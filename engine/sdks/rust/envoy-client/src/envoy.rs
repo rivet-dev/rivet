@@ -147,7 +147,7 @@ pub struct ActorInfo {
 }
 
 impl EnvoyContext {
-	pub fn insert_actor(
+	pub async fn insert_actor(
 		&mut self,
 		actor_id: String,
 		generation: u32,
@@ -172,20 +172,25 @@ impl EnvoyContext {
 					received_stop: false,
 				},
 			);
+		// Clone the Arc and immediately drop the entry guard so the bucket
+		// lock is not held across the subsequent upsert_async await.
 		let shared_generations = self
 			.shared
 			.actors
-			.entry_sync(actor_id)
+			.entry_async(actor_id)
+			.await
 			.or_insert_with(|| Arc::new(SharedActorGenerations::new()))
 			.get()
 			.clone();
-		shared_generations.upsert_sync(
-			generation,
-			crate::context::SharedActorEntry {
-				handle,
-				active_http_request_count,
-			},
-		);
+		shared_generations
+			.upsert_async(
+				generation,
+				crate::context::SharedActorEntry {
+					handle,
+					active_http_request_count,
+				},
+			)
+			.await;
 
 		self.shared.actors_notify.notify_waiters();
 
@@ -203,7 +208,7 @@ impl EnvoyContext {
 		}
 	}
 
-	pub fn remove_actor(&mut self, actor_id: &str, generation: u32) {
+	pub async fn remove_actor(&mut self, actor_id: &str, generation: u32) {
 		if let Some(generations) = self.actors.get_mut(actor_id) {
 			generations.remove(&generation);
 			if generations.is_empty() {
@@ -214,15 +219,17 @@ impl EnvoyContext {
 		if let Some(shared_generations) = self
 			.shared
 			.actors
-			.read_sync(actor_id, |_, generations| generations.clone())
+			.read_async(actor_id, |_, generations| generations.clone())
+			.await
 		{
-			shared_generations.remove_sync(&generation);
+			shared_generations.remove_async(&generation).await;
 			if shared_generations.is_empty() {
 				self.shared
 					.actors
-					.remove_if_sync(actor_id, |generations| {
+					.remove_if_async(actor_id, |generations| {
 						Arc::ptr_eq(generations, &shared_generations)
-					});
+					})
+					.await;
 			}
 		}
 		self.shared.actors_notify.notify_waiters();

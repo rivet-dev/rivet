@@ -2067,14 +2067,19 @@ mod tests {
 		};
 		let counter = Arc::new(AsyncCounter::new());
 		let generations = Arc::new(scc::HashMap::new());
-		generations.upsert_sync(
-			4,
-			SharedActorEntry {
-				handle: mpsc::unbounded_channel().0,
-				active_http_request_count: counter.clone(),
-			},
-		);
-		shared.actors.upsert_sync("actor-4".to_string(), generations);
+		generations
+			.upsert_async(
+				4,
+				SharedActorEntry {
+					handle: mpsc::unbounded_channel().0,
+					active_http_request_count: counter.clone(),
+				},
+			)
+			.await;
+		shared
+			.actors
+			.upsert_async("actor-4".to_string(), generations)
+			.await;
 
 		let request_guard = ActiveHttpRequestGuard::new(counter);
 		let handle_counter = handle

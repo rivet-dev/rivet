@@ -104,6 +104,7 @@ fn record_limited_warning(
 	key: String,
 	now: Instant,
 ) -> WarningDecision {
+	// Sync function — must use sync scc API.
 	let window = warnings
 		.read_sync(&key, |_, window| window.clone())
 		.unwrap_or_else(|| {

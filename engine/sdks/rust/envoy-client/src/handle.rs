@@ -209,6 +209,7 @@ impl EnvoyHandle {
 				.shared
 				.actors
 				.read_async(actor_id, |_, generations| {
+					// Inside a sync read_async closure — must use sync scc API.
 					generations.contains_sync(&generation)
 				})
 				.await
@@ -233,6 +234,7 @@ impl EnvoyHandle {
 		actor_id: &str,
 		generation: Option<u32>,
 	) -> Option<Arc<AsyncCounter>> {
+		// Sync function — must use sync scc API.
 		self.shared.actors.read_sync(actor_id, |_, generations| {
 			if let Some(generation) = generation {
 				return generations.read_sync(&generation, |_, actor| {
@@ -272,6 +274,7 @@ impl EnvoyHandle {
 		request_id: protocol::RequestId,
 	) -> bool {
 		let key = tunnel_request_key(&gateway_id, &request_id);
+		// Sync function — must use sync scc API.
 		if self
 			.shared
 			.live_tunnel_requests
@@ -281,6 +284,7 @@ impl EnvoyHandle {
 			return true;
 		}
 
+		// Sync function — must use sync scc API.
 		self.shared
 			.pending_hibernation_restores
 			.read_sync(actor_id, |_, entries| {
@@ -541,6 +545,7 @@ impl EnvoyHandle {
 		actor_id: String,
 		meta_entries: Vec<HibernatingWebSocketMetadata>,
 	) {
+		// Sync function — must use sync scc API.
 		self.shared
 			.pending_hibernation_restores
 			.upsert_sync(actor_id, meta_entries);
@@ -550,6 +555,7 @@ impl EnvoyHandle {
 		&self,
 		actor_id: &str,
 	) -> Option<Vec<HibernatingWebSocketMetadata>> {
+		// Sync function — must use sync scc API.
 		self.shared
 			.pending_hibernation_restores
 			.remove_sync(actor_id)
@@ -636,6 +642,7 @@ impl EnvoyStatusHandle {
 
 fn active_actor_count(shared: &SharedContext) -> usize {
 	let mut count = 0;
+	// Sync function — must use sync scc API.
 	shared.actors.iter_sync(|_, generations| {
 		generations.iter_sync(|_, actor| {
 			if !actor.handle.is_closed() {

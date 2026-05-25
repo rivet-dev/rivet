@@ -58,7 +58,8 @@ pub async fn handle_commands(ctx: &mut EnvoyContext, commands: Vec<protocol::Com
 					active_http_request_count,
 					actor_name,
 					checkpoint.index,
-				);
+				)
+				.await;
 			}
 			protocol::Command::CommandStopActor(val) => {
 				let entry = ctx.get_actor_entry_mut(&checkpoint.actor_id, checkpoint.generation);

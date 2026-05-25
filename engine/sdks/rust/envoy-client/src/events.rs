@@ -31,7 +31,8 @@ pub async fn handle_send_events(ctx: &mut EnvoyContext, events: Vec<protocol::Ev
 			}
 		}
 		if remove_after_stop {
-			ctx.remove_actor(&event.checkpoint.actor_id, event.checkpoint.generation);
+			ctx.remove_actor(&event.checkpoint.actor_id, event.checkpoint.generation)
+				.await;
 		}
 	}
 
@@ -199,7 +200,7 @@ mod tests {
 		)
 	}
 
-	fn insert_actor(
+	async fn insert_actor(
 		ctx: &mut EnvoyContext,
 		actor_id: &str,
 		generation: u32,
@@ -214,7 +215,8 @@ mod tests {
 			counter.clone(),
 			format!("{actor_id}-{generation}"),
 			0,
-		);
+		)
+		.await;
 		ctx.actors
 			.get_mut(actor_id)
 			.and_then(|generations| generations.get_mut(&generation))
@@ -242,7 +244,7 @@ mod tests {
 	async fn stop_event_removes_actor_from_primary_and_shared_registries() {
 		let (mut ctx, handle) = new_envoy_context();
 		let counter = Arc::new(AsyncCounter::new());
-		insert_actor(&mut ctx, "actor-stop", 1, counter.clone(), true);
+		insert_actor(&mut ctx, "actor-stop", 1, counter.clone(), true).await;
 
 		assert!(handle.http_request_counter("actor-stop", Some(1)).is_some());
 
@@ -252,7 +254,8 @@ mod tests {
 		assert!(
 			ctx.shared
 				.actors
-				.read_sync("actor-stop", |_, _| ())
+				.read_async("actor-stop", |_, _| ())
+				.await
 				.is_none()
 		);
 		assert!(handle.http_request_counter("actor-stop", Some(1)).is_none());
@@ -263,8 +266,8 @@ mod tests {
 		let (mut ctx, handle) = new_envoy_context();
 		let stopped_counter = Arc::new(AsyncCounter::new());
 		let live_counter = Arc::new(AsyncCounter::new());
-		insert_actor(&mut ctx, "actor-shared", 1, stopped_counter, true);
-		insert_actor(&mut ctx, "actor-shared", 2, live_counter.clone(), false);
+		insert_actor(&mut ctx, "actor-shared", 1, stopped_counter, true).await;
+		insert_actor(&mut ctx, "actor-shared", 2, live_counter.clone(), false).await;
 
 		handle_send_events(&mut ctx, vec![stopped_event("actor-shared", 1)]).await;
 

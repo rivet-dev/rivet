@@ -1056,6 +1056,7 @@ impl RegistryDispatcher {
 			return true;
 		}
 
+		// Sync function — must use sync scc API.
 		let Some(instance) = self
 			.actor_instances
 			.read_sync(actor_id, |_, state| state.active_instance())

@@ -43,7 +43,7 @@ pub async fn handle_tunnel_message(ctx: &mut EnvoyContext, msg: protocol::ToEnvo
 			handle_ws_message(ctx, message_id, msg);
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(close) => {
-			handle_ws_close(ctx, message_id, close);
+			handle_ws_close(ctx, message_id, close).await;
 		}
 	}
 }
@@ -249,7 +249,7 @@ fn handle_ws_message(
 	}
 }
 
-fn handle_ws_close(
+async fn handle_ws_close(
 	ctx: &mut EnvoyContext,
 	message_id: protocol::MessageId,
 	close: protocol::ToEnvoyWebSocketClose,
@@ -279,7 +279,11 @@ fn handle_ws_close(
 		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	ctx.shared
 		.live_tunnel_requests
-		.remove_sync(&tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+		.remove_async(&tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		))
+		.await;
 }
 
 fn to_envoy_tunnel_message_kind_name(

@@ -998,6 +998,7 @@ fn sqlite_worker_duration_buckets() -> Vec<f64> {
 
 fn retain_actor_metrics(labels: &Arc<ActorMetricLabels>) {
 	cleanup_expired_actor_metrics(Instant::now());
+	// Sync function — must use sync scc API.
 	let mut retained = RETAINED_ACTORS
 		.entry_sync(labels.as_ref().clone())
 		.or_default();
@@ -1012,6 +1013,7 @@ fn retain_actor_metrics(labels: &Arc<ActorMetricLabels>) {
 fn release_actor_metrics(labels: &Arc<ActorMetricLabels>) {
 	let now = Instant::now();
 	let mut inactive = false;
+	// Sync function — must use sync scc API.
 	if let Some(mut retained) = RETAINED_ACTORS.get_sync(labels.as_ref()) {
 		retained.active_refs = retained.active_refs.saturating_sub(1);
 		if retained.active_refs == 0 {
@@ -1032,6 +1034,7 @@ fn record_retained_actor_metrics(
 	labels: &Arc<ActorMetricLabels>,
 	record: impl FnOnce(&mut RetainedActorMetrics),
 ) {
+	// Sync function — must use sync scc API.
 	let mut retained = RETAINED_ACTORS
 		.entry_sync(labels.as_ref().clone())
 		.or_default();
@@ -1039,6 +1042,7 @@ fn record_retained_actor_metrics(
 }
 
 fn cleanup_expired_actor_metrics(now: Instant) {
+	// Sync function — must use sync scc API.
 	RETAINED_ACTORS.retain_sync(|labels, retained| {
 		let expired = retained
 			.expires_at

@@ -157,7 +157,8 @@ async fn replayed_stop_command_is_dropped() {
 		Arc::new(AsyncCounter::new()),
 		"actor-replay".to_string(),
 		-1,
-	);
+	)
+	.await;
 
 	handle_commands(&mut ctx, vec![stop_command("actor-replay", 1, 5)]).await;
 	assert!(matches!(
@@ -194,7 +195,8 @@ async fn dedup_is_per_actor_and_generation() {
 		Arc::new(AsyncCounter::new()),
 		"actor-a".to_string(),
 		-1,
-	);
+	)
+	.await;
 	ctx.insert_actor(
 		"actor-a".to_string(),
 		2,
@@ -202,7 +204,8 @@ async fn dedup_is_per_actor_and_generation() {
 		Arc::new(AsyncCounter::new()),
 		"actor-a".to_string(),
 		-1,
-	);
+	)
+	.await;
 	ctx.insert_actor(
 		"actor-b".to_string(),
 		1,
@@ -210,7 +213,8 @@ async fn dedup_is_per_actor_and_generation() {
 		Arc::new(AsyncCounter::new()),
 		"actor-b".to_string(),
 		-1,
-	);
+	)
+	.await;
 
 	handle_commands(&mut ctx, vec![stop_command("actor-a", 1, 5)]).await;
 	assert!(rx_a1.try_recv().is_ok());
@@ -235,7 +239,8 @@ async fn replayed_command_is_dropped_after_remote_sql_lost_response() {
 		Arc::new(AsyncCounter::new()),
 		"actor-replay".to_string(),
 		-1,
-	);
+	)
+	.await;
 
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
 	ctx.shared.ws_tx.store(Some(Arc::new(ws_tx)));
