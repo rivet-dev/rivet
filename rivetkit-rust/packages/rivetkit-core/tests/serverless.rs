@@ -48,8 +48,8 @@ mod moved_tests {
 	}
 
 	#[test]
-	fn matches_combined_duplicate_endpoint_headers() {
-		assert!(endpoints_match(
+	fn comma_joined_endpoint_values_do_not_match_single_endpoints() {
+		assert!(!endpoints_match(
 			"http://127.0.0.1:6420, http://127.0.0.1:8080",
 			"http://localhost:8080/"
 		));
@@ -124,6 +124,28 @@ mod moved_tests {
 		let parsed = parse_start_headers(&headers).expect("headers should parse");
 
 		assert_eq!(parsed.token, None);
+	}
+
+	#[test]
+	fn start_headers_reject_comma_joined_endpoint() {
+		let headers = HashMap::from([
+			(
+				"x-rivet-endpoint".to_owned(),
+				"http://127.0.0.1:6420, http://127.0.0.1:8080".to_owned(),
+			),
+			("x-rivet-pool-name".to_owned(), "default".to_owned()),
+			("x-rivet-namespace-name".to_owned(), "default".to_owned()),
+		]);
+
+		let error = parse_start_headers(&headers).expect_err("headers should fail");
+		let extracted = rivet_error::RivetError::extract(&error);
+
+		assert_eq!(extracted.group(), "request");
+		assert_eq!(extracted.code(), "invalid");
+		assert_eq!(
+			extracted.message(),
+			"Invalid request: x-rivet-endpoint header must contain exactly one endpoint"
+		);
 	}
 
 	#[test]

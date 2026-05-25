@@ -84,6 +84,33 @@ pub struct ServerlessStreamError {
 	pub message: String,
 }
 
+// # Serverless `/start` trust boundary
+//
+// ## Env/config credentials
+//
+// - `RIVET_ENDPOINT` and `RIVET_TOKEN` are runtime config.
+//   - They are the default endpoint and token.
+//   - `RIVET_ENDPOINT` may include userinfo credentials.
+//   - These are for app/client calls and local defaults.
+//   - They do not authorize `/start`.
+//
+// ## Engine `/start` credentials
+//
+// - `x-rivet-endpoint` is the envoy WebSocket target.
+//   - It overrides the default endpoint for this spawn.
+//   - It is chosen by the engine per spawn.
+//   - Regional hosts are intentional.
+//   - Comma-joined values are invalid.
+// - `x-rivet-token` is the envoy connection token.
+//   - It overrides the default token for this spawn.
+//   - It is paired with the header endpoint.
+//   - It authenticates this `/start` request.
+//
+// ## Payload
+//
+// - The body contains actor start data.
+//   - Do not decode or start it before the envoy connection is accepted.
+//   - This prevents public `/start` callers from forcing bogus engine work.
 #[derive(Debug)]
 struct StartHeaders {
 	endpoint: String,
@@ -533,6 +560,14 @@ fn route_path(base_path: &str, url: &str) -> Result<String> {
 }
 
 fn parse_start_headers(headers: &HashMap<String, String>) -> Result<StartHeaders> {
+	let endpoint = required_header(headers, "x-rivet-endpoint")?;
+	if endpoint.contains(',') {
+		return Err(InvalidRequest {
+			reason: "x-rivet-endpoint header must contain exactly one endpoint".to_owned(),
+		}
+		.build());
+	}
+
 	let pool_name = match optional_header(headers, "x-rivet-pool-name") {
 		Some(pool_name) => pool_name,
 		None => optional_header(headers, "x-rivet-runner-name").ok_or_else(|| {
@@ -544,7 +579,7 @@ fn parse_start_headers(headers: &HashMap<String, String>) -> Result<StartHeaders
 	};
 
 	Ok(StartHeaders {
-		endpoint: required_header(headers, "x-rivet-endpoint")?,
+		endpoint,
 		token: optional_header(headers, "x-rivet-token"),
 		pool_name,
 		namespace: required_header(headers, "x-rivet-namespace-name")?,
@@ -734,23 +769,10 @@ pub fn normalize_endpoint_url(url: &str) -> Option<String> {
 	Some(format!("{}://{}{}", parsed.scheme(), host, pathname))
 }
 
-fn normalized_endpoint_candidates(value: &str) -> Vec<String> {
-	value
-		.split(',')
-		.map(str::trim)
-		.filter(|candidate| !candidate.is_empty())
-		.map(|candidate| normalize_endpoint_url(candidate).unwrap_or_else(|| candidate.to_owned()))
-		.collect()
-}
-
 pub fn endpoints_match(a: &str, b: &str) -> bool {
-	let a_candidates = normalized_endpoint_candidates(a);
-	let b_candidates = normalized_endpoint_candidates(b);
-	a_candidates.iter().any(|a_candidate| {
-		b_candidates
-			.iter()
-			.any(|b_candidate| a_candidate == b_candidate)
-	})
+	let a_normalized = normalize_endpoint_url(a).unwrap_or_else(|| a.to_owned());
+	let b_normalized = normalize_endpoint_url(b).unwrap_or_else(|| b.to_owned());
+	a_normalized == b_normalized
 }
 
 fn normalize_regional_hostname(hostname: &str) -> String {
