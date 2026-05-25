@@ -339,9 +339,7 @@ impl ActorContext {
 		let queue_size = metadata.size;
 		drop(metadata);
 		self.0.metrics.add_queue_messages_sent(1);
-		self.0
-			.metrics
-			.set_queue_depth(self.0.queue_metadata.lock().await.size);
+		self.0.metrics.set_queue_depth(queue_size);
 		self.notify_inspector_update(queue_size);
 		self.0.queue_notify.notify_waiters();
 
@@ -783,9 +781,7 @@ impl ActorContext {
 			.put(&QUEUE_METADATA_KEY, &encoded_metadata)
 			.await
 			.context("persist queue metadata after delete")?;
-		self.0
-			.metrics
-			.set_queue_depth(self.0.queue_metadata.lock().await.size);
+		self.0.metrics.set_queue_depth(queue_size);
 		self.notify_inspector_update(queue_size);
 		Ok(())
 	}
