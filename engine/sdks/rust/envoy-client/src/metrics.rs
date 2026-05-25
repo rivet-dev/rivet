@@ -18,7 +18,6 @@ use rivet_metrics::prometheus::{
 
 const SQLITE_REQUEST_EXPIRED_LABELS: &[&str] = &["kind", "was_sent"];
 const ENVOY_LOOP_ITER_LABELS: &[&str] = &["branch"];
-const WS_TX_LOCK_LABELS: &[&str] = &["message_kind"];
 const SQLITE_SEND_LABELS: &[&str] = &["kind"];
 const WS_RECONNECT_LABELS: &[&str] = &["reason"];
 const LOST_TIMER_ARMED_LABELS: &[&str] = &["reason"];
@@ -34,8 +33,6 @@ pub struct EnvoyClientMetrics {
 	pub remote_sqlite_requests_inflight: IntGauge,
 	pub kv_requests_inflight: IntGauge,
 	pub envoy_loop_iteration_duration_seconds: HistogramVec,
-	pub ws_tx_lock_wait_duration_seconds: HistogramVec,
-	pub ws_tx_lock_hold_duration_seconds: HistogramVec,
 	pub sqlite_request_total_duration_seconds: HistogramVec,
 	pub sqlite_request_submit_duration_seconds: HistogramVec,
 	pub sqlite_request_wait_duration_seconds: HistogramVec,
@@ -92,26 +89,6 @@ impl EnvoyClientMetrics {
 			ENVOY_LOOP_ITER_LABELS,
 		)
 		.expect("create envoy_client_envoy_loop_iteration_duration_seconds histogram");
-
-		let ws_tx_lock_wait_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_tx_lock_wait_duration_seconds",
-				"time spent waiting to acquire the ws_tx mutex in seconds",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-			WS_TX_LOCK_LABELS,
-		)
-		.expect("create envoy_client_ws_tx_lock_wait_duration_seconds histogram");
-
-		let ws_tx_lock_hold_duration_seconds = HistogramVec::new(
-			HistogramOpts::new(
-				"rivetkit_envoy_client_ws_tx_lock_hold_duration_seconds",
-				"time the ws_tx mutex guard was held in seconds (covers encode + send)",
-			)
-			.buckets(rivet_metrics::MICRO_BUCKETS.to_vec()),
-			WS_TX_LOCK_LABELS,
-		)
-		.expect("create envoy_client_ws_tx_lock_hold_duration_seconds histogram");
 
 		let sqlite_request_total_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
@@ -262,14 +239,6 @@ impl EnvoyClientMetrics {
 		);
 		register(
 			&rivet_metrics::REGISTRY,
-			ws_tx_lock_wait_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
-			ws_tx_lock_hold_duration_seconds.clone(),
-		);
-		register(
-			&rivet_metrics::REGISTRY,
 			sqlite_request_total_duration_seconds.clone(),
 		);
 		register(
@@ -309,8 +278,6 @@ impl EnvoyClientMetrics {
 			remote_sqlite_requests_inflight,
 			kv_requests_inflight,
 			envoy_loop_iteration_duration_seconds,
-			ws_tx_lock_wait_duration_seconds,
-			ws_tx_lock_hold_duration_seconds,
 			sqlite_request_total_duration_seconds,
 			sqlite_request_submit_duration_seconds,
 			sqlite_request_wait_duration_seconds,

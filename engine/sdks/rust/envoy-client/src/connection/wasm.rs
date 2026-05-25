@@ -166,10 +166,7 @@ mod imp {
 		}
 
 		let (ws_tx, mut ws_rx) = mpsc::unbounded_channel::<WsTxMessage>();
-		{
-			let mut guard = shared.ws_tx.lock().await;
-			*guard = Some(ws_tx);
-		}
+		shared.ws_tx.store(Some(Arc::new(ws_tx)));
 
 		tracing::info!(
 			endpoint = %shared.config.endpoint,
@@ -295,10 +292,7 @@ mod imp {
 
 		super::super::observe_ping_unhealthy_on_close(shared);
 
-		{
-			let mut guard = shared.ws_tx.lock().await;
-			*guard = None;
-		}
+		shared.ws_tx.store(None);
 
 		close_if_open(&ws);
 		ws.set_onopen(None);

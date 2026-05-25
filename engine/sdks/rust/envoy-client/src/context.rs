@@ -2,6 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicI64};
 
 use crate::async_counter::AsyncCounter;
+use arc_swap::ArcSwapOption;
 use rivet_envoy_protocol as protocol;
 use scc::HashMap as SccHashMap;
 use tokio::sync::Mutex;
@@ -30,7 +31,7 @@ pub struct SharedContext {
 	pub actors_notify: Arc<Notify>,
 	pub live_tunnel_requests: Arc<SccHashMap<[u8; 8], String>>,
 	pub pending_hibernation_restores: Arc<SccHashMap<String, Vec<HibernatingWebSocketMetadata>>>,
-	pub ws_tx: Arc<Mutex<Option<mpsc::UnboundedSender<WsTxMessage>>>>,
+	pub ws_tx: ArcSwapOption<mpsc::UnboundedSender<WsTxMessage>>,
 	pub protocol_metadata: Arc<Mutex<Option<protocol::ProtocolMetadata>>>,
 	pub shutting_down: AtomicBool,
 	/// Epoch ms timestamp of the most recent ping packet received from the engine. Used by

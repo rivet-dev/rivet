@@ -94,9 +94,7 @@ fn new_envoy_context() -> EnvoyContext {
 		actors_notify: Arc::new(tokio::sync::Notify::new()),
 		live_tunnel_requests: Arc::new(scc::HashMap::new()),
 		pending_hibernation_restores: Arc::new(scc::HashMap::new()),
-		ws_tx: Arc::new(tokio::sync::Mutex::new(
-			None::<mpsc::UnboundedSender<WsTxMessage>>,
-		)),
+		ws_tx: arc_swap::ArcSwapOption::from(None::<Arc<mpsc::UnboundedSender<WsTxMessage>>>),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
@@ -240,7 +238,7 @@ async fn replayed_command_is_dropped_after_remote_sql_lost_response() {
 	);
 
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
-	*ctx.shared.ws_tx.lock().await = Some(ws_tx);
+	ctx.shared.ws_tx.store(Some(Arc::new(ws_tx)));
 	let (sql_tx, sql_rx) = tokio::sync::oneshot::channel();
 	handle_remote_sqlite_request(
 		&mut ctx,

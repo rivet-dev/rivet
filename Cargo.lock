@@ -154,6 +154,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arc-swap"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a3a1fd6f75306b68087b831f025c712524bcb19aad54e557b1129cfa0a2b207"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "arraydeque"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5645,6 +5654,7 @@ name = "rivet-envoy-client"
 version = "2.3.0-rc.5"
 dependencies = [
  "anyhow",
+ "arc-swap",
  "futures-util",
  "getrandom 0.2.16",
  "hex",

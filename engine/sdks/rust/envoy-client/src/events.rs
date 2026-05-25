@@ -167,9 +167,7 @@ mod tests {
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(scc::HashMap::new()),
 			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			ws_tx: arc_swap::ArcSwapOption::from(None::<Arc<mpsc::UnboundedSender<WsTxMessage>>>),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),

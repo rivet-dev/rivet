@@ -12,6 +12,7 @@ wasm-transport = ["dep:js-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", 
 
 [dependencies]
 anyhow.workspace = true
+arc-swap.workspace = true
 futures-util.workspace = true
 parking_lot.workspace = true
 hex.workspace = true

@@ -127,24 +127,11 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		tracing::debug!(data = stringify_to_rivet(&message), "sending message");
 	}
 
-	let wait_start = crate::time::Instant::now();
 	let is_pong = matches!(message, protocol::ToRivet::ToRivetPong(_));
 	let (message_kind, gateway_id, request_id, message_index, inner_data_len) =
 		to_rivet_message_meta(&message);
 
-	let guard = shared.ws_tx.lock().await;
-	let wait_elapsed = wait_start.elapsed();
-	METRICS
-		.ws_tx_lock_wait_duration_seconds
-		.with_label_values(&[message_kind])
-		.observe(wait_elapsed.as_secs_f64());
-
-	let hold_start = crate::time::Instant::now();
-	let Some(tx) = guard.as_ref() else {
-		METRICS
-			.ws_tx_lock_hold_duration_seconds
-			.with_label_values(&[message_kind])
-			.observe(hold_start.elapsed().as_secs_f64());
+	let Some(tx) = shared.ws_tx.load().as_ref().map(|tx| (**tx).clone()) else {
 		if let (Some(gateway_id), Some(request_id), Some(message_index)) =
 			(gateway_id.as_ref(), request_id.as_ref(), message_index)
 		{
@@ -181,11 +168,6 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		inner_data_len,
 	});
 	shared.ws_tx_depth.fetch_add(1, Ordering::Release);
-	drop(guard);
-	METRICS
-		.ws_tx_lock_hold_duration_seconds
-		.with_label_values(&[message_kind])
-		.observe(hold_start.elapsed().as_secs_f64());
 	if let (Some(gateway_id), Some(request_id), Some(message_index)) =
 		(gateway_id.as_ref(), request_id.as_ref(), message_index)
 	{

@@ -79,6 +79,7 @@ members = [
 
   [workspace.dependencies]
   anyhow = "1.0.82"
+  arc-swap = "1.7.1"
   async-channel = "2.1.1"
   async-nats = "0.46.0"
   async-stream = "0.3"

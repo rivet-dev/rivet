@@ -119,10 +119,7 @@ async fn single_connection(
 	let (mut write, mut read) = ws_stream.split();
 
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel::<WsTxMessage>();
-	{
-		let mut guard = shared.ws_tx.lock().await;
-		*guard = Some(ws_tx);
-	}
+	shared.ws_tx.store(Some(Arc::new(ws_tx)));
 
 	tracing::info!(
 		endpoint = %shared.config.endpoint,
@@ -323,10 +320,7 @@ async fn single_connection(
 	);
 
 	// Clean up
-	{
-		let mut guard = shared.ws_tx.lock().await;
-		*guard = None;
-	}
+	shared.ws_tx.store(None);
 	write_handle.abort();
 	shared
 		.config

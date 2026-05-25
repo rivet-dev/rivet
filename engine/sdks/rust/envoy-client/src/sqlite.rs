@@ -87,12 +87,7 @@ pub async fn handle_sqlite_request(
 	ctx.sqlite_requests.insert(request_id, entry);
 	METRICS.sqlite_requests_inflight.inc();
 
-	let ws_available = {
-		let guard = ctx.shared.ws_tx.lock().await;
-		guard.is_some()
-	};
-
-	if ws_available {
+	if ctx.shared.ws_tx.load().is_some() {
 		send_single_sqlite_request(ctx, request_id).await;
 	}
 }
@@ -115,12 +110,7 @@ pub async fn handle_remote_sqlite_request(
 	ctx.remote_sqlite_requests.insert(request_id, entry);
 	METRICS.remote_sqlite_requests_inflight.inc();
 
-	let ws_available = {
-		let guard = ctx.shared.ws_tx.lock().await;
-		guard.is_some()
-	};
-
-	if ws_available {
+	if ctx.shared.ws_tx.load().is_some() {
 		send_single_remote_sqlite_request(ctx, request_id).await;
 	}
 }
@@ -276,12 +266,7 @@ pub fn remote_sqlite_request_to_message(
 }
 
 pub async fn process_unsent_sqlite_requests(ctx: &mut EnvoyContext) {
-	let ws_available = {
-		let guard = ctx.shared.ws_tx.lock().await;
-		guard.is_some()
-	};
-
-	if !ws_available {
+	if ctx.shared.ws_tx.load().is_none() {
 		return;
 	}
 
@@ -298,12 +283,7 @@ pub async fn process_unsent_sqlite_requests(ctx: &mut EnvoyContext) {
 }
 
 pub async fn process_unsent_remote_sqlite_requests(ctx: &mut EnvoyContext) {
-	let ws_available = {
-		let guard = ctx.shared.ws_tx.lock().await;
-		guard.is_some()
-	};
-
-	if !ws_available {
+	if ctx.shared.ws_tx.load().is_none() {
 		return;
 	}
 
@@ -518,9 +498,9 @@ mod tests {
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests: Arc::new(scc::HashMap::new()),
 			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<tokio::sync::mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			ws_tx: arc_swap::ArcSwapOption::from(
+				None::<Arc<tokio::sync::mpsc::UnboundedSender<WsTxMessage>>>,
+			),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
@@ -654,7 +634,7 @@ mod tests {
 	async fn sent_remote_sqlite_request_fails_indeterminate_on_disconnect() {
 		let mut ctx = new_envoy_context();
 		let (ws_tx, mut ws_rx) = tokio::sync::mpsc::unbounded_channel();
-		*ctx.shared.ws_tx.lock().await = Some(ws_tx);
+		ctx.shared.ws_tx.store(Some(Arc::new(ws_tx)));
 		let (tx, rx) = oneshot::channel();
 
 		handle_remote_sqlite_request(
@@ -710,7 +690,7 @@ mod tests {
 		assert!(ctx.remote_sqlite_requests.contains_key(&0));
 
 		let (ws_tx, mut ws_rx) = tokio::sync::mpsc::unbounded_channel();
-		*ctx.shared.ws_tx.lock().await = Some(ws_tx);
+		ctx.shared.ws_tx.store(Some(Arc::new(ws_tx)));
 		process_unsent_remote_sqlite_requests(&mut ctx).await;
 
 		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send { .. })));

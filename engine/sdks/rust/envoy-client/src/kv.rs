@@ -36,12 +36,7 @@ pub async fn handle_kv_request(
 	ctx.kv_requests.insert(request_id, entry);
 	METRICS.kv_requests_inflight.inc();
 
-	let ws_available = {
-		let guard = ctx.shared.ws_tx.lock().await;
-		guard.is_some()
-	};
-
-	if ws_available {
+	if ctx.shared.ws_tx.load().is_some() {
 		send_single_kv_request(ctx, request_id).await;
 	}
 }
@@ -94,12 +89,7 @@ pub async fn send_single_kv_request(ctx: &mut EnvoyContext, request_id: u32) {
 }
 
 pub async fn process_unsent_kv_requests(ctx: &mut EnvoyContext) {
-	let ws_available = {
-		let guard = ctx.shared.ws_tx.lock().await;
-		guard.is_some()
-	};
-
-	if !ws_available {
+	if ctx.shared.ws_tx.load().is_none() {
 		return;
 	}
 
