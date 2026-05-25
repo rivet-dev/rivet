@@ -208,9 +208,18 @@ pub fn wrapping_lte_u16(a: u16, b: u16) -> bool {
 	a == b || wrapping_lt_u16(a, b)
 }
 
-/// Hash-map keyed by multiple byte buffers (equivalent of TS BufferMap).
+pub type BufferMapKey = [u8; 8];
+
+pub fn tunnel_request_key(gateway_id: &[u8; 4], request_id: &[u8; 4]) -> BufferMapKey {
+	let mut key = [0u8; 8];
+	key[..4].copy_from_slice(gateway_id);
+	key[4..].copy_from_slice(request_id);
+	key
+}
+
+/// Hash-map keyed by fixed tunnel request keys.
 pub struct BufferMap<T> {
-	inner: HashMap<String, T>,
+	inner: HashMap<BufferMapKey, T>,
 }
 
 impl<T> BufferMap<T> {
@@ -220,24 +229,24 @@ impl<T> BufferMap<T> {
 		}
 	}
 
-	pub fn get(&self, buffers: &[&[u8]]) -> Option<&T> {
-		self.inner.get(&cyrb53(buffers))
+	pub fn get(&self, key: BufferMapKey) -> Option<&T> {
+		self.inner.get(&key)
 	}
 
-	pub fn get_mut(&mut self, buffers: &[&[u8]]) -> Option<&mut T> {
-		self.inner.get_mut(&cyrb53(buffers))
+	pub fn get_mut(&mut self, key: BufferMapKey) -> Option<&mut T> {
+		self.inner.get_mut(&key)
 	}
 
-	pub fn insert(&mut self, buffers: &[&[u8]], value: T) {
-		self.inner.insert(cyrb53(buffers), value);
+	pub fn insert(&mut self, key: BufferMapKey, value: T) {
+		self.inner.insert(key, value);
 	}
 
-	pub fn remove(&mut self, buffers: &[&[u8]]) -> Option<T> {
-		self.inner.remove(&cyrb53(buffers))
+	pub fn remove(&mut self, key: BufferMapKey) -> Option<T> {
+		self.inner.remove(&key)
 	}
 
-	pub fn contains_key(&self, buffers: &[&[u8]]) -> bool {
-		self.inner.contains_key(&cyrb53(buffers))
+	pub fn contains_key(&self, key: BufferMapKey) -> bool {
+		self.inner.contains_key(&key)
 	}
 }
 
@@ -245,18 +254,4 @@ impl<T> Default for BufferMap<T> {
 	fn default() -> Self {
 		Self::new()
 	}
-}
-
-fn cyrb53(buffers: &[&[u8]]) -> String {
-	let (mut h1, mut h2): (u32, u32) = (0xdeadbeef, 0x41c6ce57);
-	for buffer in buffers {
-		for &b in *buffer {
-			h1 = (h1 ^ b as u32).wrapping_mul(2654435761);
-			h2 = (h2 ^ b as u32).wrapping_mul(1597334677);
-		}
-	}
-	h1 = (h1 ^ (h1 >> 16)).wrapping_mul(2246822507) ^ (h2 ^ (h2 >> 13)).wrapping_mul(3266489909);
-	h2 = (h2 ^ (h2 >> 16)).wrapping_mul(2246822507) ^ (h1 ^ (h1 >> 13)).wrapping_mul(3266489909);
-	let result = (2097151 & h2 as u64) * 4294967296 + h1 as u64;
-	format!("{result:x}")
 }

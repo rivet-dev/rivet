@@ -17,7 +17,8 @@ use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
 use crate::stringify::stringify_to_rivet_tunnel_message_kind;
 use crate::utils::{
-	BufferMap, display_id, spawn_detached, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16,
+	BufferMap, display_id, spawn_detached, tunnel_request_key, wrapping_add_u16,
+	wrapping_lte_u16, wrapping_sub_u16,
 };
 
 pub enum ToActor {
@@ -536,7 +537,7 @@ fn handle_req_start(
 		body_tx: None,
 	};
 	ctx.pending_requests
-		.insert(&[&message_id.gateway_id, &message_id.request_id], pending);
+		.insert(tunnel_request_key(&message_id.gateway_id, &message_id.request_id), pending);
 
 	let headers: HashMap<String, String> = req
 		.headers
@@ -548,7 +549,7 @@ fn handle_req_start(
 		let (body_tx, body_rx) = mpsc::unbounded_channel::<Vec<u8>>();
 		if let Some(pending) = ctx
 			.pending_requests
-			.get_mut(&[&message_id.gateway_id, &message_id.request_id])
+			.get_mut(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
 		{
 			pending.body_tx = Some(body_tx);
 		}
@@ -599,7 +600,7 @@ fn handle_req_start(
 
 	if !req.stream {
 		ctx.pending_requests
-			.remove(&[&message_id.gateway_id, &message_id.request_id]);
+			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	}
 }
 
@@ -642,7 +643,7 @@ fn handle_req_chunk(
 	let finish = chunk.finish;
 	let pending = ctx
 		.pending_requests
-		.get(&[&message_id.gateway_id, &message_id.request_id]);
+		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	if let Some(pending) = pending {
 		if let Some(body_tx) = &pending.body_tx {
 			let _ = body_tx.send(chunk.body);
@@ -655,13 +656,13 @@ fn handle_req_chunk(
 
 	if finish {
 		ctx.pending_requests
-			.remove(&[&message_id.gateway_id, &message_id.request_id]);
+			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	}
 }
 
 fn handle_req_abort(ctx: &mut ActorContext, message_id: protocol::MessageId) {
 	ctx.pending_requests
-		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 }
 
 fn spawn_ws_outgoing_task(
@@ -760,7 +761,7 @@ async fn handle_ws_open(
 ) {
 	let restored_ws = ctx
 		.ws_entries
-		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	let is_restoring_hibernatable = restored_ws
 		.as_ref()
 		.map(|ws| ws.is_hibernatable)
@@ -768,7 +769,7 @@ async fn handle_ws_open(
 
 	if !is_restoring_hibernatable {
 		ctx.pending_requests.insert(
-			&[&message_id.gateway_id, &message_id.request_id],
+			tunnel_request_key(&message_id.gateway_id, &message_id.request_id),
 			PendingRequest {
 				envoy_message_index: 0,
 				body_tx: None,
@@ -822,7 +823,7 @@ async fn handle_ws_open(
 				.await;
 
 				ctx.pending_requests
-					.remove(&[&message_id.gateway_id, &message_id.request_id]);
+					.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 				return;
 			}
 		}
@@ -873,7 +874,7 @@ async fn handle_ws_open(
 	match ws_result {
 		Ok(ws_handler) => {
 			ctx.ws_entries.insert(
-				&[&message_id.gateway_id, &message_id.request_id],
+				tunnel_request_key(&message_id.gateway_id, &message_id.request_id),
 				WsEntry {
 					is_hibernatable,
 					rivet_message_index: message_id.message_index,
@@ -907,7 +908,7 @@ async fn handle_ws_open(
 			// Call on_open if provided
 			if let Some(ws) = ctx
 				.ws_entries
-				.get_mut(&[&message_id.gateway_id, &message_id.request_id])
+				.get_mut(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
 			{
 				if let Some(handler) = &mut ws.ws_handler {
 					if let Some(on_open) = handler.on_open.take() {
@@ -938,9 +939,9 @@ async fn handle_ws_open(
 			.await;
 
 			ctx.pending_requests
-				.remove(&[&message_id.gateway_id, &message_id.request_id]);
+				.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 			ctx.ws_entries
-				.remove(&[&message_id.gateway_id, &message_id.request_id]);
+				.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 		}
 	}
 }
@@ -965,7 +966,7 @@ async fn handle_ws_message(
 	);
 	let ws = ctx
 		.ws_entries
-		.get_mut(&[&message_id.gateway_id, &message_id.request_id]);
+		.get_mut(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 
 	if let Some(ws) = ws {
 		// Validate message index for hibernatable websockets
@@ -1062,7 +1063,7 @@ async fn handle_ws_close(
 ) {
 	let ws = ctx
 		.ws_entries
-		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 
 	if let Some(ws) = ws {
 		if let Some(handler) = &ws.ws_handler {
@@ -1071,7 +1072,7 @@ async fn handle_ws_close(
 			(handler.on_close)(code, reason).await;
 		}
 		ctx.pending_requests
-			.remove(&[&message_id.gateway_id, &message_id.request_id]);
+			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	} else {
 		tracing::warn!("received close for unknown ws");
 	}
@@ -1096,7 +1097,7 @@ async fn handle_hws_restore(
 
 		if let Some(meta) = meta {
 			ctx.pending_requests.insert(
-				&[&hib_req.gateway_id, &hib_req.request_id],
+				tunnel_request_key(&hib_req.gateway_id, &hib_req.request_id),
 				PendingRequest {
 					envoy_message_index: meta.envoy_message_index,
 					body_tx: None,
@@ -1147,7 +1148,7 @@ async fn handle_hws_restore(
 						hws_outgoing_rx,
 					);
 					ctx.ws_entries.insert(
-						&[&hib_req.gateway_id, &hib_req.request_id],
+						tunnel_request_key(&hib_req.gateway_id, &hib_req.request_id),
 						WsEntry {
 							is_hibernatable: true,
 							rivet_message_index: meta.rivet_message_index,
@@ -1170,7 +1171,7 @@ async fn handle_hws_restore(
 					.await;
 					if let Some(ws) = ctx
 						.ws_entries
-						.get_mut(&[&hib_req.gateway_id, &hib_req.request_id])
+						.get_mut(tunnel_request_key(&hib_req.gateway_id, &hib_req.request_id))
 					{
 						if let Some(handler) = &mut ws.ws_handler {
 							if let Some(on_open) = handler.on_open.take() {
@@ -1209,7 +1210,7 @@ async fn handle_hws_restore(
 					.await;
 
 					ctx.pending_requests
-						.remove(&[&hib_req.gateway_id, &hib_req.request_id]);
+						.remove(tunnel_request_key(&hib_req.gateway_id, &hib_req.request_id));
 				}
 			}
 		} else {
@@ -1328,7 +1329,7 @@ async fn send_actor_message(
 	request_id: protocol::RequestId,
 	message_kind: protocol::ToRivetTunnelMessageKind,
 ) {
-	let req = ctx.pending_requests.get_mut(&[&gateway_id, &request_id]);
+	let req = ctx.pending_requests.get_mut(tunnel_request_key(&gateway_id, &request_id));
 	let envoy_message_index = if let Some(req) = req {
 		let idx = req.envoy_message_index;
 		req.envoy_message_index += 1;

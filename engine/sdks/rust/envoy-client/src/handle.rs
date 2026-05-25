@@ -10,6 +10,7 @@ use crate::envoy::{ActorInfo, ToEnvoyMessage};
 use crate::metrics::METRICS;
 use crate::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse, SqliteRequest, SqliteResponse};
 use crate::tunnel::HibernatingWebSocketMetadata;
+use crate::utils::tunnel_request_key;
 
 /// Handle for interacting with the envoy from callbacks.
 #[derive(Clone)]
@@ -270,7 +271,7 @@ impl EnvoyHandle {
 		gateway_id: protocol::GatewayId,
 		request_id: protocol::RequestId,
 	) -> bool {
-		let key = make_ws_key(&gateway_id, &request_id);
+		let key = tunnel_request_key(&gateway_id, &request_id);
 		if self
 			.shared
 			.live_tunnel_requests
@@ -789,13 +790,6 @@ impl EnvoyHandle {
 			.observe(total_start.elapsed().as_secs_f64());
 		result
 	}
-}
-
-fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
-	let mut key = [0u8; 8];
-	key[..4].copy_from_slice(gateway_id);
-	key[4..].copy_from_slice(request_id);
-	key
 }
 
 fn parse_list_response(

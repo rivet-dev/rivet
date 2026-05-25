@@ -2,14 +2,7 @@ use rivet_envoy_protocol as protocol;
 
 use crate::connection::ws_send;
 use crate::envoy::{BufferedActorMessage, EnvoyContext};
-use crate::utils::display_id;
-
-fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
-	let mut key = [0u8; 8];
-	key[..4].copy_from_slice(gateway_id);
-	key[4..].copy_from_slice(request_id);
-	key
-}
+use crate::utils::{display_id, tunnel_request_key};
 
 pub struct HibernatingWebSocketMetadata {
 	pub gateway_id: protocol::GatewayId,
@@ -70,7 +63,7 @@ async fn handle_request_start(
 	}
 
 	ctx.request_to_actor.insert(
-		&[&message_id.gateway_id, &message_id.request_id],
+		tunnel_request_key(&message_id.gateway_id, &message_id.request_id),
 		actor_id.clone(),
 	);
 
@@ -87,7 +80,7 @@ fn handle_request_chunk(
 ) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(&[&message_id.gateway_id, &message_id.request_id])
+		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
 		.cloned();
 
 	let finish = chunk.finish;
@@ -103,14 +96,14 @@ fn handle_request_chunk(
 
 	if finish {
 		ctx.request_to_actor
-			.remove(&[&message_id.gateway_id, &message_id.request_id]);
+			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	}
 }
 
 fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(&[&message_id.gateway_id, &message_id.request_id])
+		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
@@ -121,7 +114,7 @@ fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId)
 	}
 
 	ctx.request_to_actor
-		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 }
 
 async fn handle_ws_open(
@@ -153,13 +146,13 @@ async fn handle_ws_open(
 	}
 
 	ctx.request_to_actor.insert(
-		&[&message_id.gateway_id, &message_id.request_id],
+		tunnel_request_key(&message_id.gateway_id, &message_id.request_id),
 		actor_id.clone(),
 	);
 	ctx.shared
 		.live_tunnel_requests
 		.upsert_async(
-			make_ws_key(&message_id.gateway_id, &message_id.request_id),
+			tunnel_request_key(&message_id.gateway_id, &message_id.request_id),
 			actor_id.clone(),
 		)
 		.await;
@@ -191,7 +184,7 @@ fn handle_ws_message(
 	let message_index = message_id.message_index;
 	let actor_id = ctx
 		.request_to_actor
-		.get(&[&message_id.gateway_id, &message_id.request_id])
+		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
@@ -263,7 +256,7 @@ fn handle_ws_close(
 ) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(&[&message_id.gateway_id, &message_id.request_id])
+		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
@@ -283,10 +276,10 @@ fn handle_ws_close(
 	}
 
 	ctx.request_to_actor
-		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 	ctx.shared
 		.live_tunnel_requests
-		.remove_sync(&make_ws_key(&message_id.gateway_id, &message_id.request_id));
+		.remove_sync(&tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
 }
 
 fn to_envoy_tunnel_message_kind_name(
@@ -325,7 +318,7 @@ pub fn send_hibernatable_ws_message_ack(
 ) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(&[&gateway_id, &request_id])
+		.get(tunnel_request_key(&gateway_id, &request_id))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
