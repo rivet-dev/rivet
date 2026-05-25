@@ -235,7 +235,9 @@ export class ActorConnRaw {
 			},
 		});
 
-		this.#keepNodeAliveInterval = setInterval(() => 60_000);
+		// Keep the Node event loop alive while this connection is active without blocking exit.
+		this.#keepNodeAliveInterval = setInterval(() => {}, 60_000);
+		this.#keepNodeAliveInterval.unref?.();
 	}
 
 	#clearResolvedActorIdentity() {
