@@ -69,6 +69,7 @@ const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
 #[cfg(test)]
 const LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD: Duration = Duration::from_secs(1);
 const INSPECTOR_SERIALIZE_STATE_INTERVAL: Duration = Duration::from_millis(50);
+const INBOX_DEPTH_SAMPLE_INTERVAL: Duration = Duration::from_secs(1);
 const INSPECTOR_OVERLAY_CHANNEL_CAPACITY: usize = 32;
 
 pub use crate::actor::task_types::LifecycleState;
@@ -463,6 +464,7 @@ impl ActorTask {
 
 	async fn run_live(&mut self) -> LiveExit {
 		let activity_notify = self.ctx.sleep_activity_notify();
+		let mut inbox_depth_sample_deadline = Instant::now() + INBOX_DEPTH_SAMPLE_INTERVAL;
 
 		loop {
 			if self.ctx.acknowledge_activity_dirty() {
@@ -470,10 +472,12 @@ impl ActorTask {
 					return exit;
 				}
 			}
-			// TODO: Sample inbox depths periodically instead of on every loop iteration.
-			self.record_inbox_depths();
 			tokio::select! {
 				biased;
+				_ = Self::inbox_depth_sample_tick(inbox_depth_sample_deadline) => {
+					self.record_inbox_depths();
+					inbox_depth_sample_deadline = Instant::now() + INBOX_DEPTH_SAMPLE_INTERVAL;
+				}
 				lifecycle_command = self.lifecycle_inbox.recv() => {
 					match lifecycle_command {
 						Some(command) => {
@@ -1896,6 +1900,10 @@ impl ActorTask {
 			return;
 		};
 
+		sleep_until(deadline).await;
+	}
+
+	async fn inbox_depth_sample_tick(deadline: Instant) {
 		sleep_until(deadline).await;
 	}
 

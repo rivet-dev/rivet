@@ -210,7 +210,7 @@ mod moved_tests {
 		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
 		WebSocketSender,
 	};
-	use rivet_envoy_client::context::{SharedActorEntry, SharedContext, WsTxMessage};
+	use rivet_envoy_client::context::{SharedActorEntry, SharedContext};
 	use rivet_envoy_client::handle::EnvoyHandle;
 	use rivet_envoy_client::protocol;
 	use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
@@ -291,15 +291,12 @@ mod moved_tests {
 		pending_restores: Vec<HibernatingWebSocketMetadata>,
 	) -> EnvoyHandle {
 		let (envoy_tx, _envoy_rx) = mpsc::unbounded_channel();
-		let live_tunnel_requests = Arc::new(std::sync::Mutex::new(HashMap::new()));
-		{
-			let mut requests = live_tunnel_requests
-				.lock()
-				.expect("live tunnel request registry poisoned");
-			for request_key in live_connections {
-				requests.insert(request_key, actor_id.to_owned());
-			}
+		let live_tunnel_requests = Arc::new(scc::HashMap::new());
+		for request_key in live_connections {
+			live_tunnel_requests.upsert_sync(request_key, actor_id.to_owned());
 		}
+		let pending_hibernation_restores = Arc::new(scc::HashMap::new());
+		pending_hibernation_restores.upsert_sync(actor_id.to_owned(), pending_restores);
 		let shared = Arc::new(SharedContext {
 			config: EnvoyConfig {
 				version: 1,
@@ -315,16 +312,11 @@ mod moved_tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
-			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors: Arc::new(scc::HashMap::new()),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
 			live_tunnel_requests,
-			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::from([(
-				actor_id.to_owned(),
-				pending_restores,
-			)]))),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			pending_hibernation_restores,
+			ws_tx: Default::default(),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(0),
@@ -332,21 +324,17 @@ mod moved_tests {
 			ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
-		shared
-			.actors
-			.lock()
-			.expect("shared actor registry poisoned")
-			.entry(actor_id.to_owned())
-			.or_insert_with(HashMap::new)
-			.insert(
-				generation,
-				SharedActorEntry {
-					handle: mpsc::unbounded_channel().0,
-					active_http_request_count: Arc::new(
-						rivet_envoy_client::async_counter::AsyncCounter::new(),
-					),
-				},
-			);
+		let generations = Arc::new(scc::HashMap::new());
+		generations.upsert_sync(
+			generation,
+			SharedActorEntry {
+				handle: mpsc::unbounded_channel().0,
+				active_http_request_count: Arc::new(
+					rivet_envoy_client::async_counter::AsyncCounter::new(),
+				),
+			},
+		);
+		shared.actors.upsert_sync(actor_id.to_owned(), generations);
 		EnvoyHandle::from_shared(shared)
 	}
 
@@ -367,13 +355,11 @@ mod moved_tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
-			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors: Arc::new(scc::HashMap::new()),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
-			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			live_tunnel_requests: Arc::new(scc::HashMap::new()),
+			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
+			ws_tx: Default::default(),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(0),

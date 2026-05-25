@@ -13,7 +13,7 @@ mod moved_tests {
 		BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse,
 		WebSocketHandler, WebSocketSender,
 	};
-	use rivet_envoy_client::context::{SharedContext, WsTxMessage};
+	use rivet_envoy_client::context::SharedContext;
 	use rivet_envoy_client::envoy::ToEnvoyMessage;
 	use rivet_envoy_client::handle::EnvoyHandle;
 	use rivet_envoy_client::protocol;
@@ -245,13 +245,11 @@ mod moved_tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
-			actors: Arc::new(Mutex::new(HashMap::new())),
+			actors: Arc::new(scc::HashMap::new()),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
-			live_tunnel_requests: Arc::new(Mutex::new(HashMap::new())),
-			pending_hibernation_restores: Arc::new(Mutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			live_tunnel_requests: Arc::new(scc::HashMap::new()),
+			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
+			ws_tx: Default::default(),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(0),
@@ -558,7 +556,7 @@ mod moved_tests {
 			let mut visitor = MessageVisitor::default();
 			event.record(&mut visitor);
 			if visitor.message.as_deref()
-				== Some("shutdown task spawned after teardown; aborting immediately")
+				== Some("actor work spawned after teardown; aborting immediately")
 			{
 				self.count.fetch_add(1, Ordering::SeqCst);
 			}

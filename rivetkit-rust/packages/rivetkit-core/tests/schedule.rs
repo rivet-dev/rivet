@@ -2,14 +2,13 @@ use super::*;
 
 mod moved_tests {
 	use std::collections::HashMap;
-	use std::sync::Mutex as EnvoySharedMutex;
 	use std::sync::atomic::AtomicBool;
 
 	use rivet_envoy_client::config::{
 		BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
 		WebSocketSender,
 	};
-	use rivet_envoy_client::context::{SharedContext, WsTxMessage};
+	use rivet_envoy_client::context::SharedContext;
 	use rivet_envoy_client::envoy::ToEnvoyMessage;
 	use rivet_envoy_client::protocol;
 	use tokio::sync::mpsc;
@@ -87,13 +86,11 @@ mod moved_tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
-			actors: Arc::new(EnvoySharedMutex::new(HashMap::new())),
+			actors: Arc::new(scc::HashMap::new()),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
-			live_tunnel_requests: Arc::new(EnvoySharedMutex::new(HashMap::new())),
-			pending_hibernation_restores: Arc::new(EnvoySharedMutex::new(HashMap::new())),
-			ws_tx: Arc::new(tokio::sync::Mutex::new(
-				None::<mpsc::UnboundedSender<WsTxMessage>>,
-			)),
+			live_tunnel_requests: Arc::new(scc::HashMap::new()),
+			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
+			ws_tx: Default::default(),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(0),

@@ -9,7 +9,7 @@ use rivet_envoy_client::config::{
 	BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse,
 	WebSocketHandler, WebSocketSender,
 };
-use rivet_envoy_client::context::{SharedContext, WsTxMessage};
+use rivet_envoy_client::context::SharedContext;
 use rivet_envoy_client::envoy::ToEnvoyMessage;
 use rivet_envoy_client::handle::EnvoyHandle;
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
@@ -170,7 +170,7 @@ fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>)
 		actors_notify: Arc::new(tokio::sync::Notify::new()),
 		live_tunnel_requests: Default::default(),
 		pending_hibernation_restores: Default::default(),
-		ws_tx: Arc::new(AsyncMutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
+		ws_tx: Default::default(),
 		protocol_metadata: Arc::new(AsyncMutex::new(None)),
 		shutting_down: AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
