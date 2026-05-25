@@ -80,6 +80,10 @@ ENV PORT=8080
 # RIVET_RUN_ENGINE=1 cannot be used here because it would also start an
 # embedded engine, conflicting with the cloud-supplied endpoint.
 ENV KITCHEN_SINK_SERVERLESS_URL=cloud
+# Enable rivetkit prometheus metrics on /api/rivet/metrics. A bearer token is
+# required by rivetkit-core; this token is shared across kitchen-sink deploys.
+ENV RIVETKIT_METRICS_ENABLED=1
+ENV RIVETKIT_METRICS_TOKEN=kitchen-sink-metrics
 EXPOSE 8080
 # Run the bundled server directly so node is pid1. Signals reach the rivetkit
 # SIGTERM handler without going through pnpm/tsx wrappers.

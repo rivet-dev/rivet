@@ -12851,7 +12851,7 @@ import { Hono as Hono3 } from "hono";
 import * as v8 from "v8";
 var app = new Hono3();
 var port = Number.parseInt(process.env.PORT ?? "3000", 10);
-var serverlessMode = process.env.RIVET_RUN_ENGINE === "1" || process.env.RIVET_SERVERLESS_URL !== void 0 || process.env.KITCHEN_SINK_SERVERLESS_URL !== void 0;
+var serverlessMode = process.env.RIVET_RUN_ENGINE === "1" || !!process.env.RIVET_SERVERLESS_URL || !!process.env.KITCHEN_SINK_SERVERLESS_URL;
 process.on("exit", (code) => {
   console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
 });

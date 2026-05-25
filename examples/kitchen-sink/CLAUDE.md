@@ -64,7 +64,55 @@ gcloud run services update <service> \
   --image us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag>
 ```
 
-The kitchen-sink is deployed on Railway via Rivet Cloud. To test actors and inspect their SQLite databases, use the Rivet gateway API.
+### Railway Deploys
+
+The kitchen-sink also runs on Railway as a long-lived ("serverful") fleet for load tests. Railway pulls a pre-built Docker image — it does NOT build from the repo. Railway's RAILPACK auto-build cannot reproduce our Dockerfile because it depends on the pre-built `rivetkit-napi.linux-x64-gnu.node` being copied into `examples/kitchen-sink/` (gitignored).
+
+Service info:
+- Project: `kitchen-sink` (`cec5b904-ff03-4621-9bb7-f82f9678be68`)
+- Environment: `production` (`615d08c3-5eca-4a4c-baaf-352807974d9d`)
+- Service: `rivet` (`592ea18b-a70f-459d-bda5-2cc61f7f6b4e`)
+- Source: Docker Hub image `nathanflurry/rivet-kitchen-sink:<tag>` (private repo, Railway has cached pull creds)
+
+Deploy steps:
+
+```bash
+# 1. Build + push a fresh tag (reuses the same Dockerfile Cloud Run uses; the
+#    pre-built rivetkit-napi.linux-x64-gnu.node must already exist at
+#    examples/kitchen-sink/rivetkit-napi.linux-x64-gnu.node).
+SHA=$(git rev-parse --short HEAD)
+TAG="railway-$(date +%Y%m%d-%H%M%S)-$SHA"
+docker build -f examples/kitchen-sink/Dockerfile -t nathanflurry/rivet-kitchen-sink:$TAG .
+docker push nathanflurry/rivet-kitchen-sink:$TAG
+
+# 2. Point Railway at the new tag and trigger a deploy (GraphQL).
+TOKEN=$(python3 -c "import json; print(json.load(open('/home/nathan/.railway/config.json'))['user']['accessToken'])")
+curl -sS -X POST https://backboard.railway.com/graphql/v2 \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"query\":\"mutation(\$sid:String!,\$eid:String!,\$input:ServiceInstanceUpdateInput!){serviceInstanceUpdate(serviceId:\$sid,environmentId:\$eid,input:\$input)}\",\"variables\":{\"sid\":\"592ea18b-a70f-459d-bda5-2cc61f7f6b4e\",\"eid\":\"615d08c3-5eca-4a4c-baaf-352807974d9d\",\"input\":{\"source\":{\"image\":\"docker.io/nathanflurry/rivet-kitchen-sink:$TAG\"}}}}"
+curl -sS -X POST https://backboard.railway.com/graphql/v2 \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"query":"mutation($sid:String!,$eid:String!){serviceInstanceDeployV2(serviceId:$sid,environmentId:$eid)}","variables":{"sid":"592ea18b-a70f-459d-bda5-2cc61f7f6b4e","eid":"615d08c3-5eca-4a4c-baaf-352807974d9d"}}'
+
+# 3. Watch the deploy.
+railway status
+railway logs --deployment --lines 200 <deployment-id>
+```
+
+Gotchas:
+- Do NOT use `railway up`. It uploads the monorepo and runs RAILPACK / Nixpacks, which cannot reproduce the kitchen-sink build (missing NAPI binary, vite `/frontend/main.tsx` resolution under Railpack root, etc.). The image-source flow above is the only supported path.
+- Do NOT set a custom `startCommand` on the Railway service. The image's CMD (`node --enable-source-maps dist-server/server.mjs`) is correct; any override that runs `pnpm start` will fail with `sh: 1: tsx: not found` because the production image does not install `tsx`.
+- `dockerfilePath` on the service instance is irrelevant when `source.image` is set, but Railway sometimes shows a stale value (e.g. `examples/kitchen-sink/Dockerfile` or even `/examples/sandbox/Dockerfile`). Ignore it — the image-source path bypasses building.
+- Image registry is private. Railway authenticates via cached creds from a prior push. If a fresh region/replica fails to pull, set Private Image Credentials on the service: Settings → Source → Private Image Credentials, or via GraphQL `serviceInstanceUpdate({ registryCredentials: { username, password } })`. Alternative: make the Docker Hub repo public.
+- Verify the image runs locally before pushing to Railway:
+  ```bash
+  docker run --rm -p 8080:8080 -e PORT=8080 \
+    -e RIVET_ENDPOINT="<endpoint>" -e RIVET_POOL=rw \
+    nathanflurry/rivet-kitchen-sink:$TAG
+  curl http://localhost:8080/api/rivet/health
+  ```
+
+To test actors and inspect their SQLite databases, use the Rivet gateway API.
 
 See [Debugging Docs](https://rivet.dev/docs/actors/debugging) for full inspector documentation.
 

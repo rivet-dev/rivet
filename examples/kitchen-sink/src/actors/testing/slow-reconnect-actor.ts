@@ -971,6 +971,10 @@ export const registry = setup({
 	maxOutgoingMessageSize: 5 * 1024 * 1024,
 })
 
-if (import.meta.main) {
-	registry.start()
-}
+// NOTE: do not call registry.start() at module top-level here, even guarded
+// by `import.meta.main`. When tsup bundles this file into the kitchen-sink
+// server entry, `import.meta.main` evaluates to true for the bundle as a
+// whole, so this would spawn a second runner that only knows about
+// `slowReconnectActor` and rejects every other actor on the shared serverful
+// pool with `not_registered`. If you want to run this actor standalone, do
+// it from a separate entrypoint file.

@@ -8,8 +8,8 @@ const app = new Hono();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 const serverlessMode =
 	process.env.RIVET_RUN_ENGINE === "1" ||
-	process.env.RIVET_SERVERLESS_URL !== undefined ||
-	process.env.KITCHEN_SINK_SERVERLESS_URL !== undefined;
+	!!process.env.RIVET_SERVERLESS_URL ||
+	!!process.env.KITCHEN_SINK_SERVERLESS_URL;
 
 process.on("exit", (code) => {
 	console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
@@ -155,10 +155,13 @@ app.use("*", async (c, next) => {
 	// );
 });
 
-if (serverlessMode) {
-	app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-	app.all("/api/rivet", (c) => registry.handler(c.req.raw));
-} else {
+// Always mount the rivetkit handler so /api/rivet/health and
+// /api/rivet/metrics are reachable in both serverful and serverless modes. In
+// serverful mode this only serves diagnostic endpoints; the runner's outbound
+// connection to the engine is started separately via registry.start().
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+app.all("/api/rivet", (c) => registry.handler(c.req.raw));
+if (!serverlessMode) {
 	registry.start();
 }
 
