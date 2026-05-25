@@ -15,6 +15,7 @@ mod imp {
 
 	use crate::context::{SharedContext, WsTxMessage};
 	use crate::envoy::ToEnvoyMessage;
+	use crate::metrics::METRICS;
 	use crate::utils::{BackoffOptions, calculate_backoff, display_id, parse_ws_close_reason};
 
 	const STABLE_CONNECTION_MS: u64 = 60_000;
@@ -197,6 +198,7 @@ mod imp {
 							inner_data_len,
 						} => {
 							let depth_after_recv = shared.ws_tx_depth.fetch_sub(1, Ordering::AcqRel) - 1;
+							METRICS.ws_tx_depth.dec();
 							let payload_len = data.len();
 							let dequeue_ts = crate::time::now_millis();
 							let queue_wait_ms = dequeue_ts - enqueue_ts;

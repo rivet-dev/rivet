@@ -469,7 +469,7 @@
           "minimum": 0.0
         },
         "tcp_nodelay": {
-          "description": "Enables TCP_NODELAY on accepted Guard sockets.",
+          "description": "Enables TCP_NODELAY on accepted Guard sockets. Defaults to `true`; set to `false` only in unusual environments where Nagle's coalescing is preferable (extreme packet-rate constraints).",
           "type": [
             "boolean",
             "null"

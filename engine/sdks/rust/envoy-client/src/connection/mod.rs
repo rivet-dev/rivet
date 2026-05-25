@@ -168,6 +168,7 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		inner_data_len,
 	});
 	shared.ws_tx_depth.fetch_add(1, Ordering::Release);
+	METRICS.ws_tx_depth.inc();
 	if let (Some(gateway_id), Some(request_id), Some(message_index)) =
 		(gateway_id.as_ref(), request_id.as_ref(), message_index)
 	{

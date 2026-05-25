@@ -9,7 +9,9 @@ pub struct Guard {
 	pub host: Option<IpAddr>,
 	/// Port for HTTP traffic
 	pub port: Option<u16>,
-	/// Enables TCP_NODELAY on accepted Guard sockets.
+	/// Enables TCP_NODELAY on accepted Guard sockets. Defaults to `true`; set to
+	/// `false` only in unusual environments where Nagle's coalescing is preferable
+	/// (extreme packet-rate constraints).
 	pub tcp_nodelay: Option<bool>,
 	/// Enables the internal websocket health route for debug and latency testing. This is intended
 	/// for websocket ping/pong verification and should remain disabled in normal deployments.
@@ -38,7 +40,7 @@ impl Guard {
 	}
 
 	pub fn tcp_nodelay(&self) -> bool {
-		self.tcp_nodelay.unwrap_or(false)
+		self.tcp_nodelay.unwrap_or(true)
 	}
 
 	pub fn enable_websocket_health_route(&self) -> bool {

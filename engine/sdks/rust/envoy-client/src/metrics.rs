@@ -39,6 +39,7 @@ pub struct EnvoyClientMetrics {
 	pub ws_reconnect_total: IntCounterVec,
 	pub ws_session_duration_seconds: Histogram,
 	pub envoy_tx_depth: IntGauge,
+	pub ws_tx_depth: IntGauge,
 	pub lost_timer_armed_total: IntCounterVec,
 	pub lost_timer_outcome_total: IntCounterVec,
 	pub reconnect_within_grace_seconds: Histogram,
@@ -143,6 +144,12 @@ impl EnvoyClientMetrics {
 			"current depth of the unbounded envoy_tx mpsc between WS read task and envoy_loop",
 		)
 		.expect("create envoy_client_envoy_tx_depth gauge");
+
+		let ws_tx_depth = IntGauge::new(
+			"rivetkit_envoy_client_ws_tx_depth",
+			"current depth of the ws_tx mpsc between message producers and the websocket write task (frames enqueued but not yet written to the socket)",
+		)
+		.expect("create envoy_client_ws_tx_depth gauge");
 
 		let lost_timer_armed_total = IntCounterVec::new(
 			Opts::new(
@@ -255,6 +262,7 @@ impl EnvoyClientMetrics {
 			ws_session_duration_seconds.clone(),
 		);
 		register(&rivet_metrics::REGISTRY, envoy_tx_depth.clone());
+		register(&rivet_metrics::REGISTRY, ws_tx_depth.clone());
 		register(&rivet_metrics::REGISTRY, lost_timer_armed_total.clone());
 		register(&rivet_metrics::REGISTRY, lost_timer_outcome_total.clone());
 		register(
@@ -284,6 +292,7 @@ impl EnvoyClientMetrics {
 			ws_reconnect_total,
 			ws_session_duration_seconds,
 			envoy_tx_depth,
+			ws_tx_depth,
 			lost_timer_armed_total,
 			lost_timer_outcome_total,
 			reconnect_within_grace_seconds,

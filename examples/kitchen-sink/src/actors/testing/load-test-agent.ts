@@ -40,7 +40,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 export const loadTestAgent = actor({
 	options: {
 		canHibernateWebSocket: false,
-		sleepGracePeriod: 30_000,
+		sleepGracePeriod: 5_000,
 	},
 	db: db({
 		onMigrate: async (db) => {

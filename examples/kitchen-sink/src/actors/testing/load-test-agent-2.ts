@@ -222,7 +222,7 @@ function send(
 export const loadTestAgent2 = actor({
 	options: {
 		canHibernateWebSocket: false,
-		sleepGracePeriod: 1_000,
+		sleepGracePeriod: 5_000,
 	},
 	state: {
 		runCount: 0,

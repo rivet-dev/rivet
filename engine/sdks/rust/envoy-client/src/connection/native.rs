@@ -116,6 +116,36 @@ async fn single_connection(
 		.map_err(|e| anyhow::anyhow!("failed to build ws request: {e}"))?;
 
 	let (ws_stream, _) = tokio_tungstenite::connect_async(request).await?;
+
+	// Disable Nagle on the underlying TCP socket. Envoy traffic is small,
+	// bidirectional, and latency-sensitive (pings, acks, events); without this each
+	// sub-MSS write can stall up to 200ms behind delayed ACKs. Set
+	// RIVET_ENVOY_CLIENT_TCP_NODELAY=false to opt out.
+	let nodelay_enabled = std::env::var("RIVET_ENVOY_CLIENT_TCP_NODELAY")
+		.map(|v| !matches!(v.as_str(), "0" | "false" | "no" | "off"))
+		.unwrap_or(true);
+	if nodelay_enabled {
+		use tokio_tungstenite::MaybeTlsStream;
+		let result = match ws_stream.get_ref() {
+			MaybeTlsStream::Plain(tcp) => tcp.set_nodelay(true),
+			MaybeTlsStream::Rustls(tls) => tls.get_ref().0.set_nodelay(true),
+			// MaybeTlsStream is #[non_exhaustive]. Hitting this arm means
+			// upstream added a variant (or a feature flag we don't enable
+			// today is now in effect — e.g. native-tls). Surface loudly so
+			// we add explicit handling instead of silently leaving Nagle on.
+			other => {
+				tracing::warn!(
+					discriminant = ?std::mem::discriminant(other),
+					"envoy ws using unsupported MaybeTlsStream variant; TCP_NODELAY skipped"
+				);
+				Ok(())
+			}
+		};
+		if let Err(err) = result {
+			tracing::debug!(?err, "failed to enable TCP_NODELAY on envoy ws");
+		}
+	}
+
 	let (mut write, mut read) = ws_stream.split();
 
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel::<WsTxMessage>();
@@ -162,6 +192,7 @@ async fn single_connection(
 					} => {
 						let depth_after_recv =
 							shared2.ws_tx_depth.fetch_sub(1, Ordering::AcqRel) - 1;
+						METRICS.ws_tx_depth.dec();
 						let payload_len = data.len();
 						let dequeue_ts = crate::time::now_millis();
 						let queue_wait_ms = dequeue_ts - enqueue_ts;
