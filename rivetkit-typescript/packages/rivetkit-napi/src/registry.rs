@@ -185,7 +185,7 @@ impl CoreRegistry {
 					serverless_validate_endpoint: config.serverless_validate_endpoint,
 					serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
 						as usize,
-					serverless_cache_envoy: true,
+					serverless_cache_envoy: false,
 				},
 				self.shutdown_token.clone(),
 			)
@@ -536,7 +536,7 @@ impl CoreRegistry {
 				serverless_validate_endpoint: config.serverless_validate_endpoint,
 				serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
 					as usize,
-				serverless_cache_envoy: true,
+				serverless_cache_envoy: false,
 			})
 			.await;
 

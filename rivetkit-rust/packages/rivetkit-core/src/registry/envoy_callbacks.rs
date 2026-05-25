@@ -196,7 +196,7 @@ impl ServeConfig {
 			serverless_client_token: settings.serverless_client_token,
 			serverless_validate_endpoint: settings.serverless_validate_endpoint,
 			serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
-			serverless_cache_envoy: true,
+			serverless_cache_envoy: false,
 		}
 	}
 }

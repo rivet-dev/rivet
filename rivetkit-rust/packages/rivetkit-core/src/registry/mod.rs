@@ -230,6 +230,13 @@ pub struct ServeConfig {
 	pub serverless_client_token: Option<String>,
 	pub serverless_validate_endpoint: bool,
 	pub serverless_max_start_payload_bytes: usize,
+	/// Share one envoy WebSocket across serverless `/start` requests.
+	///
+	/// Security: keep this disabled for this release. A cached envoy proves the
+	/// `x-rivet-token` only when the socket is created, so later public `/start`
+	/// requests could reuse that socket without proving they have the token. The
+	/// next protocol version should add authenticated reuse so this performance
+	/// optimization can be enabled again.
 	pub serverless_cache_envoy: bool,
 }
 
