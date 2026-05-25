@@ -204,17 +204,14 @@ impl EnvoyHandle {
 				return;
 			}
 
-			let actor_is_registered = {
-				let guard = self
-					.shared
-					.actors
-					.lock()
-					.expect("shared actor registry poisoned");
-				guard
-					.get(actor_id)
-					.and_then(|generations| generations.get(&generation))
-					.is_some()
-			};
+			let actor_is_registered = self
+				.shared
+				.actors
+				.read_async(actor_id, |_, generations| {
+					generations.contains_sync(&generation)
+				})
+				.await
+				.unwrap_or(false);
 
 			if registered && !actor_is_registered {
 				return;
@@ -235,24 +232,26 @@ impl EnvoyHandle {
 		actor_id: &str,
 		generation: Option<u32>,
 	) -> Option<Arc<AsyncCounter>> {
-		let guard = self
-			.shared
-			.actors
-			.lock()
-			.expect("shared actor registry poisoned");
-		let generations = guard.get(actor_id)?;
+		self.shared.actors.read_sync(actor_id, |_, generations| {
+			if let Some(generation) = generation {
+				return generations.read_sync(&generation, |_, actor| {
+					actor.active_http_request_count.clone()
+				});
+			}
 
-		if let Some(generation) = generation {
-			return generations
-				.get(&generation)
-				.map(|actor| actor.active_http_request_count.clone());
-		}
-
-		generations
-			.iter()
-			.filter(|(_, actor)| !actor.handle.is_closed())
-			.max_by_key(|(generation, _)| *generation)
-			.map(|(_, actor)| actor.active_http_request_count.clone())
+			let mut best: Option<(u32, Arc<AsyncCounter>)> = None;
+			generations.iter_sync(|generation, actor| {
+				if !actor.handle.is_closed()
+					&& best
+						.as_ref()
+						.is_none_or(|(best_generation, _)| generation > best_generation)
+				{
+					best = Some((*generation, actor.active_http_request_count.clone()));
+				}
+				true
+			});
+			best.map(|(_, counter)| counter)
+		})?
 	}
 
 	pub async fn get_active_http_request_count(
@@ -275,24 +274,20 @@ impl EnvoyHandle {
 		if self
 			.shared
 			.live_tunnel_requests
-			.lock()
-			.expect("shared live tunnel request registry poisoned")
-			.get(&key)
-			.is_some_and(|live_actor_id| live_actor_id == actor_id)
+			.read_sync(&key, |_, live_actor_id| live_actor_id == actor_id)
+			.unwrap_or(false)
 		{
 			return true;
 		}
 
 		self.shared
 			.pending_hibernation_restores
-			.lock()
-			.expect("shared pending hibernation restore registry poisoned")
-			.get(actor_id)
-			.is_some_and(|entries| {
+			.read_sync(actor_id, |_, entries| {
 				entries
 					.iter()
 					.any(|entry| entry.gateway_id == gateway_id && entry.request_id == request_id)
 			})
+			.unwrap_or(false)
 	}
 
 	pub fn set_alarm(&self, actor_id: String, alarm_ts: Option<i64>, generation: Option<u32>) {
@@ -547,9 +542,7 @@ impl EnvoyHandle {
 	) {
 		self.shared
 			.pending_hibernation_restores
-			.lock()
-			.expect("shared pending hibernation restore registry poisoned")
-			.insert(actor_id, meta_entries);
+			.upsert_sync(actor_id, meta_entries);
 	}
 
 	pub(crate) fn take_pending_hibernation_restore(
@@ -558,9 +551,8 @@ impl EnvoyHandle {
 	) -> Option<Vec<HibernatingWebSocketMetadata>> {
 		self.shared
 			.pending_hibernation_restores
-			.lock()
-			.expect("shared pending hibernation restore registry poisoned")
-			.remove(actor_id)
+			.remove_sync(actor_id)
+			.map(|(_, meta_entries)| meta_entries)
 	}
 
 	pub fn send_hibernatable_ws_message_ack(
@@ -642,19 +634,17 @@ impl EnvoyStatusHandle {
 }
 
 fn active_actor_count(shared: &SharedContext) -> usize {
-	let guard = shared
-		.actors
-		.lock()
-		.expect("shared actor registry poisoned");
-	guard
-		.values()
-		.map(|generations| {
-			generations
-				.values()
-				.filter(|actor| !actor.handle.is_closed())
-				.count()
-		})
-		.sum()
+	let mut count = 0;
+	shared.actors.iter_sync(|_, generations| {
+		generations.iter_sync(|_, actor| {
+			if !actor.handle.is_closed() {
+				count += 1;
+			}
+			true
+		});
+		true
+	});
+	count
 }
 
 fn decode_serverless_actor_start_payload(

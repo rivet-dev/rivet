@@ -90,10 +90,10 @@ fn new_envoy_context() -> EnvoyContext {
 		},
 		envoy_key: "test-envoy".to_string(),
 		envoy_tx,
-		actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		actors: Arc::new(scc::HashMap::new()),
 		actors_notify: Arc::new(tokio::sync::Notify::new()),
-		live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
-		pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		live_tunnel_requests: Arc::new(scc::HashMap::new()),
+		pending_hibernation_restores: Arc::new(scc::HashMap::new()),
 		ws_tx: Arc::new(tokio::sync::Mutex::new(
 			None::<mpsc::UnboundedSender<WsTxMessage>>,
 		)),

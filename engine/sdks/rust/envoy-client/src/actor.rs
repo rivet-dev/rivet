@@ -1746,10 +1746,10 @@ mod tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
-			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors: Arc::new(scc::HashMap::new()),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
-			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			live_tunnel_requests: Arc::new(scc::HashMap::new()),
+			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(
 				None::<mpsc::UnboundedSender<WsTxMessage>>,
 			)),
@@ -2067,19 +2067,15 @@ mod tests {
 			started_rx: tokio::sync::watch::channel(()).1,
 		};
 		let counter = Arc::new(AsyncCounter::new());
-		shared
-			.actors
-			.lock()
-			.expect("shared actor registry poisoned")
-			.entry("actor-4".to_string())
-			.or_insert_with(HashMap::new)
-			.insert(
-				4,
-				SharedActorEntry {
-					handle: mpsc::unbounded_channel().0,
-					active_http_request_count: counter.clone(),
-				},
-			);
+		let generations = Arc::new(scc::HashMap::new());
+		generations.upsert_sync(
+			4,
+			SharedActorEntry {
+				handle: mpsc::unbounded_channel().0,
+				active_http_request_count: counter.clone(),
+			},
+		);
+		shared.actors.upsert_sync("actor-4".to_string(), generations);
 
 		let request_guard = ActiveHttpRequestGuard::new(counter);
 		let handle_counter = handle

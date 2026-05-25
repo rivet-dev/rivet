@@ -158,12 +158,11 @@ async fn handle_ws_open(
 	);
 	ctx.shared
 		.live_tunnel_requests
-		.lock()
-		.expect("shared live tunnel request registry poisoned")
-		.insert(
+		.upsert_async(
 			make_ws_key(&message_id.gateway_id, &message_id.request_id),
 			actor_id.clone(),
-		);
+		)
+		.await;
 
 	// Convert HashableMap headers to BTreeMap for the actor message
 	let headers = open
@@ -287,9 +286,7 @@ fn handle_ws_close(
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
 	ctx.shared
 		.live_tunnel_requests
-		.lock()
-		.expect("shared live tunnel request registry poisoned")
-		.remove(&make_ws_key(&message_id.gateway_id, &message_id.request_id));
+		.remove_sync(&make_ws_key(&message_id.gateway_id, &message_id.request_id));
 }
 
 fn to_envoy_tunnel_message_kind_name(

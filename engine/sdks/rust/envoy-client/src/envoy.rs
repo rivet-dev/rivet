@@ -17,7 +17,7 @@ use crate::actor::ToActor;
 use crate::commands::{ACK_COMMANDS_INTERVAL_MS, handle_commands, send_command_ack};
 use crate::config::EnvoyConfig;
 use crate::connection::{start_connection, ws_send};
-use crate::context::{SharedContext, WsTxMessage};
+use crate::context::{SharedActorGenerations, SharedContext, WsTxMessage};
 use crate::events::{handle_ack_events, handle_send_events, resend_unacknowledged_events};
 use crate::handle::EnvoyHandle;
 use crate::kv::{
@@ -172,19 +172,20 @@ impl EnvoyContext {
 					received_stop: false,
 				},
 			);
-		self.shared
+		let shared_generations = self
+			.shared
 			.actors
-			.lock()
-			.expect("shared actor registry poisoned")
-			.entry(actor_id)
-			.or_insert_with(HashMap::new)
-			.insert(
-				generation,
-				crate::context::SharedActorEntry {
-					handle,
-					active_http_request_count,
-				},
-			);
+			.entry_sync(actor_id)
+			.or_insert_with(|| Arc::new(SharedActorGenerations::new()))
+			.get()
+			.clone();
+		shared_generations.upsert_sync(
+			generation,
+			crate::context::SharedActorEntry {
+				handle,
+				active_http_request_count,
+			},
+		);
 
 		self.shared.actors_notify.notify_waiters();
 
@@ -210,15 +211,18 @@ impl EnvoyContext {
 			}
 		}
 
-		let mut shared = self
+		if let Some(shared_generations) = self
 			.shared
 			.actors
-			.lock()
-			.expect("shared actor registry poisoned");
-		if let Some(generations) = shared.get_mut(actor_id) {
-			generations.remove(&generation);
-			if generations.is_empty() {
-				shared.remove(actor_id);
+			.read_sync(actor_id, |_, generations| generations.clone())
+		{
+			shared_generations.remove_sync(&generation);
+			if shared_generations.is_empty() {
+				self.shared
+					.actors
+					.remove_if_sync(actor_id, |generations| {
+						Arc::ptr_eq(generations, &shared_generations)
+					});
 			}
 		}
 		self.shared.actors_notify.notify_waiters();
@@ -302,10 +306,10 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		config,
 		envoy_key,
 		envoy_tx: envoy_tx.clone(),
-		actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		actors: Arc::new(scc::HashMap::new()),
 		actors_notify: Arc::new(tokio::sync::Notify::new()),
-		live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
-		pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
+		live_tunnel_requests: Arc::new(scc::HashMap::new()),
+		pending_hibernation_restores: Arc::new(scc::HashMap::new()),
 		ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
@@ -558,11 +562,7 @@ async fn envoy_loop(
 						.with_label_values(&["lost_threshold"])
 						.inc_by(evicted);
 					ctx.actors.clear();
-					ctx.shared
-						.actors
-						.lock()
-						.expect("shared actor registry poisoned")
-						.clear();
+					ctx.shared.actors.clear_sync();
 				}
 
 				lost_timeout = None;
@@ -590,11 +590,7 @@ async fn envoy_loop(
 	fail_remote_sqlite_requests_with_shutdown(&mut ctx);
 
 	ctx.actors.clear();
-	ctx.shared
-		.actors
-		.lock()
-		.expect("shared actor registry poisoned")
-		.clear();
+	ctx.shared.actors.clear_sync();
 
 	tracing::info!("envoy stopped");
 

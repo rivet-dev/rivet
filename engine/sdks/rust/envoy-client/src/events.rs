@@ -163,10 +163,10 @@ mod tests {
 			},
 			envoy_key: "test-envoy".to_string(),
 			envoy_tx,
-			actors: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			actors: Arc::new(scc::HashMap::new()),
 			actors_notify: Arc::new(tokio::sync::Notify::new()),
-			live_tunnel_requests: Arc::new(std::sync::Mutex::new(HashMap::new())),
-			pending_hibernation_restores: Arc::new(std::sync::Mutex::new(HashMap::new())),
+			live_tunnel_requests: Arc::new(scc::HashMap::new()),
+			pending_hibernation_restores: Arc::new(scc::HashMap::new()),
 			ws_tx: Arc::new(tokio::sync::Mutex::new(
 				None::<mpsc::UnboundedSender<WsTxMessage>>,
 			)),
@@ -254,9 +254,7 @@ mod tests {
 		assert!(
 			ctx.shared
 				.actors
-				.lock()
-				.expect("shared actor registry poisoned")
-				.get("actor-stop")
+				.read_sync("actor-stop", |_, _| ())
 				.is_none()
 		);
 		assert!(handle.http_request_counter("actor-stop", Some(1)).is_none());
