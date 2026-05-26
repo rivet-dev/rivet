@@ -5,7 +5,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { formatDistance } from "date-fns";
 import {
 	Button,
@@ -307,8 +307,20 @@ function CreateTs({ createTs }: { createTs: string }) {
 
 function DeploymentNamespace({ namespace }: { namespace: string }) {
 	const provider = useCloudProjectDataProvider();
+	const { organization, project } = useParams({ strict: false }) as {
+		organization: string;
+		project: string;
+	};
 	const { data } = useQuery(
 		provider.currentProjectNamespaceQueryOptions({ namespace }),
 	);
-	return <div>{data?.displayName || <Skeleton className="w-6 h-4" />}</div>;
+	return (
+		<Link
+			to="/orgs/$organization/projects/$project/ns/$namespace"
+			params={{ organization, project, namespace }}
+			className="hover:underline"
+		>
+			{data?.displayName || <Skeleton className="w-6 h-4" />}
+		</Link>
+	);
 }
