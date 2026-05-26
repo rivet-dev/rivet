@@ -99,6 +99,9 @@ fn new_envoy_context() -> EnvoyContext {
 		)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
+		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
+		last_pong_sent_ts: std::sync::atomic::AtomicI64::new(0),
+		ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 	EnvoyContext {
@@ -245,7 +248,7 @@ async fn replayed_command_is_dropped_after_remote_sql_lost_response() {
 		sql_tx,
 	)
 	.await;
-	assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+	assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send { .. })));
 
 	handle_commands(&mut ctx, vec![stop_command("actor-replay", 1, 5)]).await;
 	assert!(matches!(
