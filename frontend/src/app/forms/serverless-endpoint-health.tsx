@@ -20,7 +20,11 @@ import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import { WithTooltip } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
-import { endpointSchema } from "@/app/serverless-connection-check";
+import {
+	endpointSchema,
+	formatServerlessMetadataError,
+	HEALTH_CHECK_FALLBACK_ERROR,
+} from "@/app/serverless-connection-check";
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -182,34 +186,17 @@ export function EndpointHealthIndicator({
 
 const failureSchema = z.object({
 	failure: z.object({
-		error: z.object({
-			message: z.string().optional(),
-			details: z.string().optional(),
-			metadata: z
-				.object({
-					kind: z.string().optional(),
-					status_code: z.number().optional(),
-				})
-				.partial()
-				.optional(),
-		}),
+		error: z.unknown(),
 	}),
 });
 
 function extractErrorMessage(data: unknown, error: unknown): string {
-	const fallback = "Health check failed. Verify the endpoint is reachable.";
 	const parsed = failureSchema.safeParse(data);
 	if (parsed.success) {
-		const { message, details, metadata } = parsed.data.failure.error;
-		if (message) {
-			return details ? `${message} (${details})` : message;
-		}
-		if (metadata?.kind && metadata.status_code) {
-			return `${metadata.kind.replace(/_/g, " ")} (HTTP ${metadata.status_code})`;
-		}
+		return formatServerlessMetadataError(parsed.data.failure.error);
 	}
 	if (error instanceof Error && error.message) {
 		return error.message.slice(0, 200);
 	}
-	return fallback;
+	return HEALTH_CHECK_FALLBACK_ERROR;
 }

@@ -16,6 +16,12 @@ import z from "zod";
 import * as z4 from "zod/v4";
 import { cn, Uptime } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
+import { formatServerlessMetadataError } from "@/app/serverless-health-error";
+
+export {
+	formatServerlessMetadataError,
+	HEALTH_CHECK_FALLBACK_ERROR,
+} from "@/app/serverless-health-error";
 
 const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
 const IPV6_REGEX = /^\[[\da-fA-F:]+\]$/;
@@ -208,31 +214,7 @@ function isRivetHealthCheckFailureResponse(
 	return error && "error" in error;
 }
 
-function formatMetadataError(
-	error: Rivet.RunnerConfigsServerlessMetadataError,
-): string {
-	if ("invalidRequest" in error) return "Invalid request";
-	if ("requestFailed" in error) return "Request failed";
-	if ("requestTimedOut" in error) return "Request timed out";
-	if ("nonSuccessStatus" in error) {
-		const { statusCode, body } = error.nonSuccessStatus;
-		return `Non-success status ${statusCode}${body ? `: ${body}` : ""}`;
-	}
-	if ("invalidResponseJson" in error) {
-		return `Invalid response JSON: ${error.invalidResponseJson.parseError}`;
-	}
-	if ("invalidResponseSchema" in error) {
-		const { runtime, version } = error.invalidResponseSchema;
-		return `Invalid response schema (runtime ${runtime}, version ${version})`;
-	}
-	if ("invalidEnvoyProtocolVersion" in error) {
-		const { version, maxSupported } = error.invalidEnvoyProtocolVersion;
-		return `Unsupported envoy protocol version ${version} (max supported: ${maxSupported})`;
-	}
-	return "Unknown error";
-}
-
-function HealthCheckFailure({
+export function HealthCheckFailure({
 	error,
 }: {
 	error: Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
@@ -244,5 +226,7 @@ function HealthCheckFailure({
 		return null;
 	}
 
-	return <p>Health check failed: {formatMetadataError(error.error)}</p>;
+	return (
+		<p>Health check failed: {formatServerlessMetadataError(error.error)}</p>
+	);
 }
