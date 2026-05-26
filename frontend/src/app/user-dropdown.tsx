@@ -9,7 +9,6 @@ import {
 	faSparkles,
 	faSun,
 	faUserCircle,
-	faUsers,
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
@@ -110,7 +109,7 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 					}}
 				>
 					<Icon icon={faUserCircle} className="mr-2 size-3.5 text-muted-foreground" />
-					Profile
+					Account
 				</DropdownMenuItem>
 				<DropdownMenuItem
 					onSelect={() => {
@@ -134,22 +133,6 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 							<BillingUsageGauge />
 							<BillingPlanBadge />
 						</span>
-					</DropdownMenuItem>
-				) : null}
-				{params.organization ? (
-					<DropdownMenuItem
-						onSelect={() => {
-							return navigate({
-								to: ".",
-								search: (old) => ({
-									...old,
-									settings: "members",
-								}),
-							});
-						}}
-					>
-						<Icon icon={faUsers} className="mr-2 size-3.5 text-muted-foreground" />
-						Members
 					</DropdownMenuItem>
 				) : null}
 				<DropdownMenuSeparator />
