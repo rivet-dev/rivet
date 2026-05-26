@@ -26,6 +26,45 @@ use crate::log::{
 use crate::stats::{State, WorkerHealth};
 use crate::ws::open_raw_ws;
 
+/// Gradually mark workers as "should stop", highest id first, spread evenly over `duration`.
+/// After all workers are marked, set stopping so the schedulers and outer loops exit.
+/// Grace period after `set_stopping` before the process force-exits if workers haven't unwound.
+const SCALE_DOWN_FORCE_EXIT_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
+
+pub fn spawn_scale_down(ctx: Arc<WorkloadCtx>, duration: std::time::Duration, reason: &'static str) {
+	let concurrency = ctx.args.concurrency;
+	tokio::spawn(async move {
+		let prefix = format!("{}{}{}", DIM, iso_now(), RESET);
+		crate::out!(
+			"{} {}scale-down{} reason={} concurrency={} duration_ms={} force_exit_after_ms={}",
+			prefix,
+			BOLD,
+			RESET,
+			reason,
+			concurrency,
+			duration.as_millis(),
+			(duration + SCALE_DOWN_FORCE_EXIT_GRACE).as_millis(),
+		);
+		if concurrency > 0 {
+			let step = duration.checked_div(concurrency).unwrap_or(std::time::Duration::ZERO);
+			for offset in 0..concurrency {
+				if ctx.state.stopping() {
+					break;
+				}
+				sleep(step).await;
+				let id = concurrency - offset;
+				ctx.state.mark_worker_should_stop(id);
+			}
+		}
+		ctx.state.set_stopping();
+
+		// Hard deadline: if workers haven't unwound after the grace period, force exit.
+		sleep(SCALE_DOWN_FORCE_EXIT_GRACE).await;
+		print_concurrent_summary(&ctx, "force-exit");
+		std::process::exit(124);
+	});
+}
+
 pub fn make_key(worker: u32, prefix: &str) -> String {
 	let now_ms = chrono::Utc::now().timestamp_millis();
 	format!("{}-{}-{}", prefix, worker, base36(now_ms as u64))
@@ -309,13 +348,16 @@ pub async fn run_concurrent_mode(
 		state: state.clone(),
 	});
 
-	// Run-for-ms guard: close workers after the deadline.
+	// Run-for-ms guard: begin gradual scale-down after the deadline.
 	if env.run_for_ms > 0 {
-		let state_clone = state.clone();
+		let ctx_clone = ctx.clone();
 		let dur = std::time::Duration::from_millis(env.run_for_ms);
+		let scale_down = std::time::Duration::from_millis(env.scale_down_ms);
 		tokio::spawn(async move {
 			sleep(dur).await;
-			state_clone.set_stopping();
+			if ctx_clone.state.try_begin_scale_down() {
+				spawn_scale_down(ctx_clone, scale_down, "run-for-ms");
+			}
 		});
 	}
 
@@ -346,11 +388,14 @@ async fn run_agent_concurrent_2_mode(
 	state: Arc<State>,
 ) {
 	if env.run_for_ms > 0 {
-		let state_clone = state.clone();
+		let ctx_clone = ctx.clone();
 		let dur = std::time::Duration::from_millis(env.run_for_ms);
+		let scale_down = std::time::Duration::from_millis(env.scale_down_ms);
 		tokio::spawn(async move {
 			sleep(dur).await;
-			state_clone.set_stopping();
+			if ctx_clone.state.try_begin_scale_down() {
+				spawn_scale_down(ctx_clone, scale_down, "run-for-ms");
+			}
 		});
 	}
 
@@ -378,7 +423,7 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 	let mut sequence: u64 = 0;
 	let actor_id: Option<String> = None;
 
-	'worker_loop: while !ctx.state.stopping() {
+	'worker_loop: while !ctx.state.stopping() && !ctx.state.worker_should_stop(worker) {
 		sequence += 1;
 		ctx.state.set_worker_health(worker, WorkerHealth::Connecting);
 		let t0 = Instant::now();
@@ -817,6 +862,11 @@ async fn run_rolling(
 	let interval = std::time::Duration::from_millis(args.interval);
 
 	while !state.stopping() {
+		// Once scale-down has started, stop spawning replacements; in-flight short-lived workers
+		// drain naturally.
+		if state.scaling_down() {
+			break;
+		}
 		// Steady spawn cadence: wait until the next scheduled tick before attempting to acquire
 		// a permit. We use a fixed wall-clock cadence (`next_spawn += interval`) instead of
 		// `sleep(interval)` after each spawn so that brief permit-wait stalls don't propagate
@@ -871,7 +921,7 @@ async fn run_concurrent_worker(
 	let mut reconnect = false;
 	let actor_id: Option<String> = None;
 
-	while !ctx.state.stopping() {
+	while !ctx.state.stopping() && !ctx.state.worker_should_stop(worker) {
 		let t0 = Instant::now();
 		let url = ctx.endpoint.build_raw_ws_url(
 			workload.actor_name(),
@@ -999,6 +1049,9 @@ async fn run_concurrent_worker(
 			tokio::select! {
 				biased;
 				_ = steady_stall_tick.tick() => {
+					if ctx.state.worker_should_stop(worker) || ctx.state.stopping() {
+						break;
+					}
 					if !steady_stall_logged {
 						let elapsed_ms = steady_silence_since.elapsed().as_millis() as u64;
 						if elapsed_ms >= STALL_WARN_THRESHOLD_MS {
@@ -1096,7 +1149,8 @@ async fn run_concurrent_worker(
 			.await;
 
 		let (code, reason) = close_info.unwrap_or((0, String::new()));
-		if !ctx.state.stopping()
+		let exiting = ctx.state.stopping() || ctx.state.worker_should_stop(worker);
+		if !exiting
 			&& !saw_websocket_error
 			&& code == ACTOR_STOPPED_CLOSE_CODE
 			&& reason == ACTOR_STOPPED_CLOSE_REASON
@@ -1104,7 +1158,7 @@ async fn run_concurrent_worker(
 			log_reconnect(&ctx, worker, &key, actor_id.as_deref(), code, &reason);
 			reconnect = true;
 		} else {
-			let unclean = !ctx.state.stopping();
+			let unclean = !exiting;
 			let detail = format!("code={} reason={}", code, reason);
 			log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, unclean);
 		}
