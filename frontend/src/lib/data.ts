@@ -52,10 +52,23 @@ export function deriveOnboardingState(opts: {
 		.find((p) => p !== undefined);
 
 	const hasRunnerNames = (runnerNames?.pages[0]?.names.length ?? 0) > 0;
-	const hasRunnerConfigs =
-		Object.keys(runnerConfigs?.pages[0]?.runnerConfigs ?? {}).length > 0;
+	// A runner-config datacenter counts as "user-onboarded" only when
+	// `metadata.provider` is set. Both onboarding signals write it: the
+	// serverless `upsertRunnerConfig` call here in the frontend, and the
+	// engine-ee compute-pool actor once GCP Cloud Run services come up. A
+	// bare runner config without provider metadata (e.g. compute pre-enabled
+	// out-of-band, or partial backend state) doesn't count, so the user
+	// keeps seeing the provider/backend onboarding step instead of being
+	// pushed straight to "Waiting for an Actor".
+	const hasConfiguredDatacenter = (runnerConfigs?.pages ?? []).some((page) =>
+		Object.values(page.runnerConfigs).some((config) =>
+			Object.values(config.datacenters).some(
+				(dc) => deriveProviderFromMetadata(dc.metadata) !== undefined,
+			),
+		),
+	);
 	const hasActors = actorCount > 0;
-	const hasBackendConfigured = hasRunnerNames || hasRunnerConfigs;
+	const hasBackendConfigured = hasRunnerNames || hasConfiguredDatacenter;
 
 	return {
 		displayOnboarding: !hasBackendConfigured && !hasActors,

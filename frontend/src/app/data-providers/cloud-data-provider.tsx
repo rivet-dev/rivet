@@ -1010,6 +1010,27 @@ export const createProjectContext = ({
 				limit: opts?.limit,
 			});
 		},
+		// Polls the project image registry. Used by the onboarding frontend
+		// step to hold back the "Waiting for an Actor" caption until the user
+		// has pushed their first image to Rivet Compute.
+		currentProjectFirstImagePresentQueryOptions() {
+			return queryOptions({
+				queryKey: [
+					organization,
+					project,
+					"images",
+					"first-present",
+				] as QueryKey,
+				queryFn: async () => {
+					const response = await client.docker.listImages(project, {
+						limit: 1,
+						org: organization,
+					});
+					return response.images.length > 0;
+				},
+				refetchInterval: 5000,
+			});
+		},
 		upsertCurrentProjectManagedPoolMutationOptions() {
 			return mutationOptions({
 				mutationKey: [organization, project, "managed-pool", "upsert"],

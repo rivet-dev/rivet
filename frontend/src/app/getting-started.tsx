@@ -1487,6 +1487,24 @@ function useServerfullEndpoint() {
 	return data?.url || engineEnv().VITE_APP_API_URL;
 }
 
+// Cloud + Rivet compute: poll the project image registry. Until the user
+// pushes their first image, no runner config exists and no actor can be
+// scheduled, so the caller hides the "Waiting for an Actor" affordance and
+// shows a deployment-pending caption instead. In non-cloud builds
+// `useCloudNamespaceDataProvider` returns undefined and this is a no-op.
+function useWaitingForFirstImage(provider: string | undefined): boolean {
+	const nsDataProvider = useCloudNamespaceDataProvider();
+	const enabled =
+		features.compute && provider === "rivet" && nsDataProvider != null;
+	const { data: hasImage } = useQuery({
+		...(nsDataProvider
+			? nsDataProvider.currentProjectFirstImagePresentQueryOptions()
+			: { queryKey: ["frontend-setup", "first-image-noop"] as const, queryFn: () => false }),
+		enabled,
+	});
+	return enabled && hasImage !== true;
+}
+
 function FrontendSetup() {
 	const dataProvider = useDataProvider();
 
@@ -1521,6 +1539,7 @@ function FrontendSetup() {
 	const { data: nsData } = useQuery(
 		nsDataProvider.currentProjectNamespaceQueryOptions({ namespace: namespaceParam }),
 	);
+	const waitingForFirstImage = useWaitingForFirstImage(provider);
 
 	const deploymentUrl = useMemo(() => {
 		if (provider === "rivet" && nsData?.access?.engineNamespaceName) {
@@ -1571,7 +1590,9 @@ function FrontendSetup() {
 						<Ping variant="pending" className="relative" />
 					</div>
 					<p data-testid={TEST_IDS.Onboarding.WaitingForActor}>
-						Waiting for an Actor to be created...
+						{waitingForFirstImage
+							? "Waiting for your first deployment..."
+							: "Waiting for an Actor to be created..."}
 					</p>
 				</div>
 
