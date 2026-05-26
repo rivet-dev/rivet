@@ -312,7 +312,7 @@ export function DeploymentLogs({
 					<div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
 						<button
 							type="button"
-							className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
+							className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-sans font-medium shadow-lg hover:bg-primary/90 transition-colors"
 							onClick={() => {
 								setFollow(true);
 								virtualizerRef.current?.scrollToIndex(totalCount - 1, { align: "end" });
