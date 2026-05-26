@@ -68,6 +68,12 @@ function RouteComponent() {
 		useDataProvider().datacentersQueryOptions(),
 	);
 
+	// Width all region labels to the longest datacenter name so messages line up.
+	const regionLabelLength = datacenters.reduce(
+		(max, dc) => Math.max(max, dc.name.length),
+		0,
+	);
+
 	const { search: initialSearch } = Route.useSearch();
 	const [search, setSearch] = useState(initialSearch ?? "");
 	const [isPaused, setIsPaused] = useState(false);
@@ -196,6 +202,7 @@ function RouteComponent() {
 								region={region === "all" ? undefined : region}
 								paused={isPaused}
 								logsRef={logsRef}
+								regionLabelLength={regionLabelLength}
 							/>
 						</div>
 					) : (
