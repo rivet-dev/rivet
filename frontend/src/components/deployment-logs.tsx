@@ -61,6 +61,7 @@ interface DeploymentLogsProps {
 	region?: string;
 	paused?: boolean;
 	logsRef?: React.MutableRefObject<RivetSse.LogStreamEvent.Log[]>;
+	regionLabelLength?: number;
 }
 
 interface LogRowData {
@@ -68,9 +69,16 @@ interface LogRowData {
 	entry?: RivetSse.LogStreamEvent.Log;
 	isSentinel?: boolean;
 	isLoadingMore?: boolean;
+	regionColumnWidth?: string;
 }
 
-function LogRow({ entry, isSentinel, isLoadingMore, ...props }: LogRowData) {
+function LogRow({
+	entry,
+	isSentinel,
+	isLoadingMore,
+	regionColumnWidth,
+	...props
+}: LogRowData) {
 	if (isSentinel) {
 		return (
 			<div
@@ -96,21 +104,26 @@ function LogRow({ entry, isSentinel, isLoadingMore, ...props }: LogRowData) {
 		>
 			<div
 				className={cn(
-					"grid grid-cols-[max-content,16ch,3fr] gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
+					"grid gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
 					{
 						"text-red-400": entry.data.severity === "error",
 						"text-muted-foreground": entry.data.severity !== "error",
 					},
 				)}
+				style={{
+					gridTemplateColumns: `max-content ${regionColumnWidth ?? "16ch"} 3fr`,
+				}}
 			>
-				<span className="text-neutral-500 shrink-0">
+				<span className="text-neutral-500 shrink-0 select-none">
 					{entry.data.timestamp}
 				</span>
 				{entry.data.region ? (
-					<span className="text-neutral-600 shrink-0">
+					<span className="text-neutral-600 shrink-0 select-none">
 						[{entry.data.region}]
 					</span>
-				) : null}
+				) : (
+					<span />
+				)}
 				<span className="flex-1">
 					<AnsiText text={entry.data.message} />
 				</span>
@@ -127,7 +140,13 @@ export function DeploymentLogs({
 	region,
 	paused,
 	logsRef,
+	regionLabelLength,
 }: DeploymentLogsProps) {
+	// Region label gets brackets, so column width is name length + 2.
+	const regionColumnWidth =
+		regionLabelLength && regionLabelLength > 0
+			? `${regionLabelLength + 2}ch`
+			: "16ch";
 	const {
 		logs,
 		isLoading,
@@ -304,7 +323,10 @@ export function DeploymentLogs({
 						if (hasMore && index === 0) {
 							return { isSentinel: true, isLoadingMore };
 						}
-						return { entry: displayedLogs[index - sentinelOffset] };
+						return {
+							entry: displayedLogs[index - sentinelOffset],
+							regionColumnWidth,
+						};
 					}}
 					row={LogRow}
 				/>
