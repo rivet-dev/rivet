@@ -5,6 +5,8 @@ const path = require("node:path");
 const html = fs.readFileSync(path.join(__dirname, "index.html"));
 const port = Number(process.env.PORT) || 8080;
 
+console.log("Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/connect/rivet-compute to learn more");
+
 const server = http.createServer((req, res) => {
 	if (req.url === "/" || req.url === "/index.html") {
 		res.writeHead(200, {
@@ -19,6 +21,4 @@ const server = http.createServer((req, res) => {
 	res.end("not found");
 });
 
-server.listen(port, "0.0.0.0", () => {
-	console.log(`compute-hello-world listening on http://0.0.0.0:${port}`);
-});
+server.listen(port, "0.0.0.0", () => {});
