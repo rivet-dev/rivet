@@ -35,7 +35,6 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
-	DiscreteCopyButton,
 	FormField,
 	Ping,
 	Skeleton,
@@ -1005,7 +1004,7 @@ gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
 
 ## Step 4: Create GitHub Action
 
-Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.1:
+Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.0:
 
 \`\`\`
 name: Rivet Deploy
@@ -1029,7 +1028,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.1
+      - uses: rivet-dev/deploy-action@v1.1.0
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}
 		  managed-pool-config: '{"environment":{"PORT":"3000"}}'
@@ -1217,7 +1216,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.1
+      - uses: rivet-dev/deploy-action@v1.1.0
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}`;
 
@@ -1599,30 +1598,15 @@ function FrontendSetup() {
 
 				<div className="flex items-center flex-col justify-center gap-4">
 					{provider === "rivet" ? (
-						<>
-							<Button asChild>
-								<Link
-									to="."
-									search={{ skipOnboarding: true }}
-								>
-									Go to dashboard
-									<Icon icon={faArrowRight} className="ml-1.5" />
-								</Link>
-							</Button>
-							{deploymentUrl ? (
-								<div className="mt-4 flex flex-col items-center gap-1 text-sm">
-									<span className="text-muted-foreground">
-										Deployment URL
-									</span>
-									<DiscreteCopyButton
-										value={deploymentUrl}
-										className="font-mono text-xs text-muted-foreground"
-									>
-										{deploymentUrl}
-									</DiscreteCopyButton>
-								</div>
-							) : null}
-						</>
+						<Button asChild>
+							<Link
+								to="."
+								search={{ onboardingSuccess: true }}
+							>
+								Go to dashboard
+								<Icon icon={faArrowRight} className="ml-1.5" />
+							</Link>
+						</Button>
 					) : (
 						<>
 							{deploymentUrl ? (

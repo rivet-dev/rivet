@@ -588,10 +588,10 @@ export const registry = setup({ use: { counter } });`;
 function QuickstartEmptyState({ hasNameFilter }: { hasNameFilter: boolean }) {
 	const { links } = useActorsView();
 	const title = hasNameFilter
-		? "No actors created"
+		? "Call this actor to see instances"
 		: "Get started with Actors";
 	const description = hasNameFilter
-		? "Actor instances appear here once created."
+		? "Instances appear here the first time your code calls this actor with a unique key, or create one manually."
 		: "Define an actor in your registry. Instances appear here as your code calls them.";
 
 	return (
@@ -632,7 +632,7 @@ function QuickstartEmptyState({ hasNameFilter }: { hasNameFilter: boolean }) {
 					</a>
 					<CreateActorButton
 						variant="default"
-						label={hasNameFilter ? "Create Actor" : undefined}
+						label={hasNameFilter ? "Create Instance" : undefined}
 					/>
 				</div>
 			</div>
