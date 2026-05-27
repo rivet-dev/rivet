@@ -142,11 +142,13 @@ export function DeploymentLogs({
 	logsRef,
 	regionLabelLength,
 }: DeploymentLogsProps) {
-	// Region label gets brackets, so column width is name length + 2.
+	// Region label gets brackets (2 chars) plus a small buffer so the column
+	// has visual breathing room and tolerates glyph-width differences from
+	// `ch` (measured from "0").
 	const regionColumnWidth =
 		regionLabelLength && regionLabelLength > 0
-			? `${regionLabelLength + 2}ch`
-			: "16ch";
+			? `${regionLabelLength + 4}ch`
+			: "18ch";
 	const {
 		logs,
 		isLoading,

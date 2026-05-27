@@ -95,7 +95,7 @@ function Deployments() {
 		fetchNextPage,
 		hasNextPage,
 	} = useSuspenseInfiniteQuery({
-		...dataProvider.currentProjectImagesQueryOptions({ limit: 1 }),
+		...dataProvider.currentProjectImagesQueryOptions({ limit: 20 }),
 		refetchInterval: 5_000,
 	});
 
