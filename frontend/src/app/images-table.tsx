@@ -7,6 +7,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { formatDistance } from "date-fns";
+import { Fragment } from "react";
 import {
 	Button,
 	DiscreteCopyButton,
@@ -63,7 +64,7 @@ export function ImagesTable({
 				<TableRow>
 					<TableHead className="pl-8">Tag</TableHead>
 					<TableHead className="w-full">Deployed To</TableHead>
-					<TableHead className="min-w-40">Date</TableHead>
+					<TableHead className="min-w-56">Date</TableHead>
 					<TableHead />
 				</TableRow>
 			</TableHeader>
@@ -200,11 +201,13 @@ function TagRow({
 			</TableCell>
 			<TableCell>
 				{deployments.length > 0 ? (
-					deployments.map((deployment) => (
-						<DeploymentNamespace
-							key={deployment.namespace}
-							namespace={deployment.namespace}
-						/>
+					deployments.map((deployment, i) => (
+						<Fragment key={deployment.namespace}>
+							{i > 0 ? ", " : null}
+							<DeploymentNamespace
+								namespace={deployment.namespace}
+							/>
+						</Fragment>
 					))
 				) : (
 					<Text className="text-muted-foreground">-</Text>
@@ -299,7 +302,9 @@ function CreateTs({ createTs }: { createTs: string }) {
 		<WithTooltip
 			content={formatDistance(createTs, new Date(), { addSuffix: true })}
 			trigger={
-				<div>{new Date(createTs).toLocaleDateString()}</div>
+				<div className="text-muted-foreground">
+					{new Date(createTs).toLocaleString()}
+				</div>
 			}
 		/>
 	);
