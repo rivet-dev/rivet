@@ -1004,7 +1004,7 @@ gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
 
 ## Step 4: Create GitHub Action
 
-Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.0:
+Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.1:
 
 \`\`\`
 name: Rivet Deploy
@@ -1028,7 +1028,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.0
+      - uses: rivet-dev/deploy-action@v1.1.1
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}
 		  managed-pool-config: '{"environment":{"PORT":"3000"}}'
@@ -1216,7 +1216,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.0
+      - uses: rivet-dev/deploy-action@v1.1.1
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}`;
 
