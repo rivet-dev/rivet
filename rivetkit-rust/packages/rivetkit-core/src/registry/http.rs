@@ -1,7 +1,7 @@
 use super::dispatch::*;
 use super::inspector::*;
 use super::*;
-use crate::error::{client_error_message, client_error_metadata, ProtocolError};
+use crate::error::{ProtocolError, client_error_message, client_error_metadata};
 use ::http;
 
 const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
@@ -21,7 +21,10 @@ impl RegistryDispatcher {
 			request.uri().path(),
 			self.handle_inspector_http_in_runtime,
 		)?;
-		if matches!(route, RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)) {
+		if matches!(
+			route,
+			RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)
+		) {
 			let envoy_status = self.envoy_status();
 			return handle_metrics_fetch(&request, envoy_status.as_ref());
 		}
@@ -386,7 +389,6 @@ impl RegistryDispatcher {
 			}
 		}
 	}
-
 }
 
 enum RegistryHttpRoute {
@@ -490,7 +492,10 @@ fn handle_metrics_fetch(
 
 fn bytes_response(status: StatusCode, content_type: &str, body: Vec<u8>) -> Result<HttpResponse> {
 	let mut headers = HashMap::new();
-	headers.insert(http::header::CONTENT_TYPE.to_string(), content_type.to_owned());
+	headers.insert(
+		http::header::CONTENT_TYPE.to_string(),
+		content_type.to_owned(),
+	);
 	Ok(HttpResponse {
 		status: status.as_u16(),
 		headers,

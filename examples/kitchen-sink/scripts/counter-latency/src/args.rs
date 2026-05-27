@@ -16,7 +16,7 @@ pub const DEFAULT_TOKENS_PER_SECOND: f64 = 20.0;
 pub const DEFAULT_DURATION_MS: u64 = 5_000;
 pub const MESSAGE_GAP_WARN_MS: f64 = 3_000.0;
 pub const ACTOR_STOPPED_CLOSE_CODE: u16 = 1000;
-pub const ACTOR_STOPPED_CLOSE_REASON: &str = "hack_force_close";
+pub const ACTOR_STOPPED_CLOSE_REASON: &str = "actor.stopped";
 
 #[derive(Parser)]
 #[command(
@@ -161,7 +161,12 @@ impl EnvConfig {
 				process::exit(1);
 			}
 		};
-		Self { run_for_ms, scale_down_ms, rivet_pool, endpoint }
+		Self {
+			run_for_ms,
+			scale_down_ms,
+			rivet_pool,
+			endpoint,
+		}
 	}
 }
 

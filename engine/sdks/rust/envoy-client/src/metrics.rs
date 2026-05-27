@@ -233,7 +233,10 @@ impl EnvoyClientMetrics {
 		)
 		.expect("create envoy_client_actor_lifetime_seconds histogram");
 
-		register(&rivet_metrics::REGISTRY, sqlite_request_expired_total.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			sqlite_request_expired_total.clone(),
+		);
 		register(&rivet_metrics::REGISTRY, sqlite_requests_inflight.clone());
 		register(
 			&rivet_metrics::REGISTRY,
@@ -269,10 +272,16 @@ impl EnvoyClientMetrics {
 			&rivet_metrics::REGISTRY,
 			reconnect_within_grace_seconds.clone(),
 		);
-		register(&rivet_metrics::REGISTRY, lost_threshold_source_total.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			lost_threshold_source_total.clone(),
+		);
 		register(&rivet_metrics::REGISTRY, actor_evicted_total.clone());
 		register(&rivet_metrics::REGISTRY, outbound_queue_depth.clone());
-		register(&rivet_metrics::REGISTRY, ping_unhealthy_seconds_total.clone());
+		register(
+			&rivet_metrics::REGISTRY,
+			ping_unhealthy_seconds_total.clone(),
+		);
 		register(
 			&rivet_metrics::REGISTRY,
 			ping_unhealthy_recovered_total.clone(),

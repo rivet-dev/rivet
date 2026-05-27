@@ -232,17 +232,13 @@ fn to_rivet_message_meta(
 	}
 }
 
-fn to_rivet_tunnel_message_kind_name(
-	kind: &protocol::ToRivetTunnelMessageKind,
-) -> &'static str {
+fn to_rivet_tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) -> &'static str {
 	match kind {
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
-		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => {
-			"ToRivetWebSocketMessage"
-		}
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ToRivetWebSocketMessage",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => {
 			"ToRivetWebSocketMessageAck"
 		}

@@ -80,7 +80,10 @@ fn handle_request_chunk(
 ) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
+		.get(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		))
 		.cloned();
 
 	let finish = chunk.finish;
@@ -95,15 +98,20 @@ fn handle_request_chunk(
 	}
 
 	if finish {
-		ctx.request_to_actor
-			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+		ctx.request_to_actor.remove(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		));
 	}
 }
 
 fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
+		.get(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
@@ -113,8 +121,10 @@ fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId)
 		}
 	}
 
-	ctx.request_to_actor
-		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	ctx.request_to_actor.remove(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 }
 
 async fn handle_ws_open(
@@ -184,7 +194,10 @@ fn handle_ws_message(
 	let message_index = message_id.message_index;
 	let actor_id = ctx
 		.request_to_actor
-		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
+		.get(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
@@ -201,8 +214,8 @@ fn handle_ws_message(
 				.handle
 				.send(crate::actor::ToActor::WsMsg { message_id, msg })
 				.is_ok()
-				{
-					tracing::trace!(
+			{
+				tracing::trace!(
 						actor_id = %actor_id,
 						gateway_id = %display_id(&gateway_id),
 						request_id = %display_id(&request_id),
@@ -211,8 +224,8 @@ fn handle_ws_message(
 						binary,
 					"dispatched websocket message to actor task"
 				);
-				} else {
-					tracing::warn!(
+			} else {
+				tracing::warn!(
 						actor_id = %actor_id,
 						gateway_id = %display_id(&gateway_id),
 						request_id = %display_id(&request_id),
@@ -256,7 +269,10 @@ async fn handle_ws_close(
 ) {
 	let actor_id = ctx
 		.request_to_actor
-		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
+		.get(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		))
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
@@ -275,8 +291,10 @@ async fn handle_ws_close(
 		}
 	}
 
-	ctx.request_to_actor
-		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	ctx.request_to_actor.remove(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 	ctx.shared
 		.live_tunnel_requests
 		.remove_async(&tunnel_request_key(
@@ -286,17 +304,13 @@ async fn handle_ws_close(
 		.await;
 }
 
-fn to_envoy_tunnel_message_kind_name(
-	kind: &protocol::ToEnvoyTunnelMessageKind,
-) -> &'static str {
+fn to_envoy_tunnel_message_kind_name(kind: &protocol::ToEnvoyTunnelMessageKind) -> &'static str {
 	match kind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_) => "ToEnvoyRequestStart",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(_) => "ToEnvoyRequestChunk",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => "ToEnvoyRequestAbort",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_) => "ToEnvoyWebSocketOpen",
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => {
-			"ToEnvoyWebSocketMessage"
-		}
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => "ToEnvoyWebSocketMessage",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => "ToEnvoyWebSocketClose",
 	}
 }

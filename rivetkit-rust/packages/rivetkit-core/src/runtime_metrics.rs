@@ -1,8 +1,7 @@
 use std::sync::LazyLock;
 
 use rivet_metrics::prometheus::{
-	CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, IntGauge, IntGaugeVec, Opts,
-	Registry,
+	CounterVec, Gauge, GaugeVec, HistogramOpts, HistogramVec, IntGauge, IntGaugeVec, Opts, Registry,
 };
 
 const QUANTILE_LABELS: &[&str] = &["quantile"];

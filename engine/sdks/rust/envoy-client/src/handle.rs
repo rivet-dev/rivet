@@ -1,5 +1,5 @@
-use std::sync::{Arc, Weak};
 use std::sync::atomic::Ordering;
+use std::sync::{Arc, Weak};
 
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
@@ -88,11 +88,7 @@ impl EnvoyHandle {
 	/// Epoch ms timestamp of the most recent engine ping.
 	pub fn last_ping_at_ms(&self) -> Option<i64> {
 		let last = self.shared.last_ping_ts.load(Ordering::Acquire);
-		if last == 0 {
-			None
-		} else {
-			Some(last)
-		}
+		if last == 0 { None } else { Some(last) }
 	}
 
 	/// Milliseconds since the most recent engine ping.
@@ -615,11 +611,7 @@ impl EnvoyStatusHandle {
 	pub fn last_ping_at_ms(&self) -> Option<i64> {
 		self.shared.upgrade().and_then(|shared| {
 			let last = shared.last_ping_ts.load(Ordering::Acquire);
-			if last == 0 {
-				None
-			} else {
-				Some(last)
-			}
+			if last == 0 { None } else { Some(last) }
 		})
 	}
 

@@ -321,7 +321,11 @@ impl CoreRegistry {
 					Some(envoy) => {
 						return Ok(health_response(
 							if envoy.ping_healthy { 200 } else { 503 },
-							if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
+							if envoy.ping_healthy {
+								"ok"
+							} else {
+								"engine_ping_stale"
+							},
 							&version,
 						));
 					}
@@ -340,7 +344,11 @@ impl CoreRegistry {
 		let response = match serverless_runtime.active_envoy_status().await {
 			Some(envoy) => health_response(
 				if envoy.ping_healthy { 200 } else { 503 },
-				if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
+				if envoy.ping_healthy {
+					"ok"
+				} else {
+					"engine_ping_stale"
+				},
 				&version,
 			),
 			None => health_response(503, "engine_ping_stale", &version),
@@ -368,7 +376,10 @@ impl CoreRegistry {
 			let guard = self.state.lock().await;
 			match &*guard {
 				RegistryState::Serving => (
-					self.serving_envoy.lock().as_ref().map(CoreEnvoyHandle::status),
+					self.serving_envoy
+						.lock()
+						.as_ref()
+						.map(CoreEnvoyHandle::status),
 					None,
 				),
 				RegistryState::Serverless(runtime) => (None, Some(runtime.clone())),

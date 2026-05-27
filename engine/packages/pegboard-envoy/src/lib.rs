@@ -287,7 +287,12 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			.with_label_values(&[ns_label.as_str(), pool_label, initiator, cause.as_str()])
 			.inc();
 		metrics::CONNECTION_CLOSE_TOTAL
-			.with_label_values(&[ns_label.as_str(), pool_label, close_code, reason_group.as_str()])
+			.with_label_values(&[
+				ns_label.as_str(),
+				pool_label,
+				close_code,
+				reason_group.as_str(),
+			])
 			.inc();
 
 		// This will determine the close frame sent back to the envoy websocket
@@ -301,12 +306,7 @@ fn classify_ws_close(
 	res: &Result<LifecycleResult>,
 ) -> (&'static str, String, &'static str, String) {
 	match res {
-		Ok(LifecycleResult::Closed) => (
-			"client_close",
-			"ok".to_string(),
-			"1000",
-			"ok".to_string(),
-		),
+		Ok(LifecycleResult::Closed) => ("client_close", "ok".to_string(), "1000", "ok".to_string()),
 		Ok(LifecycleResult::Aborted) => (
 			"engine_shutdown",
 			"ok".to_string(),

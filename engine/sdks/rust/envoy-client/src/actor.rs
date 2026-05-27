@@ -17,8 +17,8 @@ use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
 use crate::stringify::stringify_to_rivet_tunnel_message_kind;
 use crate::utils::{
-	BufferMap, display_id, spawn_detached, tunnel_request_key, wrapping_add_u16,
-	wrapping_lte_u16, wrapping_sub_u16,
+	BufferMap, display_id, spawn_detached, tunnel_request_key, wrapping_add_u16, wrapping_lte_u16,
+	wrapping_sub_u16,
 };
 
 pub enum ToActor {
@@ -536,8 +536,10 @@ fn handle_req_start(
 		envoy_message_index: 0,
 		body_tx: None,
 	};
-	ctx.pending_requests
-		.insert(tunnel_request_key(&message_id.gateway_id, &message_id.request_id), pending);
+	ctx.pending_requests.insert(
+		tunnel_request_key(&message_id.gateway_id, &message_id.request_id),
+		pending,
+	);
 
 	let headers: HashMap<String, String> = req
 		.headers
@@ -547,10 +549,10 @@ fn handle_req_start(
 
 	let body_stream = if req.stream {
 		let (body_tx, body_rx) = mpsc::unbounded_channel::<Vec<u8>>();
-		if let Some(pending) = ctx
-			.pending_requests
-			.get_mut(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
-		{
+		if let Some(pending) = ctx.pending_requests.get_mut(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		)) {
 			pending.body_tx = Some(body_tx);
 		}
 		Some(body_rx)
@@ -599,8 +601,10 @@ fn handle_req_start(
 	http_request_tasks.spawn(task);
 
 	if !req.stream {
-		ctx.pending_requests
-			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+		ctx.pending_requests.remove(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		));
 	}
 }
 
@@ -641,9 +645,10 @@ fn handle_req_chunk(
 	chunk: protocol::ToEnvoyRequestChunk,
 ) {
 	let finish = chunk.finish;
-	let pending = ctx
-		.pending_requests
-		.get(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	let pending = ctx.pending_requests.get(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 	if let Some(pending) = pending {
 		if let Some(body_tx) = &pending.body_tx {
 			let _ = body_tx.send(chunk.body);
@@ -655,14 +660,18 @@ fn handle_req_chunk(
 	}
 
 	if finish {
-		ctx.pending_requests
-			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+		ctx.pending_requests.remove(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		));
 	}
 }
 
 fn handle_req_abort(ctx: &mut ActorContext, message_id: protocol::MessageId) {
-	ctx.pending_requests
-		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	ctx.pending_requests.remove(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 }
 
 fn spawn_ws_outgoing_task(
@@ -759,9 +768,10 @@ async fn handle_ws_open(
 	path: String,
 	headers: BTreeMap<String, String>,
 ) {
-	let restored_ws = ctx
-		.ws_entries
-		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	let restored_ws = ctx.ws_entries.remove(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 	let is_restoring_hibernatable = restored_ws
 		.as_ref()
 		.map(|ws| ws.is_hibernatable)
@@ -822,8 +832,10 @@ async fn handle_ws_open(
 				)
 				.await;
 
-				ctx.pending_requests
-					.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+				ctx.pending_requests.remove(tunnel_request_key(
+					&message_id.gateway_id,
+					&message_id.request_id,
+				));
 				return;
 			}
 		}
@@ -906,10 +918,10 @@ async fn handle_ws_open(
 			.await;
 
 			// Call on_open if provided
-			if let Some(ws) = ctx
-				.ws_entries
-				.get_mut(tunnel_request_key(&message_id.gateway_id, &message_id.request_id))
-			{
+			if let Some(ws) = ctx.ws_entries.get_mut(tunnel_request_key(
+				&message_id.gateway_id,
+				&message_id.request_id,
+			)) {
 				if let Some(handler) = &mut ws.ws_handler {
 					if let Some(on_open) = handler.on_open.take() {
 						let sender = crate::config::WebSocketSender {
@@ -938,10 +950,14 @@ async fn handle_ws_open(
 			)
 			.await;
 
-			ctx.pending_requests
-				.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
-			ctx.ws_entries
-				.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+			ctx.pending_requests.remove(tunnel_request_key(
+				&message_id.gateway_id,
+				&message_id.request_id,
+			));
+			ctx.ws_entries.remove(tunnel_request_key(
+				&message_id.gateway_id,
+				&message_id.request_id,
+			));
 		}
 	}
 }
@@ -964,9 +980,10 @@ async fn handle_ws_message(
 		binary,
 		"received websocket message from engine"
 	);
-	let ws = ctx
-		.ws_entries
-		.get_mut(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	let ws = ctx.ws_entries.get_mut(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 
 	if let Some(ws) = ws {
 		// Validate message index for hibernatable websockets
@@ -1026,26 +1043,26 @@ async fn handle_ws_message(
 				message_index: message_id.message_index,
 				sender,
 			};
-				tracing::trace!(
-					gateway_id = %display_id(&gateway_id),
-					request_id = %display_id(&request_id),
-					message_index,
-					data_len,
-					binary,
-					"dispatching websocket message to actor handler"
-				);
-				(handler.on_message)(ws_msg).await;
-				tracing::trace!(
-					gateway_id = %display_id(&gateway_id),
-					request_id = %display_id(&request_id),
-					message_index,
-					data_len,
-					binary,
-					"dispatched websocket message to actor handler"
-				);
-			}
-		} else {
-			tracing::warn!(
+			tracing::trace!(
+				gateway_id = %display_id(&gateway_id),
+				request_id = %display_id(&request_id),
+				message_index,
+				data_len,
+				binary,
+				"dispatching websocket message to actor handler"
+			);
+			(handler.on_message)(ws_msg).await;
+			tracing::trace!(
+				gateway_id = %display_id(&gateway_id),
+				request_id = %display_id(&request_id),
+				message_index,
+				data_len,
+				binary,
+				"dispatched websocket message to actor handler"
+			);
+		}
+	} else {
+		tracing::warn!(
 				gateway_id = %display_id(&gateway_id),
 				request_id = %display_id(&request_id),
 				message_index,
@@ -1061,9 +1078,10 @@ async fn handle_ws_close(
 	message_id: protocol::MessageId,
 	close: protocol::ToEnvoyWebSocketClose,
 ) {
-	let ws = ctx
-		.ws_entries
-		.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+	let ws = ctx.ws_entries.remove(tunnel_request_key(
+		&message_id.gateway_id,
+		&message_id.request_id,
+	));
 
 	if let Some(ws) = ws {
 		if let Some(handler) = &ws.ws_handler {
@@ -1071,8 +1089,10 @@ async fn handle_ws_close(
 			let reason = close.reason.unwrap_or_default();
 			(handler.on_close)(code, reason).await;
 		}
-		ctx.pending_requests
-			.remove(tunnel_request_key(&message_id.gateway_id, &message_id.request_id));
+		ctx.pending_requests.remove(tunnel_request_key(
+			&message_id.gateway_id,
+			&message_id.request_id,
+		));
 	} else {
 		tracing::warn!("received close for unknown ws");
 	}
@@ -1329,7 +1349,9 @@ async fn send_actor_message(
 	request_id: protocol::RequestId,
 	message_kind: protocol::ToRivetTunnelMessageKind,
 ) {
-	let req = ctx.pending_requests.get_mut(tunnel_request_key(&gateway_id, &request_id));
+	let req = ctx
+		.pending_requests
+		.get_mut(tunnel_request_key(&gateway_id, &request_id));
 	let envoy_message_index = if let Some(req) = req {
 		let idx = req.envoy_message_index;
 		req.envoy_message_index += 1;
