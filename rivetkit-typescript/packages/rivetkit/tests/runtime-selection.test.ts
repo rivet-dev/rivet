@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { actor } from "@/actor/mod";
+import { ENGINE_ENDPOINT } from "@/common/engine";
 import { type RegistryConfig, RegistryConfigSchema } from "@/registry/config";
 import {
 	loadConfiguredRuntime,
@@ -10,6 +11,10 @@ import {
 import type { CoreRuntime } from "@/registry/runtime";
 
 const previousRuntimeEnv = process.env.RIVETKIT_RUNTIME;
+const previousNodeEnv = process.env.NODE_ENV;
+const previousRunEngineEnv = process.env.RIVET_RUN_ENGINE;
+const previousRivetEndpointEnv = process.env.RIVET_ENDPOINT;
+const previousRivetEngineEnv = process.env.RIVET_ENGINE;
 
 const testActor = actor({
 	state: {},
@@ -22,6 +27,23 @@ function parseConfig(input: Record<string, unknown> = {}) {
 		startEngine: false,
 		...input,
 	});
+}
+
+function parseConfigWithDefaultStartEngine(
+	input: Record<string, unknown> = {},
+) {
+	return RegistryConfigSchema.parse({
+		use: { test: testActor },
+		...input,
+	});
+}
+
+function restoreEnv(name: string, value: string | undefined) {
+	if (value === undefined) {
+		delete process.env[name];
+	} else {
+		process.env[name] = value;
+	}
 }
 
 function fakeRuntime(kind: CoreRuntime["kind"]): CoreRuntime {
@@ -60,11 +82,82 @@ function fakeLoaders(options: {
 
 describe("runtime selection", () => {
 	afterEach(() => {
-		if (previousRuntimeEnv === undefined) {
-			delete process.env.RIVETKIT_RUNTIME;
-		} else {
-			process.env.RIVETKIT_RUNTIME = previousRuntimeEnv;
-		}
+		restoreEnv("RIVETKIT_RUNTIME", previousRuntimeEnv);
+		restoreEnv("NODE_ENV", previousNodeEnv);
+		restoreEnv("RIVET_RUN_ENGINE", previousRunEngineEnv);
+		restoreEnv("RIVET_ENDPOINT", previousRivetEndpointEnv);
+		restoreEnv("RIVET_ENGINE", previousRivetEngineEnv);
+	});
+
+	test("auto-starts the local engine by default in development", () => {
+		delete process.env.RIVET_ENDPOINT;
+		delete process.env.RIVET_ENGINE;
+		delete process.env.RIVET_RUN_ENGINE;
+		process.env.NODE_ENV = "development";
+
+		const config = parseConfigWithDefaultStartEngine();
+
+		expect(config.startEngine).toBe(true);
+		expect(config.endpoint).toBe(ENGINE_ENDPOINT);
+		expect(config.publicEndpoint).toBe(ENGINE_ENDPOINT);
+		expect(config.validateServerlessEndpoint).toBe(true);
+	});
+
+	test("does not auto-start the local engine when an endpoint is configured", () => {
+		delete process.env.RIVET_RUN_ENGINE;
+		process.env.NODE_ENV = "development";
+
+		const config = parseConfigWithDefaultStartEngine({
+			endpoint: "https://ns:token@example.com",
+		});
+
+		expect(config.startEngine).toBe(false);
+		if (!config.endpoint) throw new Error("expected endpoint");
+		expect(new URL(config.endpoint).origin).toBe("https://example.com");
+		expect(config.namespace).toBe("ns");
+		expect(config.token).toBe("token");
+	});
+
+	test("allows development auto-start to be disabled explicitly", () => {
+		delete process.env.RIVET_ENDPOINT;
+		delete process.env.RIVET_ENGINE;
+		delete process.env.RIVET_RUN_ENGINE;
+		process.env.NODE_ENV = "development";
+
+		const config = parseConfigWithDefaultStartEngine({
+			startEngine: false,
+		});
+
+		expect(config.startEngine).toBe(false);
+		expect(config.endpoint).toBe(ENGINE_ENDPOINT);
+		expect(config.publicEndpoint).toBeUndefined();
+		expect(config.validateServerlessEndpoint).toBe(false);
+	});
+
+	test("allows development auto-start to be disabled by env", () => {
+		delete process.env.RIVET_ENDPOINT;
+		delete process.env.RIVET_ENGINE;
+		process.env.RIVET_RUN_ENGINE = "0";
+		process.env.NODE_ENV = "development";
+
+		const config = parseConfigWithDefaultStartEngine();
+
+		expect(config.startEngine).toBe(false);
+		expect(config.endpoint).toBe(ENGINE_ENDPOINT);
+		expect(config.publicEndpoint).toBeUndefined();
+		expect(config.validateServerlessEndpoint).toBe(false);
+	});
+
+	test("does not auto-start the local engine by default in production", () => {
+		delete process.env.RIVET_ENDPOINT;
+		delete process.env.RIVET_ENGINE;
+		delete process.env.RIVET_RUN_ENGINE;
+		process.env.NODE_ENV = "production";
+
+		const config = parseConfigWithDefaultStartEngine();
+
+		expect(config.startEngine).toBe(false);
+		expect(config.endpoint).toBeUndefined();
 	});
 
 	test("config runtime wins over env runtime", async () => {

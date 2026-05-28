@@ -224,8 +224,10 @@ export const RegistryConfigSchema = z
 		 * @experimental
 		 *
 		 * Starts the full Rust engine process locally.
+		 *
+		 * Defaults to true in development when no engine endpoint is configured.
 		 */
-		startEngine: z.boolean().default(() => getRivetRunEngine()),
+		startEngine: z.boolean().optional(),
 		/** @experimental */
 		engineVersion: z
 			.string()
@@ -269,11 +271,7 @@ export const RegistryConfigSchema = z
 				 *
 				 * Must be >= rivetkit-core's drain timeout (20s) + margin.
 				 */
-				gracePeriodMs: z
-					.number()
-					.int()
-					.min(1_000)
-					.optional(),
+				gracePeriodMs: z.number().int().min(1_000).optional(),
 				/**
 				 * If true, rivetkit will not install SIGINT/SIGTERM handlers.
 				 * Use when the host application owns signal policy and will
@@ -318,8 +316,13 @@ export const RegistryConfigSchema = z
 				})
 			: undefined;
 
+		const startEngine =
+			config.startEngine ??
+			getRivetRunEngine() ??
+			(isDevEnv && !parsedEndpoint);
+
 		// Can't start a local engine and connect to a remote endpoint.
-		if (config.startEngine && parsedEndpoint) {
+		if (startEngine && parsedEndpoint) {
 			ctx.addIssue({
 				code: "custom",
 				message: "cannot specify both startEngine and endpoint",
@@ -327,7 +330,7 @@ export const RegistryConfigSchema = z
 		}
 
 		// configurePool requires an engine (via endpoint or startEngine).
-		if (config.configurePool && !parsedEndpoint && !config.startEngine) {
+		if (config.configurePool && !parsedEndpoint && !startEngine) {
 			ctx.addIssue({
 				code: "custom",
 				message:
@@ -337,12 +340,12 @@ export const RegistryConfigSchema = z
 
 		// Flatten the endpoint and apply defaults for namespace/token
 		// If startEngine is enabled, set endpoint to the engine endpoint.
-		const endpoint = config.startEngine
+		const endpoint = startEngine
 			? ENGINE_ENDPOINT
 			: (parsedEndpoint?.endpoint ??
 				(isDevEnv ? ENGINE_ENDPOINT : undefined));
 		const validateServerlessEndpoint = Boolean(
-			config.startEngine || parsedEndpoint,
+			startEngine || parsedEndpoint,
 		);
 		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
 		const namespace =
@@ -373,7 +376,7 @@ export const RegistryConfigSchema = z
 		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && config.startEngine ? ENGINE_ENDPOINT : undefined);
+			(isDevEnv && startEngine ? ENGINE_ENDPOINT : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;
@@ -383,6 +386,7 @@ export const RegistryConfigSchema = z
 		// If endpoint is set or starting the engine, we'll use the engine driver.
 		return {
 			...config,
+			startEngine,
 			sqlite,
 			endpoint,
 			namespace,
@@ -633,7 +637,7 @@ export const DocRegistryConfigSchema = z
 			.boolean()
 			.optional()
 			.describe(
-				"Starts the full Rust engine process locally. Default: false",
+				"Starts the full Rust engine process locally. Defaults to true in development when no engine endpoint is configured.",
 			),
 		engineVersion: z
 			.string()
