@@ -12,6 +12,7 @@ import {
 	type MutableRefObject,
 	type ReactNode,
 	useContext,
+	useLayoutEffect,
 	useRef,
 	useState,
 } from "react";
@@ -34,6 +35,7 @@ export type StepConfirm<TValues = Record<string, unknown>> = (
 
 type Step = Stepperize.Step & {
 	assist?: boolean;
+	description?: string;
 	schema: z.ZodSchema | ((values: Record<string, unknown>) => z.ZodSchema);
 	next?: string;
 	previous?: string;
@@ -121,6 +123,7 @@ type StepperFormProps<Steps extends Step[]> = StepperProps<Steps> &
 		initialStep?: Steps[number]["id"];
 		controls?: ReactNode;
 		children?: ReactNode;
+		header?: ReactNode;
 		formId?: string;
 		className?: string;
 	};
@@ -155,23 +158,43 @@ export function StepperForm<const Steps extends Step[]>({
 	);
 }
 
-function useStepperDirection(stepper: {
-	all: { id: string }[];
-	current: { id: string };
-}) {
-	const currentStepIndex = stepper.all.findIndex(
-		(s) => s.id === stepper.current.id,
+// Cross-fade between steps. The step container clips overflow so it can animate
+// its height between differently-sized steps; a horizontal slide would be cut
+// off by that same clip, so the transition is opacity-only and the height
+// reveal carries the motion.
+const slideVariants = {
+	enter: { opacity: 0 },
+	center: { opacity: 1 },
+	exit: { opacity: 0 },
+};
+
+// Animates its own height to match the measured height of the current child so
+// stepping between steps of different sizes glides instead of snapping. The
+// inner content height is measured continuously; the wrapper animates to it and
+// clips overflow during the transition.
+function AnimatedHeight({ children }: { children: ReactNode }) {
+	const innerRef = useRef<HTMLDivElement>(null);
+	const [height, setHeight] = useState<number | "auto">("auto");
+
+	useLayoutEffect(() => {
+		const el = innerRef.current;
+		if (!el) return;
+		const measure = () => setHeight(el.offsetHeight);
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	}, []);
+
+	return (
+		<motion.div
+			animate={{ height }}
+			transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+			style={{ overflow: "hidden" }}
+		>
+			<div ref={innerRef}>{children}</div>
+		</motion.div>
 	);
-	const prevStepIndexRef = useRef(currentStepIndex);
-	const directionRef = useRef(0);
-
-	if (currentStepIndex !== prevStepIndexRef.current) {
-		directionRef.current =
-			currentStepIndex > prevStepIndexRef.current ? 1 : -1;
-		prevStepIndexRef.current = currentStepIndex;
-	}
-
-	return directionRef.current;
 }
 
 function getNextVisibleStepId(
@@ -213,6 +236,7 @@ function Content<const Steps extends Step[]>({
 	initialStep,
 	controls,
 	formId,
+	header,
 	extraChildren,
 	...formProps
 }: StepperFormProps<Steps> & { extraChildren?: ReactNode }) {
@@ -248,7 +272,6 @@ function Content<const Steps extends Step[]>({
 	});
 
 	const ref = useRef<z.infer<JoinStepSchemas<Steps>> | null>({});
-	const direction = useStepperDirection(stepper);
 	const formRef = useRef<HTMLFormElement>(null);
 
 	const getValues = () => {
@@ -310,7 +333,6 @@ function Content<const Steps extends Step[]>({
 
 	if (singlePage) {
 		const step = stepper.current;
-		const isLast = isLastVisible(step.id);
 		const hasPrev =
 			getPrevVisibleStepId(allSteps as Step[], step.id, getValues()) !==
 			null;
@@ -322,6 +344,7 @@ function Content<const Steps extends Step[]>({
 					}}
 				>
 					<FormProvider {...form}>
+						{header}
 						<form
 							ref={formRef}
 							onSubmit={(event) => {
@@ -330,23 +353,29 @@ function Content<const Steps extends Step[]>({
 							}}
 							className="space-y-6"
 						>
-							<AnimatePresence mode="wait" custom={direction}>
-								<motion.div
-									key={step.id}
-									custom={direction}
-									initial={{ opacity: 0, x: direction * 30 }}
-									animate={{ opacity: 1, x: 0 }}
-									exit={{ opacity: 0, x: direction * -30 }}
-									transition={{
-										duration: 0.25,
-										ease: [0.4, 0, 0.2, 1],
-									}}
-								>
+							<AnimatedHeight>
+								<AnimatePresence mode="wait">
+									<motion.div
+										key={step.id}
+										variants={slideVariants}
+										initial="enter"
+										animate="center"
+										exit="exit"
+										transition={{
+											duration: 0.25,
+											ease: [0.4, 0, 0.2, 1],
+										}}
+									>
 									<div className="flex items-center justify-between">
 										<h2 className="text-xl font-semibold">
 											{step.title}
 										</h2>
 									</div>
+									{(step as Step).description ? (
+										<p className="mt-1.5 text-sm text-muted-foreground">
+											{(step as Step).description}
+										</p>
+									) : null}
 									<div className="mt-6">
 										<StepPanel<Steps>
 											Stepper={Stepper}
@@ -366,12 +395,12 @@ function Content<const Steps extends Step[]>({
 												(step.showPrevious ?? true) &&
 												hasPrev
 											}
-											isLastVisible={isLast}
 										/>
 									</div>
 									{extraChildren}
 								</motion.div>
 							</AnimatePresence>
+							</AnimatedHeight>
 						</form>
 					</FormProvider>
 				</StepperFormContext.Provider>
@@ -423,9 +452,6 @@ function Content<const Steps extends Step[]>({
 												steps.length - 1 === index
 											}
 											controls={controls}
-											isLastVisible={isLastVisible(
-												step.id,
-											)}
 										/>
 									) : (
 										stepper.when(step.id, (step) => {
@@ -452,9 +478,6 @@ function Content<const Steps extends Step[]>({
 														step.showPrevious ??
 														true
 													}
-													isLastVisible={isLastVisible(
-														step.id,
-													)}
 												/>
 											);
 										})
@@ -479,7 +502,6 @@ function StepPanel<const Steps extends Step[]>({
 	showNext = true,
 	showPrevious = true,
 	showControls = true,
-	isLastVisible = false,
 	controls,
 }: Pick<StepperFormProps<Steps>, "Stepper" | "content"> & {
 	stepper: Stepperize.Stepper<Steps>;
@@ -489,7 +511,6 @@ function StepPanel<const Steps extends Step[]>({
 	showControls?: boolean;
 	showNext?: boolean;
 	showPrevious?: boolean;
-	isLastVisible?: boolean;
 	controls?: ReactNode;
 }) {
 	const form = useFormContext();
