@@ -30,8 +30,13 @@ const SQLITE_COMMIT_PHASE_LABELS: &[&str] = &["actor_id_gen", "actor_key", "envo
 const SQLITE_WORKER_COMMAND_LABELS: &[&str] =
 	&["actor_id_gen", "actor_key", "envoy_key", "operation"];
 #[cfg(feature = "sqlite-local")]
-const SQLITE_WORKER_ERROR_LABELS: &[&str] =
-	&["actor_id_gen", "actor_key", "envoy_key", "operation", "code"];
+const SQLITE_WORKER_ERROR_LABELS: &[&str] = &[
+	"actor_id_gen",
+	"actor_key",
+	"envoy_key",
+	"operation",
+	"code",
+];
 
 pub(crate) struct ActorMetrics {
 	labels: Arc<ActorMetricLabels>,
@@ -160,7 +165,10 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_queue_depth gauge");
 		let queue_messages_sent_total = IntCounterVec::new(
-			Opts::new("actor_queue_messages_sent_total", "total queue messages sent"),
+			Opts::new(
+				"actor_queue_messages_sent_total",
+				"total queue messages sent",
+			),
 			ACTOR_LABELS,
 		)
 		.expect("create actor_queue_messages_sent_total counter");
@@ -471,7 +479,10 @@ impl ActorMetricCollectors {
 		register_metric(&rivet_metrics::REGISTRY, create_vars_ms.clone());
 		register_metric(&rivet_metrics::REGISTRY, queue_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, queue_messages_sent_total.clone());
-		register_metric(&rivet_metrics::REGISTRY, queue_messages_received_total.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			queue_messages_received_total.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, active_connections.clone());
 		register_metric(&rivet_metrics::REGISTRY, connections_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, connection_closed_total.clone());
@@ -481,7 +492,10 @@ impl ActorMetricCollectors {
 		);
 		register_metric(&rivet_metrics::REGISTRY, lifecycle_inbox_depth.clone());
 		register_metric(&rivet_metrics::REGISTRY, dispatch_inbox_depth.clone());
-		register_metric(&rivet_metrics::REGISTRY, lifecycle_event_inbox_depth.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			lifecycle_event_inbox_depth.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, user_tasks_active.clone());
 		register_metric(&rivet_metrics::REGISTRY, user_task_duration_seconds.clone());
 		register_metric(&rivet_metrics::REGISTRY, shutdown_wait_seconds.clone());
@@ -493,7 +507,10 @@ impl ActorMetricCollectors {
 		);
 		#[cfg(feature = "sqlite-local")]
 		{
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_resolve_pages_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_resolve_pages_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_vfs_resolve_pages_requested_total.clone(),
@@ -507,10 +524,22 @@ impl ActorMetricCollectors {
 				sqlite_vfs_resolve_pages_cache_misses_total.clone(),
 			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_get_pages_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_pages_fetched_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_prefetch_pages_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_bytes_fetched_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_vfs_prefetch_bytes_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_pages_fetched_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_prefetch_pages_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_bytes_fetched_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_vfs_prefetch_bytes_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_vfs_get_pages_duration_seconds.clone(),
@@ -525,16 +554,31 @@ impl ActorMetricCollectors {
 				sqlite_vfs_commit_duration_seconds_total.clone(),
 			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_depth.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_queue_overload_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_queue_overload_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_worker_command_duration_seconds.clone(),
 			);
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_command_error_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_close_duration_seconds.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_close_timeout_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_command_error_total.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_close_duration_seconds.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_close_timeout_total.clone(),
+			);
 			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_crash_total.clone());
-			register_metric(&rivet_metrics::REGISTRY, sqlite_worker_unclean_close_total.clone());
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_worker_unclean_close_total.clone(),
+			);
 		}
 
 		Self {
@@ -729,10 +773,7 @@ impl ActorMetrics {
 		});
 		let labels = self.actor_labels();
 		let labels = [labels[0], labels[1], labels[2], kind.as_metric_label()];
-		METRICS
-			.user_tasks_active
-			.with_label_values(&labels)
-			.dec();
+		METRICS.user_tasks_active.with_label_values(&labels).dec();
 		METRICS
 			.user_task_duration_seconds
 			.with_label_values(&labels)
@@ -865,7 +906,13 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 		total_ns: u64,
 	) {
 		record_retained_actor_metrics(&self.labels, |retained| {
-			for phase in ["request_build", "serialize", "transport", "state_update", "total"] {
+			for phase in [
+				"request_build",
+				"serialize",
+				"transport",
+				"state_update",
+				"total",
+			] {
 				push_unique(&mut retained.sqlite_commit_phases, phase);
 			}
 		});
@@ -1148,7 +1195,12 @@ fn remove_retained_actor_metrics(labels: &ActorMetricLabels, retained: &Retained
 			);
 		}
 		for operation in &retained.sqlite_worker_operations {
-			let labels = [actor_labels[0], actor_labels[1], actor_labels[2], *operation];
+			let labels = [
+				actor_labels[0],
+				actor_labels[1],
+				actor_labels[2],
+				*operation,
+			];
 			ignore_missing_labels(
 				metrics
 					.sqlite_worker_command_duration_seconds

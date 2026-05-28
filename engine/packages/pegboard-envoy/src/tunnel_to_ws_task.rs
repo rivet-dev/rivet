@@ -188,10 +188,20 @@ async fn handle_message(
 		versioned::ToEnvoy::wrap_latest(to_client_msg).serialize(conn.protocol_version)?;
 	let serialized_len = serialized_msg.len();
 	metrics::WS_MESSAGES_TOTAL
-		.with_label_values(&[ns_label.as_str(), pool_label, "outbound", message_kind_label])
+		.with_label_values(&[
+			ns_label.as_str(),
+			pool_label,
+			"outbound",
+			message_kind_label,
+		])
 		.inc();
 	metrics::WS_BYTES_TOTAL
-		.with_label_values(&[ns_label.as_str(), pool_label, "outbound", message_kind_label])
+		.with_label_values(&[
+			ns_label.as_str(),
+			pool_label,
+			"outbound",
+			message_kind_label,
+		])
 		.inc_by(serialized_len as u64);
 	metrics::WS_FRAME_SIZE_BYTES
 		.with_label_values(&[ns_label.as_str(), pool_label, "outbound"])

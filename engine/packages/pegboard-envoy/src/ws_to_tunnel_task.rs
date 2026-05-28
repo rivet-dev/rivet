@@ -177,11 +177,7 @@ async fn handle_message(
 				metrics::PONG_MISSED_TOTAL
 					.with_label_values(&[ns_label.as_str(), pool_label])
 					.inc();
-				tracing::warn!(
-					rtt_ms = rtt,
-					slow_threshold_ms,
-					"slow pong"
-				);
+				tracing::warn!(rtt_ms = rtt, slow_threshold_ms, "slow pong");
 			}
 
 			// Independent high-rtt warning at a hard 500ms threshold so operators

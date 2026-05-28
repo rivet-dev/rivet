@@ -896,8 +896,7 @@ impl ActorContext {
 
 	async fn disconnect_managed(&self, conn_id: &str, reason: Option<String>) -> Result<()> {
 		let close_reason = ConnectionCloseReason::from_disconnect_reason(reason.as_deref());
-		let Some(conn) =
-			self.remove_existing_for_disconnect_with_reason(conn_id, close_reason)
+		let Some(conn) = self.remove_existing_for_disconnect_with_reason(conn_id, close_reason)
 		else {
 			tracing::debug!(
 				actor_id = %self.actor_id(),

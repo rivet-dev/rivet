@@ -15,8 +15,7 @@ struct EnvoyMetricCollectors {
 	ping_healthy: IntGauge,
 }
 
-static ENVOY_METRICS: LazyLock<EnvoyMetricCollectors> =
-	LazyLock::new(EnvoyMetricCollectors::new);
+static ENVOY_METRICS: LazyLock<EnvoyMetricCollectors> = LazyLock::new(EnvoyMetricCollectors::new);
 
 pub struct RenderedMetrics {
 	pub content_type: String,
@@ -81,7 +80,10 @@ impl EnvoyMetricCollectors {
 		))
 		.expect("create envoy ping healthy gauge");
 
-		register_metric(&rivet_metrics::REGISTRY, last_ping_timestamp_seconds.clone());
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			last_ping_timestamp_seconds.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, ping_healthy.clone());
 
 		Self {

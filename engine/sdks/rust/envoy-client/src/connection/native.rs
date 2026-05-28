@@ -197,9 +197,7 @@ async fn single_connection(
 						let dequeue_ts = crate::time::now_millis();
 						let queue_wait_ms = dequeue_ts - enqueue_ts;
 						let write_start = std::time::Instant::now();
-						let result = write
-							.send(tungstenite::Message::Binary(data.into()))
-							.await;
+						let result = write.send(tungstenite::Message::Binary(data.into())).await;
 						let write_elapsed_ms = write_start.elapsed().as_millis() as i64;
 						if let Err(e) = result {
 							tracing::error!(?e, "failed to send ws message");
@@ -317,17 +315,15 @@ async fn single_connection(
 			}
 			Err(e) => {
 				disconnect_reason = "error";
-				let last_ping_ts = shared.last_ping_ts.load(std::sync::atomic::Ordering::Acquire);
+				let last_ping_ts = shared
+					.last_ping_ts
+					.load(std::sync::atomic::Ordering::Acquire);
 				let time_since_last_ping_ms = if last_ping_ts == 0 {
 					None
 				} else {
 					Some(crate::time::now_millis() - last_ping_ts)
 				};
-				tracing::error!(
-					?e,
-					?time_since_last_ping_ms,
-					"websocket error"
-				);
+				tracing::error!(?e, ?time_since_last_ping_ms, "websocket error");
 				break;
 			}
 			_ => {}

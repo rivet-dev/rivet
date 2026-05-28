@@ -197,7 +197,8 @@ mod imp {
 							message_index,
 							inner_data_len,
 						} => {
-							let depth_after_recv = shared.ws_tx_depth.fetch_sub(1, Ordering::AcqRel) - 1;
+							let depth_after_recv =
+								shared.ws_tx_depth.fetch_sub(1, Ordering::AcqRel) - 1;
 							METRICS.ws_tx_depth.dec();
 							let payload_len = data.len();
 							let dequeue_ts = crate::time::now_millis();
@@ -211,9 +212,7 @@ mod imp {
 							}
 							let now = crate::time::now_millis();
 							if is_pong {
-								shared
-									.last_pong_sent_ts
-									.store(now, Ordering::Release);
+								shared.last_pong_sent_ts.store(now, Ordering::Release);
 							}
 							if let (Some(gateway_id), Some(request_id), Some(message_index)) =
 								(gateway_id.as_ref(), request_id.as_ref(), message_index)

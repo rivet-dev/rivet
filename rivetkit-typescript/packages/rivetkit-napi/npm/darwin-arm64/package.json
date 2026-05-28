@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/rivetkit-napi-darwin-arm64",
-	"version": "2.3.0-rc.5",
+	"version": "2.3.0-rc.8",
 	"os": [
 		"darwin"
 	],
