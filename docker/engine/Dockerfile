@@ -33,7 +33,7 @@ RUN if [ "$BUILD_FRONTEND" = "true" ]; then \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
         pnpm install --ignore-scripts && \
-        VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" VITE_APP_TURNSTILE_SITE_KEY="${VITE_APP_TURNSTILE_SITE_KEY}" npx turbo build -F @rivetkit/engine-frontend; \
+        BASE_URL="/ui/" VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" VITE_APP_TURNSTILE_SITE_KEY="${VITE_APP_TURNSTILE_SITE_KEY}" npx turbo build -F @rivetkit/engine-frontend; \
     fi
 
 # Build and copy all binaries from target directory into an empty image (it is not
