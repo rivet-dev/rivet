@@ -1,13 +1,9 @@
 import { Accordion, AccordionContent } from "@radix-ui/react-accordion";
 import {
 	faArrowRight,
-	faBroadcastTower,
+	faCheck,
 	faCopy,
-	faDatabase,
-	faDiagramProject,
-	faLayerGroup,
-	faMagnifyingGlass,
-	faPlug,
+	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
 import { deployOptions, type Provider } from "@rivetkit/shared-data";
@@ -19,8 +15,8 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
+import { type ReactNode, Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -37,9 +33,7 @@ import {
 	CodePreview,
 	DiscreteCopyButton,
 	FormField,
-	Ping,
 	Skeleton,
-	useInterval,
 } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
@@ -72,31 +66,36 @@ import { Content } from "./layout";
 const stepper = defineStepper(
 	{
 		id: "install",
-		title: "Install RivetKit & Skills",
+		title: "Install RivetKit",
+		description:
+			"Add the Rivet skill so your coding agent knows Rivet, then install the package.",
+		next: "Continue",
 		schema: z.object({}),
 		group: "local",
 	},
 	{
 		id: "run",
-		title: "Run locally",
-		schema: z.object({}),
-		group: "local",
-	},
-	{
-		id: "explore",
-		title: "Explore Rivet Actors",
+		title: "Build your first Actor",
+		description:
+			"Let your coding agent scaffold an Actor, or follow the quickstart yourself.",
+		next: "Continue",
 		schema: z.object({}),
 		group: "local",
 	},
 	{
 		id: "provider",
-		title: "Ready to deploy?",
+		title: "Where do you want to deploy?",
+		description:
+			"Pick a backend. Rivet manages actor orchestration, state, and scaling for you.",
+		next: "Continue",
 		schema: z.object({ provider: z.string().nonempty() }),
 		group: "deploy",
 	},
 	{
 		id: "backend",
-		title: "Connect your Backend",
+		title: "Connect your backend",
+		description:
+			"Deploy your app and connect it so Rivet can route to your Actors.",
 		assist: true,
 		group: "deploy",
 		schema: (values: Record<string, unknown>) => {
@@ -133,11 +132,13 @@ const stepper = defineStepper(
 	},
 	{
 		id: "frontend",
-		title: "Create your first Actor",
+		title: "Verify deployment",
+		description:
+			"We'll detect your first Actor automatically once your backend is live.",
 		assist: true,
 		group: "deploy",
 		schema: z.object({}),
-		previous: "Edit Provider",
+		previous: "Edit provider",
 		showNext: false,
 	},
 );
@@ -220,19 +221,22 @@ export function GettingStarted({
 	return (
 		<Content className="flex-1 min-h-0 !h-auto !overflow-hidden flex flex-col items-center justify-safe-center">
 			<motion.div
-				className="relative min-w-0 overflow-hidden w-full flex-1 min-h-0 flex flex-col"
+				className="relative min-w-0 w-full flex-1 min-h-0 flex flex-col"
 				initial={{ opacity: 0, y: 20 }}
 				animate={{ opacity: 1, y: 0 }}
 				transition={{ duration: 0.3 }}
 				data-testid={TEST_IDS.Onboarding.GettingStartedWizard}
 			>
-				<div className="flex-1 min-h-0 flex items-safe-center justify-center [&_[data-component='stepper']>form]:mx-auto [&_[data-component='stepper']]:overflow-x-hidden [&_[data-component='stepper']]:w-full [&:has([data-wide='true'])_[data-component='stepper']>form]:max-w-[56rem] has-[[data-wide='true']]:w-auto [&_[data-component='stepper']>form]:max-w-[32rem] px-4 overflow-auto pt-4">
-					<CodeGroupSyncProvider>
-						<StepperForm
-							{...stepper}
-							singlePage
-							formId="onboarding"
-							className="mb-4 mt-6"
+				<SkipOnboardingHeaderLink />
+				<div className="flex-1 min-h-0 overflow-auto flex items-safe-center justify-center px-4 py-8 [&_[data-component='stepper']]:w-full [&_[data-component='stepper']>form]:w-full">
+					<div className="w-full max-w-[36rem] rounded-xl border bg-card p-6 sm:p-8 shadow-sm">
+						<CodeGroupSyncProvider>
+							<StepperForm
+								{...stepper}
+								singlePage
+								formId="onboarding"
+								className="mt-2"
+								header={<OnboardingProgress />}
 							initialStep={
 								displayFrontendOnboarding
 									? "frontend"
@@ -250,11 +254,6 @@ export function GettingStarted({
 								run: () => (
 									<StepContent>
 										<RunLocallyStep />
-									</StepContent>
-								),
-								explore: () => (
-									<StepContent wide>
-										<ExploreRivet />
 									</StepContent>
 								),
 								provider: () => (
@@ -290,15 +289,25 @@ export function GettingStarted({
 								const provider = (values.provider ?? form.getValues("provider")) as string | undefined;
 								if (stepper.current.id === "provider") {
 									if (features.compute && provider === "rivet") {
-										await mutateAsyncManagedPool({
-											displayName: "default",
-											pool: "default",
-											image: null,
-											maxConcurrentActors: 50_000,
-											environment: {},
-											command: null,
-											args: [],
-										});
+										try {
+											await mutateAsyncManagedPool({
+												displayName: "default",
+												pool: "default",
+												image: null,
+												maxConcurrentActors: 50_000,
+												environment: {},
+												command: null,
+												args: [],
+											});
+										} catch (error) {
+											console.error(
+												"Failed to create default managed pool during onboarding",
+												error,
+											);
+											toast.error(
+												"Couldn't create the default Rivet Compute pool — you can configure it on the next step.",
+											);
+										}
 									}
 
 									await Promise.all([
@@ -406,60 +415,26 @@ export function GettingStarted({
 						>
 							<StepperFooter />
 						</StepperForm>
-					</CodeGroupSyncProvider>
+						</CodeGroupSyncProvider>
+					</div>
 				</div>
 			</motion.div>
 		</Content>
 	);
 }
 
-function StepContent({
-	children,
-	wide,
-}: {
-	children: ReactNode;
-	wide?: boolean;
-}) {
+function StepContent({ children }: { children: ReactNode }) {
 	return (
-		<motion.div
-			className="mx-auto"
-			data-component="step-content"
-			data-wide={wide ? "true" : "false"}
-			animate={{ maxWidth: wide ? "56rem" : "32rem", width: "100%" }}
-			transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-			style={{ maxWidth: wide ? "56rem" : "32rem" }}
-		>
+		<div className="w-full" data-component="step-content">
 			{children}
-		</motion.div>
+		</div>
 	);
 }
 
 function StepperFooter() {
 	const s = stepper.useStepper();
-	const navigate = useNavigate();
 
-	const skipOnboardingLink = !features.platform ? (
-		<Button
-			type="button"
-			variant="link"
-			size="xs"
-			className="text-muted-foreground"
-			onClick={() =>
-				navigate({
-					to: ".",
-					search: (search) => ({
-						...search,
-						skipOnboarding: true,
-					}),
-				})
-			}
-			endIcon={<Icon icon={faArrowRight} className="ms-1" />}
-		>
-			Skip onboarding
-		</Button>
-	) : null;
-
-	if (s.current.group === "local" && s.current.id !== "explore") {
+	if (s.current.group === "local") {
 		return (
 			<div className="flex flex-col items-center gap-4 mt-6">
 				<Button
@@ -473,19 +448,64 @@ function StepperFooter() {
 				>
 					Already have a project working locally? Skip to deploy
 				</Button>
-				{skipOnboardingLink}
 			</div>
 		);
 	}
 
-	if (skipOnboardingLink) {
-		return (
-			<div className="flex flex-col items-center gap-4 mt-6">
-				{skipOnboardingLink}
-			</div>
-		);
-	}
 	return null;
+}
+
+function SkipOnboardingHeaderLink() {
+	if (features.platform) return null;
+	return (
+		<div className="absolute top-2 right-2 z-10">
+			<Button
+				asChild
+				variant="ghost"
+				size="sm"
+				className="text-muted-foreground hover:text-foreground"
+				endIcon={<Icon icon={faArrowRight} className="ms-1" />}
+			>
+				<Link to="." search={(s) => ({ ...s, skipOnboarding: true })}>
+					Skip onboarding
+				</Link>
+			</Button>
+		</div>
+	);
+}
+
+function OnboardingProgress() {
+	const s = stepper.useStepper();
+	const steps = s.all;
+	const currentIndex = steps.findIndex((step) => step.id === s.current.id);
+	const total = steps.length;
+	const groupLabel =
+		s.current.group === "local" ? "Local setup" : "Deploy";
+	return (
+		<div
+			role="progressbar"
+			aria-valuemin={1}
+			aria-valuemax={total}
+			aria-valuenow={currentIndex + 1}
+			aria-valuetext={`Step ${currentIndex + 1} of ${total}, ${groupLabel}`}
+			className="flex flex-col items-center gap-2 mt-2 mb-4"
+		>
+			<div className="text-xs text-muted-foreground tabular-nums">
+				Step {currentIndex + 1} of {total} · {groupLabel}
+			</div>
+			<div className="flex gap-1.5">
+				{steps.map((step, i) => (
+					<div
+						key={step.id}
+						className={cn(
+							"h-1 w-8 rounded-full transition-colors",
+							i <= currentIndex ? "bg-primary" : "bg-muted",
+						)}
+					/>
+				))}
+			</div>
+		</div>
+	);
 }
 
 function ProviderSetup() {
@@ -504,10 +524,6 @@ function ProviderSetup() {
 
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
-			<p className="text-sm text-muted-foreground mb-4">
-				Deploy your application to your preferred backend provider. We
-				manage the actor orchestration, state, and scaling for you.
-			</p>
 			<FormField
 				control={control}
 				name="provider"
@@ -581,12 +597,22 @@ function ProviderCard({
 			<Icon
 				icon={option.icon}
 				className={cn(
-					"!w-5 h-auto shrink-0 text-muted-foreground",
+					"!size-5 shrink-0 text-muted-foreground",
 					iconClassName,
 				)}
 			/>
-			<div className="min-w-0">
-				<p className="text-sm font-medium">{option.displayName}</p>
+			<div className="min-w-0 flex-1">
+				<div className="flex items-center gap-2">
+					<p className="text-sm font-medium">{option.displayName}</p>
+					{option.badge ? (
+						<Badge
+							variant="outline"
+							className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
+						>
+							{option.badge}
+						</Badge>
+					) : null}
+				</div>
 				<p className="text-xs text-muted-foreground">
 					{option.description}
 				</p>
@@ -595,49 +621,70 @@ function ProviderCard({
 	);
 }
 
+function OrDivider({ label }: { label: string }) {
+	return (
+		<div className="flex items-center gap-3">
+			<div className="h-px flex-1 bg-border" />
+			<span className="text-xs text-muted-foreground">{label}</span>
+			<div className="h-px flex-1 bg-border" />
+		</div>
+	);
+}
+
+function CommandBox({ command }: { command: string }) {
+	return (
+		<div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
+			<CodePreview code={command} language="bash" />
+			<Button
+				type="button"
+				variant="ghost"
+				size="sm"
+				className="shrink-0"
+				onClick={(e) => {
+					e.preventDefault();
+					e.stopPropagation();
+					navigator.clipboard.writeText(command);
+					toast.success("Copied to clipboard");
+				}}
+			>
+				<Icon icon={faCopy} className="w-3.5 h-3.5" />
+			</Button>
+		</div>
+	);
+}
+
 function InstallStep() {
 	return (
-		<div className="flex flex-col gap-5">
-			<div className="relative rounded-lg border border-primary p-4 pt-5">
-				<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
-					Recommended
-				</Badge>
-				<p className="font-medium mb-1.5">Install Rivet Skills</p>
-				<p className="text-sm text-muted-foreground mb-3">
-					Run this command in your coding agent to install Rivet
-					skills for guided setup and development.
-				</p>
-				<div className="flex items-center justify-between gap-2 rounded-md px-3 py-2">
-					<CodePreview
-						code="npx skills add rivet-dev/skills"
-						language="bash"
-					/>
-					<Button
-						type="button"
-						variant="ghost"
-						size="sm"
-						className="shrink-0"
-						onClick={(e) => {
-							e.preventDefault();
-							e.stopPropagation();
-							navigator.clipboard.writeText(
-								"npx skills add rivet-dev/skills",
-							);
-							toast.success("Copied to clipboard");
-						}}
-					>
-						<Icon icon={faCopy} className="w-3.5 h-3.5" />
-					</Button>
+		<div className="flex flex-col gap-6">
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-1.5">Install the Rivet skill</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Run this in your coding agent. The skill teaches it how to
+						build and deploy with Rivet, then guides you through the
+						rest of this setup.
+					</p>
+					<CommandBox command="npx skills add rivet-dev/skills" />
 				</div>
 			</div>
-			<div>
-				<PackageManagerCode
-					npx="npm install rivetkit"
-					yarn="yarn add rivetkit"
-					pnpm="pnpm add rivetkit"
-					bun="bun add rivetkit"
-					deno="deno add npm:rivetkit"
-				/>
+
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-1.5">Add the RivetKit package</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Install the library your app imports to define and call
+						Actors.
+					</p>
+					<PackageManagerCode
+						npx="npm install rivetkit"
+						yarn="yarn add rivetkit"
+						pnpm="pnpm add rivetkit"
+						bun="bun add rivetkit"
+						deno="deno add npm:rivetkit"
+					/>
+				</div>
 			</div>
 		</div>
 	);
@@ -759,15 +806,19 @@ Check the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting
 
 function RunLocallyStep() {
 	return (
-		<div className="flex flex-col gap-5">
-			<AgentPromptBanner code={agentPrompt} />
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={agentPrompt}
+				label="Have your coding agent scaffold and run your first Actor for you."
+			/>
+			<OrDivider label="or do it yourself" />
 			<div className="w-full flex items-center justify-between rounded-lg px-4 py-3 border border-border">
 				<div>
 					<p className="font-medium mb-1.5">
 						Follow the quickstart guide
 					</p>
 					<p className="text-sm text-muted-foreground">
-						Set up a Rivet actor project manually step-by-step.
+						Build a Rivet Actor project by hand, step by step.
 					</p>
 				</div>
 				<Button variant="outline" asChild className="shrink-0 ml-4">
@@ -776,7 +827,7 @@ function RunLocallyStep() {
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						Quickstart Guide
+						Quickstart guide
 						<Icon icon={faArrowRight} className="ms-2" />
 					</a>
 				</Button>
@@ -793,143 +844,6 @@ function StepNumber({ n }: { n: number }) {
 	);
 }
 
-const exploreFeatures = [
-	{
-		id: "inspector",
-		icon: faMagnifyingGlass,
-		label: "Inspector",
-		title: "RivetKit Inspector",
-		description:
-			"A built-in visual debugger that runs locally. View active actors, monitor connections, and trace every interaction in real-time.",
-		docsUrl: "https://rivet.dev/docs/actors/debugging",
-	},
-	{
-		id: "state",
-		icon: faLayerGroup,
-		label: "In-memory state",
-		title: "In-memory State",
-		description:
-			"Each actor has its own isolated state co-located with compute for instant reads and writes. Persist with SQLite or BYO database.",
-		docsUrl: "https://rivet.dev/docs/actors/state",
-	},
-	{
-		id: "storage",
-		icon: faDatabase,
-		label: "Storage",
-		title: "Built-in Storage",
-		description:
-			"Actors have built-in KV storage and SQLite. Browse stored data and watch writes happen live in the inspector.",
-		docsUrl: "https://rivet.dev/docs/actors/storage",
-	},
-	{
-		id: "workflows",
-		icon: faDiagramProject,
-		label: "Workflows",
-		title: "Durable Workflows",
-		description:
-			"Orchestrate multi-step processes that survive crashes and restarts. Automatic retries and step-through history visualization.",
-		docsUrl: "https://rivet.dev/docs/actors/workflows",
-	},
-	{
-		id: "events",
-		icon: faBroadcastTower,
-		label: "Events",
-		title: "Event Streams",
-		description:
-			"Actors can broadcast events to connected clients. Real-time bidirectional streaming built in.",
-		docsUrl: "https://rivet.dev/docs/actors/events",
-	},
-	{
-		id: "rpcs",
-		icon: faPlug,
-		label: "RPCs",
-		title: "Remote Procedure Calls",
-		description:
-			"Call actor methods directly from your client with full type safety. The inspector shows every RPC call, its arguments, and response.",
-		docsUrl: "https://rivet.dev/docs/actors/rpc",
-	},
-];
-
-const CAROUSEL_INTERVAL = 5000;
-
-const GIF_SRC = `/onboarding-demo.gif?t=${Date.now()}`;
-
-function ExploreRivet() {
-	const [activeIndex, setActiveIndex] = useState(0);
-	const feature = exploreFeatures[activeIndex];
-
-	const { reset } = useInterval(() => {
-		setActiveIndex((prev) => (prev + 1) % exploreFeatures.length);
-	}, CAROUSEL_INTERVAL);
-
-	return (
-		<div className="flex flex-col gap-6">
-			<div className="rounded-lg border bg-muted/30 aspect-video flex items-center justify-center overflow-hidden">
-				<img
-					src={GIF_SRC}
-					alt="Rivet Actors demo"
-					className="w-full h-full object-cover"
-				/>
-			</div>
-			<div className="flex gap-0">
-				{exploreFeatures.map((f, i) => (
-					<button
-						key={f.id}
-						type="button"
-						onClick={() => {
-							setActiveIndex(i);
-							reset();
-						}}
-						className={`flex-1 text-left px-3 pt-3 pb-2 transition-colors relative ${
-							i === activeIndex
-								? "text-foreground"
-								: "text-muted-foreground hover:text-foreground"
-						}`}
-					>
-						<div className="absolute top-0 left-0 right-0 h-0.5 bg-muted overflow-hidden rounded-full">
-							<div
-								className="h-full bg-primary rounded-full"
-								style={{
-									width: i === activeIndex ? "100%" : "0%",
-									transition:
-										i === activeIndex
-											? `width ${CAROUSEL_INTERVAL}ms linear`
-											: "none",
-								}}
-							/>
-						</div>
-						<div className="flex items-center gap-1.5 mb-1">
-							<Icon
-								icon={f.icon}
-								className="w-3 h-3 flex-shrink-0"
-							/>
-							<span className="text-xs font-semibold truncate">
-								{f.label}
-							</span>
-						</div>
-					</button>
-				))}
-			</div>
-			<div className="min-h-[4.5rem]">
-				<h3 className="text-base font-semibold mb-1">
-					{feature.title}
-				</h3>
-				<p className="text-sm text-muted-foreground leading-relaxed">
-					{feature.description}{" "}
-					<a
-						href={feature.docsUrl}
-						target="_blank"
-						rel="noreferrer"
-						className="inline-flex items-center gap-1 text-primary hover:underline"
-					>
-						Learn more
-						<Icon icon={faArrowRight} className="w-3 h-3" />
-					</a>
-				</p>
-			</div>
-		</div>
-	);
-}
 
 function buildRivetAgentInstructionsCode({
 	cloudToken,
@@ -1150,23 +1064,42 @@ function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 	return <OtherCopyAgentInstructionsButton provider={provider} />;
 }
 
-function AgentPromptBanner({ code }: { code: string }) {
+function AgentPromptBanner({
+	code,
+	containsSecret = false,
+	label = "Have your coding agent complete these steps automatically to deploy to Rivet Compute.",
+}: {
+	code: string;
+	containsSecret?: boolean;
+	label?: string;
+}) {
 	return (
 		<button
 			type="button"
 			onClick={() => {
 				navigator.clipboard.writeText(code);
-				toast.success("Copied to clipboard");
+				toast.success(
+					containsSecret
+						? "Copied to clipboard — includes a secret deploy token, paste only into your agent"
+						: "Copied to clipboard",
+				);
 			}}
-			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer"
+			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer text-left"
 		>
 			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
 				Recommended
 			</Badge>
-			<span className="text-sm font-medium text-foreground text-left">
-				Have your coding agent complete these steps automatically to
-				deploy to Rivet Compute.
-			</span>
+			<div className="flex flex-col gap-1 min-w-0">
+				<span className="text-sm font-medium text-foreground">
+					{label}
+				</span>
+				{containsSecret ? (
+					<span className="text-xs text-muted-foreground">
+						Includes a secret deploy token. Paste only into your
+						coding agent.
+					</span>
+				) : null}
+			</div>
 			<Button
 				asChild
 				variant="ghost"
@@ -1184,7 +1117,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 
 function RivetCopyAgentInstructionsButton() {
 	const code = useRivetAgentInstructionsCode();
-	return <AgentPromptBanner code={code} />;
+	return <AgentPromptBanner code={code} containsSecret />;
 }
 
 function OtherCopyAgentInstructionsButton({
@@ -1193,7 +1126,7 @@ function OtherCopyAgentInstructionsButton({
 	provider?: Provider;
 }) {
 	const code = useOtherAgentInstructionsCode(provider);
-	return <AgentPromptBanner code={code} />;
+	return <AgentPromptBanner code={code} containsSecret />;
 }
 
 const githubActionYaml = `name: Rivet Deploy
@@ -1234,6 +1167,7 @@ function BackendSetupRivet() {
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
+			<OrDivider label="or set it up manually" />
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
@@ -1357,16 +1291,24 @@ function BackendSetup() {
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider={provider} />
-			<RunnerConfigToggleGroup
-				mode={mode ?? "serverless"}
-				onChange={(value) =>
-					setValue("mode", value, {
-						shouldDirty: true,
-						shouldTouch: true,
-						shouldValidate: true,
-					})
-				}
-			/>
+			<OrDivider label="or set it up manually" />
+			<div>
+				<RunnerConfigToggleGroup
+					mode={mode ?? "serverless"}
+					onChange={(value) =>
+						setValue("mode", value, {
+							shouldDirty: true,
+							shouldTouch: true,
+							shouldValidate: true,
+						})
+					}
+				/>
+				<p className="text-xs text-muted-foreground text-center -mt-2">
+					{(mode ?? "serverless") === "serverfull"
+						? "Runner: a long-lived process you keep running that connects to Rivet."
+						: "Serverless: Rivet invokes your deployment on demand and scales to zero."}
+				</p>
+			</div>
 			{mode === "serverfull" ? (
 				<BackendSetupServerfull provider={provider} />
 			) : (
@@ -1582,36 +1524,46 @@ function FrontendSetup() {
 
 	return (
 		<div
-			className="space-y-2"
+			className="space-y-4"
 			data-testid={TEST_IDS.Onboarding.VerificationStep}
 		>
-			<div className="border rounded-md py-10 flex flex-col gap-6">
-				<div className="flex gap-2 justify-center items-center py-2 px-8">
-					<div className="relative mr-4">
-						<Ping variant="pending" className="relative" />
-					</div>
-					<p data-testid={TEST_IDS.Onboarding.WaitingForActor}>
-						{waitingForFirstImage
-							? "Waiting for your first deployment..."
-							: "Waiting for an Actor to be created..."}
-					</p>
-				</div>
-
-				<div className="flex items-center flex-col justify-center gap-4">
+			<div className="border rounded-lg p-6 flex flex-col gap-5">
+				<div
+					className="flex flex-col gap-4"
+					data-testid={TEST_IDS.Onboarding.WaitingForActor}
+				>
 					{provider === "rivet" ? (
 						<>
-							<Button asChild>
-								<Link
-									to="."
-									search={{ skipOnboarding: true }}
-								>
-									Go to dashboard
-									<Icon icon={faArrowRight} className="ml-1.5" />
-								</Link>
-							</Button>
+							<VerifyStatusRow
+								state={waitingForFirstImage ? "active" : "done"}
+								label="Deploy your backend"
+								sublabel={
+									waitingForFirstImage
+										? "Push your changes to trigger the Rivet Deploy workflow."
+										: "Deployment detected."
+								}
+							/>
+							<VerifyStatusRow
+								state={waitingForFirstImage ? "pending" : "active"}
+								label="Create your first Actor"
+								sublabel="We'll continue automatically once an Actor is running."
+							/>
+						</>
+					) : (
+						<VerifyStatusRow
+							state="active"
+							label="Waiting for your first Actor"
+							sublabel="We'll continue automatically once an Actor is created."
+						/>
+					)}
+				</div>
+
+				<div className="border-t pt-5 flex items-center flex-wrap justify-between gap-3">
+					{provider === "rivet" ? (
+						<>
 							{deploymentUrl ? (
-								<div className="mt-4 flex flex-col items-center gap-1 text-sm">
-									<span className="text-muted-foreground">
+								<div className="flex flex-col gap-1 text-sm min-w-0">
+									<span className="text-xs text-muted-foreground">
 										Deployment URL
 									</span>
 									<DiscreteCopyButton
@@ -1621,39 +1573,22 @@ function FrontendSetup() {
 										{deploymentUrl}
 									</DiscreteCopyButton>
 								</div>
-							) : null}
+							) : (
+								<span />
+							)}
+							<Button variant="outline" size="sm" asChild>
+								<Link to="." search={{ skipOnboarding: true }}>
+									Skip to dashboard
+									<Icon
+										icon={faArrowRight}
+										className="ml-1.5"
+									/>
+								</Link>
+							</Button>
 						</>
 					) : (
 						<>
-							{deploymentUrl ? (
-								<Button variant="outline">
-									<a
-										href={deploymentUrl}
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										Visit Deployment
-									</a>
-								</Button>
-							) : (
-								<Button variant="outline" asChild>
-									<Link
-										to="."
-										search={(s) => ({
-											...s,
-											modal: "create-actor",
-										})}
-									>
-										Create Actor
-									</Link>
-								</Button>
-							)}
-							<Button
-								asChild
-								variant="link"
-								size="xs"
-								className="text-muted-foreground mx-auto inline-block"
-							>
+							<Button asChild>
 								<Link
 									to="."
 									search={(s) => ({
@@ -1661,14 +1596,65 @@ function FrontendSetup() {
 										modal: "create-actor",
 									})}
 								>
-									or Manually Create Actor
+									Create an Actor
 								</Link>
 							</Button>
+							{deploymentUrl ? (
+								<Button variant="outline" asChild>
+									<a
+										href={deploymentUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										Visit deployment
+									</a>
+								</Button>
+							) : null}
 						</>
 					)}
 				</div>
 			</div>
 			<TroubleshootingSection endpoint={endpoint} />
+		</div>
+	);
+}
+
+function VerifyStatusRow({
+	state,
+	label,
+	sublabel,
+}: {
+	state: "done" | "active" | "pending";
+	label: string;
+	sublabel?: string;
+}) {
+	return (
+		<div className="flex items-start gap-3">
+			<div className="mt-0.5 shrink-0">
+				{state === "done" ? (
+					<Icon icon={faCheck} className="text-primary w-4 h-4" />
+				) : state === "active" ? (
+					<Icon
+						icon={faSpinnerThird}
+						className="w-4 h-4 animate-spin text-muted-foreground"
+					/>
+				) : (
+					<div className="w-4 h-4 rounded-full border border-muted-foreground/30" />
+				)}
+			</div>
+			<div className="min-w-0">
+				<p
+					className={cn(
+						"text-sm font-medium",
+						state === "pending" && "text-muted-foreground",
+					)}
+				>
+					{label}
+				</p>
+				{sublabel ? (
+					<p className="text-xs text-muted-foreground">{sublabel}</p>
+				) : null}
+			</div>
 		</div>
 	);
 }
