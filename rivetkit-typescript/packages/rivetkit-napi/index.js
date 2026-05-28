@@ -310,7 +310,7 @@ if (!nativeBinding) {
   throw new Error(`Failed to load native binding`)
 }
 
-const { ActorContext, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, Kv, Queue, QueueMessage, CoreRegistry, Schedule, WebSocket, jsSetEventloopLagQuantile, jsSetEventloopUtilization, jsSetEventloopHeartbeatTsMs, jsAddProcessCpuSeconds, jsSetProcessResidentMemoryBytes, jsSetHeapBytes, jsObserveGcDuration, jsSetActiveHandles, jsSetActiveRequests } = nativeBinding
+const { ActorContext, NapiActorFactory, CancellationToken, ConnHandle, JsNativeDatabase, Kv, Queue, QueueMessage, CoreRegistry, jsSetEventloopLagQuantile, jsSetEventloopUtilization, jsSetEventloopHeartbeatTsMs, jsAddProcessCpuSeconds, jsSetProcessResidentMemoryBytes, jsSetHeapBytes, jsObserveGcDuration, jsSetActiveHandles, jsSetActiveRequests, Schedule, WebSocket } = nativeBinding
 
 module.exports.ActorContext = ActorContext
 module.exports.NapiActorFactory = NapiActorFactory
@@ -321,8 +321,6 @@ module.exports.Kv = Kv
 module.exports.Queue = Queue
 module.exports.QueueMessage = QueueMessage
 module.exports.CoreRegistry = CoreRegistry
-module.exports.Schedule = Schedule
-module.exports.WebSocket = WebSocket
 module.exports.jsSetEventloopLagQuantile = jsSetEventloopLagQuantile
 module.exports.jsSetEventloopUtilization = jsSetEventloopUtilization
 module.exports.jsSetEventloopHeartbeatTsMs = jsSetEventloopHeartbeatTsMs
@@ -332,3 +330,5 @@ module.exports.jsSetHeapBytes = jsSetHeapBytes
 module.exports.jsObserveGcDuration = jsObserveGcDuration
 module.exports.jsSetActiveHandles = jsSetActiveHandles
 module.exports.jsSetActiveRequests = jsSetActiveRequests
+module.exports.Schedule = Schedule
+module.exports.WebSocket = WebSocket

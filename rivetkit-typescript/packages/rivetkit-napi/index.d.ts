@@ -183,6 +183,15 @@ export interface JsServerlessStreamError {
   code: string
   message: string
 }
+export declare function jsSetEventloopLagQuantile(quantile: string, seconds: number): void
+export declare function jsSetEventloopUtilization(value: number): void
+export declare function jsSetEventloopHeartbeatTsMs(epochMs: number): void
+export declare function jsAddProcessCpuSeconds(mode: string, seconds: number): void
+export declare function jsSetProcessResidentMemoryBytes(bytes: number): void
+export declare function jsSetHeapBytes(state: string, bytes: number): void
+export declare function jsObserveGcDuration(kind: string, seconds: number): void
+export declare function jsSetActiveHandles(count: number): void
+export declare function jsSetActiveRequests(count: number): void
 /** Options for KV list operations. */
 export interface JsKvListOptions {
   reverse?: boolean
@@ -315,11 +324,8 @@ export declare class CoreRegistry {
    * separately to avoid re-entrancy.
    */
   shutdown(): Promise<void>
+  actorStopThresholdMs(): Promise<number | null>
   diagnostics(): Promise<JsRegistryDiagnostics>
-  actorStopThresholdMs(): Promise<number | undefined | null>
-  health(): Promise<JsRegistryRouteResponse>
-  metadata(): JsRegistryRouteResponse
-  metrics(): Promise<JsRegistryRouteResponse>
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {
@@ -331,12 +337,3 @@ export declare class WebSocket {
   close(code?: number | undefined | null, reason?: string | undefined | null): Promise<void>
   setEventCallback(callback: (...args: any[]) => any): void
 }
-export declare function jsSetEventloopLagQuantile(quantile: string, seconds: number): void
-export declare function jsSetEventloopUtilization(value: number): void
-export declare function jsSetEventloopHeartbeatTsMs(epochMs: number): void
-export declare function jsAddProcessCpuSeconds(mode: string, seconds: number): void
-export declare function jsSetProcessResidentMemoryBytes(bytes: number): void
-export declare function jsSetHeapBytes(state: string, bytes: number): void
-export declare function jsObserveGcDuration(kind: string, seconds: number): void
-export declare function jsSetActiveHandles(count: number): void
-export declare function jsSetActiveRequests(count: number): void
