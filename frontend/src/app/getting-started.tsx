@@ -1,8 +1,10 @@
 import {
+	faActors,
 	faArrowRight,
 	faCheck,
 	faChevronDown,
 	faCopy,
+	faKey,
 	Icon,
 } from "@rivet-gg/icons";
 import { deployOptions, type Provider } from "@rivetkit/shared-data";
@@ -26,6 +28,7 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	FormField,
 	Skeleton,
 } from "@/components";
 import {
@@ -188,6 +191,7 @@ export function GettingStarted({
 		datacenters: {},
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
+		template: "actor" as "actor" | "agent-os",
 		...(initialRunnerConfig || {}),
 	};
 
@@ -479,8 +483,10 @@ function RivetDeploy() {
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
 	const deployCommand = `npx @rivetkit/cli deploy --token ${cloudToken ?? "<RIVET_CLOUD_TOKEN>"}`;
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider="rivet" />
 			<OrDivider label="or deploy manually" />
 			<div>
@@ -595,35 +601,199 @@ function CommandBox({ command }: { command: string }) {
 	);
 }
 
+function AgentOsKeyNotice() {
+	return (
+		<div className="flex gap-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
+			<Icon
+				icon={faKey}
+				className="mt-0.5 shrink-0 text-muted-foreground"
+			/>
+			<div className="space-y-1">
+				<p className="font-medium">agentOS needs an LLM key</p>
+				<p className="text-muted-foreground text-xs">
+					Set{" "}
+					<code className="rounded bg-muted px-1 py-0.5 text-foreground">
+						ANTHROPIC_API_KEY
+					</code>{" "}
+					as a secret on your deployment. agentOS doesn't inherit it
+					from the host process, so your server passes it to each
+					session.{" "}
+					<a
+						href="https://rivet.dev/docs/agent-os/llm-credentials"
+						target="_blank"
+						rel="noreferrer"
+						className="text-primary hover:underline"
+					>
+						Learn more
+					</a>
+				</p>
+			</div>
+		</div>
+	);
+}
+
+// agentOS brand mark (rounded square + "OS") drawn in currentColor so it adapts
+// to the theme, unlike the white-only marketing SVG.
+function AgentOsLogo({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 32 32"
+			fill="none"
+			className={className}
+			aria-hidden="true"
+		>
+			<rect
+				x="2.75"
+				y="2.75"
+				width="26.5"
+				height="26.5"
+				rx="8"
+				stroke="currentColor"
+				strokeWidth="2.5"
+			/>
+			<text
+				x="16"
+				y="20.5"
+				textAnchor="middle"
+				fontSize="11"
+				fontWeight="700"
+				fontFamily="inherit"
+				fill="currentColor"
+			>
+				OS
+			</text>
+		</svg>
+	);
+}
+
+function BuildTargetCard({
+	icon,
+	label,
+	description,
+	badge,
+	isSelected,
+	onSelect,
+}: {
+	icon: ReactNode;
+	label: string;
+	description: string;
+	badge?: string;
+	isSelected: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			className={cn(
+				"flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
+				isSelected
+					? "border-primary bg-primary/5"
+					: "border-border hover:border-muted-foreground/50",
+			)}
+		>
+			<span className="text-muted-foreground mt-0.5 shrink-0">{icon}</span>
+			<div className="min-w-0">
+				<div className="flex items-center gap-2">
+					<p className="text-sm font-medium">{label}</p>
+					{badge ? (
+						<Badge
+							variant="outline"
+							className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
+						>
+							{badge}
+						</Badge>
+					) : null}
+				</div>
+				<p className="text-xs text-muted-foreground">{description}</p>
+			</div>
+		</button>
+	);
+}
+
+// "What are you building?" selector shown atop the first step when the agentOS
+// feature flag is on. Picking agentOS reveals the agent/software/sandbox/handoff
+// steps (gated by `template === "agent-os"` via the stepper's isVisible).
+function BuildTargetSelector() {
+	const { control, setValue } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="template"
+			render={({ field }) => (
+				<div>
+					<p className="font-medium mb-2">What are you building?</p>
+					<div className="grid grid-cols-2 gap-2">
+						<BuildTargetCard
+							icon={<Icon icon={faActors} className="!size-5" />}
+							label="Rivet Actors"
+							description="Realtime, state, and multiplayer for any app"
+							isSelected={field.value !== "agent-os"}
+							onSelect={() =>
+								setValue("template", "actor", {
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								})
+							}
+						/>
+						<BuildTargetCard
+							icon={<AgentOsLogo className="size-5" />}
+							label="agentOS"
+							badge="Preview"
+							description="An open-source OS for agents. Runs in-process with ~6 ms cold starts."
+							isSelected={field.value === "agent-os"}
+							onSelect={() =>
+								setValue("template", "agent-os", {
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								})
+							}
+						/>
+					</div>
+				</div>
+			)}
+		/>
+	);
+}
+
 function RunLocallyStep() {
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
-			{features.compute ? (
-				<RunLocallyComputeBanner />
-			) : (
-				<RunLocallyGenericBanner />
+			{features.agentOs ? <BuildTargetSelector /> : null}
+			{isAgentOs ? null : (
+				<>
+					{features.compute ? (
+						<RunLocallyComputeBanner />
+					) : (
+						<RunLocallyGenericBanner />
+					)}
+					<OrDivider label="or do it yourself" />
+					<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
+						<div className="min-w-0">
+							<p className="font-medium mb-1">
+								Follow the quickstart guide
+							</p>
+							<p className="text-sm text-muted-foreground">
+								Build a Rivet Actor project by hand, step by
+								step.
+							</p>
+						</div>
+						<Button variant="outline" asChild className="shrink-0">
+							<a
+								href="https://rivet.dev/docs/actors/quickstart/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								Quickstart guide
+								<Icon icon={faArrowRight} className="ms-2" />
+							</a>
+						</Button>
+					</div>
+				</>
 			)}
-			<OrDivider label="or do it yourself" />
-			<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
-				<div className="min-w-0">
-					<p className="font-medium mb-1">
-						Follow the quickstart guide
-					</p>
-					<p className="text-sm text-muted-foreground">
-						Build a Rivet Actor project by hand, step by step.
-					</p>
-				</div>
-				<Button variant="outline" asChild className="shrink-0">
-					<a
-						href="https://rivet.dev/docs/actors/quickstart/"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						Quickstart guide
-						<Icon icon={faArrowRight} className="ms-2" />
-					</a>
-				</Button>
-			</div>
 		</div>
 	);
 }
@@ -818,9 +988,11 @@ function BackendSetupRivet() {
 	const ghSecretCmd = cloudToken
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider="rivet" />
 			<OrDivider label="or set it up manually" />
 			<div className="flex gap-3">
@@ -933,6 +1105,7 @@ function BackendSetupRivet() {
 
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	const mode = useWatch({ name: "mode" }) as
 		| "serverless"
 		| "serverfull"
@@ -945,6 +1118,7 @@ function BackendSetup() {
 
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider={provider} />
 			<OrDivider label="or set it up manually" />
 			<div>
