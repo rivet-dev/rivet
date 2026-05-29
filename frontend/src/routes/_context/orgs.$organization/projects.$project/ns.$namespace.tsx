@@ -225,6 +225,21 @@ function CloudNamespaceModals() {
 					}
 				}}
 			/>
+			<CreateActorSheet
+				variant="agent-os"
+				open={search?.modal === "create-agent-os"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				}}
+			/>
 			<UpsertDeploymentDialog
 				namespace={search?.namespace}
 				defaultImage={

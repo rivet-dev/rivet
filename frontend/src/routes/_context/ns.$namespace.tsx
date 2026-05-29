@@ -194,6 +194,21 @@ function Modals() {
 					}
 				}}
 			/>
+			<CreateActorSheet
+				variant="agent-os"
+				open={search.modal === "create-agent-os"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				}}
+			/>
 			<ConnectProviderSheet
 				modal={search.modal}
 				open={isConnectProviderModal(search.modal)}

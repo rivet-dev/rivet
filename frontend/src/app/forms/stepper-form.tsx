@@ -35,7 +35,10 @@ export type StepConfirm<TValues = Record<string, unknown>> = (
 
 type Step = Stepperize.Step & {
 	assist?: boolean;
-	description?: string;
+	// Title/description may be static or derived from the live form values so a
+	// step can adapt its heading to earlier choices (e.g. a template selection).
+	description?: string | ((values: Record<string, unknown>) => string);
+	titleFor?: (values: Record<string, unknown>) => string;
 	schema: z.ZodSchema | ((values: Record<string, unknown>) => z.ZodSchema);
 	next?: string;
 	previous?: string;
@@ -192,6 +195,30 @@ function AnimatedHeight({ children }: { children: ReactNode }) {
 		>
 			<div ref={innerRef}>{children}</div>
 		</motion.div>
+	);
+}
+
+// Resolves a step's title/description against the live form values so headings
+// can adapt to earlier choices. Subscribes via useWatch so it re-renders when
+// those values change.
+function StepHeading({ step }: { step: Step }) {
+	const values = useWatch() as Record<string, unknown>;
+	const title = step.titleFor ? step.titleFor(values) : step.title;
+	const description =
+		typeof step.description === "function"
+			? step.description(values)
+			: step.description;
+	return (
+		<>
+			<div className="flex items-center justify-between">
+				<h2 className="text-xl font-semibold">{title}</h2>
+			</div>
+			{description ? (
+				<p className="mt-1.5 text-sm text-muted-foreground">
+					{description}
+				</p>
+			) : null}
+		</>
 	);
 }
 
@@ -364,16 +391,7 @@ function Content<const Steps extends Step[]>({
 											ease: [0.4, 0, 0.2, 1],
 										}}
 									>
-									<div className="flex items-center justify-between">
-										<h2 className="text-xl font-semibold">
-											{step.title}
-										</h2>
-									</div>
-									{(step as Step).description ? (
-										<p className="mt-1.5 text-sm text-muted-foreground">
-											{(step as Step).description}
-										</p>
-									) : null}
+									<StepHeading step={step as Step} />
 									<div className="mt-6">
 										<StepPanel<Steps>
 											Stepper={Stepper}

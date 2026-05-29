@@ -1,8 +1,10 @@
 import { Accordion, AccordionContent } from "@radix-ui/react-accordion";
 import {
+	faActors,
 	faArrowRight,
 	faCheck,
 	faCopy,
+	faKey,
 	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
@@ -76,8 +78,14 @@ const stepper = defineStepper(
 	{
 		id: "run",
 		title: "Build your first Actor",
-		description:
-			"Let your coding agent scaffold an Actor, or follow the quickstart yourself.",
+		titleFor: (values) =>
+			values.template === "agent-os"
+				? "Set up agentOS"
+				: "Build your first Actor",
+		description: (values) =>
+			values.template === "agent-os"
+				? "Boot an agentOS instance and run your first session, locally."
+				: "Let your coding agent scaffold an Actor, or follow the quickstart yourself.",
 		next: "Continue",
 		schema: z.object({}),
 		group: "local",
@@ -215,6 +223,7 @@ export function GettingStarted({
 		datacenters: {},
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
+		template: "actor" as "actor" | "agent-os",
 		...(initialRunnerConfig || {}),
 	};
 
@@ -621,6 +630,36 @@ function ProviderCard({
 	);
 }
 
+function AgentOsKeyNotice() {
+	return (
+		<div className="flex gap-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
+			<Icon
+				icon={faKey}
+				className="mt-0.5 shrink-0 text-muted-foreground"
+			/>
+			<div className="space-y-1">
+				<p className="font-medium">agentOS needs an LLM key</p>
+				<p className="text-muted-foreground text-xs">
+					Set{" "}
+					<code className="rounded bg-muted px-1 py-0.5 text-foreground">
+						ANTHROPIC_API_KEY
+					</code>{" "}
+					as a secret on your deployment. The VM doesn't inherit it
+					from the host, so your server passes it to each session.{" "}
+					<a
+						href="https://rivet.dev/docs/agent-os/llm-credentials"
+						target="_blank"
+						rel="noreferrer"
+						className="text-primary hover:underline"
+					>
+						Learn more
+					</a>
+				</p>
+			</div>
+		</div>
+	);
+}
+
 function OrDivider({ label }: { label: string }) {
 	return (
 		<div className="flex items-center gap-3">
@@ -653,9 +692,139 @@ function CommandBox({ command }: { command: string }) {
 	);
 }
 
+// agentOS brand mark (rounded square + "OS") drawn in currentColor so it adapts
+// to the theme, unlike the white-only marketing SVG.
+function AgentOsLogo({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 32 32"
+			fill="none"
+			className={className}
+			aria-hidden="true"
+		>
+			<rect
+				x="2.75"
+				y="2.75"
+				width="26.5"
+				height="26.5"
+				rx="8"
+				stroke="currentColor"
+				strokeWidth="2.5"
+			/>
+			<text
+				x="16"
+				y="20.5"
+				textAnchor="middle"
+				fontSize="11"
+				fontWeight="700"
+				fontFamily="inherit"
+				fill="currentColor"
+			>
+				OS
+			</text>
+		</svg>
+	);
+}
+
+function BuildTargetCard({
+	icon,
+	label,
+	description,
+	badge,
+	isSelected,
+	onSelect,
+}: {
+	icon: ReactNode;
+	label: string;
+	description: string;
+	badge?: string;
+	isSelected: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			className={cn(
+				"flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
+				isSelected
+					? "border-primary bg-primary/5"
+					: "border-border hover:border-muted-foreground/50",
+			)}
+		>
+			<span className="text-muted-foreground mt-0.5 shrink-0">{icon}</span>
+			<div className="min-w-0">
+				<div className="flex items-center gap-2">
+					<p className="text-sm font-medium">{label}</p>
+					{badge ? (
+						<Badge
+							variant="outline"
+							className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
+						>
+							{badge}
+						</Badge>
+					) : null}
+				</div>
+				<p className="text-xs text-muted-foreground">{description}</p>
+			</div>
+		</button>
+	);
+}
+
+function BuildTargetSelector() {
+	const { control, setValue } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="template"
+			render={({ field }) => (
+				<div>
+					<p className="font-medium mb-2">What are you building?</p>
+					<div className="grid grid-cols-2 gap-2">
+						<BuildTargetCard
+							icon={
+								<Icon icon={faActors} className="!size-5" />
+							}
+							label="Rivet Actors"
+							description="Realtime, state, and multiplayer for any app"
+							isSelected={field.value !== "agent-os"}
+							onSelect={() =>
+								setValue("template", "actor", {
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								})
+							}
+						/>
+						<BuildTargetCard
+							icon={<AgentOsLogo className="size-5" />}
+							label="agentOS"
+							badge="Preview"
+							description="Sandboxed VMs with a filesystem, network, and processes"
+							isSelected={field.value === "agent-os"}
+							onSelect={() =>
+								setValue("template", "agent-os", {
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								})
+							}
+						/>
+					</div>
+				</div>
+			)}
+		/>
+	);
+}
+
+const AGENT_OS_PACKAGES =
+	"rivetkit @rivet-dev/agent-os-common @rivet-dev/agent-os-pi";
+
 function InstallStep() {
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
+			{features.agentOs ? <BuildTargetSelector /> : null}
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
@@ -672,18 +841,33 @@ function InstallStep() {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-1.5">Add the RivetKit package</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Install the library your app imports to define and call
-						Actors.
+					<p className="font-medium mb-1.5">
+						{isAgentOs
+							? "Add the agentOS packages"
+							: "Add the RivetKit package"}
 					</p>
-					<PackageManagerCode
-						npx="npm install rivetkit"
-						yarn="yarn add rivetkit"
-						pnpm="pnpm add rivetkit"
-						bun="bun add rivetkit"
-						deno="deno add npm:rivetkit"
-					/>
+					<p className="text-sm text-muted-foreground mb-3">
+						{isAgentOs
+							? "Install RivetKit plus the agentOS runtime and the Pi agent."
+							: "Install the library your app imports to define and call Actors."}
+					</p>
+					{isAgentOs ? (
+						<PackageManagerCode
+							npx={`npm install ${AGENT_OS_PACKAGES}`}
+							yarn={`yarn add ${AGENT_OS_PACKAGES}`}
+							pnpm={`pnpm add ${AGENT_OS_PACKAGES}`}
+							bun={`bun add ${AGENT_OS_PACKAGES}`}
+							deno="deno add npm:rivetkit npm:@rivet-dev/agent-os-common npm:@rivet-dev/agent-os-pi"
+						/>
+					) : (
+						<PackageManagerCode
+							npx="npm install rivetkit"
+							yarn="yarn add rivetkit"
+							pnpm="pnpm add rivetkit"
+							bun="bun add rivetkit"
+							deno="deno add npm:rivetkit"
+						/>
+					)}
 				</div>
 			</div>
 		</div>
@@ -804,12 +988,82 @@ For detailed setup instructions, see the quickstart guides:
 
 Check the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting. If that doesn't help, prompt the user to join the Rivet Discord (https://rivet.dev/discord) or file an issue on GitHub (https://github.com/rivet-dev/rivet). Generate a report with: symptoms (error, local vs deployed), what you've tried, and environment (RivetKit version, runtime, provider, HTTP router).`;
 
+const agentOsPrompt = `# agentOS Setup
+
+I want to add agentOS to this project using RivetKit. agentOS gives agents and sandboxed code their own isolated VMs with a full filesystem, shell, network, and persistent state. Pi is one coding agent you can run inside it, and this setup uses Pi as the example. An agentOS actor is a normal Rivet Actor, so it deploys the same way as any other actor.
+
+Read https://rivet.dev/docs/agent-os/quickstart before making changes. agentOS is in preview.
+
+## Steps
+
+### Step 1: Install
+
+\`\`\`bash
+npm install rivetkit @rivet-dev/agent-os-common @rivet-dev/agent-os-pi
+\`\`\`
+
+### Step 2: Create the server
+
+\`\`\`ts
+import { agentOs } from "rivetkit/agent-os";
+import { setup } from "rivetkit";
+import common from "@rivet-dev/agent-os-common";
+import pi from "@rivet-dev/agent-os-pi";
+
+const vm = agentOs({ options: { software: [common, pi] } });
+
+export const registry = setup({ use: { vm } });
+registry.start();
+\`\`\`
+
+### Step 3: Configure the model key
+
+The agent needs an LLM key at runtime. Set \`ANTHROPIC_API_KEY\` in the environment locally, and once deployed, set it as a deployment secret. Never hardcode it.
+
+### Step 4: Boot an instance and run a prompt
+
+\`\`\`ts
+import { createClient } from "rivetkit/client";
+import type { registry } from "./server";
+
+const client = createClient<typeof registry>();
+
+// getOrCreate boots the agentOS instance (the VM) on first call.
+const agent = client.vm.getOrCreate(["my-agent"]);
+
+agent.on("sessionEvent", (data) => console.log(data.event));
+
+const session = await agent.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await agent.sendPrompt(
+  session.sessionId,
+  "Write a hello world script to /home/user/hello.js",
+);
+
+const content = await agent.readFile("/home/user/hello.js");
+console.log(new TextDecoder().decode(content));
+\`\`\`
+
+### Step 5: Verify
+
+Run the server, then the client, and confirm the agent created the file. Then verify it works through the Rivet inspector or your deployed endpoint.
+
+## If You Get Stuck
+
+agentOS is in preview. See https://rivet.dev/docs/agent-os, the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting, or the Rivet Discord (https://rivet.dev/discord).`;
+
 function RunLocallyStep() {
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
 			<AgentPromptBanner
-				code={agentPrompt}
-				label="Have your coding agent scaffold and run your first Actor for you."
+				code={isAgentOs ? agentOsPrompt : agentPrompt}
+				label={
+					isAgentOs
+						? "Have your coding agent set up agentOS and run a session for you."
+						: "Have your coding agent scaffold and run your first Actor for you."
+				}
 			/>
 			<OrDivider label="or do it yourself" />
 			<div className="w-full flex items-center justify-between rounded-lg px-4 py-3 border border-border">
@@ -818,12 +1072,18 @@ function RunLocallyStep() {
 						Follow the quickstart guide
 					</p>
 					<p className="text-sm text-muted-foreground">
-						Build a Rivet Actor project by hand, step by step.
+						{isAgentOs
+							? "Build an agentOS agent by hand, step by step."
+							: "Build a Rivet Actor project by hand, step by step."}
 					</p>
 				</div>
 				<Button variant="outline" asChild className="shrink-0 ml-4">
 					<a
-						href="https://rivet.dev/docs/actors/quickstart/"
+						href={
+							isAgentOs
+								? "https://rivet.dev/docs/agent-os/quickstart"
+								: "https://rivet.dev/docs/actors/quickstart/"
+						}
 						target="_blank"
 						rel="noopener noreferrer"
 					>
@@ -1159,6 +1419,7 @@ function BackendSetupRivet() {
 	const { data: cloudToken } = useSuspenseQuery(
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 
 	const ghSecretCmd = cloudToken
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
@@ -1166,6 +1427,7 @@ function BackendSetupRivet() {
 
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider="rivet" />
 			<OrDivider label="or set it up manually" />
 			<div className="flex gap-3">
@@ -1278,6 +1540,7 @@ function BackendSetupRivet() {
 
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	const mode = useWatch({ name: "mode" }) as
 		| "serverless"
 		| "serverfull"
@@ -1290,6 +1553,7 @@ function BackendSetup() {
 
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider={provider} />
 			<OrDivider label="or set it up manually" />
 			<div>
@@ -1477,6 +1741,7 @@ function FrontendSetup() {
 	});
 
 	const provider = useWatch({ name: "provider" });
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	const nsDataProvider = useCloudNamespaceDataProvider();
 	const { namespace: namespaceParam } = useParams({ strict: false }) as { namespace: string };
 	const { data: nsData } = useQuery(
@@ -1545,15 +1810,31 @@ function FrontendSetup() {
 							/>
 							<VerifyStatusRow
 								state={waitingForFirstImage ? "pending" : "active"}
-								label="Create your first Actor"
-								sublabel="We'll continue automatically once an Actor is running."
+								label={
+									isAgentOs
+										? "Boot your first agent"
+										: "Create your first Actor"
+								}
+								sublabel={
+									isAgentOs
+										? "We'll continue automatically once your agent is running."
+										: "We'll continue automatically once an Actor is running."
+								}
 							/>
 						</>
 					) : (
 						<VerifyStatusRow
 							state="active"
-							label="Waiting for your first Actor"
-							sublabel="We'll continue automatically once an Actor is created."
+							label={
+								isAgentOs
+									? "Waiting for your first agent"
+									: "Waiting for your first Actor"
+							}
+							sublabel={
+								isAgentOs
+									? "We'll continue automatically once your agent is running."
+									: "We'll continue automatically once an Actor is created."
+							}
 						/>
 					)}
 				</div>

@@ -22,9 +22,14 @@ import * as ActorCreateForm from "../form/actor-create-form";
 interface CreateActorSheetProps {
 	open: boolean;
 	onOpenChange: (open: boolean) => void;
+	variant?: "actor" | "agent-os";
 }
 
-export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) {
+export function CreateActorSheet({
+	open,
+	onOpenChange,
+	variant = "actor",
+}: CreateActorSheetProps) {
 	const { mutateAsync } = useMutation(
 		useDataProvider().createActorMutationOptions(),
 	);
@@ -34,6 +39,14 @@ export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) 
 	});
 	const { copy } = useActorsView();
 	const [advancedOpen, setAdvancedOpen] = useState(false);
+
+	const isAgentOs = variant === "agent-os";
+	const title = isAgentOs
+		? "Create agentOS instance"
+		: copy.createActorModal.title(name);
+	const description = isAgentOs
+		? "agentOS boots an isolated VM for this key. Choose the agentOS build and a key to identify this instance."
+		: copy.createActorModal.description;
 
 	return (
 		<Dialog
@@ -78,12 +91,8 @@ export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) 
 					className="flex flex-col min-h-0 flex-1"
 				>
 					<DialogHeader className="px-6 pt-6 pb-4 shrink-0">
-						<DialogTitle>
-							{copy.createActorModal.title(name)}
-						</DialogTitle>
-						<DialogDescription>
-							{copy.createActorModal.description}
-						</DialogDescription>
+						<DialogTitle>{title}</DialogTitle>
+						<DialogDescription>{description}</DialogDescription>
 					</DialogHeader>
 
 					{/*
