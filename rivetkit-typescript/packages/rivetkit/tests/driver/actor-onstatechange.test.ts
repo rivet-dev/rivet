@@ -77,6 +77,49 @@ describeDriverMatrix("Actor Onstatechange", (driverTestConfig) => {
 			}
 		}, ON_STATE_CHANGE_TEST_TIMEOUT_MS);
 
+		test("coalesces onStateChange to once per tick for a synchronous mutation burst", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.onStateChangeActor.getOrCreate();
+
+			// One action mutates state 100 times synchronously. Each mutation
+			// must not cross the NAPI boundary or run onStateChange on its own;
+			// the burst should be flushed once when the tick ends.
+			await actor.incrementMultiple(100);
+
+			const changeCount = await actor.getChangeCount();
+			expect(changeCount).toBe(1);
+		}, ON_STATE_CHANGE_TEST_TIMEOUT_MS);
+
+		test("reading c.state returns a stable memoized proxy", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.onStateChangeActor.getOrCreate();
+
+			const stable = await actor.stateIdentityStable();
+			expect(stable).toBe(true);
+		}, ON_STATE_CHANGE_TEST_TIMEOUT_MS);
+
+		test("a mutation burst over large state does not pin the event loop", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+
+			const actor = client.onStateChangeActor.getOrCreate();
+
+			// Grow the state so per-mutation re-serialization would be costly.
+			await actor.seedLarge(20_000);
+
+			// Measure how long a 200-mutation synchronous burst blocks for.
+			const durationMs = await actor.churn(200);
+			// Informational: compare this number before vs after the fix.
+			console.log(
+				`[repro] churn(200) over large state blocked for ${durationMs.toFixed(1)}ms`,
+			);
+
+			// Generous ceiling: not a precise perf gate, just a guard against
+			// the quadratic per-mutation serialization regression.
+			expect(durationMs).toBeLessThan(250);
+		}, ON_STATE_CHANGE_TEST_TIMEOUT_MS);
+
 		test("simple: connect, call action, dispose does NOT trigger onChange", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 
