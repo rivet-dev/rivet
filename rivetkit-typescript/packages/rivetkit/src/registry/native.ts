@@ -249,6 +249,14 @@ type NativePersistActorState = {
 	state: unknown;
 	isInOnStateChange: boolean;
 	connStates: Map<string, NativePersistConnState>;
+	// Memoized deep write-through proxy and the state object it wraps. Rebuilt
+	// only when the underlying state object identity changes.
+	stateProxy?: unknown;
+	stateProxyTarget?: unknown;
+	// Set when a coalesced save and onStateChange flush is pending for the
+	// current event loop tick.
+	saveScheduled?: boolean;
+	pendingSaveHandle?: ReturnType<typeof setImmediate>;
 };
 type NativeDestroyGate = {
 	destroyCompletion?: Promise<void>;
@@ -2471,17 +2479,29 @@ export class ActorContextHandleAdapter {
 		if (!this.#stateEnabled) {
 			throw stateNotEnabledError();
 		}
+		const actorState = getNativePersistState(this.#runtime, this.#ctx);
 		const nextState = this.#readState();
-		return createWriteThroughProxy(
-			nextState,
-			(nextValue) => {
-				this.#writeState(nextValue, { scheduleSave: true });
-			},
-			(newValue) => {
-				this.#assertCanMutateState();
-				assertJsonCompatValue(newValue);
-			},
-		);
+		// Reading `c.state` rebuilds the deep write-through proxy, which
+		// allocates fresh on-change caches and rewraps the whole tree. Memoize
+		// the proxy keyed on the underlying state object so repeated reads and
+		// deep read cascades reuse a single proxy.
+		if (
+			actorState.stateProxy === undefined ||
+			actorState.stateProxyTarget !== nextState
+		) {
+			actorState.stateProxyTarget = nextState;
+			actorState.stateProxy = createWriteThroughProxy(
+				nextState,
+				(nextValue) => {
+					this.#writeState(nextValue, { scheduleSave: true });
+				},
+				(newValue) => {
+					this.#assertCanMutateState();
+					assertJsonCompatValue(newValue);
+				},
+			);
+		}
+		return actorState.stateProxy;
 	}
 
 	set state(value: unknown) {
@@ -2902,6 +2922,9 @@ export class ActorContextHandleAdapter {
 	}
 
 	async dispose(): Promise<void> {
+		// Flush any save coalesced for this tick before the context is torn
+		// down so the request-save and onStateChange always run.
+		this.#flushStateChange();
 		this.#abortSignalCleanup?.();
 		this.#sql = undefined;
 	}
@@ -2937,13 +2960,12 @@ export class ActorContextHandleAdapter {
 			scheduleSave: boolean;
 		},
 	): void {
-		encodeValue(value);
 		const actorState = getNativePersistState(this.#runtime, this.#ctx);
 		actorState.state = value;
 		if (!options.scheduleSave) {
 			return;
 		}
-		this.#handleStateChange();
+		this.#scheduleSave();
 	}
 
 	#assertCanMutateState(): void {
@@ -2953,9 +2975,33 @@ export class ActorContextHandleAdapter {
 		}
 	}
 
-	#handleStateChange(): void {
+	// Coalesce the request-save and onStateChange work to once per event loop
+	// tick. A synchronous burst of mutations (for example
+	// `Object.assign(c.state, ...)`) would otherwise cross the NAPI boundary and
+	// run onStateChange once per field, re-serializing the whole state each time
+	// and pinning the event loop on large state.
+	#scheduleSave(): void {
 		const actorState = getNativePersistState(this.#runtime, this.#ctx);
-		encodeValue(actorState.state);
+		if (actorState.saveScheduled) {
+			return;
+		}
+		actorState.saveScheduled = true;
+		actorState.pendingSaveHandle = setImmediate(() => {
+			this.#flushStateChange();
+		});
+	}
+
+	#flushStateChange(): void {
+		const actorState = getNativePersistState(this.#runtime, this.#ctx);
+		if (!actorState.saveScheduled) {
+			return;
+		}
+		actorState.saveScheduled = false;
+		if (actorState.pendingSaveHandle !== undefined) {
+			clearImmediate(actorState.pendingSaveHandle);
+			actorState.pendingSaveHandle = undefined;
+		}
+
 		callNativeSync(() =>
 			this.#runtime.actorRequestSave(this.#ctx, { immediate: false }),
 		);
