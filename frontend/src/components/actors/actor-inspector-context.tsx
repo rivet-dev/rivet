@@ -1,3 +1,4 @@
+import { RivetError } from "@rivetkit/engine-api-full";
 import type { ReadRangeOptions, ReadRangeWire } from "@rivetkit/traces";
 import { decodeReadRangeWire } from "@rivetkit/traces/encoding";
 import {
@@ -443,18 +444,6 @@ export const createDefaultActorInspectorContext = ({
 			},
 		});
 	},
-
-	actorMetadataQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			queryKey: ["actor", actorId, "metadata"],
-			retry: 0,
-			retryDelay: 5_000,
-			refetchInterval: 5_000,
-			queryFn: async () => {
-				return api.getMetadata();
-			},
-		});
-	},
 });
 
 const computeActorUrl = ({ url, actorId }: { url: string; actorId: ActorId }) =>
@@ -587,9 +576,15 @@ const getActorMetadata = async ({
 	);
 
 	if (!response.ok) {
-		throw new Error(
-			`Failed to fetch actor metadata: ${response.statusText}`,
-		);
+		const body: unknown = await response.json().catch(() => undefined);
+		const parsed = z.object({ message: z.string() }).safeParse(body);
+		throw new RivetError({
+			message:
+				parsed.data?.message ??
+				`Failed to fetch actor metadata: ${response.statusText}`,
+			statusCode: response.status,
+			body,
+		});
 	}
 	return z
 		.object({
