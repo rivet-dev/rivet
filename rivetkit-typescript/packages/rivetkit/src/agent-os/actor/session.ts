@@ -19,7 +19,7 @@ import type {
 	PromptResult,
 	SessionRecord,
 } from "../types";
-import { ensureVm, runHook, syncPreventSleep } from "./index";
+import { ensureVm, runHook } from "./index";
 
 // Strip non-serializable values (functions) from agent-os-core responses so
 // CBOR/BARE encoding doesn't fail. The JsonRpcResponse objects from
@@ -229,7 +229,6 @@ export function buildSessionActions<TConnParams>(
 			await agentOs.destroySession(sessionId);
 			c.vars.sessions.delete(sessionId);
 			c.vars.activeSessionIds.delete(sessionId);
-			syncPreventSleep(c);
 
 			// Clean up persisted session and events from SQLite.
 			await deletePersistedSession(c, sessionId);
@@ -253,7 +252,6 @@ export function buildSessionActions<TConnParams>(
 			agentOs.closeSession(sessionId);
 			c.vars.sessions.delete(sessionId);
 			c.vars.activeSessionIds.delete(sessionId);
-			syncPreventSleep(c);
 
 			// Clean up persisted session and events from SQLite.
 			await deletePersistedSession(c, sessionId);
@@ -286,7 +284,6 @@ export function buildPromptActions<TConnParams>(
 			}
 
 			c.vars.activeSessionIds.add(sessionId);
-			syncPreventSleep(c);
 			c.log.info({ msg: "agent-os prompt turn started", sessionId });
 
 			const start = Date.now();
@@ -298,7 +295,6 @@ export function buildPromptActions<TConnParams>(
 				};
 			} finally {
 				c.vars.activeSessionIds.delete(sessionId);
-				syncPreventSleep(c);
 				c.log.info({
 					msg: "agent-os prompt turn ended",
 					sessionId,

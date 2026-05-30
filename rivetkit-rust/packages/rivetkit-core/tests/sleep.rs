@@ -494,34 +494,6 @@ mod moved_tests {
 		assert_eq!(rivet_err.code(), "stopping");
 	}
 
-	// `set_prevent_sleep` is a deprecated no-op kept for NAPI bridge
-	// compatibility. The exhaustive `CanSleep` match below is a build-time
-	// guard against reintroducing a `PreventSleep` enum variant.
-	#[tokio::test(start_paused = true)]
-	#[allow(deprecated)]
-	async fn set_prevent_sleep_is_a_deprecated_noop() {
-		use crate::actor::sleep::CanSleep;
-
-		let ctx = ActorContext::new_for_sleep_tests("actor-prevent-sleep-noop");
-		ctx.set_started(true);
-
-		ctx.set_prevent_sleep(true);
-		match ctx.can_sleep().await {
-			CanSleep::Yes
-			| CanSleep::NotReady
-			| CanSleep::NoSleep
-			| CanSleep::ActiveHttpRequests
-			| CanSleep::ActiveKeepAwake
-			| CanSleep::ActiveInternalKeepAwake
-			| CanSleep::ActiveRunHandler
-			| CanSleep::ActiveDisconnectCallbacks
-			| CanSleep::ActiveConnections
-			| CanSleep::ActiveWebSocketCallbacks => {}
-		}
-
-		ctx.set_prevent_sleep(false);
-	}
-
 	#[tokio::test(start_paused = true)]
 	async fn shutdown_deadline_token_aborts_select_awaiting_task() {
 		// Mirrors the NAPI `RunGracefulCleanup` pattern: a task awaits user

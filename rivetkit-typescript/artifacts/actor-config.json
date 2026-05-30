@@ -130,7 +130,7 @@
           "type": "number"
         },
         "sleepGracePeriod": {
-          "description": "Max time in ms for the graceful sleep window. Covers lifecycle hooks, waitUntil, async raw WebSocket handlers, disconnect callbacks, and waiting for preventSleep to clear after shutdown starts. Default: 15000.",
+          "description": "Max time in ms for the graceful sleep window. Covers lifecycle hooks, waitUntil, async raw WebSocket handlers, and disconnect callbacks. Default: 15000.",
           "type": "number"
         },
         "onDestroyTimeout": {
@@ -158,7 +158,7 @@
           "type": "number"
         },
         "noSleep": {
-          "description": "Deprecated. If true, the actor will never sleep. Use c.setPreventSleep(true) for bounded idle sleep delays instead. Default: false",
+          "description": "Deprecated. If true, the actor will never sleep. Use c.keepAwake(promise) to scope keep-awake to a specific operation instead. Default: false",
           "type": "boolean"
         },
         "sleepTimeout": {

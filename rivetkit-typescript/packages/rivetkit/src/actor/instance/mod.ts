@@ -1,6 +1,5 @@
 // TODO(sleep-cleanup): investigate whether ActorInstance / drivers/engine
-// path is still needed after native path maturation. preventSleep tracking
-// below is retained for legacy driver compatibility but no longer drives core.
+// path is still needed after native path maturation.
 import type { OtlpExportTraceServiceRequestJson } from "@rivetkit/traces";
 import {
 	createNoopTraces,
@@ -24,7 +23,6 @@ import {
 } from "@/schemas/actor-persist/versioned";
 import { EXTRA_ERROR_LOG } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
-import { promiseWithResolvers } from "@/utils";
 import {
 	type Actions,
 	type ActorConfig,
@@ -173,7 +171,6 @@ enum CanSleep {
 	Yes,
 	NotReady,
 	NotStarted,
-	PreventSleep,
 	ActiveConns,
 	ActiveDisconnectCallbacks,
 	ActiveHonoHttpRequests,
@@ -347,7 +344,7 @@ export class ActorInstance<
 	/**
 	 * If the actor has fully started.
 	 *
-	 * The only purpose of this is to prevent sleeping until started.
+	 * The only purpose of this is to keep the actor awake until started.
 	 */
 	#started = false;
 	#sleepCalled = false;
@@ -369,7 +366,6 @@ export class ActorInstance<
 	// MARK: - Background Tasks
 	#backgroundPromises: Promise<void>[] = [];
 	#websocketCallbackPromises: Promise<void>[] = [];
-	#preventSleepClearedPromise?: ReturnType<typeof promiseWithResolvers<void>>;
 	#runPromise?: Promise<void>;
 	#runHandlerActive = false;
 	#activeQueueWaitCount = 0;
@@ -381,7 +377,6 @@ export class ActorInstance<
 		internalKeepAwake: 0,
 		websocketCallbacks: 0,
 	};
-	#preventSleep = false;
 
 	// MARK: - Deprecated (kept for compatibility)
 	#schedule!: Schedule;
@@ -696,10 +691,6 @@ export class ActorInstance<
 
 	get abortSignal(): AbortSignal {
 		return this.#abortController.signal;
-	}
-
-	get preventSleep(): boolean {
-		return this.#preventSleep;
 	}
 
 	get actions(): string[] {
@@ -1549,10 +1540,6 @@ export class ActorInstance<
 	 *
 	 * Returns the resolved value and resets the sleep timer on completion.
 	 * Errors are propagated to the caller.
-	 *
-	 * @deprecated Use `setPreventSleep(true)` while work is active, or move
-	 * shutdown and flush work to `onSleep` if it can wait until the actor is
-	 * sleeping.
 	 */
 	async keepAwake<T>(promise: Promise<T>): Promise<T> {
 		this.assertNotShutdown();
@@ -1591,21 +1578,6 @@ export class ActorInstance<
 		} finally {
 			this.#endActiveAsyncRegion("internalKeepAwake");
 		}
-	}
-
-	setPreventSleep(prevent: boolean) {
-		if (this.#preventSleep === prevent) return;
-
-		this.#preventSleep = prevent;
-		if (!prevent) {
-			this.#preventSleepClearedPromise?.resolve();
-			this.#preventSleepClearedPromise = undefined;
-		}
-		this.#rLog.debug({
-			msg: "updated prevent sleep state",
-			prevent,
-		});
-		this.resetSleepTimer();
 	}
 
 	beginQueueWait() {
@@ -2239,8 +2211,7 @@ export class ActorInstance<
 	async #waitShutdownTasks(deadlineTs: number) {
 		while (
 			this.#backgroundPromises.length > 0 ||
-			this.#websocketCallbackPromises.length > 0 ||
-			this.#preventSleep
+			this.#websocketCallbackPromises.length > 0
 		) {
 			await this.#drainPromiseQueue(
 				this.#backgroundPromises,
@@ -2252,7 +2223,6 @@ export class ActorInstance<
 				"websocket callbacks",
 				deadlineTs,
 			);
-			await this.#waitForPreventSleepClear(deadlineTs);
 
 			if (deadlineTs - Date.now() <= 0) {
 				break;
@@ -2350,48 +2320,6 @@ export class ActorInstance<
 		}
 	}
 
-	async #waitForPreventSleepClear(deadlineTs: number) {
-		while (this.#preventSleep) {
-			const remaining = deadlineTs - Date.now();
-			if (remaining <= 0) {
-				this.#rLog.error({
-					msg: "timed out waiting for preventSleep to clear during shutdown",
-				});
-				break;
-			}
-
-			if (!this.#preventSleepClearedPromise) {
-				this.#preventSleepClearedPromise = promiseWithResolvers<void>(
-					(reason: unknown) =>
-						this.#rLog.warn({
-							msg: "preventSleep clear waiter rejected unexpectedly",
-							reason: stringifyError(reason),
-							...EXTRA_ERROR_LOG,
-						}),
-				);
-			}
-
-			let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
-			const timedOut = await Promise.race([
-				this.#preventSleepClearedPromise.promise.then(() => {
-					if (timeoutHandle !== undefined)
-						clearTimeout(timeoutHandle);
-					return false;
-				}),
-				new Promise<true>((resolve) => {
-					timeoutHandle = setTimeout(() => resolve(true), remaining);
-				}),
-			]);
-
-			if (timedOut) {
-				this.#rLog.error({
-					msg: "timed out waiting for preventSleep to clear during shutdown",
-				});
-				break;
-			}
-		}
-	}
-
 	#createTrackedWebSocket(websocket: UniversalWebSocket): TrackedWebSocket {
 		return new TrackedWebSocket(websocket, {
 			onPromise: (eventType, promise) => {
@@ -2446,7 +2374,6 @@ export class ActorInstance<
 	#canSleep(): CanSleep {
 		if (!this.#ready) return CanSleep.NotReady;
 		if (!this.#started) return CanSleep.NotReady;
-		if (this.#preventSleep) return CanSleep.PreventSleep;
 		if (this.#activeHonoHttpRequests > 0)
 			return CanSleep.ActiveHonoHttpRequests;
 		if (this.#activeAsyncRegionCounts.keepAwake > 0) {

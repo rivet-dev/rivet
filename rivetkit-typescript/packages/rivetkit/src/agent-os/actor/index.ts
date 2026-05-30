@@ -94,29 +94,6 @@ function buildVmOptions(userOptions?: AgentOsOptions): AgentOsOptions {
 	};
 }
 
-// --- Prevent-sleep coordination ---
-
-function syncPreventSleep<TConnParams>(
-	c: AgentOsActionContext<TConnParams>,
-): void {
-	const shouldPrevent =
-		c.vars.activeSessionIds.size > 0 ||
-		c.vars.activeProcesses.size > 0 ||
-		c.vars.activeHooks.size > 0 ||
-		c.vars.activeShells.size > 0;
-
-	c.setPreventSleep(shouldPrevent);
-
-	c.log.info({
-		msg: "agent-os prevent sleep sync",
-		preventSleep: shouldPrevent,
-		activeSessions: c.vars.activeSessionIds.size,
-		activeProcesses: c.vars.activeProcesses.size,
-		activeHooks: c.vars.activeHooks.size,
-		activeShells: c.vars.activeShells.size,
-	});
-}
-
 // --- Hook tracking ---
 
 function runHook<TConnParams>(
@@ -130,10 +107,8 @@ function runHook<TConnParams>(
 		)
 		.finally(() => {
 			c.vars.activeHooks.delete(promise);
-			syncPreventSleep(c);
 		});
 	c.vars.activeHooks.add(promise);
-	syncPreventSleep(c);
 	c.waitUntil(promise);
 }
 
@@ -262,4 +237,4 @@ const processExitToken = event<ProcessExitPayload>();
 const shellDataToken = event<ShellDataPayload>();
 const cronEventToken = event<CronEventPayload>();
 
-export { ensureVm, syncPreventSleep, runHook };
+export { ensureVm, runHook };

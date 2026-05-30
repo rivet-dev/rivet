@@ -8,7 +8,7 @@ export {
 // Filesystem actions
 export { buildFilesystemActions } from "./actor/filesystem";
 // Actor factory and VM lifecycle helpers
-export { agentOs, ensureVm, runHook, syncPreventSleep } from "./actor/index";
+export { agentOs, ensureVm, runHook } from "./actor/index";
 // Preview actions
 export {
 	buildOnRequestHandler,

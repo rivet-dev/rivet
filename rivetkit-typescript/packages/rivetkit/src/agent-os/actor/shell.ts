@@ -1,7 +1,7 @@
 import type { OpenShellOptions } from "@rivet-dev/agent-os-core";
 import type { AgentOsActorConfig } from "../config";
 import type { AgentOsActionContext } from "../types";
-import { ensureVm, syncPreventSleep } from "./index";
+import { ensureVm } from "./index";
 
 // Build shell actions for the actor factory.
 export function buildShellActions<TConnParams>(
@@ -21,7 +21,6 @@ export function buildShellActions<TConnParams>(
 			});
 
 			c.vars.activeShells.add(shellId);
-			syncPreventSleep(c);
 			c.log.info({ msg: "agent-os shell opened", shellId });
 
 			return { shellId };
@@ -53,7 +52,6 @@ export function buildShellActions<TConnParams>(
 			const agentOs = await ensureVm(c, config);
 			agentOs.closeShell(shellId);
 			c.vars.activeShells.delete(shellId);
-			syncPreventSleep(c);
 			c.log.info({ msg: "agent-os shell closed", shellId });
 		},
 	};

@@ -136,8 +136,7 @@ impl ActorContext {
     // Sleep control
     fn sleep(&self);          // Defers to next tick. Does NOT fire abort signal.
     fn destroy(&self);        // Defers to next tick. Fires abort signal immediately.
-    fn set_prevent_sleep(&self, prevent: bool);
-    fn prevent_sleep(&self) -> bool;
+        fn keep_awake(&self) -> bool;
 
     // Background work tracking
     fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static);
@@ -575,8 +574,7 @@ impl<A: Actor> Ctx<A> {
     fn aborted(&self) -> bool;
     fn sleep(&self);
     fn destroy(&self);
-    fn set_prevent_sleep(&self, prevent: bool);
-    fn prevent_sleep(&self) -> bool;
+        fn keep_awake(&self) -> bool;
     fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static);
 
     // Typed event broadcast
@@ -766,7 +764,7 @@ Note: step 14 is clarification that the abort signal fires at the beginning of `
    - No pending disconnect callbacks
    - No active WebSocket callbacks
 7. Call `on_sleep` (with remaining deadline budget).
-8. Wait for shutdown tasks: `wait_until` futures, WebSocket callback futures, `prevent_sleep` to clear.
+8. Wait for shutdown tasks: `wait_until` futures, WebSocket callback futures, `keep_awake` to clear.
 9. Disconnect all non-hibernatable connections.
 10. Wait for shutdown tasks again.
 11. Save state immediately. Wait for all pending KV/SQLite writes.
@@ -793,7 +791,7 @@ Destroy does NOT wait for idle sleep window.
 
 ALL must be true:
 - `ready` AND `started`
-- `prevent_sleep` is false
+- `keep_awake` is false
 - `no_sleep` config is false
 - No active HTTP requests
 - No active `keep_awake` / `internal_keep_awake` regions
@@ -855,7 +853,7 @@ rivetkit-rust/packages/rivetkit-core/
     │   ├── lifecycle.rs          # Startup + shutdown sequences (sleep + destroy)
     │   ├── state.rs              # State dirty tracking, throttled save, PersistedActor
     │   ├── vars.rs               # Vars (transient, recreated each start)
-    │   ├── sleep.rs              # can_sleep(), auto-sleep timer, prevent_sleep, keep_awake, internal_keep_awake
+    │   ├── sleep.rs              # can_sleep(), auto-sleep timer, keep_awake, keep_awake, internal_keep_awake
     │   ├── schedule.rs           # Schedule API, PersistedScheduleEvent, alarm sync, invoke_action_by_name
     │   ├── action.rs             # Action dispatch, timeout wrapping, on_before_action_response
     │   ├── connection.rs         # ConnHandle, lifecycle hooks, hibernation persistence, subscription tracking

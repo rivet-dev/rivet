@@ -328,14 +328,10 @@ export interface ActorContext<
 	readonly abortSignal: AbortSignal;
 	readonly aborted: boolean;
 	readonly request?: Request;
-	/** @deprecated No-op. Always returns `false`. Use `keepAwake(promise)` or `waitUntil(promise)` instead. Will be removed in 2.2.0. */
-	readonly preventSleep: boolean;
 	broadcast(name: string, ...args: any[]): void;
 	saveState(opts?: { immediate?: boolean; maxWait?: number }): Promise<void>;
 	keepAwake<T>(promise: Promise<T>): Promise<T>;
 	waitUntil(promise: Promise<unknown>): void;
-	/** @deprecated No-op. Use `keepAwake(promise)` to hold the actor awake for a specific promise. Will be removed in 2.2.0. */
-	setPreventSleep(preventSleep: boolean): void;
 	sleep(): void;
 	destroy(): void;
 	client<T = any>(): ActorClientFor<T>;
@@ -887,7 +883,7 @@ const InstanceActorOptionsBaseSchema = z
 		actionTimeout: z.number().positive().default(60_000),
 		connectionLivenessTimeout: z.number().positive().default(2500),
 		connectionLivenessInterval: z.number().positive().default(5000),
-		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation, or keep `noSleep` for actors that must stay awake indefinitely. Will be removed in 2.2.0. */
+		/** @deprecated Use `c.keepAwake(promise)` to scope keep-awake to a specific operation. Will be removed in 2.2.0. */
 		noSleep: z.boolean().default(false),
 		sleepTimeout: z.number().positive().default(30_000),
 		maxQueueSize: z.number().positive().default(1000),

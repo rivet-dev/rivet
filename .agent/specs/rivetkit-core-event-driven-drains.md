@@ -104,7 +104,7 @@ struct WorkRegistry {
     shutdown_counter: Arc<AsyncCounter>,
     shutdown_tasks: Mutex<JoinSet<()>>,
     idle_notify: Notify,            // composed: fires when any of keep_awake / internal_keep_awake / http reaches zero
-    prevent_sleep_notify: Notify,   // pinged on every ctx.set_prevent_sleep flip
+    keep_awake_notify: Notify,   // pinged on every ctx.keep_awake flip
 }
 
 impl SleepController {
@@ -188,12 +188,12 @@ The aggregate drain requires `keep_awake == 0 && internal_keep_awake == 0 && act
 
 Simpler alternative: expose an `AsyncCounter::subscribe(Arc<Notify>)` that pipes zero-transitions to an external Notify. Both approaches work; pick whichever reads cleanest.
 
-### `prevent_sleep` bool
+### `keep_awake` bool
 
 Rarely flipped. Two options:
 
 1. `watch::channel<bool>` on `ActorContext`, subscribers re-check on every send.
-2. Dedicated `prevent_sleep_notify: Notify` pinged on every flip.
+2. Dedicated `keep_awake_notify: Notify` pinged on every flip.
 
 Either is fine. Recommend (2) for symmetry with the other notify sites.
 
@@ -212,7 +212,7 @@ Audit `ctx.destroy()` at `context.rs:382-389` for consistency — it has no slee
 | File:line | Function | Action |
 |-----------|----------|--------|
 | `actor/sleep.rs:240-258` | `wait_for_sleep_idle_window` | Replace poll loop with `idle_notify`-driven wait (composed over keep_awake, internal_keep_awake, http counters) |
-| `actor/sleep.rs:260-281` | `wait_for_shutdown_tasks` | Replace with `shutdown_counter.wait_zero(deadline).await` + `websocket_callback.wait_zero` + `prevent_sleep` notify |
+| `actor/sleep.rs:260-281` | `wait_for_shutdown_tasks` | Replace with `shutdown_counter.wait_zero(deadline).await` + `websocket_callback.wait_zero` + `keep_awake` notify |
 | `actor/sleep.rs:283-303` | `wait_for_internal_keep_awake_idle` | Replace with `internal_keep_awake.wait_zero(deadline)` |
 | `actor/sleep.rs:305-326` | `wait_for_http_requests_drained` | Replace with `envoy_handle.http_request_counter(...).wait_zero(deadline)` |
 | `actor/sleep.rs:24-26` | `keep_awake_count`, `internal_keep_awake_count`, `websocket_callback_count` AtomicUsize fields | Replace with `Arc<AsyncCounter>` fields on `WorkRegistry` |

@@ -258,5 +258,5 @@ registry.start();
 - Use `exec` for short commands where you need the full output. Use `spawn` for long-running processes where you want streaming output.
 - Subscribe to `processOutput` and `processExit` **before** calling `spawn` to avoid missing events.
 - Active processes prevent the actor from sleeping. Stop or kill them when they are no longer needed.
-- Active shells also prevent sleep. Close shells when the user disconnects.
+- Close active shells when the user disconnects.
 - Use `allProcesses` and `processTree` for debugging. They show everything running in the VM, including agent processes.

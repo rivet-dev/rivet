@@ -357,7 +357,7 @@ The explicit end state is to remove `ActorVars`, `ActorContext::vars`, `ActorCon
 
 These TS APIs must be mirrored on `ActorContext` and are load-bearing for existing driver tests.
 
-- `ctx.set_prevent_sleep(enabled: bool)` — toggle the `prevent_sleep` flag observed by `#canSleep` and by the `#waitShutdownTasks` drain loop. While set, the drain loop keeps looping up to the grace deadline even if every tracked counter is zero.
+- `ctx.keep_awake(future)` — toggle the `keep_awake` flag observed by `#canSleep` and by the `#waitShutdownTasks` drain loop. While set, the drain loop keeps looping up to the grace deadline even if every tracked counter is zero.
 - `ctx.keep_awake<F>(future: F) -> impl Future` — enter an external keep-awake region for the duration of `future`. Increments `active_async_regions.keep_awake` on entry and decrements on exit via a guard. User-facing.
 - `ctx.internal_keep_awake<F>(future: F) -> impl Future` — same pattern but increments `active_async_regions.internal_keep_awake`. Subsystems (queue, websocket) use the thunk form to enter the region before user callback starts, avoiding a race where the sleep timer fires underneath newly scheduled work.
 - `ctx.cancelled() -> impl Future<Output = ()>` and `ctx.is_cancelled() -> bool` — alias the existing `abort_signal()` and `is_cancelled()` surface in `context.rs` (`context.rs:142, 324, 362-367`). Do not remove the existing names; add the new names as aliases to avoid churning callers.
@@ -436,7 +436,7 @@ The lifetime task owns the socket loop and invokes open/message/close callbacks.
 Sleep readiness stays centralized in core. It reads concurrent counters/snapshots matching the TS `#canSleep()` check (`instance/mod.ts:2497-2528` on `feat/sqlite-vfs-v2`):
 
 - not started / not ready
-- `prevent_sleep` flag
+- `keep_awake` flag
 - no-sleep config
 - active HTTP requests
 - user tasks in flight (`active_async_regions.user_task`)
@@ -473,7 +473,7 @@ Mirrors `instance/mod.ts:.onStop("sleep")` at `:942-1022` on `feat/sqlite-vfs-v2
 6. Wait for the `run` handler to finish with `run_stop_timeout` (default 15s). Done first so `on_sleep` observes `run` already stopped.
 7. Compute the shutdown task deadline = `now + effective_sleep_grace_period`.
 8. Run `on_sleep` with `on_sleep_timeout`.
-9. Drain tracked work until the shutdown task deadline: `preventSleep` flag must be clear AND every tracked counter must hit zero. Any newly-entered `preventSleep` region keeps the drain loop running until deadline.
+9. Drain tracked work until the shutdown task deadline: `keepAwake` flag must be clear AND every tracked counter must hit zero. Any newly-entered `keepAwake` region keeps the drain loop running until deadline.
 10. Persist hibernatable connections.
 11. Disconnect non-hibernatable connections. Hibernatable connections stay attached so they can be re-delivered on wake.
 12. Drain tracked work again (this lets WS close callbacks finish).
@@ -534,7 +534,7 @@ Tracked work blocks sleep and destroy until it completes or the effective sleep 
 - `wait_until` registrations
 - `ctx.keep_awake(...)` regions
 - `ctx.internal_keep_awake(...)` regions
-- `prevent_sleep` flag (holds the drain loop open even if all counters are zero)
+- `keep_awake` flag (holds the drain loop open even if all counters are zero)
 - `on_state_change` runner task
 - State saves
 - SQLite cleanup

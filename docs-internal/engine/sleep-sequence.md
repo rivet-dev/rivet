@@ -16,11 +16,9 @@ Two user-facing primitives in TypeScript. Both accept a `Promise`, never a closu
 | `c.keepAwake(promise)` | Yes | Yes | Returns the same promise. Use for work the actor must stay up for. |
 | `c.waitUntil(promise)` | No | Yes | Returns void. Use for best-effort flush/cleanup work that is allowed to complete inside the grace window. |
 
-`c.setPreventSleep(b)` and `c.preventSleep` are deprecated no-ops retained for binary / call-site compatibility. They will be removed in 2.2.0.
-
 ### Why two primitives and not one
 
-`keepAwake` is scoped, non-leaky, and symmetric with `waitUntil`. `setPreventSleep` was a flag that had to be paired by hand; forgetting to clear it wedged the actor awake. A promise-scoped counter cannot leak: when the promise settles (resolve or reject), the counter decrements.
+`keepAwake` is scoped, non-leaky, and symmetric with `waitUntil`. A promise-scoped counter cannot leak: when the promise settles (resolve or reject), the counter decrements.
 
 ### Why separate `keep_awake` and `internal_keep_awake` in core
 
@@ -33,7 +31,7 @@ Two predicates govern the sleep state machine. Both live on `ActorContext` / `Sl
 - `can_arm_sleep_timer()` — the idle predicate. Returns `CanSleep::Yes` only when every sleep-affecting counter is zero and the run handler is inactive (or waiting on a queue). Used to start the sleep idle timer.
 - `can_finalize_sleep()` — the grace predicate. Returns `true` only when every shutdown-affecting counter is zero: `core_dispatched_hooks`, `shutdown_task_count`, `sleep_keep_awake`, `sleep_internal_keep_awake`, `active_http_requests`, `websocket_callbacks`, `pending_disconnects`. Used to advance from `SleepGrace` to `SleepFinalize` (or finalize destroy).
 
-Removing `preventSleep` deleted both predicate branches. Any future sleep-affecting counter must add an entry in each predicate and must call `ActorContext::reset_sleep_timer()` on transitions that change the result.
+Any future sleep-affecting counter must add an entry in each predicate and must call `ActorContext::reset_sleep_timer()` on transitions that change the result.
 
 ## Grace period and abort signals
 
@@ -61,4 +59,4 @@ When the grace deadline elapses before `can_finalize_sleep()` returns true:
 ## Test harness parity
 
 - Rust integration tests live in `rivetkit-core/tests/modules/sleep.rs` and pin predicate behavior, grace period selection, and `save_final_state` cap.
-- TypeScript driver tests in `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep*.test.ts` cover abort-signal-at-grace-entry, `keepAwake` holding shutdown, `c.db` writes surviving `onSleep`, and regression coverage for `setPreventSleep` being a no-op.
+- TypeScript driver tests in `rivetkit-typescript/packages/rivetkit/tests/driver/actor-sleep*.test.ts` cover abort-signal-at-grace-entry, `keepAwake` holding shutdown, and `c.db` writes surviving `onSleep`.

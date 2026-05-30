@@ -36,7 +36,7 @@ Searched `rivetkit-rust/packages/rivetkit-core/src/` for:
 
 - `actor/sleep.rs::wait_for_shutdown_tasks`
   - Classification: event-driven.
-  - Uses `AsyncCounter::wait_zero(deadline)` for shutdown tasks and websocket callbacks, plus `prevent_sleep_notify` for the prevent-sleep flag.
+  - Uses `AsyncCounter::wait_zero(deadline)` for shutdown tasks and websocket callbacks, plus `keep_awake_notify` for the keep-awake flag.
 
 - `actor/sleep.rs::wait_for_internal_keep_awake_idle`
   - Classification: event-driven.

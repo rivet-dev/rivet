@@ -537,17 +537,6 @@ impl ActorContext {
 		self.0.shutdown_deadline.cancel();
 	}
 
-	/// Deprecated no-op. Use `keep_awake` to hold the actor awake for the
-	/// duration of a future, or `wait_until` to keep work alive across the
-	/// sleep grace period. Retained only for NAPI bridge compatibility.
-	#[deprecated(note = "no-op: use `keep_awake` or `wait_until` instead")]
-	pub fn set_prevent_sleep(&self, _enabled: bool) {}
-
-	#[deprecated(note = "no-op: always returns false")]
-	pub fn prevent_sleep(&self) -> bool {
-		false
-	}
-
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
 		self.spawn_work(ActorWorkKind::WaitUntil, future);

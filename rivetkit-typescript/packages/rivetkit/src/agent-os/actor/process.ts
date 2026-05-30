@@ -6,7 +6,7 @@ import type {
 import { isRivetErrorCode } from "@/actor/errors";
 import type { AgentOsActorConfig } from "../config";
 import type { AgentOsActionContext } from "../types";
-import { ensureVm, syncPreventSleep } from "./index";
+import { ensureVm } from "./index";
 
 // Infer types from AgentOs methods since @secure-exec/core is not a direct dep.
 type ExecResult = Awaited<
@@ -76,14 +76,13 @@ export function buildProcessActions<TConnParams>(
 			});
 
 			c.vars.activeProcesses.add(pid);
-			syncPreventSleep(c);
 			c.log.info({
 				msg: "agent-os process spawned",
 				pid,
 				command,
 			});
 
-			agentOs
+			const waitPromise = agentOs
 				.waitProcess(pid)
 				.then((exitCode) => {
 					broadcastProcessEvent(c, "processExit", { pid, exitCode });
@@ -98,8 +97,8 @@ export function buildProcessActions<TConnParams>(
 				})
 				.finally(() => {
 					c.vars.activeProcesses.delete(pid);
-					syncPreventSleep(c);
 				});
+			c.waitUntil(waitPromise);
 
 			return { pid };
 		},

@@ -523,17 +523,6 @@ export class ActorWorkflowContext<
 		return this.#runCtx.log;
 	}
 
-	/** @deprecated No-op. Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
-	setPreventSleep(_prevent: boolean): void {
-		this.#ensureActorAccess("setPreventSleep");
-	}
-
-	/** @deprecated No-op. Always returns `false`. */
-	get preventSleep(): boolean {
-		this.#ensureActorAccess("preventSleep");
-		return false;
-	}
-
 	/**
 	 * Holds the actor awake for the duration of the provided promise. The
 	 * actor cannot idle-sleep or finalize the sleep grace period until the

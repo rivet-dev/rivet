@@ -2858,26 +2858,6 @@ export class ActorContextHandleAdapter {
 		);
 	}
 
-	// Intentionally a no-op. `setPreventSleep` / `preventSleep` are kept on the
-	// surface for legacy callers but must not gate sleep here. Callers that
-	// need to keep an actor awake should use `keepAwake(promise)` or
-	// `waitUntil(promise)` so the native counter machinery in rivetkit-core
-	// owns the lifecycle.
-	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
-	setPreventSleep(_preventSleep: boolean): void {
-		logger().warn({
-			msg: "setPreventSleep is deprecated and is a no-op; use keepAwake(promise) or waitUntil(promise) instead",
-		});
-	}
-
-	/** @deprecated Use `keepAwake(promise)` or `waitUntil(promise)` instead. */
-	get preventSleep(): boolean {
-		logger().warn({
-			msg: "preventSleep is deprecated and always returns false; use keepAwake(promise) or waitUntil(promise) instead",
-		});
-		return false;
-	}
-
 	sleep(): void {
 		callNativeSync(() => this.#runtime.actorSleep(this.#ctx));
 	}

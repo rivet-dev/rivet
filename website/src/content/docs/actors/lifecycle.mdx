@@ -803,7 +803,7 @@ declare function processTurn(input: string): Promise<string>;
 ```
 
 <Note>
-`setPreventSleep(enabled)` is deprecated and now a no-op. Wrap the work you want to keep alive with `c.keepAwake(promise)` instead.
+Wrap the work you want to keep alive with `c.keepAwake(promise)`.
 </Note>
 
 ### On Sleep Hook
