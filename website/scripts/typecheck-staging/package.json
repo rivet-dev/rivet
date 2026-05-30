@@ -7,7 +7,7 @@
     "@rivetkit/react": "workspace:*",
     "@ai-sdk/openai": "^3.0.30",
     "ai": "^6.0.92",
-    "hono": "^4.7.0",
+    "hono": "^4.12.18",
     "zod": "^4.1.0",
     "elysia": "^1.2.25",
     "@hono/node-server": "^1.14.1",
