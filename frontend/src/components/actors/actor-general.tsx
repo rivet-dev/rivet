@@ -87,7 +87,9 @@ export function ActorGeneral({ actorId }: ActorGeneralProps) {
 									<QueriedActorStatus actorId={actorId} />
 								</div>
 							</div>
-							<QueriedActorStatusAdditionalInfo actorId={actorId} />
+							<QueriedActorStatusAdditionalInfo
+								actorId={actorId}
+							/>
 						</Dd>
 						<Dt>Keys</Dt>
 						<Dd>
@@ -205,17 +207,13 @@ function Versions({ actorId }: { actorId: ActorId }) {
 function ActorVersions({ actorId }: { actorId: ActorId }) {
 	const inspector = useActorInspector();
 
-	const { data: actorMetadata } = useQuery({
-		...inspector.actorMetadataQueryOptions(actorId),
-		enabled: inspector.isInspectorAvailable,
-	});
-
-	if (!actorMetadata?.version) return null;
+	if (!inspector.isInspectorAvailable || !inspector.rivetkitVersion)
+		return null;
 
 	return (
 		<>
 			<Dt>Actor version</Dt>
-			<Dd>{actorMetadata.version}</Dd>
+			<Dd>{inspector.rivetkitVersion}</Dd>
 		</>
 	);
 }

@@ -116,7 +116,7 @@ const TAB_PRIORITY = [
 type TabId = (typeof TAB_PRIORITY)[number];
 
 function useManagedPool() {
-	if (!features.platform) return false;
+	if (!features.compute) return false;
 	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	const provider = useCloudNamespaceDataProvider();
 	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant

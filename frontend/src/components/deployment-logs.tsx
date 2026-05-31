@@ -61,6 +61,7 @@ interface DeploymentLogsProps {
 	region?: string;
 	paused?: boolean;
 	logsRef?: React.MutableRefObject<RivetSse.LogStreamEvent.Log[]>;
+	regionLabelLength?: number;
 }
 
 interface LogRowData {
@@ -68,9 +69,16 @@ interface LogRowData {
 	entry?: RivetSse.LogStreamEvent.Log;
 	isSentinel?: boolean;
 	isLoadingMore?: boolean;
+	regionColumnWidth?: string;
 }
 
-function LogRow({ entry, isSentinel, isLoadingMore, ...props }: LogRowData) {
+function LogRow({
+	entry,
+	isSentinel,
+	isLoadingMore,
+	regionColumnWidth,
+	...props
+}: LogRowData) {
 	if (isSentinel) {
 		return (
 			<div
@@ -96,21 +104,26 @@ function LogRow({ entry, isSentinel, isLoadingMore, ...props }: LogRowData) {
 		>
 			<div
 				className={cn(
-					"grid grid-cols-[max-content,16ch,3fr] gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
+					"grid gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
 					{
 						"text-red-400": entry.data.severity === "error",
 						"text-muted-foreground": entry.data.severity !== "error",
 					},
 				)}
+				style={{
+					gridTemplateColumns: `max-content ${regionColumnWidth ?? "16ch"} 3fr`,
+				}}
 			>
-				<span className="text-neutral-500 shrink-0">
+				<span className="text-neutral-500 shrink-0 select-none">
 					{entry.data.timestamp}
 				</span>
 				{entry.data.region ? (
-					<span className="text-neutral-600 shrink-0">
+					<span className="text-neutral-600 shrink-0 select-none">
 						[{entry.data.region}]
 					</span>
-				) : null}
+				) : (
+					<span />
+				)}
 				<span className="flex-1">
 					<AnsiText text={entry.data.message} />
 				</span>
@@ -127,7 +140,15 @@ export function DeploymentLogs({
 	region,
 	paused,
 	logsRef,
+	regionLabelLength,
 }: DeploymentLogsProps) {
+	// Region label gets brackets (2 chars) plus a small buffer so the column
+	// has visual breathing room and tolerates glyph-width differences from
+	// `ch` (measured from "0").
+	const regionColumnWidth =
+		regionLabelLength && regionLabelLength > 0
+			? `${regionLabelLength + 4}ch`
+			: "18ch";
 	const {
 		logs,
 		isLoading,
@@ -178,28 +199,31 @@ export function DeploymentLogs({
 		}
 	}, [totalCount, displayedLogs.length, follow, isLoading]);
 
-	// After prepending older history, scroll to restore the previously-first row.
+	// After prepending older history, restore scroll position by adjusting for
+	// the pixel height of the newly prepended rows so the viewport stays in place.
 	const wasLoadingMoreRef = useRef(false);
+	const scrollOffsetBeforeLoadRef = useRef(0);
+	const prevTotalSizeRef = useRef(0);
 	useEffect(() => {
 		if (
 			wasLoadingMoreRef.current &&
 			!isLoadingMore &&
 			displayedLogs.length > prevLogCountRef.current
 		) {
-			const addedCount = displayedLogs.length - prevLogCountRef.current;
 			const rafId = requestAnimationFrame(() => {
-				// +1 to skip sentinel row at index 0.
-				virtualizerRef.current?.scrollToIndex(
-					addedCount + sentinelOffset,
-					{
-						align: "start",
-					},
+				const virtualizer = virtualizerRef.current;
+				if (!virtualizer) return;
+				const newTotalSize = virtualizer.getTotalSize();
+				const addedHeight = newTotalSize - prevTotalSizeRef.current;
+				virtualizer.scrollToOffset(
+					scrollOffsetBeforeLoadRef.current + addedHeight,
+					{ align: "start" },
 				);
 			});
 			return () => cancelAnimationFrame(rafId);
 		}
 		wasLoadingMoreRef.current = isLoadingMore;
-	}, [isLoadingMore, displayedLogs.length, sentinelOffset]);
+	}, [isLoadingMore, displayedLogs.length]);
 
 	useEffect(() => {
 		if (logsRef) {
@@ -223,6 +247,8 @@ export function DeploymentLogs({
 					!isLoadingMore
 				) {
 					prevLogCountRef.current = displayedLogs.length;
+					scrollOffsetBeforeLoadRef.current = instance.scrollOffset ?? 0;
+					prevTotalSizeRef.current = instance.getTotalSize();
 					loadMoreHistory();
 				}
 			}
@@ -299,7 +325,10 @@ export function DeploymentLogs({
 						if (hasMore && index === 0) {
 							return { isSentinel: true, isLoadingMore };
 						}
-						return { entry: displayedLogs[index - sentinelOffset] };
+						return {
+							entry: displayedLogs[index - sentinelOffset],
+							regionColumnWidth,
+						};
 					}}
 					row={LogRow}
 				/>
@@ -307,7 +336,7 @@ export function DeploymentLogs({
 					<div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
 						<button
 							type="button"
-							className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-medium shadow-lg hover:bg-primary/90 transition-colors"
+							className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-sans font-medium shadow-lg hover:bg-primary/90 transition-colors"
 							onClick={() => {
 								setFollow(true);
 								virtualizerRef.current?.scrollToIndex(totalCount - 1, { align: "end" });

@@ -44,9 +44,14 @@ export function RunnersTable({
 	fetchNextPage,
 	runners,
 }: RunnersTableProps) {
-	const latestVersion = runners?.length
-		? Math.max(...runners.map((r) => r.version))
-		: undefined;
+	const latestVersionByPool = runners?.reduce<Record<string, number>>(
+		(acc, r) => {
+			const key = "runnerId" in r ? r.name : r.poolName;
+			acc[key] = Math.max(acc[key] ?? 0, r.version);
+			return acc;
+		},
+		{},
+	);
 
 	return (
 		<Table>
@@ -94,7 +99,13 @@ export function RunnersTable({
 								? runner.runnerId
 								: runner.envoyKey
 						}
-						latestVersion={latestVersion}
+						latestVersion={
+							latestVersionByPool?.[
+								"runnerId" in runner
+									? runner.name
+									: runner.poolName
+							]
+						}
 					/>
 				))}
 

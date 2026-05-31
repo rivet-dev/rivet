@@ -18,7 +18,7 @@ import {
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { Link, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -35,6 +35,7 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	DiscreteCopyButton,
 	FormField,
 	Ping,
 	Skeleton,
@@ -101,7 +102,7 @@ const stepper = defineStepper(
 		schema: (values: Record<string, unknown>) => {
 			if ((values.provider as string) === "rivet") {
 				return z.object({
-					success: z.boolean(),
+					success: z.literal(true),
 				});
 			}
 			if ((values.mode as string) === "serverfull") {
@@ -283,14 +284,20 @@ export function GettingStarted({
 								),
 							}}
 							onSubmit={() => {}}
-							onPartialSubmit={async ({ stepper, values }) => {
+							onPartialSubmit={async ({ stepper, values, form }) => {
+								// Provider may be lost from accumulated values
+								// after form reset, so read it from the live form.
+								const provider = (values.provider ?? form.getValues("provider")) as string | undefined;
 								if (stepper.current.id === "provider") {
-									if (values.provider === "rivet") {
+									if (features.compute && provider === "rivet") {
 										await mutateAsyncManagedPool({
 											displayName: "default",
 											pool: "default",
-											minCount: 0,
-											maxCount: 100_000,
+											image: null,
+											maxConcurrentActors: 50_000,
+											environment: {},
+											command: null,
+											args: [],
 										});
 									}
 
@@ -313,7 +320,14 @@ export function GettingStarted({
 								}
 								if (
 									stepper.current.id === "backend" &&
-									values.provider !== "rivet"
+									features.compute &&
+									provider === "rivet"
+								) {
+									return;
+								}
+								if (
+									stepper.current.id === "backend" &&
+									provider !== "rivet"
 								) {
 									const v = values as unknown as {
 										runnerName: string;
@@ -475,7 +489,18 @@ function StepperFooter() {
 }
 
 function ProviderSetup() {
-	const { setValue, control } = useFormContext();
+	const { setValue, control, getValues } = useFormContext();
+
+	useEffect(() => {
+		if (!features.compute) return;
+		if (!getValues("provider")) {
+			setValue("provider", "rivet", {
+				shouldDirty: true,
+				shouldTouch: true,
+				shouldValidate: true,
+			});
+		}
+	}, [setValue, getValues]);
 
 	return (
 		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
@@ -490,20 +515,32 @@ function ProviderSetup() {
 					return (
 						<div className="flex flex-col gap-2">
 							<div className="grid grid-cols-2 gap-2">
-								{deployOptions.map((option) => (
-									<ProviderCard
-										key={option.name}
-										option={option}
-										isSelected={field.value === option.name}
-										onSelect={() =>
-											setValue("provider", option.name, {
-												shouldDirty: true,
-												shouldTouch: true,
-												shouldValidate: true,
-											})
-										}
-									/>
-								))}
+								{deployOptions
+									.filter(
+										(option) =>
+											features.compute ||
+											option.name !== "rivet",
+									)
+									.map((option) => (
+										<ProviderCard
+											key={option.name}
+											option={option}
+											isSelected={field.value === option.name}
+											onSelect={() =>
+												setValue("provider", option.name, {
+													shouldDirty: true,
+													shouldTouch: true,
+													shouldValidate: true,
+												})
+											}
+											className={
+												features.compute &&
+												option.name === "rivet"
+													? "col-span-2 py-5"
+													: undefined
+											}
+										/>
+									))}
 							</div>
 						</div>
 					);
@@ -936,6 +973,8 @@ RUN npm ci
 COPY . .
 RUN npm run build --if-present
 
+EXPOSE 3000
+
 CMD ["node", "dist/index.js"]
 \`\`\`
 
@@ -966,7 +1005,7 @@ gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
 
 ## Step 4: Create GitHub Action
 
-Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1:
+Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.1:
 
 \`\`\`
 name: Rivet Deploy
@@ -990,10 +1029,13 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1
+      - uses: rivet-dev/deploy-action@v1.1.1
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}
+		  managed-pool-config: '{"environment":{"PORT":"3000"}}'
 \`\`\`
+
+Important: the container should be connectable at 3000! If using another port, ensure that environment.PORT is set to that environment.
 
 ## Step 5: Push and Verify
 
@@ -1045,6 +1087,7 @@ Once deployed, verify the deployment works:
 5. Common issues:
    - "actor should have a key": The key field was missing from the create request.
    - Token 401: Make sure you're using the correct API URLs (${apiUrl}, ${cloudApiUrl}).
+	- "Failed to start container: Please ensure your container starts successfully on the specified port (8080 if unspecified). Make sure your image was built for linux/amd64.": Ensure that we the container is connectable to PORT 3000 or whichever PORT specified in your managed-pool-config settings of your Github action.
 
 ## Troubleshooting
 
@@ -1122,7 +1165,7 @@ function AgentPromptBanner({ code }: { code: string }) {
 			</Badge>
 			<span className="text-sm font-medium text-foreground text-left">
 				Have your coding agent complete these steps automatically to
-				deploy to Rivet Cloud.
+				deploy to Rivet Compute.
 			</span>
 			<Button
 				asChild
@@ -1174,7 +1217,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1
+      - uses: rivet-dev/deploy-action@v1.1.1
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}`;
 
@@ -1188,159 +1231,110 @@ function BackendSetupRivet() {
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
 
-	const [currentStep, setCurrentStep] = useState(0);
-	const [direction, setDirection] = useState(1);
-
-	const steps = [
-		{
-			title: "Create a Dockerfile for your RivetKit deployment",
-			description: (
-				<p className="text-sm text-muted-foreground">
-					Add a{" "}
-					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-						Dockerfile
-					</code>{" "}
-					to the root of your project that builds and runs your
-					RivetKit server.
-				</p>
-			),
-			content: null,
-		},
-		{
-			title: "Add GitHub secret",
-			description: (
-				<p className="text-sm text-muted-foreground">
-					Add your Rivet token as a repository secret named{" "}
-					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-						RIVET_CLOUD_TOKEN
-					</code>
-					.
-				</p>
-			),
-			content: (
-				<CodeGroup className="my-0">
-					{[
-						<CodeFrame
-							key="gh-secret"
-							language="bash"
-							title="bash"
-							code={() => ghSecretCmd}
-							className="m-0"
-						>
-							<CodePreview
-								language="bash"
-								className="text-left"
-								code={ghSecretCmd}
-							/>
-						</CodeFrame>,
-					]}
-				</CodeGroup>
-			),
-		},
-		{
-			title: "Add GitHub Action",
-			description: (
-				<p className="text-sm text-muted-foreground">
-					Create{" "}
-					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-						.github/workflows/rivet-deploy.yml
-					</code>{" "}
-					to automatically deploy on every push and pull request.
-				</p>
-			),
-			content: (
-				<CodeGroup className="my-0">
-					{[
-						<CodeFrame
-							key="gh-action"
-							language="yaml"
-							title=".github/workflows/rivet-deploy.yml"
-							code={() => githubActionYaml}
-							className="m-0"
-						>
-							<CodePreview
-								language="yaml"
-								className="text-left"
-								code={githubActionYaml}
-							/>
-						</CodeFrame>,
-					]}
-				</CodeGroup>
-			),
-		},
-	];
-
-	const step = steps[currentStep];
-
 	return (
 		<div className="flex flex-col gap-6">
 			<CopyAgentInstructionsButton provider="rivet" />
-			<div className="rounded-lg border bg-muted/30 p-8 overflow-hidden">
-				<AnimatePresence mode="wait">
-					<motion.div
-						key={currentStep}
-						initial={{ opacity: 0, x: direction * 20 }}
-						animate={{ opacity: 1, x: 0 }}
-						exit={{ opacity: 0, x: direction * -20 }}
-						transition={{ duration: 0.2, ease: "easeInOut" }}
-					>
-						<p className="font-medium mb-4">{step.title}</p>
-						<div className="mb-4">{step.description}</div>
-						{step.content}
-					</motion.div>
-				</AnimatePresence>
-				<div className="flex items-center justify-between mt-6 pt-4 border-t">
-					{currentStep > 0 ? (
-						<Button
-							type="button"
-							variant="outline"
-							onClick={() => {
-								setDirection(-1);
-								setCurrentStep((s) => s - 1);
-							}}
-						>
-							Previous
-						</Button>
-					) : (
-						<div />
-					)}
-					{currentStep < steps.length - 1 ? (
-						<Button
-							type="button"
-							onClick={() => {
-								setDirection(1);
-								setCurrentStep((s) => s + 1);
-							}}
-						>
-							Next
-						</Button>
-					) : null}
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Create a Dockerfile</p>
+					<p className="text-sm text-muted-foreground">
+						Add a{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							Dockerfile
+						</code>{" "}
+						to the root of your project that builds and runs your
+						RivetKit server.
+					</p>
 				</div>
 			</div>
-			<div>
-				<p className="font-medium mb-2">Deploy to Rivet Cloud</p>
-				<p className="text-sm text-muted-foreground mb-2">
-					Push your changes to trigger the{" "}
-					<strong>Rivet Deploy</strong> workflow. The status check
-					below will update automatically once your backend is
-					deployed.
-				</p>
-				<div className="border rounded-md py-8">
-					<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
-						<DeploymentCheck
-							validateConfig={(data) =>
-								!!data?.find(([, value]) =>
-									Object.values(value.datacenters).some(
-										(dc) =>
-											dc.serverless &&
-											deriveProviderFromMetadata(
-												dc.metadata,
-											) === "rivet",
-									),
-								)
-							}
-							validatePool={(data) => !!data?.config.image}
-						/>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Add GitHub secret</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Add your Rivet token as a repository secret named{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							RIVET_CLOUD_TOKEN
+						</code>
+						.
+					</p>
+					<CodeGroup className="my-0">
+						{[
+							<CodeFrame
+								key="gh-secret"
+								language="bash"
+								title="bash"
+								code={() => ghSecretCmd}
+								className="m-0"
+							>
+								<CodePreview
+									language="bash"
+									className="text-left"
+									code={ghSecretCmd}
+								/>
+							</CodeFrame>,
+						]}
+					</CodeGroup>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={3} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Add GitHub Action</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Create{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							.github/workflows/rivet-deploy.yml
+						</code>{" "}
+						to automatically deploy on every push and pull request.
+					</p>
+					<CodeGroup className="my-0">
+						{[
+							<CodeFrame
+								key="gh-action"
+								language="yaml"
+								title=".github/workflows/rivet-deploy.yml"
+								code={() => githubActionYaml}
+								className="m-0"
+							>
+								<CodePreview
+									language="yaml"
+									className="text-left"
+									code={githubActionYaml}
+								/>
+							</CodeFrame>,
+						]}
+					</CodeGroup>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={4} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Deploy to Rivet Compute</p>
+					<p className="text-sm text-muted-foreground mb-2">
+						Push your changes to trigger the{" "}
+						<strong>Rivet Deploy</strong> workflow. The status check
+						below will update automatically once your backend is
+						deployed.
+					</p>
+					<div className="border rounded-md py-8">
+						<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
+							<DeploymentCheck
+								validateConfig={(data) =>
+									!!data?.find(([, value]) =>
+										Object.values(value.datacenters).some(
+											(dc) =>
+												dc.serverless &&
+												deriveProviderFromMetadata(
+													dc.metadata,
+												) === "rivet",
+										),
+									)
+								}
+								validatePool={(data) => !!data?.config.image}
+							/>
+						</div>
 					</div>
 				</div>
 			</div>
@@ -1494,6 +1488,24 @@ function useServerfullEndpoint() {
 	return data?.url || engineEnv().VITE_APP_API_URL;
 }
 
+// Cloud + Rivet compute: poll the project image registry. Until the user
+// pushes their first image, no runner config exists and no actor can be
+// scheduled, so the caller hides the "Waiting for an Actor" affordance and
+// shows a deployment-pending caption instead. In non-cloud builds
+// `useCloudNamespaceDataProvider` returns undefined and this is a no-op.
+function useWaitingForFirstImage(provider: string | undefined): boolean {
+	const nsDataProvider = useCloudNamespaceDataProvider();
+	const enabled =
+		features.compute && provider === "rivet" && nsDataProvider != null;
+	const { data: hasImage } = useQuery({
+		...(nsDataProvider
+			? nsDataProvider.currentProjectFirstImagePresentQueryOptions()
+			: { queryKey: ["frontend-setup", "first-image-noop"] as const, queryFn: () => false }),
+		enabled,
+	});
+	return enabled && hasImage !== true;
+}
+
 function FrontendSetup() {
 	const dataProvider = useDataProvider();
 
@@ -1522,7 +1534,21 @@ function FrontendSetup() {
 				.filter((dc) => dc.serverless)?.[0].serverless,
 	});
 
+	const provider = useWatch({ name: "provider" });
+	const nsDataProvider = useCloudNamespaceDataProvider();
+	const { namespace: namespaceParam } = useParams({ strict: false }) as { namespace: string };
+	const { data: nsData } = useQuery(
+		nsDataProvider.currentProjectNamespaceQueryOptions({ namespace: namespaceParam }),
+	);
+	const waitingForFirstImage = useWaitingForFirstImage(provider);
+
 	const deploymentUrl = useMemo(() => {
+		if (provider === "rivet" && nsData?.access?.engineNamespaceName) {
+			const engineNsName = nsData.access.engineNamespaceName;
+			const env = cloudEnv();
+			const isProduction = env.DEPLOYMENT_TYPE === "production";
+			return `https://${engineNsName}${isProduction ? "" : ".staging"}.rivet.run`;
+		}
 		if (!config?.url) return null;
 		try {
 			const url = new URL(config.url);
@@ -1531,7 +1557,7 @@ function FrontendSetup() {
 		} catch {
 			return null;
 		}
-	}, [config?.url]);
+	}, [config?.url, provider, nsData?.access?.engineNamespaceName]);
 
 	useEffect(() => {
 		const success = async () => {
@@ -1565,102 +1591,145 @@ function FrontendSetup() {
 						<Ping variant="pending" className="relative" />
 					</div>
 					<p data-testid={TEST_IDS.Onboarding.WaitingForActor}>
-						Waiting for an Actor to be created...
+						{waitingForFirstImage
+							? "Waiting for your first deployment..."
+							: "Waiting for an Actor to be created..."}
 					</p>
 				</div>
 
 				<div className="flex items-center flex-col justify-center gap-4">
-					{deploymentUrl ? (
-						<Button variant="outline">
-							<a
-								href={deploymentUrl}
-								target="_blank"
-								rel="noopener noreferrer"
-							>
-								Visit Deployment
-							</a>
-						</Button>
+					{provider === "rivet" ? (
+						<>
+							<Button asChild>
+								<Link
+									to="."
+									search={{ skipOnboarding: true }}
+								>
+									Go to dashboard
+									<Icon icon={faArrowRight} className="ml-1.5" />
+								</Link>
+							</Button>
+							{deploymentUrl ? (
+								<div className="mt-4 flex flex-col items-center gap-1 text-sm">
+									<span className="text-muted-foreground">
+										Deployment URL
+									</span>
+									<DiscreteCopyButton
+										value={deploymentUrl}
+										className="font-mono text-xs text-muted-foreground"
+									>
+										{deploymentUrl}
+									</DiscreteCopyButton>
+								</div>
+							) : null}
+						</>
 					) : (
-						<Button variant="outline" asChild>
-							<Link
-								to="."
-								search={(s) => ({
-									...s,
-									modal: "create-actor",
-								})}
+						<>
+							{deploymentUrl ? (
+								<Button variant="outline">
+									<a
+										href={deploymentUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										Visit Deployment
+									</a>
+								</Button>
+							) : (
+								<Button variant="outline" asChild>
+									<Link
+										to="."
+										search={(s) => ({
+											...s,
+											modal: "create-actor",
+										})}
+									>
+										Create Actor
+									</Link>
+								</Button>
+							)}
+							<Button
+								asChild
+								variant="link"
+								size="xs"
+								className="text-muted-foreground mx-auto inline-block"
 							>
-								Create Actor
-							</Link>
-						</Button>
+								<Link
+									to="."
+									search={(s) => ({
+										...s,
+										modal: "create-actor",
+									})}
+								>
+									or Manually Create Actor
+								</Link>
+							</Button>
+						</>
 					)}
-					<Button
-						asChild
-						variant="link"
-						size="xs"
-						className="text-muted-foreground mx-auto inline-block"
-					>
-						<Link
-							to="."
-							search={(s) => ({
-								...s,
-								modal: "create-actor",
-							})}
-						>
-							or Manually Create Actor
-						</Link>
-					</Button>
 				</div>
 			</div>
-			<Accordion type="single" collapsible className="mt-10">
-				<AccordionItem value="troubleshooting">
-					<AccordionTrigger className="w-full flex items-center justify-between px-4 py-2">
-						Troubleshooting
-					</AccordionTrigger>
-					<AccordionContent className="px-4 py-2  rounded-md border">
-						<p className="mt-2">
-							If your actor isn't showing up, check the following:
-						</p>
-						<ul className="list-disc list-inside mt-2">
-							<li>
-								<span>
-									The actor file is in the correct location
-									and has the correct name.
-								</span>
-							</li>
-							<li>
-								<span>
-									The actor is being exported properly.
-								</span>
-							</li>
-							<li>
-								<span>
-									Check the terminal output for any errors
-									during the build or runtime.
-								</span>
-							</li>
-							<li>
-								<span>
-									Make sure your coding agent has completed
-									the setup steps correctly.
-								</span>
-							</li>
-							<li>
-								<span className="inline-block mb-1">
-									You're using correct environment variables:
-								</span>
-								<Suspense
-									fallback={
-										<Skeleton className="w-full h-20" />
-									}
-								>
-									<EnvVariables endpoint={endpoint} />
-								</Suspense>
-							</li>
-						</ul>
-					</AccordionContent>
-				</AccordionItem>
-			</Accordion>
+			<TroubleshootingSection endpoint={endpoint} />
 		</div>
+	);
+}
+
+function TroubleshootingSection({ endpoint }: { endpoint: string | null }) {
+	const provider = useWatch({ name: "provider" });
+
+	if (provider === "rivet") {
+		return null;
+	}
+
+	return (
+		<Accordion type="single" collapsible className="mt-10">
+			<AccordionItem value="troubleshooting">
+				<AccordionTrigger className="w-full flex items-center justify-between px-4 py-2">
+					Troubleshooting
+				</AccordionTrigger>
+				<AccordionContent className="px-4 py-2  rounded-md border">
+					<p className="mt-2">
+						If your actor isn't showing up, check the following:
+					</p>
+					<ul className="list-disc list-inside mt-2">
+						<li>
+							<span>
+								The actor file is in the correct location
+								and has the correct name.
+							</span>
+						</li>
+						<li>
+							<span>
+								The actor is being exported properly.
+							</span>
+						</li>
+						<li>
+							<span>
+								Check the terminal output for any errors
+								during the build or runtime.
+							</span>
+						</li>
+						<li>
+							<span>
+								Make sure your coding agent has completed
+								the setup steps correctly.
+							</span>
+						</li>
+						<li>
+							<span className="inline-block mb-1">
+								You're using correct environment variables:
+							</span>
+							<Suspense
+								fallback={
+									<Skeleton className="w-full h-20" />
+								}
+							>
+								<EnvVariables endpoint={endpoint} />
+							</Suspense>
+						</li>
+					</ul>
+				</AccordionContent>
+			</AccordionItem>
+		</Accordion>
 	);
 }
 

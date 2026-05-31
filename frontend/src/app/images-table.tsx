@@ -5,8 +5,9 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { formatDistance } from "date-fns";
+import { Fragment } from "react";
 import {
 	Button,
 	DiscreteCopyButton,
@@ -23,7 +24,6 @@ import {
 import {
 	ErrorDetails,
 	ErrorDetailsContent,
-	useCloudNamespaceDataProvider,
 	useCloudProjectDataProvider,
 } from "@/components/actors";
 
@@ -64,7 +64,7 @@ export function ImagesTable({
 				<TableRow>
 					<TableHead className="pl-8">Tag</TableHead>
 					<TableHead className="w-full">Deployed To</TableHead>
-					<TableHead className="min-w-40">Date</TableHead>
+					<TableHead className="min-w-56">Date</TableHead>
 					<TableHead />
 				</TableRow>
 			</TableHeader>
@@ -114,12 +114,14 @@ export function ImagesTable({
 
 				{!isLoading && hasNextPage ? (
 					<TableRow>
-						<TableCell colSpan={7}>
+						<TableCell colSpan={7} className="text-center py-2">
 							<Button
-								variant="outline"
+								variant="ghost"
+								size="sm"
 								isLoading={isLoading}
 								onClick={() => fetchNextPage?.()}
 								disabled={!hasNextPage}
+								className="text-muted-foreground"
 							>
 								Load more
 							</Button>
@@ -199,11 +201,13 @@ function TagRow({
 			</TableCell>
 			<TableCell>
 				{deployments.length > 0 ? (
-					deployments.map((deployment) => (
-						<DeploymentNamespace
-							key={deployment.namespace}
-							namespace={deployment.namespace}
-						/>
+					deployments.map((deployment, i) => (
+						<Fragment key={deployment.namespace}>
+							{i > 0 ? ", " : null}
+							<DeploymentNamespace
+								namespace={deployment.namespace}
+							/>
+						</Fragment>
 					))
 				) : (
 					<Text className="text-muted-foreground">-</Text>
@@ -296,12 +300,10 @@ function ManagedPoolStatus({ namespace }: { namespace: string }) {
 function CreateTs({ createTs }: { createTs: string }) {
 	return (
 		<WithTooltip
-			content={new Date(createTs).toLocaleString()}
+			content={formatDistance(createTs, new Date(), { addSuffix: true })}
 			trigger={
-				<div>
-					{formatDistance(createTs, new Date(), {
-						addSuffix: true,
-					})}
+				<div className="text-muted-foreground">
+					{new Date(createTs).toLocaleString()}
 				</div>
 			}
 		/>
@@ -309,9 +311,21 @@ function CreateTs({ createTs }: { createTs: string }) {
 }
 
 function DeploymentNamespace({ namespace }: { namespace: string }) {
-	const provider = useCloudNamespaceDataProvider();
+	const provider = useCloudProjectDataProvider();
+	const { organization, project } = useParams({ strict: false }) as {
+		organization: string;
+		project: string;
+	};
 	const { data } = useQuery(
 		provider.currentProjectNamespaceQueryOptions({ namespace }),
 	);
-	return <div>{data?.displayName || <Skeleton className="w-6 h-4" />}</div>;
+	return (
+		<Link
+			to="/orgs/$organization/projects/$project/ns/$namespace"
+			params={{ organization, project, namespace }}
+			className="hover:underline"
+		>
+			{data?.displayName || <Skeleton className="w-6 h-4" />}
+		</Link>
+	);
 }

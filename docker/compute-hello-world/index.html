@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Hello from Rivet Compute</title>
+		<style>
+			:root {
+				color-scheme: dark;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			html,
+			body {
+				margin: 0;
+				padding: 0;
+				height: 100%;
+			}
+			body {
+				background: #0f0f0f;
+				color: #f0f0f0;
+				font-family:
+					ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 24px;
+			}
+			.card {
+				width: 100%;
+				max-width: 520px;
+				text-align: center;
+			}
+			.logo {
+				width: 96px;
+				height: 96px;
+				margin: 0 auto 28px;
+				display: block;
+			}
+			h1 {
+				font-size: 32px;
+				font-weight: 600;
+				margin: 0 0 12px;
+				letter-spacing: -0.01em;
+			}
+			p {
+				margin: 0 0 32px;
+				color: #a0a0a0;
+				font-size: 16px;
+				line-height: 1.5;
+			}
+			.links {
+				display: flex;
+				flex-direction: column;
+				gap: 12px;
+			}
+			a.btn {
+				display: inline-block;
+				padding: 12px 20px;
+				border-radius: 10px;
+				border: 1px solid #2a2a2a;
+				background: #1a1a1a;
+				color: #f0f0f0;
+				text-decoration: none;
+				font-size: 15px;
+				font-weight: 500;
+				transition:
+					background 0.15s ease,
+					border-color 0.15s ease;
+			}
+			a.btn:hover {
+				background: #222;
+				border-color: #3a3a3a;
+			}
+			a.btn.primary {
+				background: #f0f0f0;
+				color: #0f0f0f;
+				border-color: #f0f0f0;
+			}
+			a.btn.primary:hover {
+				background: #fff;
+				border-color: #fff;
+			}
+		</style>
+	</head>
+	<body>
+		<main class="card">
+			<svg
+				class="logo"
+				viewBox="0 0 128 128"
+				fill="none"
+				xmlns="http://www.w3.org/2000/svg"
+				aria-label="Rivet"
+			>
+				<rect x="1" y="1" width="126" height="126" rx="44" fill="#0F0F0F" />
+				<rect
+					x="18.25"
+					y="18.25"
+					width="91.5"
+					height="91.5"
+					rx="25.75"
+					stroke="#F0F0F0"
+					stroke-width="8.5"
+				/>
+				<path
+					fill-rule="evenodd"
+					clip-rule="evenodd"
+					d="M57.694 43.098c0-.622-.505-1.126-1.127-1.126h-8.444a5.114 5.114 0 0 0-5.112 5.111v33.824a5.114 5.114 0 0 0 5.112 5.112h8.444c.622 0 1.127-.505 1.127-1.127V43.098Zm24.424 27.869c-1.238-2.222-4.047-4.026-6.27-4.026H62.923c-.684 0-.93.555-.549 1.239l7.703 13.822c1.239 2.223 4.048 4.026 6.27 4.026h12.927c.683 0 .93-.555.548-1.239l-7.703-13.822Zm.538-18.718c0-5.672-4.605-10.277-10.277-10.277H63.31a1.21 1.21 0 0 0-1.209 1.209v18.137c0 .667.542 1.209 1.21 1.209h9.068c5.672 0 10.277-4.605 10.277-10.278Z"
+					fill="#F0F0F0"
+				/>
+			</svg>
+			<h1>Hello from Rivet Compute</h1>
+			<p>
+				Your container is up and running. Replace this image with your own to
+				ship something real.
+			</p>
+			<div class="links">
+				<a class="btn primary" href="https://dashboard.rivet.dev">Open dashboard</a>
+				<a class="btn" href="https://rivet.dev/docs/connect/rivet-compute"
+					>Read the docs</a
+				>
+			</div>
+		</main>
+	</body>
+</html>

@@ -1,21 +1,24 @@
-import { faGear, faPlus, Icon } from "@rivet-gg/icons";
+import { faGear, faLogs, faPlus, Icon } from "@rivet-gg/icons";
 import {
 	queryOptions,
 	useInfiniteQuery,
 	useQueries,
-	useSuspenseInfiniteQuery,
+	useQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
 import { type ReactNode } from "react";
 import {
 	Button,
 	cn,
+	DiscreteCopyButton,
 	H1,
 	ScrollArea,
 	Skeleton,
 	SmallText,
 	WithTooltip,
 } from "@/components";
+import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 import { ActorIcon } from "@/components/lazy-icon";
 import { useDataProvider, useCloudNamespaceDataProvider } from "@/components/actors";
 import { VisibilitySensor } from "@/components/visibility-sensor";
@@ -67,9 +70,21 @@ export function ActorsGrid({
 	namespaceLabel?: string;
 }) {
 	const dataProvider = useDataProvider();
+	const nsDataProvider = useCloudNamespaceDataProvider();
+	const { namespace } = useParams({ strict: false }) as { namespace: string };
 	const navigate = useNavigate();
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(dataProvider.buildsQueryOptions());
+
+	const { data: managedPool } = useQuery({
+		...nsDataProvider.currentProjectManagedPoolQueryOptions({
+			namespace,
+			pool: "default",
+			safe: true,
+		}),
+		enabled: features.compute,
+	});
+	const hasCompute = features.compute && managedPool != null;
 	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
 		...dataProvider.runnerNamesQueryOptions(),
 		select: (data) => data.pages.flatMap((page) => page.names).length,
@@ -93,27 +108,40 @@ export function ActorsGrid({
 				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
 					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
 						<H1 className="text-2xl truncate">{namespaceName}</H1>
-						<WithTooltip
-							content="Namespace settings"
-							trigger={
-								<Button
-									variant="outline"
-									size="icon-sm"
-									aria-label="Namespace settings"
-									onClick={() => {
-										navigate({
-											to: ".",
-											search: (old) => ({
-												...old,
-												settings: "settings",
-											}),
-										});
-									}}
-								>
-									<Icon icon={faGear} />
-								</Button>
-							}
-						/>
+						<div className="flex items-center gap-2">
+							{hasCompute ? (
+								<Link to="./logs">
+									<Button
+										variant="outline"
+										size="sm"
+										startIcon={<Icon icon={faLogs} />}
+									>
+										Logs
+									</Button>
+								</Link>
+							) : null}
+							<WithTooltip
+								content="Namespace settings"
+								trigger={
+									<Button
+										variant="outline"
+										size="icon-sm"
+										aria-label="Namespace settings"
+										onClick={() => {
+											navigate({
+												to: ".",
+												search: (old) => ({
+													...old,
+													settings: "settings",
+												}),
+											});
+										}}
+									>
+										<Icon icon={faGear} />
+									</Button>
+								}
+							/>
+						</div>
 					</header>
 
 					<section>
@@ -243,105 +271,142 @@ export function ActorsGrid({
 					</section>
 
 						<DeploymentsSection />
-					</div>
+				</div>
 				</ScrollArea>
 			</div>
 		);
 }
 
 function DeploymentsSection() {
-	const { namespace } = useParams({ strict: false }) as { namespace: string };
+	const { namespace } = useParams({ strict: false }) as {
+		namespace: string;
+	};
 	const dataProvider = useCloudNamespaceDataProvider();
-	const navigate = useNavigate();
 
-	// const {
-	// 	data: images,
-	// 	isError,
-	// 	isLoading: isLoadingImages,
-	// 	fetchNextPage,
-	// 	hasNextPage,
-	// } = useSuspenseInfiniteQuery({
-	// 	...dataProvider.currentProjectImagesQueryOptions(),
-	// 	refetchInterval: 5_000,
-	// });
+	// Check if this namespace has a managed pool. If not, don't show deployments.
+	// Once we know there's no pool, stop refetching to avoid 404 spam.
+	const { data: managedPool, isLoading: isLoadingPool } = useQuery({
+		...dataProvider.currentProjectManagedPoolQueryOptions({
+			namespace,
+			pool: "default",
+			safe: true,
+		}),
+		enabled: features.compute,
+		refetchInterval: (query) =>
+			query.state.data === null ? false : 5_000,
+		refetchOnWindowFocus: (query) => query.state.data !== null,
+	});
 
-	// const { data: namespaces } = useSuspenseInfiniteQuery({
-	// 	...dataProvider.currentProjectNamespacesQueryOptions(),
-	// 	refetchInterval: 5_000,
-	// });
+	const hasPool = features.compute && managedPool != null;
 
-	// const managedPoolQueries = useQueries({
-	// 	queries:
-	// 		namespaces.map((ns) =>
-	// 			queryOptions({
-	// 				...dataProvider.currentProjectManagedPoolQueryOptions({
-	// 					namespace: ns.name,
-	// 					pool: "default",
-	// 				}),
-	// 				select: (data) => ({
-	// 					...data,
-	// 					namespace: ns.name,
-	// 					...data?.config?.image,
-	// 				}),
-	// 				refetchInterval: 5_000,
-	// 			}),
-	// 		) ?? [],
-	// });
+	const {
+		data: images,
+		isError,
+		isLoading: isLoadingImages,
+	} = useInfiniteQuery({
+		...dataProvider.currentProjectImagesQueryOptions({ limit: 5 }),
+		enabled: hasPool,
+		refetchInterval: 5_000,
+	});
 
-	// const deployments = managedPoolQueries
-	// 	.map((query) => query.data)
-	// 	.filter(
-	// 		(data): data is Exclude<typeof data, undefined> =>
-	// 			data !== undefined,
-	// 	);
+	const { data: namespaces } = useInfiniteQuery({
+		...dataProvider.currentProjectNamespacesQueryOptions(),
+		enabled: hasPool,
+		refetchInterval: 5_000,
+	});
 
-	// // Only show deployments section if there are images (namespace uses compute).
-	// if (!isLoadingImages && images.length === 0) {
-	// 	return null;
-	// }
+	const managedPoolQueries = useQueries({
+		queries: hasPool
+			? (namespaces ?? []).map((ns) =>
+					queryOptions({
+						...dataProvider.currentProjectManagedPoolQueryOptions({
+							namespace: ns.name,
+							pool: "default",
+							safe: true,
+						}),
+						select: (data) => ({
+							...data,
+							namespace: ns.name,
+							...data?.config?.image,
+						}),
+						refetchInterval: 5_000,
+					}),
+				)
+			: [],
+	});
 
-	// const sorted = images.toSorted((a, b) => {
-	// 	const aTimestamp = new Date(a.createdAt).getTime();
-	// 	const bTimestamp = new Date(b.createdAt).getTime();
-	// 	return bTimestamp - aTimestamp;
-	// });
+	const deployments = managedPoolQueries
+		.map((query) => query.data)
+		.filter(
+			(data): data is Exclude<typeof data, undefined> =>
+				data !== undefined,
+		);
 
-	// return (
-	// 	<section>
-	// 		<header className="flex items-center justify-between gap-4 mb-3">
-	// 			<h2 className="text-base font-semibold text-foreground">
-	// 				Deployments
-	// 			</h2>
-	// 			<Button
-	// 				variant="outline"
-	// 				size="sm"
-	// 				startIcon={<Icon icon={faPlus} />}
-	// 				onClick={() => {
-	// 					navigate({
-	// 						to: ".",
-	// 						search: (old) => ({
-	// 							...old,
-	// 							modal: "upsert-deployment",
-	// 							namespace,
-	// 						}),
-	// 					});
-	// 				}}
-	// 			>
-	// 				Deploy
-	// 			</Button>
-	// 		</header>
-	// 		<div className="border rounded-md">
-	// 			<ImagesTable
-	// 				images={sorted}
-	// 				deployments={deployments}
-	// 				isLoading={isLoadingImages}
-	// 				namespace={namespace}
-	// 				isError={isError}
-	// 				fetchNextPage={fetchNextPage}
-	// 				hasNextPage={hasNextPage}
-	// 			/>
-	// 		</div>
-	// 	</section>
-	// );
-	return null;
+	const { data: nsData } = useQuery(
+		dataProvider.currentProjectNamespaceQueryOptions({ namespace }),
+	);
+
+	const isDeployed =
+		managedPool?.status === "ready" && managedPool?.config?.image != null;
+	const deploymentUrl =
+		isDeployed && nsData?.access?.engineNamespaceName
+			? (() => {
+					const engineNsName = nsData.access.engineNamespaceName;
+					const isProduction = cloudEnv().DEPLOYMENT_TYPE === "production";
+					return `https://${engineNsName}${isProduction ? "" : ".staging"}.rivet.run/`;
+				})()
+			: null;
+
+	if (isLoadingPool || !hasPool) {
+		return null;
+	}
+
+	const allImages = images ?? [];
+
+	const sorted = allImages.toSorted((a, b) => {
+		const aTimestamp = new Date(a.createdAt).getTime();
+		const bTimestamp = new Date(b.createdAt).getTime();
+		return bTimestamp - aTimestamp;
+	});
+
+	const hasMore = sorted.length >= 5;
+
+	return (
+		<section>
+			<header className="mb-3">
+				<h2 className="text-base font-semibold text-foreground">
+					Deployments
+				</h2>
+			</header>
+			{deploymentUrl ? (
+				<div className="mb-3 flex items-center gap-2 text-sm">
+					<span className="text-muted-foreground">Deployment URL</span>
+					<DiscreteCopyButton
+						value={deploymentUrl}
+						className="font-mono text-xs text-muted-foreground"
+					>
+						{deploymentUrl}
+					</DiscreteCopyButton>
+				</div>
+			) : null}
+			<div className="border rounded-md">
+				<ImagesTable
+					images={sorted}
+					deployments={deployments}
+					isLoading={isLoadingImages}
+					namespace={namespace}
+					isError={isError}
+				/>
+			{hasMore ? (
+				<Link
+					to="./deployments"
+					className="block border-t border-foreground/10 py-2 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+				>
+					View all
+				</Link>
+			) : null}
+			</div>
+		</section>
+	);
 }
+

@@ -87,7 +87,7 @@ function RivetRunnerEnv({
 		<>
 			<DiscreteInput
 				aria-label="environment variable key"
-				value={`${prefix ? `${prefix}_` : ""}RUNNER_POOL`}
+				value={`${prefix ? `${prefix}_` : ""}RIVET_POOL`}
 				show
 			/>
 			<DiscreteInput
