@@ -24,6 +24,8 @@
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"check-types": "tsc --noEmit",
+		"lint:publint": "publint --strict",
+		"lint:attw": "attw --pack . --profile esm-only",
 		"test": "vitest --typecheck",
 		"coverage": "vitest run --coverage"
 	},
@@ -34,11 +36,13 @@
 		"effect": "^4.0.0-beta.66"
 	},
 	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.18.3",
 		"@effect/language-service": "^0.85.1",
 		"@effect/vitest": "^4.0.0-beta.66",
 		"@types/node": "^22.18.1",
 		"@vitest/coverage-v8": "^4.1.7",
 		"effect": "^4.0.0-beta.66",
+		"publint": "^0.3.21",
 		"typescript": "^5.9.2",
 		"vitest": "^4.1.5"
 	}

@@ -25,6 +25,20 @@
 				"../rivetkit/tests/shared-engine.ts"
 			]
 		},
+		"lint:publint": {
+			"dependsOn": ["build"],
+			"inputs": [
+				"package.json",
+				"dist/**"
+			]
+		},
+		"lint:attw": {
+			"dependsOn": ["build"],
+			"inputs": [
+				"package.json",
+				"dist/**"
+			]
+		},
 		"test": {
 			"dependsOn": ["^build", "check-types"],
 			"inputs": [
