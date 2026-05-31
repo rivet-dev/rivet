@@ -1,4 +1,41 @@
 {
 	"$schema": "https://turbo.build/schema.json",
-	"extends": ["//"]
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"package.json",
+				"src/**",
+				"tsconfig.json",
+				"tsconfig.build.json",
+				"../../../tsconfig.base.json"
+			],
+			"outputs": ["dist/**"],
+			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD", "SKIP_WASM_BUILD"]
+		},
+		"check-types": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"package.json",
+				"src/**",
+				"test/**",
+				"tsconfig.json",
+				"../../../tsconfig.base.json",
+				"../rivetkit/tests/shared-engine.ts"
+			]
+		},
+		"test": {
+			"dependsOn": ["^build", "check-types"],
+			"inputs": [
+				"package.json",
+				"src/**",
+				"test/**",
+				"tsconfig.json",
+				"vitest.config.ts",
+				"../../../tsconfig.base.json",
+				"../rivetkit/tests/shared-engine.ts"
+			]
+		}
+	}
 }
