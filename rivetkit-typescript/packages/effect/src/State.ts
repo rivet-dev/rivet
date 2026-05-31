@@ -41,8 +41,8 @@ const TypeId = "~@rivetkit/effect/State";
  *         `SchemaError` when read/write decode/encode against a schema)
  * - `R` — the read/write closures' service requirements
  */
-export interface State<in out A, out E = never, out R = never>
-	extends State.Variance<A, E, R>,
+export interface State<A, E = never, R = never>
+	extends Variance<A, E, R>,
 		Pipeable.Pipeable,
 		Inspectable.Inspectable {
 	readonly read: () => Effect.Effect<A, E, R>;
@@ -61,14 +61,12 @@ export interface State<in out A, out E = never, out R = never>
 export const isState = (u: unknown): u is State<unknown, unknown> =>
 	Predicate.hasProperty(u, TypeId);
 
-export declare namespace State {
-	export interface Variance<in out A, out E, out R> {
-		readonly [TypeId]: {
-			readonly _A: Types.Invariant<A>;
-			readonly _E: Types.Covariant<E>;
-			readonly _R: Types.Covariant<R>;
-		};
-	}
+export interface Variance<A, E, R> {
+	readonly [TypeId]: {
+		readonly _A: Types.Invariant<A>;
+		readonly _E: Types.Covariant<E>;
+		readonly _R: Types.Covariant<R>;
+	};
 }
 
 const Proto = {
@@ -134,10 +132,7 @@ export const update: {
 	<A>(
 		f: (a: A) => A,
 	): <E, R>(self: State<A, E, R>) => Effect.Effect<void, E, R>;
-	<A, E, R>(
-		self: State<A, E, R>,
-		f: (a: A) => A,
-	): Effect.Effect<void, E, R>;
+	<A, E, R>(self: State<A, E, R>, f: (a: A) => A): Effect.Effect<void, E, R>;
 } = dual(
 	2,
 	<A, E, R>(
@@ -155,9 +150,7 @@ export const update: {
  * read/apply/write triple is atomic across fibers.
  */
 export const updateAndGet: {
-	<A>(
-		f: (a: A) => A,
-	): <E, R>(self: State<A, E, R>) => Effect.Effect<A, E, R>;
+	<A>(f: (a: A) => A): <E, R>(self: State<A, E, R>) => Effect.Effect<A, E, R>;
 	<A, E, R>(self: State<A, E, R>, f: (a: A) => A): Effect.Effect<A, E, R>;
 } = dual(
 	2,

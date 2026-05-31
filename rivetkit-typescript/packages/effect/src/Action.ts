@@ -9,10 +9,10 @@ export const isAction = (u: unknown): u is Action<any, any, any, any> =>
  * A value-level definition for a non-durable, request-response call.
  */
 export interface Action<
-	in out Tag extends string,
-	out Payload extends Schema.Top = Schema.Void,
-	out Success extends Schema.Top = Schema.Void,
-	out Error extends Schema.Top = Schema.Never,
+	Tag extends string,
+	Payload extends Schema.Top = Schema.Void,
+	Success extends Schema.Top = Schema.Void,
+	Error extends Schema.Top = Schema.Never,
 > {
 	readonly [TypeId]: typeof TypeId;
 	readonly _tag: Tag;

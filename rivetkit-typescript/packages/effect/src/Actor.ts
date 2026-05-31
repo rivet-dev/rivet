@@ -246,8 +246,8 @@ type ToLayerRequirements<
  * display options, but no server implementation.
  */
 export interface Actor<
-	in out Name extends string,
-	in out Actions extends Action.Any = never,
+	Name extends string,
+	Actions extends Action.Any = never,
 > {
 	readonly [TypeId]: typeof TypeId;
 	readonly name: Name;
@@ -310,9 +310,9 @@ export interface Actor<
 export type Any = Actor<string, Action.AnyWithProps>;
 
 export type ActionHandlersFrom<Actions extends Action.Any> = {
-	readonly [Action in Actions as Action["_tag"]]: (
-		envelope: ActionRequest<Action>,
-	) => Action.ResultFrom<Action, any>;
+	readonly [A in Actions as A["_tag"]]: (
+		envelope: ActionRequest<A>,
+	) => Action.ResultFrom<A, any>;
 };
 
 const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
