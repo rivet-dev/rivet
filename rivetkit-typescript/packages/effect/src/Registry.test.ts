@@ -36,7 +36,7 @@ describe("Registry.toWebHandler", () => {
 			const body = (await response.json()) as {
 				readonly actorNames: Record<string, unknown>;
 			};
-			await assert.ok(body.actorNames.TestActor);
+			assert.ok(body.actorNames.TestActor);
 		} finally {
 			await dispose();
 		}
@@ -56,7 +56,7 @@ describe("Registry.toWebHandler", () => {
 			const body = (await response.json()) as {
 				readonly actorNames: Record<string, unknown>;
 			};
-			await assert.ok(body.actorNames.TestActor);
+			assert.ok(body.actorNames.TestActor);
 		} finally {
 			await dispose();
 		}
@@ -93,7 +93,7 @@ describe("Registry.toWebHandler", () => {
 				{ group: body.group, code: body.code },
 				{ group: "message", code: "incoming_too_long" },
 			);
-			await assert.match(body.message, /limit is 1 bytes/);
+			assert.match(body.message, /limit is 1 bytes/);
 		} finally {
 			await dispose();
 		}
@@ -122,7 +122,7 @@ describe("Registry.toWebHandler", () => {
 				{ group: body.group, code: body.code },
 				{ group: "message", code: "incoming_too_long" },
 			);
-			await assert.match(body.message, /limit is 1 bytes/);
+			assert.match(body.message, /limit is 1 bytes/);
 		} finally {
 			await dispose();
 		}
@@ -222,7 +222,7 @@ describe("Registry.toHttpEffect", () => {
 						const body = (await response.json()) as {
 							readonly actorNames: Record<string, unknown>;
 						};
-						await assert.ok(body.actorNames.TestActor);
+						assert.ok(body.actorNames.TestActor);
 					})(response),
 				);
 			}),
@@ -246,7 +246,7 @@ describe("Registry.toHttpEffect", () => {
 						const body = (await response.json()) as {
 							readonly actorNames: Record<string, unknown>;
 						};
-						await assert.ok(body.actorNames.TestActor);
+						assert.ok(body.actorNames.TestActor);
 					})(response),
 				);
 			}),

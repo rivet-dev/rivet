@@ -411,7 +411,7 @@ export function toWakeHandler<
 	W extends WakeOptions = WakeOptions,
 >(
 	wake: (wakeOptions: W) => ActionHandlers,
-): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, never>;
+): (wakeOptions: W) => Effect.Effect<ActionHandlers>;
 export function toWakeHandler<
 	ActionHandlers extends object,
 	RX,
@@ -422,9 +422,7 @@ export function toWakeHandler<
 export function toWakeHandler<
 	ActionHandlers extends object,
 	W extends WakeOptions = WakeOptions,
->(
-	wake: ActionHandlers,
-): (wakeOptions: W) => Effect.Effect<ActionHandlers, never, never>;
+>(wake: ActionHandlers): (wakeOptions: W) => Effect.Effect<ActionHandlers>;
 export function toWakeHandler<
 	ActionHandlers extends object,
 	R,
@@ -482,7 +480,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	readonly options: Options<State, Database>;
 }) {
 	// Snapshot the current Effect context so action callbacks
-	// (which run in rivetkit's plain Promise world) can run
+	// (which run in rivetkit’s plain Promise world) can run
 	// handler effects against the same services the Registry.start /
 	// Registry.test layer was provided with.
 	const services = yield* Effect.context<any>();
@@ -595,7 +593,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 			) => {
 				// Always wrap in a server-side span so the handler has a
 				// live `currentSpan` even when the caller didn't ship trace
-				// context (e.g. a non-Effect-SDK client). When trace context
+				// context (e.g., a non-Effect-SDK client). When trace context
 				// is present, reattach it as the parent so the server span
 				// joins the caller's trace.
 				const rpcMethod = `${actor.name}/${action._tag}`;

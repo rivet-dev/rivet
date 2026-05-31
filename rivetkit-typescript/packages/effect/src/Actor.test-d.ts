@@ -1,3 +1,4 @@
+import { Action, Actor, type Client, type State } from "@rivetkit/effect";
 import {
 	Context,
 	Effect,
@@ -5,12 +6,6 @@ import {
 	Schema,
 	SchemaTransformation,
 } from "effect";
-import {
-	Action,
-	Actor,
-	type Client,
-	type State,
-} from "@rivetkit/effect";
 import type { RawAccess } from "rivetkit/db";
 import { db } from "rivetkit/db";
 import { describe, expectTypeOf, test } from "vitest";
