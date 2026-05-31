@@ -250,9 +250,12 @@ export const TransformedStateActorLive = TransformedStateActor.toLayer(
 					Effect.succeed(
 						rawWakeState as unknown as typeof EncodedTransformedState.Type,
 					),
-				GetDecodedState: () => State.get(state),
+				GetDecodedState: () => State.get(state).pipe(Effect.orDie),
 				SetTransformedStateAndSleep: ({ payload }) =>
-					State.set(state, payload).pipe(Effect.andThen(sleep)),
+					State.set(state, payload).pipe(
+						Effect.andThen(sleep),
+						Effect.orDie,
+					),
 				SetRawWakeStateAndSleep: ({ payload }) =>
 					Effect.tryPromise(async () => {
 						rawRivetkitContext.state =
@@ -388,7 +391,7 @@ export const CounterLive = Counter.toLayer(
 								...s,
 								count: s.count + payload.amount,
 							}),
-						);
+						).pipe(Effect.orDie);
 						yield* sleep;
 						return count;
 					}),
@@ -400,7 +403,7 @@ export const CounterLive = Counter.toLayer(
 								...s,
 								when: payload.when,
 							}),
-						);
+						).pipe(Effect.orDie);
 						yield* sleep;
 						return when;
 					}),
@@ -412,7 +415,7 @@ export const CounterLive = Counter.toLayer(
 								...s,
 								tags: payload.tags,
 							}),
-						);
+						).pipe(Effect.orDie);
 						yield* sleep;
 						return tags;
 					}),
@@ -424,11 +427,11 @@ export const CounterLive = Counter.toLayer(
 								...s,
 								scaled: payload.amount,
 							}),
-						);
+						).pipe(Effect.orDie);
 						yield* sleep;
 						return scaled;
 					}),
-				GetPersistedState: () => State.get(state),
+				GetPersistedState: () => State.get(state).pipe(Effect.orDie),
 				// Per-actor SQLite is provisioned via the `db:` option on
 				// `Counter.toLayer` below. The build effect destructures `db`
 				// from `rawRivetkitContext`, so handlers reach SQLite
@@ -538,8 +541,9 @@ export const StrictLive = Strict.toLayer(
 				StrictSetUnhandled: ({ payload }) =>
 					State.set(state, payload.value).pipe(
 						Effect.as(payload.value),
+						Effect.orDie,
 					),
-				StrictGet: () => State.get(state),
+				StrictGet: () => State.get(state).pipe(Effect.orDie),
 			});
 		}),
 	{
