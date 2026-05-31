@@ -1,0 +1,19 @@
+{
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		// Use incremental builds with project references.
+		"incremental": true,
+		"composite": true,
+		// Target modern JavaScript (ES2022+) whilst staying closely compatible with the Node.js module system.
+		"target": "ES2022",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"noEmit": false,
+		"declarationMap": true,
+		"sourceMap": true
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["src/**/*.test.ts", "src/**/*.test-d.ts"]
+}

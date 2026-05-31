@@ -7,7 +7,7 @@ import {
 	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
-import * as Client from "./Client";
+import * as Client from "./Client.ts";
 
 const TypeId = "~@rivetkit/effect/Registry";
 type ServerlessOptions = NonNullable<

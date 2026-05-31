@@ -1,10 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
+import { Action, Actor, Registry } from "@rivetkit/effect";
 import { Effect, Layer } from "effect";
 import { HttpEffect } from "effect/unstable/http";
 import { vi } from "vitest";
-import * as Action from "./Action";
-import * as Actor from "./Actor";
-import * as Registry from "./Registry";
 
 const TestActor = Actor.make("TestActor", {
 	actions: [Action.make("Test")],

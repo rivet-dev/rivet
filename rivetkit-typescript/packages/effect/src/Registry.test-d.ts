@@ -1,13 +1,11 @@
 import { type Context, Effect, Layer, type Scope } from "effect";
+import { Action, Actor, Registry } from "@rivetkit/effect";
 import type {
 	HttpServerError,
 	HttpServerRequest,
 	HttpServerResponse,
 } from "effect/unstable/http";
 import { describe, expectTypeOf, test } from "vitest";
-import * as Action from "./Action";
-import * as Actor from "./Actor";
-import * as Registry from "./Registry";
 
 const TestActor = Actor.make("TestActor", {
 	actions: [Action.make("Test")],

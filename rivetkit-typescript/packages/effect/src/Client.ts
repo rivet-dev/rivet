@@ -1,11 +1,11 @@
 import { Context, Effect, Layer, Record, Result, Schema } from "effect";
 import * as RivetkitClient from "rivetkit/client";
 import * as RivetkitErrors from "rivetkit/errors";
-import type * as Action from "./Action";
-import type * as Actor from "./Actor";
-import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
-import { rpcSystem, type TraceMeta } from "./internal/tracing";
-import * as RivetError from "./RivetError";
+import type * as Action from "./Action.ts";
+import type * as Actor from "./Actor.ts";
+import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope.ts";
+import { rpcSystem, type TraceMeta } from "./internal/tracing.ts";
+import * as RivetError from "./RivetError.ts";
 
 const TypeId = "~@rivetkit/effect/Client";
 

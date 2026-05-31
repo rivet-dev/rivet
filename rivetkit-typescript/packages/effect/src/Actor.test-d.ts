@@ -5,13 +5,15 @@ import {
 	Schema,
 	SchemaTransformation,
 } from "effect";
+import {
+	Action,
+	Actor,
+	type Client,
+	type State,
+} from "@rivetkit/effect";
 import type { RawAccess } from "rivetkit/db";
 import { db } from "rivetkit/db";
 import { describe, expectTypeOf, test } from "vitest";
-import * as Action from "./Action";
-import * as Actor from "./Actor";
-import type * as Client from "./Client";
-import type * as State from "./State";
 
 class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
 	"SomeDep",

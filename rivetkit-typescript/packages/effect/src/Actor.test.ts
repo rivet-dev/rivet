@@ -1,8 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
+import { Actor, State } from "@rivetkit/effect";
 import { Context, Effect, Layer } from "effect";
 import type * as Rivetkit from "rivetkit";
-import * as Actor from "./Actor";
-import * as State from "./State";
 
 class Prefix extends Context.Service<Prefix, { readonly value: string }>()(
 	"Actor.test/Prefix",

@@ -18,15 +18,15 @@ import {
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
-import type * as Action from "./Action";
-import * as Client from "./Client";
-import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
-import type * as StateOptions from "./internal/StateOptions";
-import { readTraceMeta, rpcSystem } from "./internal/tracing";
-import { hasStringProperty } from "./internal/utils";
-import * as Registry from "./Registry";
-import type * as RivetError from "./RivetError";
-import * as State from "./State";
+import type * as Action from "./Action.ts";
+import * as Client from "./Client.ts";
+import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope.ts";
+import type * as StateOptions from "./internal/StateOptions.ts";
+import { readTraceMeta, rpcSystem } from "./internal/tracing.ts";
+import { hasStringProperty } from "./internal/utils.ts";
+import * as Registry from "./Registry.ts";
+import type * as RivetError from "./RivetError.ts";
+import * as State from "./State.ts";
 
 const TypeId = "~@rivetkit/effect/Actor";
 

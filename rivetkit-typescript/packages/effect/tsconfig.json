@@ -2,7 +2,10 @@
 	"extends": "../../../tsconfig.base.json",
 	"compilerOptions": {
 		"types": [],
-		"verbatimModuleSyntax": true,
+		"moduleDetection": "force", // Treat every non-declaration file as a module.
+		"verbatimModuleSyntax": true, // Only transform/eliminate type-only import/export statements.
+		"rewriteRelativeImportExtensions": true, // Rewrite `.ts` imports to `.js` at build time.
+		"noEmit": true,
 		"plugins": [
 			{
 				"name": "@effect/language-service",
@@ -14,5 +17,5 @@
 			}
 		]
 	},
-	"include": ["src/**/*", "test/**/*"]
+	"include": ["src/**/*.ts", "test/**/*.ts"]
 }

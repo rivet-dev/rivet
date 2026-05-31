@@ -1,9 +1,8 @@
 import { assert, describe, it } from "@effect/vitest";
+import { Client, RivetError } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
-import * as Client from "./Client";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
-import * as RivetError from "./RivetError";
 
 describe("makeRivetkitActionFailureClassifier", () => {
 	const ExpectedError = Schema.Struct({

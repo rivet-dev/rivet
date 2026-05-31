@@ -1,6 +1,6 @@
 import { assert, describe, it } from "@effect/vitest";
+import { State } from "@rivetkit/effect";
 import { Effect, Exit, PubSub, Stream } from "effect";
-import * as State from "./State";
 
 // Helper: build a State backed by a plain mutable cell, with
 // Effect-typed read/write closures. Mirrors how Registry wires

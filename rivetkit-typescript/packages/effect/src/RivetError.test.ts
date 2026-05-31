@@ -1,7 +1,7 @@
 import { assert, describe, it } from "@effect/vitest";
+import { RivetError } from "@rivetkit/effect";
 import { Duration, Effect, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
-import * as RivetError from "./RivetError";
 
 describe("RivetError", () => {
 	it("preserves non-Rivet causes as UnknownError", () => {
