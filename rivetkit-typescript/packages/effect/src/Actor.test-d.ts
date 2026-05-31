@@ -17,8 +17,13 @@ class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
 	"SomeDep",
 ) {}
 
+const Ping = Action.make("Ping", {
+	success: Schema.Number,
+	error: Schema.String,
+});
+
 const TestActor = Actor.make("TestActor", {
-	actions: [Action.make("GetContext")],
+	actions: [Ping],
 });
 
 const TestState = {
@@ -80,15 +85,15 @@ describe("Actor.make(...).toLayer", () => {
 
 	test("accepts a plain action handlers object", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith({
-			GetContext: () => Effect.void,
+			Ping: () => Effect.succeed(0),
 		});
 	});
 
-	test("accepts an Effect of action handlers", () => {
+	test("accepts an effect of action handlers", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith(
 			Effect.gen(function* () {
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			}),
 		);
@@ -97,7 +102,7 @@ describe("Actor.make(...).toLayer", () => {
 	test("accepts a function returning a plain action handlers object", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith(
 			(_wakeOptions: any) => ({
-				GetContext: () => Effect.void,
+				Ping: () => Effect.succeed(0),
 			}),
 		);
 	});
@@ -111,7 +116,7 @@ describe("Actor.make(...).toLayer", () => {
 			).toEqualTypeOf<never>();
 
 			return {
-				GetContext: () => Effect.void,
+				Ping: () => Effect.succeed(0),
 			};
 		});
 
@@ -124,7 +129,7 @@ describe("Actor.make(...).toLayer", () => {
 			).toEqualTypeOf<never>();
 
 			return {
-				GetContext: () => Effect.void,
+				Ping: () => Effect.succeed(0),
 			};
 		}, {});
 	});
@@ -137,7 +142,7 @@ describe("Actor.make(...).toLayer", () => {
 				>();
 
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			},
 			{ state: TestState },
@@ -165,7 +170,7 @@ describe("Actor.make(...).toLayer", () => {
 				>();
 
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			},
 			{ state: TransformedState },
@@ -180,7 +185,7 @@ describe("Actor.make(...).toLayer", () => {
 				).toEqualTypeOf<{ readonly count: number }>();
 
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			},
 			{ state: TestState },
@@ -205,7 +210,7 @@ describe("Actor.make(...).toLayer", () => {
 				}>();
 
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			},
 			{ state: TransformedState },
@@ -220,24 +225,24 @@ describe("Actor.make(...).toLayer", () => {
 				).toEqualTypeOf<RawAccess>();
 
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			},
 			{ db: db() },
 		);
 	});
 
-	test("accepts a function returning an Effect of action handlers", () => {
+	test("accepts a function returning an effect of action handlers", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith((_wakeOptions: any) =>
 			Effect.gen(function* () {
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			}),
 		);
 	});
 
-	test("accepts an Effect that resolves to a wake function", () => {
+	test("accepts an effect that resolves to a wake function", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith(
 			Effect.gen(function* () {
 				// Allow for initialization logic before the per-entity wake function is called
@@ -245,7 +250,7 @@ describe("Actor.make(...).toLayer", () => {
 				return (_wakeOptions: any) =>
 					Effect.gen(function* () {
 						return {
-							GetContext: () => Effect.void,
+							Ping: () => Effect.succeed(0),
 						};
 					});
 			}),
@@ -256,7 +261,7 @@ describe("Actor.make(...).toLayer", () => {
 		expectTypeOf(TestActor.toLayer).toBeCallableWith(
 			Effect.fn("wake")(function* (_wakeOptions) {
 				return {
-					GetContext: () => Effect.void,
+					Ping: () => Effect.succeed(0),
 				};
 			}),
 		);
@@ -268,22 +273,216 @@ describe("Actor.make(...).toLayer", () => {
 
 	test("action handler's envelope is typed against the action", () => {
 		TestActor.toLayer({
-			GetContext: (envelope) => {
-				expectTypeOf(envelope._tag).toEqualTypeOf<"GetContext">();
+			Ping: (envelope) => {
+				expectTypeOf(envelope._tag).toEqualTypeOf<"Ping">();
 				expectTypeOf(envelope.action).toExtend<Action.Any>();
-				return Effect.void;
+				return Effect.succeed(0);
 			},
 		});
 	});
 
+	test("action handler return success is type checked", () => {
+		// Plain action handlers object.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith({
+			Ping: () => Effect.succeed(0),
+		});
+
+		TestActor.toLayer({
+			// @ts-expect-error: Ping must return the declared number success type.
+			Ping: () => Effect.succeed("not a number"),
+		});
+
+		// Effect of action handlers.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.gen(function* () {
+				return {
+					Ping: () => Effect.succeed(0),
+				};
+			}),
+		);
+
+		TestActor.toLayer(
+			// @ts-expect-error: Ping must return the declared number success type.
+			Effect.gen(function* () {
+				return {
+					Ping: () => Effect.succeed("not a number"),
+				};
+			}),
+		);
+
+		// Function returning a plain action handlers object.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(() => ({
+			Ping: () => Effect.succeed(0),
+		}));
+
+		// @ts-expect-error: Ping must return the declared number success type.
+		TestActor.toLayer(() => ({
+			Ping: () => Effect.succeed("not a number"),
+		}));
+
+		// Function returning an effect of action handlers.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(() =>
+			Effect.gen(function* () {
+				return {
+					Ping: () => Effect.succeed(0),
+				};
+			}),
+		);
+
+		// @ts-expect-error: Ping must return the declared number success type.
+		TestActor.toLayer(() =>
+			Effect.gen(function* () {
+				return {
+					Ping: () => Effect.succeed("not a number"),
+				};
+			}),
+		);
+
+		// Effect that resolves to a wake function.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.gen(function* () {
+				return () => ({
+					Ping: () => Effect.succeed(0),
+				});
+			}),
+		);
+
+		TestActor.toLayer(
+			// @ts-expect-error: Ping must return the declared number success type.
+			Effect.gen(function* () {
+				return () => ({
+					Ping: () => Effect.succeed("not a number"),
+				});
+			}),
+		);
+
+		// Effect.fn returning action handlers.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.fn("wake")(function* () {
+				return {
+					Ping: () => Effect.succeed(0),
+				};
+			}),
+		);
+
+		TestActor.toLayer(
+			// @ts-expect-error: Ping must return the declared number success type.
+			Effect.fn("wake")(function* () {
+				return {
+					Ping: () => Effect.succeed("not a number"),
+				};
+			}),
+		);
+	});
+
+	test("action handler return error is type checked", () => {
+		// Plain action handlers object.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith({
+			Ping: () => Effect.succeed(0),
+		});
+
+		TestActor.toLayer({
+			// @ts-expect-error: Ping can only fail with its declared action error type.
+			// @effect-diagnostics effect/missingEffectError:off
+			Ping: () => Effect.fail(1),
+		});
+
+		// Effect of action handlers.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.gen(function* () {
+				return {
+					Ping: () => Effect.succeed(0),
+				};
+			}),
+		);
+
+		TestActor.toLayer(
+			// @ts-expect-error: Ping can only fail with its declared action error type.
+			Effect.gen(function* () {
+				return {
+					// @effect-diagnostics effect/missingEffectError:off
+					Ping: () => Effect.fail(1),
+				};
+			}),
+		);
+
+		// Function returning a plain action handlers object.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(() => ({
+			Ping: () => Effect.succeed(0),
+		}));
+
+		// @ts-expect-error: Ping can only fail with its declared action error type.
+		TestActor.toLayer(() => ({
+			// @effect-diagnostics effect/missingEffectError:off
+			Ping: () => Effect.fail(1),
+		}));
+
+		// Function returning an effect of action handlers.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(() =>
+			Effect.gen(function* () {
+				return {
+					Ping: () => Effect.succeed(0),
+				};
+			}),
+		);
+
+		// @ts-expect-error: Ping can only fail with its declared action error type.
+		TestActor.toLayer(() =>
+			Effect.gen(function* () {
+				return {
+					// @effect-diagnostics effect/missingEffectError:off
+					Ping: () => Effect.fail(1),
+				};
+			}),
+		);
+
+		// Effect that resolves to a wake function.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.gen(function* () {
+				return () => ({
+					Ping: () => Effect.succeed(0),
+				});
+			}),
+		);
+
+		TestActor.toLayer(
+			// @ts-expect-error: Ping can only fail with its declared action error type.
+			Effect.gen(function* () {
+				return () => ({
+					// @effect-diagnostics effect/missingEffectError:off
+					Ping: () => Effect.fail(1),
+				});
+			}),
+		);
+
+		// Effect.fn returning action handlers.
+		expectTypeOf(TestActor.toLayer).toBeCallableWith(
+			Effect.fn("wake")(function* () {
+				return {
+					Ping: () => Effect.succeed(0),
+				};
+			}),
+		);
+
+		TestActor.toLayer(
+			// @ts-expect-error: Ping can only fail with its declared action error type.
+			Effect.fn("wake")(function* () {
+				return {
+					// @effect-diagnostics effect/missingEffectError:off
+					Ping: () => Effect.fail(1),
+				};
+			}),
+		);
+	});
+
 	test("missing action handler is rejected", () => {
-		// @ts-expect-error: GetContext handler is required
+		// @ts-expect-error: Ping handler is required
 		TestActor.toLayer({});
 	});
 
 	test.todo("unknown action handler key is rejected", () => {
 		TestActor.toLayer({
-			GetContext: () => Effect.void,
+			Ping: () => Effect.succeed(0),
 			// TODO: toLayer should reject unknown action handler keys
 			Unknown: () => Effect.void,
 		});
@@ -293,7 +492,7 @@ describe("Actor.make(...).toLayer", () => {
 		const layer = TestActor.toLayer(
 			Effect.gen(function* () {
 				yield* SomeDep;
-				return { GetContext: () => Effect.void };
+				return { Ping: () => Effect.succeed(0) };
 			}),
 		);
 		type Reqs =
