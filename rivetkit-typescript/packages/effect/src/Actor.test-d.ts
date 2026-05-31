@@ -502,6 +502,49 @@ describe("Actor.make(...).toLayer", () => {
 	});
 });
 
+describe("Actor.make(...).of", () => {
+	test("preserves the action handlers object type", () => {
+		const handlers = {
+			Ping: () => Effect.succeed(0),
+		};
+
+		expectTypeOf(TestActor.of(handlers)).toEqualTypeOf<typeof handlers>();
+	});
+
+	test("action handler's envelope is typed against the action", () => {
+		TestActor.of({
+			Ping: (envelope) => {
+				expectTypeOf(envelope._tag).toEqualTypeOf<"Ping">();
+				expectTypeOf(envelope.action).toEqualTypeOf<typeof Ping>();
+				return Effect.succeed(0);
+			},
+		});
+	});
+
+	test("action handler return success is type checked", () => {
+		expectTypeOf(TestActor.of).toBeCallableWith({
+			Ping: () => Effect.succeed(0),
+		});
+
+		TestActor.of({
+			// @ts-expect-error: Ping must return the declared number success type.
+			Ping: () => Effect.succeed("not a number"),
+		});
+	});
+
+	test("action handler return error is type checked", () => {
+		expectTypeOf(TestActor.of).toBeCallableWith({
+			Ping: () => Effect.succeed(0),
+		});
+
+		TestActor.of({
+			// @ts-expect-error: Ping can only fail with its declared action error type.
+			// @effect-diagnostics effect/missingEffectError:off
+			Ping: () => Effect.fail(1),
+		});
+	});
+});
+
 describe("Actor.make(...).client", () => {
 	test("yields a typed Accessor", () => {
 		expectTypeOf(TestActor.client).toEqualTypeOf<
