@@ -127,7 +127,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 							name: payload.name,
 							initialized: true,
 						};
-					}),
+					}).pipe(Effect.orDie),
 				Join: ({ payload }) =>
 					Effect.gen(function* () {
 						const joinedAt = yield* DateTime.now;
@@ -141,7 +141,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 								...current,
 								members: [...current.members, member],
 							}),
-						);
+						).pipe(Effect.orDie);
 
 						rawRivetkitContext.broadcast("memberJoined", {
 							member: {
@@ -190,7 +190,9 @@ export const ChatRoomLive = ChatRoom.toLayer(
 
 						// If Review fails with BannedWordsError, that typed error
 						// flows through SendMessage's declared error channel.
-						yield* moderator.Review({ text: payload.text });
+						yield* moderator
+							.Review({ text: payload.text })
+							.pipe(Effect.catchTag("RivetError", Effect.die));
 
 						const createdAt = yield* DateTime.now;
 						yield* Effect.tryPromise(() =>
