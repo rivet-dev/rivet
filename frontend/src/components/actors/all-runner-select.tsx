@@ -9,16 +9,22 @@ interface AllRunnerSelectProps {
 }
 
 export const useAllRunners = () => {
+	const dataProvider = useEngineCompatDataProvider();
+	const hasRunnerNames = "runnerNamesQueryOptions" in dataProvider;
 	const {
 		data: runners = [],
 		hasNextPage: runnersHasNextPage,
 		fetchNextPage: fetchNextRunnersPage,
 		isLoading: runnersIsLoading,
 		isFetchingNextPage: runnersIsFetchingNextPage,
-	} = useInfiniteQuery(
-		useEngineCompatDataProvider().runnerNamesQueryOptions(),
-	);
+	} = useInfiniteQuery({
+		...(hasRunnerNames
+			? dataProvider.runnerNamesQueryOptions()
+			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+		enabled: hasRunnerNames,
+	});
 
+	const hasRunnerConfigs = "runnerConfigsQueryOptions" in dataProvider;
 	const {
 		data: serverlessRunners = [],
 		hasNextPage: serverlessHasNextPage,
@@ -26,11 +32,10 @@ export const useAllRunners = () => {
 		isLoading: serverlessIsLoading,
 		isFetchingNextPage: serverlessIsFetchingNextPage,
 	} = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions({
-			variant: "serverless",
-		}),
-		select: (data) =>
-			data.pages.flatMap((page) => Object.keys(page.runnerConfigs)),
+		...(hasRunnerConfigs
+			? { ...dataProvider.runnerConfigsQueryOptions({ variant: "serverless" }), select: (data: { pages: { runnerConfigs: Record<string, unknown> }[] }) => data.pages.flatMap((page) => Object.keys(page.runnerConfigs)) }
+			: { queryKey: ["noop-runner-configs"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+		enabled: hasRunnerConfigs,
 	});
 
 	const allRunners = useMemo(() => {

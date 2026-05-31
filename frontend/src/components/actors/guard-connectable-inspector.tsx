@@ -14,7 +14,11 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useNavigate, useRouteContext, useSearch } from "@tanstack/react-router";
+import {
+	useNavigate,
+	useRouteContext,
+	useSearch,
+} from "@tanstack/react-router";
 import {
 	createContext,
 	type ReactNode,
@@ -32,8 +36,8 @@ import { useConfig } from "../lib/config";
 import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
-import { resumeAutoWake, useAutoWakeSuppression } from "./auto-wake-suppression";
 import {
+	actorMetadataQueryOptions,
 	actorWakeUpMutationOptions,
 	actorWakeUpQueryOptions,
 	ActorInspectorProvider as InspectorProvider,
@@ -45,6 +49,10 @@ import {
 	QueriedActorError,
 	QueriedActorStatusAdditionalInfo,
 } from "./actor-status-label";
+import {
+	resumeAutoWake,
+	useAutoWakeSuppression,
+} from "./auto-wake-suppression";
 import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
 import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId, ActorStatus } from "./queries";
@@ -140,7 +148,9 @@ export function GuardConnectableInspector({
 			// observe as a status transition.
 			if (suppression === "sleep") {
 				return (
-					<InspectorGuardContext.Provider value={<TransitioningActor />}>
+					<InspectorGuardContext.Provider
+						value={<TransitioningActor />}
+					>
 						{children}
 					</InspectorGuardContext.Provider>
 				);
@@ -343,10 +353,7 @@ export function buildInspectorTokenErrorMessage(
 		isVersionOutdated(metadata.version, RIVET_KIT_MIN_VERSION)
 	) {
 		return (
-			<OutdatedRivetKit
-				currentVersion={metadata.version}
-				error={error}
-			/>
+			<OutdatedRivetKit currentVersion={metadata.version} error={error} />
 		);
 	}
 
@@ -379,7 +386,9 @@ export function buildInspectorTokenErrorMessage(
 					icon={faExclamationTriangle}
 					className="text-4xl text-destructive"
 				/>
-				<p className="font-semibold">Inspector authentication failed.</p>
+				<p className="font-semibold">
+					Inspector authentication failed.
+				</p>
 				<p className="text-sm text-muted-foreground">
 					The dashboard fetches the per-actor inspector token from the
 					engine KV API. This typically indicates a permissions or
@@ -532,13 +541,10 @@ function UnexpectedInspectorError({
 				icon={faExclamationTriangle}
 				className="text-4xl text-destructive"
 			/>
-			<p className="font-semibold">
-				Unable to connect to the Inspector.
-			</p>
+			<p className="font-semibold">Unable to connect to the Inspector.</p>
 			<p className="text-sm text-muted-foreground">
-				An unexpected error occurred. Our team has been notified.
-				Please try again later or contact support if the issue
-				persists.
+				An unexpected error occurred. Our team has been notified. Please
+				try again later or contact support if the issue persists.
 			</p>
 			<ErrorDetails error={error} />
 		</Info>
@@ -809,15 +815,34 @@ function InspectorGuard({
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const {
-		connectionStatus,
-		isInspectorAvailable,
-		actorMetadataQueryOptions,
-	} = useActorInspector();
+	const { connectionStatus, isInspectorAvailable } = useActorInspector();
+	const { credentials } = useActorEngineContext({ actorId });
 
-	const { data, isPending, error } = useQuery(
-		actorMetadataQueryOptions(actorId),
-	);
+	const {
+		data,
+		isPending,
+		error: liveError,
+	} = useQuery(actorMetadataQueryOptions({ actorId, credentials }));
+
+	// React Query resets `status` to "pending" (clearing the live error) every
+	// time `refetchInterval` re-runs an errored query that has no cached data.
+	// Latch the last error so the UI doesn't flash back to the loading state
+	// between failed fetches.
+	const lastErrorRef = useRef<unknown>(null);
+
+	useEffect(() => {
+		if (liveError) {
+			lastErrorRef.current = liveError;
+		} else if (data) {
+			lastErrorRef.current = null;
+		}
+	}, [data, liveError]);
+
+	const error = liveError ?? lastErrorRef.current;
+
+	if (error) {
+		return <OutdatedInspector error={error}>{children}</OutdatedInspector>;
+	}
 
 	if (isPending) {
 		return (
@@ -827,10 +852,8 @@ function InspectorGuard({
 		);
 	}
 
-	if (!data || error || !isInspectorAvailable) {
-		return (
-			<OutdatedInspector error={error}>{children}</OutdatedInspector>
-		);
+	if (!data || !isInspectorAvailable) {
+		return <OutdatedInspector error={error}>{children}</OutdatedInspector>;
 	}
 
 	if (connectionStatus === "error") {

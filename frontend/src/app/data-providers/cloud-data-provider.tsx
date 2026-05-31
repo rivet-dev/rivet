@@ -201,23 +201,23 @@ export const createGlobalContext = () => {
 			});
 		},
 
-		// imagesQueryOptions(opts: { organization: string; project: string }) {
-		// 	return infiniteQueryOptions({
-		// 		queryKey: [opts, "images"],
-		// 		queryFn: async ({ pageParam }) => {
-		// 			return await client.docker.listImages(opts.project, {
-		// 				limit: 10,
-		// 				cursor: pageParam ?? undefined,
-		// 				org: opts.organization,
-		// 			});
-		// 		},
-		// 		getNextPageParam: (lastPage) => {
-		// 			return lastPage.pagination.cursor;
-		// 		},
-		// 		initialPageParam: undefined as string | undefined,
-		// 		select: (data) => data.pages.flatMap((page) => page.images),
-		// 	});
-		// },
+		imagesQueryOptions(opts: { organization: string; project: string; limit?: number }) {
+			return infiniteQueryOptions({
+				queryKey: [opts, "images"],
+				queryFn: async ({ pageParam }) => {
+					return await client.docker.listImages(opts.project, {
+						limit: opts.limit ?? 10,
+						cursor: pageParam ?? undefined,
+						org: opts.organization,
+					});
+				},
+				getNextPageParam: (lastPage) => {
+					return lastPage.pagination.cursor;
+				},
+				initialPageParam: undefined as string | undefined,
+				select: (data) => data.pages.flatMap((page) => page.images),
+			});
+		},
 	};
 };
 
@@ -1003,12 +1003,34 @@ export const createProjectContext = ({
 				repository: opts.repository,
 			});
 		},
-		// currentProjectImagesQueryOptions() {
-		// 	return parent.imagesQueryOptions({
-		// 		organization,
-		// 		project,
-		// 	});
-		// },
+		currentProjectImagesQueryOptions(opts?: { limit?: number }) {
+			return parent.imagesQueryOptions({
+				organization,
+				project,
+				limit: opts?.limit,
+			});
+		},
+		// Polls the project image registry. Used by the onboarding frontend
+		// step to hold back the "Waiting for an Actor" caption until the user
+		// has pushed their first image to Rivet Compute.
+		currentProjectFirstImagePresentQueryOptions() {
+			return queryOptions({
+				queryKey: [
+					organization,
+					project,
+					"images",
+					"first-present",
+				] as QueryKey,
+				queryFn: async () => {
+					const response = await client.docker.listImages(project, {
+						limit: 1,
+						org: organization,
+					});
+					return response.images.length > 0;
+				},
+				refetchInterval: 5000,
+			});
+		},
 		upsertCurrentProjectManagedPoolMutationOptions() {
 			return mutationOptions({
 				mutationKey: [organization, project, "managed-pool", "upsert"],

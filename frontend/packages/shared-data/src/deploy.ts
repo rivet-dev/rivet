@@ -6,7 +6,7 @@ import {
 	faHetznerH,
 	faKubernetes,
 	faRailway,
-	// faRivet,
+	faRivet,
 	faRocket,
 	faServer,
 	faVercel,
@@ -25,15 +25,15 @@ export interface DeployOption {
 }
 
 export const deployOptions = [
-	// {
-	// 	displayName: "Rivet Cloud",
-	// 	name: "rivet" as const,
-	// 	href: "/docs/connect/rivet-compute",
-	// 	description:
-	// 		"Deploy to Rivet's managed compute platform",
-	// 	icon: faRivet as any,
-	// 	badge: "Beta",
-	// },
+	{
+		displayName: "Rivet Compute",
+		name: "rivet" as const,
+		href: "/docs/connect/rivet-compute",
+		description:
+			"Deploy to Rivet's managed compute platform",
+		icon: faRivet as any,
+		badge: "Beta",
+	},
 	{
 		displayName: "Vercel",
 		name: "vercel" as const,

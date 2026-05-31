@@ -28,12 +28,13 @@ if (features.platform) {
 | `acl` | Engine enforces token auth on the public endpoint. Implied by `platform`; set independently for enterprise. |
 | `billing` | Billing UI. |
 | `captcha` | Turnstile captcha on auth forms. Requires `auth`. |
+| `compute` | Rivet Compute (managed pool) UI: namespace deployments + logs sidebar links and routes, actor-details deployment-logs tab, and the Rivet provider option in onboarding / Add Provider. Requires `platform`. |
 | `support` | Support/help affordances. |
 | `branding` | Rivet branding chrome. |
 | `datacenter` | Datacenter-related UI. |
 | `danger-zone` | Destructive settings actions (`features.dangerZone`). |
 
-Deployment flavors map to flag sets roughly as: **cloud** = all on; **OSS** = `auth`/`platform`/`acl` off; **enterprise** = `acl` on, `auth`/`platform` off (engine enforces auth without a login UI). Do not treat `platform`/`auth` as "engine requires credentials" — that is `acl`.
+Deployment flavors map to flag sets roughly as: **cloud** = all on; **OSS** = `auth`/`platform`/`acl` off; **enterprise** = `acl` on, `auth`/`platform` off (engine enforces auth without a login UI). Do not treat `platform`/`auth` as "engine requires credentials" — that is `acl`. **`compute` is opt-in even on cloud** — each Railway service adds it to `VITE_FEATURE_FLAGS` per-environment (e.g. staging on, prod off) rather than inheriting the cloud default-on set.
 
 ## When to add a new flag
 

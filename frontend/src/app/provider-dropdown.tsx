@@ -22,6 +22,7 @@ import {
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { deriveProviderFromMetadata } from "@/lib/data";
+import { features } from "@/lib/features";
 
 export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	const navigate = useNavigate();
@@ -100,8 +101,8 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
-				<RivetCloudDropdownMenuItem />
+			<DropdownMenuContent className="min-w-[--radix-popper-anchor-width]">
+				{features.compute ? <RivetCloudDropdownMenuItem /> : null}
 				{externalClouds}
 			</DropdownMenuContent>
 		</DropdownMenu>

@@ -136,8 +136,31 @@ async function fetchLogsHistory(
 	return response.json();
 }
 
+// Cloud Run emits this on every container cold-start, prefixed with its own
+// timestamp on stderr. When the user hasn't pushed an image yet, surface a
+// Rivet-flavored hint instead of leaky provider detail. Matched by suffix
+// (after Cloud Run's leading "YYYY/MM/DD HH:MM:SS " prefix) and gated on
+// `stream === "stderr"` so we don't grab a user-emitted line that happens to
+// contain the same text.
+const CLOUD_RUN_HELLO_SUFFIX =
+	"Hello from Cloud Run! The container started successfully and is listening for HTTP requests on port 8080";
+const RIVET_COMPUTE_HELLO =
+	"Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/connect/rivet-compute to learn more.";
+
+function rewriteLogEntry<T extends { message: string; stream?: string }>(
+	data: T,
+): T {
+	if (
+		data.stream === "stderr" &&
+		data.message.endsWith(CLOUD_RUN_HELLO_SUFFIX)
+	) {
+		return { ...data, message: RIVET_COMPUTE_HELLO };
+	}
+	return data;
+}
+
 function historyToLogEvent(item: Rivet.LogHistoryResponseItem): RivetSse.LogStreamEvent.Log {
-	return { event: "log", data: item };
+	return { event: "log", data: rewriteLogEntry(item) };
 }
 
 async function streamWithRetry(
@@ -174,7 +197,7 @@ async function streamWithRetry(
 				} else if (event.event === "error") {
 					return { error: event.data.message };
 				} else if (event.event === "log") {
-					onEntry(event);
+					onEntry({ ...event, data: rewriteLogEntry(event.data) });
 				}
 			}
 		} catch (err) {
