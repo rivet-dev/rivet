@@ -34,9 +34,9 @@ export async function sendHttpRequestToGateway(
 			bodyToSend = reqBody;
 
 			// If this is a streaming request, we need to convert the headers
-			// for the basic array buffer
+			// for the basic array buffer.
 			guardHeaders.delete("transfer-encoding");
-			guardHeaders.set("content-length", String(bodyToSend.byteLength));
+			guardHeaders.delete("content-length");
 		}
 	}
 
