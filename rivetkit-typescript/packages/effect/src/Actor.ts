@@ -3,7 +3,6 @@ import {
 	Context,
 	Effect,
 	Exit,
-	type Fiber,
 	FiberSet,
 	identity,
 	Layer,
@@ -13,22 +12,21 @@ import {
 	Record,
 	Schema,
 	Scope,
-	Semaphore,
 	Struct,
 	Tracer,
-	UndefinedOr,
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action.ts";
 import * as Client from "./Client.ts";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope.ts";
+import * as StateRuntime from "./internal/StateRuntime.ts";
 import type * as StateOptions from "./internal/StateOptions.ts";
 import { readTraceMeta, rpcSystem } from "./internal/tracing.ts";
 import { hasStringProperty } from "./internal/utils.ts";
 import * as Registry from "./Registry.ts";
 import type * as RivetError from "./RivetError.ts";
-import * as State from "./State.ts";
+import type * as State from "./State.ts";
 
 const TypeId = "~@rivetkit/effect/Actor";
 
@@ -463,6 +461,14 @@ export function toWakeHandler<
 	};
 }
 
+type ActorInstance<
+	ActionHandlers,
+	StateDefinition extends StateOptions.Any,
+> = StateRuntime.Instance<StateDefinition> & {
+	readonly actionHandlers: ActionHandlers;
+	readonly scope: Scope.Closeable;
+};
+
 const makeRivetkitActor = Effect.fnUntraced(function* <
 	Name extends string,
 	Actions extends Action.AnyWithProps,
@@ -488,27 +494,14 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	const services = yield* Effect.context<any>();
 
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
-	const stateCodec = UndefinedOr.map(effectOptions.state, (state) => ({
-		decodeUnknown: Schema.decodeUnknownEffect(
-			Schema.toCodecJson(state.schema),
-		),
-		encode: Schema.encodeEffect(Schema.toCodecJson(state.schema)),
-	}));
+	const stateRuntime =
+		effectOptions.state === undefined
+			? undefined
+			: yield* StateRuntime.make<State>(effectOptions.state);
 
 	const instances = MutableHashMap.empty<
 		string,
-		{
-			readonly actionHandlers: ActionHandlers;
-			readonly runFork: <A, E>(
-				effect: Effect.Effect<A, E, any>,
-				options?: Effect.RunOptions,
-			) => Fiber.Fiber<A, E>;
-			readonly scope: Scope.Closeable;
-			readonly state?: State.State<
-				StateOptions.Decoded<State>,
-				Schema.SchemaError
-			>;
-		}
+		ActorInstance<ActionHandlers, State>
 	>();
 
 	type RivetkitDefinition = RivetkitActorDefinitionFor<State, Database>;
@@ -517,34 +510,8 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		await Effect.runPromiseWith(services)(
 			Effect.gen(function* () {
 				const scope = yield* Scope.make();
-
-				const state = stateCodec
-					? // `c.state` IS the state — `State` is just a typed
-						// view + change stream over it. Effect-typed
-						// read/write so async schema transforms work,
-						// and `SchemaError` flows through `State.get` /
-						// `set` / `update` to action handlers. The
-						// wake-time initial read still dies if persisted
-						// state can't be decoded — no caller exists yet
-						// to handle it. `Schema.Top`'s requirements show
-						// up as `unknown`; the captured `services`
-						// context satisfies them at runtime, so we erase
-						// R at the boundary.
-						((yield* State.make(
-							() => stateCodec.decodeUnknown(c.state),
-							(next) =>
-								stateCodec.encode(next).pipe(
-									Effect.tap((encoded) =>
-										Effect.sync(() => {
-											c.state = encoded;
-										}),
-									),
-									Effect.asVoid,
-								),
-						).pipe(Effect.orDie)) as State.State<
-							StateOptions.Decoded<StateOptions.Any>,
-							Schema.SchemaError
-						>)
+				const state = stateRuntime
+					? yield* stateRuntime.makeStateView(c)
 					: undefined;
 
 				const context = Context.mergeAll(
@@ -716,35 +683,21 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		];
 	});
 
-	const onStateChange = (
-		c: Rivetkit.WakeContextOf<RivetkitDefinition>,
-		newState: unknown,
-	) => {
-		const instance = MutableHashMap.get(instances, c.actorId).pipe(
-			Option.getOrUndefined,
-		);
-		// Late state-change callbacks can arrive after teardown removed the
-		// instance. There is no live Effect state stream left to update.
-		if (!stateCodec || !instance) return;
-
-		instance.runFork(
-			Effect.gen(function* () {
-				const state = yield* Effect.fromNullishOr(instance.state).pipe(
-					Effect.orDie,
+	const onStateChange = stateRuntime
+		? (
+				c: Rivetkit.WakeContextOf<RivetkitDefinition>,
+				newState: unknown,
+			) => {
+				const instance = MutableHashMap.get(instances, c.actorId).pipe(
+					Option.getOrUndefined,
 				);
+				// Late state-change callbacks can arrive after teardown removed the
+				// instance. There is no live Effect state stream left to update.
+				if (!instance) return;
 
-				yield* Semaphore.withPermit(
-					state.semaphore,
-					Effect.gen(function* () {
-						const decoded = yield* stateCodec
-							.decodeUnknown(newState)
-							.pipe(Effect.orDie);
-						State.publishUnsafe(state, decoded);
-					}),
-				);
-			}),
-		);
-	};
+				stateRuntime.publishChange(instance, newState);
+			}
+		: undefined;
 
 	const cleanupInstance = Effect.fnUntraced(function* (actorId: string) {
 		const instance = MutableHashMap.get(instances, actorId);
@@ -780,22 +733,11 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		options: rivetkitOptions,
 		...(effectOptions.db ? { db: effectOptions.db } : {}),
 		onWake,
-		...(options.state
-			? {
-					createState: () =>
-						Effect.runPromiseWith(services)(
-							UndefinedOr.getOrThrow(stateCodec)
-								.encode(
-									UndefinedOr.getOrThrow(
-										options.state,
-									).initialValue(),
-								)
-								.pipe(Effect.orDie),
-						),
-				}
+		...(stateRuntime
+			? { createState: stateRuntime.createInitialState }
 			: {}),
 		actions,
-		onStateChange,
+		...(onStateChange ? { onStateChange } : {}),
 		onSleep,
 		onDestroy,
 	});
