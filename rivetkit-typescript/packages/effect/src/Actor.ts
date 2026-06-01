@@ -3,6 +3,7 @@ import {
 	Context,
 	Effect,
 	Exit,
+	FiberSet,
 	identity,
 	Layer,
 	MutableHashMap,
@@ -497,6 +498,9 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		string,
 		{
 			readonly actionHandlers: ActionHandlers;
+			readonly runFork: (
+				effect: Effect.Effect<void, unknown, any>,
+			) => unknown;
 			readonly scope: Scope.Closeable;
 			readonly state?: State.State<
 				StateOptions.Decoded<State>,
@@ -553,7 +557,6 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						Effect.sync(() => c.sleep()),
 					),
 				);
-
 				const wakeOptions = {
 					rawRivetkitContext: c,
 					...(state ? { state } : {}),
@@ -561,10 +564,16 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 				const actionHandlers = yield* wakeHandler(wakeOptions).pipe(
 					Effect.provide(context),
 				);
+				const runFork = yield* FiberSet.makeRuntime<
+					any,
+					void,
+					unknown
+				>().pipe(Effect.provide(Context.merge(services, context)));
 
 				yield* Effect.sync(() =>
 					MutableHashMap.set(instances, c.actorId, {
 						actionHandlers,
+						runFork,
 						scope,
 						state,
 					}),
@@ -700,15 +709,15 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		c: Rivetkit.WakeContextOf<RivetkitDefinition>,
 		newState: unknown,
 	) => {
-		void Effect.runForkWith(services)(
+		const instance = MutableHashMap.get(instances, c.actorId).pipe(
+			Option.getOrUndefined,
+		);
+		// Late state-change callbacks can arrive after teardown removed the
+		// instance. There is no live Effect state stream left to update.
+		if (!stateCodec || !instance) return;
+
+		instance.runFork(
 			Effect.gen(function* () {
-				if (!stateCodec) return;
-
-				const instance = yield* MutableHashMap.get(
-					instances,
-					c.actorId,
-				).pipe(Effect.fromOption, Effect.orDie);
-
 				const state = yield* Effect.fromNullishOr(instance.state).pipe(
 					Effect.orDie,
 				);
@@ -726,19 +735,24 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		);
 	};
 
+	const cleanupInstance = Effect.fnUntraced(function* (actorId: string) {
+		const instance = MutableHashMap.get(instances, actorId);
+		// Actor teardown can be reported more than once across sleep
+		// and destroy paths. Treat missing entries as already cleaned up.
+		if (Option.isNone(instance)) return;
+
+		MutableHashMap.remove(instances, actorId);
+		yield* Scope.close(instance.value.scope, Exit.void);
+	});
+
 	const onSleep = async (c: Rivetkit.SleepContextOf<RivetkitDefinition>) => {
-		await Effect.runPromiseWith(services)(
-			Effect.gen(function* () {
-				const instance = yield* MutableHashMap.get(
-					instances,
-					c.actorId,
-				).pipe(Effect.fromOption, Effect.orDie);
-				yield* Scope.close(instance.scope, Exit.void);
-				yield* Effect.sync(() => {
-					MutableHashMap.remove(instances, c.actorId);
-				});
-			}),
-		);
+		await Effect.runPromiseWith(services)(cleanupInstance(c.actorId));
+	};
+
+	const onDestroy = async (
+		c: Rivetkit.DestroyContextOf<RivetkitDefinition>,
+	) => {
+		await Effect.runPromiseWith(services)(cleanupInstance(c.actorId));
 	};
 
 	return Rivetkit.actor<
@@ -772,5 +786,6 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		actions,
 		onStateChange,
 		onSleep,
+		onDestroy,
 	});
 });
