@@ -231,13 +231,16 @@ pub struct VfsPreloadHintSnapshot {
 pub(crate) struct InitialPages {
 	pub pages: Vec<(u32, Vec<u8>)>,
 	pub head_txid: Option<u64>,
+	pub requested_page_count: u32,
 }
 
 impl From<Vec<(u32, Vec<u8>)>> for InitialPages {
 	fn from(pages: Vec<(u32, Vec<u8>)>) -> Self {
+		let requested_page_count = pages.len().try_into().unwrap_or(u32::MAX);
 		Self {
 			pages,
 			head_txid: None,
+			requested_page_count,
 		}
 	}
 }
@@ -284,6 +287,25 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub db_size_pages: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum SqliteOpenPhase {
+	InitialPreload,
+	VfsRegister,
+	WorkerReady,
+	Total,
+}
+
+impl SqliteOpenPhase {
+	pub fn as_label(self) -> &'static str {
+		match self {
+			SqliteOpenPhase::InitialPreload => "initial_preload",
+			SqliteOpenPhase::VfsRegister => "vfs_register",
+			SqliteOpenPhase::WorkerReady => "worker_ready",
+			SqliteOpenPhase::Total => "total",
+		}
+	}
+}
+
 pub trait SqliteVfsMetrics: Send + Sync {
 	fn record_resolve_pages(&self, _requested_pages: u64) {}
 
@@ -294,6 +316,16 @@ pub trait SqliteVfsMetrics: Send + Sync {
 	fn record_get_pages_request(&self, _pages: u64, _prefetch_pages: u64, _page_size: u64) {}
 
 	fn observe_get_pages_duration(&self, _duration_ns: u64) {}
+
+	fn observe_open_phase(
+		&self,
+		_phase: SqliteOpenPhase,
+		_outcome: &'static str,
+		_duration_ns: u64,
+	) {
+	}
+
+	fn record_startup_preload_pages(&self, _kind: &'static str, _pages: u64) {}
 
 	fn record_commit(&self) {}
 
@@ -1387,11 +1419,11 @@ impl VfsContext {
 				pgnos: to_fetch.clone(),
 				expected_generation: None,
 				expected_head_txid,
-			}))
-			.map_err(|err| GetPagesError::Other(err.to_string()))?;
+			}));
 		if let Some(metrics) = &self.metrics {
 			metrics.observe_get_pages_duration(get_pages_start.elapsed().as_nanos() as u64);
 		}
+		let response = response.map_err(|err| GetPagesError::Other(err.to_string()))?;
 
 		match response {
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
@@ -1915,7 +1947,11 @@ async fn fetch_initial_pages(
 				head_txid,
 				"sqlite initial page preload result"
 			);
-			Ok(InitialPages { pages, head_txid })
+			Ok(InitialPages {
+				pages,
+				head_txid,
+				requested_page_count: page_count,
+			})
 		}
 		Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(error)) => {
 			if !is_initial_main_page_missing(&error.message) {
@@ -1934,6 +1970,7 @@ async fn fetch_initial_pages(
 			Ok(InitialPages {
 				pages: Vec::new(),
 				head_txid: Some(0),
+				requested_page_count: page_count,
 			})
 		}
 		Err(err) => Err(format!("sqlite initial page fetch failed: {err}")),
@@ -2975,6 +3012,7 @@ impl SqliteVfs {
 			InitialPages {
 				pages: initial_pages,
 				head_txid: None,
+				requested_page_count: 1,
 			},
 			metrics,
 		)

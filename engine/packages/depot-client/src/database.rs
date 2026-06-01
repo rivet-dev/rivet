@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -8,7 +9,7 @@ use tokio::runtime::Handle;
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
 	vfs::{
-		NativeVfsHandle, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
+		NativeVfsHandle, SqliteOpenPhase, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
 		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
 		fetch_initial_pages_for_registration,
 	},
@@ -56,32 +57,150 @@ pub async fn open_database_from_transport(
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
 ) -> Result<NativeDatabaseHandle> {
+	let open_timer = SqliteOpenTimer::new(&metrics);
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
 	let config = VfsConfig::default();
 	let transport: SqliteTransportHandle = Arc::new(GenerationFencedTransport {
 		inner: transport,
 		generation,
 	});
-	let initial_pages =
-		fetch_initial_pages_for_registration(transport.clone(), &actor_id, generation, &config)
-			.await
-			.map_err(|e| anyhow!("failed to preload sqlite pages: {e}"))?;
-	let vfs = Arc::new(
-		SqliteVfs::register_with_transport_and_initial_pages(
-			&vfs_name,
-			transport,
-			actor_id.clone(),
-			rt_handle,
-			config,
-			initial_pages,
-			metrics.clone(),
-		)
-		.map_err(|e| anyhow!("failed to register sqlite VFS: {e}"))?,
+	let preload_start = Instant::now();
+	let preload_result = fetch_initial_pages_for_registration(
+		transport.clone(),
+		&actor_id,
+		generation,
+		&config,
+	)
+	.await
+	.map_err(|err| anyhow!("failed to preload sqlite pages: {err}"));
+	let initial_pages = observe_open_phase_result(
+		&metrics,
+		SqliteOpenPhase::InitialPreload,
+		preload_start,
+		preload_result,
+	)?;
+	record_startup_preload_pages(
+		&metrics,
+		u64::from(initial_pages.requested_page_count),
+		initial_pages.pages.len() as u64,
 	);
 
-	let native_db = NativeDatabaseHandle::new_with_metrics(vfs, actor_id, metrics)?;
-	native_db.initialize().await?;
+	let vfs_register_start = Instant::now();
+	let vfs_result = SqliteVfs::register_with_transport_and_initial_pages(
+		&vfs_name,
+		transport,
+		actor_id.clone(),
+		rt_handle,
+		config,
+		initial_pages,
+		metrics.clone(),
+	)
+	.map(Arc::new)
+	.map_err(|err| anyhow!("failed to register sqlite VFS: {err}"));
+	let vfs = observe_open_phase_result(
+		&metrics,
+		SqliteOpenPhase::VfsRegister,
+		vfs_register_start,
+		vfs_result,
+	)?;
+
+	let worker_ready_start = Instant::now();
+	let worker_ready_result: Result<NativeDatabaseHandle> = async {
+		let native_db = NativeDatabaseHandle::new_with_metrics(vfs, actor_id, metrics.clone())?;
+		native_db.initialize().await?;
+		Ok(native_db)
+	}
+	.await;
+	let native_db = observe_open_phase_result(
+		&metrics,
+		SqliteOpenPhase::WorkerReady,
+		worker_ready_start,
+		worker_ready_result,
+	)?;
+	open_timer.finish_success();
 	Ok(native_db)
+}
+
+/// Records the total SQLite open metric when the open attempt leaves scope.
+///
+/// Individual open phases record their own durations. This guard owns the total
+/// duration so early returns cannot forget the total error metric.
+struct SqliteOpenTimer {
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	started_at: Instant,
+	finished: bool,
+}
+
+impl SqliteOpenTimer {
+	fn new(metrics: &Option<Arc<dyn SqliteVfsMetrics>>) -> Self {
+		Self {
+			metrics: metrics.clone(),
+			started_at: Instant::now(),
+			finished: false,
+		}
+	}
+
+	fn finish_success(mut self) {
+		observe_open_phase(
+			&self.metrics,
+			SqliteOpenPhase::Total,
+			"success",
+			self.started_at,
+		);
+		self.finished = true;
+	}
+}
+
+impl Drop for SqliteOpenTimer {
+	fn drop(&mut self) {
+		if self.finished {
+			return;
+		}
+
+		observe_open_phase(
+			&self.metrics,
+			SqliteOpenPhase::Total,
+			"error",
+			self.started_at,
+		);
+	}
+}
+
+fn observe_open_phase_result<T, E>(
+	metrics: &Option<Arc<dyn SqliteVfsMetrics>>,
+	phase: SqliteOpenPhase,
+	start: Instant,
+	result: std::result::Result<T, E>,
+) -> std::result::Result<T, E> {
+	let outcome = if result.is_ok() { "success" } else { "error" };
+	observe_open_phase(metrics, phase, outcome, start);
+	result
+}
+
+fn observe_open_phase(
+	metrics: &Option<Arc<dyn SqliteVfsMetrics>>,
+	phase: SqliteOpenPhase,
+	outcome: &'static str,
+	start: Instant,
+) {
+	if let Some(metrics) = metrics {
+		metrics.observe_open_phase(phase, outcome, start.elapsed().as_nanos() as u64);
+	}
+}
+
+fn record_startup_preload_pages(
+	metrics: &Option<Arc<dyn SqliteVfsMetrics>>,
+	requested_pages: u64,
+	loaded_pages: u64,
+) {
+	if let Some(metrics) = metrics {
+		if requested_pages > 0 {
+			metrics.record_startup_preload_pages("requested", requested_pages);
+		}
+		if loaded_pages > 0 {
+			metrics.record_startup_preload_pages("loaded", loaded_pages);
+		}
+	}
 }
 
 impl NativeDatabaseHandle {
