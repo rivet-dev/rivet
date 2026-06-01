@@ -497,48 +497,56 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 
 	type RivetkitDefinition = RivetkitActorDefinitionFor<State, Database>;
 
+	const makeInstance = Effect.fnUntraced(function* (
+		c: Rivetkit.WakeContextOf<RivetkitDefinition>,
+	): Effect.fn.Return<ActorInstance<ActionHandlers, State>, never, any> {
+		const scope = yield* Scope.make();
+		const state = stateRuntime
+			? yield* stateRuntime.makeStateView(c)
+			: undefined;
+
+		const context = Context.mergeAll(
+			Context.make(CurrentAddress, {
+				actorId: c.actorId,
+				name: c.name,
+				key: c.key,
+			}),
+			Context.make(Scope.Scope, scope),
+			Context.make(
+				Sleep,
+				Effect.sync(() => c.sleep()),
+			),
+		);
+		const wakeOptions = {
+			rawRivetkitContext: c,
+			...(state ? { state } : {}),
+		} as WakeOptionsFor<State, Database>;
+		const actionHandlers = yield* wakeHandler(wakeOptions).pipe(
+			Effect.provide(context),
+		);
+		const runFork = yield* FiberSet.makeRuntime<
+			any,
+			unknown,
+			unknown
+		>().pipe(Effect.provide(Context.merge(services, context)));
+
+		return {
+			actionHandlers,
+			runFork,
+			scope,
+			state,
+		};
+	});
+
 	const onWake = async (c: Rivetkit.WakeContextOf<RivetkitDefinition>) => {
 		await Effect.runPromiseWith(services)(
-			Effect.gen(function* () {
-				const scope = yield* Scope.make();
-				const state = stateRuntime
-					? yield* stateRuntime.makeStateView(c)
-					: undefined;
-
-				const context = Context.mergeAll(
-					Context.make(CurrentAddress, {
-						actorId: c.actorId,
-						name: c.name,
-						key: c.key,
+			makeInstance(c).pipe(
+				Effect.tap((instance) =>
+					Effect.sync(() => {
+						instances.set(c.actorId, instance);
 					}),
-					Context.make(Scope.Scope, scope),
-					Context.make(
-						Sleep,
-						Effect.sync(() => c.sleep()),
-					),
-				);
-				const wakeOptions = {
-					rawRivetkitContext: c,
-					...(state ? { state } : {}),
-				} as WakeOptionsFor<State, Database>;
-				const actionHandlers = yield* wakeHandler(wakeOptions).pipe(
-					Effect.provide(context),
-				);
-				const runFork = yield* FiberSet.makeRuntime<
-					any,
-					unknown,
-					unknown
-				>().pipe(Effect.provide(Context.merge(services, context)));
-
-				yield* Effect.sync(() =>
-					instances.set(c.actorId, {
-						actionHandlers,
-						runFork,
-						scope,
-						state,
-					}),
-				);
-			}),
+				),
+			),
 		);
 	};
 
