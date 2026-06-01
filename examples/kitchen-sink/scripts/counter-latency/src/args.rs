@@ -16,11 +16,7 @@ pub const DEFAULT_TOKENS_PER_SECOND: f64 = 20.0;
 pub const DEFAULT_DURATION_MS: u64 = 5_000;
 pub const MESSAGE_GAP_WARN_MS: f64 = 3_000.0;
 pub const ACTOR_STOPPED_CLOSE_CODE: u16 = 1000;
-pub const ACTOR_STOPPED_CLOSE_REASONS: &[&str] = &["hack_force_close", "actor.stopped"];
-
-pub fn is_actor_stopped_close(code: u16, reason: &str) -> bool {
-	code == ACTOR_STOPPED_CLOSE_CODE && ACTOR_STOPPED_CLOSE_REASONS.contains(&reason)
-}
+pub const ACTOR_STOPPED_CLOSE_REASON: &str = "actor.stopped";
 
 #[derive(Parser)]
 #[command(
@@ -138,8 +134,11 @@ impl Args {
 	}
 }
 
+pub const DEFAULT_SCALE_DOWN_MS: u64 = 30_000;
+
 pub struct EnvConfig {
 	pub run_for_ms: u64,
+	pub scale_down_ms: u64,
 	pub rivet_pool: String,
 	pub endpoint: String,
 }
@@ -150,6 +149,10 @@ impl EnvConfig {
 			.ok()
 			.and_then(|v| v.parse().ok())
 			.unwrap_or(0);
+		let scale_down_ms = env::var("SCALE_DOWN_MS")
+			.ok()
+			.and_then(|v| v.parse().ok())
+			.unwrap_or(DEFAULT_SCALE_DOWN_MS);
 		let rivet_pool = env::var("RIVET_POOL").unwrap_or_else(|_| "k8s".to_string());
 		let endpoint = match env::var("RIVET_ENDPOINT") {
 			Ok(v) if !v.is_empty() => v,
@@ -158,7 +161,12 @@ impl EnvConfig {
 				process::exit(1);
 			}
 		};
-		Self { run_for_ms, rivet_pool, endpoint }
+		Self {
+			run_for_ms,
+			scale_down_ms,
+			rivet_pool,
+			endpoint,
+		}
 	}
 }
 

@@ -19,7 +19,7 @@ mod ws;
 use std::sync::Arc;
 
 use crate::args::{Args, EnvConfig};
-use crate::concurrent::{WorkloadCtx, print_concurrent_summary};
+use crate::concurrent::{WorkloadCtx, print_concurrent_summary, spawn_scale_down};
 use crate::endpoint::Endpoint;
 use crate::log::{BOLD, COLOR_MIN_MS, COLOR_MAX_MS, DIM, RESET, gradient_color};
 use crate::stats::State;
@@ -82,9 +82,13 @@ async fn run() {
 fn install_signal_handlers(ctx: Arc<WorkloadCtx>) {
 	let ctx_int = ctx.clone();
 	tokio::spawn(async move {
+		// First SIGINT: begin gradual scale-down. Second SIGINT: force immediate exit.
+		if tokio::signal::ctrl_c().await.is_ok() {
+			handle_first_signal(&ctx_int, "sigint");
+		}
 		if tokio::signal::ctrl_c().await.is_ok() {
 			ctx_int.state.set_stopping();
-			print_concurrent_summary(&ctx_int, "sigint");
+			print_concurrent_summary(&ctx_int, "sigint-force");
 			std::process::exit(130);
 		}
 	});
@@ -97,12 +101,23 @@ fn install_signal_handlers(ctx: Arc<WorkloadCtx>) {
 			let Ok(mut sig) = signal(SignalKind::terminate()) else {
 				return;
 			};
+			// First SIGTERM: begin gradual scale-down. Second SIGTERM: force immediate exit.
+			if sig.recv().await.is_some() {
+				handle_first_signal(&ctx_term, "sigterm");
+			}
 			if sig.recv().await.is_some() {
 				ctx_term.state.set_stopping();
-				print_concurrent_summary(&ctx_term, "sigterm");
+				print_concurrent_summary(&ctx_term, "sigterm-force");
 				std::process::exit(143);
 			}
 		});
+	}
+}
+
+fn handle_first_signal(ctx: &Arc<WorkloadCtx>, reason: &'static str) {
+	if ctx.state.try_begin_scale_down() {
+		let scale_down = std::time::Duration::from_millis(ctx.env.scale_down_ms);
+		spawn_scale_down(ctx.clone(), scale_down, reason);
 	}
 }
 
