@@ -14,8 +14,8 @@ const program = Effect.gen(function* () {
 		`chatroom_${yield* Random.nextUUIDv4}`,
 	);
 
-	yield* Effect.addFinalizer(() =>
-		Effect.gen(function* () {
+	yield* Effect.addFinalizer(
+		Effect.fnUntraced(function* () {
 			yield* room.Archive().pipe(Effect.orDie);
 			yield* Effect.log("archived room");
 		}),

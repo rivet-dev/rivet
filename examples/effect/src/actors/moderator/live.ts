@@ -5,28 +5,24 @@ import { BannedWordsError, Moderator } from "./api.ts";
 const bannedWords = ["spam", "scam"];
 
 export const ModeratorLive = Moderator.toLayer(
-	({ state }) =>
-		Effect.gen(function* () {
-			return Moderator.of({
-				Review: ({ payload }) =>
-					Effect.gen(function* () {
-						yield* State.update(state, (current) => ({
-							...current,
-							reviewed: current.reviewed + 1,
-						})).pipe(Effect.orDie);
+	Effect.fnUntraced(function* ({ state }) {
+		return Moderator.of({
+			Review: Effect.fnUntraced(function* ({ payload }) {
+				yield* State.update(state, (current) => ({
+					...current,
+					reviewed: current.reviewed + 1,
+				})).pipe(Effect.orDie);
 
-						const lower = payload.text.toLowerCase();
-						const hit = bannedWords.find((word) =>
-							lower.includes(word),
-						);
-						if (hit !== undefined) {
-							return yield* new BannedWordsError({
-								message: `contains banned word "${hit}"`,
-							});
-						}
-					}),
-			});
-		}),
+				const lower = payload.text.toLowerCase();
+				const hit = bannedWords.find((word) => lower.includes(word));
+				if (hit !== undefined) {
+					return yield* new BannedWordsError({
+						message: `contains banned word "${hit}"`,
+					});
+				}
+			}),
+		});
+	}),
 	{
 		state: {
 			schema: Schema.Struct({

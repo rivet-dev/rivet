@@ -147,10 +147,10 @@ export type ToHttpEffectOptions = ServerlessOptions;
  * Actors are materialized into a single underlying RivetKit registry, and each
  * request is delegated to that registry's serverless handler.
  */
-export const toHttpEffect = <E>(
+export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	registryLayer: Layer.Layer<Registry, E>,
 	options?: ToHttpEffectOptions,
-): Effect.Effect<
+): Effect.fn.Return<
 	Effect.Effect<
 		HttpServerResponse.HttpServerResponse,
 		HttpServerError.HttpServerError,
@@ -158,12 +158,11 @@ export const toHttpEffect = <E>(
 	>,
 	E,
 	Scope.Scope
-> =>
-	Effect.gen(function* () {
-		const context = yield* Layer.build(registryLayer);
-		// @effect-diagnostics-next-line returnEffectInGen:off
-		return makeHttpEffect(Context.get(context, Registry), options);
-	});
+> {
+	const context = yield* Layer.build(registryLayer);
+	// @effect-diagnostics-next-line returnEffectInGen:off
+	return makeHttpEffect(Context.get(context, Registry), options);
+});
 
 export type ToWebHandlerOptions = ServerlessOptions & {
 	/**

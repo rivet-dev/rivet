@@ -89,21 +89,20 @@ const Proto = {
  * The PubSub is not explicitly shut down — it's reclaimed by GC when
  * the `State` and any subscribers become unreachable.
  */
-export const make = <A, E, R>(
+export const make = Effect.fnUntraced(function* <A, E, R>(
 	read: () => Effect.Effect<A, E, R>,
 	write: (value: A) => Effect.Effect<void, E, R>,
-): Effect.Effect<State<A, E, R>, E, R> =>
-	Effect.gen(function* () {
-		const pubsub = yield* PubSub.unbounded<A>({ replay: 1 });
-		const initial = yield* read();
-		PubSub.publishUnsafe(pubsub, initial);
-		const self = Object.create(Proto);
-		self.read = read;
-		self.write = write;
-		self.pubsub = pubsub;
-		self.semaphore = Semaphore.makeUnsafe(1);
-		return self;
-	});
+): Effect.fn.Return<State<A, E, R>, E, R> {
+	const pubsub = yield* PubSub.unbounded<A>({ replay: 1 });
+	const initial = yield* read();
+	PubSub.publishUnsafe(pubsub, initial);
+	const self = Object.create(Proto);
+	self.read = read;
+	self.write = write;
+	self.pubsub = pubsub;
+	self.semaphore = Semaphore.makeUnsafe(1);
+	return self;
+});
 
 /**
  * Reads the current value.
