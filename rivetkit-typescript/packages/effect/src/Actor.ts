@@ -14,9 +14,9 @@ import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action.ts";
 import * as Client from "./Client.ts";
 import * as ActionDispatcher from "./internal/ActionDispatcher.ts";
-import * as ActorInstanceRuntime from "./internal/ActorInstanceRuntime.ts";
+import * as ActorInstanceManager from "./internal/ActorInstanceManager.ts";
+import * as ActorStateAdapter from "./internal/ActorStateAdapter.ts";
 import type * as StateOptions from "./internal/StateOptions.ts";
-import * as StateRuntime from "./internal/StateRuntime.ts";
 import * as Registry from "./Registry.ts";
 import type * as RivetError from "./RivetError.ts";
 import type * as State from "./State.ts";
@@ -473,19 +473,19 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	readonly options: Options<State, Database>;
 }) {
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
-	const stateRuntime =
+	const stateAdapter =
 		effectOptions.state === undefined
 			? undefined
-			: yield* StateRuntime.make<State>(effectOptions.state);
+			: yield* ActorStateAdapter.make<State>(effectOptions.state);
 
-	const instanceRuntime = yield* ActorInstanceRuntime.make<
+	const instanceManager = yield* ActorInstanceManager.make<
 		ActionHandlers,
 		State,
 		Database,
 		WakeOptionsFor<State, Database>
 	>({
 		wakeHandler,
-		stateRuntime,
+		stateAdapter,
 		makeContext: (c, scope) =>
 			Context.mergeAll(
 				Context.make(CurrentAddress, {
@@ -513,7 +513,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		RivetkitActorDefinitionFor<State, Database>
 	>({
 		actor,
-		getInstance: instanceRuntime.get,
+		getInstance: instanceManager.get,
 	});
 
 	return Rivetkit.actor<
@@ -529,15 +529,15 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	>({
 		options: rivetkitOptions,
 		...(effectOptions.db ? { db: effectOptions.db } : {}),
-		onWake: instanceRuntime.onWake,
-		...(stateRuntime
-			? { createState: stateRuntime.createInitialState }
+		onWake: instanceManager.onWake,
+		...(stateAdapter
+			? { createState: stateAdapter.createInitialState }
 			: {}),
 		actions,
-		...(instanceRuntime.onStateChange
-			? { onStateChange: instanceRuntime.onStateChange }
+		...(instanceManager.onStateChange
+			? { onStateChange: instanceManager.onStateChange }
 			: {}),
-		onSleep: instanceRuntime.onTeardown,
-		onDestroy: instanceRuntime.onTeardown,
+		onSleep: instanceManager.onTeardown,
+		onDestroy: instanceManager.onTeardown,
 	});
 });

@@ -1,8 +1,8 @@
 import { Context, Effect, Exit, type Fiber, FiberSet, Scope } from "effect";
 import type * as Rivetkit from "rivetkit";
 import type * as RivetkitDb from "rivetkit/db";
+import type * as ActorStateAdapter from "./ActorStateAdapter.ts";
 import type * as StateOptions from "./StateOptions.ts";
-import type * as StateRuntime from "./StateRuntime.ts";
 
 type RivetkitDefinitionFor<
 	StateDefinition extends StateOptions.Any,
@@ -34,7 +34,7 @@ export type Instance<
 		options?: Effect.RunOptions,
 	) => Fiber.Fiber<A, E>;
 	readonly scope: Scope.Closeable;
-	readonly state?: StateRuntime.ActorState<StateDefinition>;
+	readonly state?: ActorStateAdapter.ActorState<StateDefinition>;
 };
 
 export const make = Effect.fnUntraced(function* <
@@ -44,21 +44,23 @@ export const make = Effect.fnUntraced(function* <
 	WakeOptions,
 >({
 	wakeHandler,
-	stateRuntime,
+	stateAdapter,
 	makeContext,
 	makeWakeOptions,
 }: {
 	readonly wakeHandler: (
 		wakeOptions: WakeOptions,
 	) => Effect.Effect<ActionHandlers, never, any>;
-	readonly stateRuntime: StateRuntime.Runtime<StateDefinition> | undefined;
+	readonly stateAdapter:
+		| ActorStateAdapter.Adapter<StateDefinition>
+		| undefined;
 	readonly makeContext: (
 		c: WakeContext<StateDefinition, Database>,
 		scope: Scope.Closeable,
 	) => Context.Context<any>;
 	readonly makeWakeOptions: (
 		c: WakeContext<StateDefinition, Database>,
-		state: StateRuntime.ActorState<StateDefinition> | undefined,
+		state: ActorStateAdapter.ActorState<StateDefinition> | undefined,
 	) => WakeOptions;
 }) {
 	const instances = new Map<
@@ -73,8 +75,8 @@ export const make = Effect.fnUntraced(function* <
 		c: WakeContext<StateDefinition, Database>,
 	): Effect.fn.Return<Instance<ActionHandlers, StateDefinition>, never, any> {
 		const scope = yield* Scope.make();
-		const state = stateRuntime
-			? yield* stateRuntime.makeStateView(c)
+		const state = stateAdapter
+			? yield* stateAdapter.makeStateView(c)
 			: undefined;
 		const context = makeContext(c, scope);
 		const actionHandlers = yield* wakeHandler(
@@ -107,7 +109,7 @@ export const make = Effect.fnUntraced(function* <
 				),
 			);
 		},
-		onStateChange: stateRuntime
+		onStateChange: stateAdapter
 			? (
 					c: WakeContext<StateDefinition, Database>,
 					newState: unknown,
@@ -116,7 +118,7 @@ export const make = Effect.fnUntraced(function* <
 					// State changes can arrive after teardown removes the instance.
 					if (!instance) return;
 
-					stateRuntime.publishChange(instance, newState);
+					stateAdapter.publishChange(instance, newState);
 				}
 			: undefined,
 		onTeardown: async (c: { readonly actorId: string }) => {

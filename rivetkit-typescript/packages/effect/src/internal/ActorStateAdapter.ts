@@ -15,7 +15,7 @@ type StateInstance<StateDefinition extends StateOptions.Any> = {
 	readonly state?: ActorState<StateDefinition>;
 };
 
-export type Runtime<StateDefinition extends StateOptions.Any> = {
+export type Adapter<StateDefinition extends StateOptions.Any> = {
 	readonly makeStateView: (c: {
 		state: StateOptions.Encoded<StateDefinition>;
 	}) => Effect.Effect<ActorState<StateDefinition>, never, any>;
@@ -32,7 +32,7 @@ export const make = Effect.fnUntraced(function* <
 	StateDefinition extends StateOptions.Any,
 >(
 	stateOptions: StateDefinition,
-): Effect.fn.Return<Runtime<StateDefinition>, never, any> {
+): Effect.fn.Return<Adapter<StateDefinition>, never, any> {
 	const services = yield* Effect.context<any>();
 
 	const stateCodec = {
