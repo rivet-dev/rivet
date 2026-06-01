@@ -1,4 +1,4 @@
-import { type Deferred, type Effect, Predicate, Schema } from "effect";
+import { type Effect, Predicate, Schema } from "effect";
 
 const TypeId = "~@rivetkit/effect/Action";
 
@@ -144,12 +144,7 @@ export type ResultFrom<R extends Any, Services> = R extends Action<
 	infer _Success,
 	infer _Error
 >
-	? Effect.Effect<
-			| _Success["Type"]
-			| Deferred.Deferred<_Success["Type"], _Error["Type"]>,
-			_Error["Type"],
-			Services
-		>
+	? Effect.Effect<_Success["Type"], _Error["Type"], Services>
 	: never;
 
 // --- Implementation -------------------------------------------------
