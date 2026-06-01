@@ -161,6 +161,7 @@ export const toHttpEffect = <E>(
 > =>
 	Effect.gen(function* () {
 		const context = yield* Layer.build(registryLayer);
+		// @effect-diagnostics-next-line returnEffectInGen:off
 		return makeHttpEffect(Context.get(context, Registry), options);
 	});
 
