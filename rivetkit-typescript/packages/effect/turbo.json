@@ -40,7 +40,7 @@
 			]
 		},
 		"test": {
-			"dependsOn": ["^build", "check-types"],
+			"dependsOn": ["^build"],
 			"inputs": [
 				"package.json",
 				"src/**",
