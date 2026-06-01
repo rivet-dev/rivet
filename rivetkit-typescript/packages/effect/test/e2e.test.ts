@@ -139,34 +139,26 @@ layer(TestLayer)("end-to-end", (it) => {
 
 	it.effect("persists state across a sleep/wake cycle", () =>
 		Effect.gen(function* () {
-			const counter = (yield* Counter.client).getOrCreate([
-				"t-persist-state",
-			]);
-
-			// Bump the in-memory `Ref` so we can later assert that
-			// the wake actually rebuilt the actor (the ref should
-			// reset to 0 on each wake).
-			yield* counter.Increment({ amount: 7 });
+			const key = "t-persist-state";
+			const counter = (yield* Counter.client).getOrCreate([key]);
+			const flags = yield* Flags;
+			const flagName = `finalizer:${key}`;
 
 			const beforeSleep = yield* counter.PersistAndSleep({
 				amount: 11,
 			});
 			assert.strictEqual(beforeSleep, 11);
 
-			// Engine-side sleep teardown is asynchronous. `count`
-			// is `Ref.make(0)` per wake, so seeing 0 is the deterministic
-			// signal that the prior wake torn down and a fresh one started.
-			// `TestClock.withLive` swaps in the real Clock for the duration
-			// of the poll so the schedule's interval and the timeout both
-			// elapse in wall time (the suite otherwise runs under TestClock).
-			const inMemoryAfterWake = yield* counter.GetCount().pipe(
+			const finalizerFired = yield* Effect.sync(() =>
+				flags.get(flagName),
+			).pipe(
 				Effect.repeat({
-					until: (n) => n === 0,
+					until: (v) => v === true,
 					schedule: Schedule.spaced("100 millis"),
 				}),
 				TestClock.withLive,
 			);
-			assert.strictEqual(inMemoryAfterWake, 0);
+			assert.strictEqual(finalizerFired, true);
 
 			const persistedAfterWake = yield* counter.GetPersistedState();
 			assert.strictEqual(persistedAfterWake.count, 11);
@@ -175,14 +167,10 @@ layer(TestLayer)("end-to-end", (it) => {
 
 	it.effect("persists state with a non-trivial schema (Date)", () =>
 		Effect.gen(function* () {
-			const counter = (yield* Counter.client).getOrCreate([
-				"t-persist-state-date",
-			]);
-
-			// Bump the in-memory `Ref` so we can later assert that
-			// the wake actually rebuilt the actor (the ref should
-			// reset to 0 on each wake).
-			yield* counter.Increment({ amount: 7 });
+			const key = "t-persist-state-date";
+			const counter = (yield* Counter.client).getOrCreate([key]);
+			const flags = yield* Flags;
+			const flagName = `finalizer:${key}`;
 
 			const when = new Date("2024-01-15T10:30:00.000Z");
 			const beforeSleep = yield* counter.PersistDateAndSleep({
@@ -190,20 +178,16 @@ layer(TestLayer)("end-to-end", (it) => {
 			});
 			assert.strictEqual(beforeSleep.toISOString(), when.toISOString());
 
-			// Engine-side sleep teardown is asynchronous. `count`
-			// is `Ref.make(0)` per wake, so seeing 0 is the deterministic
-			// signal that the prior wake torn down and a fresh one started.
-			// `TestClock.withLive` swaps in the real Clock for the duration
-			// of the poll so the schedule's interval and the timeout both
-			// elapse in wall time (the suite otherwise runs under TestClock).
-			const inMemoryAfterWake = yield* counter.GetCount().pipe(
+			const finalizerFired = yield* Effect.sync(() =>
+				flags.get(flagName),
+			).pipe(
 				Effect.repeat({
-					until: (n) => n === 0,
+					until: (v) => v === true,
 					schedule: Schedule.spaced("100 millis"),
 				}),
 				TestClock.withLive,
 			);
-			assert.strictEqual(inMemoryAfterWake, 0);
+			assert.strictEqual(finalizerFired, true);
 
 			const persistedAfterWake = yield* counter.GetPersistedState();
 			assert.strictEqual(
@@ -215,14 +199,10 @@ layer(TestLayer)("end-to-end", (it) => {
 
 	it.effect("persists state with a custom Schema.transform", () =>
 		Effect.gen(function* () {
-			const counter = (yield* Counter.client).getOrCreate([
-				"t-persist-state-transform",
-			]);
-
-			// Bump the in-memory `Ref` so we can later assert that
-			// the wake actually rebuilt the actor (the ref should
-			// reset to 0 on each wake).
-			yield* counter.Increment({ amount: 7 });
+			const key = "t-persist-state-transform";
+			const counter = (yield* Counter.client).getOrCreate([key]);
+			const flags = yield* Flags;
+			const flagName = `finalizer:${key}`;
 
 			const tags = ["alpha", "beta", "gamma"];
 			const beforeSleep = yield* counter.PersistTagsAndSleep({
@@ -230,20 +210,16 @@ layer(TestLayer)("end-to-end", (it) => {
 			});
 			assert.deepEqual(beforeSleep, tags);
 
-			// Engine-side sleep teardown is asynchronous. `count`
-			// is `Ref.make(0)` per wake, so seeing 0 is the deterministic
-			// signal that the prior wake torn down and a fresh one started.
-			// `TestClock.withLive` swaps in the real Clock for the duration
-			// of the poll so the schedule's interval and the timeout both
-			// elapse in wall time (the suite otherwise runs under TestClock).
-			const inMemoryAfterWake = yield* counter.GetCount().pipe(
+			const finalizerFired = yield* Effect.sync(() =>
+				flags.get(flagName),
+			).pipe(
 				Effect.repeat({
-					until: (n) => n === 0,
+					until: (v) => v === true,
 					schedule: Schedule.spaced("100 millis"),
 				}),
 				TestClock.withLive,
 			);
-			assert.strictEqual(inMemoryAfterWake, 0);
+			assert.strictEqual(finalizerFired, true);
 
 			const persistedAfterWake = yield* counter.GetPersistedState();
 			assert.deepEqual(persistedAfterWake.tags, tags);
@@ -252,14 +228,10 @@ layer(TestLayer)("end-to-end", (it) => {
 
 	it.effect("persists state through a service-dependent transform", () =>
 		Effect.gen(function* () {
-			const counter = (yield* Counter.client).getOrCreate([
-				"t-persist-state-scaled",
-			]);
-
-			// Bump the in-memory `Ref` so we can later assert that
-			// the wake actually rebuilt the actor (the ref should
-			// reset to 0 on each wake).
-			yield* counter.Increment({ amount: 7 });
+			const key = "t-persist-state-scaled";
+			const counter = (yield* Counter.client).getOrCreate([key]);
+			const flags = yield* Flags;
+			const flagName = `finalizer:${key}`;
 
 			// 14 is the decoded (in-memory) value. With `factor: 2`,
 			// the state schema's encode (write) divides 14 -> 7 and
@@ -272,20 +244,16 @@ layer(TestLayer)("end-to-end", (it) => {
 			});
 			assert.strictEqual(beforeSleep, 14);
 
-			// Engine-side sleep teardown is asynchronous. `count`
-			// is `Ref.make(0)` per wake, so seeing 0 is the deterministic
-			// signal that the prior wake torn down and a fresh one started.
-			// `TestClock.withLive` swaps in the real Clock for the duration
-			// of the poll so the schedule's interval and the timeout both
-			// elapse in wall time (the suite otherwise runs under TestClock).
-			const inMemoryAfterWake = yield* counter.GetCount().pipe(
+			const finalizerFired = yield* Effect.sync(() =>
+				flags.get(flagName),
+			).pipe(
 				Effect.repeat({
-					until: (n) => n === 0,
+					until: (v) => v === true,
 					schedule: Schedule.spaced("100 millis"),
 				}),
 				TestClock.withLive,
 			);
-			assert.strictEqual(inMemoryAfterWake, 0);
+			assert.strictEqual(finalizerFired, true);
 
 			const persistedAfterWake = yield* counter.GetPersistedState();
 			assert.strictEqual(persistedAfterWake.scaled, 14);
@@ -770,26 +738,24 @@ layer(TestLayer)("end-to-end", (it) => {
 
 	it.effect("persists db rows across a sleep/wake cycle", () =>
 		Effect.gen(function* () {
-			const counter = (yield* Counter.client).getOrCreate([
-				"t-db-persist",
-			]);
+			const key = "t-db-persist";
+			const counter = (yield* Counter.client).getOrCreate([key]);
 			yield* counter.LogEvent({ event: "before-sleep" });
 
-			// `PersistAndSleep` signals `c.sleep()` after writing state; the
-			// engine tears the wake scope down asynchronously. The
-			// `in-memory Ref` resets to 0 on the next wake, so polling
-			// `GetCount` until it reads 0 is the deterministic signal that
-			// a fresh wake started. `TestClock.withLive` runs the poll in
-			// wall time since the suite otherwise drives `TestClock`.
+			const flags = yield* Flags;
+			const flagName = `finalizer:${key}`;
+
 			yield* counter.PersistAndSleep({ amount: 1 });
-			const inMemoryAfterWake = yield* counter.GetCount().pipe(
+			const finalizerFired = yield* Effect.sync(() =>
+				flags.get(flagName),
+			).pipe(
 				Effect.repeat({
-					until: (n) => n === 0,
+					until: (v) => v === true,
 					schedule: Schedule.spaced("100 millis"),
 				}),
 				TestClock.withLive,
 			);
-			assert.strictEqual(inMemoryAfterWake, 0);
+			assert.strictEqual(finalizerFired, true);
 
 			yield* counter.LogEvent({ event: "after-wake" });
 			assert.deepStrictEqual(yield* counter.ListEvents(), [
