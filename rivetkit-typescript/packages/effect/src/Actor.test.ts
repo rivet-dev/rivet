@@ -9,6 +9,12 @@ class Prefix extends Context.Service<Prefix, { readonly value: string }>()(
 const PrefixLive = Layer.succeed(Prefix, Prefix.of({ value: "svc" }));
 
 describe("Actor.toWakeHandler", () => {
+	it("defaults actions to an empty array", () => {
+		const actor = Actor.make("NoActions");
+
+		assert.deepStrictEqual(actor.actions, []);
+	});
+
 	it.effect("wraps a plain action handler object", () =>
 		Effect.gen(function* () {
 			const wake = { Ping: () => Effect.succeed("pong") };

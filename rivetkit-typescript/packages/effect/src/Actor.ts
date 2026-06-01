@@ -375,7 +375,7 @@ export const make = <
 ): Actor<Name, Actions[number]> => {
 	const self = Object.create(Proto);
 	self.name = name;
-	self.actions = options?.actions;
+	self.actions = options?.actions ?? [];
 	return self;
 };
 
