@@ -696,20 +696,13 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 						},
 					}),
 				);
-				const fiber = instance.runFork(Effect.exit(actionEffect), {
+				const fiber = instance.runFork(actionEffect, {
 					signal: c.abortSignal,
 				});
-				const fiberExit = await new Promise<
-					Exit.Exit<Exit.Exit<unknown, unknown>>
-				>((resolve) => fiber.addObserver(resolve));
+				const exit = await new Promise<Exit.Exit<unknown, unknown>>(
+					(resolve) => fiber.addObserver(resolve),
+				);
 
-				if (Exit.isFailure(fiberExit)) {
-					if (Cause.hasInterruptsOnly(fiberExit.cause)) {
-						throw makeActorAbortedError();
-					}
-					throw Cause.squash(fiberExit.cause);
-				}
-				const exit = fiberExit.value;
 				if (Exit.isSuccess(exit)) return exit.value;
 				// Action fibers can be interrupted by a caller abort signal
 				// or by the actor instance scope closing during sleep, destroy,
