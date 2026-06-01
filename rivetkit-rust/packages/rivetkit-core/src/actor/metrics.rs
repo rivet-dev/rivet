@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 use std::fmt;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
@@ -10,6 +10,7 @@ use rivet_metrics::prometheus::{
 };
 
 use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
+use crate::time::Instant;
 
 const ACTOR_LABELS: &[&str] = &["actor_name"];
 const INBOX_LABELS: &[&str] = &["actor_name", "inbox"];
@@ -18,9 +19,81 @@ const WORK_LABELS: &[&str] = &["actor_name", "kind"];
 const SHUTDOWN_LABELS: &[&str] = &["actor_name", "reason"];
 const STATE_MUTATION_LABELS: &[&str] = &["actor_name", "reason"];
 const DIRECT_SHUTDOWN_LABELS: &[&str] = &["actor_name", "subsystem", "operation"];
+const STARTUP_PHASE_LABELS: &[&str] = &["actor_name", "phase", "is_new", "outcome"];
+const STARTUP_KIND_UNKNOWN: u8 = 0;
+const STARTUP_KIND_NEW: u8 = 1;
+const STARTUP_KIND_EXISTING: u8 = 2;
+
+pub(crate) mod startup_phase {
+	#[derive(Clone, Copy, Debug)]
+	#[repr(u8)]
+	pub(crate) enum StartupPhase {
+		Unknown = 0,
+		LoadPersisted = 1,
+		CoreInit = 2,
+		RuntimePreamble = 3,
+		PostReady = 4,
+		Total = 5,
+	}
+
+	impl StartupPhase {
+		pub(crate) fn as_label(self) -> &'static str {
+			match self {
+				StartupPhase::Unknown => "unknown",
+				StartupPhase::LoadPersisted => "load_persisted",
+				StartupPhase::CoreInit => "core_init",
+				StartupPhase::RuntimePreamble => "runtime_preamble",
+				StartupPhase::PostReady => "post_ready",
+				StartupPhase::Total => "total",
+			}
+		}
+
+		#[cfg(feature = "sqlite-local")]
+		pub(super) fn from_id(id: u8) -> Self {
+			match id {
+				0 => StartupPhase::Unknown,
+				1 => StartupPhase::LoadPersisted,
+				2 => StartupPhase::CoreInit,
+				3 => StartupPhase::RuntimePreamble,
+				4 => StartupPhase::PostReady,
+				5 => StartupPhase::Total,
+				_ => StartupPhase::Unknown,
+			}
+		}
+	}
+}
+
+#[cfg(feature = "sqlite-local")]
+mod actor_lifecycle_bucket {
+	use std::time::Duration;
+
+	pub(super) const READY_0_1S: &str = "ready_0_1s";
+	pub(super) const READY_1_5S: &str = "ready_1_5s";
+	pub(super) const READY_5_30S: &str = "ready_5_30s";
+	pub(super) const READY_30S_PLUS: &str = "ready_30s_plus";
+
+	pub(super) fn ready_for_age(age: Duration) -> &'static str {
+		if age < Duration::from_secs(1) {
+			READY_0_1S
+		} else if age < Duration::from_secs(5) {
+			READY_1_5S
+		} else if age < Duration::from_secs(30) {
+			READY_5_30S
+		} else {
+			READY_30S_PLUS
+		}
+	}
+}
 
 #[cfg(feature = "sqlite-local")]
 const SQLITE_COMMIT_PHASE_LABELS: &[&str] = &["actor_name", "phase"];
+#[cfg(feature = "sqlite-local")]
+const SQLITE_OPEN_PHASE_LABELS: &[&str] = &["actor_name", "phase", "is_new", "outcome"];
+#[cfg(feature = "sqlite-local")]
+const SQLITE_STARTUP_PRELOAD_PAGE_LABELS: &[&str] = &["actor_name", "is_new", "kind"];
+#[cfg(feature = "sqlite-local")]
+const SQLITE_VFS_LIFECYCLE_BUCKET_LABELS: &[&str] =
+	&["actor_name", "actor_lifecycle_bucket", "is_new"];
 #[cfg(feature = "sqlite-local")]
 const SQLITE_WORKER_COMMAND_LABELS: &[&str] = &["actor_name", "operation"];
 #[cfg(feature = "sqlite-local")]
@@ -31,11 +104,26 @@ pub(crate) struct ActorMetrics {
 	inner: Arc<ActorMetricInner>,
 }
 
+/// Records the total startup metric when the startup attempt leaves scope.
+///
+/// Startup phases record their own durations at the phase boundary. This guard
+/// owns the total duration so early returns cannot forget the total error metric.
+pub(crate) struct StartupTimer {
+	metrics: ActorMetrics,
+	started_at: Instant,
+	is_new: Option<bool>,
+	finished: bool,
+}
+
 #[derive(Debug)]
 struct ActorMetricInner {
 	labels: ActorMetricLabels,
 	state: Mutex<ActorMetricState>,
 	active: AtomicBool,
+	startup_is_new: AtomicU8,
+	startup_complete: AtomicBool,
+	current_startup_phase: AtomicU8,
+	ready_at: Mutex<Option<Instant>>,
 }
 
 #[derive(Debug)]
@@ -65,6 +153,7 @@ struct ActorMetricCollectors {
 	actor_active_count: IntGaugeVec,
 	actor_started_total: IntCounterVec,
 	actor_stopped_total: IntCounterVec,
+	startup_phase_duration_seconds: HistogramVec,
 	create_state_duration_seconds: HistogramVec,
 	create_vars_duration_seconds: HistogramVec,
 	queue_depth: IntGaugeVec,
@@ -82,6 +171,10 @@ struct ActorMetricCollectors {
 	shutdown_timeout_total: CounterVec,
 	state_mutation_total: CounterVec,
 	direct_subsystem_shutdown_warning_total: CounterVec,
+	#[cfg(feature = "sqlite-local")]
+	sqlite_open_phase_duration_seconds: HistogramVec,
+	#[cfg(feature = "sqlite-local")]
+	sqlite_startup_preload_pages_total: IntCounterVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_vfs_resolve_pages_total: IntCounterVec,
 	#[cfg(feature = "sqlite-local")]
@@ -156,6 +249,15 @@ impl ActorMetricCollectors {
 			ACTOR_LABELS,
 		)
 		.expect("create actor_stopped_total counter");
+		let startup_phase_duration_seconds = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_startup_phase_duration_seconds",
+				"actor startup phase duration in seconds",
+			)
+			.buckets(startup_duration_buckets()),
+			STARTUP_PHASE_LABELS,
+		)
+		.expect("create actor_startup_phase_duration_seconds histogram");
 		let create_state_duration_seconds = HistogramVec::new(
 			HistogramOpts::new(
 				"rivetkit_actor_create_state_duration_seconds",
@@ -288,12 +390,31 @@ impl ActorMetricCollectors {
 		.expect("create actor_direct_subsystem_shutdown_warning_total counter");
 
 		#[cfg(feature = "sqlite-local")]
+		let sqlite_open_phase_duration_seconds = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_sqlite_open_phase_duration_seconds",
+				"native SQLite open phase duration in seconds",
+			)
+			.buckets(startup_duration_buckets()),
+			SQLITE_OPEN_PHASE_LABELS,
+		)
+		.expect("create actor_sqlite_open_phase_duration_seconds histogram");
+		#[cfg(feature = "sqlite-local")]
+		let sqlite_startup_preload_pages_total = IntCounterVec::new(
+			Opts::new(
+				"rivetkit_actor_sqlite_startup_preload_pages_total",
+				"total SQLite startup preload pages requested or loaded",
+			),
+			SQLITE_STARTUP_PRELOAD_PAGE_LABELS,
+		)
+		.expect("create actor_sqlite_startup_preload_pages_total counter");
+		#[cfg(feature = "sqlite-local")]
 		let sqlite_vfs_resolve_pages_total = IntCounterVec::new(
 			Opts::new(
 				"rivetkit_actor_sqlite_vfs_resolve_pages_total",
 				"total VFS page resolution attempts",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_resolve_pages_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -302,7 +423,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_resolve_pages_requested_total",
 				"total pages requested by VFS page resolution attempts",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_resolve_pages_requested_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -311,7 +432,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_hits_total",
 				"total pages resolved from the VFS page cache or write buffer",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_resolve_pages_cache_hits_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -320,7 +441,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_resolve_pages_cache_misses_total",
 				"total pages missing from the VFS page cache and write buffer",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_resolve_pages_cache_misses_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -329,7 +450,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_get_pages_total",
 				"total VFS to engine get_pages requests",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_get_pages_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -338,7 +459,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_pages_fetched_total",
 				"total pages requested from the engine by VFS get_pages calls",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_pages_fetched_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -347,7 +468,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_prefetch_pages_total",
 				"total pages requested speculatively by VFS prefetch",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_prefetch_pages_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -356,7 +477,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_bytes_fetched_total",
 				"total bytes requested from the engine by VFS get_pages calls",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_bytes_fetched_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -365,7 +486,7 @@ impl ActorMetricCollectors {
 				"rivetkit_actor_sqlite_vfs_prefetch_bytes_total",
 				"total bytes requested speculatively by VFS prefetch",
 			),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_prefetch_bytes_total counter");
 		#[cfg(feature = "sqlite-local")]
@@ -377,7 +498,7 @@ impl ActorMetricCollectors {
 			.buckets(vec![
 				0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0,
 			]),
-			ACTOR_LABELS,
+			SQLITE_VFS_LIFECYCLE_BUCKET_LABELS,
 		)
 		.expect("create actor_sqlite_vfs_get_pages_duration_seconds histogram");
 		#[cfg(feature = "sqlite-local")]
@@ -500,6 +621,10 @@ impl ActorMetricCollectors {
 		);
 		register_metric(
 			&rivet_metrics::REGISTRY,
+			startup_phase_duration_seconds.clone(),
+		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
 			create_vars_duration_seconds.clone(),
 		);
 		register_metric(&rivet_metrics::REGISTRY, queue_depth.clone());
@@ -525,6 +650,14 @@ impl ActorMetricCollectors {
 		);
 		#[cfg(feature = "sqlite-local")]
 		{
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_open_phase_duration_seconds.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
+				sqlite_startup_preload_pages_total.clone(),
+			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
 				sqlite_vfs_resolve_pages_total.clone(),
@@ -604,6 +737,7 @@ impl ActorMetricCollectors {
 			actor_active_count,
 			actor_started_total,
 			actor_stopped_total,
+			startup_phase_duration_seconds,
 			create_state_duration_seconds,
 			create_vars_duration_seconds,
 			queue_depth,
@@ -621,6 +755,10 @@ impl ActorMetricCollectors {
 			shutdown_timeout_total,
 			state_mutation_total,
 			direct_subsystem_shutdown_warning_total,
+			#[cfg(feature = "sqlite-local")]
+			sqlite_open_phase_duration_seconds,
+			#[cfg(feature = "sqlite-local")]
+			sqlite_startup_preload_pages_total,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_vfs_resolve_pages_total,
 			#[cfg(feature = "sqlite-local")]
@@ -688,6 +826,10 @@ impl ActorMetrics {
 				labels,
 				state: Mutex::new(ActorMetricState::default()),
 				active: AtomicBool::new(true),
+				startup_is_new: AtomicU8::new(STARTUP_KIND_UNKNOWN),
+				startup_complete: AtomicBool::new(false),
+				current_startup_phase: AtomicU8::new(startup_phase::StartupPhase::Unknown as u8),
+				ready_at: Mutex::new(None),
 			}),
 		}
 	}
@@ -698,6 +840,117 @@ impl ActorMetrics {
 
 	fn actor_labels(&self) -> [&str; 1] {
 		self.labels().as_label_values()
+	}
+
+	#[cfg(feature = "sqlite-local")]
+	fn startup_is_new_label(&self) -> &'static str {
+		match self.inner.startup_is_new.load(Ordering::Acquire) {
+			STARTUP_KIND_NEW => "true",
+			STARTUP_KIND_EXISTING => "false",
+			STARTUP_KIND_UNKNOWN => "unknown",
+			_ => "unknown",
+		}
+	}
+
+	#[cfg(feature = "sqlite-local")]
+	fn actor_lifecycle_bucket_label(&self) -> &'static str {
+		if !self.inner.startup_complete.load(Ordering::Acquire) {
+			return startup_phase::StartupPhase::from_id(
+				self.inner.current_startup_phase.load(Ordering::Acquire),
+			)
+			.as_label();
+		}
+		let ready_age = self
+			.inner
+			.ready_at
+			.lock()
+			.as_ref()
+			.map(|ready_at| ready_at.elapsed())
+			.unwrap_or(Duration::ZERO);
+		actor_lifecycle_bucket::ready_for_age(ready_age)
+	}
+
+	#[cfg(feature = "sqlite-local")]
+	fn sqlite_vfs_labels(&self) -> [&str; 3] {
+		let labels = self.actor_labels();
+		[
+			labels[0],
+			self.actor_lifecycle_bucket_label(),
+			self.startup_is_new_label(),
+		]
+	}
+
+	pub(crate) fn begin_startup(&self) {
+		self.inner
+			.startup_is_new
+			.store(STARTUP_KIND_UNKNOWN, Ordering::Release);
+		self.inner
+			.current_startup_phase
+			.store(startup_phase::StartupPhase::LoadPersisted as u8, Ordering::Release);
+		*self.inner.ready_at.lock() = None;
+		self.inner.startup_complete.store(false, Ordering::Release);
+	}
+
+	/// Begins a timed startup attempt and records `total,error` unless it succeeds.
+	pub(crate) fn begin_startup_timer(&self) -> StartupTimer {
+		self.begin_startup();
+		StartupTimer {
+			metrics: self.clone(),
+			started_at: Instant::now(),
+			is_new: None,
+			finished: false,
+		}
+	}
+
+	pub(crate) fn set_startup_phase(&self, phase: startup_phase::StartupPhase) {
+		self.inner
+			.current_startup_phase
+			.store(phase as u8, Ordering::Release);
+	}
+
+	pub(crate) fn set_startup_is_new(&self, is_new: bool) {
+		let kind = if is_new {
+			STARTUP_KIND_NEW
+		} else {
+			STARTUP_KIND_EXISTING
+		};
+		self.inner.startup_is_new.store(kind, Ordering::Release);
+	}
+
+	pub(crate) fn finish_startup(&self) {
+		*self.inner.ready_at.lock() = Some(crate::time::Instant::now());
+		self.inner.startup_complete.store(true, Ordering::Release);
+	}
+
+	pub(crate) fn observe_startup_phase(
+		&self,
+		phase: startup_phase::StartupPhase,
+		is_new: Option<bool>,
+		outcome: &'static str,
+		duration: Duration,
+	) {
+		let labels = self.actor_labels();
+		METRICS
+			.startup_phase_duration_seconds
+			.with_label_values(&[
+				labels[0],
+				phase.as_label(),
+				optional_is_new_label(is_new),
+				outcome,
+			])
+			.observe(duration.as_secs_f64());
+	}
+
+	pub(crate) fn observe_startup_phase_result<T, E>(
+		&self,
+		phase: startup_phase::StartupPhase,
+		is_new: Option<bool>,
+		started_at: Instant,
+		result: std::result::Result<T, E>,
+	) -> std::result::Result<T, E> {
+		let outcome = if result.is_ok() { "success" } else { "error" };
+		self.observe_startup_phase(phase, is_new, outcome, started_at.elapsed());
+		result
 	}
 
 	pub(crate) fn observe_create_state(&self, duration: Duration) {
@@ -1013,7 +1266,7 @@ impl fmt::Debug for ActorMetrics {
 #[cfg(feature = "sqlite-local")]
 impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	fn record_resolve_pages(&self, requested_pages: u64) {
-		let labels = self.actor_labels();
+		let labels = self.sqlite_vfs_labels();
 		METRICS
 			.sqlite_vfs_resolve_pages_total
 			.with_label_values(&labels)
@@ -1027,19 +1280,19 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	fn record_resolve_cache_hits(&self, pages: u64) {
 		METRICS
 			.sqlite_vfs_resolve_pages_cache_hits_total
-			.with_label_values(&self.actor_labels())
+			.with_label_values(&self.sqlite_vfs_labels())
 			.inc_by(pages);
 	}
 
 	fn record_resolve_cache_misses(&self, pages: u64) {
 		METRICS
 			.sqlite_vfs_resolve_pages_cache_misses_total
-			.with_label_values(&self.actor_labels())
+			.with_label_values(&self.sqlite_vfs_labels())
 			.inc_by(pages);
 	}
 
 	fn record_get_pages_request(&self, pages: u64, prefetch_pages: u64, page_size: u64) {
-		let labels = self.actor_labels();
+		let labels = self.sqlite_vfs_labels();
 		METRICS
 			.sqlite_vfs_get_pages_total
 			.with_label_values(&labels)
@@ -1065,8 +1318,34 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 	fn observe_get_pages_duration(&self, duration_ns: u64) {
 		METRICS
 			.sqlite_vfs_get_pages_duration_seconds
-			.with_label_values(&self.actor_labels())
+			.with_label_values(&self.sqlite_vfs_labels())
 			.observe(ns_to_seconds(duration_ns));
+	}
+
+	fn observe_open_phase(
+		&self,
+		phase: depot_client::vfs::SqliteOpenPhase,
+		outcome: &'static str,
+		duration_ns: u64,
+	) {
+		let labels = self.actor_labels();
+		METRICS
+			.sqlite_open_phase_duration_seconds
+			.with_label_values(&[
+				labels[0],
+				phase.as_label(),
+				self.startup_is_new_label(),
+				outcome,
+			])
+			.observe(ns_to_seconds(duration_ns));
+	}
+
+	fn record_startup_preload_pages(&self, kind: &'static str, pages: u64) {
+		let labels = self.actor_labels();
+		METRICS
+			.sqlite_startup_preload_pages_total
+			.with_label_values(&[labels[0], self.startup_is_new_label(), kind])
+			.inc_by(pages);
 	}
 
 	fn record_commit(&self) {
@@ -1194,6 +1473,56 @@ fn set_aggregated_gauge(current: &mut i64, next: i64, gauge: &IntGaugeVec, label
 		gauge.with_label_values(labels).add(delta);
 		*current = next;
 	}
+}
+
+impl StartupTimer {
+	pub(crate) fn set_is_new(&mut self, is_new: bool) {
+		self.is_new = Some(is_new);
+		self.metrics.set_startup_is_new(is_new);
+	}
+
+	pub(crate) fn finish_success(mut self) -> Duration {
+		let duration = self.started_at.elapsed();
+		self.metrics.finish_startup();
+		self.metrics.observe_startup_phase(
+			startup_phase::StartupPhase::Total,
+			self.is_new,
+			"success",
+			duration,
+		);
+		self.finished = true;
+		duration
+	}
+}
+
+impl Drop for StartupTimer {
+	fn drop(&mut self) {
+		if self.finished {
+			return;
+		}
+
+		self.metrics.observe_startup_phase(
+			startup_phase::StartupPhase::Total,
+			self.is_new,
+			"error",
+			self.started_at.elapsed(),
+		);
+	}
+}
+
+fn optional_is_new_label(is_new: Option<bool>) -> &'static str {
+	match is_new {
+		Some(true) => "true",
+		Some(false) => "false",
+		None => "unknown",
+	}
+}
+
+fn startup_duration_buckets() -> Vec<f64> {
+	vec![
+		0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+		10.0, 30.0, 60.0,
+	]
 }
 
 fn usize_to_i64(value: usize) -> i64 {
