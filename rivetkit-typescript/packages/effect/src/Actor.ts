@@ -6,7 +6,6 @@ import {
 	FiberSet,
 	identity,
 	Layer,
-	MutableHashMap,
 	Option,
 	Predicate,
 	Record,
@@ -499,10 +498,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 			? undefined
 			: yield* StateRuntime.make<State>(effectOptions.state);
 
-	const instances = MutableHashMap.empty<
-		string,
-		ActorInstance<ActionHandlers, State>
-	>();
+	const instances = new Map<string, ActorInstance<ActionHandlers, State>>();
 
 	type RivetkitDefinition = RivetkitActorDefinitionFor<State, Database>;
 
@@ -540,7 +536,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 				>().pipe(Effect.provide(Context.merge(services, context)));
 
 				yield* Effect.sync(() =>
-					MutableHashMap.set(instances, c.actorId, {
+					instances.set(c.actorId, {
 						actionHandlers,
 						runFork,
 						scope,
@@ -577,9 +573,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 				const rpcMethod = `${actor.name}/${action._tag}`;
 				const traceMeta = readTraceMeta(meta);
 
-				const instance = MutableHashMap.get(instances, c.actorId).pipe(
-					Option.getOrUndefined,
-				);
+				const instance = instances.get(c.actorId);
 				if (!instance) {
 					if (c.abortSignal.aborted) throw makeActorAbortedError();
 					throw new Error("actor instance missing");
@@ -688,9 +682,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 				c: Rivetkit.WakeContextOf<RivetkitDefinition>,
 				newState: unknown,
 			) => {
-				const instance = MutableHashMap.get(instances, c.actorId).pipe(
-					Option.getOrUndefined,
-				);
+				const instance = instances.get(c.actorId);
 				// Late state-change callbacks can arrive after teardown removed the
 				// instance. There is no live Effect state stream left to update.
 				if (!instance) return;
@@ -700,13 +692,13 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		: undefined;
 
 	const cleanupInstance = Effect.fnUntraced(function* (actorId: string) {
-		const instance = MutableHashMap.get(instances, actorId);
+		const instance = instances.get(actorId);
 		// Actor teardown can be reported more than once across sleep
 		// and destroy paths. Treat missing entries as already cleaned up.
-		if (Option.isNone(instance)) return;
+		if (!instance) return;
 
-		MutableHashMap.remove(instances, actorId);
-		yield* Scope.close(instance.value.scope, Exit.void);
+		instances.delete(actorId);
+		yield* Scope.close(instance.scope, Exit.void);
 	});
 
 	const onSleep = async (c: Rivetkit.SleepContextOf<RivetkitDefinition>) => {
