@@ -20,7 +20,7 @@ export function FeedbackButton({ source = "web" }: { source?: string }) {
 	// already typing in an input/textarea/contenteditable somewhere else.
 	useEffect(() => {
 		const handler = (e: KeyboardEvent) => {
-			if (e.key.toLowerCase() !== "f") return;
+			if (!e.key && e.key.toLowerCase() !== "f") return;
 			if (e.metaKey || e.ctrlKey || e.altKey) return;
 			const target = e.target as HTMLElement | null;
 			if (!target) return;
