@@ -1,5 +1,5 @@
 {
-	"name": "effect",
+	"name": "example-effect",
 	"private": true,
 	"type": "module",
 	"scripts": {
