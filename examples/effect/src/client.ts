@@ -1,4 +1,5 @@
 import { Client } from "@rivetkit/effect";
+import { NodeRuntime } from "@effect/platform-node";
 import { Effect, Logger, Random } from "effect";
 import {
 	type BannedWordsError,
@@ -70,8 +71,6 @@ const program = Effect.gen(function* () {
 const ClientLayer = Client.layer({ endpoint: "http://127.0.0.1:6420" });
 const LoggerLayer = Logger.layer([Logger.consolePretty()]);
 
-Effect.runPromise(
-	program.pipe(Effect.provide(ClientLayer), Effect.provide(LoggerLayer)),
-).catch(() => {
-	process.exit(1);
-});
+program
+	.pipe(Effect.provide(ClientLayer), Effect.provide(LoggerLayer))
+	.pipe(NodeRuntime.runMain);
