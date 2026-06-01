@@ -1,13 +1,11 @@
 import {
 	Context,
 	Effect,
-	Exit,
-	FiberSet,
 	identity,
 	Layer,
 	Predicate,
-	Record,
-	Schema,
+	type Record,
+	type Schema,
 	Scope,
 	Struct,
 } from "effect";
@@ -16,8 +14,9 @@ import type * as RivetkitDb from "rivetkit/db";
 import type * as Action from "./Action.ts";
 import * as Client from "./Client.ts";
 import * as ActionDispatcher from "./internal/ActionDispatcher.ts";
-import * as StateRuntime from "./internal/StateRuntime.ts";
+import * as ActorInstanceRuntime from "./internal/ActorInstanceRuntime.ts";
 import type * as StateOptions from "./internal/StateOptions.ts";
+import * as StateRuntime from "./internal/StateRuntime.ts";
 import * as Registry from "./Registry.ts";
 import type * as RivetError from "./RivetError.ts";
 import type * as State from "./State.ts";
@@ -171,7 +170,7 @@ type WakeOptionsFor<
 > = {
 	readonly rawRivetkitContext: RawWakeContextFor<StateDefinition, Database>;
 } & ([StateDefinition] extends [never]
-	? {}
+	? unknown
 	: {
 			readonly state: State.State<
 				StateOptions.Decoded<StateDefinition>,
@@ -455,14 +454,6 @@ export function toWakeHandler<
 	};
 }
 
-type ActorInstance<
-	ActionHandlers,
-	StateDefinition extends StateOptions.Any,
-> = ActionDispatcher.Instance<ActionHandlers> &
-	StateRuntime.Instance<StateDefinition> & {
-	readonly scope: Scope.Closeable;
-};
-
 const makeRivetkitActor = Effect.fnUntraced(function* <
 	Name extends string,
 	Actions extends Action.AnyWithProps,
@@ -481,118 +472,49 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	) => Effect.Effect<ActionHandlers, never, RX>;
 	readonly options: Options<State, Database>;
 }) {
-	// Snapshot the current Effect context so action callbacks
-	// (which run in rivetkit’s plain Promise world) can run
-	// handler effects against the same services the Registry.start /
-	// Registry.test layer was provided with.
-	const services = yield* Effect.context<any>();
-
 	const { effectOptions, rivetkitOptions } = splitOptions(options);
 	const stateRuntime =
 		effectOptions.state === undefined
 			? undefined
 			: yield* StateRuntime.make<State>(effectOptions.state);
 
-	const instances = new Map<string, ActorInstance<ActionHandlers, State>>();
-
-	type RivetkitDefinition = RivetkitActorDefinitionFor<State, Database>;
-
-	const makeInstance = Effect.fnUntraced(function* (
-		c: Rivetkit.WakeContextOf<RivetkitDefinition>,
-	): Effect.fn.Return<ActorInstance<ActionHandlers, State>, never, any> {
-		const scope = yield* Scope.make();
-		const state = stateRuntime
-			? yield* stateRuntime.makeStateView(c)
-			: undefined;
-
-		const context = Context.mergeAll(
-			Context.make(CurrentAddress, {
-				actorId: c.actorId,
-				name: c.name,
-				key: c.key,
-			}),
-			Context.make(Scope.Scope, scope),
-			Context.make(
-				Sleep,
-				Effect.sync(() => c.sleep()),
-			),
-		);
-		const wakeOptions = {
-			rawRivetkitContext: c,
-			...(state ? { state } : {}),
-		} as WakeOptionsFor<State, Database>;
-		const actionHandlers = yield* wakeHandler(wakeOptions).pipe(
-			Effect.provide(context),
-		);
-		const runFork = yield* FiberSet.makeRuntime<
-			any,
-			unknown,
-			unknown
-		>().pipe(Effect.provide(Context.merge(services, context)));
-
-		return {
-			actionHandlers,
-			runFork,
-			scope,
-			state,
-		};
-	});
-
-	const onWake = async (c: Rivetkit.WakeContextOf<RivetkitDefinition>) => {
-		await Effect.runPromiseWith(services)(
-			makeInstance(c).pipe(
-				Effect.tap((instance) =>
-					Effect.sync(() => {
-						instances.set(c.actorId, instance);
-					}),
+	const instanceRuntime = yield* ActorInstanceRuntime.make<
+		ActionHandlers,
+		State,
+		Database,
+		WakeOptionsFor<State, Database>
+	>({
+		wakeHandler,
+		stateRuntime,
+		makeContext: (c, scope) =>
+			Context.mergeAll(
+				Context.make(CurrentAddress, {
+					actorId: c.actorId,
+					name: c.name,
+					key: c.key,
+				}),
+				Context.make(Scope.Scope, scope),
+				Context.make(
+					Sleep,
+					Effect.sync(() => c.sleep()),
 				),
 			),
-		);
-	};
+		makeWakeOptions: (c, state) =>
+			({
+				rawRivetkitContext: c,
+				...(state === undefined ? {} : { state }),
+			}) as WakeOptionsFor<State, Database>,
+	});
 
 	const actions = ActionDispatcher.make<
 		Name,
 		Actions,
 		ActionHandlers,
-		RivetkitDefinition
+		RivetkitActorDefinitionFor<State, Database>
 	>({
 		actor,
-		getInstance: (actorId) => instances.get(actorId),
+		getInstance: instanceRuntime.get,
 	});
-
-	const onStateChange = stateRuntime
-		? (
-				c: Rivetkit.WakeContextOf<RivetkitDefinition>,
-				newState: unknown,
-			) => {
-				const instance = instances.get(c.actorId);
-				// Late state-change callbacks can arrive after teardown removed the
-				// instance. There is no live Effect state stream left to update.
-				if (!instance) return;
-
-				stateRuntime.publishChange(instance, newState);
-			}
-		: undefined;
-
-	const cleanupInstance = Effect.fnUntraced(function* (actorId: string) {
-		const instance = instances.get(actorId);
-		// Actor teardown can be reported more than once across sleep
-		// and destroy paths. Treat missing entries as already cleaned up.
-		if (!instance) return;
-
-		instances.delete(actorId);
-		yield* Scope.close(instance.scope, Exit.void);
-	});
-
-	const onSleep = async (c: Rivetkit.SleepContextOf<RivetkitDefinition>) => {
-		await Effect.runPromiseWith(services)(cleanupInstance(c.actorId));
-	};
-
-	const onDestroy = async (
-		c: Rivetkit.DestroyContextOf<RivetkitDefinition>,
-	) => {
-		await Effect.runPromiseWith(services)(cleanupInstance(c.actorId));
-	};
 
 	return Rivetkit.actor<
 		StateOptions.Encoded<State>,
@@ -607,13 +529,15 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 	>({
 		options: rivetkitOptions,
 		...(effectOptions.db ? { db: effectOptions.db } : {}),
-		onWake,
+		onWake: instanceRuntime.onWake,
 		...(stateRuntime
 			? { createState: stateRuntime.createInitialState }
 			: {}),
 		actions,
-		...(onStateChange ? { onStateChange } : {}),
-		onSleep,
-		onDestroy,
+		...(instanceRuntime.onStateChange
+			? { onStateChange: instanceRuntime.onStateChange }
+			: {}),
+		onSleep: instanceRuntime.onTeardown,
+		onDestroy: instanceRuntime.onTeardown,
 	});
 });

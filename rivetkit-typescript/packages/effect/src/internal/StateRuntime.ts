@@ -7,7 +7,7 @@ export type ActorState<StateDefinition extends StateOptions.Any> = State.State<
 	Schema.SchemaError
 >;
 
-export type Instance<StateDefinition extends StateOptions.Any> = {
+type StateInstance<StateDefinition extends StateOptions.Any> = {
 	readonly runFork: <A, E>(
 		effect: Effect.Effect<A, E, any>,
 		options?: Effect.RunOptions,
@@ -16,14 +16,14 @@ export type Instance<StateDefinition extends StateOptions.Any> = {
 };
 
 export type Runtime<StateDefinition extends StateOptions.Any> = {
-	readonly makeStateView: (
-		c: { state: StateOptions.Encoded<StateDefinition> },
-	) => Effect.Effect<ActorState<StateDefinition>, never, any>;
+	readonly makeStateView: (c: {
+		state: StateOptions.Encoded<StateDefinition>;
+	}) => Effect.Effect<ActorState<StateDefinition>, never, any>;
 	readonly createInitialState: () => Promise<
 		StateOptions.Encoded<StateDefinition>
 	>;
 	readonly publishChange: (
-		instance: Instance<StateDefinition>,
+		instance: StateInstance<StateDefinition>,
 		newState: unknown,
 	) => void;
 };
@@ -61,9 +61,9 @@ export const make = Effect.fnUntraced(function* <
 			),
 		createInitialState: () =>
 			Effect.runPromiseWith(services)(
-				stateCodec.encode(stateOptions.initialValue()).pipe(
-					Effect.orDie,
-				),
+				stateCodec
+					.encode(stateOptions.initialValue())
+					.pipe(Effect.orDie),
 			),
 		publishChange: (instance, newState) => {
 			instance.runFork(
