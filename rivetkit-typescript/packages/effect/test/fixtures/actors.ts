@@ -181,6 +181,10 @@ export const CountEvents = Action.make("CountEvents", {
 	success: Schema.Number,
 });
 
+export const SleepDuringAction = Action.make("SleepDuringAction", {
+	success: Schema.String,
+});
+
 const EncodedTransformedState = Schema.Struct({
 	when: Schema.String,
 	instant: Schema.String,
@@ -302,6 +306,7 @@ export const Counter = Actor.make("Counter", {
 		LogEvent,
 		ListEvents,
 		CountEvents,
+		SleepDuringAction,
 	],
 });
 
@@ -462,6 +467,24 @@ export const CounterLive = Counter.toLayer(
 						);
 						return rows[0]?.count ?? 0;
 					}).pipe(Effect.orDie),
+				SleepDuringAction: () =>
+					Effect.gen(function* () {
+						const key = address.key.join("/");
+						yield* Effect.sync(() => {
+							flags.set(`sleep-during-action-started:${key}`, true);
+						});
+						yield* sleep;
+						return yield* Effect.never.pipe(
+							Effect.onInterrupt(() =>
+								Effect.sync(() => {
+									flags.set(
+										`sleep-during-action-interrupted:${key}`,
+										true,
+									);
+								}),
+							),
+						);
+					}),
 			});
 		}),
 	{

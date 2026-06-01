@@ -3,6 +3,7 @@ import {
 	Context,
 	Effect,
 	Exit,
+	type Fiber,
 	FiberSet,
 	identity,
 	Layer,
@@ -498,9 +499,10 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		string,
 		{
 			readonly actionHandlers: ActionHandlers;
-			readonly runFork: (
-				effect: Effect.Effect<void, unknown, any>,
-			) => unknown;
+			readonly runFork: <A, E>(
+				effect: Effect.Effect<A, E, any>,
+				options?: Effect.RunOptions,
+			) => Fiber.Fiber<A, E>;
 			readonly scope: Scope.Closeable;
 			readonly state?: State.State<
 				StateOptions.Decoded<State>,
@@ -566,7 +568,7 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 				);
 				const runFork = yield* FiberSet.makeRuntime<
 					any,
-					void,
+					unknown,
 					unknown
 				>().pipe(Effect.provide(Context.merge(services, context)));
 
@@ -608,98 +610,114 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 				const rpcMethod = `${actor.name}/${action._tag}`;
 				const traceMeta = readTraceMeta(meta);
 
-				const exit = await Effect.runPromiseExitWith(services)(
-					Effect.gen(function* () {
-						const instance = yield* MutableHashMap.get(
-							instances,
-							c.actorId,
-						).pipe(Effect.fromOption, Effect.orDie);
-						// The handler map is keyed by the same action
-						// definitions being registered here, but
-						// TypeScript loses that relationship once the
-						// actions are widened into the RivetKit actions
-						// record.
-						const actionHandler = instance.actionHandlers[
-							action._tag as keyof ActionHandlers
-						] as (
-							envelope: ActionRequest<typeof action>,
-						) => Action.ResultFrom<typeof action, any>;
-						// Raw RivetKit clients call no-argument actions with an
-						// absent first argument. The Effect JSON Void codec expects
-						// null, so adapt only actions that declared no payload.
-						const payloadForDecode =
-							!action.hasPayload && payload === undefined
-								? null
-								: payload;
-						const decodedPayload = yield* decodePayload(
-							payloadForDecode,
-						).pipe(Effect.orDie);
-						// The payload was decoded with this action's schema,
-						// so this is the runtime boundary that restores the
-						// typed envelope expected by the user handler.
-						const actionRequest = {
-							_tag: action._tag,
-							action,
-							payload: decodedPayload,
-						} as ActionRequest<typeof action>;
-
-						const resultExit = yield* Effect.exit(
-							actionHandler(actionRequest),
-						);
-
-						if (Exit.isSuccess(resultExit)) {
-							return yield* encodeSuccess(resultExit.value).pipe(
-								Effect.orDie,
-							);
-						}
-
-						const expectedError = Exit.findErrorOption(resultExit);
-
-						if (Option.isSome(expectedError)) {
-							const encodedError = yield* encodeError(
-								expectedError.value,
-							).pipe(Effect.orDie);
-
-							return yield* Effect.fail(
-								new Rivetkit.UserError(
-									hasStringProperty("message")(encodedError)
-										? encodedError.message
-										: `${action._tag} failed`,
-									{
-										code: hasStringProperty("_tag")(
-											encodedError,
-										)
-											? encodedError._tag
-											: undefined,
-										metadata:
-											ActionErrorEnvelope.make(
-												encodedError,
-											),
-									},
-								),
-							);
-						}
-
-						// Defect / interruption. Do not encode these as action errors.
-						// Let them escape, so Rivetkit maps them to its internal_error shape.
-						return yield* Effect.die(
-							Cause.squash(resultExit.cause),
-						);
-					}).pipe(
-						Effect.withSpan(rpcMethod, {
-							parent: traceMeta
-								? Tracer.externalSpan(traceMeta)
-								: undefined,
-							kind: "server",
-							attributes: {
-								"rpc.system.name": rpcSystem,
-								"rpc.method": rpcMethod,
-							},
-						}),
-					),
+				const instance = MutableHashMap.get(instances, c.actorId).pipe(
+					Option.getOrUndefined,
 				);
+				if (!instance) {
+					if (c.abortSignal.aborted) throw makeActorAbortedError();
+					throw new Error("actor instance missing");
+				}
 
+				const actionEffect = Effect.gen(function* () {
+					// The handler map is keyed by the same action
+					// definitions being registered here, but
+					// TypeScript loses that relationship once the
+					// actions are widened into the RivetKit actions
+					// record.
+					const actionHandler = instance.actionHandlers[
+						action._tag as keyof ActionHandlers
+					] as (
+						envelope: ActionRequest<typeof action>,
+					) => Action.ResultFrom<typeof action, any>;
+					// Raw RivetKit clients call no-argument actions with an
+					// absent first argument. The Effect JSON Void codec expects
+					// null, so adapt only actions that declared no payload.
+					const payloadForDecode =
+						!action.hasPayload && payload === undefined
+							? null
+							: payload;
+					const decodedPayload = yield* decodePayload(
+						payloadForDecode,
+					).pipe(Effect.orDie);
+					// The payload was decoded with this action's schema,
+					// so this is the runtime boundary that restores the
+					// typed envelope expected by the user handler.
+					const actionRequest = {
+						_tag: action._tag,
+						action,
+						payload: decodedPayload,
+					} as ActionRequest<typeof action>;
+
+					const resultExit = yield* Effect.exit(
+						actionHandler(actionRequest),
+					);
+
+					if (Exit.isSuccess(resultExit)) {
+						return yield* encodeSuccess(resultExit.value).pipe(
+							Effect.orDie,
+						);
+					}
+
+					const expectedError = Exit.findErrorOption(resultExit);
+
+					if (Option.isSome(expectedError)) {
+						const encodedError = yield* encodeError(
+							expectedError.value,
+						).pipe(Effect.orDie);
+
+						return yield* Effect.fail(
+							new Rivetkit.UserError(
+								hasStringProperty("message")(encodedError)
+									? encodedError.message
+									: `${action._tag} failed`,
+								{
+									code: hasStringProperty("_tag")(
+										encodedError,
+									)
+										? encodedError._tag
+										: undefined,
+									metadata:
+										ActionErrorEnvelope.make(encodedError),
+								},
+							),
+						);
+					}
+
+					return yield* Effect.failCause(resultExit.cause);
+				}).pipe(
+					Effect.withSpan(rpcMethod, {
+						parent: traceMeta
+							? Tracer.externalSpan(traceMeta)
+							: undefined,
+						kind: "server",
+						attributes: {
+							"rpc.system.name": rpcSystem,
+							"rpc.method": rpcMethod,
+						},
+					}),
+				);
+				const fiber = instance.runFork(Effect.exit(actionEffect), {
+					signal: c.abortSignal,
+				});
+				const fiberExit = await new Promise<
+					Exit.Exit<Exit.Exit<unknown, unknown>>
+				>((resolve) => fiber.addObserver(resolve));
+
+				if (Exit.isFailure(fiberExit)) {
+					if (Cause.hasInterruptsOnly(fiberExit.cause)) {
+						throw makeActorAbortedError();
+					}
+					throw Cause.squash(fiberExit.cause);
+				}
+				const exit = fiberExit.value;
 				if (Exit.isSuccess(exit)) return exit.value;
+				// Action fibers can be interrupted by a caller abort signal
+				// or by the actor instance scope closing during sleep, destroy,
+				// or shutdown. Surface those lifecycle exits as RivetKit's
+				// structured action-aborted error instead of an internal error.
+				if (Cause.hasInterruptsOnly(exit.cause)) {
+					throw makeActorAbortedError();
+				}
 				throw Cause.squash(exit.cause);
 			},
 		];
@@ -789,3 +807,8 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		onDestroy,
 	});
 });
+
+const makeActorAbortedError = () =>
+	new Rivetkit.RivetError("actor", "aborted", "Actor aborted", {
+		public: true,
+	});

@@ -1,6 +1,6 @@
 import { assert, layer } from "@effect/vitest";
 import { Registry, RivetError } from "@rivetkit/effect";
-import { DateTime, Effect, Layer, Schedule } from "effect";
+import { DateTime, Effect, Fiber, Layer, Schedule } from "effect";
 import { TestClock } from "effect/testing";
 import { createClient } from "rivetkit/client";
 import { inject } from "vitest";
@@ -334,6 +334,56 @@ layer(TestLayer)("end-to-end", (it) => {
 			if (exit._tag === "Success") {
 				assert.instanceOf(exit.value, RivetError.RivetError);
 			}
+		}),
+	);
+
+	it.effect("interrupts action effects when actor scope closes", () =>
+		Effect.gen(function* () {
+			const key = "t-action-scope-close";
+			const flags = yield* Flags;
+			const counter = (yield* Counter.client).getOrCreate([key]);
+			const actionFiber = yield* counter.SleepDuringAction().pipe(
+				Effect.flip,
+				Effect.forkChild({ startImmediately: true }),
+			);
+
+			const started = yield* Effect.sync(() =>
+				flags.get(`sleep-during-action-started:${key}`),
+			).pipe(
+				Effect.repeat({
+					until: (v) => v === true,
+					schedule: Schedule.spaced("100 millis"),
+				}),
+				TestClock.withLive,
+			);
+			assert.strictEqual(started, true);
+
+			const finalizerFired = yield* Effect.sync(() =>
+				flags.get(`finalizer:${key}`),
+			).pipe(
+				Effect.repeat({
+					until: (v) => v === true,
+					schedule: Schedule.spaced("100 millis"),
+				}),
+				TestClock.withLive,
+			);
+			assert.strictEqual(finalizerFired, true);
+
+			const interrupted = yield* Effect.sync(() =>
+				flags.get(`sleep-during-action-interrupted:${key}`),
+			).pipe(
+				Effect.repeat({
+					until: (v) => v === true,
+					schedule: Schedule.spaced("100 millis"),
+				}),
+				TestClock.withLive,
+			);
+			assert.strictEqual(interrupted, true);
+
+			const error = yield* Fiber.join(actionFiber);
+			assert.instanceOf(error, RivetError.RivetError);
+			assert.strictEqual(error.group, "actor");
+			assert.strictEqual(error.code, "aborted");
 		}),
 	);
 
