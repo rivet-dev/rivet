@@ -1,4 +1,4 @@
-import { Action, Actor, type Client, type State } from "@rivetkit/effect";
+import { Action, Actor, Client, type State } from "@rivetkit/effect";
 import {
 	Context,
 	Effect,
@@ -8,7 +8,7 @@ import {
 } from "effect";
 import type { RawAccess } from "rivetkit/db";
 import { db } from "rivetkit/db";
-import { describe, expectTypeOf, test } from "vitest";
+import { describe, expectTypeOf, it, test } from "@effect/vitest";
 
 class SomeDep extends Context.Service<SomeDep, { readonly x: number }>()(
 	"SomeDep",
@@ -39,6 +39,42 @@ const TagsCsv = Schema.String.pipe(
 		}),
 	),
 );
+
+const ServiceDependentNumber = Schema.Number.pipe(
+	Schema.decodeTo(
+		Schema.Number,
+		SchemaTransformation.transformOrFail({
+			decode: (n: number) =>
+				Effect.gen(function* () {
+					const dep = yield* SomeDep;
+					return n + dep.x;
+				}),
+			encode: (n: number) =>
+				Effect.gen(function* () {
+					const dep = yield* SomeDep;
+					return n - dep.x;
+				}),
+		}),
+	),
+);
+
+class ServiceDependentError extends Schema.TaggedErrorClass<ServiceDependentError>()(
+	"ServiceDependentError",
+	{
+		limit: ServiceDependentNumber,
+		message: Schema.String,
+	},
+) {}
+
+const ServiceDependentAction = Action.make("ServiceDependentAction", {
+	payload: { amount: ServiceDependentNumber },
+	success: ServiceDependentNumber,
+	error: ServiceDependentError,
+});
+
+const ServiceDependentActor = Actor.make("ServiceDependentActor", {
+	actions: [ServiceDependentAction],
+});
 
 const TransformedState = {
 	schema: Schema.Struct({
@@ -552,4 +588,16 @@ describe("Actor.make(...).client", () => {
 			>
 		>();
 	});
+
+	it.effect("handle calls require client-side schema services", () =>
+		Effect.gen(function* () {
+			const actor = (yield* ServiceDependentActor.client).getOrCreate(
+				"t-service-dependent",
+			);
+			const actionEffect = actor.ServiceDependentAction({ amount: 10 });
+			type ActionClientServices = Effect.Services<typeof actionEffect>;
+
+			expectTypeOf<SomeDep>().toExtend<ActionClientServices>();
+		}).pipe(Effect.provide(Client.layer())),
+	);
 });

@@ -199,11 +199,12 @@ export type AccessorKeyParam = string | Rivetkit.ActorKey;
 export type Handle<Actions extends Action.Any> = {
 	readonly [A in Actions as Action.Tag<A>]: (
 		payload: Action.PayloadConstructor<A>,
-	) => Effect.Effect<
-		Action.Success<A>,
-		Action.Error<A> | RivetError.RivetError
-	>;
-};
+		) => Effect.Effect<
+			Action.Success<A>,
+			Action.Error<A> | RivetError.RivetError,
+			Action.ServicesClient<A>
+		>;
+	};
 
 /**
  * Yielded by `Actor.client`. Address an actor instance by key, then
