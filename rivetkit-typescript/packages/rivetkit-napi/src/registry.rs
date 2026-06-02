@@ -241,6 +241,30 @@ impl CoreRegistry {
 		Ok(())
 	}
 
+	#[napi(js_name = "actorStopThresholdMs")]
+	pub async fn actor_stop_threshold_ms(&self) -> napi::Result<Option<i64>> {
+		let (active_envoy, serverless_runtime) = {
+			let guard = self.state.lock().await;
+			match &*guard {
+				RegistryState::Serving => (self.serving_envoy.lock().clone(), None),
+				RegistryState::Serverless(runtime) => (None, Some(runtime.clone())),
+				RegistryState::Registering(_)
+				| RegistryState::BuildingServerless
+				| RegistryState::ShuttingDown
+				| RegistryState::ShutDown => (None, None),
+			}
+		};
+
+		if let Some(runtime) = serverless_runtime {
+			return Ok(runtime.active_envoy_actor_stop_threshold_ms().await);
+		}
+
+		match active_envoy {
+			Some(envoy) => Ok(envoy.actor_stop_threshold_ms().await),
+			None => Ok(None),
+		}
+	}
+
 	#[napi]
 	pub async fn diagnostics(&self) -> napi::Result<JsRegistryDiagnostics> {
 		let guard = self.state.lock().await;
@@ -274,6 +298,98 @@ impl CoreRegistry {
 			},
 		};
 		Ok(diagnostics)
+	}
+
+	#[napi]
+	pub async fn health(&self) -> napi::Result<JsRegistryRouteResponse> {
+		let version = self.route_package_version();
+		let serverless_runtime = {
+			let guard = self.state.lock().await;
+			match &*guard {
+				RegistryState::Registering(_) => {
+					return Ok(health_response(503, "not_started", &version));
+				}
+				RegistryState::BuildingServerless => {
+					return Ok(health_response(503, "starting", &version));
+				}
+				RegistryState::Serving => match self
+					.serving_envoy
+					.lock()
+					.as_ref()
+					.map(CoreEnvoyHandle::status)
+				{
+					Some(envoy) => {
+						return Ok(health_response(
+							if envoy.ping_healthy { 200 } else { 503 },
+							if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
+							&version,
+						));
+					}
+					None => return Ok(health_response(503, "starting", &version)),
+				},
+				RegistryState::Serverless(runtime) => runtime.clone(),
+				RegistryState::ShuttingDown => {
+					return Ok(health_response(503, "shutting_down", &version));
+				}
+				RegistryState::ShutDown => {
+					return Ok(health_response(503, "shut_down", &version));
+				}
+			}
+		};
+
+		let response = match serverless_runtime.active_envoy_status().await {
+			Some(envoy) => health_response(
+				if envoy.ping_healthy { 200 } else { 503 },
+				if envoy.ping_healthy { "ok" } else { "engine_ping_stale" },
+				&version,
+			),
+			None => health_response(503, "engine_ping_stale", &version),
+		};
+		Ok(response)
+	}
+
+	#[napi]
+	pub fn metadata(&self) -> napi::Result<JsRegistryRouteResponse> {
+		self.route_metadata.lock().clone().ok_or_else(|| {
+			napi_anyhow_error(
+				NapiInvalidState {
+					state: "metadata_unavailable".to_owned(),
+					reason: "registry metadata is not available until the registry has started"
+						.to_owned(),
+				}
+				.build(),
+			)
+		})
+	}
+
+	#[napi]
+	pub async fn metrics(&self) -> napi::Result<JsRegistryRouteResponse> {
+		let (active_envoy, serverless_runtime) = {
+			let guard = self.state.lock().await;
+			match &*guard {
+				RegistryState::Serving => (
+					self.serving_envoy.lock().as_ref().map(CoreEnvoyHandle::status),
+					None,
+				),
+				RegistryState::Serverless(runtime) => (None, Some(runtime.clone())),
+				RegistryState::Registering(_)
+				| RegistryState::BuildingServerless
+				| RegistryState::ShuttingDown
+				| RegistryState::ShutDown => (None, None),
+			}
+		};
+		let serverless_envoy = match serverless_runtime {
+			Some(runtime) => runtime.active_envoy_status().await,
+			None => None,
+		};
+		let envoy_status = active_envoy.as_ref().or(serverless_envoy.as_ref());
+		let metrics = rivetkit_core::metrics_endpoint::render_prometheus_metrics(envoy_status)
+			.map_err(napi_anyhow_error)?;
+		Ok(JsRegistryRouteResponse {
+			status: 200,
+			headers: HashMap::from([("content-type".to_owned(), metrics.content_type)]),
+			body: Buffer::from(metrics.body),
+		})
 	}
 
 	#[napi(ts_return_type = "Promise<JsServerlessResponseHead>")]

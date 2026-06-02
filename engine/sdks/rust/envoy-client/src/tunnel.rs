@@ -2,6 +2,7 @@ use rivet_envoy_protocol as protocol;
 
 use crate::connection::ws_send;
 use crate::envoy::{BufferedActorMessage, EnvoyContext};
+use crate::utils::display_id;
 
 fn make_ws_key(gateway_id: &protocol::GatewayId, request_id: &protocol::RequestId) -> [u8; 8] {
 	let mut key = [0u8; 8];
@@ -21,6 +22,17 @@ pub struct HibernatingWebSocketMetadata {
 
 pub async fn handle_tunnel_message(ctx: &mut EnvoyContext, msg: protocol::ToEnvoyTunnelMessage) {
 	let message_id = msg.message_id;
+	let message_index = message_id.message_index;
+	let message_kind = to_envoy_tunnel_message_kind_name(&msg.message_kind);
+	let inner_data_len = to_envoy_tunnel_message_inner_data_len(&msg.message_kind);
+	tracing::trace!(
+		gateway_id = %display_id(&message_id.gateway_id),
+		request_id = %display_id(&message_id.request_id),
+		message_index,
+		message_kind,
+		inner_data_len,
+		"received tunnel message from engine"
+	);
 	match msg.message_kind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(req) => {
 			handle_request_start(ctx, message_id, req).await;
@@ -173,21 +185,75 @@ fn handle_ws_message(
 	message_id: protocol::MessageId,
 	msg: protocol::ToEnvoyWebSocketMessage,
 ) {
+	let data_len = msg.data.len();
+	let binary = msg.binary;
+	let gateway_id = message_id.gateway_id;
+	let request_id = message_id.request_id;
+	let message_index = message_id.message_index;
 	let actor_id = ctx
 		.request_to_actor
 		.get(&[&message_id.gateway_id, &message_id.request_id])
 		.cloned();
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
-			let _ = actor
+			tracing::trace!(
+				actor_id = %actor_id,
+				gateway_id = %display_id(&gateway_id),
+				request_id = %display_id(&request_id),
+				message_index,
+				data_len,
+				binary,
+				"dispatching websocket message to actor task"
+			);
+			if actor
 				.handle
-				.send(crate::actor::ToActor::WsMsg { message_id, msg });
+				.send(crate::actor::ToActor::WsMsg { message_id, msg })
+				.is_ok()
+				{
+					tracing::trace!(
+						actor_id = %actor_id,
+						gateway_id = %display_id(&gateway_id),
+						request_id = %display_id(&request_id),
+						message_index,
+						data_len,
+						binary,
+					"dispatched websocket message to actor task"
+				);
+				} else {
+					tracing::warn!(
+						actor_id = %actor_id,
+						gateway_id = %display_id(&gateway_id),
+						request_id = %display_id(&request_id),
+						message_index,
+						data_len,
+						binary,
+					"actor websocket task channel closed"
+				);
+			}
 		} else {
+			tracing::trace!(
+				actor_id = %actor_id,
+				gateway_id = %display_id(&gateway_id),
+				request_id = %display_id(&request_id),
+				message_index,
+				data_len,
+				binary,
+				"buffering websocket message for actor task"
+			);
 			ctx.buffered_actor_messages
 				.entry(actor_id.clone())
 				.or_default()
 				.push(BufferedActorMessage::WsMsg { message_id, msg });
 		}
+	} else {
+		tracing::warn!(
+			gateway_id = %display_id(&gateway_id),
+			request_id = %display_id(&request_id),
+			message_index,
+			data_len,
+			binary,
+			"received websocket message for unknown tunnel request"
+		);
 	}
 }
 
@@ -226,6 +292,34 @@ fn handle_ws_close(
 		.remove(&make_ws_key(&message_id.gateway_id, &message_id.request_id));
 }
 
+fn to_envoy_tunnel_message_kind_name(
+	kind: &protocol::ToEnvoyTunnelMessageKind,
+) -> &'static str {
+	match kind {
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_) => "ToEnvoyRequestStart",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(_) => "ToEnvoyRequestChunk",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => "ToEnvoyRequestAbort",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_) => "ToEnvoyWebSocketOpen",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => {
+			"ToEnvoyWebSocketMessage"
+		}
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => "ToEnvoyWebSocketClose",
+	}
+}
+
+fn to_envoy_tunnel_message_inner_data_len(kind: &protocol::ToEnvoyTunnelMessageKind) -> usize {
+	match kind {
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(msg) => {
+			msg.body.as_ref().map_or(0, Vec::len)
+		}
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(msg) => msg.body.len(),
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(msg) => msg.data.len(),
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort
+		| protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_)
+		| protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => 0,
+	}
+}
+
 pub fn send_hibernatable_ws_message_ack(
 	ctx: &mut EnvoyContext,
 	gateway_id: protocol::GatewayId,
@@ -258,6 +352,9 @@ pub async fn resend_buffered_tunnel_messages(ctx: &mut EnvoyContext) {
 	);
 
 	let messages = std::mem::take(&mut ctx.buffered_messages);
+	crate::metrics::METRICS
+		.outbound_queue_depth
+		.sub(messages.len() as i64);
 	for msg in messages {
 		ws_send(&ctx.shared, protocol::ToRivet::ToRivetTunnelMessage(msg)).await;
 	}

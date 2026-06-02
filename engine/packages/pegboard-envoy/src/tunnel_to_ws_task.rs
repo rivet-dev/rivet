@@ -64,6 +64,14 @@ async fn recv_msg(
 					conn.protocol_version.to_string().as_str(),
 				])
 				.inc();
+			metrics::EVICTION_WITH_REASON_TOTAL
+				.with_label_values(&[
+					conn.namespace_id.to_string().as_str(),
+					&conn.pool_name,
+					conn.protocol_version.to_string().as_str(),
+					"duplicate_key",
+				])
+				.inc();
 
 			return Ok(Err(LifecycleResult::Evicted));
 		}
@@ -94,6 +102,9 @@ async fn handle_message(
 			return Ok(false);
 		}
 	};
+
+	let ns_label = conn.namespace_id.to_string();
+	let pool_label = conn.pool_name.as_str();
 
 	// Convert to ToEnvoy types
 	let to_client_msg = match msg {
@@ -127,8 +138,24 @@ async fn handle_message(
 			// TODO: Parallelize
 			for command_wrapper in &mut command_wrappers {
 				hibernating_requests::hydrate_command_wrapper(ctx, command_wrapper).await?;
-				if let protocol::Command::CommandStopActor(_) = &command_wrapper.inner {
-					actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
+				match &command_wrapper.inner {
+					protocol::Command::CommandStartActor(start) => {
+						actor_lifecycle::record_actor_start(
+							conn,
+							&command_wrapper.checkpoint.actor_id,
+							start.config.create_ts,
+						)
+						.await;
+					}
+					protocol::Command::CommandStopActor(stop) => {
+						actor_lifecycle::record_actor_stop_dispatch(
+							conn,
+							&command_wrapper.checkpoint.actor_id,
+							&stop.reason,
+						)
+						.await;
+						actor_lifecycle::stop_actor(conn, &command_wrapper.checkpoint).await?;
+					}
 				}
 			}
 
@@ -142,13 +169,33 @@ async fn handle_message(
 				.authorized_tunnel_routes
 				.insert_async((x.message_id.gateway_id, x.message_id.request_id), ())
 				.await;
+			metrics::TUNNEL_MESSAGE_TOTAL
+				.with_label_values(&[
+					ns_label.as_str(),
+					pool_label,
+					"outbound",
+					to_envoy_tunnel_kind_label(&x.message_kind),
+				])
+				.inc();
 			protocol::ToEnvoy::ToEnvoyTunnelMessage(x)
 		}
 	};
 
+	let message_kind_label = to_envoy_message_kind_label(&to_client_msg);
+
 	// Forward raw message to WebSocket
 	let serialized_msg =
 		versioned::ToEnvoy::wrap_latest(to_client_msg).serialize(conn.protocol_version)?;
+	let serialized_len = serialized_msg.len();
+	metrics::WS_MESSAGES_TOTAL
+		.with_label_values(&[ns_label.as_str(), pool_label, "outbound", message_kind_label])
+		.inc();
+	metrics::WS_BYTES_TOTAL
+		.with_label_values(&[ns_label.as_str(), pool_label, "outbound", message_kind_label])
+		.inc_by(serialized_len as u64);
+	metrics::WS_FRAME_SIZE_BYTES
+		.with_label_values(&[ns_label.as_str(), pool_label, "outbound"])
+		.observe(serialized_len as f64);
 	let ws_msg = Message::Binary(serialized_msg.into());
 	conn.ws_handle
 		.send(ws_msg)
@@ -156,4 +203,32 @@ async fn handle_message(
 		.context("failed to send message to WebSocket")?;
 
 	Ok(false)
+}
+
+/// Map a `ToEnvoy` variant to a bounded `message_kind` metric label.
+fn to_envoy_message_kind_label(msg: &protocol::ToEnvoy) -> &'static str {
+	match msg {
+		protocol::ToEnvoy::ToEnvoyInit(_) => "init",
+		protocol::ToEnvoy::ToEnvoyCommands(_) => "commands",
+		protocol::ToEnvoy::ToEnvoyAckEvents(_) => "ack_events",
+		protocol::ToEnvoy::ToEnvoyKvResponse(_) => "kv_response",
+		protocol::ToEnvoy::ToEnvoyTunnelMessage(_) => "tunnel_message",
+		protocol::ToEnvoy::ToEnvoyPing(_) => "ping",
+		protocol::ToEnvoy::ToEnvoySqliteGetPagesResponse(_) => "sqlite_get_pages_response",
+		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(_) => "sqlite_commit_response",
+		protocol::ToEnvoy::ToEnvoySqliteExecResponse(_) => "sqlite_exec_response",
+		protocol::ToEnvoy::ToEnvoySqliteExecuteResponse(_) => "sqlite_execute_response",
+	}
+}
+
+/// Map a `ToEnvoyTunnelMessageKind` variant to a bounded `tunnel_kind` metric label.
+fn to_envoy_tunnel_kind_label(kind: &protocol::ToEnvoyTunnelMessageKind) -> &'static str {
+	match kind {
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_) => "request_start",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(_) => "request_chunk",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => "request_abort",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_) => "ws_open",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => "ws_message",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => "ws_close",
+	}
 }

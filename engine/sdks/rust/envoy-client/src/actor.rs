@@ -17,7 +17,7 @@ use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
 use crate::stringify::stringify_to_rivet_tunnel_message_kind;
 use crate::utils::{
-	BufferMap, id_to_str, spawn_detached, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16,
+	BufferMap, display_id, spawn_detached, wrapping_add_u16, wrapping_lte_u16, wrapping_sub_u16,
 };
 
 pub enum ToActor {
@@ -88,6 +88,9 @@ struct ActorContext {
 	ws_entries: BufferMap<WsEntry>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	active_http_request_count: Arc<AsyncCounter>,
+	/// Captured at the top of `actor_inner` so `actor_lifetime_seconds` can be
+	/// observed at stop time.
+	started_at: crate::time::Instant,
 }
 
 struct ActiveHttpRequestGuard {
@@ -179,6 +182,7 @@ async fn actor_inner(
 		ws_entries: BufferMap::new(),
 		hibernating_requests,
 		active_http_request_count,
+		started_at: crate::time::Instant::now(),
 	};
 	let mut http_request_tasks = JoinSet::new();
 	let mut pending_stop: Option<PendingStop> = None;
@@ -302,11 +306,14 @@ async fn actor_inner(
 							);
 							continue;
 						}
+
+						ctx.error = Some("actor lost due to timeout".to_string());
+
 						match begin_stop(
 							&mut ctx,
 							&handle,
 							&mut http_request_tasks,
-							protocol::StopActorReason::Lost,
+							protocol::StopActorReason::SleepIntent,
 						)
 						.await
 						{
@@ -371,17 +378,28 @@ async fn actor_inner(
 	}
 
 	abort_and_join_http_request_tasks(&mut ctx, &mut http_request_tasks).await;
-	tracing::debug!("envoy actor stopped");
+	tracing::info!("actor stopped");
 }
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 	let checkpoint = increment_checkpoint(ctx);
-	let _ = ctx
-		.shared
-		.envoy_tx
-		.send(crate::envoy::ToEnvoyMessage::SendEvents {
+	let _ = crate::envoy::send_to_envoy_tx(
+		&ctx.shared,
+		crate::envoy::ToEnvoyMessage::SendEvents {
 			events: vec![protocol::EventWrapper { checkpoint, inner }],
-		});
+		},
+	);
+}
+
+/// Bounded label values for `actor_stop_total` / `actor_lifetime_seconds`.
+fn stop_actor_reason_label(reason: &protocol::StopActorReason) -> &'static str {
+	match reason {
+		protocol::StopActorReason::SleepIntent => "sleep_intent",
+		protocol::StopActorReason::StopIntent => "stop_intent",
+		protocol::StopActorReason::Destroy => "destroy",
+		protocol::StopActorReason::GoingAway => "going_away",
+		protocol::StopActorReason::Lost => "lost",
+	}
 }
 
 async fn begin_stop(
@@ -390,12 +408,23 @@ async fn begin_stop(
 	_http_request_tasks: &mut JoinSet<()>,
 	reason: protocol::StopActorReason,
 ) -> StopProgress {
-	let mut stop_code = if ctx.error.is_some() {
-		protocol::StopCode::Error
+	// A Lost stop must surface as Stopped(Error). The runner side detected its
+	// own WS to pegboard-envoy was unhealthy and gave up on the actor; that is
+	// not a graceful exit. If we emitted Stopped(Ok) here, pegboard's
+	// `handle_stopped` would see Stopped(Ok) from `Transition::Running` (no
+	// prior `ActorIntent` was sent) and take `Decision::Destroy`, wiping the
+	// actor and its KV after every transient WS flap that exceeds
+	// `envoy_lost_threshold`.
+	let (mut stop_code, mut stop_message) = if let Some(err) = ctx.error.clone() {
+		(protocol::StopCode::Error, Some(err))
+	} else if matches!(reason, protocol::StopActorReason::Lost) {
+		(
+			protocol::StopCode::Error,
+			Some("envoy connection lost".to_string()),
+		)
 	} else {
-		protocol::StopCode::Ok
+		(protocol::StopCode::Ok, None)
 	};
-	let mut stop_message = ctx.error.clone();
 	let (stop_tx, mut stop_rx) = oneshot::channel();
 
 	let stop_result = ctx
@@ -647,13 +676,23 @@ fn spawn_ws_outgoing_task(
 			idx += 1;
 			match msg {
 				crate::config::WsOutgoing::Message { data, binary } => {
-					ws_send(
+					let data_len = data.len();
+					let message_index = idx;
+					tracing::trace!(
+						gateway_id = %display_id(&gateway_id),
+						request_id = %display_id(&request_id),
+						message_index,
+						data_len,
+						binary,
+						"sending websocket message to engine"
+					);
+					let failed = ws_send(
 						&shared,
 						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
 							message_id: protocol::MessageId {
 								gateway_id,
 								request_id,
-								message_index: idx,
+								message_index,
 							},
 							message_kind:
 								protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(
@@ -662,6 +701,25 @@ fn spawn_ws_outgoing_task(
 						}),
 					)
 					.await;
+					if failed {
+						tracing::warn!(
+							gateway_id = %display_id(&gateway_id),
+							request_id = %display_id(&request_id),
+							message_index,
+							data_len,
+							binary,
+							"failed sending websocket message to engine"
+						);
+					} else {
+						tracing::trace!(
+							gateway_id = %display_id(&gateway_id),
+							request_id = %display_id(&request_id),
+							message_index,
+							data_len,
+							binary,
+							"sent websocket message to engine"
+						);
+					}
 				}
 				crate::config::WsOutgoing::Flush { tx } => {
 					let _ = tx.send(());
@@ -892,6 +950,19 @@ async fn handle_ws_message(
 	message_id: protocol::MessageId,
 	msg: protocol::ToEnvoyWebSocketMessage,
 ) {
+	let data_len = msg.data.len();
+	let binary = msg.binary;
+	let gateway_id = message_id.gateway_id;
+	let request_id = message_id.request_id;
+	let message_index = message_id.message_index;
+	tracing::trace!(
+		gateway_id = %display_id(&gateway_id),
+		request_id = %display_id(&request_id),
+		message_index,
+		data_len,
+		binary,
+		"received websocket message from engine"
+	);
 	let ws = ctx
 		.ws_entries
 		.get_mut(&[&message_id.gateway_id, &message_id.request_id]);
@@ -904,7 +975,7 @@ async fn handle_ws_message(
 
 			if wrapping_lte_u16(received_index, previous_index) {
 				tracing::info!(
-					request_id = id_to_str(&message_id.request_id),
+					request_id = %display_id(&message_id.request_id),
 					previous_index,
 					received_index,
 					"received duplicate hibernating websocket message"
@@ -915,7 +986,7 @@ async fn handle_ws_message(
 			let expected_index = wrapping_add_u16(previous_index, 1);
 			if received_index != expected_index {
 				tracing::warn!(
-					request_id = id_to_str(&message_id.request_id),
+					request_id = %display_id(&message_id.request_id),
 					previous_index,
 					expected_index,
 					received_index,
@@ -954,10 +1025,33 @@ async fn handle_ws_message(
 				message_index: message_id.message_index,
 				sender,
 			};
-			(handler.on_message)(ws_msg).await;
-		}
-	} else {
-		tracing::warn!("received message for unknown ws");
+				tracing::trace!(
+					gateway_id = %display_id(&gateway_id),
+					request_id = %display_id(&request_id),
+					message_index,
+					data_len,
+					binary,
+					"dispatching websocket message to actor handler"
+				);
+				(handler.on_message)(ws_msg).await;
+				tracing::trace!(
+					gateway_id = %display_id(&gateway_id),
+					request_id = %display_id(&request_id),
+					message_index,
+					data_len,
+					binary,
+					"dispatched websocket message to actor handler"
+				);
+			}
+		} else {
+			tracing::warn!(
+				gateway_id = %display_id(&gateway_id),
+				request_id = %display_id(&request_id),
+				message_index,
+				data_len,
+				binary,
+			"received message for unknown ws"
+		);
 	}
 }
 
@@ -1089,13 +1183,13 @@ async fn handle_hws_restore(
 						}
 					}
 					tracing::info!(
-						request_id = id_to_str(&hib_req.request_id),
+						request_id = %display_id(&hib_req.request_id),
 						"connection successfully restored"
 					);
 				}
 				Err(error) => {
 					tracing::error!(
-						request_id = id_to_str(&hib_req.request_id),
+						request_id = %display_id(&hib_req.request_id),
 						?error,
 						"error creating websocket during restore"
 					);
@@ -1120,7 +1214,7 @@ async fn handle_hws_restore(
 			}
 		} else {
 			tracing::warn!(
-				request_id = id_to_str(&hib_req.request_id),
+				request_id = %display_id(&hib_req.request_id),
 				"closing websocket that is not persisted"
 			);
 
@@ -1148,7 +1242,7 @@ async fn handle_hws_restore(
 
 		if !is_connected {
 			tracing::warn!(
-				request_id = id_to_str(&meta.request_id),
+				request_id = %display_id(&meta.request_id),
 				"removing stale persisted websocket"
 			);
 
@@ -1200,7 +1294,7 @@ async fn handle_hws_ack(
 	envoy_message_index: u16,
 ) {
 	tracing::debug!(
-		request_id = id_to_str(&request_id),
+		request_id = %display_id(&request_id),
 		index = envoy_message_index,
 		"ack ws msg"
 	);
@@ -1241,8 +1335,8 @@ async fn send_actor_message(
 		idx
 	} else {
 		tracing::warn!(
-			gateway_id = id_to_str(&gateway_id),
-			request_id = id_to_str(&request_id),
+			gateway_id = %display_id(&gateway_id),
+			request_id = %display_id(&request_id),
 			"missing pending request for send message"
 		);
 		return;
@@ -1263,15 +1357,15 @@ async fn send_actor_message(
 	if failed {
 		if tracing::enabled!(tracing::Level::DEBUG) {
 			tracing::debug!(
-				request_id = id_to_str(&request_id),
+				request_id = %display_id(&request_id),
 				message = stringify_to_rivet_tunnel_message_kind(&message_kind),
 				"buffering tunnel message, socket not connected to engine"
 			);
 		}
-		let _ = ctx
-			.shared
-			.envoy_tx
-			.send(crate::envoy::ToEnvoyMessage::BufferTunnelMsg { msg: buffer_msg });
+		let _ = crate::envoy::send_to_envoy_tx(
+			&ctx.shared,
+			crate::envoy::ToEnvoyMessage::BufferTunnelMsg { msg: buffer_msg },
+		);
 	}
 }
 
@@ -1662,6 +1756,8 @@ mod tests {
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			last_pong_sent_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 		(shared, envoy_rx)

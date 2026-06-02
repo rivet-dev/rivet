@@ -14,6 +14,22 @@ pub fn id_to_str(id: &[u8]) -> String {
 	hex::encode(id)
 }
 
+pub fn display_id(id: &[u8]) -> DisplayId<'_> {
+	DisplayId(id)
+}
+
+#[derive(Clone, Copy)]
+pub struct DisplayId<'a>(&'a [u8]);
+
+impl std::fmt::Display for DisplayId<'_> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		for byte in self.0 {
+			write!(f, "{byte:02x}")?;
+		}
+		Ok(())
+	}
+}
+
 /// Stringify an error for logging.
 pub fn stringify_error(error: &anyhow::Error) -> String {
 	format!("{error:#}")

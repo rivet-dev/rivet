@@ -212,6 +212,48 @@ export class NapiCoreRuntime implements CoreRuntime {
 		};
 	}
 
+	async registryActorStopThresholdMs(
+		registry: RegistryHandle,
+	): Promise<number | undefined> {
+		return (
+			(await asNativeRegistry(registry).actorStopThresholdMs()) ??
+			undefined
+		);
+	}
+
+	async registryHealth(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse> {
+		const response = await asNativeRegistry(registry).health();
+		return {
+			status: response.status,
+			headers: response.headers,
+			body: response.body,
+		};
+	}
+
+	async registryMetadata(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse> {
+		const response = asNativeRegistry(registry).metadata();
+		return {
+			status: response.status,
+			headers: response.headers,
+			body: response.body,
+		};
+	}
+
+	async registryMetrics(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse> {
+		const response = await asNativeRegistry(registry).metrics();
+		return {
+			status: response.status,
+			headers: response.headers,
+			body: response.body,
+		};
+	}
+
 	async handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,

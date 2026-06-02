@@ -37,7 +37,7 @@ use crate::{
 	LifecycleResult,
 	actor_event_demuxer::ActorEventDemuxer,
 	conn::{Conn, RemoteSqliteExecutors},
-	errors, sqlite_runtime,
+	errors, metrics, sqlite_runtime,
 };
 
 const MAX_REMOTE_SQL_BIND_BYTES: usize = 128 * 1024;
@@ -131,6 +131,13 @@ async fn handle_message(
 	event_demuxer: &mut ActorEventDemuxer,
 	msg: Bytes,
 ) -> Result<()> {
+	let ns_label = conn.namespace_id.to_string();
+	let pool_label = conn.pool_name.as_str();
+	let msg_len = msg.len();
+	metrics::WS_FRAME_SIZE_BYTES
+		.with_label_values(&[ns_label.as_str(), pool_label, "inbound"])
+		.observe(msg_len as f64);
+
 	// Parse message
 	let msg = match versioned::ToRivet::deserialize(&msg, conn.protocol_version) {
 		Ok(x) => x,
@@ -139,6 +146,14 @@ async fn handle_message(
 			return Ok(());
 		}
 	};
+
+	let message_kind_label = to_rivet_message_kind_label(&msg);
+	metrics::WS_MESSAGES_TOTAL
+		.with_label_values(&[ns_label.as_str(), pool_label, "inbound", message_kind_label])
+		.inc();
+	metrics::WS_BYTES_TOTAL
+		.with_label_values(&[ns_label.as_str(), pool_label, "inbound", message_kind_label])
+		.inc_by(msg_len as u64);
 
 	tracing::debug!(?msg, "received message from envoy");
 
@@ -153,6 +168,27 @@ async fn handle_message(
 				tracing::debug!("ping ts in the future, ignoring");
 				u32::MAX
 			};
+
+			// Count pongs that arrived after a "slow" threshold (1.5x normal ping interval) but
+			// before the ping timeout fired in `ping_task::task`.
+			let update_ping_interval = ctx.config().pegboard().envoy_update_ping_interval();
+			let slow_threshold_ms = update_ping_interval.saturating_mul(3) / 2;
+			if u64::from(rtt) > slow_threshold_ms {
+				metrics::PONG_MISSED_TOTAL
+					.with_label_values(&[ns_label.as_str(), pool_label])
+					.inc();
+				tracing::warn!(
+					rtt_ms = rtt,
+					slow_threshold_ms,
+					"slow pong"
+				);
+			}
+
+			// Independent high-rtt warning at a hard 500ms threshold so operators
+			// see latency spikes even when slow_threshold_ms is configured higher.
+			if rtt > 500 && u64::from(rtt) <= slow_threshold_ms {
+				tracing::warn!(rtt_ms = rtt, "high rtt pong");
+			}
 
 			conn.last_rtt.store(rtt, Ordering::SeqCst);
 			conn.last_ping_ts
@@ -419,6 +455,14 @@ async fn handle_message(
 			send_sqlite_execute_response(&conn, req.request_id, response).await?;
 		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
+			metrics::TUNNEL_MESSAGE_TOTAL
+				.with_label_values(&[
+					ns_label.as_str(),
+					pool_label,
+					"inbound",
+					to_rivet_tunnel_kind_label(&tunnel_msg.message_kind),
+				])
+				.inc();
 			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
 				.await
 				.context("failed to handle tunnel message")?;
@@ -429,13 +473,37 @@ async fn handle_message(
 		// Forward to demuxer which forwards to actor wf
 		protocol::ToRivet::ToRivetEvents(events) => {
 			for event in events {
-				event_demuxer.ingest(Id::parse(&event.checkpoint.actor_id)?, event);
+				let actor_id = Id::parse(&event.checkpoint.actor_id)?;
+				// Inspect actor state transitions to drive lifecycle metrics before we hand the
+				// event off to the demuxer (which takes ownership).
+				if let protocol::Event::EventActorStateUpdate(update) = &event.inner {
+					if let protocol::ActorState::ActorStateStopped(stopped) = &update.state {
+						observe_actor_stopped(
+							&conn,
+							ns_label.as_str(),
+							pool_label,
+							&event.checkpoint.actor_id,
+							stopped,
+						)
+						.await;
+					}
+				}
+				event_demuxer.ingest(actor_id, event);
 			}
 		}
 		protocol::ToRivet::ToRivetAckCommands(ack) => {
+			// TODO(metrics): `pegboard_envoy_ack_lag_messages` requires the latest sent command
+			// sequence per actor, which is tracked in the pegboard workflow rather than in
+			// pegboard-envoy. Wire from the workflow when available.
 			ack_commands(&ctx, conn.namespace_id, &conn.envoy_key, ack).await?;
 		}
 		protocol::ToRivet::ToRivetStopping => {
+			// The envoy is voluntarily going away. Treat all actors hosted on it as lost from
+			// the client's side.
+			metrics::ACTOR_LOST_TOTAL
+				.with_label_values(&[ns_label.as_str(), pool_label, "client_self_evict"])
+				.inc();
+
 			// For serverful, remove from lb
 			if !conn.is_serverless {
 				ctx.op(pegboard::ops::envoy::expire::Input {
@@ -1155,6 +1223,74 @@ fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErrorResponse {
 		group: structured.group().to_string(),
 		code: structured.code().to_string(),
 		message: sqlite_error_reason(err),
+	}
+}
+
+/// Map a `ToRivet` variant to a bounded `message_kind` metric label.
+fn to_rivet_message_kind_label(msg: &protocol::ToRivet) -> &'static str {
+	match msg {
+		protocol::ToRivet::ToRivetMetadata(_) => "metadata",
+		protocol::ToRivet::ToRivetEvents(_) => "events",
+		protocol::ToRivet::ToRivetAckCommands(_) => "ack_commands",
+		protocol::ToRivet::ToRivetStopping => "stopping",
+		protocol::ToRivet::ToRivetPong(_) => "pong",
+		protocol::ToRivet::ToRivetKvRequest(_) => "kv_request",
+		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
+		protocol::ToRivet::ToRivetSqliteGetPagesRequest(_) => "sqlite_get_pages_request",
+		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit_request",
+		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec_request",
+		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute_request",
+	}
+}
+
+/// Map a `ToRivetTunnelMessageKind` variant to a bounded `tunnel_kind` metric label.
+fn to_rivet_tunnel_kind_label(kind: &protocol::ToRivetTunnelMessageKind) -> &'static str {
+	match kind {
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "response_start",
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "response_chunk",
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => "response_abort",
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ws_open",
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ws_message",
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => "ws_message_ack",
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => "ws_close",
+	}
+}
+
+/// Emit lifecycle metrics for an observed `ActorStateStopped` transition, then drop the
+/// tracking entries for that actor.
+async fn observe_actor_stopped(
+	conn: &Conn,
+	ns_label: &str,
+	pool_label: &str,
+	actor_id: &str,
+	stopped: &protocol::ActorStateStopped,
+) {
+	let code_label = match stopped.code {
+		protocol::StopCode::Ok => "ok",
+		protocol::StopCode::Error => "error",
+	};
+	let stop_meta = conn.actor_stop_meta.remove_async(actor_id).await;
+	let reason_label = stop_meta
+		.as_ref()
+		.map(|(_, meta)| meta.reason)
+		.unwrap_or("stop_intent");
+
+	metrics::ACTOR_STOP_TOTAL
+		.with_label_values(&[ns_label, pool_label, reason_label, code_label])
+		.inc();
+
+	if let Some((_, started_at_ms)) = conn.actor_started_at.remove_async(actor_id).await {
+		let now_ms = util::timestamp::now();
+		let lifetime_seconds = (now_ms.saturating_sub(started_at_ms) as f64) / 1000.0;
+		metrics::ACTOR_LIFETIME_SECONDS
+			.with_label_values(&[ns_label, pool_label, reason_label])
+			.observe(lifetime_seconds.max(0.0));
+	}
+
+	if let Some((_, meta)) = stop_meta {
+		metrics::ACTOR_STOP_TO_CLOSE_SECONDS
+			.with_label_values(&[ns_label, pool_label])
+			.observe(meta.dispatched_at.elapsed().as_secs_f64());
 	}
 }
 

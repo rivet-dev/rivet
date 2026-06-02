@@ -7,6 +7,7 @@ pub mod kv;
 pub mod napi_actor_events;
 pub mod queue;
 pub mod registry;
+pub mod runtime_metrics;
 pub mod schedule;
 pub mod types;
 pub mod websocket;

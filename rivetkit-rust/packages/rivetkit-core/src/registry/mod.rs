@@ -16,7 +16,7 @@ use rivet_envoy_client::config::{
 	WebSocketHandler, WebSocketMessage, WebSocketSender,
 };
 use rivet_envoy_client::envoy::start_envoy;
-use rivet_envoy_client::handle::EnvoyHandle;
+use rivet_envoy_client::handle::{EnvoyHandle, EnvoyStatusHandle};
 use rivet_envoy_client::protocol;
 use rivet_error::{ActorSpecifier, RivetError};
 use rivetkit_client_protocol as client_protocol;
@@ -82,6 +82,52 @@ pub struct CoreRegistry {
 }
 
 #[derive(Clone)]
+pub struct CoreEnvoyHandle {
+	handle: EnvoyHandle,
+}
+
+#[derive(Clone, Debug)]
+pub struct CoreEnvoyStatus {
+	pub active_actor_count: usize,
+	pub ping_healthy: bool,
+	pub last_ping_at_ms: Option<i64>,
+	pub last_ping_age_ms: Option<i64>,
+}
+
+impl CoreEnvoyStatus {
+	fn from_status_handle(handle: &EnvoyStatusHandle) -> Option<Self> {
+		Some(Self {
+			active_actor_count: handle.active_actor_count()?,
+			ping_healthy: handle.is_ping_healthy(),
+			last_ping_at_ms: handle.last_ping_at_ms(),
+			last_ping_age_ms: handle.last_ping_age_ms(),
+		})
+	}
+}
+
+impl CoreEnvoyHandle {
+	pub(crate) fn new(handle: EnvoyHandle) -> Self {
+		Self { handle }
+	}
+
+	pub fn status(&self) -> CoreEnvoyStatus {
+		CoreEnvoyStatus {
+			active_actor_count: self.handle.active_actor_count(),
+			ping_healthy: self.handle.is_ping_healthy(),
+			last_ping_at_ms: self.handle.last_ping_at_ms(),
+			last_ping_age_ms: self.handle.last_ping_age_ms(),
+		}
+	}
+
+	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
+		self.handle
+			.get_protocol_metadata()
+			.await
+			.map(|metadata| metadata.actor_stop_threshold)
+	}
+}
+
+#[derive(Clone)]
 struct ActorTaskHandle {
 	actor_id: String,
 	actor_name: String,
@@ -130,6 +176,7 @@ pub(crate) struct RegistryDispatcher {
 	actor_instances: SccHashMap<String, ActorInstanceState>,
 	starting_instances: SccHashMap<String, Arc<Notify>>,
 	pending_stops: SccHashMap<String, PendingStop>,
+	envoy_status_handle: Mutex<Option<EnvoyStatusHandle>>,
 	region: String,
 	handle_inspector_http_in_runtime: bool,
 }
@@ -468,6 +515,7 @@ impl CoreRegistry {
 			callbacks,
 		})
 		.await;
+		dispatcher.set_envoy_status_handle(handle.status_handle());
 
 		// Do not install `tokio::signal::ctrl_c()` here. It calls
 		// `sigaction(SIGINT, ...)` at the POSIX level, which overrides the
@@ -516,9 +564,21 @@ impl RegistryDispatcher {
 			actor_instances: SccHashMap::new(),
 			starting_instances: SccHashMap::new(),
 			pending_stops: SccHashMap::new(),
+			envoy_status_handle: Mutex::new(None),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
 			handle_inspector_http_in_runtime,
 		}
+	}
+
+	pub(crate) fn set_envoy_status_handle(&self, handle: EnvoyStatusHandle) {
+		*self.envoy_status_handle.lock() = Some(handle);
+	}
+
+	pub(crate) fn envoy_status(&self) -> Option<CoreEnvoyStatus> {
+		self.envoy_status_handle
+			.lock()
+			.as_ref()
+			.and_then(CoreEnvoyStatus::from_status_handle)
 	}
 
 	pub(crate) fn build_actor_metadata_map(&self) -> HashMap<String, JsonValue> {
@@ -905,7 +965,7 @@ impl RegistryDispatcher {
 			instance.ctx.mark_destroy_requested();
 		}
 
-		tracing::debug!(
+		tracing::info!(
 			actor_id,
 			handle_actor_id = %instance.actor_id,
 			actor_name = %instance.actor_name,

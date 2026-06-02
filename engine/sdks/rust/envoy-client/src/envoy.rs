@@ -24,6 +24,7 @@ use crate::kv::{
 	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
 	handle_kv_response, process_unsent_kv_requests,
 };
+use crate::metrics::METRICS;
 use crate::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteRequestEntry, RemoteSqliteResponse, SqliteRequest,
 	SqliteRequestEntry, SqliteResponse, cleanup_old_remote_sqlite_requests,
@@ -90,6 +91,7 @@ pub enum ToEnvoyMessage {
 	},
 	ConnClose {
 		evict: bool,
+		was_error: bool,
 	},
 	SendEvents {
 		events: Vec<protocol::EventWrapper>,
@@ -308,6 +310,8 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+		last_pong_sent_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+		ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx,
 	});
 
@@ -350,20 +354,73 @@ async fn envoy_loop(
 	let mut kv_cleanup_tick = boxed_sleep(std::time::Duration::from_millis(KV_CLEANUP_INTERVAL_MS));
 
 	let mut lost_timeout: Option<SleepFuture> = None;
+	// Captured at the moment we arm the lost-threshold timer so we can observe
+	// `reconnect_within_grace_seconds` if a reconnect/init beats the timer.
+	let mut lost_timer_armed_at: Option<crate::time::Instant> = None;
 
 	loop {
+		let iter_start = crate::time::Instant::now();
+		#[allow(unused_assignments)]
+		let mut branch: &'static str = "unknown";
 		tokio::select! {
 			msg = rx.recv() => {
-				let Some(msg) = msg else { break };
+				branch = "envoy_msg";
+				let Some(msg) = msg else {
+					observe_envoy_loop_iteration(branch, iter_start);
+					break;
+				};
+				METRICS.envoy_tx_depth.dec();
 
 				match msg {
 					ToEnvoyMessage::ConnMessage { message } => {
+						let was_armed = lost_timeout.is_some();
+						let prev_armed_at = lost_timer_armed_at;
 						lost_timeout = handle_conn_message(&mut ctx, &start_tx, lost_timeout, message).await;
+						// Detect lost-timer cancellation by a successful init/reconnect.
+						if was_armed && lost_timeout.is_none() {
+							METRICS
+								.lost_timer_outcome_total
+								.with_label_values(&["cancelled_by_reconnect"])
+								.inc();
+							if let Some(at) = prev_armed_at {
+								METRICS
+									.reconnect_within_grace_seconds
+									.observe(at.elapsed().as_secs_f64());
+							}
+							lost_timer_armed_at = None;
+						}
 					}
-					ToEnvoyMessage::ConnClose { evict } => {
+					ToEnvoyMessage::ConnClose { evict, was_error } => {
 						fail_sent_remote_sqlite_requests_with_indeterminate_result(&mut ctx);
+						let was_armed = lost_timeout.is_some();
 						lost_timeout = handle_conn_close(&ctx, lost_timeout);
-						if evict { break; }
+						// Only count metrics on the first arm (handle_conn_close
+						// is a no-op when a timer is already armed).
+						if !was_armed && lost_timeout.is_some() {
+							let reason = if was_error {
+								"conn_close_error"
+							} else {
+								"conn_close_clean"
+							};
+							METRICS
+								.lost_timer_armed_total
+								.with_label_values(&[reason])
+								.inc();
+							let source = if has_protocol_metadata(&ctx).await {
+								"metadata"
+							} else {
+								"fallback"
+							};
+							METRICS
+								.lost_threshold_source_total
+								.with_label_values(&[source])
+								.inc();
+							lost_timer_armed_at = Some(crate::time::Instant::now());
+						}
+						if evict {
+							observe_envoy_loop_iteration(branch, iter_start);
+							break;
+						}
 					}
 					ToEnvoyMessage::SendEvents { events } => {
 						handle_send_events(&mut ctx, events).await;
@@ -379,6 +436,7 @@ async fn envoy_loop(
 					}
 					ToEnvoyMessage::BufferTunnelMsg { msg } => {
 						ctx.buffered_messages.push(msg);
+						METRICS.outbound_queue_depth.inc();
 					}
 					ToEnvoyMessage::ActorIntent { actor_id, generation, intent, error } => {
 						if let Some(entry) = ctx.get_actor(&actor_id, generation) {
@@ -426,15 +484,18 @@ async fn envoy_loop(
 						handle_shutdown(&mut ctx).await;
 					}
 					ToEnvoyMessage::Stop => {
+						observe_envoy_loop_iteration(branch, iter_start);
 						break;
 					}
 				}
 			}
 			_ = ack_tick.as_mut() => {
+				branch = "ack_tick";
 				send_command_ack(&mut ctx).await;
 				ack_tick = boxed_sleep(std::time::Duration::from_millis(ACK_COMMANDS_INTERVAL_MS));
 			}
 			_ = kv_cleanup_tick.as_mut() => {
+				branch = "cleanup_tick";
 				cleanup_old_kv_requests(&mut ctx);
 				cleanup_old_sqlite_requests(&mut ctx);
 				cleanup_old_remote_sqlite_requests(&mut ctx);
@@ -446,22 +507,56 @@ async fn envoy_loop(
 					None => std::future::pending::<()>().await,
 				}
 			} => {
+				branch = "lost_timeout";
+				METRICS
+					.lost_timer_outcome_total
+					.with_label_values(&["fired"])
+					.inc();
 				// Lost timeout fired
 				for (_id, request) in ctx.kv_requests.drain() {
+					METRICS.kv_requests_inflight.dec();
 					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
 				}
 				fail_sqlite_requests_with_shutdown(&mut ctx);
 				fail_remote_sqlite_requests_with_shutdown(&mut ctx);
 
 				if !ctx.actors.is_empty() {
-					tracing::warn!("stopping all actors due to envoy lost threshold");
+					let threshold_source = if ctx.shared.protocol_metadata.try_lock()
+						.ok()
+						.and_then(|g| g.as_ref().map(|_| ()))
+						.is_some()
+					{
+						"metadata"
+					} else {
+						"fallback"
+					};
+					let time_since_close_ms = lost_timer_armed_at
+						.map(|t| t.elapsed().as_millis() as u64)
+						.unwrap_or(0);
+					let actor_count: u64 = ctx
+						.actors
+						.values()
+						.map(|gens| gens.len() as u64)
+						.sum();
+					tracing::warn!(
+						actor_count,
+						time_since_close_ms,
+						threshold_source,
+						"stopping all actors due to envoy lost threshold"
+					);
+					let mut evicted = 0u64;
 					for (_actor_id, gens) in &ctx.actors {
 						for (_g, entry) in gens {
 							if !entry.handle.is_closed() {
 								let _ = entry.handle.send(ToActor::Lost);
+								evicted += 1;
 							}
 						}
 					}
+					METRICS
+						.actor_evicted_total
+						.with_label_values(&["lost_threshold"])
+						.inc_by(evicted);
 					ctx.actors.clear();
 					ctx.shared
 						.actors
@@ -471,8 +566,10 @@ async fn envoy_loop(
 				}
 
 				lost_timeout = None;
+				lost_timer_armed_at = None;
 			}
 		}
+		observe_envoy_loop_iteration(branch, iter_start);
 	}
 
 	// Cleanup
@@ -484,6 +581,7 @@ async fn envoy_loop(
 	}
 
 	for (_id, request) in ctx.kv_requests.drain() {
+		METRICS.kv_requests_inflight.dec();
 		let _ = request
 			.response_tx
 			.send(Err(anyhow::anyhow!("envoy shutting down")));
@@ -506,6 +604,30 @@ async fn envoy_loop(
 	// any future callers of `wait_stopped` resolve immediately because watch
 	// retains the last value.
 	let _ = ctx.shared.stopped_tx.send(true);
+}
+
+fn observe_envoy_loop_iteration(branch: &'static str, start: crate::time::Instant) {
+	let elapsed = start.elapsed();
+	METRICS
+		.envoy_loop_iteration_duration_seconds
+		.with_label_values(&[branch])
+		.observe(elapsed.as_secs_f64());
+}
+
+/// Send a message into the envoy_loop's mpsc and bump the depth gauge.
+/// Producers should prefer this over calling `shared.envoy_tx.send` directly
+/// so the `envoy_tx_depth` gauge stays in sync.
+pub fn send_to_envoy_tx(
+	shared: &crate::context::SharedContext,
+	msg: ToEnvoyMessage,
+) -> Result<(), tokio::sync::mpsc::error::SendError<ToEnvoyMessage>> {
+	match shared.envoy_tx.send(msg) {
+		Ok(()) => {
+			METRICS.envoy_tx_depth.inc();
+			Ok(())
+		}
+		Err(e) => Err(e),
+	}
 }
 
 async fn handle_conn_message(
@@ -563,6 +685,13 @@ async fn handle_conn_message(
 	lost_timeout
 }
 
+/// True if the engine has delivered a `ToEnvoyInit` containing a protocol
+/// metadata block (so the lost-threshold value would come from metadata rather
+/// than the 10s local fallback).
+async fn has_protocol_metadata(ctx: &EnvoyContext) -> bool {
+	ctx.shared.protocol_metadata.lock().await.is_some()
+}
+
 fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> Option<SleepFuture> {
 	if lost_timeout.is_some() {
 		return lost_timeout;
@@ -576,7 +705,19 @@ fn handle_conn_close(ctx: &EnvoyContext, lost_timeout: Option<SleepFuture>) -> O
 			.unwrap_or(10_000)
 	};
 
-	tracing::debug!(ms = lost_threshold, "starting envoy lost timeout");
+	let source = if ctx
+		.shared
+		.protocol_metadata
+		.try_lock()
+		.ok()
+		.and_then(|guard| guard.as_ref().map(|m| m.envoy_lost_threshold))
+		.is_some()
+	{
+		"metadata"
+	} else {
+		"fallback"
+	};
+	tracing::info!(ms = lost_threshold, source, "starting envoy lost timeout");
 
 	Some(boxed_sleep(std::time::Duration::from_millis(
 		lost_threshold,
@@ -604,7 +745,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		.map(|entry| entry.handle.clone())
 		.collect();
 
-	let envoy_tx = ctx.shared.envoy_tx.clone();
+	let shared = ctx.shared.clone();
 	let shutdown_span = tracing::debug_span!(
 		parent: tracing::Span::current(),
 		"envoy_graceful_shutdown",
@@ -614,7 +755,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		async move {
 			futures_util::future::join_all(actor_handles.iter().map(|h| h.closed())).await;
 			tracing::debug!("all actors stopped during graceful shutdown");
-			let _ = envoy_tx.send(ToEnvoyMessage::Stop);
+			let _ = send_to_envoy_tx(&shared, ToEnvoyMessage::Stop);
 		}
 		.instrument(shutdown_span),
 	);

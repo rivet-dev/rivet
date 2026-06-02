@@ -3,8 +3,8 @@ release *ARGS:
 	pnpm --filter=publish release {{ ARGS }}
 
 [group('release')]
-preview-publish:
-	gh workflow run .github/workflows/publish.yaml --ref "$(git rev-parse --abbrev-ref HEAD)"
+preview-publish REF:
+	gh workflow run .github/workflows/publish.yaml --ref "{{ REF }}"
 
 [group('docker')]
 docker-build:

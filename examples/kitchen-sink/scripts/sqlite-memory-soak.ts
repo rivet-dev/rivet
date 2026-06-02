@@ -674,7 +674,7 @@ async function startKitchenSinkServer(
 		RIVET_ENDPOINT: args.endpoint,
 		RIVET_TOKEN: process.env.RIVET_TOKEN ?? "dev",
 		RIVET_NAMESPACE: process.env.RIVET_NAMESPACE ?? "default",
-		RIVET_POOL: process.env.RIVET_POOL ?? "default",
+		RIVET_POOL: process.env.RIVET_POOL ?? "k8s",
 		RIVET_SERVERLESS_URL: serverlessUrl,
 		RIVET_SERVERLESS_REQUEST_LIFESPAN:
 			args.requestLifespanSeconds.toString(),
@@ -748,7 +748,7 @@ async function configureServerlessRunner(
 	const base = args.endpoint.replace(/\/$/, "");
 	const namespace = process.env.RIVET_NAMESPACE ?? "default";
 	const token = process.env.RIVET_TOKEN ?? "dev";
-	const poolName = process.env.RIVET_POOL ?? "default";
+	const poolName = process.env.RIVET_POOL ?? "k8s";
 	const datacentersResponse = await fetch(`${base}/datacenters?namespace=${namespace}`, {
 		headers: { Authorization: `Bearer ${token}` },
 	});
@@ -1912,7 +1912,7 @@ async function main(): Promise<void> {
 			endpoint: args.endpoint,
 			namespace: process.env.RIVET_NAMESPACE ?? "default",
 			token: process.env.RIVET_TOKEN ?? "dev",
-			poolName: process.env.RIVET_POOL ?? "default",
+			poolName: process.env.RIVET_POOL ?? "k8s",
 		});
 
 		if (args.preWorkloadWaitMs > 0) {

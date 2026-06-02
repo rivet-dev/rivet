@@ -4,12 +4,22 @@ use tokio::sync::oneshot;
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
 use crate::kv::KV_EXPIRE_MS;
+use crate::metrics::METRICS;
 use crate::utils::{EnvoyShutdownError, RemoteSqliteIndeterminateResultError};
 
 #[derive(Clone)]
 pub enum SqliteRequest {
 	GetPages(protocol::SqliteGetPagesRequest),
 	Commit(protocol::SqliteCommitRequest),
+}
+
+impl SqliteRequest {
+	pub fn kind(&self) -> &'static str {
+		match self {
+			SqliteRequest::GetPages(_) => "get_pages",
+			SqliteRequest::Commit(_) => "commit",
+		}
+	}
 }
 
 pub enum SqliteResponse {
@@ -34,6 +44,13 @@ impl RemoteSqliteRequest {
 		match self {
 			RemoteSqliteRequest::Exec(_) => "exec",
 			RemoteSqliteRequest::Execute(_) => "execute",
+		}
+	}
+
+	pub fn kind(&self) -> &'static str {
+		match self {
+			RemoteSqliteRequest::Exec(_) => "remote_exec",
+			RemoteSqliteRequest::Execute(_) => "remote_execute",
 		}
 	}
 }
@@ -68,6 +85,7 @@ pub async fn handle_sqlite_request(
 	};
 
 	ctx.sqlite_requests.insert(request_id, entry);
+	METRICS.sqlite_requests_inflight.inc();
 
 	let ws_available = {
 		let guard = ctx.shared.ws_tx.lock().await;
@@ -95,6 +113,7 @@ pub async fn handle_remote_sqlite_request(
 	};
 
 	ctx.remote_sqlite_requests.insert(request_id, entry);
+	METRICS.remote_sqlite_requests_inflight.inc();
 
 	let ws_available = {
 		let guard = ctx.shared.ws_tx.lock().await;
@@ -163,6 +182,7 @@ fn handle_sqlite_response(
 	let request = ctx.sqlite_requests.remove(&request_id);
 
 	if let Some(request) = request {
+		METRICS.sqlite_requests_inflight.dec();
 		let _ = request.response_tx.send(Ok(response));
 	} else {
 		tracing::error!(
@@ -182,6 +202,7 @@ fn handle_remote_sqlite_response(
 	let request = ctx.remote_sqlite_requests.remove(&request_id);
 
 	if let Some(request) = request {
+		METRICS.remote_sqlite_requests_inflight.dec();
 		let _ = request.response_tx.send(Ok(response));
 	} else {
 		tracing::error!(
@@ -310,6 +331,20 @@ pub fn cleanup_old_sqlite_requests(ctx: &mut EnvoyContext) {
 
 	for request_id in to_delete {
 		if let Some(request) = ctx.sqlite_requests.remove(&request_id) {
+			let kind = request.request.kind();
+			let was_sent = if request.sent { "true" } else { "false" };
+			METRICS
+				.sqlite_request_expired_total
+				.with_label_values(&[kind, was_sent])
+				.inc();
+			METRICS.sqlite_requests_inflight.dec();
+			tracing::warn!(
+				request_id,
+				kind,
+				was_sent = request.sent,
+				age_ms = now.duration_since(request.timestamp).as_millis() as u64,
+				"sqlite request expired by cleanup; if was_sent=true this indicates an abandoned in-flight request"
+			);
 			let _ = request
 				.response_tx
 				.send(Err(anyhow::anyhow!("sqlite request timed out")));
@@ -329,6 +364,20 @@ pub fn cleanup_old_remote_sqlite_requests(ctx: &mut EnvoyContext) {
 
 	for request_id in to_delete {
 		if let Some(request) = ctx.remote_sqlite_requests.remove(&request_id) {
+			let kind = request.request.kind();
+			let was_sent = if request.sent { "true" } else { "false" };
+			METRICS
+				.sqlite_request_expired_total
+				.with_label_values(&[kind, was_sent])
+				.inc();
+			METRICS.remote_sqlite_requests_inflight.dec();
+			tracing::warn!(
+				request_id,
+				kind,
+				was_sent = request.sent,
+				age_ms = now.duration_since(request.timestamp).as_millis() as u64,
+				"remote sqlite request expired by cleanup; if was_sent=true this indicates an abandoned in-flight request"
+			);
 			let _ = request
 				.response_tx
 				.send(Err(anyhow::anyhow!("remote sqlite request timed out")));
@@ -338,6 +387,7 @@ pub fn cleanup_old_remote_sqlite_requests(ctx: &mut EnvoyContext) {
 
 pub fn fail_sqlite_requests_with_shutdown(ctx: &mut EnvoyContext) {
 	for (_id, request) in ctx.sqlite_requests.drain() {
+		METRICS.sqlite_requests_inflight.dec();
 		let _ = request
 			.response_tx
 			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
@@ -346,6 +396,7 @@ pub fn fail_sqlite_requests_with_shutdown(ctx: &mut EnvoyContext) {
 
 pub fn fail_remote_sqlite_requests_with_shutdown(ctx: &mut EnvoyContext) {
 	for (_id, request) in ctx.remote_sqlite_requests.drain() {
+		METRICS.remote_sqlite_requests_inflight.dec();
 		let _ = request
 			.response_tx
 			.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
@@ -362,6 +413,7 @@ pub fn fail_sent_remote_sqlite_requests_with_indeterminate_result(ctx: &mut Envo
 
 	for request_id in request_ids {
 		if let Some(request) = ctx.remote_sqlite_requests.remove(&request_id) {
+			METRICS.remote_sqlite_requests_inflight.dec();
 			let operation = request.request.operation();
 			tracing::warn!(
 				request_id,
@@ -471,6 +523,9 @@ mod tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			last_pong_sent_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			ws_tx_depth: std::sync::atomic::AtomicI64::new(0),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 
@@ -608,7 +663,7 @@ mod tests {
 			tx,
 		)
 		.await;
-		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send { .. })));
 		assert!(
 			ctx.remote_sqlite_requests
 				.get(&0)
@@ -658,7 +713,7 @@ mod tests {
 		*ctx.shared.ws_tx.lock().await = Some(ws_tx);
 		process_unsent_remote_sqlite_requests(&mut ctx).await;
 
-		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send { .. })));
 		assert!(
 			ctx.remote_sqlite_requests
 				.get(&0)

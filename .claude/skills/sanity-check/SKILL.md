@@ -15,7 +15,10 @@ Run a quick end-to-end sanity check of a published rivetkit version: copy the he
 
 ## Inputs
 1. **Version or tag** (required) — explicit pkg-pr-new preview, npm dist-tag, or semver. If not provided in the user's message, ask for it.
-2. **Additional test behavior** (optional) — e.g., "also verify workflows persist" or "check that KV works." If provided, extend `src/index.ts` + `test.mjs` using the menu in "Extending with custom tests" below.
+2. **Engine mode** (optional, defaults to bundled) — the hello-world example's `registry.start()` only spawns the bundled engine binary when `RIVET_RUN_ENGINE=1` is set. Without it, the runtime boots in serverful mode and immediately fails trying to connect to a non-existent engine at `:6420` (`get local datacenters` → `Connection refused`).
+   - **bundled engine** (default): export `RIVET_RUN_ENGINE=1` before `node test.mjs`. Pairs the published `@rivetkit/engine-cli` binary with the published `rivetkit` runtime — what you want for end-to-end version verification.
+   - **external engine**: only use if the user explicitly says they have their own engine already running on `:6420` (e.g. `self-host/compose/dev`). Do not set the env var.
+3. **Additional test behavior** (optional) — e.g., "also verify workflows persist" or "check that KV works." If provided, extend `src/index.ts` + `test.mjs` using the menu in "Extending with custom tests" below.
 
 ## Usage
 - `/sanity-check <version>` — run in a temp directory on the host
@@ -151,22 +154,25 @@ try {
 
 ### 3. Install + run
 
-**Default (host):**
+**Default (host, bundled engine):**
 ```bash
 cd "$SANITY_DIR"
 npm install
-node test.mjs
+RIVET_RUN_ENGINE=1 node test.mjs
 ```
+
+Drop `RIVET_RUN_ENGINE=1` only if the user explicitly said they're running an external engine on `:6420`.
 
 If you need to inspect a failure after the fact, tee the output:
 ```bash
-node test.mjs 2>&1 | tee /tmp/sanity-check.log
+RIVET_RUN_ENGINE=1 node test.mjs 2>&1 | tee /tmp/sanity-check.log
 echo "exit=$?"
 ```
 
 **Docker mode:**
 ```bash
 docker run --rm \
+  -e RIVET_RUN_ENGINE=1 \
   -v "$SANITY_DIR":/app \
   -w /app \
   node:22 \

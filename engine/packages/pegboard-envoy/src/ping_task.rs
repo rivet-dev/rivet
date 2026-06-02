@@ -32,18 +32,34 @@ pub async fn task(
 		// Check if the last ping is past the timeout threshold
 		let last_ping_ts = conn.last_ping_ts.load(Ordering::SeqCst);
 		let now = util::timestamp::now();
-		if now - last_ping_ts > ping_timeout_ms {
+		let gap_ms = now - last_ping_ts;
+		if gap_ms > ping_timeout_ms {
+			tracing::warn!(
+				envoy_key = %conn.envoy_key,
+				last_ping_ts,
+				now,
+				gap_ms,
+				threshold_ms = ping_timeout_ms,
+				"envoy ping timed out, closing connection"
+			);
 			return Err(WsError::TimedOut.build());
 		}
 
 		// Update ping
+		let last_rtt = conn.last_rtt.load(Ordering::Relaxed);
 		ctx.op(pegboard::ops::envoy::update_ping::Input {
 			namespace_id: conn.namespace_id,
 			envoy_key: conn.envoy_key.clone(),
 			update_lb: !conn.is_serverless,
-			rtt: conn.last_rtt.load(Ordering::Relaxed),
+			rtt: last_rtt,
 		})
 		.await?;
+
+		tracing::debug!(
+			gap_since_last_pong_ms = gap_ms,
+			last_rtt_ms = last_rtt,
+			"sending ping"
+		);
 
 		// Send ping to envoy
 		let ping_msg = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyPing(

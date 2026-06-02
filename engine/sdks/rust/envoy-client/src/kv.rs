@@ -3,6 +3,7 @@ use tokio::sync::oneshot;
 
 use crate::connection::ws_send;
 use crate::envoy::EnvoyContext;
+use crate::metrics::METRICS;
 
 pub struct KvRequestEntry {
 	pub actor_id: String,
@@ -33,6 +34,7 @@ pub async fn handle_kv_request(
 	};
 
 	ctx.kv_requests.insert(request_id, entry);
+	METRICS.kv_requests_inflight.inc();
 
 	let ws_available = {
 		let guard = ctx.shared.ws_tx.lock().await;
@@ -48,6 +50,7 @@ pub async fn handle_kv_response(ctx: &mut EnvoyContext, response: protocol::ToEn
 	let request = ctx.kv_requests.remove(&response.request_id);
 
 	if let Some(request) = request {
+		METRICS.kv_requests_inflight.dec();
 		match response.data {
 			protocol::KvResponseData::KvErrorResponse(ref e) => {
 				let _ = request
@@ -124,6 +127,13 @@ pub fn cleanup_old_kv_requests(ctx: &mut EnvoyContext) {
 
 	for request_id in to_delete {
 		if let Some(request) = ctx.kv_requests.remove(&request_id) {
+			METRICS.kv_requests_inflight.dec();
+			tracing::warn!(
+				request_id,
+				was_sent = request.sent,
+				age_ms = now.duration_since(request.timestamp).as_millis() as u64,
+				"kv request expired by cleanup"
+			);
 			let _ = request
 				.response_tx
 				.send(Err(anyhow::anyhow!("KV request timed out")));

@@ -26,6 +26,12 @@ use crate::{actor_lifecycle, errors, hibernating_requests, metrics, utils::UrlDa
 pub type RemoteSqliteExecutors =
 	HashMap<(String, u64), Arc<tokio::sync::OnceCell<NativeDatabaseHandle>>>;
 
+#[derive(Clone)]
+pub struct ActorStopMeta {
+	pub reason: &'static str,
+	pub dispatched_at: Instant,
+}
+
 pub struct Conn {
 	pub namespace_id: Id,
 	pub namespace_name: String,
@@ -46,6 +52,10 @@ pub struct Conn {
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
 	pub last_ping_ts: AtomicI64,
+	/// Per-actor start timestamp (epoch ms) used for lifetime histograms.
+	pub actor_started_at: HashMap<String, i64>,
+	/// Per-actor stop dispatch metadata used for stop-cause and stop-to-close metrics.
+	pub actor_stop_meta: HashMap<String, ActorStopMeta>,
 }
 
 #[tracing::instrument(skip_all)]
@@ -327,6 +337,8 @@ pub async fn init_conn(
 		is_serverless,
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
+		actor_started_at: HashMap::new(),
+		actor_stop_meta: HashMap::new(),
 	});
 
 	// Send missed commands after the init packet.
@@ -334,8 +346,24 @@ pub async fn init_conn(
 		let replay_result: Result<()> = async {
 			for cmd_wrapper in &mut missed_commands {
 				hibernating_requests::hydrate_command_wrapper(ctx, cmd_wrapper).await?;
-				if let protocol::Command::CommandStopActor(_) = cmd_wrapper.inner {
-					actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
+				match &cmd_wrapper.inner {
+					protocol::Command::CommandStartActor(start) => {
+						actor_lifecycle::record_actor_start(
+							&conn,
+							&cmd_wrapper.checkpoint.actor_id,
+							start.config.create_ts,
+						)
+						.await;
+					}
+					protocol::Command::CommandStopActor(stop) => {
+						actor_lifecycle::record_actor_stop_dispatch(
+							&conn,
+							&cmd_wrapper.checkpoint.actor_id,
+							&stop.reason,
+						)
+						.await;
+						actor_lifecycle::stop_actor(&conn, &cmd_wrapper.checkpoint).await?;
+					}
 				}
 			}
 			Ok(())

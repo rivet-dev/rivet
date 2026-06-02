@@ -77,6 +77,10 @@ docker-compose up -d
 - We use Graphite for stacked PRs. Diff against the parent branch (`gt ls` to see the stack), not `main`.
 - To revert a file to the version before this branch's changes, checkout from the first child branch (below in the stack), not from `main` or the parent. Child branches contain the pre-this-branch state of files modified by branches further down the stack.
 
+### jj
+
+- Always invoke `jj diff` with `--git --color=never`. The jj-default format compresses unchanged context with `...` ellipses and uses a `<old> <new>:` line-number prefix that visually fuses with adjacent tokens, causing misreads (e.g. `tracing::debug!` → `tracing::info!` looked like a `debug!` → `debuginfo!` rename). The unified `diff --git` format has unambiguous `-`/`+` markers at column 0 and standard `@@` hunk headers.
+
 **Never push to `main` unless explicitly specified by the user.**
 
 ## Frontend Visual Changes

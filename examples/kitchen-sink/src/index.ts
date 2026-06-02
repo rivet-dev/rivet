@@ -123,6 +123,10 @@ import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
 import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
 import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
 import { sleepCloseFuzz } from "./actors/testing/sleep-close-fuzz.ts";
+import { loadTestAgent } from "./actors/testing/load-test-agent.ts";
+import { loadTestAgent2 } from "./actors/testing/load-test-agent-2.ts";
+import { sigtermSleepProbe } from "./actors/testing/sigterm-sleep-probe.ts";
+import { slowReconnectActor } from "./actors/testing/slow-reconnect-actor.ts";
 // AI
 import { aiAgent } from "./actors/ai/ai-agent.ts";
 
@@ -139,6 +143,19 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function serverlessPoolConfig() {
+	// Running under a platform-managed serverless host (Rivet Cloud managed
+	// pool, or Cloud Run via Rivet's deploy pipeline). The platform configures
+	// the serverless runner pool on its side and issues per-namespace `sk_`
+	// tokens that do not have permission to list datacenters, which is what
+	// `configurePool` would try to do. Skip our in-process pool configuration
+	// in that case.
+	if (
+		process.env._RIVET_COMPUTE === "1" ||
+		process.env.SANDBOX_MODE === "serverless"
+	) {
+		return undefined;
+	}
+
 	const url =
 		process.env.RIVET_SERVERLESS_URL ??
 		process.env.KITCHEN_SINK_SERVERLESS_URL ??
@@ -279,6 +296,10 @@ export const registry = setup({
 		sqliteMemoryPressure,
 		mockAgenticLoop,
 		sleepCloseFuzz,
+		loadTestAgent,
+		loadTestAgent2,
+		sigtermSleepProbe,
+		slowReconnectActor,
 		// AI
 		aiAgent,
 	},

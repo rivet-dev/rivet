@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::sync::Mutex as StdMutex;
+use std::sync::atomic::AtomicBool;
 
 use super::*;
 use depot_client_types::{HEAD_FENCE_MISMATCH_CODE, HEAD_FENCE_MISMATCH_GROUP};
@@ -318,7 +318,10 @@ async fn remote_execute_logs_operation_context_at_source() {
 	let result = db
 		.execute(
 			"SELECT ?",
-			Some(vec![BindParam::Integer(1), BindParam::Text("two".to_owned())]),
+			Some(vec![
+				BindParam::Integer(1),
+				BindParam::Text("two".to_owned()),
+			]),
 		)
 		.await;
 

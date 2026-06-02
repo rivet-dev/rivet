@@ -2,9 +2,44 @@
 
 ## Testing Against Production (Rivet Cloud)
 
+### Rivet Cloud Managed-Pool Deploys
+
+- The `Rivet Deploy (kitchen-sink)` GitHub Action (`.github/workflows/rivet-deploy-kitchen-sink.yml`) builds `examples/kitchen-sink/Dockerfile` from the repo root and ships it to a Rivet Cloud managed pool via `rivet-dev/deploy-action@v1.1.0`.
+- The workflow only triggers on changes under `examples/kitchen-sink/**`, the bundled `rivetkit-typescript/packages/**`, `engine/sdks/typescript/**`, and `shared/typescript/**` (everything the Dockerfile actually copies).
+- The Dockerfile bakes `ENV PORT=8080` and `ENV KITCHEN_SINK_SERVERLESS_URL=cloud` so the container listens on 8080 and `server.ts` enters serverless mode (serves `/api/rivet/*` via the registry handler instead of calling `registry.start()`). Do NOT use `RIVET_RUN_ENGINE=1` — that flag starts an embedded engine, which conflicts with the engine endpoint that Rivet Cloud injects (`ZodError: cannot specify both startEngine and endpoint`). The `managed-pool-config.environment` field on the deploy-action is not currently honored by the cloud API, so do not rely on it; configure runtime env via `ENV` in the Dockerfile.
+- The CI workflow prebuilds `rivetkit-napi.linux-x64-gnu.node` via `docker/build/linux-x64-gnu.Dockerfile` and the runtime Dockerfile copies the whole built `/app` workspace tree (not `pnpm deploy`). `pnpm deploy --legacy` leaves workspace packages as symlinks back to `/app/rivetkit-typescript/...` which then dangle in the runtime stage, so the kitchen-sink image keeps the workspace source + symlinked `node_modules` + chunked `.pnpm` store instead. Image size is large but registry-friendly because the `.pnpm` store is split into 8 chunked `COPY` layers (the registry 503s on a single large layer).
+- Token is the `KITCHEN_SINK_RIVET_CLOUD_TOKEN` repo secret (a `cloud_api_*` token scoped to cloud-api.rivet.dev for this kitchen-sink project only). Do not confuse with the engine `pk_*` token used for actor/gateway calls.
+
 ### Cloud Run Deploys
 
-- Deploy the kitchen-sink to Cloud Run from an isolated temp build context that pins the published `rivetkit` preview version, so root workspace `resolutions` do not silently swap in local packages.
+There are two Cloud Run services maintained for the kitchen-sink in `dev-projects-491221` / `us-east4`:
+
+- `kitchen-sink-staging` → engine namespace `kitchen-sink-gv34-staging-52gh` on `api.staging.rivet.dev`.
+- `rivet-kitchen-sink` → engine namespace under `kitchen-sink-29a8-cloud-run-*` on `api.rivet.dev`.
+
+#### Deploying the current workspace (with local rivetkit changes)
+
+Use [`scripts/deploy-cloud-run.sh`](file:///home/nathan/r8/examples/kitchen-sink/scripts/deploy-cloud-run.sh). It builds [`Dockerfile`](file:///home/nathan/r8/examples/kitchen-sink/Dockerfile) from the monorepo root, tags with `manual-<sha>`, pushes to the `cloud-run-source-deploy` Artifact Registry repo, and updates both services (or just one with `--only staging|prod`). It also verifies `/api/rivet/health` after each update.
+
+```bash
+# Build the napi binary once if it's missing.
+cd rivetkit-typescript/packages/rivetkit-napi && pnpm build:release && cd -
+
+# Deploy.
+examples/kitchen-sink/scripts/deploy-cloud-run.sh
+```
+
+Things that must be true for the deploy to actually start serving on Rivet Cloud:
+
+- Container listens on `$PORT` (default 8080). The [Dockerfile](file:///home/nathan/r8/examples/kitchen-sink/Dockerfile) bakes `ENV PORT=8080`.
+- `server.ts` must enter serverless mode (`registry.handler(...)`, not `registry.start()`). The Dockerfile sets `ENV KITCHEN_SINK_SERVERLESS_URL=cloud` to force that. Do NOT use `RIVET_RUN_ENGINE=1` — it also turns on `startEngine`, which collides with the engine endpoint Rivet Cloud injects (`ZodError: cannot specify both startEngine and endpoint`).
+- `serverlessPoolConfig()` in [src/index.ts](file:///home/nathan/r8/examples/kitchen-sink/src/index.ts) returns `undefined` whenever `_RIVET_COMPUTE=1` (Rivet Cloud managed compute) **or** `SANDBOX_MODE=serverless` (Cloud Run via Rivet's deploy pipeline) is set. The platform configures the runner pool itself; the in-process `configurePool` would try to hit `GET /datacenters`, which the per-namespace `sk_` token cannot do (`no permission to list datacenters in namespace any with target any`).
+- Rivet-injected envs on Cloud Run: `RIVET_PUBLIC_ENDPOINT` (pk_) + `RIVET_ENDPOINT` (sk_) + `SANDBOX_MODE=serverless` + (on the managed-pool path) `RIVET_RUNNER_VERSION` + `_RIVET_COMPUTE=1`. Do not duplicate them in the image.
+
+#### Deploying a published rivetkit preview build instead
+
+When validating a published rivetkit preview (instead of the local workspace), build from an isolated temp context so the root `package.json` `resolutions` do not silently swap the published package back to the workspace copy:
+
 - Copy `examples/kitchen-sink` to a temp directory and edit that temp copy instead of building from the monorepo root.
 - Pin the temp copy to the exact published preview packages you want to test, such as `rivetkit@0.0.0-pr.4667.33279e9` and `@rivetkit/react@0.0.0-pr.4667.33279e9`.
 - Build and push the image from that temp context, then update the target Cloud Run service to that image.
@@ -49,7 +84,7 @@ export GW="https://api.rivet.dev/gateway"
 curl -s -X PUT "https://api.rivet.dev/actors?namespace=${RIVET_NS}" \
   -H "Authorization: Bearer ${RIVET_TOKEN}" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"default","crash_policy":"sleep"}'
+  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"k8s","crash_policy":"sleep"}'
 ```
 
 This returns `{"actor":{"actor_id":"<ACTOR_ID>", ...}, "created": true/false}`.

@@ -15,6 +15,22 @@ import type { RuntimeServerlessResponseHead } from "./runtime";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
 
+function signalExitCode(signal: ShutdownSignal): number {
+	switch (signal) {
+		case "SIGINT":
+			return 130;
+		case "SIGTERM":
+			return 143;
+	}
+}
+
+function finishShutdownSignal(signal: ShutdownSignal): void {
+	if (process.pid === 1) {
+		process.exit(signalExitCode(signal));
+	}
+	process.kill(process.pid, signal);
+}
+
 export type FetchHandler = (
 	request: Request,
 	...args: any
@@ -396,10 +412,11 @@ export class Registry<A extends RegistryActors> {
 	): void {
 		if (this.#shutdownInFlight !== null) {
 			// Second delivery of the same (or another) shutdown signal.
-			// Remove our handler only (preserving any user-installed listeners)
-			// and re-raise so Node proceeds with its default exit path.
+			// Remove our handler only, preserving any user-installed listeners.
+			// PID 1 must exit directly because re-raised default signals can be
+			// swallowed by the container signal path.
 			this.#removeSignalHandlers();
-			process.kill(process.pid, signal);
+			finishShutdownSignal(signal);
 			return;
 		}
 		this.#shutdownInFlight = this.#runShutdown(
@@ -416,11 +433,13 @@ export class Registry<A extends RegistryActors> {
 		config: RegistryConfig,
 		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
 	): Promise<void> {
-		const gracePeriodMs = config.shutdown?.gracePeriodMs ?? 30_000;
+		const gracePeriodMs =
+			config.shutdown?.gracePeriodMs ??
+			(await this.#actorStopThresholdMs(configuredRegistryPromise)) ??
+			30 * 60 * 1000;
 		// Race the entire drain sequence (both modes + serve promise) against
-		// a single grace ceiling. Without this, each mode's Rust-side drain
-		// (20s) could stack sequentially and blow past gracePeriodMs before
-		// we re-raise the signal.
+		// a single grace ceiling. By default, this uses the engine-provided
+		// actor stop threshold, matching Pegboard's hard cutoff for actors.
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
@@ -474,7 +493,30 @@ export class Registry<A extends RegistryActors> {
 			),
 		]);
 		this.#removeSignalHandlers();
-		process.kill(process.pid, signal);
+		finishShutdownSignal(signal);
+	}
+
+	async #actorStopThresholdMs(
+		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
+	): Promise<number | undefined> {
+		try {
+			const { runtime, registry } = await configuredRegistryPromise;
+			const thresholdMs =
+				await runtime.registryActorStopThresholdMs?.(registry);
+			if (
+				thresholdMs !== undefined &&
+				Number.isFinite(thresholdMs) &&
+				thresholdMs > 0
+			) {
+				return thresholdMs;
+			}
+		} catch (err) {
+			logger().warn(
+				{ err },
+				"failed to read actor stop threshold for shutdown grace",
+			);
+		}
+		return undefined;
 	}
 
 	#removeSignalHandlers(): void {
