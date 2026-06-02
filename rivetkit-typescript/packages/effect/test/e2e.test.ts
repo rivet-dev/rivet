@@ -3,6 +3,7 @@ import { Registry, RivetError } from "@rivetkit/effect";
 import { DateTime, Effect, Fiber, Layer, Schedule } from "effect";
 import { TestClock } from "effect/testing";
 import { createClient } from "rivetkit/client";
+import * as RawRivetErrors from "rivetkit/errors";
 import { inject } from "vitest";
 import {
 	BuildSetRejected,
@@ -125,6 +126,28 @@ layer(TestLayer)("end-to-end", (it) => {
 					0,
 				);
 			}),
+	);
+
+	it.effect("rejects malformed raw action payloads as request.invalid", () =>
+		Effect.gen(function* () {
+			const client = yield* Effect.acquireRelease(
+				Effect.sync(() => createClient({ endpoint, token, namespace })),
+				(client) => Effect.promise(() => client.dispose()),
+			);
+			const counter = client.Counter.getOrCreate("t-raw-invalid-payload");
+
+			const error = yield* Effect.promise(async () => {
+				try {
+					await counter.Increment({ amount: "not-a-number" } as any);
+					throw new Error("expected malformed payload to fail");
+				} catch (error) {
+					return RawRivetErrors.toRivetError(error);
+				}
+			});
+
+			assert.strictEqual(error.group, "request");
+			assert.strictEqual(error.code, "invalid");
+		}),
 	);
 
 	it.effect("isolates in-wake state across keys", () =>

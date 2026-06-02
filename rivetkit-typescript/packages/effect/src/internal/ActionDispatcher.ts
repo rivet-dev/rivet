@@ -94,7 +94,15 @@ export const make = <
 							: payload;
 					const decodedPayload = yield* decodePayload(
 						payloadForDecode,
-					).pipe(Effect.orDie);
+					).pipe(
+						Effect.mapError(() =>
+							new Rivetkit.RivetError(
+								"request",
+								"invalid",
+								`Invalid payload for action ${actor.name}/${action._tag}`,
+							),
+						),
+					);
 					// The payload was decoded with this action's schema,
 					// so this is the runtime boundary that restores the
 					// typed envelope expected by the user handler.
@@ -166,6 +174,10 @@ export const make = <
 				// structured action-aborted error instead of an internal error.
 				if (Cause.hasInterruptsOnly(exit.cause)) {
 					throw makeActorAbortedError();
+				}
+				const expectedError = Exit.findErrorOption(exit);
+				if (Option.isSome(expectedError)) {
+					throw expectedError.value;
 				}
 				throw Cause.squash(exit.cause);
 			},
