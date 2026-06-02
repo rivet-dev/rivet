@@ -605,6 +605,39 @@ export const FailingActorLive = FailingActor.toLayer(
 	Effect.die("build effect failed"),
 );
 
+// --- FailingWakeCleanup ---
+
+export const FailingWakeCleanup = Actor.make("FailingWakeCleanup", {
+	actions: [Ping],
+});
+
+export const FailingWakeCleanupLive = FailingWakeCleanup.toLayer(() =>
+	Effect.gen(function* () {
+		const flags = yield* Flags;
+		const address = yield* Actor.CurrentAddress;
+		const key = address.key.join("/");
+
+		flags.set(`failed-wake-started:${key}`, true);
+
+		yield* Effect.addFinalizer(() =>
+			Effect.sync(() => {
+				flags.set(`failed-wake-finalizer:${key}`, true);
+			}),
+		);
+
+		yield* Effect.never.pipe(
+			Effect.onInterrupt(() =>
+				Effect.sync(() => {
+					flags.set(`failed-wake-fiber-interrupted:${key}`, true);
+				}),
+			),
+			Effect.forkScoped({ startImmediately: true }),
+		);
+
+		return yield* Effect.die("wake failed after scoped resources");
+	}),
+);
+
 // --- Unregistered ---
 
 // Used solely to test the failure shape when calling an actor whose
