@@ -80,6 +80,14 @@ docker-compose up -d
 
 **Never push to `main` unless explicitly specified by the user.**
 
+## Assets
+
+- Large public dashboard and website media belongs in the `rivet-assets` R2 bucket, not Git.
+- Use object keys shaped like `dashboard/{group}/{asset-name}` for dashboard media and `website/blog/{post}/{asset-name}` for blog or changelog post media.
+- Upload with `op://Engineering/rivet-assets R2 Upload/{username,password}` and `aws s3 cp <file> s3://rivet-assets/<key> --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com`.
+- For blog or changelog hero media, upload the file to R2 as `website/blog/{post-slug}/image.{ext}` and set frontmatter `image: true` (or `image: { format: "gif" }` for a non-png). The URL is derived from the slug and dimensions are fixed at a 2:1 ratio, so do not write the absolute URL, width, or height. Resolved by `website/src/lib/postImage.ts`.
+- Do not use Git LFS in this repo; jj can snapshot raw working-tree bytes.
+
 ## Frontend Visual Changes
 
 - For any frontend visual change, use the `agent-browser` skill to view the result in a browser instead of working blind. If it is not installed, prompt the user to install it.

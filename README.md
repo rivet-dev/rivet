@@ -142,7 +142,7 @@ One primitive that adapts to agents, workflows, collaboration, and more.
 Powerful debugging and monitoring tools from local development to production at scale.
 
 <p align="center">
-  <img src="./.github/media/screenshots/inspector.png" alt="Rivet Inspector" width="800" />
+  <img src="https://assets.rivet.dev/github/media/screenshots/inspector.png" alt="Rivet Inspector" width="800" />
 </p>
 
 - **SQLite Viewer** — Browse and query your actor's SQLite database in real-time

@@ -96,7 +96,7 @@ export default function TimelinePage() {
 						>
 							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
 								<img
-									src='/images/agent-os/ken-thompson-dennis-ritchie-1973.jpg'
+									src='https://assets.rivet.dev/website/public/images/agent-os/ken-thompson-dennis-ritchie-1973.jpg'
 									alt='Ken Thompson and Dennis Ritchie, creators of Unix, 1973'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
@@ -138,7 +138,7 @@ export default function TimelinePage() {
 						>
 							<div className='mt-4 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
 								<img
-									src='/images/agent-os/first-web-server.jpg'
+									src='https://assets.rivet.dev/website/public/images/agent-os/first-web-server.jpg'
 									alt='The first web server at CERN'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
@@ -166,7 +166,7 @@ export default function TimelinePage() {
 						>
 							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
 								<img
-									src='/images/agent-os/nersc-server-racks.jpg'
+									src='https://assets.rivet.dev/website/public/images/agent-os/nersc-server-racks.jpg'
 									alt='Server racks at NERSC'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
@@ -204,7 +204,7 @@ export default function TimelinePage() {
 						>
 							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
 								<img
-									src='/images/agent-os/data-flock.jpg'
+									src='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 									alt='Data flock (digits) by Philipp Schmitt'
 									className='w-full object-cover opacity-90'
 									loading='lazy'

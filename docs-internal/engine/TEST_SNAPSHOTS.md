@@ -9,7 +9,7 @@ The `test-snapshot-gen` crate (`engine/packages/test-snapshot-gen/`) provides:
 1. **A binary** (`test-snapshot-gen`) that runs scenarios to generate RocksDB snapshots.
 2. **A library** (`test_snapshot`) that loads those snapshots into test infrastructure.
 
-Snapshots capture the entire UDB state (epoxy, gasoline, pegboard, etc.) for each replica in a multi-node cluster. They are stored as raw RocksDB checkpoint directories tracked by git LFS.
+Snapshots capture the entire UDB state (epoxy, gasoline, pegboard, etc.) for each replica in a multi-node cluster. They are stored as raw RocksDB checkpoint directories checked in as normal fixture files.
 
 ## Generating Snapshots
 
@@ -140,6 +140,6 @@ let replica_paths = load_snapshot("epoxy-v1", test_id).unwrap();
 4. A `metadata.json` file is written with the commit hash, branch name, and timestamp.
 5. The test loader copies the checkpoint directory to `$TMPDIR/rivet-test-{test_id}-{dc_label}`, which is the same path that `rivet_test_deps::setup_single_datacenter` creates. Since the directory already exists with data, the RocksDB driver opens it and finds the pre-populated state.
 
-## Git LFS
+## Git
 
-All files under `engine/packages/test-snapshot-gen/snapshots/` are tracked by git LFS (configured in `.gitattributes`). Make sure git LFS is installed before committing snapshots.
+All files under `engine/packages/test-snapshot-gen/snapshots/` are checked in directly. Keep scenarios small enough that generated snapshots stay lightweight.

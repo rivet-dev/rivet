@@ -1,4 +1,4 @@
-import imgStudio from '@/images/screenshots/rivet-hub.png';
+const imgStudio = { src: "https://assets.rivet.dev/website/images/screenshots/rivet-hub.png", width: 2967, height: 1826, format: "png" };
 import { Icon } from '@rivet-gg/icons';
 import {
   faTerminal,

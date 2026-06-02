@@ -19,6 +19,26 @@ import {
 import { getHeapStatistics } from "node:v8";
 import * as napi from "@rivetkit/rivetkit-napi";
 
+type OptionalProcessMetricsNapi = typeof napi & {
+	jsObserveGcDuration?: (kind: string, durationSeconds: number) => void;
+	jsSetEventloopHeartbeatTsMs?: (timestampMs: number) => void;
+	jsSetEventloopLagQuantile?: (quantile: string, valueSeconds: number) => void;
+	jsSetEventloopUtilization?: (utilization: number) => void;
+	jsAddProcessCpuSeconds?: (mode: string, valueSeconds: number) => void;
+	jsSetProcessResidentMemoryBytes?: (bytes: number) => void;
+	jsSetHeapBytes?: (kind: string, bytes: number) => void;
+	jsSetActiveHandles?: (count: number) => void;
+	jsSetActiveRequests?: (count: number) => void;
+};
+
+type GcPerformanceEntry = {
+	duration: number;
+	detail?: { kind?: number };
+	kind?: number;
+};
+
+const processMetricsNapi = napi as OptionalProcessMetricsNapi;
+
 // Some napi process-metrics symbols may be missing on older native binaries
 // (the auto-generated index.js destructures them as `undefined` if the
 // underlying `.node` was built before they were added). Guard each call so
@@ -73,19 +93,17 @@ export function startProcessMetrics(): void {
 
 	const gcObserver = new PerformanceObserver((list) => {
 		for (const entry of list.getEntries()) {
-			const kind =
-				(
-					entry as PerformanceEntry & {
-						detail?: { kind?: number };
-						kind?: number;
-					}
-				).detail?.kind ??
-				(entry as PerformanceEntry & { kind?: number }).kind;
+			const gcEntry = entry as GcPerformanceEntry;
+			const kind = gcEntry.detail?.kind ?? gcEntry.kind;
 			if (typeof kind !== "number") continue;
 			const kindName = GC_KIND_NAMES[kind];
 			if (!kindName) continue;
 			// `entry.duration` is in milliseconds; convert to seconds.
-			callIfFn(napi.jsObserveGcDuration, kindName, entry.duration / 1000);
+			callIfFn(
+				processMetricsNapi.jsObserveGcDuration,
+				kindName,
+				gcEntry.duration / 1000,
+			);
 		}
 	});
 	gcObserver.observe({ entryTypes: ["gc"], buffered: false });
@@ -94,7 +112,7 @@ export function startProcessMetrics(): void {
 	const lastEventLoopUtilization = performance.eventLoopUtilization();
 
 	const heartbeatInterval = setInterval(() => {
-		callIfFn(napi.jsSetEventloopHeartbeatTsMs, Date.now());
+		callIfFn(processMetricsNapi.jsSetEventloopHeartbeatTsMs, Date.now());
 	}, HEARTBEAT_INTERVAL_MS);
 	heartbeatInterval.unref();
 
@@ -118,7 +136,7 @@ export function startProcessMetrics(): void {
 	};
 
 	// Emit one snapshot immediately so freshly-scraped instances have data.
-	callIfFn(napi.jsSetEventloopHeartbeatTsMs, Date.now());
+	callIfFn(processMetricsNapi.jsSetEventloopHeartbeatTsMs, Date.now());
 	try {
 		collectAndPush();
 	} catch {
@@ -145,21 +163,25 @@ function collectAndPush(): void {
 	// reflects only the new interval.
 	const hist = state.eventLoopHistogram;
 	callIfFn(
-		napi.jsSetEventloopLagQuantile,
+		processMetricsNapi.jsSetEventloopLagQuantile,
 		"p50",
 		hist.percentile(50) / NS_PER_SECOND,
 	);
 	callIfFn(
-		napi.jsSetEventloopLagQuantile,
+		processMetricsNapi.jsSetEventloopLagQuantile,
 		"p90",
 		hist.percentile(90) / NS_PER_SECOND,
 	);
 	callIfFn(
-		napi.jsSetEventloopLagQuantile,
+		processMetricsNapi.jsSetEventloopLagQuantile,
 		"p99",
 		hist.percentile(99) / NS_PER_SECOND,
 	);
-	callIfFn(napi.jsSetEventloopLagQuantile, "max", hist.max / NS_PER_SECOND);
+	callIfFn(
+		processMetricsNapi.jsSetEventloopLagQuantile,
+		"max",
+		hist.max / NS_PER_SECOND,
+	);
 	hist.reset();
 
 	// Event loop utilization delta over the scrape window.
@@ -169,7 +191,7 @@ function collectAndPush(): void {
 		state.lastEventLoopUtilization,
 	);
 	state.lastEventLoopUtilization = nextElu;
-	callIfFn(napi.jsSetEventloopUtilization, eluDelta.utilization);
+	callIfFn(processMetricsNapi.jsSetEventloopUtilization, eluDelta.utilization);
 
 	// CPU usage delta. `process.cpuUsage()` returns microseconds.
 	const nextCpu = process.cpuUsage();
@@ -178,14 +200,14 @@ function collectAndPush(): void {
 	state.lastCpuUsage = nextCpu;
 	if (userDeltaUs > 0) {
 		callIfFn(
-			napi.jsAddProcessCpuSeconds,
+			processMetricsNapi.jsAddProcessCpuSeconds,
 			"user",
 			userDeltaUs / US_PER_SECOND,
 		);
 	}
 	if (systemDeltaUs > 0) {
 		callIfFn(
-			napi.jsAddProcessCpuSeconds,
+			processMetricsNapi.jsAddProcessCpuSeconds,
 			"system",
 			systemDeltaUs / US_PER_SECOND,
 		);
@@ -193,11 +215,11 @@ function collectAndPush(): void {
 
 	// Memory + heap.
 	const mem = process.memoryUsage();
-	callIfFn(napi.jsSetProcessResidentMemoryBytes, mem.rss);
-	callIfFn(napi.jsSetHeapBytes, "used", mem.heapUsed);
-	callIfFn(napi.jsSetHeapBytes, "total", mem.heapTotal);
+	callIfFn(processMetricsNapi.jsSetProcessResidentMemoryBytes, mem.rss);
+	callIfFn(processMetricsNapi.jsSetHeapBytes, "used", mem.heapUsed);
+	callIfFn(processMetricsNapi.jsSetHeapBytes, "total", mem.heapTotal);
 	const heapLimit = getHeapStatistics().heap_size_limit;
-	callIfFn(napi.jsSetHeapBytes, "limit", heapLimit);
+	callIfFn(processMetricsNapi.jsSetHeapBytes, "limit", heapLimit);
 
 	// libuv active handles + requests. These are unstable Node internals
 	// guarded behind underscore-prefixed names; if a future Node release
@@ -208,9 +230,9 @@ function collectAndPush(): void {
 		_getActiveRequests?: () => unknown[];
 	};
 	if (typeof proc._getActiveHandles === "function") {
-		callIfFn(napi.jsSetActiveHandles, proc._getActiveHandles().length);
+		callIfFn(processMetricsNapi.jsSetActiveHandles, proc._getActiveHandles().length);
 	}
 	if (typeof proc._getActiveRequests === "function") {
-		callIfFn(napi.jsSetActiveRequests, proc._getActiveRequests().length);
+		callIfFn(processMetricsNapi.jsSetActiveRequests, proc._getActiveRequests().length);
 	}
 }

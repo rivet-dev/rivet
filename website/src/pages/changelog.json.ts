@@ -1,6 +1,7 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
+import { getPostImage } from '@/lib/postImage';
 
 // Ensure this route is pre-rendered at build time
 export const prerender = true;
@@ -8,12 +9,6 @@ export const prerender = true;
 export const GET: APIRoute = async () => {
 	const posts = await getCollection('posts');
 	const changelogPosts = posts.filter(p => p.data.category === 'changelog' && !p.data.unpublished);
-
-	// Import all post images eagerly
-	const images = import.meta.glob<{ default: ImageMetadata }>(
-		'/src/content/posts/*/image.{png,jpg,gif}',
-		{ eager: true }
-	);
 
 	const entries = await Promise.all(
 		changelogPosts
@@ -23,9 +18,7 @@ export const GET: APIRoute = async () => {
 				const title = entry.data.title;
 				const slug = entry.id.replace(/\/page$/, '');
 
-				// Find the image for this post
-				const imagePath = Object.keys(images).find(p => p.includes(slug));
-				const image = entry.data.image || (imagePath ? images[imagePath].default : null);
+				const image = getPostImage(entry);
 
 				return {
 					title,
@@ -59,10 +52,3 @@ export const GET: APIRoute = async () => {
 		},
 	});
 };
-
-interface ImageMetadata {
-	src: string;
-	width: number;
-	height: number;
-	format: string;
-}

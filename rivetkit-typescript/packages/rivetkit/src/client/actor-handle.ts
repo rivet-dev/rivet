@@ -128,7 +128,7 @@ export class ActorHandleRaw {
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | undefined> {
+	): Promise<QueueSendResult | void> {
 		return this.#sendQueueMessage(name, body, options as any);
 	}
 
@@ -136,7 +136,7 @@ export class ActorHandleRaw {
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | undefined> {
+	): Promise<QueueSendResult | void> {
 		return await this.#queueSendMutex.run(async () => {
 			const maxAttempts = this.#getDynamicQueryMaxAttempts();
 			let useQueryTarget = false;
