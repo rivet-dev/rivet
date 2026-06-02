@@ -7,7 +7,13 @@ import {
 	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
+import {
+	configureBaseLogger,
+	type Logger as PinoLogger,
+} from "rivetkit/log";
 import * as Client from "./Client.ts";
+import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
+import * as Logger from "./Logger.ts";
 
 const TypeId = "~@rivetkit/effect/Registry";
 type ServerlessOptions = NonNullable<
@@ -24,36 +30,47 @@ export interface Registry {
 
 	readonly options: Options;
 
+	readonly baseLogger: PinoLogger;
+
 	readonly rivetkitActors: Map<string, Rivetkit.AnyActorDefinition>;
 }
 
 export const Registry: Context.Service<Registry, Registry> =
 	Context.Service<Registry>("@rivetkit/effect/Registry");
 
-const make = (options: Options = {}): Registry => {
+const make = (options: Options, baseLogger: PinoLogger): Registry => {
 	return Registry.of({
 		[TypeId]: TypeId,
 		options,
+		baseLogger,
 		rivetkitActors: new Map(),
 	});
 };
 
 export const layer = (options: Options = {}): Layer.Layer<Registry> =>
-	Layer.succeed(Registry, make(options));
+	Layer.effect(
+		Registry,
+		Effect.map(getOrCreateBaseLogger, (baseLogger) =>
+			make(options, baseLogger),
+		),
+	);
 
 const setupRivetkitRegistry = (
 	registry: Registry,
 	options?: {
 		readonly serverless?: ServerlessOptions | undefined;
 	},
-) =>
-	Rivetkit.setup({
+) => {
+	configureBaseLogger(registry.baseLogger);
+	return Rivetkit.setup({
 		use: Object.fromEntries(registry.rivetkitActors),
 		...registry.options,
+		logging: { baseLogger: registry.baseLogger },
 		...(options?.serverless === undefined
 			? {}
 			: { serverless: options.serverless }),
 	});
+};
 
 /**
  * Runs an actor registration layer against the configured engine.
@@ -64,14 +81,19 @@ const setupRivetkitRegistry = (
  */
 export const serve = <E, R>(
 	actorsLayer: Layer.Layer<never, E, R>,
-): Layer.Layer<never, E, R | Registry> =>
-	Layer.effectDiscard(
-		Effect.gen(function* () {
-			yield* Layer.build(actorsLayer);
-			const registry = yield* Registry;
-			const rivetkitRegistry = setupRivetkitRegistry(registry);
-			yield* Effect.sync(() => rivetkitRegistry.start());
-		}),
+	): Layer.Layer<never, E, R | Registry> =>
+		Layer.effectDiscard(
+			Effect.gen(function* () {
+				const registry = yield* Registry;
+				const baseLogger = registry.baseLogger;
+				yield* Layer.build(
+					actorsLayer.pipe(
+						Layer.provideMerge(Logger.layerPino(baseLogger)),
+					),
+				);
+				const rivetkitRegistry = setupRivetkitRegistry(registry);
+				yield* Effect.sync(() => rivetkitRegistry.start());
+			}),
 	);
 
 /**
@@ -115,12 +137,14 @@ export const test: Layer.Layer<Client.Client, never, Registry> = Layer.effect(
 		// to its (warning-emitting) default.
 		const resolvedEndpoint = rivetkitRegistry.parseConfig().endpoint;
 
-		return yield* Client.make({
-			...registry.options,
-			endpoint: registry.options.endpoint ?? resolvedEndpoint,
-		});
-	}),
-);
+			return yield* Client.make({
+				...registry.options,
+				endpoint: registry.options.endpoint ?? resolvedEndpoint,
+			}).pipe(
+				Effect.provideService(BaseLogger, registry.baseLogger),
+			);
+		}),
+	);
 
 const makeHttpEffect = (
 	registry: Registry,
@@ -159,9 +183,13 @@ export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	E,
 	Scope.Scope
 > {
-	const context = yield* Layer.build(registryLayer);
+	const context = yield* Layer.build(
+		registryLayer.pipe(Layer.provideMerge(Logger.layer)),
+	);
 	// @effect-diagnostics-next-line returnEffectInGen:off
-	return makeHttpEffect(Context.get(context, Registry), options);
+	return makeHttpEffect(Context.get(context, Registry), options).pipe(
+		Effect.provide(context),
+	);
 });
 
 export type ToWebHandlerOptions = ServerlessOptions & {
@@ -197,12 +225,18 @@ export const toWebHandler = <E>(
 		serverlessOptions = handlerOptions;
 	}
 
-	return HttpEffect.toWebHandlerLayerWith(registryLayer, {
+	const registryLayerWithLogging = registryLayer.pipe(
+		Layer.provideMerge(Logger.layer),
+	);
+
+	return HttpEffect.toWebHandlerLayerWith(registryLayerWithLogging, {
 		toHandler: (context) =>
-			Effect.sync(() => {
-				const registry = Context.get(context, Registry);
-				return makeHttpEffect(registry, serverlessOptions);
-			}),
+			Effect.succeed(
+				makeHttpEffect(
+					Context.get(context, Registry),
+					serverlessOptions,
+				).pipe(Effect.provide(context)),
+			),
 		middleware,
 		memoMap,
 	});

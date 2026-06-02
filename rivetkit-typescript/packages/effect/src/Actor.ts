@@ -16,6 +16,7 @@ import * as Client from "./Client.ts";
 import * as ActionDispatcher from "./internal/ActionDispatcher.ts";
 import * as ActorInstanceManager from "./internal/ActorInstanceManager.ts";
 import * as ActorStateAdapter from "./internal/ActorStateAdapter.ts";
+import { makeActorLogAnnotations } from "./internal/logging.ts";
 import type * as StateOptions from "./internal/StateOptions.ts";
 import * as Registry from "./Registry.ts";
 import type * as RivetError from "./RivetError.ts";
@@ -199,12 +200,12 @@ export type AccessorKeyParam = string | Rivetkit.ActorKey;
 export type Handle<Actions extends Action.Any> = {
 	readonly [A in Actions as Action.Tag<A>]: (
 		payload: Action.PayloadConstructor<A>,
-		) => Effect.Effect<
-			Action.Success<A>,
-			Action.Error<A> | RivetError.RivetError,
-			Action.ServicesClient<A>
-		>;
-	};
+	) => Effect.Effect<
+		Action.Success<A>,
+		Action.Error<A> | RivetError.RivetError,
+		Action.ServicesClient<A>
+	>;
+};
 
 /**
  * Yielded by `Actor.client`. Address an actor instance by key, then
@@ -485,7 +486,12 @@ const makeRivetkitActor = Effect.fnUntraced(function* <
 		Database,
 		WakeOptionsFor<State, Database>
 	>({
-		wakeHandler,
+		wakeHandler: (wakeOptions) =>
+			wakeHandler(wakeOptions).pipe(
+				Effect.annotateLogs(
+					makeActorLogAnnotations(wakeOptions.rawRivetkitContext),
+				),
+			),
 		stateAdapter,
 		makeContext: (c, scope) =>
 			Context.mergeAll(

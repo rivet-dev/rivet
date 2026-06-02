@@ -1,11 +1,12 @@
-import { Client } from "@rivetkit/effect";
 import { NodeRuntime } from "@effect/platform-node";
-import { Effect, Logger, Random } from "effect";
+import { Client } from "@rivetkit/effect";
+import { Effect, Random } from "effect";
 import {
 	type BannedWordsError,
 	ChatRoom,
 	type MemberNotInRoomError,
 } from "./actors/mod.ts";
+import { PrettyLoggerLayer } from "./logger.ts";
 
 const program = Effect.gen(function* () {
 	// `Actor.client` yields a typed accessor backed by the Effect SDK client layer.
@@ -69,8 +70,7 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.scoped);
 
 const ClientLayer = Client.layer({ endpoint: "http://127.0.0.1:6420" });
-const LoggerLayer = Logger.layer([Logger.consolePretty()]);
 
 program
-	.pipe(Effect.provide(ClientLayer), Effect.provide(LoggerLayer))
+	.pipe(Effect.provide(ClientLayer), Effect.provide(PrettyLoggerLayer))
 	.pipe(NodeRuntime.runMain);

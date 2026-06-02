@@ -17,6 +17,7 @@ import type {
 } from "../Actor.ts";
 import type * as Client from "../Client.ts";
 import * as ActionErrorEnvelope from "./ActionErrorEnvelope.ts";
+import { makeActorLogAnnotations } from "./logging.ts";
 import { readTraceMeta, rpcSystem } from "./tracing.ts";
 import { hasStringProperty } from "./utils.ts";
 
@@ -159,6 +160,7 @@ export const make = <
 							"rpc.method": rpcMethod,
 						},
 					}),
+					Effect.annotateLogs(makeActorLogAnnotations(c)),
 				);
 				const fiber = instance.runFork(actionEffect, {
 					signal: c.abortSignal,

@@ -1,10 +1,13 @@
 import { Context, Effect, Layer, Record, Result, Schema } from "effect";
 import * as RivetkitClient from "rivetkit/client";
 import * as RivetkitErrors from "rivetkit/errors";
+import { configureBaseLogger } from "rivetkit/log";
 import type * as Action from "./Action.ts";
 import type * as Actor from "./Actor.ts";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope.ts";
+import { getOrCreateBaseLogger } from "./internal/logging.ts";
 import { rpcSystem, type TraceMeta } from "./internal/tracing.ts";
+import * as Logger from "./Logger.ts";
 import * as RivetError from "./RivetError.ts";
 
 const TypeId = "~@rivetkit/effect/Client";
@@ -43,8 +46,12 @@ export const Client: Context.Service<Client, Client> = Context.Service<Client>(
 );
 
 export const make = Effect.fnUntraced(function* (options: Options = {}) {
+	const baseLogger = yield* getOrCreateBaseLogger;
 	const rivetkitClient = yield* Effect.acquireRelease(
-		Effect.sync(() => RivetkitClient.createClient(options)),
+		Effect.sync(() => {
+			configureBaseLogger(baseLogger);
+			return RivetkitClient.createClient(options);
+		}),
 		(c) => Effect.promise(() => c.dispose()),
 	);
 
@@ -136,7 +143,13 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 });
 
 export const layer = (options: Options = {}): Layer.Layer<Client> =>
-	Layer.effect(Client, make(options));
+	Layer.unwrap(
+		Effect.map(getOrCreateBaseLogger, (baseLogger) =>
+			Layer.effect(Client, make(options)).pipe(
+				Layer.provideMerge(Logger.layerPino(baseLogger)),
+			),
+		),
+	);
 
 const decodeActionErrorEnvelope = Schema.decodeUnknownEffect(
 	ActionErrorEnvelope.ActionErrorEnvelope,

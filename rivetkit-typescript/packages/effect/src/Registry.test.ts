@@ -1,7 +1,12 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Action, Actor, Registry } from "@rivetkit/effect";
+import { Action, Actor, Logger, Registry } from "@rivetkit/effect";
 import { Effect, Layer } from "effect";
 import { HttpEffect } from "effect/unstable/http";
+import {
+	configureDefaultLogger,
+	getBaseLogger,
+	type Logger as PinoLogger,
+} from "rivetkit/log";
 import { vi } from "vitest";
 
 const TestActor = Actor.make("TestActor", {
@@ -22,6 +27,25 @@ const RegistryLive = ActorsLayer.pipe(
 		}),
 	),
 );
+
+function makeTestLogger(): PinoLogger {
+	const logger: Record<string, unknown> = {
+		level: "debug",
+		child: () => logger,
+	};
+	for (const level of [
+		"trace",
+		"debug",
+		"info",
+		"warn",
+		"error",
+		"fatal",
+	]) {
+		logger[level] = (): void => {};
+	}
+
+	return logger as unknown as PinoLogger;
+}
 
 describe("Registry.toWebHandler", () => {
 	it("serves registered actors as a Fetch handler", async () => {
@@ -171,6 +195,58 @@ describe("Registry.toWebHandler", () => {
 			assert.strictEqual(builds, 1);
 		} finally {
 			await dispose();
+		}
+	});
+
+	it("initializes the underlying RivetKit registry once across requests", async () => {
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const WelcomeRegistryLive = ActorsLayer.pipe(
+			Layer.provideMerge(
+				Registry.layer({
+					endpoint: "http://127.0.0.1:6420",
+				}),
+			),
+		);
+		const { handler, dispose } =
+			Registry.toWebHandler(WelcomeRegistryLive);
+
+		try {
+			const first = await handler(
+				new Request("http://runner.test/api/rivet/metadata"),
+			);
+			const callsAfterFirst = log.mock.calls.length;
+			const second = await handler(
+				new Request("http://runner.test/api/rivet/metadata"),
+			);
+
+			assert.strictEqual(first.status, 200);
+			assert.strictEqual(second.status, 200);
+			assert.ok(callsAfterFirst > 0);
+			assert.strictEqual(log.mock.calls.length, callsAfterFirst);
+		} finally {
+			await dispose();
+			log.mockRestore();
+		}
+	});
+
+	it("uses a custom logger layer for the underlying RivetKit registry", async () => {
+		const baseLogger = makeTestLogger();
+		const CustomLoggerRegistryLive = RegistryLive.pipe(
+			Layer.provide(Logger.layerPino(baseLogger)),
+		);
+		const { handler, dispose } =
+			Registry.toWebHandler(CustomLoggerRegistryLive);
+
+		try {
+			const response = await handler(
+				new Request("http://runner.test/api/rivet/metadata"),
+			);
+
+			assert.strictEqual(response.status, 200);
+			assert.strictEqual(getBaseLogger(), baseLogger);
+		} finally {
+			await dispose();
+			configureDefaultLogger("silent");
 		}
 	});
 

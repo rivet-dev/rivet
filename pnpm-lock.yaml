@@ -1159,6 +1159,12 @@ importers:
       effect:
         specifier: 4.0.0-beta.66
         version: 4.0.0-beta.66
+      pino:
+        specifier: 9.9.5
+        version: 9.9.5
+      pino-pretty:
+        specifier: 13.1.2
+        version: 13.1.2
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit

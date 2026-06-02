@@ -1,8 +1,9 @@
-import { Layer } from "effect";
 import { NodeRuntime } from "@effect/platform-node";
-import { Registry, Client } from "@rivetkit/effect";
+import { Client, Registry } from "@rivetkit/effect";
+import { Layer } from "effect";
 import { ChatRoomLive, RoomPolicyLive } from "./actors/chat-room/live.ts";
 import { ModeratorLive } from "./actors/moderator/live.ts";
+import { PrettyLoggerLayer } from "./logger.ts";
 
 const endpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 
@@ -18,6 +19,7 @@ const ActorsLayer = Layer.mergeAll(
 //   RIVET_ENGINE_BINARY=$(pwd)/target/debug/rivet-engine pnpm start
 const MainLayer = Registry.serve(ActorsLayer).pipe(
 	Layer.provide(Registry.layer()),
+	Layer.provide(PrettyLoggerLayer),
 );
 
 // Keeps the layer alive. Tears down on SIGINT/SIGTERM.
@@ -25,5 +27,8 @@ Layer.launch(MainLayer).pipe(NodeRuntime.runMain);
 
 // Or create a web handler, which can be used in serverless environments.
 export const { handler, dispose } = Registry.toWebHandler(
-	ActorsLayer.pipe(Layer.provideMerge(Registry.layer())),
+	ActorsLayer.pipe(
+		Layer.provideMerge(Registry.layer()),
+		Layer.provide(PrettyLoggerLayer),
+	),
 );
