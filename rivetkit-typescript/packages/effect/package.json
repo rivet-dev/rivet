@@ -29,11 +29,9 @@
 		"test": "vitest --typecheck",
 		"coverage": "vitest run --coverage"
 	},
-	"dependencies": {
-		"rivetkit": "workspace:*"
-	},
 	"peerDependencies": {
-		"effect": "^4.0.0-beta.66"
+		"effect": "^4.0.0-beta.66",
+		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
 		"@arethetypeswrong/cli": "^0.18.3",
@@ -43,6 +41,7 @@
 		"@vitest/coverage-v8": "^4.1.7",
 		"effect": "^4.0.0-beta.66",
 		"publint": "^0.3.21",
+		"rivetkit": "workspace:*",
 		"typescript": "^5.9.2",
 		"vitest": "^4.1.5"
 	}
