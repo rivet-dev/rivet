@@ -58,14 +58,14 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		yield* Effect.addFinalizer(
 			Effect.fnUntraced(function* () {
 				// Access the actor's persisted `state` with a `SubscriptionRef`-like API
-				const name = yield* State.get(state).pipe(
+				const roomName = yield* State.get(state).pipe(
 					Effect.orDie,
 					Effect.map((s) => s.name),
 				);
 				yield* Effect.log("room sleeping", {
 					actorId: address.actorId,
 					key: address.key.join("/"),
-					name,
+					roomName,
 				});
 			}),
 		);
@@ -75,7 +75,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			Stream.runForEach((current) =>
 				Effect.log("room state changed", {
 					actorId: address.actorId,
-					name: current.name,
+					roomName: current.name,
 					memberCount: current.members.length,
 				}),
 			),
