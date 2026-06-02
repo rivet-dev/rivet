@@ -44,8 +44,18 @@ export interface RegistryRoutes {
 	prometheusMetrics(request?: Request): Promise<Response>;
 }
 
+/**
+ * Injectable dependencies for {@link Registry}. Production code uses the
+ * defaults. Tests override `buildConfiguredRegistry` to drive lifecycle
+ * orchestration against a fake `CoreRuntime` without an engine.
+ */
+export interface RegistryDeps {
+	buildConfiguredRegistry: typeof buildConfiguredRegistry;
+}
+
 export class Registry<A extends RegistryActors> {
 	#config: RegistryConfigInput<A>;
+	#buildConfiguredRegistry: typeof buildConfiguredRegistry;
 	public readonly routes: RegistryRoutes;
 
 	get config(): RegistryConfigInput<A> {
@@ -65,8 +75,10 @@ export class Registry<A extends RegistryActors> {
 	#shutdownInFlight: Promise<void> | null = null;
 	#signalHandlers: Partial<Record<ShutdownSignal, () => void>> = {};
 
-	constructor(config: RegistryConfigInput<A>) {
+	constructor(config: RegistryConfigInput<A>, deps?: Partial<RegistryDeps>) {
 		this.#config = config;
+		this.#buildConfiguredRegistry =
+			deps?.buildConfiguredRegistry ?? buildConfiguredRegistry;
 		this.routes = {
 			health: () => this.#healthRoute(),
 			metadata: () => this.#metadataRoute(),
@@ -106,7 +118,8 @@ export class Registry<A extends RegistryActors> {
 		this.#printWelcome(config, "serverless");
 
 		if (!this.#runtimeServerlessPromise) {
-			this.#runtimeServerlessPromise = buildConfiguredRegistry(config);
+			this.#runtimeServerlessPromise =
+				this.#buildConfiguredRegistry(config);
 		}
 
 		const { runtime, registry, serveConfig } =
@@ -405,7 +418,8 @@ export class Registry<A extends RegistryActors> {
 	 */
 	#startEnvoy(config: RegistryConfig, printWelcome: boolean) {
 		if (!this.#runtimeServePromise) {
-			const configuredRegistryPromise = buildConfiguredRegistry(config);
+			const configuredRegistryPromise =
+				this.#buildConfiguredRegistry(config);
 			this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
 			this.#runtimeServePromise = configuredRegistryPromise
 				.then(async ({ runtime, registry, serveConfig }) => {
@@ -423,17 +437,14 @@ export class Registry<A extends RegistryActors> {
 			// does not install handlers because it runs on Workers/Vercel/Deno
 			// Deploy where `process.on` is absent or forbidden; those platforms
 			// own their own signal policy.
-			this.#installSignalHandlers(config, configuredRegistryPromise);
+			this.#installSignalHandlers(config);
 		}
 		if (printWelcome) {
 			this.#printWelcome(config, "serverful");
 		}
 	}
 
-	#installSignalHandlers(
-		config: RegistryConfig,
-		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
-	): void {
+	#installSignalHandlers(config: RegistryConfig): void {
 		if (this.#shutdownInstalled) return;
 		if (config.shutdown?.disableSignalHandlers) return;
 		// Guard against non-Node runtimes (Workers/Edge) where `process` may
@@ -448,12 +459,7 @@ export class Registry<A extends RegistryActors> {
 		this.#shutdownInstalled = true;
 
 		const install = (signal: ShutdownSignal) => {
-			const handler = () =>
-				this.#onShutdownSignal(
-					signal,
-					config,
-					configuredRegistryPromise,
-				);
+			const handler = () => this.#onShutdownSignal(signal, config);
 			this.#signalHandlers[signal] = handler;
 			process.on(signal, handler);
 		};
@@ -461,37 +467,69 @@ export class Registry<A extends RegistryActors> {
 		install("SIGTERM");
 	}
 
-	#onShutdownSignal(
-		signal: ShutdownSignal,
-		config: RegistryConfig,
-		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
-	): void {
+	#onShutdownSignal(signal: ShutdownSignal, config: RegistryConfig): void {
 		if (this.#shutdownInFlight !== null) {
-			// Second delivery of the same (or another) shutdown signal.
-			// Remove our handler only, preserving any user-installed listeners.
-			// PID 1 must exit directly because re-raised default signals can be
+			// Second delivery of the same (or another) shutdown signal, or a
+			// drain already started by an explicit `shutdown()` call. Remove
+			// our handler only, preserving any user-installed listeners. PID 1
+			// must exit directly because re-raised default signals can be
 			// swallowed by the container signal path.
 			this.#removeSignalHandlers();
 			finishShutdownSignal(signal);
 			return;
 		}
-		this.#shutdownInFlight = this.#runShutdown(
-			signal,
-			config,
-			configuredRegistryPromise,
-		).catch((err) => {
-			logger().warn({ err }, "shutdown error");
-		});
+		this.#shutdownInFlight = this.#drain(config)
+			.catch((err) => {
+				logger().warn({ err }, "shutdown error");
+			})
+			.then(() => {
+				this.#removeSignalHandlers();
+				finishShutdownSignal(signal);
+			});
 	}
 
-	async #runShutdown(
-		signal: ShutdownSignal,
-		config: RegistryConfig,
-		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
-	): Promise<void> {
+	/**
+	 * Gracefully drains all live registries.
+	 *
+	 * Programmatic counterpart to the SIGINT/SIGTERM handlers: tears down
+	 * every live `CoreRegistry` (both `start()` and `handler()` modes) and
+	 * waits for the serve promise to resolve, all bounded by the shutdown
+	 * grace period. Unlike a signal-driven shutdown, this does not re-raise a
+	 * signal or exit the process. The caller owns process lifetime.
+	 *
+	 * Idempotent: concurrent or repeated calls share a single drain. Safe to
+	 * call even if nothing has been started.
+	 *
+	 * @example
+	 * ```ts
+	 * const registry = setup({ use: { counter } });
+	 * registry.start();
+	 * // ...later, on your own shutdown trigger:
+	 * await registry.shutdown();
+	 * ```
+	 */
+	public async shutdown(): Promise<void> {
+		if (this.#shutdownInFlight !== null) return this.#shutdownInFlight;
+		const config = this.parseConfig();
+		// Uninstall our signal handlers so a later SIGINT/SIGTERM does not
+		// re-trigger a drain on already-torn-down registries. Subsequent
+		// signals fall back to Node's default termination behavior.
+		this.#removeSignalHandlers();
+		this.#shutdownInFlight = this.#drain(config).catch((err) => {
+			logger().warn({ err }, "shutdown error");
+		});
+		return this.#shutdownInFlight;
+	}
+
+	async #drain(config: RegistryConfig): Promise<void> {
+		const modeAPromise = this.#runtimeServeConfiguredPromise;
+		const modeBPromise = this.#runtimeServerlessPromise;
+
 		const gracePeriodMs =
 			config.shutdown?.gracePeriodMs ??
-			(await this.#actorStopThresholdMs(configuredRegistryPromise)) ??
+			(await this.#actorStopThresholdMs(
+				modeAPromise ?? modeBPromise,
+			)) ??
 			30 * 60 * 1000;
 		// Race the entire drain sequence (both modes + serve promise) against
 		// a single grace ceiling. By default, this uses the engine-provided
@@ -499,29 +537,29 @@ export class Registry<A extends RegistryActors> {
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
-			// runtime registry, so one signal handler fans out to both to
-			// honor the spec invariant "single shutdown tears down both modes".
-			const registries: Promise<void>[] = [
-				(async () => {
-					try {
-						const { runtime, registry } =
-							await configuredRegistryPromise;
-						await runtime.shutdownRegistry(registry);
-					} catch (err) {
-						logger().warn(
-							{ err },
-							"runtime registry shutdown errored (mode A)",
-						);
-					}
-				})(),
-			];
-			const runtimeServerlessPromise = this.#runtimeServerlessPromise;
-			if (runtimeServerlessPromise !== undefined) {
+			// runtime registry, so one drain fans out to both to honor the
+			// spec invariant "single shutdown tears down both modes".
+			const registries: Promise<void>[] = [];
+			if (modeAPromise !== undefined) {
 				registries.push(
 					(async () => {
 						try {
-							const { runtime, registry } =
-								await runtimeServerlessPromise;
+							const { runtime, registry } = await modeAPromise;
+							await runtime.shutdownRegistry(registry);
+						} catch (err) {
+							logger().warn(
+								{ err },
+								"runtime registry shutdown errored (mode A)",
+							);
+						}
+					})(),
+				);
+			}
+			if (modeBPromise !== undefined) {
+				registries.push(
+					(async () => {
+						try {
+							const { runtime, registry } = await modeBPromise;
 							await runtime.shutdownRegistry(registry);
 						} catch (err) {
 							logger().warn(
@@ -548,13 +586,14 @@ export class Registry<A extends RegistryActors> {
 				setTimeout(resolve, gracePeriodMs).unref?.(),
 			),
 		]);
-		this.#removeSignalHandlers();
-		finishShutdownSignal(signal);
 	}
 
 	async #actorStopThresholdMs(
-		configuredRegistryPromise: ReturnType<typeof buildConfiguredRegistry>,
+		configuredRegistryPromise:
+			| ReturnType<typeof buildConfiguredRegistry>
+			| undefined,
 	): Promise<number | undefined> {
+		if (configuredRegistryPromise === undefined) return undefined;
 		try {
 			const { runtime, registry } = await configuredRegistryPromise;
 			const thresholdMs =
