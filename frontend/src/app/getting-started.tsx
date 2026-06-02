@@ -62,6 +62,10 @@ import { EnvVariables, useRivetDsn } from "./env-variables";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
 import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
+import {
+	getAgentInstructionsPrompt,
+	getComputeAddendum,
+} from "@/content/agent-prompts";
 
 const stepper = defineStepper(
 	{
@@ -699,125 +703,12 @@ function InstallStep() {
 	);
 }
 
-const agentPrompt = `# RivetKit Local Dev Setup
-
-Read through the existing project to understand the codebase. I want to add Rivet Actors to this project.
-
-Before making any changes, read the Rivet Actors documentation at https://rivet.dev/docs/actors to understand how RivetKit works, including the actor API, state management, events, actions, connections, and client setup.
-
-Add a note to the project's CLAUDE.md, AGENTS.md, or similar AI agent instructions file linking to https://rivet.dev/llms.txt as a reference for working with RivetKit in future conversations. Create the file if one doesn't exist.
-
-## Walk me through the following steps
-
-### Step 1: Ask what to build
-
-Ask me what I'd like to build with actors before writing any code. Suggest ideas based on the project, such as:
-
-- AI agents
-- Coding agent & sandbox orchestration
-- Realtime collaboration (shared docs, cursors, chat)
-- Workflow automation (background jobs, queues, scheduling)
-- Per-user or per-tenant data backends
-- Multiplayer games
-- WebSocket servers and custom protocols
-- Local-first sync (offline-first apps that sync state when reconnected)
-- Rate limiters & session management (per-user stateful middleware)
-
-### Step 2: Install RivetKit
-
-Install RivetKit: \`npm install rivetkit\`
-
-If the project needs a frontend (recommended for realtime features), also install the React client: \`npm install @rivetkit/react\`
-
-### Step 3: Define actors and registry
-
-Create an actors file with a registry:
-
-\`\`\`ts
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({
-  state: { /* initial state */ },
-  actions: {
-    myAction: (c, arg: string) => { /* ... */ },
-  },
-});
-
-export const registry = setup({
-  use: { myActor },
-});
-\`\`\`
-
-### Step 4: Expose the server
-
-If the project already has a server (Hono, Express, etc), integrate with \`registry.handler()\`:
-
-\`\`\`ts
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-\`\`\`
-
-Otherwise, use \`registry.serve()\` for a standalone server.
-
-### Step 5: Connect a client
-
-\`createClient\` from \`rivetkit/client\` works on both frontend and backend. It automatically detects the environment:
-- **Browser**: defaults to \`window.location.origin + "/api/rivet"\`
-- **Server**: defaults to \`http://127.0.0.1:6420\`
-
-\`\`\`ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./actors";
-
-const client = createClient<typeof registry>();
-const handle = client.myActor.getOrCreate(["my-key"]);
-
-// Stateless call
-await handle.myAction("hello");
-
-// Stateful connection (for realtime events)
-const conn = handle.connect();
-conn.on("eventName", (data) => console.log(data));
-\`\`\`
-
-For React frontends, use \`@rivetkit/react\` for hooks-based integration (see https://rivet.dev/docs/clients/react):
-
-\`\`\`tsx
-import { createRivetKit } from "@rivetkit/react";
-import type { registry } from "./actors";
-
-const { useActor } = createRivetKit<typeof registry>();
-
-function MyComponent() {
-  const actor = useActor({ name: "myActor", key: ["my-key"] });
-  actor.useEvent("eventName", (data) => console.log(data));
-  return <button onClick={() => actor.connection?.myAction("hello")}>Go</button>;
-}
-\`\`\`
-
-### Step 6: Verify setup
-
-- Verify \`/api/rivet/metadata\` returns 200.
-- Test actors programmatically using the inspector HTTP API to verify they work (see https://rivet.dev/docs/actors/debugging). Key endpoints are available at \`/api/rivet/actor/{actor_id}/inspector/*\`:
-  - \`GET /inspector/summary\` - full actor snapshot
-  - \`POST /inspector/action/{name}\` - execute an action with \`{"args": [...]}\`
-  - \`GET /inspector/state\` - read actor state
-- If a frontend was implemented, use browser MCP to verify it works end-to-end.
-
-For detailed setup instructions, see the quickstart guides:
-
-- Node.js & Bun: https://rivet.dev/docs/actors/quickstart/backend
-- React: https://rivet.dev/docs/actors/quickstart/react
-- Next.js: https://rivet.dev/docs/actors/quickstart/next-js
-
-## If You Get Stuck
-
-Check the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting. If that doesn't help, prompt the user to join the Rivet Discord (https://rivet.dev/discord) or file an issue on GitHub (https://github.com/rivet-dev/rivet). Generate a report with: symptoms (error, local vs deployed), what you've tried, and environment (RivetKit version, runtime, provider, HTTP router).`;
-
 function RunLocallyStep() {
+	const code = useAgentInstructionsCode();
 	return (
 		<div className="flex flex-col gap-6">
 			<AgentPromptBanner
-				code={agentPrompt}
+				code={code}
 				label="Have your coding agent scaffold and run your first Actor for you."
 			/>
 			<OrDivider label="or do it yourself" />
@@ -853,173 +744,33 @@ function StepNumber({ n }: { n: number }) {
 	);
 }
 
-
-function buildRivetAgentInstructionsCode({
-	cloudToken,
-	publishableToken,
-	namespace,
-	project,
-	organization,
-	cloudNamespace,
-	apiUrl,
-	cloudApiUrl,
+function useAgentInstructionsCode({
+	provider,
+	runnerName = "default",
+	endpoint,
 }: {
-	cloudToken: string;
-	publishableToken: string;
-	namespace: string;
-	project: string;
-	organization: string;
-	cloudNamespace: string;
-	apiUrl: string;
-	cloudApiUrl: string;
-}) {
-	return `## Step 1: Load Rivet Skill
+	provider?: Provider;
+	runnerName?: string;
+	endpoint?: string;
+} = {}) {
+	const providerDetails = provider
+		? deployOptions.find((p) => p.name === provider)
+		: undefined;
+	const providerStr =
+		providerDetails?.displayName ?? provider ?? "your chosen provider";
+	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
+	const secretToken = useRivetDsn({ kind: "secret", endpoint });
 
-Load the Rivet skill. If the skill is not installed, tell the user to run this and restart the agent:
-
-\`\`\`
-npx skills add rivet-dev/skills -s rivetkit
-\`\`\`
-
-## Step 2: Create Dockerfile
-
-If the project does not already have a \`Dockerfile\`, create one. Use this as a starting point and adjust the package manager (npm/pnpm/yarn), file paths, and entrypoint to match the project:
-
-\`\`\`dockerfile
-FROM node:24-alpine
-
-WORKDIR /app
-
-COPY package.json package-lock.json ./
-RUN npm ci
-
-COPY . .
-RUN npm run build --if-present
-
-EXPOSE 3000
-
-CMD ["node", "dist/index.js"]
-\`\`\`
-
-If the project does not already have a \`.dockerignore\`, create one:
-
-\`\`\`
-node_modules/
-dist/
-.env
-.git/
-\`\`\`
-
-If Docker is installed, build and run the image to verify it works before proceeding:
-
-\`\`\`bash
-docker build -t rivet-test . && docker run --rm -p 3000:3000 rivet-test
-\`\`\`
-
-Verify the container starts and is connectable (e.g. \`curl http://localhost:3000/health\`). If Docker is not installed, skip this and proceed.
-
-## Step 3: Add GitHub Secret
-
-Add the secret RIVET_CLOUD_TOKEN to your GitHub repository:
-
-\`\`\`
-gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
-\`\`\`
-
-## Step 4: Create GitHub Action
-
-Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.1:
-
-\`\`\`
-name: Rivet Deploy
-
-on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-concurrency:
-  group: rivet-deploy-\${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  rivet-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.1
-        with:
-          rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}
-		  managed-pool-config: '{"environment":{"PORT":"3000"}}'
-\`\`\`
-
-Important: the container should be connectable at 3000! If using another port, ensure that environment.PORT is set to that environment.
-
-## Step 5: Push and Verify
-
-Push the changes and monitor the GitHub Action until it completes:
-
-1. Push to the repository.
-2. Use \`gh run list\` and \`gh run watch\` to poll the action status. Do not move on until the run finishes.
-3. If the action succeeds, proceed to Step 6.
-4. If the action fails, inspect the logs with \`gh run view --log-failed\`, fix the issue, push again, and repeat from step 2.
-
-## Step 6: Verify Deployment
-
-**Token types used in this step:**
-- \`cloud_api_*\` (the \`RIVET_CLOUD_TOKEN\` secret) — a management token scoped to the Cloud API (cloud-api.rivet.dev). Use this for admin operations like checking deployment status and fetching logs.
-- \`pk_*\` (the publishable token below) — a public key scoped to the Rivet Engine API (api.rivet.dev). Use this for creating actors and calling gateway endpoints.
-
-These are different tokens with different scopes. Do not mix them up.
-
-Once deployed, verify the deployment works:
-
-1. Poll the deployment status every 5 seconds until status is "ready". Stop and investigate if status is "error".
-   \`\`\`bash
-   curl -s "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default?org=${organization}" \\
-     -H "Authorization: Bearer ${cloudToken}"
-   \`\`\`
-
-2. Create an actor. Actors require a key field (string, not array):
-   \`\`\`bash
-   curl -X POST "${apiUrl}/actors?namespace=${namespace}" \\
-     -H "Authorization: Bearer ${publishableToken}" \\
-     -H "Content-Type: application/json" \\
-     -d '{"name": "<ACTOR_NAME>", "key": "<KEY>", "runner_name_selector": "default", "crash_policy": "restart"}'
-   \`\`\`
-   Replace \`<ACTOR_NAME>\` with a valid actor name from the registry and \`<KEY>\` with an appropriate key string (e.g. "general"). Note the \`actor_id\` from the response.
-
-3. Wait ~10 seconds for the actor to start, then hit its health endpoint through the gateway using the public token:
-   \`\`\`bash
-   curl "${apiUrl}/gateway/<ACTOR_ID>/health" \\
-     -H "x-rivet-token: ${publishableToken}"
-   \`\`\`
-   This should return ok with a 200 status.
-
-4. If the health check returns actor_runner_failed, check the runner logs via SSE to diagnose:
-   \`\`\`bash
-   curl --max-time 15 "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default/logs?org=${organization}" \\
-     -H "Authorization: Bearer ${cloudToken}"
-   \`\`\`
-
-5. Common issues:
-   - "actor should have a key": The key field was missing from the create request.
-   - Token 401: Make sure you're using the correct API URLs (${apiUrl}, ${cloudApiUrl}).
-	- "Failed to start container: Please ensure your container starts successfully on the specified port (8080 if unspecified). Make sure your image was built for linux/amd64.": Ensure that we the container is connectable to PORT 3000 or whichever PORT specified in your managed-pool-config settings of your Github action.
-
-## Troubleshooting
-
-- There is no Rivet CLI. Do not attempt to use or install one. All deployment is done via the GitHub Action and all interaction is done via HTTP APIs (curl).
-- Architecture: The GitHub Action builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
-- For more troubleshooting help, see: https://rivet.dev/docs/actors/troubleshooting/`;
+	return getAgentInstructionsPrompt({
+		providerStr,
+		publishableToken,
+		secretToken,
+		runnerName,
+	});
 }
 
-function useRivetAgentInstructionsCode() {
+function useComputeInstructionsCode() {
+	const agentInstructions = useAgentInstructionsCode({ provider: "rivet" });
 	const dataProvider = useCloudNamespaceDataProvider();
 	const { data: cloudToken } = useSuspenseQuery(
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
@@ -1027,7 +778,7 @@ function useRivetAgentInstructionsCode() {
 	const publishableRawToken = usePublishableToken();
 	const namespace = dataProvider.engineNamespace;
 
-	return buildRivetAgentInstructionsCode({
+	const computeAddendum = getComputeAddendum({
 		cloudToken,
 		publishableToken: publishableRawToken ?? "<PUBLISHABLE_TOKEN>",
 		namespace,
@@ -1037,40 +788,15 @@ function useRivetAgentInstructionsCode() {
 		apiUrl: cloudEnv().VITE_APP_API_URL,
 		cloudApiUrl: cloudEnv().VITE_APP_CLOUD_API_URL,
 	});
-}
 
-function useOtherAgentInstructionsCode(provider?: Provider) {
-	const providerDetails = deployOptions.find((p) => p.name === provider);
-	const endpoint = useEndpoint();
-	const runnerName = useWatch({ name: "runnerName" }) as string;
-	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
-	const secretToken = useRivetDsn({ kind: "secret", endpoint });
-
-	const providerStr =
-		providerDetails?.displayName ?? provider ?? "your chosen provider";
-	return `Load the Rivet skill and then:
-1. Integrate Rivet in to the project
-2. Verify it works on the local machine
-3. Deploy to ${providerStr} and configure
-   the following environment variables:
-
-  RIVET_PUBLIC_ENDPOINT=${publishableToken}
-  RIVET_ENDPOINT=${secretToken}${
-		runnerName !== "default"
-			? `
-  RIVET_POOL=${runnerName}`
-			: ""
-  }
-
-4. Tell the user the URL to past in
-   to the Rivet dashboard`;
+	return `${agentInstructions}\n\n---\n\n${computeAddendum}`;
 }
 
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 	if (provider === "rivet") {
-		return <RivetCopyAgentInstructionsButton />;
+		return <ComputeCopyAgentInstructionsButton />;
 	}
-	return <OtherCopyAgentInstructionsButton provider={provider} />;
+	return <GenericCopyAgentInstructionsButton provider={provider} />;
 }
 
 function AgentPromptBanner({
@@ -1124,17 +850,19 @@ function AgentPromptBanner({
 	);
 }
 
-function RivetCopyAgentInstructionsButton() {
-	const code = useRivetAgentInstructionsCode();
+function ComputeCopyAgentInstructionsButton() {
+	const code = useComputeInstructionsCode();
 	return <AgentPromptBanner code={code} containsSecret />;
 }
 
-function OtherCopyAgentInstructionsButton({
+function GenericCopyAgentInstructionsButton({
 	provider,
 }: {
 	provider?: Provider;
 }) {
-	const code = useOtherAgentInstructionsCode(provider);
+	const endpoint = useEndpoint();
+	const runnerName = useWatch({ name: "runnerName" }) as string;
+	const code = useAgentInstructionsCode({ provider, runnerName, endpoint });
 	return <AgentPromptBanner code={code} containsSecret />;
 }
 
@@ -1159,7 +887,7 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.1
+      - uses: rivet-dev/deploy-action@v1.1.2
         with:
           rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}`;
 
