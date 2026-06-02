@@ -58,8 +58,8 @@ cargo test -- --nocapture
 cargo clippy -- -W warnings
 ```
 
-- Do not run `cargo fmt` automatically. The team runs it at merge time.
-- Do not run `./scripts/cargo/fix.sh`. Do not format the code yourself.
+- Agents may run `node scripts/format/agent-format.mjs` to format changed Biome and Rust files. Do not run broad `cargo fmt` or `cargo fmt --all` manually.
+- Do not run `./scripts/cargo/fix.sh` or other broad formatter/fixer commands yourself.
 - Ensure lefthook is installed and enabled for git hooks (`lefthook install`).
 
 ### Docker dev environment
