@@ -48,6 +48,7 @@
 				"tsconfig.json",
 				"vitest.config.ts",
 				"../../../tsconfig.base.json",
+				"../../../vitest.base.ts",
 				"../rivetkit/tests/shared-engine.ts"
 			]
 		}
