@@ -9,5 +9,5 @@
  *     }
  */
 export interface ActorsKvGetRequest {
-    namespace: string;
+	namespace: string;
 }

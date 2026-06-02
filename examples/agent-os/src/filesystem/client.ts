@@ -39,7 +39,10 @@ const tree = (await agent.readdirRecursive("/home/user/project", {
 console.log("Recursive listing:", tree);
 
 // Check existence
-console.log("/home/user/project exists:", await agent.exists("/home/user/project"));
+console.log(
+	"/home/user/project exists:",
+	await agent.exists("/home/user/project"),
+);
 console.log("/missing exists:", await agent.exists("/missing"));
 
 // Move a file

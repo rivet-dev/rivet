@@ -160,7 +160,8 @@ const defaultContext = {
 			},
 			meta: {
 				actorsListPage1Poll: true,
-				actorsListTargetQueryKey: this.actorsQueryOptions(opts).queryKey,
+				actorsListTargetQueryKey:
+					this.actorsQueryOptions(opts).queryKey,
 			},
 		});
 	},

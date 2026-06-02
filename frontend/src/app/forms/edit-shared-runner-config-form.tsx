@@ -11,6 +11,8 @@ import {
 	useFormContext,
 } from "react-hook-form";
 import z from "zod";
+import { EndpointHealthIndicator } from "@/app/forms/serverless-endpoint-health";
+import { RunnerConfigToggleGroup } from "@/app/runner-config-toggle-group";
 import {
 	Button,
 	Checkbox,
@@ -29,8 +31,6 @@ import {
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { WithTooltip } from "@/components/ui/tooltip";
 import { VisibilitySensor } from "@/components/visibility-sensor";
-import { EndpointHealthIndicator } from "@/app/forms/serverless-endpoint-health";
-import { RunnerConfigToggleGroup } from "@/app/runner-config-toggle-group";
 
 const LabelWithInfo = ({
 	children,
@@ -545,8 +545,8 @@ export const AutoUpgrade = <TValues extends Record<string, any> = FormValues>({
 					<div>
 						<FormLabel>Auto Upgrade Actors</FormLabel>
 						<FormDescription>
-							Automatically upgrade actors when a new runner version
-							is available.
+							Automatically upgrade actors when a new runner
+							version is available.
 						</FormDescription>
 					</div>
 					<FormMessage />

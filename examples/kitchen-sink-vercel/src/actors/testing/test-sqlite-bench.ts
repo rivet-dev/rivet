@@ -31,7 +31,10 @@ async function seedChatLog(
 				batchIndex < CHAT_LOG_INSERT_BATCH_SIZE && remainingBytes > 0;
 				batchIndex++
 			) {
-				const contentBytes = Math.min(CHAT_LOG_CHUNK_BYTES, remainingBytes);
+				const contentBytes = Math.min(
+					CHAT_LOG_CHUNK_BYTES,
+					remainingBytes,
+				);
 				const seq = rows;
 				const role = seq % 2 === 0 ? "user" : "assistant";
 
@@ -79,8 +82,12 @@ export const testSqliteBench = actor({
 				payload BLOB,
 				created_at INTEGER NOT NULL DEFAULT 0
 			)`);
-			await database.execute("CREATE INDEX IF NOT EXISTS idx_bench_key ON bench(key)");
-			await database.execute("CREATE INDEX IF NOT EXISTS idx_bench_num ON bench(num)");
+			await database.execute(
+				"CREATE INDEX IF NOT EXISTS idx_bench_key ON bench(key)",
+			);
+			await database.execute(
+				"CREATE INDEX IF NOT EXISTS idx_bench_num ON bench(num)",
+			);
 
 			await database.execute(`CREATE TABLE IF NOT EXISTS bench_json (
 				id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,7 +130,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < n; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`k-${i}`, `v-${i}`, i, Date.now(),
+					`k-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			return { ms: performance.now() - t0, ops: n };
@@ -135,7 +145,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < n; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`k-${i}`, `v-${i}`, i, Date.now(),
+					`k-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -144,18 +157,28 @@ export const testSqliteBench = actor({
 
 		insertBatch: async (c, n: number) => {
 			const t0 = performance.now();
-			const placeholders = Array.from({ length: n }, () => "(?, ?, ?, ?)").join(", ");
+			const placeholders = Array.from(
+				{ length: n },
+				() => "(?, ?, ?, ?)",
+			).join(", ");
 			const args: unknown[] = [];
 			for (let i = 0; i < n; i++) {
 				args.push(`k-${i}`, `v-${i}`, i, Date.now());
 			}
-			await c.db.execute(`INSERT INTO bench (key, value, num, created_at) VALUES ${placeholders}`, ...args);
+			await c.db.execute(
+				`INSERT INTO bench (key, value, num, created_at) VALUES ${placeholders}`,
+				...args,
+			);
 			return { ms: performance.now() - t0, ops: n };
 		},
 
 		pointRead: async (c, n: number) => {
-			await c.db.execute("INSERT INTO bench (key, value, num, created_at) VALUES ('pr', 'pr', 0, 0)");
-			const rows = await c.db.execute("SELECT id FROM bench WHERE key = 'pr' LIMIT 1");
+			await c.db.execute(
+				"INSERT INTO bench (key, value, num, created_at) VALUES ('pr', 'pr', 0, 0)",
+			);
+			const rows = await c.db.execute(
+				"SELECT id FROM bench WHERE key = 'pr' LIMIT 1",
+			);
 			const id = (rows[0] as { id: number }).id;
 			const t0 = performance.now();
 			for (let i = 0; i < n; i++) {
@@ -170,14 +193,21 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < seedRows; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`scan-${i}`, `val-${i}`, i, Date.now(),
+					`scan-${i}`,
+					`val-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
 			const seedMs = performance.now() - t0Seed;
 			const t0 = performance.now();
 			const rows = await c.db.execute("SELECT * FROM bench");
-			return { ms: performance.now() - t0, seedMs, rows: (rows as unknown[]).length };
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		rangeScanIndexed: async (c) => {
@@ -186,14 +216,23 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 500; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`rs-${i}`, `v-${i}`, i, Date.now(),
+					`rs-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
 			const seedMs = performance.now() - t0Seed;
 			const t0 = performance.now();
-			const rows = await c.db.execute("SELECT * FROM bench WHERE num BETWEEN 100 AND 300");
-			return { ms: performance.now() - t0, seedMs, rows: (rows as unknown[]).length };
+			const rows = await c.db.execute(
+				"SELECT * FROM bench WHERE num BETWEEN 100 AND 300",
+			);
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		rangeScanUnindexed: async (c) => {
@@ -202,14 +241,23 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 500; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`ru-${i}`, `v-${i}`, i, Date.now(),
+					`ru-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
 			const seedMs = performance.now() - t0Seed;
 			const t0 = performance.now();
-			const rows = await c.db.execute("SELECT * FROM bench WHERE value BETWEEN 'v-100' AND 'v-300'");
-			return { ms: performance.now() - t0, seedMs, rows: (rows as unknown[]).length };
+			const rows = await c.db.execute(
+				"SELECT * FROM bench WHERE value BETWEEN 'v-100' AND 'v-300'",
+			);
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		bulkUpdate: async (c) => {
@@ -218,13 +266,18 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 200; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`bu-${i}`, `v-${i}`, i, Date.now(),
+					`bu-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
 			const seedMs = performance.now() - t0Seed;
 			const t0 = performance.now();
-			await c.db.execute("UPDATE bench SET value = 'updated', num = num + 1000 WHERE key LIKE 'bu-%'");
+			await c.db.execute(
+				"UPDATE bench SET value = 'updated', num = num + 1000 WHERE key LIKE 'bu-%'",
+			);
 			return { ms: performance.now() - t0, seedMs, ops: 200 };
 		},
 
@@ -234,7 +287,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 200; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`bd-${i}`, `v-${i}`, i, Date.now(),
+					`bd-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -245,12 +301,20 @@ export const testSqliteBench = actor({
 		},
 
 		hotRowUpdates: async (c, n: number) => {
-			await c.db.execute("INSERT INTO bench (key, value, num, created_at) VALUES ('hot', 'v', 0, 0)");
-			const rows = await c.db.execute("SELECT id FROM bench WHERE key = 'hot' LIMIT 1");
+			await c.db.execute(
+				"INSERT INTO bench (key, value, num, created_at) VALUES ('hot', 'v', 0, 0)",
+			);
+			const rows = await c.db.execute(
+				"SELECT id FROM bench WHERE key = 'hot' LIMIT 1",
+			);
 			const id = (rows[0] as { id: number }).id;
 			const t0 = performance.now();
 			for (let i = 0; i < n; i++) {
-				await c.db.execute("UPDATE bench SET num = ? WHERE id = ?", i, id);
+				await c.db.execute(
+					"UPDATE bench SET num = ? WHERE id = ?",
+					i,
+					id,
+				);
 			}
 			return { ms: performance.now() - t0, ops: n };
 		},
@@ -261,7 +325,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 500; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`vac-${i}`, `v-${i}`, i, Date.now(),
+					`vac-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -278,7 +345,11 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < n; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, payload, created_at) VALUES (?, ?, ?, ?, ?)",
-					`lp-${i}`, `v-${i}`, i, blob, Date.now(),
+					`lp-${i}`,
+					`v-${i}`,
+					i,
+					blob,
+					Date.now(),
 				);
 			}
 			return { ms: performance.now() - t0, ops: n };
@@ -288,11 +359,19 @@ export const testSqliteBench = actor({
 			const t0 = performance.now();
 			await c.db.execute(
 				"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-				"oltp", "initial", 0, Date.now(),
+				"oltp",
+				"initial",
+				0,
+				Date.now(),
 			);
-			const rows = await c.db.execute("SELECT * FROM bench WHERE key = 'oltp' LIMIT 1");
+			const rows = await c.db.execute(
+				"SELECT * FROM bench WHERE key = 'oltp' LIMIT 1",
+			);
 			const id = (rows[0] as { id: number }).id;
-			await c.db.execute("UPDATE bench SET value = 'updated', num = 1 WHERE id = ?", id);
+			await c.db.execute(
+				"UPDATE bench SET value = 'updated', num = 1 WHERE id = ?",
+				id,
+			);
 			await c.db.execute("SELECT * FROM bench WHERE id = ?", id);
 			return { ms: performance.now() - t0, ops: 4 };
 		},
@@ -302,25 +381,41 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 50; i++) {
 				await c.db.execute(
 					"INSERT INTO bench_json (data) VALUES (?)",
-					JSON.stringify({ name: `item-${i}`, tags: ["a", "b"], score: Math.random() * 100 }),
+					JSON.stringify({
+						name: `item-${i}`,
+						tags: ["a", "b"],
+						score: Math.random() * 100,
+					}),
 				);
 			}
 			const rows = await c.db.execute(
 				"SELECT id, json_extract(data, '$.name') as name, json_extract(data, '$.score') as score FROM bench_json ORDER BY json_extract(data, '$.score') DESC LIMIT 10",
 			);
-			return { ms: performance.now() - t0, ops: 51, rows: (rows as unknown[]).length };
+			return {
+				ms: performance.now() - t0,
+				ops: 51,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		jsonEachAgg: async (c) => {
 			await c.db.execute(
 				"INSERT INTO bench_json (data) VALUES (?)",
-				JSON.stringify({ items: Array.from({ length: 100 }, (_, i) => ({ id: i, val: i * 10 })) }),
+				JSON.stringify({
+					items: Array.from({ length: 100 }, (_, i) => ({
+						id: i,
+						val: i * 10,
+					})),
+				}),
 			);
 			const t0 = performance.now();
 			const rows = await c.db.execute(
 				"SELECT SUM(json_extract(value, '$.val')) as total FROM bench_json, json_each(json_extract(data, '$.items')) LIMIT 1",
 			);
-			return { ms: performance.now() - t0, total: (rows[0] as { total: number }).total };
+			return {
+				ms: performance.now() - t0,
+				total: (rows[0] as { total: number }).total,
+			};
 		},
 
 		complexAggregation: async (c) => {
@@ -329,7 +424,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 200; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`grp-${i % 10}`, `v-${i}`, i, Date.now(),
+					`grp-${i % 10}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -338,7 +436,11 @@ export const testSqliteBench = actor({
 			const rows = await c.db.execute(
 				"SELECT key, COUNT(*) as cnt, AVG(num) as avg_num, MIN(num) as min_num, MAX(num) as max_num FROM bench WHERE key LIKE 'grp-%' GROUP BY key ORDER BY cnt DESC",
 			);
-			return { ms: performance.now() - t0, seedMs, groups: (rows as unknown[]).length };
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				groups: (rows as unknown[]).length,
+			};
 		},
 
 		complexSubquery: async (c) => {
@@ -347,7 +449,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 200; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`sq-${i}`, `v-${i}`, i, Date.now(),
+					`sq-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -356,7 +461,11 @@ export const testSqliteBench = actor({
 			const rows = await c.db.execute(
 				"SELECT * FROM bench WHERE num > (SELECT AVG(num) FROM bench) ORDER BY num DESC LIMIT 50",
 			);
-			return { ms: performance.now() - t0, seedMs, rows: (rows as unknown[]).length };
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		complexJoin: async (c) => {
@@ -365,11 +474,16 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 200; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`j-${i}`, `v-${i}`, i, Date.now(),
+					`j-${i}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 				await c.db.execute(
 					"INSERT INTO bench_secondary (bench_id, label, score) VALUES (?, ?, ?)",
-					i + 1, `label-${i}`, Math.random() * 100,
+					i + 1,
+					`label-${i}`,
+					Math.random() * 100,
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -378,7 +492,11 @@ export const testSqliteBench = actor({
 			const rows = await c.db.execute(
 				"SELECT b.key, b.num, s.label, s.score FROM bench b INNER JOIN bench_secondary s ON s.bench_id = b.id WHERE b.key LIKE 'j-%' ORDER BY s.score DESC LIMIT 200",
 			);
-			return { ms: performance.now() - t0, seedMs, rows: (rows as unknown[]).length };
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		complexCteWindow: async (c) => {
@@ -387,7 +505,10 @@ export const testSqliteBench = actor({
 			for (let i = 0; i < 200; i++) {
 				await c.db.execute(
 					"INSERT INTO bench (key, value, num, created_at) VALUES (?, ?, ?, ?)",
-					`cte-${i % 10}`, `v-${i}`, i, Date.now(),
+					`cte-${i % 10}`,
+					`v-${i}`,
+					i,
+					Date.now(),
 				);
 			}
 			await c.db.execute("COMMIT");
@@ -402,7 +523,11 @@ export const testSqliteBench = actor({
 				)
 				SELECT * FROM ranked WHERE rn <= 3 ORDER BY key, rn
 			`);
-			return { ms: performance.now() - t0, seedMs, rows: (rows as unknown[]).length };
+			return {
+				ms: performance.now() - t0,
+				seedMs,
+				rows: (rows as unknown[]).length,
+			};
 		},
 
 		migrationTables: async (c, n: number) => {
@@ -421,7 +546,11 @@ export const testSqliteBench = actor({
 		chatLogInsert: async (c, totalBytes: number) => {
 			const t0 = performance.now();
 			const seeded = await seedChatLog(c.db, totalBytes);
-			return { ms: performance.now() - t0, ops: seeded.rows, bytes: seeded.totalBytes };
+			return {
+				ms: performance.now() - t0,
+				ops: seeded.rows,
+				bytes: seeded.totalBytes,
+			};
 		},
 
 		chatLogSelectLimit: async (c, totalBytes: number) => {
@@ -480,7 +609,9 @@ export const testSqliteBench = actor({
 			return {
 				ms: performance.now() - t0,
 				ops: 1,
-				totalBytes: (rows[0] as { total_bytes: number | null }).total_bytes ?? 0,
+				totalBytes:
+					(rows[0] as { total_bytes: number | null }).total_bytes ??
+					0,
 				bytes: seeded.totalBytes,
 			};
 		},

@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import type React from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function App() {
-	const [messages, setMessages] = useState<Array<{ id: string; text: string; timestamp: number }>>([]);
+	const [messages, setMessages] = useState<
+		Array<{ id: string; text: string; timestamp: number }>
+	>([]);
 	const [inputText, setInputText] = useState("");
 	const [isConnected, setIsConnected] = useState(false);
 	const wsRef = useRef<WebSocket | null>(null);
@@ -9,16 +12,21 @@ export default function App() {
 	useEffect(() => {
 		// Direct WebSocket connection to actor
 		const protocols = [
-			`query.${encodeURIComponent(JSON.stringify({
-				getOrCreateForKey: { name: "chatRoom", key: "main" }
-			}))}`,
+			`query.${encodeURIComponent(
+				JSON.stringify({
+					getOrCreateForKey: { name: "chatRoom", key: "main" },
+				}),
+			)}`,
 			`encoding.json`,
-			`conn_params.${encodeURIComponent(JSON.stringify({ apiKey: "your-api-key" }))}`
+			`conn_params.${encodeURIComponent(JSON.stringify({ apiKey: "your-api-key" }))}`,
 		];
 
 		// FIXME: Use metadata's clientEndpoint
-		const ws = new WebSocket("ws://localhost:6420/api/rivet/actors/chatRoom/ws/", protocols);
-		
+		const ws = new WebSocket(
+			"ws://localhost:6420/api/rivet/actors/chatRoom/ws/",
+			protocols,
+		);
+
 		ws.onopen = () => {
 			setIsConnected(true);
 			console.log("Connected via direct access!");
@@ -26,15 +34,18 @@ export default function App() {
 
 		ws.onmessage = (event) => {
 			const data = JSON.parse(event.data);
-			
+
 			if (data.type === "init") {
 				setMessages(data.messages);
 			} else if (data.type === "message") {
-				setMessages(prev => [...prev, {
-					id: data.id,
-					text: data.text,
-					timestamp: data.timestamp
-				}]);
+				setMessages((prev) => [
+					...prev,
+					{
+						id: data.id,
+						text: data.text,
+						timestamp: data.timestamp,
+					},
+				]);
 			}
 		};
 
@@ -56,52 +67,74 @@ export default function App() {
 
 	const sendMessage = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!inputText.trim() || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return;
+		if (
+			!inputText.trim() ||
+			!wsRef.current ||
+			wsRef.current.readyState !== WebSocket.OPEN
+		)
+			return;
 
-		wsRef.current.send(JSON.stringify({
-			type: "message",
-			text: inputText.trim()
-		}));
+		wsRef.current.send(
+			JSON.stringify({
+				type: "message",
+				text: inputText.trim(),
+			}),
+		);
 		setInputText("");
 	};
 
 	return (
 		<div style={{ maxWidth: "800px", margin: "0 auto", padding: "20px" }}>
 			<h1>Raw WebSocket Chat</h1>
-			
-			<div style={{
-				padding: "10px",
-				background: isConnected ? "#4caf50" : "#f44336",
-				color: "white",
-				borderRadius: "4px",
-				marginBottom: "20px"
-			}}>
+
+			<div
+				style={{
+					padding: "10px",
+					background: isConnected ? "#4caf50" : "#f44336",
+					color: "white",
+					borderRadius: "4px",
+					marginBottom: "20px",
+				}}
+			>
 				{isConnected ? "Connected" : "Disconnected"}
 			</div>
 
-			<div style={{
-				background: "white",
-				border: "1px solid #ddd",
-				borderRadius: "8px",
-				padding: "10px",
-				height: "400px",
-				overflowY: "auto",
-				marginBottom: "10px"
-			}}>
+			<div
+				style={{
+					background: "white",
+					border: "1px solid #ddd",
+					borderRadius: "8px",
+					padding: "10px",
+					height: "400px",
+					overflowY: "auto",
+					marginBottom: "10px",
+				}}
+			>
 				{messages.map((msg) => (
 					<div key={msg.id} style={{ marginBottom: "10px" }}>
-						<strong>{new Date(msg.timestamp).toLocaleTimeString()}:</strong> {msg.text}
+						<strong>
+							{new Date(msg.timestamp).toLocaleTimeString()}:
+						</strong>{" "}
+						{msg.text}
 					</div>
 				))}
 			</div>
 
-			<form onSubmit={sendMessage} style={{ display: "flex", gap: "10px" }}>
+			<form
+				onSubmit={sendMessage}
+				style={{ display: "flex", gap: "10px" }}
+			>
 				<input
 					type="text"
 					value={inputText}
 					onChange={(e) => setInputText(e.target.value)}
 					placeholder="Type a message..."
-					style={{ flex: 1, padding: "8px", borderRadius: "4px", border: "1px solid #ddd" }}
+					style={{
+						flex: 1,
+						padding: "8px",
+						borderRadius: "4px",
+						border: "1px solid #ddd",
+					}}
 				/>
 				<button type="submit">Send</button>
 			</form>

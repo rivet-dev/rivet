@@ -235,6 +235,7 @@ export const sleepWithRawHttp = actor({
 		if (url.pathname === "/long-request") {
 			const duration = parseInt(
 				url.searchParams.get("duration") || "1000",
+				10,
 			);
 			c.log.info({ msg: "starting long fetch request", duration });
 			await new Promise((resolve) => setTimeout(resolve, duration));
@@ -538,9 +539,7 @@ export const sleepAbortListenerVarsActor = actor({
 			() => {
 				let observation: AbortVarsObservation;
 				try {
-					const vars = c.vars as
-						| { isStopping: boolean }
-						| undefined;
+					const vars = c.vars as { isStopping: boolean } | undefined;
 					if (vars === undefined || vars === null) {
 						observation = "undefined";
 					} else {
@@ -549,9 +548,7 @@ export const sleepAbortListenerVarsActor = actor({
 					}
 				} catch (error) {
 					observation = `error:${
-						error instanceof Error
-							? error.message
-							: String(error)
+						error instanceof Error ? error.message : String(error)
 					}`;
 				}
 				try {
@@ -577,7 +574,7 @@ export const sleepAbortListenerVarsActor = actor({
 			await new Promise<void>((resolve) => setTimeout(resolve, 0));
 		}
 	},
-	onWebSocket: (c, websocket) => {
+	onWebSocket: (_c, websocket) => {
 		websocket.send(JSON.stringify({ type: "connected" }));
 	},
 	actions: {

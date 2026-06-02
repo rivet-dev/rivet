@@ -1,8 +1,8 @@
 import type { Hono, Context as HonoContext } from "hono";
 import type { ActorKey, Encoding, UniversalWebSocket } from "@/actor/mod";
+import type { ActorQuery, CrashPolicy } from "@/client/query";
 import type { RegistryConfig } from "@/registry/config";
 import type { GetUpgradeWebSocket } from "@/utils";
-import type { ActorQuery, CrashPolicy } from "@/client/query";
 
 export type GatewayTarget = { directId: string } | ActorQuery;
 

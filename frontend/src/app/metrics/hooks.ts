@@ -89,7 +89,9 @@ function detailRangeFromBrush(brushDomain: [Date, Date]): {
 	const rangeMs = brushDomain[1].getTime() - brushDomain[0].getTime();
 	// Pick the smallest valid resolution that yields at most ~200 points.
 	const ideal = rangeMs / (200 * 1000);
-	const resolution = VALID_RESOLUTIONS.find((r) => r >= ideal) ?? VALID_RESOLUTIONS[VALID_RESOLUTIONS.length - 1];
+	const resolution =
+		VALID_RESOLUTIONS.find((r) => r >= ideal) ??
+		VALID_RESOLUTIONS[VALID_RESOLUTIONS.length - 1];
 	return {
 		startAt: brushDomain[0].toISOString(),
 		endAt: brushDomain[1].toISOString(),
@@ -109,7 +111,12 @@ export function useNamespaceDetailMetrics({
 		[brushDomain],
 	);
 
-	return { ...useNamespaceMetrics({ namespaces, startAt, endAt, resolution }), startAt, endAt, resolution };
+	return {
+		...useNamespaceMetrics({ namespaces, startAt, endAt, resolution }),
+		startAt,
+		endAt,
+		resolution,
+	};
 }
 
 export function useSingleNamespaceDetailMetrics({

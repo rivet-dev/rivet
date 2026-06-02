@@ -132,11 +132,7 @@ mod moved_tests {
 			"success",
 			Duration::from_millis(5).as_nanos() as u64,
 		);
-		depot_client::vfs::SqliteVfsMetrics::record_startup_preload_pages(
-			&metrics,
-			"requested",
-			2,
-		);
+		depot_client::vfs::SqliteVfsMetrics::record_startup_preload_pages(&metrics, "requested", 2);
 		metrics.finish_startup();
 		depot_client::vfs::SqliteVfsMetrics::record_get_pages_request(&metrics, 1, 0, 4096);
 

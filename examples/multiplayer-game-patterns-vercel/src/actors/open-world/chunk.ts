@@ -1,7 +1,7 @@
 import { actor, event } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { CHUNK_SIZE, TICK_MS, SPEED, SPRINT_MULTIPLIER } from "./config.ts";
 import { getPlayerColor } from "../player-color.ts";
+import { CHUNK_SIZE, SPEED, SPRINT_MULTIPLIER, TICK_MS } from "./config.ts";
 
 const GRID_COLS = Math.floor(CHUNK_SIZE / 50);
 
@@ -170,7 +170,10 @@ export const openWorldChunk = actor({
 			}
 			broadcastSnapshot(c);
 		},
-		setInput: (c, input: { inputX: number; inputY: number; sprint?: boolean }) => {
+		setInput: (
+			c,
+			input: { inputX: number; inputY: number; sprint?: boolean },
+		) => {
 			const player = getControlledPlayer(c, c.conn.id);
 			if (!player) return;
 			player.inputX = Math.max(-1, Math.min(1, input.inputX));
@@ -183,7 +186,13 @@ export const openWorldChunk = actor({
 			if (Array.isArray(c.state.blocks)) c.state.blocks = {};
 			if (!c.state.blocks) c.state.blocks = {};
 			const { gridX, gridY } = input;
-			if (gridX < 0 || gridX >= GRID_COLS || gridY < 0 || gridY >= GRID_COLS) return;
+			if (
+				gridX < 0 ||
+				gridX >= GRID_COLS ||
+				gridY < 0 ||
+				gridY >= GRID_COLS
+			)
+				return;
 			const key = `${gridX},${gridY}`;
 			if (c.state.blocks[key] !== player.color) {
 				c.state.blocks[key] = player.color;
@@ -211,17 +220,22 @@ interface Snapshot {
 	chunkSize: number;
 	tick: number;
 	selfPlayerId: string | null;
-	players: Record<string, { x: number; y: number; name: string; color: string }>;
+	players: Record<
+		string,
+		{ x: number; y: number; name: string; color: string }
+	>;
 	blocks: Record<string, string>;
 }
 
-function buildSnapshot(
-	c: { state: State },
-	playerId: string | null,
-): Snapshot {
+function buildSnapshot(c: { state: State }, playerId: string | null): Snapshot {
 	const players: Snapshot["players"] = {};
 	for (const [id, player] of Object.entries(c.state.players)) {
-		players[id] = { x: player.x, y: player.y, name: player.name, color: player.color };
+		players[id] = {
+			x: player.x,
+			y: player.y,
+			name: player.name,
+			color: player.color,
+		};
 	}
 	return {
 		worldId: c.state.worldId,
@@ -232,7 +246,9 @@ function buildSnapshot(
 		selfPlayerId: playerId,
 		players,
 		blocks: Array.isArray(c.state.blocks)
-			? Object.fromEntries(c.state.blocks.map((blockKey) => [blockKey, "#ff4f00"]))
+			? Object.fromEntries(
+					c.state.blocks.map((blockKey) => [blockKey, "#ff4f00"]),
+				)
 			: { ...c.state.blocks },
 	};
 }

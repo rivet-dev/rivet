@@ -1,13 +1,10 @@
-import { describe, expect, test } from "vitest";
-import packageJson from "../package.json" with { type: "json" };
-import * as rivetkit from "rivetkit";
 import type {
 	ActionContextOf,
 	ActorContextOf,
 	BeforeActionResponseContextOf,
 	BeforeConnectContextOf,
-	ConnectContextOf,
 	ConnContextOf,
+	ConnectContextOf,
 	ConnInitContextOf,
 	CreateConnStateContextOf,
 	CreateContextOf,
@@ -22,13 +19,14 @@ import type {
 	WakeContextOf,
 	WebSocketContextOf,
 } from "rivetkit";
+import * as rivetkit from "rivetkit";
 import type {
 	AnyDatabaseProvider,
 	DatabaseProvider,
 	RawAccess,
 } from "rivetkit/db";
 import { db as rawDb } from "rivetkit/db";
-import { db as drizzleDb, defineConfig } from "rivetkit/db/drizzle";
+import { defineConfig, db as drizzleDb } from "rivetkit/db/drizzle";
 import { decodeWorkflowHistoryTransport } from "rivetkit/inspector";
 import {
 	CURRENT_VERSION,
@@ -37,6 +35,8 @@ import {
 	type TransportWorkflowHistory,
 } from "rivetkit/inspector/client";
 import { setupTest } from "rivetkit/test";
+import { describe, expect, test } from "vitest";
+import packageJson from "../package.json" with { type: "json" };
 
 const contextTypeSmokeActor = rivetkit.actor({
 	createState: (_ctx, input: { initialCount: number }) => ({

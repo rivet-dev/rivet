@@ -1,8 +1,8 @@
 import http from "node:http";
 import { serviceName } from "../config/service-name";
-import { incomingMessageToRequest } from "./web-request";
 import { pipeWebResponseToNode } from "./pipe-response";
 import { createStaticAndProbeHandler } from "./serve-static";
+import { incomingMessageToRequest } from "./web-request";
 
 export function startProductionServer(options: {
 	registry: { handler: (req: Request) => Promise<Response> };
@@ -19,7 +19,10 @@ export function startProductionServer(options: {
 		void (async () => {
 			const url = new URL(req.url ?? "/", `http://127.0.0.1:${port}`);
 
-			if (url.pathname === "/api/rivet" || url.pathname.startsWith("/api/rivet/")) {
+			if (
+				url.pathname === "/api/rivet" ||
+				url.pathname.startsWith("/api/rivet/")
+			) {
 				try {
 					const webReq = incomingMessageToRequest(req, port);
 					const webRes = await registry.handler(webReq);
@@ -30,7 +33,9 @@ export function startProductionServer(options: {
 						res.writeHead(500, {
 							"Content-Type": "application/json; charset=utf-8",
 						});
-						res.end(JSON.stringify({ error: "rivet_handler_failed" }));
+						res.end(
+							JSON.stringify({ error: "rivet_handler_failed" }),
+						);
 					}
 				}
 				return;

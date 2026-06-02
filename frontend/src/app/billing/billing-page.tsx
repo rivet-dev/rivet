@@ -90,7 +90,7 @@ export function BillingPage() {
 	const metrics = useBilledMetrics();
 	const plan = data?.billing.activePlan || "free";
 
-	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
+	const _totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
 		const current = metrics[key] || 0n;
 		const includedInPlan = BILLING.included[plan][key];
 		return (

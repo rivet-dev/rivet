@@ -1,2 +1,2 @@
-export { type NamespacesListRequest } from "./NamespacesListRequest";
-export { type NamespacesCreateRequest } from "./NamespacesCreateRequest";
+export type { NamespacesCreateRequest } from "./NamespacesCreateRequest";
+export type { NamespacesListRequest } from "./NamespacesListRequest";

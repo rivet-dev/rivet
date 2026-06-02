@@ -25,7 +25,7 @@ export async function importEventSource(): Promise<typeof EventSource> {
 			const es = await import(/* webpackIgnore: true */ moduleName);
 			_EventSource = es.EventSource;
 			logger().debug("using eventsource from npm");
-		} catch (err) {
+		} catch (_err) {
 			// EventSource not available
 			_EventSource = class MockEventSource {
 				constructor() {

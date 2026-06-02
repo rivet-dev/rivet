@@ -22,7 +22,6 @@ import {
 	WithTooltip,
 } from "@/components";
 import {
-	ErrorDetails,
 	ErrorDetailsContent,
 	useCloudProjectDataProvider,
 } from "@/components/actors";

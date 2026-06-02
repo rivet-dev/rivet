@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
-import { Info } from "./actor-state-tab";
 import { useActorInspector } from "./actor-inspector-context";
-import { useDataProvider } from "./data-provider";
 import { ActorQueue } from "./actor-queue";
+import { Info } from "./actor-state-tab";
+import { useDataProvider } from "./data-provider";
 import type { ActorId } from "./queries";
 
 interface ActorQueueTabProps {

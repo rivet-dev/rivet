@@ -3,7 +3,6 @@ import {
 	type Attributes,
 	type Chunk,
 	type ReadRangeWire,
-	type Record as TraceRecord,
 	type RecordBody,
 	type SpanId,
 	type SpanLink,
@@ -12,6 +11,7 @@ import {
 	type SpanStatus,
 	SpanStatusCode,
 	type TraceId,
+	type Record as TraceRecord,
 } from "../schemas/versioned.js";
 import {
 	anyValueFromJs,
@@ -360,9 +360,7 @@ function decodeAttributeList(
 		const key = strings[kv.key] ?? "";
 		try {
 			map.set(key, decodeCbor(toUint8Array(kv.value)) as unknown);
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 	return map;
 }
@@ -376,9 +374,7 @@ function applyAttributes(
 		const key = strings[kv.key] ?? "";
 		try {
 			map.set(key, decodeCbor(toUint8Array(kv.value)) as unknown);
-		} catch {
-			continue;
-		}
+		} catch {}
 	}
 }
 

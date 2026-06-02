@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { deserializeEntry } from "../schemas/serde.js";
+import { buildHistoryPrefixAll } from "../src/keys.js";
 import {
 	CriticalError,
 	EntryInProgressError,
@@ -7,11 +9,9 @@ import {
 	RollbackError,
 	runWorkflow,
 	StepExhaustedError,
-	type WorkflowErrorEvent,
 	type WorkflowContextInterface,
+	type WorkflowErrorEvent,
 } from "../src/testing.js";
-import { buildHistoryPrefixAll } from "../src/keys.js";
-import { deserializeEntry } from "../schemas/serde.js";
 
 const modes = ["yield", "live"] as const;
 
@@ -25,7 +25,6 @@ class CountingDriver extends InMemoryDriver {
 		await super.batch(writes);
 	}
 }
-
 
 for (const mode of modes) {
 	describe(`Workflow Engine Steps (${mode})`, { sequential: true }, () => {
@@ -419,7 +418,7 @@ for (const mode of modes) {
 		});
 
 		it("should exhaust retries", async () => {
-			let attempts = 0;
+			let _attempts = 0;
 
 			const workflow = async (ctx: WorkflowContextInterface) => {
 				return await ctx.step({
@@ -427,7 +426,7 @@ for (const mode of modes) {
 					maxRetries: 2,
 					retryBackoffBase: 1,
 					run: async () => {
-						attempts++;
+						_attempts++;
 						throw new Error("Always fails");
 					},
 				});

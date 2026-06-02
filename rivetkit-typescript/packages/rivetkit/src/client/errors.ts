@@ -1,7 +1,7 @@
 import {
+	type ActorSpecifier,
 	INTERNAL_ERROR_CODE,
 	RivetError,
-	type ActorSpecifier,
 	type RivetErrorLike,
 	UserError,
 } from "@/actor/errors";

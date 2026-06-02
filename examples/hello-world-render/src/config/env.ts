@@ -32,11 +32,13 @@ ensureRivetEnvoyVersionFromEnvironment();
 export const devPort = Number(process.env.RIVET_MANAGER_PORT) || 6420;
 export const port = Number(process.env.PORT) || devPort;
 
-export const publicStaticDir = process.env.PUBLIC_STATIC_DIR?.trim() || "public";
+export const publicStaticDir =
+	process.env.PUBLIC_STATIC_DIR?.trim() || "public";
 
 /** Rivet Cloud: serverless handler on this origin. */
 export const useRivetCloud =
-	process.env.NODE_ENV === "production" && Boolean(process.env.RIVET_ENDPOINT);
+	process.env.NODE_ENV === "production" &&
+	Boolean(process.env.RIVET_ENDPOINT);
 
 function rivetUrlUsesGlobalApiHost(urlStr: string | undefined): boolean {
 	if (!urlStr) return false;

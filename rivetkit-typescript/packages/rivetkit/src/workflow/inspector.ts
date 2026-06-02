@@ -5,15 +5,15 @@ import type {
 	EntryStatus,
 	Location,
 	SleepState,
+	WorkflowEntryMetadataSnapshot,
 	WorkflowHistoryEntry,
 	WorkflowHistorySnapshot,
-	WorkflowEntryMetadataSnapshot,
 	WorkflowState,
 } from "@rivetkit/workflow-engine";
-import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import type * as inspectorSchema from "@/common/bare/generated/inspector/v4";
 import * as transport from "@/common/bare/transport/v1";
 import type { JsonCompatValue } from "@/common/encoding";
+import { encodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { encodeCborCompat } from "@/serde";
 import { assertUnreachable, bufferToArrayBuffer } from "@/utils";
 

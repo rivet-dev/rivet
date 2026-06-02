@@ -23,7 +23,12 @@ export function ConnectedRunnerSelect({
 	} = useInfiniteQuery({
 		...(hasRunnerNames
 			? dataProvider.runnerNamesQueryOptions()
-			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+			: {
+					queryKey: ["noop-runner-names"],
+					queryFn: async () => [],
+					initialPageParam: undefined,
+					getNextPageParam: () => undefined,
+				}),
 		enabled: hasRunnerNames,
 	});
 

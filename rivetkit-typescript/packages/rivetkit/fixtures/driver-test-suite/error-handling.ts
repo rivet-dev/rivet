@@ -32,7 +32,7 @@ export const errorHandlingActor = actor({
 		},
 
 		// Action that times out (simulated with a long delay)
-		timeoutAction: async (c) => {
+		timeoutAction: async (_c) => {
 			// This action should time out if the timeout is configured
 			return new Promise((resolve) => {
 				setTimeout(() => {
@@ -42,7 +42,7 @@ export const errorHandlingActor = actor({
 		},
 
 		// Action with configurable delay to test timeout edge cases
-		delayedAction: async (c, delayMs: number) => {
+		delayedAction: async (_c, delayMs: number) => {
 			return new Promise((resolve) => {
 				setTimeout(() => {
 					resolve(`Completed after ${delayMs}ms`);

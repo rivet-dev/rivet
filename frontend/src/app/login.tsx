@@ -154,7 +154,7 @@ export function LoginWithGoogle() {
 	const { isPending, mutate } = useMutation({
 		mutationFn: async () => {
 			const callbackPath =
-				from && from.startsWith("/") && !from.startsWith("//") ? from : "/";
+				from?.startsWith("/") && !from.startsWith("//") ? from : "/";
 			return authClient.signIn.social({
 				provider: "google",
 				callbackURL: `${window.location.origin}${callbackPath}`,

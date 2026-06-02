@@ -1,6 +1,5 @@
-import { Slot, Slottable } from "@radix-ui/react-slot";
 import { faChevronRight, Icon, type IconProp } from "@rivet-gg/icons";
-import { type ComponentProps, cloneElement } from "react";
+import type { ComponentProps } from "react";
 import { cn } from "./lib/utils";
 
 interface ExternalLinkCardProps {

@@ -1,7 +1,7 @@
 import { faActorsBorderless, Icon, type IconProp } from "@rivet-gg/icons";
 import {
-	lazy,
 	type LazyExoticComponent,
+	lazy,
 	type ReactNode,
 	Suspense,
 } from "react";
@@ -121,7 +121,11 @@ export function ActorIcon({
 				/>
 			}
 		>
-			<LazyIcon name={iconValue} className={className} fallback={fallback} />
+			<LazyIcon
+				name={iconValue}
+				className={className}
+				fallback={fallback}
+			/>
 		</Suspense>
 	);
 }

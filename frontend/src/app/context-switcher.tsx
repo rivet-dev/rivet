@@ -1,7 +1,7 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import {
-	faChevronDown,
 	faCheck,
+	faChevronDown,
 	faGear,
 	faPlus,
 	faPlusCircle,
@@ -22,11 +22,6 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import {
-	RECENT_NAMESPACES_KEY,
-	RECENT_PROJECTS_KEY,
-	getRecentTimestamp,
-} from "@/lib/recently-visited";
-import {
 	Button,
 	Command,
 	CommandEmpty,
@@ -43,12 +38,16 @@ import {
 import {
 	useCloudDataProvider,
 	useEngineCompatDataProvider,
-	useEngineDataProvider,
 } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
+import {
+	getRecentTimestamp,
+	RECENT_NAMESPACES_KEY,
+	RECENT_PROJECTS_KEY,
+} from "@/lib/recently-visited";
 import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
 
 export function ContextSwitcher({ inline }: { inline?: boolean }) {
@@ -333,14 +332,23 @@ function Breadcrumbs({ inline }: { inline?: boolean }) {
 					<ProjectBreadcrumb
 						project={match.project}
 						className={cn(
-							inline ? "whitespace-nowrap" : "truncate min-w-0 max-w-full block",
+							inline
+								? "whitespace-nowrap"
+								: "truncate min-w-0 max-w-full block",
 							inline && "h-auto",
 							!inline && "h-4",
 						)}
 					/>
 				</div>
-				{inline ? <Icon icon={faSlashForward} className="shrink-0" /> : null}
-				<div className={cn(!inline && "min-w-0 w-full", inline && "shrink-0")}>
+				{inline ? (
+					<Icon icon={faSlashForward} className="shrink-0" />
+				) : null}
+				<div
+					className={cn(
+						!inline && "min-w-0 w-full",
+						inline && "shrink-0",
+					)}
+				>
 					<NamespaceBreadcrumb
 						className={cn(
 							"text-left block",
@@ -448,13 +456,15 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 		| Record<string, unknown>
 		| undefined;
 	const currentLabel =
-		typeof currentMeta?.name === "string" ? currentMeta.name : currentBuildId;
+		typeof currentMeta?.name === "string"
+			? currentMeta.name
+			: currentBuildId;
 
 	const sorted = [...builds].sort((a, b) => {
-		const an =
-			(a.name?.metadata as Record<string, unknown> | undefined)?.name;
-		const bn =
-			(b.name?.metadata as Record<string, unknown> | undefined)?.name;
+		const an = (a.name?.metadata as Record<string, unknown> | undefined)
+			?.name;
+		const bn = (b.name?.metadata as Record<string, unknown> | undefined)
+			?.name;
 		const aLabel = typeof an === "string" ? an : a.id;
 		const bLabel = typeof bn === "string" ? bn : b.id;
 		return aLabel.localeCompare(bLabel);
@@ -500,7 +510,8 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 										typeof meta?.name === "string"
 											? meta.name
 											: build.id;
-									const isCurrent = build.id === currentBuildId;
+									const isCurrent =
+										build.id === currentBuildId;
 									return (
 										<CommandItem
 											key={build.id}
@@ -689,8 +700,14 @@ function ProjectList({
 
 						{data
 							?.sort((a, b) => {
-								const aTime = getRecentTimestamp(RECENT_PROJECTS_KEY, a.name);
-								const bTime = getRecentTimestamp(RECENT_PROJECTS_KEY, b.name);
+								const aTime = getRecentTimestamp(
+									RECENT_PROJECTS_KEY,
+									a.name,
+								);
+								const bTime = getRecentTimestamp(
+									RECENT_PROJECTS_KEY,
+									b.name,
+								);
 								return bTime - aTime;
 							})
 							.map((p, index) => {
@@ -749,7 +766,10 @@ function ProjectList({
 								});
 							}}
 						>
-							<Icon icon={faPlus} className="mr-2 size-3 text-primary" />
+							<Icon
+								icon={faPlus}
+								className="mr-2 size-3 text-primary"
+							/>
 							New Project
 						</CommandItem>
 
@@ -898,8 +918,7 @@ function NamespaceList({
 	const leafFullPath = useMatches({
 		select: (matches) => matches[matches.length - 1]?.fullPath,
 	});
-	const namespaceBase =
-		"/orgs/$organization/projects/$project/ns/$namespace";
+	const namespaceBase = "/orgs/$organization/projects/$project/ns/$namespace";
 	const namespaceTo = (
 		typeof leafFullPath === "string" &&
 		leafFullPath.startsWith(namespaceBase)
@@ -944,8 +963,14 @@ function NamespaceList({
 
 						{data
 							?.sort((a, b) => {
-								const aTime = getRecentTimestamp(RECENT_NAMESPACES_KEY, a.name);
-								const bTime = getRecentTimestamp(RECENT_NAMESPACES_KEY, b.name);
+								const aTime = getRecentTimestamp(
+									RECENT_NAMESPACES_KEY,
+									a.name,
+								);
+								const bTime = getRecentTimestamp(
+									RECENT_NAMESPACES_KEY,
+									b.name,
+								);
 								return bTime - aTime;
 							})
 							.map((ns) => {
@@ -956,21 +981,29 @@ function NamespaceList({
 											value={ns.name}
 											keywords={[ns.displayName, ns.name]}
 											className="group static w-full"
-											onMouseEnter={() => onHover?.(ns.name)}
+											onMouseEnter={() =>
+												onHover?.(ns.name)
+											}
 											onFocus={() => onHover?.(ns.name)}
 											onSelect={() => {
 												onClose?.();
-												authClient.organization.setActive({
-													organizationSlug: organization,
-												});
+												authClient.organization.setActive(
+													{
+														organizationSlug:
+															organization,
+													},
+												);
 												return navigate({
 													to: namespaceTo,
 													params: {
-														organization: organization,
+														organization:
+															organization,
 														project: project,
 														namespace: ns.name,
 													},
-													search: (old) => ({ ...old }),
+													search: (old) => ({
+														...old,
+													}),
 												});
 											}}
 										>
@@ -1000,9 +1033,12 @@ function NamespaceList({
 													e.stopPropagation();
 													e.preventDefault();
 													onClose?.();
-													authClient.organization.setActive({
-														organizationSlug: organization,
-													});
+													authClient.organization.setActive(
+														{
+															organizationSlug:
+																organization,
+														},
+													);
 													void navigate({
 														to: "/orgs/$organization/projects/$project/ns/$namespace",
 														params: {
@@ -1010,7 +1046,10 @@ function NamespaceList({
 															project,
 															namespace: ns.name,
 														},
-														search: { settings: "settings" },
+														search: {
+															settings:
+																"settings",
+														},
 													});
 												}}
 												// `relative z-10` is load-bearing: the SafeHover
@@ -1026,7 +1065,10 @@ function NamespaceList({
 													"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 												)}
 											>
-												<Icon icon={faGear} className="size-3" />
+												<Icon
+													icon={faGear}
+													className="size-3"
+												/>
 											</button>
 										</CommandItem>
 									</SafeHover>
@@ -1057,7 +1099,10 @@ function NamespaceList({
 								});
 							}}
 						>
-							<Icon icon={faPlus} className="mr-2 size-3 text-primary" />
+							<Icon
+								icon={faPlus}
+								className="mr-2 size-3 text-primary"
+							/>
 							New Namespace
 						</CommandItem>
 
@@ -1090,10 +1135,12 @@ function ActorsList({
 		isFetchingNextPage,
 		fetchNextPage,
 	} = useInfiniteQuery(
-		useCloudDataProvider().currentOrgProjectNamespaceActorNamesQueryOptions({
-			project,
-			namespace,
-		}),
+		useCloudDataProvider().currentOrgProjectNamespaceActorNamesQueryOptions(
+			{
+				project,
+				namespace,
+			},
+		),
 	);
 
 	const sorted = [...(actors ?? [])].sort((a, b) => {
@@ -1149,7 +1196,10 @@ function ActorsList({
 												namespace,
 											},
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												actorId: undefined,
 												actorKey: undefined,
 												settings: undefined,
@@ -1158,7 +1208,9 @@ function ActorsList({
 										});
 									}}
 								>
-									<span className="truncate w-full">{label}</span>
+									<span className="truncate w-full">
+										{label}
+									</span>
 								</CommandItem>
 							);
 						})}

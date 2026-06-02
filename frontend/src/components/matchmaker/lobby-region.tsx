@@ -1,10 +1,4 @@
-import {
-	faCloud,
-	faComputer,
-	faServer,
-	Icon,
-	type IconProp,
-} from "@rivet-gg/icons";
+import { faCloud, faServer, Icon, type IconProp } from "@rivet-gg/icons";
 import { AssetImage } from "../asset-image";
 import { convertEmojiToUriFriendlyString } from "../lib/emoji";
 

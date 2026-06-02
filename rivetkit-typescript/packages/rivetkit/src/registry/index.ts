@@ -61,16 +61,18 @@ export class Registry<A extends RegistryActors> {
 		};
 	}
 
-	#ensureServerlessPoolConfigured(config: RegistryConfig): Promise<void> | undefined {
+	#ensureServerlessPoolConfigured(
+		config: RegistryConfig,
+	): Promise<void> | undefined {
 		if (!config.configurePool) return undefined;
 
 		if (!this.#configureServerlessPoolPromise) {
-			this.#configureServerlessPoolPromise = configureServerlessPool(config).catch(
-				(error) => {
-					this.#configureServerlessPoolPromise = undefined;
-					throw error;
-				},
-			);
+			this.#configureServerlessPoolPromise = configureServerlessPool(
+				config,
+			).catch((error) => {
+				this.#configureServerlessPoolPromise = undefined;
+				throw error;
+			});
 			this.#configureServerlessPoolPromise.catch(() => {});
 		}
 
@@ -106,12 +108,13 @@ export class Registry<A extends RegistryActors> {
 			serveConfig.serverlessBasePath ?? "/api/rivet",
 		);
 		const isEngineMetadataRequest =
-			request.headers.get("user-agent")?.startsWith("RivetEngine/") ?? false;
+			request.headers.get("user-agent")?.startsWith("RivetEngine/") ??
+			false;
 
 		if (isStartRequest) {
 			try {
 				await this.#ensureServerlessPoolConfigured(config);
-			} catch (error) {
+			} catch (_error) {
 				return new Response(
 					JSON.stringify({
 						group: "guard",
@@ -253,7 +256,7 @@ export class Registry<A extends RegistryActors> {
 		if (isMetadataRequest && !isEngineMetadataRequest) {
 			try {
 				await this.#ensureServerlessPoolConfigured(config);
-			} catch (error) {
+			} catch (_error) {
 				return new Response(
 					JSON.stringify({
 						group: "guard",
@@ -408,8 +411,11 @@ export class Registry<A extends RegistryActors> {
 		const candidates = [
 			this.#runtimeServerlessPromise,
 			this.#runtimeServeConfiguredPromise,
-		].filter((candidate): candidate is ReturnType<typeof buildConfiguredRegistry> =>
-			candidate !== undefined
+		].filter(
+			(
+				candidate,
+			): candidate is ReturnType<typeof buildConfiguredRegistry> =>
+				candidate !== undefined,
 		);
 
 		if (candidates.length === 0) return undefined;
@@ -636,7 +642,10 @@ function isServerlessStartRequest(request: Request, basePath: string): boolean {
 	return parsed.pathname === `${normalizedBase}/start`;
 }
 
-function isServerlessMetadataRequest(request: Request, basePath: string): boolean {
+function isServerlessMetadataRequest(
+	request: Request,
+	basePath: string,
+): boolean {
 	if (request.method !== "GET") return false;
 	const parsed = new URL(request.url);
 	const normalizedBase =

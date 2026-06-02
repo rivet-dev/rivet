@@ -1,10 +1,10 @@
 import { z } from "zod/v4";
+import { RivetError } from "@/actor/errors";
 import type { ClientConfig } from "@/client/config";
 import { sendHttpRequest } from "@/client/utils";
-import { RivetError } from "@/actor/errors";
+import type { RegistryConfig } from "@/registry/config";
 import { combineUrlPath } from "@/utils";
 import { logger } from "./log";
-import { RegistryConfig } from "@/registry/config";
 
 export { RivetError as EngineApiError };
 

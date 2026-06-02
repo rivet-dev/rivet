@@ -1,4 +1,9 @@
-import { actor, setup, type UniversalWebSocket, type RivetMessageEvent } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	setup,
+	type UniversalWebSocket,
+} from "rivetkit";
 
 interface Vars {
 	websockets: Map<string, UniversalWebSocket>;

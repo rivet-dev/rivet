@@ -122,71 +122,73 @@ const v4HttpResponseErrorToV3 = (
 	return rest;
 };
 
-export const CLIENT_PROTOCOL_TO_SERVER = createVersionedDataHandler<v4.ToServer>({
-	deserializeVersion: (bytes, version) => {
-		switch (version) {
-			case 1:
-				return v1.decodeToServer(bytes);
-			case 2:
-				return v2.decodeToServer(bytes);
-			case 3:
-				return v3.decodeToServer(bytes);
-			case 4:
-				return v4.decodeToServer(bytes);
-			default:
-				throw new Error(`Unknown version ${version}`);
-		}
-	},
-	serializeVersion: (data, version) => {
-		switch (version) {
-			case 1:
-				return v1.encodeToServer(data as v1.ToServer);
-			case 2:
-				return v2.encodeToServer(data as v2.ToServer);
-			case 3:
-				return v3.encodeToServer(data as v3.ToServer);
-			case 4:
-				return v4.encodeToServer(data as v4.ToServer);
-			default:
-				throw new Error(`Unknown version ${version}`);
-		}
-	},
-	deserializeConverters: () => [v1ToServerV2, v2ToServerV3, v3ToServerV4],
-	serializeConverters: () => [v4ToServerV3, v3ToServerV2, v2ToServerV1],
-});
+export const CLIENT_PROTOCOL_TO_SERVER =
+	createVersionedDataHandler<v4.ToServer>({
+		deserializeVersion: (bytes, version) => {
+			switch (version) {
+				case 1:
+					return v1.decodeToServer(bytes);
+				case 2:
+					return v2.decodeToServer(bytes);
+				case 3:
+					return v3.decodeToServer(bytes);
+				case 4:
+					return v4.decodeToServer(bytes);
+				default:
+					throw new Error(`Unknown version ${version}`);
+			}
+		},
+		serializeVersion: (data, version) => {
+			switch (version) {
+				case 1:
+					return v1.encodeToServer(data as v1.ToServer);
+				case 2:
+					return v2.encodeToServer(data as v2.ToServer);
+				case 3:
+					return v3.encodeToServer(data as v3.ToServer);
+				case 4:
+					return v4.encodeToServer(data as v4.ToServer);
+				default:
+					throw new Error(`Unknown version ${version}`);
+			}
+		},
+		deserializeConverters: () => [v1ToServerV2, v2ToServerV3, v3ToServerV4],
+		serializeConverters: () => [v4ToServerV3, v3ToServerV2, v2ToServerV1],
+	});
 
-export const CLIENT_PROTOCOL_TO_CLIENT = createVersionedDataHandler<v4.ToClient>({
-	deserializeVersion: (bytes, version) => {
-		switch (version) {
-			case 1:
-				return v1.decodeToClient(bytes);
-			case 2:
-				return v2.decodeToClient(bytes);
-			case 3:
-				return v3.decodeToClient(bytes);
-			case 4:
-				return v4.decodeToClient(bytes);
-			default:
-				throw new Error(`Unknown version ${version}`);
-		}
-	},
-	serializeVersion: (data, version) => {
-		switch (version) {
-			case 1:
-				return v1.encodeToClient(data as v1.ToClient);
-			case 2:
-				return v2.encodeToClient(data as v2.ToClient);
-			case 3:
-				return v3.encodeToClient(data as v3.ToClient);
-			case 4:
-				return v4.encodeToClient(data as v4.ToClient);
-			default:
-				throw new Error(`Unknown version ${version}`);
-		}
-	},
-	deserializeConverters: () => [v1ToV2, v2ToV3, v3ToV4],
-	serializeConverters: () => [v4ToV3, v3ToV2, v2ToV1],
-});
+export const CLIENT_PROTOCOL_TO_CLIENT =
+	createVersionedDataHandler<v4.ToClient>({
+		deserializeVersion: (bytes, version) => {
+			switch (version) {
+				case 1:
+					return v1.decodeToClient(bytes);
+				case 2:
+					return v2.decodeToClient(bytes);
+				case 3:
+					return v3.decodeToClient(bytes);
+				case 4:
+					return v4.decodeToClient(bytes);
+				default:
+					throw new Error(`Unknown version ${version}`);
+			}
+		},
+		serializeVersion: (data, version) => {
+			switch (version) {
+				case 1:
+					return v1.encodeToClient(data as v1.ToClient);
+				case 2:
+					return v2.encodeToClient(data as v2.ToClient);
+				case 3:
+					return v3.encodeToClient(data as v3.ToClient);
+				case 4:
+					return v4.encodeToClient(data as v4.ToClient);
+				default:
+					throw new Error(`Unknown version ${version}`);
+			}
+		},
+		deserializeConverters: () => [v1ToV2, v2ToV3, v3ToV4],
+		serializeConverters: () => [v4ToV3, v3ToV2, v2ToV1],
+	});
 
 export const HTTP_ACTION_REQUEST_VERSIONED =
 	createVersionedDataHandler<v4.HttpActionRequest>({

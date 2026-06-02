@@ -6,7 +6,8 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import { type ReactNode } from "react";
+import type { ReactNode } from "react";
+import { ImagesTable } from "@/app/images-table";
 import {
 	Button,
 	cn,
@@ -17,15 +18,17 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
+import {
+	useCloudNamespaceDataProvider,
+	useDataProvider,
+} from "@/components/actors";
+import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
+import { ActorIcon } from "@/components/lazy-icon";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";
-import { ActorIcon } from "@/components/lazy-icon";
-import { useDataProvider, useCloudNamespaceDataProvider } from "@/components/actors";
-import { VisibilitySensor } from "@/components/visibility-sensor";
-import { ImagesTable } from "@/app/images-table";
-import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 
-function GridCard({
+function _GridCard({
 	children,
 	className,
 	asChild,
@@ -64,11 +67,7 @@ function ActorGridCardSkeleton() {
 	);
 }
 
-export function ActorsGrid({
-	namespaceLabel,
-}: {
-	namespaceLabel?: string;
-}) {
+export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 	const dataProvider = useDataProvider();
 	const nsDataProvider = useCloudNamespaceDataProvider();
 	const { namespace } = useParams({ strict: false }) as { namespace: string };
@@ -185,8 +184,8 @@ export function ActorsGrid({
 										No actors yet
 									</h3>
 									<SmallText className="text-muted-foreground max-w-md">
-										Deploy code that registers an actor to see
-										it here.
+										Deploy code that registers an actor to
+										see it here.
 									</SmallText>
 									<Button
 										variant="default"
@@ -209,72 +208,78 @@ export function ActorsGrid({
 						) : (
 							<>
 								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-								{sorted.map((build) => {
-									const meta = build.name.metadata as
-										| Record<string, unknown>
-										| undefined;
-									const iconValue =
-										typeof meta?.icon === "string"
-											? meta.icon
-											: null;
-									const displayName =
-										typeof meta?.name === "string"
-											? meta.name
-											: build.id;
+									{sorted.map((build) => {
+										const meta = build.name.metadata as
+											| Record<string, unknown>
+											| undefined;
+										const iconValue =
+											typeof meta?.icon === "string"
+												? meta.icon
+												: null;
+										const displayName =
+											typeof meta?.name === "string"
+												? meta.name
+												: build.id;
 
-									return (
-										<Link
-											key={build.id}
-											to="."
-											search={(old) => ({
-												...old,
-												actorId: undefined,
-												actorKey: undefined,
-												n: [build.id],
-											})}
-											className={cn(
-												"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
-												"hover:border-foreground/20 hover:bg-foreground/[0.05]",
-												"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-												"min-h-[110px] cursor-pointer",
-											)}
-										>
-											<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
-												<ActorIcon
-													iconValue={iconValue}
-													className="text-lg"
-												/>
-											</div>
-											<div className="font-medium text-sm leading-tight">
-												{displayName}
-											</div>
-											{displayName !== build.id ? (
-												<SmallText className="text-muted-foreground text-xs leading-tight">
-													{build.id}
-												</SmallText>
-											) : null}
-										</Link>
-									);
-								})}
-								{isFetchingNextPage
-									? Array.from({ length: 4 }).map((_, i) => (
-											// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
-											<ActorGridCardSkeleton key={`next-${i}`} />
-										))
-									: null}
+										return (
+											<Link
+												key={build.id}
+												to="."
+												search={(old) => ({
+													...old,
+													actorId: undefined,
+													actorKey: undefined,
+													n: [build.id],
+												})}
+												className={cn(
+													"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
+													"hover:border-foreground/20 hover:bg-foreground/[0.05]",
+													"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+													"min-h-[110px] cursor-pointer",
+												)}
+											>
+												<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
+													<ActorIcon
+														iconValue={iconValue}
+														className="text-lg"
+													/>
+												</div>
+												<div className="font-medium text-sm leading-tight">
+													{displayName}
+												</div>
+												{displayName !== build.id ? (
+													<SmallText className="text-muted-foreground text-xs leading-tight">
+														{build.id}
+													</SmallText>
+												) : null}
+											</Link>
+										);
+									})}
+									{isFetchingNextPage
+										? Array.from({ length: 4 }).map(
+												(_, i) => (
+													// biome-ignore lint/suspicious/noArrayIndexKey: skeleton loaders are static
+													<ActorGridCardSkeleton
+														key={`next-${i}`}
+													/>
+												),
+											)
+										: null}
 								</div>
 								{hasNextPage && !isFetchingNextPage ? (
-									<VisibilitySensor onChange={fetchNextPage} />
+									<VisibilitySensor
+										onChange={fetchNextPage}
+									/>
 								) : null}
 							</>
 						)}
 					</section>
 
-						<DeploymentsSection />
+					<DeploymentsSection />
 				</div>
-				</ScrollArea>
-			</div>
-		);
+			</ScrollArea>
+		</div>
+	);
 }
 
 function DeploymentsSection() {
@@ -292,8 +297,7 @@ function DeploymentsSection() {
 			safe: true,
 		}),
 		enabled: features.compute,
-		refetchInterval: (query) =>
-			query.state.data === null ? false : 5_000,
+		refetchInterval: (query) => (query.state.data === null ? false : 5_000),
 		refetchOnWindowFocus: (query) => query.state.data !== null,
 	});
 
@@ -352,7 +356,8 @@ function DeploymentsSection() {
 		isDeployed && nsData?.access?.engineNamespaceName
 			? (() => {
 					const engineNsName = nsData.access.engineNamespaceName;
-					const isProduction = cloudEnv().DEPLOYMENT_TYPE === "production";
+					const isProduction =
+						cloudEnv().DEPLOYMENT_TYPE === "production";
 					return `https://${engineNsName}${isProduction ? "" : ".staging"}.rivet.run/`;
 				})()
 			: null;
@@ -380,7 +385,9 @@ function DeploymentsSection() {
 			</header>
 			{deploymentUrl ? (
 				<div className="mb-3 flex items-center gap-2 text-sm">
-					<span className="text-muted-foreground">Deployment URL</span>
+					<span className="text-muted-foreground">
+						Deployment URL
+					</span>
 					<DiscreteCopyButton
 						value={deploymentUrl}
 						className="font-mono text-xs text-muted-foreground"
@@ -397,16 +404,15 @@ function DeploymentsSection() {
 					namespace={namespace}
 					isError={isError}
 				/>
-			{hasMore ? (
-				<Link
-					to="./deployments"
-					className="block border-t border-foreground/10 py-2 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
-				>
-					View all
-				</Link>
-			) : null}
+				{hasMore ? (
+					<Link
+						to="./deployments"
+						className="block border-t border-foreground/10 py-2 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
+					>
+						View all
+					</Link>
+				) : null}
 			</div>
 		</section>
 	);
 }
-

@@ -1,7 +1,7 @@
 // @ts-nocheck
-import { describeDriverMatrix } from "./shared-matrix";
+
 import { describe, expect, test } from "vitest";
-import { z } from "zod/v4";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Raw Http Request Properties", (driverTestConfig) => {
@@ -41,7 +41,7 @@ describeDriverMatrix("Raw Http Request Properties", (driverTestConfig) => {
 			// Verify headers
 			expect(data.headers["content-type"]).toBe("application/json");
 			expect(data.headers["x-custom-header"]).toBe("custom-value");
-			expect(data.headers["authorization"]).toBe("Bearer test-token");
+			expect(data.headers.authorization).toBe("Bearer test-token");
 
 			// Verify body
 			expect(data.body).toEqual({ test: "data" });
@@ -125,7 +125,7 @@ describeDriverMatrix("Raw Http Request Properties", (driverTestConfig) => {
 			const data = (await response.json()) as any;
 
 			// Headers should be normalized to lowercase
-			expect(data.headers["accept"]).toBe("application/json");
+			expect(data.headers.accept).toBe("application/json");
 			expect(data.headers["accept-language"]).toBe("en-US,en;q=0.9");
 			expect(data.headers["cache-control"]).toBe("no-cache");
 			// User-Agent might be overwritten by the HTTP client, so just check it exists
@@ -362,7 +362,7 @@ describeDriverMatrix("Raw Http Request Properties", (driverTestConfig) => {
 					const data = (await response.json()) as any;
 					expect(data.method).toBe("CUSTOM");
 				}
-			} catch (error) {
+			} catch (_error) {
 				// Some HTTP clients may reject custom methods
 				// This is expected behavior
 			}

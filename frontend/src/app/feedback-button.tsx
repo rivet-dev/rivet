@@ -82,7 +82,6 @@ export function FeedbackButton({ source = "web" }: { source?: string }) {
 				<textarea
 					value={value}
 					onChange={(e) => setValue(e.target.value)}
-					autoFocus
 					rows={4}
 					placeholder="Have an idea to improve the product? Tell the Rivet team..."
 					className={cn(
@@ -90,10 +89,7 @@ export function FeedbackButton({ source = "web" }: { source?: string }) {
 						"placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:border-foreground/30",
 					)}
 					onKeyDown={(e) => {
-						if (
-							(e.metaKey || e.ctrlKey) &&
-							e.key === "Enter"
-						) {
+						if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
 							e.preventDefault();
 							submit();
 						}

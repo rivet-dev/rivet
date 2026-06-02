@@ -17,7 +17,9 @@ const client = createClient<typeof registry>("http://localhost:6420");
 const agent = client.vm.getOrCreate(["my-agent"]);
 
 // Call a tool using the auto-generated CLI command
-const result = (await agent.exec("agentos-weather forecast --city Paris --days 3")) as {
+const result = (await agent.exec(
+	"agentos-weather forecast --city Paris --days 3",
+)) as {
 	stdout: string;
 	exitCode: number;
 };

@@ -1,4 +1,8 @@
-import { actor, type RivetMessageEvent, type UniversalWebSocket } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	type UniversalWebSocket,
+} from "rivetkit";
 import { db } from "rivetkit/db";
 
 export const DEFAULT_ON_SLEEP_DURATION_MS = 5_000;
@@ -37,14 +41,14 @@ export const sigtermSleepProbe = actor({
 	db: db({
 		onMigrate: async (database) => {
 			await database.execute(`
-				CREATE TABLE IF NOT EXISTS sigterm_sleep_log (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					event TEXT NOT NULL,
-					sleep_count INTEGER NOT NULL,
-					detail TEXT,
-					created_at INTEGER NOT NULL
-				)
-			`);
+ 				CREATE TABLE IF NOT EXISTS sigterm_sleep_log (
+ 					id INTEGER PRIMARY KEY AUTOINCREMENT,
+ 					event TEXT NOT NULL,
+ 					sleep_count INTEGER NOT NULL,
+ 					detail TEXT,
+ 					created_at INTEGER NOT NULL
+ 				)
+ 			`);
 		},
 	}),
 	onWebSocket: (c, websocket: UniversalWebSocket) => {
@@ -270,10 +274,14 @@ export const sigtermSleepProbe = actor({
 			onSleepTickMs = DEFAULT_ON_SLEEP_TICK_MS,
 		) => {
 			if (!Number.isFinite(onSleepDurationMs) || onSleepDurationMs < 0) {
-				throw new Error("onSleepDurationMs must be a finite non-negative number");
+				throw new Error(
+					"onSleepDurationMs must be a finite non-negative number",
+				);
 			}
 			if (!Number.isFinite(onSleepTickMs) || onSleepTickMs <= 0) {
-				throw new Error("onSleepTickMs must be a finite positive number");
+				throw new Error(
+					"onSleepTickMs must be a finite positive number",
+				);
 			}
 			c.state.label = label;
 			c.state.onSleepDurationMs = onSleepDurationMs;

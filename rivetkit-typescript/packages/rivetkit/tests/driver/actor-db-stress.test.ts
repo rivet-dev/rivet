@@ -94,14 +94,14 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 					const actorKey = [
 						`stress-cycle-${i}-${crypto.randomUUID()}`,
 					];
-					const getActor = () => client.dbStressActor.getOrCreate(actorKey);
+					const getActor = () =>
+						client.dbStressActor.getOrCreate(actorKey);
 
 					// Poll the first insert because the actor can still be starting when the initial DB action is sent.
 					await vi.waitFor(
 						async () => {
-							await withRuntimeLogTail(
-								getRuntimeOutput,
-								() => getActor().insertBatch(10),
+							await withRuntimeLogTail(getRuntimeOutput, () =>
+								getActor().insertBatch(10),
 							);
 						},
 						{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
@@ -190,9 +190,8 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 
 				await actor.reset();
 
-				const count = await withRuntimeLogTail(
-					getRuntimeOutput,
-					() => actor.upsertMetaRows(240),
+				const count = await withRuntimeLogTail(getRuntimeOutput, () =>
+					actor.upsertMetaRows(240),
 				);
 				expect(count).toBe(32);
 
@@ -218,9 +217,8 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 
 				await actor.reset();
 
-				const first = await withRuntimeLogTail(
-					getRuntimeOutput,
-					() => actor.kitchenSinkSmoke(320),
+				const first = await withRuntimeLogTail(getRuntimeOutput, () =>
+					actor.kitchenSinkSmoke(320),
 				);
 				expect(first.metaCount).toBeGreaterThanOrEqual(19);
 				expect(first.dataCount).toBeGreaterThan(0);
@@ -245,9 +243,8 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 				// Poll because the actor can still be in the stopping window after triggerSleep.
 				const afterWake = await vi.waitFor(
 					async () =>
-						await withRuntimeLogTail(
-							getRuntimeOutput,
-							() => actor.kitchenSinkSmoke(96),
+						await withRuntimeLogTail(getRuntimeOutput, () =>
+							actor.kitchenSinkSmoke(96),
 						),
 					{ timeout: ACTOR_READY_TIMEOUT_MS, interval: 100 },
 				);

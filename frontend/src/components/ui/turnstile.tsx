@@ -1,4 +1,4 @@
-import { Turnstile, TurnstileInstance } from "@marsidev/react-turnstile";
+import { Turnstile, type TurnstileInstance } from "@marsidev/react-turnstile";
 
 interface TurnstileWidgetProps {
 	ref?: React.Ref<TurnstileInstance>;

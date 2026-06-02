@@ -22,7 +22,8 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 		define: {
-			"import.meta.env.VITE_RIVET_PUBLIC_ENDPOINT": JSON.stringify(rivetPublic),
+			"import.meta.env.VITE_RIVET_PUBLIC_ENDPOINT":
+				JSON.stringify(rivetPublic),
 		},
 		build: {
 			outDir: "public",
@@ -51,7 +52,10 @@ export default defineConfig(({ mode }) => {
 		server: {
 			clearScreen: false,
 			proxy: {
-				"/actors": { target: `http://127.0.0.1:${managerPort}`, ws: true },
+				"/actors": {
+					target: `http://127.0.0.1:${managerPort}`,
+					ws: true,
+				},
 				"/metadata": { target: `http://127.0.0.1:${managerPort}` },
 				"/health": { target: `http://127.0.0.1:${managerPort}` },
 			},

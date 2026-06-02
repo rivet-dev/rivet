@@ -84,7 +84,6 @@ const defineStepper = <const Steps extends Stepperize.Step[]>(
 					<nav
 						data-component="stepper-navigation"
 						aria-label={ariaLabel}
-						role="tablist"
 						{...props}
 					>
 						<ol

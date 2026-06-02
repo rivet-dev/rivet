@@ -5,7 +5,7 @@ export const counterWithParams = actor({
 	events: {
 		newCount: event<{ count: number; by: string }>(),
 	},
-	createConnState: (c, params: { name?: string }) => {
+	createConnState: (_c, params: { name?: string }) => {
 		return {
 			name: params.name || "anonymous",
 		};

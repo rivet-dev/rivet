@@ -1,9 +1,4 @@
-import {
-	Avatar,
-	AvatarFallback,
-	AvatarImage,
-	SmallText,
-} from "@/components";
+import { Avatar, AvatarFallback, AvatarImage, SmallText } from "@/components";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { MembersPanel } from "./members-panel";
@@ -38,7 +33,7 @@ export function OrganizationPanel() {
 		(inv: { status?: string }) => inv?.status === "pending",
 	).length;
 	const currentMember = members.find((m) => m.userId === session?.user?.id);
-	const isOwner = currentMember?.role === "owner";
+	const _isOwner = currentMember?.role === "owner";
 
 	const initial = (org.name?.[0] ?? "?").toUpperCase();
 
@@ -110,4 +105,3 @@ function Cell({ label, value }: { label: string; value: string }) {
 		</div>
 	);
 }
-

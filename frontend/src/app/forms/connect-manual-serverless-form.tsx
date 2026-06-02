@@ -9,7 +9,6 @@ import {
 } from "@/app/serverless-connection-check";
 import {
 	Button,
-	cn,
 	FormControl,
 	FormDescription,
 	FormField,
@@ -260,7 +259,12 @@ export const MinRunners = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Min Runners</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						The minimum number of runners to keep running.
@@ -282,10 +286,16 @@ export const MaxRunners = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Max Runners</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
-						The maximum number of runners that can be created to handle load.
+						The maximum number of runners that can be created to
+						handle load.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>
@@ -302,9 +312,16 @@ export const SlotsPerRunner = ({ className }: { className?: string }) => {
 			name="slotsPerRunner"
 			render={({ field }) => (
 				<FormItem className={className}>
-					<FormLabel className="col-span-1">Slots Per Runner</FormLabel>
+					<FormLabel className="col-span-1">
+						Slots Per Runner
+					</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						The number of concurrent slots each runner can handle.
@@ -326,10 +343,16 @@ export const RunnerMargin = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Runner Margin</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
-						The number of extra runners to keep running to handle sudden spikes in load.
+						The number of extra runners to keep running to handle
+						sudden spikes in load.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>

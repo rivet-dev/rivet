@@ -5,7 +5,11 @@ import { H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { ChartSyncProvider } from "./chart-sync-context";
 import { METRICS_CONFIG } from "./constants";
-import { OVERVIEW_RANGE_MS, OVERVIEW_RESOLUTION, useNamespaceMetrics } from "./hooks";
+import {
+	OVERVIEW_RANGE_MS,
+	OVERVIEW_RESOLUTION,
+	useNamespaceMetrics,
+} from "./hooks";
 import { MetricsChart } from "./metrics-chart";
 import { NamespaceFilterCombobox } from "./namespace-filter-combobox";
 

@@ -68,7 +68,9 @@ function main(): void {
 	const start = lines.find((l) => l.event === "start");
 	const workloadEnd = lines.find((l) => l.event === "workload_end");
 	const verdictLine = lines.find((l) => l.event === "verdict");
-	const metricLines = lines.filter((l) => l.event === "metric") as unknown as MetricSeries[];
+	const metricLines = lines.filter(
+		(l) => l.event === "metric",
+	) as unknown as MetricSeries[];
 	const errorLines = lines.filter((l) => l.event === "log_error");
 	const assertionFails = lines.filter((l) => l.event === "assertion_failure");
 
@@ -80,15 +82,25 @@ function main(): void {
 	process.stdout.write(`mode:      ${mode ?? "?"}\n`);
 	process.stdout.write(`revision:  ${revision ?? "?"}\n`);
 
-	const stats = (workloadEnd as { stats?: { cycles?: number; failures?: number } } | undefined)?.stats;
+	const stats = (
+		workloadEnd as
+			| { stats?: { cycles?: number; failures?: number } }
+			| undefined
+	)?.stats;
 	process.stdout.write(`cycles:    ${stats?.cycles ?? 0}\n`);
 	process.stdout.write(`failures:  ${stats?.failures ?? 0}\n`);
 	process.stdout.write(`errors:    ${errorLines.length}\n`);
 	process.stdout.write(`asserts:   ${assertionFails.length}\n`);
 
-	const memSeries = metricLines.filter((m) => m.metric.endsWith("/memory/utilizations"));
-	const cpuSeries = metricLines.filter((m) => m.metric.endsWith("/cpu/utilizations"));
-	const instSeries = metricLines.filter((m) => m.metric.endsWith("/instance_count"));
+	const memSeries = metricLines.filter((m) =>
+		m.metric.endsWith("/memory/utilizations"),
+	);
+	const cpuSeries = metricLines.filter((m) =>
+		m.metric.endsWith("/cpu/utilizations"),
+	);
+	const instSeries = metricLines.filter((m) =>
+		m.metric.endsWith("/instance_count"),
+	);
 
 	const memValues = memSeries.flatMap((s) =>
 		s.points.map((p) => p.value).filter((v): v is number => v !== null),
@@ -108,12 +120,16 @@ function main(): void {
 
 	process.stdout.write(`memory max:    ${fmtPct(memMax)}\n`);
 	process.stdout.write(`memory p95:    ${fmtPct(memP95)}\n`);
-	process.stdout.write(`memory slope:  ${memSlope === null ? "n/a" : `${(memSlope * 100).toFixed(2)}%/hr`}\n`);
+	process.stdout.write(
+		`memory slope:  ${memSlope === null ? "n/a" : `${(memSlope * 100).toFixed(2)}%/hr`}\n`,
+	);
 	process.stdout.write(`cpu max:       ${fmtPct(cpuMax)}\n`);
 	process.stdout.write(`instance max:  ${instMax ?? "n/a"}\n`);
 
 	if (verdictLine) {
-		process.stdout.write(`recorded pass: ${(verdictLine as { pass?: boolean }).pass}\n`);
+		process.stdout.write(
+			`recorded pass: ${(verdictLine as { pass?: boolean }).pass}\n`,
+		);
 		const notes = (verdictLine as { notes?: string[] }).notes ?? [];
 		for (const n of notes) process.stdout.write(`  note: ${n}\n`);
 	}
@@ -121,9 +137,21 @@ function main(): void {
 	if (errorLines.length > 0) {
 		process.stdout.write(`\nfirst 5 error log entries:\n`);
 		for (const e of errorLines.slice(0, 5)) {
-			const entry = (e as { entry?: { timestamp?: string; severity?: string; textPayload?: string } }).entry;
-			const text = entry?.textPayload ?? JSON.stringify(entry?.textPayload ?? entry);
-			process.stdout.write(`  [${entry?.severity ?? "?"}] ${entry?.timestamp ?? "?"} ${text?.slice(0, 200)}\n`);
+			const entry = (
+				e as {
+					entry?: {
+						timestamp?: string;
+						severity?: string;
+						textPayload?: string;
+					};
+				}
+			).entry;
+			const text =
+				entry?.textPayload ??
+				JSON.stringify(entry?.textPayload ?? entry);
+			process.stdout.write(
+				`  [${entry?.severity ?? "?"}] ${entry?.timestamp ?? "?"} ${text?.slice(0, 200)}\n`,
+			);
 		}
 	}
 }

@@ -1,28 +1,5 @@
 // @ts-nocheck
-import { RAW_STATE_SYMBOL, type RunContext } from "@/actor/config";
-import type {
-	QueueFilterName,
-	QueueNextBatchOptions,
-	QueueNextOptions,
-	QueueResultMessageForName,
-} from "@/actor/config";
-import type { Client } from "@/client/client";
-import type { Registry } from "@/registry";
-import type {
-	BaseActorDefinition,
-	AnyActorDefinition,
-} from "@/actor/definition";
-import type {
-	AnyDatabaseProvider,
-	InferDatabaseClient,
-} from "@/common/database/config";
-import type {
-	EventSchemaConfig,
-	InferEventArgs,
-	InferSchemaMap,
-	QueueSchemaConfig,
-} from "@/actor/schema";
-import type { WorkflowContextInterface } from "@rivetkit/workflow-engine";
+
 import type {
 	BranchConfig,
 	BranchOutput,
@@ -34,8 +11,32 @@ import type {
 	TryBlockResult,
 	TryStepConfig,
 	TryStepResult,
+	WorkflowContextInterface,
 	WorkflowQueueMessage,
 } from "@rivetkit/workflow-engine";
+import type {
+	QueueFilterName,
+	QueueNextBatchOptions,
+	QueueNextOptions,
+	QueueResultMessageForName,
+} from "@/actor/config";
+import { RAW_STATE_SYMBOL, type RunContext } from "@/actor/config";
+import type {
+	AnyActorDefinition,
+	BaseActorDefinition,
+} from "@/actor/definition";
+import type {
+	EventSchemaConfig,
+	InferEventArgs,
+	InferSchemaMap,
+	QueueSchemaConfig,
+} from "@/actor/schema";
+import type { Client } from "@/client/client";
+import type {
+	AnyDatabaseProvider,
+	InferDatabaseClient,
+} from "@/common/database/config";
+import type { Registry } from "@/registry";
 import { WORKFLOW_GUARD_KV_KEY } from "./constants";
 
 type WorkflowActorQueueNextOptions<
@@ -80,7 +81,7 @@ type ActorWorkflowLoopConfig<
 			TQueues
 		>,
 		state: S,
-	) => Promise<LoopResult<S, T> | (S extends undefined ? void : never)>;
+	) => Promise<LoopResult<S, T> | (S extends undefined ? undefined : never)>;
 };
 
 type ActorWorkflowBranchConfig<
@@ -329,13 +330,13 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, T> | void>,
+		) => Promise<LoopResult<undefined, T> | undefined>,
 	): Promise<T>;
 	async loop<T>(
 		name: string,
 		run: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T> | void>,
+		) => Promise<LoopResult<undefined, T> | undefined>,
 	): Promise<T>;
 	async loop<S, T>(
 		config: ActorWorkflowLoopConfig<
@@ -379,7 +380,7 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, any> | void>,
+		) => Promise<LoopResult<undefined, any> | undefined>,
 	): Promise<any> {
 		if (typeof nameOrConfig === "string") {
 			if (!run) {

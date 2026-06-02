@@ -1,9 +1,9 @@
 import type { EnvoyConfig } from "@rivetkit/rivetkit-native/wrapper";
 import {
-	type HibernatingWebSocketMetadata,
 	type EnvoyHandle,
+	type HibernatingWebSocketMetadata,
 	openDatabaseFromEnvoy,
-	protocol,
+	type protocol,
 	startEnvoySync,
 } from "@rivetkit/rivetkit-native/wrapper";
 import * as cbor from "cbor-x";
@@ -11,17 +11,19 @@ import type { Context as HonoContext } from "hono";
 import { streamSSE } from "hono/streaming";
 import { WSContext, type WSContextInit } from "hono/ws";
 import invariant from "invariant";
-import { type AnyConn, CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
+import { CONN_STATE_MANAGER_SYMBOL } from "@/actor/conn/mod";
 import { isStaticActorDefinition, lookupInRegistry } from "@/actor/definition";
-import {
-	isStaticActorInstance,
-	type AnyStaticActorInstance,
-} from "@/actor/instance/mod";
+import type { ActorDriver } from "@/actor/driver";
 import { KEYS } from "@/actor/instance/keys";
+import type { AnyActorInstance } from "@/actor/instance/mod";
 import {
-	type PreloadMap,
+	type AnyStaticActorInstance,
+	isStaticActorInstance,
+} from "@/actor/instance/mod";
+import {
 	compareBytes,
 	createPreloadMap,
+	type PreloadMap,
 } from "@/actor/instance/preload-map";
 import { deserializeActorKey } from "@/actor/keys";
 import type { Encoding } from "@/actor/protocol/serde";
@@ -41,6 +43,10 @@ import {
 } from "@/common/actor-router-consts";
 import { getLogger } from "@/common/log";
 import { deconstructError } from "@/common/utils";
+import type {
+	RivetMessageEvent,
+	UniversalWebSocket,
+} from "@/common/websocket-interface";
 import {
 	buildHibernatableWebSocketAckStateTestResponse,
 	type IndexedWebSocketPayload,
@@ -49,21 +55,19 @@ import {
 	setHibernatableWebSocketAckTestHooks,
 	unregisterRemoteHibernatableWebSocketAckHooks,
 } from "@/common/websocket-test-hooks";
-import type {
-	RivetMessageEvent,
-	UniversalWebSocket,
-} from "@/common/websocket-interface";
-import type { ActorDriver } from "@/actor/driver";
-import type { AnyActorInstance } from "@/actor/instance/mod";
 import {
-	getInitialActorKvState,
+	type JsNativeDatabaseLike,
+	wrapJsNativeDatabase,
+} from "@/db/native-database";
+import {
 	type EngineControlClient,
+	getInitialActorKvState,
 } from "@/driver-helpers/mod";
 import { DynamicActorInstance } from "@/dynamic/instance";
-import { DynamicActorIsolateRuntime } from "@/dynamic/isolate-runtime";
 import { isDynamicActorDefinition } from "@/dynamic/internal";
-import { buildActorNames, type RegistryConfig } from "@/registry/config";
+import { DynamicActorIsolateRuntime } from "@/dynamic/isolate-runtime";
 import { getEndpoint } from "@/engine-client/api-utils";
+import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import {
 	type LongTimeoutHandle,
 	promiseWithResolvers,
@@ -71,10 +75,6 @@ import {
 	stringifyError,
 	VERSION,
 } from "@/utils";
-import {
-	wrapJsNativeDatabase,
-	type JsNativeDatabaseLike,
-} from "@/db/native-database";
 import { logger } from "./log";
 
 const ENVOY_SSE_PING_INTERVAL = 1000;
@@ -88,13 +88,13 @@ const REMOTE_ACK_HOOK_QUERY_PARAM = "__rivetkitAckHook";
 //
 // See engine/packages/pegboard-gateway/src/shared_state.rs
 // (HWS_MESSAGE_ACK_TIMEOUT)
-const CONN_MESSAGE_ACK_DEADLINE = 5_000;
+const _CONN_MESSAGE_ACK_DEADLINE = 5_000;
 
 // Force saveState when cumulative message size reaches this threshold (0.5 MB)
 //
 // See engine/packages/pegboard-gateway/src/shared_state.rs
 // (HWS_MAX_PENDING_MSGS_SIZE_PER_REQ)
-const CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
+const _CONN_BUFFERED_MESSAGE_SIZE_THRESHOLD = 500_000;
 
 interface ActorHandler {
 	actor?: AnyActorInstance;
@@ -144,7 +144,6 @@ export type DriverContext = {};
 
 export class EngineActorDriver implements ActorDriver {
 	#config: RegistryConfig;
-	#engineClient: EngineControlClient;
 	#inlineClient: Client<any>;
 	#envoy: EnvoyHandle;
 	#actors: Map<string, ActorHandler> = new Map();
@@ -160,15 +159,6 @@ export class EngineActorDriver implements ActorDriver {
 	#hibernatableRunnerWebSocketBindings = new Map<
 		string,
 		HibernatableRunnerWebSocketBinding
-	>();
-	#hwsMessageIndex = new Map<
-		string,
-		{
-			serverMessageIndex: number;
-			bufferedMessageSize: number;
-			pendingAckFromMessageIndex: boolean;
-			pendingAckFromBufferSize: boolean;
-		}
 	>();
 	#actorRouter: ActorRouter;
 
@@ -376,8 +366,7 @@ export class EngineActorDriver implements ActorDriver {
 		requestId: ArrayBuffer,
 	): void {
 		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
-		const binding =
-			this.#hibernatableRunnerWebSocketBindings.get(key);
+		const binding = this.#hibernatableRunnerWebSocketBindings.get(key);
 		if (!binding) {
 			return;
 		}
@@ -397,8 +386,7 @@ export class EngineActorDriver implements ActorDriver {
 		requestId: ArrayBuffer,
 	): void {
 		const key = this.#hibernatableWebSocketAckKey(gatewayId, requestId);
-		const binding =
-			this.#hibernatableRunnerWebSocketBindings.get(key);
+		const binding = this.#hibernatableRunnerWebSocketBindings.get(key);
 		binding?.detach?.();
 		this.#hibernatableRunnerWebSocketBindings.delete(key);
 	}
@@ -585,7 +573,7 @@ export class EngineActorDriver implements ActorDriver {
 		return handler;
 	}
 
-	getContext(actorId: string): DriverContext {
+	getContext(_actorId: string): DriverContext {
 		return {};
 	}
 
@@ -1129,7 +1117,10 @@ export class EngineActorDriver implements ActorDriver {
 						actorId: binding.actorId,
 						error: stringifyError(error),
 					});
-					binding.websocket.close(1011, "dynamic.websocket_forward_failed");
+					binding.websocket.close(
+						1011,
+						"dynamic.websocket_forward_failed",
+					);
 				});
 		};
 		const onClose = (event: CloseEvent) => {
@@ -1259,7 +1250,10 @@ export class EngineActorDriver implements ActorDriver {
 					msg: "dynamic runtime websocket binding is missing after restore",
 					actorId: binding.actorId,
 				});
-				binding.websocket.close(1011, "dynamic.websocket_forward_failed");
+				binding.websocket.close(
+					1011,
+					"dynamic.websocket_forward_failed",
+				);
 				return;
 			}
 
@@ -1275,7 +1269,10 @@ export class EngineActorDriver implements ActorDriver {
 						actorId: binding.actorId,
 						error: stringifyError(error),
 					});
-					binding.websocket.close(1011, "dynamic.websocket_forward_failed");
+					binding.websocket.close(
+						1011,
+						"dynamic.websocket_forward_failed",
+					);
 				});
 		};
 		const onClose = (event: CloseEvent) => {
@@ -1979,7 +1976,10 @@ export class EngineActorDriver implements ActorDriver {
 				isRestoringHibernatable,
 			);
 		} catch (error) {
-			logger().error({ msg: "building websocket handlers errored", error });
+			logger().error({
+				msg: "building websocket handlers errored",
+				error,
+			});
 			websocketRaw.close(1011, "ws.route_error");
 			return;
 		}
@@ -1994,7 +1994,7 @@ export class EngineActorDriver implements ActorDriver {
 		// Get connection and actor from wsHandler (may be undefined for inspector endpoint)
 		const conn = wsHandler.conn;
 		const actor = wsHandler.actor;
-		const connStateManager = conn?.[CONN_STATE_MANAGER_SYMBOL];
+		const _connStateManager = conn?.[CONN_STATE_MANAGER_SYMBOL];
 
 		// Bind event listeners to Hono WebSocket handlers
 		//
@@ -2033,16 +2033,15 @@ export class EngineActorDriver implements ActorDriver {
 
 			const currentActor = this.#actors.get(actorId)?.actor;
 			const actorForDispatch =
-				currentActor &&
-				isStaticActorInstance(currentActor)
+				currentActor && isStaticActorInstance(currentActor)
 					? currentActor
 					: actor;
 			const connForDispatch =
 				isHibernatable && actorForDispatch
-					? actorForDispatch.connectionManager.findHibernatableConn(
+					? (actorForDispatch.connectionManager.findHibernatableConn(
 							gatewayIdBuf,
 							requestIdBuf,
-						) ?? conn
+						) ?? conn)
 					: conn;
 
 			if (actorForDispatch?.isStopping) {
@@ -2052,7 +2051,10 @@ export class EngineActorDriver implements ActorDriver {
 					actorId: actorForDispatch?.id,
 					messageIndex: event.rivetMessageIndex,
 				});
-				if (!isRawWebSocketPath && websocket.readyState !== websocket.CLOSED) {
+				if (
+					!isRawWebSocketPath &&
+					websocket.readyState !== websocket.CLOSED
+				) {
 					websocket.close(1011, "actor.stopping");
 				}
 				return;

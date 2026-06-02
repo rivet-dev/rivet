@@ -35,7 +35,7 @@ export function App() {
 	// Auto-scroll to bottom when new messages arrive
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [messages]);
+	}, []);
 
 	const sendMessage = async () => {
 		if (chatRoom.connection && messageText.trim()) {
@@ -82,9 +82,13 @@ export function App() {
 					messages.map((msg) => (
 						<div key={msg.id} className="message">
 							<div className="message-header">
-								<span className="message-sender">{msg.sender}</span>
+								<span className="message-sender">
+									{msg.sender}
+								</span>
 								<span className="message-timestamp">
-									{new Date(msg.timestamp).toLocaleTimeString()}
+									{new Date(
+										msg.timestamp,
+									).toLocaleTimeString()}
 								</span>
 							</div>
 							<div className="message-text">{msg.text}</div>

@@ -1,6 +1,6 @@
 import type { ServerResponse } from "node:http";
-import { pipeline } from "node:stream/promises";
 import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 function isStreamPrematureClose(err: unknown): boolean {
 	return (
@@ -24,7 +24,9 @@ export async function pipeWebResponseToNode(
 	if (webRes.body) {
 		try {
 			await pipeline(
-				Readable.fromWeb(webRes.body as import("stream/web").ReadableStream),
+				Readable.fromWeb(
+					webRes.body as import("stream/web").ReadableStream,
+				),
 				nodeRes,
 			);
 		} catch (err) {

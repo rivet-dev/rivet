@@ -9,5 +9,5 @@
  *     }
  */
 export interface RunnerConfigsDeleteRequest {
-    namespace: string;
+	namespace: string;
 }

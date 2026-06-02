@@ -15,5 +15,7 @@ export function generatePartyCode(): string {
 }
 
 export function generatePlayerName(): string {
-	return `Player#${Math.floor(Math.random() * 10000).toString().padStart(4, "0")}`;
+	return `Player#${Math.floor(Math.random() * 10000)
+		.toString()
+		.padStart(4, "0")}`;
 }

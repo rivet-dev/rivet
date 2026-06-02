@@ -43,7 +43,7 @@ export function buildSpanTree(spans: SpanNode[]): SpanNode[] {
 		const node = spanMap.get(span.spanId)!;
 		const parentSpanId = span.span.parentSpanId;
 		if (parentSpanId && spanMap.has(parentSpanId)) {
-			spanMap.get(parentSpanId)!.children.push(node);
+			spanMap.get(parentSpanId)?.children.push(node);
 		} else {
 			roots.push(node);
 		}

@@ -14,6 +14,7 @@ import {
 	type ToServer as ToServerJson,
 	ToServerSchema,
 } from "@/common/client-protocol-zod";
+import type { JsonCompatValue } from "@/common/encoding";
 import {
 	type Encoding,
 	inputDataToBuffer,
@@ -22,7 +23,6 @@ import {
 import { assertUnreachable, stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { EngineControlClient } from "@/engine-client/driver";
-import type { JsonCompatValue } from "@/common/encoding";
 import {
 	decodeCborCompat,
 	deserializeWithEncoding,
@@ -289,7 +289,7 @@ export class ActorConnRaw {
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | void> {
+	): Promise<QueueSendResult | undefined> {
 		return this.#sendQueueMessage(name, body, options as any);
 	}
 
@@ -297,7 +297,7 @@ export class ActorConnRaw {
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | void> {
+	): Promise<QueueSendResult | undefined> {
 		return await this.#queueSender.send(name, body, options as any);
 	}
 
@@ -784,12 +784,10 @@ export class ActorConnRaw {
 				}
 
 				// Check if this is an actor scheduling error and try to get more details
-				let errorToThrow = new errors.ActorError(
-					group,
-					code,
-					message,
-					{ metadata, actor },
-				);
+				let errorToThrow = new errors.ActorError(group, code, message, {
+					metadata,
+					actor,
+				});
 				if (errors.isSchedulingError(group, code) && this.#actorId) {
 					const schedulingError = await checkForSchedulingError(
 						group,
@@ -1271,7 +1269,8 @@ export class ActorConnRaw {
 											name: msg.body.val.name,
 											args: bufferToArrayBuffer(
 												encodeCborCompat(
-													msg.body.val.args as JsonCompatValue,
+													msg.body.val
+														.args as JsonCompatValue,
 												),
 											),
 										},

@@ -8,10 +8,10 @@ export const counterConn = actor({
 		newCount: event<number>(),
 	},
 	connState: { count: 0 },
-	onConnect: (c, conn) => {
+	onConnect: (c, _conn) => {
 		c.state.connectionCount += 1;
 	},
-	onDisconnect: (c, conn) => {
+	onDisconnect: (c, _conn) => {
 		// Note: We can't determine if disconnect was graceful from here
 		// For testing purposes, we'll decrement on all disconnects
 		// In real scenarios, you'd use connection tracking with timeouts

@@ -1,4 +1,4 @@
-import { actor, setup, event } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 import { db } from "rivetkit/db";
 
 const COUNTER_ROW_ID = 1;

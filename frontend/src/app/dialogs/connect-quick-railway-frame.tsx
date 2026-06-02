@@ -1,11 +1,11 @@
 import { faRailway, Icon } from "@rivet-gg/icons";
-import z from "zod";
 import {
 	useMutation,
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
 import { useWatch } from "react-hook-form";
+import z from "zod";
 import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";
 import { type DialogContentProps, ExternalLinkCard, Frame } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
@@ -125,12 +125,10 @@ function FormStepper({ onClose }: { onClose?: () => void }) {
 
 export function Step1() {
 	return (
-		<>
-			<div className="space-y-4">
-				<p>Deploy the Rivet Railway template to get started quickly.</p>
-				<DeployToRailwayButton />
-			</div>
-		</>
+		<div className="space-y-4">
+			<p>Deploy the Rivet Railway template to get started quickly.</p>
+			<DeployToRailwayButton />
+		</div>
 	);
 }
 

@@ -1,16 +1,18 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
-import type {
-	GatewayId,
-	MessageId,
-	RequestId,
-} from "@rivetkit/engine-runner-protocol";
+import type { GatewayId, RequestId } from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
 import { type Runner, type RunnerActor, RunnerShutdownError } from "./mod";
 import {
 	stringifyToClientTunnelMessageKind,
 	stringifyToServerTunnelMessageKind,
 } from "./stringify";
-import { arraysEqual, idToStr, MAX_PAYLOAD_SIZE, stringifyError, unreachable } from "./utils";
+import {
+	arraysEqual,
+	idToStr,
+	MAX_PAYLOAD_SIZE,
+	stringifyError,
+	unreachable,
+} from "./utils";
 import {
 	HIBERNATABLE_SYMBOL,
 	WebSocketTunnelAdapter,
@@ -636,14 +638,14 @@ export class Tunnel {
 			case "ToClientRequestAbort":
 				await this.#handleRequestAbort(gatewayId, requestId);
 				break;
-				case "ToClientWebSocketOpen":
-					await this.#handleWebSocketOpen(
-						gatewayId,
-						requestId,
-						message.messageId.messageIndex,
-						message.messageKind.val,
-					);
-					break;
+			case "ToClientWebSocketOpen":
+				await this.#handleWebSocketOpen(
+					gatewayId,
+					requestId,
+					message.messageId.messageIndex,
+					message.messageKind.val,
+				);
+				break;
 			case "ToClientWebSocketMessage": {
 				await this.#handleWebSocketMessage(
 					gatewayId,
@@ -985,15 +987,15 @@ export class Tunnel {
 			// hood to add the event listeners for open, etc. If this handler
 			// throws, then the WebSocket will be closed before sending the
 			// open event.
-				const adapter = await this.#createWebSocket(
-					actor.actorId,
-					gatewayId,
-					requestId,
-					requestIdStr,
-					serverMessageIndex,
-					canHibernate,
-					false,
-					request,
+			const adapter = await this.#createWebSocket(
+				actor.actorId,
+				gatewayId,
+				requestId,
+				requestIdStr,
+				serverMessageIndex,
+				canHibernate,
+				false,
+				request,
 				open.path,
 				Object.fromEntries(open.headers),
 				false,

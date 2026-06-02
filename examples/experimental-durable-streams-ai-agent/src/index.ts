@@ -5,7 +5,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
 import { anthropic } from "@ai-sdk/anthropic";
 import type { DurableStream } from "@durable-streams/client";
 import { streamText } from "ai";
-import { type ActorContextOf, actor, setup, event } from "rivetkit";
+import { type ActorContextOf, actor, event, setup } from "rivetkit";
 import { getStreams } from "./shared/streams.ts";
 import type { PromptMessage, ResponseChunk } from "./shared/types.ts";
 
@@ -189,7 +189,7 @@ async function processPrompt(
 			timestamp: Date.now(),
 		};
 
-		await responseStream.append(JSON.stringify(responseChunk) + "\n", {
+		await responseStream.append(`${JSON.stringify(responseChunk)}\n`, {
 			contentType: "application/json",
 		});
 	}
@@ -208,7 +208,7 @@ async function processPrompt(
 			timestamp: Date.now(),
 		};
 
-		await responseStream.append(JSON.stringify(errorChunk) + "\n", {
+		await responseStream.append(`${JSON.stringify(errorChunk)}\n`, {
 			contentType: "application/json",
 		});
 		c.broadcast("responseError", {
@@ -226,7 +226,7 @@ async function processPrompt(
 		timestamp: Date.now(),
 	};
 
-	await responseStream.append(JSON.stringify(completeChunk) + "\n", {
+	await responseStream.append(`${JSON.stringify(completeChunk)}\n`, {
 		contentType: "application/json",
 	});
 	c.broadcast("responseComplete", { promptId: prompt.id, fullResponse });

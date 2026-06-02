@@ -1,4 +1,4 @@
-import { actor, setup, event } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 import type { Player } from "./types.ts";
 
 export type { Player };

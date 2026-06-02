@@ -31,7 +31,11 @@ interface PayloadValueRow {
 	expected_bytes: number;
 }
 
-function positiveInteger(value: number | undefined, fallback: number, name: string) {
+function positiveInteger(
+	value: number | undefined,
+	fallback: number,
+	name: string,
+) {
 	const resolved = value ?? fallback;
 	if (!Number.isInteger(resolved) || resolved < 1) {
 		throw new Error(`${name} must be a positive integer`);
@@ -40,7 +44,9 @@ function positiveInteger(value: number | undefined, fallback: number, name: stri
 }
 
 function randomAsciiString(bytes: number): string {
-	return randomBytes(Math.ceil(bytes / 2)).toString("hex").slice(0, bytes);
+	return randomBytes(Math.ceil(bytes / 2))
+		.toString("hex")
+		.slice(0, bytes);
 }
 
 async function readPayloads(
@@ -83,7 +89,8 @@ async function readPayloads(
 				FROM ${REVERSE_PROBE_TABLE}
 			`,
 		)) as PayloadRow[];
-		if (!probeBounds) throw new Error("reverse probe query returned no rows");
+		if (!probeBounds)
+			throw new Error("reverse probe query returned no rows");
 		const probeMinId = probeBounds.min_id ?? 0;
 		const probeMaxId = probeBounds.max_id ?? 0;
 
@@ -126,11 +133,7 @@ async function readPayloads(
 		};
 	}
 
-	for (
-		let lowerId = minId;
-		lowerId <= maxId;
-		lowerId += READ_BATCH_ROWS
-	) {
+	for (let lowerId = minId; lowerId <= maxId; lowerId += READ_BATCH_ROWS) {
 		const upperId = lowerId + READ_BATCH_ROWS - 1;
 		const [chunk] = (await database.execute(
 			`
@@ -198,7 +201,11 @@ export const sqliteColdStartBench = actor({
 				DEFAULT_TARGET_BYTES,
 				"targetBytes",
 			);
-			const rowBytes = positiveInteger(input.rowBytes, DEFAULT_ROW_BYTES, "rowBytes");
+			const rowBytes = positiveInteger(
+				input.rowBytes,
+				DEFAULT_ROW_BYTES,
+				"rowBytes",
+			);
 			const batchRows = positiveInteger(
 				input.batchRows,
 				DEFAULT_BATCH_ROWS,

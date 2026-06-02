@@ -1,7 +1,12 @@
-import type { RegistryConfig } from "@/registry/config";
-import { ActorConfigSchema, type Actions, type ActorConfig, type ActorConfigInput } from "./config";
-import { loggerWithoutContext } from "./log";
 import type { AnyDatabaseProvider } from "@/common/database/config";
+import type { RegistryConfig } from "@/registry/config";
+import {
+	type Actions,
+	type ActorConfig,
+	type ActorConfigInput,
+	ActorConfigSchema,
+} from "./config";
+import { loggerWithoutContext } from "./log";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
 const warnedDeprecatedTimeoutKeys = new Set<string>();
@@ -28,7 +33,7 @@ export interface BaseActorDefinition<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-	R extends Actions<S, CP, CS, V, I, DB, E, Q> = Actions<
+	_R extends Actions<S, CP, CS, V, I, DB, E, Q> = Actions<
 		S,
 		CP,
 		CS,

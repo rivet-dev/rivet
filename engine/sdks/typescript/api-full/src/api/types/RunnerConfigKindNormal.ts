@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigKindNormal {
-    normal: Record<string, unknown>;
+	normal: Record<string, unknown>;
 }

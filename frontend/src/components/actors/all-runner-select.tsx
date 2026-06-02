@@ -1,5 +1,5 @@
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { Combobox } from "@/components";
 import { useEngineCompatDataProvider } from "./data-provider";
 
@@ -20,7 +20,12 @@ export const useAllRunners = () => {
 	} = useInfiniteQuery({
 		...(hasRunnerNames
 			? dataProvider.runnerNamesQueryOptions()
-			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+			: {
+					queryKey: ["noop-runner-names"],
+					queryFn: async () => [],
+					initialPageParam: undefined,
+					getNextPageParam: () => undefined,
+				}),
 		enabled: hasRunnerNames,
 	});
 
@@ -33,8 +38,23 @@ export const useAllRunners = () => {
 		isFetchingNextPage: serverlessIsFetchingNextPage,
 	} = useInfiniteQuery({
 		...(hasRunnerConfigs
-			? { ...dataProvider.runnerConfigsQueryOptions({ variant: "serverless" }), select: (data: { pages: { runnerConfigs: Record<string, unknown> }[] }) => data.pages.flatMap((page) => Object.keys(page.runnerConfigs)) }
-			: { queryKey: ["noop-runner-configs"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+			? {
+					...dataProvider.runnerConfigsQueryOptions({
+						variant: "serverless",
+					}),
+					select: (data: {
+						pages: { runnerConfigs: Record<string, unknown> }[];
+					}) =>
+						data.pages.flatMap((page) =>
+							Object.keys(page.runnerConfigs),
+						),
+				}
+			: {
+					queryKey: ["noop-runner-configs"],
+					queryFn: async () => [],
+					initialPageParam: undefined,
+					getNextPageParam: () => undefined,
+				}),
 		enabled: hasRunnerConfigs,
 	});
 

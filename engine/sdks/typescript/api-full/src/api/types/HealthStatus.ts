@@ -4,6 +4,6 @@
 
 export type HealthStatus = "ok" | "error";
 export const HealthStatus = {
-    Ok: "ok",
-    Error: "error",
+	Ok: "ok",
+	Error: "error",
 } as const;

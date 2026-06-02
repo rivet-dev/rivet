@@ -9,7 +9,7 @@ import { logger } from "./log";
  * Returns Hono `upgradeWebSocket` args that will proxy requests from the client to a destination address.
  */
 export async function createWebSocketProxy(
-	c: HonoContext,
+	_c: HonoContext,
 	targetUrl: string,
 	protocols: string[],
 ): Promise<UpgradeWebSocketArgs> {
@@ -23,7 +23,7 @@ export async function createWebSocketProxy(
 	const state: WsState = {};
 
 	return {
-		onOpen: async (event: any, clientWs: WSContext) => {
+		onOpen: async (_event: any, clientWs: WSContext) => {
 			logger().debug({ msg: "client websocket connected", targetUrl });
 
 			if (clientWs.readyState !== 1) {
@@ -137,7 +137,7 @@ export async function createWebSocketProxy(
 			}
 		},
 
-		onClose: (event: any, clientWs: WSContext) => {
+		onClose: (event: any, _clientWs: WSContext) => {
 			logger().debug({
 				msg: "client websocket closed",
 				targetUrl,
@@ -159,7 +159,7 @@ export async function createWebSocketProxy(
 			}
 		},
 
-		onError: (event: any, clientWs: WSContext) => {
+		onError: (event: any, _clientWs: WSContext) => {
 			logger().error({ msg: "client websocket error", targetUrl, event });
 
 			if (state.targetWs) {

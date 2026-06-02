@@ -1,7 +1,7 @@
 import { actorNotFound, invalidRequest } from "@/actor/errors";
 import type {
-	GatewayTarget,
 	EngineControlClient,
+	GatewayTarget,
 } from "@/engine-client/driver";
 
 /**

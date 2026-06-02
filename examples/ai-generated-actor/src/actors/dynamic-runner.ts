@@ -6,7 +6,9 @@ export const dynamicRunner = dynamicActor({
 		// Extract the coding agent that owns the code
 		const codeAgentKey = c.key.slice(0, -1);
 		const client = await c.client();
-		const state = await client.codeAgent.getOrCreate(codeAgentKey).getState();
+		const state = await client.codeAgent
+			.getOrCreate(codeAgentKey)
+			.getState();
 
 		return {
 			source: state.code,

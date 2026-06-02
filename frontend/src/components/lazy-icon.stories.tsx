@@ -1,5 +1,5 @@
-import { faQuestion } from "@rivet-gg/icons";
 import type { Story } from "@ladle/react";
+import { faQuestion } from "@rivet-gg/icons";
 import { Suspense } from "react";
 import "../../.ladle/ladle.css";
 import { ActorIcon, LazyIcon } from "./lazy-icon";
@@ -12,7 +12,13 @@ function Frame({ children }: { children: React.ReactNode }) {
 	);
 }
 
-function Cell({ label, children }: { label: string; children: React.ReactNode }) {
+function Cell({
+	label,
+	children,
+}: {
+	label: string;
+	children: React.ReactNode;
+}) {
 	return (
 		<div className="flex flex-col items-center gap-2">
 			<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80 text-lg">

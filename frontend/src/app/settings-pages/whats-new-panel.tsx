@@ -48,9 +48,7 @@ export function WhatsNewPanel() {
 	if (data.length === 0) {
 		return (
 			<div className="flex h-64 items-center justify-center rounded-lg border border-dashed border-border">
-				<p className="text-sm text-muted-foreground">
-					No updates yet.
-				</p>
+				<p className="text-sm text-muted-foreground">No updates yet.</p>
 			</div>
 		);
 	}

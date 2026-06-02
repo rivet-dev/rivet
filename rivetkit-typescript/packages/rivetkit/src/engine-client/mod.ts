@@ -7,9 +7,9 @@ import {
 	PATH_WEBSOCKET_BASE,
 	PATH_WEBSOCKET_PREFIX,
 } from "@/common/actor-router-consts";
+import type { JsonCompatValue } from "@/common/encoding";
 import { noopNext } from "@/common/utils";
 import type { Actor as ApiActor } from "@/engine-api/actors";
-import { shouldSkipReadyWait } from "@/engine-client/driver";
 import type {
 	ActorOutput,
 	CreateInput,
@@ -22,8 +22,8 @@ import type {
 	ListActorsInput,
 	RuntimeDisplayInformation,
 } from "@/engine-client/driver";
+import { shouldSkipReadyWait } from "@/engine-client/driver";
 import type { Encoding, UniversalWebSocket } from "@/mod";
-import type { JsonCompatValue } from "@/common/encoding";
 import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath, type GetUpgradeWebSocket } from "@/utils";
 import { getNextPhase } from "@/utils/env-vars";
@@ -182,7 +182,9 @@ export class RemoteEngineControlClient implements EngineControlClient {
 			key: serializeActorKey(key),
 			runner_name_selector: this.#config.poolName,
 			input: actorInput
-				? uint8ArrayToBase64(encodeCborCompat(actorInput as JsonCompatValue))
+				? uint8ArrayToBase64(
+						encodeCborCompat(actorInput as JsonCompatValue),
+					)
 				: undefined,
 			crash_policy: crashPolicy ?? "sleep",
 		});

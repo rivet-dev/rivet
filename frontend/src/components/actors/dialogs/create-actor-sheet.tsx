@@ -24,7 +24,10 @@ interface CreateActorSheetProps {
 	onOpenChange: (open: boolean) => void;
 }
 
-export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) {
+export function CreateActorSheet({
+	open,
+	onOpenChange,
+}: CreateActorSheetProps) {
 	const { mutateAsync } = useMutation(
 		useDataProvider().createActorMutationOptions(),
 	);
@@ -108,9 +111,7 @@ export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) 
 							<div className="mt-1 border-t border-border/60 pt-2">
 								<AdvancedDisclosure
 									open={advancedOpen}
-									onToggle={() =>
-										setAdvancedOpen((v) => !v)
-									}
+									onToggle={() => setAdvancedOpen((v) => !v)}
 								/>
 								<CollapsibleRegion open={advancedOpen}>
 									<AdvancedFields />
@@ -258,7 +259,12 @@ function DialogFooter({ onCancel }: { onCancel: () => void }) {
 				</div>
 			) : null}
 			<div className="flex items-center justify-end gap-2 px-6 py-3">
-				<Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={onCancel}
+				>
 					Cancel
 				</Button>
 				<ActorCreateForm.Submit allowPristine type="submit" size="sm">

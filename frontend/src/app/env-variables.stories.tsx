@@ -36,7 +36,13 @@ const ADMIN_TOKEN = "sk_Km9XaQpL2tRZ3nVxYbCdEfGhJkMnPqRsTuVwXyZaBcDe";
 const PUBLISHABLE_TOKEN = "pk_ivU6QmAj3sKwLp1XnVxYbCdEfGhJkMnPqRsTuVwXyZ";
 const HOST = "engine.example.com";
 
-function MockEnvBlock({ publicDsn, secretDsn }: { publicDsn: string; secretDsn: string }) {
+function MockEnvBlock({
+	publicDsn,
+	secretDsn,
+}: {
+	publicDsn: string;
+	secretDsn: string;
+}) {
 	return (
 		<div className="gap-1 items-center grid grid-cols-2">
 			<Label asChild className="text-muted-foreground text-xs mb-1">

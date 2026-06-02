@@ -18,8 +18,13 @@ import {
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Link, useNavigate, useParams, useRouter } from "@tanstack/react-router";
-import { AnimatePresence, motion } from "framer-motion";
+import {
+	Link,
+	useNavigate,
+	useParams,
+	useRouter,
+} from "@tanstack/react-router";
+import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
@@ -58,7 +63,6 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { TEST_IDS } from "../utils/test-ids";
 import { DeploymentCheck } from "./deployment-check";
-import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
 import {
 	buildServerlessConfig,
@@ -68,6 +72,7 @@ import {
 import { EnvVariables, useRivetDsn } from "./env-variables";
 import { StepperForm } from "./forms/stepper-form";
 import { Content } from "./layout";
+import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
 
 const stepper = defineStepper(
 	{
@@ -108,12 +113,8 @@ const stepper = defineStepper(
 			if ((values.mode as string) === "serverfull") {
 				return z.object({
 					mode: z.literal("serverfull"),
-					runnerName: z
-						.string()
-						.min(1, "Runner name is required"),
-					datacenter: z
-						.string()
-						.min(1, "Please select a region"),
+					runnerName: z.string().min(1, "Runner name is required"),
+					datacenter: z.string().min(1, "Please select a region"),
 					customName: z
 						.string()
 						.trim()
@@ -284,12 +285,22 @@ export function GettingStarted({
 								),
 							}}
 							onSubmit={() => {}}
-							onPartialSubmit={async ({ stepper, values, form }) => {
+							onPartialSubmit={async ({
+								stepper,
+								values,
+								form,
+							}) => {
 								// Provider may be lost from accumulated values
 								// after form reset, so read it from the live form.
-								const provider = (values.provider ?? form.getValues("provider")) as string | undefined;
+								const provider = (values.provider ??
+									form.getValues("provider")) as
+									| string
+									| undefined;
 								if (stepper.current.id === "provider") {
-									if (features.compute && provider === "rivet") {
+									if (
+										features.compute &&
+										provider === "rivet"
+									) {
 										await mutateAsyncManagedPool({
 											displayName: "default",
 											pool: "default",
@@ -525,13 +536,19 @@ function ProviderSetup() {
 										<ProviderCard
 											key={option.name}
 											option={option}
-											isSelected={field.value === option.name}
+											isSelected={
+												field.value === option.name
+											}
 											onSelect={() =>
-												setValue("provider", option.name, {
-													shouldDirty: true,
-													shouldTouch: true,
-													shouldValidate: true,
-												})
+												setValue(
+													"provider",
+													option.name,
+													{
+														shouldDirty: true,
+														shouldTouch: true,
+														shouldValidate: true,
+													},
+												)
 											}
 											className={
 												features.compute &&
@@ -1385,7 +1402,9 @@ function BackendSetupServerless({ provider }: { provider: Provider }) {
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Set environment variables</p>
+					<p className="font-medium mb-2">
+						Set environment variables
+					</p>
 					<p className="text-sm text-muted-foreground mb-3">
 						Configure the following environment variables in your
 						deployment.
@@ -1441,8 +1460,7 @@ function BackendSetupServerless({ provider }: { provider: Provider }) {
 }
 
 function BackendSetupServerfull({ provider }: { provider: Provider }) {
-	const isCustom =
-		provider === "custom" || provider === "custom-platform";
+	const isCustom = provider === "custom" || provider === "custom-platform";
 	const endpoint = useServerfullEndpoint();
 	const runnerName = useWatch({ name: "runnerName" });
 
@@ -1454,7 +1472,9 @@ function BackendSetupServerfull({ provider }: { provider: Provider }) {
 					<p className="font-medium mb-4">Configure your runner</p>
 					<div className="space-y-3">
 						<ConnectServerfullForm.RunnerName />
-						{isCustom ? <ConnectServerlessForm.CustomBranding /> : null}
+						{isCustom ? (
+							<ConnectServerlessForm.CustomBranding />
+						) : null}
 						<ConnectServerfullForm.Datacenter />
 					</div>
 				</div>
@@ -1462,7 +1482,9 @@ function BackendSetupServerfull({ provider }: { provider: Provider }) {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Set environment variables</p>
+					<p className="font-medium mb-2">
+						Set environment variables
+					</p>
 					<p className="text-sm text-muted-foreground mb-3">
 						Set the following environment variables on the machine
 						running your runner.
@@ -1501,7 +1523,10 @@ function useWaitingForFirstImage(provider: string | undefined): boolean {
 	const { data: hasImage } = useQuery({
 		...(nsDataProvider
 			? nsDataProvider.currentProjectFirstImagePresentQueryOptions()
-			: { queryKey: ["frontend-setup", "first-image-noop"] as const, queryFn: () => false }),
+			: {
+					queryKey: ["frontend-setup", "first-image-noop"] as const,
+					queryFn: () => false,
+				}),
 		enabled,
 	});
 	return enabled && hasImage !== true;
@@ -1537,9 +1562,13 @@ function FrontendSetup() {
 
 	const provider = useWatch({ name: "provider" });
 	const nsDataProvider = useCloudNamespaceDataProvider();
-	const { namespace: namespaceParam } = useParams({ strict: false }) as { namespace: string };
+	const { namespace: namespaceParam } = useParams({ strict: false }) as {
+		namespace: string;
+	};
 	const { data: nsData } = useQuery(
-		nsDataProvider.currentProjectNamespaceQueryOptions({ namespace: namespaceParam }),
+		nsDataProvider.currentProjectNamespaceQueryOptions({
+			namespace: namespaceParam,
+		}),
 	);
 	const waitingForFirstImage = useWaitingForFirstImage(provider);
 
@@ -1602,12 +1631,12 @@ function FrontendSetup() {
 					{provider === "rivet" ? (
 						<>
 							<Button asChild>
-								<Link
-									to="."
-									search={{ skipOnboarding: true }}
-								>
+								<Link to="." search={{ skipOnboarding: true }}>
 									Go to dashboard
-									<Icon icon={faArrowRight} className="ml-1.5" />
+									<Icon
+										icon={faArrowRight}
+										className="ml-1.5"
+									/>
 								</Link>
 							</Button>
 							{deploymentUrl ? (
@@ -1694,25 +1723,23 @@ function TroubleshootingSection({ endpoint }: { endpoint: string | null }) {
 					<ul className="list-disc list-inside mt-2">
 						<li>
 							<span>
-								The actor file is in the correct location
-								and has the correct name.
+								The actor file is in the correct location and
+								has the correct name.
+							</span>
+						</li>
+						<li>
+							<span>The actor is being exported properly.</span>
+						</li>
+						<li>
+							<span>
+								Check the terminal output for any errors during
+								the build or runtime.
 							</span>
 						</li>
 						<li>
 							<span>
-								The actor is being exported properly.
-							</span>
-						</li>
-						<li>
-							<span>
-								Check the terminal output for any errors
-								during the build or runtime.
-							</span>
-						</li>
-						<li>
-							<span>
-								Make sure your coding agent has completed
-								the setup steps correctly.
+								Make sure your coding agent has completed the
+								setup steps correctly.
 							</span>
 						</li>
 						<li>
@@ -1720,9 +1747,7 @@ function TroubleshootingSection({ endpoint }: { endpoint: string | null }) {
 								You're using correct environment variables:
 							</span>
 							<Suspense
-								fallback={
-									<Skeleton className="w-full h-20" />
-								}
+								fallback={<Skeleton className="w-full h-20" />}
 							>
 								<EnvVariables endpoint={endpoint} />
 							</Suspense>

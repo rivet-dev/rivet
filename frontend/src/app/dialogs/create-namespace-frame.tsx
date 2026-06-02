@@ -33,7 +33,9 @@ const useCreateNamespace = ({ project: projectProp }: { project?: string }) => {
 					id: response.namespace.id,
 					name: response.namespace.name,
 					displayName: response.namespace.displayName,
-					createdAt: new Date(response.namespace.createdAt).toISOString(),
+					createdAt: new Date(
+						response.namespace.createdAt,
+					).toISOString(),
 				};
 			},
 			onSuccess: async (data) => {

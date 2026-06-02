@@ -36,7 +36,6 @@ export function safeStringify(obj: unknown, maxSize: number) {
 	return JSON.stringify(obj, replacer);
 }
 
-
 export interface DeconstructedError {
 	__type: "ActorError";
 	statusCode: ContentfulStatusCode;

@@ -1,5 +1,5 @@
-import { AsyncBatcher } from "@tanstack/pacer";
 import type { Rivet } from "@rivetkit/engine-api-full";
+import { AsyncBatcher } from "@tanstack/pacer";
 
 type PendingEntry = {
 	resolve: (actor: Rivet.Actor) => void;

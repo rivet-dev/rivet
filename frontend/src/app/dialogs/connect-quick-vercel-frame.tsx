@@ -5,7 +5,6 @@ import {
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 import { useMemo } from "react";
 import * as ConnectVercelForm from "@/app/forms/connect-quick-vercel-form";
 import { type DialogContentProps, ExternalLinkCard, Frame } from "@/components";

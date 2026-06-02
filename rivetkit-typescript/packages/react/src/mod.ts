@@ -16,8 +16,8 @@ import {
 	type ExtractActorsFromRegistry,
 } from "rivetkit/client";
 
-export { ActorConnDisposed, createClient } from "rivetkit/client";
 export type { ActorConnStatus } from "@rivetkit/framework-base";
+export { ActorConnDisposed, createClient } from "rivetkit/client";
 
 type UseEvent<
 	Registry extends AnyActorRegistry,
@@ -29,7 +29,9 @@ type UseActorState<
 	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
 > = {
 	handle: ActorHandle<ExtractActorsFromRegistry<Registry>[ActorName]> | null;
-	connection: ActorConn<ExtractActorsFromRegistry<Registry>[ActorName]> | null;
+	connection: ActorConn<
+		ExtractActorsFromRegistry<Registry>[ActorName]
+	> | null;
 	connStatus: ActorConnStatus;
 	error: Error | null;
 	hash: string;
@@ -42,7 +44,7 @@ export function createRivetKit<Registry extends AnyActorRegistry>(
 	clientInput: string | ClientConfigInput | undefined = undefined,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
-	// @ts-ignore Type instantiation can be excessively deep for complex registries.
+	// @ts-expect-error Type instantiation can be excessively deep for complex registries.
 	return createRivetKitWithClient<Registry>(
 		createClient<Registry>(clientInput),
 		opts,
@@ -53,7 +55,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 	client: Client<Registry>,
 	opts: CreateRivetKitOptions<Registry> = {},
 ) {
-	// @ts-ignore Type instantiation can be excessively deep for complex registries.
+	// @ts-expect-error Type instantiation can be excessively deep for complex registries.
 	const { getOrCreateActor } = createVanillaRivetKit(client, opts);
 
 	/**
@@ -86,7 +88,7 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
 		 * @param eventName The name of the event to listen for.
 		 * @param handler The function to call when the event is emitted.
 		 */
-		// @ts-ignore Type instantiation can be excessively deep for complex registries.
+		// @ts-expect-error Type instantiation can be excessively deep for complex registries.
 		const useEvent = ((
 			eventName: string,
 			handler: (...args: unknown[]) => void,

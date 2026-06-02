@@ -21,10 +21,7 @@ type SourceResponse = {
 	revision: number;
 };
 
-async function requestJson<T>(
-	input: string,
-	init?: RequestInit,
-): Promise<T> {
+async function requestJson<T>(input: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(input, init);
 	if (!response.ok) {
 		const body = await response.text();
@@ -44,7 +41,7 @@ function App() {
 
 	useEffect(() => {
 		void loadSource();
-	}, []);
+	}, [loadSource]);
 
 	const loadSource = async () => {
 		setLoading(true);
@@ -65,13 +62,16 @@ function App() {
 		setLoading(true);
 		setStatus("Saving source...");
 		try {
-			const result = await requestJson<{ revision: number }>("/api/source", {
-				method: "POST",
-				headers: {
-					"content-type": "application/json",
+			const result = await requestJson<{ revision: number }>(
+				"/api/source",
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+					},
+					body: JSON.stringify({ source }),
 				},
-				body: JSON.stringify({ source }),
-			});
+			);
 			setRevision(result.revision);
 			setCount(null);
 			setStatus(
@@ -106,7 +106,9 @@ function App() {
 				`/api/dynamic/${encodeURIComponent(normalizedKey)}/count`,
 			);
 			setCount(result.count);
-			setStatus(`Dynamic actor count is ${result.count} (key "${normalizedKey}").`);
+			setStatus(
+				`Dynamic actor count is ${result.count} (key "${normalizedKey}").`,
+			);
 		} catch (error) {
 			setStatus(`Dynamic actor call failed: ${String(error)}`);
 		} finally {
@@ -133,15 +135,15 @@ function App() {
 					},
 					body: JSON.stringify({ amount }),
 				},
-				);
-				setCount(result.count);
-				setStatus(
-					`Incremented by ${amount}. Dynamic actor count is ${result.count} (key "${normalizedKey}").`,
-				);
-			} catch (error) {
-				setStatus(`Dynamic actor call failed: ${String(error)}`);
-			} finally {
-				setLoading(false);
+			);
+			setCount(result.count);
+			setStatus(
+				`Incremented by ${amount}. Dynamic actor count is ${result.count} (key "${normalizedKey}").`,
+			);
+		} catch (error) {
+			setStatus(`Dynamic actor call failed: ${String(error)}`);
+		} finally {
+			setLoading(false);
 		}
 	};
 
@@ -149,17 +151,30 @@ function App() {
 		<div style={{ maxWidth: 960, margin: "0 auto", padding: "2rem" }}>
 			<h1>Dynamic Actor Editor</h1>
 			<p>
-				This example has two actors: <code>sourceCode</code> stores your source,
-				 and <code>dynamicWorkflow</code> loads and runs that source.
+				This example has two actors: <code>sourceCode</code> stores your
+				source, and <code>dynamicWorkflow</code> loads and runs that
+				source.
 			</p>
 
-			<div style={{ display: "flex", gap: "0.75rem", marginBottom: "0.75rem" }}>
-				<button onClick={loadSource} disabled={loading}>Reload Source</button>
-				<button onClick={saveSource} disabled={loading}>Save Source</button>
+			<div
+				style={{
+					display: "flex",
+					gap: "0.75rem",
+					marginBottom: "0.75rem",
+				}}
+			>
+				<button onClick={loadSource} disabled={loading}>
+					Reload Source
+				</button>
+				<button onClick={saveSource} disabled={loading}>
+					Save Source
+				</button>
 				<button
 					onClick={() => {
 						setSource(SOURCE_TEMPLATE);
-						setStatus("Template restored in editor. Click Save Source to persist.");
+						setStatus(
+							"Template restored in editor. Click Save Source to persist.",
+						);
 					}}
 					disabled={loading}
 				>
@@ -174,7 +189,8 @@ function App() {
 				style={{
 					width: "100%",
 					height: 360,
-					fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+					fontFamily:
+						"ui-monospace, SFMono-Regular, Menlo, monospace",
 					fontSize: 14,
 					lineHeight: 1.45,
 					padding: "0.75rem",
@@ -182,7 +198,14 @@ function App() {
 				}}
 			/>
 
-			<div style={{ marginTop: "1rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+			<div
+				style={{
+					marginTop: "1rem",
+					display: "flex",
+					gap: "0.75rem",
+					alignItems: "center",
+				}}
+			>
 				<label>
 					Dynamic key:
 					<input
@@ -197,18 +220,31 @@ function App() {
 				</button>
 			</div>
 
-			<div style={{ marginTop: "0.75rem", display: "flex", gap: "0.75rem", alignItems: "center" }}>
+			<div
+				style={{
+					marginTop: "0.75rem",
+					display: "flex",
+					gap: "0.75rem",
+					alignItems: "center",
+				}}
+			>
 				<label>
 					Amount:
 					<input
 						type="number"
 						value={amount}
-						onChange={(event) => setAmount(Number(event.target.value) || 0)}
+						onChange={(event) =>
+							setAmount(Number(event.target.value) || 0)
+						}
 						style={{ marginLeft: "0.5rem", width: 80 }}
 					/>
 				</label>
-				<button onClick={getCount} disabled={loading}>getCount()</button>
-				<button onClick={increment} disabled={loading}>increment(amount)</button>
+				<button onClick={getCount} disabled={loading}>
+					getCount()
+				</button>
+				<button onClick={increment} disabled={loading}>
+					increment(amount)
+				</button>
 			</div>
 
 			<div style={{ marginTop: "1rem" }}>

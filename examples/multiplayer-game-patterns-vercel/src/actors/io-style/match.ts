@@ -1,6 +1,6 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { type ActorContextOf, actor, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { registry } from "../index.ts";
+import type { registry } from "../index.ts";
 import { getPlayerColor } from "../player-color.ts";
 import { CAPACITY, SPEED, WORLD_SIZE } from "./config.ts";
 
@@ -143,12 +143,10 @@ function broadcastSnapshot(c: ActorContextOf<typeof ioStyleMatch>) {
 
 async function updateMatchmaker(c: ActorContextOf<typeof ioStyleMatch>) {
 	const client = c.client<typeof registry>();
-	await client.ioStyleMatchmaker
-		.getOrCreate(["main"])
-		.send("updateMatch", {
-			matchId: c.state.matchId,
-			connectedPlayerCount: occupiedPlayerCount(c.state),
-		});
+	await client.ioStyleMatchmaker.getOrCreate(["main"]).send("updateMatch", {
+		matchId: c.state.matchId,
+		connectedPlayerCount: occupiedPlayerCount(c.state),
+	});
 }
 
 async function claimPendingPlayer(
@@ -156,16 +154,14 @@ async function claimPendingPlayer(
 	playerId: string,
 ): Promise<boolean> {
 	const client = c.client<typeof registry>();
-	const result = await client.ioStyleMatchmaker
-		.getOrCreate(["main"])
-		.send(
-			"pendingPlayerConnected",
-			{
-				matchId: c.state.matchId,
-				playerId,
-			},
-			{ wait: true, timeout: 3_000 },
-		);
+	const result = await client.ioStyleMatchmaker.getOrCreate(["main"]).send(
+		"pendingPlayerConnected",
+		{
+			matchId: c.state.matchId,
+			playerId,
+		},
+		{ wait: true, timeout: 3_000 },
+	);
 	if (result.status !== "completed") {
 		return false;
 	}

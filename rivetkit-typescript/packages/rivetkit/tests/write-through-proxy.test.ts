@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
-import { createWriteThroughProxy } from "@/registry/write-through-proxy";
 import {
 	assertJsonCompatValue,
 	encodeJsonCompatValue,
 	reviveJsonCompatValue,
 } from "@/common/encoding";
+import { createWriteThroughProxy } from "@/registry/write-through-proxy";
 import { decodeCborCompat, encodeCborCompat } from "@/serde";
 
 describe("createWriteThroughProxy", () => {
@@ -113,11 +113,7 @@ describe("createWriteThroughProxy", () => {
 		const commit = vi.fn();
 		const beforeChange = vi.fn();
 
-		const state = createWriteThroughProxy(
-			{ x: 1 },
-			commit,
-			beforeChange,
-		);
+		const state = createWriteThroughProxy({ x: 1 }, commit, beforeChange);
 
 		state.x = 99;
 		expect(beforeChange).toHaveBeenCalled();
@@ -142,13 +138,9 @@ describe("createWriteThroughProxy", () => {
 
 	test("beforeChange throwing prevents the mutation", () => {
 		const commit = vi.fn();
-		const state = createWriteThroughProxy(
-			{ x: 1 },
-			commit,
-			() => {
-				throw new TypeError("rejected");
-			},
-		);
+		const state = createWriteThroughProxy({ x: 1 }, commit, () => {
+			throw new TypeError("rejected");
+		});
 
 		expect(() => {
 			state.x = 99;
@@ -195,9 +187,9 @@ describe("assertJsonCompatValue", () => {
 	});
 
 	test("rejects a nested function", () => {
-		expect(() =>
-			assertJsonCompatValue({ foo: () => {} }),
-		).toThrow(TypeError);
+		expect(() => assertJsonCompatValue({ foo: () => {} })).toThrow(
+			TypeError,
+		);
 	});
 
 	test("rejects a symbol", () => {
@@ -217,21 +209,21 @@ describe("assertJsonCompatValue", () => {
 	});
 
 	test("rejects a Promise", () => {
-		expect(() =>
-			assertJsonCompatValue(Promise.resolve()),
-		).toThrow(TypeError);
+		expect(() => assertJsonCompatValue(Promise.resolve())).toThrow(
+			TypeError,
+		);
 	});
 
 	test("rejects a function inside a Map value", () => {
-		expect(() =>
-			assertJsonCompatValue(new Map([["k", () => {}]])),
-		).toThrow(TypeError);
+		expect(() => assertJsonCompatValue(new Map([["k", () => {}]]))).toThrow(
+			TypeError,
+		);
 	});
 
 	test("rejects a function inside a Set", () => {
-		expect(() =>
-			assertJsonCompatValue(new Set([() => {}])),
-		).toThrow(TypeError);
+		expect(() => assertJsonCompatValue(new Set([() => {}]))).toThrow(
+			TypeError,
+		);
 	});
 
 	test("rejects a function inside an array", () => {
@@ -254,7 +246,12 @@ describe("Set encoding round-trip", () => {
 	});
 
 	test("full CBOR round-trip preserves undefined inside Maps", () => {
-		const original = { m: new Map<string, unknown>([["k", undefined], ["b", 3n]]) };
+		const original = {
+			m: new Map<string, unknown>([
+				["k", undefined],
+				["b", 3n],
+			]),
+		};
 		const encoded = encodeCborCompat(original);
 		const decoded = decodeCborCompat<typeof original>(encoded);
 		expect(decoded.m).toBeInstanceOf(Map);

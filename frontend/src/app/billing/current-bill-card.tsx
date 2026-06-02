@@ -1,7 +1,7 @@
 "use client";
 
 import { faInfoCircle, Icon } from "@rivet-gg/icons";
-import { AnimatedCurrency, Button, formatCurrency } from "@/components";
+import { AnimatedCurrency, Button } from "@/components";
 import { WithTooltip } from "@/components/ui/tooltip";
 
 interface CurrentBillTotalProps {

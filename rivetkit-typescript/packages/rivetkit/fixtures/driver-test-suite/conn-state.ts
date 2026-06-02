@@ -15,7 +15,7 @@ export const connStateActor = actor({
 	},
 	// Define connection state
 	createConnState: (
-		c,
+		_c,
 		params: { username?: string; role?: string; noCount?: boolean },
 	): ConnState => {
 		return {
@@ -101,8 +101,8 @@ export const connStateActor = actor({
 		sendToConnection: (c, targetId: string, message: string) => {
 			if (c.conns.has(targetId)) {
 				c.conns
-					.get(targetId)!
-					.send("directMessage", { from: c.conn.id, message });
+					.get(targetId)
+					?.send("directMessage", { from: c.conn.id, message });
 				return true;
 			} else {
 				return false;

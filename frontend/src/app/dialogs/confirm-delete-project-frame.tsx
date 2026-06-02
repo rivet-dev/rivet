@@ -1,11 +1,11 @@
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { posthog } from "@/lib/posthog";
 import { useState } from "react";
 import { Button, type DialogContentProps, Frame } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { posthog } from "@/lib/posthog";
 import { queryClient } from "@/queries/global";
 
 interface ConfirmDeleteProjectContentProps extends DialogContentProps {

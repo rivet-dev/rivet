@@ -9,22 +9,21 @@ import {
 	type SpanStatusInput,
 	type Traces,
 } from "@rivetkit/traces";
-import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import invariant from "invariant";
+import { ActorMetrics, type StartupTimingKey } from "@/actor/metrics";
 import type { Client } from "@/client/client";
+import type { ActorKey } from "@/client/query";
 import { getBaseLogger, getIncludeTarget, type Logger } from "@/common/log";
 import { stringifyError } from "@/common/utils";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import { ActorInspector } from "@/inspector/actor-inspector";
-import type { ActorKey } from "@/client/query";
 import type { Registry } from "@/mod";
 import {
 	ACTOR_VERSIONED,
 	CONN_VERSIONED,
 } from "@/schemas/actor-persist/versioned";
-import { EXTRA_ERROR_LOG } from "@/utils";
+import { EXTRA_ERROR_LOG, promiseWithResolvers } from "@/utils";
 import { getRivetExperimentalOtel } from "@/utils/env-vars";
-import { promiseWithResolvers } from "@/utils";
 import {
 	type Actions,
 	type ActorConfig,
@@ -32,16 +31,13 @@ import {
 	ActorConfigSchema,
 	getRunFunction,
 } from "../config";
-import type { ConnDriver } from "../conn/driver";
-import { createHttpDriver } from "../conn/drivers/http";
 import {
-	HibernatableWebSocketAckState,
 	handleInboundHibernatableWebSocketMessage as applyInboundHibernatableWebSocketMessage,
+	HibernatableWebSocketAckState,
 } from "../conn/hibernatable-websocket-ack-state";
 import {
-	CONN_DRIVER_SYMBOL,
-	CONN_STATE_MANAGER_SYMBOL,
 	type AnyConn,
+	CONN_STATE_MANAGER_SYMBOL,
 	type Conn,
 	type ConnId,
 } from "../conn/mod";
@@ -50,7 +46,7 @@ import {
 	type PersistedConn,
 } from "../conn/persisted";
 import {
-	ActionContext,
+	type ActionContext,
 	ActorContext,
 	RequestContext,
 	WebSocketContext,
@@ -80,19 +76,15 @@ import { ConnectionManager } from "./connection-manager";
 import { EventManager } from "./event-manager";
 import { KEYS, workflowStoragePrefix } from "./keys";
 import {
-	type PreloadedEntries,
-	type PreloadHit,
-	type PreloadMap,
-} from "./preload-map";
-import {
 	convertActorFromBarePersisted,
 	type PersistedActor,
 } from "./persisted";
+import type { PreloadedEntries, PreloadMap } from "./preload-map";
 import { QueueManager } from "./queue-manager";
 import { ScheduleManager } from "./schedule-manager";
 import { type SaveStateOptions, StateManager } from "./state-manager";
-import { TrackedWebSocket } from "./tracked-websocket";
 import { ActorTracesDriver } from "./traces-driver";
+import { TrackedWebSocket } from "./tracked-websocket";
 import { WriteCollector } from "./write-collector";
 
 export type { SaveStateOptions };
@@ -215,14 +207,14 @@ const ACTIVE_ASYNC_REGION_ERROR_MESSAGES: Record<
  * only on `ActorInstance`.
  */
 export interface BaseActorInstance<
-	S = any,
-	CP = any,
-	CS = any,
-	V = any,
-	I = any,
-	DB extends AnyDatabaseProvider = AnyDatabaseProvider,
-	E extends EventSchemaConfig = Record<never, never>,
-	Q extends QueueSchemaConfig = Record<never, never>,
+	_S = any,
+	_CP = any,
+	_CS = any,
+	_V = any,
+	_I = any,
+	_DB extends AnyDatabaseProvider = AnyDatabaseProvider,
+	_E extends EventSchemaConfig = Record<never, never>,
+	_Q extends QueueSchemaConfig = Record<never, never>,
 > {
 	readonly id: string;
 	readonly isStopping: boolean;
@@ -1274,7 +1266,7 @@ export class ActorInstance<
 							"actor.onBeforeActionResponse",
 							{ "rivet.action.name": actionName },
 							() =>
-								this.#config.onBeforeActionResponse!(
+								this.#config.onBeforeActionResponse?.(
 									this.actorContext,
 									actionName,
 									args,
@@ -1406,7 +1398,7 @@ export class ActorInstance<
 
 			// NOTE: This is async and will run in the background
 			const voidOrPromise = this.#traces.withSpan(span, () =>
-				this.#config.onWebSocket!(ctx, trackedWebSocket),
+				this.#config.onWebSocket?.(ctx, trackedWebSocket),
 			);
 
 			// Save changes from the WebSocket open
@@ -1882,7 +1874,7 @@ export class ActorInstance<
 				"actor.createVars",
 				undefined,
 				() => {
-					const dataOrPromise = createVars!(
+					const dataOrPromise = createVars?.(
 						this.actorContext as any,
 						this.driver.getContext(this.#actorId),
 					);
@@ -2084,7 +2076,7 @@ export class ActorInstance<
 		}
 	}
 
-	async #setupDatabase(preload?: PreloadMap) {
+	async #setupDatabase(_preload?: PreloadMap) {
 		if (!("db" in this.#config) || !this.#config.db) {
 			return;
 		}
@@ -2099,14 +2091,14 @@ export class ActorInstance<
 					overrideRawDatabaseClient: this.driver
 						.overrideRawDatabaseClient
 						? () =>
-								this.driver.overrideRawDatabaseClient!(
+								this.driver.overrideRawDatabaseClient?.(
 									this.#actorId,
 								)
 						: undefined,
 					overrideDrizzleDatabaseClient: this.driver
 						.overrideDrizzleDatabaseClient
 						? () =>
-								this.driver.overrideDrizzleDatabaseClient!(
+								this.driver.overrideDrizzleDatabaseClient?.(
 									this.#actorId,
 								)
 						: undefined,
