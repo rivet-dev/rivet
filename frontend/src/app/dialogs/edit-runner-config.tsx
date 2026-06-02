@@ -20,6 +20,7 @@ const SERVERLESS_FIELDS = [
 	"drainGracePeriod",
 	"autoUpgrade",
 ] as const;
+
 import * as EditRunnerConfigForm from "@/app/forms/edit-shared-runner-config-form";
 import * as EditSingleRunnerConfigForm from "@/app/forms/edit-single-runner-config-form";
 import {
@@ -54,9 +55,7 @@ type RuntimeMode = "serverless" | "serverfull";
 function hasProtocolVersion(
 	datacenters: Record<string, Rivet.RunnerConfigResponse>,
 ): boolean {
-	return Object.values(datacenters).some(
-		(dc) => dc.protocolVersion != null,
-	);
+	return Object.values(datacenters).some((dc) => dc.protocolVersion != null);
 }
 
 function dcHasProtocolVersion(dc: Rivet.RunnerConfigResponse): boolean {
@@ -74,10 +73,10 @@ function dcMode(
 }
 
 function dcSignatureWithoutMetadata(dc: Rivet.RunnerConfigResponse): string {
-	const { metadata: _metadata, ...rest } = dc as 
-	Rivet.RunnerConfigResponse & {
-		metadata?: unknown;
-	};
+	const { metadata: _metadata, ...rest } =
+		dc as Rivet.RunnerConfigResponse & {
+			metadata?: unknown;
+		};
 	return JSON.stringify(rest);
 }
 
@@ -163,7 +162,8 @@ function WhenMode({
 	value: RuntimeMode;
 	children: ReactNode;
 }) {
-	const mode = (useWatch({ name }) as RuntimeMode | undefined) ?? "serverless";
+	const mode =
+		(useWatch({ name }) as RuntimeMode | undefined) ?? "serverless";
 	if (mode !== value) return null;
 	return <>{children}</>;
 }
@@ -259,12 +259,7 @@ function SharedSettingsForm({
 
 	return (
 		<EditRunnerConfigForm.Form
-			onSubmit={async ({
-				mode,
-				regions,
-				autoUpgrade,
-				...values
-			}) => {
+			onSubmit={async ({ mode, regions, autoUpgrade, ...values }) => {
 				const selectedRegions = regions || {};
 				const sharedFallback = fallbackMetadata(data.datacenters);
 				const providerConfig: Record<string, Rivet.RunnerConfig> = {};
@@ -291,7 +286,8 @@ function SharedSettingsForm({
 										slotsPerRunner: 1,
 										maxConcurrentActors:
 											values.maxConcurrentActors,
-										drainGracePeriod: values.drainGracePeriod,
+										drainGracePeriod:
+											values.drainGracePeriod,
 									}
 								: {
 										url: values.url ?? "",
@@ -300,15 +296,18 @@ function SharedSettingsForm({
 										headers: Object.fromEntries(
 											values.headers || [],
 										),
-										maxRunners: values.maxRunners ?? 100_000,
+										maxRunners:
+											values.maxRunners ?? 100_000,
 										minRunners: values.minRunners ?? 0,
-										runnersMargin: values.runnersMargin ?? 0,
+										runnersMargin:
+											values.runnersMargin ?? 0,
 										slotsPerRunner:
 											values.slotsPerRunner ?? 1,
 									};
-						const { normal: _drop, ...existingRest } = existing as Rivet.RunnerConfig & {
-							normal?: unknown;
-						};
+						const { normal: _drop, ...existingRest } =
+							existing as Rivet.RunnerConfig & {
+								normal?: unknown;
+							};
 						providerConfig[regionId] = {
 							...existingRest,
 							...(metadata ? { metadata } : {}),
@@ -318,9 +317,10 @@ function SharedSettingsForm({
 								: {}),
 						} as Rivet.RunnerConfig;
 					} else {
-						const { serverless: _drop, ...existingRest } = existing as Rivet.RunnerConfig & {
-							serverless?: unknown;
-						};
+						const { serverless: _drop, ...existingRest } =
+							existing as Rivet.RunnerConfig & {
+								serverless?: unknown;
+							};
 						providerConfig[regionId] = {
 							...existingRest,
 							...(metadata ? { metadata } : {}),
@@ -486,19 +486,15 @@ function DatacenterSettingsForm({
 					const metadata =
 						(existing as { metadata?: unknown }).metadata ??
 						sharedFallback;
-					const {
-						enable,
-						mode,
-						headers,
-						autoUpgrade,
-						...rest
-					} = dcConfig;
+					const { enable, mode, headers, autoUpgrade, ...rest } =
+						dcConfig;
 					if (mode === "serverless" || !mode) {
 						const isNew = dcHasProtocolVersion(existing);
 						const serverless: Rivet.RunnerConfigServerless = isNew
 							? {
 									url: rest.url ?? "",
-									requestLifespan: rest.requestLifespan ?? 300,
+									requestLifespan:
+										rest.requestLifespan ?? 300,
 									headers: Object.fromEntries(headers || []),
 									maxRunners: 0,
 									slotsPerRunner: 1,
@@ -508,16 +504,18 @@ function DatacenterSettingsForm({
 								}
 							: {
 									url: rest.url ?? "",
-									requestLifespan: rest.requestLifespan ?? 300,
+									requestLifespan:
+										rest.requestLifespan ?? 300,
 									headers: Object.fromEntries(headers || []),
 									maxRunners: rest.maxRunners ?? 100_000,
 									minRunners: rest.minRunners ?? 0,
 									runnersMargin: rest.runnersMargin ?? 0,
 									slotsPerRunner: rest.slotsPerRunner ?? 1,
 								};
-						const { normal: _drop, ...existingRest } = existing as Rivet.RunnerConfig & {
-							normal?: unknown;
-						};
+						const { normal: _drop, ...existingRest } =
+							existing as Rivet.RunnerConfig & {
+								normal?: unknown;
+							};
 						providerConfig[dcId] = {
 							...existingRest,
 							...(metadata ? { metadata } : {}),
@@ -527,9 +525,10 @@ function DatacenterSettingsForm({
 								: {}),
 						} as Rivet.RunnerConfig;
 					} else {
-						const { serverless: _drop, ...existingRest } = existing as Rivet.RunnerConfig & {
-							serverless?: unknown;
-						};
+						const { serverless: _drop, ...existingRest } =
+							existing as Rivet.RunnerConfig & {
+								serverless?: unknown;
+							};
 						providerConfig[dcId] = {
 							...existingRest,
 							...(metadata ? { metadata } : {}),
@@ -682,7 +681,10 @@ function ConfirmableSaveButton({
 		const switches = computeSwitches();
 		if (switches.length === 0) return null;
 		return (
-			<>Saving will overwrite the existing configuration: {describeSwitches(switches)}.</>
+			<>
+				Saving will overwrite the existing configuration:{" "}
+				{describeSwitches(switches)}.
+			</>
 		);
 	};
 
@@ -769,7 +771,11 @@ function DatacenterSettingsSubmit({
 			const submittedMode: RuntimeMode = dcConfig.mode ?? "serverless";
 			const prev = dcMode(dataDatacenters[dcId]);
 			if (prev && prev !== submittedMode) {
-				switches.push({ regionId: dcId, from: prev, to: submittedMode });
+				switches.push({
+					regionId: dcId,
+					from: prev,
+					to: submittedMode,
+				});
 			}
 		}
 		return switches;

@@ -1,7 +1,7 @@
+import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import srvx from "vite-plugin-srvx";
-import { readFileSync } from "node:fs";
 
 function sqlRawPlugin(): Plugin {
 	return {
@@ -16,9 +16,16 @@ function sqlRawPlugin(): Plugin {
 }
 
 export default defineConfig({
-	plugins: [react(), sqlRawPlugin(), ...srvx({ entry: "src/server.ts", clientOutDir: "dist/public" })],
+	plugins: [
+		react(),
+		sqlRawPlugin(),
+		...srvx({ entry: "src/server.ts", clientOutDir: "dist/public" }),
+	],
 	ssr: {
 		noExternal: true,
-		external: ["@rivetkit/rivetkit-native", "@rivetkit/rivetkit-native/wrapper"],
+		external: [
+			"@rivetkit/rivetkit-native",
+			"@rivetkit/rivetkit-native/wrapper",
+		],
 	},
 });

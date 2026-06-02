@@ -1,5 +1,6 @@
 import * as protocol from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
+import { v4 as uuidv4 } from "uuid";
 import type WebSocket from "ws";
 import { type ActorConfig, RunnerActor } from "./actor";
 import { logger, setLogger } from "./log.js";
@@ -12,7 +13,6 @@ import {
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
-import { v4 as uuidv4 } from "uuid";
 
 export type { HibernatingWebSocketMetadata };
 export { RunnerActor, type ActorConfig };
@@ -1057,7 +1057,7 @@ export class Runner {
 
 		for (const [_, actor] of this.#actors) {
 			const checkpoint = ack.lastEventCheckpoints.find(
-				(x) => x.actorId == actor.actorId,
+				(x) => x.actorId === actor.actorId,
 			);
 
 			if (checkpoint) actor.handleAckEvents(checkpoint.index);
@@ -1194,7 +1194,7 @@ export class Runner {
 	}
 
 	async #handleCommandStopActor(commandWrapper: protocol.CommandWrapper) {
-		const stopCommand = commandWrapper.inner
+		const _stopCommand = commandWrapper.inner
 			.val as protocol.CommandStopActor;
 
 		const actorId = commandWrapper.checkpoint.actorId;

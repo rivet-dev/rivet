@@ -14,9 +14,9 @@ import { match } from "ts-pattern";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import * as z4 from "zod/v4";
+import { formatServerlessMetadataError } from "@/app/serverless-health-error";
 import { cn, Uptime } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
-import { formatServerlessMetadataError } from "@/app/serverless-health-error";
 
 export {
 	formatServerlessMetadataError,
@@ -125,8 +125,14 @@ export function ServerlessConnectionCheck({
 							{match(provider)
 								.with("railway", () => "Railway")
 								.with("vercel", () => "Vercel")
-								.with("cloudflare-workers", () => "Cloudflare Workers")
-								.with("supabase-functions", () => "Supabase Functions")
+								.with(
+									"cloudflare-workers",
+									() => "Cloudflare Workers",
+								)
+								.with(
+									"supabase-functions",
+									() => "Supabase Functions",
+								)
 								.with("aws-ecs", () => "AWS ECS")
 								.with("gcp-cloud-run", () => "GCP Cloud Run")
 								.with("hetzner", () => "Hetzner")

@@ -3,6 +3,6 @@
  */
 
 export interface ActorsKvGetResponse {
-    updateTs: number;
-    value: string;
+	updateTs: number;
+	value: string;
 }

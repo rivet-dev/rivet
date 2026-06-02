@@ -1,9 +1,9 @@
-import { useState } from "react";
 import Editor, { type OnMount } from "@monaco-editor/react";
+import { useState } from "react";
 import "./App.css";
-import DEFAULT_REGISTRY from "../template/src/registry.ts?raw";
-import DEFAULT_APP from "../template/frontend/App.tsx?raw";
 import type { DeployRequest } from "../src/utils.ts";
+import DEFAULT_APP from "../template/frontend/App.tsx?raw";
+import DEFAULT_REGISTRY from "../template/src/registry.ts?raw";
 
 type DeploymentTarget = "cloud" | "selfHosted";
 
@@ -41,15 +41,22 @@ export function App() {
 		target: "cloud",
 		freestyleDomain: "",
 		freestyleApiKey: "",
-		cloudApiUrl: import.meta.env.VITE_RIVET_CLOUD_ENDPOINT || "https://api-cloud.rivet.dev",
+		cloudApiUrl:
+			import.meta.env.VITE_RIVET_CLOUD_ENDPOINT ||
+			"https://api-cloud.rivet.dev",
 		cloudApiToken: "",
-		cloudEngineEndpoint: import.meta.env.VITE_RIVET_ENGINE_ENDPOINT || "https://api.rivet.dev",
+		cloudEngineEndpoint:
+			import.meta.env.VITE_RIVET_ENGINE_ENDPOINT ||
+			"https://api.rivet.dev",
 		selfHostedEndpoint: "",
 		selfHostedToken: "",
 	});
 
 	const addLog = (message: string) => {
-		setDeploymentLog((prev) => [...prev, `[${new Date().toLocaleTimeString()}] ${message}`]);
+		setDeploymentLog((prev) => [
+			...prev,
+			`[${new Date().toLocaleTimeString()}] ${message}`,
+		]);
 	};
 
 	const handleDeploy = async () => {
@@ -60,7 +67,8 @@ export function App() {
 		setFreestyleUrl(null);
 
 		try {
-			const datacenter = import.meta.env.VITE_RIVET_DATACENTER || "us-west-1";
+			const datacenter =
+				import.meta.env.VITE_RIVET_DATACENTER || "us-west-1";
 
 			// Build request payload
 			const payload: DeployRequest = {
@@ -69,20 +77,21 @@ export function App() {
 				datacenter,
 				freestyleDomain: config.freestyleDomain,
 				freestyleApiKey: config.freestyleApiKey,
-				kind: config.target === "cloud"
-					? {
-						cloud: {
-							cloudEndpoint: config.cloudApiUrl,
-							cloudToken: config.cloudApiToken,
-							engineEndpoint: config.cloudEngineEndpoint,
-						}
-					}
-					: {
-						selfHosted: {
-							endpoint: config.selfHostedEndpoint,
-							token: config.selfHostedToken,
-						}
-					}
+				kind:
+					config.target === "cloud"
+						? {
+								cloud: {
+									cloudEndpoint: config.cloudApiUrl,
+									cloudToken: config.cloudApiToken,
+									engineEndpoint: config.cloudEngineEndpoint,
+								},
+							}
+						: {
+								selfHosted: {
+									endpoint: config.selfHostedEndpoint,
+									token: config.selfHostedToken,
+								},
+							},
 			};
 
 			const response = await fetch("/api/deploy", {
@@ -124,7 +133,9 @@ export function App() {
 							addLog(data);
 						} else if (currentEvent === "result") {
 							const result = JSON.parse(data);
-							setDeploymentUrl(`https://${config.freestyleDomain}/`);
+							setDeploymentUrl(
+								`https://${config.freestyleDomain}/`,
+							);
 							if (result.dashboardUrl) {
 								setDashboardUrl(result.dashboardUrl);
 							}
@@ -139,7 +150,9 @@ export function App() {
 				}
 			}
 		} catch (error) {
-			addLog(`Error: ${error instanceof Error ? error.message : String(error)}`);
+			addLog(
+				`Error: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		} finally {
 			setDeploying(false);
 		}
@@ -150,7 +163,9 @@ export function App() {
 			<div className="ide-layout">
 				<div className="editors-row">
 					<div className="editor-section">
-						<div className="editor-header">src/backend/registry.ts</div>
+						<div className="editor-header">
+							src/backend/registry.ts
+						</div>
 						<Editor
 							height="100%"
 							defaultLanguage="typescript"
@@ -168,7 +183,9 @@ export function App() {
 					</div>
 
 					<div className="editor-section">
-						<div className="editor-header">src/frontend/App.tsx</div>
+						<div className="editor-header">
+							src/frontend/App.tsx
+						</div>
 						<Editor
 							height="100%"
 							defaultLanguage="typescript"
@@ -193,14 +210,22 @@ export function App() {
 
 					<div className="tabs">
 						<button
-							className={config.target === "cloud" ? "active" : ""}
-							onClick={() => setConfig({ ...config, target: "cloud" })}
+							className={
+								config.target === "cloud" ? "active" : ""
+							}
+							onClick={() =>
+								setConfig({ ...config, target: "cloud" })
+							}
 						>
 							Rivet Cloud
 						</button>
 						<button
-							className={config.target === "selfHosted" ? "active" : ""}
-							onClick={() => setConfig({ ...config, target: "selfHosted" })}
+							className={
+								config.target === "selfHosted" ? "active" : ""
+							}
+							onClick={() =>
+								setConfig({ ...config, target: "selfHosted" })
+							}
 						>
 							Rivet Self-Hosted
 						</button>
@@ -217,7 +242,11 @@ export function App() {
 											type="password"
 											value={config.cloudApiToken}
 											onChange={(e) =>
-												setConfig({ ...config, cloudApiToken: e.target.value })
+												setConfig({
+													...config,
+													cloudApiToken:
+														e.target.value,
+												})
 											}
 											placeholder="Required"
 										/>
@@ -229,9 +258,15 @@ export function App() {
 											<label>Rivet Endpoint</label>
 											<input
 												type="text"
-												value={config.selfHostedEndpoint}
+												value={
+													config.selfHostedEndpoint
+												}
 												onChange={(e) =>
-													setConfig({ ...config, selfHostedEndpoint: e.target.value })
+													setConfig({
+														...config,
+														selfHostedEndpoint:
+															e.target.value,
+													})
 												}
 												placeholder="Required"
 											/>
@@ -242,7 +277,11 @@ export function App() {
 												type="password"
 												value={config.selfHostedToken}
 												onChange={(e) =>
-													setConfig({ ...config, selfHostedToken: e.target.value })
+													setConfig({
+														...config,
+														selfHostedToken:
+															e.target.value,
+													})
 												}
 												placeholder="Required"
 											/>
@@ -255,7 +294,10 @@ export function App() {
 										type="text"
 										value={config.freestyleDomain}
 										onChange={(e) =>
-											setConfig({ ...config, freestyleDomain: e.target.value })
+											setConfig({
+												...config,
+												freestyleDomain: e.target.value,
+											})
 										}
 										placeholder="myapp.style.dev"
 									/>
@@ -266,7 +308,10 @@ export function App() {
 										type="password"
 										value={config.freestyleApiKey}
 										onChange={(e) =>
-											setConfig({ ...config, freestyleApiKey: e.target.value })
+											setConfig({
+												...config,
+												freestyleApiKey: e.target.value,
+											})
 										}
 										placeholder="Required"
 									/>
@@ -285,7 +330,9 @@ export function App() {
 						</div>
 
 						{deploymentLog.length > 0 && (
-							<div className={`log-section${deploying ? " deploying" : ""}`}>
+							<div
+								className={`log-section${deploying ? " deploying" : ""}`}
+							>
 								<h3>Deployment Log</h3>
 								{deploymentLog.map((log, i) => (
 									<div key={i}>{log}</div>
@@ -296,16 +343,28 @@ export function App() {
 						{deploymentUrl && (
 							<div className="deployment-success">
 								<h3>Deployment Complete</h3>
-								<a href={deploymentUrl} target="_blank" rel="noopener noreferrer">
+								<a
+									href={deploymentUrl}
+									target="_blank"
+									rel="noopener noreferrer"
+								>
 									Open App ›
 								</a>
 								{dashboardUrl && (
-									<a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
+									<a
+										href={dashboardUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+									>
 										Rivet Namespace ›
 									</a>
 								)}
 								{freestyleUrl && (
-									<a href={freestyleUrl} target="_blank" rel="noopener noreferrer">
+									<a
+										href={freestyleUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+									>
 										Freestyle Deployment ›
 									</a>
 								)}

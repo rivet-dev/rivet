@@ -11,7 +11,7 @@
  * `kind`.
  */
 export interface RunnerConfigsServerlessMetadataError {
-    details?: string;
-    message: string;
-    metadata?: unknown;
+	details?: string;
+	message: string;
+	metadata?: unknown;
 }

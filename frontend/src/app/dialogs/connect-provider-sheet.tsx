@@ -19,7 +19,8 @@ type FrameLoader = () => Promise<{
 const PROVIDER_FRAMES: Record<string, FrameLoader> = {
 	"connect-rivet": () => import("@/app/dialogs/connect-rivet-frame"),
 	"connect-vercel": () => import("@/app/dialogs/connect-vercel-frame"),
-	"connect-q-vercel": () => import("@/app/dialogs/connect-quick-vercel-frame"),
+	"connect-q-vercel": () =>
+		import("@/app/dialogs/connect-quick-vercel-frame"),
 	"connect-railway": () => import("@/app/dialogs/connect-railway-frame"),
 	"connect-q-railway": () =>
 		import("@/app/dialogs/connect-quick-railway-frame"),
@@ -89,10 +90,12 @@ export function ConnectProviderSheet({
 										}) => (
 											<div className="flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
 												<div className="font-medium text-destructive">
-													Couldn't load provider setup.
+													Couldn't load provider
+													setup.
 												</div>
 												<div className="text-muted-foreground text-xs">
-													{error?.message ?? "Unknown error"}
+													{error?.message ??
+														"Unknown error"}
 												</div>
 												<button
 													type="button"
@@ -123,7 +126,9 @@ export function ConnectProviderSheet({
 										>
 											{Content ? (
 												<Content
-													onClose={() => onOpenChange(false)}
+													onClose={() =>
+														onOpenChange(false)
+													}
 												/>
 											) : null}
 										</Suspense>

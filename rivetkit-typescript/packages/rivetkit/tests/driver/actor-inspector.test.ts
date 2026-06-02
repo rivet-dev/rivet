@@ -986,6 +986,5 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			);
 			expect(response.status).toBe(401);
 		});
-
 	});
 });

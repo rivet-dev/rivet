@@ -1,7 +1,7 @@
-import type { GameClient } from "../../client.ts";
 import type { Mode } from "../../../src/actors/arena/config.ts";
-import type { ArenaMatchInfo } from "./menu.tsx";
+import type { GameClient } from "../../client.ts";
 import { ArenaGame } from "./arena-game.ts";
+import type { ArenaMatchInfo } from "./menu.tsx";
 import { waitForAssignment } from "./wait-for-assignment.ts";
 
 export class ArenaBot {
@@ -10,17 +10,22 @@ export class ArenaBot {
 	// biome-ignore lint/suspicious/noExplicitAny: connection handle
 	private mm: any = null;
 
-	constructor(private client: GameClient, private mode: Mode) {
+	constructor(
+		private client: GameClient,
+		private mode: Mode,
+	) {
 		this.start();
 	}
 
 	private async start() {
 		try {
-			const mm = this.client.arenaMatchmaker.getOrCreate(["main"]).connect();
+			const mm = this.client.arenaMatchmaker
+				.getOrCreate(["main"])
+				.connect();
 			this.mm = mm;
-			const response = await mm.queueForMatch({
+			const response = (await mm.queueForMatch({
 				mode: this.mode,
-			}) as { playerId?: string };
+			})) as { playerId?: string };
 			if (!response?.playerId || this.destroyed) return;
 
 			const assignment = await waitForAssignment<ArenaMatchInfo>(
@@ -30,7 +35,9 @@ export class ArenaBot {
 			if (this.destroyed) return;
 			mm.dispose();
 			this.mm = null;
-			this.game = new ArenaGame(null, this.client, assignment, { bot: true });
+			this.game = new ArenaGame(null, this.client, assignment, {
+				bot: true,
+			});
 		} catch {
 			// Bot failed to join.
 		}

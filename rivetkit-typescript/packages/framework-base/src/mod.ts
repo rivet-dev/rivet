@@ -1,12 +1,12 @@
 import { Derived, Effect, Store } from "@tanstack/store";
 import equal from "fast-deep-equal";
 import type { AnyActorDefinition, Registry } from "rivetkit";
-import {
-	type ActorConn,
-	type ActorConnStatus,
-	type ActorHandle,
-	type Client,
-	type ExtractActorsFromRegistry,
+import type {
+	ActorConn,
+	ActorConnStatus,
+	ActorHandle,
+	Client,
+	ExtractActorsFromRegistry,
 } from "rivetkit/client";
 
 export type AnyActorRegistry = Registry<any>;
@@ -342,7 +342,7 @@ function getOrCreateActor<
 			// Effect doesn't run immediately on mount, only on state changes.
 			// Trigger initial connection if actor is enabled and idle.
 			const actor = store.state.actors[key];
-			if (actor && actor.opts.enabled && actor.connStatus === "idle") {
+			if (actor?.opts.enabled && actor.connStatus === "idle") {
 				(create as Function)(client, store, key);
 			}
 		}

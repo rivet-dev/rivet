@@ -71,53 +71,56 @@ export const approval = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("approval-loop", async (loopCtx) => {
-				const c = actorCtx<State>(loopCtx);
+			const c = actorCtx<State>(loopCtx);
 
-				await loopCtx.step("init-request", async () => {
-					ctx.log.info({
-						msg: "waiting for approval decision",
-						requestId: c.state.id,
-						title: c.state.title,
-					});
-					c.broadcast("requestCreated", c.state);
+			await loopCtx.step("init-request", async () => {
+				ctx.log.info({
+					msg: "waiting for approval decision",
+					requestId: c.state.id,
+					title: c.state.title,
 				});
-
-				const [decisionMessage] = await loopCtx.queue.nextBatch(
-					"wait-decision",
-					{
-						names: [QUEUE_DECISION],
-						timeout: APPROVAL_TIMEOUT_MS,
-					},
-				);
-				const decision = decisionMessage?.body ?? null;
-
-				await loopCtx.step("update-status", async () => {
-					c.state.deciding = false;
-					if (decision === null) {
-						c.state.status = "timeout";
-						ctx.log.info({ msg: "request timed out", requestId: c.state.id });
-					} else if (decision.approved) {
-						c.state.status = "approved";
-						c.state.decidedBy = decision.approver;
-						ctx.log.info({
-							msg: "request approved",
-							requestId: c.state.id,
-							approver: decision.approver,
-						});
-					} else {
-						c.state.status = "rejected";
-						c.state.decidedBy = decision.approver;
-						ctx.log.info({
-							msg: "request rejected",
-							requestId: c.state.id,
-							approver: decision.approver,
-						});
-					}
-					c.state.decidedAt = Date.now();
-					c.broadcast("requestUpdated", c.state);
-				});
-
-				return Loop.break(undefined);
+				c.broadcast("requestCreated", c.state);
 			});
+
+			const [decisionMessage] = await loopCtx.queue.nextBatch(
+				"wait-decision",
+				{
+					names: [QUEUE_DECISION],
+					timeout: APPROVAL_TIMEOUT_MS,
+				},
+			);
+			const decision = decisionMessage?.body ?? null;
+
+			await loopCtx.step("update-status", async () => {
+				c.state.deciding = false;
+				if (decision === null) {
+					c.state.status = "timeout";
+					ctx.log.info({
+						msg: "request timed out",
+						requestId: c.state.id,
+					});
+				} else if (decision.approved) {
+					c.state.status = "approved";
+					c.state.decidedBy = decision.approver;
+					ctx.log.info({
+						msg: "request approved",
+						requestId: c.state.id,
+						approver: decision.approver,
+					});
+				} else {
+					c.state.status = "rejected";
+					c.state.decidedBy = decision.approver;
+					ctx.log.info({
+						msg: "request rejected",
+						requestId: c.state.id,
+						approver: decision.approver,
+					});
+				}
+				c.state.decidedAt = Date.now();
+				c.broadcast("requestUpdated", c.state);
+			});
+
+			return Loop.break(undefined);
+		});
 	}),
 });

@@ -3,8 +3,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import { z } from "zod/v4";
-import { UserError, actor, event, queue, setup } from "../../src/mod";
 import { db } from "../../src/db/mod";
+import { actor, event, queue, setup, UserError } from "../../src/mod";
 import { buildNativeRegistry } from "../../src/registry/native";
 
 const textDecoder = new TextDecoder();

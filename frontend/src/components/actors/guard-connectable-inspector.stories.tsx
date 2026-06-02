@@ -1,6 +1,6 @@
 import type { Story } from "@ladle/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RivetError } from "@rivetkit/engine-api-full";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "../../../.ladle/ladle.css";
 import { TooltipProvider } from "@/components";
 import {
@@ -61,9 +61,10 @@ const OUTDATED_METADATA = { type: "deployed", version: "2.0.10" };
 
 function rivetError(statusCode: number, body: unknown) {
 	return new RivetError({
-		message: typeof body === "object" && body !== null && "message" in body
-			? String((body as { message: unknown }).message)
-			: "Request failed",
+		message:
+			typeof body === "object" && body !== null && "message" in body
+				? String((body as { message: unknown }).message)
+				: "Request failed",
 		statusCode,
 		body,
 	});

@@ -4,7 +4,6 @@ import { getConfig } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
 	useEngineCompatDataProvider,
-	useEngineNamespaceDataProvider,
 } from "@/components/actors";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";

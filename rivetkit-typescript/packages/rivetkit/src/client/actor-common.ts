@@ -1,6 +1,6 @@
 import type {
-	BaseActorDefinition,
 	AnyActorDefinition,
+	BaseActorDefinition,
 } from "@/actor/definition";
 import type {
 	EventSchemaConfig,
@@ -41,7 +41,8 @@ export function resolveActorGatewayOptions(
 	defaults: ActorGatewayOptions = {},
 	overrides?: ActorGatewayOptions,
 ): ResolvedActorGatewayOptions {
-	const skipReadyWait = overrides?.skipReadyWait ?? defaults.skipReadyWait ?? false;
+	const skipReadyWait =
+		overrides?.skipReadyWait ?? defaults.skipReadyWait ?? false;
 
 	return {
 		skipReadyWait,

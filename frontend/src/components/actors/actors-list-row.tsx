@@ -4,8 +4,8 @@ import { Link } from "@tanstack/react-router";
 import { memo } from "react";
 import {
 	Button,
-	cn,
 	CopyTrigger,
+	cn,
 	RelativeTime,
 	Skeleton,
 	SmallText,
@@ -36,8 +36,7 @@ export function actorsTableGridTemplate(
 export function useActorsTableColumns() {
 	const filters = useFiltersValue();
 	const showIds = filters.showIds?.value.includes("1") ?? false;
-	const showDatacenter =
-		filters.showDatacenter?.value.includes("1") ?? false;
+	const showDatacenter = filters.showDatacenter?.value.includes("1") ?? false;
 	return { showIds, showDatacenter };
 }
 
@@ -90,9 +89,7 @@ export const ActorsListRow = memo(
 						}
 					/>
 					{showIds ? <Id actorId={actorId} /> : null}
-					{showDatacenter ? (
-						<Datacenter actorId={actorId} />
-					) : null}
+					{showDatacenter ? <Datacenter actorId={actorId} /> : null}
 					<Tags actorId={actorId} />
 					<Timestamp actorId={actorId} />
 				</Link>

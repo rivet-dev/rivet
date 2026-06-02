@@ -13,9 +13,7 @@ import {
 } from "@/components";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 
-export const Route = createFileRoute(
-	"/_context/orgs/$organization/projects/",
-)({
+export const Route = createFileRoute("/_context/orgs/$organization/projects/")({
 	component: RouteComponent,
 	errorComponent: RouteError,
 });

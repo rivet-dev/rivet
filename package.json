@@ -12,7 +12,7 @@
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",
 		"lint": "pnpm biome check .",
-		"fmt": "pnpm biome check --write --diagnostic-level=error ."
+		"fmt": "pnpm biome format --write ."
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "0.15.0",

@@ -1,1 +1,1 @@
-export { type EnvoysListRequest } from "./EnvoysListRequest";
+export type { EnvoysListRequest } from "./EnvoysListRequest";

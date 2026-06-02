@@ -24,8 +24,8 @@ import {
 	toast,
 	WithTooltip,
 } from "@/components";
-import { queryClient } from "@/queries/global";
 import { authClient } from "@/lib/auth";
+import { queryClient } from "@/queries/global";
 import { SettingsCard } from "./settings-card";
 
 export function MembersPanel() {
@@ -105,7 +105,8 @@ export function MembersPanel() {
 										setShowInvite(false);
 									} catch {
 										form.setError("root", {
-											message: "Failed to send invitation.",
+											message:
+												"Failed to send invitation.",
 										});
 									}
 								}}

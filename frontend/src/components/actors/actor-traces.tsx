@@ -50,7 +50,7 @@ type ViewType = "list" | "timeline";
 
 export function ActorTraces({ actorId }: { actorId: ActorId }) {
 	const inspector = useActorInspector();
-	const [viewType, setViewType] = useState<ViewType>("list");
+	const [viewType, _setViewType] = useState<ViewType>("list");
 	const [isLive, setIsLive] = useState(true);
 	const [presetMs, setPresetMs] = useState(DEFAULT_PRESET_MS);
 	const [customRange, setCustomRange] = useState<DateRange | undefined>(
@@ -663,7 +663,7 @@ interface TimelineGap {
 
 const GAP_VISUAL_WIDTH_PERCENT = 2;
 
-function TracesTimelineView({
+function _TracesTimelineView({
 	spans,
 	nowNs,
 	clamped,

@@ -46,8 +46,7 @@ export function HelpButton({ source = "web" }: { source?: string }) {
 	const [impact, setImpact] = useState<Impact>("general");
 	const [submitting, setSubmitting] = useState(false);
 
-	const canSend =
-		subject.trim().length > 0 && message.trim().length > 0;
+	const canSend = subject.trim().length > 0 && message.trim().length > 0;
 
 	const submit = async () => {
 		if (!canSend || submitting) return;

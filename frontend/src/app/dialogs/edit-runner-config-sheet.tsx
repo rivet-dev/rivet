@@ -77,10 +77,12 @@ export function EditRunnerConfigSheet({
 										}) => (
 											<div className="m-5 flex flex-col gap-3 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
 												<div className="font-medium text-destructive">
-													Couldn't load provider settings.
+													Couldn't load provider
+													settings.
 												</div>
 												<div className="text-muted-foreground text-xs">
-													{error?.message ?? "Unknown error"}
+													{error?.message ??
+														"Unknown error"}
 												</div>
 												<button
 													type="button"
@@ -106,7 +108,9 @@ export function EditRunnerConfigSheet({
 												<EditRunnerConfigFrameContent
 													name={name}
 													dc={dc}
-													onClose={() => onOpenChange(false)}
+													onClose={() =>
+														onOpenChange(false)
+													}
 												/>
 											) : null}
 										</Suspense>

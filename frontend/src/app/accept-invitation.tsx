@@ -81,7 +81,7 @@ export function AcceptInvitation() {
 				async () => await redirectToOrganization(),
 			);
 			if (error && isRedirect(error)) {
-				navigate(error.options);
+				await navigate(error.options);
 			}
 		},
 	});

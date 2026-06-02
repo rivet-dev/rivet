@@ -1,5 +1,5 @@
-import { z } from "zod/v4";
 import type { VersionedDataHandler } from "vbare";
+import { z } from "zod/v4";
 import { serializeWithEncoding } from "@/serde";
 import { assertUnreachable } from "./utils";
 
@@ -172,7 +172,7 @@ export function assertJsonCompatValue(
 
 	const typeName =
 		typeof value === "object" && value !== null
-			? value.constructor?.name ?? typeof value
+			? (value.constructor?.name ?? typeof value)
 			: typeof value;
 	throw new TypeError(
 		`Value at ${path || "root"} of type "${typeName}" is not CBOR serializable`,
@@ -310,7 +310,11 @@ export function encodeJsonCompatValue(input: JsonCompatValue): unknown {
 	}
 
 	// Date, RegExp, and Error pass through for cbor-x native handling
-	if (input instanceof Date || input instanceof RegExp || input instanceof Error) {
+	if (
+		input instanceof Date ||
+		input instanceof RegExp ||
+		input instanceof Error
+	) {
 		return input;
 	}
 
@@ -344,7 +348,7 @@ export function encodeJsonCompatValue(input: JsonCompatValue): unknown {
 			typeof encoded[0] === "string" &&
 			(encoded[0] as string).startsWith("$")
 		) {
-			return ["$" + encoded[0], encoded[1]];
+			return [`$${encoded[0]}`, encoded[1]];
 		}
 		return encoded;
 	}
@@ -361,11 +365,9 @@ export function encodeJsonCompatValue(input: JsonCompatValue): unknown {
 	// Not serializable
 	const typeName =
 		typeof input === "object" && input !== null
-			? (input as object).constructor?.name ?? typeof input
+			? ((input as object).constructor?.name ?? typeof input)
 			: typeof input;
-	throw new TypeError(
-		`Value of type "${typeName}" is not CBOR serializable`,
-	);
+	throw new TypeError(`Value of type "${typeName}" is not CBOR serializable`);
 }
 
 export interface JsonCompatReviveOptions {
@@ -477,16 +479,10 @@ export function jsonStringifyCompat(input: any): string {
 			return [JSON_COMPAT_BIGINT, value.toString()];
 		}
 		if (value instanceof ArrayBuffer) {
-			return [
-				JSON_COMPAT_ARRAY_BUFFER,
-				base64EncodeArrayBuffer(value),
-			];
+			return [JSON_COMPAT_ARRAY_BUFFER, base64EncodeArrayBuffer(value)];
 		}
 		if (value instanceof Uint8Array) {
-			return [
-				JSON_COMPAT_UINT8_ARRAY,
-				base64EncodeUint8Array(value),
-			];
+			return [JSON_COMPAT_UINT8_ARRAY, base64EncodeUint8Array(value)];
 		}
 		if (
 			Array.isArray(value) &&
@@ -494,7 +490,7 @@ export function jsonStringifyCompat(input: any): string {
 			typeof value[0] === "string" &&
 			value[0].startsWith("$")
 		) {
-			return ["$" + value[0], value[1]];
+			return [`$${value[0]}`, value[1]];
 		}
 		return value;
 	});

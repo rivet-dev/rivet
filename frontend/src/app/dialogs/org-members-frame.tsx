@@ -283,7 +283,9 @@ export default function OrgMembersFrameContent(_: OrgMembersFrameContentProps) {
 						</div>
 
 						<div className="space-y-2 mt-4">
-							<p className="text-sm font-medium">Invite a member</p>
+							<p className="text-sm font-medium">
+								Invite a member
+							</p>
 							<InviteMemberForm.Form
 								defaultValues={{ email: "" }}
 								// Lock validation to submit-time so focusing or

@@ -6,14 +6,15 @@ import {
 	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
+import type { ReactNode } from "react";
 import { useMemo, useState } from "react";
 import { match, P } from "ts-pattern";
 import {
 	Badge,
 	Button,
 	Code,
-	cn,
 	CopyTrigger,
+	cn,
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
@@ -28,7 +29,6 @@ import {
 	TooltipTrigger,
 } from "@/components";
 import { CodePreview } from "@/components/code-preview/code-preview";
-import type { ReactNode } from "react";
 import {
 	getRegionKey,
 	REGION_LABEL,
@@ -224,10 +224,7 @@ export function RunnerPoolErrorPopover({
 									className,
 								)}
 							>
-								<Icon
-									icon={triggerIcon}
-									className="size-4"
-								/>
+								<Icon icon={triggerIcon} className="size-4" />
 							</button>
 						</PopoverTrigger>
 					</TooltipTrigger>
@@ -331,9 +328,7 @@ function ErrorPopoverBody({
 								value={g.classified.fingerprint}
 								className="h-6 shrink-0 rounded-sm border-0 px-2 py-0 text-xs font-medium data-[state=active]:border-b-transparent data-[state=active]:bg-background data-[state=active]:text-foreground"
 							>
-								<SeverityDot
-									severity={g.classified.severity}
-								/>
+								<SeverityDot severity={g.classified.severity} />
 								<span className="ml-1.5 truncate max-w-[100px]">
 									{g.classified.title}
 								</span>
@@ -352,18 +347,12 @@ function ErrorPopoverBody({
 							value={g.classified.fingerprint}
 							className="mt-0"
 						>
-							<GroupBody
-								group={g}
-								renderRegion={renderRegion}
-							/>
+							<GroupBody group={g} renderRegion={renderRegion} />
 						</TabsContent>
 					))}
 				</Tabs>
 			) : (
-				<GroupBody
-					group={groups[0]}
-					renderRegion={renderRegion}
-				/>
+				<GroupBody group={groups[0]} renderRegion={renderRegion} />
 			)}
 
 			{onEditConfig ? (

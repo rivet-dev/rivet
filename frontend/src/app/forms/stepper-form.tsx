@@ -7,7 +7,6 @@ import {
 } from "@rivet-gg/icons";
 import type * as Stepperize from "@stepperize/react";
 import { AnimatePresence, motion } from "framer-motion";
-import { posthog } from "@/lib/posthog";
 import {
 	createContext,
 	type MutableRefObject,
@@ -27,6 +26,7 @@ import {
 import type * as z from "zod";
 import { Button, cn } from "@/components";
 import type { defineStepper } from "@/components/ui/stepper";
+import { posthog } from "@/lib/posthog";
 
 export type StepConfirm<TValues = Record<string, unknown>> = (
 	values: TValues,
@@ -43,7 +43,9 @@ type Step = Stepperize.Step & {
 	isVisible?: (values: Record<string, unknown>) => boolean;
 	// method-style declaration so consumers can supply a narrower values type
 	// (parameter contravariance would otherwise reject typed callbacks).
-	confirm?(values: Record<string, unknown>): ReactNode | null | Promise<ReactNode | null>;
+	confirm?(
+		values: Record<string, unknown>,
+	): ReactNode | null | Promise<ReactNode | null>;
 };
 
 type StepVisibilityContextType = {
@@ -625,4 +627,3 @@ function StepPanel<const Steps extends Step[]>({
 		</Stepper.Panel>
 	);
 }
-

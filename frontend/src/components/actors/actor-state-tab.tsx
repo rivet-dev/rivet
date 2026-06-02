@@ -1,7 +1,6 @@
 import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
-import { DocsSheet } from "../docs-sheet";
 import { Button } from "../ui/button";
 import { ActorEditableState } from "./actor-editable-state";
 import { useActorInspector } from "./actor-inspector-context";

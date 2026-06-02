@@ -112,7 +112,7 @@ function postProcess(code: string): string {
 	code = code.replace(/^import assert from "assert"/m, "");
 
 	// Add marker and assert function
-	code = POST_PROCESS_MARKER + code + `\n${ASSERT_FUNCTION}`;
+	code = `${POST_PROCESS_MARKER + code}\n${ASSERT_FUNCTION}`;
 
 	// Validate post-processing succeeded
 	if (code.includes("@bare-ts/lib")) {

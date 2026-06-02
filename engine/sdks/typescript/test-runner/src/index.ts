@@ -15,12 +15,16 @@ const RIVET_RUNNER_NAME = process.env.RIVET_RUNNER_NAME ?? "test-runner";
 const RIVET_RUNNER_VERSION = process.env.RIVET_RUNNER_VERSION
 	? Number(process.env.RIVET_RUNNER_VERSION)
 	: 1;
-const RIVET_RUNNER_TOTAL_SLOTS = parseInt(process.env.RIVET_RUNNER_TOTAL_SLOTS ?? "1");
+const RIVET_RUNNER_TOTAL_SLOTS = parseInt(
+	process.env.RIVET_RUNNER_TOTAL_SLOTS ?? "1",
+	10,
+);
 const RIVET_ENDPOINT = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 const RIVET_TOKEN = process.env.RIVET_TOKEN ?? "dev";
-const AUTOSTART_SERVER = (process.env.AUTOSTART_SERVER ?? "1") == "1";
-const AUTOSTART_RUNNER = (process.env.AUTOSTART_RUNNER ?? "0") == "1";
-const AUTOCONFIGURE_SERVERLESS = (process.env.AUTOCONFIGURE_SERVERLESS ?? "1") == "1";
+const AUTOSTART_SERVER = (process.env.AUTOSTART_SERVER ?? "1") === "1";
+const AUTOSTART_RUNNER = (process.env.AUTOSTART_RUNNER ?? "0") === "1";
+const AUTOCONFIGURE_SERVERLESS =
+	(process.env.AUTOCONFIGURE_SERVERLESS ?? "1") === "1";
 
 const runnerStarted = Promise.withResolvers<Runner>();
 const runnerStopped = Promise.withResolvers<Runner>();
@@ -86,7 +90,7 @@ app.get("/api/rivet/start", async (c) => {
 
 		c.req.raw.signal.addEventListener("abort", () => {
 			getLogger().debug("SSE aborted, shutting down runner");
-			runner!.shutdown(true);
+			runner?.shutdown(true);
 		});
 
 		await runnerStarted.promise;
@@ -124,14 +128,14 @@ if (AUTOSTART_RUNNER) {
 process.on("SIGTERM", async () => {
 	getLogger().debug("received SIGTERM, force exiting in 3s");
 
-	await new Promise(res => setTimeout(res, 3000));
+	await new Promise((res) => setTimeout(res, 3000));
 
 	process.exit(0);
 });
 process.on("SIGINT", async () => {
 	getLogger().debug("received SIGTERM, force exiting in 3s");
 
-	await new Promise(res => setTimeout(res, 3000));
+	await new Promise((res) => setTimeout(res, 3000));
 
 	process.exit(0);
 });
@@ -187,7 +191,7 @@ async function startRunner(
 		onConnected: () => {
 			runnerStarted.resolve(runner);
 		},
-		onDisconnected: () => { },
+		onDisconnected: () => {},
 		onShutdown: () => {
 			runnerStopped.resolve(runner);
 		},

@@ -1,5 +1,5 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 const POLL_INTERVAL_MS = 25;
@@ -15,7 +15,9 @@ async function waitForObserverPhase(input: {
 	) => void
 		? T
 		: never;
-	observer: Awaited<ReturnType<typeof setupDriverTest>>["client"]["saveStateObserver"];
+	observer: Awaited<
+		ReturnType<typeof setupDriverTest>
+	>["client"]["saveStateObserver"];
 	expectedPhase: string;
 	pollAttempts: number;
 	pollIntervalMs: number;
@@ -35,7 +37,9 @@ async function waitForObserverPhase(input: {
 }
 
 async function waitForPersistedValue(input: {
-	actor: Awaited<ReturnType<typeof setupDriverTest>>["client"]["saveStateActor"];
+	actor: Awaited<
+		ReturnType<typeof setupDriverTest>
+	>["client"]["saveStateActor"];
 	driverTestConfig: Parameters<typeof describeDriverMatrix>[1] extends (
 		driverTestConfig: infer T,
 	) => void

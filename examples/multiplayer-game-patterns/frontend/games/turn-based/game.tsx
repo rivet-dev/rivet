@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type {
+	CellValue,
+	GameResult,
+} from "../../../src/actors/turn-based/config.ts";
 import type { GameClient } from "../../client.ts";
-import type { TurnBasedMatchInfo } from "./menu.tsx";
-import type { CellValue, GameResult } from "../../../src/actors/turn-based/config.ts";
 import { TurnBasedBot } from "./bot.ts";
+import type { TurnBasedMatchInfo } from "./menu.tsx";
 
 interface GameSnapshot {
 	matchId: string;
@@ -10,7 +13,10 @@ interface GameSnapshot {
 	currentTurn: "X" | "O";
 	result: GameResult;
 	moveCount: number;
-	players: Record<string, { name: string; color: string; symbol: "X" | "O"; connected: boolean }>;
+	players: Record<
+		string,
+		{ name: string; color: string; symbol: "X" | "O"; connected: boolean }
+	>;
 }
 
 export function TurnBasedGame({
@@ -35,7 +41,9 @@ export function TurnBasedGame({
 
 	useEffect(() => {
 		const conn = client.turnBasedMatch
-			.get([matchInfo.matchId], { params: { playerId: matchInfo.playerId } })
+			.get([matchInfo.matchId], {
+				params: { playerId: matchInfo.playerId },
+			})
 			.connect();
 		connRef.current = conn;
 
@@ -56,7 +64,9 @@ export function TurnBasedGame({
 
 	const addBot = () => {
 		if (matchInfo.inviteCode) {
-			botsRef.current.push(new TurnBasedBot(client, matchInfo.inviteCode));
+			botsRef.current.push(
+				new TurnBasedBot(client, matchInfo.inviteCode),
+			);
 		}
 	};
 
@@ -70,13 +80,18 @@ export function TurnBasedGame({
 	const playerEntries = snapshot ? Object.entries(snapshot.players) : [];
 	const waitingForOpponent = playerEntries.length < 2;
 
-	const resultText = snapshot?.result === "draw"
-		? "Draw!"
-		: snapshot?.result === "x_wins"
-			? (mySymbol === "X" ? "You Win!" : "You Lose!")
-			: snapshot?.result === "o_wins"
-				? (mySymbol === "O" ? "You Win!" : "You Lose!")
-				: null;
+	const resultText =
+		snapshot?.result === "draw"
+			? "Draw!"
+			: snapshot?.result === "x_wins"
+				? mySymbol === "X"
+					? "You Win!"
+					: "You Lose!"
+				: snapshot?.result === "o_wins"
+					? mySymbol === "O"
+						? "You Win!"
+						: "You Lose!"
+					: null;
 
 	return (
 		<div className="app">
@@ -84,16 +99,33 @@ export function TurnBasedGame({
 				<h2>Turn-Based</h2>
 				<div className="btn-row">
 					{waitingForOpponent && matchInfo.inviteCode && (
-						<button className="btn btn-secondary" onClick={addBot}>Add Bot</button>
+						<button className="btn btn-secondary" onClick={addBot}>
+							Add Bot
+						</button>
 					)}
-					<button className="btn btn-secondary" onClick={() => { cleanup(); onLeave(); }}>Leave</button>
+					<button
+						className="btn btn-secondary"
+						onClick={() => {
+							cleanup();
+							onLeave();
+						}}
+					>
+						Leave
+					</button>
 				</div>
 			</div>
 
 			<div className="menu-container">
 				<div style={{ textAlign: "center", marginBottom: 16 }}>
 					{playerEntries.map(([id, p]) => (
-						<span key={id} style={{ margin: "0 12px", fontSize: 14, color: p.color }}>
+						<span
+							key={id}
+							style={{
+								margin: "0 12px",
+								fontSize: 14,
+								color: p.color,
+							}}
+						>
 							<strong>{p.symbol}</strong>: {p.name}
 							{id === matchInfo.playerId ? " (You)" : ""}
 						</span>
@@ -103,26 +135,48 @@ export function TurnBasedGame({
 				{waitingForOpponent ? (
 					<div className="queue-status">
 						{matchInfo.inviteCode && (
-							<div className="party-code-display" style={{ marginBottom: 16 }}>
-								<div className="party-code-label">Invite Code</div>
-								<div className="party-code">{matchInfo.inviteCode}</div>
+							<div
+								className="party-code-display"
+								style={{ marginBottom: 16 }}
+							>
+								<div className="party-code-label">
+									Invite Code
+								</div>
+								<div className="party-code">
+									{matchInfo.inviteCode}
+								</div>
 							</div>
 						)}
-						<div className="queue-label">Waiting for opponent...</div>
+						<div className="queue-label">
+							Waiting for opponent...
+						</div>
 					</div>
 				) : (
 					<>
 						<div style={{ textAlign: "center", marginBottom: 12 }}>
 							{snapshot?.result === null ? (
-								<span style={{ color: isMyTurn ? "#30d158" : "#8e8e93" }}>
-									{isMyTurn ? "Your turn!" : "Opponent's turn..."}
+								<span
+									style={{
+										color: isMyTurn ? "#30d158" : "#8e8e93",
+									}}
+								>
+									{isMyTurn
+										? "Your turn!"
+										: "Opponent's turn..."}
 								</span>
 							) : (
-								<span style={{
-									color: resultText === "You Win!" ? "#30d158" : resultText === "Draw!" ? "#ff4f00" : "#ff3b30",
-									fontSize: 20,
-									fontWeight: 700,
-								}}>
+								<span
+									style={{
+										color:
+											resultText === "You Win!"
+												? "#30d158"
+												: resultText === "Draw!"
+													? "#ff4f00"
+													: "#ff3b30",
+										fontSize: 20,
+										fontWeight: 700,
+									}}
+								>
 									{resultText}
 								</span>
 							)}
@@ -136,7 +190,11 @@ export function TurnBasedGame({
 											key={`${r}-${c}`}
 											className={`ttt-cell ${cell ? "ttt-cell-filled" : ""} ${cell === "X" ? "ttt-cell-x" : cell === "O" ? "ttt-cell-o" : ""}`}
 											onClick={() => makeMove(r, c)}
-											disabled={!!cell || !isMyTurn || snapshot.result !== null}
+											disabled={
+												!!cell ||
+												!isMyTurn ||
+												snapshot.result !== null
+											}
 										>
 											{cell}
 										</button>

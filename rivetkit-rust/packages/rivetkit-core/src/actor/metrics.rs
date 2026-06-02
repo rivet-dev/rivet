@@ -884,9 +884,10 @@ impl ActorMetrics {
 		self.inner
 			.startup_is_new
 			.store(STARTUP_KIND_UNKNOWN, Ordering::Release);
-		self.inner
-			.current_startup_phase
-			.store(startup_phase::StartupPhase::LoadPersisted as u8, Ordering::Release);
+		self.inner.current_startup_phase.store(
+			startup_phase::StartupPhase::LoadPersisted as u8,
+			Ordering::Release,
+		);
 		*self.inner.ready_at.lock() = None;
 		self.inner.startup_complete.store(false, Ordering::Release);
 	}
@@ -1520,8 +1521,7 @@ fn optional_is_new_label(is_new: Option<bool>) -> &'static str {
 
 fn startup_duration_buckets() -> Vec<f64> {
 	vec![
-		0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
-		10.0, 30.0, 60.0,
+		0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0,
 	]
 }
 

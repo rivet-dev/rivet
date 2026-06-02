@@ -27,24 +27,20 @@ export const saveStateActor = actor({
 			c.state.value = value;
 			await c.saveState({ immediate: true });
 
-			const observer = c.client<typeof registry>().saveStateObserver.getOrCreate([
-				"observer",
-			]);
+			const observer = c
+				.client<typeof registry>()
+				.saveStateObserver.getOrCreate(["observer"]);
 			await observer.recordPhase(c.key.join("/"), "immediate");
 
 			await new Promise<void>(() => {});
 		},
-		saveDeferredAndBlock: async (
-			c,
-			value: number,
-			maxWaitMs: number,
-		) => {
+		saveDeferredAndBlock: async (c, value: number, maxWaitMs: number) => {
 			c.state.value = value;
 			await c.saveState({ maxWait: maxWaitMs });
 
-			const observer = c.client<typeof registry>().saveStateObserver.getOrCreate([
-				"observer",
-			]);
+			const observer = c
+				.client<typeof registry>()
+				.saveStateObserver.getOrCreate(["observer"]);
 			await observer.recordPhase(c.key.join("/"), "deferred");
 
 			await new Promise<void>(() => {});

@@ -455,7 +455,7 @@ export type LoopResult<S, T> =
  * `Loop.continue(undefined)`.
  */
 export type LoopIterationResult<S, T> = Promise<
-	LoopResult<S, T> | (S extends undefined ? void : never)
+	LoopResult<S, T> | (S extends undefined ? undefined : never)
 >;
 
 /**

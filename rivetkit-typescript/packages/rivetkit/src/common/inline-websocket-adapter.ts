@@ -1,7 +1,7 @@
+import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { WSContext } from "hono/ws";
 import type { UpgradeWebSocketArgs } from "@/common/actor-websocket";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
-import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import { getLogger } from "./log";
 
 function logger() {
@@ -166,7 +166,8 @@ export class InlineWebSocketAdapter {
 		logger().error({
 			msg: "error in websocket",
 			error,
-			errorMessage: error instanceof Error ? error.message : String(error),
+			errorMessage:
+				error instanceof Error ? error.message : String(error),
 			stack: error instanceof Error ? error.stack : undefined,
 		});
 

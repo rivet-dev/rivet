@@ -299,10 +299,7 @@ export async function retryOnLifecycleBoundary<T>(
 				break;
 			}
 
-			const delayMs = Math.min(
-				initialDelayMs * 2 ** attempt,
-				maxDelayMs,
-			);
+			const delayMs = Math.min(initialDelayMs * 2 ** attempt, maxDelayMs);
 			await waitWithSignal(delayMs, opts?.signal);
 		}
 	}

@@ -1,8 +1,7 @@
 "use client";
-import { faGoogle, Icon } from "@rivet-gg/icons";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
 	EmailField,
 	Form,

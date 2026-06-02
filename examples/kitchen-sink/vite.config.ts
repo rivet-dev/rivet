@@ -1,6 +1,6 @@
+import { readFileSync } from "node:fs";
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
-import { readFileSync } from "node:fs";
 
 function sqlRawPlugin(): Plugin {
 	return {

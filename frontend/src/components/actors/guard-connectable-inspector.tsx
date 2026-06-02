@@ -587,7 +587,7 @@ function ActorContextProvider(props: {
 	return <ActorEngineProvider {...props} inspectorToken={token} />;
 }
 
-function ActorInspectorProvider({
+function _ActorInspectorProvider({
 	actorId,
 	inspectorToken,
 	children,

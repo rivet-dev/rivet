@@ -1,13 +1,13 @@
 import { useMutation } from "@tanstack/react-query";
 import { useSearch } from "@tanstack/react-router";
 import type { DialogContentProps } from "@/components/hooks";
-import { features } from "@/lib/features";
 import {
 	Accordion,
 	AccordionContent,
 	AccordionItem,
 	AccordionTrigger,
 } from "@/components/ui/accordion";
+import { features } from "@/lib/features";
 import { getRandomKey } from "@/lib/words";
 import {
 	DialogDescription,

@@ -91,9 +91,13 @@ async function waitForOpen(ws: WebSocket): Promise<void> {
 
 	await new Promise<void>((resolve, reject) => {
 		ws.addEventListener("open", () => resolve(), { once: true });
-		ws.addEventListener("error", () => reject(new Error("websocket error")), {
-			once: true,
-		});
+		ws.addEventListener(
+			"error",
+			() => reject(new Error("websocket error")),
+			{
+				once: true,
+			},
+		);
 		ws.addEventListener(
 			"close",
 			(event) =>
@@ -126,7 +130,9 @@ async function postSleep(actorId: string, label: string, stopAt: number) {
 	const sleepUrl = buildSleepUrl(actorId);
 
 	while (Date.now() < stopAt) {
-		await sleep(Math.min(SLEEP_INTERVAL_MS, Math.max(0, stopAt - Date.now())));
+		await sleep(
+			Math.min(SLEEP_INTERVAL_MS, Math.max(0, stopAt - Date.now())),
+		);
 		if (Date.now() >= stopAt) break;
 
 		try {
@@ -198,7 +204,10 @@ async function runWorker(workerIndex: number, stopAt: number) {
 		}
 
 		try {
-			const ws = new WebSocket(webSocketUrl, ["rivet", "rivet_encoding.json"]);
+			const ws = new WebSocket(webSocketUrl, [
+				"rivet",
+				"rivet_encoding.json",
+			]);
 			current = ws;
 			await waitForOpen(ws);
 			console.log(`[open] ${label} attempt=${attempt}`);
@@ -212,19 +221,26 @@ async function runWorker(workerIndex: number, stopAt: number) {
 				);
 				const staleWatchdog =
 					STALE_TIMEOUT_MS > 0
-						? setInterval(() => {
-								if (
-									ws.readyState === WebSocket.OPEN &&
-									lastMessageAt > 0 &&
-									Date.now() - lastMessageAt > STALE_TIMEOUT_MS
-								) {
-									staleReconnects += 1;
-									console.error(
-										`[stale] ${label} attempt=${attempt} lastMessageAgeMs=${Date.now() - lastMessageAt}`,
-									);
-									ws.close(4000, "stale smoke connection");
-								}
-							}, Math.min(1000, STALE_TIMEOUT_MS))
+						? setInterval(
+								() => {
+									if (
+										ws.readyState === WebSocket.OPEN &&
+										lastMessageAt > 0 &&
+										Date.now() - lastMessageAt >
+											STALE_TIMEOUT_MS
+									) {
+										staleReconnects += 1;
+										console.error(
+											`[stale] ${label} attempt=${attempt} lastMessageAgeMs=${Date.now() - lastMessageAt}`,
+										);
+										ws.close(
+											4000,
+											"stale smoke connection",
+										);
+									}
+								},
+								Math.min(1000, STALE_TIMEOUT_MS),
+							)
 						: undefined;
 
 				ws.addEventListener("message", (event) => {

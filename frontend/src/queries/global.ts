@@ -1,3 +1,5 @@
+import type { Rivet } from "@rivetkit/engine-api-full";
+import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import {
 	CancelledError,
 	defaultShouldDehydrateQuery,
@@ -8,16 +10,14 @@ import {
 	type QueryKey,
 	queryOptions,
 } from "@tanstack/react-query";
-import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import {
 	type PersistQueryClientOptions,
 	persistQueryClientRestore,
 	persistQueryClientSubscribe,
 } from "@tanstack/react-query-persist-client";
-import type { Rivet } from "@rivetkit/engine-api-full";
-import { posthog } from "@/lib/posthog";
 import { toast } from "@/components";
 import { isAuthError, isRivetApiError } from "@/lib/errors";
+import { posthog } from "@/lib/posthog";
 import { modal } from "@/utils/modal-utils";
 import { Changelog } from "./types";
 
@@ -65,7 +65,9 @@ const queryCache = new QueryCache({
 				(old) => {
 					if (!old?.pages.length) return old;
 					const existingIds = new Set(
-						old.pages.flatMap((p) => p.actors.map((a) => a.actorId)),
+						old.pages.flatMap((p) =>
+							p.actors.map((a) => a.actorId),
+						),
 					);
 					const newActors = response.actors.filter(
 						(a) => !existingIds.has(a.actorId),
@@ -88,7 +90,7 @@ const queryCache = new QueryCache({
 });
 
 const mutationCache = new MutationCache({
-	onError(error, variables, context, mutation) {
+	onError(error, _variables, _context, mutation) {
 		console.error(error);
 		if (mutation.meta?.hideErrorToast) {
 			return;

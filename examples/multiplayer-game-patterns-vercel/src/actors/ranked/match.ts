@@ -1,16 +1,16 @@
-import { actor, type ActorContextOf, event, UserError } from "rivetkit";
+import { type ActorContextOf, actor, event, UserError } from "rivetkit";
 import { interval } from "rivetkit/utils";
-import { registry } from "../index.ts";
+import type { registry } from "../index.ts";
+import { getPlayerColor } from "../player-color.ts";
 import {
+	K_FACTOR,
+	MAX_SPEED,
+	SCORE_LIMIT,
+	SHOOT_ANGLE,
+	SHOOT_RANGE,
 	TICK_MS,
 	WORLD_SIZE,
-	MAX_SPEED,
-	SHOOT_RANGE,
-	SHOOT_ANGLE,
-	SCORE_LIMIT,
-	K_FACTOR,
 } from "./config.ts";
-import { getPlayerColor } from "../player-color.ts";
 
 interface PlayerEntry {
 	connId: string | null;
@@ -43,32 +43,32 @@ export const rankedMatch = actor({
 		snapshot: event<Snapshot>(),
 		shoot: event<ShootEvent>(),
 	},
-		createState: (
-			_c,
-			input: { matchId: string; assignedPlayers: AssignedPlayer[] },
-		): State => {
-			const players: Record<string, PlayerEntry> = {};
-			for (const ap of input.assignedPlayers) {
-				players[ap.username] = {
-					connId: null,
-					color: getPlayerColor(ap.username),
-					x: Math.random() * WORLD_SIZE,
-					y: Math.random() * WORLD_SIZE,
-					lastPositionAt: Date.now(),
-					alive: true,
-					score: 0,
-					rating: ap.rating,
-				};
-			}
-			return {
-				matchId: input.matchId,
-				tick: 0,
-				phase: "waiting",
-				players,
-				winnerId: null,
-				resultReported: false,
+	createState: (
+		_c,
+		input: { matchId: string; assignedPlayers: AssignedPlayer[] },
+	): State => {
+		const players: Record<string, PlayerEntry> = {};
+		for (const ap of input.assignedPlayers) {
+			players[ap.username] = {
+				connId: null,
+				color: getPlayerColor(ap.username),
+				x: Math.random() * WORLD_SIZE,
+				y: Math.random() * WORLD_SIZE,
+				lastPositionAt: Date.now(),
+				alive: true,
+				score: 0,
+				rating: ap.rating,
 			};
-		},
+		}
+		return {
+			matchId: input.matchId,
+			tick: 0,
+			phase: "waiting",
+			players,
+			winnerId: null,
+			resultReported: false,
+		};
+	},
 	onConnect: (c, conn) => {
 		const params = conn.params as { username?: string; playerId?: string };
 		const playerId = params.username ?? params.playerId;
@@ -126,7 +126,9 @@ export const rankedMatch = actor({
 			}
 			const [, player] = found;
 			if (!player.alive) {
-				throw new UserError("player is not alive", { code: "not_alive" });
+				throw new UserError("player is not alive", {
+					code: "not_alive",
+				});
 			}
 
 			const now = Date.now();
@@ -158,13 +160,17 @@ export const rankedMatch = actor({
 			}
 			const [shooterId, shooter] = found;
 			if (!shooter.alive) {
-				throw new UserError("player is not alive", { code: "not_alive" });
+				throw new UserError("player is not alive", {
+					code: "not_alive",
+				});
 			}
 			if (c.state.phase !== "live") {
 				throw new UserError("match is not live", { code: "not_live" });
 			}
 
-			const mag = Math.sqrt(input.dirX * input.dirX + input.dirY * input.dirY);
+			const mag = Math.sqrt(
+				input.dirX * input.dirX + input.dirY * input.dirY,
+			);
 			if (mag === 0) return;
 			const ndx = input.dirX / mag;
 			const ndy = input.dirY / mag;
@@ -241,9 +247,13 @@ async function reportMatchCompletedIfNeeded(
 	const client = c.client<typeof registry>();
 	const entries = Object.entries(c.state.players);
 	if (c.state.winnerId && entries.length === 2) {
-		const loserUsername = entries.find(([id]) => id !== c.state.winnerId)?.[0];
+		const loserUsername = entries.find(
+			([id]) => id !== c.state.winnerId,
+		)?.[0];
 		const winner = c.state.players[c.state.winnerId];
-		const loser = loserUsername ? c.state.players[loserUsername] : undefined;
+		const loser = loserUsername
+			? c.state.players[loserUsername]
+			: undefined;
 		if (winner && loser && loserUsername) {
 			const [newWR, newLR] = calculateElo(winner.rating, loser.rating);
 			await client.rankedMatchmaker
@@ -261,19 +271,20 @@ async function reportMatchCompletedIfNeeded(
 	}
 	if (!allowNoResult) return;
 
-	await client.rankedMatchmaker
-		.getOrCreate(["main"])
-		.send("matchCompleted", {
-			matchId: c.state.matchId,
-			winnerUsername: "",
-			loserUsername: "",
-			winnerNewRating: 0,
-			loserNewRating: 0,
-		});
+	await client.rankedMatchmaker.getOrCreate(["main"]).send("matchCompleted", {
+		matchId: c.state.matchId,
+		winnerUsername: "",
+		loserUsername: "",
+		winnerNewRating: 0,
+		loserNewRating: 0,
+	});
 	c.state.resultReported = true;
 }
 
-function calculateElo(winnerRating: number, loserRating: number): [number, number] {
+function calculateElo(
+	winnerRating: number,
+	loserRating: number,
+): [number, number] {
 	const expectedW = 1 / (1 + 10 ** ((loserRating - winnerRating) / 400));
 	const expectedL = 1 - expectedW;
 	return [
@@ -293,7 +304,10 @@ interface Snapshot {
 	winnerId: string | null;
 	worldSize: number;
 	scoreLimit: number;
-	players: Record<string, { x: number; y: number; color: string; score: number; rating: number }>;
+	players: Record<
+		string,
+		{ x: number; y: number; color: string; score: number; rating: number }
+	>;
 }
 
 interface ShootEvent {

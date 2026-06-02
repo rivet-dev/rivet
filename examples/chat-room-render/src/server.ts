@@ -1,5 +1,5 @@
-import { Hono } from "hono";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { Hono } from "hono";
 import { registry } from "./actors.ts";
 
 const app = new Hono();

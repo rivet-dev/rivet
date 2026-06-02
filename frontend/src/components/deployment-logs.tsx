@@ -107,7 +107,8 @@ function LogRow({
 					"grid gap-3 whitespace-pre-wrap break-words px-4 py-1 border-b",
 					{
 						"text-red-400": entry.data.severity === "error",
-						"text-muted-foreground": entry.data.severity !== "error",
+						"text-muted-foreground":
+							entry.data.severity !== "error",
 					},
 				)}
 				style={{
@@ -157,7 +158,14 @@ export function DeploymentLogs({
 		isLoadingMore,
 		hasMore,
 		loadMoreHistory,
-	} = useDeploymentLogsStream({ project: project ?? "", namespace: namespace ?? "", pool, filter, region, paused });
+	} = useDeploymentLogsStream({
+		project: project ?? "",
+		namespace: namespace ?? "",
+		pool,
+		filter,
+		region,
+		paused,
+	});
 
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const virtualizerRef = useRef<Virtualizer<HTMLDivElement, Element>>(null);
@@ -188,7 +196,12 @@ export function DeploymentLogs({
 	const totalCount = displayedLogs.length + sentinelOffset;
 
 	useEffect(() => {
-		if (follow && !isLoading && virtualizerRef.current && displayedLogs.length > 0) {
+		if (
+			follow &&
+			!isLoading &&
+			virtualizerRef.current &&
+			displayedLogs.length > 0
+		) {
 			// https://github.com/TanStack/virtual/issues/537
 			const rafId = requestAnimationFrame(() => {
 				virtualizerRef.current?.scrollToIndex(totalCount - 1, {
@@ -247,13 +260,20 @@ export function DeploymentLogs({
 					!isLoadingMore
 				) {
 					prevLogCountRef.current = displayedLogs.length;
-					scrollOffsetBeforeLoadRef.current = instance.scrollOffset ?? 0;
+					scrollOffsetBeforeLoadRef.current =
+						instance.scrollOffset ?? 0;
 					prevTotalSizeRef.current = instance.getTotalSize();
 					loadMoreHistory();
 				}
 			}
 		},
-		[totalCount, displayedLogs.length, hasMore, isLoadingMore, loadMoreHistory],
+		[
+			totalCount,
+			displayedLogs.length,
+			hasMore,
+			isLoadingMore,
+			loadMoreHistory,
+		],
 	);
 
 	if (isLoading) {
@@ -339,7 +359,10 @@ export function DeploymentLogs({
 							className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary text-primary-foreground text-xs font-sans font-medium shadow-lg hover:bg-primary/90 transition-colors"
 							onClick={() => {
 								setFollow(true);
-								virtualizerRef.current?.scrollToIndex(totalCount - 1, { align: "end" });
+								virtualizerRef.current?.scrollToIndex(
+									totalCount - 1,
+									{ align: "end" },
+								);
 							}}
 						>
 							<Icon icon={faArrowDown} className="size-3" />

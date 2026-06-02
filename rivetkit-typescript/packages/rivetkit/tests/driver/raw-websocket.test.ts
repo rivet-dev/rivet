@@ -1,7 +1,7 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
 import { HIBERNATABLE_WEBSOCKET_BUFFERED_MESSAGE_SIZE_THRESHOLD } from "@/common/hibernatable-websocket-ack-state";
 import { getHibernatableWebSocketAckState } from "@/common/websocket-test-hooks";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 const HIBERNATABLE_ACK_SETTLE_TIMEOUT_MS = 12_000;
@@ -489,12 +489,16 @@ describeDriverMatrix("Raw Websocket", (driverTestConfig) => {
 				const timeout = setTimeout(() => {
 					reject(new Error("timed out waiting for websocket close"));
 				}, 5_000);
-				ws.addEventListener("close", (event) => {
-					clearTimeout(timeout);
-					resolve(event);
-				}, {
-					once: true,
-				});
+				ws.addEventListener(
+					"close",
+					(event) => {
+						clearTimeout(timeout);
+						resolve(event);
+					},
+					{
+						once: true,
+					},
+				);
 			});
 			const response = await fetch(
 				`${endpoint}/actors/${encodeURIComponent(actorId)}/sleep?namespace=${encodeURIComponent(namespace)}`,

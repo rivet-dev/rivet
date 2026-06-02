@@ -21,7 +21,7 @@ import {
 	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
-import { buildLoopIterationRange, buildEntryMetadataKey } from "./keys.js";
+import { buildEntryMetadataKey, buildLoopIterationRange } from "./keys.js";
 import {
 	appendLoopIteration,
 	appendName,
@@ -36,13 +36,12 @@ import {
 	flush,
 	getOrCreateMetadata,
 	loadMetadata,
-	setEntry,
 	type PendingDeletions,
+	setEntry,
 } from "./storage.js";
 import type {
 	BranchConfig,
 	BranchOutput,
-	BranchStatus,
 	Entry,
 	EntryKindType,
 	EntryMetadata,
@@ -66,11 +65,11 @@ import type {
 	WorkflowError,
 	WorkflowErrorEvent,
 	WorkflowErrorHandler,
+	WorkflowMessageDriver,
 	WorkflowQueue,
 	WorkflowQueueMessage,
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
-	WorkflowMessageDriver,
 } from "./types.js";
 import { sleep } from "./utils.js";
 
@@ -505,8 +504,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	 * Throws HistoryDivergedError if duplicate detected.
 	 */
 	private checkDuplicateName(name: string): void {
-		const fullKey =
-			locationToKey(this.storage, this.currentLocation) + "/" + name;
+		const fullKey = `${locationToKey(this.storage, this.currentLocation)}/${name}`;
 		if (this.usedNamesInExecution.has(fullKey)) {
 			throw new HistoryDivergedError(
 				`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
@@ -580,7 +578,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const isUnderPrefix =
 				prefix === ""
 					? true // Root: all keys are children
-					: key.startsWith(prefix + "/") || key === prefix;
+					: key.startsWith(`${prefix}/`) || key === prefix;
 
 			if (isUnderPrefix) {
 				if (!this.visitedKeys.has(key)) {

@@ -66,7 +66,8 @@ export const dbInitOrderCreateVarsActor = actor({
 	},
 	db: initOrderProvider(),
 	actions: {
-		getInitialCount: (c) => (c.vars as { initialCount: number }).initialCount,
+		getInitialCount: (c) =>
+			(c.vars as { initialCount: number }).initialCount,
 	},
 	options: {
 		actionTimeout: 120_000,

@@ -7,7 +7,7 @@ export const counterWithLifecycle = actor({
 		count: 0,
 		events: [] as string[],
 	},
-	createConnState: (c, params: ConnParams) => ({
+	createConnState: (_c, _params: ConnParams) => ({
 		joinTime: Date.now(),
 	}),
 	onWake: (c) => {

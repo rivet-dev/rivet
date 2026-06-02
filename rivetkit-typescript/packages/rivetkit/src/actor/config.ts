@@ -1,24 +1,18 @@
 import { z } from "zod/v4";
-import type { UniversalWebSocket } from "@/common/websocket-interface";
+import type { Client } from "@/client/client";
 import type {
 	AnyDatabaseProvider,
 	InferDatabaseClient,
-	RawDatabaseClient,
-	DrizzleDatabaseClient,
-	NativeDatabaseProvider,
 } from "@/common/database/config";
-import type { Client } from "@/client/client";
+import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { Registry } from "@/registry";
 import type { BaseActorDefinition } from "./definition";
 import type {
 	EventSchemaConfig,
-	PrimitiveSchema,
-	QueueSchemaConfig,
-} from "./schema";
-import type {
-	InferEventArgs,
 	InferQueueCompleteMap,
 	InferSchemaMap,
+	PrimitiveSchema,
+	QueueSchemaConfig,
 } from "./schema";
 
 export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
@@ -98,7 +92,10 @@ export interface ActorKv {
 		end: Uint8Array | string,
 		options?: ActorKvListOptions<T, K>,
 	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
-	list<T extends ActorKvValueType = "text", K extends ActorKvKeyType = "text">(
+	list<
+		T extends ActorKvValueType = "text",
+		K extends ActorKvKeyType = "text",
+	>(
 		prefix: Uint8Array | string,
 		options?: ActorKvListOptions<T, K>,
 	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
@@ -119,7 +116,8 @@ export type QueueMessageOf<Name extends string, Body> = {
 	[key: string]: unknown;
 };
 
-export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
+export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues &
+	string;
 export type QueueFilterName<TQueues extends QueueSchemaConfig> =
 	keyof TQueues extends never ? string : QueueName<TQueues>;
 
@@ -229,7 +227,9 @@ export interface QueueIterOptions<
 	completable?: TCompletable;
 }
 
-export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, never>> {
+export interface ActorQueue<
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> {
 	send<TName extends QueueFilterName<TQueues>>(
 		name: TName,
 		body: QueueMessageForName<TQueues, TName>["body"],
@@ -237,15 +237,11 @@ export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, ne
 	next<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueNextOptions<TName, TCompletable>,
-	): Promise<any>;
+	>(opts?: QueueNextOptions<TName, TCompletable>): Promise<any>;
 	nextBatch<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueNextBatchOptions<TName, TCompletable>,
-	): Promise<any[]>;
+	>(opts?: QueueNextBatchOptions<TName, TCompletable>): Promise<any[]>;
 	waitForNames<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
@@ -261,33 +257,27 @@ export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, ne
 	tryNext<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueTryNextOptions<TName, TCompletable>,
-	): Promise<any>;
+	>(opts?: QueueTryNextOptions<TName, TCompletable>): Promise<any>;
 	tryNextBatch<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueTryNextBatchOptions<TName, TCompletable>,
-	): Promise<any[]>;
+	>(opts?: QueueTryNextBatchOptions<TName, TCompletable>): Promise<any[]>;
 	iter<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueIterOptions<TName, TCompletable>,
-	): AsyncIterable<any>;
+	>(opts?: QueueIterOptions<TName, TCompletable>): AsyncIterable<any>;
 	[key: string]: any;
 }
 
 export interface Conn<
-	TState = unknown,
+	_TState = unknown,
 	TConnParams = unknown,
 	TConnState = unknown,
-	TVars = unknown,
-	TInput = unknown,
-	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
-	TEvents extends EventSchemaConfig = Record<never, never>,
-	TQueues extends QueueSchemaConfig = Record<never, never>,
+	_TVars = unknown,
+	_TInput = unknown,
+	_TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+	_TEvents extends EventSchemaConfig = Record<never, never>,
+	_TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
 	id: string;
 	params: TConnParams;
@@ -323,7 +313,19 @@ export interface ActorContext<
 	readonly name: string;
 	readonly key: string[];
 	readonly region: string;
-	readonly conns: Map<string, Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase, TEvents, TQueues>>;
+	readonly conns: Map<
+		string,
+		Conn<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>
+	>;
 	readonly log: ActorLogger;
 	readonly abortSignal: AbortSignal;
 	readonly aborted: boolean;
@@ -654,7 +656,9 @@ export type WebSocketContext<
 	TQueues
 >;
 
-export type ActorContextOf<AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, any>> =
+export type ActorContextOf<
+	AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, any>,
+> =
 	AD extends BaseActorDefinition<
 		infer TState,
 		infer TConnParams,
@@ -982,9 +986,9 @@ export const ActorConfigSchema = z
 // Data returned from this handler will be available on `c.state`.
 type CreateState<
 	TState,
-	TConnParams,
-	TConnState,
-	TVars,
+	_TConnParams,
+	_TConnState,
+	_TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig,
@@ -1039,8 +1043,8 @@ type CreateConnState<
  */
 type CreateVars<
 	TState,
-	TConnParams,
-	TConnState,
+	_TConnParams,
+	_TConnState,
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,

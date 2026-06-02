@@ -1,7 +1,6 @@
 import crypto from "node:crypto";
-import type { DatabaseProvider } from "@/common/database/config";
 import type { RequestContext } from "@/actor/config";
-import type { RawAccess } from "@/common/database/config";
+import type { DatabaseProvider, RawAccess } from "@/common/database/config";
 import type { AgentOsActorConfig } from "../config";
 import type {
 	AgentOsActionContext,

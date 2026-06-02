@@ -1,9 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { Button, Dd, Dl, Dt, Flex } from "@/components";
 import type { ActorId } from "./queries";
 
-const timeWindowOptions = [
+const _timeWindowOptions = [
 	{ label: "5 minutes", value: "5m", milliseconds: 5 * 60 * 1000 },
 	{ label: "15 minutes", value: "15m", milliseconds: 15 * 60 * 1000 },
 	{ label: "30 minutes", value: "30m", milliseconds: 30 * 60 * 1000 },

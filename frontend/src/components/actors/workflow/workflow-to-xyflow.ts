@@ -960,7 +960,7 @@ function layoutSequence(
 
 export function workflowHistoryToXYFlow(
 	history: WorkflowHistory,
-	options: WorkflowLayoutOptions = {},
+	_options: WorkflowLayoutOptions = {},
 ): LayoutResult {
 	const rootItems = buildRenderTree(history);
 	const rootFragment = layoutSequence(rootItems, {

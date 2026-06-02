@@ -12,8 +12,8 @@ import z from "zod";
 import { getConfig, ls } from "@/components";
 import type { ActorId } from "@/components/actors";
 import { engineEnv } from "@/lib/env";
-import { convertStringToId } from "@/lib/utils";
 import { features } from "@/lib/features";
+import { convertStringToId } from "@/lib/utils";
 import { createActorBatchLoader } from "@/queries/actor-batch-loader";
 import { noThrow, shouldRetryAllExpect403 } from "@/queries/utils";
 import {
@@ -333,7 +333,10 @@ export const createNamespaceContext = ({
 							parsedOpts?.filters.key?.value?.length === 0 ||
 							!parsedOpts?.filters.key?.value)
 					) {
-						return { actors: [], pagination: { cursor: undefined } };
+						return {
+							actors: [],
+							pagination: { cursor: undefined },
+						};
 					}
 
 					const data = await client.actorsList({
@@ -360,7 +363,8 @@ export const createNamespaceContext = ({
 				meta: {
 					mightRequireAuth,
 					actorsListPage1Poll: true,
-					actorsListTargetQueryKey: this.actorsQueryOptions(opts).queryKey,
+					actorsListTargetQueryKey:
+						this.actorsQueryOptions(opts).queryKey,
 				},
 			});
 		},
@@ -710,7 +714,7 @@ export const createNamespaceContext = ({
 			});
 		},
 		deleteRunnerConfigMutationOptions(
-			opts: { onSuccess?: (data: void) => void } = {},
+			opts: { onSuccess?: (data: undefined) => void } = {},
 		) {
 			return mutationOptions({
 				...opts,

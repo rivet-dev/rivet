@@ -189,10 +189,13 @@ function parseArgs(argv: string[]): Args {
 
 	const endpoint = readFlag(argv, "--endpoint") ?? process.env.RIVET_ENDPOINT;
 	if (!endpoint) {
-		throw new Error("missing endpoint. Pass --endpoint or set RIVET_ENDPOINT.");
+		throw new Error(
+			"missing endpoint. Pass --endpoint or set RIVET_ENDPOINT.",
+		);
 	}
 
-	const modeRaw = readFlag(argv, "--mode") ?? process.env.DB_FUZZ_MODE ?? DEFAULT_MODE;
+	const modeRaw =
+		readFlag(argv, "--mode") ?? process.env.DB_FUZZ_MODE ?? DEFAULT_MODE;
 	if (!VALID_MODES.has(modeRaw as WorkloadMode)) {
 		throw new Error(`invalid --mode: ${modeRaw}`);
 	}
@@ -206,11 +209,21 @@ function parseArgs(argv: string[]): Args {
 		endpoint,
 		seed,
 		iterations: readNumber(argv, "--iterations", "DB_FUZZ_ITERATIONS", 5),
-		concurrency: readNumber(argv, "--concurrency", "DB_FUZZ_CONCURRENCY", 2),
+		concurrency: readNumber(
+			argv,
+			"--concurrency",
+			"DB_FUZZ_CONCURRENCY",
+			2,
+		),
 		actorCount: readNumber(argv, "--actor-count", "DB_FUZZ_ACTOR_COUNT", 2),
 		mode: modeRaw as WorkloadMode,
 		sleepEvery: readNumber(argv, "--sleep-every", "DB_FUZZ_SLEEP_EVERY", 0),
-		opsPerPhase: readNumber(argv, "--ops-per-phase", "DB_FUZZ_OPS_PER_PHASE", 50),
+		opsPerPhase: readNumber(
+			argv,
+			"--ops-per-phase",
+			"DB_FUZZ_OPS_PER_PHASE",
+			50,
+		),
 		keySpace: readNumber(argv, "--key-space", "DB_FUZZ_KEY_SPACE", 64),
 		maxPayloadBytes: readNumber(
 			argv,
@@ -224,7 +237,12 @@ function parseArgs(argv: string[]): Args {
 			"DB_FUZZ_GROWTH_TARGET_BYTES",
 			1024 * 1024,
 		),
-		wakeDelayMs: readNumber(argv, "--wake-delay-ms", "DB_FUZZ_WAKE_DELAY_MS", 1000),
+		wakeDelayMs: readNumber(
+			argv,
+			"--wake-delay-ms",
+			"DB_FUZZ_WAKE_DELAY_MS",
+			1000,
+		),
 		localEnvoyWarmupMs: readNumber(
 			argv,
 			"--local-envoy-warmup-ms",
@@ -268,7 +286,8 @@ function assertValidation(
 		validation.mismatchedRows !== 0 ||
 		validation.duplicateKeys !== 0 ||
 		validation.actualVersionSum !== validation.expectedVersionSum ||
-		validation.actualPayloadChecksumSum !== validation.expectedPayloadChecksumSum ||
+		validation.actualPayloadChecksumSum !==
+			validation.expectedPayloadChecksumSum ||
 		validation.accountCount !== 8 ||
 		validation.accountBalanceSum !== validation.expectedAccountBalanceSum ||
 		validation.accountBalanceMismatch !== 0 ||
@@ -300,7 +319,9 @@ function formatOps(ops: Record<string, number>): string {
 
 async function runPhase(
 	handle: ReturnType<
-		ReturnType<typeof createClient<typeof registry>>["rawSqliteFuzzer"]["getOrCreate"]
+		ReturnType<
+			typeof createClient<typeof registry>
+		>["rawSqliteFuzzer"]["getOrCreate"]
 	>,
 	args: Args,
 	actorIndex: number,
@@ -325,7 +346,8 @@ async function runPhase(
 		});
 		return result;
 	} catch (err) {
-		const message = err instanceof Error ? err.stack ?? err.message : String(err);
+		const message =
+			err instanceof Error ? (err.stack ?? err.message) : String(err);
 		throw new Error(
 			`phase failed seed=${args.seed} actorKey=${key.join("/")} phase=${phase} mode=${args.mode}: ${message}`,
 		);
@@ -336,7 +358,9 @@ async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
 
 	if (args.startLocalEnvoy) {
-		await import("../../../rivetkit-typescript/packages/sql-loader/dist/register.js");
+		await import(
+			"../../../rivetkit-typescript/packages/sql-loader/dist/register.js"
+		);
 		const { registry } = await import("../src/index.ts");
 		registry.start();
 		await sleep(args.localEnvoyWarmupMs);
@@ -352,7 +376,9 @@ async function main(): Promise<void> {
 		args.mode,
 		String(i),
 	]);
-	const handles = actorKeys.map((key) => client.rawSqliteFuzzer.getOrCreate(key));
+	const handles = actorKeys.map((key) =>
+		client.rawSqliteFuzzer.getOrCreate(key),
+	);
 	const stats = new Map<number, ActorStats>();
 
 	console.log(
@@ -369,7 +395,9 @@ async function main(): Promise<void> {
 			`start_local_envoy=${args.startLocalEnvoy}`,
 		].join(" "),
 	);
-	console.log(`actor_keys=${actorKeys.map((key) => key.join("/")).join(",")}`);
+	console.log(
+		`actor_keys=${actorKeys.map((key) => key.join("/")).join(",")}`,
+	);
 
 	try {
 		if (args.reset) {
@@ -400,7 +428,13 @@ async function main(): Promise<void> {
 				const key = actorKeys[actorIndex]!;
 				const handle = handles[actorIndex]!;
 				const startedAt = performance.now();
-				const result = await runPhase(handle, args, actorIndex, key, phase);
+				const result = await runPhase(
+					handle,
+					args,
+					actorIndex,
+					key,
+					phase,
+				);
 				const durationMs = performance.now() - startedAt;
 
 				stats.set(actorIndex, {
@@ -414,7 +448,10 @@ async function main(): Promise<void> {
 					`phase ok worker=${workerId} actor=${actorIndex} phase=${phase} events=${result.validation.totalEvents} rows=${result.validation.activeRows} edge=${result.validation.edgeRows} index=${result.validation.indexRows} orders=${result.validation.relationalOrders} probes=${result.validation.probeRows} prepared=${result.validation.preparedRows} shadow=${result.validation.shadowRows} ms=${durationMs.toFixed(1)} ${formatOps(result.ops)}`,
 				);
 
-				if (args.sleepEvery > 0 && (phase + 1) % args.sleepEvery === 0) {
+				if (
+					args.sleepEvery > 0 &&
+					(phase + 1) % args.sleepEvery === 0
+				) {
 					console.log(`sleep actor=${actorIndex} phase=${phase}`);
 					await handle.goToSleep();
 					await sleep(args.wakeDelayMs);
@@ -438,7 +475,9 @@ async function main(): Promise<void> {
 		);
 
 		for (let actorIndex = 0; actorIndex < handles.length; actorIndex += 1) {
-			const reacquired = client.rawSqliteFuzzer.getOrCreate(actorKeys[actorIndex]!);
+			const reacquired = client.rawSqliteFuzzer.getOrCreate(
+				actorKeys[actorIndex]!,
+			);
 			const validation = await reacquired.validate();
 			assertValidation(validation, {
 				seed: args.seed,
@@ -471,7 +510,8 @@ main()
 		process.exit(0);
 	})
 	.catch((err: unknown) => {
-		const message = err instanceof Error ? err.stack ?? err.message : String(err);
+		const message =
+			err instanceof Error ? (err.stack ?? err.message) : String(err);
 		console.error(message);
 		process.exit(1);
 	});

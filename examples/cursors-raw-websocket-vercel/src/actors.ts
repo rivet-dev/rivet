@@ -1,4 +1,9 @@
-import { actor, setup, type UniversalWebSocket, type RivetMessageEvent, type RivetCloseEvent } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	setup,
+	type UniversalWebSocket,
+} from "rivetkit";
 
 export interface CursorPosition {
 	userId: string;

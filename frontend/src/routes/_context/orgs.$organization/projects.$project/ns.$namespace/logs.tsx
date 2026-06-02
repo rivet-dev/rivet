@@ -1,11 +1,5 @@
 import type { RivetSse } from "@rivet-gg/cloud";
-import {
-	faCopy,
-	faDownload,
-	faPause,
-	faPlay,
-	Icon,
-} from "@rivet-gg/icons";
+import { faCopy, faDownload, faPause, faPlay, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { startTransition, useCallback, useRef, useState } from "react";
@@ -110,10 +104,16 @@ function RouteComponent() {
 			<Content>
 				<div className="h-full flex flex-col items-center justify-center gap-3">
 					<p className="text-muted-foreground">
-						Logs are only accessible on namespaces running on Rivet Compute.
+						Logs are only accessible on namespaces running on Rivet
+						Compute.
 					</p>
-					<Link to="/orgs/$organization/projects/$project/ns/$namespace" params={Route.useParams()}>
-						<Button variant="outline" size="sm">Go back</Button>
+					<Link
+						to="/orgs/$organization/projects/$project/ns/$namespace"
+						params={Route.useParams()}
+					>
+						<Button variant="outline" size="sm">
+							Go back
+						</Button>
 					</Link>
 				</div>
 			</Content>

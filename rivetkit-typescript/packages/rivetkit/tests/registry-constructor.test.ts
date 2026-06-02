@@ -1,5 +1,5 @@
-import { actor, setup } from "@/mod";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { actor, setup } from "@/mod";
 import { buildNativeRegistry } from "../src/registry/native";
 
 const testActor = actor({
@@ -57,10 +57,14 @@ describe("Registry constructor", () => {
 			poolName: "after-build-pool",
 		};
 
-		const { serveConfig } = await buildNativeRegistry(registry.parseConfig());
+		const { serveConfig } = await buildNativeRegistry(
+			registry.parseConfig(),
+		);
 
 		expect(setTimeoutSpy.mock.calls).toHaveLength(initialTimeoutCalls);
-		expect(new URL(serveConfig.endpoint).origin).toBe("http://127.0.0.1:7755");
+		expect(new URL(serveConfig.endpoint).origin).toBe(
+			"http://127.0.0.1:7755",
+		);
 		expect(serveConfig.namespace).toBe("after-build");
 		expect(serveConfig.poolName).toBe("after-build-pool");
 	});

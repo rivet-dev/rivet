@@ -29,6 +29,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { DeploymentLogs } from "@/components/deployment-logs";
+import { features } from "@/lib/features";
 import { ActorConfigTab } from "./actor-config-tab";
 import { ActorConnectionsTab } from "./actor-connections-tab";
 import { ActorDatabaseTab } from "./actor-db-tab";
@@ -45,7 +46,6 @@ import {
 	GuardConnectableInspector,
 	useInspectorGuard,
 } from "./guard-connectable-inspector";
-import { features } from "@/lib/features";
 import type { ActorId } from "./queries";
 import { ActorWorkerContextProvider } from "./worker/actor-worker-context";
 import { ActorWorkflowTab } from "./workflow/actor-workflow-tab";
@@ -65,13 +65,15 @@ interface ActorsActorDetailsProps {
 export const ActorsActorDetails = memo(
 	({ tab, onTabChange, actorId }: ActorsActorDetailsProps) => {
 		return (
-			<Suspense fallback={
-				<div className="flex flex-col h-full flex-1">
-					<ActorTabs disabled className="relative">
-				 		<ShimmerLine className="top-0" />
-					</ActorTabs>
-				</div>
-			}>
+			<Suspense
+				fallback={
+					<div className="flex flex-col h-full flex-1">
+						<ActorTabs disabled className="relative">
+							<ShimmerLine className="top-0" />
+						</ActorTabs>
+					</div>
+				}
+			>
 				<GuardConnectableInspector actorId={actorId}>
 					<ActorDetailsSettingsProvider>
 						<div className="flex flex-col h-full flex-1">

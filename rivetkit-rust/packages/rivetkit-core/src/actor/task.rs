@@ -1121,15 +1121,12 @@ impl ActorTask {
 
 		let load_state_started_at = Instant::now();
 		let load_state_result = self.load_persisted_startup().await;
-		let persisted = self
-			.ctx
-			.metrics()
-			.observe_startup_phase_result(
-				StartupPhase::LoadPersisted,
-				None,
-				load_state_started_at,
-				load_state_result,
-			)?;
+		let persisted = self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::LoadPersisted,
+			None,
+			load_state_started_at,
+			load_state_result,
+		)?;
 		let is_new = !persisted.actor.has_initialized;
 		startup_timer.set_is_new(is_new);
 		tracing::debug!(
@@ -1176,14 +1173,12 @@ impl ActorTask {
 			Ok(())
 		}
 		.await;
-		self.ctx
-			.metrics()
-			.observe_startup_phase_result(
-				StartupPhase::CoreInit,
-				Some(is_new),
-				core_init_started_at,
-				core_init_result,
-			)?;
+		self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::CoreInit,
+			Some(is_new),
+			core_init_started_at,
+			core_init_result,
+		)?;
 
 		self.transition_to(LifecycleState::Started);
 		self.ctx
@@ -1191,16 +1186,16 @@ impl ActorTask {
 			.set_startup_phase(StartupPhase::RuntimePreamble);
 		let runtime_preamble_started_at = Instant::now();
 		let runtime_preamble_result = self.spawn_run_handle(is_new).await;
+		self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::RuntimePreamble,
+			Some(is_new),
+			runtime_preamble_started_at,
+			runtime_preamble_result,
+		)?;
+
 		self.ctx
 			.metrics()
-			.observe_startup_phase_result(
-				StartupPhase::RuntimePreamble,
-				Some(is_new),
-				runtime_preamble_started_at,
-				runtime_preamble_result,
-			)?;
-
-		self.ctx.metrics().set_startup_phase(StartupPhase::PostReady);
+			.set_startup_phase(StartupPhase::PostReady);
 		let post_ready_started_at = Instant::now();
 		let post_ready_result: Result<()> = async {
 			if is_new {
@@ -1220,14 +1215,12 @@ impl ActorTask {
 			Ok(())
 		}
 		.await;
-		self.ctx
-			.metrics()
-			.observe_startup_phase_result(
-				StartupPhase::PostReady,
-				Some(is_new),
-				post_ready_started_at,
-				post_ready_result,
-			)?;
+		self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::PostReady,
+			Some(is_new),
+			post_ready_started_at,
+			post_ready_result,
+		)?;
 		let startup_elapsed = startup_timer.finish_success();
 		tracing::debug!(
 			actor_id = %actor_id,

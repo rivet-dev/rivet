@@ -29,7 +29,9 @@ const server = createServer(async (req, res) => {
 		for await (const chunk of req) {
 			chunks.push(chunk as Buffer);
 		}
-		const body: DeployRequest = JSON.parse(Buffer.concat(chunks).toString());
+		const body: DeployRequest = JSON.parse(
+			Buffer.concat(chunks).toString(),
+		);
 
 		// Set up SSE response
 		res.writeHead(200, {

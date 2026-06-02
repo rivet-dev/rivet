@@ -52,7 +52,10 @@ export function NamespacesGrid({
 										navigate({
 											to: ".",
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												settings: "billing",
 											}),
 										});
@@ -78,7 +81,10 @@ export function NamespacesGrid({
 										navigate({
 											to: ".",
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												modal: "create-ns",
 											}),
 										});
@@ -95,8 +101,8 @@ export function NamespacesGrid({
 									No namespaces yet
 								</h3>
 								<SmallText className="text-muted-foreground max-w-md">
-									Create a namespace to start deploying actors in
-									this project.
+									Create a namespace to start deploying actors
+									in this project.
 								</SmallText>
 								<Button
 									variant="default"
@@ -106,7 +112,10 @@ export function NamespacesGrid({
 										navigate({
 											to: ".",
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												modal: "create-ns",
 											}),
 										});
@@ -145,12 +154,16 @@ export function NamespacesGrid({
 											className="-mx-2 h-auto w-fit font-mono-console text-muted-foreground"
 											onClick={(e) => e.preventDefault()}
 										>
-											<span className="truncate">{ns.name}</span>
+											<span className="truncate">
+												{ns.name}
+											</span>
 										</DiscreteCopyButton>
 										<div className="text-muted-foreground">
 											{ns.createdAt ? (
 												<RelativeTime
-													time={new Date(ns.createdAt)}
+													time={
+														new Date(ns.createdAt)
+													}
 												/>
 											) : (
 												"—"

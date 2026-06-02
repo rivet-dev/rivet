@@ -13,7 +13,7 @@ export const hibernationActor = actor({
 		sleepCount: 0,
 		wakeCount: 0,
 	},
-	createConnState: (c): HibernationConnState => {
+	createConnState: (_c): HibernationConnState => {
 		return {
 			count: 0,
 			connectCount: 0,
@@ -26,15 +26,15 @@ export const hibernationActor = actor({
 	onSleep: (c) => {
 		c.state.sleepCount += 1;
 	},
-	onConnect: (c, conn) => {
+	onConnect: (_c, conn) => {
 		conn.state.connectCount += 1;
 	},
-	onDisconnect: (c, conn) => {
+	onDisconnect: (_c, conn) => {
 		conn.state.disconnectCount += 1;
 	},
 	actions: {
 		// Basic RPC that returns a simple value
-		ping: (c) => {
+		ping: (_c) => {
 			return "pong";
 		},
 		// Increment the connection's count

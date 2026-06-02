@@ -201,7 +201,11 @@ export const createGlobalContext = () => {
 			});
 		},
 
-		imagesQueryOptions(opts: { organization: string; project: string; limit?: number }) {
+		imagesQueryOptions(opts: {
+			organization: string;
+			project: string;
+			limit?: number;
+		}) {
 			return infiniteQueryOptions({
 				queryKey: [opts, "images"],
 				queryFn: async ({ pageParam }) => {

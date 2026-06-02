@@ -1,9 +1,12 @@
-import { useInfiniteQuery, usePrefetchInfiniteQuery } from "@tanstack/react-query";
+import {
+	useInfiniteQuery,
+	usePrefetchInfiniteQuery,
+} from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Fragment } from "react";
 import { Button, cn, Skeleton } from "@/components";
-import { ActorIcon } from "@/components/lazy-icon";
 import { useEngineCompatDataProvider } from "@/components/actors";
+import { ActorIcon } from "@/components/lazy-icon";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { features } from "@/lib/features";
 import { RECORDS_PER_PAGE } from "./data-providers/default-data-provider";
@@ -12,7 +15,10 @@ const ICON_CLASS =
 	"opacity-80 group-hover:opacity-100 group-data-active:opacity-100";
 
 export function ActorBuildsList() {
-	usePrefetchInfiniteQuery({...useEngineCompatDataProvider().buildsQueryOptions(), pages: Infinity});
+	usePrefetchInfiniteQuery({
+		...useEngineCompatDataProvider().buildsQueryOptions(),
+		pages: Infinity,
+	});
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(useEngineCompatDataProvider().buildsQueryOptions());
 
@@ -26,65 +32,72 @@ export function ActorBuildsList() {
 						Connect RivetKit to see instances.
 					</p>
 				) : null}
-				{data?.toSorted((a, b) => a.id.localeCompare(b.id)).map((build) => {
-					const actorMeta = build.name.metadata as
-						| Record<string, unknown>
-						| undefined;
-					const iconValue =
-						typeof actorMeta?.icon === "string"
-							? actorMeta.icon
-							: null;
-					const displayName =
-						typeof actorMeta?.name === "string"
-							? actorMeta.name
-							: build.id;
+				{data
+					?.toSorted((a, b) => a.id.localeCompare(b.id))
+					.map((build) => {
+						const actorMeta = build.name.metadata as
+							| Record<string, unknown>
+							| undefined;
+						const iconValue =
+							typeof actorMeta?.icon === "string"
+								? actorMeta.icon
+								: null;
+						const displayName =
+							typeof actorMeta?.name === "string"
+								? actorMeta.name
+								: build.id;
 
-					return (
-						<Button
-							key={build.id}
-							className={cn(
-								"text-muted-foreground justify-start font-medium px-1",
-								"data-active:text-foreground data-active:bg-foreground/[0.06]",
-							)}
-							startIcon={
-								<ActorIcon
-									iconValue={iconValue}
-									className={ICON_CLASS}
-									emojiClassName={cn(ICON_CLASS, "text-sm")}
-								/>
-							}
-							variant={"ghost"}
-							size="sm"
-							onClick={() => {
-								// eslint-disable-next-line @typescript-eslint/no-explicit-any
-								return (navigate as any)({
-									to: features.platform
-										? "/orgs/$organization/projects/$project/ns/$namespace"
-										: "/ns/$namespace",
-									search: (old: Record<string, unknown>) => ({
+						return (
+							<Button
+								key={build.id}
+								className={cn(
+									"text-muted-foreground justify-start font-medium px-1",
+									"data-active:text-foreground data-active:bg-foreground/[0.06]",
+								)}
+								startIcon={
+									<ActorIcon
+										iconValue={iconValue}
+										className={ICON_CLASS}
+										emojiClassName={cn(
+											ICON_CLASS,
+											"text-sm",
+										)}
+									/>
+								}
+								variant={"ghost"}
+								size="sm"
+								onClick={() => {
+									// eslint-disable-next-line @typescript-eslint/no-explicit-any
+									return (navigate as any)({
+										to: features.platform
+											? "/orgs/$organization/projects/$project/ns/$namespace"
+											: "/ns/$namespace",
+										search: (
+											old: Record<string, unknown>,
+										) => ({
+											...old,
+											actorId: undefined,
+											n: [build.id],
+										}),
+									});
+								}}
+								asChild
+							>
+								<Link
+									to="."
+									search={(old) => ({
 										...old,
 										actorId: undefined,
 										n: [build.id],
-									}),
-								});
-							}}
-							asChild
-						>
-							<Link
-								to="."
-								search={(old) => ({
-									...old,
-									actorId: undefined,
-									n: [build.id],
-								})}
-							>
-								<span className="text-ellipsis overflow-hidden whitespace-nowrap">
-									{displayName}
-								</span>
-							</Link>
-						</Button>
-					);
-				})}
+									})}
+								>
+									<span className="text-ellipsis overflow-hidden whitespace-nowrap">
+										{displayName}
+									</span>
+								</Link>
+							</Button>
+						);
+					})}
 				{isFetchingNextPage || isLoading
 					? Array(RECORDS_PER_PAGE)
 							.fill(null)

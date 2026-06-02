@@ -2,9 +2,9 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
-	RAW_STATE_SYMBOL,
 	getRunFunction,
 	getRunInspectorConfig,
+	RAW_STATE_SYMBOL,
 	type WorkflowInspectorConfig,
 } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
@@ -33,11 +33,8 @@ import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
+import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
-import {
-	assertJsonCompatValue,
-	type JsonCompatValue,
-} from "@/common/encoding";
 import { deconstructError, stringifyError } from "@/common/utils";
 import type {
 	RivetCloseEvent,
@@ -59,7 +56,6 @@ import {
 } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
 import { logger } from "./log";
-import { createWriteThroughProxy } from "./write-through-proxy";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
 	type NativeValidationConfig,
@@ -85,6 +81,7 @@ import type {
 	WebSocketHandle,
 } from "./runtime";
 import { loadWasmRuntime } from "./wasm-runtime";
+import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -1081,7 +1078,6 @@ function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 			: [decoded];
 }
 
-
 function buildRequest(init: {
 	method: string;
 	uri: string;
@@ -1177,11 +1173,15 @@ class NativeConnAdapter {
 
 	get state(): unknown {
 		const nextState = this.#readState();
-		return createWriteThroughProxy(nextState, (nextValue) => {
-			this.#writeState(nextValue, { writeNative: true });
-		}, (newValue) => {
-			assertJsonCompatValue(newValue);
-		});
+		return createWriteThroughProxy(
+			nextState,
+			(nextValue) => {
+				this.#writeState(nextValue, { writeNative: true });
+			},
+			(newValue) => {
+				assertJsonCompatValue(newValue);
+			},
+		);
 	}
 
 	set state(value: unknown) {
@@ -2334,9 +2334,7 @@ class NativeConnectionMap implements ReadonlyMap<string, NativeConnAdapter> {
 
 	get(key: string): NativeConnAdapter | undefined {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		const conn = conns.find(
-			(c) => this.#runtime.connId(c) === key,
-		);
+		const conn = conns.find((c) => this.#runtime.connId(c) === key);
 		if (!conn) return undefined;
 		return this.#connToAdapter(conn);
 	}
@@ -2348,23 +2346,39 @@ class NativeConnectionMap implements ReadonlyMap<string, NativeConnAdapter> {
 
 	keys(): MapIterator<string> {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		return conns.map((c) => this.#runtime.connId(c))[Symbol.iterator]() satisfies MapIterator<string>;
+		return conns
+			.map((c) => this.#runtime.connId(c))
+			[Symbol.iterator]() satisfies MapIterator<string>;
 	}
 
 	values(): MapIterator<NativeConnAdapter> {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		return conns.map((c) => this.#connToAdapter(c))[Symbol.iterator]() satisfies MapIterator<NativeConnAdapter>;
+		return conns
+			.map((c) => this.#connToAdapter(c))
+			[Symbol.iterator]() satisfies MapIterator<NativeConnAdapter>;
 	}
 
 	entries(): MapIterator<[string, NativeConnAdapter]> {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		return conns.map(
-			(c) => [this.#runtime.connId(c), this.#connToAdapter(c)] as [string, NativeConnAdapter],
-		)[Symbol.iterator]() satisfies MapIterator<[string, NativeConnAdapter]>;
+		return conns
+			.map(
+				(c) =>
+					[this.#runtime.connId(c), this.#connToAdapter(c)] as [
+						string,
+						NativeConnAdapter,
+					],
+			)
+			[Symbol.iterator]() satisfies MapIterator<
+			[string, NativeConnAdapter]
+		>;
 	}
 
 	forEach(
-		callback: (value: NativeConnAdapter, key: string, map: ReadonlyMap<string, NativeConnAdapter>) => void,
+		callback: (
+			value: NativeConnAdapter,
+			key: string,
+			map: ReadonlyMap<string, NativeConnAdapter>,
+		) => void,
 		thisArg?: unknown,
 	): void {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
@@ -2578,7 +2592,11 @@ export class ActorContextHandleAdapter {
 
 	get conns(): ReadonlyMap<string, NativeConnAdapter> {
 		if (!this.#connMap) {
-			this.#connMap = new NativeConnectionMap(this.#runtime, this.#ctx, this.#schemas);
+			this.#connMap = new NativeConnectionMap(
+				this.#runtime,
+				this.#ctx,
+				this.#schemas,
+			);
 		}
 		return this.#connMap;
 	}

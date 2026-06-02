@@ -1,9 +1,9 @@
 import { convertRegistryConfigToClientConfig } from "@/client/config";
+import { stringifyError } from "@/common/utils";
 import {
 	getDatacenters,
 	updateRunnerConfig,
 } from "@/engine-client/api-endpoints";
-import { stringifyError } from "@/common/utils";
 import type { RegistryConfig } from "@/registry/config";
 import { logger } from "@/registry/log";
 
@@ -16,11 +16,14 @@ function sleep(ms: number): Promise<void> {
 
 function configureTimeoutMs() {
 	const value = process.env.RIVET_SERVERLESS_CONFIGURE_TIMEOUT_MS;
-	if (value === undefined || value === "") return DEFAULT_CONFIGURE_TIMEOUT_MS;
+	if (value === undefined || value === "")
+		return DEFAULT_CONFIGURE_TIMEOUT_MS;
 
 	const parsed = Number(value);
 	if (!Number.isFinite(parsed) || parsed < 0) {
-		throw new Error("RIVET_SERVERLESS_CONFIGURE_TIMEOUT_MS must be a finite non-negative number");
+		throw new Error(
+			"RIVET_SERVERLESS_CONFIGURE_TIMEOUT_MS must be a finite non-negative number",
+		);
 	}
 
 	return parsed;
@@ -40,13 +43,19 @@ export async function configureServerlessPool(
 		attempts += 1;
 		try {
 			if (!config.namespace) {
-				throw new Error("namespace is required for serverless configuration");
+				throw new Error(
+					"namespace is required for serverless configuration",
+				);
 			}
 			if (!config.endpoint) {
-				throw new Error("endpoint is required for serverless configuration");
+				throw new Error(
+					"endpoint is required for serverless configuration",
+				);
 			}
 			if (!config.configurePool) {
-				throw new Error("configurePool is required for serverless configuration");
+				throw new Error(
+					"configurePool is required for serverless configuration",
+				);
 			}
 
 			const customConfig = config.configurePool;
@@ -55,7 +64,9 @@ export async function configureServerlessPool(
 			const poolName = customConfig.name ?? "default";
 			const serverlessToken = config.token ?? config.publicToken;
 			const headers = {
-				...(serverlessToken ? { "x-rivet-token": serverlessToken } : {}),
+				...(serverlessToken
+					? { "x-rivet-token": serverlessToken }
+					: {}),
 				...(customConfig.headers ?? {}),
 			};
 			const serverlessConfig = {

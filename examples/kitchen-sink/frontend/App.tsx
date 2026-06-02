@@ -1,11 +1,8 @@
 import { createRivetKit } from "@rivetkit/react";
-import { createClient } from "rivetkit/client";
-import mermaid from "mermaid";
-import { Highlight, themes } from "prism-react-renderer";
 import {
+	Clipboard,
 	Code,
 	Compass,
-	Clipboard,
 	Database,
 	FlaskConical,
 	GitBranch,
@@ -15,7 +12,10 @@ import {
 	Radio,
 	RefreshCw,
 } from "lucide-react";
+import mermaid from "mermaid";
+import { Highlight, themes } from "prism-react-renderer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 import {
 	ACTION_TEMPLATES,
@@ -85,8 +85,7 @@ const viteRivetEndpoint = import.meta.env.VITE_RIVET_ENDPOINT as
 	| undefined;
 const rivetEndpoint =
 	viteRivetEndpoint ?? `${globalThis.location.origin}/api/rivet`;
-const mockAgenticLoopEndpoint =
-	viteRivetEndpoint ?? "http://127.0.0.1:6420";
+const mockAgenticLoopEndpoint = viteRivetEndpoint ?? "http://127.0.0.1:6420";
 const mockAgenticLoopEndpointStorageKey = `kitchen-sink:mock-agentic-loop:endpoint:${mockAgenticLoopEndpoint}`;
 
 const { useActor } = createRivetKit<typeof registry>(rivetEndpoint);
@@ -95,13 +94,22 @@ type ActorPanelActor = {
 	connStatus: string | null;
 	error: unknown;
 	handle: {
-		action: (request: { name: string; args: unknown[] }) => Promise<unknown>;
-		fetch: (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+		action: (request: {
+			name: string;
+			args: unknown[];
+		}) => Promise<unknown>;
+		fetch: (
+			input: RequestInfo | URL,
+			init?: RequestInit,
+		) => Promise<Response>;
 		resolve: () => Promise<string>;
 		webSocket: () => Promise<WebSocket>;
 	} | null;
 	connection: {
-		on: (event: string, callback: (...args: unknown[]) => void) => () => void;
+		on: (
+			event: string,
+			callback: (...args: unknown[]) => void,
+		) => () => void;
 	} | null;
 };
 
@@ -184,7 +192,9 @@ export function App() {
 			<aside className="sidebar">
 				<div>
 					<h1>Kitchen Sink</h1>
-					<p className="subtitle">Explore every Rivet Actor feature</p>
+					<p className="subtitle">
+						Explore every Rivet Actor feature
+					</p>
 				</div>
 
 				<div className="mobile-select">
@@ -192,7 +202,9 @@ export function App() {
 					<select
 						id="page-select"
 						value={activePage.id}
-						onChange={(event) => setActivePageId(event.target.value)}
+						onChange={(event) =>
+							setActivePageId(event.target.value)
+						}
 					>
 						{PAGE_GROUPS.map((group) => (
 							<optgroup key={group.id} label={group.title}>
@@ -273,7 +285,7 @@ function ActorDemoPanel({ page }: { page: PageConfig }) {
 
 	useEffect(() => {
 		setSelectedIdx(0);
-	}, [page.id]);
+	}, []);
 
 	const actorName = page.actors[selectedIdx] ?? page.actors[0];
 
@@ -359,7 +371,9 @@ function ActorView({
 	});
 
 	const templates = ACTION_TEMPLATES[actorName] ?? [];
-	const stateAction = page.noAutoState ? undefined : getStateAction(actorName);
+	const stateAction = page.noAutoState
+		? undefined
+		: getStateAction(actorName);
 
 	const [stateRefreshCounter, setStateRefreshCounter] = useState(0);
 	const triggerStateRefresh = useCallback(
@@ -372,16 +386,19 @@ function ActorView({
 			<div className="actor-view-header">
 				<div className="actor-view-title-row">
 					{page.actors.length === 1 && (
-						<span className="actor-name">{formatActorName(actorName)}</span>
+						<span className="actor-name">
+							{formatActorName(actorName)}
+						</span>
 					)}
 					<div className="status-pill">
 						<span
-							className={`status-dot ${actor.connStatus === "connected"
+							className={`status-dot ${
+								actor.connStatus === "connected"
 									? "connected"
 									: actor.error
 										? "error"
 										: ""
-								}`}
+							}`}
 						/>
 						<span>{actor.connStatus ?? "idle"}</span>
 					</div>
@@ -433,7 +450,10 @@ function ActorView({
 							refreshTrigger={stateRefreshCounter}
 						/>
 					)}
-					<EventsPanel actor={actor} defaultEvents={page.defaultEvents} />
+					<EventsPanel
+						actor={actor}
+						defaultEvents={page.defaultEvents}
+					/>
 				</div>
 			</div>
 		</div>
@@ -524,7 +544,9 @@ function StatePanel({
 			});
 			setState(formatJson(result));
 		} catch (err) {
-			setState(`Error: ${err instanceof Error ? err.message : String(err)}`);
+			setState(
+				`Error: ${err instanceof Error ? err.message : String(err)}`,
+			);
 		} finally {
 			setIsRefreshing(false);
 		}
@@ -601,13 +623,21 @@ function EventsPanel({
 
 		const names = subscribedKey.split(",");
 		const stops = names.map((name) =>
-			actor.connection!.on(name, (...args: unknown[]) => {
+			actor.connection?.on(name, (...args: unknown[]) => {
 				const now = new Date();
-				const time = [now.getHours(), now.getMinutes(), now.getSeconds()]
+				const time = [
+					now.getHours(),
+					now.getMinutes(),
+					now.getSeconds(),
+				]
 					.map((n) => n.toString().padStart(2, "0"))
 					.join(":");
 				setEvents((prev) => [
-					{ time, name, data: formatJson(args.length === 1 ? args[0] : args) },
+					{
+						time,
+						name,
+						data: formatJson(args.length === 1 ? args[0] : args),
+					},
 					...prev.slice(0, 49),
 				]);
 			}),
@@ -726,7 +756,7 @@ function ActionRunner({
 	);
 	const [result, setResult] = useState<string>("");
 	const [error, setError] = useState<string>("");
-	const [isRunning, setIsRunning] = useState(false);
+	const [_isRunning, _setIsRunning] = useState(false);
 	const [lastLatency, setLastLatency] = useState<number | null>(null);
 	const [inflight, setInflight] = useState(0);
 
@@ -789,7 +819,9 @@ function ActionRunner({
 
 	if (templates.length === 0) {
 		return (
-			<div className="no-actions">No actions available for this actor.</div>
+			<div className="no-actions">
+				No actions available for this actor.
+			</div>
 		);
 	}
 
@@ -826,9 +858,13 @@ function ActionRunner({
 					</button>
 				</div>
 				{lastLatency !== null && (
-					<div className="action-latency">{lastLatency.toFixed(0)}ms</div>
+					<div className="action-latency">
+						{lastLatency.toFixed(0)}ms
+					</div>
 				)}
-				{!parsedArgs.ok && <div className="notice">{parsedArgs.error}</div>}
+				{!parsedArgs.ok && (
+					<div className="notice">{parsedArgs.error}</div>
+				)}
 				{error && <div className="notice">{error}</div>}
 				{result && <pre className="action-result">{result}</pre>}
 			</div>
@@ -1060,12 +1096,13 @@ function validateAgenticRows(
 	return {
 		ok: problems.length === 0,
 		problems,
-			expectedRows: expectedRequests.reduce(
+		expectedRows:
+			expectedRequests.reduce(
 				(total, request) => total + request.seconds,
 				0,
 			) + (activeRequest?.received.length ?? 0),
-		};
-	}
+	};
+}
 
 function sleepStatusFromPayload(
 	source: string,
@@ -1135,8 +1172,11 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		received: number[];
 	} | null>(null);
 	const [queuedRequests, setQueuedRequests] = useState<AgenticRequest[]>([]);
-	const [expectedRequests, setExpectedRequests] = useState<AgenticRequest[]>([]);
-	const [lastVerification, setLastVerification] = useState("No requests yet.");
+	const [expectedRequests, setExpectedRequests] = useState<AgenticRequest[]>(
+		[],
+	);
+	const [lastVerification, setLastVerification] =
+		useState("No requests yet.");
 	const [lastHistory, setLastHistory] = useState("No history loaded yet.");
 	const [lastBypass, setLastBypass] = useState("No bypass requests yet.");
 	const [lastHealth, setLastHealth] = useState("No health checks yet.");
@@ -1168,9 +1208,13 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 	const expectedRequestsRef = useRef<AgenticRequest[]>([]);
 	const pendingRequestsRef = useRef<AgenticRequest[]>([]);
 	const activeRequestRef = useRef<ActiveAgenticRequest | null>(null);
-	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const copyResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+		null,
+	);
 	const reconnectStartedAtRef = useRef<number | null>(null);
 	const mainSocketCleanupRef = useRef<(() => void) | null>(null);
 	const closedByUserRef = useRef(false);
@@ -1212,14 +1256,17 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		}
 	}, []);
 
-	const markValidationError = useCallback((message: string) => {
-		setStats((prev) => ({
-			...prev,
-			validationErrors: prev.validationErrors + 1,
-		}));
-		setLastVerification(message);
-		addLog("error", message);
-	}, [addLog]);
+	const markValidationError = useCallback(
+		(message: string) => {
+			setStats((prev) => ({
+				...prev,
+				validationErrors: prev.validationErrors + 1,
+			}));
+			setLastVerification(message);
+			addLog("error", message);
+		},
+		[addLog],
+	);
 
 	const scheduleProgressTimeout = useCallback(() => {
 		clearProgressTimer();
@@ -1339,49 +1386,56 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 					? prev.validationErrors
 					: prev.validationErrors + 1,
 			}));
-			setLastVerification(formatJson({ expectedState, actorRows: result }));
+			setLastVerification(
+				formatJson({ expectedState, actorRows: result }),
+			);
 			addLog(
 				result.ok ? "ok" : "error",
 				`manual verify ${result.ok ? "ok" : "failed"} expectedRows=${result.expectedTotalRows} actorRows=${result.totalRows} unexpected=${result.unexpectedRequestIds.length}`,
 			);
 			requestHistory();
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const message =
+				error instanceof Error ? error.message : String(error);
 			markValidationError(`manual verification failed: ${message}`);
 		} finally {
 			setIsVerifying(false);
 		}
 	}, [addLog, markValidationError, requestHistory]);
 
-	const handleHistory = useCallback((message: AgenticHistory) => {
-		const validation = validateAgenticRows(
-			message.entries,
-			expectedRequestsRef.current,
-			activeRequestRef.current,
-		);
-		setStats((prev) => ({
-			...prev,
-			actualRows: message.totalRows,
-			expectedRows: validation.expectedRows,
-			validationErrors: validation.ok
-				? prev.validationErrors
-				: prev.validationErrors + 1,
-		}));
-		if (validation.ok) {
-			setLastHistory(
-				`history ok: rows=${message.totalRows}, expected=${validation.expectedRows}`,
+	const handleHistory = useCallback(
+		(message: AgenticHistory) => {
+			const validation = validateAgenticRows(
+				message.entries,
+				expectedRequestsRef.current,
+				activeRequestRef.current,
 			);
-			addLog("ok", `history rows=${message.totalRows}`);
-		} else {
-			const text = `history mismatch: ${validation.problems.join("; ")}`;
-			setLastHistory(text);
-			addLog("error", text);
-		}
-	}, [addLog]);
+			setStats((prev) => ({
+				...prev,
+				actualRows: message.totalRows,
+				expectedRows: validation.expectedRows,
+				validationErrors: validation.ok
+					? prev.validationErrors
+					: prev.validationErrors + 1,
+			}));
+			if (validation.ok) {
+				setLastHistory(
+					`history ok: rows=${message.totalRows}, expected=${validation.expectedRows}`,
+				);
+				addLog("ok", `history rows=${message.totalRows}`);
+			} else {
+				const text = `history mismatch: ${validation.problems.join("; ")}`;
+				setLastHistory(text);
+				addLog("error", text);
+			}
+		},
+		[addLog],
+	);
 
 	const handleStarted = useCallback(
 		(message: Extract<AgenticServerMessage, { type: "started" }>) => {
-			const [nextRequest, ...remainingRequests] = pendingRequestsRef.current;
+			const [nextRequest, ...remainingRequests] =
+				pendingRequestsRef.current;
 			if (!nextRequest || nextRequest.requestId !== message.requestId) {
 				markValidationError(
 					`unexpected start for ${message.requestId.slice(0, 8)}`,
@@ -1417,187 +1471,231 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		[addLog, markValidationError, scheduleProgressTimeout],
 	);
 
-	const handleProgress = useCallback((message: Extract<AgenticServerMessage, { type: "progress" }>) => {
-		const active = activeRequestRef.current;
-		if (!active || active.requestId !== message.requestId) {
-			markValidationError(`unexpected progress for ${message.requestId.slice(0, 8)}`);
-			return;
-		}
-		const now = performance.now();
-		const gapMs = now - active.lastProgressAt;
-		if (message.idx !== active.expectedIdx) {
-			markValidationError(
-				`expected idx=${active.expectedIdx}, got idx=${message.idx}`,
-			);
-		}
-		active.received.push(message.idx);
-		active.expectedIdx += 1;
-		active.lastProgressAt = now;
-		setCurrentRequest({
-			requestId: active.requestId,
-			seconds: active.seconds,
-			received: [...active.received],
-		});
-		addLog(
-			"info",
-			`progress ${message.idx}/${message.seconds} gapMs=${gapMs.toFixed(0)}`,
-		);
-		scheduleProgressTimeout();
-	}, [addLog, markValidationError, scheduleProgressTimeout]);
-
-	const handleDone = useCallback(async (message: Extract<AgenticServerMessage, { type: "done" }>) => {
-		const active = activeRequestRef.current;
-		clearProgressTimer();
-		activeRequestRef.current = null;
-
-		if (!active || active.requestId !== message.requestId) {
-			markValidationError(`unexpected done for ${message.requestId.slice(0, 8)}`);
-			return;
-		}
-
-		const contiguous =
-			active.received.length === active.seconds &&
-			active.received.every((idx, offset) => idx === offset + 1);
-		if (!contiguous || !message.verification.ok) {
-			markValidationError(
-				`done verification failed: stream=[${active.received.join(", ")}], actor=${formatJson(message.verification)}`,
-			);
-			return;
-		}
-
-		const completed = {
-			requestId: active.requestId,
-			seconds: active.seconds,
-		};
-		expectedRequestsRef.current = [...expectedRequestsRef.current, completed];
-		setExpectedRequests(expectedRequestsRef.current);
-		setStats((prev) => ({
-			...prev,
-			requests: prev.requests + 1,
-			expectedRows: prev.expectedRows + active.seconds,
-		}));
-		setLastVerification(
-			`request ${active.requestId.slice(0, 8)} ok: ${active.seconds}/${active.seconds} rows`,
-		);
-		addLog(
-			"ok",
-			`done ${active.requestId.slice(0, 8)} rows=${active.seconds}`,
-		);
-		requestHistory();
-	}, [addLog, clearProgressTimer, markValidationError, requestHistory]);
-
-	const onSocketMessage = useCallback((event: MessageEvent) => {
-		if (typeof event.data !== "string") return;
-		const message = JSON.parse(event.data) as AgenticServerMessage;
-		if (message.type === "hello") {
-			addLog("ok", `main ws hello ${message.connectionId.slice(0, 8)}`);
-			return;
-		}
-		if (message.type === "history") {
-			handleHistory(message);
-			return;
-		}
-		if (message.type === "debugEvent") {
-			const level =
-				message.name === "onSleepStart" || message.name === "webSocketClose"
-					? "warn"
-					: "info";
-			addLog(level, formatAgenticDebugEvent(message));
-			return;
-		}
-		if (message.type === "started") {
-			handleStarted(message);
-			return;
-		}
-		if (message.type === "progress") {
-			handleProgress(message);
-			return;
-		}
-		if (message.type === "done") {
-			void handleDone(message);
-			return;
-		}
-		if (message.type === "error") {
-			markValidationError(`actor error: ${message.message}`);
-		}
-	}, [addLog, handleDone, handleHistory, handleProgress, handleStarted, markValidationError]);
-
-	const connect = useCallback(async (countReconnect = false) => {
-		if (isConnecting) return;
-		setIsConnecting(true);
-		setConnectionStatus("connecting");
-		closedByUserRef.current = false;
-		const startedAt = performance.now();
-
-		try {
-			const client = createClient<typeof registry>({
-				endpoint,
-				namespace,
-				token,
-				encoding: "json",
-			});
-			const handle = client.mockAgenticLoop.getOrCreate([
-				key,
-			]) as unknown as AgenticHandle;
-			handleRef.current = handle;
-			const resolvedActorId = await handle.resolve();
-			setActorId(resolvedActorId);
-
-			const socket = await handle.webSocket();
-			await waitForSocketOpen(socket);
-			socketRef.current = socket;
-			const onClose = (event: CloseEvent) => {
-				if (socketRef.current === socket) socketRef.current = null;
-				setConnectionStatus("closed");
-				const closedLocally = closedByUserRef.current;
-				addLog(
-					closedLocally ? "info" : "warn",
-					`${closedLocally ? "local" : "remote"} main ws close code=${event.code} reason=${event.reason}`,
+	const handleProgress = useCallback(
+		(message: Extract<AgenticServerMessage, { type: "progress" }>) => {
+			const active = activeRequestRef.current;
+			if (!active || active.requestId !== message.requestId) {
+				markValidationError(
+					`unexpected progress for ${message.requestId.slice(0, 8)}`,
 				);
-				if (!closedLocally) {
-					reconnectStartedAtRef.current = performance.now();
-					reconnectTimerRef.current = setTimeout(() => {
-						void connect(true);
-					}, 500);
-				}
-			};
-			const onError = () => {
-				addLog("error", "main ws error");
-			};
-			socket.addEventListener("message", onSocketMessage);
-			socket.addEventListener("close", onClose);
-			socket.addEventListener("error", onError);
-			mainSocketCleanupRef.current = () => {
-				socket.removeEventListener("message", onSocketMessage);
-				socket.removeEventListener("close", onClose);
-				socket.removeEventListener("error", onError);
-			};
-
-			const elapsedMs = performance.now() - startedAt;
-			setConnectionStatus("connected");
-			if (countReconnect || reconnectStartedAtRef.current !== null) {
-				const reconnectMs = reconnectStartedAtRef.current === null
-					? elapsedMs
-					: performance.now() - reconnectStartedAtRef.current;
-				reconnectStartedAtRef.current = null;
-				setStats((prev) => ({
-					...prev,
-					reconnects: prev.reconnects + 1,
-					maxReconnectMs: Math.max(prev.maxReconnectMs, reconnectMs),
-				}));
-				addLog("ok", `reconnected in ${reconnectMs.toFixed(0)}ms`);
-			} else {
-				addLog("ok", `connected actor=${resolvedActorId}`);
+				return;
 			}
+			const now = performance.now();
+			const gapMs = now - active.lastProgressAt;
+			if (message.idx !== active.expectedIdx) {
+				markValidationError(
+					`expected idx=${active.expectedIdx}, got idx=${message.idx}`,
+				);
+			}
+			active.received.push(message.idx);
+			active.expectedIdx += 1;
+			active.lastProgressAt = now;
+			setCurrentRequest({
+				requestId: active.requestId,
+				seconds: active.seconds,
+				received: [...active.received],
+			});
+			addLog(
+				"info",
+				`progress ${message.idx}/${message.seconds} gapMs=${gapMs.toFixed(0)}`,
+			);
+			scheduleProgressTimeout();
+		},
+		[addLog, markValidationError, scheduleProgressTimeout],
+	);
+
+	const handleDone = useCallback(
+		async (message: Extract<AgenticServerMessage, { type: "done" }>) => {
+			const active = activeRequestRef.current;
+			clearProgressTimer();
+			activeRequestRef.current = null;
+
+			if (!active || active.requestId !== message.requestId) {
+				markValidationError(
+					`unexpected done for ${message.requestId.slice(0, 8)}`,
+				);
+				return;
+			}
+
+			const contiguous =
+				active.received.length === active.seconds &&
+				active.received.every((idx, offset) => idx === offset + 1);
+			if (!contiguous || !message.verification.ok) {
+				markValidationError(
+					`done verification failed: stream=[${active.received.join(", ")}], actor=${formatJson(message.verification)}`,
+				);
+				return;
+			}
+
+			const completed = {
+				requestId: active.requestId,
+				seconds: active.seconds,
+			};
+			expectedRequestsRef.current = [
+				...expectedRequestsRef.current,
+				completed,
+			];
+			setExpectedRequests(expectedRequestsRef.current);
+			setStats((prev) => ({
+				...prev,
+				requests: prev.requests + 1,
+				expectedRows: prev.expectedRows + active.seconds,
+			}));
+			setLastVerification(
+				`request ${active.requestId.slice(0, 8)} ok: ${active.seconds}/${active.seconds} rows`,
+			);
+			addLog(
+				"ok",
+				`done ${active.requestId.slice(0, 8)} rows=${active.seconds}`,
+			);
 			requestHistory();
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			setConnectionStatus("error");
-			addLog("error", `connect failed: ${message}`);
-		} finally {
-			setIsConnecting(false);
-		}
-	}, [addLog, endpoint, isConnecting, key, namespace, onSocketMessage, requestHistory, token]);
+		},
+		[addLog, clearProgressTimer, markValidationError, requestHistory],
+	);
+
+	const onSocketMessage = useCallback(
+		(event: MessageEvent) => {
+			if (typeof event.data !== "string") return;
+			const message = JSON.parse(event.data) as AgenticServerMessage;
+			if (message.type === "hello") {
+				addLog(
+					"ok",
+					`main ws hello ${message.connectionId.slice(0, 8)}`,
+				);
+				return;
+			}
+			if (message.type === "history") {
+				handleHistory(message);
+				return;
+			}
+			if (message.type === "debugEvent") {
+				const level =
+					message.name === "onSleepStart" ||
+					message.name === "webSocketClose"
+						? "warn"
+						: "info";
+				addLog(level, formatAgenticDebugEvent(message));
+				return;
+			}
+			if (message.type === "started") {
+				handleStarted(message);
+				return;
+			}
+			if (message.type === "progress") {
+				handleProgress(message);
+				return;
+			}
+			if (message.type === "done") {
+				void handleDone(message);
+				return;
+			}
+			if (message.type === "error") {
+				markValidationError(`actor error: ${message.message}`);
+			}
+		},
+		[
+			addLog,
+			handleDone,
+			handleHistory,
+			handleProgress,
+			handleStarted,
+			markValidationError,
+		],
+	);
+
+	const connect = useCallback(
+		async (countReconnect = false) => {
+			if (isConnecting) return;
+			setIsConnecting(true);
+			setConnectionStatus("connecting");
+			closedByUserRef.current = false;
+			const startedAt = performance.now();
+
+			try {
+				const client = createClient<typeof registry>({
+					endpoint,
+					namespace,
+					token,
+					encoding: "json",
+				});
+				const handle = client.mockAgenticLoop.getOrCreate([
+					key,
+				]) as unknown as AgenticHandle;
+				handleRef.current = handle;
+				const resolvedActorId = await handle.resolve();
+				setActorId(resolvedActorId);
+
+				const socket = await handle.webSocket();
+				await waitForSocketOpen(socket);
+				socketRef.current = socket;
+				const onClose = (event: CloseEvent) => {
+					if (socketRef.current === socket) socketRef.current = null;
+					setConnectionStatus("closed");
+					const closedLocally = closedByUserRef.current;
+					addLog(
+						closedLocally ? "info" : "warn",
+						`${closedLocally ? "local" : "remote"} main ws close code=${event.code} reason=${event.reason}`,
+					);
+					if (!closedLocally) {
+						reconnectStartedAtRef.current = performance.now();
+						reconnectTimerRef.current = setTimeout(() => {
+							void connect(true);
+						}, 500);
+					}
+				};
+				const onError = () => {
+					addLog("error", "main ws error");
+				};
+				socket.addEventListener("message", onSocketMessage);
+				socket.addEventListener("close", onClose);
+				socket.addEventListener("error", onError);
+				mainSocketCleanupRef.current = () => {
+					socket.removeEventListener("message", onSocketMessage);
+					socket.removeEventListener("close", onClose);
+					socket.removeEventListener("error", onError);
+				};
+
+				const elapsedMs = performance.now() - startedAt;
+				setConnectionStatus("connected");
+				if (countReconnect || reconnectStartedAtRef.current !== null) {
+					const reconnectMs =
+						reconnectStartedAtRef.current === null
+							? elapsedMs
+							: performance.now() - reconnectStartedAtRef.current;
+					reconnectStartedAtRef.current = null;
+					setStats((prev) => ({
+						...prev,
+						reconnects: prev.reconnects + 1,
+						maxReconnectMs: Math.max(
+							prev.maxReconnectMs,
+							reconnectMs,
+						),
+					}));
+					addLog("ok", `reconnected in ${reconnectMs.toFixed(0)}ms`);
+				} else {
+					addLog("ok", `connected actor=${resolvedActorId}`);
+				}
+				requestHistory();
+			} catch (error) {
+				const message =
+					error instanceof Error ? error.message : String(error);
+				setConnectionStatus("error");
+				addLog("error", `connect failed: ${message}`);
+			} finally {
+				setIsConnecting(false);
+			}
+		},
+		[
+			addLog,
+			endpoint,
+			isConnecting,
+			key,
+			namespace,
+			onSocketMessage,
+			requestHistory,
+			token,
+		],
+	);
 
 	const disconnect = useCallback(() => {
 		closedByUserRef.current = true;
@@ -1620,9 +1718,14 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		const safeSeconds = Math.max(1, Math.floor(seconds));
 		const requestId = crypto.randomUUID();
 		const queuedRequest = { requestId, seconds: safeSeconds };
-		pendingRequestsRef.current = [...pendingRequestsRef.current, queuedRequest];
+		pendingRequestsRef.current = [
+			...pendingRequestsRef.current,
+			queuedRequest,
+		];
 		setQueuedRequests(pendingRequestsRef.current);
-		socket.send(JSON.stringify({ type: "infer", requestId, seconds: safeSeconds }));
+		socket.send(
+			JSON.stringify({ type: "infer", requestId, seconds: safeSeconds }),
+		);
 		addLog(
 			"info",
 			`queued infer ${requestId.slice(0, 8)} seconds=${safeSeconds} queue=${pendingRequestsRef.current.length}`,
@@ -1652,22 +1755,37 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			});
 			const text = await response.text();
 			if (!response.ok) {
-				setStats((prev) => ({ ...prev, sleepErrors: prev.sleepErrors + 1 }));
+				setStats((prev) => ({
+					...prev,
+					sleepErrors: prev.sleepErrors + 1,
+				}));
 				addLog("error", `sleep ${response.status}: ${text}`);
 				return;
 			}
 			addLog("ok", `sleep ${response.status}`);
 		} catch (error) {
-			setStats((prev) => ({ ...prev, sleepErrors: prev.sleepErrors + 1 }));
-			addLog("error", `sleep failed: ${error instanceof Error ? error.message : String(error)}`);
+			setStats((prev) => ({
+				...prev,
+				sleepErrors: prev.sleepErrors + 1,
+			}));
+			addLog(
+				"error",
+				`sleep failed: ${error instanceof Error ? error.message : String(error)}`,
+			);
 		}
 	}, [actorId, addLog, endpoint, namespace, token]);
 
-	const noteActorStopping = useCallback((message: string, text: string) => {
-		setStats((prev) => ({ ...prev, actorStopping: prev.actorStopping + 1 }));
-		setLastBypass(message);
-		addLog("warn", `${message} ${text}`);
-	}, [addLog]);
+	const noteActorStopping = useCallback(
+		(message: string, text: string) => {
+			setStats((prev) => ({
+				...prev,
+				actorStopping: prev.actorStopping + 1,
+			}));
+			setLastBypass(message);
+			addLog("warn", `${message} ${text}`);
+		},
+		[addLog],
+	);
 
 	const testHttpBypass = useCallback(async () => {
 		const handle = handleRef.current;
@@ -1713,7 +1831,8 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			setLastBypass(message);
 			addLog("ok", message);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const message =
+				error instanceof Error ? error.message : String(error);
 			setLastBypass(`http bypass error: ${message}`);
 			addLog("error", `http bypass error: ${message}`);
 		}
@@ -1761,7 +1880,8 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			setLastBypass(message);
 			addLog("ok", message);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
+			const message =
+				error instanceof Error ? error.message : String(error);
 			setLastBypass(`http error: ${message}`);
 			addLog("error", `http error: ${message}`);
 		}
@@ -1780,53 +1900,68 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 				gateway: { bypassConnectable: true },
 			});
 			await waitForSocketOpen(socket);
-			const result = await new Promise<Extract<AgenticServerMessage, { type: "pong" }>>(
-				(resolve, reject) => {
-					const timeout = setTimeout(() => {
-						cleanup();
-						reject(new Error("timed out waiting for bypass pong"));
-					}, 10_000);
-					const cleanup = () => {
-						clearTimeout(timeout);
-						socket?.removeEventListener("message", onMessage);
-						socket?.removeEventListener("close", onClose);
-						socket?.removeEventListener("error", onError);
-					};
-					const onMessage = (event: MessageEvent) => {
-						if (typeof event.data !== "string") return;
-						const message = JSON.parse(event.data) as AgenticServerMessage;
-						if (message.type !== "pong" || message.probeId !== probeId) return;
-						cleanup();
-						resolve(message);
-					};
-					const onClose = (event: CloseEvent) => {
-						cleanup();
-						reject(
-							new Error(`closed code=${event.code} reason=${event.reason}`),
-						);
-					};
-					const onError = () => {
-						cleanup();
-						reject(new Error("websocket error"));
-					};
-					socket?.addEventListener("message", onMessage);
-					socket?.addEventListener("close", onClose, { once: true });
-					socket?.addEventListener("error", onError, { once: true });
-					socket?.send(JSON.stringify({ type: "ping", probeId }));
-				},
-			);
+			const result = await new Promise<
+				Extract<AgenticServerMessage, { type: "pong" }>
+			>((resolve, reject) => {
+				const timeout = setTimeout(() => {
+					cleanup();
+					reject(new Error("timed out waiting for bypass pong"));
+				}, 10_000);
+				const cleanup = () => {
+					clearTimeout(timeout);
+					socket?.removeEventListener("message", onMessage);
+					socket?.removeEventListener("close", onClose);
+					socket?.removeEventListener("error", onError);
+				};
+				const onMessage = (event: MessageEvent) => {
+					if (typeof event.data !== "string") return;
+					const message = JSON.parse(
+						event.data,
+					) as AgenticServerMessage;
+					if (message.type !== "pong" || message.probeId !== probeId)
+						return;
+					cleanup();
+					resolve(message);
+				};
+				const onClose = (event: CloseEvent) => {
+					cleanup();
+					reject(
+						new Error(
+							`closed code=${event.code} reason=${event.reason}`,
+						),
+					);
+				};
+				const onError = () => {
+					cleanup();
+					reject(new Error("websocket error"));
+				};
+				socket?.addEventListener("message", onMessage);
+				socket?.addEventListener("close", onClose, { once: true });
+				socket?.addEventListener("error", onError, { once: true });
+				socket?.send(JSON.stringify({ type: "ping", probeId }));
+			});
 			const sleepStatus = sleepStatusFromPayload("ws bypass", result);
 			setStats((prev) => ({
 				...prev,
 				bypassWsOk: prev.bypassWsOk + 1,
-				sleepProofWs: prev.sleepProofWs + (sleepStatus.sleepStarted ? 1 : 0),
+				sleepProofWs:
+					prev.sleepProofWs + (sleepStatus.sleepStarted ? 1 : 0),
 			}));
-			setLastBypass(`ws bypass ok: sleepStarted=${sleepStatus.sleepStarted}`);
+			setLastBypass(
+				`ws bypass ok: sleepStarted=${sleepStatus.sleepStarted}`,
+			);
 			addLog("ok", `ws bypass sleepStarted=${sleepStatus.sleepStarted}`);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			if (message.includes("actor.stopping") || message.includes("Server Error")) {
-				setStats((prev) => ({ ...prev, actorStopping: prev.actorStopping + 1 }));
+			const message =
+				error instanceof Error ? error.message : String(error);
+			if (
+				message.includes("actor.stopping") ||
+				message.includes("Server Error")
+			) {
+				setStats((prev) => ({
+					...prev,
+					actorStopping: prev.actorStopping + 1,
+				}));
 				setLastBypass(`ws bypass transient close: ${message}`);
 				addLog("warn", `ws bypass transient close: ${message}`);
 			} else {
@@ -1855,53 +1990,66 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 		try {
 			socket = await handle.webSocket("/bypass");
 			await waitForSocketOpen(socket);
-			const result = await new Promise<Extract<AgenticServerMessage, { type: "pong" }>>(
-				(resolve, reject) => {
-					const timeout = setTimeout(() => {
-						cleanup();
-						reject(new Error("timed out waiting for ws pong"));
-					}, 10_000);
-					const cleanup = () => {
-						clearTimeout(timeout);
-						socket?.removeEventListener("message", onMessage);
-						socket?.removeEventListener("close", onClose);
-						socket?.removeEventListener("error", onError);
-					};
-					const onMessage = (event: MessageEvent) => {
-						if (typeof event.data !== "string") return;
-						const message = JSON.parse(event.data) as AgenticServerMessage;
-						if (message.type !== "pong" || message.probeId !== probeId) return;
-						cleanup();
-						resolve(message);
-					};
-					const onClose = (event: CloseEvent) => {
-						cleanup();
-						reject(
-							new Error(`closed code=${event.code} reason=${event.reason}`),
-						);
-					};
-					const onError = () => {
-						cleanup();
-						reject(new Error("websocket error"));
-					};
-					socket?.addEventListener("message", onMessage);
-					socket?.addEventListener("close", onClose, { once: true });
-					socket?.addEventListener("error", onError, { once: true });
-					socket?.send(JSON.stringify({ type: "ping", probeId }));
-				},
-			);
+			const result = await new Promise<
+				Extract<AgenticServerMessage, { type: "pong" }>
+			>((resolve, reject) => {
+				const timeout = setTimeout(() => {
+					cleanup();
+					reject(new Error("timed out waiting for ws pong"));
+				}, 10_000);
+				const cleanup = () => {
+					clearTimeout(timeout);
+					socket?.removeEventListener("message", onMessage);
+					socket?.removeEventListener("close", onClose);
+					socket?.removeEventListener("error", onError);
+				};
+				const onMessage = (event: MessageEvent) => {
+					if (typeof event.data !== "string") return;
+					const message = JSON.parse(
+						event.data,
+					) as AgenticServerMessage;
+					if (message.type !== "pong" || message.probeId !== probeId)
+						return;
+					cleanup();
+					resolve(message);
+				};
+				const onClose = (event: CloseEvent) => {
+					cleanup();
+					reject(
+						new Error(
+							`closed code=${event.code} reason=${event.reason}`,
+						),
+					);
+				};
+				const onError = () => {
+					cleanup();
+					reject(new Error("websocket error"));
+				};
+				socket?.addEventListener("message", onMessage);
+				socket?.addEventListener("close", onClose, { once: true });
+				socket?.addEventListener("error", onError, { once: true });
+				socket?.send(JSON.stringify({ type: "ping", probeId }));
+			});
 			const sleepStatus = sleepStatusFromPayload("ws", result);
 			setStats((prev) => ({
 				...prev,
 				wsOk: prev.wsOk + 1,
-				sleepProofWs: prev.sleepProofWs + (sleepStatus.sleepStarted ? 1 : 0),
+				sleepProofWs:
+					prev.sleepProofWs + (sleepStatus.sleepStarted ? 1 : 0),
 			}));
 			setLastBypass(`ws ok: sleepStarted=${sleepStatus.sleepStarted}`);
 			addLog("ok", `ws sleepStarted=${sleepStatus.sleepStarted}`);
 		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			if (message.includes("actor.stopping") || message.includes("Server Error")) {
-				setStats((prev) => ({ ...prev, actorStopping: prev.actorStopping + 1 }));
+			const message =
+				error instanceof Error ? error.message : String(error);
+			if (
+				message.includes("actor.stopping") ||
+				message.includes("Server Error")
+			) {
+				setStats((prev) => ({
+					...prev,
+					actorStopping: prev.actorStopping + 1,
+				}));
 				setLastBypass(`ws transient close: ${message}`);
 				addLog("warn", `ws transient close: ${message}`);
 			} else {
@@ -1921,8 +2069,10 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 
 	useEffect(() => {
 		return () => {
-			if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-			if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+			if (reconnectTimerRef.current)
+				clearTimeout(reconnectTimerRef.current);
+			if (copyResetTimerRef.current)
+				clearTimeout(copyResetTimerRef.current);
 			clearProgressTimer();
 			mainSocketCleanupRef.current?.();
 			mainSocketCleanupRef.current = null;
@@ -1944,8 +2094,7 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 			: null,
 		queued: queuedRequests,
 	});
-	const invariantStatus =
-		stats.validationErrors === 0 ? "pass" : "fail";
+	const invariantStatus = stats.validationErrors === 0 ? "pass" : "fail";
 
 	return (
 		<div className="agentic-lab">
@@ -1954,8 +2103,9 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 					<div>
 						<h3 className="card-title">Mock Agentic Loop</h3>
 						<p className="card-subtitle">
-							Use one raw WebSocket stream, explicit actions, manual sleep, and
-							gateway bypass calls against the same actor.
+							Use one raw WebSocket stream, explicit actions,
+							manual sleep, and gateway bypass calls against the
+							same actor.
 						</p>
 					</div>
 					<div className={`agentic-status ${connectionStatus}`}>
@@ -1969,7 +2119,9 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 						<input
 							id="agentic-endpoint"
 							value={endpoint}
-							onChange={(event) => setEndpoint(event.target.value)}
+							onChange={(event) =>
+								setEndpoint(event.target.value)
+							}
 						/>
 					</div>
 					<div className="form-row">
@@ -1977,7 +2129,9 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 						<input
 							id="agentic-namespace"
 							value={namespace}
-							onChange={(event) => setNamespace(event.target.value)}
+							onChange={(event) =>
+								setNamespace(event.target.value)
+							}
 						/>
 					</div>
 					<div className="form-row">
@@ -1997,18 +2151,33 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 					</div>
 					<div>
 						<div className="agentic-kicker">Actor ID</div>
-						<div className="agentic-mono">{actorId || "not resolved"}</div>
+						<div className="agentic-mono">
+							{actorId || "not resolved"}
+						</div>
 					</div>
 				</div>
 
 				<div className="button-row">
-					<button className="primary" onClick={() => void connect()} disabled={isConnecting} type="button">
+					<button
+						className="primary"
+						onClick={() => void connect()}
+						disabled={isConnecting}
+						type="button"
+					>
 						{isConnecting ? "Connecting..." : "Connect"}
 					</button>
-					<button className="secondary" onClick={disconnect} type="button">
+					<button
+						className="secondary"
+						onClick={disconnect}
+						type="button"
+					>
 						Disconnect
 					</button>
-					<button className="ghost" onClick={resetSession} type="button">
+					<button
+						className="ghost"
+						onClick={resetSession}
+						type="button"
+					>
 						New Actor
 					</button>
 				</div>
@@ -2030,17 +2199,23 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 							min={1}
 							max={120}
 							value={seconds}
-							onChange={(event) => setSeconds(Number(event.target.value))}
+							onChange={(event) =>
+								setSeconds(Number(event.target.value))
+							}
 						/>
 					</div>
 					<div className="form-row">
-						<label htmlFor="agentic-margin">Progress Margin Ms</label>
+						<label htmlFor="agentic-margin">
+							Progress Margin Ms
+						</label>
 						<input
 							id="agentic-margin"
 							type="number"
 							min={0}
 							value={progressMarginMs}
-							onChange={(event) => setProgressMarginMs(Number(event.target.value))}
+							onChange={(event) =>
+								setProgressMarginMs(Number(event.target.value))
+							}
 						/>
 					</div>
 				</div>
@@ -2051,9 +2226,17 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 						disabled={connectionStatus !== "connected"}
 						type="button"
 					>
-						Run Inference{queuedRequests.length > 0 ? ` (${queuedRequests.length})` : ""}
+						Run Inference
+						{queuedRequests.length > 0
+							? ` (${queuedRequests.length})`
+							: ""}
 					</button>
-					<button className="secondary" onClick={requestHistory} disabled={connectionStatus !== "connected"} type="button">
+					<button
+						className="secondary"
+						onClick={requestHistory}
+						disabled={connectionStatus !== "connected"}
+						type="button"
+					>
 						Request History
 					</button>
 					<button
@@ -2073,26 +2256,35 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 								{currentIndexes.length}/{currentRequest.seconds}
 							</div>
 							<div className="agentic-indexes">
-								{Array.from({ length: currentRequest.seconds }, (_, index) => {
-									const idx = index + 1;
-									const received = currentIndexes.includes(idx);
-									return (
-										<span
-											key={idx}
-											className={`agentic-index ${received ? "received" : ""}`}
-										>
-											{idx}
-										</span>
-									);
-								})}
+								{Array.from(
+									{ length: currentRequest.seconds },
+									(_, index) => {
+										const idx = index + 1;
+										const received =
+											currentIndexes.includes(idx);
+										return (
+											<span
+												key={idx}
+												className={`agentic-index ${received ? "received" : ""}`}
+											>
+												{idx}
+											</span>
+										);
+									},
+								)}
 							</div>
 						</>
 					) : (
-						<div className="agentic-empty">No active inference.</div>
+						<div className="agentic-empty">
+							No active inference.
+						</div>
 					)}
 					{queuedRequests.length > 0 && (
 						<div className="agentic-empty">
-							Queued: {queuedRequests.map((request) => request.requestId.slice(0, 8)).join(", ")}
+							Queued:{" "}
+							{queuedRequests
+								.map((request) => request.requestId.slice(0, 8))
+								.join(", ")}
 						</div>
 					)}
 				</div>
@@ -2103,22 +2295,52 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 					<h3 className="card-title">Sleep and Bypass</h3>
 				</div>
 				<div className="button-row">
-					<button className="primary" onClick={() => void forceSleep()} disabled={!actorId} type="button">
+					<button
+						className="primary"
+						onClick={() => void forceSleep()}
+						disabled={!actorId}
+						type="button"
+					>
 						Force Sleep
 					</button>
-					<button className="secondary" onClick={() => void checkHealth()} disabled={!actorId || isCheckingHealth} type="button">
+					<button
+						className="secondary"
+						onClick={() => void checkHealth()}
+						disabled={!actorId || isCheckingHealth}
+						type="button"
+					>
 						{isCheckingHealth ? "Checking..." : "Health Check"}
 					</button>
-					<button className="secondary" onClick={() => void testHttp()} disabled={!handleRef.current} type="button">
+					<button
+						className="secondary"
+						onClick={() => void testHttp()}
+						disabled={!handleRef.current}
+						type="button"
+					>
 						Test HTTP
 					</button>
-					<button className="secondary" onClick={() => void testWebSocket()} disabled={!handleRef.current} type="button">
+					<button
+						className="secondary"
+						onClick={() => void testWebSocket()}
+						disabled={!handleRef.current}
+						type="button"
+					>
 						Test WS
 					</button>
-					<button className="secondary" onClick={() => void testHttpBypass()} disabled={!handleRef.current} type="button">
+					<button
+						className="secondary"
+						onClick={() => void testHttpBypass()}
+						disabled={!handleRef.current}
+						type="button"
+					>
 						Test HTTP Bypass
 					</button>
-					<button className="secondary" onClick={() => void testWebSocketBypass()} disabled={!handleRef.current} type="button">
+					<button
+						className="secondary"
+						onClick={() => void testWebSocketBypass()}
+						disabled={!handleRef.current}
+						type="button"
+					>
 						Test WS Bypass
 					</button>
 				</div>
@@ -2141,7 +2363,11 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 							<Clipboard size={15} />
 							<span>{eventLogCopied ? "Copied" : "Copy"}</span>
 						</button>
-						<button className="ghost" onClick={() => setLogs([])} type="button">
+						<button
+							className="ghost"
+							onClick={() => setLogs([])}
+							type="button"
+						>
 							Clear
 						</button>
 					</div>
@@ -2151,7 +2377,10 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 						<div className="agentic-empty">No activity yet.</div>
 					) : (
 						logs.map((entry) => (
-							<div className={`agentic-log-row ${entry.level}`} key={entry.id}>
+							<div
+								className={`agentic-log-row ${entry.level}`}
+								key={entry.id}
+							>
 								<span>{entry.time}</span>
 								<span>{entry.message}</span>
 							</div>
@@ -2166,19 +2395,37 @@ function MockAgenticLoopPanel({ page }: { page: PageConfig }) {
 				</div>
 				<div className="agentic-stat-grid">
 					<AgenticStat label="Requests" value={stats.requests} />
-					<AgenticStat label="Rows" value={`${stats.actualRows}/${stats.expectedRows}`} />
+					<AgenticStat
+						label="Rows"
+						value={`${stats.actualRows}/${stats.expectedRows}`}
+					/>
 					<AgenticStat label="Reconnects" value={stats.reconnects} />
-					<AgenticStat label="Max Reconnect" value={`${stats.maxReconnectMs.toFixed(0)}ms`} />
+					<AgenticStat
+						label="Max Reconnect"
+						value={`${stats.maxReconnectMs.toFixed(0)}ms`}
+					/>
 					<AgenticStat label="Sleep Posts" value={stats.sleepPosts} />
-					<AgenticStat label="Sleep Errors" value={stats.sleepErrors} />
+					<AgenticStat
+						label="Sleep Errors"
+						value={stats.sleepErrors}
+					/>
 					<AgenticStat label="HTTP" value={stats.httpOk} />
 					<AgenticStat label="WS" value={stats.wsOk} />
-					<AgenticStat label="HTTP Bypass" value={stats.bypassHttpOk} />
+					<AgenticStat
+						label="HTTP Bypass"
+						value={stats.bypassHttpOk}
+					/>
 					<AgenticStat label="WS Bypass" value={stats.bypassWsOk} />
 					<AgenticStat label="Stopping" value={stats.actorStopping} />
-					<AgenticStat label="HTTP Proof" value={stats.sleepProofHttp} />
+					<AgenticStat
+						label="HTTP Proof"
+						value={stats.sleepProofHttp}
+					/>
 					<AgenticStat label="WS Proof" value={stats.sleepProofWs} />
-					<AgenticStat label="Validation Errors" value={stats.validationErrors} />
+					<AgenticStat
+						label="Validation Errors"
+						value={stats.validationErrors}
+					/>
 				</div>
 				<div className="agentic-result">{expectedStateText}</div>
 				<div className="agentic-result">{lastVerification}</div>
@@ -2216,9 +2463,9 @@ function WelcomePanel() {
 	return (
 		<section className="card">
 			<p className="card-subtitle">
-				This kitchen sink lets you interact with every Rivet Actor feature in
-				one place. Pick a topic from the sidebar to connect to live actors,
-				invoke actions, and observe events in real time.
+				This kitchen sink lets you interact with every Rivet Actor
+				feature in one place. Pick a topic from the sidebar to connect
+				to live actors, invoke actions, and observe events in real time.
 			</p>
 		</section>
 	);
@@ -2245,7 +2492,8 @@ function ConfigPlayground() {
 			<div>
 				<h3 className="card-title">Configuration Playground</h3>
 				<p className="card-subtitle">
-					Edit JSON to explore how actor configuration payloads are shaped.
+					Edit JSON to explore how actor configuration payloads are
+					shaped.
 				</p>
 			</div>
 			<div className="demo-grid">
@@ -2272,7 +2520,9 @@ function ConfigPlayground() {
 
 function RawHttpPanel({ page }: { page: PageConfig }) {
 	const [selectedActor, setSelectedActor] = useState(page.actors[0] ?? "");
-	const [path, setPath] = useState(page.rawHttpDefaults?.path ?? "/api/hello");
+	const [path, setPath] = useState(
+		page.rawHttpDefaults?.path ?? "/api/hello",
+	);
 	const [method, setMethod] = useState(page.rawHttpDefaults?.method ?? "GET");
 	const [body, setBody] = useState(page.rawHttpDefaults?.body ?? "");
 	const [response, setResponse] = useState("");
@@ -2284,7 +2534,7 @@ function RawHttpPanel({ page }: { page: PageConfig }) {
 		setPath(page.rawHttpDefaults?.path ?? "/api/hello");
 		setMethod(page.rawHttpDefaults?.method ?? "GET");
 		setBody(page.rawHttpDefaults?.body ?? "");
-	}, [page.id, page.actors, page.rawHttpDefaults]);
+	}, [page.actors, page.rawHttpDefaults]);
 
 	const actor = useActorLoose({
 		name: selectedActor,
@@ -2304,7 +2554,9 @@ function RawHttpPanel({ page }: { page: PageConfig }) {
 				method,
 				body: method === "GET" ? undefined : body || undefined,
 				headers:
-					method === "GET" ? undefined : { "Content-Type": "application/json" },
+					method === "GET"
+						? undefined
+						: { "Content-Type": "application/json" },
 			});
 			const text = await response.text();
 			setResponse(`Status ${response.status}\n${text}`);
@@ -2329,7 +2581,9 @@ function RawHttpPanel({ page }: { page: PageConfig }) {
 					<select
 						id="raw-http-actor"
 						value={selectedActor}
-						onChange={(event) => setSelectedActor(event.target.value)}
+						onChange={(event) =>
+							setSelectedActor(event.target.value)
+						}
 					>
 						{page.actors.map((actorName) => (
 							<option key={actorName} value={actorName}>
@@ -2396,7 +2650,7 @@ function RawWebSocketPanel({ page }: { page: PageConfig }) {
 
 	useEffect(() => {
 		setSelectedActor(page.actors[0] ?? "");
-	}, [page.id, page.actors]);
+	}, [page.actors]);
 
 	const actor = useActorLoose({
 		name: selectedActor,
@@ -2449,7 +2703,9 @@ function RawWebSocketPanel({ page }: { page: PageConfig }) {
 					<select
 						id="raw-ws-actor"
 						value={selectedActor}
-						onChange={(event) => setSelectedActor(event.target.value)}
+						onChange={(event) =>
+							setSelectedActor(event.target.value)
+						}
 					>
 						{page.actors.map((actorName) => (
 							<option key={actorName} value={actorName}>
@@ -2505,10 +2761,13 @@ function RawWebSocketPanel({ page }: { page: PageConfig }) {
 				{log.length === 0
 					? "No WebSocket activity yet."
 					: log.map((entry, index) => (
-						<div className="event-entry" key={`${entry}-${index}`}>
-							{entry}
-						</div>
-					))}
+							<div
+								className="event-entry"
+								key={`${entry}-${index}`}
+							>
+								{entry}
+							</div>
+						))}
 			</div>
 		</section>
 	);

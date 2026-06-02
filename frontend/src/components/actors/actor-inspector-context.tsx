@@ -996,7 +996,13 @@ export const ActorInspectorProvider = ({
 				return getActorMetadataProxy.current();
 			},
 		} satisfies ActorInspectorApi;
-	}, [sendMessage, reconnect, inspectorProtocolVersion]);
+	}, [
+		sendMessage,
+		reconnect,
+		inspectorProtocolVersion,
+		actorId,
+		credentials,
+	]);
 
 	const value = useMemo(() => {
 		return {

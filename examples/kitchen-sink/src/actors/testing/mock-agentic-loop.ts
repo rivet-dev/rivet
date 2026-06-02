@@ -349,17 +349,20 @@ export const mockAgenticLoop = actor({
 					"SELECT sleep_started_at FROM mock_agentic_sleep_state WHERE id = 1",
 				),
 			);
-			return new Response(JSON.stringify({
-				type: "bypass",
-				transport: "http",
-				sleepStarted: sleepState !== undefined,
-				sleepStartedAt: sleepState?.sleep_started_at ?? null,
-				timestamp: Date.now(),
-			}), {
-				headers: {
-					"content-type": "application/json",
+			return new Response(
+				JSON.stringify({
+					type: "bypass",
+					transport: "http",
+					sleepStarted: sleepState !== undefined,
+					sleepStartedAt: sleepState?.sleep_started_at ?? null,
+					timestamp: Date.now(),
+				}),
+				{
+					headers: {
+						"content-type": "application/json",
+					},
 				},
-			});
+			);
 		}
 
 		return new Response("not found", { status: 404 });
@@ -456,91 +459,109 @@ export const mockAgenticLoop = actor({
 			});
 		};
 
-		websocket.addEventListener("message", async (event: RivetMessageEvent) => {
-			try {
-				if (typeof event.data !== "string") {
-					throw new Error("message data must be a JSON string");
-				}
-
-				const message = JSON.parse(event.data) as Record<string, unknown>;
-				const type = stringValue(message.type, "type");
-
-				if (type === "history") {
-					const rows = typedRows<EntryRow>(
-						await c.db.execute(
-							"SELECT request_id, idx, created_at FROM mock_agentic_entries ORDER BY created_at ASC, request_id ASC, idx ASC",
-						),
-					);
-					const [count] = typedRows<CountRow>(
-						await c.db.execute(
-							"SELECT COUNT(*) AS count FROM mock_agentic_entries",
-						),
-					);
-					send(websocket, {
-						type: "history",
-						totalRows: count?.count ?? rows.length,
-						entries: rows,
-						timestamp: Date.now(),
-					});
-					return;
-				}
-
-				if (type === "ping") {
-					send(websocket, {
-						type: "pong",
-						probeId: stringValue(message.probeId, "probeId"),
-						...(await sleepStatus()),
-						timestamp: Date.now(),
-					});
-					return;
-				}
-
-				if (type === "verify") {
-					const requestId = stringValue(message.requestId, "requestId");
-					const expectedSeconds = positiveInteger(
-						message.expectedSeconds,
-						"expectedSeconds",
-					);
-					send(websocket, await verify(requestId, expectedSeconds));
-					return;
-				}
-
-				if (type === "infer") {
-					const requestId = stringValue(message.requestId, "requestId");
-					const seconds = positiveInteger(message.seconds, "seconds");
-					await recordDebugEvent(c, {
-						name: "inferenceRequested",
-						connectionId,
-						requestId,
-						details: {
-							seconds,
-						},
-					});
-					const previousInference = activeInference;
-					const inference = (async () => {
-						await previousInference?.catch(() => undefined);
-						await runInference(requestId, seconds);
-					})();
-					activeInference = inference;
-					await c.keepAwake(inference);
-					if (activeInference === inference) {
-						activeInference = undefined;
+		websocket.addEventListener(
+			"message",
+			async (event: RivetMessageEvent) => {
+				try {
+					if (typeof event.data !== "string") {
+						throw new Error("message data must be a JSON string");
 					}
-					return;
-				}
 
-				throw new Error(`unknown message type: ${type}`);
-			} catch (error) {
-				send(websocket, {
-					type: "error",
-					message:
-						error instanceof Error
-							? error.message
-							: "unknown websocket error",
-					timestamp: Date.now(),
-				});
-			}
-		});
+					const message = JSON.parse(event.data) as Record<
+						string,
+						unknown
+					>;
+					const type = stringValue(message.type, "type");
+
+					if (type === "history") {
+						const rows = typedRows<EntryRow>(
+							await c.db.execute(
+								"SELECT request_id, idx, created_at FROM mock_agentic_entries ORDER BY created_at ASC, request_id ASC, idx ASC",
+							),
+						);
+						const [count] = typedRows<CountRow>(
+							await c.db.execute(
+								"SELECT COUNT(*) AS count FROM mock_agentic_entries",
+							),
+						);
+						send(websocket, {
+							type: "history",
+							totalRows: count?.count ?? rows.length,
+							entries: rows,
+							timestamp: Date.now(),
+						});
+						return;
+					}
+
+					if (type === "ping") {
+						send(websocket, {
+							type: "pong",
+							probeId: stringValue(message.probeId, "probeId"),
+							...(await sleepStatus()),
+							timestamp: Date.now(),
+						});
+						return;
+					}
+
+					if (type === "verify") {
+						const requestId = stringValue(
+							message.requestId,
+							"requestId",
+						);
+						const expectedSeconds = positiveInteger(
+							message.expectedSeconds,
+							"expectedSeconds",
+						);
+						send(
+							websocket,
+							await verify(requestId, expectedSeconds),
+						);
+						return;
+					}
+
+					if (type === "infer") {
+						const requestId = stringValue(
+							message.requestId,
+							"requestId",
+						);
+						const seconds = positiveInteger(
+							message.seconds,
+							"seconds",
+						);
+						await recordDebugEvent(c, {
+							name: "inferenceRequested",
+							connectionId,
+							requestId,
+							details: {
+								seconds,
+							},
+						});
+						const previousInference = activeInference;
+						const inference = (async () => {
+							await previousInference?.catch(() => undefined);
+							await runInference(requestId, seconds);
+						})();
+						activeInference = inference;
+						await c.keepAwake(inference);
+						if (activeInference === inference) {
+							activeInference = undefined;
+						}
+						return;
+					}
+
+					throw new Error(`unknown message type: ${type}`);
+				} catch (error) {
+					send(websocket, {
+						type: "error",
+						message:
+							error instanceof Error
+								? error.message
+								: "unknown websocket error",
+						timestamp: Date.now(),
+					});
+				}
+			},
+		);
 
 		websocket.addEventListener("close", async () => {
 			removeDebugSocket();

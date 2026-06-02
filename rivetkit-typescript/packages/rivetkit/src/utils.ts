@@ -1,6 +1,5 @@
-import { stringifyError } from "@/common/utils";
 import type { Context as HonoContext, Handler as HonoHandler } from "hono";
-import { stringify as uuidstringify } from "uuid";
+import { stringifyError } from "@/common/utils";
 import pkgJson from "../package.json" with { type: "json" };
 import { getLogger } from "./common/log";
 import { assertUnreachable } from "./common/utils";

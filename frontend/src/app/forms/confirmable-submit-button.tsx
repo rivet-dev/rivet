@@ -8,10 +8,7 @@ export interface ConfirmableSubmitButtonProps {
 	confirmLabel?: string;
 	blocked?: boolean;
 	blockedReason?: string | null;
-	getConfirmation: () =>
-		| ReactNode
-		| null
-		| Promise<ReactNode | null>;
+	getConfirmation: () => ReactNode | null | Promise<ReactNode | null>;
 }
 
 export function ConfirmableSubmitButton({
@@ -26,10 +23,10 @@ export function ConfirmableSubmitButton({
 	const [pending, setPending] = useState<ReactNode | null>(null);
 	const hiddenSubmitRef = useRef<HTMLButtonElement>(null);
 
-	const allValues = useWatch();
+	const _allValues = useWatch();
 	useEffect(() => {
 		setPending(null);
-	}, [allValues]);
+	}, []);
 
 	const onSubmitClick = async (e: React.MouseEvent<HTMLButtonElement>) => {
 		e.preventDefault();

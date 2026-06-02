@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import type { GameClient } from "../../client.ts";
-import type { ArenaMatchInfo } from "./menu.tsx";
 import { ArenaGame } from "./arena-game.ts";
+import type { ArenaMatchInfo } from "./menu.tsx";
 
 export function ArenaGameView({
 	client,
@@ -31,7 +31,9 @@ export function ArenaGameView({
 			<div className="game-header">
 				<h2>Arena ({matchInfo.mode.toUpperCase()})</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
+					<button className="btn btn-secondary" onClick={onLeave}>
+						Leave
+					</button>
 				</div>
 			</div>
 			<p className="controls-hint">WASD to move, click to shoot</p>

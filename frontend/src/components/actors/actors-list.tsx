@@ -1,5 +1,4 @@
 import {
-	faActors,
 	faArrowUpRightFromSquare,
 	faBookOpen,
 	faMagnifyingGlass,
@@ -13,8 +12,8 @@ import {
 	useQueryClient,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
 	type RefObject,
 	Suspense,
@@ -85,9 +84,7 @@ function ActorNameLabel() {
 	if (!buildId) return null;
 
 	const build = builds.find((b) => b.id === buildId);
-	const meta = build?.name?.metadata as
-		| Record<string, unknown>
-		| undefined;
+	const meta = build?.name?.metadata as Record<string, unknown> | undefined;
 	const displayName =
 		typeof meta?.name === "string" ? meta.name : (buildId ?? "");
 
@@ -321,7 +318,9 @@ function ActorsTableHeaderGate() {
 
 function List({
 	viewportRef,
-}: { viewportRef: RefObject<HTMLDivElement | null> }) {
+}: {
+	viewportRef: RefObject<HTMLDivElement | null>;
+}) {
 	const filters = useFiltersValue({ onlyStatic: true });
 	const { actorId, n } = useSearch({
 		from: "/_context",
@@ -561,13 +560,11 @@ function Display() {
 	const onFiltersChange = useFiltersChangeCallback();
 
 	return (
-		<>
-			<FiltersDisplay
-				value={filters}
-				definitions={definitions}
-				onChange={onFiltersChange}
-			/>
-		</>
+		<FiltersDisplay
+			value={filters}
+			definitions={definitions}
+			onChange={onFiltersChange}
+		/>
 	);
 }
 
@@ -655,7 +652,9 @@ function QuickstartSection({
 				{step}
 			</div>
 			<div className="flex-1 min-w-0">
-				<p className="text-sm font-medium text-foreground mb-2">{title}</p>
+				<p className="text-sm font-medium text-foreground mb-2">
+					{title}
+				</p>
 				<CodePreview
 					code={code}
 					language="typescript"
