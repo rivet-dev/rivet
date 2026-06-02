@@ -8,7 +8,7 @@ Design constraints, invariants, and reference commands for the Rivet monorepo. F
 
 - API endpoint: `https://api.rivet.dev`
 - Cloud API endpoint: `https://cloud-api.rivet.dev`
-- Dashboard: `https://hub.rivet.dev`
+- Dashboard: `https://dashboard.rivet.dev`
 - Documentation: `https://rivet.dev/docs`
 
 **Use "sandbox mounting" when referring to the agentOS sandbox integration.** Do not use "sandbox extension" or "sandbox escalation." The feature mounts a sandbox as a filesystem inside the VM.

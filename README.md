@@ -189,7 +189,7 @@ docker run -p 6420:6420 rivetdev/engine
 
 Fully managed. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
 
-[Sign up →](https://hub.rivet.dev)
+[Sign up →](https://dashboard.rivet.dev)
 
 </td>
 </tr>

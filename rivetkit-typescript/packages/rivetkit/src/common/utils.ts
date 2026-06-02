@@ -134,7 +134,7 @@ export function deconstructError(
 			actor = error.actor;
 		}
 		metadata = {
-			//url: `https://hub.rivet.dev/projects/${actorMetadata.project.slug}/environments/${actorMetadata.environment.slug}/actors?actorId=${actorMetadata.actor.id}`,
+			//url: `https://dashboard.rivet.dev/projects/${actorMetadata.project.slug}/environments/${actorMetadata.environment.slug}/actors?actorId=${actorMetadata.actor.id}`,
 		} satisfies errors.InternalErrorMetadata;
 	}
 
