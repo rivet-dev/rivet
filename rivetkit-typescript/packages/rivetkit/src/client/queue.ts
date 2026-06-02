@@ -74,7 +74,7 @@ export function createQueueSender(
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | undefined> {
+	): Promise<QueueSendResult | void> {
 		const wait = options?.wait ?? false;
 		const timeout = options?.timeout;
 

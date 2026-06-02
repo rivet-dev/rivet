@@ -1,9 +1,9 @@
 ---
 import { getCollection } from 'astro:content';
-import { Image } from 'astro:assets';
 import BlogLayout from '@/layouts/BlogLayout.astro';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
+import { getPostImage } from '@/lib/postImage';
 
 type AuthorInfo = {
 	name: string;
@@ -17,12 +17,6 @@ import { Icon, faRss } from '@rivet-gg/icons';
 
 const posts = await getCollection('posts');
 
-// Import all post images eagerly
-const images = import.meta.glob<{ default: ImageMetadata }>(
-	'/src/content/posts/*/image.{png,jpg,gif}',
-	{ eager: true }
-);
-
 // Filter only changelog posts, exclude unpublished, and sort by date
 const filteredPosts = posts
 	.filter((post) => post.data.category === 'changelog' && !post.data.unpublished)
@@ -30,12 +24,7 @@ const filteredPosts = posts
 
 const changelogPosts = filteredPosts.map((post) => {
 	const slug = post.id.replace(/\/page$/, '');
-	const imagePath = Object.keys(images).find((p) => p.includes(slug));
-	const image = post.data.image
-		? { ...post.data.image, remote: true }
-		: imagePath
-			? { ...images[imagePath].default, remote: false }
-			: null;
+	const image = getPostImage(post);
 	const author = AUTHORS[post.data.author] as AuthorInfo;
 	const category = { ...CATEGORIES[post.data.category], id: post.data.category };
 	const data = post.data as unknown as { title: string; description: string };
@@ -87,27 +76,15 @@ const changelogPosts = filteredPosts.map((post) => {
 						<div>
 							{article.image && (
 								<div class="relative w-full">
-									{article.image.remote ? (
-										<img
-											src={article.image.src}
-											alt={article.title}
-											width={600}
-											height={300}
-											class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
-											loading="lazy"
-											decoding="async"
-										/>
-									) : (
-										<Image
-											src={article.image}
-											alt={article.title}
-											width={600}
-											height={300}
-											class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
-											loading="lazy"
-											decoding="async"
-										/>
-									)}
+									<img
+										src={article.image.src}
+										alt={article.title}
+										width={600}
+										height={300}
+										class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
+										loading="lazy"
+										decoding="async"
+									/>
 								</div>
 							)}
 							<div class="mt-3 flex items-center gap-x-3 text-xs">

@@ -7,9 +7,6 @@
 # Use Debian-based Node image (required for Playwright/mermaid rendering)
 FROM node:22-bookworm AS builder
 
-# Install git-lfs and Playwright system dependencies
-RUN apt-get update && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
-
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -31,10 +28,6 @@ COPY rivetkit-typescript/packages/ rivetkit-typescript/packages/
 COPY rivetkit-openapi/ rivetkit-openapi/
 COPY rivetkit-asyncapi/ rivetkit-asyncapi/
 COPY shared/typescript/ shared/typescript/
-
-# Fetch LFS files if build platform doesn't support Git LFS natively
-COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
-RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
 
 # Arguments required before installing dependencies
 ARG FONTAWESOME_PACKAGE_TOKEN=""

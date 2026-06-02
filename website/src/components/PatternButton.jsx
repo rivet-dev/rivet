@@ -1,6 +1,6 @@
 "use client";
 
-import grainDark from "@/images/effects/grain-dark.png";
+const grainDark = { src: "https://assets.rivet.dev/website/images/effects/grain-dark.png", width: 64, height: 64, format: "png" };
 import clsx from "clsx";
 
 export function PatternButton({ children, highlight, ...props }) {

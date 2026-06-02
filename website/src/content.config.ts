@@ -46,12 +46,14 @@ const posts = defineCollection({
 		published: z.coerce.date(),
 		category: z.enum(['changelog', 'monthly-update', 'launch-week', 'technical', 'guide', 'frogs']),
 		keywords: z.array(z.string()).optional(),
-		image: z.object({
-			src: z.string().url(),
-			width: z.number(),
-			height: z.number(),
-			format: z.string().optional(),
-		}).optional(),
+		// Hero image. The URL is derived from the post slug and the file is named
+		// `image.{format}` in R2, so frontmatter only signals presence and format.
+		// Use `image: true` for the default `image.png`, or `image: { format: "gif" }`
+		// for a different extension. Resolved via `getPostImage` in `@/lib/postImage`.
+		image: z.union([
+			z.boolean(),
+			z.object({ format: z.string().optional() }),
+		]).optional(),
 		unpublished: z.boolean().optional(),
 	}),
 });

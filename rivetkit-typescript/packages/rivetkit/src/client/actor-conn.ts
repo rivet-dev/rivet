@@ -289,7 +289,7 @@ export class ActorConnRaw {
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | undefined> {
+	): Promise<QueueSendResult | void> {
 		return this.#sendQueueMessage(name, body, options as any);
 	}
 
@@ -297,7 +297,7 @@ export class ActorConnRaw {
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | undefined> {
+	): Promise<QueueSendResult | void> {
 		return await this.#queueSender.send(name, body, options as any);
 	}
 

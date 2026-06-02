@@ -2,9 +2,8 @@
 import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import StartupsPage from '@/components/marketing/startups/StartupsPage';
-import imgFounders from '@/images/yc-founders.jpg';
-import imgSpeedrun from '@/images/a16z-speedrun.jpg';
-
+const imgFounders = { src: "https://assets.rivet.dev/website/images/yc-founders.jpg", width: 5925, height: 3942, format: "jpg" };
+const imgSpeedrun = { src: "https://assets.rivet.dev/website/images/a16z-speedrun.jpg", width: 2048, height: 1365, format: "jpg" };
 const optimizedFounders = await getImage({
 	src: imgFounders,
 	width: 1280,

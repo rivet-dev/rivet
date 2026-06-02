@@ -1,20 +1,18 @@
 import { Icon, faArrowRight } from '@rivet-gg/icons';
 
-import chinomanAvatar from '../images/quotes/users/Chinoman10_.jpg';
-import socialQuotientAvatar from '../images/quotes/users/Social_Quotient.jpg';
-import alistaiirAvatar from '../images/quotes/users/alistaiir.jpg';
+const chinomanAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/Chinoman10_.jpg", width: 400, height: 400, format: "jpg" };
+const socialQuotientAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/Social_Quotient.jpg", width: 400, height: 400, format: "jpg" };
+const alistaiirAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/alistaiir.jpg", width: 400, height: 400, format: "jpg" };
 // User avatars
-import devgerredAvatar from '../images/quotes/users/devgerred.jpg';
-import j0g1tAvatar from '../images/quotes/users/j0g1t.jpg';
-import localFirstAvatar from '../images/quotes/users/localfirstnews.jpg';
-import samgoodwinAvatar from '../images/quotes/users/samgoodwin89.jpg';
-import samk0Avatar from '../images/quotes/users/samk0_com.jpg';
-import uripontAvatar from '../images/quotes/users/uripont_.jpg';
-
-import j0g1tPostImage from '../images/quotes/posts/1902835527977439591.jpg';
+const devgerredAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/devgerred.jpg", width: 399, height: 399, format: "jpg" };
+const j0g1tAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/j0g1t.jpg", width: 400, height: 400, format: "jpg" };
+const localFirstAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/localfirstnews.jpg", width: 400, height: 400, format: "jpg" };
+const samgoodwinAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/samgoodwin89.jpg", width: 400, height: 400, format: "jpg" };
+const samk0Avatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/samk0_com.jpg", width: 400, height: 400, format: "jpg" };
+const uripontAvatar = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/users/uripont_.jpg", width: 400, height: 400, format: "jpg" };
+const j0g1tPostImage = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/posts/1902835527977439591.jpg", width: 640, height: 360, format: "jpg" };
 // Post images
-import samk0PostImage from '../images/quotes/posts/1909278348812952007.png';
-
+const samk0PostImage = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/quotes/posts/1909278348812952007.png", width: 3750, height: 2296, format: "png" };
 export function QuotesSection() {
   const quotesColumn1 = [
     {
