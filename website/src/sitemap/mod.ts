@@ -746,6 +746,15 @@ export const sitemap = [
 				title: "Platforms",
 				pages: deploySidebarPages,
 			},
+			{
+				title: "Reference",
+				pages: [
+					{
+						title: "Pool Configuration",
+						href: "/docs/general/pool-configuration",
+					},
+				],
+			},
 		],
 	},
 	{

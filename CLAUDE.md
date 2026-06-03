@@ -239,9 +239,13 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 
 ## Performance
 
+- Use `rivet_perf::{perf_start, perf_finish}` for latency-sensitive async phases, shared I/O wrappers, and suspected backpressure points where slow-tail spans are useful.
+- Keep `perf_start!` labels bounded for metrics; put high-cardinality values such as IDs, request paths, and byte counts in span fields instead.
+- Every `PerfMeasure` must end with `perf_finish!` or `perf_abandon!` before leaving scope.
 - Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`. Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap` for concurrent maps.
 - Use `scc::HashSet` instead of `Mutex<HashSet<...>>` for concurrent sets.
 - `scc` async methods do not hold locks across `.await` points. Use `entry_async` for atomic read-then-write.
+- Hold lock guards for as short as possible, including `scc` guards from `get_async` and related methods. Clone/copy needed data and `drop(...)` before async work, as in `send_and_check_ping` in `engine/packages/pegboard-gateway2/src/shared_state.rs`.
 - Never poll a shared-state counter with `loop { if ready; sleep(Nms).await; }`. Pair the counter with a `tokio::sync::Notify` (or `watch::channel`) that every decrement-to-zero site pings, and wait with `AsyncCounter::wait_zero(deadline)` or an equivalent `notify.notified()` + re-check guard that arms the permit before the check.
 - Every shared counter with an awaiter must have a paired `Notify`, `watch`, or permit. Waiters must arm the notification before re-checking the counter so decrement-to-zero cannot race past them.
 - Reserve `tokio::time::sleep` for: per-call timeouts via `tokio::select!`, retry/reconnect backoff, deliberate debounce windows, or `sleep_until(deadline)` arms in an event-select loop. If it is inside a `loop { check; sleep }` body, it is polling and should be event-driven instead.
@@ -278,6 +282,20 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 - Do not format parameters into the main message. Use structured fields: `tracing::info!(?x, "foo")` instead of `tracing::info!("foo {x}")`.
 - Log messages should be lowercase unless mentioning specific code symbols. `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`.
 - `rivetkit-core` runtime logs should include `actor_id` and stable structured fields such as `reason`, `kind`, `delta_count`, byte counts, and timestamp fields instead of payload debug dumps.
+
+## Metrics
+
+- **Always include `namespace_id` as a metric label** when applicable. Bounded cardinality, useful for per-namespace dashboards.
+- **Never use unbounded labels.** No `actor_id`, `actor_key`, `envoy_key`, `runner_id`, `workflow_id`, request_id, etc. Each unbounded label creates a new time series per value; under load this produces millions of series and OOMs the metrics pipeline.
+- Other safe labels: `pool_name`, `runner_name`, `workflow_name`, `activity_name`, `operation_name`, `state`, `result`, `reason`, `error`, `status` — all bounded by code-defined enums or by namespace count.
+- Standard label names (match existing conventions):
+  - HTTP error class → `error` (not `error_kind` or `error_type`)
+  - HTTP status code → `status` (not `status_code` or `http_status`)
+  - Operation success/failure → `result` (not `outcome`)
+  - State-transition cause → `reason`
+- Never emit metrics from inside a `#[workflow]` function body. Workflow functions are replayed deterministically by gasoline; metric increments inside them fire on every replay. Move the increment into an `#[activity]` or `#[operation]` that the workflow calls.
+- Gauges of integer-valued state use `IntGauge` / `IntGaugeVec`, not `Gauge` / `GaugeVec`.
+- Reuse existing histogram bucket constants from `engine/packages/metrics/src/buckets.rs` (`BUCKETS`, `MICRO_BUCKETS`, `LIFETIME_BUCKETS`, etc.) rather than inventing new bucket arrays per metric. Add a new constant to `buckets.rs` only if no existing constant covers the value range.
 
 ## Testing
 
@@ -344,6 +362,7 @@ Load these only when the task touches the topic.
 - **[ActorTask dispatch](docs-internal/engine/actor-task-dispatch.md)** — `DispatchCommand::Action`/`Http`/`OpenWebSocket`, `UserTaskKind` children, `ActorTask` migration status. Read before changing actor task routing.
 - **[Inspector protocol](docs-internal/engine/inspector-protocol.md)** — HTTP↔WebSocket mirroring rules, wire-version negotiation, `inspector.*_dropped` downgrades, workflow inspector inference. Read before touching inspector endpoints.
 - **[NAPI bridge](docs-internal/engine/napi-bridge.md)** — TSF callback slots, `ActorContextShared` cache reset, `#[napi(object)]` payload rules, cancellation token bridging, error prefix encoding. Read before touching `rivetkit-napi`.
+- **[Envoy load balancing](docs-internal/engine/envoy-load-balancing.md)** — Hash-ring layout, virtual nodes, allocator flow, stale-envoy expiry, and tuning. Read before touching pegboard envoy allocation.
 - **[BARE protocol crates](docs-internal/engine/bare-protocol-crates.md)** — vbare schema ordering, identity converters, `build.rs` TS codec generation pattern. Read before adding/changing protocol crates.
 - **[SQLite VFS parity](docs-internal/engine/sqlite-vfs.md)** — native Rust VFS ↔ WASM TypeScript VFS 1:1 parity rule, v2 storage keys, chunk layout, delete/truncate strategy. Read before touching either VFS.
 - **[SQLite optimizations](docs-internal/engine/SQLITE_OPTIMIZATIONS.md)** — brief tracker for SQLite cold-read, VFS, storage, preload, and benchmark optimization ideas.

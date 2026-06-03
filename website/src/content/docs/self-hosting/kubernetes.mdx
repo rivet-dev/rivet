@@ -223,6 +223,29 @@ kubectl apply -f 02-engine-configmap.yaml
 kubectl -n rivet-engine rollout restart deployment/rivet-engine
 ```
 
+### Ingress and Load Balancer Timeouts
+
+Rivet uses long-lived WebSocket connections for both client traffic (browsers, SDKs) and envoy traffic (actor hosts connecting back to the engine). Default Ingress and cloud load balancer idle timeouts (typically 30 to 60 seconds) drop these connections and cause reconnect storms.
+
+Raise the idle / read / send timeout on every Ingress and load balancer in front of the engine to at least 1 hour (`3600` seconds). Examples:
+
+- **NGINX Ingress** (annotations on the Ingress):
+
+    ```yaml
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    ```
+
+- **AWS Load Balancer Controller (ALB)**:
+
+    ```yaml
+    alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=3600
+    ```
+
+- **GCE Ingress (GKE)**: set `timeoutSec: 3600` on the `BackendConfig` referenced by the Service.
+
+The same guidance applies to the load balancer fronting your RivetKit app, since envoys connect to it over WebSocket.
+
 
 ## Next Steps
 

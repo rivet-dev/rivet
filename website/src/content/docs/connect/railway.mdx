@@ -38,6 +38,10 @@ See [Railway's environment variables docs](https://docs.railway.com/guides/varia
 3. On the Rivet dashboard, paste your domain with the `/api/rivet` path into the connect form (e.g. `https://my-app.railway.app/api/rivet`)
 4. Click "Done"
 
+<Warning>
+Rivet envoys connect to your app over long-lived WebSockets, and your app's clients (browsers, SDKs) do the same. Railway's HTTP proxy supports WebSockets, but if you front your app with your own reverse proxy (NGINX, Caddy, etc.) inside the Railway service, raise its idle / read timeout to at least 1 hour (`3600` seconds). Default proxy timeouts (typically 30 to 60 seconds) drop these connections and cause reconnect storms.
+</Warning>
+
 </Step>
 <Step title="Configure Sleeping & Multi-Region (Optional)">
 
