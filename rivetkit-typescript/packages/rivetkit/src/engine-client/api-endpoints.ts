@@ -143,7 +143,11 @@ export async function getRunnerConfig(
 	config: ClientConfig,
 	name: string,
 ): Promise<RunnerConfigsResponse> {
-	return apiCall<never, RunnerConfigsResponse>(config, "GET", `/runner-configs?runner_name=${name}`);
+	return apiCall<never, RunnerConfigsResponse>(
+		config,
+		"GET",
+		`/runner-configs?runner_name=${name}`,
+	);
 }
 
 // MARK: Update runner config

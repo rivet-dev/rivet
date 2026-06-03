@@ -49,10 +49,7 @@ import type {
 	RuntimeKind,
 	SqliteBackend,
 } from "@/registry/config";
-import {
-	decodeCborCompat,
-	encodeCborCompat,
-} from "@/serde";
+import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
 import { logger } from "./log";
 import { loadNapiRuntime } from "./napi-runtime";

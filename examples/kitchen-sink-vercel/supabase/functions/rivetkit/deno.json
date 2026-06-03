@@ -1,0 +1,30 @@
+{
+  "imports": {
+    "@rivet-dev/agent-os-core": "npm:@rivet-dev/agent-os-core@^0.1.1",
+    "@rivetkit/bare-ts": "npm:@rivetkit/bare-ts@^0.6.2",
+    "@rivetkit/bare-ts/": "npm:@rivetkit/bare-ts@^0.6.2/",
+    "@rivetkit/engine-envoy-protocol": "../../../../../engine/sdks/typescript/envoy-protocol/dist/index.js",
+    "@rivetkit/rivetkit-wasm": "../../../../../rivetkit-typescript/packages/rivetkit-wasm/pkg-deno/rivetkit_wasm.js",
+    "@rivetkit/virtual-websocket": "../../../../../shared/typescript/virtual-websocket/dist/mod.js",
+    "@rivetkit/workflow-engine": "../../../../../rivetkit-typescript/packages/workflow-engine/dist/tsup/index.js",
+    "cbor-x": "npm:cbor-x@^1.6.0",
+    "crypto": "node:crypto",
+    "drizzle-orm/": "npm:drizzle-orm@^0.44.2/",
+    "drizzle-orm/sqlite-core": "npm:drizzle-orm@^0.44.2/sqlite-core",
+    "drizzle-orm/sqlite-proxy": "npm:drizzle-orm@^0.44.2/sqlite-proxy",
+    "hono": "npm:hono@^4.11.3",
+    "hono/": "npm:hono@^4.11.3/",
+    "hono/ws": "npm:hono@^4.11.3/ws",
+    "invariant": "npm:invariant@^2.2.4",
+    "module": "node:module",
+    "p-retry": "npm:p-retry@^6.2.1",
+    "path/posix": "node:path/posix",
+    "pino": "npm:pino@^9.5.0",
+    "rivetkit": "../../../../../rivetkit-typescript/packages/rivetkit/dist/tsup/mod.js",
+    "rivetkit/db": "../../../../../rivetkit-typescript/packages/rivetkit/dist/tsup/db/mod.js",
+    "vbare": "npm:vbare@^0.0.4",
+    "zod": "npm:zod@^4.1.0",
+    "zod/": "npm:zod@^4.1.0/",
+    "zod/v4": "npm:zod@^4.1.0/v4"
+  }
+}

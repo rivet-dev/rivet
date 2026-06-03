@@ -1,11 +1,9 @@
 import { createClient } from "@rivetkit/react";
 import { useEffect, useState } from "react";
-import type { registry } from "../src/actors.ts";
+import type { registry } from "../src/index.ts";
 
 // Create a client that connects to the running server
-const client = createClient<typeof registry>(
-	`${window.location.origin}/api/rivet`,
-);
+const client = createClient<typeof registry>("http://localhost:6420");
 
 function Counter({ name }: { name: string }) {
 	const [count, setCount] = useState<number | null>(null);

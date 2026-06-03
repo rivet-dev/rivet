@@ -22,7 +22,10 @@ import * as napi from "@rivetkit/rivetkit-napi";
 type OptionalProcessMetricsNapi = typeof napi & {
 	jsObserveGcDuration?: (kind: string, durationSeconds: number) => void;
 	jsSetEventloopHeartbeatTsMs?: (timestampMs: number) => void;
-	jsSetEventloopLagQuantile?: (quantile: string, valueSeconds: number) => void;
+	jsSetEventloopLagQuantile?: (
+		quantile: string,
+		valueSeconds: number,
+	) => void;
 	jsSetEventloopUtilization?: (utilization: number) => void;
 	jsAddProcessCpuSeconds?: (mode: string, valueSeconds: number) => void;
 	jsSetProcessResidentMemoryBytes?: (bytes: number) => void;
@@ -191,7 +194,10 @@ function collectAndPush(): void {
 		state.lastEventLoopUtilization,
 	);
 	state.lastEventLoopUtilization = nextElu;
-	callIfFn(processMetricsNapi.jsSetEventloopUtilization, eluDelta.utilization);
+	callIfFn(
+		processMetricsNapi.jsSetEventloopUtilization,
+		eluDelta.utilization,
+	);
 
 	// CPU usage delta. `process.cpuUsage()` returns microseconds.
 	const nextCpu = process.cpuUsage();
@@ -230,9 +236,15 @@ function collectAndPush(): void {
 		_getActiveRequests?: () => unknown[];
 	};
 	if (typeof proc._getActiveHandles === "function") {
-		callIfFn(processMetricsNapi.jsSetActiveHandles, proc._getActiveHandles().length);
+		callIfFn(
+			processMetricsNapi.jsSetActiveHandles,
+			proc._getActiveHandles().length,
+		);
 	}
 	if (typeof proc._getActiveRequests === "function") {
-		callIfFn(processMetricsNapi.jsSetActiveRequests, proc._getActiveRequests().length);
+		callIfFn(
+			processMetricsNapi.jsSetActiveRequests,
+			proc._getActiveRequests().length,
+		);
 	}
 }
