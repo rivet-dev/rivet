@@ -242,6 +242,7 @@ export declare class ActorContext {
   broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): void
   waitForTrackedShutdownWork(): Promise<boolean>
+  waitForTrackedShutdownWorkUnbounded(): Promise<void>
   registerTask(promise: Promise<any>): void
   runtimeState(): object
   clearRuntimeState(): void

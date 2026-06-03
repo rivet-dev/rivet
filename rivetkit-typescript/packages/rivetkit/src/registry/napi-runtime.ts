@@ -452,6 +452,12 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return await asNativeActorContext(ctx).waitForTrackedShutdownWork();
 	}
 
+	async actorWaitForTrackedShutdownWorkUnbounded(
+		ctx: ActorContextHandle,
+	): Promise<void> {
+		await asNativeActorContext(ctx).waitForTrackedShutdownWorkUnbounded();
+	}
+
 	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
 		asNativeActorContext(ctx).keepAwake(promise);
 	}

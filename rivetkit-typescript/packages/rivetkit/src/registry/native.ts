@@ -421,8 +421,33 @@ function clearNativeRuntimeState(
 async function cleanupNativeSleepRuntimeState(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
+	afterTrackedWorkDrained?: () => Promise<void>,
 ): Promise<void> {
-	await runtime.actorWaitForTrackedShutdownWork(ctx);
+	// The bounded wait gives shutdown work one grace-period chance to finish.
+	// Drained means all tracked shutdown work completed before the deadline, so
+	// we can save final state and clear runtime state immediately. If it did not
+	// drain, close database handles now, then defer the final save and clear until
+	// the tracked work finishes without a deadline.
+	const drained = await runtime.actorWaitForTrackedShutdownWork(ctx);
+	if (!drained) {
+		await closeNativeDatabaseClient(runtime, ctx);
+		await closeNativeSqlDatabase(runtime, ctx);
+		void runtime
+			.actorWaitForTrackedShutdownWorkUnbounded(ctx)
+			.then(async () => {
+				await afterTrackedWorkDrained?.();
+				clearNativeRuntimeState(runtime, ctx);
+			})
+			.catch((error) => {
+				logger().warn({
+					msg: "deferred native sleep cleanup failed",
+					error: stringifyError(error),
+				});
+			});
+		return;
+	}
+
+	await afterTrackedWorkDrained?.();
 	await closeNativeDatabaseClient(runtime, ctx);
 	await closeNativeSqlDatabase(runtime, ctx);
 	clearNativeRuntimeState(runtime, ctx);
@@ -2873,6 +2898,7 @@ export class ActorContextHandleAdapter {
 	}
 
 	sleep(): void {
+		this.#flushStateChange();
 		callNativeSync(() => this.#runtime.actorSleep(this.#ctx));
 	}
 
@@ -3936,26 +3962,35 @@ export function buildNativeFactory(
 			async (error: unknown, payload: { ctx: ActorContextHandle }) => {
 				const { ctx } = unwrapTsfnPayload(error, payload);
 				const actorCtx = makeActorCtx(ctx);
+				// TODO: Move this save hook into cleanupNativeSleepRuntimeState
+				// so immediate and deferred sleep cleanup share one save-state
+				// path instead of passing a callback through cleanup.
+				const saveActorState = async () => {
+					if (runtime.kind === "wasm") {
+						// Wasm cannot use the native context save helper here because
+						// the runtime owns the serialized state handoff.
+						await runtime.actorSaveState(
+							ctx,
+							actorCtx.serializeForTick("save"),
+						);
+					} else {
+						await actorCtx.saveState({
+							immediate: true,
+						});
+					}
+				};
 				try {
 					if (onSleep) {
-						try {
-							await onSleep(actorCtx);
-						} finally {
-							if (runtime.kind === "wasm") {
-								// Wasm cannot use the native context save helper here because
-								// the runtime owns the serialized state handoff.
-								await runtime.actorSaveState(
-									ctx,
-									actorCtx.serializeForTick("save"),
-								);
-							} else {
-								await actorCtx.saveState({ immediate: true });
-							}
-						}
+						await onSleep(actorCtx);
 					}
+					await saveActorState();
 				} finally {
 					try {
-						await cleanupNativeSleepRuntimeState(runtime, ctx);
+						await cleanupNativeSleepRuntimeState(
+							runtime,
+							ctx,
+							saveActorState,
+						);
 					} finally {
 						await actorCtx.dispose();
 					}
