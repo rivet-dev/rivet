@@ -4974,6 +4974,18 @@ importers:
         specifier: ^4.20.5
         version: 4.21.0
 
+  scripts/vercel-examples:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.7.1
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+
   self-host/compose/template:
     dependencies:
       '@types/js-yaml':

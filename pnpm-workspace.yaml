@@ -16,6 +16,7 @@ packages:
   - rivetkit-swift/examples/*/server
   - scripts/publish
   - scripts/tests
+  - scripts/vercel-examples
   - shared/typescript/*
   - website
   - ext/*
