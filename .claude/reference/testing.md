@@ -6,7 +6,7 @@ Agent-procedural guide for running tests and avoiding known harness foot-guns. F
 
 - Run from `rivetkit-typescript/packages/rivetkit` and use `pnpm test <filter>` with `-t` to narrow to specific suites. For example: `pnpm test driver-file-system -t ".*Actor KV.*"`.
 - Always pipe the test to a file in `/tmp/` then grep it in a second step. You can grep test logs multiple times to search for different log lines.
-- For RivetKit driver work, follow `.agent/notes/driver-test-progress.md` one file group at a time. Keep the red/green loop anchored to `driver-test-suite.test.ts` in `rivetkit-typescript/packages/rivetkit` instead of switching to ad hoc native-only tests.
+- For RivetKit driver work, follow `~/.agents/notes/driver-test-progress.md` one file group at a time. Keep the red/green loop anchored to `driver-test-suite.test.ts` in `rivetkit-typescript/packages/rivetkit` instead of switching to ad hoc native-only tests.
 - When RivetKit tests need a local engine instance, start the RocksDB engine in the background with `./scripts/run/engine-rocksdb.sh >/tmp/rivet-engine-startup.log 2>&1 &`.
 
 ## Parity-bug workflow

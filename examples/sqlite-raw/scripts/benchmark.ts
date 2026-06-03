@@ -38,9 +38,10 @@ interface BenchReport {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
+const agentsDir = process.env.AGENTS_DIR ?? path.join(os.homedir(), ".agents");
 const outputPath = path.join(
-	repoRoot,
-	".agent/research/sqlite/v1-baseline-bench.json",
+	agentsDir,
+	"research/sqlite/v1-baseline-bench.json",
 );
 
 function parseResults(stdout: string): {

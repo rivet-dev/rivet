@@ -44,7 +44,7 @@ function usage(exitCode = 1): never {
   pnpm --filter kitchen-sink proc-metrics -- <events.jsonl> [--out-dir <path>]
 
 Examples:
-  pnpm --filter kitchen-sink proc-metrics -- .agent/benchmarks/sqlite-memory-soak/no-delete-sleep-5m-10c/events.jsonl
+  pnpm --filter kitchen-sink proc-metrics -- ~/.agents/benchmarks/sqlite-memory-soak/no-delete-sleep-5m-10c/events.jsonl
 `);
 	process.exit(exitCode);
 }
