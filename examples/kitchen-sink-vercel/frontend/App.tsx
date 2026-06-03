@@ -553,9 +553,10 @@ function EventsPanel({
 	useEffect(() => {
 		if (!actor.connection || !subscribedKey) return;
 
+		const connection = actor.connection;
 		const names = subscribedKey.split(",");
 		const stops = names.map((name) =>
-			actor.connection?.on(name, (...args: unknown[]) => {
+			connection.on(name, (...args: unknown[]) => {
 				const now = new Date();
 				const time = [
 					now.getHours(),

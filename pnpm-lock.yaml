@@ -268,9 +268,24 @@ importers:
 
   examples/agent-os:
     dependencies:
+      '@rivet-dev/agent-os-common':
+        specifier: '*'
+        version: 0.0.260331072558
+      '@rivet-dev/agent-os-core':
+        specifier: ^0.1.1
+        version: 0.1.1(pyodide@0.28.3)
+      '@rivet-dev/agent-os-pi':
+        specifier: ^0.1.1
+        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(pyodide@0.28.3)(ws@8.19.0)(zod@3.25.76)
+      '@rivet-dev/agent-os-sandbox':
+        specifier: ^0.1.1
+        version: 0.1.1(get-port@7.1.0)(pyodide@0.28.3)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
+      sandbox-agent:
+        specifier: ^0.4.2
+        version: 0.4.2(get-port@7.1.0)(zod@3.25.76)
       zod:
         specifier: ^3.25.0
         version: 3.25.76
@@ -292,7 +307,7 @@ importers:
         version: 0.0.260331072558
       '@rivet-dev/agent-os-pi':
         specifier: ^0.1.1
-        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
+        version: 0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
@@ -3357,7 +3372,7 @@ importers:
         version: 5.2.2(react-hook-form@7.62.0(react@19.1.0))
       '@ladle/react':
         specifier: ^5.1.1
-        version: 5.1.1(@swc/helpers@0.5.17)(@types/node@20.19.13)(@types/react@19.2.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+        version: 5.1.1(@swc/helpers@0.5.17)(@types/node@20.19.13)(@types/react@19.2.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
       '@marsidev/react-turnstile':
         specifier: ^1.5.0
         version: 1.5.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -3606,7 +3621,7 @@ importers:
         version: 2.4.3
       better-auth:
         specifier: ^1.5.6
-        version: 1.5.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(better-sqlite3@12.8.0)(drizzle-kit@0.31.5)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(sql.js@1.13.0))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2))(pg@8.17.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+        version: 1.5.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(better-sqlite3@12.8.0)(drizzle-kit@0.31.5)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(sql.js@1.13.0))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2))(pg@8.17.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       canvas-confetti:
         specifier: ^1.9.3
         version: 1.9.3
@@ -3726,7 +3741,7 @@ importers:
         version: 5.2.0(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@20.19.13)(typescript@5.9.3))(typescript@5.9.3)
       unplugin-macros:
         specifier: ^0.18.3
-        version: 0.18.3(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+        version: 0.18.3(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
       usehooks-ts:
         specifier: ^3.1.1
         version: 3.1.1(react@19.1.0)
@@ -3748,7 +3763,7 @@ importers:
         version: 2.14.4(@types/node@20.19.13)(typescript@5.9.3)
       vitest:
         specifier: ^4.0.18
-        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   frontend/packages/components:
     dependencies:
@@ -5129,10 +5144,6 @@ packages:
 
   '@aws-sdk/token-providers@3.1024.0':
     resolution: {integrity: sha512-eoyTMgd6OzoE1dq50um5Y53NrosEkWsjH0W6pswi7vrv1W9hY/7hR43jDcPevqqj+OQksf/5lc++FTqRlb8Y1Q==}
-    engines: {node: '>=20.0.0'}
-
-  '@aws-sdk/types@3.973.5':
-    resolution: {integrity: sha512-hl7BGwDCWsjH8NkZfx+HgS7H2LyM2lTMAI7ba9c8O0KqdBLTdNJivsHpqjg9rNlAlPyREb6DeDRXUl0s8uFdmQ==}
     engines: {node: '>=20.0.0'}
 
   '@aws-sdk/types@3.973.6':
@@ -8930,6 +8941,9 @@ packages:
       pyodide:
         optional: true
 
+  '@rivet-dev/agent-os-sandbox@0.1.1':
+    resolution: {integrity: sha512-E4nl1b2DwV7X6XYgWdw3F+UBulEDmYfEdkNOZowJYh7/D0lEEWewNnQWUyPgegCMrnQR3Q2ql7QG3oJiE57E3A==}
+
   '@rivet-dev/agent-os-sed@0.0.260331072558':
     resolution: {integrity: sha512-i/6ifWCcGE2TEfPWR5ig5tMVKUc0qL0ng59htgS+sqt6zdMaPIllwVztOgXNxMEdFM1TF646e/OkMfMzmYZDCA==}
 
@@ -9142,6 +9156,38 @@ packages:
 
   '@rushstack/ts-command-line@5.1.2':
     resolution: {integrity: sha512-jn0EnSefYrkZDrBGd6KGuecL84LI06DgzL4hVQ46AUijNBt2nRU/ST4HhrfII/w91siCd1J/Okvxq/BS75Me/A==}
+
+  '@sandbox-agent/cli-darwin-arm64@0.4.2':
+    resolution: {integrity: sha512-+L1O8SI7k/LLhyB4dG0ghmz1cJHa0WtVjuRTrEE2gw/5EbGLWopPBsCVCmQ7snrQ4fPwtaiZDhfExcEj1VI7aw==}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@sandbox-agent/cli-darwin-x64@0.4.2':
+    resolution: {integrity: sha512-dDg/EwWsdgVVbJiiCX1scSNRRA48u77SsC7Tuqrfzx4fIJMLuLiIcmEtXQyCBWysSyQNV2Cr+PYXXQfCb3xg8g==}
+    cpu: [x64]
+    os: [darwin]
+
+  '@sandbox-agent/cli-linux-arm64@0.4.2':
+    resolution: {integrity: sha512-TGmTUexMoubmWQyTeaOJu0rDVl2h0Ifh1pZ0ceZy7u/6Eoqs2n46CbfQtasUxZJf10uxPgRyzEDhcdDrTYVQUA==}
+    cpu: [arm64]
+    os: [linux]
+
+  '@sandbox-agent/cli-linux-x64@0.4.2':
+    resolution: {integrity: sha512-H9Rbqq0DRkCHvakzefJUDrDa2y+vJjlYd5/tefzKbQ34locE13TGNygRLxdEVXpBECjK9wVdBwTVEphQNsOcjw==}
+    cpu: [x64]
+    os: [linux]
+
+  '@sandbox-agent/cli-shared@0.4.2':
+    resolution: {integrity: sha512-sjZXRkKeFXCSKR6hHzF2Af8CCRO3F3WFwVQJ22+sLTXJ2xskV8lkUE4egknQU9B5BC1Zumts/YiNCFQWG85awQ==}
+
+  '@sandbox-agent/cli-win32-x64@0.4.2':
+    resolution: {integrity: sha512-lZNfHWPwQe/VH51Yvrl/ATCUvBZ3a+c8mwovojhQcmZlv4QuUQPkuvxhPqHRh9AyBx78L5J/ha46es2doa34nQ==}
+    cpu: [x64]
+    os: [win32]
+
+  '@sandbox-agent/cli@0.4.2':
+    resolution: {integrity: sha512-trO//ypJBSt5xkewuol9LOykvDgHwUXq8R+yQVS+0CmpN3lYUtewHkb+At9RVGRhDMmJZY2oasaXDnhfurQ33w==}
+    hasBin: true
 
   '@sec-ant/readable-stream@0.4.1':
     resolution: {integrity: sha512-831qok9r2t8AlxLko40y2ebgSDhenenCatLVeW/uBtnHPyhHOvG0C7TvfgecV+wHzIm5KUICgzmVpWS+IMEAeg==}
@@ -9593,10 +9639,6 @@ packages:
 
   '@smithy/smithy-client@4.12.8':
     resolution: {integrity: sha512-aJaAX7vHe5i66smoSSID7t4rKY08PbD8EBU7DOloixvhOozfYWdcSYE4l6/tjkZ0vBZhGjheWzB2mh31sLgCMA==}
-    engines: {node: '>=18.0.0'}
-
-  '@smithy/types@4.13.0':
-    resolution: {integrity: sha512-COuLsZILbbQsdrwKQpkkpyep7lCsByxwj7m0Mg5v66/ZTyenlfBc40/QFQ5chO0YN/PNEH1Bi3fGtfXPnYNeDw==}
     engines: {node: '>=18.0.0'}
 
   '@smithy/types@4.13.1':
@@ -10845,6 +10887,9 @@ packages:
     resolution: {integrity: sha512-UVJyE9MttOsBQIDKw1skb9nAwQuR5wuGD3+82K6JgJlm/Y+KI92oNsMNGZCYdDsVtRHSak0pcV5Dno5+4jh9sw==}
     engines: {node: '>=0.4.0'}
     hasBin: true
+
+  acp-http-client@0.4.2:
+    resolution: {integrity: sha512-3wtPieF08YIU4vNXaoL5up/1D0if4i9IX3Ye5q/bwbcwg1BKsazIK/VNNfvN4ldbPjWul69IqIOpGRS3I0qo3Q==}
 
   actor-core@0.6.3:
     resolution: {integrity: sha512-cdYf0GX3m3jvlubbdujOcnPn93r1fP9F0mEBso72ofMTI0+EeGMS34BNrmaGmk5Pb3iD45KQl3u5ZY5Mzv4DNg==}
@@ -16228,6 +16273,7 @@ packages:
   recharts@2.15.4:
     resolution: {integrity: sha512-UT/q6fwS3c1dHbXv2uFgYJ9BMFHu3fwnd7AYZaEQhXuYQ4hgsxLvsUXzGdKeZrW5xopzDCvuA2N41WJ88I7zIw==}
     engines: {node: '>=14'}
+    deprecated: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
     peerDependencies:
       react: 19.1.0
       react-dom: 19.1.0
@@ -16499,6 +16545,38 @@ packages:
 
   safer-buffer@2.1.2:
     resolution: {integrity: sha512-YZo3K82SD7Riyi0E1EQPojLz7kpepnSQI9IyPbHHg1XXXevb5dJI7tpyN2ADxGcQbHG7vcyRHk0cbwqcQriUtg==}
+
+  sandbox-agent@0.4.2:
+    resolution: {integrity: sha512-fH6WDQEaIrgiu93LxZcy+4Dx+t+/cslu+hzXImDyUlsaL6jV2jIv4fdxELkALlo7uzyEDVK9lmqs9qy65RHwBQ==}
+    peerDependencies:
+      '@cloudflare/sandbox': '>=0.1.0'
+      '@daytonaio/sdk': '>=0.12.0'
+      '@e2b/code-interpreter': '>=1.0.0'
+      '@fly/sprites': '>=0.0.1'
+      '@vercel/sandbox': '>=0.1.0'
+      computesdk: '>=0.1.0'
+      dockerode: '>=4.0.0'
+      get-port: '>=7.0.0'
+      modal: '>=0.1.0'
+    peerDependenciesMeta:
+      '@cloudflare/sandbox':
+        optional: true
+      '@daytonaio/sdk':
+        optional: true
+      '@e2b/code-interpreter':
+        optional: true
+      '@fly/sprites':
+        optional: true
+      '@vercel/sandbox':
+        optional: true
+      computesdk:
+        optional: true
+      dockerode:
+        optional: true
+      get-port:
+        optional: true
+      modal:
+        optional: true
 
   sass@1.93.2:
     resolution: {integrity: sha512-t+YPtOQHpGW1QWsh1CHQ5cPIr9lbbGZLZnbihP/D/qZj/yuV68m8qarcV17nvkOX81BCrvzAlq2klCQFZghyTg==}
@@ -18389,6 +18467,10 @@ snapshots:
     dependencies:
       zod: 4.1.13
 
+  '@agentclientprotocol/sdk@0.16.1(zod@4.3.6)':
+    dependencies:
+      zod: 4.3.6
+
   '@ai-sdk/anthropic@1.2.12(zod@4.1.13)':
     dependencies:
       '@ai-sdk/provider': 1.1.3
@@ -18562,6 +18644,12 @@ snapshots:
     optionalDependencies:
       zod: 4.1.13
 
+  '@anthropic-ai/sdk@0.73.0(zod@4.3.6)':
+    dependencies:
+      json-schema-to-ts: 3.1.1
+    optionalDependencies:
+      zod: 4.3.6
+
   '@asteasolutions/zod-to-openapi@8.2.0(zod@4.1.13)':
     dependencies:
       openapi3-ts: 4.5.0
@@ -18674,7 +18762,7 @@ snapshots:
   '@aws-crypto/crc32@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
-      '@aws-sdk/types': 3.973.5
+      '@aws-sdk/types': 3.973.6
       tslib: 2.8.1
 
   '@aws-crypto/sha256-browser@5.2.0':
@@ -18682,7 +18770,7 @@ snapshots:
       '@aws-crypto/sha256-js': 5.2.0
       '@aws-crypto/supports-web-crypto': 5.2.0
       '@aws-crypto/util': 5.2.0
-      '@aws-sdk/types': 3.973.5
+      '@aws-sdk/types': 3.973.6
       '@aws-sdk/util-locate-window': 3.965.5
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
@@ -18690,7 +18778,7 @@ snapshots:
   '@aws-crypto/sha256-js@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
-      '@aws-sdk/types': 3.973.5
+      '@aws-sdk/types': 3.973.6
       tslib: 2.8.1
 
   '@aws-crypto/supports-web-crypto@5.2.0':
@@ -18699,7 +18787,7 @@ snapshots:
 
   '@aws-crypto/util@5.2.0':
     dependencies:
-      '@aws-sdk/types': 3.973.5
+      '@aws-sdk/types': 3.973.6
       '@smithy/util-utf8': 2.3.0
       tslib: 2.8.1
 
@@ -19010,11 +19098,6 @@ snapshots:
       tslib: 2.8.1
     transitivePeerDependencies:
       - aws-crt
-
-  '@aws-sdk/types@3.973.5':
-    dependencies:
-      '@smithy/types': 4.13.0
-      tslib: 2.8.1
 
   '@aws-sdk/types@3.973.6':
     dependencies:
@@ -20866,6 +20949,19 @@ snapshots:
       - supports-color
       - utf-8-validate
 
+  '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))':
+    dependencies:
+      google-auth-library: 10.6.2
+      p-retry: 4.6.2
+      protobufjs: 7.5.4
+      ws: 8.19.0
+    optionalDependencies:
+      '@modelcontextprotocol/sdk': 1.25.3(hono@4.11.9)(zod@4.3.6)
+    transitivePeerDependencies:
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+
   '@headlessui/react@2.2.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
     dependencies:
       '@floating-ui/react': 0.26.28(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -21349,7 +21445,7 @@ snapshots:
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
 
-  '@ladle/react@5.1.1(@swc/helpers@0.5.17)(@types/node@20.19.13)(@types/react@19.2.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)':
+  '@ladle/react@5.1.1(@swc/helpers@0.5.17)(@types/node@20.19.13)(@types/react@19.2.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)':
     dependencies:
       '@babel/code-frame': 7.29.0
       '@babel/core': 7.29.0
@@ -21361,8 +21457,8 @@ snapshots:
       '@ladle/react-context': 1.0.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@mdx-js/mdx': 3.1.1
       '@mdx-js/react': 3.1.1(@types/react@19.2.13)(react@19.1.0)
-      '@vitejs/plugin-react': 4.7.0(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
-      '@vitejs/plugin-react-swc': 3.11.0(@swc/helpers@0.5.17)(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitejs/plugin-react': 4.7.0(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitejs/plugin-react-swc': 3.11.0(@swc/helpers@0.5.17)(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       axe-core: 4.11.1
       boxen: 8.0.1
       chokidar: 4.0.3
@@ -21389,8 +21485,8 @@ snapshots:
       remark-gfm: 4.0.1
       source-map: 0.7.6
       vfile: 6.0.3
-      vite: 6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-      vite-tsconfig-paths: 5.1.4(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      vite: 6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite-tsconfig-paths: 5.1.4(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
     transitivePeerDependencies:
       - '@swc/helpers'
       - '@types/node'
@@ -21526,6 +21622,18 @@ snapshots:
       - ws
       - zod
 
+  '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)':
+    dependencies:
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@3.25.76)
@@ -21574,6 +21682,30 @@ snapshots:
       - ws
       - zod
 
+  '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.73.0(zod@4.3.6)
+      '@aws-sdk/client-bedrock-runtime': 3.1024.0
+      '@google/genai': 1.48.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))
+      '@mistralai/mistralai': 1.14.1
+      '@sinclair/typebox': 0.34.41
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      chalk: 5.6.2
+      openai: 6.26.0(ws@8.19.0)(zod@4.3.6)
+      partial-json: 0.1.7
+      proxy-agent: 6.5.0
+      undici: 7.24.7
+      zod-to-json-schema: 3.25.1(zod@4.3.6)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       '@mariozechner/jiti': 2.6.5
@@ -21611,6 +21743,38 @@ snapshots:
       '@mariozechner/jiti': 2.6.5
       '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
       '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+      '@mariozechner/pi-tui': 0.60.0
+      '@silvia-odwyer/photon-node': 0.3.4
+      chalk: 5.6.2
+      cli-highlight: 2.1.11
+      diff: 8.0.3
+      extract-zip: 2.0.1
+      file-type: 21.3.4
+      glob: 13.0.6
+      hosted-git-info: 9.0.2
+      ignore: 7.0.5
+      marked: 15.0.12
+      minimatch: 10.2.5
+      proper-lockfile: 4.1.2
+      strip-ansi: 7.1.2
+      undici: 7.24.7
+      yaml: 2.8.2
+    optionalDependencies:
+      '@mariozechner/clipboard': 0.3.2
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
+  '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)':
+    dependencies:
+      '@mariozechner/jiti': 2.6.5
+      '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-tui': 0.60.0
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
@@ -21988,6 +22152,29 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.1.13
       zod-to-json-schema: 3.25.1(zod@4.1.13)
+    transitivePeerDependencies:
+      - hono
+      - supports-color
+    optional: true
+
+  '@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6)':
+    dependencies:
+      '@hono/node-server': 1.19.13(hono@4.11.9)
+      ajv: 8.17.1
+      ajv-formats: 3.0.1(ajv@8.17.1)
+      content-type: 1.0.5
+      cors: 2.8.5
+      cross-spawn: 7.0.6
+      eventsource: 3.0.7
+      eventsource-parser: 3.0.6
+      express: 5.2.1
+      express-rate-limit: 7.5.1(express@5.2.1)
+      jose: 6.1.3
+      json-schema-typed: 8.0.2
+      pkce-challenge: 5.0.1
+      raw-body: 3.0.2
+      zod: 4.3.6
+      zod-to-json-schema: 3.25.1(zod@4.3.6)
     transitivePeerDependencies:
       - hono
       - supports-color
@@ -23370,7 +23557,7 @@ snapshots:
 
   '@rivet-dev/agent-os-gzip@0.0.260331072558': {}
 
-  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)':
+  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(pyodide@0.28.3)(ws@8.19.0)(zod@3.25.76)':
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@3.25.76)
       '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@3.25.76))(ws@8.19.0)(zod@3.25.76)
@@ -23402,6 +23589,22 @@ snapshots:
       - ws
       - zod
 
+  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)':
+    dependencies:
+      '@agentclientprotocol/sdk': 0.16.1(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.25.3(hono@4.11.9)(zod@4.3.6))(ws@8.19.0)(zod@4.3.6)
+      '@rivet-dev/agent-os-core': 0.1.1(pyodide@0.28.3)
+    transitivePeerDependencies:
+      - '@modelcontextprotocol/sdk'
+      - aws-crt
+      - bufferutil
+      - pyodide
+      - supports-color
+      - utf-8-validate
+      - ws
+      - zod
+
   '@rivet-dev/agent-os-posix@0.1.0':
     dependencies:
       '@secure-exec/core': 0.2.1
@@ -23411,6 +23614,24 @@ snapshots:
       '@secure-exec/core': 0.2.1
     optionalDependencies:
       pyodide: 0.28.3
+
+  '@rivet-dev/agent-os-sandbox@0.1.1(get-port@7.1.0)(pyodide@0.28.3)':
+    dependencies:
+      '@rivet-dev/agent-os-core': 0.1.1(pyodide@0.28.3)
+      '@secure-exec/core': 0.2.1
+      sandbox-agent: 0.4.2(get-port@7.1.0)(zod@4.3.6)
+      zod: 4.3.6
+    transitivePeerDependencies:
+      - '@cloudflare/sandbox'
+      - '@daytonaio/sdk'
+      - '@e2b/code-interpreter'
+      - '@fly/sprites'
+      - '@vercel/sandbox'
+      - computesdk
+      - dockerode
+      - get-port
+      - modal
+      - pyodide
 
   '@rivet-dev/agent-os-sed@0.0.260331072558': {}
 
@@ -23719,6 +23940,34 @@ snapshots:
       string-argv: 0.3.2
     transitivePeerDependencies:
       - '@types/node'
+    optional: true
+
+  '@sandbox-agent/cli-darwin-arm64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-darwin-x64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-linux-arm64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-linux-x64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli-shared@0.4.2': {}
+
+  '@sandbox-agent/cli-win32-x64@0.4.2':
+    optional: true
+
+  '@sandbox-agent/cli@0.4.2':
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+    optionalDependencies:
+      '@sandbox-agent/cli-darwin-arm64': 0.4.2
+      '@sandbox-agent/cli-darwin-x64': 0.4.2
+      '@sandbox-agent/cli-linux-arm64': 0.4.2
+      '@sandbox-agent/cli-linux-x64': 0.4.2
+      '@sandbox-agent/cli-win32-x64': 0.4.2
     optional: true
 
   '@sec-ant/readable-stream@0.4.1': {}
@@ -24338,10 +24587,6 @@ snapshots:
       '@smithy/protocol-http': 5.3.12
       '@smithy/types': 4.13.1
       '@smithy/util-stream': 4.5.21
-      tslib: 2.8.1
-
-  '@smithy/types@4.13.0':
-    dependencies:
       tslib: 2.8.1
 
   '@smithy/types@4.13.1':
@@ -25473,11 +25718,11 @@ snapshots:
       d3-time-format: 4.1.0
       internmap: 2.0.3
 
-  '@vitejs/plugin-react-swc@3.11.0(@swc/helpers@0.5.17)(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitejs/plugin-react-swc@3.11.0(@swc/helpers@0.5.17)(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@swc/core': 1.15.11(@swc/helpers@0.5.17)
-      vite: 6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@swc/helpers'
 
@@ -25517,7 +25762,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@vitejs/plugin-react@4.7.0(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitejs/plugin-react@4.7.0(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@babel/core': 7.29.0
       '@babel/plugin-transform-react-jsx-self': 7.27.1(@babel/core@7.29.0)
@@ -25525,7 +25770,7 @@ snapshots:
       '@rolldown/pluginutils': 1.0.0-beta.27
       '@types/babel__core': 7.20.5
       react-refresh: 0.17.0
-      vite: 6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - supports-color
 
@@ -25619,14 +25864,14 @@ snapshots:
       msw: 2.14.4(@types/node@22.19.15)(typescript@5.9.3)
       vite: 5.4.21(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
-  '@vitest/mocker@4.0.18(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
+  '@vitest/mocker@4.0.18(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))':
     dependencies:
       '@vitest/spy': 4.0.18
       estree-walker: 3.0.3
       magic-string: 0.30.21
     optionalDependencies:
       msw: 2.14.4(@types/node@20.19.13)(typescript@5.9.3)
-      vite: 6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -25928,6 +26173,18 @@ snapshots:
   acorn@8.15.0: {}
 
   acorn@8.16.0: {}
+
+  acp-http-client@0.4.2(zod@3.25.76):
+    dependencies:
+      '@agentclientprotocol/sdk': 0.16.1(zod@3.25.76)
+    transitivePeerDependencies:
+      - zod
+
+  acp-http-client@0.4.2(zod@4.3.6):
+    dependencies:
+      '@agentclientprotocol/sdk': 0.16.1(zod@4.3.6)
+    transitivePeerDependencies:
+      - zod
 
   actor-core@0.6.3(eventsource@3.0.7)(ws@8.19.0):
     dependencies:
@@ -26441,7 +26698,7 @@ snapshots:
 
   bcryptjs@2.4.3: {}
 
-  better-auth@1.5.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(better-sqlite3@12.8.0)(drizzle-kit@0.31.5)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(sql.js@1.13.0))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2))(pg@8.17.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
+  better-auth@1.5.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(better-sqlite3@12.8.0)(drizzle-kit@0.31.5)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(sql.js@1.13.0))(next@16.1.1(@babel/core@7.29.0)(@opentelemetry/api@1.9.0)(@playwright/test@1.57.0)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2))(pg@8.17.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       '@better-auth/core': 1.5.6(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(better-call@1.3.2(zod@3.25.76))(jose@6.1.3)(kysely@0.28.15)(nanostores@1.2.0)
       '@better-auth/drizzle-adapter': 1.5.6(@better-auth/core@1.5.6(@better-auth/utils@0.3.1)(@better-fetch/fetch@1.1.21)(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(better-call@1.3.2(zod@3.25.76))(jose@6.1.3)(kysely@0.28.15)(nanostores@1.2.0))(@better-auth/utils@0.3.1)(drizzle-orm@0.44.6(@cloudflare/workers-types@4.20251014.0)(@opentelemetry/api@1.9.0)(@types/better-sqlite3@7.6.13)(@types/pg@8.16.0)(@types/sql.js@1.4.9)(better-sqlite3@12.8.0)(bun-types@1.3.11)(kysely@0.28.15)(pg@8.17.2)(sql.js@1.13.0))
@@ -26468,7 +26725,7 @@ snapshots:
       pg: 8.17.2
       react: 19.1.0
       react-dom: 19.1.0(react@19.1.0)
-      vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vitest: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@cloudflare/workers-types'
       - '@opentelemetry/api'
@@ -31376,6 +31633,11 @@ snapshots:
       ws: 8.19.0
       zod: 4.1.13
 
+  openai@6.26.0(ws@8.19.0)(zod@4.3.6):
+    optionalDependencies:
+      ws: 8.19.0
+      zod: 4.3.6
+
   openapi-types@12.1.3: {}
 
   openapi3-ts@4.5.0:
@@ -32786,6 +33048,26 @@ snapshots:
 
   safer-buffer@2.1.2: {}
 
+  sandbox-agent@0.4.2(get-port@7.1.0)(zod@3.25.76):
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+      acp-http-client: 0.4.2(zod@3.25.76)
+    optionalDependencies:
+      '@sandbox-agent/cli': 0.4.2
+      get-port: 7.1.0
+    transitivePeerDependencies:
+      - zod
+
+  sandbox-agent@0.4.2(get-port@7.1.0)(zod@4.3.6):
+    dependencies:
+      '@sandbox-agent/cli-shared': 0.4.2
+      acp-http-client: 0.4.2(zod@4.3.6)
+    optionalDependencies:
+      '@sandbox-agent/cli': 0.4.2
+      get-port: 7.1.0
+    transitivePeerDependencies:
+      - zod
+
   sass@1.93.2:
     dependencies:
       chokidar: 4.0.3
@@ -34043,13 +34325,13 @@ snapshots:
 
   unpipe@1.0.0: {}
 
-  unplugin-macros@0.18.3(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
+  unplugin-macros@0.18.3(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       ast-kit: 2.2.0
       magic-string-ast: 1.0.3
       unplugin: 2.3.10
-      vite: 7.3.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
-      vite-node: 5.2.0(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite-node: 5.2.0(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -34336,13 +34618,13 @@ snapshots:
       - supports-color
       - terser
 
-  vite-node@5.2.0(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
+  vite-node@5.2.0(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       cac: 6.7.14
       es-module-lexer: 1.7.0
       obug: 2.0.0(ms@2.1.3)
       pathe: 2.0.3
-      vite: 7.3.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 7.3.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - '@types/node'
       - jiti
@@ -34415,13 +34697,13 @@ snapshots:
       - supports-color
       - typescript
 
-  vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
+  vite-tsconfig-paths@5.1.4(typescript@5.9.3)(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)):
     dependencies:
       debug: 4.4.3
       globrex: 0.1.2
       tsconfck: 3.1.6(typescript@5.9.3)
     optionalDependencies:
-      vite: 6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
     transitivePeerDependencies:
       - supports-color
       - typescript
@@ -34479,7 +34761,7 @@ snapshots:
       stylus: 0.62.0
       terser: 5.46.0
 
-  vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
+  vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       esbuild: 0.25.12
       fdir: 6.5.0(picomatch@4.0.3)
@@ -34490,7 +34772,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 20.19.13
       fsevents: 2.3.3
-      jiti: 1.21.7
+      jiti: 2.6.1
       less: 4.4.1
       lightningcss: 1.32.0
       sass: 1.93.2
@@ -34539,7 +34821,7 @@ snapshots:
       tsx: 4.21.0
       yaml: 2.8.2
 
-  vite@7.3.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
+  vite@7.3.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       esbuild: 0.27.3
       fdir: 6.5.0(picomatch@4.0.3)
@@ -34550,7 +34832,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 20.19.13
       fsevents: 2.3.3
-      jiti: 1.21.7
+      jiti: 2.6.1
       less: 4.4.1
       lightningcss: 1.32.0
       sass: 1.93.2
@@ -34824,10 +35106,10 @@ snapshots:
       - supports-color
       - terser
 
-  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
+  vitest@4.0.18(@opentelemetry/api@1.9.0)(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2):
     dependencies:
       '@vitest/expect': 4.0.18
-      '@vitest/mocker': 4.0.18(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(vite@6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
+      '@vitest/mocker': 4.0.18(msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3))(vite@6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2))
       '@vitest/pretty-format': 4.0.18
       '@vitest/runner': 4.0.18
       '@vitest/snapshot': 4.0.18
@@ -34844,7 +35126,7 @@ snapshots:
       tinyexec: 1.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vite: 6.4.1(@types/node@20.19.13)(jiti@1.21.7)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
+      vite: 6.4.1(@types/node@20.19.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.8.2)
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@opentelemetry/api': 1.9.0

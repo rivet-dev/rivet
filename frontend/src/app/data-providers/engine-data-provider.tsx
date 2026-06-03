@@ -721,6 +721,7 @@ export const createNamespaceContext = ({
 				mutationKey: ["runner-config", "delete"] as QueryKey,
 				mutationFn: async (name: string) => {
 					await client.runnerConfigsDelete(name, { namespace });
+					return undefined;
 				},
 				meta: {
 					mightRequireAuth,

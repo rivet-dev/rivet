@@ -49,10 +49,10 @@ export default function ConnectRivetFrameContent({
 		upsertManagedPool({
 			displayName: "default",
 			pool: "default",
-			image: null,
+			image: undefined,
 			maxConcurrentActors: 50_000,
 			environment: {},
-			command: null,
+			command: undefined,
 			args: [],
 		});
 	}, [upsertManagedPool]);
@@ -80,7 +80,7 @@ export default function ConnectRivetFrameContent({
 				deriveProviderFromMetadata(dc.metadata) === "rivet",
 		),
 	);
-	const hasValidPool = !!poolData?.config.image;
+	const hasValidPool = !!poolData?.config?.image;
 	const isSuccess =
 		hasRunnerConfig && hasValidPool && poolData?.status === "ready";
 
@@ -203,7 +203,8 @@ function PoolStatus({
 		| "initializing"
 		| "allocating"
 		| "deploying"
-		| "binding";
+		| "binding"
+		| "destroying";
 	error?: string;
 	isSuccess: boolean;
 }) {
@@ -266,6 +267,14 @@ function PoolStatus({
 			<span>
 				<Icon icon={faSpinnerThird} className="mr-1.5 animate-spin" />
 				Binding...
+			</span>
+		);
+	}
+	if (status === "destroying") {
+		return (
+			<span>
+				<Icon icon={faSpinnerThird} className="mr-1.5 animate-spin" />
+				Destroying...
 			</span>
 		);
 	}

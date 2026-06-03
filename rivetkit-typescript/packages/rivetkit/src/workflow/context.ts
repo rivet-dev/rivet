@@ -81,7 +81,9 @@ type ActorWorkflowLoopConfig<
 			TQueues
 		>,
 		state: S,
-	) => Promise<LoopResult<S, T> | (S extends undefined ? undefined : never)>;
+	) => Promise<
+		LoopResult<S, T> | (S extends undefined ? undefined | void : never)
+	>;
 };
 
 type ActorWorkflowBranchConfig<
@@ -328,13 +330,13 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, T> | undefined>,
+		) => Promise<LoopResult<undefined, T> | undefined | void>,
 	): Promise<T>;
 	async loop<T>(
 		name: string,
 		run: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T> | undefined>,
+		) => Promise<LoopResult<undefined, T> | undefined | void>,
 	): Promise<T>;
 	async loop<S, T>(
 		config: ActorWorkflowLoopConfig<
@@ -378,7 +380,7 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, any> | undefined>,
+		) => Promise<LoopResult<undefined, any> | undefined | void>,
 	): Promise<any> {
 		if (typeof nameOrConfig === "string") {
 			if (!run) {

@@ -1,6 +1,6 @@
 import { setupTest } from "rivetkit/test";
 import { describe, expect, test } from "vitest";
-import { registry } from "../src/index.ts";
+import { registry, type Reminder } from "../src/index.ts";
 
 // Helper to wait for a delay
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -24,7 +24,7 @@ describe("reminder scheduling", () => {
 		await wait(150);
 
 		const reminders = await reminderClient.getReminders();
-		const completed = reminders.find((r) => r.id === reminder.id);
+		const completed = reminders.find((r: Reminder) => r.id === reminder.id);
 
 		expect(completed?.completedAt).toBeDefined();
 	});
@@ -47,7 +47,7 @@ describe("reminder scheduling", () => {
 		await wait(150);
 
 		const reminders = await reminderClient.getReminders();
-		const completed = reminders.find((r) => r.id === reminder.id);
+		const completed = reminders.find((r: Reminder) => r.id === reminder.id);
 
 		expect(completed?.completedAt).toBeDefined();
 	});
@@ -77,9 +77,15 @@ describe("reminder scheduling", () => {
 		const reminders = await reminderClient.getReminders();
 
 		// Verify each reminder received the correct ID and was triggered
-		const completed1 = reminders.find((r) => r.id === reminder1.id);
-		const completed2 = reminders.find((r) => r.id === reminder2.id);
-		const completed3 = reminders.find((r) => r.id === reminder3.id);
+		const completed1 = reminders.find(
+			(r: Reminder) => r.id === reminder1.id,
+		);
+		const completed2 = reminders.find(
+			(r: Reminder) => r.id === reminder2.id,
+		);
+		const completed3 = reminders.find(
+			(r: Reminder) => r.id === reminder3.id,
+		);
 
 		expect(completed1?.completedAt).toBeDefined();
 		expect(completed2?.completedAt).toBeDefined();
@@ -101,7 +107,7 @@ describe("reminder scheduling", () => {
 		await wait(150);
 
 		const reminders = await reminderClient.getReminders();
-		const found = reminders.find((r) => r.id === reminder.id);
+		const found = reminders.find((r: Reminder) => r.id === reminder.id);
 
 		// Reminder should not exist (was removed from state)
 		expect(found).toBeUndefined();
@@ -141,19 +147,19 @@ describe("reminder scheduling", () => {
 
 		// Verify all are completed
 		expect(
-			reminders.find((r) => r.id === reminder1.id)?.completedAt,
+			reminders.find((r: Reminder) => r.id === reminder1.id)?.completedAt,
 		).toBeDefined();
 		expect(
-			reminders.find((r) => r.id === reminder2.id)?.completedAt,
+			reminders.find((r: Reminder) => r.id === reminder2.id)?.completedAt,
 		).toBeDefined();
 		expect(
-			reminders.find((r) => r.id === reminder3.id)?.completedAt,
+			reminders.find((r: Reminder) => r.id === reminder3.id)?.completedAt,
 		).toBeDefined();
 		expect(
-			reminders.find((r) => r.id === reminder4.id)?.completedAt,
+			reminders.find((r: Reminder) => r.id === reminder4.id)?.completedAt,
 		).toBeDefined();
 		expect(
-			reminders.find((r) => r.id === reminder5.id)?.completedAt,
+			reminders.find((r: Reminder) => r.id === reminder5.id)?.completedAt,
 		).toBeDefined();
 
 		const stats = await reminderClient.getStats();
@@ -175,7 +181,7 @@ describe("reminder scheduling", () => {
 		await wait(150);
 
 		const reminders = await reminderClient.getReminders();
-		const completed = reminders.find((r) => r.id === reminder.id);
+		const completed = reminders.find((r: Reminder) => r.id === reminder.id);
 
 		expect(completed?.completedAt).toBeDefined();
 	});

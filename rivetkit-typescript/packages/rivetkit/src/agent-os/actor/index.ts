@@ -1,6 +1,6 @@
 import type { AgentOsOptions, MountConfig } from "@rivet-dev/agent-os-core";
 import { AgentOs, createInMemoryFileSystem } from "@rivet-dev/agent-os-core";
-import { actor, event } from "@/actor/mod";
+import { actor, event, type ActorDefinition } from "@/actor/mod";
 import type { DatabaseProvider, RawAccess } from "@/common/database/config";
 import { db } from "@/common/database/mod";
 import {
@@ -140,10 +140,41 @@ function runHook<TConnParams>(
 
 export function agentOs<TConnParams = undefined>(
 	config: AgentOsActorConfigInput<TConnParams>,
-) {
+): ActorDefinition<
+	AgentOsActorState,
+	TConnParams,
+	undefined,
+	AgentOsActorVars,
+	undefined,
+	DatabaseProvider<RawAccess>,
+	{
+		sessionEvent: typeof sessionEventToken;
+		permissionRequest: typeof permissionRequestToken;
+		vmBooted: typeof vmBootedToken;
+		vmShutdown: typeof vmShutdownToken;
+		processOutput: typeof processOutputToken;
+		processExit: typeof processExitToken;
+		shellData: typeof shellDataToken;
+		cronEvent: typeof cronEventToken;
+	},
+	Record<never, never>,
+	any
+> {
 	const parsedConfig = agentOsActorConfigSchema.parse(
 		config,
 	) as AgentOsActorConfig<TConnParams>;
+	const actions = {
+		...buildSessionActions(parsedConfig),
+		...buildPromptActions(parsedConfig),
+		...buildConfigActions(parsedConfig),
+		...buildSessionPersistenceActions(parsedConfig),
+		...buildProcessActions(parsedConfig),
+		...buildFilesystemActions(parsedConfig),
+		...buildPreviewActions(parsedConfig),
+		...buildShellActions(parsedConfig),
+		...buildCronActions(parsedConfig),
+		...buildNetworkActions(parsedConfig),
+	};
 
 	return actor<
 		AgentOsActorState,
@@ -162,7 +193,8 @@ export function agentOs<TConnParams = undefined>(
 			shellData: typeof shellDataToken;
 			cronEvent: typeof cronEventToken;
 		},
-		Record<never, never>
+		Record<never, never>,
+		typeof actions
 	>({
 		options: {
 			sleepGracePeriod: 900_000,
@@ -235,18 +267,7 @@ export function agentOs<TConnParams = undefined>(
 
 			c.broadcast("vmShutdown", { reason: "destroy" as const });
 		},
-		actions: {
-			...buildSessionActions(parsedConfig),
-			...buildPromptActions(parsedConfig),
-			...buildConfigActions(parsedConfig),
-			...buildSessionPersistenceActions(parsedConfig),
-			...buildProcessActions(parsedConfig),
-			...buildFilesystemActions(parsedConfig),
-			...buildPreviewActions(parsedConfig),
-			...buildShellActions(parsedConfig),
-			...buildCronActions(parsedConfig),
-			...buildNetworkActions(parsedConfig),
-		},
+		actions,
 	});
 }
 
