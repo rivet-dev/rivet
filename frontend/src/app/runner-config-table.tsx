@@ -444,9 +444,10 @@ function Endpoints({
 	) => ReactNode;
 }) {
 	const perDatacenter = useMemo(() => {
-		return datacenters
-			.filter(([, config]) => config.serverless?.url)
-			.map(([dc, config]) => [dc, config.serverless?.url] as const);
+		return datacenters.flatMap(([dc, config]) => {
+			const endpoint = config.serverless?.url;
+			return endpoint ? [[dc, endpoint] as const] : [];
+		});
 	}, [datacenters]);
 
 	const uniqueEndpoints = useMemo(

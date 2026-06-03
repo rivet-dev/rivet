@@ -15,7 +15,13 @@ const weatherToolkit = toolKit({
 				city: z.string().describe("City name (e.g. 'Paris')."),
 				days: z.number().optional().describe("Number of days"),
 			}),
-			execute: async ({ city, days }) => ({
+			execute: async ({
+				city,
+				days,
+			}: {
+				city: string;
+				days?: number;
+			}) => ({
 				city,
 				days: days ?? 3,
 				temperature: 22,

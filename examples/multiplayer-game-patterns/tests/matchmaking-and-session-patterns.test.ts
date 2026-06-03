@@ -5,6 +5,19 @@ import { CHUNK_SIZE, WORLD_ID } from "../src/actors/open-world/config.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+type QueueResult<T> = {
+	status: "completed" | "timedOut";
+	response?: T;
+};
+
+type RawQueueConnection = {
+	send<TResponse>(
+		name: string,
+		body: unknown,
+		options: { wait: true; timeout?: number },
+	): Promise<QueueResult<TResponse>>;
+};
+
 describe("matchmaking and session patterns", () => {
 	test("io-style open lobby + 10 tps match with movement", async (ctx) => {
 		const { client } = await setupTest(ctx, registry);
@@ -190,12 +203,14 @@ describe("matchmaking and session patterns", () => {
 		)?.response;
 		expect(createResponse?.matchId).toBeTypeOf("string");
 		expect(createResponse?.partyCode).toHaveLength(6);
+		if (!createResponse)
+			throw new Error("expected party creation response");
 
 		const hostConn = client.partyMatch
-			.get([createResponse?.matchId], {
+			.get([createResponse.matchId], {
 				params: {
-					playerId: createResponse?.playerId,
-					joinToken: createResponse?.joinToken,
+					playerId: createResponse.playerId,
+					joinToken: createResponse.joinToken,
 				},
 			})
 			.connect();
@@ -205,31 +220,28 @@ describe("matchmaking and session patterns", () => {
 		expect(snap1.partyCode).toBe(createResponse?.partyCode);
 		expect(snap1.phase).toBe("waiting");
 		expect(Object.keys(snap1.members)).toHaveLength(1);
-		const hostMember = snap1.members[createResponse?.playerId];
+		const hostMember = snap1.members[createResponse.playerId];
 		expect(hostMember.isHost).toBe(true);
 
-		const joinResult = await mm.send(
+		const joinResult = await (mm as RawQueueConnection).send<{
+			matchId: string;
+			playerId: string;
+			joinToken: string;
+			playerName: string;
+		}>(
 			"joinParty",
-			{ partyCode: createResponse?.partyCode, playerName: "Player2" },
+			{ partyCode: createResponse.partyCode, playerName: "Player2" },
 			{ wait: true, timeout: 5_000 },
 		);
-		const joinResponse = (
-			joinResult as {
-				response?: {
-					matchId: string;
-					playerId: string;
-					joinToken: string;
-					playerName: string;
-				};
-			}
-		)?.response;
+		const joinResponse = joinResult.response;
 		expect(joinResponse?.matchId).toBe(createResponse?.matchId);
+		if (!joinResponse) throw new Error("expected party join response");
 
 		const p2Conn = client.partyMatch
-			.get([joinResponse?.matchId], {
+			.get([joinResponse.matchId], {
 				params: {
-					playerId: joinResponse?.playerId,
-					joinToken: joinResponse?.joinToken,
+					playerId: joinResponse.playerId,
+					joinToken: joinResponse.joinToken,
 				},
 			})
 			.connect();
@@ -282,25 +294,28 @@ describe("matchmaking and session patterns", () => {
 		)?.response;
 		expect(createResponse?.matchId).toBeTypeOf("string");
 		expect(createResponse?.inviteCode).toHaveLength(6);
+		if (!createResponse) throw new Error("expected game creation response");
 
-		const joinResult = await mm.send(
+		const joinResult = await (mm as RawQueueConnection).send<{
+			matchId: string;
+			playerId: string;
+		}>(
 			"joinByCode",
-			{ inviteCode: createResponse?.inviteCode, playerName: "PlayerO" },
+			{ inviteCode: createResponse.inviteCode, playerName: "PlayerO" },
 			{ wait: true, timeout: 5_000 },
 		);
-		const joinResponse = (
-			joinResult as { response?: { matchId: string; playerId: string } }
-		)?.response;
+		const joinResponse = joinResult.response;
 		expect(joinResponse?.matchId).toBe(createResponse?.matchId);
+		if (!joinResponse) throw new Error("expected game join response");
 
 		const xConn = client.turnBasedMatch
-			.get([createResponse?.matchId], {
-				params: { playerId: createResponse?.playerId },
+			.get([createResponse.matchId], {
+				params: { playerId: createResponse.playerId },
 			})
 			.connect();
 		const oConn = client.turnBasedMatch
-			.get([joinResponse?.matchId], {
-				params: { playerId: joinResponse?.playerId },
+			.get([joinResponse.matchId], {
+				params: { playerId: joinResponse.playerId },
 			})
 			.connect();
 		await sleep(200);
@@ -519,18 +534,21 @@ describe("matchmaking and session patterns", () => {
 		)?.response;
 		expect(r1?.matchId).toBeTypeOf("string");
 		expect(r2?.matchId).toBe(r1?.matchId);
+		if (!r1 || !r2) {
+			throw new Error("expected battle royale queue responses");
+		}
 
 		const a = client.battleRoyaleMatch
-			.get([r1?.matchId], {
+			.get([r1.matchId], {
 				params: {
-					playerId: r1?.playerId,
+					playerId: r1.playerId,
 				},
 			})
 			.connect();
 		const b = client.battleRoyaleMatch
-			.get([r2?.matchId], {
+			.get([r2.matchId], {
 				params: {
-					playerId: r2?.playerId,
+					playerId: r2.playerId,
 				},
 			})
 			.connect();
@@ -569,9 +587,9 @@ describe("matchmaking and session patterns", () => {
 		expect(snap.chunkY).toBe(0);
 		expect(snap.chunkSize).toBe(1200);
 		expect(Object.keys(snap.players)).toHaveLength(1);
-		const myConnId = Object.entries(snap.players).find(
-			([, p]) => p.name === "Explorer",
-		)?.[0];
+		const myConnId = (
+			Object.entries(snap.players) as Array<[string, { name: string }]>
+		).find(([, p]) => p.name === "Explorer")?.[0];
 		expect(myConnId).toBeTypeOf("string");
 
 		await chunk.setInput({ inputX: 1, inputY: 0 });
@@ -609,17 +627,20 @@ describe("matchmaking and session patterns", () => {
 		await sleep(500);
 
 		const snapAtEdge = await chunk0.getSnapshot();
-		const travelerConnId = Object.entries(snapAtEdge.players).find(
-			([, p]) => p.name === "Traveler",
-		)?.[0];
+		const travelerConnId = (
+			Object.entries(snapAtEdge.players) as Array<
+				[string, { name: string }]
+			>
+		).find(([, p]) => p.name === "Traveler")?.[0];
 		const posAtEdge = travelerConnId
 			? snapAtEdge.players[travelerConnId]
 			: undefined;
 		expect(posAtEdge).toBeDefined();
 		expect(posAtEdge?.x).toBe(1199);
 
-		const absX = 0 * 1200 + posAtEdge?.x + 1;
-		const absY = 0 * 1200 + posAtEdge?.y;
+		if (!posAtEdge) throw new Error("expected traveler position");
+		const absX = 0 * 1200 + posAtEdge.x + 1;
+		const absY = 0 * 1200 + posAtEdge.y;
 		const r2 = resolveChunkForPosition(absX, absY);
 		expect(r2.chunkKey).toEqual([WORLD_ID, 1, 0]);
 		expect(r2.spawnX).toBeTypeOf("number");
@@ -636,9 +657,11 @@ describe("matchmaking and session patterns", () => {
 		const snapNewChunk = await chunk1.getSnapshot();
 		expect(snapNewChunk.chunkX).toBe(1);
 		expect(snapNewChunk.chunkY).toBe(0);
-		const newTravelerConnId = Object.entries(snapNewChunk.players).find(
-			([, p]) => p.name === "Traveler",
-		)?.[0];
+		const newTravelerConnId = (
+			Object.entries(snapNewChunk.players) as Array<
+				[string, { name: string }]
+			>
+		).find(([, p]) => p.name === "Traveler")?.[0];
 		const newPos = newTravelerConnId
 			? snapNewChunk.players[newTravelerConnId]
 			: undefined;

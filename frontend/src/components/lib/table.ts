@@ -1,7 +1,7 @@
-import type { Header } from "@tanstack/react-table";
+import type { Header, RowData } from "@tanstack/react-table";
 
 declare module "@tanstack/react-table" {
-	interface ColumnMeta<_TData, _TValue> {
+	interface ColumnMeta<TData extends RowData, TValue> {
 		isGrow?: boolean;
 		widthPercentage?: number;
 	}

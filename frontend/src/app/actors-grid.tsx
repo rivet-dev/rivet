@@ -70,7 +70,13 @@ function ActorGridCardSkeleton() {
 export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 	const dataProvider = useDataProvider();
 	const nsDataProvider = useCloudNamespaceDataProvider();
-	const { namespace } = useParams({ strict: false }) as { namespace: string };
+	const { organization, project, namespace } = useParams({
+		strict: false,
+	}) as {
+		organization: string;
+		project: string;
+		namespace: string;
+	};
 	const navigate = useNavigate();
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(dataProvider.buildsQueryOptions());
@@ -109,7 +115,14 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 						<H1 className="text-2xl truncate">{namespaceName}</H1>
 						<div className="flex items-center gap-2">
 							{hasCompute ? (
-								<Link to="./logs">
+								<Link
+									to="/orgs/$organization/projects/$project/ns/$namespace/logs"
+									params={{
+										organization,
+										project,
+										namespace,
+									}}
+								>
 									<Button
 										variant="outline"
 										size="sm"
@@ -283,7 +296,11 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 }
 
 function DeploymentsSection() {
-	const { namespace } = useParams({ strict: false }) as {
+	const { organization, project, namespace } = useParams({
+		strict: false,
+	}) as {
+		organization: string;
+		project: string;
 		namespace: string;
 	};
 	const dataProvider = useCloudNamespaceDataProvider();
@@ -406,7 +423,8 @@ function DeploymentsSection() {
 				/>
 				{hasMore ? (
 					<Link
-						to="./deployments"
+						to="/orgs/$organization/projects/$project/ns/$namespace/deployments"
+						params={{ organization, project, namespace }}
 						className="block border-t border-foreground/10 py-2 text-center text-sm text-muted-foreground hover:text-foreground transition-colors"
 					>
 						View all

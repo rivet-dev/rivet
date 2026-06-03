@@ -304,10 +304,10 @@ export function GettingStarted({
 										await mutateAsyncManagedPool({
 											displayName: "default",
 											pool: "default",
-											image: null,
+											image: undefined,
 											maxConcurrentActors: 50_000,
 											environment: {},
-											command: null,
+											command: undefined,
 											args: [],
 										});
 									}
@@ -1350,7 +1350,7 @@ function BackendSetupRivet() {
 										),
 									)
 								}
-								validatePool={(data) => !!data?.config.image}
+								validatePool={(data) => !!data?.config?.image}
 							/>
 						</div>
 					</div>
@@ -1410,7 +1410,7 @@ function BackendSetupServerless({ provider }: { provider: Provider }) {
 						deployment.
 					</p>
 					<div className="space-y-2">
-						<EnvVariables endpoint={endpoint} />
+						<EnvVariables endpoint={endpoint ?? ""} />
 					</div>
 				</div>
 			</div>
@@ -1749,7 +1749,7 @@ function TroubleshootingSection({ endpoint }: { endpoint: string | null }) {
 							<Suspense
 								fallback={<Skeleton className="w-full h-20" />}
 							>
-								<EnvVariables endpoint={endpoint} />
+								<EnvVariables endpoint={endpoint ?? ""} />
 							</Suspense>
 						</li>
 					</ul>

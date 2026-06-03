@@ -1227,7 +1227,7 @@ export const createNamespaceContext = ({
 					pool: opts.pool ?? "default",
 					safe: true,
 				}),
-				select: (data) => !!data?.config.image,
+				select: (data) => !!data?.config?.image,
 			});
 		},
 

@@ -8,9 +8,10 @@ interface RankedAssignmentEvent {
 }
 
 type AssignmentConnection = {
-	getAssignment: (input: {
-		username: string;
-	}) => Promise<RankedMatchInfo | null | Promise<RankedMatchInfo | null>>;
+	action: <Args extends unknown[], Response>(opts: {
+		name: string;
+		args: Args;
+	}) => Promise<Response>;
 	on: (
 		event: "assignmentReady",
 		handler: (raw: unknown) => void,
@@ -72,8 +73,8 @@ async function readAssignment(
 	mm: AssignmentConnection,
 	username: string,
 ): Promise<RankedMatchInfo | null> {
-	const nested = await mm.getAssignment({ username });
-	const resolved = await nested;
-	if (!resolved) return null;
-	return resolved as RankedMatchInfo;
+	return await mm.action<[{ username: string }], RankedMatchInfo | null>({
+		name: "getAssignment",
+		args: [{ username }],
+	});
 }

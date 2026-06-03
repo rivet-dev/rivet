@@ -91,7 +91,8 @@ function PoolStatus({
 		| "initializing"
 		| "allocating"
 		| "deploying"
-		| "binding";
+		| "binding"
+		| "destroying";
 	error?: string;
 }) {
 	if (status === "ready") {
@@ -153,6 +154,14 @@ function PoolStatus({
 			<span>
 				<Icon icon={faSpinnerThird} className="mr-1.5 animate-spin" />
 				Binding...
+			</span>
+		);
+	}
+	if (status === "destroying") {
+		return (
+			<span>
+				<Icon icon={faSpinnerThird} className="mr-1.5 animate-spin" />
+				Destroying...
 			</span>
 		);
 	}

@@ -1,4 +1,6 @@
+import { type Rivet } from "@rivetkit/engine-api-full";
 import {
+	infiniteQueryOptions,
 	useInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
@@ -33,6 +35,17 @@ const jsonValid = z.custom<string>(
 	},
 	{ fatal: true, message: "Must be valid JSON" },
 );
+
+const emptyRunnerNamesQueryOptions = infiniteQueryOptions({
+	queryKey: ["noop-runner-names"] as readonly unknown[],
+	queryFn: async (): Promise<Rivet.RunnersListNamesResponse> => ({
+		names: [],
+		pagination: {},
+	}),
+	initialPageParam: undefined as string | undefined,
+	getNextPageParam: () => undefined,
+	select: (data) => data.pages.flatMap((page) => page.names),
+});
 
 export const formSchema = z
 	.object({
@@ -215,15 +228,16 @@ export const PrefillRunnerName = () => {
 	const dataProvider = useEngineCompatDataProvider();
 	const hasRunnerNames = "runnerNamesQueryOptions" in dataProvider;
 
-	const { data = [], isSuccess } = useInfiniteQuery({
+	const { data = [], isSuccess } = useInfiniteQuery<
+		Rivet.RunnersListNamesResponse,
+		Error,
+		string[],
+		readonly unknown[],
+		string | undefined
+	>({
 		...(hasRunnerNames
 			? dataProvider.runnerNamesQueryOptions()
-			: {
-					queryKey: ["noop-runner-names"],
-					queryFn: async () => [],
-					initialPageParam: undefined,
-					getNextPageParam: () => undefined,
-				}),
+			: emptyRunnerNamesQueryOptions),
 		enabled: hasRunnerNames,
 	});
 

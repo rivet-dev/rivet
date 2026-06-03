@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const SOURCE_TEMPLATE = `import { actor } from "rivetkit";
 
@@ -39,11 +39,7 @@ function App() {
 	const [status, setStatus] = useState("Loading source actor...");
 	const [loading, setLoading] = useState(false);
 
-	useEffect(() => {
-		void loadSource();
-	}, [loadSource]);
-
-	const loadSource = async () => {
+	const loadSource = useCallback(async () => {
 		setLoading(true);
 		setStatus("Loading source...");
 		try {
@@ -56,7 +52,11 @@ function App() {
 		} finally {
 			setLoading(false);
 		}
-	};
+	}, []);
+
+	useEffect(() => {
+		void loadSource();
+	}, [loadSource]);
 
 	const saveSource = async () => {
 		setLoading(true);

@@ -3,9 +3,10 @@ interface Assignment {
 }
 
 type AssignmentConnection = {
-	getAssignment: (input: {
-		playerId: string;
-	}) => Promise<Assignment | null | Promise<Assignment | null>>;
+	action: <Args extends unknown[], Response>(opts: {
+		name: string;
+		args: Args;
+	}) => Promise<Response>;
 	on: (
 		event: "assignmentReady",
 		handler: (raw: unknown) => void,
@@ -63,8 +64,8 @@ async function readAssignment<T extends Assignment>(
 	mm: AssignmentConnection,
 	playerId: string,
 ): Promise<T | null> {
-	const nested = await mm.getAssignment({ playerId });
-	const resolved = await nested;
-	if (!resolved) return null;
-	return resolved as T;
+	return await mm.action<[{ playerId: string }], T | null>({
+		name: "getAssignment",
+		args: [{ playerId }],
+	});
 }

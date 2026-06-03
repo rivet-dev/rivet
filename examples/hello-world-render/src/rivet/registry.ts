@@ -1,5 +1,5 @@
 import { setup } from "rivetkit";
-import { port, useRivetCloud, warnIfRivetUsesGlobalHost } from "../config/env";
+import { useRivetCloud, warnIfRivetUsesGlobalHost } from "../config/env";
 import { counter } from "./counter";
 
 warnIfRivetUsesGlobalHost();
@@ -9,8 +9,6 @@ export const registry = setup(
 		? { use: { counter } }
 		: {
 				use: { counter },
-				publicDir: "public",
-				managerPort: port,
 			},
 );
 

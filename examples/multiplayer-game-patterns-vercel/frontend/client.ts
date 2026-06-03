@@ -5,7 +5,6 @@ export function makeClient() {
 	return createClient<typeof registry>({
 		endpoint: `${window.location.origin}/api/rivet`,
 		namespace: "default",
-		runnerName: "default",
 	});
 }
 
