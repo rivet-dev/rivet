@@ -239,7 +239,7 @@ export class ActorWorkflowContext<
 	}
 
 	async step<T>(
-		nameOrConfig: string | Parameters<WorkflowContextInterface["step"]>[0],
+		nameOrConfig: string | StepConfig<T>,
 		run?: () => Promise<T>,
 	): Promise<T> {
 		if (typeof nameOrConfig === "string") {
@@ -261,9 +261,7 @@ export class ActorWorkflowContext<
 	}
 
 	async tryStep<T>(
-		nameOrConfig:
-			| string
-			| Parameters<WorkflowContextInterface["tryStep"]>[0],
+		nameOrConfig: string | TryStepConfig<T>,
 		run?: () => Promise<T>,
 	): Promise<TryStepResult<T>> {
 		if (typeof nameOrConfig === "string") {
