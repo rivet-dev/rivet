@@ -5,47 +5,43 @@
 import { toJson } from "../core/json";
 
 export class RivetError extends Error {
-	readonly statusCode?: number;
-	readonly body?: unknown;
+    readonly statusCode?: number;
+    readonly body?: unknown;
 
-	constructor({
-		message,
-		statusCode,
-		body,
-	}: { message?: string; statusCode?: number; body?: unknown }) {
-		super(buildMessage({ message, statusCode, body }));
-		Object.setPrototypeOf(this, RivetError.prototype);
-		if (statusCode != null) {
-			this.statusCode = statusCode;
-		}
+    constructor({ message, statusCode, body }: { message?: string; statusCode?: number; body?: unknown }) {
+        super(buildMessage({ message, statusCode, body }));
+        Object.setPrototypeOf(this, RivetError.prototype);
+        if (statusCode != null) {
+            this.statusCode = statusCode;
+        }
 
-		if (body !== undefined) {
-			this.body = body;
-		}
-	}
+        if (body !== undefined) {
+            this.body = body;
+        }
+    }
 }
 
 function buildMessage({
-	message,
-	statusCode,
-	body,
+    message,
+    statusCode,
+    body,
 }: {
-	message: string | undefined;
-	statusCode: number | undefined;
-	body: unknown | undefined;
+    message: string | undefined;
+    statusCode: number | undefined;
+    body: unknown | undefined;
 }): string {
-	const lines: string[] = [];
-	if (message != null) {
-		lines.push(message);
-	}
+    let lines: string[] = [];
+    if (message != null) {
+        lines.push(message);
+    }
 
-	if (statusCode != null) {
-		lines.push(`Status code: ${statusCode.toString()}`);
-	}
+    if (statusCode != null) {
+        lines.push(`Status code: ${statusCode.toString()}`);
+    }
 
-	if (body != null) {
-		lines.push(`Body: ${toJson(body, undefined, 2)}`);
-	}
+    if (body != null) {
+        lines.push(`Body: ${toJson(body, undefined, 2)}`);
+    }
 
-	return lines.join("\n");
+    return lines.join("\n");
 }

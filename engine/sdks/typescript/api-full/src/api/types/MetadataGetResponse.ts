@@ -3,12 +3,12 @@
  */
 
 export interface MetadataGetResponse {
-	buildTimestamp: string;
-	cargoProfile: string;
-	cargoTarget: string;
-	gitSha: string;
-	runtime: string;
-	rustcHost: string;
-	rustcVersion: string;
-	version: string;
+    buildTimestamp: string;
+    cargoProfile: string;
+    cargoTarget: string;
+    gitSha: string;
+    runtime: string;
+    rustcHost: string;
+    rustcVersion: string;
+    version: string;
 }

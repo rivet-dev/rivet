@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigsUpsertResponse {
-	endpointConfigChanged: boolean;
+    endpointConfigChanged: boolean;
 }

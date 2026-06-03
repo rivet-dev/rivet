@@ -3,5 +3,5 @@
  */
 
 export interface RunnerConfigsServerlessHealthCheckResponseSuccessSuccess {
-	version: string;
+    version: string;
 }

@@ -9,5 +9,5 @@
  *     }
  */
 export interface ActorsDeleteRequest {
-	namespace: string;
+    namespace: string;
 }

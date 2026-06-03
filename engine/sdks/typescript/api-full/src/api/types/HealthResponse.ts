@@ -3,7 +3,7 @@
  */
 
 export interface HealthResponse {
-	runtime: string;
-	status: string;
-	version: string;
+    runtime: string;
+    status: string;
+    version: string;
 }

@@ -6,11 +6,11 @@
  * @returns JSON string
  */
 export const toJson = (
-	value: unknown,
-	replacer?: (this: unknown, key: string, value: unknown) => unknown,
-	space?: string | number,
+    value: unknown,
+    replacer?: (this: unknown, key: string, value: unknown) => unknown,
+    space?: string | number,
 ): string => {
-	return JSON.stringify(value, replacer, space);
+    return JSON.stringify(value, replacer, space);
 };
 
 /**
@@ -20,8 +20,8 @@ export const toJson = (
  * @returns Parsed object, array, or other type
  */
 export function fromJson<T = unknown>(
-	text: string,
-	reviver?: (this: unknown, key: string, value: unknown) => unknown,
+    text: string,
+    reviver?: (this: unknown, key: string, value: unknown) => unknown,
 ): T {
-	return JSON.parse(text, reviver);
+    return JSON.parse(text, reviver);
 }

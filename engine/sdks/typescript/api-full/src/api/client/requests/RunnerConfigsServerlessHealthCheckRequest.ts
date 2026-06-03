@@ -10,7 +10,7 @@
  *     }
  */
 export interface RunnerConfigsServerlessHealthCheckRequest {
-	namespace: string;
-	headers?: Record<string, string>;
-	url: string;
+    namespace: string;
+    headers?: Record<string, string>;
+    url: string;
 }

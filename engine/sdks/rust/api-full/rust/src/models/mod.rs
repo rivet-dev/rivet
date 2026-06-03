@@ -58,6 +58,8 @@ pub mod runner_config_kind_one_of_1;
 pub use self::runner_config_kind_one_of_1::RunnerConfigKindOneOf1;
 pub mod runner_config_kind_one_of_1_serverless;
 pub use self::runner_config_kind_one_of_1_serverless::RunnerConfigKindOneOf1Serverless;
+pub mod runner_config_kind_one_of_normal;
+pub use self::runner_config_kind_one_of_normal::RunnerConfigKindOneOfNormal;
 pub mod runner_config_response;
 pub use self::runner_config_response::RunnerConfigResponse;
 pub mod runner_config_variant;

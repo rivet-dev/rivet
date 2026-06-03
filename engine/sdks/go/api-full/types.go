@@ -848,10 +848,11 @@ func (r *Runner) String() string {
 }
 
 type RunnerConfig struct {
-	Normal                map[string]interface{}  `json:"normal,omitempty"`
-	Serverless            *RunnerConfigServerless `json:"serverless,omitempty"`
-	DrainOnVersionUpgrade *bool                   `json:"drain_on_version_upgrade,omitempty"`
-	Metadata              interface{}             `json:"metadata,omitempty"`
+	Normal     *RunnerConfigNormal     `json:"normal,omitempty"`
+	Serverless *RunnerConfigServerless `json:"serverless,omitempty"`
+	// Deprecated.
+	DrainOnVersionUpgrade *bool       `json:"drain_on_version_upgrade,omitempty"`
+	Metadata              interface{} `json:"metadata,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -937,7 +938,7 @@ func (r *RunnerConfigKind) Accept(visitor RunnerConfigKindVisitor) error {
 }
 
 type RunnerConfigKindNormal struct {
-	Normal map[string]interface{} `json:"normal,omitempty"`
+	Normal *RunnerConfigKindNormalNormal `json:"normal,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -954,6 +955,41 @@ func (r *RunnerConfigKindNormal) UnmarshalJSON(data []byte) error {
 }
 
 func (r *RunnerConfigKindNormal) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
+type RunnerConfigKindNormalNormal struct {
+	// Seconds.
+	ActorEvictionDelay *int `json:"actor_eviction_delay,omitempty"`
+	// Seconds.
+	ActorEvictionPeriod *int `json:"actor_eviction_period,omitempty"`
+	// Actors per second.
+	ActorEvictionRate     *float64 `json:"actor_eviction_rate,omitempty"`
+	DrainOnVersionUpgrade *bool    `json:"drain_on_version_upgrade,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigKindNormalNormal) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigKindNormalNormal
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigKindNormalNormal(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigKindNormalNormal) String() string {
 	if len(r._rawJSON) > 0 {
 		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
 			return value
@@ -996,11 +1032,18 @@ func (r *RunnerConfigKindServerless) String() string {
 
 type RunnerConfigKindServerlessServerless struct {
 	// Seconds.
-	DrainGracePeriod    *int              `json:"drain_grace_period,omitempty"`
-	Headers             map[string]string `json:"headers,omitempty"`
-	MaxConcurrentActors *int64            `json:"max_concurrent_actors,omitempty"`
+	ActorEvictionDelay *int `json:"actor_eviction_delay,omitempty"`
+	// Seconds.
+	ActorEvictionPeriod *int `json:"actor_eviction_period,omitempty"`
+	// Actors per second.
+	ActorEvictionRate *float64 `json:"actor_eviction_rate,omitempty"`
+	// Seconds.
+	DrainGracePeriod      *int              `json:"drain_grace_period,omitempty"`
+	DrainOnVersionUpgrade *bool             `json:"drain_on_version_upgrade,omitempty"`
+	Headers               map[string]string `json:"headers,omitempty"`
+	MaxConcurrentActors   *int64            `json:"max_concurrent_actors,omitempty"`
 	// Deprecated.
-	MaxRunners int `json:"max_runners"`
+	MaxRunners *int `json:"max_runners,omitempty"`
 	// Milliseconds between metadata polling. If not set, uses the global default.
 	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
 	// Deprecated.
@@ -1010,7 +1053,7 @@ type RunnerConfigKindServerlessServerless struct {
 	// Deprecated.
 	RunnersMargin *int `json:"runners_margin,omitempty"`
 	// Deprecated.
-	SlotsPerRunner int    `json:"slots_per_runner"`
+	SlotsPerRunner *int   `json:"slots_per_runner,omitempty"`
 	Url            string `json:"url"`
 
 	_rawJSON json.RawMessage
@@ -1039,13 +1082,49 @@ func (r *RunnerConfigKindServerlessServerless) String() string {
 	return fmt.Sprintf("%#v", r)
 }
 
+type RunnerConfigNormal struct {
+	// Seconds.
+	ActorEvictionDelay *int `json:"actor_eviction_delay,omitempty"`
+	// Seconds.
+	ActorEvictionPeriod *int `json:"actor_eviction_period,omitempty"`
+	// Actors per second.
+	ActorEvictionRate     *float64 `json:"actor_eviction_rate,omitempty"`
+	DrainOnVersionUpgrade *bool    `json:"drain_on_version_upgrade,omitempty"`
+
+	_rawJSON json.RawMessage
+}
+
+func (r *RunnerConfigNormal) UnmarshalJSON(data []byte) error {
+	type unmarshaler RunnerConfigNormal
+	var value unmarshaler
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	*r = RunnerConfigNormal(value)
+	r._rawJSON = json.RawMessage(data)
+	return nil
+}
+
+func (r *RunnerConfigNormal) String() string {
+	if len(r._rawJSON) > 0 {
+		if value, err := core.StringifyJSON(r._rawJSON); err == nil {
+			return value
+		}
+	}
+	if value, err := core.StringifyJSON(r); err == nil {
+		return value
+	}
+	return fmt.Sprintf("%#v", r)
+}
+
 type RunnerConfigResponse struct {
-	Normal                map[string]interface{}  `json:"normal,omitempty"`
-	Serverless            *RunnerConfigServerless `json:"serverless,omitempty"`
-	DrainOnVersionUpgrade *bool                   `json:"drain_on_version_upgrade,omitempty"`
-	Metadata              interface{}             `json:"metadata,omitempty"`
-	ProtocolVersion       *int                    `json:"protocol_version,omitempty"`
-	RunnerPoolError       map[string]interface{}  `json:"runner_pool_error,omitempty"`
+	Normal     *RunnerConfigNormal     `json:"normal,omitempty"`
+	Serverless *RunnerConfigServerless `json:"serverless,omitempty"`
+	// Deprecated.
+	DrainOnVersionUpgrade *bool                  `json:"drain_on_version_upgrade,omitempty"`
+	Metadata              interface{}            `json:"metadata,omitempty"`
+	ProtocolVersion       *int                   `json:"protocol_version,omitempty"`
+	RunnerPoolError       map[string]interface{} `json:"runner_pool_error,omitempty"`
 
 	_rawJSON json.RawMessage
 }
@@ -1075,11 +1154,18 @@ func (r *RunnerConfigResponse) String() string {
 
 type RunnerConfigServerless struct {
 	// Seconds.
-	DrainGracePeriod    *int              `json:"drain_grace_period,omitempty"`
-	Headers             map[string]string `json:"headers,omitempty"`
-	MaxConcurrentActors *int64            `json:"max_concurrent_actors,omitempty"`
+	ActorEvictionDelay *int `json:"actor_eviction_delay,omitempty"`
+	// Seconds.
+	ActorEvictionPeriod *int `json:"actor_eviction_period,omitempty"`
+	// Actors per second.
+	ActorEvictionRate *float64 `json:"actor_eviction_rate,omitempty"`
+	// Seconds.
+	DrainGracePeriod      *int              `json:"drain_grace_period,omitempty"`
+	DrainOnVersionUpgrade *bool             `json:"drain_on_version_upgrade,omitempty"`
+	Headers               map[string]string `json:"headers,omitempty"`
+	MaxConcurrentActors   *int64            `json:"max_concurrent_actors,omitempty"`
 	// Deprecated.
-	MaxRunners int `json:"max_runners"`
+	MaxRunners *int `json:"max_runners,omitempty"`
 	// Milliseconds between metadata polling. If not set, uses the global default.
 	MetadataPollInterval *int64 `json:"metadata_poll_interval,omitempty"`
 	// Deprecated.
@@ -1089,7 +1175,7 @@ type RunnerConfigServerless struct {
 	// Deprecated.
 	RunnersMargin *int `json:"runners_margin,omitempty"`
 	// Deprecated.
-	SlotsPerRunner int    `json:"slots_per_runner"`
+	SlotsPerRunner *int   `json:"slots_per_runner,omitempty"`
 	Url            string `json:"url"`
 
 	_rawJSON json.RawMessage
