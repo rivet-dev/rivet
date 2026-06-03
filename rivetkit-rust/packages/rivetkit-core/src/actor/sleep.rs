@@ -428,6 +428,10 @@ impl ActorContext {
 		}
 	}
 
+	pub async fn wait_for_tracked_shutdown_work_unbounded(&self) {
+		self.wait_for_tracked_shutdown_work_drained().await;
+	}
+
 	async fn wait_for_tracked_shutdown_work_drained(&self) {
 		loop {
 			let shutdown_count = self.shutdown_task_count();

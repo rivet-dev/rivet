@@ -519,6 +519,15 @@ export class WasmCoreRuntime implements CoreRuntime {
 		);
 	}
 
+	async actorWaitForTrackedShutdownWorkUnbounded(
+		ctx: ActorContextHandle,
+	): Promise<void> {
+		await callHandle<Promise<void>>(
+			asWasmActorContext(ctx),
+			"waitForTrackedShutdownWorkUnbounded",
+		);
+	}
+
 	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
 		const wasmCtx = asWasmActorContext(ctx);
 		const regionId = callHandle<number>(wasmCtx, "beginKeepAwake");
