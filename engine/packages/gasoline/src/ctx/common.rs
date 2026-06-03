@@ -125,7 +125,7 @@ where
 	// Record metrics
 	{
 		let error_str = match &res {
-			Ok(Err(err)) => {
+			Ok(Err(_)) => {
 				// TODO: Temporarily don't record err to reduce metrics cardinality
 				// let error_str = err.to_string();
 

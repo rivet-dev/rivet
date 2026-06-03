@@ -363,12 +363,6 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				let is_recoverable = err
-					.chain()
-					.find_map(|x| x.downcast_ref::<WorkflowError>())
-					.map(|err| err.is_recoverable())
-					.unwrap_or_default();
-
 				// TODO: Temporarily don't record err to reduce metrics cardinality
 				// if !is_recoverable {
 				// 	metrics::ACTIVITY_ERRORS

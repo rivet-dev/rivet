@@ -1,6 +1,37 @@
 import { actor } from "rivetkit";
 import type { registry } from "../../index.ts";
 
+// The dynamic-sandbox WebSocket connect path is failing intermittently and
+// silently swapping to HTTP-only would skip event-bridge validation entirely.
+// Re-enable WebSocket coverage on every runtime; if the dynamic-sandbox
+// regression returns, root-cause it instead of restoring this gate.
+function isDynamicSandboxRuntime(): boolean {
+	return false;
+}
+
+async function waitForConnectionOpen(connection: {
+	connStatus: string;
+	onOpen(callback: () => void): () => void;
+	onError(callback: (error: unknown) => void): () => void;
+}) {
+	if (connection.connStatus === "connected") {
+		return;
+	}
+
+	await new Promise<void>((resolve, reject) => {
+		const unsubscribeOpen = connection.onOpen(() => {
+			unsubscribeOpen();
+			unsubscribeError();
+			resolve();
+		});
+		const unsubscribeError = connection.onError((error) => {
+			unsubscribeOpen();
+			unsubscribeError();
+			reject(error);
+		});
+	});
+}
+
 export const inlineClientActor = actor({
 	state: { messages: [] as string[] },
 	actions: {
@@ -30,7 +61,24 @@ export const inlineClientActor = actor({
 		connectToCounterAndIncrement: async (c, amount: number) => {
 			const client = c.client<typeof registry>();
 			const handle = client.counter.getOrCreate(["inline-test-stateful"]);
+
+			if (isDynamicSandboxRuntime()) {
+				const events: number[] = [];
+				const result1 = await handle.increment(amount);
+				events.push(result1);
+				const result2 = await handle.increment(amount * 2);
+				events.push(result2);
+
+				c.state.messages.push(
+					`Connected to counter, incremented by ${amount} and ${amount * 2}, results: ${result1}, ${result2}, events: ${JSON.stringify(events)}`,
+				);
+
+				return { result1, result2, events };
+			}
+
+			await handle.getCount();
 			const connection = handle.connect();
+			await waitForConnectionOpen(connection);
 
 			// Set up event listener
 			const events: number[] = [];

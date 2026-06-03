@@ -37,6 +37,7 @@ async function callAction(
 	key: string[],
 	action: string,
 	args: unknown[] = [],
+	timeoutMs: number = 120_000,
 ): Promise<unknown> {
 	const params = new URLSearchParams({
 		"rvt-method": "getOrCreate",
@@ -53,6 +54,7 @@ async function callAction(
 			"x-rivet-encoding": "json",
 		},
 		body: JSON.stringify({ args }),
+		signal: AbortSignal.timeout(timeoutMs),
 	});
 	if (!res.ok) {
 		const text = await res.text();
@@ -328,6 +330,65 @@ function benchSqlite(): BenchFn[] {
 			name: "Migration (50 tables)",
 			action: "migrationTables",
 			args: [50],
+		},
+		{
+			name: "Large TX insert 500KB",
+			action: "largeTxInsert500KB",
+			args: [],
+		},
+		{ name: "Large TX insert 1MB", action: "largeTxInsert1MB", args: [] },
+		{
+			name: "Large TX insert 1MB (tiny rows, 4096x256B)",
+			action: "largeTxInsert1MBTinyRows",
+			args: [],
+		},
+		{
+			name: "Large TX insert 1MB (medium rows, 256x4KiB)",
+			action: "largeTxInsert1MBMediumRows",
+			args: [],
+		},
+		{
+			name: "Large TX insert 1MB (one row, 1x1MiB)",
+			action: "largeTxInsert1MBOneRow",
+			args: [],
+		},
+		{ name: "Large TX insert 5MB", action: "largeTxInsert5MB", args: [] },
+		{ name: "Large TX insert 10MB", action: "largeTxInsert10MB", args: [] },
+		{ name: "Large TX insert 50MB", action: "largeTxInsert50MB", args: [] },
+		{
+			name: "Stress: churn insert/delete 10x1000",
+			action: "churnInsertDelete",
+			args: [],
+		},
+		{
+			name: "Stress: mixed OLTP large",
+			action: "mixedOltpLarge",
+			args: [],
+		},
+		{
+			name: "Stress: growing aggregation",
+			action: "growingAggregation",
+			args: [],
+		},
+		{
+			name: "Stress: index creation on 10k rows",
+			action: "indexCreationOnLargeTable",
+			args: [],
+		},
+		{
+			name: "Stress: bulk update 1000 rows",
+			action: "bulkUpdate1000Rows",
+			args: [],
+		},
+		{
+			name: "Stress: truncate + regrow",
+			action: "truncateAndRegrow",
+			args: [],
+		},
+		{
+			name: "Stress: many small tables",
+			action: "manySmallTables",
+			args: [],
 		},
 	];
 

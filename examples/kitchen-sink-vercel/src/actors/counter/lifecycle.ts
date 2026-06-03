@@ -13,6 +13,11 @@ export const counterWithLifecycle = actor({
 	onWake: (c) => {
 		c.state.events.push("onWake");
 	},
+	onSleep: async (c) => {
+		c.state.events.push("onSleep:start");
+		await new Promise<void>((resolve) => setTimeout(resolve, 1000));
+		c.state.events.push("onSleep:end");
+	},
 	onBeforeConnect: (c, params: ConnParams) => {
 		if (params?.trackLifecycle) c.state.events.push("onBeforeConnect");
 	},

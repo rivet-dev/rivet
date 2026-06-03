@@ -27,6 +27,7 @@ import { counterWithParams } from "./actors/counter/conn-params.ts";
 import { counter } from "./actors/counter/counter.ts";
 import { counterConn } from "./actors/counter/counter-conn.ts";
 import { counterWithLifecycle } from "./actors/counter/lifecycle.ts";
+import { pingPongCounter } from "./actors/counter/ping-pong-counter.ts";
 import { rawFetchCounter } from "./actors/http/raw-fetch-counter.ts";
 // HTTP
 import {
@@ -42,6 +43,7 @@ import {
 } from "./actors/http/raw-websocket.ts";
 import { rawWebSocketChatRoom } from "./actors/http/raw-websocket-chat-room.ts";
 import { rawWebSocketServerlessSmoke } from "./actors/http/raw-websocket-serverless-smoke.ts";
+import { tunnelStress } from "./actors/http/tunnel-stress.ts";
 // Inter-actor
 import {
 	checkout,
@@ -88,6 +90,16 @@ import {
 } from "./actors/state/vars.ts";
 // Testing
 import { inlineClientActor } from "./actors/testing/inline-client.ts";
+import { loadTestAgent } from "./actors/testing/load-test-agent.ts";
+import { loadTestAgent2 } from "./actors/testing/load-test-agent-2.ts";
+import { mockAgenticLoop } from "./actors/testing/mock-agentic-loop.ts";
+import { rawSqliteFuzzer } from "./actors/testing/raw-sqlite-fuzzer.ts";
+import { sigtermSleepProbe } from "./actors/testing/sigterm-sleep-probe.ts";
+import { sleepCloseFuzz } from "./actors/testing/sleep-close-fuzz.ts";
+import { slowReconnectActor } from "./actors/testing/slow-reconnect-actor.ts";
+import { sqliteColdStartBench } from "./actors/testing/sqlite-cold-start-bench.ts";
+import { sqliteMemoryPressure } from "./actors/testing/sqlite-memory-pressure.ts";
+import { sqliteRealworldBench } from "./actors/testing/sqlite-realworld-bench.ts";
 import { testCounter } from "./actors/testing/test-counter.ts";
 import { testCounterSqlite } from "./actors/testing/test-counter-sqlite.ts";
 import { testSqliteBench } from "./actors/testing/test-sqlite-bench.ts";
@@ -116,6 +128,7 @@ import {
 	workflowQueueTimeoutActor,
 	workflowSleepActor,
 } from "./actors/workflow/workflow-fixtures.ts";
+import { resolveMode } from "./mode.ts";
 
 function numberFromEnv(name: string, fallback: number): number {
 	const value = process.env[name];
@@ -130,29 +143,34 @@ function numberFromEnv(name: string, fallback: number): number {
 }
 
 function serverlessPoolConfig() {
+	// Only the local serverless mode self-registers its pool with the engine.
+	// In the deployed `serverless` mode the pool is configured externally on
+	// the engine cluster, and the `serverful` mode uses a long-lived runner
+	// connection rather than a serverless pool.
+	if (resolveMode() !== "serverless-local") return undefined;
+
 	const url =
 		process.env.RIVET_SERVERLESS_URL ??
 		process.env.KITCHEN_SINK_SERVERLESS_URL ??
-		(process.env.RIVET_RUN_ENGINE === "1"
-			? "http://127.0.0.1:3000/api/rivet"
-			: undefined);
-
-	if (!url) return undefined;
+		"http://127.0.0.1:3000/api/rivet";
 
 	return {
 		name: process.env.RIVET_POOL,
 		url,
-		requestLifespan: numberFromEnv("RIVET_SERVERLESS_REQUEST_LIFESPAN", 30),
+		requestLifespan: numberFromEnv(
+			"RIVET_SERVERLESS_REQUEST_LIFESPAN",
+			15 * 60,
+		),
 		drainGracePeriod: numberFromEnv(
 			"RIVET_SERVERLESS_DRAIN_GRACE_PERIOD",
-			5,
+			15 * 60,
 		),
 		metadataPollInterval: numberFromEnv(
 			"RIVET_SERVERLESS_METADATA_POLL_INTERVAL_MS",
 			1000,
 		),
 		metadata: {
-			source: "kitchen-sink-vercel",
+			source: "kitchen-sink",
 			smoke: "raw-websocket-serverless",
 		},
 	};
@@ -160,12 +178,21 @@ function serverlessPoolConfig() {
 
 export const registry = setup({
 	configurePool: serverlessPoolConfig(),
+	serverless: {
+		publicToken:
+			process.env.RIVET_PUBLIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev",
+		maxStartPayloadBytes: numberFromEnv(
+			"RIVET_SERVERLESS_MAX_START_PAYLOAD_BYTES",
+			16 * 1024 * 1024,
+		),
+	},
 	use: {
 		// Overview + state basics
 		counter,
 		counterConn,
 		counterWithParams,
 		counterWithLifecycle,
+		pingPongCounter,
 		// Core API
 		inputActor,
 		syncActionActor,
@@ -206,6 +233,7 @@ export const registry = setup({
 		rawFetchCounter,
 		rawWebSocketChatRoom,
 		rawWebSocketServerlessSmoke,
+		tunnelStress,
 		// Lifecycle and scheduling
 		runWithTicks,
 		runWithQueueConsumer,
@@ -253,6 +281,16 @@ export const registry = setup({
 		testCounterSqlite,
 		testSqliteLoad,
 		testSqliteBench,
+		sqliteColdStartBench,
+		sqliteRealworldBench,
+		rawSqliteFuzzer,
+		sqliteMemoryPressure,
+		mockAgenticLoop,
+		sleepCloseFuzz,
+		loadTestAgent,
+		loadTestAgent2,
+		sigtermSleepProbe,
+		slowReconnectActor,
 		// AI
 		aiAgent,
 	},

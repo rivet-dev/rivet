@@ -5,7 +5,11 @@
 //   RIVET_SERVERLESS_URL=http://127.0.0.1:3000/api/rivet \
 //   SMOKE_PARALLELISM=4 \
 //   SMOKE_STAGGER_MS=1000 \
-//   pnpm --filter kitchen-sink-vercel smoke:raw-websocket-serverless
+//   pnpm --filter kitchen-sink smoke:raw-websocket-serverless
+//
+// The serverless pool is configured by the kitchen-sink server when
+// RIVET_SERVERLESS_URL is set. It uses a 30s request lifespan and a 5s drain
+// grace period by default.
 
 import { createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";

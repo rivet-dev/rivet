@@ -767,7 +767,13 @@ export class WasmCoreRuntime implements CoreRuntime {
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<void> {
 		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		await callHandleAsync(queue, "waitForNamesAvailable", names, options, signal);
+		await callHandleAsync(
+			queue,
+			"waitForNamesAvailable",
+			names,
+			options,
+			signal,
+		);
 	}
 
 	async actorQueueEnqueueAndWait(

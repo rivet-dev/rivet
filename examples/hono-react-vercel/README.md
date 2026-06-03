@@ -1,7 +1,7 @@
 > **Note:** This is the Vercel-optimized version of the [hono-react](../hono-react) example.
 > It uses the `hono/vercel` adapter and is configured for Vercel deployment.
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-gg%2Frivet%2Ftree%2Fmain%2Fexamples%2Fhono-react-vercel&project-name=hono-react-vercel)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Frivet-dev%2Frivet%2Ftree%2Fmain%2Fexamples%2Fhono-react-vercel&project-name=hono-react-vercel)
 
 # Hono + React
 

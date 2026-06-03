@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createClient } from "rivetkit/client";
-import { registry } from "./actors.ts";
+import { registry } from "./index.ts";
 
 const client = createClient<typeof registry>();
 
