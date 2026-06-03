@@ -143,7 +143,7 @@ The kitchen-sink has three SQLite actor types to test:
 
 ### `scripts/sqlite-realworld-bench.ts` — SQLite real-world harness
 
-- Measure only server-reported SQLite time for the cold-wake main phase; write comparable JSON results under `.agent/benchmarks/sqlite-realworld/`.
+- Measure only server-reported SQLite time for the cold-wake main phase; write comparable JSON results under `~/.agents/benchmarks/sqlite-realworld/` (override with `$AGENTS_DIR`).
 
 ### `scripts/soak.ts` — Cloud Run soak harness
 

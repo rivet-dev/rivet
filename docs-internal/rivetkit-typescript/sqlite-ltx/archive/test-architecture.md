@@ -718,9 +718,9 @@ describe("driver engine (v2 VFS)", () => runDriverTests(driverVfsV2Config));
 
 `runDriverTests` already walks the shared suite. The variant matrix expands by one.
 
-### 6.4 Relationship to existing `.agent/research/sqlite/`
+### 6.4 Relationship to existing `~/.agents/research/sqlite/`
 
-The research file at `.agent/research/sqlite/sqlite-vfs-ltx-redesign.md` captured the initial redesign brainstorm. The test architecture here is the operational output of that research. If the research file and this document disagree, this document wins.
+The research file at `~/.agents/research/sqlite/sqlite-vfs-ltx-redesign.md` captured the initial redesign brainstorm. The test architecture here is the operational output of that research. If the research file and this document disagree, this document wins.
 
 ---
 
