@@ -120,7 +120,7 @@ app.get("/debug/memory", async (c) => {
 	return c.json(await memoryBreakdown(forceGc));
 });
 
-app.get("/health", () => registry.routes.health());
+app.get("/health", () => new Response("ok\n"));
 
 app.get("/metadata", () => registry.routes.metadata());
 
