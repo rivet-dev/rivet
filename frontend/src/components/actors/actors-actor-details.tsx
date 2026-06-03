@@ -40,6 +40,8 @@ import { ActorQueueTab } from "./actor-queue-tab";
 import { ActorStateTab } from "./actor-state-tab";
 import { QueriedActorStatusIndicator } from "./actor-status-indicator";
 import { useActorsView } from "./actors-view-context-provider";
+import { AgentOsActorTabs } from "./agent-os/agent-os-actor-tabs";
+import { useAgentOsManifest } from "./agent-os/use-agent-os-inspector";
 import { ActorConsoleFull } from "./console/actor-console";
 import { useCloudNamespaceDataProvider } from "./data-provider";
 import {
@@ -565,6 +567,24 @@ function ActorTabsWithId({
 	children?: ReactNode;
 }) {
 	const guardContent = useInspectorGuard();
+
+	// agentOS actors get an entirely different inspector surface. Detection reads
+	// fixtures (safe under the guard, never touches useActorInspector) and is
+	// gated by the feature flag. Keep this hook unconditional.
+	const { data: agentOsManifest } = useAgentOsManifest(actorId);
+	if (features.agentOsInspector && agentOsManifest?.kind === "agent-os") {
+		return (
+			<AgentOsActorTabs
+				actorId={actorId}
+				tab={tab}
+				onTabChange={onTabChange}
+				className={className}
+				guardContent={guardContent}
+			>
+				{children}
+			</AgentOsActorTabs>
+		);
+	}
 
 	// Inspector context is only available when the actor is running (guardContent is null).
 	// We must not call useActorInspector hooks when the inspector is unavailable.

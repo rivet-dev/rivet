@@ -39,5 +39,9 @@ export const features = {
 	branding: isEnabled("branding"),
 	datacenter: isEnabled("datacenter"),
 	dangerZone: isEnabled("danger-zone"),
+	// `agentOsInspector` gates the agentOS actor inspector UI (the 8 agentOS
+	// tabs that swap in for agent-os actors). Self-contained prototype surface,
+	// so it does not depend on auth/platform.
+	agentOsInspector: isEnabled("agent-os-inspector"),
 	platform,
 } as const;
