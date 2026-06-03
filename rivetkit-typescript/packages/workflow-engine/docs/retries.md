@@ -24,7 +24,7 @@ await ctx.step({
 
 - `maxRetries` defaults to 3.
 - `retryBackoffBase` and `retryBackoffMax` control exponential delay.
-- `timeout` limits how long the step can run; timeouts are treated as critical failures.
+- `timeout` limits how long the step can run; by default a timeout is treated as a critical failure with no retry. Set `retryOnTimeout: true` on the step to retry timeouts like any other error.
 
 ## Unrecoverable Errors
 
@@ -46,7 +46,7 @@ await ctx.step("halt", async () => {
 });
 ```
 
-`StepTimeoutError` is also treated as critical, so timeouts bypass retries.
+`StepTimeoutError` is treated as critical by default and bypasses retries. Opt into normal retry behavior with `retryOnTimeout: true`; when retries exhaust on a timeout the `try`-step failure `kind` is `"timeout"`.
 
 ## Exhaustion and Recovery
 
