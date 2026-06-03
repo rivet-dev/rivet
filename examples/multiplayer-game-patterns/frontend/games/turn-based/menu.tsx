@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import type { TurnBasedMatchmakerConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import { waitForAssignment } from "./wait-for-assignment.ts";
 
@@ -28,8 +29,7 @@ export function TurnBasedMenu({
 		"idle" | "loading" | "waiting" | "error"
 	>("idle");
 	const [error, setError] = useState("");
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	const queueConnRef = useRef<any>(null);
+	const queueConnRef = useRef<TurnBasedMatchmakerConn | null>(null);
 
 	const cancelQueue = () => {
 		const conn = queueConnRef.current;
@@ -55,11 +55,9 @@ export function TurnBasedMenu({
 				.getOrCreate(["main"])
 				.connect();
 			queueConnRef.current = mm;
-			const queueResult = (await mm.queueForMatch({
+			const queueResult = await mm.queueForMatch({
 				playerName: name.trim(),
-			})) as {
-				playerId?: string;
-			};
+			});
 			const playerId = queueResult.playerId;
 			if (!playerId) {
 				throw new Error("Failed to queue for match");
@@ -101,8 +99,7 @@ export function TurnBasedMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: TurnBasedMatchInfo })
-				?.response;
+			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to create game");
 			onReady(response);
 		} catch (err) {
@@ -125,9 +122,7 @@ export function TurnBasedMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as { response?: { matchId: string; playerId: string } }
-			)?.response;
+			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to join game");
 			onReady(response);
 		} catch (err) {

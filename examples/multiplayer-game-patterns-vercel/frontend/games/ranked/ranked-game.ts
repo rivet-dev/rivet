@@ -1,3 +1,4 @@
+import type { RankedMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { RankedMatchInfo } from "./menu.tsx";
 
@@ -17,10 +18,6 @@ interface ShotLine {
 	hit: boolean;
 	createdAt: number;
 }
-
-type RankedMatchConn = ReturnType<
-	ReturnType<GameClient["rankedMatch"]["get"]>["connect"]
->;
 
 export class RankedGame {
 	private stopped = false;
@@ -55,23 +52,7 @@ export class RankedGame {
 			})
 			.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as {
-				worldSize: number;
-				phase: "waiting" | "live" | "finished";
-				winnerId: string | null;
-				scoreLimit: number;
-				players: Record<
-					string,
-					{
-						x: number;
-						y: number;
-						color: string;
-						score: number;
-						rating: number;
-					}
-				>;
-			};
+		this.conn.on("snapshot", (snap) => {
 			this.worldSize = snap.worldSize;
 			this.phase = snap.phase;
 			this.winnerId = snap.winnerId;
@@ -98,14 +79,7 @@ export class RankedGame {
 			}
 		});
 
-		this.conn.on("shoot", (raw: unknown) => {
-			const shot = raw as {
-				fromX: number;
-				fromY: number;
-				dirX: number;
-				dirY: number;
-				hitPlayerId: string | null;
-			};
+		this.conn.on("shoot", (shot) => {
 			this.shotLines.push({
 				fromX: shot.fromX,
 				fromY: shot.fromY,

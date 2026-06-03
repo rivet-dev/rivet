@@ -5,7 +5,7 @@ This matchmaker uses a rating window flow.
 3. createRankedMatch removes paired players, creates a match actor, stores assignments, and broadcasts assignmentReady.
 4. matchCompleted updates player rating actors and leaderboard entries, then removes the match row.
 */
-import { type ActorContextOf, actor, queue } from "rivetkit";
+import { type ActorContextOf, actor, event, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 import { interval } from "rivetkit/utils";
 
@@ -22,6 +22,22 @@ export interface RankedAssignment {
 	rating: number;
 	connId: string | null;
 }
+
+export type RankedQueueUpdate =
+	| {
+			queued: false;
+			count: number;
+	  }
+	| {
+			queued: true;
+			count: number;
+			username: string;
+			rating: number;
+			queueDurationMs: number;
+			ratingWindow: number;
+			ratingMin: number;
+			ratingMax: number;
+	  };
 
 type QueuePlayerRow = {
 	username: string;
@@ -51,6 +67,10 @@ export const rankedMatchmaker = actor({
 			winnerNewRating: number;
 			loserNewRating: number;
 		}>(),
+	},
+	events: {
+		assignmentReady: event<RankedAssignment>(),
+		queueUpdate: event<RankedQueueUpdate>(),
 	},
 	actions: {
 		queueForMatch: async (c, { username }: { username: string }) => {

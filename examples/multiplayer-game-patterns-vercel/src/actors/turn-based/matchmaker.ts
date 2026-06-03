@@ -7,7 +7,7 @@ This matchmaker supports invite and queued public matchmaking flows.
 5. getAssignment lets clients poll for their match assignment.
 6. onDisconnect unqueues waiting players so stale queue entries do not remain.
 */
-import { type ActorContextOf, actor, queue, UserError } from "rivetkit";
+import { type ActorContextOf, actor, event, queue, UserError } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 import type { registry } from "../index.ts";
@@ -48,6 +48,9 @@ export const turnBasedMatchmaker = actor({
 		}>(),
 		unqueueForMatch: queue<{ connId: string }>(),
 		closeMatch: queue<{ matchId: string }>(),
+	},
+	events: {
+		assignmentReady: event<TurnBasedAssignment>(),
 	},
 	actions: {
 		queueForMatch: async (c, { playerName }: { playerName: string }) => {

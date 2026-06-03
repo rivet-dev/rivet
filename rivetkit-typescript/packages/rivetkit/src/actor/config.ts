@@ -1505,6 +1505,25 @@ export type ActorConfig<
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
+	TActions extends Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> = Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>,
 > = Omit<
 	z.infer<typeof ActorConfigSchema>,
 	| "actions"
@@ -1540,16 +1559,7 @@ export type ActorConfig<
 		TDatabase,
 		TEvents,
 		TQueues,
-		Actions<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase,
-			TEvents,
-			TQueues
-		>
+		TActions
 	> &
 	CreateState<
 		TState,

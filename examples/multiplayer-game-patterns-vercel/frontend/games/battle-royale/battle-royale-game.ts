@@ -1,3 +1,4 @@
+import type { BattleRoyaleMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { BattleRoyaleMatchInfo } from "./menu.tsx";
 
@@ -18,10 +19,6 @@ interface ShotLine {
 	hit: boolean;
 	createdAt: number;
 }
-
-type BattleRoyaleMatchConn = ReturnType<
-	ReturnType<GameClient["battleRoyaleMatch"]["get"]>["connect"]
->;
 
 export class BattleRoyaleGame {
 	private stopped = false;
@@ -70,29 +67,7 @@ export class BattleRoyaleGame {
 			})
 			.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as {
-				worldSize: number;
-				phase: "lobby" | "live" | "finished";
-				winnerId: string | null;
-				playerCount: number;
-				aliveCount: number;
-				capacity: number;
-				lobbyCountdown: number | null;
-				zone: { centerX: number; centerY: number; radius: number };
-				players: Record<
-					string,
-					{
-						x: number;
-						y: number;
-						color: string;
-						hp: number;
-						maxHp: number;
-						alive: boolean;
-						placement: number | null;
-					}
-				>;
-			};
+		this.conn.on("snapshot", (snap) => {
 			this.worldSize = snap.worldSize;
 			this.phase = snap.phase;
 			this.winnerId = snap.winnerId;
@@ -131,14 +106,7 @@ export class BattleRoyaleGame {
 			}
 		});
 
-		this.conn.on("shoot", (raw: unknown) => {
-			const shot = raw as {
-				fromX: number;
-				fromY: number;
-				dirX: number;
-				dirY: number;
-				hitPlayerId: string | null;
-			};
+		this.conn.on("shoot", (shot) => {
 			this.shotLines.push({
 				fromX: shot.fromX,
 				fromY: shot.fromY,

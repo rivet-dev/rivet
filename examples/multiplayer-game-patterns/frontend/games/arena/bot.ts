@@ -1,4 +1,5 @@
 import type { Mode } from "../../../src/actors/arena/config.ts";
+import type { ArenaMatchmakerConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import { ArenaGame } from "./arena-game.ts";
 import type { ArenaMatchInfo } from "./menu.tsx";
@@ -7,8 +8,7 @@ import { waitForAssignment } from "./wait-for-assignment.ts";
 export class ArenaBot {
 	private game: ArenaGame | null = null;
 	private destroyed = false;
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	private mm: any = null;
+	private mm: ArenaMatchmakerConn | null = null;
 
 	constructor(
 		private client: GameClient,
@@ -23,9 +23,9 @@ export class ArenaBot {
 				.getOrCreate(["main"])
 				.connect();
 			this.mm = mm;
-			const response = (await mm.queueForMatch({
+			const response = await mm.queueForMatch({
 				mode: this.mode,
-			})) as { playerId?: string };
+			});
 			if (!response?.playerId || this.destroyed) return;
 
 			const assignment = await waitForAssignment<ArenaMatchInfo>(

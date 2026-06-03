@@ -1,8 +1,8 @@
+import type { PartyMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 
 export class PartyBot {
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	private conn: any = null;
+	private conn: PartyMatchConn | null = null;
 	private destroyed = false;
 
 	constructor(
@@ -26,16 +26,7 @@ export class PartyBot {
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as {
-					response?: {
-						matchId: string;
-						playerId: string;
-						joinToken: string;
-						playerName: string;
-					};
-				}
-			)?.response;
+			const response = result.response;
 			if (!response || this.destroyed) return;
 
 			this.conn = this.client.partyMatch

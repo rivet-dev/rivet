@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PartyMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import { PartyBot } from "./bot.ts";
 import type { PartyMatchInfo } from "./menu.tsx";
@@ -32,8 +33,7 @@ export function PartyGame({
 	const [nameInput, setNameInput] = useState(
 		matchInfo.playerName || "Player",
 	);
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	const connRef = useRef<any>(null);
+	const connRef = useRef<PartyMatchConn | null>(null);
 	const botsRef = useRef<PartyBot[]>([]);
 	const nameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -54,14 +54,13 @@ export function PartyGame({
 			.connect();
 		connRef.current = conn;
 
-		conn.on("partyUpdate", (raw: unknown) => {
-			setSnapshot(raw as PartySnapshot);
+		conn.on("partyUpdate", (snap) => {
+			setSnapshot(snap);
 		});
 
-		conn.getSnapshot().then((snap: unknown) => {
-			const s = snap as PartySnapshot;
-			setSnapshot(s);
-			const myName = s.members[matchInfo.playerId]?.name;
+		conn.getSnapshot().then((snap) => {
+			setSnapshot(snap);
+			const myName = snap.members[matchInfo.playerId]?.name;
 			if (myName) setNameInput(myName);
 		});
 

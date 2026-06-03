@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BUILDINGS } from "../../../src/actors/idle/config.ts";
+import type { IdleLeaderboardConn, IdleWorldConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { IdleMatchInfo } from "./menu.tsx";
 
@@ -37,10 +38,8 @@ export function IdleGame({
 	const [state, setState] = useState<IdleSnapshot | null>(null);
 	const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 	const [now, setNow] = useState(Date.now());
-	// biome-ignore lint/suspicious/noExplicitAny: connection handles
-	const worldRef = useRef<any>(null);
-	// biome-ignore lint/suspicious/noExplicitAny: connection handles
-	const lbRef = useRef<any>(null);
+	const worldRef = useRef<IdleWorldConn | null>(null);
+	const lbRef = useRef<IdleLeaderboardConn | null>(null);
 
 	const cleanup = useCallback(() => {
 		const world = worldRef.current;
@@ -57,8 +56,8 @@ export function IdleGame({
 			.connect();
 		worldRef.current = world;
 
-		world.on("stateUpdate", (raw: unknown) => {
-			setState(raw as IdleSnapshot);
+		world.on("stateUpdate", (snap) => {
+			setState(snap);
 		});
 
 		// Initialize the actor.
@@ -70,21 +69,21 @@ export function IdleGame({
 			.then(() => {
 				return world.getState();
 			})
-			.then((s: unknown) => {
-				setState(s as IdleSnapshot);
+			.then((snap) => {
+				setState(snap);
 			});
 
 		// Fetch initial leaderboard.
-		world.getLeaderboard().then((lb: unknown) => {
-			setLeaderboard(lb as LeaderboardEntry[]);
+		world.getLeaderboard().then((scores) => {
+			setLeaderboard(scores);
 		});
 
 		// Connect to leaderboard for live updates.
 		const lb = client.idleLeaderboard.getOrCreate(["main"]).connect();
 		lbRef.current = lb;
 
-		lb.on("leaderboardUpdate", (raw: unknown) => {
-			setLeaderboard(raw as LeaderboardEntry[]);
+		lb.on("leaderboardUpdate", (scores) => {
+			setLeaderboard(scores);
 		});
 
 		return () => {

@@ -5,7 +5,7 @@ This matchmaker uses a queue and fill flow.
 3. The matchmaker stores assignments and broadcasts assignmentReady so each client can connect to the new match.
 4. onDisconnect unqueues pending players so stale queue entries do not stay in the pool.
 */
-import { type ActorContextOf, actor, queue } from "rivetkit";
+import { type ActorContextOf, actor, event, queue } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 import type { registry } from "../index.ts";
@@ -37,6 +37,10 @@ export const arenaMatchmaker = actor({
 		}>(),
 		unqueueForMatch: queue<{ connId: string }>(),
 		matchCompleted: queue<{ matchId: string }>(),
+	},
+	events: {
+		assignmentReady: event<ArenaAssignment>(),
+		queueUpdate: event<{ counts: Record<string, number> }>(),
 	},
 	actions: {
 		queueForMatch: async (c, { mode }: { mode: Mode }) => {

@@ -2,6 +2,7 @@ import type {
 	CellValue,
 	GameResult,
 } from "../../../src/actors/turn-based/config.ts";
+import type { TurnBasedMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 
 interface GameSnapshot {
@@ -12,8 +13,7 @@ interface GameSnapshot {
 }
 
 export class TurnBasedBot {
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	private conn: any = null;
+	private conn: TurnBasedMatchConn | null = null;
 	private destroyed = false;
 	private playerId = "";
 	private symbol: "X" | "O" = "O";
@@ -39,9 +39,7 @@ export class TurnBasedBot {
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as { response?: { matchId: string; playerId: string } }
-			)?.response;
+			const response = result.response;
 			if (!response || this.destroyed) return;
 
 			this.playerId = response.playerId;
@@ -52,11 +50,11 @@ export class TurnBasedBot {
 				})
 				.connect();
 
-			this.conn.on("gameUpdate", (raw: unknown) => {
-				this.tryMove(raw as GameSnapshot);
+			this.conn.on("gameUpdate", (snap) => {
+				this.tryMove(snap);
 			});
 
-			this.conn.getSnapshot().then((snap: unknown) => {
+			this.conn.getSnapshot().then((snap) => {
 				this.tryMove(snap as GameSnapshot);
 			});
 		} catch {

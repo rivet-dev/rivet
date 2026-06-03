@@ -3,6 +3,7 @@ import type {
 	CellValue,
 	GameResult,
 } from "../../../src/actors/turn-based/config.ts";
+import type { TurnBasedMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import { TurnBasedBot } from "./bot.ts";
 import type { TurnBasedMatchInfo } from "./menu.tsx";
@@ -29,8 +30,7 @@ export function TurnBasedGame({
 	onLeave: () => void;
 }) {
 	const [snapshot, setSnapshot] = useState<GameSnapshot | null>(null);
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	const connRef = useRef<any>(null);
+	const connRef = useRef<TurnBasedMatchConn | null>(null);
 	const botsRef = useRef<TurnBasedBot[]>([]);
 
 	const cleanup = useCallback(() => {
@@ -47,12 +47,12 @@ export function TurnBasedGame({
 			.connect();
 		connRef.current = conn;
 
-		conn.on("gameUpdate", (raw: unknown) => {
-			setSnapshot(raw as GameSnapshot);
+		conn.on("gameUpdate", (snap) => {
+			setSnapshot(snap);
 		});
 
-		conn.getSnapshot().then((snap: unknown) => {
-			setSnapshot(snap as GameSnapshot);
+		conn.getSnapshot().then((snap) => {
+			setSnapshot(snap);
 		});
 
 		return () => {

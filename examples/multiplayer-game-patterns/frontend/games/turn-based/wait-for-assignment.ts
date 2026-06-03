@@ -3,13 +3,10 @@ interface Assignment {
 }
 
 type AssignmentConnection = {
-	action: <Args extends unknown[], Response>(opts: {
-		name: string;
-		args: Args;
-	}) => Promise<Response>;
+	getAssignment: (input: { playerId: string }) => Promise<Assignment | null>;
 	on: (
 		event: "assignmentReady",
-		handler: (raw: unknown) => void,
+		handler: (assignment: Assignment) => void,
 	) => (() => void) | undefined;
 };
 
@@ -24,7 +21,7 @@ export async function waitForAssignment<T extends Assignment>(
 	timeoutMs = 120_000,
 ): Promise<T> {
 	const existing = await readAssignment<T>(mm, playerId);
-	if (existing) return existing as T;
+	if (existing) return existing;
 
 	return await new Promise<T>((resolve, reject) => {
 		let settled = false;
@@ -39,10 +36,9 @@ export async function waitForAssignment<T extends Assignment>(
 			fn();
 		};
 
-		off = mm.on("assignmentReady", (raw: unknown) => {
-			const next = raw as T;
+		off = mm.on("assignmentReady", (next) => {
 			if (next.playerId !== playerId) return;
-			settle(() => resolve(next));
+			settle(() => resolve(next as T));
 		});
 
 		timeout = window.setTimeout(() => {
@@ -64,8 +60,5 @@ async function readAssignment<T extends Assignment>(
 	mm: AssignmentConnection,
 	playerId: string,
 ): Promise<T | null> {
-	return await mm.action<[{ playerId: string }], T | null>({
-		name: "getAssignment",
-		args: [{ playerId }],
-	});
+	return (await mm.getAssignment({ playerId })) as T | null;
 }

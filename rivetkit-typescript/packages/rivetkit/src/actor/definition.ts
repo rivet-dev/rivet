@@ -44,7 +44,7 @@ export interface BaseActorDefinition<
 		Q
 	>,
 > {
-	readonly config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
+	readonly config: ActorConfig<S, CP, CS, V, I, DB, E, Q, _R>;
 }
 
 export interface AnyActorDefinition {
@@ -84,13 +84,13 @@ export class ActorDefinition<
 	>,
 > implements BaseActorDefinition<S, CP, CS, V, I, DB, E, Q, R>
 {
-	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
+	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>;
 
-	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {
+	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>) {
 		this.#config = config;
 	}
 
-	get config(): ActorConfig<S, CP, CS, V, I, DB, E, Q> {
+	get config(): ActorConfig<S, CP, CS, V, I, DB, E, Q, R> {
 		return this.#config;
 	}
 }
@@ -192,7 +192,8 @@ export function actor<
 		TInput,
 		TDatabase,
 		TEvents,
-		TQueues
+		TQueues,
+		TActions
 	>;
 	return new ActorDefinition(config);
 }
