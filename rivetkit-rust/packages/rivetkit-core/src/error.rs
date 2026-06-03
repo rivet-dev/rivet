@@ -21,6 +21,7 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 			| "complete_not_configured"
 			| "timed_out",
 		) => Some(400),
+		("user", _) => Some(400),
 		_ => None,
 	}
 }
