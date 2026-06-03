@@ -166,6 +166,7 @@ import {
 	workflowSleepActor,
 	workflowSpawnChildActor,
 	workflowSpawnParentActor,
+	workflowStepRollbackActor,
 	workflowStopTeardownActor,
 	workflowTryActor,
 } from "./workflow";
@@ -322,6 +323,7 @@ export const registry = setup({
 		workflowRunningStepActor,
 		workflowReplayActor,
 		workflowSleepActor,
+		workflowStepRollbackActor,
 		workflowTryActor,
 		warmupActor,
 		workflowStopTeardownActor,
