@@ -20,7 +20,7 @@ jobs:
           cache: 'pnpm'
       - run: pnpm install
       - name: Generate Vercel examples
-        run: npx -y tsx scripts/vercel-examples/generate-vercel-examples.ts --all
+        run: pnpm --dir scripts/vercel-examples exec tsx generate-vercel-examples.ts --all
       - name: Check for uncommitted changes
         run: |
           if [ -n "$(git status --porcelain examples/)" ]; then
