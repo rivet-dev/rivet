@@ -8,7 +8,7 @@ use futures_util::TryStreamExt;
 use gas::prelude::*;
 use indexmap::IndexMap;
 use rivet_api_builder::ApiCtx;
-use rivet_profiling::pubsub_subjects::ProfileConfigSubject;
+use rivet_profiling::pubsub_subjects::{ProfileConfigSubject, SetProfileConfigMessage};
 use rivet_tracing_reconfigure::pubsub_subjects::TracingConfigSubject;
 use serde::{Deserialize, Serialize};
 use universaldb::{
@@ -99,7 +99,7 @@ pub async fn set_profiling_config(
 	body: SetProfileConfigRequest,
 ) -> Result<SetProfileConfigResponse> {
 	// Broadcast message to all services via UPS
-	let message = serde_json::to_vec(&rivet_profiling::SetProfileConfigMessage {
+	let message = serde_json::to_vec(&SetProfileConfigMessage {
 		enabled: body.enabled,
 		sample_rate: body.sample_rate,
 	})?;

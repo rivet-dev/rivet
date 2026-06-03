@@ -1,8 +1,18 @@
 use std::borrow::Cow;
 
+use serde::{Deserialize, Serialize};
 use universalpubsub::Subject;
 
 pub const PROFILE_CONFIG_SUBJECT: &str = "rivet.debug.profile.config";
+
+#[derive(Serialize, Deserialize)]
+pub struct SetProfileConfigMessage {
+	pub enabled: bool,
+	/// Overrides the configured sampling frequency (Hz) for this run. Falls back to the
+	/// `pyroscope.sample_rate` config when absent.
+	#[serde(default)]
+	pub sample_rate: Option<u32>,
+}
 
 pub struct ProfileConfigSubject;
 
