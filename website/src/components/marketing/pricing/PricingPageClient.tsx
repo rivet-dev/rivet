@@ -512,7 +512,12 @@ const Pricing = () => {
             features: [
                 "Actor orchestration runtime",
                 "FoundationDB persistence layer",
+                "Cloud layer for multi-tenant",
+                "SQLite backup",
+                "SQLite PITR",
+                "Forking",
                 "ACL system",
+                "ACL for agents",
                 "Advanced ClickHouse analytics",
                 "OpenTelemetry integration",
                 "Alert manager rules, Prometheus rules, Grafana configs",
