@@ -677,10 +677,11 @@ export class NapiCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
+		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<void> {
 		await asNativeActorContext(ctx)
 			.queue()
-			.waitForNamesAvailable(names, options);
+			.waitForNamesAvailable(names, options, signal);
 	}
 
 	async actorQueueEnqueueAndWait(
