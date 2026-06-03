@@ -6,10 +6,16 @@
 			"!frontend/packages",
 			"!**/*.gen.*",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
+			"!rivetkit-typescript/packages/engine-runner-protocol/**",
+			"!rivetkit-typescript/packages/rivetkit/src/common/bare/generated/**",
 			"!rivetkit-typescript/packages/rivetkit-napi/index.d.ts",
+			"!rivetkit-typescript/packages/rivetkit-wasm/index.d.ts",
 			"agent-os/**/*.ts",
 			"examples/**/*.{ts,tsx}",
 			"engine/sdks/typescript/**/*.ts",
+			"!engine/sdks/typescript/api-*/**",
+			"!engine/sdks/typescript/envoy-protocol/**",
+			"!engine/sdks/typescript/runner-protocol/**",
 			"!/**/node_modules"
 		],
 		"ignoreUnknown": true

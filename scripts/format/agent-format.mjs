@@ -13,7 +13,7 @@ const files = hookFiles.length > 0 ? hookFiles : filesFromGitChanges(stagedOnly)
 const existingFiles = unique(files)
 	.map((path) => normalizeRepoPath(path))
 	.filter((path) => path && existsSync(path) && statSync(path).isFile())
-	.filter((path) => !isGeneratedSdk(path));
+	.filter((path) => !isGeneratedOutput(path));
 
 const biomeFiles = existingFiles.filter(isBiomeFile);
 const rustFiles = existingFiles.filter((path) => path.endsWith(".rs"));
@@ -89,8 +89,19 @@ function normalizeRepoPath(path) {
 	return relativePath;
 }
 
-function isGeneratedSdk(path) {
-	return /^engine\/sdks\/[^/]+\/api-[^/]+\//.test(path);
+function isGeneratedOutput(path) {
+	return (
+		/^engine\/sdks\/[^/]+\/api-[^/]+\//.test(path) ||
+		/^engine\/sdks\/typescript\/(?:envoy-protocol|runner-protocol)\//.test(
+			path,
+		) ||
+		/^rivetkit-typescript\/packages\/engine-runner-protocol\//.test(path) ||
+		/^rivetkit-typescript\/packages\/rivetkit\/src\/common\/bare\/generated\//.test(
+			path,
+		) ||
+		path === "rivetkit-typescript/packages/rivetkit-napi/index.d.ts" ||
+		path === "rivetkit-typescript/packages/rivetkit-wasm/index.d.ts"
+	);
 }
 
 function isBiomeFile(path) {
