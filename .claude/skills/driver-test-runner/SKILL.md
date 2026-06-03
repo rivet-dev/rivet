@@ -1,12 +1,12 @@
 ---
 name: driver-test-runner
-description: Methodically run the RivetKit driver test suite file by file across the native (NAPI) and wasm runtimes, tracking progress in .agent/notes/driver-test-progress.md. Use when you need to validate the driver test suite after changes, bring up a new driver, or debug test failures systematically.
+description: Methodically run the RivetKit driver test suite file by file across the native (NAPI) and wasm runtimes, tracking progress in ~/.agents/notes/driver-test-progress.md. Use when you need to validate the driver test suite after changes, bring up a new driver, or debug test failures systematically.
 allowed-tools: Bash, Read, Write, Edit, Grep, Glob, Agent, TaskCreate, TaskUpdate
 ---
 
 # Driver Test Suite Runner
 
-Methodically run the RivetKit driver test suite one file group at a time across the native (NAPI) and wasm runtimes, tracking progress in `.agent/notes/driver-test-progress.md`.
+Methodically run the RivetKit driver test suite one file group at a time across the native (NAPI) and wasm runtimes, tracking progress in `~/.agents/notes/driver-test-progress.md`.
 
 ## Arguments
 
@@ -88,7 +88,7 @@ Wait for health check to pass (poll every 2 seconds, up to 60 seconds).
 
 ### 3. Initialize or load progress file
 
-The progress file lives at `.agent/notes/driver-test-progress.md`. If it doesn't exist or `reset` was passed, create it with the template below. If it exists and `resume` was passed, read it and pick up from the first file with an unchecked runtime box.
+The progress file lives at `~/.agents/notes/driver-test-progress.md`. If it doesn't exist or `reset` was passed, create it with the template below. If it exists and `resume` was passed, read it and pick up from the first file with an unchecked runtime box.
 
 Each file row gets two checkboxes — one for each runtime. Check off a runtime independently as soon as it passes, and only advance to the next file when both runtimes for the current file are checked.
 

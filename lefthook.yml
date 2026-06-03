@@ -7,15 +7,10 @@ pre-commit:
     pnpm-lock:
       run: pnpm install --frozen-lockfile --ignore-scripts
       tags: lockfile
-    cargo-fmt:
-      run: cargo fmt --all
+    agent-fmt:
+      run: pnpm fmt:agent -- --staged
       tags: formatting
       stage_fixed: true
-    # TODO: Bring this back after big dumb errors are fixed
-    # biome-fmt:
-    #   run: pnpm fmt
-    #   tags: formatting
-    #   stage_fixed: true
     # TODO: this is being a pain in my ass we'll figrue out a better way
     # generate-vercel-examples:
     #   glob: "examples/**/*"
