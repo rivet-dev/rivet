@@ -21,9 +21,7 @@ pub use conveyer::pitr_interval;
 pub use conveyer::{constants, error, keys, ltx, page_index, policy, quota, types, udb};
 
 pub fn registry() -> WorkflowResult<Registry> {
-	use workflows::*;
-
-	let mut registry = Registry::new();
+	let registry = Registry::new();
 	// registry.register_workflow::<db_cold_compacter::DbColdCompacterWorkflow>()?;
 	// registry.register_workflow::<db_hot_compacter::DbHotCompacterWorkflow>()?;
 	// registry.register_workflow::<db_manager::DbManagerWorkflow>()?;
