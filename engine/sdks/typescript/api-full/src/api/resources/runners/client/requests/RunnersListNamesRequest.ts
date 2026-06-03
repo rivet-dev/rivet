@@ -9,7 +9,7 @@
  *     }
  */
 export interface RunnersListNamesRequest {
-	namespace: string;
-	limit?: number;
-	cursor?: string;
+    namespace: string;
+    limit?: number;
+    cursor?: string;
 }

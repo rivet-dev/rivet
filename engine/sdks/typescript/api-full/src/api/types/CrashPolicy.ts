@@ -4,7 +4,7 @@
 
 export type CrashPolicy = "restart" | "sleep" | "destroy";
 export const CrashPolicy = {
-	Restart: "restart",
-	Sleep: "sleep",
-	Destroy: "destroy",
+    Restart: "restart",
+    Sleep: "sleep",
+    Destroy: "destroy",
 } as const;

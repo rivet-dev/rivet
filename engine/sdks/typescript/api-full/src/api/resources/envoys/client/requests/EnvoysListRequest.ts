@@ -9,9 +9,9 @@
  *     }
  */
 export interface EnvoysListRequest {
-	namespace: string;
-	name?: string;
-	envoyKey?: string | string[];
-	limit?: number;
-	cursor?: string;
+    namespace: string;
+    name?: string;
+    envoyKey?: string | string[];
+    limit?: number;
+    cursor?: string;
 }

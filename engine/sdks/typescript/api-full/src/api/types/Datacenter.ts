@@ -3,7 +3,7 @@
  */
 
 export interface Datacenter {
-	label: number;
-	name: string;
-	url: string;
+    label: number;
+    name: string;
+    url: string;
 }
