@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::PathBuf;

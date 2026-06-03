@@ -33,9 +33,7 @@ import {
 
 export const ActorsSchema = z.record(
 	z.string(),
-	z.custom<
-		BaseActorDefinition<any, any, any, any, any, any, any, any, any>
-	>(),
+	z.custom<AnyActorDefinition>(),
 );
 export type RegistryActors = z.infer<typeof ActorsSchema>;
 

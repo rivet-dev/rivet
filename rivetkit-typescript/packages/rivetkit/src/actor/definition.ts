@@ -47,17 +47,9 @@ export interface BaseActorDefinition<
 	readonly config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
 }
 
-export type AnyActorDefinition = BaseActorDefinition<
-	any,
-	any,
-	any,
-	any,
-	any,
-	any,
-	any,
-	any,
-	any
->;
+export interface AnyActorDefinition {
+	readonly config: any;
+}
 
 export type AnyStaticActorDefinition = ActorDefinition<
 	any,

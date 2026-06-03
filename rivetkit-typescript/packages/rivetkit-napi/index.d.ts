@@ -323,6 +323,7 @@ export declare class Queue {
 	waitForNamesAvailable(
 		names: Array<string>,
 		options?: JsQueueWaitOptions | undefined | null,
+		signal?: CancellationToken | undefined | null,
 	): Promise<void>;
 	enqueueAndWait(
 		name: string,
