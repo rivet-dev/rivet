@@ -17,7 +17,7 @@ pub async fn pegboard_actor_hibernating_request_delete(
 	input: &Input,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_hibernating_request_delete", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let last_ping_ts_key =

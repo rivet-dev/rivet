@@ -107,7 +107,7 @@ async fn read_database_branch_id(
 ) -> Result<DatabaseBranchId> {
 	let db = test_ctx.pools().udb()?;
 	let database_id = database_id.to_string();
-	db.run(move |tx| {
+	db.txn("test_depotcompaction_fault_hooks", move |tx| {
 		let database_id = database_id.clone();
 		async move {
 			branch::resolve_database_branch(
@@ -127,7 +127,7 @@ async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>>
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| {
+		.txn("test_depotcompaction_fault_hooks", move |tx| {
 			let key = key.clone();
 			async move {
 				Ok(tx

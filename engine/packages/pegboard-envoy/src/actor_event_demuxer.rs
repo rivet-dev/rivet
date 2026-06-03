@@ -90,7 +90,7 @@ impl ActorEventDemuxer {
 			self.channels
 				.retain(|_, channel| channel.last_seen.elapsed() < self.max_last_seen);
 
-			metrics::EVENT_MULTIPLEXER_COUNT.set(self.channels.len() as i64);
+			metrics::EVENT_DEMUXER_COUNT.set(self.channels.len() as i64);
 		}
 	}
 

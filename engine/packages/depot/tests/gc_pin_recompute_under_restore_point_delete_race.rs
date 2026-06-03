@@ -27,16 +27,19 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 }
 
 async fn database_branch_id_for(db: &universaldb::Database) -> Result<DatabaseBranchId> {
-	db.run(move |tx| async move {
-		branch::resolve_database_branch(
-			&tx,
-			BucketId::from_gas_id(bucket()),
-			TEST_DATABASE,
-			Serializable,
-		)
-		.await?
-		.context("database branch should exist")
-	})
+	db.txn(
+		"test_depotgc_pin_recompute_under_restore",
+		move |tx| async move {
+			branch::resolve_database_branch(
+				&tx,
+				BucketId::from_gas_id(bucket()),
+				TEST_DATABASE,
+				Serializable,
+			)
+			.await?
+			.context("database branch should exist")
+		},
+	)
 	.await
 }
 
@@ -66,17 +69,20 @@ async fn gc_pin_recompute_under_restore_point_delete_race() -> Result<()> {
 
 			database_db.delete_restore_point(restore_point).await?;
 			let fork_before_gc = DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x1111));
-			db.run(move |tx| async move {
-				branch::derive_branch_at(
-					&tx,
-					branch_id,
-					commit.versionstamp,
-					fork_before_gc,
-					BucketBranchId::nil(),
-					None,
-				)
-				.await
-			})
+			db.txn(
+				"test_depotgc_pin_recompute_under_restore",
+				move |tx| async move {
+					branch::derive_branch_at(
+						&tx,
+						branch_id,
+						commit.versionstamp,
+						fork_before_gc,
+						BucketBranchId::nil(),
+						None,
+					)
+					.await
+				},
+			)
 			.await?;
 			assert!(
 				common::read_value(&db, branch_meta_head_at_fork_key(fork_before_gc))
@@ -85,29 +91,35 @@ async fn gc_pin_recompute_under_restore_point_delete_race() -> Result<()> {
 				"fork should still succeed while the hot rows have not been GC'd"
 			);
 
-			db.run(move |tx| async move {
-				tx.informal().clear(&branch_commit_key(branch_id, 1));
-				tx.informal()
-					.clear(&branch_vtx_key(branch_id, commit.versionstamp));
-				tx.informal().clear(&branches_desc_pin_key(branch_id));
-				tx.informal()
-					.clear(&branches_restore_point_pin_key(branch_id));
-				Ok(())
-			})
+			db.txn(
+				"test_depotgc_pin_recompute_under_restore",
+				move |tx| async move {
+					tx.informal().clear(&branch_commit_key(branch_id, 1));
+					tx.informal()
+						.clear(&branch_vtx_key(branch_id, commit.versionstamp));
+					tx.informal().clear(&branches_desc_pin_key(branch_id));
+					tx.informal()
+						.clear(&branches_restore_point_pin_key(branch_id));
+					Ok(())
+				},
+			)
 			.await?;
 			let fork_after_gc = DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x2222));
 			let err = db
-				.run(move |tx| async move {
-					branch::derive_branch_at(
-						&tx,
-						branch_id,
-						commit.versionstamp,
-						fork_after_gc,
-						BucketBranchId::nil(),
-						None,
-					)
-					.await
-				})
+				.txn(
+					"test_depotgc_pin_recompute_under_restore",
+					move |tx| async move {
+						branch::derive_branch_at(
+							&tx,
+							branch_id,
+							commit.versionstamp,
+							fork_after_gc,
+							BucketBranchId::nil(),
+							None,
+						)
+						.await
+					},
+				)
 				.await
 				.expect_err("fork should fail once GC has removed the VTX row");
 			assert!(

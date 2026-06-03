@@ -51,7 +51,7 @@ pub async fn delete_restore_point(
 	database_id: String,
 	restore_point: RestorePointId,
 ) -> Result<()> {
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_delete", move |tx| {
 		let database_id = database_id.clone();
 		let restore_point = restore_point.clone();
 
@@ -100,7 +100,7 @@ pub async fn restore_point_status(
 	database_id: String,
 	restore_point: RestorePointId,
 ) -> Result<Option<PinStatus>> {
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_status", move |tx| {
 		let database_id = database_id.clone();
 		let restore_point = restore_point.clone();
 
@@ -130,7 +130,7 @@ pub(super) async fn create_restore_point_for_resolved(
 	database_id: String,
 	pin: ResolvedRestorePointPin,
 ) -> Result<RestorePointCreateResult> {
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_create", move |tx| {
 		let database_id = database_id.clone();
 		let pin = pin.clone();
 

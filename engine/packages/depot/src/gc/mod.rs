@@ -47,24 +47,30 @@ pub async fn estimate_branch_gc_pin(
 	db: &universaldb::Database,
 	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchGcPin>> {
-	db.run(move |tx| async move { read_branch_gc_pin_tx(&tx, branch_id).await })
-		.await
+	db.txn("depot_gc_read_branch_pin", move |tx| async move {
+		read_branch_gc_pin_tx(&tx, branch_id).await
+	})
+	.await
 }
 
 pub async fn sweep_branch_hot_history(
 	db: &universaldb::Database,
 	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchHotGcOutcome>> {
-	db.run(move |tx| async move { sweep_branch_hot_history_tx(&tx, branch_id).await })
-		.await
+	db.txn("depot_gc_sweep_hot_history", move |tx| async move {
+		sweep_branch_hot_history_tx(&tx, branch_id).await
+	})
+	.await
 }
 
 pub async fn sweep_unreferenced_branch(
 	db: &universaldb::Database,
 	branch_id: DatabaseBranchId,
 ) -> Result<Option<BranchDeletionOutcome>> {
-	db.run(move |tx| async move { sweep_unreferenced_branch_tx(&tx, branch_id).await })
-		.await
+	db.txn("depot_gc_sweep_unreferenced_branch", move |tx| async move {
+		sweep_unreferenced_branch_tx(&tx, branch_id).await
+	})
+	.await
 }
 
 pub(crate) async fn read_branch_gc_pin_tx(

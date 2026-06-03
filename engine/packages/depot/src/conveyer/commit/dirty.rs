@@ -80,7 +80,7 @@ pub async fn clear_sqlite_cmp_dirty_if_observed_idle(
 	branch_id: DatabaseBranchId,
 	observed_dirty: SqliteCmpDirty,
 ) -> Result<bool> {
-	db.run(move |tx| {
+	db.txn("depot_clear_compaction_dirty", move |tx| {
 		let observed_dirty = observed_dirty.clone();
 		async move {
 			let dirty_key = keys::sqlite_cmp_dirty_key(branch_id);

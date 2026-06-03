@@ -805,7 +805,7 @@ fn sha256(bytes: &[u8]) -> [u8; 32] {
 
 async fn read_value(test_ctx: &TestCtx, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| {
+	db.txn("test_depotworkflow_compaction_skeletons", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx
@@ -828,7 +828,7 @@ async fn read_named_database_branch_id(
 ) -> Result<DatabaseBranchId> {
 	let db = test_ctx.pools().udb()?;
 	let database_id = database_id.to_string();
-	db.run(move |tx| {
+	db.txn("test_depotworkflow_compaction_skeletons", move |tx| {
 		let database_id = database_id.clone();
 		async move {
 			branch::resolve_database_branch(
@@ -873,7 +873,7 @@ async fn read_pitr_interval_txid(
 
 async fn read_bucket_branch_id(test_ctx: &TestCtx) -> Result<BucketBranchId> {
 	let db = test_ctx.pools().udb()?;
-	db.run(|tx| async move {
+	db.txn("test_depotworkflow_compaction_skeletons", |tx| async move {
 		branch::resolve_bucket_branch(
 			&tx,
 			BucketId::from_gas_id(test_bucket()),
@@ -890,7 +890,7 @@ async fn read_prefix_values(
 	prefix: Vec<u8>,
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| {
+	db.txn("test_depotworkflow_compaction_skeletons", move |tx| {
 		let prefix = prefix.clone();
 		async move {
 			let prefix_subspace =
@@ -926,7 +926,7 @@ async fn seed_manager_branch(
 	let db = test_ctx.pools().udb()?;
 	let bucket_branch =
 		BucketBranchId::from_uuid(Uuid::from_u128(0x9999_8888_7777_6666_5555_4444_3333_2222));
-	db.run(move |tx| {
+	db.txn("test_depotworkflow_compaction_skeletons", move |tx| {
 		let root = root.clone();
 		let dirty = dirty.clone();
 		async move {
@@ -953,8 +953,6 @@ async fn seed_manager_branch(
 					db_size_pages: 2,
 					post_apply_checksum: 0,
 					branch_id: database_branch_id,
-					#[cfg(debug_assertions)]
-					generation: 0,
 				})?,
 			);
 			for txid in 1..=head_txid {
@@ -1014,20 +1012,23 @@ async fn update_branch_lifecycle(
 	lifecycle_generation: u64,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		let key = branches_list_key(database_branch_id);
-		let record_bytes = tx
-			.informal()
-			.get(&key, Snapshot)
-			.await?
-			.expect("database branch record should exist");
-		let mut record = depot::types::decode_database_branch_record(&record_bytes)?;
-		record.state = state;
-		record.lifecycle_generation = lifecycle_generation;
-		tx.informal()
-			.set(&key, &encode_database_branch_record(record)?);
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			let key = branches_list_key(database_branch_id);
+			let record_bytes = tx
+				.informal()
+				.get(&key, Snapshot)
+				.await?
+				.expect("database branch record should exist");
+			let mut record = depot::types::decode_database_branch_record(&record_bytes)?;
+			record.state = state;
+			record.lifecycle_generation = lifecycle_generation;
+			tx.informal()
+				.set(&key, &encode_database_branch_record(record)?);
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1036,10 +1037,13 @@ async fn clear_branch_record(
 	database_branch_id: DatabaseBranchId,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		tx.informal().clear(&branches_list_key(database_branch_id));
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			tx.informal().clear(&branches_list_key(database_branch_id));
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1051,7 +1055,7 @@ async fn seed_restore_point_db_pin(
 	let restore_point =
 		RestorePointId::format(1_000 + i64::try_from(at_txid).unwrap_or(i64::MAX), at_txid)?;
 	let db = test_ctx.pools().udb()?;
-	db.run({
+	db.txn("test_depotworkflow_compaction_skeletons", {
 		let restore_point = restore_point.clone();
 		move |tx| {
 			let restore_point = restore_point.clone();
@@ -1086,24 +1090,27 @@ async fn seed_pitr_interval_coverage(
 	expires_at_ms: i64,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		let commit_bytes = tx
-			.informal()
-			.get(&branch_commit_key(database_branch_id, txid), Snapshot)
-			.await?
-			.expect("PITR interval commit row should exist");
-		let commit = decode_commit_row(&commit_bytes)?;
-		tx.informal().set(
-			&branch_pitr_interval_key(database_branch_id, bucket_start_ms),
-			&encode_pitr_interval_coverage(PitrIntervalCoverage {
-				txid,
-				versionstamp: commit.versionstamp,
-				wall_clock_ms: commit.wall_clock_ms,
-				expires_at_ms,
-			})?,
-		);
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			let commit_bytes = tx
+				.informal()
+				.get(&branch_commit_key(database_branch_id, txid), Snapshot)
+				.await?
+				.expect("PITR interval commit row should exist");
+			let commit = decode_commit_row(&commit_bytes)?;
+			tx.informal().set(
+				&branch_pitr_interval_key(database_branch_id, bucket_start_ms),
+				&encode_pitr_interval_coverage(PitrIntervalCoverage {
+					txid,
+					versionstamp: commit.versionstamp,
+					wall_clock_ms: commit.wall_clock_ms,
+					expires_at_ms,
+				})?,
+			);
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1113,21 +1120,24 @@ async fn publish_test_shard_and_clear_pidx(
 	as_of_txid: u64,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		let shard_blob = encode_ltx_v3(
-			LtxHeader::delta(as_of_txid, 1, 1_000),
-			&[DirtyPage {
-				pgno: 1,
-				bytes: vec![as_of_txid as u8; PAGE_SIZE as usize],
-			}],
-		)?;
-		tx.informal().set(
-			&branch_shard_key(database_branch_id, 0, as_of_txid),
-			&shard_blob,
-		);
-		tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			let shard_blob = encode_ltx_v3(
+				LtxHeader::delta(as_of_txid, 1, 1_000),
+				&[DirtyPage {
+					pgno: 1,
+					bytes: vec![as_of_txid as u8; PAGE_SIZE as usize],
+				}],
+			)?;
+			tx.informal().set(
+				&branch_shard_key(database_branch_id, 0, as_of_txid),
+				&shard_blob,
+			);
+			tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1137,11 +1147,14 @@ async fn set_test_pidx(
 	txid: u64,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		tx.informal()
-			.set(&branch_pidx_key(database_branch_id, 1), &txid.to_be_bytes());
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			tx.informal()
+				.set(&branch_pidx_key(database_branch_id, 1), &txid.to_be_bytes());
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1151,14 +1164,17 @@ async fn clear_hot_rows_for_cold_read(
 	txid: u64,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		tx.informal()
-			.clear(&branch_shard_key(database_branch_id, 0, txid));
-		tx.informal()
-			.clear(&branch_delta_chunk_key(database_branch_id, txid, 0));
-		tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			tx.informal()
+				.clear(&branch_shard_key(database_branch_id, 0, txid));
+			tx.informal()
+				.clear(&branch_delta_chunk_key(database_branch_id, txid, 0));
+			tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1168,13 +1184,16 @@ async fn set_branch_access_bucket(
 	bucket: i64,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		tx.informal().set(
-			&branch_manifest_last_access_bucket_key(database_branch_id),
-			&bucket.to_le_bytes(),
-		);
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			tx.informal().set(
+				&branch_manifest_last_access_bucket_key(database_branch_id),
+				&bucket.to_le_bytes(),
+			);
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1233,7 +1252,7 @@ async fn seed_workflow_cold_ref(
 	};
 
 	let db = test_ctx.pools().udb()?;
-	db.run({
+	db.txn("test_depotworkflow_compaction_skeletons", {
 		let cold_ref = cold_ref.clone();
 		move |tx| {
 			let cold_ref = cold_ref.clone();
@@ -1265,45 +1284,48 @@ async fn seed_bucket_fork_proof(
 	write_fork_pin_fact: bool,
 ) -> Result<()> {
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		let mut fork_versionstamp = [0; 16];
-		fork_versionstamp[8..16].copy_from_slice(&fork_txid.to_be_bytes());
-		tx.informal().set(
-			&bucket_catalog_by_db_key(database_branch_id, source_bucket_branch_id),
-			&encode_bucket_catalog_db_fact(BucketCatalogDbFact {
-				database_branch_id,
-				bucket_branch_id: source_bucket_branch_id,
-				catalog_versionstamp: [0; 16],
-				tombstone_versionstamp: None,
-			})?,
-		);
-		let fact = BucketForkFact {
-			source_bucket_branch_id,
-			target_bucket_branch_id,
-			fork_versionstamp,
-			parent_cap_versionstamp: fork_versionstamp,
-		};
-		let encoded_fact = encode_bucket_fork_fact(fact)?;
-		tx.informal().set(
-			&bucket_child_key(
-				source_bucket_branch_id,
-				fork_versionstamp,
-				target_bucket_branch_id,
-			),
-			&encoded_fact,
-		);
-		if write_fork_pin_fact {
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			let mut fork_versionstamp = [0; 16];
+			fork_versionstamp[8..16].copy_from_slice(&fork_txid.to_be_bytes());
 			tx.informal().set(
-				&bucket_fork_pin_key(
+				&bucket_catalog_by_db_key(database_branch_id, source_bucket_branch_id),
+				&encode_bucket_catalog_db_fact(BucketCatalogDbFact {
+					database_branch_id,
+					bucket_branch_id: source_bucket_branch_id,
+					catalog_versionstamp: [0; 16],
+					tombstone_versionstamp: None,
+				})?,
+			);
+			let fact = BucketForkFact {
+				source_bucket_branch_id,
+				target_bucket_branch_id,
+				fork_versionstamp,
+				parent_cap_versionstamp: fork_versionstamp,
+			};
+			let encoded_fact = encode_bucket_fork_fact(fact)?;
+			tx.informal().set(
+				&bucket_child_key(
 					source_bucket_branch_id,
 					fork_versionstamp,
 					target_bucket_branch_id,
 				),
 				&encoded_fact,
 			);
-		}
-		Ok(())
-	})
+			if write_fork_pin_fact {
+				tx.informal().set(
+					&bucket_fork_pin_key(
+						source_bucket_branch_id,
+						fork_versionstamp,
+						target_bucket_branch_id,
+					),
+					&encoded_fact,
+				);
+			}
+			Ok(())
+		},
+	)
 	.await
 }
 
@@ -1904,7 +1926,7 @@ async fn manager_rejects_hot_publish_after_lifecycle_generation_bump() -> Result
 			test_ctx
 				.pools()
 				.udb()?
-				.run({
+				.txn("test_depotworkflow_compaction_skeletons", {
 					let staged_blob = staged_blob.clone();
 					let active_hot_job = active_hot_job.clone();
 					let output_ref = output_ref.clone();
@@ -2006,10 +2028,7 @@ async fn manager_refresh_clears_idle_dirty_marker_without_planning_hot_job() -> 
 
 			wait_for_dirty_marker_cleared(&test_ctx, database_branch_id).await?;
 			let manager_state = wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
-				state.planning_deadlines.next_hot_check_at_ms.is_some()
-					&& state.planning_deadlines.next_cold_check_at_ms.is_some()
-					&& state.planning_deadlines.next_reclaim_check_at_ms.is_some()
-					&& state.planning_deadlines.final_settle_check_at_ms.is_some()
+				state.last_observed_branch_lifecycle_generation.is_some()
 			})
 			.await?;
 
@@ -3476,15 +3495,18 @@ async fn e2e_force_reclaim_materializes_bucket_fork_pin() -> Result<()> {
 				}]
 			);
 			let forked_bucket_branch_id = udb
-				.run(move |tx| async move {
-					branch::resolve_bucket_branch(
-						&tx,
-						forked_bucket,
-						universaldb::utils::IsolationLevel::Serializable,
-					)
-					.await?
-					.ok_or_else(|| anyhow::anyhow!("forked bucket branch should exist"))
-				})
+				.txn(
+					"test_depotworkflow_compaction_skeletons",
+					move |tx| async move {
+						branch::resolve_bucket_branch(
+							&tx,
+							forked_bucket,
+							universaldb::utils::IsolationLevel::Serializable,
+						)
+						.await?
+						.ok_or_else(|| anyhow::anyhow!("forked bucket branch should exist"))
+					},
+				)
 				.await?;
 			assert!(
 				read_value(
@@ -3637,11 +3659,14 @@ async fn cold_disabled_read_missing_fdb_shard_returns_error() -> Result<()> {
 	)
 	.await?;
 	let db = test_ctx.pools().udb()?;
-	db.run(move |tx| async move {
-		tx.informal()
-			.clear(&branch_shard_key(database_branch_id, 0, 1));
-		Ok(())
-	})
+	db.txn(
+		"test_depotworkflow_compaction_skeletons",
+		move |tx| async move {
+			tx.informal()
+				.clear(&branch_shard_key(database_branch_id, 0, 1));
+			Ok(())
+		},
+	)
 	.await?;
 
 	let missing = database_db.get_pages(vec![1]).await;
@@ -3835,19 +3860,22 @@ async fn reclaimer_eviction_preserves_future_pin_reads_via_cold_ref() -> Result<
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| async move {
-			tx.informal().set(
-				&branch_compaction_root_key(database_branch_id),
-				&encode_compaction_root(CompactionRoot {
-					schema_version: 1,
-					manifest_generation: 1,
-					hot_watermark_txid: 0,
-					cold_watermark_txid: 1,
-					cold_watermark_versionstamp: [0; 16],
-				})?,
-			);
-			Ok(())
-		})
+		.txn(
+			"test_depotworkflow_compaction_skeletons",
+			move |tx| async move {
+				tx.informal().set(
+					&branch_compaction_root_key(database_branch_id),
+					&encode_compaction_root(CompactionRoot {
+						schema_version: 1,
+						manifest_generation: 1,
+						hot_watermark_txid: 0,
+						cold_watermark_txid: 1,
+						cold_watermark_versionstamp: [0; 16],
+					})?,
+				);
+				Ok(())
+			},
+		)
 		.await?;
 
 	let result = run_reclaim_force(&test_ctx, database_branch_id, Id::new_v1(95)).await?;
@@ -3875,10 +3903,13 @@ async fn reclaimer_eviction_preserves_future_pin_reads_via_cold_ref() -> Result<
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| async move {
-			tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
-			Ok(())
-		})
+		.txn(
+			"test_depotworkflow_compaction_skeletons",
+			move |tx| async move {
+				tx.informal().clear(&branch_pidx_key(database_branch_id, 1));
+				Ok(())
+			},
+		)
 		.await?;
 	assert_eq!(
 		database_db.get_pages(vec![1]).await?,
@@ -3983,7 +4014,7 @@ async fn reclaimer_evictions_require_matching_cold_ref() -> Result<()> {
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| {
+		.txn("test_depotworkflow_compaction_skeletons", move |tx| {
 			let shard_bytes = shard_bytes.clone();
 			async move {
 				tx.informal()
@@ -4055,7 +4086,7 @@ async fn reclaimer_evictions_reject_hash_mismatched_cold_ref() -> Result<()> {
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| {
+		.txn("test_depotworkflow_compaction_skeletons", move |tx| {
 			let cold_ref = cold_ref.clone();
 			async move {
 				tx.informal().set(
@@ -4130,18 +4161,21 @@ async fn reclaimer_evictions_keep_unexpired_interval_pinned_shard() -> Result<()
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| async move {
-			tx.informal().set(
-				&branch_pitr_interval_key(database_branch_id, 1_000),
-				&encode_pitr_interval_coverage(PitrIntervalCoverage {
-					txid: 1,
-					versionstamp,
-					wall_clock_ms: 1_001,
-					expires_at_ms: i64::MAX,
-				})?,
-			);
-			Ok(())
-		})
+		.txn(
+			"test_depotworkflow_compaction_skeletons",
+			move |tx| async move {
+				tx.informal().set(
+					&branch_pitr_interval_key(database_branch_id, 1_000),
+					&encode_pitr_interval_coverage(PitrIntervalCoverage {
+						txid: 1,
+						versionstamp,
+						wall_clock_ms: 1_001,
+						expires_at_ms: i64::MAX,
+					})?,
+				);
+				Ok(())
+			},
+		)
 		.await?;
 
 	let result = run_reclaim_force(&test_ctx, database_branch_id, Id::new_v1(93)).await?;
@@ -4674,11 +4708,14 @@ async fn stale_pidx_missing_delta_falls_back_to_fdb_shard() -> Result<()> {
 			test_ctx
 				.pools()
 				.udb()?
-				.run(move |tx| async move {
-					tx.informal()
-						.clear(&branch_delta_chunk_key(database_branch_id, 1, 0));
-					Ok(())
-				})
+				.txn(
+					"test_depotworkflow_compaction_skeletons",
+					move |tx| async move {
+						tx.informal()
+							.clear(&branch_delta_chunk_key(database_branch_id, 1, 0));
+						Ok(())
+					},
+				)
 				.await?;
 
 			assert!(
@@ -5332,7 +5369,7 @@ async fn manager_schedules_cleanup_for_stale_hot_output() -> Result<()> {
 			test_ctx
 				.pools()
 				.udb()?
-				.run({
+				.txn("test_depotworkflow_compaction_skeletons", {
 					let staged_blob = staged_blob.clone();
 					move |tx| {
 						let staged_blob = staged_blob.clone();
@@ -5629,18 +5666,21 @@ async fn manager_cleans_uploaded_cold_output_when_active_publish_rejects() -> Re
 	test_ctx
 		.pools()
 		.udb()?
-		.run(move |tx| async move {
-			let root_key = branch_compaction_root_key(database_branch_id);
-			let root_bytes = tx
-				.informal()
-				.get(&root_key, Snapshot)
-				.await?
-				.expect("compaction root should exist");
-			let mut root = decode_compaction_root(&root_bytes)?;
-			root.manifest_generation = root.manifest_generation.saturating_add(1);
-			tx.informal().set(&root_key, &encode_compaction_root(root)?);
-			Ok(())
-		})
+		.txn(
+			"test_depotworkflow_compaction_skeletons",
+			move |tx| async move {
+				let root_key = branch_compaction_root_key(database_branch_id);
+				let root_bytes = tx
+					.informal()
+					.get(&root_key, Snapshot)
+					.await?
+					.expect("compaction root should exist");
+				let mut root = decode_compaction_root(&root_bytes)?;
+				root.manifest_generation = root.manifest_generation.saturating_add(1);
+				tx.informal().set(&root_key, &encode_compaction_root(root)?);
+				Ok(())
+			},
+		)
 		.await?;
 	let cold_ref = ColdShardRef {
 		object_key: object_key.clone(),
@@ -6137,7 +6177,7 @@ async fn reclaimer_logs_and_retains_live_cold_ref_for_delete_issued_object() -> 
 	test_ctx
 		.pools()
 		.udb()?
-		.run({
+		.txn("test_depotworkflow_compaction_skeletons", {
 			let object_key = object_key.clone();
 			move |tx| {
 				let object_key = object_key.clone();
@@ -6432,7 +6472,7 @@ async fn reclaimer_retains_rows_when_pidx_still_references_deleted_txid() -> Res
 				.dispatch()
 				.await?;
 			let manager_state = wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
-				state.planning_deadlines.next_reclaim_check_at_ms.is_some()
+				state.last_observed_branch_lifecycle_generation.is_some()
 			})
 			.await?;
 
@@ -6868,7 +6908,7 @@ async fn reclaimer_retains_history_when_bucket_proof_is_ambiguous() -> Result<()
 				.dispatch()
 				.await?;
 			let manager_state = wait_for_manager_state(&test_ctx, manager_workflow_id, |state| {
-				state.planning_deadlines.next_reclaim_check_at_ms.is_some()
+				state.last_observed_branch_lifecycle_generation.is_some()
 			})
 			.await?;
 

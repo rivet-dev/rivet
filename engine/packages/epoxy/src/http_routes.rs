@@ -2,7 +2,7 @@ use anyhow::{Result, ensure};
 use axum::body::Bytes;
 use epoxy_protocol::{protocol, versioned};
 use rivet_api_builder::prelude::*;
-use std::time::Instant;
+use rivet_perf::{perf_finish, perf_start};
 use vbare::OwnedVersionedData;
 
 use crate::metrics;
@@ -76,10 +76,20 @@ async fn handle_request(ctx: ApiCtx, request: protocol::Request) -> Result<Vec<u
 	);
 
 	let kind_label = request_kind_label(&request.kind);
-	let start = Instant::now();
+	let measure = perf_start!(
+		&metrics::REQUEST_DURATION,
+		slow_ms = 1000,
+		"epoxy_request",
+		labels: { request_type = %kind_label },
+		fields: {
+			to_replica_id = %request.to_replica_id,
+			current_replica_id = %current_replica_id,
+		},
+	);
 	let res = crate::replica::message_request::message_request(&ctx, request).await;
 	let result_label = if res.is_ok() { "ok" } else { "err" };
-	metrics::record_request(kind_label, result_label, start.elapsed());
+	metrics::record_request_result(kind_label, result_label);
+	perf_finish!(measure, fields: { result = %result_label });
 
 	serde_bare::to_vec(&res?).map_err(Into::into)
 }

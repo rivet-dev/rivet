@@ -102,11 +102,11 @@ async function waitForActorReady<T>(
 			if (
 				!(
 					(errorCode &&
-						/^(no_envoys|actor_ready_timeout|service_unavailable)$/.test(
+						/^(no_envoys|actor_ready_timeout|actor_wake_retries_exceeded|service_unavailable)$/.test(
 							errorCode,
 						)) ||
 					(error instanceof Error &&
-						/(no_envoys|actor_ready_timeout|service_unavailable)/.test(
+						/(no_envoys|actor_ready_timeout|actor_wake_retries_exceeded|service_unavailable)/.test(
 							error.message,
 						))
 				)

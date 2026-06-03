@@ -280,7 +280,7 @@ impl DatabaseDebug for DatabaseKv {
 	async fn get_workflows(&self, workflow_ids: Vec<Id>) -> Result<Vec<WorkflowData>> {
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_get_workflows", |tx| {
 				let workflow_ids = workflow_ids.clone();
 				async move { self.get_workflows_inner(workflow_ids, &tx).await }
 			})
@@ -298,7 +298,7 @@ impl DatabaseDebug for DatabaseKv {
 		// NOTE: this does a full scan of all keys under workflow/data and filters in memory
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_find_workflows", |tx| {
 				let name = name.clone();
 				async move {
 					let mut workflow_ids = Vec::new();
@@ -421,7 +421,7 @@ impl DatabaseDebug for DatabaseKv {
 	async fn silence_workflows(&self, workflow_ids: Vec<Id>) -> Result<()> {
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_silence_workflows", |tx| {
 				let workflow_ids = workflow_ids.clone();
 
 				async move {
@@ -646,9 +646,11 @@ impl DatabaseDebug for DatabaseKv {
 	async fn wake_workflows(&self, workflow_ids: Vec<Id>) -> Result<()> {
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_wake_workflows", |tx| {
 				let workflow_ids = workflow_ids.clone();
 				async move {
+					tx.tag("wake_workflows")?;
+
 					let tx = tx.with_subspace(self.subspace.clone());
 
 					for workflow_id in workflow_ids {
@@ -746,7 +748,7 @@ impl DatabaseDebug for DatabaseKv {
 	) -> Result<Option<HistoryData>> {
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_get_workflow_history", |tx| {
 				async move {
 					let history_subspace =
 						self.subspace
@@ -997,7 +999,7 @@ impl DatabaseDebug for DatabaseKv {
 	async fn get_signals(&self, signal_ids: Vec<Id>) -> Result<Vec<SignalData>> {
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_get_signals", |tx| {
 				let signal_ids = signal_ids.clone();
 				async move { self.get_signals_inner(signal_ids, &tx).await }
 			})
@@ -1017,7 +1019,7 @@ impl DatabaseDebug for DatabaseKv {
 		// NOTE: this does a full scan of all keys under signal/data and filters in memory
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_find_signals", |tx| {
 				let name = name.clone();
 				let workflow_id = workflow_id.clone();
 				async move {
@@ -1124,7 +1126,7 @@ impl DatabaseDebug for DatabaseKv {
 	async fn silence_signals(&self, signal_ids: Vec<Id>) -> Result<()> {
 		self.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_silence_signals", |tx| {
 				let signal_ids = signal_ids.clone();
 
 				async move {
@@ -1271,9 +1273,11 @@ impl DatabaseDebug for DatabaseKv {
 		let (prune_count, inserter, new_last_key) = self
 			.pools
 			.udb()?
-			.run(|tx| {
+			.txn("gas_debug_prune_workflows", |tx| {
 				let last_key = &last_key;
 				async move {
+					tx.tag("prune_workflows")?;
+
 					let start = Instant::now();
 					let tx = tx.with_subspace(self.subspace.clone());
 					let now = rivet_util::timestamp::now();
@@ -1486,8 +1490,12 @@ impl DatabaseKv {
 		loop {
 			let (new_current_workflow_id, workflow_ids) = self.pools
 				.udb()?
-				.run(|tx| {
+				.txn("gas_debug_revive_workflows", |tx| {
 					async move {
+						for name in names {
+							tx.tag(&format!("revive_workflows:{name}"))?;
+						}
+
 						let mut workflow_ids = Vec::new();
 
 						let key_end = keys::workflow::DataSubspaceKey::new_with_workflow_id(end_workflow_id);
@@ -1639,8 +1647,10 @@ impl DatabaseKv {
 		loop {
 			let (new_current_workflow_id, workflow_ids) = self.pools
 				.udb()?
-				.run(|tx| {
+				.txn("gas_debug_fetch_prune_workflows", |tx| {
 					async move {
+						tx.tag("fetch_prune_workflows")?;
+
 						let mut workflow_ids = Vec::new();
 
 						let key_end = keys::workflow::DataSubspaceKey::new_with_workflow_id(end_workflow_id);
@@ -1775,7 +1785,9 @@ impl DatabaseKv {
 				let workflow_ids = &workflow_ids;
 				self.pools
 					.udb()?
-					.run(|tx| async move {
+					.txn("gas_debug_prune_workflow_history", |tx| async move {
+						tx.tag("prune_workflows")?;
+
 						let tx = tx.with_subspace(self.subspace.clone());
 						let now = rivet_util::timestamp::now();
 
@@ -1820,8 +1832,10 @@ impl DatabaseKv {
 		loop {
 			let (new_current_signal_id, signal_ids) = self.pools
 				.udb()?
-				.run(|tx| {
+				.txn("gas_debug_fetch_prune_signals", |tx| {
 					async move {
+						tx.tag("fetch_prune_signals")?;
+
 						let mut signal_ids = Vec::new();
 
 						let key_end = keys::signal::DataSubspaceKey::new_with_signal_id(end_signal_id);
@@ -1944,7 +1958,9 @@ impl DatabaseKv {
 				let signal_ids = &signal_ids;
 				self.pools
 					.udb()?
-					.run(|tx| async move {
+					.txn("gas_debug_delete_signals", |tx| async move {
+						tx.tag("prune_signals")?;
+
 						let tx = tx.with_subspace(self.subspace.clone());
 
 						for signal_id in signal_ids {

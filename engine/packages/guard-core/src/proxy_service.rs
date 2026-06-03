@@ -10,6 +10,7 @@ use hyper::{
 use hyper_tungstenite;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
+use opentelemetry_http::{HeaderExtractor, HeaderInjector};
 use rand::seq::SliceRandom;
 use rivet_api_builder::{RequestIds, X_RIVET_RAY_ID};
 use rivet_util::Id;
@@ -133,8 +134,8 @@ impl ProxyState {
 		let res = if let Some(res) = cache_res {
 			res
 		} else {
-			// Not in cache, call routing function with a configured timeout.
-			// Routing functions should have their own internal timeouts that are shorter.
+			// Not in cache, call routing function with a configured backstop timeout.
+			// Primary timeout signals live in per-phase fences inside each routing module.
 			let route_timeout = self.config.guard().route_timeout();
 			tracing::debug!(
 				hostname = %req_ctx.hostname,
@@ -148,6 +149,7 @@ impl ProxyState {
 				.await
 				.map_err(|_| {
 					errors::RequestTimeout {
+						phase: "route_resolution".to_owned(),
 						timeout_seconds: route_timeout.as_secs(),
 					}
 					.build()
@@ -189,7 +191,11 @@ impl ProxyState {
 						path = %req_ctx.path,
 						"No route targets available from result"
 					);
-					Err(errors::NoRouteTargets.build())
+					Err(errors::NoRouteTargets {
+						hostname: req_ctx.hostname.clone(),
+						path: req_ctx.path.clone(),
+					}
+					.build())
 				}
 			}
 			RoutingOutput::CustomServe(handler) => {
@@ -355,6 +361,23 @@ impl ProxyService {
 		req.extensions_mut().insert(request_ids);
 
 		let current_span = tracing::Span::current();
+
+		// Extract trace context from incoming request headers and use it as the parent of
+		// the current span, then inject the current span's context back into the request
+		// headers so upstream services see this request as a child of the current span.
+		// The injected headers ride along via `req_ctx.headers` into both the HTTP and
+		// WebSocket upstream paths.
+		if self.state.config.guard().trace_propagation() {
+			let parent_ctx = opentelemetry::global::get_text_map_propagator(|prop| {
+				prop.extract(&HeaderExtractor(req.headers()))
+			});
+			current_span.set_parent(parent_ctx);
+
+			let span_ctx = current_span.context();
+			opentelemetry::global::get_text_map_propagator(|prop| {
+				prop.inject_context(&span_ctx, &mut HeaderInjector(req.headers_mut()))
+			});
+		}
 
 		current_span.record("req_id", request_ids.req_id.to_string());
 		current_span.record("ray_id", request_ids.ray_id.to_string());
@@ -747,11 +770,18 @@ impl ProxyService {
 					Limited::new(body, self.state.config.guard().http_max_request_body_size())
 						.collect()
 						.await
-						.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
+						.map_err(|err| {
+							errors::InvalidRequestBody {
+								reason: err.to_string(),
+							}
+							.build()
+						})?
 						.to_bytes();
 
 				// Use a value-returning loop to handle both errors and successful responses
 				let mut attempts = 0;
+				let mut last_status = "none".to_owned();
+				let mut last_error_code = "none".to_owned();
 				while attempts < req_ctx.retry.max_attempts {
 					attempts += 1;
 
@@ -770,6 +800,7 @@ impl ProxyService {
 						.await
 						.map_err(|_| {
 							errors::RequestTimeout {
+								phase: "upstream_request".to_owned(),
 								timeout_seconds: timeout_duration.as_secs(),
 							}
 							.build()
@@ -779,6 +810,14 @@ impl ProxyService {
 						Ok(resp) => {
 							// Check if this is a retryable response
 							if utils::should_retry_request_inner(resp.status(), resp.headers()) {
+								last_status = resp.status().as_u16().to_string();
+								last_error_code = resp
+									.headers()
+									.get(X_RIVET_ERROR)
+									.and_then(|value| value.to_str().ok())
+									.unwrap_or("retryable_status")
+									.to_owned();
+
 								// Request connect error, might retry
 								tracing::debug!(
 									"Request attempt {attempts} failed (service unavailable)"
@@ -827,7 +866,10 @@ impl ProxyService {
 								.collect()
 								.await
 								.map_err(|err| {
-									errors::InvalidResponseBody(err.to_string()).build()
+									errors::InvalidResponseBody {
+										reason: err.to_string(),
+									}
+									.build()
 								})?
 								.to_bytes();
 
@@ -877,6 +919,9 @@ impl ProxyService {
 				// If we get here, all attempts failed
 				return Err(errors::RetryAttemptsExceeded {
 					attempts: req_ctx.retry.max_attempts,
+					last_error_code,
+					last_status,
+					last_target_kind: "target".to_owned(),
 				}
 				.build());
 			}
@@ -887,18 +932,47 @@ impl ProxyService {
 					Limited::new(body, self.state.config.guard().http_max_request_body_size())
 						.collect()
 						.await
-						.map_err(|err| errors::InvalidRequestBody(err.to_string()).build())?
+						.map_err(|err| {
+							errors::InvalidRequestBody {
+								reason: err.to_string(),
+							}
+							.build()
+						})?
 						.to_bytes();
 				let req_collected =
 					hyper::Request::from_parts(req_parts, Full::<Bytes>::new(req_body));
 
 				// Attempt request
 				let mut attempts = 0;
+				let mut last_status = "none".to_owned();
+				let mut last_error_code = "none".to_owned();
 				while attempts < req_ctx.retry.max_attempts {
 					attempts += 1;
 
 					let res = handler.handle_request(req_collected.clone(), req_ctx).await;
 					if utils::should_retry_request(&res) {
+						match &res {
+							Ok(resp) => {
+								last_status = resp.status().as_u16().to_string();
+								last_error_code = resp
+									.headers()
+									.get(X_RIVET_ERROR)
+									.and_then(|value| value.to_str().ok())
+									.unwrap_or("retryable_status")
+									.to_owned();
+							}
+							Err(err) => {
+								last_status = "none".to_owned();
+								last_error_code = err
+									.chain()
+									.find_map(|x| x.downcast_ref::<rivet_error::RivetError>())
+									.map(|rivet_err| {
+										format!("{}.{}", rivet_err.group(), rivet_err.code())
+									})
+									.unwrap_or_else(|| "unknown".to_owned());
+							}
+						}
+
 						// Request connect error, might retry
 						tracing::debug!("Request attempt {attempts} failed (service unavailable)");
 
@@ -932,6 +1006,9 @@ impl ProxyService {
 					.await;
 				return Err(errors::RetryAttemptsExceeded {
 					attempts: req_ctx.retry.max_attempts,
+					last_error_code,
+					last_status,
+					last_target_kind: "custom_serve".to_owned(),
 				}
 				.build());
 			}
@@ -1030,6 +1107,7 @@ impl ProxyService {
 
 						// Now attempt to connect to the upstream server
 						tracing::debug!("Attempting connect to upstream WebSocket");
+						let mut last_error_code;
 						while attempts < req_ctx.retry.max_attempts {
 							attempts += 1;
 
@@ -1131,6 +1209,7 @@ impl ProxyService {
 									break;
 								}
 								Ok(Err(err)) => {
+									last_error_code = Some(err.to_string());
 									tracing::debug!(
 										?err,
 										"WebSocket request attempt {} failed",
@@ -1138,6 +1217,7 @@ impl ProxyService {
 									);
 								}
 								Err(_) => {
+									last_error_code = Some("websocket_connect_timeout".to_owned());
 									tracing::debug!(
 										"WebSocket request attempt {} timed out after 5s",
 										attempts
@@ -1153,7 +1233,15 @@ impl ProxyService {
 								);
 
 								// Send a close message to the client since we can't connect to upstream
-								let err = errors::RetryAttemptsExceeded { attempts }.build();
+								let err = errors::RetryAttemptsExceeded {
+									attempts,
+									last_error_code: last_error_code.unwrap_or_else(|| {
+										"websocket_upstream_connect_failed".to_owned()
+									}),
+									last_status: "none".to_owned(),
+									last_target_kind: "target".to_owned(),
+								}
+								.build();
 								tracing::warn!(
 									?err,
 									"sending close message to client due to upstream connection failure"
@@ -1215,7 +1303,12 @@ impl ProxyService {
 									target = new_target;
 								}
 								Ok(ResolveRouteOutput::CustomServe(_)) => {
-									let err = errors::WebSocketTargetChanged.build();
+									let err = errors::WebSocketTargetChanged {
+										phase: "upstream_websocket_retry".to_owned(),
+										from_target_kind: "target".to_owned(),
+										to_target_kind: "custom_serve".to_owned(),
+									}
+									.build();
 									tracing::warn!(
 										?err,
 										"websocket target changed to custom serve"
@@ -1700,7 +1793,12 @@ impl ProxyService {
 											continue;
 										}
 										Ok(ResolveRouteOutput::Target(_)) => {
-											let err = errors::WebSocketTargetChanged.build();
+											let err = errors::WebSocketTargetChanged {
+												phase: "custom_serve_websocket_retry".to_owned(),
+												from_target_kind: "custom_serve".to_owned(),
+												to_target_kind: "target".to_owned(),
+											}
+											.build();
 											tracing::warn!(
 												?err,
 												"websocket target changed to target"

@@ -29,7 +29,7 @@ pub async fn pegboard_runner_config_list(
 ) -> Result<Vec<RunnerConfig>> {
 	let runner_configs = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_config_list", |tx| async move {
 			let tx = tx.with_subspace(namespace::keys::subspace());
 
 			let (start, end) = if let Some(variant) = input.variant {

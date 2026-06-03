@@ -141,7 +141,7 @@ pub async fn read_v2_committed_value(
 ) -> Result<Option<protocol::CommittedValue>> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
@@ -191,7 +191,7 @@ pub async fn write_v2_committed_value(
 ) -> Result<()> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			let value = value.clone();
 			async move {
@@ -211,7 +211,7 @@ pub async fn read_legacy_value(
 ) -> Result<Option<Vec<u8>>> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::legacy_subspace(replica_id));
@@ -232,7 +232,7 @@ pub async fn write_legacy_value(
 	let key = key.to_vec();
 	let value = value.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			let value = value.clone();
 			async move {
@@ -254,7 +254,7 @@ pub async fn write_legacy_v2_value(
 	let key = key.to_vec();
 	let value = value.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			let value = value.clone();
 			async move {
@@ -275,7 +275,7 @@ pub async fn read_cached_value(
 ) -> Result<Option<protocol::CachedValue>> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
@@ -295,7 +295,7 @@ pub async fn write_cached_value(
 ) -> Result<()> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			let value = value.clone();
 			async move {
@@ -327,7 +327,7 @@ pub async fn read_ballot(
 ) -> Result<Option<protocol::Ballot>> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
@@ -345,7 +345,7 @@ pub async fn read_accepted_value(
 ) -> Result<Option<protocol::AcceptedValue>> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
@@ -378,7 +378,7 @@ pub async fn write_ballot(
 ) -> Result<()> {
 	let key = key.to_vec();
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("test_epoxycommon_utils", move |tx| {
 			let key = key.clone();
 			let ballot = ballot.clone();
 			async move {
@@ -396,7 +396,7 @@ pub async fn read_changelog_entries(
 	replica_id: ReplicaId,
 ) -> Result<Vec<protocol::ChangelogEntry>> {
 	ctx.udb()?
-		.run(move |tx| async move {
+		.txn("test_epoxycommon_utils", move |tx| async move {
 			let replica_subspace = keys::subspace(replica_id);
 			let changelog_subspace = replica_subspace.subspace(&(CHANGELOG,));
 			let mut range: RangeOption<'static> = (&changelog_subspace).into();

@@ -1,13 +1,13 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_cache::{CachePurgeMessage, CACHE_PURGE_TOPIC};
+use rivet_cache::{CachePurgeMessage, CachePurgeSubject, CACHE_PURGE_TOPIC};
 use universalpubsub::NextOutput;
 
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
 	// Subscribe to cache purge updates
 	let ups = pools.ups()?;
-	let mut sub = ups.subscribe(CACHE_PURGE_TOPIC).await?;
+	let mut sub = ups.subscribe(CachePurgeSubject).await?;
 
 	tracing::debug!(subject=%CACHE_PURGE_TOPIC, "subscribed to cache purge updates");
 

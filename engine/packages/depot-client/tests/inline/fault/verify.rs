@@ -62,7 +62,7 @@ impl DepotInvariantScanner {
 		let cold_tier = self.cold_tier.clone();
 		let violations = self
 			.db
-			.run(move |tx| {
+			.txn("test_depot_clientinline_fault_verify", move |tx| {
 				let database_id = database_id.clone();
 				let cold_tier = cold_tier.clone();
 				async move {
@@ -861,17 +861,20 @@ fn depot_invariant_scanner_detects_missing_head_commit() -> Result<()> {
 		.verify(|ctx| async move {
 			let branch_id = ctx.database_branch_id().await?;
 			let db = ctx.depot_database();
-			db.run(move |tx| async move {
-				let head_bytes = tx
-					.informal()
-					.get(&keys::branch_meta_head_key(branch_id), Serializable)
-					.await?
-					.context("head should exist")?;
-				let head = decode_db_head(&head_bytes)?;
-				tx.informal()
-					.clear(&keys::branch_commit_key(branch_id, head.head_txid));
-				Ok(())
-			})
+			db.txn(
+				"test_depot_clientinline_fault_verify",
+				move |tx| async move {
+					let head_bytes = tx
+						.informal()
+						.get(&keys::branch_meta_head_key(branch_id), Serializable)
+						.await?
+						.context("head should exist")?;
+					let head = decode_db_head(&head_bytes)?;
+					tx.informal()
+						.clear(&keys::branch_commit_key(branch_id, head.head_txid));
+					Ok(())
+				},
+			)
 			.await?;
 
 			let err = ctx
@@ -906,11 +909,14 @@ fn depot_invariant_scanner_detects_broken_pidx_backing() -> Result<()> {
 		.verify(|ctx| async move {
 			let branch_id = ctx.database_branch_id().await?;
 			let db = ctx.depot_database();
-			db.run(move |tx| async move {
-				tx.informal()
-					.set(&keys::branch_pidx_key(branch_id, 1), &999_u64.to_be_bytes());
-				Ok(())
-			})
+			db.txn(
+				"test_depot_clientinline_fault_verify",
+				move |tx| async move {
+					tx.informal()
+						.set(&keys::branch_pidx_key(branch_id, 1), &999_u64.to_be_bytes());
+					Ok(())
+				},
+			)
 			.await?;
 
 			let err = ctx

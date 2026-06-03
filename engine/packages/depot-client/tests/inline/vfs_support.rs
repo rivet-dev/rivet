@@ -261,7 +261,7 @@ impl DirectStorage {
 		cold_tier.put_object(&object_key, &object_bytes).await?;
 
 		self.db
-			.run(move |tx| {
+			.txn("test_depot_clientinline_vfs_support", move |tx| {
 				let cold_ref = cold_ref.clone();
 				async move {
 					tx.informal().set(
@@ -299,7 +299,7 @@ impl DirectStorage {
 	async fn read_head(&self, actor_id: &str) -> Result<DBHead> {
 		let actor_id = actor_id.to_string();
 		self.db
-			.run(move |tx| {
+			.txn("test_depot_clientinline_vfs_support", move |tx| {
 				let actor_id = actor_id.clone();
 				async move {
 					let branch_id = depot::conveyer::branch::resolve_database_branch(
@@ -433,6 +433,7 @@ impl SqliteTransport for DirectDepotTransport {
 				&pgnos,
 				depot::types::GetPagesOptions {
 					expected_head_txid: request.expected_head_txid,
+					..Default::default()
 				},
 			)
 			.await

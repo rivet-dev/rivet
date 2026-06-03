@@ -162,6 +162,7 @@ function classifyActorError(
 function isRetryableGuardGatewayHttpError(code: string): boolean {
 	return (
 		code === "service_unavailable" ||
+		code === "actor_wake_retries_exceeded" ||
 		code === "actor_stopped_while_waiting" ||
 		code === "tunnel_request_aborted" ||
 		code === "tunnel_message_timeout" ||

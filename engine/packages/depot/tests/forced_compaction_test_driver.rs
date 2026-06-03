@@ -62,7 +62,7 @@ async fn read_database_branch_id(
 ) -> Result<DatabaseBranchId> {
 	let db = test_ctx.pools().udb()?;
 	let database_id = database_id.to_string();
-	db.run(move |tx| {
+	db.txn("test_depotforced_compaction_test_driver", move |tx| {
 		let database_id = database_id.clone();
 		async move {
 			branch::resolve_database_branch(
@@ -126,7 +126,8 @@ async fn test_driver_forces_noop_without_planning_timers() -> Result<()> {
 			.skipped_noop_reasons
 			.contains(&"final-settle:refreshed".to_string())
 	);
-	assert_eq!(manager_state.planning_deadlines, Default::default());
+	assert_eq!(manager_state.next_cold_check_at_ms, None);
+	assert_eq!(manager_state.next_reclaim_check_at_ms, None);
 
 	test_ctx.shutdown().await?;
 	Ok(())
@@ -160,7 +161,8 @@ async fn test_driver_forces_hot_compaction_and_exposes_result_fields() -> Result
 	assert_eq!(result.completed_job_ids.len(), 1);
 	assert!(result.skipped_noop_reasons.is_empty());
 	assert!(result.terminal_error.is_none());
-	assert_eq!(manager_state.planning_deadlines, Default::default());
+	assert_eq!(manager_state.next_cold_check_at_ms, None);
+	assert_eq!(manager_state.next_reclaim_check_at_ms, None);
 
 	let tag_value = depot::workflows::compaction::database_branch_tag_value(database_branch_id);
 	assert_eq!(

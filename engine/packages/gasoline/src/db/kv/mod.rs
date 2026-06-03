@@ -15,13 +15,8 @@ use rivet_util::future::CustomInstrumentExt;
 use serde_json::json;
 use tokio::sync::Mutex;
 use tracing::Instrument;
-use universaldb::utils::{
-	FormalChunkedKey, FormalKey, IsolationLevel::*, end_of_key_range, keys::*,
-};
-use universaldb::{
-	options::{ConflictRangeType, MutationType, StreamingMode},
-	value::Value,
-};
+use universaldb::prelude::*;
+use universaldb::utils::end_of_key_range;
 
 use super::{BumpSubSubject, Database, PulledWorkflowData, SignalData, WorkflowData};
 use crate::{
@@ -57,11 +52,6 @@ pub struct DatabaseKv {
 	system: Arc<Mutex<system::SystemInfo>>,
 }
 
-struct DispatchWorkflowResult {
-	workflow_id: Id,
-	created_tags: Vec<String>,
-}
-
 impl DatabaseKv {
 	/// Spawns a new thread and gracefully publishes a bump message to pubsub.
 	fn bump(&self, subject: BumpSubSubject) {
@@ -75,7 +65,7 @@ impl DatabaseKv {
 				// Fail gracefully
 				if let Err(err) = pubsub
 					.publish(
-						&subjects::convert(subject),
+						subject,
 						&Vec::new(),
 						universalpubsub::PublishOpts::broadcast(),
 					)
@@ -255,7 +245,7 @@ impl DatabaseKv {
 		input: &serde_json::value::RawValue,
 		unique: bool,
 		tx: &universaldb::Transaction,
-	) -> Result<DispatchWorkflowResult> {
+	) -> Result<Id> {
 		let tx = tx.with_subspace(self.subspace.clone());
 
 		if unique {
@@ -266,10 +256,7 @@ impl DatabaseKv {
 				.await?
 			{
 				tracing::debug!(?existing_workflow_id, "found existing workflow");
-				return Ok(DispatchWorkflowResult {
-					workflow_id: existing_workflow_id,
-					created_tags: Vec::new(),
-				});
+				return Ok(existing_workflow_id);
 			}
 		}
 
@@ -364,10 +351,7 @@ impl DatabaseKv {
 			)),
 		);
 
-		Ok(DispatchWorkflowResult {
-			workflow_id,
-			created_tags,
-		})
+		Ok(workflow_id)
 	}
 
 	async fn find_workflow_inner(
@@ -440,8 +424,12 @@ impl DatabaseKv {
 
 #[async_trait::async_trait]
 impl Database for DatabaseKv {
-	fn worker_poll_interval(&self) -> std::time::Duration {
-		std::time::Duration::from_secs(4)
+	fn worker_poll_interval(&self) -> Duration {
+		Duration::from_secs(16)
+	}
+
+	fn signal_poll_interval(&self) -> Duration {
+		Duration::from_millis(1500)
 	}
 
 	async fn new(
@@ -466,7 +454,7 @@ impl Database for DatabaseKv {
 			.pools
 			.ups()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.subscribe(&subjects::convert(subject))
+			.subscribe(subject)
 			.await
 			.context("failed to subscribe to bump sub")
 			.map_err(|x| WorkflowError::CreateSubscription(x.into()))?;
@@ -477,6 +465,7 @@ impl Database for DatabaseKv {
 				match subscriber.next().await {
 					Ok(NextOutput::Message(_)) => yield (),
 					Ok(NextOutput::Unsubscribed) => break,
+					Ok(NextOutput::NoResponders) => break,
 					Err(err) => {
 						tracing::warn!(?err, "error in worker wake stream");
 						break;
@@ -494,7 +483,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_clear_expired_leases", |tx| {
 				async move {
 					let start = Instant::now();
 					let now = rivet_util::timestamp::now();
@@ -640,14 +629,16 @@ impl Database for DatabaseKv {
 	}
 
 	#[tracing::instrument(skip_all)]
-	async fn publish_metrics(&self, _worker_id: Id) -> WorkflowResult<()> {
+	async fn publish_metrics(&self, worker_id: Id) -> WorkflowResult<()> {
 		// Attempt to be the only worker publishing metrics by writing to the lock key
 		let acquired_lock = self
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_acquire_metrics_lock", |tx| {
 				async move {
+					tx.tag(&format!("acquire_metrics_lock:{worker_id}"))?;
+
 					let tx = tx.with_subspace(self.subspace.clone());
 
 					// Read existing lock
@@ -684,7 +675,9 @@ impl Database for DatabaseKv {
 				.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx| async move {
+				.txn("gas_read_metrics", |tx| async move {
+					tx.tag(&format!("publish_metrics:{worker_id}"))?;
+
 					let tx = tx.with_subspace(self.subspace.clone());
 
 					let metrics_subspace =
@@ -783,7 +776,7 @@ impl Database for DatabaseKv {
 			self.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx| async move {
+				.txn("gas_clear_metrics_lock", |tx| async move {
 					let metrics_lock_key = keys::worker::MetricsLockKey::new();
 					tx.clear(&self.subspace.pack(&metrics_lock_key));
 
@@ -805,14 +798,18 @@ impl Database for DatabaseKv {
 		worker_version: i64,
 		update_active_idx: bool,
 	) -> WorkflowResult<()> {
+		// TODO: Temporarily don't record worker id to reduce metrics cardinality
+		// let worker_id_str = worker_id.to_string();
+		let worker_id_str = "worker".to_string();
+
 		metrics::WORKER_LAST_PING
-			.with_label_values(&[&worker_id.to_string()])
+			.with_label_values(&[worker_id_str.as_str()])
 			.set(rivet_util::timestamp::now());
 
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_update_worker_ping", |tx| async move {
 				let tx = tx.with_subspace(self.subspace.clone());
 
 				let ping_ts = rivet_util::timestamp::now();
@@ -859,7 +856,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_mark_worker_inactive", |tx| async move {
 				let last_active_ping_ts_key = keys::worker::LastActivePingTsKey::new(worker_id);
 				let version_key = keys::worker::VersionKey::new(worker_id);
 
@@ -895,11 +892,13 @@ impl Database for DatabaseKv {
 		input: &serde_json::value::RawValue,
 		unique: bool,
 	) -> WorkflowResult<Id> {
-		let dispatch_result = self
+		let workflow_id = self
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_dispatch_workflow", |tx| async move {
+				tx.tag(&format!("dispatch_workflow:{workflow_name}"))?;
+
 				self.dispatch_workflow_inner(
 					ray_id,
 					workflow_id,
@@ -916,12 +915,9 @@ impl Database for DatabaseKv {
 			.context("failed to dispatch workflow")
 			.map_err(WorkflowError::Udb)?;
 
-		for tag in dispatch_result.created_tags {
-			self.bump(BumpSubSubject::WorkflowCreated { tag });
-		}
 		self.bump(BumpSubSubject::Worker);
 
-		Ok(dispatch_result.workflow_id)
+		Ok(workflow_id)
 	}
 
 	#[tracing::instrument(skip_all, fields(?workflow_ids))]
@@ -929,9 +925,11 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_get_workflows", |tx| {
 				let workflow_ids = workflow_ids.clone();
 				async move {
+					tx.tag("get_workflows")?;
+
 					futures_util::stream::iter(workflow_ids)
 						.map(|workflow_id| {
 							let tx = tx.clone();
@@ -1043,7 +1041,10 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move { self.find_workflow_inner(workflow_name, tags, &tx).await })
+			.txn("gas_find_workflow", |tx| async move {
+				tx.tag(&format!("find_workflow:{workflow_name}"))?;
+				self.find_workflow_inner(workflow_name, tags, &tx).await
+			})
 			.custom_instrument(tracing::info_span!("find_workflow_tx"))
 			.await
 			.context("failed to find workflow")
@@ -1068,7 +1069,9 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_find_workflows_batch", |tx| async move {
+				tx.tag("find_workflows")?;
+
 				let futures = queries.iter().map(|(workflow_name, tags)| {
 					self.find_workflow_inner(workflow_name, tags, &tx)
 				});
@@ -1102,10 +1105,12 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_pull_workflows", |tx| {
 				let owned_filter = owned_filter.clone();
 
 				async move {
+					tx.tag(&format!("pull_workflows:{worker_id}"))?;
+
 					let tx = tx.with_subspace(self.subspace.clone());
 					let now = rivet_util::timestamp::now();
 
@@ -1115,10 +1120,10 @@ impl Database for DatabaseKv {
 					let active_workers_after = now - i64::try_from(PING_INTERVAL.as_millis() * 2)?;
 
 					let cpu_usage_ratio = {
-						self.system
-							.lock()
-							.await
-							.cpu_usage_ratio(self.config.runtime.worker_cpu_max)
+						self.system.lock().await.fetch_cpu_usage(
+							self.config.runtime.worker_load_shedding_beta(),
+							self.config.runtime.worker_cpu_max,
+						)
 					};
 					let load_shed_curve = self.config.runtime.worker_load_shedding_curve();
 					let load_shed_ratio_x1000 = calc_pull_ratio(
@@ -1242,6 +1247,8 @@ impl Database for DatabaseKv {
 					let mut dedup_workflows = HashMap::<Id, MinimalPulledWorkflow>::new();
 					let now = rivet_util::timestamp::now(); // More up to date now than prev var
 					for wake_key in &wake_keys {
+						let wake_age_ms = now.saturating_sub(wake_key.ts).max(0);
+
 						// Record time difference between when the wake condition was created and when it was
 						// pulled (here). We ignore deadline wake conditions because their ts value is not
 						// representative of when it was created, but rather when it should wake.
@@ -1252,7 +1259,7 @@ impl Database for DatabaseKv {
 							// TODO: This will record metrics even if the txn fails, which is wrong
 							metrics::WORKFLOW_WAKE_DELTA_DURATION
 								.with_label_values(&[&wake_key.workflow_name])
-								.observe(now.saturating_sub(wake_key.ts).max(0) as f64 / 1000.0);
+								.observe(wake_age_ms as f64 / 1000.0);
 						}
 
 						let Some(wf) = dedup_workflows.get_mut(&wake_key.workflow_id) else {
@@ -1386,7 +1393,9 @@ impl Database for DatabaseKv {
 			.context("failed to lease workflows")
 			.map_err(WorkflowError::Udb)?;
 
-		let worker_id_str = worker_id.to_string();
+		// TODO: Temporarily don't record worker id to reduce metrics cardinality
+		// let worker_id_str = worker_id.to_string();
+		let worker_id_str = "worker".to_string();
 		let dt = start_instant.elapsed().as_secs_f64();
 		metrics::LAST_PULL_WORKFLOWS_DURATION
 			.with_label_values(&[worker_id_str.as_str()])
@@ -1423,7 +1432,7 @@ impl Database for DatabaseKv {
 			self.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx| {
+				.txn("gas_clear_workflow_secondary_idx", |tx| {
 					let leased_workflow_ids = leased_workflow_ids.clone();
 
 					async move {
@@ -1479,10 +1488,12 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_pull_workflow_history", |tx| {
 				let leased_workflows = leased_workflows.clone();
 
 				async move {
+					tx.tag(&format!("pull_workflow_history:{worker_id}"))?;
+
 					// Read required wf data for each leased wf
 					futures_util::stream::iter(leased_workflows)
 						.map(|wf| {
@@ -1871,7 +1882,7 @@ impl Database for DatabaseKv {
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_complete_workflow", |tx| {
 				async move {
 					let tx = tx.with_subspace(self.subspace.clone());
 
@@ -2089,7 +2100,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_commit_workflow", |tx| {
 				async move {
 					let wake_deadline_key = keys::workflow::WakeDeadlineKey::new(workflow_id);
 
@@ -2244,13 +2255,14 @@ impl Database for DatabaseKv {
 	async fn pull_next_signals(
 		&self,
 		workflow_id: Id,
-		_workflow_name: &str,
+		workflow_name: &str,
 		filter: &[&str],
 		location: &Location,
 		version: usize,
 		_loop_location: Option<&Location>,
 		mut limit: usize,
 		last_attempt: bool,
+		related_sleep_location: Option<&Location>,
 	) -> WorkflowResult<Vec<SignalData>> {
 		let owned_filter = filter
 			.into_iter()
@@ -2264,10 +2276,12 @@ impl Database for DatabaseKv {
 				.pools
 				.udb()
 				.map_err(WorkflowError::PoolsGeneric)?
-				.run(|tx| {
+				.txn("gas_pull_next_signals", |tx| {
 					let owned_filter = owned_filter.clone();
 
 					async move {
+						tx.tag(&format!("pull_next_signals:{workflow_name}"))?;
+
 						// Fetch signals from all streams at the same time
 						let mut signals = futures_util::stream::iter(owned_filter.clone())
 							.map(|signal_name| {
@@ -2404,6 +2418,17 @@ impl Database for DatabaseKv {
 							.try_collect::<Vec<_>>()
 							.await?;
 
+							// Update the related sleep event and mark it as interrupted
+							if let Some(related_sleep_location) = related_sleep_location {
+								keys::history::insert::update_sleep_event(
+									&self.subspace,
+									&tx,
+									workflow_id,
+									related_sleep_location,
+									SleepState::Interrupted,
+								)?;
+							}
+
 							Ok(signals)
 						}
 						// No signals found
@@ -2463,7 +2488,7 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_get_sub_workflow", |tx| {
 				async move {
 					let name_key = keys::workflow::NameKey::new(sub_workflow_id);
 					let input_key = keys::workflow::InputKey::new(sub_workflow_id);
@@ -2570,10 +2595,13 @@ impl Database for DatabaseKv {
 		signal_name: &str,
 		body: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
+		let started_at = Instant::now();
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_publish_signal", |tx| async move {
+				tx.tag("publish_signal")?;
+
 				self.publish_signal_inner(ray_id, workflow_id, signal_id, signal_name, body, &tx)
 					.await
 			})
@@ -2581,6 +2609,17 @@ impl Database for DatabaseKv {
 			.await
 			.context("failed to publish signal")
 			.map_err(WorkflowError::Udb)?;
+
+		if signal_name == "pegboard_actor2_wake" {
+			tracing::info!(
+				?ray_id,
+				?workflow_id,
+				?signal_id,
+				signal_name,
+				elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0,
+				"published workflow wake signal",
+			);
+		}
 
 		self.bump(BumpSubSubject::SignalPublish {
 			to_workflow_id: workflow_id,
@@ -2606,7 +2645,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_publish_signal_from_workflow", |tx| async move {
+				tx.tag(&format!("publish_signal:{from_workflow_id}"))?;
+
 				self.publish_signal_inner(
 					ray_id,
 					to_workflow_id,
@@ -2658,12 +2699,14 @@ impl Database for DatabaseKv {
 		_loop_location: Option<&Location>,
 		unique: bool,
 	) -> WorkflowResult<Id> {
-		let dispatch_result = self
+		let sub_workflow_id = self
 			.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
-				let dispatch_result = self
+			.txn("gas_dispatch_sub_workflow", |tx| async move {
+				tx.tag(&format!("dispatch_workflow:{sub_workflow_name}"))?;
+
+				let sub_workflow_id = self
 					.dispatch_workflow_inner(
 						ray_id,
 						sub_workflow_id,
@@ -2683,113 +2726,22 @@ impl Database for DatabaseKv {
 					&location,
 					version,
 					rivet_util::timestamp::now(),
-					dispatch_result.workflow_id,
+					sub_workflow_id,
 					sub_workflow_name,
 					tags,
 					input,
 				)?;
 
-				Ok(dispatch_result)
+				Ok(sub_workflow_id)
 			})
 			.custom_instrument(tracing::info_span!("dispatch_sub_workflow_tx"))
 			.await
 			.context("failed to dispatch sub workflow")
 			.map_err(WorkflowError::Udb)?;
 
-		for tag in dispatch_result.created_tags {
-			self.bump(BumpSubSubject::WorkflowCreated { tag });
-		}
 		self.bump(BumpSubSubject::Worker);
 
-		Ok(dispatch_result.workflow_id)
-	}
-
-	#[tracing::instrument(skip_all)]
-	async fn update_workflow_tags(
-		&self,
-		workflow_id: Id,
-		workflow_name: &str,
-		tags: &serde_json::Value,
-	) -> WorkflowResult<()> {
-		self.pools
-			.udb()
-			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
-				async move {
-					let tags_subspace = self
-						.subspace
-						.subspace(&keys::workflow::TagKey::subspace(workflow_id));
-
-					// Read old tags
-					let tag_keys = tx
-						.get_ranges_keyvalues(
-							universaldb::RangeOption {
-								mode: StreamingMode::WantAll,
-								..(&tags_subspace).into()
-							},
-							Serializable,
-						)
-						.map(|res| {
-							self.subspace
-								.unpack::<keys::workflow::TagKey>(res?.key())
-								.map_err(anyhow::Error::from)
-						})
-						.try_collect::<Vec<_>>()
-						.await?;
-
-					// Clear old tags
-					tx.clear_subspace_range(&tags_subspace);
-
-					// Clear old "by name and first tag" secondary index
-					for key in tag_keys {
-						keys::workflow::ByNameAndTagKey::new(
-							workflow_name.to_string(),
-							key.k,
-							key.v,
-							workflow_id,
-						);
-					}
-
-					// Write new tags
-					let tags = tags
-						.as_object()
-						.ok_or_else(|| WorkflowError::InvalidTags("must be an object".to_string()))?
-						.into_iter()
-						.map(|(k, v)| Ok((k.clone(), value_to_str(v)?)))
-						.collect::<WorkflowResult<Vec<_>>>()?;
-
-					for (k, v) in &tags {
-						let tag_key =
-							keys::workflow::TagKey::new(workflow_id, k.clone(), v.clone());
-						tx.set(&self.subspace.pack(&tag_key), &tag_key.serialize(())?);
-
-						// Write new "by name and first tag" secondary index
-						let by_name_and_tag_key = keys::workflow::ByNameAndTagKey::new(
-							workflow_name.to_string(),
-							k.clone(),
-							v.clone(),
-							workflow_id,
-						);
-						let rest_of_tags = tags
-							.iter()
-							.filter(|(k2, _)| k2 != k)
-							.map(|(k, v)| (k.clone(), v.clone()))
-							.collect();
-						tx.set(
-							&self.subspace.pack(&by_name_and_tag_key),
-							&by_name_and_tag_key.serialize(rest_of_tags)?,
-						);
-					}
-
-					Ok(())
-				}
-			})
-			.custom_instrument(tracing::info_span!("update_workflow_tags_tx"))
-			.await
-			.context("failed to update workflow tags")
-			.map_err(WorkflowError::Udb)?;
-
-		Ok(())
+		Ok(sub_workflow_id)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -2801,8 +2753,10 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| {
+			.txn("gas_update_workflow_state", |tx| {
 				async move {
+					tx.tag(&format!("workflow_state_update:{workflow_id}"))?;
+
 					let state_key = keys::workflow::StateKey::new(workflow_id);
 					let state_subspace = self.subspace.subspace(&state_key);
 
@@ -2842,7 +2796,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_commit_workflow_activity_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::activity_event(
 					&self.subspace,
 					&tx,
@@ -2879,7 +2835,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_commit_workflow_message_send_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::message_send_event(
 					&self.subspace,
 					&tx,
@@ -2917,7 +2875,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_upsert_workflow_loop_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				if iteration == 0 {
 					keys::history::insert::loop_event(
 						&self.subspace,
@@ -3054,7 +3014,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_commit_workflow_sleep_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::sleep_event(
 					&self.subspace,
 					&tx,
@@ -3086,7 +3048,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_update_workflow_sleep_state", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::update_sleep_event(
 					&self.subspace,
 					&tx,
@@ -3116,7 +3080,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_commit_workflow_branch_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::branch_event(
 					&self.subspace,
 					&tx,
@@ -3148,7 +3114,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_commit_workflow_removed_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::removed_event(
 					&self.subspace,
 					&tx,
@@ -3182,7 +3150,9 @@ impl Database for DatabaseKv {
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
-			.run(|tx| async move {
+			.txn("gas_commit_workflow_version_check_event", |tx| async move {
+				tx.tag(&format!("update_workflow_history:{from_workflow_id}"))?;
+
 				keys::history::insert::version_check_event(
 					&self.subspace,
 					&tx,

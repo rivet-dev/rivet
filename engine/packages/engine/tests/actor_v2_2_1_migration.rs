@@ -224,7 +224,7 @@ async fn load_v2_sqlite_bytes(
 	let actor_id = actor_id.to_string();
 	let actor_id_for_tx = actor_id.clone();
 	let head = db
-		.run(move |tx| {
+		.txn("test_engineactor_v2_2_1_migration", move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			let bucket_id = BucketId::from_gas_id(namespace_id);
 			async move {

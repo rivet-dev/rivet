@@ -1855,7 +1855,11 @@
             "type": "object",
             "properties": {
               "drain_on_version_upgrade": {
-                "type": "boolean"
+                "type": [
+                  "boolean",
+                  "null"
+                ],
+                "description": "Deprecated."
               },
               "metadata": {}
             }
@@ -1871,7 +1875,41 @@
             ],
             "properties": {
               "normal": {
-                "type": "object"
+                "type": "object",
+                "properties": {
+                  "actor_eviction_delay": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "actor_eviction_period": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "actor_eviction_rate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "format": "float",
+                    "description": "Actors per second."
+                  },
+                  "drain_on_version_upgrade": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
+                  }
+                }
               }
             }
           },
@@ -1885,11 +1923,35 @@
                 "type": "object",
                 "required": [
                   "url",
-                  "request_lifespan",
-                  "slots_per_runner",
-                  "max_runners"
+                  "request_lifespan"
                 ],
                 "properties": {
+                  "actor_eviction_delay": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "actor_eviction_period": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "format": "int32",
+                    "description": "Seconds.",
+                    "minimum": 0
+                  },
+                  "actor_eviction_rate": {
+                    "type": [
+                      "number",
+                      "null"
+                    ],
+                    "format": "float",
+                    "description": "Actors per second."
+                  },
                   "drain_grace_period": {
                     "type": [
                       "integer",
@@ -1898,6 +1960,12 @@
                     "format": "int32",
                     "description": "Seconds.",
                     "minimum": 0
+                  },
+                  "drain_on_version_upgrade": {
+                    "type": [
+                      "boolean",
+                      "null"
+                    ]
                   },
                   "headers": {
                     "type": [
@@ -1920,7 +1988,10 @@
                     "minimum": 0
                   },
                   "max_runners": {
-                    "type": "integer",
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
                     "format": "int32",
                     "description": "Deprecated.",
                     "minimum": 0
@@ -1959,7 +2030,10 @@
                     "minimum": 0
                   },
                   "slots_per_runner": {
-                    "type": "integer",
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
                     "format": "int32",
                     "description": "Deprecated.",
                     "minimum": 0

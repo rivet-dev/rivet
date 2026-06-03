@@ -1,12 +1,18 @@
 use anyhow::Result;
 use futures_util::TryStreamExt;
-use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Snapshot};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Serializable};
 
 pub(super) async fn tx_get_value(
 	tx: &universaldb::Transaction,
 	key: &[u8],
 ) -> Result<Option<Vec<u8>>> {
-	Ok(tx.informal().get(key, Snapshot).await?.map(Vec::<u8>::from))
+	// TODO: This can probably be made Snapshot again to reduce contention if read
+	// side freshness is not worth the cost.
+	Ok(tx
+		.informal()
+		.get(key, Serializable)
+		.await?
+		.map(Vec::<u8>::from))
 }
 
 pub(super) async fn tx_scan_prefix_values(
@@ -21,7 +27,9 @@ pub(super) async fn tx_scan_prefix_values(
 			mode: StreamingMode::WantAll,
 			..RangeOption::from(&prefix_subspace)
 		},
-		Snapshot,
+		// TODO: This can probably be made Snapshot again to reduce contention if
+		// read side freshness is not worth the cost.
+		Serializable,
 	);
 	let mut rows = Vec::new();
 

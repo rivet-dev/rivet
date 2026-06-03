@@ -23,7 +23,7 @@ pub async fn pegboard_runner_get(ctx: &OperationCtx, input: &Input) -> Result<Ou
 
 	let runners = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_get", |tx| {
 			let dc_name = dc_name.to_string();
 			async move {
 				let mut runners = Vec::new();

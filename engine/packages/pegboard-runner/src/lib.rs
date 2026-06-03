@@ -86,16 +86,14 @@ impl CustomServeTrait for PegboardRunnerWsCustomServe {
 			.context("failed to initialize runner connection")?;
 
 		// Subscribe before accepting the client websocket so that failures can be retried by the proxy.
-		let topic =
-			pegboard::pubsub_subjects::RunnerReceiverSubject::new(conn.runner_id).to_string();
+		let topic = pegboard::pubsub_subjects::RunnerReceiverSubject::new(conn.runner_id);
 		let eviction_topic =
-			pegboard::pubsub_subjects::RunnerEvictionByIdSubject::new(conn.runner_id).to_string();
+			pegboard::pubsub_subjects::RunnerEvictionByIdSubject::new(conn.runner_id);
 		let eviction_topic2 = pegboard::pubsub_subjects::RunnerEvictionByNameSubject::new(
 			conn.namespace_id,
 			&conn.runner_name,
 			&conn.runner_key,
-		)
-		.to_string();
+		);
 
 		tracing::debug!(%topic, %eviction_topic, %eviction_topic2, "subscribing to runner topics");
 		let sub = ups

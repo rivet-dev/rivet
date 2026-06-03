@@ -47,7 +47,7 @@ where
 	let target_responses = utils::calculate_fanout_quorum(replica_ids.len(), quorum_type);
 
 	if target_responses == 0 {
-		tracing::warn!("no fanout, target is 0");
+		tracing::debug!("no fanout, target is 0");
 
 		return Ok(Vec::new());
 	}

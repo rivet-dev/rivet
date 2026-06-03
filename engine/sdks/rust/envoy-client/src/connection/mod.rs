@@ -5,7 +5,7 @@ use rivet_envoy_protocol as protocol;
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
-use rivet_util_serde::HashableMap;
+use std::collections::HashMap;
 use vbare::OwnedVersionedData;
 
 use crate::context::SharedContext;
@@ -47,7 +47,7 @@ pub use wasm::start_connection;
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
 async fn send_initial_metadata(shared: &SharedContext) {
-	let mut prepopulate_map = HashableMap::new();
+	let mut prepopulate_map = HashMap::new();
 	for (name, actor) in &shared.config.prepopulate_actor_names {
 		prepopulate_map.insert(
 			name.clone(),

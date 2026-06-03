@@ -16,6 +16,7 @@ pub fn registry() -> Result<Registry> {
 		.merge(namespace::registry()?)?
 		.merge(epoxy::registry()?)?
 		.merge(gasoline_runtime::registry()?)?
-		.merge(datacenter::registry()?)
+		.merge(datacenter::registry()?)?
+		.merge(depot::registry()?)
 		.map_err(Into::into)
 }

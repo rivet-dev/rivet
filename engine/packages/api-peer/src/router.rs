@@ -99,6 +99,7 @@ pub async fn router(
 			)
 			.route("/epoxy/replica/kv/{key}", put(internal::set_epoxy_kv))
 			.route("/debug/tracing/config", put(internal::set_tracing_config))
+			.route("/debug/profile/config", put(internal::set_profiling_config))
 	})
 	.await
 }

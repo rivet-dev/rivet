@@ -25,7 +25,7 @@ pub async fn namespace_list(ctx: &OperationCtx, input: &Input) -> Result<Output>
 
 	let namespaces = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("namespace_list", |tx| async move {
 			let mut namespaces = Vec::new();
 			let limit = input.limit.unwrap_or(1000); // Default limit to 1000
 

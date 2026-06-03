@@ -37,7 +37,7 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 }
 
 async fn clear_value(db: &universaldb::Database, key: Vec<u8>) -> Result<()> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_restore_point", move |tx| {
 		let key = key.clone();
 
 		async move {
@@ -53,7 +53,7 @@ async fn database_branch_id(
 	bucket_id: BucketId,
 	database_id: &str,
 ) -> Result<DatabaseBranchId> {
-	db.run(move |tx| async move {
+	db.txn("test_depotconveyer_restore_point", move |tx| async move {
 		branch::resolve_database_branch(&tx, bucket_id, database_id, Serializable)
 			.await?
 			.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
@@ -65,7 +65,7 @@ async fn bucket_branch_id(
 	db: &universaldb::Database,
 	bucket_id: BucketId,
 ) -> Result<depot::types::BucketBranchId> {
-	db.run(move |tx| async move {
+	db.txn("test_depotconveyer_restore_point", move |tx| async move {
 		branch::resolve_bucket_branch(&tx, bucket_id, Serializable)
 			.await?
 			.ok_or_else(|| anyhow::anyhow!("bucket branch should exist"))
@@ -90,7 +90,7 @@ async fn seed_pitr_interval(
 	bucket_start_ms: i64,
 	coverage: PitrIntervalCoverage,
 ) -> Result<()> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_restore_point", move |tx| {
 		let coverage = coverage.clone();
 
 		async move {
@@ -368,7 +368,7 @@ async fn restore_point_status_reads_pinned_record_or_absent() -> Result<()> {
 			);
 
 			let database_branch_id = db
-				.run({
+				.txn("test_depotconveyer_restore_point", {
 					let restore_point = restore_point.clone();
 
 					move |tx| {
@@ -499,7 +499,7 @@ async fn legacy_failed_restore_point_status_preserves_object_key() -> Result<()>
 			let restore_point = RestorePointId::format(1_010, 1)?;
 			let pin_object_key = "db/legacy/pin/object.ltx".to_string();
 
-			db.run({
+			db.txn("test_depotconveyer_restore_point", {
 				let restore_point = restore_point.clone();
 				let pin_object_key = pin_object_key.clone();
 
@@ -566,7 +566,7 @@ async fn create_restore_point_enforces_bucket_pin_cap() -> Result<()> {
 			database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
 			let bucket_id = BucketId::from_gas_id(test_bucket());
 			let bucket_branch_id = bucket_branch_id(&db, bucket_id).await?;
-			db.run(move |tx| async move {
+			db.txn("test_depotconveyer_restore_point", move |tx| async move {
 				tx.informal().set(
 					&bucket_branches_pin_count_key(bucket_branch_id),
 					&i64::from(depot::constants::MAX_RESTORE_POINTS_PER_BUCKET).to_le_bytes(),
@@ -1279,7 +1279,7 @@ async fn resolve_restore_point_prefers_exact_pinned_record() -> Result<()> {
 			let bucket_id = BucketId::from_gas_id(test_bucket());
 			let branch_id = database_branch_id(&db, bucket_id, TEST_DATABASE).await?;
 			let pinned_versionstamp = [9; 16];
-			db.run({
+			db.txn("test_depotconveyer_restore_point", {
 				let restore_point = restore_point.clone();
 
 				move |tx| {

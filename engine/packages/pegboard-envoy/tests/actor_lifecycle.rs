@@ -57,7 +57,7 @@ async fn seed(db: &universaldb::Database, keys: &[Vec<u8>]) -> Result<()> {
 		.cloned()
 		.map(|key| (key, b"present".to_vec()))
 		.collect::<Vec<_>>();
-	db.run(move |tx| {
+	db.txn("test_pegboard_envoyactor_lifecycle", move |tx| {
 		let writes = writes.clone();
 		async move {
 			for (key, value) in writes {
@@ -70,7 +70,7 @@ async fn seed(db: &universaldb::Database, keys: &[Vec<u8>]) -> Result<()> {
 }
 
 async fn value_exists(db: &universaldb::Database, key: Vec<u8>) -> Result<bool> {
-	db.run(move |tx| {
+	db.txn("test_pegboard_envoyactor_lifecycle", move |tx| {
 		let key = key.clone();
 		async move { Ok(tx.informal().get(&key, Snapshot).await?.is_some()) }
 	})

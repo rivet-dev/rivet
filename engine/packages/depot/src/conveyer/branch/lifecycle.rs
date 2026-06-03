@@ -26,7 +26,7 @@ pub async fn delete_database(
 	bucket: BucketId,
 	database_id: DatabaseBranchId,
 ) -> Result<()> {
-	udb.run(move |tx| async move {
+	udb.txn("depot_branch_delete", move |tx| async move {
 		let bucket_branch_id = resolve_bucket_branch(&tx, bucket, Serializable)
 			.await?
 			.ok_or(SqliteStorageError::DatabaseNotFound)?;
@@ -62,7 +62,7 @@ pub async fn rollback_bucket(
 ) -> Result<BucketBranchId> {
 	let rolled_branch_id = BucketBranchId::new_v4();
 
-	udb.run({
+	udb.txn("depot_bucket_rollback", {
 		let at = at.clone();
 
 		move |tx| {
@@ -128,7 +128,7 @@ pub async fn rollback_database(
 ) -> Result<DatabaseBranchId> {
 	let rolled_branch_id = DatabaseBranchId::new_v4();
 
-	udb.run({
+	udb.txn("depot_branch_rollback", {
 		let database_id = database_id.clone();
 		let at = at.clone();
 

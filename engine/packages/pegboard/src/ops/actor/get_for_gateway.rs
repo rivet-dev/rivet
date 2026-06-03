@@ -12,6 +12,7 @@ pub struct Input {
 pub struct Output {
 	pub namespace_id: Id,
 	pub workflow_id: Id,
+	pub key: Option<String>,
 	// NOTE: None if older actor has not received the new key
 	pub runner_name_selector: Option<String>,
 	pub sleeping: bool,
@@ -29,11 +30,12 @@ pub async fn pegboard_actor_get_for_gateway(
 	input: &Input,
 ) -> Result<Option<Output>> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_get_for_gateway", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let namespace_id_key = keys::actor::NamespaceIdKey::new(input.actor_id);
 			let workflow_id_key = keys::actor::WorkflowIdKey::new(input.actor_id);
+			let key_key = keys::actor::KeyKey::new(input.actor_id);
 			let runner_name_selector_key = keys::actor::RunnerNameSelectorKey::new(input.actor_id);
 			let sleep_ts_key = keys::actor::SleepTsKey::new(input.actor_id);
 			let destroy_ts_key = keys::actor::DestroyTsKey::new(input.actor_id);
@@ -45,6 +47,7 @@ pub async fn pegboard_actor_get_for_gateway(
 			let (
 				namespace_id_entry,
 				workflow_id_entry,
+				key,
 				runner_name_selector,
 				sleeping,
 				destroyed,
@@ -55,6 +58,7 @@ pub async fn pegboard_actor_get_for_gateway(
 			) = tokio::try_join!(
 				tx.read_opt(&namespace_id_key, Serializable),
 				tx.read_opt(&workflow_id_key, Serializable),
+				tx.read_opt(&key_key, Serializable),
 				tx.read_opt(&runner_name_selector_key, Serializable),
 				tx.exists(&sleep_ts_key, Serializable),
 				tx.exists(&destroy_ts_key, Serializable),
@@ -69,9 +73,12 @@ pub async fn pegboard_actor_get_for_gateway(
 				return Ok(None);
 			};
 
+			tx.tag(&format!("actor_get_for_gateway:{namespace_id}"))?;
+
 			Ok(Some(Output {
 				namespace_id,
 				workflow_id,
+				key,
 				runner_name_selector,
 				sleeping,
 				destroyed,

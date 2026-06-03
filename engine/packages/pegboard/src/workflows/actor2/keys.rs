@@ -263,7 +263,7 @@ pub async fn reserve_actor_key(
 	let create_ts = state.create_ts;
 	let res = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_reserve_key", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Check if there are any actors that share the same key that are not destroyed
@@ -328,7 +328,7 @@ pub async fn update_key_index(ctx: &ActivityCtx, _input: &UpdateKeyIndexInput) -
 
 	if let Some(key) = &state.key {
 		ctx.udb()?
-			.run(|tx| async move {
+			.txn("pegboard_actor2_update_key_index", |tx| async move {
 				let tx = tx.with_subspace(keys::subspace());
 
 				// Update key

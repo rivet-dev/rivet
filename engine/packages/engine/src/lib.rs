@@ -34,10 +34,20 @@ pub enum SubCommand {
 		#[clap(subcommand)]
 		command: tracing::SubCommand,
 	},
+	/// Manage CPU profiling
+	Profile {
+		#[clap(subcommand)]
+		command: profile::SubCommand,
+	},
 	/// Epoxy debug commands
 	Epoxy {
 		#[clap(subcommand)]
 		command: epoxy::SubCommand,
+	},
+	/// Depot SQLite diagnostic commands
+	Depot {
+		#[clap(subcommand)]
+		command: depot::SubCommand,
 	},
 	/// Allows inspection of UDB data
 	Udb(udb::Opts),
@@ -51,7 +61,9 @@ impl SubCommand {
 			SubCommand::Workflow { command } => command.execute(config).await,
 			SubCommand::Config { command } => command.execute(config).await,
 			SubCommand::Tracing { command } => command.execute(config).await,
+			SubCommand::Profile { command } => command.execute(config).await,
 			SubCommand::Epoxy { command } => command.execute(config).await,
+			SubCommand::Depot { command } => command.execute(config).await,
 			SubCommand::Udb(opts) => opts.execute(config).await,
 		}
 	}

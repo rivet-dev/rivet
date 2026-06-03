@@ -24,7 +24,7 @@ pub async fn pegboard_envoy_get(ctx: &OperationCtx, input: &Input) -> Result<Out
 
 	let envoys = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_envoy_get", |tx| {
 			let dc_name = dc_name.to_string();
 			async move {
 				let mut envoys = Vec::new();

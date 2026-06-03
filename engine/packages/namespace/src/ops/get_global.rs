@@ -30,12 +30,14 @@ pub async fn namespace_get_global(ctx: &OperationCtx, input: &Input) -> Result<V
 						let url = leader_dc.peer_url.join(&format!("/namespaces"))?;
 						let res = client
 							.get(url)
-							.query(
-								&namespace_ids
+							.query(&[(
+								"namespace_ids",
+								namespace_ids
 									.iter()
-									.map(|ns_id| ("namespace_id", ns_id))
-									.collect::<Vec<_>>(),
-							)
+									.map(|x| x.to_string())
+									.collect::<Vec<_>>()
+									.join(","),
+							)])
 							.send()
 							.await?;
 

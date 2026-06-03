@@ -1,6 +1,11 @@
 //! Metrics definitions for the stateless depot conveyer.
 
+use std::{future::Future, time::Instant};
+
+use anyhow::Result;
 use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
+
+const SLOW_PHASE_WARN_THRESHOLD_SECONDS: f64 = 1.0;
 
 pub const SHARD_CACHE_READ_FDB_HIT: &str = "fdb_hit";
 pub const SHARD_CACHE_READ_COLD_HIT: &str = "cold_hit";
@@ -28,6 +33,22 @@ lazy_static::lazy_static! {
 		"sqlite_conveyer_get_pages_duration_seconds",
 		"Duration of stateless sqlite conveyer get_pages operations.",
 		&["node_id"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_GET_PAGES_PHASE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_conveyer_get_pages_phase_duration_seconds",
+		"Duration of stateless sqlite conveyer get_pages transaction-attempt phases.",
+		&["node_id", "phase", "attempt_result"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref SQLITE_COMMIT_PHASE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"sqlite_conveyer_commit_phase_duration_seconds",
+		"Duration of stateless sqlite conveyer commit transaction-attempt phases.",
+		&["node_id", "phase", "attempt_result"],
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
@@ -188,4 +209,72 @@ lazy_static::lazy_static! {
 		vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
 		*REGISTRY
 	).unwrap();
+}
+
+pub fn observe_get_pages_phase(
+	node_id: &str,
+	phase: &'static str,
+	start: Instant,
+	result: &'static str,
+) {
+	let elapsed = start.elapsed();
+	SQLITE_GET_PAGES_PHASE_DURATION
+		.with_label_values(&[node_id, phase, result])
+		.observe(elapsed.as_secs_f64());
+	if elapsed.as_secs_f64() >= SLOW_PHASE_WARN_THRESHOLD_SECONDS {
+		tracing::warn!(
+			node_id,
+			phase,
+			result,
+			duration_ms = elapsed.as_millis() as u64,
+			"slow depot get_pages phase"
+		);
+	}
+}
+
+pub fn observe_commit_phase(
+	node_id: &str,
+	phase: &'static str,
+	start: Instant,
+	result: &'static str,
+) {
+	let elapsed = start.elapsed();
+	SQLITE_COMMIT_PHASE_DURATION
+		.with_label_values(&[node_id, phase, result])
+		.observe(elapsed.as_secs_f64());
+	if elapsed.as_secs_f64() >= SLOW_PHASE_WARN_THRESHOLD_SECONDS {
+		tracing::warn!(
+			node_id,
+			phase,
+			result,
+			duration_ms = elapsed.as_millis() as u64,
+			"slow depot commit phase"
+		);
+	}
+}
+
+pub async fn observe_get_pages_phase_result<T>(
+	node_id: &str,
+	phase: &'static str,
+	future: impl Future<Output = Result<T>>,
+) -> Result<T> {
+	let start = Instant::now();
+	let result = future.await;
+	observe_get_pages_phase(node_id, phase, start, result_label(&result));
+	result
+}
+
+pub async fn observe_commit_phase_result<T>(
+	node_id: &str,
+	phase: &'static str,
+	future: impl Future<Output = Result<T>>,
+) -> Result<T> {
+	let start = Instant::now();
+	let result = future.await;
+	observe_commit_phase(node_id, phase, start, result_label(&result));
+	result
+}
+
+fn result_label<T>(result: &Result<T>) -> &'static str {
+	if result.is_ok() { "ok" } else { "error" }
 }

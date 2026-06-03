@@ -23,7 +23,6 @@ use crate::{
 
 pub struct ActivityCtx {
 	workflow_id: Id,
-	workflow_name: String,
 	ray_id: Id,
 	name: &'static str,
 	create_ts: i64,
@@ -44,7 +43,6 @@ impl ActivityCtx {
 	#[tracing::instrument(skip_all, fields(activity_name=%name))]
 	pub fn new(
 		workflow_id: Id,
-		workflow_name: String,
 		workflow_state: Box<serde_json::value::RawValue>,
 		db: DatabaseHandle,
 		config: &rivet_config::Config,
@@ -59,7 +57,6 @@ impl ActivityCtx {
 
 		Ok(ActivityCtx {
 			workflow_id,
-			workflow_name,
 			ray_id,
 			name,
 			create_ts: activity_create_ts,
@@ -152,14 +149,6 @@ impl ActivityCtx {
 		)
 		.in_current_span()
 		.await
-	}
-
-	#[tracing::instrument(skip_all)]
-	pub async fn update_workflow_tags(&self, tags: &serde_json::Value) -> Result<()> {
-		self.db
-			.update_workflow_tags(self.workflow_id, &self.workflow_name, tags)
-			.await
-			.map_err(Into::into)
 	}
 
 	/// IMPORTANT: This is intended for ephemeral realtime events and should be used carefully. Use

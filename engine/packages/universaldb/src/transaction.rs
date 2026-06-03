@@ -1,11 +1,13 @@
 use std::{future::Future, ops::Deref, pin::Pin, sync::Arc, time::Duration};
 
 use anyhow::{Context, Result};
+use futures_util::StreamExt;
 
 use crate::{
 	driver::TransactionDriver,
 	key_selector::KeySelector,
-	options::{ConflictRangeType, MutationType},
+	metrics,
+	options::{ConflictRangeType, MutationType, Priority},
 	range_option::RangeOption,
 	tuple::{self, TuplePack, TupleUnpack},
 	utils::{
@@ -16,11 +18,80 @@ use crate::{
 };
 
 pub const TXN_TIMEOUT: Duration = Duration::from_secs(5);
+const DEFAULT_TXN_NAME: &str = "manual";
+const SLOW_OPERATION_WARN_THRESHOLD: Duration = Duration::from_secs(1);
+
+fn isolation_label(isolation_level: IsolationLevel) -> &'static str {
+	match isolation_level {
+		IsolationLevel::Serializable => "serializable",
+		IsolationLevel::Snapshot => "snapshot",
+	}
+}
+
+fn result_label<T>(result: &Result<T>) -> &'static str {
+	if result.is_ok() { "ok" } else { "error" }
+}
+
+fn observe_operation<T>(
+	txn_name: &'static str,
+	op: &'static str,
+	isolation: &'static str,
+	start: std::time::Instant,
+	result: &Result<T>,
+) {
+	let result = result_label(result);
+	let elapsed = start.elapsed();
+	metrics::OPERATION_TOTAL
+		.with_label_values(&[op, isolation, result])
+		.inc();
+	metrics::OPERATION_DURATION
+		.with_label_values(&[op, isolation, result])
+		.observe(elapsed.as_secs_f64());
+	if elapsed >= SLOW_OPERATION_WARN_THRESHOLD {
+		tracing::warn!(
+			txn_name,
+			op,
+			isolation,
+			result,
+			duration_ms = elapsed.as_millis() as u64,
+			"slow udb operation"
+		);
+	}
+}
+
+fn observe_bytes(txn_name: &'static str, op: &'static str, direction: &'static str, bytes: usize) {
+	if bytes == 0 {
+		return;
+	}
+
+	let bytes = u64::try_from(bytes).unwrap_or(u64::MAX);
+	metrics::OPERATION_BYTES
+		.with_label_values(&[op, direction])
+		.inc_by(bytes);
+	match direction {
+		"read" => metrics::TRANSACTION_READ_BYTES
+			.with_label_values(&[txn_name])
+			.inc_by(bytes),
+		"write" => metrics::TRANSACTION_MUTATION_BYTES
+			.with_label_values(&[txn_name])
+			.inc_by(bytes),
+		_ => {}
+	}
+}
+
+fn observe_keys(op: &'static str, keys: usize) {
+	if keys > 0 {
+		metrics::OPERATION_KEYS
+			.with_label_values(&[op])
+			.inc_by(u64::try_from(keys).unwrap_or(u64::MAX));
+	}
+}
 
 #[derive(Clone)]
 pub struct Transaction {
 	pub(crate) driver: Arc<dyn TransactionDriver>,
 	subspace: Subspace,
+	name: &'static str,
 }
 
 impl Transaction {
@@ -28,6 +99,15 @@ impl Transaction {
 		Transaction {
 			driver: driver,
 			subspace: tuple::Subspace::all().into(),
+			name: DEFAULT_TXN_NAME,
+		}
+	}
+
+	pub(crate) fn with_name(&self, name: &'static str) -> Self {
+		Transaction {
+			driver: self.driver.clone(),
+			subspace: self.subspace.clone(),
+			name,
 		}
 	}
 
@@ -36,6 +116,7 @@ impl Transaction {
 		Transaction {
 			driver: self.driver.clone(),
 			subspace,
+			name: self.name,
 		}
 	}
 
@@ -59,7 +140,7 @@ impl Transaction {
 	}
 
 	pub fn write<T: FormalKey + TuplePack>(&self, key: &T, value: T::Value) -> Result<()> {
-		self.driver.set(
+		self.set(
 			&self.subspace.pack(key),
 			&key.serialize(value).with_context(|| {
 				format!(
@@ -77,8 +158,7 @@ impl Transaction {
 		key: &'de T,
 		isolation_level: IsolationLevel,
 	) -> Result<T::Value> {
-		self.driver
-			.get(&self.subspace.pack(key), isolation_level)
+		self.get(&self.subspace.pack(key), isolation_level)
 			.await?
 			.read(key)
 	}
@@ -88,8 +168,7 @@ impl Transaction {
 		key: &'de T,
 		isolation_level: IsolationLevel,
 	) -> Result<Option<T::Value>> {
-		self.driver
-			.get(&self.subspace.pack(key), isolation_level)
+		self.get(&self.subspace.pack(key), isolation_level)
 			.await?
 			.read_opt(key)
 	}
@@ -100,14 +179,13 @@ impl Transaction {
 		isolation_level: IsolationLevel,
 	) -> Result<bool> {
 		Ok(self
-			.driver
 			.get(&self.subspace.pack(key), isolation_level)
 			.await?
 			.is_some())
 	}
 
 	pub fn delete<T: TuplePack>(&self, key: &T) {
-		self.driver.clear(&self.subspace.pack(key));
+		self.clear(&self.subspace.pack(key));
 	}
 
 	pub fn delete_subspace(&self, subspace: &Subspace) {
@@ -150,9 +228,7 @@ impl Transaction {
 	) -> Result<()> {
 		let key_buf = self.subspace.pack(key);
 
-		self.driver
-			.add_conflict_range(&key_buf, &end_of_key_range(&key_buf), conflict_type)
-			.map_err(Into::into)
+		self.add_conflict_range(&key_buf, &end_of_key_range(&key_buf), conflict_type)
 	}
 
 	pub fn atomic_op<'de, T: std::fmt::Debug + FormalKey + TuplePack + TupleUnpack<'de>>(
@@ -161,8 +237,7 @@ impl Transaction {
 		param: &[u8],
 		op_type: MutationType,
 	) {
-		self.driver
-			.atomic_op(&self.subspace.pack(key), param, op_type)
+		self.atomic_op_bytes(&self.subspace.pack(key), param, op_type)
 	}
 
 	pub fn read_range<'a>(
@@ -183,7 +258,7 @@ impl Transaction {
 			),
 			..opt
 		};
-		self.driver.get_ranges_keyvalues(opt, isolation_level)
+		self.get_ranges_keyvalues(opt, isolation_level)
 	}
 
 	// TODO: Fix types
@@ -202,24 +277,78 @@ impl Transaction {
 		key: &[u8],
 		isolation_level: IsolationLevel,
 	) -> impl Future<Output = Result<Option<Slice>>> + 'a {
-		self.driver.get(key, isolation_level)
+		let start = std::time::Instant::now();
+		let key = key.to_vec();
+		let key_bytes = key.len();
+		let txn_name = self.name;
+		async move {
+			let result = self.driver.get(&key, isolation_level).await;
+			observe_operation(
+				txn_name,
+				"get",
+				isolation_label(isolation_level),
+				start,
+				&result,
+			);
+			observe_keys("get", 1);
+			if let Ok(Some(value)) = &result {
+				observe_bytes(txn_name, "get", "read", key_bytes + value.len());
+			}
+			result
+		}
 	}
 
-	pub fn get_key<'a>(
+	pub fn get_key<'a, 'k>(
 		&'a self,
-		selector: &KeySelector<'a>,
+		selector: &'k KeySelector<'k>,
 		isolation_level: IsolationLevel,
-	) -> impl Future<Output = Result<Slice>> + 'a {
-		self.driver.get_key(selector, isolation_level)
+	) -> impl Future<Output = Result<Slice>> + use<'a, 'k> {
+		let start = std::time::Instant::now();
+		let txn_name = self.name;
+		async move {
+			let result = self.driver.get_key(selector, isolation_level).await;
+			observe_operation(
+				txn_name,
+				"get_key",
+				isolation_label(isolation_level),
+				start,
+				&result,
+			);
+			observe_keys("get_key", 1);
+			if let Ok(value) = &result {
+				observe_bytes(txn_name, "get_key", "read", value.len());
+			}
+			result
+		}
 	}
 
-	pub fn get_range<'a>(
+	pub fn get_range<'a, 'k>(
 		&'a self,
-		opt: &RangeOption<'a>,
+		opt: &'k RangeOption<'k>,
 		iteration: usize,
 		isolation_level: IsolationLevel,
-	) -> impl Future<Output = Result<Values>> + 'a {
-		self.driver.get_range(opt, iteration, isolation_level)
+	) -> impl Future<Output = Result<Values>> + use<'a, 'k> {
+		let start = std::time::Instant::now();
+		let txn_name = self.name;
+		async move {
+			let result = self.driver.get_range(opt, iteration, isolation_level).await;
+			observe_operation(
+				txn_name,
+				"get_range",
+				isolation_label(isolation_level),
+				start,
+				&result,
+			);
+			if let Ok(values) = &result {
+				observe_keys("get_range", values.len());
+				let bytes = values
+					.iter()
+					.map(|value| value.key().len() + value.value().len())
+					.sum();
+				observe_bytes(txn_name, "get_range", "read", bytes);
+			}
+			result
+		}
 	}
 
 	pub fn get_ranges_keyvalues<'a>(
@@ -227,24 +356,63 @@ impl Transaction {
 		opt: RangeOption<'a>,
 		isolation_level: IsolationLevel,
 	) -> crate::value::Stream<'a, Value> {
-		self.driver.get_ranges_keyvalues(opt, isolation_level)
+		let txn_name = self.name;
+		let isolation = isolation_label(isolation_level);
+		metrics::OPERATION_TOTAL
+			.with_label_values(&["get_ranges_keyvalues", isolation, "stream"])
+			.inc();
+		Box::pin(
+			self.driver
+				.get_ranges_keyvalues(opt, isolation_level)
+				.map(move |result| {
+					match &result {
+						Ok(value) => {
+							observe_keys("get_ranges_keyvalues", 1);
+							observe_bytes(
+								txn_name,
+								"get_ranges_keyvalues",
+								"read",
+								value.key().len() + value.value().len(),
+							);
+						}
+						Err(_) => {
+							metrics::OPERATION_TOTAL
+								.with_label_values(&["get_ranges_keyvalues", isolation, "error"])
+								.inc();
+						}
+					}
+					result
+				}),
+		)
 	}
 
 	pub fn set(&self, key: &[u8], value: &[u8]) {
+		observe_keys("set", 1);
+		observe_bytes(self.name, "set", "write", key.len() + value.len());
 		self.driver.set(key, value)
 	}
 
+	fn atomic_op_bytes(&self, key: &[u8], param: &[u8], op_type: MutationType) {
+		observe_keys("atomic_op", 1);
+		observe_bytes(self.name, "atomic_op", "write", key.len() + param.len());
+		self.driver.atomic_op(key, param, op_type)
+	}
+
 	pub fn clear(&self, key: &[u8]) {
+		observe_keys("clear", 1);
+		observe_bytes(self.name, "clear", "write", key.len());
 		self.driver.clear(key)
 	}
 
 	pub fn clear_range(&self, begin: &[u8], end: &[u8]) {
+		observe_keys("clear_range", 2);
+		observe_bytes(self.name, "clear_range", "write", begin.len() + end.len());
 		self.driver.clear_range(begin, end)
 	}
 
 	pub fn clear_subspace_range(&self, subspace: &tuple::Subspace) {
 		let (begin, end) = subspace.range();
-		self.driver.clear_range(&begin, &end);
+		self.clear_range(&begin, &end);
 	}
 
 	pub fn cancel(&self) {
@@ -257,6 +425,13 @@ impl Transaction {
 		end: &[u8],
 		conflict_type: ConflictRangeType,
 	) -> Result<()> {
+		observe_keys("add_conflict_range", 2);
+		observe_bytes(
+			self.name,
+			"add_conflict_range",
+			"write",
+			begin.len() + end.len(),
+		);
 		self.driver.add_conflict_range(begin, end, conflict_type)
 	}
 
@@ -268,9 +443,13 @@ impl Transaction {
 		self.driver.get_estimated_range_size_bytes(begin, end)
 	}
 
-	/// Adds a tag to the current transaction
+	/// Adds a tag intended for throttling to the current transaction.
 	pub fn tag(&self, tag: &str) -> Result<()> {
 		self.driver.tag(tag)
+	}
+
+	pub fn priority(&self, priority: Priority) -> Result<()> {
+		self.driver.priority(priority)
 	}
 }
 
@@ -280,7 +459,7 @@ pub struct InformalTransaction<'t> {
 
 impl<'t> InformalTransaction<'t> {
 	pub fn atomic_op(&self, key: &[u8], param: &[u8], op_type: MutationType) {
-		self.inner.driver.atomic_op(key, param, op_type)
+		self.inner.atomic_op_bytes(key, param, op_type)
 	}
 
 	// Read operations
@@ -289,24 +468,24 @@ impl<'t> InformalTransaction<'t> {
 		key: &[u8],
 		isolation_level: IsolationLevel,
 	) -> impl Future<Output = Result<Option<Slice>>> + 'a {
-		self.inner.driver.get(key, isolation_level)
+		self.inner.get(key, isolation_level)
 	}
 
-	pub fn get_key<'a>(
+	pub fn get_key<'a, 'k>(
 		&'a self,
-		selector: &KeySelector<'a>,
+		selector: &'k KeySelector<'k>,
 		isolation_level: IsolationLevel,
-	) -> impl Future<Output = Result<Slice>> + 'a {
-		self.inner.driver.get_key(selector, isolation_level)
+	) -> impl Future<Output = Result<Slice>> + use<'a, 'k> {
+		self.inner.get_key(selector, isolation_level)
 	}
 
-	pub fn get_range<'a>(
+	pub fn get_range<'a, 'k>(
 		&'a self,
-		opt: &RangeOption<'a>,
+		opt: &'k RangeOption<'k>,
 		iteration: usize,
 		isolation_level: IsolationLevel,
-	) -> impl Future<Output = Result<Values>> + 'a {
-		self.inner.driver.get_range(opt, iteration, isolation_level)
+	) -> impl Future<Output = Result<Values>> + use<'a, 'k> {
+		self.inner.get_range(opt, iteration, isolation_level)
 	}
 
 	pub fn get_ranges_keyvalues<'a>(
@@ -314,26 +493,26 @@ impl<'t> InformalTransaction<'t> {
 		opt: RangeOption<'a>,
 		isolation_level: IsolationLevel,
 	) -> crate::value::Stream<'a, Value> {
-		self.inner.driver.get_ranges_keyvalues(opt, isolation_level)
+		self.inner.get_ranges_keyvalues(opt, isolation_level)
 	}
 
 	// Write operations
 	pub fn set(&self, key: &[u8], value: &[u8]) {
-		self.inner.driver.set(key, value)
+		self.inner.set(key, value)
 	}
 
 	pub fn clear(&self, key: &[u8]) {
-		self.inner.driver.clear(key)
+		self.inner.clear(key)
 	}
 
 	pub fn clear_range(&self, begin: &[u8], end: &[u8]) {
-		self.inner.driver.clear_range(begin, end)
+		self.inner.clear_range(begin, end)
 	}
 
 	/// Clear all keys in a subspace range
 	pub fn clear_subspace_range(&self, subspace: &tuple::Subspace) {
 		let (begin, end) = subspace.range();
-		self.inner.driver.clear_range(&begin, &end);
+		self.inner.clear_range(&begin, &end);
 	}
 
 	pub fn cancel(&self) {
@@ -346,9 +525,7 @@ impl<'t> InformalTransaction<'t> {
 		end: &[u8],
 		conflict_type: ConflictRangeType,
 	) -> Result<()> {
-		self.inner
-			.driver
-			.add_conflict_range(begin, end, conflict_type)
+		self.inner.add_conflict_range(begin, end, conflict_type)
 	}
 
 	pub fn get_estimated_range_size_bytes<'a>(
@@ -372,6 +549,13 @@ impl RetryableTransaction {
 		RetryableTransaction {
 			inner: transaction,
 			maybe_committed: MaybeCommitted(false),
+		}
+	}
+
+	pub(crate) fn with_name(&self, name: &'static str) -> Self {
+		RetryableTransaction {
+			inner: self.inner.with_name(name),
+			maybe_committed: self.maybe_committed,
 		}
 	}
 

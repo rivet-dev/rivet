@@ -305,7 +305,10 @@ pub struct DbManagerState {
 	#[serde(default)]
 	pub force_compactions: ForceCompactionTracker,
 	pub retry_cursors: ManagerRetryCursors,
-	pub planning_deadlines: ManagerPlanningDeadlines,
+	#[serde(default)]
+	pub next_cold_check_at_ms: Option<i64>,
+	#[serde(default)]
+	pub next_reclaim_check_at_ms: Option<i64>,
 	pub branch_stop_state: BranchStopState,
 	pub last_dirty_cursor: Option<DirtyCursor>,
 	#[serde(default)]
@@ -319,20 +322,12 @@ impl DbManagerState {
 			active_jobs: ManagerActiveJobs::default(),
 			force_compactions: ForceCompactionTracker::default(),
 			retry_cursors: ManagerRetryCursors::default(),
-			planning_deadlines: ManagerPlanningDeadlines::default(),
+			next_cold_check_at_ms: None,
+			next_reclaim_check_at_ms: None,
 			branch_stop_state: BranchStopState::Running,
 			last_dirty_cursor: None,
 			last_observed_branch_lifecycle_generation: None,
 		}
-	}
-
-	pub fn new_with_initial_deadline(
-		companion_workflow_ids: CompanionWorkflowIds,
-		now_ms: i64,
-	) -> Self {
-		let mut state = Self::new(companion_workflow_ids);
-		state.planning_deadlines = ManagerPlanningDeadlines::after_refresh(now_ms);
-		state
 	}
 }
 
@@ -590,36 +585,6 @@ impl Default for RetryCursor {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ManagerPlanningDeadlines {
-	pub next_hot_check_at_ms: Option<i64>,
-	pub next_cold_check_at_ms: Option<i64>,
-	pub next_reclaim_check_at_ms: Option<i64>,
-	pub final_settle_check_at_ms: Option<i64>,
-}
-
-impl Default for ManagerPlanningDeadlines {
-	fn default() -> Self {
-		ManagerPlanningDeadlines {
-			next_hot_check_at_ms: None,
-			next_cold_check_at_ms: None,
-			next_reclaim_check_at_ms: None,
-			final_settle_check_at_ms: None,
-		}
-	}
-}
-
-impl ManagerPlanningDeadlines {
-	pub(crate) fn after_refresh(now_ms: i64) -> Self {
-		ManagerPlanningDeadlines {
-			next_hot_check_at_ms: Some(now_ms + 500),
-			next_cold_check_at_ms: Some(now_ms + 5_000),
-			next_reclaim_check_at_ms: Some(now_ms + 10_000),
-			final_settle_check_at_ms: Some(now_ms + 30_000),
-		}
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum BranchStopState {
 	Running,
 	StopRequested {
@@ -848,7 +813,8 @@ pub struct RefreshManagerInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefreshManagerOutput {
-	pub planning_deadlines: ManagerPlanningDeadlines,
+	#[serde(default)]
+	pub refreshed_at_ms: i64,
 	pub planned_hot_job: Option<PlannedHotCompactionJob>,
 	pub planned_cold_job: Option<PlannedColdCompactionJob>,
 	pub planned_reclaim_job: Option<PlannedReclaimCompactionJob>,
@@ -1076,6 +1042,7 @@ pub(crate) struct HotInputSnapshot {
 	pub(crate) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) total_value_bytes: u64,
+	pub(crate) selected_max_txid: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1091,6 +1058,8 @@ pub(crate) struct ColdInputSnapshot {
 	pub(crate) total_value_bytes: u64,
 	pub(crate) min_versionstamp: [u8; 16],
 	pub(crate) max_versionstamp: [u8; 16],
+	pub(crate) selected_max_txid: Option<u64>,
+	pub(crate) shards_complete: bool,
 }
 
 #[derive(Debug, Clone)]

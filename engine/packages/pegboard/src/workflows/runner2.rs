@@ -279,7 +279,7 @@ impl LifecycleState {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct InitInput {
 	runner_id: Id,
 	namespace_id: Id,
@@ -298,7 +298,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
 	*state = Some(State::new(input.namespace_id, input.create_ts));
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner2_init", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let remaining_slots_key = keys::runner::RemainingSlotsKey::new(input.runner_id);
@@ -459,7 +459,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct EnsureRunnerConfigInput {
 	namespace_id: Id,
 	name: String,
@@ -476,7 +476,7 @@ async fn ensure_runner_config(ctx: &ActivityCtx, input: &EnsureRunnerConfigInput
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct MarkEligibleInput {
 	runner_id: Id,
 }
@@ -500,7 +500,7 @@ async fn mark_eligible(ctx: &ActivityCtx, input: &MarkEligibleInput) -> Result<(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ClearDbInput {
 	runner_id: Id,
 	name: String,
@@ -508,7 +508,7 @@ struct ClearDbInput {
 	update_state: RunnerState,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 enum RunnerState {
 	Draining,
 	Stopped,
@@ -522,7 +522,7 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 
 	// TODO: Combine into a single udb txn
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner2_clear_db", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 			let now = util::timestamp::now();
 
@@ -581,7 +581,7 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct FetchRemainingActorsInput {
 	runner_id: Id,
 }
@@ -593,7 +593,7 @@ async fn fetch_remaining_actors(
 ) -> Result<Vec<(Id, u32)>> {
 	let actors = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner2_fetch_remaining_actors", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let actor_subspace =
@@ -620,7 +620,7 @@ async fn fetch_remaining_actors(
 	Ok(actors)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CheckExpiredInput {
 	runner_id: Id,
 }
@@ -630,7 +630,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 	let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner2_check_expired", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let last_ping_ts = tx
@@ -654,7 +654,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 		.map_err(Into::into)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct AllocatePendingActorsInput {
 	pub namespace_id: Id,
 	pub name: String,
@@ -681,7 +681,7 @@ pub(crate) async fn allocate_pending_actors(
 	// First, fetch all of the pending actors with a snapshot read
 	let mut pending_actors = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner2_fetch_pending_actors", |tx| async move {
 			let start = Instant::now();
 			let tx = tx.with_subspace(keys::subspace());
 
@@ -741,7 +741,7 @@ pub(crate) async fn allocate_pending_actors(
 			let queue_key = &queue_key;
 
 			ctx.udb()?
-				.run(|tx| async move {
+				.txn("pegboard_runner2_allocate_one_actor", |tx| async move {
 					let start = Instant::now();
 					let tx = tx.with_subspace(keys::subspace());
 					let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
@@ -911,7 +911,7 @@ pub(crate) async fn allocate_pending_actors(
 	})
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SendMessagesToRunnerInput {
 	runner_id: Id,
 	messages: Vec<protocol::mk2::ToRunner>,
@@ -922,8 +922,7 @@ async fn send_messages_to_runner(
 	ctx: &ActivityCtx,
 	input: &SendMessagesToRunnerInput,
 ) -> Result<()> {
-	let receiver_subject =
-		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+	let receiver_subject = crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id);
 
 	for message in &input.messages {
 		let message_serialized = versioned::ToRunnerMk2::wrap_latest(message.clone())
@@ -937,7 +936,7 @@ async fn send_messages_to_runner(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct DrainOlderVersionsInput {
 	namespace_id: Id,
 	name: String,

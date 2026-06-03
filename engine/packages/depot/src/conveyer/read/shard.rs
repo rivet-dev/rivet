@@ -3,7 +3,7 @@ use futures_util::TryStreamExt;
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::{IsolationLevel::Snapshot, end_of_key_range},
+	utils::{IsolationLevel::Serializable, end_of_key_range},
 };
 
 use crate::conveyer::keys;
@@ -13,11 +13,15 @@ use super::plan::{ReadSource, StorageScope};
 pub(super) async fn tx_load_delta_blob(
 	tx: &universaldb::Transaction,
 	delta_prefix: &[u8],
-) -> Result<Option<Vec<u8>>> {
+) -> Result<DeltaBlobLoad> {
 	let mut delta_chunks = super::tx::tx_scan_prefix_values(tx, delta_prefix).await?;
 	if delta_chunks.is_empty() {
-		return Ok(None);
+		return Ok(DeltaBlobLoad {
+			blob: None,
+			chunk_rows_scanned: 0,
+		});
 	}
+	let chunk_rows_scanned = delta_chunks.len();
 	delta_chunks.sort_by_key(|(key, _)| key.clone());
 
 	let mut delta_blob = Vec::new();
@@ -30,7 +34,15 @@ pub(super) async fn tx_load_delta_blob(
 		delta_blob.extend_from_slice(&chunk);
 	}
 
-	Ok(Some(delta_blob))
+	Ok(DeltaBlobLoad {
+		blob: Some(delta_blob),
+		chunk_rows_scanned,
+	})
+}
+
+pub(super) struct DeltaBlobLoad {
+	pub(super) blob: Option<Vec<u8>>,
+	pub(super) chunk_rows_scanned: usize,
 }
 
 fn decode_delta_chunk_idx(delta_prefix: &[u8], key: &[u8]) -> Result<u32> {
@@ -53,10 +65,11 @@ pub(super) async fn tx_load_latest_shard_blob(
 	tx: &universaldb::Transaction,
 	scope: &StorageScope,
 	shard_id: u32,
-) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+) -> Result<ShardBlobLoad> {
 	let sources = match scope {
 		StorageScope::Branch(plan) => plan.sources.clone(),
 	};
+	let mut rows_scanned = 0usize;
 
 	for source in sources {
 		let as_of_txid = match source {
@@ -79,18 +92,32 @@ pub(super) async fn tx_load_latest_shard_blob(
 				mode: StreamingMode::WantAll,
 				..(prefix.as_slice(), end.as_slice()).into()
 			},
-			Snapshot,
+			// TODO: This can probably be made Snapshot again to reduce contention if
+			// read side freshness is not worth the cost.
+			Serializable,
 		);
 
 		let mut latest = None;
 		while let Some(entry) = stream.try_next().await? {
+			rows_scanned += 1;
 			latest = Some((entry.key().to_vec(), entry.value().to_vec()));
 		}
 
 		if latest.is_some() {
-			return Ok(latest);
+			return Ok(ShardBlobLoad {
+				source: latest,
+				rows_scanned,
+			});
 		}
 	}
 
-	Ok(None)
+	Ok(ShardBlobLoad {
+		source: None,
+		rows_scanned,
+	})
+}
+
+pub(super) struct ShardBlobLoad {
+	pub(super) source: Option<(Vec<u8>, Vec<u8>)>,
+	pub(super) rows_scanned: usize,
 }

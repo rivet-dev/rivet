@@ -101,6 +101,13 @@ impl CoreEnvoyHandle {
 			ping_healthy: self.handle.is_ping_healthy(),
 		}
 	}
+
+	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
+		self.handle
+			.get_protocol_metadata()
+			.await
+			.map(|metadata| metadata.actor_stop_threshold)
+	}
 }
 
 #[derive(Clone)]
@@ -724,11 +731,8 @@ impl RegistryDispatcher {
 
 		let (start_tx, start_rx) = oneshot::channel();
 		let result: Result<Arc<ActorTaskHandle>> = async {
-			try_send_lifecycle_command(
-				&lifecycle_tx,
-				LifecycleCommand::Start { reply: start_tx },
-			)
-			.context("send actor task start command")?;
+			try_send_lifecycle_command(&lifecycle_tx, LifecycleCommand::Start { reply: start_tx })
+				.context("send actor task start command")?;
 			start_rx
 				.await
 				.context("receive actor task start reply")?
