@@ -152,7 +152,6 @@ example-name/
 - `tsup` for bundling (only for separate frontend/backend examples)
 - `concurrently` for parallel dev servers (only for separate frontend/backend examples)
 - Common production dependencies:
-- `hono` for the server framework (required for Vercel detection)
 - `srvx` for serving in production (used by `start` script)
 - `@hono/node-server` for Node.js HTTP server adapter
 - `@hono/node-ws` for Node.js WebSocket support
@@ -255,16 +254,6 @@ export default defineConfig({
 });
 ```
 
-### vercel.json
-
-- Vercel auto-detects Vite when it sees `vite.config.ts` and ignores Hono, so explicitly set the framework to Hono:
-
-```json
-{
-  "framework": "hono"
-}
-```
-
 ### turbo.json
 
 - Extend the root turbo config in all examples:
@@ -340,8 +329,6 @@ export const registry = setup({
 ```
 
 ### Server Entry Point (src/server.ts)
-
-- Explicitly import from `"hono"` so Vercel can detect the framework.
 
 - Include at least:
 
@@ -468,139 +455,6 @@ import { someUtil } from "../utils/helper";
 5. **State management** - Show persistent state with clear before/after behavior
 6. **Testing** - Use `setupTest()` from `rivetkit/test` for isolated actor testing
 7. **Comments** - Include helpful comments linking to documentation (e.g., `// https://rivet.dev/docs/actors/state`)
-
-## Vercel Examples
-
-- Generate Vercel-optimized example variants with `scripts/vercel-examples/generate-vercel-examples.ts`; these variants use `hono/vercel` and Vercel-focused serverless config.
-
-### Generation Script
-
-```bash
-# Generate all changed examples (uses git diff)
-npx tsx scripts/vercel-examples/generate-vercel-examples.ts
-
-# Generate a specific example
-npx tsx scripts/vercel-examples/generate-vercel-examples.ts --example hello-world
-
-# Force regenerate all examples
-npx tsx scripts/vercel-examples/generate-vercel-examples.ts --all
-
-# Dry run (show what would be generated)
-npx tsx scripts/vercel-examples/generate-vercel-examples.ts --dry-run
-```
-
-### Naming Convention
-
-- Place generated Vercel examples at `examples/{original-name}-vercel/`, for example:
-- `hello-world` → `hello-world-vercel`
-- `chat-room` → `chat-room-vercel`
-
-### Directory Layout
-
-- Use this layout for Vercel examples with frontend:
-```
-example-name-vercel/
-├── api/
-│   └── index.ts        # Hono handler with hono/vercel adapter
-├── src/
-│   ├── actors.ts       # Actor definitions (copied from origin)
-│   └── server.ts       # Server entry point (copied from origin)
-├── frontend/
-│   ├── App.tsx         # React component (copied from origin)
-│   └── main.tsx        # React entry point (copied from origin)
-├── index.html          # HTML entry point (copied from origin)
-├── package.json        # Modified for Vercel
-├── tsconfig.json       # Modified for Vercel
-├── vite.config.ts      # Simplified (no srvx)
-├── vercel.json         # Vercel configuration
-├── turbo.json
-└── README.md           # With Vercel-specific note and deploy button
-```
-
-- Use this layout for Vercel examples without frontend (API-only):
-```
-example-name-vercel/
-├── api/
-│   └── index.ts        # Hono handler with hono/vercel adapter
-├── src/
-│   ├── actors.ts
-│   └── server.ts
-├── package.json
-├── tsconfig.json
-├── vercel.json
-├── turbo.json
-└── README.md
-```
-
-### Key Files
-
-#### api/index.ts
-
-- Use the Hono Vercel adapter (built into `hono`) in the API entry point:
-
-```typescript
-import app from "../src/server.ts";
-
-export default app;
-```
-
-#### vercel.json
-
-- Use this `vercel.json` for examples with frontend:
-```json
-{
-  "framework": "vite",
-  "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api" }
-  ]
-}
-```
-
-- Use this `vercel.json` for API-only examples:
-```json
-{
-  "rewrites": [
-    { "source": "/(.*)", "destination": "/api" }
-  ]
-}
-```
-
-#### package.json
-
-- Apply these key differences from origin examples:
-- Removes `srvx` and `vite-plugin-srvx`
-- Uses `vercel dev` for development
-- Simplified build scripts
-- Uses `hono/vercel` adapter (built into the `hono` package)
-
-#### README.md
-
-- Include the following in each Vercel example README:
-- A note explaining it's the Vercel-optimized version with a link back to the origin
-- A "Deploy with Vercel" button for one-click deployment
-
-- Use this example header:
-```markdown
-> **Note:** This is the Vercel-optimized version of the [hello-world](../hello-world) example.
-> It uses the `hono/vercel` adapter and is configured for Vercel deployment.
-
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=...)
-```
-
-### Skipped Examples
-
-- Do not convert these example types to Vercel:
-- **Next.js examples** (`*-next-js`): Next.js has its own Vercel integration
-- **Cloudflare examples** (`*-cloudflare*`): Different runtime environment
-- **Deno examples**: Different runtime environment
-- **Examples without `src/server.ts`**: Cannot be converted
-
-### Workflow
-
-1. Make changes to an origin example (e.g., `hello-world`)
-2. Run the generation script to update the Vercel version
-3. The script detects changes via git diff and only regenerates modified examples
-4. Commit both the origin and generated Vercel examples
 
 ## Frontend Style Guide
 
