@@ -136,10 +136,9 @@ struct NamespaceMismatch {
 	"message",
 	"incoming_too_long",
 	"Incoming message too long.",
-	"Incoming message too long. Received {size} bytes, limit is {limit} bytes."
+	"Incoming message too long. Exceeded limit of {limit} bytes."
 )]
 struct IncomingMessageTooLong {
-	size: usize,
 	limit: usize,
 }
 
@@ -252,6 +251,29 @@ impl CoreServerlessRuntime {
 		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
 	}
 
+	/// Listener-side body cap; reuses the `/start` payload limit.
+	pub fn max_request_body_bytes(&self) -> usize {
+		self.settings.max_start_payload_bytes
+	}
+
+	/// Canonical 413 response built through the `RivetError` system.
+	pub fn incoming_too_long_response(&self) -> ServerlessResponse {
+		let error = IncomingMessageTooLong {
+			limit: self.settings.max_start_payload_bytes,
+		}
+		.build();
+		error_response(error)
+	}
+
+	/// Canonical 400 response for malformed requests.
+	pub fn invalid_request_response(&self, reason: impl Into<String>) -> ServerlessResponse {
+		let error = InvalidRequest {
+			reason: reason.into(),
+		}
+		.build();
+		error_response(error)
+	}
+
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {
 		let cors = cors_headers(&req);
 		match self.handle_request_inner(req).await {
@@ -334,7 +356,6 @@ impl CoreServerlessRuntime {
 		);
 		if req.body.len() > self.settings.max_start_payload_bytes {
 			return Err(IncomingMessageTooLong {
-				size: req.body.len(),
 				limit: self.settings.max_start_payload_bytes,
 			}
 			.build());

@@ -188,8 +188,6 @@
 		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
-		"@hono/node-ws": "^1.1.1",
 		"@hono/zod-openapi": "^1.1.5",
 		"@rivet-dev/agent-os-core": "^0.1.1",
 		"@rivetkit/bare-ts": "^0.6.2",
@@ -203,7 +201,6 @@
 		"@rivetkit/workflow-engine": "workspace:*",
 		"cbor-x": "^1.6.0",
 		"drizzle-orm": "^0.44.2",
-		"get-port": "^7.1.0",
 		"hono": "^4.7.0",
 		"invariant": "^2.2.4",
 		"p-retry": "^6.2.1",
@@ -215,12 +212,15 @@
 	"devDependencies": {
 		"@biomejs/biome": "^2.3",
 		"@copilotkit/llmock": "^1.6.0",
+		"@hono/node-server": "^1.18.2",
+		"@hono/node-ws": "^1.1.1",
 		"@rivet-dev/agent-os-common": "*",
 		"@rivet-dev/agent-os-pi": "^0.1.1",
 		"@standard-schema/spec": "^1.0.0",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",
 		"eventsource": "^4.0.0",
+		"get-port": "^7.1.0",
 		"tsup": "^8.4.0",
 		"tsx": "^4.19.4",
 		"typescript": "^5.7.3",
