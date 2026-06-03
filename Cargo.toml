@@ -82,7 +82,7 @@ members = [
 
   [workspace.dependencies]
   anyhow = "1.0.82"
-  pyroscope = { version = "2.0", features = ["backend-pprof-rs"] }
+  pyroscope = "2.0"
   scopeguard = "1.2"
   xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
   async-channel = "2.1.1"
