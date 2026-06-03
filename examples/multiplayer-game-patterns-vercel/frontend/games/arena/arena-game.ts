@@ -1,3 +1,4 @@
+import type { ArenaMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { ArenaMatchInfo } from "./menu.tsx";
 
@@ -17,10 +18,6 @@ interface ShotLine {
 	hit: boolean;
 	createdAt: number;
 }
-
-type ArenaMatchConn = ReturnType<
-	ReturnType<GameClient["arenaMatch"]["get"]>["connect"]
->;
 
 export class ArenaGame {
 	private stopped = false;
@@ -56,24 +53,7 @@ export class ArenaGame {
 			})
 			.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as {
-				worldSize: number;
-				scoreLimit: number;
-				phase: "waiting" | "live" | "finished";
-				winnerTeam: number | null;
-				winnerPlayerId: string | null;
-				players: Record<
-					string,
-					{
-						x: number;
-						y: number;
-						teamId: number;
-						color: string;
-						score: number;
-					}
-				>;
-			};
+		this.conn.on("snapshot", (snap) => {
 			this.worldSize = snap.worldSize;
 			this.scoreLimit = snap.scoreLimit;
 			this.phase = snap.phase;
@@ -103,15 +83,7 @@ export class ArenaGame {
 			}
 		});
 
-		this.conn.on("shoot", (raw: unknown) => {
-			const shot = raw as {
-				shooterId: string;
-				fromX: number;
-				fromY: number;
-				dirX: number;
-				dirY: number;
-				hitPlayerId: string | null;
-			};
+		this.conn.on("shoot", (shot) => {
 			const lineLen = 300;
 			this.shotLines.push({
 				fromX: shot.fromX,

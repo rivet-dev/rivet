@@ -1,3 +1,4 @@
+import type { RankedMatchmakerConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import { RankedGame } from "./ranked-game.ts";
 import { waitForAssignment } from "./wait-for-assignment.ts";
@@ -5,8 +6,7 @@ import { waitForAssignment } from "./wait-for-assignment.ts";
 export class RankedBot {
 	private game: RankedGame | null = null;
 	private destroyed = false;
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	private mm: any = null;
+	private mm: RankedMatchmakerConn | null = null;
 
 	constructor(private client: GameClient) {
 		this.start();
@@ -21,9 +21,9 @@ export class RankedBot {
 				.getOrCreate(["main"])
 				.connect();
 			this.mm = mm;
-			const queueResult = (await mm.queueForMatch({
+			const queueResult = await mm.queueForMatch({
 				username: botUsername,
-			})) as { queued: boolean; connId?: string };
+			});
 			if (this.destroyed) return;
 
 			const assignment = await waitForAssignment(

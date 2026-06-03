@@ -382,8 +382,7 @@ async function claimPendingPlayer(
 	if (result.status !== "completed") {
 		return false;
 	}
-	const response = (result as { response?: { accepted?: boolean } }).response;
-	return response?.accepted === true;
+	return result.response?.accepted === true;
 }
 
 function countAlivePlayers(state: State): number {

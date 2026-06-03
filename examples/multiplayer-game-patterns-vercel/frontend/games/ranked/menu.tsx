@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LeaderboardEntry } from "../../../src/actors/ranked/leaderboard.ts";
+import type { RankedQueueUpdate } from "../../../src/actors/ranked/matchmaker.ts";
 import type { PlayerSnapshot } from "../../../src/actors/ranked/player.ts";
+import type {
+	RankedLeaderboardConn,
+	RankedMatchmakerConn,
+} from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import { RankedBot } from "./bot.ts";
 import { waitForAssignment } from "./wait-for-assignment.ts";
@@ -66,10 +71,8 @@ export function RankedMenu({
 	const [profile, setProfile] = useState<PlayerSnapshot | null>(null);
 	const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	const mmRef = useRef<any>(null);
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	const lbRef = useRef<any>(null);
+	const mmRef = useRef<RankedMatchmakerConn | null>(null);
+	const lbRef = useRef<RankedLeaderboardConn | null>(null);
 	const abortRef = useRef(false);
 	const botsRef = useRef<RankedBot[]>([]);
 	const matchedRef = useRef(false);
@@ -79,12 +82,12 @@ export function RankedMenu({
 		const lb = client.rankedLeaderboard.getOrCreate(["main"]).connect();
 		lbRef.current = lb;
 
-		lb.on("leaderboardUpdate", (raw: unknown) => {
-			setLeaderboard(raw as LeaderboardEntry[]);
+		lb.on("leaderboardUpdate", (scores) => {
+			setLeaderboard(scores);
 		});
 
-		lb.getTopScores().then((scores: unknown) => {
-			setLeaderboard(scores as LeaderboardEntry[]);
+		lb.getTopScores().then((scores) => {
+			setLeaderboard(scores);
 		});
 
 		return () => {
@@ -104,7 +107,7 @@ export function RankedMenu({
 		handle
 			.initialize({ username })
 			.then(() => handle.getProfile())
-			.then((p: unknown) => setProfile(p as PlayerSnapshot))
+			.then((p) => setProfile(p))
 			.catch(() => setProfile(null));
 	}, [client, username]);
 
@@ -151,15 +154,7 @@ export function RankedMenu({
 				}, 1500);
 			};
 
-			mm.on("queueUpdate", (raw: unknown) => {
-				const data = raw as {
-					queued: boolean;
-					count: number;
-					queueDurationMs?: number;
-					ratingWindow?: number;
-					ratingMin?: number;
-					ratingMax?: number;
-				};
+			mm.on("queueUpdate", (data: RankedQueueUpdate) => {
 				setQueueCount(data.count ?? 0);
 				if (!data.queued) {
 					setQueueDurationMs(0);
@@ -188,10 +183,7 @@ export function RankedMenu({
 
 			setStatus("queued");
 
-			const queueResult = (await mm.queueForMatch({ username })) as {
-				queued: boolean;
-				connId?: string;
-			};
+			const queueResult = await mm.queueForMatch({ username });
 			if (abortRef.current) {
 				throw new Error("Failed to queue");
 			}

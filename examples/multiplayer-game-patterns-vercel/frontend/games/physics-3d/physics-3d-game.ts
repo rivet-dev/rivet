@@ -4,12 +4,9 @@ import {
 	PLAYER_RADIUS,
 	SCENE_STATIC,
 } from "../../../src/actors/physics-3d/config.ts";
+import type { Physics3dConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { Physics3dMatchInfo } from "./menu.tsx";
-
-type Physics3dConn = ReturnType<
-	ReturnType<GameClient["physics3dWorld"]["getOrCreate"]>["connect"]
->;
 
 interface BodySnapshot {
 	id: string;
@@ -140,8 +137,7 @@ export class Physics3dGame {
 		});
 		this.conn = handle.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as Snapshot;
+		this.conn.on("snapshot", (snap) => {
 			const now = Date.now();
 
 			if (this.lastSnapshotTime > 0) {
