@@ -37,6 +37,6 @@
 	},
 	"devDependencies": {
 		"typescript": "^5.9.2",
-		"wasm-pack": "0.14.0"
+		"wasm-pack": "0.15.0"
 	}
 }
