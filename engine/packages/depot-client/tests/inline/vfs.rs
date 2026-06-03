@@ -21,9 +21,10 @@ use tokio::runtime::Builder;
 use tokio::sync::{Notify, OnceCell};
 
 use crate::optimization_flags::{
-	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
-	DEFAULT_VFS_PROTECTED_CACHE_PAGES, DEFAULT_VFS_STAGING_CACHE_TTL_MS, SqliteOptimizationFlags,
-	SqliteReadAheadMode, SqliteVfsPageCacheMode,
+	DEFAULT_PAGER_CACHE_SIZE_KIB, DEFAULT_STARTUP_PRELOAD_MAX_BYTES,
+	DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES, DEFAULT_VFS_PROTECTED_CACHE_PAGES,
+	DEFAULT_VFS_STAGING_CACHE_TTL_MS, SqliteOptimizationFlags, SqliteReadAheadMode,
+	SqliteVfsPageCacheMode,
 };
 use crate::query::{BindParam, ColumnValue};
 use crate::vfs::SqliteVfsMetrics;
@@ -59,6 +60,7 @@ fn vfs_config_wires_optimization_flags() {
 		vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2,
 		vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS / 2,
 		vfs_retain_read_cache: true,
+		pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
 	};
 
 	let config = VfsConfig::from_optimization_flags(flags);

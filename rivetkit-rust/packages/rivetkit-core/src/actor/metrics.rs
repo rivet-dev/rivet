@@ -1483,6 +1483,7 @@ fn ns_to_seconds(duration_ns: u64) -> f64 {
 fn sqlite_worker_duration_buckets() -> Vec<f64> {
 	vec![
 		0.000_1, 0.000_5, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+		10.0, 25.0, 50.0,
 	]
 }
 

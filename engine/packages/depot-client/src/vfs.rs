@@ -3250,14 +3250,20 @@ pub fn configure_connection_for_database(
 	vfs: &SqliteVfs,
 	file_name: &str,
 ) -> std::result::Result<(), String> {
-	for pragma in &[
+	// SQLite interprets a negative cache_size as a KiB budget instead of a page count.
+	let cache_size_kib = sqlite_optimization_flags().pager_cache_size_kib;
+	let cache_size_pragma = format!("PRAGMA cache_size = -{cache_size_kib};");
+
+	let pragmas = [
 		"PRAGMA page_size = 4096;",
 		"PRAGMA journal_mode = DELETE;",
 		"PRAGMA synchronous = NORMAL;",
 		"PRAGMA temp_store = MEMORY;",
 		"PRAGMA auto_vacuum = NONE;",
 		"PRAGMA locking_mode = EXCLUSIVE;",
-	] {
+		cache_size_pragma.as_str(),
+	];
+	for pragma in &pragmas {
 		if let Err(err) = sqlite_exec(db, pragma) {
 			tracing::error!(
 				file_name,

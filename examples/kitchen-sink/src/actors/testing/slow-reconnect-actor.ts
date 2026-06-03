@@ -4,15 +4,15 @@ import { db } from 'rivetkit/db'
 export type SlowReconnectRequest =
 	| { type: 'client_resume'; version: number }
 	| {
-			type: 'executor_connect'
-			clientId: string
-			executorType?: 'local-client' | 'sandbox' | 'virtual'
-	  }
+		type: 'executor_connect'
+		clientId: string
+		executorType?: 'local-client' | 'sandbox' | 'virtual'
+	}
 	| {
-			type: 'repro_reconnect'
-			clientId?: string
-			staggerHandleMs?: number
-	  }
+		type: 'repro_reconnect'
+		clientId?: string
+		staggerHandleMs?: number
+	}
 
 export interface SlowReconnectStep {
 	name: string
@@ -269,8 +269,8 @@ function parseSlowReconnectRequest(data: unknown): SlowReconnectRequest {
 			type: 'executor_connect',
 			clientId: stringField(request, 'clientId'),
 			...(executorType === 'local-client' ||
-			executorType === 'sandbox' ||
-			executorType === 'virtual'
+				executorType === 'sandbox' ||
+				executorType === 'virtual'
 				? { executorType }
 				: {}),
 		}
@@ -777,13 +777,27 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 }> {
 	const existing = await database.execute(`SELECT COUNT(*) AS count FROM messages`)
 	if (Number(existing[0]?.count ?? 0) > 0) {
+		const [toolCalls] = await database.execute(`SELECT COUNT(*) AS count FROM tool_calls`)
+		const [threadEvents] = await database.execute(`SELECT COUNT(*) AS count FROM thread_events`)
 		return {
 			seeded: false,
-			messages: MESSAGE_COUNT,
-			toolCalls: TOOL_CALL_COUNT,
-			threadEvents: THREAD_EVENT_COUNT,
+			messages: Number(existing[0]?.count ?? 0),
+			toolCalls: Number(toolCalls?.count ?? 0),
+			threadEvents: Number(threadEvents?.count ?? 0),
 		}
 	}
+
+	// Randomize the seeded data volume so each actor's database differs
+	// substantially in size. This exercises the reconnect repro across a wide
+	// range of catch-up payload sizes instead of a single fixed shape.
+	const vary = (base: number, min = 1) =>
+		Math.max(min, Math.round(base * (0.25 + Math.random() * 3.75)))
+	const messageCount = vary(MESSAGE_COUNT, 2)
+	const messageToolRefCount = vary(MESSAGE_TOOL_REF_COUNT, 2)
+	const toolCallCount = vary(TOOL_CALL_COUNT)
+	const executorToolCount = vary(EXECUTOR_TOOL_COUNT)
+	const threadEventCount = vary(THREAD_EVENT_COUNT)
+	const assistantSpan = Math.max(1, Math.floor(messageCount / 2))
 
 	const now = new Date('2026-05-16T03:58:18.661Z').getTime()
 	const text = (size: number) => 'x'.repeat(size)
@@ -796,7 +810,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	])
 
 	const messageRows: unknown[][] = []
-	for (let index = 1; index <= MESSAGE_COUNT; index++) {
+	for (let index = 1; index <= messageCount; index++) {
 		const role = index % 2 === 0 ? 'assistant' : 'user'
 		messageRows.push([
 			messageId(index),
@@ -819,10 +833,10 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	)
 
 	const messageToolRefRows: unknown[][] = []
-	for (let index = 0; index < MESSAGE_TOOL_REF_COUNT / 2; index++) {
-		const assistantIndex = 2 + (index % 42) * 2
+	for (let index = 0; index < messageToolRefCount / 2; index++) {
+		const assistantIndex = 2 + (index % assistantSpan) * 2
 		const sourceIndex = Math.max(1, assistantIndex - 1)
-		const resultIndex = Math.min(MESSAGE_COUNT, assistantIndex + 1)
+		const resultIndex = Math.min(messageCount, assistantIndex + 1)
 		const toolUseId = toolUseID(index + 1)
 		messageToolRefRows.push([
 			messageId(sourceIndex),
@@ -847,8 +861,8 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	)
 
 	const toolCallRows: unknown[][] = []
-	for (let index = 1; index <= TOOL_CALL_COUNT; index++) {
-		const assistantIndex = 2 + ((index - 1) % 42) * 2
+	for (let index = 1; index <= toolCallCount; index++) {
+		const assistantIndex = 2 + ((index - 1) % assistantSpan) * 2
 		toolCallRows.push([
 			toolUseID(index),
 			`provider-${index}`,
@@ -875,7 +889,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	)
 
 	const executorToolRows: unknown[][] = []
-	for (let index = 1; index <= EXECUTOR_TOOL_COUNT; index++) {
+	for (let index = 1; index <= executorToolCount; index++) {
 		const schema = JSON.stringify({
 			name: `tool_${index}`,
 			description: text(EXECUTOR_TOOL_SCHEMA_BYTES),
@@ -891,7 +905,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	)
 
 	const threadEventRows: unknown[][] = []
-	for (let index = 1; index <= THREAD_EVENT_COUNT; index++) {
+	for (let index = 1; index <= threadEventCount; index++) {
 		threadEventRows.push([
 			index,
 			index % 3 === 0 ? 'message_added' : 'agent_state_changed',
@@ -907,7 +921,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	)
 
 	const messageAddedRows: unknown[][] = []
-	for (let index = 1; index <= MESSAGE_COUNT; index++) {
+	for (let index = 1; index <= messageCount; index++) {
 		messageAddedRows.push([messageId(index), index])
 	}
 	await batchInsert(
@@ -929,9 +943,9 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	)
 	return {
 		seeded: true,
-		messages: MESSAGE_COUNT,
-		toolCalls: TOOL_CALL_COUNT,
-		threadEvents: THREAD_EVENT_COUNT,
+		messages: messageCount,
+		toolCalls: toolCallCount,
+		threadEvents: threadEventCount,
 	}
 }
 

@@ -12504,13 +12504,22 @@ async function createSlowReconnectSchema(database) {
 async function seedSlowReconnectData(database) {
   const existing = await database.execute(`SELECT COUNT(*) AS count FROM messages`);
   if (Number(existing[0]?.count ?? 0) > 0) {
+    const [toolCalls] = await database.execute(`SELECT COUNT(*) AS count FROM tool_calls`);
+    const [threadEvents] = await database.execute(`SELECT COUNT(*) AS count FROM thread_events`);
     return {
       seeded: false,
-      messages: MESSAGE_COUNT2,
-      toolCalls: TOOL_CALL_COUNT2,
-      threadEvents: THREAD_EVENT_COUNT2
+      messages: Number(existing[0]?.count ?? 0),
+      toolCalls: Number(toolCalls?.count ?? 0),
+      threadEvents: Number(threadEvents?.count ?? 0)
     };
   }
+  const vary = (base, min = 1) => Math.max(min, Math.round(base * (0.25 + Math.random() * 3.75)));
+  const messageCount = vary(MESSAGE_COUNT2, 2);
+  const messageToolRefCount = vary(MESSAGE_TOOL_REF_COUNT2, 2);
+  const toolCallCount = vary(TOOL_CALL_COUNT2);
+  const executorToolCount = vary(EXECUTOR_TOOL_COUNT2);
+  const threadEventCount = vary(THREAD_EVENT_COUNT2);
+  const assistantSpan = Math.max(1, Math.floor(messageCount / 2));
   const now = (/* @__PURE__ */ new Date("2026-05-16T03:58:18.661Z")).getTime();
   const text2 = (size) => "x".repeat(size);
   const isoAt = (index) => new Date(now + index * 1e3).toISOString();
@@ -12520,7 +12529,7 @@ async function seedSlowReconnectData(database) {
     ["executor_status", JSON.stringify({ available: true, message: "ready" }), isoAt(0)]
   ]);
   const messageRows = [];
-  for (let index = 1; index <= MESSAGE_COUNT2; index++) {
+  for (let index = 1; index <= messageCount; index++) {
     const role = index % 2 === 0 ? "assistant" : "user";
     messageRows.push([
       messageId2(index),
@@ -12542,10 +12551,10 @@ async function seedSlowReconnectData(database) {
     20
   );
   const messageToolRefRows = [];
-  for (let index = 0; index < MESSAGE_TOOL_REF_COUNT2 / 2; index++) {
-    const assistantIndex = 2 + index % 42 * 2;
+  for (let index = 0; index < messageToolRefCount / 2; index++) {
+    const assistantIndex = 2 + index % assistantSpan * 2;
     const sourceIndex = Math.max(1, assistantIndex - 1);
-    const resultIndex = Math.min(MESSAGE_COUNT2, assistantIndex + 1);
+    const resultIndex = Math.min(messageCount, assistantIndex + 1);
     const toolUseId = toolUseID2(index + 1);
     messageToolRefRows.push([
       messageId2(sourceIndex),
@@ -12569,8 +12578,8 @@ async function seedSlowReconnectData(database) {
     50
   );
   const toolCallRows = [];
-  for (let index = 1; index <= TOOL_CALL_COUNT2; index++) {
-    const assistantIndex = 2 + (index - 1) % 42 * 2;
+  for (let index = 1; index <= toolCallCount; index++) {
+    const assistantIndex = 2 + (index - 1) % assistantSpan * 2;
     toolCallRows.push([
       toolUseID2(index),
       `provider-${index}`,
@@ -12596,7 +12605,7 @@ async function seedSlowReconnectData(database) {
     20
   );
   const executorToolRows = [];
-  for (let index = 1; index <= EXECUTOR_TOOL_COUNT2; index++) {
+  for (let index = 1; index <= executorToolCount; index++) {
     const schema = JSON.stringify({
       name: `tool_${index}`,
       description: text2(EXECUTOR_TOOL_SCHEMA_BYTES2),
@@ -12611,7 +12620,7 @@ async function seedSlowReconnectData(database) {
     42
   );
   const threadEventRows = [];
-  for (let index = 1; index <= THREAD_EVENT_COUNT2; index++) {
+  for (let index = 1; index <= threadEventCount; index++) {
     threadEventRows.push([
       index,
       index % 3 === 0 ? "message_added" : "agent_state_changed",
@@ -12626,7 +12635,7 @@ async function seedSlowReconnectData(database) {
     25
   );
   const messageAddedRows = [];
-  for (let index = 1; index <= MESSAGE_COUNT2; index++) {
+  for (let index = 1; index <= messageCount; index++) {
     messageAddedRows.push([messageId2(index), index]);
   }
   await batchInsert3(
@@ -12647,9 +12656,9 @@ async function seedSlowReconnectData(database) {
   );
   return {
     seeded: true,
-    messages: MESSAGE_COUNT2,
-    toolCalls: TOOL_CALL_COUNT2,
-    threadEvents: THREAD_EVENT_COUNT2
+    messages: messageCount,
+    toolCalls: toolCallCount,
+    threadEvents: threadEventCount
   };
 }
 async function batchInsert3(database, insertPrefix, rows, batchSize = 100) {

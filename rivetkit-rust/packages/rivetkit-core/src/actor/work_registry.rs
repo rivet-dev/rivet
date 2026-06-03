@@ -15,6 +15,8 @@ use crate::actor::task_types::UserTaskKind;
 /// Classifies actor work so sleep can apply one policy model across different APIs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ActorWorkKind {
+	/// Dispatched action work awaiting its reply from the runtime adapter.
+	Action,
 	/// User work that keeps the actor out of idle sleep while it runs.
 	KeepAwake,
 	/// Runtime-owned work that should behave like keep-awake without exposing a user API.
@@ -46,6 +48,12 @@ impl ActorWorkKind {
 	/// Returns the lifecycle policy owned by this work kind.
 	pub fn policy(self) -> ActorWorkPolicy {
 		match self {
+			ActorWorkKind::Action => ActorWorkPolicy {
+				blocks_idle_sleep: true,
+				drains_shutdown_grace: true,
+				aborts_at_shutdown_deadline: true,
+				user_task_kind: Some(UserTaskKind::Action),
+			},
 			ActorWorkKind::KeepAwake => ActorWorkPolicy {
 				blocks_idle_sleep: true,
 				drains_shutdown_grace: true,
@@ -88,6 +96,7 @@ impl ActorWorkKind {
 	/// Returns a stable label for logs and metric fields.
 	pub(crate) fn label(self) -> &'static str {
 		match self {
+			ActorWorkKind::Action => "action",
 			ActorWorkKind::KeepAwake => "keep_awake",
 			ActorWorkKind::InternalKeepAwake => "internal_keep_awake",
 			ActorWorkKind::WaitUntil => "wait_until",
