@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
@@ -32,7 +32,8 @@ const REPO_ENGINE_BINARY = fileURLToPath(
 	new URL("../../../target/debug/rivet-engine", import.meta.url),
 );
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
-const DEFAULT_RESULTS_ROOT = ".agent/benchmarks/sqlite-realworld";
+const AGENTS_DIR = process.env.AGENTS_DIR ?? join(homedir(), ".agents");
+const DEFAULT_RESULTS_ROOT = join(AGENTS_DIR, "benchmarks/sqlite-realworld");
 const SQLITE_OPT_MODE_ENVS = [
 	"RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE",
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE",

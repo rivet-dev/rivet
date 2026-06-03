@@ -227,7 +227,7 @@ We explicitly do **not** import:
 
 ## Specs
 
-- `.agent/specs/depot-stateless.md` — base architecture (hot tier only, two compactors, pegboard-envoy stateless).
-- `.agent/specs/sqlite-pitr-fork.md` — branches, restore points, forking, S3 cold tier, retention. Extends the stateless spec.
+- `~/.agents/specs/depot-stateless.md` — base architecture (hot tier only, two compactors, pegboard-envoy stateless).
+- `~/.agents/specs/sqlite-pitr-fork.md` — branches, restore points, forking, S3 cold tier, retention. Extends the stateless spec.
 - `r2-prior-art/.agent/research/sqlite/requirements.md` — the binding constraint floor (citing here for traceability; same constraints are duplicated above).
 - `r2-prior-art/.agent/specs/sqlite-vfs-single-writer-plan.md` — Option F: client-side VFS read-cache, hydration, `sqlite_read_many`, stride prefetch. Orthogonal but complementary to PITR/fork; the steady-state hot-path read latency in this spec depends on Option F shipping for fork descendants to be tolerable.

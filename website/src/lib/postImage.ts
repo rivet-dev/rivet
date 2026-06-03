@@ -28,9 +28,10 @@ export function getPostImage(entry: CollectionEntry<'posts'>): PostImage | null 
 
 	const slug = entry.id.replace(/\/page$/, '');
 	const format = typeof config === 'object' && config.format ? config.format : 'png';
+	const file = typeof config === 'object' && config.file ? config.file : `image.${format}`;
 
 	return {
-		src: `${ASSETS_BASE}/website/blog/${slug}/image.${format}`,
+		src: `${ASSETS_BASE}/website/blog/${slug}/${file}`,
 		width: HERO_IMAGE_WIDTH,
 		height: HERO_IMAGE_HEIGHT,
 	};
