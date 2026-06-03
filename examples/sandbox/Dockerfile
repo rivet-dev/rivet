@@ -15,7 +15,6 @@ COPY shared/typescript/ ./shared/typescript/
 RUN pnpm install --frozen-lockfile
 RUN mkdir -p rivetkit-openapi rivetkit-asyncapi
 RUN pnpm build --filter=kitchen-sink
-COPY examples/kitchen-sink/public ./examples/kitchen-sink/dist/public
 
 WORKDIR /app/examples/kitchen-sink
 
