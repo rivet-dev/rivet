@@ -1,0 +1,228 @@
+{
+	"schemaVersion": 1,
+	"startedAt": "2026-04-29T10:18:23.224Z",
+	"finishedAt": "2026-04-29T10:19:02.894Z",
+	"config": {
+		"endpoint": "http://127.0.0.1:7520",
+		"profile": "smoke",
+		"selectedWorkloads": [
+			"rowid-range-forward",
+			"secondary-index-scattered-table",
+			"random-point-lookups",
+			"migration-add-column-large"
+		],
+		"sizes": {
+			"smallBytes": 262144,
+			"mediumBytes": 1048576,
+			"cacheFitBytes": 1048576,
+			"cacheOverflowBytes": 2097152,
+			"largeBytes": 2097152,
+			"rowBytes": 2048
+		},
+		"metricsToken": "dev-metrics",
+		"wakeDelayMs": 1000,
+		"postSetupWaitMs": 0,
+		"startLocalEnvoy": true,
+		"disableStorageCompaction": false,
+		"sqliteOptimizationsDisabled": true,
+		"sqliteOptimizationEnv": {
+			"RIVETKIT_SQLITE_OPT_READ_AHEAD": "false",
+			"RIVETKIT_SQLITE_OPT_CACHE_HIT_PREDICTOR_TRAINING": "false",
+			"RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS": "false",
+			"RIVETKIT_SQLITE_OPT_ADAPTIVE_READ_AHEAD": "false",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH": "false",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGES": "false",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_ON_OPEN": "false",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES": "false",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES": "false",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES": "false",
+			"RIVETKIT_SQLITE_OPT_DEDUP_GET_PAGES_META": "false",
+			"RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION": "false",
+			"RIVETKIT_SQLITE_OPT_RANGE_READS": "false",
+			"RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS": "false",
+			"RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE": "false",
+			"RIVETKIT_SQLITE_OPT_VFS_CACHE_FETCHED_PAGES": "false",
+			"RIVETKIT_SQLITE_OPT_VFS_CACHE_PREFETCHED_PAGES": "false",
+			"RIVETKIT_SQLITE_OPT_VFS_CACHE_STARTUP_PRELOADED_PAGES": "false",
+			"RIVETKIT_SQLITE_OPT_VFS_SCAN_RESISTANT_CACHE": "false",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES": "0",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT": "0",
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES": "1",
+			"RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES": "0"
+		},
+		"cacheSizing": {
+			"sqlitePageSizeBytes": 4096,
+			"startupPreloadMaxBytes": 0,
+			"vfsPageCacheCapacityPages": 1,
+			"vfsPageCacheCapacityBytes": 4096,
+			"largeBytesExceedsConfiguredVfsCache": true
+		}
+	},
+	"cacheConfigProbe": {
+		"sqliteCacheSizePragma": -2000,
+		"sqlitePageSize": 4096,
+		"pageCount": 16
+	},
+	"results": [
+		{
+			"workload": "rowid-range-forward",
+			"description": "Large append-like INTEGER PRIMARY KEY forward range scan.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457901653-7c6244b2",
+				"rowid-range-forward"
+			],
+			"actorId": "9qhpr92yuo3cyli6hwbsfvj2kjcl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 614.354797,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 14946.551086000001,
+				"workload": "rowid-range-forward",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1032,
+				"resolvePagesRequestedTotal": 1032,
+				"resolvePagesCacheHitsTotal": -3,
+				"resolvePagesCacheMissesTotal": 1035,
+				"getPagesTotal": 1035,
+				"pagesFetchedTotal": 17179,
+				"prefetchPagesTotal": 16144,
+				"bytesFetchedTotal": 70365184,
+				"prefetchBytesTotal": 66125824,
+				"getPagesDurationSecondsSum": 14.822318194999998,
+				"getPagesDurationSecondsCount": 1035
+			}
+		},
+		{
+			"workload": "secondary-index-scattered-table",
+			"description": "Large secondary-index range that visits table rows in scattered rowid order.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457901653-7c6244b2",
+				"secondary-index-scattered-table"
+			],
+			"actorId": "dpzhx6td3elrkg4w33bpnshfh9dl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 461.5752219999995,
+				"pageCount": 1062
+			},
+			"main": {
+				"ms": 8251.848477,
+				"workload": "secondary-index-scattered-table",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1063
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1035,
+				"resolvePagesRequestedTotal": 1035,
+				"resolvePagesCacheHitsTotal": -3,
+				"resolvePagesCacheMissesTotal": 1038,
+				"getPagesTotal": 1038,
+				"pagesFetchedTotal": 3514,
+				"prefetchPagesTotal": 2476,
+				"bytesFetchedTotal": 14393344,
+				"prefetchBytesTotal": 10141696,
+				"getPagesDurationSecondsSum": 8.176378407,
+				"getPagesDurationSecondsCount": 1038
+			}
+		},
+		{
+			"workload": "random-point-lookups",
+			"description": "Deterministic random primary-key point lookups across a large table.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457901653-7c6244b2",
+				"random-point-lookups"
+			],
+			"actorId": "dh1qdiyzkl40znrz5wr8zuevkkcl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 582.4261729999998,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 8725.889302,
+				"workload": "random-point-lookups",
+				"ops": 1000,
+				"bytes": 2048000,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1008,
+				"resolvePagesRequestedTotal": 1008,
+				"resolvePagesCacheHitsTotal": -3,
+				"resolvePagesCacheMissesTotal": 1011,
+				"getPagesTotal": 1011,
+				"pagesFetchedTotal": 3208,
+				"prefetchPagesTotal": 2197,
+				"bytesFetchedTotal": 13139968,
+				"prefetchBytesTotal": 8998912,
+				"getPagesDurationSecondsSum": 8.084016886,
+				"getPagesDurationSecondsCount": 1011
+			}
+		},
+		{
+			"workload": "migration-add-column-large",
+			"description": "Large-table ADD COLUMN migration that should avoid row rewrite.",
+			"category": "migration",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-realworld-1777457901653-7c6244b2",
+				"migration-add-column-large"
+			],
+			"actorId": "hsw0n9x0nf0tvc6hbmfkm19xnmcl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 388.5069980000044,
+				"pageCount": 1043
+			},
+			"main": {
+				"ms": 2.7332150000002002,
+				"workload": "migration-add-column-large",
+				"alters": 1,
+				"rewritesRows": false,
+				"pageCount": 1044
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 0,
+				"resolvePagesRequestedTotal": 0,
+				"resolvePagesCacheHitsTotal": -3,
+				"resolvePagesCacheMissesTotal": 3,
+				"getPagesTotal": 3,
+				"pagesFetchedTotal": 3,
+				"prefetchPagesTotal": 0,
+				"bytesFetchedTotal": 12288,
+				"prefetchBytesTotal": 0,
+				"getPagesDurationSecondsSum": 0.024192735,
+				"getPagesDurationSecondsCount": 3
+			}
+		}
+	]
+}

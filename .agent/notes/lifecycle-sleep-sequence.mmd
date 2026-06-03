@@ -1,0 +1,59 @@
+sequenceDiagram
+    autonumber
+    participant Timer as Sleep timer
+    participant Task as ActorTask
+    participant Ctx as ActorContext
+    participant Adapter as Runtime adapter
+    participant User as User hooks/run
+    participant Store as State/KV
+
+    Timer->>Task: sleep_timer() / idle deadline fires
+    Task->>Task: reset_sleep_deadline() used can_arm_sleep_timer()
+    Task->>Task: begin_grace(StopReason::Sleep)
+    Task->>Task: transition_to(LifecycleState::SleepGrace)
+    Task->>Ctx: suspend_alarm_dispatch()
+    Task->>Ctx: cancel_local_alarm_timeouts()
+    Task->>Ctx: cancel_abort_signal_for_sleep()
+    Task->>Task: emit_grace_events(StopReason::Sleep)
+    Task->>Ctx: begin_core_dispatched_hook()
+    Task->>Adapter: send_actor_event(DisconnectConn { conn_id, reply })
+    Adapter->>User: call_on_disconnect_final()
+    Adapter->>Ctx: disconnect_conn(conn_id)
+    Adapter-->>Task: Reply<()> Ok
+    Task->>Ctx: mark_core_dispatched_hook_completed()
+    Task->>Ctx: begin_core_dispatched_hook()
+    Task->>Adapter: send_actor_event(RunGracefulCleanup { Sleep, reply })
+    Adapter->>User: call_on_sleep()
+    Adapter-->>Task: Reply<()> Ok
+    Task->>Ctx: mark_core_dispatched_hook_completed()
+    User-->>Ctx: waitUntil / on_state_change / http / raw ws completes
+    Ctx-->>Task: activity_notify.notified()
+    Task->>Task: on_activity_signal()
+    Task->>Task: try_finish_grace()
+    Task->>Ctx: can_finalize_sleep()
+    alt all work idle before grace deadline
+        Task->>Task: run_shutdown(StopReason::Sleep)
+        Task->>Task: transition_to(LifecycleState::SleepFinalize)
+        Task->>Task: save_final_state(StopReason::Sleep)
+        Task->>Adapter: send_actor_event(SerializeState { Save, reply })
+        Adapter-->>Task: Reply<Vec<StateDelta>>
+        Task->>Ctx: save_state(deltas)
+        Ctx->>Store: persist actor state
+        Task->>Task: close_actor_event_channel()
+        Task->>User: abort_and_join_run_handle()
+        Task->>Ctx: cleanup_for_stopped()
+        Task->>Task: LiveExit::Stopped(Sleep)
+    else grace deadline expires
+        Task->>Task: on_sleep_grace_deadline()
+        Task->>User: run_handle.abort()
+        Task->>Task: run_shutdown(StopReason::Sleep)
+        Task->>Task: transition_to(LifecycleState::SleepFinalize)
+        Task->>Task: save_final_state(StopReason::Sleep)
+        Task->>Adapter: send_actor_event(SerializeState { Save, reply })
+        Adapter-->>Task: Reply<Vec<StateDelta>> or empty on timeout/error
+        Task->>Ctx: save_state(deltas)
+        Ctx->>Store: persist actor state
+        Task->>Task: close_actor_event_channel()
+        Task->>Ctx: cleanup_for_stopped()
+        Task->>Task: LiveExit::Stopped(Sleep)
+    end

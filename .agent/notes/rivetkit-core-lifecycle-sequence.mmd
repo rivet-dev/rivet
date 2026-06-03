@@ -1,0 +1,69 @@
+sequenceDiagram
+	autonumber
+	participant Registry as RegistryDispatcher
+	participant Lifecycle as ActorLifecycle
+	participant Ctx as ActorContext
+	participant Factory as ActorFactory
+	participant Sleep as SleepController
+	participant Schedule as Schedule
+	participant Action as ActionInvoker
+	participant State as ActorState
+
+	Registry->>Lifecycle: startup(ctx, factory, options)
+	Lifecycle->>Ctx: load persisted actor
+	Lifecycle->>Factory: create(ctx, input, is_new)
+	Factory-->>Lifecycle: callbacks
+	Lifecycle->>Ctx: configure sleep, connections, callbacks
+	Lifecycle->>State: save initialized actor immediately
+	opt on_migrate
+		Lifecycle->>Factory: run on_migrate with timeout
+	end
+	opt on_wake
+		Lifecycle->>Factory: run on_wake
+	end
+	Lifecycle->>Schedule: sync future alarm
+	Lifecycle->>Ctx: restore hibernatable connections
+	Lifecycle->>Sleep: ready = true
+	opt driver before-start hook
+		Lifecycle->>Registry: on_before_actor_start
+	end
+	Lifecycle->>Sleep: started = true
+	Lifecycle->>Sleep: reset sleep timer
+	Lifecycle->>Ctx: spawn run handler task
+	Lifecycle->>Schedule: process overdue scheduled events
+	Lifecycle->>Schedule: install local alarm callback
+	Lifecycle-->>Registry: startup outcome
+
+	par User or scheduled action
+		Registry->>Action: dispatch(action request)
+		Action->>Ctx: acquire action_lock
+		Action->>Sleep: begin keep_awake
+		Action->>Factory: run user action callback
+		Factory-->>Action: output
+		Action->>Sleep: end keep_awake
+		Action->>State: trigger throttled save
+		Action-->>Registry: action output
+	and Local alarm fires
+		Schedule->>Action: dispatch scheduled action
+		Action->>Ctx: acquire same action_lock
+	end
+
+	Registry->>Lifecycle: shutdown_for_sleep or shutdown_for_destroy
+	Lifecycle->>Sleep: cancel sleep timer
+	Lifecycle->>Schedule: suspend alarms and cancel local timer
+	Lifecycle->>Sleep: ready = false, started = false
+	Lifecycle->>Ctx: cancel abort signal
+	Lifecycle->>Sleep: wait or abort run handler
+	Lifecycle->>Sleep: wait for idle counters/tasks
+	alt sleep shutdown
+		Lifecycle->>Factory: on_sleep with remaining deadline
+		Lifecycle->>Ctx: persist hibernatable connections
+		Lifecycle->>Ctx: disconnect non-hibernatable connections
+	else destroy shutdown
+		Lifecycle->>Factory: on_destroy with timeout
+		Lifecycle->>Ctx: disconnect all connections
+	end
+	Lifecycle->>Sleep: wait for shutdown callbacks
+	Lifecycle->>State: save state immediately
+	Lifecycle->>Ctx: cleanup sqlite
+	Lifecycle-->>Registry: shutdown outcome

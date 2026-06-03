@@ -1,0 +1,54 @@
+sequenceDiagram
+	participant Registry as RegistryDispatcher
+	participant Lifecycle as ActorLifecycle
+	participant Ctx as ActorContext
+	participant Factory as ActorFactory
+	participant Sleep as SleepController
+	participant Schedule as Schedule
+	participant Action as ActionInvoker
+	participant State as ActorState
+
+	Registry->>Lifecycle: startup(ctx, factory, options)
+	Lifecycle->>Ctx: load persisted actor
+	Lifecycle->>Factory: create(ctx, input, is_new)
+	Factory-->>Lifecycle: callbacks
+	Lifecycle->>Ctx: configure sleep, connections, callbacks
+	Lifecycle->>State: save initialized actor immediately
+	Lifecycle->>Factory: maybe run on_migrate with timeout
+	Lifecycle->>Factory: maybe run on_wake
+	Lifecycle->>Schedule: sync future alarm
+	Lifecycle->>Ctx: restore hibernatable connections
+	Lifecycle->>Sleep: ready = true
+	Lifecycle->>Registry: maybe run before-start hook
+	Lifecycle->>Sleep: started = true
+	Lifecycle->>Sleep: reset sleep timer
+	Lifecycle->>Ctx: spawn run handler task
+	Lifecycle->>Schedule: process overdue scheduled events
+	Lifecycle->>Schedule: install local alarm callback
+	Lifecycle-->>Registry: startup outcome
+
+	Registry->>Action: dispatch user action
+	Action->>Ctx: acquire action_lock
+	Action->>Sleep: begin keep_awake
+	Action->>Factory: run user action callback
+	Factory-->>Action: output
+	Action->>Sleep: end keep_awake
+	Action->>State: trigger throttled save
+	Action-->>Registry: action output
+
+	Schedule->>Action: dispatch scheduled action
+	Action->>Ctx: acquire same action_lock
+
+	Registry->>Lifecycle: shutdown_for_sleep or shutdown_for_destroy
+	Lifecycle->>Sleep: cancel sleep timer
+	Lifecycle->>Schedule: suspend alarms and cancel local timer
+	Lifecycle->>Sleep: ready = false, started = false
+	Lifecycle->>Ctx: cancel abort signal
+	Lifecycle->>Sleep: wait or abort run handler
+	Lifecycle->>Sleep: wait for idle counters/tasks
+	Lifecycle->>Factory: run on_sleep or on_destroy
+	Lifecycle->>Ctx: persist or disconnect connections
+	Lifecycle->>Sleep: wait for shutdown callbacks
+	Lifecycle->>State: save state immediately
+	Lifecycle->>Ctx: cleanup sqlite
+	Lifecycle-->>Registry: shutdown outcome

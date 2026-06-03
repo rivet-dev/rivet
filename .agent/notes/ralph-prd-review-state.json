@@ -1,0 +1,658 @@
+{
+  "description": "State for the 5-min loop that audits ralph PRD stories with passes:true. Tracks reviewed story COMMITS by SHA so we don't re-review. Reset per PRD phase since story IDs (US-001, US-002, ...) are reused across PRDs.",
+  "currentPrd": {
+    "project": "rivetkit-napi-receive-loop-adapter",
+    "branchName": "04-19-chore_move_rivetkit_to_task_model",
+    "storyCount": 9,
+    "phase": "event-driven-drains",
+    "phaseStartedAt": "2026-04-21T09:30:00-07:00"
+  },
+  "previousPhases": [
+    {
+      "phase": "napi-receive-loop-adapter + rivetkit-rust typed event-loop + 2026-04-21 holistic-audit follow-ups",
+      "archivedAt": "2026-04-21T09:30:00-07:00",
+      "reviewedStoryCommits": {
+        "US-001": "4ed4b7cee",
+        "US-002": "4314c2938",
+        "US-003": "ce465a684",
+        "US-004": "0953c6654",
+        "US-005": "66423a18b",
+        "US-006": "af792f9c0",
+        "US-007": "639fc495c",
+        "US-008": "6a2fc6343",
+        "US-009": "af23e7819",
+        "US-010": "9b55103f1",
+        "US-011": "557c4a520",
+        "US-104": "SKIPPED_PERSISTENT_GAP_SEE_outOfScopeKnownGaps",
+        "US-012": "dddddc7eb",
+        "US-013": "ba722a362",
+        "US-014": "0486d8720",
+        "US-015": "20e696549",
+        "US-016": "c7d172741",
+        "US-200": "29e438c70",
+        "US-201": "d0ce1315d",
+        "US-202": "7ed94f6fe",
+        "US-203": "c905598f0",
+        "US-204": "4122f28dc",
+        "US-205": "042a2a107",
+        "US-206": "f74381198",
+        "US-207": "2a884a9bb",
+        "US-208": "8dd4e28fe",
+        "US-209": "c2bb1c27b",
+        "US-210": "da156586a",
+        "US-211": "faf1523c9",
+        "US-212": "2e521e1b1",
+        "US-213": "3101bafe0",
+        "US-214": "4a294a3 (in ~/open-artifacts, not r6)",
+        "US-105": "f89cc0e56",
+        "US-106": "affc324d5",
+        "US-101": "2e856a06f",
+        "US-102": "17434b613",
+        "US-103": "b13e3883e",
+        "US-215": "0769b9247",
+        "US-216": "f72f9f628",
+        "US-217": "c59cbc9a1",
+        "US-218": "5cd3540df"
+      },
+      "auditVerdicts": {
+        "US-001": {
+          "commit": "4ed4b7cee",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Rename SaveTick→SerializeState clean; SerializeStateReason::{Save,Inspector} added. Inspector emit sites deferred to later story (correctly scoped)."
+        },
+        "US-002": {
+          "commit": "4314c2938",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Sleep/Destroy reply→Reply<()>, in-core shutdown delta-persistence removed (adapter owns it now), Action.conn→Option<ConnHandle>, alarm path sends None. New test covers both Some/None conn paths."
+        },
+        "US-003": {
+          "commit": "ce465a684",
+          "verdict": "PASS",
+          "medCritIssues": [
+            "disconnect_conns early-returns on first per-conn error, leaving later matching conns in divergent transport/map state",
+            "ConnHandles holds RwLockReadGuard across iteration — not a snapshot; holding ctx.conns() across .await blocks all writers"
+          ],
+          "addressedIn": "US-101"
+        },
+        "US-004": {
+          "commit": "0953c6654",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Inspector attach/detach/debouncer/broadcast fan-out all landed cleanly with 3 new tests. Nit-severity follow-ups excluded: 50ms/cap-32 hardcoded, Inspector/Save deadline not min-composed, ConnHibernation* dropped in overlay wire decode (feature gap, not regression)."
+        },
+        "US-101": {
+          "commit": "2e856a06f",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Follow-up from US-003 audit closed cleanly. disconnect_conns now iterates through errors + aggregates; ConnHandles got doc-warn + #[must_use] on both struct AND public conns() method. My inserted follow-up resolved."
+        },
+        "US-005": {
+          "commit": "66423a18b",
+          "verdict": "PARTIAL",
+          "medCritIssues": [
+            "abort_signal() returns Rust CancellationToken wrapper, not JS AbortSignal (blocker — breaks contract with fetch/addEventListener)",
+            "StateDeltaPayload.conn_hibernation and conn_hibernation_removed declared Option<Vec<_>> instead of spec-required Vec<_>",
+            "mark_ready/mark_started unguarded (no forward-only state machine)",
+            "disconnect_conns(predicate) doesn't await Promise<bool> — only handles sync bool"
+          ],
+          "addressedIn": "US-102"
+        },
+        "US-006": {
+          "commit": "af792f9c0",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "All 21 callback slots present, #[napi(constructor)] builds Arc<CallbackBindings> once, TSF helpers preserved byte-for-byte. #[allow(dead_code)] scaffolding expected, will lift in US-007+."
+        },
+        "US-007": {
+          "commit": "639fc495c",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Adapter loop scaffold clean. 9/11 variants unimplemented!() as expected for skeleton; Sleep/Destroy stub replies Ok(()). JoinSet per-loop, drained before return. create_callbacks fully deleted."
+        },
+        "US-102": {
+          "commit": "17434b613",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "All 4 US-005 follow-up fixes landed clean. Real web AbortSignal via env.run_script, required Vec fields, forward-only state-machine guards with Rust test, Promise<bool> predicates via call_async<Promise<bool>>."
+        },
+        "US-008": {
+          "commit": "6a2fc6343",
+          "verdict": "PASS",
+          "medCritIssues": [
+            "BLOCKER: mark_has_initialized_and_flush only calls save_state, does NOT flip has_initialized flag. First-create re-runs every reload.",
+            "MEDIUM: init_alarms and drain_overdue_scheduled_events are no-op stubs. Overdue schedules won't fire on wake under the new receive-loop path."
+          ],
+          "addressedIn": "US-103"
+        },
+        "US-009": {
+          "commit": "af23e7819",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Run handler spawn/non-fatal/restart support all clean. std::sync::Mutex guard correctly scoped to not cross .await. Abort-then-await only at end-of-life; restart path aborts without joining (correct to avoid deadlock)."
+        },
+        "US-103": {
+          "commit": "b13e3883e",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "US-008 follow-up closed cleanly. set_has_initialized exposed pub + called in mark_has_initialized_and_flush. init_alarms delegates to real Schedule::sync_future_alarm_logged. drain_overdue_scheduled_events dispatches real ActorEvent::Action. Bonus: task-local helpers moved to ActorContext for deduplication."
+        },
+        "US-010": {
+          "commit": "9b55103f1",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Action dispatch clean: tokio::select! with abort branch, action_not_found error shape, conn: Option<ConnHandle> with no synthetic conn for alarms, timeout wrapped, on_before_action_response optional wrapper correctly propagates errors. Reply double-send race safe via Drop guard re-check."
+        },
+        "US-011": {
+          "commit": "557c4a520",
+          "verdict": "PARTIAL",
+          "medCritIssues": [
+            "onRequest, getWorkflowHistory, replayWorkflow not wrapped in tokio::time::timeout — corresponding config fields don't exist. DoS vector.",
+            "onDisconnect reuses on_connect_timeout; onBeforeSubscribe reuses on_before_connect_timeout (wrong config field)",
+            "missing_callback returns plain anyhow!, not structured RivetError (inconsistent with action_not_found)"
+          ],
+          "addressedIn": "US-104"
+        },
+        "US-012": {
+          "commit": "dddddc7eb",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "SerializeState dispatched inline (not spawned). maybe_serialize correctly handles Save vs Inspector dirty semantics. CancellationToken correctly propagates to spawned tasks and is cancelled only on Destroy + end-of-life (not Sleep or run-exit). US-102's AbortController bridge preserved — no regression."
+        },
+        "US-013": {
+          "commit": "ba722a362",
+          "verdict": "PASS",
+          "medCritIssues": [
+            "Error paths in Sleep/Destroy arms don't set end_reason — outer loop may not terminate after a failed lifecycle callback"
+          ],
+          "addressedIn": "US-105",
+          "notes": "Success paths wired correctly per spec. Low-severity findings excluded: has_conn_changes only checks hibernatable conn count, tests use empty_bindings so don't exercise real callbacks."
+        },
+        "US-014": {
+          "commit": "0486d8720",
+          "verdict": "PARTIAL",
+          "medCritIssues": [
+            "BLOCKER: serializeForTick orphan — never wired as serializeState TSF callback; Save/Sleep/Destroy will fail at runtime",
+            "BLOCKER: saveState({immediate}) calls non-blocking request_save, no longer awaits durable write",
+            "BLOCKER: maxWait field dropped from saveState signature"
+          ],
+          "addressedIn": "US-106"
+        },
+        "US-105": {
+          "commit": "f89cc0e56",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Error paths for both Sleep and Destroy now set end_reason. Two new tests verify: sleep_error_sets_end_reason_so_loop_terminates, destroy_error_sets_end_reason_so_loop_terminates."
+        },
+        "US-015": {
+          "commit": "20e696549",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Conn handler calls requestSave(false); saveState({immediate, maxWait}) implements all 3 modes; ctx.keepAwake pushes into adapter JoinSet via register_task TSF. Bonus: this commit resolved all 3 US-106 blockers from the US-014 audit (serializeForTick wiring, durable-write semantics, maxWait field)."
+        },
+        "US-016": {
+          "commit": "c7d172741",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Watershed: all 21 callbacks wired in single object literal, driver tests green (native-save-state 6/6, actor-state 9/9, actor-conn 69/69, actor-destroy 30/30, lifecycle 14/18 with 1 flake). End-to-end NAPI receive-loop adapter functional. Minor nits excluded: stale AC #7 filter name, onWake/onBeforeActorStart key swap intentional per CLAUDE.md, onRequest/serializeState always wrapped by adapter design."
+        },
+        "US-200": {
+          "commit": "29e438c70",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Rust rivetkit teardown clean. 0 grep hits on all 14 forbidden callback request types. bridge.rs, validation.rs deleted. registry.rs + queue.rs left as orphan TODO stubs (per AC option). Pre-existing blocker: package not in root workspace members — known infrastructure gap."
+        },
+        "US-201": {
+          "commit": "d0ce1315d",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Actor trait content exactly matches spec (4 associated types with precise bounds, no methods). Raw struct fails Deserialize with correct guidance message. EmptyActor test compiles. Pre-existing workspace-registration blocker prevents cargo build -p rivetkit from running; fix is out of scope for this story (root /Cargo.toml edit)."
+        },
+        "US-202": {
+          "commit": "7ed94f6fe",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Ctx<A> wrapper clean: PhantomData<fn() -> A> variance, ciborium CBOR broadcast, ConnIter struct, no state cache / no vars field. All 14 criteria met. Same workspace-registration gap prevents cargo build verification."
+        },
+        "US-203": {
+          "commit": "c905598f0",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Start<A>/Input<A>/Snapshot/Hibernated<A>/Events<A> all per spec. Event::Todo(TodoEvent<A>) placeholder ensures no core ActorEvent is silently dropped until US-204 fills typed variants. Events::recv truly awaits the mpsc. 6+ round-trip tests. Same workspace blocker."
+        },
+        "US-204": {
+          "commit": "4122f28dc",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Event<A> enum with exactly 11 variants, each wrapper #[must_use] with informative message + Drop warn-log before core Reply drop-guard. US-203's Event::Todo placeholder fully replaced. Test asserts RivetError group/code + tracing log. Workspace gap unchanged."
+        },
+        "US-205": {
+          "commit": "042a2a107",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "All 7 Action<A> methods, hand-rolled ActionDeserializer, unit_variant accepts [] or [0xf6] literally, Reply::take() prevents double-fire, all 4 variant-shape tests + unknown-variant test pass. Spec-drift note (not a blocker): newtype/tuple/struct variants go through ciborium::Value + ValueDeserializer instead of direct ciborium::de::Deserializer::from_reader forwarding — functionally equivalent for tested shapes but rejects CBOR tags and hand-rolls numeric coercions."
+        },
+        "US-206": {
+          "commit": "f74381198",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "ConnCtx<A> (8 methods), ConnOpen<A> (accept/accept_default with Default bound/reject), ConnClosed<A> (plain, no reply, no Drop), Subscribe<A> (allow/deny). Reply::take() pattern + Drop-warn impls preserved from US-204. Tests verify CBOR roundtrip and oneshot resolution. Workspace gap unchanged."
+        },
+        "US-207": {
+          "commit": "2a884a9bb",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "SerializeState<A> 5 methods with correct delta assembly order, Sleep/Destroy ok/err, persist.rs module with 4 free fns all pub. Reply::take() pattern consistent. Test empirically verifies CBOR bytes match (not just roundtrip). Workspace gap unchanged."
+        },
+        "US-208": {
+          "commit": "8dd4e28fe",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "HttpCall (with HttpReply Send-safe for spawning), WsOpen<A>, WfHistory, WfReplay all per spec. into_request transfers Drop-warn baton to HttpReply so neither fires prematurely. Reply→reply_raw delegation pattern consistent. All 3 inline tests pass. Workspace gap unchanged."
+        },
+        "US-209": {
+          "commit": "c2bb1c27b",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Registry + register + register_with + serve passthroughs. Generic bounds exact-match spec. wrap_start errors propagate via ?. Arc<F> wrapping needed for Fn→BoxFuture; spec wording simpler but impl is correct. Inline integration test drives factory to Ok(()). Workspace gap unchanged."
+        },
+        "US-210": {
+          "commit": "da156586a",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "All re-exports present in lib.rs (13 Event variants + 5 start types + Actor/Raw/Ctx/ConnCtx/Registry/persist). Prelude minimal: Actor/Ctx/ConnCtx/Event/Start/Registry + anyhow::{Result, anyhow}. 22 rivetkit-core re-exports preserved. No intra-doc links so cargo doc trivially passes. pub(crate) applied consistently."
+        },
+        "US-211": {
+          "commit": "faf1523c9",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "All 10 wrappers drop-tested (ConnClosed correctly excluded — no reply). 7 Action::decode cases including name-agnostic decode_as<String> test with deliberately-wrong variant name. Shared LogCapture + assert_dropped_reply_logs helper. Workspace gap unchanged."
+        },
+        "US-212": {
+          "commit": "2e521e1b1",
+          "verdict": "PARTIAL",
+          "medCritIssues": [
+            "Test file at tests/integration_canned_events.rs dual-wired: auto-discovered as standalone integration-test binary AND included as cfg-test module via src/lib.rs:30-32 #[path] shim. Uses crate:: imports + pub(crate) wrap_start — standalone binary won't compile. Currently latent behind workspace blocker."
+          ],
+          "notes": "All 9 functional AC criteria pass. Fix coupling with the workspace-registration follow-up (promote wrap_start to pub OR add autotests = false + explicit [[test]])."
+        },
+        "US-213": {
+          "commit": "3101bafe0",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Chat example covers all 11 Event<A> variants explicitly (no _ wildcard), uses real typed ConnState=String, demonstrates ctx.broadcast. Minor deviations excluded: SerializeState uses .save(&state) direct shortcut (equivalent to persist::state_deltas route), ConnClosed arm is a no-op (explicit per AC). Workspace gap unchanged."
+        },
+        "US-214": {
+          "commit": "4a294a3 (in ~/open-artifacts)",
+          "verdict": "PARTIAL",
+          "medCritIssues": [
+            "2 new test failures in ~/open-artifacts storage/tokens.rs attributable to r6 SqliteDb::default() error-chain change",
+            "CI workflow .github/workflows/live-engine-e2e.yml still wired to r5 + cargo-r5 [patch] override — now a no-op since Cargo.toml uses path deps",
+            "4 new clippy::let_unit_value warnings at let _ = start.input.decode_or_default()?; sites"
+          ],
+          "notes": "4 actors (Auth, Namespace, RateLimit, Repo) migrated to new 4-assoc-type Actor + async fn run. All event variants handled, no _ wildcards. Scope issue: fix for the 3 med issues is entirely in the sibling repo ~/open-artifacts, so no follow-up story added in the r6 PRD (same pattern as US-104). Tracked as out-of-scope known gap."
+        },
+        "US-106": {
+          "commit": "affc324d5",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Behavior fix already landed in US-015 (20e696549). This commit adds 150-line test file native-save-state.test.ts covering the 3 blockers + makes some symbols exported for the test. Pure belt-and-suspenders."
+        },
+        "US-215": {
+          "commit": "0769b9247",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Inspector dirty-flag consumption fix is minimal and correct. Refactored into maybe_serialize_with seam to enable unit test with mock serializer; Save path preserves swap+early-return and was_dirty rollback; new invariant comment added."
+        },
+        "US-216": {
+          "commit": "f72f9f628",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "with_timeout wrappers added for onRequest/getWorkflowHistory/replayWorkflow via shared spawn_reply_with_timeout helper; AdapterConfig fields with action_timeout_ms fallback + 60s final default; 3 unit tests (pending-future + drain_tasks cleanup); index.d.ts regen. US-104 removed from outOfScopeKnownGaps."
+        },
+        "US-217": {
+          "commit": "c59cbc9a1",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "Introduced tracked_persist Mutex<Option<JoinHandle>> on ActorStateInner; persist_now_tracked chains handles; wait_for_pending_writes drains in re-check loop before SQLite cleanup. Schedule path routes through state.persist_now_tracked. Integration test schedules inside Destroy event then asserts KV write; unit test exercises tracked_persist_pending true→false transition."
+        },
+        "US-218": {
+          "commit": "5cd3540df",
+          "verdict": "PASS",
+          "medCritIssues": [],
+          "notes": "All 4 bridge_actor.rs type aliases + ACTOR_CONTEXT_SHARED + queue.rs completion_waiters migrated to scc::HashMap. Error schema interning via LazyLock<SccHashMap<(group,code), &RivetErrorSchema>> with Box::leak only on Vacant (bounded by distinct error codes). Warn log on malformed BridgeRivetErrorPayload. 2 unit tests. envoy_handle.rs + lib.rs changes are justified consumer updates. grep confirms zero Mutex<HashMap remain."
+        }
+      },
+      "followupStoriesAdded": [],
+      "outOfScopeKnownGaps": [
+        {
+          "issue": "Envoy-backend kv.rs::apply_batch uses sequential batch_put + batch_delete RPCs instead of one atomic UniversalDB transaction. Breaks atomicity for every multi-delta flush.",
+          "location": "rivetkit-rust/packages/rivetkit-core/src/kv.rs:189-213",
+          "blocker": "Requires a runner-protocol change + envoy-client edits",
+          "carriedFromPriorPrd": "rivetkit-core-receive-loop-api"
+        },
+        {
+          "issue": "ActorContext::hibernated_connection_is_live production path is todo!(). Any live wake with persisted hibernated conns panics until envoy-client exposes a gateway_id/request_id liveness query.",
+          "location": "rivetkit-rust/packages/rivetkit-core/src/actor/context.rs:808-832",
+          "blocker": "Requires envoy-client API extension",
+          "carriedFromPriorPrd": "rivetkit-core-receive-loop-api"
+        },
+        {
+          "issue": "rivetkit-rust/packages/rivetkit package not registered in root workspace members — cargo build -p rivetkit fails with 'current package believes it's in a workspace when it's not'",
+          "location": "/home/nathan/r6/Cargo.toml (members array)",
+          "blocker": "Pre-existing, out-of-scope for US-200/201 which only permit edits under rivetkit-rust/packages/rivetkit/",
+          "recommendation": "Add rivetkit-rust/packages/rivetkit to the root workspace members array (single-line fix), or convert the package to standalone by removing its workspace = '../../../' declaration."
+        },
+        {
+          "issue": "US-214 migration in sibling repo ~/open-artifacts has 2 test failures in storage/tokens.rs attributable to r6 SqliteDb::default() error-chain change; CI workflow still wired to r5 cargo-r5 [patch] (now a no-op); 4 new clippy::let_unit_value warnings",
+          "location": "~/open-artifacts (NOT ~/r6)",
+          "blocker": "Fix is entirely in sibling repo, which the r6 PRD doesn't govern",
+          "recommendation": "Handle in a follow-up PR in ~/open-artifacts — either wrap SqliteDb::default() with outer anyhow context, update CI workflow to point at r6 path deps, and silence/fix let_unit_value warnings."
+        }
+      ]
+    }
+  ],
+  "reviewedStoryCommits": {
+    "US-001": "ee4f035a3",
+    "US-002": "2a95e3057",
+    "US-003": "b2c454532",
+    "US-004": "0dc9e2866",
+    "US-005": "7764a15fd",
+    "US-006": "880e45207",
+    "US-007": "13d606e31",
+    "US-008": "efb9fea13",
+    "US-009": "5f831ac85",
+    "US-010": "fb15b24be",
+    "US-011": "c722a9117",
+    "US-012": "eb317143a",
+    "US-100": "8eb3c3131",
+    "US-101": "85012c84e",
+    "US-102": "7cbd07517",
+    "US-013": "52b274146",
+    "US-014": "d285806be",
+    "US-020": "4d238ffcb",
+    "US-016": "UNCOMMITTED-at-HEAD-4d238ffcb",
+    "US-103": "3b80078db",
+    "US-019": "9c2c4a4cc",
+    "US-108": "851dc0e13",
+    "US-109": "851dc0e13",
+    "US-114": "851dc0e13",
+    "US-110": "UNCOMMITTED-at-HEAD-c9a1905c8",
+    "US-115": "e33f4bbac",
+    "US-117": "cb4442628",
+    "US-104": "bd2eb4e04",
+    "US-106": "7d1b3cce8",
+    "US-107": "6dacbcd6b",
+    "US-111": "b25d24596",
+    "US-105": "2026e45a9",
+    "US-118": "ce0a4347b",
+    "US-112": "4f62825ad",
+    "US-113": "9b062bc38",
+    "US-018": "c03083f49",
+    "US-116": "a4a794ae9",
+    "US-119": "8d8c979b8",
+    "US-017": "cf632fde0"
+  },
+  "auditVerdicts": {
+    "US-001": {
+      "commit": "ee4f035a3",
+      "verdict": "PARTIAL",
+      "medCritIssues": [
+        "rivet-util dep not wired into rivetkit-core or envoy-client Cargo.toml (later stories US-002 and US-003 each added the dep themselves, so effectively resolved)"
+      ],
+      "notes": "AsyncCounter impl is correct; arm-before-check race safety solid. Test for non-zero decrement not firing notify uses !is_finished() instead of spy task (functionally adequate). debug_assert test uses catch_unwind instead of #[should_panic] (functionally equivalent). Cargo.toml wiring gap resolved by downstream stories."
+    },
+    "US-002": {
+      "commit": "2a95e3057",
+      "verdict": "PARTIAL",
+      "medCritIssues": [
+        "SharedContext.actors mirror lifecycle: no per-actor removal on stop/destroy — only bulk clear on disconnect/shutdown. http_request_counter fallback may return a stale counter for a stopped actor via highest-non-closed-generation fallback (commands.rs lifecycle + envoy.rs:335,368)",
+        "Dual-map divergence risk: commands.rs:23-45 populates both ctx.actors and ctx.shared.actors via duplicate or_insert_with calls; no helper wraps the pair, so any future code path mutating one without the other silently diverges"
+      ],
+      "notes": "Core HttpRequestGuard and EnvoyHandle::http_request_counter API match ACs. SharedContext.actors mirror (new) was needed because http_request_counter is sync but get_actor is async. Two outstanding lifecycle issues warrant follow-up story."
+    },
+    "US-003": {
+      "commit": "b2c454532",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Pure scaffolding. Old fields correctly preserved in parallel under #[allow(dead_code)]. RegionGuard + CountGuard (alias) present with panic-unwind decrement test."
+    },
+    "US-004": {
+      "commit": "0dc9e2866",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "begin_*/end_* pairs removed, guard-based APIs in place, call sites migrated (ctx.internal_keep_awake + ctx.with_websocket_callback wrappers). Grep confirms zero remaining begin/end symbols. Old AtomicUsize fields retained as write-only shim per AC (future story deletes them)."
+    },
+    "US-005": {
+      "commit": "7764a15fd",
+      "verdict": "PASS_WITH_MEDIUM",
+      "medCritIssues": [
+        "Post-teardown spawn race: SleepController.teardown() calls JoinSet::shutdown().await then replaces with fresh empty JoinSet. track_shutdown_task remains callable afterward — any post-teardown ctx.wait_until(...) increments shutdown_counter and spawns into the new never-shutdown JoinSet, leaking the task AND keeping counter nonzero forever. finish_shutdown_cleanup calls teardown() but subsequent pending-state-writes wait + SQLite cleanup + any concurrent user callback could still invoke wait_until (sleep.rs:368-379)"
+      ],
+      "notes": "Primary migration is correct: Mutex<Vec<JoinHandle>> removed, JoinSet on WorkRegistry, CountGuard drops on abort path, all ACs met. Single issue: teardown replaces JoinSet instead of gating further spawns, creating a post-teardown race window."
+    },
+    "US-006": {
+      "commit": "880e45207",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Main payoff story. AsyncCounter gained register_zero_notify fan-out (Weak<Notify> observer pattern). idle_notify is pinged by keep_awake + internal_keep_awake + http_request_counter via register_zero_notify in WorkRegistry::new + lookup_http_request_counter. wait_for_shutdown_tasks composes shutdown_counter + websocket_callback + prevent_sleep_notify via tokio::select!. set_prevent_sleep calls notify_prevent_sleep_changed only on flip. Old AtomicUsize shims removed; can_sleep reads from WorkRegistry. Two deterministic tests use tokio::test(start_paused=true). Grep confirms zero Duration::from_millis(10) remain in sleep.rs. Minor: lookup_http_request_counter re-registers on every miss (bounded by envoy reconfigures, Weak refs prevent leak)."
+    },
+    "US-007": {
+      "commit": "13d606e31",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "task.rs:851-853 delegates directly to ctx.wait_for_sleep_idle_window (no local poll). drain_tracked_work uses tokio::select!{ wait_for_shutdown_tasks | sleep(THRESHOLD) => { probe + warn_once + inner wait }}. Warn-once verified by two deterministic tests using tokio::time::pause(): threshold-minus-1ms shows 0 warns, threshold-plus-2s shows 1 warn still (not re-fired). Old long_drain_warned bool + deadline tracking removed. Grep confirms zero Duration::from_millis(10) in task.rs."
+    },
+    "US-008": {
+      "commit": "efb9fea13",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "1ms sleep removed from ctx.sleep() runtime.spawn body (context.rs:368). ctx.destroy() already had no defer; comment updated. Deterministic test sleep_requests_envoy_on_next_scheduler_tick_without_wall_clock_delay uses start_paused=true + yield_now(). #[cfg(test)] sleep_request_count counter for test observation. Grep confirms zero sleep(Duration::from_millis(1)) in context.rs."
+    },
+    "US-009": {
+      "commit": "5f831ac85",
+      "verdict": "PASS_WITH_MEDIUM",
+      "medCritIssues": [
+        "Regression tests at tests/modules/task.rs:~1378,~1432 use std::time::Instant::now().elapsed() < 5ms under tokio::test(start_paused=true). Since tokio::time::sleep is virtual under paused mode, a regressed sleep(10ms) would NOT advance std::time and tests would incorrectly pass. The grep gate at check-event-driven-drains.sh textually catches that specific pattern, but the tests themselves are weaker than proving deterministic zero-tick behavior. Stronger form: use tokio::time::Instant or assert is_finished() after yield_now()."
+      ],
+      "notes": "3 integration tests added: no-work finishes <5ms, keep_awake blocks+releases, destroy-shutdown-times-out-and-aborts-stuck-task via NotifyOnDrop. CI grep gate script at rivetkit-core/scripts/check-event-driven-drains.sh enforces 3 patterns with set -euo pipefail + exit 1. Spec updated to Status: LANDED. grep verification: zero matches for all three banned patterns."
+    },
+    "US-010": {
+      "commit": "fb15b24be",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Message size checks moved to Rust handle_fetch at registry.rs:720-727 (incoming, before dispatch) + :748-755 (outgoing, after reply). BARE wire format verified to match TS v3 client-protocol encoding: u16 LE version=3 + string(group) + string(code) + string(message) + optional(metadata)=0 byte. Content-Type + x-rivet-encoding header match. Error artifacts generated. TS size checks deleted from native.ts 3017-3033 and 3153-3168. Scope widening noted (Rust enforces on all actor HTTP requests vs TS action-only; aligns with story intent). Cosmetic: error JSON files missing trailing newline."
+    },
+    "US-011": {
+      "commit": "c722a9117",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "with_structured_timeout helper added (napi_actor_events.rs:797-811). with_timeout delegates with (actor, callback_timed_out). HttpRequest dispatch uses action_timed_out; Action + on_before_action_response dispatch also use action_timed_out. Error artifact actor.action_timed_out.json generated with correct group/code/message. TS withTimeout wrapper removed from native.ts. Inspector maps actor/action_timed_out → HTTP 408. Abort-race semantics preserved via spawn_reply + inline with_structured_timeout. Minor: structured_timeout_schema fallback Box::leak branch is latent dead code for unknown (group, code) pairs — not exercised by current callers."
+    },
+    "US-012": {
+      "commit": "eb317143a",
+      "verdict": "PASS_WITH_MINOR",
+      "medCritIssues": [],
+      "notes": "cancel_token module uses scc::HashMap + AtomicU64 monotonic IDs (no reuse). #[napi] fn poll_cancel_token exposed for sync JS access. ActionPayload + HttpRequestPayload gain Option<u64> plain-data field. Dispatch sites now register a Drop-guarded cancel token so panic unwind still cancels + removes the entry, and US-106 added guard/manual-drop plus mixed-load leak regression coverage around that helper. TS ctx.abortSignal() polls pollCancelToken every 50ms; cleanup idempotent via cleanedUp flag; interval cleared on actor abort or dispatch cancel. No Mutex<HashMap>. setInterval(fn, 50) correct arg order. Minor concern: two parallel cancellation modules (cancel_token vs cancellation_token) — naming confusion for future contributors."
+    },
+    "US-100": {
+      "commit": "6dacbcd6b",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Resolved by US-107 commit 6dacbcd6b: task.rs now has a test-only shutdown-cleanup hook immediately after teardown_sleep_controller(), and the new sleep/destroy integration tests inject ctx.wait_until(...) at that exact point, assert the warn fires once, verify the refused future drops immediately, confirm shutdown_counter stays drained via wait_for_shutdown_tasks(), and preserve destroy-completion ordering."
+    },
+    "US-101": {
+      "commit": "85012c84e",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Three arms (lifecycle_inbox, lifecycle_events, dispatch_inbox) switched to Option binding + explicit match. None branch calls log_closed_channel helper emitting structured tracing::warn with actor_id, channel, reason = all senders dropped. dispatch_inbox keeps accepting_dispatch() guard. else => break arm removed (grep confirms zero matches). Inline comment present above arm cluster. 3 unit tests using poll!() + MessageVisitor capture each channel closure and assert tracing event fires with correct fields. Some(msg) bodies identical to prior behavior."
+    },
+    "US-102": {
+      "commit": "7cbd07517",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "SleepGrace + SleepFinalize added to task_types.rs; Sleeping fully removed (grep zero matches). handle_stop(Sleep): Started→SleepGrace, request_begin_sleep() fires onSleep TSF early, select-loop awaits idle drain AND keeps lifecycle_inbox/events live, then →SleepFinalize runs drain+disconnect+save. Adapter split: BeginSleep handler = onSleep TSF only (detached spawn); FinalizeSleep handler = drain + onDisconnect non-hib + disconnect + reply. accepting_dispatch() = Started|SleepGrace only (task.rs:1059). state_save/inspector deadlines guarded by Started|SleepGrace; cancelled at SleepFinalize entry. sleep_deadline cancelled at SleepGrace entry. suspend_alarm_dispatch + cancel_local_alarm_timeouts + set_local_alarm_callback(None) at SleepFinalize entry. Second Stop{Sleep} idempotent via select-loop reply-immediately (begin_sleep_count stays 1). Stop{Destroy} escalates via finish_destroy_shutdown preserving mark_destroy_completed ordering. All 5 regression tests present. CLAUDE.md bullet at line 190. Minors: send_stop_reply_clone flattens RivetError downcast chain during Destroy-escalation; examples/counter.rs ride-along update for ActorEvent match; abort.cancel() semantics unchanged from pre-existing (cancellation lives in adapter, not task.rs)."
+    },
+    "US-013": {
+      "commit": "52b274146",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Error artifact actor.callback_timed_out.json created with correct shape. JsActorConfig (actor_factory.rs:78) loses workflow_history_timeout_ms, workflow_replay_timeout_ms, run_stop_timeout_ms. AdapterConfig (actor_factory.rs:199) loses matching 3 fields. AdapterConfig::from_js_config (lines 333-346) no longer assigns them. index.d.ts regenerated (3 lines removed). Verified via grep that napi_actor_events.rs no longer references workflow_history_timeout / workflow_replay_timeout / run_stop_timeout / spawn_reply_with_timeout — the dispatch sites use with_structured_timeout directly (done by US-011), and the with_timeout helper delegates to (actor,callback_timed_out) which produces the new artifact. All 11 lifecycle callbacks automatically emit the structured error via the shared helper. Preserved FlatActorConfig.run_stop_timeout_ms=None mapping for upstream compatibility."
+    },
+    "US-014": {
+      "commit": "d285806be",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Core wait_for_names uses shared wait_for_message helper with tokio::select over actor_aborted + external_aborted + sleep(timeout) arms. enqueue_and_wait completion waits correctly IGNORE actor abort per CLAUDE.md rule (documented at queue.rs:882). NAPI queue binding accepts cancel_token_id: Option<BigInt>, resolved via cancel_token::lookup_token. NAPI exposes register_native_cancel_token + cancel + drop helpers. ActorContext wires abort_signal CancellationToken to Queue and cancels it in shutdown_begin. TS polling slicer fully removed — deleted for(;;) loop + 100ms slice + timed_out catch-retry; single native call wrapped in try/finally cleanup. 3 unit tests cover already-cancelled signal, signal-cancels-during-wait, actor_signal cancels next(). Minor: TS pre-cancelled path removeEventListener is harmless no-op; duplicated BigInt-id parsing vs parse_cancel_token_id (~4 lines)."
+    },
+    "US-020": {
+      "commit": "4d238ffcb",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "isCanonicalStructuredRivetError helper uses BOTH instanceof RivetError AND object with __type === RivetError tag + strict typeof checks on group/code/message — stricter than duck-typing on in operator. Fast path in deconstructError logs msg: structured error passthrough at info level. Preserves statusCode + public + group + code + message + metadata from structured error. Inline comment documents intent. 3 tests: RivetError instance passthrough (all fields preserved including statusCode 408 + metadata.source=core), plain object without __type falls through to classifier (rivetkit/internal_error, 500), malformed tagged payload missing group also falls through."
+    },
+    "US-016": {
+      "commit": "UNCOMMITTED",
+      "verdict": "FAIL",
+      "medCritIssues": [
+        "AC1 FAIL: connection.rs diff only adds pending_hibernation_removals() reader accessor — no atomicity rework to the disconnect flow. remove_existing was already single-winner but the story required explicit bundling of (1)remove + (2)queue_hibernation_removal + (3)on_disconnect atomic under one lock/compare-exchange. Not done.",
+        "AC2 FAIL: no core-side on_disconnect_final NAPI hook added. Instead queue_hibernation_removal + take_pending_hibernation_changes accessors were exposed so TS still drives the state mutation from outside core.",
+        "AC3 FAIL: native.ts:4300-4311 onDisconnect body still calls getNativePersistState, checks connState?.isHibernatable, calls ctx.queueHibernationRemoval + actorState.connStates.delete. Handler is NOT pure user-code dispatch. Same pattern also persists at native.ts:1149-1159 in NativeConnAdapter.disconnect.",
+        "AC7 FAIL: regression test take_pending_hibernation_changes_snapshots_removals_without_draining_core_state is a single-threaded accessor snapshot test — does NOT race two concurrent disconnects on the same conn, does NOT verify exactly-one remove_existing, does NOT verify exactly-one callback invocation.",
+        "SUSPECT: context.rs hibernated_connection_is_live replaced todo!() with `Ok(true) if envoy_handle.is_some() else Ok(false)` heuristic — presence of any EnvoyHandle does NOT verify a specific persisted gateway_id/request_id is still live, could falsely report dead connections as live."
+      ],
+      "notes": "Working tree mixes US-016 + US-103 (actor_entry→run_handle rename) together — uncommitted. US-016 ACs largely unmet. Recommend US-104 follow-up story to actually land the atomicity guarantee, on_disconnect_final hook, native.ts pure-dispatch refactor, and real race test."
+    },
+    "US-103": {
+      "commit": "3b80078db",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Rename committed cleanly at 3b80078db. Mechanically correct within task.rs: field actor_entry -> run_handle; spawn_actor_entry / handle_actor_entry_outcome / wait_for_actor_entry / wait_for_actor_entry_shutdown all renamed; 4 log/error strings updated. Grep confirms zero actor_entry remain in rivetkit-rust/ and ~26 run_handle hits in task.rs. Protected names untouched: actor_event_rx/tx, close_actor_event_channel, ActorEvent, ActorTask, ActorStart, ActorFactory. Minor stylistic let-else refactor in settle_hibernated_connections — behavior-equivalent."
+    },
+    "US-019": {
+      "commit": "9c2c4a4cc",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "NAPI inspector_snapshot() exposed as #[napi] method returning JsInspectorSnapshot with queue_size + revisions + connected_clients. TS #lastQueueSize field + getQueueSize/updateQueueSize methods removed from actor-inspector.ts. native.ts:3704-3714 hardcoded size:0 replaced with inspectorSnapshot.queueSize (also fixed sibling queueSize:0 path). Core already tracks via record_queue_updated at rivetkit-core/src/inspector/mod.rs — no duplicated state. Test updates present in actor-inspector.test.ts + driver/actor-inspector.test.ts."
+    },
+    "US-108": {
+      "commit": "851dc0e13",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Committed cleanly at 851dc0e13 — the scope-sprawl work I audited in the working tree (envoy-client hibernatable WS liveness + connection.rs disconnect race + ensure_actor_event_channel) was correctly NOT included. Only the narrow fix landed: .agent/research/sleep-wake-hang-2026-04-21.md (investigation doc), rivetkit-napi/src/actor_context.rs reset_runtime_state helper, rivetkit-napi/src/napi_actor_events.rs ctx.reset_runtime_shared_state() call at run_adapter_loop top + regression test. Investigation honestly rejects original envoy-client received_stop hypothesis and identifies real root cause: stale ActorContextShared in NAPI cache keyed by actor_id (not generation). Stale end_reason/ready/started/abort/restart-hook leaked into next wake. Fix resets these at adapter startup. Regression test run_adapter_loop_resets_stale_shared_end_reason_before_wake verifies. pegboard-runner untouched. Mandatory actor-db sleep/wake test green per investigation doc. The bundled work from the working tree likely went to separate follow-up PRs or was discarded."
+    },
+    "US-109": {
+      "commit": "851dc0e13",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Resolved downstream of US-108. Per progress.txt US-114 entry: 'actor-db-raw > maintains separate databases for different actors is now green after US-108'. No independent commit for US-109 — the stale ActorContextShared fix in US-108's reset_runtime_state also unblocks this test because it used the same sleep→wake cache path. No code audit needed; closure justified by test verification."
+    },
+    "US-114": {
+      "commit": "851dc0e13",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Checkpoint story — verified 7/8 post-US-108 tests green (actor-db, actor-db-pragma-migration, 3 actor-state-zod-coercion, actor-workflow onError). One flaky miss on actor-workflow > sleeps and resumes between ticks (no_envoys actor-start race, passed on rerun — treated as flaky). US-109 closed as resolved. No code changes in this story — pure test-run validation."
+    },
+    "US-110": {
+      "commit": "UNCOMMITTED",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Clean policy-split fix. Raw onRequest HTTP: Rust-side cap REMOVED — user code is responsible for raw body policy. /action/* and /queue/* routes: TS-side enforcement restored via maybeHandleNativeActionRequest/maybeHandleNativeQueueRequest with the same message/incoming_too_long + message/outgoing_too_long error codes US-010 established, reusing buildNativeRequestErrorResponse for wire-shape parity. WebSocket frame size caps preserved in Rust (correct — WS frames aren't HTTP). CLAUDE.md rule updated distinguishing raw onRequest vs framework message routes. Progress.txt's stale US-010 bullet rewritten to reflect supersession. Minor: limits.mdx not updated but visible defaults unchanged (arguably not required). Error artifacts in engine/artifacts/errors/message.*_too_long.json still exist but are regenerated by registry.rs test-only re-declarations, not orphaned. Dead-code nit: HttpResponseEncoding + request_encoding + helpers are now #[cfg(test)] only. No US-010/US-110 policy inconsistency found."
+    },
+    "US-115": {
+      "commit": "e33f4bbac",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Checkpoint 2: full fast-test rerun after US-110 landed. chore commit — only driver-test-progress.md + prd.json + progress.txt touched. No production code changes. Surfaced a still-flaky actor-workflow > sleeps and resumes between ticks test that passes in isolation but fails under full-file load; new follow-up US-117 filed at priority 6 to investigate."
+    },
+    "US-117": {
+      "commit": "cb4442628",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Real product fix, not test stabilization hack. Root cause: during sleep/finalize teardown the actor task registration channel closes, but TS adapter keepAwake/internalKeepAwake still calls registerTask late → throws actor task registration is closed → runtime crashes → test sees no_envoys. Two-part fix: (1) napi_actor_events.rs cancels abort token on FinalizeSleep reply on both Ok/Err branches so late registrations see closed channel cleanly; (2) TS native.ts narrowly swallows the specific registration-closed bridge error (regex-matched on core/INTERNAL_ERROR_CODE + exact message) and rethrows everything else — fail-by-default preserved. Full-file tests: 18 passed, 39 skipped. Root cause documented in driver-test-progress.md + CLAUDE.md + progress.txt learnings."
+    },
+    "US-104": {
+      "commit": "bd2eb4e04",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Real follow-up to the US-016 rubber-stamp. All 8 ACs satisfied with evidence. AC1 atomic disconnect: new disconnect_state: Mutex<()> in connection.rs holds remove_existing + pending_hibernation_removals.insert atomically; remove_existing_for_disconnect is the single entry point (connection.rs:412,479,539-575,842,921). AC2 on_disconnect_final NAPI hook: CallbackBindings renamed on_disconnect -> on_disconnect_final with JS key onDisconnectFinal (actor_factory.rs:217,385-394; napi_actor_events.rs:429,438,595,608,1215). AC3 TS onDisconnect body stripped (native.ts:~4348-4397): body is now pure `config.onDisconnect?.(actorCtx, connCtx, event)` with comment that core owns cleanup. AC4 NativeConnAdapter.disconnect (native.ts:~1156-1170) strips removedHibernatableConnIds push + requestSave + connStates.delete; type also drops removedHibernatableConnIds field. AC6 regression tests: concurrent_disconnects_only_emit_one_close_and_one_hibernation_removal + remove_existing_for_disconnect_has_exactly_one_winner (connection.rs:983-1167). AC7 hibernated_connection_is_live: real check via new EnvoyHandle::hibernatable_connection_is_live (handle.rs:145-174) looking up live_tunnel_requests by (gateway_id,request_id) per actor_id + pending_hibernation_restores; HwsRestore converted from message-passed to shared registry (actor.rs:210-224); placeholder Ok(envoy_handle.is_some()) removed. AC8 unit tests: hibernated_connection_is_live_checks_specific_live_registry_entry + hibernated_connection_is_live_checks_pending_restore_registry_entry + take_pending_hibernation_changes_snapshots_removals_without_draining_core_state (tests/modules/context.rs:22-170,292-388) with build_envoy_handle_with_live_connections helper. Generic commit message `[Story ID] - [Story Title]` is a minor lint issue (template not filled), but the code is real at every layer. No unmet ACs; story correctly resolves the US-016 gap including the dangerous Ok(envoy_handle.is_some()) placeholder."
+    },
+    "US-106": {
+      "commit": "7d1b3cce8",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Surgical drop-guard fix for US-012 panic-safety gap. All 7 code-level ACs satisfied; still uncommitted on top of bd2eb4e04. AC1: CancelTokenGuard struct at cancel_token.rs:16-18 with Drop impl at :57-62 calling cancel(self.id) + drop_token(self.id) in correct order. AC2: register_guarded_token() at cancel_token.rs:27-30 returns (CancelTokenGuard, CancellationToken). AC3: with_dispatch_cancel_token at napi_actor_events.rs:1083-1091 rewritten to just register guard + await work(id) — no manual cleanup path, so Ok/Err/panic all unwind through Drop. Both call sites (action dispatch :294, HTTP dispatch :342) use it. AC4: guarded_token_drop_cancels_and_removes_token (cancel_token.rs:150-167) proves cancellation, removal, and monotonic id (stronger than no-reuse). AC5: panic-cleanup test (napi_actor_events.rs:1336-1365) uses tokio::spawn + join_error.is_panic() to isolate the panic instead of AssertUnwindSafe+catch_unwind — functionally equivalent for async code (async blocks aren't trivially UnwindSafe), asserts active_dispatch_token_count == baseline + poll_dispatch_cancelled(cancel_token_id). Treating as equivalent to AC spelling. AC6: success-cleanup test (:1321-1333) asserts same zero-net-change invariant. AC7: mixed-load test (:1368-1397) interleaves 1000 iterations of completions + panics via even/odd index, asserts active_dispatch_token_count == baseline (bounded, no leak). This also resolves the panic-safety concern flagged in US-012 audit."
+    },
+    "US-107": {
+      "commit": "6dacbcd6b",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Closes US-100 AC10 gap with a real concurrent-race regression test. All 6 ACs satisfied. AC1 scope: the 48 lines in src/actor/task.rs are fully #[cfg(test)] gated — a ShutdownCleanupHook OnceLock<Mutex<Option<...>>> + install_shutdown_cleanup_hook() RAII guard + run_shutdown_cleanup_hook(&ctx, reason) call inside finish_shutdown_cleanup after teardown_sleep_controller().await and before wait_for_pending_state_writes(). This is the test-only injection hook the AC explicitly permits. Zero non-test production behavior change. AC2: ctx_wait_until_during_finish_shutdown_cleanup_refused_without_leak at tests/modules/task.rs:1747 with #[tokio::test(start_paused=true)] runs full Start->Stop(Sleep) cycle and races ctx.wait_until via the injection hook post-teardown. AC3 all 5 assertions: (a) implicit via c+e — never-completing future dropped proves track_shutdown_task short-circuited; (b) exact warning_count == 1 matching 'shutdown task spawned after teardown; aborting immediately' text at sleep.rs:373; (c) wait_for_shutdown_tasks(now+1ms) == true only when counter == 0; (d) stop_rx Ok and task.run() joins Ok (terminated path); (e) drop_rx.try_recv() synchronous succeeds (no deadlock). AC4: new ShutdownTaskRefusedWarningLayer reuses MessageVisitor pattern verbatim from sleep.rs:560. AC5: destroy_shutdown_concurrent_wait_until_refused at :1844 asserts destroy_completed == 0 inside cleanup hook (proves mark_destroy_completed fires AFTER cleanup) then == 1 post-stop — ordering verified. AC6: single-threaded OnceLock<Mutex> + RAII guard clear prevents cross-test pollution. Files: src/actor/task.rs:46-89,1035; tests/modules/task.rs:1747-1944. Resolves US-100 PARTIAL verdict."
+    },
+    "US-111": {
+      "commit": "b25d24596",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Resolved by follow-up US-118 on the same branch. The replay endpoint now returns a structured `409 actor/workflow_in_flight` response while the workflow state is `pending` or `running`, the in-flight replay test uses a test-controlled deferred block instead of timing coincidence, the completed-workflow replay path stayed green, and the docs/skill-base copy now describe the real API behavior. The original FAIL against b25d24596 remains historically correct, but it no longer applies to the current branch state. RESOLVED by US-118 at ce0a4347b: real structured 409 + deterministic test + docs + error artifact."
+    },
+    "US-105": {
+      "commit": "2026e45a9",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Full detached-shutdown state-machine pattern applied to SleepFinalize + Destroy. All 16 ACs verified. AC1 scope: task.rs + tests/modules/task.rs + spec update + prd/progress only. AC2 ShutdownPhase 8 variants at task.rs:321-330 (SendingFinalize, AwaitingFinalizeReply, DrainingBefore, DisconnectingConns, DrainingAfter, AwaitingRunHandle, Finalizing, Done). AC3 shutdown_step: Option<Pin<Box<dyn Future<Output = Result<ShutdownPhase>> + Send>>> at :332,358. AC4 poll_shutdown_step returns future::pending() when None (:1055-1062). AC5 new select arm at :449-451 biased after lifecycle_events.recv() (:437) and before dispatch_inbox.recv() (:452), gated on shutdown_step.is_some(). AC6 on_shutdown_step_complete (:1064) + install_shutdown_step (:1075) use owned captures (ctx.clone, actor_event_tx.clone, run_handle.take) — no &mut self inside step bodies (:1086-1236). AC7 Done → complete_shutdown() transitions to Terminated, calls mark_destroy_completed for Destroy, drains shutdown_replies via send_shutdown_replies (:1317-1337). AC8 Destroy uses same state machine (enter_shutdown_state_machine StopReason::Destroy at :528,937,998-1030, skipping SleepGrace). Minor: explicit abort.cancel() at Destroy entry not present, but spec doesn't mandate it — request_hibernation_transport_removal is used instead for hibernatable conns. Treating as spec-faithful. AC9 outer LifecycleState SleepFinalize/Destroying set at :1003,1007; ShutdownPhase tracks inner step via shutdown_phase field. AC10 gating: accepting_dispatch() → Started|SleepGrace only (:1360-1365); run_handle arm additionally gated by shutdown_step.is_none() (:464). AC11 REAL interleaving test: sleep_finalize_keeps_lifecycle_events_live_between_shutdown_steps parks shutdown in DrainingBefore via ctx.wait_until(release_rx), sends StateMutated on events_tx mpsc, wait_for_count(&seen_state_mutation, 1) fires BEFORE release_tx — genuine proof, not timing coincidence. AC12 shutdown_step_panic_returns_error_instead_of_crashing_task_loop installs panic in Finalizing + asserts error text 'shutdown phase Finalizing panicked' matches AssertUnwindSafe+catch_unwind wrapper (:1239-1249). AC13 destroy_marks_completion_before_shutdown_reply_is_sent hooks send_shutdown_replies + asserts wait_for_destroy_completion_public().now_or_never().is_some() before send. AC14 .agent/specs/rivetkit-core-detached-shutdown-task.md:3 'Status: LANDED in US-105.' AC16 grep 'actor_entry' in rivetkit-core/src/ returns zero (US-103 invariant preserved). Clean landing of the spec's core contribution — lifecycle_events drain live across shutdown steps now, enabling the inspector overlay + state-mutation flows to stay responsive during teardown."
+    },
+    "US-118": {
+      "commit": "ce0a4347b",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Real fix this time — no timing-coincidence bypass. All 10 ACs satisfied. AC1 decision doc: progress.txt 2026-04-21 21:58:23 PDT entry chose Option A (structured 409 rejection) BEFORE coding; follow-up 22:29:33 and 22:42:10 entries cover implementation. AC2 endpoint fixed: raw `throw new Error(...)` removed from native.ts:3848-3869; guard moved to rivetkit-typescript/packages/rivetkit/src/workflow/mod.ts:199-224 throwing structured RivetError('actor','workflow_in_flight',..,{public: true, statusCode: 409}); errorResponse helper refactored to honor statusCode. AC3+AC5 deterministic in-flight test (actor-inspector.test.ts:549-609): fixture workflowRunningStepActor now has module-local workflowRunningStepDeferreds map + release() action; block step awaits deferred.promise (fixture swapped setTimeout(250) → test-controlled promise); test gates on workflowState ∈ [pending,running] via /inspector/workflow-history BEFORE POSTing replay, asserts 409 + exact shape {group: 'actor', code: 'workflow_in_flight',...} then releases. In-flight invariant is structurally provable — block cannot progress until release() called and release() only fires after assertion completes. No race window. AC4 completed-workflow test: replays completed workflow test (renamed) uses workflowReplayActor unchanged, stays green. AC6 error artifact: engine/artifacts/errors/actor.workflow_in_flight.json added with correct group/code/message. AC7 docs: website/src/content/docs/actors/debugging.mdx gains 409 section with error-response example; website/src/metadata/skill-base-rivetkit.md updates replay bullet and removes duplicate. AC8 tests: progress.txt 22:42:10 confirms full actor-inspector driver file 63/63 passed. AC10 audit note: .agent/notes/ralph-prd-review-state.json US-111 verdict already has the resolving US-118 follow-up reference (will update with this sha too). Multi-layer guard triple-checks (isRunHandlerActive OR workflowState pending/running OR lower-layer rejection). Resolves US-111 FAIL."
+    },
+    "US-112": {
+      "commit": "4f62825ad",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Valid PRD-false-positive close, NOT a test-rewrite bypass. Commit scope: only scripts/ralph/prd.json + progress.txt (11 lines). Zero code changes to rivetkit-core, rivetkit-napi, rivetkit-typescript, or workflow-engine. Investigation reveals the PRD's description was wrong: the test name 'completed workflows sleep instead of destroying the actor' reads like a bug report but is actually the INTENDED contract name. Test at tests/driver/actor-workflow.test.ts:386-413 asserts state.sleepCount > 0 AND state.startCount > 1 — i.e. the actor SHOULD sleep and wake, not be destroyed. Fixture workflowCompleteActor at fixtures/driver-test-suite/workflow.ts:535-558 has sleepTimeout: 50, no ctx.destroy() call, uses onSleep/onWake counters. Adjacent workflowDestroyActor (fixtures/workflow.ts:560-571) is the destroy counterpart and calls ctx.destroy() explicitly — confirming destroy is opt-in contract, not implicit 'workflow completed' policy. feat/sqlite-vfs-v2 reference at rivetkit-typescript/packages/rivetkit/src/driver-test-suite/tests/actor-workflow.ts contains identical test body with identical assertions — sleep-on-completion IS the intended behavior. Unlike US-111 (test-rewrite bypass), no test file modified here — test and fixture unchanged, match ref byte-for-byte. No code change possible so no condition could be inverted. Adjacent 'workflow steps can destroy the actor' test at :415 still proves destroy path works when ctx.destroy() called explicitly. Build ACs 6/7 trivially satisfied (no code changed). Minor nit: commit message 'Fix...' is misleading — 'Close as PRD false positive' would be more honest, but progress.txt correctly documents it as false positive. PRD US-112 description was wrong about the expected vs. actual behavior; the reported 'failing test' wasn't actually failing on this branch."
+    },
+    "US-113": {
+      "commit": "9b062bc38",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Honest false-positive close — empirically verified. Scope: only scripts/ralph/prd.json (flip passes:false → true) and scripts/ralph/progress.txt (+8 lines diagnosis narrative). Zero product or test code changed. The subagent actually ran the targeted test on all 3 encodings: bare PASS (3598ms), cbor PASS (3148ms), json PASS (3180ms). Test file tests/driver/actor-workflow.test.ts:157 last modified in 4412f9c93 (US-029), not touched by 9b062bc38. Progress.txt narrative declares it stale-red from earlier US-108 sleep→wake runtime fix (the same one that fixed actor-db tests). Adds useful Codebase Patterns entry cautioning future iterations to rerun the repro before patching workflow-engine for similar stories. Unlike US-111 (assertion-rewrite bypass now resolved by US-118): no test file modified. Unlike my initial skepticism around US-112 (pure false-positive close): empirical test evidence here makes the close factually verified. Classification: legitimate stale-red cleanup with transparency."
+    },
+    "US-018": {
+      "commit": "c03083f49",
+      "verdict": "PARTIAL",
+      "medCritIssues": [
+        "AC3 vacuous: no production caller migration happened. `git diff 9b062bc38..c03083f49 -- rivetkit-typescript/packages/rivetkit/src/inspector/ rivetkit-typescript/packages/rivetkit/src/registry/native.ts` is empty. The deleted common/inspector-versioned.ts was dead code in production — live wire conversion was already happening in rivetkit-core/src/registry.rs:1925,3460 via decode_client_message/encode_server_message. Pre-commit callers were only client/actor-conn.ts and common/client-protocol-versioned.ts (different CURRENT_VERSION constant, not the converter). The new NAPI bridge is used only by the test file tests/inspector-versioned.test.ts.",
+        "AC1 error-code contract partially dropped at NAPI boundary: bridge surfaces errors as bare napi::Error from anyhow::bail!('unsupported inspector websocket version {version}') instead of structured RivetError with kind `inspector/events_dropped | inspector/queue_dropped | inspector/workflow_dropped`. The *_dropped codes exist only on server-side encode downgrades (protocol.rs:519-530: queue_dropped + workflow_history_dropped + trace_dropped + database_dropped), NOT as structured errors at the NAPI decode-error boundary.",
+        "AC1 missing inspector.events_dropped: v1 EventsRequest/ClearEventsRequest decode `bail!`s plain string instead of surfacing inspector.events_dropped. TS original had EVENTS_DROPPED_ERROR = 'inspector.events_dropped' but core drops that contract on decode. (Arguably moot since v1 ServerMessage has no Events* variants, so the server-to-client path is unaffected.)"
+      ],
+      "notes": "Real deletion + real core delegation for the canonical cases: file common/inspector-versioned.ts deleted (278 lines removed); NAPI bridge decode_inspector_request/encode_inspector_response added at actor_context.rs:282-304 + index.d.ts:187-188; delegates to rivetkit_core::inspector::decode_request_payload/encode_response_payload → protocol::decode_client_payload/encode_server_payload → decode_v{1..4}_message / encode_v{1..4}_server_message. Real delegation, not a stub. `rg 'TO_SERVER_VERSIONED|TO_CLIENT_VERSIONED' rivetkit-typescript/packages/rivetkit/src` returns zero. BUT: production never consumed the deleted converter (live WS conversion was already in core), so AC3 is a cleanup of dead code rather than rewire. The NAPI bridge is test-facing only. Error-code contract drops at bridge layer — generic anyhow strings instead of structured inspector/*_dropped RivetErrors. These are severity-bounded: the structured-error gap matters only if a test or future consumer uses the decode bridge and expects typed errors to branch on, and the dead-code cleanup is still a net-positive (no silent duplication to drift). Story achieves its stated invariant (core is canonical inspector v1↔v4 owner) but doesn't fully honor the AC1 contract. Consider a small follow-up to promote decode errors into structured RivetError { group: 'inspector', code: *_dropped, ... } at actor_context.rs:282-304."
+    },
+    "US-116": {
+      "commit": "a4a794ae9",
+      "verdict": "PARTIAL",
+      "medCritIssues": [
+        "Fast tier gate tripped — not all 29 fast tests green. actor-inspector RECHECK failed on 'GET /inspector/workflow-history returns populated history for active workflows' (503). Ralph correctly stopped before slow tests per the AC5 gate and filed US-119 (p6) for the failure, but the ideal outcome (all 29+9 green) was not achieved. Slow tests deferred.",
+        "Merge-readiness is BLOCKED (correctly reported). Branch is not merge-ready until US-119 (and any downstream regressions) are resolved and a US-116-style rerun succeeds.",
+        "Minor lint: commit prefix `feat:` instead of prescribed `chore:` for this checkpoint story."
+      ],
+      "notes": "Honest checkpoint execution. Scope PASS: only docs + prd.json + progress.txt touched; no production code. AC1 prereqs (US-108, 109, 110, 105, 111, 112, 113) all passes:true beforehand. AC4 fresh baseline: archived prior log to .agent/notes/driver-test-progress.2026-04-21-230108.md and reset main file. AC5 gate: 26/29 fast green on RECHECK (action-features, actor-onstatechange, actor-db-raw passed on retry after suite-name corrections); actor-inspector failed and halted slow-tier per spec. AC6 slow tests: 0/9 ran — correctly deferred behind the fast gate. AC7 actor-agent-os correctly skipped. AC8 final summary format matches prescribed template: '2026-04-21 23:11:00 PDT US-116 CHECKPOINT 3 COMPLETE: fast=26/29 confirmed green before stop, slow=0/9. Regressions: [...]. New bugs: [US-119]. Branch merge-readiness: BLOCKED'. AC10 (no production edits) PASS. US-119 filed at p6 with repro steps + rebuild requirement per AC5's 'before starting slow tests' requirement. Self-mark passes:true is per-spec — regardless of outcome. Honest BLOCKED verdict. Expected action: resolve US-119, then re-run US-116 or equivalent checkpoint before merging branch. Files: scripts/ralph/prd.json (US-119 added, US-116 closed), scripts/ralph/progress.txt (final summary), .agent/notes/driver-test-progress.md (fresh rerun log)."
+    },
+    "US-119": {
+      "commit": "8d8c979b8",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Legitimate test-harness stabilization, NOT a US-111-style assertion bypass. Scope: actor-inspector.test.ts +67/-37 + progress/prd/notes. No product-code change. Root cause diagnosed as query-route startup warm-up per-endpoint (not cross-test state leakage). Fix: new waitForInspectorJson<T> helper (actor-inspector.test.ts:46-79) polls the EXACT asserted endpoint and ONLY retries on the specific 503 + structured error `{group: 'guard', code: 'actor_ready_timeout'}`; any other non-200 fails loudly. 100ms poll interval under existing 30s WORKFLOW_READY_TIMEOUT_MS. Strong assertions preserved AND strengthened: history.entries.length > 0, entryMetadata keys > 0, nameRegistry.length > 0 now run INSIDE the poll + post-poll block re-asserts the same contract on final captured value (lines 396-403, 753-761). Skepticism checks cleared: (a) not an assertion flip — original contract stronger; (b) principled wait not arbitrary sleep — narrow retry condition anchored to structured error code; (c) no gateway/product mutation (progress note explicitly warns against changing getGatewayUrl() which is locked by gateway-query-url.test.ts). Regression gate: progress.txt 23:58:38 'FULL BARE PASS (52s), 21 passed | 42 skipped (63)'. Secondary gate: two isolated reruns logged PASS same timestamp. Minor caveats: driver-test-progress.md:88 typo 'slop=0/9' (was 'slow=0/9') cosmetic; progress.txt mentions AGENTS.md in changed-files list but --stat shows no AGENTS.md — inaccurate bookkeeping, not a correctness issue. Resolves the US-116 Checkpoint 3 blocker; US-116-equivalent rerun can proceed."
+    },
+    "US-017": {
+      "commit": "cf632fde0",
+      "verdict": "PASS",
+      "medCritIssues": [],
+      "notes": "Real migration + bonus scope hardening. Unlike US-018 which turned out to be a dead-code cleanup, here the old TS auth paths were genuinely doing auth work and are now fully delegated. AC1 InspectorAuth: rivetkit-rust/packages/rivetkit-core/src/inspector/auth.rs implements verify with (a) reject missing/empty bearer, (b) RIVET_INSPECTOR_TOKEN env check with empty-string filter, (c) per-actor KV fallback via ctx.kv().get(&INSPECTOR_TOKEN_KEY) at key [3], (d) custom timing_safe_equal. Real impl, not stub. AC2 artifact: rivetkit-rust/engine/artifacts/errors/inspector.unauthorized.json with group: 'inspector', code: 'unauthorized'. AC3 NAPI bridge: verify_inspector_auth_js at actor_context.rs:322-335 wraps failures with BridgeRivetErrorContext { public_: Some(true), status_code: Some(401) }; exposed in index.d.ts:190. AC4 native.ts delegation: ~40-line env+per-actor+production-fallback block removed at native.ts:3646-3649, replaced with single ctx.verifyInspectorAuth(header.replace(/^Bearer\\s+/i,'') ?? null) call. AC5 TS delete: actor-inspector.ts loadToken/generateToken/verifyToken + unused imports (KEYS, generateSecureToken, timingSafeEqual) removed; grep confirms no remaining inspector-method callers. BONUS: registry.rs HTTP + WS handlers also migrated at :757-762, 1762-1771 — removed request_has_inspector_access/request_has_inspector_websocket_access helpers and call InspectorAuth::new().verify(&instance.ctx, ...) directly. Old dev-mode bypass (NODE_ENV != production allowed missing token) REMOVED — fail-closed when no token configured; error group changed auth → inspector consistently. Three new Rust tests in tests/modules/inspector.rs: env-precedence, KV-fallback, missing-token (all assert group == 'inspector', code == 'unauthorized'). Minor: KEYS.INSPECTOR_TOKEN still in registry/config/index.ts:280 as KV preload hint — harmless warm-path optimization for Rust-side KV read."
+    }
+  },
+  "followupStoriesAdded": [],
+  "outOfScopeKnownGaps": {}
+}

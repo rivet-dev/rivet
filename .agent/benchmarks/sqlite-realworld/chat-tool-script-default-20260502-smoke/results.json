@@ -1,0 +1,63 @@
+{
+	"schemaVersion": 1,
+	"startedAt": "2026-05-02T10:49:33.724Z",
+	"finishedAt": null,
+	"config": {
+		"endpoint": "http://127.0.0.1:6420",
+		"profile": "smoke",
+		"selectedWorkloads": [
+			"chat-tool-script"
+		],
+		"sizes": {
+			"smallBytes": 262144,
+			"mediumBytes": 1048576,
+			"cacheFitBytes": 1048576,
+			"cacheOverflowBytes": 2097152,
+			"largeBytes": 2097152,
+			"rowBytes": 2048
+		},
+		"metricsToken": "dev-metrics",
+		"matrixScenario": null,
+		"wakeDelayMs": 2000,
+		"postSetupWaitMs": 0,
+		"vfsRoundTripLatencyMs": 0,
+		"startLocalEnvoy": true,
+		"disableStorageCompaction": false,
+		"sqliteOptimizationsDisabled": false,
+		"sqliteOptimizationEnv": {
+			"RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE": null,
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE": null,
+			"RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS": null,
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH": null,
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGES": null,
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_ON_OPEN": null,
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES": null,
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES": null,
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES": null,
+			"RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION": null,
+			"RIVETKIT_SQLITE_OPT_RANGE_READS": null,
+			"RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS": null,
+			"RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE": null,
+			"RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED": null,
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES": null,
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT": null,
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES": null,
+			"RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES": null,
+			"RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS": null,
+			"RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS": null
+		},
+		"cacheSizing": {
+			"sqlitePageSizeBytes": 4096,
+			"startupPreloadMaxBytes": 1048576,
+			"vfsPageCacheCapacityPages": 50000,
+			"vfsPageCacheCapacityBytes": 204800000,
+			"largeBytesExceedsConfiguredVfsCache": false
+		}
+	},
+	"cacheConfigProbe": {
+		"sqliteCacheSizePragma": -2000,
+		"sqlitePageSize": 4096,
+		"pageCount": 18
+	},
+	"results": []
+}

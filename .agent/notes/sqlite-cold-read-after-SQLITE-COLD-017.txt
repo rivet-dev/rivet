@@ -1,0 +1,43 @@
+(node:813042) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+  RivetKit 2.3.0-rc.4 (Engine - Serverful)
+  - Endpoint:     http://127.0.0.1:6420 (local native)
+  - Actors:       85
+
+SQLite cold-start benchmark
+endpoint=http://127.0.0.1:6420
+actor_key=sqlite-cold-start-bench/sqlite-cold-start-1777450155246-ca8a449f
+actor_id=92vf5bcjmguyajkjqbkncbgn2hbl00
+start_local_envoy=true
+target=50.00 MiB row_bytes=16384 batch_rows=8 transaction_bytes=65536
+
+reset...
+write random strings...
+hot read...
+sleep...
+wake read...
+
+Results
+  rows: 3200
+  transactions: 800
+  bytes: 50.00 MiB
+  insert server: 15215.2ms (insert=471.5ms, commit=14743.7ms, random_strings=68.0ms)
+  insert e2e: 15619.8ms
+  hot read server: 147.8ms
+  hot read e2e: 157.9ms
+  wake read server: 3834.2ms
+  wake read e2e: 4067.4ms
+  wake overhead estimate: 233.2ms
+  hot read VFS get_pages round trips: 0
+  hot read VFS fetched: 0 pages / 0.00 MiB
+  hot read VFS prefetch: 0 pages / 0.00 MiB
+  hot read VFS cache: hits=16786 misses=0 requested=16786
+  hot read VFS get_pages transport: 0.0ms over 0 calls
+  wake read actor-lifetime VFS get_pages round trips: 70
+  wake read actor-lifetime VFS fetched: 13722 pages / 53.60 MiB
+  wake read actor-lifetime VFS prefetch: 13652 pages / 53.33 MiB
+  wake read actor-lifetime VFS cache: hits=16723 misses=70 requested=16793
+  wake read actor-lifetime VFS get_pages transport: 3598.3ms over 70 calls
+  wake read actor-lifetime VFS metrics include startup DB work before the read action.
+  probe matches: hot=0 wake=0

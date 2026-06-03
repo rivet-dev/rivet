@@ -1,0 +1,160 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1345.3 2068" width="1345.3" height="2068" style="--bg:#1a1b26;--fg:#a9b1d6;--line:#3d59a1;--accent:#7aa2f7;--muted:#565f89;background:var(--bg)">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap');
+  text { font-family: 'Inter', system-ui, sans-serif; }
+  svg {
+    /* Derived from --bg and --fg (overridable via --line, --accent, etc.) */
+    --_text:          var(--fg);
+    --_text-sec:      var(--muted, color-mix(in srgb, var(--fg) 60%, var(--bg)));
+    --_text-muted:    var(--muted, color-mix(in srgb, var(--fg) 40%, var(--bg)));
+    --_text-faint:    color-mix(in srgb, var(--fg) 25%, var(--bg));
+    --_line:          var(--line, color-mix(in srgb, var(--fg) 30%, var(--bg)));
+    --_arrow:         var(--accent, color-mix(in srgb, var(--fg) 50%, var(--bg)));
+    --_node-fill:     var(--surface, color-mix(in srgb, var(--fg) 3%, var(--bg)));
+    --_node-stroke:   var(--border, color-mix(in srgb, var(--fg) 20%, var(--bg)));
+    --_group-fill:    var(--bg);
+    --_group-hdr:     color-mix(in srgb, var(--fg) 5%, var(--bg));
+    --_inner-stroke:  color-mix(in srgb, var(--fg) 12%, var(--bg));
+    --_key-badge:     color-mix(in srgb, var(--fg) 10%, var(--bg));
+  }
+</style>
+<defs>
+  <marker id="seq-arrow" markerWidth="8" markerHeight="4.8" refX="8" refY="2.4" orient="auto-start-reverse">
+    <polygon points="0 0, 8 2.4, 0 4.8" fill="var(--_arrow)" />
+  </marker>
+  <marker id="seq-arrow-open" markerWidth="8" markerHeight="4.8" refX="8" refY="2.4" orient="auto-start-reverse">
+    <polyline points="0 0, 8 2.4, 0 4.8" fill="none" stroke="var(--_arrow)" stroke-width="1" />
+  </marker>
+</defs>
+<rect x="230.70000000000005" y="318" width="467.69999999999993" height="60" rx="0" ry="0" fill="none" stroke="var(--_node-stroke)" stroke-width="1" />
+<rect x="230.70000000000005" y="318" width="118.08" height="18" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="236.70000000000005" y="327" dy="0.35em" font-size="11" font-weight="600" fill="var(--_text-sec)">opt [on_migrate]</text>
+<rect x="230.70000000000005" y="386" width="467.69999999999993" height="60" rx="0" ry="0" fill="none" stroke="var(--_node-stroke)" stroke-width="1" />
+<rect x="230.70000000000005" y="386" width="98.94" height="18" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="236.70000000000005" y="395" dy="0.35em" font-size="11" font-weight="600" fill="var(--_text-sec)">opt [on_wake]</text>
+<rect x="30" y="574" width="352.80000000000007" height="60" rx="0" ry="0" fill="none" stroke="var(--_node-stroke)" stroke-width="1" />
+<rect x="30" y="574" width="207.39999999999998" height="18" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="36" y="583" dy="0.35em" font-size="11" font-weight="600" fill="var(--_text-sec)">opt [driver before-start hook]</text>
+<rect x="30" y="882" width="1285.3" height="444" rx="0" ry="0" fill="none" stroke="var(--_node-stroke)" stroke-width="1" />
+<rect x="30" y="882" width="207.39999999999998" height="18" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="36" y="891" dy="0.35em" font-size="11" font-weight="600" fill="var(--_text-sec)">par [User or scheduled action]</text>
+<line x1="30" y1="1238" x2="1315.3" y2="1238" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<text x="38" y="1252" font-size="11" font-weight="400" fill="var(--_text-muted)">[Local alarm fires]</text>
+<rect x="230.70000000000005" y="1614" width="467.69999999999993" height="244" rx="0" ry="0" fill="none" stroke="var(--_node-stroke)" stroke-width="1" />
+<rect x="230.70000000000005" y="1614" width="143.6" height="18" fill="var(--_group-hdr)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="236.70000000000005" y="1623" dy="0.35em" font-size="11" font-weight="600" fill="var(--_text-sec)">alt [sleep shutdown]</text>
+<line x1="230.70000000000005" y1="1770" x2="698.4" y2="1770" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<text x="238.70000000000005" y="1784" font-size="11" font-weight="400" fill="var(--_text-muted)">[destroy shutdown]</text>
+<line x1="120.35000000000001" y1="70" x2="120.35000000000001" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="306.75000000000006" y1="70" x2="306.75000000000006" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="471.70000000000005" y1="70" x2="471.70000000000005" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="629.5" y1="70" x2="629.5" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="798.025" y1="70" x2="798.025" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="952.25" y1="70" x2="952.25" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="1099.325" y1="70" x2="1099.325" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="1253.55" y1="70" x2="1253.55" y2="2038" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" />
+<line x1="120.35000000000001" y1="90" x2="306.75000000000006" y2="90" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="213.55000000000004" y="84" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">startup(ctx, factory, options)</text>
+<line x1="306.75000000000006" y1="130" x2="471.70000000000005" y2="130" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="124" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">load persisted actor</text>
+<line x1="306.75000000000006" y1="170" x2="629.5" y2="170" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="468.125" y="164" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">create(ctx, input, is_new)</text>
+<line x1="629.5" y1="210" x2="306.75000000000006" y2="210" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" marker-end="url(#seq-arrow)" />
+<text x="468.125" y="204" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">callbacks</text>
+<line x1="306.75000000000006" y1="250" x2="471.70000000000005" y2="250" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="244" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">configure sleep, connections, callbacks</text>
+<line x1="306.75000000000006" y1="290" x2="1253.55" y2="290" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="780.15" y="284" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">save initialized actor immediately</text>
+<line x1="306.75000000000006" y1="358" x2="629.5" y2="358" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="468.125" y="352" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">run on_migrate with timeout</text>
+<line x1="306.75000000000006" y1="426" x2="629.5" y2="426" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="468.125" y="420" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">run on_wake</text>
+<line x1="306.75000000000006" y1="466" x2="952.25" y2="466" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="629.5" y="460" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">sync future alarm</text>
+<line x1="306.75000000000006" y1="506" x2="471.70000000000005" y2="506" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="500" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">restore hibernatable connections</text>
+<line x1="306.75000000000006" y1="546" x2="798.025" y2="546" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="540" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">ready = true</text>
+<line x1="306.75000000000006" y1="614" x2="120.35000000000001" y2="614" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="213.55000000000004" y="608" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">on_before_actor_start</text>
+<line x1="306.75000000000006" y1="654" x2="798.025" y2="654" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="648" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">started = true</text>
+<line x1="306.75000000000006" y1="694" x2="798.025" y2="694" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="688" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">reset sleep timer</text>
+<line x1="306.75000000000006" y1="734" x2="471.70000000000005" y2="734" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="728" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">spawn run handler task</text>
+<line x1="306.75000000000006" y1="774" x2="952.25" y2="774" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="629.5" y="768" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">process overdue scheduled events</text>
+<line x1="306.75000000000006" y1="814" x2="952.25" y2="814" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="629.5" y="808" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">install local alarm callback</text>
+<line x1="306.75000000000006" y1="854" x2="120.35000000000001" y2="854" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" marker-end="url(#seq-arrow)" />
+<text x="213.55000000000004" y="848" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">startup outcome</text>
+<line x1="120.35000000000001" y1="922" x2="1099.325" y2="922" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="609.8375" y="916" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">dispatch(action request)</text>
+<line x1="1099.325" y1="962" x2="471.70000000000005" y2="962" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="785.5125" y="956" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">acquire action_lock</text>
+<line x1="1099.325" y1="1002" x2="798.025" y2="1002" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="948.675" y="996" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">begin keep_awake</text>
+<line x1="1099.325" y1="1042" x2="629.5" y2="1042" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="864.4125" y="1036" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">run user action callback</text>
+<line x1="629.5" y1="1082" x2="1099.325" y2="1082" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" marker-end="url(#seq-arrow)" />
+<text x="864.4125" y="1076" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">output</text>
+<line x1="1099.325" y1="1122" x2="798.025" y2="1122" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="948.675" y="1116" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">end keep_awake</text>
+<line x1="1099.325" y1="1162" x2="1253.55" y2="1162" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="1176.4375" y="1156" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">trigger throttled save</text>
+<line x1="1099.325" y1="1202" x2="120.35000000000001" y2="1202" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" marker-end="url(#seq-arrow)" />
+<text x="609.8375" y="1196" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">action output</text>
+<line x1="952.25" y1="1266" x2="1099.325" y2="1266" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="1025.7875" y="1260" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">dispatch scheduled action</text>
+<line x1="1099.325" y1="1306" x2="471.70000000000005" y2="1306" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="785.5125" y="1300" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">acquire same action_lock</text>
+<line x1="120.35000000000001" y1="1346" x2="306.75000000000006" y2="1346" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="213.55000000000004" y="1340" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">shutdown_for_sleep or shutdown_for_destroy</text>
+<line x1="306.75000000000006" y1="1386" x2="798.025" y2="1386" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="1380" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">cancel sleep timer</text>
+<line x1="306.75000000000006" y1="1426" x2="952.25" y2="1426" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="629.5" y="1420" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">suspend alarms and cancel local timer</text>
+<line x1="306.75000000000006" y1="1466" x2="798.025" y2="1466" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="1460" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">ready = false, started = false</text>
+<line x1="306.75000000000006" y1="1506" x2="471.70000000000005" y2="1506" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="1500" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">cancel abort signal</text>
+<line x1="306.75000000000006" y1="1546" x2="798.025" y2="1546" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="1540" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">wait or abort run handler</text>
+<line x1="306.75000000000006" y1="1586" x2="798.025" y2="1586" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="1580" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">wait for idle counters/tasks</text>
+<line x1="306.75000000000006" y1="1654" x2="629.5" y2="1654" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="468.125" y="1648" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">on_sleep with remaining deadline</text>
+<line x1="306.75000000000006" y1="1694" x2="471.70000000000005" y2="1694" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="1688" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">persist hibernatable connections</text>
+<line x1="306.75000000000006" y1="1734" x2="471.70000000000005" y2="1734" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="1728" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">disconnect non-hibernatable connections</text>
+<line x1="306.75000000000006" y1="1798" x2="629.5" y2="1798" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="468.125" y="1792" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">on_destroy with timeout</text>
+<line x1="306.75000000000006" y1="1838" x2="471.70000000000005" y2="1838" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="1832" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">disconnect all connections</text>
+<line x1="306.75000000000006" y1="1878" x2="798.025" y2="1878" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="552.3875" y="1872" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">wait for shutdown callbacks</text>
+<line x1="306.75000000000006" y1="1918" x2="1253.55" y2="1918" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="780.15" y="1912" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">save state immediately</text>
+<line x1="306.75000000000006" y1="1958" x2="471.70000000000005" y2="1958" stroke="var(--_line)" stroke-width="0.75" marker-end="url(#seq-arrow)" />
+<text x="389.225" y="1952" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">cleanup sqlite</text>
+<line x1="306.75000000000006" y1="1998" x2="120.35000000000001" y2="1998" stroke="var(--_line)" stroke-width="0.75" stroke-dasharray="6 4" marker-end="url(#seq-arrow)" />
+<text x="213.55000000000004" y="1992" text-anchor="middle" font-size="11" font-weight="400" fill="var(--_text-muted)">shutdown outcome</text>
+<rect x="40" y="30" width="160.70000000000002" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="120.35000000000001" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">RegistryDispatcher</text>
+<rect x="240.70000000000005" y="30" width="132.10000000000002" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="306.75000000000006" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">ActorLifecycle</text>
+<rect x="412.80000000000007" y="30" width="117.80000000000001" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="471.70000000000005" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">ActorContext</text>
+<rect x="570.6" y="30" width="117.80000000000001" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="629.5" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">ActorFactory</text>
+<rect x="728.4" y="30" width="139.25" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="798.025" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">SleepController</text>
+<rect x="907.65" y="30" width="89.2" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="952.25" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">Schedule</text>
+<rect x="1036.8500000000001" y="30" width="124.95" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="1099.325" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">ActionInvoker</text>
+<rect x="1201.8" y="30" width="103.5" height="40" rx="4" ry="4" fill="var(--_node-fill)" stroke="var(--_node-stroke)" stroke-width="1" />
+<text x="1253.55" y="50" text-anchor="middle" dy="0.35em" font-size="13" font-weight="500" fill="var(--_text)">ActorState</text>
+</svg>

@@ -1,0 +1,119 @@
+(node:1002960) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+SQLite cold-start benchmark
+running un-compacted and compacted scenarios separately
+(node:1003054) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+  RivetKit 2.3.0-rc.4 (Engine - Serverful)
+  - Endpoint:     http://127.0.0.1:6420 (local native)
+  - Actors:       85
+
+SQLite cold-start benchmark
+scenario=un-compacted
+endpoint=http://127.0.0.1:6420
+actor_key_prefix=sqlite-cold-start-bench/sqlite-cold-start-1777453758697-fd95040c-un-compacted
+start_local_envoy=true
+target=50.00 MiB row_bytes=16384 batch_rows=8 transaction_bytes=65536
+compaction_wait_ms=10000
+storage_compaction_disabled=true
+RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=default
+
+un-compacted actor_key=sqlite-cold-start-bench/sqlite-cold-start-1777453758697-fd95040c-un-compacted-un-compacted
+un-compacted actor_id=x0ek15ve7htjtx051wxbwa8c10dl00
+
+un-compacted reset...
+un-compacted write random strings...
+un-compacted hot read...
+sleep before un-compacted wake/open...
+un-compacted cold wake/open...
+sleep before un-compacted cold full read...
+un-compacted wake read...
+
+Results
+  un-compacted rows: 3200
+  un-compacted transactions: 800
+  un-compacted bytes: 50.00 MiB
+  un-compacted transaction bytes: 65536
+  un-compacted insert server: 14674.5ms (insert=426.8ms, commit=14247.7ms, random_strings=69.5ms)
+  un-compacted insert e2e: 15048.4ms
+  un-compacted hot read server: 166.8ms
+  un-compacted hot read e2e: 179.5ms
+  un-compacted cold wake/open server: 44.9ms
+  un-compacted cold wake/open e2e: 240.3ms
+  un-compacted cold wake/open overhead estimate: 195.4ms
+  un-compacted wake read server: 3930.2ms
+  un-compacted wake read e2e: 4126.1ms
+  un-compacted wake overhead estimate: 195.9ms
+  un-compacted hot read VFS get_pages round trips: 0
+  un-compacted hot read VFS fetched: 0 pages / 0.00 MiB
+  un-compacted hot read VFS prefetch: 0 pages / 0.00 MiB
+  un-compacted hot read VFS cache: hits=16786 misses=0 requested=16786
+  un-compacted hot read VFS get_pages transport: 0.0ms over 0 calls
+  un-compacted wake read actor-lifetime VFS get_pages round trips: 68
+  un-compacted wake read actor-lifetime VFS fetched: 13662 pages / 53.37 MiB
+  un-compacted wake read actor-lifetime VFS prefetch: 13594 pages / 53.10 MiB
+  un-compacted wake read actor-lifetime VFS cache: hits=16726 misses=68 requested=16794
+  un-compacted wake read actor-lifetime VFS get_pages transport: 3721.6ms over 68 calls
+  cold wake/open uses a tiny SQLite action without scanning the payload.
+  un-compacted keeps storage compaction disabled in the local benchmark engine.
+  compacted runs as a separate cold-read control with the same inline transaction size.
+  wake read actor-lifetime VFS metrics include startup DB work before the read action.
+(node:1005328) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+  RivetKit 2.3.0-rc.4 (Engine - Serverful)
+  - Endpoint:     http://127.0.0.1:6420 (local native)
+  - Actors:       85
+
+SQLite cold-start benchmark
+scenario=compacted
+endpoint=http://127.0.0.1:6420
+actor_key_prefix=sqlite-cold-start-bench/sqlite-cold-start-1777453758697-fd95040c-compacted
+start_local_envoy=true
+target=50.00 MiB row_bytes=16384 batch_rows=8 transaction_bytes=65536
+compaction_wait_ms=10000
+storage_compaction_disabled=true
+RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=default
+
+compacted actor_key=sqlite-cold-start-bench/sqlite-cold-start-1777453758697-fd95040c-compacted-compacted
+compacted actor_id=92f3rxf5jlhyu2x1oq7ebuiuhial00
+
+compacted reset...
+compacted write random strings...
+compacted wait for storage compaction...
+compacted hot read...
+sleep before compacted wake/open...
+compacted cold wake/open...
+sleep before compacted cold full read...
+compacted wake read...
+
+Results
+  compacted rows: 3200
+  compacted transactions: 800
+  compacted bytes: 50.00 MiB
+  compacted transaction bytes: 65536
+  compacted insert server: 15293.5ms (insert=467.9ms, commit=14825.6ms, random_strings=64.0ms)
+  compacted insert e2e: 15689.5ms
+  compacted hot read server: 190.8ms
+  compacted hot read e2e: 220.0ms
+  compacted cold wake/open server: 44.5ms
+  compacted cold wake/open e2e: 257.8ms
+  compacted cold wake/open overhead estimate: 213.3ms
+  compacted wake read server: 3932.2ms
+  compacted wake read e2e: 4089.3ms
+  compacted wake overhead estimate: 157.1ms
+  compacted hot read VFS get_pages round trips: 0
+  compacted hot read VFS fetched: 0 pages / 0.00 MiB
+  compacted hot read VFS prefetch: 0 pages / 0.00 MiB
+  compacted hot read VFS cache: hits=16786 misses=0 requested=16786
+  compacted hot read VFS get_pages transport: 0.0ms over 0 calls
+  compacted wake read actor-lifetime VFS get_pages round trips: 68
+  compacted wake read actor-lifetime VFS fetched: 13662 pages / 53.37 MiB
+  compacted wake read actor-lifetime VFS prefetch: 13594 pages / 53.10 MiB
+  compacted wake read actor-lifetime VFS cache: hits=16726 misses=68 requested=16794
+  compacted wake read actor-lifetime VFS get_pages transport: 3719.2ms over 68 calls
+  cold wake/open uses a tiny SQLite action without scanning the payload.
+  un-compacted keeps storage compaction disabled in the local benchmark engine.
+  compacted runs as a separate cold-read control with the same inline transaction size.
+  wake read actor-lifetime VFS metrics include startup DB work before the read action.

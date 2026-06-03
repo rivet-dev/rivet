@@ -1,0 +1,934 @@
+# run 4 2026-04-22 01:03:23 PDT
+
+> rivetkit@2.3.0-rc.4 test /home/nathan/r6/rivetkit-typescript/packages/rivetkit
+> vitest run tests/driver/actor-sleep.test.ts -t 'static registry.*encoding \(bare\).*Actor Sleep Tests'
+
+
+ RUN  v3.2.4 /home/nathan/r6/rivetkit-typescript/packages/rivetkit
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.063Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.063Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key=[]
+ts=2026-04-22T08:03:25.064Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-abbf236b-3cf2-408f-b18e-411275ec6bfa"
+ts=2026-04-22T08:03:25.064Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-abbf236b-3cf2-408f-b18e-411275ec6bfa" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.095Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=10gkxthyxb8mbp9uz89eb5fuoocl00 name=sleep key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.095Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10gkxthyxb8mbp9uz89eb5fuoocl00
+ts=2026-04-22T08:03:25.095Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:25.095Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.173Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10gkxthyxb8mbp9uz89eb5fuoocl00
+ts=2026-04-22T08:03:25.174Z level=DEBUG target=actor-client msg="handling action" name=triggerSleep encoding=bare
+ts=2026-04-22T08:03:25.174Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/triggerSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.442Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10gkxthyxb8mbp9uz89eb5fuoocl00
+ts=2026-04-22T08:03:25.442Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:25.442Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.517Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state
+ts=2026-04-22T08:03:25.517Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:26.057Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:26.058Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key=[]
+ts=2026-04-22T08:03:26.058Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-656fcada-d9ad-4e3e-8a2a-44eeeac8084f"
+ts=2026-04-22T08:03:26.058Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-656fcada-d9ad-4e3e-8a2a-44eeeac8084f" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:26.095Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=1oyqlmsqryi19iu2pwv60g0kyfal00 name=sleep key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:26.095Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=1oyqlmsqryi19iu2pwv60g0kyfal00
+ts=2026-04-22T08:03:26.095Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:26.095Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:27.412Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=1oyqlmsqryi19iu2pwv60g0kyfal00
+ts=2026-04-22T08:03:27.412Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:27.412Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:27.488Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout
+ts=2026-04-22T08:03:27.488Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.028Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key=[] parameters= createInRegion=
+ts=2026-04-22T08:03:28.028Z level=DEBUG target=actor-client msg="establishing connection from handle" query="{\"getOrCreateForKey\":{\"name\":\"sleep\",\"key\":[]}}"
+ts=2026-04-22T08:03:28.029Z level=DEBUG target=actor-client msg=action name=getCounts args=[]
+ts=2026-04-22T08:03:28.029Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=0 actionName=getCounts inFlightCount=1
+ts=2026-04-22T08:03:28.029Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T08:03:28.029Z level=DEBUG target=actor-client msg="queued connection message" queueLength=1 connId= messageType=ActionRequest actionName=getCounts
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.029Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleep/connect?rvt-namespace=driver-42461f1c-e7a2-45ee-a7b6-894c99e6bd64&rvt-method=getOrCreate&rvt-runner=driver-suite-cc499498-6843-4f0c-9e5a-cec0451030cb&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.030Z level=DEBUG target=actor-client msg="opened websocket" connId= readyState=0 messageQueueLength=1
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.089Z level=DEBUG target=actor-client msg="client websocket open" connId=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.137Z level=DEBUG target=actor-client msg="socket open" messageQueueLength=1 connId=8cfc4fbf-7646-4cf6-9eb5-eac6fa9e0400
+ts=2026-04-22T08:03:28.137Z level=DEBUG target=actor-client msg="flushing message queue" queueLength=1
+ts=2026-04-22T08:03:28.137Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=8cfc4fbf-7646-4cf6-9eb5-eac6fa9e0400 messageType=ActionRequest actionName=getCounts
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.183Z level=DEBUG target=actor-client msg="received action response" actionId=0 inFlightCount=1 inFlightIds=[0]
+ts=2026-04-22T08:03:28.183Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=0 actionName=getCounts inFlightCount=0
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.183Z level=DEBUG target=actor-client msg="disposing actor conn"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:28.192Z level=INFO target=actor-client msg="socket closed" code=1000 reason=Disposed wasClean=true disposed=true connId=8cfc4fbf-7646-4cf6-9eb5-eac6fa9e0400
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:29.444Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:29.444Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key=[]
+ts=2026-04-22T08:03:29.444Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-42461f1c-e7a2-45ee-a7b6-894c99e6bd64"
+ts=2026-04-22T08:03:29.444Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-42461f1c-e7a2-45ee-a7b6-894c99e6bd64" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:29.455Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=t926s9i4e8x6zkiaahhygzi3meal00 name=sleep key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:29.455Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=t926s9i4e8x6zkiaahhygzi3meal00
+ts=2026-04-22T08:03:29.455Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:29.455Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:29.537Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+ts=2026-04-22T08:03:29.537Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithWaitUntilMessage key=[] parameters= createInRegion=
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg="establishing connection from handle" query="{\"getOrCreateForKey\":{\"name\":\"sleepWithWaitUntilMessage\",\"key\":[]}}"
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg=action name=triggerSleep args=[]
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=0 actionName=triggerSleep inFlightCount=1
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=actor-client msg="queued connection message" queueLength=1 connId= messageType=ActionRequest actionName=triggerSleep
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.079Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepWithWaitUntilMessage/connect?rvt-namespace=driver-6e2fd14d-93dc-4b1d-8fe9-df775e7a120d&rvt-method=getOrCreate&rvt-runner=driver-suite-18b775db-4adb-45ac-ac53-9fa0eda3b1b0&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.080Z level=DEBUG target=actor-client msg="opened websocket" connId= readyState=0 messageQueueLength=1
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.125Z level=DEBUG target=actor-client msg="client websocket open" connId=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.179Z level=DEBUG target=actor-client msg="socket open" messageQueueLength=1 connId=a9c7728c-c07b-45b2-96fa-6326ae094f03
+ts=2026-04-22T08:03:30.179Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=a9c7728c-c07b-45b2-96fa-6326ae094f03 messageType=SubscriptionRequest actionName=
+ts=2026-04-22T08:03:30.179Z level=DEBUG target=actor-client msg="flushing message queue" queueLength=1
+ts=2026-04-22T08:03:30.179Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=a9c7728c-c07b-45b2-96fa-6326ae094f03 messageType=ActionRequest actionName=triggerSleep
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.223Z level=DEBUG target=actor-client msg="received action response" actionId=0 inFlightCount=1 inFlightIds=[0]
+ts=2026-04-22T08:03:30.223Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=0 actionName=triggerSleep inFlightCount=0
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.475Z level=DEBUG target=actor-client msg="disposing actor conn"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.522Z level=INFO target=actor-client msg="socket closed" code=1000 reason=Disposed wasClean=true disposed=true connId=a9c7728c-c07b-45b2-96fa-6326ae094f03
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.773Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithWaitUntilMessage key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.773Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithWaitUntilMessage key=[]
+ts=2026-04-22T08:03:30.773Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-6e2fd14d-93dc-4b1d-8fe9-df775e7a120d"
+ts=2026-04-22T08:03:30.774Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-6e2fd14d-93dc-4b1d-8fe9-df775e7a120d" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.782Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=5n0fzc4f4v11s84x8arx4v511gal00 name=sleepWithWaitUntilMessage key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.782Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=5n0fzc4f4v11s84x8arx4v511gal00
+ts=2026-04-22T08:03:30.782Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:30.782Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.795Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+ts=2026-04-22T08:03:30.795Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.339Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithWaitUntilInOnWake key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.339Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithWaitUntilInOnWake key=[]
+ts=2026-04-22T08:03:31.339Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-529dccaa-571a-46f7-9cbf-1016011e611d"
+ts=2026-04-22T08:03:31.339Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-529dccaa-571a-46f7-9cbf-1016011e611d" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.385Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=18ah3tc4hxg4w2wbytwvuocizoal00 name=sleepWithWaitUntilInOnWake key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.385Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=18ah3tc4hxg4w2wbytwvuocizoal00
+ts=2026-04-22T08:03:31.385Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:03:31.385Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.445Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=18ah3tc4hxg4w2wbytwvuocizoal00
+ts=2026-04-22T08:03:31.445Z level=DEBUG target=actor-client msg="handling action" name=triggerSleep encoding=bare
+ts=2026-04-22T08:03:31.446Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/triggerSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.714Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=18ah3tc4hxg4w2wbytwvuocizoal00
+ts=2026-04-22T08:03:31.714Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:03:31.714Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.792Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake
+ts=2026-04-22T08:03:31.792Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:32.334Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key="[\"rpc-awake-b5df408f-f003-4831-8561-d494a396eec7\"]" parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:32.334Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key="[\"rpc-awake-b5df408f-f003-4831-8561-d494a396eec7\"]"
+ts=2026-04-22T08:03:32.334Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-3cda63fc-6b25-4fd8-8af6-aa43eadb3f0b"
+ts=2026-04-22T08:03:32.334Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-3cda63fc-6b25-4fd8-8af6-aa43eadb3f0b" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:32.362Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=d19hf5qld1jfpqcggbbbm40gssal00 name=sleep key="[\"rpc-awake-b5df408f-f003-4831-8561-d494a396eec7\"]" created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:32.362Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=d19hf5qld1jfpqcggbbbm40gssal00
+ts=2026-04-22T08:03:32.362Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:32.362Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:33.180Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=d19hf5qld1jfpqcggbbbm40gssal00
+ts=2026-04-22T08:03:33.180Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:33.180Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:33.941Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=d19hf5qld1jfpqcggbbbm40gssal00
+ts=2026-04-22T08:03:33.941Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:33.941Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:35.203Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key="[\"rpc-awake-b5df408f-f003-4831-8561-d494a396eec7\"]" parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:35.203Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key="[\"rpc-awake-b5df408f-f003-4831-8561-d494a396eec7\"]"
+ts=2026-04-22T08:03:35.203Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-3cda63fc-6b25-4fd8-8af6-aa43eadb3f0b"
+ts=2026-04-22T08:03:35.203Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-3cda63fc-6b25-4fd8-8af6-aa43eadb3f0b" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:35.214Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=d19hf5qld1jfpqcggbbbm40gssal00 name=sleep key="[\"rpc-awake-b5df408f-f003-4831-8561-d494a396eec7\"]" created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:35.214Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=d19hf5qld1jfpqcggbbbm40gssal00
+ts=2026-04-22T08:03:35.214Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:35.214Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:35.289Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake
+ts=2026-04-22T08:03:35.290Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:35.836Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:35.836Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key=[]
+ts=2026-04-22T08:03:35.836Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-bc4dc85c-1f91-4e20-992c-86232a47edfc"
+ts=2026-04-22T08:03:35.836Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-bc4dc85c-1f91-4e20-992c-86232a47edfc" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:35.878Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=531m9q1qu9cvv732zzmt971h3oal00 name=sleep key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:35.878Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=531m9q1qu9cvv732zzmt971h3oal00
+ts=2026-04-22T08:03:35.878Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:35.878Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:35.944Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=531m9q1qu9cvv732zzmt971h3oal00
+ts=2026-04-22T08:03:35.944Z level=DEBUG target=actor-client msg="handling action" name=setAlarm encoding=bare
+ts=2026-04-22T08:03:35.944Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setAlarm encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:37.206Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=531m9q1qu9cvv732zzmt971h3oal00
+ts=2026-04-22T08:03:37.206Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:37.206Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:37.217Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake
+ts=2026-04-22T08:03:37.217Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:37.767Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:37.767Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleep key=[]
+ts=2026-04-22T08:03:37.767Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-47e604fc-9b88-438e-b590-7c8c4c9663ec"
+ts=2026-04-22T08:03:37.767Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-47e604fc-9b88-438e-b590-7c8c4c9663ec" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:37.808Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=14n8nh2rarxsuzcq9jgh9rghn4dl00 name=sleep key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:37.808Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=14n8nh2rarxsuzcq9jgh9rghn4dl00
+ts=2026-04-22T08:03:37.808Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:37.808Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:37.860Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=14n8nh2rarxsuzcq9jgh9rghn4dl00
+ts=2026-04-22T08:03:37.860Z level=DEBUG target=actor-client msg="handling action" name=setAlarm encoding=bare
+ts=2026-04-22T08:03:37.860Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setAlarm encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:39.118Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=14n8nh2rarxsuzcq9jgh9rghn4dl00
+ts=2026-04-22T08:03:39.118Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:39.118Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:49.128Z level=INFO target=actor-client msg="structured error passthrough" group=guard code=actor_ready_timeout message="Timed out waiting for actor to become ready. Ensure that the runner name selector is accurate and there are runners available in the namespace you created this actor." issues=https://github.com/rivet-dev/rivet/issues support=https://rivet.dev/discord version=2.3.0-rc.4
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:49.129Z level=DEBUG target=engine-client msg="making api call" method=GET url="http://127.0.0.1:33561/actors?actor_ids=14n8nh2rarxsuzcq9jgh9rghn4dl00&namespace=driver-47e604fc-9b88-438e-b590-7c8c4c9663ec"
+ts=2026-04-22T08:03:49.129Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?actor_ids=14n8nh2rarxsuzcq9jgh9rghn4dl00&namespace=driver-47e604fc-9b88-438e-b590-7c8c4c9663ec" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:49.235Z level=DEBUG target=actor-client msg="using query gateway target for action" query="{\"getOrCreateForKey\":{\"name\":\"sleep\",\"key\":[]}}"
+ts=2026-04-22T08:03:49.235Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:49.235Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:59.245Z level=INFO target=actor-client msg="structured error passthrough" group=guard code=actor_ready_timeout message="Timed out waiting for actor to become ready. Ensure that the runner name selector is accurate and there are runners available in the namespace you created this actor." issues=https://github.com/rivet-dev/rivet/issues support=https://rivet.dev/discord version=2.3.0-rc.4
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:03:59.346Z level=DEBUG target=actor-client msg="using query gateway target for action" query="{\"getOrCreateForKey\":{\"name\":\"sleep\",\"key\":[]}}"
+ts=2026-04-22T08:03:59.346Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:03:59.346Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:04:07.229Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+ts=2026-04-22T08:04:07.229Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.778Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithLongRpc key=[] parameters= createInRegion=
+ts=2026-04-22T08:04:07.778Z level=DEBUG target=actor-client msg="establishing connection from handle" query="{\"getOrCreateForKey\":{\"name\":\"sleepWithLongRpc\",\"key\":[]}}"
+ts=2026-04-22T08:04:07.778Z level=DEBUG target=actor-client msg=action name=getCounts args=[]
+ts=2026-04-22T08:04:07.778Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=0 actionName=getCounts inFlightCount=1
+ts=2026-04-22T08:04:07.778Z level=DEBUG target=actor-client msg="no websocket, queueing message"
+ts=2026-04-22T08:04:07.778Z level=DEBUG target=actor-client msg="queued connection message" queueLength=1 connId= messageType=ActionRequest actionName=getCounts
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.779Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepWithLongRpc/connect?rvt-namespace=driver-9cdda73a-38b0-4c4e-bae4-6bee9d92191d&rvt-method=getOrCreate&rvt-runner=driver-suite-ab8b3f7a-96c8-4cc8-ad76-a25ac7ebb897&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.779Z level=DEBUG target=actor-client msg="opened websocket" connId= readyState=0 messageQueueLength=1
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.822Z level=DEBUG target=actor-client msg="client websocket open" connId=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.867Z level=DEBUG target=actor-client msg="socket open" messageQueueLength=1 connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4
+ts=2026-04-22T08:04:07.867Z level=DEBUG target=actor-client msg="flushing message queue" queueLength=1
+ts=2026-04-22T08:04:07.867Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4 messageType=ActionRequest actionName=getCounts
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.915Z level=DEBUG target=actor-client msg="received action response" actionId=0 inFlightCount=1 inFlightIds=[0]
+ts=2026-04-22T08:04:07.915Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=0 actionName=getCounts inFlightCount=0
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:07.915Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4 messageType=SubscriptionRequest actionName=
+ts=2026-04-22T08:04:07.916Z level=DEBUG target=actor-client msg=action name=longRunningRpc args=[]
+ts=2026-04-22T08:04:07.916Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=1 actionName=longRunningRpc inFlightCount=1
+ts=2026-04-22T08:04:07.916Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4 messageType=ActionRequest actionName=longRunningRpc
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.209Z level=DEBUG target=actor-client msg=action name=finishLongRunningRpc args=[]
+ts=2026-04-22T08:04:09.210Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=2 actionName=finishLongRunningRpc inFlightCount=2
+ts=2026-04-22T08:04:09.210Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4 messageType=ActionRequest actionName=finishLongRunningRpc
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.255Z level=DEBUG target=actor-client msg="received action response" actionId=1 inFlightCount=2 inFlightIds=[1,2]
+ts=2026-04-22T08:04:09.255Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=1 actionName=longRunningRpc inFlightCount=1
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.256Z level=DEBUG target=actor-client msg="received action response" actionId=2 inFlightCount=1 inFlightIds=[2]
+ts=2026-04-22T08:04:09.256Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=2 actionName=finishLongRunningRpc inFlightCount=0
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.256Z level=DEBUG target=actor-client msg=action name=getCounts args=[]
+ts=2026-04-22T08:04:09.256Z level=DEBUG target=actor-client msg="added action to in-flight map" actionId=3 actionName=getCounts inFlightCount=1
+ts=2026-04-22T08:04:09.256Z level=DEBUG target=actor-client msg="websocket send attempt" readyState=1 readyStateString=OPEN connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4 messageType=ActionRequest actionName=getCounts
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.299Z level=DEBUG target=actor-client msg="received action response" actionId=3 inFlightCount=1 inFlightIds=[3]
+ts=2026-04-22T08:04:09.299Z level=DEBUG target=actor-client msg="removed action from in-flight map" actionId=3 actionName=getCounts inFlightCount=0
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.299Z level=DEBUG target=actor-client msg="disposing actor conn"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:09.308Z level=INFO target=actor-client msg="socket closed" code=1000 reason=Disposed wasClean=true disposed=true connId=93a6a133-d4b8-4e65-a655-2e98be4ecee4
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:10.558Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithLongRpc key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:10.559Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithLongRpc key=[]
+ts=2026-04-22T08:04:10.559Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-9cdda73a-38b0-4c4e-bae4-6bee9d92191d"
+ts=2026-04-22T08:04:10.559Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-9cdda73a-38b0-4c4e-bae4-6bee9d92191d" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:10.568Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=ljcqljyr35zaf2typ7wckuixcycl00 name=sleepWithLongRpc key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:10.568Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=ljcqljyr35zaf2typ7wckuixcycl00
+ts=2026-04-22T08:04:10.568Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:10.568Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:10.646Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake
+ts=2026-04-22T08:04:10.646Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:11.190Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithRawWebSocket key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:11.190Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithRawWebSocket key=[]
+ts=2026-04-22T08:04:11.190Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-56a7415c-7156-4b3e-bb24-bd378dba6737"
+ts=2026-04-22T08:04:11.190Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-56a7415c-7156-4b3e-bb24-bd378dba6737" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:11.228Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=dpzx5p3hskthyq8qvu3yb03muvbl00 name=sleepWithRawWebSocket key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:11.228Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=dpzx5p3hskthyq8qvu3yb03muvbl00
+ts=2026-04-22T08:04:11.228Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:11.228Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:11.285Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:11.286Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepWithRawWebSocket/websocket/?rvt-namespace=driver-56a7415c-7156-4b3e-bb24-bd378dba6737&rvt-method=getOrCreate&rvt-runner=driver-suite-2627994e-1094-4fc1-98d2-14875df9efa7&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:13.843Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=dpzx5p3hskthyq8qvu3yb03muvbl00
+ts=2026-04-22T08:04:13.843Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:13.843Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:13.920Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake
+ts=2026-04-22T08:04:13.920Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:14.353Z level=INFO target=actor-client msg="structured error passthrough" group=guard code=request_timeout message="Request timed out after 15 seconds." issues=https://github.com/rivet-dev/rivet/issues support=https://rivet.dev/discord version=2.3.0-rc.4
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:14.466Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithRawHttp key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:14.466Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithRawHttp key=[]
+ts=2026-04-22T08:04:14.466Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-77d53f75-12fe-4d6a-8b5f-868f0a6c78a6"
+ts=2026-04-22T08:04:14.466Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-77d53f75-12fe-4d6a-8b5f-868f0a6c78a6" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:14.493Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=9q19y3n2za3lso1qzvsrkosibvcl00 name=sleepWithRawHttp key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:14.493Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=9q19y3n2za3lso1qzvsrkosibvcl00
+ts=2026-04-22T08:04:14.493Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:14.493Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:14.561Z level=DEBUG target=actor-client msg="sending raw http request to actor" actorId=9q19y3n2za3lso1qzvsrkosibvcl00
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:15.829Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=9q19y3n2za3lso1qzvsrkosibvcl00
+ts=2026-04-22T08:04:15.829Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:15.829Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:17.106Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=9q19y3n2za3lso1qzvsrkosibvcl00
+ts=2026-04-22T08:04:17.106Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:17.107Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:17.189Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake
+ts=2026-04-22T08:04:17.189Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:17.737Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithNoSleepOption key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:17.737Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithNoSleepOption key=[]
+ts=2026-04-22T08:04:17.738Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-4a782179-5625-4e1b-8e95-560cda22614c"
+ts=2026-04-22T08:04:17.738Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-4a782179-5625-4e1b-8e95-560cda22614c" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:17.782Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=piuu4v800ih11nq97ttn4wzie0dl00 name=sleepWithNoSleepOption key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:17.782Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=piuu4v800ih11nq97ttn4wzie0dl00
+ts=2026-04-22T08:04:17.782Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:17.782Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:19.084Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=piuu4v800ih11nq97ttn4wzie0dl00
+ts=2026-04-22T08:04:19.084Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:19.084Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:20.344Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=piuu4v800ih11nq97ttn4wzie0dl00
+ts=2026-04-22T08:04:20.344Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:20.344Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:20.355Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping
+ts=2026-04-22T08:04:20.355Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:20.894Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithPreventSleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:20.895Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithPreventSleep key=[]
+ts=2026-04-22T08:04:20.895Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-1ca6d8f7-30f6-4bd0-8eda-3784831f8adb"
+ts=2026-04-22T08:04:20.895Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-1ca6d8f7-30f6-4bd0-8eda-3784831f8adb" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:20.920Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=10oioj3uhyi63gza50oesadr18dl00 name=sleepWithPreventSleep key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:20.920Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10oioj3uhyi63gza50oesadr18dl00
+ts=2026-04-22T08:04:20.920Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:20.920Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:20.985Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10oioj3uhyi63gza50oesadr18dl00
+ts=2026-04-22T08:04:20.985Z level=DEBUG target=actor-client msg="handling action" name=setPreventSleep encoding=bare
+ts=2026-04-22T08:04:20.985Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setPreventSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:22.244Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10oioj3uhyi63gza50oesadr18dl00
+ts=2026-04-22T08:04:22.244Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:22.244Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:22.254Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10oioj3uhyi63gza50oesadr18dl00
+ts=2026-04-22T08:04:22.254Z level=DEBUG target=actor-client msg="handling action" name=setPreventSleep encoding=bare
+ts=2026-04-22T08:04:22.254Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setPreventSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:23.512Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=10oioj3uhyi63gza50oesadr18dl00
+ts=2026-04-22T08:04:23.512Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:23.513Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:23.592Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+ts=2026-04-22T08:04:23.592Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.131Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithPreventSleep key="[\"prevent-sleep-shutdown-delay\"]" parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.131Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithPreventSleep key="[\"prevent-sleep-shutdown-delay\"]"
+ts=2026-04-22T08:04:24.131Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-65a216a6-66c3-42f3-abbd-f2d75f9a5938"
+ts=2026-04-22T08:04:24.131Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-65a216a6-66c3-42f3-abbd-f2d75f9a5938" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.157Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=5zlj1y68vpfd5wbzumg8829g4kal00 name=sleepWithPreventSleep key="[\"prevent-sleep-shutdown-delay\"]" created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.157Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=5zlj1y68vpfd5wbzumg8829g4kal00
+ts=2026-04-22T08:04:24.157Z level=DEBUG target=actor-client msg="handling action" name=setDelayPreventSleepDuringShutdown encoding=bare
+ts=2026-04-22T08:04:24.157Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setDelayPreventSleepDuringShutdown encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.221Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=5zlj1y68vpfd5wbzumg8829g4kal00
+ts=2026-04-22T08:04:24.221Z level=DEBUG target=actor-client msg="handling action" name=triggerSleep encoding=bare
+ts=2026-04-22T08:04:24.221Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/triggerSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.651Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=5zlj1y68vpfd5wbzumg8829g4kal00
+ts=2026-04-22T08:04:24.651Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:24.651Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.728Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+ts=2026-04-22T08:04:24.729Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:25.268Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepWithPreventSleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:25.269Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepWithPreventSleep key=[]
+ts=2026-04-22T08:04:25.269Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-f6157dce-23e0-4368-94cf-6f809224320f"
+ts=2026-04-22T08:04:25.269Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-f6157dce-23e0-4368-94cf-6f809224320f" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:25.315Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=xwipej66qundfmiaeni453xkrkal00 name=sleepWithPreventSleep key=[] created=true
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:25.315Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:25.315Z level=DEBUG target=actor-client msg="handling action" name=setPreventSleepOnWake encoding=bare
+ts=2026-04-22T08:04:25.315Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setPreventSleepOnWake encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:25.365Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:25.365Z level=DEBUG target=actor-client msg="handling action" name=triggerSleep encoding=bare
+ts=2026-04-22T08:04:25.365Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/triggerSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:25.644Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:25.644Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:25.645Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:26.976Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:26.976Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:26.976Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:26.985Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:26.986Z level=DEBUG target=actor-client msg="handling action" name=setPreventSleepOnWake encoding=bare
+ts=2026-04-22T08:04:26.986Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setPreventSleepOnWake encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:26.994Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:26.994Z level=DEBUG target=actor-client msg="handling action" name=setPreventSleep encoding=bare
+ts=2026-04-22T08:04:26.994Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/setPreventSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:28.253Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=xwipej66qundfmiaeni453xkrkal00
+ts=2026-04-22T08:04:28.253Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:28.253Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:28.333Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake
+ts=2026-04-22T08:04:28.333Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:28.874Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepRawWsAddEventListenerMessage key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:28.875Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:28.875Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepRawWsAddEventListenerMessage/websocket/?rvt-namespace=driver-11161ec5-7f6e-418b-9b1d-c4d21bdb6db6&rvt-method=getOrCreate&rvt-runner=driver-suite-3189a046-a782-454b-b630-4b6931ba9f2a&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:29.152Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepRawWsAddEventListenerMessage key=[]
+ts=2026-04-22T08:04:29.152Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-11161ec5-7f6e-418b-9b1d-c4d21bdb6db6"
+ts=2026-04-22T08:04:29.152Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-11161ec5-7f6e-418b-9b1d-c4d21bdb6db6" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:29.160Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=pmlq3cdv8l3edm65muash9gyrobl00 name=sleepRawWsAddEventListenerMessage key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:29.160Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=pmlq3cdv8l3edm65muash9gyrobl00
+ts=2026-04-22T08:04:29.160Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:29.160Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:29.673Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=pmlq3cdv8l3edm65muash9gyrobl00
+ts=2026-04-22T08:04:29.673Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:29.673Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:29.757Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+ts=2026-04-22T08:04:29.757Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:30.308Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepRawWsOnMessage key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:30.309Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:30.309Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepRawWsOnMessage/websocket/?rvt-namespace=driver-7125bd82-d48b-4196-9486-f90dbeb572bc&rvt-method=getOrCreate&rvt-runner=driver-suite-28f3abbf-0010-4548-a958-56dfb7318c05&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:30.962Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepRawWsOnMessage key=[]
+ts=2026-04-22T08:04:30.962Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-7125bd82-d48b-4196-9486-f90dbeb572bc"
+ts=2026-04-22T08:04:30.962Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-7125bd82-d48b-4196-9486-f90dbeb572bc" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:30.971Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=pmtc2bs90hjnycbzqlyy4fl80qcl00 name=sleepRawWsOnMessage key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:30.972Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=pmtc2bs90hjnycbzqlyy4fl80qcl00
+ts=2026-04-22T08:04:30.972Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:30.972Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:31.047Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+ts=2026-04-22T08:04:31.047Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:31.650Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepRawWsAddEventListenerClose key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:31.651Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:31.651Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepRawWsAddEventListenerClose/websocket/?rvt-namespace=driver-206a4fc0-86bc-483c-b056-d46b48cb825b&rvt-method=getOrCreate&rvt-runner=driver-suite-5417cdab-9284-42a8-a88c-5b4e2701eb63&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:31.998Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepRawWsAddEventListenerClose key=[]
+ts=2026-04-22T08:04:31.998Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-206a4fc0-86bc-483c-b056-d46b48cb825b"
+ts=2026-04-22T08:04:31.998Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-206a4fc0-86bc-483c-b056-d46b48cb825b" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:32.024Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=18ukf5y1249wmd12izl5lpr8zacl00 name=sleepRawWsAddEventListenerClose key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:32.024Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=18ukf5y1249wmd12izl5lpr8zacl00
+ts=2026-04-22T08:04:32.024Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:32.024Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:32.547Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=18ukf5y1249wmd12izl5lpr8zacl00
+ts=2026-04-22T08:04:32.547Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:32.547Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:32.624Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+ts=2026-04-22T08:04:32.624Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.171Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepRawWsOnClose key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.171Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.171Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepRawWsOnClose/websocket/?rvt-namespace=driver-2847cc71-f6b9-4a18-ab94-4b3d86933845&rvt-method=getOrCreate&rvt-runner=driver-suite-930a2405-0587-4e13-8b0e-44b9e8544534&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.771Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepRawWsOnClose key=[]
+ts=2026-04-22T08:04:33.771Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-2847cc71-f6b9-4a18-ab94-4b3d86933845"
+ts=2026-04-22T08:04:33.771Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-2847cc71-f6b9-4a18-ab94-4b3d86933845" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.780Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=1o2el0j5wtlrqj1busnpvhemrkcl00 name=sleepRawWsOnClose key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.780Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=1o2el0j5wtlrqj1busnpvhemrkcl00
+ts=2026-04-22T08:04:33.781Z level=DEBUG target=actor-client msg="handling action" name=getStatus encoding=bare
+ts=2026-04-22T08:04:33.781Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getStatus encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.861Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep
+ts=2026-04-22T08:04:33.861Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:34.407Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepRawWsSendOnSleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:34.407Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:34.407Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepRawWsSendOnSleep/websocket/?rvt-namespace=driver-13260ac7-7608-4845-ba43-8fc490520562&rvt-method=getOrCreate&rvt-runner=driver-suite-3a473aeb-ad70-4568-b317-d795f012720d&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:34.499Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepRawWsSendOnSleep key=[]
+ts=2026-04-22T08:04:34.499Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-13260ac7-7608-4845-ba43-8fc490520562"
+ts=2026-04-22T08:04:34.499Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-13260ac7-7608-4845-ba43-8fc490520562" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:34.508Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=dhp0tepmm7xojbk4t2q2kgs906cl00 name=sleepRawWsSendOnSleep key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:34.508Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=dhp0tepmm7xojbk4t2q2kgs906cl00
+ts=2026-04-22T08:04:34.508Z level=DEBUG target=actor-client msg="handling action" name=triggerSleep encoding=bare
+ts=2026-04-22T08:04:34.508Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/triggerSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:35.072Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=dhp0tepmm7xojbk4t2q2kgs906cl00
+ts=2026-04-22T08:04:35.072Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:35.072Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:35.152Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket
+ts=2026-04-22T08:04:35.152Z level=INFO target=test-suite msg="cleaning up test"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:35.694Z level=DEBUG target=actor-client msg="get or create handle to actor" name=sleepRawWsDelayedSendOnSleep key=[] parameters= createInRegion=
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:35.694Z level=DEBUG target="[object Object]" msg="opening websocket" encoding=bare path=/websocket/
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:35.694Z level=DEBUG target=engine-client msg="opening websocket to actor via guard" gatewayUrl="http://127.0.0.1:33561/gateway/sleepRawWsDelayedSendOnSleep/websocket/?rvt-namespace=driver-da5d3310-894e-466a-9b2f-c3323397e28e&rvt-method=getOrCreate&rvt-runner=driver-suite-e23b5ebe-df49-4a87-a0e7-facdb9eb2bee&rvt-crash-policy=sleep"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:35.787Z level=INFO target=engine-client msg="getOrCreateWithKey: getting or creating actor via engine api" name=sleepRawWsDelayedSendOnSleep key=[]
+ts=2026-04-22T08:04:35.787Z level=DEBUG target=engine-client msg="making api call" method=PUT url="http://127.0.0.1:33561/actors?namespace=driver-da5d3310-894e-466a-9b2f-c3323397e28e"
+ts=2026-04-22T08:04:35.787Z level=DEBUG target=actor-client msg="sending http request" url="http://127.0.0.1:33561/actors?namespace=driver-da5d3310-894e-466a-9b2f-c3323397e28e" encoding=json
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:35.796Z level=INFO target=engine-client msg="getOrCreateWithKey: actor ready" actorId=l7f0plcuaggi3h6mlxx0wy7h5pal00 name=sleepRawWsDelayedSendOnSleep key=[] created=false
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:35.796Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=l7f0plcuaggi3h6mlxx0wy7h5pal00
+ts=2026-04-22T08:04:35.796Z level=DEBUG target=actor-client msg="handling action" name=triggerSleep encoding=bare
+ts=2026-04-22T08:04:35.796Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/triggerSleep encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:36.422Z level=DEBUG target=actor-client msg="using direct actor gateway target" actorId=l7f0plcuaggi3h6mlxx0wy7h5pal00
+ts=2026-04-22T08:04:36.422Z level=DEBUG target=actor-client msg="handling action" name=getCounts encoding=bare
+ts=2026-04-22T08:04:36.422Z level=DEBUG target=actor-client msg="sending http request" url=http://actor/action/getCounts encoding=bare
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:36.500Z level=DEBUG target=actor-client msg="disposing client"
+
+stdout | tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+ts=2026-04-22T08:04:36.500Z level=INFO target=test-suite msg="cleaning up test"
+
+ ❯ tests/driver/actor-sleep.test.ts (66 tests | 1 failed | 45 skipped) 72101ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state  1015ms
+   ↓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor sleep persists state with connect
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout  1971ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > actor automatically sleeps after timeout with connect  2049ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect  1258ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > waitUntil works in onWake  997ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > rpc calls keep actor awake  3497ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms keep actor awake  1927ms
+   × Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors 30012ms
+     → Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > long running rpcs keep actor awake  3416ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw websockets keep actor awake  3274ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > active raw fetch requests keep actor awake  3270ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > noSleep option disables sleeping  3164ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared  3237ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep delays shutdown until cleared  1136ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > preventSleep can be restored during onWake  3605ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep  1425ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onmessage handler delays sleep  1297ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep  1570ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > async websocket onclose handler delays sleep  1236ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends message to raw websocket  1291ms
+   ✓ Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > onSleep sends delayed message to raw websocket  1348ms
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > actor sleep persists state
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > actor sleep persists state with connect
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > actor automatically sleeps after timeout
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > waitUntil works in onWake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > rpc calls keep actor awake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > alarms keep actor awake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > alarms wake actors
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > long running rpcs keep actor awake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > active raw websockets keep actor awake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > active raw fetch requests keep actor awake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > noSleep option disables sleeping
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > preventSleep can be restored during onWake
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > async websocket onclose handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > onSleep sends message to raw websocket
+   ↓ Actor Sleep > static registry > encoding (cbor) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > actor sleep persists state
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > actor sleep persists state with connect
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > actor automatically sleeps after timeout
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > actor automatically sleeps after timeout with connect
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > waitUntil can broadcast before sleep disconnect
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > waitUntil works in onWake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > rpc calls keep actor awake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > alarms keep actor awake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > alarms wake actors
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > long running rpcs keep actor awake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > active raw websockets keep actor awake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > active raw fetch requests keep actor awake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > noSleep option disables sleeping
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > preventSleep blocks auto sleep until cleared
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > preventSleep delays shutdown until cleared
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > preventSleep can be restored during onWake
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > async websocket addEventListener message handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > async websocket onmessage handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > async websocket addEventListener close handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > async websocket onclose handler delays sleep
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > onSleep sends message to raw websocket
+   ↓ Actor Sleep > static registry > encoding (json) > Actor Sleep Tests > onSleep sends delayed message to raw websocket
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/driver/actor-sleep.test.ts > Actor Sleep > static registry > encoding (bare) > Actor Sleep Tests > alarms wake actors
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/driver/actor-sleep.test.ts:361:3
+    359|   });
+    360| 
+    361|   test("alarms wake actors", async (c) => {
+       |   ^
+    362|    const { client } = await setupDriverTest(c, driverTestConfig);
+    363| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 20 passed | 45 skipped (66)
+   Start at  01:03:24
+   Duration  72.61s (transform 259ms, setup 0ms, collect 401ms, tests 72.10s, environment 0ms, prepare 36ms)
+
+ ELIFECYCLE  Test failed. See above for more details.
+
+# exit 1

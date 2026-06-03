@@ -1,0 +1,638 @@
+{
+	"schemaVersion": 1,
+	"startedAt": "2026-04-29T20:36:57.622Z",
+	"finishedAt": "2026-04-29T20:37:45.143Z",
+	"config": {
+		"endpoint": "http://127.0.0.1:6420",
+		"profile": "smoke",
+		"selectedWorkloads": [
+			"small-schema-read",
+			"rowid-range-forward",
+			"rowid-range-backward",
+			"secondary-index-scattered-table",
+			"aggregate-status",
+			"parallel-read-aggregates",
+			"parallel-read-write-transition",
+			"random-point-lookups",
+			"write-batch-after-wake",
+			"migration-create-indexes-large"
+		],
+		"sizes": {
+			"smallBytes": 262144,
+			"mediumBytes": 1048576,
+			"cacheFitBytes": 1048576,
+			"cacheOverflowBytes": 2097152,
+			"largeBytes": 2097152,
+			"rowBytes": 2048
+		},
+		"metricsToken": "dev-metrics",
+		"matrixScenario": "no-read-pool",
+		"wakeDelayMs": 2000,
+		"postSetupWaitMs": 0,
+		"startLocalEnvoy": true,
+		"disableStorageCompaction": false,
+		"sqliteOptimizationsDisabled": false,
+		"sqliteOptimizationEnv": {
+			"RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE": "adaptive",
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE": "all",
+			"RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH": "true",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGES": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_ON_OPEN": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES": "true",
+			"RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION": "true",
+			"RIVETKIT_SQLITE_OPT_RANGE_READS": "true",
+			"RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS": "true",
+			"RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE": "true",
+			"RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED": "false",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES": "1048576",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT": "1",
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES": "50000",
+			"RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES": "512",
+			"RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS": "0",
+			"RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS": "0"
+		},
+		"cacheSizing": {
+			"sqlitePageSizeBytes": 4096,
+			"startupPreloadMaxBytes": 1048576,
+			"vfsPageCacheCapacityPages": 50000,
+			"vfsPageCacheCapacityBytes": 204800000,
+			"largeBytesExceedsConfiguredVfsCache": false
+		}
+	},
+	"cacheConfigProbe": {
+		"sqliteCacheSizePragma": -2000,
+		"sqlitePageSize": 4096,
+		"pageCount": 16
+	},
+	"results": [
+		{
+			"workload": "small-schema-read",
+			"description": "Small cold-wake schema and table metadata read.",
+			"category": "canary",
+			"sizeClass": "small",
+			"targetBytes": 262144,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"small-schema-read"
+			],
+			"actorId": "5n4mqbzx66jblrinohh804zp4cdl00",
+			"setup": {
+				"rows": 128,
+				"targetBytes": 262144,
+				"rowBytes": 2048,
+				"setupMs": 69.79463200000009,
+				"pageCount": 165
+			},
+			"main": {
+				"ms": 5.840441999999712,
+				"workload": "small-schema-read",
+				"objects": 15,
+				"columns": 7,
+				"rows": 128,
+				"pageCount": 166
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 4,
+				"resolvePagesRequestedTotal": 4,
+				"resolvePagesCacheHitsTotal": 3,
+				"resolvePagesCacheMissesTotal": 1,
+				"getPagesTotal": 1,
+				"pagesFetchedTotal": 1,
+				"prefetchPagesTotal": 0,
+				"bytesFetchedTotal": 4096,
+				"prefetchBytesTotal": 0,
+				"getPagesDurationSecondsSum": 0.004277777,
+				"getPagesDurationSecondsCount": 1
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "rowid-range-forward",
+			"description": "Large append-like INTEGER PRIMARY KEY forward range scan.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"rowid-range-forward"
+			],
+			"actorId": "t1cgwoqodtwfznul9xbmsdbtjobl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 584.6957470000007,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 406.5608680000005,
+				"workload": "rowid-range-forward",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1035,
+				"resolvePagesRequestedTotal": 1035,
+				"resolvePagesCacheHitsTotal": 1020,
+				"resolvePagesCacheMissesTotal": 15,
+				"getPagesTotal": 15,
+				"pagesFetchedTotal": 1223,
+				"prefetchPagesTotal": 1208,
+				"bytesFetchedTotal": 5009408,
+				"prefetchBytesTotal": 4947968,
+				"getPagesDurationSecondsSum": 0.39020411699999996,
+				"getPagesDurationSecondsCount": 15
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "rowid-range-backward",
+			"description": "Large append-like INTEGER PRIMARY KEY reverse range scan.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"rowid-range-backward"
+			],
+			"actorId": "5ven6oa34t7648whmwjzufuf23bl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 592.3937770000002,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 360.3142399999997,
+				"workload": "rowid-range-backward",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1035,
+				"resolvePagesRequestedTotal": 1035,
+				"resolvePagesCacheHitsTotal": 1017,
+				"resolvePagesCacheMissesTotal": 18,
+				"getPagesTotal": 18,
+				"pagesFetchedTotal": 1230,
+				"prefetchPagesTotal": 1212,
+				"bytesFetchedTotal": 5038080,
+				"prefetchBytesTotal": 4964352,
+				"getPagesDurationSecondsSum": 0.341753752,
+				"getPagesDurationSecondsCount": 18
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "secondary-index-scattered-table",
+			"description": "Large secondary-index range that visits table rows in scattered rowid order.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"secondary-index-scattered-table"
+			],
+			"actorId": "t1kiw3i8ziiej1198ikiquxqxmbl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 442.17877999999837,
+				"pageCount": 1062
+			},
+			"main": {
+				"ms": 2355.5414139999993,
+				"workload": "secondary-index-scattered-table",
+				"rows": 1024,
+				"bytes": 2097152,
+				"pageCount": 1063
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1038,
+				"resolvePagesRequestedTotal": 1038,
+				"resolvePagesCacheHitsTotal": 505,
+				"resolvePagesCacheMissesTotal": 533,
+				"getPagesTotal": 533,
+				"pagesFetchedTotal": 1849,
+				"prefetchPagesTotal": 1316,
+				"bytesFetchedTotal": 7573504,
+				"prefetchBytesTotal": 5390336,
+				"getPagesDurationSecondsSum": 2.271746766000001,
+				"getPagesDurationSecondsCount": 533
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "aggregate-status",
+			"description": "Large GROUP BY status aggregate over an OLTP-style orders table.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"aggregate-status"
+			],
+			"actorId": "5n4qhzof510mhybs5fb56e4nbfbl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 593.3329980000017,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 600.4880420000009,
+				"workload": "aggregate-status",
+				"groups": 4,
+				"rows": 1024,
+				"total": 13353120,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1037,
+				"resolvePagesRequestedTotal": 1037,
+				"resolvePagesCacheHitsTotal": 1013,
+				"resolvePagesCacheMissesTotal": 24,
+				"getPagesTotal": 24,
+				"pagesFetchedTotal": 2132,
+				"prefetchPagesTotal": 2108,
+				"bytesFetchedTotal": 8732672,
+				"prefetchBytesTotal": 8634368,
+				"getPagesDurationSecondsSum": 0.5767470390000001,
+				"getPagesDurationSecondsCount": 24
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "parallel-read-aggregates",
+			"description": "Concurrent read-only aggregates over one actor-local SQLite database.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"parallel-read-aggregates"
+			],
+			"actorId": "p22ab4w1gfr12sxt6tt14pqmz5cl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 560.7565990000003,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 593.9723610000001,
+				"workload": "parallel-read-aggregates",
+				"ops": 4,
+				"groups": 14,
+				"rows": 4112,
+				"total": 42981868,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 2047,
+				"resolvePagesRequestedTotal": 2047,
+				"resolvePagesCacheHitsTotal": 2019,
+				"resolvePagesCacheMissesTotal": 28,
+				"getPagesTotal": 28,
+				"pagesFetchedTotal": 2136,
+				"prefetchPagesTotal": 2108,
+				"bytesFetchedTotal": 8749056,
+				"prefetchBytesTotal": 8634368,
+				"getPagesDurationSecondsSum": 0.5619281929999999,
+				"getPagesDurationSecondsCount": 28
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "parallel-read-write-transition",
+			"description": "Concurrent read aggregates with a queued write-mode update.",
+			"category": "write",
+			"sizeClass": "medium",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"parallel-read-write-transition"
+			],
+			"actorId": "5noh6dupi7xocltewbbqxup8r0bl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 292.68896700000187,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 357.7377029999989,
+				"workload": "parallel-read-write-transition",
+				"ops": 4,
+				"readOps": 3,
+				"writeOps": 1,
+				"groups": 8,
+				"rows": 1568,
+				"total": 14660458,
+				"pageCount": 623
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 532,
+				"resolvePagesRequestedTotal": 532,
+				"resolvePagesCacheHitsTotal": 508,
+				"resolvePagesCacheMissesTotal": 24,
+				"getPagesTotal": 24,
+				"pagesFetchedTotal": 998,
+				"prefetchPagesTotal": 974,
+				"bytesFetchedTotal": 4087808,
+				"prefetchBytesTotal": 3989504,
+				"getPagesDurationSecondsSum": 0.319566577,
+				"getPagesDurationSecondsCount": 24
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "random-point-lookups",
+			"description": "Deterministic random primary-key point lookups across a large table.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"random-point-lookups"
+			],
+			"actorId": "tl33s2afqx9leifiprtg5mlju6dl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 570.8703070000047,
+				"pageCount": 1230
+			},
+			"main": {
+				"ms": 3520.7633950000018,
+				"workload": "random-point-lookups",
+				"ops": 1000,
+				"bytes": 2048000,
+				"pageCount": 1231
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1011,
+				"resolvePagesRequestedTotal": 1011,
+				"resolvePagesCacheHitsTotal": 436,
+				"resolvePagesCacheMissesTotal": 575,
+				"getPagesTotal": 575,
+				"pagesFetchedTotal": 2068,
+				"prefetchPagesTotal": 1493,
+				"bytesFetchedTotal": 8470528,
+				"prefetchBytesTotal": 6115328,
+				"getPagesDurationSecondsSum": 2.9244945369999997,
+				"getPagesDurationSecondsCount": 575
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "write-batch-after-wake",
+			"description": "Post-wake transactional insert batch into an existing database.",
+			"category": "write",
+			"sizeClass": "medium",
+			"targetBytes": 1048576,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"write-batch-after-wake"
+			],
+			"actorId": "18u89d6rxt89lhbbr8sdtsu4pocl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 1048576,
+				"rowBytes": 2048,
+				"setupMs": 286.88775700000406,
+				"pageCount": 622
+			},
+			"main": {
+				"ms": 450.6324659999955,
+				"workload": "write-batch-after-wake",
+				"rows": 1000,
+				"pageCount": 1642
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 15,
+				"resolvePagesRequestedTotal": 15,
+				"resolvePagesCacheHitsTotal": 3,
+				"resolvePagesCacheMissesTotal": 12,
+				"getPagesTotal": 12,
+				"pagesFetchedTotal": 14,
+				"prefetchPagesTotal": 2,
+				"bytesFetchedTotal": 57344,
+				"prefetchBytesTotal": 8192,
+				"getPagesDurationSecondsSum": 0.052855796,
+				"getPagesDurationSecondsCount": 12
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "migration-create-indexes-large",
+			"description": "Schema migration that creates multiple indexes on an existing large table.",
+			"category": "migration",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-opt-impact-20260429-no-read-pool",
+				"migration-create-indexes-large"
+			],
+			"actorId": "tdpe6nby5nn061gja8it7kub7qbl00",
+			"setup": {
+				"rows": 1024,
+				"targetBytes": 2097152,
+				"rowBytes": 2048,
+				"setupMs": 398.0868350000019,
+				"pageCount": 1043
+			},
+			"main": {
+				"ms": 319.59184000000096,
+				"workload": "migration-create-indexes-large",
+				"indexes": 3,
+				"pageCount": 1059
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 3078,
+				"resolvePagesRequestedTotal": 3078,
+				"resolvePagesCacheHitsTotal": 3069,
+				"resolvePagesCacheMissesTotal": 9,
+				"getPagesTotal": 9,
+				"pagesFetchedTotal": 1029,
+				"prefetchPagesTotal": 1020,
+				"bytesFetchedTotal": 4214784,
+				"prefetchBytesTotal": 4177920,
+				"getPagesDurationSecondsSum": 0.273333145,
+				"getPagesDurationSecondsCount": 9
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		}
+	]
+}

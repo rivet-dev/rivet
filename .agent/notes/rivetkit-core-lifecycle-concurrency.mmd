@@ -1,0 +1,26 @@
+flowchart TD
+	startup[ActorLifecycle::startup] --> load[load persisted actor]
+	load --> create[factory.create callbacks]
+	create --> migrate[on_migrate with timeout]
+	migrate --> wake[on_wake]
+	wake --> ready[set ready]
+	ready --> started[set started]
+	started --> run[spawn run handler task]
+	started --> alarms[process/sync scheduled alarms]
+	started --> sleep_timer[spawn sleep timer task]
+
+	action[Action dispatch] --> action_lock[action_lock serializes actions]
+	action_lock --> keep_awake[keep_awake counter blocks sleep]
+	keep_awake --> handler[user action callback]
+	handler --> state_save[throttled state save task]
+
+	alarms --> scheduled_action[scheduled action dispatch]
+	scheduled_action --> action_lock
+
+	shutdown[shutdown for sleep/destroy] --> stop_flags[ready=false, started=false, abort signal]
+	stop_flags --> wait_run[wait/abort run handler]
+	wait_run --> idle_wait[wait for counters/tasks to drain]
+	idle_wait --> hooks[on_sleep or on_destroy]
+	hooks --> conns[persist/disconnect connections]
+	conns --> final_save[immediate state save]
+	final_save --> sqlite[sqlite cleanup]

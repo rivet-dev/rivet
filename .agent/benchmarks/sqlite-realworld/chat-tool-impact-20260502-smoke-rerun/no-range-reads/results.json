@@ -1,0 +1,348 @@
+{
+	"schemaVersion": 1,
+	"startedAt": "2026-05-02T10:21:24.558Z",
+	"finishedAt": "2026-05-02T10:21:38.213Z",
+	"config": {
+		"endpoint": "http://127.0.0.1:6420",
+		"profile": "smoke",
+		"selectedWorkloads": [
+			"chat-log-select-limit",
+			"chat-log-select-indexed",
+			"chat-log-count",
+			"chat-log-sum",
+			"chat-tool-read-fanout"
+		],
+		"sizes": {
+			"smallBytes": 262144,
+			"mediumBytes": 1048576,
+			"cacheFitBytes": 1048576,
+			"cacheOverflowBytes": 2097152,
+			"largeBytes": 2097152,
+			"rowBytes": 2048
+		},
+		"metricsToken": "dev-metrics",
+		"matrixScenario": "no-range-reads",
+		"wakeDelayMs": 2000,
+		"postSetupWaitMs": 0,
+		"startLocalEnvoy": true,
+		"disableStorageCompaction": false,
+		"sqliteOptimizationsDisabled": false,
+		"sqliteOptimizationEnv": {
+			"RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE": "adaptive",
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE": "all",
+			"RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH": "true",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGES": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_ON_OPEN": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_HOT_PAGES": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_EARLY_PAGES": "true",
+			"RIVETKIT_SQLITE_OPT_PRELOAD_HINT_SCAN_RANGES": "true",
+			"RIVETKIT_SQLITE_OPT_CACHE_GET_PAGES_VALIDATION": "true",
+			"RIVETKIT_SQLITE_OPT_RANGE_READS": "false",
+			"RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS": "true",
+			"RIVETKIT_SQLITE_OPT_DECODED_LTX_CACHE": "true",
+			"RIVETKIT_SQLITE_OPT_READ_POOL_ENABLED": "true",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES": "1048576",
+			"RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT": "1",
+			"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES": "50000",
+			"RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES": "512",
+			"RIVETKIT_SQLITE_OPT_READ_POOL_MAX_READERS": "4",
+			"RIVETKIT_SQLITE_OPT_READ_POOL_IDLE_TTL_MS": "60000"
+		},
+		"cacheSizing": {
+			"sqlitePageSizeBytes": 4096,
+			"startupPreloadMaxBytes": 1048576,
+			"vfsPageCacheCapacityPages": 50000,
+			"vfsPageCacheCapacityBytes": 204800000,
+			"largeBytesExceedsConfiguredVfsCache": false
+		}
+	},
+	"cacheConfigProbe": {
+		"sqliteCacheSizePragma": -2000,
+		"sqlitePageSize": 4096,
+		"pageCount": 18
+	},
+	"results": [
+		{
+			"workload": "chat-log-select-limit",
+			"description": "Chat log recent-message ORDER BY timestamp with LIMIT.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-chat-tool-impact-20260502-rerun-no-range-reads",
+				"chat-log-select-limit"
+			],
+			"actorId": "td9upciywz0g4lpg2rh52di0l9bl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 2097152,
+				"rowBytes": 4096,
+				"setupMs": 220.8274409999999,
+				"pageCount": 597
+			},
+			"main": {
+				"ms": 203.18063799999982,
+				"workload": "chat-log-select-limit",
+				"rows": 100,
+				"pageCount": 598
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1092,
+				"resolvePagesRequestedTotal": 1092,
+				"resolvePagesCacheHitsTotal": 1081,
+				"resolvePagesCacheMissesTotal": 11,
+				"getPagesTotal": 11,
+				"pagesFetchedTotal": 612,
+				"prefetchPagesTotal": 601,
+				"bytesFetchedTotal": 2506752,
+				"prefetchBytesTotal": 2461696,
+				"getPagesDurationSecondsSum": 0.190763405,
+				"getPagesDurationSecondsCount": 11
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "chat-log-select-indexed",
+			"description": "Chat log indexed latest-thread message lookup.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-chat-tool-impact-20260502-rerun-no-range-reads",
+				"chat-log-select-indexed"
+			],
+			"actorId": "p61sjcdxahfr8ztnwwvmxfg0pkal00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 2097152,
+				"rowBytes": 4096,
+				"setupMs": 233.99020800000017,
+				"pageCount": 597
+			},
+			"main": {
+				"ms": 47.76367600000049,
+				"workload": "chat-log-select-indexed",
+				"rows": 100,
+				"pageCount": 598
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 119,
+				"resolvePagesRequestedTotal": 119,
+				"resolvePagesCacheHitsTotal": 112,
+				"resolvePagesCacheMissesTotal": 7,
+				"getPagesTotal": 7,
+				"pagesFetchedTotal": 135,
+				"prefetchPagesTotal": 128,
+				"bytesFetchedTotal": 552960,
+				"prefetchBytesTotal": 524288,
+				"getPagesDurationSecondsSum": 0.043640248000000006,
+				"getPagesDurationSecondsCount": 7
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "chat-log-count",
+			"description": "Chat log per-thread message count aggregate.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-chat-tool-impact-20260502-rerun-no-range-reads",
+				"chat-log-count"
+			],
+			"actorId": "hcwdmv9ps8ocrohxqramahmldpbl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 2097152,
+				"rowBytes": 4096,
+				"setupMs": 212.15433800000028,
+				"pageCount": 597
+			},
+			"main": {
+				"ms": 12.643909000000349,
+				"workload": "chat-log-count",
+				"ops": 1,
+				"rows": 512,
+				"pageCount": 598
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 7,
+				"resolvePagesRequestedTotal": 7,
+				"resolvePagesCacheHitsTotal": 3,
+				"resolvePagesCacheMissesTotal": 4,
+				"getPagesTotal": 4,
+				"pagesFetchedTotal": 4,
+				"prefetchPagesTotal": 0,
+				"bytesFetchedTotal": 16384,
+				"prefetchBytesTotal": 0,
+				"getPagesDurationSecondsSum": 0.010344458,
+				"getPagesDurationSecondsCount": 4
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "chat-log-sum",
+			"description": "Chat log per-thread content byte aggregate.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-chat-tool-impact-20260502-rerun-no-range-reads",
+				"chat-log-sum"
+			],
+			"actorId": "1oi68j3tagbc8bl0kdb6qa7ua9cl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 2097152,
+				"rowBytes": 4096,
+				"setupMs": 227.2726360000015,
+				"pageCount": 597
+			},
+			"main": {
+				"ms": 277.6784630000002,
+				"workload": "chat-log-sum",
+				"ops": 1,
+				"bytes": 2097152,
+				"pageCount": 598
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 584,
+				"resolvePagesRequestedTotal": 584,
+				"resolvePagesCacheHitsTotal": 542,
+				"resolvePagesCacheMissesTotal": 42,
+				"getPagesTotal": 42,
+				"pagesFetchedTotal": 609,
+				"prefetchPagesTotal": 567,
+				"bytesFetchedTotal": 2494464,
+				"prefetchBytesTotal": 2322432,
+				"getPagesDurationSecondsSum": 0.26367433599999995,
+				"getPagesDurationSecondsCount": 42
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		},
+		{
+			"workload": "chat-tool-read-fanout",
+			"description": "Parallel chat/tool read fan-out over one actor-local SQLite database.",
+			"category": "read",
+			"sizeClass": "large",
+			"targetBytes": 2097152,
+			"actorKey": [
+				"sqlite-realworld-bench",
+				"sqlite-chat-tool-impact-20260502-rerun-no-range-reads",
+				"chat-tool-read-fanout"
+			],
+			"actorId": "9667b3666dz4gex0lwv3ib7tdgcl00",
+			"setup": {
+				"rows": 512,
+				"targetBytes": 2097152,
+				"rowBytes": 4096,
+				"setupMs": 216.89098700000068,
+				"pageCount": 597
+			},
+			"main": {
+				"ms": 202.010228000001,
+				"workload": "chat-tool-read-fanout",
+				"ops": 4,
+				"limitRows": 100,
+				"indexedRows": 100,
+				"rows": 512,
+				"bytes": 2097152,
+				"pageCount": 598
+			},
+			"vfsMetrics": {
+				"resolvePagesTotal": 1096,
+				"resolvePagesRequestedTotal": 1096,
+				"resolvePagesCacheHitsTotal": 1085,
+				"resolvePagesCacheMissesTotal": 11,
+				"getPagesTotal": 11,
+				"pagesFetchedTotal": 583,
+				"prefetchPagesTotal": 572,
+				"bytesFetchedTotal": 2387968,
+				"prefetchBytesTotal": 2342912,
+				"getPagesDurationSecondsSum": 0.185402495,
+				"getPagesDurationSecondsCount": 11
+			},
+			"readPoolMetrics": {
+				"activeReaders": 0,
+				"idleReaders": 0,
+				"readWaitDurationSecondsSum": 0,
+				"readWaitDurationSecondsCount": 0,
+				"writeWaitDurationSecondsSum": 0,
+				"writeWaitDurationSecondsCount": 0,
+				"routedReadQueriesTotal": 0,
+				"writeFallbackQueriesTotal": 0,
+				"manualTransactionDurationSecondsSum": 0,
+				"manualTransactionDurationSecondsCount": 0,
+				"readerOpensTotal": 0,
+				"readerClosesTotal": 0,
+				"rejectedReaderMutationsTotal": 0,
+				"modeTransitionsTotal": 0
+			}
+		}
+	]
+}
