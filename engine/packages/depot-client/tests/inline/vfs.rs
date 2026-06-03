@@ -603,7 +603,13 @@ impl SqliteVfsMetrics for WorkerTestMetrics {
 		self.overloads.fetch_add(1, Ordering::AcqRel);
 	}
 
-	fn observe_worker_command_duration(&self, _operation: &'static str, _duration_ns: u64) {
+	fn observe_worker_command_duration(
+		&self,
+		_operation: &'static str,
+		_in_tx: bool,
+		_stmt_kind: &'static str,
+		_duration_ns: u64,
+	) {
 		self.command_durations.fetch_add(1, Ordering::AcqRel);
 	}
 

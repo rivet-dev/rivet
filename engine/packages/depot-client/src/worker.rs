@@ -11,7 +11,7 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use crossbeam_channel::{Receiver, Sender, TrySendError};
-use libsqlite3_sys::{SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE};
+use libsqlite3_sys::{SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE, sqlite3_get_autocommit};
 use parking_lot::Mutex;
 use tokio::sync::{Notify, oneshot};
 
@@ -426,16 +426,30 @@ fn run_command(
 			if reply.is_closed() {
 				return;
 			}
+			// Read the transaction state before running so the label reflects the
+			// transaction the statement executed against, not the state it leaves
+			// behind (a BEGIN flips autocommit off, a COMMIT flips it back on).
+			let in_tx = command_in_tx(db);
+			let stmt_kind = classify_statement(&sql);
 			let result = execute_single_statement(db.as_ptr(), &sql, params.as_deref());
-			record_command_metrics(metrics, "execute", &result, start.elapsed());
+			record_command_metrics(
+				metrics,
+				"execute",
+				in_tx,
+				stmt_kind,
+				&result,
+				start.elapsed(),
+			);
 			let _ = reply.send(result);
 		}
 		SqliteCommand::Exec { sql, reply } => {
 			if reply.is_closed() {
 				return;
 			}
+			let in_tx = command_in_tx(db);
+			let stmt_kind = classify_statement(&sql);
 			let result = exec_statements(db.as_ptr(), &sql);
-			record_command_metrics(metrics, "exec", &result, start.elapsed());
+			record_command_metrics(metrics, "exec", in_tx, stmt_kind, &result, start.elapsed());
 			let _ = reply.send(result);
 		}
 		#[cfg(test)]
@@ -453,15 +467,83 @@ fn run_command(
 fn record_command_metrics<T>(
 	metrics: Option<&dyn SqliteVfsMetrics>,
 	operation: &'static str,
+	in_tx: bool,
+	stmt_kind: &'static str,
 	result: &Result<T>,
 	duration: Duration,
 ) {
 	let Some(metrics) = metrics else {
 		return;
 	};
-	metrics.observe_worker_command_duration(operation, duration.as_nanos() as u64);
+	metrics.observe_worker_command_duration(
+		operation,
+		in_tx,
+		stmt_kind,
+		duration.as_nanos() as u64,
+	);
 	if let Err(error) = result {
 		metrics.record_worker_command_error(operation, worker_error_code(error));
+	}
+}
+
+/// Returns whether an explicit transaction is open on the connection.
+///
+/// `sqlite3_get_autocommit` returns non-zero in autocommit mode (no open
+/// transaction) and zero once a `BEGIN` opens one. Implicit per-statement
+/// transactions keep autocommit on, so this only reports explicit transactions.
+fn command_in_tx(db: &mut NativeConnection) -> bool {
+	unsafe { sqlite3_get_autocommit(db.as_ptr()) == 0 }
+}
+
+/// Classifies a SQL command by its leading keyword for metric labeling.
+///
+/// Leading line and block comments are skipped so generated SQL with a header
+/// comment still classifies by its first statement. Multi-statement `exec`
+/// payloads are labeled by their first statement.
+fn classify_statement(sql: &str) -> &'static str {
+	let trimmed = strip_leading_sql_noise(sql);
+	let keyword: String = trimmed
+		.chars()
+		.take_while(|c| c.is_ascii_alphabetic())
+		.collect();
+	match keyword.to_ascii_uppercase().as_str() {
+		"SELECT" | "WITH" => "select",
+		"INSERT" | "REPLACE" => "insert",
+		"UPDATE" => "update",
+		"DELETE" => "delete",
+		"BEGIN" => "begin",
+		"COMMIT" | "END" => "commit",
+		"ROLLBACK" => "rollback",
+		"SAVEPOINT" => "savepoint",
+		"RELEASE" => "release",
+		"PRAGMA" => "pragma",
+		"CREATE" => "create",
+		"DROP" => "drop",
+		"ALTER" => "alter",
+		"VACUUM" => "vacuum",
+		"ANALYZE" => "analyze",
+		"ATTACH" => "attach",
+		"DETACH" => "detach",
+		_ => "other",
+	}
+}
+
+fn strip_leading_sql_noise(sql: &str) -> &str {
+	let mut rest = sql.trim_start();
+	loop {
+		if let Some(after) = rest.strip_prefix("--") {
+			rest = match after.find('\n') {
+				Some(idx) => after[idx + 1..].trim_start(),
+				None => "",
+			};
+		} else if let Some(after) = rest.strip_prefix("/*") {
+			rest = match after.find("*/") {
+				Some(idx) => after[idx + 2..].trim_start(),
+				None => "",
+			};
+		} else {
+			return rest;
+		}
 	}
 }
 

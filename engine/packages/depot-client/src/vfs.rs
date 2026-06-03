@@ -345,7 +345,14 @@ pub trait SqliteVfsMetrics: Send + Sync {
 
 	fn record_worker_queue_overload(&self) {}
 
-	fn observe_worker_command_duration(&self, _operation: &'static str, _duration_ns: u64) {}
+	fn observe_worker_command_duration(
+		&self,
+		_operation: &'static str,
+		_in_tx: bool,
+		_stmt_kind: &'static str,
+		_duration_ns: u64,
+	) {
+	}
 
 	fn record_worker_command_error(&self, _operation: &'static str, _code: &'static str) {}
 
@@ -1412,14 +1419,14 @@ impl VfsContext {
 		// Transport rejection, including envoy shutdown while a VFS callback is
 		// active, becomes GetPagesError here. The SQLite callback maps that to
 		// SQLITE_IOERR_* because VFS has no richer async transport error channel.
-		let response = self
-			.runtime
-			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
-				actor_id: self.actor_id.clone(),
-				pgnos: to_fetch.clone(),
-				expected_generation: None,
-				expected_head_txid,
-			}));
+		let response =
+			self.runtime
+				.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
+					actor_id: self.actor_id.clone(),
+					pgnos: to_fetch.clone(),
+					expected_generation: None,
+					expected_head_txid,
+				}));
 		if let Some(metrics) = &self.metrics {
 			metrics.observe_get_pages_duration(get_pages_start.elapsed().as_nanos() as u64);
 		}

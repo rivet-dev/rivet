@@ -12,7 +12,7 @@ export default defineConfig({
 		compilerOptions: {
 			skipLibCheck: true,
 			resolveJsonModule: true,
-			lib: ["ESNext", "DOM"],
+			lib: ["ESNext", "DOM", "DOM.Iterable"],
 		},
 	},
 	minify: false,

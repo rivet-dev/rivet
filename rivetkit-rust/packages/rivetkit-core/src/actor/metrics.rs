@@ -95,7 +95,13 @@ const SQLITE_STARTUP_PRELOAD_PAGE_LABELS: &[&str] = &["actor_name", "is_new", "k
 const SQLITE_VFS_LIFECYCLE_BUCKET_LABELS: &[&str] =
 	&["actor_name", "actor_lifecycle_bucket", "is_new"];
 #[cfg(feature = "sqlite-local")]
-const SQLITE_WORKER_COMMAND_LABELS: &[&str] = &["actor_name", "operation"];
+const SQLITE_WORKER_COMMAND_LABELS: &[&str] = &[
+	"actor_name",
+	"operation",
+	"actor_lifecycle_bucket",
+	"is_tx",
+	"stmt_kind",
+];
 #[cfg(feature = "sqlite-local")]
 const SQLITE_WORKER_ERROR_LABELS: &[&str] = &["actor_name", "operation", "code"];
 
@@ -884,9 +890,10 @@ impl ActorMetrics {
 		self.inner
 			.startup_is_new
 			.store(STARTUP_KIND_UNKNOWN, Ordering::Release);
-		self.inner
-			.current_startup_phase
-			.store(startup_phase::StartupPhase::LoadPersisted as u8, Ordering::Release);
+		self.inner.current_startup_phase.store(
+			startup_phase::StartupPhase::LoadPersisted as u8,
+			Ordering::Release,
+		);
 		*self.inner.ready_at.lock() = None;
 		self.inner.startup_complete.store(false, Ordering::Release);
 	}
@@ -1410,11 +1417,23 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 			.inc();
 	}
 
-	fn observe_worker_command_duration(&self, operation: &'static str, duration_ns: u64) {
+	fn observe_worker_command_duration(
+		&self,
+		operation: &'static str,
+		in_tx: bool,
+		stmt_kind: &'static str,
+		duration_ns: u64,
+	) {
 		let labels = self.actor_labels();
 		METRICS
 			.sqlite_worker_command_duration_seconds
-			.with_label_values(&[labels[0], operation])
+			.with_label_values(&[
+				labels[0],
+				operation,
+				self.actor_lifecycle_bucket_label(),
+				if in_tx { "true" } else { "false" },
+				stmt_kind,
+			])
 			.observe(ns_to_seconds(duration_ns));
 	}
 
@@ -1520,8 +1539,7 @@ fn optional_is_new_label(is_new: Option<bool>) -> &'static str {
 
 fn startup_duration_buckets() -> Vec<f64> {
 	vec![
-		0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
-		10.0, 30.0, 60.0,
+		0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0,
 	]
 }
 
