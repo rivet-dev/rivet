@@ -30,6 +30,23 @@ fn preserves_public_error_message_for_client_boundary() {
 }
 
 #[test]
+fn preserves_user_error_message_and_metadata_for_client_boundary() {
+	let error = ActionDispatchError {
+		group: "user".to_owned(),
+		code: "detailed_error".to_owned(),
+		message: "Detailed error message".to_owned(),
+		metadata: Some(serde_json::json!({ "reason": "test" })),
+		actor: None,
+	};
+
+	assert_eq!(error.client_message(), "Detailed error message");
+	assert_eq!(
+		error.client_metadata(),
+		Some(&serde_json::json!({ "reason": "test" }))
+	);
+}
+
+#[test]
 fn masks_private_structured_message_at_client_boundary() {
 	static TEST_ERROR: RivetErrorSchema = RivetErrorSchema {
 		group: "sqlite",
