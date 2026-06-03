@@ -18,7 +18,13 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate, useParams, useRouter } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo } from "react";
+import {
+	type ReactNode,
+	Suspense,
+	useContext,
+	useEffect,
+	useMemo,
+} from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -62,8 +68,17 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
-import { StepperForm } from "./forms/stepper-form";
+import { StepperForm, StepVisibilityContext } from "./forms/stepper-form";
 import { Content } from "./layout";
+import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
+import { SoftwareSelectStep } from "@/components/onboarding/agent-os/software-select-step";
+import { SandboxMountStep } from "@/components/onboarding/agent-os/sandbox-mount-step";
+import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
+import {
+	DEFAULT_AGENT,
+	DEFAULT_PACKAGES,
+	DEFAULT_SANDBOX_PROVIDER,
+} from "@/components/onboarding/agent-os/catalog";
 
 const stepper = defineStepper(
 	{
@@ -76,13 +91,49 @@ const stepper = defineStepper(
 		group: "local",
 	},
 	{
+		id: "agent",
+		title: "Choose your agent",
+		description: "Pick the coding agent to run inside agentOS.",
+		next: "Continue",
+		schema: z.object({ agent: z.string().nonempty() }),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
+		id: "software",
+		title: "Choose software",
+		description: "Select the packages baked into your build image.",
+		next: "Continue",
+		schema: z.object({ packages: z.array(z.string()) }),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
+		id: "sandbox",
+		title: "Sandbox & mounts",
+		description:
+			"Optionally mount a full sandbox for heavy workloads. Off by default.",
+		next: "Continue",
+		schema: z.object({
+			sandbox: z.object({
+				enabled: z.boolean(),
+				provider: z.string().optional(),
+			}),
+		}),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
 		id: "run",
 		title: "Build your first Actor",
-		titleFor: (values) =>
+		titleFor: (values: Record<string, unknown>) =>
 			values.template === "agent-os"
 				? "Set up agentOS"
 				: "Build your first Actor",
-		description: (values) =>
+		description: (values: Record<string, unknown>) =>
 			values.template === "agent-os"
 				? "Boot an agentOS instance and run your first session, locally."
 				: "Let your coding agent scaffold an Actor, or follow the quickstart yourself.",
@@ -224,6 +275,12 @@ export function GettingStarted({
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
 		template: "actor" as "actor" | "agent-os",
+		agent: DEFAULT_AGENT,
+		packages: DEFAULT_PACKAGES,
+		sandbox: { enabled: false, provider: DEFAULT_SANDBOX_PROVIDER } as {
+			enabled: boolean;
+			provider?: string;
+		},
 		...(initialRunnerConfig || {}),
 	};
 
@@ -258,6 +315,21 @@ export function GettingStarted({
 								install: () => (
 									<StepContent>
 										<InstallStep />
+									</StepContent>
+								),
+								agent: () => (
+									<StepContent>
+										<AgentSelectStep />
+									</StepContent>
+								),
+								software: () => (
+									<StepContent>
+										<SoftwareSelectStep />
+									</StepContent>
+								),
+								sandbox: () => (
+									<StepContent>
+										<SandboxMountStep />
 									</StepContent>
 								),
 								run: () => (
@@ -485,9 +557,13 @@ function SkipOnboardingHeaderLink() {
 
 function OnboardingProgress() {
 	const s = stepper.useStepper();
-	const steps = s.all;
-	const currentIndex = steps.findIndex((step) => step.id === s.current.id);
-	const total = steps.length;
+	const { isStepVisible, visibleStepIndex, visibleStepCount } =
+		useContext(StepVisibilityContext);
+	// Count only steps visible for the current path (agentOS adds steps that are
+	// hidden for the actor path), so "Step X of N" and the dots stay accurate.
+	const visibleSteps = s.all.filter((step) => isStepVisible(step.id));
+	const currentIndex = Math.max(0, visibleStepIndex(s.current.id));
+	const total = visibleStepCount;
 	const groupLabel =
 		s.current.group === "local" ? "Local setup" : "Deploy";
 	return (
@@ -503,7 +579,7 @@ function OnboardingProgress() {
 				Step {currentIndex + 1} of {total} · {groupLabel}
 			</div>
 			<div className="flex gap-1.5">
-				{steps.map((step, i) => (
+				{visibleSteps.map((step, i) => (
 					<div
 						key={step.id}
 						className={cn(
@@ -644,8 +720,9 @@ function AgentOsKeyNotice() {
 					<code className="rounded bg-muted px-1 py-0.5 text-foreground">
 						ANTHROPIC_API_KEY
 					</code>{" "}
-					as a secret on your deployment. The VM doesn't inherit it
-					from the host, so your server passes it to each session.{" "}
+					as a secret on your deployment. agentOS doesn't inherit it
+					from the host process, so your server passes it to each
+					session.{" "}
 					<a
 						href="https://rivet.dev/docs/agent-os/llm-credentials"
 						target="_blank"
@@ -800,7 +877,7 @@ function BuildTargetSelector() {
 							icon={<AgentOsLogo className="size-5" />}
 							label="agentOS"
 							badge="Preview"
-							description="Sandboxed VMs with a filesystem, network, and processes"
+							description="An open-source OS for agents. Runs in-process with ~6 ms cold starts."
 							isSelected={field.value === "agent-os"}
 							onSelect={() =>
 								setValue("template", "agent-os", {
@@ -816,9 +893,6 @@ function BuildTargetSelector() {
 		/>
 	);
 }
-
-const AGENT_OS_PACKAGES =
-	"rivetkit @rivet-dev/agent-os-common @rivet-dev/agent-os-pi";
 
 function InstallStep() {
 	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
@@ -841,33 +915,19 @@ function InstallStep() {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-1.5">
-						{isAgentOs
-							? "Add the agentOS packages"
-							: "Add the RivetKit package"}
-					</p>
+					<p className="font-medium mb-1.5">Add the RivetKit package</p>
 					<p className="text-sm text-muted-foreground mb-3">
 						{isAgentOs
-							? "Install RivetKit plus the agentOS runtime and the Pi agent."
+							? "Install the framework. You'll choose your agent and software packages in the next steps."
 							: "Install the library your app imports to define and call Actors."}
 					</p>
-					{isAgentOs ? (
-						<PackageManagerCode
-							npx={`npm install ${AGENT_OS_PACKAGES}`}
-							yarn={`yarn add ${AGENT_OS_PACKAGES}`}
-							pnpm={`pnpm add ${AGENT_OS_PACKAGES}`}
-							bun={`bun add ${AGENT_OS_PACKAGES}`}
-							deno="deno add npm:rivetkit npm:@rivet-dev/agent-os-common npm:@rivet-dev/agent-os-pi"
-						/>
-					) : (
-						<PackageManagerCode
-							npx="npm install rivetkit"
-							yarn="yarn add rivetkit"
-							pnpm="pnpm add rivetkit"
-							bun="bun add rivetkit"
-							deno="deno add npm:rivetkit"
-						/>
-					)}
+					<PackageManagerCode
+						npx="npm install rivetkit"
+						yarn="yarn add rivetkit"
+						pnpm="pnpm add rivetkit"
+						bun="bun add rivetkit"
+						deno="deno add npm:rivetkit"
+					/>
 				</div>
 			</div>
 		</div>
@@ -988,82 +1048,16 @@ For detailed setup instructions, see the quickstart guides:
 
 Check the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting. If that doesn't help, prompt the user to join the Rivet Discord (https://rivet.dev/discord) or file an issue on GitHub (https://github.com/rivet-dev/rivet). Generate a report with: symptoms (error, local vs deployed), what you've tried, and environment (RivetKit version, runtime, provider, HTTP router).`;
 
-const agentOsPrompt = `# agentOS Setup
-
-I want to add agentOS to this project using RivetKit. agentOS gives agents and sandboxed code their own isolated VMs with a full filesystem, shell, network, and persistent state. Pi is one coding agent you can run inside it, and this setup uses Pi as the example. An agentOS actor is a normal Rivet Actor, so it deploys the same way as any other actor.
-
-Read https://rivet.dev/docs/agent-os/quickstart before making changes. agentOS is in preview.
-
-## Steps
-
-### Step 1: Install
-
-\`\`\`bash
-npm install rivetkit @rivet-dev/agent-os-common @rivet-dev/agent-os-pi
-\`\`\`
-
-### Step 2: Create the server
-
-\`\`\`ts
-import { agentOs } from "rivetkit/agent-os";
-import { setup } from "rivetkit";
-import common from "@rivet-dev/agent-os-common";
-import pi from "@rivet-dev/agent-os-pi";
-
-const vm = agentOs({ options: { software: [common, pi] } });
-
-export const registry = setup({ use: { vm } });
-registry.start();
-\`\`\`
-
-### Step 3: Configure the model key
-
-The agent needs an LLM key at runtime. Set \`ANTHROPIC_API_KEY\` in the environment locally, and once deployed, set it as a deployment secret. Never hardcode it.
-
-### Step 4: Boot an instance and run a prompt
-
-\`\`\`ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./server";
-
-const client = createClient<typeof registry>();
-
-// getOrCreate boots the agentOS instance (the VM) on first call.
-const agent = client.vm.getOrCreate(["my-agent"]);
-
-agent.on("sessionEvent", (data) => console.log(data.event));
-
-const session = await agent.createSession("pi", {
-  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
-});
-await agent.sendPrompt(
-  session.sessionId,
-  "Write a hello world script to /home/user/hello.js",
-);
-
-const content = await agent.readFile("/home/user/hello.js");
-console.log(new TextDecoder().decode(content));
-\`\`\`
-
-### Step 5: Verify
-
-Run the server, then the client, and confirm the agent created the file. Then verify it works through the Rivet inspector or your deployed endpoint.
-
-## If You Get Stuck
-
-agentOS is in preview. See https://rivet.dev/docs/agent-os, the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting, or the Rivet Discord (https://rivet.dev/discord).`;
-
 function RunLocallyStep() {
 	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
+	if (isAgentOs) {
+		return <AgentOsHandoff />;
+	}
 	return (
 		<div className="flex flex-col gap-6">
 			<AgentPromptBanner
-				code={isAgentOs ? agentOsPrompt : agentPrompt}
-				label={
-					isAgentOs
-						? "Have your coding agent set up agentOS and run a session for you."
-						: "Have your coding agent scaffold and run your first Actor for you."
-				}
+				code={agentPrompt}
+				label="Have your coding agent scaffold and run your first Actor for you."
 			/>
 			<OrDivider label="or do it yourself" />
 			<div className="w-full flex items-center justify-between rounded-lg px-4 py-3 border border-border">
@@ -1072,18 +1066,12 @@ function RunLocallyStep() {
 						Follow the quickstart guide
 					</p>
 					<p className="text-sm text-muted-foreground">
-						{isAgentOs
-							? "Build an agentOS agent by hand, step by step."
-							: "Build a Rivet Actor project by hand, step by step."}
+						Build a Rivet Actor project by hand, step by step.
 					</p>
 				</div>
 				<Button variant="outline" asChild className="shrink-0 ml-4">
 					<a
-						href={
-							isAgentOs
-								? "https://rivet.dev/docs/agent-os/quickstart"
-								: "https://rivet.dev/docs/actors/quickstart/"
-						}
+						href="https://rivet.dev/docs/actors/quickstart/"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
@@ -1091,6 +1079,75 @@ function RunLocallyStep() {
 						<Icon icon={faArrowRight} className="ms-2" />
 					</a>
 				</Button>
+			</div>
+		</div>
+	);
+}
+
+// agentOS handoff: turns the agent/software/sandbox selections into the install
+// command, server.ts/client.ts, and a copy-prompt for the coding agent.
+function AgentOsHandoff() {
+	const agent = useWatch({ name: "agent" }) as string | undefined;
+	const packages = useWatch({ name: "packages" }) as string[] | undefined;
+	const sandbox = useWatch({ name: "sandbox" }) as
+		| { enabled: boolean; provider?: string }
+		| undefined;
+
+	const setup = useMemo(
+		() =>
+			buildAgentOsSetup({
+				agent: agent ?? DEFAULT_AGENT,
+				packages: packages ?? DEFAULT_PACKAGES,
+				sandbox: sandbox ?? {
+					enabled: false,
+					provider: DEFAULT_SANDBOX_PROVIDER,
+				},
+			}),
+		[agent, packages, sandbox],
+	);
+
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={setup.prompt}
+				label="Have your coding agent set up agentOS and run a session for you."
+			/>
+			<OrDivider label="or set it up yourself" />
+			<div className="flex flex-col gap-4">
+				<div>
+					<p className="font-medium mb-1.5">Install</p>
+					<CommandBox command={setup.installCommand} />
+				</div>
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="server"
+							language="typescript"
+							title="server.ts"
+							code={() => setup.serverCode}
+							className="m-0"
+						>
+							<CodePreview
+								language="typescript"
+								className="text-left"
+								code={setup.serverCode}
+							/>
+						</CodeFrame>,
+						<CodeFrame
+							key="client"
+							language="typescript"
+							title="client.ts"
+							code={() => setup.clientCode}
+							className="m-0"
+						>
+							<CodePreview
+								language="typescript"
+								className="text-left"
+								code={setup.clientCode}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
 			</div>
 		</div>
 	);
