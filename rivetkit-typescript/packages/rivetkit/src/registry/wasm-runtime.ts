@@ -26,6 +26,7 @@ import type {
 	RuntimeInspectorSnapshot,
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
+	RuntimeListenerConfig,
 	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueInspectMessage,
 	RuntimeQueueMessage,
@@ -299,6 +300,16 @@ export class WasmCoreRuntime implements CoreRuntime {
 			onStreamEvent,
 			asWasmCancellationToken(cancelToken),
 			config,
+		);
+	}
+
+	async serveListener(
+		_registry: RegistryHandle,
+		_listener: RuntimeListenerConfig,
+		_config: RuntimeServeConfig,
+	): Promise<void> {
+		throw new Error(
+			"registry.listen() is not supported on the wasm runtime; use registry.serve() and mount the handler in your platform's HTTP server instead",
 		);
 	}
 
