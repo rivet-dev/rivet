@@ -46,6 +46,21 @@ type ActorActionMap<R> = {
 		: never;
 };
 
+type ActionsOf<AD extends AnyActorDefinition> =
+	AD extends BaseActorDefinition<
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		infer R
+	>
+		? R
+		: never;
+
 export interface ActorGatewayOptions {
 	skipReadyWait?: boolean;
 }
@@ -81,21 +96,7 @@ export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
 	IsAny<AD> extends true
 		? Record<string, ActorActionFunction<any[], any>>
-		: AD extends { config: { actions?: infer R } }
-			? ActorActionMap<R>
-			: AD extends BaseActorDefinition<
-						any,
-						any,
-						any,
-						any,
-						any,
-						any,
-						any,
-						any,
-						infer R
-					>
-				? ActorActionMap<R>
-				: {};
+		: ActorActionMap<ActionsOf<AD>>;
 
 type ActorQueueSend<TQueues extends QueueSchemaConfig> = {
 	<K extends keyof TQueues & string>(
