@@ -58,8 +58,8 @@ cargo test -- --nocapture
 cargo clippy -- -W warnings
 ```
 
-- Do not run `cargo fmt` automatically. The team runs it at merge time.
-- Do not run `./scripts/cargo/fix.sh`. Do not format the code yourself.
+- Agents may run `node scripts/format/agent-format.mjs` to format changed Biome and Rust files. Do not run broad `cargo fmt` or `cargo fmt --all` manually.
+- Do not run `./scripts/cargo/fix.sh` or other broad formatter/fixer commands yourself.
 - Ensure lefthook is installed and enabled for git hooks (`lefthook install`).
 
 ### Docker dev environment
@@ -132,7 +132,7 @@ docker-compose up -d
 ### RivetKit Test Fixtures
 
 - Core tests that touch the `_RIVET_TEST_INSPECTOR_TOKEN` env override must share a process-wide lock with startup tests that assert inspector-token initialization side effects; otherwise parallel `cargo test` runs can flip `init_inspector_token(...)` between the env-override no-op path and the KV-backed path.
-- For the fast static/http/bare driver verifier, pass only the files listed under `## Fast Tests` in `.agent/notes/driver-test-progress.md`; `tests/driver/*.test.ts` also pulls in slow-suite files and gives bogus gate failures.
+- For the fast static/http/bare driver verifier, pass only the files listed under `## Fast Tests` in `~/.agents/notes/driver-test-progress.md`; `tests/driver/*.test.ts` also pulls in slow-suite files and gives bogus gate failures.
 - Wasm host smoke tests can drive `buildNativeFactory` through `WasmCoreRuntime` fake bindings to cover actor callbacks, KV, state serialization, remote SQLite routing, and NAPI import boundaries without checked-in wasm-pack output.
 - When moving Rust inline tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim so the moved file still has private module access without widening runtime visibility. Prefer a dedicated moved-test file per source module; reusing stale shared `tests/modules/*.rs` files can silently rot against private APIs and explode once you wire them back in.
 - Tracing assertions on spawned Rust futures should bind an explicit `tracing::Dispatch` with `.with_subscriber(...)` on the spawned future; thread-local `set_default(...)` can miss the real logs in full async suite runs.
@@ -158,14 +158,15 @@ docker-compose up -d
 
 ## Agent Working Directory
 
-All agent working files live in `.agent/` at the repo root.
+All agent working files live user-scoped in `~/.agents/`, never inside the repo. Override the location with the `AGENTS_DIR` env var. Run `scripts/setup/agents-dir.sh` once to create the subdirs. These files are not committed; `.agent/` is gitignored as a safety net.
 
-- **Specs**: `.agent/specs/` — design specs and interface definitions for planned work.
-- **Research**: `.agent/research/` — research documents on external systems, prior art, and design analysis.
-- **Todo**: `.agent/todo/*.md` — deferred work items with context on what needs to be done and why.
-- **Notes**: `.agent/notes/` — general notes and tracking.
+- **Specs**: `~/.agents/specs/` — design specs and interface definitions for planned work.
+- **Research**: `~/.agents/research/` — research documents on external systems, prior art, and design analysis.
+- **Todo**: `~/.agents/todo/*.md` — deferred work items with context on what needs to be done and why.
+- **Notes**: `~/.agents/notes/` — general notes and tracking.
+- **Benchmarks**: `~/.agents/benchmarks/` — benchmark result artifacts.
 
-When the user asks to track something in a note, store it in `.agent/notes/` by default. When something is identified as "do later", add it to `.agent/todo/`. Design documents and interface specs go in `.agent/specs/`.
+When the user asks to track something in a note, store it in `~/.agents/notes/` by default. When something is identified as "do later", add it to `~/.agents/todo/`. Design documents and interface specs go in `~/.agents/specs/`.
 
 ## RivetKit Layer Architecture
 

@@ -2,11 +2,11 @@
 
 Brief tracker for SQLite cold-read, VFS, and storage performance work.
 
-Current baseline: `.agent/notes/sqlite-cold-read-before.txt` records a 50 MiB cold full-scan read at 20.14s e2e, 1,249 VFS `get_pages` calls, and 19.33s VFS transport.
+Current baseline: `~/.agents/notes/sqlite-cold-read-before.txt` records a 50 MiB cold full-scan read at 20.14s e2e, 1,249 VFS `get_pages` calls, and 19.33s VFS transport.
 
 Implementation tracking lives in `scripts/ralph/prd.json`.
 
-Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-protocol.md`.
+Range page-read protocol details live in `~/.agents/specs/sqlite-range-page-read-protocol.md`.
 
 ## Existing Optimizations
 
@@ -58,4 +58,4 @@ Range page-read protocol details live in `.agent/specs/sqlite-range-page-read-pr
 
 - Add new SQLite read/write performance ideas here before implementation if they change VFS, storage layout, actor startup preload, or metrics.
 - Move completed ideas into "Existing Optimizations" with the measured benchmark delta.
-- Keep benchmark artifacts under `.agent/notes/sqlite-cold-read-*.txt`.
+- Keep benchmark artifacts under `~/.agents/notes/sqlite-cold-read-*.txt`.

@@ -13,7 +13,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
@@ -25,7 +25,8 @@ const REPO_ENGINE_BINARY = fileURLToPath(
 	new URL("../../../target/debug/rivet-engine", import.meta.url),
 );
 const DEFAULT_ENGINE_PORT = 6520;
-const DEFAULT_OUTPUT_DIR = ".agent/benchmarks/sqlite-memory-soak";
+const AGENTS_DIR = process.env.AGENTS_DIR ?? join(homedir(), ".agents");
+const DEFAULT_OUTPUT_DIR = join(AGENTS_DIR, "benchmarks/sqlite-memory-soak");
 const SQLITE_PAGE_SIZE_BYTES = 4096;
 const CLOCK_TICKS_PER_SECOND = 100;
 
