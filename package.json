@@ -12,7 +12,8 @@
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",
 		"lint": "pnpm biome check .",
-		"fmt": "pnpm biome format --write ."
+		"fmt": "pnpm biome format --write .",
+		"fmt:agent": "node ./scripts/format/agent-format.mjs"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "0.15.0",

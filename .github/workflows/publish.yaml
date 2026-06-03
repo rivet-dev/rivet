@@ -13,7 +13,7 @@
 #                                       (npm_tag becomes `rc` if version contains `-rc.`, or
 #                                        `next` if `latest=false`)
 #
-# See .agent/specs/publish-flow-unification.md for the design.
+# See ~/.agents/specs/publish-flow-unification.md for the design.
 # ============================================================================
 
 name: publish

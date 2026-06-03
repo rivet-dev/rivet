@@ -113,7 +113,7 @@ the user explicitly asks for them:
 **TDD process per story:** (1) write or identify a failing test that exercises
 the bug; (2) implement the clean fix; (3) confirm the same test now passes.
 Record the failing command in the story `notes` field as you go. If the fix
-sketch from `.agent/notes/sqlite-review-issues.md` proves wrong on closer
+sketch from `~/.agents/notes/sqlite-review-issues.md` proves wrong on closer
 inspection, update the issue file and the story `notes`, then implement the
 correct fix — do not silently divergeo from what's tracked.
 
