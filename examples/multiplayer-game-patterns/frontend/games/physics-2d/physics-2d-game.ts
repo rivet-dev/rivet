@@ -4,12 +4,9 @@ import {
 	SCALE,
 	SCENE_STATIC,
 } from "../../../src/actors/physics-2d/config.ts";
+import type { Physics2dConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { Physics2dMatchInfo } from "./menu.tsx";
-
-type Physics2dConn = ReturnType<
-	ReturnType<GameClient["physics2dWorld"]["getOrCreate"]>["connect"]
->;
 
 interface BodySnapshot {
 	id: string;
@@ -72,8 +69,7 @@ export class Physics2dGame {
 		});
 		this.conn = handle.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as Snapshot;
+		this.conn.on("snapshot", (snap) => {
 			const now = Date.now();
 
 			// Measure tick interval and one-way latency estimate.

@@ -38,6 +38,14 @@ type LooseEventSubscribe = (
 	callback: (...args: any[]) => void,
 ) => () => void;
 
+type ActorActionMap<R> = {
+	[K in keyof NonNullable<R>]: NonNullable<R>[K] extends (
+		...args: infer Args
+	) => infer Return
+		? ActorActionFunction<Args, Awaited<Return>>
+		: never;
+};
+
 export interface ActorGatewayOptions {
 	skipReadyWait?: boolean;
 }
@@ -74,13 +82,7 @@ export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 	IsAny<AD> extends true
 		? Record<string, ActorActionFunction<any[], any>>
 		: AD extends { config: { actions?: infer R } }
-			? {
-					[K in keyof R]: R[K] extends (
-						...args: infer Args
-					) => infer Return
-						? ActorActionFunction<Args, Return>
-						: never;
-				}
+			? ActorActionMap<R>
 			: AD extends BaseActorDefinition<
 						any,
 						any,
@@ -92,13 +94,7 @@ export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 						any,
 						infer R
 					>
-				? {
-						[K in keyof R]: R[K] extends (
-							...args: infer Args
-						) => infer Return
-							? ActorActionFunction<Args, Return>
-							: never;
-					}
+				? ActorActionMap<R>
 				: {};
 
 type ActorQueueSend<TQueues extends QueueSchemaConfig> = {

@@ -666,7 +666,8 @@ describe("matchmaking and session patterns", () => {
 			? snapNewChunk.players[newTravelerConnId]
 			: undefined;
 		expect(newPos).toBeDefined();
-		expect(newPos?.x).toBeLessThan(100);
+		if (!newPos) throw new Error("traveler position missing");
+		expect(newPos.x).toBeLessThan(100);
 
 		await chunk1.setInput({ inputX: 1, inputY: 0 });
 		await sleep(350);

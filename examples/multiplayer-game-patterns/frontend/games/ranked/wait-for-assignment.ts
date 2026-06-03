@@ -1,6 +1,6 @@
 import type { RankedMatchInfo } from "./menu.tsx";
 
-interface RankedAssignmentEvent {
+interface RankedAssignment {
 	matchId: string;
 	username: string;
 	rating: number;
@@ -8,13 +8,12 @@ interface RankedAssignmentEvent {
 }
 
 type AssignmentConnection = {
-	action: <Args extends unknown[], Response>(opts: {
-		name: string;
-		args: Args;
-	}) => Promise<Response>;
+	getAssignment: (input: {
+		username: string;
+	}) => Promise<RankedAssignment | null>;
 	on: (
 		event: "assignmentReady",
-		handler: (raw: unknown) => void,
+		handler: (assignment: RankedAssignment) => void,
 	) => (() => void) | undefined;
 };
 
@@ -45,8 +44,7 @@ export async function waitForAssignment(
 			fn();
 		};
 
-		off = mm.on("assignmentReady", (raw: unknown) => {
-			const next = raw as RankedAssignmentEvent;
+		off = mm.on("assignmentReady", (next) => {
 			if (next.username !== username) return;
 			// Bind assignment delivery to the queueing connection so duplicate usernames in
 			// other tabs do not accept the wrong match assignment.
@@ -73,8 +71,5 @@ async function readAssignment(
 	mm: AssignmentConnection,
 	username: string,
 ): Promise<RankedMatchInfo | null> {
-	return await mm.action<[{ username: string }], RankedMatchInfo | null>({
-		name: "getAssignment",
-		args: [{ username }],
-	});
+	return await mm.getAssignment({ username });
 }

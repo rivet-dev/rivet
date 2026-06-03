@@ -1,5 +1,6 @@
 import { CHUNK_SIZE, WORLD_ID } from "../../../src/actors/open-world/config.ts";
 import { getPlayerColor } from "../../../src/actors/player-color.ts";
+import type { OpenWorldChunkConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { OpenWorldMatchInfo } from "./menu.tsx";
 
@@ -11,10 +12,6 @@ const DEFAULT_VIEWPORT_SIZE = 600;
 const MIN_ZOOM = 0.25;
 const MAX_ZOOM = 2;
 const ZOOM_STEP = 0.15;
-
-type OpenWorldChunkConn = ReturnType<
-	ReturnType<GameClient["openWorldChunk"]["getOrCreate"]>["connect"]
->;
 
 interface ChunkConnection {
 	cx: number;
@@ -124,8 +121,7 @@ export class OpenWorldGame {
 			selfPresent: false,
 		};
 
-		conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as ChunkSnapshot;
+		conn.on("snapshot", (snap) => {
 			this.chunkSize = snap.chunkSize;
 			const isPrimaryChunk =
 				chunk.cx === this.chunkX && chunk.cy === this.chunkY;

@@ -1,13 +1,10 @@
+import type { IoStyleMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
 import type { IoStyleMatchInfo } from "./menu.tsx";
 
 const PLAYER_RADIUS = 12;
 const LERP_FACTOR = 0.2;
 const GRID_SPACING = 50;
-
-type IoStyleMatchConn = ReturnType<
-	ReturnType<GameClient["ioStyleMatch"]["get"]>["connect"]
->;
 
 export class IoGame {
 	private stopped = false;
@@ -36,14 +33,7 @@ export class IoGame {
 			})
 			.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as {
-				worldSize: number;
-				players: Record<
-					string,
-					{ x: number; y: number; color: string }
-				>;
-			};
+		this.conn.on("snapshot", (snap) => {
 			this.worldSize = snap.worldSize;
 			for (const [id, pos] of Object.entries(snap.players)) {
 				this.targets[id] = pos;

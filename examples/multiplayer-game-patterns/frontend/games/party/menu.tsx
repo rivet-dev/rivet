@@ -33,8 +33,7 @@ export function PartyMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: PartyMatchInfo })
-				?.response;
+			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to create party");
 			onReady(response);
 		} catch (err) {
@@ -55,16 +54,7 @@ export function PartyMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as {
-					response?: {
-						matchId: string;
-						playerId: string;
-						joinToken: string;
-						playerName: string;
-					};
-				}
-			)?.response;
+			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to join party");
 			onReady({ ...response, partyCode: joinCode.trim().toUpperCase() });
 		} catch (err) {

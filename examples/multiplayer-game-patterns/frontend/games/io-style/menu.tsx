@@ -28,8 +28,7 @@ export function IoStyleMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: IoStyleMatchInfo })
-				?.response;
+			const response = result.response;
 			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid lobby");
 			}
