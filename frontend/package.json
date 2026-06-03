@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "dev:ladle": "ladle dev",
+    "build:inspector": "NODE_OPTIONS='--max-old-space-size=8192' vite build --config vite.inspector.config.ts --mode=production",
     "build:ladle": "ladle build"
   },
   "dependencies": {
