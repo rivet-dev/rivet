@@ -357,6 +357,16 @@ impl RegistryDispatcher {
 							let actor_id = ctx.actor_id().to_owned();
 							RuntimeSpawner::spawn(
 								async move {
+									if conn.is_hibernatable() && ctx.sleep_requested() {
+										tracing::debug!(
+											conn_id = conn.id(),
+											message_index,
+											action_name = %request.name,
+											"deferring hibernatable actor websocket action while actor is entering sleep"
+										);
+										return;
+									}
+
 									let response = match dispatch_action_through_task(
 										&dispatch,
 										conn.clone(),
