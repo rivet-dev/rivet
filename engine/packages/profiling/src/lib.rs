@@ -25,12 +25,12 @@ pub use supported::start;
 mod supported {
 	use super::*;
 	use gas::prelude::*;
-	use pyroscope::PyroscopeAgent;
-	use pyroscope::backend::{BackendConfig, PprofConfig, pprof_backend};
+	use pyroscope::backend::{pprof_backend, BackendConfig, PprofConfig};
 	use pyroscope::pyroscope::{PyroscopeAgentBuilder, PyroscopeAgentRunning};
+	use pyroscope::PyroscopeAgent;
 	use universalpubsub::NextOutput;
 
-	use crate::pubsub_subjects::{PROFILE_CONFIG_SUBJECT, ProfileConfigSubject};
+	use crate::pubsub_subjects::{ProfileConfigSubject, PROFILE_CONFIG_SUBJECT};
 
 	/// Listens for runtime profiling toggles and owns the Pyroscope agent lifecycle.
 	///
