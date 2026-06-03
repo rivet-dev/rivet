@@ -6,6 +6,7 @@
 			"!frontend/packages",
 			"!**/*.gen.*",
 			"rivetkit-typescript/**/*.{tsx,ts,css}",
+			"!rivetkit-typescript/packages/rivetkit-napi/index.d.ts",
 			"agent-os/**/*.ts",
 			"examples/**/*.{ts,tsx}",
 			"engine/sdks/typescript/**/*.ts",
