@@ -287,6 +287,30 @@ pub struct SqliteVfsMetricsSnapshot {
 	pub db_size_pages: u64,
 }
 
+/// Cumulative count of network round trips the VFS has issued to the engine.
+///
+/// `get_pages` counts `SqliteGetPagesRequest` fetches and `commit` counts
+/// `SqliteCommitRequest` commits. Diffing two snapshots gives the round trips
+/// performed by the work that ran between them, such as a SQLite transaction.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SqliteRoundTripCounts {
+	pub get_pages: u64,
+	pub commit: u64,
+}
+
+impl SqliteRoundTripCounts {
+	pub fn total(&self) -> u64 {
+		self.get_pages.saturating_add(self.commit)
+	}
+
+	pub fn since(&self, earlier: SqliteRoundTripCounts) -> SqliteRoundTripCounts {
+		SqliteRoundTripCounts {
+			get_pages: self.get_pages.saturating_sub(earlier.get_pages),
+			commit: self.commit.saturating_sub(earlier.commit),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum SqliteOpenPhase {
 	InitialPreload,
@@ -351,6 +375,13 @@ pub trait SqliteVfsMetrics: Send + Sync {
 		_in_tx: bool,
 		_stmt_kind: &'static str,
 		_duration_ns: u64,
+	) {
+	}
+
+	fn observe_transaction_round_trips(
+		&self,
+		_get_pages_round_trips: u64,
+		_commit_round_trips: u64,
 	) {
 	}
 
@@ -1171,6 +1202,13 @@ impl VfsContext {
 		};
 
 		result.map(CommitWait::Completed)
+	}
+
+	fn round_trip_counts(&self) -> SqliteRoundTripCounts {
+		SqliteRoundTripCounts {
+			get_pages: self.resolve_pages_fetches.load(Ordering::Relaxed),
+			commit: self.commit_total.load(Ordering::Relaxed),
+		}
 	}
 
 	fn page_size(&self) -> usize {
@@ -3142,6 +3180,10 @@ impl NativeDatabase {
 
 	pub fn sqlite_vfs_metrics(&self) -> SqliteVfsMetricsSnapshot {
 		self._vfs.ctx.sqlite_vfs_metrics()
+	}
+
+	pub fn round_trip_counts(&self) -> SqliteRoundTripCounts {
+		self._vfs.ctx.round_trip_counts()
 	}
 
 	pub fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {

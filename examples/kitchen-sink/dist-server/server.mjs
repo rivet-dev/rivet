@@ -12081,18 +12081,18 @@ function createSlowReconnectDb(db16) {
 }
 async function runReconnectRepro(sql, clientId, staggerHandleMs) {
   const startedAt = performance.now();
-  const buildToolPlanContext = runBuildToolPlanContext2(sql);
-  const catchupSnapshot = runCatchupSnapshot2(sql, 0);
-  const recoverToolCalls = runRecoverToolCalls2(sql);
-  const handleExecutorConnect = delay3(staggerHandleMs).then(
+  const buildToolPlanContext = await runBuildToolPlanContext2(sql);
+  const catchupSnapshot = await runCatchupSnapshot2(sql, 0);
+  const recoverToolCalls = await runRecoverToolCalls2(sql);
+  const handleExecutorConnect = await delay3(staggerHandleMs).then(
     () => runHandleExecutorConnect(sql, clientId)
   );
-  const results = await Promise.all([
+  const results = [
     handleExecutorConnect,
     buildToolPlanContext,
     catchupSnapshot,
     recoverToolCalls
-  ]);
+  ];
   return {
     totalMs: Math.round(performance.now() - startedAt),
     results
@@ -12280,53 +12280,51 @@ async function runBuildToolPlanContext2(sql) {
 async function runCatchupSnapshot2(sql, version) {
   const startedAt = performance.now();
   const steps = [];
-  await Promise.all([
-    timedQuery2(
-      sql,
-      steps,
-      "thread-events-list-since-version",
-      `SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC`,
-      version
-    ),
-    timedQuery2(
-      sql,
-      steps,
-      "environment-snapshot",
-      `SELECT snapshot FROM environment_snapshot WHERE id = 1`
-    ),
-    timedQuery2(
-      sql,
-      steps,
-      "thread-settings-snapshot",
-      `SELECT settings FROM thread_settings_snapshot WHERE id = 1`
-    ),
-    timedQuery2(sql, steps, "retry-state", `SELECT * FROM retry_state WHERE id = 1`),
-    timedQuery2(
-      sql,
-      steps,
-      "queued-messages",
-      `SELECT * FROM queued_messages ORDER BY created_at ASC`
-    ),
-    timedQuery2(
-      sql,
-      steps,
-      "executor-artifacts",
-      `SELECT artifact_key, data_type, length(content_base64) AS bytes, tool_call_id, updated_at FROM executor_artifacts ORDER BY updated_at ASC`
-    ),
-    timedQuery2(sql, steps, "tool-approvals", `SELECT * FROM tool_approvals ORDER BY timestamp ASC`),
-    timedQuery2(
-      sql,
-      steps,
-      "compaction-summaries",
-      `SELECT cut_message_id, created_at FROM compaction_summaries ORDER BY created_at ASC`
-    ),
-    timedQuery2(
-      sql,
-      steps,
-      "executor-status",
-      `SELECT value FROM thread_meta_kv WHERE key = 'executor_status'`
-    )
-  ]);
+  await timedQuery2(
+    sql,
+    steps,
+    "thread-events-list-since-version",
+    `SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC`,
+    version
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "environment-snapshot",
+    `SELECT snapshot FROM environment_snapshot WHERE id = 1`
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "thread-settings-snapshot",
+    `SELECT settings FROM thread_settings_snapshot WHERE id = 1`
+  );
+  await timedQuery2(sql, steps, "retry-state", `SELECT * FROM retry_state WHERE id = 1`);
+  await timedQuery2(
+    sql,
+    steps,
+    "queued-messages",
+    `SELECT * FROM queued_messages ORDER BY created_at ASC`
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "executor-artifacts",
+    `SELECT artifact_key, data_type, length(content_base64) AS bytes, tool_call_id, updated_at FROM executor_artifacts ORDER BY updated_at ASC`
+  );
+  await timedQuery2(sql, steps, "tool-approvals", `SELECT * FROM tool_approvals ORDER BY timestamp ASC`);
+  await timedQuery2(
+    sql,
+    steps,
+    "compaction-summaries",
+    `SELECT cut_message_id, created_at FROM compaction_summaries ORDER BY created_at ASC`
+  );
+  await timedQuery2(
+    sql,
+    steps,
+    "executor-status",
+    `SELECT value FROM thread_meta_kv WHERE key = 'executor_status'`
+  );
   steps.sort((a, b) => b.durationMs - a.durationMs);
   return { name: "catchup-snapshot", totalMs: Math.round(performance.now() - startedAt), steps };
 }

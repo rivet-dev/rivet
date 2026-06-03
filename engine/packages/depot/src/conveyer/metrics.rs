@@ -36,7 +36,7 @@ lazy_static::lazy_static! {
 		"sqlite_conveyer_commit_dirty_page_count",
 		"Number of dirty pages written per stateless sqlite conveyer commit.",
 		&["node_id"],
-		vec![0.0, 1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 8192.0],
+		vec![1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 8192.0],
 		*REGISTRY
 	).unwrap();
 
@@ -44,7 +44,7 @@ lazy_static::lazy_static! {
 		"sqlite_conveyer_get_pages_pgno_count",
 		"Number of pages requested per stateless sqlite conveyer get_pages call.",
 		&["node_id"],
-		vec![0.0, 1.0, 4.0, 16.0, 64.0, 256.0, 1024.0],
+		vec![1.0, 4.0, 16.0, 64.0, 256.0, 1024.0],
 		*REGISTRY
 	).unwrap();
 
@@ -142,7 +142,7 @@ lazy_static::lazy_static! {
 		"sqlite_branch_ancestry_walk_depth",
 		"Observed sqlite database branch ancestry walk depth.",
 		&["node_id"],
-		vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
+		vec![1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
 		*REGISTRY
 	).unwrap();
 
@@ -185,7 +185,7 @@ lazy_static::lazy_static! {
 		"sqlite_restore_point_resolution_chain_depth",
 		"Observed sqlite restore point resolution parent-chain depth.",
 		&["node_id"],
-		vec![0.0, 1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
+		vec![1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
 		*REGISTRY
 	).unwrap();
 }

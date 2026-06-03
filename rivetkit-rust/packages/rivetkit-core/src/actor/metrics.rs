@@ -216,6 +216,8 @@ struct ActorMetricCollectors {
 	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_command_duration_seconds: HistogramVec,
 	#[cfg(feature = "sqlite-local")]
+	sqlite_transaction_round_trips: HistogramVec,
+	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_command_error_total: CounterVec,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_worker_close_duration_seconds: HistogramVec,
@@ -572,6 +574,16 @@ impl ActorMetricCollectors {
 		)
 		.expect("create actor_sqlite_worker_command_duration_seconds histogram");
 		#[cfg(feature = "sqlite-local")]
+		let sqlite_transaction_round_trips = HistogramVec::new(
+			HistogramOpts::new(
+				"rivetkit_actor_sqlite_transaction_round_trips",
+				"network round trips (get_pages + commit) per native SQLite transaction",
+			)
+			.buckets(sqlite_round_trip_count_buckets()),
+			ACTOR_LABELS,
+		)
+		.expect("create actor_sqlite_transaction_round_trips histogram");
+		#[cfg(feature = "sqlite-local")]
 		let sqlite_worker_command_error_total = CounterVec::new(
 			Opts::new(
 				"rivetkit_actor_sqlite_worker_command_error_total",
@@ -722,6 +734,10 @@ impl ActorMetricCollectors {
 			);
 			register_metric(
 				&rivet_metrics::REGISTRY,
+				sqlite_transaction_round_trips.clone(),
+			);
+			register_metric(
+				&rivet_metrics::REGISTRY,
 				sqlite_worker_command_error_total.clone(),
 			);
 			register_metric(
@@ -799,6 +815,8 @@ impl ActorMetricCollectors {
 			sqlite_worker_queue_overload_total,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_command_duration_seconds,
+			#[cfg(feature = "sqlite-local")]
+			sqlite_transaction_round_trips,
 			#[cfg(feature = "sqlite-local")]
 			sqlite_worker_command_error_total,
 			#[cfg(feature = "sqlite-local")]
@@ -1437,6 +1455,13 @@ impl depot_client::vfs::SqliteVfsMetrics for ActorMetrics {
 			.observe(ns_to_seconds(duration_ns));
 	}
 
+	fn observe_transaction_round_trips(&self, get_pages_round_trips: u64, commit_round_trips: u64) {
+		METRICS
+			.sqlite_transaction_round_trips
+			.with_label_values(&self.actor_labels())
+			.observe((get_pages_round_trips.saturating_add(commit_round_trips)) as f64);
+	}
+
 	fn record_worker_command_error(&self, operation: &'static str, code: &'static str) {
 		let labels = self.actor_labels();
 		METRICS
@@ -1484,6 +1509,13 @@ fn sqlite_worker_duration_buckets() -> Vec<f64> {
 	vec![
 		0.000_1, 0.000_5, 0.001, 0.0025, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
 		10.0, 25.0, 50.0,
+	]
+}
+
+#[cfg(feature = "sqlite-local")]
+fn sqlite_round_trip_count_buckets() -> Vec<f64> {
+	vec![
+		1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 64.0, 128.0, 256.0, 512.0, 1024.0,
 	]
 }
 
