@@ -42,7 +42,7 @@ async fn restore_database_to_target_and_pin_undo(
 ) -> Result<RestorePointCreateResult> {
 	let rolled_branch_id = DatabaseBranchId::new_v4();
 
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_restore", move |tx| {
 		let database_id = database_id.clone();
 		let target = target.clone();
 		let undo = undo.clone();
@@ -68,7 +68,7 @@ async fn capture_current_restore_point_for_restore(
 	bucket_id: BucketId,
 	database_id: String,
 ) -> Result<ResolvedRestorePointPin> {
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_capture_undo", move |tx| {
 		let database_id = database_id.clone();
 
 		async move {

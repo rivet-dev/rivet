@@ -7,6 +7,7 @@ edition.workspace = true
 
 [features]
 default = []
+pidx-cache = []
 test-faults = []
 
 [dependencies]
@@ -34,6 +35,8 @@ serde.workspace = true
 serde_bare.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+rusqlite.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -45,5 +48,4 @@ vbare.workspace = true
 
 [dev-dependencies]
 rivet-test-deps.workspace = true
-tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

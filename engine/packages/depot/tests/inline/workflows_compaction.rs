@@ -13,21 +13,24 @@ use super::{
 	CompactionJobKind, CompactionJobStatus, CompactionRoot, CompanionWorkflowIds, DatabaseBranchId,
 	DatabaseBranchRecord, DbManagerInput, DbManagerState, ForceCompaction, ForceCompactionTracker,
 	ForceCompactionWork, HotInputSnapshot, HotJobFinished, HotJobInputRange, HotShardOutputRef,
-	ManagerActiveJobs, ManagerEffect, ManagerFdbSnapshot, ManagerPlanningDeadlines,
-	ManagerStopReason, PlannedColdCompactionJob, PlannedHotCompactionJob,
-	PlannedReclaimCompactionJob, ReclaimFdbJobInput, ReclaimInputSnapshot, ReclaimJobFinished,
-	ReclaimJobInputRange, RefreshManagerOutput, ShardCachePolicy, StagedHotShardCleanupRef,
-	TxidRange, cleanup_repair_fdb_outputs_tx, fingerprint_repair_reclaim_range,
+	ManagerActiveJobs, ManagerEffect, ManagerFdbSnapshot, ManagerStopReason,
+	PlannedColdCompactionJob, PlannedHotCompactionJob, PlannedReclaimCompactionJob,
+	ReclaimFdbJobInput, ReclaimInputSnapshot, ReclaimJobFinished, ReclaimJobInputRange,
+	RefreshManagerOutput, ShardCachePolicy, StagedHotShardCleanupRef, TxidRange, WakeTriggers,
+	cleanup_repair_fdb_outputs_tx, fingerprint_repair_reclaim_range,
 	manager_effect_for_requested_stop, manager_effects_after_refresh,
 	manager_effects_for_cold_job_finished, manager_effects_for_hot_job_finished,
 	manager_effects_for_reclaim_job_finished, plan_cold_job, plan_hot_job,
-	plan_orphan_cold_object_deletes_tx, read_reclaim_input_snapshot, repair_reclaim_input_range,
+	plan_orphan_cold_object_deletes_tx, read_cold_input_snapshot, read_hot_input_snapshot,
+	read_reclaim_input_snapshot, repair_reclaim_input_range,
 };
 use crate::conveyer::{
+	constants::CMP_FDB_BATCH_MAX_VALUE_BYTES,
 	keys,
+	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
-		BranchState, BucketBranchId, CommitRow, DBHead, encode_commit_row, encode_compaction_root,
-		encode_database_branch_record,
+		BranchState, BucketBranchId, CommitRow, DBHead, DirtyPage, PitrPolicy, encode_commit_row,
+		encode_compaction_root, encode_database_branch_record,
 	},
 };
 
@@ -90,8 +93,6 @@ fn head(database_branch_id: DatabaseBranchId, head_txid: u64) -> DBHead {
 		db_size_pages: 4,
 		post_apply_checksum: 55,
 		branch_id: database_branch_id,
-		#[cfg(debug_assertions)]
-		generation: 0,
 	}
 }
 
@@ -102,6 +103,16 @@ fn commit(versionstamp_byte: u8) -> CommitRow {
 		db_size_pages: 4,
 		post_apply_checksum: 5_678,
 	}
+}
+
+fn encoded_delta(txid: u64) -> Result<Vec<u8>> {
+	encode_ltx_v3(
+		LtxHeader::delta(txid, 1, txid as i64),
+		&[DirtyPage {
+			pgno: 1,
+			bytes: vec![txid as u8; keys::PAGE_SIZE as usize],
+		}],
+	)
 }
 
 fn finish_expected_fingerprint(fingerprint: Sha256) -> [u8; 32] {
@@ -193,7 +204,7 @@ fn reclaim_range() -> ReclaimJobInputRange {
 
 fn refresh_without_planned_work() -> RefreshManagerOutput {
 	RefreshManagerOutput {
-		planning_deadlines: ManagerPlanningDeadlines::after_refresh(1_000),
+		refreshed_at_ms: 1_000,
 		planned_hot_job: None,
 		planned_cold_job: None,
 		planned_reclaim_job: None,
@@ -499,7 +510,7 @@ fn manager_refresh_effects_keep_cold_and_reclaim_mutually_exclusive() {
 	let input = manager_input(database_branch_id);
 	let state = DbManagerState::new(companion_workflow_ids());
 	let refresh = RefreshManagerOutput {
-		planning_deadlines: ManagerPlanningDeadlines::after_refresh(1_000),
+		refreshed_at_ms: 1_000,
 		planned_hot_job: None,
 		planned_cold_job: Some(planned_cold_job(
 			database_branch_id,
@@ -527,7 +538,17 @@ fn manager_refresh_effects_keep_cold_and_reclaim_mutually_exclusive() {
 		reclaim_noop_reason: None,
 	};
 
-	let effects = manager_effects_after_refresh(&state, &input, &refresh, 1_500);
+	let effects = manager_effects_after_refresh(
+		&state,
+		&input,
+		&refresh,
+		1_500,
+		WakeTriggers {
+			hot: true,
+			cold: true,
+			reclaim: true,
+		},
+	);
 	assert!(
 		effects
 			.iter()
@@ -554,7 +575,8 @@ fn manager_refresh_effects_stop_branch_not_live_with_explicit_reason() {
 	refresh.branch_is_live = false;
 	refresh.branch_lifecycle_generation = Some(9);
 
-	let effects = manager_effects_after_refresh(&state, &input, &refresh, 12_000);
+	let effects =
+		manager_effects_after_refresh(&state, &input, &refresh, 12_000, WakeTriggers::default());
 	let [ManagerEffect::StopCompanions { request }] = effects.as_slice() else {
 		panic!("expected branch-not-live stop effect");
 	};
@@ -654,6 +676,7 @@ fn hot_planning_uses_sha256_fingerprint_and_changes_with_inputs() {
 		pidx_entries: vec![(b"pidx-key".to_vec(), b"pidx-value".to_vec())],
 		pitr_interval_coverage: Vec::new(),
 		total_value_bytes: 24,
+		selected_max_txid: Some(2),
 	};
 	let mut snapshot = ManagerFdbSnapshot {
 		branch_record: Some(branch_record(database_branch_id, 0)),
@@ -723,6 +746,8 @@ fn cold_planning_uses_sha256_fingerprint_and_changes_with_inputs() {
 		total_value_bytes: 11,
 		min_versionstamp: [2; 16],
 		max_versionstamp: [4; 16],
+		selected_max_txid: Some(4),
+		shards_complete: true,
 	};
 	let mut snapshot = ManagerFdbSnapshot {
 		branch_record: Some(branch_record(database_branch_id, 0)),
@@ -812,7 +837,7 @@ async fn repair_fdb_cleanup_lifecycle_generation_rejects_recreated_branch() -> R
 	};
 
 	let output = db
-		.run({
+		.txn("test_depotinline_workflows_compaction", {
 			let staged_blob = staged_blob.clone();
 			let input = input.clone();
 			let stage_key = stage_key.clone();
@@ -844,7 +869,7 @@ async fn repair_fdb_cleanup_lifecycle_generation_rejects_recreated_branch() -> R
 		}
 	);
 	let stage_after = db
-		.run(move |tx| {
+		.txn("test_depotinline_workflows_compaction", move |tx| {
 			let stage_key = stage_key.clone();
 			async move {
 				Ok(tx
@@ -879,7 +904,7 @@ async fn orphan_cold_delete_lifecycle_generation_rejects_recreated_branch() -> R
 	};
 
 	let output = db
-		.run({
+		.txn("test_depotinline_workflows_compaction", {
 			let orphan = orphan.clone();
 			move |tx| {
 				let orphan = orphan.clone();
@@ -919,13 +944,209 @@ async fn orphan_cold_delete_lifecycle_generation_rejects_recreated_branch() -> R
 }
 
 #[tokio::test]
+async fn hot_input_snapshot_caps_on_complete_txid_units() -> Result<()> {
+	let db = test_db().await?;
+	let database_branch_id = database_branch_id(0x3600);
+	let root = root_with_watermarks(1, 0, 0);
+	let head = head(database_branch_id, 300);
+
+	let snapshot = db
+		.txn("test_depotinline_workflows_compaction", {
+			let root = root.clone();
+			let head = head.clone();
+			move |tx| {
+				let root = root.clone();
+				let head = head.clone();
+				async move {
+					for txid in 1..=head.head_txid {
+						tx.informal().set(
+							&keys::branch_commit_key(database_branch_id, txid),
+							&encode_commit_row(commit(txid as u8))?,
+						);
+						tx.informal().set(
+							&keys::branch_delta_chunk_key(database_branch_id, txid, 0),
+							&encoded_delta(txid)?,
+						);
+					}
+
+					read_hot_input_snapshot(
+						&tx,
+						database_branch_id,
+						Some(&head),
+						&root,
+						Snapshot,
+						PitrPolicy::default(),
+						1_000,
+					)
+					.await
+				}
+			}
+		})
+		.await?;
+
+	assert_eq!(snapshot.selected_max_txid, Some(250));
+	assert_eq!(snapshot.commits.len(), 250);
+	assert_eq!(snapshot.delta_chunks.len(), 250);
+
+	let planned = plan_hot_job(
+		database_branch_id,
+		&ManagerFdbSnapshot {
+			branch_record: Some(branch_record(database_branch_id, 0)),
+			head: Some(head),
+			root,
+			dirty: None,
+			db_pins: Vec::new(),
+			hot_inputs: snapshot,
+			cold_inputs: ColdInputSnapshot::default(),
+			reclaim_inputs: ReclaimInputSnapshot::default(),
+			bucket_proof_blocked_reclaim: false,
+			cleared_dirty: false,
+		},
+		Id::new_v1(3600),
+		1_000,
+		true,
+	)
+	.expect("hot job should be planned");
+	assert_eq!(planned.input_range.txids.max_txid, 250);
+	assert_eq!(planned.input_range.coverage_txids, vec![250]);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn hot_input_snapshot_caps_on_value_bytes() -> Result<()> {
+	let db = test_db().await?;
+	let database_branch_id = database_branch_id(0x3602);
+	let root = root_with_watermarks(1, 0, 0);
+	let head = head(database_branch_id, 2);
+	let first_commit = encode_commit_row(commit(1))?;
+	let first_delta = b"small-delta".to_vec();
+	let second_commit = encode_commit_row(commit(2))?;
+	let second_delta = vec![2_u8; CMP_FDB_BATCH_MAX_VALUE_BYTES];
+	let expected_value_bytes = (first_commit.len() + first_delta.len()) as u64;
+
+	let snapshot = db
+		.txn("test_depotinline_workflows_compaction", {
+			let root = root.clone();
+			let head = head.clone();
+			let first_commit = first_commit.clone();
+			let first_delta = first_delta.clone();
+			let second_commit = second_commit.clone();
+			let second_delta = second_delta.clone();
+			move |tx| {
+				let root = root.clone();
+				let head = head.clone();
+				let first_commit = first_commit.clone();
+				let first_delta = first_delta.clone();
+				let second_commit = second_commit.clone();
+				let second_delta = second_delta.clone();
+				async move {
+					tx.informal().set(
+						&keys::branch_commit_key(database_branch_id, 1),
+						&first_commit,
+					);
+					tx.informal().set(
+						&keys::branch_delta_chunk_key(database_branch_id, 1, 0),
+						&first_delta,
+					);
+					tx.informal().set(
+						&keys::branch_commit_key(database_branch_id, 2),
+						&second_commit,
+					);
+					tx.informal().set(
+						&keys::branch_delta_chunk_key(database_branch_id, 2, 0),
+						&second_delta,
+					);
+
+					read_hot_input_snapshot(
+						&tx,
+						database_branch_id,
+						Some(&head),
+						&root,
+						Snapshot,
+						PitrPolicy::default(),
+						1_000,
+					)
+					.await
+				}
+			}
+		})
+		.await?;
+
+	assert_eq!(snapshot.selected_max_txid, Some(1));
+	assert_eq!(snapshot.commits.len(), 1);
+	assert_eq!(snapshot.commits[0].0, 1);
+	assert_eq!(snapshot.delta_chunks.len(), 1);
+	assert_eq!(snapshot.total_value_bytes, expected_value_bytes);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn cold_planning_requires_complete_selected_shard_set() -> Result<()> {
+	let db = test_db().await?;
+	let database_branch_id = database_branch_id(0x3601);
+	let root = root_with_watermarks(1, 1, 0);
+
+	let cold_inputs = db
+		.txn("test_depotinline_workflows_compaction", {
+			let root = root.clone();
+			move |tx| {
+				let root = root.clone();
+				async move {
+					tx.informal().set(
+						&keys::branch_commit_key(database_branch_id, 1),
+						&encode_commit_row(commit(1))?,
+					);
+					for shard_id in [0, 1] {
+						tx.informal().set(
+							&keys::branch_shard_key(database_branch_id, shard_id, 1),
+							&encoded_delta(1)?,
+						);
+					}
+
+					read_cold_input_snapshot(&tx, database_branch_id, &root, Snapshot).await
+				}
+			}
+		})
+		.await?;
+
+	assert_eq!(cold_inputs.selected_max_txid, Some(1));
+	assert_eq!(cold_inputs.shard_blobs.len(), 1);
+	assert!(!cold_inputs.shards_complete);
+	assert!(
+		plan_cold_job(
+			database_branch_id,
+			&ManagerFdbSnapshot {
+				branch_record: Some(branch_record(database_branch_id, 0)),
+				head: Some(head(database_branch_id, 1)),
+				root,
+				dirty: None,
+				db_pins: Vec::new(),
+				hot_inputs: HotInputSnapshot::default(),
+				cold_inputs,
+				reclaim_inputs: ReclaimInputSnapshot::default(),
+				bucket_proof_blocked_reclaim: false,
+				cleared_dirty: false,
+			},
+			Id::new_v1(3601),
+			1_000,
+			true,
+		)
+		.is_none()
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
 async fn reclaim_input_snapshot_bounds_commit_scan_by_reclaim_ceiling() -> Result<()> {
 	let db = test_db().await?;
 	let database_branch_id = database_branch_id(0x3700);
 	let root = root_with_watermarks(1, 10, 0);
 
 	let snapshot = db
-		.run({
+		.txn("test_depotinline_workflows_compaction", {
 			let root = root.clone();
 			move |tx| {
 				let root = root.clone();
@@ -965,6 +1186,65 @@ async fn reclaim_input_snapshot_bounds_commit_scan_by_reclaim_ceiling() -> Resul
 		vec![10]
 	);
 	assert_eq!(snapshot.commits.len(), 1);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaim_input_snapshot_caps_on_complete_txid_units() -> Result<()> {
+	let db = test_db().await?;
+	let database_branch_id = database_branch_id(0x3701);
+	let root = root_with_watermarks(1, 300, 0);
+
+	let snapshot = db
+		.txn("test_depotinline_workflows_compaction", {
+			let root = root.clone();
+			move |tx| {
+				let root = root.clone();
+				async move {
+					for txid in 1..=root.hot_watermark_txid {
+						tx.informal().set(
+							&keys::branch_commit_key(database_branch_id, txid),
+							&encode_commit_row(commit(txid as u8))?,
+						);
+						tx.informal().set(
+							&keys::branch_delta_chunk_key(database_branch_id, txid, 0),
+							&encoded_delta(txid)?,
+						);
+					}
+
+					read_reclaim_input_snapshot(
+						&tx,
+						database_branch_id,
+						&root,
+						&[],
+						None,
+						ShardCachePolicy::default(),
+						Snapshot,
+						false,
+						1_000,
+					)
+					.await
+				}
+			}
+		})
+		.await?;
+
+	let selected_txids = snapshot
+		.txid_refs
+		.iter()
+		.map(|txid_ref| txid_ref.txid)
+		.collect::<Vec<_>>();
+	let delta_txids = snapshot
+		.delta_chunks
+		.iter()
+		.map(|(key, _)| keys::decode_branch_delta_chunk_txid(database_branch_id, key))
+		.collect::<Result<Vec<_>>>()?;
+	assert_eq!(selected_txids.len(), 250);
+	assert_eq!(snapshot.commits.len(), 250);
+	assert_eq!(snapshot.delta_chunks.len(), 250);
+	assert_eq!(selected_txids, delta_txids);
+	assert_eq!(selected_txids.last(), Some(&250));
 
 	Ok(())
 }

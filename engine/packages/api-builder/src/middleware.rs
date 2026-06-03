@@ -95,7 +95,8 @@ pub async fn http_logging_middleware(
 	let path = if let Some(path) = req.extensions().get::<MatchedPath>() {
 		path.as_str().to_string()
 	} else {
-		uri.path().to_string()
+		// uri.path().to_string()
+		"unknown".to_string()
 	};
 	let protocol = req.version();
 

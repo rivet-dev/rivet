@@ -64,13 +64,14 @@ pub(super) fn encode_actor_connect_message(message: &ActorConnectToClient) -> Re
 					.as_ref()
 					.map(|metadata| metadata.as_ref().to_vec()),
 				action_id: payload.action_id.map(serde_bare::Uint),
-				actor: payload.actor.as_ref().map(|actor| {
-					client_protocol::ActorSpecifier {
+				actor: payload
+					.actor
+					.as_ref()
+					.map(|actor| client_protocol::ActorSpecifier {
 						actor_id: actor.actor_id.clone(),
 						generation: serde_bare::Uint(actor.generation),
 						key: actor.key.clone(),
-					}
-				}),
+					}),
 			})
 		}
 		ActorConnectToClient::ActionResponse(payload) => {

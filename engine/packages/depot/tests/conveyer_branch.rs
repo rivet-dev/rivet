@@ -56,7 +56,7 @@ fn encoded_blob(txid: u64, pages: Vec<DirtyPage>) -> Result<Vec<u8>> {
 }
 
 async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_branch", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx
@@ -70,7 +70,7 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 }
 
 async fn clear_value(db: &universaldb::Database, key: Vec<u8>) -> Result<()> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_branch", move |tx| {
 		let key = key.clone();
 		async move {
 			tx.informal().clear(&key);
@@ -81,7 +81,7 @@ async fn clear_value(db: &universaldb::Database, key: Vec<u8>) -> Result<()> {
 }
 
 async fn read_prefix_values(db: &universaldb::Database, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_branch", move |tx| {
 		let prefix = prefix.clone();
 		async move {
 			let prefix_subspace =
@@ -241,7 +241,7 @@ async fn derive_branch_at_snapshots_head_and_writes_branch_metadata() -> Result<
 		let first_commit = decode_commit_row(&first_commit_bytes)?;
 		let new_branch_id = DatabaseBranchId::from_uuid(uuid::Uuid::from_u128(0x9999));
 
-		db.run(move |tx| async move {
+		db.txn("test_depotconveyer_branch", move |tx| async move {
 			branch::derive_branch_at(
 				&tx,
 				source_branch_id,
@@ -264,8 +264,6 @@ async fn derive_branch_at_snapshots_head_and_writes_branch_metadata() -> Result<
 				db_size_pages: 2,
 				post_apply_checksum: first_commit.post_apply_checksum,
 				branch_id: new_branch_id,
-				#[cfg(debug_assertions)]
-				generation: 0,
 			}
 		);
 		let record_bytes = read_value(&db, branches_list_key(new_branch_id))
@@ -315,7 +313,7 @@ async fn derive_branch_at_rejects_expired_pin_before_copying_head() -> Result<()
 		let pin_versionstamp = [2; 16];
 
 		seed_branch_record(&db, source_branch_id, bucket_branch_id, 0).await?;
-		db.run(move |tx| async move {
+		db.txn("test_depotconveyer_branch", move |tx| async move {
 			tx.informal().atomic_op(
 				&branches_restore_point_pin_key(source_branch_id),
 				&pin_versionstamp,
@@ -326,7 +324,7 @@ async fn derive_branch_at_rejects_expired_pin_before_copying_head() -> Result<()
 		.await?;
 
 		let err = db
-			.run(move |tx| async move {
+			.txn("test_depotconveyer_branch", move |tx| async move {
 				branch::derive_branch_at(
 					&tx,
 					source_branch_id,
@@ -366,7 +364,7 @@ async fn derive_branch_at_rejects_versionstamp_below_parent_gc_floor() -> Result
 		let old_versionstamp = [1; 16];
 		let gc_floor_versionstamp = [2; 16];
 
-		db.run(move |tx| async move {
+		db.txn("test_depotconveyer_branch", move |tx| async move {
 			tx.informal().set(
 				&branches_list_key(source_branch_id),
 				&encode_database_branch_record(DatabaseBranchRecord {
@@ -404,7 +402,7 @@ async fn derive_branch_at_rejects_versionstamp_below_parent_gc_floor() -> Result
 		.await?;
 
 		let err = db
-			.run(move |tx| async move {
+			.txn("test_depotconveyer_branch", move |tx| async move {
 				branch::derive_branch_at(
 					&tx,
 					source_branch_id,
@@ -452,7 +450,7 @@ async fn derive_branch_at_enforces_max_fork_depth() -> Result<()> {
 		.await?;
 
 		let err = db
-			.run(move |tx| async move {
+			.txn("test_depotconveyer_branch", move |tx| async move {
 				branch::derive_branch_at(
 					&tx,
 					source_branch_id,
@@ -492,7 +490,7 @@ async fn derive_bucket_branch_at_writes_branch_metadata() -> Result<()> {
 
 		seed_bucket_branch_record(&db, source_branch_id, 0).await?;
 
-		db.run(move |tx| async move {
+		db.txn("test_depotconveyer_branch", move |tx| async move {
 			branch::derive_bucket_branch_at(
 				&tx,
 				source_branch_id,
@@ -535,7 +533,7 @@ async fn derive_bucket_branch_at_rejects_expired_pin_before_writing_record() -> 
 		let pin_versionstamp = [2; 16];
 
 		seed_bucket_branch_record(&db, source_branch_id, 0).await?;
-		db.run(move |tx| async move {
+		db.txn("test_depotconveyer_branch", move |tx| async move {
 			tx.informal().atomic_op(
 				&bucket_branches_restore_point_pin_key(source_branch_id),
 				&pin_versionstamp,
@@ -546,7 +544,7 @@ async fn derive_bucket_branch_at_rejects_expired_pin_before_writing_record() -> 
 		.await?;
 
 		let err = db
-			.run(move |tx| async move {
+			.txn("test_depotconveyer_branch", move |tx| async move {
 				branch::derive_bucket_branch_at(
 					&tx,
 					source_branch_id,
@@ -586,7 +584,7 @@ async fn derive_bucket_branch_at_enforces_max_bucket_depth() -> Result<()> {
 			.await?;
 
 		let err = db
-			.run(move |tx| async move {
+			.txn("test_depotconveyer_branch", move |tx| async move {
 				branch::derive_bucket_branch_at(&tx, source_branch_id, [1; 16], new_branch_id, None)
 					.await
 			})
@@ -733,7 +731,7 @@ async fn resolve_database_pointer_walks_bucket_parent_chain_after_fork() -> Resu
 			let forked_pointer = decode_bucket_pointer(&pointer_bytes)?;
 
 			let resolved_pointer = db
-				.run(move |tx| async move {
+				.txn("test_depotconveyer_branch", move |tx| async move {
 					branch::resolve_database_pointer(
 						&tx,
 						forked_pointer.current_branch,
@@ -781,7 +779,7 @@ async fn resolve_database_pointer_honors_bucket_branch_tombstones() -> Result<()
 		let forked_pointer = decode_bucket_pointer(&pointer_bytes)?;
 		let forked_bucket_branch = forked_pointer.current_branch;
 
-		db.run(move |tx| async move {
+		db.txn("test_depotconveyer_branch", move |tx| async move {
 			tx.informal().set(
 				&bucket_branches_database_name_tombstone_key(forked_bucket_branch, TEST_DATABASE),
 				&[],
@@ -791,7 +789,7 @@ async fn resolve_database_pointer_honors_bucket_branch_tombstones() -> Result<()
 		.await?;
 
 		let err = db
-			.run(move |tx| async move {
+			.txn("test_depotconveyer_branch", move |tx| async move {
 				branch::resolve_database_pointer(&tx, forked_bucket_branch, TEST_DATABASE, Snapshot)
 					.await
 			})
@@ -962,7 +960,7 @@ async fn fork_database_reads_parent_shard_when_parent_pidx_is_newer_than_fork() 
 				.expect("source commit row should exist");
 			let source_commit = decode_commit_row(&source_commit_bytes)?;
 
-			db.run(move |tx| async move {
+			db.txn("test_depotconveyer_branch", move |tx| async move {
 				tx.informal().set(
 					&branch_shard_key(source_branch_id, 0, 1),
 					&encoded_blob(1, vec![page(1, 0x11)])?,
@@ -1353,7 +1351,7 @@ async fn seed_branch_record(
 		lifecycle_generation: 0,
 	};
 	let encoded_record = encode_database_branch_record(record)?;
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_branch", move |tx| {
 		let encoded_record = encoded_record.clone();
 		async move {
 			tx.informal()
@@ -1380,7 +1378,7 @@ async fn seed_bucket_branch_record(
 		state: BranchState::Live,
 	};
 	let encoded_record = encode_bucket_branch_record(record)?;
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_branch", move |tx| {
 		let encoded_record = encoded_record.clone();
 		async move {
 			tx.informal()

@@ -74,4 +74,45 @@ lazy_static! {
 		&["error"],
 		*REGISTRY
 	).unwrap();
+
+	// MARK: WebSockets
+	pub static ref WEBSOCKET_SEND_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"guard_websocket_send_duration",
+		"Time to send a WebSocket message through a shared WebSocketHandle in seconds.",
+		&["message_kind"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref WEBSOCKET_SEND_LOCK_WAIT_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"guard_core_websocket_send_lock_wait_duration_seconds",
+		"Time spent awaiting the per-connection ws_tx mutex inside WebSocketHandle::send. High tails indicate contention from other senders on the same connection.",
+		&["message_kind"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref WEBSOCKET_SEND_WRITE_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"guard_core_websocket_send_write_duration_seconds",
+		"Time spent inside the network write (lock held) of WebSocketHandle::send.",
+		&["message_kind"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref WEBSOCKET_WRITE_WOULD_BLOCK_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_websocket_write_would_block_total",
+		"Total number of WebSocket write or flush attempts that hit WouldBlock.",
+		&["message_kind"],
+		*REGISTRY
+	).unwrap();
+	pub static ref WEBSOCKET_WRITE_BUFFER_FULL_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_websocket_write_buffer_full_total",
+		"Total number of WebSocket messages rejected because the tungstenite write buffer was full.",
+		&["message_kind"],
+		*REGISTRY
+	).unwrap();
+	pub static ref WEBSOCKET_WRITE_BACKPRESSURE_EVENTS_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"guard_websocket_write_backpressure_events_total",
+		"Total number of transitions from write-ready to write-backpressured.",
+		&["message_kind"],
+		*REGISTRY
+	).unwrap();
 }

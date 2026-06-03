@@ -23,7 +23,7 @@ pub async fn pegboard_runner_get_by_key(ctx: &OperationCtx, input: &Input) -> Re
 
 	let runner = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_get_by_key", |tx| {
 			let dc_name = dc_name.to_string();
 			let input = input.clone();
 			async move {

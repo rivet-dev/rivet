@@ -9,8 +9,8 @@ use crate::conveyer::{
 };
 
 pub const SQLITE_MAX_STORAGE_BYTES: i64 = 10 * 1024 * 1024 * 1024;
-pub const COMPACTION_DELTA_THRESHOLD: u64 = 32;
-pub const TRIGGER_THROTTLE_MS: u64 = 500;
+pub const COMPACTION_DELTA_THRESHOLD: u64 = 128;
+pub const TRIGGER_THROTTLE_MS: u64 = 15000;
 pub const TRIGGER_MAX_SILENCE_MS: u64 = 30_000;
 
 pub fn atomic_add(tx: &universaldb::Transaction, database_id: &str, delta_bytes: i64) {

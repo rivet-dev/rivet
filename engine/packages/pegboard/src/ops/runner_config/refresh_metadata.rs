@@ -44,7 +44,7 @@ pub async fn pegboard_runner_config_refresh_metadata(
 	// Save protocol to udb
 	let downgraded = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_config_save_protocol", |tx| async move {
 			let tx = tx.with_subspace(namespace::keys::subspace());
 
 			let protocol_version_key = keys::runner_config::ProtocolVersionKey::new(
@@ -86,7 +86,7 @@ pub async fn pegboard_runner_config_refresh_metadata(
 	// Update actor names in DB if present
 	if !metadata.actor_names.is_empty() {
 		ctx.udb()?
-			.run(|tx| {
+			.txn("pegboard_runner_config_write_actor_names", |tx| {
 				let metadata = &metadata;
 				let namespace_id = input.namespace_id;
 				async move {

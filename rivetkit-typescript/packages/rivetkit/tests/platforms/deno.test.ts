@@ -202,7 +202,9 @@ function isColdStartCapacityError(error: unknown): boolean {
 			: "";
 	return (
 		code === "service_unavailable" ||
+		code === "actor_wake_retries_exceeded" ||
 		message.includes("actor_ready_timeout") ||
+		message.includes("actor_wake_retries_exceeded") ||
 		message.includes("no_capacity") ||
 		message.includes("request_timeout") ||
 		message.includes("service_unavailable")

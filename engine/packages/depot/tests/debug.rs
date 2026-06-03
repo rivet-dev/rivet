@@ -24,7 +24,7 @@ async fn commit_row(
 	branch_id: DatabaseBranchId,
 	txid: u64,
 ) -> Result<depot::types::CommitRow> {
-	db.run(move |tx| async move {
+	db.txn("test_depotdebug", move |tx| async move {
 		let bytes = tx
 			.informal()
 			.get(&branch_commit_key(branch_id, txid), Snapshot)

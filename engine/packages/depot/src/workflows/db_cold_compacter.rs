@@ -4,6 +4,7 @@ use crate::compaction::{
 	*,
 };
 use crate::workflows::db_manager::branch_record_is_live_at_generation;
+use universaldb::prelude::Priority;
 
 #[cfg(feature = "test-faults")]
 use crate::compaction::test_hooks;
@@ -11,7 +12,10 @@ use crate::compaction::test_hooks;
 use crate::fault::ColdCompactionFaultPoint;
 
 #[workflow(DbColdCompacterWorkflow)]
-pub async fn db_cold_compacter(ctx: &mut WorkflowCtx, input: &DbColdCompacterInput) -> Result<()> {
+pub async fn depot_db_cold_compacter(
+	ctx: &mut WorkflowCtx,
+	input: &DbColdCompacterInput,
+) -> Result<()> {
 	run_companion_loop(ctx, input.database_branch_id, CompanionKind::Cold).await
 }
 
@@ -24,9 +28,12 @@ pub async fn upload_cold_job(
 	let input_for_tx = input.clone();
 	let upload = ctx
 		.udb()?
-		.run(move |tx| {
+		.txn("depot_cold_compact_prepare_upload", move |tx| {
 			let input = input_for_tx.clone();
-			async move { prepare_cold_upload_tx(&tx, &input).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				prepare_cold_upload_tx(&tx, &input).await
+			}
 		})
 		.await?;
 
@@ -165,8 +172,13 @@ async fn prepare_cold_upload_tx(
 
 	let cold_inputs =
 		read_cold_input_snapshot(tx, input.database_branch_id, &root, Serializable).await?;
-	if cold_inputs.shard_blobs.is_empty() {
+	if cold_inputs.shard_blobs.is_empty() || !cold_inputs.shards_complete {
 		return Ok(rejected_cold_upload("no cold shard input is available"));
+	}
+	if cold_inputs.selected_max_txid != Some(input.input_range.txids.max_txid) {
+		return Ok(rejected_cold_upload(
+			"cold compaction selected txid changed",
+		));
 	}
 	if cold_inputs.min_versionstamp != input.input_range.min_versionstamp
 		|| cold_inputs.max_versionstamp != input.input_range.max_versionstamp
@@ -290,9 +302,12 @@ pub async fn publish_cold_job(
 	let input = input.clone();
 
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("depot_cold_compact_publish", move |tx| {
 			let input = input.clone();
-			async move { publish_cold_job_tx(&tx, &input).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				publish_cold_job_tx(&tx, &input).await
+			}
 		})
 		.await
 }
@@ -358,8 +373,13 @@ async fn publish_cold_job_tx(
 
 	let cold_inputs =
 		read_cold_input_snapshot(tx, input.database_branch_id, &root, Serializable).await?;
-	if cold_inputs.shard_blobs.is_empty() {
+	if cold_inputs.shard_blobs.is_empty() || !cold_inputs.shards_complete {
 		return Ok(rejected_cold_publish("no cold shard input is available"));
+	}
+	if cold_inputs.selected_max_txid != Some(input.input_range.txids.max_txid) {
+		return Ok(rejected_cold_publish(
+			"cold compaction selected txid changed",
+		));
 	}
 	if cold_inputs.min_versionstamp != input.input_range.min_versionstamp
 		|| cold_inputs.max_versionstamp != input.input_range.max_versionstamp

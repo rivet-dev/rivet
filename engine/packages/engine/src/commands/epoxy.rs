@@ -3,7 +3,8 @@ use base64::Engine;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
 
-use crate::util::udb::{SimpleTuple, SimpleTupleValue};
+use crate::commands::udb::key_parser;
+use crate::util::udb::SimpleTupleValue;
 
 #[derive(Parser)]
 pub enum SubCommand {
@@ -325,15 +326,14 @@ fn encode_key(key: &str, is_base64: bool) -> Result<String> {
 		Ok(key.to_string())
 	} else {
 		// Parse as tuple path and encode
-		let (tuple, _relative, back_count) =
-			SimpleTuple::parse(key).context("failed to parse key as tuple path")?;
+		let parsed = key_parser::parse_path(key).context("failed to parse key as tuple path")?;
 
-		if back_count > 0 {
+		if parsed.back_count > 0 {
 			bail!("relative paths with '..' are not supported for key lookup");
 		}
 
 		// Tuple-pack the key
-		let packed = universaldb::tuple::pack(&tuple);
+		let packed = universaldb::tuple::pack(&parsed.tuple);
 
 		// Base64 encode for URL
 		Ok(base64::engine::general_purpose::STANDARD.encode(&packed))

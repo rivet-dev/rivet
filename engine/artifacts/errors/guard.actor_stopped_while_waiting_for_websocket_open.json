@@ -1,0 +1,5 @@
+{
+  "code": "actor_stopped_while_waiting_for_websocket_open",
+  "group": "guard",
+  "message": "Actor stopped while waiting for WebSocket open."
+}

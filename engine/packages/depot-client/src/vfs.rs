@@ -206,7 +206,7 @@ impl VfsConfig {
 			cache_hit_predictor_training: flags.cache_hit_predictor_training,
 			recent_page_hints: flags.recent_page_hints,
 			adaptive_read_ahead: flags.adaptive_read_ahead,
-			retain_read_cache: flags.vfs_retain_read_cache,
+			retain_read_cache: flags.vfs_page_cache_mode.caches_any_pages(),
 			#[cfg(test)]
 			assert_batch_atomic: true,
 			#[cfg(test)]
@@ -1412,14 +1412,14 @@ impl VfsContext {
 		// Transport rejection, including envoy shutdown while a VFS callback is
 		// active, becomes GetPagesError here. The SQLite callback maps that to
 		// SQLITE_IOERR_* because VFS has no richer async transport error channel.
-		let response = self
-			.runtime
-			.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
-				actor_id: self.actor_id.clone(),
-				pgnos: to_fetch.clone(),
-				expected_generation: None,
-				expected_head_txid,
-			}));
+		let response =
+			self.runtime
+				.block_on(self.transport.get_pages(protocol::SqliteGetPagesRequest {
+					actor_id: self.actor_id.clone(),
+					pgnos: to_fetch.clone(),
+					expected_generation: None,
+					expected_head_txid,
+				}));
 		if let Some(metrics) = &self.metrics {
 			metrics.observe_get_pages_duration(get_pages_start.elapsed().as_nanos() as u64);
 		}

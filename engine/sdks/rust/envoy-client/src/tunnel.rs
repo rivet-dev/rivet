@@ -1,4 +1,5 @@
 use rivet_envoy_protocol as protocol;
+use std::collections::HashMap;
 
 use crate::connection::ws_send;
 use crate::envoy::{BufferedActorMessage, EnvoyContext};
@@ -153,7 +154,7 @@ async fn handle_ws_open(
 			actor_id.clone(),
 		);
 
-	// Convert HashableMap headers to BTreeMap for the actor message
+	// Convert HashMap headers to BTreeMap for the actor message
 	let headers = open
 		.headers
 		.iter()
@@ -269,7 +270,7 @@ async fn send_error_response(
 	request_id: protocol::RequestId,
 ) {
 	let body = b"Actor not found".to_vec();
-	let mut headers = rivet_util_serde::HashableMap::new();
+	let mut headers = HashMap::new();
 	headers.insert(
 		"x-rivet-error".to_string(),
 		"envoy.actor_not_found".to_string(),

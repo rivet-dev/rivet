@@ -16,7 +16,9 @@ pub struct Output {
 pub async fn epoxy_read_cluster_config(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let config = ctx
 		.udb()?
-		.run(|tx| async move { utils::read_config(&tx, ctx.config().epoxy_replica_id()).await })
+		.txn("epoxy_read_cluster_config", |tx| async move {
+			utils::read_config(&tx, ctx.config().epoxy_replica_id()).await
+		})
 		.custom_instrument(tracing::info_span!("read_cluster_config_tx"))
 		.await?;
 

@@ -18,13 +18,11 @@ fn head(head_txid: u64, db_size_pages: u32) -> DBHead {
 		db_size_pages,
 		post_apply_checksum: 0,
 		branch_id: DatabaseBranchId::nil(),
-		#[cfg(debug_assertions)]
-		generation: 0,
 	}
 }
 
 async fn seed(db: &universaldb::Database, writes: Vec<(Vec<u8>, Vec<u8>)>) -> Result<()> {
-	db.run(move |tx| {
+	db.txn("test_depottakeover", move |tx| {
 		let writes = writes.clone();
 		async move {
 			for (key, value) in writes {

@@ -1,0 +1,5 @@
+{
+  "code": "route_subscribe_timeout",
+  "group": "pegboard",
+  "message": "Timed out subscribing to actor routing events."
+}

@@ -16,8 +16,6 @@ fn head_with_branch(branch_id: DatabaseBranchId, head_txid: u64) -> DBHead {
 		db_size_pages: 1,
 		post_apply_checksum: 0,
 		branch_id,
-		#[cfg(debug_assertions)]
-		generation: 0,
 	}
 }
 
@@ -27,7 +25,7 @@ async fn burst_signal_is_derived_from_workflow_compaction_root() -> Result<()> {
 		Box::pin(async move {
 			let db = ctx.udb.clone();
 			let branch_id = DatabaseBranchId::new_v4();
-			db.run(move |tx| async move {
+			db.txn("test_depotburst_mode", move |tx| async move {
 				tx.informal().set(
 					&branch_meta_head_key(branch_id),
 					&encode_db_head(head_with_branch(
@@ -54,14 +52,14 @@ async fn burst_signal_is_derived_from_workflow_compaction_root() -> Result<()> {
 			.await?;
 
 			let active = db
-				.run(move |tx| async move {
+				.txn("test_depotburst_mode", move |tx| async move {
 					burst_mode::read_branch_signal(&tx, branch_id, Snapshot).await
 				})
 				.await?;
 			assert!(active.active);
 			assert_eq!(active.lag_txids, HOT_BURST_COLD_LAG_THRESHOLD_TXIDS);
 
-			db.run(move |tx| async move {
+			db.txn("test_depotburst_mode", move |tx| async move {
 				tx.informal().set(
 					&branch_compaction_root_key(branch_id),
 					&encode_compaction_root(CompactionRoot {
@@ -81,7 +79,7 @@ async fn burst_signal_is_derived_from_workflow_compaction_root() -> Result<()> {
 			.await?;
 
 			let recovered = db
-				.run(move |tx| async move {
+				.txn("test_depotburst_mode", move |tx| async move {
 					burst_mode::read_branch_signal(&tx, branch_id, Snapshot).await
 				})
 				.await?;

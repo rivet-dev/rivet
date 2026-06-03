@@ -13,7 +13,6 @@ use crate::{
 	RetryableTransaction, Transaction,
 	driver::{BoxFut, DatabaseDriver, Erased},
 	error::DatabaseError,
-	options::DatabaseOption,
 	transaction::TXN_TIMEOUT,
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
@@ -56,7 +55,7 @@ impl RocksDbDatabaseDriver {
 }
 
 impl DatabaseDriver for RocksDbDatabaseDriver {
-	fn create_trx(&self) -> Result<Transaction> {
+	fn create_txn(&self) -> Result<Transaction> {
 		Ok(Transaction::new(Arc::new(RocksDbTransactionDriver::new(
 			self.db.clone(),
 			self.txn_conflict_tracker.clone(),
@@ -72,7 +71,7 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 			let max_retries = self.max_retries.load(Ordering::SeqCst);
 
 			for attempt in 0..max_retries {
-				let tx = self.create_trx()?;
+				let tx = self.create_txn()?;
 				let mut retryable = RetryableTransaction::new(tx);
 				retryable.maybe_committed = maybe_committed;
 
@@ -111,13 +110,9 @@ impl DatabaseDriver for RocksDbDatabaseDriver {
 		})
 	}
 
-	fn set_option(&self, opt: DatabaseOption) -> Result<()> {
-		match opt {
-			DatabaseOption::TransactionRetryLimit(limit) => {
-				self.max_retries.store(limit, Ordering::SeqCst);
-				Ok(())
-			}
-		}
+	fn txn_retry_limit(&self, limit: i32) -> Result<()> {
+		self.max_retries.store(limit, Ordering::SeqCst);
+		Ok(())
 	}
 
 	fn checkpoint(&self, path: &Path) -> Result<()> {

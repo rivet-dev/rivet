@@ -7,10 +7,7 @@ use futures_util::TryStreamExt;
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::{
-		IsolationLevel::{Serializable, Snapshot},
-		end_of_key_range,
-	},
+	utils::{IsolationLevel::Serializable, end_of_key_range},
 };
 
 use crate::conveyer::{
@@ -264,7 +261,7 @@ impl Db {
 		);
 
 		self.udb
-			.run(move |tx| {
+			.txn("depot_cold_shard_current_check", move |tx| {
 				let key = key.clone();
 				let reference = reference.clone();
 				async move {
@@ -381,7 +378,9 @@ pub(super) async fn tx_load_latest_compaction_cold_ref(
 				mode: StreamingMode::WantAll,
 				..(prefix.as_slice(), end.as_slice()).into()
 			},
-			Snapshot,
+			// TODO: This can probably be made Snapshot again to reduce contention if
+			// read side freshness is not worth the cost.
+			Serializable,
 		);
 
 		let mut latest = None;

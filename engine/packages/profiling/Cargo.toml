@@ -1,0 +1,15 @@
+[package]
+name = "rivet-profiling"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+gas.workspace = true
+pyroscope.workspace = true
+rivet-config.workspace = true
+rivet-pools.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+universalpubsub.workspace = true

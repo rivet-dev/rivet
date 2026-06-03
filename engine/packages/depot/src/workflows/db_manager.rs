@@ -6,15 +6,10 @@ use crate::compaction::test_hooks;
 use crate::fault::ReclaimFaultPoint;
 
 #[workflow(DbManagerWorkflow)]
-pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result<()> {
+pub async fn depot_db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result<()> {
 	let companion_workflow_ids =
 		dispatch_companion_workflows(ctx, input.database_branch_id).await?;
-	let initial_deadline_ms = ctx.create_ts();
-	let initial_state = if manager_planning_timers_disabled(input) {
-		DbManagerState::new(companion_workflow_ids)
-	} else {
-		DbManagerState::new_with_initial_deadline(companion_workflow_ids, initial_deadline_ms)
-	};
+	let initial_state = DbManagerState::new(companion_workflow_ids);
 
 	ctx.lupe()
 		.commit_interval(1)
@@ -26,12 +21,21 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 		.await
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub(super) struct WakeTriggers {
+	pub hot: bool,
+	pub cold: bool,
+	pub reclaim: bool,
+}
+
 async fn run_manager_iteration(
 	ctx: &mut WorkflowCtx,
 	state: &mut DbManagerState,
 	input: &DbManagerInput,
 ) -> Result<Loop<()>> {
-	let signals = listen_for_manager_signals(ctx, input, &state.planning_deadlines).await?;
+	let signals = listen_for_manager_signals(ctx, input, state).await?;
+	let signal_received = !signals.is_empty();
+
 	let effects = manager_effects_for_signals(state, input, signals, ctx.create_ts());
 	execute_manager_effects(ctx, state, input, effects).await?;
 
@@ -42,7 +46,15 @@ async fn run_manager_iteration(
 
 	let forced_work = state.force_compactions.pending_work();
 	let refresh = execute_manager_refresh(ctx, state, input, forced_work).await?;
-	let effects = manager_effects_after_refresh(state, input, &refresh, ctx.create_ts());
+	let now_ms = refresh.refreshed_at_ms;
+
+	let triggers = WakeTriggers {
+		hot: signal_received,
+		cold: state.next_cold_check_at_ms.is_some_and(|d| now_ms >= d) || forced_work.cold,
+		reclaim: state.next_reclaim_check_at_ms.is_some_and(|d| now_ms >= d) || forced_work.reclaim,
+	};
+
+	let effects = manager_effects_after_refresh(state, input, &refresh, now_ms, triggers);
 	let should_stop = effects
 		.iter()
 		.any(|effect| matches!(effect, ManagerEffect::StopCompanions { .. }));
@@ -51,7 +63,43 @@ async fn run_manager_iteration(
 		return Ok(Loop::Break(()));
 	}
 
+	schedule_next_wake(state, input, now_ms, signal_received, triggers);
+
 	Ok(Loop::Continue)
+}
+
+fn schedule_next_wake(
+	state: &mut DbManagerState,
+	input: &DbManagerInput,
+	now_ms: i64,
+	signal_received: bool,
+	triggers: WakeTriggers,
+) {
+	use crate::conveyer::constants::{
+		MANAGER_COLD_COMPACTION_INTERVAL_MS, MANAGER_RECLAIM_INTERVAL_MS,
+	};
+
+	if manager_planning_timers_disabled(input) {
+		state.next_cold_check_at_ms = None;
+		state.next_reclaim_check_at_ms = None;
+		return;
+	}
+
+	if triggers.cold {
+		state.next_cold_check_at_ms = None;
+	}
+	if triggers.reclaim {
+		state.next_reclaim_check_at_ms = None;
+	}
+
+	if signal_received {
+		if state.next_cold_check_at_ms.is_none() {
+			state.next_cold_check_at_ms = Some(now_ms + MANAGER_COLD_COMPACTION_INTERVAL_MS);
+		}
+		if state.next_reclaim_check_at_ms.is_none() {
+			state.next_reclaim_check_at_ms = Some(now_ms + MANAGER_RECLAIM_INTERVAL_MS);
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -371,11 +419,6 @@ async fn execute_refresh_effect(
 		})
 		.await?;
 
-	state.planning_deadlines = if manager_planning_timers_disabled(input) {
-		ManagerPlanningDeadlines::default()
-	} else {
-		refresh.planning_deadlines.clone()
-	};
 	state.last_observed_branch_lifecycle_generation = refresh.branch_lifecycle_generation;
 	if state.last_dirty_cursor.is_none()
 		&& let Some(dirty) = refresh.observed_dirty.as_ref()
@@ -582,6 +625,7 @@ pub(super) fn manager_effects_after_refresh(
 	input: &DbManagerInput,
 	refresh: &RefreshManagerOutput,
 	now_ms: i64,
+	triggers: WakeTriggers,
 ) -> Vec<ManagerEffect> {
 	if !refresh.branch_is_live && matches!(state.branch_stop_state, BranchStopState::Running) {
 		return vec![stop_companions_effect(ManagerStopRequest {
@@ -595,18 +639,21 @@ pub(super) fn manager_effects_after_refresh(
 	let mut effects = Vec::new();
 	if matches!(state.branch_stop_state, BranchStopState::Running) {
 		let mut cold_will_run = state.active_jobs.cold.is_some();
-		if state.active_jobs.hot.is_none()
+		if triggers.hot
+			&& state.active_jobs.hot.is_none()
 			&& let Some(active_job) = refresh.planned_hot_job.clone()
 		{
 			effects.push(ManagerEffect::RunHotJob { active_job });
 		}
-		if state.active_jobs.cold.is_none()
+		if triggers.cold
+			&& state.active_jobs.cold.is_none()
 			&& let Some(active_job) = refresh.planned_cold_job.clone()
 		{
 			cold_will_run = true;
 			effects.push(ManagerEffect::RunColdJob { active_job });
 		}
-		if state.active_jobs.reclaim.is_none()
+		if triggers.reclaim
+			&& state.active_jobs.reclaim.is_none()
 			&& !cold_will_run
 			&& let Some(active_job) = refresh.planned_reclaim_job.clone()
 		{
@@ -687,13 +734,18 @@ async fn signal_companions_destroy(
 async fn listen_for_manager_signals(
 	ctx: &mut WorkflowCtx,
 	input: &DbManagerInput,
-	planning_deadlines: &ManagerPlanningDeadlines,
+	state: &DbManagerState,
 ) -> Result<Vec<DbManagerSignal>> {
 	if manager_planning_timers_disabled(input) {
 		return ctx.listen_n::<DbManagerSignal>(256).await;
 	}
 
-	if let Some(deadline) = nearest_planning_deadline(planning_deadlines) {
+	let deadline = [state.next_cold_check_at_ms, state.next_reclaim_check_at_ms]
+		.into_iter()
+		.flatten()
+		.min();
+
+	if let Some(deadline) = deadline {
 		ctx.listen_n_until::<DbManagerSignal>(deadline, 256).await
 	} else {
 		ctx.listen_n::<DbManagerSignal>(256).await
@@ -710,18 +762,6 @@ fn manager_planning_timers_disabled(_input: &DbManagerInput) -> bool {
 	false
 }
 
-fn nearest_planning_deadline(planning_deadlines: &ManagerPlanningDeadlines) -> Option<i64> {
-	[
-		planning_deadlines.next_hot_check_at_ms,
-		planning_deadlines.next_cold_check_at_ms,
-		planning_deadlines.next_reclaim_check_at_ms,
-		planning_deadlines.final_settle_check_at_ms,
-	]
-	.into_iter()
-	.flatten()
-	.min()
-}
-
 #[activity(RefreshManager)]
 pub async fn refresh_manager(
 	ctx: &ActivityCtx,
@@ -735,7 +775,7 @@ pub async fn refresh_manager(
 		.await?;
 	let snapshot = ctx
 		.udb()?
-		.run(move |tx| async move {
+		.txn("depot_manager_refresh", move |tx| async move {
 			read_manager_fdb_snapshot(&tx, database_branch_id, cold_storage_enabled, now_ms).await
 		})
 		.await?;
@@ -790,7 +830,7 @@ pub async fn refresh_manager(
 	};
 
 	Ok(RefreshManagerOutput {
-		planning_deadlines: ManagerPlanningDeadlines::after_refresh(now_ms),
+		refreshed_at_ms: now_ms,
 		planned_hot_job,
 		planned_cold_job,
 		planned_reclaim_job,

@@ -284,7 +284,7 @@ pub async fn reserve_actor_key(
 ) -> Result<ReserveActorKeyOutput> {
 	let res = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_reserve_key", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Check if there are any actors that share the same key that are not destroyed

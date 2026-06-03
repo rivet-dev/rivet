@@ -12,3 +12,4 @@ pub mod api_actors_list;
 pub mod api_actors_list_names;
 pub mod auth;
 pub mod network_faults;
+pub mod sqlite_generation;

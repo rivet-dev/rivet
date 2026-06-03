@@ -65,9 +65,12 @@ pub(crate) async fn read_manager_fdb_snapshot(
 	let mut db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
 	let bucket_proof_blocked_reclaim =
 		resolve_bucket_fork_pins(tx, branch_id, &mut db_pins).await?;
-	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
-	let shard_cache_policy =
-		read_effective_shard_cache_policy_for_branch(tx, branch_record.as_ref()).await?;
+	// Policy overrides currently require resolving a branch back to its bucket and
+	// database by scanning global pointer indexes. Doing that inside manager
+	// refresh can age out the FDB transaction when many actors cross the hot
+	// compaction threshold together.
+	let pitr_policy = PitrPolicy::default();
+	let shard_cache_policy = ShardCachePolicy::default();
 	let hot_inputs = read_hot_input_snapshot(
 		tx,
 		branch_id,
@@ -533,6 +536,39 @@ pub(crate) fn decode_txid_value(value: &[u8]) -> Result<u64> {
 	Ok(u64::from_be_bytes(bytes))
 }
 
+#[derive(Debug, Clone, Copy)]
+struct CompactionBatchBudget {
+	max_keys: usize,
+	max_value_bytes: u64,
+	key_count: usize,
+	value_bytes: u64,
+}
+
+impl CompactionBatchBudget {
+	fn fdb() -> Self {
+		CompactionBatchBudget {
+			max_keys: CMP_FDB_BATCH_MAX_KEYS,
+			max_value_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
+			key_count: 0,
+			value_bytes: 0,
+		}
+	}
+
+	fn can_add(&self, row_count: usize, value_bytes: u64) -> bool {
+		self.key_count.saturating_add(row_count) <= self.max_keys
+			&& self.value_bytes.saturating_add(value_bytes) <= self.max_value_bytes
+	}
+
+	fn add(&mut self, row_count: usize, value_bytes: u64) {
+		self.key_count = self.key_count.saturating_add(row_count);
+		self.value_bytes = self.value_bytes.saturating_add(value_bytes);
+	}
+
+	fn value_bytes(&self) -> u64 {
+		self.value_bytes
+	}
+}
+
 pub(crate) fn decode_i64_le(value: &[u8]) -> Result<i64> {
 	let bytes = <[u8; 8]>::try_from(value)
 		.map_err(|_| anyhow::anyhow!("i64 value had {} bytes, expected 8", value.len()))?;
@@ -559,60 +595,67 @@ pub(crate) async fn read_hot_input_snapshot(
 	let min_txid = root.hot_watermark_txid.saturating_add(1);
 	let max_txid = head.head_txid;
 	let mut snapshot = HotInputSnapshot::default();
+	let mut budget = CompactionBatchBudget::fdb();
 
+	let commit_scan_start = keys::branch_commit_key(branch_id, min_txid);
+	let commit_scan_end = max_txid
+		.checked_add(1)
+		.map(|next_txid| keys::branch_commit_key(branch_id, next_txid))
+		.unwrap_or_else(|| end_of_key_range(&keys::branch_commit_prefix(branch_id)));
 	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
+		tx_scan_range_values(tx, &commit_scan_start, &commit_scan_end, isolation_level).await?
 	{
 		let txid = decode_branch_commit_txid(branch_id, &key)?;
-		if txid < min_txid || txid > max_txid {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.commits.push((
-			txid,
-			decode_commit_row(&value).context("decode sqlite commit row for hot planning")?,
-		));
-	}
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), isolation_level).await?
-	{
-		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
-		if txid < min_txid || txid > max_txid {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.delta_chunks.push((key, value));
-		if snapshot.delta_chunks.len() + snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
+		if txid > max_txid {
 			break;
 		}
+		let commit =
+			decode_commit_row(&value).context("decode sqlite commit row for hot planning")?;
+		let delta_chunks = tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_chunk_prefix(branch_id, txid),
+			isolation_level,
+		)
+		.await?;
+		let txid_value_bytes = u64::try_from(value.len())
+			.unwrap_or(u64::MAX)
+			.saturating_add(
+				delta_chunks
+					.iter()
+					.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
+					.fold(0_u64, u64::saturating_add),
+			);
+
+		if !budget.can_add(1 + delta_chunks.len(), txid_value_bytes) {
+			break;
+		}
+
+		budget.add(1 + delta_chunks.len(), txid_value_bytes);
+		snapshot.commits.push((txid, commit));
+		snapshot.delta_chunks.extend(delta_chunks);
+		snapshot.selected_max_txid = Some(txid);
 	}
+
+	let Some(selected_max_txid) = snapshot.selected_max_txid else {
+		return Ok(snapshot);
+	};
 
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
+		if !budget.can_add(1, u64::try_from(value.len()).unwrap_or(u64::MAX)) {
+			break;
+		}
+
 		if let Ok(txid) = decode_pidx_txid(&value) {
-			if txid < min_txid || txid > max_txid {
+			if txid < min_txid || txid > selected_max_txid {
 				continue;
 			}
 		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		budget.add(1, u64::try_from(value.len()).unwrap_or(u64::MAX));
 		snapshot.pidx_entries.push((key, value));
-		if snapshot.pidx_entries.len() + snapshot.delta_chunks.len() + snapshot.commits.len()
-			>= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
-			break;
-		}
 	}
+	snapshot.total_value_bytes = budget.value_bytes();
 
 	snapshot.pitr_interval_coverage =
 		select_pitr_interval_coverage(&pitr_policy, &snapshot.commits, now_ms)?;
@@ -719,6 +762,7 @@ pub(crate) async fn read_reclaim_input_snapshot(
 		expired_pitr_interval_rows,
 		..ReclaimInputSnapshot::default()
 	};
+	let mut budget = CompactionBatchBudget::fdb();
 	let commit_scan_start = keys::branch_commit_key(branch_id, 0);
 	let commit_scan_end = max_reclaim_txid
 		.checked_add(1)
@@ -732,15 +776,32 @@ pub(crate) async fn read_reclaim_input_snapshot(
 			break;
 		}
 		let commit = decode_commit_row(&value).context("decode sqlite commit row for reclaim")?;
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		let delta_chunks = tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_chunk_prefix(branch_id, txid),
+			isolation_level,
+		)
+		.await?;
+		let txid_value_bytes = u64::try_from(value.len())
+			.unwrap_or(u64::MAX)
+			.saturating_add(
+				delta_chunks
+					.iter()
+					.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
+					.fold(0_u64, u64::saturating_add),
+			);
+		if !budget.can_add(1 + delta_chunks.len(), txid_value_bytes) {
+			break;
+		}
+		budget.add(1 + delta_chunks.len(), txid_value_bytes);
 		snapshot.txid_refs.push(ReclaimTxidRef {
 			txid,
 			versionstamp: commit.versionstamp,
 		});
 		snapshot.commits.push((txid, key, value, commit));
+		snapshot.delta_chunks.extend(delta_chunks);
 	}
+	snapshot.total_value_bytes = budget.value_bytes();
 
 	let selected_txids = snapshot
 		.txid_refs
@@ -750,25 +811,6 @@ pub(crate) async fn read_reclaim_input_snapshot(
 	if selected_txids.is_empty() {
 		return Ok(snapshot);
 	}
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), isolation_level).await?
-	{
-		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
-		if !selected_txids.contains(&txid) {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.delta_chunks.push((key, value));
-		if snapshot.txid_refs.len() + snapshot.delta_chunks.len() >= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
-			break;
-		}
-	}
-
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
@@ -975,13 +1017,23 @@ pub(crate) async fn read_cold_input_snapshot(
 	let min_txid = root.cold_watermark_txid.saturating_add(1);
 	let max_txid = root.hot_watermark_txid;
 	let mut snapshot = ColdInputSnapshot::default();
+	let mut budget = CompactionBatchBudget::fdb();
 
+	let commit_scan_start = keys::branch_commit_key(branch_id, min_txid);
+	let commit_scan_end = max_txid
+		.checked_add(1)
+		.map(|next_txid| keys::branch_commit_key(branch_id, next_txid))
+		.unwrap_or_else(|| end_of_key_range(&keys::branch_commit_prefix(branch_id)));
 	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
+		tx_scan_range_values(tx, &commit_scan_start, &commit_scan_end, isolation_level).await?
 	{
 		let txid = decode_branch_commit_txid(branch_id, &key)?;
-		if txid < min_txid || txid > max_txid {
-			continue;
+		if txid > max_txid {
+			break;
+		}
+		let value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+		if !budget.can_add(1, value_bytes) {
+			break;
 		}
 		let commit =
 			decode_commit_row(&value).context("decode sqlite commit row for cold planning")?;
@@ -992,15 +1044,19 @@ pub(crate) async fn read_cold_input_snapshot(
 			snapshot.min_versionstamp = snapshot.min_versionstamp.min(commit.versionstamp);
 			snapshot.max_versionstamp = snapshot.max_versionstamp.max(commit.versionstamp);
 		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		budget.add(1, value_bytes);
 		snapshot.commits.push((txid, commit));
+		snapshot.selected_max_txid = Some(txid);
 	}
 
 	if snapshot.commits.is_empty() {
 		return Ok(ColdInputSnapshot::default());
 	}
+	let selected_max_txid = snapshot
+		.selected_max_txid
+		.context("cold compaction selected txid is missing")?;
+	let mut shard_bytes = 0_u64;
+	let mut shard_scan_capped = false;
 
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_shard_prefix(branch_id), isolation_level).await?
@@ -1008,24 +1064,26 @@ pub(crate) async fn read_cold_input_snapshot(
 		let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &key)? else {
 			continue;
 		};
-		if as_of_txid != max_txid {
+		if as_of_txid != selected_max_txid {
 			continue;
 		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		let value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+		if snapshot.shard_blobs.len().saturating_add(1) > CMP_S3_UPLOAD_MAX_OBJECTS
+			|| shard_bytes.saturating_add(value_bytes) > CMP_S3_UPLOAD_LIMIT_BYTES as u64
+		{
+			shard_scan_capped = true;
+			break;
+		}
+		shard_bytes = shard_bytes.saturating_add(value_bytes);
 		snapshot.shard_blobs.push(ColdShardBlob {
 			shard_id,
 			as_of_txid,
 			key,
 			bytes: value,
 		});
-		if snapshot.shard_blobs.len() >= CMP_S3_UPLOAD_MAX_OBJECTS
-			|| snapshot.total_value_bytes >= CMP_S3_UPLOAD_LIMIT_BYTES as u64
-		{
-			break;
-		}
 	}
+	snapshot.shards_complete = !shard_scan_capped;
+	snapshot.total_value_bytes = budget.value_bytes().saturating_add(shard_bytes);
 
 	Ok(snapshot)
 }
@@ -1079,21 +1137,21 @@ pub(crate) fn reclaim_coverage_is_complete(snapshot: &ReclaimInputSnapshot) -> b
 
 pub(crate) fn selected_hot_coverage_txids(
 	root: &CompactionRoot,
-	head: &DBHead,
+	selected_max_txid: u64,
 	db_pins: &[DbHistoryPin],
 	pitr_interval_coverage: &[PitrIntervalSelection],
 ) -> Vec<u64> {
 	let mut coverage_txids = BTreeSet::new();
-	coverage_txids.insert(head.head_txid);
+	coverage_txids.insert(selected_max_txid);
 
 	for pin in db_pins {
-		if pin.at_txid > root.hot_watermark_txid && pin.at_txid <= head.head_txid {
+		if pin.at_txid > root.hot_watermark_txid && pin.at_txid <= selected_max_txid {
 			coverage_txids.insert(pin.at_txid);
 		}
 	}
 	for selection in pitr_interval_coverage {
 		let txid = selection.coverage.txid;
-		if txid > root.hot_watermark_txid && txid <= head.head_txid {
+		if txid > root.hot_watermark_txid && txid <= selected_max_txid {
 			coverage_txids.insert(txid);
 		}
 	}
@@ -1116,15 +1174,16 @@ pub(crate) fn plan_hot_job(
 	let hot_lag = head
 		.head_txid
 		.saturating_sub(snapshot.root.hot_watermark_txid);
+	let selected_max_txid = snapshot.hot_inputs.selected_max_txid?;
 	let coverage_txids = selected_hot_coverage_txids(
 		&snapshot.root,
-		head,
+		selected_max_txid,
 		&snapshot.db_pins,
 		&snapshot.hot_inputs.pitr_interval_coverage,
 	);
 	let has_uncovered_pin = coverage_txids
 		.iter()
-		.any(|txid| *txid != head.head_txid && *txid > snapshot.root.hot_watermark_txid);
+		.any(|txid| *txid != selected_max_txid && *txid > snapshot.root.hot_watermark_txid);
 	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD && !has_uncovered_pin && !force {
 		return None;
 	}
@@ -1132,7 +1191,7 @@ pub(crate) fn plan_hot_job(
 	let input_range = HotJobInputRange {
 		txids: TxidRange {
 			min_txid: snapshot.root.hot_watermark_txid.saturating_add(1),
-			max_txid: head.head_txid,
+			max_txid: selected_max_txid,
 		},
 		coverage_txids: coverage_txids.clone(),
 		max_pages: u32::try_from(snapshot.hot_inputs.pidx_entries.len()).unwrap_or(u32::MAX),
@@ -1166,7 +1225,8 @@ pub(crate) fn plan_cold_job(
 	force: bool,
 ) -> Option<PlannedColdCompactionJob> {
 	let branch_record = snapshot.branch_record.as_ref()?;
-	if snapshot.cold_inputs.shard_blobs.is_empty() {
+	let selected_max_txid = snapshot.cold_inputs.selected_max_txid?;
+	if snapshot.cold_inputs.shard_blobs.is_empty() || !snapshot.cold_inputs.shards_complete {
 		return None;
 	}
 	let cold_lag = snapshot
@@ -1180,7 +1240,7 @@ pub(crate) fn plan_cold_job(
 	let input_range = ColdJobInputRange {
 		txids: TxidRange {
 			min_txid: snapshot.root.cold_watermark_txid.saturating_add(1),
-			max_txid: snapshot.root.hot_watermark_txid,
+			max_txid: selected_max_txid,
 		},
 		min_versionstamp: snapshot.cold_inputs.min_versionstamp,
 		max_versionstamp: snapshot.cold_inputs.max_versionstamp,
@@ -1498,14 +1558,22 @@ pub(crate) fn finish_fingerprint(fingerprint: Sha256) -> CompactionInputFingerpr
 pub(crate) async fn write_staged_hot_shards(
 	tx: &universaldb::Transaction,
 	input: &StageHotJobInput,
-	head: &DBHead,
+	_head: &DBHead,
 	hot_inputs: &HotInputSnapshot,
 ) -> Result<Vec<HotShardOutputRef>> {
 	let deltas = decode_hot_delta_chunks(input.database_branch_id, &hot_inputs.delta_chunks)?;
+	let selected_db_size_pages = hot_inputs
+		.commits
+		.iter()
+		.find_map(|(txid, commit)| {
+			(*txid == input.input_range.txids.max_txid).then_some(commit.db_size_pages)
+		})
+		.context("hot compaction selected commit row is missing")?;
 	let mut output_refs = Vec::new();
 
 	for as_of_txid in &input.input_range.coverage_txids {
-		let pages_by_shard = collect_hot_pages_by_shard(head, &deltas, *as_of_txid)?;
+		let pages_by_shard =
+			collect_hot_pages_by_shard(selected_db_size_pages, &deltas, *as_of_txid)?;
 
 		for (shard_id, page_updates) in pages_by_shard {
 			let encoded = build_staged_hot_shard_blob(
@@ -1567,7 +1635,7 @@ pub(crate) fn decode_hot_delta_chunks(
 }
 
 pub(crate) fn collect_hot_pages_by_shard(
-	head: &DBHead,
+	db_size_pages: u32,
 	deltas: &BTreeMap<u64, DecodedLtx>,
 	as_of_txid: u64,
 ) -> Result<BTreeMap<u32, Vec<(u32, Vec<u8>)>>> {
@@ -1578,7 +1646,7 @@ pub(crate) fn collect_hot_pages_by_shard(
 			continue;
 		}
 		for page in &delta.pages {
-			if page.pgno <= head.db_size_pages {
+			if page.pgno <= db_size_pages {
 				pages_by_number.insert(page.pgno, page.bytes.clone());
 			}
 		}

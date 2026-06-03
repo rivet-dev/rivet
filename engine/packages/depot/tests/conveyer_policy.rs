@@ -200,7 +200,7 @@ async fn policy_writes_use_expected_storage_keys() -> Result<()> {
 				.await?;
 
 			let bucket_policy = db
-				.run(move |tx| async move {
+				.txn("test_depotconveyer_policy", move |tx| async move {
 					Ok(tx
 						.informal()
 						.get(&keys::bucket_policy_pitr_key(bucket_id), Snapshot)
@@ -211,7 +211,7 @@ async fn policy_writes_use_expected_storage_keys() -> Result<()> {
 			assert_eq!(decode_pitr_policy(&bucket_policy)?, pitr);
 
 			let database_policy = db
-				.run(move |tx| {
+				.txn("test_depotconveyer_policy", move |tx| {
 					let database_id = database_id.clone();
 					async move {
 						Ok(tx

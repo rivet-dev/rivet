@@ -29,7 +29,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	println!("cargo:rerun-if-changed={}", highest_version_path.display());
 
-	let cfg = vbare_compiler::Config::with_hashable_map();
+	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// Append protocol version constant to generated file

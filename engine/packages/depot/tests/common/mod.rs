@@ -132,7 +132,7 @@ where
 }
 
 pub async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotcommon_mod", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx

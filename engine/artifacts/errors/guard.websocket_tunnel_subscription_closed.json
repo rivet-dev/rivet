@@ -1,0 +1,5 @@
+{
+  "code": "websocket_tunnel_subscription_closed",
+  "group": "guard",
+  "message": "WebSocket tunnel subscription closed."
+}

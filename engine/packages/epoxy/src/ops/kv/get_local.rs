@@ -48,7 +48,7 @@ pub(crate) async fn read_local_value(
 	include_cache: bool,
 ) -> Result<LocalValueRead> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_kv_read_local_value", |tx| {
 			async move {
 				let value_key = KvValueKey::new(key.to_vec());
 				let legacy_value_key = LegacyCommittedValueKey::new(key.to_vec());

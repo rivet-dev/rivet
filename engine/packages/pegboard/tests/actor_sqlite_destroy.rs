@@ -38,7 +38,7 @@ async fn seed(db: &universaldb::Database, keys: &[Vec<u8>]) -> Result<()> {
 		.cloned()
 		.map(|key| (key, b"present".to_vec()))
 		.collect::<Vec<_>>();
-	db.run(move |tx| {
+	db.txn("test_pegboardactor_sqlite_destroy", move |tx| {
 		let writes = writes.clone();
 		async move {
 			for (key, value) in writes {
@@ -51,7 +51,7 @@ async fn seed(db: &universaldb::Database, keys: &[Vec<u8>]) -> Result<()> {
 }
 
 async fn value_exists(db: &universaldb::Database, key: Vec<u8>) -> Result<bool> {
-	db.run(move |tx| {
+	db.txn("test_pegboardactor_sqlite_destroy", move |tx| {
 		let key = key.clone();
 		async move { Ok(tx.informal().get(&key, Snapshot).await?.is_some()) }
 	})
@@ -65,7 +65,7 @@ async fn actor_destroy_clears_compactor_lease() -> Result<()> {
 	let keys = sqlite_keys(actor_id);
 	seed(&db, &keys).await?;
 
-	db.run(move |tx| async move {
+	db.txn("test_pegboardactor_sqlite_destroy", move |tx| async move {
 		pegboard::actor_sqlite::clear_v2_storage_for_destroy(&tx, actor_id);
 		Ok(())
 	})
@@ -85,7 +85,7 @@ async fn actor_destroy_in_one_tx() -> Result<()> {
 	let keys = sqlite_keys(actor_id);
 	seed(&db, &keys).await?;
 
-	db.run(move |tx| async move {
+	db.txn("test_pegboardactor_sqlite_destroy", move |tx| async move {
 		pegboard::actor_sqlite::clear_v2_storage_for_destroy(&tx, actor_id);
 		Err::<(), anyhow::Error>(anyhow!("rollback sqlite destroy"))
 	})

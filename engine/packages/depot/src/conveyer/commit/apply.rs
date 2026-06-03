@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::BTreeSet, sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
 use universaldb::{
@@ -12,6 +12,7 @@ use crate::{
 	burst_mode,
 	conveyer::{
 		Db, branch,
+		constants::{MAX_COMMIT_DIRTY_PAGES, MAX_COMMIT_RAW_DIRTY_BYTES},
 		db::{
 			BranchAncestry, CacheSnapshot, load_branch_ancestry, touch_access_if_bucket_advanced,
 		},
@@ -79,6 +80,7 @@ impl Db {
 			.with_label_values(labels)
 			.observe(dirty_pages.len() as f64);
 
+		let phase_start = Instant::now();
 		let cached_storage_used = *self.storage_used.read().await;
 		let cached_snapshot = self.cache_snapshot.read().await.clone();
 		let cached_branch_id = cached_snapshot.as_ref().map(|snapshot| snapshot.branch_id);
@@ -89,19 +91,25 @@ impl Db {
 			.as_ref()
 			.and_then(|snapshot| snapshot.last_access_bucket);
 		let last_deltas_available_at_ms = *self.last_deltas_available_at_ms.read().await;
+		#[cfg(feature = "pidx-cache")]
 		let cache_was_warm = cached_snapshot
 			.as_ref()
 			.is_some_and(|snapshot| !snapshot.pidx.range(0, u32::MAX).is_empty());
+		#[cfg(not(feature = "pidx-cache"))]
+		let cache_was_warm = false;
+		metrics::observe_commit_phase(&node_id, "cache_snapshot", phase_start, "ok");
 		let database_id = self.database_id.clone();
 		let bucket_id = self.sqlite_bucket_id();
 		let dirty_pages_for_tx = dirty_pages.clone();
 		let expected_head_txid = options.expected_head_txid;
+		let phase_node_id = node_id.clone();
 		#[cfg(feature = "test-faults")]
 		let fault_controller = self.fault_controller.clone();
 
 		let result = self
 			.udb
-			.run(move |tx| {
+			.txn("depot_commit", move |tx| {
+				let phase_node_id = phase_node_id.clone();
 				let database_id = database_id.clone();
 				let bucket_id = bucket_id;
 				let dirty_pages = dirty_pages_for_tx.clone();
@@ -113,6 +121,7 @@ impl Db {
 				let fault_controller = fault_controller.clone();
 
 				async move {
+					let phase_start = Instant::now();
 					let branch_resolution =
 						resolve_or_allocate_branch(&tx, bucket_id, &database_id).await?;
 					let branch_id = branch_resolution.branch_id;
@@ -148,9 +157,16 @@ impl Db {
 					} else {
 						load_branch_ancestry(&tx, branch_id).await?
 					};
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"resolve_branch",
+						phase_start,
+						"ok",
+					);
 					let head_key = keys::branch_meta_head_key(branch_id);
 					let head_at_fork_key = keys::branch_meta_head_at_fork_key(branch_id);
 					let branch_cache_matches = cached_branch_id == Some(branch_id);
+					let phase_start = Instant::now();
 					let (head_bytes, head_at_fork_bytes, storage_used) =
 						if let (true, Some(storage_used)) =
 							(branch_cache_matches, cached_storage_used)
@@ -169,6 +185,12 @@ impl Db {
 								tokio::try_join!(head_fut, head_at_fork_fut, quota_fut)?;
 							(head_bytes, head_at_fork_bytes, storage_used)
 						};
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"head_read",
+						phase_start,
+						"ok",
+					);
 
 					let previous_head_bytes = head_bytes.as_ref().or(head_at_fork_bytes.as_ref());
 					let previous_head = previous_head_bytes
@@ -218,6 +240,7 @@ impl Db {
 						None => 1,
 					};
 
+					let phase_start = Instant::now();
 					let truncate_cleanup = collect_truncate_cleanup(
 						&tx,
 						branch_id,
@@ -225,6 +248,12 @@ impl Db {
 						db_size_pages,
 					)
 					.await?;
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"truncate_cleanup",
+						phase_start,
+						"ok",
+					);
 					test_hooks::maybe_pause_after_truncate_cleanup(&database_id).await;
 					#[cfg(feature = "test-faults")]
 					maybe_fire_commit_fault(
@@ -235,6 +264,7 @@ impl Db {
 					)
 					.await?;
 
+					let phase_start = Instant::now();
 					let encoded_delta =
 						encode_ltx_v3(LtxHeader::delta(txid, db_size_pages, now_ms), &dirty_pages)
 							.context("encode commit delta")?;
@@ -266,8 +296,6 @@ impl Db {
 							.as_ref()
 							.map_or(0, |head| head.post_apply_checksum),
 						branch_id,
-						#[cfg(debug_assertions)]
-						generation: previous_head.as_ref().map_or(0, |head| head.generation),
 					};
 					let encoded_head =
 						encode_db_head(new_head.clone()).context("encode new sqlite db head")?;
@@ -297,6 +325,12 @@ impl Db {
 						.iter()
 						.map(|page| page.pgno)
 						.collect::<BTreeSet<_>>();
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"encode_delta",
+						phase_start,
+						"ok",
+					);
 
 					let added_bytes = tracked_entry_size(&head_key, &encoded_head)?
 						+ tracked_entry_size(&commit_key, &encoded_commit_row)?
@@ -351,9 +385,16 @@ impl Db {
 						Some(branch_id),
 					)
 					.await?;
+					let phase_start = Instant::now();
 					for (key, value) in &delta_chunks {
 						tx.informal().set(key, value);
 					}
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"write_delta_chunks",
+						phase_start,
+						"ok",
+					);
 					#[cfg(feature = "test-faults")]
 					maybe_fire_commit_fault(
 						&fault_controller,
@@ -362,6 +403,7 @@ impl Db {
 						Some(branch_id),
 					)
 					.await?;
+					let phase_start = Instant::now();
 					for pgno in &dirty_pgnos {
 						tx.informal()
 							.set(&keys::branch_pidx_key(branch_id, *pgno), &txid_bytes);
@@ -378,6 +420,12 @@ impl Db {
 						fence_truncate_cleanup_row(&tx, row).await?;
 						tx.informal().set(&row.key, value);
 					}
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"write_page_index",
+						phase_start,
+						"ok",
+					);
 					#[cfg(feature = "test-faults")]
 					maybe_fire_commit_fault(
 						&fault_controller,
@@ -386,6 +434,7 @@ impl Db {
 						Some(branch_id),
 					)
 					.await?;
+					let phase_start = Instant::now();
 					tx.informal().set(&head_key, &encoded_head);
 					if head_at_fork_bytes.is_some() {
 						tx.informal().clear(&head_at_fork_key);
@@ -447,6 +496,12 @@ impl Db {
 						now_ms,
 					)
 					.await?;
+					metrics::observe_commit_phase(
+						&phase_node_id,
+						"write_manifest",
+						phase_start,
+						"ok",
+					);
 
 					Ok(CommitTxResult {
 						branch_id,
@@ -471,17 +526,21 @@ impl Db {
 		)
 		.await?;
 
+		let phase_start = Instant::now();
 		*self.storage_used.write().await = Some(result.storage_used);
 		self.commit_bytes_since_rollup.fetch_add(
 			u64::try_from(result.added_bytes)
 				.context("commit added bytes should be non-negative")?,
 			std::sync::atomic::Ordering::Relaxed,
 		);
+		#[cfg(not(feature = "pidx-cache"))]
+		let _ = (&result.dirty_pgnos, &result.truncated_pgnos);
 
 		let mut cache_snapshot = self.cache_snapshot.write().await;
 		let current_branch_id = cache_snapshot.as_ref().map(|snapshot| snapshot.branch_id);
 		let publish_branch_changed =
 			current_branch_id.is_some_and(|branch_id| branch_id != result.branch_id);
+		#[cfg(feature = "pidx-cache")]
 		let pidx = if publish_branch_changed {
 			Arc::new(DeltaPageIndex::new())
 		} else {
@@ -490,7 +549,10 @@ impl Db {
 				.map(|snapshot| Arc::clone(&snapshot.pidx))
 				.unwrap_or_else(|| Arc::new(DeltaPageIndex::new()))
 		};
+		#[cfg(not(feature = "pidx-cache"))]
+		let pidx = Arc::new(DeltaPageIndex::new());
 		let pidx_was_warm = !pidx.range(0, u32::MAX).is_empty();
+		#[cfg(feature = "pidx-cache")]
 		if cache_was_warm || pidx_was_warm || publish_branch_changed {
 			for pgno in result.truncated_pgnos {
 				pidx.remove(pgno);
@@ -499,6 +561,8 @@ impl Db {
 				pidx.insert(pgno, result.txid);
 			}
 		}
+		#[cfg(not(feature = "pidx-cache"))]
+		let _ = (cache_was_warm, pidx_was_warm, publish_branch_changed);
 		let last_access_bucket = result.access_bucket.or_else(|| {
 			cache_snapshot
 				.as_ref()
@@ -511,6 +575,7 @@ impl Db {
 			last_access_bucket,
 			pidx,
 		});
+		metrics::observe_commit_phase(&node_id, "cache_update", phase_start, "ok");
 
 		self.publish_deltas_available_if_needed(result.deltas_available, result.branch_id)
 			.await?;
@@ -586,6 +651,7 @@ async fn maybe_fire_commit_fault(
 
 fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<()> {
 	let mut seen = BTreeSet::new();
+	let mut actual_size_bytes = 0_u64;
 	for page in dirty_pages {
 		ensure!(page.pgno > 0, "sqlite commit does not accept page 0");
 		ensure!(
@@ -600,6 +666,26 @@ fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<()> {
 			"sqlite commit duplicated page {} in a single request",
 			page.pgno
 		);
+		actual_size_bytes =
+			actual_size_bytes.saturating_add(u64::try_from(page.bytes.len()).unwrap_or(u64::MAX));
+	}
+
+	if dirty_pages.len() > MAX_COMMIT_DIRTY_PAGES
+		|| actual_size_bytes > MAX_COMMIT_RAW_DIRTY_BYTES as u64
+	{
+		tracing::warn!(
+			dirty_pages = dirty_pages.len(),
+			actual_size_bytes,
+			max_dirty_pages = MAX_COMMIT_DIRTY_PAGES,
+			max_size_bytes = MAX_COMMIT_RAW_DIRTY_BYTES,
+			"sqlite commit exceeds engine-side size cap"
+		);
+		// TODO: Re-enable the engine-side commit size cap after large commit handling is fixed.
+		// return Err(SqliteStorageError::CommitTooLarge {
+		// 	actual_size_bytes,
+		// 	max_size_bytes: MAX_COMMIT_RAW_DIRTY_BYTES as u64,
+		// }
+		// .into());
 	}
 
 	Ok(())

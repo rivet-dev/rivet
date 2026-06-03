@@ -168,7 +168,7 @@ async fn record_metrics(ctx: &ActivityCtx, input: &RecordMetricsInput) -> Result
 	let namespace_id = state.namespace_id;
 	let name = &state.name;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_record_metrics", |tx| async move {
 			namespace::keys::metric::inc(
 				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
@@ -209,7 +209,7 @@ async fn record_kv_metrics(ctx: &ActivityCtx, input: &RecordKvMetricsInput) -> R
 	loop {
 		let res = ctx
 			.udb()?
-			.run(|tx| {
+			.txn("pegboard_actor2_kv_size_scan", |tx| {
 				let last_key = &last_key;
 				async move {
 					let start = Instant::now();
@@ -295,7 +295,7 @@ async fn record_kv_metrics(ctx: &ActivityCtx, input: &RecordKvMetricsInput) -> R
 	}
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_record_kv_metrics", |tx| async move {
 			namespace::keys::metric::inc(
 				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,

@@ -1,26 +1,26 @@
 use std::ops::Deref;
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
+use rivet_perf::{perf_finish, perf_start};
 use scc::HashMap;
-use tokio::sync::{broadcast, oneshot};
-use tracing::Instrument;
+use tokio::sync::broadcast;
 use uuid::Uuid;
 
 use rivet_util::backoff::Backoff;
 
-use crate::chunking::{ChunkTracker, encode_chunk, split_payload_into_chunks};
+use crate::chunking::{ChunkTracker, FastPath, encode_chunk, split_payload_into_chunks};
 use crate::driver::{PubSubDriverHandle, PublishOpts, SubscriberDriverHandle};
+use crate::errors;
 use crate::metrics;
-use crate::subject::Subject;
+use crate::subject::{InboxSubject, Subject};
 
 const GC_INTERVAL: Duration = Duration::from_secs(60);
 
 pub struct PubSubInner {
 	driver: PubSubDriverHandle,
-	chunk_tracker: Mutex<ChunkTracker>,
-	reply_subscribers: HashMap<String, oneshot::Sender<Vec<u8>>>,
+	chunk_tracker: ChunkTracker,
 	// Local in-memory subscribers by subject (shared across all drivers)
 	local_subscribers: HashMap<String, broadcast::Sender<Vec<u8>>>,
 	// Enables/disables local fast-path across all drivers
@@ -49,23 +49,22 @@ impl PubSub {
 	) -> Self {
 		let inner = Arc::new(PubSubInner {
 			driver,
-			chunk_tracker: Mutex::new(ChunkTracker::new()),
-			reply_subscribers: HashMap::new(),
+			chunk_tracker: ChunkTracker::new(),
 			local_subscribers: HashMap::new(),
 			memory_optimization,
 		});
 
 		// Spawn GC task for chunk buffers and local subscribers
-		let gc_inner = Arc::downgrade(&inner);
+		let inner2 = Arc::downgrade(&inner);
 		tokio::spawn(async move {
 			let mut interval = tokio::time::interval(GC_INTERVAL);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 			loop {
 				interval.tick().await;
-				if let Some(inner) = gc_inner.upgrade() {
+				if let Some(inner) = inner2.upgrade() {
 					// Clean up chunk buffers
-					inner.chunk_tracker.lock().unwrap().gc();
+					inner.chunk_tracker.gc().await;
 
 					// Clean up local subscribers with no receivers
 					inner
@@ -84,8 +83,17 @@ impl PubSub {
 
 	#[tracing::instrument(skip_all, fields(%subject))]
 	pub async fn subscribe<T: Subject>(&self, subject: T) -> Result<Subscriber> {
+		self.subscribe_inner(subject, None).await
+	}
+
+	#[tracing::instrument(skip_all, fields(%subject))]
+	async fn subscribe_inner<T: Subject>(
+		&self,
+		subject: T,
+		reply_id: Option<Uuid>,
+	) -> Result<Subscriber> {
 		// Underlying driver subscription
-		let driver = self.driver.subscribe(&subject.as_cow()).await?;
+		let driver = self.driver.subscribe(&subject.as_cow(), reply_id).await?;
 
 		if !self.memory_optimization {
 			return Ok(Subscriber::new(
@@ -93,7 +101,7 @@ impl PubSub {
 				self.clone(),
 				false,
 				subject.to_string(),
-				T::root().map(|x| x.to_string()),
+				subject.subject_root().map(|x| x.to_string()),
 			));
 		}
 
@@ -121,7 +129,7 @@ impl PubSub {
 			self.clone(),
 			true,
 			subject.to_string(),
-			T::root().map(|x| x.to_string()),
+			subject.subject_root().map(|x| x.to_string()),
 		))
 	}
 
@@ -138,7 +146,7 @@ impl PubSub {
 			self.clone(),
 			false,
 			subject.to_string(),
-			T::root().map(|x| x.to_string()),
+			subject.subject_root().map(|x| x.to_string()),
 		));
 	}
 
@@ -148,8 +156,8 @@ impl PubSub {
 		subject: impl Subject,
 		payload: &[u8],
 		opts: PublishOpts,
-	) -> Result<()> {
-		self.publish_inner(subject, payload, None::<&str>, opts)
+	) -> Result<Uuid> {
+		self.publish_inner(subject, payload, None::<&str>, opts, None)
 			.await
 	}
 
@@ -160,24 +168,29 @@ impl PubSub {
 		payload: &[u8],
 		reply_subject: impl Subject,
 		opts: PublishOpts,
-	) -> Result<()> {
-		self.publish_inner(subject, payload, Some(reply_subject), opts)
+	) -> Result<Uuid> {
+		self.publish_inner(subject, payload, Some(reply_subject), opts, None)
 			.await
 	}
 
+	#[tracing::instrument(skip_all, fields(%subject, ?opts, message_id = tracing::field::Empty))]
 	async fn publish_inner<T: Subject>(
 		&self,
 		subject: T,
 		payload: &[u8],
 		reply_subject: Option<impl Subject>,
 		opts: PublishOpts,
-	) -> Result<()> {
-		let message_id = *Uuid::new_v4().as_bytes();
+		request_deadline_at: Option<i64>,
+	) -> Result<Uuid> {
+		let message_id = Uuid::new_v4();
+		tracing::Span::current().record("message_id", message_id.to_string());
+
 		let chunks = split_payload_into_chunks(
 			payload,
 			self.driver.max_message_size(),
 			message_id,
 			reply_subject.as_ref().map(|x| x.as_cow()).as_deref(),
+			request_deadline_at,
 		)?;
 		let chunk_count = chunks.len() as u32;
 
@@ -186,6 +199,9 @@ impl PubSub {
 			.await;
 
 		let subject_cow = subject.as_cow();
+		let reply_subject = reply_subject.as_ref().map(|x| x.as_cow());
+		let subject_root = subject.subject_root();
+		let subject_root = subject_root.as_deref().unwrap_or("unknown");
 
 		for (chunk_idx, chunk_payload) in chunks.into_iter().enumerate() {
 			let encoded = encode_chunk(
@@ -193,7 +209,8 @@ impl PubSub {
 				chunk_idx as u32,
 				chunk_count,
 				message_id,
-				reply_subject.as_ref().map(|x| x.to_string()),
+				reply_subject.clone(),
+				request_deadline_at,
 			)?;
 
 			if use_local {
@@ -205,46 +222,57 @@ impl PubSub {
 				}
 			} else {
 				// Use backoff when publishing through the driver
-				self.publish_with_backoff(&subject, &encoded).await?;
+				let subject = subject.as_cow();
+
+				let mut backoff = Backoff::default();
+				loop {
+					let measure = perf_start!(
+						&metrics::PUBLISH_ATTEMPT_DURATION,
+						slow_ms = 50,
+						"ups_publish_attempt",
+						labels: { subject_root = %subject_root },
+						fields: { subject = %subject },
+					);
+					let res = self
+						.driver
+						.publish(&subject, &encoded, reply_subject.as_deref())
+						.await;
+					perf_finish!(measure, fields: { result = %res.is_ok() });
+
+					match res {
+						Result::Ok(_) => {
+							break;
+						}
+						Err(err) if !backoff.tick().await => {
+							metrics::PUBLISH_RETRY_TOTAL
+								.with_label_values(&[subject_root])
+								.inc();
+							tracing::warn!(?err, "error publishing, cannot retry again");
+							return Err(errors::Ups::PublishFailed.build().into());
+						}
+						Err(err) => {
+							metrics::PUBLISH_RETRY_TOTAL
+								.with_label_values(&[subject_root])
+								.inc();
+							tracing::debug!(?err, "error publishing, retrying");
+							// Continue retrying
+						}
+					}
+				}
 			}
 		}
 
-		let subject_str = T::root();
-		let subject_str = subject_str.as_deref().unwrap_or("unknown");
 		if use_local {
 			metrics::MESSAGE_SEND_COUNT
-				.with_label_values(&["local", subject_str])
+				.with_label_values(&["local", subject_root])
 				.inc();
 		} else {
 			metrics::MESSAGE_SEND_COUNT
-				.with_label_values(&["driver", subject_str])
+				.with_label_values(&["driver", subject_root])
 				.inc();
 		}
 
-		Ok(())
-	}
-
-	#[tracing::instrument(skip_all, fields(%subject))]
-	async fn publish_with_backoff(&self, subject: &impl Subject, encoded: &[u8]) -> Result<()> {
-		let subject = subject.as_cow();
-
-		let mut backoff = Backoff::default();
-		loop {
-			match self.driver.publish(&subject, encoded).await {
-				Result::Ok(_) => {
-					break;
-				}
-				Err(err) if !backoff.tick().await => {
-					tracing::warn!(?err, "error publishing, cannot retry again");
-					return Err(crate::errors::Ups::PublishFailed.build().into());
-				}
-				Err(err) => {
-					tracing::debug!(?err, "error publishing, retrying");
-					// Continue retrying
-				}
-			}
-		}
-		Ok(())
+		Ok(message_id)
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -253,7 +281,7 @@ impl PubSub {
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
-	pub async fn request(&self, subject: impl Subject, payload: &[u8]) -> Result<Response> {
+	pub async fn request(&self, subject: impl Subject, payload: &[u8]) -> Result<NextOutput> {
 		self.request_with_timeout(subject, payload, Duration::from_secs(30))
 			.await
 	}
@@ -264,68 +292,64 @@ impl PubSub {
 		subject: impl Subject,
 		payload: &[u8],
 		timeout: Duration,
-	) -> Result<Response> {
-		// Create a unique reply subject for this request
-		let reply_subject = format!("_INBOX.{}", Uuid::new_v4());
+	) -> Result<NextOutput> {
+		self.request_with_timeout_inner(subject, payload, timeout)
+			.await
+	}
 
-		// Create a oneshot channel for the response
-		let (tx, rx) = oneshot::channel();
-
-		// Register the reply handler
-		self.reply_subscribers
-			.upsert_async(reply_subject.clone(), tx)
-			.await;
-		metrics::REPLY_SUBSCRIBER_COUNT.set(self.reply_subscribers.len() as i64);
+	#[tracing::instrument(skip_all, fields(%subject))]
+	pub async fn request_with_timeout_inner<T: Subject>(
+		&self,
+		subject: T,
+		payload: &[u8],
+		timeout: Duration,
+	) -> Result<NextOutput> {
+		let start = Instant::now();
+		let reply_subject = self.driver.new_inbox();
+		let now = rivet_util::timestamp::now();
+		let request_deadline_at = i64::try_from(timeout.as_millis())
+			.ok()
+			.and_then(|timeout_ms| now.checked_add(timeout_ms));
 
 		// Subscribe to the reply subject (use local-aware subscribe)
-		let mut reply_subscriber = self.subscribe(&reply_subject).await?;
-
-		// Send the request with the reply subject, using local fast-path
-		self.publish_with_reply(subject, payload, &reply_subject, PublishOpts::one())
+		let mut reply_subscriber = self
+			.subscribe_inner(reply_subject.clone(), Some(reply_subject.id))
 			.await?;
 
-		// Spawn a task to wait for the reply
-		let inner = self.0.clone();
-		let reply_subject_clone = reply_subject.clone();
-		tokio::spawn(async move {
-			loop {
-				match reply_subscriber.next().await {
-					std::result::Result::Ok(NextOutput::Message(msg)) => {
-						// Already decoded; forward payload
-						if let Some((_, tx)) = inner
-							.reply_subscribers
-							.remove_async(&reply_subject_clone)
-							.await
-						{
-							let _ = tx.send(msg.payload);
-						}
-						metrics::REPLY_SUBSCRIBER_COUNT.set(inner.reply_subscribers.len() as i64);
-						break;
-					}
-					std::result::Result::Ok(NextOutput::Unsubscribed)
-					| std::result::Result::Err(_) => break,
-				}
-			}
-		});
+		// Send the request with the reply subject, using local fast-path
+		self.publish_inner(
+			subject,
+			payload,
+			Some(&reply_subject),
+			PublishOpts::one(),
+			request_deadline_at,
+		)
+		.await?;
 
 		// Wait for response with timeout
-		let response = match tokio::time::timeout(timeout, rx).await {
-			std::result::Result::Ok(std::result::Result::Ok(payload)) => Response { payload },
+		match tokio::time::timeout(timeout, reply_subscriber.next()).await {
+			std::result::Result::Ok(std::result::Result::Ok(output)) => {
+				let subject_str = T::root();
+				let subject_str = subject_str.as_deref().unwrap_or("unknown");
+				metrics::REQUEST_RESPONSE_LAG
+					.with_label_values(&[subject_str])
+					.observe(start.elapsed().as_secs_f64());
+
+				Ok(output)
+			}
 			std::result::Result::Ok(std::result::Result::Err(_)) => {
-				// Clean up the reply subscription
-				self.reply_subscribers.remove_async(&reply_subject).await;
-				metrics::REPLY_SUBSCRIBER_COUNT.set(self.reply_subscribers.len() as i64);
-				return Err(crate::errors::Ups::RequestTimeout.build().into());
+				Err(errors::Ups::RequestTimeout.build().into())
 			}
 			std::result::Result::Err(_) => {
-				// Timeout elapsed
-				self.reply_subscribers.remove_async(&reply_subject).await;
-				metrics::REPLY_SUBSCRIBER_COUNT.set(self.reply_subscribers.len() as i64);
-				return Err(crate::errors::Ups::RequestTimeout.build().into());
-			}
-		};
+				let subject_str = T::root();
+				let subject_str = subject_str.as_deref().unwrap_or("unknown");
+				metrics::REQUEST_TIMEOUT_COUNT
+					.with_label_values(&[subject_str])
+					.inc();
 
-		Ok(response)
+				Err(errors::Ups::RequestTimeout.build().into())
+			}
+		}
 	}
 
 	#[tracing::instrument(skip_all, fields(%subject))]
@@ -394,7 +418,7 @@ impl Subscriber {
 		}
 	}
 
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(subject=%self.subject, message_id = tracing::field::Empty))]
 	pub async fn next(&mut self) -> Result<NextOutput> {
 		loop {
 			match self.driver.next().await? {
@@ -402,44 +426,62 @@ impl Subscriber {
 					subject: _,
 					payload,
 				} => {
-					// Process chunks
-					let mut tracker = self.pubsub.chunk_tracker.lock().unwrap();
-					match tracker.process_chunk(&payload) {
-						std::result::Result::Ok(Some((payload, reply_subject))) => {
-							metrics::MESSAGE_RECV_COUNT
-								.with_label_values(&[
-									if let Some(root_subject) = &self.root_subject {
-										root_subject.as_str()
-									} else {
-										"unknown"
-									},
-								])
-								.inc();
-
-							metrics::BYTES_PER_MESSAGE
-								.with_label_values(&[
-									if let Some(root_subject) = &self.root_subject {
-										root_subject.as_str()
-									} else {
-										"unknown"
-									},
-								])
-								.observe(payload.len() as f64);
-
-							return Ok(NextOutput::Message(Message {
-								pubsub: self.pubsub.clone(),
-								payload,
-								reply: reply_subject,
-							}));
+					// Sync fast path skips the scc::HashMap entry for single-chunk messages.
+					let decoded = match self.pubsub.chunk_tracker.try_process_chunk_fast(&payload) {
+						std::result::Result::Ok(FastPath::Decoded(decoded)) => decoded,
+						std::result::Result::Ok(FastPath::Multi(message)) => {
+							match self.pubsub.chunk_tracker.process_chunk_async(message).await {
+								std::result::Result::Ok(Some(decoded)) => decoded,
+								std::result::Result::Ok(None) => continue, // Waiting for more chunks
+								std::result::Result::Err(e) => {
+									tracing::warn!(?e, "failed to process chunk");
+									continue;
+								}
+							}
 						}
-						std::result::Result::Ok(None) => continue, // Waiting for more chunks
 						std::result::Result::Err(e) => {
 							tracing::warn!(?e, "failed to process chunk");
 							continue;
 						}
-					}
+					};
+
+					let secs = rivet_util::timestamp::now().saturating_sub(decoded.timestamp)
+						as f64 / 1000.0;
+					metrics::MESSAGE_RECV_LAG
+						.with_label_values(&[if let Some(root_subject) = &self.root_subject {
+							root_subject.as_str()
+						} else {
+							"unknown"
+						}])
+						.observe(secs);
+					metrics::MESSAGE_RECV_COUNT
+						.with_label_values(&[if let Some(root_subject) = &self.root_subject {
+							root_subject.as_str()
+						} else {
+							"unknown"
+						}])
+						.inc();
+
+					metrics::BYTES_PER_MESSAGE
+						.with_label_values(&[if let Some(root_subject) = &self.root_subject {
+							root_subject.as_str()
+						} else {
+							"unknown"
+						}])
+						.observe(decoded.payload.len() as f64);
+
+					tracing::Span::current().record("message_id", decoded.message_id.to_string());
+
+					return Ok(NextOutput::Message(Message {
+						message_id: decoded.message_id,
+						pubsub: self.pubsub.clone(),
+						payload: decoded.payload,
+						reply: decoded.reply_subject,
+						request_deadline_at: decoded.request_deadline_at,
+					}));
 				}
 				DriverOutput::Unsubscribed => return Ok(NextOutput::Unsubscribed),
+				DriverOutput::NoResponders => return Ok(NextOutput::NoResponders),
 			}
 		}
 	}
@@ -475,44 +517,59 @@ impl Drop for Subscriber {
 pub enum DriverOutput {
 	Message { subject: String, payload: Vec<u8> },
 	Unsubscribed,
+	NoResponders,
 }
 
 // Output from subscriber (after chunking/decoding)
 pub enum NextOutput {
 	Message(Message),
 	Unsubscribed,
+	NoResponders,
 }
 
 impl From<NextOutput> for Option<Message> {
 	fn from(value: NextOutput) -> Self {
 		match value {
 			NextOutput::Message(msg) => Some(msg),
-			NextOutput::Unsubscribed => None,
+			NextOutput::Unsubscribed | NextOutput::NoResponders => None,
 		}
 	}
 }
 
 pub struct Message {
+	pub message_id: Uuid,
 	pub pubsub: PubSub,
 	pub payload: Vec<u8>,
 	pub reply: Option<String>,
+	pub request_deadline_at: Option<i64>,
 }
 
 impl Message {
-	#[tracing::instrument(skip_all)]
+	#[tracing::instrument(skip_all, fields(message_id=?self.message_id, reply_subject=?self.reply, request_deadline_at=?self.request_deadline_at))]
 	pub async fn reply(&self, payload: &[u8]) -> Result<()> {
 		if let Some(ref reply_subject) = self.reply {
+			if self.is_request_expired() {
+				return Err(errors::Ups::RequestTimeout.build().into());
+			}
+
 			// Replies expect exactly one subscriber and should use local fast-path
-			self.pubsub
-				.publish(reply_subject, payload, PublishOpts::one())
-				.await?;
+			if let Some(reply_subject) = InboxSubject::from_existing(reply_subject) {
+				self.pubsub
+					.publish(reply_subject, payload, PublishOpts::one())
+					.await?;
+			} else {
+				self.pubsub
+					.publish(reply_subject, payload, PublishOpts::one())
+					.await?;
+			}
 		}
 		Ok(())
 	}
-}
 
-pub struct Response {
-	pub payload: Vec<u8>,
+	pub fn is_request_expired(&self) -> bool {
+		self.request_deadline_at
+			.is_some_and(|deadline_at| rivet_util::timestamp::now() >= deadline_at)
+	}
 }
 
 /// Internal composite subscriber that merges driver messages with local in-memory messages
@@ -546,7 +603,7 @@ impl crate::driver::SubscriberDriver for LocalOptimizedSubscriberDriver {
 						}
 					}
 				}
-				res = self.driver.next().in_current_span() => {
+				res = self.driver.next() => {
 					return res;
 				}
 			}

@@ -139,7 +139,7 @@ fn actor_db(db: &universaldb::Database, actor_id: &str) -> Db {
 async fn load_v2_bytes(db: &universaldb::Database, actor_id: &str) -> Result<Vec<u8>> {
 	let actor_id_for_tx = actor_id.to_string();
 	let head = db
-		.run(move |tx| {
+		.txn("test_pegboardactor_sqlite_migration", move |tx| {
 			let actor_id = actor_id_for_tx.clone();
 			async move {
 				let bucket_id = BucketId::from_gas_id(test_namespace());
@@ -305,7 +305,7 @@ async fn bails_when_v2_meta_is_unreadable() -> Result<()> {
 	let actor_id_str = actor_id.to_string();
 	let fixture = build_fixture_db(&["broken-meta"])?;
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
-	db.run(move |tx| {
+	db.txn("test_pegboardactor_sqlite_migration", move |tx| {
 		let actor_id = actor_id_str.clone();
 		async move {
 			tx.informal()

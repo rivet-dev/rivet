@@ -736,6 +736,211 @@ fn simple_heavy_workload_truncates_and_regrows_database() -> Result<()> {
 }
 
 #[test]
+fn simple_thread_actor_schema_survives_forced_compaction_reload() -> Result<()> {
+	FaultScenario::new("simple_thread_actor_schema_survives_forced_compaction_reload")
+		.seed(1_249)
+		.profile(FaultProfile::Simple)
+		.setup(create_thread_actor_schema)
+		.workload(|ctx| async move {
+			for cycle in 0..24 {
+				thread_actor_write_cycle(&ctx, cycle, 128 * 1024).await?;
+				if cycle % 6 == 5 {
+					thread_actor_assert_reads(&ctx, "pre-compaction").await?;
+					ctx.reload_database().await?;
+				}
+			}
+			thread_actor_assert_reads(&ctx, "before-hot-cold").await?;
+			let before_pages = page_count(&ctx).await?;
+			assert!(
+				before_pages > depot::keys::SHARD_SIZE,
+				"thread-actor-shaped workload should cross at least one depot shard, page_count={before_pages}"
+			);
+
+			let restore_point = ctx.create_restore_point().await?;
+			let hot_cold = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					cold: true,
+					reclaim: false,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				hot_cold.terminal_error.is_none(),
+				"forced hot/cold compaction should succeed: {hot_cold:?}"
+			);
+			ctx.reload_database().await?;
+			thread_actor_assert_reads(&ctx, "after-hot-cold-reload").await?;
+
+			for cycle in 24..32 {
+				thread_actor_write_cycle(&ctx, cycle, 128 * 1024).await?;
+			}
+			ctx.delete_restore_point(restore_point).await?;
+			let _grace = ctx.override_cold_object_delete_grace(0).await?;
+			let reclaim = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					cold: true,
+					reclaim: true,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				reclaim.terminal_error.is_none(),
+				"forced reclaim compaction should succeed: {reclaim:?}"
+			);
+			ctx.checkpoint("after-thread-actor-hot-cold-reclaim")
+				.await?;
+			ctx.reload_database().await?;
+			thread_actor_assert_reads(&ctx, "after-reclaim-reload").await
+		})
+		.verify(|ctx| async move {
+			thread_actor_assert_reads(&ctx, "verify").await?;
+			verify_simple_replay(&ctx, 1_249, &["after-thread-actor-hot-cold-reclaim"], &[]).await
+		})
+		.run()
+}
+
+#[test]
+#[ignore = "reproduces partial hot shard shadowing cold coverage"]
+fn repro_harness_cleared_hot_shard_shadowing_cold_returns_malformed_after_reopen() -> Result<()> {
+	FaultScenario::new("repro_harness_cleared_hot_shard_shadowing_cold")
+		.seed(1_250)
+		.profile(FaultProfile::Simple)
+		.setup(|ctx| async move {
+			ctx.sql(
+				"CREATE TABLE items (
+					id INTEGER PRIMARY KEY,
+					value TEXT NOT NULL
+				);
+				INSERT INTO items (id, value) VALUES (1, 'cold-covered');",
+			)
+			.await
+		})
+		.workload(|ctx| async move {
+			let page_count = page_count(&ctx).await?;
+			assert!(
+				page_count >= 2,
+				"seed database should have a table root page to shadow, page_count={page_count}"
+			);
+
+			let restore_point = ctx.create_restore_point().await?;
+			let cold_publish = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					cold: true,
+					reclaim: false,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				cold_publish.terminal_error.is_none(),
+				"forced hot/cold compaction should succeed: {cold_publish:?}"
+			);
+
+			ctx.delete_restore_point(restore_point).await?;
+			let _grace = ctx.override_cold_object_delete_grace(0).await?;
+			let reclaim = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: false,
+					cold: false,
+					reclaim: true,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				reclaim.terminal_error.is_none(),
+				"forced reclaim should succeed: {reclaim:?}"
+			);
+			let cleared_hot_shards = ctx.clear_hot_shards_for_harness_regression().await?;
+			assert!(
+				cleared_hot_shards > 0,
+				"harness regression should clear at least one hot shard after cold coverage"
+			);
+
+			ctx.sql("PRAGMA user_version = 1250;").await?;
+			let partial_hot = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					cold: false,
+					reclaim: false,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				partial_hot.terminal_error.is_none(),
+				"forced partial hot compaction should succeed: {partial_hot:?}"
+			);
+
+			ctx.reload_database().await?;
+			let err = ctx
+				.query("SELECT count(*) FROM items;")
+				.await
+				.expect_err("partial hot shard should shadow cold-backed table root");
+			let message = format!("{err:#}");
+			assert!(
+				message.contains("database disk image is malformed"),
+				"expected persistent malformed database after reopen, got: {message}"
+			);
+			ctx.checkpoint("after-partial-hot-shadowing-cold").await
+		})
+		.verify(|ctx| async move {
+			let replay = ctx.replay_record().await;
+			assert_eq!(replay.seed, 1_250);
+			assert_eq!(
+				replay.checkpoints,
+				vec!["after-partial-hot-shadowing-cold".to_string()]
+			);
+			assert!(replay.branch_head_before_faults.is_some());
+			assert!(replay.branch_head_after_workload.is_some());
+			Ok(())
+		})
+		.run()
+}
+
+#[test]
+#[ignore = "focused investigation for hot compaction input cap corruption"]
+fn simple_hot_compaction_window_cap_reopens_cleanly() -> Result<()> {
+	FaultScenario::new("simple_hot_compaction_window_cap_reopens_cleanly")
+		.seed(1_250)
+		.profile(FaultProfile::Simple)
+		.setup(create_hot_cap_schema)
+		.workload(|ctx| async move {
+			for cycle in 0..540 {
+				hot_cap_write_cycle(&ctx, cycle).await?;
+			}
+			hot_cap_assert_reads(&ctx, "before-hot").await?;
+
+			let result = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					cold: false,
+					reclaim: false,
+					final_settle: true,
+				})
+				.await?;
+			assert_eq!(result.attempted_job_kinds, vec![CompactionJobKind::Hot]);
+			assert!(
+				result.terminal_error.is_none(),
+				"forced hot compaction should succeed: {result:?}"
+			);
+
+			ctx.checkpoint("after-window-cap-hot-compaction").await?;
+			ctx.reload_database().await?;
+			hot_cap_assert_reads(&ctx, "after-hot-reload").await?;
+
+			hot_cap_write_cycle(&ctx, 540).await?;
+			ctx.reload_database().await?;
+			hot_cap_assert_reads(&ctx, "after-post-hot-commit-reload").await
+		})
+		.verify(|ctx| async move {
+			hot_cap_assert_reads(&ctx, "verify").await?;
+			verify_simple_replay(&ctx, 1_250, &["after-window-cap-hot-compaction"], &[]).await
+		})
+		.run()
+}
+
+#[test]
 fn simple_high_risk_fault_matrix() -> Result<()> {
 	for case in high_risk_fault_matrix_cases() {
 		run_high_risk_fault_matrix_case(case)?;
@@ -1118,6 +1323,239 @@ fn configure_heavy_page_size(
 		)
 		.await
 	}
+}
+
+fn create_thread_actor_schema(
+	ctx: super::scenario::FaultScenarioCtx,
+) -> impl std::future::Future<Output = Result<()>> {
+	async move {
+		ctx.sql(
+			"CREATE TABLE compaction_summaries (
+				summary_id TEXT PRIMARY KEY,
+				summary_text TEXT NOT NULL,
+				cut_message_id TEXT NOT NULL,
+				created_at TEXT NOT NULL
+			);
+			CREATE INDEX idx_compaction_summaries_created_at
+				ON compaction_summaries(created_at);
+			CREATE TABLE tool_calls (
+				call_id TEXT PRIMARY KEY,
+				message_id TEXT NOT NULL,
+				state TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				payload TEXT NOT NULL
+			);
+			CREATE INDEX idx_tool_calls_state ON tool_calls(state);
+			CREATE TABLE messages (
+				message_id TEXT PRIMARY KEY,
+				body TEXT NOT NULL,
+				created_at TEXT NOT NULL
+			);
+			CREATE TABLE thread_events (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				event_type TEXT NOT NULL,
+				message_id TEXT,
+				created_at TEXT NOT NULL
+			);",
+		)
+		.await
+	}
+}
+
+fn create_hot_cap_schema(
+	ctx: super::scenario::FaultScenarioCtx,
+) -> impl std::future::Future<Output = Result<()>> {
+	async move {
+		ctx.sql(
+			"CREATE TABLE hot_cap (
+				id INTEGER PRIMARY KEY,
+				bucket TEXT NOT NULL,
+				payload BLOB NOT NULL,
+				updated_at TEXT NOT NULL
+			);
+			CREATE INDEX hot_cap_bucket_idx ON hot_cap(bucket, id);",
+		)
+		.await
+	}
+}
+
+async fn hot_cap_write_cycle(ctx: &super::scenario::FaultScenarioCtx, cycle: usize) -> Result<()> {
+	let id = cycle + 1;
+	ctx.exec(LogicalOp::Sql(format!(
+		"INSERT INTO hot_cap (id, bucket, payload, updated_at)
+		 VALUES ({id}, 'b{}', zeroblob(3072), '2026-05-16T08:{:02}:{:02}.{:03}Z')
+		 ON CONFLICT(id) DO UPDATE SET
+			bucket = excluded.bucket,
+			payload = excluded.payload,
+			updated_at = excluded.updated_at;",
+		id % 11,
+		cycle % 60,
+		(cycle * 7) % 60,
+		(cycle * 13) % 1000,
+	)))
+	.await
+}
+
+async fn hot_cap_assert_reads(ctx: &super::scenario::FaultScenarioCtx, phase: &str) -> Result<()> {
+	let snapshot = hot_cap_snapshot(ctx, phase).await;
+	ctx.verify_sqlite_integrity_rows()
+		.await
+		.with_context(|| format!("hot cap sqlite integrity failed during {phase}: {snapshot}"))?;
+	let row_count = ctx
+		.query("SELECT count(*) FROM hot_cap;")
+		.await
+		.with_context(|| format!("hot cap count failed during {phase}"))?;
+	assert_eq!(
+		row_count,
+		vec![vec![
+			if phase == "after-post-hot-commit-reload" || phase == "verify" {
+				"541".to_string()
+			} else {
+				"540".to_string()
+			}
+		]],
+		"hot cap row count mismatch during {phase}: {row_count:?}"
+	);
+	let indexed = ctx
+		.query(
+			"SELECT id, length(payload)
+			 FROM hot_cap
+			 WHERE bucket = 'b3'
+			 ORDER BY id DESC
+			 LIMIT 8;",
+		)
+		.await
+		.with_context(|| format!("hot cap indexed read failed during {phase}"))?;
+	assert!(
+		!indexed.is_empty(),
+		"hot cap indexed read should return rows during {phase}"
+	);
+	Ok(())
+}
+
+async fn hot_cap_snapshot(ctx: &super::scenario::FaultScenarioCtx, phase: &str) -> String {
+	let page_count = ctx.query("PRAGMA page_count;").await;
+	let freelist_count = ctx.query("PRAGMA freelist_count;").await;
+	let row_count = ctx.query("SELECT count(*) FROM hot_cap;").await;
+	let max_id = ctx.query("SELECT coalesce(max(id), 0) FROM hot_cap;").await;
+	format!(
+		"phase={phase} page_count={page_count:?} freelist_count={freelist_count:?} row_count={row_count:?} max_id={max_id:?}"
+	)
+}
+
+async fn thread_actor_write_cycle(
+	ctx: &super::scenario::FaultScenarioCtx,
+	cycle: usize,
+	payload_bytes: usize,
+) -> Result<()> {
+	let summary_payload_blob_bytes = (payload_bytes / 2).max(1);
+	let tool_payload_blob_bytes = (payload_bytes / 32).max(1);
+	let mut sql = "BEGIN;".to_string();
+	for summary_idx in 0..5 {
+		sql.push_str(&format!(
+			"INSERT INTO compaction_summaries
+				(summary_id, summary_text, cut_message_id, created_at)
+			VALUES
+				('CS-{summary_idx}', lower(hex(zeroblob({summary_payload_blob_bytes}))) || '-{cycle:04}-{summary_idx:02}',
+				 'M-cut-{cycle:04}-{summary_idx:02}', '2026-05-16T04:{:02}:{:02}.{:03}Z')
+			ON CONFLICT(summary_id) DO UPDATE SET
+				summary_text = excluded.summary_text,
+				cut_message_id = excluded.cut_message_id,
+				created_at = excluded.created_at;",
+			(cycle + summary_idx) % 60,
+			(cycle * 7 + summary_idx) % 60,
+			(cycle * 37 + summary_idx) % 1000,
+		));
+	}
+	for tool_idx in 0..32 {
+		let state = match (cycle + tool_idx) % 4 {
+			0 => "running",
+			1 => "completed",
+			2 => "failed",
+			3 => "cancelled",
+			_ => unreachable!(),
+		};
+		sql.push_str(&format!(
+			"INSERT INTO tool_calls (call_id, message_id, state, created_at, payload)
+			VALUES
+				('TC-{cycle:04}-{tool_idx:02}', 'M-{cycle:04}', '{state}',
+				 '2026-05-16T07:{:02}:{:02}.{:03}Z',
+				 lower(hex(zeroblob({tool_payload_blob_bytes}))))
+			ON CONFLICT(call_id) DO UPDATE SET
+				state = excluded.state,
+				payload = excluded.payload;",
+			cycle % 60,
+			(cycle * 11 + tool_idx) % 60,
+			(cycle * 13 + tool_idx) % 1000,
+		));
+	}
+	sql.push_str(&format!(
+		"INSERT INTO messages (message_id, body, created_at)
+		VALUES ('M-{cycle:04}', 'are you working? {cycle}', '2026-05-16T07:39:03.509Z')
+		ON CONFLICT(message_id) DO UPDATE SET body = excluded.body;
+		INSERT INTO thread_events (event_type, message_id, created_at)
+		VALUES ('message_added', 'M-{cycle:04}', '2026-05-16T07:39:03.509Z');"
+	));
+	if cycle % 7 == 0 {
+		sql.push_str(
+			"DELETE FROM tool_calls WHERE rowid IN (
+				SELECT rowid FROM tool_calls ORDER BY created_at ASC, rowid ASC LIMIT 8
+			);",
+		);
+	}
+	sql.push_str("COMMIT;");
+	ctx.exec(LogicalOp::Sql(sql)).await
+}
+
+async fn thread_actor_assert_reads(
+	ctx: &super::scenario::FaultScenarioCtx,
+	phase: &str,
+) -> Result<()> {
+	ctx.verify_sqlite_integrity_rows()
+		.await
+		.with_context(|| format!("thread actor sqlite integrity failed during {phase}"))?;
+	let summaries = ctx
+		.query(
+			"SELECT summary_id, length(summary_text), cut_message_id, created_at
+			 FROM compaction_summaries
+			 ORDER BY created_at ASC, rowid ASC;",
+		)
+		.await
+		.with_context(|| format!("thread actor getAll query failed during {phase}"))?;
+	assert_eq!(
+		summaries.len(),
+		5,
+		"thread actor getAll should return five summaries during {phase}: {summaries:?}"
+	);
+	let latest = ctx
+		.query(
+			"SELECT summary_id, length(summary_text), cut_message_id, created_at
+			 FROM compaction_summaries
+			 ORDER BY created_at DESC, rowid DESC
+			 LIMIT 1;",
+		)
+		.await
+		.with_context(|| format!("thread actor getLatest query failed during {phase}"))?;
+	assert_eq!(
+		latest.len(),
+		1,
+		"thread actor getLatest should return one summary during {phase}: {latest:?}"
+	);
+	let running_tools = ctx
+		.query(
+			"SELECT call_id, state
+			 FROM tool_calls
+			 WHERE state = 'running'
+			 ORDER BY created_at DESC, rowid DESC
+			 LIMIT 16;",
+		)
+		.await
+		.with_context(|| format!("thread actor tool_calls index query failed during {phase}"))?;
+	assert!(
+		!running_tools.is_empty(),
+		"thread actor tool_calls indexed query should return running tools during {phase}"
+	);
+	Ok(())
 }
 
 async fn assert_shard_boundary_page_count(ctx: &super::scenario::FaultScenarioCtx) -> Result<u32> {

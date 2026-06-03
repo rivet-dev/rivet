@@ -16,7 +16,7 @@ pub struct Input {
 pub async fn pegboard_envoy_update_ping(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_envoy_update_ping", |tx| {
 			async move {
 				let tx = tx.with_subspace(keys::subspace());
 

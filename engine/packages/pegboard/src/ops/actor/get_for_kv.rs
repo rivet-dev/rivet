@@ -26,7 +26,7 @@ pub async fn pegboard_actor_get_for_kv(
 			move |mut cache, key| async move {
 				let output = ctx
 					.udb()?
-					.run(|tx| async move {
+					.txn("pegboard_actor_get_for_kv", |tx| async move {
 						let tx = tx.with_subspace(keys::subspace());
 
 						let name_key = keys::actor::NameKey::new(input.actor_id);

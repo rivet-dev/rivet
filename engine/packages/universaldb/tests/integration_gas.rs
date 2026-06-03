@@ -55,7 +55,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	println!("Running simple write/read test...");
 
 	// Simple test: write a single key and read it back
-	db.run(|tx| async move {
+	db.txn("test_universaldbintegration_gas", |tx| async move {
 		tx.set(b"simple_test_key", b"simple_test_value");
 		Ok(())
 	})
@@ -63,7 +63,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	.unwrap();
 
 	let value = db
-		.run(|tx| async move {
+		.txn("test_universaldbintegration_gas", |tx| async move {
 			let val = tx.get(b"simple_test_key", Serializable).await?;
 			println!(
 				"Simple test read result: {:?}",
@@ -91,7 +91,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	let workflow_id = Uuid::new_v4();
 
 	// Test 1: Write workflow data like gasoline does
-	db.run(|tx| {
+	db.txn("test_universaldbintegration_gas", |tx| {
 		let workflow_subspace = workflow_subspace.clone();
 		async move {
 			// Write create timestamp (similar to CreateTsKey)
@@ -132,7 +132,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 
 	// Test 2: Read workflow data back like gasoline does
 	let (input_found, state_found, wake_found) = db
-		.run(|tx| {
+		.txn("test_universaldbintegration_gas", |tx| {
 			let workflow_subspace = workflow_subspace.clone();
 			async move {
 				// Read input chunks using range query
@@ -189,7 +189,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 	assert!(wake_found, "Should find wake condition");
 
 	// Test 3: Test the exact pattern gasoline uses with subspace operations
-	db.run(|tx| {
+	db.txn("test_universaldbintegration_gas", |tx| {
 		let workflow_subspace = workflow_subspace.clone();
 		async move {
 			// Create a new workflow ID
@@ -212,7 +212,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 
 	// Test 4: Verify the data was written correctly
 	let workflow_id2 = db
-		.run(|tx| {
+		.txn("test_universaldbintegration_gas", |tx| {
 			let workflow_subspace = workflow_subspace.clone();
 			async move {
 				// Generate the same workflow_id2 again (for test purposes, we'll store it)
@@ -241,7 +241,7 @@ pub async fn test_gasoline_operations(db: &Database) {
 		.unwrap();
 
 	// Test 5: Read in a separate transaction (like gasoline does)
-	db.run(|tx| {
+	db.txn("test_universaldbintegration_gas", |tx| {
 		let workflow_subspace = workflow_subspace.clone();
 		async move {
 			let input_key_base = workflow_subspace.pack(&("workflow", "input", workflow_id2));

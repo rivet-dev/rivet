@@ -1,0 +1,5 @@
+{
+  "code": "websocket_garbage_collected",
+  "group": "guard",
+  "message": "WebSocket request was garbage collected."
+}

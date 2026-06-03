@@ -14,6 +14,7 @@ anyhow.workspace = true
 base64.workspace = true
 chrono.workspace = true
 clap.workspace = true
+rand.workspace = true
 colored_json.workspace = true
 epoxy.workspace = true
 epoxy-protocol.workspace = true
@@ -35,6 +36,8 @@ rivet-cache.workspace = true
 rivet-config.workspace = true
 rivet-guard.workspace = true
 rivet-logs.workspace = true
+rivet-profiling.workspace = true
+rivet-ups-broadcast.workspace = true
 rivet-pools.workspace = true
 rivet-runtime.workspace = true
 rivet-service-manager.workspace = true
@@ -51,6 +54,8 @@ serde_json.workspace = true
 serde_yaml.workspace = true
 serde.workspace = true
 depot.workspace = true
+depot-client-embedded.workspace = true
+depot-client-types.workspace = true
 strum.workspace = true
 tabled.workspace = true
 tempfile.workspace = true
@@ -60,6 +65,8 @@ tracing.workspace = true
 universaldb.workspace = true
 url.workspace = true
 uuid.workspace = true
+
+lazy_static.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true

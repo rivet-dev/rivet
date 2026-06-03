@@ -38,8 +38,10 @@ impl Config {
 		// Add env source for overrides
 		settings = settings.add_source(
 			config_loader::Environment::with_prefix("RIVET")
+				.try_parsing(true)
 				.separator("__")
-				.list_separator(","),
+				.list_separator(",")
+				.with_list_parse_key("foundationdb.addresses"),
 		);
 
 		// Read config

@@ -170,7 +170,7 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 	// TODO: non-transactional. Epoxy propose and the local UDB write can diverge if we crash or
 	// error between them.
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_config_upsert", |tx| {
 			let config = &config;
 			let existing_config = &existing_config;
 			async move {

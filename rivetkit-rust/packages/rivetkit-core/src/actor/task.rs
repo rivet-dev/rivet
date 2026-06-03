@@ -895,7 +895,8 @@ impl ActorTask {
 							let _action_keep_awake = action_keep_awake;
 							match tracked_reply_rx.await {
 								Ok(result) => {
-									let result = result.map_err(|error| ctx.attach_actor_to_error(error));
+									let result =
+										result.map_err(|error| ctx.attach_actor_to_error(error));
 									tracing::info!(
 										actor_id = %actor_id,
 										action_name = %action_name_for_log,

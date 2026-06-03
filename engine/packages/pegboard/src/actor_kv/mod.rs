@@ -47,7 +47,7 @@ pub async fn sqlite_v1_data_exists(db: &universaldb::Database, actor_id: Id) -> 
 	let subspace = keys::actor_kv::subspace(actor_id);
 	let prefix = vec![SQLITE_V1_PREFIX];
 
-	db.run(|tx| {
+	db.txn("pegboard_kv_sqlite_v1_probe", |tx| {
 		let subspace = subspace.clone();
 		let prefix = prefix.clone();
 
@@ -84,7 +84,7 @@ pub async fn get(
 	validate_keys(&keys)?;
 
 	let result = db
-		.run(|tx| {
+		.txn("pegboard_kv_get", |tx| {
 			let keys = keys.clone();
 			async move {
 				let tx = tx.with_subspace(keys::actor_kv::subspace(recipient.actor_id));
@@ -198,7 +198,7 @@ pub async fn list(
 	let subspace = keys::actor_kv::subspace(recipient.actor_id);
 	let list_range = list_query_range(query, &subspace);
 
-	db.run(|tx| {
+	db.txn("pegboard_kv_list", |tx| {
 		let list_range = list_range.clone();
 		let subspace = subspace.clone();
 
@@ -310,7 +310,7 @@ pub async fn put(
 	let keys = &keys;
 	let values = &values;
 	let result = db
-		.run(|tx| {
+		.txn("pegboard_kv_put", |tx| {
 			async move {
 				let total_size = estimate_kv_size(&tx, recipient.actor_id).await? as usize;
 
@@ -401,7 +401,7 @@ pub async fn delete(
 
 	let keys = &keys;
 	let result = db
-		.run(|tx| {
+		.txn("pegboard_kv_delete", |tx| {
 			async move {
 				// Total written bytes (rounded up to nearest chunk)
 				let total_size = keys.iter().fold(0, |s, key| s + key.len());
@@ -453,7 +453,7 @@ pub async fn delete_range(
 	}
 
 	let result = db
-		.run(|tx| {
+		.txn("pegboard_kv_delete_range", |tx| {
 			let start = start.clone();
 			let end = end.clone();
 			async move {
@@ -495,7 +495,7 @@ pub async fn delete_range(
 /// Deletes all keys from the KV store. Cannot be undone.
 #[tracing::instrument(skip_all)]
 pub async fn delete_all(db: &universaldb::Database, recipient: &Recipient) -> Result<()> {
-	db.run(|tx| async move {
+	db.txn("pegboard_kv_delete_all", |tx| async move {
 		tx.clear_subspace_range(&keys::actor_kv::subspace(recipient.actor_id));
 
 		// Total written bytes (rounded up to nearest chunk)

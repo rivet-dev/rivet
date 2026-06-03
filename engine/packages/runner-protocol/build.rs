@@ -19,7 +19,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.join("runner-protocol");
 
 	// Rust SDK generation
-	let cfg = vbare_compiler::Config::with_hashable_map();
+	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// TypeScript SDK generation

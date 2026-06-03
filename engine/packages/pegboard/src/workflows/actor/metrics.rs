@@ -144,7 +144,7 @@ async fn init_state(ctx: &ActivityCtx, input: &InitStateInput) -> Result<bool> {
 	// Check if actor is sleeping when this workflow was created. This can return true if this workflow was
 	// backfilled
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_read_sleeping", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.exists(&keys::actor::SleepTsKey::new(input.actor_id), Serializable)
@@ -179,7 +179,7 @@ async fn record_metrics(ctx: &ActivityCtx, input: &RecordMetricsInput) -> Result
 	let namespace_id = state.namespace_id;
 	let name = &state.name;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_record_metrics", |tx| async move {
 			namespace::keys::metric::inc(
 				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,
@@ -220,7 +220,7 @@ async fn record_kv_metrics(ctx: &ActivityCtx, input: &RecordKvMetricsInput) -> R
 	loop {
 		let res = ctx
 			.udb()?
-			.run(|tx| {
+			.txn("pegboard_actor_kv_size_scan", |tx| {
 				let last_key = &last_key;
 				async move {
 					let start = Instant::now();
@@ -306,7 +306,7 @@ async fn record_kv_metrics(ctx: &ActivityCtx, input: &RecordKvMetricsInput) -> R
 	}
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_record_kv_metrics", |tx| async move {
 			namespace::keys::metric::inc(
 				&tx.with_subspace(namespace::keys::subspace()),
 				namespace_id,

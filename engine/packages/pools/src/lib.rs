@@ -11,6 +11,8 @@ pub use crate::{
 	node_id::NodeId, pools::Pools,
 };
 
+pub type PoolsHandle = Pools;
+
 // Re-export for macros
 #[doc(hidden)]
 pub use rivet_util as __rivet_util;

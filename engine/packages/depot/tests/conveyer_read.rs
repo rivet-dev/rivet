@@ -18,10 +18,10 @@ use depot::{
 	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
 		ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, ColdShardRef, CompactionRoot,
-		DBHead, DatabaseBranchId, DirtyPage, FetchedPage, LayerEntry, LayerKind,
-		ResolvedVersionstamp, SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_commit_row,
-		decode_compaction_root, encode_cold_manifest_chunk, encode_cold_manifest_index,
-		encode_cold_shard_ref, encode_compaction_root, encode_db_head,
+		DBHead, DatabaseBranchId, DepotReadMode, DirtyPage, FetchedPage, GetPagesOptions,
+		LayerEntry, LayerKind, ResolvedVersionstamp, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
+		decode_commit_row, decode_compaction_root, encode_cold_manifest_chunk,
+		encode_cold_manifest_index, encode_cold_shard_ref, encode_compaction_root, encode_db_head,
 	},
 };
 #[cfg(feature = "test-faults")]
@@ -51,8 +51,6 @@ fn head_at(head_txid: u64, db_size_pages: u32) -> DBHead {
 		db_size_pages,
 		post_apply_checksum: 0,
 		branch_id: DatabaseBranchId::nil(),
-		#[cfg(debug_assertions)]
-		generation: 1,
 	}
 }
 
@@ -119,7 +117,7 @@ fn cold_shard_ref(
 }
 
 async fn read_database_branch_id(db: &universaldb::Database) -> Result<DatabaseBranchId> {
-	db.run(|tx| async move {
+	db.txn("test_depotconveyer_read", |tx| async move {
 		branch::resolve_database_branch(
 			&tx,
 			depot::types::BucketId::from_gas_id(test_bucket()),
@@ -137,7 +135,7 @@ async fn seed(
 	writes: Vec<(Vec<u8>, Vec<u8>)>,
 	deletes: Vec<Vec<u8>>,
 ) -> Result<()> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_read", move |tx| {
 		let writes = writes.clone();
 		let deletes = deletes.clone();
 		async move {
@@ -154,7 +152,7 @@ async fn seed(
 }
 
 async fn read_i64_le(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<i64>> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_read", move |tx| {
 		let key = key.clone();
 		async move {
 			tx.informal()
@@ -174,7 +172,7 @@ async fn read_i64_le(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<
 }
 
 async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_read", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx
@@ -188,7 +186,7 @@ async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<V
 }
 
 async fn read_prefix_keys(db: &universaldb::Database, prefix: Vec<u8>) -> Result<Vec<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_read", move |tx| {
 		let prefix = prefix.clone();
 		async move {
 			let prefix_subspace =
@@ -617,6 +615,7 @@ async fn branch_cache_snapshot_is_atomic_across_dbptr_move() -> Result<()> {
 	)
 }
 
+#[cfg(feature = "pidx-cache")]
 #[tokio::test]
 async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 	read_matrix!("depot-read-warm-cache", |ctx, db, database_db| {
@@ -646,6 +645,7 @@ async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 	})
 }
 
+#[cfg(feature = "pidx-cache")]
 #[tokio::test]
 async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()> {
 	read_matrix!("depot-read-stale-pidx", |ctx, db, database_db| {
@@ -684,6 +684,66 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 
 		Ok(())
 	})
+}
+
+#[cfg(all(feature = "test-faults", feature = "pidx-cache"))]
+#[tokio::test]
+async fn pidx_rows_loaded_before_concurrent_commit_do_not_publish_stale_cache() -> Result<()> {
+	use depot::fault::{DepotFaultPoint, ReadFaultPoint};
+
+	let db = common::test_db_arc("depot-read-pidx-publication-race").await?;
+	let writer_db = common::make_db(db.clone(), test_bucket(), TEST_DATABASE.to_string());
+	writer_db
+		.commit(vec![dirty_page(2, 0x22)], 3, 1_000)
+		.await?;
+
+	let controller = DepotFaultController::new();
+	controller
+		.at(DepotFaultPoint::Read(ReadFaultPoint::AfterPidxScan))
+		.page_number(2)
+		.once()
+		.pause("after-pidx-scan")?;
+	let pause = controller.pause_handle("after-pidx-scan");
+	let replay_controller = controller.clone();
+	let reader_db = Arc::new(Db::new_with_fault_controller_for_test(
+		db.clone(),
+		test_bucket(),
+		TEST_DATABASE.to_string(),
+		NodeId::new(),
+		controller,
+	));
+
+	let read_task = tokio::spawn({
+		let reader_db = reader_db.clone();
+		async move { reader_db.get_pages(vec![2]).await }
+	});
+	timeout(Duration::from_secs(5), pause.wait_reached()).await?;
+
+	writer_db
+		.commit(vec![dirty_page(2, 0x33)], 3, 2_000)
+		.await?;
+	pause.release();
+
+	let first_read = read_task.await??;
+	assert_eq!(
+		first_read,
+		vec![FetchedPage {
+			pgno: 2,
+			bytes: Some(page(0x22)),
+		}]
+	);
+
+	assert_eq!(
+		reader_db.get_pages(vec![2]).await?,
+		vec![FetchedPage {
+			pgno: 2,
+			bytes: Some(page(0x33)),
+		}],
+		"reader must not publish stale PIDX rows loaded before the concurrent commit"
+	);
+	replay_controller.assert_expected_fired()?;
+
+	Ok(())
 }
 
 #[tokio::test]
@@ -971,6 +1031,73 @@ async fn get_pages_throttles_access_touch_for_same_bucket_shard_reads() -> Resul
 }
 
 #[tokio::test]
+async fn diagnostic_get_pages_does_not_publish_hot_read_side_effects() -> Result<()> {
+	read_matrix!(
+		"depot-read-diagnostic-hot-no-side-effects",
+		|ctx, db, database_db| {
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let snapshot_before = database_db.branch_cache_snapshot_for_test().await;
+			let access_ts_before =
+				read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?;
+			let access_bucket_before =
+				read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?;
+			let _ = database_db.take_metering_snapshot();
+
+			seed(
+				&db,
+				vec![(
+					branch_shard_key(branch_id, 0, 1),
+					encoded_blob(1, &[(1, 0x44)])?,
+				)],
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
+			)
+			.await?;
+
+			let result = database_db
+				.get_pages_with_options(
+					vec![1],
+					GetPagesOptions {
+						mode: DepotReadMode::DiagnosticNoSideEffects,
+						collect_provenance: true,
+						..Default::default()
+					},
+				)
+				.await?;
+
+			assert_eq!(
+				result.pages,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x44)),
+				}]
+			);
+			assert_eq!(result.provenance.len(), 1);
+			assert_eq!(
+				read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+				access_ts_before
+			);
+			assert_eq!(
+				read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+				access_bucket_before
+			);
+			assert_eq!(
+				database_db.branch_cache_snapshot_for_test().await,
+				snapshot_before
+			);
+			assert_eq!(database_db.take_metering_snapshot(), (0, 0));
+
+			Ok(())
+		}
+	)
+}
+
+#[tokio::test]
 async fn get_pages_keeps_branch_shard_fallback_without_compaction_root() -> Result<()> {
 	read_matrix!("depot-read-shard-no-root", |ctx, db, database_db| {
 		database_db
@@ -1076,6 +1203,86 @@ async fn get_pages_falls_back_to_compaction_cold_shard_ref() -> Result<()> {
 		})
 	})
 	.await
+}
+
+#[tokio::test]
+async fn diagnostic_get_pages_does_not_enqueue_cold_shard_cache_fill() -> Result<()> {
+	let ctx = common::build_test_db(
+		"depot-read-diagnostic-cold-no-side-effects",
+		common::TierMode::Filesystem,
+	)
+	.await?;
+	let db = ctx.udb.clone();
+	let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
+	database_db
+		.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+		.await?;
+	let branch_id = read_database_branch_id(&db).await?;
+	let access_ts_before =
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?;
+	let access_bucket_before =
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?;
+	let object_key = format!(
+		"db/{}/shard/00000000/0000000000000001-{}-workflow.ltx",
+		branch_id.as_uuid().simple(),
+		Id::v1(uuid::Uuid::from_u128(0x1234), 7)
+	);
+	let object_bytes = encoded_blob(1, &[(1, 0x66)])?;
+	let tier = ctx.cold_tier.expect("filesystem tier should be enabled");
+	tier.put_object(&object_key, &object_bytes).await?;
+
+	seed(
+		&db,
+		vec![
+			(
+				branch_compaction_root_key(branch_id),
+				encode_compaction_root(compaction_root(2))?,
+			),
+			(
+				branch_compaction_cold_shard_key(branch_id, 0, 1),
+				encode_cold_shard_ref(cold_shard_ref(object_key, 0, 1, 2, &object_bytes))?,
+			),
+		],
+		vec![
+			branch_delta_chunk_key(branch_id, 1, 0),
+			branch_pidx_key(branch_id, 1),
+		],
+	)
+	.await?;
+
+	let result = database_db
+		.get_pages_with_options(
+			vec![1],
+			GetPagesOptions {
+				mode: DepotReadMode::DiagnosticNoSideEffects,
+				collect_provenance: true,
+				..Default::default()
+			},
+		)
+		.await?;
+
+	assert_eq!(
+		result.pages,
+		vec![FetchedPage {
+			pgno: 1,
+			bytes: Some(page(0x66)),
+		}]
+	);
+	assert_eq!(database_db.shard_cache_fill_outstanding_for_test(), 0);
+	assert_eq!(
+		read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
+		None
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_ts_ms_key(branch_id)).await?,
+		access_ts_before
+	);
+	assert_eq!(
+		read_i64_le(&db, branch_manifest_last_access_bucket_key(branch_id)).await?,
+		access_bucket_before
+	);
+
+	Ok(())
 }
 
 #[cfg(feature = "test-faults")]
@@ -1659,6 +1866,62 @@ async fn direct_shard_cache_fill_skips_when_cold_ref_changes() -> Result<()> {
 
 		Ok(())
 	})
+}
+
+#[tokio::test]
+async fn shard_cache_fill_after_newer_commit_does_not_shadow_latest_page() -> Result<()> {
+	read_matrix!(
+		"depot-read-fill-after-newer-commit",
+		|ctx, db, database_db| {
+			database_db
+				.commit(vec![dirty_page(1, 0x11)], 1, 1_000)
+				.await?;
+			let branch_id = read_database_branch_id(&db).await?;
+			let object_bytes = encoded_blob(1, &[(1, 0x11)])?;
+			let cold_ref =
+				cold_shard_ref("late-fill-object.ltx".to_string(), 0, 1, 2, &object_bytes);
+			seed(
+				&db,
+				vec![
+					(
+						branch_compaction_root_key(branch_id),
+						encode_compaction_root(compaction_root(2))?,
+					),
+					(
+						branch_compaction_cold_shard_key(branch_id, 0, 1),
+						encode_cold_shard_ref(cold_ref.clone())?,
+					),
+				],
+				vec![
+					branch_delta_chunk_key(branch_id, 1, 0),
+					branch_pidx_key(branch_id, 1),
+				],
+			)
+			.await?;
+
+			database_db
+				.commit(vec![dirty_page(1, 0x22)], 1, 2_000)
+				.await?;
+			database_db
+				.fill_shard_cache_once_for_test(branch_id, cold_ref, object_bytes.clone())
+				.await?;
+			assert_eq!(
+				read_value(&db, branch_shard_key(branch_id, 0, 1)).await?,
+				Some(object_bytes)
+			);
+
+			let reader_db = ctx.make_db(test_bucket(), TEST_DATABASE);
+			assert_eq!(
+				reader_db.get_pages(vec![1]).await?,
+				vec![FetchedPage {
+					pgno: 1,
+					bytes: Some(page(0x22)),
+				}]
+			);
+
+			Ok(())
+		}
+	)
 }
 
 #[tokio::test]

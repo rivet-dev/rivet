@@ -294,7 +294,7 @@ pub async fn handle_init(
 			runners: vec![(conn.namespace_id, conn.runner_name.clone())],
 			bypass_cache: false,
 		}),
-		udb.run(|tx| {
+		udb.txn("runner_conn_init_metadata", |tx| {
 			let init = init.clone();
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());

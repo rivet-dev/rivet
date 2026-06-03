@@ -21,13 +21,10 @@ pub fn build_cache_key_path_based(
 ) -> Result<u64> {
 	let target = "actor";
 
-	// Parse actor ID from path
-	let actor_id = Id::parse(&actor_path_info.actor_id).context("invalid actor id in path")?;
-
 	// Create a hash using actor_id, stripped path, and method
 	let mut hasher = DefaultHasher::new();
 	target.hash(&mut hasher);
-	actor_id.hash(&mut hasher);
+	actor_path_info.actor_id.hash(&mut hasher);
 	// TODO: Should this exclude query for cache key?
 	actor_path_info.stripped_path.hash(&mut hasher);
 	req_ctx.method().as_str().hash(&mut hasher);

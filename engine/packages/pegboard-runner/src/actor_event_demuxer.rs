@@ -88,7 +88,7 @@ impl ActorEventDemuxer {
 				keep
 			});
 
-			metrics::EVENT_MULTIPLEXER_COUNT.set(self.channels.len() as i64);
+			metrics::EVENT_DEMUXER_COUNT.set(self.channels.len() as i64);
 		}
 	}
 

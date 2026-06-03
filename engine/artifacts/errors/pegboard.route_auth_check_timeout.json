@@ -1,0 +1,5 @@
+{
+  "code": "route_auth_check_timeout",
+  "group": "pegboard",
+  "message": "Timed out checking actor route authorization."
+}

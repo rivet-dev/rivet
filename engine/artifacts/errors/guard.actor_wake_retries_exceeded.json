@@ -1,0 +1,5 @@
+{
+  "code": "actor_wake_retries_exceeded",
+  "group": "guard",
+  "message": "Actor wake retries exceeded."
+}

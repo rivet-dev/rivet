@@ -15,10 +15,17 @@ fn roundtrip(
 	payload: &[u8],
 	max_message_size: usize,
 	reply_subject: Option<&str>,
-) -> (Vec<u8>, Option<String>) {
+	request_deadline_at: Option<i64>,
+) -> (Vec<u8>, Option<String>, Option<i64>) {
 	let message_id = [0u8; 16];
-	let chunks = split_payload_into_chunks(payload, max_message_size, message_id, reply_subject)
-		.expect("split failed");
+	let chunks = split_payload_into_chunks(
+		payload,
+		max_message_size,
+		message_id,
+		reply_subject,
+		request_deadline_at,
+	)
+	.expect("split failed");
 	let chunk_count = chunks.len() as u32;
 
 	let mut tracker = ChunkTracker::new();
@@ -30,7 +37,8 @@ fn roundtrip(
 			i as u32,
 			chunk_count,
 			message_id,
-			reply_subject.map(|s| s.to_string()),
+			reply_subject.map(|s| s.into()),
+			request_deadline_at,
 		)
 		.expect("encode failed");
 
@@ -50,7 +58,12 @@ fn roundtrip(
 		}
 	}
 
-	final_result.unwrap()
+	let final_result = final_result.unwrap();
+	(
+		final_result.payload,
+		final_result.reply_subject,
+		final_result.request_deadline_at,
+	)
 }
 
 #[test]
@@ -58,9 +71,10 @@ fn test_single_chunk_small_payload() {
 	setup_logging();
 
 	let payload = b"hello world";
-	let (reassembled, reply) = roundtrip(payload, 1024, None);
+	let (reassembled, reply, deadline) = roundtrip(payload, 1024, None, None);
 	assert_eq!(reassembled, payload);
 	assert_eq!(reply, None);
+	assert_eq!(deadline, None);
 }
 
 #[test]
@@ -68,9 +82,10 @@ fn test_multi_chunk_roundtrip() {
 	setup_logging();
 
 	let payload: Vec<u8> = (0..10000_usize).map(|i| (i % 256) as u8).collect();
-	let (reassembled, reply) = roundtrip(&payload, 512, None);
+	let (reassembled, reply, deadline) = roundtrip(&payload, 512, None, None);
 	assert_eq!(reassembled, payload);
 	assert_eq!(reply, None);
+	assert_eq!(deadline, None);
 }
 
 #[test]
@@ -78,9 +93,10 @@ fn test_empty_payload() {
 	setup_logging();
 
 	let payload = b"";
-	let (reassembled, reply) = roundtrip(payload, 512, None);
+	let (reassembled, reply, deadline) = roundtrip(payload, 512, None, None);
 	assert_eq!(reassembled, payload);
 	assert_eq!(reply, None);
+	assert_eq!(deadline, None);
 }
 
 #[test]
@@ -88,9 +104,10 @@ fn test_reply_subject_preserved_single_chunk() {
 	setup_logging();
 
 	let payload = b"hello";
-	let (reassembled, reply) = roundtrip(payload, 1024, Some("_INBOX.abc"));
+	let (reassembled, reply, deadline) = roundtrip(payload, 1024, Some("_INBOX.abc"), None);
 	assert_eq!(reassembled, payload);
 	assert_eq!(reply, Some("_INBOX.abc".to_string()));
+	assert_eq!(deadline, None);
 }
 
 #[test]
@@ -98,9 +115,23 @@ fn test_reply_subject_preserved_multi_chunk() {
 	setup_logging();
 
 	let payload: Vec<u8> = (0..5000_usize).map(|i| (i % 256) as u8).collect();
-	let (reassembled, reply) = roundtrip(&payload, 512, Some("_INBOX.xyz"));
+	let (reassembled, reply, deadline) = roundtrip(&payload, 512, Some("_INBOX.xyz"), None);
 	assert_eq!(reassembled, payload);
 	assert_eq!(reply, Some("_INBOX.xyz".to_string()));
+	assert_eq!(deadline, None);
+}
+
+#[test]
+fn test_request_deadline_preserved_multi_chunk() {
+	setup_logging();
+
+	let payload: Vec<u8> = (0..5000_usize).map(|i| (i % 256) as u8).collect();
+	let deadline = Some(1_800_000_000_000);
+	let (reassembled, reply, reassembled_deadline) =
+		roundtrip(&payload, 512, Some("_INBOX.deadline"), deadline);
+	assert_eq!(reassembled, payload);
+	assert_eq!(reply, Some("_INBOX.deadline".to_string()));
+	assert_eq!(reassembled_deadline, deadline);
 }
 
 /// Verifies that every encoded chunk fits within the declared max_message_size.
@@ -112,12 +143,14 @@ fn test_encoded_chunks_fit_within_limit() {
 	let payload: Vec<u8> = (0..5000_usize).map(|i| (i % 256) as u8).collect();
 	let message_id = [1u8; 16];
 
-	let chunks = split_payload_into_chunks(&payload, max_message_size, message_id, None).unwrap();
+	let chunks =
+		split_payload_into_chunks(&payload, max_message_size, message_id, None, None).unwrap();
 	let chunk_count = chunks.len() as u32;
 	assert!(chunk_count > 1, "expected multi-chunk message");
 
 	for (i, chunk_payload) in chunks.into_iter().enumerate() {
-		let encoded = encode_chunk(chunk_payload, i as u32, chunk_count, message_id, None).unwrap();
+		let encoded =
+			encode_chunk(chunk_payload, i as u32, chunk_count, message_id, None, None).unwrap();
 		assert!(
 			encoded.len() <= max_message_size,
 			"chunk {} is {} bytes, exceeds limit of {}",
@@ -138,9 +171,14 @@ fn test_encoded_chunks_with_reply_fit_within_limit() {
 	let payload: Vec<u8> = (0..5000_usize).map(|i| (i % 256) as u8).collect();
 	let message_id = [2u8; 16];
 
-	let chunks =
-		split_payload_into_chunks(&payload, max_message_size, message_id, Some(reply_subject))
-			.unwrap();
+	let chunks = split_payload_into_chunks(
+		&payload,
+		max_message_size,
+		message_id,
+		Some(reply_subject),
+		None,
+	)
+	.unwrap();
 	let chunk_count = chunks.len() as u32;
 
 	for (i, chunk_payload) in chunks.into_iter().enumerate() {
@@ -149,8 +187,15 @@ fn test_encoded_chunks_with_reply_fit_within_limit() {
 		} else {
 			None
 		};
-		let encoded =
-			encode_chunk(chunk_payload, i as u32, chunk_count, message_id, reply).unwrap();
+		let encoded = encode_chunk(
+			chunk_payload,
+			i as u32,
+			chunk_count,
+			message_id,
+			reply.map(|x| x.into()),
+			None,
+		)
+		.unwrap();
 		assert!(
 			encoded.len() <= max_message_size,
 			"chunk {} is {} bytes, exceeds limit of {}",
@@ -175,9 +220,9 @@ fn test_multiple_concurrent_messages() {
 	let payload2: Vec<u8> = (0..2000_usize).map(|i| ((i + 128) % 256) as u8).collect();
 
 	let chunks1 =
-		split_payload_into_chunks(&payload1, max_message_size, message_id_1, None).unwrap();
+		split_payload_into_chunks(&payload1, max_message_size, message_id_1, None, None).unwrap();
 	let chunks2 =
-		split_payload_into_chunks(&payload2, max_message_size, message_id_2, None).unwrap();
+		split_payload_into_chunks(&payload2, max_message_size, message_id_2, None, None).unwrap();
 	assert!(chunks1.len() > 1, "expected multi-chunk for message 1");
 	assert!(chunks2.len() > 1, "expected multi-chunk for message 2");
 
@@ -187,12 +232,12 @@ fn test_multiple_concurrent_messages() {
 	let encoded1: Vec<Vec<u8>> = chunks1
 		.into_iter()
 		.enumerate()
-		.map(|(i, p)| encode_chunk(p, i as u32, chunk_count1, message_id_1, None).unwrap())
+		.map(|(i, p)| encode_chunk(p, i as u32, chunk_count1, message_id_1, None, None).unwrap())
 		.collect();
 	let encoded2: Vec<Vec<u8>> = chunks2
 		.into_iter()
 		.enumerate()
-		.map(|(i, p)| encode_chunk(p, i as u32, chunk_count2, message_id_2, None).unwrap())
+		.map(|(i, p)| encode_chunk(p, i as u32, chunk_count2, message_id_2, None, None).unwrap())
 		.collect();
 
 	let mut tracker = ChunkTracker::new();
@@ -216,8 +261,14 @@ fn test_multiple_concurrent_messages() {
 		}
 	}
 
-	assert_eq!(result1.expect("message 1 not reassembled").0, payload1);
-	assert_eq!(result2.expect("message 2 not reassembled").0, payload2);
+	assert_eq!(
+		result1.expect("message 1 not reassembled").payload,
+		payload1
+	);
+	assert_eq!(
+		result2.expect("message 2 not reassembled").payload,
+		payload2
+	);
 }
 
 /// Sending a later chunk before an earlier one returns an error.
@@ -229,7 +280,8 @@ fn test_out_of_order_chunk_error() {
 	let max_message_size = 256;
 	let payload: Vec<u8> = (0..3000_usize).map(|i| (i % 256) as u8).collect();
 
-	let chunks = split_payload_into_chunks(&payload, max_message_size, message_id, None).unwrap();
+	let chunks =
+		split_payload_into_chunks(&payload, max_message_size, message_id, None, None).unwrap();
 	let chunk_count = chunks.len() as u32;
 	assert!(
 		chunk_count >= 3,
@@ -240,7 +292,7 @@ fn test_out_of_order_chunk_error() {
 	let encoded: Vec<Vec<u8>> = chunks
 		.into_iter()
 		.enumerate()
-		.map(|(i, p)| encode_chunk(p, i as u32, chunk_count, message_id, None).unwrap())
+		.map(|(i, p)| encode_chunk(p, i as u32, chunk_count, message_id, None, None).unwrap())
 		.collect();
 
 	let mut tracker = ChunkTracker::new();
@@ -263,7 +315,7 @@ fn test_orphan_chunk_without_start() {
 	setup_logging();
 
 	let message_id = [4u8; 16];
-	let encoded = encode_chunk(b"orphan".to_vec(), 1, 3, message_id, None).unwrap();
+	let encoded = encode_chunk(b"orphan".to_vec(), 1, 3, message_id, None, None).unwrap();
 
 	let mut tracker = ChunkTracker::new();
 	let err = tracker.process_chunk(&encoded).unwrap_err();
@@ -282,7 +334,8 @@ fn test_split_count_single_vs_multi() {
 	let max_message_size = 256;
 
 	let small = vec![0u8; 10];
-	let chunks = split_payload_into_chunks(&small, max_message_size, message_id, None).unwrap();
+	let chunks =
+		split_payload_into_chunks(&small, max_message_size, message_id, None, None).unwrap();
 	assert_eq!(
 		chunks.len(),
 		1,
@@ -290,7 +343,8 @@ fn test_split_count_single_vs_multi() {
 	);
 
 	let large = vec![0u8; max_message_size * 10];
-	let chunks = split_payload_into_chunks(&large, max_message_size, message_id, None).unwrap();
+	let chunks =
+		split_payload_into_chunks(&large, max_message_size, message_id, None, None).unwrap();
 	assert!(
 		chunks.len() > 1,
 		"large payload should produce multiple chunks"

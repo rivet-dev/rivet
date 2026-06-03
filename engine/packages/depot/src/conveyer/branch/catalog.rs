@@ -22,7 +22,7 @@ pub async fn list_databases(
 	udb: &universaldb::Database,
 	bucket: BucketId,
 ) -> Result<Vec<DatabaseBranchId>> {
-	udb.run(move |tx| async move {
+	udb.txn("depot_list_databases", move |tx| async move {
 		let Some(bucket_branch_id) = resolve_bucket_branch(&tx, bucket, Serializable).await? else {
 			return Ok(Vec::new());
 		};

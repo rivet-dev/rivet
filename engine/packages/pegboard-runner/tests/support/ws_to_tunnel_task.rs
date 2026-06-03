@@ -181,7 +181,7 @@ async fn rejects_unissued_mk2_tunnel_message_pairs() {
 	let gateway_id = [1, 2, 3, 4];
 	let request_id = [5, 6, 7, 8];
 	let mut sub = pubsub
-		.subscribe(&GatewayReceiverSubject::new(gateway_id).to_string())
+		.subscribe(GatewayReceiverSubject::new(gateway_id))
 		.await
 		.unwrap();
 	let authorized_tunnel_routes = HashMap::new();
@@ -206,7 +206,7 @@ async fn republishes_issued_mk2_tunnel_message_pairs() {
 	let gateway_id = [9, 10, 11, 12];
 	let request_id = [13, 14, 15, 16];
 	let mut sub = pubsub
-		.subscribe(&GatewayReceiverSubject::new(gateway_id).to_string())
+		.subscribe(GatewayReceiverSubject::new(gateway_id))
 		.await
 		.unwrap();
 	let authorized_tunnel_routes = HashMap::new();
@@ -241,7 +241,7 @@ async fn rejects_unissued_mk1_tunnel_message_pairs() {
 	let gateway_id = [17, 18, 19, 20];
 	let request_id = [21, 22, 23, 24];
 	let mut sub = pubsub
-		.subscribe(&GatewayReceiverSubject::new(gateway_id).to_string())
+		.subscribe(GatewayReceiverSubject::new(gateway_id))
 		.await
 		.unwrap();
 	let authorized_tunnel_routes = HashMap::new();
@@ -266,7 +266,7 @@ async fn republishes_issued_mk1_tunnel_message_pairs() {
 	let gateway_id = [25, 26, 27, 28];
 	let request_id = [29, 30, 31, 32];
 	let mut sub = pubsub
-		.subscribe(&GatewayReceiverSubject::new(gateway_id).to_string())
+		.subscribe(GatewayReceiverSubject::new(gateway_id))
 		.await
 		.unwrap();
 	let authorized_tunnel_routes = HashMap::new();

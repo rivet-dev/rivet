@@ -101,7 +101,7 @@ async fn update_state_and_db(
 	let create_ts = state.create_ts;
 	let key = &state.key;
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_actor_destroy", |tx| {
 			async move {
 				let tx = tx.with_subspace(keys::subspace());
 
@@ -182,7 +182,7 @@ struct ClearKvOutput {
 async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutput> {
 	let final_size = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_clear_kv", |tx| async move {
 			let subspace = keys::actor_kv::subspace(input.actor_id);
 
 			let (start, end) = subspace.range();

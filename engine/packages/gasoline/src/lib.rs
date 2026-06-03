@@ -10,6 +10,7 @@ pub mod message;
 pub mod metrics;
 pub mod operation;
 pub mod prelude;
+pub mod pubsub_subjects;
 pub mod registry;
 pub mod signal;
 mod stub;

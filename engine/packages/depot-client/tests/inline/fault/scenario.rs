@@ -611,6 +611,37 @@ impl FaultScenarioCtx {
 		self.inner.storage.depot_database()
 	}
 
+	pub(crate) async fn clear_hot_shards_for_harness_regression(&self) -> Result<usize> {
+		let database_branch_id = self.database_branch_id().await?;
+		let db = self.inner.storage.depot_database();
+		db.txn(
+			"test_depot_clientinline_fault_scenario",
+			move |tx| async move {
+				let prefix = keys::branch_shard_prefix(database_branch_id);
+				let prefix_subspace =
+					universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
+				let informal = tx.informal();
+				let mut stream = informal.get_ranges_keyvalues(
+					RangeOption {
+						mode: StreamingMode::WantAll,
+						..RangeOption::from(&prefix_subspace)
+					},
+					Snapshot,
+				);
+				let mut keys_to_clear = Vec::new();
+				while let Some(entry) = stream.try_next().await? {
+					keys_to_clear.push(entry.key().to_vec());
+				}
+				let count = keys_to_clear.len();
+				for key in keys_to_clear {
+					tx.informal().clear(&key);
+				}
+				Ok(count)
+			},
+		)
+		.await
+	}
+
 	pub(crate) async fn create_restore_point(&self) -> Result<RestorePointId> {
 		self.inner
 			.storage
@@ -689,7 +720,7 @@ impl FaultScenarioCtx {
 			.inner
 			.storage
 			.depot_database()
-			.run(move |tx| {
+			.txn("test_depot_clientinline_fault_scenario", move |tx| {
 				let cold_ref_key = cold_ref_key.clone();
 				async move {
 					let value = tx
@@ -733,7 +764,7 @@ impl FaultScenarioCtx {
 		self.inner
 			.storage
 			.depot_database()
-			.run(move |tx| {
+			.txn("test_depot_clientinline_fault_scenario", move |tx| {
 				let reference = reference.clone();
 				async move {
 					tx.informal().set(
@@ -769,24 +800,27 @@ impl FaultScenarioCtx {
 			.read_branch_head(&self.inner.actor_id)
 			.await?;
 		let db = self.inner.storage.depot_database();
-		db.run(move |tx| async move {
-			let prefix = keys::branch_delta_chunk_prefix(branch_id, head_txid);
-			let prefix_subspace =
-				universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
-			let informal = tx.informal();
-			let mut stream = informal.get_ranges_keyvalues(
-				RangeOption {
-					mode: StreamingMode::WantAll,
-					..RangeOption::from(&prefix_subspace)
-				},
-				Snapshot,
-			);
-			let mut count = 0;
-			while stream.try_next().await?.is_some() {
-				count += 1;
-			}
-			Ok(count)
-		})
+		db.txn(
+			"test_depot_clientinline_fault_scenario",
+			move |tx| async move {
+				let prefix = keys::branch_delta_chunk_prefix(branch_id, head_txid);
+				let prefix_subspace =
+					universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
+				let informal = tx.informal();
+				let mut stream = informal.get_ranges_keyvalues(
+					RangeOption {
+						mode: StreamingMode::WantAll,
+						..RangeOption::from(&prefix_subspace)
+					},
+					Snapshot,
+				);
+				let mut count = 0;
+				while stream.try_next().await?.is_some() {
+					count += 1;
+				}
+				Ok(count)
+			},
+		)
 		.await
 	}
 
