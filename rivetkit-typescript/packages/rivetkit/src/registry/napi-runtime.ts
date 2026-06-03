@@ -18,6 +18,7 @@ import type {
 	RuntimeHttpRequest,
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
+	RuntimeListenerConfig,
 	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueMessage,
 	RuntimeQueueNextBatchOptions,
@@ -255,6 +256,21 @@ export class NapiCoreRuntime implements CoreRuntime {
 			{ ...req, body: toNapiBuffer(req.body) },
 			onStreamEvent,
 			asNativeCancellationToken(cancelToken),
+			config,
+		);
+	}
+
+	async serveListener(
+		registry: RegistryHandle,
+		listener: RuntimeListenerConfig,
+		config: RuntimeServeConfig,
+	): Promise<void> {
+		await asNativeRegistry(registry).serveListener(
+			{
+				port: listener.port,
+				host: listener.host,
+				publicDir: listener.publicDir,
+			},
 			config,
 		);
 	}

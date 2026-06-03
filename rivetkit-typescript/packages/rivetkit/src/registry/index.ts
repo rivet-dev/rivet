@@ -1,8 +1,11 @@
-import { Hono } from "hono";
 import { ENGINE_ENDPOINT } from "@/common/engine";
 import { configureServerlessPool } from "@/serverless/configure";
-import { detectRuntime, VERSION } from "@/utils";
-import { crossPlatformServe, loadRuntimeServeStatic } from "@/utils/serve";
+import { VERSION } from "@/utils";
+import {
+	getRivetkitPublicDir,
+	getRivetkitRuntimeMode,
+	parsePortEnv,
+} from "@/utils/env-vars";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -89,6 +92,12 @@ export class Registry<A extends RegistryActors> {
 		};
 	}
 
+	/**
+	 * Fires `configureServerlessPool` once per process when the registry
+	 * config opts into it. Cached on the instance so repeated calls (from
+	 * `handler()` and `listen()`) only run the upsert once. The retry loop
+	 * inside `configureServerlessPool` tolerates the engine still warming up.
+	 */
 	#ensureServerlessPoolConfigured(
 		config: RegistryConfig,
 	): Promise<void> | undefined {
@@ -322,13 +331,15 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	/**
-	 * Starts an HTTP server that dispatches every request through the
-	 * serverless handler. Uses `crossPlatformServe` to pick the right
-	 * runtime (Node, Bun, Deno).
+	 * Bind an HTTP listener provided by the native (Rust) runtime and serve
+	 * the registry's serverless endpoints over it. Resolves only after the
+	 * registry is shut down (SIGINT/SIGTERM or `nativeRegistry.shutdown()`).
 	 *
-	 * @param opts.port      Port to listen on. Defaults to 3000.
+	 * @param opts.port      Port to listen on. Defaults to `process.env.PORT`
+	 *                       if set, otherwise 3000.
+	 * @param opts.host      Address to bind. Defaults to `0.0.0.0`.
 	 * @param opts.publicDir If set, serves static files from this directory
-	 *                       before falling through to the registry handler.
+	 *                       as a fallback below the framework routes.
 	 *
 	 * @example
 	 * ```ts
@@ -337,18 +348,34 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public async listen(
-		opts: { port?: number; publicDir?: string } = {},
+		opts: { port?: number; host?: string; publicDir?: string } = {},
 	): Promise<void> {
-		const port = opts.port ?? 3000;
+		const port = opts.port ?? parsePortEnv(process.env.PORT) ?? 3000;
+		const publicDir = opts.publicDir ?? getRivetkitPublicDir();
 		const config = this.parseConfig();
-		const runtime = detectRuntime();
-		const app = new Hono();
-		if (opts.publicDir) {
-			const serveStatic = await loadRuntimeServeStatic(runtime);
-			app.use("*", serveStatic({ root: opts.publicDir }));
-		}
-		app.all("*", (c) => this.handler(c.req.raw));
-		await crossPlatformServe(config, port, app, runtime);
+
+		// Cache on both promise fields so the shutdown drain sees Mode A and B.
+		const configuredRegistryPromise = buildConfiguredRegistry(config);
+		this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
+		this.#runtimeServerlessPromise = configuredRegistryPromise;
+		this.#installSignalHandlers(config, configuredRegistryPromise);
+
+		this.#printWelcome(config, "serverless", {
+			port,
+			host: opts.host,
+			publicDir,
+		});
+
+		// Background fire; the retry loop tolerates engine warm-up.
+		this.#ensureServerlessPoolConfigured(config);
+
+		const { runtime, registry, serveConfig } =
+			await configuredRegistryPromise;
+		await runtime.serveListener(
+			registry,
+			{ port, host: opts.host, publicDir },
+			serveConfig,
+		);
 	}
 
 	/**
@@ -664,7 +691,43 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	/**
+	 * Drains any active envoy / serverless / listener registries. Idempotent.
+	 */
+	public async shutdown(): Promise<void> {
+		const drain = async (
+			promise: ReturnType<typeof buildConfiguredRegistry>,
+		) => {
+			try {
+				const { runtime, registry } = await promise;
+				await runtime.shutdownRegistry(registry);
+			} catch (error) {
+				logger().warn({ error }, "shutdown drain errored");
+			}
+		};
+		const drains: Promise<void>[] = [];
+		if (this.#runtimeServeConfiguredPromise) {
+			drains.push(drain(this.#runtimeServeConfiguredPromise));
+		}
+		if (this.#runtimeServerlessPromise) {
+			drains.push(drain(this.#runtimeServerlessPromise));
+		}
+		await Promise.all(drains);
+		if (this.#runtimeServePromise) {
+			await this.#runtimeServePromise.catch(() => undefined);
+		}
+	}
+
+	/**
 	 * Starts the actor envoy for standalone server deployments.
+	 *
+	 * Auto-promotes to `listen()` when `NODE_ENV === "production"` so the
+	 * same `start()` call boots an HTTP listener in deployed containers
+	 * while keeping the persistent-envoy WS behavior in local development.
+	 * The `RIVETKIT_AUTO_LISTEN` env var overrides the heuristic: `1`
+	 * forces auto-listen on, `0` forces it off.
+	 *
+	 * Mode A (envoy) and Mode B (listener) are mutually exclusive per
+	 * registry instance.
 	 *
 	 * @example
 	 * ```ts
@@ -673,6 +736,21 @@ export class Registry<A extends RegistryActors> {
 	 * ```
 	 */
 	public start() {
+		if (getRivetkitRuntimeMode() === "serverless") {
+			// start() defaults publicDir to "/public" unless overridden by env.
+			const publicDir = getRivetkitPublicDir() ?? "/public";
+			// Detached listener; bind failures are fatal so exit hard.
+			this.listen({ publicDir }).catch((error) => {
+				logger().error({ error }, "auto-listen failed; exiting");
+				if (
+					typeof process !== "undefined" &&
+					typeof process.exit === "function"
+				) {
+					process.exit(1);
+				}
+			});
+			return;
+		}
 		const config = this.parseConfig();
 		this.#startEnvoy(config, true);
 	}
@@ -680,6 +758,7 @@ export class Registry<A extends RegistryActors> {
 	#printWelcome(
 		config: RegistryConfig,
 		kind: "serverless" | "serverful",
+		listener?: { port: number; host?: string; publicDir?: string },
 	): void {
 		if (config.noWelcome || this.#welcomePrinted) return;
 		this.#welcomePrinted = true;
@@ -709,6 +788,15 @@ export class Registry<A extends RegistryActors> {
 		}
 
 		logLine("Actors", Object.keys(config.use).length.toString());
+
+		if (listener) {
+			const host = listener.host ?? "0.0.0.0";
+			logLine("Listening", `http://${host}:${listener.port}`);
+			if (listener.publicDir) {
+				logLine("Public Dir", listener.publicDir);
+			}
+		}
+
 		console.log();
 	}
 }

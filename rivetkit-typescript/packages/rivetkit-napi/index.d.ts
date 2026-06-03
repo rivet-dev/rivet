@@ -163,6 +163,17 @@ export interface JsServeConfig {
   serverlessClientToken?: string
   serverlessValidateEndpoint: boolean
   serverlessMaxStartPayloadBytes: number
+  forceNormalRunnerConfigUpsert?: boolean
+}
+export interface JsListenerConfig {
+  /** Host to bind. Defaults to `0.0.0.0` when not provided. */
+  host?: string
+  port: number
+  /**
+   * Optional static file root mounted as a fallback below the framework
+   * routes.
+   */
+  publicDir?: string
 }
 export interface JsServerlessRequest {
   method: string
@@ -321,6 +332,7 @@ export declare class CoreRegistry {
   health(): Promise<JsRegistryRouteResponse>
   metadata(): JsRegistryRouteResponse
   metrics(): JsRegistryRouteResponse
+  serveListener(listener: JsListenerConfig, config: JsServeConfig): Promise<void>
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {

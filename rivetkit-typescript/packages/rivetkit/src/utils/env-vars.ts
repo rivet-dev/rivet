@@ -44,6 +44,37 @@ export const getRivetkitStoragePath = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_STORAGE_PATH");
 export const getRivetkitRuntime = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_RUNTIME");
+export type RuntimeMode = "envoy" | "serverless";
+
+export const getRivetkitRuntimeMode = (): RuntimeMode => {
+	const explicit = getEnvUniversal("RIVETKIT_RUNTIME_MODE");
+	if (explicit === "envoy" || explicit === "serverless") return explicit;
+	const railwayId = getEnvUniversal("RAILWAY_DEPLOYMENT_ID");
+	if (railwayId !== undefined && railwayId !== "") return "envoy";
+	if (getNodeEnv() === "production") return "serverless";
+	return "envoy";
+};
+
+export const getRivetkitPublicDir = (): string | undefined => {
+	const value = getEnvUniversal("RIVETKIT_PUBLIC_DIR");
+	return value === undefined || value === "" ? undefined : value;
+};
+
+export function parsePortEnv(raw: string | undefined): number | undefined {
+	if (raw === undefined || raw === "") return undefined;
+	const parsed = Number.parseInt(raw, 10);
+	if (
+		!Number.isFinite(parsed) ||
+		parsed < 1 ||
+		parsed > 65535 ||
+		String(parsed) !== raw.trim()
+	) {
+		throw new Error(
+			`PORT env var must be an integer between 1 and 65535; got "${raw}"`,
+		);
+	}
+	return parsed;
+}
 
 // Logging configuration
 // DEPRECATED: LOG_LEVEL will be removed in a future version

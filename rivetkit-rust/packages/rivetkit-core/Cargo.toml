@@ -12,6 +12,11 @@ default = ["native-runtime"]
 native-runtime = [
 	"dep:nix",
 	"dep:reqwest",
+	"dep:axum",
+	"dep:bytes",
+	"dep:http-body-util",
+	"dep:tokio-stream",
+	"dep:tower-http",
 	"rivet-envoy-client/native-transport",
 ]
 wasm-runtime = ["rivet-envoy-client/wasm-transport"]
@@ -22,10 +27,13 @@ sqlite-remote = []
 [dependencies]
 anyhow.workspace = true
 async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
 base64.workspace = true
+bytes = { workspace = true, optional = true }
 ciborium.workspace = true
 futures.workspace = true
 http.workspace = true
+http-body-util = { workspace = true, optional = true }
 nix = { workspace = true, optional = true }
 parking_lot.workspace = true
 rand.workspace = true
@@ -45,7 +53,9 @@ serde_json.workspace = true
 serde_bare.workspace = true
 serde_bytes.workspace = true
 subtle.workspace = true
+tokio-stream = { workspace = true, optional = true }
 tokio-util.workspace = true
+tower-http = { workspace = true, optional = true, features = ["fs"] }
 tracing.workspace = true
 url.workspace = true
 vbare.workspace = true

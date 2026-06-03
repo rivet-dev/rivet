@@ -102,6 +102,9 @@ impl CoreEnvoyHandle {
 		}
 	}
 
+	/// Engine-reported drain threshold in milliseconds. `None` until the
+	/// envoy has completed its first protocol-metadata exchange with the
+	/// engine.
 	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
 		self.handle
 			.get_protocol_metadata()
@@ -213,6 +216,10 @@ pub struct ServeConfig {
 	pub serverless_validate_endpoint: bool,
 	pub serverless_max_start_payload_bytes: usize,
 	pub serverless_cache_envoy: bool,
+	/// When true, upsert a normal runner config to the engine on startup
+	/// even if the endpoint is not a local engine. Set by the TS Registry
+	/// when `RIVETKIT_RUNTIME_MODE` resolves to `envoy`.
+	pub force_normal_runner_config_upsert: bool,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -498,7 +505,7 @@ impl CoreRegistry {
 		}
 
 		#[cfg(feature = "native-runtime")]
-		runner_config::ensure_local_normal_runner_config(&config).await?;
+		runner_config::ensure_normal_runner_config(&config).await?;
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: dispatcher.clone(),
 		});

@@ -15,6 +15,8 @@ pub mod metrics_endpoint;
 pub mod registry;
 pub mod runtime;
 pub mod serverless;
+#[cfg(feature = "native-runtime")]
+pub mod serverless_http;
 pub(crate) mod time {
 	use std::fmt;
 	use std::future::Future;
