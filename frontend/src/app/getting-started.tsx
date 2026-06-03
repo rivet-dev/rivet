@@ -16,7 +16,7 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense } from "react";
+import { type ReactNode, Suspense, useContext, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -59,8 +59,17 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
-import { StepperForm } from "./forms/stepper-form";
+import { StepperForm, StepVisibilityContext } from "./forms/stepper-form";
 import { Content } from "./layout";
+import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
+import { SoftwareSelectStep } from "@/components/onboarding/agent-os/software-select-step";
+import { SandboxMountStep } from "@/components/onboarding/agent-os/sandbox-mount-step";
+import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
+import {
+	DEFAULT_AGENT,
+	DEFAULT_PACKAGES,
+	DEFAULT_SANDBOX_PROVIDER,
+} from "@/components/onboarding/agent-os/catalog";
 import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
 import {
 	getAgentInstructionsPrompt,
@@ -78,10 +87,68 @@ const stepper = defineStepper(
 	{
 		id: "local",
 		title: "Run locally",
+		titleFor: (values: Record<string, unknown>) =>
+			values.template === "agent-os"
+				? "What are you building?"
+				: "Run locally",
 		description: "Get your first Rivet Actor running on your machine.",
+		next: "Continue",
+		// `template` is carried in the step schema so the stepper accumulates it
+		// into its running values. The agentOS steps below gate on it via
+		// isVisible, so it must survive navigation past this step.
+		schema: z.object({
+			template: z.enum(["actor", "agent-os"]).optional(),
+		}),
+		group: "local",
+	},
+	// agentOS-only steps. Hidden for the actor path via isVisible, so the
+	// stepper skips them and the wizard stays a two-step local -> deploy flow.
+	{
+		id: "agent",
+		title: "Choose your agent",
+		description: "Pick the coding agent to run inside agentOS.",
+		next: "Continue",
+		schema: z.object({ agent: z.string().nonempty() }),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
+		id: "software",
+		title: "Choose software",
+		description: "Select the packages baked into your build image.",
+		next: "Continue",
+		schema: z.object({ packages: z.array(z.string()) }),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
+		id: "sandbox",
+		title: "Sandbox & mounts",
+		description:
+			"Optionally mount a full sandbox for heavy workloads. Off by default.",
+		next: "Continue",
+		schema: z.object({
+			sandbox: z.object({
+				enabled: z.boolean(),
+				provider: z.string().optional(),
+			}),
+		}),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
+		id: "handoff",
+		title: "Set up agentOS",
+		description:
+			"Boot an agentOS instance and run your first session, locally.",
 		next: "Continue to deploy",
 		schema: z.object({}),
 		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
 	},
 	{
 		id: "deploy",
@@ -192,6 +259,12 @@ export function GettingStarted({
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
 		template: "actor" as "actor" | "agent-os",
+		agent: DEFAULT_AGENT,
+		packages: DEFAULT_PACKAGES,
+		sandbox: { enabled: false, provider: DEFAULT_SANDBOX_PROVIDER } as {
+			enabled: boolean;
+			provider?: string;
+		},
 		...(initialRunnerConfig || {}),
 	};
 
@@ -275,6 +348,26 @@ export function GettingStarted({
 									local: () => (
 										<StepContent>
 											<RunLocallyStep />
+										</StepContent>
+									),
+									agent: () => (
+										<StepContent>
+											<AgentSelectStep />
+										</StepContent>
+									),
+									software: () => (
+										<StepContent>
+											<SoftwareSelectStep />
+										</StepContent>
+									),
+									sandbox: () => (
+										<StepContent>
+											<SandboxMountStep />
+										</StepContent>
+									),
+									handoff: () => (
+										<StepContent>
+											<AgentOsHandoff />
 										</StepContent>
 									),
 									deploy: () => (
@@ -544,9 +637,13 @@ function SkipOnboardingHeaderLink() {
 
 function OnboardingProgress({ action }: { action?: ReactNode }) {
 	const s = stepper.useStepper();
-	const steps = s.all;
-	const currentIndex = steps.findIndex((step) => step.id === s.current.id);
-	const total = steps.length;
+	const { isStepVisible, visibleStepIndex, visibleStepCount } =
+		useContext(StepVisibilityContext);
+	// Count only steps visible for the current path (agentOS adds steps that are
+	// hidden for the actor path), so "Step X of N" and the dots stay accurate.
+	const steps = s.all.filter((step) => isStepVisible(step.id));
+	const currentIndex = Math.max(0, visibleStepIndex(s.current.id));
+	const total = visibleStepCount;
 	const groupLabel = s.current.group === "local" ? "Local setup" : "Deploy";
 	return (
 		<div className="mb-6 flex flex-col gap-2">
@@ -794,6 +891,77 @@ function RunLocallyStep() {
 					</div>
 				</>
 			)}
+		</div>
+	);
+}
+
+// agentOS handoff: turns the agent/software/sandbox selections into the install
+// command, server.ts/client.ts, and a copy-prompt for the coding agent. Shown
+// as the final local-group step on the agentOS path.
+function AgentOsHandoff() {
+	const agent = useWatch({ name: "agent" }) as string | undefined;
+	const packages = useWatch({ name: "packages" }) as string[] | undefined;
+	const sandbox = useWatch({ name: "sandbox" }) as
+		| { enabled: boolean; provider?: string }
+		| undefined;
+
+	const setup = useMemo(
+		() =>
+			buildAgentOsSetup({
+				agent: agent ?? DEFAULT_AGENT,
+				packages: packages ?? DEFAULT_PACKAGES,
+				sandbox: sandbox ?? {
+					enabled: false,
+					provider: DEFAULT_SANDBOX_PROVIDER,
+				},
+			}),
+		[agent, packages, sandbox],
+	);
+
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={setup.prompt}
+				title="Use your coding agent"
+				description="Have your coding agent set up agentOS and run a session for you."
+			/>
+			<OrDivider label="or set it up yourself" />
+			<div className="flex flex-col gap-4">
+				<div>
+					<p className="font-medium mb-1.5">Install</p>
+					<CommandBox command={setup.installCommand} />
+				</div>
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="server"
+							language="typescript"
+							title="server.ts"
+							code={() => setup.serverCode}
+							className="m-0"
+						>
+							<CodePreview
+								language="typescript"
+								className="text-left"
+								code={setup.serverCode}
+							/>
+						</CodeFrame>,
+						<CodeFrame
+							key="client"
+							language="typescript"
+							title="client.ts"
+							code={() => setup.clientCode}
+							className="m-0"
+						>
+							<CodePreview
+								language="typescript"
+								className="text-left"
+								code={setup.clientCode}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
+			</div>
 		</div>
 	);
 }
