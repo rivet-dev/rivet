@@ -872,8 +872,9 @@ export class ActorHandleRaw {
 			this.#gatewayOptions,
 			options,
 		);
+		const useQueryTarget = isDynamicActorQuery(this.#actorResolutionState);
 		const target = await this.#resolveGatewayRequestTarget(
-			false,
+			useQueryTarget,
 			gatewayOptions,
 		);
 		return await rawWebSocket(
