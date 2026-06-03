@@ -162,9 +162,10 @@ impl Queue {
 		&self,
 		names: Vec<String>,
 		options: Option<JsQueueWaitOptions>,
+		signal: Option<&CancellationToken>,
 	) -> napi::Result<()> {
 		self.inner
-			.wait_for_names_available(names, queue_wait_opts(options, None)?)
+			.wait_for_names_available(names, queue_wait_opts(options, signal)?)
 			.await
 			.map_err(napi_anyhow_error)
 	}

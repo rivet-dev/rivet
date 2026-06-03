@@ -18,6 +18,7 @@ packages:
   - scripts/tests
   - shared/typescript/*
   - website
+  - ext/*
   - website/scripts/typecheck-staging
 
 ignoredBuiltDependencies:

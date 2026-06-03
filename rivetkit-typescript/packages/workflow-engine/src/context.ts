@@ -941,8 +941,9 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 			entry.dirty = true;
 
-			// Timeout errors are treated as critical (no retry)
-			if (error instanceof StepTimeoutError) {
+			// Timeout errors are treated as critical by default. Steps opt
+			// into retrying on timeout with retryOnTimeout: true.
+			if (error instanceof StepTimeoutError && !config.retryOnTimeout) {
 				metadata.status = "exhausted";
 				metadata.error = String(error);
 				await this.notifyStepError(config, metadata.attempts, error, {
@@ -1008,7 +1009,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				attachTryStepFailure(
 					new StepExhaustedError(config.name, String(error)),
 					{
-						kind: "exhausted",
+						kind:
+							error instanceof StepTimeoutError
+								? "timeout"
+								: "exhausted",
 						stepName: config.name,
 						attempts: metadata.attempts,
 						error: extractErrorInfo(error),
@@ -1027,7 +1031,9 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	 *
 	 * Note: This does NOT cancel the underlying operation. JavaScript Promises
 	 * cannot be cancelled once started. When a timeout occurs:
-	 * - The step is marked as failed with StepTimeoutError
+	 * - The step is rejected with StepTimeoutError. By default this is treated
+	 *   as a critical failure with no retry. Set retryOnTimeout: true on the
+	 *   step config to retry timeouts like any other error.
 	 * - The underlying async operation continues running in the background
 	 * - Any side effects from the operation may still occur
 	 *
