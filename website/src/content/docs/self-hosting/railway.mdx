@@ -79,6 +79,12 @@ Follow the [Railway Quick Start guide](https://docs.railway.com/quick-start) to 
 4. Configure environment variables for your application:
     - `RIVET_ENDPOINT=${{Rivet.RAILWAY_PRIVATE_DOMAIN}}` - Points to the Rivet Engine service's private domain
 
+## WebSocket Timeouts
+
+Rivet uses long-lived WebSocket connections for both client traffic (browsers, SDKs) and envoy traffic (actor hosts connecting back to the engine). Railway's HTTP proxy supports WebSockets, but you must make sure no app-side timeout cuts them off.
+
+If you front the engine with your own reverse proxy (NGINX, Caddy, etc.) inside the Railway service, raise its idle / read timeout to at least 1 hour (`3600` seconds). The same guidance applies to the Railway service hosting your RivetKit app, since envoys connect to it over WebSocket.
+
 ## Graceful Shutdown
 
 By default, Railway kills the old deploy 0 seconds after sending `SIGTERM` (see [Railway's docs](https://docs.railway.com/deployments/reference#singleton-deploys)), so in-flight requests are dropped and state flushes can be interrupted on every deploy. Rivet ships with a `SIGTERM` handler that drains cleanly, but it only gets to run if Railway is configured to give it time.

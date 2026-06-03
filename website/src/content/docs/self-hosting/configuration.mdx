@@ -52,6 +52,27 @@ rivet-engine --config /etc/rivet/base.json --config /etc/rivet/override.json
 
 <EngineConfigSchema />
 
+### Pegboard Envoy Load Balancing
+
+`pegboard.envoy_load_balancer` supports the `hash` strategy for hash-ring-based envoy selection:
+
+```json
+{
+	"pegboard": {
+		"envoy_load_balancer": {
+			"hash": {
+				"virtual_nodes": 8,
+				"samples": 2,
+				"max_scan": 16,
+				"use_snapshot_read": true
+			}
+		}
+	}
+}
+```
+
+Use `samples: 1` for a uniform random pick that skips slot reads. Use `samples >= 2` for power-of-K choices over envoy slot counts. Treat `virtual_nodes` as an operational invariant once envoys have registered.
+
 ## Related
 
 - SQLite actor startup picks the storage schema by probing the actor KV subspace for legacy v1 data. Existing v1 data stays on v1, and actors without v1 data start on v2.
