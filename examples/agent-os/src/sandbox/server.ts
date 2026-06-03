@@ -1,4 +1,4 @@
-// Sandbox mounting: mount a remote Docker sandbox into the VM.
+// Sandbox extension: mount a remote Docker sandbox into the VM.
 //
 // Requires Docker running locally. The sandbox-agent package manages the
 // container lifecycle. The sandbox filesystem is mounted at /sandbox and
