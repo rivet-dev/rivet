@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: biomejs/setup-biome@v2
         with:
-          version: latest
+          version: 2.3.11
       - run: biome check ./frontend --formatter-enabled=true --linter-enabled=false --assist-enabled=false --reporter=github
   rivetkit-quality-check:
     name: RivetKit / Quality Check
@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: biomejs/setup-biome@v2
         with:
-          version: latest
+          version: 2.3.11
       - run: biome check ./rivetkit-typescript --formatter-enabled=true --linter-enabled=false --assist-enabled=false --reporter=github
   # website-quality-check:
   #   name: Website / Quality Check
@@ -108,4 +108,3 @@ jobs:
   #     - run: pnpm build
   #     - run: pnpm check-types
   #       working-directory: ./website
-
