@@ -43,7 +43,7 @@ import {
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
-import { cloudEnv, engineEnv } from "@/lib/env";
+import { cloudEnv, engineEnv, getRivetRunUrl } from "@/lib/env";
 import { features } from "@/lib/features";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
@@ -1507,10 +1507,7 @@ function FrontendSetup() {
 
 	const deploymentUrl = useMemo(() => {
 		if (provider === "rivet" && nsData?.access?.engineNamespaceName) {
-			const engineNsName = nsData.access.engineNamespaceName;
-			const env = cloudEnv();
-			const isProduction = env.DEPLOYMENT_TYPE === "production";
-			return `https://${engineNsName}${isProduction ? "" : ".staging"}.rivet.run`;
+			return getRivetRunUrl(nsData.access.engineNamespaceName);
 		}
 		if (!config?.url) return null;
 		try {

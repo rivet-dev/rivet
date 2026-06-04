@@ -18,6 +18,7 @@ import {
 	SmallText,
 	WithTooltip,
 } from "@/components";
+<<<<<<< HEAD
 import {
 	useCloudNamespaceDataProvider,
 	useDataProvider,
@@ -26,6 +27,9 @@ import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { ActorIcon } from "@/components/lazy-icon";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { cloudEnv } from "@/lib/env";
+=======
+import { getRivetRunUrl } from "@/lib/env";
+>>>>>>> ec63be2ef (fix(frontend): fix compute rivet run url)
 import { features } from "@/lib/features";
 
 function _GridCard({

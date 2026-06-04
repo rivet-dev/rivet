@@ -34,3 +34,10 @@ export const cloudEnvSchema = commonEnvSchema.merge(
 );
 
 export const cloudEnv = () => cloudEnvSchema.parse(import.meta.env);
+
+export const isStagingHost = () =>
+	typeof window !== "undefined" &&
+	/(^|\.)staging\.rivet\.dev$/.test(window.location.hostname);
+
+export const getRivetRunUrl = (engineNsName: string) =>
+	`https://${engineNsName}${isStagingHost() ? ".staging" : ""}.rivet.run`;
