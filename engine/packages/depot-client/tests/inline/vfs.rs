@@ -1043,6 +1043,74 @@ fn predictor_prefers_stride_after_repeated_reads() {
 }
 
 #[test]
+fn classify_recognizes_btree_and_overflow_pages() {
+	let page_size = DEFAULT_PAGE_SIZE;
+	for type_byte in [0x02u8, 0x05, 0x0a, 0x0d] {
+		let mut page = vec![0u8; page_size];
+		page[0] = type_byte;
+		assert_eq!(classify(2, &page), PageClass::Btree);
+	}
+
+	// An overflow page leads with a 4-byte next-page pointer, not a page type.
+	let mut overflow = vec![0u8; page_size];
+	overflow[0..4].copy_from_slice(&7u32.to_be_bytes());
+	assert_eq!(classify(2, &overflow), PageClass::Overflow);
+
+	// Page 1 carries the b-tree type byte after the 100-byte database header.
+	let mut header_page = vec![0u8; page_size];
+	header_page[100] = 0x0d;
+	assert_eq!(classify(1, &header_page), PageClass::Btree);
+}
+
+#[test]
+fn interleaved_overflow_reads_hide_leaf_forward_scan() {
+	// A single read-ahead tracker fed the merged leaf/overflow access stream of
+	// a scan over overflowing rows never sees a monotonic stride, so it never
+	// escalates to forward-scan read-ahead. This documents the behavior the
+	// per-class trackers fix.
+	let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags::default());
+	let mut tracker = AdaptiveReadAhead::default();
+	let mut mode = ReadAheadMode::Bounded;
+	for pgno in [2, 20, 3, 21, 4, 22, 5, 23, 6, 24] {
+		mode = tracker.record_and_plan(&[pgno], &config).mode;
+	}
+	assert_eq!(mode, ReadAheadMode::Bounded);
+}
+
+#[test]
+fn separated_leaf_reads_escalate_forward_scan() {
+	// With overflow pages routed to a separate tracker, the leaf tracker sees a
+	// clean monotonic stride and escalates to forward-scan read-ahead.
+	let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags::default());
+	let mut tracker = AdaptiveReadAhead::default();
+	let mut mode = ReadAheadMode::Bounded;
+	for pgno in [2, 3, 4, 5, 6] {
+		mode = tracker.record_and_plan(&[pgno], &config).mode;
+	}
+	assert_eq!(mode, ReadAheadMode::ForwardScan);
+}
+
+#[test]
+fn classified_predictor_keeps_per_class_strides_independent() {
+	// Interleaving leaf and overflow accesses must not destroy either stream's
+	// stride signal: each class predicts its own forward run.
+	let mut predictor = ClassifiedPredictor::default();
+	for (leaf, overflow) in [(2, 20), (3, 21), (4, 22), (5, 23)] {
+		predictor.record(PageClass::Btree, leaf);
+		predictor.record(PageClass::Overflow, overflow);
+	}
+
+	assert_eq!(
+		predictor.multi_predict(PageClass::Btree, 5, 3, 100),
+		vec![6, 7, 8]
+	);
+	assert_eq!(
+		predictor.multi_predict(PageClass::Overflow, 23, 3, 100),
+		vec![24, 25, 26]
+	);
+}
+
+#[test]
 fn direct_engine_open_engine_is_concurrency_safe() {
 	let runtime = direct_runtime();
 	let handle = runtime.handle().clone();

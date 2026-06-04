@@ -65,14 +65,10 @@ pub async fn open_database_from_transport(
 		generation,
 	});
 	let preload_start = Instant::now();
-	let preload_result = fetch_initial_pages_for_registration(
-		transport.clone(),
-		&actor_id,
-		generation,
-		&config,
-	)
-	.await
-	.map_err(|err| anyhow!("failed to preload sqlite pages: {err}"));
+	let preload_result =
+		fetch_initial_pages_for_registration(transport.clone(), &actor_id, generation, &config)
+			.await
+			.map_err(|err| anyhow!("failed to preload sqlite pages: {err}"));
 	let initial_pages = observe_open_phase_result(
 		&metrics,
 		SqliteOpenPhase::InitialPreload,

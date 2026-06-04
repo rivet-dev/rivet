@@ -23,6 +23,7 @@ use tokio::runtime::Handle;
 use crate::optimization_flags::{
 	SqliteOptimizationFlags, SqliteVfsPageCacheMode, sqlite_optimization_flags,
 };
+use crate::sqlite_page::{PageClass, classify};
 
 const DEFAULT_PREFETCH_DEPTH: usize = 64;
 const LEGACY_PREFETCH_DEPTH: usize = 16;
@@ -448,8 +449,8 @@ struct VfsState {
 	committed_page_cache: Cache<u32, Vec<u8>>,
 	protected_page_cache: Arc<SccHashMap<u32, Vec<u8>>>,
 	write_buffer: WriteBuffer,
-	predictor: PrefetchPredictor,
-	read_ahead: AdaptiveReadAhead,
+	predictor: ClassifiedPredictor,
+	read_ahead: ClassifiedReadAhead,
 	recent_pages: RecentPageTracker,
 	dead: bool,
 }
@@ -489,6 +490,67 @@ struct AdaptiveReadAhead {
 	last_pgno: Option<u32>,
 	scan_tip_pgno: Option<u32>,
 	score: i32,
+}
+
+/// Per-class Markov/stride predictors. Keeping B-tree and overflow accesses on
+/// separate predictors prevents the interleaved leaf/overflow read pattern from
+/// destroying each stream's stride signal.
+#[derive(Debug, Clone, Default)]
+struct ClassifiedPredictor {
+	btree: PrefetchPredictor,
+	overflow: PrefetchPredictor,
+}
+
+impl ClassifiedPredictor {
+	fn record(&mut self, class: PageClass, pgno: u32) {
+		self.for_class(class).record(pgno);
+	}
+
+	fn multi_predict(
+		&self,
+		class: PageClass,
+		from_pgno: u32,
+		depth: usize,
+		db_size_pages: u32,
+	) -> Vec<u32> {
+		match class {
+			PageClass::Btree => self.btree.multi_predict(from_pgno, depth, db_size_pages),
+			PageClass::Overflow => self.overflow.multi_predict(from_pgno, depth, db_size_pages),
+		}
+	}
+
+	fn for_class(&mut self, class: PageClass) -> &mut PrefetchPredictor {
+		match class {
+			PageClass::Btree => &mut self.btree,
+			PageClass::Overflow => &mut self.overflow,
+		}
+	}
+}
+
+/// Per-class adaptive read-ahead trackers. The B-tree tracker drives leaf-scan
+/// forward read-ahead while the overflow tracker handles overflow-chain scans,
+/// so neither resets the other's forward-scan score.
+#[derive(Debug, Clone, Default)]
+struct ClassifiedReadAhead {
+	btree: AdaptiveReadAhead,
+	overflow: AdaptiveReadAhead,
+}
+
+impl ClassifiedReadAhead {
+	fn for_class(&mut self, class: PageClass) -> &mut AdaptiveReadAhead {
+		match class {
+			PageClass::Btree => &mut self.btree,
+			PageClass::Overflow => &mut self.overflow,
+		}
+	}
+}
+
+/// A read-ahead plan paired with the page class of the prefetch seed, so the
+/// caller knows which per-class predictor to extrapolate from.
+#[derive(Debug, Clone, Copy)]
+struct ClassifiedReadAheadPlan {
+	plan: ReadAheadPlan,
+	seed_class: PageClass,
 }
 
 #[derive(Debug, Clone)]
@@ -903,8 +965,8 @@ impl VfsState {
 			committed_page_cache,
 			protected_page_cache: Arc::new(SccHashMap::new()),
 			write_buffer: WriteBuffer::default(),
-			predictor: PrefetchPredictor::default(),
-			read_ahead: AdaptiveReadAhead::default(),
+			predictor: ClassifiedPredictor::default(),
+			read_ahead: ClassifiedReadAhead::default(),
 			recent_pages: RecentPageTracker::new(
 				config.recent_hint_page_budget,
 				config.recent_hint_range_budget,
@@ -946,6 +1008,66 @@ impl VfsState {
 					.read_sync(&pgno, |_, bytes| bytes.clone())
 			})
 			.or_else(|| self.page_cache.get(&pgno))
+	}
+
+	/// Record target page accesses into the per-class predictor and read-ahead
+	/// trackers, returning the read-ahead plan for the class of the last target
+	/// page (the prefetch seed). `train_predictor` mirrors the existing
+	/// predictor-training gate on the cache-hit path.
+	///
+	/// Pages are classified from `resolved`, the already-materialized bytes for
+	/// the non-missing targets, so this adds no extra page copies. A page whose
+	/// bytes are not present (a first-touch miss) defaults to
+	/// [`PageClass::Btree`]: the only pages read before their bytes are cached
+	/// are first-touch leaf misses during a scan, since overflow pages arrive
+	/// prefetched (server-side expansion) and are already cached.
+	fn record_targets(
+		&mut self,
+		config: &VfsConfig,
+		target_pgnos: &[u32],
+		resolved: &HashMap<u32, Option<Vec<u8>>>,
+		train_predictor: bool,
+	) -> ClassifiedReadAheadPlan {
+		let classes: Vec<PageClass> = target_pgnos
+			.iter()
+			.map(|&pgno| match resolved.get(&pgno) {
+				Some(Some(bytes)) => classify(pgno, bytes),
+				_ => PageClass::Btree,
+			})
+			.collect();
+		let mut btree_pgnos = Vec::new();
+		let mut overflow_pgnos = Vec::new();
+		for (&pgno, &class) in target_pgnos.iter().zip(classes.iter()) {
+			match class {
+				PageClass::Btree => btree_pgnos.push(pgno),
+				PageClass::Overflow => overflow_pgnos.push(pgno),
+			}
+		}
+
+		if train_predictor {
+			for pgno in &btree_pgnos {
+				self.predictor.record(PageClass::Btree, *pgno);
+			}
+			for pgno in &overflow_pgnos {
+				self.predictor.record(PageClass::Overflow, *pgno);
+			}
+		}
+
+		let btree_plan = self
+			.read_ahead
+			.for_class(PageClass::Btree)
+			.record_and_plan(&btree_pgnos, config);
+		let overflow_plan = self
+			.read_ahead
+			.for_class(PageClass::Overflow)
+			.record_and_plan(&overflow_pgnos, config);
+
+		let seed_class = classes.last().copied().unwrap_or(PageClass::Btree);
+		let plan = match seed_class {
+			PageClass::Btree => btree_plan,
+			PageClass::Overflow => overflow_plan,
+		};
+		ClassifiedReadAheadPlan { plan, seed_class }
 	}
 
 	fn has_readable_page(&self, config: &VfsConfig, pgno: u32) -> bool {
@@ -1331,12 +1453,12 @@ impl VfsContext {
 			self.resolve_pages_cache_hits
 				.fetch_add(target_pgnos.len() as u64, Relaxed);
 			let mut state = self.state.write();
-			if self.config.cache_hit_predictor_training {
-				for pgno in target_pgnos.iter().copied() {
-					state.predictor.record(pgno);
-				}
-			}
-			state.read_ahead.record_and_plan(target_pgnos, &self.config);
+			state.record_targets(
+				&self.config,
+				target_pgnos,
+				&resolved,
+				self.config.cache_hit_predictor_training,
+			);
 			if self.config.recent_page_hints {
 				state
 					.recent_pages
@@ -1368,10 +1490,10 @@ impl VfsContext {
 			expected_head_txid,
 		) = {
 			let mut state = self.state.write();
-			for pgno in target_pgnos.iter().copied() {
-				state.predictor.record(pgno);
-			}
-			let read_ahead_plan = state.read_ahead.record_and_plan(target_pgnos, &self.config);
+			let ClassifiedReadAheadPlan {
+				plan: read_ahead_plan,
+				seed_class,
+			} = state.record_targets(&self.config, target_pgnos, &resolved, true);
 			if self.config.recent_page_hints {
 				state
 					.recent_pages
@@ -1388,6 +1510,7 @@ impl VfsContext {
 				prediction_budget = page_budget.saturating_sub(to_fetch.len());
 				let seed = seed_pgno.unwrap_or_default();
 				predicted_pgnos = state.predictor.multi_predict(
+					seed_class,
 					seed,
 					prediction_budget.min(read_ahead_plan.depth),
 					state.db_size_pages.max(seed),

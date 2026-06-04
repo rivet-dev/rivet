@@ -23,6 +23,9 @@ pub mod optimization_flags;
 /// SQLite query execution helpers.
 pub mod query;
 
+/// Lightweight SQLite page classification for prefetch planning.
+pub mod sqlite_page;
+
 pub use depot_client_types as types;
 
 /// Custom SQLite VFS for actor-side depot transport.

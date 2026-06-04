@@ -433,6 +433,7 @@ impl SqliteTransport for DirectDepotTransport {
 				&pgnos,
 				depot::types::GetPagesOptions {
 					expected_head_txid: request.expected_head_txid,
+					..Default::default()
 				},
 			)
 			.await

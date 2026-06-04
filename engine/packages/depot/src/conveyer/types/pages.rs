@@ -22,6 +22,9 @@ pub struct GetPagesResult {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GetPagesOptions {
 	pub expected_head_txid: Option<u64>,
+	/// Also return the overflow pages referenced by any requested leaf page so a
+	/// scanning client does not round trip once per overflowing row.
+	pub expand_overflow: bool,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

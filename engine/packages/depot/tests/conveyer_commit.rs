@@ -340,6 +340,7 @@ async fn get_pages_head_fence_rejects_stale_reader() -> Result<()> {
 					vec![1],
 					GetPagesOptions {
 						expected_head_txid: Some(1),
+						..Default::default()
 					},
 				)
 				.await?;
@@ -363,6 +364,7 @@ async fn get_pages_head_fence_rejects_stale_reader() -> Result<()> {
 					vec![1],
 					GetPagesOptions {
 						expected_head_txid: Some(1),
+						..Default::default()
 					},
 				)
 				.await
