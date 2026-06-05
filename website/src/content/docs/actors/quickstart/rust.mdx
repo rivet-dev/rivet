@@ -1,0 +1,120 @@
+---
+title: "Rust Quickstart (Preview)"
+description: "Run a RivetKit Rust counter actor with rivetkit-core"
+skill: true
+---
+
+<Note>
+RivetKit Rust is in preview. This quickstart uses the low-level `rivetkit-core` API directly.
+</Note>
+
+## Steps
+
+<Steps>
+<Step title="Build The Local Engine">
+
+The Rust runtime connects to the Rivet Engine. Build the local engine binary once:
+
+```sh
+cargo build -p rivet-engine
+```
+
+</Step>
+
+<Step title="Run The Rust Counter">
+
+Start the example actor runtime. `RIVET_ENGINE_BINARY_PATH` tells `rivetkit-core` where to find `rivet-engine`; the runtime will spawn or reuse a local engine at `http://127.0.0.1:6420`.
+
+```sh
+cd examples/rust-counter
+RIVET_ENGINE_BINARY_PATH=../../target/debug/rivet-engine cargo run
+```
+
+If you prefer to run the engine yourself, start `rivet-engine start` separately and run the example with `RIVET_ENDPOINT` pointing at that engine.
+
+</Step>
+
+<Step title="Create A Counter Actor">
+
+In another terminal, create the default namespace and a `counter` actor. These examples use the local dev token `dev`.
+
+```sh
+curl -s -X POST 'http://127.0.0.1:6420/namespaces' \
+  -H 'authorization: Bearer dev' \
+  -H 'content-type: application/json' \
+  -d '{"name":"default","display_name":"Default"}'
+```
+
+```sh
+ACTOR_ID=$(curl -s -X POST 'http://127.0.0.1:6420/actors?namespace=default' \
+  -H 'authorization: Bearer dev' \
+  -H 'content-type: application/json' \
+  -d '{"name":"counter","runner_name_selector":"rivetkit-rust","key":null,"input":null,"datacenter":null,"crash_policy":"destroy"}' \
+  | jq -r '.actor.actor_id')
+```
+
+</Step>
+
+<Step title="Call Actions">
+
+Call `increment` to update the actor state:
+
+```sh
+curl -s -X POST "http://127.0.0.1:6420/gateway/$ACTOR_ID/action/increment" \
+  -H 'x-rivet-encoding: json' \
+  -H 'content-type: application/json' \
+  -d '{"args":[]}'
+```
+
+Read the current count:
+
+```sh
+curl -s -X POST "http://127.0.0.1:6420/gateway/$ACTOR_ID/action/get" \
+  -H 'x-rivet-encoding: json' \
+  -H 'content-type: application/json' \
+  -d '{"args":[]}'
+```
+
+</Step>
+
+<Step title="Inspect The Actor Code">
+
+The example registers a `counter` actor factory with `rivetkit-core` and handles action events in a receive loop:
+
+```rust examples/rust-counter/src/main.rs
+use anyhow::Result;
+use rivetkit_core::ServeConfig;
+use tokio_util::sync::CancellationToken;
+
+#[tokio::main]
+async fn main() -> Result<()> {
+	let config = ServeConfig::from_env();
+	let shutdown = CancellationToken::new();
+	let registry = rivetkit_rust_counter_example::registry();
+	let serve = tokio::spawn({
+		let shutdown = shutdown.clone();
+		async move { registry.serve_with_config(config, shutdown).await }
+	});
+
+	tokio::signal::ctrl_c().await?;
+	shutdown.cancel();
+	serve.await??;
+
+	Ok(())
+}
+```
+
+Full source: [`examples/rust-counter`](https://github.com/rivet-dev/rivet/tree/main/examples/rust-counter).
+
+</Step>
+
+<Step title="Run The E2E Test">
+
+The example includes an e2e test that starts a temporary engine, serves the Rust registry, creates a counter actor, calls `increment` twice, and verifies `get` returns `2`.
+
+```sh
+cargo test -p rivetkit-rust-counter-example --test e2e -- --nocapture
+```
+
+</Step>
+</Steps>
