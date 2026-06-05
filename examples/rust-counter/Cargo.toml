@@ -1,0 +1,22 @@
+[package]
+name = "rivetkit-rust-counter-example"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+ciborium.workspace = true
+rivetkit-core.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+
+[dev-dependencies]
+portpicker.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+tempfile.workspace = true

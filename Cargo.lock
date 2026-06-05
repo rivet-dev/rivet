@@ -6022,6 +6022,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivetkit-rust-counter-example"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ciborium",
+ "portpicker",
+ "reqwest 0.12.22",
+ "rivetkit-core",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "rivetkit-shared-types"
 version = "2.3.0-rc.12"
 dependencies = [
