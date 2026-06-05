@@ -99,9 +99,10 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_MIGRATION_REJECTED_JOURNAL_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"pegboard_sqlite_migration_rejected_journal_total",
-		"Total number of v1 actors rejected from migration because a rollback journal sidecar was present (actor crashed during a write transaction).",
+	pub static ref SQLITE_MIGRATION_ABANDONED_SIDECAR_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_sqlite_migration_abandoned_sidecar_total",
+		"Total number of sidecars abandoned during sqlite v1 to v2 migration.",
+		&["sidecar"],
 		*REGISTRY
 	).unwrap();
 
