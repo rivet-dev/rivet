@@ -330,7 +330,7 @@ async fn bails_when_v2_meta_is_unreadable() -> Result<()> {
 }
 
 #[tokio::test]
-async fn rejects_v1_journal_sidecars() -> Result<()> {
+async fn migrates_v1_sqlite_and_abandons_journal_sidecars() -> Result<()> {
 	let db = test_db().await?;
 	let actor_id = Id::new_v1(1);
 	let recipient = recipient(actor_id);
@@ -338,17 +338,12 @@ async fn rejects_v1_journal_sidecars() -> Result<()> {
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &main).await?;
 	seed_v1_file(&db, &recipient, FILE_TAG_JOURNAL, &journal).await?;
 
-	let err = migrate(&db, actor_id)
-		.await
-		.expect_err("journal sidecar should fail migration");
-	let msg = err.to_string();
-	assert!(
-		msg.contains("crashed during a write transaction"),
-		"unexpected error: {err:?}"
-	);
-	assert!(
-		msg.contains(&actor_id.to_string()),
-		"error should include actor id: {err:?}"
+	assert!(migrate(&db, actor_id).await?.migrated);
+
+	let actor_id_str = actor_id.to_string();
+	assert_eq!(
+		query_note_values(&load_v2_bytes(&db, &actor_id_str).await?)?,
+		vec!["before"]
 	);
 
 	Ok(())
@@ -413,27 +408,27 @@ async fn rejects_v1_databases_with_unsupported_page_size() -> Result<()> {
 }
 
 #[tokio::test]
-async fn rejects_v1_wal_sidecars() -> Result<()> {
+async fn migrates_v1_sqlite_and_abandons_wal_sidecars() -> Result<()> {
 	let db = test_db().await?;
 	let actor_id = Id::new_v1(1);
 	let recipient = recipient(actor_id);
 	let fixture = build_fixture_db(&["wal-sidecar"])?;
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
-	seed_v1_file(&db, &recipient, FILE_TAG_WAL, b"unexpected wal bytes").await?;
+	seed_v1_file(&db, &recipient, FILE_TAG_WAL, &[]).await?;
 
-	let err = migrate(&db, actor_id)
-		.await
-		.expect_err("wal sidecar should fail migration");
-	assert!(
-		err.to_string().contains("unexpected WAL sidecar"),
-		"unexpected error: {err:?}"
+	assert!(migrate(&db, actor_id).await?.migrated);
+
+	let actor_id_str = actor_id.to_string();
+	assert_eq!(
+		query_note_values(&load_v2_bytes(&db, &actor_id_str).await?)?,
+		vec!["wal-sidecar"]
 	);
 
 	Ok(())
 }
 
 #[tokio::test]
-async fn rejects_v1_shm_sidecars() -> Result<()> {
+async fn migrates_v1_sqlite_and_abandons_shm_sidecars() -> Result<()> {
 	let db = test_db().await?;
 	let actor_id = Id::new_v1(1);
 	let recipient = recipient(actor_id);
@@ -441,12 +436,12 @@ async fn rejects_v1_shm_sidecars() -> Result<()> {
 	seed_v1_file(&db, &recipient, FILE_TAG_MAIN, &fixture).await?;
 	seed_v1_file(&db, &recipient, FILE_TAG_SHM, b"unexpected shm bytes").await?;
 
-	let err = migrate(&db, actor_id)
-		.await
-		.expect_err("shm sidecar should fail migration");
-	assert!(
-		err.to_string().contains("unexpected SHM sidecar"),
-		"unexpected error: {err:?}"
+	assert!(migrate(&db, actor_id).await?.migrated);
+
+	let actor_id_str = actor_id.to_string();
+	assert_eq!(
+		query_note_values(&load_v2_bytes(&db, &actor_id_str).await?)?,
+		vec!["shm-sidecar"]
 	);
 
 	Ok(())
