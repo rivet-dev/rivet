@@ -133,6 +133,12 @@ export const sitemap = [
 								href: "/docs/actors/quickstart/next-js",
 								icon: faNextjs,
 							},
+							{
+								title: "Rust",
+								href: "/docs/actors/quickstart/rust",
+								icon: faRust,
+								badge: "Preview",
+							},
 						],
 					},
 				]

@@ -1,9 +1,9 @@
-use anyhow::{anyhow, Context, Result};
-use base64::{engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use anyhow::{Context, Result, anyhow};
+use base64::{Engine as _, engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD};
 use bytes::Bytes;
 use reqwest::{
-	header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT},
 	Method,
+	header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT},
 };
 use serde::{Deserialize, Serialize};
 use serde_cbor;
@@ -13,8 +13,8 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 use crate::{
 	common::{
-		ActorKey, EncodingKind, RawWebSocket, HEADER_RIVET_ACTOR, HEADER_RIVET_NAMESPACE,
-		HEADER_RIVET_TARGET, HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET, PATH_WEBSOCKET_PREFIX,
+		ActorKey, EncodingKind, HEADER_RIVET_ACTOR, HEADER_RIVET_NAMESPACE, HEADER_RIVET_TARGET,
+		HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET, PATH_WEBSOCKET_PREFIX, RawWebSocket,
 		USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID, WS_PROTOCOL_CONN_PARAMS,
 		WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING, WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET,
 		WS_PROTOCOL_TOKEN,
@@ -70,6 +70,8 @@ struct ActorsGetOrCreateRequest {
 	key: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	input: Option<String>, // base64-encoded CBOR
+	runner_name_selector: String,
+	crash_policy: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,6 +86,8 @@ struct ActorsCreateRequest {
 	key: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	input: Option<String>, // base64-encoded CBOR
+	runner_name_selector: String,
+	crash_policy: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -208,8 +212,9 @@ impl RemoteManager {
 	pub async fn get_for_id(&self, name: &str, actor_id: &str) -> Result<Option<String>> {
 		let config = self.resolved_config().await?;
 		let url = format!(
-			"{}/actors?name={}&actor_ids={}",
+			"{}/actors?namespace={}&name={}&actor_ids={}",
 			config.endpoint,
+			urlencoding::encode(&config.namespace),
 			urlencoding::encode(name),
 			urlencoding::encode(actor_id)
 		);
@@ -239,8 +244,9 @@ impl RemoteManager {
 		let config = self.resolved_config().await?;
 		let key_str = serde_json::to_string(key)?;
 		let url = format!(
-			"{}/actors?name={}&key={}",
+			"{}/actors?namespace={}&name={}&key={}",
 			config.endpoint,
+			urlencoding::encode(&config.namespace),
 			urlencoding::encode(name),
 			urlencoding::encode(&key_str)
 		);
@@ -285,19 +291,27 @@ impl RemoteManager {
 			name: name.to_string(),
 			key: key_str,
 			input: input_encoded,
+			runner_name_selector: self.pool_name.clone(),
+			crash_policy: "destroy".to_string(),
 		};
 
 		let req = self.apply_common_headers_with(
 			self.client
-				.put(format!("{}/actors", config.endpoint))
+				.put(format!(
+					"{}/actors?namespace={}",
+					config.endpoint,
+					urlencoding::encode(&config.namespace)
+				))
 				.json(&request_body),
 			&config,
 		)?;
 
 		let res = req.send().await?;
 
-		if !res.status().is_success() {
-			return Err(anyhow!("failed to get or create actor: {}", res.status()));
+		let status = res.status();
+		if !status.is_success() {
+			let body = res.text().await.unwrap_or_default();
+			return Err(anyhow!("failed to get or create actor ({status}): {body}"));
 		}
 
 		let data: ActorsGetOrCreateResponse = res.json().await?;
@@ -324,19 +338,27 @@ impl RemoteManager {
 			name: name.to_string(),
 			key: key_str,
 			input: input_encoded,
+			runner_name_selector: self.pool_name.clone(),
+			crash_policy: "destroy".to_string(),
 		};
 
 		let req = self.apply_common_headers_with(
 			self.client
-				.post(format!("{}/actors", config.endpoint))
+				.post(format!(
+					"{}/actors?namespace={}",
+					config.endpoint,
+					urlencoding::encode(&config.namespace)
+				))
 				.json(&request_body),
 			&config,
 		)?;
 
 		let res = req.send().await?;
 
-		if !res.status().is_success() {
-			return Err(anyhow!("failed to create actor: {}", res.status()));
+		let status = res.status();
+		if !status.is_success() {
+			let body = res.text().await.unwrap_or_default();
+			return Err(anyhow!("failed to create actor ({status}): {body}"));
 		}
 
 		let data: ActorsCreateResponse = res.json().await?;

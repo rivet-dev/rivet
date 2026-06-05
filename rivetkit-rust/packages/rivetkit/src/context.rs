@@ -6,12 +6,14 @@ use std::sync::{Arc, OnceLock};
 use anyhow::{Context, Result};
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
 use rivetkit_core::{
-	ActorContext, ActorKey, ConnHandle, ConnId, Kv, RequestSaveOpts, SqliteDb, StateDelta,
-	actor::connection::ConnHandles, error::ActorRuntime,
+	ActorContext, ActorKey, ConnHandle, ConnId, KeepAwakeRegion, Kv, OnStateChangeGuard,
+	RequestSaveOpts, SqliteDb, StateDelta, actor::connection::ConnHandles, error::ActorRuntime,
 };
 use serde::{Serialize, de::DeserializeOwned};
+use tokio_util::sync::CancellationToken;
 
 use crate::actor::Actor;
+use crate::queue::Queue;
 
 #[derive(Debug)]
 pub struct Ctx<A: Actor> {
@@ -67,12 +69,90 @@ impl<A: Actor> Ctx<A> {
 		self.inner.sql()
 	}
 
-	pub fn queue(&self) -> &ActorContext {
-		self.inner.queue()
+	pub fn queue(&self) -> Queue<'_, A> {
+		Queue::new(&self.inner)
 	}
 
 	pub fn schedule(&self) -> Schedule<'_> {
 		Schedule { inner: &self.inner }
+	}
+
+	/// Holds the actor awake for the duration of `future` and returns its
+	/// output. Mirrors the TypeScript `ctx.waitUntil`/keep-awake semantics:
+	/// the actor will not sleep while the future is in flight.
+	pub async fn keep_awake<F>(&self, future: F) -> F::Output
+	where
+		F: Future,
+	{
+		self.inner.keep_awake(future).await
+	}
+
+	/// Acquires a keep-awake region that holds the actor awake until the
+	/// returned guard is dropped. Use when the awake window does not map
+	/// cleanly to a single future.
+	pub fn keep_awake_region(&self) -> KeepAwakeRegion {
+		self.inner.keep_awake_region()
+	}
+
+	/// Registers runtime-owned background work that must drain during shutdown.
+	/// Unlike `wait_until`, registered tasks are raced against the shutdown
+	/// grace deadline by core.
+	pub fn register_task(&self, future: impl Future<Output = ()> + Send + 'static) {
+		self.inner.register_task(future);
+	}
+
+	/// Returns the actor abort signal. The token is cancelled when the actor is
+	/// being torn down so in-flight work can observe shutdown.
+	pub fn abort_signal(&self) -> CancellationToken {
+		self.inner.actor_abort_signal()
+	}
+
+	/// Returns `true` once the actor abort signal has fired.
+	pub fn aborted(&self) -> bool {
+		self.inner.actor_aborted()
+	}
+
+	/// Runs `future` inside an on-state-change region, mirroring the TypeScript
+	/// `onStateChange` hook. While the future is in flight the actor will not
+	/// sleep, and shutdown waits for the region to finish before serializing
+	/// final state. Call this after mutating actor state to react to the change.
+	pub async fn on_state_change<F>(&self, future: F) -> F::Output
+	where
+		F: Future,
+	{
+		let _guard = self.inner.begin_on_state_change();
+		future.await
+	}
+
+	/// Begins an on-state-change region tracked by core. The returned guard
+	/// keeps the actor awake until dropped. Prefer `on_state_change` when the
+	/// reaction maps cleanly to a single future.
+	pub fn begin_state_change(&self) -> OnStateChangeGuard {
+		self.inner.begin_on_state_change()
+	}
+
+	/// Executes a single SQL statement against the actor database, returning the
+	/// CBOR-encoded result. Convenience over `sql()` for the CBOR boundary.
+	pub async fn db_exec(&self, sql: &str) -> Result<Vec<u8>> {
+		self.inner.db_exec(sql).await
+	}
+
+	/// Runs a read query with optional CBOR-encoded bind params, returning
+	/// CBOR-encoded rows.
+	pub async fn db_query(&self, sql: &str, params: Option<&[u8]>) -> Result<Vec<u8>> {
+		self.inner.db_query(sql, params).await
+	}
+
+	/// Runs a write query with optional CBOR-encoded bind params, returning the
+	/// CBOR-encoded execution result.
+	pub async fn db_execute(&self, sql: &str, params: Option<&[u8]>) -> Result<Vec<u8>> {
+		self.inner.db_execute(sql, params).await
+	}
+
+	/// Runs a statement with optional CBOR-encoded bind params, discarding the
+	/// result.
+	pub async fn db_run(&self, sql: &str, params: Option<&[u8]>) -> Result<()> {
+		self.inner.db_run(sql, params).await
 	}
 
 	/// Requests a save without surfacing delivery failures to the caller.

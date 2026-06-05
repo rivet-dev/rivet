@@ -31,8 +31,6 @@ pub enum Event<A: Actor> {
 	SerializeState(SerializeState<A>),
 	Sleep(Sleep<A>),
 	Destroy(Destroy<A>),
-	WorkflowHistory(WfHistory),
-	WorkflowReplay(WfReplay),
 }
 
 impl<A: Actor> Event<A> {
@@ -125,14 +123,11 @@ impl<A: Actor> Event<A> {
 			ActorEvent::DisconnectConn { .. } => {
 				unreachable!("DisconnectConn is handled by foreign-runtime adapters")
 			}
-			ActorEvent::WorkflowHistoryRequested { reply } => {
-				Self::WorkflowHistory(WfHistory { reply: Some(reply) })
-			}
-			ActorEvent::WorkflowReplayRequested { entry_id, reply } => {
-				Self::WorkflowReplay(WfReplay {
-					entry_id,
-					reply: Some(reply),
-				})
+			ActorEvent::WorkflowHistoryRequested { .. }
+			| ActorEvent::WorkflowReplayRequested { .. } => {
+				unreachable!(
+					"workflow events are handled by the TypeScript runtime; Rust actors never host workflows"
+				)
 			}
 		}
 	}
@@ -282,9 +277,12 @@ impl<'de> VariantAccess<'de> for ActionVariantAccess<'de> {
 
 	fn unit_variant(self) -> Result<(), Self::Error> {
 		match self.args {
-			[] | [0xf6] => Ok(()),
+			// Empty bytes, cbor null, or an empty cbor array (`[]`) all map to a
+			// no-argument action. Clients encode the empty positional argument
+			// list as an empty cbor array.
+			[] | [0xf6] | [0x80] => Ok(()),
 			_ => Err(de::Error::custom(
-				"unit action variant expects empty args or cbor null",
+				"unit action variant expects empty args, cbor null, or an empty cbor array",
 			)),
 		}
 	}
@@ -1326,90 +1324,6 @@ impl<A: Actor> Destroy<A> {
 	}
 }
 
-#[derive(Debug)]
-#[must_use = "reply to workflow history or dropping it sends actor/dropped_reply"]
-pub struct WfHistory {
-	pub(crate) reply: Option<Reply<Option<Vec<u8>>>>,
-}
-
-impl Drop for WfHistory {
-	fn drop(&mut self) {
-		if self.reply.is_some() {
-			warn_dropped_event("WorkflowHistory", "history");
-		}
-	}
-}
-
-impl WfHistory {
-	pub fn reply<T: Serialize>(self, history: Option<&T>) {
-		match history {
-			Some(history) => match encode_cbor(history, "encode workflow history as cbor") {
-				Ok(bytes) => self.reply_raw(Some(bytes)),
-				Err(error) => self.reply_err(error),
-			},
-			None => self.reply_raw(None),
-		}
-	}
-
-	pub fn reply_raw(mut self, bytes: Option<Vec<u8>>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(bytes));
-		}
-	}
-
-	pub fn reply_err(mut self, err: anyhow::Error) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Err(err));
-		}
-	}
-}
-
-#[derive(Debug)]
-#[must_use = "reply to workflow replay or dropping it sends actor/dropped_reply"]
-pub struct WfReplay {
-	pub(crate) entry_id: Option<String>,
-	pub(crate) reply: Option<Reply<Option<Vec<u8>>>>,
-}
-
-impl Drop for WfReplay {
-	fn drop(&mut self) {
-		if self.reply.is_some() {
-			warn_dropped_event(
-				"WorkflowReplay",
-				self.entry_id.as_deref().unwrap_or("<start>"),
-			);
-		}
-	}
-}
-
-impl WfReplay {
-	pub fn entry_id(&self) -> Option<&str> {
-		self.entry_id.as_deref()
-	}
-
-	pub fn reply<T: Serialize>(self, value: Option<&T>) {
-		match value {
-			Some(value) => match encode_cbor(value, "encode workflow replay as cbor") {
-				Ok(bytes) => self.reply_raw(Some(bytes)),
-				Err(error) => self.reply_err(error),
-			},
-			None => self.reply_raw(None),
-		}
-	}
-
-	pub fn reply_raw(mut self, bytes: Option<Vec<u8>>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(bytes));
-		}
-	}
-
-	pub fn reply_err(mut self, err: anyhow::Error) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Err(err));
-		}
-	}
-}
-
 fn warn_dropped_event(variant: &'static str, identifying: impl fmt::Display) {
 	tracing::warn!(
 		variant,
@@ -1607,29 +1521,6 @@ mod tests {
 				request: Some(test_request("/drop-websocket")),
 				reply: Some(reply_tx.into()),
 				_p: PhantomData,
-			});
-			reply_rx
-		});
-	}
-
-	#[test]
-	fn dropped_workflow_history_logs_warning_and_sends_dropped_reply() {
-		assert_dropped_reply_logs("WorkflowHistory", "history", || {
-			let (reply_tx, reply_rx) = oneshot::channel();
-			drop(WfHistory {
-				reply: Some(reply_tx.into()),
-			});
-			reply_rx
-		});
-	}
-
-	#[test]
-	fn dropped_workflow_replay_logs_warning_and_sends_dropped_reply() {
-		assert_dropped_reply_logs("WorkflowReplay", "entry-7", || {
-			let (reply_tx, reply_rx) = oneshot::channel();
-			drop(WfReplay {
-				entry_id: Some("entry-7".into()),
-				reply: Some(reply_tx.into()),
 			});
 			reply_rx
 		});
@@ -1953,33 +1844,6 @@ mod tests {
 	}
 
 	#[test]
-	fn workflow_history_reply_encodes_cbor_value() {
-		let runtime = tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("build runtime");
-		let (reply_tx, reply_rx) = oneshot::channel();
-		let snapshot = WorkflowSnapshot {
-			step: "hydrate".into(),
-			attempt: 2,
-		};
-
-		WfHistory {
-			reply: Some(reply_tx.into()),
-		}
-		.reply(Some(&snapshot));
-
-		let bytes = runtime
-			.block_on(reply_rx)
-			.expect("receive workflow history reply")
-			.expect("workflow history should succeed")
-			.expect("workflow history should include bytes");
-		let decoded: WorkflowSnapshot =
-			ciborium::from_reader(Cursor::new(bytes)).expect("decode workflow history payload");
-		assert_eq!(decoded, snapshot);
-	}
-
-	#[test]
 	fn serialize_state_save_encodes_actor_state_delta() {
 		let runtime = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
@@ -2028,12 +1892,6 @@ mod tests {
 	struct SendPayload {
 		text: String,
 		count: u32,
-	}
-
-	#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-	struct WorkflowSnapshot {
-		step: String,
-		attempt: u32,
 	}
 
 	fn test_action(name: &str, args: Vec<u8>) -> Action<TestActor> {

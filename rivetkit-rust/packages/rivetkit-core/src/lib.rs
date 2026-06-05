@@ -134,7 +134,7 @@ pub use actor::queue::{
 pub use actor::sqlite::{
 	BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult, SqliteBackend, SqliteDb,
 };
-pub use actor::state::RequestSaveOpts;
+pub use actor::state::{OnStateChangeGuard, RequestSaveOpts};
 pub use actor::task::{
 	ActionDispatchResult, ActorTask, DispatchCommand, HttpDispatchResult, LifecycleCommand,
 	LifecycleEvent, LifecycleState,
@@ -145,7 +145,9 @@ pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
 pub use registry::{CoreRegistry, ServeConfig};
 pub use runtime::{RuntimeBoxFuture, RuntimeSpawner, boxed_runtime_future};
-pub use serverless::{CoreServerlessRuntime, ServerlessRequest, ServerlessResponse};
+pub use serverless::{
+	CoreServerlessRuntime, ServerlessRequest, ServerlessResponse, ServerlessStreamError,
+};
 pub use types::{
 	ActorKey, ActorKeySegment, ConnId, ListOpts, SaveStateOpts, WsMessage, format_actor_key,
 };

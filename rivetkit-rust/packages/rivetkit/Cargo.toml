@@ -9,15 +9,9 @@ workspace = "../../../"
 [features]
 default = ["sqlite"]
 sqlite = ["rivetkit-core/sqlite"]
-typed-event-loop-example = []
-
-[[example]]
-name = "counter"
-required-features = ["typed-event-loop-example"]
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 ciborium.workspace = true
 futures.workspace = true
 http.workspace = true
@@ -25,6 +19,7 @@ rivet-error.workspace = true
 rivetkit-core = { path = "../rivetkit-core" }
 rivetkit-client = { path = "../client" }
 serde.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true

@@ -170,6 +170,8 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 
 ## RivetKit Layer Architecture
 
+- **rivetkit-core** is the source of truth for all load-bearing functionality. **rivetkit (TypeScript)** is the flagship user-facing implementation. **rivetkit (Rust)** is a preview API that should be kept up to date with rivetkit-typescript on a best-effort basis; it may lag behind, but new user-facing capabilities added to rivetkit-typescript should be mirrored where practical.
+
 - **Engine** (`packages/core/engine/`, includes Pegboard + Pegboard Envoy) — Orchestration. Manages actor lifecycle, routing, KV, SQLite, alarms. In local dev, the engine is spawned alongside RivetKit.
 - **envoy-client** (`engine/sdks/rust/envoy-client/`) — Wire protocol between actors and the engine. BARE serialization, WebSocket transport, KV request/response matching, SQLite protocol dispatch, tunnel routing.
 - **rivetkit-core** (`rivetkit-rust/packages/rivetkit-core/`) — Core RivetKit logic in Rust, language-agnostic. Lifecycle state machine, sleep logic, shutdown sequencing, state persistence, action dispatch, event broadcast, queue management, schedule system, inspector, metrics. All callbacks are dynamic closures with opaque bytes. All load-bearing logic must live here. Config conversion helpers and HTTP request/response parsing for foreign runtimes belong here.

@@ -154,6 +154,7 @@ fn test_envoy_handle(endpoint: String) -> EnvoyHandle {
 		envoy_key: "test-envoy".to_string(),
 		envoy_tx,
 		actors: Arc::new(Mutex::new(HashMap::new())),
+		actors_notify: Arc::new(tokio::sync::Notify::new()),
 		live_tunnel_requests: Arc::new(Mutex::new(HashMap::new())),
 		pending_hibernation_restores: Arc::new(Mutex::new(HashMap::new())),
 		ws_tx: Arc::new(tokio::sync::Mutex::new(
@@ -161,6 +162,7 @@ fn test_envoy_handle(endpoint: String) -> EnvoyHandle {
 		)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: AtomicBool::new(false),
+		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 

@@ -2,8 +2,10 @@ use std::{future::Future, sync::Arc};
 
 use anyhow::Result;
 use rivet_error::RivetError;
+use rivetkit_core::metrics_endpoint::{RenderedMetrics, render_prometheus_metrics};
 use rivetkit_core::{
-	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, ServeConfig,
+	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, CoreServerlessRuntime,
+	ServeConfig,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -58,6 +60,84 @@ impl Registry {
 		shutdown: CancellationToken,
 	) -> Result<()> {
 		self.inner.serve_with_config(config, shutdown).await
+	}
+
+	/// Converts the registry into a serverless runtime. The returned runtime
+	/// lazily starts an envoy on first request and handles RivetKit serverless
+	/// HTTP requests (start, metadata, health, metrics) via
+	/// [`CoreServerlessRuntime::handle_request`]. Equivalent to the TypeScript
+	/// `registry.handler` entry point for platform fetch handlers.
+	pub async fn into_serverless_runtime(
+		self,
+		config: ServeConfig,
+	) -> Result<CoreServerlessRuntime> {
+		self.inner.into_serverless_runtime(config).await
+	}
+
+	/// Renders the process-global Prometheus metrics. Equivalent to the
+	/// TypeScript `registry.routes.prometheusMetrics()`. Metrics are
+	/// process-global, so this does not depend on registry instance state.
+	pub fn prometheus_metrics(&self) -> Result<RenderedMetrics> {
+		render_prometheus_metrics()
+	}
+
+	/// Serves actors until the process receives SIGINT or SIGTERM, then cancels
+	/// and drains. This is the standalone-binary entry point and mirrors the
+	/// TypeScript `registry.start()`. Connection settings (including the
+	/// `RIVET_ENGINE_BINARY_PATH` used to spawn or reuse a local engine) are
+	/// read from the environment.
+	///
+	/// Unlike TypeScript, this blocks until shutdown because Rust has no
+	/// implicit runtime to keep the process alive. For programmatic lifecycle
+	/// control (tests, embedding), drive [`serve`](Self::serve) with your own
+	/// [`CancellationToken`] instead.
+	pub async fn start(self) -> Result<()> {
+		self.start_with_config(ServeConfig::from_env()).await
+	}
+
+	/// [`start`](Self::start) with an explicit [`ServeConfig`].
+	pub async fn start_with_config(self, config: ServeConfig) -> Result<()> {
+		let shutdown = CancellationToken::new();
+		let mut serve = tokio::spawn({
+			let shutdown = shutdown.clone();
+			async move { self.serve_with_config(config, shutdown).await }
+		});
+
+		tokio::select! {
+			// Surface an early serve failure instead of waiting for a signal.
+			result = &mut serve => return result?,
+			_ = shutdown_signal() => {}
+		}
+
+		shutdown.cancel();
+		serve.await?
+	}
+}
+
+/// Resolves when the process receives SIGINT or, on Unix, SIGTERM.
+async fn shutdown_signal() {
+	#[cfg(unix)]
+	{
+		use tokio::signal::unix::{SignalKind, signal};
+
+		let mut terminate = match signal(SignalKind::terminate()) {
+			Ok(terminate) => terminate,
+			Err(error) => {
+				tracing::warn!(?error, "failed to install SIGTERM handler");
+				let _ = tokio::signal::ctrl_c().await;
+				return;
+			}
+		};
+
+		tokio::select! {
+			_ = tokio::signal::ctrl_c() => {}
+			_ = terminate.recv() => {}
+		}
+	}
+
+	#[cfg(not(unix))]
+	{
+		let _ = tokio::signal::ctrl_c().await;
 	}
 }
 
