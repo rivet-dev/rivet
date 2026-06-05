@@ -61,7 +61,7 @@ impl Db {
 		now_ms: i64,
 		options: CommitOptions,
 	) -> Result<CommitResult> {
-		validate_dirty_pages(&dirty_pages)?;
+		validate_dirty_pages(&dirty_pages, options.disable_size_cap)?;
 		#[cfg(feature = "test-faults")]
 		maybe_fire_commit_fault(
 			&self.fault_controller,
@@ -366,7 +366,7 @@ impl Db {
 						branch_id,
 						txid,
 						compaction_root.as_ref(),
-						burst_signal.cold_watermark_txid,
+						burst_signal.compaction_watermark_txid,
 						now_ms,
 						last_deltas_available_at_ms,
 					)
@@ -649,7 +649,7 @@ async fn maybe_fire_commit_fault(
 	Ok(())
 }
 
-fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<()> {
+fn validate_dirty_pages(dirty_pages: &[DirtyPage], disable_size_cap: bool) -> Result<()> {
 	let mut seen = BTreeSet::new();
 	let mut actual_size_bytes = 0_u64;
 	for page in dirty_pages {
@@ -680,12 +680,13 @@ fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<()> {
 			max_size_bytes = MAX_COMMIT_RAW_DIRTY_BYTES,
 			"sqlite commit exceeds engine-side size cap"
 		);
-		// TODO: Re-enable the engine-side commit size cap after large commit handling is fixed.
-		// return Err(SqliteStorageError::CommitTooLarge {
-		// 	actual_size_bytes,
-		// 	max_size_bytes: MAX_COMMIT_RAW_DIRTY_BYTES as u64,
-		// }
-		// .into());
+		if !disable_size_cap {
+			return Err(SqliteStorageError::CommitTooLarge {
+				actual_size_bytes,
+				max_size_bytes: MAX_COMMIT_RAW_DIRTY_BYTES as u64,
+			}
+			.into());
+		}
 	}
 
 	Ok(())

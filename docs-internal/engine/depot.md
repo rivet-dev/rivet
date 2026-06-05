@@ -1,12 +1,12 @@
-# Depot crash course
+# Depot Crash Course
 
 How the Depot SQLite backend reads, writes, compacts, and fences branchable database storage. Read this before changing anything in `engine/packages/depot/`.
 
 For VFS-side parity rules, see [sqlite-vfs.md](sqlite-vfs.md). For exact key formats, see [sqlite/storage-structure.md](sqlite/storage-structure.md).
 
-## Storage model
+## Storage Model
 
-Depot stores SQLite pages in UDB first. S3 is optional cold storage for workflow-published shard objects.
+Depot stores SQLite pages in UDB/FDB. OSS Depot does not include object-backed cold storage.
 
 | Row family | Holds | Owner |
 |---|---|---|
@@ -16,58 +16,47 @@ Depot stores SQLite pages in UDB first. S3 is optional cold storage for workflow
 | `BR/{branch}/META/head` | Current database head | Commit path |
 | `BR/{branch}/COMMITS` and `BR/{branch}/VTX` | Commit metadata and versionstamp-to-txid lookup | Commit path |
 | `BR/{branch}/PIDX` and `BR/{branch}/DELTA` | Recent page-owner index and LTX delta chunks | Commit path |
-| `BR/{branch}/SHARD` | Reader-visible hot shard versions and cold-backed shard-cache rows | Workflow manager, cache fill, reclaimer |
-| `BR/{branch}/CMP/*` | Workflow manifest, cold refs, retired cold objects, staged hot output | Workflow manager and companions |
+| `BR/{branch}/SHARD` | Reader-visible hot shard versions | Workflow manager and reclaimer |
+| `BR/{branch}/CMP/*` | Workflow root and staged hot output | Workflow manager and companions |
 | `BR/{branch}/PITR_INTERVAL` | Automatic PITR interval coverage rows | Workflow hot install and reclaim |
 | `RESTORE_POINT` and `DB_PIN` | User retained restore points and exact history pins | Restore point APIs and workflow proof |
 
 The main invariant is simple: **commits write deltas directly to UDB; workflow compaction is the only publish/delete authority for compaction output.**
 
-## Read path
+## Read Path
 
-Reads resolve the database pointer to a database branch, build a branch-aware read plan, and fetch each page through the hot path first:
+Reads resolve the database pointer to a database branch, build a branch-aware read plan, and fetch each page through FDB-backed coverage:
 
-```text
 1. Read branch head or fork head metadata.
 2. Return missing for pages above EOF.
 3. Check PIDX and DELTA first.
 4. If the DELTA is absent or reclaimed, fall back to the newest SHARD at or below the read cap.
-5. If no FDB SHARD covers the page, locate a matching workflow CMP/cold_shard ref and read the cold object.
-6. If the cold read succeeds, enqueue a bounded background fill to restore the matching FDB SHARD cache row.
-```
+5. Zero-fill only valid gaps inside the database size.
 
-Cold storage is optional. If only cold coverage can satisfy a page and the `Db` has no configured cold tier, reads fail with `ShardCoverageMissing` instead of inventing zero-filled bytes.
+Missing required DELTA/SHARD coverage below EOF is a storage error. The in-process PIDX and branch ancestry caches are perf caches only; correctness comes from UDB rows and workflow revalidation.
 
-The in-process PIDX, branch-id, ancestry, and shard-cache fill queues are perf caches only. Correctness comes from UDB rows and workflow revalidation.
-
-## Write path
+## Write Path
 
 SQLite commits call Depot through the conveyer path:
 
-```text
 1. Resolve DBPTR and read the current branch head in the UDB transaction.
 2. Encode dirty pages into LTX DELTA chunks.
 3. Write COMMITS, VTX, DELTA, and PIDX rows.
 4. Update META/head and quota counters.
-5. After commit, update SQLITE_CMP_DIRTY and send a throttled DeltasAvailable wake when lag crosses thresholds.
-```
+5. After commit, update SQLITE_CMP_DIRTY and send a throttled DeltasAvailable wake when hot lag crosses thresholds.
 
-The commit path does **not** publish SHARD rows, upload cold objects, or delete old history. It only records new committed history and wakes workflow compaction.
+The commit path does **not** publish SHARD rows or delete old history. It records new committed history and wakes workflow compaction.
 
-## Workflow compaction
+## Workflow Compaction
 
-Each active database branch has one DB manager workflow plus hot, cold, and reclaimer companions, all unique by database branch id.
-
-The manager owns planning and durable publication:
+Each active database branch has one DB manager workflow plus hot and reclaimer companions, all unique by database branch id.
 
 - Hot jobs stage LTX shard blobs under `CMP/stage/{job_id}/hot_shard`; the manager validates the active job, copies output to reader-visible `SHARD`, advances `CMP/root`, writes selected `PITR_INTERVAL` rows, and compare-clears matching PIDX.
-- Cold jobs upload deterministic objects at `db/{branch}/shard/{shard_id}/{txid}-{job_id}-{hash}.ltx`; the manager publishes `CMP/cold_shard` refs only after revalidating branch lifecycle, manifest generation, pins, proof state, and covered inputs.
-- Reclaim jobs delete hot rows only after the manager proves replacement coverage. They also retire cold refs, wait the grace window, mark deletes issued, delete exact S3 keys, and leave completed retired records so object keys are not republished.
-- Shard-cache eviction is a reclaimer lane. It clears only FDB `SHARD` rows that have matching `CMP/cold_shard` refs and are not retained by restore points, forks, or unexpired PITR interval coverage.
+- Reclaim jobs delete hot rows only after the manager proves replacement coverage against branch pins, restore points, PITR intervals, PIDX, SHARD rows, lifecycle generation, and current branch state.
 
-`CMP/root` watermarks are scheduling summaries, not deletion proof by themselves. Deletes re-read the exact pins, PIDX dependencies, SHARD coverage, lifecycle generation, and manifest generation inside the delete transaction.
+`CMP/root` watermarks are scheduling summaries, not deletion proof by themselves. `CompactionRoot` retains legacy cold watermark fields for persisted compatibility, but OSS Depot does not update or act on them.
 
-## PITR and restore
+## PITR And Restore
 
 Automatic timestamp restore coverage is stored as `PITR_INTERVAL` rows selected during hot compaction from commit wall-clock timestamps and the effective bucket/database PITR policy. Expired interval rows are soft pins until reclaim compare-clears them.
 
@@ -75,7 +64,7 @@ Restore points are retained user tokens. Creating a restore point resolves a `Sn
 
 Fork and restore use the same primitive: resolve a snapshot selector, derive a branch at that exact point, and let the caller decide whether to keep a fork or move the database pointer.
 
-## Cross-references
+## Cross-References
 
 - Key layout: [sqlite/storage-structure.md](sqlite/storage-structure.md)
 - Component ownership: [sqlite/components.md](sqlite/components.md)

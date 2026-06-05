@@ -17,10 +17,9 @@ use crate::{
 		keys,
 		types::{
 			BucketId, DatabaseBranchId, decode_bucket_branch_record, decode_bucket_pointer,
-			decode_cold_shard_ref, decode_commit_row, decode_compaction_root,
-			decode_database_branch_record, decode_database_pointer, decode_db_head,
-			decode_db_history_pin, decode_pitr_interval_coverage, decode_retired_cold_object,
-			decode_sqlite_cmp_dirty,
+			decode_commit_row, decode_compaction_root, decode_database_branch_record,
+			decode_database_pointer, decode_db_head, decode_db_history_pin,
+			decode_pitr_interval_coverage, decode_sqlite_cmp_dirty,
 		},
 	},
 	gc,
@@ -100,8 +99,6 @@ pub enum RowFamily {
 	Pidx,
 	Deltas,
 	Shards,
-	ColdShards,
-	RetiredColdObjects,
 	PitrIntervals,
 	Pins,
 	StagedHotShards,
@@ -114,8 +111,6 @@ impl RowFamily {
 			"pidx" => Ok(Self::Pidx),
 			"deltas" => Ok(Self::Deltas),
 			"shards" => Ok(Self::Shards),
-			"cold-shards" => Ok(Self::ColdShards),
-			"retired-cold-objects" => Ok(Self::RetiredColdObjects),
 			"pitr-intervals" => Ok(Self::PitrIntervals),
 			"pins" => Ok(Self::Pins),
 			"staged-hot-shards" => Ok(Self::StagedHotShards),
@@ -129,8 +124,6 @@ impl RowFamily {
 			Self::Pidx => "pidx",
 			Self::Deltas => "deltas",
 			Self::Shards => "shards",
-			Self::ColdShards => "cold-shards",
-			Self::RetiredColdObjects => "retired-cold-objects",
 			Self::PitrIntervals => "pitr-intervals",
 			Self::Pins => "pins",
 			Self::StagedHotShards => "staged-hot-shards",
@@ -143,10 +136,6 @@ impl RowFamily {
 			Self::Pidx => keys::branch_pidx_prefix(branch_id),
 			Self::Deltas => keys::branch_delta_prefix(branch_id),
 			Self::Shards => keys::branch_shard_prefix(branch_id),
-			Self::ColdShards => keys::branch_compaction_cold_shard_prefix(branch_id),
-			Self::RetiredColdObjects => {
-				keys::branch_compaction_retired_cold_object_prefix(branch_id)
-			}
 			Self::PitrIntervals => keys::branch_pitr_interval_prefix(branch_id),
 			Self::Pins => keys::db_pin_prefix(branch_id),
 			Self::StagedHotShards => keys::branch_compaction_stage_prefix(branch_id),
@@ -172,7 +161,6 @@ pub async fn summary(db: &universaldb::Database, node_id: NodeId) -> Result<Insp
 		node_id,
 		json!({ "kind": "summary" }),
 		json!({
-			"cold_tier": { "configured": false, "kind": "unknown" },
 			"counters": counters,
 		}),
 	)
@@ -812,8 +800,6 @@ async fn branch_blob_in_tx(
 		RowFamily::Pidx,
 		RowFamily::Deltas,
 		RowFamily::Shards,
-		RowFamily::ColdShards,
-		RowFamily::RetiredColdObjects,
 		RowFamily::PitrIntervals,
 		RowFamily::Pins,
 		RowFamily::StagedHotShards,
@@ -955,8 +941,6 @@ fn decode_row_value(
 			"value_size": value.len(),
 			"sha256": digest_value(value),
 		}),
-		RowFamily::ColdShards => value_or_error(decode_cold_shard_ref(value)),
-		RowFamily::RetiredColdObjects => value_or_error(decode_retired_cold_object(value)),
 		RowFamily::PitrIntervals => json!({
 			"bucket_start_ms": keys::decode_branch_pitr_interval_bucket(branch_id, key).ok(),
 			"coverage": result_to_value(decode_pitr_interval_coverage(value)),

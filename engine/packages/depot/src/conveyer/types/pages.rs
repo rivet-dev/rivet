@@ -71,7 +71,6 @@ pub enum PageSourceKind {
 	MissingDelta,
 	StaleDelta,
 	HotShard,
-	Cold,
 	ZeroFill,
 	OutOfRange,
 }
@@ -87,6 +86,7 @@ pub enum PageSourceCandidateResult {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommitOptions {
 	pub expected_head_txid: Option<u64>,
+	pub disable_size_cap: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
