@@ -18,7 +18,7 @@ reqwest = { version = "0.12.12", default-features = false, features = ["json", "
 rivetkit-client-protocol = { path = "../client-protocol" }
 scc.workspace = true
 serde = { version = "1.0", features = ["derive"] }
-serde_bare = "0.5.0"
+serde_bare.workspace = true
 serde_cbor = "0.11.2"
 serde_json = "1.0"
 tokio =  { version = "1", features = ["full"] }

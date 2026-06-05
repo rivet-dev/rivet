@@ -790,6 +790,7 @@ checksum = "021e862c184ae977658b36c4500f7feac3221ca5da43e3f25bd04ab6c79a29b5"
 dependencies = [
  "axum-core 0.5.2",
  "axum-macros",
+ "base64 0.22.1",
  "bytes",
  "form_urlencoded",
  "futures-util",
@@ -809,8 +810,10 @@ dependencies = [
  "serde_json",
  "serde_path_to_error",
  "serde_urlencoded",
+ "sha1",
  "sync_wrapper",
  "tokio",
+ "tokio-tungstenite",
  "tower 0.5.2",
  "tower-layer",
  "tower-service",
@@ -1266,7 +1269,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57663b653d948a338bfb3eeba9bb2fd5fcfaecb9e199e87e1eda4d9e8b240fd9"
 dependencies = [
  "ciborium-io",
- "half",
+ "half 2.7.1",
 ]
 
 [[package]]
@@ -2894,6 +2897,12 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
+
+[[package]]
+name = "half"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
 
 [[package]]
 name = "half"
@@ -5508,9 +5517,11 @@ checksum = "cbc931937e6ca3a06e3b6c0aa7841849b160a90351d6ab467a8b9b9959767531"
 dependencies = [
  "base64 0.22.1",
  "bytes",
+ "encoding_rs",
  "futures-channel",
  "futures-core",
  "futures-util",
+ "h2 0.4.11",
  "http 1.3.1",
  "http-body 1.0.1",
  "http-body-util",
@@ -5519,6 +5530,7 @@ dependencies = [
  "hyper-util",
  "js-sys",
  "log",
+ "mime",
  "mime_guess",
  "percent-encoding",
  "pin-project-lite",
@@ -6574,6 +6586,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivetkit"
+version = "2.3.0-rc.11"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "axum 0.8.4",
+ "bytes",
+ "ciborium",
+ "futures",
+ "http 1.3.1",
+ "rivet-envoy-client",
+ "rivet-error",
+ "rivetkit-client",
+ "rivetkit-client-protocol",
+ "rivetkit-core",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-util",
+ "tracing",
+ "tracing-subscriber",
+ "vbare",
+]
+
+[[package]]
 name = "rivetkit-actor-persist"
 version = "2.3.0-rc.11"
 dependencies = [
@@ -6582,6 +6619,36 @@ dependencies = [
  "serde_bare",
  "vbare",
  "vbare-compiler",
+]
+
+[[package]]
+name = "rivetkit-client"
+version = "0.9.0-rc.2"
+dependencies = [
+ "anyhow",
+ "axum 0.8.4",
+ "base64 0.22.1",
+ "bytes",
+ "fs_extra",
+ "futures-util",
+ "parking_lot",
+ "portpicker",
+ "reqwest 0.12.22",
+ "rivetkit-client-protocol",
+ "scc",
+ "serde",
+ "serde_bare",
+ "serde_cbor",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tokio-test",
+ "tokio-tungstenite",
+ "tracing",
+ "tracing-subscriber",
+ "tungstenite",
+ "urlencoding",
+ "vbare",
 ]
 
 [[package]]
@@ -7314,6 +7381,16 @@ checksum = "a5d440709e79d88e51ac01c4b72fc6cb7314017bb7da9eeff678aa94c10e3ea8"
 dependencies = [
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "serde_cbor"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2bef2ebfde456fb76bbcf9f59315333decc4fda0b2b44b420243c11e0f5ec1f5"
+dependencies = [
+ "half 1.8.3",
+ "serde",
 ]
 
 [[package]]
@@ -8273,6 +8350,17 @@ dependencies = [
  "tokio",
  "tokio-stream",
  "xattr",
+]
+
+[[package]]
+name = "tokio-test"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f6d24790a10a7af737693a3e8f1d03faef7e6ca0cc99aae5066f533766de545"
+dependencies = [
+ "futures-core",
+ "tokio",
+ "tokio-stream",
 ]
 
 [[package]]
