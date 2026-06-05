@@ -1,5 +1,4 @@
 use anyhow::{Context, Result, bail};
-use gas::prelude::Id;
 use serde::{Deserialize, Serialize};
 use vbare::OwnedVersionedData;
 
@@ -13,39 +12,6 @@ pub struct CompactionRoot {
 	pub hot_watermark_txid: u64,
 	pub cold_watermark_txid: u64,
 	pub cold_watermark_versionstamp: [u8; 16],
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ColdShardRef {
-	pub object_key: String,
-	pub object_generation_id: Id,
-	pub shard_id: u32,
-	pub as_of_txid: u64,
-	pub min_txid: u64,
-	pub max_txid: u64,
-	pub min_versionstamp: [u8; 16],
-	pub max_versionstamp: [u8; 16],
-	pub size_bytes: u64,
-	pub content_hash: [u8; 32],
-	pub publish_generation: u64,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum RetiredColdObjectDeleteState {
-	Retired,
-	DeleteIssued,
-	Deleted,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RetiredColdObject {
-	pub object_key: String,
-	pub object_generation_id: Id,
-	pub content_hash: [u8; 32],
-	pub retired_manifest_generation: u64,
-	pub retired_at_ms: i64,
-	pub delete_after_ms: i64,
-	pub delete_state: RetiredColdObjectDeleteState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -113,14 +79,6 @@ enum VersionedCompactionRoot {
 	V1(CompactionRoot),
 }
 
-enum VersionedColdShardRef {
-	V1(ColdShardRef),
-}
-
-enum VersionedRetiredColdObject {
-	V1(RetiredColdObject),
-}
-
 enum VersionedSqliteCmpDirty {
 	V1(SqliteCmpDirty),
 }
@@ -138,12 +96,6 @@ enum VersionedBucketCatalogDbFact {
 }
 
 impl_compaction_versioned_data!(VersionedCompactionRoot, CompactionRoot, "CompactionRoot");
-impl_compaction_versioned_data!(VersionedColdShardRef, ColdShardRef, "ColdShardRef");
-impl_compaction_versioned_data!(
-	VersionedRetiredColdObject,
-	RetiredColdObject,
-	"RetiredColdObject"
-);
 impl_compaction_versioned_data!(VersionedSqliteCmpDirty, SqliteCmpDirty, "SqliteCmpDirty");
 impl_compaction_versioned_data!(
 	VersionedPitrIntervalCoverage,
@@ -166,28 +118,6 @@ pub fn encode_compaction_root(root: CompactionRoot) -> Result<Vec<u8>> {
 pub fn decode_compaction_root(payload: &[u8]) -> Result<CompactionRoot> {
 	VersionedCompactionRoot::deserialize_with_embedded_version(payload)
 		.context("decode sqlite compaction root")
-}
-
-pub fn encode_cold_shard_ref(reference: ColdShardRef) -> Result<Vec<u8>> {
-	VersionedColdShardRef::wrap_latest(reference)
-		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
-		.context("encode sqlite cold shard ref")
-}
-
-pub fn decode_cold_shard_ref(payload: &[u8]) -> Result<ColdShardRef> {
-	VersionedColdShardRef::deserialize_with_embedded_version(payload)
-		.context("decode sqlite cold shard ref")
-}
-
-pub fn encode_retired_cold_object(object: RetiredColdObject) -> Result<Vec<u8>> {
-	VersionedRetiredColdObject::wrap_latest(object)
-		.serialize_with_embedded_version(SQLITE_STORAGE_META_VERSION)
-		.context("encode sqlite retired cold object")
-}
-
-pub fn decode_retired_cold_object(payload: &[u8]) -> Result<RetiredColdObject> {
-	VersionedRetiredColdObject::deserialize_with_embedded_version(payload)
-		.context("decode sqlite retired cold object")
 }
 
 pub fn encode_sqlite_cmp_dirty(dirty: SqliteCmpDirty) -> Result<Vec<u8>> {

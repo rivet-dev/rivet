@@ -1,14 +1,12 @@
 use depot::types::{
-	BucketBranchId, BucketCatalogDbFact, BucketForkFact, ColdShardRef, CompactionRoot,
-	DatabaseBranchId, DbHistoryPin, DbHistoryPinKind, PitrIntervalCoverage, RestorePointId,
-	RetiredColdObject, RetiredColdObjectDeleteState, SQLITE_STORAGE_META_VERSION, SqliteCmpDirty,
-	decode_bucket_catalog_db_fact, decode_bucket_fork_fact, decode_cold_shard_ref,
-	decode_compaction_root, decode_db_history_pin, decode_pitr_interval_coverage,
-	decode_retired_cold_object, decode_sqlite_cmp_dirty, encode_bucket_catalog_db_fact,
-	encode_bucket_fork_fact, encode_cold_shard_ref, encode_compaction_root, encode_db_history_pin,
-	encode_pitr_interval_coverage, encode_retired_cold_object, encode_sqlite_cmp_dirty,
+	BucketBranchId, BucketCatalogDbFact, BucketForkFact, CompactionRoot, DatabaseBranchId,
+	DbHistoryPin, DbHistoryPinKind, PitrIntervalCoverage, RestorePointId,
+	SQLITE_STORAGE_META_VERSION, SqliteCmpDirty, decode_bucket_catalog_db_fact,
+	decode_bucket_fork_fact, decode_compaction_root, decode_db_history_pin,
+	decode_pitr_interval_coverage, decode_sqlite_cmp_dirty, encode_bucket_catalog_db_fact,
+	encode_bucket_fork_fact, encode_compaction_root, encode_db_history_pin,
+	encode_pitr_interval_coverage, encode_sqlite_cmp_dirty,
 };
-use gas::prelude::Id;
 use uuid::Uuid;
 
 fn database_branch_id(value: u128) -> DatabaseBranchId {
@@ -17,10 +15,6 @@ fn database_branch_id(value: u128) -> DatabaseBranchId {
 
 fn bucket_branch_id(value: u128) -> BucketBranchId {
 	BucketBranchId::from_uuid(Uuid::from_u128(value))
-}
-
-fn gas_id(value: u128, label: u16) -> Id {
-	Id::v1(Uuid::from_u128(value), label)
 }
 
 fn assert_embedded_version(encoded: &[u8]) {
@@ -45,48 +39,6 @@ fn compaction_root_round_trips_with_embedded_version() {
 
 	let decoded = decode_compaction_root(&encoded).expect("root should decode");
 	assert_eq!(decoded, root);
-}
-
-#[test]
-fn cold_shard_ref_round_trips_with_embedded_version() {
-	let reference = ColdShardRef {
-		object_key: "db/branch/shard/00000001/0000000000000064-job-hash.ltx".into(),
-		object_generation_id: gas_id(0x0011_2233_4455_6677_8899_aabb_ccdd_eeff, 9),
-		shard_id: 3,
-		as_of_txid: 100,
-		min_txid: 50,
-		max_txid: 100,
-		min_versionstamp: [1; 16],
-		max_versionstamp: [2; 16],
-		size_bytes: 96 * 1024,
-		content_hash: [3; 32],
-		publish_generation: 43,
-	};
-
-	let encoded = encode_cold_shard_ref(reference.clone()).expect("cold ref should encode");
-	assert_embedded_version(&encoded);
-
-	let decoded = decode_cold_shard_ref(&encoded).expect("cold ref should decode");
-	assert_eq!(decoded, reference);
-}
-
-#[test]
-fn retired_cold_object_round_trips_with_embedded_version() {
-	let object = RetiredColdObject {
-		object_key: "db/branch/shard/00000001/0000000000000064-job-hash.ltx".into(),
-		object_generation_id: gas_id(0x1020_3040_5060_7080_90a0_b0c0_d0e0_f000, 11),
-		content_hash: [4; 32],
-		retired_manifest_generation: 44,
-		retired_at_ms: 1_714_000_000_000,
-		delete_after_ms: 1_714_000_060_000,
-		delete_state: RetiredColdObjectDeleteState::DeleteIssued,
-	};
-
-	let encoded = encode_retired_cold_object(object.clone()).expect("retired object should encode");
-	assert_embedded_version(&encoded);
-
-	let decoded = decode_retired_cold_object(&encoded).expect("retired object should decode");
-	assert_eq!(decoded, object);
 }
 
 #[test]
