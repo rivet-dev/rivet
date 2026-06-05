@@ -3700,6 +3700,130 @@ export function buildNativeFactory(
 				return jsonResponse({ rows: jsonSafe(rows) });
 			}
 			if (
+				url.pathname === "/inspector/eval" &&
+				jsRequest.method === "POST"
+			) {
+				const body = (await jsRequest.json()) as {
+					code?: unknown;
+				};
+				if (
+					typeof body.code !== "string" ||
+					body.code.trim() === ""
+				) {
+					return jsonResponse(
+						{ error: "code is required and must be non-empty" },
+						{ status: 400 },
+					);
+				}
+
+				let db: unknown;
+				try {
+					db = actorCtx.db;
+				} catch {
+					db = undefined;
+				}
+
+				const logs: string[] = [];
+				const log = (...args: unknown[]) => {
+					logs.push(
+						args
+							.map((a) =>
+								typeof a === "string"
+									? a
+									: JSON.stringify(a),
+							)
+							.join(" "),
+					);
+				};
+
+				const rawKv = {
+					get: (key: Uint8Array) =>
+						runtime.actorKvGet(ctx, key),
+					put: (key: Uint8Array, value: Uint8Array) =>
+						runtime.actorKvPut(ctx, key, value),
+					delete: (key: Uint8Array) =>
+						runtime.actorKvDelete(ctx, key),
+					deleteRange: (start: Uint8Array, end: Uint8Array) =>
+						runtime.actorKvDeleteRange(ctx, start, end),
+					listPrefix: (
+						prefix: Uint8Array,
+						options?: { limit?: number; reverse?: boolean },
+					) =>
+						runtime.actorKvListPrefix(ctx, prefix, options),
+					listRange: (
+						start: Uint8Array,
+						end: Uint8Array,
+						options?: { limit?: number; reverse?: boolean },
+					) =>
+						runtime.actorKvListRange(
+							ctx,
+							start,
+							end,
+							options,
+						),
+					batchGet: (keys: Uint8Array[]) =>
+						runtime.actorKvBatchGet(ctx, keys),
+					batchPut: (entries: [Uint8Array, Uint8Array][]) =>
+						runtime.actorKvBatchPut(
+							ctx,
+							entries.map(([key, value]) => ({
+								key,
+								value,
+							})),
+						),
+					batchDelete: (keys: Uint8Array[]) =>
+						runtime.actorKvBatchDelete(ctx, keys),
+				};
+
+				try {
+					// biome-ignore lint/security/noGlobalEval: intentional admin eval endpoint
+					const AsyncFunction = Object.getPrototypeOf(
+						async function () {},
+					).constructor;
+					const fn = new AsyncFunction(
+						"ctx",
+						"kv",
+						"rawKv",
+						"sql",
+						"db",
+						"state",
+						"queue",
+						"schedule",
+						"conns",
+						"log",
+						body.code,
+					);
+					const result = await fn(
+						actorCtx,
+						actorCtx.kv,
+						rawKv,
+						actorCtx.sql,
+						db,
+						stateEnabled ? actorCtx.state : undefined,
+						actorCtx.queue,
+						actorCtx.schedule,
+						actorCtx.conns,
+						log,
+					);
+					return jsonResponse({
+						result: jsonSafe(result ?? null),
+						logs,
+					});
+				} catch (error) {
+					if (error instanceof Error) {
+						return jsonResponse(
+							{
+								error: error.message,
+								stack: error.stack,
+								logs,
+							},
+							{ status: 500 },
+						);
+					}
+					return errorResponse(error);
+				}
+			}
+			if (
 				url.pathname === "/inspector/summary" &&
 				jsRequest.method === "GET"
 			) {
