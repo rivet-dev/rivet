@@ -28,13 +28,9 @@ pub const SHARD_SIZE: u32 = 64;
 const META_HEAD_PATH: &[u8] = b"/META/head";
 const META_HEAD_AT_FORK_PATH: &[u8] = b"/META/head_at_fork";
 const META_COMPACT_PATH: &[u8] = b"/META/compact";
-const META_COLD_COMPACT_PATH: &[u8] = b"/META/cold_compact";
 const META_QUOTA_PATH: &[u8] = b"/META/quota";
 const META_COMPACTOR_LEASE_PATH: &[u8] = b"/META/compactor_lease";
-const META_COLD_LEASE_PATH: &[u8] = b"/META/cold_lease";
 const CMP_ROOT_PATH: &[u8] = b"/CMP/root";
-const CMP_COLD_SHARD_PATH: &[u8] = b"/CMP/cold_shard/";
-const CMP_RETIRED_COLD_OBJECT_PATH: &[u8] = b"/CMP/retired_cold_object/";
 const CMP_STAGE_PATH: &[u8] = b"/CMP/stage/";
 const CMP_STAGE_HOT_SHARD_PATH: &[u8] = b"/hot_shard/";
 const SHARD_PATH: &[u8] = b"/SHARD/";
@@ -57,36 +53,18 @@ const DESC_PIN_PATH: &[u8] = b"/desc_pin";
 const RESTORE_POINT_PIN_PATH: &[u8] = b"/restore_point_pin";
 const PIN_COUNT_PATH: &[u8] = b"/pin_count";
 const DATABASE_TOMBSTONES_PATH: &[u8] = b"/database_tombstones/";
-const MANIFEST_COLD_DRAINED_TXID_PATH: &[u8] = b"/META/manifest/cold_drained_txid";
 const MANIFEST_LAST_HOT_PASS_TXID_PATH: &[u8] = b"/META/manifest/last_hot_pass_txid";
 const MANIFEST_LAST_ACCESS_TS_MS_PATH: &[u8] = b"/META/manifest/last_access_ts_ms";
 const MANIFEST_LAST_ACCESS_BUCKET_PATH: &[u8] = b"/META/manifest/last_access_bucket";
 const CTR_QUOTA_GLOBAL_PATH: &[u8] = b"/quota_global";
 const CTR_EVICTION_INDEX_PATH: &[u8] = b"/eviction_index/";
 const RESTORE_POINT_PATH: &[u8] = b"/";
-const CMPC_ENQUEUE_PATH: &[u8] = b"/enqueue/";
-const CMPC_LEASE_GLOBAL_PATH: &[u8] = b"/lease_global/";
 const DB_PIN_PATH: &[u8] = b"/";
 const BUCKET_FORK_PIN_PATH: &[u8] = b"/";
 const BUCKET_CHILD_PATH: &[u8] = b"/";
 const BUCKET_CATALOG_BY_DB_PATH: &[u8] = b"/";
 const BUCKET_PROOF_EPOCH_PATH: &[u8] = b"/";
 const SQLITE_CMP_DIRTY_PATH: &[u8] = b"/";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompactorQueueKind {
-	Cold,
-	Eviction,
-}
-
-impl CompactorQueueKind {
-	fn as_byte(self) -> u8 {
-		match self {
-			Self::Cold => 0x00,
-			Self::Eviction => 0x01,
-		}
-	}
-}
 
 fn partition_prefix(partition: u8) -> Vec<u8> {
 	vec![SQLITE_SUBSPACE_PREFIX, partition]
@@ -438,27 +416,12 @@ pub fn branch_meta_compact_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), META_COMPACT_PATH)
 }
 
-pub fn branch_meta_cold_compact_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), META_COLD_COMPACT_PATH)
-}
-
 pub fn branch_meta_quota_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), META_QUOTA_PATH)
 }
 
 pub fn branch_meta_compactor_lease_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), META_COMPACTOR_LEASE_PATH)
-}
-
-pub fn branch_meta_cold_lease_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), META_COLD_LEASE_PATH)
-}
-
-pub fn branch_manifest_cold_drained_txid_key(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(
-		database_branch_base(branch_id),
-		MANIFEST_COLD_DRAINED_TXID_PATH,
-	)
 }
 
 pub fn branch_manifest_last_hot_pass_txid_key(branch_id: DatabaseBranchId) -> Vec<u8> {
@@ -486,51 +449,8 @@ pub fn branch_compaction_root_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), CMP_ROOT_PATH)
 }
 
-pub fn branch_compaction_cold_shard_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(database_branch_base(branch_id), CMP_COLD_SHARD_PATH)
-}
-
-pub fn branch_compaction_retired_cold_object_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
-	with_suffix(
-		database_branch_base(branch_id),
-		CMP_RETIRED_COLD_OBJECT_PATH,
-	)
-}
-
 pub fn branch_compaction_stage_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), CMP_STAGE_PATH)
-}
-
-pub fn branch_compaction_cold_shard_version_prefix(
-	branch_id: DatabaseBranchId,
-	shard_id: u32,
-) -> Vec<u8> {
-	let mut key = branch_compaction_cold_shard_prefix(branch_id);
-	key.extend_from_slice(&shard_id.to_be_bytes());
-	key.push(b'/');
-	key
-}
-
-pub fn branch_compaction_cold_shard_key(
-	branch_id: DatabaseBranchId,
-	shard_id: u32,
-	as_of_txid: u64,
-) -> Vec<u8> {
-	let mut key = branch_compaction_cold_shard_version_prefix(branch_id, shard_id);
-	key.extend_from_slice(&as_of_txid.to_be_bytes());
-	key
-}
-
-pub fn branch_compaction_retired_cold_object_key(
-	branch_id: DatabaseBranchId,
-	object_key_hash: [u8; 32],
-) -> Vec<u8> {
-	let mut key = with_suffix(
-		database_branch_base(branch_id),
-		CMP_RETIRED_COLD_OBJECT_PATH,
-	);
-	key.extend_from_slice(&object_key_hash);
-	key
 }
 
 pub fn branch_compaction_stage_hot_shard_prefix(
@@ -768,22 +688,6 @@ pub fn restore_point_prefix(database_id: &str) -> Vec<u8> {
 pub fn restore_point_key(database_id: &str, restore_point: &str) -> Vec<u8> {
 	let mut key = restore_point_prefix(database_id);
 	key.extend_from_slice(restore_point.as_bytes());
-	key
-}
-
-pub fn compactor_enqueue_key(ts_ms: i64, database_id: &str, kind: CompactorQueueKind) -> Vec<u8> {
-	let mut key = with_suffix(partition_prefix(CMPC_PARTITION), CMPC_ENQUEUE_PATH);
-	key.extend_from_slice(&ts_ms.to_be_bytes());
-	key.push(b'/');
-	append_database_id(&mut key, database_id);
-	key.push(b'/');
-	key.push(kind.as_byte());
-	key
-}
-
-pub fn compactor_global_lease_key(kind: CompactorQueueKind) -> Vec<u8> {
-	let mut key = with_suffix(partition_prefix(CMPC_PARTITION), CMPC_LEASE_GLOBAL_PATH);
-	key.push(kind.as_byte());
 	key
 }
 

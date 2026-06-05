@@ -1035,24 +1035,6 @@ async fn detect_unsupported(
 						{
 							return Ok(Some("branch has head_at_fork metadata"));
 						}
-						for (label, key) in [
-							(
-								"cold compact metadata is present",
-								keys::branch_meta_cold_compact_key(branch_id),
-							),
-							(
-								"cold compactor lease metadata is present",
-								keys::branch_meta_cold_lease_key(branch_id),
-							),
-							(
-								"cold drained manifest metadata is present",
-								keys::branch_manifest_cold_drained_txid_key(branch_id),
-							),
-						] {
-							if tx.informal().get(&key, Snapshot).await?.is_some() {
-								return Ok(Some(label));
-							}
-						}
 						if let (Some(bucket_id), Some(database_id)) =
 							(bucket_id, database_id.as_ref())
 						{
@@ -1086,14 +1068,6 @@ async fn detect_unsupported(
 	if reason.is_none() {
 		let branch_id = resolved.branch_id;
 		for (label, prefix) in [
-			(
-				"cold shard rows are present",
-				keys::branch_compaction_cold_shard_prefix(branch_id),
-			),
-			(
-				"retired cold object rows are present",
-				keys::branch_compaction_retired_cold_object_prefix(branch_id),
-			),
 			(
 				"PITR interval rows are present",
 				keys::branch_pitr_interval_prefix(branch_id),
@@ -1267,18 +1241,6 @@ async fn load_storage_facts(
 		db,
 		keys::branch_compaction_stage_prefix(branch_id),
 		"branch_compaction_stage",
-	)
-	.await?;
-	let cold_rows = count_prefix_rows(
-		db,
-		keys::branch_compaction_cold_shard_prefix(branch_id),
-		"branch_cold_shard",
-	)
-	.await?;
-	let retired_cold_rows = count_prefix_rows(
-		db,
-		keys::branch_compaction_retired_cold_object_prefix(branch_id),
-		"branch_retired_cold_object",
 	)
 	.await?;
 	let pitr_rows = count_prefix_rows(
@@ -1478,8 +1440,6 @@ async fn load_storage_facts(
 		"head_rows": usize::from(commit_map.contains_key(&selected_txid)),
 		"hot_shard_rows": hot_shard_facts.len(),
 		"staged_hot_shard_rows": staged_rows.len(),
-		"cold_compaction_rows": cold_rows,
-		"retired_cold_object_rows": retired_cold_rows,
 		"pitr_rows": pitr_rows,
 		"pin_rows": pin_rows,
 		"approximate_raw_bytes_scanned": delta_chunk_facts.iter().map(|row| row.encoded_byte_len).sum::<usize>(),
@@ -1504,7 +1464,6 @@ async fn load_storage_facts(
 		"hot_present": !hot_shard_facts.is_empty() || !staged_rows.is_empty(),
 		"installed_hot_shard_count": hot_shard_facts.len(),
 		"staged_hot_shard_count": staged_rows.len(),
-		"cold_present": cold_rows > 0 || retired_cold_rows > 0,
 		"conclusion": if !hot_shard_facts.is_empty() || !staged_rows.is_empty() {
 			"hot compaction state exists; hot compaction must be included in diagnosis"
 		} else {
@@ -2034,7 +1993,6 @@ fn page_source_kind_label(kind: PageSourceKind) -> &'static str {
 		PageSourceKind::MissingDelta => "missing_delta",
 		PageSourceKind::StaleDelta => "stale_delta",
 		PageSourceKind::HotShard => "hot_shard",
-		PageSourceKind::Cold => "cold",
 		PageSourceKind::ZeroFill => "zero_fill",
 		PageSourceKind::OutOfRange => "out_of_range",
 	}

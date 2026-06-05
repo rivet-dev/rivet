@@ -98,6 +98,7 @@ impl SqliteTransport for EmbeddedDepotSqliteTransport {
 				request.now_ms,
 				depot::types::CommitOptions {
 					expected_head_txid: request.expected_head_txid,
+					..Default::default()
 				},
 			)
 			.await

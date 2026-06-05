@@ -1,15 +1,12 @@
 use depot::conveyer::keys::{
 	BR_PARTITION, BRANCHES_PARTITION, BUCKET_BRANCH_PARTITION, BUCKET_CATALOG_BY_DB_PARTITION,
 	BUCKET_CHILD_PARTITION, BUCKET_FORK_PIN_PARTITION, BUCKET_PROOF_EPOCH_PARTITION,
-	BUCKET_PTR_PARTITION, CMPC_PARTITION, CTR_PARTITION, CompactorQueueKind, DB_PIN_PARTITION,
-	DBPTR_PARTITION, PAGE_SIZE, RESTORE_POINT_PARTITION, SHARD_SIZE, SQLITE_CMP_DIRTY_PARTITION,
-	SQLITE_SUBSPACE_PREFIX, branch_commit_key, branch_compaction_cold_shard_key,
-	branch_compaction_cold_shard_version_prefix, branch_compaction_retired_cold_object_key,
-	branch_compaction_root_key, branch_compaction_stage_hot_shard_key,
+	BUCKET_PTR_PARTITION, CTR_PARTITION, DB_PIN_PARTITION, DBPTR_PARTITION, PAGE_SIZE,
+	RESTORE_POINT_PARTITION, SHARD_SIZE, SQLITE_CMP_DIRTY_PARTITION, SQLITE_SUBSPACE_PREFIX,
+	branch_commit_key, branch_compaction_root_key, branch_compaction_stage_hot_shard_key,
 	branch_compaction_stage_hot_shard_version_prefix, branch_delta_chunk_key,
-	branch_manifest_cold_drained_txid_key, branch_manifest_last_access_bucket_key,
-	branch_manifest_last_access_ts_ms_key, branch_manifest_last_hot_pass_txid_key,
-	branch_meta_cold_compact_key, branch_meta_cold_lease_key, branch_meta_compact_key,
+	branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
+	branch_manifest_last_hot_pass_txid_key, branch_meta_compact_key,
 	branch_meta_compactor_lease_key, branch_meta_head_at_fork_key, branch_meta_head_key,
 	branch_meta_quota_key, branch_pidx_key, branch_pitr_interval_key, branch_pitr_interval_prefix,
 	branch_prefix, branch_range, branch_shard_key, branch_shard_version_prefix, branch_vtx_key,
@@ -19,14 +16,14 @@ use depot::conveyer::keys::{
 	bucket_branches_restore_point_pin_key, bucket_catalog_by_db_key, bucket_catalog_by_db_prefix,
 	bucket_child_key, bucket_child_prefix, bucket_fork_pin_key, bucket_fork_pin_prefix,
 	bucket_pointer_cur_key, bucket_pointer_history_key, bucket_policy_pitr_key,
-	bucket_policy_shard_cache_key, bucket_proof_epoch_key, commit_key, compactor_enqueue_key,
-	compactor_global_lease_key, ctr_eviction_index_key, ctr_eviction_index_range,
-	ctr_quota_global_key, database_pitr_policy_key, database_pointer_cur_key,
-	database_pointer_history_key, database_prefix, database_range, database_shard_cache_policy_key,
-	db_pin_key, db_pin_prefix, decode_ctr_eviction_index_key, delta_chunk_key, delta_chunk_prefix,
-	delta_prefix, meta_compact_key, meta_compactor_lease_key, meta_head_key, meta_quota_key,
-	pidx_delta_key, pidx_delta_prefix, restore_point_key, restore_point_prefix, shard_key,
-	shard_prefix, shard_version_key, shard_version_prefix, sqlite_cmp_dirty_key, vtx_key,
+	bucket_policy_shard_cache_key, bucket_proof_epoch_key, commit_key, ctr_eviction_index_key,
+	ctr_eviction_index_range, ctr_quota_global_key, database_pitr_policy_key,
+	database_pointer_cur_key, database_pointer_history_key, database_prefix, database_range,
+	database_shard_cache_policy_key, db_pin_key, db_pin_prefix, decode_ctr_eviction_index_key,
+	delta_chunk_key, delta_chunk_prefix, delta_prefix, meta_compact_key, meta_compactor_lease_key,
+	meta_head_key, meta_quota_key, pidx_delta_key, pidx_delta_prefix, restore_point_key,
+	restore_point_prefix, shard_key, shard_prefix, shard_version_key, shard_version_prefix,
+	sqlite_cmp_dirty_key, vtx_key,
 };
 use depot::conveyer::types::{BucketBranchId, BucketId, DatabaseBranchId};
 use gas::prelude::Id;
@@ -186,10 +183,6 @@ fn pitr_partition_prefixes_use_reserved_bytes() {
 		&restore_point_key(TEST_DATABASE, TEST_RESTORE_POINT)[..2],
 		&[SQLITE_SUBSPACE_PREFIX, RESTORE_POINT_PARTITION]
 	);
-	assert_eq!(
-		&compactor_global_lease_key(CompactorQueueKind::Cold)[..2],
-		&[SQLITE_SUBSPACE_PREFIX, CMPC_PARTITION]
-	);
 }
 
 #[test]
@@ -315,17 +308,12 @@ fn database_branch_data_keys_live_under_br_partition() {
 		branch_meta_head_key(branch),
 		branch_meta_head_at_fork_key(branch),
 		branch_meta_compact_key(branch),
-		branch_meta_cold_compact_key(branch),
 		branch_meta_quota_key(branch),
 		branch_meta_compactor_lease_key(branch),
-		branch_meta_cold_lease_key(branch),
-		branch_manifest_cold_drained_txid_key(branch),
 		branch_manifest_last_hot_pass_txid_key(branch),
 		branch_manifest_last_access_ts_ms_key(branch),
 		branch_manifest_last_access_bucket_key(branch),
 		branch_compaction_root_key(branch),
-		branch_compaction_cold_shard_key(branch, 4, 7),
-		branch_compaction_retired_cold_object_key(branch, [1; 32]),
 		branch_compaction_stage_hot_shard_key(branch, compaction_job_id(), 4, 7, 2),
 		branch_commit_key(branch, 7),
 		branch_vtx_key(branch, [3; 16]),
@@ -346,10 +334,6 @@ fn database_branch_data_keys_live_under_br_partition() {
 		b"/CMP/root"
 	);
 	assert!(branch_shard_key(branch, 4, 7).starts_with(&branch_shard_version_prefix(branch, 4)));
-	assert!(
-		branch_compaction_cold_shard_key(branch, 4, 7)
-			.starts_with(&branch_compaction_cold_shard_version_prefix(branch, 4))
-	);
 	assert!(
 		branch_compaction_stage_hot_shard_key(branch, compaction_job_id(), 4, 7, 2).starts_with(
 			&branch_compaction_stage_hot_shard_version_prefix(branch, compaction_job_id(), 4)
@@ -384,18 +368,6 @@ fn global_restore_point_and_compactor_keys_match_expected_suffixes() {
 			TEST_RESTORE_POINT.as_bytes()
 		]
 		.concat()
-	);
-
-	let cold_enqueue = compactor_enqueue_key(55, TEST_DATABASE, CompactorQueueKind::Cold);
-	let eviction_enqueue = compactor_enqueue_key(55, TEST_DATABASE, CompactorQueueKind::Eviction);
-	assert_ne!(cold_enqueue, eviction_enqueue);
-	assert_eq!(*cold_enqueue.last().expect("kind byte"), 0x00);
-	assert_eq!(*eviction_enqueue.last().expect("kind byte"), 0x01);
-	assert_eq!(
-		*compactor_global_lease_key(CompactorQueueKind::Eviction)
-			.last()
-			.expect("kind byte"),
-		0x01
 	);
 }
 
@@ -434,23 +406,6 @@ fn workflow_compaction_key_partitions_are_reserved() {
 fn workflow_compaction_branch_keys_sort_by_big_endian_components() {
 	let branch = database_branch_id();
 	let job = compaction_job_id();
-
-	let mut cold_shards = vec![
-		branch_compaction_cold_shard_key(branch, 2, 10),
-		branch_compaction_cold_shard_key(branch, 1, 50),
-		branch_compaction_cold_shard_key(branch, 1, 7),
-		branch_compaction_cold_shard_key(branch, 2, 1),
-	];
-	cold_shards.sort();
-	assert_eq!(
-		cold_shards,
-		vec![
-			branch_compaction_cold_shard_key(branch, 1, 7),
-			branch_compaction_cold_shard_key(branch, 1, 50),
-			branch_compaction_cold_shard_key(branch, 2, 1),
-			branch_compaction_cold_shard_key(branch, 2, 10),
-		]
-	);
 
 	let mut staged_hot_shards = vec![
 		branch_compaction_stage_hot_shard_key(branch, job, 2, 10, 1),
@@ -520,21 +475,6 @@ fn workflow_compaction_global_keys_sort_by_big_endian_components() {
 			bucket_child_key(source_bucket, [1; 16], target_a),
 			bucket_child_key(source_bucket, [1; 16], target_b),
 			bucket_child_key(source_bucket, [2; 16], target_a),
-		]
-	);
-
-	let mut retired_objects = vec![
-		branch_compaction_retired_cold_object_key(branch, [0x80; 32]),
-		branch_compaction_retired_cold_object_key(branch, [0x01; 32]),
-		branch_compaction_retired_cold_object_key(branch, [0xff; 32]),
-	];
-	retired_objects.sort();
-	assert_eq!(
-		retired_objects,
-		vec![
-			branch_compaction_retired_cold_object_key(branch, [0x01; 32]),
-			branch_compaction_retired_cold_object_key(branch, [0x80; 32]),
-			branch_compaction_retired_cold_object_key(branch, [0xff; 32]),
 		]
 	);
 

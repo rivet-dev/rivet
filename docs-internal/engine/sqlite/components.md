@@ -13,7 +13,7 @@ Responsibilities:
 - Write PIDX owner rows for dirty pages.
 - Write `COMMITS/{txid}` and `VTX/{versionstamp}` in the same commit transaction.
 - Maintain `META/head`, quota counters, and access-touch manifest fields.
-- Update `SQLITE_CMP_DIRTY/{database_branch_id}` and send throttled `DeltasAvailable` workflow wakeups when hot or cold lag crosses compaction thresholds.
+- Update `SQLITE_CMP_DIRTY/{database_branch_id}` and send throttled `DeltasAvailable` workflow wakeups when hot lag crosses compaction thresholds.
 - Create buckets, create databases, fork buckets, fork databases, and write branch records/catalog markers.
 - Create and resolve restore points. Pinned restore points write FDB pins directly and start as `PinStatus::Ready`.
 
@@ -21,7 +21,7 @@ Lease ownership: none. Correctness relies on Pegboard single-writer exclusivity 
 
 ## Workflow Compaction
 
-The workflow compaction path uses one persistent DB manager plus hot, cold, and reclaim companion workflows per database branch.
+The workflow compaction path uses one persistent DB manager plus hot and reclaim companion workflows per database branch.
 
 Responsibilities:
 
@@ -30,9 +30,7 @@ Responsibilities:
 - Carry the branch lifecycle generation through planned jobs and reject stale stage, publish, or reclaim work after branch deletion or recreation.
 - Have the hot companion write staged shard blobs under `CMP/stage/{job_id}/hot_shard`.
 - Install matching hot job output by copying staged blobs to reader-visible `SHARD`, advancing `CMP/root`, and compare-and-clearing expected PIDX rows.
-- Have the cold companion upload deterministic cold shard objects, then publish `CMP/cold_shard` refs only through the manager.
-- Have the reclaimer delete only manager-authorized FDB rows, staged output, orphan cold objects, and retired cold objects.
-- Evict cold-backed FDB `SHARD` rows as shard-cache entries without clearing the matching `CMP/cold_shard` refs.
+- Have the reclaimer delete only manager-authorized FDB rows and stale staged output.
 - Keep automatic PITR interval coverage and retained restore point pins live until reclaim can prove they are no longer needed.
 - Stop the manager and companion workflows through `DestroyDatabaseBranch` when a database branch is no longer live.
 
@@ -43,7 +41,7 @@ Lease ownership: none. Gasoline workflow uniqueness uses only the database branc
 | Component | Main writes | Lease |
 |---|---|---|
 | Conveyer | `META/head`, `COMMITS`, `VTX`, `PIDX`, `DELTA`, branch records, restore points | None |
-| Workflow DB manager | `CMP/root`, live `SHARD`, `PITR_INTERVAL`, `CMP/cold_shard`, retire records, matching PIDX clears | None |
-| Workflow companions | Staged hot output, cold object uploads, manager-authorized deletes and cleanup | None |
+| Workflow DB manager | `CMP/root`, live `SHARD`, `PITR_INTERVAL`, matching PIDX clears | None |
+| Workflow companions | Staged hot output and manager-authorized FDB cleanup | None |
 
 The components share branch metadata and pin counters, but each mutable manifest field has one owner.

@@ -4,7 +4,7 @@ This page is intentionally brief. Full VFS rules live in [../sqlite-vfs.md](../s
 
 ## Boundary
 
-The VFS presents SQLite page reads and commits to the storage conveyer. It does not own PITR, fork metadata, cold-tier upload, or eviction. Those are storage-layer responsibilities under `engine/packages/depot/`.
+The VFS presents SQLite page reads and commits to the storage conveyer. It does not own PITR, fork metadata, or FDB compaction/reclaim. Those are storage-layer responsibilities under `engine/packages/depot/`.
 
 ## Read Shape
 
@@ -14,15 +14,15 @@ For page reads, the VFS asks storage for pages by database id and generation. St
 2. Checks database size and the current head.
 3. Uses PIDX to find recent DELTA owners.
 4. Falls through to the latest SHARD version at or below the read txid.
-5. Falls through to cold layers when FDB has been evicted.
+5. Zero-fills valid database gaps.
 
-The VFS should treat missing pages above EOF differently from recoverable storage misses below EOF.
+The VFS should treat missing pages above EOF differently from storage misses below EOF.
 
 ## Commit Shape
 
 For commits, the VFS passes dirty pages to storage. Storage encodes the pages into LTX chunks, writes DELTA/PIDX rows, updates `COMMITS` and `VTX`, and advances `META/head` in one FDB transaction.
 
-The VFS does not write local SQLite database files. Local files would break the stateless storage invariant and bypass the branch/cold-tier machinery.
+The VFS does not write local SQLite database files. Local files would break the stateless storage invariant and bypass the branch machinery.
 
 ## Reference Links
 
