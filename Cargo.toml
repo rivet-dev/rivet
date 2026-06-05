@@ -71,7 +71,8 @@ members = [
   "rivetkit-typescript/packages/rivetkit-wasm",
   "engine/packages/perf",
   "engine/packages/profiling",
-  "engine/packages/ups-broadcast"
+  "engine/packages/ups-broadcast",
+  "examples/rust-counter"
 ]
 
   [workspace.package]
