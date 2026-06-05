@@ -180,6 +180,10 @@ function serverlessPoolConfig() {
 }
 
 export const registry = setup({
+	sqlite:
+		process.env.RIVET_KITCHEN_SINK_REMOTE_SQLITE === "1"
+			? { backend: "remote" }
+			: undefined,
 	configurePool: serverlessPoolConfig(),
 	serverless: {
 		publicToken:

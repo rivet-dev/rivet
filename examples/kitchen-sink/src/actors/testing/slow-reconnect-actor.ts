@@ -949,6 +949,27 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	}
 }
 
+// The engine rejects a remote SQLite statement whose bind params exceed 128
+// KiB. Keep each chunk under a budget below that so wide rows (large message
+// content) never trip the limit, regardless of the row-count batch size.
+const MAX_BATCH_BIND_BYTES = 120 * 1024
+
+function bindParamBytes(value: unknown): number {
+	if (value === null || value === undefined) {
+		return 0
+	}
+	if (typeof value === 'string') {
+		return Buffer.byteLength(value, 'utf8')
+	}
+	if (typeof value === 'number') {
+		return 8
+	}
+	if (value instanceof Uint8Array) {
+		return value.byteLength
+	}
+	return Buffer.byteLength(String(value), 'utf8')
+}
+
 async function batchInsert(
 	database: RawRivetDB,
 	insertPrefix: string,
@@ -963,8 +984,26 @@ async function batchInsert(
 		return
 	}
 	const rowPlaceholder = `(${'?,'.repeat(columnCount).slice(0, -1)})`
-	for (let index = 0; index < rows.length; index += batchSize) {
-		const chunk = rows.slice(index, index + batchSize)
+	const rowBytes = rows.map((row) =>
+		row.reduce((sum: number, value) => sum + bindParamBytes(value), 0),
+	)
+
+	let index = 0
+	while (index < rows.length) {
+		const chunk: unknown[][] = []
+		let chunkBytes = 0
+		while (
+			index < rows.length &&
+			chunk.length < batchSize &&
+			// Always take at least one row so an oversized single row still runs
+			// (and surfaces the engine error) rather than looping forever.
+			(chunk.length === 0 ||
+				chunkBytes + rowBytes[index]! <= MAX_BATCH_BIND_BYTES)
+		) {
+			chunk.push(rows[index]!)
+			chunkBytes += rowBytes[index]!
+			index++
+		}
 		const values = chunk.map(() => rowPlaceholder).join(',')
 		const bindings = chunk.flat()
 		await database.execute(`${insertPrefix} VALUES ${values}`, ...bindings)

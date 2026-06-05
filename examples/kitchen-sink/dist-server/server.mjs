@@ -12659,6 +12659,22 @@ async function seedSlowReconnectData(database) {
     threadEvents: threadEventCount
   };
 }
+var MAX_BATCH_BIND_BYTES = 120 * 1024;
+function bindParamBytes(value) {
+  if (value === null || value === void 0) {
+    return 0;
+  }
+  if (typeof value === "string") {
+    return Buffer.byteLength(value, "utf8");
+  }
+  if (typeof value === "number") {
+    return 8;
+  }
+  if (value instanceof Uint8Array) {
+    return value.byteLength;
+  }
+  return Buffer.byteLength(String(value), "utf8");
+}
 async function batchInsert3(database, insertPrefix, rows, batchSize = 100) {
   if (rows.length === 0) {
     return;
@@ -12668,8 +12684,20 @@ async function batchInsert3(database, insertPrefix, rows, batchSize = 100) {
     return;
   }
   const rowPlaceholder = `(${"?,".repeat(columnCount).slice(0, -1)})`;
-  for (let index = 0; index < rows.length; index += batchSize) {
-    const chunk = rows.slice(index, index + batchSize);
+  const rowBytes = rows.map(
+    (row) => row.reduce((sum, value) => sum + bindParamBytes(value), 0)
+  );
+  let index = 0;
+  while (index < rows.length) {
+    const chunk = [];
+    let chunkBytes = 0;
+    while (index < rows.length && chunk.length < batchSize && // Always take at least one row so an oversized single row still runs
+    // (and surfaces the engine error) rather than looping forever.
+    (chunk.length === 0 || chunkBytes + rowBytes[index] <= MAX_BATCH_BIND_BYTES)) {
+      chunk.push(rows[index]);
+      chunkBytes += rowBytes[index];
+      index++;
+    }
     const values = chunk.map(() => rowPlaceholder).join(",");
     const bindings = chunk.flat();
     await database.execute(`${insertPrefix} VALUES ${values}`, ...bindings);
@@ -12790,6 +12818,7 @@ function serverlessPoolConfig() {
   };
 }
 var registry2 = setup2({
+  sqlite: process.env.RIVET_KITCHEN_SINK_REMOTE_SQLITE === "1" ? { backend: "remote" } : void 0,
   configurePool: serverlessPoolConfig(),
   serverless: {
     publicToken: process.env.RIVET_PUBLIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev",
