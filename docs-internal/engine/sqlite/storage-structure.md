@@ -1,6 +1,6 @@
 # SQLite Storage Structure
 
-This is the key-format reference for the branchable Depot layer. Update it whenever FDB or S3 layout changes.
+This is the key-format reference for the branchable Depot layer. Update it whenever FDB layout changes.
 
 ## Identity Model
 
@@ -106,24 +106,20 @@ BR/{database_id_be:16}/PITR_INTERVAL/{bucket_start_ms_be:8}
 
 `COMMITS` stores commit metadata, including wall-clock time, captured versionstamp, size in pages, and post-apply checksum. `VTX` maps a versionstamp back to txid for restore point resolution and GC. `PIDX` maps a page number to the DELTA txid that currently owns it.
 
-`SHARD` is versioned by `as_of_txid`. Reads choose the largest `as_of_txid <= read_txid`. Hot compaction writes new SHARD versions and does not overwrite older ones. When cold storage is enabled, the same FDB SHARD rows are also the shard cache for manager-published `CMP/cold_shard` refs; read-through fill can repopulate an evicted row without advancing manifest watermarks.
+`SHARD` is versioned by `as_of_txid`. Reads choose the largest `as_of_txid <= read_txid`. Hot compaction writes new SHARD versions and does not overwrite older ones.
 
 ## Workflow Compaction Metadata
 
 ```text
 BR/{database_id_be:16}/CMP/root
   -> CompactionRoot (vbare-versioned)
-BR/{database_id_be:16}/CMP/cold_shard/{shard_id_be:4}/{as_of_txid_be:8}
-  -> ColdShardRef (vbare-versioned)
-BR/{database_id_be:16}/CMP/retired_cold_object/{object_key_hash:32}
-  -> RetiredColdObject (vbare-versioned)
 BR/{database_id_be:16}/CMP/stage/{job_id}/hot_shard/{shard_id_be:4}/{as_of_txid_be:8}/{chunk_be:4}
   -> staged LTX shard blob
 ```
 
 The DB manager owns published `CMP` metadata. Staged hot shard keys are not reader-visible until the manager validates the active job and copies them to `SHARD`; the same install transaction advances `CMP/root` and compare-and-clears matching PIDX rows.
 
-`CMP/cold_shard` refs point to workflow cold objects and are the durable proof that an evictable FDB `SHARD` has cold coverage. `CMP/retired_cold_object` records fence the S3 grace-delete lifecycle so an object key is not republished after retirement.
+`CompactionRoot` may contain legacy cold watermark fields for persisted compatibility. OSS Depot does not use those fields as planning or deletion authority.
 
 ## Branch Manifest Subkeys
 
@@ -159,16 +155,3 @@ BUCKET_PROOF_EPOCH/{root_bucket_id_be:16}
 SQLITE_CMP_DIRTY/{database_id_be:16}
   -> SqliteCmpDirty (vbare-versioned)
 ```
-
-## S3 Layout
-
-All objects are under a deployment-configured root. Workflow cold objects are immutable LTX shard objects. The object generation id is the cold job id, so retrying a job reuses the same object key.
-
-```text
-{root}/
-  db/{database_id_uuid_hex:32}/
-    shard/{shard_id_be_hex:8}/
-      {as_of_txid_be_hex:16}-{object_generation_id}-{content_hash_hex}.ltx
-```
-
-Each object contains exactly one shard. The content hash is also stored in the matching `ColdShardRef`, and the manager/reclaimer compare that identity before publishing, evicting, retiring, or deleting cold-backed data.

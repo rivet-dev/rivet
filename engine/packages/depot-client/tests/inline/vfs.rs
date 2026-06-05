@@ -13,7 +13,6 @@ use std::thread;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use depot::cold_tier::FilesystemColdTier;
 use parking_lot::Mutex as SyncMutex;
 use rivet_envoy_protocol as protocol;
 use tempfile::TempDir;
@@ -422,7 +421,6 @@ fn next_test_name(prefix: &str) -> String {
 struct DirectEngineHarness {
 	actor_id: String,
 	db_dir: TempDir,
-	cold_dir: Option<TempDir>,
 	storage: OnceCell<Arc<DirectStorage>>,
 }
 
@@ -431,16 +429,6 @@ impl DirectEngineHarness {
 		Self {
 			actor_id: next_test_name("sqlite-direct-actor"),
 			db_dir: tempfile::tempdir().expect("temp dir should build"),
-			cold_dir: None,
-			storage: OnceCell::new(),
-		}
-	}
-
-	fn new_with_cold_tier() -> Self {
-		Self {
-			actor_id: next_test_name("sqlite-direct-actor"),
-			db_dir: tempfile::tempdir().expect("temp dir should build"),
-			cold_dir: Some(tempfile::tempdir().expect("cold temp dir should build")),
 			storage: OnceCell::new(),
 		}
 	}
@@ -457,14 +445,7 @@ impl DirectEngineHarness {
 				.expect("rocksdb driver should build");
 				let db = universaldb::Database::new(Arc::new(driver));
 
-				Arc::new(if let Some(cold_dir) = &self.cold_dir {
-					DirectStorage::new_with_cold_tier(
-						db,
-						Arc::new(FilesystemColdTier::new(cold_dir.path())),
-					)
-				} else {
-					DirectStorage::new(db)
-				})
+				Arc::new(DirectStorage::new(db))
 			})
 			.await;
 		Arc::clone(storage)
@@ -1561,111 +1542,6 @@ fn direct_mirror_transport_reopens_from_mirror_pages() {
 	assert_eq!(stats.depot_get_pages, 0);
 	assert!(stats.mirror_reads > 0);
 	assert!(stats.mirror_seeds > 0);
-}
-
-#[test]
-fn strict_direct_reopen_counts_cold_tier_get_for_cold_covered_page() {
-	let runtime = direct_runtime();
-	let harness = DirectEngineHarness::new_with_cold_tier();
-	let page_count;
-
-	{
-		let db = harness.open_db(&runtime);
-		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 808;")
-			.expect("user_version write should succeed");
-		page_count = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
-			.expect("page count should succeed") as u32;
-	}
-
-	let engine = runtime.block_on(harness.open_engine());
-	let page = runtime
-		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect("page 1 should be fetched from depot")
-		.pages
-		.into_iter()
-		.find(|page| page.pgno == 1)
-		.and_then(|page| page.bytes)
-		.expect("page 1 should be present");
-	assert_eq!(&page[..16], b"SQLite format 3\0");
-	runtime
-		.block_on(engine.seed_page_as_cold_ref(&harness.actor_id, 1, page))
-		.expect("cold ref should seed");
-	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xcd; 4096], page_count));
-	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
-
-	let before = engine.stats();
-	let reopened = harness.open_db(&runtime);
-	assert_eq!(
-		sqlite_query_i64(reopened.as_ptr(), "PRAGMA user_version;")
-			.expect("strict reopen should read cold-backed state"),
-		808
-	);
-	let after = engine.stats();
-	assert!(after.depot_get_pages > before.depot_get_pages);
-	assert!(after.cold_gets > before.cold_gets);
-	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_seeds, before.mirror_seeds);
-}
-
-#[test]
-fn strict_direct_warmed_shard_cache_does_not_count_as_cold_tier_evidence() {
-	let runtime = direct_runtime();
-	let harness = DirectEngineHarness::new_with_cold_tier();
-	let page_count;
-
-	{
-		let db = harness.open_db(&runtime);
-		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 909;")
-			.expect("user_version write should succeed");
-		page_count = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
-			.expect("page count should succeed") as u32;
-	}
-
-	let engine = runtime.block_on(harness.open_engine());
-	let page = runtime
-		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect("page 1 should be fetched from depot")
-		.pages
-		.into_iter()
-		.find(|page| page.pgno == 1)
-		.and_then(|page| page.bytes)
-		.expect("page 1 should be present");
-	assert_eq!(&page[..16], b"SQLite format 3\0");
-	runtime
-		.block_on(engine.seed_page_as_cold_ref(&harness.actor_id, 1, page))
-		.expect("cold ref should seed");
-	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xcd; 4096], page_count));
-	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
-
-	let before_warm = engine.stats();
-	let cold_page = runtime
-		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect("strict direct read should hit cold tier")
-		.pages
-		.into_iter()
-		.find(|page| page.pgno == 1)
-		.and_then(|page| page.bytes)
-		.expect("cold-backed page should be present");
-	assert_eq!(&cold_page[..16], b"SQLite format 3\0");
-	let after_warm = engine.stats();
-	assert!(after_warm.cold_gets > before_warm.cold_gets);
-
-	let actor_db = runtime.block_on(engine.actor_db(harness.actor_id.clone()));
-	runtime.block_on(actor_db.wait_for_shard_cache_fill_idle_for_test());
-	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
-
-	let before = engine.stats();
-	let reopened = harness.open_db(&runtime);
-	assert_eq!(
-		sqlite_query_i64(reopened.as_ptr(), "PRAGMA user_version;")
-			.expect("strict reopen should read shard-cache-backed state"),
-		909
-	);
-	let after = engine.stats();
-	assert!(after.depot_get_pages > before.depot_get_pages);
-	assert_eq!(after.cold_gets, before.cold_gets);
-	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_seeds, before.mirror_seeds);
 }
 
 #[test]
@@ -4721,6 +4597,7 @@ fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
 					request.now_ms,
 					CommitOptions {
 						expected_head_txid: request.expected_head_txid,
+						..Default::default()
 					},
 				)
 				.await
@@ -5287,6 +5164,7 @@ fn warm_pidx_stale_read_then_rmw_commit_natural_repro() {
 					request.now_ms,
 					CommitOptions {
 						expected_head_txid: request.expected_head_txid,
+						..Default::default()
 					},
 				)
 				.await

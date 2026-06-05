@@ -3,10 +3,7 @@ pub enum DepotFaultPoint {
 	Commit(CommitFaultPoint),
 	Read(ReadFaultPoint),
 	HotCompaction(HotCompactionFaultPoint),
-	ColdCompaction(ColdCompactionFaultPoint),
 	Reclaim(ReclaimFaultPoint),
-	ColdTier(ColdTierFaultPoint),
-	ShardCacheFill(ShardCacheFillFaultPoint),
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -43,10 +40,7 @@ pub enum ReadFaultPoint {
 	DeltaBlobMissing,
 	AfterDeltaBlobLoad,
 	AfterShardBlobLoad,
-	ColdRefSelected,
-	ColdObjectMissing,
 	BeforeReturnPages,
-	ShardCacheFillEnqueue,
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -64,47 +58,12 @@ pub enum HotCompactionFaultPoint {
 }
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ColdCompactionFaultPoint {
-	UploadBeforeInputRead,
-	UploadAfterInputRead,
-	UploadBeforePutObject,
-	UploadAfterPutObject,
-	PublishBeforeInputRead,
-	PublishAfterInputRead,
-	PublishBeforeColdRefWrite,
-	PublishAfterColdRefWriteBeforeRootUpdate,
-	PublishAfterRootUpdate,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ReclaimFaultPoint {
 	PlanBeforeSnapshot,
 	PlanAfterSnapshot,
 	BeforeHotDelete,
 	AfterHotDelete,
-	BeforeColdRetire,
-	AfterColdRetire,
-	BeforeColdDelete,
-	AfterColdDelete,
 	BeforeCleanupRows,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ColdTierFaultPoint {
-	PutObject,
-	GetObject,
-	DeleteObjects,
-	ListPrefix,
-}
-
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-pub enum ShardCacheFillFaultPoint {
-	BeforeEnqueue,
-	BeforeGetObject,
-	AfterGetObject,
-	BeforeShardWrite,
-	AfterShardWrite,
-	Skipped,
 }
 
 impl DepotFaultPoint {
@@ -113,10 +72,7 @@ impl DepotFaultPoint {
 			DepotFaultPoint::Commit(point) => point.boundary(),
 			DepotFaultPoint::Read(point) => point.boundary(),
 			DepotFaultPoint::HotCompaction(point) => point.boundary(),
-			DepotFaultPoint::ColdCompaction(point) => point.boundary(),
 			DepotFaultPoint::Reclaim(point) => point.boundary(),
-			DepotFaultPoint::ColdTier(point) => point.boundary(),
-			DepotFaultPoint::ShardCacheFill(point) => point.boundary(),
 		}
 	}
 }
@@ -151,10 +107,7 @@ impl ReadFaultPoint {
 			| ReadFaultPoint::DeltaBlobMissing
 			| ReadFaultPoint::AfterDeltaBlobLoad
 			| ReadFaultPoint::AfterShardBlobLoad
-			| ReadFaultPoint::ColdRefSelected
-			| ReadFaultPoint::ColdObjectMissing
-			| ReadFaultPoint::BeforeReturnPages
-			| ReadFaultPoint::ShardCacheFillEnqueue => FaultBoundary::ReadOnly,
+			| ReadFaultPoint::BeforeReturnPages => FaultBoundary::ReadOnly,
 		}
 	}
 }
@@ -176,22 +129,6 @@ impl HotCompactionFaultPoint {
 	}
 }
 
-impl ColdCompactionFaultPoint {
-	pub fn boundary(&self) -> FaultBoundary {
-		match self {
-			ColdCompactionFaultPoint::UploadBeforeInputRead
-			| ColdCompactionFaultPoint::UploadAfterInputRead
-			| ColdCompactionFaultPoint::UploadBeforePutObject
-			| ColdCompactionFaultPoint::UploadAfterPutObject
-			| ColdCompactionFaultPoint::PublishBeforeInputRead
-			| ColdCompactionFaultPoint::PublishAfterInputRead
-			| ColdCompactionFaultPoint::PublishBeforeColdRefWrite
-			| ColdCompactionFaultPoint::PublishAfterColdRefWriteBeforeRootUpdate
-			| ColdCompactionFaultPoint::PublishAfterRootUpdate => FaultBoundary::WorkflowOnly,
-		}
-	}
-}
-
 impl ReclaimFaultPoint {
 	pub fn boundary(&self) -> FaultBoundary {
 		match self {
@@ -199,37 +136,7 @@ impl ReclaimFaultPoint {
 			| ReclaimFaultPoint::PlanAfterSnapshot
 			| ReclaimFaultPoint::BeforeHotDelete
 			| ReclaimFaultPoint::AfterHotDelete
-			| ReclaimFaultPoint::BeforeColdRetire
-			| ReclaimFaultPoint::AfterColdRetire
-			| ReclaimFaultPoint::BeforeColdDelete
-			| ReclaimFaultPoint::AfterColdDelete
 			| ReclaimFaultPoint::BeforeCleanupRows => FaultBoundary::WorkflowOnly,
-		}
-	}
-}
-
-impl ColdTierFaultPoint {
-	pub fn boundary(&self) -> FaultBoundary {
-		match self {
-			ColdTierFaultPoint::GetObject | ColdTierFaultPoint::ListPrefix => {
-				FaultBoundary::ReadOnly
-			}
-			ColdTierFaultPoint::PutObject | ColdTierFaultPoint::DeleteObjects => {
-				FaultBoundary::WorkflowOnly
-			}
-		}
-	}
-}
-
-impl ShardCacheFillFaultPoint {
-	pub fn boundary(&self) -> FaultBoundary {
-		match self {
-			ShardCacheFillFaultPoint::BeforeEnqueue
-			| ShardCacheFillFaultPoint::BeforeGetObject
-			| ShardCacheFillFaultPoint::AfterGetObject
-			| ShardCacheFillFaultPoint::BeforeShardWrite
-			| ShardCacheFillFaultPoint::AfterShardWrite
-			| ShardCacheFillFaultPoint::Skipped => FaultBoundary::ReadOnly,
 		}
 	}
 }

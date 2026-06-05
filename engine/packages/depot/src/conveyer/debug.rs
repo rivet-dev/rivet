@@ -17,10 +17,8 @@ use crate::{
 		keys,
 		ltx::{DecodedLtx, decode_ltx_v3},
 		types::{
-			ColdManifestChunk, ColdManifestIndex, CommitRow, DatabaseBranchId, FetchedPage,
-			LayerEntry, LayerKind, RestorePointIndexEntry, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-			decode_cold_manifest_chunk, decode_cold_manifest_index, decode_commit_row,
-			decode_restore_point_record,
+			CommitRow, DatabaseBranchId, FetchedPage, RestorePointIndexEntry,
+			SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_commit_row, decode_restore_point_record,
 		},
 	},
 	gc,
@@ -32,13 +30,6 @@ pub struct BranchPins {
 	pub refcount: i64,
 	pub desc_pin: [u8; 16],
 	pub restore_point_pin: [u8; 16],
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ColdManifest {
-	pub branch_id: DatabaseBranchId,
-	pub index: Option<ColdManifestIndex>,
-	pub chunks: Vec<ColdManifestChunk>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,51 +107,6 @@ pub async fn list_restore_points(db: &Db) -> Result<Vec<RestorePointIndexEntry>>
 		.await
 }
 
-pub async fn dump_cold_manifest(db: &Db) -> Result<ColdManifest> {
-	let branch_id = resolve_current_branch(db).await?;
-	let Some(cold_tier) = &db.cold_tier else {
-		return Ok(ColdManifest {
-			branch_id,
-			index: None,
-			chunks: Vec::new(),
-		});
-	};
-
-	let index_key = cold_manifest_index_object_key(branch_id);
-	let Some(index_bytes) = cold_tier
-		.get_object(&index_key)
-		.await
-		.with_context(|| format!("get sqlite cold manifest index {index_key}"))?
-	else {
-		return Ok(ColdManifest {
-			branch_id,
-			index: None,
-			chunks: Vec::new(),
-		});
-	};
-	let index = decode_cold_manifest_index(&index_bytes)
-		.with_context(|| format!("decode sqlite cold manifest index {index_key}"))?;
-	let mut chunks = Vec::new();
-	for chunk_ref in &index.chunks {
-		let Some(chunk_bytes) = cold_tier
-			.get_object(&chunk_ref.object_key)
-			.await
-			.with_context(|| format!("get sqlite cold manifest chunk {}", chunk_ref.object_key))?
-		else {
-			continue;
-		};
-		chunks.push(decode_cold_manifest_chunk(&chunk_bytes).with_context(|| {
-			format!("decode sqlite cold manifest chunk {}", chunk_ref.object_key)
-		})?);
-	}
-
-	Ok(ColdManifest {
-		branch_id,
-		index: Some(index),
-		chunks,
-	})
-}
-
 pub async fn estimate_gc_pin(db: &Db) -> Result<[u8; 16]> {
 	let branch_id = resolve_current_branch(db).await?;
 	Ok(gc::estimate_branch_gc_pin(&db.udb, branch_id)
@@ -171,7 +117,6 @@ pub async fn estimate_gc_pin(db: &Db) -> Result<[u8; 16]> {
 
 pub async fn read_at(db: &Db, versionstamp: [u8; 16]) -> Result<PageState> {
 	let root_branch_id = resolve_current_branch(db).await?;
-	let cold_tier = db.cold_tier.clone();
 	let branch_id_for_tx = root_branch_id;
 	let read_plan = db
 		.udb
@@ -224,18 +169,11 @@ pub async fn read_at(db: &Db, versionstamp: [u8; 16]) -> Result<PageState> {
 				versionstamp,
 				db_size_pages: commit.db_size_pages,
 				pages,
-				sources,
 			})
 		})
 		.await?;
 
-	let pages = fill_cold_pages(
-		cold_tier.as_ref(),
-		read_plan.db_size_pages,
-		read_plan.pages,
-		&read_plan.sources,
-	)
-	.await?;
+	let pages = fill_missing_pages(read_plan.db_size_pages, read_plan.pages);
 
 	Ok(PageState {
 		branch_id: read_plan.branch_id,
@@ -252,7 +190,6 @@ struct DebugReadPlan {
 	versionstamp: [u8; 16],
 	db_size_pages: u32,
 	pages: BTreeMap<u32, Option<Vec<u8>>>,
-	sources: Vec<DebugReadSource>,
 }
 
 async fn resolve_current_branch(db: &Db) -> Result<DatabaseBranchId> {
@@ -329,116 +266,18 @@ async fn load_pages_from_hot_tier(
 	Ok(pages)
 }
 
-async fn fill_cold_pages(
-	cold_tier: Option<&std::sync::Arc<dyn crate::cold_tier::ColdTier>>,
+fn fill_missing_pages(
 	db_size_pages: u32,
 	mut pages: BTreeMap<u32, Option<Vec<u8>>>,
-	sources: &[DebugReadSource],
-) -> Result<Vec<FetchedPage>> {
-	let mut loaded_objects = BTreeMap::<String, Vec<u8>>::new();
-	let mut decoded_objects = BTreeMap::<String, DecodedLtx>::new();
-
-	for pgno in 1..=db_size_pages {
-		if pages.get(&pgno).is_some_and(Option::is_some) {
-			continue;
-		}
-
-		let Some(cold_tier) = cold_tier else {
-			pages.insert(pgno, Some(vec![0; keys::PAGE_SIZE as usize]));
-			continue;
-		};
-		let shard_id = pgno / keys::SHARD_SIZE;
-		for source in sources {
-			let mut layers = load_manifest_layers(cold_tier.as_ref(), *source, shard_id).await?;
-			layers.sort_by(|a, b| {
-				b.max_txid
-					.cmp(&a.max_txid)
-					.then_with(|| layer_kind_rank(b.kind).cmp(&layer_kind_rank(a.kind)))
-			});
-			for layer in layers {
-				let object_key = layer.object_key.clone();
-				if !loaded_objects.contains_key(&object_key) {
-					let Some(bytes) = cold_tier
-						.get_object(&object_key)
-						.await
-						.with_context(|| format!("get sqlite debug cold layer {object_key}"))?
-					else {
-						continue;
-					};
-					loaded_objects.insert(object_key.clone(), bytes);
-				}
-				if !decoded_objects.contains_key(&object_key) {
-					let bytes = loaded_objects
-						.get(&object_key)
-						.context("sqlite debug cold layer should be loaded before decode")?;
-					decoded_objects.insert(
-						object_key.clone(),
-						decode_ltx_v3(bytes).with_context(|| {
-							format!("decode sqlite debug cold layer {object_key}")
-						})?,
-					);
-				}
-				if let Some(bytes) = decoded_objects
-					.get(&object_key)
-					.and_then(|decoded| decoded.get_page(pgno))
-				{
-					pages.insert(pgno, Some(bytes.to_vec()));
-					break;
-				}
-			}
-			if pages.get(&pgno).is_some_and(Option::is_some) {
-				break;
-			}
-		}
-		if pages.get(&pgno).is_none_or(Option::is_none) {
-			pages.insert(pgno, Some(vec![0; keys::PAGE_SIZE as usize]));
-		}
-	}
-
-	Ok((1..=db_size_pages)
+) -> Vec<FetchedPage> {
+	(1..=db_size_pages)
 		.map(|pgno| FetchedPage {
 			pgno,
 			bytes: pages
 				.remove(&pgno)
 				.unwrap_or_else(|| Some(vec![0; keys::PAGE_SIZE as usize])),
 		})
-		.collect())
-}
-
-async fn load_manifest_layers(
-	cold_tier: &dyn crate::cold_tier::ColdTier,
-	source: DebugReadSource,
-	shard_id: u32,
-) -> Result<Vec<LayerEntry>> {
-	let Some(index_bytes) = cold_tier
-		.get_object(&cold_manifest_index_object_key(source.branch_id))
-		.await?
-	else {
-		return Ok(Vec::new());
-	};
-	let index = decode_cold_manifest_index(&index_bytes)
-		.context("decode sqlite debug cold manifest index")?;
-	let mut layers = Vec::new();
-
-	for chunk_ref in index.chunks {
-		let Some(chunk_bytes) = cold_tier.get_object(&chunk_ref.object_key).await? else {
-			continue;
-		};
-		let chunk = decode_cold_manifest_chunk(&chunk_bytes)
-			.context("decode sqlite debug cold manifest chunk")?;
-		for layer in chunk.layers {
-			if source.max_txid < layer.min_txid || source.max_txid > layer.max_txid {
-				continue;
-			}
-			match layer.kind {
-				LayerKind::Image if layer.shard_id == Some(shard_id) => layers.push(layer),
-				LayerKind::Delta | LayerKind::Pin => layers.push(layer),
-				LayerKind::Image => {}
-			}
-		}
-	}
-
-	Ok(layers)
+		.collect()
 }
 
 async fn read_commit_row(
@@ -558,19 +397,4 @@ async fn tx_load_latest_shard_blob(
 	}
 
 	Ok(None)
-}
-
-fn cold_manifest_index_object_key(branch_id: DatabaseBranchId) -> String {
-	format!(
-		"db/{}/cold_manifest/index.bare",
-		branch_id.as_uuid().simple()
-	)
-}
-
-fn layer_kind_rank(kind: LayerKind) -> u8 {
-	match kind {
-		LayerKind::Pin => 3,
-		LayerKind::Delta => 2,
-		LayerKind::Image => 1,
-	}
 }

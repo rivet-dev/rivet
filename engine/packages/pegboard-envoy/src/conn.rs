@@ -7,7 +7,7 @@ use std::{
 };
 
 use anyhow::Context;
-use depot::{cold_tier::ColdTier, conveyer::Db};
+use depot::conveyer::Db;
 use depot_client::database::NativeDatabaseHandle;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
@@ -45,7 +45,6 @@ pub struct Conn {
 	pub pending_websocket_opens: HashMap<(protocol::GatewayId, protocol::RequestId), Instant>,
 	pub udb: Arc<universaldb::Database>,
 	pub node_id: NodeId,
-	pub sqlite_cold_tier: Option<Arc<dyn ColdTier>>,
 	/// This is a perf-only SQLite conveyer cache, not authoritative actor presence tracking.
 	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
 	/// lazily populate it and lifecycle commands only evict stale cache entries.
@@ -115,7 +114,6 @@ pub async fn init_conn(
 	let udb = ctx.udb()?;
 	let conn_udb = Arc::new((*udb).clone());
 	let node_id = ctx.pools().node_id();
-	let sqlite_cold_tier = depot::cold_tier::cold_tier_from_config(ctx.config()).await?;
 	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
@@ -376,7 +374,6 @@ pub async fn init_conn(
 		pending_websocket_opens: HashMap::new(),
 		udb: conn_udb,
 		node_id,
-		sqlite_cold_tier,
 		actor_dbs: HashMap::new(),
 		remote_sqlite_executors: HashMap::new(),
 		pool: pool.config,

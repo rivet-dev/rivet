@@ -597,29 +597,6 @@ async fn doctor_max_txid_selects_latest_existing_commit_below_gap() -> Result<()
 }
 
 #[tokio::test]
-async fn doctor_stops_on_unsupported_cold_state() -> Result<()> {
-	let ctx = common::build_test_db("depot-doctor-cold", common::TierMode::Disabled).await?;
-	commit_sqlite(&ctx, &[("a", "1")], 1_000).await?;
-	let branch_id = branch_id(&ctx).await?;
-
-	set_value(
-		&ctx.udb,
-		keys::branch_compaction_cold_shard_key(branch_id, 0, 1),
-		b"unsupported".to_vec(),
-	)
-	.await?;
-
-	let report = run_doctor(&ctx, None).await?;
-
-	assert_eq!(report.verdict.verdict, DoctorVerdictKind::Unsupported);
-	assert_eq!(
-		report.verdict.unsupported_reason,
-		Some("unsupported_unexpected_storage_shape")
-	);
-	Ok(())
-}
-
-#[tokio::test]
 async fn doctor_stops_on_unsupported_pitr_state() -> Result<()> {
 	let ctx = common::build_test_db("depot-doctor-pitr", common::TierMode::Disabled).await?;
 	commit_sqlite(&ctx, &[("a", "1")], 1_000).await?;
