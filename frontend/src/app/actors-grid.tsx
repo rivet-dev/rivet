@@ -27,6 +27,7 @@ import { ActorIcon } from "@/components/lazy-icon";
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { cloudEnv } from "@/lib/env";
 import { features } from "@/lib/features";
+import { getRivetRunUrl } from "../lib/env";
 
 function _GridCard({
 	children,
@@ -370,7 +371,9 @@ function DeploymentsSection() {
 	const isDeployed =
 		managedPool?.status === "ready" && managedPool?.config?.image != null;
 	const deploymentUrl =
-		isDeployed && nsData?.access?.engineNamespaceName ? getRivetRunUrl(nsData.access.engineNamespaceName) : null;
+		isDeployed && nsData?.access?.engineNamespaceName
+			? getRivetRunUrl(nsData.access.engineNamespaceName)
+			: null;
 
 	if (isLoadingPool || !hasPool) {
 		return null;
