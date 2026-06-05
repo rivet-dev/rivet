@@ -1,5 +1,4 @@
 mod branch;
-mod cold_manifest;
 mod compaction;
 mod history_pin;
 mod ids;
@@ -10,7 +9,6 @@ mod serialization;
 mod storage;
 
 pub use branch::*;
-pub use cold_manifest::*;
 pub use compaction::*;
 pub use history_pin::*;
 pub use ids::*;

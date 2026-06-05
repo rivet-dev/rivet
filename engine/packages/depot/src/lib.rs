@@ -1,7 +1,6 @@
 pub mod burst_mode;
 use gas::prelude::*;
 
-pub mod cold_tier;
 mod compaction;
 pub mod conveyer;
 pub mod doctor;
@@ -22,7 +21,6 @@ pub use conveyer::{constants, error, keys, ltx, page_index, policy, quota, types
 
 pub fn registry() -> WorkflowResult<Registry> {
 	let registry = Registry::new();
-	// registry.register_workflow::<db_cold_compacter::DbColdCompacterWorkflow>()?;
 	// registry.register_workflow::<db_hot_compacter::DbHotCompacterWorkflow>()?;
 	// registry.register_workflow::<db_manager::DbManagerWorkflow>()?;
 	// registry.register_workflow::<db_reclaimer::DbReclaimerWorkflow>()?;

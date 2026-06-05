@@ -4,11 +4,7 @@ use anyhow::Result;
 use depot::{
 	debug,
 	keys::{PAGE_SIZE, branch_commit_key},
-	types::{
-		ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, DatabaseBranchId, DirtyPage,
-		LayerEntry, LayerKind, SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_commit_row,
-		encode_cold_manifest_chunk, encode_cold_manifest_index,
-	},
+	types::{DatabaseBranchId, DirtyPage, decode_commit_row},
 };
 use universaldb::utils::IsolationLevel::Snapshot;
 
@@ -114,85 +110,6 @@ async fn debug_read_at_returns_page_state_for_versionstamp() -> Result<()> {
 				second_state.pages[1].bytes.as_deref(),
 				Some(&vec![0x33; PAGE_SIZE as usize][..])
 			);
-
-			Ok(())
-		})
-	})
-	.await
-}
-
-#[tokio::test]
-async fn debug_dump_cold_manifest_reads_index_and_chunks() -> Result<()> {
-	common::test_matrix("depot-debug-cold-manifest", |tier, ctx| {
-		Box::pin(async move {
-			let database_db = ctx.db;
-			database_db.commit(vec![page(1, 0x11)], 2, 1_000).await?;
-			let branch_id = debug::dump_database_ancestry(&database_db).await?[0].0;
-
-			if tier == common::TierMode::Disabled {
-				let manifest = debug::dump_cold_manifest(&database_db).await?;
-				assert_eq!(manifest.branch_id, branch_id);
-				assert!(manifest.index.is_none());
-				assert!(manifest.chunks.is_empty());
-				return Ok(());
-			}
-
-			let cold_tier = ctx.cold_tier.expect("filesystem tier should be configured");
-			let chunk_key = format!(
-				"db/{}/cold_manifest/chunks/debug.bare",
-				branch_id.as_uuid().simple()
-			);
-			let index_key = format!(
-				"db/{}/cold_manifest/index.bare",
-				branch_id.as_uuid().simple()
-			);
-
-			cold_tier
-				.put_object(
-					&chunk_key,
-					&encode_cold_manifest_chunk(ColdManifestChunk {
-						schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-						branch_id,
-						pass_versionstamp: [2; 16],
-						layers: vec![LayerEntry {
-							kind: LayerKind::Delta,
-							shard_id: None,
-							min_txid: 1,
-							max_txid: 1,
-							min_versionstamp: [1; 16],
-							max_versionstamp: [1; 16],
-							byte_size: 10,
-							checksum: 99,
-							object_key: "db/layer.ltx".to_string(),
-						}],
-						restore_points: Vec::new(),
-					})?,
-				)
-				.await?;
-			cold_tier
-				.put_object(
-					&index_key,
-					&encode_cold_manifest_index(ColdManifestIndex {
-						schema_version: SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-						branch_id,
-						chunks: vec![ColdManifestChunkRef {
-							object_key: chunk_key,
-							pass_versionstamp: [2; 16],
-							min_versionstamp: [1; 16],
-							max_versionstamp: [1; 16],
-							byte_size: 10,
-						}],
-						last_pass_at_ms: 2_000,
-						last_pass_versionstamp: [2; 16],
-					})?,
-				)
-				.await?;
-
-			let manifest = debug::dump_cold_manifest(&database_db).await?;
-			assert_eq!(manifest.branch_id, branch_id);
-			assert!(manifest.index.is_some());
-			assert_eq!(manifest.chunks.len(), 1);
-			assert_eq!(manifest.chunks[0].layers[0].checksum, 99);
 
 			Ok(())
 		})

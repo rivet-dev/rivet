@@ -4,35 +4,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Sqlite {
+	/// UNSTABLE: disables the SQLite v2 commit dirty-page size cap.
 	#[serde(default)]
-	pub workflow_cold_storage: Option<SqliteWorkflowColdStorage>,
+	pub unstable_disable_commit_size_cap: Option<bool>,
 }
 
 impl Sqlite {
-	pub fn workflow_cold_storage(&self) -> Option<&SqliteWorkflowColdStorage> {
-		self.workflow_cold_storage.as_ref()
+	pub fn unstable_disable_commit_size_cap(&self) -> bool {
+		self.unstable_disable_commit_size_cap.unwrap_or_default()
 	}
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum SqliteWorkflowColdStorage {
-	FileSystem(SqliteWorkflowColdStorageFileSystem),
-	S3(SqliteWorkflowColdStorageS3),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SqliteWorkflowColdStorageFileSystem {
-	pub root: String,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
-#[serde(deny_unknown_fields)]
-pub struct SqliteWorkflowColdStorageS3 {
-	pub bucket: String,
-	#[serde(default)]
-	pub prefix: Option<String>,
-	#[serde(default)]
-	pub endpoint: Option<String>,
 }

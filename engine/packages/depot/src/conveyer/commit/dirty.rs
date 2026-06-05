@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use universaldb::utils::IsolationLevel::Serializable;
 
 use crate::{
-	HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
 	conveyer::{
 		keys, quota,
 		types::{
@@ -21,11 +20,11 @@ pub(super) async fn admit_deltas_available(
 	branch_id: DatabaseBranchId,
 	head_txid: u64,
 	compaction_root: Option<&CompactionRoot>,
-	fallback_cold_watermark_txid: u64,
+	_fallback_compaction_watermark_txid: u64,
 	now_ms: i64,
 	last_signal_at_ms: Option<i64>,
 ) -> Result<Option<DeltasAvailable>> {
-	if !has_actionable_lag(head_txid, compaction_root, fallback_cold_watermark_txid) {
+	if !has_actionable_lag(head_txid, compaction_root) {
 		return Ok(None);
 	}
 
@@ -60,19 +59,11 @@ pub(super) async fn admit_deltas_available(
 	}
 }
 
-fn has_actionable_lag(
-	head_txid: u64,
-	compaction_root: Option<&CompactionRoot>,
-	fallback_cold_watermark_txid: u64,
-) -> bool {
+fn has_actionable_lag(head_txid: u64, compaction_root: Option<&CompactionRoot>) -> bool {
 	let hot_watermark_txid = compaction_root.map_or(0, |root| root.hot_watermark_txid);
-	let cold_watermark_txid = compaction_root.map_or(fallback_cold_watermark_txid, |root| {
-		root.cold_watermark_txid
-	});
 	let hot_lag = head_txid.saturating_sub(hot_watermark_txid);
-	let cold_lag = head_txid.saturating_sub(cold_watermark_txid);
 
-	hot_lag >= quota::COMPACTION_DELTA_THRESHOLD || cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS
+	hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
 }
 
 pub async fn clear_sqlite_cmp_dirty_if_observed_idle(
@@ -128,5 +119,5 @@ async fn branch_has_actionable_lag(
 		"sqlite compaction root missing for dirty clear; \
 			workflow manager must publish CMP/root before clearing dirty marker",
 	)?;
-	Ok(has_actionable_lag(head_txid, Some(&compaction_root), 0))
+	Ok(has_actionable_lag(head_txid, Some(&compaction_root)))
 }

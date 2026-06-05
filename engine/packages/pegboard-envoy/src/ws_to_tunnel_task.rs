@@ -1469,6 +1469,7 @@ async fn handle_sqlite_commit(
 			request.now_ms,
 			depot::types::CommitOptions {
 				expected_head_txid: request.expected_head_txid,
+				disable_size_cap: ctx.config().sqlite().unstable_disable_commit_size_cap(),
 			},
 		)
 		.await;
@@ -1980,7 +1981,6 @@ async fn actor_db(_ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result
 				conn.namespace_id,
 				actor_id,
 				conn.node_id,
-				conn.sqlite_cold_tier.clone(),
 				compaction_signaler,
 			))
 		})
