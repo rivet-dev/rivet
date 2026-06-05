@@ -5,28 +5,19 @@ use std::sync::{
 	mpsc,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use depot::{
-	cold_tier::{ColdTier, ColdTierObjectMetadata},
 	conveyer::{Db, db::CompactionSignaler},
 	error::SqliteStorageError,
 	fault::DepotFaultController,
-	keys::{
-		SHARD_SIZE, branch_compaction_cold_shard_key, branch_compaction_root_key,
-		branch_delta_chunk_key, branch_meta_head_key, branch_pidx_key, branch_shard_key,
-	},
-	ltx::{LtxHeader, encode_ltx_v3},
-	types::{
-		ColdShardRef, CompactionRoot, DBHead, DatabaseBranchId, DirtyPage, decode_db_head,
-		encode_cold_shard_ref, encode_compaction_root,
-	},
+	keys::branch_meta_head_key,
+	types::{DBHead, DatabaseBranchId, decode_db_head},
 	workflows::compaction::DeltasAvailable,
 };
 use parking_lot::Mutex;
 use rivet_envoy_protocol as protocol;
 use rivet_pools::{__rivet_util::Id, NodeId};
-use sha2::{Digest, Sha256};
 use universaldb::utils::IsolationLevel::Serializable;
 
 use super::super::SqliteTransport;
@@ -34,7 +25,6 @@ use super::super::SqliteTransport;
 pub(crate) struct DirectStorage {
 	db: Arc<universaldb::Database>,
 	node_id: NodeId,
-	cold_tier: Option<Arc<dyn ColdTier>>,
 	actor_dbs: scc::HashMap<String, Arc<Db>>,
 	page_mirrors: scc::HashMap<String, Arc<Mutex<DirectActorPages>>>,
 	compaction_signals: Arc<Mutex<Vec<DeltasAvailable>>>,
@@ -51,41 +41,25 @@ pub(crate) struct DirectActorPages {
 
 impl DirectStorage {
 	pub(crate) fn new(db: universaldb::Database) -> Self {
-		Self::new_inner(db, None, None)
+		Self::new_inner(db, None)
 	}
 
-	pub(crate) fn new_with_cold_tier(
+	pub(crate) fn new_with_fault_controller(
 		db: universaldb::Database,
-		cold_tier: Arc<dyn ColdTier>,
-	) -> Self {
-		Self::new_inner(db, Some(cold_tier), None)
-	}
-
-	pub(crate) fn new_with_cold_tier_and_fault_controller(
-		db: universaldb::Database,
-		cold_tier: Arc<dyn ColdTier>,
 		fault_controller: DepotFaultController,
 	) -> Self {
-		Self::new_inner(db, Some(cold_tier), Some(fault_controller))
+		Self::new_inner(db, Some(fault_controller))
 	}
 
 	fn new_inner(
 		db: universaldb::Database,
-		cold_tier: Option<Arc<dyn ColdTier>>,
 		fault_controller: Option<DepotFaultController>,
 	) -> Self {
 		let counters = Arc::new(DirectStorageCounters::default());
-		let cold_tier = cold_tier.map(|inner| {
-			Arc::new(CountingColdTier {
-				inner,
-				counters: Arc::clone(&counters),
-			}) as Arc<dyn ColdTier>
-		});
 
 		Self {
 			db: Arc::new(db),
 			node_id: NodeId::new(),
-			cold_tier,
 			actor_dbs: scc::HashMap::new(),
 			page_mirrors: scc::HashMap::new(),
 			compaction_signals: Arc::new(Mutex::new(Vec::new())),
@@ -97,7 +71,6 @@ impl DirectStorage {
 
 	pub(crate) async fn actor_db(&self, actor_id: String) -> Arc<Db> {
 		let signals = Arc::clone(&self.compaction_signals);
-		let cold_tier = self.cold_tier.clone();
 		self.actor_dbs
 			.entry_async(actor_id.clone())
 			.await
@@ -116,7 +89,6 @@ impl DirectStorage {
 							Id::nil(),
 							actor_id,
 							self.node_id,
-							cold_tier,
 							compaction_signaler,
 							fault_controller,
 						)
@@ -126,7 +98,6 @@ impl DirectStorage {
 							Id::nil(),
 							actor_id,
 							self.node_id,
-							cold_tier,
 							compaction_signaler,
 						)
 					},
@@ -145,16 +116,11 @@ impl DirectStorage {
 			depot_get_pages: self.counters.depot_get_pages.load(Ordering::SeqCst),
 			mirror_reads: self.counters.mirror_reads.load(Ordering::SeqCst),
 			mirror_seeds: self.counters.mirror_seeds.load(Ordering::SeqCst),
-			cold_gets: self.counters.cold_gets.load(Ordering::SeqCst),
 		}
 	}
 
 	pub(crate) fn depot_database(&self) -> Arc<universaldb::Database> {
 		Arc::clone(&self.db)
-	}
-
-	pub(crate) fn cold_tier(&self) -> Option<Arc<dyn ColdTier>> {
-		self.cold_tier.clone()
 	}
 
 	pub(crate) async fn poison_mirror_page(
@@ -168,127 +134,6 @@ impl DirectStorage {
 		let mut mirror = mirror.lock();
 		mirror.db_size_pages = db_size_pages;
 		mirror.pages.insert(pgno, bytes);
-	}
-
-	pub(crate) async fn seed_page_as_cold_ref(
-		&self,
-		actor_id: &str,
-		pgno: u32,
-		bytes: Vec<u8>,
-	) -> Result<()> {
-		let head = self.read_head(actor_id).await?;
-		let shard_id = pgno / SHARD_SIZE;
-		let snapshot = self.snapshot_pages(actor_id).await;
-		let shard_pgnos = (1..=head.db_size_pages)
-			.filter(|candidate_pgno| *candidate_pgno / SHARD_SIZE == shard_id)
-			.collect::<Vec<_>>();
-		let missing_pgnos = shard_pgnos
-			.iter()
-			.filter(|candidate_pgno| !snapshot.pages.contains_key(candidate_pgno))
-			.copied()
-			.collect::<Vec<_>>();
-		let fetched_pages = if missing_pgnos.is_empty() {
-			Vec::new()
-		} else {
-			self.actor_db(actor_id.to_string())
-				.await
-				.get_pages(missing_pgnos)
-				.await?
-		};
-		let mut fetched_by_pgno = fetched_pages
-			.into_iter()
-			.filter_map(|page| page.bytes.map(|bytes| (page.pgno, bytes)))
-			.collect::<BTreeMap<_, _>>();
-		fetched_by_pgno.entry(pgno).or_insert(bytes);
-
-		let dirty_pages = shard_pgnos
-			.into_iter()
-			.filter_map(|candidate_pgno| {
-				snapshot
-					.pages
-					.get(&candidate_pgno)
-					.cloned()
-					.or_else(|| fetched_by_pgno.remove(&candidate_pgno))
-					.map(|bytes| DirtyPage {
-						pgno: candidate_pgno,
-						bytes,
-					})
-			})
-			.collect::<Vec<_>>();
-		if dirty_pages.is_empty() {
-			bail!("cold-ref seed could not load pages for shard {shard_id}");
-		}
-		self.seed_pages_as_cold_ref(actor_id, pgno, dirty_pages)
-			.await
-	}
-
-	pub(crate) async fn seed_pages_as_cold_ref(
-		&self,
-		actor_id: &str,
-		pgno: u32,
-		dirty_pages: Vec<DirtyPage>,
-	) -> Result<()> {
-		let Some(cold_tier) = &self.cold_tier else {
-			bail!("direct storage has no cold tier");
-		};
-		let (branch_id, head_txid) = self.read_branch_head(actor_id).await?;
-		let shard_id = pgno / SHARD_SIZE;
-		let object_key = format!(
-			"db/{}/strict/shard-{shard_id}.ltx",
-			branch_id.as_uuid().simple()
-		);
-		if dirty_pages.is_empty() {
-			bail!("cold-ref seed requires at least one page");
-		}
-		let object_bytes = encode_ltx_v3(LtxHeader::delta(head_txid, 1, 1_000), &dirty_pages)?;
-		let digest = Sha256::digest(&object_bytes);
-		let mut content_hash = [0_u8; 32];
-		content_hash.copy_from_slice(&digest);
-		let cold_ref = ColdShardRef {
-			object_key: object_key.clone(),
-			object_generation_id: Id::nil(),
-			shard_id,
-			as_of_txid: head_txid,
-			min_txid: 1,
-			max_txid: head_txid,
-			min_versionstamp: [1; 16],
-			max_versionstamp: [2; 16],
-			size_bytes: object_bytes.len() as u64,
-			content_hash,
-			publish_generation: 1,
-		};
-
-		cold_tier.put_object(&object_key, &object_bytes).await?;
-
-		self.db
-			.txn("test_depot_clientinline_vfs_support", move |tx| {
-				let cold_ref = cold_ref.clone();
-				async move {
-					tx.informal().set(
-						&branch_compaction_cold_shard_key(branch_id, shard_id, head_txid),
-						&encode_cold_shard_ref(cold_ref)?,
-					);
-					tx.informal().set(
-						&branch_compaction_root_key(branch_id),
-						&encode_compaction_root(CompactionRoot {
-							schema_version: 1,
-							manifest_generation: 1,
-							hot_watermark_txid: head_txid,
-							cold_watermark_txid: head_txid,
-							cold_watermark_versionstamp: [2; 16],
-						})?,
-					);
-					tx.informal().clear(&branch_pidx_key(branch_id, pgno));
-					for txid in 1..=head_txid {
-						tx.informal()
-							.clear(&branch_delta_chunk_key(branch_id, txid, 0));
-						tx.informal()
-							.clear(&branch_shard_key(branch_id, shard_id, txid));
-					}
-					Ok(())
-				}
-			})
-			.await
 	}
 
 	pub(crate) async fn read_branch_head(&self, actor_id: &str) -> Result<(DatabaseBranchId, u64)> {
@@ -395,10 +240,6 @@ impl DirectStorage {
 		Ok(())
 	}
 
-	pub(crate) async fn snapshot_pages(&self, actor_id: &str) -> DirectActorPages {
-		self.page_mirror(actor_id.to_string()).await.lock().clone()
-	}
-
 	pub(crate) fn compaction_signals(&self) -> Vec<DeltasAvailable> {
 		self.compaction_signals.lock().clone()
 	}
@@ -477,6 +318,7 @@ impl SqliteTransport for DirectDepotTransport {
 				request.now_ms,
 				depot::types::CommitOptions {
 					expected_head_txid: request.expected_head_txid,
+					..Default::default()
 				},
 			)
 			.await
@@ -570,7 +412,6 @@ pub(crate) struct DirectStorageStats {
 	pub(crate) depot_get_pages: u64,
 	pub(crate) mirror_reads: u64,
 	pub(crate) mirror_seeds: u64,
-	pub(crate) cold_gets: u64,
 }
 
 #[derive(Default)]
@@ -578,32 +419,6 @@ struct DirectStorageCounters {
 	depot_get_pages: AtomicU64,
 	mirror_reads: AtomicU64,
 	mirror_seeds: AtomicU64,
-	cold_gets: AtomicU64,
-}
-
-struct CountingColdTier {
-	inner: Arc<dyn ColdTier>,
-	counters: Arc<DirectStorageCounters>,
-}
-
-#[async_trait]
-impl ColdTier for CountingColdTier {
-	async fn put_object(&self, key: &str, bytes: &[u8]) -> Result<()> {
-		self.inner.put_object(key, bytes).await
-	}
-
-	async fn get_object(&self, key: &str) -> Result<Option<Vec<u8>>> {
-		self.counters.cold_gets.fetch_add(1, Ordering::SeqCst);
-		self.inner.get_object(key).await
-	}
-
-	async fn delete_objects(&self, keys: &[String]) -> Result<()> {
-		self.inner.delete_objects(keys).await
-	}
-
-	async fn list_prefix(&self, prefix: &str) -> Result<Vec<ColdTierObjectMetadata>> {
-		self.inner.list_prefix(prefix).await
-	}
 }
 
 #[derive(Default)]

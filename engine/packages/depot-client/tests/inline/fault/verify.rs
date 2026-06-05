@@ -1,22 +1,20 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use depot::{
-	cold_tier::ColdTier,
 	conveyer::branch::resolve_database_branch,
 	keys,
 	ltx::{DecodedLtx, decode_ltx_v3},
 	types::{
-		BranchState, BucketId, ColdShardRef, CommitRow, DatabaseBranchId, decode_cold_shard_ref,
-		decode_commit_row, decode_compaction_root, decode_database_branch_record,
-		decode_database_pointer, decode_db_head, decode_db_history_pin,
-		decode_pitr_interval_coverage, decode_retired_cold_object, decode_sqlite_cmp_dirty,
+		BranchState, BucketId, CommitRow, DatabaseBranchId, decode_commit_row,
+		decode_compaction_root, decode_database_branch_record, decode_database_pointer,
+		decode_db_head, decode_db_history_pin, decode_pitr_interval_coverage,
+		decode_sqlite_cmp_dirty,
 	},
 };
 use futures_util::TryStreamExt;
 use rivet_pools::__rivet_util::Id;
-use sha2::{Digest, Sha256};
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
@@ -27,7 +25,6 @@ use super::{FaultProfile, FaultScenario, LogicalOp};
 
 pub(crate) struct DepotInvariantScanner {
 	db: Arc<universaldb::Database>,
-	cold_tier: Option<Arc<dyn ColdTier>>,
 	database_id: String,
 }
 
@@ -36,37 +33,21 @@ struct BranchRows {
 	commits: BTreeMap<u64, CommitRow>,
 	deltas: BTreeMap<u64, DecodedLtx>,
 	shards: BTreeMap<(u32, u64), DecodedLtx>,
-	cold_refs: Vec<ColdRefCoverage>,
-}
-
-struct ColdRefCoverage {
-	reference: ColdShardRef,
-	pages: Option<BTreeSet<u32>>,
 }
 
 impl DepotInvariantScanner {
-	pub(crate) fn new(
-		db: Arc<universaldb::Database>,
-		cold_tier: Option<Arc<dyn ColdTier>>,
-		database_id: String,
-	) -> Self {
-		Self {
-			db,
-			cold_tier,
-			database_id,
-		}
+	pub(crate) fn new(db: Arc<universaldb::Database>, database_id: String) -> Self {
+		Self { db, database_id }
 	}
 
 	pub(crate) async fn verify(&self) -> Result<()> {
 		let database_id = self.database_id.clone();
-		let cold_tier = self.cold_tier.clone();
 		let violations = self
 			.db
 			.txn("test_depot_clientinline_fault_verify", move |tx| {
 				let database_id = database_id.clone();
-				let cold_tier = cold_tier.clone();
 				async move {
-					let mut scan = InvariantScan::new(&tx, database_id, cold_tier);
+					let mut scan = InvariantScan::new(&tx, database_id);
 					scan.run().await?;
 					Ok(scan.violations)
 				}
@@ -84,20 +65,14 @@ impl DepotInvariantScanner {
 struct InvariantScan<'a> {
 	tx: &'a universaldb::Transaction,
 	database_id: String,
-	cold_tier: Option<Arc<dyn ColdTier>>,
 	violations: Vec<String>,
 }
 
 impl<'a> InvariantScan<'a> {
-	fn new(
-		tx: &'a universaldb::Transaction,
-		database_id: String,
-		cold_tier: Option<Arc<dyn ColdTier>>,
-	) -> Self {
+	fn new(tx: &'a universaldb::Transaction, database_id: String) -> Self {
 		Self {
 			tx,
 			database_id,
-			cold_tier,
 			violations: Vec::new(),
 		}
 	}
@@ -232,12 +207,10 @@ impl<'a> InvariantScan<'a> {
 		let commits = self.check_commits(branch_id, head_txid).await?;
 		let deltas = self.check_deltas(branch_id, &commits).await?;
 		let shards = self.check_shards(branch_id, head_txid, &commits).await?;
-		let cold_refs = self.check_cold_refs(branch_id, &commits).await?;
 		Ok(BranchRows {
 			commits,
 			deltas,
 			shards,
-			cold_refs,
 		})
 	}
 
@@ -357,7 +330,7 @@ impl<'a> InvariantScan<'a> {
 			match decode_ltx_v3(&value) {
 				Ok(shard) => {
 					// Hot shard cache rows can outlive compacted commit rows. The compaction
-					// root is the fence that says those commits are now represented by cold
+					// root is the fence that says those commits are now represented by shard
 					// coverage, so stale hot rows below the fence only need shape validation.
 					if commits.contains_key(&as_of_txid) || as_of_txid > compacted_through {
 						self.check_ltx_pages("hot shard", as_of_txid, &shard, commits);
@@ -373,97 +346,6 @@ impl<'a> InvariantScan<'a> {
 			}
 		}
 		Ok(shards)
-	}
-
-	async fn check_cold_refs(
-		&mut self,
-		branch_id: DatabaseBranchId,
-		commits: &BTreeMap<u64, CommitRow>,
-	) -> Result<Vec<ColdRefCoverage>> {
-		let mut refs = Vec::new();
-		let mut seen = BTreeSet::new();
-		for (key, value) in scan_prefix(
-			self.tx,
-			keys::branch_compaction_cold_shard_prefix(branch_id),
-		)
-		.await?
-		{
-			let key_parts = match decode_cold_shard_key(branch_id, &key) {
-				Ok(parts) => parts,
-				Err(err) => {
-					self.violate(format!("cold shard key failed to decode: {err:#}"));
-					continue;
-				}
-			};
-			let reference = match decode_cold_shard_ref(&value) {
-				Ok(reference) => reference,
-				Err(err) => {
-					self.violate(format!("cold shard ref failed to decode: {err:#}"));
-					continue;
-				}
-			};
-			if key_parts != (reference.shard_id, reference.as_of_txid) {
-				self.violate("cold shard ref key did not match encoded metadata");
-			}
-			if !seen.insert((reference.shard_id, reference.as_of_txid)) {
-				self.violate("duplicate cold shard ref was present");
-			}
-			if let Some(commit) = commits.get(&reference.as_of_txid) {
-				if reference.as_of_txid > reference.max_txid
-					|| reference.min_txid > reference.max_txid
-				{
-					self.violate("cold shard ref txid range was invalid");
-				}
-				if reference.shard_id > commit.db_size_pages / keys::SHARD_SIZE {
-					self.violate("cold shard ref was beyond database size");
-				}
-			} else {
-				self.violate(format!(
-					"cold shard ref pointed at missing commit {}",
-					reference.as_of_txid
-				));
-			}
-			let pages = self.check_cold_object(&reference, commits).await?;
-			refs.push(ColdRefCoverage { reference, pages });
-		}
-		Ok(refs)
-	}
-
-	async fn check_cold_object(
-		&mut self,
-		reference: &ColdShardRef,
-		commits: &BTreeMap<u64, CommitRow>,
-	) -> Result<Option<BTreeSet<u32>>> {
-		let Some(cold_tier) = self.cold_tier.clone() else {
-			return Ok(None);
-		};
-		let Some(bytes) = cold_tier.get_object(&reference.object_key).await? else {
-			self.violate(format!("cold object {} was missing", reference.object_key));
-			return Ok(Some(BTreeSet::new()));
-		};
-		if reference.size_bytes != bytes.len() as u64 {
-			self.violate("cold object size did not match its ref");
-		}
-		if reference.content_hash != content_hash(&bytes) {
-			self.violate("cold object content hash did not match its ref");
-		}
-		let pages = match decode_ltx_v3(&bytes) {
-			Ok(blob) => {
-				self.check_ltx_pages("cold shard", reference.as_of_txid, &blob, commits);
-				self.check_ltx_shard_pages(
-					"cold shard",
-					reference.shard_id,
-					reference.as_of_txid,
-					&blob,
-				);
-				Some(blob.pages.iter().map(|page| page.pgno).collect())
-			}
-			Err(err) => {
-				self.violate(format!("cold object failed to decode as LTX: {err:#}"));
-				Some(BTreeSet::new())
-			}
-		};
-		Ok(pages)
 	}
 
 	async fn check_pidx(
@@ -531,29 +413,6 @@ impl<'a> InvariantScan<'a> {
 					}
 				}
 				Err(err) => self.violate(format!("dirty marker failed to decode: {err:#}")),
-			}
-		}
-
-		for (key, value) in scan_prefix(
-			self.tx,
-			keys::branch_compaction_retired_cold_object_prefix(branch_id),
-		)
-		.await?
-		{
-			match decode_retired_cold_object(&value) {
-				Ok(retired) => {
-					let expected_key = keys::branch_compaction_retired_cold_object_key(
-						branch_id,
-						content_hash(retired.object_key.as_bytes()),
-					);
-					if key != expected_key {
-						self.violate("retired cold object key did not match object key hash");
-					}
-					if retired.delete_after_ms < retired.retired_at_ms {
-						self.violate("retired cold object delete fence preceded retirement time");
-					}
-				}
-				Err(err) => self.violate(format!("retired cold object failed to decode: {err:#}")),
 			}
 		}
 
@@ -701,25 +560,13 @@ impl<'a> InvariantScan<'a> {
 			return true;
 		}
 		let shard_id = pgno / keys::SHARD_SIZE;
-		if rows
-			.shards
+		rows.shards
 			.iter()
 			.any(|(&(candidate_shard, as_of_txid), shard)| {
 				candidate_shard == shard_id
 					&& as_of_txid >= owner_txid
 					&& shard.get_page(pgno).is_some()
-			}) {
-			return true;
-		}
-		rows.cold_refs.iter().any(|reference| {
-			reference.reference.shard_id == shard_id
-				&& reference.reference.min_txid <= owner_txid
-				&& reference.reference.max_txid >= owner_txid
-				&& reference
-					.pages
-					.as_ref()
-					.map_or(true, |pages| pages.contains(&pgno))
-		})
+			})
 	}
 
 	fn violate(&mut self, message: impl Into<String>) {
@@ -814,34 +661,6 @@ fn decode_branch_shard_version_key(
 	Ok(Some((shard_id, as_of_txid)))
 }
 
-fn decode_cold_shard_key(branch_id: DatabaseBranchId, key: &[u8]) -> Result<(u32, u64)> {
-	let prefix = keys::branch_compaction_cold_shard_prefix(branch_id);
-	let suffix = key
-		.strip_prefix(prefix.as_slice())
-		.context("cold shard key did not start with expected prefix")?;
-	ensure!(
-		suffix.len() == std::mem::size_of::<u32>() + 1 + std::mem::size_of::<u64>()
-			&& suffix[std::mem::size_of::<u32>()] == b'/',
-		"cold shard key suffix had invalid length"
-	);
-	let shard_id = u32::from_be_bytes(
-		suffix[..std::mem::size_of::<u32>()]
-			.try_into()
-			.context("decode cold shard id")?,
-	);
-	let as_of_txid = u64::from_be_bytes(
-		suffix[std::mem::size_of::<u32>() + 1..]
-			.try_into()
-			.context("decode cold shard txid")?,
-	);
-	Ok((shard_id, as_of_txid))
-}
-
-fn content_hash(bytes: &[u8]) -> [u8; 32] {
-	let digest = Sha256::digest(bytes);
-	digest.into()
-}
-
 #[test]
 fn depot_invariant_scanner_detects_missing_head_commit() -> Result<()> {
 	FaultScenario::new("invariant_missing_head_commit")
@@ -925,41 +744,6 @@ fn depot_invariant_scanner_detects_broken_pidx_backing() -> Result<()> {
 				.expect_err("scanner should reject missing PIDX backing");
 			assert!(
 				err.to_string().contains("PIDX page"),
-				"unexpected error: {err:#}"
-			);
-			Ok(())
-		})
-		.run()
-}
-
-#[test]
-fn depot_invariant_scanner_detects_cold_ref_missing_referenced_page() -> Result<()> {
-	FaultScenario::new("invariant_cold_ref_missing_referenced_page")
-		.seed(8003)
-		.profile(FaultProfile::Simple)
-		.setup(|ctx| async move {
-			ctx.sql("CREATE TABLE kv (k TEXT PRIMARY KEY, v BLOB NOT NULL);")
-				.await
-		})
-		.workload(|ctx| async move {
-			ctx.exec(LogicalOp::Put {
-				key: "alpha".to_string(),
-				value: vec![1, 2, 3],
-			})
-			.await
-		})
-		.verify(|ctx| async move {
-			ctx.seed_page_as_cold_ref_for_harness_test(1).await?;
-			ctx.remove_page_from_seeded_cold_ref_for_harness_test(1)
-				.await?;
-
-			let err = ctx
-				.verify_depot_invariants()
-				.await
-				.expect_err("scanner should reject cold refs missing the PIDX page");
-			assert!(
-				err.to_string()
-					.contains("PIDX page 1 pointed at missing backing"),
 				"unexpected error: {err:#}"
 			);
 			Ok(())

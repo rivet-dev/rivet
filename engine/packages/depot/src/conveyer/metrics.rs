@@ -8,17 +8,7 @@ use rivet_metrics::{BUCKETS, REGISTRY, prometheus::*};
 const SLOW_PHASE_WARN_THRESHOLD_SECONDS: f64 = 1.0;
 
 pub const SHARD_CACHE_READ_FDB_HIT: &str = "fdb_hit";
-pub const SHARD_CACHE_READ_COLD_HIT: &str = "cold_hit";
 pub const SHARD_CACHE_READ_MISS: &str = "miss";
-
-pub const SHARD_CACHE_FILL_SCHEDULED: &str = "scheduled";
-pub const SHARD_CACHE_FILL_SUCCEEDED: &str = "succeeded";
-pub const SHARD_CACHE_FILL_FAILED: &str = "failed";
-pub const SHARD_CACHE_FILL_SKIPPED_QUEUE_FULL: &str = "skipped_queue_full";
-pub const SHARD_CACHE_FILL_SKIPPED_DUPLICATE: &str = "skipped_duplicate";
-pub const SHARD_CACHE_FILL_SKIPPED_NO_COLD_REF: &str = "skipped_no_cold_ref";
-
-pub const SHARD_CACHE_EVICTION_CLEARED: &str = "cleared";
 
 lazy_static::lazy_static! {
 	pub static ref SQLITE_PUMP_COMMIT_DURATION: HistogramVec = register_histogram_vec_with_registry!(
@@ -69,16 +59,9 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_PUMP_PIDX_COLD_SCAN_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"sqlite_conveyer_pidx_cold_scan_total",
-		"Total stateless sqlite conveyer get_pages calls that performed a cold PIDX scan.",
-		&["node_id"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref SQLITE_SHARD_CACHE_FILL_SKIPPED_QUEUE_FULL_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"sqlite_shard_cache_fill_skipped_queue_full_total",
-		"Total sqlite read-through shard cache fills skipped because the queue was full.",
+	pub static ref SQLITE_PUMP_PIDX_FDB_LOAD_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"sqlite_conveyer_pidx_fdb_load_total",
+		"Total stateless sqlite conveyer get_pages calls that loaded PIDX rows from FDB.",
 		&["node_id"],
 		*REGISTRY
 	).unwrap();
@@ -90,36 +73,9 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_SHARD_CACHE_FILL_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"sqlite_shard_cache_fill_total",
-		"Total sqlite read-through shard cache fill outcomes.",
-		&["outcome"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref SQLITE_SHARD_CACHE_FILL_BYTES_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"sqlite_shard_cache_fill_bytes_total",
-		"Total bytes written by sqlite read-through shard cache fills.",
-		*REGISTRY
-	).unwrap();
-
-	pub static ref SQLITE_SHARD_CACHE_EVICTION_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
-		"sqlite_shard_cache_eviction_total",
-		"Total sqlite shard cache eviction outcomes.",
-		&["outcome"],
-		*REGISTRY
-	).unwrap();
-
 	pub static ref SQLITE_SHARD_CACHE_RESIDENT_BYTES: IntGauge = register_int_gauge_with_registry!(
 		"sqlite_shard_cache_resident_bytes",
 		"Sampled sqlite shard cache resident bytes.",
-		*REGISTRY
-	).unwrap();
-
-	pub static ref SQLITE_SHARD_CACHE_COLD_READ_DURATION: Histogram = register_histogram_with_registry!(
-		"sqlite_shard_cache_cold_read_duration_seconds",
-		"Duration of sqlite cold shard-cache read-through object fetches.",
-		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 
@@ -192,13 +148,6 @@ lazy_static::lazy_static! {
 		"sqlite_restore_point_count_per_bucket",
 		"Sampled sqlite restore point count per bucket.",
 		&["node_id"],
-		*REGISTRY
-	).unwrap();
-
-	pub static ref SQLITE_COLD_LAG_VERSIONSTAMPS: GaugeVec = register_gauge_vec_with_registry!(
-		"sqlite_cold_lag_versionstamps",
-		"Sampled sqlite cold lag in versionstamp units by database.",
-		&["node_id", "database_id"],
 		*REGISTRY
 	).unwrap();
 

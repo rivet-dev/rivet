@@ -1428,80 +1428,11 @@
     "Sqlite": {
       "type": "object",
       "properties": {
-        "workflow_cold_storage": {
-          "default": null,
-          "anyOf": [
-            {
-              "$ref": "#/definitions/SqliteWorkflowColdStorage"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "SqliteWorkflowColdStorage": {
-      "oneOf": [
-        {
-          "type": "object",
-          "required": [
-            "file_system"
-          ],
-          "properties": {
-            "file_system": {
-              "$ref": "#/definitions/SqliteWorkflowColdStorageFileSystem"
-            }
-          },
-          "additionalProperties": false
-        },
-        {
-          "type": "object",
-          "required": [
-            "s3"
-          ],
-          "properties": {
-            "s3": {
-              "$ref": "#/definitions/SqliteWorkflowColdStorageS3"
-            }
-          },
-          "additionalProperties": false
-        }
-      ]
-    },
-    "SqliteWorkflowColdStorageFileSystem": {
-      "type": "object",
-      "required": [
-        "root"
-      ],
-      "properties": {
-        "root": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false
-    },
-    "SqliteWorkflowColdStorageS3": {
-      "type": "object",
-      "required": [
-        "bucket"
-      ],
-      "properties": {
-        "bucket": {
-          "type": "string"
-        },
-        "endpoint": {
+        "unstable_disable_commit_size_cap": {
+          "description": "UNSTABLE: disables the SQLite v2 commit dirty-page size cap.",
           "default": null,
           "type": [
-            "string",
-            "null"
-          ]
-        },
-        "prefix": {
-          "default": null,
-          "type": [
-            "string",
+            "boolean",
             "null"
           ]
         }

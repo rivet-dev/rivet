@@ -6,12 +6,13 @@ use anyhow::Result;
 #[cfg(feature = "test-faults")]
 use depot::fault::{CommitFaultPoint, DepotFaultController, DepotFaultPoint, FaultBoundary};
 use depot::{
-	ACCESS_TOUCH_THROTTLE_MS, HOT_BURST_COLD_LAG_THRESHOLD_TXIDS, MAX_COMMIT_DIRTY_PAGES,
+	ACCESS_TOUCH_THROTTLE_MS, MAX_COMMIT_DIRTY_PAGES, MAX_COMMIT_RAW_DIRTY_BYTES,
 	conveyer::Db,
 	conveyer::{
 		commit::{clear_sqlite_cmp_dirty_if_observed_idle, test_hooks},
 		db::CompactionSignaler,
 	},
+	error::SqliteStorageError,
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_root_key, branch_delta_chunk_key,
 		branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
@@ -285,6 +286,7 @@ async fn commit_head_fence_rejects_stale_writer() -> Result<()> {
 				1_000,
 				CommitOptions {
 					expected_head_txid: Some(0),
+					..Default::default()
 				},
 			)
 			.await?;
@@ -297,6 +299,7 @@ async fn commit_head_fence_rejects_stale_writer() -> Result<()> {
 				1_001,
 				CommitOptions {
 					expected_head_txid: Some(0),
+					..Default::default()
 				},
 			)
 			.await
@@ -328,6 +331,7 @@ async fn get_pages_head_fence_rejects_stale_reader() -> Result<()> {
 					1_000,
 					CommitOptions {
 						expected_head_txid: Some(0),
+						..Default::default()
 					},
 				)
 				.await?;
@@ -352,6 +356,7 @@ async fn get_pages_head_fence_rejects_stale_reader() -> Result<()> {
 					1_001,
 					CommitOptions {
 						expected_head_txid: Some(1),
+						..Default::default()
 					},
 				)
 				.await?;
@@ -380,7 +385,7 @@ async fn get_pages_head_fence_rejects_stale_reader() -> Result<()> {
 
 #[tokio::test]
 async fn commit_rejects_invalid_dirty_pages_before_storage_writes() -> Result<()> {
-	commit_matrix!("depot-commit-invalid-dirty", |ctx, _db, database_db| {
+	commit_matrix!("depot-commit-invalid-dirty", |ctx, db, database_db| {
 		assert_commit_rejected(
 			&database_db,
 			vec![page(0, 0x11)],
@@ -402,35 +407,46 @@ async fn commit_rejects_invalid_dirty_pages_before_storage_writes() -> Result<()
 		let oversized_pages = (1..=u32::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap())
 			.map(|pgno| page(pgno, 0x33))
 			.collect::<Vec<_>>();
-		// TODO: Re-enable the engine-side commit size cap after large commit handling is fixed.
-		// let err = database_db
-		// 	.commit(oversized_pages, u32::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap(), 1_000)
-		// 	.await
-		// 	.expect_err("oversized commit should be rejected before storage writes");
-		// assert_eq!(
-		// 	err.downcast_ref::<SqliteStorageError>(),
-		// 	Some(&SqliteStorageError::CommitTooLarge {
-		// 		actual_size_bytes: u64::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap()
-		// 			* u64::from(PAGE_SIZE),
-		// 		max_size_bytes: MAX_COMMIT_RAW_DIRTY_BYTES as u64,
-		// 	})
-		// );
-		// assert_eq!(
-		// 	read_value(
-		// 		&db,
-		// 		bucket_pointer_cur_key(BucketId::from_gas_id(test_bucket()))
-		// 	)
-		// 	.await?,
-		// 	None
-		// );
-		database_db
+		let err = database_db
 			.commit(
 				oversized_pages,
 				u32::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap(),
 				1_000,
 			)
 			.await
-			.expect("oversized commit should be accepted while the engine-side cap is disabled");
+			.expect_err("oversized commit should be rejected before storage writes");
+		assert_eq!(
+			err.downcast_ref::<SqliteStorageError>(),
+			Some(&SqliteStorageError::CommitTooLarge {
+				actual_size_bytes: u64::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap()
+					* u64::from(PAGE_SIZE),
+				max_size_bytes: MAX_COMMIT_RAW_DIRTY_BYTES as u64,
+			})
+		);
+		assert_eq!(
+			read_value(
+				&db,
+				bucket_pointer_cur_key(BucketId::from_gas_id(test_bucket()))
+			)
+			.await?,
+			None
+		);
+
+		let oversized_pages = (1..=u32::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap())
+			.map(|pgno| page(pgno, 0x44))
+			.collect::<Vec<_>>();
+		database_db
+			.commit_with_options(
+				oversized_pages,
+				u32::try_from(MAX_COMMIT_DIRTY_PAGES + 1).unwrap(),
+				1_001,
+				CommitOptions {
+					disable_size_cap: true,
+					..Default::default()
+				},
+			)
+			.await
+			.expect("oversized commit should be accepted when the unstable cap bypass is set");
 
 		Ok(())
 	})
@@ -720,82 +736,6 @@ async fn commit_rejects_quota_cap_before_writes() -> Result<()> {
 }
 
 #[tokio::test]
-async fn commit_uses_burst_adjusted_quota_cap() -> Result<()> {
-	commit_matrix!("depot-commit-burst-quota", |ctx, db, database_db| {
-		database_db.commit(vec![page(1, 0x11)], 1, 1_000).await?;
-		let branch_id = read_branch_id(&db).await?;
-		let storage_used = read_quota(&db).await?;
-
-		seed(
-			&db,
-			vec![
-				(
-					branch_meta_head_key(branch_id),
-					encode_db_head(head_with_branch(
-						branch_id,
-						HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
-						1,
-					))?,
-				),
-				(
-					branch_compaction_root_key(branch_id),
-					encode_compaction_root(CompactionRoot {
-						schema_version: 1,
-						manifest_generation: 1,
-						hot_watermark_txid: 0,
-						cold_watermark_txid: 0,
-						cold_watermark_versionstamp: [0; 16],
-					})?,
-				),
-			],
-		)
-		.await?;
-		db.txn("test_depotconveyer_commit", move |tx| async move {
-			quota::atomic_add_branch(&tx, branch_id, SQLITE_MAX_STORAGE_BYTES - storage_used);
-			Ok(())
-		})
-		.await?;
-
-		let database_db = ctx.make_db(test_bucket(), TEST_DATABASE);
-		database_db.commit(vec![page(1, 0x44)], 1, 3_000).await?;
-		assert!(read_quota(&db).await? > SQLITE_MAX_STORAGE_BYTES);
-		let expected_head_txid = HOT_BURST_COLD_LAG_THRESHOLD_TXIDS + 1;
-
-		seed(
-			&db,
-			vec![(
-				branch_compaction_root_key(branch_id),
-				encode_compaction_root(CompactionRoot {
-					schema_version: 1,
-					manifest_generation: 2,
-					hot_watermark_txid: expected_head_txid,
-					cold_watermark_txid: expected_head_txid,
-					cold_watermark_versionstamp: [1; 16],
-				})?,
-			)],
-		)
-		.await?;
-		let err = database_db
-			.commit(vec![page(1, 0x55)], 1, 4_000)
-			.await
-			.expect_err("commit should exceed quota after cold lag recovers");
-		assert!(
-			err.downcast_ref::<depot::error::SqliteStorageError>()
-				.is_some_and(|err| matches!(
-					err,
-					depot::error::SqliteStorageError::SqliteStorageQuotaExceeded { .. }
-				))
-		);
-		assert_eq!(
-			read_head(&db).await?,
-			head_with_branch(branch_id, expected_head_txid, 1)
-		);
-
-		Ok(())
-	})
-}
-
-#[tokio::test]
 async fn truncate_prunes_boundary_shard_pages_above_eof() -> Result<()> {
 	commit_matrix!("depot-commit-truncate-boundary", |ctx, db, database_db| {
 		database_db.commit(vec![page(1, 0x01)], 130, 1_000).await?;
@@ -968,7 +908,6 @@ async fn commit_writes_dirty_marker_and_sends_first_deltas_available() -> Result
 				test_bucket(),
 				TEST_DATABASE.to_string(),
 				NodeId::new(),
-				ctx.cold_tier.clone(),
 				recording_compaction_signaler(Arc::clone(&signals)),
 			);
 			database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
@@ -1033,7 +972,6 @@ async fn commit_refreshes_dirty_marker_and_throttles_deltas_available() -> Resul
 				test_bucket(),
 				TEST_DATABASE.to_string(),
 				NodeId::new(),
-				ctx.cold_tier.clone(),
 				recording_compaction_signaler(Arc::clone(&signals)),
 			);
 			database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;

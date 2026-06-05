@@ -1,8 +1,6 @@
 //! Page read path for the stateless depot conveyer.
 
 mod cache;
-pub(super) mod cache_fill;
-mod cold;
 mod pidx;
 mod plan;
 mod shard;
@@ -37,10 +35,6 @@ use crate::conveyer::{
 };
 
 use self::{
-	cold::{
-		ColdLayerCandidate, ColdPageCandidate, CompactionColdShardCandidate,
-		tx_load_latest_compaction_cold_ref,
-	},
 	pidx::{PageRef, PageRefKind, decode_pidx_txid},
 	plan::{ReadSource, StorageScope, resolve_storage_scope},
 	shard::{DeltaBlobLoad, ShardBlobLoad, tx_load_delta_blob, tx_load_latest_shard_blob},
@@ -257,7 +251,6 @@ impl Db {
 							page_candidates: BTreeMap::new(),
 							selected_candidates: BTreeMap::new(),
 							shard_cache_read_outcomes: BTreeMap::new(),
-							cold_page_candidates: BTreeMap::new(),
 							stale_pidx_pgnos: BTreeSet::new(),
 							debug,
 						});
@@ -394,17 +387,16 @@ impl Db {
 					let mut missing_delta_prefixes = BTreeSet::new();
 					let mut shard_sources = BTreeMap::<u32, Option<(Vec<u8>, Vec<u8>)>>::new();
 					let mut stale_pidx_pgnos = BTreeSet::new();
-					let mut cold_page_candidates = BTreeMap::<u32, Vec<ColdPageCandidate>>::new();
 					let mut shard_cache_read_outcomes =
 						BTreeMap::<u32, ShardCacheReadOutcome>::new();
 					let mut touched_cache_backed_page = false;
 
 					let phase_start = Instant::now();
 
-					// Phase 1: prefetch every unique delta blob, shard blob, and cold ref
-					// concurrently. The assembly loop below dedups loads per delta prefix and
-					// per shard, so we resolve the unique keys here, fetch each exactly once,
-					// and let the loop read from these maps instead of awaiting inline.
+					// Phase 1: prefetch every unique delta blob and shard blob concurrently.
+					// The assembly loop below dedups loads per delta prefix and per shard, so
+					// we resolve the unique keys here, fetch each exactly once, and let the
+					// loop read from these maps instead of awaiting inline.
 					let tx_ref = &tx;
 					let scope_ref = &scope;
 					let ltx_blob_cache_ref = &ltx_blob_cache;
@@ -531,32 +523,7 @@ impl Db {
 						.try_collect()
 						.await?;
 
-					// Cold refs are consulted for pages whose shard blob is missing. The result
-					// depends only on the shard, so dedup by shard here; the per-page
-					// `ColdRefSelected` fault stays in the assembly loop below.
-					let cold_ref_shards: Vec<u32> = shard_blobs
-						.iter()
-						.filter(|(_, load)| load.source.is_none())
-						.map(|(shard_id, _)| *shard_id)
-						.collect();
-
-					let cold_refs: BTreeMap<u32, Option<CompactionColdShardCandidate>> =
-						stream::iter(cold_ref_shards)
-							.map(move |shard_id| async move {
-								let reference = tx_load_latest_compaction_cold_ref(
-									tx_ref, scope_ref, shard_id,
-								)
-								.await?;
-								Result::<(u32, Option<CompactionColdShardCandidate>)>::Ok((
-									shard_id, reference,
-								))
-							})
-							.buffer_unordered(PAGE_SOURCE_FETCH_CONCURRENCY)
-							.try_collect()
-							.await?;
-
 					for pgno in &pgnos_in_range {
-						let mut cold_candidates = Vec::new();
 						let preferred_delta = pidx_by_pgno.get(pgno).copied().map(|page_ref| {
 							(
 								page_ref
@@ -585,7 +552,7 @@ impl Db {
 							}
 						}
 
-						if let Some((delta_prefix, delta_source, delta_txid, delta_kind)) = preferred_delta
+						if let Some((delta_prefix, _delta_source, delta_txid, delta_kind)) = preferred_delta
 							.as_ref()
 							.filter(|(prefix, _, _, _)| !missing_delta_prefixes.contains(prefix))
 						{
@@ -611,15 +578,6 @@ impl Db {
 											reason: Some("delta_blob_missing".to_string()),
 										});
 									}
-									let ReadSource::Branch(source) = *delta_source;
-									cold_candidates.push(
-										ColdLayerCandidate {
-											branch_id: source.branch_id,
-											owner_txid: *delta_txid,
-											shard_id: pgno / SHARD_SIZE,
-										}
-										.into(),
-									);
 								}
 							}
 
@@ -682,49 +640,6 @@ impl Db {
 							page_sources.insert(*pgno, source_key);
 							shard_cache_read_outcomes.insert(*pgno, ShardCacheReadOutcome::FdbHit);
 							touched_cache_backed_page = true;
-						} else {
-							if let Some(reference) = cold_refs.get(&shard_id).cloned().flatten() {
-								#[cfg(feature = "test-faults")]
-								let drop_ref = matches!(
-									maybe_fire_read_fault(
-										&fault_controller,
-										ReadFaultPoint::ColdRefSelected,
-										&database_id,
-										Some(scope.branch_id()),
-										Some(*pgno),
-										Some(shard_id),
-									)
-									.await?,
-									Some(DepotFaultFired {
-										action: DepotFaultAction::DropArtifact,
-										..
-									})
-								);
-								#[cfg(not(feature = "test-faults"))]
-								let drop_ref = false;
-								if !drop_ref {
-									cold_candidates.push(reference.into());
-								}
-								touched_cache_backed_page = true;
-							}
-							cold_candidates.extend(
-								scope
-									.cold_layer_candidates(*pgno)
-									.into_iter()
-									.map(ColdPageCandidate::from),
-							);
-							if !cold_candidates.is_empty() {
-								if collect_provenance {
-									page_candidates.entry(*pgno).or_default().push(PageSourceCandidate {
-										kind: PageSourceKind::Cold,
-										txid: None,
-										shard_id: Some(shard_id),
-										result: PageSourceCandidateResult::Selected,
-										reason: Some("cold_candidate_selected".to_string()),
-									});
-								}
-								cold_page_candidates.insert(*pgno, cold_candidates);
-							}
 						}
 					}
 					metrics::observe_get_pages_phase(
@@ -761,7 +676,6 @@ impl Db {
 						page_candidates,
 						selected_candidates,
 						shard_cache_read_outcomes,
-						cold_page_candidates,
 						stale_pidx_pgnos,
 						debug,
 					})
@@ -770,34 +684,6 @@ impl Db {
 			.await?;
 
 		let mut tx_result = tx_result;
-		let cold_pages = self
-			.load_cold_page_blobs(&tx_result.cold_page_candidates)
-			.await?;
-		let shard_cache_fill_jobs = cold_pages.shard_cache_fills;
-		for (pgno, (source_key, blob)) in cold_pages.pages {
-			tx_result.debug.cold_page_loads += 1;
-			tx_result.debug.cold_page_bytes += blob.len();
-			tx_result.page_sources.insert(pgno, source_key.clone());
-			tx_result.source_blobs.entry(source_key).or_insert(blob);
-			tx_result
-				.shard_cache_read_outcomes
-				.insert(pgno, ShardCacheReadOutcome::ColdHit);
-			if collect_provenance {
-				let candidate = PageSourceCandidate {
-					kind: PageSourceKind::Cold,
-					txid: None,
-					shard_id: Some(pgno / SHARD_SIZE),
-					result: PageSourceCandidateResult::Selected,
-					reason: None,
-				};
-				tx_result
-					.page_candidates
-					.entry(pgno)
-					.or_default()
-					.push(candidate.clone());
-				tx_result.selected_candidates.insert(pgno, candidate);
-			}
-		}
 
 		let mut stale_pidx_pgnos = tx_result.stale_pidx_pgnos;
 
@@ -973,25 +859,6 @@ impl Db {
 		if allow_side_effects {
 			self.read_bytes_since_rollup
 				.fetch_add(returned_bytes, std::sync::atomic::Ordering::Relaxed);
-
-			// Return overflow pages referenced by the requested leaf pages up front.
-			// This runs before taking the cache-snapshot write lock because it issues
-			// nested get_pages calls that take the lock themselves. Expansion is a
-			// best-effort prefetch: an error here must not fail the base read, whose
-			// requested pages are already materialized.
-			if options.expand_overflow {
-				if let Err(err) = self
-					.expand_overflow_pages(&mut pages, tx_result.db_size_pages)
-					.await
-				{
-					tracing::warn!(
-						database_id = %self.database_id,
-						?err,
-						"sqlite overflow prefetch expansion failed; returning base pages",
-					);
-				}
-			}
-
 			let mut cache_snapshot = self.cache_snapshot.write().await;
 			let current_branch_id = cache_snapshot.as_ref().map(|snapshot| snapshot.branch_id);
 			let publish_branch_changed =
@@ -1010,7 +877,7 @@ impl Db {
 			#[cfg(not(feature = "pidx-cache"))]
 			let _ = publish_branch_changed;
 			if let Some(loaded_pidx_rows) = tx_result.loaded_pidx_rows.take() {
-				metrics::SQLITE_PUMP_PIDX_COLD_SCAN_TOTAL
+				metrics::SQLITE_PUMP_PIDX_FDB_LOAD_TOTAL
 					.with_label_values(labels)
 					.inc();
 
@@ -1040,38 +907,6 @@ impl Db {
 			});
 		}
 
-		#[cfg(feature = "test-faults")]
-		let mut shard_cache_fill_jobs = shard_cache_fill_jobs;
-		#[cfg(feature = "test-faults")]
-		{
-			let mut filtered_jobs = Vec::with_capacity(shard_cache_fill_jobs.len());
-			for job in shard_cache_fill_jobs {
-				let key = job.key();
-				let fired = maybe_fire_read_fault(
-					&self.fault_controller,
-					ReadFaultPoint::ShardCacheFillEnqueue,
-					&self.database_id,
-					Some(key.branch_id),
-					None,
-					Some(key.shard_id),
-				)
-				.await?;
-				if !matches!(
-					fired,
-					Some(DepotFaultFired {
-						action: DepotFaultAction::DropArtifact,
-						..
-					})
-				) {
-					filtered_jobs.push(job);
-				}
-			}
-			shard_cache_fill_jobs = filtered_jobs;
-		}
-
-		if allow_side_effects {
-			self.shard_cache_fill.enqueue_many(shard_cache_fill_jobs);
-		}
 		let elapsed_ms = read_started_at.elapsed().as_millis();
 		if elapsed_ms >= SQLITE_GET_PAGES_DEBUG_SLOW_MS || tx_result.debug.is_expensive() {
 			tracing::debug!(
@@ -1086,7 +921,6 @@ impl Db {
 				pages_from_delta = tx_result.debug.pages_from_delta,
 				pages_from_historical_delta = tx_result.debug.pages_from_historical_delta,
 				pages_from_hot_shard = tx_result.debug.pages_from_hot_shard,
-				pages_from_cold = tx_result.debug.pages_from_cold,
 				zero_fill_pages = tx_result.debug.zero_fill_pages,
 				out_of_range_pages = tx_result.debug.out_of_range_pages,
 				stale_delta_pages = tx_result.debug.stale_delta_pages,
@@ -1115,8 +949,6 @@ impl Db {
 				hot_shard_hits = tx_result.debug.hot_shard_hits,
 				hot_shard_misses = tx_result.debug.hot_shard_misses,
 				hot_shard_bytes = tx_result.debug.hot_shard_bytes,
-				cold_page_loads = tx_result.debug.cold_page_loads,
-				cold_page_bytes = tx_result.debug.cold_page_bytes,
 				source_blob_count = tx_result.debug.source_blob_count,
 				source_blob_bytes = tx_result.debug.source_blob_bytes,
 				decoded_source_blobs = tx_result.debug.decoded_source_blobs,
@@ -1238,7 +1070,6 @@ struct GetPagesTxResult {
 	page_candidates: BTreeMap<u32, Vec<PageSourceCandidate>>,
 	selected_candidates: BTreeMap<u32, PageSourceCandidate>,
 	shard_cache_read_outcomes: BTreeMap<u32, ShardCacheReadOutcome>,
-	cold_page_candidates: BTreeMap<u32, Vec<ColdPageCandidate>>,
 	stale_pidx_pgnos: BTreeSet<u32>,
 	debug: GetPagesDebug,
 }
@@ -1253,7 +1084,6 @@ struct GetPagesDebug {
 	pages_from_delta: usize,
 	pages_from_historical_delta: usize,
 	pages_from_hot_shard: usize,
-	pages_from_cold: usize,
 	zero_fill_pages: usize,
 	out_of_range_pages: usize,
 	stale_delta_pages: usize,
@@ -1282,8 +1112,6 @@ struct GetPagesDebug {
 	hot_shard_hits: usize,
 	hot_shard_misses: usize,
 	hot_shard_bytes: usize,
-	cold_page_loads: usize,
-	cold_page_bytes: usize,
 	source_blob_count: usize,
 	source_blob_bytes: usize,
 	decoded_source_blobs: usize,
@@ -1305,7 +1133,6 @@ impl GetPagesDebug {
 			PageSourceKind::MissingDelta => self.stale_delta_pages += 1,
 			PageSourceKind::StaleDelta => self.stale_delta_pages += 1,
 			PageSourceKind::HotShard => self.pages_from_hot_shard += 1,
-			PageSourceKind::Cold => self.pages_from_cold += 1,
 			PageSourceKind::ZeroFill => self.zero_fill_pages += 1,
 			PageSourceKind::OutOfRange => self.out_of_range_pages += 1,
 		}
@@ -1315,7 +1142,6 @@ impl GetPagesDebug {
 #[derive(Clone, Copy)]
 enum ShardCacheReadOutcome {
 	FdbHit,
-	ColdHit,
 	Miss,
 }
 
@@ -1323,7 +1149,6 @@ impl ShardCacheReadOutcome {
 	fn as_label(self) -> &'static str {
 		match self {
 			ShardCacheReadOutcome::FdbHit => metrics::SHARD_CACHE_READ_FDB_HIT,
-			ShardCacheReadOutcome::ColdHit => metrics::SHARD_CACHE_READ_COLD_HIT,
 			ShardCacheReadOutcome::Miss => metrics::SHARD_CACHE_READ_MISS,
 		}
 	}
@@ -1382,7 +1207,6 @@ fn mark_provenance_winner(
 						| PageSourceKind::HistoricalDelta
 						| PageSourceKind::MissingDelta
 						| PageSourceKind::HotShard
-						| PageSourceKind::Cold
 						| PageSourceKind::OutOfRange => "superseded",
 					}
 					.to_string(),

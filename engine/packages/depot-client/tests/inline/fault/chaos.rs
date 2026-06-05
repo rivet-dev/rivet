@@ -2,9 +2,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, ensure};
 use depot::fault::{
-	ColdCompactionFaultPoint, ColdTierFaultPoint, CommitFaultPoint, DepotFaultPoint,
-	DepotFaultReplayEventKind, FaultBoundary, HotCompactionFaultPoint, ReadFaultPoint,
-	ReclaimFaultPoint,
+	CommitFaultPoint, DepotFaultPoint, DepotFaultReplayEventKind, FaultBoundary,
+	HotCompactionFaultPoint, ReadFaultPoint, ReclaimFaultPoint,
 };
 use depot::workflows::compaction::ForceCompactionWork;
 use futures_util::future;
@@ -63,21 +62,11 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 				.once()
 				.delay(Duration::from_millis(fault_plan.hot_delay_ms))?;
 			faults
-				.at(DepotFaultPoint::ColdCompaction(
-					fault_plan.cold_delay_point.clone(),
-				))
-				.once()
-				.delay(Duration::from_millis(fault_plan.cold_delay_ms))?;
-			faults
 				.at(DepotFaultPoint::Reclaim(
 					fault_plan.reclaim_delay_point.clone(),
 				))
 				.once()
 				.delay(Duration::from_millis(fault_plan.reclaim_delay_ms))?;
-			faults
-				.at(DepotFaultPoint::ColdTier(ColdTierFaultPoint::PutObject))
-				.once()
-				.delay(Duration::from_millis(fault_plan.cold_put_delay_ms))?;
 			Ok(())
 		})
 		.workload(move |ctx| async move {
@@ -94,7 +83,7 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 				.await?;
 
 			let mut rng = ChaosRng::new(seed ^ 0x9e37_79b9_7f4a_7c15);
-			for index in 0..profile.pre_cold_ops {
+			for index in 0..profile.pre_hot_ops {
 				ctx.exec(random_logical_op(&mut rng, index)).await?;
 				if index % profile.reload_every == 1 {
 					ctx.reload_database().await?;
@@ -105,7 +94,7 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 
 			run_overlapping_hot_compaction(&ctx, seed).await?;
 
-			for index in profile.pre_cold_ops..profile.total_ops {
+			for index in profile.pre_hot_ops..profile.total_ops {
 				ctx.exec(random_logical_op(&mut rng, index)).await?;
 				if index % profile.reload_every == profile.reload_every - 1 {
 					ctx.reload_database().await?;
@@ -116,47 +105,40 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 			let restore_point = ctx.create_restore_point().await?;
 			ctx.force_compaction(ForceCompactionWork {
 				hot: true,
-				cold: true,
 				reclaim: false,
 				final_settle: false,
 			})
 			.await?;
-			ctx.checkpoint(format!("after-cold-{seed:016x}")).await?;
+			ctx.checkpoint(format!("after-hot-{seed:016x}")).await?;
 
 			ctx.fault_controller()
 				.at(DepotFaultPoint::Read(ReadFaultPoint::AfterShardBlobLoad))
 				.once()
-				.drop_artifact()?;
-			ctx.fault_controller()
-				.at(DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject))
-				.once()
-				.delay(Duration::from_millis(workload_plan.cold_get_delay_ms))?;
-			let cold_read_started = Instant::now();
+				.delay(Duration::from_millis(workload_plan.shard_read_delay_ms))?;
+			let shard_read_started = Instant::now();
 			ctx.read_page_from_depot(1).await?;
-			let cold_read_elapsed = cold_read_started.elapsed();
+			let shard_read_elapsed = shard_read_started.elapsed();
 			assert_delay_elapsed(
 				seed,
-				"cold-tier-get",
-				cold_read_elapsed,
-				Duration::from_millis(workload_plan.cold_get_delay_ms),
+				"shard-blob-load",
+				shard_read_elapsed,
+				Duration::from_millis(workload_plan.shard_read_delay_ms),
 			)?;
 			ctx.checkpoint(format!(
-				"after-cold-read-{seed:016x}-elapsed-{}ms",
-				cold_read_elapsed.as_millis()
+				"after-shard-read-{seed:016x}-elapsed-{}ms",
+				shard_read_elapsed.as_millis()
 			))
 			.await?;
 
 			ctx.delete_restore_point(restore_point).await?;
 			ctx.exec(LogicalOp::Put {
-				key: format!("seed-{seed:x}-after-cold"),
+				key: format!("seed-{seed:x}-after-hot"),
 				value: vec![0xc0, 0x1d],
 			})
 			.await?;
 			let _current_restore_point = ctx.create_restore_point().await?;
-			let _grace = ctx.override_cold_object_delete_grace(0).await?;
 			ctx.force_compaction(ForceCompactionWork {
 				hot: true,
-				cold: true,
 				reclaim: true,
 				final_settle: true,
 			})
@@ -229,7 +211,7 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 					.iter()
 					.filter(|event| event.event.kind == DepotFaultReplayEventKind::Fired)
 					.count(),
-				9,
+				6,
 				"{}",
 				chaos_failure_context(
 					seed,
@@ -243,11 +225,8 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 				DepotFaultPoint::Read(verify_plan.read_delay_point.clone()),
 				DepotFaultPoint::HotCompaction(HotCompactionFaultPoint::StageAfterInputRead),
 				DepotFaultPoint::HotCompaction(verify_plan.hot_delay_point.clone()),
-				DepotFaultPoint::ColdCompaction(verify_plan.cold_delay_point.clone()),
 				DepotFaultPoint::Reclaim(verify_plan.reclaim_delay_point.clone()),
-				DepotFaultPoint::ColdTier(ColdTierFaultPoint::PutObject),
 				DepotFaultPoint::Read(ReadFaultPoint::AfterShardBlobLoad),
-				DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject),
 			] {
 				assert!(
 					replay.fault_events.iter().any(|event| {
@@ -273,7 +252,7 @@ fn run_chaos_seed(seed: u64, profile: ChaosRunProfile) -> Result<()> {
 #[derive(Clone, Copy)]
 struct ChaosRunProfile {
 	name: &'static str,
-	pre_cold_ops: usize,
+	pre_hot_ops: usize,
 	total_ops: usize,
 	reload_every: usize,
 }
@@ -282,7 +261,7 @@ impl ChaosRunProfile {
 	fn curated() -> Self {
 		Self {
 			name: "curated",
-			pre_cold_ops: 10,
+			pre_hot_ops: 10,
 			total_ops: 16,
 			reload_every: 4,
 		}
@@ -291,7 +270,7 @@ impl ChaosRunProfile {
 	fn soak(total_ops: usize, reload_every: usize) -> Self {
 		Self {
 			name: "soak",
-			pre_cold_ops: total_ops / 2,
+			pre_hot_ops: total_ops / 2,
 			total_ops,
 			reload_every,
 		}
@@ -370,14 +349,11 @@ struct ChaosPlan {
 	commit_pause_point: CommitFaultPoint,
 	read_delay_point: ReadFaultPoint,
 	hot_delay_point: HotCompactionFaultPoint,
-	cold_delay_point: ColdCompactionFaultPoint,
 	reclaim_delay_point: ReclaimFaultPoint,
 	read_delay_ms: u64,
 	hot_delay_ms: u64,
-	cold_delay_ms: u64,
 	reclaim_delay_ms: u64,
-	cold_put_delay_ms: u64,
-	cold_get_delay_ms: u64,
+	shard_read_delay_ms: u64,
 }
 
 impl ChaosPlan {
@@ -387,14 +363,11 @@ impl ChaosPlan {
 			commit_pause_point: choose_commit_point(&mut rng),
 			read_delay_point: choose_read_point(&mut rng),
 			hot_delay_point: choose_hot_point(&mut rng),
-			cold_delay_point: choose_cold_point(&mut rng),
 			reclaim_delay_point: choose_reclaim_point(&mut rng),
 			read_delay_ms: rng.delay_ms(),
 			hot_delay_ms: rng.delay_ms(),
-			cold_delay_ms: rng.delay_ms(),
 			reclaim_delay_ms: rng.delay_ms(),
-			cold_put_delay_ms: rng.delay_ms(),
-			cold_get_delay_ms: rng.delay_ms(),
+			shard_read_delay_ms: rng.delay_ms(),
 		}
 	}
 }
@@ -450,7 +423,7 @@ fn choose_commit_point(rng: &mut ChaosRng) -> CommitFaultPoint {
 fn choose_read_point(rng: &mut ChaosRng) -> ReadFaultPoint {
 	[
 		ReadFaultPoint::AfterPidxScan,
-		ReadFaultPoint::ColdRefSelected,
+		ReadFaultPoint::AfterDeltaBlobLoad,
 		ReadFaultPoint::BeforeReturnPages,
 	][rng.index(3)]
 	.clone()
@@ -461,15 +434,6 @@ fn choose_hot_point(rng: &mut ChaosRng) -> HotCompactionFaultPoint {
 		HotCompactionFaultPoint::StageBeforeInputRead,
 		HotCompactionFaultPoint::InstallAfterStagedRead,
 		HotCompactionFaultPoint::InstallBeforeRootUpdate,
-	][rng.index(3)]
-	.clone()
-}
-
-fn choose_cold_point(rng: &mut ChaosRng) -> ColdCompactionFaultPoint {
-	[
-		ColdCompactionFaultPoint::UploadBeforePutObject,
-		ColdCompactionFaultPoint::PublishBeforeColdRefWrite,
-		ColdCompactionFaultPoint::PublishAfterRootUpdate,
 	][rng.index(3)]
 	.clone()
 }
