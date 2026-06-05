@@ -178,7 +178,7 @@
 		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.18.2",
+		"@hono/node-server": "^1.19.13",
 		"@hono/node-ws": "^1.1.1",
 		"@hono/zod-openapi": "^1.1.5",
 		"@rivet-dev/agent-os-core": "^0.1.1",
