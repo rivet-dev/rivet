@@ -142,6 +142,18 @@ interface HibernatableRunnerWebSocketBinding {
 
 export type DriverContext = {};
 
+/**
+ * Placeholder `handler.actor` value used for Rust-backed actor definitions
+ * (those with `nativeFactoryBuilder`). The Rust `CoreActorFactory` owns
+ * lifecycle and request dispatch, so the JS-side actor instance is a stub
+ * that no-ops on the handful of methods the engine driver may invoke during
+ * stop/teardown paths.
+ */
+const NATIVE_NAPI_ACTOR_STUB = {
+	onStop: async (_reason: string) => {},
+	debugForceCrash: async () => {},
+} as unknown as AnyActorInstance;
+
 export class EngineActorDriver implements ActorDriver {
 	#config: RegistryConfig;
 	#inlineClient: Client<any>;
@@ -1629,6 +1641,22 @@ export class EngineActorDriver implements ActorDriver {
 						error: stringifyError(error),
 					});
 				}
+			} else if (definition.nativeFactoryBuilder) {
+				// Rust-backed actor (e.g. `agentOs(...)`). The
+				// `CoreActorFactory` registered for this name owns the
+				// actor's lifecycle, state, and request dispatch. The
+				// engine driver only needs to keep the handler alive so
+				// stop/load paths don't blow up.
+				handler.actor = NATIVE_NAPI_ACTOR_STUB;
+				handler.actorStartError = undefined;
+				handler.actorStartPromise?.resolve();
+				handler.actorStartPromise = undefined;
+				logger().debug({
+					msg: "engine actor started (rust-native)",
+					actorId,
+					name,
+					key,
+				});
 			} else if (isStaticActorDefinition(definition)) {
 				const instantiateStart = performance.now();
 				const staticActor =

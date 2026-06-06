@@ -35,16 +35,14 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 			}
 		}
 		"writeFile" => {
-			// TS sends `contents` either as a raw `Buffer`/`Uint8Array` (CBOR
-			// byte string -> `ByteBuf`) or as a `["$Uint8Array", base64]`
-			// wrapper. The wrapper form arrives in args as a 2-element array
-			// inside the positional tuple; for the Rust-driven dispatcher
-			// path we accept the byte-string form which is the canonical
-			// post-decode shape.
-			let args: Result<(String, serde_bytes::ByteBuf)> = action.decode_as();
+			// TS sends `contents` as either a `string` (CBOR text string),
+			// a `Uint8Array` / `Buffer` (CBOR byte string -> `ByteBuf`), or
+			// a `["$Uint8Array", base64]` wrapper. Accept any of those and
+			// coerce to raw bytes.
+			let args: Result<(String, WriteFileContent)> = action.decode_as();
 			match args {
 				Ok((path, contents)) => {
-					match filesystem::write_file(vm, &path, contents.into_vec()).await {
+					match filesystem::write_file(vm, &path, contents.into_bytes()).await {
 						Ok(()) => action.ok(&()),
 						Err(error) => action.err(error),
 					}
@@ -58,4 +56,53 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 
 fn not_implemented(name: &str) -> anyhow::Error {
 	anyhow!("agent-os action not implemented yet: {name}")
+}
+
+/// Accept either a CBOR text string, a CBOR byte string (via `ByteBuf`), or
+/// the `["$Uint8Array", base64]` wrapper that TS encoders emit when the
+/// outer codec is JSON-compatible. Used by `writeFile` and similar
+/// byte-payload action arms.
+#[derive(serde::Deserialize)]
+#[serde(untagged)]
+enum WriteFileContent {
+	String(String),
+	Bytes(serde_bytes::ByteBuf),
+	Wrapped(JsonCompatUint8Array),
+}
+
+impl WriteFileContent {
+	fn into_bytes(self) -> Vec<u8> {
+		match self {
+			Self::String(s) => s.into_bytes(),
+			Self::Bytes(b) => b.into_vec(),
+			Self::Wrapped(w) => w.bytes,
+		}
+	}
+}
+
+/// Deserializer for the `["$Uint8Array", base64]` envelope. Used as part
+/// of [`WriteFileContent`]'s untagged enum so the same arm accepts wrapped
+/// bytes from the JSON encoder path.
+struct JsonCompatUint8Array {
+	bytes: Vec<u8>,
+}
+
+impl<'de> serde::Deserialize<'de> for JsonCompatUint8Array {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+		let (tag, base64): (String, String) =
+			serde::Deserialize::deserialize(deserializer)?;
+		if tag != "$Uint8Array" {
+			return Err(serde::de::Error::custom(format!(
+				"expected $Uint8Array wrapper, got {tag}"
+			)));
+		}
+		let bytes = BASE64
+			.decode(&base64)
+			.map_err(|error| serde::de::Error::custom(format!("base64 decode: {error}")))?;
+		Ok(Self { bytes })
+	}
 }

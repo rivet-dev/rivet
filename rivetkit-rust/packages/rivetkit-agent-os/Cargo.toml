@@ -8,6 +8,7 @@ edition.workspace = true
 [dependencies]
 agent-os-client = { path = "../../../ext/agent-os/crates/client" }
 anyhow.workspace = true
+base64.workspace = true
 ciborium.workspace = true
 futures.workspace = true
 rivet-error.workspace = true
