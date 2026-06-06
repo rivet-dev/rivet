@@ -8,7 +8,7 @@ import { Prose } from '@/components/Prose';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
 import { AuthorAvatar } from '@/components/AuthorAvatar';
-import { Icon, faBluesky, faCalendarDay, faChevronRight, faGithub, faXTwitter } from '@rivet-gg/icons';
+import { Icon, faArrowLeft, faArrowRight, faBluesky, faGithub, faXTwitter } from '@rivet-gg/icons';
 import * as mdxComponents from '@/components/mdx';
 
 type AuthorInfo = {
@@ -54,23 +54,39 @@ const tableOfContents = headings
 		return acc;
 	}, [] as any[]);
 
-// Load other articles
+// Load other changelog entries
 const allPosts = await getCollection('posts');
 const filteredOtherPosts = allPosts
-	.filter((p) => p.id !== entry.id && !p.data.unpublished)
+	.filter((p) => p.id !== entry.id && !p.data.unpublished && p.data.category === 'changelog')
 	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime())
 	.slice(0, 3);
 
 const otherArticles = filteredOtherPosts.map((post) => {
 	const slugValue = post.id.replace(/\/page$/, '');
 	const cat = { ...CATEGORIES[post.data.category], id: post.data.category };
+	const data = post.data as unknown as { title: string; description: string };
 	return {
 		slug: slugValue,
-		title: (post.data as unknown as { title: string }).title,
+		title: data.title,
+		description: data.description,
 		category: cat,
 		published: post.data.published,
+		image: getPostImage(post),
 	};
 });
+
+const authorLink = author.socials?.twitter || author.url || author.socials?.github;
+
+// BreadcrumbList schema
+const breadcrumbSchema = {
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	"itemListElement": [
+		{ "@type": "ListItem", "position": 1, "name": "Home", "item": "https://rivet.dev/" },
+		{ "@type": "ListItem", "position": 2, "name": "Changelog", "item": "https://rivet.dev/changelog/" },
+		{ "@type": "ListItem", "position": 3, "name": title, "item": `https://rivet.dev/changelog/${slug}/` }
+	]
+};
 ---
 
 <BlogLayout
@@ -84,107 +100,264 @@ const otherArticles = filteredOtherPosts.map((post) => {
 	authorSocials={author.socials}
 	category={category.name}
 >
-	<div class="mx-auto mt-20 w-full md:max-w-3xl lg:max-w-4xl xl:max-w-7xl px-4 md:mt-32" style="--header-height: 5rem;">
-		<ul class="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
-			<li><a href="/changelog/">Changelog</a></li>
-			<li class="flex items-center"><Icon className="h-2.5 w-auto" icon={faChevronRight} /></li>
-			<li class="text-foreground font-semibold">{title}</li>
-		</ul>
-		<div class="flex flex-col items-center gap-8 pb-6 lg:items-start lg:flex-row">
-			<aside class="hidden lg:flex mt-2 min-w-0 lg:w-[220px] lg:shrink-0 flex-col gap-2">
-				<div class="top-header sticky pt-2">
-					<p class="mb-2 text-sm font-semibold">Posted by</p>
-					<div class="mb-4 flex items-center gap-2">
-						<AuthorAvatar className="mt-1 size-14" name={author.name} avatarSrc={author.avatar.src} client:load />
-						<div class="flex flex-col">
-							<h3 class="font-bold">{author.name}</h3>
-							<p class="text-muted-foreground text-sm">{author.role}</p>
-							<p class="flex gap-2 text-xs text-muted-foreground mt-1">
-								{(author.socials?.twitter || author.url) && (
-									<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer">
-										<Icon icon={faXTwitter} />
-									</a>
-								)}
-								{author.socials?.bluesky && (
-									<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer">
-										<Icon icon={faBluesky} />
-									</a>
-								)}
-								{author.socials?.github && (
-									<a href={author.socials.github} target="_blank" rel="noopener noreferrer">
-										<Icon icon={faGithub} />
-									</a>
-								)}
+	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+
+	<div class="blog-article relative w-full" style="--header-height: 5rem;">
+		<div class="mx-auto w-full max-w-[88rem] px-6 pb-24 pt-32 md:pt-40">
+			<div class="xl:grid xl:grid-cols-[1fr_minmax(0,44rem)_1fr] xl:gap-10">
+				<!-- Left spacer keeps the article optically centered on wide screens -->
+				<div class="hidden xl:block" aria-hidden="true"></div>
+
+				<article class="mx-auto w-full max-w-[44rem] xl:mx-0 xl:max-w-none">
+					<!-- Back link -->
+					<a
+						href="/changelog/"
+						class="group flex items-center gap-2 text-sm text-zinc-500 transition-colors hover:text-white"
+					>
+						<Icon icon={faArrowLeft} className="h-3 w-auto transition-transform group-hover:-translate-x-0.5" />
+						Changelog
+					</a>
+
+					<!-- Header -->
+					<header class="mb-12 mt-8">
+						<span class="text-accent text-xs font-semibold uppercase tracking-[0.12em]">
+							{category.name}
+						</span>
+						<h1 class="mt-4 text-4xl font-semibold leading-[1.08] tracking-tight text-white [text-wrap:balance] md:text-[3.25rem]">
+							{title}
+						</h1>
+						{description && (
+							<p class="mt-5 text-lg leading-relaxed text-zinc-400 [text-wrap:pretty] md:text-xl">
+								{description}
 							</p>
+						)}
+
+						<div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/10 pt-6">
+							<AuthorAvatar className="size-10 shrink-0" name={author.name} avatarSrc={author.avatar.src} client:load />
+							<div class="flex flex-col">
+								<div class="flex items-center gap-2">
+									{authorLink ? (
+										<a href={authorLink} target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-white hover:text-accent transition-colors">
+											{author.name}
+										</a>
+									) : (
+										<span class="text-sm font-semibold text-white">{author.name}</span>
+									)}
+									<div class="flex items-center gap-2 text-zinc-500">
+										{(author.socials?.twitter || author.url) && (
+											<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
+												<Icon icon={faXTwitter} className="h-3.5 w-auto" />
+											</a>
+										)}
+										{author.socials?.bluesky && (
+											<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
+												<Icon icon={faBluesky} className="h-3.5 w-auto" />
+											</a>
+										)}
+										{author.socials?.github && (
+											<a href={author.socials.github} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
+												<Icon icon={faGithub} className="h-3.5 w-auto" />
+											</a>
+										)}
+									</div>
+								</div>
+								<p class="text-xs text-zinc-500">
+									{author.role}
+									<span class="px-1.5 text-zinc-700">·</span>
+									<time datetime={entry.data.published.toISOString()}>{formatTimestamp(entry.data.published)}</time>
+								</p>
+							</div>
+						</div>
+					</header>
+
+					{image && (
+						<img
+							src={image.src}
+							alt={title}
+							width={image.width}
+							height={image.height}
+							class="mb-12 aspect-[2/1] w-full rounded-2xl border border-white/10 object-cover"
+							loading="eager"
+							decoding="async"
+						/>
+					)}
+
+					<Prose as="div" className="blog-prose w-full max-w-none">
+						<Content components={mdxComponents} />
+					</Prose>
+
+					<div class="mt-16 border-t border-white/10 pt-8">
+						<ArticleSocials title={title} client:load />
+					</div>
+				</article>
+
+				<!-- Table of contents, floats in the right margin on wide screens only -->
+				<aside class="hidden xl:block">
+					<div class="top-header sticky pt-9">
+						{tableOfContents.length > 0 && (
+							<p class="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">On this page</p>
+						)}
+						<DocsTableOfContents tableOfContents={tableOfContents} client:load />
+					</div>
+				</aside>
+			</div>
+
+			<!-- Read next -->
+			{otherArticles.length > 0 && (
+				<div class="mx-auto mt-24 w-full max-w-[44rem] xl:max-w-none">
+					<div class="mx-auto w-full max-w-[44rem] border-t border-white/10 pt-10 xl:max-w-none">
+						<h2 class="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">Read next</h2>
+						<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+							{otherArticles.map((article) => (
+								<a href={`/changelog/${article.slug}/`} class="group flex flex-col">
+									{article.image && (
+										<img
+											src={article.image.src}
+											alt={article.title}
+											width={600}
+											height={300}
+											class="aspect-[2/1] w-full rounded-xl border border-white/10 object-cover transition-colors group-hover:border-white/25"
+											loading="lazy"
+											decoding="async"
+										/>
+									)}
+									<div class="mt-3 flex items-center gap-x-3 text-xs">
+										<span class="text-accent font-semibold uppercase tracking-[0.1em]">{article.category.name}</span>
+										<time datetime={article.published.toISOString()} class="text-zinc-500">
+											{formatTimestamp(article.published)}
+										</time>
+									</div>
+									<h3 class="mt-2 text-base font-medium leading-snug text-white transition-colors group-hover:text-accent">
+										{article.title}
+									</h3>
+									<span class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition-colors group-hover:text-white">
+										Read article
+										<Icon icon={faArrowRight} className="h-2.5 w-auto transition-transform group-hover:translate-x-0.5" />
+									</span>
+								</a>
+							))}
 						</div>
 					</div>
-					<div class="text-muted-foreground mb-6 flex items-center gap-2 text-sm">
-						<Icon icon={faCalendarDay} />
-						<time class="text-sm">{formatTimestamp(entry.data.published)}</time>
-					</div>
-					<p class="mb-2 hidden text-sm font-semibold lg:block">Other articles</p>
-					<ul class="text-muted-foreground hidden list-disc pl-5 text-sm lg:block">
-						{otherArticles.map((article) => (
-							<li class="py-1">
-								<a href={article.category.id === 'changelog' ? `/changelog/${article.slug}/` : `/blog/${article.slug}/`}>
-									{article.title || article.slug}
-								</a>
-							</li>
-						))}
-					</ul>
 				</div>
-			</aside>
-			<Prose
-				as="article"
-				className="w-full lg:flex-1 min-w-0 lg:order-2 max-w-none"
-			>
-				{image && (
-					<img
-						src={image.src}
-						alt={title}
-						width={image.width}
-						height={image.height}
-						class="w-full h-auto rounded-xl border border-white/10"
-						loading="eager"
-						decoding="async"
-					/>
-				)}
-				<Content components={mdxComponents} />
-				<ArticleSocials title={title} client:load />
-			</Prose>
-			<aside class="hidden xl:block min-w-0 xl:w-[220px] xl:shrink-0 lg:order-3">
-				<DocsTableOfContents tableOfContents={tableOfContents} client:load />
-			</aside>
-		</div>
-		<div class="mt-8 border-t border-white/10 pt-6 lg:hidden">
-			<div class="flex items-center gap-3">
-				<AuthorAvatar className="size-10" name={author.name} avatarSrc={author.avatar.src} client:load />
-				<div class="flex flex-col">
-					<h3 class="text-sm font-bold">{author.name}</h3>
-					<p class="text-muted-foreground text-xs">{author.role}</p>
-				</div>
-				<div class="flex gap-2 text-xs text-muted-foreground ml-auto">
-					{(author.socials?.twitter || author.url) && (
-						<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer">
-							<Icon icon={faXTwitter} />
-						</a>
-					)}
-					{author.socials?.bluesky && (
-						<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer">
-							<Icon icon={faBluesky} />
-						</a>
-					)}
-					{author.socials?.github && (
-						<a href={author.socials.github} target="_blank" rel="noopener noreferrer">
-							<Icon icon={faGithub} />
-						</a>
-					)}
-				</div>
-			</div>
-			<div class="text-muted-foreground mt-2 flex items-center gap-2 text-sm">
-				<Icon icon={faCalendarDay} />
-				<time class="text-sm">{formatTimestamp(entry.data.published)}</time>
-			</div>
+			)}
 		</div>
 	</div>
 </BlogLayout>
+
+<style is:global>
+	/* Editorial typography scoped to blog articles only, so docs Prose stays untouched. */
+	.blog-article .blog-prose {
+		font-size: 1.0625rem;
+		line-height: 1.8;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.blog-article .blog-prose p,
+	.blog-article .blog-prose ul,
+	.blog-article .blog-prose ol {
+		margin-top: 1.4em;
+		margin-bottom: 1.4em;
+	}
+
+	.blog-article .blog-prose > :first-child {
+		margin-top: 0;
+	}
+
+	.blog-article .blog-prose h2 {
+		font-size: 1.75rem;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
+		margin-top: 2.75rem;
+		margin-bottom: 1rem;
+		color: #fff;
+	}
+
+	.blog-article .blog-prose h3 {
+		font-size: 1.3rem;
+		line-height: 1.3;
+		letter-spacing: -0.015em;
+		margin-top: 2.25rem;
+		margin-bottom: 0.75rem;
+		color: #fff;
+	}
+
+	.blog-article .blog-prose h4 {
+		font-size: 1.075rem;
+		margin-top: 2rem;
+		margin-bottom: 0.5rem;
+		color: #fff;
+	}
+
+	.blog-article .blog-prose a {
+		color: #ff6a33;
+		text-decoration: underline;
+		text-decoration-color: rgb(255 69 0 / 0.35);
+		text-underline-offset: 0.2em;
+		text-decoration-thickness: 1px;
+		font-weight: 500;
+		transition: text-decoration-color 0.15s ease, color 0.15s ease;
+	}
+
+	.blog-article .blog-prose a:hover {
+		color: #ff8a5c;
+		text-decoration-color: rgb(255 69 0 / 0.9);
+	}
+
+	.blog-article .blog-prose strong {
+		color: #fff;
+		font-weight: 600;
+	}
+
+	.blog-article .blog-prose :not(pre) > code {
+		background: rgb(255 255 255 / 0.06);
+		border: 1px solid rgb(255 255 255 / 0.08);
+		border-radius: 0.375rem;
+		padding: 0.1em 0.4em;
+		font-size: 0.875em;
+		color: #e6e6e6;
+	}
+
+	.blog-article .blog-prose pre {
+		border-radius: 0.75rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		background: rgb(255 255 255 / 0.025);
+		padding: 1.25rem 1.4rem;
+		font-size: 0.9rem;
+		line-height: 1.7;
+		margin-top: 1.75rem;
+		margin-bottom: 1.75rem;
+	}
+
+	.blog-article .blog-prose blockquote {
+		border-left: 2px solid #ff4500;
+		padding-left: 1.25rem;
+		font-style: normal;
+		color: hsl(var(--muted-foreground));
+	}
+
+	.blog-article .blog-prose img,
+	.blog-article .blog-prose video {
+		border-radius: 0.75rem;
+		border: 1px solid rgb(255 255 255 / 0.1);
+		margin-top: 2rem;
+		margin-bottom: 2rem;
+	}
+
+	.blog-article .blog-prose hr {
+		border-color: rgb(255 255 255 / 0.1);
+		margin-top: 2.75rem;
+		margin-bottom: 2.75rem;
+	}
+
+	.blog-article .blog-prose li {
+		margin-top: 0.4em;
+		margin-bottom: 0.4em;
+	}
+
+	.blog-article .blog-prose h2 a,
+	.blog-article .blog-prose h3 a,
+	.blog-article .blog-prose h4 a {
+		color: inherit;
+		text-decoration: none;
+	}
+</style>
