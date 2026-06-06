@@ -3,7 +3,6 @@ import { getCollection, render } from 'astro:content';
 import BlogLayout from '@/layouts/BlogLayout.astro';
 import { getPostImage } from '@/lib/postImage';
 import { ArticleSocials } from '@/components/ArticleSocials';
-import { DocsTableOfContents } from '@/components/DocsTableOfContents';
 import { Prose } from '@/components/Prose';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
@@ -34,25 +33,13 @@ export async function getStaticPaths() {
 }
 
 const { entry, image } = Astro.props;
-const { Content, headings } = await render(entry);
+const { Content } = await render(entry);
 
 const slug = entry.id.replace(/\/page$/, '');
 const author = AUTHORS[entry.data.author] as AuthorInfo;
 const category = { ...CATEGORIES[entry.data.category], id: entry.data.category };
 
 const { title, description } = entry.data as unknown as { title: string; description: string };
-
-// Build table of contents
-const tableOfContents = headings
-	.filter((h) => h.depth === 2 || h.depth === 3)
-	.reduce((acc, h) => {
-		if (h.depth === 2) {
-			acc.push({ title: h.text, id: h.slug, children: [] });
-		} else if (acc.length > 0) {
-			acc[acc.length - 1].children.push({ title: h.text, id: h.slug, children: [] });
-		}
-		return acc;
-	}, [] as any[]);
 
 // Load other articles
 const allPosts = await getCollection('posts');
@@ -105,8 +92,7 @@ const breadcrumbSchema = {
 
 	<div class="blog-article relative w-full" style="--header-height: 5rem;">
 		<div class="mx-auto w-full max-w-[62rem] px-6 pb-24 pt-32 md:pt-40">
-			<div class="xl:flex xl:items-start xl:gap-14">
-				<article class="mx-auto w-full max-w-[44rem] xl:mx-0 xl:max-w-none xl:flex-1 xl:min-w-0">
+			<article class="mx-auto w-full max-w-[44rem]">
 					<!-- Back link -->
 					<a
 						href="/blog/"
@@ -188,17 +174,6 @@ const breadcrumbSchema = {
 						<ArticleSocials title={title} client:load />
 					</div>
 				</article>
-
-				<!-- Sticky table of contents in a right rail on wide screens -->
-				<aside class="hidden xl:block xl:w-52 xl:shrink-0">
-					<div class="top-header sticky pt-1.5">
-						{tableOfContents.length > 0 && (
-							<p class="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">On this page</p>
-						)}
-						<DocsTableOfContents tableOfContents={tableOfContents} client:load />
-					</div>
-				</aside>
-			</div>
 
 			<!-- Read next -->
 			{otherArticles.length > 0 && (
@@ -355,13 +330,5 @@ const breadcrumbSchema = {
 	.blog-article .blog-prose h4 a {
 		color: inherit;
 		text-decoration: none;
-	}
-
-	/* Smaller, tighter table of contents in the blog right rail. */
-	.blog-article aside a {
-		font-size: 0.75rem;
-		line-height: 1.25;
-		padding-top: 0.2rem;
-		padding-bottom: 0.2rem;
 	}
 </style>
