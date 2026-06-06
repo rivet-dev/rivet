@@ -139,7 +139,7 @@ impl Default for SqliteOptimizationFlags {
 			vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
 			vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES,
 			vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS,
-			vfs_retain_read_cache: false,
+			vfs_retain_read_cache: true,
 			pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
 		}
 	}
@@ -214,7 +214,7 @@ impl SqliteOptimizationFlags {
 				DEFAULT_VFS_STAGING_CACHE_TTL_MS,
 				MAX_VFS_STAGING_CACHE_TTL_MS,
 			),
-			vfs_retain_read_cache: disabled_by_default(
+			vfs_retain_read_cache: enabled_by_default(
 				read_env(VFS_RETAIN_READ_CACHE_ENV).as_deref(),
 			),
 			pager_cache_size_kib: u64_bounded_by_default(
@@ -348,7 +348,7 @@ mod tests {
 			VFS_PAGE_CACHE_CAPACITY_PAGES_ENV => Some("0".to_string()),
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some("0".to_string()),
 			VFS_STAGING_CACHE_TTL_MS_ENV => Some("0".to_string()),
-			VFS_RETAIN_READ_CACHE_ENV => Some("true".to_string()),
+			VFS_RETAIN_READ_CACHE_ENV => Some("false".to_string()),
 			_ => None,
 		});
 
@@ -370,7 +370,7 @@ mod tests {
 		assert_eq!(flags.vfs_page_cache_capacity_pages, 0);
 		assert_eq!(flags.vfs_protected_cache_pages, 0);
 		assert_eq!(flags.vfs_staging_cache_ttl_ms, 0);
-		assert!(flags.vfs_retain_read_cache);
+		assert!(!flags.vfs_retain_read_cache);
 	}
 
 	#[test]
