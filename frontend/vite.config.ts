@@ -66,7 +66,9 @@ export default defineConfig(({ mode }) => {
 				: null,
 			favigo({
 				source: "./public/favicon.svg",
-				variant: getVariantForMode(env.DEPLOYMENT_TYPE || "production"),
+				variant: getVariantForMode(
+					env.VITE_DEPLOYMENT_TYPE || "production",
+				),
 				configuration: {
 					theme_color: "#FF4F00",
 					background: "transparent",
