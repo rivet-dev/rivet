@@ -6,8 +6,7 @@ import { ArticleSocials } from '@/components/ArticleSocials';
 import { Prose } from '@/components/Prose';
 import { formatTimestamp } from '@/lib/formatDate';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
-import { AuthorAvatar } from '@/components/AuthorAvatar';
-import { Icon, faArrowLeft, faArrowRight, faBluesky, faGithub, faXTwitter } from '@rivet-gg/icons';
+import { Icon, faArrowLeft, faArrowRight } from '@rivet-gg/icons';
 import * as mdxComponents from '@/components/mdx';
 
 type AuthorInfo = {
@@ -62,8 +61,6 @@ const otherArticles = filteredOtherPosts.map((post) => {
 	};
 });
 
-const authorLink = author.socials?.twitter || author.url || author.socials?.github;
-
 // BreadcrumbList schema
 const breadcrumbSchema = {
 	"@context": "https://schema.org",
@@ -104,10 +101,10 @@ const breadcrumbSchema = {
 
 					<!-- Header -->
 					<header class="mb-12 mt-8">
-						<span class="text-accent text-xs font-medium uppercase tracking-[0.12em]">
-							{category.name}
-						</span>
-						<h1 class="mt-4 text-4xl font-normal leading-[1.1] tracking-tight text-white [text-wrap:balance] md:text-[3.25rem]">
+						<time datetime={entry.data.published.toISOString()} class="text-sm font-medium text-zinc-500">
+							{formatTimestamp(entry.data.published)}
+						</time>
+						<h1 class="mt-2 text-4xl font-normal leading-[1.1] tracking-tight text-white [text-wrap:balance] md:text-[3.25rem]">
 							{title}
 						</h1>
 						{description && (
@@ -115,43 +112,6 @@ const breadcrumbSchema = {
 								{description}
 							</p>
 						)}
-
-						<div class="mt-8 flex flex-wrap items-center gap-x-4 gap-y-3 border-t border-white/10 pt-6">
-							<AuthorAvatar className="size-10 shrink-0" name={author.name} avatarSrc={author.avatar.src} client:load />
-							<div class="flex flex-col">
-								<div class="flex items-center gap-2">
-									{authorLink ? (
-										<a href={authorLink} target="_blank" rel="noopener noreferrer" class="text-sm font-semibold text-white hover:text-accent transition-colors">
-											{author.name}
-										</a>
-									) : (
-										<span class="text-sm font-semibold text-white">{author.name}</span>
-									)}
-									<div class="flex items-center gap-2 text-zinc-500">
-										{(author.socials?.twitter || author.url) && (
-											<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
-												<Icon icon={faXTwitter} className="h-3.5 w-auto" />
-											</a>
-										)}
-										{author.socials?.bluesky && (
-											<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
-												<Icon icon={faBluesky} className="h-3.5 w-auto" />
-											</a>
-										)}
-										{author.socials?.github && (
-											<a href={author.socials.github} target="_blank" rel="noopener noreferrer" class="hover:text-white transition-colors">
-												<Icon icon={faGithub} className="h-3.5 w-auto" />
-											</a>
-										)}
-									</div>
-								</div>
-								<p class="text-xs text-zinc-500">
-									{author.role}
-									<span class="px-1.5 text-zinc-700">·</span>
-									<time datetime={entry.data.published.toISOString()}>{formatTimestamp(entry.data.published)}</time>
-								</p>
-							</div>
-						</div>
 					</header>
 
 					{image && (
