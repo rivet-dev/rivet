@@ -116,41 +116,37 @@ for (const entry of changelogPosts) {
 			</aside>
 
 			<!-- Blog posts -->
-			<div class="order-first grid grid-cols-1 gap-6 sm:grid-cols-2 lg:order-none">
+			<div class="order-first flex flex-col gap-6 lg:order-none">
 				{blogPosts.map((article) => (
-					<a href={`/blog/${article.slug}/`} class="size-full">
-						<article class="flex size-full flex-col items-start justify-between rounded-md border border-white/10 p-4 transition-colors hover:border-white/20">
-							<div>
-								{article.image && (
-									<div class="relative w-full">
-										<img
-											src={article.image.src}
-											alt={article.title}
-											width={600}
-											height={300}
-											class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
-											loading="lazy"
-											decoding="async"
-										/>
-									</div>
-								)}
-								<div class="mt-3 flex items-center gap-x-3 text-xs">
+					<a href={`/blog/${article.slug}/`} class="block">
+						<article class="flex flex-col gap-4 rounded-md border border-white/10 p-4 transition-colors hover:border-white/20 sm:flex-row sm:gap-5">
+							{article.image && (
+								<div class="w-full sm:w-64 sm:shrink-0">
+									<img
+										src={article.image.src}
+										alt={article.title}
+										width={600}
+										height={300}
+										class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
+										loading="lazy"
+										decoding="async"
+									/>
+								</div>
+							)}
+							<div class="flex min-w-0 flex-1 flex-col">
+								<div class="flex items-center gap-x-3 text-xs">
 									<time datetime={article.data.published.toISOString()} class="text-zinc-500">
 										{formatTimestamp(article.data.published)}
 									</time>
 									<span class="rounded-full border border-white/10 px-2 py-0.5 text-xs text-zinc-400">{article.category.name}</span>
 								</div>
-								<div class="group relative">
-									<h3 class="mt-2 text-base font-normal leading-6 text-white">
-										{article.title}
-									</h3>
-									<p class="mt-2 line-clamp-3 text-sm leading-relaxed text-zinc-500">
-										{article.description}
-									</p>
-								</div>
-							</div>
-							<div class="max-w-xl">
-								<div class="relative mt-4 flex items-center gap-x-3">
+								<h3 class="mt-2 text-base font-normal leading-6 text-white">
+									{article.title}
+								</h3>
+								<p class="mt-2 line-clamp-2 text-sm leading-relaxed text-zinc-500">
+									{article.description}
+								</p>
+								<div class="mt-auto flex items-center gap-x-3 pt-4">
 									<AuthorAvatar name={article.author.name} avatarSrc={article.author.avatar.src} client:load />
 									<div class="text-sm text-zinc-400">
 										{article.author.name}
