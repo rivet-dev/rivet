@@ -317,6 +317,28 @@ impl NapiActorFactory {
 			inner,
 		})
 	}
+
+	/// Static constructor that builds the agent-os actor factory. The
+	/// factory wraps `rivetkit_agent_os::build_core_factory` and exposes
+	/// no JS callbacks (the actor's run loop is owned by the Rust crate).
+	///
+	/// `tool_callbacks` is accepted for forward compatibility with Phase 5
+	/// (toolkit dispatch). It is currently ignored.
+	#[napi(factory)]
+	pub fn from_agent_os(
+		options: crate::agent_os::NapiAgentOsOptions,
+		_tool_callbacks: Option<JsObject>,
+	) -> napi::Result<Self> {
+		crate::init_tracing(None);
+		let actor_config = crate::agent_os::parse_agent_os_options(options)?;
+		let inner = Arc::new(rivetkit_agent_os::build_core_factory(actor_config));
+		let bindings = Arc::new(CallbackBindings::empty());
+		tracing::debug!(class = "NapiActorFactory", "constructed via from_agent_os");
+		Ok(Self {
+			_bindings: bindings,
+			inner,
+		})
+	}
 }
 
 impl Drop for NapiActorFactory {
@@ -350,6 +372,36 @@ impl AdapterConfig {
 }
 
 impl CallbackBindings {
+	/// Construct an empty `CallbackBindings` (no JS callbacks registered).
+	/// Used by foreign-runtime factories like agent-os where the actor's
+	/// event loop lives in Rust and never bridges back into JS.
+	pub(crate) fn empty() -> Self {
+		Self {
+			create_state: None,
+			on_create: None,
+			create_conn_state: None,
+			create_vars: None,
+			on_migrate: None,
+			on_wake: None,
+			on_before_actor_start: None,
+			on_sleep: None,
+			on_destroy: None,
+			on_before_connect: None,
+			on_connect: None,
+			on_disconnect_final: None,
+			on_before_subscribe: None,
+			actions: HashMap::new(),
+			on_before_action_response: None,
+			on_request: None,
+			on_queue_send: None,
+			on_websocket: None,
+			run: None,
+			get_workflow_history: None,
+			replay_workflow: None,
+			serialize_state: None,
+		}
+	}
+
 	fn from_js(callbacks: JsObject) -> napi::Result<Self> {
 		let actions = if let Some(actions) = callbacks.get::<_, JsObject>("actions")? {
 			let mut mapped = HashMap::new();

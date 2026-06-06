@@ -34,6 +34,24 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 				Err(error) => action.err(error),
 			}
 		}
+		"writeFile" => {
+			// TS sends `contents` either as a raw `Buffer`/`Uint8Array` (CBOR
+			// byte string -> `ByteBuf`) or as a `["$Uint8Array", base64]`
+			// wrapper. The wrapper form arrives in args as a 2-element array
+			// inside the positional tuple; for the Rust-driven dispatcher
+			// path we accept the byte-string form which is the canonical
+			// post-decode shape.
+			let args: Result<(String, serde_bytes::ByteBuf)> = action.decode_as();
+			match args {
+				Ok((path, contents)) => {
+					match filesystem::write_file(vm, &path, contents.into_vec()).await {
+						Ok(()) => action.ok(&()),
+						Err(error) => action.err(error),
+					}
+				}
+				Err(error) => action.err(error),
+			}
+		}
 		_ => action.err(not_implemented(&name)),
 	}
 }
