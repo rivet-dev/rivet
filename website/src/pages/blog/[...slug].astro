@@ -104,14 +104,14 @@ const breadcrumbSchema = {
 
 					<!-- Header -->
 					<header class="mb-12 mt-8">
-						<span class="text-accent text-xs font-semibold uppercase tracking-[0.12em]">
+						<span class="text-accent text-xs font-medium uppercase tracking-[0.12em]">
 							{category.name}
 						</span>
-						<h1 class="mt-4 text-4xl font-semibold leading-[1.08] tracking-tight text-white [text-wrap:balance] md:text-[3.25rem]">
+						<h1 class="mt-4 text-4xl font-normal leading-[1.1] tracking-tight text-white [text-wrap:balance] md:text-[3.25rem]">
 							{title}
 						</h1>
 						{description && (
-							<p class="mt-5 text-lg leading-relaxed text-zinc-400 [text-wrap:pretty] md:text-xl">
+							<p class="mt-5 text-lg font-light leading-7 text-zinc-400 [text-wrap:pretty] md:text-xl">
 								{description}
 							</p>
 						)}
@@ -178,7 +178,7 @@ const breadcrumbSchema = {
 			<!-- Read next -->
 			{otherArticles.length > 0 && (
 				<div class="mx-auto mt-24 w-full max-w-[62rem] border-t border-white/10 pt-10">
-					<h2 class="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">Read next</h2>
+					<h2 class="text-sm font-medium uppercase tracking-[0.12em] text-zinc-500">Read next</h2>
 					<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
 						{otherArticles.map((article) => (
 							<a href={`/blog/${article.slug}/`} class="group flex flex-col">
@@ -199,7 +199,7 @@ const breadcrumbSchema = {
 										{formatTimestamp(article.published)}
 									</time>
 								</div>
-								<h3 class="mt-2 text-base font-medium leading-snug text-white transition-colors group-hover:text-accent">
+								<h3 class="mt-2 text-base font-normal leading-snug text-white transition-colors group-hover:text-accent">
 									{article.title}
 								</h3>
 								<span class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition-colors group-hover:text-white">
