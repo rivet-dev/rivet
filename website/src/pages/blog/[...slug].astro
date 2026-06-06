@@ -104,12 +104,9 @@ const breadcrumbSchema = {
 	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 
 	<div class="blog-article relative w-full" style="--header-height: 5rem;">
-		<div class="mx-auto w-full max-w-[88rem] px-6 pb-24 pt-32 md:pt-40">
-			<div class="xl:grid xl:grid-cols-[1fr_minmax(0,44rem)_1fr] xl:gap-10">
-				<!-- Left spacer keeps the article optically centered on wide screens -->
-				<div class="hidden xl:block" aria-hidden="true"></div>
-
-				<article class="mx-auto w-full max-w-[44rem] xl:mx-0 xl:max-w-none">
+		<div class="mx-auto w-full max-w-[62rem] px-6 pb-24 pt-32 md:pt-40">
+			<div class="xl:flex xl:items-start xl:gap-14">
+				<article class="mx-auto w-full max-w-[44rem] xl:mx-0 xl:max-w-none xl:flex-1 xl:min-w-0">
 					<!-- Back link -->
 					<a
 						href="/blog/"
@@ -192,9 +189,9 @@ const breadcrumbSchema = {
 					</div>
 				</article>
 
-				<!-- Table of contents, floats in the right margin on wide screens only -->
-				<aside class="hidden xl:block">
-					<div class="top-header sticky pt-9">
+				<!-- Sticky table of contents in a right rail on wide screens -->
+				<aside class="hidden xl:block xl:w-52 xl:shrink-0">
+					<div class="top-header sticky pt-1.5">
 						{tableOfContents.length > 0 && (
 							<p class="mb-3 text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">On this page</p>
 						)}
@@ -205,39 +202,37 @@ const breadcrumbSchema = {
 
 			<!-- Read next -->
 			{otherArticles.length > 0 && (
-				<div class="mx-auto mt-24 w-full max-w-[44rem] xl:max-w-none">
-					<div class="mx-auto w-full max-w-[44rem] border-t border-white/10 pt-10 xl:max-w-none">
-						<h2 class="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">Read next</h2>
-						<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
-							{otherArticles.map((article) => (
-								<a href={`/blog/${article.slug}/`} class="group flex flex-col">
-									{article.image && (
-										<img
-											src={article.image.src}
-											alt={article.title}
-											width={600}
-											height={300}
-											class="aspect-[2/1] w-full rounded-xl border border-white/10 object-cover transition-colors group-hover:border-white/25"
-											loading="lazy"
-											decoding="async"
-										/>
-									)}
-									<div class="mt-3 flex items-center gap-x-3 text-xs">
-										<span class="text-accent font-semibold uppercase tracking-[0.1em]">{article.category.name}</span>
-										<time datetime={article.published.toISOString()} class="text-zinc-500">
-											{formatTimestamp(article.published)}
-										</time>
-									</div>
-									<h3 class="mt-2 text-base font-medium leading-snug text-white transition-colors group-hover:text-accent">
-										{article.title}
-									</h3>
-									<span class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition-colors group-hover:text-white">
-										Read article
-										<Icon icon={faArrowRight} className="h-2.5 w-auto transition-transform group-hover:translate-x-0.5" />
-									</span>
-								</a>
-							))}
-						</div>
+				<div class="mx-auto mt-24 w-full max-w-[62rem] border-t border-white/10 pt-10">
+					<h2 class="text-sm font-semibold uppercase tracking-[0.12em] text-zinc-500">Read next</h2>
+					<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
+						{otherArticles.map((article) => (
+							<a href={`/blog/${article.slug}/`} class="group flex flex-col">
+								{article.image && (
+									<img
+										src={article.image.src}
+										alt={article.title}
+										width={600}
+										height={300}
+										class="aspect-[2/1] w-full rounded-xl border border-white/10 object-cover transition-colors group-hover:border-white/25"
+										loading="lazy"
+										decoding="async"
+									/>
+								)}
+								<div class="mt-3 flex items-center gap-x-3 text-xs">
+									<span class="text-accent font-semibold uppercase tracking-[0.1em]">{article.category.name}</span>
+									<time datetime={article.published.toISOString()} class="text-zinc-500">
+										{formatTimestamp(article.published)}
+									</time>
+								</div>
+								<h3 class="mt-2 text-base font-medium leading-snug text-white transition-colors group-hover:text-accent">
+									{article.title}
+								</h3>
+								<span class="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition-colors group-hover:text-white">
+									Read article
+									<Icon icon={faArrowRight} className="h-2.5 w-auto transition-transform group-hover:translate-x-0.5" />
+								</span>
+							</a>
+						))}
 					</div>
 				</div>
 			)}
