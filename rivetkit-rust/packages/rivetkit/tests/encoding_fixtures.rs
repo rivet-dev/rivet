@@ -62,6 +62,58 @@ fn fixture_struct_with_byte_field() {
 	write_fixture("struct_with_byte_field", &intermediate);
 }
 
+/// Structured non-byte payload modeled after `agent_os_client::VirtualStat`.
+/// Exercises bool, u32, u64, f64, and camelCase `#[serde(rename)]` fields
+/// to catch encoder bugs that the byte-only fixtures would miss. Phase 2
+/// gate: this struct must round-trip losslessly across bare/cbor/json.
+#[derive(Serialize)]
+struct VirtualStatFixture {
+	mode: u32,
+	size: u64,
+	blocks: u64,
+	dev: u64,
+	rdev: u64,
+	#[serde(rename = "isDirectory")]
+	is_directory: bool,
+	#[serde(rename = "isSymbolicLink")]
+	is_symbolic_link: bool,
+	#[serde(rename = "atimeMs")]
+	atime_ms: f64,
+	#[serde(rename = "mtimeMs")]
+	mtime_ms: f64,
+	#[serde(rename = "ctimeMs")]
+	ctime_ms: f64,
+	#[serde(rename = "birthtimeMs")]
+	birthtime_ms: f64,
+	ino: u64,
+	nlink: u64,
+	uid: u32,
+	gid: u32,
+}
+
+#[test]
+fn fixture_virtual_stat_struct() {
+	let value = VirtualStatFixture {
+		mode: 0o100_644,
+		size: 7,
+		blocks: 1,
+		dev: 42,
+		rdev: 0,
+		is_directory: false,
+		is_symbolic_link: false,
+		atime_ms: 1_780_000_000_000.5,
+		mtime_ms: 1_780_000_001_000.25,
+		ctime_ms: 1_780_000_002_000.125,
+		birthtime_ms: 1_780_000_003_000.0625,
+		ino: 9_876_543_210,
+		nlink: 1,
+		uid: 1000,
+		gid: 1000,
+	};
+	let intermediate = encode_and_cbor_decode(&value);
+	write_fixture("virtual_stat", &intermediate);
+}
+
 #[test]
 fn fixture_plain_string() {
 	let value = "hello world".to_string();

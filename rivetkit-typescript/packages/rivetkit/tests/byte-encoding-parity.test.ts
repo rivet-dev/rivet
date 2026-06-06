@@ -84,4 +84,49 @@ describe("byte-encoding parity (Rust ⇄ TS)", () => {
 		expect(revived.body).toBeInstanceOf(Uint8Array);
 		expect(new TextDecoder().decode(revived.body)).toBe("ok");
 	});
+
+	// Structured non-byte payload (VirtualStat-shaped). Phase 2 gate:
+	// every field — bool, u32, u64, f64 with fractional precision,
+	// camelCase renames — must come through the Rust encode -> TS decode
+	// path losslessly.
+	test("virtual_stat fixture round-trips all field types from Rust to TS", () => {
+		const rustEncoded = loadFixture("virtual_stat") as Record<
+			string,
+			unknown
+		>;
+
+		// Integer fields.
+		expect(rustEncoded.mode).toBe(0o100_644);
+		expect(rustEncoded.size).toBe(7);
+		expect(rustEncoded.blocks).toBe(1);
+		expect(rustEncoded.dev).toBe(42);
+		expect(rustEncoded.rdev).toBe(0);
+		expect(rustEncoded.nlink).toBe(1);
+		expect(rustEncoded.uid).toBe(1000);
+		expect(rustEncoded.gid).toBe(1000);
+
+		// Booleans.
+		expect(rustEncoded.isDirectory).toBe(false);
+		expect(rustEncoded.isSymbolicLink).toBe(false);
+
+		// f64 with sub-integer precision must survive intact.
+		expect(rustEncoded.atimeMs).toBe(1_780_000_000_000.5);
+		expect(rustEncoded.mtimeMs).toBe(1_780_000_001_000.25);
+		expect(rustEncoded.ctimeMs).toBe(1_780_000_002_000.125);
+		expect(rustEncoded.birthtimeMs).toBe(1_780_000_003_000.0625);
+
+		// Large u64 — must not silently truncate to f53.
+		expect(rustEncoded.ino).toBe(9_876_543_210);
+
+		// camelCase renames: snake_case Rust field names must not leak.
+		expect(rustEncoded).not.toHaveProperty("is_directory");
+		expect(rustEncoded).not.toHaveProperty("is_symbolic_link");
+		expect(rustEncoded).not.toHaveProperty("atime_ms");
+		expect(rustEncoded).not.toHaveProperty("birthtime_ms");
+
+		// TS reviveJsonCompatValue on a structured (non-byte) payload
+		// must be a no-op: the object passes through unchanged.
+		const revived = reviveJsonCompatValue(rustEncoded);
+		expect(revived).toEqual(rustEncoded);
+	});
 });
