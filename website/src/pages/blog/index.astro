@@ -68,13 +68,14 @@ for (const entry of changelogPosts) {
 		<div class="mt-12 flex flex-col gap-12 lg:grid lg:grid-cols-[16rem_minmax(0,1fr)] lg:gap-14">
 			<!-- Changelog calendar -->
 			<aside class="order-last lg:order-none">
-				<div class="lg:sticky lg:top-header">
+				<div class="lg:sticky lg:top-32">
 					<div class="flex items-center justify-between border-b border-white/10 pb-3">
 						<h2 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Changelog</h2>
 						<a href="/changelog/" class="text-xs text-zinc-500 transition-colors hover:text-white">View all</a>
 					</div>
-					<div class="mt-5 max-h-[calc(100vh-9rem)] space-y-6 overflow-y-auto pr-1 lg:pb-4">
-						{changelogMonths.map((month) => (
+					<div class="relative">
+						<div class="mt-5 max-h-[calc(100vh-14rem)] space-y-6 overflow-y-auto pb-6 pr-1">
+							{changelogMonths.map((month) => (
 							<div>
 								<p class="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-zinc-600">{month.label}</p>
 								<ul class="mt-2">
@@ -99,6 +100,8 @@ for (const entry of changelogPosts) {
 								</ul>
 							</div>
 						))}
+						</div>
+						<div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black to-transparent"></div>
 					</div>
 				</div>
 			</aside>
