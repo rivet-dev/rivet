@@ -46,20 +46,20 @@ pub fn encode_http_action_request(encoding: EncodingKind, args: &[JsonValue]) ->
 }
 
 pub fn decode_http_action_response(encoding: EncodingKind, payload: &[u8]) -> Result<JsonValue> {
-	match encoding {
+	let raw = match encoding {
 		EncodingKind::Json => {
 			let value: JsonValue = serde_json::from_slice(payload)?;
 			value
 				.get("output")
 				.cloned()
-				.ok_or_else(|| anyhow!("action response missing output"))
+				.ok_or_else(|| anyhow!("action response missing output"))?
 		}
 		EncodingKind::Cbor => {
 			let value: JsonValue = serde_cbor::from_slice(payload)?;
 			value
 				.get("output")
 				.cloned()
-				.ok_or_else(|| anyhow!("action response missing output"))
+				.ok_or_else(|| anyhow!("action response missing output"))?
 		}
 		EncodingKind::Bare => {
 			let response =
@@ -67,9 +67,13 @@ pub fn decode_http_action_response(encoding: EncodingKind, payload: &[u8]) -> Re
                     payload,
                 )
                 .context("decode bare action response")?;
-			Ok(serde_cbor::from_slice(&response.output)?)
+			serde_cbor::from_slice(&response.output)?
 		}
-	}
+	};
+	// Strip rivetkit's `["$Uint8Array", base64]` byte-payload wrappers
+	// (mirrors TS `reviveJsonCompatValue`). See `crate::encoding` for
+	// the caveat about how byte payloads are represented in JsonValue.
+	Ok(crate::encoding::revive_json_compat(raw))
 }
 
 pub fn encode_http_queue_request<T: Serialize>(
