@@ -53,6 +53,8 @@ export default defineConfig({
 		'/solutions/per-tenant-db': '/',
 		'/solutions/user-session-store': '/',
 		'/solutions/workflows': '/',
+		// Changelog list view merged into the blog index
+		'/changelog': '/blog',
 	},
 	prefetch: {
 		prefetchAll: true,
