@@ -27,8 +27,11 @@ export default defineConfig({
 		'/docs/actors/http': '/docs/actors/http-api/',
 		'/docs/actors/run': '/docs/actors/lifecycle/',
 		'/docs/actors/scheduling': '/docs/actors/schedule/',
-		'/docs/actors/external-sql': '/docs/actors/postgres/',
-		'/docs/actors/raw-sql': '/docs/actors/persistence/',
+		'/docs/actors/external-sql': '/docs/actors/state/',
+		'/docs/actors/raw-sql': '/docs/actors/sqlite/',
+		'/docs/actors/ephemeral-variables': '/docs/actors/state/',
+		'/docs/actors/persistence': '/docs/actors/state/',
+		'/docs/actors/postgres': '/docs/actors/state/',
 		// Platform docs moved to clients/connect
 		'/docs/platforms/react': '/docs/clients/react/',
 		'/docs/platforms/next-js': '/docs/clients/javascript/',

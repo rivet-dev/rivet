@@ -76,7 +76,7 @@ const useCases: Record<string, UseCaseConfig> = {
     description: 'Each agent runs as its own actor with persistent context, memory, and the ability to schedule tool calls.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Context', href: '/docs/actors/state' },
-      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Memory', href: '/docs/actors/persistence' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Memory', href: '/docs/actors/state' },
       { icon: Clock, label: 'Scheduling', detail: 'Tool calls', href: '/docs/actors/schedule' },
     ],
     serverCode: `const agent = actor({
@@ -109,7 +109,7 @@ await agent.queue.send("hello!");`,
     features: [
       { icon: Workflow, label: 'Workflows', detail: 'Steps', href: '/docs/actors/workflows' },
       { icon: Clock, label: 'Scheduling', detail: 'Retry', href: '/docs/actors/schedule' },
-      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'State', href: '/docs/actors/persistence' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'State', href: '/docs/actors/state' },
     ],
     serverCode: `// One actor per workflow run
 const workflow = actor({
@@ -161,7 +161,7 @@ doc.on("update", (state) => render(state));`,
     description: 'One actor per tenant with low-latency in-memory reads and durable tenant data persistence.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Hot reads', href: '/docs/actors/state' },
-      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Tenant data', href: '/docs/actors/persistence' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'Tenant data', href: '/docs/actors/state' },
       { icon: Zap, label: 'Sleeps when idle', detail: 'Cost efficient', href: '/docs/actors/lifecycle' },
     ],
     serverCode: `// One actor per tenant
@@ -212,7 +212,7 @@ sandbox.on("runComplete", (result) => render(result));`,
     description: 'One actor per room or conversation with in-memory state, persistent history, and realtime delivery.',
     features: [
       { icon: Cpu, label: 'In-memory state', detail: 'Room state', href: '/docs/actors/state' },
-      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'History', href: '/docs/actors/persistence' },
+      { icon: Database, label: 'SQLite or BYO database persistence', detail: 'History', href: '/docs/actors/state' },
       { icon: Wifi, label: 'WebSockets', detail: 'Realtime', href: '/docs/actors/events' },
     ],
     serverCode: `// One actor per chat room

@@ -597,7 +597,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 				docs: [
 					{
 						label: "Ephemeral Variables",
-						href: "https://rivet.dev/docs/actors/ephemeral-variables",
+						href: "https://rivet.dev/docs/actors/state",
 					},
 				],
 				actors: [
