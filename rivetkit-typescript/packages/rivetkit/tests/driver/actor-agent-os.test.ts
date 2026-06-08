@@ -139,6 +139,42 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				);
 			}, 60_000);
 
+			// Partial-failure verification for the batch DTO mapping.
+			// `BatchReadResultDto` uses `Option<ByteBuf>` content and
+			// `Option<String>` error, both `skip_serializing_if`. A bug
+			// where the partial shape doesn't make it across the encoding
+			// wire (e.g. None elided incorrectly, error string not
+			// surfaced) would be silent without this test.
+			test("readFiles surfaces per-entry error for missing paths", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`partial-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile("/home/user/exists.txt", "present");
+
+				const results = await actor.readFiles([
+					"/home/user/exists.txt",
+					"/home/user/does-not-exist.txt",
+				]);
+
+				expect(results).toHaveLength(2);
+				// Successful entry: content present, no error field.
+				expect(results[0].path).toBe("/home/user/exists.txt");
+				expect(new TextDecoder().decode(results[0].content)).toBe(
+					"present",
+				);
+				expect(results[0].error).toBeUndefined();
+				// Failed entry: no content, error string surfaced.
+				expect(results[1].path).toBe("/home/user/does-not-exist.txt");
+				expect(results[1].content).toBeUndefined();
+				expect(typeof results[1].error).toBe("string");
+				expect(results[1].error?.length).toBeGreaterThan(0);
+			}, 60_000);
+
 			test("readdirRecursive lists nested files", async (c) => {
 				const { client } = await setupDriverTest(c, {
 					...driverTestConfig,
