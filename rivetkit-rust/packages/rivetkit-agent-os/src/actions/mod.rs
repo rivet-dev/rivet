@@ -7,6 +7,7 @@
 //! through `encode_json_compat`.
 
 pub mod filesystem;
+pub mod process;
 
 use agent_os_client::AgentOs;
 use anyhow::{Result, anyhow};
@@ -136,6 +137,101 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 			match args {
 				Ok((path,)) => match filesystem::readdir_recursive(vm, &path).await {
 					Ok(entries) => action.ok(&entries),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"exec" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((command,)) => match process::exec(vm, &command).await {
+					Ok(result) => action.ok(&result),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"spawn" => {
+			let args: Result<(String, Vec<String>)> = action.decode_as();
+			match args {
+				Ok((command, spawn_args)) => match process::spawn(vm, &command, spawn_args) {
+					Ok(handle) => action.ok(&handle),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"waitProcess" => {
+			let args: Result<(u32,)> = action.decode_as();
+			match args {
+				Ok((pid,)) => match process::wait_process(vm, pid).await {
+					Ok(code) => action.ok(&code),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"killProcess" => {
+			let args: Result<(u32,)> = action.decode_as();
+			match args {
+				Ok((pid,)) => match process::kill_process(vm, pid) {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"stopProcess" => {
+			let args: Result<(u32,)> = action.decode_as();
+			match args {
+				Ok((pid,)) => match process::stop_process(vm, pid) {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"listProcesses" => {
+			// No args.
+			let processes = process::list_processes(vm);
+			action.ok(&processes);
+		}
+		"allProcesses" => {
+			match process::all_processes(vm).await {
+				Ok(processes) => action.ok(&processes),
+				Err(error) => action.err(error),
+			}
+		}
+		"processTree" => match process::process_tree(vm).await {
+			Ok(tree) => action.ok(&tree),
+			Err(error) => action.err(error),
+		},
+		"getProcess" => {
+			let args: Result<(u32,)> = action.decode_as();
+			match args {
+				Ok((pid,)) => match process::get_process(vm, pid) {
+					Ok(info) => action.ok(&info),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"writeProcessStdin" => {
+			let args: Result<(u32, WriteFileContent)> = action.decode_as();
+			match args {
+				Ok((pid, data)) => match process::write_process_stdin(vm, pid, data) {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"closeProcessStdin" => {
+			let args: Result<(u32,)> = action.decode_as();
+			match args {
+				Ok((pid,)) => match process::close_process_stdin(vm, pid) {
+					Ok(()) => action.ok(&()),
 					Err(error) => action.err(error),
 				},
 				Err(error) => action.err(error),

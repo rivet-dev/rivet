@@ -23,23 +23,24 @@ import {
 import type { AgentOsActorState, AgentOsActorVars } from "../types";
 
 /**
- * Build the JSON envelope the Rust crate consumes. Only the subset that
- * is currently serializable across the bridge is included; the rest of
- * `AgentOsActorConfig` (callbacks, preview window, tool kits) lands in
- * later phases. The Rust deserializer uses `deny_unknown_fields`, so the
- * envelope must stay in lock-step with `agent_os.rs::AgentOsConfigJson`.
+ * Build the JSON envelope the Rust crate consumes. The Rust deserializer
+ * uses `deny_unknown_fields`, so the envelope must stay in lock-step
+ * with `agent_os.rs::AgentOsConfigJson`.
  *
- * `software` is intentionally NOT threaded yet. The JS `SoftwareInput`
- * union (`name`, `type`, `commandDir`, agent configs) and the Rust
- * client's `{package, version}` shape mean a naive `name` extraction
- * makes the Rust sidecar look for `./node_modules/<name>` — but the real
- * npm package is `@rivet-dev/agent-os-<name>`. A correct mapping needs
- * the host-side `commandDir` or the full npm package name. Phase 3 will
- * resolve this when `exec`/`spawn` actually need installed software.
- *
- * The Rust-side parsing path is verified by
- * `rivetkit-napi/tests/agent_os_factory.rs::parsing` for non-empty
- * configs, so this function can be expanded without rewiring the bridge.
+ * `software` is NOT threaded yet. Investigation in 2026-06 showed that
+ * even when an absolute `packageDir` / `commandDir` is forwarded as the
+ * Rust-side `package` field (and `Path::join` correctly produces a
+ * valid `root`), the agent-os-client Rust crate's `ConfigureVm` call
+ * passes `mounts: Vec::new()` to the sidecar. Software descriptors get
+ * registered but the wasm command directories are never mounted at the
+ * guest filesystem path (`/__agentos/commands/{N}/`) that
+ * `discover_command_guest_paths` reads. The TS port had software → mount
+ * mapping that the Rust port hasn't reproduced. Fixing this requires
+ * either modifying `ext/agent-os/crates/client/src/agent_os.rs` to build
+ * mount descriptors from software inputs, or building those mounts
+ * ourselves in `rivetkit-agent-os::run::ensure_vm` before calling
+ * `AgentOs::create`. Until then, `exec` / `shell` / agent sessions that
+ * depend on wasm-provided commands cannot work end-to-end.
  */
 export function buildConfigJson<TConnParams>(
 	_parsed: AgentOsActorConfig<TConnParams>,
