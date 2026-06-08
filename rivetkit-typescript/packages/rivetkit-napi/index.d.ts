@@ -79,6 +79,15 @@ export interface JsActorConfig {
   preloadMaxConnectionsBytes?: number
   actions?: Array<JsActionDefinition>
 }
+export interface NapiAgentOsOptions {
+  /**
+   * JSON-encoded subset of `AgentOsConfig`. Fields that cannot be
+   * represented in JSON (e.g. `schedule_driver`, `MountConfig::driver`)
+   * are intentionally absent; passing them in the JSON envelope must
+   * fail loud (enforced by `deny_unknown_fields`).
+   */
+  configJson?: string
+}
 export interface JsBindParam {
   kind: string
   intValue?: number
@@ -249,6 +258,15 @@ export declare class ActorContext {
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)
+  /**
+   * Static constructor that builds the agent-os actor factory. The
+   * factory wraps `rivetkit_agent_os::build_core_factory` and exposes
+   * no JS callbacks (the actor's run loop is owned by the Rust crate).
+   *
+   * `tool_callbacks` is accepted for forward compatibility with Phase 5
+   * (toolkit dispatch). It is currently ignored.
+   */
+  static fromAgentOs(options: NapiAgentOsOptions, toolCallbacks?: object | undefined | null): NapiActorFactory
 }
 export declare class CancellationToken {
   constructor()

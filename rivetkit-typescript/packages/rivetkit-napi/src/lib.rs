@@ -1,5 +1,6 @@
 pub mod actor_context;
 pub mod actor_factory;
+pub mod agent_os;
 pub mod cancellation_token;
 pub mod connection;
 pub mod database;

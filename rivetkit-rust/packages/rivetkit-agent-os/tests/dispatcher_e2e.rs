@@ -131,6 +131,54 @@ async fn dispatcher_round_trips_read_file_against_real_sidecar() {
 }
 
 #[tokio::test]
+async fn dispatcher_round_trips_write_then_read_file() {
+	if !sidecar_available() {
+		eprintln!("skipping: AGENT_OS_SIDECAR_BIN not present");
+		return;
+	}
+
+	let vm = new_vm().await;
+
+	// writeFile via the dispatcher (no direct vm.write_file seeding).
+	let path = "/home/user/dispatcher-roundtrip.txt";
+	let payload = b"round-trip via writeFile arm".to_vec();
+	let write_args = {
+		let mut buf = Vec::new();
+		let tuple = (
+			path.to_owned(),
+			serde_bytes::ByteBuf::from(payload.clone()),
+		);
+		ciborium::into_writer(&tuple, &mut buf).expect("encode writeFile args");
+		buf
+	};
+	let write_reply = dispatch_one(&vm, "writeFile", write_args)
+		.await
+		.expect("dispatch writeFile");
+	// writeFile replies with unit `()` — should encode as a single CBOR null.
+	let unit: Option<serde_json::Value> =
+		ciborium::from_reader(Cursor::new(write_reply)).ok();
+	// We don't assert the exact unit encoding; just that it isn't an error
+	// envelope and the read below succeeds.
+	let _ = unit;
+
+	// readFile via the dispatcher.
+	let read_args = encode_args(&[serde_json::json!(path)]);
+	let read_reply = dispatch_one(&vm, "readFile", read_args)
+		.await
+		.expect("dispatch readFile");
+
+	let intermediate: serde_json::Value =
+		ciborium::from_reader(Cursor::new(read_reply)).expect("decode readFile reply");
+	assert_eq!(intermediate[0], "$Uint8Array");
+	let base64 = intermediate[1].as_str().expect("base64 element");
+	use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+	let decoded = BASE64.decode(base64).expect("decode base64");
+	assert_eq!(decoded, payload);
+
+	let _ = vm.shutdown().await;
+}
+
+#[tokio::test]
 async fn dispatcher_returns_not_implemented_for_unknown_action() {
 	if !sidecar_available() {
 		eprintln!("skipping: AGENT_OS_SIDECAR_BIN not present");

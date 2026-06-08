@@ -29,6 +29,8 @@ hex.workspace = true
 http.workspace = true
 rivet-error.workspace = true
 rivetkit-core = { workspace = true, features = ["sqlite"] }
+rivetkit-agent-os = { path = "../../../rivetkit-rust/packages/rivetkit-agent-os" }
+agent-os-client = { path = "../../../ext/agent-os/crates/client" }
 
 [build-dependencies]
 napi-build = "2"
@@ -36,3 +38,6 @@ napi-build = "2"
 [dev-dependencies]
 rivetkit-actor-persist.workspace = true
 vbare.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+serde_bytes.workspace = true
