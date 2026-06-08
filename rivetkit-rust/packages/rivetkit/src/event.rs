@@ -194,7 +194,8 @@ impl<A: Actor> Action<A> {
 	}
 
 	pub fn ok<T: Serialize>(mut self, value: &T) {
-		let result = encode_cbor(value, "encode action response as cbor");
+		let result =
+			crate::encoding::encode_json_compat_to_vec(value).context("encode action response");
 		if let Some(reply) = self.reply.take() {
 			reply.send(result);
 		}
@@ -816,12 +817,6 @@ fn decode_action_value(args: &[u8]) -> Result<Value, de::value::Error> {
 		.map_err(|error| de::Error::custom(format!("decode action args from cbor: {error}")))
 }
 
-fn encode_cbor<T: Serialize>(value: &T, context: &'static str) -> AnyhowResult<Vec<u8>> {
-	let mut encoded = Vec::new();
-	ciborium::into_writer(value, &mut encoded).context(context)?;
-	Ok(encoded)
-}
-
 fn expect_signed<T>(value: Value, expected: &'static str) -> Result<T, de::value::Error>
 where
 	T: TryFrom<i128>,
@@ -1343,7 +1338,9 @@ impl Drop for WfHistory {
 impl WfHistory {
 	pub fn reply<T: Serialize>(self, history: Option<&T>) {
 		match history {
-			Some(history) => match encode_cbor(history, "encode workflow history as cbor") {
+			Some(history) => match crate::encoding::encode_json_compat_to_vec(history)
+				.context("encode workflow history")
+			{
 				Ok(bytes) => self.reply_raw(Some(bytes)),
 				Err(error) => self.reply_err(error),
 			},
@@ -1389,7 +1386,9 @@ impl WfReplay {
 
 	pub fn reply<T: Serialize>(self, value: Option<&T>) {
 		match value {
-			Some(value) => match encode_cbor(value, "encode workflow replay as cbor") {
+			Some(value) => match crate::encoding::encode_json_compat_to_vec(value)
+				.context("encode workflow replay")
+			{
 				Ok(bytes) => self.reply_raw(Some(bytes)),
 				Err(error) => self.reply_err(error),
 			},

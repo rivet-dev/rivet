@@ -1,6 +1,7 @@
 pub mod action;
 pub mod actor;
 pub mod context;
+pub mod encoding;
 pub mod event;
 pub mod persist;
 pub mod prelude;
