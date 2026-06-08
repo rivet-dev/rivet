@@ -28,12 +28,22 @@ import type { AgentOsActorState, AgentOsActorVars } from "../types";
  * `AgentOsActorConfig` (callbacks, preview window, tool kits) lands in
  * later phases. The Rust deserializer uses `deny_unknown_fields`, so the
  * envelope must stay in lock-step with `agent_os.rs::AgentOsConfigJson`.
+ *
+ * `software` is intentionally NOT threaded yet. The JS `SoftwareInput`
+ * union (`name`, `type`, `commandDir`, agent configs) and the Rust
+ * client's `{package, version}` shape mean a naive `name` extraction
+ * makes the Rust sidecar look for `./node_modules/<name>` — but the real
+ * npm package is `@rivet-dev/agent-os-<name>`. A correct mapping needs
+ * the host-side `commandDir` or the full npm package name. Phase 3 will
+ * resolve this when `exec`/`spawn` actually need installed software.
+ *
+ * The Rust-side parsing path is verified by
+ * `rivetkit-napi/tests/agent_os_factory.rs::parsing` for non-empty
+ * configs, so this function can be expanded without rewiring the bridge.
  */
-function buildConfigJson<TConnParams>(
+export function buildConfigJson<TConnParams>(
 	_parsed: AgentOsActorConfig<TConnParams>,
 ): string {
-	// Phase 1c minimum: empty config. Future phases thread software,
-	// permissions, mounts, etc. through here.
 	return "{}";
 }
 

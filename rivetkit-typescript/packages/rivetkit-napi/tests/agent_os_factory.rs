@@ -12,6 +12,96 @@
 //!
 //! Sidecar-gated: skips when `AGENT_OS_SIDECAR_BIN` is unset.
 
+/// Pure parsing tests — no sidecar required. Phase 3 prep: verifies that
+/// the JSON envelope sent by the TS shim actually round-trips through
+/// `parse_agent_os_options` into an `AgentOsConfig` with the right fields.
+mod parsing {
+	use crate::agent_os::{NapiAgentOsOptions, parse_agent_os_options};
+
+	#[test]
+	fn parse_threads_software_through_to_agent_os_config() {
+		let options = NapiAgentOsOptions {
+			config_json: Some(
+				r#"{"software":[{"package":"node"},{"package":"python","version":"3.11"}]}"#
+					.to_owned(),
+			),
+		};
+		let actor_config = parse_agent_os_options(options)
+			.expect("parse_agent_os_options ok with non-empty software");
+		let agent_os_config = actor_config.build_options();
+		assert_eq!(
+			agent_os_config.software.len(),
+			2,
+			"software entries must be preserved across the bridge"
+		);
+		assert_eq!(agent_os_config.software[0].package, "node");
+		assert_eq!(agent_os_config.software[0].version, None);
+		assert_eq!(agent_os_config.software[1].package, "python");
+		assert_eq!(
+			agent_os_config.software[1].version.as_deref(),
+			Some("3.11"),
+		);
+	}
+
+	#[test]
+	fn parse_preserves_all_supported_fields() {
+		let options = NapiAgentOsOptions {
+			config_json: Some(
+				r#"{
+					"software": [{"package": "coreutils"}],
+					"additionalInstructions": "Be terse.",
+					"moduleAccessCwd": "/home/user/workspace",
+					"loopbackExemptPorts": [9000, 9001],
+					"allowedNodeBuiltins": ["fs", "path"]
+				}"#
+				.to_owned(),
+			),
+		};
+		let actor_config = parse_agent_os_options(options).expect("parse ok");
+		let agent_os_config = actor_config.build_options();
+		assert_eq!(agent_os_config.software.len(), 1);
+		assert_eq!(
+			agent_os_config.additional_instructions.as_deref(),
+			Some("Be terse."),
+		);
+		assert_eq!(
+			agent_os_config.module_access_cwd.as_deref(),
+			Some("/home/user/workspace"),
+		);
+		assert_eq!(agent_os_config.loopback_exempt_ports, vec![9000, 9001]);
+		assert_eq!(
+			agent_os_config.allowed_node_builtins.as_deref(),
+			Some(&["fs".to_owned(), "path".to_owned()][..]),
+		);
+	}
+
+	#[test]
+	fn parse_builder_produces_fresh_config_each_call() {
+		// AgentOsConfig is non-Clone, so the builder must produce a fresh
+		// value per invocation. Each VM bring-up calls the builder again.
+		let options = NapiAgentOsOptions {
+			config_json: Some(r#"{"software":[{"package":"node"}]}"#.to_owned()),
+		};
+		let actor_config = parse_agent_os_options(options).expect("parse ok");
+		let first = actor_config.build_options();
+		let second = actor_config.build_options();
+		assert_eq!(first.software.len(), 1);
+		assert_eq!(second.software.len(), 1);
+		assert_eq!(first.software[0].package, second.software[0].package);
+	}
+
+	#[test]
+	fn empty_config_yields_empty_software_list() {
+		let options = NapiAgentOsOptions {
+			config_json: Some("{}".to_owned()),
+		};
+		let actor_config = parse_agent_os_options(options).expect("parse ok");
+		let agent_os_config = actor_config.build_options();
+		assert!(agent_os_config.software.is_empty());
+		assert!(agent_os_config.additional_instructions.is_none());
+	}
+}
+
 mod e2e {
 	use std::io::Cursor;
 	use std::path::PathBuf;
