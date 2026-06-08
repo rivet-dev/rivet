@@ -20,11 +20,11 @@
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
-		"vitest": "^3.1.1"
+		"vitest": "^3.2.6"
 	},
 	"dependencies": {
 		"@rivetkit/react": "^2.3.0-rc.11",
-		"hono": "^4.7.0",
+		"hono": "^4.12.21",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
 		"rivetkit": "^2.3.0-rc.11"

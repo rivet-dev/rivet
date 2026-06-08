@@ -41,7 +41,7 @@
 		"@rivetkit/rivetkit-napi": "*",
 		"ai": "^4.0.38",
 		"fdb-tuple": "^1.0.0",
-		"hono": "^4.11.3",
+		"hono": "^4.12.21",
 		"lucide-react": "^0.439.0",
 		"mermaid": "^11.12.2",
 		"prism-react-renderer": "^2.4.1",

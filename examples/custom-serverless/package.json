@@ -13,7 +13,7 @@
 		"@types/node": "^22.13.9",
 		"tsx": "^3.12.7",
 		"typescript": "^5.7.3",
-		"vitest": "^3.1.1"
+		"vitest": "^3.2.6"
 	},
 	"dependencies": {
 		"rivetkit": "*"
