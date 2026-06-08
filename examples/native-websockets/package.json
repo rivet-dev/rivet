@@ -21,8 +21,8 @@
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2",
 		"vite": "^5.0.0",
-		"vitest": "^3.1.1",
-		"ws": "^8.16.0"
+		"vitest": "^3.2.6",
+		"ws": "^8.20.1"
 	},
 	"dependencies": {
 		"@rivetkit/react": "^2.3.0-rc.11",
