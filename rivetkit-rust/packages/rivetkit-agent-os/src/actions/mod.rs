@@ -8,6 +8,7 @@
 
 pub mod filesystem;
 pub mod process;
+pub mod session;
 
 use agent_os_client::AgentOs;
 use anyhow::{Result, anyhow};
@@ -15,6 +16,7 @@ use rivetkit::Action;
 
 use crate::actor::AgentOsActor;
 use filesystem::{WriteFileContent, WriteFilesEntryArg};
+use session::CreateSessionOptionsDto;
 
 /// Dispatch one action against a live VM. Each arm decodes its args,
 /// calls the helper, and replies through `action.ok` / `action.err`.
@@ -231,6 +233,54 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 			let args: Result<(u32,)> = action.decode_as();
 			match args {
 				Ok((pid,)) => match process::close_process_stdin(vm, pid) {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"createSession" => {
+			let args: Result<(String, CreateSessionOptionsDto)> = action.decode_as();
+			match args {
+				Ok((agent_type, options)) => {
+					match session::create_session(vm, &agent_type, options).await {
+						Ok(id) => action.ok(&id),
+						Err(error) => action.err(error),
+					}
+				}
+				Err(error) => action.err(error),
+			}
+		}
+		"sendPrompt" => {
+			let args: Result<(String, String)> = action.decode_as();
+			match args {
+				Ok((session_id, text)) => {
+					match session::send_prompt(vm, &session_id, &text).await {
+						Ok(reply) => action.ok(&reply),
+						Err(error) => action.err(error),
+					}
+				}
+				Err(error) => action.err(error),
+			}
+		}
+		"listSessions" => {
+			let sessions = session::list_sessions(vm);
+			action.ok(&sessions);
+		}
+		"destroySession" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((session_id,)) => match session::destroy_session(vm, &session_id).await {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"closeSession" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((session_id,)) => match session::close_session(vm, &session_id) {
 					Ok(()) => action.ok(&()),
 					Err(error) => action.err(error),
 				},
