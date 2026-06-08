@@ -962,6 +962,46 @@ async fn commit_writes_dirty_marker_and_sends_first_deltas_available() -> Result
 }
 
 #[tokio::test]
+async fn commit_without_compaction_signaler_skips_dirty_marker() -> Result<()> {
+	common::test_matrix("depot-commit-dirty-disabled", |_tier, ctx| {
+		Box::pin(async move {
+			let db = ctx.udb.clone();
+			let database_db = Db::new(
+				db.clone(),
+				test_bucket(),
+				TEST_DATABASE.to_string(),
+				NodeId::new(),
+			);
+			database_db.commit(vec![page(1, 0x01)], 1, 1_000).await?;
+			let branch_id = read_branch_id(&db).await?;
+			seed(
+				&db,
+				vec![(
+					branch_meta_head_key(branch_id),
+					encode_db_head(head_with_branch(
+						branch_id,
+						quota::COMPACTION_DELTA_THRESHOLD - 1,
+						1,
+					))?,
+				)],
+			)
+			.await?;
+			db.txn("test_depotconveyer_commit", |tx| async move {
+				quota::atomic_add_branch(&tx, branch_id, 1_000);
+				Ok(())
+			})
+			.await?;
+
+			database_db.commit(vec![page(1, 0x11)], 1, 5_000).await?;
+
+			assert!(read_dirty_marker(&db, branch_id).await?.is_none());
+			Ok(())
+		})
+	})
+	.await
+}
+
+#[tokio::test]
 async fn commit_refreshes_dirty_marker_and_throttles_deltas_available() -> Result<()> {
 	common::test_matrix("depot-commit-dirty-refresh", |_tier, ctx| {
 		Box::pin(async move {

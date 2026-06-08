@@ -1435,6 +1435,14 @@
             "boolean",
             "null"
           ]
+        },
+        "unstable_disable_compaction": {
+          "description": "UNSTABLE: disables SQLite hot compaction.",
+          "default": null,
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false
