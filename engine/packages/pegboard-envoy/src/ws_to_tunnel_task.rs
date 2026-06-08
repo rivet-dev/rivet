@@ -1948,12 +1948,22 @@ fn protocol_column_value(value: ColumnValue) -> protocol::SqliteColumnValue {
 	}
 }
 
-async fn actor_db(_ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<Arc<Db>> {
+async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<Arc<Db>> {
+	let compaction_disabled = ctx.config().sqlite().unstable_disable_compaction();
 	let db = conn
 		.actor_dbs
 		.entry_async(actor_id.clone())
 		.await
 		.or_insert_with(|| {
+			if compaction_disabled {
+				return Arc::new(Db::new(
+					conn.udb.clone(),
+					conn.namespace_id,
+					actor_id,
+					conn.node_id,
+				));
+			}
+
 			let compaction_signaler = Arc::new(move |_signal: DeltasAvailable| {
 				async move {
 					// TODO: Add back after enabling hot compaction

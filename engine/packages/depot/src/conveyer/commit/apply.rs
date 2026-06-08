@@ -90,7 +90,12 @@ impl Db {
 		let cached_access_bucket = cached_snapshot
 			.as_ref()
 			.and_then(|snapshot| snapshot.last_access_bucket);
-		let last_deltas_available_at_ms = *self.last_deltas_available_at_ms.read().await;
+		let compaction_enabled = self.compaction_signaler.is_some();
+		let last_deltas_available_at_ms = if compaction_enabled {
+			*self.last_deltas_available_at_ms.read().await
+		} else {
+			None
+		};
 		#[cfg(feature = "pidx-cache")]
 		let cache_was_warm = cached_snapshot
 			.as_ref()
@@ -116,6 +121,7 @@ impl Db {
 				let expected_head_txid = expected_head_txid;
 				let cached_ancestry = cached_ancestry.clone();
 				let cached_access_bucket = cached_access_bucket;
+				let compaction_enabled = compaction_enabled;
 				let last_deltas_available_at_ms = last_deltas_available_at_ms;
 				#[cfg(feature = "test-faults")]
 				let fault_controller = fault_controller.clone();
@@ -361,16 +367,20 @@ impl Db {
 						.context("sqlite commit quota check overflowed i64")?;
 					let burst_signal =
 						burst_mode::read_branch_signal_for_head(txid, compaction_root.as_ref());
-					let deltas_available = admit_deltas_available(
-						&tx,
-						branch_id,
-						txid,
-						compaction_root.as_ref(),
-						burst_signal.compaction_watermark_txid,
-						now_ms,
-						last_deltas_available_at_ms,
-					)
-					.await?;
+					let deltas_available = if compaction_enabled {
+						admit_deltas_available(
+							&tx,
+							branch_id,
+							txid,
+							compaction_root.as_ref(),
+							burst_signal.compaction_watermark_txid,
+							now_ms,
+							last_deltas_available_at_ms,
+						)
+						.await?
+					} else {
+						None
+					};
 					let hot_quota_cap = burst_mode::adjusted_hot_quota_cap(
 						quota::SQLITE_MAX_STORAGE_BYTES,
 						burst_signal,
