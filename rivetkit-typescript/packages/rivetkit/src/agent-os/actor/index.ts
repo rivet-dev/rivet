@@ -24,28 +24,126 @@ import type { AgentOsActorState, AgentOsActorVars } from "../types";
 
 /**
  * Build the JSON envelope the Rust crate consumes. The Rust deserializer
- * uses `deny_unknown_fields`, so the envelope must stay in lock-step
- * with `agent_os.rs::AgentOsConfigJson`.
+ * uses `deny_unknown_fields` + `camelCase`, so this output must stay in
+ * lock-step with `packages/rivetkit-napi/src/agent_os.rs::AgentOsConfigJson`.
  *
- * `software` is NOT threaded yet. Investigation in 2026-06 showed that
- * even when an absolute `packageDir` / `commandDir` is forwarded as the
- * Rust-side `package` field (and `Path::join` correctly produces a
- * valid `root`), the agent-os-client Rust crate's `ConfigureVm` call
- * passes `mounts: Vec::new()` to the sidecar. Software descriptors get
- * registered but the wasm command directories are never mounted at the
- * guest filesystem path (`/__agentos/commands/{N}/`) that
- * `discover_command_guest_paths` reads. The TS port had software → mount
- * mapping that the Rust port hasn't reproduced. Fixing this requires
- * either modifying `ext/agent-os/crates/client/src/agent_os.rs` to build
- * mount descriptors from software inputs, or building those mounts
- * ourselves in `rivetkit-agent-os::run::ensure_vm` before calling
- * `AgentOs::create`. Until then, `exec` / `shell` / agent sessions that
- * depend on wasm-provided commands cannot work end-to-end.
+ * `kind` is inferred from the descriptor shape rather than required from
+ * the user. The JS `SoftwareInput` union encodes the discriminator
+ * structurally:
+ *   - `commandDir: string` (typed `type: "wasm-commands"` or duck-typed
+ *     registry packages like `@rivet-dev/agent-os-common`) → wasm
+ *     command directory, mounted at `/__agentos/commands/{N}/` by the
+ *     Rust client.
+ *   - `type: "agent"` + `packageDir: string` → agent SDK package.
+ *   - `type: "tool"` + `packageDir: string` → tool package.
+ *
+ * Meta-packages (`software: [common]` where `common` is itself an
+ * array) are shallow-flattened. Malformed descriptors are silently
+ * dropped rather than failing the whole config — same fail-soft
+ * behavior as the legacy JS port's `processSoftware`.
  */
 export function buildConfigJson<TConnParams>(
-	_parsed: AgentOsActorConfig<TConnParams>,
+	parsed: AgentOsActorConfig<TConnParams>,
 ): string {
-	return "{}";
+	const out: AgentOsConfigJsonEnvelope = {};
+
+	const options = parsed.options as AgentOsOptionsLoose | undefined;
+
+	const rawSoftware = options?.software;
+	if (Array.isArray(rawSoftware) && rawSoftware.length > 0) {
+		const flat: AgentOsConfigJsonSoftwareEntry[] = [];
+		for (const entry of rawSoftware) {
+			if (Array.isArray(entry)) {
+				for (const descriptor of entry) {
+					const mapped = mapSoftwareDescriptor(descriptor);
+					if (mapped) flat.push(mapped);
+				}
+			} else {
+				const mapped = mapSoftwareDescriptor(entry);
+				if (mapped) flat.push(mapped);
+			}
+		}
+		if (flat.length > 0) out.software = flat;
+	}
+
+	if (typeof options?.additionalInstructions === "string") {
+		out.additionalInstructions = options.additionalInstructions;
+	}
+	if (typeof options?.moduleAccessCwd === "string") {
+		out.moduleAccessCwd = options.moduleAccessCwd;
+	}
+	if (Array.isArray(options?.loopbackExemptPorts)) {
+		const ports = options.loopbackExemptPorts.filter(
+			(p): p is number => typeof p === "number",
+		);
+		if (ports.length > 0) out.loopbackExemptPorts = ports;
+	}
+	if (Array.isArray(options?.allowedNodeBuiltins)) {
+		const names = options.allowedNodeBuiltins.filter(
+			(n): n is string => typeof n === "string",
+		);
+		if (names.length > 0) out.allowedNodeBuiltins = names;
+	}
+
+	return JSON.stringify(out);
+}
+
+interface AgentOsConfigJsonEnvelope {
+	software?: AgentOsConfigJsonSoftwareEntry[];
+	additionalInstructions?: string;
+	moduleAccessCwd?: string;
+	loopbackExemptPorts?: number[];
+	allowedNodeBuiltins?: string[];
+}
+
+interface AgentOsConfigJsonSoftwareEntry {
+	package: string;
+	kind: "wasm-commands" | "agent" | "tool";
+}
+
+interface AgentOsOptionsLoose {
+	software?: unknown[];
+	additionalInstructions?: unknown;
+	moduleAccessCwd?: unknown;
+	loopbackExemptPorts?: unknown[];
+	allowedNodeBuiltins?: unknown[];
+}
+
+/**
+ * Map a single JS descriptor to the flat Rust shape, inferring `kind`
+ * from the descriptor's structure. Returns `null` for descriptors that
+ * carry no usable host path so the caller can drop them silently.
+ */
+function mapSoftwareDescriptor(
+	descriptor: unknown,
+): AgentOsConfigJsonSoftwareEntry | null {
+	if (!descriptor || typeof descriptor !== "object") return null;
+	const obj = descriptor as Record<string, unknown>;
+
+	// `commandDir` is the wasm-commands signal. Both
+	// `WasmCommandSoftwareDescriptor` (typed) and `WasmCommandDirDescriptor`
+	// (duck-typed registry packages) expose it, so we infer wasm-commands
+	// from the field rather than the `type` discriminator.
+	const commandDir = obj.commandDir;
+	if (typeof commandDir === "string" && commandDir.length > 0) {
+		return { package: commandDir, kind: "wasm-commands" };
+	}
+
+	// `packageDir` carries the host path for Agent/Tool descriptors.
+	const packageDir = obj.packageDir;
+	if (typeof packageDir === "string" && packageDir.length > 0) {
+		const type = obj.type;
+		if (type === "agent") {
+			return { package: packageDir, kind: "agent" };
+		}
+		if (type === "tool") {
+			return { package: packageDir, kind: "tool" };
+		}
+		// Has packageDir but unknown / missing type: not enough signal to
+		// classify. Drop rather than guess.
+	}
+
+	return null;
 }
 
 function buildNativeFactoryBuilder<TConnParams>(
