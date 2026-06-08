@@ -15,7 +15,7 @@ const useCreateNamespace = ({ project: projectProp }: { project?: string }) => {
 	const navigate = useNavigate();
 	const params = useParams({ strict: false });
 
-	if (features.multitenancy) {
+	if (features.platform) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		const orgDataProvider = useCloudDataProvider();
 		const targetProject = projectProp ?? params.project!;
@@ -33,7 +33,9 @@ const useCreateNamespace = ({ project: projectProp }: { project?: string }) => {
 					id: response.namespace.id,
 					name: response.namespace.name,
 					displayName: response.namespace.displayName,
-					createdAt: new Date(response.namespace.createdAt).toISOString(),
+					createdAt: new Date(
+						response.namespace.createdAt,
+					).toISOString(),
 				};
 			},
 			onSuccess: async (data) => {

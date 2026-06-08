@@ -53,7 +53,7 @@ pub enum ActorError {
 	/// No envoys available matching the pool name
 	NoEnvoys,
 	/// Envoy was allocated but never started the actor (GC timeout)
-	EnvoyNoResponse { envoy_key: String },
+	EnvoyNoResponse { envoy_key: Option<String> },
 	/// Envoy connection was lost (no recent ping, network issue, or crash)
 	EnvoyConnectionLost { envoy_key: String },
 }

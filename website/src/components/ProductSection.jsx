@@ -2,12 +2,11 @@ import { Button } from "@/components/Button";
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
 
-import imgBackendEditor from "@/images/product/backend-editor.png";
-import imgBackendLogs from "@/images/product/backend-logs.png";
+const imgBackendEditor = { src: "https://assets.rivet.dev/website/images/product/backend-editor.png", width: 3467, height: 2448, format: "png" };
+const imgBackendLogs = { src: "https://assets.rivet.dev/website/images/product/backend-logs.png", width: 2064, height: 2046, format: "png" };
 // Import your new images here
-import imgGameServerManagement from "@/images/product/game-server-management.png";
-import imgVersionsRollback from "@/images/product/version-management.png";
-
+const imgGameServerManagement = { src: "https://assets.rivet.dev/website/images/product/game-server-management.png", width: 3459, height: 2523, format: "png" };
+const imgVersionsRollback = { src: "https://assets.rivet.dev/website/images/product/version-management.png", width: 3464, height: 2528, format: "png" };
 const PRODUCT_PAGES = [
 	{
 		name: "Game Server Management",

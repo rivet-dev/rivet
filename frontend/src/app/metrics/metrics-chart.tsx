@@ -30,7 +30,11 @@ function buildSeries(
 	return namespaces.map((ns, index) => {
 		const nsData = metricsData.get(ns);
 		const metricData = nsData?.[metricName] ?? [];
-		const filled = zeroFillDataPoints(metricData, { startAt, endAt, resolution });
+		const filled = zeroFillDataPoints(metricData, {
+			startAt,
+			endAt,
+			resolution,
+		});
 		return {
 			key: ns,
 			color: NAMESPACE_COLORS[index % NAMESPACE_COLORS.length],
@@ -38,7 +42,6 @@ function buildSeries(
 		};
 	});
 }
-
 
 export function MetricsChart({
 	metric,
@@ -61,13 +64,36 @@ export function MetricsChart({
 	} = useNamespaceDetailMetrics({ namespaces, brushDomain });
 
 	const overviewSeries = useMemo(
-		() => buildSeries(namespaces, overviewData, metric.name, overviewStartAt, overviewEndAt, OVERVIEW_RESOLUTION),
+		() =>
+			buildSeries(
+				namespaces,
+				overviewData,
+				metric.name,
+				overviewStartAt,
+				overviewEndAt,
+				OVERVIEW_RESOLUTION,
+			),
 		[namespaces, overviewData, metric.name, overviewStartAt, overviewEndAt],
 	);
 
 	const detailSeries = useMemo(
-		() => buildSeries(namespaces, detailData, metric.name, detailStartAt, detailEndAt, detailResolution),
-		[namespaces, detailData, metric.name, detailStartAt, detailEndAt, detailResolution],
+		() =>
+			buildSeries(
+				namespaces,
+				detailData,
+				metric.name,
+				detailStartAt,
+				detailEndAt,
+				detailResolution,
+			),
+		[
+			namespaces,
+			detailData,
+			metric.name,
+			detailStartAt,
+			detailEndAt,
+			detailResolution,
+		],
 	);
 
 	if (isOverviewLoading) {
@@ -89,7 +115,9 @@ export function MetricsChart({
 			<Card>
 				<CardHeader className="pb-2">
 					<CardTitle className="text-base">{metric.title}</CardTitle>
-					<p className="text-sm text-muted-foreground">{metric.description}</p>
+					<p className="text-sm text-muted-foreground">
+						{metric.description}
+					</p>
 				</CardHeader>
 				<CardContent>
 					<div className="h-[200px] flex items-center justify-center text-muted-foreground">
@@ -104,11 +132,17 @@ export function MetricsChart({
 		<Card>
 			<CardHeader className="pb-2">
 				<CardTitle className="text-base">{metric.title}</CardTitle>
-				<p className="text-sm text-muted-foreground">{metric.description}</p>
+				<p className="text-sm text-muted-foreground">
+					{metric.description}
+				</p>
 			</CardHeader>
 			<CardContent className="pb-0">
 				<VisxAreaChart
-					series={isDetailLoading || isDetailError ? overviewSeries : detailSeries}
+					series={
+						isDetailLoading || isDetailError
+							? overviewSeries
+							: detailSeries
+					}
 					formatValue={metric.formatValue}
 				/>
 				<VisxBrushChart series={overviewSeries} />
@@ -117,7 +151,12 @@ export function MetricsChart({
 						<div key={ns} className="flex items-center gap-1.5">
 							<div
 								className="h-2 w-2 shrink-0 rounded-[2px]"
-								style={{ backgroundColor: NAMESPACE_COLORS[index % NAMESPACE_COLORS.length] }}
+								style={{
+									backgroundColor:
+										NAMESPACE_COLORS[
+											index % NAMESPACE_COLORS.length
+										],
+								}}
 							/>
 							<span className="text-xs">{ns}</span>
 						</div>

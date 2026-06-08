@@ -27,8 +27,6 @@ pub struct DBHead {
 	pub db_size_pages: u32,
 	pub post_apply_checksum: u64,
 	pub branch_id: DatabaseBranchId,
-	#[cfg(debug_assertions)]
-	pub generation: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

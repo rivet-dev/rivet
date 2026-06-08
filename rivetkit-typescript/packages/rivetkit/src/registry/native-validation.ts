@@ -1,12 +1,12 @@
 import { RivetError } from "@/actor/errors";
 import {
+	type EventSchemaConfig,
 	isEventSchemaDefinition,
 	isQueueSchemaDefinition,
 	isStandardSchema,
-	validateSchemaSync,
-	type EventSchemaConfig,
 	type PrimitiveSchema,
 	type QueueSchemaConfig,
+	validateSchemaSync,
 } from "@/actor/schema";
 
 const CONN_PARAMS_KEY = "__conn_params__";
@@ -126,19 +126,17 @@ export function validateQueueComplete(
 		response,
 	);
 	if (!result.success) {
-		throw validationError(`queue \`${name}\` completion response`, result.issues);
+		throw validationError(
+			`queue \`${name}\` completion response`,
+			result.issues,
+		);
 	}
 	return result.data;
 }
 
 function validationError(target: string, issues: unknown[]): RivetError {
-	return new RivetError(
-		"actor",
-		"validation_error",
-		`Invalid ${target}`,
-		{
-			public: true,
-			metadata: { issues },
-		},
-	);
+	return new RivetError("actor", "validation_error", `Invalid ${target}`, {
+		public: true,
+		metadata: { issues },
+	});
 }

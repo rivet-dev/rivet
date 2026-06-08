@@ -16,10 +16,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.join("sdks")
 		.join("schemas")
 		.join("ups-protocol");
+	println!("cargo:rerun-if-changed={}", schema_dir.display());
 
 	let (highest_version, _) = find_highest_version(&schema_dir);
 
-	let cfg = vbare_compiler::Config::with_hashable_map();
+	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// Append protocol version constant to generated file

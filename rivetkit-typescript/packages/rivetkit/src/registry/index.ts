@@ -1,6 +1,8 @@
+import { Hono } from "hono";
 import { ENGINE_ENDPOINT } from "@/common/engine";
 import { configureServerlessPool } from "@/serverless/configure";
-import { VERSION } from "@/utils";
+import { detectRuntime, VERSION } from "@/utils";
+import { crossPlatformServe, loadRuntimeServeStatic } from "@/utils/serve";
 import {
 	type RegistryActors,
 	type RegistryConfig,
@@ -87,16 +89,18 @@ export class Registry<A extends RegistryActors> {
 		};
 	}
 
-	#ensureServerlessPoolConfigured(config: RegistryConfig): Promise<void> | undefined {
+	#ensureServerlessPoolConfigured(
+		config: RegistryConfig,
+	): Promise<void> | undefined {
 		if (!config.configurePool) return undefined;
 
 		if (!this.#configureServerlessPoolPromise) {
-			this.#configureServerlessPoolPromise = configureServerlessPool(config).catch(
-				(error) => {
-					this.#configureServerlessPoolPromise = undefined;
-					throw error;
-				},
-			);
+			this.#configureServerlessPoolPromise = configureServerlessPool(
+				config,
+			).catch((error) => {
+				this.#configureServerlessPoolPromise = undefined;
+				throw error;
+			});
 			this.#configureServerlessPoolPromise.catch(() => {});
 		}
 
@@ -133,12 +137,13 @@ export class Registry<A extends RegistryActors> {
 			serveConfig.serverlessBasePath ?? "/api/rivet",
 		);
 		const isEngineMetadataRequest =
-			request.headers.get("user-agent")?.startsWith("RivetEngine/") ?? false;
+			request.headers.get("user-agent")?.startsWith("RivetEngine/") ??
+			false;
 
 		if (isStartRequest) {
 			try {
 				await this.#ensureServerlessPoolConfigured(config);
-			} catch (error) {
+			} catch (_error) {
 				return new Response(
 					JSON.stringify({
 						group: "guard",
@@ -280,7 +285,7 @@ export class Registry<A extends RegistryActors> {
 		if (isMetadataRequest && !isEngineMetadataRequest) {
 			try {
 				await this.#ensureServerlessPoolConfigured(config);
-			} catch (error) {
+			} catch (_error) {
 				return new Response(
 					JSON.stringify({
 						group: "guard",
@@ -314,6 +319,36 @@ export class Registry<A extends RegistryActors> {
 		return {
 			fetch: (request) => this.handler(request),
 		};
+	}
+
+	/**
+	 * Starts an HTTP server that dispatches every request through the
+	 * serverless handler. Uses `crossPlatformServe` to pick the right
+	 * runtime (Node, Bun, Deno).
+	 *
+	 * @param opts.port      Port to listen on. Defaults to 3000.
+	 * @param opts.publicDir If set, serves static files from this directory
+	 *                       before falling through to the registry handler.
+	 *
+	 * @example
+	 * ```ts
+	 * await registry.listen();
+	 * await registry.listen({ port: 8080, publicDir: "./public" });
+	 * ```
+	 */
+	public async listen(
+		opts: { port?: number; publicDir?: string } = {},
+	): Promise<void> {
+		const port = opts.port ?? 3000;
+		const config = this.parseConfig();
+		const runtime = detectRuntime();
+		const app = new Hono();
+		if (opts.publicDir) {
+			const serveStatic = await loadRuntimeServeStatic(runtime);
+			app.use("*", serveStatic({ root: opts.publicDir }));
+		}
+		app.all("*", (c) => this.handler(c.req.raw));
+		await crossPlatformServe(config, port, app, runtime);
 	}
 
 	/**
@@ -405,8 +440,11 @@ export class Registry<A extends RegistryActors> {
 		const candidates = [
 			this.#runtimeServerlessPromise,
 			this.#runtimeServeConfiguredPromise,
-		].filter((candidate): candidate is ReturnType<typeof buildConfiguredRegistry> =>
-			candidate !== undefined
+		].filter(
+			(
+				candidate,
+			): candidate is ReturnType<typeof buildConfiguredRegistry> =>
+				candidate !== undefined,
 		);
 
 		if (candidates.length === 0) return undefined;
@@ -425,12 +463,12 @@ export class Registry<A extends RegistryActors> {
 				.then(async ({ runtime, registry, serveConfig }) => {
 					await runtime.serveRegistry(registry, serveConfig);
 				})
-				.catch((err) => {
+				.catch((error) => {
 					// Always-attached catch so the stored promise never leaves a
 					// rejection unhandled. Downstream awaits (e.g. #runShutdown's
 					// Promise.race) attach their own catches and still observe
 					// resolution via the race.
-					logger().warn({ err }, "runtime registry serve errored");
+					logger().warn({ error }, "runtime registry serve errored");
 				});
 			// Install signal handlers once an envoy lifecycle has begun. Only
 			// Mode A ever reaches here. Mode B (handler(request)) intentionally
@@ -527,9 +565,7 @@ export class Registry<A extends RegistryActors> {
 
 		const gracePeriodMs =
 			config.shutdown?.gracePeriodMs ??
-			(await this.#actorStopThresholdMs(
-				modeAPromise ?? modeBPromise,
-			)) ??
+			(await this.#actorStopThresholdMs(modeAPromise ?? modeBPromise)) ??
 			30 * 60 * 1000;
 		// Race the entire drain sequence (both modes + serve promise) against
 		// a single grace ceiling. By default, this uses the engine-provided
@@ -563,7 +599,7 @@ export class Registry<A extends RegistryActors> {
 							await runtime.shutdownRegistry(registry);
 						} catch (err) {
 							logger().warn(
-								{ err },
+								{ error: err },
 								"runtime registry shutdown errored (mode B)",
 							);
 						}
@@ -685,7 +721,10 @@ function isServerlessStartRequest(request: Request, basePath: string): boolean {
 	return parsed.pathname === `${normalizedBase}/start`;
 }
 
-function isServerlessMetadataRequest(request: Request, basePath: string): boolean {
+function isServerlessMetadataRequest(
+	request: Request,
+	basePath: string,
+): boolean {
 	if (request.method !== "GET") return false;
 	const parsed = new URL(request.url);
 	const normalizedBase =

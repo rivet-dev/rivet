@@ -124,6 +124,7 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 
 		let signal_id = Id::new_v1(self.config.dc_label());
 		let start_instant = Instant::now();
+		let db_write_duration;
 
 		tracing::Span::current().record("signal_id", signal_id.to_string());
 
@@ -159,16 +160,20 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 					}
 				};
 
+				let db_write_started = Instant::now();
 				self.db
 					.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, &input_val)
 					.await?;
+				db_write_duration = db_write_started.elapsed();
 			}
 			(None, Some(workflow_id), true) => {
 				tracing::debug!(to_workflow_id=%workflow_id, "dispatching signal via workflow id");
 
+				let db_write_started = Instant::now();
 				self.db
 					.publish_signal(self.ray_id, workflow_id, signal_id, T::NAME, &input_val)
 					.await?;
+				db_write_duration = db_write_started.elapsed();
 			}
 			(None, None, false) => {
 				return Err(BuilderError::InvalidSignalSend(
@@ -200,6 +205,9 @@ impl<T: Signal + Serialize> SignalBuilder<T> {
 		metrics::SIGNAL_SEND_DURATION
 			.with_label_values(&["", T::NAME])
 			.observe(dt);
+		metrics::SIGNAL_SEND_DURATION_SECONDS
+			.with_label_values(&["", T::NAME])
+			.observe(db_write_duration.as_secs_f64());
 		metrics::SIGNAL_PUBLISHED
 			.with_label_values(&["", T::NAME])
 			.inc();

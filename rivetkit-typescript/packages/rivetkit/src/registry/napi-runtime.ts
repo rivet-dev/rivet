@@ -23,8 +23,8 @@ import type {
 	RuntimeQueueNextBatchOptions,
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
-	RuntimeRequestSaveOpts,
 	RuntimeRegistryRouteResponse,
+	RuntimeRequestSaveOpts,
 	RuntimeServeConfig,
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
@@ -452,6 +452,12 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return await asNativeActorContext(ctx).waitForTrackedShutdownWork();
 	}
 
+	async actorWaitForTrackedShutdownWorkUnbounded(
+		ctx: ActorContextHandle,
+	): Promise<void> {
+		await asNativeActorContext(ctx).waitForTrackedShutdownWorkUnbounded();
+	}
+
 	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
 		asNativeActorContext(ctx).keepAwake(promise);
 	}
@@ -677,10 +683,15 @@ export class NapiCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
+		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<void> {
 		await asNativeActorContext(ctx)
 			.queue()
-			.waitForNamesAvailable(names, options);
+			.waitForNamesAvailable(
+				names,
+				options,
+				signal ? asNativeCancellationToken(signal) : signal,
+			);
 	}
 
 	async actorQueueEnqueueAndWait(

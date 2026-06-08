@@ -7,14 +7,13 @@ import {
 	faPencil,
 	faRailway,
 	faRivet,
+	faServer,
 	faTrash,
-	faTriangleExclamation,
 	faVercel,
 	Icon,
 } from "@rivet-gg/icons";
 import type { Rivet } from "@rivetkit/engine-api-full";
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
+import type { ReactNode } from "react";
 import { useMemo } from "react";
 import {
 	Button,
@@ -23,8 +22,6 @@ import {
 	DropdownMenuContent,
 	DropdownMenuItem,
 	DropdownMenuTrigger,
-	formatList,
-	Ping,
 	Skeleton,
 	Table,
 	TableBody,
@@ -35,14 +32,15 @@ import {
 	Text,
 	WithTooltip,
 } from "@/components";
+import { Badge } from "@/components/ui/badge";
+import { IconRenderer } from "@/components/ui/icon-picker";
 import {
-	ActorRegion,
-	RunnerPoolError,
-	useEngineCompatDataProvider,
-} from "@/components/actors";
-import { REGION_LABEL } from "@/components/matchmaker/lobby-region";
-import { deriveProviderFromMetadata } from "@/lib/data";
+	deriveCustomIconFromMetadata,
+	deriveCustomNameFromMetadata,
+	deriveProviderFromMetadata,
+} from "@/lib/data";
 import type { RivetActorError } from "@/queries/types";
+import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 
 interface RunnerConfigsTableProps {
 	isLoading?: boolean;
@@ -50,6 +48,13 @@ interface RunnerConfigsTableProps {
 	hasNextPage?: boolean;
 	fetchNextPage?: () => void;
 	configs: [string, Rivet.RunnerConfigsListResponseRunnerConfigsValue][];
+	totalDatacenterCount?: number;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
+	onEditConfig: (name: string) => void;
+	onDeleteConfig: (name: string) => void;
 }
 
 export function RunnerConfigsTable({
@@ -58,6 +63,10 @@ export function RunnerConfigsTable({
 	hasNextPage,
 	fetchNextPage,
 	configs,
+	totalDatacenterCount,
+	renderRegion,
+	onEditConfig,
+	onDeleteConfig,
 }: RunnerConfigsTableProps) {
 	return (
 		<Table>
@@ -66,7 +75,9 @@ export function RunnerConfigsTable({
 					<TableHead className="w-8"></TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Provider</TableHead>
-					<TableHead>Endpoint</TableHead>
+					<TableHead className="w-[220px] max-w-[220px]">
+						Endpoint
+					</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
@@ -103,7 +114,15 @@ export function RunnerConfigsTable({
 					</>
 				) : null}
 				{configs?.map(([id, config]) => (
-					<Row name={id} {...config} key={id} />
+					<Row
+						name={id}
+						{...config}
+						totalDatacenterCount={totalDatacenterCount}
+						renderRegion={renderRegion}
+						onEditConfig={onEditConfig}
+						onDeleteConfig={onDeleteConfig}
+						key={id}
+					/>
 				))}
 
 				{!isLoading && hasNextPage ? (
@@ -150,10 +169,21 @@ function RowSkeleton() {
 
 function Row({
 	name,
+	totalDatacenterCount,
+	renderRegion,
+	onEditConfig,
+	onDeleteConfig,
 	...value
-}: { name: string } & Rivet.RunnerConfigsListResponseRunnerConfigsValue) {
-	const navigate = useNavigate();
-
+}: {
+	name: string;
+	totalDatacenterCount?: number;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
+	onEditConfig: (name: string) => void;
+	onDeleteConfig: (name: string) => void;
+} & Rivet.RunnerConfigsListResponseRunnerConfigsValue) {
 	const datacenters = Object.entries(value.datacenters);
 
 	const isManaged = datacenters.some(
@@ -164,18 +194,31 @@ function Row({
 
 	return (
 		<TableRow className="hover:bg-muted/50">
-			<StatusCell datacenters={value.datacenters} />
+			<StatusCell
+				datacenters={value.datacenters}
+				renderRegion={renderRegion}
+			/>
 			<TableCell>
 				<DiscreteCopyButton value={name}>{name}</DiscreteCopyButton>
 			</TableCell>
 			<TableCell>
-				<Providers datacenters={datacenters} />
+				<ProviderSummary
+					datacenters={datacenters}
+					renderRegion={renderRegion}
+				/>
+			</TableCell>
+			<TableCell className="w-[220px] max-w-[220px] truncate">
+				<Endpoints
+					datacenters={datacenters}
+					renderRegion={renderRegion}
+				/>
 			</TableCell>
 			<TableCell>
-				<Endpoints datacenters={datacenters} />
-			</TableCell>
-			<TableCell>
-				<Regions regions={Object.keys(value.datacenters)} />
+				<Regions
+					regions={Object.keys(value.datacenters)}
+					totalDatacenterCount={totalDatacenterCount}
+					renderRegion={renderRegion}
+				/>
 			</TableCell>
 			<TableCell className="text-right">
 				<DropdownMenu>
@@ -188,30 +231,14 @@ function Row({
 						{isManaged ? null : (
 							<DropdownMenuItem
 								indicator={<Icon icon={faPencil} />}
-								onSelect={() =>
-									navigate({
-										to: ".",
-										search: {
-											modal: "edit-provider-config",
-											config: name,
-										},
-									})
-								}
+								onSelect={() => onEditConfig(name)}
 							>
 								Edit
 							</DropdownMenuItem>
 						)}
 						<DropdownMenuItem
 							indicator={<Icon icon={faTrash} />}
-							onSelect={() =>
-								navigate({
-									to: ".",
-									search: {
-										modal: "delete-provider-config",
-										config: name,
-									},
-								})
-							}
+							onSelect={() => onDeleteConfig(name)}
 						>
 							Delete
 						</DropdownMenuItem>
@@ -224,8 +251,13 @@ function Row({
 
 function StatusCell({
 	datacenters,
+	renderRegion,
 }: {
 	datacenters: Record<string, Rivet.RunnerConfigResponse>;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 }) {
 	const errors = useMemo(() => {
 		const errorMap: Record<string, RivetActorError | undefined> = {};
@@ -242,220 +274,332 @@ function StatusCell({
 	if (!errors) {
 		return (
 			<TableCell className="w-8">
-				<Ping variant="success" className="relative" />
+				<span className="relative inline-flex size-5 items-center justify-center">
+					<span className="absolute inline-flex size-3 rounded-full bg-green-400 opacity-75 animate-ping" />
+					<span className="relative inline-flex size-2 rounded-full bg-green-500" />
+				</span>
 			</TableCell>
 		);
 	}
 
 	return (
-		<TableCell className="w-8 text-center">
-			<WithTooltip
-				delayDuration={0}
-				content={
-					<>
-						<p>Some providers are experiencing errors:</p>
-						<ul className="max-w-xs whitespace-pre-wrap text-left my-0 space-y-1">
-							{typeof errors !== "string"
-								? Object.entries(errors).map(([dc, error]) => {
-										if (!error) return null;
-										return (
-											<li
-												key={dc}
-												className="border-t pt-2 pb-2"
-											>
-												<ActorRegion
-													className="w-full justify-start items-center mr-2 mt-3 mb-2"
-													regionId={dc}
-													showLabel
-												/>
-												<div className="text-xs">
-													<RunnerPoolError
-														error={error}
-													/>
-												</div>
-											</li>
-										);
-									})
-								: errors}
-						</ul>
-					</>
-				}
-				trigger={
-					<span className="inline-flex items-center justify-center text-destructive ml-2.5">
-						<Icon icon={faTriangleExclamation} />
-					</span>
+		<TableCell className="w-8">
+			<RunnerPoolErrorPopover
+				iconOnly
+				errors={errors}
+				renderRegion={(regionId) =>
+					renderRegion(regionId, { abbreviated: true })
 				}
 			/>
 		</TableCell>
 	);
 }
 
-function Providers({
-	datacenters,
-}: {
-	datacenters: [string, Rivet.RunnerConfigResponse][];
-}) {
-	const providers = useMemo(() => {
-		const providerSet = new Set<string>();
-		for (const [, config] of datacenters) {
-			const providerName =
-				deriveProviderFromMetadata(config.metadata) || "unknown";
-			providerSet.add(providerName);
-		}
-		return Array.from(providerSet);
-	}, [datacenters]);
+const PROVIDER_LABELS: Record<string, string> = {
+	vercel: "Vercel",
+	"next-js": "Next.js",
+	railway: "Railway",
+	hetzner: "Hetzner",
+	aws: "AWS ECS",
+	gcp: "Google Cloud Run",
+	"gcp-cloud-run": "Google Cloud Run",
+	rivet: "Rivet",
+};
 
-	if (providers.length === 1) {
-		return <Provider metadata={datacenters[0][1].metadata} />;
-	}
-
-	return (
-		<WithTooltip
-			content={providers.join(" and ")}
-			trigger={<span>Multiple providers</span>}
-		/>
-	);
+function getProviderLabel(provider: string | undefined): string {
+	if (!provider) return "Unknown";
+	return PROVIDER_LABELS[provider] ?? provider;
 }
 
-function Endpoints({
+type RunnerKind = "serverless" | "runner";
+
+function getDatacenterKind(config: Rivet.RunnerConfigResponse): RunnerKind {
+	return config.serverless ? "serverless" : "runner";
+}
+
+function ProviderSummary({
 	datacenters,
+	renderRegion,
 }: {
 	datacenters: [string, Rivet.RunnerConfigResponse][];
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 }) {
-	const endpoints = useMemo(() => {
-		const endpointSet = new Set<string>();
-		for (const [, config] of datacenters) {
-			if (config.serverless?.url) {
-				endpointSet.add(config.serverless.url);
-			}
-		}
-		return Array.from(endpointSet);
+	const breakdown = useMemo(() => {
+		const rows = datacenters.map(([dc, config]) => {
+			const provider =
+				deriveProviderFromMetadata(config.metadata) || "unknown";
+			const customName = deriveCustomNameFromMetadata(config.metadata);
+			const customIcon = deriveCustomIconFromMetadata(config.metadata);
+			return {
+				dc,
+				provider,
+				customName,
+				customIcon,
+				kind: getDatacenterKind(config),
+				groupKey: isCustomProvider(provider)
+					? `${provider}:${customName ?? ""}:${customIcon ?? ""}`
+					: provider,
+			};
+		});
+		const providers = new Set(rows.map((r) => r.groupKey));
+		const kinds = new Set(rows.map((r) => r.kind));
+		return { rows, providers, kinds };
 	}, [datacenters]);
 
-	if (endpoints.length === 1) {
-		const endpoint = endpoints[0];
+	if (breakdown.rows.length === 0) return null;
+
+	const isUniform =
+		breakdown.providers.size === 1 && breakdown.kinds.size === 1;
+
+	if (isUniform) {
+		const kind = breakdown.kinds.values().next().value as RunnerKind;
 		return (
-			<DiscreteCopyButton value={endpoint}>
-				{endpoint && endpoint.length > 32
-					? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
-					: endpoint || "-"}
-			</DiscreteCopyButton>
+			<div className="flex items-center gap-2">
+				<Provider metadata={datacenters[0][1].metadata} />
+				<Badge variant="outline" className="font-normal capitalize">
+					{kind}
+				</Badge>
+			</div>
 		);
 	}
+
+	const providerNode =
+		breakdown.providers.size === 1 ? (
+			<Provider metadata={datacenters[0][1].metadata} />
+		) : (
+			<span>Multiple</span>
+		);
+
+	const kindLabel =
+		breakdown.kinds.size === 1
+			? (breakdown.kinds.values().next().value as RunnerKind)
+			: "Mixed";
+
+	const showProviderInTooltip = breakdown.providers.size > 1;
+	const showKindInTooltip = breakdown.kinds.size > 1;
 
 	return (
 		<WithTooltip
 			content={
-				<>
-					<p className="my-2">Endpoints:</p>
-					<ul className="list-disc list-inside">
-						{endpoints.map((endpoint) => (
-							<li key={endpoint}>
-								<DiscreteCopyButton
-									tooltip={false}
-									value={endpoint}
-									className="px-2 -mx-2"
-								>
-									<span>
-										{endpoint && endpoint.length > 32
-											? `${endpoint.slice(0, 16)}...${endpoint.slice(-16)}`
-											: endpoint || "-"}
-									</span>
-								</DiscreteCopyButton>
+				<ul className="space-y-1">
+					{breakdown.rows.map(
+						({ dc, provider, customName, customIcon, kind }) => (
+							<li key={dc} className="flex items-center gap-2">
+								{renderRegion(dc, { abbreviated: false })}
+								{showProviderInTooltip ? (
+									<>
+										<span className="text-muted-foreground">
+											·
+										</span>
+										<ProviderInline
+											provider={provider}
+											customName={customName}
+											customIcon={customIcon}
+										/>
+									</>
+								) : null}
+								{showKindInTooltip ? (
+									<>
+										<span className="text-muted-foreground">
+											·
+										</span>
+										<span className="capitalize">
+											{kind}
+										</span>
+									</>
+								) : null}
 							</li>
-						))}
-					</ul>
-				</>
+						),
+					)}
+				</ul>
 			}
-			trigger={<span>Multiple endpoints</span>}
+			trigger={
+				<div className="flex items-center gap-2 cursor-default">
+					{providerNode}
+					<Badge variant="outline" className="font-normal capitalize">
+						{kindLabel}
+					</Badge>
+				</div>
+			}
 		/>
 	);
 }
 
-function Provider({ metadata }: { metadata: unknown }) {
-	const provider = deriveProviderFromMetadata(metadata);
-
-	if (provider === "vercel") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faVercel} className="mr-1" /> Vercel
-			</div>
-		);
-	}
-	if (provider === "next-js") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faNextjs} className="mr-1" /> Next.js
-			</div>
-		);
-	}
-	if (provider === "railway") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faRailway} className="mr-1" /> Railway
-			</div>
-		);
-	}
-	if (provider === "hetzner") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faHetznerH} className="mr-1" /> Hetzner
-			</div>
-		);
-	}
-	if (provider === "aws") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faAws} className="mr-1" /> AWS ECS
-			</div>
-		);
-	}
-	if (provider === "gcp" || provider === "gcp-cloud-run") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faGoogleCloud} className="mr-1" /> Google Cloud Run
-			</div>
-		);
-	}
-	if (provider === "rivet") {
-		return (
-			<div className="whitespace-nowrap">
-				<Icon icon={faRivet} className="mr-1" /> Rivet
-			</div>
-		);
-	}
-	return <span>{provider || "Unknown"}</span>;
+function truncateEndpoint(endpoint: string): string {
+	if (endpoint.length <= 20) return endpoint;
+	return `${endpoint.slice(0, 10)}...${endpoint.slice(-7)}`;
 }
 
-function Regions({ regions }: { regions: string[] }) {
-	const { data: datacentersCount } = useInfiniteQuery({
-		...useEngineCompatDataProvider().datacentersQueryOptions(),
-		maxPages: Infinity,
-		select: (data) =>
-			data.pages.reduce((acc, page) => acc + page.datacenters?.length, 0),
-	});
+function Endpoints({
+	datacenters,
+	renderRegion,
+}: {
+	datacenters: [string, Rivet.RunnerConfigResponse][];
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
+}) {
+	const perDatacenter = useMemo(() => {
+		return datacenters.flatMap(([dc, config]) => {
+			const endpoint = config.serverless?.url;
+			return endpoint ? [[dc, endpoint] as const] : [];
+		});
+	}, [datacenters]);
 
-	if (regions.length === datacentersCount) {
-		return <span>Global</span>;
+	const uniqueEndpoints = useMemo(
+		() => new Set(perDatacenter.map(([, url]) => url)),
+		[perDatacenter],
+	);
+
+	if (perDatacenter.length === 0) {
+		return (
+			<span className="inline-flex h-9 items-center px-4 text-muted-foreground">
+				—
+			</span>
+		);
 	}
 
-	if (regions.length === 1) {
+	if (uniqueEndpoints.size === 1) {
+		const endpoint = perDatacenter[0][1];
 		return (
-			<ActorRegion
-				className="w-full items-center flex-1 whitespace-nowrap"
-				regionId={regions[0]}
-				showLabel
+			<WithTooltip
+				content={endpoint || "-"}
+				trigger={
+					<DiscreteCopyButton value={endpoint}>
+						{endpoint ? truncateEndpoint(endpoint) : "-"}
+					</DiscreteCopyButton>
+				}
 			/>
 		);
 	}
 
 	return (
 		<WithTooltip
-			content={formatList(
-				regions.map(
-					(region) => REGION_LABEL[region] ?? REGION_LABEL.unknown,
-				),
-			)}
+			content={
+				<ul className="space-y-1">
+					{perDatacenter.map(([dc, endpoint]) => (
+						<li key={dc} className="flex items-center gap-2">
+							{renderRegion(dc, { abbreviated: false })}
+							<span className="text-muted-foreground">·</span>
+							<DiscreteCopyButton
+								tooltip={false}
+								value={endpoint}
+								className="px-2 -mx-2"
+							>
+								<span>{truncateEndpoint(endpoint)}</span>
+							</DiscreteCopyButton>
+						</li>
+					))}
+				</ul>
+			}
+			trigger={
+				<span className="inline-flex h-9 items-center px-4 cursor-default">
+					Multiple endpoints
+				</span>
+			}
+		/>
+	);
+}
+
+const PROVIDER_ICONS: Record<string, typeof faVercel> = {
+	vercel: faVercel,
+	"next-js": faNextjs,
+	railway: faRailway,
+	hetzner: faHetznerH,
+	aws: faAws,
+	gcp: faGoogleCloud,
+	"gcp-cloud-run": faGoogleCloud,
+	rivet: faRivet,
+};
+
+function isCustomProvider(provider: string | undefined): boolean {
+	return provider === "custom" || provider === "custom-platform";
+}
+
+function ProviderInline({
+	provider,
+	customName,
+	customIcon,
+}: {
+	provider: string | undefined;
+	customName?: string;
+	customIcon?: string;
+}) {
+	if (isCustomProvider(provider)) {
+		const label = customName || getProviderLabel(provider);
+		return (
+			<span className="whitespace-nowrap inline-flex items-center gap-1.5">
+				{customIcon ? (
+					<IconRenderer name={customIcon} className="size-3.5" />
+				) : (
+					<Icon icon={faServer} className="size-3.5" />
+				)}
+				{label}
+			</span>
+		);
+	}
+
+	const icon = provider ? PROVIDER_ICONS[provider] : undefined;
+	const label = getProviderLabel(provider);
+
+	if (!icon) {
+		return <span className="whitespace-nowrap">{label}</span>;
+	}
+
+	return (
+		<span className="whitespace-nowrap">
+			<Icon icon={icon} className="mr-1" />
+			{label}
+		</span>
+	);
+}
+
+function Provider({ metadata }: { metadata: unknown }) {
+	return (
+		<ProviderInline
+			provider={deriveProviderFromMetadata(metadata)}
+			customName={deriveCustomNameFromMetadata(metadata)}
+			customIcon={deriveCustomIconFromMetadata(metadata)}
+		/>
+	);
+}
+
+function Regions({
+	regions,
+	totalDatacenterCount,
+	renderRegion,
+}: {
+	regions: string[];
+	totalDatacenterCount?: number;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
+}) {
+	if (
+		totalDatacenterCount !== undefined &&
+		regions.length === totalDatacenterCount
+	) {
+		return <span>Global</span>;
+	}
+
+	if (regions.length === 1) {
+		return <>{renderRegion(regions[0], {})}</>;
+	}
+
+	return (
+		<WithTooltip
+			content={
+				<ul className="space-y-1">
+					{regions.map((region) => (
+						<li key={region}>{renderRegion(region, {})}</li>
+					))}
+				</ul>
+			}
 			trigger={
 				<span className="w-full cursor-pointer">Multiple regions</span>
 			}

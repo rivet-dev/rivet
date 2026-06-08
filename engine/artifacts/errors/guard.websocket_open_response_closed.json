@@ -1,0 +1,5 @@
+{
+  "code": "websocket_open_response_closed",
+  "group": "guard",
+  "message": "WebSocket open response closed."
+}

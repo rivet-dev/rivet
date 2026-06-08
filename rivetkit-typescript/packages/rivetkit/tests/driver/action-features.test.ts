@@ -1,13 +1,13 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test } from "vitest";
 import type { ActorError } from "@/client/errors";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Action Features", (driverTestConfig) => {
 	describe("Action Features", () => {
 		// TODO: These do not work with fake timers
 		describe("Action Timeouts", () => {
-			const usesFakeTimers = !driverTestConfig.useRealTimers;
+			const _usesFakeTimers = !driverTestConfig.useRealTimers;
 
 			test("should timeout actions that exceed the configured timeout", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);

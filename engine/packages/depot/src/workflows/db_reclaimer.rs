@@ -1,3 +1,5 @@
+use universaldb::prelude::*;
+
 use crate::{
 	compaction::{
 		companion::{CompanionKind, run_companion_loop},
@@ -7,12 +9,13 @@ use crate::{
 	conveyer::metrics,
 	workflows::db_manager::branch_record_is_live_at_generation,
 };
+use universaldb::prelude::Priority;
 
 #[cfg(feature = "test-faults")]
 use crate::fault::ReclaimFaultPoint;
 
 #[workflow(DbReclaimerWorkflow)]
-pub async fn db_reclaimer(ctx: &mut WorkflowCtx, input: &DbReclaimerInput) -> Result<()> {
+pub async fn depot_db_reclaimer(ctx: &mut WorkflowCtx, input: &DbReclaimerInput) -> Result<()> {
 	run_companion_loop(ctx, input.database_branch_id, CompanionKind::Reclaim).await
 }
 
@@ -29,9 +32,12 @@ pub async fn reclaim_fdb_job(
 
 	let output = ctx
 		.udb()?
-		.run(move |tx| {
+		.txn("depot_reclaim_fdb", move |tx| {
 			let input = input_for_tx.clone();
-			async move { reclaim_fdb_job_tx(&tx, &input, cold_storage_enabled, now_ms).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				reclaim_fdb_job_tx(&tx, &input, cold_storage_enabled, now_ms).await
+			}
 		})
 		.await?;
 	record_shard_cache_eviction_metrics(&input, &output);
@@ -396,9 +402,12 @@ pub async fn retire_cold_objects(
 	input.retired_at_ms = ctx.ts();
 
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("depot_reclaim_retire_cold", move |tx| {
 			let input = input.clone();
-			async move { retire_cold_objects_tx(&tx, &input).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				retire_cold_objects_tx(&tx, &input).await
+			}
 		})
 		.await
 }
@@ -592,11 +601,14 @@ pub async fn delete_retired_cold_objects(
 
 	let marked = ctx
 		.udb()?
-		.run({
+		.txn("depot_reclaim_mark_cold_delete_issued", {
 			let input = input.clone();
 			move |tx| {
 				let input = input.clone();
-				async move { mark_retired_cold_objects_delete_issued_tx(&tx, &input).await }
+				async move {
+					tx.priority(Priority::Low)?;
+					mark_retired_cold_objects_delete_issued_tx(&tx, &input).await
+				}
 			}
 		})
 		.await?;
@@ -727,9 +739,12 @@ pub async fn cleanup_retired_cold_objects(
 	let input = input.clone();
 
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("depot_reclaim_cleanup_cold", move |tx| {
 			let input = input.clone();
-			async move { cleanup_retired_cold_objects_tx(&tx, &input).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				cleanup_retired_cold_objects_tx(&tx, &input).await
+			}
 		})
 		.await
 }
@@ -842,11 +857,14 @@ pub async fn validate_reclaim_cold_objects(
 
 	let validated = ctx
 		.udb()?
-		.run({
+		.txn("depot_reclaim_validate_cold", {
 			let input = input.clone();
 			move |tx| {
 				let input = input.clone();
-				async move { validate_reclaim_cold_objects_tx(&tx, &input).await }
+				async move {
+					tx.priority(Priority::Low)?;
+					validate_reclaim_cold_objects_tx(&tx, &input).await
+				}
 			}
 		})
 		.await?;
@@ -963,11 +981,14 @@ pub async fn delete_orphan_cold_objects(
 
 	let planned = ctx
 		.udb()?
-		.run({
+		.txn("depot_reclaim_plan_orphan_cold_deletes", {
 			let input = input.clone();
 			move |tx| {
 				let input = input.clone();
-				async move { plan_orphan_cold_object_deletes_tx(&tx, &input).await }
+				async move {
+					tx.priority(Priority::Low)?;
+					plan_orphan_cold_object_deletes_tx(&tx, &input).await
+				}
 			}
 		})
 		.await?;

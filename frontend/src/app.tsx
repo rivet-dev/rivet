@@ -15,6 +15,8 @@ import {
 	Toaster,
 	TooltipProvider,
 } from "@/components";
+import { isAuthError } from "@/lib/errors";
+import { modal } from "@/utils/modal-utils";
 import {
 	getOrCreateCloudContext,
 	getOrCreateCloudNamespaceContext,
@@ -25,8 +27,6 @@ import {
 } from "./app/data-providers/cache";
 import { NotFoundCard } from "./app/not-found-card";
 import { RouteLayout } from "./app/route-layout";
-import { isAuthError } from "@/lib/errors";
-import { modal } from "@/utils/modal-utils";
 import { queryClient } from "./queries/global";
 import { routeTree } from "./routeTree.gen";
 
@@ -40,6 +40,7 @@ declare module "@tanstack/react-query" {
 			actorsListQueryKey?: readonly unknown[];
 			actorsListPage1Poll?: boolean;
 			actorsListTargetQueryKey?: readonly unknown[];
+			persist?: boolean;
 		};
 	}
 }

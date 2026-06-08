@@ -148,7 +148,7 @@ async fn insert_db(
 	input: &InsertDbInput,
 ) -> Result<std::result::Result<(), errors::Namespace>> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("namespace_create_insert_db", |tx| {
 			let namespace_id = input.namespace_id;
 			let name = input.name.clone();
 			let display_name = input.display_name.clone();

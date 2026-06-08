@@ -1,5 +1,5 @@
 // @ts-nocheck
-import { actor, type ActorContext } from "rivetkit";
+import { type ActorContext, actor } from "rivetkit";
 
 export const kvActor = actor({
 	actions: {

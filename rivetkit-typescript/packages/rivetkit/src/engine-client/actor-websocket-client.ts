@@ -2,23 +2,24 @@ import {
 	type ClientConfig,
 	DEFAULT_MAX_QUERY_INPUT_SIZE,
 } from "@/client/config";
+import type { ActorGatewayQuery, CrashPolicy } from "@/client/query";
 import {
+	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_CONN_PARAMS,
 	WS_PROTOCOL_ENCODING,
 	WS_PROTOCOL_STANDARD as WS_PROTOCOL_RIVETKIT,
-	WS_PROTOCOL_TARGET,
-	WS_PROTOCOL_ACTOR,
 	WS_PROTOCOL_SKIP_READY_WAIT,
+	WS_PROTOCOL_TARGET,
 	WS_PROTOCOL_TEST_ACK_HOOK,
 	WS_PROTOCOL_TOKEN,
 } from "@/common/actor-router-consts";
+import type { JsonCompatValue } from "@/common/encoding";
 import { importWebSocket } from "@/common/websocket";
 import { setRemoteHibernatableWebSocketAckTestHooks } from "@/common/websocket-test-hooks";
-import type { ActorGatewayQuery, CrashPolicy } from "@/client/query";
 import type { Encoding, UniversalWebSocket } from "@/mod";
 import { encodeCborCompat, uint8ArrayToBase64 } from "@/serde";
 import { combineUrlPath } from "@/utils";
-import { shouldSkipReadyWait, type GatewayRequestOptions } from "./driver";
+import { type GatewayRequestOptions, shouldSkipReadyWait } from "./driver";
 import { logger } from "./log";
 
 class BufferedRemoteWebSocket implements UniversalWebSocket {
@@ -302,7 +303,7 @@ function pushInputQueryParam(
 		return;
 	}
 
-	const encodedInput = encodeCborCompat(input);
+	const encodedInput = encodeCborCompat(input as JsonCompatValue);
 	if (encodedInput.byteLength > maxInputSize) {
 		throw new Error(
 			`Actor query input exceeds maxInputSize (${encodedInput.byteLength} > ${maxInputSize} bytes). Increase client maxInputSize to allow larger query payloads.`,

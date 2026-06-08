@@ -17,7 +17,6 @@ import { useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { type MetricType, UsageCard } from "@/app/billing/usage-card";
 import { HelpDropdown } from "@/app/help-dropdown";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { BILLING } from "@/content/billing";
@@ -91,7 +90,7 @@ export function BillingPage() {
 	const metrics = useBilledMetrics();
 	const plan = data?.billing.activePlan || "free";
 
-	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
+	const _totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
 		const current = metrics[key] || 0n;
 		const includedInPlan = BILLING.included[plan][key];
 		return (
@@ -104,7 +103,6 @@ export function BillingPage() {
 		<Content>
 			<div className="mb-4 pt-2 max-w-5xl mx-auto">
 				<div className="flex justify-between items-center px-6 @6xl:px-0 py-4 ">
-					<SidebarToggle className="absolute left-4" />
 					<H1>Billing</H1>
 					<HelpDropdown>
 						<Button
@@ -123,45 +121,72 @@ export function BillingPage() {
 
 			<hr className="mb-6" />
 
-			<div className="px-4  max-w-5xl mx-auto @6xl:px-0 space-y-8 pb-8">
-				<CurrentBillTotal
-					total={Number(totalOverageCents) / 100}
-					periodStart={
-						data.billing.currentPeriodStart
-							? new Date(data.billing.currentPeriodStart)
-							: startOfMonth(new Date())
-					}
-					periodEnd={
-						data.billing.currentPeriodEnd
-							? new Date(data.billing.currentPeriodEnd)
-							: endOfMonth(new Date())
-					}
-				/>
-				<BillingPlansSection />
-				{USAGE_METRICS.map(
-					({ key, title, description, icon, metricType }) => {
-						const current = metrics[key] || 0n;
-						const includedInPlan = BILLING.included[plan][key];
-						return (
-							<UsageCard
-								key={key}
-								title={title}
-								description={description}
-								current={current}
-								monthToDate={calculateOverageCost(
-									current,
-									includedInPlan,
-									BILLING.prices[key],
-								)}
-								includedInPlan={includedInPlan}
-								icon={icon}
-								metricType={metricType}
-							/>
-						);
-					},
-				)}
-			</div>
+			<BillingBody />
 		</Content>
+	);
+}
+
+/**
+ * Headerless billing content (no SidebarToggle / H1 / Help). Safe to render
+ * outside `RootLayoutContextProvider`, e.g. inside the settings drawer.
+ */
+export function BillingBody() {
+	const dataProvider = useCloudProjectDataProvider();
+	const { data } = useSuspenseQuery({
+		...dataProvider.currentProjectBillingDetailsQueryOptions(),
+	});
+	const metrics = useBilledMetrics();
+	const plan = data?.billing.activePlan || "free";
+	const planIncluded = BILLING.included[plan] ?? BILLING.included.free;
+
+	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
+		const current = metrics[key] || 0n;
+		const includedInPlan = planIncluded[key];
+		return (
+			total +
+			calculateOverageCost(current, includedInPlan, BILLING.prices[key])
+		);
+	}, 0n);
+
+	return (
+		<div className="px-4  max-w-5xl mx-auto @6xl:px-0 space-y-8 pb-8">
+			<CurrentBillTotal
+				total={Number(totalOverageCents) / 100}
+				periodStart={
+					data.billing.currentPeriodStart
+						? new Date(data.billing.currentPeriodStart)
+						: startOfMonth(new Date())
+				}
+				periodEnd={
+					data.billing.currentPeriodEnd
+						? new Date(data.billing.currentPeriodEnd)
+						: endOfMonth(new Date())
+				}
+			/>
+			<BillingPlansSection />
+			{USAGE_METRICS.map(
+				({ key, title, description, icon, metricType }) => {
+					const current = metrics[key] || 0n;
+					const includedInPlan = planIncluded[key];
+					return (
+						<UsageCard
+							key={key}
+							title={title}
+							description={description}
+							current={current}
+							monthToDate={calculateOverageCost(
+								current,
+								includedInPlan,
+								BILLING.prices[key],
+							)}
+							includedInPlan={includedInPlan}
+							icon={icon}
+							metricType={metricType}
+						/>
+					);
+				},
+			)}
+		</div>
 	);
 }
 

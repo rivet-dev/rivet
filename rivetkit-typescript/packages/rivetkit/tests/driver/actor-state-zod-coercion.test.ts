@@ -1,5 +1,5 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 const SLEEP_WAIT_MS = 150;

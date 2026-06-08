@@ -236,7 +236,9 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 
 	let config = ctx
 		.udb()?
-		.run(|tx| async move { utils::read_config(&tx, replica_id).await })
+		.txn("epoxy_propose_read_config", |tx| async move {
+			utils::read_config(&tx, replica_id).await
+		})
 		.custom_instrument(tracing::info_span!("read_config_tx"))
 		.await
 		.context("failed reading config")?;
@@ -255,7 +257,7 @@ pub async fn epoxy_propose(ctx: &OperationCtx, input: &Input) -> Result<Proposal
 
 	let result = match ctx
 		.udb()?
-		.run(|tx| {
+		.txn("epoxy_propose_ballot_selection", |tx| {
 			let key = proposal.key.clone();
 			let mutable = proposal.mutable;
 			async move { ballot::ballot_selection(&tx, replica_id, key, mutable).await }
@@ -467,7 +469,7 @@ async fn run_accept_path(
 
 	let commit_result = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("epoxy_propose_commit_kv", |tx| {
 			let key = proposal.key.clone();
 			let value = chosen_value.clone();
 			let ballot = ballot.clone();
@@ -1009,7 +1011,7 @@ async fn store_prepare_ballot(
 	ballot: Ballot,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_propose_store_prepare_ballot", |tx| {
 			let key = key.clone();
 			async move { ballot::store_ballot(&tx, replica_id, key, ballot) }
 		})

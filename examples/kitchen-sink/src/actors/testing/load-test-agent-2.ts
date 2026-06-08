@@ -1,4 +1,8 @@
-import { actor, type RivetMessageEvent, type UniversalWebSocket } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	type UniversalWebSocket,
+} from "rivetkit";
 import { db } from "rivetkit/db";
 
 type AgentConcurrent2Request =
@@ -173,12 +177,22 @@ function createSerializedDb(
 			await mutex.acquire();
 			const tx = createTransactionDb();
 			try {
-				await executeTrackedQuery(execute, stats, "transaction-begin", "BEGIN");
+				await executeTrackedQuery(
+					execute,
+					stats,
+					"transaction-begin",
+					"BEGIN",
+				);
 				activeTransaction = tx;
 				try {
 					const result = await fn(tx);
 					activeTransaction = null;
-					await executeTrackedQuery(execute, stats, "transaction-commit", "COMMIT");
+					await executeTrackedQuery(
+						execute,
+						stats,
+						"transaction-commit",
+						"COMMIT",
+					);
 					return result;
 				} catch (error) {
 					activeTransaction = null;
@@ -212,7 +226,10 @@ const SLOW_QUERY_MS = 1_000;
 
 function send(
 	websocket: UniversalWebSocket,
-	message: AgentConcurrent2ResultMessage | AgentConcurrent2ErrorMessage | object,
+	message:
+		| AgentConcurrent2ResultMessage
+		| AgentConcurrent2ErrorMessage
+		| object,
 ): void {
 	if (websocket.readyState === 1) {
 		websocket.send(JSON.stringify(message));
@@ -222,7 +239,7 @@ function send(
 export const loadTestAgent2 = actor({
 	options: {
 		canHibernateWebSocket: false,
-		sleepGracePeriod: 1_000,
+		sleepGracePeriod: 5_000,
 	},
 	state: {
 		runCount: 0,
@@ -248,7 +265,11 @@ export const loadTestAgent2 = actor({
 		});
 
 		websocket.addEventListener("message", (event: RivetMessageEvent) => {
-			const promise = handleAgentConcurrent2Message(c, websocket, event.data);
+			const promise = handleAgentConcurrent2Message(
+				c,
+				websocket,
+				event.data,
+			);
 			void c.keepAwake(promise);
 		});
 	},
@@ -357,7 +378,9 @@ async function handleAgentConcurrent2Message(
 			type: "agent2_error",
 			trigger,
 			error: error instanceof Error ? error.message : String(error),
-			...(cycleStats ? { stats: snapshotAgentConcurrent2Stats(c, cycleStats) } : {}),
+			...(cycleStats
+				? { stats: snapshotAgentConcurrent2Stats(c, cycleStats) }
+				: {}),
 		});
 	}
 }
@@ -382,7 +405,10 @@ function parseAgentConcurrent2Request(data: unknown): AgentConcurrent2Request {
 		return { type: "force_sleep" };
 	}
 	if (request.type === "agent2_resume") {
-		return { type: "agent2_resume", version: numberField(request, "version") };
+		return {
+			type: "agent2_resume",
+			version: numberField(request, "version"),
+		};
 	}
 	if (request.type === "agent2_connect") {
 		return {
@@ -393,7 +419,9 @@ function parseAgentConcurrent2Request(data: unknown): AgentConcurrent2Request {
 				: {}),
 		};
 	}
-	throw new Error(`unknown agent concurrent 2 request type: ${String(request.type)}`);
+	throw new Error(
+		`unknown agent concurrent 2 request type: ${String(request.type)}`,
+	);
 }
 
 function stringField(record: Record<string, unknown>, field: string): string {
@@ -407,21 +435,25 @@ function stringField(record: Record<string, unknown>, field: string): string {
 function numberField(record: Record<string, unknown>, field: string): number {
 	const value = record[field];
 	if (typeof value !== "number" || !Number.isFinite(value)) {
-		throw new Error(`agent concurrent 2 request ${field} must be a finite number`);
+		throw new Error(
+			`agent concurrent 2 request ${field} must be a finite number`,
+		);
 	}
 	return value;
 }
 
 function createAgentConcurrent2Db(db: RawRivetDB): AgentConcurrent2Db {
-	return createSerializedDb(async <T = Record<string, SQLPrimitive>>(
-		query: string,
-		...values: SQLPrimitive[]
-	): Promise<T[]> => {
-		const converted = values.map((value) =>
-			typeof value === "boolean" ? (value ? 1 : 0) : value,
-		);
-		return (await db.execute(query, ...converted)) as T[];
-	});
+	return createSerializedDb(
+		async <T = Record<string, SQLPrimitive>>(
+			query: string,
+			...values: SQLPrimitive[]
+		): Promise<T[]> => {
+			const converted = values.map((value) =>
+				typeof value === "boolean" ? (value ? 1 : 0) : value,
+			);
+			return (await db.execute(query, ...converted)) as T[];
+		},
+	);
 }
 
 function ensureAgentConcurrent2Runtime(c: {
@@ -641,7 +673,9 @@ async function runBuildToolPlanContext(
 		"load-latest-executor-id",
 		`SELECT executor_id FROM executor_tools ORDER BY updated_at DESC LIMIT 1`,
 	);
-	const latestExecutorId = String(latestExecutor[0]?.executor_id ?? "seed-executor");
+	const latestExecutorId = String(
+		latestExecutor[0]?.executor_id ?? "seed-executor",
+	);
 	await timedQuery(
 		sql,
 		stats,
@@ -927,7 +961,10 @@ async function runMutationMix(
 			`INSERT INTO thread_events (seq, event_type, payload, created_at) VALUES (?, ?, ?, ?)`,
 			seq,
 			"message_added",
-			JSON.stringify({ type: "message_added", messageId: messageIdValue }),
+			JSON.stringify({
+				type: "message_added",
+				messageId: messageIdValue,
+			}),
 			now,
 		);
 		await timedQuery(
@@ -1042,7 +1079,14 @@ async function timedQuery<T = Record<string, SQLPrimitive>>(
 	try {
 		const rows = await sql<T>(query, ...values);
 		const durationMs = Math.round(performance.now() - startedAt);
-		recordAgentConcurrent2Query(stats, name, query, durationMs, rows.length, false);
+		recordAgentConcurrent2Query(
+			stats,
+			name,
+			query,
+			durationMs,
+			rows.length,
+			false,
+		);
 		steps.push({
 			name,
 			durationMs,
@@ -1131,7 +1175,8 @@ function classifyAgentConcurrent2Query(query: string): {
 	table: string;
 } {
 	const normalized = query.trim().replace(/\s+/g, " ");
-	const operation = normalized.match(/^([a-z]+)/i)?.[1]?.toLowerCase() ?? "other";
+	const operation =
+		normalized.match(/^([a-z]+)/i)?.[1]?.toLowerCase() ?? "other";
 	const table = extractAgentConcurrent2Table(normalized, operation);
 	if (operation === "select") {
 		return { operation, kind: "read", table };
@@ -1144,13 +1189,20 @@ function classifyAgentConcurrent2Query(query: string): {
 	) {
 		return { operation, kind: "mutation", table };
 	}
-	if (operation === "begin" || operation === "commit" || operation === "rollback") {
+	if (
+		operation === "begin" ||
+		operation === "commit" ||
+		operation === "rollback"
+	) {
 		return { operation, kind: "tx", table };
 	}
 	return { operation, kind: "other", table };
 }
 
-function extractAgentConcurrent2Table(query: string, operation: string): string {
+function extractAgentConcurrent2Table(
+	query: string,
+	operation: string,
+): string {
 	const lower = query.toLowerCase();
 	if (operation === "select") {
 		return firstMatch(lower, /\bfrom\s+([a-z0-9_]+)/) ?? "unknown";
@@ -1164,7 +1216,11 @@ function extractAgentConcurrent2Table(query: string, operation: string): string 
 	if (operation === "delete") {
 		return firstMatch(lower, /\bfrom\s+([a-z0-9_]+)/) ?? "unknown";
 	}
-	if (operation === "begin" || operation === "commit" || operation === "rollback") {
+	if (
+		operation === "begin" ||
+		operation === "commit" ||
+		operation === "rollback"
+	) {
 		return "transaction";
 	}
 	return "unknown";
@@ -1180,7 +1236,9 @@ function hasPendingLaunch(value: unknown): boolean {
 	}
 	try {
 		const parsed = JSON.parse(value) as { pendingLaunch?: unknown };
-		return parsed.pendingLaunch !== null && parsed.pendingLaunch !== undefined;
+		return (
+			parsed.pendingLaunch !== null && parsed.pendingLaunch !== undefined
+		);
 	} catch {
 		return false;
 	}
@@ -1190,7 +1248,9 @@ function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 }
 
-async function createAgentConcurrent2Schema(database: RawRivetDB): Promise<void> {
+async function createAgentConcurrent2Schema(
+	database: RawRivetDB,
+): Promise<void> {
 	await database.execute(`CREATE TABLE IF NOT EXISTS executor_tools (
 		executor_id TEXT NOT NULL,
 		tool_name TEXT NOT NULL,
@@ -1327,20 +1387,35 @@ async function createAgentConcurrent2Schema(database: RawRivetDB): Promise<void>
 }
 
 async function seedAgentConcurrent2Data(database: RawRivetDB): Promise<void> {
-	const existing = await database.execute(`SELECT COUNT(*) AS count FROM messages`);
+	const existing = await database.execute(
+		`SELECT COUNT(*) AS count FROM messages`,
+	);
 	if (Number(existing[0]?.count ?? 0) > 0) {
 		return;
 	}
 
 	const now = new Date("2026-05-16T03:58:18.661Z").getTime();
 	const text = (size: number) => "x".repeat(size);
-	const isoAt = (index: number) => new Date(now + index * 1_000).toISOString();
+	const isoAt = (index: number) =>
+		new Date(now + index * 1_000).toISOString();
 
-	await batchInsert(database, `INSERT INTO thread_meta_kv (key, value, updated_at)`, [
-		["executor_type", "local-client", isoAt(0)],
-		["workspace_intent", JSON.stringify({ spec: null, pendingLaunch: null }), isoAt(0)],
-		["executor_status", JSON.stringify({ available: true, message: "ready" }), isoAt(0)],
-	]);
+	await batchInsert(
+		database,
+		`INSERT INTO thread_meta_kv (key, value, updated_at)`,
+		[
+			["executor_type", "local-client", isoAt(0)],
+			[
+				"workspace_intent",
+				JSON.stringify({ spec: null, pendingLaunch: null }),
+				isoAt(0),
+			],
+			[
+				"executor_status",
+				JSON.stringify({ available: true, message: "ready" }),
+				isoAt(0),
+			],
+		],
+	);
 
 	const messageRows: unknown[][] = [];
 	for (let index = 1; index <= MESSAGE_COUNT; index++) {
@@ -1428,7 +1503,12 @@ async function seedAgentConcurrent2Data(database: RawRivetDB): Promise<void> {
 			description: text(EXECUTOR_TOOL_SCHEMA_BYTES),
 			input_schema: { type: "object", properties: {} },
 		});
-		executorToolRows.push(["seed-executor", `tool_${index}`, schema, isoAt(index)]);
+		executorToolRows.push([
+			"seed-executor",
+			`tool_${index}`,
+			schema,
+			isoAt(index),
+		]);
 	}
 	await batchInsert(
 		database,
@@ -1442,7 +1522,10 @@ async function seedAgentConcurrent2Data(database: RawRivetDB): Promise<void> {
 		threadEventRows.push([
 			index,
 			index % 3 === 0 ? "message_added" : "agent_state_changed",
-			JSON.stringify({ type: "seed_event", body: text(THREAD_EVENT_PAYLOAD_BYTES) }),
+			JSON.stringify({
+				type: "seed_event",
+				body: text(THREAD_EVENT_PAYLOAD_BYTES),
+			}),
 			isoAt(index),
 		]);
 	}

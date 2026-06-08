@@ -21,7 +21,7 @@ import {
 	StepExhaustedError,
 	StepFailedError,
 } from "./errors.js";
-import { buildLoopIterationRange, buildEntryMetadataKey } from "./keys.js";
+import { buildEntryMetadataKey, buildLoopIterationRange } from "./keys.js";
 import {
 	appendLoopIteration,
 	appendName,
@@ -36,13 +36,12 @@ import {
 	flush,
 	getOrCreateMetadata,
 	loadMetadata,
-	setEntry,
 	type PendingDeletions,
+	setEntry,
 } from "./storage.js";
 import type {
 	BranchConfig,
 	BranchOutput,
-	BranchStatus,
 	Entry,
 	EntryKindType,
 	EntryMetadata,
@@ -66,11 +65,11 @@ import type {
 	WorkflowError,
 	WorkflowErrorEvent,
 	WorkflowErrorHandler,
+	WorkflowMessageDriver,
 	WorkflowQueue,
 	WorkflowQueueMessage,
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
-	WorkflowMessageDriver,
 } from "./types.js";
 import { sleep } from "./utils.js";
 
@@ -505,8 +504,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	 * Throws HistoryDivergedError if duplicate detected.
 	 */
 	private checkDuplicateName(name: string): void {
-		const fullKey =
-			locationToKey(this.storage, this.currentLocation) + "/" + name;
+		const fullKey = `${locationToKey(this.storage, this.currentLocation)}/${name}`;
 		if (this.usedNamesInExecution.has(fullKey)) {
 			throw new HistoryDivergedError(
 				`Duplicate entry name "${name}" at location "${locationToKey(this.storage, this.currentLocation)}". ` +
@@ -580,7 +578,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const isUnderPrefix =
 				prefix === ""
 					? true // Root: all keys are children
-					: key.startsWith(prefix + "/") || key === prefix;
+					: key.startsWith(`${prefix}/`) || key === prefix;
 
 			if (isUnderPrefix) {
 				if (!this.visitedKeys.has(key)) {
@@ -825,10 +823,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			const maxRetries = config.maxRetries ?? DEFAULT_MAX_RETRIES;
 
 			if (metadata.attempts > maxRetries) {
-				// Prefer step history error, but fall back to metadata since
-				// driver implementations may persist metadata without the history
-				// entry error (e.g. partial writes/crashes between attempts).
-				const lastError = stepData.error ?? metadata.error;
+				const lastError = metadata.error;
 				const exhaustedError = new StepExhaustedError(
 					config.name,
 					lastError,
@@ -941,15 +936,16 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			});
 			return output;
 		} catch (error) {
-			// Timeout errors are treated as critical (no retry)
-			if (error instanceof StepTimeoutError) {
-				if (entry.kind.type === "step") {
-					entry.kind.data.error = String(error);
-				}
-				entry.dirty = true;
+			if (entry.kind.type === "step") {
+				entry.kind.data.error = String(error);
+			}
+			entry.dirty = true;
+
+			// Timeout errors are treated as critical by default. Steps opt
+			// into retrying on timeout with retryOnTimeout: true.
+			if (error instanceof StepTimeoutError && !config.retryOnTimeout) {
 				metadata.status = "exhausted";
 				metadata.error = String(error);
-				await this.flushStorage();
 				await this.notifyStepError(config, metadata.attempts, error, {
 					willRetry: false,
 				});
@@ -967,13 +963,8 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				error instanceof CriticalError ||
 				error instanceof RollbackError
 			) {
-				if (entry.kind.type === "step") {
-					entry.kind.data.error = String(error);
-				}
-				entry.dirty = true;
 				metadata.status = "exhausted";
 				metadata.error = String(error);
-				await this.flushStorage();
 				await this.notifyStepError(config, metadata.attempts, error, {
 					willRetry: false,
 				});
@@ -990,15 +981,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				);
 			}
 
-			if (entry.kind.type === "step") {
-				entry.kind.data.error = String(error);
-			}
-			entry.dirty = true;
 			const willRetry = metadata.attempts <= maxRetries;
 			metadata.status = willRetry ? "failed" : "exhausted";
 			metadata.error = String(error);
 
-			await this.flushStorage();
 			if (willRetry) {
 				const retryDelay = calculateBackoff(
 					metadata.attempts,
@@ -1023,7 +1009,10 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				attachTryStepFailure(
 					new StepExhaustedError(config.name, String(error)),
 					{
-						kind: "exhausted",
+						kind:
+							error instanceof StepTimeoutError
+								? "timeout"
+								: "exhausted",
 						stepName: config.name,
 						attempts: metadata.attempts,
 						error: extractErrorInfo(error),
@@ -1042,7 +1031,9 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	 *
 	 * Note: This does NOT cancel the underlying operation. JavaScript Promises
 	 * cannot be cancelled once started. When a timeout occurs:
-	 * - The step is marked as failed with StepTimeoutError
+	 * - The step is rejected with StepTimeoutError. By default this is treated
+	 *   as a critical failure with no retry. Set retryOnTimeout: true on the
+	 *   step config to retry timeouts like any other error.
 	 * - The underlying async operation continues running in the background
 	 * - Any side effects from the operation may still occur
 	 *

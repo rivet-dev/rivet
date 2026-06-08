@@ -1,5 +1,12 @@
-import type { RivetSse } from "@rivet-gg/cloud";
-import { startTransition, useEffect, useRef, useState } from "react";
+import type { Rivet, RivetSse } from "@rivet-gg/cloud";
+import * as Sentry from "@sentry/react";
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { cloudEnv } from "@/lib/env";
 
 const MAX_RETRIES = 8;
@@ -102,6 +109,73 @@ async function sleep(ms: number, signal: AbortSignal) {
 	});
 }
 
+const HISTORY_PAGE_SIZE = 100;
+const INITIAL_HISTORY_SIZE = 50;
+
+async function fetchLogsHistory(
+	baseUrl: string,
+	project: string,
+	namespace: string,
+	pool: string,
+	params: {
+		before?: string;
+		limit?: number;
+		region?: string;
+		contains?: string;
+	},
+): Promise<Rivet.LogHistoryResponseItem[]> {
+	const qs = new URLSearchParams();
+	if (params.before) qs.set("before", params.before);
+	if (params.limit) qs.set("limit", String(params.limit));
+	if (params.region) qs.set("region", params.region);
+	if (params.contains) qs.set("contains", params.contains);
+	const query = qs.toString();
+	const url = `${baseUrl}/projects/${encodeURIComponent(project)}/namespaces/${encodeURIComponent(namespace)}/managed-pools/${encodeURIComponent(pool)}/logs/history${query ? `?${query}` : ""}`;
+
+	const response = await fetch(url, {
+		method: "GET",
+		headers: { Accept: "application/json" },
+		credentials: "include",
+	});
+
+	if (!response.ok) {
+		const body = await response.text();
+		throw new Error(
+			`fetchLogsHistory failed with status ${response.status}: ${body}`,
+		);
+	}
+
+	return response.json();
+}
+
+// Cloud Run emits this on every container cold-start, prefixed with its own
+// timestamp on stderr. When the user hasn't pushed an image yet, surface a
+// Rivet-flavored hint instead of leaky provider detail. Matched by suffix
+// (after Cloud Run's leading "YYYY/MM/DD HH:MM:SS " prefix) and gated on
+// `stream === "stderr"` so we don't grab a user-emitted line that happens to
+// contain the same text.
+const CLOUD_RUN_HELLO_SUFFIX =
+	"Hello from Cloud Run! The container started successfully and is listening for HTTP requests on port 8080";
+const RIVET_COMPUTE_HELLO =
+	"Hello from Rivet Compute! Waiting for you to deploy an image. See rivet.dev/docs/connect/rivet-compute to learn more.";
+
+function rewriteLogEntry<T extends { message: string; stream?: string }>(
+	data: T,
+): T {
+	if (
+		data.stream === "stderr" &&
+		data.message.endsWith(CLOUD_RUN_HELLO_SUFFIX)
+	) {
+		return { ...data, message: RIVET_COMPUTE_HELLO };
+	}
+	return data;
+}
+
+function historyToLogEvent(
+	item: Rivet.LogHistoryResponseItem,
+): RivetSse.LogStreamEvent.Log {
+	return { event: "log", data: rewriteLogEntry(item) };
+}
 
 async function streamWithRetry(
 	project: string,
@@ -137,7 +211,7 @@ async function streamWithRetry(
 				} else if (event.event === "error") {
 					return { error: event.data.message };
 				} else if (event.event === "log") {
-					onEntry(event);
+					onEntry({ ...event, data: rewriteLogEntry(event.data) });
 				}
 			}
 		} catch (err) {
@@ -173,8 +247,17 @@ export function useDeploymentLogsStream({
 	const [logs, setLogs] = useState<RivetSse.LogStreamEvent.Log[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [isLoadingMore, setIsLoadingMore] = useState(false);
+	const [hasMore, setHasMore] = useState(true);
 	const pendingRef = useRef<RivetSse.LogStreamEvent.Log[]>([]);
 	const pausedRef = useRef(paused);
+	const logsRef = useRef(logs);
+	logsRef.current = logs;
+	// Dedupes entries that appear in both the initial history fetch and
+	// the live stream (and across "load more" page boundaries that share
+	// a timestamp). `insertId` is the only unique identifier the API
+	// exposes per log entry.
+	const seenInsertIdsRef = useRef<Set<string>>(new Set());
 
 	useEffect(() => {
 		pausedRef.current = paused;
@@ -185,11 +268,15 @@ export function useDeploymentLogsStream({
 		setIsLoading(true);
 		setError(null);
 		pendingRef.current = [];
+		seenInsertIdsRef.current = new Set();
 
 		const controller = new AbortController();
 
 		function onEntry(entry: RivetSse.LogStreamEvent.Log) {
 			setIsLoading(false);
+			const insertId = entry.data.insertId;
+			if (seenInsertIdsRef.current.has(insertId)) return;
+			seenInsertIdsRef.current.add(insertId);
 			pendingRef.current.push(entry);
 			if (!pausedRef.current) {
 				const toFlush = pendingRef.current;
@@ -200,35 +287,75 @@ export function useDeploymentLogsStream({
 			}
 		}
 
-		streamWithRetry(
-			project,
-			namespace,
-			pool,
-			filter,
-			region,
-			controller.signal,
-			() => setIsLoading(false),
-			onEntry,
-		)
-			.then((result) => {
+		async function start() {
+			// Seed the view with recent historical logs so it isn't empty on load.
+			try {
+				const initial = await fetchLogsHistory(
+					cloudEnv().VITE_APP_CLOUD_API_URL,
+					project,
+					namespace,
+					pool,
+					{
+						limit: INITIAL_HISTORY_SIZE,
+						region: region || undefined,
+						contains: filter || undefined,
+					},
+				);
+				if (controller.signal.aborted) return;
+				if (initial.length < INITIAL_HISTORY_SIZE) {
+					setHasMore(false);
+				}
+				if (initial.length > 0) {
+					for (const item of initial) {
+						seenInsertIdsRef.current.add(item.insertId);
+					}
+					const converted = initial.map(historyToLogEvent);
+					startTransition(() => {
+						setLogs(converted);
+					});
+				}
+			} catch (err) {
+				// Non-fatal. The stream will still start.
+				console.warn("Failed to fetch initial log history:", err);
+				Sentry.captureException(err, {
+					tags: { source: "deployment-logs-initial-history" },
+					contexts: {
+						logs: { project, namespace, pool, region, filter },
+					},
+				});
+			}
+
+			if (controller.signal.aborted) return;
+			setIsLoading(false);
+
+			const result = await streamWithRetry(
+				project,
+				namespace,
+				pool,
+				filter,
+				region,
+				controller.signal,
+				() => setIsLoading(false),
+				onEntry,
+			);
+
+			setIsLoading(false);
+			if (result === "exhausted") {
+				setError(
+					"Failed to connect to log stream after multiple attempts.",
+				);
+			} else if (typeof result === "object") {
+				setError(result.error);
+			}
+		}
+
+		start().catch((err) => {
+			if ((err as Error).name !== "AbortError") {
+				console.error("Log stream fatal error:", err);
 				setIsLoading(false);
-				if (result === "exhausted") {
-					setError(
-						"Failed to connect to log stream after multiple attempts.",
-					);
-				} else if (typeof result === "object") {
-					setError(result.error);
-				}
-			})
-			.catch((err) => {
-				if ((err as Error).name !== "AbortError") {
-					console.error("Log stream fatal error:", err);
-					setIsLoading(false);
-					setError(
-						"An unexpected error occurred while streaming logs.",
-					);
-				}
-			});
+				setError("An unexpected error occurred while streaming logs.");
+			}
+		});
 
 		return () => controller.abort();
 	}, [project, namespace, pool, filter, region]);
@@ -243,13 +370,68 @@ export function useDeploymentLogsStream({
 		}
 	}, [paused]);
 
+	// Reset hasMore when filters change.
+	useEffect(() => {
+		setHasMore(true);
+	}, []);
+
+	const loadMoreHistory = useCallback(async () => {
+		if (isLoadingMore || !hasMore) return;
+		setIsLoadingMore(true);
+		try {
+			const currentLogs = logsRef.current;
+			// The history API only accepts a timestamp cursor. Multiple
+			// entries can share a timestamp, so `seenInsertIdsRef` below
+			// filters out any overlap at the page boundary.
+			const before =
+				currentLogs.length > 0
+					? currentLogs[0].data.timestamp
+					: new Date().toISOString();
+
+			const items = await fetchLogsHistory(
+				cloudEnv().VITE_APP_CLOUD_API_URL,
+				project,
+				namespace,
+				pool,
+				{
+					before,
+					limit: HISTORY_PAGE_SIZE,
+					region: region || undefined,
+					contains: filter || undefined,
+				},
+			);
+
+			if (items.length < HISTORY_PAGE_SIZE) {
+				setHasMore(false);
+			}
+
+			const fresh = items.filter(
+				(item) => !seenInsertIdsRef.current.has(item.insertId),
+			);
+			for (const item of fresh) {
+				seenInsertIdsRef.current.add(item.insertId);
+			}
+
+			if (fresh.length > 0) {
+				const converted = fresh.map(historyToLogEvent);
+				startTransition(() => {
+					setLogs((prev) => [...converted, ...prev]);
+				});
+			}
+		} catch (err) {
+			console.error("Failed to load historical logs:", err);
+		} finally {
+			setIsLoadingMore(false);
+		}
+	}, [isLoadingMore, hasMore, project, namespace, pool, filter, region]);
+
 	return {
 		logs,
 		isLoading,
 		error,
 		streamError: null,
-		isLoadingMore: false,
-		hasMore: false,
-		loadMoreHistory: () => { },
+		isLoadingMore,
+		hasMore,
+		loadMoreHistory,
 	};
 }

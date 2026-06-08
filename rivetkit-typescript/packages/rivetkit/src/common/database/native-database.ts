@@ -97,7 +97,7 @@ function enrichNativeDatabaseError(
 			? error
 			: error instanceof Error
 				? error.message
-			: undefined;
+				: undefined;
 	const bridged =
 		bridgeReason === undefined
 			? undefined

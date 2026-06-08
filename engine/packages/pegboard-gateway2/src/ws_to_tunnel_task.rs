@@ -10,9 +10,9 @@ use tokio::sync::{Mutex, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::LifecycleResult;
-use crate::shared_state::InFlightRequestHandle;
+use crate::shared_state::{InFlightRequestHandle, display_id};
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(name = "ws_to_tunnel_task", skip_all)]
 pub async fn task(
 	in_flight_req: InFlightRequestHandle,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
@@ -29,6 +29,13 @@ pub async fn task(
 
 					match msg {
 						Message::Binary(data) => {
+							let data_len = data.len();
+							tracing::trace!(
+								request_id=%display_id(&in_flight_req.request_id),
+								data_len,
+								binary = true,
+								"received websocket message from client"
+							);
 							let ws_message =
 								protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
 									protocol::ToEnvoyWebSocketMessage {
@@ -36,9 +43,22 @@ pub async fn task(
 										binary: true,
 									},
 								);
-							in_flight_req.send_message(ws_message).await?;
+							in_flight_req.send_message(ws_message, false).await?;
+							tracing::trace!(
+								request_id=%display_id(&in_flight_req.request_id),
+								data_len,
+								binary = true,
+								"sent websocket message toward envoy"
+							);
 						}
 						Message::Text(text) => {
+							let data_len = text.as_bytes().len();
+							tracing::trace!(
+								request_id=%display_id(&in_flight_req.request_id),
+								data_len,
+								binary = false,
+								"received websocket message from client"
+							);
 							let ws_message =
 								protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(
 									protocol::ToEnvoyWebSocketMessage {
@@ -46,7 +66,13 @@ pub async fn task(
 										binary: false,
 									},
 								);
-							in_flight_req.send_message(ws_message).await?;
+							in_flight_req.send_message(ws_message, false).await?;
+							tracing::trace!(
+								request_id=%display_id(&in_flight_req.request_id),
+								data_len,
+								binary = false,
+								"sent websocket message toward envoy"
+							);
 						}
 						Message::Close(close) => {
 							return Ok(LifecycleResult::ClientClose(close));

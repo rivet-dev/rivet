@@ -14,26 +14,30 @@ import {
 	useQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { useRouteContext, useSearch } from "@tanstack/react-router";
+import {
+	useNavigate,
+	useRouteContext,
+	useSearch,
+} from "@tanstack/react-router";
 import {
 	createContext,
 	type ReactNode,
 	useContext,
 	useEffect,
 	useMemo,
+	useRef,
 } from "react";
 import { match, P } from "ts-pattern";
-import { useLocalStorage } from "usehooks-ts";
-import { HelpDropdown } from "@/app/help-dropdown";
+import { z } from "zod";
 import { isRivetApiError } from "@/lib/errors";
 import { features } from "@/lib/features";
 import { DiscreteCopyButton } from "../copy-area";
-import { getConfig, useConfig } from "../lib/config";
-import { ls } from "../lib/utils";
+import { useConfig } from "../lib/config";
 import { ShimmerLine } from "../shimmer-line";
 import { Button } from "../ui/button";
 import { useFiltersValue } from "./actor-filters-context";
 import {
+	actorMetadataQueryOptions,
 	actorWakeUpMutationOptions,
 	actorWakeUpQueryOptions,
 	ActorInspectorProvider as InspectorProvider,
@@ -45,6 +49,10 @@ import {
 	QueriedActorError,
 	QueriedActorStatusAdditionalInfo,
 } from "./actor-status-label";
+import {
+	resumeAutoWake,
+	useAutoWakeSuppression,
+} from "./auto-wake-suppression";
 import { useDataProvider, useEngineCompatDataProvider } from "./data-provider";
 import { useActorInspectorData } from "./hooks/use-actor-inspector-data";
 import type { ActorId, ActorStatus } from "./queries";
@@ -111,16 +119,56 @@ export function GuardConnectableInspector({
 		refetchInterval: 1000,
 	});
 
+	const suppression = useAutoWakeSuppression(actorId);
+
+	// Resume auto-wake when the actor transitions into running. This clears
+	// suppression set by an explicit sleep or reschedule once the actor is back
+	// up (a reschedule reallocated it, or it was woken externally). A rising edge
+	// is used instead of "is running" so a status refetch returning running while
+	// already running, such as the invalidation triggered by the sleep mutation,
+	// does not prematurely clear suppression set milliseconds earlier. The
+	// initial undefined-to-running transition also clears any leftover suppression
+	// when reopening an already-running actor.
+	const prevStatusRef = useRef<ActorStatus | undefined>(undefined);
+	useEffect(() => {
+		const prevStatus = prevStatusRef.current;
+		prevStatusRef.current = status;
+		if (status === "running" && prevStatus !== "running") {
+			resumeAutoWake(actorId);
+		}
+	}, [status, actorId]);
+
 	return match(status)
-		.with(P.union("running"), () => (
-			<ActorContextProvider actorId={actorId}>
-				{children}
-			</ActorContextProvider>
-		))
+		.with(P.union("running"), () => {
+			// When the user has put the actor to sleep, do not mount the inspector
+			// connection. Its /metadata polling and websocket count as actor
+			// activity and would keep the actor awake. Reschedule does not drop it:
+			// the actor reallocates back to running on its own, and the inspector
+			// would otherwise risk getting stuck if the sleep blip is too brief to
+			// observe as a status transition.
+			if (suppression === "sleep") {
+				return (
+					<InspectorGuardContext.Provider
+						value={<TransitioningActor />}
+					>
+						{children}
+					</InspectorGuardContext.Provider>
+				);
+			}
+
+			return (
+				<ActorContextProvider actorId={actorId}>
+					{children}
+				</ActorContextProvider>
+			);
+		})
 		.otherwise((status) => (
 			<InspectorGuardContext.Provider
 				value={<UnavailableInfo actorId={actorId} status={status} />}
 			>
+				{status === "sleeping" && (
+					<AutoWakeUpController actorId={actorId} />
+				)}
 				{children}
 			</InspectorGuardContext.Provider>
 		));
@@ -135,29 +183,24 @@ function UnavailableInfo({
 }) {
 	return match(status)
 		.with("crashed", () => (
-			<Info>
-				<Icon
-					icon={faExclamationTriangle}
-					className="text-4xl text-destructive"
-				/>
-				<p>Actor is unavailable.</p>
-
-				<QueriedActorError actorId={actorId} />
-
-				<div className="flex gap-4 items-center mt-4">
-					<WakeUpActorButton actorId={actorId} />
-
-					<HelpDropdown>
-						<Button
-							size="sm"
-							variant="outline"
-							startIcon={<Icon icon={faQuestionCircle} />}
-						>
-							Need help?
-						</Button>
-					</HelpDropdown>
+			<div className="flex-1 flex flex-col items-center justify-center h-full text-center px-6">
+				<div className="flex items-center justify-center size-10 rounded-full bg-destructive/10 mb-4">
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-destructive text-lg"
+					/>
 				</div>
-			</Info>
+				<h3 className="text-base font-semibold text-foreground mb-1">
+					Actor is unavailable
+				</h3>
+				<div className="text-sm text-muted-foreground max-w-sm mb-5">
+					<QueriedActorError actorId={actorId} />
+				</div>
+				<div className="flex gap-2 items-center">
+					<WakeUpActorButton actorId={actorId} />
+					<NeedHelpButton />
+				</div>
+			</div>
 		))
 		.with("crash-loop", () => <CrashLoopActor actorId={actorId} />)
 		.with("pending", () => <NoRunners />)
@@ -186,9 +229,10 @@ function UnavailableInfo({
 
 function SleepingActor({ actorId }: { actorId: ActorId }) {
 	const { wakeOnSelect } = useFiltersValue({ onlyEphemeral: true });
+	const suppression = useAutoWakeSuppression(actorId);
 
-	if (wakeOnSelect?.value[0] === "1") {
-		return <AutoWakeUpActor actorId={actorId} />;
+	if (wakeOnSelect?.value[0] === "1" && !suppression) {
+		return <AutoWakeUpActor />;
 	}
 
 	return (
@@ -218,17 +262,31 @@ function CrashLoopActor({ actorId }: { actorId: ActorId }) {
 
 			<div className="flex gap-4 items-center mt-4">
 				{!rescheduleInFuture && <WakeUpActorButton actorId={actorId} />}
-				<HelpDropdown>
-					<Button
-						size="sm"
-						variant="outline"
-						startIcon={<Icon icon={faQuestionCircle} />}
-					>
-						Need help?
-					</Button>
-				</HelpDropdown>
+				<NeedHelpButton />
 			</div>
 		</Info>
+	);
+}
+
+function NeedHelpButton() {
+	const navigate = useNavigate();
+	return (
+		<Button
+			size="sm"
+			variant="ghost"
+			startIcon={<Icon icon={faQuestionCircle} />}
+			onClick={() => {
+				void navigate({
+					to: ".",
+					search: (prev) => ({
+						...(prev as Record<string, unknown>),
+						modal: "help",
+					}),
+				});
+			}}
+		>
+			Need help?
+		</Button>
 	);
 }
 
@@ -265,140 +323,193 @@ interface InspectorTokenErrorContext {
 	error?: unknown;
 }
 
-function buildInspectorTokenErrorMessage(
+const EngineErrorBodySchema = z.object({
+	group: z.string(),
+	code: z.string(),
+	message: z.string(),
+	metadata: z.unknown().optional(),
+});
+
+type EngineErrorBody = z.infer<typeof EngineErrorBodySchema>;
+
+function extractEngineErrorBody(error: unknown): EngineErrorBody | undefined {
+	if (!isRivetApiError(error)) return undefined;
+	const parsed = EngineErrorBodySchema.safeParse(error.body);
+	return parsed.success ? parsed.data : undefined;
+}
+
+export function buildInspectorTokenErrorMessage(
 	context: InspectorTokenErrorContext,
 ): ReactNode {
 	const { statusCode, metadata, error } = context;
 
-	const isLocal = metadata?.type === "local";
+	const engineError = extractEngineErrorBody(error);
 
-	// 403: Inspector auth rejected (deployed only).
+	// Version check is orthogonal to the specific error. If RivetKit itself
+	// is below the minimum, surface that first regardless of which call
+	// failed.
+	if (
+		metadata?.version &&
+		isVersionOutdated(metadata.version, RIVET_KIT_MIN_VERSION)
+	) {
+		return (
+			<OutdatedRivetKit currentVersion={metadata.version} error={error} />
+		);
+	}
+
+	// The inspector token couldn't be retrieved. Two underlying causes:
+	// 1. Engine route is missing entirely (older engine without the KV
+	//    endpoint, returns 404 with no structured body).
+	// 2. Engine returned `actor.kv_key_not_found` for the inspector token
+	//    key.
+	const isKvKeyMissing =
+		engineError?.group === "actor" &&
+		engineError?.code === "kv_key_not_found";
+	const isEndpointMissing = statusCode === 404 && !engineError;
+
+	if (isKvKeyMissing || isEndpointMissing) {
+		return (
+			<MissingInspectorToken
+				currentVersion={metadata?.version}
+				error={error}
+			/>
+		);
+	}
+
+	// Inspector auth rejected. Deployed only: locally we expect to fall
+	// through to the verbose error so the user can debug.
+	const isLocal = metadata?.type === "local";
 	if (statusCode === 403 && !isLocal) {
 		return (
 			<Info>
-				<p>
-					Inspector authentication failed. The dashboard fetches the
-					per-actor inspector token from the engine KV API; this
-					typically indicates a permissions or configuration issue
-					with the request.
+				<Icon
+					icon={faExclamationTriangle}
+					className="text-4xl text-destructive"
+				/>
+				<p className="font-semibold">
+					Inspector authentication failed.
 				</p>
-				<p className="mt-2 text-sm text-gray-600">
-					See the{" "}
+				<p className="text-sm text-muted-foreground">
+					The dashboard fetches the per-actor inspector token from the
+					engine KV API. This typically indicates a permissions or
+					configuration issue with the request. See the{" "}
 					<a
 						href="https://rivet.dev/docs/actors/inspector"
-						className="text-blue-600 hover:underline"
+						className="underline hover:text-foreground"
 					>
 						Inspector documentation
 					</a>{" "}
 					for more details.
 				</p>
+				{engineError ? (
+					<EngineErrorBlock body={engineError} />
+				) : (
+					<ErrorDetails
+						error={isRivetApiError(error) ? error.body : error}
+					/>
+				)}
 			</Info>
 		);
 	}
 
-	// 404: Check version mismatch first
-	if (statusCode === 404) {
-		if (metadata?.version) {
-			const currentVersion = metadata.version;
-			const minVersion = RIVET_KIT_MIN_VERSION;
-			const versionIsOutdated =
-				currentVersion &&
-				minVersion &&
-				isVersionOutdated(currentVersion, minVersion);
-
-			if (versionIsOutdated) {
-				return (
-					<Info>
-						<p>RivetKit version is outdated.</p>
-						<p>
-							Your RivetKit version (
-							<span className="font-mono-console font-bold">
-								{currentVersion}
-							</span>
-							) is older than the required version (
-							<span className="font-mono-console font-bold">
-								{minVersion}
-							</span>
-							).
-						</p>
-						<p className="mt-2">
-							Please upgrade RivetKit to use the Inspector.
-						</p>
-					</Info>
-				);
-			}
-		}
-
-		// 404 in deployed environment but not a version issue
-		if (!isLocal) {
-			return (
-				<Info>
-					<p>
-						Inspector token endpoint returned a 404. Please check
-						your RivetKit version and contact support if the issue
-						persists.
-					</p>
-					<p className="mt-2 text-sm text-gray-600">
-						Current RivetKit version:{" "}
-						<span className="font-mono-console">
-							{metadata?.version || "unknown"}
-						</span>
-					</p>
-				</Info>
-			);
-		}
-
-		// 404 in local environment
+	// Surface the engine's structured error directly.
+	if (engineError) {
 		return (
 			<Info>
-				<p>
-					Inspector token endpoint returned a 404. This might indicate
-					an outdated version of RivetKit.
+				<Icon
+					icon={faExclamationTriangle}
+					className="text-4xl text-destructive"
+				/>
+				<p className="font-semibold">
+					Unable to connect to the Inspector.
 				</p>
-				<p className="mt-2 text-sm text-gray-600">
-					Current RivetKit version:{" "}
-					<span className="font-mono-console">
-						{metadata?.version || "unknown"}
-					</span>
-				</p>
-				<p className="mt-2">
-					Please ensure you're running the latest version of RivetKit.
-				</p>
-				<p className="mt-2 text-sm">
-					If the problem persists, please contact support.
-				</p>
+				<EngineErrorBlock body={engineError} />
 			</Info>
 		);
 	}
 
-	// Unknown error code in deployed environment
-	if (statusCode && statusCode !== 403 && statusCode !== 404 && !isLocal) {
-		return <UnexpectedInspectorError error={error} metadata={metadata} />;
-	}
+	return <UnexpectedInspectorError error={error} metadata={metadata} />;
+}
 
-	// Default/generic error
+function OutdatedRivetKit({
+	currentVersion,
+	error,
+}: {
+	currentVersion: string;
+	error?: unknown;
+}) {
 	return (
 		<Info>
-			<p>Unable to retrieve the Actor's Inspector token.</p>
-			<p>
-				Please ensure the Inspector is enabled for your Actor and that
-				you're using RivetKit version{" "}
-				<b className="font-mono-console">{RIVET_KIT_MIN_VERSION}</b> or
-				newer.
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p className="font-semibold">RivetKit version is outdated.</p>
+			<p className="text-sm text-muted-foreground">
+				Your RivetKit version (
+				<span className="font-mono-console">{currentVersion}</span>) is
+				older than the required version (
+				<span className="font-mono-console">
+					{RIVET_KIT_MIN_VERSION}
+				</span>
+				). Please upgrade RivetKit to use the Inspector.
 			</p>
-			<p>
+			{error ? (
+				<ErrorDetails
+					error={isRivetApiError(error) ? error.body : error}
+				/>
+			) : null}
+		</Info>
+	);
+}
+
+function MissingInspectorToken({
+	currentVersion,
+	error,
+}: {
+	currentVersion?: string;
+	error: unknown;
+}) {
+	return (
+		<Info>
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p className="font-semibold">Inspector token not found.</p>
+			<p className="text-sm text-muted-foreground">
+				Ensure the Inspector is enabled on your Actor and that you are
+				running RivetKit{" "}
+				<span className="font-mono-console">
+					{RIVET_KIT_MIN_VERSION}
+				</span>{" "}
+				or newer.
+			</p>
+			<p className="text-sm text-muted-foreground">
 				Current RivetKit version:{" "}
 				<DiscreteCopyButton
-					value={metadata?.version || "unknown"}
+					value={currentVersion || "unknown"}
 					className="inline-block p-0 h-auto px-0.5"
 				>
-					<span className="font-mono-console text-lg font-bold">
-						{metadata?.version || "unknown"}
+					<span className="font-mono-console">
+						{currentVersion || "unknown"}
 					</span>
 				</DiscreteCopyButton>
 			</p>
 			<ErrorDetails error={isRivetApiError(error) ? error.body : error} />
 		</Info>
+	);
+}
+
+function EngineErrorBlock({ body }: { body: EngineErrorBody }) {
+	return (
+		<div className="mt-2 flex flex-col items-center gap-2 w-full">
+			<span className="font-mono-console text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">
+				{body.group}.{body.code}
+			</span>
+			<p className="text-sm text-muted-foreground">{body.message}</p>
+			<ErrorDetails error={body} />
+		</div>
 	);
 }
 
@@ -426,12 +537,14 @@ function UnexpectedInspectorError({
 	}, []);
 	return (
 		<Info>
-			<p>
-				An unexpected error occurred while connecting to the Inspector.
-			</p>
-			<p className="mt-2">
-				Our team has been notified. Please try again later or contact
-				support if the issue persists.
+			<Icon
+				icon={faExclamationTriangle}
+				className="text-4xl text-destructive"
+			/>
+			<p className="font-semibold">Unable to connect to the Inspector.</p>
+			<p className="text-sm text-muted-foreground">
+				An unexpected error occurred. Our team has been notified. Please
+				try again later or contact support if the issue persists.
 			</p>
 			<ErrorDetails error={error} />
 		</Info>
@@ -474,7 +587,7 @@ function ActorContextProvider(props: {
 	return <ActorEngineProvider {...props} inspectorToken={token} />;
 }
 
-function ActorInspectorProvider({
+function _ActorInspectorProvider({
 	actorId,
 	inspectorToken,
 	children,
@@ -524,20 +637,18 @@ function useActorRunner({ actorId }: { actorId: ActorId }) {
 }
 
 function useEngineToken() {
-	if (features.multitenancy) {
+	if (features.platform) {
 		const { data } = useQuery(
 			useRouteContext({
 				from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 			}).dataProvider.publishableTokenQueryOptions(),
 		);
-		return data;
+		return data || "";
 	}
-	const [data] = useLocalStorage(
-		ls.engineCredentials.key(getConfig().apiUrl),
-		"",
-		{ serializer: JSON.stringify, deserializer: JSON.parse },
+	const { data } = useQuery(
+		useEngineCompatDataProvider().engineAdminTokenQueryOptions(),
 	);
-	return data?.token || "";
+	return data || "";
 }
 
 function useEngineUrl() {
@@ -619,7 +730,7 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<Button
-			variant="outline"
+			variant="default"
 			size="sm"
 			onClick={() =>
 				mutate({
@@ -635,7 +746,33 @@ function WakeUpActorButton({ actorId }: { actorId: ActorId }) {
 	);
 }
 
-function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
+function AutoWakeUpActor() {
+	return (
+		<Info>
+			<div className="flex items-center">
+				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+				Waiting for Actor to wake...
+			</div>
+		</Info>
+	);
+}
+
+// Keeps a sleeping actor waking regardless of which tab is active. The actual
+// wake query lives here instead of in the sleeping overlay because the metadata
+// tab renders its own content instead of the guard overlay, so the
+// overlay-driven wake path never mounts there.
+function AutoWakeUpController({ actorId }: { actorId: ActorId }) {
+	const { wakeOnSelect } = useFiltersValue({ onlyEphemeral: true });
+	const suppression = useAutoWakeSuppression(actorId);
+
+	if (suppression || wakeOnSelect?.value[0] !== "1") {
+		return null;
+	}
+
+	return <AutoWakeUpRunner actorId={actorId} />;
+}
+
+function AutoWakeUpRunner({ actorId }: { actorId: ActorId }) {
 	const { credentials } = useActorEngineContext({
 		actorId,
 	});
@@ -646,14 +783,7 @@ function AutoWakeUpActor({ actorId }: { actorId: ActorId }) {
 		refetchInterval: 1_000,
 	});
 
-	return (
-		<Info>
-			<div className="flex items-center">
-				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
-				Waiting for Actor to wake...
-			</div>
-		</Info>
-	);
+	return null;
 }
 
 function ConnectingInspector() {
@@ -667,6 +797,17 @@ function ConnectingInspector() {
 	);
 }
 
+function TransitioningActor() {
+	return (
+		<Info>
+			<div className="flex items-center">
+				<Icon icon={faSpinnerThird} className="animate-spin mr-2" />
+				Updating Actor...
+			</div>
+		</Info>
+	);
+}
+
 function InspectorGuard({
 	actorId,
 	children,
@@ -674,15 +815,34 @@ function InspectorGuard({
 	actorId: ActorId;
 	children: ReactNode;
 }) {
-	const {
-		connectionStatus,
-		isInspectorAvailable,
-		actorMetadataQueryOptions,
-	} = useActorInspector();
+	const { connectionStatus, isInspectorAvailable } = useActorInspector();
+	const { credentials } = useActorEngineContext({ actorId });
 
-	const { data, isPending, error } = useQuery(
-		actorMetadataQueryOptions(actorId),
-	);
+	const {
+		data,
+		isPending,
+		error: liveError,
+	} = useQuery(actorMetadataQueryOptions({ actorId, credentials }));
+
+	// React Query resets `status` to "pending" (clearing the live error) every
+	// time `refetchInterval` re-runs an errored query that has no cached data.
+	// Latch the last error so the UI doesn't flash back to the loading state
+	// between failed fetches.
+	const lastErrorRef = useRef<unknown>(null);
+
+	useEffect(() => {
+		if (liveError) {
+			lastErrorRef.current = liveError;
+		} else if (data) {
+			lastErrorRef.current = null;
+		}
+	}, [data, liveError]);
+
+	const error = liveError ?? lastErrorRef.current;
+
+	if (error) {
+		return <OutdatedInspector error={error}>{children}</OutdatedInspector>;
+	}
 
 	if (isPending) {
 		return (
@@ -692,8 +852,8 @@ function InspectorGuard({
 		);
 	}
 
-	if (!data || error || !isInspectorAvailable) {
-		return <OutdatedInspector>{children}</OutdatedInspector>;
+	if (!data || !isInspectorAvailable) {
+		return <OutdatedInspector error={error}>{children}</OutdatedInspector>;
 	}
 
 	if (connectionStatus === "error") {
@@ -723,18 +883,49 @@ function InspectorGuard({
 	);
 }
 
-function OutdatedInspector({ children }: { children: ReactNode }) {
+export function OutdatedInspector({
+	children,
+	error,
+}: {
+	children: ReactNode;
+	error?: unknown;
+}) {
+	const engineError = extractEngineErrorBody(error);
+
 	return (
 		<InspectorGuardContext.Provider
 			value={
 				<Info>
-					<p>
-						Please upgrade your Actor to RivetKit version{" "}
-						<b className="font-mono-console">
-							{RIVET_KIT_MIN_VERSION}
-						</b>{" "}
-						to use the Inspector.
+					<Icon
+						icon={faExclamationTriangle}
+						className="text-4xl text-destructive"
+					/>
+					<p className="font-semibold">
+						Unable to connect to the Inspector.
 					</p>
+					{engineError ? (
+						<EngineErrorBlock body={engineError} />
+					) : (
+						<>
+							<p className="text-sm text-muted-foreground">
+								Ensure the Inspector is enabled and that you are
+								running RivetKit{" "}
+								<span className="font-mono-console">
+									{RIVET_KIT_MIN_VERSION}
+								</span>{" "}
+								or newer.
+							</p>
+							{error ? (
+								<ErrorDetails
+									error={
+										isRivetApiError(error)
+											? error.body
+											: error
+									}
+								/>
+							) : null}
+						</>
+					)}
 				</Info>
 			}
 		>

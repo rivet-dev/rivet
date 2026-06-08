@@ -152,7 +152,7 @@ async fn cache_fanout_value(
 	value_to_cache: &CommittedValue,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_kv_cache_fanout_value", |tx| {
 			async move {
 				let tx = tx.with_subspace(keys::subspace(replica_id));
 				let cache_key = keys::KvOptimisticCacheKey::new(key.to_vec());
@@ -182,7 +182,7 @@ async fn cache_fanout_value(
 
 async fn cache_empty_value(ctx: &OperationCtx, replica_id: ReplicaId, key: &[u8]) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("epoxy_kv_cache_empty_value", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace(replica_id));
 			let cache_key = keys::KvOptimisticCacheKey::new(key.to_vec());
 

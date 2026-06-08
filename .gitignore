@@ -84,3 +84,7 @@ examples/*/public/
 
 # Ralph/Codex generated command stream logs
 scripts/ralph/codex-streams/
+
+# Agent working files now live user-scoped in ~/.agents (or $AGENTS_DIR).
+# This entry is a safety net so a stray in-repo .agent/ never gets committed.
+.agent/

@@ -1,38 +1,53 @@
-import { useEffect, useMemo, useState } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
-	Globe,
-	Swords,
-	Users,
-	Grid3X3,
-	Trophy,
-	Skull,
-	Map,
-	Factory,
 	Box,
 	Boxes,
+	Factory,
+	Globe,
+	Grid3X3,
+	Map,
+	Skull,
+	Swords,
+	Trophy,
+	Users,
 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { makeClient } from "./client.ts";
-import { ArenaMenu } from "./games/arena/menu.tsx";
 import { ArenaGameView } from "./games/arena/game.tsx";
-import { BattleRoyaleMenu } from "./games/battle-royale/menu.tsx";
+import { ArenaMenu, type ArenaMatchInfo } from "./games/arena/menu.tsx";
 import { BattleRoyaleGameView } from "./games/battle-royale/game.tsx";
-import { IdleMenu } from "./games/idle/menu.tsx";
+import {
+	BattleRoyaleMenu,
+	type BattleRoyaleMatchInfo,
+} from "./games/battle-royale/menu.tsx";
 import { IdleGame } from "./games/idle/game.tsx";
-import { IoStyleMenu } from "./games/io-style/menu.tsx";
+import { IdleMenu, type IdleMatchInfo } from "./games/idle/menu.tsx";
 import { IoStyleGame } from "./games/io-style/game.tsx";
-import { OpenWorldMenu } from "./games/open-world/menu.tsx";
+import { IoStyleMenu, type IoStyleMatchInfo } from "./games/io-style/menu.tsx";
 import { OpenWorldGameView } from "./games/open-world/game.tsx";
-import { PartyMenu } from "./games/party/menu.tsx";
+import {
+	OpenWorldMenu,
+	type OpenWorldMatchInfo,
+} from "./games/open-world/menu.tsx";
 import { PartyGame } from "./games/party/game.tsx";
-import { Physics2dMenu } from "./games/physics-2d/menu.tsx";
+import { PartyMenu, type PartyMatchInfo } from "./games/party/menu.tsx";
 import { Physics2dGameView } from "./games/physics-2d/game.tsx";
-import { Physics3dMenu } from "./games/physics-3d/menu.tsx";
+import {
+	Physics2dMenu,
+	type Physics2dMatchInfo,
+} from "./games/physics-2d/menu.tsx";
 import { Physics3dGameView } from "./games/physics-3d/game.tsx";
-import { RankedMenu } from "./games/ranked/menu.tsx";
+import {
+	Physics3dMenu,
+	type Physics3dMatchInfo,
+} from "./games/physics-3d/menu.tsx";
 import { RankedGameView } from "./games/ranked/game.tsx";
-import { TurnBasedMenu } from "./games/turn-based/menu.tsx";
+import { RankedMenu, type RankedMatchInfo } from "./games/ranked/menu.tsx";
 import { TurnBasedGame } from "./games/turn-based/game.tsx";
+import {
+	TurnBasedMenu,
+	type TurnBasedMatchInfo,
+} from "./games/turn-based/menu.tsx";
 
 type PatternId =
 	| "io-style"
@@ -49,55 +64,81 @@ type PatternId =
 type Route =
 	| { page: "selector" }
 	| { page: "menu"; pattern: PatternId }
-	| { page: "game"; pattern: PatternId; matchInfo: unknown };
+	| { page: "game"; pattern: "io-style"; matchInfo: IoStyleMatchInfo }
+	| { page: "game"; pattern: "arena"; matchInfo: ArenaMatchInfo }
+	| { page: "game"; pattern: "party"; matchInfo: PartyMatchInfo }
+	| { page: "game"; pattern: "turn-based"; matchInfo: TurnBasedMatchInfo }
+	| { page: "game"; pattern: "ranked"; matchInfo: RankedMatchInfo }
+	| {
+			page: "game";
+			pattern: "battle-royale";
+			matchInfo: BattleRoyaleMatchInfo;
+	  }
+	| { page: "game"; pattern: "open-world"; matchInfo: OpenWorldMatchInfo }
+	| { page: "game"; pattern: "idle"; matchInfo: IdleMatchInfo }
+	| { page: "game"; pattern: "physics-2d"; matchInfo: Physics2dMatchInfo }
+	| { page: "game"; pattern: "physics-3d"; matchInfo: Physics3dMatchInfo };
 
-const PATTERNS: Array<{ id: PatternId; title: string; description: string; icon: LucideIcon }> = [
+const PATTERNS: Array<{
+	id: PatternId;
+	title: string;
+	description: string;
+	icon: LucideIcon;
+}> = [
 	{
 		id: "physics-2d",
 		title: "Physics 2D",
-		description: "Shared Rapier 2D physics at 10 TPS with client-side prediction and network smoothing.",
+		description:
+			"Shared Rapier 2D physics at 10 TPS with client-side prediction and network smoothing.",
 		icon: Box,
 	},
 	{
 		id: "physics-3d",
 		title: "Physics 3D",
-		description: "Shared Rapier 3D physics at 10 TPS with Three.js rendering and network smoothing.",
+		description:
+			"Shared Rapier 3D physics at 10 TPS with Three.js rendering and network smoothing.",
 		icon: Boxes,
 	},
 	{
 		id: "io-style",
 		title: "IO-Style",
-		description: "Open lobby matchmaking with server-authoritative movement at 10 tps.",
+		description:
+			"Open lobby matchmaking with server-authoritative movement at 10 tps.",
 		icon: Globe,
 	},
 	{
 		id: "arena",
 		title: "Arena",
-		description: "Mode-based fixed-capacity matches with hybrid netcode and hitscan combat at 20 tps.",
+		description:
+			"Mode-based fixed-capacity matches with hybrid netcode and hitscan combat at 20 tps.",
 		icon: Swords,
 	},
 	{
 		id: "battle-royale",
 		title: "Battle Royale",
-		description: "Waiting lobby into shrinking zone gameplay. Last player standing wins.",
+		description:
+			"Waiting lobby into shrinking zone gameplay. Last player standing wins.",
 		icon: Skull,
 	},
 	{
 		id: "ranked",
 		title: "Ranked",
-		description: "1v1 ELO-based matchmaking with expanding rating windows. First to 5 kills.",
+		description:
+			"1v1 ELO-based matchmaking with expanding rating windows. First to 5 kills.",
 		icon: Trophy,
 	},
 	{
 		id: "open-world",
 		title: "Open World",
-		description: "Infinite chunk-based world with cross-chunk movement and coordinate routing.",
+		description:
+			"Infinite chunk-based world with cross-chunk movement and coordinate routing.",
 		icon: Map,
 	},
 	{
 		id: "idle",
 		title: "Idle",
-		description: "Offline progression with scheduled production, building management, and global leaderboard.",
+		description:
+			"Offline progression with scheduled production, building management, and global leaderboard.",
 		icon: Factory,
 	},
 	{
@@ -109,7 +150,8 @@ const PATTERNS: Array<{ id: PatternId; title: string; description: string; icon:
 	{
 		id: "party",
 		title: "Party",
-		description: "Event-driven party lobby with invite codes and host controls.",
+		description:
+			"Event-driven party lobby with invite codes and host controls.",
 		icon: Users,
 	},
 ];
@@ -123,8 +165,22 @@ function Selector({ onSelect }: { onSelect: (id: PatternId) => void }) {
 			</div>
 			<div className="card-grid">
 				{PATTERNS.map((p) => (
-					<div key={p.id} className="card" onClick={() => onSelect(p.id)}>
-						<h3><p.icon size={18} style={{ verticalAlign: "middle", marginRight: 8, opacity: 0.7 }} />{p.title}</h3>
+					<div
+						key={p.id}
+						className="card"
+						onClick={() => onSelect(p.id)}
+					>
+						<h3>
+							<p.icon
+								size={18}
+								style={{
+									verticalAlign: "middle",
+									marginRight: 8,
+									opacity: 0.7,
+								}}
+							/>
+							{p.title}
+						</h3>
 						<p>{p.description}</p>
 					</div>
 				))}
@@ -141,70 +197,238 @@ export function App() {
 
 	const goSelector = () => setRoute({ page: "selector" });
 	const goMenu = (pattern: PatternId) => setRoute({ page: "menu", pattern });
-	const goGame = (pattern: PatternId, matchInfo: unknown) =>
-		setRoute({ page: "game", pattern, matchInfo });
 
 	if (route.page === "selector") {
 		return <Selector onSelect={goMenu} />;
 	}
 
 	if (route.page === "menu") {
-		const props = {
-			client,
-			onReady: (info: unknown) => goGame(route.pattern, info),
-			onBack: goSelector,
-		};
 		switch (route.pattern) {
 			case "io-style":
-				return <IoStyleMenu {...props} />;
+				return (
+					<IoStyleMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "io-style",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "arena":
-				return <ArenaMenu {...props} />;
+				return (
+					<ArenaMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "arena",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "party":
-				return <PartyMenu {...props} />;
+				return (
+					<PartyMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "party",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "turn-based":
-				return <TurnBasedMenu {...props} />;
+				return (
+					<TurnBasedMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "turn-based",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "ranked":
-				return <RankedMenu {...props} />;
+				return (
+					<RankedMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "ranked",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "battle-royale":
-				return <BattleRoyaleMenu {...props} />;
+				return (
+					<BattleRoyaleMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "battle-royale",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "open-world":
-				return <OpenWorldMenu {...props} />;
+				return (
+					<OpenWorldMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "open-world",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "idle":
-				return <IdleMenu {...props} />;
+				return (
+					<IdleMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "idle",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "physics-2d":
-				return <Physics2dMenu {...props} />;
+				return (
+					<Physics2dMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "physics-2d",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 			case "physics-3d":
-				return <Physics3dMenu {...props} />;
+				return (
+					<Physics3dMenu
+						client={client}
+						onReady={(matchInfo) =>
+							setRoute({
+								page: "game",
+								pattern: "physics-3d",
+								matchInfo,
+							})
+						}
+						onBack={goSelector}
+					/>
+				);
 		}
 	}
 
 	if (route.page === "game") {
-		const props = {
-			client,
-			matchInfo: route.matchInfo as never,
-			onLeave: goSelector,
-		};
 		switch (route.pattern) {
 			case "io-style":
-				return <IoStyleGame {...props} />;
+				return (
+					<IoStyleGame
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "arena":
-				return <ArenaGameView {...props} />;
+				return (
+					<ArenaGameView
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "party":
-				return <PartyGame {...props} />;
+				return (
+					<PartyGame
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "turn-based":
-				return <TurnBasedGame {...props} />;
+				return (
+					<TurnBasedGame
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "ranked":
-				return <RankedGameView {...props} />;
+				return (
+					<RankedGameView
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "battle-royale":
-				return <BattleRoyaleGameView {...props} />;
+				return (
+					<BattleRoyaleGameView
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "open-world":
-				return <OpenWorldGameView {...props} />;
+				return (
+					<OpenWorldGameView
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "idle":
-				return <IdleGame {...props} />;
+				return (
+					<IdleGame
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "physics-2d":
-				return <Physics2dGameView {...props} />;
+				return (
+					<Physics2dGameView
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 			case "physics-3d":
-				return <Physics3dGameView {...props} />;
+				return (
+					<Physics3dGameView
+						client={client}
+						matchInfo={route.matchInfo}
+						onLeave={goSelector}
+					/>
+				);
 		}
 	}
 

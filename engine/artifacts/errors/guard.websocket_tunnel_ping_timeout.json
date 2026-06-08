@@ -1,0 +1,5 @@
+{
+  "code": "websocket_tunnel_ping_timeout",
+  "group": "guard",
+  "message": "WebSocket tunnel ping timed out."
+}

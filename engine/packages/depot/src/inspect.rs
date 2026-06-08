@@ -156,7 +156,7 @@ impl RowFamily {
 
 pub async fn summary(db: &universaldb::Database, node_id: NodeId) -> Result<InspectResponse> {
 	let counters = db
-		.run(|tx| async move {
+		.txn("depot_inspect_summary_counters", |tx| async move {
 			Ok(json!({
 				"bucket_pointers": count_prefix(&tx, keys::bucket_pointer_cur_prefix()).await?,
 				"database_pointers": count_prefix(&tx, keys::database_pointer_cur_prefix()).await?,
@@ -192,7 +192,7 @@ pub async fn catalog(
 		.transpose()?;
 	let database_filter = query.database_id.clone();
 	let rows = db
-		.run(move |tx| {
+		.txn("depot_inspect_catalog", move |tx| {
 			let cursor = cursor.clone();
 			let database_filter = database_filter.clone();
 			async move {
@@ -293,7 +293,7 @@ pub async fn bucket(
 	let sample_limit = sample_limit(query.sample_limit)?;
 	let include_history = query.include_history.unwrap_or(false);
 	let data = db
-		.run(move |tx| async move {
+		.txn("depot_inspect_bucket", move |tx| async move {
 			let pointer = tx_get_decoded(
 				&tx,
 				keys::bucket_pointer_cur_key(bucket_id),
@@ -374,7 +374,7 @@ pub async fn database(
 	let sample_limit = sample_limit(query.sample_limit)?;
 	let scope_database_id = database_id.clone();
 	let data = db
-		.run(move |tx| {
+		.txn("depot_inspect_database", move |tx| {
 			let database_id = database_id.clone();
 			async move {
 				let bucket_pointer = tx_get_decoded(
@@ -426,7 +426,9 @@ pub async fn branch(
 ) -> Result<InspectResponse> {
 	let sample_limit = sample_limit(query.sample_limit)?;
 	let data = db
-		.run(move |tx| async move { branch_blob_in_tx(&tx, branch_id, sample_limit).await })
+		.txn("depot_inspect_branch", move |tx| async move {
+			branch_blob_in_tx(&tx, branch_id, sample_limit).await
+		})
 		.await?;
 
 	response(
@@ -448,7 +450,7 @@ pub async fn branch_rows(
 	let prefix = family.scan_prefix(branch_id);
 	let include_bytes = query.include_bytes.unwrap_or(false);
 	let scan = db
-		.run(move |tx| {
+		.txn("depot_inspect_branch_rows", move |tx| {
 			let prefix = prefix.clone();
 			let cursor = cursor.clone();
 			async move { scan_prefix_page(&tx, prefix, cursor.as_deref(), limit).await }
@@ -484,7 +486,7 @@ pub async fn raw_key(
 	key: Vec<u8>,
 ) -> Result<InspectResponse> {
 	let value = db
-		.run({
+		.txn("depot_inspect_raw_key", {
 			let key = key.clone();
 			move |tx| {
 				let key = key.clone();
@@ -522,7 +524,7 @@ pub async fn raw_scan(
 	let cursor = decode_optional_key(query.start_after.as_deref())?;
 	let decode = query.decode.unwrap_or(true);
 	let scan = db
-		.run(move |tx| {
+		.txn("depot_inspect_raw_scan", move |tx| {
 			let prefix = prefix.clone();
 			let cursor = cursor.clone();
 			async move { scan_prefix_page(&tx, prefix, cursor.as_deref(), limit).await }
@@ -568,7 +570,7 @@ pub async fn page_trace(
 	pgno: u32,
 ) -> Result<InspectResponse> {
 	let head = db
-		.run(move |tx| async move {
+		.txn("depot_inspect_page_trace", move |tx| async move {
 			tx_get_decoded(&tx, keys::branch_meta_head_key(branch_id), decode_db_head).await
 		})
 		.await?;

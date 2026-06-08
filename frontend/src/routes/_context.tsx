@@ -10,8 +10,9 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import posthog from "posthog-js";
 import { useEffect } from "react";
 import z from "zod";
-import { getConfig, ls } from "@/components";
+import { SettingsDrawerHost } from "@/app/settings-drawer";
 import { useDialog } from "@/app/use-dialog";
+import { getConfig, ls } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
@@ -28,6 +29,7 @@ const searchSchema = z
 			])
 			.or(z.string())
 			.optional(),
+		settings: z.string().optional(),
 		utm_source: z.string().optional(),
 		actorId: z.string().optional(),
 		tab: z.string().optional(),
@@ -43,7 +45,7 @@ export const Route = createFileRoute("/_context")({
 	component: RouteComponent,
 	validateSearch: zodValidator(searchSchema),
 	context: ({ context }) => {
-		if (features.multitenancy) {
+		if (features.platform) {
 			return {
 				dataProvider: context.getOrCreateCloudContext(),
 				__type: "cloud" as const,
@@ -57,7 +59,7 @@ export const Route = createFileRoute("/_context")({
 		};
 	},
 	beforeLoad: async (route) => {
-		if (features.multitenancy) {
+		if (features.platform) {
 			const justVerifiedEmail =
 				(route.location.search as { emailVerified?: string })
 					?.emailVerified === "1";
@@ -80,7 +82,6 @@ export const Route = createFileRoute("/_context")({
 			if (!session.data.user.emailVerified) {
 				throw redirect({ to: "/verify-email-pending" });
 			}
-
 		}
 	},
 	loader: ({ context }) => ({ dataProvider: context.dataProvider }),
@@ -107,8 +108,9 @@ function RouteComponent() {
 			<Outlet />
 			<ModalRenderer />
 			<Modals />
-			{!features.multitenancy && <EngineModals />}
-			{features.multitenancy && <CloudModals />}
+			{!features.platform && <EngineModals />}
+			{features.platform && <CloudModals />}
+			{features.platform && <SettingsDrawerHost />}
 		</>
 	);
 }

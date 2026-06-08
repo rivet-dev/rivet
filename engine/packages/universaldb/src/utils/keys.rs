@@ -156,4 +156,6 @@ define_keys! {
 	(128, ACTIVE2, "active2"),
 	(129, LAST_ACTIVE_PING_TS, "last_active_ping_ts"),
 	(130, GENERATION, "generation"),
+	(131, ENVOY_HASH_IDX, "envoy_hash_idx"),
+	(132, VIRTUAL_NODES, "virtual_nodes"),
 }

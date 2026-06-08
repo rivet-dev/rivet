@@ -15,7 +15,7 @@ export function truncateByTokens(text: string, maxTokens: number): string {
 		0,
 		Math.max(1, Math.floor(maxTokens / TOKEN_RATIO)),
 	);
-	return trimmed.join(" ") + " …";
+	return `${trimmed.join(" ")} …`;
 }
 
 export function stripMarkdown(markdown: string): string {

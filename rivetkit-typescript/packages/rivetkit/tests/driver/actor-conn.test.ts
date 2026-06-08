@@ -721,7 +721,7 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				await connection.dispose();
 			});
 
-			test("should reject request exceeding maxIncomingMessageSize", async (c) => {
+			test("should reject request exceeding maxIncomingMessageSize via server", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 
 				const handle = client.largePayloadConnActor.getOrCreate([
@@ -729,8 +729,10 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 				]);
 				const connection = handle.connect();
 
-				// Create a payload that exceeds the default 64KB limit
-				// Each item is roughly 60 bytes, so 1500 items ≈ 90KB
+				// Create a payload that exceeds the default 64KB limit.
+				// Each item is roughly 60 bytes, so 1500 items ~ 90KB.
+				// The server enforces the limit and closes the entire
+				// WebSocket with reason "message.incoming_too_long".
 				const items: string[] = [];
 				for (let i = 0; i < 1500; i++) {
 					items.push(
@@ -738,12 +740,28 @@ describeDriverMatrix("Actor Conn", (driverTestConfig) => {
 					);
 				}
 
-				await expect(
-					connection.processLargeRequest({ items }),
-				).rejects.toMatchObject({
+				// Send a normal action concurrently with the oversized
+				// one to verify the server closes the whole connection,
+				// not just the offending action.
+				const [oversizedResult, collateralResult] =
+					await Promise.allSettled([
+						connection.processLargeRequest({ items }),
+						connection.processLargeRequest({
+							items: ["small"],
+						}),
+					]);
+
+				expect(oversizedResult.status).toBe("rejected");
+				expect(
+					(oversizedResult as PromiseRejectedResult).reason,
+				).toMatchObject({
 					group: "message",
 					code: "incoming_too_long",
 				});
+
+				// The normal action also fails because the server
+				// closed the connection.
+				expect(collateralResult.status).toBe("rejected");
 
 				// Clean up
 				await connection.dispose();

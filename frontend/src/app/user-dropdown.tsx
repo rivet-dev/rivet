@@ -1,6 +1,24 @@
-import { faChevronDown, faPlus, Icon } from "@rivet-gg/icons";
+import {
+	faArrowRightFromBracket,
+	faChevronDown,
+	faCreditCard,
+	faGear,
+	faMoon,
+	faPlus,
+	faRightLeft,
+	faSparkles,
+	faSun,
+	faUserCircle,
+	Icon,
+} from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMatchRoute, useNavigate, useParams, useRouter } from "@tanstack/react-router";
+import {
+	useMatchRoute,
+	useNavigate,
+	useParams,
+	useRouter,
+} from "@tanstack/react-router";
+import { useState } from "react";
 import {
 	Avatar,
 	AvatarFallback,
@@ -20,7 +38,11 @@ import {
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
+import { useTheme } from "@/lib/theme";
 import { queryClient } from "@/queries/global";
+import { BillingPlanBadge } from "./billing/billing-plan-badge";
+import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 
 export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const params = useParams({
@@ -31,14 +53,29 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const { data: session } = authClient.useSession();
 	const navigate = useNavigate();
 	const match = useMatchRoute();
+	const { theme, toggle: toggleTheme } = useTheme();
+	const [open, setOpen] = useState(false);
 
 	const isMatchingProjectRoute = match({
 		to: "/orgs/$organization/projects/$project",
 		fuzzy: true,
 	});
 
+	const goToBilling = () => {
+		if (isMatchingProjectRoute) {
+			return navigate({
+				to: ".",
+				search: (old) => ({ ...old, settings: "billing" }),
+			});
+		}
+		return navigate({
+			to: ".",
+			search: (old) => ({ ...old, settings: "billing" }),
+		});
+	};
+
 	return (
-		<DropdownMenu>
+		<DropdownMenu open={open} onOpenChange={setOpen}>
 			<DropdownMenuTrigger asChild={!params.organization || !!children}>
 				{children ||
 					(params.organization ? (
@@ -54,54 +91,118 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						</Button>
 					))}
 			</DropdownMenuTrigger>
-			<DropdownMenuContent>
+			{/*
+			 * `closeAnimation={false}`: selecting an org navigates to a new
+			 * route whose `beforeLoad` is async. The router runs that navigation
+			 * inside a React transition, and while it is pending the old tree is
+			 * held on screen. Radix keeps the menu mounted for its close
+			 * animation, so the held transition freezes the closing menu and it
+			 * lingers until `beforeLoad` resolves. Closing without an exit
+			 * animation lets the menu unmount immediately instead.
+			 */}
+			<DropdownMenuContent
+				align="end"
+				className="min-w-56"
+				closeAnimation={false}
+			>
+				<DropdownMenuItem
+					onSelect={() => {
+						return navigate({
+							to: ".",
+							search: (old) => ({ ...old, settings: "profile" }),
+						});
+					}}
+				>
+					<Icon
+						icon={faUserCircle}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
+					Account
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onSelect={() => {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								settings: "settings",
+							}),
+						});
+					}}
+				>
+					<Icon
+						icon={faGear}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
+					Settings
+				</DropdownMenuItem>
 				{isMatchingProjectRoute ? (
-					<>
-						<DropdownMenuItem
-							onSelect={() => {
-								return navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "billing",
-									}),
-								});
-							}}
-						>
-							Billing
-						</DropdownMenuItem>
-						<DropdownMenuSeparator />
-					</>
+					<DropdownMenuItem onSelect={goToBilling}>
+						<Icon
+							icon={faCreditCard}
+							className="mr-2 size-3.5 text-muted-foreground"
+						/>
+						Billing
+						<span className="ml-auto flex items-center gap-1">
+							<BillingUsageGauge />
+							<BillingPlanBadge />
+						</span>
+					</DropdownMenuItem>
 				) : null}
+				<DropdownMenuSeparator />
 				{params.organization ? (
-					<>
-						<DropdownMenuSub>
-							<DropdownMenuSubTrigger>
-								Switch Organization
-							</DropdownMenuSubTrigger>
-							<DropdownMenuPortal>
-								<DropdownMenuSubContent>
-									<OrganizationSwitcher
-										value={params.organization}
-									/>
-								</DropdownMenuSubContent>
-							</DropdownMenuPortal>
-						</DropdownMenuSub>
-						<DropdownMenuItem
-							onSelect={() => {
-								return navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "org-members",
-									}),
-								});
-							}}
-						>
-							Manage Members
-						</DropdownMenuItem>
-					</>
+					<DropdownMenuSub>
+						<DropdownMenuSubTrigger>
+							<Icon
+								icon={faRightLeft}
+								className="mr-2 size-3.5 text-muted-foreground"
+							/>
+							Switch Organization
+						</DropdownMenuSubTrigger>
+						<DropdownMenuPortal>
+							<DropdownMenuSubContent
+								sideOffset={8}
+								className="min-w-56"
+								closeAnimation={false}
+							>
+								<OrganizationSwitcher
+									value={params.organization}
+									onSwitch={() => {
+										setOpen(false);
+									}}
+								/>
+							</DropdownMenuSubContent>
+						</DropdownMenuPortal>
+					</DropdownMenuSub>
 				) : null}
+				<DropdownMenuItem
+					onSelect={() => {
+						window.open(
+							"https://www.rivet.dev/changelog",
+							"_blank",
+							"noopener,noreferrer",
+						);
+					}}
+				>
+					<Icon
+						icon={faSparkles}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
+					What's new
+				</DropdownMenuItem>
+				<DropdownMenuItem
+					onSelect={(e) => {
+						e.preventDefault();
+						toggleTheme();
+					}}
+				>
+					<Icon
+						icon={theme === "dark" ? faSun : faMoon}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
+					{theme === "dark" ? "Light mode" : "Dark mode"}
+				</DropdownMenuItem>
+				<DropdownMenuSeparator />
 				<DropdownMenuItem
 					onSelect={() => {
 						authClient.signOut();
@@ -110,7 +211,11 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						return navigate({ to: "/login" });
 					}}
 				>
-					Logout
+					<Icon
+						icon={faArrowRightFromBracket}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
+					Sign out
 				</DropdownMenuItem>
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -132,7 +237,18 @@ function Preview({ org }: { org: string }) {
 			<div className="flex gap-2 items-center w-full min-w-0">
 				<Avatar className="size-5">
 					<AvatarImage src={data?.logo ?? undefined} />
-					<AvatarFallback>
+					<AvatarFallback
+						className="text-white text-[10px] font-semibold"
+						style={
+							data?.name
+								? {
+										backgroundImage: orgConicGradient(
+											paletteForLetter(data.name),
+										),
+									}
+								: undefined
+						}
+					>
 						{isLoading ? (
 							<Skeleton className="h-5 w-5" />
 						) : (
@@ -152,11 +268,18 @@ function Preview({ org }: { org: string }) {
 	);
 }
 
-function OrganizationSwitcher({ value }: { value: string | undefined }) {
+function OrganizationSwitcher({
+	value,
+	onSwitch,
+}: {
+	value: string | undefined;
+	onSwitch?: () => void;
+}) {
 	const { data: organizations, isPending: isLoading } =
 		authClient.useListOrganizations();
 
 	const navigate = useNavigate();
+	const router = useRouter();
 
 	return (
 		<>
@@ -177,21 +300,38 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 				<DropdownMenuCheckboxItem
 					key={org.id}
 					checked={org.slug === value}
-					onSelect={() => {
-						authClient.organization.setActive({
-							organizationId: org.id,
-						});
-						navigate({
+					onSelect={async () => {
+						// Don't call `setActive` here — the org route's
+						// `beforeLoad` handles it once based on the URL params.
+						// Calling it eagerly races with the route transition
+						// and fires Better Auth updates against components that
+						// are mounting/unmounting, causing the
+						// "state update on unmounted component" warning.
+						onSwitch?.();
+						await navigate({
 							to: `/orgs/$organization`,
 							params: {
 								organization: org.slug,
 							},
 						});
+						// Force a fresh load of the new org's matches.
+						// Without this, a route stuck in an error state
+						// (e.g. landing here from a deleted org) keeps
+						// rendering its errorComponent because the new
+						// match reuses the prior failed loader state.
+						await router.invalidate();
 					}}
 				>
-					<Avatar className="size-4 mr-2">
+					<Avatar className="size-6 mr-2">
 						<AvatarImage src={org.logo ?? undefined} />
-						<AvatarFallback>
+						<AvatarFallback
+							className="text-white text-[11px] font-semibold"
+							style={{
+								backgroundImage: orgConicGradient(
+									paletteForLetter(org.name),
+								),
+							}}
+						>
 							{org.name[0].toUpperCase()}
 						</AvatarFallback>
 					</Avatar>
@@ -200,15 +340,14 @@ function OrganizationSwitcher({ value }: { value: string | undefined }) {
 			))}
 			<DropdownMenuItem
 				onSelect={() => {
-					navigate({
-						to: ".",
-						search: (old) => ({
-							...old,
-							modal: "create-organization",
-						}),
-					});
+					navigate({ to: "/new-org" });
 				}}
-				indicator={<Icon icon={faPlus} className="size-4" />}
+				indicator={
+					<Icon
+						icon={faPlus}
+						className="size-4 text-muted-foreground"
+					/>
+				}
 			>
 				Create a new organization
 			</DropdownMenuItem>

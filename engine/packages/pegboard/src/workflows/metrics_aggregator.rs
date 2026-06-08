@@ -51,7 +51,7 @@ async fn aggregate_pending_actors(
 	loop {
 		last_key = ctx
 			.udb()?
-			.run(|tx| {
+			.txn("pegboard_metrics_aggregate_pending_actors", |tx| {
 				let last_key = &last_key;
 				async move {
 					let start = Instant::now();
@@ -130,7 +130,7 @@ async fn aggregate_pending_actors(
 // 	loop {
 // 		last_key = ctx
 // 			.udb()?
-// 			.run(|tx| {
+// 			.txn("test_pegboardworkflows_metrics_aggregato", |tx| {
 // 				let last_key = &last_key;
 // 				async move {
 // 					let start = Instant::now();
@@ -215,7 +215,7 @@ async fn aggregate_serverless_desired_slots(
 	loop {
 		last_key = ctx
 			.udb()?
-			.run(|tx| {
+			.txn("pegboard_metrics_aggregate_serverless_slots", |tx| {
 				let last_key = &last_key;
 				async move {
 					let start = Instant::now();

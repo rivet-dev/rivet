@@ -14,8 +14,14 @@ import { match } from "ts-pattern";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
 import * as z4 from "zod/v4";
+import { formatServerlessMetadataError } from "@/app/serverless-health-error";
 import { cn, Uptime } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
+
+export {
+	formatServerlessMetadataError,
+	HEALTH_CHECK_FALLBACK_ERROR,
+} from "@/app/serverless-health-error";
 
 const IPV4_REGEX = /^(\d{1,3}\.){3}\d{1,3}$/;
 const IPV6_REGEX = /^\[[\da-fA-F:]+\]$/;
@@ -104,9 +110,8 @@ export function ServerlessConnectionCheck({
 					layoutId="serverless-health-check"
 					className={cn(
 						"text-center text-muted-foreground text-sm overflow-hidden flex items-center justify-center transition-colors border rounded-md p-4",
-						isSuccess && "text-primary-foreground border-primary",
-						isError &&
-							"text-destructive-foreground border-destructive ",
+						isSuccess && "text-primary border-primary",
+						isError && "text-destructive border-destructive",
 					)}
 					initial={{ minHeight: 0, height: 0, opacity: 0.5 }}
 					animate={{ minHeight: "8rem", height: "auto", opacity: 1 }}
@@ -120,12 +125,20 @@ export function ServerlessConnectionCheck({
 							{match(provider)
 								.with("railway", () => "Railway")
 								.with("vercel", () => "Vercel")
+								.with(
+									"cloudflare-workers",
+									() => "Cloudflare Workers",
+								)
+								.with(
+									"supabase-functions",
+									() => "Supabase Functions",
+								)
 								.with("aws-ecs", () => "AWS ECS")
 								.with("gcp-cloud-run", () => "GCP Cloud Run")
 								.with("hetzner", () => "Hetzner")
 								.with("kubernetes", () => "Kubernetes")
 								.with("custom", () => "VM & Bare Metal")
-								// .with("rivet", () => "Rivet")
+								.with("rivet", () => "Rivet")
 								.with(
 									"custom-platform",
 									() => "Custom Platform",
@@ -207,7 +220,7 @@ function isRivetHealthCheckFailureResponse(
 	return error && "error" in error;
 }
 
-function HealthCheckFailure({
+export function HealthCheckFailure({
 	error,
 }: {
 	error: Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
@@ -219,11 +232,7 @@ function HealthCheckFailure({
 		return null;
 	}
 
-	const { message, details } = error.error;
 	return (
-		<p>
-			Health check failed: {message}
-			{details ? ` (${details})` : null}
-		</p>
+		<p>Health check failed: {formatServerlessMetadataError(error.error)}</p>
 	);
 }

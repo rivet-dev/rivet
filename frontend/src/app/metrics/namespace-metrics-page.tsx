@@ -1,7 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Content } from "@/app/layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { H1 } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 import { ChartSyncProvider } from "./chart-sync-context";
@@ -38,7 +37,6 @@ export function NamespaceMetricsPage() {
 		<Content>
 			<div className="mb-4 pt-2 max-w-7xl mx-auto">
 				<div className="flex justify-between items-center px-6 @6xl:px-0 py-4">
-					<SidebarToggle className="absolute left-4" />
 					<H1>Metrics</H1>
 				</div>
 				<p className="max-w-7xl mb-6 px-6 @6xl:px-0 text-muted-foreground">

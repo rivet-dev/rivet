@@ -262,6 +262,59 @@ impl Envoy {
 			.map(|handle| handle.is_ping_healthy())
 	}
 
+	pub async fn current_envoy_key(&self) -> Result<String> {
+		Ok(self
+			.handle
+			.lock()
+			.await
+			.as_ref()
+			.context("envoy is not running")?
+			.get_envoy_key()
+			.to_string())
+	}
+
+	pub async fn sqlite_get_pages(
+		&self,
+		request: ep::SqliteGetPagesRequest,
+	) -> Result<ep::SqliteGetPagesResponse> {
+		let handle = self
+			.handle
+			.lock()
+			.await
+			.as_ref()
+			.context("envoy is not started")?
+			.clone();
+		handle.sqlite_get_pages(request).await
+	}
+
+	pub async fn sqlite_commit(
+		&self,
+		request: ep::SqliteCommitRequest,
+	) -> Result<ep::SqliteCommitResponse> {
+		let handle = self
+			.handle
+			.lock()
+			.await
+			.as_ref()
+			.context("envoy is not started")?
+			.clone();
+		handle.sqlite_commit(request).await
+	}
+
+	pub async fn remote_sqlite_execute(
+		&self,
+		request: ep::SqliteExecuteRequest,
+	) -> Result<ep::SqliteExecuteResponse> {
+		let handle = self
+			.handle
+			.lock()
+			.await
+			.as_ref()
+			.context("envoy is not started")?
+			.clone();
+		handle.remote_sqlite_execute(request).await
+	}
+
 	pub async fn shutdown(&self) {
 		if let Some(handle) = self.handle.lock().await.take() {
 			handle.shutdown_and_wait(false).await;

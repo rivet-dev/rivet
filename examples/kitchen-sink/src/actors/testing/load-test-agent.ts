@@ -1,4 +1,8 @@
-import { actor, type RivetMessageEvent, type UniversalWebSocket } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	type UniversalWebSocket,
+} from "rivetkit";
 import { db } from "rivetkit/db";
 
 const DEFAULT_TOKENS_PER_SECOND = 20;
@@ -40,7 +44,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 export const loadTestAgent = actor({
 	options: {
 		canHibernateWebSocket: false,
-		sleepGracePeriod: 30_000,
+		sleepGracePeriod: 5_000,
 	},
 	db: db({
 		onMigrate: async (db) => {
@@ -76,118 +80,128 @@ export const loadTestAgent = actor({
 			timestamp: Date.now(),
 		});
 
-		websocket.addEventListener("message", async (event: RivetMessageEvent) => {
-			try {
-				const message =
-					typeof event.data === "string"
-						? JSON.parse(event.data)
-						: undefined;
+		websocket.addEventListener(
+			"message",
+			async (event: RivetMessageEvent) => {
+				try {
+					const message =
+						typeof event.data === "string"
+							? JSON.parse(event.data)
+							: undefined;
 
-				// Fast-path ping: echo back without touching SQLite so the client can measure raw
-				// RTT without the per-message storage write. Used by the counter-latency client's
-				// first two probes after WS open.
-				if (message && message.type === "ping") {
-					send(websocket, {
-						type: "pong",
-						connectionId,
-						id: message.id,
-						timestamp: Date.now(),
-					});
-					return;
-				}
-
-				if (!message || message.type !== "inference") {
-					throw new Error("expected inference message");
-				}
-
-				const requestId =
-					typeof message.requestId === "string" && message.requestId
-						? message.requestId
-						: crypto.randomUUID();
-				const tokensPerSecond = parsePositiveNumber(
-					message.tokensPerSecond,
-					"tokensPerSecond",
-					DEFAULT_TOKENS_PER_SECOND,
-				);
-				const durationMs = parsePositiveNumber(
-					message.durationMs,
-					"durationMs",
-					DEFAULT_DURATION_MS,
-				);
-				const intervalMs = 1_000 / tokensPerSecond;
-				const targetTokens = Math.max(
-					1,
-					Math.floor((durationMs / 1_000) * tokensPerSecond),
-				);
-
-				const inference = (async () => {
-					c.state.inferenceCount += 1;
-					send(websocket, {
-						type: "inference-start",
-						connectionId,
-						requestId,
-						tokensPerSecond,
-						durationMs,
-						targetTokens,
-						timestamp: Date.now(),
-					});
-
-					const startedAt = performance.now();
-					for (let i = 0; i < targetTokens; i++) {
-						if (c.abortSignal.aborted || websocket.readyState !== 1) {
-							break;
-						}
-
-						const tokenIndex = i + 1;
-						const token = `token-${tokenIndex}`;
-						const createdAt = Date.now();
-						await c.db.execute(
-							"INSERT INTO messages (connection_id, request_id, token_index, token, created_at) VALUES (?, ?, ?, ?, ?)",
-							connectionId,
-							requestId,
-							tokenIndex,
-							token,
-							createdAt,
-						);
-						c.state.tokenCount += 1;
-
+					// Fast-path ping: echo back without touching SQLite so the client can measure raw
+					// RTT without the per-message storage write. Used by the counter-latency client's
+					// first two probes after WS open.
+					if (message && message.type === "ping") {
 						send(websocket, {
-							type: "token",
+							type: "pong",
 							connectionId,
-							requestId,
-							tokenIndex,
-							token,
-							timestamp: createdAt,
+							id: message.id,
+							timestamp: Date.now(),
 						});
-
-						const nextAt = startedAt + tokenIndex * intervalMs;
-						const delayMs = Math.max(0, nextAt - performance.now());
-						if (delayMs > 0) {
-							await sleep(delayMs, c.abortSignal);
-						}
+						return;
 					}
 
+					if (!message || message.type !== "inference") {
+						throw new Error("expected inference message");
+					}
+
+					const requestId =
+						typeof message.requestId === "string" &&
+						message.requestId
+							? message.requestId
+							: crypto.randomUUID();
+					const tokensPerSecond = parsePositiveNumber(
+						message.tokensPerSecond,
+						"tokensPerSecond",
+						DEFAULT_TOKENS_PER_SECOND,
+					);
+					const durationMs = parsePositiveNumber(
+						message.durationMs,
+						"durationMs",
+						DEFAULT_DURATION_MS,
+					);
+					const intervalMs = 1_000 / tokensPerSecond;
+					const targetTokens = Math.max(
+						1,
+						Math.floor((durationMs / 1_000) * tokensPerSecond),
+					);
+
+					const inference = (async () => {
+						c.state.inferenceCount += 1;
+						send(websocket, {
+							type: "inference-start",
+							connectionId,
+							requestId,
+							tokensPerSecond,
+							durationMs,
+							targetTokens,
+							timestamp: Date.now(),
+						});
+
+						const startedAt = performance.now();
+						for (let i = 0; i < targetTokens; i++) {
+							if (
+								c.abortSignal.aborted ||
+								websocket.readyState !== 1
+							) {
+								break;
+							}
+
+							const tokenIndex = i + 1;
+							const token = `token-${tokenIndex}`;
+							const createdAt = Date.now();
+							await c.db.execute(
+								"INSERT INTO messages (connection_id, request_id, token_index, token, created_at) VALUES (?, ?, ?, ?, ?)",
+								connectionId,
+								requestId,
+								tokenIndex,
+								token,
+								createdAt,
+							);
+							c.state.tokenCount += 1;
+
+							send(websocket, {
+								type: "token",
+								connectionId,
+								requestId,
+								tokenIndex,
+								token,
+								timestamp: createdAt,
+							});
+
+							const nextAt = startedAt + tokenIndex * intervalMs;
+							const delayMs = Math.max(
+								0,
+								nextAt - performance.now(),
+							);
+							if (delayMs > 0) {
+								await sleep(delayMs, c.abortSignal);
+							}
+						}
+
+						send(websocket, {
+							type: "inference-complete",
+							connectionId,
+							requestId,
+							tokenCount: targetTokens,
+							timestamp: Date.now(),
+						});
+					})();
+
+					await c.keepAwake(inference);
+				} catch (error) {
 					send(websocket, {
-						type: "inference-complete",
-						connectionId,
-						requestId,
-						tokenCount: targetTokens,
+						type: "error",
+						message:
+							error instanceof Error
+								? error.message
+								: "unknown websocket error",
 						timestamp: Date.now(),
 					});
-				})();
-
-				await c.keepAwake(inference);
-			} catch (error) {
-				send(websocket, {
-					type: "error",
-					message:
-						error instanceof Error
-							? error.message
-							: "unknown websocket error",
-					timestamp: Date.now(),
-				});
-			}
-		});
+				}
+			},
+		);
 
 		websocket.addEventListener("close", () => {
 			c.state.connectionCount -= 1;

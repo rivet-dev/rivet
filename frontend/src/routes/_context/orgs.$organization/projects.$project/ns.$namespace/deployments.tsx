@@ -1,55 +1,36 @@
-import { faQuestionCircle, Icon } from "@rivet-gg/icons";
 import {
 	queryOptions,
 	useQueries,
 	useSuspenseInfiniteQuery,
+	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
-import { HelpDropdown } from "@/app/help-dropdown";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { ImagesTable } from "@/app/images-table";
 import { Content } from "@/app/layout";
-import { SidebarToggle } from "@/app/sidebar-toggle";
 import { Button, H1, H2, Skeleton } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/deployments",
 )({
 	component: RouteComponent,
+	beforeLoad: ({ params }) => {
+		if (!features.compute) {
+			throw redirect({
+				to: "/orgs/$organization/projects/$project/ns/$namespace",
+				params,
+			});
+		}
+	},
 	loader: async ({ context }) => {
 		const dataProvider = context.dataProvider;
-		const [namespaces, imageRepositories] = await Promise.all([
-			context.queryClient.fetchInfiniteQuery({
-				...dataProvider.currentProjectNamespacesQueryOptions(),
-				pages: Infinity,
+		await context.queryClient.prefetchQuery(
+			dataProvider.currentNamespaceManagedPoolQueryOptions({
+				pool: "default",
+				safe: true,
 			}),
-			context.queryClient.fetchInfiniteQuery({
-				...dataProvider.currentProjectImageRepositoriesQueryOptions(),
-				pages: Infinity,
-			}),
-		]);
-
-		return Promise.all([
-			...namespaces.pages.flatMap((page) =>
-				page.namespaces.map((ns) =>
-					context.queryClient.prefetchQuery({
-						...dataProvider.currentProjectManagedPoolQueryOptions({
-							namespace: ns.name,
-							pool: "default",
-						}),
-					}),
-				),
-			),
-			...imageRepositories.pages.flatMap((page) =>
-				page.repositories.map((repo) =>
-					context.queryClient.prefetchInfiniteQuery({
-						...dataProvider.currentProjectTagsQueryOptions({
-							repository: repo.repository,
-						}),
-					}),
-				),
-			),
-		]);
+		);
 	},
 	loaderDeps() {
 		return [];
@@ -58,21 +39,41 @@ export const Route = createFileRoute(
 });
 
 function RouteComponent() {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: pool } = useSuspenseQuery(
+		dataProvider.currentNamespaceManagedPoolQueryOptions({
+			pool: "default",
+			safe: true,
+		}),
+	);
+
+	if (!pool) {
+		return (
+			<Content>
+				<div className="h-full flex flex-col items-center justify-center gap-3">
+					<p className="text-muted-foreground">
+						Deployments are only accessible on namespaces running on
+						Rivet Compute.
+					</p>
+					<Link
+						to="/orgs/$organization/projects/$project/ns/$namespace"
+						params={Route.useParams()}
+					>
+						<Button variant="outline" size="sm">
+							Go back
+						</Button>
+					</Link>
+				</div>
+			</Content>
+		);
+	}
+
 	return (
 		<Content>
 			<div className=" ">
 				<div className="mb-4 pt-2 max-w-5xl mx-auto">
 					<div className="flex justify-between items-center px-6 @6xl:px-0 py-4 ">
-						<SidebarToggle className="absolute left-4" />
 						<H1>Deployments</H1>
-						<HelpDropdown>
-							<Button
-								variant="outline"
-								startIcon={<Icon icon={faQuestionCircle} />}
-							>
-								Need help?
-							</Button>
-						</HelpDropdown>
 					</div>
 					<p className="max-w-5xl mb-6 px-6 @6xl:px-0 text-muted-foreground">
 						Deployments are Docker images that can be deployed as
@@ -100,7 +101,7 @@ function Deployments() {
 		fetchNextPage,
 		hasNextPage,
 	} = useSuspenseInfiniteQuery({
-		...dataProvider.currentProjectImagesQueryOptions(),
+		...dataProvider.currentProjectImagesQueryOptions({ limit: 20 }),
 		refetchInterval: 5_000,
 	});
 
@@ -116,11 +117,12 @@ function Deployments() {
 					...dataProvider.currentProjectManagedPoolQueryOptions({
 						namespace: ns.name,
 						pool: "default",
+						safe: true,
 					}),
 					select: (data) => ({
 						...data,
 						namespace: ns.name,
-						...data?.config.image,
+						...data?.config?.image,
 					}),
 					refetchInterval: 5_000,
 				}),

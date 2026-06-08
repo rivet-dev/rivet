@@ -22,10 +22,9 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { EnvVariables, useRivetDsn } from "@/app/env-variables";
-import { features } from "@/lib/features";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
-import { SidebarToggle } from "@/app/sidebar-toggle";
+import { SettingsCard } from "@/app/settings-pages/settings-card";
 import { useDialog } from "@/app/use-dialog";
 import {
 	Accordion,
@@ -40,7 +39,6 @@ import {
 	DiscreteInput,
 	getConfig,
 	H1,
-	H3,
 	Label,
 	Skeleton,
 	Table,
@@ -63,6 +61,7 @@ import { RegionSelect } from "@/components/actors/region-select";
 import { useRootLayout } from "@/components/actors/root-layout-context";
 import { docsLinks } from "@/content/data";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 import { queryClient } from "@/queries/global";
 
 export const Route = createFileRoute(
@@ -70,9 +69,9 @@ export const Route = createFileRoute(
 )({
 	beforeLoad: async ({ context, params }) => {
 		throw redirect({
-			to: "/orgs/$organization/projects/$project/ns/$namespace/settings",
+			to: "/orgs/$organization/projects/$project/ns/$namespace",
 			params,
-			search: true,
+			search: { settings: "settings" },
 		});
 	},
 	component: RouteComponent,
@@ -94,7 +93,6 @@ function RouteComponent() {
 		>
 			<div className="max-w-5xl mx-auto">
 				<div className="mt-2 flex justify-between items-center px-10 py-4">
-					<SidebarToggle className="absolute left-4" />
 					<H1>Tokens</H1>
 					<HelpDropdown>
 						<Button
@@ -130,45 +128,39 @@ export function PublishableToken() {
 	const dsn = useRivetDsn({ kind: "publishable" });
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg ">
-			<div className="flex gap-2 items-center mb-2 mt-6">
-				<H3>Manual Client Configuration</H3>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Manually configuring the client is only required for{" "}
-				<a
-					href="https://www.rivet.dev/docs/general/runtime-modes/#runners"
-					target="_blank"
-					rel="noopener noreferrer"
-					className="underline"
-				>
-					Runner Runtime Mode
-				</a>{" "}
-				or clients that need to be configured to connect directly to
-				Rivet.
-			</p>
+		<SettingsCard
+			title="Manual Client Configuration"
+			description={
+				<>
+					Manually configuring the client is only required for{" "}
+					<a
+						href="https://www.rivet.dev/docs/general/runtime-modes/#runners"
+						target="_blank"
+						rel="noopener noreferrer"
+						className="underline"
+					>
+						Runner Runtime Mode
+					</a>{" "}
+					or clients that need to be configured to connect directly to
+					Rivet.
+				</>
+			}
+		>
 			<div className="space-y-8">
 				<DiscreteInput value={dsn || ""} show />
 
 				<PublishableTokenCodeGroup />
 			</div>
-		</div>
+		</SettingsCard>
 	);
 }
 
 export function SecretToken() {
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
-			<div className="flex gap-2 items-center mb-2 mt-6">
-				<H3>Backend Configuration</H3>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Used by Rivet to run your actors. Choose between Serverless
-				mode, where Rivet sends HTTP requests to your backend, or
-				Runners mode, where Rivet runs your actors as long-running
-				background processes.
-			</p>
-
+		<SettingsCard
+			title="Backend Configuration"
+			description="Used by Rivet to run your actors. Choose between Serverless mode, where Rivet sends HTTP requests to your backend, or Runners mode, where Rivet runs your actors as long-running background processes."
+		>
 			<Tabs defaultValue="serverless">
 				<TabsList>
 					<TabsTrigger value="serverless">Serverless</TabsTrigger>
@@ -181,7 +173,7 @@ export function SecretToken() {
 					<RunnersModeInfo />
 				</TabsContent>
 			</Tabs>
-		</div>
+		</SettingsCard>
 	);
 }
 
@@ -291,8 +283,9 @@ function RunnersModeInfo() {
 		() => regions[0]?.name,
 	);
 
-	const endpoint = features.multitenancy
-		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
+	const endpoint = features.platform
+		? regions.find((r) => r.name === selectedDatacenter)?.url ||
+			cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 
 	const codeSnippet = `import { registry } from "./registry";
@@ -380,12 +373,15 @@ export function CloudApiTokens() {
 	const cloudApiUrl = cloudEnv().VITE_APP_CLOUD_API_URL;
 
 	return (
-		<div className="pb-4 pb-8 px-6 max-w-5xl mx-auto my-8 border-b @6xl:border @6xl:rounded-lg">
-			<div className="flex gap-2 items-center justify-between mb-2 mt-6">
-				<div className="flex gap-2 items-center">
-					<H3>Cloud API Tokens</H3>
+		<SettingsCard
+			title={
+				<span className="inline-flex items-center gap-2">
+					Cloud API Tokens
 					<Badge variant="secondary">Beta</Badge>
-				</div>
+				</span>
+			}
+			description="Cloud API tokens provide programmatic access to the Rivet Cloud API. Keep them secure and never share them publicly."
+			action={
 				<Button
 					className="min-w-32"
 					variant="outline"
@@ -394,11 +390,8 @@ export function CloudApiTokens() {
 				>
 					Create API Token
 				</Button>
-			</div>
-			<p className="mb-6 text-muted-foreground">
-				Cloud API tokens provide programmatic access to the Rivet Cloud
-				API. Keep them secure and never share them publicly.
-			</p>
+			}
+		>
 			<div className="border rounded-md">
 				{isLoading ? (
 					<div className="space-y-2 p-4">
@@ -588,7 +581,7 @@ console.log(data.token);`}
 				</CodeGroup>
 			</div>
 			{createApiTokenDialog}
-		</div>
+		</SettingsCard>
 	);
 }
 

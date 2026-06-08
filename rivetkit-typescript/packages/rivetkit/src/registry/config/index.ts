@@ -33,9 +33,7 @@ import {
 
 export const ActorsSchema = z.record(
 	z.string(),
-	z.custom<
-		BaseActorDefinition<any, any, any, any, any, any, any, any, any>
-	>(),
+	z.custom<AnyActorDefinition>(),
 );
 export type RegistryActors = z.infer<typeof ActorsSchema>;
 
@@ -267,13 +265,9 @@ export const RegistryConfigSchema = z
 				 * after calling `CoreRegistry::shutdown()`. Defaults to the
 				 * engine-provided actor stop threshold once the envoy connects.
 				 *
-				 * Must be >= rivetkit-core's drain timeout (20s) + margin.
+				 * Must be long enough for rivetkit-core to drain the envoy.
 				 */
-				gracePeriodMs: z
-					.number()
-					.int()
-					.min(1_000)
-					.optional(),
+				gracePeriodMs: z.number().int().min(1_000).optional(),
 				/**
 				 * If true, rivetkit will not install SIGINT/SIGTERM handlers.
 				 * Use when the host application owns signal policy and will

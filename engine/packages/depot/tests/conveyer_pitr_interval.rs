@@ -30,7 +30,7 @@ async fn seed_rows(
 	branch: DatabaseBranchId,
 	rows: Vec<(i64, PitrIntervalCoverage)>,
 ) -> Result<()> {
-	db.run(move |tx| {
+	db.txn("test_depotconveyer_pitr_interval", move |tx| {
 		let rows = rows.clone();
 
 		async move {
@@ -88,7 +88,7 @@ async fn pitr_interval_helpers_read_exact_between_and_quiet_period_targets() -> 
 			.await?;
 
 			let exact = db
-				.run(move |tx| async move {
+				.txn("test_depotconveyer_pitr_interval", move |tx| async move {
 					read_pitr_interval_coverage(&tx, branch, 1_000, Snapshot).await
 				})
 				.await?
@@ -96,7 +96,7 @@ async fn pitr_interval_helpers_read_exact_between_and_quiet_period_targets() -> 
 			assert_eq!(exact.txid, 10);
 
 			let between = db
-				.run(move |tx| async move {
+				.txn("test_depotconveyer_pitr_interval", move |tx| async move {
 					read_latest_pitr_interval_coverage_at_or_before(&tx, branch, 2_750, Snapshot)
 						.await
 				})
@@ -106,7 +106,7 @@ async fn pitr_interval_helpers_read_exact_between_and_quiet_period_targets() -> 
 			assert_eq!(between.1.txid, 20);
 
 			let quiet_period = db
-				.run(move |tx| async move {
+				.txn("test_depotconveyer_pitr_interval", move |tx| async move {
 					read_latest_pitr_interval_coverage_at_or_before(&tx, branch, 2_999, Snapshot)
 						.await
 				})
@@ -116,7 +116,7 @@ async fn pitr_interval_helpers_read_exact_between_and_quiet_period_targets() -> 
 			assert_eq!(quiet_period.1.txid, 20);
 
 			let walked_back = db
-				.run(move |tx| async move {
+				.txn("test_depotconveyer_pitr_interval", move |tx| async move {
 					read_latest_pitr_interval_coverage_at_or_before(&tx, branch, 2_100, Snapshot)
 						.await
 				})

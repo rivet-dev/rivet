@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm exec tsx
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
 	existsSync,
 	mkdirSync,
@@ -10,7 +10,7 @@ import {
 	writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
@@ -32,7 +32,8 @@ const REPO_ENGINE_BINARY = fileURLToPath(
 	new URL("../../../target/debug/rivet-engine", import.meta.url),
 );
 const REPO_ROOT = fileURLToPath(new URL("../../..", import.meta.url));
-const DEFAULT_RESULTS_ROOT = ".agent/benchmarks/sqlite-realworld";
+const AGENTS_DIR = process.env.AGENTS_DIR ?? join(homedir(), ".agents");
+const DEFAULT_RESULTS_ROOT = join(AGENTS_DIR, "benchmarks/sqlite-realworld");
 const SQLITE_OPT_MODE_ENVS = [
 	"RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE",
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_MODE",
@@ -89,7 +90,13 @@ const WORKLOADS = [
 ] as const;
 
 type WorkloadName = (typeof WORKLOADS)[number];
-type SizeClass = "none" | "small" | "medium" | "cache-fit" | "cache-overflow" | "large";
+type SizeClass =
+	| "none"
+	| "small"
+	| "medium"
+	| "cache-fit"
+	| "cache-overflow"
+	| "large";
 type Profile = "standard" | "smoke";
 type WorkloadCategory = "read" | "write" | "migration" | "canary";
 type MatrixName = "none" | "impact" | "full-impact";
@@ -231,7 +238,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "small-range-scan",
 		category: "canary",
 		sizeClass: "small",
-		description: "Small rowid range scan to catch regressions on tiny databases.",
+		description:
+			"Small rowid range scan to catch regressions on tiny databases.",
 	},
 	{
 		// Included for append-heavy product tables where rowid order often maps well to physical page locality.
@@ -239,7 +247,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "rowid-range-forward",
 		category: "read",
 		sizeClass: "large",
-		description: "Large append-like INTEGER PRIMARY KEY forward range scan.",
+		description:
+			"Large append-like INTEGER PRIMARY KEY forward range scan.",
 	},
 	{
 		// Included because feeds and history views often scan newest-to-oldest.
@@ -247,7 +256,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "rowid-range-backward",
 		category: "read",
 		sizeClass: "large",
-		description: "Large append-like INTEGER PRIMARY KEY reverse range scan.",
+		description:
+			"Large append-like INTEGER PRIMARY KEY reverse range scan.",
 	},
 	{
 		// Included to isolate index-only range reads from table hydration.
@@ -263,7 +273,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "secondary-index-scattered-table",
 		category: "read",
 		sizeClass: "large",
-		description: "Large secondary-index range that visits table rows in scattered rowid order.",
+		description:
+			"Large secondary-index range that visits table rows in scattered rowid order.",
 	},
 	{
 		// Included for actor-local reporting over operational tables.
@@ -271,7 +282,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "aggregate-status",
 		category: "read",
 		sizeClass: "large",
-		description: "Large GROUP BY status aggregate over an OLTP-style orders table.",
+		description:
+			"Large GROUP BY status aggregate over an OLTP-style orders table.",
 	},
 	{
 		// Included for dashboard-style time bucketing across many rows.
@@ -279,7 +291,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "aggregate-time-bucket",
 		category: "read",
 		sizeClass: "large",
-		description: "Large time-bucket aggregate over an OLTP-style orders table.",
+		description:
+			"Large time-bucket aggregate over an OLTP-style orders table.",
 	},
 	{
 		// Included for selective OLTP aggregates scoped to one tenant and time range.
@@ -287,21 +300,24 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "aggregate-tenant-time-range",
 		category: "read",
 		sizeClass: "cache-fit",
-		description: "Selective tenant/time-range aggregate over events joined to orders.",
+		description:
+			"Selective tenant/time-range aggregate over events joined to orders.",
 	},
 	{
 		// Included to measure concurrent read-only aggregate pressure over the same VFS and transport.
 		name: "parallel-read-aggregates",
 		category: "read",
 		sizeClass: "large",
-		description: "Concurrent read-only aggregates over one actor-local SQLite database.",
+		description:
+			"Concurrent read-only aggregates over one actor-local SQLite database.",
 	},
 	{
 		// Included to measure read pressure queued alongside a write update.
 		name: "parallel-read-write-transition",
 		category: "write",
 		sizeClass: "medium",
-		description: "Concurrent read aggregates with a queued write-mode update.",
+		description:
+			"Concurrent read aggregates with a queued write-mode update.",
 	},
 	{
 		// Included for the first page of a timeline, inbox, or event feed after actor wake.
@@ -317,7 +333,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "feed-pagination-adjacent",
 		category: "read",
 		sizeClass: "medium",
-		description: "Adjacent cursor pagination over an indexed recent-feed query.",
+		description:
+			"Adjacent cursor pagination over an indexed recent-feed query.",
 	},
 	{
 		// Included because joins can bounce between parent and child B-trees.
@@ -333,7 +350,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "random-point-lookups",
 		category: "read",
 		sizeClass: "large",
-		description: "Deterministic random primary-key point lookups across a large table.",
+		description:
+			"Deterministic random primary-key point lookups across a large table.",
 	},
 	{
 		// Included for a hot index with cold table hydration.
@@ -341,7 +359,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "hot-index-cold-table",
 		category: "read",
 		sizeClass: "cache-overflow",
-		description: "Hot secondary-index selection followed by cold table-row hydration.",
+		description:
+			"Hot secondary-index selection followed by cold table-row hydration.",
 	},
 	{
 		// Included to test composite primary-key storage without normal rowid table layout.
@@ -388,7 +407,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "chat-tool-read-fanout",
 		category: "read",
 		sizeClass: "large",
-		description: "Parallel chat/tool read fan-out over one actor-local SQLite database.",
+		description:
+			"Parallel chat/tool read fan-out over one actor-local SQLite database.",
 	},
 	{
 		// Mirrors the original sql-rush reconnect script's catchup workload.
@@ -396,7 +416,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "chat-tool-script",
 		category: "read",
 		sizeClass: "large",
-		description: "Original SQL-rush catchup script with seven parallel reads.",
+		description:
+			"Original SQL-rush catchup script with seven parallel reads.",
 	},
 	{
 		// Included to measure the write/commit path after opening a non-empty database.
@@ -404,7 +425,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "write-batch-after-wake",
 		category: "write",
 		sizeClass: "medium",
-		description: "Post-wake transactional insert batch into an existing database.",
+		description:
+			"Post-wake transactional insert batch into an existing database.",
 	},
 	{
 		// Included to model repeated updates to a tenant/shard subset after wake.
@@ -420,7 +442,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "delete-churn-range-read",
 		category: "write",
 		sizeClass: "medium",
-		description: "Delete a hot shard range, then scan the remaining rowid table.",
+		description:
+			"Delete a hot shard range, then scan the remaining rowid table.",
 	},
 	{
 		// Included because CREATE INDEX over existing data scans the source table and writes new index B-trees.
@@ -428,7 +451,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "migration-create-indexes-large",
 		category: "migration",
 		sizeClass: "large",
-		description: "Schema migration that creates multiple indexes on an existing large table.",
+		description:
+			"Schema migration that creates multiple indexes on an existing large table.",
 	},
 	{
 		// Included because skew changes index fanout/cardinality while still requiring a table scan.
@@ -436,7 +460,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "migration-create-indexes-skewed-large",
 		category: "migration",
 		sizeClass: "large",
-		description: "Schema migration that creates indexes over skewed existing data.",
+		description:
+			"Schema migration that creates indexes over skewed existing data.",
 	},
 	{
 		// Included for SQLite migrations that must rebuild a table, such as drop-column or type-change patterns.
@@ -444,7 +469,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "migration-table-rebuild-large",
 		category: "migration",
 		sizeClass: "large",
-		description: "Large table-rebuild migration using create-copy-drop-rename.",
+		description:
+			"Large table-rebuild migration using create-copy-drop-rename.",
 	},
 	{
 		// Included as the large-data control for schema-only ADD COLUMN migrations.
@@ -452,7 +478,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "migration-add-column-large",
 		category: "migration",
 		sizeClass: "large",
-		description: "Large-table ADD COLUMN migration that should avoid row rewrite.",
+		description:
+			"Large-table ADD COLUMN migration that should avoid row rewrite.",
 	},
 	{
 		// Included as a low-data migration canary.
@@ -460,7 +487,8 @@ const WORKLOAD_SPECS: WorkloadSpec[] = [
 		name: "migration-ddl-small",
 		category: "canary",
 		sizeClass: "none",
-		description: "Small schema-only migration with CREATE TABLE, ALTER TABLE, and CREATE INDEX.",
+		description:
+			"Small schema-only migration with CREATE TABLE, ALTER TABLE, and CREATE INDEX.",
 	},
 ];
 
@@ -503,7 +531,9 @@ function defaultSqliteOptimizationEnv(): Record<string, string> {
 	};
 }
 
-function scenarioEnv(overrides: Record<string, string>): Record<string, string> {
+function scenarioEnv(
+	overrides: Record<string, string>,
+): Record<string, string> {
 	return {
 		...defaultSqliteOptimizationEnv(),
 		...overrides,
@@ -514,7 +544,8 @@ function preloadDisabledEnv(): Record<string, string> {
 	return {
 		RIVETKIT_SQLITE_OPT_RECENT_PAGE_HINTS: "false",
 		RIVETKIT_SQLITE_OPT_PRELOAD_HINT_FLUSH: "false",
-		RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES: SQLITE_PAGE_SIZE_BYTES.toString(),
+		RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_MAX_BYTES:
+			SQLITE_PAGE_SIZE_BYTES.toString(),
 		RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGES: "true",
 		RIVETKIT_SQLITE_OPT_STARTUP_PRELOAD_FIRST_PAGE_COUNT: "1",
 		RIVETKIT_SQLITE_OPT_PRELOAD_HINTS_ON_OPEN: "false",
@@ -528,7 +559,8 @@ const SQLITE_OPTIMIZATION_MATRIX_SCENARIOS: MatrixScenario[] = [
 	{
 		id: "defaults",
 		label: "Current defaults",
-		description: "Explicit current defaults. This is the comparison baseline.",
+		description:
+			"Explicit current defaults. This is the comparison baseline.",
 		env: scenarioEnv({}),
 		includeInImpact: true,
 	},
@@ -590,7 +622,8 @@ const SQLITE_OPTIMIZATION_MATRIX_SCENARIOS: MatrixScenario[] = [
 	{
 		id: "bounded-read-ahead",
 		label: "Bounded read-ahead",
-		description: "Current defaults with bounded read-ahead instead of adaptive read-ahead.",
+		description:
+			"Current defaults with bounded read-ahead instead of adaptive read-ahead.",
 		env: scenarioEnv({
 			RIVETKIT_SQLITE_OPT_READ_AHEAD_MODE: "bounded",
 		}),
@@ -736,15 +769,22 @@ function timestampForPath(date = new Date()): string {
 
 function parseArgs(argv: string[]): Args {
 	if (argv.includes("--help") || argv.includes("-h")) usage(0);
-	const endpoint = readFlag(argv, "--endpoint") ?? process.env.RIVET_ENDPOINT ?? DEFAULT_ENDPOINT;
+	const endpoint =
+		readFlag(argv, "--endpoint") ??
+		process.env.RIVET_ENDPOINT ??
+		DEFAULT_ENDPOINT;
 	const profile = parseProfile(readFlag(argv, "--profile"));
 	const onlyFlag = readFlag(argv, "--only");
-	const defaultSmallBytes = profile === "smoke" ? 256 * 1024 : 4 * 1024 * 1024;
-	const defaultMediumBytes = profile === "smoke" ? 1024 * 1024 : 64 * 1024 * 1024;
-	const defaultCacheFitBytes = profile === "smoke" ? 1024 * 1024 : 128 * 1024 * 1024;
+	const defaultSmallBytes =
+		profile === "smoke" ? 256 * 1024 : 4 * 1024 * 1024;
+	const defaultMediumBytes =
+		profile === "smoke" ? 1024 * 1024 : 64 * 1024 * 1024;
+	const defaultCacheFitBytes =
+		profile === "smoke" ? 1024 * 1024 : 128 * 1024 * 1024;
 	const defaultCacheOverflowBytes =
 		profile === "smoke" ? 2 * 1024 * 1024 : 201 * 1024 * 1024;
-	const defaultLargeBytes = profile === "smoke" ? 2 * 1024 * 1024 : 256 * 1024 * 1024;
+	const defaultLargeBytes =
+		profile === "smoke" ? 2 * 1024 * 1024 : 256 * 1024 * 1024;
 	const shouldStartLocalEnvoy =
 		argv.includes("--start-local-envoy") ||
 		(!argv.includes("--no-start-local-envoy") &&
@@ -827,7 +867,9 @@ function parseArgs(argv: string[]): Args {
 		disableMetadataLookup: argv.includes("--disable-metadata-lookup"),
 		startLocalEnvoy: shouldStartLocalEnvoy,
 		disableStorageCompaction: argv.includes("--disable-storage-compaction"),
-		disableSqliteOptimizations: argv.includes("--disable-sqlite-optimizations"),
+		disableSqliteOptimizations: argv.includes(
+			"--disable-sqlite-optimizations",
+		),
 	};
 }
 
@@ -851,7 +893,11 @@ function applyDisabledSqliteOptimizations(target: NodeJS.ProcessEnv): void {
 
 function sqliteOptimizationEnvSnapshot(): Record<string, string | null> {
 	const snapshot: Record<string, string | null> = {};
-	for (const name of [...SQLITE_OPT_MODE_ENVS, ...SQLITE_OPT_BOOLEAN_ENVS, ...SQLITE_OPT_NUMERIC_ENVS]) {
+	for (const name of [
+		...SQLITE_OPT_MODE_ENVS,
+		...SQLITE_OPT_BOOLEAN_ENVS,
+		...SQLITE_OPT_NUMERIC_ENVS,
+	]) {
 		snapshot[name] = process.env[name] ?? null;
 	}
 	return snapshot;
@@ -925,7 +971,9 @@ async function waitForEngineReady(
 		}
 
 		try {
-			const response = await fetch(`${endpoint.replace(/\/$/, "")}/health`);
+			const response = await fetch(
+				`${endpoint.replace(/\/$/, "")}/health`,
+			);
 			if (response.ok) return;
 			lastError = new Error(`health returned ${response.status}`);
 		} catch (err) {
@@ -947,7 +995,9 @@ async function startLocalEngine(args: Args): Promise<LocalEngine> {
 	const engineEndpoint = new URL(args.endpoint);
 	const guardPort = Number.parseInt(engineEndpoint.port, 10);
 	if (!Number.isFinite(guardPort) || guardPort <= 0) {
-		throw new Error(`endpoint must include a numeric port: ${args.endpoint}`);
+		throw new Error(
+			`endpoint must include a numeric port: ${args.endpoint}`,
+		);
 	}
 	const guardHost = engineEndpoint.hostname || "127.0.0.1";
 	const env: NodeJS.ProcessEnv = {
@@ -987,7 +1037,9 @@ async function findOpenPort(): Promise<number> {
 		server.listen(0, "127.0.0.1", () => {
 			const address = server.address();
 			if (address === null || typeof address === "string") {
-				server.close(() => reject(new Error("failed to allocate metrics port")));
+				server.close(() =>
+					reject(new Error("failed to allocate metrics port")),
+				);
 				return;
 			}
 			const port = address.port;
@@ -1016,7 +1068,9 @@ async function waitForRegistryReady(endpoint: string): Promise<void> {
 
 	while (Date.now() < deadline) {
 		try {
-			const response = await fetch(`${endpoint.replace(/\/$/, "")}/metadata`);
+			const response = await fetch(
+				`${endpoint.replace(/\/$/, "")}/metadata`,
+			);
 			if (response.ok) return;
 			lastError = new Error(`metadata returned ${response.status}`);
 		} catch (err) {
@@ -1033,9 +1087,12 @@ async function waitForRegistryReady(endpoint: string): Promise<void> {
 
 async function configureLocalRunner(endpoint: string): Promise<void> {
 	const base = endpoint.replace(/\/$/, "");
-	const datacentersResponse = await fetch(`${base}/datacenters?namespace=default`, {
-		headers: { Authorization: "Bearer dev" },
-	});
+	const datacentersResponse = await fetch(
+		`${base}/datacenters?namespace=default`,
+		{
+			headers: { Authorization: "Bearer dev" },
+		},
+	);
 	if (!datacentersResponse.ok) {
 		throw new Error(
 			`failed to list local datacenters: ${datacentersResponse.status} ${await datacentersResponse.text()}`,
@@ -1048,20 +1105,23 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 	const datacenter = datacentersBody.datacenters[0]?.name;
 	if (!datacenter) throw new Error("local engine returned no datacenters");
 
-	const response = await fetch(`${base}/runner-configs/k8s?namespace=default`, {
-		method: "PUT",
-		headers: {
-			Authorization: "Bearer dev",
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			datacenters: {
-				[datacenter]: {
-					normal: {},
-				},
+	const response = await fetch(
+		`${base}/runner-configs/k8s?namespace=default`,
+		{
+			method: "PUT",
+			headers: {
+				Authorization: "Bearer dev",
+				"Content-Type": "application/json",
 			},
-		}),
-	});
+			body: JSON.stringify({
+				datacenters: {
+					[datacenter]: {
+						normal: {},
+					},
+				},
+			}),
+		},
+	);
 	if (!response.ok) {
 		throw new Error(
 			`failed to configure local k8s runner: ${response.status} ${await response.text()}`,
@@ -1074,9 +1134,12 @@ async function waitForEnvoy(endpoint: string): Promise<void> {
 	const deadline = Date.now() + 15_000;
 
 	while (Date.now() < deadline) {
-		const response = await fetch(`${base}/envoys?namespace=default&name=k8s`, {
-			headers: { Authorization: "Bearer dev" },
-		});
+		const response = await fetch(
+			`${base}/envoys?namespace=default&name=k8s`,
+			{
+				headers: { Authorization: "Bearer dev" },
+			},
+		);
 		if (response.ok) {
 			const body = (await response.json()) as {
 				envoys: Array<{ envoy_key: string }>;
@@ -1108,14 +1171,18 @@ async function retryTransient<T>(
 				message.includes("Connection reset") ||
 				message.includes("Service unavailable");
 			if (!transient || attempt === attempts) break;
-			console.warn(`  ${label} failed transiently, retrying ${attempt + 1}/${attempts}`);
+			console.warn(
+				`  ${label} failed transiently, retrying ${attempt + 1}/${attempts}`,
+			);
 			await sleep(1000 * attempt);
 		}
 	}
 	throw lastError;
 }
 
-function parsePrometheusLabels(raw: string | undefined): Record<string, string> {
+function parsePrometheusLabels(
+	raw: string | undefined,
+): Record<string, string> {
 	if (!raw) return {};
 	const labels: Record<string, string> = {};
 	for (const part of raw.slice(1, -1).split(",")) {
@@ -1186,9 +1253,15 @@ function scrapeVfsMetrics(text: string): VfsMetricSnapshot {
 		),
 		getPagesTotal: metricValue(text, "sqlite_vfs_get_pages_total"),
 		pagesFetchedTotal: metricValue(text, "sqlite_vfs_pages_fetched_total"),
-		prefetchPagesTotal: metricValue(text, "sqlite_vfs_prefetch_pages_total"),
+		prefetchPagesTotal: metricValue(
+			text,
+			"sqlite_vfs_prefetch_pages_total",
+		),
 		bytesFetchedTotal: metricValue(text, "sqlite_vfs_bytes_fetched_total"),
-		prefetchBytesTotal: metricValue(text, "sqlite_vfs_prefetch_bytes_total"),
+		prefetchBytesTotal: metricValue(
+			text,
+			"sqlite_vfs_prefetch_bytes_total",
+		),
 		getPagesDurationSecondsSum: metricValue(
 			text,
 			"sqlite_vfs_get_pages_duration_seconds_sum",
@@ -1204,7 +1277,8 @@ function diffMetrics<T extends object>(after: T, before: T): T {
 	return Object.fromEntries(
 		Object.keys(after).map((key) => [
 			key,
-			(after[key as keyof T] as number) - (before[key as keyof T] as number),
+			(after[key as keyof T] as number) -
+				(before[key as keyof T] as number),
 		]),
 	) as T;
 }
@@ -1266,7 +1340,11 @@ function selectedMatrixScenarios(matrix: MatrixName): MatrixScenario[] {
 	return SQLITE_OPTIMIZATION_MATRIX_SCENARIOS;
 }
 
-function removeCliFlag(argv: string[], flag: string, hasValue: boolean): string[] {
+function removeCliFlag(
+	argv: string[],
+	flag: string,
+	hasValue: boolean,
+): string[] {
 	const next: string[] = [];
 	for (let i = 0; i < argv.length; i += 1) {
 		const arg = argv[i];
@@ -1280,12 +1358,25 @@ function removeCliFlag(argv: string[], flag: string, hasValue: boolean): string[
 	return next;
 }
 
-function childMatrixArgs(args: Args, originalArgv: string[], scenario: MatrixScenario): string[] {
+function childMatrixArgs(
+	args: Args,
+	originalArgv: string[],
+	scenario: MatrixScenario,
+): string[] {
 	let childArgs = [...originalArgv];
-	for (const flag of ["--matrix", "--matrix-scenario", "--key", "--output-dir"]) {
+	for (const flag of [
+		"--matrix",
+		"--matrix-scenario",
+		"--key",
+		"--output-dir",
+	]) {
 		childArgs = removeCliFlag(childArgs, flag, true);
 	}
-	childArgs = removeCliFlag(childArgs, "--disable-sqlite-optimizations", false);
+	childArgs = removeCliFlag(
+		childArgs,
+		"--disable-sqlite-optimizations",
+		false,
+	);
 	if (!args.onlyProvided) {
 		childArgs = removeCliFlag(childArgs, "--only", true);
 		childArgs.push("--only", MATRIX_DEFAULT_WORKLOADS.join(","));
@@ -1331,7 +1422,10 @@ async function runMatrixChild(
 	return null;
 }
 
-function readScenarioDocument(args: Args, scenario: MatrixScenario): MatrixScenarioReport {
+function readScenarioDocument(
+	args: Args,
+	scenario: MatrixScenario,
+): MatrixScenarioReport {
 	const scenarioOutputDir = resolve(REPO_ROOT, args.outputDir, scenario.id);
 	const document = JSON.parse(
 		readFileSync(join(scenarioOutputDir, "results.json"), "utf8"),
@@ -1377,7 +1471,10 @@ function failedScenarioReport(
 	};
 }
 
-function writeMatrixSummary(outputDir: string, scenarios: MatrixScenarioReport[]): void {
+function writeMatrixSummary(
+	outputDir: string,
+	scenarios: MatrixScenarioReport[],
+): void {
 	const baseline = scenarios.find((scenario) => scenario.id === "defaults");
 	const baselineByWorkload = new Map(
 		baseline?.results.map((result) => [result.workload, result]) ?? [],
@@ -1413,21 +1510,29 @@ function writeMatrixSummary(outputDir: string, scenarios: MatrixScenarioReport[]
 		}
 	}
 
-	writeFileSync(join(outputDir, "matrix-summary.md"), `${lines.join("\n")}\n`);
+	writeFileSync(
+		join(outputDir, "matrix-summary.md"),
+		`${lines.join("\n")}\n`,
+	);
 }
 
 async function runMatrix(args: Args, originalArgv: string[]): Promise<void> {
 	const outputDir = resolve(REPO_ROOT, args.outputDir);
 	const scenarios = selectedMatrixScenarios(args.matrix);
-	if (scenarios.length === 0) throw new Error("matrix must select at least one scenario");
+	if (scenarios.length === 0)
+		throw new Error("matrix must select at least one scenario");
 	mkdirSync(outputDir, { recursive: true });
 
-	const selectedWorkloads = args.onlyProvided ? args.only : MATRIX_DEFAULT_WORKLOADS;
+	const selectedWorkloads = args.onlyProvided
+		? args.only
+		: MATRIX_DEFAULT_WORKLOADS;
 	console.log("SQLite optimization impact matrix");
 	console.log(`matrix=${args.matrix}`);
 	console.log(`output=${outputDir}`);
 	console.log(`workloads=${selectedWorkloads.join(",")}`);
-	console.log(`scenarios=${scenarios.map((scenario) => scenario.id).join(",")}`);
+	console.log(
+		`scenarios=${scenarios.map((scenario) => scenario.id).join(",")}`,
+	);
 
 	const scenarioDocuments: MatrixScenarioReport[] = [];
 	for (const scenario of scenarios) {
@@ -1501,7 +1606,9 @@ async function main(): Promise<void> {
 		endpoint: args.endpoint,
 		disableMetadataLookup: args.disableMetadataLookup,
 	});
-	type BenchHandle = ReturnType<typeof client.sqliteRealworldBench.getOrCreate>;
+	type BenchHandle = ReturnType<
+		typeof client.sqliteRealworldBench.getOrCreate
+	>;
 	const results: BenchmarkResult[] = [];
 	const startedAt = new Date().toISOString();
 
@@ -1513,7 +1620,8 @@ async function main(): Promise<void> {
 		"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES",
 		DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
 	);
-	const vfsPageCacheBytes = vfsPageCacheCapacityPages * SQLITE_PAGE_SIZE_BYTES;
+	const vfsPageCacheBytes =
+		vfsPageCacheCapacityPages * SQLITE_PAGE_SIZE_BYTES;
 	const resultDocument = {
 		schemaVersion: 1,
 		startedAt,
@@ -1544,7 +1652,8 @@ async function main(): Promise<void> {
 				startupPreloadMaxBytes,
 				vfsPageCacheCapacityPages,
 				vfsPageCacheCapacityBytes: vfsPageCacheBytes,
-				largeBytesExceedsConfiguredVfsCache: args.largeBytes > vfsPageCacheBytes,
+				largeBytesExceedsConfiguredVfsCache:
+					args.largeBytes > vfsPageCacheBytes,
 			},
 		},
 		cacheConfigProbe: null as CacheConfigResult | null,
@@ -1564,7 +1673,9 @@ async function main(): Promise<void> {
 	if (args.vfsRoundTripLatencyMs > 0) {
 		console.log(`vfs_round_trip_latency_ms=${args.vfsRoundTripLatencyMs}`);
 	}
-	console.log("server SQLite time only; setup, sleep, wake, and RTT are excluded");
+	console.log(
+		"server SQLite time only; setup, sleep, wake, and RTT are excluded",
+	);
 
 	try {
 		mkdirSync(outputDir, { recursive: true });
@@ -1588,7 +1699,9 @@ async function main(): Promise<void> {
 			console.log(`  ${spec.description}`);
 			console.log(`  actor_key=${actorKey.join("/")}`);
 			console.log(`  target=${fmtBytes(targetBytes)}`);
-			const actorId = await retryTransient("actor resolve", () => handle.resolve());
+			const actorId = await retryTransient("actor resolve", () =>
+				handle.resolve(),
+			);
 			console.log(`  actor_id=${actorId}`);
 
 			let setup: SetupResult | null = null;
@@ -1618,7 +1731,8 @@ async function main(): Promise<void> {
 			await sleep(args.wakeDelayMs);
 
 			console.log("  cold-wake main phase...");
-			const coldHandle = client.sqliteRealworldBench.getOrCreate(actorKey);
+			const coldHandle =
+				client.sqliteRealworldBench.getOrCreate(actorKey);
 			const mainResult = (await retryTransient("main workload", () =>
 				coldHandle.runWorkload({
 					workload: spec.name,
@@ -1684,7 +1798,8 @@ main()
 		process.exit(0);
 	})
 	.catch((err: unknown) => {
-		const message = err instanceof Error ? err.stack ?? err.message : String(err);
+		const message =
+			err instanceof Error ? (err.stack ?? err.message) : String(err);
 		console.error(message);
 		process.exit(1);
 	});

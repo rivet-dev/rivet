@@ -69,7 +69,7 @@ where
 	};
 	let target_for_tx = target.clone();
 
-	udb.run({
+	udb.txn("depot_branch_fork", {
 		let new_database_id = new_database_id.clone();
 		move |tx| {
 			let source_database_id = source_database_id.clone();
@@ -154,7 +154,7 @@ pub async fn fork_bucket(
 	let new_bucket_branch_id = BucketBranchId::new_v4();
 	let at_for_tx = at.clone();
 
-	udb.run({
+	udb.txn("depot_bucket_fork", {
 		move |tx| {
 			let at = at_for_tx.clone();
 
@@ -240,8 +240,6 @@ pub async fn derive_branch_at(
 		db_size_pages: commit_at_versionstamp.db_size_pages,
 		post_apply_checksum: commit_at_versionstamp.post_apply_checksum,
 		branch_id: new_branch_id,
-		#[cfg(debug_assertions)]
-		generation: 0,
 	};
 	let encoded_head_at_fork =
 		encode_db_head(head_at_fork).context("encode sqlite fork head snapshot")?;

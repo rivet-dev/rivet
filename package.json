@@ -14,7 +14,8 @@
 		"counter-latency": "pnpm --dir examples/kitchen-sink counter-latency",
 		"slow-reconnect": "pnpm --dir examples/kitchen-sink slow-reconnect",
 		"lint": "pnpm biome check .",
-		"fmt": "pnpm biome check --write --diagnostic-level=error ."
+		"fmt": "pnpm biome format --write .",
+		"fmt:agent": "node ./scripts/format/agent-format.mjs"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "0.15.0",
@@ -49,7 +50,7 @@
 		"overrides": {
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
-			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/cloud/@rivet-gg/cloud@413534c",
+			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299",
 			"rivetkit": "workspace:*",
 			"@rivetkit/engine-api-full": "workspace:*",
 			"@codemirror/state": "6.5.2",

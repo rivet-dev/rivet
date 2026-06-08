@@ -7,6 +7,35 @@ use gasoline as gas;
 use gasoline::db::{BumpSubSubject, Database, DatabaseKv};
 use serde_json::json;
 
+#[test]
+fn bump_subject_display_preserves_wire_subjects() {
+	let workflow_id = Id::new_v1(1);
+
+	let cases = [
+		(BumpSubSubject::Worker, "gasoline.worker.bump".to_string()),
+		(
+			BumpSubSubject::WorkflowCreated {
+				tag: "tag".to_string(),
+			},
+			"gasoline.workflow.created.746167".to_string(),
+		),
+		(
+			BumpSubSubject::WorkflowComplete { workflow_id },
+			format!("gasoline.workflow.complete.{workflow_id}"),
+		),
+		(
+			BumpSubSubject::SignalPublish {
+				to_workflow_id: workflow_id,
+			},
+			format!("gasoline.signal.for-workflow.{workflow_id}"),
+		),
+	];
+
+	for (subject, expected) in cases {
+		assert_eq!(subject.to_string(), expected);
+	}
+}
+
 #[tokio::test]
 async fn workflow_created_bump_fires_for_workflow_tag() -> Result<()> {
 	let test_deps = rivet_test_deps::TestDeps::new().await?;

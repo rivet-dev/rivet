@@ -6,7 +6,7 @@ import { Button } from "../ui/button";
 
 export function OnboardingFooter() {
 	return (
-		<div className="flex gap-4 justify-center py-8 bg-gradient-to-t from-background to-transparent">
+		<div className="shrink-0 flex gap-4 justify-center py-4 bg-gradient-to-t from-background to-transparent">
 			<Button
 				variant="link"
 				size="xs"

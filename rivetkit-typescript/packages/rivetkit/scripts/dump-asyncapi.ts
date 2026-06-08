@@ -41,7 +41,7 @@ function fixRefs(obj: any): any {
 }
 
 // Helper function to extract and flatten definitions into schemas
-function extractSchemas(jsonSchema: any): Record<string, any> {
+function _extractSchemas(jsonSchema: any): Record<string, any> {
 	const schemas: Record<string, any> = {};
 
 	if (jsonSchema.definitions) {
@@ -60,9 +60,9 @@ function getSchemaWithoutDefinitions(jsonSchema: any): any {
 	delete result.definitions;
 
 	// If there's a $ref to definitions, replace it with the actual schema
-	if (result.$ref && result.$ref.startsWith("#/definitions/")) {
+	if (result.$ref?.startsWith("#/definitions/")) {
 		const defName = result.$ref.replace("#/definitions/", "");
-		if (jsonSchema.definitions && jsonSchema.definitions[defName]) {
+		if (jsonSchema.definitions?.[defName]) {
 			return fixRefs(jsonSchema.definitions[defName]);
 		}
 	}

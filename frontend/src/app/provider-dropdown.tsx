@@ -14,14 +14,11 @@ import {
 	DropdownMenu,
 	DropdownMenuContent,
 	DropdownMenuItem,
-	DropdownMenuPortal,
-	DropdownMenuSub,
-	DropdownMenuSubContent,
-	DropdownMenuSubTrigger,
 	DropdownMenuTrigger,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import { deriveProviderFromMetadata } from "@/lib/data";
+import { features } from "@/lib/features";
 
 export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	const navigate = useNavigate();
@@ -34,7 +31,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-vercel" },
+						search: (s) => ({ ...s, modal: "connect-vercel" }),
 					})
 				}
 			>
@@ -45,7 +42,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-railway" },
+						search: (s) => ({ ...s, modal: "connect-railway" }),
 					})
 				}
 			>
@@ -56,7 +53,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-aws" },
+						search: (s) => ({ ...s, modal: "connect-aws" }),
 					})
 				}
 			>
@@ -67,7 +64,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-gcp" },
+						search: (s) => ({ ...s, modal: "connect-gcp" }),
 					})
 				}
 			>
@@ -78,7 +75,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-hetzner" },
+						search: (s) => ({ ...s, modal: "connect-hetzner" }),
 					})
 				}
 			>
@@ -89,7 +86,7 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 				onSelect={() =>
 					navigate({
 						to: ".",
-						search: { modal: "connect-custom" },
+						search: (s) => ({ ...s, modal: "connect-custom" }),
 					})
 				}
 			>
@@ -100,7 +97,8 @@ export function ProviderDropdown({ children }: { children: React.ReactNode }) {
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-			<DropdownMenuContent className="w-[--radix-popper-anchor-width]">
+			<DropdownMenuContent className="min-w-[--radix-popper-anchor-width]">
+				{features.compute ? <RivetCloudDropdownMenuItem /> : null}
 				{externalClouds}
 			</DropdownMenuContent>
 		</DropdownMenu>
@@ -135,7 +133,7 @@ function RivetCloudDropdownMenuItem() {
 			onSelect={() =>
 				navigate({
 					to: ".",
-					search: { modal: "connect-rivet" },
+					search: (s) => ({ ...s, modal: "connect-rivet" }),
 				})
 			}
 		>

@@ -792,7 +792,7 @@ function isSafeJson(json: string): boolean {
 	try {
 		JSON.parse(json);
 		return true;
-	} catch (e) {
+	} catch (_e) {
 		return false;
 	}
 }

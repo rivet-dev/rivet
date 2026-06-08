@@ -16,6 +16,11 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use crate::error::ActorRuntime;
 use crate::types::ListOpts;
 
+/// Maximum keys per `apply_batch` put or delete list. Mirrors the engine-side
+/// `MAX_KEYS` limit in `engine/packages/pegboard/src/actor_kv/mod.rs`; the
+/// envoy backend rejects requests above this.
+pub(crate) const APPLY_BATCH_CHUNK_SIZE: usize = 128;
+
 #[derive(Clone)]
 pub struct Kv {
 	backend: KvBackend,

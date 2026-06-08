@@ -161,7 +161,7 @@ export const Combobox = <Option extends ComboboxOption>({
 					role="combobox"
 					aria-expanded={open}
 					className={cn(
-						"justify-between bg-background",
+						"justify-between font-normal",
 						currentOptions.length === 0 &&
 							"text-muted-foreground/50",
 						className,

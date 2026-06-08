@@ -107,12 +107,59 @@ export async function getDatacenters(
 	return apiCall<never, DatacentersResponse>(config, "GET", `/datacenters`);
 }
 
+// MARK: Get runner configs
+export interface RunnerConfig {
+	normal?: {
+		drain_on_version_upgrade?: boolean;
+		actor_eviction_period?: number;
+		actor_eviction_rate?: number;
+	};
+	serverless?: {
+		url: string;
+		headers: Record<string, string>;
+		drain_grace_period?: number;
+		max_runners: number;
+		min_runners: number;
+		request_lifespan: number;
+		runners_margin: number;
+		slots_per_runner: number;
+		metadata_poll_interval?: number;
+		drain_on_version_upgrade?: boolean;
+		actor_eviction_period?: number;
+		actor_eviction_rate?: number;
+	};
+	protocol_version?: number;
+}
+
+export interface RunnerConfigDatacenters {
+	datacenters: Record<string, RunnerConfig>;
+}
+
+export interface RunnerConfigsResponse {
+	runner_configs: Record<string, RunnerConfigDatacenters>;
+}
+
+export async function getRunnerConfig(
+	config: ClientConfig,
+	name: string,
+): Promise<RunnerConfigsResponse> {
+	return apiCall<never, RunnerConfigsResponse>(
+		config,
+		"GET",
+		`/runner-configs?runner_name=${name}`,
+	);
+}
+
 // MARK: Update runner config
 export interface RegistryConfigRequest {
 	datacenters: Record<
 		string,
 		{
-			normal?: Record<string, unknown>;
+			normal?: {
+				drain_on_version_upgrade?: boolean;
+				actor_eviction_period?: number;
+				actor_eviction_rate?: number;
+			};
 			serverless?: {
 				url: string;
 				headers: Record<string, string>;
@@ -123,9 +170,11 @@ export interface RegistryConfigRequest {
 				runners_margin: number;
 				slots_per_runner: number;
 				metadata_poll_interval?: number;
+				drain_on_version_upgrade?: boolean;
+				actor_eviction_period?: number;
+				actor_eviction_rate?: number;
 			};
 			metadata?: Record<string, unknown>;
-			drain_on_version_upgrade?: boolean;
 		}
 	>;
 }

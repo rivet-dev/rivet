@@ -82,7 +82,9 @@ async function main() {
 	console.log(`Endpoint: ${DEFAULT_ENDPOINT}`);
 
 	registry.start();
-	const client = createClient<typeof registry>({ endpoint: DEFAULT_ENDPOINT });
+	const client = createClient<typeof registry>({
+		endpoint: DEFAULT_ENDPOINT,
+	});
 	const actor = client.todoList.getOrCreate([`bench-${Date.now()}`]);
 	const label = `payload-${crypto.randomUUID()}`;
 
@@ -98,7 +100,9 @@ async function main() {
 
 	console.log("");
 	console.log("RivetKit actor path");
-	console.log(`  inserted: ${formatBytes(actorResult.totalBytes)} in ${actorResult.storedRows} row(s)`);
+	console.log(
+		`  inserted: ${formatBytes(actorResult.totalBytes)} in ${actorResult.storedRows} row(s)`,
+	);
 	console.log(`  db insert time: ${formatMs(actorResult.insertElapsedMs)}`);
 	console.log(`  db verify time: ${formatMs(actorResult.verifyElapsedMs)}`);
 	console.log(`  end-to-end action time: ${formatMs(endToEndElapsedMs)}`);
@@ -108,7 +112,9 @@ async function main() {
 
 	console.log("");
 	console.log("Native SQLite baseline");
-	console.log(`  inserted: ${formatBytes(nativeResult.totalBytes)} in ${nativeResult.storedRows} row(s)`);
+	console.log(
+		`  inserted: ${formatBytes(nativeResult.totalBytes)} in ${nativeResult.storedRows} row(s)`,
+	);
 	console.log(`  db insert time: ${formatMs(nativeResult.insertElapsedMs)}`);
 	console.log(`  db verify time: ${formatMs(nativeResult.verifyElapsedMs)}`);
 

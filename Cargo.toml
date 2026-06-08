@@ -68,7 +68,10 @@ members = [
   "rivetkit-rust/packages/rivetkit-core",
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",
-  "rivetkit-typescript/packages/rivetkit-wasm"
+  "rivetkit-typescript/packages/rivetkit-wasm",
+  "engine/packages/perf",
+  "engine/packages/profiling",
+  "engine/packages/ups-broadcast"
 ]
 
   [workspace.package]
@@ -79,8 +82,12 @@ members = [
 
   [workspace.dependencies]
   anyhow = "1.0.82"
+  pyroscope = "2.0"
+  scopeguard = "1.2"
+  xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
   async-channel = "2.1.1"
-  async-nats = "0.46.0"
+  # Fork owner: Rivet/NathanFlurry. Sync with upstream async-nats when upgrading the client, and upstream the SlowConsumer subject enrichment plus subscription backpressure stats before returning to crates.io.
+  async-nats = { git = "https://github.com/NathanFlurry/nats.rs", rev = "b8658013e2e9de1d3d4d25f6b1f4f345d0970539" }
   async-stream = "0.3"
   async-trait = "0.1"
   axum-test = "17"
@@ -131,7 +138,7 @@ members = [
   rustyline = "15.0.0"
   scc = "3.6.12"
   semver = "1.0.27"
-  serde_bare = "0.5.0"
+  serde_bare = { git = "https://github.com/rivet-dev/serde_bare", rev = "f63f155db7e0ab989255ee0d6991ff8eb9ebee25" }
   serde_bytes = "0.11.17"
   serde_html_form = "0.2.7"
   serde_yaml = "0.9.34"
@@ -156,6 +163,18 @@ members = [
   tracing-slog = "0.2"
   vergen-gitcl = "1.0.0"
   reqwest-eventsource = "0.6.0"
+
+    [workspace.dependencies.opentelemetry-http]
+    version = "0.28"
+
+    [workspace.dependencies.rivet-perf]
+    path = "engine/packages/perf"
+
+    [workspace.dependencies.rivet-profiling]
+    path = "engine/packages/profiling"
+
+    [workspace.dependencies.rivet-ups-broadcast]
+    path = "engine/packages/ups-broadcast"
 
     [workspace.dependencies.hyper-rustls]
     version = "0.27.7"
@@ -372,7 +391,9 @@ members = [
     version = "0.0.4"
 
     [workspace.dependencies.vbare-compiler]
-    version = "0.0.4"
+    # version = "0.0.4"
+    git = "https://github.com/rivet-dev/vbare"
+    rev = "daba2acdf708fc9683559938eead354507e5ea21"
 
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"
@@ -586,6 +607,9 @@ members = [
 
     [workspace.dependencies.rivet-ups-protocol]
     path = "engine/sdks/rust/ups-protocol"
+
+[patch.crates-io]
+tokio-tungstenite = { git = "https://github.com/NathanFlurry/tokio-tungstenite-rivet", rev = "7cf88064d7def36a2a1cac82dc28366b4db4fd4d" }
 
 [profile.dev]
 overflow-checks = false

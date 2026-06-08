@@ -304,7 +304,7 @@ impl ShardCacheFillQueue {
 
 		let job_for_tx = job.clone();
 		self.udb
-			.run(move |tx| {
+			.txn("depot_shard_cache_fill", move |tx| {
 				let job = job_for_tx.clone();
 				async move { fill_job_tx(&tx, job).await }
 			})

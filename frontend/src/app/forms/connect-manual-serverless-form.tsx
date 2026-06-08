@@ -9,7 +9,6 @@ import {
 } from "@/app/serverless-connection-check";
 import {
 	Button,
-	cn,
 	FormControl,
 	FormDescription,
 	FormField,
@@ -22,6 +21,7 @@ import {
 } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
 import { RegionSelect } from "@/components/actors/region-select";
+import { IconPicker, IconRenderer } from "@/components/ui/icon-picker";
 import { defineStepper } from "@/components/ui/stepper";
 
 export { endpointSchema };
@@ -37,6 +37,8 @@ export const configurationSchema = z.object({
 	headers: z.array(z.tuple([z.string(), z.string()])).default([]),
 	requestLifespan: z.coerce.number().min(0, "Must be 0 or greater"),
 	drainGracePeriod: z.coerce.number().min(0).optional().default(0),
+	customName: z.string().trim().max(32, "Name is too long").optional(),
+	customIcon: z.string().optional(),
 	// Deprecated fields — only used when submitting to an old runner config (no protocolVersion).
 	slotsPerRunner: z.coerce.number().min(1).optional(),
 	maxRunners: z.coerce.number().min(1).optional(),
@@ -89,6 +91,68 @@ export const RunnerName = function RunnerName() {
 				</FormItem>
 			)}
 		/>
+	);
+};
+
+export const CustomBranding = function CustomBranding() {
+	const { control, watch } = useFormContext();
+	const icon = watch("customIcon");
+	const name = watch("customName");
+	return (
+		<div className="space-y-2">
+			<FormLabel asChild>
+				<p>Display</p>
+			</FormLabel>
+			<FormDescription>
+				Pick an icon and label for this provider. Shown in the provider
+				list.
+			</FormDescription>
+			<div className="flex items-start gap-2">
+				<FormField
+					control={control}
+					name="customIcon"
+					render={({ field }) => (
+						<FormItem>
+							<FormControl>
+								<IconPicker
+									value={field.value || null}
+									onChange={(v) => field.onChange(v ?? "")}
+								/>
+							</FormControl>
+						</FormItem>
+					)}
+				/>
+				<FormField
+					control={control}
+					name="customName"
+					render={({ field }) => (
+						<FormItem className="flex-1">
+							<FormControl>
+								<Input
+									type="text"
+									placeholder="My custom cluster"
+									maxLength={32}
+									{...field}
+									value={field.value ?? ""}
+								/>
+							</FormControl>
+							<FormMessage />
+						</FormItem>
+					)}
+				/>
+			</div>
+			{name || icon ? (
+				<div className="flex items-center gap-2 text-xs text-muted-foreground">
+					Preview:
+					<span className="inline-flex items-center gap-1.5 rounded bg-muted px-2 py-1 text-foreground">
+						{icon ? (
+							<IconRenderer name={icon} className="size-3.5" />
+						) : null}
+						{name || "Custom"}
+					</span>
+				</div>
+			) : null}
+		</div>
 	);
 };
 
@@ -195,7 +259,12 @@ export const MinRunners = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Min Runners</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						The minimum number of runners to keep running.
@@ -217,10 +286,16 @@ export const MaxRunners = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Max Runners</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
-						The maximum number of runners that can be created to handle load.
+						The maximum number of runners that can be created to
+						handle load.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>
@@ -237,9 +312,16 @@ export const SlotsPerRunner = ({ className }: { className?: string }) => {
 			name="slotsPerRunner"
 			render={({ field }) => (
 				<FormItem className={className}>
-					<FormLabel className="col-span-1">Slots Per Runner</FormLabel>
+					<FormLabel className="col-span-1">
+						Slots Per Runner
+					</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
 						The number of concurrent slots each runner can handle.
@@ -261,10 +343,16 @@ export const RunnerMargin = ({ className }: { className?: string }) => {
 				<FormItem className={className}>
 					<FormLabel className="col-span-1">Runner Margin</FormLabel>
 					<FormControl className="row-start-2">
-						<Input type="number" {...field} value={field.value ?? ""} min={0} />
+						<Input
+							type="number"
+							{...field}
+							value={field.value ?? ""}
+							min={0}
+						/>
 					</FormControl>
 					<FormDescription className="col-span-1">
-						The number of extra runners to keep running to handle sudden spikes in load.
+						The number of extra runners to keep running to handle
+						sudden spikes in load.
 					</FormDescription>
 					<FormMessage className="col-span-1" />
 				</FormItem>

@@ -103,7 +103,8 @@ async function withAttemptTimeout<T>(
 }
 
 function formatError(err: unknown): string {
-	if (err instanceof ActorError) return `${err.group}.${err.code} - ${err.message}`;
+	if (err instanceof ActorError)
+		return `${err.group}.${err.code} - ${err.message}`;
 	if (err instanceof Error) return `${err.name}: ${err.message}`;
 	return String(err);
 }
@@ -155,9 +156,17 @@ async function attemptCreate(
 			error.group === "actor" &&
 			error.code === "duplicate_key"
 		) {
-			return { region: region.label, durationMs, outcome: { kind: "duplicate" } };
+			return {
+				region: region.label,
+				durationMs,
+				outcome: { kind: "duplicate" },
+			};
 		}
-		return { region: region.label, durationMs, outcome: { kind: "error", error } };
+		return {
+			region: region.label,
+			durationMs,
+			outcome: { kind: "error", error },
+		};
 	}
 }
 
@@ -202,7 +211,9 @@ async function runCreateRaceRound(round: number): Promise<boolean> {
 		);
 		for (const r of errors) {
 			if (r.outcome.kind === "error") {
-				console.error(`    ${r.region}: ${formatError(r.outcome.error)}`);
+				console.error(
+					`    ${r.region}: ${formatError(r.outcome.error)}`,
+				);
 			}
 		}
 		return false;
@@ -216,7 +227,7 @@ async function runCreateRaceRound(round: number): Promise<boolean> {
 	}
 
 	console.log(
-		`  PASS: 1 winner in ${successes[0]!.region}, ${duplicates.length} duplicate_key rejections`,
+		`  PASS: 1 winner in ${successes[0]?.region}, ${duplicates.length} duplicate_key rejections`,
 	);
 	return true;
 }
@@ -264,7 +275,7 @@ async function attemptGetOrCreate(
 	}
 }
 
-async function runGetOrCreateRaceRound(round: number): Promise<boolean> {
+async function _runGetOrCreateRaceRound(round: number): Promise<boolean> {
 	const key = makeKey("getOrCreate", round);
 	console.log(`\n--- Round ${round + 1}/${ROUNDS} key=${key} ---`);
 
@@ -274,8 +285,11 @@ async function runGetOrCreateRaceRound(round: number): Promise<boolean> {
 	const results = await Promise.all(attempts);
 
 	const resolved = results.filter(
-		(r): r is GetOrCreateAttempt & { outcome: { kind: "resolved"; actorId: string } } =>
-			r.outcome.kind === "resolved",
+		(
+			r,
+		): r is GetOrCreateAttempt & {
+			outcome: { kind: "resolved"; actorId: string };
+		} => r.outcome.kind === "resolved",
 	);
 	const timeouts = results.filter((r) => r.outcome.kind === "timeout");
 	const errors = results.filter((r) => r.outcome.kind === "error");
@@ -286,9 +300,13 @@ async function runGetOrCreateRaceRound(round: number): Promise<boolean> {
 				`  [RESOLVED] ${r.region.padEnd(14)} ${r.durationMs}ms actorId=${r.outcome.actorId}`,
 			);
 		} else if (r.outcome.kind === "timeout") {
-			console.log(`  [TIMEOUT]  ${r.region.padEnd(14)} ${r.durationMs}ms`);
+			console.log(
+				`  [TIMEOUT]  ${r.region.padEnd(14)} ${r.durationMs}ms`,
+			);
 		} else {
-			console.log(`  [ERROR]    ${r.region.padEnd(14)} ${r.durationMs}ms`);
+			console.log(
+				`  [ERROR]    ${r.region.padEnd(14)} ${r.durationMs}ms`,
+			);
 		}
 	}
 
@@ -308,7 +326,9 @@ async function runGetOrCreateRaceRound(round: number): Promise<boolean> {
 		);
 		for (const r of errors) {
 			if (r.outcome.kind === "error") {
-				console.error(`    ${r.region}: ${formatError(r.outcome.error)}`);
+				console.error(
+					`    ${r.region}: ${formatError(r.outcome.error)}`,
+				);
 			}
 		}
 		return false;
@@ -365,7 +385,7 @@ async function attemptGet(region: Client, key: string): Promise<GetAttempt> {
 	}
 }
 
-async function runCrossRegionRound(round: number): Promise<boolean> {
+async function _runCrossRegionRound(round: number): Promise<boolean> {
 	const key = makeKey("cross-region", round);
 	// Rotate the creator region each round so both directions are exercised.
 	const creator = clients[round % clients.length]!;
@@ -389,7 +409,9 @@ async function runCrossRegionRound(round: number): Promise<boolean> {
 			);
 			return false;
 		}
-		const idOrTimeout = await withAttemptTimeout(() => handleOrTimeout.resolve());
+		const idOrTimeout = await withAttemptTimeout(() =>
+			handleOrTimeout.resolve(),
+		);
 		if (idOrTimeout === TIMEOUT_SENTINEL) {
 			console.error(
 				`  FAIL: resolve after create in ${creator.label} timed out after ${ATTEMPT_TIMEOUT_MS}ms`,
@@ -398,7 +420,9 @@ async function runCrossRegionRound(round: number): Promise<boolean> {
 		}
 		createdActorId = idOrTimeout;
 	} catch (err) {
-		console.error(`  FAIL: create in ${creator.label} errored: ${formatError(err)}`);
+		console.error(
+			`  FAIL: create in ${creator.label} errored: ${formatError(err)}`,
+		);
 		return false;
 	}
 	console.log(
@@ -417,14 +441,20 @@ async function runCrossRegionRound(round: number): Promise<boolean> {
 				`  [GET]      ${r.region.padEnd(14)} ${r.durationMs}ms actorId=${r.outcome.actorId}`,
 			);
 		} else if (r.outcome.kind === "timeout") {
-			console.log(`  [TIMEOUT]  ${r.region.padEnd(14)} ${r.durationMs}ms`);
+			console.log(
+				`  [TIMEOUT]  ${r.region.padEnd(14)} ${r.durationMs}ms`,
+			);
 		} else {
-			console.log(`  [ERROR]    ${r.region.padEnd(14)} ${r.durationMs}ms`);
+			console.log(
+				`  [ERROR]    ${r.region.padEnd(14)} ${r.durationMs}ms`,
+			);
 		}
 	}
 
 	const mismatches = observations.filter(
-		(r) => r.outcome.kind === "resolved" && r.outcome.actorId !== createdActorId,
+		(r) =>
+			r.outcome.kind === "resolved" &&
+			r.outcome.actorId !== createdActorId,
 	);
 	if (mismatches.length > 0) {
 		console.error(
@@ -448,7 +478,9 @@ async function runCrossRegionRound(round: number): Promise<boolean> {
 		);
 		for (const r of errors) {
 			if (r.outcome.kind === "error") {
-				console.error(`    ${r.region}: ${formatError(r.outcome.error)}`);
+				console.error(
+					`    ${r.region}: ${formatError(r.outcome.error)}`,
+				);
 			}
 		}
 		return false;
@@ -495,7 +527,8 @@ async function main() {
 		console.log(`  region=${region.label.padEnd(14)} host=${host}`);
 	}
 
-	const scenarioResults: { name: string; passed: number; failed: number }[] = [];
+	const scenarioResults: { name: string; passed: number; failed: number }[] =
+		[];
 	let totalFailed = 0;
 
 	for (const scenario of SCENARIOS) {
@@ -510,12 +543,16 @@ async function main() {
 		}
 		scenarioResults.push({ name: scenario.name, passed, failed });
 		totalFailed += failed;
-		console.log(`\n[${scenario.name}] ${passed}/${ROUNDS} passed, ${failed}/${ROUNDS} failed`);
+		console.log(
+			`\n[${scenario.name}] ${passed}/${ROUNDS} passed, ${failed}/${ROUNDS} failed`,
+		);
 	}
 
 	console.log(`\n======== Summary ========`);
 	for (const s of scenarioResults) {
-		console.log(`  ${s.name.padEnd(26)} ${s.passed}/${ROUNDS} passed, ${s.failed} failed`);
+		console.log(
+			`  ${s.name.padEnd(26)} ${s.passed}/${ROUNDS} passed, ${s.failed} failed`,
+		);
 	}
 
 	if (totalFailed > 0) process.exit(1);

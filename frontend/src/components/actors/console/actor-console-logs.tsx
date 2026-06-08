@@ -22,7 +22,7 @@ export function ActorConsoleLogs() {
 		<ScrollArea
 			viewportRef={ref}
 			viewportProps={{
-				onScroll: (e) => {
+				onScroll: (_e) => {
 					if (ref.current) {
 						isScrolledToBottom.current =
 							ref.current.scrollTop + ref.current.clientHeight >=

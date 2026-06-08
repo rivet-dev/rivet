@@ -5,11 +5,12 @@
 import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
+import { RunnerConfigNormal } from "./RunnerConfigNormal";
 import { RunnerConfigServerless } from "./RunnerConfigServerless";
 
 export const RunnerConfig: core.serialization.ObjectSchema<serializers.RunnerConfig.Raw, Rivet.RunnerConfig> =
     core.serialization.object({
-        normal: core.serialization.record(core.serialization.string(), core.serialization.unknown()).optional(),
+        normal: RunnerConfigNormal.optional(),
         serverless: RunnerConfigServerless.optional(),
         drainOnVersionUpgrade: core.serialization.property(
             "drain_on_version_upgrade",
@@ -20,7 +21,7 @@ export const RunnerConfig: core.serialization.ObjectSchema<serializers.RunnerCon
 
 export declare namespace RunnerConfig {
     export interface Raw {
-        normal?: Record<string, unknown> | null;
+        normal?: RunnerConfigNormal.Raw | null;
         serverless?: RunnerConfigServerless.Raw | null;
         drain_on_version_upgrade?: boolean | null;
         metadata?: unknown | null;

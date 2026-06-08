@@ -10,6 +10,9 @@ use rivet_guard_core::request_context::RequestContext;
 use rivet_guard_core::{CustomServeTrait, ResponseBody, RoutingOutput};
 use tower::Service;
 
+use super::{Phase, phase_timeout};
+use crate::{errors, metrics};
+
 struct ApiPublicService {
 	router: axum::Router,
 }
@@ -54,7 +57,19 @@ pub async fn route_request(ctx: &StandaloneCtx, target: &str) -> Result<Option<R
 	}
 
 	// Create the router once
-	let router = rivet_api_public::router(ctx.config().clone(), ctx.pools().clone()).await?;
+	let router = phase_timeout(
+		Phase::new("route_api_public", &metrics::ROUTE_API_PUBLIC_DURATION),
+		ctx.config().guard().route_api_public_timeout(),
+		rivet_api_public::router(ctx.config().clone(), ctx.pools().clone()),
+		|elapsed, timeout| {
+			errors::RouteApiPublicTimeout {
+				elapsed_ms: elapsed.as_millis() as u64,
+				timeout_ms: timeout.as_millis() as u64,
+			}
+			.build()
+		},
+	)
+	.await?;
 
 	let service = Arc::new(ApiPublicService { router });
 

@@ -38,7 +38,11 @@ const ON_SLEEP_TICK_MS = numberFromConfig(
 const OPEN_TIMEOUT_MS = numberFromConfig("open-timeout-ms", [], 15_000);
 const OPEN_DELAY_MS = numberFromConfig("open-delay-ms", [], 0);
 const MESSAGE_TIMEOUT_MS = numberFromConfig("message-timeout-ms", [], 5_000);
-const RECONNECT_TIMEOUT_MS = numberFromConfig("reconnect-timeout-ms", [], 5_000);
+const RECONNECT_TIMEOUT_MS = numberFromConfig(
+	"reconnect-timeout-ms",
+	[],
+	5_000,
+);
 const WATCH_TIMEOUT_MS = numberFromConfig(
 	"watch-timeout-ms",
 	[],
@@ -85,7 +89,8 @@ function installTimestampedConsole(): void {
 	const originalLog = console.log.bind(console);
 	const originalError = console.error.bind(console);
 	const originalWarn = console.warn.bind(console);
-	console.log = (...args: unknown[]) => originalLog(`[${new Date().toISOString()}]`, ...args);
+	console.log = (...args: unknown[]) =>
+		originalLog(`[${new Date().toISOString()}]`, ...args);
 	console.error = (...args: unknown[]) =>
 		originalError(`[${new Date().toISOString()}]`, ...args);
 	console.warn = (...args: unknown[]) =>
@@ -179,7 +184,9 @@ function parseEndpoint(raw: string, poolName: string) {
 	const namespace = decodeURIComponent(url.username);
 	const token = url.password ? decodeURIComponent(url.password) : undefined;
 	if (!namespace) {
-		throw new Error("RIVET_ENDPOINT must include namespace auth, e.g. https://namespace:token@host");
+		throw new Error(
+			"RIVET_ENDPOINT must include namespace auth, e.g. https://namespace:token@host",
+		);
 	}
 	url.username = "";
 	url.password = "";
@@ -214,7 +221,10 @@ async function waitForOpen(ws: WebSocket, timeoutMs: number): Promise<void> {
 	if (ws.readyState === WebSocket.OPEN) return;
 	await new Promise<void>((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(new Error(`websocket open timeout after ${timeoutMs}ms`)),
+			() =>
+				reject(
+					new Error(`websocket open timeout after ${timeoutMs}ms`),
+				),
 			timeoutMs,
 		);
 		const cleanup = () => clearTimeout(timeout);
@@ -257,7 +267,10 @@ async function waitForMessage(
 ): Promise<JsonRecord> {
 	return await new Promise((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(new Error(`${label} message timeout after ${timeoutMs}ms`)),
+			() =>
+				reject(
+					new Error(`${label} message timeout after ${timeoutMs}ms`),
+				),
 			timeoutMs,
 		);
 		const cleanup = () => {
@@ -266,7 +279,10 @@ async function waitForMessage(
 			ws.removeEventListener("close", onClose);
 		};
 		const onMessage = (event: MessageEvent) => {
-			const data = typeof event.data === "string" ? event.data : String(event.data);
+			const data =
+				typeof event.data === "string"
+					? event.data
+					: String(event.data);
 			console.log(`[ws:message] ${data}`);
 			let parsed: JsonRecord;
 			try {
@@ -302,11 +318,17 @@ function waitForClose(
 ): Promise<CloseInfo> {
 	return new Promise((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(new Error(`websocket close timeout after ${timeoutMs}ms`)),
+			() =>
+				reject(
+					new Error(`websocket close timeout after ${timeoutMs}ms`),
+				),
 			timeoutMs,
 		);
 		ws.addEventListener("message", (event) => {
-			const data = typeof event.data === "string" ? event.data : String(event.data);
+			const data =
+				typeof event.data === "string"
+					? event.data
+					: String(event.data);
 			console.log(`[ws:message] ${data}`);
 			try {
 				const parsed = JSON.parse(data) as JsonRecord;
@@ -375,7 +397,10 @@ async function connectAndPingPong(
 		console.log(`[ws] ${label} ping pong ok`);
 		return ws;
 	} catch (error) {
-		if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+		if (
+			ws.readyState === WebSocket.OPEN ||
+			ws.readyState === WebSocket.CONNECTING
+		) {
 			ws.close(1000, `${label} failed`);
 		}
 		throw error;
@@ -420,13 +445,17 @@ function assertProof(proof: Proof): void {
 	const ticks = proof.rows.filter((row) => row.event === "on-sleep-tick");
 
 	if (proof.state.sleepCount < 1) {
-		throw new Error(`expected sleepCount >= 1, got ${proof.state.sleepCount}`);
+		throw new Error(
+			`expected sleepCount >= 1, got ${proof.state.sleepCount}`,
+		);
 	}
 	if (proof.state.onSleepLastError !== null) {
 		throw new Error(`onSleep error: ${proof.state.onSleepLastError}`);
 	}
 	if (!start || !afterAwait || !finish) {
-		throw new Error(`missing onSleep proof rows. saw events=${events.join(",")}`);
+		throw new Error(
+			`missing onSleep proof rows. saw events=${events.join(",")}`,
+		);
 	}
 
 	const elapsedMs = afterAwait.created_at - start.created_at;
@@ -474,7 +503,11 @@ async function main(): Promise<void> {
 		console.log(`[ws] waiting before open delayMs=${OPEN_DELAY_MS}`);
 		await sleep(OPEN_DELAY_MS);
 	}
-	const ws = await connectAndPingPong("initial", OPEN_TIMEOUT_MS, MESSAGE_TIMEOUT_MS);
+	const ws = await connectAndPingPong(
+		"initial",
+		OPEN_TIMEOUT_MS,
+		MESSAGE_TIMEOUT_MS,
+	);
 	console.log("[manual] roll/restart the remote kitchen-sink envoy pods now");
 
 	const state = {
@@ -499,7 +532,9 @@ async function main(): Promise<void> {
 	assertClose(close, startedAt);
 	assertProof(proof);
 	console.log(`[proof] ${JSON.stringify(proof.state)}`);
-	console.log("[done] PASS observed shutdown close, reconnected, and verified onSleep proof");
+	console.log(
+		"[done] PASS observed shutdown close, reconnected, and verified onSleep proof",
+	);
 }
 
 main().catch((error) => {

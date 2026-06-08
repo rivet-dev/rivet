@@ -1,28 +1,5 @@
 // @ts-nocheck
-import type { RunContext } from "@/actor/config";
-import type {
-	QueueFilterName,
-	QueueNextBatchOptions,
-	QueueNextOptions,
-	QueueResultMessageForName,
-} from "@/actor/config";
-import type { Client } from "@/client/client";
-import type { Registry } from "@/registry";
-import type {
-	BaseActorDefinition,
-	AnyActorDefinition,
-} from "@/actor/definition";
-import type {
-	AnyDatabaseProvider,
-	InferDatabaseClient,
-} from "@/common/database/config";
-import type {
-	EventSchemaConfig,
-	InferEventArgs,
-	InferSchemaMap,
-	QueueSchemaConfig,
-} from "@/actor/schema";
-import type { WorkflowContextInterface } from "@rivetkit/workflow-engine";
+
 import type {
 	BranchConfig,
 	BranchOutput,
@@ -34,8 +11,32 @@ import type {
 	TryBlockResult,
 	TryStepConfig,
 	TryStepResult,
+	WorkflowContextInterface,
 	WorkflowQueueMessage,
 } from "@rivetkit/workflow-engine";
+import type {
+	QueueFilterName,
+	QueueNextBatchOptions,
+	QueueNextOptions,
+	QueueResultMessageForName,
+} from "@/actor/config";
+import { RAW_STATE_SYMBOL, type RunContext } from "@/actor/config";
+import type {
+	AnyActorDefinition,
+	BaseActorDefinition,
+} from "@/actor/definition";
+import type {
+	EventSchemaConfig,
+	InferEventArgs,
+	InferSchemaMap,
+	QueueSchemaConfig,
+} from "@/actor/schema";
+import type { Client } from "@/client/client";
+import type {
+	AnyDatabaseProvider,
+	InferDatabaseClient,
+} from "@/common/database/config";
+import type { Registry } from "@/registry";
 import { WORKFLOW_GUARD_KV_KEY } from "./constants";
 
 type WorkflowActorQueueNextOptions<
@@ -80,7 +81,9 @@ type ActorWorkflowLoopConfig<
 			TQueues
 		>,
 		state: S,
-	) => Promise<LoopResult<S, T> | (S extends undefined ? void : never)>;
+	) => Promise<
+		LoopResult<S, T> | (S extends undefined ? undefined | void : never)
+	>;
 };
 
 type ActorWorkflowBranchConfig<
@@ -238,7 +241,7 @@ export class ActorWorkflowContext<
 	}
 
 	async step<T>(
-		nameOrConfig: string | Parameters<WorkflowContextInterface["step"]>[0],
+		nameOrConfig: string | StepConfig<T>,
 		run?: () => Promise<T>,
 	): Promise<T> {
 		if (typeof nameOrConfig === "string") {
@@ -247,22 +250,20 @@ export class ActorWorkflowContext<
 			}
 			return await this.#wrapActive(() =>
 				this.#inner.step(nameOrConfig, () =>
-					this.#withActorAccess(run),
+					this.#withActorAccessAndStateRollback(run),
 				),
 			);
 		}
 		const stepConfig = nameOrConfig as StepConfig<T>;
 		const config: StepConfig<T> = {
 			...stepConfig,
-			run: () => this.#withActorAccess(stepConfig.run),
+			run: () => this.#withActorAccessAndStateRollback(stepConfig.run),
 		};
 		return await this.#wrapActive(() => this.#inner.step(config));
 	}
 
 	async tryStep<T>(
-		nameOrConfig:
-			| string
-			| Parameters<WorkflowContextInterface["tryStep"]>[0],
+		nameOrConfig: string | TryStepConfig<T>,
 		run?: () => Promise<T>,
 	): Promise<TryStepResult<T>> {
 		if (typeof nameOrConfig === "string") {
@@ -271,14 +272,14 @@ export class ActorWorkflowContext<
 			}
 			return await this.#wrapActive(() =>
 				this.#inner.tryStep(nameOrConfig, () =>
-					this.#withActorAccess(run),
+					this.#withActorAccessAndStateRollback(run),
 				),
 			);
 		}
 		const stepConfig = nameOrConfig as TryStepConfig<T>;
 		const config: TryStepConfig<T> = {
 			...stepConfig,
-			run: () => this.#withActorAccess(stepConfig.run),
+			run: () => this.#withActorAccessAndStateRollback(stepConfig.run),
 		};
 		return await this.#wrapActive(() => this.#inner.tryStep(config));
 	}
@@ -329,13 +330,13 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, T> | void>,
+		) => Promise<LoopResult<undefined, T> | undefined | void>,
 	): Promise<T>;
 	async loop<T>(
 		name: string,
 		run: (
 			ctx: WorkflowContextInterface,
-		) => Promise<LoopResult<undefined, T> | void>,
+		) => Promise<LoopResult<undefined, T> | undefined | void>,
 	): Promise<T>;
 	async loop<S, T>(
 		config: ActorWorkflowLoopConfig<
@@ -379,7 +380,7 @@ export class ActorWorkflowContext<
 				TEvents,
 				TQueues
 			>,
-		) => Promise<LoopResult<undefined, any> | void>,
+		) => Promise<LoopResult<undefined, any> | undefined | void>,
 	): Promise<any> {
 		if (typeof nameOrConfig === "string") {
 			if (!run) {
@@ -609,6 +610,33 @@ export class ActorWorkflowContext<
 			if (this.#actorAccessDepth === 0) {
 				this.#allowActorAccess = false;
 			}
+		}
+	}
+
+	async #withActorAccessAndStateRollback<T>(
+		run: () => Promise<T>,
+	): Promise<T> {
+		let stateSnapshot: { state: TState } | null = null;
+		try {
+			stateSnapshot = { state: this.#runCtx[RAW_STATE_SYMBOL]() };
+		} catch (error) {
+			this.#runCtx.log.debug({
+				msg: "failed to get state, likely due to being stateless workflow",
+				error,
+			});
+		}
+		if (stateSnapshot) {
+			stateSnapshot.state = structuredClone(stateSnapshot.state);
+		}
+		const varsSnapshot = structuredClone(this.#runCtx.vars);
+		try {
+			return await this.#withActorAccess(run);
+		} catch (error) {
+			if (stateSnapshot) {
+				this.#runCtx.state = stateSnapshot.state;
+			}
+			this.#runCtx.vars = varsSnapshot;
+			throw error;
 		}
 	}
 

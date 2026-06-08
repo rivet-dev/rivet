@@ -29,7 +29,6 @@ const stepper = defineStepper(
 		id: "step-1",
 		title: "Configure",
 		assist: false,
-		next: "Next",
 		schema: ConnectServerlessForm.configurationSchema,
 	},
 	{
@@ -37,7 +36,6 @@ const stepper = defineStepper(
 		title: "Deploy",
 		assist: false,
 		schema: z.object({}),
-		next: "Next",
 	},
 	{
 		id: "step-3",
@@ -123,7 +121,7 @@ function FormStepper({
 				),
 			}}
 			content={{
-				"step-1": () => <Step1 />,
+				"step-1": () => <Step1 provider={provider} />,
 				"step-2": () => <Step2 />,
 				"step-3": () => <Step3 provider={provider} />,
 			}}
@@ -150,17 +148,14 @@ export const buildServerlessConfig = async (
 
 	const endpoint = status.url || values.endpoint;
 
-	let existing: Record<string, Rivet.RunnerConfig> = {};
-	try {
-		const runnerConfig = await queryClient.fetchQuery(
-			dataProvider.runnerConfigQueryOptions({
-				name: values.runnerName,
-			}),
-		);
-		existing = runnerConfig?.datacenters || {};
-	} catch {
-		existing = {};
-	}
+	const runnerConfig = await queryClient.fetchQuery(
+		dataProvider.runnerConfigQueryOptions({
+			name: values.runnerName,
+			safe: true,
+		}),
+	);
+	const existing: Record<string, Rivet.RunnerConfig> =
+		runnerConfig?.datacenters || {};
 
 	const selectedDatacenters = Object.entries(values.datacenters)
 		.filter(([, selected]) => selected)
@@ -194,10 +189,22 @@ export const buildServerlessConfig = async (
 							runnersMargin: values.runnerMargin ?? 0,
 							minRunners: values.minRunners ?? 0,
 						};
+				const resolvedProvider = provider || "custom";
+				const isCustom =
+					resolvedProvider === "custom" ||
+					resolvedProvider === "custom-platform";
+				const customName = isCustom
+					? values.customName?.trim() || undefined
+					: undefined;
+				const customIcon = isCustom
+					? values.customIcon || undefined
+					: undefined;
 				const config = {
 					serverless,
 					metadata: {
-						provider: provider || "custom",
+						provider: resolvedProvider,
+						...(customName ? { customName } : {}),
+						...(customIcon ? { customIcon } : {}),
 					},
 				};
 				return [dc, config];
@@ -208,9 +215,11 @@ export const buildServerlessConfig = async (
 	return payload;
 };
 
-function Step1() {
+function Step1({ provider }: { provider: Provider }) {
+	const isCustom = provider === "custom" || provider === "custom-platform";
 	return (
 		<div className="space-y-4">
+			{isCustom ? <ConnectServerlessForm.CustomBranding /> : null}
 			<Configuration />
 		</div>
 	);

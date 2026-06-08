@@ -16,7 +16,8 @@ export function resolveMode(): KitchenSinkMode {
 	}
 
 	if (process.env.RIVET_RUN_ENGINE === "1") return "serverless-local";
-	if (process.env.RIVET_SERVERLESS_URL !== undefined) return "serverless-local";
+	if (process.env.RIVET_SERVERLESS_URL !== undefined)
+		return "serverless-local";
 	if (process.env.KITCHEN_SINK_SERVERLESS_URL !== undefined) {
 		return "serverless-local";
 	}

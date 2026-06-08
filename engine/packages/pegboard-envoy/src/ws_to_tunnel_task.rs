@@ -3,9 +3,7 @@ use bytes::Bytes;
 use depot::{
 	conveyer::Db,
 	error::{SqliteStorageError, is_head_fence_mismatch},
-	workflows::compaction::{
-		DATABASE_BRANCH_ID_TAG, DbManagerInput, DeltasAvailable, database_branch_tag_value,
-	},
+	workflows::compaction::DeltasAvailable,
 };
 use depot_client::{
 	database::NativeDatabaseHandle,
@@ -21,13 +19,17 @@ use pegboard::pubsub_subjects::GatewayReceiverSubject;
 use rivet_data::converted::{ActorNameKeyData, MetadataKeyData};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_guard_core::websocket_handle::WebSocketReceiver;
-use scc::HashMap;
+use rivet_perf::{perf_finish, perf_start};
 use std::{
+	collections::HashMap as StdHashMap,
+	hash::Hash,
 	sync::{Arc, atomic::Ordering},
-	time::Instant,
+	time::{Duration, Instant},
 };
-use tokio::sync::{Mutex, MutexGuard, watch};
-use tracing::Instrument;
+use tokio::{
+	sync::{Mutex, MutexGuard, mpsc, watch},
+	task::JoinSet,
+};
 use universaldb::prelude::*;
 use universaldb::utils::end_of_key_range;
 use universalpubsub::PublishOpts;
@@ -36,13 +38,401 @@ use vbare::OwnedVersionedData;
 use crate::{
 	LifecycleResult,
 	actor_event_demuxer::ActorEventDemuxer,
+	actor_kv_task, actor_remote_sqlite_task, actor_sqlite_page_task,
 	conn::{Conn, RemoteSqliteExecutors},
-	errors, sqlite_runtime,
+	control_task, errors, metrics, sqlite_runtime, tunnel_message_task,
 };
 
 const MAX_REMOTE_SQL_BIND_BYTES: usize = 128 * 1024;
 
-#[tracing::instrument(name="ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
+/// Wall-clock threshold above which a single handle_message invocation is logged as a head-of-line
+/// blocking risk. The ws_to_tunnel_task loop is strictly serial per envoy, so any handler that
+/// spends longer than this delays every subsequent WS message from the same envoy (including
+/// pings, state updates, and other actors' KV ops). Picked above normal UDB-write tail latency
+/// but well below `actor_start_threshold` (30s) so we get warned before the engine declares
+/// actors lost.
+const SLOW_HANDLE_WARN_THRESHOLD: Duration = Duration::from_secs(5);
+const SLOW_SQLITE_REQUEST_WARN_THRESHOLD: Duration = Duration::from_secs(1);
+pub(super) const TASK_IDLE_TIMEOUT: Duration = Duration::from_secs(30);
+
+#[derive(Debug)]
+pub(super) enum TaskExit {
+	Kv(actor_kv_task::Key),
+	SqlitePage(actor_sqlite_page_task::Key),
+	RemoteSqlite(actor_remote_sqlite_task::Key),
+	Tunnel(tunnel_message_task::Key),
+	Control,
+}
+
+struct TaskManager {
+	ctx: StandaloneCtx,
+	conn: Arc<Conn>,
+	kv_tasks: StdHashMap<actor_kv_task::Key, mpsc::UnboundedSender<actor_kv_task::Message>>,
+	sqlite_page_tasks: StdHashMap<
+		actor_sqlite_page_task::Key,
+		mpsc::UnboundedSender<actor_sqlite_page_task::Message>,
+	>,
+	remote_sqlite_tasks: StdHashMap<
+		actor_remote_sqlite_task::Key,
+		mpsc::UnboundedSender<actor_remote_sqlite_task::Message>,
+	>,
+	tunnel_tasks:
+		StdHashMap<tunnel_message_task::Key, mpsc::UnboundedSender<tunnel_message_task::Message>>,
+	control_tasks: StdHashMap<(), mpsc::UnboundedSender<control_task::Message>>,
+	workers: JoinSet<Result<TaskExit>>,
+}
+
+impl TaskManager {
+	fn new(ctx: StandaloneCtx, conn: Arc<Conn>) -> Self {
+		Self {
+			ctx,
+			conn,
+			kv_tasks: StdHashMap::new(),
+			sqlite_page_tasks: StdHashMap::new(),
+			remote_sqlite_tasks: StdHashMap::new(),
+			tunnel_tasks: StdHashMap::new(),
+			control_tasks: StdHashMap::new(),
+			workers: JoinSet::new(),
+		}
+	}
+
+	fn abort_all(&mut self) {
+		let tunnel_task_count = self.tunnel_tasks.len();
+		let kv_task_count = self.kv_tasks.len();
+		let sqlite_page_task_count = self.sqlite_page_tasks.len();
+		let remote_sqlite_task_count = self.remote_sqlite_tasks.len();
+		self.kv_tasks.clear();
+		self.sqlite_page_tasks.clear();
+		self.remote_sqlite_tasks.clear();
+		self.tunnel_tasks.clear();
+		if tunnel_task_count > 0 {
+			metrics::TUNNEL_TASKS_ACTIVE
+				.with_label_values(&[
+					self.conn.namespace_id.to_string().as_str(),
+					&self.conn.pool_name,
+				])
+				.sub(tunnel_task_count as i64);
+			metrics::ACTOR_TASKS_ACTIVE
+				.with_label_values(&["tunnel_message"])
+				.sub(tunnel_task_count as i64);
+		}
+		if kv_task_count > 0 {
+			metrics::ACTOR_TASKS_ACTIVE
+				.with_label_values(&["kv"])
+				.sub(kv_task_count as i64);
+		}
+		if sqlite_page_task_count > 0 {
+			metrics::ACTOR_TASKS_ACTIVE
+				.with_label_values(&["sqlite_page"])
+				.sub(sqlite_page_task_count as i64);
+		}
+		if remote_sqlite_task_count > 0 {
+			metrics::ACTOR_TASKS_ACTIVE
+				.with_label_values(&["remote_sqlite"])
+				.sub(remote_sqlite_task_count as i64);
+		}
+		self.control_tasks.clear();
+		self.workers.abort_all();
+	}
+
+	async fn join_next(&mut self) -> Option<Result<()>> {
+		let res = self.workers.join_next().await?;
+		Some(match res {
+			Ok(Ok(exit)) => {
+				self.remove_worker_task(exit);
+				Ok(())
+			}
+			Ok(Err(err)) => Err(err),
+			Err(err) => Err(err.into()),
+		})
+	}
+
+	fn remove_worker_task(&mut self, exit: TaskExit) {
+		match exit {
+			TaskExit::Kv(key) => {
+				if remove_closed_task(&mut self.kv_tasks, &key) {
+					metrics::ACTOR_TASKS_ACTIVE.with_label_values(&["kv"]).dec();
+				}
+			}
+			TaskExit::SqlitePage(key) => {
+				if remove_closed_task(&mut self.sqlite_page_tasks, &key) {
+					metrics::ACTOR_TASKS_ACTIVE
+						.with_label_values(&["sqlite_page"])
+						.dec();
+				}
+			}
+			TaskExit::RemoteSqlite(key) => {
+				if remove_closed_task(&mut self.remote_sqlite_tasks, &key) {
+					metrics::ACTOR_TASKS_ACTIVE
+						.with_label_values(&["remote_sqlite"])
+						.dec();
+				}
+			}
+			TaskExit::Tunnel(key) => {
+				if remove_closed_task(&mut self.tunnel_tasks, &key) {
+					tracing::trace!(
+						namespace_id = %self.conn.namespace_id,
+						pool_name = %self.conn.pool_name,
+						envoy_key = %self.conn.envoy_key,
+						gateway_id = %key.gateway_id_display(),
+						request_id = %key.request_id_display(),
+						"tunnel message task exited"
+					);
+					metrics::TUNNEL_TASKS_ACTIVE
+						.with_label_values(&[
+							self.conn.namespace_id.to_string().as_str(),
+							&self.conn.pool_name,
+						])
+						.dec();
+					metrics::ACTOR_TASKS_ACTIVE
+						.with_label_values(&["tunnel_message"])
+						.dec();
+				}
+			}
+			TaskExit::Control => {
+				remove_closed_task(&mut self.control_tasks, &());
+			}
+		}
+	}
+
+	fn enqueue_kv(&mut self, key: actor_kv_task::Key, msg: actor_kv_task::Message) -> Result<()> {
+		let ctx = self.ctx.clone();
+		let conn = self.conn.clone();
+		enqueue_keyed_task(
+			&mut self.kv_tasks,
+			&mut self.workers,
+			key,
+			msg,
+			Some("kv"),
+			move |key, rx| actor_kv_task::task(ctx.clone(), conn.clone(), key, rx),
+		)
+	}
+
+	fn enqueue_sqlite_page(
+		&mut self,
+		key: actor_sqlite_page_task::Key,
+		msg: actor_sqlite_page_task::Message,
+	) -> Result<()> {
+		let ctx = self.ctx.clone();
+		let conn = self.conn.clone();
+		enqueue_keyed_task(
+			&mut self.sqlite_page_tasks,
+			&mut self.workers,
+			key,
+			msg,
+			Some("sqlite_page"),
+			move |key, rx| actor_sqlite_page_task::task(ctx.clone(), conn.clone(), key, rx),
+		)
+	}
+
+	fn enqueue_remote_sqlite(
+		&mut self,
+		key: actor_remote_sqlite_task::Key,
+		msg: actor_remote_sqlite_task::Message,
+	) -> Result<()> {
+		let ctx = self.ctx.clone();
+		let conn = self.conn.clone();
+		enqueue_keyed_task(
+			&mut self.remote_sqlite_tasks,
+			&mut self.workers,
+			key,
+			msg,
+			Some("remote_sqlite"),
+			move |key, rx| actor_remote_sqlite_task::task(ctx.clone(), conn.clone(), key, rx),
+		)
+	}
+
+	fn enqueue_tunnel(
+		&mut self,
+		key: tunnel_message_task::Key,
+		msg: tunnel_message_task::Message,
+	) -> Result<()> {
+		let ctx = self.ctx.clone();
+		let conn = self.conn.clone();
+		if self
+			.tunnel_tasks
+			.get(&key)
+			.is_some_and(mpsc::UnboundedSender::is_closed)
+		{
+			tracing::trace!(
+				namespace_id = %self.conn.namespace_id,
+				pool_name = %self.conn.pool_name,
+				envoy_key = %self.conn.envoy_key,
+				gateway_id = %key.gateway_id_display(),
+				request_id = %key.request_id_display(),
+				"removing closed tunnel message task before enqueue"
+			);
+			self.tunnel_tasks.remove(&key);
+			metrics::TUNNEL_TASKS_ACTIVE
+				.with_label_values(&[
+					self.conn.namespace_id.to_string().as_str(),
+					&self.conn.pool_name,
+				])
+				.dec();
+		}
+
+		if !self.tunnel_tasks.contains_key(&key) {
+			let (tx, rx) = mpsc::unbounded_channel();
+			self.tunnel_tasks.insert(key.clone(), tx);
+			self.workers
+				.spawn(tunnel_message_task::task(ctx, conn, key.clone(), rx));
+			tracing::trace!(
+				namespace_id = %self.conn.namespace_id,
+				pool_name = %self.conn.pool_name,
+				envoy_key = %self.conn.envoy_key,
+				gateway_id = %key.gateway_id_display(),
+				request_id = %key.request_id_display(),
+				"created tunnel message task"
+			);
+			metrics::TUNNEL_TASKS_ACTIVE
+				.with_label_values(&[
+					self.conn.namespace_id.to_string().as_str(),
+					&self.conn.pool_name,
+				])
+				.inc();
+		}
+
+		let (message_index, message_kind, inner_data_len) = match &msg {
+			tunnel_message_task::Message::Message(tunnel_msg) => (
+				tunnel_msg.message_id.message_index,
+				tunnel_message_kind_name(&tunnel_msg.message_kind),
+				tunnel_message_inner_data_len(&tunnel_msg.message_kind),
+			),
+		};
+		tracing::trace!(
+			namespace_id = %self.conn.namespace_id,
+			pool_name = %self.conn.pool_name,
+			envoy_key = %self.conn.envoy_key,
+			gateway_id = %key.gateway_id_display(),
+			request_id = %key.request_id_display(),
+			message_index,
+			message_kind,
+			inner_data_len,
+			"enqueuing tunnel message task"
+		);
+		match self
+			.tunnel_tasks
+			.get(&key)
+			.expect("task sender must exist")
+			.send(msg)
+		{
+			Ok(()) => {
+				tracing::trace!(
+					namespace_id = %self.conn.namespace_id,
+					pool_name = %self.conn.pool_name,
+					envoy_key = %self.conn.envoy_key,
+					gateway_id = %key.gateway_id_display(),
+					request_id = %key.request_id_display(),
+					message_index,
+					message_kind,
+					inner_data_len,
+					"enqueued tunnel message task"
+				);
+				Ok(())
+			}
+			Err(mpsc::error::SendError(_)) => {
+				tracing::warn!(
+					namespace_id = %self.conn.namespace_id,
+					pool_name = %self.conn.pool_name,
+					envoy_key = %self.conn.envoy_key,
+					gateway_id = %key.gateway_id_display(),
+					request_id = %key.request_id_display(),
+					message_index,
+					message_kind,
+					inner_data_len,
+					"tunnel message task sender closed"
+				);
+				if self.tunnel_tasks.remove(&key).is_some() {
+					metrics::TUNNEL_TASKS_ACTIVE
+						.with_label_values(&[
+							self.conn.namespace_id.to_string().as_str(),
+							&self.conn.pool_name,
+						])
+						.dec();
+				}
+				bail!("websocket dispatcher task closed")
+			}
+		}
+	}
+
+	fn enqueue_control(&mut self, msg: control_task::Message) -> Result<()> {
+		let ctx = self.ctx.clone();
+		let conn = self.conn.clone();
+		enqueue_keyed_task(
+			&mut self.control_tasks,
+			&mut self.workers,
+			(),
+			msg,
+			None,
+			move |(), rx| control_task::task(ctx.clone(), conn.clone(), rx),
+		)
+	}
+}
+
+impl Drop for TaskManager {
+	fn drop(&mut self) {
+		self.abort_all();
+	}
+}
+
+fn remove_closed_task<K, M>(tasks: &mut StdHashMap<K, mpsc::UnboundedSender<M>>, key: &K) -> bool
+where
+	K: Eq + Hash,
+{
+	if tasks.get(key).is_some_and(mpsc::UnboundedSender::is_closed) {
+		tasks.remove(key);
+		true
+	} else {
+		false
+	}
+}
+
+fn enqueue_keyed_task<K, M, F, Fut>(
+	tasks: &mut StdHashMap<K, mpsc::UnboundedSender<M>>,
+	workers: &mut JoinSet<Result<TaskExit>>,
+	key: K,
+	msg: M,
+	task_kind: Option<&'static str>,
+	spawn_worker: F,
+) -> Result<()>
+where
+	K: Clone + Eq + Hash + Send + 'static,
+	M: Send + 'static,
+	F: FnOnce(K, mpsc::UnboundedReceiver<M>) -> Fut,
+	Fut: std::future::Future<Output = Result<TaskExit>> + Send + 'static,
+{
+	if tasks
+		.get(&key)
+		.is_some_and(mpsc::UnboundedSender::is_closed)
+	{
+		tasks.remove(&key);
+		if let Some(kind) = task_kind {
+			metrics::ACTOR_TASKS_ACTIVE.with_label_values(&[kind]).dec();
+		}
+	}
+
+	if !tasks.contains_key(&key) {
+		let (tx, rx) = mpsc::unbounded_channel();
+		tasks.insert(key.clone(), tx);
+		workers.spawn(spawn_worker(key.clone(), rx));
+		if let Some(kind) = task_kind {
+			metrics::ACTOR_TASKS_ACTIVE.with_label_values(&[kind]).inc();
+		}
+	}
+
+	match tasks.get(&key).expect("task sender must exist").send(msg) {
+		Ok(()) => Ok(()),
+		Err(mpsc::error::SendError(_)) => {
+			tasks.remove(&key);
+			if let Some(kind) = task_kind {
+				metrics::ACTOR_TASKS_ACTIVE.with_label_values(&[kind]).dec();
+			}
+			bail!("websocket dispatcher task closed")
+		}
+	}
+}
+
+#[tracing::instrument(name = "ws_to_tunnel_task", skip_all, fields(ray_id=?ctx.ray_id(), req_id=?ctx.req_id(), namespace_id=%conn.namespace_id, pool_name=%conn.pool_name, envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
@@ -59,7 +449,7 @@ pub async fn task(
 	res
 }
 
-#[tracing::instrument(skip_all, fields(envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
+#[tracing::instrument(skip_all, fields(namespace_id=%conn.namespace_id, pool_name=%conn.pool_name, envoy_key=%conn.envoy_key, protocol_version=%conn.protocol_version))]
 pub async fn task_inner(
 	ctx: StandaloneCtx,
 	conn: Arc<Conn>,
@@ -69,18 +459,88 @@ pub async fn task_inner(
 ) -> Result<LifecycleResult> {
 	let mut ws_rx = ws_rx.lock().await;
 	let mut term_signal = rivet_runtime::TermSignal::get();
+	let mut task_manager = TaskManager::new(ctx.clone(), conn.clone());
 
 	loop {
-		match recv_msg(&mut ws_rx, &mut ws_to_tunnel_abort_rx, &mut term_signal).await? {
-			Ok(Some(msg)) => {
-				handle_message(&ctx, conn.clone(), event_demuxer, msg).await?;
+		tokio::select! {
+			recv = recv_msg(&mut ws_rx, &mut ws_to_tunnel_abort_rx, &mut term_signal) => {
+				let branch_start = Instant::now();
+				let branch_result: Result<Option<LifecycleResult>> = async {
+					match recv? {
+						Ok(Some(msg)) => {
+							let msg = match decode_message(msg, conn.protocol_version)? {
+								Ok(msg) => msg,
+								Err(lifecycle) => {
+									if let Some(lifecycle) = lifecycle {
+										task_manager.abort_all();
+										return Ok(Some(lifecycle));
+									}
+									return Ok(None);
+								}
+							};
+							let kind = message_kind_label(&msg);
+							let measure = perf_start!(
+								&metrics::WS_MESSAGE_PROCESSING_DURATION,
+								slow_ms = SLOW_HANDLE_WARN_THRESHOLD.as_millis() as u64,
+								"pegboard_envoy_ws_message",
+								labels: {
+									namespace_id = %conn.namespace_id,
+									pool_name = %conn.pool_name,
+									message_kind = %kind,
+								},
+								fields: {
+									envoy_key = %conn.envoy_key,
+									protocol_version = %conn.protocol_version,
+								},
+							);
+							let lifecycle = handle_message(
+								&ctx,
+								conn.clone(),
+								event_demuxer,
+								&mut task_manager,
+								msg,
+							)
+							.await?;
+							let elapsed = perf_finish!(measure, fields: { message_kind = %kind });
+							if elapsed >= SLOW_HANDLE_WARN_THRESHOLD {
+								metrics::WS_MESSAGE_SLOW_TOTAL
+									.with_label_values(&[
+										conn.namespace_id.to_string().as_str(),
+										conn.pool_name.as_str(),
+										kind,
+									])
+									.inc();
+							}
+							Ok(lifecycle)
+						}
+						Ok(None) => Ok(None),
+						Err(lifecycle_res) => Ok(Some(lifecycle_res)),
+					}
+				}.await;
+				metrics::WS_TO_TUNNEL_BRANCH_DURATION
+					.with_label_values(&["ws_msg"])
+					.observe(branch_start.elapsed().as_secs_f64());
+				if let Some(lifecycle) = branch_result? {
+					return Ok(lifecycle);
+				}
 			}
-			Ok(None) => {}
-			Err(lifecycle_res) => return Ok(lifecycle_res),
+			worker = task_manager.join_next(), if !task_manager.workers.is_empty() => {
+				let branch_start = Instant::now();
+				let res = if let Some(result) = worker {
+					result
+				} else {
+					Ok(())
+				};
+				metrics::WS_TO_TUNNEL_BRANCH_DURATION
+					.with_label_values(&["completed_task"])
+					.observe(branch_start.elapsed().as_secs_f64());
+				res?;
+			}
 		}
 	}
 }
 
+#[tracing::instrument(skip_all)]
 async fn recv_msg(
 	ws_rx: &mut MutexGuard<'_, WebSocketReceiver>,
 	ws_to_tunnel_abort_rx: &mut watch::Receiver<()>,
@@ -92,7 +552,10 @@ async fn recv_msg(
 				msg
 			} else {
 				tracing::debug!("websocket closed");
-				return Ok(Err(LifecycleResult::Closed));
+				return Ok(Err(LifecycleResult::Closed {
+					incoming_close_code: None,
+					incoming_close_reason: None,
+				}));
 			}
 		}
 		_ = ws_to_tunnel_abort_rx.changed() => {
@@ -113,13 +576,56 @@ async fn recv_msg(
 
 			Ok(Ok(Some(data)))
 		}
-		Message::Close(_) => {
-			tracing::debug!("websocket closed");
-			return Ok(Err(LifecycleResult::Closed));
+		Message::Close(frame) => {
+			let (incoming_close_code, incoming_close_reason) = frame
+				.as_ref()
+				.map(|f| (Some(u16::from(f.code)), Some(f.reason.to_string())))
+				.unwrap_or((None, None));
+			tracing::debug!(
+				?incoming_close_code,
+				?incoming_close_reason,
+				"websocket closed"
+			);
+			return Ok(Err(LifecycleResult::Closed {
+				incoming_close_code,
+				incoming_close_reason,
+			}));
 		}
 		_ => {
 			// Ignore other message types
 			Ok(Ok(None))
+		}
+	}
+}
+
+/// Returns a short, bounded label identifying the message variant. Used as the `message_kind`
+/// label on `WS_MESSAGE_PROCESSING_DURATION` and the slow-handle warning. Keep the set small and
+/// stable; new variants should be added explicitly rather than falling through to a wildcard.
+fn message_kind_label(msg: &protocol::ToRivet) -> &'static str {
+	match msg {
+		protocol::ToRivet::ToRivetPong(_) => "pong",
+		protocol::ToRivet::ToRivetKvRequest(_) => "kv_request",
+		protocol::ToRivet::ToRivetSqliteGetPagesRequest(_) => "sqlite_get_pages",
+		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit",
+		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec",
+		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute",
+		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
+		protocol::ToRivet::ToRivetMetadata(_) => "metadata",
+		protocol::ToRivet::ToRivetEvents(_) => "events",
+		protocol::ToRivet::ToRivetAckCommands(_) => "ack_commands",
+		protocol::ToRivet::ToRivetStopping => "stopping",
+	}
+}
+
+fn decode_message(
+	msg: Bytes,
+	protocol_version: u16,
+) -> Result<std::result::Result<protocol::ToRivet, Option<LifecycleResult>>> {
+	match versioned::ToRivet::deserialize(&msg, protocol_version) {
+		Ok(msg) => Ok(Ok(msg)),
+		Err(err) => {
+			tracing::warn!(?err, msg_len = msg.len(), "failed to deserialize message");
+			Ok(Err(None))
 		}
 	}
 }
@@ -129,19 +635,22 @@ async fn handle_message(
 	ctx: &StandaloneCtx,
 	conn: Arc<Conn>,
 	event_demuxer: &mut ActorEventDemuxer,
-	msg: Bytes,
-) -> Result<()> {
-	// Parse message
-	let msg = match versioned::ToRivet::deserialize(&msg, conn.protocol_version) {
-		Ok(x) => x,
-		Err(err) => {
-			tracing::warn!(?err, msg_len = msg.len(), "failed to deserialize message");
-			return Ok(());
-		}
-	};
-
+	task_manager: &mut TaskManager,
+	msg: protocol::ToRivet,
+) -> Result<Option<LifecycleResult>> {
 	tracing::debug!(?msg, "received message from envoy");
 
+	dispatch_message(ctx, conn, event_demuxer, task_manager, msg).await
+}
+
+#[tracing::instrument(skip_all)]
+async fn dispatch_message(
+	ctx: &StandaloneCtx,
+	conn: Arc<Conn>,
+	event_demuxer: &mut ActorEventDemuxer,
+	task_manager: &mut TaskManager,
+	msg: protocol::ToRivet,
+) -> Result<Option<LifecycleResult>> {
 	match msg {
 		protocol::ToRivet::ToRivetPong(pong) => {
 			let now = util::timestamp::now();
@@ -157,274 +666,75 @@ async fn handle_message(
 			conn.last_rtt.store(rtt, Ordering::SeqCst);
 			conn.last_ping_ts
 				.store(util::timestamp::now(), Ordering::SeqCst);
+			metrics::ENVOY_PING_LAG_SECONDS
+				.with_label_values(&[conn.namespace_id.to_string().as_str(), &conn.pool_name])
+				.observe(rtt as f64 / 1000.0);
 		}
 		// Process KV request
 		protocol::ToRivet::ToRivetKvRequest(req) => {
-			let actor_id = match Id::parse(&req.actor_id) {
-				Ok(actor_id) => actor_id,
-				Err(err) => {
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: protocol::KvResponseData::KvErrorResponse(
-								protocol::KvErrorResponse {
-									message: err.to_string(),
-								},
-							),
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV error response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV error response to client")?;
-
-					return Ok(());
-				}
-			};
-
-			let actor_res = ctx
-				.op(pegboard::ops::actor::get_for_kv::Input { actor_id })
-				.await
-				.with_context(|| format!("failed to get envoy for actor: {}", actor_id))?;
-
-			let Some(actor) = actor_res else {
-				send_actor_kv_error(&conn, req.request_id, "actor does not exist").await?;
-				return Ok(());
-			};
-
-			// Verify actor belongs to this namespace
-			if actor.namespace_id != conn.namespace_id {
-				send_actor_kv_error(&conn, req.request_id, "actor does not exist").await?;
-				return Ok(());
-			}
-
-			let recipient = actor_kv::Recipient {
-				actor_id,
-				namespace_id: conn.namespace_id,
-				name: actor.name,
-			};
-
-			// TODO: Add queue and bg thread for processing kv ops
-			// Run kv operation
-			match req.data {
-				protocol::KvRequestData::KvGetRequest(body) => {
-					let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
-
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok((keys, values, metadata)) => {
-									protocol::KvResponseData::KvGetResponse(
-										protocol::KvGetResponse {
-											keys,
-											values,
-											metadata,
-										},
-									)
-								}
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV get response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV get response to client")?;
-				}
-				protocol::KvRequestData::KvListRequest(body) => {
-					let res = actor_kv::list(
-						&*ctx.udb()?,
-						&recipient,
-						body.query,
-						body.reverse.unwrap_or_default(),
-						body.limit
-							.map(TryInto::try_into)
-							.transpose()
-							.context("KV list limit value overflow")?,
-					)
-					.await;
-
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok((keys, values, metadata)) => {
-									protocol::KvResponseData::KvListResponse(
-										protocol::KvListResponse {
-											keys,
-											values,
-											metadata,
-										},
-									)
-								}
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV list response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV list response to client")?;
-				}
-				protocol::KvRequestData::KvPutRequest(body) => {
-					let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
-
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvPutResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV put response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV put response to client")?;
-				}
-				protocol::KvRequestData::KvDeleteRequest(body) => {
-					let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
-
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDeleteResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV delete response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV delete response to client")?;
-				}
-				protocol::KvRequestData::KvDeleteRangeRequest(body) => {
-					let res =
-						actor_kv::delete_range(&*ctx.udb()?, &recipient, body.start, body.end)
-							.await;
-
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDeleteResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV delete range response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV delete range response to client")?;
-				}
-				protocol::KvRequestData::KvDropRequest => {
-					let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
-
-					let res_msg = versioned::ToEnvoy::wrap_latest(
-						protocol::ToEnvoy::ToEnvoyKvResponse(protocol::ToEnvoyKvResponse {
-							request_id: req.request_id,
-							data: match res {
-								Ok(()) => protocol::KvResponseData::KvDropResponse,
-								Err(err) => protocol::KvResponseData::KvErrorResponse(
-									protocol::KvErrorResponse {
-										message: err.to_string(),
-									},
-								),
-							},
-						}),
-					);
-
-					let res_msg_serialized = res_msg
-						.serialize(conn.protocol_version)
-						.context("failed to serialize KV drop response")?;
-					conn.ws_handle
-						.send(Message::Binary(res_msg_serialized.into()))
-						.await
-						.context("failed to send KV drop response to client")?;
-				}
-			}
+			let key = actor_kv_task::Key::new(req.actor_id.clone());
+			task_manager.enqueue_kv(key, actor_kv_task::Message::Request(req))?;
 		}
 		protocol::ToRivet::ToRivetSqliteGetPagesRequest(req) => {
-			let response = handle_sqlite_get_pages_response(ctx, &conn, req.data).await;
-			send_sqlite_get_pages_response(&conn, req.request_id, response).await?;
+			let Some(generation) = req.data.expected_generation else {
+				send_sqlite_get_pages_response(
+					&conn,
+					req.request_id,
+					protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+						sqlite_protocol_error_response(
+							"sqlite get_pages missing expectedGeneration",
+						),
+					),
+				)
+				.await?;
+				return Ok(None);
+			};
+			let key = actor_sqlite_page_task::Key::new(req.data.actor_id.clone(), generation);
+			task_manager
+				.enqueue_sqlite_page(key, actor_sqlite_page_task::Message::GetPages(req))?;
 		}
 		protocol::ToRivet::ToRivetSqliteCommitRequest(req) => {
-			let actor_id = req.data.actor_id.clone();
-			let request_id = req.request_id;
-			let timed_response =
-				async { handle_sqlite_commit_response(ctx, &conn, req.data).await }
-					.instrument(tracing::debug_span!(
-						"handle_sqlite_commit",
-						actor_id = %actor_id,
-						request_id = ?request_id
-					))
-					.await;
-			send_sqlite_commit_response(&conn, request_id, timed_response.response).await?;
-			crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
-				.observe(timed_response.commit_completed_at.elapsed().as_secs_f64());
+			let Some(generation) = req.data.expected_generation else {
+				send_sqlite_commit_response(
+					&conn,
+					req.request_id,
+					protocol::SqliteCommitResponse::SqliteErrorResponse(
+						sqlite_protocol_error_response("sqlite commit missing expectedGeneration"),
+					),
+				)
+				.await?;
+				return Ok(None);
+			};
+			let key = actor_sqlite_page_task::Key::new(req.data.actor_id.clone(), generation);
+			task_manager.enqueue_sqlite_page(key, actor_sqlite_page_task::Message::Commit(req))?;
 		}
 		protocol::ToRivet::ToRivetSqliteExecRequest(req) => {
-			let response = handle_remote_sqlite_exec_response(ctx, &conn, req.data).await;
-			send_sqlite_exec_response(&conn, req.request_id, response).await?;
+			let key =
+				actor_remote_sqlite_task::Key::new(req.data.actor_id.clone(), req.data.generation);
+			task_manager
+				.enqueue_remote_sqlite(key, actor_remote_sqlite_task::Message::Exec(req))?;
 		}
 		protocol::ToRivet::ToRivetSqliteExecuteRequest(req) => {
-			let response = handle_remote_sqlite_execute_response(ctx, &conn, req.data).await;
-			send_sqlite_execute_response(&conn, req.request_id, response).await?;
+			let key =
+				actor_remote_sqlite_task::Key::new(req.data.actor_id.clone(), req.data.generation);
+			task_manager
+				.enqueue_remote_sqlite(key, actor_remote_sqlite_task::Message::Execute(req))?;
 		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
-			handle_tunnel_message(ctx, &conn.authorized_tunnel_routes, tunnel_msg)
-				.await
-				.context("failed to handle tunnel message")?;
+			let inner_data_len = tunnel_message_inner_data_len(&tunnel_msg.message_kind);
+			if inner_data_len > ctx.config().pegboard().envoy_max_response_payload_size() {
+				return Err(
+					errors::WsError::InvalidPacket("payload too large".to_string()).build(),
+				);
+			}
+			let key = tunnel_message_task::Key::new(
+				tunnel_msg.message_id.gateway_id,
+				tunnel_msg.message_id.request_id,
+			);
+			task_manager.enqueue_tunnel(key, tunnel_message_task::Message::Message(tunnel_msg))?;
 		}
 		protocol::ToRivet::ToRivetMetadata(metadata) => {
-			handle_metadata(&ctx, conn.namespace_id, &conn.envoy_key, metadata).await?;
+			task_manager.enqueue_control(control_task::Message::Metadata(metadata))?;
 		}
 		// Forward to demuxer which forwards to actor wf
 		protocol::ToRivet::ToRivetEvents(events) => {
@@ -433,23 +743,211 @@ async fn handle_message(
 			}
 		}
 		protocol::ToRivet::ToRivetAckCommands(ack) => {
-			ack_commands(&ctx, conn.namespace_id, &conn.envoy_key, ack).await?;
+			task_manager.enqueue_control(control_task::Message::AckCommands(ack))?;
 		}
 		protocol::ToRivet::ToRivetStopping => {
 			// For serverful, remove from lb
-			if !conn.is_serverless {
+			if !conn.is_serverless() {
 				ctx.op(pegboard::ops::envoy::expire::Input {
 					namespace_id: conn.namespace_id,
 					envoy_key: conn.envoy_key.to_string(),
+					skip_if_fresh: false,
 				})
 				.await?;
 			}
 
+			let ctx = ctx.clone();
+			let namespace_id = conn.namespace_id;
+			let envoy_key = conn.envoy_key.clone();
+			let actor_eviction_delay = conn.pool.actor_eviction_delay();
+			let actor_eviction_period = conn.pool.actor_eviction_period();
+			let actor_eviction_rate = conn.pool.actor_eviction_rate();
+
+			// TODO: Drop guard
 			// Evict all actors
-			ctx.op(pegboard::ops::envoy::evict_actors::Input {
-				namespace_id: conn.namespace_id,
-				envoy_key: conn.envoy_key.to_string(),
-			})
+			tokio::spawn(async move {
+				if actor_eviction_delay != 0 {
+					tokio::time::sleep(Duration::from_secs(actor_eviction_delay as u64)).await;
+				}
+
+				let res = ctx
+					.op(pegboard::ops::envoy::evict_actors::Input {
+						namespace_id,
+						envoy_key: envoy_key.clone(),
+						throttle: Some(pegboard::ops::envoy::evict_actors::Throttle {
+							rate: actor_eviction_rate,
+							period: Duration::from_secs(actor_eviction_period as u64),
+						}),
+					})
+					.await;
+
+				if let Err(err) = res {
+					tracing::error!(?namespace_id, %envoy_key, ?err, "failed to evict actors");
+				}
+			});
+		}
+	}
+
+	Ok(None)
+}
+
+pub(super) async fn handle_kv_request(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	req: protocol::ToRivetKvRequest,
+) -> Result<()> {
+	let actor_id = match Id::parse(&req.actor_id) {
+		Ok(actor_id) => actor_id,
+		Err(err) => {
+			send_actor_kv_error(conn, req.request_id, &err.to_string()).await?;
+			return Ok(());
+		}
+	};
+
+	let actor_res = ctx
+		.op(pegboard::ops::actor::get_for_kv::Input { actor_id })
+		.await
+		.with_context(|| format!("failed to get envoy for actor: {}", actor_id))?;
+
+	let Some(actor) = actor_res else {
+		send_actor_kv_error(conn, req.request_id, "actor does not exist").await?;
+		return Ok(());
+	};
+
+	if actor.namespace_id != conn.namespace_id {
+		send_actor_kv_error(conn, req.request_id, "actor does not exist").await?;
+		return Ok(());
+	}
+
+	let recipient = actor_kv::Recipient {
+		actor_id,
+		namespace_id: conn.namespace_id,
+		name: actor.name,
+	};
+
+	match req.data {
+		protocol::KvRequestData::KvGetRequest(body) => {
+			let res = actor_kv::get(&*ctx.udb()?, &recipient, body.keys).await;
+			send_actor_kv_response(
+				conn,
+				req.request_id,
+				match res {
+					Ok((keys, values, metadata)) => {
+						protocol::KvResponseData::KvGetResponse(protocol::KvGetResponse {
+							keys,
+							values,
+							metadata,
+						})
+					}
+					Err(err) => {
+						protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+							message: err.to_string(),
+						})
+					}
+				},
+				"KV get response",
+			)
+			.await?;
+		}
+		protocol::KvRequestData::KvListRequest(body) => {
+			let res = actor_kv::list(
+				&*ctx.udb()?,
+				&recipient,
+				body.query,
+				body.reverse.unwrap_or_default(),
+				body.limit
+					.map(TryInto::try_into)
+					.transpose()
+					.context("KV list limit value overflow")?,
+			)
+			.await;
+			send_actor_kv_response(
+				conn,
+				req.request_id,
+				match res {
+					Ok((keys, values, metadata)) => {
+						protocol::KvResponseData::KvListResponse(protocol::KvListResponse {
+							keys,
+							values,
+							metadata,
+						})
+					}
+					Err(err) => {
+						protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+							message: err.to_string(),
+						})
+					}
+				},
+				"KV list response",
+			)
+			.await?;
+		}
+		protocol::KvRequestData::KvPutRequest(body) => {
+			let res = actor_kv::put(&*ctx.udb()?, &recipient, body.keys, body.values).await;
+			send_actor_kv_response(
+				conn,
+				req.request_id,
+				match res {
+					Ok(()) => protocol::KvResponseData::KvPutResponse,
+					Err(err) => {
+						protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+							message: err.to_string(),
+						})
+					}
+				},
+				"KV put response",
+			)
+			.await?;
+		}
+		protocol::KvRequestData::KvDeleteRequest(body) => {
+			let res = actor_kv::delete(&*ctx.udb()?, &recipient, body.keys).await;
+			send_actor_kv_response(
+				conn,
+				req.request_id,
+				match res {
+					Ok(()) => protocol::KvResponseData::KvDeleteResponse,
+					Err(err) => {
+						protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+							message: err.to_string(),
+						})
+					}
+				},
+				"KV delete response",
+			)
+			.await?;
+		}
+		protocol::KvRequestData::KvDeleteRangeRequest(body) => {
+			let res = actor_kv::delete_range(&*ctx.udb()?, &recipient, body.start, body.end).await;
+			send_actor_kv_response(
+				conn,
+				req.request_id,
+				match res {
+					Ok(()) => protocol::KvResponseData::KvDeleteResponse,
+					Err(err) => {
+						protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+							message: err.to_string(),
+						})
+					}
+				},
+				"KV delete range response",
+			)
+			.await?;
+		}
+		protocol::KvRequestData::KvDropRequest => {
+			let res = actor_kv::delete_all(&*ctx.udb()?, &recipient).await;
+			send_actor_kv_response(
+				conn,
+				req.request_id,
+				match res {
+					Ok(()) => protocol::KvResponseData::KvDropResponse,
+					Err(err) => {
+						protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+							message: err.to_string(),
+						})
+					}
+				},
+				"KV drop response",
+			)
 			.await?;
 		}
 	}
@@ -457,21 +955,24 @@ async fn handle_message(
 	Ok(())
 }
 
-struct TimedSqliteCommitResponse {
-	response: protocol::SqliteCommitResponse,
-	commit_completed_at: Instant,
+pub(super) struct TimedSqliteCommitResponse {
+	pub(super) response: protocol::SqliteCommitResponse,
+	pub(super) commit_completed_at: Instant,
 }
 
-async fn handle_sqlite_get_pages_response(
+pub(super) async fn handle_sqlite_get_pages_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
 	request: protocol::SqliteGetPagesRequest,
 ) -> protocol::SqliteGetPagesResponse {
+	let start = Instant::now();
 	let actor_id = request.actor_id.clone();
 	let pgnos = request.pgnos.clone();
+	let requested_pages = pgnos.len();
+	let request_bytes = requested_pages * std::mem::size_of::<u32>();
 	let expected_generation = request.expected_generation;
 	let expected_head_txid = request.expected_head_txid;
-	match handle_sqlite_get_pages(ctx, conn, request).await {
+	let response = match handle_sqlite_get_pages(ctx, conn, request).await {
 		Ok(response) => response,
 		Err(err) => {
 			if is_startup_database_miss(&err, expected_generation, expected_head_txid) {
@@ -492,15 +993,55 @@ async fn handle_sqlite_get_pages_response(
 			}
 			protocol::SqliteGetPagesResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
+	};
+	record_sqlite_request_metrics(
+		conn,
+		"get_pages",
+		sqlite_get_pages_response_kind(&response),
+		start,
+	);
+	metrics::SQLITE_REQUEST_PAGES
+		.with_label_values(&[
+			conn.namespace_id.to_string().as_str(),
+			conn.pool_name.as_str(),
+			"get_pages",
+			"request",
+		])
+		.observe(requested_pages as f64);
+	record_sqlite_payload_bytes(conn, "get_pages", "request", request_bytes);
+	if let protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) = &response {
+		let response_pages = ok.pages.len();
+		let response_bytes = ok
+			.pages
+			.iter()
+			.map(|page| page.bytes.as_ref().map_or(0, Vec::len))
+			.sum();
+		metrics::SQLITE_REQUEST_PAGES
+			.with_label_values(&[
+				conn.namespace_id.to_string().as_str(),
+				conn.pool_name.as_str(),
+				"get_pages",
+				"response",
+			])
+			.observe(response_pages as f64);
+		record_sqlite_payload_bytes(conn, "get_pages", "response", response_bytes);
 	}
+	response
 }
 
-async fn handle_sqlite_commit_response(
+pub(super) async fn handle_sqlite_commit_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
 	request: protocol::SqliteCommitRequest,
 ) -> TimedSqliteCommitResponse {
+	let start = Instant::now();
 	let actor_id = request.actor_id.clone();
+	let dirty_pages = request.dirty_pages.len();
+	let request_bytes = request
+		.dirty_pages
+		.iter()
+		.map(|page| page.bytes.len())
+		.sum();
 	let response = match handle_sqlite_commit(ctx, conn, request).await {
 		Ok(response) => response,
 		Err(err) => {
@@ -508,19 +1049,35 @@ async fn handle_sqlite_commit_response(
 			protocol::SqliteCommitResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
 	};
+	record_sqlite_request_metrics(
+		conn,
+		"commit",
+		sqlite_commit_response_kind(&response),
+		start,
+	);
+	metrics::SQLITE_REQUEST_DIRTY_PAGES
+		.with_label_values(&[
+			conn.namespace_id.to_string().as_str(),
+			conn.pool_name.as_str(),
+			"commit",
+		])
+		.observe(dirty_pages as f64);
+	record_sqlite_payload_bytes(conn, "commit", "request", request_bytes);
 	TimedSqliteCommitResponse {
 		response,
 		commit_completed_at: Instant::now(),
 	}
 }
 
-async fn handle_remote_sqlite_exec_response(
+pub(super) async fn handle_remote_sqlite_exec_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
 	request: protocol::SqliteExecRequest,
 ) -> protocol::SqliteExecResponse {
+	let start = Instant::now();
 	let actor_id = request.actor_id.clone();
-	match handle_remote_sqlite_exec(ctx, conn, request).await {
+	let request_bytes = request.sql.len();
+	let response = match handle_remote_sqlite_exec(ctx, conn, request).await {
 		Ok(result) => protocol::SqliteExecResponse::SqliteExecOk(protocol::SqliteExecOk {
 			result: protocol_query_result(result),
 		}),
@@ -528,16 +1085,24 @@ async fn handle_remote_sqlite_exec_response(
 			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite exec request failed");
 			protocol::SqliteExecResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
+	};
+	record_sqlite_request_metrics(conn, "exec", sqlite_exec_response_kind(&response), start);
+	record_sqlite_payload_bytes(conn, "exec", "request", request_bytes);
+	if let protocol::SqliteExecResponse::SqliteExecOk(ok) = &response {
+		record_sqlite_payload_bytes(conn, "exec", "response", query_result_bytes(&ok.result));
 	}
+	response
 }
 
-async fn handle_remote_sqlite_execute_response(
+pub(super) async fn handle_remote_sqlite_execute_response(
 	ctx: &StandaloneCtx,
 	conn: &Conn,
 	request: protocol::SqliteExecuteRequest,
 ) -> protocol::SqliteExecuteResponse {
+	let start = Instant::now();
 	let actor_id = request.actor_id.clone();
-	match handle_remote_sqlite_execute(ctx, conn, request).await {
+	let request_bytes = request.sql.len() + bind_params_bytes(request.params.as_ref());
+	let response = match handle_remote_sqlite_execute(ctx, conn, request).await {
 		Ok(result) => protocol::SqliteExecuteResponse::SqliteExecuteOk(protocol::SqliteExecuteOk {
 			result: protocol_execute_result(result),
 		}),
@@ -545,10 +1110,26 @@ async fn handle_remote_sqlite_execute_response(
 			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite execute request failed");
 			protocol::SqliteExecuteResponse::SqliteErrorResponse(sqlite_error_response(&err))
 		}
+	};
+	record_sqlite_request_metrics(
+		conn,
+		"execute",
+		sqlite_execute_response_kind(&response),
+		start,
+	);
+	record_sqlite_payload_bytes(conn, "execute", "request", request_bytes);
+	if let protocol::SqliteExecuteResponse::SqliteExecuteOk(ok) = &response {
+		record_sqlite_payload_bytes(
+			conn,
+			"execute",
+			"response",
+			execute_result_bytes(&ok.result),
+		);
 	}
+	response
 }
 
-async fn ack_commands(
+pub(super) async fn ack_commands(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,
 	envoy_key: &str,
@@ -556,7 +1137,7 @@ async fn ack_commands(
 ) -> Result<()> {
 	let ack = &ack;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("envoy_handle_ack", |tx| async move {
 			let tx = tx.with_subspace(pegboard::keys::subspace());
 
 			for checkpoint in &ack.last_command_checkpoints {
@@ -585,7 +1166,7 @@ async fn ack_commands(
 		.await
 }
 
-async fn handle_metadata(
+pub(super) async fn handle_metadata(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,
 	envoy_key: &str,
@@ -593,7 +1174,7 @@ async fn handle_metadata(
 ) -> Result<()> {
 	let metadata = &metadata;
 	ctx.udb()?
-		.run(|tx| {
+		.txn("envoy_handle_metadata", |tx| {
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
 
@@ -645,13 +1226,45 @@ async fn handle_metadata(
 }
 
 #[tracing::instrument(skip_all)]
-async fn handle_tunnel_message(
+pub(super) async fn handle_tunnel_message(
 	ctx: &StandaloneCtx,
-	_authorized_tunnel_routes: &HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	conn: &Conn,
 	msg: protocol::ToRivetTunnelMessage,
 ) -> Result<()> {
 	// Extract inner data length before consuming msg
 	let inner_data_len = tunnel_message_inner_data_len(&msg.message_kind);
+	let gateway_id = msg.message_id.gateway_id;
+	let request_id = msg.message_id.request_id;
+	let message_index = msg.message_id.message_index;
+	let message_kind = tunnel_message_kind_name(&msg.message_kind);
+	let is_websocket_open = matches!(
+		&msg.message_kind,
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+	);
+	let is_websocket_close = matches!(
+		&msg.message_kind,
+		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketClose(_)
+	);
+
+	// Observe envoy-side actor wake duration on the matching ToRivetWebSocketOpen
+	// reply, or as an error if the envoy closed the websocket before opening it.
+	// Mirrors the gateway-side `pegboard_gateway_websocket_open_wait_seconds`.
+	if is_websocket_open || is_websocket_close {
+		if let Some((_, start)) = conn
+			.pending_websocket_opens
+			.remove_async(&(gateway_id, request_id))
+			.await
+		{
+			let result = if is_websocket_open { "ok" } else { "error" };
+			metrics::ACTOR_WAKE_DURATION
+				.with_label_values(&[
+					conn.namespace_id.to_string().as_str(),
+					conn.pool_name.as_str(),
+					result,
+				])
+				.observe(start.elapsed().as_secs_f64());
+		}
+	}
 
 	// Enforce incoming payload size
 	if inner_data_len > ctx.config().pegboard().envoy_max_response_payload_size() {
@@ -667,30 +1280,121 @@ async fn handle_tunnel_message(
 	// 	);
 	// }
 
-	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
+	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id);
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::ToGateway::ToRivetTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_VERSION)
 			.context("failed to serialize tunnel message for gateway")?;
 
 	tracing::trace!(
+		namespace_id = %conn.namespace_id,
+		pool_name = %conn.pool_name,
+		envoy_key = %conn.envoy_key,
+		gateway_id = %tunnel_message_task::display_id(&gateway_id),
+		request_id = %tunnel_message_task::display_id(&request_id),
+		message_index,
+		message_kind,
 		inner_data_len = inner_data_len,
 		serialized_len = msg_serialized.len(),
 		"publishing tunnel message to gateway"
 	);
+	if is_websocket_open {
+		tracing::debug!(
+			namespace_id = %conn.namespace_id,
+			pool_name = %conn.pool_name,
+			envoy_key = %conn.envoy_key,
+			gateway_id = %tunnel_message_task::display_id(&gateway_id),
+			request_id = %tunnel_message_task::display_id(&request_id),
+			message_index,
+			message_kind,
+			gateway_reply_to = %gateway_reply_to,
+			"publishing websocket open to gateway"
+		);
+	}
 
-	// Publish message to UPS
-	ctx.ups()?
+	match ctx
+		.ups()?
 		.publish(&gateway_reply_to, &msg_serialized, PublishOpts::one())
 		.await
-		.with_context(|| {
-			format!(
-				"failed to publish tunnel message to gateway reply topic: {}",
-				gateway_reply_to
-			)
-		})?;
+	{
+		Ok(message_id) => {
+			metrics::TUNNEL_PUBLISH_TOTAL
+				.with_label_values(&[
+					conn.namespace_id.to_string().as_str(),
+					conn.pool_name.as_str(),
+					"ok",
+				])
+				.inc();
+			tracing::trace!(
+				namespace_id = %conn.namespace_id,
+				pool_name = %conn.pool_name,
+				envoy_key = %conn.envoy_key,
+				gateway_id = %tunnel_message_task::display_id(&gateway_id),
+				request_id = %tunnel_message_task::display_id(&request_id),
+				message_index,
+				message_kind,
+				gateway_reply_to = %gateway_reply_to,
+				?message_id,
+				"published tunnel message to gateway"
+			);
+			if is_websocket_open {
+				tracing::debug!(
+					namespace_id = %conn.namespace_id,
+					pool_name = %conn.pool_name,
+					envoy_key = %conn.envoy_key,
+					gateway_id = %tunnel_message_task::display_id(&gateway_id),
+					request_id = %tunnel_message_task::display_id(&request_id),
+					message_index,
+					message_kind,
+					gateway_reply_to = %gateway_reply_to,
+					?message_id,
+					"published websocket open to gateway"
+				);
+			}
+		}
+		Err(err) => {
+			metrics::TUNNEL_PUBLISH_TOTAL
+				.with_label_values(&[
+					conn.namespace_id.to_string().as_str(),
+					conn.pool_name.as_str(),
+					"error",
+				])
+				.inc();
+			tracing::warn!(
+				namespace_id = %conn.namespace_id,
+				pool_name = %conn.pool_name,
+				envoy_key = %conn.envoy_key,
+				gateway_id = %tunnel_message_task::display_id(&gateway_id),
+				request_id = %tunnel_message_task::display_id(&request_id),
+				message_index,
+				message_kind,
+				gateway_reply_to = %gateway_reply_to,
+				?err,
+				"failed to publish tunnel message to gateway"
+			);
+			return Err(err).with_context(|| {
+				format!(
+					"failed to publish tunnel message to gateway reply topic: {}",
+					gateway_reply_to
+				)
+			});
+		}
+	}
 
 	Ok(())
+}
+
+fn tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) -> &'static str {
+	use protocol::ToRivetTunnelMessageKind;
+	match kind {
+		ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
+		ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
+		ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
+		ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
+		ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ToRivetWebSocketMessage",
+		ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => "ToRivetWebSocketMessageAck",
+		ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => "ToRivetWebSocketClose",
+	}
 }
 
 async fn handle_sqlite_get_pages(
@@ -708,6 +1412,7 @@ async fn handle_sqlite_get_pages(
 			depot::types::GetPagesOptions {
 				expected_head_txid: request.expected_head_txid,
 				expand_overflow: true,
+				..Default::default()
 			},
 		)
 		.await?;
@@ -734,12 +1439,23 @@ async fn handle_sqlite_commit(
 	conn: &Conn,
 	request: protocol::SqliteCommitRequest,
 ) -> Result<protocol::SqliteCommitResponse> {
-	let decode_request_start = Instant::now();
+	let dispatch_measure = perf_start!(
+		&crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION,
+		slow_ms = 100,
+		"sqlite_commit_envoy_dispatch",
+		labels: {
+			namespace_id = %conn.namespace_id,
+			pool_name = %conn.pool_name,
+		},
+		fields: {
+			envoy_key = %conn.envoy_key,
+			actor_id = %request.actor_id,
+			expected_generation = ?request.expected_generation,
+		},
+	);
 	validate_sqlite_actor_for_request(ctx, conn, &request.actor_id, request.expected_generation)
 		.await?;
-	let decode_request_duration = decode_request_start.elapsed();
-	crate::metrics::SQLITE_COMMIT_ENVOY_DISPATCH_DURATION
-		.observe(decode_request_duration.as_secs_f64());
+	perf_finish!(dispatch_measure);
 
 	let actor_id = request.actor_id.clone();
 	let actor_db = actor_db(ctx, conn, actor_id.clone()).await?;
@@ -757,7 +1473,19 @@ async fn handle_sqlite_commit(
 			},
 		)
 		.await;
-	let response_build_start = Instant::now();
+	let response_measure = perf_start!(
+		&crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION,
+		slow_ms = 100,
+		"sqlite_commit_envoy_response",
+		labels: {
+			namespace_id = %conn.namespace_id,
+			pool_name = %conn.pool_name,
+		},
+		fields: {
+			envoy_key = %conn.envoy_key,
+			actor_id = %actor_id,
+		},
+	);
 	let response = match engine_result {
 		Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
 			protocol::SqliteCommitOk {
@@ -780,9 +1508,90 @@ async fn handle_sqlite_commit(
 			_ => Err(err),
 		},
 	}?;
-	crate::metrics::SQLITE_COMMIT_ENVOY_RESPONSE_DURATION
-		.observe(response_build_start.elapsed().as_secs_f64());
+	perf_finish!(response_measure, fields: { response_kind = %sqlite_commit_response_kind(&response) });
 	Ok(response)
+}
+
+fn sqlite_commit_response_kind(response: &protocol::SqliteCommitResponse) -> &'static str {
+	match response {
+		protocol::SqliteCommitResponse::SqliteCommitOk(_) => "ok",
+		protocol::SqliteCommitResponse::SqliteErrorResponse(_) => "error",
+	}
+}
+
+fn sqlite_get_pages_response_kind(response: &protocol::SqliteGetPagesResponse) -> &'static str {
+	match response {
+		protocol::SqliteGetPagesResponse::SqliteGetPagesOk(_) => "ok",
+		protocol::SqliteGetPagesResponse::SqliteErrorResponse(_) => "error",
+	}
+}
+
+fn sqlite_exec_response_kind(response: &protocol::SqliteExecResponse) -> &'static str {
+	match response {
+		protocol::SqliteExecResponse::SqliteExecOk(_) => "ok",
+		protocol::SqliteExecResponse::SqliteErrorResponse(_) => "error",
+	}
+}
+
+fn sqlite_execute_response_kind(response: &protocol::SqliteExecuteResponse) -> &'static str {
+	match response {
+		protocol::SqliteExecuteResponse::SqliteExecuteOk(_) => "ok",
+		protocol::SqliteExecuteResponse::SqliteErrorResponse(_) => "error",
+	}
+}
+
+fn record_sqlite_request_metrics(
+	conn: &Conn,
+	request_type: &'static str,
+	result: &'static str,
+	start: Instant,
+) {
+	let elapsed = start.elapsed();
+	metrics::SQLITE_REQUEST_TOTAL
+		.with_label_values(&[
+			conn.namespace_id.to_string().as_str(),
+			conn.pool_name.as_str(),
+			request_type,
+			result,
+		])
+		.inc();
+	metrics::SQLITE_REQUEST_DURATION
+		.with_label_values(&[
+			conn.namespace_id.to_string().as_str(),
+			conn.pool_name.as_str(),
+			request_type,
+			result,
+		])
+		.observe(elapsed.as_secs_f64());
+	if elapsed >= SLOW_SQLITE_REQUEST_WARN_THRESHOLD {
+		tracing::warn!(
+			namespace_id = %conn.namespace_id,
+			pool_name = %conn.pool_name,
+			request_type,
+			result,
+			duration_ms = elapsed.as_millis() as u64,
+			"slow pegboard envoy sqlite request"
+		);
+	}
+}
+
+fn record_sqlite_payload_bytes(
+	conn: &Conn,
+	request_type: &'static str,
+	direction: &'static str,
+	bytes: usize,
+) {
+	if bytes == 0 {
+		return;
+	}
+	metrics::SQLITE_REQUEST_PAYLOAD_BYTES
+		.with_label_values(&[
+			conn.namespace_id.to_string().as_str(),
+			conn.pool_name.as_str(),
+			request_type,
+			direction,
+		])
+		.inc_by(u64::try_from(bytes).unwrap_or(u64::MAX));
 }
 
 async fn handle_remote_sqlite_exec(
@@ -890,7 +1699,7 @@ async fn validate_remote_sqlite_generation(
 	let envoy_key = conn.envoy_key.clone();
 	let (current_generation, has_pending_start_command) = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("envoy_check_pending_start_command", |tx| {
 			let envoy_key = envoy_key.clone();
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
@@ -1018,22 +1827,29 @@ fn validate_remote_sqlite_params(params: Option<&Vec<protocol::SqliteBindParam>>
 	let Some(params) = params else {
 		return Ok(());
 	};
-	let total = params
-		.iter()
-		.map(|param| match param {
-			protocol::SqliteBindParam::SqliteValueNull => 0,
-			protocol::SqliteBindParam::SqliteValueInteger(_) => std::mem::size_of::<i64>(),
-			protocol::SqliteBindParam::SqliteValueFloat(_) => std::mem::size_of::<u64>(),
-			protocol::SqliteBindParam::SqliteValueText(value) => value.value.len(),
-			protocol::SqliteBindParam::SqliteValueBlob(value) => value.value.len(),
-		})
-		.sum::<usize>();
+	let total = bind_params_bytes(Some(params));
 	if total > MAX_REMOTE_SQL_BIND_BYTES {
 		bail!(
 			"remote sqlite bind params had {total} bytes, exceeding limit {MAX_REMOTE_SQL_BIND_BYTES}"
 		);
 	}
 	Ok(())
+}
+
+fn bind_params_bytes(params: Option<&Vec<protocol::SqliteBindParam>>) -> usize {
+	params.map_or(0, |params| {
+		params.iter().map(bind_param_bytes).sum::<usize>()
+	})
+}
+
+fn bind_param_bytes(param: &protocol::SqliteBindParam) -> usize {
+	match param {
+		protocol::SqliteBindParam::SqliteValueNull => 0,
+		protocol::SqliteBindParam::SqliteValueInteger(_) => std::mem::size_of::<i64>(),
+		protocol::SqliteBindParam::SqliteValueFloat(_) => std::mem::size_of::<u64>(),
+		protocol::SqliteBindParam::SqliteValueText(value) => value.value.len(),
+		protocol::SqliteBindParam::SqliteValueBlob(value) => value.value.len(),
+	}
 }
 
 fn pump_dirty_page(page: protocol::SqliteDirtyPage) -> depot::types::DirtyPage {
@@ -1079,6 +1895,38 @@ fn protocol_execute_result(result: ExecuteResult) -> protocol::SqliteExecuteResu
 	}
 }
 
+fn query_result_bytes(result: &protocol::SqliteQueryResult) -> usize {
+	result.columns.iter().map(String::len).sum::<usize>()
+		+ result
+			.rows
+			.iter()
+			.flatten()
+			.map(protocol_column_value_bytes)
+			.sum::<usize>()
+}
+
+fn execute_result_bytes(result: &protocol::SqliteExecuteResult) -> usize {
+	result.columns.iter().map(String::len).sum::<usize>()
+		+ result
+			.rows
+			.iter()
+			.flatten()
+			.map(protocol_column_value_bytes)
+			.sum::<usize>()
+		+ std::mem::size_of::<u64>()
+		+ std::mem::size_of::<i64>()
+}
+
+fn protocol_column_value_bytes(value: &protocol::SqliteColumnValue) -> usize {
+	match value {
+		protocol::SqliteColumnValue::SqliteValueNull => 0,
+		protocol::SqliteColumnValue::SqliteValueInteger(_) => std::mem::size_of::<i64>(),
+		protocol::SqliteColumnValue::SqliteValueFloat(_) => std::mem::size_of::<u64>(),
+		protocol::SqliteColumnValue::SqliteValueText(value) => value.value.len(),
+		protocol::SqliteColumnValue::SqliteValueBlob(value) => value.value.len(),
+	}
+}
+
 fn protocol_column_value(value: ColumnValue) -> protocol::SqliteColumnValue {
 	match value {
 		ColumnValue::Null => protocol::SqliteColumnValue::SqliteValueNull,
@@ -1099,33 +1947,30 @@ fn protocol_column_value(value: ColumnValue) -> protocol::SqliteColumnValue {
 	}
 }
 
-async fn actor_db(ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<Arc<Db>> {
+async fn actor_db(_ctx: &StandaloneCtx, conn: &Conn, actor_id: String) -> Result<Arc<Db>> {
 	let db = conn
 		.actor_dbs
 		.entry_async(actor_id.clone())
 		.await
 		.or_insert_with(|| {
-			let signal_ctx = ctx.clone();
-			let workflow_actor_id = actor_id.clone();
-			let compaction_signaler = Arc::new(move |signal: DeltasAvailable| {
-				let signal_ctx = signal_ctx.clone();
-				let actor_id = workflow_actor_id.clone();
+			let compaction_signaler = Arc::new(move |_signal: DeltasAvailable| {
 				async move {
-					let tag_value = database_branch_tag_value(signal.database_branch_id);
-					let workflow_id = signal_ctx
-						.workflow(DbManagerInput {
-							database_branch_id: signal.database_branch_id,
-							actor_id: Some(actor_id),
-						})
-						.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
-						.unique()
-						.dispatch()
-						.await?;
-					signal_ctx
-						.signal(signal)
-						.to_workflow_id(workflow_id)
-						.send()
-						.await?;
+					// TODO: Add back after enabling hot compaction
+					// let tag_value = database_branch_tag_value(signal.database_branch_id);
+					// let workflow_id = signal_ctx
+					// 	.workflow(DbManagerInput {
+					// 		database_branch_id: signal.database_branch_id,
+					// 		actor_id: Some(actor_id),
+					// 	})
+					// 	.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
+					// 	.unique()
+					// 	.dispatch()
+					// 	.await?;
+					// signal_ctx
+					// 	.signal(signal)
+					// 	.to_workflow_id(workflow_id)
+					// 	.send()
+					// 	.await?;
 					Ok(())
 				}
 				.boxed()
@@ -1184,6 +2029,14 @@ fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErrorResponse {
 	}
 }
 
+fn sqlite_protocol_error_response(message: &str) -> protocol::SqliteErrorResponse {
+	protocol::SqliteErrorResponse {
+		group: "sqlite".to_string(),
+		code: "invalid_request".to_string(),
+		message: message.to_string(),
+	}
+}
+
 /// Returns the length of the inner data payload for a tunnel message kind.
 fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> usize {
 	use protocol::ToRivetTunnelMessageKind;
@@ -1205,27 +2058,40 @@ fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> u
 mod tests;
 
 async fn send_actor_kv_error(conn: &Conn, request_id: u32, message: &str) -> Result<()> {
+	send_actor_kv_response(
+		conn,
+		request_id,
+		protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
+			message: message.to_string(),
+		}),
+		"KV actor validation error",
+	)
+	.await
+}
+
+async fn send_actor_kv_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::KvResponseData,
+	description: &str,
+) -> Result<()> {
 	let res_msg = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyKvResponse(
-		protocol::ToEnvoyKvResponse {
-			request_id,
-			data: protocol::KvResponseData::KvErrorResponse(protocol::KvErrorResponse {
-				message: message.to_string(),
-			}),
-		},
+		protocol::ToEnvoyKvResponse { request_id, data },
 	));
 
 	let res_msg_serialized = res_msg
 		.serialize(conn.protocol_version)
-		.context("failed to serialize KV actor validation error")?;
+		.with_context(|| format!("failed to serialize {description}"))?;
+	let _in_flight = WsResponseInFlightGuard::new();
 	conn.ws_handle
 		.send(Message::Binary(res_msg_serialized.into()))
 		.await
-		.context("failed to send KV actor validation error to client")?;
+		.with_context(|| format!("failed to send {description} to client"))?;
 
 	Ok(())
 }
 
-async fn send_sqlite_get_pages_response(
+pub(super) async fn send_sqlite_get_pages_response(
 	conn: &Conn,
 	request_id: u32,
 	data: protocol::SqliteGetPagesResponse,
@@ -1241,7 +2107,7 @@ async fn send_sqlite_get_pages_response(
 	.await
 }
 
-async fn send_sqlite_commit_response(
+pub(super) async fn send_sqlite_commit_response(
 	conn: &Conn,
 	request_id: u32,
 	data: protocol::SqliteCommitResponse,
@@ -1257,7 +2123,7 @@ async fn send_sqlite_commit_response(
 	.await
 }
 
-async fn send_sqlite_exec_response(
+pub(super) async fn send_sqlite_exec_response(
 	conn: &Conn,
 	request_id: u32,
 	data: protocol::SqliteExecResponse,
@@ -1273,7 +2139,7 @@ async fn send_sqlite_exec_response(
 	.await
 }
 
-async fn send_sqlite_execute_response(
+pub(super) async fn send_sqlite_execute_response(
 	conn: &Conn,
 	request_id: u32,
 	data: protocol::SqliteExecuteResponse,
@@ -1293,10 +2159,29 @@ async fn send_to_envoy(conn: &Conn, msg: protocol::ToEnvoy, description: &str) -
 	let serialized = versioned::ToEnvoy::wrap_latest(msg)
 		.serialize(conn.protocol_version)
 		.with_context(|| format!("failed to serialize {description}"))?;
+	let _in_flight = WsResponseInFlightGuard::new();
 	conn.ws_handle
 		.send(Message::Binary(serialized.into()))
 		.await
 		.with_context(|| format!("failed to send {description}"))?;
 
 	Ok(())
+}
+
+/// RAII guard tracking responses currently being written to the envoy WebSocket.
+/// Increments [`metrics::WS_RESPONSES_IN_FLIGHT`] on construction and decrements on drop,
+/// so the gauge captures the time spent in `WebSocketHandle::send` (lock-wait plus network write).
+pub(super) struct WsResponseInFlightGuard;
+
+impl WsResponseInFlightGuard {
+	pub(super) fn new() -> Self {
+		metrics::WS_RESPONSES_IN_FLIGHT.inc();
+		Self
+	}
+}
+
+impl Drop for WsResponseInFlightGuard {
+	fn drop(&mut self) {
+		metrics::WS_RESPONSES_IN_FLIGHT.dec();
+	}
 }

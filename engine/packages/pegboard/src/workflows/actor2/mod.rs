@@ -6,6 +6,7 @@ use universaldb::prelude::*;
 
 use crate::errors;
 
+mod alloc_serverful;
 mod keys;
 pub mod metrics;
 mod runtime;
@@ -17,7 +18,7 @@ use runtime::{StoppedResult, Transition};
 const EVENT_ACK_BATCH_SIZE: i64 = 250;
 
 // NOTE: Assumes input is validated.
-#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Input {
 	pub actor_id: Id,
 	pub name: String,
@@ -46,6 +47,8 @@ pub struct State {
 
 	pub create_ts: i64,
 	pub create_complete_ts: Option<i64>,
+	pub allocate_ts: Option<i64>,
+	/// Set only on first allocation.
 	pub start_ts: Option<i64>,
 	// NOTE: This is not the alarm ts, this is when the actor started sleeping. See `LifecycleState` for alarm
 	pub sleep_ts: Option<i64>,
@@ -85,6 +88,7 @@ impl State {
 
 			create_ts,
 			create_complete_ts: None,
+			allocate_ts: None,
 			start_ts: None,
 			sleep_ts: None,
 			connectable_ts: None,
@@ -94,6 +98,45 @@ impl State {
 			error: None,
 		}
 	}
+}
+
+#[doc(hidden)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct HashAllocatorReadStats {
+	pub last_ping_ts_reads: usize,
+	pub slots_reads: usize,
+}
+
+#[doc(hidden)]
+pub async fn allocate_hash_for_tests(
+	namespace_id: Id,
+	pool_name: &str,
+	tx: &universaldb::Transaction,
+	pools: &rivet_pools::PoolsHandle,
+	now: i64,
+	envoy_eligible_threshold: i64,
+	samples: u8,
+	max_scan: u32,
+	slot_jitter: u8,
+	use_snapshot_read: bool,
+	pivots: Vec<[u8; 16]>,
+	rng_seed: u64,
+) -> Result<(Option<String>, HashAllocatorReadStats)> {
+	alloc_serverful::allocate_hash_for_tests(
+		namespace_id,
+		pool_name,
+		tx,
+		pools,
+		now,
+		envoy_eligible_threshold,
+		samples,
+		max_scan,
+		slot_jitter,
+		use_snapshot_read,
+		pivots,
+		rng_seed,
+	)
+	.await
 }
 
 #[workflow]
@@ -207,7 +250,8 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	runtime::reschedule_actor(ctx, input, &mut lifecycle_state, metrics_workflow_id).await?;
 
 	ctx.lupe()
-		.commit_interval(10)
+		// TODO: Temp set to 1 as part of a two phase actor wf fix for amp
+		.commit_interval(1)
 		.with_state(lifecycle_state)
 		.run(|ctx, state| {
 			let input = input.clone();
@@ -240,7 +284,7 @@ pub async fn pegboard_actor2(ctx: &mut WorkflowCtx, input: &Input) -> Result<()>
 	destroy(ctx, input).await
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InitStateAndUdbInput {
 	pub actor_id: Id,
 	pub name: String,
@@ -257,7 +301,7 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 
 	let create_ts = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_insert_state_and_db", |tx| async move {
 			let tx = tx.with_subspace(crate::keys::subspace());
 
 			let create_ts = if input.from_v1 {
@@ -291,6 +335,7 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				input.name.clone(),
 			)?;
 			tx.write(&crate::keys::actor::VersionKey::new(input.actor_id), 2)?;
+			// Generation is reset to 0 even when upgrading from v1 actor wf
 			tx.write(&crate::keys::actor::GenerationKey::new(input.actor_id), 0)?;
 
 			if let Some(key) = &input.key {
@@ -327,7 +372,7 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct PopulateIndexesInput {}
 
 #[activity(PopulateIndexes)]
@@ -344,7 +389,7 @@ pub async fn populate_indexes(ctx: &ActivityCtx, input: &PopulateIndexesInput) -
 
 	// Populate indexes
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_actor2_populate_indexes", |tx| {
 			async move {
 				let tx = tx.with_subspace(crate::keys::subspace());
 
@@ -380,7 +425,7 @@ pub async fn populate_indexes(ctx: &ActivityCtx, input: &PopulateIndexesInput) -
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CheckEnvoyLivenessInput {
 	envoy_key: String,
 }
@@ -401,7 +446,7 @@ async fn check_envoy_liveness(
 
 	let namespace_id = state.namespace_id;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_check_envoy_liveness", |tx| async move {
 			let tx = tx.with_subspace(crate::keys::subspace());
 
 			let last_ping_ts = tx
@@ -450,7 +495,7 @@ async fn listen_for_signals(
 			// Listen for signals with a timeout. if a timeout happens, it means this actor is lost
 			let signals = ctx.listen_n_until::<Main>(*lost_timeout_ts, 256).await?;
 			if signals.is_empty() {
-				tracing::warn!(actor_id=?input.actor_id, "actor lost");
+				tracing::warn!(actor_id=?input.actor_id, transition=%state.transition, "actor lost");
 
 				// Fake signal
 				vec![Main::Lost(Lost {
@@ -632,9 +677,10 @@ async fn process_signal(
 						match intent {
 							protocol::ActorIntent::ActorIntentSleep => {
 								if let Transition::Running { envoy, .. } = &mut state.transition {
+									let envoy = std::mem::take(envoy);
 									// Transition to sleep intent
 									state.transition = Transition::SleepIntent {
-										envoy: std::mem::take(envoy),
+										envoy,
 										lost_timeout_ts: now
 											+ ctx.config().pegboard().actor_stop_threshold(),
 										rewake_after_stop: false,
@@ -656,9 +702,10 @@ async fn process_signal(
 							}
 							protocol::ActorIntent::ActorIntentStop => {
 								if let Transition::Running { envoy, .. } = &mut state.transition {
+									let envoy = std::mem::take(envoy);
 									// Transition to stop intent
 									state.transition = Transition::StopIntent {
-										envoy: std::mem::take(envoy),
+										envoy,
 										lost_timeout_ts: now
 											+ ctx.config().pegboard().actor_stop_threshold(),
 									};
@@ -851,10 +898,11 @@ async fn process_signal(
 				Transition::Running { envoy, .. } => {
 					let envoy_key = envoy.envoy_key.clone();
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
+					let envoy = std::mem::take(envoy);
 
 					// Transition to sleep intent
 					state.transition = Transition::SleepIntent {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 						rewake_after_stop: false,
 					};
@@ -887,10 +935,11 @@ async fn process_signal(
 				Transition::Running { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
 					let envoy_key = envoy.envoy_key.clone();
+					let envoy = std::mem::take(envoy);
 
 					// Transition to going away
 					state.transition = Transition::GoingAway {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
@@ -907,9 +956,10 @@ async fn process_signal(
 				}
 				Transition::SleepIntent { envoy, .. } | Transition::StopIntent { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
+					let envoy = std::mem::take(envoy);
 
 					state.transition = Transition::GoingAway {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
@@ -952,12 +1002,22 @@ async fn process_signal(
 				Transition::Running { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
 					let envoy_key = envoy.envoy_key.clone();
+					let envoy = std::mem::take(envoy);
 
 					// Transition to going away
 					state.transition = Transition::GoingAway {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
+
+					match ctx.check_version(2).await? {
+						1 => {}
+						_latest => {
+							ctx.v(2)
+								.activity(runtime::SetNotConnectableInput {})
+								.await?;
+						}
+					}
 
 					ctx.activity(runtime::InsertAndSendCommandsInput {
 						generation: state.generation,
@@ -972,21 +1032,25 @@ async fn process_signal(
 				}
 				Transition::SleepIntent { envoy, .. } | Transition::StopIntent { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
+					let envoy = std::mem::take(envoy);
 
 					state.transition = Transition::GoingAway {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
 					// Stop command was already sent
 				}
-				Transition::Allocating { .. }
-				| Transition::Starting { .. }
-				| Transition::Sleeping
-				| Transition::Reallocating { .. } => {
+				Transition::Allocating { .. } => {
 					tracing::warn!(transition=?state.transition, "should not be reachable");
 				}
-				Transition::GoingAway { .. } | Transition::Destroying { .. } => {}
+				Transition::Starting { .. } => {
+					// TODO: Reallocate after start
+				}
+				Transition::Sleeping
+				| Transition::Reallocating { .. }
+				| Transition::GoingAway { .. }
+				| Transition::Destroying { .. } => {}
 			}
 		}
 		Main::Destroy(_) => {
@@ -994,10 +1058,11 @@ async fn process_signal(
 				Transition::Running { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
 					let envoy_key = envoy.envoy_key.clone();
+					let envoy = std::mem::take(envoy);
 
 					// Transition to destroying
 					state.transition = Transition::Destroying {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
@@ -1016,9 +1081,10 @@ async fn process_signal(
 				| Transition::StopIntent { envoy, .. }
 				| Transition::GoingAway { envoy, .. } => {
 					let now = ctx.activity(runtime::GetTsInput {}).await?;
+					let envoy = std::mem::take(envoy);
 
 					state.transition = Transition::Destroying {
-						envoy: std::mem::take(envoy),
+						envoy,
 						lost_timeout_ts: now + ctx.config().pegboard().actor_stop_threshold(),
 					};
 
@@ -1050,7 +1116,7 @@ async fn process_signal(
 /// Reason why an actor failed to allocate or run.
 ///
 /// Distinct from `errors::Actor` which represents user-facing API errors.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ActorError {
 	/// Actor cannot allocate due to the concurrent actor limit. Only set if `error`
@@ -1059,7 +1125,7 @@ pub enum ActorError {
 	/// No envoys connected to serverful pool.
 	NoEnvoys,
 	/// Envoy did not respond with expected events (lost timeout).
-	EnvoyNoResponse { envoy_key: String },
+	EnvoyNoResponse { envoy_key: Option<String> },
 	/// Envoy connection was lost (no recent ping, network issue, or crash).
 	EnvoyConnectionLost { envoy_key: String },
 	/// Actor crashed during execution.
@@ -1097,7 +1163,7 @@ async fn destroy(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct UpdateStateAndDbInput {}
 
 #[activity(UpdateStateAndDb)]
@@ -1113,7 +1179,7 @@ async fn update_state_and_db(ctx: &ActivityCtx, input: &UpdateStateAndDbInput) -
 	let create_ts = state.create_ts;
 	let key = &state.key;
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_actor2_destroy", |tx| {
 			async move {
 				let tx = tx.with_subspace(crate::keys::subspace());
 
@@ -1160,10 +1226,10 @@ async fn update_state_and_db(ctx: &ActivityCtx, input: &UpdateStateAndDbInput) -
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ClearKvInput {}
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ClearKvOutput {
 	/// Simply an estimate, not accurate under 3MiB
 	final_size: i64,
@@ -1176,7 +1242,7 @@ async fn clear_kv(ctx: &ActivityCtx, input: &ClearKvInput) -> Result<ClearKvOutp
 	let actor_id = state.actor_id;
 	let final_size = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_clear_kv", |tx| async move {
 			let subspace = crate::keys::actor_kv::subspace(actor_id);
 
 			let (start, end) = subspace.range();

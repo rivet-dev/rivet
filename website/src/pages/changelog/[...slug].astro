@@ -1,15 +1,9 @@
 ---
-import { getCollection, render } from 'astro:content';
-import { Image } from 'astro:assets';
+import { getCollection } from 'astro:content';
 import BlogLayout from '@/layouts/BlogLayout.astro';
-import { ArticleSocials } from '@/components/ArticleSocials';
-import { DocsTableOfContents } from '@/components/DocsTableOfContents';
-import { Prose } from '@/components/Prose';
-import { formatTimestamp } from '@/lib/formatDate';
+import BlogArticle from '@/components/BlogArticle.astro';
+import { getPostImage } from '@/lib/postImage';
 import { AUTHORS, CATEGORIES } from '@/lib/article';
-import { AuthorAvatar } from '@/components/AuthorAvatar';
-import { Icon, faBluesky, faCalendarDay, faChevronRight, faGithub, faXTwitter } from '@rivet-gg/icons';
-import * as mdxComponents from '@/components/mdx';
 
 type AuthorInfo = {
 	name: string;
@@ -22,63 +16,34 @@ type AuthorInfo = {
 export async function getStaticPaths() {
 	const posts = await getCollection('posts');
 
-	// Import all post images eagerly
-	const images = import.meta.glob<{ default: ImageMetadata }>(
-		'/src/content/posts/*/image.{png,jpg,gif}',
-		{ eager: true }
-	);
-
 	return posts
 		.filter((post) => post.data.category === 'changelog' && !post.data.unpublished)
 		.map((entry) => {
 			const slug = entry.id.replace(/\/page$/, '');
-			const imagePath = Object.keys(images).find((p) => p.includes(slug));
-			const image = imagePath ? images[imagePath].default : null;
 			return {
 				params: { slug },
-				props: { entry, image },
+				props: { entry, image: getPostImage(entry) },
 			};
 		});
 }
 
 const { entry, image } = Astro.props;
-const { Content, headings } = await render(entry);
 
 const slug = entry.id.replace(/\/page$/, '');
 const author = AUTHORS[entry.data.author] as AuthorInfo;
 const category = { ...CATEGORIES[entry.data.category], id: entry.data.category };
-
 const { title, description } = entry.data as unknown as { title: string; description: string };
 
-// Build table of contents
-const tableOfContents = headings
-	.filter((h) => h.depth === 2 || h.depth === 3)
-	.reduce((acc, h) => {
-		if (h.depth === 2) {
-			acc.push({ title: h.text, id: h.slug, children: [] });
-		} else if (acc.length > 0) {
-			acc[acc.length - 1].children.push({ title: h.text, id: h.slug, children: [] });
-		}
-		return acc;
-	}, [] as any[]);
-
-// Load other articles
-const allPosts = await getCollection('posts');
-const filteredOtherPosts = allPosts
-	.filter((p) => p.id !== entry.id && !p.data.unpublished)
-	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime())
-	.slice(0, 3);
-
-const otherArticles = filteredOtherPosts.map((post) => {
-	const slugValue = post.id.replace(/\/page$/, '');
-	const cat = { ...CATEGORIES[post.data.category], id: post.data.category };
-	return {
-		slug: slugValue,
-		title: (post.data as unknown as { title: string }).title,
-		category: cat,
-		published: post.data.published,
-	};
-});
+// BreadcrumbList schema
+const breadcrumbSchema = {
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	"itemListElement": [
+		{ "@type": "ListItem", "position": 1, "name": "Home", "item": "https://rivet.dev/" },
+		{ "@type": "ListItem", "position": 2, "name": "Changelog", "item": "https://rivet.dev/changelog/" },
+		{ "@type": "ListItem", "position": 3, "name": title, "item": `https://rivet.dev/changelog/${slug}/` }
+	]
+};
 ---
 
 <BlogLayout
@@ -92,99 +57,6 @@ const otherArticles = filteredOtherPosts.map((post) => {
 	authorSocials={author.socials}
 	category={category.name}
 >
-	<div class="mx-auto mt-20 w-full md:max-w-3xl lg:max-w-4xl xl:max-w-7xl px-4 md:mt-32" style="--header-height: 5rem;">
-		<ul class="text-muted-foreground my-4 flex flex-wrap items-center gap-2 text-xs">
-			<li><a href="/changelog/">Changelog</a></li>
-			<li class="flex items-center"><Icon className="h-2.5 w-auto" icon={faChevronRight} /></li>
-			<li class="text-foreground font-semibold">{title}</li>
-		</ul>
-		<div class="flex flex-col items-center gap-8 pb-6 lg:items-start lg:flex-row">
-			<aside class="hidden lg:flex mt-2 min-w-0 lg:w-[220px] lg:shrink-0 flex-col gap-2">
-				<div class="top-header sticky pt-2">
-					<p class="mb-2 text-sm font-semibold">Posted by</p>
-					<div class="mb-4 flex items-center gap-2">
-						<AuthorAvatar className="mt-1 size-14" name={author.name} avatarSrc={author.avatar.src} client:load />
-						<div class="flex flex-col">
-							<h3 class="font-bold">{author.name}</h3>
-							<p class="text-muted-foreground text-sm">{author.role}</p>
-							<p class="flex gap-2 text-xs text-muted-foreground mt-1">
-								{(author.socials?.twitter || author.url) && (
-									<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer">
-										<Icon icon={faXTwitter} />
-									</a>
-								)}
-								{author.socials?.bluesky && (
-									<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer">
-										<Icon icon={faBluesky} />
-									</a>
-								)}
-								{author.socials?.github && (
-									<a href={author.socials.github} target="_blank" rel="noopener noreferrer">
-										<Icon icon={faGithub} />
-									</a>
-								)}
-							</p>
-						</div>
-					</div>
-					<div class="text-muted-foreground mb-6 flex items-center gap-2 text-sm">
-						<Icon icon={faCalendarDay} />
-						<time class="text-sm">{formatTimestamp(entry.data.published)}</time>
-					</div>
-					<p class="mb-2 hidden text-sm font-semibold lg:block">Other articles</p>
-					<ul class="text-muted-foreground hidden list-disc pl-5 text-sm lg:block">
-						{otherArticles.map((article) => (
-							<li class="py-1">
-								<a href={article.category.id === 'changelog' ? `/changelog/${article.slug}/` : `/blog/${article.slug}/`}>
-									{article.title || article.slug}
-								</a>
-							</li>
-						))}
-					</ul>
-				</div>
-			</aside>
-			<Prose
-				as="article"
-				className="w-full lg:flex-1 min-w-0 lg:order-2 max-w-none"
-			>
-				{image && (
-					<Image src={image} alt={title} class="rounded-xl border border-white/10" loading="eager" decoding="async" />
-				)}
-				<Content components={mdxComponents} />
-				<ArticleSocials title={title} client:load />
-			</Prose>
-			<aside class="hidden xl:block min-w-0 xl:w-[220px] xl:shrink-0 lg:order-3">
-				<DocsTableOfContents tableOfContents={tableOfContents} client:load />
-			</aside>
-		</div>
-		<div class="mt-8 border-t border-white/10 pt-6 lg:hidden">
-			<div class="flex items-center gap-3">
-				<AuthorAvatar className="size-10" name={author.name} avatarSrc={author.avatar.src} client:load />
-				<div class="flex flex-col">
-					<h3 class="text-sm font-bold">{author.name}</h3>
-					<p class="text-muted-foreground text-xs">{author.role}</p>
-				</div>
-				<div class="flex gap-2 text-xs text-muted-foreground ml-auto">
-					{(author.socials?.twitter || author.url) && (
-						<a href={author.socials?.twitter || author.url} target="_blank" rel="noopener noreferrer">
-							<Icon icon={faXTwitter} />
-						</a>
-					)}
-					{author.socials?.bluesky && (
-						<a href={author.socials.bluesky} target="_blank" rel="noopener noreferrer">
-							<Icon icon={faBluesky} />
-						</a>
-					)}
-					{author.socials?.github && (
-						<a href={author.socials.github} target="_blank" rel="noopener noreferrer">
-							<Icon icon={faGithub} />
-						</a>
-					)}
-				</div>
-			</div>
-			<div class="text-muted-foreground mt-2 flex items-center gap-2 text-sm">
-				<Icon icon={faCalendarDay} />
-				<time class="text-sm">{formatTimestamp(entry.data.published)}</time>
-			</div>
-		</div>
-	</div>
+	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
+	<BlogArticle entry={entry} image={image} section="changelog" />
 </BlogLayout>

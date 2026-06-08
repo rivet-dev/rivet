@@ -43,7 +43,25 @@ When changing a versioned VBARE schema, follow the existing migration pattern.
 
 ## Test snapshots
 
-Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB KV store for migration and integration tests. Scenarios produce per-replica RocksDB checkpoints stored under `engine/packages/test-snapshot-gen/snapshots/` (git LFS tracked). In tests, use `test_snapshot::SnapshotTestCtx::from_snapshot("scenario-name")` to boot a cluster from snapshot data. See `docs-internal/engine/TEST_SNAPSHOTS.md` for the full guide.
+Use `test-snapshot-gen` to generate and load RocksDB snapshots of the full UDB KV store for migration and integration tests. Scenarios produce per-replica RocksDB checkpoints stored under `engine/packages/test-snapshot-gen/snapshots/` as normal checked-in fixture files. In tests, use `test_snapshot::SnapshotTestCtx::from_snapshot("scenario-name")` to boot a cluster from snapshot data. See `docs-internal/engine/TEST_SNAPSHOTS.md` for the full guide.
+
+## Workflow debugging
+
+- `rivet-engine wf get <WORKFLOW_ID>` shows workflow state, tags, error, input/output.
+- `rivet-engine wf history <WORKFLOW_ID> --print-ts` shows full event history with timestamps.
+- `rivet-engine wf list` scans the workflow index and often hits FDB "transaction too old" on staging/prod. Use UDB direct queries instead.
+- To find a workflow by tags, query UDB directly from the engine-shell pod:
+```bash
+# Find pegboard_runner_pool workflow for a namespace
+rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_runner_pool/str:namespace_id/str:NAMESPACE_ID'
+
+# Other useful workflow lookups
+rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_runner_pool_metadata_poller/str:namespace_id/str:NAMESPACE_ID'
+rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_runner_pool_error_tracker/str:namespace_id/str:NAMESPACE_ID'
+rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_actor/str:actor_id/str:ACTOR_ID'
+```
+- `rivet-engine wf revive -n WORKFLOW_NAME` wakes dead workflows matching the name.
+- `rivet-engine wf wake <WORKFLOW_ID>` wakes a specific sleeping workflow.
 
 ## Engine test flakes
 

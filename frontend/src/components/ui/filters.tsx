@@ -241,14 +241,10 @@ const FilterValueCombobox = ({
 	const Display = definition.display;
 	const display = Display ? (
 		<Display value={value} />
+	) : selectedOptionsCount === 1 ? (
+		<span>{value[0]}</span>
 	) : (
-		<>
-			{selectedOptionsCount === 1 ? (
-				<span>{value[0]}</span>
-			) : (
-				<span>{selectedOptionsCount} selected</span>
-			)}
-		</>
+		<span>{selectedOptionsCount} selected</span>
 	);
 	return (
 		<Popover
@@ -682,6 +678,8 @@ export type FilterDefinition =
 			ephemeral?: boolean;
 			excludes?: string[];
 			defaultValue?: string[];
+			// Behavioral toggle rendered below a divider in the Display popover.
+			feature?: boolean;
 	  }
 	| FilterSelectDefinition;
 
@@ -735,7 +733,7 @@ export const FilterCreator = ({
 }) => {
 	const [open, setOpen] = useState(false);
 	const [selectedDefId, setSelectedDefId] = useState<string | null>(null);
-	const [commandInput, setCommandInput] = useState("");
+	const [_commandInput, setCommandInput] = useState("");
 	const commandInputRef = useRef<HTMLInputElement>(null);
 
 	const selectedDefinition = definitions[selectedDefId ?? ""] ?? null;
@@ -1293,7 +1291,7 @@ function FilterDateRange({
 function parseTime(time: string) {
 	const [hours, minutes, seconds] = time
 		.split(":")
-		.map((val) => Number.parseInt(val) || 0);
+		.map((val) => Number.parseInt(val, 10) || 0);
 
 	if (Number.isNaN(hours) || Number.isNaN(minutes) || Number.isNaN(seconds)) {
 		return null;
@@ -1412,26 +1410,75 @@ export function FiltersDisplay({
 					Display
 				</Button>
 			</PopoverTrigger>
-			<PopoverContent>
-				<div className="flex flex-col gap-2">
-					{Object.entries(definitions).map(([key, def]) => (
-						<div
-							key={key}
-							className="flex items-center justify-between"
-						>
-							<Label className="text-sm">{def.label}</Label>
-							<FilterValue
-								id={key}
-								definition={def}
-								value={filters[key]?.value ?? []}
-								operator={
-									filters[key]?.operator || FilterOp.EQUAL
-								}
-								onChange={onChange}
-							/>
+			<PopoverContent className="w-60 p-2">
+				{(() => {
+					const entries = Object.entries(definitions);
+					const filterEntries = entries.filter(
+						([, def]) => !("feature" in def && def.feature),
+					);
+					const featureEntries = entries.filter(
+						([, def]) => "feature" in def && def.feature,
+					);
+
+					const renderItem = ([key, def]: [
+						string,
+						FilterDefinition,
+					]) => {
+						const checked =
+							filters[key]?.value?.[0] === "true" ||
+							filters[key]?.value?.[0] === "1";
+						return (
+							<Label
+								key={key}
+								htmlFor={`display-${key}`}
+								className={cn(
+									"flex items-center gap-2.5 rounded-md px-2 py-1.5 text-sm font-normal cursor-pointer",
+									"hover:bg-foreground/[0.04]",
+								)}
+							>
+								<Checkbox
+									id={`display-${key}`}
+									checked={checked}
+									onCheckedChange={(next) => {
+										onChange((prev) => ({
+											...prev,
+											[key]: {
+												...prev[key],
+												value: [String(Number(!!next))],
+											},
+										}));
+									}}
+								/>
+								<span>{def.label}</span>
+							</Label>
+						);
+					};
+
+					return (
+						<div className="flex flex-col">
+							{filterEntries.length > 0 ? (
+								<>
+									<div className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">
+										Display
+									</div>
+									{filterEntries.map(renderItem)}
+								</>
+							) : null}
+							{filterEntries.length > 0 &&
+							featureEntries.length > 0 ? (
+								<div className="my-1 h-px bg-border" />
+							) : null}
+							{featureEntries.length > 0 ? (
+								<>
+									<div className="px-2 pt-1 pb-1.5 text-xs font-medium text-muted-foreground">
+										Behavior
+									</div>
+									{featureEntries.map(renderItem)}
+								</>
+							) : null}
 						</div>
-					))}
-				</div>
+					);
+				})()}
 			</PopoverContent>
 		</Popover>
 	);

@@ -5,10 +5,9 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 
-import type { ComponentProps, PropsWithChildren, ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { CardGroup, CtaCard } from "../cta-card";
 import { cn } from "../lib/utils";
-import { WithTooltip } from "../ui/tooltip";
 import { Link } from "../ui/typography";
 
 // Custom CalloutBase component for dark backgrounds
@@ -114,10 +113,10 @@ export const Note = ({ children }: { children: ReactNode }) => {
 	return (
 		<CalloutBase
 			icon={faInfoCircle}
-			iconColor="text-gray-400"
-			bgColor="bg-gray-950/20"
-			borderColor="border-gray-700/50"
-			textColor="text-gray-100"
+			iconColor="text-muted-foreground"
+			bgColor="bg-foreground/[0.02]"
+			borderColor="border-foreground/10"
+			textColor="text-foreground"
 		>
 			{children}
 		</CalloutBase>

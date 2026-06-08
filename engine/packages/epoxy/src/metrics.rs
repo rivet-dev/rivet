@@ -95,13 +95,10 @@ pub fn record_changelog_append() {
 	CHANGELOG_SIZE.inc();
 }
 
-pub fn record_request(request_type: &str, result: &str, duration: std::time::Duration) {
+pub fn record_request_result(request_type: &str, result: &str) {
 	REQUEST_TOTAL
 		.with_label_values(&[request_type, result])
 		.inc();
-	REQUEST_DURATION
-		.with_label_values(&[request_type])
-		.observe(duration.as_secs_f64());
 }
 
 pub fn record_replicas(config: &protocol::ClusterConfig) {

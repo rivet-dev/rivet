@@ -1,6 +1,5 @@
 import type { AnyActorDefinition } from "@/actor/definition";
 import type { ActorSpecifier } from "@/actor/errors";
-import type { Encoding } from "@/common/encoding";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
@@ -12,7 +11,6 @@ import {
 	HTTP_ACTION_RESPONSE_VERSIONED,
 	HTTP_RESPONSE_ERROR_VERSIONED,
 } from "@/common/client-protocol-versioned";
-import { AsyncMutex } from "@/common/database/shared";
 import {
 	type HttpActionRequest as HttpActionRequestJson,
 	HttpActionRequestSchema,
@@ -21,16 +19,22 @@ import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
+import { AsyncMutex } from "@/common/database/shared";
+import type { Encoding, JsonCompatValue } from "@/common/encoding";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
-import { decodeCborCompat, deserializeWithEncoding, encodeCborCompat } from "@/serde";
+import {
+	decodeCborCompat,
+	deserializeWithEncoding,
+	encodeCborCompat,
+} from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import type {
 	ActorActionOptions,
 	ActorConnectOptions,
 	ActorDefinitionActions,
-	ActorFetchInit,
 	ActorDefinitionQueueSend,
+	ActorFetchInit,
 	ActorGatewayOptions,
 	ActorWebSocketOptions,
 } from "./actor-common";
@@ -147,7 +151,8 @@ export class ActorHandleRaw {
 						useQueryTarget,
 						gatewayOptions,
 					);
-					actorId = "directId" in target ? target.directId : undefined;
+					actorId =
+						"directId" in target ? target.directId : undefined;
 
 					return await createQueueSender({
 						encoding: this.#encoding,
@@ -161,10 +166,8 @@ export class ActorHandleRaw {
 						},
 					}).send(name, body, options as any);
 				} catch (err) {
-					const { group, code, message, metadata, actor } = deconstructError(
-						err,
-						true,
-					);
+					const { group, code, message, metadata, actor } =
+						deconstructError(err, true);
 
 					if (
 						this.#shouldRetryQueueDispatchOverload(
@@ -207,19 +210,25 @@ export class ActorHandleRaw {
 						continue;
 					}
 
-					const invalidated = this.#invalidateResolvedActorId(group, code);
+					const invalidated = this.#invalidateResolvedActorId(
+						group,
+						code,
+					);
 					if (invalidated && attempt < maxAttempts - 1) {
 						useQueryTarget =
-							(code === "starting" ||
-								code === "stopping" ||
-								code.startsWith("destroyed_"));
+							code === "starting" ||
+							code === "stopping" ||
+							code.startsWith("destroyed_");
 						if (useQueryTarget) {
 							await this.#waitForRetryWindow();
 						}
 						continue;
 					}
 
-					throw new ActorError(group, code, message, { metadata, actor });
+					throw new ActorError(group, code, message, {
+						metadata,
+						actor,
+					});
 				}
 			}
 
@@ -234,13 +243,12 @@ export class ActorHandleRaw {
 	 * @template Args - The type of arguments to pass to the action function.
 	 * @template Response - The type of the response returned by the action function.
 	 */
-	async action<
-		Args extends Array<unknown> = unknown[],
-		Response = unknown,
-	>(opts: {
-		name: string;
-		args: Args;
-	} & ActorActionOptions): Promise<Response> {
+	async action<Args extends Array<unknown> = unknown[], Response = unknown>(
+		opts: {
+			name: string;
+			args: Args;
+		} & ActorActionOptions,
+	): Promise<Response> {
 		if (
 			typeof opts === "string" ||
 			typeof opts !== "object" ||
@@ -259,10 +267,12 @@ export class ActorHandleRaw {
 		return await retryOnLifecycleBoundary(run, { signal: opts.signal });
 	}
 
-	async #sendActionNow(opts: {
-		name: string;
-		args: unknown[];
-	} & ActorActionOptions): Promise<unknown> {
+	async #sendActionNow(
+		opts: {
+			name: string;
+			args: unknown[];
+		} & ActorActionOptions,
+	): Promise<unknown> {
 		const maxAttempts = this.#getDynamicQueryMaxAttempts();
 		let useQueryTarget = false;
 		const gatewayOptions = resolveActorGatewayOptions(
@@ -325,16 +335,20 @@ export class ActorHandleRaw {
 					requestVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
 					requestVersionedDataHandler: HTTP_ACTION_REQUEST_VERSIONED,
 					responseVersion: CLIENT_PROTOCOL_CURRENT_VERSION,
-					responseVersionedDataHandler: HTTP_ACTION_RESPONSE_VERSIONED,
+					responseVersionedDataHandler:
+						HTTP_ACTION_RESPONSE_VERSIONED,
 					requestZodSchema: HttpActionRequestSchema,
 					responseZodSchema: HttpActionResponseSchema,
 					requestToJson: (args): HttpActionRequestJson => ({
 						args,
 					}),
 					requestToBare: (args): protocol.HttpActionRequest => ({
-						args: bufferToArrayBuffer(encodeCborCompat(args)),
+						args: bufferToArrayBuffer(
+							encodeCborCompat(args as JsonCompatValue),
+						),
 					}),
-					responseFromJson: (json): Response => json.output as Response,
+					responseFromJson: (json): Response =>
+						json.output as Response,
 					responseFromBare: (bare): Response =>
 						decodeCborCompat(new Uint8Array(bare.output)),
 				});
@@ -343,10 +357,8 @@ export class ActorHandleRaw {
 				}
 				return output;
 			} catch (err) {
-				const { group, code, message, metadata, actor } = deconstructError(
-					err,
-					true,
-				);
+				const { group, code, message, metadata, actor } =
+					deconstructError(err, true);
 
 				if (
 					await this.#shouldRetrySchedulingError(
@@ -390,14 +402,19 @@ export class ActorHandleRaw {
 					);
 				}
 
-				const invalidated = this.#invalidateResolvedActorId(group, code);
+				const invalidated = this.#invalidateResolvedActorId(
+					group,
+					code,
+				);
 				if (invalidated && attempt < maxAttempts - 1) {
 					if (
 						group === "actor" &&
 						(code === "starting" || code === "stopping")
 					) {
 						useQueryTarget = true;
-						await new Promise((resolve) => setTimeout(resolve, 100));
+						await new Promise((resolve) =>
+							setTimeout(resolve, 100),
+						);
 					}
 					continue;
 				}
@@ -662,10 +679,8 @@ export class ActorHandleRaw {
 				}
 				return response;
 			} catch (err) {
-				const { group, code, message, metadata, actor } = deconstructError(
-					err,
-					true,
-				);
+				const { group, code, message, metadata, actor } =
+					deconstructError(err, true);
 
 				if (
 					await this.#shouldRetrySchedulingError(
@@ -695,12 +710,15 @@ export class ActorHandleRaw {
 					continue;
 				}
 
-				const invalidated = this.#invalidateResolvedActorId(group, code);
+				const invalidated = this.#invalidateResolvedActorId(
+					group,
+					code,
+				);
 				if (invalidated && attempt < maxAttempts - 1) {
 					useQueryTarget =
-						(code === "starting" ||
-							code === "stopping" ||
-							code.startsWith("destroyed_"));
+						code === "starting" ||
+						code === "stopping" ||
+						code.startsWith("destroyed_");
 					if (useQueryTarget) {
 						await this.#waitForRetryWindow();
 					}
@@ -719,13 +737,10 @@ export class ActorHandleRaw {
 		actorId: string | undefined,
 		attempt: number,
 		maxAttempts: number,
-	): Promise<
-		| {
-				useQueryTarget: boolean;
-				waitForRetryWindow: boolean;
-		  }
-		| null
-	> {
+	): Promise<{
+		useQueryTarget: boolean;
+		waitForRetryWindow: boolean;
+	} | null> {
 		if (response.ok || !isDynamicActorQuery(this.#actorResolutionState)) {
 			return null;
 		}
@@ -857,8 +872,9 @@ export class ActorHandleRaw {
 			this.#gatewayOptions,
 			options,
 		);
+		const useQueryTarget = isDynamicActorQuery(this.#actorResolutionState);
 		const target = await this.#resolveGatewayRequestTarget(
-			false,
+			useQueryTarget,
 			gatewayOptions,
 		);
 		return await rawWebSocket(
@@ -884,7 +900,9 @@ export class ActorHandleRaw {
 			return target.directId;
 		}
 
-		throw new Error("dynamic actor resolution did not produce a direct actor id");
+		throw new Error(
+			"dynamic actor resolution did not produce a direct actor id",
+		);
 	}
 
 	/**

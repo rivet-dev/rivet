@@ -3,6 +3,10 @@ use gas::prelude::*;
 use serde::{Deserialize, Serialize};
 use universalpubsub::NextOutput;
 
+pub mod pubsub_subjects;
+
+use pubsub_subjects::{TRACING_CONFIG_SUBJECT, TracingConfigSubject};
+
 #[derive(Serialize, Deserialize)]
 pub struct SetTracingConfigMessage {
 	#[serde(default, skip_serializing_if = "Option::is_none")]
@@ -15,10 +19,9 @@ pub struct SetTracingConfigMessage {
 pub async fn start(_config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
 	// Subscribe to tracing config updates
 	let ups = pools.ups()?;
-	let subject = "rivet.debug.tracing.config";
-	let mut sub = ups.subscribe(subject).await?;
+	let mut sub = ups.subscribe(TracingConfigSubject).await?;
 
-	tracing::debug!(%subject, "subscribed to tracing config updates");
+	tracing::debug!(subject = %TRACING_CONFIG_SUBJECT, "subscribed to tracing config updates");
 
 	// Process incoming messages
 	while let Ok(NextOutput::Message(msg)) = sub.next().await {

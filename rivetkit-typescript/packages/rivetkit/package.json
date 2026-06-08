@@ -72,6 +72,16 @@
 				"default": "./dist/tsup/db/drizzle.cjs"
 			}
 		},
+		"./dynamic": {
+			"import": {
+				"types": "./dist/tsup/dynamic/mod.d.ts",
+				"default": "./dist/tsup/dynamic/mod.js"
+			},
+			"require": {
+				"types": "./dist/tsup/dynamic/mod.d.cts",
+				"default": "./dist/tsup/dynamic/mod.cjs"
+			}
+		},
 		"./client": {
 			"import": {
 				"browser": {
@@ -151,7 +161,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check . && pnpm run check:test-skips && pnpm run check:wait-for-comments",
@@ -168,13 +178,14 @@
 		"actor-config-schema-gen": "tsx scripts/actor-config-schema-gen.ts"
 	},
 	"dependencies": {
-		"@rivet-dev/agent-os-core": "^0.1.1",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
 		"@hono/zod-openapi": "^1.1.5",
+		"@rivet-dev/agent-os-core": "^0.1.1",
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
+		"@rivetkit/on-change": "6.0.1",
 		"@rivetkit/rivetkit-napi": "workspace:*",
 		"@rivetkit/rivetkit-wasm": "workspace:*",
 		"@rivetkit/traces": "workspace:*",
@@ -192,10 +203,10 @@
 		"zod": "^4.1.0"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "^2.3",
 		"@copilotkit/llmock": "^1.6.0",
 		"@rivet-dev/agent-os-common": "*",
 		"@rivet-dev/agent-os-pi": "^0.1.1",
-		"@biomejs/biome": "^2.3",
 		"@standard-schema/spec": "^1.0.0",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",

@@ -1,9 +1,9 @@
-import type { Logger } from "pino";
 import {
-	VirtualWebSocket,
-	type UniversalWebSocket,
 	type RivetMessageEvent,
+	type UniversalWebSocket,
+	VirtualWebSocket,
 } from "@rivetkit/virtual-websocket";
+import type { Logger } from "pino";
 import type { Tunnel } from "./tunnel";
 import {
 	MAX_PAYLOAD_SIZE,

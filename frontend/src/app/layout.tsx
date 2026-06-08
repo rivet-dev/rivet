@@ -1,9 +1,9 @@
 import {
 	faArrowUpRight,
 	faBook,
+	faChevronDown,
 	faCog,
 	faDiscord,
-	faFileLines,
 	faGift,
 	faGithub,
 	faLogs,
@@ -12,10 +12,10 @@ import {
 	faWallet,
 	Icon,
 } from "@rivet-gg/icons";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
 	Link,
-	useMatch,
+	useMatches,
 	useMatchRoute,
 	useNavigate,
 } from "@tanstack/react-router";
@@ -45,15 +45,19 @@ import {
 	Skeleton,
 } from "@/components";
 import {
+	ActorRegion,
 	useCloudNamespaceDataProvider,
 	useDataProvider,
 	useDataProviderCheck,
+	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
+import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { ensureTrailingSlash } from "@/lib/utils";
+import type { RivetActorError } from "@/queries/types";
 import { TEST_IDS } from "@/utils/test-ids";
 import { ActorBuildsList } from "./actor-builds-list";
 import { BillingLimitAlert } from "./billing/billing-limit-alert";
@@ -61,8 +65,12 @@ import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
+import { FeedbackButton } from "./feedback-button";
+import { HelpButton } from "./help-button";
 import { HelpDropdown } from "./help-dropdown";
+import { Logo as BrandLogo } from "./logo";
 import { NamespaceSelect } from "./namespace-select";
+import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
 import { UserDropdown } from "./user-dropdown";
 
 interface RootProps {
@@ -198,24 +206,25 @@ const Sidebar = ({
 				>
 					<Logo />
 					<div className="flex flex-1 flex-col gap-2 px-2 min-h-0">
-						{features.multitenancy
-							? <CloudSidebar />
-							: (
-								<>
-									<Breadcrumbs />
-									<ScrollArea>
-										<EngineSubnav />
-									</ScrollArea>
-								</>
-							)}
+						{features.platform ? (
+							<CloudSidebar />
+						) : (
+							<>
+								<Breadcrumbs />
+								<ScrollArea>
+									<EngineSubnav />
+								</ScrollArea>
+							</>
+						)}
 					</div>
 					<div>
 						<div className="border-t my-0.5 mx-2.5" />
 
-						{features.multitenancy ? (
+						{features.platform ? (
 							<>
 								<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-									{features.billing && matchRoute({
+									{features.billing &&
+									matchRoute({
 										to: "/orgs/$organization/projects/$project/ns/$namespace",
 										fuzzy: true,
 										pending: false,
@@ -239,10 +248,11 @@ const Sidebar = ({
 												</div>
 											</Link>
 										</HeaderButton>
-									) : features.billing && matchRoute({
+									) : features.billing &&
+										matchRoute({
 											to: "/orgs/$organization/projects/$project",
-												fuzzy: true,
-												pending: false,
+											fuzzy: true,
+											pending: false,
 										}) ? (
 										<HeaderButton asChild>
 											<Link
@@ -312,118 +322,118 @@ const Sidebar = ({
 							</>
 						) : (
 							<div className="flex gap-0.5 my-2 px-2.5 flex-col">
-									{features.branding ? (
-										<Changelog>
-											<HeaderButton
-												startIcon={
-													<Icon
-														icon={faGift}
-														className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-													/>
-												}
+								{features.branding ? (
+									<Changelog>
+										<HeaderButton
+											startIcon={
+												<Icon
+													icon={faGift}
+													className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+												/>
+											}
+										>
+											<a
+												href="https://www.rivet.dev/changelog"
+												target="_blank"
+												rel="noopener"
 											>
-												<a
-													href="https://www.rivet.dev/changelog"
-													target="_blank"
-													rel="noopener"
-												>
-													What's new?
-													<Ping
-														className="relative -right-1"
-														data-changelog-ping
-													/>
-												</a>
-											</HeaderButton>
-										</Changelog>
-									) : null}
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faMessageSmile}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
+												What's new?
+												<Ping
+													className="relative -right-1"
+													data-changelog-ping
+												/>
+											</a>
+										</HeaderButton>
+									</Changelog>
+								) : null}
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faMessageSmile}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+								>
+									<Link
+										to="."
+										search={(old) => ({
+											...old,
+											modal: "feedback",
+										})}
 									>
-										<Link
-											to="."
-											search={(old) => ({
-												...old,
-												modal: "feedback",
-											})}
-										>
-											Feedback
-										</Link>
-									</HeaderButton>
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faBook}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
+										Feedback
+									</Link>
+								</HeaderButton>
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faBook}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+									endIcon={
+										<Icon
+											icon={faArrowUpRight}
+											className="ms-1"
+										/>
+									}
+								>
+									<a
+										href="https://www.rivet.dev/docs"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										<a
-											href="https://www.rivet.dev/docs"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Documentation
-										</a>
-									</HeaderButton>
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faDiscord}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
+										Documentation
+									</a>
+								</HeaderButton>
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faDiscord}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+									endIcon={
+										<Icon
+											icon={faArrowUpRight}
+											className="ms-1"
+										/>
+									}
+								>
+									<a
+										href="http://www.rivet.dev/discord"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										<a
-											href="http://www.rivet.dev/discord"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											Discord
-										</a>
-									</HeaderButton>
-									<HeaderButton
-										asChild
-										startIcon={
-											<Icon
-												icon={faGithub}
-												className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
-											/>
-										}
-										endIcon={
-											<Icon
-												icon={faArrowUpRight}
-												className="ms-1"
-											/>
-										}
+										Discord
+									</a>
+								</HeaderButton>
+								<HeaderButton
+									asChild
+									startIcon={
+										<Icon
+											icon={faGithub}
+											className="size-5 opacity-80 group-hover:opacity-100 transition-opacity"
+										/>
+									}
+									endIcon={
+										<Icon
+											icon={faArrowUpRight}
+											className="ms-1"
+										/>
+									}
+								>
+									<a
+										href="http://github.com/rivet-dev/rivet"
+										target="_blank"
+										rel="noopener noreferrer"
 									>
-										<a
-											href="http://github.com/rivet-dev/rivet"
-											target="_blank"
-											rel="noopener noreferrer"
-										>
-											GitHub
-										</a>
-									</HeaderButton>
+										GitHub
+									</a>
+								</HeaderButton>
 							</div>
 						)}
 					</div>
@@ -474,6 +484,16 @@ const NamespaceBreadcrumbs = ({
 	namespaceNameId: string;
 }) => {
 	const navigate = useNavigate();
+	const leafFullPath = useMatches({
+		select: (matches) => matches[matches.length - 1]?.fullPath,
+	});
+	const namespaceBase = "/ns/$namespace";
+	const namespaceTo = (
+		typeof leafFullPath === "string" &&
+		leafFullPath.startsWith(namespaceBase)
+			? leafFullPath
+			: namespaceBase
+	) as "/ns/$namespace";
 
 	return (
 		<div className="flex items-center gap-2">
@@ -483,7 +503,7 @@ const NamespaceBreadcrumbs = ({
 				value={namespaceNameId}
 				onValueChange={(value) =>
 					navigate({
-						to: "/ns/$namespace",
+						to: namespaceTo,
 						params: {
 							namespace: value,
 						},
@@ -519,9 +539,10 @@ const EngineSubnav = () => {
 			<div className="w-full pt-1.5">
 				<div className="flex gap-0.5 mb-2 flex-col">
 					<HeaderLink
-						to="/ns/$namespace/settings"
+						to="/ns/$namespace"
 						className="font-normal"
 						params={nsMatch}
+						search={(s) => ({ ...s, settings: "settings" })}
 						icon={faCog}
 					>
 						Settings
@@ -543,8 +564,11 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 		<HeaderButton
 			asChild
 			variant="ghost"
-			className="font-medium px-1 text-muted-foreground data-active:text-foreground data-active:bg-accent"
 			{...props}
+			className={cn(
+				"font-medium px-1 text-muted-foreground hover:bg-foreground/[0.04] data-active:text-foreground data-active:bg-foreground/[0.06]",
+				className,
+			)}
 			startIcon={
 				icon ? (
 					<Icon
@@ -560,6 +584,40 @@ function HeaderLink({ icon, children, className, ...props }: HeaderLinkProps) {
 				{children}
 			</Link>
 		</HeaderButton>
+	);
+}
+
+function RunnerConfigErrorIndicator() {
+	const dataProvider = useEngineCompatDataProvider();
+	const { data: errors } = useInfiniteQuery({
+		...dataProvider.runnerConfigsQueryOptions(),
+		select(data) {
+			const map: Record<string, RivetActorError | undefined> = {};
+			for (const page of data.pages) {
+				for (const config of Object.values(page.runnerConfigs)) {
+					for (const [dc, dcConfig] of Object.entries(
+						config.datacenters,
+					)) {
+						if (dcConfig.runnerPoolError && !map[dc]) {
+							map[dc] = dcConfig.runnerPoolError;
+						}
+					}
+				}
+			}
+			return Object.keys(map).length > 0 ? map : null;
+		},
+	});
+
+	if (!errors) return null;
+
+	return (
+		<RunnerPoolErrorPopover
+			iconOnly
+			errors={errors}
+			renderRegion={(regionId) => (
+				<ActorRegion regionId={regionId} showLabel="abbreviated" />
+			)}
+		/>
 	);
 }
 
@@ -615,15 +673,15 @@ function CloudSidebarContentInner() {
 							to: "/orgs/$organization/projects/$project/ns/$namespace",
 							fuzzy: true,
 						}) ? (
-							<>
-								<HeaderLink
-									to="/orgs/$organization/projects/$project/ns/$namespace/settings"
-									className="font-normal"
-									icon={faCog}
-								>
-									Settings
-								</HeaderLink>
-							</>
+							<HeaderLink
+								to="/orgs/$organization/projects/$project/ns/$namespace"
+								className="flex-1 font-normal items-center gap-1"
+								search={(s) => ({ ...s, settings: "settings" })}
+								icon={faCog}
+							>
+								<span className="flex-1">Settings</span>
+								<RunnerConfigErrorIndicator />
+							</HeaderLink>
 						) : matchRoute({
 								to: "/orgs/$organization/projects/$project",
 								fuzzy: true,
@@ -638,6 +696,10 @@ function CloudSidebarContentInner() {
 						) : null}
 					</div>
 
+					<Suspense>
+						<DeploymentsLink />
+					</Suspense>
+
 					<div className="border-t my-2" />
 					<span className="block text-muted-foreground text-xs px-2 py-1 transition-colors mb-0.5">
 						Actors
@@ -650,8 +712,13 @@ function CloudSidebarContentInner() {
 }
 
 function DeploymentsLink() {
+	if (!features.compute) {
+		return null;
+	}
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	const provider = useCloudNamespaceDataProvider();
 
+	// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 	const { data } = useSuspenseQuery(
 		provider.currentNamespaceHasManagedPoolQueryOptions(),
 	);
@@ -705,26 +772,94 @@ export const Content = ({
 	);
 };
 
+// Sidebarless onboarding/new-project pages share the same chrome as the
+// main dashboard TopBar (Logo + breadcrumb + Feedback / Help / Docs / Org
+// dropdown). The markup is inlined rather than imported from `./top-bar`
+// to avoid any module-evaluation order issue with this large layout file.
 export const SidebarlessHeader = () => {
+	const { data: org, isPending } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
-	return (
-		<div className="rounded-lg flex items-center pe-1.5 justify-between bg-card/10 backdrop-blur-lg fixed inset-x-0 top-0 z-10">
-			<Logo />
+	const name =
+		org?.name ??
+		session?.user?.name ??
+		session?.user?.email?.split("@")[0] ??
+		"Account";
+	const logo = org?.logo ?? undefined;
+	const initial = name[0]?.toUpperCase() ?? "?";
 
-			<div className="flex gap-4">
+	return (
+		<div className="pl-2">
+			<header className="z-20 flex items-center gap-3 h-11 px-3 mt-2 mr-2 bg-card border border-border rounded-lg shrink-0">
+				<Link to="/" className="flex items-center gap-2 shrink-0">
+					<BrandLogo className="h-5 w-auto text-foreground" />
+				</Link>
 				<ContextSwitcher inline />
-				<UserDropdown>
+				<div className="ml-auto flex items-center gap-1">
+					<FeedbackButton />
+					{features.support ? <HelpButton /> : null}
 					<Button
 						variant="ghost"
-						className="text-sm text-muted-foreground font-normal px-1.5"
+						size="sm"
+						className="gap-2 text-muted-foreground hover:text-foreground"
+						asChild
+						startIcon={<Icon icon={faBook} className="size-4" />}
 					>
-						Logged in as{" "}
-						<span className="text-foreground">
-							{session?.user?.email}
-						</span>
+						<a
+							href="https://www.rivet.dev/docs"
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							Docs
+						</a>
 					</Button>
-				</UserDropdown>
-			</div>
+					{features.auth ? (
+						<>
+							<div className="mx-1 h-5 w-px bg-border" />
+							<UserDropdown>
+								<Button
+									variant="ghost"
+									size="sm"
+									className="gap-2 text-muted-foreground hover:text-foreground"
+									endIcon={
+										<Icon
+											icon={faChevronDown}
+											className="size-2.5 opacity-60"
+										/>
+									}
+								>
+									<span className="size-5 rounded-full overflow-hidden flex items-center justify-center shrink-0">
+										{logo ? (
+											// biome-ignore lint/performance/noImgElement: small avatar, no Next runtime
+											<img
+												src={logo}
+												alt=""
+												className="size-full object-cover"
+											/>
+										) : (
+											<span
+												className="size-full flex items-center justify-center text-[10px] font-semibold text-white"
+												style={{
+													backgroundImage:
+														orgConicGradient(
+															paletteForLetter(
+																name,
+															),
+														),
+												}}
+											>
+												{initial}
+											</span>
+										)}
+									</span>
+									<span className="text-sm">
+										{isPending && !org ? "…" : name}
+									</span>
+								</Button>
+							</UserDropdown>
+						</>
+					) : null}
+				</div>
+			</header>
 		</div>
 	);
 };

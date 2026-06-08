@@ -47,7 +47,7 @@ export const startStopRaceActor = actor({
 				startCompleted: c.state.startCompleted,
 			};
 		},
-		ping: (c) => {
+		ping: (_c) => {
 			return "pong";
 		},
 		destroy: (c) => {

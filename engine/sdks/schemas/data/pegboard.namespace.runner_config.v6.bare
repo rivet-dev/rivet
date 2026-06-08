@@ -1,0 +1,35 @@
+type Json str
+
+type Serverless struct {
+	url: str
+	headers: map<str><str>
+	requestLifespan: u32
+	maxConcurrentActors: u64
+	drainGracePeriod: u32
+	slotsPerRunner: u32
+	minRunners: u32
+	maxRunners: u32
+	runnersMargin: u32
+	metadataPollInterval: optional<u64>
+	drainOnVersionUpgrade: bool
+	actorEvictionDelay: u32
+	actorEvictionPeriod: u32
+	actorEvictionRate: f32
+}
+
+type Normal struct {
+	drainOnVersionUpgrade: bool
+	actorEvictionDelay: u32
+	actorEvictionPeriod: u32
+	actorEvictionRate: f32
+}
+
+type RunnerConfigKind union {
+	Serverless |
+	Normal
+}
+
+type RunnerConfig struct {
+	kind: RunnerConfigKind
+	metadata: optional<Json>
+}

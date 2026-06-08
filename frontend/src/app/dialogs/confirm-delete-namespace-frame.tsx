@@ -1,12 +1,12 @@
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { posthog } from "@/lib/posthog";
 import { useState } from "react";
 import { deleteCloudNamespaceContext } from "@/app/data-providers/cache";
 import { Button, type DialogContentProps, Frame } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { posthog } from "@/lib/posthog";
 import { queryClient } from "@/queries/global";
 
 interface ConfirmDeleteNamespaceContentProps extends DialogContentProps {
@@ -38,7 +38,7 @@ export default function ConfirmDeleteNamespaceContent({
 			onClose?.();
 			return navigate({
 				to: "/orgs/$organization/projects/$project",
-				from: "/orgs/$organization/projects/$project/ns/$namespace/settings",
+				from: "/orgs/$organization/projects/$project/ns/$namespace",
 			});
 		},
 	});

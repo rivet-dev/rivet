@@ -63,7 +63,7 @@ export const rawHttpNoHandlerActor = actor({
 });
 
 export const rawHttpVoidReturnActor = actor({
-	onRequest(ctx, request) {
+	onRequest(_ctx, _request) {
 		// Intentionally return void to test error handling
 		return undefined as any;
 	},
@@ -89,7 +89,7 @@ export const rawHttpHonoActor = actor({
 		router.get("/users/:id", (c: any) => {
 			const id = c.req.param("id");
 			return c.json({
-				id: parseInt(id),
+				id: parseInt(id, 10),
 				name: id === "1" ? "Alice" : "Bob",
 			});
 		});
@@ -102,7 +102,7 @@ export const rawHttpHonoActor = actor({
 		router.put("/users/:id", async (c: any) => {
 			const id = c.req.param("id");
 			const body = await c.req.json();
-			return c.json({ id: parseInt(id), ...body });
+			return c.json({ id: parseInt(id, 10), ...body });
 		});
 
 		router.delete("/users/:id", (c: any) => {

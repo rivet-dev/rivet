@@ -8,7 +8,7 @@ Design constraints, invariants, and reference commands for the Rivet monorepo. F
 
 - API endpoint: `https://api.rivet.dev`
 - Cloud API endpoint: `https://cloud-api.rivet.dev`
-- Dashboard: `https://hub.rivet.dev`
+- Dashboard: `https://dashboard.rivet.dev`
 - Documentation: `https://rivet.dev/docs`
 
 **Use "sandbox mounting" when referring to the agentOS sandbox integration.** Do not use "sandbox extension" or "sandbox escalation." The feature mounts a sandbox as a filesystem inside the VM.
@@ -58,8 +58,8 @@ cargo test -- --nocapture
 cargo clippy -- -W warnings
 ```
 
-- Do not run `cargo fmt` automatically. The team runs it at merge time.
-- Do not run `./scripts/cargo/fix.sh`. Do not format the code yourself.
+- Agents may run `node scripts/format/agent-format.mjs` to format changed Biome and Rust files. Do not run broad `cargo fmt` or `cargo fmt --all` manually.
+- Do not run `./scripts/cargo/fix.sh` or other broad formatter/fixer commands yourself.
 - Ensure lefthook is installed and enabled for git hooks (`lefthook install`).
 
 ### Docker dev environment
@@ -79,6 +79,30 @@ docker-compose up -d
 - To revert a file to the version before this branch's changes, checkout from the first child branch (below in the stack), not from `main` or the parent. Child branches contain the pre-this-branch state of files modified by branches further down the stack.
 
 **Never push to `main` unless explicitly specified by the user.**
+
+## Assets
+
+- Large public dashboard and website media belongs in the `rivet-assets` R2 bucket, not Git.
+- Use object keys shaped like `dashboard/{group}/{asset-name}` for dashboard media and `website/blog/{post}/{asset-name}` for blog or changelog post media.
+- Upload with `op://Engineering/rivet-assets R2 Upload/{username,password}` and `aws s3 cp <file> s3://rivet-assets/<key> --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com`.
+- For blog or changelog hero media, upload the file to R2 as `website/blog/{post-slug}/image.{ext}` and set frontmatter `image: true` (or `image: { format: "gif" }` for a non-png). The URL is derived from the slug and dimensions are fixed at a 2:1 ratio, so do not write the absolute URL, width, or height. Resolved by `website/src/lib/postImage.ts`.
+- Do not use Git LFS in this repo; jj can snapshot raw working-tree bytes.
+
+## Frontend Visual Changes
+
+- For any frontend visual change, use the `agent-browser` skill to view the result in a browser instead of working blind. If it is not installed, prompt the user to install it.
+- The frontend dashboard dev server always runs at `http://localhost:43708/`. Check that it is already serving there before starting a new one.
+
+## Frontend Forms
+
+- Manage all user-submitted form state with `react-hook-form`. Do not hand-roll form state with `useState`-driven controlled inputs. Wrapping a controlled UI-library input (e.g. a shadcn `Select`) in RHF's `<Controller>` is still react-hook-form owning the state and is fine.
+
+## Frontend Feature Flags
+
+- The dashboard serves multiple deployment flavors (cloud / OSS / enterprise) from one build via flags in `frontend/src/lib/features.ts`; consume them through `import { features } from "@/lib/features"`, never by reading `VITE_FEATURE_FLAGS` directly.
+- Ship a new pack of features behind a feature flag whenever it is significant (a whole panel/page/subsystem) or not universally available across flavors, so each flavor can freely enable or disable it. Do not gate small universal changes, and do not make flags for everything.
+- If unsure whether a feature needs a flag, confirm the need with the user before adding or omitting one.
+- See [Feature flags](.claude/reference/feature-flags.md) for the flag list, flavor mapping, and consistency rules.
 
 ## Frontend Routing (TanStack Router)
 
@@ -108,7 +132,7 @@ docker-compose up -d
 ### RivetKit Test Fixtures
 
 - Core tests that touch the `_RIVET_TEST_INSPECTOR_TOKEN` env override must share a process-wide lock with startup tests that assert inspector-token initialization side effects; otherwise parallel `cargo test` runs can flip `init_inspector_token(...)` between the env-override no-op path and the KV-backed path.
-- For the fast static/http/bare driver verifier, pass only the files listed under `## Fast Tests` in `.agent/notes/driver-test-progress.md`; `tests/driver/*.test.ts` also pulls in slow-suite files and gives bogus gate failures.
+- For the fast static/http/bare driver verifier, pass only the files listed under `## Fast Tests` in `~/.agents/notes/driver-test-progress.md`; `tests/driver/*.test.ts` also pulls in slow-suite files and gives bogus gate failures.
 - Wasm host smoke tests can drive `buildNativeFactory` through `WasmCoreRuntime` fake bindings to cover actor callbacks, KV, state serialization, remote SQLite routing, and NAPI import boundaries without checked-in wasm-pack output.
 - When moving Rust inline tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim so the moved file still has private module access without widening runtime visibility. Prefer a dedicated moved-test file per source module; reusing stale shared `tests/modules/*.rs` files can silently rot against private APIs and explode once you wire them back in.
 - Tracing assertions on spawned Rust futures should bind an explicit `tracing::Dispatch` with `.with_subscriber(...)` on the spawned future; thread-local `set_default(...)` can miss the real logs in full async suite runs.
@@ -134,14 +158,15 @@ docker-compose up -d
 
 ## Agent Working Directory
 
-All agent working files live in `.agent/` at the repo root.
+All agent working files live user-scoped in `~/.agents/`, never inside the repo. Override the location with the `AGENTS_DIR` env var. Run `scripts/setup/agents-dir.sh` once to create the subdirs. These files are not committed; `.agent/` is gitignored as a safety net.
 
-- **Specs**: `.agent/specs/` — design specs and interface definitions for planned work.
-- **Research**: `.agent/research/` — research documents on external systems, prior art, and design analysis.
-- **Todo**: `.agent/todo/*.md` — deferred work items with context on what needs to be done and why.
-- **Notes**: `.agent/notes/` — general notes and tracking.
+- **Specs**: `~/.agents/specs/` — design specs and interface definitions for planned work.
+- **Research**: `~/.agents/research/` — research documents on external systems, prior art, and design analysis.
+- **Todo**: `~/.agents/todo/*.md` — deferred work items with context on what needs to be done and why.
+- **Notes**: `~/.agents/notes/` — general notes and tracking.
+- **Benchmarks**: `~/.agents/benchmarks/` — benchmark result artifacts.
 
-When the user asks to track something in a note, store it in `.agent/notes/` by default. When something is identified as "do later", add it to `.agent/todo/`. Design documents and interface specs go in `.agent/specs/`.
+When the user asks to track something in a note, store it in `~/.agents/notes/` by default. When something is identified as "do later", add it to `~/.agents/todo/`. Design documents and interface specs go in `~/.agents/specs/`.
 
 ## RivetKit Layer Architecture
 
@@ -214,9 +239,13 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 
 ## Performance
 
+- Use `rivet_perf::{perf_start, perf_finish}` for latency-sensitive async phases, shared I/O wrappers, and suspected backpressure points where slow-tail spans are useful.
+- Keep `perf_start!` labels bounded for metrics; put high-cardinality values such as IDs, request paths, and byte counts in span fields instead.
+- Every `PerfMeasure` must end with `perf_finish!` or `perf_abandon!` before leaving scope.
 - Never use `Mutex<HashMap<...>>` or `RwLock<HashMap<...>>`. Use `scc::HashMap` (preferred), `moka::Cache` (for TTL/bounded), or `DashMap` for concurrent maps.
 - Use `scc::HashSet` instead of `Mutex<HashSet<...>>` for concurrent sets.
 - `scc` async methods do not hold locks across `.await` points. Use `entry_async` for atomic read-then-write.
+- Hold lock guards for as short as possible, including `scc` guards from `get_async` and related methods. Clone/copy needed data and `drop(...)` before async work, as in `send_and_check_ping` in `engine/packages/pegboard-gateway2/src/shared_state.rs`.
 - Never poll a shared-state counter with `loop { if ready; sleep(Nms).await; }`. Pair the counter with a `tokio::sync::Notify` (or `watch::channel`) that every decrement-to-zero site pings, and wait with `AsyncCounter::wait_zero(deadline)` or an equivalent `notify.notified()` + re-check guard that arms the permit before the check.
 - Every shared counter with an awaiter must have a paired `Notify`, `watch`, or permit. Waiters must arm the notification before re-checking the counter so decrement-to-zero cannot race past them.
 - Reserve `tokio::time::sleep` for: per-call timeouts via `tokio::select!`, retry/reconnect backoff, deliberate debounce windows, or `sleep_until(deadline)` arms in an event-select loop. If it is inside a `loop { check; sleep }` body, it is polling and should be event-driven instead.
@@ -253,6 +282,20 @@ When the user asks to track something in a note, store it in `.agent/notes/` by 
 - Do not format parameters into the main message. Use structured fields: `tracing::info!(?x, "foo")` instead of `tracing::info!("foo {x}")`.
 - Log messages should be lowercase unless mentioning specific code symbols. `tracing::info!("inserted UserRow")` instead of `tracing::info!("Inserted UserRow")`.
 - `rivetkit-core` runtime logs should include `actor_id` and stable structured fields such as `reason`, `kind`, `delta_count`, byte counts, and timestamp fields instead of payload debug dumps.
+
+## Metrics
+
+- **Always include `namespace_id` as a metric label** when applicable. Bounded cardinality, useful for per-namespace dashboards.
+- **Never use unbounded labels.** No `actor_id`, `actor_key`, `envoy_key`, `runner_id`, `workflow_id`, request_id, etc. Each unbounded label creates a new time series per value; under load this produces millions of series and OOMs the metrics pipeline.
+- Other safe labels: `pool_name`, `runner_name`, `workflow_name`, `activity_name`, `operation_name`, `state`, `result`, `reason`, `error`, `status` — all bounded by code-defined enums or by namespace count.
+- Standard label names (match existing conventions):
+  - HTTP error class → `error` (not `error_kind` or `error_type`)
+  - HTTP status code → `status` (not `status_code` or `http_status`)
+  - Operation success/failure → `result` (not `outcome`)
+  - State-transition cause → `reason`
+- Never emit metrics from inside a `#[workflow]` function body. Workflow functions are replayed deterministically by gasoline; metric increments inside them fire on every replay. Move the increment into an `#[activity]` or `#[operation]` that the workflow calls.
+- Gauges of integer-valued state use `IntGauge` / `IntGaugeVec`, not `Gauge` / `GaugeVec`.
+- Reuse existing histogram bucket constants from `engine/packages/metrics/src/buckets.rs` (`BUCKETS`, `MICRO_BUCKETS`, `LIFETIME_BUCKETS`, etc.) rather than inventing new bucket arrays per metric. Add a new constant to `buckets.rs` only if no existing constant covers the value range.
 
 ## Testing
 
@@ -319,6 +362,7 @@ Load these only when the task touches the topic.
 - **[ActorTask dispatch](docs-internal/engine/actor-task-dispatch.md)** — `DispatchCommand::Action`/`Http`/`OpenWebSocket`, `UserTaskKind` children, `ActorTask` migration status. Read before changing actor task routing.
 - **[Inspector protocol](docs-internal/engine/inspector-protocol.md)** — HTTP↔WebSocket mirroring rules, wire-version negotiation, `inspector.*_dropped` downgrades, workflow inspector inference. Read before touching inspector endpoints.
 - **[NAPI bridge](docs-internal/engine/napi-bridge.md)** — TSF callback slots, `ActorContextShared` cache reset, `#[napi(object)]` payload rules, cancellation token bridging, error prefix encoding. Read before touching `rivetkit-napi`.
+- **[Envoy load balancing](docs-internal/engine/envoy-load-balancing.md)** — Hash-ring layout, virtual nodes, allocator flow, stale-envoy expiry, and tuning. Read before touching pegboard envoy allocation.
 - **[BARE protocol crates](docs-internal/engine/bare-protocol-crates.md)** — vbare schema ordering, identity converters, `build.rs` TS codec generation pattern. Read before adding/changing protocol crates.
 - **[SQLite VFS parity](docs-internal/engine/sqlite-vfs.md)** — native Rust VFS ↔ WASM TypeScript VFS 1:1 parity rule, v2 storage keys, chunk layout, delete/truncate strategy. Read before touching either VFS.
 - **[SQLite optimizations](docs-internal/engine/SQLITE_OPTIMIZATIONS.md)** — brief tracker for SQLite cold-read, VFS, storage, preload, and benchmark optimization ideas.
@@ -328,6 +372,7 @@ Load these only when the task touches the topic.
 ### Agent procedural (`.claude/reference/`)
 
 - **[Testing](.claude/reference/testing.md)** — running RivetKit tests, Vitest filter gotchas, driver-test parity workflow, Rust test layout.
+- **[Feature flags](.claude/reference/feature-flags.md)** — frontend `features.*` system, deployment-flavor mapping, when to add a flag, consistency rules.
 - **[Build troubleshooting](.claude/reference/build-troubleshooting.md)** — DTS failures, NAPI rebuild, `JsActorConfig` field churn, tsup stale exports.
 - **[Docs sync](.claude/reference/docs-sync.md)** — full table of "when you change X, update docs Y". Consult before finishing a change.
 - **[Content frontmatter](.claude/reference/content-frontmatter.md)** — required frontmatter schemas for docs + blog/changelog.

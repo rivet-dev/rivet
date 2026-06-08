@@ -342,8 +342,7 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 				useRealTimers: true,
 			});
 
-			const sleepActor =
-				client.sleepAbortListenerVarsActor.getOrCreate();
+			const sleepActor = client.sleepAbortListenerVarsActor.getOrCreate();
 
 			{
 				const status = await sleepActor.getStatus();
@@ -375,7 +374,11 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			// `c.vars` as a real object. If the race condition fires on
 			// any cycle, that wake's slot reads `"undefined"` (or an error
 			// string) and the assertion fails — pinning the bug.
-			for (let i = 0; i < status.abortVarsSeenPerWake.length - 1; i += 1) {
+			for (
+				let i = 0;
+				i < status.abortVarsSeenPerWake.length - 1;
+				i += 1
+			) {
 				expect({
 					wake: i + 1,
 					observation: status.abortVarsSeenPerWake[i],
@@ -411,7 +414,9 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 			await waitFor(driverTestConfig, 50);
 
 			const runtimeOutput = getRuntimeOutput();
-			expect(runtimeOutput).toContain("actor wait_until promise rejected");
+			expect(runtimeOutput).toContain(
+				"actor wait_until promise rejected",
+			);
 			expect(runtimeOutput).toContain("reject-with-error-ok");
 			expect(runtimeOutput).not.toContain(
 				"undefined cannot be represented as a serde_json::Value",
@@ -975,10 +980,9 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 					driverTestConfig,
 				);
 
-				const actor =
-					client.sleepWaitUntilVarsDuringGrace.getOrCreate([
-						"waituntil-vars-during-grace",
-					]);
+				const actor = client.sleepWaitUntilVarsDuringGrace.getOrCreate([
+					"waituntil-vars-during-grace",
+				]);
 
 				await actor.triggerSleep();
 				await waitFor(
@@ -1010,10 +1014,9 @@ describeDriverMatrix("Actor Sleep", (driverTestConfig) => {
 					driverTestConfig,
 				);
 
-				const actor =
-					client.sleepRawWsVarsExceedsGrace.getOrCreate([
-						"ws-vars-exceeds-grace",
-					]);
+				const actor = client.sleepRawWsVarsExceedsGrace.getOrCreate([
+					"ws-vars-exceeds-grace",
+				]);
 				const ws = await connectRawWebSocket(actor);
 
 				// Send a message that starts slow async work (2000ms delay

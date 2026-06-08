@@ -30,9 +30,9 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref EVENT_MULTIPLEXER_COUNT: IntGauge = register_int_gauge_with_registry!(
-		"pegboard_runner_event_multiplexer_count",
-		"Number of active actor event multiplexers.",
+	pub static ref EVENT_DEMUXER_COUNT: IntGauge = register_int_gauge_with_registry!(
+		"pegboard_runner_event_demuxer_count",
+		"Number of active actor event demultiplexers.",
 		*REGISTRY
 	).unwrap();
 

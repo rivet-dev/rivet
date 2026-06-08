@@ -137,11 +137,12 @@ export function ActorError({ error }: { error: object | string }) {
 				</p>
 			),
 		)
-		.with(P.shape({envoy_connection_lost: P.shape({ envoy_key: P.string })}), (err) => (
-			<p>
-				Connection to Runner was lost.
-			</p>
-		))
+		.with(
+			P.shape({
+				envoy_connection_lost: P.shape({ envoy_key: P.string }),
+			}),
+			(_err) => <p>Connection to Runner was lost.</p>,
+		)
 		.with(P.shape({ crashed: P.shape({ message: P.string }) }), (err) => (
 			<p>Actor crashed. {err.crashed.message} </p>
 		))
@@ -257,10 +258,10 @@ export function ErrorDetails({
 			className={cn("max-w-full min-w-0 pb-0", className)}
 		>
 			<AccordionItem value="error-details">
-				<AccordionTrigger className="gap-1 p-0 max-w-full min-w-0 mb-1">
-					View Error Details
+				<AccordionTrigger className="!flex-initial !w-auto mx-auto gap-1.5 !p-0 text-xs font-medium text-muted-foreground hover:text-foreground hover:no-underline [&>svg]:!size-3 [&>svg]:opacity-60">
+					View error details
 				</AccordionTrigger>
-				<AccordionContent className="max-w-full min-w-0 pb-0 ">
+				<AccordionContent className="max-w-full min-w-0 pb-0">
 					<ErrorDetailsContent error={error} />
 				</AccordionContent>
 			</AccordionItem>

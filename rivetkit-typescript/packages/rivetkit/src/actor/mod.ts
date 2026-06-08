@@ -15,6 +15,26 @@ export type {
 } from "@/common/websocket-interface";
 export type * from "./config";
 export type {
+	ActionContextOf,
+	BeforeActionResponseContextOf,
+	BeforeConnectContextOf,
+	ConnContextOf,
+	ConnectContextOf,
+	ConnInitContextOf,
+	CreateConnStateContextOf,
+	CreateContextOf,
+	CreateVarsContextOf,
+	DestroyContextOf,
+	DisconnectContextOf,
+	MigrateContextOf,
+	RequestContextOf,
+	RunContextOf,
+	SleepContextOf,
+	StateChangeContextOf,
+	WakeContextOf,
+	WebSocketContextOf,
+} from "./contexts";
+export type {
 	AnyActorDefinition,
 	AnyActorInstance,
 	AnyStaticActorDefinition,
@@ -35,24 +55,4 @@ export {
 	UserError,
 	type UserErrorOptions,
 } from "./errors";
-export type {
-	ActionContextOf,
-	BeforeActionResponseContextOf,
-	BeforeConnectContextOf,
-	ConnectContextOf,
-	ConnContextOf,
-	ConnInitContextOf,
-	CreateConnStateContextOf,
-	CreateContextOf,
-	CreateVarsContextOf,
-	DestroyContextOf,
-	DisconnectContextOf,
-	MigrateContextOf,
-	RequestContextOf,
-	RunContextOf,
-	SleepContextOf,
-	StateChangeContextOf,
-	WakeContextOf,
-	WebSocketContextOf,
-} from "./contexts";
 export { event, queue, type Type } from "./schema";

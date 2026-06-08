@@ -14,12 +14,12 @@ import {
 	Image,
 } from "@/components/learn/mdx";
 
-import oldArch from "./scene-1/old-arch.png";
-import actorArch from "./scene-1/actor-arch.png";
-import isolatedState from "./scene-1/isolated-state.png";
-import messagePassing from "./scene-1/message-passing.png";
-import locationTransparency from "./scene-1/location-transparency.png";
-import horizontalScaling from "./scene-1/horizontal-scaling.png";
+export const oldArch = { src: "https://assets.rivet.dev/website/learn/act-1/scene-1/old-arch.png", width: 1704, height: 1256, format: "png" };
+export const actorArch = { src: "https://assets.rivet.dev/website/learn/act-1/scene-1/actor-arch.png", width: 1000, height: 1288, format: "png" };
+export const isolatedState = { src: "https://assets.rivet.dev/website/learn/act-1/scene-1/isolated-state.png", width: 1387, height: 1580, format: "png" };
+export const messagePassing = { src: "https://assets.rivet.dev/website/learn/act-1/scene-1/message-passing.png", width: 1421, height: 1768, format: "png" };
+export const locationTransparency = { src: "https://assets.rivet.dev/website/learn/act-1/scene-1/location-transparency.png", width: 2009, height: 1572, format: "png" };
+export const horizontalScaling = { src: "https://assets.rivet.dev/website/learn/act-1/scene-1/horizontal-scaling.png", width: 1960, height: 2331, format: "png" };
 
 <Narrative>
 The typical backend architecture follows a familiar pattern. A web server connects to a database. Traffic grows, so you add Redis for caching. You need async processing, so you add Kafka. You need coordination, so you add distributed locks.

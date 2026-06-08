@@ -242,6 +242,7 @@ export declare class ActorContext {
   broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): void
   waitForTrackedShutdownWork(): Promise<boolean>
+  waitForTrackedShutdownWorkUnbounded(): Promise<void>
   registerTask(promise: Promise<any>): void
   runtimeState(): object
   clearRuntimeState(): void
@@ -289,7 +290,7 @@ export declare class Queue {
   next(options?: JsQueueNextOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage | null>
   nextBatch(options?: JsQueueNextBatchOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Array<QueueMessage>>
   waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage>
-  waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<void>
+  waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<void>
   enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>

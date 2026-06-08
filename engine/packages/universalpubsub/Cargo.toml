@@ -16,6 +16,7 @@ lazy_static.workspace = true
 rand.workspace = true
 rivet-error.workspace = true
 rivet-metrics.workspace = true
+rivet-perf.workspace = true
 rivet-postgres-util.workspace = true
 rivet-ups-protocol.workspace = true
 rivet-util.workspace = true

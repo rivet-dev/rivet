@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-use anyhow::*;
+use anyhow::Result;
 use async_trait::async_trait;
+use uuid::Uuid;
+
+use crate::InboxSubject;
 
 pub mod memory;
 pub mod nats;
@@ -18,7 +21,6 @@ pub enum PublishBehavior {
 	/// the same machine as the published message will not have to communicate with the driver but can instead
 	/// be delivered entirely in-memory.
 	OneSubscriber,
-
 	/// Publishes a message to multiple subscribers.
 	Broadcast,
 }
@@ -44,15 +46,27 @@ impl PublishOpts {
 
 #[async_trait]
 pub trait PubSubDriver: Send + Sync {
-	async fn subscribe(&self, subject: &str) -> Result<Box<dyn SubscriberDriver>>;
+	async fn subscribe(
+		&self,
+		subject: &str,
+		reply_id: Option<Uuid>,
+	) -> Result<Box<dyn SubscriberDriver>>;
 	async fn queue_subscribe(
 		&self,
 		subject: &str,
 		queue: &str,
 	) -> Result<Box<dyn SubscriberDriver>>;
-	async fn publish(&self, subject: &str, message: &[u8]) -> Result<()>;
+	async fn publish(
+		&self,
+		subject: &str,
+		message: &[u8],
+		reply_subject: Option<&str>,
+	) -> Result<()>;
 	async fn flush(&self) -> Result<()>;
 	fn max_message_size(&self) -> usize;
+	fn new_inbox(&self) -> InboxSubject {
+		InboxSubject::new()
+	}
 }
 
 pub type SubscriberDriverHandle = Box<dyn SubscriberDriver>;

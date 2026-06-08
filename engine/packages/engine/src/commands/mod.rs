@@ -1,6 +1,8 @@
 pub mod config;
 pub mod db;
+pub mod depot;
 pub mod epoxy;
+pub mod profile;
 pub mod start;
 pub mod tracing;
 pub mod udb;

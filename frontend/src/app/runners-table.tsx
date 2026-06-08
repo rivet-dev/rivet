@@ -44,9 +44,14 @@ export function RunnersTable({
 	fetchNextPage,
 	runners,
 }: RunnersTableProps) {
-	const latestVersion = runners?.length
-		? Math.max(...runners.map((r) => r.version))
-		: undefined;
+	const latestVersionByPool = runners?.reduce<Record<string, number>>(
+		(acc, r) => {
+			const key = "runnerId" in r ? r.name : r.poolName;
+			acc[key] = Math.max(acc[key] ?? 0, r.version);
+			return acc;
+		},
+		{},
+	);
 
 	return (
 		<Table>
@@ -56,7 +61,7 @@ export function RunnersTable({
 					<TableHead className="pl-8">ID</TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Datacenter</TableHead>
-					<TableHead>Slots</TableHead>
+					<TableHead>Actors</TableHead>
 					<TableHead>Version</TableHead>
 					<TableHead>Created</TableHead>
 				</TableRow>
@@ -94,7 +99,13 @@ export function RunnersTable({
 								? runner.runnerId
 								: runner.envoyKey
 						}
-						latestVersion={latestVersion}
+						latestVersion={
+							latestVersionByPool?.[
+								"runnerId" in runner
+									? runner.name
+									: runner.poolName
+							]
+						}
 					/>
 				))}
 
@@ -391,7 +402,10 @@ function EmptyState() {
 								>
 									<Link
 										to="."
-										search={{ modal: "create-actor" }}
+										search={(s) => ({
+											...s,
+											modal: "create-actor",
+										})}
 									>
 										Create Actor
 									</Link>

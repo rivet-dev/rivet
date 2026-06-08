@@ -5,8 +5,9 @@
 import * as Rivet from "../index";
 
 export interface RunnerConfig {
-    normal?: Record<string, unknown>;
+    normal?: Rivet.RunnerConfigNormal;
     serverless?: Rivet.RunnerConfigServerless;
+    /** Deprecated. */
     drainOnVersionUpgrade?: boolean;
     metadata?: unknown;
 }

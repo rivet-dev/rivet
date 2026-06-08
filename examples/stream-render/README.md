@@ -41,8 +41,8 @@ This stream processor uses a Top-K algorithm to efficiently maintain the top 3 v
 
 | Variable | Description |
 |----------|-------------|
-| `RIVET_ENDPOINT` | Backend endpoint URL from your [Rivet Cloud](https://hub.rivet.dev) project |
-| `RIVET_PUBLIC_ENDPOINT` | Public endpoint URL from your [Rivet Cloud](https://hub.rivet.dev) project |
+| `RIVET_ENDPOINT` | Backend endpoint URL from your [Rivet Cloud](https://dashboard.rivet.dev) project |
+| `RIVET_PUBLIC_ENDPOINT` | Public endpoint URL from your [Rivet Cloud](https://dashboard.rivet.dev) project |
 
 3. In the Rivet dashboard, point **Connect your backend** at your service's HTTPS URL.
 

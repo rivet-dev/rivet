@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -1402,6 +1404,11 @@ impl WasmActorContext {
 	#[wasm_bindgen(js_name = waitForTrackedShutdownWork)]
 	pub async fn wait_for_tracked_shutdown_work(&self) -> bool {
 		self.inner.wait_for_tracked_shutdown_work().await
+	}
+
+	#[wasm_bindgen(js_name = waitForTrackedShutdownWorkUnbounded)]
+	pub async fn wait_for_tracked_shutdown_work_unbounded(&self) {
+		self.inner.wait_for_tracked_shutdown_work_unbounded().await;
 	}
 
 	#[wasm_bindgen(js_name = keepAwake)]

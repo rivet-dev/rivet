@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use universaldb::utils::IsolationLevel::Snapshot;
+use universaldb::utils::IsolationLevel::Serializable;
 
 use crate::conveyer::{
 	branch,
@@ -127,7 +127,16 @@ pub(super) async fn resolve_storage_scope(
 	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<StorageScope> {
 	Ok(
-		match branch::resolve_database_branch(tx, bucket_id, database_id, Snapshot).await? {
+		match branch::resolve_database_branch(
+			tx,
+			bucket_id,
+			database_id,
+			// TODO: This can probably be made Snapshot again to reduce contention if
+			// read side freshness is not worth the cost.
+			Serializable,
+		)
+		.await?
+		{
 			Some(branch_id) => {
 				StorageScope::Branch(load_branch_read_plan(tx, branch_id, cached_ancestry).await?)
 			}

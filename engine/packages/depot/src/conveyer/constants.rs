@@ -32,7 +32,7 @@ pub const STALE_MARKER_AGE_MS: i64 = 10 * 60 * 1000;
 pub const HOT_BURST_MULTIPLIER: i64 = 2;
 
 /// Spec section 12.2 derives burst mode from cold-drain lag, matching the cold trigger window.
-pub const HOT_BURST_COLD_LAG_THRESHOLD_TXIDS: u64 = 1024;
+pub const HOT_BURST_COLD_LAG_THRESHOLD_TXIDS: u64 = 2048;
 
 /// Workflow compaction signal payloads stay below Gasoline's durable signal size budget.
 pub const CMP_SIGNAL_PAYLOAD_LIMIT_BYTES: usize = 64 * 1024;
@@ -45,6 +45,13 @@ pub const CMP_FDB_BATCH_MAX_KEYS: usize = 500;
 
 /// Workflow compaction install and reclaim activities cap each FDB transaction by value bytes.
 pub const CMP_FDB_BATCH_MAX_VALUE_BYTES: usize = 2 * 1024 * 1024;
+
+/// SQLite commits must stay comfortably below the compaction input caps so one txid always fits in
+/// a hot/reclaim compaction batch. 320 pages leaves room under the 500-key cap for PIDX rows,
+/// delta chunk keys, commit metadata, VTX rows, root updates, and future per-commit overhead.
+pub const MAX_COMMIT_DIRTY_PAGES: usize = 320;
+pub const MAX_COMMIT_RAW_DIRTY_BYTES: usize =
+	MAX_COMMIT_DIRTY_PAGES * crate::conveyer::keys::PAGE_SIZE as usize;
 
 /// Workflow compaction uploads at most one cold shard object per S3 activity.
 pub const CMP_S3_UPLOAD_MAX_OBJECTS: usize = 1;
@@ -60,3 +67,9 @@ pub const CMP_COLD_OBJECT_DELETE_GRACE_MS: i64 = 500;
 
 /// Workflow compaction splits planned activities expected to exceed this wall time.
 pub const CMP_ACTIVITY_TARGET_MS: i64 = 30 * 1000;
+
+/// DB manager schedules its next cold compaction check this far in the future after arming.
+pub const MANAGER_COLD_COMPACTION_INTERVAL_MS: i64 = 2 * 60 * 1000;
+
+/// DB manager schedules its next reclaim/GC check this far in the future after arming.
+pub const MANAGER_RECLAIM_INTERVAL_MS: i64 = 10 * 60 * 1000;

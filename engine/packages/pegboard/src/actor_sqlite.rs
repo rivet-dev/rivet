@@ -148,7 +148,7 @@ async fn load_v2_head(
 ) -> Result<Option<DBHead>> {
 	let actor_id = actor_id.to_string();
 	let bucket_id = BucketId::from_gas_id(namespace_id);
-	db.run(move |tx| {
+	db.txn("pegboard_actor_sqlite_get_head", move |tx| {
 		let actor_id = actor_id.clone();
 		let bucket_id = bucket_id;
 		async move {

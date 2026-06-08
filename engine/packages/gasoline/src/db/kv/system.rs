@@ -12,9 +12,17 @@ static SYSTEM_INFO_CELL: OnceLock<Arc<Mutex<SystemInfo>>> = OnceLock::new();
 pub struct SystemInfo {
 	system: System,
 	pid: Pid,
+
+	/// CPU core usage smoothed via EMA.
+	cpu_usage_smoothed: f32,
+
+	/// Last time CPU usage was read.
 	last_cpu_usage_read: Instant,
+	/// Cache for max CPU based on cgroups.
 	cgroup_cpu_max: Option<CgroupCpuMax>,
+	/// Last sampled CPU usage.
 	last_cgroup_usage_usec: Option<u64>,
+	/// Last sampled CPU cores used.
 	last_cgroup_cores: f32,
 }
 
@@ -29,6 +37,8 @@ impl SystemInfo {
 							.with_processes(ProcessRefreshKind::nothing().with_cpu()),
 					),
 					pid: Pid::from_u32(std::process::id()),
+
+					cpu_usage_smoothed: 0.0,
 					last_cpu_usage_read: Instant::now(),
 					cgroup_cpu_max: CgroupCpuMax::read(),
 					last_cgroup_usage_usec: CgroupCpuUsage::read(),
@@ -40,9 +50,12 @@ impl SystemInfo {
 
 	/// Returns a float 0.0-1.0 of the avg cpu usage in the current container (if cgroups are configured) or
 	/// otherwise for the current process.
-	pub fn cpu_usage_ratio(&mut self, cpu_max: Option<usize>) -> f32 {
-		// 1 = 1 core
-		let cpu_max = if let Some(cpu_max) = cpu_max {
+	///
+	/// `beta` is the term that dictates how quickly the exponential moving average reacts to load changes.
+	///
+	/// `cpu_max` is in millicores.
+	pub fn fetch_cpu_usage(&mut self, beta: f32, cpu_max: Option<usize>) -> f32 {
+		let cores_max = if let Some(cpu_max) = cpu_max {
 			cpu_max as f32 / 1000.0
 		} else {
 			if let Some(CgroupCpuMax { quota, period }) = self.cgroup_cpu_max {
@@ -57,7 +70,8 @@ impl SystemInfo {
 			}
 		};
 
-		let total = if let Some(last_usage_usec) = self.last_cgroup_usage_usec {
+		// 1 = 1 core
+		let cores_used = if let Some(last_usage_usec) = self.last_cgroup_usage_usec {
 			// Use cgroup cpu.stat for usage (cumulative counter)
 			if self.last_cpu_usage_read.elapsed() > CPU_UPDATE_INTERVAL {
 				if let Some(current_usage_usec) = CgroupCpuUsage::read() {
@@ -103,9 +117,14 @@ impl SystemInfo {
 				.unwrap_or(0.0)
 		};
 
-		crate::metrics::CPU_USAGE.observe(total as f64);
+		// Apply EMA
+		self.cpu_usage_smoothed = beta * self.cpu_usage_smoothed + (1.0 - beta) * cores_used;
 
-		total / cpu_max
+		crate::metrics::CPU_USAGE.observe(cores_used as f64);
+		crate::metrics::CPU_USAGE_SMOOTHED.observe(self.cpu_usage_smoothed as f64);
+
+		// Cores used / max cores
+		self.cpu_usage_smoothed / cores_max
 	}
 }
 

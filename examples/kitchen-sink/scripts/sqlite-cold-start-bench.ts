@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm exec tsx
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -163,7 +163,10 @@ function readNumber(
 
 function parseArgs(argv: string[]): Args {
 	if (argv.includes("--help") || argv.includes("-h")) usage();
-	const endpoint = readFlag(argv, "--endpoint") ?? process.env.RIVET_ENDPOINT ?? DEFAULT_ENDPOINT;
+	const endpoint =
+		readFlag(argv, "--endpoint") ??
+		process.env.RIVET_ENDPOINT ??
+		DEFAULT_ENDPOINT;
 	const scenario = readFlag(argv, "--scenario") ?? "both";
 	if (
 		scenario !== "both" &&
@@ -208,25 +211,25 @@ function parseArgs(argv: string[]): Args {
 			"SQLITE_COLD_START_TRANSACTION_BYTES",
 			DEFAULT_TRANSACTION_BYTES,
 		),
-			wakeDelayMs: readNumber(
-				argv,
-				"--wake-delay-ms",
-				"SQLITE_COLD_START_WAKE_DELAY_MS",
-				DEFAULT_WAKE_DELAY_MS,
-			),
-			compactionWaitMs: readNumber(
-				argv,
-				"--compaction-wait-ms",
-				"SQLITE_COLD_START_COMPACTION_WAIT_MS",
-				DEFAULT_COMPACTION_WAIT_MS,
-			),
-			metricsToken:
-				readFlag(argv, "--metrics-token") ??
-				process.env.SQLITE_COLD_START_METRICS_TOKEN ??
-				process.env._RIVET_METRICS_TOKEN ??
-				"dev-metrics",
-			disableMetadataLookup: argv.includes("--disable-metadata-lookup"),
-			startLocalEnvoy: shouldStartLocalEnvoy,
+		wakeDelayMs: readNumber(
+			argv,
+			"--wake-delay-ms",
+			"SQLITE_COLD_START_WAKE_DELAY_MS",
+			DEFAULT_WAKE_DELAY_MS,
+		),
+		compactionWaitMs: readNumber(
+			argv,
+			"--compaction-wait-ms",
+			"SQLITE_COLD_START_COMPACTION_WAIT_MS",
+			DEFAULT_COMPACTION_WAIT_MS,
+		),
+		metricsToken:
+			readFlag(argv, "--metrics-token") ??
+			process.env.SQLITE_COLD_START_METRICS_TOKEN ??
+			process.env._RIVET_METRICS_TOKEN ??
+			"dev-metrics",
+		disableMetadataLookup: argv.includes("--disable-metadata-lookup"),
+		startLocalEnvoy: shouldStartLocalEnvoy,
 	};
 }
 
@@ -234,7 +237,9 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function timed<T>(fn: () => Promise<T>): Promise<{ result: T; ms: number }> {
+async function timed<T>(
+	fn: () => Promise<T>,
+): Promise<{ result: T; ms: number }> {
 	const start = performance.now();
 	const result = await fn();
 	return { result, ms: performance.now() - start };
@@ -253,7 +258,9 @@ function fmtCount(value: number): string {
 	return Number.isInteger(value) ? value.toString() : value.toFixed(3);
 }
 
-function parsePrometheusLabels(raw: string | undefined): Record<string, string> {
+function parsePrometheusLabels(
+	raw: string | undefined,
+): Record<string, string> {
 	if (!raw) return {};
 	const labels: Record<string, string> = {};
 	for (const part of raw.slice(1, -1).split(",")) {
@@ -329,9 +336,15 @@ async function scrapeMetrics(
 		),
 		getPagesTotal: metricValue(text, "sqlite_vfs_get_pages_total"),
 		pagesFetchedTotal: metricValue(text, "sqlite_vfs_pages_fetched_total"),
-		prefetchPagesTotal: metricValue(text, "sqlite_vfs_prefetch_pages_total"),
+		prefetchPagesTotal: metricValue(
+			text,
+			"sqlite_vfs_prefetch_pages_total",
+		),
 		bytesFetchedTotal: metricValue(text, "sqlite_vfs_bytes_fetched_total"),
-		prefetchBytesTotal: metricValue(text, "sqlite_vfs_prefetch_bytes_total"),
+		prefetchBytesTotal: metricValue(
+			text,
+			"sqlite_vfs_prefetch_bytes_total",
+		),
 		getPagesDurationSecondsSum: metricValue(
 			text,
 			"sqlite_vfs_get_pages_duration_seconds_sum",
@@ -383,7 +396,9 @@ function diffMetrics(
 }
 
 function printVfsMetricDelta(label: string, metrics: VfsMetricSnapshot): void {
-	console.log(`  ${label} VFS get_pages round trips: ${fmtCount(metrics.getPagesTotal)}`);
+	console.log(
+		`  ${label} VFS get_pages round trips: ${fmtCount(metrics.getPagesTotal)}`,
+	);
 	console.log(
 		`  ${label} VFS fetched: ${fmtCount(metrics.pagesFetchedTotal)} pages / ${fmtBytes(metrics.bytesFetchedTotal)}`,
 	);
@@ -410,7 +425,9 @@ function assertRead(
 		);
 	}
 	if (read.rows !== expectedRows) {
-		throw new Error(`${label} read ${read.rows} rows, expected ${expectedRows}`);
+		throw new Error(
+			`${label} read ${read.rows} rows, expected ${expectedRows}`,
+		);
 	}
 }
 
@@ -420,7 +437,9 @@ async function waitForRegistryReady(endpoint: string): Promise<void> {
 
 	while (Date.now() < deadline) {
 		try {
-			const response = await fetch(`${endpoint.replace(/\/$/, "")}/metadata`);
+			const response = await fetch(
+				`${endpoint.replace(/\/$/, "")}/metadata`,
+			);
 			if (response.ok) return;
 			lastError = new Error(`metadata returned ${response.status}`);
 		} catch (err) {
@@ -437,9 +456,12 @@ async function waitForRegistryReady(endpoint: string): Promise<void> {
 
 async function configureLocalRunner(endpoint: string): Promise<void> {
 	const base = endpoint.replace(/\/$/, "");
-	const datacentersResponse = await fetch(`${base}/datacenters?namespace=default`, {
-		headers: { Authorization: "Bearer dev" },
-	});
+	const datacentersResponse = await fetch(
+		`${base}/datacenters?namespace=default`,
+		{
+			headers: { Authorization: "Bearer dev" },
+		},
+	);
 	if (!datacentersResponse.ok) {
 		throw new Error(
 			`failed to list local datacenters: ${datacentersResponse.status} ${await datacentersResponse.text()}`,
@@ -452,20 +474,23 @@ async function configureLocalRunner(endpoint: string): Promise<void> {
 	const datacenter = datacentersBody.datacenters[0]?.name;
 	if (!datacenter) throw new Error("local engine returned no datacenters");
 
-	const response = await fetch(`${base}/runner-configs/k8s?namespace=default`, {
-		method: "PUT",
-		headers: {
-			Authorization: "Bearer dev",
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify({
-			datacenters: {
-				[datacenter]: {
-					normal: {},
-				},
+	const response = await fetch(
+		`${base}/runner-configs/k8s?namespace=default`,
+		{
+			method: "PUT",
+			headers: {
+				Authorization: "Bearer dev",
+				"Content-Type": "application/json",
 			},
-		}),
-	});
+			body: JSON.stringify({
+				datacenters: {
+					[datacenter]: {
+						normal: {},
+					},
+				},
+			}),
+		},
+	);
 	if (!response.ok) {
 		throw new Error(
 			`failed to configure local k8s runner: ${response.status} ${await response.text()}`,
@@ -478,9 +503,12 @@ async function waitForEnvoy(endpoint: string): Promise<void> {
 	const deadline = Date.now() + 15_000;
 
 	while (Date.now() < deadline) {
-		const response = await fetch(`${base}/envoys?namespace=default&name=k8s`, {
-			headers: { Authorization: "Bearer dev" },
-		});
+		const response = await fetch(
+			`${base}/envoys?namespace=default&name=k8s`,
+			{
+				headers: { Authorization: "Bearer dev" },
+			},
+		);
 		if (response.ok) {
 			const body = (await response.json()) as {
 				envoys: Array<{ envoy_key: string }>;
@@ -525,7 +553,9 @@ async function waitForEngineReady(
 		}
 
 		try {
-			const response = await fetch(`${endpoint.replace(/\/$/, "")}/health`);
+			const response = await fetch(
+				`${endpoint.replace(/\/$/, "")}/health`,
+			);
 			if (response.ok) return;
 			lastError = new Error(`health returned ${response.status}`);
 		} catch (err) {
@@ -589,7 +619,10 @@ async function stopLocalEngine(engine: LocalEngine | undefined): Promise<void> {
 	rmSync(dbRoot, { recursive: true, force: true });
 }
 
-function childArgs(args: Args, scenario: "un-compacted" | "compacted"): string[] {
+function childArgs(
+	args: Args,
+	scenario: "un-compacted" | "compacted",
+): string[] {
 	const transactionBytes =
 		scenario === "compacted"
 			? Math.min(args.targetBytes, COMPACTED_TRANSACTION_BYTES)
@@ -692,7 +725,9 @@ async function main(): Promise<void> {
 		endpoint: args.endpoint,
 		disableMetadataLookup: args.disableMetadataLookup,
 	});
-	type BenchHandle = ReturnType<typeof client.sqliteColdStartBench.getOrCreate>;
+	type BenchHandle = ReturnType<
+		typeof client.sqliteColdStartBench.getOrCreate
+	>;
 
 	console.log("SQLite cold-start benchmark");
 	console.log(`scenario=${args.scenario}`);
@@ -703,9 +738,7 @@ async function main(): Promise<void> {
 		`target=${fmtBytes(args.targetBytes)} row_bytes=${args.rowBytes} batch_rows=${args.batchRows} transaction_bytes=${args.transactionBytes}`,
 	);
 	console.log(`compaction_wait_ms=${args.compactionWaitMs}`);
-		console.log(
-			`storage_compaction_disabled=true`,
-	);
+	console.log(`storage_compaction_disabled=true`);
 	console.log(
 		`RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS=${process.env.RIVETKIT_SQLITE_OPT_BATCH_CHUNK_READS ?? "default"}`,
 	);
@@ -725,17 +758,23 @@ async function main(): Promise<void> {
 			await sleep(args.wakeDelayMs);
 
 			console.log(`${label} cold wake/open...`);
-			const wakeHandle = client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
+			const wakeHandle =
+				client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
 			const wakeOpen = await timed(() => wakeHandle.wakeSqlite());
 			const wakeOpenResult = wakeOpen.result as WakeOpenResult;
-			await scrapeMetrics(args.endpoint, scenarioActorId, args.metricsToken);
+			await scrapeMetrics(
+				args.endpoint,
+				scenarioActorId,
+				args.metricsToken,
+			);
 
 			console.log(`sleep before ${label} cold full read...`);
 			await wakeHandle.goToSleep();
 			await sleep(args.wakeDelayMs);
 
 			console.log(`${label} wake read...`);
-			const coldHandle = client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
+			const coldHandle =
+				client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
 			const coldRead = await timed(() => readFull(coldHandle));
 			const coldReadResult = coldRead.result as ReadResult;
 			assertRead(label, coldReadResult, expectedBytes, expectedRows);
@@ -760,14 +799,15 @@ async function main(): Promise<void> {
 			transactionBytes: number,
 			measureHotRead: boolean,
 		): Promise<ScenarioResult> => {
-			const scenarioSuffix = label.replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+			const scenarioSuffix = label
+				.replace(/[^a-z0-9]+/gi, "-")
+				.toLowerCase();
 			const scenarioActorKey = [
 				"sqlite-cold-start-bench",
 				`${args.key}-${scenarioSuffix}`,
 			];
-			const scenarioHandle = client.sqliteColdStartBench.getOrCreate(
-				scenarioActorKey,
-			);
+			const scenarioHandle =
+				client.sqliteColdStartBench.getOrCreate(scenarioActorKey);
 			const scenarioActorId = await scenarioHandle.resolve();
 			console.log(`\n${label} actor_key=${scenarioActorKey.join("/")}`);
 			console.log(`${label} actor_id=${scenarioActorId}`);
@@ -813,9 +853,14 @@ async function main(): Promise<void> {
 					scenarioActorId,
 					args.metricsToken,
 				);
-				hotReadMetrics = diffMetrics(afterHotReadMetrics, afterWriteMetrics);
+				hotReadMetrics = diffMetrics(
+					afterHotReadMetrics,
+					afterWriteMetrics,
+				);
 			} else {
-				console.log(`${label} hot read skipped before cold-read measurement...`);
+				console.log(
+					`${label} hot read skipped before cold-read measurement...`,
+				);
 			}
 			const coldRead = await runColdReadVariant(
 				label,
@@ -860,22 +905,32 @@ async function main(): Promise<void> {
 		for (const scenario of [scenarioResult]) {
 			const variant = scenario.coldRead;
 			const reverseVariant = scenario.reverseColdRead;
-			console.log(`  ${scenario.label} rows: ${scenario.writeResult.rows}`);
+			console.log(
+				`  ${scenario.label} rows: ${scenario.writeResult.rows}`,
+			);
 			console.log(
 				`  ${scenario.label} transactions: ${scenario.writeResult.transactions}`,
 			);
 			console.log(
 				`  ${scenario.label} reverse probe rows: ${scenario.writeResult.reverseProbeRows}`,
 			);
-			console.log(`  ${scenario.label} bytes: ${fmtBytes(scenario.writeResult.bytes)}`);
+			console.log(
+				`  ${scenario.label} bytes: ${fmtBytes(scenario.writeResult.bytes)}`,
+			);
 			console.log(
 				`  ${scenario.label} transaction bytes: ${scenario.writeResult.transactionBytes}`,
 			);
 			console.log(
 				`  ${scenario.label} insert server: ${fmtMs(scenario.writeResult.ms)} (insert=${fmtMs(scenario.writeResult.sqliteInsertMs)}, commit=${fmtMs(scenario.writeResult.commitMs)}, random_strings=${fmtMs(scenario.writeResult.randomStringMs)})`,
 			);
-			console.log(`  ${scenario.label} insert e2e: ${fmtMs(scenario.write.ms)}`);
-			if (scenario.hotRead && scenario.hotReadResult && scenario.hotReadMetrics) {
+			console.log(
+				`  ${scenario.label} insert e2e: ${fmtMs(scenario.write.ms)}`,
+			);
+			if (
+				scenario.hotRead &&
+				scenario.hotReadResult &&
+				scenario.hotReadMetrics
+			) {
 				console.log(
 					`  ${scenario.label} hot read server: ${fmtMs(scenario.hotReadResult.ms)}`,
 				);
@@ -904,7 +959,10 @@ async function main(): Promise<void> {
 				`  ${variant.label} wake overhead estimate: ${fmtMs(Math.max(0, variant.coldRead.ms - variant.coldReadResult.ms))}`,
 			);
 			if (scenario.hotReadMetrics) {
-				printVfsMetricDelta(`${scenario.label} hot read`, scenario.hotReadMetrics);
+				printVfsMetricDelta(
+					`${scenario.label} hot read`,
+					scenario.hotReadMetrics,
+				);
 			}
 			printVfsMetricDelta(
 				`${variant.label} wake read actor-lifetime`,
@@ -966,7 +1024,8 @@ main()
 		process.exit(0);
 	})
 	.catch((err: unknown) => {
-		const message = err instanceof Error ? err.stack ?? err.message : String(err);
+		const message =
+			err instanceof Error ? (err.stack ?? err.message) : String(err);
 		console.error(message);
 		process.exit(1);
 	});

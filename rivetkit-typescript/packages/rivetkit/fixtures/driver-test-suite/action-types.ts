@@ -46,7 +46,7 @@ export const asyncActionActor = actor({
 			return data;
 		},
 		// Async action with error handling
-		asyncWithError: async (c, shouldError: boolean) => {
+		asyncWithError: async (_c, shouldError: boolean) => {
 			await Promise.resolve();
 
 			if (shouldError) {
@@ -76,7 +76,7 @@ export const promiseActor = actor({
 	state: { results: [] as string[] },
 	actions: {
 		// Action that returns a resolved promise
-		resolvedPromise: (c) => {
+		resolvedPromise: (_c) => {
 			return Promise.resolve("resolved value");
 		},
 		// Action that returns a promise that resolves after a delay
@@ -87,7 +87,7 @@ export const promiseActor = actor({
 			});
 		},
 		// Action that returns a rejected promise
-		rejectedPromise: (c) => {
+		rejectedPromise: (_c) => {
 			return Promise.reject(new UserError("promised rejection"));
 		},
 		// Action to check the collected results

@@ -1,19 +1,19 @@
 #!/usr/bin/env -S pnpm exec tsx
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { type ChildProcess, spawn } from "node:child_process";
 import {
 	appendFileSync,
 	existsSync,
 	mkdirSync,
 	mkdtempSync,
-	readFileSync,
 	readdirSync,
+	readFileSync,
 	rmSync,
 	statSync,
 	writeFileSync,
 } from "node:fs";
 import { createServer } from "node:net";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
@@ -25,7 +25,8 @@ const REPO_ENGINE_BINARY = fileURLToPath(
 	new URL("../../../target/debug/rivet-engine", import.meta.url),
 );
 const DEFAULT_ENGINE_PORT = 6520;
-const DEFAULT_OUTPUT_DIR = ".agent/benchmarks/sqlite-memory-soak";
+const AGENTS_DIR = process.env.AGENTS_DIR ?? join(homedir(), ".agents");
+const DEFAULT_OUTPUT_DIR = join(AGENTS_DIR, "benchmarks/sqlite-memory-soak");
 const SQLITE_PAGE_SIZE_BYTES = 4096;
 const CLOCK_TICKS_PER_SECOND = 100;
 
@@ -217,7 +218,9 @@ function scheduledWorkMs(args: Args): number {
 }
 
 function defaultRequestLifespanSeconds(args: Args): number {
-	const resetBudgetMs = args.reset ? args.actorStartIntervalMs * args.actors : 0;
+	const resetBudgetMs = args.reset
+		? args.actorStartIntervalMs * args.actors
+		: 0;
 	const slowTailBudgetMs = Math.max(5 * 60_000, args.cycleIntervalMs * 2);
 	return Math.max(
 		300,
@@ -242,12 +245,19 @@ function parseArgs(argv: string[]): Args {
 		`http://127.0.0.1:${DEFAULT_ENGINE_PORT}`;
 	const endpointUrl = new URL(endpoint);
 	if (endpointUrl.port === "6420") {
-		throw new Error("sqlite-memory-soak must not run the engine on port 6420");
+		throw new Error(
+			"sqlite-memory-soak must not run the engine on port 6420",
+		);
 	}
 
 	const args: Args = {
 		endpoint,
-		serverPort: readNumber(argv, "--server-port", "SQLITE_MEMORY_SOAK_SERVER_PORT", 0),
+		serverPort: readNumber(
+			argv,
+			"--server-port",
+			"SQLITE_MEMORY_SOAK_SERVER_PORT",
+			0,
+		),
 		seed:
 			readFlag(argv, "--seed") ??
 			process.env.SQLITE_MEMORY_SOAK_SEED ??
@@ -430,20 +440,20 @@ function parseArgs(argv: string[]): Args {
 		["--actors", args.actors],
 		["--cycles", args.cycles],
 		["--cycle-interval-ms", args.cycleIntervalMs],
-			["--actor-start-interval-ms", args.actorStartIntervalMs],
-			["--concurrency", args.concurrency],
-			[
-				"--spike-max-concurrency",
-				args.spikeMaxConcurrency > 0
-					? args.spikeMaxConcurrency
-					: args.spikeMinConcurrency > 0
-						? args.concurrency
-						: 1,
-			],
-			["--spike-period-ms", args.spikePeriodMs],
-			["--insert-rows", args.insertRows],
-			["--row-bytes", args.rowBytes],
-			["--scan-rows", args.scanRows],
+		["--actor-start-interval-ms", args.actorStartIntervalMs],
+		["--concurrency", args.concurrency],
+		[
+			"--spike-max-concurrency",
+			args.spikeMaxConcurrency > 0
+				? args.spikeMaxConcurrency
+				: args.spikeMinConcurrency > 0
+					? args.concurrency
+					: 1,
+		],
+		["--spike-period-ms", args.spikePeriodMs],
+		["--insert-rows", args.insertRows],
+		["--row-bytes", args.rowBytes],
+		["--scan-rows", args.scanRows],
 		["--sample-interval-ms", args.sampleIntervalMs],
 		["--request-lifespan-seconds", args.requestLifespanSeconds],
 		["--engine-route-timeout-seconds", args.engineRouteTimeoutSeconds],
@@ -456,10 +466,7 @@ function parseArgs(argv: string[]): Args {
 			args.engineActorLifecycleTimeoutMs,
 		],
 		["--engine-envoy-ping-timeout-ms", args.engineEnvoyPingTimeoutMs],
-		[
-			"--engine-envoy-lost-threshold-ms",
-			args.engineEnvoyLostThresholdMs,
-		],
+		["--engine-envoy-lost-threshold-ms", args.engineEnvoyLostThresholdMs],
 		["--sleep-log-timeout-ms", args.sleepLogTimeoutMs],
 		[
 			"--serverless-max-start-payload-bytes",
@@ -507,7 +514,9 @@ async function findOpenPort(): Promise<number> {
 		server.listen(0, "127.0.0.1", () => {
 			const address = server.address();
 			if (address === null || typeof address === "string") {
-				server.close(() => reject(new Error("failed to allocate open port")));
+				server.close(() =>
+					reject(new Error("failed to allocate open port")),
+				);
 				return;
 			}
 			const port = address.port;
@@ -564,13 +573,13 @@ function attachLogs(
 	child.once("exit", (code, signal) => {
 		append(
 			Buffer.from(
-				JSON.stringify({
+				`${JSON.stringify({
 					kind: "child_exit",
 					label,
 					code,
 					signal,
 					timestamp: new Date().toISOString(),
-				}) + "\n",
+				})}\n`,
 			),
 		);
 	});
@@ -581,7 +590,9 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 	const guardHost = endpointUrl.hostname || "127.0.0.1";
 	const guardPort = Number.parseInt(endpointUrl.port, 10);
 	if (!Number.isFinite(guardPort) || guardPort <= 0) {
-		throw new Error(`endpoint must include a numeric port: ${args.endpoint}`);
+		throw new Error(
+			`endpoint must include a numeric port: ${args.endpoint}`,
+		);
 	}
 
 	const dbRoot = mkdtempSync(join(tmpdir(), "sqlite-memory-soak-engine-"));
@@ -611,7 +622,8 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 						args.engineActorReadyTimeoutSeconds * 1000,
 				},
 				pegboard: {
-					actor_allocation_threshold: args.engineActorLifecycleTimeoutMs,
+					actor_allocation_threshold:
+						args.engineActorLifecycleTimeoutMs,
 					actor_start_threshold: args.engineActorLifecycleTimeoutMs,
 					actor_stop_threshold: args.engineActorLifecycleTimeoutMs,
 					envoy_ping_timeout: args.engineEnvoyPingTimeoutMs,
@@ -639,10 +651,14 @@ async function startEngine(args: Args, runDir: string): Promise<LocalEngine> {
 		MALLOC_ARENA_MAX: process.env.MALLOC_ARENA_MAX ?? "2",
 		MALLOC_TRIM_THRESHOLD_: process.env.MALLOC_TRIM_THRESHOLD_ ?? "131072",
 	};
-	const child = spawn(resolveEngineBinary(), ["start", "--config", configPath], {
-		env,
-		stdio: ["ignore", "pipe", "pipe"],
-	});
+	const child = spawn(
+		resolveEngineBinary(),
+		["start", "--config", configPath],
+		{
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+		},
+	);
 	attachLogs(child, "engine", logPath, logs);
 
 	try {
@@ -697,7 +713,9 @@ async function startKitchenSinkServer(
 		"src/server.ts",
 	];
 	const command =
-		process.env.SQLITE_MEMORY_SOAK_STRACE === "1" ? "strace" : process.execPath;
+		process.env.SQLITE_MEMORY_SOAK_STRACE === "1"
+			? "strace"
+			: process.execPath;
 	const commandArgs =
 		process.env.SQLITE_MEMORY_SOAK_STRACE === "1"
 			? [
@@ -749,9 +767,12 @@ async function configureServerlessRunner(
 	const namespace = process.env.RIVET_NAMESPACE ?? "default";
 	const token = process.env.RIVET_TOKEN ?? "dev";
 	const poolName = process.env.RIVET_POOL ?? "k8s";
-	const datacentersResponse = await fetch(`${base}/datacenters?namespace=${namespace}`, {
-		headers: { Authorization: `Bearer ${token}` },
-	});
+	const datacentersResponse = await fetch(
+		`${base}/datacenters?namespace=${namespace}`,
+		{
+			headers: { Authorization: `Bearer ${token}` },
+		},
+	);
 	if (!datacentersResponse.ok) {
 		throw new Error(
 			`failed to list local datacenters: ${datacentersResponse.status} ${await datacentersResponse.text()}`,
@@ -810,19 +831,20 @@ async function stopChild(managed: ManagedChild | undefined): Promise<void> {
 	const { child, label, logPath, logs } = managed;
 	if (child.exitCode !== null) return;
 
-	const event =
-		JSON.stringify({
-			kind: "harness_stop_child",
-			label,
-			pid: child.pid,
-			timestamp: new Date().toISOString(),
-			stack: new Error().stack,
-		}) + "\n";
+	const event = `${JSON.stringify({
+		kind: "harness_stop_child",
+		label,
+		pid: child.pid,
+		timestamp: new Date().toISOString(),
+		stack: new Error().stack,
+	})}\n`;
 	logs.push(event);
 	appendFileSync(logPath, event);
 	child.kill("SIGTERM");
 	await Promise.race([
-		new Promise<void>((resolveExit) => child.once("exit", () => resolveExit())),
+		new Promise<void>((resolveExit) =>
+			child.once("exit", () => resolveExit()),
+		),
 		sleep(5_000),
 	]);
 	if (child.exitCode === null) child.kill("SIGKILL");
@@ -855,7 +877,8 @@ function readSmapsRollup(pid: number): Record<string, number> | undefined {
 		const result: Record<string, number> = {};
 		for (const line of text.split("\n")) {
 			const match = /^([A-Za-z_]+):\s+(\d+)\s+kB$/.exec(line);
-			if (match) result[match[1]!] = Number.parseInt(match[2]!, 10) * 1024;
+			if (match)
+				result[match[1]!] = Number.parseInt(match[2]!, 10) * 1024;
 		}
 		return result;
 	} catch {
@@ -984,7 +1007,10 @@ async function fetchKitchenSinkBreakdown(
 		if (forceGc) url.searchParams.set("gc", "1");
 		const response = await fetch(url);
 		if (!response.ok) {
-			return { error: `status ${response.status}`, body: await response.text() };
+			return {
+				error: `status ${response.status}`,
+				body: await response.text(),
+			};
 		}
 		return await response.json();
 	} catch (err) {
@@ -1011,7 +1037,9 @@ async function captureKitchenSinkHeapSnapshot(
 		timestamp: new Date().toISOString(),
 	});
 	if (!response.ok) {
-		throw new Error(`failed to capture heap snapshot ${label}: ${response.status} ${body}`);
+		throw new Error(
+			`failed to capture heap snapshot ${label}: ${response.status} ${body}`,
+		);
 	}
 }
 
@@ -1120,7 +1148,8 @@ async function captureSample(
 		harness: readProcMemory(process.pid),
 		engine: readProcMemory(engine.child.pid),
 		kitchenSink: readProcMemory(
-			kitchenSinkPidFromBreakdown(kitchenSinkBreakdown) ?? server.child.pid,
+			kitchenSinkPidFromBreakdown(kitchenSinkBreakdown) ??
+				server.child.pid,
 		),
 		kitchenSinkBreakdown,
 	};
@@ -1160,7 +1189,9 @@ function assertCycle(result: {
 	activeBytes: number;
 }) {
 	if (result.integrityCheck !== "ok") {
-		throw new Error(`sqlite integrity check failed: ${result.integrityCheck}`);
+		throw new Error(
+			`sqlite integrity check failed: ${result.integrityCheck}`,
+		);
 	}
 	if (result.activeRows < 0 || result.activeBytes < 0) {
 		throw new Error(`invalid actor stats: ${JSON.stringify(result)}`);
@@ -1180,7 +1211,9 @@ async function runActorDriver(
 		(args.cycleIntervalMs * actorIndex) / args.actors,
 	);
 	const stopAt =
-		args.durationMs > 0 ? workloadStartedAt + args.durationMs : Number.POSITIVE_INFINITY;
+		args.durationMs > 0
+			? workloadStartedAt + args.durationMs
+			: Number.POSITIVE_INFINITY;
 	let wroteActorWake = false;
 
 	for (let cycle = 0; cycle < args.cycles; cycle += 1) {
@@ -1320,7 +1353,9 @@ async function runChurnActorDriver(
 	const actorStartedAt = Date.now();
 	const sleepAt = actorStartedAt + args.churnSleepAfterMs;
 	const stopAt =
-		args.durationMs > 0 ? actorStartedAt + args.durationMs : Number.POSITIVE_INFINITY;
+		args.durationMs > 0
+			? actorStartedAt + args.durationMs
+			: Number.POSITIVE_INFINITY;
 
 	for (let cycle = 0; cycle < args.cycles; cycle += 1) {
 		const scheduledAt = actorStartedAt + cycle * args.cycleIntervalMs;
@@ -1434,7 +1469,9 @@ async function runChurnActorDriver(
 			log: verified.matched,
 			timestamp: new Date().toISOString(),
 		});
-		console.log(`actor sleep verified actor=${actorIndex} actor_id=${actorId}`);
+		console.log(
+			`actor sleep verified actor=${actorIndex} actor_id=${actorId}`,
+		);
 	} catch (err) {
 		const error = stringifyError(err);
 		writeEvent(jsonlPath, {
@@ -1459,7 +1496,8 @@ async function resetActorOnSchedule(
 	startupStartedAt: number,
 	jsonlPath: string,
 ): Promise<void> {
-	const scheduledAt = startupStartedAt + actorIndex * args.actorStartIntervalMs;
+	const scheduledAt =
+		startupStartedAt + actorIndex * args.actorStartIntervalMs;
 	const waitMs = scheduledAt - Date.now();
 	if (waitMs > 0) {
 		await sleep(waitMs);
@@ -1497,7 +1535,9 @@ async function resetActors(
 			nextActor += 1;
 			if (actorIndex >= args.actors) return;
 
-			console.log(`actor reset start worker=${workerId} actor=${actorIndex}`);
+			console.log(
+				`actor reset start worker=${workerId} actor=${actorIndex}`,
+			);
 			await resetActorOnSchedule(
 				args,
 				client,
@@ -1573,7 +1613,11 @@ async function runWithSpikeConcurrency(
 		workers.add(worker);
 	}
 
-	while (Date.now() < stopSchedulingAt && nextActor < args.actors && !failed) {
+	while (
+		Date.now() < stopSchedulingAt &&
+		nextActor < args.actors &&
+		!failed
+	) {
 		const elapsedMs = Date.now() - startedAt;
 		const target = targetConcurrencyForElapsed(args, elapsedMs);
 		writeEvent(jsonlPath, {
@@ -1629,7 +1673,9 @@ async function runWithActorConcurrency(
 				nextActor += 1;
 				if (actorIndex >= args.actors) return;
 
-				console.log(`actor churn start worker=${workerId} actor=${actorIndex}`);
+				console.log(
+					`actor churn start worker=${workerId} actor=${actorIndex}`,
+				);
 				await runChurnActorDriver(
 					args,
 					client,
@@ -1659,7 +1705,9 @@ async function runWithActorConcurrency(
 			nextActor += 1;
 			if (actorIndex >= args.actors) return;
 
-			console.log(`actor driver start worker=${workerId} actor=${actorIndex}`);
+			console.log(
+				`actor driver start worker=${workerId} actor=${actorIndex}`,
+			);
 			await runActorDriver(
 				args,
 				client,
@@ -1724,16 +1772,22 @@ function summarizeProcess(
 	return `${label}: start=${bytesToMiB(first)} max=${bytesToMiB(max)} final=${bytesToMiB(final)} delta=${bytesToMiB(final - first)}`;
 }
 
-function summarizeKitchenBreakdown(samples: MemorySample[]): string | undefined {
+function summarizeKitchenBreakdown(
+	samples: MemorySample[],
+): string | undefined {
 	const breakdowns = samples
 		.map((sample) => sample.kitchenSinkBreakdown)
 		.filter((value): value is { estimates?: Record<string, number> } => {
-			return typeof value === "object" && value !== null && "estimates" in value;
+			return (
+				typeof value === "object" &&
+				value !== null &&
+				"estimates" in value
+			);
 		});
 	if (breakdowns.length === 0) return undefined;
 
-	const first = breakdowns[0]!.estimates ?? {};
-	const final = breakdowns[breakdowns.length - 1]!.estimates ?? {};
+	const first = breakdowns[0]?.estimates ?? {};
+	const final = breakdowns[breakdowns.length - 1]?.estimates ?? {};
 	return [
 		"kitchen estimates:",
 		`jsHeapUsed ${bytesToMiB(first.jsHeapUsedBytes ?? null)} -> ${bytesToMiB(final.jsHeapUsedBytes ?? null)}`,
@@ -1795,7 +1849,8 @@ function summarizeCycleVfs(jsonlPath: string): string | undefined {
 		totalCacheBytes +=
 			(vfs.pageCacheWeightedSize ?? 0) *
 			(event.result?.storage?.page_size ?? SQLITE_PAGE_SIZE_BYTES);
-		totalDbPages += vfs.dbSizePages ?? event.result?.storage?.page_count ?? 0;
+		totalDbPages +=
+			vfs.dbSizePages ?? event.result?.storage?.page_count ?? 0;
 	}
 	if (!final || count === 0) return undefined;
 	const avgCacheBytes = totalCacheBytes / count;
@@ -1814,7 +1869,8 @@ function summarizeCycleVfs(jsonlPath: string): string | undefined {
 			finalVfs?.pageCacheWeightedSize === undefined
 				? null
 				: finalVfs.pageCacheWeightedSize *
-						(final.result?.storage?.page_size ?? SQLITE_PAGE_SIZE_BYTES),
+						(final.result?.storage?.page_size ??
+							SQLITE_PAGE_SIZE_BYTES),
 		)}`,
 		`final_entries=${finalVfs?.pageCacheEntries ?? "n/a"}`,
 	].join(" ");
@@ -1842,7 +1898,8 @@ function summarizeActorSleeps(jsonlPath: string): string | undefined {
 
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
-	const serverPort = args.serverPort > 0 ? args.serverPort : await findOpenPort();
+	const serverPort =
+		args.serverPort > 0 ? args.serverPort : await findOpenPort();
 	const runId = args.seed.replace(/[^a-zA-Z0-9_.-]/g, "_");
 	const outputRoot = resolve(REPO_ROOT, args.outputDir);
 	const runDir = join(outputRoot, runId);
@@ -1867,16 +1924,16 @@ async function main(): Promise<void> {
 		console.log(`run_id=${runId}`);
 		console.log(`endpoint=${args.endpoint}`);
 		console.log(`server_port=${serverPort}`);
-		console.log(
-			`request_lifespan_seconds=${args.requestLifespanSeconds}`,
-		);
+		console.log(`request_lifespan_seconds=${args.requestLifespanSeconds}`);
 		console.log(`output=${jsonlPath}`);
 
 		engine = await startEngine(args, runDir);
 		console.log(`engine pid=${engine.child.pid} log=${engine.logPath}`);
 
 		server = await startKitchenSinkServer(args, runDir, serverPort);
-		console.log(`kitchen_sink pid=${server.child.pid} log=${server.logPath}`);
+		console.log(
+			`kitchen_sink pid=${server.child.pid} log=${server.logPath}`,
+		);
 
 		await captureSample(
 			args,
@@ -2007,23 +2064,32 @@ async function main(): Promise<void> {
 		});
 
 		console.log("summary");
-		console.log(summarizeProcess("harness", samples, (sample) => sample.harness));
-		console.log(summarizeProcess("engine", samples, (sample) => sample.engine));
 		console.log(
-			summarizeProcess("kitchen-sink", samples, (sample) => sample.kitchenSink),
+			summarizeProcess("harness", samples, (sample) => sample.harness),
+		);
+		console.log(
+			summarizeProcess("engine", samples, (sample) => sample.engine),
+		);
+		console.log(
+			summarizeProcess(
+				"kitchen-sink",
+				samples,
+				(sample) => sample.kitchenSink,
+			),
 		);
 		const kitchenSummary = summarizeKitchenBreakdown(samples);
 		if (kitchenSummary) console.log(kitchenSummary);
 		const vfsSummary = summarizeCycleVfs(jsonlPath);
 		if (vfsSummary) console.log(vfsSummary);
-			const sleepSummary = summarizeActorSleeps(jsonlPath);
-			if (sleepSummary) console.log(sleepSummary);
-			console.log(`events=${jsonlPath}`);
+		const sleepSummary = summarizeActorSleeps(jsonlPath);
+		if (sleepSummary) console.log(sleepSummary);
+		console.log(`events=${jsonlPath}`);
 	} catch (err) {
 		writeEvent(jsonlPath, {
 			kind: "run_error",
 			runId,
-			error: err instanceof Error ? err.stack ?? err.message : String(err),
+			error:
+				err instanceof Error ? (err.stack ?? err.message) : String(err),
 			timestamp: new Date().toISOString(),
 		});
 		throw err;
@@ -2035,6 +2101,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-	console.error(err instanceof Error ? err.stack ?? err.message : err);
+	console.error(err instanceof Error ? (err.stack ?? err.message) : err);
 	process.exit(1);
 });

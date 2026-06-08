@@ -207,7 +207,7 @@ impl VfsConfig {
 			cache_hit_predictor_training: flags.cache_hit_predictor_training,
 			recent_page_hints: flags.recent_page_hints,
 			adaptive_read_ahead: flags.adaptive_read_ahead,
-			retain_read_cache: flags.vfs_retain_read_cache,
+			retain_read_cache: flags.vfs_page_cache_mode.caches_any_pages(),
 			#[cfg(test)]
 			assert_batch_atomic: true,
 			#[cfg(test)]

@@ -4,7 +4,7 @@ use anyhow::{Result, bail};
 
 use crate::{
 	key_selector::KeySelector,
-	options::{ConflictRangeType, DatabaseOption, MutationType},
+	options::{ConflictRangeType, MutationType, Priority},
 	range_option::RangeOption,
 	transaction::{RetryableTransaction, Transaction},
 	utils::IsolationLevel,
@@ -23,12 +23,12 @@ pub type Erased = Box<dyn Any + Send>;
 pub type DatabaseDriverHandle = Arc<dyn DatabaseDriver>;
 
 pub trait DatabaseDriver: Send + Sync {
-	fn create_trx(&self) -> Result<Transaction>;
+	fn create_txn(&self) -> Result<Transaction>;
 	fn run<'a>(
 		&'a self,
 		closure: Box<dyn Fn(RetryableTransaction) -> BoxFut<'a, Result<Erased>> + Send + Sync + 'a>,
 	) -> BoxFut<'a, Result<Erased>>;
-	fn set_option(&self, opt: DatabaseOption) -> Result<()>;
+	fn txn_retry_limit(&self, limit: i32) -> Result<()>;
 
 	/// Create a consistent point-in-time snapshot of the database at the given path.
 	fn checkpoint(&self, _path: &Path) -> Result<()> {
@@ -84,6 +84,11 @@ pub trait TransactionDriver: Send + Sync {
 	) -> Pin<Box<dyn Future<Output = Result<i64>> + Send + 'a>>;
 
 	fn tag(&self, _tag: &str) -> Result<()> {
+		// No-op unless implemented
+		Ok(())
+	}
+
+	fn priority(&self, _priority: Priority) -> Result<()> {
 		// No-op unless implemented
 		Ok(())
 	}

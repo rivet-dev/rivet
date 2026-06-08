@@ -16,8 +16,8 @@ use tokio_tungstenite::tungstenite::protocol::CloseFrame;
 use tokio_tungstenite::tungstenite::protocol::frame::coding::CloseCode;
 
 use crate::args::{
-	ACTOR_STOPPED_CLOSE_CODE, ACTOR_STOPPED_CLOSE_REASON, ConcurrentArgs, ConcurrentMode,
-	EnvConfig, MESSAGE_GAP_WARN_MS, WorkerMode,
+	ConcurrentArgs, ConcurrentMode, EnvConfig, MESSAGE_GAP_WARN_MS, WorkerMode,
+	is_actor_stopped_close,
 };
 use crate::endpoint::Endpoint;
 use crate::log::{
@@ -31,7 +31,11 @@ use crate::ws::open_raw_ws;
 /// Grace period after `set_stopping` before the process force-exits if workers haven't unwound.
 const SCALE_DOWN_FORCE_EXIT_GRACE: std::time::Duration = std::time::Duration::from_secs(5);
 
-pub fn spawn_scale_down(ctx: Arc<WorkloadCtx>, duration: std::time::Duration, reason: &'static str) {
+pub fn spawn_scale_down(
+	ctx: Arc<WorkloadCtx>,
+	duration: std::time::Duration,
+	reason: &'static str,
+) {
 	let concurrency = ctx.args.concurrency;
 	tokio::spawn(async move {
 		let prefix = format!("{}{}{}", DIM, iso_now(), RESET);
@@ -46,7 +50,9 @@ pub fn spawn_scale_down(ctx: Arc<WorkloadCtx>, duration: std::time::Duration, re
 			(duration + SCALE_DOWN_FORCE_EXIT_GRACE).as_millis(),
 		);
 		if concurrency > 0 {
-			let step = duration.checked_div(concurrency).unwrap_or(std::time::Duration::ZERO);
+			let step = duration
+				.checked_div(concurrency)
+				.unwrap_or(std::time::Duration::ZERO);
 			for offset in 0..concurrency {
 				if ctx.state.stopping() {
 					break;
@@ -229,12 +235,7 @@ impl Workload for AgentWorkload {
 				first = false;
 				sequence += 1;
 				let now_ms = chrono::Utc::now().timestamp_millis() as u64;
-				let request_id = format!(
-					"agent-{}-{}-{}",
-					worker,
-					to_base36(now_ms),
-					sequence
-				);
+				let request_id = format!("agent-{}-{}-{}", worker, to_base36(now_ms), sequence);
 				pending_sends_clone
 					.lock()
 					.await
@@ -269,24 +270,19 @@ impl Workload for AgentWorkload {
 					tokio::spawn(async move {
 						let mut map = pending.lock().await;
 						if let Some(sent_at) = map.remove(&request_id) {
-							let elapsed_ms =
-								sent_at.elapsed().as_secs_f64() * 1000.0;
+							let elapsed_ms = sent_at.elapsed().as_secs_f64() * 1000.0;
 							if elapsed_ms > MESSAGE_GAP_WARN_MS {
-								log_message_gap(
-									&ctx_inner,
-									worker,
-									&key_inner,
-									None,
-									elapsed_ms,
-								);
+								log_message_gap(&ctx_inner, worker, &key_inner, None, elapsed_ms);
 							}
 						}
 					});
 				}
 			} else if ty == "slow-sql" {
 				let elapsed_ms = message.get("elapsedMs").and_then(|v| v.as_f64());
-				let request_id =
-					message.get("requestId").and_then(|v| v.as_str()).unwrap_or("?");
+				let request_id = message
+					.get("requestId")
+					.and_then(|v| v.as_str())
+					.unwrap_or("?");
 				let token_index = message
 					.get("tokenIndex")
 					.and_then(|v| v.as_i64())
@@ -425,11 +421,12 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 
 	'worker_loop: while !ctx.state.stopping() && !ctx.state.worker_should_stop(worker) {
 		sequence += 1;
-		ctx.state.set_worker_health(worker, WorkerHealth::Connecting);
+		ctx.state
+			.set_worker_health(worker, WorkerHealth::Connecting);
 		let t0 = Instant::now();
-		let url =
-			ctx.endpoint
-				.build_raw_ws_url("loadTestAgent2", &key, ctx.args.skip_ready_wait);
+		let url = ctx
+			.endpoint
+			.build_raw_ws_url("loadTestAgent2", &key, ctx.args.skip_ready_wait);
 
 		let ws = match open_raw_ws_with_stall_log(&url, &ctx, &key, actor_id.as_deref()).await {
 			Ok(ws) => ws,
@@ -568,7 +565,9 @@ async fn run_agent_concurrent_2_worker(worker: u32, ctx: Arc<WorkloadCtx>) {
 
 		let _ = sink
 			.send(Message::Text(
-				serde_json::json!({ "type": "force_sleep" }).to_string().into(),
+				serde_json::json!({ "type": "force_sleep" })
+					.to_string()
+					.into(),
 			))
 			.await;
 		let _ = timeout(
@@ -601,9 +600,8 @@ async fn wait_agent_concurrent_2_result<R>(
 	actor_id: Option<&str>,
 ) -> AgentConcurrent2Cycle
 where
-	R: futures_util::stream::Stream<
-			Item = Result<Message, tokio_tungstenite::tungstenite::Error>,
-		> + Unpin,
+	R: futures_util::stream::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+		+ Unpin,
 {
 	while let Some(incoming) = stream.next().await {
 		match incoming {
@@ -667,9 +665,8 @@ where
 
 async fn wait_agent_concurrent_2_sleeping<R>(stream: &mut R)
 where
-	R: futures_util::stream::Stream<
-			Item = Result<Message, tokio_tungstenite::tungstenite::Error>,
-		> + Unpin,
+	R: futures_util::stream::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+		+ Unpin,
 {
 	while let Some(incoming) = stream.next().await {
 		let Ok(Message::Text(text)) = incoming else {
@@ -755,10 +752,7 @@ fn summarize_agent_concurrent_2_query_stats(
 	let wake_index = stat_i64(stats, "wakeIndex");
 	let actor_iteration = stat_i64(stats, "actorIteration");
 	let wake_iteration = stat_i64(stats, "wakeIteration");
-	let max_step = cycle
-		.get("maxStep")
-		.and_then(|v| v.as_str())
-		.unwrap_or("");
+	let max_step = cycle.get("maxStep").and_then(|v| v.as_str()).unwrap_or("");
 	let max_ms = stat_i64(cycle, "maxMs");
 	let top_tables = top_counter_entries(cycle.get("byTable"), 3);
 	Some(format!(
@@ -826,8 +820,14 @@ async fn run_steady(
 		let workload_clone = workload.clone();
 		let options_clone = options.clone();
 		let handle = tokio::spawn(async move {
-			run_concurrent_worker(id, workload_clone, ctx_clone, options_clone, WorkerMode::Steady)
-				.await;
+			run_concurrent_worker(
+				id,
+				workload_clone,
+				ctx_clone,
+				options_clone,
+				WorkerMode::Steady,
+			)
+			.await;
 		});
 		handles.push(handle);
 		if i < args.concurrency - 1 {
@@ -895,8 +895,14 @@ async fn run_rolling(
 		let options_clone = options.clone();
 		let state_clone = state.clone();
 		let handle = tokio::spawn(async move {
-			run_concurrent_worker(id, workload_clone, ctx_clone, options_clone, WorkerMode::Rolling)
-				.await;
+			run_concurrent_worker(
+				id,
+				workload_clone,
+				ctx_clone,
+				options_clone,
+				WorkerMode::Rolling,
+			)
+			.await;
 			// Drop tracked health entry so the scoreboard counts the next replacement, not a
 			// growing ledger of completed workers.
 			state_clone.drop_worker_health(id);
@@ -923,11 +929,9 @@ async fn run_concurrent_worker(
 
 	while !ctx.state.stopping() && !ctx.state.worker_should_stop(worker) {
 		let t0 = Instant::now();
-		let url = ctx.endpoint.build_raw_ws_url(
-			workload.actor_name(),
-			&key,
-			options.skip_ready_wait,
-		);
+		let url =
+			ctx.endpoint
+				.build_raw_ws_url(workload.actor_name(), &key, options.skip_ready_wait);
 
 		let ws = match open_raw_ws_with_stall_log(&url, &ctx, &key, actor_id.as_deref()).await {
 			Ok(ws) => ws,
@@ -986,7 +990,15 @@ async fn run_concurrent_worker(
 				);
 			}
 			PingOutcome::Failed { first_ms, close } => {
-				log_partial_rtt(&ctx, worker, &key, actor_id.as_deref(), connect_ms, *first_ms, was_reconnect);
+				log_partial_rtt(
+					&ctx,
+					worker,
+					&key,
+					actor_id.as_deref(),
+					connect_ms,
+					*first_ms,
+					was_reconnect,
+				);
 				if let Some((code, reason)) = close {
 					let detail = format!("code={} reason={}", code, reason);
 					log_disconnect(&ctx, worker, &key, actor_id.as_deref(), &detail, true);
@@ -1012,10 +1024,7 @@ async fn run_concurrent_worker(
 			if !ctx.state.stopping()
 				&& close
 					.as_ref()
-					.map(|(code, reason)| {
-						*code == ACTOR_STOPPED_CLOSE_CODE
-							&& reason == ACTOR_STOPPED_CLOSE_REASON
-					})
+					.map(|(code, reason)| is_actor_stopped_close(*code, reason))
 					.unwrap_or(false)
 			{
 				let (code, reason) = close.clone().unwrap();
@@ -1031,8 +1040,7 @@ async fn run_concurrent_worker(
 		// loop. Per-message MESSAGE-GAP / SLOW-SQL detection fires as before; no more rtt
 		// timing in this phase.
 		let (send_tx, mut send_rx) = mpsc::channel::<String>(64);
-		let hooks =
-			workload.on_open(ctx.clone(), worker, key.clone(), options.clone(), send_tx);
+		let hooks = workload.on_open(ctx.clone(), worker, key.clone(), options.clone(), send_tx);
 
 		let mut last_message_at: Option<Instant> = None;
 		let mut saw_websocket_error = false;
@@ -1087,6 +1095,7 @@ async fn run_concurrent_worker(
 				incoming = stream.next() => {
 					steady_silence_since = Instant::now();
 					steady_stall_logged = false;
+					ctx.state.clear_worker_slow(worker);
 					match incoming {
 						Some(Ok(Message::Text(text))) => {
 							let now = Instant::now();
@@ -1150,11 +1159,7 @@ async fn run_concurrent_worker(
 
 		let (code, reason) = close_info.unwrap_or((0, String::new()));
 		let exiting = ctx.state.stopping() || ctx.state.worker_should_stop(worker);
-		if !exiting
-			&& !saw_websocket_error
-			&& code == ACTOR_STOPPED_CLOSE_CODE
-			&& reason == ACTOR_STOPPED_CLOSE_REASON
-		{
+		if !exiting && !saw_websocket_error && is_actor_stopped_close(code, &reason) {
 			log_reconnect(&ctx, worker, &key, actor_id.as_deref(), code, &reason);
 			reconnect = true;
 		} else {
@@ -1166,6 +1171,10 @@ async fn run_concurrent_worker(
 			ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 		}
 		if !reconnect {
+			// Make sure the worker is removed from the live "connected" bucket on exit;
+			// reconnect path goes back through `record_connect` (which sets Pinging) so we
+			// only need to mark Failed here.
+			ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 			break;
 		}
 	}
@@ -1201,9 +1210,8 @@ async fn run_ping_phase<S, R>(
 ) -> PingOutcome
 where
 	S: SinkExt<Message> + Unpin,
-	R: futures_util::stream::Stream<
-			Item = Result<Message, tokio_tungstenite::tungstenite::Error>,
-		> + Unpin,
+	R: futures_util::stream::Stream<Item = Result<Message, tokio_tungstenite::tungstenite::Error>>
+		+ Unpin,
 {
 	const PING1: &str = r#"{"type":"ping","id":1}"#;
 	const PING2: &str = r#"{"type":"ping","id":2}"#;
@@ -1321,10 +1329,7 @@ fn log_phase1_stall(
 	stage: PingStage,
 	elapsed_ms: u64,
 ) {
-	ctx.state
-		.stats
-		.stalls
-		.fetch_add(1, Ordering::Relaxed);
+	ctx.state.stats.stalls.fetch_add(1, Ordering::Relaxed);
 	let prefix = ctx.log_prefix();
 	crate::out!(
 		"{} {}{} {}STALL{} stage={} elapsed_ms={}",
@@ -1495,7 +1500,10 @@ fn log_rtt_line(
 	total_ms: f64,
 	reconnect: bool,
 ) {
-	ctx.state.stats.first_messages.fetch_add(1, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.first_messages
+		.fetch_add(1, Ordering::Relaxed);
 	ctx.state.set_worker_health(worker, WorkerHealth::Connected);
 	let prefix = ctx.log_prefix();
 	let label = if reconnect { "reconnect" } else { "connect" };
@@ -1556,7 +1564,10 @@ fn log_disconnect(
 ) {
 	ctx.state.stats.disconnects.fetch_add(1, Ordering::Relaxed);
 	if unclean {
-		ctx.state.stats.unclean_failures_or_disconnects.fetch_add(1, Ordering::Relaxed);
+		ctx.state
+			.stats
+			.unclean_failures_or_disconnects
+			.fetch_add(1, Ordering::Relaxed);
 	}
 	ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 	let prefix = ctx.log_prefix();
@@ -1585,7 +1596,8 @@ fn log_reconnect(
 	code: u16,
 	reason: &str,
 ) {
-	ctx.state.set_worker_health(worker, WorkerHealth::Connecting);
+	ctx.state
+		.set_worker_health(worker, WorkerHealth::Connecting);
 	let prefix = ctx.log_prefix();
 	crate::out!(
 		"{} {}{} actor-stopped reconnect code={} reason={}",
@@ -1605,7 +1617,10 @@ fn log_message_gap(
 	gap_ms: f64,
 ) {
 	ctx.state.stats.message_gaps.fetch_add(1, Ordering::Relaxed);
-	ctx.state.stats.unclean_failures_or_disconnects.fetch_add(1, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.unclean_failures_or_disconnects
+		.fetch_add(1, Ordering::Relaxed);
 	ctx.state.flag_worker_slow(worker);
 	let prefix = ctx.log_prefix();
 	crate::out!(
@@ -1650,8 +1665,14 @@ fn log_connect_error(
 	elapsed_ms: f64,
 	reason: &str,
 ) {
-	ctx.state.stats.connect_errors.fetch_add(1, Ordering::Relaxed);
-	ctx.state.stats.unclean_failures_or_disconnects.fetch_add(1, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.connect_errors
+		.fetch_add(1, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.unclean_failures_or_disconnects
+		.fetch_add(1, Ordering::Relaxed);
 	ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 	let prefix = ctx.log_prefix();
 	crate::out!(
@@ -1666,14 +1687,15 @@ fn log_connect_error(
 	);
 }
 
-fn log_websocket_error(
-	ctx: &Arc<WorkloadCtx>,
-	worker: u32,
-	key: &str,
-	actor_id: Option<&str>,
-) {
-	ctx.state.stats.websocket_errors.fetch_add(1, Ordering::Relaxed);
-	ctx.state.stats.unclean_failures_or_disconnects.fetch_add(1, Ordering::Relaxed);
+fn log_websocket_error(ctx: &Arc<WorkloadCtx>, worker: u32, key: &str, actor_id: Option<&str>) {
+	ctx.state
+		.stats
+		.websocket_errors
+		.fetch_add(1, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.unclean_failures_or_disconnects
+		.fetch_add(1, Ordering::Relaxed);
 	ctx.state.flag_worker_slow(worker);
 	let prefix = ctx.log_prefix();
 	crate::out!(
@@ -1713,7 +1735,10 @@ fn log_agent_concurrent_2_error(
 	error: &str,
 ) {
 	ctx.state.stats.slow_sql.fetch_add(1, Ordering::Relaxed);
-	ctx.state.stats.unclean_failures_or_disconnects.fetch_add(1, Ordering::Relaxed);
+	ctx.state
+		.stats
+		.unclean_failures_or_disconnects
+		.fetch_add(1, Ordering::Relaxed);
 	ctx.state.set_worker_health(worker, WorkerHealth::Failed);
 	let prefix = ctx.log_prefix();
 	crate::out!(
@@ -1735,11 +1760,21 @@ pub fn print_concurrent_summary(ctx: &Arc<WorkloadCtx>, reason: &str) {
 		RESET,
 		reason,
 		ctx.state.workers_started(),
-		BLUE, counts.connecting, RESET,
-		CYAN, counts.pinging, RESET,
-		GREEN, counts.connected, RESET,
-		YELLOW, counts.connected_slow, RESET,
-		RED, counts.failed, RESET,
+		BLUE,
+		counts.connecting,
+		RESET,
+		CYAN,
+		counts.pinging,
+		RESET,
+		GREEN,
+		counts.connected,
+		RESET,
+		YELLOW,
+		counts.connected_slow,
+		RESET,
+		RED,
+		counts.failed,
+		RESET,
 		ctx.state.stats.disconnects.load(Ordering::Relaxed),
 		ctx.state.stats.connect_errors.load(Ordering::Relaxed),
 		ctx.state.stats.websocket_errors.load(Ordering::Relaxed),

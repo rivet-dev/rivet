@@ -1,3 +1,4 @@
+import { RivetError } from "@rivetkit/engine-api-full";
 import type { ReadRangeOptions, ReadRangeWire } from "@rivetkit/traces";
 import { decodeReadRangeWire } from "@rivetkit/traces/encoding";
 import {
@@ -443,18 +444,6 @@ export const createDefaultActorInspectorContext = ({
 			},
 		});
 	},
-
-	actorMetadataQueryOptions(actorId: ActorId) {
-		return queryOptions({
-			queryKey: ["actor", actorId, "metadata"],
-			retry: 0,
-			retryDelay: 5_000,
-			refetchInterval: 5_000,
-			queryFn: async () => {
-				return api.getMetadata();
-			},
-		});
-	},
 });
 
 const computeActorUrl = ({ url, actorId }: { url: string; actorId: ActorId }) =>
@@ -479,19 +468,26 @@ const replayWorkflowFromStepHttp = async ({
 	entryId,
 }: {
 	actorId: ActorId;
-	credentials: { url: string; inspectorToken: string };
+	credentials: { url: string; inspectorToken: string; token: string };
 	entryId?: string;
 }) => {
+	const headers: Record<string, string> = {
+		Authorization: `Bearer ${credentials.inspectorToken}`,
+		"Content-Type": "application/json",
+		"X-Rivet-Target": "actor",
+		"X-Rivet-Actor": actorId,
+	};
+	if (credentials.token) {
+		headers["x-rivet-token"] = credentials.token;
+	}
+
 	const response = await fetch(
 		new URL(
 			`${computeActorUrl({ url: credentials.url, actorId })}/inspector/workflow/replay`,
 		).href,
 		{
 			method: "POST",
-			headers: {
-				Authorization: `Bearer ${credentials.inspectorToken}`,
-				"Content-Type": "application/json",
-			},
+			headers,
 			signal: AbortSignal.timeout(10_000),
 			body: JSON.stringify(entryId ? { entryId } : {}),
 		},
@@ -580,9 +576,15 @@ const getActorMetadata = async ({
 	);
 
 	if (!response.ok) {
-		throw new Error(
-			`Failed to fetch actor metadata: ${response.statusText}`,
-		);
+		const body: unknown = await response.json().catch(() => undefined);
+		const parsed = z.object({ message: z.string() }).safeParse(body);
+		throw new RivetError({
+			message:
+				parsed.data?.message ??
+				`Failed to fetch actor metadata: ${response.statusText}`,
+			statusCode: response.status,
+			body,
+		});
 	}
 	return z
 		.object({
@@ -888,6 +890,7 @@ export const ActorInspectorProvider = ({
 					credentials: {
 						url: credentials.url,
 						inspectorToken: credentials.inspectorToken,
+						token: credentials.token,
 					},
 					entryId,
 				});
@@ -993,7 +996,13 @@ export const ActorInspectorProvider = ({
 				return getActorMetadataProxy.current();
 			},
 		} satisfies ActorInspectorApi;
-	}, [sendMessage, reconnect, inspectorProtocolVersion]);
+	}, [
+		sendMessage,
+		reconnect,
+		inspectorProtocolVersion,
+		actorId,
+		credentials,
+	]);
 
 	const value = useMemo(() => {
 		return {

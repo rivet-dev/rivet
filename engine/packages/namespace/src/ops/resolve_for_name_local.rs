@@ -28,7 +28,7 @@ pub async fn namespace_resolve_for_name_local(
 				async move {
 					let ns = ctx
 						.udb()?
-						.run(|tx| {
+						.txn("namespace_resolve_for_name_local", |tx| {
 							let name = input.name.clone();
 							async move {
 								let tx = tx.with_subspace(keys::subspace());

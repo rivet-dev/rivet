@@ -115,7 +115,7 @@ async fn rocksdb_udb() {
 		.unwrap();
 	let db = Database::new(Arc::new(driver));
 
-	db.run(|tx| async move {
+	db.txn("test_universaldbrocksdb", |tx| async move {
 		for i in 0..=255 {
 			for j in 0..=0 {
 				let key = vec![1, 2, 3, i, j];
@@ -140,7 +140,7 @@ async fn rocksdb_udb() {
 			let start = Instant::now();
 
 			let alloc = db
-				.run(|tx| {
+				.txn("test_universaldbrocksdb", |tx| {
 					let tries = &tries;
 
 					async move {

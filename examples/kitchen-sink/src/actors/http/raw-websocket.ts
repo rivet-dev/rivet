@@ -1,4 +1,4 @@
-import { type ActorContext, actor, type UniversalWebSocket } from "rivetkit";
+import { actor } from "rivetkit";
 
 export const rawWebSocketActor = actor({
 	state: {
@@ -95,7 +95,7 @@ export const rawWebSocketActor = actor({
 });
 
 export const rawWebSocketBinaryActor = actor({
-	onWebSocket(ctx, websocket) {
+	onWebSocket(_ctx, websocket) {
 		// Handle binary data
 		websocket.addEventListener("message", (event: any) => {
 			const data = event.data;

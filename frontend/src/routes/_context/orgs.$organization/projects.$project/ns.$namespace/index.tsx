@@ -1,10 +1,8 @@
-import {
-	CatchBoundary,
-	createFileRoute,
-	notFound,
-	redirect,
-} from "@tanstack/react-router";
+import { useSuspenseQuery } from "@tanstack/react-query";
+import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
+import { ActorsGrid } from "@/app/actors-grid";
+import { useCloudNamespaceDataProvider } from "@/components/actors";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/ns/$namespace/",
@@ -22,7 +20,7 @@ export const Route = createFileRoute(
 	},
 	async loader({ context, deps, location }) {
 		const dataProvider = context.dataProvider;
-		const { actorId, actorKey } = location.search as Record<string, string> || {};
+		const { actorId } = (location.search as Record<string, string>) || {};
 
 		// Prefetch runner configs so EmptyState doesn't flash "No Providers Connected"
 		// while the queries are loading.
@@ -35,25 +33,23 @@ export const Route = createFileRoute(
 			),
 		]);
 
-		if (deps.n && (actorId || actorKey)) {
+		if (deps.n && actorId) {
 			await runnerPrefetch;
 			return;
 		}
 
 		const n: string[] = deps.n || [];
 
+		// Without a selected actor name, render the grid landing instead of
+		// auto-redirecting into the first build's instances.
 		if (!n[0]) {
-			const builds = await context.queryClient.fetchInfiniteQuery(
-				dataProvider.buildsQueryOptions(),
-			);
-			const firstBuildId = Object.keys(builds.pages[0]?.names ?? {})[0];
-
-			if (!firstBuildId) {
-				await runnerPrefetch;
-				return;
-			}
-
-			n[0] = firstBuildId;
+			await Promise.all([
+				runnerPrefetch,
+				context.queryClient.prefetchInfiniteQuery(
+					dataProvider.buildsQueryOptions(),
+				),
+			]);
+			return;
 		}
 
 		const [actors] = await Promise.all([
@@ -62,7 +58,7 @@ export const Route = createFileRoute(
 			),
 			runnerPrefetch,
 		]);
-		const firstActorId = actors.pages[0]?.actors?.[0]?.key;
+		const firstActorId = actors.pages[0]?.actors?.[0]?.actorId;
 
 		if (!firstActorId) return;
 
@@ -71,7 +67,7 @@ export const Route = createFileRoute(
 			search: (old) => ({
 				...old,
 				n,
-				actorKey: firstActorId,
+				actorId: firstActorId,
 			}),
 			replace: true,
 		});
@@ -80,13 +76,52 @@ export const Route = createFileRoute(
 });
 
 export function RouteComponent() {
-	const { actorId, actorKey } = Route.useSearch();
+	const search = Route.useSearch() as Record<string, unknown>;
+	const actorId = search.actorId as string | undefined;
+	const actorKey = search.actorKey as string | undefined;
+	const n = search.n as string[] | undefined;
+	const hasSelection = !!(actorId || actorKey || n?.length);
 
-	return <Actors actorId={actorKey ?? actorId} />;
+	return (
+		<NamespaceContent
+			hasSelection={hasSelection}
+			actorId={actorKey ?? actorId}
+		/>
+	);
+}
+
+function NamespaceContent({
+	hasSelection,
+	actorId,
+}: {
+	hasSelection: boolean;
+	actorId: string | undefined;
+}) {
+	const { namespace: namespaceParam } = Route.useParams();
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: namespace } = useSuspenseQuery(
+		dataProvider.currentProjectNamespaceQueryOptions({
+			namespace: namespaceParam,
+		}),
+	);
+
+	if (!hasSelection) {
+		return <ActorsGrid namespaceLabel={namespace.displayName} />;
+	}
+	return <Actors actorId={actorId} />;
 }
 
 function PendingComponent() {
-	const { actorId, actorKey } = Route.useSearch();
+	const search = Route.useSearch() as Record<string, unknown>;
+	const actorId = search.actorId as string | undefined;
+	const actorKey = search.actorKey as string | undefined;
+	const n = search.n as string[] | undefined;
+	const hasSelection = !!(actorId || actorKey || n?.length);
 
-	return <Actors actorId={actorKey ?? actorId} />;
+	return (
+		<NamespaceContent
+			hasSelection={hasSelection}
+			actorId={actorKey ?? actorId}
+		/>
+	);
 }

@@ -1,7 +1,7 @@
 # Frontend (Cloud) Dockerfile
 FROM node:22-alpine AS builder
 
-RUN apk add --no-cache git git-lfs coreutils
+RUN apk add --no-cache git coreutils
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -21,6 +21,7 @@ COPY rivetkit-typescript/packages/engine-runner-protocol/ rivetkit-typescript/pa
 
 # Copy rivetkit dependencies
 COPY rivetkit-typescript/packages/rivetkit/ rivetkit-typescript/packages/rivetkit/
+COPY rivetkit-typescript/packages/rivetkit-wasm/ rivetkit-typescript/packages/rivetkit-wasm/
 COPY rivetkit-typescript/packages/traces/ rivetkit-typescript/packages/traces/
 COPY rivetkit-typescript/packages/workflow-engine/ rivetkit-typescript/packages/workflow-engine/
 
@@ -36,11 +37,14 @@ COPY rivetkit-asyncapi/ rivetkit-asyncapi/
 COPY rivetkit-openapi/ rivetkit-openapi/
 
 # Fetch LFS files
-COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
-RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
-
 ARG FONTAWESOME_PACKAGE_TOKEN=""
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
+
+# Skip the wasm-pack build for @rivetkit/rivetkit-wasm. The frontend bundle
+# only needs the committed type declarations (index.d.ts) for the rivetkit DTS
+# build to resolve `typeof import("@rivetkit/rivetkit-wasm")`; wasm-pack
+# requires a Rust toolchain we don't ship in this image.
+ENV SKIP_WASM_BUILD=1
 
 RUN --mount=type=cache,id=s/47975eb7-74fd-4043-a505-62b995ff5718-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile
@@ -66,7 +70,7 @@ ENV VITE_APP_POSTHOG_HOST=${VITE_APP_POSTHOG_HOST}
 ENV VITE_FEATURE_FLAGS=${VITE_FEATURE_FLAGS}
 ENV VITE_APP_TURNSTILE_SITE_KEY=${VITE_APP_TURNSTILE_SITE_KEY}
 ENV VITE_APP_SENTRY_ENV=${DEPLOYMENT_TYPE}
-ENV DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
+ENV VITE_DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 ENV VITE_APP_SENTRY_TUNNEL="/tunnel"
 

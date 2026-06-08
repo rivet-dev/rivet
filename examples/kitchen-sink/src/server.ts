@@ -1,16 +1,18 @@
-import { registry } from "./index.ts";
-import { resolveMode } from "./mode.ts";
-import { serve } from "@hono/node-server";
-import { Hono } from "hono";
 import type { Server as HttpServer } from "node:http";
 import * as v8 from "node:v8";
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import { registry } from "./index.ts";
+import { resolveMode } from "./mode.ts";
 
 const app = new Hono();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 const mode = resolveMode();
 
 process.on("exit", (code) => {
-	console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
+	console.log(
+		JSON.stringify({ kind: "process_exit", code, pid: process.pid }),
+	);
 });
 if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS === "1") {
 	for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -29,7 +31,9 @@ if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS === "1") {
 	}
 }
 process.on("beforeExit", (code) => {
-	console.log(JSON.stringify({ kind: "process_before_exit", code, pid: process.pid }));
+	console.log(
+		JSON.stringify({ kind: "process_before_exit", code, pid: process.pid }),
+	);
 });
 process.on("uncaughtException", (error) => {
 	console.error(
@@ -43,7 +47,10 @@ process.on("unhandledRejection", (reason) => {
 	console.error(
 		JSON.stringify({
 			kind: "unhandled_rejection",
-			error: reason instanceof Error ? reason.stack ?? reason.message : String(reason),
+			error:
+				reason instanceof Error
+					? (reason.stack ?? reason.message)
+					: String(reason),
 		}),
 	);
 });
@@ -95,7 +102,7 @@ async function memoryBreakdown(forceGc: boolean) {
 	};
 }
 
-function requestHeaders(headers: Headers) {
+function _requestHeaders(headers: Headers) {
 	const entries: Array<[string, string]> = [];
 	headers.forEach((value, key) => {
 		entries.push([
@@ -114,9 +121,7 @@ app.get("/debug/memory", async (c) => {
 });
 
 app.get("/health", () => registry.routes.health());
-
 app.get("/metadata", () => registry.routes.metadata());
-
 app.get("/metrics", (c) => registry.routes.prometheusMetrics(c.req.raw));
 
 app.post("/debug/heap-snapshot", (c) => {
@@ -133,8 +138,8 @@ app.post("/debug/heap-snapshot", (c) => {
 	return c.json({ path: writtenPath });
 });
 
-app.use("*", async (c, next) => {
-	const startedAt = Date.now();
+app.use("*", async (_c, next) => {
+	const _startedAt = Date.now();
 	await next();
 	// console.log(
 	// 	JSON.stringify({

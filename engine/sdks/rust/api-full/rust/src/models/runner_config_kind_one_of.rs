@@ -14,13 +14,13 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Default, Debug, PartialEq, Serialize, Deserialize)]
 pub struct RunnerConfigKindOneOf {
     #[serde(rename = "normal")]
-    pub normal: serde_json::Value,
+    pub normal: Box<models::RunnerConfigKindOneOfNormal>,
 }
 
 impl RunnerConfigKindOneOf {
-    pub fn new(normal: serde_json::Value) -> RunnerConfigKindOneOf {
+    pub fn new(normal: models::RunnerConfigKindOneOfNormal) -> RunnerConfigKindOneOf {
         RunnerConfigKindOneOf {
-            normal,
+            normal: Box::new(normal),
         }
     }
 }

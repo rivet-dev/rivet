@@ -8,6 +8,10 @@ export const prerender = true;
  */
 function cleanMdxContent(content: string): string {
 	return content
+		// Unwrap <LLMOnly>...</LLMOnly> to its inner text. Must run before the
+		// generic JSX-with-children stripper below, which would otherwise delete
+		// the inner content along with the tags.
+		.replace(/<LLMOnly[^>]*>([\s\S]*?)<\/LLMOnly>/g, '$1')
 		// Remove import statements
 		.replace(/import\s+.*?from\s+['"][^'"]*['"];?\s*/g, '')
 		// Remove export statements

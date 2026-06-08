@@ -60,5 +60,7 @@ await run("git -C /tmp/clone checkout feature");
 console.log("clone branches after checkout:");
 console.log((await run("git -C /tmp/clone branch")).stdout.trim());
 
-const featureFile = (await agent.readFile("/tmp/clone/feature.txt")) as Uint8Array;
+const featureFile = (await agent.readFile(
+	"/tmp/clone/feature.txt",
+)) as Uint8Array;
 console.log("feature.txt:", new TextDecoder().decode(featureFile).trim());

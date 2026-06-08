@@ -2,8 +2,7 @@
 
 import { Database, GitBranch, Activity, Terminal, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
-import imgInspector from '../images/screenshots/inspector-6.png';
-
+const imgInspector = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/inspector-6.png", width: 5984, height: 3224, format: "png" };
 export const ObservabilitySection = () => {
   const features = [
     {

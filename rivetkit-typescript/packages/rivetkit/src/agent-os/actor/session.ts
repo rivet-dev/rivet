@@ -140,11 +140,11 @@ export function subscribeToSession<TConnParams>(
 		);
 
 		// Persist event to SQLite for sleep/wake recovery.
-		persistSessionEvent(c, sessionId, event).catch((err) =>
+		persistSessionEvent(c, sessionId, event).catch((error) =>
 			c.log.error({
 				msg: "agent-os failed to persist session event",
 				sessionId,
-				error: err,
+				error,
 			}),
 		);
 

@@ -173,7 +173,7 @@ async fn set_policy_value(
 	key: Vec<u8>,
 	encoded: Vec<u8>,
 ) -> Result<()> {
-	udb.run(move |tx| {
+	udb.txn("depot_policy_write", move |tx| {
 		let key = key.clone();
 		let encoded = encoded.clone();
 
@@ -186,7 +186,7 @@ async fn set_policy_value(
 }
 
 async fn clear_policy_value(udb: &universaldb::Database, key: Vec<u8>) -> Result<()> {
-	udb.run(move |tx| {
+	udb.txn("depot_policy_write", move |tx| {
 		let key = key.clone();
 
 		async move {
@@ -198,7 +198,7 @@ async fn clear_policy_value(udb: &universaldb::Database, key: Vec<u8>) -> Result
 }
 
 async fn read_pitr_policy(udb: &universaldb::Database, key: Vec<u8>) -> Result<Option<PitrPolicy>> {
-	udb.run(move |tx| {
+	udb.txn("depot_policy_read", move |tx| {
 		let key = key.clone();
 
 		async move {
@@ -216,7 +216,7 @@ async fn read_shard_cache_policy(
 	udb: &universaldb::Database,
 	key: Vec<u8>,
 ) -> Result<Option<ShardCachePolicy>> {
-	udb.run(move |tx| {
+	udb.txn("depot_policy_read", move |tx| {
 		let key = key.clone();
 
 		async move {

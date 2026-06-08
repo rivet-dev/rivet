@@ -70,7 +70,7 @@ async fn backfill_chunk(
 ) -> Result<BackfillChunkOutput> {
 	let new_last_key = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_migration_backfill_chunk", |tx| async move {
 			let start = Instant::now();
 			let tx = tx.with_subspace(keys::subspace());
 			let mut new_last_key = Vec::new();

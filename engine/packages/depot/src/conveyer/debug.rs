@@ -60,7 +60,9 @@ pub async fn dump_database_ancestry(db: &Db) -> Result<Vec<(DatabaseBranchId, Op
 	let branch_id = resolve_current_branch(db).await?;
 	let ancestry = db
 		.udb
-		.run(move |tx| async move { load_branch_ancestry(&tx, branch_id).await })
+		.txn("depot_debug_dump_ancestry", move |tx| async move {
+			load_branch_ancestry(&tx, branch_id).await
+		})
 		.await?;
 
 	Ok(ancestry
@@ -88,7 +90,7 @@ pub async fn list_restore_points(db: &Db) -> Result<Vec<RestorePointIndexEntry>>
 	let database_id = db.database_id.clone();
 
 	db.udb
-		.run(move |tx| {
+		.txn("depot_debug_list_restore_points", move |tx| {
 			let database_id = database_id.clone();
 
 			async move {
@@ -173,7 +175,7 @@ pub async fn read_at(db: &Db, versionstamp: [u8; 16]) -> Result<PageState> {
 	let branch_id_for_tx = root_branch_id;
 	let read_plan = db
 		.udb
-		.run(move |tx| async move {
+		.txn("depot_debug_read_at", move |tx| async move {
 			let ancestry = load_branch_ancestry(&tx, branch_id_for_tx).await?;
 			let mut target = None;
 			for (idx, ancestor) in ancestry.ancestors.iter().enumerate() {
@@ -257,7 +259,7 @@ async fn resolve_current_branch(db: &Db) -> Result<DatabaseBranchId> {
 	let bucket_id = db.sqlite_bucket_id();
 	let database_id = db.database_id.clone();
 	db.udb
-		.run(move |tx| {
+		.txn("depot_debug_resolve_current_branch", move |tx| {
 			let database_id = database_id.clone();
 
 			async move {

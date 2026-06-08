@@ -1,4 +1,9 @@
-import { actor, event, type RivetMessageEvent, type UniversalWebSocket } from "rivetkit";
+import {
+	actor,
+	event,
+	type RivetMessageEvent,
+	type UniversalWebSocket,
+} from "rivetkit";
 
 export const counter = actor({
 	options: {

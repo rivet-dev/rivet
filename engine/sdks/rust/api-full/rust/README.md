@@ -81,6 +81,7 @@ Class | Method | HTTP request | Description
  - [RunnerConfigKindOneOf](docs/RunnerConfigKindOneOf.md)
  - [RunnerConfigKindOneOf1](docs/RunnerConfigKindOneOf1.md)
  - [RunnerConfigKindOneOf1Serverless](docs/RunnerConfigKindOneOf1Serverless.md)
+ - [RunnerConfigKindOneOfNormal](docs/RunnerConfigKindOneOfNormal.md)
  - [RunnerConfigResponse](docs/RunnerConfigResponse.md)
  - [RunnerConfigVariant](docs/RunnerConfigVariant.md)
  - [RunnerConfigsListResponse](docs/RunnerConfigsListResponse.md)

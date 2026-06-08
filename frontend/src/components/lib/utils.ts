@@ -1,5 +1,4 @@
 import { type ClassValue, clsx } from "clsx";
-import { set } from "lodash";
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -67,6 +66,17 @@ export const ls = {
 				`onboarding-skip-welcome-${btoa(
 					JSON.stringify({ project, ns }),
 				)}`,
+			);
+		},
+		skipWelcomeEngine: (ns: string) => {
+			ls.set(
+				`onboarding-skip-welcome-engine-${btoa(JSON.stringify({ ns }))}`,
+				true,
+			);
+		},
+		getSkipWelcomeEngine: (ns: string) => {
+			return ls.get(
+				`onboarding-skip-welcome-engine-${btoa(JSON.stringify({ ns }))}`,
 			);
 		},
 	},

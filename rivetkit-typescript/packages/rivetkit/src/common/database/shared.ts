@@ -1,4 +1,5 @@
 import type { SqliteBindings } from "./config";
+
 type SqliteBindingObject = Record<string, unknown>;
 
 function isSqliteBindingValue(value: unknown): boolean {

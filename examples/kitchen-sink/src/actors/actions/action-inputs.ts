@@ -7,7 +7,7 @@ export interface State {
 
 // Test actor that can capture input during creation
 export const inputActor = actor({
-	createState: (c, input): State => {
+	createState: (_c, input): State => {
 		return {
 			initialInput: input,
 			onCreateInput: undefined,

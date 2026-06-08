@@ -16,7 +16,7 @@ export const commonEnvSchema = z.object({
 	SENTRY_AUTH_TOKEN: z.string().optional(),
 	SENTRY_PROJECT: z.string().optional(),
 	APP_TYPE: z.enum(["engine", "cloud", "inspector"]).optional(),
-	DEPLOYMENT_TYPE: z.enum(["staging", "production"]).optional(),
+	VITE_DEPLOYMENT_TYPE: z.enum(["staging", "production"]).optional(),
 	BASE_URL: z.string().optional(),
 });
 
@@ -34,3 +34,9 @@ export const cloudEnvSchema = commonEnvSchema.merge(
 );
 
 export const cloudEnv = () => cloudEnvSchema.parse(import.meta.env);
+
+export const getRivetRunUrl = (engineNsName: string) => {
+	return cloudEnv().VITE_DEPLOYMENT_TYPE === "production"
+		? `https://${engineNsName}.rivet.run/`
+		: `https://${engineNsName}.staging.rivet.run/`;
+};

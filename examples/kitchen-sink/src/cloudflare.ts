@@ -1,6 +1,6 @@
-import wasmModule from "../../../rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm_bg.wasm";
-import * as rivetkitWasm from "../../../rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.js";
 import { setup } from "rivetkit";
+import * as rivetkitWasm from "../../../rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm.js";
+import wasmModule from "../../../rivetkit-typescript/packages/rivetkit-wasm/pkg/rivetkit_wasm_bg.wasm";
 import { counter } from "./actors/counter/counter.ts";
 import { rawHttpActor } from "./actors/http/raw-http.ts";
 import { rawWebSocketActor } from "./actors/http/raw-websocket.ts";

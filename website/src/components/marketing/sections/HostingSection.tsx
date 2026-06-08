@@ -1,6 +1,6 @@
 'use client';
 
-import { Package, Server, Check, ArrowRight, Github } from 'lucide-react';
+import { Package, Server, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import imgLogo from '@/images/rivet-logos/icon-white.svg';
 
@@ -114,30 +114,6 @@ export const HostingSection = () => (
         </div>
       </motion.div>
 
-      {/* Open Source callout */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        transition={{ duration: 0.5 }}
-        className='mt-24 text-center'
-      >
-        <h3 className='mb-3 text-lg font-normal tracking-tight text-white md:text-xl'>
-          Open source, permissively licensed.
-        </h3>
-        <p className='mx-auto max-w-md text-sm leading-relaxed text-zinc-500'>
-          Self-hosting matters for enterprise deployments, cloud portability, and avoiding vendor lock-in. Licensed Apache 2.0.
-        </p>
-        <a
-          href='https://github.com/rivet-dev/rivet'
-          target='_blank'
-          rel='noopener noreferrer'
-          className='mt-5 inline-flex items-center gap-2 rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
-        >
-          <Github className='h-4 w-4' />
-          View on GitHub
-        </a>
-      </motion.div>
     </div>
   </section>
 );

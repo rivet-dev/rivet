@@ -55,7 +55,7 @@ pub struct BackfillOutput {
 pub async fn backfill(ctx: &ActivityCtx, _input: &BackfillInput) -> Result<BackfillOutput> {
 	let serverless_data: Vec<rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey> = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_serverless_backfill", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let serverless_desired_subspace = keys::subspace().subspace(

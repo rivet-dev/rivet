@@ -26,7 +26,7 @@ pub async fn pegboard_envoy_list(ctx: &OperationCtx, input: &Input) -> Result<Ou
 
 	let envoys = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_envoy_list", |tx| {
 			let dc_name = dc_name.to_string();
 			async move {
 				let tx = tx.with_subspace(keys::subspace());

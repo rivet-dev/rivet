@@ -4,11 +4,18 @@
 
 export interface RunnerConfigServerless {
     /** Seconds. */
+    actorEvictionDelay?: number;
+    /** Seconds. */
+    actorEvictionPeriod?: number;
+    /** Actors per second. */
+    actorEvictionRate?: number;
+    /** Seconds. */
     drainGracePeriod?: number;
+    drainOnVersionUpgrade?: boolean;
     headers?: Record<string, string>;
     maxConcurrentActors?: number;
     /** Deprecated. */
-    maxRunners: number;
+    maxRunners?: number;
     /** Milliseconds between metadata polling. If not set, uses the global default. */
     metadataPollInterval?: number;
     /** Deprecated. */
@@ -18,6 +25,6 @@ export interface RunnerConfigServerless {
     /** Deprecated. */
     runnersMargin?: number;
     /** Deprecated. */
-    slotsPerRunner: number;
+    slotsPerRunner?: number;
     url: string;
 }

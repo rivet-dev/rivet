@@ -1,5 +1,6 @@
 import * as protocol from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
+import { v4 as uuidv4 } from "uuid";
 import type WebSocket from "ws";
 import { type ActorConfig, RunnerActor } from "./actor";
 import { logger, setLogger } from "./log.js";
@@ -12,9 +13,6 @@ import {
 	unreachable,
 } from "./utils";
 import { importWebSocket } from "./websocket.js";
-import {
-	v4 as uuidv4,
-} from "uuid";
 
 export type { HibernatingWebSocketMetadata };
 export { RunnerActor, type ActorConfig };
@@ -874,7 +872,9 @@ export class Runner {
 				} else if (Buffer.isBuffer(ev.data)) {
 					buf = new Uint8Array(ev.data);
 				} else {
-					throw new Error(`expected binary data, got ${typeof ev.data}`);
+					throw new Error(
+						`expected binary data, got ${typeof ev.data}`,
+					);
 				}
 
 				await this.#injectLatency();
@@ -923,12 +923,14 @@ export class Runner {
 					const kvResponse = message.val;
 					this.#handleKvResponse(kvResponse);
 				} else if (message.tag === "ToClientTunnelMessage") {
-					this.#tunnel?.handleTunnelMessage(message.val).catch((err) => {
-						this.log?.error({
-							msg: "error handling tunnel message",
-							error: stringifyError(err),
+					this.#tunnel
+						?.handleTunnelMessage(message.val)
+						.catch((err) => {
+							this.log?.error({
+								msg: "error handling tunnel message",
+								error: stringifyError(err),
+							});
 						});
-					});
 				} else if (message.tag === "ToClientPing") {
 					this.__sendToServer({
 						tag: "ToServerPong",
@@ -1093,7 +1095,7 @@ export class Runner {
 
 		for (const [_, actor] of this.#actors) {
 			const checkpoint = ack.lastEventCheckpoints.find(
-				(x) => x.actorId == actor.actorId,
+				(x) => x.actorId === actor.actorId,
 			);
 
 			if (checkpoint) actor.handleAckEvents(checkpoint.index);
@@ -1214,14 +1216,14 @@ export class Runner {
 			await this.#config.onActorStart(actorId, generation, actorConfig);
 
 			instance.actorStartPromise.resolve();
-		} catch (err) {
+		} catch (error) {
 			this.log?.error({
 				msg: "error starting runner actor",
 				actorId,
-				err,
+				error,
 			});
 
-			instance.actorStartPromise.reject(err);
+			instance.actorStartPromise.reject(error);
 
 			// TODO: Mark as crashed
 			// Send stopped state update if start failed
@@ -1230,7 +1232,7 @@ export class Runner {
 	}
 
 	async #handleCommandStopActor(commandWrapper: protocol.CommandWrapper) {
-		const stopCommand = commandWrapper.inner
+		const _stopCommand = commandWrapper.inner
 			.val as protocol.CommandStopActor;
 
 		const actorId = commandWrapper.checkpoint.actorId;
@@ -1300,9 +1302,10 @@ export class Runner {
 			actorState = {
 				tag: "ActorStateStopped",
 				val: {
-					code: actor.stopIntentSent || this.#draining
-						? protocol.StopCode.Ok
-						: protocol.StopCode.Error,
+					code:
+						actor.stopIntentSent || this.#draining
+							? protocol.StopCode.Ok
+							: protocol.StopCode.Error,
 					message: null,
 				},
 			};

@@ -1,9 +1,9 @@
-import { openai } from "@ai-sdk/openai";
 import { createMCPClient } from "@ai-sdk/mcp";
-import { streamText, tool, type CoreMessage } from "ai";
-import { z } from "zod";
+import { openai } from "@ai-sdk/openai";
+import { type CoreMessage, streamText, tool } from "ai";
 import { actor, event, queue } from "rivetkit";
 import { db } from "rivetkit/db";
+import { z } from "zod";
 
 // Shared types for client usage
 export type ChatMessage = {
@@ -122,7 +122,11 @@ export const codeAgent = actor({
 		},
 	}),
 	queues: {
-		chat: queue<{ text: string; currentCode?: string; reasoning?: string }>(),
+		chat: queue<{
+			text: string;
+			currentCode?: string;
+			reasoning?: string;
+		}>(),
 	},
 	events: {
 		response: event<ResponseEvent>(),
@@ -191,7 +195,8 @@ export const codeAgent = actor({
 			);
 
 			let content = "";
-			let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null = null;
+			let mcpClient: Awaited<ReturnType<typeof createMCPClient>> | null =
+				null;
 
 			try {
 				// Connect to MCP docs server with a timeout. If it fails, proceed without docs tools.
@@ -204,19 +209,40 @@ export const codeAgent = actor({
 						},
 					});
 					const timeoutPromise = new Promise<never>((_, reject) =>
-						setTimeout(() => reject(new Error("MCP connection timeout")), 5000),
+						setTimeout(
+							() => reject(new Error("MCP connection timeout")),
+							5000,
+						),
 					);
-					mcpClient = await Promise.race([mcpPromise, timeoutPromise]);
+					mcpClient = await Promise.race([
+						mcpPromise,
+						timeoutPromise,
+					]);
 					docsTools = await mcpClient.tools();
-					console.log("[codeAgent] MCP docs tools loaded:", Object.keys(docsTools));
+					console.log(
+						"[codeAgent] MCP docs tools loaded:",
+						Object.keys(docsTools),
+					);
 				} catch (mcpError) {
-					console.warn("[codeAgent] MCP docs unavailable, proceeding without:", mcpError);
+					console.warn(
+						"[codeAgent] MCP docs unavailable, proceeding without:",
+						mcpError,
+					);
 				}
 
 				const reasoningLevel = body.reasoning || "none";
 				const providerOptions =
 					reasoningLevel !== "none"
-						? { openai: { reasoningEffort: reasoningLevel === "extra_high" ? "high" : reasoningLevel as "medium" | "high" } }
+						? {
+								openai: {
+									reasoningEffort:
+										reasoningLevel === "extra_high"
+											? "high"
+											: (reasoningLevel as
+													| "medium"
+													| "high"),
+								},
+							}
 						: undefined;
 
 				console.log(

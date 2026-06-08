@@ -1,49 +1,57 @@
-import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
-import CreateNamespacesFrameContent from "@/app/dialogs/create-namespace-frame";
+import {
+	createFileRoute,
+	notFound,
+	useNavigate,
+	useSearch,
+} from "@tanstack/react-router";
+import { NamespacesGrid } from "@/app/namespaces-grid";
 import { RouteLayout } from "@/app/route-layout";
-import { Card } from "@/components";
+import { useDialog } from "@/app/use-dialog";
 import { features } from "@/lib/features";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/",
 )({
-	beforeLoad: async ({ context, params }) => {
-		if (!features.multitenancy) {
+	beforeLoad: async ({ context }) => {
+		if (!features.platform) {
 			throw notFound();
 		}
 
-		const result = await context.queryClient.fetchInfiniteQuery(
+		// Prefetch namespaces so the grid renders without a flash.
+		await context.queryClient.prefetchInfiniteQuery(
 			context.dataProvider.currentProjectNamespacesQueryOptions(),
 		);
-
-		const firstNamespace = result.pages[0].namespaces[0];
-
-		if (firstNamespace) {
-			throw redirect({
-				to: "/orgs/$organization/projects/$project/ns/$namespace",
-				replace: true,
-				search: true,
-				params: {
-					organization: params.organization,
-					project: params.project,
-					namespace: firstNamespace.name,
-				},
-			});
-		}
 	},
 	component: RouteComponent,
 });
 
 function RouteComponent() {
+	const { organization, project } = Route.useParams();
 	return (
 		<RouteLayout>
-			<div className="bg-card h-full border my-2 mr-2 rounded-lg">
-				<div className="mt-2 flex flex-col items-center justify-center h-full">
-					<Card className="min-w-96">
-						<CreateNamespacesFrameContent />
-					</Card>
-				</div>
-			</div>
+			<NamespacesGrid organization={organization} project={project} />
+			<ProjectModals />
 		</RouteLayout>
+	);
+}
+
+function ProjectModals() {
+	const navigate = useNavigate();
+	const search = useSearch({ strict: false });
+	const CreateNamespaceDialog = useDialog.CreateNamespace.Dialog;
+	return (
+		<CreateNamespaceDialog
+			dialogProps={{
+				open: search?.modal === "create-ns",
+				onOpenChange: (value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({ ...old, modal: undefined }),
+						});
+					}
+				},
+			}}
+		/>
 	);
 }

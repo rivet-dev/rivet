@@ -29,7 +29,7 @@ async fn message_request_inner(
 			);
 
 			ctx.udb()?
-				.run(|tx| {
+				.txn("epoxy_replica_update_config", |tx| {
 					let req = req.clone();
 					async move { replica::update_config::update_config(&*tx, current_replica_id, req) }
 				})
@@ -41,7 +41,7 @@ async fn message_request_inner(
 		protocol::RequestKind::PrepareRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(|tx| {
+				.txn("epoxy_replica_prepare", |tx| {
 					let req = req.clone();
 					async move { replica::messages::prepare(&*tx, current_replica_id, req).await }
 				})
@@ -55,7 +55,7 @@ async fn message_request_inner(
 		protocol::RequestKind::AcceptRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(|tx| {
+				.txn("epoxy_replica_accept", |tx| {
 					let req = req.clone();
 					async move { replica::messages::accept(&*tx, current_replica_id, req).await }
 				})
@@ -66,7 +66,7 @@ async fn message_request_inner(
 		protocol::RequestKind::CommitRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(|tx| {
+				.txn("epoxy_replica_commit", |tx| {
 					let req = req.clone();
 					async move { replica::messages::commit(&*tx, current_replica_id, req).await }
 				})
@@ -77,7 +77,7 @@ async fn message_request_inner(
 		protocol::RequestKind::ChangelogReadRequest(req) => {
 			let response = ctx
 				.udb()?
-				.run(|tx| {
+				.txn("epoxy_replica_changelog_read", |tx| {
 					let req = req.clone();
 					async move { replica::changelog::read(&*tx, current_replica_id, req).await }
 				})

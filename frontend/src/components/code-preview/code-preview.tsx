@@ -7,6 +7,7 @@ import {
 	type ThemeInput,
 } from "shiki";
 import { Skeleton } from "../ui/skeleton";
+import lightTheme from "./github-light.json";
 import theme from "./theme.json";
 
 const langs = {
@@ -16,6 +17,9 @@ const langs = {
 	markdown: () => import("@shikijs/langs/markdown"),
 	yaml: () => import("@shikijs/langs/yaml"),
 };
+
+const DARK_THEME_NAME = theme.name;
+const LIGHT_THEME_NAME = lightTheme.name;
 
 let highlighterPromise: Promise<HighlighterCore> | null = null;
 let highlighterInstance: HighlighterCore | null = null;
@@ -35,7 +39,7 @@ async function getHighlighter(
 		highlighterPromise = langs[language]()
 			.then((langModule) =>
 				createHighlighterCore({
-					themes: [theme as ThemeInput],
+					themes: [theme as ThemeInput, lightTheme as ThemeInput],
 					langs: [langModule],
 					engine: createOnigurumaEngine(import("shiki/wasm")),
 				}),
@@ -89,7 +93,11 @@ export function CodePreview({ className, code, language }: CodePreviewProps) {
 				? ""
 				: (highlighter.codeToHtml(code, {
 						lang: language,
-						theme: theme.name,
+						themes: {
+							light: LIGHT_THEME_NAME,
+							dark: DARK_THEME_NAME,
+						},
+						defaultColor: "light",
 						transformers: [notationTransformer],
 					}) as TrustedHTML),
 		[isLoading, highlighter, code, language, notationTransformer],

@@ -367,11 +367,7 @@ function parseCliArgs(argv: string[]): Args {
 const ARGS = parseCliArgs(process.argv.slice(2));
 const BATCHES = Number(process.env.BATCHES ?? "0");
 const SERIAL = ((v) => v === "1" || v === "true")(process.env.SERIAL ?? "");
-const RUN_FOR_MS = parseOptionalMs(
-	process.env.RUN_FOR_MS,
-	"RUN_FOR_MS",
-	0,
-);
+const RUN_FOR_MS = parseOptionalMs(process.env.RUN_FOR_MS, "RUN_FOR_MS", 0);
 
 let concurrentWorkersStarted = 0;
 let stoppingConcurrentWorkers = false;
@@ -675,9 +671,13 @@ async function waitForOpen(ws: TunnelWebSocket): Promise<void> {
 
 	await new Promise<void>((resolve, reject) => {
 		ws.addEventListener("open", () => resolve(), { once: true });
-		ws.addEventListener("error", () => reject(new Error("websocket error")), {
-			once: true,
-		});
+		ws.addEventListener(
+			"error",
+			() => reject(new Error("websocket error")),
+			{
+				once: true,
+			},
+		);
 		ws.addEventListener(
 			"close",
 			(event) =>
@@ -698,7 +698,10 @@ function eventDataToString(data: unknown): string {
 	return String(data);
 }
 
-function isActorStoppedClose(event: { code: number; reason?: string }): boolean {
+function isActorStoppedClose(event: {
+	code: number;
+	reason?: string;
+}): boolean {
 	return (
 		event.code === ACTOR_STOPPED_CLOSE_CODE &&
 		event.reason === ACTOR_STOPPED_CLOSE_REASON
@@ -709,7 +712,9 @@ function makeTunnelStressWorkload(): ConcurrentWorkload {
 	return {
 		keyPrefix: "cl-t",
 		async resolveActorId(handle: unknown) {
-			return await (handle as ReturnType<typeof client.tunnelStress.getOrCreate>).resolve();
+			return await (
+				handle as ReturnType<typeof client.tunnelStress.getOrCreate>
+			).resolve();
 		},
 		async openWebSocket(actorId: string, key: string) {
 			const handle = actorId
@@ -738,7 +743,9 @@ function makeAgentWorkload(): ConcurrentWorkload {
 	return {
 		keyPrefix: "cl-a",
 		async resolveActorId(handle: unknown) {
-			return await (handle as ReturnType<typeof client.loadTestAgent.getOrCreate>).resolve();
+			return await (
+				handle as ReturnType<typeof client.loadTestAgent.getOrCreate>
+			).resolve();
 		},
 		async openWebSocket(actorId: string, key: string) {
 			const handle = actorId
@@ -762,7 +769,10 @@ function makeAgentWorkload(): ConcurrentWorkload {
 			};
 
 			sendInference();
-			const interval = setInterval(sendInference, options.messageInterval);
+			const interval = setInterval(
+				sendInference,
+				options.messageInterval,
+			);
 			return () => clearInterval(interval);
 		},
 	};
@@ -819,7 +829,12 @@ async function runConcurrentWorker(
 						lastMessageAt > 0 &&
 						now - lastMessageAt > MESSAGE_GAP_WARN_MS
 					) {
-						logMessageGap(worker, key, actorId, now - lastMessageAt);
+						logMessageGap(
+							worker,
+							key,
+							actorId,
+							now - lastMessageAt,
+						);
 					}
 					lastMessageAt = now;
 					if (options.showMessages) {
@@ -840,7 +855,13 @@ async function runConcurrentWorker(
 							!sawWebSocketError &&
 							isActorStoppedClose(event)
 						) {
-							logReconnect(worker, key, actorId, event.code, event.reason);
+							logReconnect(
+								worker,
+								key,
+								actorId,
+								event.code,
+								event.reason,
+							);
 							reconnect = true;
 						} else {
 							logDisconnect(

@@ -13,9 +13,7 @@ type ConnParams = {
 };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-const visibleLabels = (c: {
-	conns: Map<unknown, { state?: ConnState }>;
-}) =>
+const visibleLabels = (c: { conns: Map<unknown, { state?: ConnState }> }) =>
 	Array.from(c.conns.values()).map((conn) => conn.state?.label ?? null);
 
 export const connPreflightVisibilityActor = actor({

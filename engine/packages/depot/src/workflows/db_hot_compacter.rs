@@ -1,3 +1,5 @@
+use universaldb::prelude::*;
+
 use crate::compaction::{
 	companion::{CompanionKind, run_companion_loop},
 	shared::*,
@@ -11,7 +13,10 @@ use crate::compaction::test_hooks;
 use crate::fault::{DepotFaultAction, HotCompactionFaultPoint};
 
 #[workflow(DbHotCompacterWorkflow)]
-pub async fn db_hot_compacter(ctx: &mut WorkflowCtx, input: &DbHotCompacterInput) -> Result<()> {
+pub async fn depot_db_hot_compacter(
+	ctx: &mut WorkflowCtx,
+	input: &DbHotCompacterInput,
+) -> Result<()> {
 	run_companion_loop(ctx, input.database_branch_id, CompanionKind::Hot).await
 }
 
@@ -24,9 +29,12 @@ pub async fn stage_hot_job(
 	let now_ms = ctx.ts();
 
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("depot_hot_compact_stage", move |tx| {
 			let input = input.clone();
-			async move { stage_hot_job_tx(&tx, &input, now_ms).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				stage_hot_job_tx(&tx, &input, now_ms).await
+			}
 		})
 		.await
 }
@@ -111,8 +119,15 @@ async fn stage_hot_job_tx(
 		now_ms,
 	)
 	.await?;
-	let coverage_txids =
-		selected_hot_coverage_txids(&root, &head, &db_pins, &hot_inputs.pitr_interval_coverage);
+	if hot_inputs.selected_max_txid != Some(input.input_range.txids.max_txid) {
+		return Ok(rejected_hot_job("hot compaction selected txid changed"));
+	}
+	let coverage_txids = selected_hot_coverage_txids(
+		&root,
+		input.input_range.txids.max_txid,
+		&db_pins,
+		&hot_inputs.pitr_interval_coverage,
+	);
 	if coverage_txids != input.input_range.coverage_txids {
 		return Ok(rejected_hot_job("hot compaction coverage targets changed"));
 	}
@@ -220,9 +235,12 @@ pub async fn install_hot_job(
 	let now_ms = ctx.ts();
 
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("depot_hot_compact_install", move |tx| {
 			let input = input.clone();
-			async move { install_hot_job_tx(&tx, &input, now_ms).await }
+			async move {
+				tx.priority(Priority::Low)?;
+				install_hot_job_tx(&tx, &input, now_ms).await
+			}
 		})
 		.await
 }
@@ -302,8 +320,15 @@ async fn install_hot_job_tx(
 		now_ms,
 	)
 	.await?;
-	let coverage_txids =
-		selected_hot_coverage_txids(&root, &head, &db_pins, &hot_inputs.pitr_interval_coverage);
+	if hot_inputs.selected_max_txid != Some(input.input_range.txids.max_txid) {
+		return Ok(rejected_hot_install("hot compaction selected txid changed"));
+	}
+	let coverage_txids = selected_hot_coverage_txids(
+		&root,
+		input.input_range.txids.max_txid,
+		&db_pins,
+		&hot_inputs.pitr_interval_coverage,
+	);
 	if coverage_txids != input.input_range.coverage_txids {
 		return Ok(rejected_hot_install(
 			"hot compaction coverage targets changed",

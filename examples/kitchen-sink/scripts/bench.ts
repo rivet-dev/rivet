@@ -21,7 +21,9 @@ const filterIdx = args.indexOf("--filter");
 const FILTER = filterIdx >= 0 ? args[filterIdx + 1]?.toLowerCase() : undefined;
 
 if (!RAW_ENDPOINT) {
-	console.error("Usage: npx tsx scripts/bench.ts <endpoint> [--filter <pattern>]");
+	console.error(
+		"Usage: npx tsx scripts/bench.ts <endpoint> [--filter <pattern>]",
+	);
 	process.exit(1);
 }
 
@@ -48,7 +50,10 @@ async function callAction(
 	const actionUrl = `${HOST}/gateway/${actorName}/action/${action}?${params}`;
 	const res = await fetch(actionUrl, {
 		method: "POST",
-		headers: { "Content-Type": "application/json", "x-rivet-encoding": "json" },
+		headers: {
+			"Content-Type": "application/json",
+			"x-rivet-encoding": "json",
+		},
 		body: JSON.stringify({ args }),
 		signal: AbortSignal.timeout(timeoutMs),
 	});
@@ -59,7 +64,9 @@ async function callAction(
 	return (await res.json()).output;
 }
 
-async function timed<T>(fn: () => Promise<T>): Promise<{ result: T; ms: number }> {
+async function timed<T>(
+	fn: () => Promise<T>,
+): Promise<{ result: T; ms: number }> {
 	const start = performance.now();
 	const result = await fn();
 	return { result, ms: performance.now() - start };
@@ -114,11 +121,19 @@ function printTable(entries: BenchEntry[], baselineMs: number): void {
 			currentGroup = e.group;
 		}
 		if (e.failed) {
-			console.log(`│ ${e.name.padEnd(nameW)}  ${"FAILED".padStart(10)}  ${"".padStart(10)}  ${"".padStart(10)}  ${"".padStart(8)} │`);
+			console.log(
+				`│ ${e.name.padEnd(nameW)}  ${"FAILED".padStart(10)}  ${"".padStart(10)}  ${"".padStart(10)}  ${"".padStart(8)} │`,
+			);
 		} else {
-			const serverStr = e.serverMs != null ? fmt(e.serverMs) : fmt(Math.max(0, e.e2eMs - baselineMs));
+			const serverStr =
+				e.serverMs != null
+					? fmt(e.serverMs)
+					: fmt(Math.max(0, e.e2eMs - baselineMs));
 			const perOpStr = e.perOpMs != null ? fmt(e.perOpMs) : "";
-			const rtt = e.serverMs != null ? fmt(e.e2eMs - e.serverMs) : fmt(baselineMs);
+			const rtt =
+				e.serverMs != null
+					? fmt(e.e2eMs - e.serverMs)
+					: fmt(baselineMs);
 			console.log(
 				`│ ${e.name.padEnd(nameW)}  ${fmt(e.e2eMs).padStart(10)}  ${serverStr.padStart(10)}  ${perOpStr.padStart(10)}  ${rtt.padStart(8)} │`,
 			);
@@ -153,11 +168,16 @@ function buildEntry(
 	result: { ms?: number; ops?: number } | null,
 ): BenchEntry {
 	const serverMs = result?.ms ?? null;
-	const perOpMs = serverMs != null && result?.ops ? serverMs / result.ops : null;
+	const perOpMs =
+		serverMs != null && result?.ops ? serverMs / result.ops : null;
 	return { group, name, e2eMs, serverMs, perOpMs };
 }
 
-function buildFailedEntry(group: string, name: string, err: unknown): BenchEntry {
+function buildFailedEntry(
+	group: string,
+	name: string,
+	err: unknown,
+): BenchEntry {
 	return {
 		group,
 		name,
@@ -186,7 +206,13 @@ function benchLatency(): BenchFn[] {
 			}
 			times.sort((a, b) => a - b);
 			const ms = times[Math.floor(times.length / 2)];
-			return { group, name: "HTTP ping (health endpoint)", e2eMs: ms, serverMs: null, perOpMs: null };
+			return {
+				group,
+				name: "HTTP ping (health endpoint)",
+				e2eMs: ms,
+				serverMs: null,
+				perOpMs: null,
+			};
 		});
 	}
 
@@ -196,20 +222,36 @@ function benchLatency(): BenchFn[] {
 			await callAction("counter", key, "noop");
 			const times: number[] = [];
 			for (let i = 0; i < 10; i++) {
-				const { ms } = await timed(() => callAction("counter", key, "noop"));
+				const { ms } = await timed(() =>
+					callAction("counter", key, "noop"),
+				);
 				times.push(ms);
 			}
 			times.sort((a, b) => a - b);
 			const ms = times[Math.floor(times.length / 2)];
-			return { group, name: "Action ping (warm actor)", e2eMs: ms, serverMs: null, perOpMs: null };
+			return {
+				group,
+				name: "Action ping (warm actor)",
+				e2eMs: ms,
+				serverMs: null,
+				perOpMs: null,
+			};
 		});
 	}
 
 	if (shouldRun(group, "Cold start (fresh actor)")) {
 		benches.push(async () => {
 			const key = [`bench-cold-${uid()}`];
-			const { ms } = await timed(() => callAction("counter", key, "noop"));
-			return { group, name: "Cold start (fresh actor)", e2eMs: ms, serverMs: null, perOpMs: null };
+			const { ms } = await timed(() =>
+				callAction("counter", key, "noop"),
+			);
+			return {
+				group,
+				name: "Cold start (fresh actor)",
+				e2eMs: ms,
+				serverMs: null,
+				perOpMs: null,
+			};
 		});
 	}
 
@@ -219,8 +261,16 @@ function benchLatency(): BenchFn[] {
 			await callAction("counter", key, "noop");
 			await callAction("counter", key, "goToSleep");
 			await new Promise((resolve) => setTimeout(resolve, 2000));
-			const { ms } = await timed(() => callAction("counter", key, "noop"));
-			return { group, name: "Wake from sleep", e2eMs: ms, serverMs: null, perOpMs: null };
+			const { ms } = await timed(() =>
+				callAction("counter", key, "noop"),
+			);
+			return {
+				group,
+				name: "Wake from sleep",
+				e2eMs: ms,
+				serverMs: null,
+				perOpMs: null,
+			};
 		});
 	}
 
@@ -243,36 +293,104 @@ function benchSqlite(): BenchFn[] {
 		{ name: "Point read x100", action: "pointRead", args: [100] },
 		{ name: "Full scan (500 rows)", action: "fullScan", args: [500] },
 		{ name: "Range scan indexed", action: "rangeScanIndexed", args: [] },
-		{ name: "Range scan unindexed", action: "rangeScanUnindexed", args: [] },
+		{
+			name: "Range scan unindexed",
+			action: "rangeScanUnindexed",
+			args: [],
+		},
 		{ name: "Bulk update", action: "bulkUpdate", args: [] },
 		{ name: "Bulk delete", action: "bulkDelete", args: [] },
 		{ name: "Hot row updates x100", action: "hotRowUpdates", args: [100] },
-		{ name: "Hot row updates x10000", action: "hotRowUpdates", args: [10000] },
+		{
+			name: "Hot row updates x10000",
+			action: "hotRowUpdates",
+			args: [10000],
+		},
 		{ name: "VACUUM after delete", action: "vacuumAfterDelete", args: [] },
-		{ name: "Large payload insert (32KB x20)", action: "largePayloadInsert", args: [20] },
+		{
+			name: "Large payload insert (32KB x20)",
+			action: "largePayloadInsert",
+			args: [20],
+		},
 		{ name: "Mixed OLTP x1", action: "mixedOltp", args: [] },
 		{ name: "JSON extract query", action: "jsonInsertAndQuery", args: [] },
 		{ name: "JSON each aggregation", action: "jsonEachAgg", args: [] },
-		{ name: "Complex: aggregation", action: "complexAggregation", args: [] },
+		{
+			name: "Complex: aggregation",
+			action: "complexAggregation",
+			args: [],
+		},
 		{ name: "Complex: subquery", action: "complexSubquery", args: [] },
 		{ name: "Complex: join (200 rows)", action: "complexJoin", args: [] },
-		{ name: "Complex: CTE + window functions", action: "complexCteWindow", args: [] },
-		{ name: "Migration (50 tables)", action: "migrationTables", args: [50] },
-		{ name: "Large TX insert 500KB", action: "largeTxInsert500KB", args: [] },
+		{
+			name: "Complex: CTE + window functions",
+			action: "complexCteWindow",
+			args: [],
+		},
+		{
+			name: "Migration (50 tables)",
+			action: "migrationTables",
+			args: [50],
+		},
+		{
+			name: "Large TX insert 500KB",
+			action: "largeTxInsert500KB",
+			args: [],
+		},
 		{ name: "Large TX insert 1MB", action: "largeTxInsert1MB", args: [] },
-		{ name: "Large TX insert 1MB (tiny rows, 4096x256B)", action: "largeTxInsert1MBTinyRows", args: [] },
-		{ name: "Large TX insert 1MB (medium rows, 256x4KiB)", action: "largeTxInsert1MBMediumRows", args: [] },
-		{ name: "Large TX insert 1MB (one row, 1x1MiB)", action: "largeTxInsert1MBOneRow", args: [] },
+		{
+			name: "Large TX insert 1MB (tiny rows, 4096x256B)",
+			action: "largeTxInsert1MBTinyRows",
+			args: [],
+		},
+		{
+			name: "Large TX insert 1MB (medium rows, 256x4KiB)",
+			action: "largeTxInsert1MBMediumRows",
+			args: [],
+		},
+		{
+			name: "Large TX insert 1MB (one row, 1x1MiB)",
+			action: "largeTxInsert1MBOneRow",
+			args: [],
+		},
 		{ name: "Large TX insert 5MB", action: "largeTxInsert5MB", args: [] },
 		{ name: "Large TX insert 10MB", action: "largeTxInsert10MB", args: [] },
 		{ name: "Large TX insert 50MB", action: "largeTxInsert50MB", args: [] },
-		{ name: "Stress: churn insert/delete 10x1000", action: "churnInsertDelete", args: [] },
-		{ name: "Stress: mixed OLTP large", action: "mixedOltpLarge", args: [] },
-		{ name: "Stress: growing aggregation", action: "growingAggregation", args: [] },
-		{ name: "Stress: index creation on 10k rows", action: "indexCreationOnLargeTable", args: [] },
-		{ name: "Stress: bulk update 1000 rows", action: "bulkUpdate1000Rows", args: [] },
-		{ name: "Stress: truncate + regrow", action: "truncateAndRegrow", args: [] },
-		{ name: "Stress: many small tables", action: "manySmallTables", args: [] },
+		{
+			name: "Stress: churn insert/delete 10x1000",
+			action: "churnInsertDelete",
+			args: [],
+		},
+		{
+			name: "Stress: mixed OLTP large",
+			action: "mixedOltpLarge",
+			args: [],
+		},
+		{
+			name: "Stress: growing aggregation",
+			action: "growingAggregation",
+			args: [],
+		},
+		{
+			name: "Stress: index creation on 10k rows",
+			action: "indexCreationOnLargeTable",
+			args: [],
+		},
+		{
+			name: "Stress: bulk update 1000 rows",
+			action: "bulkUpdate1000Rows",
+			args: [],
+		},
+		{
+			name: "Stress: truncate + regrow",
+			action: "truncateAndRegrow",
+			args: [],
+		},
+		{
+			name: "Stress: many small tables",
+			action: "manySmallTables",
+			args: [],
+		},
 	];
 
 	for (const b of sqliteBenches) {
@@ -284,7 +402,12 @@ function benchSqlite(): BenchFn[] {
 				const { result, ms: e2eMs } = await timed(() =>
 					callAction("testSqliteBench", key, b.action, b.args),
 				);
-				return buildEntry(group, b.name, e2eMs, result as { ms?: number; ops?: number });
+				return buildEntry(
+					group,
+					b.name,
+					e2eMs,
+					result as { ms?: number; ops?: number },
+				);
 			} catch (err) {
 				return buildFailedEntry(group, b.name, err);
 			}
@@ -296,24 +419,46 @@ function benchSqlite(): BenchFn[] {
 			const { ms: wallMs } = await timed(async () => {
 				await Promise.all(
 					Array.from({ length: 5 }, (_, i) =>
-						callAction("testSqliteBench", [`bench-conc-${uid()}-${i}`], "insertSingle", [10]),
+						callAction(
+							"testSqliteBench",
+							[`bench-conc-${uid()}-${i}`],
+							"insertSingle",
+							[10],
+						),
 					),
 				);
 			});
-			return { group, name: "Concurrent 5 actors wall time", e2eMs: wallMs, serverMs: null, perOpMs: null };
+			return {
+				group,
+				name: "Concurrent 5 actors wall time",
+				e2eMs: wallMs,
+				serverMs: null,
+				perOpMs: null,
+			};
 		});
 		benches.push(async () => {
 			const times: number[] = [];
 			await Promise.all(
 				Array.from({ length: 5 }, async (_, i) => {
 					const { ms } = await timed(() =>
-						callAction("testSqliteBench", [`bench-conc2-${uid()}-${i}`], "insertSingle", [10]),
+						callAction(
+							"testSqliteBench",
+							[`bench-conc2-${uid()}-${i}`],
+							"insertSingle",
+							[10],
+						),
 					);
 					times.push(ms);
 				}),
 			);
 			const avg = times.reduce((a, b) => a + b, 0) / times.length;
-			return { group, name: "Concurrent 5 actors (per-actor)", e2eMs: avg, serverMs: null, perOpMs: null };
+			return {
+				group,
+				name: "Concurrent 5 actors (per-actor)",
+				e2eMs: avg,
+				serverMs: null,
+				perOpMs: null,
+			};
 		});
 	}
 
@@ -332,9 +477,16 @@ function benchChatLogInsert(): BenchFn[] {
 			try {
 				await callAction("testSqliteBench", key, "noop");
 				const { result, ms: e2eMs } = await timed(() =>
-					callAction("testSqliteBench", key, "chatLogInsert", [scenario.bytes]),
+					callAction("testSqliteBench", key, "chatLogInsert", [
+						scenario.bytes,
+					]),
 				);
-				return buildEntry(group, name, e2eMs, result as { ms?: number; ops?: number });
+				return buildEntry(
+					group,
+					name,
+					e2eMs,
+					result as { ms?: number; ops?: number },
+				);
 			} catch (err) {
 				return buildFailedEntry(group, name, err);
 			}
@@ -364,9 +516,16 @@ function benchChatLogRead(): BenchFn[] {
 				try {
 					await callAction("testSqliteBench", key, "noop");
 					const { result, ms: e2eMs } = await timed(() =>
-						callAction("testSqliteBench", key, readBench.action, [scenario.bytes]),
+						callAction("testSqliteBench", key, readBench.action, [
+							scenario.bytes,
+						]),
 					);
-					return buildEntry(group, name, e2eMs, result as { ms?: number; ops?: number });
+					return buildEntry(
+						group,
+						name,
+						e2eMs,
+						result as { ms?: number; ops?: number },
+					);
 				} catch (err) {
 					return buildFailedEntry(group, name, err);
 				}
@@ -411,7 +570,9 @@ async function main(): Promise<void> {
 		const entry = await allBenches[i]();
 		entries.push(entry);
 		const status = entry.failed ? "FAILED" : fmt(entry.e2eMs);
-		process.stdout.write(`  [${String(i + 1).padStart(2)}/${allBenches.length}] ${entry.name.padEnd(40)} ${status}\n`);
+		process.stdout.write(
+			`  [${String(i + 1).padStart(2)}/${allBenches.length}] ${entry.name.padEnd(40)} ${status}\n`,
+		);
 	}
 
 	printTable(entries, baselineMs);

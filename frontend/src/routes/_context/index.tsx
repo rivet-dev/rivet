@@ -6,9 +6,9 @@ import { redirectToOrganization } from "@/lib/auth";
 import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/")({
-	component: () => (features.multitenancy ? <CloudRoute /> : <EngineRoute />),
+	component: () => (features.platform ? <CloudRoute /> : <EngineRoute />),
 	beforeLoad: async ({ context, search }) => {
-		if (features.multitenancy) {
+		if (features.platform) {
 			if (!(await redirectToOrganization(search))) {
 				throw redirect({ to: "/login", search: true });
 			}

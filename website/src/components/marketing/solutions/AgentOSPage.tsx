@@ -248,45 +248,45 @@ interface HeroImage {
 const heroImages: HeroImage[] = [
 	// Human work
 	{
-		src: '/images/agent-os/division-classification-cataloging.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/division-classification-cataloging.jpg',
 		title: 'Division of Classification and Cataloging',
 		caption: 'Manual human labor at scale',
 	},
 	{
-		src: '/images/agent-os/crowded-office-space.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/crowded-office-space.jpg',
 		title: 'Crowded Office Space',
 		caption: 'Rooms full of human operators',
 	},
 	// Automation with computers
 	{
-		src: '/images/agent-os/early-computer-room.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/early-computer-room.jpg',
 		title: 'Early Computer Room',
 		caption: 'The first machines',
 	},
 	{
-		src: '/images/agent-os/unix-timesharing-uw-madison-1978.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/unix-timesharing-uw-madison-1978.jpg',
 		title: 'Unix Timesharing',
 		caption: 'UW-Madison, 1978',
 	},
 	{
-		src: '/images/agent-os/early-computing-workstation.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/early-computing-workstation.jpg',
 		title: 'Early Computing Workstation',
 		caption: 'Humans operating computers',
 	},
 	{
-		src: '/images/agent-os/apollo-14-mission-control.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/apollo-14-mission-control.jpg',
 		title: 'Apollo 14: Mission Control Center',
 		caption: 'Computers in mission-critical work',
 	},
 	// Modern work
 	{
-		src: '/images/agent-os/modern-office.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/modern-office.jpg',
 		title: 'Modern Office',
 		caption: "Today's human operators",
 	},
 	// AI agents of tomorrow
 	{
-		src: '/images/agent-os/data-flock.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg',
 		title: 'Data Flock (digits)',
 		caption: 'The agent era',
 	},
@@ -1859,6 +1859,102 @@ const BeforeAfterSlider = ({ before, after }: { before: string; after: string })
 };
 
 // --- From Unix to Agents ---
+const SisterProducts = () => {
+	const products = [
+		{
+			name: 'Secure Exec',
+			tagline: 'Secure Node.js execution without a sandbox.',
+			bullets: [
+				'V8 isolates with bridged Node APIs',
+				'npm-compatible: fs, child_process, http',
+				'176x faster cold start than containers',
+				'Just `npm install` — no Docker, no VMs',
+			],
+			href: 'https://secureexec.dev/',
+			cta: 'secureexec.dev',
+		},
+		{
+			name: 'Sandbox Agent SDK',
+			tagline: 'Run coding agents in sandboxes. Control them over HTTP.',
+			bullets: [
+				'One interface for Claude Code, Codex, OpenCode, Amp',
+				'Streams events, handles permissions, manages sessions',
+				'Replay, audit, and retain full transcripts',
+				'Swap agents with a config change',
+			],
+			href: 'https://sandboxagent.dev/',
+			cta: 'sandboxagent.dev',
+		},
+	];
+
+	return (
+		<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
+			<div className='mx-auto max-w-5xl'>
+				<div className='mb-12 max-w-3xl'>
+					<motion.span
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5 }}
+						className='mb-4 inline-block text-xs font-medium uppercase tracking-[0.18em] text-zinc-500'
+					>
+						The Rest of the Suite
+					</motion.span>
+					<motion.h2
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5, delay: 0.05 }}
+						className='mb-4 text-3xl font-normal tracking-tight text-zinc-900 md:text-4xl'
+					>
+						Pairs with agentOS.
+					</motion.h2>
+					<motion.p
+						initial={{ opacity: 0, y: 20 }}
+						whileInView={{ opacity: 1, y: 0 }}
+						viewport={{ once: true }}
+						transition={{ duration: 0.5, delay: 0.1 }}
+						className='text-base leading-relaxed text-zinc-500 md:text-lg'
+					>
+						agentOS is where agents live. Secure Exec is how you safely run the code they generate. Sandbox Agent SDK is how you control coding agents over HTTP.
+					</motion.p>
+				</div>
+
+				<div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
+					{products.map((product, idx) => (
+						<motion.a
+							key={product.name}
+							href={product.href}
+							target='_blank'
+							rel='noopener noreferrer'
+							initial={{ opacity: 0, y: 20 }}
+							whileInView={{ opacity: 1, y: 0 }}
+							viewport={{ once: true }}
+							transition={{ duration: 0.5, delay: 0.05 * idx }}
+							className='group flex flex-col rounded-xl border border-zinc-200 bg-white p-6 transition-colors hover:border-zinc-300'
+						>
+							<h3 className='mb-2 text-lg font-medium text-zinc-900'>{product.name}</h3>
+							<p className='mb-6 text-sm leading-relaxed text-zinc-600'>{product.tagline}</p>
+							<ul className='mb-8 flex flex-grow flex-col gap-2'>
+								{product.bullets.map((bullet) => (
+									<li key={bullet} className='flex items-start gap-2 text-sm leading-relaxed text-zinc-500'>
+										<span className='mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-zinc-400' />
+										<span>{bullet}</span>
+									</li>
+								))}
+							</ul>
+							<div className='inline-flex items-center gap-2 text-sm font-medium text-zinc-900 transition-colors group-hover:text-zinc-600'>
+								{product.cta}
+								<ArrowRight className='h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5' />
+							</div>
+						</motion.a>
+					))}
+				</div>
+			</div>
+		</section>
+	);
+};
+
 const FromUnixToAgents = () => (
 	<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
 		<div className='mx-auto max-w-5xl'>
@@ -1871,8 +1967,8 @@ const FromUnixToAgents = () => (
 					className='flex-1'
 				>
 					<BeforeAfterSlider
-						before='/images/agent-os/unix-timesharing-uw-madison-1978.jpg'
-						after='/images/agent-os/data-flock.jpg'
+						before='https://assets.rivet.dev/website/public/images/agent-os/unix-timesharing-uw-madison-1978.jpg'
+						after='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 					/>
 					<p className='mt-2 text-xs text-zinc-400'>
 						Left: Unix timesharing, UW-Madison, 1978. Right: "Data flock (digits)" by Philipp Schmitt, <a href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg' className='underline hover:text-zinc-600' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>
@@ -1912,6 +2008,7 @@ export default function AgentOSPage({ heroTabs }: AgentOSPageProps) {
 				<Hero heroTabs={heroTabs} />
 				<TechnologyAndBenchmarks />
 				<AgentOSFeatures />
+				<SisterProducts />
 				<FromUnixToAgents />
 			</main>
 		</div>

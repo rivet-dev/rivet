@@ -20,7 +20,7 @@ pub async fn route_request(
 
 	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "routing to runner via header");
 
-	route_runner_internal(ctx, req_ctx).await.map(Some)
+	route_request_inner(ctx, req_ctx).await.map(Some)
 }
 
 /// Route requests to the runner service using path-based routing
@@ -38,12 +38,12 @@ pub async fn route_request_path_based(
 
 	tracing::debug!(hostname=%req_ctx.hostname(), path=%req_ctx.path(), "routing to runner via path");
 
-	route_runner_internal(ctx, req_ctx).await.map(Some)
+	route_request_inner(ctx, req_ctx).await.map(Some)
 }
 
 /// Internal runner routing logic shared by both header-based and path-based routing
 #[tracing::instrument(skip_all)]
-async fn route_runner_internal(
+async fn route_request_inner(
 	ctx: &StandaloneCtx,
 	req_ctx: &RequestContext,
 ) -> Result<RoutingOutput> {

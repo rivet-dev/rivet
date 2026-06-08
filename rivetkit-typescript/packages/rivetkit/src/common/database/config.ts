@@ -42,10 +42,7 @@ export interface SqliteDatabase {
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
 	): Promise<void>;
-	execute(
-		sql: string,
-		params?: SqliteBindings,
-	): Promise<SqliteExecuteResult>;
+	execute(sql: string, params?: SqliteBindings): Promise<SqliteExecuteResult>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
 	nativeMetrics?():
@@ -132,10 +129,7 @@ export interface RawDatabaseClient {
 /**
  * Drizzle database client interface (will be extended by drizzle-orm types)
  */
-export interface DrizzleDatabaseClient {
-	// This will be extended by BaseSQLiteDatabase from drizzle-orm
-	// For now, just a marker interface
-}
+export type DrizzleDatabaseClient = {};
 
 type ExecuteFunction = <
 	TRow extends Record<string, unknown> = Record<string, unknown>,

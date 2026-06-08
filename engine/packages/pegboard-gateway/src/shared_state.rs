@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_guard_core::errors::WebSocketServiceTimeout;
+use pegboard::pubsub_subjects::GatewayReceiverSubject;
+use rivet_guard_core::errors::WebSocketTunnelPingTimeout;
 use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
@@ -125,7 +126,7 @@ pub enum MsgGcReason {
 pub struct SharedStateInner {
 	ups: PubSub,
 	gateway_id: protocol::mk2::GatewayId,
-	receiver_subject: String,
+	receiver_subject: GatewayReceiverSubject,
 	in_flight_requests: HashMap<protocol::mk2::RequestId, InFlightRequest>,
 	hibernation_timeout: i64,
 	// Config values
@@ -142,8 +143,7 @@ impl SharedState {
 	pub fn new(config: &rivet_config::Config, ups: PubSub) -> Self {
 		let gateway_id = protocol::util::generate_gateway_id();
 		tracing::info!(gateway_id = %protocol::util::id_to_string(&gateway_id), "setting up shared state for gateway");
-		let receiver_subject =
-			pegboard::pubsub_subjects::GatewayReceiverSubject::new(gateway_id).to_string();
+		let receiver_subject = GatewayReceiverSubject::new(gateway_id);
 
 		let pegboard_config = config.pegboard();
 		Self(Arc::new(SharedStateInner {
@@ -326,9 +326,14 @@ impl SharedState {
 		let now = util::timestamp::now();
 
 		// Verify ping timeout
-		if now.saturating_sub(req.last_pong) > self.tunnel_ping_timeout {
+		let last_pong_age_ms = now.saturating_sub(req.last_pong);
+		if last_pong_age_ms > self.tunnel_ping_timeout {
 			tracing::warn!(runner_topic=%req.receiver_subject, "tunnel timeout");
-			return Err(WebSocketServiceTimeout.build());
+			return Err(WebSocketTunnelPingTimeout {
+				timeout_ms: self.tunnel_ping_timeout as u64,
+				last_pong_age_ms: last_pong_age_ms as u64,
+			}
+			.build());
 		}
 
 		let message_serialized = if protocol::is_mk2(req.protocol_version) {
@@ -400,6 +405,12 @@ impl SharedState {
 					Ok(NextOutput::Unsubscribed) => {
 						tracing::error!(
 							"gateway subscription unsubscribed, in flight messages may be lost"
+						);
+						break;
+					}
+					Ok(NextOutput::NoResponders) => {
+						tracing::error!(
+							"gateway subscription no responders, in flight messages may be lost"
 						);
 						break;
 					}

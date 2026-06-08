@@ -20,7 +20,7 @@ type CloudDataProvider = ReturnType<typeof createNamespaceCloudContext> &
 	ReturnType<typeof createGlobalCloudContext>;
 
 export const useDataProvider = (): EngineDataProvider | CloudDataProvider => {
-	if (features.multitenancy) {
+	if (features.platform) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		return useLoaderData({
 			from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
@@ -38,7 +38,7 @@ export const useDataProviderCheck = () => {
 	const matchRoute = useMatchRoute();
 	return matchRoute({
 		fuzzy: true,
-		to: features.multitenancy
+		to: features.platform
 			? "/orgs/$organization/projects/$project/ns/$namespace"
 			: "/ns/$namespace",
 	});
@@ -80,7 +80,7 @@ export const useCloudNamespaceDataProvider = () => {
 };
 
 export const useEngineCompatDataProvider = () => {
-	if (features.multitenancy) {
+	if (features.platform) {
 		// biome-ignore lint/correctness/useHookAtTopLevel: guarded by build constant
 		return useLoaderData({
 			from: "/_context/orgs/$organization/projects/$project/ns/$namespace",

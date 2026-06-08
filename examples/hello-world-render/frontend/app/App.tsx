@@ -16,7 +16,7 @@ import {
 	RenderLogo,
 	ThemeToggle,
 } from "render-dds";
-import { rivetClientBase, type AppRegistry } from "./rivet-client";
+import { type AppRegistry, rivetClientBase } from "./rivet-client";
 
 export function App() {
 	const rivet = useMemo(
@@ -116,8 +116,9 @@ export function App() {
 							Shared counter
 						</h1>
 						<p className="mx-auto mt-4 max-w-2xl text-pretty text-base leading-relaxed text-muted-foreground sm:text-lg md:text-xl">
-							One actor, any number of tabs. Use the same actor key everywhere to share state —
-							powered by RivetKit on Render or Rivet Cloud.
+							One actor, any number of tabs. Use the same actor
+							key everywhere to share state — powered by RivetKit
+							on Render or Rivet Cloud.
 						</p>
 
 						<div className="mt-10 w-full max-w-md md:mt-12">
@@ -126,8 +127,12 @@ export function App() {
 								className="overflow-hidden border-border text-left shadow-lg shadow-black/5 dark:shadow-black/20"
 							>
 								<div className="flex flex-col items-center justify-between gap-1 border-b border-border bg-muted/30 px-5 py-4 text-center sm:flex-row sm:text-left dark:bg-muted/15">
-									<span className="text-sm font-semibold text-foreground">Your counter</span>
-									<span className="text-xs text-muted-foreground">Actor: counter</span>
+									<span className="text-sm font-semibold text-foreground">
+										Your counter
+									</span>
+									<span className="text-xs text-muted-foreground">
+										Actor: counter
+									</span>
 								</div>
 
 								<CardContent className="space-y-0 border-b border-border px-5 py-5">
@@ -136,7 +141,9 @@ export function App() {
 										helperText="Same key in another window = same running total."
 										label="Actor key"
 										value={actorKey}
-										onChange={(e) => setActorKey(e.target.value)}
+										onChange={(e) =>
+											setActorKey(e.target.value)
+										}
 										placeholder="e.g. default"
 										autoComplete="off"
 									/>
@@ -181,7 +188,10 @@ export function App() {
 										title="Try it"
 										variant="help"
 									>
-										<p>Open this page in two tabs with the same actor key — both stay in sync.</p>
+										<p>
+											Open this page in two tabs with the
+											same actor key — both stay in sync.
+										</p>
 									</Alert>
 								</div>
 							</Card>
@@ -191,9 +201,14 @@ export function App() {
 
 				<section className="flex justify-center px-4 pb-10 pt-2 md:pb-14">
 					<div className="w-full max-w-md">
-						<Card variant="outlined" className="border-dashed border-border/80 text-center">
+						<Card
+							variant="outlined"
+							className="border-dashed border-border/80 text-center"
+						>
 							<CardHeader className="pb-2">
-								<CardTitle className="text-base">Deploy on Render</CardTitle>
+								<CardTitle className="text-base">
+									Deploy on Render
+								</CardTitle>
 							</CardHeader>
 							<CardContent className="flex justify-center pt-0">
 								<a

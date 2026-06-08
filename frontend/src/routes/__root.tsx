@@ -29,6 +29,7 @@ function CloudRoute() {
 	return (
 		<>
 			<Outlet />
+			<DevToolbar />
 			{import.meta.env.DEV ? (
 				<TanStackRouterDevtools position="bottom-right" />
 			) : null}
@@ -64,6 +65,6 @@ interface RootRouteContext {
 }
 
 export const Route = createRootRouteWithContext<RootRouteContext>()({
-	component: features.auth && features.multitenancy ? CloudRoute : RootRoute,
+	component: features.auth && features.platform ? CloudRoute : RootRoute,
 	pendingComponent: FullscreenLoading,
 });

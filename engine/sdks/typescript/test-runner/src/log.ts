@@ -1,6 +1,5 @@
 import { inspect } from "node:util";
 import {
-	type Level,
 	type LevelWithSilent,
 	type Logger,
 	pino,
@@ -16,13 +15,13 @@ const loggerCache = new Map<string, Logger>();
 
 export function getPinoLevel(): LevelWithSilent {
 	// Priority: env > default
-	return (process.env["LOG_LEVEL"] || "warn")
+	return (process.env.LOG_LEVEL || "warn")
 		.toString()
 		.toLowerCase() as LevelWithSilent;
 }
 
 export function getIncludeTarget(): boolean {
-	return process.env["LOG_TARGET"] === "1";
+	return process.env.LOG_TARGET === "1";
 }
 
 /**
@@ -38,7 +37,7 @@ function customWrite(level: string, o: any) {
 	const entries: any = {};
 
 	// Add timestamp if enabled
-	if (process.env["LOG_TIMESTAMP"] === "1" && o.time) {
+	if (process.env.LOG_TIMESTAMP === "1" && o.time) {
 		const date = typeof o.time === "number" ? new Date(o.time) : new Date();
 		entries.ts = date;
 	}
@@ -85,6 +84,7 @@ export async function configureDefaultLogger(): Promise<void> {
 	baseLogger = pino({
 		level: getPinoLevel(),
 		messageKey: "msg",
+		errorKey: "error",
 		// Do not include pid/hostname in output
 		base: {},
 		// Keep a string level in the output
@@ -94,7 +94,7 @@ export async function configureDefaultLogger(): Promise<void> {
 			},
 		},
 		timestamp:
-			process.env["LOG_TIMESTAMP"] === "1"
+			process.env.LOG_TIMESTAMP === "1"
 				? stdTimeFunctions.epochTime
 				: false,
 		browser: {
@@ -121,9 +121,7 @@ export async function configureDefaultLogger(): Promise<void> {
 				};
 				const levelName = levelMap[level] || "info";
 				const time =
-					process.env["LOG_TIMESTAMP"] === "1"
-						? Date.now()
-						: undefined;
+					process.env.LOG_TIMESTAMP === "1" ? Date.now() : undefined;
 				// TODO: This can be simplified in logfmt.ts
 				if (inputArgs.length >= 2) {
 					const [objOrMsg, msg] = inputArgs;

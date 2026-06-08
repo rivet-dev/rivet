@@ -5,12 +5,7 @@ import {
 	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
-import {
-	useInfiniteQuery,
-	useMutation,
-	useQuery,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect } from "react";
 import { useRivetDsn } from "@/app/env-variables";
 import {
@@ -25,6 +20,7 @@ import {
 	useCloudNamespaceDataProvider,
 } from "@/components/actors";
 import { Button } from "@/components/ui/button";
+import { getAgentInstructionsPrompt } from "@/content/agent-prompts";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
 import { queryClient } from "@/queries/global";
@@ -49,8 +45,11 @@ export default function ConnectRivetFrameContent({
 		upsertManagedPool({
 			displayName: "default",
 			pool: "default",
-			minCount: 0,
-			maxCount: 100_000,
+			image: undefined,
+			maxConcurrentActors: 50_000,
+			environment: {},
+			command: undefined,
+			args: [],
 		});
 	}, [upsertManagedPool]);
 
@@ -77,7 +76,7 @@ export default function ConnectRivetFrameContent({
 				deriveProviderFromMetadata(dc.metadata) === "rivet",
 		),
 	);
-	const hasValidPool = !!poolData?.config.image;
+	const hasValidPool = !!poolData?.config?.image;
 	const isSuccess =
 		hasRunnerConfig && hasValidPool && poolData?.status === "ready";
 
@@ -154,28 +153,15 @@ function StepNumber({ n }: { n: number }) {
 }
 
 function AgentInstructions() {
-	const dataProvider = useCloudNamespaceDataProvider();
-	const { data: cloudToken } = useSuspenseQuery(
-		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
-	);
-
 	const publishableToken = useRivetDsn({ kind: "publishable" });
 	const secretToken = useRivetDsn({ kind: "secret" });
 
-	const code = `Load the Rivet skill and then:
-1. Integrate Rivet into the project
-2. Set up a GitHub Actions workflow using
-   the repository secret RIVET_TOKEN
-   for automated deployment
-3. Deploy to Rivet and configure
-   the following environment variables:
-
-  RIVET_PUBLIC_ENDPOINT=${publishableToken}
-  RIVET_ENDPOINT=${secretToken}
-  RIVET_TOKEN=${cloudToken}
-
-4. Verify the deployment works end-to-end;
-   fix any issues and repeat until it succeeds`;
+	const code = getAgentInstructionsPrompt({
+		providerStr: "your chosen provider",
+		publishableToken,
+		secretToken,
+		runnerName: "default",
+	});
 
 	return (
 		<CodeFrame language="markdown" code={() => code} className="m-0">
@@ -200,7 +186,8 @@ function PoolStatus({
 		| "initializing"
 		| "allocating"
 		| "deploying"
-		| "binding";
+		| "binding"
+		| "destroying";
 	error?: string;
 	isSuccess: boolean;
 }) {
@@ -263,6 +250,14 @@ function PoolStatus({
 			<span>
 				<Icon icon={faSpinnerThird} className="mr-1.5 animate-spin" />
 				Binding...
+			</span>
+		);
+	}
+	if (status === "destroying") {
+		return (
+			<span>
+				<Icon icon={faSpinnerThird} className="mr-1.5 animate-spin" />
+				Destroying...
 			</span>
 		);
 	}

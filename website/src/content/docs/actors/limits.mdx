@@ -90,6 +90,9 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Max storage size per actor | — | 10 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
+| Max dirty data per commit | — | 1,310,720 bytes | Maximum raw SQLite page data that can be written in a single commit. This is 320 dirty pages at 4 KiB per page. |
+
+SQLite commit deltas are compressed and split into internal chunks before storage, but all chunks for one commit are published atomically. The commit limit is therefore based on raw dirty page bytes before compression, not the compressed delta size.
 
 ### KV Preloading
 

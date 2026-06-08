@@ -1,5 +1,6 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { type Rivet } from "@rivetkit/engine-api-full";
+import { infiniteQueryOptions, useInfiniteQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import { Combobox } from "@/components";
 import { useEngineCompatDataProvider } from "./data-provider";
 
@@ -8,29 +9,79 @@ interface AllRunnerSelectProps {
 	value: string;
 }
 
+const emptyRunnerNamesQueryOptions = infiniteQueryOptions({
+	queryKey: ["noop-runner-names"] as readonly unknown[],
+	queryFn: async (): Promise<Rivet.RunnersListNamesResponse> => ({
+		names: [],
+		pagination: {},
+	}),
+	initialPageParam: undefined as string | undefined,
+	getNextPageParam: () => undefined,
+	select: (data) => data.pages.flatMap((page) => page.names),
+});
+
+const emptyRunnerConfigsQueryOptions = infiniteQueryOptions({
+	queryKey: ["noop-runner-configs"] as readonly unknown[],
+	queryFn: async (): Promise<Rivet.RunnerConfigsListResponse> => ({
+		runnerConfigs: {},
+		pagination: {},
+	}),
+	initialPageParam: undefined as string | undefined,
+	getNextPageParam: () => undefined,
+	select: (data) =>
+		data.pages.flatMap((page) => Object.keys(page.runnerConfigs)),
+});
+
 export const useAllRunners = () => {
+	const dataProvider = useEngineCompatDataProvider();
+	const hasRunnerNames = "runnerNamesQueryOptions" in dataProvider;
 	const {
 		data: runners = [],
 		hasNextPage: runnersHasNextPage,
 		fetchNextPage: fetchNextRunnersPage,
 		isLoading: runnersIsLoading,
 		isFetchingNextPage: runnersIsFetchingNextPage,
-	} = useInfiniteQuery(
-		useEngineCompatDataProvider().runnerNamesQueryOptions(),
-	);
+	} = useInfiniteQuery<
+		Rivet.RunnersListNamesResponse,
+		Error,
+		string[],
+		readonly unknown[],
+		string | undefined
+	>({
+		...(hasRunnerNames
+			? dataProvider.runnerNamesQueryOptions()
+			: emptyRunnerNamesQueryOptions),
+		enabled: hasRunnerNames,
+	});
 
+	const hasRunnerConfigs = "runnerConfigsQueryOptions" in dataProvider;
 	const {
 		data: serverlessRunners = [],
 		hasNextPage: serverlessHasNextPage,
 		fetchNextPage: fetchNextServerlessPage,
 		isLoading: serverlessIsLoading,
 		isFetchingNextPage: serverlessIsFetchingNextPage,
-	} = useInfiniteQuery({
-		...useEngineCompatDataProvider().runnerConfigsQueryOptions({
-			variant: "serverless",
-		}),
-		select: (data) =>
-			data.pages.flatMap((page) => Object.keys(page.runnerConfigs)),
+	} = useInfiniteQuery<
+		Rivet.RunnerConfigsListResponse,
+		Error,
+		string[],
+		readonly unknown[],
+		string | undefined
+	>({
+		...(hasRunnerConfigs
+			? {
+					...dataProvider.runnerConfigsQueryOptions({
+						variant: "serverless",
+					}),
+					select: (data: {
+						pages: { runnerConfigs: Record<string, unknown> }[];
+					}) =>
+						data.pages.flatMap((page) =>
+							Object.keys(page.runnerConfigs),
+						),
+				}
+			: emptyRunnerConfigsQueryOptions),
+		enabled: hasRunnerConfigs,
 	});
 
 	const allRunners = useMemo(() => {

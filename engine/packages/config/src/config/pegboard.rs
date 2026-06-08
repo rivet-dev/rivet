@@ -1,3 +1,4 @@
+use anyhow::{Result, bail};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
@@ -136,6 +137,12 @@ pub struct Pegboard {
 	///
 	/// Unit is in milliseconds.
 	pub envoy_eligible_threshold: Option<i64>,
+	/// Strategy for choosing an Envoy when allocating a serverful actor.
+	pub envoy_load_balancer: Option<EnvoyLoadBalancer>,
+	/// Maximum concurrent background expire operations spawned by the read-path envoy expire scheduler.
+	pub envoy_expire_scheduler_max_concurrent_expires: Option<usize>,
+	/// Maximum pending envoys tracked by the read-path envoy expire scheduler.
+	pub envoy_expire_scheduler_max_pending: Option<usize>,
 
 	// === Serverless Settings ===
 	/// **Deprecated** Configure the drain period in the runner config.
@@ -158,6 +165,39 @@ pub struct Pegboard {
 }
 
 impl Pegboard {
+	pub fn validate(&self) -> Result<()> {
+		if let Some(EnvoyLoadBalancer::Hash {
+			virtual_nodes,
+			samples,
+			max_scan,
+			slot_jitter,
+			..
+		}) = self.envoy_load_balancer
+		{
+			if samples == 0 || samples > 8 {
+				bail!("pegboard.envoy_load_balancer.hash.samples must be in 1..=8");
+			}
+
+			if virtual_nodes == 0 || virtual_nodes > 64 {
+				bail!("pegboard.envoy_load_balancer.hash.virtual_nodes must be in 1..=64");
+			}
+
+			if max_scan == 0 || max_scan > 256 {
+				bail!("pegboard.envoy_load_balancer.hash.max_scan must be in 1..=256");
+			}
+
+			if slot_jitter > 64 {
+				bail!("pegboard.envoy_load_balancer.hash.slot_jitter must be in 0..=64");
+			}
+		}
+
+		if self.envoy_expire_scheduler_max_concurrent_expires == Some(0) {
+			bail!("pegboard.envoy_expire_scheduler_max_concurrent_expires must be greater than 0");
+		}
+
+		Ok(())
+	}
+
 	pub fn base_retry_timeout(&self) -> usize {
 		self.base_retry_timeout.unwrap_or(2_000)
 	}
@@ -312,6 +352,19 @@ impl Pegboard {
 		self.envoy_eligible_threshold.unwrap_or(10_000)
 	}
 
+	pub fn envoy_load_balancer(&self) -> EnvoyLoadBalancer {
+		self.envoy_load_balancer.unwrap_or_default()
+	}
+
+	pub fn envoy_expire_scheduler_max_concurrent_expires(&self) -> usize {
+		self.envoy_expire_scheduler_max_concurrent_expires
+			.unwrap_or(32)
+	}
+
+	pub fn envoy_expire_scheduler_max_pending(&self) -> usize {
+		self.envoy_expire_scheduler_max_pending.unwrap_or(1024)
+	}
+
 	pub fn serverless_drain_grace_period(&self) -> u64 {
 		self.serverless_drain_grace_period.unwrap_or(10_000)
 	}
@@ -319,4 +372,96 @@ impl Pegboard {
 	pub fn preload_max_total_bytes(&self) -> u64 {
 		self.preload_max_total_bytes.unwrap_or(1_048_576)
 	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, JsonSchema)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub enum EnvoyLoadBalancer {
+	/// Current default. Finds the highest protocol version, then seeks from a random ping timestamp.
+	RandomPingTimestamp {
+		#[serde(default = "default_true")]
+		use_snapshot_read: bool,
+	},
+	/// Finds the highest protocol version, then chooses the newest fresh ping timestamp.
+	/// This is purely for testing behavior that pins allocations to a single Envoy.
+	NewestPingTimestamp {
+		#[serde(default = "default_true")]
+		use_snapshot_read: bool,
+	},
+	/// Reads the full highest-version Envoy load-balancer range and chooses a random eligible Envoy.
+	RandomFullRange {
+		#[serde(default = "default_true")]
+		use_snapshot_read: bool,
+	},
+	/// Hash-ring-based envoy selection backed by `EnvoyHashIdxKey`.
+	///
+	/// `samples` controls the algorithm:
+	/// - `1`: uniform random pick — draws one random ring pivot and returns
+	///   the first fresh envoy. **Short-circuits past the `SlotsKey` read**,
+	///   so this variant is strictly cheaper than `samples >= 2`. Pick when
+	///   actor cost per envoy is uniform or measurements don't justify load
+	///   awareness.
+	/// - `>= 2`: power-of-K choices. Draws K independent random pivots,
+	///   reads `SlotsKey` for each, picks min slots with uniform random
+	///   tiebreak. Recommended default.
+	Hash {
+		#[serde(default = "default_virtual_nodes")]
+		virtual_nodes: u8,
+		/// Number of independent ring samples per allocation.
+		/// `1` = uniform pick (no slot read), `>= 2` = power-of-K-choices.
+		#[serde(default = "default_samples")]
+		samples: u8,
+		/// Maximum stale entries walked per `scan_for_fresh` call before
+		/// aborting and returning `None`. Circuit breaker against pathological
+		/// drain scenarios. Default 16. Range 1..=256.
+		#[serde(default = "default_max_scan")]
+		max_scan: u32,
+		/// Additive random integer added to each candidate's slot count before
+		/// the min-slot comparison. Decorrelates concurrent allocators reading
+		/// the same stale `SlotsKey` snapshot. Only relevant when `samples >= 2`.
+		/// `0` disables. Range 0..=64. Default 4.
+		///
+		/// See `slot_jitter` block in
+		/// `engine/packages/pegboard/src/workflows/actor2/alloc_serverful/hash.rs`
+		/// for how the default was sized.
+		#[serde(default = "default_slot_jitter")]
+		slot_jitter: u8,
+		#[serde(default = "default_true")]
+		use_snapshot_read: bool,
+	},
+}
+
+impl Default for EnvoyLoadBalancer {
+	fn default() -> Self {
+		// EnvoyLoadBalancer::RandomPingTimestamp {
+		// 	use_snapshot_read: true,
+		// }
+		EnvoyLoadBalancer::Hash {
+			virtual_nodes: 8,
+			samples: 2,
+			max_scan: 16,
+			slot_jitter: 4,
+			use_snapshot_read: true,
+		}
+	}
+}
+
+fn default_true() -> bool {
+	true
+}
+
+fn default_virtual_nodes() -> u8 {
+	8
+}
+
+fn default_samples() -> u8 {
+	2
+}
+
+fn default_max_scan() -> u32 {
+	16
+}
+
+fn default_slot_jitter() -> u8 {
+	4
 }

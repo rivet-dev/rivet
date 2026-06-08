@@ -207,7 +207,7 @@ async fn read_desired(ctx: &ActivityCtx, input: &ReadDesiredInput) -> Result<Rea
 			runners: vec![(input.namespace_id, input.runner_name.clone())],
 			bypass_cache: false,
 		}),
-		udb_pool.run(|tx| async move {
+		udb_pool.txn("pegboard_runner_pool_read_desired_slots", |tx| async move {
 			let tx = tx.with_subspace(keys::pegboard::subspace());
 
 			let desired_slots = tx

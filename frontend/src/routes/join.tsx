@@ -11,7 +11,8 @@ export const Route = createFileRoute("/join")({
 			const session = await authClient.getSession();
 			if (session.data) {
 				await redirectToOrganization({
-					from: "from" in search ? (search.from as string) : undefined,
+					from:
+						"from" in search ? (search.from as string) : undefined,
 				});
 			}
 		}

@@ -1523,6 +1523,28 @@ impl EnvoyLoadBalancerIdxKey {
 		EnvoyLoadBalancerIdxSubspaceKey::new(namespace_id, pool_name)
 	}
 
+	pub fn subspace_with_version(
+		namespace_id: Id,
+		pool_name: String,
+		version: u32,
+	) -> EnvoyLoadBalancerIdxSubspaceKey {
+		EnvoyLoadBalancerIdxSubspaceKey::new_with_version(namespace_id, pool_name, version)
+	}
+
+	pub fn subspace_with_last_ping_ts(
+		namespace_id: Id,
+		pool_name: String,
+		version: u32,
+		last_ping_ts: i64,
+	) -> EnvoyLoadBalancerIdxSubspaceKey {
+		EnvoyLoadBalancerIdxSubspaceKey::new_with_last_ping_ts(
+			namespace_id,
+			pool_name,
+			version,
+			last_ping_ts,
+		)
+	}
+
 	pub fn entire_subspace() -> EnvoyLoadBalancerIdxSubspaceKey {
 		EnvoyLoadBalancerIdxSubspaceKey::entire()
 	}
@@ -1580,6 +1602,8 @@ impl<'de> TupleUnpack<'de> for EnvoyLoadBalancerIdxKey {
 pub struct EnvoyLoadBalancerIdxSubspaceKey {
 	pub namespace_id: Option<Id>,
 	pub pool_name: Option<String>,
+	pub version: Option<u32>,
+	pub last_ping_ts: Option<i64>,
 }
 
 impl EnvoyLoadBalancerIdxSubspaceKey {
@@ -1587,6 +1611,31 @@ impl EnvoyLoadBalancerIdxSubspaceKey {
 		EnvoyLoadBalancerIdxSubspaceKey {
 			namespace_id: Some(namespace_id),
 			pool_name: Some(pool_name),
+			version: None,
+			last_ping_ts: None,
+		}
+	}
+
+	pub fn new_with_version(namespace_id: Id, pool_name: String, version: u32) -> Self {
+		EnvoyLoadBalancerIdxSubspaceKey {
+			namespace_id: Some(namespace_id),
+			pool_name: Some(pool_name),
+			version: Some(version),
+			last_ping_ts: None,
+		}
+	}
+
+	pub fn new_with_last_ping_ts(
+		namespace_id: Id,
+		pool_name: String,
+		version: u32,
+		last_ping_ts: i64,
+	) -> Self {
+		EnvoyLoadBalancerIdxSubspaceKey {
+			namespace_id: Some(namespace_id),
+			pool_name: Some(pool_name),
+			version: Some(version),
+			last_ping_ts: Some(last_ping_ts),
 		}
 	}
 
@@ -1594,6 +1643,8 @@ impl EnvoyLoadBalancerIdxSubspaceKey {
 		EnvoyLoadBalancerIdxSubspaceKey {
 			namespace_id: None,
 			pool_name: None,
+			version: None,
+			last_ping_ts: None,
 		}
 	}
 }
@@ -1612,12 +1663,142 @@ impl TuplePack for EnvoyLoadBalancerIdxSubspaceKey {
 		if let Some(namespace_id) = &self.namespace_id {
 			offset += namespace_id.pack(w, tuple_depth)?;
 
-			if let Some(name) = &self.pool_name {
-				offset += name.pack(w, tuple_depth)?;
+			if let Some(pool_name) = &self.pool_name {
+				offset += pool_name.pack(w, tuple_depth)?;
+			}
+
+			if let Some(version) = &self.version {
+				// Stored in reverse order (higher versions are first)
+				offset += (-(*version as i32)).pack(w, tuple_depth)?;
+
+				if let Some(last_ping_ts) = &self.last_ping_ts {
+					offset += last_ping_ts.pack(w, tuple_depth)?;
+				}
 			}
 		}
 
 		Ok(offset)
+	}
+}
+
+#[derive(Debug)]
+pub struct EnvoyHashIdxKey {
+	pub namespace_id: Id,
+	pub pool_name: String,
+	pub version: u32,
+	pub hash_pos: [u8; 16],
+	pub envoy_key: String,
+}
+
+impl EnvoyHashIdxKey {
+	pub fn new(
+		namespace_id: Id,
+		pool_name: String,
+		version: u32,
+		hash_pos: [u8; 16],
+		envoy_key: String,
+	) -> Self {
+		EnvoyHashIdxKey {
+			namespace_id,
+			pool_name,
+			version,
+			hash_pos,
+			envoy_key,
+		}
+	}
+
+	pub fn subspace(namespace_id: Id, pool_name: String, version: u32) -> EnvoyHashIdxSubspaceKey {
+		EnvoyHashIdxSubspaceKey::new(namespace_id, pool_name, version)
+	}
+}
+
+impl FormalKey for EnvoyHashIdxKey {
+	type Value = ();
+
+	fn deserialize(&self, _raw: &[u8]) -> Result<Self::Value> {
+		Ok(())
+	}
+
+	fn serialize(&self, _value: Self::Value) -> Result<Vec<u8>> {
+		Ok(Vec::new())
+	}
+}
+
+impl TuplePack for EnvoyHashIdxKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY_HASH_IDX,
+			self.namespace_id,
+			&self.pool_name,
+			// Stored in reverse order (higher versions are first)
+			-(self.version as i32),
+			&self.hash_pos[..],
+			&self.envoy_key,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for EnvoyHashIdxKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, namespace_id, pool_name, version, hash_pos, envoy_key)) =
+			<(usize, usize, Id, String, i32, Vec<u8>, String)>::unpack(input, tuple_depth)?;
+		let hash_pos = hash_pos
+			.try_into()
+			.map_err(|_| PackError::Message("expected 16 byte hash position".into()))?;
+
+		// Negate in i64 to avoid the i32::MIN overflow case, then narrow to u32.
+		let version = u32::try_from(-(version as i64))
+			.map_err(|_| PackError::Message("envoy hash idx version out of u32 range".into()))?;
+
+		let v = EnvoyHashIdxKey {
+			namespace_id,
+			pool_name,
+			version,
+			hash_pos,
+			envoy_key,
+		};
+
+		Ok((input, v))
+	}
+}
+
+pub struct EnvoyHashIdxSubspaceKey {
+	pub namespace_id: Id,
+	pub pool_name: String,
+	pub version: u32,
+}
+
+impl EnvoyHashIdxSubspaceKey {
+	pub fn new(namespace_id: Id, pool_name: String, version: u32) -> Self {
+		EnvoyHashIdxSubspaceKey {
+			namespace_id,
+			pool_name,
+			version,
+		}
+	}
+}
+
+impl TuplePack for EnvoyHashIdxSubspaceKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY_HASH_IDX,
+			self.namespace_id,
+			&self.pool_name,
+			// Stored in reverse order (higher versions are first)
+			-(self.version as i32),
+		);
+		t.pack(w, tuple_depth)
 	}
 }
 

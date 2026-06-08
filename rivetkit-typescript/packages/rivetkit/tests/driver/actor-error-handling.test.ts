@@ -1,10 +1,9 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test } from "vitest";
 import {
 	INTERNAL_ERROR_CODE,
 	INTERNAL_ERROR_DESCRIPTION,
 } from "@/actor/errors";
-import { assertUnreachable } from "@/actor/utils";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Actor Error Handling", (driverTestConfig) => {
@@ -150,7 +149,7 @@ describeDriverMatrix("Actor Error Handling", (driverTestConfig) => {
 				// Trigger an error
 				try {
 					await handle.throwSimpleError();
-				} catch (error) {
+				} catch (_error) {
 					// Ignore error
 				}
 

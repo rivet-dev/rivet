@@ -78,7 +78,7 @@ export const uniqueVarActor = actor({
 export const driverCtxActor = actor({
 	state: { value: 0 },
 	connState: { hello: "world" },
-	createVars: (c, driverCtx: any) => {
+	createVars: (_c, driverCtx: any) => {
 		return {
 			hasDriverCtx: Boolean(driverCtx?.isTest),
 		};

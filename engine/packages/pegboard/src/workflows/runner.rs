@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::time::{Duration, Instant};
 
 use futures_util::{FutureExt, StreamExt, TryStreamExt};
@@ -446,7 +447,7 @@ impl LifecycleState {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct InitInput {
 	runner_id: Id,
 	name: String,
@@ -468,7 +469,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 	*state = Some(State::new(input.namespace_id, input.create_ts));
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_init", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let runner_by_key_key = keys::ns::RunnerByKeyKey::new(
@@ -496,7 +497,7 @@ async fn init(ctx: &ActivityCtx, input: &InitInput) -> Result<InitOutput> {
 	})
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct InsertDbInput {
 	runner_id: Id,
 	namespace_id: Id,
@@ -510,7 +511,7 @@ struct InsertDbInput {
 #[activity(InsertDb)]
 async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_insert_db", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let remaining_slots_key = keys::runner::RemainingSlotsKey::new(input.runner_id);
@@ -651,7 +652,7 @@ async fn insert_db(ctx: &ActivityCtx, input: &InsertDbInput) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ClearDbInput {
 	runner_id: Id,
 	name: String,
@@ -659,7 +660,7 @@ struct ClearDbInput {
 	update_state: RunnerState,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 enum RunnerState {
 	Draining,
 	Stopped,
@@ -673,7 +674,7 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 
 	// TODO: Combine into a single udb txn
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_clear_db", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 			let now = util::timestamp::now();
 
@@ -727,12 +728,12 @@ async fn clear_db(ctx: &ActivityCtx, input: &ClearDbInput) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct ProcessInitInput {
 	runner_id: Id,
 	namespace_id: Id,
 	last_command_idx: i64,
-	prepopulate_actor_names: Option<util::serde::HashableMap<String, protocol::ActorName>>,
+	prepopulate_actor_names: Option<HashMap<String, protocol::ActorName>>,
 	metadata: Option<String>,
 }
 
@@ -747,7 +748,7 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 	let state = ctx.state::<State>()?;
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_process_init", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Populate actor names if provided
@@ -809,7 +810,7 @@ async fn process_init(ctx: &ActivityCtx, input: &ProcessInitInput) -> Result<Pro
 
 // TODO: Added while sqlite flushing system is in place. As the database grows, flushes get slower
 // and slower.
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AckCommandsInput {
 	last_command_idx: i64,
 }
@@ -825,7 +826,7 @@ async fn ack_commands(ctx: &ActivityCtx, input: &AckCommandsInput) -> Result<()>
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct InsertEventsInput {
 	events: Vec<protocol::EventWrapper>,
 }
@@ -853,7 +854,7 @@ async fn insert_events(ctx: &ActivityCtx, input: &InsertEventsInput) -> Result<(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct InsertCommandsInput {
 	commands: Vec<protocol::Command>,
 }
@@ -881,7 +882,7 @@ async fn insert_commands(ctx: &ActivityCtx, input: &InsertCommandsInput) -> Resu
 	Ok(old + 1)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct FetchRemainingActorsInput {
 	runner_id: Id,
 }
@@ -893,7 +894,7 @@ async fn fetch_remaining_actors(
 ) -> Result<Vec<(Id, u32)>> {
 	let actors = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_fetch_remaining_actors", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let actor_subspace =
@@ -920,7 +921,7 @@ async fn fetch_remaining_actors(
 	Ok(actors)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CheckExpiredInput {
 	runner_id: Id,
 }
@@ -930,7 +931,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 	let runner_lost_threshold = ctx.config().pegboard().runner_lost_threshold();
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_check_expired", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let last_ping_ts = tx
@@ -954,7 +955,7 @@ async fn check_expired(ctx: &ActivityCtx, input: &CheckExpiredInput) -> Result<b
 		.map_err(Into::into)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct AllocatePendingActorsInput {
 	pub namespace_id: Id,
 	pub name: String,
@@ -981,7 +982,7 @@ pub(crate) async fn allocate_pending_actors(
 	// NOTE: This txn should closely resemble the one found in the allocate_actor activity of the actor wf
 	let allocations = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_allocate_pending_actors", |tx| async move {
 			let start = Instant::now();
 			let tx = tx.with_subspace(keys::subspace());
 			let mut allocations = Vec::new();
@@ -1140,7 +1141,7 @@ pub(crate) async fn allocate_pending_actors(
 	Ok(AllocatePendingActorsOutput { allocations })
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct SendMessageToRunnerInput {
 	runner_id: Id,
 	message: protocol::ToRunner,
@@ -1148,8 +1149,7 @@ struct SendMessageToRunnerInput {
 
 #[activity(SendMessageToRunner)]
 async fn send_message_to_runner(ctx: &ActivityCtx, input: &SendMessageToRunnerInput) -> Result<()> {
-	let receiver_subject =
-		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+	let receiver_subject = crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id);
 
 	let message_serialized = versioned::ToRunner::wrap_latest(input.message.clone())
 		.serialize_with_embedded_version(PROTOCOL_MK1_VERSION)?;

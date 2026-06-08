@@ -1,4 +1,4 @@
-use anyhow::*;
+use anyhow::Result;
 use rivet_test_deps_docker::{TestDatabase, TestPubSub};
 use std::{sync::Arc, time::Duration};
 use universalpubsub::{NextOutput, PubSub, PublishOpts};
@@ -160,6 +160,9 @@ async fn test_reconnect_inner(pubsub: &PubSub, docker: &rivet_test_deps_docker::
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe before restart");
 		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders before restart");
+		}
 	}
 
 	// Restart container
@@ -182,20 +185,23 @@ async fn test_reconnect_inner(pubsub: &PubSub, docker: &rivet_test_deps_docker::
 	let receive_result = tokio::time::timeout(receive_timeout, subscriber.next()).await;
 
 	match receive_result {
-		Result::Ok(Result::Ok(NextOutput::Message(msg))) => {
+		Ok(Ok(NextOutput::Message(msg))) => {
 			assert_eq!(
 				msg.payload, message_after,
 				"message after restart should match"
 			);
 			tracing::info!("received message after restart - reconnection successful");
 		}
-		Result::Ok(Result::Ok(NextOutput::Unsubscribed)) => {
+		Ok(Ok(NextOutput::Unsubscribed)) => {
 			panic!("unexpected unsubscribe after restart");
 		}
-		Result::Ok(Result::Err(e)) => {
+		Ok(Ok(NextOutput::NoResponders)) => {
+			panic!("unexpected no responders after restart");
+		}
+		Ok(Err(e)) => {
 			panic!("error receiving message after restart: {}", e);
 		}
-		Result::Err(_) => {
+		Err(_) => {
 			panic!("timeout receiving message after restart");
 		}
 	}
@@ -246,20 +252,23 @@ async fn test_publish_while_stopped(
 	let receive_result = tokio::time::timeout(receive_timeout, subscriber.next()).await;
 
 	match receive_result {
-		Result::Ok(Result::Ok(NextOutput::Message(msg))) => {
+		Ok(Ok(NextOutput::Message(msg))) => {
 			assert_eq!(
 				msg.payload, message,
 				"message published while stopped should be received"
 			);
 			tracing::info!("received message published while stopped - reconnection successful");
 		}
-		Result::Ok(Result::Ok(NextOutput::Unsubscribed)) => {
+		Ok(Ok(NextOutput::Unsubscribed)) => {
 			panic!("unexpected unsubscribe");
 		}
-		Result::Ok(Result::Err(e)) => {
+		Ok(Ok(NextOutput::NoResponders)) => {
+			panic!("unexpected no responders");
+		}
+		Ok(Err(e)) => {
 			panic!("error receiving message: {}", e);
 		}
-		Result::Err(_) => {
+		Err(_) => {
 			panic!("timeout receiving message");
 		}
 	}
@@ -295,6 +304,9 @@ async fn test_subscribe_while_stopped(
 		}
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe");
+		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders");
 		}
 	}
 
@@ -339,20 +351,23 @@ async fn test_subscribe_while_stopped(
 	let receive_result = tokio::time::timeout(receive_timeout, new_subscriber.next()).await;
 
 	match receive_result {
-		Result::Ok(Result::Ok(NextOutput::Message(msg))) => {
+		Ok(Ok(NextOutput::Message(msg))) => {
 			assert_eq!(
 				msg.payload, final_message,
 				"message after reconnect should match"
 			);
 			tracing::info!("received message after reconnect - subscription successful");
 		}
-		Result::Ok(Result::Ok(NextOutput::Unsubscribed)) => {
+		Ok(Ok(NextOutput::Unsubscribed)) => {
 			panic!("unexpected unsubscribe");
 		}
-		Result::Ok(Result::Err(e)) => {
+		Ok(Ok(NextOutput::NoResponders)) => {
+			panic!("unexpected no responders");
+		}
+		Ok(Err(e)) => {
 			panic!("error receiving message: {}", e);
 		}
-		Result::Err(_) => {
+		Err(_) => {
 			panic!("timeout receiving message");
 		}
 	}

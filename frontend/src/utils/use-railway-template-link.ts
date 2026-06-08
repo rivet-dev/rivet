@@ -16,7 +16,7 @@ export function useRailwayTemplateLink({ runnerName }: { runnerName: string }) {
 		url.searchParams.set("utm_source", "template");
 		url.searchParams.set("utm_campaign", "generic");
 
-		url.searchParams.set("RIVET_RUNNER", runnerName || "");
+		url.searchParams.set("RIVET_POOL", runnerName || "");
 		if (secretDsn) {
 			url.searchParams.set("RIVET_ENDPOINT", secretDsn);
 		}

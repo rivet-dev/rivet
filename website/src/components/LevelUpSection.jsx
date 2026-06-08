@@ -1,6 +1,6 @@
 import { Button } from "@/components/Button";
-import imgBlockLeft from "@/images/effects/leftBlock.png";
-import imgBlockRight from "@/images/effects/rightBlock.png";
+const imgBlockLeft = { src: "https://assets.rivet.dev/website/images/effects/leftBlock.png", width: 1000, height: 1327, format: "png" };
+const imgBlockRight = { src: "https://assets.rivet.dev/website/images/effects/rightBlock.png", width: 165, height: 220, format: "png" };
 import { Icon, faPhone, faRocketLaunch } from "@rivet-gg/icons";
 
 export default function LevelUpSection() {

@@ -37,7 +37,7 @@ pub async fn pegboard_runner_drain_older_versions(
 	let drain_enabled = configs
 		.into_iter()
 		.next()
-		.map(|c| c.config.drain_on_version_upgrade)
+		.map(|c| c.config.drain_on_version_upgrade())
 		.unwrap_or(false);
 
 	if !drain_enabled {
@@ -49,7 +49,7 @@ pub async fn pegboard_runner_drain_older_versions(
 	// Scan RunnerAllocIdxKey for older versions
 	let older_runners = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_drain", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 			let mut older_runners = Vec::new();
 

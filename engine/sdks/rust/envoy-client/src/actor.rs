@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
-use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -1295,7 +1294,7 @@ async fn send_response(
 	request_id: protocol::RequestId,
 	mut response: HttpResponse,
 ) {
-	let mut headers = HashableMap::new();
+	let mut headers = HashMap::new();
 	for (k, v) in response.headers {
 		headers.insert(k, v);
 	}
@@ -1369,7 +1368,7 @@ async fn send_fetch_error_response(
 	let body =
 		br#"{"group":"envoy","code":"fetch_failed","message":"actor fetch failed","metadata":{}}"#
 			.to_vec();
-	let mut headers = HashableMap::new();
+	let mut headers = HashMap::new();
 	headers.insert("content-type".to_string(), "application/json".to_string());
 	headers.insert("content-length".to_string(), body.len().to_string());
 	headers.insert(
@@ -1695,7 +1694,7 @@ mod tests {
 			actor_id: "test-actor".to_string(),
 			method: "GET".to_string(),
 			path: "/test".to_string(),
-			headers: HashableMap::new(),
+			headers: HashMap::new(),
 			body: None,
 			stream: false,
 		}

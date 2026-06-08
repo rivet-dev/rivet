@@ -15,10 +15,7 @@
 //   --pool sigterm-sleep-test
 //   --reconnect-open-delay-ms 0
 
-import {
-	spawn,
-	type ChildProcessWithoutNullStreams,
-} from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
 import { createClient } from "rivetkit/client";
@@ -121,7 +118,8 @@ let currentPhase:
 			startedAt: number;
 	  }
 	| undefined;
-const COLOR_ENABLED = process.env.NO_COLOR === undefined && process.env.TERM !== "dumb";
+const COLOR_ENABLED =
+	process.env.NO_COLOR === undefined && process.env.TERM !== "dumb";
 const ANSI = {
 	reset: "\x1b[0m",
 	bold: "\x1b[1m",
@@ -201,7 +199,10 @@ function colorForPrefix(prefix: string): string {
 	return ANSI.gray;
 }
 
-function colorizeLogText(text: string, level: "log" | "warn" | "error"): string {
+function colorizeLogText(
+	text: string,
+	level: "log" | "warn" | "error",
+): string {
 	const colored = text.replace(/^(\[[^\]]+\])/, (prefix) =>
 		color(prefix, level === "error" ? ANSI.red : colorForPrefix(prefix)),
 	);
@@ -217,7 +218,11 @@ function formatConsoleArgs(
 	args: unknown[],
 ): unknown[] {
 	if (typeof args[0] !== "string") return [formatTimestamp(), ...args];
-	return [formatTimestamp(), colorizeLogText(args[0], level), ...args.slice(1)];
+	return [
+		formatTimestamp(),
+		colorizeLogText(args[0], level),
+		...args.slice(1),
+	];
 }
 
 function formatDuration(ms: number): string {
@@ -255,7 +260,8 @@ function installTimestampedConsole(): void {
 	const originalError = console.error.bind(console);
 	const originalWarn = console.warn.bind(console);
 
-	console.log = (...args: unknown[]) => originalLog(...formatConsoleArgs("log", args));
+	console.log = (...args: unknown[]) =>
+		originalLog(...formatConsoleArgs("log", args));
 	console.error = (...args: unknown[]) =>
 		originalError(...formatConsoleArgs("error", args));
 	console.warn = (...args: unknown[]) =>
@@ -350,10 +356,7 @@ function buildEnvoysUrl(): string {
 }
 
 function buildWebSocketUrl(_actorId: string): string {
-	const url = appendPath(
-		ENDPOINT,
-		`/gateway/sigtermSleepProbe/websocket`,
-	);
+	const url = appendPath(ENDPOINT, `/gateway/sigtermSleepProbe/websocket`);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 	url.searchParams.set("rvt-namespace", NAMESPACE);
 	url.searchParams.set("rvt-method", "getOrCreate");
@@ -491,7 +494,9 @@ async function fetchEnvoys(): Promise<Envoy[]> {
 		throw new Error(`GET /envoys status=${response.status} body=${body}`);
 	}
 	const parsed = JSON.parse(body) as EnvoysResponse;
-	return parsed.envoys.filter((envoy) => envoy.stop_ts === undefined || envoy.stop_ts === null);
+	return parsed.envoys.filter(
+		(envoy) => envoy.stop_ts === undefined || envoy.stop_ts === null,
+	);
 }
 
 async function validateEngine(): Promise<void> {
@@ -543,7 +548,10 @@ async function waitForOpen(ws: WebSocket, timeoutMs: number): Promise<void> {
 	if (ws.readyState === WebSocket.OPEN) return;
 	await new Promise<void>((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(new Error(`websocket open timeout after ${timeoutMs}ms`)),
+			() =>
+				reject(
+					new Error(`websocket open timeout after ${timeoutMs}ms`),
+				),
 			timeoutMs,
 		);
 		ws.addEventListener(
@@ -585,11 +593,17 @@ async function waitForMessage(
 ): Promise<any> {
 	return await new Promise((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(new Error(`${label} message timeout after ${timeoutMs}ms`)),
+			() =>
+				reject(
+					new Error(`${label} message timeout after ${timeoutMs}ms`),
+				),
 			timeoutMs,
 		);
 		const onMessage = (event: MessageEvent) => {
-			const data = typeof event.data === "string" ? event.data : String(event.data);
+			const data =
+				typeof event.data === "string"
+					? event.data
+					: String(event.data);
 			console.log(`[ws:message] ${data}`);
 			let parsed: any;
 			try {
@@ -654,13 +668,19 @@ async function connectAndPingPong(
 			`${label} pong`,
 		);
 		ws.addEventListener("message", (event) => {
-			const data = typeof event.data === "string" ? event.data : String(event.data);
+			const data =
+				typeof event.data === "string"
+					? event.data
+					: String(event.data);
 			console.log(`[ws:message] ${label} ${data}`);
 		});
 		console.log(`[ws] ${label} ping pong ok`);
 		return ws;
 	} catch (error) {
-		if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+		if (
+			ws.readyState === WebSocket.OPEN ||
+			ws.readyState === WebSocket.CONNECTING
+		) {
 			ws.close(1000, `${label} retry`);
 		}
 		throw error;
@@ -675,7 +695,9 @@ async function reconnectAndPingPong(
 		`[ws] reconnect strict timeoutMs=${timeoutMs} messageTimeoutMs=${RECONNECT_MESSAGE_TIMEOUT_MS} openDelayMs=${RECONNECT_OPEN_DELAY_MS}`,
 	);
 	if (RECONNECT_OPEN_DELAY_MS > 0) {
-		console.log(`[ws] reconnect waiting before open delayMs=${RECONNECT_OPEN_DELAY_MS}`);
+		console.log(
+			`[ws] reconnect waiting before open delayMs=${RECONNECT_OPEN_DELAY_MS}`,
+		);
 		await sleep(RECONNECT_OPEN_DELAY_MS);
 	}
 	return await connectAndPingPong(
@@ -689,7 +711,10 @@ async function reconnectAndPingPong(
 function waitForClose(ws: WebSocket, timeoutMs: number): Promise<CloseInfo> {
 	return new Promise((resolve, reject) => {
 		const timeout = setTimeout(
-			() => reject(new Error(`websocket close timeout after ${timeoutMs}ms`)),
+			() =>
+				reject(
+					new Error(`websocket close timeout after ${timeoutMs}ms`),
+				),
 			timeoutMs,
 		);
 		ws.addEventListener(
@@ -740,7 +765,9 @@ function assertProof(proof: Proof): void {
 	const ticks = proof.rows.filter((row) => row.event === "on-sleep-tick");
 
 	if (proof.state.sleepCount < 1) {
-		throw new Error(`expected sleepCount >= 1, got ${proof.state.sleepCount}`);
+		throw new Error(
+			`expected sleepCount >= 1, got ${proof.state.sleepCount}`,
+		);
 	}
 	if (proof.state.onSleepLastError !== null) {
 		throw new Error(`onSleep error: ${proof.state.onSleepLastError}`);
@@ -777,7 +804,9 @@ async function main(): Promise<void> {
 		throw new Error("SIGTERM_SLEEP_ON_SLEEP_TICK_MS must be positive");
 	}
 	if (RECONNECT_OPEN_DELAY_MS < 0) {
-		throw new Error("SIGTERM_SLEEP_RECONNECT_OPEN_DELAY_MS must be non-negative");
+		throw new Error(
+			"SIGTERM_SLEEP_RECONNECT_OPEN_DELAY_MS must be non-negative",
+		);
 	}
 
 	console.log(
@@ -832,11 +861,13 @@ async function main(): Promise<void> {
 		ws2 = await reconnectAndPingPong(actorId, RECONNECT_TIMEOUT_MS);
 
 		const runner1Exit = await runner1ExitPromise;
-		console.log(`[test] first runner shutdown ${JSON.stringify(runner1Exit)}`);
+		console.log(
+			`[test] first runner shutdown ${JSON.stringify(runner1Exit)}`,
+		);
 
 		logPhase("8. Verify database proof");
-		const proof = (await client().sigtermSleepProbe
-			.getOrCreate([KEY])
+		const proof = (await client()
+			.sigtermSleepProbe.getOrCreate([KEY])
 			.getProof()) as Proof;
 		assertProof(proof);
 
@@ -847,16 +878,24 @@ async function main(): Promise<void> {
 			);
 		}
 		console.log(`[test] proof state ${JSON.stringify(proof.state)}`);
-		console.log("[test] PASS onSleep completed during SIGTERM and actor reconnected on the second kitchen-sink envoy");
+		console.log(
+			"[test] PASS onSleep completed during SIGTERM and actor reconnected on the second kitchen-sink envoy",
+		);
 	} finally {
 		logPhase("9. Cleanup");
-		if (ws2 && ws2.readyState === WebSocket.OPEN) ws2.close(1000, "smoke done");
-		if (ws1 && ws1.readyState === WebSocket.OPEN) ws1.close(1000, "smoke done");
+		if (ws2 && ws2.readyState === WebSocket.OPEN)
+			ws2.close(1000, "smoke done");
+		if (ws1 && ws1.readyState === WebSocket.OPEN)
+			ws1.close(1000, "smoke done");
 		await stopRunner(runner2, "two").catch((error) => {
-			console.error(`[test] runner two cleanup failed: ${formatError(error)}`);
+			console.error(
+				`[test] runner two cleanup failed: ${formatError(error)}`,
+			);
 		});
 		await stopRunner(runner1, "one").catch((error) => {
-			console.error(`[test] runner one cleanup failed: ${formatError(error)}`);
+			console.error(
+				`[test] runner one cleanup failed: ${formatError(error)}`,
+			);
 		});
 		finishPhase();
 	}

@@ -17,6 +17,7 @@ use tracing::Instrument;
 
 use crate::actor::context::ActorContext;
 use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
+use crate::actor::kv::APPLY_BATCH_CHUNK_SIZE;
 use crate::actor::messages::StateDelta;
 use crate::actor::persist::{
 	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
@@ -339,11 +340,21 @@ impl ActorContext {
 			(puts, deletes, next_state, revision, self.begin_write())
 		};
 
-		self.0
-			.kv
-			.apply_batch(&puts, &deletes)
-			.await
-			.context("persist actor state deltas to kv")?;
+		// TODO: Make this atomic. The ideal path is to store these deltas in SQLite.
+		let mut put_chunks = puts.chunks(APPLY_BATCH_CHUNK_SIZE);
+		let mut delete_chunks = deletes.chunks(APPLY_BATCH_CHUNK_SIZE);
+		loop {
+			let put_chunk = put_chunks.next().unwrap_or(&[]);
+			let delete_chunk = delete_chunks.next().unwrap_or(&[]);
+			if put_chunk.is_empty() && delete_chunk.is_empty() {
+				break;
+			}
+			self.0
+				.kv
+				.apply_batch(put_chunk, delete_chunk)
+				.await
+				.context("persist actor state deltas to kv")?;
+		}
 
 		if let Some(state) = next_state {
 			*self.0.current_state.write() = state;

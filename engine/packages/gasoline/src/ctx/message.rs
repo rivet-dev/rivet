@@ -1,6 +1,5 @@
 use std::{
-	borrow::Cow,
-	fmt::{self, Debug, Display},
+	fmt::{self, Debug},
 	marker::PhantomData,
 	sync::Arc,
 };
@@ -9,11 +8,12 @@ use rivet_pools::UpsPool;
 use rivet_util::Id;
 use tokio_util::sync::{CancellationToken, DropGuard};
 use tracing::Instrument;
-use universalpubsub::{NextOutput, Subject, Subscriber};
+use universalpubsub::{NextOutput, Subscriber};
 
 use crate::{
 	error::{WorkflowError, WorkflowResult},
 	message::{Message, PubsubMessage, PubsubMessageWrapper},
+	pubsub_subjects::MessageSubject,
 };
 
 #[derive(Clone)]
@@ -89,10 +89,7 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let subject = MsgSubject {
-			topic,
-			msg_marker: PhantomData::<M>,
-		};
+		let subject = MessageSubject::<M>::new(topic);
 		let duration_since_epoch = std::time::SystemTime::now()
 			.duration_since(std::time::UNIX_EPOCH)
 			.unwrap_or_else(|err| unreachable!("time is broken: {}", err));
@@ -133,8 +130,11 @@ impl MessageCtx {
 
 	/// Publishes the message to pubsub.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn message_publish_pubsub<M>(&self, subject: MsgSubject<'_, M>, message_buf: Arc<Vec<u8>>)
-	where
+	async fn message_publish_pubsub<M>(
+		&self,
+		subject: MessageSubject<'_, M>,
+		message_buf: Arc<Vec<u8>>,
+	) where
 		M: Message,
 	{
 		// Infinite backoff since we want to wait until the service reboots.
@@ -198,7 +198,7 @@ impl MessageCtx {
 	where
 		M: Message,
 	{
-		let subject = format!("{}:{}", M::subject(), opts.topic);
+		let subject = MessageSubject::<M>::new(&opts.topic);
 
 		// Create subscription and flush immediately.
 		tracing::debug!(%subject, "creating subscription");
@@ -215,7 +215,7 @@ impl MessageCtx {
 		}
 
 		// Return handle
-		let subscription = SubscriptionHandle::new(subject, subscription);
+		let subscription = SubscriptionHandle::new(subject.to_string(), subscription);
 		Ok(subscription)
 	}
 }
@@ -304,6 +304,13 @@ where
 				tracing::debug!("unsubscribed");
 				return Err(WorkflowError::SubscriptionUnsubscribed);
 			}
+			// Should be unreachable
+			Ok(NextOutput::NoResponders) => {
+				tracing::warn!("no responders");
+				return Err(WorkflowError::CreateSubscription(
+					anyhow::anyhow!("no responders from gas subscription").into(),
+				));
+			}
 			Err(err) => {
 				tracing::warn!(?err, "subscription error");
 				return Err(WorkflowError::CreateSubscription(err.into()));
@@ -327,32 +334,5 @@ where
 			}
 			.in_current_span()
 		})
-	}
-}
-
-// Helper struct
-struct MsgSubject<'a, M: Message> {
-	topic: &'a str,
-	msg_marker: PhantomData<M>,
-}
-
-impl<M: Message> Clone for MsgSubject<'_, M> {
-	fn clone(&self) -> Self {
-		MsgSubject {
-			topic: self.topic,
-			msg_marker: PhantomData::<M>,
-		}
-	}
-}
-
-impl<M: Message> Display for MsgSubject<'_, M> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{}", M::subject(), self.topic)
-	}
-}
-
-impl<M: Message> Subject for MsgSubject<'_, M> {
-	fn root<'a>() -> Option<Cow<'a, str>> {
-		Some(Cow::Owned(M::subject()))
 	}
 }
