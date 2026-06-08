@@ -11,9 +11,9 @@
 		"@hono/node-server": "^1.19.1",
 		"@rivetkit/engine-runner": "workspace:*",
 		"@rivetkit/engine-runner-protocol": "workspace:*",
-		"hono": "^4.7.0",
+		"hono": "^4.12.21",
 		"pino": "^9.9.5",
-		"ws": "^8.18.3"
+		"ws": "^8.20.1"
 	},
 	"devDependencies": {
 		"@types/node": "^22.18.1",
@@ -22,6 +22,6 @@
 		"tsup": "^8.5.0",
 		"tsx": "^4.20.5",
 		"typescript": "^5.9.2",
-		"vitest": "^1.6.1"
+		"vitest": "^3.2.6"
 	}
 }
