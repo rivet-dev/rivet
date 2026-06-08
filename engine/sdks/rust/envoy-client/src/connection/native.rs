@@ -11,6 +11,7 @@ use vbare::OwnedVersionedData;
 use crate::context::{SharedContext, WsTxMessage};
 use crate::envoy::ToEnvoyMessage;
 use crate::handle::EnvoyHandle;
+use crate::metrics::METRICS;
 use crate::utils::{BackoffOptions, calculate_backoff, parse_ws_close_reason};
 
 const STABLE_CONNECTION_MS: u64 = 60_000;
@@ -36,21 +37,24 @@ async fn connection_loop(shared: Arc<SharedContext>) {
 				if let Some(reason) = &close_reason {
 					if reason.group == "ws" && reason.error == "eviction" {
 						tracing::debug!("connection evicted");
-						let _ = shared
-							.envoy_tx
-							.send(ToEnvoyMessage::ConnClose { evict: true });
+						let _ = crate::envoy::send_to_envoy_tx(
+							&shared,
+							ToEnvoyMessage::ConnClose { evict: true },
+						);
 						return;
 					}
 				}
-				let _ = shared
-					.envoy_tx
-					.send(ToEnvoyMessage::ConnClose { evict: false });
+				let _ = crate::envoy::send_to_envoy_tx(
+					&shared,
+					ToEnvoyMessage::ConnClose { evict: false },
+				);
 			}
 			Err(error) => {
 				tracing::error!(?error, "connection failed");
-				let _ = shared
-					.envoy_tx
-					.send(ToEnvoyMessage::ConnClose { evict: false });
+				let _ = crate::envoy::send_to_envoy_tx(
+					&shared,
+					ToEnvoyMessage::ConnClose { evict: false },
+				);
 			}
 		}
 
@@ -123,6 +127,9 @@ async fn single_connection(
 		.callbacks
 		.on_connect(EnvoyHandle::from_shared(shared.clone()));
 
+	let session_start = std::time::Instant::now();
+	let mut disconnect_reason: &'static str = "stream_end";
+
 	// Spawn write task
 	let shared2 = shared.clone();
 	let write_span = tracing::debug_span!("envoy_ws_write", envoy_key = %shared2.envoy_key);
@@ -173,6 +180,7 @@ async fn single_connection(
 				super::forward_to_envoy(shared, decoded).await;
 			}
 			Ok(tungstenite::Message::Close(frame)) => {
+				disconnect_reason = "close";
 				if let Some(frame) = frame {
 					let reason_str = frame.reason.to_string();
 					let code: u16 = frame.code.into();
@@ -186,12 +194,28 @@ async fn single_connection(
 				break;
 			}
 			Err(e) => {
+				disconnect_reason = "error";
 				tracing::error!(?e, "websocket error");
 				break;
 			}
 			_ => {}
 		}
 	}
+
+	let session_duration = session_start.elapsed();
+	METRICS
+		.ws_session_duration_seconds
+		.observe(session_duration.as_secs_f64());
+	METRICS
+		.ws_reconnect_total
+		.with_label_values(&[disconnect_reason])
+		.inc();
+	tracing::info!(
+		envoy_key = %shared.envoy_key,
+		reason = disconnect_reason,
+		session_duration_ms = session_duration.as_millis() as u64,
+		"websocket session ended"
+	);
 
 	// Clean up
 	{

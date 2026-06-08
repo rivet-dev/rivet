@@ -370,19 +370,20 @@ async function runReconnectRepro(
 	staggerHandleMs: number,
 ): Promise<Omit<SlowReconnectResultMessage, "type" | "trigger">> {
 	const startedAt = performance.now();
-	const buildToolPlanContext = runBuildToolPlanContext(sql);
-	const catchupSnapshot = runCatchupSnapshot(sql, 0);
-	const recoverToolCalls = runRecoverToolCalls(sql);
-	const handleExecutorConnect = delay(staggerHandleMs).then(() =>
+	const buildToolPlanContext = await runBuildToolPlanContext(sql);
+	const catchupSnapshot = await runCatchupSnapshot(sql, 0);
+	const recoverToolCalls = await runRecoverToolCalls(sql);
+	const handleExecutorConnect = await delay(staggerHandleMs).then(() =>
 		runHandleExecutorConnect(sql, clientId),
 	);
 
-	const results = await Promise.all([
+	const results = [
 		handleExecutorConnect,
 		buildToolPlanContext,
 		catchupSnapshot,
 		recoverToolCalls,
-	]);
+	];
+
 	return {
 		totalMs: Math.round(performance.now() - startedAt),
 		results,
@@ -575,6 +576,7 @@ async function runBuildToolPlanContext(
 			ORDER BY m.created_at DESC
 			LIMIT 1`,
 	);
+
 	return {
 		name: "build-tool-plan-context",
 		totalMs: Math.round(performance.now() - startedAt),
@@ -588,63 +590,63 @@ async function runCatchupSnapshot(
 ): Promise<SlowReconnectWorkloadResult> {
 	const startedAt = performance.now();
 	const steps: SlowReconnectStep[] = [];
-	await Promise.all([
-		timedQuery(
-			sql,
-			steps,
-			"thread-events-list-since-version",
-			`SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC`,
-			version,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"environment-snapshot",
-			`SELECT snapshot FROM environment_snapshot WHERE id = 1`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"thread-settings-snapshot",
-			`SELECT settings FROM thread_settings_snapshot WHERE id = 1`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"retry-state",
-			`SELECT * FROM retry_state WHERE id = 1`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"queued-messages",
-			`SELECT * FROM queued_messages ORDER BY created_at ASC`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"executor-artifacts",
-			`SELECT artifact_key, data_type, length(content_base64) AS bytes, tool_call_id, updated_at FROM executor_artifacts ORDER BY updated_at ASC`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"tool-approvals",
-			`SELECT * FROM tool_approvals ORDER BY timestamp ASC`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"compaction-summaries",
-			`SELECT cut_message_id, created_at FROM compaction_summaries ORDER BY created_at ASC`,
-		),
-		timedQuery(
-			sql,
-			steps,
-			"executor-status",
-			`SELECT value FROM thread_meta_kv WHERE key = 'executor_status'`,
-		),
-	]);
+
+	await timedQuery(
+		sql,
+		steps,
+		"thread-events-list-since-version",
+		`SELECT seq, event_type, payload, created_at FROM thread_events WHERE seq > ? ORDER BY seq ASC`,
+		version,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"environment-snapshot",
+		`SELECT snapshot FROM environment_snapshot WHERE id = 1`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"thread-settings-snapshot",
+		`SELECT settings FROM thread_settings_snapshot WHERE id = 1`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"retry-state",
+		`SELECT * FROM retry_state WHERE id = 1`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"queued-messages",
+		`SELECT * FROM queued_messages ORDER BY created_at ASC`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"executor-artifacts",
+		`SELECT artifact_key, data_type, length(content_base64) AS bytes, tool_call_id, updated_at FROM executor_artifacts ORDER BY updated_at ASC`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"tool-approvals",
+		`SELECT * FROM tool_approvals ORDER BY timestamp ASC`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"compaction-summaries",
+		`SELECT cut_message_id, created_at FROM compaction_summaries ORDER BY created_at ASC`,
+	);
+	await timedQuery(
+		sql,
+		steps,
+		"executor-status",
+		`SELECT value FROM thread_meta_kv WHERE key = 'executor_status'`,
+	);
+
 	steps.sort((a, b) => b.durationMs - a.durationMs);
 	return {
 		name: "catchup-snapshot",
@@ -812,39 +814,6 @@ async function createSlowReconnectSchema(database: RawRivetDB): Promise<void> {
 		progress TEXT,
 		completed_at TEXT
 	)`);
-	await database.execute(
-		`CREATE INDEX IF NOT EXISTS idx_tool_calls_message_id ON tool_calls(message_id)`,
-	);
-	await database.execute(
-		`CREATE INDEX IF NOT EXISTS idx_tool_calls_state ON tool_calls(state)`,
-	);
-	await database.execute(
-		`CREATE INDEX IF NOT EXISTS idx_tool_calls_expires_at ON tool_calls(expires_at) WHERE state IN ('queued', 'pending_reconnect', 'pending_ack', 'running')`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS environment_snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), snapshot TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS thread_settings_snapshot (id INTEGER PRIMARY KEY CHECK (id = 1), settings TEXT NOT NULL, updated_at TEXT NOT NULL)`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS retry_state (id INTEGER PRIMARY KEY CHECK (id = 1), attempt INTEGER NOT NULL DEFAULT 0, scheduled_at INTEGER NOT NULL, reason TEXT NOT NULL)`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS queued_messages (message_id TEXT PRIMARY KEY, content TEXT NOT NULL, user_state TEXT, created_at TEXT NOT NULL DEFAULT (datetime('now')), steer INTEGER NOT NULL DEFAULT 0, user_meta TEXT)`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS executor_artifacts (artifact_key TEXT PRIMARY KEY, data_type TEXT NOT NULL, content_base64 TEXT NOT NULL, tool_call_id TEXT, updated_at TEXT NOT NULL)`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS tool_approvals (id TEXT PRIMARY KEY, tool_call_id TEXT NOT NULL UNIQUE, tool_name TEXT NOT NULL, args TEXT NOT NULL, reason TEXT, to_allow TEXT, context TEXT NOT NULL CHECK(context IN ('thread', 'subagent')), subagent_tool_name TEXT, parent_tool_call_id TEXT, timestamp INTEGER NOT NULL, matched_rule TEXT, rule_source TEXT CHECK(rule_source IN ('user', 'built-in')))`,
-	);
-	await database.execute(
-		`CREATE INDEX IF NOT EXISTS idx_tool_approvals_timestamp ON tool_approvals(timestamp)`,
-	);
-	await database.execute(
-		`CREATE TABLE IF NOT EXISTS compaction_summaries (summary_id TEXT PRIMARY KEY, summary_text TEXT NOT NULL, cut_message_id TEXT NOT NULL, created_at TEXT NOT NULL)`,
-	);
 }
 
 async function seedSlowReconnectData(database: RawRivetDB): Promise<{
@@ -857,13 +826,31 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 		`SELECT COUNT(*) AS count FROM messages`,
 	);
 	if (Number(existing[0]?.count ?? 0) > 0) {
+		const [toolCalls] = await database.execute(
+			`SELECT COUNT(*) AS count FROM tool_calls`,
+		);
+		const [threadEvents] = await database.execute(
+			`SELECT COUNT(*) AS count FROM thread_events`,
+		);
 		return {
 			seeded: false,
-			messages: MESSAGE_COUNT,
-			toolCalls: TOOL_CALL_COUNT,
-			threadEvents: THREAD_EVENT_COUNT,
+			messages: Number(existing[0]?.count ?? 0),
+			toolCalls: Number(toolCalls?.count ?? 0),
+			threadEvents: Number(threadEvents?.count ?? 0),
 		};
 	}
+
+	// Randomize the seeded data volume so each actor's database differs
+	// substantially in size. This exercises the reconnect repro across a wide
+	// range of catch-up payload sizes instead of a single fixed shape.
+	const vary = (base: number, min = 1) =>
+		Math.max(min, Math.round(base * (0.25 + Math.random() * 3.75)));
+	const messageCount = vary(MESSAGE_COUNT, 2);
+	const messageToolRefCount = vary(MESSAGE_TOOL_REF_COUNT, 2);
+	const toolCallCount = vary(TOOL_CALL_COUNT);
+	const executorToolCount = vary(EXECUTOR_TOOL_COUNT);
+	const threadEventCount = vary(THREAD_EVENT_COUNT);
+	const assistantSpan = Math.max(1, Math.floor(messageCount / 2));
 
 	const now = new Date("2026-05-16T03:58:18.661Z").getTime();
 	const text = (size: number) => "x".repeat(size);
@@ -889,8 +876,9 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 
 	const messageRows: unknown[][] = [];
-	for (let index = 1; index <= MESSAGE_COUNT; index++) {
+	for (let index = 1; index <= messageCount; index++) {
 		const role = index % 2 === 0 ? "assistant" : "user";
+
 		messageRows.push([
 			messageId(index),
 			role,
@@ -912,10 +900,10 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 
 	const messageToolRefRows: unknown[][] = [];
-	for (let index = 0; index < MESSAGE_TOOL_REF_COUNT / 2; index++) {
-		const assistantIndex = 2 + (index % 42) * 2;
+	for (let index = 0; index < messageToolRefCount / 2; index++) {
+		const assistantIndex = 2 + (index % assistantSpan) * 2;
 		const sourceIndex = Math.max(1, assistantIndex - 1);
-		const resultIndex = Math.min(MESSAGE_COUNT, assistantIndex + 1);
+		const resultIndex = Math.min(messageCount, assistantIndex + 1);
 		const toolUseId = toolUseID(index + 1);
 		messageToolRefRows.push([
 			messageId(sourceIndex),
@@ -940,8 +928,8 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 
 	const toolCallRows: unknown[][] = [];
-	for (let index = 1; index <= TOOL_CALL_COUNT; index++) {
-		const assistantIndex = 2 + ((index - 1) % 42) * 2;
+	for (let index = 1; index <= toolCallCount; index++) {
+		const assistantIndex = 2 + ((index - 1) % assistantSpan) * 2;
 		toolCallRows.push([
 			toolUseID(index),
 			`provider-${index}`,
@@ -968,7 +956,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 
 	const executorToolRows: unknown[][] = [];
-	for (let index = 1; index <= EXECUTOR_TOOL_COUNT; index++) {
+	for (let index = 1; index <= executorToolCount; index++) {
 		const schema = JSON.stringify({
 			name: `tool_${index}`,
 			description: text(EXECUTOR_TOOL_SCHEMA_BYTES),
@@ -989,7 +977,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 
 	const threadEventRows: unknown[][] = [];
-	for (let index = 1; index <= THREAD_EVENT_COUNT; index++) {
+	for (let index = 1; index <= threadEventCount; index++) {
 		threadEventRows.push([
 			index,
 			index % 3 === 0 ? "message_added" : "agent_state_changed",
@@ -1008,7 +996,7 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 
 	const messageAddedRows: unknown[][] = [];
-	for (let index = 1; index <= MESSAGE_COUNT; index++) {
+	for (let index = 1; index <= messageCount; index++) {
 		messageAddedRows.push([messageId(index), index]);
 	}
 	await batchInsert(
@@ -1030,10 +1018,31 @@ async function seedSlowReconnectData(database: RawRivetDB): Promise<{
 	);
 	return {
 		seeded: true,
-		messages: MESSAGE_COUNT,
-		toolCalls: TOOL_CALL_COUNT,
-		threadEvents: THREAD_EVENT_COUNT,
+		messages: messageCount,
+		toolCalls: toolCallCount,
+		threadEvents: threadEventCount,
 	};
+}
+
+// The engine rejects a remote SQLite statement whose bind params exceed 128
+// KiB. Keep each chunk under a budget below that so wide rows (large message
+// content) never trip the limit, regardless of the row-count batch size.
+const MAX_BATCH_BIND_BYTES = 120 * 1024;
+
+function bindParamBytes(value: unknown): number {
+	if (value === null || value === undefined) {
+		return 0;
+	}
+	if (typeof value === "string") {
+		return Buffer.byteLength(value, "utf8");
+	}
+	if (typeof value === "number") {
+		return 8;
+	}
+	if (value instanceof Uint8Array) {
+		return value.byteLength;
+	}
+	return Buffer.byteLength(String(value), "utf8");
 }
 
 async function batchInsert(
@@ -1050,8 +1059,26 @@ async function batchInsert(
 		return;
 	}
 	const rowPlaceholder = `(${"?,".repeat(columnCount).slice(0, -1)})`;
-	for (let index = 0; index < rows.length; index += batchSize) {
-		const chunk = rows.slice(index, index + batchSize);
+	const rowBytes = rows.map((row) =>
+		row.reduce((sum: number, value) => sum + bindParamBytes(value), 0),
+	);
+
+	let index = 0;
+	while (index < rows.length) {
+		const chunk: unknown[][] = [];
+		let chunkBytes = 0;
+		while (
+			index < rows.length &&
+			chunk.length < batchSize &&
+			// Always take at least one row so an oversized single row still runs
+			// (and surfaces the engine error) rather than looping forever.
+			(chunk.length === 0 ||
+				chunkBytes + rowBytes[index]! <= MAX_BATCH_BIND_BYTES)
+		) {
+			chunk.push(rows[index]!);
+			chunkBytes += rowBytes[index]!;
+			index++;
+		}
 		const values = chunk.map(() => rowPlaceholder).join(",");
 		const bindings = chunk.flat();
 		await database.execute(`${insertPrefix} VALUES ${values}`, ...bindings);

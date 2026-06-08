@@ -1,6 +1,6 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_cache::{CachePurgeMessage, CachePurgeSubject, CACHE_PURGE_TOPIC};
+use rivet_cache::{CACHE_PURGE_TOPIC, CachePurgeMessage, CachePurgeSubject};
 use universalpubsub::NextOutput;
 
 #[tracing::instrument(skip_all)]

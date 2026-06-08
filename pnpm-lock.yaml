@@ -24,6 +24,11 @@ overrides:
   '@codemirror/commands': 6.8.1
   '@codemirror/lint': 6.8.5
 
+patchedDependencies:
+  wasm-pack@0.14.0:
+    hash: 3c7b8af86d6b541704193ec3130f1444612e1187cf4f53aff0ed0570b58d5e56
+    path: patches/wasm-pack@0.14.0.patch
+
 importers:
 
   .:

@@ -35,6 +35,8 @@ Things that must be true for the deploy to actually start serving on Rivet Cloud
 - After building and pushing, update Cloud Run service `kitchen-sink-staging` in project `dev-projects-491221`, region `us-east4`, to the pushed image tag.
 - Verify staging with `curl -fsS "$(gcloud run services describe kitchen-sink-staging --region us-east4 --project dev-projects-491221 --format='value(status.url)')/api/rivet/metadata"`.
 
+- Only use the old temp-copy preview-package flow when explicitly validating already-published npm preview packages instead of local workspace code.
+
 Example flow:
 
 ```bash
@@ -78,7 +80,7 @@ export GW="https://api.rivet.dev/gateway"
 curl -s -X PUT "https://api.rivet.dev/actors?namespace=${RIVET_NS}" \
   -H "Authorization: Bearer ${RIVET_TOKEN}" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"default","crash_policy":"sleep"}'
+  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"k8s","crash_policy":"sleep"}'
 ```
 
 This returns `{"actor":{"actor_id":"<ACTOR_ID>", ...}, "created": true/false}`.

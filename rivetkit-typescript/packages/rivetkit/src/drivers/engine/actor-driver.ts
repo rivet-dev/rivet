@@ -78,7 +78,7 @@ import {
 import { logger } from "./log";
 
 const ENVOY_SSE_PING_INTERVAL = 1000;
-const ENVOY_STOP_WAIT_MS = 15_000;
+const FALLBACK_ENVOY_STOP_WAIT_MS = 15_000;
 const INITIAL_SLEEP_TIMEOUT_MS = 250;
 const REMOTE_ACK_HOOK_QUERY_PARAM = "__rivetkitAckHook";
 
@@ -835,6 +835,7 @@ export class EngineActorDriver implements ActorDriver {
 			return;
 		}
 		this.#isShuttingDown = true;
+		const envoyStopWaitMs = this.#envoyStopWaitMs();
 
 		logger().info({ msg: "stopping engine actor driver", immediate });
 		if (!immediate) {
@@ -849,7 +850,7 @@ export class EngineActorDriver implements ActorDriver {
 				this.startSleep(actorId);
 			}
 
-			const actorSleepDeadline = Date.now() + ENVOY_STOP_WAIT_MS;
+			const actorSleepDeadline = Date.now() + envoyStopWaitMs;
 			while (this.#actors.size > 0 && Date.now() < actorSleepDeadline) {
 				await new Promise((resolve) => setTimeout(resolve, 50));
 			}
@@ -858,7 +859,7 @@ export class EngineActorDriver implements ActorDriver {
 				logger().warn({
 					msg: "timed out waiting for actors to stop before envoy drain",
 					remainingActors: this.#actors.size,
-					waitMs: ENVOY_STOP_WAIT_MS,
+					waitMs: envoyStopWaitMs,
 				});
 				// Snapshot so concurrent removals from `stopActor` do not
 				// invalidate the iterator.
@@ -900,13 +901,13 @@ export class EngineActorDriver implements ActorDriver {
 		const stopped = await Promise.race([
 			this.#envoyStopped.promise.then(() => true),
 			new Promise<false>((resolve) =>
-				setTimeout(() => resolve(false), ENVOY_STOP_WAIT_MS),
+				setTimeout(() => resolve(false), envoyStopWaitMs),
 			),
 		]);
 		if (!stopped) {
 			logger().warn({
 				msg: "timed out waiting for envoy shutdown",
-				waitMs: ENVOY_STOP_WAIT_MS,
+				waitMs: envoyStopWaitMs,
 			});
 		}
 
@@ -915,6 +916,16 @@ export class EngineActorDriver implements ActorDriver {
 
 	async waitForReady(): Promise<void> {
 		await this.#envoy.started();
+	}
+
+	#envoyStopWaitMs(): number {
+		const actorStopThreshold = Number(
+			this.#envoy.getProtocolMetadata()?.actorStopThreshold,
+		);
+		if (Number.isFinite(actorStopThreshold) && actorStopThreshold > 0) {
+			return actorStopThreshold;
+		}
+		return FALLBACK_ENVOY_STOP_WAIT_MS;
 	}
 
 	async #bindHibernatableConnectSocket(

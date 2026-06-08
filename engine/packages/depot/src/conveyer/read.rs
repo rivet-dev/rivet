@@ -6,11 +6,12 @@ mod cold;
 mod pidx;
 mod plan;
 mod shard;
+mod sqlite_page;
 mod tx;
 
 use std::{
 	collections::{BTreeMap, BTreeSet},
-	time::Instant,
+	time::{Duration, Instant},
 };
 
 #[cfg(feature = "test-faults")]
@@ -766,6 +767,25 @@ impl Db {
 		if allow_side_effects {
 			self.read_bytes_since_rollup
 				.fetch_add(returned_bytes, std::sync::atomic::Ordering::Relaxed);
+
+			// Return overflow pages referenced by the requested leaf pages up front.
+			// This runs before taking the cache-snapshot write lock because it issues
+			// nested get_pages calls that take the lock themselves. Expansion is a
+			// best-effort prefetch: an error here must not fail the base read, whose
+			// requested pages are already materialized.
+			if options.expand_overflow {
+				if let Err(err) = self
+					.expand_overflow_pages(&mut pages, tx_result.db_size_pages)
+					.await
+				{
+					tracing::warn!(
+						database_id = %self.database_id,
+						?err,
+						"sqlite overflow prefetch expansion failed; returning base pages",
+					);
+				}
+			}
+
 			let mut cache_snapshot = self.cache_snapshot.write().await;
 			let current_branch_id = cache_snapshot.as_ref().map(|snapshot| snapshot.branch_id);
 			let publish_branch_changed =
@@ -896,7 +916,98 @@ impl Db {
 			provenance,
 		})
 	}
+
+	/// Append the overflow pages referenced by the already-fetched leaf pages to
+	/// `pages`, walking each overflow chain to its end. Overflow pages are loaded
+	/// through nested get_pages calls (without further expansion), so the actor
+	/// reads them from its local cache instead of round tripping per row.
+	async fn expand_overflow_pages(
+		&self,
+		pages: &mut Vec<FetchedPage>,
+		db_size_pages: u32,
+	) -> Result<()> {
+		let page_size = PAGE_SIZE as usize;
+		// The reserved-byte count lives in the database header (page 1). It is
+		// zero for Rivet databases; fall back to zero when page 1 is absent.
+		let reserved = pages
+			.iter()
+			.find(|page| page.pgno == 1)
+			.and_then(|page| page.bytes.as_deref())
+			.and_then(sqlite_page::header_reserved_bytes)
+			.unwrap_or(0);
+
+		let mut seen: BTreeSet<u32> = pages.iter().map(|page| page.pgno).collect();
+		let mut frontier: Vec<u32> = Vec::new();
+		for page in pages.iter() {
+			let Some(bytes) = page.bytes.as_deref() else {
+				continue;
+			};
+			for head in sqlite_page::overflow_head_pages(
+				page.pgno,
+				bytes,
+				page_size,
+				reserved,
+				db_size_pages,
+			) {
+				if seen.insert(head) {
+					frontier.push(head);
+				}
+			}
+		}
+
+		// Bound the walk in wall-clock time. Each level is its own UDB read
+		// transaction, so a deep overflow chain (a multi-MB row discovered one
+		// page deeper per level) would otherwise run many sequential transactions.
+		// Stopping early just leaves the remaining overflow pages to be fetched on
+		// demand, the pre-existing behavior.
+		let deadline = Instant::now() + OVERFLOW_EXPANSION_TIME_BUDGET;
+		let mut budget = MAX_OVERFLOW_EXPANSION_PAGES;
+		while !frontier.is_empty() && budget > 0 {
+			if Instant::now() >= deadline {
+				break;
+			}
+			if frontier.len() > budget {
+				frontier.truncate(budget);
+			}
+			budget -= frontier.len();
+
+			// Box the recursive call to keep the async future a finite size.
+			let fetched = Box::pin(self.get_pages_with_options(
+				frontier.clone(),
+				GetPagesOptions {
+					expected_head_txid: None,
+					expand_overflow: false,
+				},
+			))
+			.await?
+			.pages;
+
+			let mut next_frontier = Vec::new();
+			for page in fetched {
+				if let Some(bytes) = page.bytes.as_deref() {
+					if let Some(next) = sqlite_page::overflow_next_page(bytes, db_size_pages) {
+						if seen.insert(next) {
+							next_frontier.push(next);
+						}
+					}
+				}
+				pages.push(page);
+			}
+			frontier = next_frontier;
+		}
+
+		Ok(())
+	}
 }
+
+/// Cap on the number of overflow pages a single get_pages call may eagerly
+/// return, bounding response size when leaf pages reference long overflow chains.
+const MAX_OVERFLOW_EXPANSION_PAGES: usize = 2048;
+
+/// Wall-clock ceiling on the overflow-chain walk. Overflow prefetch is
+/// best-effort, so once this elapses the remaining chain is left for on-demand
+/// fetching rather than extending the read latency further.
+const OVERFLOW_EXPANSION_TIME_BUDGET: Duration = Duration::from_millis(2500);
 
 struct GetPagesTxResult {
 	branch_id: DatabaseBranchId,

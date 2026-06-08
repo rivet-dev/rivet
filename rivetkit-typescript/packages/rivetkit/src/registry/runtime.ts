@@ -310,6 +310,9 @@ export interface CoreRuntime {
 		config: RuntimeServeConfig,
 	): Promise<void>;
 	shutdownRegistry(registry: RegistryHandle): Promise<void>;
+	registryActorStopThresholdMs?(
+		registry: RegistryHandle,
+	): Promise<number | undefined>;
 	handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,

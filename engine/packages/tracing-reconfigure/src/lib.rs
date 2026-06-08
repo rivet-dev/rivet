@@ -5,7 +5,7 @@ use universalpubsub::NextOutput;
 
 pub mod pubsub_subjects;
 
-use pubsub_subjects::{TracingConfigSubject, TRACING_CONFIG_SUBJECT};
+use pubsub_subjects::{TRACING_CONFIG_SUBJECT, TracingConfigSubject};
 
 #[derive(Serialize, Deserialize)]
 pub struct SetTracingConfigMessage {

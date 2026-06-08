@@ -2,21 +2,21 @@ use std::{
 	borrow::Cow,
 	env, fmt, hint,
 	sync::{
-		atomic::{AtomicU64, Ordering},
 		Arc,
+		atomic::{AtomicU64, Ordering},
 	},
 	time::{Duration, Instant},
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use futures_util::{FutureExt, StreamExt};
 use gas::prelude::Id;
 use rivet_pools::UdbPool;
 use serde::Deserialize;
 use universaldb::{
+	RangeOption, Subspace,
 	prelude::{PackError, PackResult, TupleDepth, TuplePack, TupleUnpack, VersionstampOffset},
 	utils::IsolationLevel::{Serializable, Snapshot},
-	RangeOption, Subspace,
 };
 use universalpubsub::{NextOutput, PubSub, PublishOpts, Subject, Subscriber};
 

@@ -532,11 +532,12 @@ impl CoreRegistry {
 		// trip the `shutdown` token instead.
 		shutdown.cancelled().await;
 
-		// Read the drain threshold from protocol metadata, falling back to 30 minutes.
+		// TODO: Move into envoy-client since timing out has to do with protocol compliance
+		// Read threshold from protocol metadata, fall back to 30 min
 		let stop_threshold = handle
 			.get_protocol_metadata()
 			.await
-			.map(|metadata| metadata.actor_stop_threshold)
+			.map(|x| x.actor_stop_threshold)
 			.unwrap_or(30 * 60 * 1000);
 		// Bounded drain. If envoy cannot reach the engine (reconnect loop stuck),
 		// we fall back to immediate `Stop` rather than hanging indefinitely.

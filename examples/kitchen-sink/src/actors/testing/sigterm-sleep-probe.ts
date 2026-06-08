@@ -41,14 +41,14 @@ export const sigtermSleepProbe = actor({
 	db: db({
 		onMigrate: async (database) => {
 			await database.execute(`
- 				CREATE TABLE IF NOT EXISTS sigterm_sleep_log (
- 					id INTEGER PRIMARY KEY AUTOINCREMENT,
- 					event TEXT NOT NULL,
- 					sleep_count INTEGER NOT NULL,
- 					detail TEXT,
- 					created_at INTEGER NOT NULL
- 				)
- 			`);
+				CREATE TABLE IF NOT EXISTS sigterm_sleep_log (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					event TEXT NOT NULL,
+					sleep_count INTEGER NOT NULL,
+					detail TEXT,
+					created_at INTEGER NOT NULL
+				)
+			`);
 		},
 	}),
 	onWebSocket: (c, websocket: UniversalWebSocket) => {

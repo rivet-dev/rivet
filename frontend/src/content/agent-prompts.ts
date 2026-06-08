@@ -203,7 +203,8 @@ export function getAgentInstructionsPrompt({
 	secretToken: string;
 	runnerName: string;
 }) {
-	const poolLine = runnerName !== "default" ? `\n  RIVET_POOL=${runnerName}` : "";
+	const poolLine =
+		runnerName !== "default" ? `\n  RIVET_POOL=${runnerName}` : "";
 	return `# RivetKit Setup & Deploy
 
 Read https://rivet.dev/llms.txt to understand how RivetKit works (actors, state, events, actions, connections, clients).

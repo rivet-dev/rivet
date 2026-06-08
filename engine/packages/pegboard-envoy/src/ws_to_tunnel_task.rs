@@ -1411,6 +1411,7 @@ async fn handle_sqlite_get_pages(
 			request.pgnos,
 			depot::types::GetPagesOptions {
 				expected_head_txid: request.expected_head_txid,
+				expand_overflow: true,
 				..Default::default()
 			},
 		)

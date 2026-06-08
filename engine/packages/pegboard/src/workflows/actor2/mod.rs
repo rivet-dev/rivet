@@ -335,8 +335,6 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 				input.name.clone(),
 			)?;
 			tx.write(&crate::keys::actor::VersionKey::new(input.actor_id), 2)?;
-			tx.write(&crate::keys::actor::GenerationKey::new(input.actor_id), 0)?;
-
 			// Generation is reset to 0 even when upgrading from v1 actor wf
 			tx.write(&crate::keys::actor::GenerationKey::new(input.actor_id), 0)?;
 

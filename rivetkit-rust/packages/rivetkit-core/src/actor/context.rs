@@ -1347,6 +1347,7 @@ impl ActorContext {
 			return None;
 		}
 		let region = match kind {
+			ActorWorkKind::Action => self.internal_keep_awake_region(),
 			ActorWorkKind::KeepAwake => self.keep_awake_region_state(),
 			ActorWorkKind::InternalKeepAwake => self.internal_keep_awake_region(),
 			ActorWorkKind::WaitUntil => return None,

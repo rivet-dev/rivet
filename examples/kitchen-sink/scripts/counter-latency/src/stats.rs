@@ -1,7 +1,7 @@
 // Worker health + concurrent stats counters. Mirrors the global state at
 // the top of scripts/counter-latency.ts.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 
@@ -71,7 +71,9 @@ pub struct State {
 	pub stats: ConcurrentStats,
 	pub workers_started: AtomicI64,
 	pub stopping: AtomicBool,
+	pub scaling_down: AtomicBool,
 	pub worker_health: Mutex<HashMap<u32, WorkerHealth>>,
+	pub workers_should_stop: Mutex<HashSet<u32>>,
 }
 
 /// Per-state counts returned by `count_worker_health`, in the same order as the scoreboard column
@@ -90,7 +92,9 @@ impl State {
 			stats: ConcurrentStats::new(),
 			workers_started: AtomicI64::new(0),
 			stopping: AtomicBool::new(false),
+			scaling_down: AtomicBool::new(false),
 			worker_health: Mutex::new(HashMap::new()),
+			workers_should_stop: Mutex::new(HashSet::new()),
 		}
 	}
 
@@ -156,5 +160,25 @@ impl State {
 
 	pub fn set_stopping(&self) {
 		self.stopping.store(true, Ordering::Relaxed);
+	}
+
+	pub fn scaling_down(&self) -> bool {
+		self.scaling_down.load(Ordering::Relaxed)
+	}
+
+	/// Returns true if this call won the race to begin scale-down. Callers should only spawn the
+	/// scale-down ramp task when this returns true.
+	pub fn try_begin_scale_down(&self) -> bool {
+		self.scaling_down
+			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+			.is_ok()
+	}
+
+	pub fn mark_worker_should_stop(&self, id: u32) {
+		self.workers_should_stop.lock().unwrap().insert(id);
+	}
+
+	pub fn worker_should_stop(&self, id: u32) -> bool {
+		self.workers_should_stop.lock().unwrap().contains(&id)
 	}
 }

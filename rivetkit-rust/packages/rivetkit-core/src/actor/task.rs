@@ -55,6 +55,7 @@ use crate::actor::metrics::startup_phase::StartupPhase;
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
 use crate::actor::state::{PersistedActor, decode_last_pushed_alarm, decode_persisted_actor};
 use crate::actor::task_types::ShutdownKind;
+use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
 #[cfg(test)]
@@ -886,13 +887,7 @@ impl ActorTask {
 						self.log_dispatch_command_handled(command_kind, "enqueued");
 						let actor_id = self.ctx.actor_id().to_owned();
 						let ctx = self.ctx.clone();
-						let action_keep_awake = self
-							.ctx
-							.internal_keep_awake_region()
-							.with_log_fields("dispatch_action", Some(actor_id.clone()));
-						self.ctx.reset_sleep_timer();
-						self.ctx.wait_until(async move {
-							let _action_keep_awake = action_keep_awake;
+						self.ctx.spawn_work(ActorWorkKind::Action, async move {
 							match tracked_reply_rx.await {
 								Ok(result) => {
 									let result =

@@ -55,6 +55,7 @@ impl SqliteTransport for EmbeddedDepotSqliteTransport {
 				request.pgnos,
 				depot::types::GetPagesOptions {
 					expected_head_txid: request.expected_head_txid,
+					expand_overflow: true,
 					..Default::default()
 				},
 			)

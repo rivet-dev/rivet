@@ -366,40 +366,41 @@ function Content<const Steps extends Step[]>({
 											ease: [0.4, 0, 0.2, 1],
 										}}
 									>
-									<div className="flex items-center justify-between">
-										<h2 className="text-xl font-semibold">
-											{step.title}
-										</h2>
-									</div>
-									{(step as Step).description ? (
-										<p className="mt-1.5 text-sm text-muted-foreground">
-											{(step as Step).description}
-										</p>
-									) : null}
-									<div className="mt-6">
-										<StepPanel<Steps>
-											Stepper={Stepper}
-											stepper={stepper}
-											allSteps={allSteps as Step[]}
-											valuesRef={
-												ref as MutableRefObject<Record<
-													string,
-													unknown
-												> | null>
-											}
-											step={step}
-											content={content}
-											controls={controls}
-											showNext={step.showNext ?? true}
-											showPrevious={
-												(step.showPrevious ?? true) &&
-												hasPrev
-											}
-										/>
-									</div>
-									{extraChildren}
-								</motion.div>
-							</AnimatePresence>
+										<div className="flex items-center justify-between">
+											<h2 className="text-xl font-semibold">
+												{step.title}
+											</h2>
+										</div>
+										{(step as Step).description ? (
+											<p className="mt-1.5 text-sm text-muted-foreground">
+												{(step as Step).description}
+											</p>
+										) : null}
+										<div className="mt-6">
+											<StepPanel<Steps>
+												Stepper={Stepper}
+												stepper={stepper}
+												allSteps={allSteps as Step[]}
+												valuesRef={
+													ref as MutableRefObject<Record<
+														string,
+														unknown
+													> | null>
+												}
+												step={step}
+												content={content}
+												controls={controls}
+												showNext={step.showNext ?? true}
+												showPrevious={
+													(step.showPrevious ??
+														true) &&
+													hasPrev
+												}
+											/>
+										</div>
+										{extraChildren}
+									</motion.div>
+								</AnimatePresence>
 							</AnimatedHeight>
 						</form>
 					</FormProvider>

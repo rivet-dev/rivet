@@ -14,7 +14,12 @@ import {
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import { Link, useNavigate, useParams, useRouter } from "@tanstack/react-router";
+import {
+	Link,
+	useNavigate,
+	useParams,
+	useRouter,
+} from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useEffect, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
@@ -237,191 +242,198 @@ export function GettingStarted({
 								formId="onboarding"
 								className="mt-2"
 								header={<OnboardingProgress />}
-							initialStep={
-								displayFrontendOnboarding
-									? "frontend"
-									: provider
-										? "backend"
-										: undefined
-							}
-							defaultValues={defaultValues}
-							content={{
-								install: () => (
-									<StepContent>
-										<InstallStep />
-									</StepContent>
-								),
-								run: () => (
-									<StepContent>
-										<RunLocallyStep />
-									</StepContent>
-								),
-								provider: () => (
-									<StepContent>
-										<ProviderSetup />
-									</StepContent>
-								),
-								backend: () => (
-									<StepContent>
-										<Suspense
-											fallback={
-												<div className="space-y-6">
-													<Skeleton className="w-full h-[180px]" />
-													<Skeleton className="w-full h-[250px]" />
-													<Skeleton className="w-full h-[200px]" />
-												</div>
+								initialStep={
+									displayFrontendOnboarding
+										? "frontend"
+										: provider
+											? "backend"
+											: undefined
+								}
+								defaultValues={defaultValues}
+								content={{
+									install: () => (
+										<StepContent>
+											<InstallStep />
+										</StepContent>
+									),
+									run: () => (
+										<StepContent>
+											<RunLocallyStep />
+										</StepContent>
+									),
+									provider: () => (
+										<StepContent>
+											<ProviderSetup />
+										</StepContent>
+									),
+									backend: () => (
+										<StepContent>
+											<Suspense
+												fallback={
+													<div className="space-y-6">
+														<Skeleton className="w-full h-[180px]" />
+														<Skeleton className="w-full h-[250px]" />
+														<Skeleton className="w-full h-[200px]" />
+													</div>
+												}
+											>
+												<BackendSetup />
+											</Suspense>
+										</StepContent>
+									),
+									frontend: () => (
+										<StepContent>
+											<FrontendSetup />
+										</StepContent>
+									),
+								}}
+								onSubmit={() => {}}
+								onPartialSubmit={async ({
+									stepper,
+									values,
+									form,
+								}) => {
+									// Provider may be lost from accumulated values
+									// after form reset, so read it from the live form.
+									const provider = (values.provider ??
+										form.getValues("provider")) as
+										| string
+										| undefined;
+									if (stepper.current.id === "provider") {
+										if (
+											features.compute &&
+											provider === "rivet"
+										) {
+											try {
+												await mutateAsyncManagedPool({
+													displayName: "default",
+													pool: "default",
+													image: undefined,
+													maxConcurrentActors: 50_000,
+													environment: {},
+													command: undefined,
+													args: [],
+												});
+											} catch (error) {
+												console.error(
+													"Failed to create default managed pool during onboarding",
+													error,
+												);
+												toast.error(
+													"Couldn't create the default Rivet Compute pool — you can configure it on the next step.",
+												);
 											}
-										>
-											<BackendSetup />
-										</Suspense>
-									</StepContent>
-								),
-								frontend: () => (
-									<StepContent>
-										<FrontendSetup />
-									</StepContent>
-								),
-							}}
-							onSubmit={() => {}}
-							onPartialSubmit={async ({
-								stepper,
-								values,
-								form,
-							}) => {
-								// Provider may be lost from accumulated values
-								// after form reset, so read it from the live form.
-								const provider = (values.provider ??
-									form.getValues("provider")) as
-									| string
-									| undefined;
-								if (stepper.current.id === "provider") {
-									if (features.compute && provider === "rivet") {
-										try {
-											await mutateAsyncManagedPool({
-												displayName: "default",
-												pool: "default",
-												image: undefined,
-												maxConcurrentActors: 50_000,
-												environment: {},
-												command: undefined,
-												args: [],
-											});
-										} catch (error) {
-											console.error(
-												"Failed to create default managed pool during onboarding",
-												error,
-											);
-											toast.error(
-												"Couldn't create the default Rivet Compute pool — you can configure it on the next step.",
-											);
 										}
+
+										await Promise.all([
+											...(features.auth &&
+											"publishableTokenQueryOptions" in
+												dataProvider
+												? [
+														queryClient.prefetchQuery(
+															dataProvider.publishableTokenQueryOptions(),
+														),
+														queryClient.prefetchInfiniteQuery(
+															dataProvider.datacentersQueryOptions(),
+														),
+													]
+												: []),
+											dataProvider.engineAdminTokenQueryOptions(),
+										]);
+										return;
 									}
+									if (
+										stepper.current.id === "backend" &&
+										features.compute &&
+										provider === "rivet"
+									) {
+										return;
+									}
+									if (
+										stepper.current.id === "backend" &&
+										provider !== "rivet"
+									) {
+										const v = values as unknown as {
+											runnerName: string;
+											provider: string;
+											mode?: "serverless" | "serverfull";
+											datacenter?: string;
+											customName?: string;
+											customIcon?: string;
+										};
 
-									await Promise.all([
-										...(features.auth &&
-										"publishableTokenQueryOptions" in
-											dataProvider
-											? [
-													queryClient.prefetchQuery(
-														dataProvider.publishableTokenQueryOptions(),
+										if (v.mode === "serverfull") {
+											const existingConfig =
+												await queryClient.fetchQuery(
+													dataProvider.runnerConfigQueryOptions(
+														{
+															name: v.runnerName,
+															safe: true,
+														},
 													),
-													queryClient.prefetchInfiniteQuery(
-														dataProvider.datacentersQueryOptions(),
-													),
-												]
-											: []),
-										dataProvider.engineAdminTokenQueryOptions(),
-									]);
-									return;
-								}
-								if (
-									stepper.current.id === "backend" &&
-									features.compute &&
-									provider === "rivet"
-								) {
-									return;
-								}
-								if (
-									stepper.current.id === "backend" &&
-									provider !== "rivet"
-								) {
-									const v = values as unknown as {
-										runnerName: string;
-										provider: string;
-										mode?: "serverless" | "serverfull";
-										datacenter?: string;
-										customName?: string;
-										customIcon?: string;
-									};
+												);
+											const existing =
+												existingConfig?.datacenters ||
+												{};
+											const isCustom =
+												v.provider === "custom" ||
+												v.provider ===
+													"custom-platform";
+											const customName = isCustom
+												? v.customName?.trim() ||
+													undefined
+												: undefined;
+											const customIcon = isCustom
+												? v.customIcon || undefined
+												: undefined;
 
-									if (v.mode === "serverfull") {
-										const existingConfig =
-											await queryClient.fetchQuery(
-												dataProvider.runnerConfigQueryOptions(
-													{
-														name: v.runnerName,
-														safe: true,
-													},
-												),
-											);
-										const existing =
-											existingConfig?.datacenters || {};
-										const isCustom =
-											v.provider === "custom" ||
-											v.provider === "custom-platform";
-										const customName = isCustom
-											? v.customName?.trim() || undefined
-											: undefined;
-										const customIcon = isCustom
-											? v.customIcon || undefined
-											: undefined;
-
-										await mutateAsync({
-											name: v.runnerName,
-											config: {
-												...existing,
-												[v.datacenter as string]: {
-													normal: {},
-													metadata: {
-														provider: v.provider,
-														...(customName
-															? { customName }
-															: {}),
-														...(customIcon
-															? { customIcon }
-															: {}),
+											await mutateAsync({
+												name: v.runnerName,
+												config: {
+													...existing,
+													[v.datacenter as string]: {
+														normal: {},
+														metadata: {
+															provider:
+																v.provider,
+															...(customName
+																? { customName }
+																: {}),
+															...(customIcon
+																? { customIcon }
+																: {}),
+														},
 													},
 												},
-											},
-										});
-									} else {
-										const config =
-											await buildServerlessConfig(
-												dataProvider,
-												values as unknown as Parameters<
-													typeof buildServerlessConfig
-												>[1],
-												{ provider: v.provider },
-											);
+											});
+										} else {
+											const config =
+												await buildServerlessConfig(
+													dataProvider,
+													values as unknown as Parameters<
+														typeof buildServerlessConfig
+													>[1],
+													{ provider: v.provider },
+												);
 
-										await mutateAsync({
-											name: v.runnerName,
-											config,
+											await mutateAsync({
+												name: v.runnerName,
+												config,
+											});
+										}
+
+										await navigate({
+											to: ".",
+											search: (s) => ({
+												...s,
+												backendOnboardingSuccess: true,
+											}),
 										});
 									}
-
-									await navigate({
-										to: ".",
-										search: (s) => ({
-											...s,
-											backendOnboardingSuccess: true,
-										}),
-									});
-								}
-							}}
-						>
-							<StepperFooter />
-						</StepperForm>
+								}}
+							>
+								<StepperFooter />
+							</StepperForm>
 						</CodeGroupSyncProvider>
 					</div>
 				</div>
@@ -486,8 +498,7 @@ function OnboardingProgress() {
 	const steps = s.all;
 	const currentIndex = steps.findIndex((step) => step.id === s.current.id);
 	const total = steps.length;
-	const groupLabel =
-		s.current.group === "local" ? "Local setup" : "Deploy";
+	const groupLabel = s.current.group === "local" ? "Local setup" : "Deploy";
 	return (
 		<div
 			role="progressbar"
@@ -672,11 +683,13 @@ function InstallStep() {
 			<div className="flex gap-3">
 				<StepNumber n={1} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-1.5">Install the Rivet skill</p>
+					<p className="font-medium mb-1.5">
+						Install the Rivet skill
+					</p>
 					<p className="text-sm text-muted-foreground mb-3">
-						Run this in your coding agent. The skill teaches it how to
-						build and deploy with Rivet, then guides you through the
-						rest of this setup.
+						Run this in your coding agent. The skill teaches it how
+						to build and deploy with Rivet, then guides you through
+						the rest of this setup.
 					</p>
 					<CommandBox command="npx skills add rivet-dev/skills" />
 				</div>
@@ -685,7 +698,9 @@ function InstallStep() {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-1.5">Add the RivetKit package</p>
+					<p className="font-medium mb-1.5">
+						Add the RivetKit package
+					</p>
 					<p className="text-sm text-muted-foreground mb-3">
 						Install the library your app imports to define and call
 						Actors.
@@ -1290,7 +1305,9 @@ function FrontendSetup() {
 								}
 							/>
 							<VerifyStatusRow
-								state={waitingForFirstImage ? "pending" : "active"}
+								state={
+									waitingForFirstImage ? "pending" : "active"
+								}
 								label="Create your first Actor"
 								sublabel="We'll continue automatically once an Actor is running."
 							/>

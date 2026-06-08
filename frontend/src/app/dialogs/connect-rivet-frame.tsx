@@ -5,11 +5,7 @@ import {
 	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
-import {
-	useInfiniteQuery,
-	useMutation,
-	useQuery,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect } from "react";
 import { useRivetDsn } from "@/app/env-variables";
 import {

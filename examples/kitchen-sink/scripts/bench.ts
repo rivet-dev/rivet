@@ -31,6 +31,7 @@ const url = new URL(RAW_ENDPOINT);
 const NAMESPACE = url.username;
 const TOKEN = url.password;
 const HOST = `${url.protocol}//${url.host}`;
+const RVT_RUNNER = process.env.RIVET_POOL ?? "k8s";
 
 async function callAction(
 	actorName: string,
@@ -44,7 +45,7 @@ async function callAction(
 		"rvt-key": key.join(","),
 		"rvt-token": TOKEN,
 		"rvt-namespace": NAMESPACE,
-		"rvt-runner": "default",
+		"rvt-runner": RVT_RUNNER,
 	});
 	const actionUrl = `${HOST}/gateway/${actorName}/action/${action}?${params}`;
 	const res = await fetch(actionUrl, {
