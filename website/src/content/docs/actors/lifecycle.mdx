@@ -110,7 +110,7 @@ const counter = actor({
 
 ### `vars`
 
-The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables-vars) for more information.
+The `vars` constant defines ephemeral variables for the actor. These variables are not persisted and are useful for storing runtime-only data. The value for `vars` must be clonable via `structuredClone`. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables) for more information.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -126,7 +126,7 @@ const counter = actor({
 
 [API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
 
-The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. The `driverCtx` parameter provides driver-specific context. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables-vars) for more information.
+The `createVars` function dynamically initializes ephemeral variables. Can be async. Use this when you need to initialize values at runtime. The `driverCtx` parameter provides driver-specific context. See [ephemeral variables documentation](/docs/actors/state#ephemeral-variables) for more information.
 
 ```typescript
 import { actor } from "rivetkit";

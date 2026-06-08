@@ -141,7 +141,7 @@ export const sitemap = [
 				title: "Features",
 				pages: [
 					{
-						title: "In-Memory State",
+						title: "State & Storage",
 						href: "/docs/actors/state",
 						icon: faFloppyDisk,
 					},
@@ -299,13 +299,9 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
-								title: "Ephemeral Variables",
-								href: "/docs/actors/ephemeral-variables",
-								//icon: faMemory,
-							},
-							{
 								title: "Low-Level KV Storage",
-								href: "/docs/actors/kv"
+								href: "/docs/actors/kv",
+								badge: "Deprecated",
 							},
 							{
 								title: "SQLite + Drizzle",
