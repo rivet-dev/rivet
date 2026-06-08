@@ -1759,6 +1759,7 @@ async fn build_resolver_image(
 				mode: DepotReadMode::DiagnosticNoSideEffects,
 				collect_provenance: !skip_page_provenance,
 				diagnostic_max_txid: Some(selected_txid),
+				..Default::default()
 			},
 		)
 		.await;
