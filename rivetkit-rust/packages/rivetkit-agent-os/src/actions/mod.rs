@@ -34,6 +34,16 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 				Err(error) => action.err(error),
 			}
 		}
+		"stat" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::stat(vm, &path).await {
+					Ok(vstat) => action.ok(&vstat),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
 		"writeFile" => {
 			// TS sends `contents` as either a `string` (CBOR text string),
 			// a `Uint8Array` / `Buffer` (CBOR byte string -> `ByteBuf`), or
