@@ -13,6 +13,7 @@ use anyhow::{Result, anyhow};
 use rivetkit::Action;
 
 use crate::actor::AgentOsActor;
+use filesystem::{WriteFileContent, WriteFilesEntryArg};
 
 /// Dispatch one action against a live VM. Each arm decodes its args,
 /// calls the helper, and replies through `action.ok` / `action.err`.
@@ -34,16 +35,6 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 				Err(error) => action.err(error),
 			}
 		}
-		"stat" => {
-			let args: Result<(String,)> = action.decode_as();
-			match args {
-				Ok((path,)) => match filesystem::stat(vm, &path).await {
-					Ok(vstat) => action.ok(&vstat),
-					Err(error) => action.err(error),
-				},
-				Err(error) => action.err(error),
-			}
-		}
 		"writeFile" => {
 			// TS sends `contents` as either a `string` (CBOR text string),
 			// a `Uint8Array` / `Buffer` (CBOR byte string -> `ByteBuf`), or
@@ -60,59 +51,100 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 				Err(error) => action.err(error),
 			}
 		}
+		"stat" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::stat(vm, &path).await {
+					Ok(vstat) => action.ok(&vstat),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"mkdir" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::mkdir(vm, &path).await {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"readdir" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::readdir(vm, &path).await {
+					Ok(entries) => action.ok(&entries),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"exists" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::exists(vm, &path).await {
+					Ok(present) => action.ok(&present),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"move" => {
+			let args: Result<(String, String)> = action.decode_as();
+			match args {
+				Ok((from, to)) => match filesystem::move_path(vm, &from, &to).await {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"deleteFile" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::delete_file(vm, &path).await {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"writeFiles" => {
+			let args: Result<(Vec<WriteFilesEntryArg>,)> = action.decode_as();
+			match args {
+				Ok((entries,)) => {
+					let results = filesystem::write_files(vm, entries).await;
+					action.ok(&results);
+				}
+				Err(error) => action.err(error),
+			}
+		}
+		"readFiles" => {
+			let args: Result<(Vec<String>,)> = action.decode_as();
+			match args {
+				Ok((paths,)) => {
+					let results = filesystem::read_files(vm, paths).await;
+					action.ok(&results);
+				}
+				Err(error) => action.err(error),
+			}
+		}
+		"readdirRecursive" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((path,)) => match filesystem::readdir_recursive(vm, &path).await {
+					Ok(entries) => action.ok(&entries),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
 		_ => action.err(not_implemented(&name)),
 	}
 }
 
 fn not_implemented(name: &str) -> anyhow::Error {
 	anyhow!("agent-os action not implemented yet: {name}")
-}
-
-/// Accept either a CBOR text string, a CBOR byte string (via `ByteBuf`), or
-/// the `["$Uint8Array", base64]` wrapper that TS encoders emit when the
-/// outer codec is JSON-compatible. Used by `writeFile` and similar
-/// byte-payload action arms.
-#[derive(serde::Deserialize)]
-#[serde(untagged)]
-enum WriteFileContent {
-	String(String),
-	Bytes(serde_bytes::ByteBuf),
-	Wrapped(JsonCompatUint8Array),
-}
-
-impl WriteFileContent {
-	fn into_bytes(self) -> Vec<u8> {
-		match self {
-			Self::String(s) => s.into_bytes(),
-			Self::Bytes(b) => b.into_vec(),
-			Self::Wrapped(w) => w.bytes,
-		}
-	}
-}
-
-/// Deserializer for the `["$Uint8Array", base64]` envelope. Used as part
-/// of [`WriteFileContent`]'s untagged enum so the same arm accepts wrapped
-/// bytes from the JSON encoder path.
-struct JsonCompatUint8Array {
-	bytes: Vec<u8>,
-}
-
-impl<'de> serde::Deserialize<'de> for JsonCompatUint8Array {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-		let (tag, base64): (String, String) =
-			serde::Deserialize::deserialize(deserializer)?;
-		if tag != "$Uint8Array" {
-			return Err(serde::de::Error::custom(format!(
-				"expected $Uint8Array wrapper, got {tag}"
-			)));
-		}
-		let bytes = BASE64
-			.decode(&base64)
-			.map_err(|error| serde::de::Error::custom(format!("base64 decode: {error}")))?;
-		Ok(Self { bytes })
-	}
 }
