@@ -1,5 +1,6 @@
 [package]
 name = "rivet-metrics-server"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true

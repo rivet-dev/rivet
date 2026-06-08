@@ -44,6 +44,7 @@ members = [
   "engine/packages/service-manager",
   "engine/packages/depot",
   "engine/packages/telemetry",
+  "engine/packages/term",
   "engine/packages/test-deps",
   "engine/packages/test-deps-docker",
   "engine/packages/test-snapshot-gen",
@@ -65,20 +66,26 @@ members = [
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
   "rivetkit-rust/packages/actor-persist",
+  "rivetkit-rust/packages/client",
+  "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",
   "rivetkit-typescript/packages/rivetkit-wasm",
   "engine/packages/perf",
   "engine/packages/profiling",
-  "engine/packages/ups-broadcast"
+  "engine/packages/ups-broadcast",
+  "examples/chat-room-rust",
+  "examples/hello-world-rust"
 ]
 
   [workspace.package]
   version = "2.3.0-rc.12"
   edition = "2024"
-  authors = [ "Rivet Gaming, LLC <developer@rivet.gg>" ]
+  authors = [ "Rivet Gaming, LLC <developer@rivet.dev>" ]
   license = "Apache-2.0"
+  homepage = "https://rivet.dev"
+  repository = "https://github.com/rivet-dev/rivet"
 
   [workspace.dependencies]
   anyhow = "1.0.82"
@@ -86,8 +93,8 @@ members = [
   scopeguard = "1.2"
   xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
   async-channel = "2.1.1"
-  # Fork owner: Rivet/NathanFlurry. Sync with upstream async-nats when upgrading the client, and upstream the SlowConsumer subject enrichment plus subscription backpressure stats before returning to crates.io.
-  async-nats = { git = "https://github.com/NathanFlurry/nats.rs", rev = "b8658013e2e9de1d3d4d25f6b1f4f345d0970539" }
+  # Rivet fork of async-nats published as rivet-async-nats. Source: https://github.com/NathanFlurry/nats.rs (branch rivet-async-nats). Carries the SlowConsumer subject enrichment plus subscription backpressure stats; upstream these before returning to the official crate.
+  async-nats = { package = "rivet-async-nats", version = "0.46.0" }
   async-stream = "0.3"
   async-trait = "0.1"
   axum-test = "17"
@@ -138,7 +145,7 @@ members = [
   rustyline = "15.0.0"
   scc = "3.6.12"
   semver = "1.0.27"
-  serde_bare = { git = "https://github.com/rivet-dev/serde_bare", rev = "f63f155db7e0ab989255ee0d6991ff8eb9ebee25" }
+  serde_bare = "0.5.0"
   serde_bytes = "0.11.17"
   serde_html_form = "0.2.7"
   serde_yaml = "0.9.34"
@@ -273,8 +280,7 @@ members = [
     features = [ "derive", "cargo" ]
 
     [workspace.dependencies.rivet-term]
-    git = "https://github.com/rivet-dev/rivet-term"
-    rev = "55e328470b68c557fb9bc8298369f90182d35b6d"
+    path = "engine/packages/term"
 
     [workspace.dependencies.clickhouse]
     version = "0.14.2"
@@ -391,9 +397,8 @@ members = [
     version = "0.0.4"
 
     [workspace.dependencies.vbare-compiler]
-    # version = "0.0.4"
-    git = "https://github.com/rivet-dev/vbare"
-    rev = "daba2acdf708fc9683559938eead354507e5ea21"
+    package = "rivet-vbare-compiler"
+    version = "0.0.5"
 
     [workspace.dependencies.rivet-api-builder]
     path = "engine/packages/api-builder"
@@ -445,9 +450,11 @@ members = [
 
     [workspace.dependencies.rivet-error]
     path = "engine/packages/error"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivet-error-macros]
     path = "engine/packages/error-macros"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.gasoline]
     path = "engine/packages/gasoline"
@@ -473,6 +480,7 @@ members = [
 
     [workspace.dependencies.rivet-metrics]
     path = "engine/packages/metrics"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivet-metrics-server]
     path = "engine/packages/metrics-server"
@@ -555,6 +563,7 @@ members = [
 
     [workspace.dependencies.rivet-util-serde]
     path = "engine/packages/util-serde"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivet-workflow-worker]
     path = "engine/packages/workflow-worker"
@@ -567,37 +576,52 @@ members = [
 
     [workspace.dependencies.rivet-envoy-client]
     path = "engine/sdks/rust/envoy-client"
+    version = "=2.3.0-rc.12"
     default-features = false
 
     [workspace.dependencies.rivet-envoy-protocol]
     path = "engine/sdks/rust/envoy-protocol"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivet-depot-protocol]
     path = "engine/sdks/rust/depot-protocol"
 
     [workspace.dependencies.rivetkit-client-protocol]
     path = "rivetkit-rust/packages/client-protocol"
+    version = "=2.3.0-rc.12"
+
+    [workspace.dependencies.rivetkit-client]
+    path = "rivetkit-rust/packages/client"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivetkit-actor-persist]
     path = "rivetkit-rust/packages/actor-persist"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivetkit-inspector-protocol]
     path = "rivetkit-rust/packages/inspector-protocol"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.depot-client]
+    package = "rivet-depot-client"
     path = "engine/packages/depot-client"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.depot-client-embedded]
     path = "engine/packages/depot-client-embedded"
 
     [workspace.dependencies.depot-client-types]
+    package = "rivet-depot-client-types"
     path = "engine/packages/depot-client-types"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivetkit-core]
     path = "rivetkit-rust/packages/rivetkit-core"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivetkit-shared-types]
     path = "rivetkit-rust/packages/shared-types"
+    version = "=2.3.0-rc.12"
 
     [workspace.dependencies.epoxy-protocol]
     path = "engine/sdks/rust/epoxy-protocol"
@@ -607,9 +631,6 @@ members = [
 
     [workspace.dependencies.rivet-ups-protocol]
     path = "engine/sdks/rust/ups-protocol"
-
-[patch.crates-io]
-tokio-tungstenite = { git = "https://github.com/NathanFlurry/tokio-tungstenite-rivet", rev = "7cf88064d7def36a2a1cac82dc28366b4db4fd4d" }
 
 [profile.dev]
 overflow-checks = false

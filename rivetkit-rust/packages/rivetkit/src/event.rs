@@ -16,12 +16,65 @@ use serde::{
 	},
 };
 
-use crate::{actor::Actor, context::ConnCtx, persist};
+use crate::{action, actor::Actor, context::ConnCtx, persist};
+
+pub trait Event: Serialize + DeserializeOwned + Send + Sync + 'static {
+	const NAME: &'static str;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EventEntry {
+	pub name: &'static str,
+}
+
+pub trait EventSet: Send + Sync + 'static {
+	fn entries() -> Vec<EventEntry>;
+}
+
+impl EventSet for () {
+	fn entries() -> Vec<EventEntry> {
+		Vec::new()
+	}
+}
+
+macro_rules! impl_event_set {
+	($($event:ident),+) => {
+		impl<$($event),+> EventSet for ($($event,)+)
+		where
+			$($event: Event,)+
+		{
+			fn entries() -> Vec<EventEntry> {
+				vec![$(EventEntry { name: <$event as Event>::NAME }),+]
+			}
+		}
+	};
+}
+
+impl_event_set!(E0);
+impl_event_set!(E0, E1);
+impl_event_set!(E0, E1, E2);
+impl_event_set!(E0, E1, E2, E3);
+impl_event_set!(E0, E1, E2, E3, E4);
+impl_event_set!(E0, E1, E2, E3, E4, E5);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7, E8);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7, E8, E9);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12);
+impl_event_set!(E0, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12, E13);
+impl_event_set!(
+	E0, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12, E13, E14
+);
+impl_event_set!(
+	E0, E1, E2, E3, E4, E5, E6, E7, E8, E9, E10, E11, E12, E13, E14, E15
+);
 
 #[derive(Debug)]
-#[must_use = "dropping an Event<A> without replying sends actor/dropped_reply"]
-pub enum Event<A: Actor> {
-	Action(Action<A>),
+#[must_use = "dropping a RuntimeEvent<A> without replying sends actor/dropped_reply"]
+pub enum RuntimeEvent<A: Actor> {
+	Action(ActionCall<A>),
 	Http(HttpCall),
 	QueueSend(QueueSend<A>),
 	WebSocketOpen(WsOpen<A>),
@@ -31,11 +84,9 @@ pub enum Event<A: Actor> {
 	SerializeState(SerializeState<A>),
 	Sleep(Sleep<A>),
 	Destroy(Destroy<A>),
-	WorkflowHistory(WfHistory),
-	WorkflowReplay(WfReplay),
 }
 
-impl<A: Actor> Event<A> {
+impl<A: Actor> RuntimeEvent<A> {
 	pub(crate) fn from_core(event: ActorEvent) -> Self {
 		match event {
 			ActorEvent::Action {
@@ -43,7 +94,7 @@ impl<A: Actor> Event<A> {
 				args,
 				conn,
 				reply,
-			} => Self::Action(Action {
+			} => Self::Action(ActionCall {
 				name,
 				args,
 				conn: conn.map(ConnCtx::from),
@@ -125,14 +176,11 @@ impl<A: Actor> Event<A> {
 			ActorEvent::DisconnectConn { .. } => {
 				unreachable!("DisconnectConn is handled by foreign-runtime adapters")
 			}
-			ActorEvent::WorkflowHistoryRequested { reply } => {
-				Self::WorkflowHistory(WfHistory { reply: Some(reply) })
-			}
-			ActorEvent::WorkflowReplayRequested { entry_id, reply } => {
-				Self::WorkflowReplay(WfReplay {
-					entry_id,
-					reply: Some(reply),
-				})
+			ActorEvent::WorkflowHistoryRequested { .. }
+			| ActorEvent::WorkflowReplayRequested { .. } => {
+				unreachable!(
+					"workflow events are handled by the TypeScript runtime; Rust actors never host workflows"
+				)
 			}
 		}
 	}
@@ -141,14 +189,14 @@ impl<A: Actor> Event<A> {
 #[derive(Debug)]
 #[must_use = "reply to the action or dropping it sends actor/dropped_reply"]
 #[allow(dead_code)]
-pub struct Action<A: Actor> {
+pub struct ActionCall<A: Actor> {
 	pub(crate) name: String,
 	pub(crate) args: Vec<u8>,
 	pub(crate) conn: Option<ConnCtx<A>>,
 	pub(crate) reply: Option<Reply<Vec<u8>>>,
 }
 
-impl<A: Actor> Drop for Action<A> {
+impl<A: Actor> Drop for ActionCall<A> {
 	fn drop(&mut self) {
 		if self.reply.is_some() {
 			warn_dropped_event("Action", self.name.as_str());
@@ -156,7 +204,7 @@ impl<A: Actor> Drop for Action<A> {
 	}
 }
 
-impl<A: Actor> Action<A> {
+impl<A: Actor> ActionCall<A> {
 	pub fn name(&self) -> &str {
 		&self.name
 	}
@@ -184,7 +232,7 @@ impl<A: Actor> Action<A> {
 	}
 
 	pub fn decode_as<T: DeserializeOwned>(&self) -> AnyhowResult<T> {
-		ciborium::from_reader(Cursor::new(self.raw_args())).with_context(|| {
+		action::decode_positional(self.raw_args()).with_context(|| {
 			format!(
 				"decode action '{}' args as {}",
 				self.name,
@@ -282,9 +330,12 @@ impl<'de> VariantAccess<'de> for ActionVariantAccess<'de> {
 
 	fn unit_variant(self) -> Result<(), Self::Error> {
 		match self.args {
-			[] | [0xf6] => Ok(()),
+			// Empty bytes, cbor null, or an empty cbor array (`[]`) all map to a
+			// no-argument action. Clients encode the empty positional argument
+			// list as an empty cbor array.
+			[] | [0xf6] | [0x80] => Ok(()),
 			_ => Err(de::Error::custom(
-				"unit action variant expects empty args or cbor null",
+				"unit action variant expects empty args, cbor null, or an empty cbor array",
 			)),
 		}
 	}
@@ -633,7 +684,16 @@ impl<'de> de::Deserializer<'de> for ValueDeserializer {
 	where
 		V: Visitor<'de>,
 	{
-		self.deserialize_map(visitor)
+		match self.value {
+			Value::Map(entries) => visitor.visit_map(ValueMapAccess {
+				entries: entries.into_iter(),
+				value: None,
+			}),
+			Value::Array(values) => visitor.visit_seq(ValueSeqAccess {
+				values: values.into_iter(),
+			}),
+			other => Err(invalid_type(&other, "a map or array")),
+		}
 	}
 
 	fn deserialize_enum<V>(
@@ -814,6 +874,12 @@ impl<'de> VariantAccess<'de> for ValueVariantAccess {
 fn decode_action_value(args: &[u8]) -> Result<Value, de::value::Error> {
 	ciborium::from_reader(Cursor::new(args))
 		.map_err(|error| de::Error::custom(format!("decode action args from cbor: {error}")))
+}
+
+pub(crate) fn deserialize_cbor_value<T: DeserializeOwned>(
+	value: Value,
+) -> Result<T, de::value::Error> {
+	T::deserialize(ValueDeserializer::new(value))
 }
 
 fn encode_cbor<T: Serialize>(value: &T, context: &'static str) -> AnyhowResult<Vec<u8>> {
@@ -1326,90 +1392,6 @@ impl<A: Actor> Destroy<A> {
 	}
 }
 
-#[derive(Debug)]
-#[must_use = "reply to workflow history or dropping it sends actor/dropped_reply"]
-pub struct WfHistory {
-	pub(crate) reply: Option<Reply<Option<Vec<u8>>>>,
-}
-
-impl Drop for WfHistory {
-	fn drop(&mut self) {
-		if self.reply.is_some() {
-			warn_dropped_event("WorkflowHistory", "history");
-		}
-	}
-}
-
-impl WfHistory {
-	pub fn reply<T: Serialize>(self, history: Option<&T>) {
-		match history {
-			Some(history) => match encode_cbor(history, "encode workflow history as cbor") {
-				Ok(bytes) => self.reply_raw(Some(bytes)),
-				Err(error) => self.reply_err(error),
-			},
-			None => self.reply_raw(None),
-		}
-	}
-
-	pub fn reply_raw(mut self, bytes: Option<Vec<u8>>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(bytes));
-		}
-	}
-
-	pub fn reply_err(mut self, err: anyhow::Error) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Err(err));
-		}
-	}
-}
-
-#[derive(Debug)]
-#[must_use = "reply to workflow replay or dropping it sends actor/dropped_reply"]
-pub struct WfReplay {
-	pub(crate) entry_id: Option<String>,
-	pub(crate) reply: Option<Reply<Option<Vec<u8>>>>,
-}
-
-impl Drop for WfReplay {
-	fn drop(&mut self) {
-		if self.reply.is_some() {
-			warn_dropped_event(
-				"WorkflowReplay",
-				self.entry_id.as_deref().unwrap_or("<start>"),
-			);
-		}
-	}
-}
-
-impl WfReplay {
-	pub fn entry_id(&self) -> Option<&str> {
-		self.entry_id.as_deref()
-	}
-
-	pub fn reply<T: Serialize>(self, value: Option<&T>) {
-		match value {
-			Some(value) => match encode_cbor(value, "encode workflow replay as cbor") {
-				Ok(bytes) => self.reply_raw(Some(bytes)),
-				Err(error) => self.reply_err(error),
-			},
-			None => self.reply_raw(None),
-		}
-	}
-
-	pub fn reply_raw(mut self, bytes: Option<Vec<u8>>) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(bytes));
-		}
-	}
-
-	pub fn reply_err(mut self, err: anyhow::Error) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Err(err));
-		}
-	}
-}
-
 fn warn_dropped_event(variant: &'static str, identifying: impl fmt::Display) {
 	tracing::warn!(
 		variant,
@@ -1438,7 +1420,11 @@ mod tests {
 	struct EmptyActor;
 
 	impl Actor for EmptyActor {
+		type State = ();
 		type Input = ();
+		type Actions = ();
+		type Events = ();
+		type Queue = ();
 		type ConnParams = ();
 		type ConnState = ();
 		type Action = action::Raw;
@@ -1456,7 +1442,11 @@ mod tests {
 	struct TestActor;
 
 	impl Actor for TestActor {
+		type State = ();
 		type Input = ();
+		type Actions = ();
+		type Events = ();
+		type Queue = ();
 		type ConnParams = ();
 		type ConnState = ();
 		type Action = TestAction;
@@ -1465,13 +1455,17 @@ mod tests {
 	struct ConnActor;
 
 	impl Actor for ConnActor {
+		type State = ();
 		type Input = ();
+		type Actions = ();
+		type Events = ();
+		type Queue = ();
 		type ConnParams = TestConnParams;
 		type ConnState = TestConnState;
 		type Action = action::Raw;
 	}
 
-	#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+	#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 	struct TestConnParams {
 		label: String,
 	}
@@ -1608,29 +1602,6 @@ mod tests {
 				request: Some(test_request("/drop-websocket")),
 				reply: Some(reply_tx.into()),
 				_p: PhantomData,
-			});
-			reply_rx
-		});
-	}
-
-	#[test]
-	fn dropped_workflow_history_logs_warning_and_sends_dropped_reply() {
-		assert_dropped_reply_logs("WorkflowHistory", "history", || {
-			let (reply_tx, reply_rx) = oneshot::channel();
-			drop(WfHistory {
-				reply: Some(reply_tx.into()),
-			});
-			reply_rx
-		});
-	}
-
-	#[test]
-	fn dropped_workflow_replay_logs_warning_and_sends_dropped_reply() {
-		assert_dropped_reply_logs("WorkflowReplay", "entry-7", || {
-			let (reply_tx, reply_rx) = oneshot::channel();
-			drop(WfReplay {
-				entry_id: Some("entry-7".into()),
-				reply: Some(reply_tx.into()),
 			});
 			reply_rx
 		});
@@ -1954,33 +1925,6 @@ mod tests {
 	}
 
 	#[test]
-	fn workflow_history_reply_encodes_cbor_value() {
-		let runtime = tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.expect("build runtime");
-		let (reply_tx, reply_rx) = oneshot::channel();
-		let snapshot = WorkflowSnapshot {
-			step: "hydrate".into(),
-			attempt: 2,
-		};
-
-		WfHistory {
-			reply: Some(reply_tx.into()),
-		}
-		.reply(Some(&snapshot));
-
-		let bytes = runtime
-			.block_on(reply_rx)
-			.expect("receive workflow history reply")
-			.expect("workflow history should succeed")
-			.expect("workflow history should include bytes");
-		let decoded: WorkflowSnapshot =
-			ciborium::from_reader(Cursor::new(bytes)).expect("decode workflow history payload");
-		assert_eq!(decoded, snapshot);
-	}
-
-	#[test]
 	fn serialize_state_save_encodes_actor_state_delta() {
 		let runtime = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
@@ -2031,14 +1975,71 @@ mod tests {
 		count: u32,
 	}
 
-	#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-	struct WorkflowSnapshot {
-		step: String,
-		attempt: u32,
+	#[derive(Debug, Serialize, Deserialize)]
+	struct FirstEvent;
+
+	impl Event for FirstEvent {
+		const NAME: &'static str = "first";
 	}
 
-	fn test_action(name: &str, args: Vec<u8>) -> Action<TestActor> {
-		Action {
+	#[derive(Debug, Serialize, Deserialize)]
+	struct SecondEvent;
+
+	impl Event for SecondEvent {
+		const NAME: &'static str = "second";
+	}
+
+	#[test]
+	fn event_set_unit_registers_nothing() {
+		assert!(<() as EventSet>::entries().is_empty());
+	}
+
+	#[test]
+	fn event_set_tuple_registers_names_in_order() {
+		let entries = <(FirstEvent, SecondEvent) as EventSet>::entries();
+
+		assert_eq!(
+			entries.iter().map(|entry| entry.name).collect::<Vec<_>>(),
+			["first", "second",]
+		);
+	}
+
+	#[test]
+	fn event_set_tuple_supports_one_and_max_arity() {
+		assert_eq!(
+			<(FirstEvent,) as EventSet>::entries()
+				.iter()
+				.map(|entry| entry.name)
+				.collect::<Vec<_>>(),
+			["first"]
+		);
+
+		type MaxEvents = (
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+			FirstEvent,
+		);
+		let entries = <MaxEvents as EventSet>::entries();
+
+		assert_eq!(entries.len(), action::TUPLE_ARITY_MAX);
+		assert!(entries.iter().all(|entry| entry.name == "first"));
+	}
+
+	fn test_action(name: &str, args: Vec<u8>) -> ActionCall<TestActor> {
+		ActionCall {
 			name: name.into(),
 			args,
 			conn: None,

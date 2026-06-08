@@ -5,13 +5,10 @@ use hyper_tungstenite::HyperWebsocket;
 use hyper_tungstenite::tungstenite::Message;
 use hyper_util::rt::TokioIo;
 use rivet_perf::{perf_finish, perf_start};
-use std::sync::{
-	Arc,
-	atomic::{AtomicU64, Ordering},
-};
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::Mutex;
-use tokio_tungstenite::{WebSocketStream, WebSocketStreamStatistics};
+use tokio_tungstenite::WebSocketStream;
 
 use crate::metrics;
 
@@ -25,26 +22,17 @@ pub type WebSocketSender =
 pub struct WebSocketHandle {
 	ws_tx: Arc<Mutex<WebSocketSender>>,
 	ws_rx: Arc<Mutex<WebSocketReceiver>>,
-	ws_statistics: Arc<WebSocketStreamStatistics>,
-	last_write_would_block_total: Arc<AtomicU64>,
-	last_write_buffer_full_total: Arc<AtomicU64>,
-	last_write_backpressure_events: Arc<AtomicU64>,
 }
 
 impl WebSocketHandle {
 	#[tracing::instrument(skip_all)]
 	pub async fn new(websocket: HyperWebsocket) -> Result<Self> {
 		let ws_stream = websocket.await?;
-		let ws_statistics = ws_stream.statistics();
 		let (ws_tx, ws_rx) = ws_stream.split();
 
 		Ok(Self {
 			ws_tx: Arc::new(Mutex::new(ws_tx)),
 			ws_rx: Arc::new(Mutex::new(ws_rx.peekable())),
-			ws_statistics,
-			last_write_would_block_total: Arc::new(AtomicU64::new(0)),
-			last_write_buffer_full_total: Arc::new(AtomicU64::new(0)),
-			last_write_backpressure_events: Arc::new(AtomicU64::new(0)),
 		})
 	}
 
@@ -93,38 +81,7 @@ impl WebSocketHandle {
 	}
 
 	fn record_write_pressure_metrics(&self, message_kind: &str) {
-		let would_block_total = self
-			.ws_statistics
-			.write_would_block_total
-			.load(Ordering::Relaxed);
-		let buffer_full_total = self
-			.ws_statistics
-			.write_buffer_full_total
-			.load(Ordering::Relaxed);
-		let backpressure_events = self
-			.ws_statistics
-			.write_backpressure_events
-			.load(Ordering::Relaxed);
-
-		let previous_would_block = self
-			.last_write_would_block_total
-			.swap(would_block_total, Ordering::Relaxed);
-		let previous_buffer_full = self
-			.last_write_buffer_full_total
-			.swap(buffer_full_total, Ordering::Relaxed);
-		let previous_backpressure_events = self
-			.last_write_backpressure_events
-			.swap(backpressure_events, Ordering::Relaxed);
-
-		metrics::WEBSOCKET_WRITE_WOULD_BLOCK_TOTAL
-			.with_label_values(&[message_kind])
-			.inc_by(would_block_total.saturating_sub(previous_would_block));
-		metrics::WEBSOCKET_WRITE_BUFFER_FULL_TOTAL
-			.with_label_values(&[message_kind])
-			.inc_by(buffer_full_total.saturating_sub(previous_buffer_full));
-		metrics::WEBSOCKET_WRITE_BACKPRESSURE_EVENTS_TOTAL
-			.with_label_values(&[message_kind])
-			.inc_by(backpressure_events.saturating_sub(previous_backpressure_events));
+		let _ = message_kind;
 	}
 }
 

@@ -3,8 +3,11 @@ name = "rivetkit-actor-persist"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 edition.workspace = true
 workspace = "../../../"
+description = "Versioned persistence protocol types for RivetKit actors"
 
 [dependencies]
 anyhow.workspace = true

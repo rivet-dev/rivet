@@ -1,0 +1,22 @@
+error[E0277]: the trait bound `TestActor: HandlesQueue<MissingMessage>` is not satisfied
+  --> tests/ui/queue_set_missing_handle.rs:27:11
+   |
+27 |     let _ = <(MissingMessage,) as QueueSet<TestActor>>::entries();
+   |              ^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `HandlesQueue<MissingMessage>` is not implemented for `TestActor`
+  --> tests/ui/queue_set_missing_handle.rs:4:1
+   |
+ 4 | struct TestActor;
+   | ^^^^^^^^^^^^^^^^
+   = help: the following other types implement trait `QueueSet<A>`:
+             `()` implements `QueueSet<A>`
+             `(M0, M1)` implements `QueueSet<Act>`
+             `(M0, M1, M2)` implements `QueueSet<Act>`
+             `(M0, M1, M2, M3)` implements `QueueSet<Act>`
+             `(M0, M1, M2, M3, M4)` implements `QueueSet<Act>`
+             `(M0, M1, M2, M3, M4, M5)` implements `QueueSet<Act>`
+             `(M0, M1, M2, M3, M4, M5, M6)` implements `QueueSet<Act>`
+             `(M0, M1, M2, M3, M4, M5, M6, M7)` implements `QueueSet<Act>`
+           and $N others
+   = note: required for `(MissingMessage,)` to implement `QueueSet<TestActor>`

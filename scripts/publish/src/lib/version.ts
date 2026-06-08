@@ -45,6 +45,23 @@ const DEP_FIELDS = [
 	"optionalDependencies",
 ] as const;
 
+const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
+	"rivet-error-macros",
+	"rivet-error",
+	"rivet-metrics",
+	"rivet-util-serde",
+	"depot-client-types",
+	"depot-client",
+	"rivet-envoy-protocol",
+	"rivetkit-shared-types",
+	"rivet-envoy-client",
+	"rivetkit-actor-persist",
+	"rivetkit-client-protocol",
+	"rivetkit-inspector-protocol",
+	"rivetkit-client",
+	"rivetkit-core",
+]);
+
 export interface BumpOptions {
 	/** If true, report actions but do not write. */
 	dryRun?: boolean;
@@ -139,6 +156,39 @@ export async function bumpPackageJsons(
 
 	log.info(`total: ${updated} package.json files updated to ${version}`);
 	return updated;
+}
+
+export async function bumpCargoVersions(
+	repoRoot: string,
+	version: string,
+	opts: Pick<BumpOptions, "dryRun"> = {},
+): Promise<void> {
+	const cargoTomlPath = join(repoRoot, "Cargo.toml");
+	const cargoToml = await fs.readFile(cargoTomlPath, "utf8");
+	let next = cargoToml.replace(
+		/(\[workspace\.package\]\n(?:[^\n]*\n)*?[ \t]*version = )"[^"]+"/,
+		`$1"${version}"`,
+	);
+	for (const dep of PUBLISHED_RUST_WORKSPACE_DEPS) {
+		const escapedDep = dep.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+		const depTable = new RegExp(
+			`(\\[workspace\\.dependencies\\.${escapedDep}\\]\\n(?:[^\\n]*\\n)*?[ \\t]*version = )"=[^"]+"`,
+			"m",
+		);
+		next = next.replace(depTable, `$1"=${version}"`);
+	}
+
+	if (next === cargoToml) {
+		log.info(`Cargo.toml Rust versions already set to ${version}`);
+		return;
+	}
+
+	if (opts.dryRun) {
+		log.info(`[dry-run] would update Cargo.toml Rust versions -> ${version}`);
+	} else {
+		await fs.writeFile(cargoTomlPath, next);
+		log.info(`updated Cargo.toml Rust versions -> ${version}`);
+	}
 }
 
 /**

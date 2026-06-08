@@ -430,6 +430,8 @@ function create<Registry extends AnyActorRegistry>(
 				});
 
 		const connection = handle.connect();
+		const storedHandle = handle as ActorHandle<AnyActorDefinition>;
+		const storedConnection = connection as ActorConn<AnyActorDefinition>;
 
 		// Store connection BEFORE registering callbacks to avoid race condition
 		// where status change fires before connection is stored
@@ -439,8 +441,8 @@ function create<Registry extends AnyActorRegistry>(
 		// avoid relating the deep Registry-generic type against
 		// AnyActorDefinition, which exceeds TS's instantiation-depth limit.
 		updateActor(store, key, {
-			handle: handle as unknown as ActorHandle<AnyActorDefinition>,
-			connection: connection as unknown as ActorConn<AnyActorDefinition>,
+			handle: storedHandle,
+			connection: storedConnection,
 		});
 
 		// Subscribe to connection state changes

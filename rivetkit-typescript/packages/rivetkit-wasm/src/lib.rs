@@ -15,10 +15,10 @@ use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
 	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
 	ActorWorkKind, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry,
-	CoreServerlessRuntime, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts, QueueMessage,
-	QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts,
-	Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason, ServeConfig,
-	ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
+	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
+	QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts,
+	QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
+	ServeConfig, ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -146,6 +146,8 @@ impl From<WasmServeConfig> for ServeConfig {
 			namespace: config.namespace,
 			pool_name: config.pool_name,
 			engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+			engine_spawn: EngineSpawnMode::Never,
+			engine_auto_download: false,
 			handle_inspector_http_in_runtime: config
 				.handle_inspector_http_in_runtime
 				.unwrap_or(false),

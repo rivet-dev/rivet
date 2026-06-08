@@ -5,18 +5,15 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+	let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
 	let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-	let workspace_root = Path::new(&manifest_dir)
+	let workspace_root = manifest_dir
 		.parent()
 		.and_then(|p| p.parent())
 		.and_then(|p| p.parent())
 		.ok_or("Failed to find workspace root")?;
 
-	let schema_dir = workspace_root
-		.join("sdks")
-		.join("schemas")
-		.join("envoy-protocol");
+	let schema_dir = manifest_dir.join("schemas");
 
 	// Rust SDK generation
 	let cfg = vbare_compiler::Config::default();

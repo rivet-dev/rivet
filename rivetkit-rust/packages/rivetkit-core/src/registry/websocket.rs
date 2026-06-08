@@ -858,7 +858,7 @@ pub(super) fn websocket_conn_params(headers: &HashMap<String, String>) -> Result
 	let Some(encoded_params) = websocket_protocols(headers)
 		.find_map(|protocol| protocol.strip_prefix(WS_PROTOCOL_CONN_PARAMS))
 	else {
-		return Ok(Vec::new());
+		return encode_json_as_cbor(&serde_json::Value::Null);
 	};
 
 	let decoded = Url::parse(&format!("http://actor/?value={encoded_params}"))

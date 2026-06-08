@@ -3,7 +3,10 @@ name = "rivet-envoy-protocol"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 edition.workspace = true
+description = "Versioned Envoy protocol types for Rivet actor hosts"
 
 [dependencies]
 anyhow.workspace = true

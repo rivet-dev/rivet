@@ -607,7 +607,7 @@ pub(super) fn http_conn_params(headers: &http::HeaderMap) -> Result<Vec<u8>> {
 		.get("x-rivet-conn-params")
 		.and_then(|value| value.to_str().ok())
 	else {
-		return Ok(Vec::new());
+		return encode_json_as_cbor(&JsonValue::Null);
 	};
 	let value: JsonValue = serde_json::from_str(raw).context("parse x-rivet-conn-params header")?;
 	encode_json_as_cbor(&value)

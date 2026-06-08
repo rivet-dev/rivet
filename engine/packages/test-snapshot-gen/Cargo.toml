@@ -1,5 +1,6 @@
 [package]
 name = "test-snapshot-gen"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true

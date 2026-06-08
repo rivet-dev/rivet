@@ -1,0 +1,18 @@
+[package]
+name = "rivet-term"
+description = "Terminal output, formatting, and prompt helpers used by Rivet"
+version.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+publish = false
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+console = "0.15"
+derive_builder = "0.12"
+tabled = { version = "0.17.0", features = ["ansi"] }
+term_size = "0.3"
+thiserror = "1.0"
+tokio = { version = "1.27", default-features = false, features = ["rt"] }

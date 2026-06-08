@@ -11,7 +11,7 @@ mod moved_tests {
 		CoreServerlessRuntime, ServerlessRequest, endpoints_match, normalize_endpoint_url,
 		parse_start_headers,
 	};
-	use crate::registry::ServeConfig;
+	use crate::registry::{EngineSpawnMode, ServeConfig};
 
 	#[test]
 	fn normalizes_loopback_addresses() {
@@ -152,6 +152,7 @@ mod moved_tests {
 	async fn engine_process_spawn_requires_native_runtime() {
 		let mut config = test_config();
 		config.engine_binary_path = Some(PathBuf::from("rivet-engine"));
+		config.engine_spawn = EngineSpawnMode::Always;
 
 		let error = match CoreServerlessRuntime::new(HashMap::new(), config).await {
 			Ok(_) => panic!("engine process spawning should fail without native runtime"),
@@ -179,6 +180,8 @@ mod moved_tests {
 			namespace: "default".to_owned(),
 			pool_name: "default".to_owned(),
 			engine_binary_path: None,
+			engine_spawn: EngineSpawnMode::Never,
+			engine_auto_download: false,
 			handle_inspector_http_in_runtime: true,
 			serverless_base_path: Some("/api/rivet".to_owned()),
 			serverless_package_version: "test-version".to_owned(),

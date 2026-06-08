@@ -3,9 +3,12 @@ name = "rivetkit-core"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 edition.workspace = true
 workspace = "../../../"
 autotests = false
+description = "Core runtime primitives for RivetKit actor hosts"
 
 [features]
 default = ["native-runtime"]
@@ -44,6 +47,7 @@ serde.workspace = true
 serde_json.workspace = true
 serde_bare.workspace = true
 serde_bytes.workspace = true
+sha2.workspace = true
 subtle.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
