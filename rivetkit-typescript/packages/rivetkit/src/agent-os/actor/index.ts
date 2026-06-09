@@ -8,7 +8,21 @@
  * configuration and hands it across the bridge.
  */
 
+import type {
+	BatchReadResult,
+	BatchWriteResult,
+	CreateSessionOptions,
+	CronJobInfo,
+	DirEntry,
+	JsonRpcResponse,
+	ProcessInfo,
+	ProcessTreeNode,
+	SessionInfo,
+	SpawnedProcessInfo,
+	VirtualStat,
+} from "@rivet-dev/agent-os-core";
 import { actor, type ActorDefinition, event } from "@/actor/mod";
+import type { ActionContext } from "@/actor/config";
 import type { DatabaseProvider, RawAccess } from "@/common/database/config";
 import type {
 	ActorFactoryHandle,
@@ -266,11 +280,238 @@ function buildNativeFactoryBuilder<TConnParams>(
 }
 
 /**
- * Type alias for the `agentOs(...)` return type. The events generic is
- * populated with declared tokens so `agent.on("sessionEvent", handler)`
- * typechecks with `handler` receiving a `SessionEventPayload`. Actions
- * stay `any` because the Rust factory owns dispatch — the TS client
- * surface intentionally accepts any action name and forwards.
+ * Shorthand for the verbose `ActionContext` parametrization shared by
+ * every typed action signature on the `agentOs(...)` actor. Each
+ * action's first parameter is this context; the framework strips it
+ * from the client-side surface so consumers call e.g.
+ * `agent.readFile(path)`, not `agent.readFile(ctx, path)`.
+ */
+type AgentOsActionContext<TConnParams> = ActionContext<
+	AgentOsActorState,
+	TConnParams,
+	undefined,
+	AgentOsActorVars,
+	undefined,
+	DatabaseProvider<RawAccess>,
+	AgentOsActorEvents,
+	Record<never, never>
+>;
+
+/**
+ * Result shape for `exec`. Matches the Rust `ExecResultDto` (camelCase
+ * `exitCode`); not part of the upstream `agent-os-core` types because
+ * the JS port exposed a richer record there.
+ */
+export interface AgentOsExecResult {
+	exitCode: number;
+	stdout: string;
+	stderr: string;
+}
+
+/**
+ * Result shape for `sendPrompt`. Matches the Rust `PromptReplyDto`.
+ */
+export interface AgentOsPromptReply {
+	text: string;
+	response: JsonRpcResponse;
+}
+
+/**
+ * Result shape for `vmFetch`. The body comes through the wire as raw
+ * bytes; the rivetkit client revives the `["$Uint8Array", base64]`
+ * wrapper into a `Uint8Array` on the consumer side.
+ */
+export interface AgentOsVmFetchResult {
+	status: number;
+	body: Uint8Array;
+}
+
+/**
+ * Result shape for `scheduleCron`.
+ */
+export interface AgentOsCronJobHandle {
+	id: string;
+}
+
+/**
+ * Action shape for `scheduleCron`. Tagged union mirroring the Rust
+ * `CronActionArg` enum — only the wire-friendly variants are accepted.
+ */
+export type AgentOsCronActionInput =
+	| { type: "exec"; command: string; args?: string[] }
+	| { type: "session"; agentType: string; prompt: string };
+
+/**
+ * Option shape for `scheduleCron`.
+ */
+export interface AgentOsScheduleCronOptions {
+	schedule: string;
+	action: AgentOsCronActionInput;
+	id?: string;
+	overlap?: "allow" | "skip" | "queue";
+}
+
+/**
+ * Typed action surface for the `agentOs(...)` actor. Each entry is the
+ * server-side action signature with `c: ActionContext` as the first
+ * parameter; the framework's `ActorActionMap` strips that first
+ * parameter when constructing the client-facing surface so consumers
+ * see `agent.readFile(path) => Promise<Uint8Array>`, etc.
+ *
+ * Notes on bytes vs strings on the consumer side:
+ *  - `readFile` returns a `Uint8Array` (rivetkit's `JsonCompatAdapter`
+ *    revives the `["$Uint8Array", base64]` wire wrapper into bytes).
+ *  - `writeFile` / `writeFiles[].content` / `writeProcessStdin.data`
+ *    accept either a `string` (UTF-8) or `Uint8Array`.
+ *  - Process output broadcasts use a base64 string (`dataBase64`)
+ *    because the broadcast pipe doesn't apply the byte-wrap uniformly
+ *    across CBOR / JSON cells.
+ */
+type AgentOsActorActions<TConnParams> = {
+	// Filesystem
+	readFile: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<Uint8Array>;
+	writeFile: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+		content: string | Uint8Array,
+	) => Promise<void>;
+	stat: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<VirtualStat>;
+	mkdir: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<void>;
+	readdir: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<string[]>;
+	exists: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<boolean>;
+	move: (
+		c: AgentOsActionContext<TConnParams>,
+		from: string,
+		to: string,
+	) => Promise<void>;
+	deleteFile: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<void>;
+	readFiles: (
+		c: AgentOsActionContext<TConnParams>,
+		paths: string[],
+	) => Promise<BatchReadResult[]>;
+	writeFiles: (
+		c: AgentOsActionContext<TConnParams>,
+		entries: Array<{ path: string; content: string | Uint8Array }>,
+	) => Promise<BatchWriteResult[]>;
+	readdirRecursive: (
+		c: AgentOsActionContext<TConnParams>,
+		path: string,
+	) => Promise<DirEntry[]>;
+
+	// Process
+	exec: (
+		c: AgentOsActionContext<TConnParams>,
+		command: string,
+	) => Promise<AgentOsExecResult>;
+	spawn: (
+		c: AgentOsActionContext<TConnParams>,
+		command: string,
+		args?: string[],
+	) => Promise<{ pid: number }>;
+	waitProcess: (
+		c: AgentOsActionContext<TConnParams>,
+		pid: number,
+	) => Promise<number>;
+	killProcess: (
+		c: AgentOsActionContext<TConnParams>,
+		pid: number,
+	) => Promise<void>;
+	stopProcess: (
+		c: AgentOsActionContext<TConnParams>,
+		pid: number,
+	) => Promise<void>;
+	listProcesses: (
+		c: AgentOsActionContext<TConnParams>,
+	) => Promise<SpawnedProcessInfo[]>;
+	allProcesses: (
+		c: AgentOsActionContext<TConnParams>,
+	) => Promise<ProcessInfo[]>;
+	processTree: (
+		c: AgentOsActionContext<TConnParams>,
+	) => Promise<ProcessTreeNode[]>;
+	getProcess: (
+		c: AgentOsActionContext<TConnParams>,
+		pid: number,
+	) => Promise<SpawnedProcessInfo>;
+	writeProcessStdin: (
+		c: AgentOsActionContext<TConnParams>,
+		pid: number,
+		data: string | Uint8Array,
+	) => Promise<void>;
+	closeProcessStdin: (
+		c: AgentOsActionContext<TConnParams>,
+		pid: number,
+	) => Promise<void>;
+
+	// Session
+	createSession: (
+		c: AgentOsActionContext<TConnParams>,
+		agentType: string,
+		options?: Partial<CreateSessionOptions> & {
+			skipOsInstructions?: boolean;
+		},
+	) => Promise<{ sessionId: string }>;
+	sendPrompt: (
+		c: AgentOsActionContext<TConnParams>,
+		sessionId: string,
+		text: string,
+	) => Promise<AgentOsPromptReply>;
+	listSessions: (
+		c: AgentOsActionContext<TConnParams>,
+	) => Promise<SessionInfo[]>;
+	destroySession: (
+		c: AgentOsActionContext<TConnParams>,
+		sessionId: string,
+	) => Promise<void>;
+	closeSession: (
+		c: AgentOsActionContext<TConnParams>,
+		sessionId: string,
+	) => Promise<void>;
+
+	// Network
+	vmFetch: (
+		c: AgentOsActionContext<TConnParams>,
+		port: number,
+		url: string,
+	) => Promise<AgentOsVmFetchResult>;
+
+	// Cron
+	scheduleCron: (
+		c: AgentOsActionContext<TConnParams>,
+		options: AgentOsScheduleCronOptions,
+	) => Promise<AgentOsCronJobHandle>;
+	listCronJobs: (
+		c: AgentOsActionContext<TConnParams>,
+	) => Promise<CronJobInfo[]>;
+	cancelCronJob: (
+		c: AgentOsActionContext<TConnParams>,
+		id: string,
+	) => Promise<void>;
+};
+
+/**
+ * Type alias for the `agentOs(...)` return type. Events AND actions
+ * are both typed at the TS surface so `agent.on("sessionEvent", ...)`
+ * and `agent.readFile(path)` get correct payload / argument /
+ * return-type inference and autocomplete.
  */
 export type AgentOsActorDefinition<TConnParams> = ActorDefinition<
 	AgentOsActorState,
@@ -281,7 +522,7 @@ export type AgentOsActorDefinition<TConnParams> = ActorDefinition<
 	DatabaseProvider<RawAccess>,
 	AgentOsActorEvents,
 	Record<never, never>,
-	any
+	AgentOsActorActions<TConnParams>
 >;
 
 export function agentOs<TConnParams = undefined>(
