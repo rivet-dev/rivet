@@ -489,7 +489,7 @@ pub async fn get_epoxy_key_debug_fanout(
 	Ok(GetEpoxyKeyDebugFanoutResponse { replicas, errors })
 }
 
-fn debug_ballot(ballot: epoxy::protocol::Ballot) -> EpoxyBallot {
+fn debug_ballot(ballot: epoxy_protocol::protocol::Ballot) -> EpoxyBallot {
 	EpoxyBallot {
 		counter: ballot.counter,
 		replica_id: ballot.replica_id,
@@ -665,7 +665,7 @@ pub async fn get_epoxy_kv_optimistic(
 		.op(epoxy::ops::kv::get_optimistic::Input {
 			replica_id,
 			key: key_bytes,
-			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			caching_behavior: epoxy_protocol::protocol::CachingBehavior::Optimistic,
 			target_replicas: None,
 			save_empty: false,
 		})

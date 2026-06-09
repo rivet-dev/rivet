@@ -571,7 +571,8 @@ async fn serverless_outbound_req(
 		}
 
 		anyhow::Ok(None)
-	};
+	}
+	.instrument(tracing::info_span!("stream_handler"));
 
 	metrics::REQ_TOTAL
 		.with_label_values(&[namespace_id.to_string().as_str(), pool_name])
