@@ -47,8 +47,14 @@ async fn history_snapshot_reports_exact_row_sets() -> Result<()> {
 			assert!(snapshot.pins.is_empty());
 			assert_eq!(snapshot.hot_watermark_txid(), 0);
 			assert_eq!(snapshot.head.as_ref().map(|head| head.head_txid), Some(3));
-			// Two single-chunk deltas plus one for the far page commit.
-			assert_eq!(snapshot.delta_chunk_rows, 3);
+			// Each commit produced a single-chunk delta blob.
+			assert_eq!(
+				snapshot.delta_chunks.values().flatten().count(),
+				3,
+				"each commit should keep exactly one delta chunk"
+			);
+			assert_eq!(snapshot.staged_rows, 0);
+			assert!(snapshot.quota_bytes.unwrap_or(0) > 0);
 
 			Ok(())
 		})

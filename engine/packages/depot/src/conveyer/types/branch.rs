@@ -36,6 +36,46 @@ pub struct DatabaseBranchRecord {
 	pub created_from_restore_point: Option<RestorePointRef>,
 	pub state: BranchState,
 	pub lifecycle_generation: u64,
+	/// Denormalized policy scope so compaction can read the effective PITR
+	/// policy without scanning global pointer indexes. The bucket pointer id
+	/// that owned this branch at creation time.
+	pub policy_bucket_id: Option<BucketIdUuid>,
+	/// The database name under that bucket at creation time.
+	pub policy_database_id: Option<DatabaseIdStr>,
+}
+
+/// Version 1 wire shape, before the denormalized policy scope fields.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct DatabaseBranchRecordV1 {
+	branch_id: DatabaseBranchId,
+	bucket_branch: BucketBranchId,
+	parent: Option<DatabaseBranchId>,
+	parent_versionstamp: Option<[u8; 16]>,
+	root_versionstamp: [u8; 16],
+	fork_depth: u8,
+	created_at_ms: i64,
+	created_from_restore_point: Option<RestorePointRef>,
+	state: BranchState,
+	lifecycle_generation: u64,
+}
+
+impl From<DatabaseBranchRecordV1> for DatabaseBranchRecord {
+	fn from(v1: DatabaseBranchRecordV1) -> Self {
+		DatabaseBranchRecord {
+			branch_id: v1.branch_id,
+			bucket_branch: v1.bucket_branch,
+			parent: v1.parent,
+			parent_versionstamp: v1.parent_versionstamp,
+			root_versionstamp: v1.root_versionstamp,
+			fork_depth: v1.fork_depth,
+			created_at_ms: v1.created_at_ms,
+			created_from_restore_point: v1.created_from_restore_point,
+			state: v1.state,
+			lifecycle_generation: v1.lifecycle_generation,
+			policy_bucket_id: None,
+			policy_database_id: None,
+		}
+	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -77,15 +117,32 @@ impl OwnedVersionedData for VersionedDatabaseBranchRecord {
 
 	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
 		match version {
-			1 => Ok(Self::Current(serde_bare::from_slice(payload)?)),
+			1 => {
+				let v1: DatabaseBranchRecordV1 = serde_bare::from_slice(payload)?;
+				Ok(Self::Current(v1.into()))
+			}
+			2 => Ok(Self::Current(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid depot DatabaseBranchRecord version: {version}"),
 		}
 	}
 
-	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
 		match self {
-			Self::Current(data) => serde_bare::to_vec(&data).map_err(Into::into),
+			Self::Current(data) => match version {
+				2 => serde_bare::to_vec(&data).map_err(Into::into),
+				_ => bail!("unsupported depot DatabaseBranchRecord serialize version: {version}"),
+			},
 		}
+	}
+
+	// The identity converters make vbare treat version 2 as the latest;
+	// deserialize_version already lifts v1 payloads into the latest shape.
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Ok]
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Ok]
 	}
 }
 

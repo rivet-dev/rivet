@@ -160,6 +160,19 @@ pub(super) async fn create_restore_point_for_resolved_tx(
 		)
 		.await?
 		.ok_or(SqliteStorageError::RestoreTargetExpired)?;
+	// A surviving commit row no longer proves the target is readable: deltas die
+	// at the watermark, so the pin must land on a covered txid or above the
+	// watermark. The serializable root read inside the fence conflicts with a
+	// concurrent install advancing the watermark past the resolved target.
+	if !crate::conveyer::coverage::snapshot_txid_is_resolvable(
+		tx,
+		pin.database_branch_id,
+		restore_point_txid,
+	)
+	.await?
+	{
+		return Err(SqliteStorageError::RestoreTargetExpired.into());
+	}
 
 	if tx
 		.informal()

@@ -2,7 +2,6 @@ mod common;
 
 use anyhow::{Context, Result};
 use depot::{
-	constants::HOT_RETENTION_FLOOR_MS,
 	conveyer::{branch, history_pin, restore_point},
 	error::SqliteStorageError,
 	keys::{
@@ -250,7 +249,7 @@ async fn restore_point_survives_hot_commit_and_vtx_reclaim() -> Result<()> {
 			let database_id = ctx.database_id.clone();
 			let database_db = ctx.make_db(nil_bucket(), database_id.clone());
 			let current_ms = now_ms();
-			let old_ms = current_ms - HOT_RETENTION_FLOOR_MS - 1_000;
+			let old_ms = current_ms - depot::types::DEFAULT_PITR_RETENTION_MS - 1_000;
 			let recent_ms = current_ms - 1_000;
 
 			database_db.commit(vec![page(1, 0x11)], 2, old_ms).await?;

@@ -102,6 +102,105 @@ where
 
 pub use depot::history_snapshot::{BranchHistorySnapshot, branch_history_snapshot};
 
+#[cfg(feature = "test-faults")]
+pub mod compaction_harness {
+	use anyhow::{Result, bail};
+	use depot::{
+		types::DatabaseBranchId,
+		workflows::compaction::{
+			DbHotCompacterWorkflow, DbManagerWorkflow, DbReclaimerWorkflow,
+			DepotCompactionTestDriver, ForceCompactionResult, ForceCompactionWork,
+		},
+	};
+	use gas::prelude::{Id, Registry, TestCtx};
+
+	pub fn build_registry() -> Registry {
+		let mut registry = Registry::new();
+		registry.register_workflow::<DbManagerWorkflow>().unwrap();
+		registry
+			.register_workflow::<DbHotCompacterWorkflow>()
+			.unwrap();
+		registry.register_workflow::<DbReclaimerWorkflow>().unwrap();
+		registry
+	}
+
+	pub async fn force_hot(
+		test_ctx: &TestCtx,
+		manager_workflow_id: Id,
+		branch_id: DatabaseBranchId,
+	) -> Result<ForceCompactionResult> {
+		force(
+			test_ctx,
+			manager_workflow_id,
+			branch_id,
+			ForceCompactionWork {
+				hot: true,
+				reclaim: false,
+				final_settle: false,
+			},
+		)
+		.await
+	}
+
+	pub async fn force_reclaim(
+		test_ctx: &TestCtx,
+		manager_workflow_id: Id,
+		branch_id: DatabaseBranchId,
+	) -> Result<ForceCompactionResult> {
+		force(
+			test_ctx,
+			manager_workflow_id,
+			branch_id,
+			ForceCompactionWork {
+				hot: false,
+				reclaim: true,
+				final_settle: false,
+			},
+		)
+		.await
+	}
+
+	/// Forces reclaim repeatedly until the manager reports no actionable work,
+	/// so batch-budgeted reclaim passes drain completely. Returns the number of
+	/// passes that attempted work.
+	pub async fn force_reclaim_until_idle(
+		test_ctx: &TestCtx,
+		manager_workflow_id: Id,
+		branch_id: DatabaseBranchId,
+	) -> Result<usize> {
+		let mut attempted_passes = 0;
+		for _ in 0..10 {
+			let result = force_reclaim(test_ctx, manager_workflow_id, branch_id).await?;
+			if let Some(error) = result.terminal_error {
+				bail!("forced reclaim failed: {error}");
+			}
+			if result.attempted_job_kinds.is_empty() {
+				return Ok(attempted_passes);
+			}
+			attempted_passes += 1;
+		}
+
+		bail!("reclaim did not drain after 10 forced passes")
+	}
+
+	pub async fn force(
+		test_ctx: &TestCtx,
+		manager_workflow_id: Id,
+		branch_id: DatabaseBranchId,
+		work: ForceCompactionWork,
+	) -> Result<ForceCompactionResult> {
+		let driver = DepotCompactionTestDriver::new(test_ctx);
+		let result = driver
+			.force_compaction(manager_workflow_id, branch_id, work)
+			.await?;
+		if let Some(error) = &result.terminal_error {
+			bail!("forced compaction failed: {error}");
+		}
+
+		Ok(result)
+	}
+}
+
 pub async fn database_branch_id(
 	udb: &universaldb::Database,
 	bucket_id: Id,
@@ -142,7 +241,8 @@ pub fn assert_delta_txids(
 		.into_iter()
 		.collect::<std::collections::BTreeSet<_>>();
 	assert_eq!(
-		snapshot.delta_txids, expected,
+		snapshot.delta_txids(),
+		expected,
 		"[{context}] surviving DELTA txids did not match"
 	);
 }

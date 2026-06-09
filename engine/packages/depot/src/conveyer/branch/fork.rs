@@ -109,6 +109,7 @@ where
 					new_database_branch_id,
 					target_bucket_branch,
 					restore_point,
+					Some((target_bucket, new_database_id.clone())),
 				)
 				.await?;
 
@@ -199,6 +200,7 @@ pub async fn derive_branch_at(
 	new_branch_id: DatabaseBranchId,
 	bucket_branch: BucketBranchId,
 	restore_point_ref: Option<RestorePointRef>,
+	policy_scope: Option<(BucketId, String)>,
 ) -> Result<()> {
 	let source = read_database_branch_record(tx, source_branch_id).await?;
 	if source.fork_depth >= MAX_FORK_DEPTH {
@@ -226,6 +228,19 @@ pub async fn derive_branch_at(
 				source_branch_id.as_uuid()
 			)
 		})?;
+	// Reclaim deletes deltas at or below the hot watermark, so historical fork
+	// targets must land on covered txids. The serializable root read inside the
+	// fence makes a concurrent install conflict with this fork instead of
+	// advancing the watermark past an uncovered target.
+	if !crate::conveyer::coverage::snapshot_txid_is_resolvable(
+		tx,
+		source_branch_id,
+		txid_at_versionstamp,
+	)
+	.await?
+	{
+		return Err(SqliteStorageError::ForkOutOfRetention.into());
+	}
 	let commit_at_versionstamp = read_commit_row(tx, source_branch_id, txid_at_versionstamp)
 		.await
 		.with_context(|| {
@@ -248,6 +263,10 @@ pub async fn derive_branch_at(
 		&encoded_head_at_fork,
 	);
 
+	let (policy_bucket_id, policy_database_id) = match policy_scope {
+		Some((bucket_id, database_id)) => (Some(bucket_id), Some(database_id)),
+		None => (source.policy_bucket_id, source.policy_database_id.clone()),
+	};
 	let new_record = DatabaseBranchRecord {
 		branch_id: new_branch_id,
 		bucket_branch,
@@ -259,6 +278,8 @@ pub async fn derive_branch_at(
 		created_from_restore_point: restore_point_ref,
 		state: BranchState::Live,
 		lifecycle_generation: 0,
+		policy_bucket_id,
+		policy_database_id,
 	};
 	let encoded_record = encode_database_branch_record(new_record)
 		.context("encode sqlite derived database branch record")?;

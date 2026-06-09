@@ -21,11 +21,10 @@ pub(crate) use crate::{
 		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 		quota,
 		types::{
-			BranchState, BucketCatalogDbFact, BucketForkFact, BucketId, CommitRow, CompactionRoot,
-			DBHead, DatabaseBranchId, DatabaseBranchRecord, DbHistoryPin, DirtyPage,
-			PitrIntervalCoverage, PitrPolicy, SqliteCmpDirty, decode_bucket_catalog_db_fact,
-			decode_bucket_fork_fact, decode_bucket_pointer, decode_commit_row,
-			decode_compaction_root, decode_database_branch_record, decode_database_pointer,
+			BranchState, BucketCatalogDbFact, BucketForkFact, CommitRow, CompactionRoot, DBHead,
+			DatabaseBranchId, DatabaseBranchRecord, DbHistoryPin, DirtyPage, PitrIntervalCoverage,
+			PitrPolicy, SqliteCmpDirty, decode_bucket_catalog_db_fact, decode_bucket_fork_fact,
+			decode_commit_row, decode_compaction_root, decode_database_branch_record,
 			decode_db_head, decode_pitr_interval_coverage, decode_pitr_policy,
 			decode_sqlite_cmp_dirty, encode_compaction_root, encode_pitr_interval_coverage,
 		},
@@ -115,6 +114,10 @@ pub struct ReclaimJobInputRange {
 	pub staged_hot_shards: Vec<StagedHotShardCleanupRef>,
 	pub max_keys: u32,
 	pub max_bytes: u64,
+	/// Shard GC scan start for this pass; rotates across passes so wide
+	/// databases eventually cover every shard window.
+	#[serde(default)]
+	pub shard_gc_cursor: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -235,6 +238,20 @@ pub struct DbManagerState {
 	pub last_dirty_cursor: Option<DirtyCursor>,
 	#[serde(default)]
 	pub last_observed_branch_lifecycle_generation: Option<u64>,
+	/// Stale-output cleanups that arrived while the reclaimer was busy; drained
+	/// one at a time as reclaim jobs finish.
+	#[serde(default)]
+	pub pending_stage_cleanups: Vec<PendingStageCleanup>,
+	/// Shard GC scan cursor handed to the next refresh.
+	#[serde(default)]
+	pub next_shard_gc_cursor: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PendingStageCleanup {
+	pub base_lifecycle_generation: u64,
+	pub base_manifest_generation: u64,
+	pub input_range: ReclaimJobInputRange,
 }
 
 impl DbManagerState {
@@ -248,6 +265,8 @@ impl DbManagerState {
 			branch_stop_state: BranchStopState::Running,
 			last_dirty_cursor: None,
 			last_observed_branch_lifecycle_generation: None,
+			pending_stage_cleanups: Vec::new(),
+			next_shard_gc_cursor: Vec::new(),
 		}
 	}
 }
@@ -576,6 +595,9 @@ pub struct ReclaimFdbJobOutput {
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub force: ForceCompactionWork,
+	/// Shard GC scan start for this refresh; rotates across passes.
+	#[serde(default)]
+	pub shard_gc_cursor: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -591,6 +613,13 @@ pub struct RefreshManagerOutput {
 	pub db_pin_count: usize,
 	#[serde(default)]
 	pub reclaim_noop_reason: Option<String>,
+	/// True when retained PITR interval rows exist, so the manager keeps a
+	/// wake armed and rows expire on schedule even with no commits.
+	#[serde(default)]
+	pub has_retained_pitr_intervals: bool,
+	/// Shard GC cursor for the next pass.
+	#[serde(default)]
+	pub shard_gc_next_cursor: Vec<u8>,
 }
 
 impl ForceCompactionTracker {
@@ -806,13 +835,33 @@ pub(crate) struct PitrIntervalSelection {
 
 #[derive(Debug, Default)]
 pub(crate) struct ReclaimInputSnapshot {
+	/// COMMITS rows selected for deletion: below the watermark and not in the
+	/// keep-set of pins and retained PITR interval representatives.
 	pub(crate) txid_refs: Vec<ReclaimTxidRef>,
 	pub(crate) expired_pitr_interval_rows: Vec<(i64, Vec<u8>, Vec<u8>, PitrIntervalCoverage)>,
 	pub(crate) commits: Vec<(u64, Vec<u8>, Vec<u8>, CommitRow)>,
+	/// DELTA chunk rows at or below the watermark. Install proved replacement
+	/// shard coverage when it advanced the watermark, so these are deletable
+	/// without any per-shard proof.
 	pub(crate) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
-	pub(crate) pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
-	pub(crate) coverage_shards: Vec<(Vec<u8>, Vec<u8>)>,
-	pub(crate) required_coverage_shard_count: usize,
+	/// PIDX rows whose value txid is at or below the watermark. Installs clear
+	/// these in the common case; budget-truncated installs leave stragglers
+	/// that reclaim drains here.
+	pub(crate) stale_pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
+	/// SHARD versions no covered txid reads through: not the newest version at
+	/// or below any pin, retained interval representative, or the watermark,
+	/// and not above the watermark. Suppressed alongside commit deletes when
+	/// bucket fork proofs are ambiguous, because the pin set may be incomplete.
+	pub(crate) stale_shard_versions: Vec<(Vec<u8>, Vec<u8>)>,
+	/// True when bucket fork proofs were ambiguous. Commit/VTX deletes are
+	/// fail-safe suppressed because the pin keep-set may be incomplete; delta
+	/// deletes never depend on pins and stay allowed.
+	pub(crate) commit_deletes_blocked: bool,
+	/// True when retained (non-expired) PITR interval rows exist.
+	pub(crate) has_retained_pitr_intervals: bool,
+	/// Where the next pass's shard GC scan should start; empty wraps to the
+	/// front of the shard prefix.
+	pub(crate) shard_gc_next_cursor: Vec<u8>,
 	pub(crate) total_value_bytes: u64,
 }
 

@@ -53,16 +53,6 @@ pub async fn estimate_branch_gc_pin(
 	.await
 }
 
-pub async fn sweep_branch_hot_history(
-	db: &universaldb::Database,
-	branch_id: DatabaseBranchId,
-) -> Result<Option<BranchHotGcOutcome>> {
-	db.txn("depot_gc_sweep_hot_history", move |tx| async move {
-		sweep_branch_hot_history_tx(&tx, branch_id).await
-	})
-	.await
-}
-
 pub async fn sweep_unreferenced_branch(
 	db: &universaldb::Database,
 	branch_id: DatabaseBranchId,
@@ -89,61 +79,6 @@ pub(crate) async fn read_branch_gc_pin_tx(
 	read_branch_gc_pin_from_record_tx(tx, &record)
 		.await
 		.map(Some)
-}
-
-pub(crate) async fn sweep_branch_hot_history_tx(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-) -> Result<Option<BranchHotGcOutcome>> {
-	let Some(pin) = read_branch_gc_pin_tx(tx, branch_id).await? else {
-		return Ok(None);
-	};
-	let Some(txid_floor) = gc_pin_txid_floor(tx, branch_id, pin.gc_pin).await? else {
-		return Ok(Some(BranchHotGcOutcome {
-			gc_pin: pin.gc_pin,
-			txid_floor: None,
-			commits_deleted: 0,
-			vtx_deleted: 0,
-			delta_chunks_deleted: 0,
-		}));
-	};
-
-	let mut commits_deleted = 0;
-	for (key, _value) in scan_prefix(tx, &keys::branch_commit_prefix(branch_id), Snapshot).await? {
-		let txid = decode_suffix_u64(&keys::branch_commit_prefix(branch_id), &key)
-			.context("decode sqlite branch commit txid during GC")?;
-		if txid < txid_floor {
-			tx.informal().clear(&key);
-			commits_deleted += 1;
-		}
-	}
-
-	let mut vtx_deleted = 0;
-	for (key, _value) in scan_prefix(tx, &keys::branch_vtx_prefix(branch_id), Snapshot).await? {
-		let versionstamp = decode_suffix_versionstamp(&keys::branch_vtx_prefix(branch_id), &key)
-			.context("decode sqlite branch VTX versionstamp during GC")?;
-		if versionstamp < pin.gc_pin {
-			tx.informal().clear(&key);
-			vtx_deleted += 1;
-		}
-	}
-
-	let mut delta_chunks_deleted = 0;
-	for (key, _value) in scan_prefix(tx, &keys::branch_delta_prefix(branch_id), Snapshot).await? {
-		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
-		if txid < txid_floor {
-			tx.informal().clear(&key);
-			delta_chunks_deleted += 1;
-		}
-	}
-
-	Ok(Some(BranchHotGcOutcome {
-		gc_pin: pin.gc_pin,
-		txid_floor: Some(txid_floor),
-		commits_deleted,
-		vtx_deleted,
-		delta_chunks_deleted,
-	}))
 }
 
 async fn sweep_unreferenced_branch_tx(
@@ -274,21 +209,6 @@ async fn recompute_parent_desc_pin(
 	Ok(())
 }
 
-async fn gc_pin_txid_floor(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-	gc_pin: [u8; 16],
-) -> Result<Option<u64>> {
-	if gc_pin == VERSIONSTAMP_ZERO {
-		return Ok(None);
-	}
-	if gc_pin == VERSIONSTAMP_INFINITY {
-		return Ok(Some(u64::MAX));
-	}
-
-	read_u64_be(tx, &keys::branch_vtx_key(branch_id, gc_pin)).await
-}
-
 async fn read_i64_le(tx: &universaldb::Transaction, key: &[u8]) -> Result<i64> {
 	let Some(bytes) = tx.informal().get(key, Serializable).await? else {
 		return Ok(0);
@@ -316,18 +236,6 @@ async fn read_versionstamp_pin(tx: &universaldb::Transaction, key: &[u8]) -> Res
 	Ok(pin)
 }
 
-async fn read_u64_be(tx: &universaldb::Transaction, key: &[u8]) -> Result<Option<u64>> {
-	let Some(bytes) = tx.informal().get(key, Serializable).await? else {
-		return Ok(None);
-	};
-	let bytes: [u8; std::mem::size_of::<u64>()] = Vec::<u8>::from(bytes)
-		.as_slice()
-		.try_into()
-		.context("sqlite VTX entry should be exactly 8 bytes")?;
-
-	Ok(Some(u64::from_be_bytes(bytes)))
-}
-
 async fn scan_prefix(
 	tx: &universaldb::Transaction,
 	prefix: &[u8],
@@ -350,26 +258,4 @@ async fn scan_prefix(
 	}
 
 	Ok(rows)
-}
-
-fn decode_suffix_u64(prefix: &[u8], key: &[u8]) -> Result<u64> {
-	let suffix = key
-		.strip_prefix(prefix)
-		.context("key did not start with expected prefix")?;
-	let bytes: [u8; std::mem::size_of::<u64>()] = suffix
-		.try_into()
-		.context("key suffix had invalid u64 length")?;
-
-	Ok(u64::from_be_bytes(bytes))
-}
-
-fn decode_suffix_versionstamp(prefix: &[u8], key: &[u8]) -> Result<[u8; 16]> {
-	let suffix = key
-		.strip_prefix(prefix)
-		.context("key did not start with expected prefix")?;
-	let bytes: [u8; 16] = suffix
-		.try_into()
-		.context("key suffix had invalid versionstamp length")?;
-
-	Ok(bytes)
 }

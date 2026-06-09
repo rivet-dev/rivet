@@ -61,7 +61,7 @@ async fn run_manager_iteration(
 		return Ok(Loop::Break(()));
 	}
 
-	schedule_next_wake(state, input, now_ms, signal_received, triggers);
+	schedule_next_wake(state, input, &refresh, now_ms, signal_received, triggers);
 
 	Ok(Loop::Continue)
 }
@@ -69,6 +69,7 @@ async fn run_manager_iteration(
 fn schedule_next_wake(
 	state: &mut DbManagerState,
 	input: &DbManagerInput,
+	refresh: &RefreshManagerOutput,
 	now_ms: i64,
 	signal_received: bool,
 	triggers: WakeTriggers,
@@ -84,10 +85,14 @@ fn schedule_next_wake(
 		state.next_reclaim_check_at_ms = None;
 	}
 
-	if signal_received {
-		if state.next_reclaim_check_at_ms.is_none() {
-			state.next_reclaim_check_at_ms = Some(now_ms + MANAGER_RECLAIM_INTERVAL_MS);
-		}
+	if signal_received && state.next_reclaim_check_at_ms.is_none() {
+		state.next_reclaim_check_at_ms = Some(now_ms + MANAGER_RECLAIM_INTERVAL_MS);
+	}
+
+	// Retained interval rows expire by wall clock, so an idle database must
+	// keep a wake armed or expired rows sit unreclaimed until the next commit.
+	if state.next_reclaim_check_at_ms.is_none() && refresh.has_retained_pitr_intervals {
+		state.next_reclaim_check_at_ms = Some(now_ms + MANAGER_RECLAIM_INTERVAL_MS);
 	}
 }
 
@@ -266,7 +271,7 @@ async fn execute_manager_effects(
 				executions.push(ManagerExecution::Refresh(refresh));
 			}
 			ManagerEffect::InstallHotOutput { signal, active_job } => {
-				execute_install_hot_output_effect(ctx, state, signal, active_job).await?;
+				execute_install_hot_output_effect(ctx, state, input, signal, active_job).await?;
 			}
 			ManagerEffect::FinishHotJob { job_id, status } => {
 				state.force_compactions.record_job_finished(
@@ -283,6 +288,37 @@ async fn execute_manager_effects(
 					&status,
 				);
 				state.active_jobs.reclaim = None;
+				// Passes are batch budgeted, so draining a backlog needs
+				// back-to-back passes rather than one per reclaim interval.
+				// Rejections are plan/execute races; retry them after a short
+				// backoff. Failures wait for the normal interval.
+				use crate::conveyer::constants::MANAGER_RECLAIM_RETRY_MS;
+				match &status {
+					CompactionJobStatus::Succeeded => {
+						state.next_reclaim_check_at_ms = Some(ctx.create_ts());
+					}
+					CompactionJobStatus::Rejected { .. } => {
+						state.next_reclaim_check_at_ms =
+							Some(ctx.create_ts() + MANAGER_RECLAIM_RETRY_MS);
+					}
+					CompactionJobStatus::Requested | CompactionJobStatus::Failed { .. } => {}
+				}
+				// The reclaimer just freed: run any queued stale-output cleanup.
+				if !state.pending_stage_cleanups.is_empty() {
+					let pending = state.pending_stage_cleanups.remove(0);
+					schedule_repair_reclaim_job(
+						ctx,
+						state,
+						input.database_branch_id,
+						pending.base_lifecycle_generation,
+						pending.base_manifest_generation,
+						pending.input_range,
+						job_id,
+						"cleanup_stale_hot_output_queued",
+						input.actor_id.as_deref(),
+					)
+					.await?;
+				}
 			}
 			ManagerEffect::ScheduleStaleHotOutputCleanup { signal, actor_id } => {
 				schedule_stale_hot_output_cleanup(ctx, state, &signal, actor_id.as_deref()).await?;
@@ -323,10 +359,16 @@ async fn execute_refresh_effect(
 		.activity(RefreshManagerInput {
 			database_branch_id: input.database_branch_id,
 			force,
+			shard_gc_cursor: state.next_shard_gc_cursor.clone(),
 		})
 		.await?;
 
 	state.last_observed_branch_lifecycle_generation = refresh.branch_lifecycle_generation;
+	// Rotate the shard GC window only when a pass is actually planned, so an
+	// unplanned window is rescanned instead of skipped.
+	if refresh.planned_reclaim_job.is_some() {
+		state.next_shard_gc_cursor = refresh.shard_gc_next_cursor.clone();
+	}
 	if state.last_dirty_cursor.is_none()
 		&& let Some(dirty) = refresh.observed_dirty.as_ref()
 	{
@@ -342,6 +384,7 @@ async fn execute_refresh_effect(
 async fn execute_install_hot_output_effect(
 	ctx: &mut WorkflowCtx,
 	state: &mut DbManagerState,
+	input: &DbManagerInput,
 	signal: HotJobFinished,
 	active_job: ActiveHotCompactionJob,
 ) -> Result<()> {
@@ -354,20 +397,30 @@ async fn execute_install_hot_output_effect(
 			base_manifest_generation: signal.base_manifest_generation,
 			input_fingerprint: signal.input_fingerprint,
 			input_range: active_job.input_range,
-			output_refs: signal.output_refs,
+			output_refs: signal.output_refs.clone(),
 		})
 		.await?;
 	match install.status {
 		CompactionJobStatus::Requested => {}
-		CompactionJobStatus::Succeeded
-		| CompactionJobStatus::Rejected { .. }
-		| CompactionJobStatus::Failed { .. } => {
+		CompactionJobStatus::Succeeded => {
 			state.force_compactions.record_job_finished(
 				CompactionJobKind::Hot,
 				signal.job_id,
 				&install.status,
 			);
 			state.active_jobs.hot = None;
+		}
+		CompactionJobStatus::Rejected { .. } | CompactionJobStatus::Failed { .. } => {
+			state.force_compactions.record_job_finished(
+				CompactionJobKind::Hot,
+				signal.job_id,
+				&install.status,
+			);
+			state.active_jobs.hot = None;
+			// The stage succeeded but the install did not publish, so the
+			// staged shard rows are orphaned; schedule the repair cleanup.
+			schedule_stale_hot_output_cleanup(ctx, state, &signal, input.actor_id.as_deref())
+				.await?;
 		}
 	}
 
@@ -577,10 +630,14 @@ pub async fn refresh_manager(
 	#[cfg(feature = "test-faults")]
 	test_hooks::maybe_fire_reclaim_fault(database_branch_id, ReclaimFaultPoint::PlanBeforeSnapshot)
 		.await?;
+	let shard_gc_cursor = input.shard_gc_cursor.clone();
 	let snapshot = ctx
 		.udb()?
-		.txn("depot_manager_refresh", move |tx| async move {
-			read_manager_fdb_snapshot(&tx, database_branch_id, now_ms).await
+		.txn("depot_manager_refresh", move |tx| {
+			let shard_gc_cursor = shard_gc_cursor.clone();
+			async move {
+				read_manager_fdb_snapshot(&tx, database_branch_id, &shard_gc_cursor, now_ms).await
+			}
 		})
 		.await?;
 	#[cfg(feature = "test-faults")]
@@ -611,6 +668,7 @@ pub async fn refresh_manager(
 			database_branch_id,
 			&snapshot,
 			Id::new_v1(ctx.config().dc_label()),
+			&input.shard_gc_cursor,
 			now_ms,
 		)
 	} else {
@@ -626,6 +684,8 @@ pub async fn refresh_manager(
 		refreshed_at_ms: now_ms,
 		planned_hot_job,
 		planned_reclaim_job,
+		has_retained_pitr_intervals: snapshot.reclaim_inputs.has_retained_pitr_intervals,
+		shard_gc_next_cursor: snapshot.reclaim_inputs.shard_gc_next_cursor.clone(),
 		observed_dirty: if snapshot.cleared_dirty {
 			None
 		} else {
@@ -669,7 +729,9 @@ async fn schedule_stale_hot_output_cleanup(
 	signal: &HotJobFinished,
 	actor_id: Option<&str>,
 ) -> Result<()> {
-	if !matches!(signal.status, CompactionJobStatus::Succeeded) || signal.output_refs.is_empty() {
+	// Cleanup applies whenever staged output exists, regardless of how the job
+	// or its install ended.
+	if signal.output_refs.is_empty() {
 		return Ok(());
 	}
 	let Some(base_lifecycle_generation) = state.last_observed_branch_lifecycle_generation else {
@@ -735,6 +797,7 @@ pub(super) fn repair_reclaim_input_range(
 		staged_hot_shards,
 		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
+		shard_gc_cursor: Vec::new(),
 	}
 }
 
@@ -750,14 +813,21 @@ async fn schedule_repair_reclaim_job(
 	actor_id: Option<&str>,
 ) -> Result<()> {
 	if state.active_jobs.reclaim.is_some() {
+		// Queue the cleanup so it actually runs when the reclaimer frees;
+		// dropping it here would leak the staged blobs permanently.
 		tracing::warn!(
 			actor_id = log_actor_id(actor_id),
 			?database_branch_id,
 			manifest_generation = base_manifest_generation,
 			?source_job_id,
 			repair_action,
-			"stale compaction output cleanup deferred because reclaimer is busy"
+			"stale compaction output cleanup queued because reclaimer is busy"
 		);
+		state.pending_stage_cleanups.push(PendingStageCleanup {
+			base_lifecycle_generation,
+			base_manifest_generation,
+			input_range,
+		});
 		return Ok(());
 	}
 

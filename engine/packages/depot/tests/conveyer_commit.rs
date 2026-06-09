@@ -827,7 +827,7 @@ async fn truncate_does_not_clobber_concurrently_rewritten_boundary_shard() -> Re
 }
 
 #[tokio::test]
-async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
+async fn shrink_commit_clears_pidx_and_publishes_pruned_shard_versions() -> Result<()> {
 	commit_matrix!("depot-commit-shrink", |ctx, db, database_db| {
 		database_db.commit(vec![page(1, 0x01)], 130, 1_000).await?;
 		let branch_id = read_branch_id(&db).await?;
@@ -878,16 +878,24 @@ async fn shrink_commit_deletes_above_eof_pidx_and_shards() -> Result<()> {
 				.await?
 				.is_none()
 		);
-		assert!(
-			read_value(&db, branch_shard_key(branch_id, 1, 7))
-				.await?
-				.is_none()
+		// Pre-shrink shard versions are retained for pins and PITR coverage; the
+		// shrink publishes pruned versions at the truncating txid instead.
+		assert_eq!(
+			read_value(&db, branch_shard_key(branch_id, 1, 7)).await?,
+			Some(encoded_blob(7, &[(64, 0x64)])?)
 		);
-		assert!(
-			read_value(&db, branch_shard_key(branch_id, 2, 7))
-				.await?
-				.is_none()
+		assert_eq!(
+			read_value(&db, branch_shard_key(branch_id, 2, 7)).await?,
+			Some(encoded_blob(7, &[(129, 0x81)])?)
 		);
+		let pruned_shard_1 = read_value(&db, branch_shard_key(branch_id, 1, 8))
+			.await?
+			.expect("shrink should publish a pruned shard 1 version at the truncate txid");
+		assert!(depot::ltx::decode_ltx_v3(&pruned_shard_1)?.pages.is_empty());
+		let pruned_shard_2 = read_value(&db, branch_shard_key(branch_id, 2, 8))
+			.await?
+			.expect("shrink should publish a pruned shard 2 version at the truncate txid");
+		assert!(depot::ltx::decode_ltx_v3(&pruned_shard_2)?.pages.is_empty());
 		assert_eq!(
 			read_value(&db, branch_pidx_key(branch_id, 1)).await?,
 			Some(8_u64.to_be_bytes().to_vec())

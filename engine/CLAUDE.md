@@ -89,7 +89,7 @@ rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_actor/str:actor_
 - `depot` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
 - `depot` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
 - `depot` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
-- `depot` quota accounting should treat only `/META/head`, SHARD, DELTA, and PIDX keys as billable; `/META/quota` tracks the sum with signed atomic-add deltas.
+- `depot` quota accounting bills `/META/head`, COMMITS, VTX, DELTA, and PIDX keys at commit time and credits them when installs or reclaim delete them; SHARD versions and PITR interval rows are never billed. `/META/quota` tracks the sum with signed atomic-add deltas.
 - `depot` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
 
 ## Pegboard Envoy

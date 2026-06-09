@@ -7,23 +7,8 @@ pub const MAX_BUCKET_DEPTH: u8 = 16;
 /// Spec section 9 caps restore_points per bucket to bound pin recomputation work.
 pub const MAX_RESTORE_POINTS_PER_BUCKET: u32 = 1024;
 
-/// Spec section 12.1 caps FDB shard-version amplification when eviction lags hot compaction.
-pub const MAX_SHARD_VERSIONS_PER_SHARD: u32 = 32;
-
-/// Spec section 12.1 keeps hot commit and VTX history for recent restore point resolution.
-pub const HOT_RETENTION_FLOOR_MS: i64 = 7 * 24 * 60 * 60 * 1000;
-
 /// Spec section 12.3 buckets access touches to bound eviction-index churn to about one write per minute.
 pub const ACCESS_TOUCH_THROTTLE_MS: i64 = 60_000;
-
-/// Spec section 12.1 keeps an eviction safety margin behind the latest hot pass.
-pub const SHARD_RETENTION_MARGIN: u64 = 64;
-
-/// Spec section 13 retains frozen rollback targets by wall-clock age rather than fixed head txid.
-pub const FROZEN_BRANCH_RETENTION_MS: i64 = 30 * 24 * 60 * 60 * 1000;
-
-/// Spec section 12.3 keeps recently accessed hot data resident before eviction can clear it.
-pub const HOT_CACHE_WINDOW_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
 /// Workflow compaction signal payloads stay below Gasoline's durable signal size budget.
 pub const CMP_SIGNAL_PAYLOAD_LIMIT_BYTES: usize = 64 * 1024;
@@ -44,8 +29,27 @@ pub const MAX_COMMIT_DIRTY_PAGES: usize = 320;
 pub const MAX_COMMIT_RAW_DIRTY_BYTES: usize =
 	MAX_COMMIT_DIRTY_PAGES * crate::conveyer::keys::PAGE_SIZE as usize;
 
+/// Commit deltas are chunked into rows of this many bytes.
+pub const DELTA_CHUNK_BYTES: usize = 10_000;
+
+// Reclaim deletes one delta blob's chunk rows atomically, so a blob larger
+// than an empty batch budget would livelock reclaim. The 10% margin covers
+// LTX frame overhead on incompressible pages.
+const _: () = assert!(
+	(MAX_COMMIT_RAW_DIRTY_BYTES + MAX_COMMIT_RAW_DIRTY_BYTES / 10) / DELTA_CHUNK_BYTES + 2
+		<= CMP_FDB_BATCH_MAX_KEYS
+);
+const _: () = assert!(
+	MAX_COMMIT_RAW_DIRTY_BYTES + MAX_COMMIT_RAW_DIRTY_BYTES / 10 <= CMP_FDB_BATCH_MAX_VALUE_BYTES
+);
+
 /// Workflow compaction splits planned activities expected to exceed this wall time.
 pub const CMP_ACTIVITY_TARGET_MS: i64 = 30 * 1000;
 
 /// DB manager schedules its next reclaim/GC check this far in the future after arming.
 pub const MANAGER_RECLAIM_INTERVAL_MS: i64 = 10 * 60 * 1000;
+
+/// DB manager retries a rejected reclaim pass after this short backoff instead
+/// of waiting a full reclaim interval; rejections are plan/execute races, not
+/// failures.
+pub const MANAGER_RECLAIM_RETRY_MS: i64 = 5 * 1000;

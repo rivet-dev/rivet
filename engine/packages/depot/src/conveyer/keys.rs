@@ -627,6 +627,32 @@ pub fn branch_shard_key(branch_id: DatabaseBranchId, shard_id: u32, as_of_txid: 
 	key
 }
 
+pub fn decode_branch_shard_version_key(
+	branch_id: DatabaseBranchId,
+	key: &[u8],
+) -> Result<(u32, u64)> {
+	let prefix = branch_shard_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch SHARD key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == 4 + 1 + 8 && suffix[4] == b'/',
+		"branch SHARD key suffix had unexpected layout"
+	);
+	let shard_id = u32::from_be_bytes(
+		suffix[..4]
+			.try_into()
+			.context("branch SHARD id should decode as u32")?,
+	);
+	let as_of_txid = u64::from_be_bytes(
+		suffix[5..]
+			.try_into()
+			.context("branch SHARD as_of txid should decode as u64")?,
+	);
+
+	Ok((shard_id, as_of_txid))
+}
+
 pub fn ctr_quota_global_key() -> Vec<u8> {
 	with_suffix(partition_prefix(CTR_PARTITION), CTR_QUOTA_GLOBAL_PATH)
 }

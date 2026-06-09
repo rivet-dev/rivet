@@ -321,6 +321,7 @@ async fn fork_database_restore_point_pin_race_returns_out_of_retention() -> Resu
 								new_branch,
 								bucket_branch,
 								None,
+								None,
 							)
 							.await?;
 
