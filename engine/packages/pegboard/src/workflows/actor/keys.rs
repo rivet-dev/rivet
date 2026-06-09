@@ -1,9 +1,7 @@
-use epoxy::{
-	ops::propose::{
-		CheckAndSetCommand, Command, CommandKind, ConsensusFailedReason, Proposal, ProposalResult,
-	},
-	protocol::ReplicaId,
+use epoxy::ops::propose::{
+	CheckAndSetCommand, Command, CommandKind, ConsensusFailedReason, Proposal, ProposalResult,
 };
+use epoxy_protocol::protocol::ReplicaId;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;

@@ -1,9 +1,7 @@
 use anyhow::*;
 use base64::Engine;
-use epoxy::{
-	ops::propose::{Command, CommandKind, Proposal, SetCommand},
-	protocol::ReplicaId,
-};
+use epoxy::ops::propose::{Command, CommandKind, Proposal, SetCommand};
+use epoxy_protocol::protocol::ReplicaId;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use indexmap::IndexMap;
