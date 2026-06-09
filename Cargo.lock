@@ -5721,6 +5721,7 @@ dependencies = [
  "anyhow",
  "axum 0.8.4",
  "epoxy",
+ "epoxy-protocol",
  "fs_extra",
  "futures-util",
  "gasoline",
