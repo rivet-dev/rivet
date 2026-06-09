@@ -347,7 +347,7 @@ When a runner process receives SIGTERM, it gracefully stops all actors before ex
 - If the process is force-killed before actors finish (e.g. SIGKILL), actors are rescheduled with a crash backoff penalty instead of a clean handoff
 
 <Note>
-Ensure your platform's shutdown grace period is at least **35 minutes** so actors have 30 minutes to stop cleanly plus buffer for runner shutdown overhead.
+Actors have a maximum of 30 minutes to clean up during shutdown. Ensure your platform's drain grace period is at most 30 minutes.
 </Note>
 
 ### Shutdown Timeouts
