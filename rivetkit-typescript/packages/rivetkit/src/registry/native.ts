@@ -13,6 +13,7 @@ import {
 	encodeBridgeRivetError,
 	forbiddenError,
 	INTERNAL_ERROR_CODE,
+	isActorAbortedError,
 	isRivetErrorLike,
 	RivetError,
 	type RivetErrorLike,
@@ -1806,11 +1807,7 @@ class NativeQueueAdapter {
 				}
 				yield message;
 			} catch (error) {
-				if (
-					isRivetErrorLike(error) &&
-					error.group === "actor" &&
-					error.code === "aborted"
-				) {
+				if (isActorAbortedError(error)) {
 					return;
 				}
 				throw error;

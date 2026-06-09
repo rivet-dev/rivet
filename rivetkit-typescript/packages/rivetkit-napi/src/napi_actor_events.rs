@@ -954,11 +954,21 @@ fn spawn_run_handler(
 				);
 			}
 			Err(error) => {
-				tracing::error!(
-					actor_id = %ctx.inner().actor_id(),
-					?error,
-					"napi run handler failed"
-				);
+				let extracted = RivetTransportError::extract(&error);
+				if extracted.group() == "actor" && extracted.code() == "aborted" {
+					// The run handler was unwound because the actor is going to
+					// sleep. This is the expected exit, not a failure.
+					tracing::debug!(
+						actor_id = %ctx.inner().actor_id(),
+						"napi run handler aborted for sleep"
+					);
+				} else {
+					tracing::error!(
+						actor_id = %ctx.inner().actor_id(),
+						?error,
+						"napi run handler failed"
+					);
+				}
 			}
 		}
 	})
