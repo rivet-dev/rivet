@@ -371,6 +371,73 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				await actor.killProcess(pid);
 			}, 60_000);
 
+			test("processOutput + processExit broadcast for a spawned process", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`procevents-${crypto.randomUUID()}`,
+				]);
+
+				// Subscribe BEFORE spawn so we don't miss the early
+				// stdout chunks or the exit broadcast.
+				const stdoutChunks: string[] = [];
+				const exitEvents: Array<{ pid: number; exitCode: number }> =
+					[];
+				const conn = actor.connect();
+				conn.on("processOutput", (data: any) => {
+					if (data.stream === "stdout") {
+						// `dataBase64` is the wire shape because rivetkit's
+						// broadcast pipe doesn't apply the
+						// JsonCompatAdapter byte-wrap uniformly across
+						// encodings (CBOR byte strings can't pass through
+						// JSON cells). Decode to bytes on the consumer.
+						stdoutChunks.push(data.dataBase64);
+					}
+				});
+				conn.on("processExit", (data: any) => {
+					exitEvents.push(data);
+				});
+
+				await actor.writeFile(
+					"/tmp/echo-and-exit.js",
+					[
+						"process.stdout.write('hello-events');",
+						"process.exit(7);",
+					].join("\n"),
+				);
+				const { pid } = await actor.spawn("node", [
+					"/tmp/echo-and-exit.js",
+				]);
+				const exitCode = await actor.waitProcess(pid);
+				expect(exitCode).toBe(7);
+
+				// Allow microtask + event-loop turn so the broadcast
+				// reaches the subscriber after waitProcess resolves.
+				await new Promise((r) => setTimeout(r, 100));
+
+				expect(
+					stdoutChunks.length,
+					"expected at least one processOutput broadcast",
+				).toBeGreaterThan(0);
+
+				// Decode each base64 chunk + concat into bytes.
+				const combined = new TextDecoder().decode(
+					new Uint8Array(
+						stdoutChunks.flatMap((chunk) =>
+							Array.from(Buffer.from(chunk, "base64")),
+						),
+					),
+				);
+				expect(combined).toContain("hello-events");
+				expect(
+					exitEvents.some((e) => e.pid === pid && e.exitCode === 7),
+				).toBe(true);
+
+				await conn.dispose();
+			}, 60_000);
+
 			test("writeProcessStdin + closeProcessStdin pipe data and trigger exit", async (c) => {
 				const { client } = await setupDriverTest(c, {
 					...driverTestConfig,

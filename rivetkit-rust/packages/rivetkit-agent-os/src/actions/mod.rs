@@ -163,10 +163,12 @@ pub async fn dispatch(vm: &AgentOs, ctx: &Ctx<AgentOsActor>, action: Action<Agen
 		"spawn" => {
 			let args: Result<(String, Vec<String>)> = action.decode_as();
 			match args {
-				Ok((command, spawn_args)) => match process::spawn(vm, &command, spawn_args) {
-					Ok(handle) => action.ok(&handle),
-					Err(error) => action.err(error),
-				},
+				Ok((command, spawn_args)) => {
+					match process::spawn(vm, ctx, &command, spawn_args) {
+						Ok(handle) => action.ok(&handle),
+						Err(error) => action.err(error),
+					}
+				}
 				Err(error) => action.err(error),
 			}
 		}

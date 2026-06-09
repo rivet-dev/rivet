@@ -82,7 +82,7 @@ fn spawn_session_event_forwarder(
 				method = %notification.method,
 				"forwarding session event"
 			);
-			if let Err(error) = ctx.broadcast("sessionEvent", &payload) {
+			if let Err(error) = ctx.broadcast("sessionEvent", &(payload,)) {
 				tracing::warn!(
 					?error,
 					session_id = %session_id_owned,
