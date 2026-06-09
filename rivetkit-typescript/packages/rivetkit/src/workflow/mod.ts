@@ -20,7 +20,7 @@ import {
 	RUN_FUNCTION_CONFIG_SYMBOL,
 } from "@/actor/config";
 import type { AnyStaticActorInstance } from "@/actor/definition";
-import { RivetError } from "@/actor/errors";
+import { isActorAbortedError, RivetError } from "@/actor/errors";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { stringifyError } from "@/utils";
@@ -256,7 +256,9 @@ export function workflow<
 		try {
 			await handle.result;
 		} catch (error) {
-			if (runCtx.abortSignal.aborted) {
+			// `abortSignal.aborted` is delivered on a separate async hop and
+			// races the rejection, so detect the sleep abort structurally too.
+			if (runCtx.abortSignal.aborted || isActorAbortedError(error)) {
 				return;
 			}
 
