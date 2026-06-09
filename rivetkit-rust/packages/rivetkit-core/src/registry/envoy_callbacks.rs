@@ -197,7 +197,6 @@ impl ServeConfig {
 			serverless_validate_endpoint: settings.serverless_validate_endpoint,
 			serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
 			serverless_cache_envoy: true,
-			force_normal_runner_config_upsert: false,
 		}
 	}
 }

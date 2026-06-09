@@ -5,72 +5,39 @@ import type { Registry } from "@/registry";
 import { getRivetkitRuntimeMode, parsePortEnv } from "@/utils/env-vars";
 
 describe("getRivetkitRuntimeMode", () => {
-	const KEYS = [
-		"RIVETKIT_RUNTIME_MODE",
-		"RAILWAY_DEPLOYMENT_ID",
-		"NODE_ENV",
-	] as const;
-	let snapshot: Record<string, string | undefined>;
+	let snapshot: string | undefined;
 
 	beforeEach(() => {
-		snapshot = Object.fromEntries(KEYS.map((k) => [k, process.env[k]]));
-		for (const k of KEYS) delete process.env[k];
+		snapshot = process.env.RIVETKIT_RUNTIME_MODE;
+		delete process.env.RIVETKIT_RUNTIME_MODE;
 	});
 	afterEach(() => {
-		for (const k of KEYS) {
-			if (snapshot[k] === undefined) delete process.env[k];
-			else process.env[k] = snapshot[k];
-		}
+		if (snapshot === undefined) delete process.env.RIVETKIT_RUNTIME_MODE;
+		else process.env.RIVETKIT_RUNTIME_MODE = snapshot;
 	});
 
-	test("dev default (no env) is envoy", () => {
+	test("default (unset) is envoy", () => {
 		expect(getRivetkitRuntimeMode()).toBe("envoy");
 	});
 
-	test("NODE_ENV=production defaults to serverless", () => {
-		process.env.NODE_ENV = "production";
-		expect(getRivetkitRuntimeMode()).toBe("serverless");
-	});
-
-	test("RAILWAY_DEPLOYMENT_ID set defaults to envoy", () => {
-		process.env.RAILWAY_DEPLOYMENT_ID = "dep_123";
-		expect(getRivetkitRuntimeMode()).toBe("envoy");
-	});
-
-	test("Railway overrides NODE_ENV=production", () => {
-		process.env.RAILWAY_DEPLOYMENT_ID = "dep_123";
-		process.env.NODE_ENV = "production";
-		expect(getRivetkitRuntimeMode()).toBe("envoy");
-	});
-
-	test("explicit envoy wins over NODE_ENV=production", () => {
-		process.env.RIVETKIT_RUNTIME_MODE = "envoy";
-		process.env.NODE_ENV = "production";
-		expect(getRivetkitRuntimeMode()).toBe("envoy");
-	});
-
-	test("explicit serverless wins over Railway", () => {
+	test("explicit serverless", () => {
 		process.env.RIVETKIT_RUNTIME_MODE = "serverless";
-		process.env.RAILWAY_DEPLOYMENT_ID = "dep_123";
 		expect(getRivetkitRuntimeMode()).toBe("serverless");
 	});
 
-	test("empty string falls through to next rule", () => {
-		process.env.RIVETKIT_RUNTIME_MODE = "";
-		process.env.NODE_ENV = "production";
-		expect(getRivetkitRuntimeMode()).toBe("serverless");
-	});
-
-	test("unrecognized value falls through to next rule", () => {
-		process.env.RIVETKIT_RUNTIME_MODE = "potato";
-		process.env.RAILWAY_DEPLOYMENT_ID = "dep_123";
+	test("explicit envoy", () => {
+		process.env.RIVETKIT_RUNTIME_MODE = "envoy";
 		expect(getRivetkitRuntimeMode()).toBe("envoy");
 	});
 
-	test("RAILWAY_DEPLOYMENT_ID empty is treated as unset; falls through to NODE_ENV", () => {
-		process.env.RAILWAY_DEPLOYMENT_ID = "";
-		process.env.NODE_ENV = "production";
-		expect(getRivetkitRuntimeMode()).toBe("serverless");
+	test("empty string is envoy", () => {
+		process.env.RIVETKIT_RUNTIME_MODE = "";
+		expect(getRivetkitRuntimeMode()).toBe("envoy");
+	});
+
+	test("unrecognized value is envoy", () => {
+		process.env.RIVETKIT_RUNTIME_MODE = "potato";
+		expect(getRivetkitRuntimeMode()).toBe("envoy");
 	});
 });
 

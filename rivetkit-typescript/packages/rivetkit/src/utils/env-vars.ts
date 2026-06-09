@@ -46,14 +46,10 @@ export const getRivetkitRuntime = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_RUNTIME");
 export type RuntimeMode = "envoy" | "serverless";
 
-export const getRivetkitRuntimeMode = (): RuntimeMode => {
-	const explicit = getEnvUniversal("RIVETKIT_RUNTIME_MODE");
-	if (explicit === "envoy" || explicit === "serverless") return explicit;
-	const railwayId = getEnvUniversal("RAILWAY_DEPLOYMENT_ID");
-	if (railwayId !== undefined && railwayId !== "") return "envoy";
-	if (getNodeEnv() === "production") return "serverless";
-	return "envoy";
-};
+export const getRivetkitRuntimeMode = (): RuntimeMode =>
+	getEnvUniversal("RIVETKIT_RUNTIME_MODE") === "serverless"
+		? "serverless"
+		: "envoy";
 
 export const getRivetkitPublicDir = (): string | undefined => {
 	const value = getEnvUniversal("RIVETKIT_PUBLIC_DIR");

@@ -36,7 +36,6 @@ pub struct JsServeConfig {
 	pub serverless_client_token: Option<String>,
 	pub serverless_validate_endpoint: bool,
 	pub serverless_max_start_payload_bytes: u32,
-	pub force_normal_runner_config_upsert: Option<bool>,
 }
 
 #[napi(object)]
@@ -657,9 +656,6 @@ fn serve_config_from_js(
 		serverless_validate_endpoint: config.serverless_validate_endpoint,
 		serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes as usize,
 		serverless_cache_envoy,
-		force_normal_runner_config_upsert: config
-			.force_normal_runner_config_upsert
-			.unwrap_or(false),
 	}
 }
 
