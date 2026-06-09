@@ -193,7 +193,6 @@ mod moved_tests {
 			serverless_validate_endpoint: true,
 			serverless_max_start_payload_bytes: 1_048_576,
 			serverless_cache_envoy: true,
-			force_normal_runner_config_upsert: false,
 		}
 	}
 
