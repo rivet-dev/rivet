@@ -273,6 +273,135 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				expect(exitCode).not.toBe(0);
 			}, 60_000);
 
+			test("getProcess returns info for a spawned process", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`getproc-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile(
+					"/tmp/long-get.js",
+					"setTimeout(() => {}, 30000);",
+				);
+				const { pid } = await actor.spawn("node", ["/tmp/long-get.js"]);
+
+				const info = await actor.getProcess(pid);
+				expect(info.pid).toBe(pid);
+				expect(info.command).toBe("node");
+				expect(info.args).toEqual(["/tmp/long-get.js"]);
+				expect(info.running).toBe(true);
+				// Rust `Option::None` serializes to `null` (not `undefined`).
+				expect(info.exitCode).toBeNull();
+
+				await actor.killProcess(pid);
+			}, 60_000);
+
+			test("stopProcess gracefully terminates a process", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`stop-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile(
+					"/tmp/hang-stop.js",
+					"setTimeout(() => {}, 60000);",
+				);
+				const { pid } = await actor.spawn("node", ["/tmp/hang-stop.js"]);
+
+				await actor.stopProcess(pid);
+				const exitCode = await actor.waitProcess(pid);
+				// SIGTERM results in non-zero exit code (Node default: 143).
+				expect(exitCode).not.toBe(0);
+			}, 60_000);
+
+			test("allProcesses snapshot includes a spawned process", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`all-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile(
+					"/tmp/long-all.js",
+					"setTimeout(() => {}, 30000);",
+				);
+				const { pid } = await actor.spawn("node", ["/tmp/long-all.js"]);
+
+				const procs = await actor.allProcesses();
+				expect(Array.isArray(procs)).toBe(true);
+				// Our spawned process should appear; correlation by display
+				// pid is what `all_processes` provides.
+				expect(procs.some((p: any) => p.pid === pid)).toBe(true);
+
+				await actor.killProcess(pid);
+			}, 60_000);
+
+			test("processTree returns a forest with the spawned process", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`tree-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile(
+					"/tmp/long-tree.js",
+					"setTimeout(() => {}, 30000);",
+				);
+				const { pid } = await actor.spawn("node", ["/tmp/long-tree.js"]);
+
+				const tree = await actor.processTree();
+				expect(Array.isArray(tree)).toBe(true);
+				// The spawned process must appear somewhere in the forest
+				// (root or descendant). Flatten and search.
+				const flatten = (nodes: any[]): any[] =>
+					nodes.flatMap((n) => [n, ...flatten(n.children ?? [])]);
+				const all = flatten(tree);
+				expect(all.some((n) => n.pid === pid)).toBe(true);
+
+				await actor.killProcess(pid);
+			}, 60_000);
+
+			test("writeProcessStdin + closeProcessStdin pipe data and trigger exit", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`stdin-${crypto.randomUUID()}`,
+				]);
+
+				// Script reads stdin, counts the bytes, exits with that
+				// count as its code. So sending "hello" (5 bytes) and
+				// closing stdin produces exit code 5.
+				await actor.writeFile(
+					"/tmp/stdin-counter.js",
+					[
+						"let n = 0;",
+						"process.stdin.on('data', (chunk) => { n += chunk.length; });",
+						"process.stdin.on('end', () => { process.exit(n); });",
+					].join("\n"),
+				);
+				const { pid } = await actor.spawn("node", [
+					"/tmp/stdin-counter.js",
+				]);
+
+				await actor.writeProcessStdin(pid, "hello");
+				await actor.closeProcessStdin(pid);
+
+				const exitCode = await actor.waitProcess(pid);
+				expect(exitCode).toBe(5);
+			}, 60_000);
+
 			// --- Network ---
 
 			test("vmFetch proxies request to VM service", async (c) => {
