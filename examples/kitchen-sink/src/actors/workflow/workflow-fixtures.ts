@@ -1,5 +1,5 @@
 import { actor, event, queue } from "rivetkit";
-import { Loop, type WorkflowLoopContextOf, workflow } from "rivetkit/workflow";
+import { Loop, type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
 
 const WORKFLOW_GUARD_KV_KEY = "__rivet_actor_workflow_guard_triggered";
 
@@ -13,16 +13,24 @@ export const workflowCounterActor = actor({
 		history: [] as number[],
 	},
 	run: workflow(async (ctx) => {
+		let leakedCtx:
+			| WorkflowStepContextOf<typeof workflowCounterActor>
+			| undefined;
 		await ctx.loop("counter", async (loopCtx) => {
-			try {
-				// Accessing state outside a step should throw.
-				// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-				loopCtx.state;
-			} catch {}
-
-			await loopCtx.step("increment", async () => {
-				incrementWorkflowCounter(loopCtx);
+			await loopCtx.step("increment", async (c) => {
+				incrementWorkflowCounter(c);
+				// Capture the step context to verify it cannot be used after
+				// its step has finished.
+				leakedCtx = c;
 			});
+
+			if (leakedCtx) {
+				try {
+					// Accessing state on a finished step context should throw.
+					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
+					leakedCtx.state;
+				} catch {}
+			}
 
 			await loopCtx.sleep("idle", 25);
 			return Loop.continue(undefined);
@@ -59,12 +67,8 @@ export const workflowQueueActor = actor({
 				return Loop.continue(undefined);
 			}
 			const complete = message.complete;
-			await loopCtx.step("store-message", async () => {
-				await storeWorkflowQueueMessage(
-					loopCtx,
-					message.body,
-					complete,
-				);
+			await loopCtx.step("store-message", async (c) => {
+				await storeWorkflowQueueMessage(c, message.body, complete);
 			});
 			return Loop.continue(undefined);
 		});
@@ -80,8 +84,8 @@ export const workflowSleepActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("sleep", async (loopCtx) => {
-			await loopCtx.step("tick", async () => {
-				incrementWorkflowSleepTick(loopCtx);
+			await loopCtx.step("tick", async (c) => {
+				incrementWorkflowSleepTick(c);
 			});
 			await loopCtx.sleep("delay", 40);
 			return Loop.continue(undefined);
@@ -115,9 +119,9 @@ export const workflowQueueTimeoutActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue-timeout-loop", async (loopCtx) => {
-			const timeoutMs = await loopCtx.step("read-timeout", async () => {
-				return readWorkflowTimeoutMs(loopCtx);
-			});
+			const timeoutMs = await loopCtx.step("read-timeout", async (c) =>
+				readWorkflowTimeoutMs(c),
+			);
 
 			const [message] = await loopCtx.queue.nextBatch(
 				"wait-job-or-timeout",
@@ -128,14 +132,14 @@ export const workflowQueueTimeoutActor = actor({
 			);
 
 			if (!message) {
-				await loopCtx.step("tick", async () => {
-					recordWorkflowTimeoutTick(loopCtx);
+				await loopCtx.step("tick", async (c) => {
+					recordWorkflowTimeoutTick(c);
 				});
 				return Loop.continue(undefined);
 			}
 
-			await loopCtx.step("process-job", async () => {
-				processWorkflowTimeoutJob(loopCtx, message.body);
+			await loopCtx.step("process-job", async (c) => {
+				processWorkflowTimeoutJob(c, message.body);
 			});
 			return Loop.continue(undefined);
 		});
@@ -155,14 +159,14 @@ export const workflowQueueTimeoutActor = actor({
 });
 
 function incrementWorkflowCounter(
-	ctx: WorkflowLoopContextOf<typeof workflowCounterActor>,
+	ctx: WorkflowStepContextOf<typeof workflowCounterActor>,
 ): void {
 	ctx.state.runCount += 1;
 	ctx.state.history.push(ctx.state.runCount);
 }
 
 async function storeWorkflowQueueMessage(
-	ctx: WorkflowLoopContextOf<typeof workflowQueueActor>,
+	ctx: WorkflowStepContextOf<typeof workflowQueueActor>,
 	body: unknown,
 	complete: (response: { echo: unknown }) => Promise<void>,
 ): Promise<void> {
@@ -171,19 +175,19 @@ async function storeWorkflowQueueMessage(
 }
 
 function incrementWorkflowSleepTick(
-	ctx: WorkflowLoopContextOf<typeof workflowSleepActor>,
+	ctx: WorkflowStepContextOf<typeof workflowSleepActor>,
 ): void {
 	ctx.state.ticks += 1;
 }
 
 function readWorkflowTimeoutMs(
-	ctx: WorkflowLoopContextOf<typeof workflowQueueTimeoutActor>,
+	ctx: WorkflowStepContextOf<typeof workflowQueueTimeoutActor>,
 ): number {
 	return ctx.state.timeoutMs;
 }
 
 function recordWorkflowTimeoutTick(
-	ctx: WorkflowLoopContextOf<typeof workflowQueueTimeoutActor>,
+	ctx: WorkflowStepContextOf<typeof workflowQueueTimeoutActor>,
 ): void {
 	const at = Date.now();
 	ctx.state.ticks += 1;
@@ -195,7 +199,7 @@ function recordWorkflowTimeoutTick(
 }
 
 function processWorkflowTimeoutJob(
-	ctx: WorkflowLoopContextOf<typeof workflowQueueTimeoutActor>,
+	ctx: WorkflowStepContextOf<typeof workflowQueueTimeoutActor>,
 	job: { id: string; payload: string },
 ): void {
 	ctx.state.processed += 1;

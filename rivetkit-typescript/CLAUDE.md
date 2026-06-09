@@ -152,8 +152,9 @@ Cloudflare Workers forbid `setTimeout`, `fetch`, `connect`, and other async I/O 
 
 ## Workflow Context Actor Access Guards
 
-- Guard all side-effectful `#runCtx` access in `ActorWorkflowContext` (`packages/rivetkit/src/workflow/context.ts`) with `#ensureActorAccess`; only read-only properties (for example `actorId` and `log`) are exempt.
-- Apply `#ensureActorAccess` to any new workflow-context method or property that delegates to `#runCtx` and has side effects.
+- Workflow contexts are split in two (`packages/rivetkit/src/workflow/context.ts`): `WorkflowContext` (workflow fn + `try`/`loop`/`race`/`join` callbacks) exposes only replayable primitives and no actor data; `WorkflowStepContext` (`step`/`tryStep`/`rollback` callbacks) is the only place actor data and side effects are reachable.
+- Side-effectful and actor-data members belong on `WorkflowStepContext` and must call `#ensureActive` so a step context captured and used after its step settles throws; only read-only props (for example `actorId`, `name`, `key`, `log`, `abortSignal`) are exempt.
+- Do not add actor data (`state`, `vars`, `db`, `client`, `broadcast`) to `WorkflowContext`; reach it through the step context passed to `step`/`tryStep`.
 
 ## Dynamic Actors Architecture Doc
 
