@@ -114,7 +114,7 @@ export const documentList = actor({
 		createDocument: async (c, title: string) => {
 			const documentId = randomUUID();
 			const createdAt = Date.now();
-			const workspaceId = c.key[0] ?? "default";
+			const workspaceId = c.actorKey[0] ?? "default";
 			const safeTitle = title.trim() || "Untitled document";
 
 			const client = c.client<typeof registry>();

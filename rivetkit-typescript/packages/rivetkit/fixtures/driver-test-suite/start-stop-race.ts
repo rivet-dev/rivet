@@ -24,7 +24,7 @@ export const startStopRaceActor = actor({
 		const client = c.client<typeof registry>();
 		const observer = client.lifecycleObserver.getOrCreate(["observer"]);
 		await observer.recordEvent({
-			actorKey: c.key.join("/"),
+			actorKey: c.actorKey.join("/"),
 			event: "started",
 		});
 	},
@@ -34,7 +34,7 @@ export const startStopRaceActor = actor({
 		const client = c.client<typeof registry>();
 		const observer = client.lifecycleObserver.getOrCreate(["observer"]);
 		await observer.recordEvent({
-			actorKey: c.key.join("/"),
+			actorKey: c.actorKey.join("/"),
 			event: "destroy",
 		});
 	},

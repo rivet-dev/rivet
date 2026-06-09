@@ -40,7 +40,7 @@ export const openWorldChunk = actor({
 		snapshot: event<Snapshot>(),
 	},
 	createState: (c): State => {
-		const key = Array.isArray(c.key) ? c.key : [c.key];
+		const key = Array.isArray(c.actorKey) ? c.actorKey : [c.actorKey];
 		const chunkX = Number(key[1] ?? "0");
 		const chunkY = Number(key[2] ?? "0");
 		return {

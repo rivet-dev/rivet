@@ -1,6 +1,5 @@
 import { actor, queue } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-import { actorCtx } from "./_helpers.ts";
 
 function delay(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -17,15 +16,14 @@ export type WorkflowHistorySimpleState = {
 
 export const workflowHistorySimple = actor({
 	createState: (c): WorkflowHistorySimpleState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "pending",
 	}),
 	actions: {
 		getState: (c): WorkflowHistorySimpleState => c.state,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("start", async () => {
-			const c = actorCtx<WorkflowHistorySimpleState>(ctx);
+		await ctx.step("start", async (c) => {
 			c.state.status = "running";
 			c.state.lastStep = "start";
 			c.state.startedAt = Date.now();
@@ -34,24 +32,21 @@ export const workflowHistorySimple = actor({
 
 		await delay(700);
 
-		await ctx.step("process", async () => {
-			const c = actorCtx<WorkflowHistorySimpleState>(ctx);
+		await ctx.step("process", async (c) => {
 			c.state.lastStep = "process";
 			return { processed: true, items: 5 };
 		});
 
 		await delay(2200);
 
-		await ctx.step("validate", async () => {
-			const c = actorCtx<WorkflowHistorySimpleState>(ctx);
+		await ctx.step("validate", async (c) => {
 			c.state.lastStep = "validate";
 			return { valid: true };
 		});
 
 		await delay(600);
 
-		await ctx.step("complete", async () => {
-			const c = actorCtx<WorkflowHistorySimpleState>(ctx);
+		await ctx.step("complete", async (c) => {
 			c.state.lastStep = "complete";
 			c.state.status = "completed";
 			c.state.completedAt = Date.now();
@@ -73,7 +68,7 @@ export type WorkflowHistoryLoopState = {
 
 export const workflowHistoryLoop = actor({
 	createState: (c): WorkflowHistoryLoopState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "running",
 		processed: 0,
 		batches: [],
@@ -82,8 +77,7 @@ export const workflowHistoryLoop = actor({
 		getState: (c): WorkflowHistoryLoopState => c.state,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("init", async () => {
-			const c = actorCtx<WorkflowHistoryLoopState>(ctx);
+		await ctx.step("init", async (c) => {
 			c.state.status = "running";
 			return { batchSize: LOOP_ITEMS.length };
 		});
@@ -97,8 +91,7 @@ export const workflowHistoryLoop = actor({
 			run: async (loopCtx, loopState: { index: number }) => {
 				const item = LOOP_ITEMS[loopState.index];
 
-				await loopCtx.step(`process-${loopState.index}`, async () => {
-					const c = actorCtx<WorkflowHistoryLoopState>(loopCtx);
+				await loopCtx.step(`process-${loopState.index}`, async (c) => {
 					c.state.processed += 1;
 					c.state.batches.push({ index: loopState.index, item });
 					return { item, status: "done" };
@@ -112,8 +105,7 @@ export const workflowHistoryLoop = actor({
 			},
 		});
 
-		await ctx.step("finalize", async () => {
-			const c = actorCtx<WorkflowHistoryLoopState>(ctx);
+		await ctx.step("finalize", async (c) => {
 			c.state.status = "completed";
 			c.state.completedAt = Date.now();
 			return { allProcessed: true };
@@ -133,15 +125,14 @@ export type WorkflowHistoryJoinState = {
 
 export const workflowHistoryJoin = actor({
 	createState: (c): WorkflowHistoryJoinState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "pending",
 	}),
 	actions: {
 		getState: (c): WorkflowHistoryJoinState => c.state,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("start", async () => {
-			const c = actorCtx<WorkflowHistoryJoinState>(ctx);
+		await ctx.step("start", async (c) => {
 			c.state.status = "running";
 			return { ready: true };
 		});
@@ -176,8 +167,7 @@ export const workflowHistoryJoin = actor({
 			},
 		});
 
-		await ctx.step("merge-results", async () => {
-			const c = actorCtx<WorkflowHistoryJoinState>(ctx);
+		await ctx.step("merge-results", async (c) => {
 			c.state.status = "completed";
 			c.state.result = {
 				api: results["fetch-api"].data,
@@ -198,15 +188,14 @@ export type WorkflowHistoryRaceState = {
 
 export const workflowHistoryRace = actor({
 	createState: (c): WorkflowHistoryRaceState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "running",
 	}),
 	actions: {
 		getState: (c): WorkflowHistoryRaceState => c.state,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("begin", async () => {
-			const c = actorCtx<WorkflowHistoryRaceState>(ctx);
+		await ctx.step("begin", async (c) => {
 			c.state.status = "running";
 			return { started: true };
 		});
@@ -231,8 +220,7 @@ export const workflowHistoryRace = actor({
 			},
 		]);
 
-		await ctx.step("use-result", async () => {
-			const c = actorCtx<WorkflowHistoryRaceState>(ctx);
+		await ctx.step("use-result", async (c) => {
 			c.state.status = "completed";
 			c.state.winner = winner;
 			c.state.result = value.provider;
@@ -293,7 +281,7 @@ const FULL_WORKFLOW_ITEMS = [
 
 export const workflowHistoryFull = actor({
 	createState: (c): WorkflowHistoryFullState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "pending",
 		seededMessages: false,
 	}),
@@ -316,8 +304,7 @@ export const workflowHistoryFull = actor({
 		},
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("bootstrap", async () => {
-			const c = actorCtx<WorkflowHistoryFullState>(ctx);
+		await ctx.step("bootstrap", async (c) => {
 			c.state.status = "running";
 			c.state.lastStep = "bootstrap";
 			c.state.startedAt = Date.now();
@@ -327,16 +314,14 @@ export const workflowHistoryFull = actor({
 			};
 		});
 
-		await ctx.step("validate-input", async () => {
-			const c = actorCtx<WorkflowHistoryFullState>(ctx);
+		await ctx.step("validate-input", async (c) => {
 			c.state.lastStep = "validate-input";
 			return true;
 		});
 
 		await ctx.rollbackCheckpoint("checkpoint-after-validation");
 
-		await ctx.step("load-user-profile", async () => {
-			const c = actorCtx<WorkflowHistoryFullState>(ctx);
+		await ctx.step("load-user-profile", async (c) => {
 			c.state.lastStep = "load-user-profile";
 			return {
 				id: "user-123",
@@ -345,14 +330,12 @@ export const workflowHistoryFull = actor({
 			};
 		});
 
-		await ctx.step("compute-discount", async () => {
-			const c = actorCtx<WorkflowHistoryFullState>(ctx);
+		await ctx.step("compute-discount", async (c) => {
 			c.state.lastStep = "compute-discount";
 			return { percent: 5, reason: "tier-discount" };
 		});
 
-		await ctx.step("ephemeral-cache-check", async () => {
-			const c = actorCtx<WorkflowHistoryFullState>(ctx);
+		await ctx.step("ephemeral-cache-check", async (c) => {
 			c.state.lastStep = "ephemeral-cache-check";
 			return { cacheHit: false, tier: "standard" };
 		});
@@ -504,8 +487,7 @@ export const workflowHistoryFull = actor({
 
 		await ctx.removed("legacy-step-placeholder", "step");
 
-		await ctx.step("finalize", async () => {
-			const c = actorCtx<WorkflowHistoryFullState>(ctx);
+		await ctx.step("finalize", async (c) => {
 			c.state.lastStep = "finalize";
 			c.state.status = "completed";
 			c.state.completedAt = Date.now();
@@ -532,7 +514,7 @@ export const workflowHistoryInProgress = actor({
 		c,
 		input?: WorkflowHistoryInProgressInput,
 	): WorkflowHistoryInProgressState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "running",
 		processingDurationMs: input?.processingDurationMs ?? 30000,
 		progress: 0,
@@ -541,21 +523,18 @@ export const workflowHistoryInProgress = actor({
 		getState: (c): WorkflowHistoryInProgressState => c.state,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("init", async () => {
-			const c = actorCtx<WorkflowHistoryInProgressState>(ctx);
+		await ctx.step("init", async (c) => {
 			c.state.startedAt = Date.now();
 			c.state.progress = 10;
 			return { initialized: true };
 		});
 
-		await ctx.step("fetch-data", async () => {
-			const c = actorCtx<WorkflowHistoryInProgressState>(ctx);
+		await ctx.step("fetch-data", async (c) => {
 			c.state.progress = 25;
 			return { fetched: true, records: 100 };
 		});
 
-		await ctx.step("process", async () => {
-			const c = actorCtx<WorkflowHistoryInProgressState>(ctx);
+		await ctx.step("process", async (c) => {
 			c.state.progress = 42;
 			await delay(c.state.processingDurationMs);
 			c.state.status = "completed";
@@ -577,7 +556,7 @@ const RETRY_MAX_RETRIES = 20;
 
 export const workflowHistoryRetrying = actor({
 	createState: (c): WorkflowHistoryRetryingState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "running",
 		attempts: 0,
 		succeedAfter: 999,
@@ -589,8 +568,7 @@ export const workflowHistoryRetrying = actor({
 		},
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("start", async () => {
-			const c = actorCtx<WorkflowHistoryRetryingState>(ctx);
+		await ctx.step("start", async (c) => {
 			c.state.status = "running";
 			return { ready: true };
 		});
@@ -600,8 +578,7 @@ export const workflowHistoryRetrying = actor({
 			maxRetries: RETRY_MAX_RETRIES,
 			retryBackoffBase: 250,
 			retryBackoffMax: 1500,
-			run: async () => {
-				const c = actorCtx<WorkflowHistoryRetryingState>(ctx);
+			run: async (c) => {
 				c.state.attempts += 1;
 				if (c.state.attempts < c.state.succeedAfter) {
 					const error = new Error("Connection timeout after 5000ms");
@@ -627,7 +604,7 @@ const FAILED_MAX_RETRIES = 3;
 
 export const workflowHistoryFailed = actor({
 	createState: (c): WorkflowHistoryFailedState => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		status: "running",
 		attempts: 0,
 	}),
@@ -635,8 +612,7 @@ export const workflowHistoryFailed = actor({
 		getState: (c): WorkflowHistoryFailedState => c.state,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("init", async () => {
-			const c = actorCtx<WorkflowHistoryFailedState>(ctx);
+		await ctx.step("init", async (c) => {
 			c.state.status = "running";
 			return { initialized: true };
 		});
@@ -650,8 +626,7 @@ export const workflowHistoryFailed = actor({
 			maxRetries: FAILED_MAX_RETRIES,
 			retryBackoffBase: 200,
 			retryBackoffMax: 800,
-			run: async () => {
-				const c = actorCtx<WorkflowHistoryFailedState>(ctx);
+			run: async (c) => {
 				c.state.attempts += 1;
 				const error = new Error(
 					"Database connection failed: ECONNREFUSED",

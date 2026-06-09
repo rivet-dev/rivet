@@ -304,8 +304,8 @@ export const mockAgenticLoop = actor({
 		await recordDebugEvent(c, {
 			name: "onWake",
 			details: {
-				key: c.key,
-				name: c.name,
+				key: c.actorKey,
+				name: c.actorName,
 			},
 		});
 	},

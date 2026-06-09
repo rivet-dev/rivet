@@ -2557,11 +2557,11 @@ export class ActorContextHandleAdapter {
 		return callNativeSync(() => this.#runtime.actorId(this.#ctx));
 	}
 
-	get name(): string {
+	get actorName(): string {
 		return callNativeSync(() => this.#runtime.actorName(this.#ctx));
 	}
 
-	get key(): string[] {
+	get actorKey(): string[] {
 		return toActorKey(
 			callNativeSync(() => this.#runtime.actorKey(this.#ctx)),
 		);

@@ -20,7 +20,7 @@ export const destroyActor = actor({
 	state: { value: 0, key: "" },
 	onWake: (c) => {
 		// Store the actor key so we can reference it in onDestroy
-		c.state.key = c.key.join("/");
+		c.state.key = c.actorKey.join("/");
 	},
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();

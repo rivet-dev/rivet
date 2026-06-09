@@ -98,10 +98,8 @@ Each lifecycle hook and handler has a corresponding `*ContextOf` type, exported 
 | `onBeforeActionResponse` | `BeforeActionResponseContextOf` |
 | `actions.*` | `ActionContextOf` |
 | `run` | `RunContextOf` |
-| `workflow` root context helpers | `WorkflowContextOf` |
-| `workflow` loop helpers | `WorkflowLoopContextOf` |
-| `workflow` branch helpers | `WorkflowBranchContextOf` |
-| `workflow` standalone step helpers | `WorkflowStepContextOf` |
+| `workflow` orchestration helpers (root, `loop`, `try`, `race`, `join` branches) | `WorkflowContextOf` |
+| `workflow` `step` / `tryStep` run + rollback helpers | `WorkflowStepContextOf` |
 | `onRequest` | `RequestContextOf` |
 | `onWebSocket` | `WebSocketContextOf` |
 

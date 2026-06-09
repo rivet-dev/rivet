@@ -310,8 +310,8 @@ export interface ActorContext<
 	readonly schedule: ActorSchedule;
 	readonly queue: ActorQueue<TQueues>;
 	readonly actorId: string;
-	readonly name: string;
-	readonly key: string[];
+	readonly actorName: string;
+	readonly actorKey: string[];
 	readonly region: string;
 	readonly conns: Map<
 		string,

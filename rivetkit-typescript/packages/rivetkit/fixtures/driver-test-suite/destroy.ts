@@ -25,7 +25,7 @@ export const destroyActor = actor({
 	},
 	onWake: (c) => {
 		// Store the actor key so we can reference it in onDestroy
-		c.state.key = c.key.join("/");
+		c.state.key = c.actorKey.join("/");
 	},
 	onRequest: (c, request) => {
 		const url = new URL(request.url);
@@ -95,7 +95,7 @@ export const destroyAbortSignalActor = actor({
 	onDestroy: async (c) => {
 		const client = c.client<typeof registry>();
 		const observer = client.destroyObserver.getOrCreate(["observer"]);
-		await observer.notifyDestroyed(c.key.join("/"));
+		await observer.notifyDestroyed(c.actorKey.join("/"));
 	},
 	actions: {
 		requestDestroy: (c) => {

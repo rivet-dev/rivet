@@ -44,7 +44,7 @@ export const partyMatch = actor({
 	): Promise<PartyConnState> => {
 		const playerId = params?.playerId;
 		const joinToken = params?.joinToken;
-		const matchId = c.key[0];
+		const matchId = c.actorKey[0];
 
 		if (!matchId || !playerId || !joinToken) {
 			throw new UserError("invalid join params", {

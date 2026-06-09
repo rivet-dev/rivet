@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import {
 	CriticalError,
 	EntryInProgressError,
@@ -9,6 +7,7 @@ import {
 	RollbackCheckpointError,
 	RollbackError,
 	replayWorkflowFromStep,
+	type RunWorkflowOptions,
 	runWorkflow,
 	StepExhaustedError,
 	type WorkflowErrorEvent,
@@ -24,7 +23,7 @@ import { isActorAbortedError, RivetError } from "@/actor/errors";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { stringifyError } from "@/utils";
-import { ActorWorkflowContext } from "./context";
+import { WorkflowContext } from "./context";
 import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
@@ -42,11 +41,17 @@ export type {
 } from "@rivetkit/workflow-engine";
 export { Loop } from "@rivetkit/workflow-engine";
 export {
-	ActorWorkflowContext,
+	type WorkflowBranchConfig,
 	type WorkflowBranchContextOf,
+	WorkflowContext,
 	type WorkflowContextOf,
+	type WorkflowLoopConfig,
 	type WorkflowLoopContextOf,
+	type WorkflowStepConfig,
+	WorkflowStepContext,
 	type WorkflowStepContextOf,
+	type WorkflowTryConfig,
+	type WorkflowTryStepConfig,
 } from "./context";
 
 function shouldRethrowWorkflowError(error: unknown): boolean {
@@ -127,7 +132,7 @@ export function workflow<
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 >(
 	fn: (
-		ctx: ActorWorkflowContext<
+		ctx: WorkflowContext<
 			TState,
 			TConnParams,
 			TConnState,
@@ -228,12 +233,14 @@ export function workflow<
 
 		const handle = runWorkflow(
 			actor.id,
-			async (ctx) => await fn(new ActorWorkflowContext(ctx, runCtx)),
+			async (ctx) => await fn(new WorkflowContext(ctx, runCtx)),
 			undefined,
 			driver,
 			{
 				mode: "live",
-				logger: runCtx.log,
+				// The actor logger and the engine's pino logger are runtime
+				// compatible but not structurally assignable.
+				logger: runCtx.log as RunWorkflowOptions["logger"],
 				onHistoryUpdated: workflowInspector.update,
 				onError: onError
 					? async (event) => await onError(runCtx, event)

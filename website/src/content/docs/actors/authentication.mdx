@@ -62,7 +62,7 @@ const chatRoom = actor({
   state: { messages: [] as Message[] },
 
   onBeforeConnect: async (c, params: ConnParams) => {
-    const roomName = c.key;
+    const roomName = c.actorKey;
     const isValid = await validateToken(params.authToken, roomName);
     if (!isValid) {
       throw new UserError("Forbidden", { code: "forbidden" });
@@ -112,7 +112,7 @@ const chatRoom = actor({
   state: { messages: [] as Message[] },
 
   createConnState: async (c, params: ConnParams): Promise<ConnState> => {
-    const roomName = c.key;
+    const roomName = c.actorKey;
     const payload = await validateToken(params.authToken, roomName);
     if (!payload) {
       throw new UserError("Forbidden", { code: "forbidden" });
@@ -149,7 +149,7 @@ Authentication hooks have access to several properties:
 | `c.request` | The underlying HTTP request object |
 | `c.request.headers` | Request headers for tokens, API keys (does not work for `.connect()`) |
 | `c.state` | Actor state for authorization decisions (see [state](/docs/actors/state)) |
-| `c.key` | The actor's key (see [keys](/docs/actors/keys)) |
+| `c.actorKey` | The actor's key (see [keys](/docs/actors/keys)) |
 
 It's recommended to use `params` instead of `c.request.headers` whenever possible since it works for both HTTP & WebSocket connections.
 
@@ -384,7 +384,7 @@ const apiActor = actor({
 
 ### Using `c.state` In Authorization
 
-Access actor state via `c.state` and the actor's key via `c.key` to make authorization decisions:
+Access actor state via `c.state` and the actor's key via `c.actorKey` to make authorization decisions:
 
 ```typescript
 import { actor, UserError } from "rivetkit";

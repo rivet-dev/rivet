@@ -20,7 +20,7 @@ export const counter = actor({
 			return c.state.count;
 		},
 		getKey: (c) => {
-			return c.key;
+			return c.actorKey;
 		},
 	},
 });

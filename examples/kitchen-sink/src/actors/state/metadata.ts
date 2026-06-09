@@ -13,7 +13,7 @@ export const metadataActor = actor({
 	},
 	onWake: (c) => {
 		// Store the actor name during initialization
-		c.state.actorName = c.name;
+		c.state.actorName = c.actorName;
 	},
 	actions: {
 		// Set up test tags - this will be called by tests to simulate tags
@@ -32,7 +32,7 @@ export const metadataActor = actor({
 		getMetadata: (c) => {
 			// Create metadata object from stored values
 			const metadata = {
-				name: c.name,
+				name: c.actorName,
 				tags: c.state.storedTags,
 				region: c.state.storedRegion,
 			};
@@ -44,7 +44,7 @@ export const metadataActor = actor({
 
 		// Get the actor name
 		getActorName: (c) => {
-			return c.name;
+			return c.actorName;
 		},
 
 		// Get a specific tag by key

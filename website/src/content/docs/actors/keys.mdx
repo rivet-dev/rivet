@@ -124,7 +124,7 @@ const chatRoom = actor({
   actions: {
     getRoomName: (c) => {
       // Access the key from metadata
-      const key = c.key;
+      const key = c.actorKey;
       return key[1]; // Get "general" from ["room", "general"]
     }
   }
@@ -141,7 +141,7 @@ import { createClient } from "rivetkit/client";
 
 const chatRoom = actor({
   state: { messages: [] as string[] },
-  actions: { getRoomName: (c) => c.key[1] }
+  actions: { getRoomName: (c) => c.actorKey[1] }
 });
 
 const registry = setup({ use: { chatRoom } });
@@ -184,7 +184,7 @@ interface UserSessionState {
 const userSession = actor({
   state: { userId: "", loginTime: 0, preferences: {} } as UserSessionState,
   createState: (c): UserSessionState => ({
-    userId: c.key[0], // Extract user ID from key
+    userId: c.actorKey[0], // Extract user ID from key
     loginTime: Date.now(),
     preferences: {}
   }),

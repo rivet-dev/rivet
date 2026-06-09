@@ -4,7 +4,6 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-import { actorCtx } from "./_helpers.ts";
 
 export type BatchInfo = {
 	id: number;
@@ -23,8 +22,6 @@ export type BatchJob = {
 	startedAt: number;
 	completedAt?: number;
 };
-
-type State = BatchJob;
 
 function fetchBatch(
 	cursor: number,
@@ -50,7 +47,7 @@ export type BatchJobInput = {
 
 export const batch = actor({
 	createState: (c, input?: BatchJobInput): BatchJob => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		totalItems: input?.totalItems ?? 50,
 		batchSize: input?.batchSize ?? 5,
 		status: "running",
@@ -77,10 +74,8 @@ export const batch = actor({
 			name: "batch-loop",
 			state: { cursor: 0 },
 			run: async (batchCtx, loopState: { cursor: number }) => {
-				const c = actorCtx<State>(batchCtx);
-
-				const batch = await batchCtx.step("fetch-batch", async () => {
-					ctx.log.info({
+				const batch = await batchCtx.step("fetch-batch", async (c) => {
+					c.log.info({
 						msg: "processing batch",
 						jobId: c.state.id,
 						cursor: loopState.cursor,
@@ -95,7 +90,7 @@ export const batch = actor({
 					);
 				});
 
-				await batchCtx.step("process-batch", async () => {
+				await batchCtx.step("process-batch", async (c) => {
 					await new Promise((r) =>
 						setTimeout(r, 300 + Math.random() * 500),
 					);
@@ -113,7 +108,7 @@ export const batch = actor({
 					c.broadcast("batchProcessed", batchInfo);
 					c.broadcast("stateChanged", c.state);
 
-					ctx.log.info({
+					c.log.info({
 						msg: "batch processed",
 						jobId: c.state.id,
 						cursor: loopState.cursor,
@@ -122,7 +117,7 @@ export const batch = actor({
 				});
 
 				if (!batch.hasMore) {
-					await batchCtx.step("mark-complete", async () => {
+					await batchCtx.step("mark-complete", async (c) => {
 						c.state.status = "completed";
 						c.state.completedAt = Date.now();
 						c.broadcast("stateChanged", c.state);

@@ -139,7 +139,7 @@ import { createClient } from "rivetkit/client";
 const chatRoom = actor({
 	state: { messages: [] as string[] },
 	actions: {
-		getRoomInfo: (c) => ({ org: c.key[0], room: c.key[1] }),
+		getRoomInfo: (c) => ({ org: c.actorKey[0], room: c.actorKey[1] }),
 	},
 });
 
@@ -149,7 +149,7 @@ const client = createClient<typeof registry>("http://localhost:6420");
 // Compound key: [org, room]
 client.chatRoom.getOrCreate(["org-acme", "general"]);
 
-// Access key inside actor via c.key
+// Access key inside actor via c.actorKey
 ```
 
 Don't build keys with string interpolation like `"org:${userId}"` when `userId` contains user data. Use arrays instead to prevent key injection attacks.
@@ -363,9 +363,9 @@ const worker = actor({
 		await ctx.loop("task-loop", async (loopCtx) => {
 			const message = await loopCtx.queue.next("wait-task");
 
-			await loopCtx.step("process-task", async () => {
+			await loopCtx.step("process-task", async (step) => {
 				await processTask(message.body.url);
-				loopCtx.state.processed += 1;
+				step.state.processed += 1;
 			});
 		});
 	}),
@@ -504,7 +504,7 @@ const chatRoom = actor({
 	createVars: () => ({ startTime: Date.now() }),
 
 	// Actor lifecycle
-	onCreate: (c) => console.log("created", c.key),
+	onCreate: (c) => console.log("created", c.actorKey),
 	onDestroy: (c) => console.log("destroyed"),
 	onWake: (c) => console.log("actor started"),
 	onSleep: (c) => console.log("actor sleeping"),
@@ -720,7 +720,7 @@ actions: {
 addRoom: async (c, name: string) => {
 // Create the chat room actor
 const client = c.client<typeof registry>();
-await client.chatRoom.create([c.key[0], name]);
+await client.chatRoom.create([c.actorKey[0], name]);
 c.state.rooms.push(name);
 },
 listRooms: (c) => c.state.rooms,
@@ -806,12 +806,12 @@ const worker = actor({
 		control: queue<ControlMessage>(),
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("setup", async () => {
+		await ctx.step("setup", async (step) => {
 			await fetch("https://api.example.com/workers/init", {
 				method: "POST",
 			});
-			ctx.state.phase = "running";
-			ctx.state.stopReason = null;
+			step.state.phase = "running";
+			step.state.stopReason = null;
 		});
 
 		const stopReason = await ctx.loop("worker-loop", async (loopCtx) => {
@@ -820,13 +820,13 @@ const worker = actor({
 			});
 
 			if (message.name === "work") {
-				await loopCtx.step("apply-work", async () => {
+				await loopCtx.step("apply-work", async (step) => {
 					await fetch("https://api.example.com/workers/process", {
 						method: "POST",
 						body: JSON.stringify({ amount: message.body.amount }),
 					});
-					loopCtx.state.processed += 1;
-					loopCtx.state.total += message.body.amount;
+					step.state.processed += 1;
+					step.state.total += message.body.amount;
 				});
 				return;
 			}
@@ -834,12 +834,12 @@ const worker = actor({
 			return Loop.break((message.body as ControlMessage).reason);
 		});
 
-		await ctx.step("teardown", async () => {
+		await ctx.step("teardown", async (step) => {
 			await fetch("https://api.example.com/workers/shutdown", {
 				method: "POST",
 			});
-			ctx.state.phase = "stopped";
-			ctx.state.stopReason = stopReason;
+			step.state.phase = "stopped";
+			step.state.stopReason = stopReason;
 		});
 	}),
 });

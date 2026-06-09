@@ -412,7 +412,7 @@ const userSession = actor({
   // external data stays fresh.
   createVars: async (c): Promise<{ user: User }> => {
     // Load from database on every wake
-    const user = await db.users.findById(c.key.join("-"));
+    const user = await db.users.findById(c.actorKey.join("-"));
     return { user };
   },
 
@@ -423,9 +423,9 @@ const userSession = actor({
     },
     updateEmail: async (c, email: string) => {
       c.state.requestCount++;
-      await db.users.update(c.key.join("-"), { email });
+      await db.users.update(c.actorKey.join("-"), { email });
       // Refresh cached data
-      c.vars.user = await db.users.findById(c.key.join("-"));
+      c.vars.user = await db.users.findById(c.actorKey.join("-"));
     },
   },
 });
@@ -508,7 +508,7 @@ const userActor = actor({
   onCreate: async (c, input: { email: string }) => {
     // Insert into database on actor creation
     await db.users.insert({
-      id: c.key.join("-"),
+      id: c.actorKey.join("-"),
       email: input.email,
       createdAt: Date.now(),
     });
@@ -516,7 +516,7 @@ const userActor = actor({
 
   onStateChange: async (c, newState) => {
     // Sync any state changes to database
-    await db.users.update(c.key.join("-"), {
+    await db.users.update(c.actorKey.join("-"), {
       email: newState.email,
       lastActive: newState.lastActive,
     });

@@ -54,7 +54,9 @@ export const idleWorld = actor({
 				return;
 			}
 			c.state.playerName = input.playerName;
-			const keyPlayerId = Array.isArray(c.key) ? c.key[0] : c.key;
+			const keyPlayerId = Array.isArray(c.actorKey)
+				? c.actorKey[0]
+				: c.actorKey;
 			if (input.playerId) {
 				c.state.playerId = input.playerId;
 			} else if (typeof keyPlayerId === "string" && keyPlayerId) {

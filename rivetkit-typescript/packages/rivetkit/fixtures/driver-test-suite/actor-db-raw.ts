@@ -54,7 +54,7 @@ async function recordLifecycleEvent(
 	const client = c.client<typeof registry>();
 	const observer = client.lifecycleObserver.getOrCreate([observerKey]);
 	await observer.recordEvent({
-		actorKey: c.key.join("/"),
+		actorKey: c.actorKey.join("/"),
 		event,
 	});
 }

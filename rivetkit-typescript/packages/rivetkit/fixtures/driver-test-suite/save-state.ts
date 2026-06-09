@@ -30,7 +30,7 @@ export const saveStateActor = actor({
 			const observer = c
 				.client<typeof registry>()
 				.saveStateObserver.getOrCreate(["observer"]);
-			await observer.recordPhase(c.key.join("/"), "immediate");
+			await observer.recordPhase(c.actorKey.join("/"), "immediate");
 
 			await new Promise<void>(() => {});
 		},
@@ -41,7 +41,7 @@ export const saveStateActor = actor({
 			const observer = c
 				.client<typeof registry>()
 				.saveStateObserver.getOrCreate(["observer"]);
-			await observer.recordPhase(c.key.join("/"), "deferred");
+			await observer.recordPhase(c.actorKey.join("/"), "deferred");
 
 			await new Promise<void>(() => {});
 		},

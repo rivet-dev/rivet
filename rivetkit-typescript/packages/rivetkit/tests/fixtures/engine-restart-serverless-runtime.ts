@@ -146,13 +146,13 @@ const sqliteCounter = actor({
 
 		logRuntimeEvent("gateway_health_request", {
 			actorId: ctx.actorId,
-			key: ctx.key,
+			key: ctx.actorKey,
 		});
 		return new Response(
 			JSON.stringify({
 				ok: true,
 				actorId: ctx.actorId,
-				key: ctx.key,
+				key: ctx.actorKey,
 			}),
 			{
 				headers: { "Content-Type": "application/json" },
@@ -162,7 +162,7 @@ const sqliteCounter = actor({
 	onWebSocket: (ctx, websocket) => {
 		logRuntimeEvent("gateway_websocket_open", {
 			actorId: ctx.actorId,
-			key: ctx.key,
+			key: ctx.actorKey,
 			path: ctx.request ? new URL(ctx.request.url).pathname : "unknown",
 		});
 		websocket.addEventListener("message", (event: { data: unknown }) => {
@@ -181,7 +181,7 @@ const sqliteCounter = actor({
 							type: "pong",
 							sentAt: message.sentAt,
 							actorId: ctx.actorId,
-							key: ctx.key,
+							key: ctx.actorKey,
 						}),
 					);
 					return;
@@ -193,7 +193,7 @@ const sqliteCounter = actor({
 		websocket.addEventListener("close", () => {
 			logRuntimeEvent("gateway_websocket_close", {
 				actorId: ctx.actorId,
-				key: ctx.key,
+				key: ctx.actorKey,
 			});
 		});
 	},
@@ -207,7 +207,7 @@ const sqliteCounter = actor({
 		vars.heartbeatSeq = 0;
 		logRuntimeEvent("heartbeat_on_wake", {
 			actorId: ctx.actorId,
-			key: ctx.key,
+			key: ctx.actorKey,
 			mode: heartbeatMode,
 		});
 		if (heartbeatMode === "none") {
@@ -224,7 +224,7 @@ const sqliteCounter = actor({
 			vars.heartbeatSeq = seq;
 			logRuntimeEvent("heartbeat_tick", {
 				actorId: ctx.actorId,
-				key: ctx.key,
+				key: ctx.actorKey,
 				seq,
 				mode: heartbeatMode,
 			});
@@ -234,7 +234,7 @@ const sqliteCounter = actor({
 					const count = await runHeartbeatSql(database);
 					logRuntimeEvent("heartbeat_sql_ok", {
 						actorId: ctx.actorId,
-						key: ctx.key,
+						key: ctx.actorKey,
 						seq,
 						count,
 					});
@@ -242,7 +242,7 @@ const sqliteCounter = actor({
 					const count = await runHeartbeatKv(ctx.kv);
 					logRuntimeEvent("heartbeat_kv_ok", {
 						actorId: ctx.actorId,
-						key: ctx.key,
+						key: ctx.actorKey,
 						seq,
 						count,
 					});
@@ -254,7 +254,7 @@ const sqliteCounter = actor({
 						: "heartbeat_kv_err",
 					{
 						actorId: ctx.actorId,
-						key: ctx.key,
+						key: ctx.actorKey,
 						seq,
 						error: stringifyError(error),
 					},
@@ -277,7 +277,7 @@ const sqliteCounter = actor({
 				}
 				logRuntimeEvent("heartbeat_abort", {
 					actorId: ctx.actorId,
-					key: ctx.key,
+					key: ctx.actorKey,
 					mode: heartbeatMode,
 				});
 			},
@@ -294,7 +294,7 @@ const sqliteCounter = actor({
 		}
 		logRuntimeEvent("heartbeat_on_sleep", {
 			actorId: ctx.actorId,
-			key: ctx.key,
+			key: ctx.actorKey,
 			mode: heartbeatMode,
 		});
 	},

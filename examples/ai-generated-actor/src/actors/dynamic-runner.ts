@@ -4,7 +4,7 @@ import { dynamicActor } from "rivetkit/dynamic";
 export const dynamicRunner = dynamicActor({
 	load: async (c: any) => {
 		// Extract the coding agent that owns the code
-		const codeAgentKey = c.key.slice(0, -1);
+		const codeAgentKey = c.actorKey.slice(0, -1);
 		const client = await c.client();
 		const state = await client.codeAgent
 			.getOrCreate(codeAgentKey)

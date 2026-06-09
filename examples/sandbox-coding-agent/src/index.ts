@@ -234,7 +234,7 @@ export const agent = actor({
 			try {
 				const sandbox = c
 					.client<typeof registry>()
-					.codingSandbox.getOrCreate([c.key[0]]);
+					.codingSandbox.getOrCreate([c.actorKey[0]]);
 				const sessionId = c.state.sessionId ?? buildId("session");
 
 				if (!c.state.sessionId) {

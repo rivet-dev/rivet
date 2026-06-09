@@ -412,13 +412,13 @@ const userActor = actor({
   // Open a connection to the external database and load initial data on every start
   createVars: async (c) => {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [c.key[0]]);
+    const result = await pool.query("SELECT * FROM users WHERE id = $1", [c.actorKey[0]]);
     return { pool, profile: result.rows[0] };
   },
 
   actions: {
     updateEmail: async (c, email: string) => {
-      await c.vars.pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, c.key[0]]);
+      await c.vars.pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, c.actorKey[0]]);
     }
   }
 });

@@ -4,7 +4,6 @@
 
 import { actor, event, queue } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-import { actorCtx } from "./_helpers.ts";
 
 export type RequestStatus = "pending" | "approved" | "rejected" | "timeout";
 
@@ -18,8 +17,6 @@ export type ApprovalRequest = {
 	decidedBy?: string;
 	deciding?: boolean; // True when a decision is being processed
 };
-
-type State = ApprovalRequest;
 
 const QUEUE_DECISION = "decision" as const;
 
@@ -37,7 +34,7 @@ type ApprovalDecision = {
 
 export const approval = actor({
 	createState: (c, input?: ApprovalRequestInput): ApprovalRequest => ({
-		id: c.key[0] as string,
+		id: c.actorKey[0] as string,
 		title: input?.title ?? "Untitled Request",
 		description: input?.description ?? "",
 		status: "pending",
@@ -71,10 +68,8 @@ export const approval = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("approval-loop", async (loopCtx) => {
-			const c = actorCtx<State>(loopCtx);
-
-			await loopCtx.step("init-request", async () => {
-				ctx.log.info({
+			await loopCtx.step("init-request", async (c) => {
+				c.log.info({
 					msg: "waiting for approval decision",
 					requestId: c.state.id,
 					title: c.state.title,
@@ -91,18 +86,18 @@ export const approval = actor({
 			);
 			const decision = decisionMessage?.body ?? null;
 
-			await loopCtx.step("update-status", async () => {
+			await loopCtx.step("update-status", async (c) => {
 				c.state.deciding = false;
 				if (decision === null) {
 					c.state.status = "timeout";
-					ctx.log.info({
+					c.log.info({
 						msg: "request timed out",
 						requestId: c.state.id,
 					});
 				} else if (decision.approved) {
 					c.state.status = "approved";
 					c.state.decidedBy = decision.approver;
-					ctx.log.info({
+					c.log.info({
 						msg: "request approved",
 						requestId: c.state.id,
 						approver: decision.approver,
@@ -110,7 +105,7 @@ export const approval = actor({
 				} else {
 					c.state.status = "rejected";
 					c.state.decidedBy = decision.approver;
-					ctx.log.info({
+					c.log.info({
 						msg: "request rejected",
 						requestId: c.state.id,
 						approver: decision.approver,

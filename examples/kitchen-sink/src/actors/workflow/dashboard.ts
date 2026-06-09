@@ -3,7 +3,6 @@
 
 import { actor, event, queue } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-import { actorCtx } from "./_helpers.ts";
 
 export type UserStats = {
 	count: number;
@@ -42,8 +41,6 @@ export type DashboardState = {
 	};
 	lastRefresh: number | null;
 };
-
-type State = DashboardState;
 
 const QUEUE_REFRESH = "refresh";
 type RefreshMessage = Record<string, never>;
@@ -115,8 +112,6 @@ export const dashboard = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("refresh-loop", async (loopCtx) => {
-			const c = actorCtx<State>(loopCtx);
-
 			await loopCtx.queue.next("wait-refresh", {
 				names: [QUEUE_REFRESH],
 			});
@@ -126,9 +121,7 @@ export const dashboard = actor({
 			const results = await loopCtx.join("fetch-all", {
 				users: {
 					run: async (branchCtx) => {
-						const bc = actorCtx<State>(branchCtx);
-
-						await branchCtx.step("mark-running", async () => {
+						await branchCtx.step("mark-running", async (bc) => {
 							bc.state.branches.users = "running";
 							bc.broadcast("stateChanged", bc.state);
 						});
@@ -140,7 +133,7 @@ export const dashboard = actor({
 							},
 						);
 
-						await branchCtx.step("mark-complete", async () => {
+						await branchCtx.step("mark-complete", async (bc) => {
 							bc.state.branches.users = "completed";
 							bc.broadcast("stateChanged", bc.state);
 						});
@@ -150,9 +143,7 @@ export const dashboard = actor({
 				},
 				orders: {
 					run: async (branchCtx) => {
-						const bc = actorCtx<State>(branchCtx);
-
-						await branchCtx.step("mark-running", async () => {
+						await branchCtx.step("mark-running", async (bc) => {
 							bc.state.branches.orders = "running";
 							bc.broadcast("stateChanged", bc.state);
 						});
@@ -164,7 +155,7 @@ export const dashboard = actor({
 							},
 						);
 
-						await branchCtx.step("mark-complete", async () => {
+						await branchCtx.step("mark-complete", async (bc) => {
 							bc.state.branches.orders = "completed";
 							bc.broadcast("stateChanged", bc.state);
 						});
@@ -174,9 +165,7 @@ export const dashboard = actor({
 				},
 				metrics: {
 					run: async (branchCtx) => {
-						const bc = actorCtx<State>(branchCtx);
-
-						await branchCtx.step("mark-running", async () => {
+						await branchCtx.step("mark-running", async (bc) => {
 							bc.state.branches.metrics = "running";
 							bc.broadcast("stateChanged", bc.state);
 						});
@@ -188,7 +177,7 @@ export const dashboard = actor({
 							},
 						);
 
-						await branchCtx.step("mark-complete", async () => {
+						await branchCtx.step("mark-complete", async (bc) => {
 							bc.state.branches.metrics = "completed";
 							bc.broadcast("stateChanged", bc.state);
 						});
@@ -198,7 +187,7 @@ export const dashboard = actor({
 				},
 			});
 
-			await loopCtx.step("save-data", async () => {
+			await loopCtx.step("save-data", async (c) => {
 				c.state.data = {
 					users: results.users,
 					orders: results.orders,

@@ -36,7 +36,7 @@ export const companyDatabase = actor({
 	createState: (c): CompanyDatabaseState => {
 		const now = Date.now();
 		return {
-			company_name: getCompanyName(c.key[0]),
+			company_name: getCompanyName(c.actorKey[0]),
 			employees: [],
 			projects: [],
 			created_at: now,
