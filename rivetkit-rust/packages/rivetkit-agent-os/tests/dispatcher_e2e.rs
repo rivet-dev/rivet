@@ -80,7 +80,7 @@ async fn dispatch_one(vm: &AgentOs, name: &str, args_cbor: Vec<u8>) -> Result<Ve
 		Event::Action(action) => action,
 		other => panic!("expected Action event, got {other:?}"),
 	};
-	rivetkit_agent_os::actions::dispatch(vm, action).await;
+	rivetkit_agent_os::actions::dispatch(vm, &start.ctx, action).await;
 
 	match reply_rx.await.expect("await reply") {
 		Ok(bytes) => Ok(bytes),

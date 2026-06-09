@@ -40,7 +40,7 @@ pub async fn run(
 					continue;
 				}
 				let handle = vm.as_ref().expect("vm present after ensure_vm");
-				actions::dispatch(handle, action).await;
+				actions::dispatch(handle, &start.ctx, action).await;
 			}
 			Event::Http(http) => http.reply_status(404),
 			Event::QueueSend(queue) => queue.err(anyhow!("queue send not supported")),

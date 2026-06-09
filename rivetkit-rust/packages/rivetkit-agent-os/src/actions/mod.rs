@@ -12,7 +12,7 @@ pub mod session;
 
 use agent_os_client::AgentOs;
 use anyhow::{Result, anyhow};
-use rivetkit::Action;
+use rivetkit::{Action, Ctx};
 
 use crate::actor::AgentOsActor;
 use filesystem::{WriteFileContent, WriteFilesEntryArg};
@@ -20,7 +20,10 @@ use session::CreateSessionOptionsDto;
 
 /// Dispatch one action against a live VM. Each arm decodes its args,
 /// calls the helper, and replies through `action.ok` / `action.err`.
-pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
+/// `ctx` is forwarded to arms that need to spawn long-lived background
+/// work tied to the actor lifecycle (e.g. session-event subscriptions
+/// that fan out as `ctx.broadcast(...)`).
+pub async fn dispatch(vm: &AgentOs, ctx: &Ctx<AgentOsActor>, action: Action<AgentOsActor>) {
 	let name = action.name().to_owned();
 	match name.as_str() {
 		"readFile" => {
@@ -243,7 +246,7 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 			let args: Result<(String, CreateSessionOptionsDto)> = action.decode_as();
 			match args {
 				Ok((agent_type, options)) => {
-					match session::create_session(vm, &agent_type, options).await {
+					match session::create_session(vm, ctx, &agent_type, options).await {
 						Ok(id) => action.ok(&id),
 						Err(error) => action.err(error),
 					}

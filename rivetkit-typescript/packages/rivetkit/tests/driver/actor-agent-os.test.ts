@@ -381,6 +381,21 @@ server.listen(9876, "127.0.0.1", () => {
 					expect(typeof session.sessionId).toBe("string");
 					expect(session.sessionId.length).toBeGreaterThan(0);
 
+					// Subscribe to sessionEvent BEFORE sending the prompt.
+					// The Rust session-event forwarder broadcasts every
+					// `session/update` JSON-RPC notification the Pi
+					// adapter emits. Whether the Pi adapter emits any
+					// notifications for a given prompt depends on
+					// Pi/Anthropic behavior — trivial 1-word replies
+					// often produce zero notifications. So we don't
+					// assert a count, only that any events that DO come
+					// through carry the expected sessionId.
+					const sessionEvents: any[] = [];
+					const conn = actor.connect();
+					conn.on("sessionEvent", (data: any) => {
+						sessionEvents.push(data);
+					});
+
 					const reply = await actor.sendPrompt(
 						session.sessionId,
 						"Reply with exactly the word: pong",
@@ -392,12 +407,21 @@ server.listen(9876, "127.0.0.1", () => {
 					// showed up (case-insensitive).
 					expect(reply.text.toLowerCase()).toContain("pong");
 
+					// Shape check: if any events came through, they
+					// must carry the right sessionId. Empty is fine.
+					expect(
+						sessionEvents.every(
+							(e) => e.sessionId === session.sessionId,
+						),
+					).toBe(true);
+
 					const sessions = await actor.listSessions();
 					expect(
 						sessions.some((s: any) => s.sessionId === session.sessionId),
 					).toBe(true);
 
 					await actor.closeSession(session.sessionId);
+					await conn.dispose();
 				},
 				120_000,
 			);

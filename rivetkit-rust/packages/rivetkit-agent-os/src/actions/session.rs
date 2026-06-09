@@ -10,20 +10,99 @@
 use std::collections::BTreeMap;
 
 use agent_os_client::{
-	AgentOs, CreateSessionOptions, PromptResult, SessionId, SessionInfo,
+	AgentOs, CreateSessionOptions, JsonRpcNotification, PromptResult, SessionId,
+	SessionInfo,
 };
 use anyhow::Result;
+use futures::StreamExt;
+use rivetkit::Ctx;
 use serde::{Deserialize, Serialize};
 
+use crate::actor::AgentOsActor;
+
 /// `createSession(agentType, options)` — port of [`AgentOs::create_session`].
-/// Returns the [`SessionId`] `{ sessionId }` directly; the upstream type
-/// already serializes with camelCase.
+/// On success, also spawns a background task that subscribes to the
+/// session's event stream and rebroadcasts each notification as a
+/// `sessionEvent` actor event via `ctx.broadcast(...)`. The subscription
+/// task self-terminates when the session is destroyed (the stream
+/// closes) or when the VM is dropped.
 pub async fn create_session(
 	vm: &AgentOs,
+	ctx: &Ctx<AgentOsActor>,
 	agent_type: &str,
 	options: CreateSessionOptionsDto,
 ) -> Result<SessionId> {
-	vm.create_session(agent_type, options.into_native()).await
+	let session = vm.create_session(agent_type, options.into_native()).await?;
+	spawn_session_event_forwarder(vm, ctx, &session.session_id);
+	Ok(session)
+}
+
+/// Spawn a detached task that forwards `session/update` notifications
+/// from the agent-os event stream to actor subscribers via
+/// `ctx.broadcast("sessionEvent", payload)`. Errors during subscription
+/// or broadcast are logged but don't propagate — failing to wire events
+/// shouldn't fail the session creation.
+fn spawn_session_event_forwarder(
+	vm: &AgentOs,
+	ctx: &Ctx<AgentOsActor>,
+	session_id: &str,
+) {
+	let (stream, subscription) = match vm.on_session_event(session_id) {
+		Ok(pair) => pair,
+		Err(error) => {
+			tracing::warn!(
+				?error,
+				session_id,
+				"failed to subscribe to session events; sessionEvent broadcasts disabled"
+			);
+			return;
+		}
+	};
+	let ctx = ctx.clone();
+	let session_id_owned = session_id.to_owned();
+	tracing::info!(
+		session_id = %session_id_owned,
+		"session-event forwarder spawned"
+	);
+	tokio::spawn(async move {
+		// Hold the subscription handle alive for the lifetime of the
+		// forwarder task; dropping it cancels the underlying stream.
+		let _subscription = subscription;
+		let mut stream = stream;
+		let mut event_count: u64 = 0;
+		while let Some(notification) = stream.next().await {
+			event_count += 1;
+			let payload = SessionEventPayload {
+				session_id: &session_id_owned,
+				event: &notification,
+			};
+			tracing::info!(
+				session_id = %session_id_owned,
+				event_count,
+				method = %notification.method,
+				"forwarding session event"
+			);
+			if let Err(error) = ctx.broadcast("sessionEvent", &payload) {
+				tracing::warn!(
+					?error,
+					session_id = %session_id_owned,
+					"sessionEvent broadcast failed"
+				);
+			}
+		}
+		tracing::info!(
+			session_id = %session_id_owned,
+			event_count,
+			"session-event forwarder exiting; stream closed"
+		);
+	});
+}
+
+#[derive(Serialize)]
+struct SessionEventPayload<'a> {
+	#[serde(rename = "sessionId")]
+	session_id: &'a str,
+	event: &'a JsonRpcNotification,
 }
 
 /// `sendPrompt(sessionId, text)` — port of [`AgentOs::prompt`]. Replies

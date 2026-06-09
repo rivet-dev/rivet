@@ -8,7 +8,7 @@
  * configuration and hands it across the bridge.
  */
 
-import { actor, type ActorDefinition } from "@/actor/mod";
+import { actor, type ActorDefinition, event } from "@/actor/mod";
 import type { DatabaseProvider, RawAccess } from "@/common/database/config";
 import type {
 	ActorFactoryHandle,
@@ -20,7 +20,50 @@ import {
 	type AgentOsActorConfigInput,
 	agentOsActorConfigSchema,
 } from "../config";
-import type { AgentOsActorState, AgentOsActorVars } from "../types";
+import type {
+	AgentOsActorState,
+	AgentOsActorVars,
+	CronEventPayload,
+	PermissionRequestPayload,
+	ProcessExitPayload,
+	ProcessOutputPayload,
+	SessionEventPayload,
+	ShellDataPayload,
+	VmBootedPayload,
+	VmShutdownPayload,
+} from "../types";
+
+// Event tokens — declare the payload shape for each event the Rust run
+// loop broadcasts. Tokens are passed to the underlying `actor({...})`
+// helper as the schema map AND used as the `typeof`-source for the
+// declared event surface on `AgentOsActorDefinition`. So a TS consumer
+// writing `agent.on("sessionEvent", (data) => ...)` gets `data` typed
+// as `SessionEventPayload`.
+//
+// Only `vmBooted` / `vmShutdown` / `sessionEvent` are currently
+// broadcast by the Rust side; the others are declared so the surface
+// is stable when the corresponding fan-out wiring lands in later
+// phases (process output/exit, shell data, cron events, permission
+// requests).
+const sessionEventToken = event<SessionEventPayload>();
+const permissionRequestToken = event<PermissionRequestPayload>();
+const vmBootedToken = event<VmBootedPayload>();
+const vmShutdownToken = event<VmShutdownPayload>();
+const processOutputToken = event<ProcessOutputPayload>();
+const processExitToken = event<ProcessExitPayload>();
+const shellDataToken = event<ShellDataPayload>();
+const cronEventToken = event<CronEventPayload>();
+
+type AgentOsActorEvents = {
+	sessionEvent: typeof sessionEventToken;
+	permissionRequest: typeof permissionRequestToken;
+	vmBooted: typeof vmBootedToken;
+	vmShutdown: typeof vmShutdownToken;
+	processOutput: typeof processOutputToken;
+	processExit: typeof processExitToken;
+	shellData: typeof shellDataToken;
+	cronEvent: typeof cronEventToken;
+};
 
 /**
  * Build the JSON envelope the Rust crate consumes. The Rust deserializer
@@ -223,9 +266,11 @@ function buildNativeFactoryBuilder<TConnParams>(
 }
 
 /**
- * Type alias for the `agentOs(...)` return type. Events are not typed at
- * the TS surface because the Rust factory owns the broadcast set and the
- * test/client surface uses `any` for actions.
+ * Type alias for the `agentOs(...)` return type. The events generic is
+ * populated with declared tokens so `agent.on("sessionEvent", handler)`
+ * typechecks with `handler` receiving a `SessionEventPayload`. Actions
+ * stay `any` because the Rust factory owns dispatch — the TS client
+ * surface intentionally accepts any action name and forwards.
  */
 export type AgentOsActorDefinition<TConnParams> = ActorDefinition<
 	AgentOsActorState,
@@ -234,7 +279,7 @@ export type AgentOsActorDefinition<TConnParams> = ActorDefinition<
 	AgentOsActorVars,
 	undefined,
 	DatabaseProvider<RawAccess>,
-	Record<never, never>,
+	AgentOsActorEvents,
 	Record<never, never>,
 	any
 >;
@@ -246,12 +291,24 @@ export function agentOs<TConnParams = undefined>(
 		config,
 	) as AgentOsActorConfig<TConnParams>;
 
-	// Construct a minimal definition through the existing actor() helper,
-	// then attach the Rust factory builder marker. The actions block stays
-	// empty because no JS-side action ever runs: the engine driver branches
-	// on `nativeFactoryBuilder` before reaching the JS dispatch path.
+	// Construct a minimal definition through the existing actor() helper.
+	// Pass the event tokens so the schema is registered with the framework
+	// (mirrors what a hand-written `actor({...})` definition would do).
+	// Then attach the Rust factory builder marker; no JS-side action ever
+	// runs because the engine driver branches on `nativeFactoryBuilder`
+	// before reaching the JS dispatch path.
 	const definition = actor({
 		actions: {},
+		events: {
+			sessionEvent: sessionEventToken,
+			permissionRequest: permissionRequestToken,
+			vmBooted: vmBootedToken,
+			vmShutdown: vmShutdownToken,
+			processOutput: processOutputToken,
+			processExit: processExitToken,
+			shellData: shellDataToken,
+			cronEvent: cronEventToken,
+		},
 	}) as unknown as AgentOsActorDefinition<TConnParams>;
 	definition.nativeFactoryBuilder = buildNativeFactoryBuilder(parsed);
 	return definition;
