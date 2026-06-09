@@ -1,6 +1,5 @@
 import { stringifyError } from "@/common/utils";
 import type { SqliteNativeMetrics } from "@/common/database/config";
-import { getRivetkitRuntimeMode } from "@/utils/env-vars";
 import type { RegistryConfig } from "./config";
 import { logger } from "./log";
 
@@ -264,7 +263,6 @@ export interface RuntimeServeConfig {
 	serverlessClientToken?: string;
 	serverlessValidateEndpoint: boolean;
 	serverlessMaxStartPayloadBytes: number;
-	forceNormalRunnerConfigUpsert?: boolean;
 }
 
 export interface RuntimeListenerConfig {
@@ -636,9 +634,6 @@ export async function buildServeConfig(
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =
 			process.env._RIVET_TEST_INSPECTOR_TOKEN ?? "token";
-	}
-	if (getRivetkitRuntimeMode() === "envoy") {
-		serveConfig.forceNormalRunnerConfigUpsert = true;
 	}
 
 	return serveConfig;

@@ -335,7 +335,7 @@ export class Registry<A extends RegistryActors> {
 	 * the registry's serverless endpoints over it. Resolves only after the
 	 * registry is shut down (SIGINT/SIGTERM or `nativeRegistry.shutdown()`).
 	 *
-	 * @param opts.port      Port to listen on. Defaults to `process.env.PORT`
+	 * @param opts.port      Port to listen on. Defaults to `process.env.RIVET_PORT`
 	 *                       if set, otherwise 3000.
 	 * @param opts.host      Address to bind. Defaults to `0.0.0.0`.
 	 * @param opts.publicDir If set, serves static files from this directory
@@ -350,7 +350,7 @@ export class Registry<A extends RegistryActors> {
 	public async listen(
 		opts: { port?: number; host?: string; publicDir?: string } = {},
 	): Promise<void> {
-		const port = opts.port ?? parsePortEnv(process.env.PORT) ?? 3000;
+		const port = opts.port ?? parsePortEnv(process.env.RIVET_PORT) ?? 3000;
 		const publicDir = opts.publicDir ?? getRivetkitPublicDir();
 		const config = this.parseConfig();
 
@@ -693,14 +693,9 @@ export class Registry<A extends RegistryActors> {
 	/**
 	 * Starts the actor envoy for standalone server deployments.
 	 *
-	 * Auto-promotes to `listen()` when `NODE_ENV === "production"` so the
-	 * same `start()` call boots an HTTP listener in deployed containers
-	 * while keeping the persistent-envoy WS behavior in local development.
-	 * The `RIVETKIT_AUTO_LISTEN` env var overrides the heuristic: `1`
-	 * forces auto-listen on, `0` forces it off.
-	 *
-	 * Mode A (envoy) and Mode B (listener) are mutually exclusive per
-	 * registry instance.
+	 * Set `RIVETKIT_RUNTIME_MODE=serverless` to instead bind an HTTP listener
+	 * via `listen()` (Mode B). Mode A (envoy) and Mode B (listener) are
+	 * mutually exclusive per registry instance.
 	 *
 	 * @example
 	 * ```ts

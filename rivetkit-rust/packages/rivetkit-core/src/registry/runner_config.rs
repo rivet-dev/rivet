@@ -17,8 +17,8 @@ struct Datacenter {
 	name: String,
 }
 
-pub(super) async fn ensure_normal_runner_config(config: &ServeConfig) -> Result<()> {
-	if !is_local_engine_endpoint(&config.endpoint) && !config.force_normal_runner_config_upsert {
+pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> Result<()> {
+	if !is_local_engine_endpoint(&config.endpoint) {
 		return Ok(());
 	}
 
@@ -51,7 +51,7 @@ pub(super) async fn ensure_normal_runner_config(config: &ServeConfig) -> Result<
 		.json(&body)
 		.send()
 		.await
-		.context("upsert normal runner config")?;
+		.context("upsert local runner config")?;
 	let status = response.status();
 	if !status.is_success() {
 		let response_body = response
@@ -59,7 +59,7 @@ pub(super) async fn ensure_normal_runner_config(config: &ServeConfig) -> Result<
 			.await
 			.context("read failed runner config response body")?;
 		anyhow::bail!(
-			"failed to upsert normal runner config `{}`: {} {}",
+			"failed to upsert local runner config `{}`: {} {}",
 			config.pool_name,
 			status,
 			response_body
@@ -69,7 +69,7 @@ pub(super) async fn ensure_normal_runner_config(config: &ServeConfig) -> Result<
 	tracing::debug!(
 		namespace = %config.namespace,
 		pool_name = %config.pool_name,
-		"ensured normal runner config"
+		"ensured local normal runner config"
 	);
 
 	Ok(())
@@ -80,7 +80,7 @@ async fn get_datacenters(client: &Client, config: &ServeConfig) -> Result<Datace
 	let response = apply_auth(client.get(url), config)
 		.send()
 		.await
-		.context("get datacenters")?;
+		.context("get local datacenters")?;
 	let status = response.status();
 	if !status.is_success() {
 		let response_body = response
@@ -88,7 +88,7 @@ async fn get_datacenters(client: &Client, config: &ServeConfig) -> Result<Datace
 			.await
 			.context("read failed datacenters response body")?;
 		anyhow::bail!(
-			"failed to get datacenters for runner config: {} {}",
+			"failed to get local datacenters for runner config: {} {}",
 			status,
 			response_body
 		);

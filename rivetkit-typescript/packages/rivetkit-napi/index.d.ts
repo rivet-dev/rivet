@@ -186,7 +186,6 @@ export interface JsServeConfig {
   serverlessClientToken?: string
   serverlessValidateEndpoint: boolean
   serverlessMaxStartPayloadBytes: number
-  forceNormalRunnerConfigUpsert?: boolean
 }
 export interface JsListenerConfig {
   /** Host to bind. Defaults to `0.0.0.0` when not provided. */

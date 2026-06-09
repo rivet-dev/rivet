@@ -68,9 +68,9 @@ These variables configure how clients connect to your actors.
 
 | Environment Variable | Description |
 |---------------------|-------------|
-| `RIVETKIT_RUNTIME_MODE` | Controls how `registry.start()` runs. `envoy` opens a long-lived WebSocket to the engine (Mode A) and auto-upserts a normal runner config to the engine on startup (even against remote endpoints). `serverless` binds an HTTP listener via `registry.listen()` (Mode B) and leaves runner-config management to the caller. Resolution: explicit value > `RAILWAY_DEPLOYMENT_ID` set → `envoy` > `NODE_ENV=production` → `serverless` > dev default `envoy`. |
-| `RAILWAY_DEPLOYMENT_ID` | Automatically set by Railway. RivetKit uses presence to default `RIVETKIT_RUNTIME_MODE=envoy` when not explicitly set. |
+| `RIVETKIT_RUNTIME_MODE` | Controls how `registry.start()` runs. Defaults to `envoy`: opens a long-lived WebSocket to the engine (Mode A). Set to `serverless` to bind an HTTP listener via `registry.listen()` (Mode B). |
 | `RIVETKIT_PUBLIC_DIR` | Directory of static assets to serve alongside the framework routes when calling `registry.listen()`. Used as a fallback when `opts.publicDir` is not passed. On auto-listen via `registry.start()`, defaults to `/public` when this env var is unset. |
+| `RIVET_PORT` | Port the listener binds when calling `registry.listen()` without an explicit `opts.port`. Must be an integer between 1 and 65535. Defaults to `3000`. |
 
 ## Logging
 

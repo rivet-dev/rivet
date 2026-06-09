@@ -52,14 +52,10 @@ export const getRivetkitRuntime = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_RUNTIME");
 export type RuntimeMode = "envoy" | "serverless";
 
-export const getRivetkitRuntimeMode = (): RuntimeMode => {
-	const explicit = getEnvUniversal("RIVETKIT_RUNTIME_MODE");
-	if (explicit === "envoy" || explicit === "serverless") return explicit;
-	const railwayId = getEnvUniversal("RAILWAY_DEPLOYMENT_ID");
-	if (railwayId !== undefined && railwayId !== "") return "envoy";
-	if (getNodeEnv() === "production") return "serverless";
-	return "envoy";
-};
+export const getRivetkitRuntimeMode = (): RuntimeMode =>
+	getEnvUniversal("RIVETKIT_RUNTIME_MODE") === "serverless"
+		? "serverless"
+		: "envoy";
 
 export const getRivetkitPublicDir = (): string | undefined => {
 	const value = getEnvUniversal("RIVETKIT_PUBLIC_DIR");
@@ -76,7 +72,7 @@ export function parsePortEnv(raw: string | undefined): number | undefined {
 		String(parsed) !== raw.trim()
 	) {
 		throw new Error(
-			`PORT env var must be an integer between 1 and 65535; got "${raw}"`,
+			`RIVET_PORT env var must be an integer between 1 and 65535; got "${raw}"`,
 		);
 	}
 	return parsed;
