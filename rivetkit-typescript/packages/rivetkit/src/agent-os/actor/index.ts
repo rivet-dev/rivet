@@ -71,6 +71,19 @@ export function buildConfigJson<TConnParams>(
 	}
 	if (typeof options?.moduleAccessCwd === "string") {
 		out.moduleAccessCwd = options.moduleAccessCwd;
+	} else {
+		// Infer `moduleAccessCwd` from the first agent/tool descriptor so
+		// `agent-os-client`'s `resolve_package_bin` can resolve the
+		// adapter package's bin entry, AND the host's `node_modules` tree
+		// can be projected via the module-access mount into the VM's
+		// `/root/node_modules` without crossing symlinks that point
+		// outside the mount root (the rivetkit pnpm layout symlinks
+		// pi → /...../.pnpm/{key}/node_modules/@rivet-dev/agent-os-pi).
+		// The packageDir already comes through as a realpath, so walking
+		// up to the `node_modules` ancestor and taking its parent yields
+		// a directory whose subtree is symlink-free under `node_modules`.
+		const inferredCwd = inferModuleAccessCwd(rawSoftware);
+		if (inferredCwd) out.moduleAccessCwd = inferredCwd;
 	}
 	if (Array.isArray(options?.loopbackExemptPorts)) {
 		const ports = options.loopbackExemptPorts.filter(
@@ -114,6 +127,43 @@ interface AgentOsOptionsLoose {
  * from the descriptor's structure. Returns `null` for descriptors that
  * carry no usable host path so the caller can drop them silently.
  */
+/**
+ * Walk up from a packageDir until we find an ancestor named
+ * `node_modules`, then return its parent. Returns `null` if no
+ * `node_modules` ancestor is found within a sane depth (handles
+ * malformed paths defensively).
+ */
+function packageDirToModuleAccessCwd(packageDir: string): string | null {
+	const segments = packageDir.split("/");
+	for (let i = segments.length - 1; i >= 0; i--) {
+		if (segments[i] === "node_modules") {
+			return segments.slice(0, i).join("/") || "/";
+		}
+	}
+	return null;
+}
+
+function inferModuleAccessCwd(
+	rawSoftware: unknown[] | undefined,
+): string | null {
+	if (!Array.isArray(rawSoftware)) return null;
+	for (const entry of rawSoftware) {
+		const candidates = Array.isArray(entry) ? entry : [entry];
+		for (const descriptor of candidates) {
+			if (!descriptor || typeof descriptor !== "object") continue;
+			const obj = descriptor as Record<string, unknown>;
+			const type = obj.type;
+			if (type !== "agent" && type !== "tool") continue;
+			const packageDir = obj.packageDir;
+			if (typeof packageDir !== "string" || packageDir.length === 0)
+				continue;
+			const cwd = packageDirToModuleAccessCwd(packageDir);
+			if (cwd) return cwd;
+		}
+	}
+	return null;
+}
+
 function mapSoftwareDescriptor(
 	descriptor: unknown,
 ): AgentOsConfigJsonSoftwareEntry | null {

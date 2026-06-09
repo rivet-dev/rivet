@@ -337,6 +337,55 @@ server.listen(9876, "127.0.0.1", () => {
 				const jobsAfter = await actor.listCronJobs();
 				expect(jobsAfter.some((j: any) => j.id === id)).toBe(false);
 			}, 60_000);
+
+			// --- Session (gated: requires ANTHROPIC_API_KEY) ---
+
+			// Verifies the full agent-session chain: JS → engine → NAPI →
+			// Rust dispatch → agent-os-client → sidecar → Pi CLI →
+			// Anthropic API → reply back through every layer. Gated so CI
+			// without credentials doesn't run it.
+			test.skipIf(!process.env.ANTHROPIC_API_KEY)(
+				"createSession + sendPrompt round-trip against live Pi agent",
+				async (c) => {
+					const { client } = await setupDriverTest(c, {
+						...driverTestConfig,
+						useRealTimers: true,
+					});
+					const actor = client.agentOsTestActor.getOrCreate([
+						`session-${crypto.randomUUID()}`,
+					]);
+
+					const session = await actor.createSession("pi", {
+						env: {
+							ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
+						},
+						// `/etc/agentos/instructions.md` isn't seeded by
+						// default; skip the OS-instruction injection step.
+						skipOsInstructions: true,
+					});
+					expect(typeof session.sessionId).toBe("string");
+					expect(session.sessionId.length).toBeGreaterThan(0);
+
+					const reply = await actor.sendPrompt(
+						session.sessionId,
+						"Reply with exactly the word: pong",
+					);
+					expect(typeof reply.text).toBe("string");
+					expect(reply.text.length).toBeGreaterThan(0);
+					// Don't pin the exact response — the model may add
+					// punctuation or framing. Just confirm the word "pong"
+					// showed up (case-insensitive).
+					expect(reply.text.toLowerCase()).toContain("pong");
+
+					const sessions = await actor.listSessions();
+					expect(
+						sessions.some((s: any) => s.sessionId === session.sessionId),
+					).toBe(true);
+
+					await actor.closeSession(session.sessionId);
+				},
+				120_000,
+			);
 		},
 	);
 });
