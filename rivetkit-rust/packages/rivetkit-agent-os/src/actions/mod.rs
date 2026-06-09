@@ -6,7 +6,9 @@
 //! `JSON_COMPAT_UINT8_ARRAY` convention thanks to `Action::ok` running
 //! through `encode_json_compat`.
 
+pub mod cron;
 pub mod filesystem;
+pub mod net;
 pub mod process;
 pub mod session;
 
@@ -15,6 +17,7 @@ use anyhow::{Result, anyhow};
 use rivetkit::{Action, Ctx};
 
 use crate::actor::AgentOsActor;
+use cron::ScheduleCronOptionsArg;
 use filesystem::{WriteFileContent, WriteFilesEntryArg};
 use session::CreateSessionOptionsDto;
 
@@ -287,6 +290,40 @@ pub async fn dispatch(vm: &AgentOs, ctx: &Ctx<AgentOsActor>, action: Action<Agen
 					Ok(()) => action.ok(&()),
 					Err(error) => action.err(error),
 				},
+				Err(error) => action.err(error),
+			}
+		}
+		"vmFetch" => {
+			let args: Result<(u16, String)> = action.decode_as();
+			match args {
+				Ok((port, url)) => match net::vm_fetch(vm, port, &url).await {
+					Ok(reply) => action.ok(&reply),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"scheduleCron" => {
+			let args: Result<(ScheduleCronOptionsArg,)> = action.decode_as();
+			match args {
+				Ok((options,)) => match cron::schedule_cron(vm, options) {
+					Ok(handle) => action.ok(&handle),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"listCronJobs" => {
+			let jobs = cron::list_cron_jobs(vm);
+			action.ok(&jobs);
+		}
+		"cancelCronJob" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((id,)) => {
+					cron::cancel_cron_job(vm, &id);
+					action.ok(&());
+				}
 				Err(error) => action.err(error),
 			}
 		}

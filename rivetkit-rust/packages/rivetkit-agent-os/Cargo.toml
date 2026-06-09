@@ -9,8 +9,11 @@ edition.workspace = true
 agent-os-client = { path = "../../../ext/agent-os/crates/client" }
 anyhow.workspace = true
 base64.workspace = true
+bytes.workspace = true
+chrono.workspace = true
 ciborium.workspace = true
 futures.workspace = true
+http.workspace = true
 rivet-error.workspace = true
 rivetkit = { path = "../rivetkit" }
 rivetkit-core = { path = "../rivetkit-core" }
