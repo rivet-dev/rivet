@@ -400,10 +400,11 @@ function getOrCreateActor<
 	};
 }
 
-function create<
-	Registry extends AnyActorRegistry,
-	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
->(client: Client<Registry>, store: Store<InternalRivetKitStore>, key: string) {
+function create<Registry extends AnyActorRegistry>(
+	client: Client<Registry>,
+	store: Store<InternalRivetKitStore>,
+	key: string,
+) {
 	const actor = store.state.actors[key];
 	if (!actor) {
 		throw new Error(
@@ -432,13 +433,14 @@ function create<
 
 		// Store connection BEFORE registering callbacks to avoid race condition
 		// where status change fires before connection is stored
+		// framework-base stores every handle in a store typed as
+		// ActorHandle<AnyActorDefinition>, so the specific actor type is
+		// erased here regardless. Cast straight to the store's field type to
+		// avoid relating the deep Registry-generic type against
+		// AnyActorDefinition, which exceeds TS's instantiation-depth limit.
 		updateActor(store, key, {
-			handle: handle as ActorHandle<
-				ExtractActorsFromRegistry<Registry>[ActorName]
-			>,
-			connection: connection as ActorConn<
-				ExtractActorsFromRegistry<Registry>[ActorName]
-			>,
+			handle: handle as unknown as ActorHandle<AnyActorDefinition>,
+			connection: connection as unknown as ActorConn<AnyActorDefinition>,
 		});
 
 		// Subscribe to connection state changes

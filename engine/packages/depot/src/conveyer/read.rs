@@ -20,13 +20,14 @@ use crate::fault::{
 	ReadFaultPoint,
 };
 use anyhow::{Context, Result, ensure};
+use futures_util::{StreamExt, TryStreamExt, stream};
 
 use crate::conveyer::{
 	Db,
 	db::{BranchAncestry, CacheSnapshot, touch_access_if_bucket_advanced},
 	error::SqliteStorageError,
 	keys::{self, PAGE_SIZE, SHARD_SIZE},
-	ltx::{DecodedLtx, decode_ltx_v3},
+	ltx::{LtxBlob, decode_ltx_v3},
 	metrics,
 	page_index::DeltaPageIndex,
 	types::{
@@ -36,12 +37,18 @@ use crate::conveyer::{
 };
 
 use self::{
-	cold::{ColdLayerCandidate, ColdPageCandidate, tx_load_latest_compaction_cold_ref},
+	cold::{
+		ColdLayerCandidate, ColdPageCandidate, CompactionColdShardCandidate,
+		tx_load_latest_compaction_cold_ref,
+	},
 	pidx::{PageRef, PageRefKind, decode_pidx_txid},
 	plan::{ReadSource, StorageScope, resolve_storage_scope},
-	shard::{tx_load_delta_blob, tx_load_latest_shard_blob},
+	shard::{DeltaBlobLoad, ShardBlobLoad, tx_load_delta_blob, tx_load_latest_shard_blob},
 	tx::{tx_get_value, tx_scan_prefix_values},
 };
+
+/// Maximum number of concurrent FDB reads issued while prefetching page sources.
+const PAGE_SOURCE_FETCH_CONCURRENCY: usize = 32;
 
 impl Db {
 	pub async fn get_pages(&self, pgnos: Vec<u32>) -> Result<Vec<FetchedPage>> {
@@ -89,6 +96,10 @@ impl Db {
 		#[cfg(not(feature = "pidx-cache"))]
 		let cached_pidx = None::<BTreeMap<u32, Option<u64>>>;
 		let cached_branch_id = cached_snapshot.as_ref().map(|snapshot| snapshot.branch_id);
+		#[cfg(feature = "pidx-cache")]
+		let cached_head_txid = cached_snapshot
+			.as_ref()
+			.map(|snapshot| snapshot.cache_head_txid);
 		let cached_ancestry = cached_snapshot
 			.as_ref()
 			.map(|snapshot| snapshot.ancestors.clone());
@@ -104,12 +115,14 @@ impl Db {
 		let diagnostic_max_txid = options.diagnostic_max_txid;
 		let collect_provenance = options.collect_provenance;
 		let phase_node_id = node_id.clone();
+		let ltx_blob_cache = self.ltx_blob_cache.clone();
 		#[cfg(feature = "test-faults")]
 		let fault_controller = self.fault_controller.clone();
 		let tx_result = self
 			.udb
 			.txn("depot_get_pages", move |tx| {
 				let phase_node_id = phase_node_id.clone();
+				let ltx_blob_cache = ltx_blob_cache.clone();
 				let database_id = database_id.clone();
 				let bucket_id = bucket_id;
 				let pgnos = pgnos_for_tx.clone();
@@ -126,6 +139,8 @@ impl Db {
 				async move {
 					let mut debug = GetPagesDebug::default();
 					debug.pages_requested = pgnos.len();
+					debug.requested_pgno_min = pgnos.iter().copied().min().unwrap_or(0);
+					debug.requested_pgno_max = pgnos.iter().copied().max().unwrap_or(0);
 					#[cfg(feature = "test-faults")]
 					maybe_fire_read_fault(
 						&fault_controller,
@@ -150,7 +165,19 @@ impl Db {
 						phase_start,
 						"ok",
 					);
-					let cached_pidx = if cached_branch_id == Some(scope.branch_id()) {
+					let cache_branch_matches = cached_branch_id == Some(scope.branch_id());
+					// A page's content is a pure function of (branch_id, head_txid): content
+					// changes only via a commit, which advances the head. Trust the cached PIDX
+					// only when the head it was built at still matches the head resolved in this
+					// transaction, so a foreign writer advancing the head forces a fresh scan.
+					#[cfg(feature = "pidx-cache")]
+					let cache_head_matches = {
+						let StorageScope::Branch(plan) = &scope;
+						cached_head_txid == Some(plan.head.head_txid)
+					};
+					#[cfg(not(feature = "pidx-cache"))]
+					let cache_head_matches = true;
+					let cached_pidx = if cache_branch_matches && cache_head_matches {
 						cached_pidx
 					} else {
 						None
@@ -239,6 +266,15 @@ impl Db {
 					let phase_start = Instant::now();
 					let mut pidx_by_pgno = BTreeMap::<u32, PageRef>::new();
 					let mut loaded_pidx_rows = None;
+					{
+						let StorageScope::Branch(plan_for_debug) = &scope;
+						debug.sources_len = plan_for_debug.sources.len();
+						debug.head_source_max_txid = plan_for_debug
+							.sources
+							.first()
+							.map(|source| source.max_txid())
+							.unwrap_or(0);
+					}
 					let cache_source = cache::cache_source_for_scope(&scope);
 					if let (Some(cache_source), Some(cached_pidx)) =
 						(cache_source, cached_pidx.as_ref())
@@ -261,17 +297,44 @@ impl Db {
 					} else {
 						debug.pidx_cache_hit = false;
 						let StorageScope::Branch(plan) = &scope;
-						for source in &plan.sources {
-							let rows =
-								tx_scan_prefix_values(&tx, &source.pidx_prefix(&database_id))
+						// Scan every source's PIDX prefix concurrently. A forked database has
+						// up to MAX_FORK_DEPTH sources, and these are independent reads on the
+						// same transaction, so we pipeline them instead of awaiting serially.
+						let pidx_tx_ref = &tx;
+						let pidx_db_ref = &database_id;
+						let mut scanned_pidx_rows: BTreeMap<usize, Vec<(Vec<u8>, Vec<u8>)>> =
+							stream::iter(plan.sources.iter().copied().enumerate())
+								.map(move |(idx, source)| async move {
+									let rows = tx_scan_prefix_values(
+										pidx_tx_ref,
+										&source.pidx_prefix(pidx_db_ref),
+									)
 									.await?;
+									Result::<(usize, Vec<(Vec<u8>, Vec<u8>)>)>::Ok((idx, rows))
+								})
+								.buffer_unordered(PAGE_SOURCE_FETCH_CONCURRENCY)
+								.try_collect()
+								.await?;
+						// Process sources in priority order so the first source that owns a
+						// page wins, matching the sequential scan's `or_insert` semantics.
+						for (idx, source) in plan.sources.iter().enumerate() {
+							let rows = scanned_pidx_rows
+								.remove(&idx)
+								.expect("every pidx source scanned");
 							debug.pidx_sources_scanned += 1;
 							debug.pidx_rows_scanned += rows.len();
 							let mut decoded_rows = Vec::new();
 							for (key, value) in rows {
 								let pgno = source.decode_pidx_pgno(&database_id, &key)?;
 								let txid = decode_pidx_txid(&value)?;
+								if debug.scanned_txid_min == 0 || txid < debug.scanned_txid_min {
+									debug.scanned_txid_min = txid;
+								}
+								if txid > debug.scanned_txid_max {
+									debug.scanned_txid_max = txid;
+								}
 								if txid > source.max_txid() {
+									debug.pidx_rows_filtered_above_max_txid += 1;
 									continue;
 								}
 								pidx_by_pgno.entry(pgno).or_insert(PageRef {
@@ -337,6 +400,161 @@ impl Db {
 					let mut touched_cache_backed_page = false;
 
 					let phase_start = Instant::now();
+
+					// Phase 1: prefetch every unique delta blob, shard blob, and cold ref
+					// concurrently. The assembly loop below dedups loads per delta prefix and
+					// per shard, so we resolve the unique keys here, fetch each exactly once,
+					// and let the loop read from these maps instead of awaiting inline.
+					let tx_ref = &tx;
+					let scope_ref = &scope;
+					let ltx_blob_cache_ref = &ltx_blob_cache;
+					#[cfg(feature = "test-faults")]
+					let database_id_ref = &database_id;
+					#[cfg(feature = "test-faults")]
+					let fault_controller_ref = &fault_controller;
+
+					// Unique delta prefixes referenced by PIDX, paired with the first page that
+					// references them so fault injection stays attributed to the same page as
+					// the sequential path.
+					let mut delta_prefix_triggers: Vec<(Vec<u8>, u32)> = Vec::new();
+					{
+						let mut seen = BTreeSet::new();
+						for pgno in &pgnos_in_range {
+							if let Some(page_ref) = pidx_by_pgno.get(pgno) {
+								let prefix = page_ref
+									.source
+									.delta_chunk_prefix(&database_id, page_ref.txid);
+								if seen.insert(prefix.clone()) {
+									delta_prefix_triggers.push((prefix, *pgno));
+								}
+							}
+						}
+					}
+
+					let delta_blobs: BTreeMap<Vec<u8>, DeltaBlobLoad> =
+						stream::iter(delta_prefix_triggers)
+							.map(move |(prefix, trigger_pgno)| async move {
+								let load =
+									tx_load_delta_blob(tx_ref, &prefix, ltx_blob_cache_ref).await?;
+								#[cfg(feature = "test-faults")]
+								let load = {
+									let mut load = load;
+									if matches!(
+										maybe_fire_read_fault(
+											fault_controller_ref,
+											if load.blob.is_some() {
+												ReadFaultPoint::AfterDeltaBlobLoad
+											} else {
+												ReadFaultPoint::DeltaBlobMissing
+											},
+											database_id_ref,
+											Some(scope_ref.branch_id()),
+											Some(trigger_pgno),
+											Some(trigger_pgno / SHARD_SIZE),
+										)
+										.await?,
+										Some(DepotFaultFired {
+											action: DepotFaultAction::DropArtifact,
+											..
+										})
+									) {
+										load.blob = None;
+									}
+									load
+								};
+								#[cfg(not(feature = "test-faults"))]
+								let _ = trigger_pgno;
+								Result::<(Vec<u8>, DeltaBlobLoad)>::Ok((prefix, load))
+							})
+							.buffer_unordered(PAGE_SOURCE_FETCH_CONCURRENCY)
+							.try_collect()
+							.await?;
+
+					// Shards are only consulted for pages whose preferred delta is absent or
+					// whose delta blob is missing. Collect the unique shards for those pages,
+					// keeping the first referencing page for fault attribution.
+					let mut shard_triggers: Vec<(u32, u32)> = Vec::new();
+					{
+						let mut seen = BTreeSet::new();
+						for pgno in &pgnos_in_range {
+							let has_present_delta =
+								pidx_by_pgno.get(pgno).is_some_and(|page_ref| {
+									let prefix = page_ref
+										.source
+										.delta_chunk_prefix(&database_id, page_ref.txid);
+									delta_blobs
+										.get(&prefix)
+										.and_then(|load| load.blob.as_ref())
+										.is_some()
+								});
+							if has_present_delta {
+								continue;
+							}
+							let shard_id = pgno / SHARD_SIZE;
+							if seen.insert(shard_id) {
+								shard_triggers.push((shard_id, *pgno));
+							}
+						}
+					}
+
+					let shard_blobs: BTreeMap<u32, ShardBlobLoad> = stream::iter(shard_triggers)
+						.map(move |(shard_id, trigger_pgno)| async move {
+							let load =
+								tx_load_latest_shard_blob(tx_ref, scope_ref, shard_id).await?;
+							#[cfg(feature = "test-faults")]
+							let load = {
+								let mut load = load;
+								if matches!(
+									maybe_fire_read_fault(
+										fault_controller_ref,
+										ReadFaultPoint::AfterShardBlobLoad,
+										database_id_ref,
+										Some(scope_ref.branch_id()),
+										Some(trigger_pgno),
+										Some(shard_id),
+									)
+									.await?,
+									Some(DepotFaultFired {
+										action: DepotFaultAction::DropArtifact,
+										..
+									})
+								) {
+									load.source = None;
+								}
+								load
+							};
+							#[cfg(not(feature = "test-faults"))]
+							let _ = trigger_pgno;
+							Result::<(u32, ShardBlobLoad)>::Ok((shard_id, load))
+						})
+						.buffer_unordered(PAGE_SOURCE_FETCH_CONCURRENCY)
+						.try_collect()
+						.await?;
+
+					// Cold refs are consulted for pages whose shard blob is missing. The result
+					// depends only on the shard, so dedup by shard here; the per-page
+					// `ColdRefSelected` fault stays in the assembly loop below.
+					let cold_ref_shards: Vec<u32> = shard_blobs
+						.iter()
+						.filter(|(_, load)| load.source.is_none())
+						.map(|(shard_id, _)| *shard_id)
+						.collect();
+
+					let cold_refs: BTreeMap<u32, Option<CompactionColdShardCandidate>> =
+						stream::iter(cold_ref_shards)
+							.map(move |shard_id| async move {
+								let reference = tx_load_latest_compaction_cold_ref(
+									tx_ref, scope_ref, shard_id,
+								)
+								.await?;
+								Result::<(u32, Option<CompactionColdShardCandidate>)>::Ok((
+									shard_id, reference,
+								))
+							})
+							.buffer_unordered(PAGE_SOURCE_FETCH_CONCURRENCY)
+							.try_collect()
+							.await?;
+
 					for pgno in &pgnos_in_range {
 						let mut cold_candidates = Vec::new();
 						let preferred_delta = pidx_by_pgno.get(pgno).copied().map(|page_ref| {
@@ -372,38 +590,14 @@ impl Db {
 							.filter(|(prefix, _, _, _)| !missing_delta_prefixes.contains(prefix))
 						{
 							if !source_blobs.contains_key(delta_prefix) {
-								let delta_load = tx_load_delta_blob(&tx, delta_prefix).await?;
+								let delta_load = delta_blobs
+									.get(delta_prefix)
+									.expect("delta blob prefetched for every PIDX prefix");
 								debug.delta_blob_loads += 1;
 								debug.delta_chunk_rows_scanned += delta_load.chunk_rows_scanned;
-								#[cfg(feature = "test-faults")]
-								let mut blob = delta_load.blob;
-								#[cfg(not(feature = "test-faults"))]
-								let blob = delta_load.blob;
-								#[cfg(feature = "test-faults")]
-								if matches!(
-									maybe_fire_read_fault(
-										&fault_controller,
-										if blob.is_some() {
-											ReadFaultPoint::AfterDeltaBlobLoad
-										} else {
-											ReadFaultPoint::DeltaBlobMissing
-										},
-										&database_id,
-										Some(scope.branch_id()),
-										Some(*pgno),
-										Some(*pgno / SHARD_SIZE),
-									)
-									.await?,
-									Some(DepotFaultFired {
-										action: DepotFaultAction::DropArtifact,
-										..
-									})
-								) {
-									blob = None;
-								}
-								if let Some(blob) = blob {
+								if let Some(blob) = delta_load.blob.as_ref() {
 									debug.delta_blob_bytes += blob.len();
-									source_blobs.insert(delta_prefix.clone(), blob);
+									source_blobs.insert(delta_prefix.clone(), blob.clone());
 								} else {
 									debug.delta_blob_missing += 1;
 									missing_delta_prefixes.insert(delta_prefix.clone());
@@ -450,31 +644,12 @@ impl Db {
 
 						let shard_id = pgno / SHARD_SIZE;
 						if !shard_sources.contains_key(&shard_id) {
-							let shard_load = tx_load_latest_shard_blob(&tx, &scope, shard_id).await?;
+							let shard_load = shard_blobs
+								.get(&shard_id)
+								.expect("shard blob prefetched for every consulted shard");
 							debug.hot_shard_range_scans += 1;
 							debug.hot_shard_rows_scanned += shard_load.rows_scanned;
-							#[cfg(feature = "test-faults")]
-							let mut source = shard_load.source;
-							#[cfg(not(feature = "test-faults"))]
-							let source = shard_load.source;
-							#[cfg(feature = "test-faults")]
-							if matches!(
-								maybe_fire_read_fault(
-									&fault_controller,
-									ReadFaultPoint::AfterShardBlobLoad,
-									&database_id,
-									Some(scope.branch_id()),
-									Some(*pgno),
-									Some(shard_id),
-								)
-								.await?,
-								Some(DepotFaultFired {
-									action: DepotFaultAction::DropArtifact,
-									..
-								})
-							) {
-								source = None;
-							}
+							let source = shard_load.source.clone();
 							if let Some((_, blob)) = source.as_ref() {
 								debug.hot_shard_hits += 1;
 								debug.hot_shard_bytes += blob.len();
@@ -508,9 +683,7 @@ impl Db {
 							shard_cache_read_outcomes.insert(*pgno, ShardCacheReadOutcome::FdbHit);
 							touched_cache_backed_page = true;
 						} else {
-							if let Some(reference) =
-								tx_load_latest_compaction_cold_ref(&tx, &scope, shard_id).await?
-							{
+							if let Some(reference) = cold_refs.get(&shard_id).cloned().flatten() {
 								#[cfg(feature = "test-faults")]
 								let drop_ref = matches!(
 									maybe_fire_read_fault(
@@ -561,6 +734,8 @@ impl Db {
 						"ok",
 					);
 
+					debug.pidx_by_pgno_len = pidx_by_pgno.len();
+					debug.page_sources_len = page_sources.len();
 					let branch_id = scope.branch_id();
 					let access_bucket = if touched_cache_backed_page && read_mode.allows_side_effects() {
 						touch_access_if_bucket_advanced(
@@ -626,7 +801,7 @@ impl Db {
 
 		let mut stale_pidx_pgnos = tx_result.stale_pidx_pgnos;
 
-		let mut decoded_blobs = BTreeMap::new();
+		let mut decoded_blobs = BTreeMap::<Vec<u8>, std::sync::Arc<LtxBlob>>::new();
 		let mut pages = Vec::with_capacity(pgnos.len());
 		let mut provenance = Vec::new();
 		let mut returned_bytes = 0u64;
@@ -662,34 +837,47 @@ impl Db {
 			let (bytes, winner_kind, winner_txid, winner_shard_id) = if let Some(source_key) =
 				tx_result.page_sources.get(&pgno)
 			{
-				let blob = tx_result
-					.source_blobs
-					.get(source_key)
-					.with_context(|| format!("missing source blob for page {pgno}"))?;
-
 				if !decoded_blobs.contains_key(source_key) {
-					let decoded = decode_ltx_v3(blob).with_context(|| {
-						let len = blob.len();
-						let head_n = len.min(64);
-						let tail_start = len.saturating_sub(64);
-						format!(
-							"decode source blob for page {pgno}; \
-							 source_key={}; len={}; head={}; tail={}",
-							crate::compaction::shared::hex_lower(source_key),
-							len,
-							crate::compaction::shared::hex_lower(&blob[..head_n]),
-							crate::compaction::shared::hex_lower(&blob[tail_start..]),
-						)
-					})?;
-					tx_result.debug.decoded_source_blobs += 1;
-					tx_result.debug.decoded_source_bytes += blob.len();
+					// Reuse the immutable blob across reads. The cache holds the parsed
+					// page index plus raw bytes; on a miss we parse the index once (no
+					// page decompression) and cache it.
+					let decoded = if let Some(cached) = self.ltx_blob_cache.get(source_key).await {
+						cached
+					} else {
+						let blob = tx_result
+							.source_blobs
+							.get(source_key)
+							.with_context(|| format!("missing source blob for page {pgno}"))?;
+						let decoded = std::sync::Arc::new(
+							LtxBlob::decode_index(blob.clone()).with_context(|| {
+								let len = blob.len();
+								let head_n = len.min(64);
+								let tail_start = len.saturating_sub(64);
+								format!(
+									"decode source blob for page {pgno}; \
+									 source_key={}; len={}; head={}; tail={}",
+									crate::compaction::shared::hex_lower(source_key),
+									len,
+									crate::compaction::shared::hex_lower(&blob[..head_n]),
+									crate::compaction::shared::hex_lower(&blob[tail_start..]),
+								)
+							})?,
+						);
+						tx_result.debug.decoded_source_blobs += 1;
+						tx_result.debug.decoded_source_bytes += decoded.bytes().len();
+						self.ltx_blob_cache
+							.insert(source_key.clone(), decoded.clone())
+							.await;
+						decoded
+					};
 					decoded_blobs.insert(source_key.clone(), decoded);
 				}
 
 				let mut bytes = decoded_blobs
 					.get(source_key)
-					.and_then(|decoded: &DecodedLtx| decoded.get_page(pgno))
-					.map(ToOwned::to_owned);
+					.map(|decoded| decoded.get_page(pgno))
+					.transpose()?
+					.flatten();
 				let selected = tx_result.selected_candidates.get(&pgno).cloned();
 				let (winner_kind, winner_txid, winner_shard_id) = if bytes.is_some() {
 					let selected = selected.unwrap_or(PageSourceCandidate {
@@ -764,6 +952,24 @@ impl Db {
 			});
 		}
 
+		// Return overflow pages referenced by the requested leaf pages up front.
+		// This runs before taking the cache-snapshot write lock because it issues
+		// nested get_pages calls that take the lock themselves. Expansion is a
+		// best-effort prefetch: an error here must not fail the base read, whose
+		// requested pages are already materialized.
+		if options.expand_overflow {
+			if let Err(err) = self
+				.expand_overflow_pages(&mut pages, tx_result.db_size_pages)
+				.await
+			{
+				tracing::warn!(
+					database_id = %self.database_id,
+					?err,
+					"sqlite overflow prefetch expansion failed; returning base pages",
+				);
+			}
+		}
+
 		if allow_side_effects {
 			self.read_bytes_since_rollup
 				.fetch_add(returned_bytes, std::sync::atomic::Ordering::Relaxed);
@@ -830,6 +1036,7 @@ impl Db {
 				ancestors: tx_result.branch_ancestry,
 				last_access_bucket,
 				pidx,
+				cache_head_txid: tx_result.head_txid,
 			});
 		}
 
@@ -867,7 +1074,7 @@ impl Db {
 		}
 		let elapsed_ms = read_started_at.elapsed().as_millis();
 		if elapsed_ms >= SQLITE_GET_PAGES_DEBUG_SLOW_MS || tx_result.debug.is_expensive() {
-			tracing::info!(
+			tracing::debug!(
 				database_id = %database_id_for_log,
 				bucket_id = ?self.sqlite_bucket_id(),
 				branch_id = ?tx_result.branch_id,
@@ -888,6 +1095,15 @@ impl Db {
 				pidx_cache_rows_used = tx_result.debug.pidx_cache_rows_used,
 				pidx_sources_scanned = tx_result.debug.pidx_sources_scanned,
 				pidx_rows_scanned = tx_result.debug.pidx_rows_scanned,
+				sources_len = tx_result.debug.sources_len,
+				head_source_max_txid = tx_result.debug.head_source_max_txid,
+				requested_pgno_min = tx_result.debug.requested_pgno_min,
+				requested_pgno_max = tx_result.debug.requested_pgno_max,
+				scanned_txid_min = tx_result.debug.scanned_txid_min,
+				scanned_txid_max = tx_result.debug.scanned_txid_max,
+				pidx_rows_filtered_above_max_txid = tx_result.debug.pidx_rows_filtered_above_max_txid,
+				pidx_by_pgno_len = tx_result.debug.pidx_by_pgno_len,
+				page_sources_len = tx_result.debug.page_sources_len,
 				historical_delta_chunk_rows_scanned = tx_result.debug.historical_delta_chunk_rows_scanned,
 				historical_delta_txids_decoded = tx_result.debug.historical_delta_txids_decoded,
 				delta_blob_loads = tx_result.debug.delta_blob_loads,
@@ -977,6 +1193,7 @@ impl Db {
 				GetPagesOptions {
 					expected_head_txid: None,
 					expand_overflow: false,
+					..Default::default()
 				},
 			))
 			.await?
@@ -1045,6 +1262,15 @@ struct GetPagesDebug {
 	pidx_cache_rows_used: usize,
 	pidx_sources_scanned: usize,
 	pidx_rows_scanned: usize,
+	sources_len: usize,
+	head_source_max_txid: u64,
+	requested_pgno_min: u32,
+	requested_pgno_max: u32,
+	scanned_txid_min: u64,
+	scanned_txid_max: u64,
+	pidx_rows_filtered_above_max_txid: usize,
+	pidx_by_pgno_len: usize,
+	page_sources_len: usize,
 	historical_delta_chunk_rows_scanned: usize,
 	historical_delta_txids_decoded: usize,
 	delta_blob_loads: usize,
@@ -1190,13 +1416,29 @@ async fn fill_historical_delta_refs(
 		.collect::<BTreeSet<_>>();
 	let mut refs = BTreeMap::new();
 
-	for source in capped_sources {
+	// Prefetch each capped source's DELTA history concurrently. The per-source
+	// processing below stays sequential to preserve source priority and the
+	// early-exit once every missing page is resolved.
+	let mut scanned_delta_rows: BTreeMap<usize, Vec<(Vec<u8>, Vec<u8>)>> =
+		stream::iter(capped_sources.iter().copied().enumerate())
+			.map(move |(idx, source)| async move {
+				let rows = tx_scan_prefix_values(tx, &source.delta_prefix(database_id)).await?;
+				Result::<(usize, Vec<(Vec<u8>, Vec<u8>)>)>::Ok((idx, rows))
+			})
+			.buffer_unordered(PAGE_SOURCE_FETCH_CONCURRENCY)
+			.try_collect()
+			.await?;
+
+	for (idx, source) in capped_sources.iter().enumerate() {
+		let source_rows = scanned_delta_rows
+			.remove(&idx)
+			.expect("every capped source scanned");
 		if missing_pgnos.is_empty() {
 			break;
 		}
 
 		let mut chunks_by_txid = BTreeMap::<u64, Vec<(u32, Vec<u8>)>>::new();
-		for (key, chunk) in tx_scan_prefix_values(tx, &source.delta_prefix(database_id)).await? {
+		for (key, chunk) in source_rows {
 			debug.historical_delta_chunk_rows_scanned += 1;
 			let txid = source.decode_delta_chunk_txid(database_id, &key)?;
 			if txid > source.max_txid() {

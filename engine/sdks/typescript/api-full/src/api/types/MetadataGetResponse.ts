@@ -6,6 +6,8 @@ export interface MetadataGetResponse {
     buildTimestamp: string;
     cargoProfile: string;
     cargoTarget: string;
+    envoyProtocolVersion: number;
+    epoxyProtocolVersion: number;
     gitSha: string;
     runtime: string;
     rustcHost: string;

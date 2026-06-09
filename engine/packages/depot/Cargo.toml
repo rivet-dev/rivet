@@ -6,7 +6,7 @@ license.workspace = true
 edition.workspace = true
 
 [features]
-default = []
+default = ["pidx-cache"]
 pidx-cache = []
 test-faults = []
 
@@ -22,6 +22,7 @@ futures-util.workspace = true
 gas.workspace = true
 lazy_static.workspace = true
 lz4_flex.workspace = true
+moka.workspace = true
 namespace.workspace = true
 parking_lot.workspace = true
 rivet-cache.workspace = true

@@ -647,14 +647,16 @@ func (h HealthStatus) Ptr() *HealthStatus {
 }
 
 type MetadataGetResponse struct {
-	BuildTimestamp string `json:"build_timestamp"`
-	CargoProfile   string `json:"cargo_profile"`
-	CargoTarget    string `json:"cargo_target"`
-	GitSha         string `json:"git_sha"`
-	Runtime        string `json:"runtime"`
-	RustcHost      string `json:"rustc_host"`
-	RustcVersion   string `json:"rustc_version"`
-	Version        string `json:"version"`
+	BuildTimestamp       string `json:"build_timestamp"`
+	CargoProfile         string `json:"cargo_profile"`
+	CargoTarget          string `json:"cargo_target"`
+	EnvoyProtocolVersion int    `json:"envoy_protocol_version"`
+	EpoxyProtocolVersion int    `json:"epoxy_protocol_version"`
+	GitSha               string `json:"git_sha"`
+	Runtime              string `json:"runtime"`
+	RustcHost            string `json:"rustc_host"`
+	RustcVersion         string `json:"rustc_version"`
+	Version              string `json:"version"`
 
 	_rawJSON json.RawMessage
 }
