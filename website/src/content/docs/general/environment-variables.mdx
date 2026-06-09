@@ -8,7 +8,7 @@ skill: true
 
 | Environment Variable | Description |
 |---------------------|-------------|
-| `RIVET_ENDPOINT` | Endpoint URL to connect to Rivet Engine. Supports [URL auth syntax](/docs/general/endpoints#url-auth-syntax). |
+| `RIVET_ENDPOINT` | Endpoint URL to connect to Rivet Engine. Supports [URL auth syntax](/docs/general/endpoints#url-auth-syntax). When `RIVET_RUN_ENGINE=1`, a local endpoint here also controls which port the spawned local engine binds to. Use a separate `RIVETKIT_STORAGE_PATH` when running multiple local engines concurrently. |
 | `RIVET_TOKEN` | Authentication token for Rivet Engine |
 | `RIVET_NAMESPACE` | Namespace to use (default: "default") |
 
@@ -60,7 +60,7 @@ These variables configure how clients connect to your actors.
 | Environment Variable | Description |
 |---------------------|-------------|
 | `RIVETKIT_RUNTIME` | Runtime binding to use for RivetKit core: `auto`, `native`, or `wasm`. Defaults to `auto`. |
-| `RIVETKIT_STORAGE_PATH` | Overrides the default file-system storage path used by RivetKit when using the default driver. |
+| `RIVETKIT_STORAGE_PATH` | Overrides the default file-system storage path used by RivetKit when using the default driver. Set this alongside a custom local `RIVET_ENDPOINT` when running multiple local engines concurrently. |
 
 ## Logging
 

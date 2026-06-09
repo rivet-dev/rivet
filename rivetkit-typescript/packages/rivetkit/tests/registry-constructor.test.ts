@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { actor, setup } from "@/mod";
+import { RegistryConfigSchema } from "@/registry/config";
 import { buildNativeRegistry } from "../src/registry/native";
 
 const testActor = actor({
@@ -67,5 +68,40 @@ describe("Registry constructor", () => {
 		);
 		expect(serveConfig.namespace).toBe("after-build");
 		expect(serveConfig.poolName).toBe("after-build-pool");
+	});
+
+	test("can start a local engine on an explicit endpoint port", () => {
+		const config = RegistryConfigSchema.parse({
+			use: {
+				test: testActor,
+			},
+			startEngine: true,
+			endpoint: "http://127.0.0.1:7654",
+		});
+
+		expect(config.endpoint).toBe("http://127.0.0.1:7654/");
+		expect(config.publicEndpoint).toBe("http://127.0.0.1:7654/");
+	});
+
+	test("rejects startEngine with a remote endpoint", () => {
+		const result = RegistryConfigSchema.safeParse({
+			use: {
+				test: testActor,
+			},
+			startEngine: true,
+			endpoint: "https://api.rivet.dev",
+		});
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						message:
+							"startEngine can only be used with a local endpoint",
+					}),
+				]),
+			);
+		}
 	});
 });

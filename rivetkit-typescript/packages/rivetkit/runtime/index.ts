@@ -1,5 +1,5 @@
 import { convertRegistryConfigToClientConfig } from "@/client/config";
-import { ENGINE_ENDPOINT } from "@/common/engine";
+import { isLocalEngineEndpoint } from "@/common/engine";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
 import {
 	getDatacenters,
@@ -22,7 +22,7 @@ function logLine(label: string, value: string): void {
 }
 
 async function ensureLocalRunnerConfig(config: RegistryConfig): Promise<void> {
-	if (config.endpoint !== ENGINE_ENDPOINT) {
+	if (!config.endpoint || !isLocalEngineEndpoint(config.endpoint)) {
 		return;
 	}
 
@@ -136,10 +136,9 @@ export class Runtime<A extends RegistryActors> {
 		}
 
 		if (this.#config.endpoint) {
-			const endpointType =
-				this.#config.endpoint === ENGINE_ENDPOINT
-					? "local native"
-					: "remote";
+			const endpointType = isLocalEngineEndpoint(this.#config.endpoint)
+				? "local native"
+				: "remote";
 			logLine("Endpoint", `${this.#config.endpoint} (${endpointType})`);
 		}
 
