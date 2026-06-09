@@ -355,9 +355,24 @@ server.listen(9876, "127.0.0.1", () => {
 						`session-${crypto.randomUUID()}`,
 					]);
 
+					// Mirrors the setup of the agent-os-client's own Pi
+					// e2e test (crates/client/tests/pi_session_e2e.rs).
+					// Pi reads provider config from ~/.pi/agent/models.json;
+					// the file must exist before createSession even if the
+					// real Anthropic endpoint is being used.
+					await actor.mkdir("/home/user/.pi/agent");
+					await actor.writeFile(
+						"/home/user/.pi/agent/models.json",
+						"{}",
+					);
+					await actor.mkdir("/home/user/workspace");
+
 					const session = await actor.createSession("pi", {
+						cwd: "/home/user/workspace",
 						env: {
+							HOME: "/home/user",
 							ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY!,
+							PI_SKIP_VERSION_CHECK: "1",
 						},
 						// `/etc/agentos/instructions.md` isn't seeded by
 						// default; skip the OS-instruction injection step.

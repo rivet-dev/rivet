@@ -128,14 +128,19 @@ interface AgentOsOptionsLoose {
  * carry no usable host path so the caller can drop them silently.
  */
 /**
- * Walk up from a packageDir until we find an ancestor named
- * `node_modules`, then return its parent. Returns `null` if no
- * `node_modules` ancestor is found within a sane depth (handles
- * malformed paths defensively).
+ * Walk up from a packageDir to the **outermost** `node_modules`
+ * ancestor and return its parent. The outermost (not innermost) is
+ * required because pnpm packages live at deep `.pnpm/{key}/node_modules/`
+ * paths but their transitive deps live in sibling `.pnpm/{otherKey}/`
+ * directories — a runtime `require()` from inside an agent package
+ * needs the whole workspace-rooted `node_modules/.pnpm/` tree
+ * projected, not just one keyed subdir.
+ *
+ * Returns `null` if no `node_modules` ancestor is found (defensive).
  */
 function packageDirToModuleAccessCwd(packageDir: string): string | null {
 	const segments = packageDir.split("/");
-	for (let i = segments.length - 1; i >= 0; i--) {
+	for (let i = 0; i < segments.length; i++) {
 		if (segments[i] === "node_modules") {
 			return segments.slice(0, i).join("/") || "/";
 		}
