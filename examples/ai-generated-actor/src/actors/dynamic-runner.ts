@@ -12,9 +12,8 @@ export const dynamicRunner = dynamicActor({
 
 		return {
 			source: state.code,
-			nodeProcess: {
-				memoryLimit: 256,
-				cpuTimeLimitMs: 10_000,
+			worker: {
+				memoryLimitMb: 256,
 			},
 		};
 	},

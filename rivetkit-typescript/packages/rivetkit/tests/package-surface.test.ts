@@ -142,9 +142,8 @@ describe("package surface", () => {
 		expect(packageJson.dependencies).not.toHaveProperty(
 			"@rivetkit/fast-json-patch",
 		);
-		expect(packageJson.dependencies).not.toHaveProperty(
-			"@rivetkit/on-change",
-		);
+		// The write-through state proxy consumes @rivetkit/on-change again.
+		expect(packageJson.dependencies).toHaveProperty("@rivetkit/on-change");
 		expect(packageJson.dependencies).not.toHaveProperty("nanoevents");
 
 		expect(packageJson.devDependencies).not.toHaveProperty("@types/ws");
@@ -162,7 +161,11 @@ describe("package surface", () => {
 		expect(packageJson.exports).not.toHaveProperty(
 			"./driver-helpers/websocket",
 		);
-		expect(packageJson.exports).not.toHaveProperty("./dynamic");
 		expect(packageJson.exports).not.toHaveProperty("./sandbox");
+	});
+
+	test("keeps bridged actor entrypoints exported", () => {
+		expect(packageJson.exports).toHaveProperty("./dynamic");
+		expect(packageJson.exports).toHaveProperty("./bridge-child");
 	});
 });

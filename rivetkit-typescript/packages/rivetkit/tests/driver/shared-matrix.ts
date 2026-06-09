@@ -113,11 +113,19 @@ export function describeDriverMatrix(
 	defineTests: (driverTestConfig: DriverTestConfig) => void,
 	options: DriverMatrixOptions = {},
 ) {
-	const registryVariantNames = new Set(options.registryVariants);
-	const variants = getDriverRegistryVariants(TEST_DIR).filter(
-		(variant) =>
-			registryVariantNames.size === 0 ||
-			registryVariantNames.has(variant.name),
+	// The registry env selector replaces the per-file default ("static")
+	// instead of intersecting with it, so bridged variants are runnable for
+	// any test file: RIVETKIT_DRIVER_TEST_REGISTRY=worker (or dynamic).
+	const envVariantNames = applyDriverMatrixEnv(
+		"RIVETKIT_DRIVER_TEST_REGISTRY",
+		["static", "worker", "dynamic"],
+		["static", "worker", "dynamic"],
+	);
+	const selectedNames = process.env.RIVETKIT_DRIVER_TEST_REGISTRY
+		? new Set<string>(envVariantNames)
+		: new Set<string>(options.registryVariants ?? ["static"]);
+	const variants = getDriverRegistryVariants(TEST_DIR).filter((variant) =>
+		selectedNames.has(variant.name),
 	);
 	const cells = getDriverMatrixCells(options);
 
@@ -134,6 +142,9 @@ export function describeDriverMatrix(
 				});
 
 				for (const cell of cells) {
+					if (variant.nativeOnly && cell.runtime !== "native") {
+						continue;
+					}
 					const suite = `runtime (${cell.runtime}) / sqlite (${cell.sqliteBackend}) / encoding (${cell.encoding})`;
 
 					if (cell.skipReason) {

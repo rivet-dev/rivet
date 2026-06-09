@@ -7,7 +7,11 @@ import {
 	RAW_STATE_SYMBOL,
 	type WorkflowInspectorConfig,
 } from "@/actor/config";
-import type { AnyActorDefinition } from "@/actor/definition";
+import {
+	type AnyActorDefinition,
+	isStaticActorDefinition,
+} from "@/actor/definition";
+import { isDynamicActorDefinition } from "@/dynamic/internal";
 import {
 	decodeBridgeRivetError,
 	encodeBridgeRivetError,
@@ -191,7 +195,7 @@ export async function loadConfiguredRuntime(
 	return loadAutoRuntime(config, loaders);
 }
 
-function sqliteBackendForConfig(
+export function sqliteBackendForConfig(
 	config: RegistryConfig,
 ): SqliteBackend | undefined {
 	return config.sqlite?.backend ?? config.test?.sqliteBackend;
@@ -615,7 +619,7 @@ async function loadEngineCli(): Promise<typeof import("@rivetkit/engine-cli")> {
 	return import(["@rivetkit", "engine-cli"].join("/"));
 }
 
-function decodeValue<T>(value?: RuntimeBytes | null): T {
+export function decodeValue<T>(value?: RuntimeBytes | null): T {
 	if (!value || value.length === 0) {
 		return undefined as T;
 	}
@@ -623,7 +627,7 @@ function decodeValue<T>(value?: RuntimeBytes | null): T {
 	return decodeCborCompat(value);
 }
 
-function encodeValue(value: unknown): RuntimeBytes {
+export function encodeValue(value: unknown): RuntimeBytes {
 	return encodeCborCompat(value as JsonCompatValue);
 }
 
@@ -3266,7 +3270,7 @@ function withConnContext(
 	);
 }
 
-function buildActorConfig(
+export function buildActorConfig(
 	definition: AnyActorDefinition,
 	registryConfig: RegistryConfig,
 ): RuntimeActorConfig {
@@ -4680,7 +4684,7 @@ export async function buildRegistryWithRuntime(
 		runtime.registerActor(
 			registry,
 			name,
-			buildNativeFactory(runtime, config, definition),
+			await buildFactory(runtime, config, name, definition),
 		);
 	}
 
@@ -4689,6 +4693,28 @@ export async function buildRegistryWithRuntime(
 		registry,
 		serveConfig: await buildServeConfig(config),
 	};
+}
+
+async function buildFactory(
+	runtime: CoreRuntime,
+	config: RegistryConfig,
+	name: string,
+	definition: AnyActorDefinition,
+): Promise<ActorFactoryHandle> {
+	// The bridge module loads lazily so non-Node platforms never import
+	// node:worker_threads unless a bridged actor is actually registered.
+	if (isDynamicActorDefinition(definition)) {
+		const { buildDynamicBridgedFactory } = await import("@/bridge/factory");
+		return buildDynamicBridgedFactory(runtime, config, name, definition);
+	}
+	if (
+		isStaticActorDefinition(definition) &&
+		definition.config.options?.runtime === "worker"
+	) {
+		const { buildWorkerBridgedFactory } = await import("@/bridge/factory");
+		return buildWorkerBridgedFactory(runtime, config, name, definition);
+	}
+	return buildNativeFactory(runtime, config, definition);
 }
 
 export async function buildNativeRegistry(config: RegistryConfig): Promise<{

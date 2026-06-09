@@ -862,6 +862,17 @@ const GlobalActorOptionsBaseSchema = z
 		canHibernateWebSocket: z
 			.union([z.boolean(), zFunction<(request: Request) => boolean>()])
 			.default(false),
+		/**
+		 * Where the actor's user code executes.
+		 *
+		 * `inline` (default) runs user code in the host process. `worker`
+		 * runs each actor instance in its own `node:worker_threads` worker,
+		 * bridged to the host runtime; the registry must configure
+		 * `worker.module` so the worker can import the actor definition.
+		 *
+		 * @experimental
+		 */
+		runtime: z.enum(["inline", "worker"]).default("inline"),
 	})
 	.strict();
 

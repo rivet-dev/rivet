@@ -113,6 +113,8 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 					.getActor(client)
 					.getOrCreate([`workflow-nested-${testCase.key}`]);
 
+				// The wait timeout leaves room for a worker-registry actor to
+				// respawn its worker thread on wake before consuming the batch.
 				const first = await actor.send(
 					WORKFLOW_NESTED_QUEUE_NAME,
 					{
@@ -120,7 +122,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 					},
 					{
 						wait: true,
-						timeout: 1_000,
+						timeout: 5_000,
 					},
 				);
 				expect(first).toEqual({
@@ -137,7 +139,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 					},
 					{
 						wait: true,
-						timeout: 1_000,
+						timeout: 5_000,
 					},
 				);
 				expect(second).toEqual({

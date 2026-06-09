@@ -375,6 +375,12 @@ impl ActorContext {
 		let names = normalize_names(opts.names);
 
 		loop {
+			// Arm the notification before checking so an enqueue that lands
+			// between the check and the wait cannot be missed.
+			let notified = self.0.queue_notify.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
 			let messages = self
 				.try_receive_batch(names.as_ref(), count, opts.completable)
 				.await?;
@@ -390,7 +396,7 @@ impl ActorContext {
 
 			let wait_guard = ActiveQueueWaitGuard::new(self);
 			let result = self
-				.wait_for_message(remaining_timeout, opts.signal.as_ref())
+				.wait_for_message(notified, remaining_timeout, opts.signal.as_ref())
 				.await;
 			drop(wait_guard);
 
@@ -413,6 +419,12 @@ impl ActorContext {
 		let names = normalize_names(Some(names));
 
 		loop {
+			// Arm the notification before checking so an enqueue that lands
+			// between the check and the wait cannot be missed.
+			let notified = self.0.queue_notify.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
 			if let Some(message) = self
 				.try_receive_batch(names.as_ref(), 1, opts.completable)
 				.await?
@@ -435,7 +447,7 @@ impl ActorContext {
 
 			let wait_guard = ActiveQueueWaitGuard::new(self);
 			let result = self
-				.wait_for_message(remaining_timeout, opts.signal.as_ref())
+				.wait_for_message(notified, remaining_timeout, opts.signal.as_ref())
 				.await;
 			drop(wait_guard);
 
@@ -463,6 +475,12 @@ impl ActorContext {
 		let names = normalize_names(Some(names));
 
 		loop {
+			// Arm the notification before checking so an enqueue that lands
+			// between the check and the wait cannot be missed.
+			let notified = self.0.queue_notify.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
 			let messages = self.list_messages().await?;
 			let has_match = if let Some(names) = names.as_ref() {
 				messages
@@ -488,7 +506,7 @@ impl ActorContext {
 
 			let wait_guard = ActiveQueueWaitGuard::new(self);
 			let result = self
-				.wait_for_message(remaining_timeout, opts.signal.as_ref())
+				.wait_for_message(notified, remaining_timeout, opts.signal.as_ref())
 				.await;
 			drop(wait_guard);
 
@@ -813,8 +831,14 @@ impl ActorContext {
 			.map(|(_, waiter)| waiter)
 	}
 
+	/// Waits on a notification future that the caller armed with
+	/// `armed_queue_notified()` BEFORE re-checking queue contents. The
+	/// producer side uses `notify_waiters()`, which stores no permit, so an
+	/// enqueue that lands between the caller's check and this wait would be
+	/// lost if the notification were created here.
 	async fn wait_for_message(
 		&self,
+		notified: std::pin::Pin<&mut tokio::sync::futures::Notified<'_>>,
 		timeout: Option<Duration>,
 		signal: Option<&CancellationToken>,
 	) -> WaitOutcome {
@@ -826,7 +850,6 @@ impl ActorContext {
 			return WaitOutcome::Aborted;
 		}
 
-		let notified = self.0.queue_notify.notified();
 		let actor_aborted = async {
 			actor_abort_signal.cancelled().await;
 		};

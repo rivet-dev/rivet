@@ -37,16 +37,15 @@ const sourceCode = actor({
 
 const dynamicWorkflow = dynamicActor({
 	load: async (c: any) => {
-		const sourceState = await c
-			.client()
-			.sourceCode.getOrCreate(["main"])
+		const client = await c.client();
+		const sourceState = await client.sourceCode
+			.getOrCreate(["main"])
 			.getSource();
 
 		return {
 			source: sourceState.source,
-			nodeProcess: {
-				memoryLimit: 256,
-				cpuTimeLimitMs: 10_000,
+			worker: {
+				memoryLimitMb: 256,
 			},
 		};
 	},
@@ -71,9 +70,8 @@ export const registry = setup({
 //
 // 		return {
 // 			source: sourceState.source,
-// 			nodeProcess: {
-// 				memoryLimit: 256,
-// 				cpuTimeLimitMs: 10_000,
+// 			worker: {
+// 				memoryLimitMb: 256,
 // 			},
 // 		};
 // 	},

@@ -151,6 +151,16 @@
 				"types": "./dist/tsup/agent-os/index.d.cts",
 				"default": "./dist/tsup/agent-os/index.cjs"
 			}
+		},
+		"./bridge-child": {
+			"import": {
+				"types": "./dist/tsup/bridge/child-entry.d.ts",
+				"default": "./dist/tsup/bridge/child-entry.js"
+			},
+			"require": {
+				"types": "./dist/tsup/bridge/child-entry.d.cts",
+				"default": "./dist/tsup/bridge/child-entry.cjs"
+			}
 		}
 	},
 	"engines": {
@@ -161,7 +171,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts src/bridge/child-entry.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check . && pnpm run check:test-skips && pnpm run check:wait-for-comments",

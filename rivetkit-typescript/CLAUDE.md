@@ -155,7 +155,12 @@ Cloudflare Workers forbid `setTimeout`, `fetch`, `connect`, and other async I/O 
 - Guard all side-effectful `#runCtx` access in `ActorWorkflowContext` (`packages/rivetkit/src/workflow/context.ts`) with `#ensureActorAccess`; only read-only properties (for example `actorId` and `log`) are exempt.
 - Apply `#ensureActorAccess` to any new workflow-context method or property that delegates to `#runCtx` and has side effects.
 
-## Dynamic Actors Architecture Doc
+## Bridged Actors (Dynamic + Worker Runtime)
 
-- Reference `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` when working on dynamic actor behavior, bridge contracts, isolate lifecycle, or runtime sandbox wiring.
-- Keep `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` up to date in the same change whenever dynamic actor architecture, lifecycle, bridge payloads, security behavior, or temporary compatibility paths change.
+- Reference `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` when working on dynamic actor behavior, bridge contracts, worker lifecycle, or child bootstrap wiring.
+- Keep `docs-internal/rivetkit-typescript/DYNAMIC_ACTORS_ARCHITECTURE.md` up to date in the same change whenever bridged actor architecture, lifecycle, bridge payloads, security behavior, or temporary compatibility paths change.
+- Bridged actors (dynamic and `options.runtime: "worker"`) are native-runtime only; the child runs `buildNativeFactory` against `RemoteCoreRuntime`, and all load-bearing lifecycle stays in the host's Rust core.
+- Classify any new `CoreRuntime` method for the bridge in `src/bridge/protocol.ts` (async rpc, fire-and-forget post, or blocking sync) and implement it in both `child-runtime.ts` and the host tables in the same change.
+- The host proxy must register exactly the callbacks the in-process bag would for worker-runtime actors (`computeCallbackNames` mirrors `buildNativeFactory` registration conditions); update both together.
+- Worker registry modules (`worker.module`) must stay side-effect free; the bridge child imports them to resolve definitions.
+- Driver fixtures must not rely on cross-actor module-level globals; record cross-actor observations through an observer actor so bridged variants (per-actor workers) behave like static.

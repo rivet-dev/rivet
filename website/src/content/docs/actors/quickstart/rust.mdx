@@ -1,0 +1,167 @@
+---
+title: "Rust Quickstart"
+description: "Get started with Rivet Actors in Rust"
+skill: true
+---
+
+import { Hosting } from "@/components/docs/Hosting";
+import { ConfigurationOptions } from "@/components/docs/ConfigurationOptions";
+
+<Note>
+The Rust API is in preview. The interface may change in future releases.
+</Note>
+
+## Steps
+
+<Steps>
+<Step title="Add Rivet Skill to Coding Agent (Optional)">
+
+If you're using an AI coding assistant (like Claude Code, Cursor, Windsurf, etc.), add Rivet skills for enhanced development assistance:
+
+```sh
+npx skills add rivet-dev/skills
+```
+
+</Step>
+
+<Step title="Install Rivet">
+
+```sh
+cargo add rivetkit tokio anyhow serde tokio-util
+cargo add serde --features derive
+cargo add tokio --features full
+```
+
+</Step>
+
+<Step title="Create An Actor and Start Server">
+
+Define an actor as an event loop, register it, and serve the registry:
+
+```rust src/main.rs
+use rivetkit::prelude::*;
+use serde::Deserialize;
+use tokio_util::sync::CancellationToken;
+
+struct Counter;
+
+impl Actor for Counter {
+	type Input = ();
+	type ConnParams = ();
+	type ConnState = ();
+	type Action = CounterAction;
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum CounterAction {
+	Increment,
+	GetCount,
+}
+
+async fn run(mut start: Start<Counter>) -> Result<()> {
+	let ctx = start.ctx.clone();
+	let mut count = start.snapshot.decode_or_default::<i64>()?;
+
+	while let Some(event) = start.events.recv().await {
+		match event {
+			Event::Action(action) => match action.decode() {
+				Ok(CounterAction::Increment) => {
+					count += 1;
+					ctx.broadcast("newCount", &count)?;
+					ctx.request_save(RequestSaveOpts::default());
+					action.ok(&count);
+				}
+				Ok(CounterAction::GetCount) => action.ok(&count),
+				Err(error) => action.err(error),
+			},
+			Event::ConnOpen(conn) => conn.accept(()),
+			Event::ConnClosed(_) => {}
+			Event::Subscribe(subscribe) => subscribe.allow(),
+			Event::SerializeState(serialize) => serialize.save(&count),
+			Event::Sleep(sleep) => sleep.ok(),
+			Event::Destroy(destroy) => destroy.ok(),
+			Event::Http(http) => http.reply_status(404),
+			Event::WebSocketOpen(ws) => ws.reject(anyhow!("no websocket support")),
+			Event::QueueSend(queue) => queue.err(anyhow!("no queue support")),
+			Event::WorkflowHistory(history) => history.reply_raw(None),
+			Event::WorkflowReplay(replay) => replay.reply_raw(None),
+		}
+	}
+
+	Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<()> {
+	let mut registry = Registry::new();
+	registry.register::<Counter, _, _>("counter", run);
+
+	let token = CancellationToken::new();
+	registry.serve(token).await
+}
+```
+
+</Step>
+
+<Step title="Run Server">
+
+```sh
+cargo run
+```
+
+Your server is now running on `http://localhost:6420`. Clients connect directly to the Rivet Engine on this port.
+
+</Step>
+
+<Step title="Connect To The Rivet Actor">
+
+Use the Rust client to call actions and listen to realtime events. This can run from another service or within your backend:
+
+```rust src/client.rs
+use anyhow::Result;
+use rivetkit::client::{Client, ClientConfig, GetOrCreateOptions};
+
+#[tokio::main]
+async fn main() -> Result<()> {
+	let client = Client::new(ClientConfig::new("http://localhost:6420"));
+
+	// Get or create a counter actor for the key "my-counter"
+	let counter = client.get_or_create(
+		"counter",
+		vec!["my-counter".to_string()],
+		GetOrCreateOptions::default(),
+	)?;
+
+	// Call an action
+	let count = counter.action("increment", vec![]).await?;
+	println!("New count: {count:?}");
+
+	// Listen to realtime events
+	let connection = counter.connect();
+	connection
+		.on_event("newCount", |args| {
+			println!("Count changed: {args:?}");
+		})
+		.await;
+
+	// Increment through the connection
+	connection.action("increment", vec![]).await?;
+
+	Ok(())
+}
+```
+
+</Step>
+
+<Step title="Deploy">
+
+<Hosting />
+
+</Step>
+
+</Steps>
+
+## Configuration Options
+
+<ConfigurationOptions />

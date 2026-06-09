@@ -143,6 +143,24 @@ export const RegistryConfigSchema = z
 
 		/**
 		 * @experimental
+		 *
+		 * Worker-runtime actor configuration. Actors with
+		 * `options.runtime: "worker"` run their user code in a dedicated
+		 * worker thread per actor instance. The worker imports the actor
+		 * definition from `module`, which must be a side-effect-free module
+		 * (no serve/start calls) that exports the registry; pass
+		 * `import.meta.url` from the module defining the registry.
+		 * */
+		worker: z
+			.object({
+				module: z.string().optional(),
+				exportName: z.string().optional(),
+			})
+			.optional()
+			.default(() => ({})),
+
+		/**
+		 * @experimental
 		 * */
 		logging: z
 			.object({

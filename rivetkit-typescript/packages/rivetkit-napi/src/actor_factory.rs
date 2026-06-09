@@ -231,6 +231,7 @@ pub(crate) struct CallbackBindings {
 	pub(crate) on_disconnect_final: Option<CallbackTsfn<ConnectionPayload>>,
 	pub(crate) on_before_subscribe: Option<CallbackTsfn<BeforeSubscribePayload>>,
 	pub(crate) actions: HashMap<String, CallbackTsfn<ActionPayload>>,
+	pub(crate) fallback_action: Option<CallbackTsfn<ActionPayload>>,
 	pub(crate) on_before_action_response: Option<CallbackTsfn<BeforeActionResponsePayload>>,
 	pub(crate) on_request: Option<CallbackTsfn<HttpRequestPayload>>,
 	pub(crate) on_queue_send: Option<CallbackTsfn<QueueSendPayload>>,
@@ -410,6 +411,11 @@ impl CallbackBindings {
 				build_before_subscribe_payload,
 			)?,
 			actions,
+			fallback_action: optional_tsfn(
+				&callbacks,
+				"fallbackAction",
+				build_fallback_action_payload,
+			)?,
 			on_before_action_response: optional_tsfn(
 				&callbacks,
 				"onBeforeActionResponse",
@@ -877,6 +883,28 @@ fn build_connection_payload(
 
 fn build_action_payload(env: &Env, payload: ActionPayload) -> napi::Result<Vec<napi::JsUnknown>> {
 	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	match payload.conn {
+		Some(conn) => object.set("conn", ConnHandle::new(conn))?,
+		None => object.set("conn", env.get_null()?)?,
+	}
+	object.set("args", Buffer::from(payload.args))?;
+	match payload.cancel_token {
+		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
+		None => object.set("cancelToken", env.get_undefined()?)?,
+	}
+	Ok(vec![object.into_unknown()])
+}
+
+// The fallback action callback serves actor definitions whose action set is not
+// known at factory creation time (dynamic actors), so the payload must carry the
+// dispatched action name for JS-side resolution.
+fn build_fallback_action_payload(
+	env: &Env,
+	payload: ActionPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("name", payload.name.as_str())?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	match payload.conn {
 		Some(conn) => object.set("conn", ConnHandle::new(conn))?,

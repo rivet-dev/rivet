@@ -124,6 +124,12 @@ export const sitemap = [
 								icon: faNodeJs,
 							},
 							{
+								title: "Rust",
+								href: "/docs/actors/quickstart/rust",
+								icon: faRust,
+								badge: "Preview",
+							},
+							{
 								title: "React",
 								href: "/docs/actors/quickstart/react",
 								icon: faReact,
@@ -198,17 +204,6 @@ export const sitemap = [
 					// 		},
 					// 	]
 					// },
-				]
-			},
-			{
-				title: "Extensions",
-				pages: [
-					{
-						title: "Sandbox Actor",
-						href: "/docs/actors/sandbox",
-						icon: faSquareTerminal,
-						badge: "Beta",
-					},
 				]
 			},
 			{

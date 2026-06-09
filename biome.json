@@ -58,7 +58,8 @@
 		{
 			"includes": [
 				"rivetkit-typescript/packages/rivetkit/src/**/*",
-				"!rivetkit-typescript/packages/rivetkit/src/test/**/*"
+				"!rivetkit-typescript/packages/rivetkit/src/test/**/*",
+				"!rivetkit-typescript/packages/rivetkit/src/bridge/**/*"
 			],
 			"linter": {
 				"rules": {

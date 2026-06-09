@@ -360,7 +360,15 @@ pub(crate) async fn dispatch_event(
 				has_conn = conn.is_some(),
 				"napi: dispatching ActorEvent::Action to JS"
 			);
-			let Some(callback) = bindings.actions.get(&name).cloned() else {
+			// Bridged actor factories (dynamic actors) do not know their action
+			// names at factory creation, so unmatched names route to the
+			// fallback action callback when one is registered.
+			let callback = bindings
+				.actions
+				.get(&name)
+				.or(bindings.fallback_action.as_ref())
+				.cloned();
+			let Some(callback) = callback else {
 				tracing::warn!(
 					actor_id = %ctx.inner().actor_id(),
 					action_name = %name,

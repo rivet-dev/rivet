@@ -18,7 +18,7 @@ The skill accepts optional arguments:
 - **`from <file>`** — Start from a specific file group, skipping earlier ones.
 - **`runtime <native|wasm|both>`** — Which runtime(s) to run (default: `both`).
 - **`encoding <bare|cbor|json>`** — Override encoding (default: `bare`).
-- **`registry <static>`** — Override registry type (default: `static`).
+- **`registry <static|worker|dynamic>`** — Override registry type (default: `static`). `worker` runs every fixture actor with per-actor worker threads; `dynamic` wraps every fixture actor in `dynamicActor` loaders. Both bridged variants run native-runtime cells only.
 
 ## Runtime Matrix
 
@@ -29,7 +29,7 @@ The driver suite runs over a runtime × SQLite-backend × encoding matrix define
 
 The skill defaults to running each test file twice: once on `native/local` and once on `wasm/remote`, each at `encoding=bare`. A file is checked off only when both runtimes pass.
 
-The test harness does not read environment variables for matrix selection. Always select matrix cells with Vitest `-t` using the full inner describe name: `runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>)`.
+Matrix cells can be selected either with Vitest `-t` using the full inner describe name (`runtime (<runtime>) / sqlite (<backend>) / encoding (<encoding>)`) or with the env vars read by `shared-matrix.ts`: `RIVETKIT_DRIVER_TEST_RUNTIME`, `RIVETKIT_DRIVER_TEST_SQLITE`, `RIVETKIT_DRIVER_TEST_ENCODING`, and `RIVETKIT_DRIVER_TEST_REGISTRY` (`static`, `worker`, or `dynamic`; the registry env var replaces the per-file default instead of intersecting with it).
 
 ## How It Works
 

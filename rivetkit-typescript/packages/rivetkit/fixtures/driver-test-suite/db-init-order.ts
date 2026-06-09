@@ -1,13 +1,15 @@
 import { actor } from "rivetkit";
 import { db } from "@/common/database/mod";
+import type { registry } from "./registry-static";
 import { scheduleActorSleep } from "./schedule-sleep";
 
 // Verifies that c.db is usable from every lifecycle hook that can be async,
 // including teardown hooks. Schema is created in onMigrate so each callback
-// only succeeds if onMigrate has already run.
+// only succeeds if onMigrate has already run. Teardown observations are
+// pushed to the observer actor via the inline client so they survive
+// per-actor process or worker isolation.
 
-const onSleepObservations = new Map<string, number>();
-const onDestroyObservations = new Map<string, number>();
+const OBSERVER_KEY = "db-init-order-observer";
 
 const initOrderProvider = () =>
 	db({
@@ -107,7 +109,10 @@ export const dbInitOrderOnSleepActor = actor({
 		const rows = await c.db.execute<{ count: number }>(
 			"SELECT COUNT(*) as count FROM init_order_items",
 		);
-		onSleepObservations.set(c.actorId, rows[0]?.count ?? -1);
+		const client = c.client<typeof registry>();
+		await client.dbInitOrderObserver
+			.getOrCreate([OBSERVER_KEY])
+			.recordOnSleep(c.actorId, rows[0]?.count ?? -1);
 		await c.db.execute(
 			"INSERT INTO init_order_items (name) VALUES (?)",
 			"sleep-event",
@@ -144,7 +149,10 @@ export const dbInitOrderOnDestroyActor = actor({
 		const rows = await c.db.execute<{ count: number }>(
 			"SELECT COUNT(*) as count FROM init_order_items",
 		);
-		onDestroyObservations.set(c.actorId, rows[0]?.count ?? -1);
+		const client = c.client<typeof registry>();
+		await client.dbInitOrderObserver
+			.getOrCreate([OBSERVER_KEY])
+			.recordOnDestroy(c.actorId, rows[0]?.count ?? -1);
 	},
 	db: initOrderProvider(),
 	actions: {
@@ -165,10 +173,19 @@ export const dbInitOrderOnDestroyActor = actor({
 });
 
 export const dbInitOrderObserver = actor({
+	state: {
+		onSleep: {} as Record<string, number>,
+		onDestroy: {} as Record<string, number>,
+	},
 	actions: {
-		getOnSleepCount: (_c, actorId: string) =>
-			onSleepObservations.get(actorId) ?? -1,
-		getOnDestroyCount: (_c, actorId: string) =>
-			onDestroyObservations.get(actorId) ?? -1,
+		recordOnSleep: (c, actorId: string, count: number) => {
+			c.state.onSleep[actorId] = count;
+		},
+		recordOnDestroy: (c, actorId: string, count: number) => {
+			c.state.onDestroy[actorId] = count;
+		},
+		getOnSleepCount: (c, actorId: string) => c.state.onSleep[actorId] ?? -1,
+		getOnDestroyCount: (c, actorId: string) =>
+			c.state.onDestroy[actorId] ?? -1,
 	},
 });
