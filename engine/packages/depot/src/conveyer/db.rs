@@ -28,6 +28,26 @@ use super::{
 
 const COLD_MANIFEST_CACHE_BRANCHES: usize = 16;
 
+/// Soft byte budget for the per-database decoded-LTX cache. Blobs are immutable
+/// (their source key includes the owning txid), so caching them across reads is
+/// a pure perf cache that never acts as a correctness fence.
+const LTX_BLOB_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Bounded cache of parsed LTX blobs keyed by their immutable source key. Holds
+/// the raw bytes plus the parsed page index so repeated reads of the same shard
+/// or delta within a connection avoid both the FDB re-fetch and the index
+/// re-parse. Bounded by total blob bytes via a moka weigher.
+pub(super) type LtxBlobCache = moka::future::Cache<Vec<u8>, Arc<super::ltx::LtxBlob>>;
+
+pub(super) fn new_ltx_blob_cache() -> LtxBlobCache {
+	moka::future::Cache::builder()
+		.max_capacity(LTX_BLOB_CACHE_MAX_BYTES)
+		.weigher(|key: &Vec<u8>, blob: &Arc<super::ltx::LtxBlob>| {
+			u32::try_from(key.len() + blob.bytes().len()).unwrap_or(u32::MAX)
+		})
+		.build()
+}
+
 pub type CompactionSignaler =
 	Arc<dyn Fn(DeltasAvailable) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 
@@ -99,6 +119,11 @@ pub(super) struct CacheSnapshot {
 	pub(super) ancestors: BranchAncestry,
 	pub(super) last_access_bucket: Option<i64>,
 	pub(super) pidx: Arc<super::page_index::DeltaPageIndex>,
+	/// Head txid the cached PIDX reflects. The cache is trusted only when this matches the
+	/// head resolved in the read transaction, so a foreign writer advancing the head
+	/// invalidates the cache instead of letting it serve stale page ownership.
+	#[cfg_attr(not(feature = "pidx-cache"), allow(dead_code))]
+	pub(super) cache_head_txid: u64,
 }
 
 pub struct Db {
@@ -108,6 +133,8 @@ pub struct Db {
 	pub(super) node_id: NodeId,
 	/// Cached branch read state. This is a perf cache; FDB remains the source of truth.
 	pub(super) cache_snapshot: RwLock<Option<CacheSnapshot>>,
+	/// Cached parsed LTX blobs keyed by immutable source key. Perf cache only.
+	pub(super) ltx_blob_cache: LtxBlobCache,
 	pub(super) cold_tier: Option<Arc<dyn ColdTier>>,
 	pub(super) cold_manifest_cache: RwLock<ColdManifestCache>,
 	/// Cached `/META/quota`. Loaded once on the first UDB tx.
@@ -289,6 +316,7 @@ impl Db {
 			database_id,
 			node_id,
 			cache_snapshot: RwLock::new(None),
+			ltx_blob_cache: new_ltx_blob_cache(),
 			cold_tier,
 			cold_manifest_cache: RwLock::new(ColdManifestCache::default()),
 			storage_used: RwLock::new(None),

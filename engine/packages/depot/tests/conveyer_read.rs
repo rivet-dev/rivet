@@ -649,31 +649,44 @@ async fn get_pages_uses_warm_cache_without_pidx_row() -> Result<()> {
 #[tokio::test]
 async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()> {
 	read_matrix!("depot-read-stale-pidx", |ctx, db, database_db| {
+		// Two separate commits create two separate delta blobs, one per page.
 		database_db
-			.commit(vec![dirty_page(2, 0x22)], 3, 1_000)
+			.commit(vec![dirty_page(1, 0x11)], 3, 1_000)
+			.await?;
+		database_db
+			.commit(vec![dirty_page(2, 0x22)], 3, 2_000)
 			.await?;
 		let branch_id = read_database_branch_id(&db).await?;
+
+		// Reading page 1 warms the PIDX cache for the whole branch (the cold scan loads
+		// every PIDX row, including page 2's) but only loads page 1's delta blob, so page
+		// 2's delta stays out of the LTX blob cache and a later read must hit FDB for it.
 		assert_eq!(
-			database_db.get_pages(vec![2]).await?,
+			database_db.get_pages(vec![1]).await?,
 			vec![FetchedPage {
-				pgno: 2,
-				bytes: Some(page(0x22)),
+				pgno: 1,
+				bytes: Some(page(0x11)),
 			}]
 		);
 
+		// Simulate compaction folding page 2 into a shard and removing its delta + PIDX row
+		// out of band. The head is unchanged, matching real compaction, so the head fence
+		// keeps trusting the cache.
 		seed(
 			&db,
 			vec![(
-				branch_shard_key(branch_id, 0, 1),
-				encoded_blob(1, &[(2, 0x44)])?,
+				branch_shard_key(branch_id, 0, 2),
+				encoded_blob(2, &[(2, 0x44)])?,
 			)],
 			vec![
-				branch_delta_chunk_key(branch_id, 1, 0),
+				branch_delta_chunk_key(branch_id, 2, 0),
 				branch_pidx_key(branch_id, 2),
 			],
 		)
 		.await?;
 
+		// The warm PIDX cache still points page 2 at the removed delta. The read finds the
+		// delta blob missing, falls back to the shard, and evicts the stale row.
 		assert_eq!(
 			database_db.get_pages(vec![2]).await?,
 			vec![FetchedPage {
@@ -684,6 +697,50 @@ async fn get_pages_falls_back_to_shard_when_cached_pidx_is_stale() -> Result<()>
 
 		Ok(())
 	})
+}
+
+#[cfg(feature = "pidx-cache")]
+#[tokio::test]
+async fn get_pages_invalidates_warm_cache_when_foreign_writer_advances_head() -> Result<()> {
+	let db = common::test_db_arc("depot-read-head-fence").await?;
+	// Two independent Db instances backed by the same database simulate two
+	// pegboard-envoy connections (e.g. a not-yet-evicted zombie conn and the new
+	// owner) that each hold their own per-conn PIDX cache.
+	let writer_db = common::make_db(db.clone(), test_bucket(), TEST_DATABASE.to_string());
+	let reader_db = common::make_db(db.clone(), test_bucket(), TEST_DATABASE.to_string());
+
+	// Seed the first version of page 2 and warm the reader's PIDX cache against it.
+	writer_db
+		.commit(vec![dirty_page(2, 0x22)], 3, 1_000)
+		.await?;
+	assert_eq!(
+		reader_db.get_pages(vec![2]).await?,
+		vec![FetchedPage {
+			pgno: 2,
+			bytes: Some(page(0x22)),
+		}],
+	);
+
+	// A foreign writer commits a new version of page 2 and advances the head. The
+	// reader's cache still maps page 2 to the old delta txid, and the old delta blob is
+	// still present because no compaction ran, so a cache trusted on branch identity
+	// alone would return the stale bytes.
+	writer_db
+		.commit(vec![dirty_page(2, 0x33)], 3, 2_000)
+		.await?;
+
+	// The head fence sees the advanced head, discards the stale cache, and rescans PIDX
+	// so the reader returns the current page contents.
+	assert_eq!(
+		reader_db.get_pages(vec![2]).await?,
+		vec![FetchedPage {
+			pgno: 2,
+			bytes: Some(page(0x33)),
+		}],
+		"reader must invalidate its warm PIDX cache once the head advances past it",
+	);
+
+	Ok(())
 }
 
 #[cfg(all(feature = "test-faults", feature = "pidx-cache"))]

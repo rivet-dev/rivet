@@ -574,6 +574,7 @@ impl Db {
 			ancestors: result.branch_ancestry.clone(),
 			last_access_bucket,
 			pidx,
+			cache_head_txid: result.txid,
 		});
 		metrics::observe_commit_phase(&node_id, "cache_update", phase_start, "ok");
 

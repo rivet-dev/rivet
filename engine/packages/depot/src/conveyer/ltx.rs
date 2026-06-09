@@ -135,6 +135,160 @@ impl DecodedLtx {
 	}
 }
 
+/// An LTX blob with its page index parsed but its page frames left compressed.
+///
+/// Decoding the index is cheap (header parse plus a varint walk) and lets the
+/// reader decompress only the page frames it actually needs, instead of
+/// materializing every page in the blob just to serve one. This is the
+/// frame-addressable read path used by the hot `get_pages` loop.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LtxBlob {
+	bytes: Vec<u8>,
+	header: LtxHeader,
+	page_index: Vec<LtxPageIndexEntry>,
+}
+
+impl LtxBlob {
+	/// Parses the header and page index without decompressing any page frames.
+	pub fn decode_index(bytes: Vec<u8>) -> Result<Self> {
+		ensure!(
+			bytes.len()
+				>= LTX_HEADER_SIZE
+					+ LTX_PAGE_HEADER_SIZE
+					+ std::mem::size_of::<u64>()
+					+ LTX_TRAILER_SIZE,
+			"ltx blob too small: {} bytes",
+			bytes.len()
+		);
+
+		let header = LtxHeader::decode(&bytes[..LTX_HEADER_SIZE])?;
+		let trailer_start = bytes.len() - LTX_TRAILER_SIZE;
+		let footer_start = trailer_start - std::mem::size_of::<u64>();
+		ensure!(
+			bytes[trailer_start..].iter().all(|byte| *byte == 0),
+			"ltx trailer checksums must be zeroed"
+		);
+
+		let index_size = u64::from_be_bytes(
+			bytes[footer_start..trailer_start]
+				.try_into()
+				.expect("ltx page index footer should be 8 bytes"),
+		) as usize;
+		let page_section_start = LTX_HEADER_SIZE;
+		ensure!(
+			footer_start >= page_section_start + LTX_PAGE_HEADER_SIZE,
+			"ltx footer overlaps page section"
+		);
+		ensure!(
+			index_size <= footer_start - page_section_start - LTX_PAGE_HEADER_SIZE,
+			"ltx page index size {} exceeds available bytes",
+			index_size
+		);
+
+		let index_start = footer_start - index_size;
+		let page_index = decode_page_index(&bytes[index_start..footer_start])?;
+
+		// Validate that every index entry points at a frame that lies within the
+		// page section and is large enough to hold a page header plus size prefix.
+		let min_frame = LTX_PAGE_HEADER_SIZE + std::mem::size_of::<u32>();
+		for entry in &page_index {
+			let offset = entry.offset as usize;
+			let size = entry.size as usize;
+			ensure!(
+				size >= min_frame,
+				"ltx page index frame for pgno {} too small ({} bytes)",
+				entry.pgno,
+				size
+			);
+			ensure!(
+				offset >= page_section_start
+					&& offset
+						.checked_add(size)
+						.is_some_and(|end| end <= index_start),
+				"ltx page index frame for pgno {} out of bounds",
+				entry.pgno
+			);
+		}
+
+		Ok(Self {
+			bytes,
+			header,
+			page_index,
+		})
+	}
+
+	pub fn bytes(&self) -> &[u8] {
+		&self.bytes
+	}
+
+	pub fn header(&self) -> &LtxHeader {
+		&self.header
+	}
+
+	/// Decompresses and returns the single requested page, or `None` if the blob
+	/// does not contain it. Only the requested frame is decompressed.
+	pub fn get_page(&self, pgno: u32) -> Result<Option<Vec<u8>>> {
+		let Ok(idx) = self
+			.page_index
+			.binary_search_by_key(&pgno, |entry| entry.pgno)
+		else {
+			return Ok(None);
+		};
+		let entry = &self.page_index[idx];
+		let offset = entry.offset as usize;
+		let size = entry.size as usize;
+		let frame = &self.bytes[offset..offset + size];
+
+		let frame_pgno = u32::from_be_bytes(
+			frame[..std::mem::size_of::<u32>()]
+				.try_into()
+				.expect("page frame pgno should decode"),
+		);
+		ensure!(
+			frame_pgno == pgno,
+			"ltx page frame pgno {} did not match index pgno {}",
+			frame_pgno,
+			pgno
+		);
+		let flags = u16::from_be_bytes(
+			frame[std::mem::size_of::<u32>()..LTX_PAGE_HEADER_SIZE]
+				.try_into()
+				.expect("page frame flags should decode"),
+		);
+		ensure!(
+			flags == LTX_PAGE_HEADER_FLAG_SIZE,
+			"unsupported page flags 0x{:04x} for page {}",
+			flags,
+			pgno
+		);
+
+		let size_start = LTX_PAGE_HEADER_SIZE;
+		let payload_start = size_start + std::mem::size_of::<u32>();
+		let compressed_size = u32::from_be_bytes(
+			frame[size_start..payload_start]
+				.try_into()
+				.expect("compressed size should decode"),
+		) as usize;
+		ensure!(
+			payload_start + compressed_size <= size,
+			"page {} compressed payload exceeded frame",
+			pgno
+		);
+
+		let compressed = &frame[payload_start..payload_start + compressed_size];
+		let bytes = lz4_flex::block::decompress(compressed, self.header.page_size as usize)?;
+		ensure!(
+			bytes.len() == self.header.page_size as usize,
+			"page {} decompressed to {} bytes, expected {}",
+			pgno,
+			bytes.len(),
+			self.header.page_size
+		);
+
+		Ok(Some(bytes))
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct LtxEncoder {
 	header: LtxHeader,

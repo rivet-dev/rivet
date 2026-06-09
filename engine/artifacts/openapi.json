@@ -1638,7 +1638,9 @@
           "rustc_version",
           "rustc_host",
           "cargo_target",
-          "cargo_profile"
+          "cargo_profile",
+          "epoxy_protocol_version",
+          "envoy_protocol_version"
         ],
         "properties": {
           "build_timestamp": {
@@ -1649,6 +1651,16 @@
           },
           "cargo_target": {
             "type": "string"
+          },
+          "envoy_protocol_version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "epoxy_protocol_version": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
           },
           "git_sha": {
             "type": "string"
