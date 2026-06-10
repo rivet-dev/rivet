@@ -14,7 +14,10 @@ import {
   Command,
   Network,
   HardDrive,
-  Laptop
+  Laptop,
+  Cpu,
+  MemoryStick,
+  Clock
 } from 'lucide-react';
 import rivetLogoWhite from '@/images/rivet-logos/icon-white.svg';
 import imgYC from '@/images/logos/yc.svg';
@@ -358,11 +361,13 @@ const SelfHostingComparison = () => {
 
 const ComparisonTable = () => {
     const features = [
-      { name: "Awake Actor Hours", free: "100,000", hobby: "400,000", team: "400,000", ent: "Custom" },
-      { name: "Storage", free: "5GB", hobby: "5GB", team: "5GB", ent: "Custom" },
-      { name: "Reads / mo", free: "200 Million", hobby: "25 Billion", team: "25 Billion", ent: "Custom" },
-      { name: "Writes / mo", free: "5 Million", hobby: "50 Million", team: "50 Million", ent: "Custom" },
-      { name: "Egress", free: "100GB", hobby: "1TB", team: "1TB", ent: "Custom" },
+      { name: "Awake Actor Hours", free: "100,000 max", hobby: "400,000 included", team: "400,000 included", ent: "Custom" },
+      { name: "Compute", free: "$5 max", hobby: "Usage-based", team: "Usage-based", ent: "Custom" },
+      { name: "Max vCPU", free: "1", hobby: "8", team: "8", ent: "Custom" },
+      { name: "Storage", free: "5GB max", hobby: "5GB included", team: "5GB included", ent: "Custom" },
+      { name: "Reads / mo", free: "200 Million max", hobby: "25 Billion included", team: "25 Billion included", ent: "Custom" },
+      { name: "Writes / mo", free: "5 Million max", hobby: "50 Million included", team: "50 Million included", ent: "Custom" },
+      { name: "Egress", free: "100GB max", hobby: "1TB included", team: "1TB included", ent: "Custom" },
       { name: "Support", free: "Community", hobby: "Email", team: "Slack & Email", ent: "Slack & Email" },
       { name: "MFA", free: false, hobby: false, team: true, ent: true },
       { name: "Custom Regions", free: false, hobby: false, team: false, ent: true },
@@ -409,9 +414,157 @@ const ComparisonTable = () => {
                     </tbody>
                 </table>
             </div>
+            <p className="mt-6 text-xs text-zinc-500">
+                Free plan values are hard monthly limits. Hobby and Team include the listed amounts, then bill per usage; paid compute has no included amount and is billed per usage.
+            </p>
         </div>
     );
   };
+
+// Rivet Compute pricing. Cost is billed per active second based on each actor's
+// configured CPU and memory:
+//   cost = active_seconds × (vcpus × CPU_PER_VCPU_SECOND + memory_gib × MEMORY_PER_GIB_SECOND)
+// One vCPU is half a physical core. The Free plan is limited to 1 vCPU; paid plans
+// allow up to 8 vCPU.
+const COMPUTE = {
+    cpuPerVcpuSecond: 0.000033,
+    memoryPerGibSecond: 0.0000029,
+    maxVcpu: 8,
+    freeMaxVcpu: 1,
+};
+
+// Valid compute shapes. vCPU is continuous from 0.08 to 1, then exactly 2, 4,
+// or 8. Memory ranges from 128 MiB to 4096 MiB (4 GiB).
+const VCPU_STEPS = [0.08, 0.25, 0.5, 1, 2, 4, 8];
+const MEMORY_STEPS = [128, 256, 512, 1024, 2048, 4096]; // MiB
+
+const usd = (n, decimals = 2) =>
+    `$${n.toLocaleString("en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}`;
+
+const ComputeCalculator = () => {
+    const [vcpuIdx, setVcpuIdx] = useState(3); // 1 vCPU
+    const [memIdx, setMemIdx] = useState(2); // 512 MiB
+    const [hours, setHours] = useState(100);
+
+    const vcpus = VCPU_STEPS[vcpuIdx];
+    const memoryMib = MEMORY_STEPS[memIdx];
+    const cpuPerSec = vcpus * COMPUTE.cpuPerVcpuSecond;
+    const memPerSec = (memoryMib / 1024) * COMPUTE.memoryPerGibSecond;
+    const perSecond = cpuPerSec + memPerSec;
+    const monthly = perSecond * hours * 3600;
+
+    const memLabel = memoryMib >= 1024 ? `${memoryMib / 1024} GiB` : `${memoryMib} MiB`;
+
+    return (
+        <div className="border-t border-white/10 pt-16 mt-12">
+            <h3 className="mb-3 text-2xl font-normal tracking-tight text-white">Estimate your compute</h3>
+            <p className="mb-8 max-w-2xl text-base leading-relaxed text-zinc-500">
+                Run your actors and applications on Rivet Compute and pay only for the seconds they are active.
+                Costs scale with the CPU and memory you configure.
+            </p>
+
+            <div className="grid gap-8 lg:grid-cols-2">
+                {/* Controls */}
+                <div className="space-y-8 rounded-lg border border-white/10 bg-black p-8">
+                    {/* vCPU */}
+                    <div>
+                        <div className="mb-3 flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm text-zinc-300">
+                                <Cpu className="h-4 w-4 text-zinc-500" /> vCPU
+                            </span>
+                            <span className="font-mono text-sm text-white">{vcpus}</span>
+                        </div>
+                        <input
+                            type="range"
+                            min={0}
+                            max={VCPU_STEPS.length - 1}
+                            step={1}
+                            value={vcpuIdx}
+                            onChange={(e) => setVcpuIdx(Number(e.target.value))}
+                            className="w-full accent-[#FF4500]"
+                        />
+                        <p className="mt-2 text-xs text-zinc-500">
+                            1 vCPU = half a physical core. 0.08–1 vCPU, or exactly 2, 4, or 8.
+                        </p>
+                    </div>
+
+                    {/* Memory */}
+                    <div>
+                        <div className="mb-3 flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm text-zinc-300">
+                                <MemoryStick className="h-4 w-4 text-zinc-500" /> Memory
+                            </span>
+                            <span className="font-mono text-sm text-white">{memLabel}</span>
+                        </div>
+                        <input
+                            type="range"
+                            min={0}
+                            max={MEMORY_STEPS.length - 1}
+                            step={1}
+                            value={memIdx}
+                            onChange={(e) => setMemIdx(Number(e.target.value))}
+                            className="w-full accent-[#FF4500]"
+                        />
+                        <p className="mt-2 text-xs text-zinc-500">
+                            128 MiB to 4 GiB.
+                        </p>
+                    </div>
+
+                    {/* Active time */}
+                    <div>
+                        <div className="mb-3 flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm text-zinc-300">
+                                <Clock className="h-4 w-4 text-zinc-500" /> Active hours / month
+                            </span>
+                            <span className="font-mono text-sm text-white">{hours >= 730 ? "Always on" : `${hours} h`}</span>
+                        </div>
+                        <input
+                            type="range"
+                            min={1}
+                            max={730}
+                            step={1}
+                            value={hours}
+                            onChange={(e) => setHours(Number(e.target.value))}
+                            className="w-full accent-[#FF4500]"
+                        />
+                        <p className="mt-2 text-xs text-zinc-500">
+                            Sleeping actors are not billed for compute.
+                        </p>
+                    </div>
+                </div>
+
+                {/* Result */}
+                <div className="flex flex-col rounded-lg border border-[#FF4500]/30 bg-black p-8">
+                    <span className="text-xs font-medium uppercase tracking-wider text-zinc-500">Estimated compute</span>
+                    <div className="mt-2 flex items-baseline gap-2">
+                        <span className="text-4xl font-normal tracking-tight text-white">{usd(monthly)}</span>
+                        <span className="font-mono text-xs text-zinc-500">/mo</span>
+                    </div>
+
+                    <div className="mt-8 space-y-3 font-mono text-sm">
+                        <div className="flex items-center justify-between border-b border-white/5 py-2">
+                            <span className="text-zinc-500">CPU ({vcpus} vCPU)</span>
+                            <span className="text-zinc-300">{usd(cpuPerSec * hours * 3600)}</span>
+                        </div>
+                        <div className="flex items-center justify-between border-b border-white/5 py-2">
+                            <span className="text-zinc-500">Memory ({memLabel})</span>
+                            <span className="text-zinc-300">{usd(memPerSec * hours * 3600)}</span>
+                        </div>
+                        <div className="flex items-center justify-between py-2">
+                            <span className="text-zinc-500">Rate</span>
+                            <span className="text-zinc-300">{usd(perSecond, 7)}/s</span>
+                        </div>
+                    </div>
+
+                    <p className="mt-auto pt-8 text-xs leading-relaxed text-zinc-500">
+                        Estimate only. Or bring your own compute and run your actors and applications on AWS, Vercel,
+                        Railway, or bare metal, paid directly to your provider.
+                    </p>
+                </div>
+            </div>
+        </div>
+    );
+};
 
 const Pricing = () => {
     const [isCloud, setIsCloud] = useState(true);
@@ -424,6 +577,8 @@ const Pricing = () => {
             desc: "For prototyping and small projects.",
             features: [
                 "100,000 Awake Actor Hours /mo limit",
+                "$5 /mo Compute limit",
+                "1 vCPU Max",
                 "5GB Limit",
                 "5 Million Writes /mo Limit",
                 "200 Million Reads /mo Limit",
@@ -441,6 +596,7 @@ const Pricing = () => {
             desc: "For scaling applications.",
             features: [
                 "400,000 Awake Actor Hours Included",
+                "Up to 8 vCPU",
                 "25 Billion Reads /mo included",
                 "50 Million Writes /mo included",
                 "5GB Storage included",
@@ -458,6 +614,7 @@ const Pricing = () => {
             desc: "For growing teams and businesses.",
             features: [
                 "400,000 Awake Actor Hours Included",
+                "Up to 8 vCPU",
                 "25 Billion Reads /mo included",
                 "50 Million Writes /mo included",
                 "5GB Storage included",
@@ -539,7 +696,7 @@ const Pricing = () => {
         { resource: "Reads*", price: "$0.20", unit: "per million reads" },
         { resource: "Writes*", price: "$1", unit: "per million writes" },
         { resource: "Egress", price: "$0.15", unit: "per GB" },
-        { resource: "Compute", price: "BYO", unit: "Paid to your provider" },
+        { resource: "Compute", prefix: "From", price: "$0.0000330", unit: "per vCPU-second + $0.0000029/GiB-s" },
     ];
 
     return (
@@ -552,7 +709,7 @@ const Pricing = () => {
                         </h2>
                         <p className="mb-6 max-w-xl text-base leading-relaxed text-zinc-500">
                             {isCloud
-                                ? "Pay for coordination and state. Compute costs are billed directly by your chosen cloud provider."
+                                ? "Pay for coordination, state, and compute. Run your actors and applications on Rivet Compute, or bring your own and run them anywhere."
                                 : "Deploy Rivet inside your VPC, your customer's environment, or fully air-gapped. Use the compliance posture you already have."
                             }
                         </p>
@@ -673,13 +830,17 @@ const Pricing = () => {
                                     {usagePricing.map((item, i) => (
                                         <div key={i} className="border-t border-white/10 pt-6">
                                             <div className="mb-2 text-xs font-medium uppercase tracking-wider text-zinc-500">{item.resource}</div>
-                                            <div className={`mb-1 text-2xl font-normal ${item.price === "BYO" ? "text-zinc-500" : "text-white"}`}>{item.price}</div>
+                                            {item.prefix && <span className="text-zinc-500 text-[10px] font-medium uppercase tracking-wider block">{item.prefix}</span>}
+                                            <div className="mb-1 text-2xl font-normal text-white">{item.price}</div>
                                             <div className="text-xs text-zinc-500">{item.unit}</div>
                                         </div>
                                     ))}
                                 </div>
                                 <p className="mt-6 text-xs text-zinc-500">* Reads and writes to persisted actor state, not in-memory operations within an actor</p>
+                                <p className="mt-2 text-xs text-zinc-500">Compute runs on Rivet Compute, billed per active second. Or bring your own compute and run your actors and applications on AWS, Vercel, Railway, or bare metal, paid directly to your provider.</p>
                             </div>
+
+                            <ComputeCalculator />
 
                             <ComparisonTable />
                         </>
