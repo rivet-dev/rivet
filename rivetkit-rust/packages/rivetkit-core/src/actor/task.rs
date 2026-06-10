@@ -1353,7 +1353,14 @@ impl ActorTask {
 		let start = ActorStart {
 			ctx: self.ctx.clone(),
 			input: self.ctx.persisted_actor().input.clone(),
-			snapshot: (!is_new).then(|| self.ctx.state()),
+			// A zero-length state blob can never be valid CBOR — it means the
+			// actor initialized but never saved state (e.g. woken after an
+			// engine restart with `has_state = false`). Hand the typed layer
+			// `None` so it re-runs `create_state` instead of failing to
+			// decode an empty snapshot.
+			snapshot: (!is_new)
+				.then(|| self.ctx.state())
+				.filter(|bytes| !bytes.is_empty()),
 			hibernated: self
 				.ctx
 				.conns()
