@@ -72,10 +72,24 @@ async fn capture_current_restore_point_for_restore(
 		let database_id = database_id.clone();
 
 		async move {
-			let branch_id =
-				branch::resolve_database_branch(&tx, bucket_id, &database_id, Serializable)
-					.await?
-					.ok_or(SqliteStorageError::DatabaseNotFound)?;
+			let now_ms = i64::try_from(
+				std::time::SystemTime::now()
+					.duration_since(std::time::UNIX_EPOCH)
+					.context("system clock is before unix epoch")?
+					.as_millis(),
+			)
+			.context("current timestamp exceeded i64 milliseconds")?;
+			// Materialize first so the undo pin captures the fork's own state
+			// when restoring through a bucket fork.
+			let branch_id = branch::resolve_or_materialize_database_branch(
+				&tx,
+				bucket_id,
+				&database_id,
+				now_ms,
+				true,
+			)
+			.await?
+			.ok_or(SqliteStorageError::DatabaseNotFound)?;
 			let head_bytes = tx
 				.informal()
 				.get(&keys::branch_meta_head_key(branch_id), Serializable)

@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use universaldb::utils::IsolationLevel::Serializable;
 
 use crate::conveyer::{
 	branch,
@@ -109,15 +108,19 @@ pub(super) async fn resolve_storage_scope(
 	bucket_id: BucketId,
 	database_id: &str,
 	cached_ancestry: Option<&BranchAncestry>,
+	now_ms: i64,
+	allow_materialize: bool,
 ) -> Result<StorageScope> {
+	// Databases inherited through a bucket fork are materialized as capped
+	// forks on first data access; reading the source branch directly would
+	// show live post-fork state.
 	Ok(
-		match branch::resolve_database_branch(
+		match branch::resolve_or_materialize_database_branch(
 			tx,
 			bucket_id,
 			database_id,
-			// TODO: This can probably be made Snapshot again to reduce contention if
-			// read side freshness is not worth the cost.
-			Serializable,
+			now_ms,
+			allow_materialize,
 		)
 		.await?
 		{

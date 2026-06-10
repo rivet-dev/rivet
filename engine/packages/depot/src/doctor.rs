@@ -871,7 +871,7 @@ async fn resolve_selector(
 				.txn("depot_doctor_resolve_bucket_database", move |tx| {
 					let database = database.clone();
 					async move {
-						branch::resolve_database_branch(&tx, bucket, &database, Snapshot)
+						branch::resolve_or_materialize_database_branch(&tx, bucket, &database, 0, false)
 							.await?
 							.context("Depot database not found")
 					}
@@ -897,7 +897,8 @@ async fn resolve_selector(
 				.txn("depot_doctor_resolve_actor", move |tx| {
 					let database = database.clone();
 					async move {
-						branch::resolve_database_branch(&tx, bucket, &database, Snapshot).await
+						branch::resolve_or_materialize_database_branch(&tx, bucket, &database, 0, false)
+							.await
 					}
 				})
 				.await?;

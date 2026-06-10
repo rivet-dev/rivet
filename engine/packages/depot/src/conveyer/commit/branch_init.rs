@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use universaldb::{options::MutationType, utils::IsolationLevel::Serializable};
+use universaldb::options::MutationType;
 
 use crate::conveyer::{
 	branch, keys,
@@ -21,19 +21,32 @@ pub(super) async fn resolve_or_allocate_branch(
 	tx: &universaldb::Transaction,
 	bucket_id: BucketId,
 	database_id: &str,
+	now_ms: i64,
 ) -> Result<BranchResolution> {
 	let bucket = branch::resolve_or_allocate_root_bucket_branch(tx, bucket_id).await?;
 
-	if let Some(branch_id) =
-		branch::resolve_database_branch_in_bucket(tx, bucket.branch_id, database_id, Serializable)
-			.await?
-	{
-		return Ok(BranchResolution {
-			branch_id,
-			bucket_branch_id: bucket.branch_id,
-			bucket_initialized: bucket.initialized,
-			database_initialized: false,
-		});
+	// A freshly allocated bucket branch has no record to walk yet; everything
+	// else resolves through the parent chain so a database inherited via a
+	// bucket fork is materialized as a capped fork instead of being shadowed by
+	// a new empty branch.
+	if !bucket.initialized {
+		if let Some(branch_id) = branch::resolve_or_materialize_in_bucket_branch(
+			tx,
+			bucket_id,
+			bucket.branch_id,
+			database_id,
+			now_ms,
+			true,
+		)
+		.await?
+		{
+			return Ok(BranchResolution {
+				branch_id,
+				bucket_branch_id: bucket.branch_id,
+				bucket_initialized: bucket.initialized,
+				database_initialized: false,
+			});
+		}
 	}
 
 	Ok(BranchResolution {

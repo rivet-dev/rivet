@@ -3,7 +3,7 @@ use universaldb::{options::MutationType, utils::IsolationLevel::Serializable};
 
 use super::{
 	catalog::{write_bucket_catalog_marker, write_bucket_fork_facts},
-	resolve::{resolve_bucket_branch, resolve_database_branch_in_bucket},
+	resolve::resolve_bucket_branch,
 	shared::{
 		lookup_txid_at_versionstamp, now_ms, read_bucket_branch_record, read_commit_row,
 		read_database_branch_record, read_versionstamp_pin,
@@ -85,14 +85,20 @@ where
 					.ok_or(SqliteStorageError::DatabaseNotFound)?;
 				let (source_database_branch, at_versionstamp, restore_point) = match target {
 					ResolvedForkTarget::CurrentSourceBranch(at) => {
-						let source_database_branch = resolve_database_branch_in_bucket(
-							&tx,
-							source_bucket_branch,
-							&source_database_id,
-							Serializable,
-						)
-						.await?
-						.ok_or(SqliteStorageError::DatabaseNotFound)?;
+						// Materialize first so a fork issued through a bucket
+						// fork derives from the fork's capped state instead of
+						// the live source.
+						let source_database_branch =
+							super::materialize::resolve_or_materialize_in_bucket_branch(
+								&tx,
+								source_bucket,
+								source_bucket_branch,
+								&source_database_id,
+								now_ms()?,
+								true,
+							)
+							.await?
+							.ok_or(SqliteStorageError::DatabaseNotFound)?;
 						(source_database_branch, at.versionstamp, at.restore_point)
 					}
 					ResolvedForkTarget::ResolvedTarget(target) => (

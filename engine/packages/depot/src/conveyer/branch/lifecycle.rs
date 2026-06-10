@@ -7,7 +7,7 @@ use super::{
 		write_bucket_catalog_tombstone_marker,
 	},
 	fork::{derive_branch_at, derive_bucket_branch_at},
-	resolve::{resolve_bucket_branch, resolve_database_pointer},
+	resolve::resolve_bucket_branch,
 	shared::{now_ms, read_bucket_branch_record, read_database_branch_record},
 };
 use crate::conveyer::{
@@ -140,10 +140,22 @@ pub async fn rollback_database(
 				let bucket_branch = resolve_bucket_branch(&tx, bucket, Serializable)
 					.await?
 					.ok_or(SqliteStorageError::DatabaseNotFound)?;
-				let cur_ptr =
-					resolve_database_pointer(&tx, bucket_branch, &database_id, Serializable)
-						.await?
-						.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				// Materialize first so rolling back through a bucket fork
+				// freezes the fork's own branch instead of the live source.
+				let cur_branch = super::materialize::resolve_or_materialize_in_bucket_branch(
+					&tx,
+					bucket,
+					bucket_branch,
+					&database_id,
+					now_ms()?,
+					true,
+				)
+				.await?
+				.ok_or(SqliteStorageError::DatabaseNotFound)?;
+				let cur_ptr = DatabasePointer {
+					current_branch: cur_branch,
+					last_swapped_at_ms: 0,
+				};
 				let cur_record = read_database_branch_record(&tx, cur_ptr.current_branch).await?;
 
 				derive_branch_at(
@@ -202,9 +214,22 @@ pub(crate) async fn rollback_database_to_target_tx(
 	let bucket_branch = resolve_bucket_branch(tx, bucket, Serializable)
 		.await?
 		.ok_or(SqliteStorageError::DatabaseNotFound)?;
-	let cur_ptr = resolve_database_pointer(tx, bucket_branch, database_id, Serializable)
-		.await?
-		.ok_or(SqliteStorageError::DatabaseNotFound)?;
+	// Materialize first so rolling back through a bucket fork freezes the
+	// fork's own branch instead of the live source.
+	let cur_branch = super::materialize::resolve_or_materialize_in_bucket_branch(
+		tx,
+		bucket,
+		bucket_branch,
+		database_id,
+		now_ms()?,
+		true,
+	)
+	.await?
+	.ok_or(SqliteStorageError::DatabaseNotFound)?;
+	let cur_ptr = DatabasePointer {
+		current_branch: cur_branch,
+		last_swapped_at_ms: 0,
+	};
 	let cur_record = read_database_branch_record(tx, cur_ptr.current_branch).await?;
 
 	derive_branch_at(
