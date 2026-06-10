@@ -1,6 +1,6 @@
 import { faChevronDown, faCopy, Icon } from "@rivet-gg/icons";
 import { useMutation } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import {
@@ -15,8 +15,9 @@ import {
 } from "@/components";
 import { features } from "@/lib/features";
 import { getRandomKey } from "@/lib/words";
+import { queryClient } from "@/queries/global";
 import { useActorsView } from "../actors-view-context-provider";
-import { useDataProvider } from "../data-provider";
+import { useEngineCompatDataProvider } from "../data-provider";
 import * as ActorCreateForm from "../form/actor-create-form";
 
 interface CreateActorSheetProps {
@@ -28,9 +29,25 @@ export function CreateActorSheet({
 	open,
 	onOpenChange,
 }: CreateActorSheetProps) {
-	const { mutateAsync } = useMutation(
-		useDataProvider().createActorMutationOptions(),
-	);
+	const dataProvider = useEngineCompatDataProvider();
+	const navigate = useNavigate();
+	const { mutateAsync } = useMutation({
+		...dataProvider.createActorMutationOptions(),
+		onSuccess: async (data) => {
+			onOpenChange(false);
+			const stringKeys = dataProvider
+				.actorsQueryOptions({})
+				.queryKey.filter((k): k is string => typeof k === "string");
+			await queryClient.invalidateQueries({
+				predicate: (query) =>
+					stringKeys.every((k) => query.queryKey.includes(k)),
+			});
+			return navigate({
+				to: ".",
+				search: (old) => ({ ...old, modal: undefined, actorId: data }),
+			});
+		},
+	});
 	const name = useSearch({
 		from: "/_context",
 		select: (state) => state.n?.[0],
@@ -72,7 +89,6 @@ export function CreateActorSheet({
 								values.runnerNameSelector || "default",
 							crashPolicy: "destroy",
 						});
-						onOpenChange(false);
 					}}
 					defaultValues={{
 						name,

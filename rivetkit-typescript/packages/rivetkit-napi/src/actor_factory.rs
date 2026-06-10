@@ -1053,11 +1053,29 @@ impl From<JsActorConfig> for ActorConfigInput {
 						if tab.hidden == Some(true) {
 							InspectorTabEntry::HideBuiltin { id: tab.id }
 						} else {
+							// `label` and `source` are required on the TS
+							// side but typed `Option<String>` on the NAPI
+							// boundary to share one struct with the
+							// HideBuiltin variant. Surface the real cause
+							// instead of silently defaulting to "" and
+							// letting downstream validation report an
+							// empty-label/empty-source error.
+							let id = tab.id.clone();
+							let label = tab.label.unwrap_or_else(|| {
+								panic!(
+									"inspector tab `{id}` is missing `label` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
+								)
+							});
+							let source = tab.source.unwrap_or_else(|| {
+								panic!(
+									"inspector tab `{id}` is missing `source` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
+								)
+							});
 							InspectorTabEntry::Custom {
 								id: tab.id,
-								label: tab.label.unwrap_or_default(),
+								label,
 								icon: tab.icon,
-								root: std::path::PathBuf::from(tab.source.unwrap_or_default()),
+								root: std::path::PathBuf::from(source),
 							}
 						}
 					})
