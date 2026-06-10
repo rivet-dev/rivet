@@ -239,6 +239,31 @@ pub(crate) enum EngineProcessError {
 	BinaryNotFound { path: String },
 
 	#[error(
+		"binary_unavailable",
+		"Engine binary is unavailable.",
+		"No usable engine binary was found for version '{version}'. Build `rivet-engine`, set `RIVET_ENGINE_BINARY_PATH`, or enable `RIVETKIT_ENGINE_AUTO_DOWNLOAD=1`."
+	)]
+	BinaryUnavailable { version: String },
+
+	#[error(
+		"download_failed",
+		"Engine binary download failed.",
+		"Engine binary download failed for '{url}': {reason}"
+	)]
+	DownloadFailed { url: String, reason: String },
+
+	#[error(
+		"checksum_mismatch",
+		"Engine binary checksum mismatch.",
+		"Engine binary checksum mismatch for '{artifact}': expected {expected}, received {received}."
+	)]
+	ChecksumMismatch {
+		artifact: String,
+		expected: String,
+		received: String,
+	},
+
+	#[error(
 		"invalid_endpoint",
 		"Engine endpoint is invalid.",
 		"Engine endpoint '{endpoint}' is invalid: {reason}"

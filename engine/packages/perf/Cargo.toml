@@ -1,5 +1,6 @@
 [package]
 name = "rivet-perf"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true

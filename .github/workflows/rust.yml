@@ -95,6 +95,15 @@ jobs:
           # Deny warnings
           RUSTFLAGS: --cfg tokio_unstable -D warnings -A unsafe-op-in-unsafe-fn
 
+      - name: Check Rust publish surface
+        run: |
+          cargo check -p rivetkit --no-default-features --features rivetkit-core/sqlite-remote
+          if cargo tree -e normal -p rivetkit --no-default-features --features rivetkit-core/sqlite-remote | grep -i 'git+'; then
+            echo "published rivetkit feature set must not contain git dependencies" >&2
+            exit 1
+          fi
+          cargo publish -p rivet-error-macros --dry-run
+
   # test:
   #   name: Test
   #   runs-on: depot-ubuntu-24.04-8

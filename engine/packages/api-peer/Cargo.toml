@@ -1,5 +1,6 @@
 [package]
 name = "rivet-api-peer"
+publish = false
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

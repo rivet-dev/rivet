@@ -853,6 +853,7 @@ impl Db {
 				GetPagesOptions {
 					expected_head_txid: None,
 					expand_overflow: false,
+					..Default::default()
 				},
 			))
 			.await?

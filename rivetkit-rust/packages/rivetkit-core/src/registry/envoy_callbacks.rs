@@ -160,6 +160,11 @@ impl ServeSettings {
 			namespace: env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_owned()),
 			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
+			engine_spawn: super::EngineSpawnMode::from_env(),
+			engine_auto_download: matches!(
+				env::var("RIVETKIT_ENGINE_AUTO_DOWNLOAD").as_deref(),
+				Ok("1") | Ok("true") | Ok("TRUE") | Ok("yes") | Ok("YES")
+			),
 			handle_inspector_http_in_runtime: false,
 			serverless_base_path: None,
 			serverless_package_version: env!("CARGO_PKG_VERSION").to_owned(),
@@ -188,6 +193,8 @@ impl ServeConfig {
 			namespace: settings.namespace,
 			pool_name: settings.pool_name,
 			engine_binary_path: settings.engine_binary_path,
+			engine_spawn: settings.engine_spawn,
+			engine_auto_download: settings.engine_auto_download,
 			handle_inspector_http_in_runtime: settings.handle_inspector_http_in_runtime,
 			serverless_base_path: settings.serverless_base_path,
 			serverless_package_version: settings.serverless_package_version,

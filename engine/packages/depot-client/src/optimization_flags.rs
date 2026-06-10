@@ -239,19 +239,6 @@ fn enabled_by_default(value: Option<&str>) -> bool {
 	}
 }
 
-fn disabled_by_default(value: Option<&str>) -> bool {
-	match value.map(|value| value.trim().to_ascii_lowercase()) {
-		Some(value)
-			if matches!(
-				value.as_str(),
-				"1" | "true" | "on" | "yes" | "enabled" | "enable"
-			) =>
-		{
-			true
-		}
-		_ => false,
-	}
-}
 fn usize_bounded_by_default(value: Option<&str>, default: usize, max: usize) -> usize {
 	value
 		.and_then(|value| value.trim().parse::<usize>().ok())

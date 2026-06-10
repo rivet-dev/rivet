@@ -49,7 +49,7 @@ use crate::actor::task::{
 };
 use crate::actor::task_types::ShutdownKind;
 #[cfg(feature = "native-runtime")]
-use crate::engine_process::EngineProcessManager;
+use crate::engine_process::{EngineProcessManager, EngineResolverConfig};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::protocol::{
 	self as inspector_protocol, ServerMessage as InspectorServerMessage,
@@ -186,6 +186,8 @@ struct ServeSettings {
 	namespace: String,
 	pool_name: String,
 	engine_binary_path: Option<PathBuf>,
+	engine_spawn: EngineSpawnMode,
+	engine_auto_download: bool,
 	handle_inspector_http_in_runtime: bool,
 	serverless_base_path: Option<String>,
 	serverless_package_version: String,
@@ -196,6 +198,24 @@ struct ServeSettings {
 	serverless_max_start_payload_bytes: usize,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EngineSpawnMode {
+	#[default]
+	Auto,
+	Always,
+	Never,
+}
+
+impl EngineSpawnMode {
+	pub(crate) fn from_env() -> Self {
+		match env::var("RIVETKIT_ENGINE_SPAWN") {
+			Ok(value) if value.eq_ignore_ascii_case("always") => Self::Always,
+			Ok(value) if value.eq_ignore_ascii_case("never") => Self::Never,
+			_ => Self::Auto,
+		}
+	}
+}
+
 #[derive(Clone, Debug)]
 pub struct ServeConfig {
 	pub version: u32,
@@ -204,6 +224,8 @@ pub struct ServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<PathBuf>,
+	pub engine_spawn: EngineSpawnMode,
+	pub engine_auto_download: bool,
 	pub handle_inspector_http_in_runtime: bool,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -269,6 +291,61 @@ impl Default for HttpActionRequestJson {
 		Self {
 			args: JsonValue::Array(Vec::new()),
 		}
+	}
+}
+
+pub(crate) fn should_manage_engine(endpoint: &str, spawn_mode: EngineSpawnMode) -> Result<bool> {
+	match spawn_mode {
+		EngineSpawnMode::Always => Ok(true),
+		EngineSpawnMode::Never => Ok(false),
+		EngineSpawnMode::Auto => is_loopback_endpoint(endpoint),
+	}
+}
+
+fn is_loopback_endpoint(endpoint: &str) -> Result<bool> {
+	let url =
+		Url::parse(endpoint).with_context(|| format!("parse engine endpoint `{endpoint}`"))?;
+	let Some(host) = url.host_str() else {
+		anyhow::bail!("engine endpoint `{endpoint}` is invalid: missing host");
+	};
+
+	if host == "localhost" || host.ends_with(".localhost") {
+		return Ok(true);
+	}
+
+	let ip_host = host
+		.strip_prefix('[')
+		.and_then(|value| value.strip_suffix(']'))
+		.unwrap_or(host);
+
+	Ok(ip_host
+		.parse::<std::net::IpAddr>()
+		.map(|ip| ip.is_loopback() || ip.is_unspecified())
+		.unwrap_or(false))
+}
+
+#[cfg(test)]
+mod engine_spawn_tests {
+	use super::{EngineSpawnMode, should_manage_engine};
+
+	#[test]
+	fn auto_manages_loopback_endpoints() {
+		assert!(should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Auto).unwrap());
+		assert!(should_manage_engine("http://localhost:6420", EngineSpawnMode::Auto).unwrap());
+		assert!(should_manage_engine("http://dev.localhost:6420", EngineSpawnMode::Auto).unwrap());
+		assert!(should_manage_engine("http://[::1]:6420", EngineSpawnMode::Auto).unwrap());
+	}
+
+	#[test]
+	fn auto_leaves_remote_endpoints_connect_only() {
+		assert!(!should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Auto).unwrap());
+		assert!(!should_manage_engine("http://192.0.2.10:6420", EngineSpawnMode::Auto).unwrap());
+	}
+
+	#[test]
+	fn explicit_spawn_mode_overrides_endpoint_shape() {
+		assert!(should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Always).unwrap());
+		assert!(!should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Never).unwrap());
 	}
 }
 
@@ -486,14 +563,20 @@ impl CoreRegistry {
 	) -> Result<()> {
 		let dispatcher = self.into_dispatcher(&config);
 		#[cfg(feature = "native-runtime")]
-		let _engine_process = match config.engine_binary_path.as_ref() {
-			Some(binary_path) => {
-				Some(EngineProcessManager::start(binary_path, &config.endpoint).await?)
-			}
-			None => None,
+		let _engine_process = if should_manage_engine(&config.endpoint, config.engine_spawn)? {
+			Some(
+				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
+					&config.endpoint,
+					config.engine_binary_path.clone(),
+					config.engine_auto_download,
+				))
+				.await?,
+			)
+		} else {
+			None
 		};
 		#[cfg(not(feature = "native-runtime"))]
-		if config.engine_binary_path.is_some() {
+		if should_manage_engine(&config.endpoint, config.engine_spawn)? {
 			anyhow::bail!("engine process spawning requires the `native-runtime` feature");
 		}
 

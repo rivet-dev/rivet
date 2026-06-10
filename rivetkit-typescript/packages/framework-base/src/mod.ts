@@ -400,10 +400,11 @@ function getOrCreateActor<
 	};
 }
 
-function create<
-	Registry extends AnyActorRegistry,
-	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
->(client: Client<Registry>, store: Store<InternalRivetKitStore>, key: string) {
+function create<Registry extends AnyActorRegistry>(
+	client: Client<Registry>,
+	store: Store<InternalRivetKitStore>,
+	key: string,
+) {
 	const actor = store.state.actors[key];
 	if (!actor) {
 		throw new Error(
@@ -429,16 +430,14 @@ function create<
 				});
 
 		const connection = handle.connect();
+		const storedHandle = handle as ActorHandle<AnyActorDefinition>;
+		const storedConnection = connection as ActorConn<AnyActorDefinition>;
 
 		// Store connection BEFORE registering callbacks to avoid race condition
 		// where status change fires before connection is stored
 		updateActor(store, key, {
-			handle: handle as ActorHandle<
-				ExtractActorsFromRegistry<Registry>[ActorName]
-			>,
-			connection: connection as ActorConn<
-				ExtractActorsFromRegistry<Registry>[ActorName]
-			>,
+			handle: storedHandle,
+			connection: storedConnection,
 		});
 
 		// Subscribe to connection state changes

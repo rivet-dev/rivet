@@ -3,8 +3,11 @@ name = "rivetkit-inspector-protocol"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 edition.workspace = true
 workspace = "../../../"
+description = "Inspector protocol types for RivetKit"
 
 [dependencies]
 anyhow.workspace = true

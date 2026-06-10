@@ -1,0 +1,5 @@
+{
+  "code": "remote_fence_mismatch",
+  "group": "sqlite",
+  "message": "Remote SQLite generation is stale."
+}

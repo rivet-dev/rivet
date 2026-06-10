@@ -8,8 +8,8 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, Threadsafe
 use napi_derive::napi;
 use parking_lot::Mutex as ParkingMutex;
 use rivetkit_core::{
-	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, ServeConfig, ServerlessRequest,
-	registry::CoreEnvoyHandle, serverless::ServerlessStreamError,
+	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, EngineSpawnMode, ServeConfig,
+	ServerlessRequest, registry::CoreEnvoyHandle, serverless::ServerlessStreamError,
 };
 use tokio::sync::{Mutex as TokioMutex, Notify};
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -612,6 +612,8 @@ fn serve_config_from_js(
 		namespace: config.namespace,
 		pool_name: config.pool_name,
 		engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+		engine_spawn: EngineSpawnMode::Auto,
+		engine_auto_download: false,
 		handle_inspector_http_in_runtime: config
 			.handle_inspector_http_in_runtime
 			.unwrap_or(default_handle_inspector_http_in_runtime),

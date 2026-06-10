@@ -1,21 +1,21 @@
 use anyhow::Result;
 use futures_util::FutureExt;
 use parking_lot::Mutex as SyncMutex;
-use scc::{hash_map::Entry as SccEntry, HashMap as SccHashMap};
+use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
 use serde_json::Value;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::{broadcast, oneshot, watch, Mutex};
+use tokio::sync::{Mutex, broadcast, oneshot, watch};
 
 use crate::{
+	EncodingKind, TransportKind,
 	backoff::Backoff,
 	drivers::*,
 	protocol::{query::ActorQuery, *},
 	remote_manager::RemoteManager,
-	EncodingKind, TransportKind,
 };
 use tracing::debug;
 
@@ -29,6 +29,7 @@ type StatusCallback = dyn Fn(ConnectionStatus) + Send + Sync;
 pub struct Event {
 	pub name: String,
 	pub args: Vec<Value>,
+	pub raw_args: Vec<u8>,
 }
 
 struct EventSubscription {
@@ -319,14 +320,7 @@ impl ActorConnectionInner {
 				}
 			}
 			to_client::ToClientBody::Event(ev) => {
-				// Decode CBOR args
-				let args: Vec<Value> = match serde_cbor::from_slice(&ev.args) {
-					Ok(a) => a,
-					Err(e) => {
-						debug!("Failed to decode event args: {:?}", e);
-						return;
-					}
-				};
+				let args = decode_event_args(&ev.args);
 
 				let callbacks = {
 					self.event_subscriptions
@@ -337,6 +331,7 @@ impl ActorConnectionInner {
 				let event = Event {
 					name: ev.name.clone(),
 					args,
+					raw_args: ev.args.clone(),
 				};
 				for subscription in callbacks {
 					(subscription.callback)(event.clone());
@@ -561,6 +556,18 @@ impl ActorConnectionInner {
 		.await
 	}
 
+	pub async fn on_event_raw<F>(
+		self: &Arc<Self>,
+		event_name: &str,
+		callback: F,
+	) -> SubscriptionHandle
+	where
+		F: Fn(Event) + Send + Sync + 'static,
+	{
+		self.add_event_subscription(event_name.to_string(), Box::new(callback))
+			.await
+	}
+
 	pub async fn once_event<F>(
 		self: &Arc<Self>,
 		event_name: &str,
@@ -741,5 +748,19 @@ impl Debug for ActorConnectionInner {
 			.field("transport_kind", &self.transport_kind)
 			.field("encoding_kind", &self.encoding_kind)
 			.finish()
+	}
+}
+
+fn decode_event_args(raw_args: &[u8]) -> Vec<Value> {
+	match serde_cbor::from_slice::<Vec<Value>>(raw_args) {
+		Ok(args) => args,
+		Err(vector_error) => match serde_cbor::from_slice::<Value>(raw_args) {
+			Ok(Value::Array(args)) => args,
+			Ok(value) => vec![value],
+			Err(value_error) => {
+				debug!(?vector_error, ?value_error, "failed to decode event args");
+				Vec::new()
+			}
+		},
 	}
 }

@@ -1715,6 +1715,7 @@ async fn build_resolver_image(
 			pgnos,
 			GetPagesOptions {
 				expected_head_txid: None,
+				expand_overflow: false,
 				mode: DepotReadMode::DiagnosticNoSideEffects,
 				collect_provenance: !skip_page_provenance,
 				diagnostic_max_txid: Some(selected_txid),

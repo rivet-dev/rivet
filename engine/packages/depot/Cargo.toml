@@ -1,5 +1,6 @@
 [package]
 name = "depot"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true

@@ -1,0 +1,5 @@
+{
+  "code": "port_occupied",
+  "group": "engine",
+  "message": "Engine port is occupied by a different runtime."
+}

@@ -7,7 +7,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context, Result, bail};
 use reqwest::StatusCode;
-use rivetkit_core::{CoreRegistry, ServeConfig};
+use rivetkit_core::{CoreRegistry, EngineSpawnMode, ServeConfig};
 use tempfile::TempDir;
 use tokio::process::{Child, Command};
 use tokio::task::JoinHandle;
@@ -94,6 +94,8 @@ impl IntegrationCtx {
 			namespace: DEFAULT_NAMESPACE.to_owned(),
 			pool_name: DEFAULT_POOL.to_owned(),
 			engine_binary_path: None,
+			engine_spawn: EngineSpawnMode::Never,
+			engine_auto_download: false,
 			..ServeConfig::default()
 		};
 		let task = tokio::spawn({
