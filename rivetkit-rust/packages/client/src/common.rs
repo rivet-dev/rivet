@@ -74,3 +74,58 @@ impl ToString for EncodingKind {
 
 // Max size of each entry is 128 bytes
 pub type ActorKey = Vec<String>;
+
+/// Serialize an actor key for the engine HTTP API in the canonical
+/// slash-escaped format shared by the TS SDK (`serializeActorKey` in
+/// `rivetkit/src/actor/keys.ts`) and the runner-side parser
+/// (`rivetkit-core/src/registry/envoy_callbacks.rs`):
+///
+/// - empty key array -> the marker `"/"`
+/// - empty segment -> the marker backslash-`0`
+/// - backslash and `/` inside a segment are escaped with a leading backslash
+/// - segments joined with `/`
+///
+/// Previously this crate sent `serde_json::to_string(key)` (e.g.
+/// `["my-key"]`), which the runner-side parser treated as ONE opaque
+/// segment, so `ctx.key()` inside the actor returned
+/// `[String("[\"my-key\"]")]` instead of `[String("my-key")]`.
+pub fn serialize_actor_key(key: &ActorKey) -> String {
+	const KEY_SEPARATOR: char = '/';
+	const EMPTY_KEY: &str = "/";
+
+	if key.is_empty() {
+		return EMPTY_KEY.to_string();
+	}
+
+	key.iter()
+		.map(|part| {
+			if part.is_empty() {
+				return "\\0".to_string();
+			}
+			let mut escaped = String::with_capacity(part.len());
+			for ch in part.chars() {
+				if ch == '\\' || ch == KEY_SEPARATOR {
+					escaped.push('\\');
+				}
+				escaped.push(ch);
+			}
+			escaped
+		})
+		.collect::<Vec<_>>()
+		.join(&KEY_SEPARATOR.to_string())
+}
+
+#[cfg(test)]
+mod actor_key_tests {
+	use super::serialize_actor_key;
+
+	#[test]
+	fn matches_the_ts_sdk_format() {
+		assert_eq!(serialize_actor_key(&vec![]), "/");
+		assert_eq!(serialize_actor_key(&vec!["a".into()]), "a");
+		assert_eq!(serialize_actor_key(&vec!["a".into(), "b".into()]), "a/b");
+		assert_eq!(serialize_actor_key(&vec!["".into()]), "\\0");
+		assert_eq!(serialize_actor_key(&vec!["a/b".into()]), "a\\/b");
+		assert_eq!(serialize_actor_key(&vec!["a\\b".into()]), "a\\\\b");
+	}
+}
