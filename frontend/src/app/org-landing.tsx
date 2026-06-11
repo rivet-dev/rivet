@@ -24,11 +24,13 @@ import {
 	H1,
 	RelativeTime,
 	ScrollArea,
+	Skeleton,
 	SmallText,
 	toast,
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
+import { RouteLayout } from "./route-layout";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import {
@@ -239,6 +241,80 @@ export function OrgLanding({ organization }: { organization: string }) {
 				</div>
 			</ScrollArea>
 		</div>
+	);
+}
+
+OrgLanding.Skeleton = function OrgLandingSkeleton() {
+	return (
+		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
+			<ScrollArea className="h-full w-full">
+				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
+					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
+						<div className="flex items-center gap-3 min-w-0">
+							<Skeleton className="size-10 rounded-full shrink-0" />
+							<Skeleton className="h-8 w-48" />
+						</div>
+						<Skeleton className="size-8 rounded-md" />
+					</header>
+
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<Skeleton className="h-5 w-20" />
+							<Skeleton className="h-8 w-32 rounded-md" />
+						</header>
+						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+							{Array.from({ length: 4 }).map((_, i) => (
+								<div
+									// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton cards
+									key={i}
+									className="flex min-h-[130px] flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4"
+								>
+									<Skeleton className="h-4 w-28" />
+									<Skeleton className="h-3 w-20" />
+									<Skeleton className="h-3 w-16 mt-auto" />
+								</div>
+							))}
+						</div>
+					</section>
+
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<Skeleton className="h-5 w-20" />
+							<Skeleton className="h-8 w-32 rounded-md" />
+						</header>
+						<div className="rounded-md border border-foreground/10 bg-card overflow-hidden">
+							<div className="grid grid-cols-[1fr_120px_28px] gap-4 items-center px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
+								<div>Member</div>
+								<div>Role</div>
+								<div />
+							</div>
+							{Array.from({ length: 3 }).map((_, i) => (
+								<div
+									// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
+									key={i}
+									className="grid grid-cols-[1fr_120px_28px] gap-4 items-center px-3 py-2.5 border-b border-foreground/10 last:border-b-0"
+								>
+									<div className="flex items-center gap-2 min-w-0">
+										<Skeleton className="size-6 rounded-full shrink-0" />
+										<Skeleton className="h-4 w-32" />
+									</div>
+									<Skeleton className="h-5 w-16 rounded-full" />
+									<div />
+								</div>
+							))}
+						</div>
+					</section>
+				</div>
+			</ScrollArea>
+		</div>
+	);
+};
+
+export function OrgLandingPending() {
+	return (
+		<RouteLayout>
+			<OrgLanding.Skeleton />
+		</RouteLayout>
 	);
 }
 

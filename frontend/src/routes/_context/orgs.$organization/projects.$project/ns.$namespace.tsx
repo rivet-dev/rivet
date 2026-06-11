@@ -10,13 +10,14 @@ import {
 	isConnectProviderModal,
 } from "@/app/dialogs/connect-provider-sheet";
 import { EditRunnerConfigSheet } from "@/app/dialogs/edit-runner-config-sheet";
+import { NamespaceLandingPending } from "@/app/actors-grid";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
-import { FullscreenLoading, ls } from "@/components";
+import { ls } from "@/components";
 import { CreateActorSheet } from "@/components/actors/dialogs/create-actor-sheet";
 import {
 	deriveOnboardingState,
@@ -170,7 +171,7 @@ export const Route = createFileRoute(
 	errorComponent: RouteError,
 	pendingMinMs: 0,
 	pendingMs: 0,
-	pendingComponent: FullscreenLoading,
+	pendingComponent: NamespaceLandingPending,
 });
 
 function RouteComponent() {
