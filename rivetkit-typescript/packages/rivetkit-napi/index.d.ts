@@ -176,6 +176,8 @@ export interface JsServeConfig {
   namespace: string
   poolName: string
   engineBinaryPath?: string
+  engineHost?: string
+  enginePort?: number
   handleInspectorHttpInRuntime?: boolean
   serverlessBasePath?: string
   serverlessPackageVersion: string

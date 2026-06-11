@@ -26,6 +26,8 @@ pub struct JsServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<String>,
+	pub engine_host: Option<String>,
+	pub engine_port: Option<u16>,
 	pub handle_inspector_http_in_runtime: Option<bool>,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -612,6 +614,8 @@ fn serve_config_from_js(
 		namespace: config.namespace,
 		pool_name: config.pool_name,
 		engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+		engine_host: config.engine_host,
+		engine_port: config.engine_port,
 		engine_spawn: EngineSpawnMode::Auto,
 		engine_auto_download: false,
 		handle_inspector_http_in_runtime: config

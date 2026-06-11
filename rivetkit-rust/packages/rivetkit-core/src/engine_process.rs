@@ -29,6 +29,8 @@ struct EngineHealthResponse {
 pub(crate) struct EngineResolverConfig {
 	pub endpoint: String,
 	pub explicit_binary_path: Option<PathBuf>,
+	pub bind_host: Option<String>,
+	pub bind_port: Option<u16>,
 	pub auto_download: bool,
 	pub version: String,
 	pub releases_endpoint: String,
@@ -38,11 +40,15 @@ impl EngineResolverConfig {
 	pub(crate) fn from_parts(
 		endpoint: &str,
 		explicit_binary_path: Option<PathBuf>,
+		bind_host: Option<String>,
+		bind_port: Option<u16>,
 		auto_download: bool,
 	) -> Self {
 		Self {
 			endpoint: endpoint.to_owned(),
 			explicit_binary_path,
+			bind_host,
+			bind_port,
 			auto_download,
 			version: std::env::var(ENGINE_VERSION_ENV)
 				.unwrap_or_else(|_| env!("CARGO_PKG_VERSION").to_owned()),
@@ -86,12 +92,15 @@ pub(crate) struct EngineProcessManager {
 
 impl EngineProcessManager {
 	pub(crate) async fn start_or_reuse(config: EngineResolverConfig) -> Result<Self> {
-		let endpoint = config.endpoint.clone();
 		let resolved = resolve_engine_binary(&config).await?;
-		Self::start_resolved(resolved, &endpoint).await
+		Self::start_resolved(resolved, &config).await
 	}
 
-	async fn start_resolved(resolved: ResolvedEngine, endpoint: &str) -> Result<Self> {
+	async fn start_resolved(
+		resolved: ResolvedEngine,
+		config: &EngineResolverConfig,
+	) -> Result<Self> {
+		let endpoint = &config.endpoint;
 		if matches!(resolved, ResolvedEngine::Existing) {
 			tracing::info!(
 				endpoint = %endpoint,
@@ -127,9 +136,11 @@ impl EngineProcessManager {
 			.host_str()
 			.ok_or_else(|| invalid_endpoint(endpoint, "missing host"))?
 			.to_owned();
+		let guard_host = config.bind_host.clone().unwrap_or(guard_host);
 		let guard_port = endpoint_url
 			.port_or_known_default()
 			.ok_or_else(|| invalid_endpoint(endpoint, "missing port"))?;
+		let guard_port = config.bind_port.unwrap_or(guard_port);
 		let api_peer_port = guard_port
 			.checked_add(1)
 			.ok_or_else(|| invalid_endpoint(endpoint, "port is too large"))?;

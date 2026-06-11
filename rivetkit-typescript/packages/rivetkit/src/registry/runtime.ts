@@ -250,6 +250,8 @@ export interface RuntimeServeConfig {
 	namespace: string;
 	poolName: string;
 	engineBinaryPath?: string;
+	engineHost?: string;
+	enginePort?: number;
 	handleInspectorHttpInRuntime?: boolean;
 	inspectorTestToken?: string;
 	serverlessBasePath?: string;
@@ -599,6 +601,8 @@ export async function buildServeConfig(
 
 	if (config.startEngine) {
 		serveConfig.engineBinaryPath = await loadEnginePath();
+		serveConfig.engineHost = config.engineHost;
+		serveConfig.enginePort = config.enginePort;
 	}
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =

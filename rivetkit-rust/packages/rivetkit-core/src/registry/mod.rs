@@ -186,6 +186,8 @@ struct ServeSettings {
 	namespace: String,
 	pool_name: String,
 	engine_binary_path: Option<PathBuf>,
+	engine_host: Option<String>,
+	engine_port: Option<u16>,
 	engine_spawn: EngineSpawnMode,
 	engine_auto_download: bool,
 	handle_inspector_http_in_runtime: bool,
@@ -224,6 +226,8 @@ pub struct ServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<PathBuf>,
+	pub engine_host: Option<String>,
+	pub engine_port: Option<u16>,
 	pub engine_spawn: EngineSpawnMode,
 	pub engine_auto_download: bool,
 	pub handle_inspector_http_in_runtime: bool,
@@ -568,6 +572,8 @@ impl CoreRegistry {
 				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
 					&config.endpoint,
 					config.engine_binary_path.clone(),
+					config.engine_host.clone(),
+					config.engine_port,
 					config.engine_auto_download,
 				))
 				.await?,

@@ -4731,6 +4731,8 @@ export async function buildServeConfig(
 	if (config.startEngine) {
 		const { getEnginePath } = await loadEngineCli();
 		serveConfig.engineBinaryPath = getEnginePath();
+		serveConfig.engineHost = config.engineHost;
+		serveConfig.enginePort = config.enginePort;
 	}
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =

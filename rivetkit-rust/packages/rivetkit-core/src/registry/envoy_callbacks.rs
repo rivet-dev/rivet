@@ -149,17 +149,29 @@ impl EnvoyCallbacks for RegistryCallbacks {
 
 impl ServeSettings {
 	fn from_env() -> Self {
+		let engine_host = env::var("RIVET_RUN_ENGINE_HOST").ok();
+		let engine_port = env::var("RIVET_RUN_ENGINE_PORT")
+			.ok()
+			.and_then(|value| value.parse().ok());
+		let endpoint = env::var("RIVET_ENDPOINT").unwrap_or_else(|_| {
+			default_engine_endpoint(
+				engine_host.as_deref().unwrap_or("127.0.0.1"),
+				engine_port.unwrap_or(6420),
+			)
+		});
+
 		Self {
 			version: env::var("RIVET_ENVOY_VERSION")
 				.ok()
 				.and_then(|value| value.parse().ok())
 				.unwrap_or(1),
-			endpoint: env::var("RIVET_ENDPOINT")
-				.unwrap_or_else(|_| "http://127.0.0.1:6420".to_owned()),
+			endpoint,
 			token: Some(env::var("RIVET_TOKEN").unwrap_or_else(|_| "dev".to_owned())),
 			namespace: env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_owned()),
 			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
+			engine_host,
+			engine_port,
 			engine_spawn: super::EngineSpawnMode::from_env(),
 			engine_auto_download: matches!(
 				env::var("RIVETKIT_ENGINE_AUTO_DOWNLOAD").as_deref(),
@@ -175,6 +187,15 @@ impl ServeSettings {
 			serverless_max_start_payload_bytes: 1_048_576,
 		}
 	}
+}
+
+fn default_engine_endpoint(host: &str, port: u16) -> String {
+	let url_host = if host.contains(':') && !host.starts_with('[') {
+		format!("[{host}]")
+	} else {
+		host.to_owned()
+	};
+	format!("http://{url_host}:{port}")
 }
 
 impl Default for ServeConfig {
@@ -193,6 +214,8 @@ impl ServeConfig {
 			namespace: settings.namespace,
 			pool_name: settings.pool_name,
 			engine_binary_path: settings.engine_binary_path,
+			engine_host: settings.engine_host,
+			engine_port: settings.engine_port,
 			engine_spawn: settings.engine_spawn,
 			engine_auto_download: settings.engine_auto_download,
 			handle_inspector_http_in_runtime: settings.handle_inspector_http_in_runtime,

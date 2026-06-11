@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { actor, setup } from "@/mod";
-import { buildNativeRegistry } from "../src/registry/native";
+import { RegistryConfigSchema } from "@/registry/config";
+import { buildNativeRegistry, buildServeConfig } from "../src/registry/native";
+
+vi.mock("@rivetkit/engine-cli", () => ({
+	getEnginePath: () => "/tmp/rivet-engine",
+}));
 
 const testActor = actor({
 	state: {},
@@ -67,5 +72,46 @@ describe("Registry constructor", () => {
 		);
 		expect(serveConfig.namespace).toBe("after-build");
 		expect(serveConfig.poolName).toBe("after-build-pool");
+	});
+
+	test("uses run-engine host and port for spawned local engine config", async () => {
+		const config = RegistryConfigSchema.parse({
+			use: {
+				test: testActor,
+			},
+			startEngine: true,
+			engineHost: "127.0.0.1",
+			enginePort: 7654,
+		});
+
+		expect(config.endpoint).toBe("http://127.0.0.1:7654");
+		expect(config.publicEndpoint).toBe("http://127.0.0.1:7654");
+
+		const serveConfig = await buildServeConfig(config);
+
+		expect(serveConfig.endpoint).toBe("http://127.0.0.1:7654");
+		expect(serveConfig.engineHost).toBe("127.0.0.1");
+		expect(serveConfig.enginePort).toBe(7654);
+	});
+
+	test("keeps endpoint separate from spawned local engine config", () => {
+		const result = RegistryConfigSchema.safeParse({
+			use: {
+				test: testActor,
+			},
+			startEngine: true,
+			endpoint: "http://127.0.0.1:7654",
+		});
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.issues).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						message: "cannot specify both startEngine and endpoint",
+					}),
+				]),
+			);
+		}
 	});
 });

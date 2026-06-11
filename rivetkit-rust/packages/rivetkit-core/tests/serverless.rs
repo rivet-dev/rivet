@@ -180,6 +180,8 @@ mod moved_tests {
 			namespace: "default".to_owned(),
 			pool_name: "default".to_owned(),
 			engine_binary_path: None,
+			engine_host: None,
+			engine_port: None,
 			engine_spawn: EngineSpawnMode::Never,
 			engine_auto_download: false,
 			handle_inspector_http_in_runtime: true,

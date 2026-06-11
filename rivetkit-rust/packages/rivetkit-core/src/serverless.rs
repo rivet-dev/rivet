@@ -163,6 +163,8 @@ impl CoreServerlessRuntime {
 				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
 					&config.endpoint,
 					config.engine_binary_path.clone(),
+					config.engine_host.clone(),
+					config.engine_port,
 					config.engine_auto_download,
 				))
 				.await?,

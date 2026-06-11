@@ -22,6 +22,12 @@ export const getRivetTotalSlots = (): number | undefined => {
 };
 export const getRivetRunEngine = (): boolean =>
 	getEnvUniversal("RIVET_RUN_ENGINE") === "1";
+export const getRivetRunEngineHost = (): string | undefined =>
+	getEnvUniversal("RIVET_RUN_ENGINE_HOST");
+export const getRivetRunEnginePort = (): number | undefined => {
+	const value = getEnvUniversal("RIVET_RUN_ENGINE_PORT");
+	return value !== undefined ? parseInt(value, 10) : undefined;
+};
 export const getRivetRunEngineVersion = (): string | undefined =>
 	getEnvUniversal("RIVET_RUN_ENGINE_VERSION");
 export const getRivetEnvoyKind = (): string | undefined =>

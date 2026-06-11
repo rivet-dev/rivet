@@ -10,7 +10,7 @@ import {
 	queueMetadataKey,
 	workflowStoragePrefix,
 } from "@/actor/keys";
-import { ENGINE_ENDPOINT } from "@/common/engine";
+import { buildEngineEndpoint, ENGINE_HOST, ENGINE_PORT } from "@/common/engine";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { VERSION } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
@@ -20,6 +20,8 @@ import {
 	getRivetkitRuntime,
 	getRivetNamespace,
 	getRivetRunEngine,
+	getRivetRunEngineHost,
+	getRivetRunEnginePort,
 	getRivetRunEngineVersion,
 	getRivetToken,
 	isDev,
@@ -224,6 +226,27 @@ export const RegistryConfigSchema = z
 		 * Starts the full Rust engine process locally.
 		 */
 		startEngine: z.boolean().default(() => getRivetRunEngine()),
+		/**
+		 * @experimental
+		 *
+		 * Host to bind the spawned local engine process to.
+		 */
+		engineHost: z
+			.string()
+			.optional()
+			.default(() => getRivetRunEngineHost() ?? ENGINE_HOST),
+		/**
+		 * @experimental
+		 *
+		 * Port to bind the spawned local engine process to.
+		 */
+		enginePort: z
+			.number()
+			.int()
+			.min(1)
+			.max(65_535)
+			.optional()
+			.default(() => getRivetRunEnginePort() ?? ENGINE_PORT),
 		/** @experimental */
 		engineVersion: z
 			.string()
@@ -312,7 +335,9 @@ export const RegistryConfigSchema = z
 				})
 			: undefined;
 
-		// Can't start a local engine and connect to a remote endpoint.
+		// RIVET_ENDPOINT configures what RivetKit connects to. Use
+		// engineHost/enginePort (or RIVET_RUN_ENGINE_HOST/PORT) to control the
+		// spawned local engine bind address.
 		if (config.startEngine && parsedEndpoint) {
 			ctx.addIssue({
 				code: "custom",
@@ -329,12 +354,17 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// Flatten the endpoint and apply defaults for namespace/token
-		// If startEngine is enabled, set endpoint to the engine endpoint.
+		// Flatten the endpoint and apply defaults for namespace/token.
+		const localEngineEndpoint = buildEngineEndpoint(
+			config.engineHost,
+			config.enginePort,
+		);
 		const endpoint = config.startEngine
-			? ENGINE_ENDPOINT
+			? localEngineEndpoint
 			: (parsedEndpoint?.endpoint ??
-				(isDevEnv ? ENGINE_ENDPOINT : undefined));
+				(isDevEnv
+					? buildEngineEndpoint(ENGINE_HOST, ENGINE_PORT)
+					: undefined));
 		const validateServerlessEndpoint = Boolean(
 			config.startEngine || parsedEndpoint,
 		);
@@ -367,7 +397,7 @@ export const RegistryConfigSchema = z
 		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && config.startEngine ? ENGINE_ENDPOINT : undefined);
+			(isDevEnv && config.startEngine ? endpoint : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;
