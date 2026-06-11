@@ -7,7 +7,9 @@ import { AUTHORS } from '@/lib/article';
 export const prerender = true;
 
 export const GET: APIRoute = async ({ site }) => {
-	const siteUrl = site?.toString() || 'https://rivet.dev';
+	// site.toString() normalizes to a trailing slash; strip it so concatenated
+	// paths below don't produce double slashes (e.g. https://rivet.dev//blog/).
+	const siteUrl = (site?.toString() || 'https://rivet.dev').replace(/\/$/, '');
 	const posts = await getCollection('posts');
 
 	const feed = new Feed({
@@ -23,12 +25,17 @@ export const GET: APIRoute = async ({ site }) => {
 		},
 	});
 
-	// Filter out unpublished posts
-	const publishedPosts = posts.filter(p => !p.data.unpublished);
+	// Filter out unpublished posts and sort newest first. The feed lib emits
+	// items in insertion order, so we sort before adding.
+	const publishedPosts = posts
+		.filter(p => !p.data.unpublished)
+		.sort((a, b) => b.data.published.getTime() - a.data.published.getTime());
 
 	for (const post of publishedPosts) {
 		const slug = post.id.replace(/\/page$/, '');
-		const url = `${siteUrl}/blog/${slug}/`;
+		// Changelog posts live under /changelog/, all other posts under /blog/.
+		const prefix = post.data.category === 'changelog' ? 'changelog' : 'blog';
+		const url = `${siteUrl}/${prefix}/${slug}/`;
 		const author = AUTHORS[post.data.author];
 
 		const title = post.data.title;
@@ -39,7 +46,7 @@ export const GET: APIRoute = async ({ site }) => {
 			date: post.data.published,
 			author: [{ name: author.name }],
 			link: url,
-			description: '',
+			description: post.data.description,
 		});
 	}
 
