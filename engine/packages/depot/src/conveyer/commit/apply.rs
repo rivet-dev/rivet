@@ -12,7 +12,7 @@ use crate::{
 	burst_mode,
 	conveyer::{
 		Db, branch,
-		constants::{MAX_COMMIT_DIRTY_PAGES, MAX_COMMIT_RAW_DIRTY_BYTES},
+		constants::{DELTA_CHUNK_BYTES, MAX_COMMIT_DIRTY_PAGES, MAX_COMMIT_RAW_DIRTY_BYTES},
 		db::{
 			BranchAncestry, CacheSnapshot, load_branch_ancestry, touch_access_if_bucket_advanced,
 		},
@@ -39,8 +39,6 @@ use super::{
 	test_hooks,
 	truncate::{collect_truncate_cleanup, fence_truncate_cleanup_row},
 };
-
-const DELTA_CHUNK_BYTES: usize = 10_000;
 
 impl Db {
 	pub async fn commit(
@@ -252,6 +250,8 @@ impl Db {
 						branch_id,
 						previous_db_size_pages,
 						db_size_pages,
+						txid,
+						now_ms,
 					)
 					.await?;
 					metrics::observe_commit_phase(
@@ -422,13 +422,9 @@ impl Db {
 						fence_truncate_cleanup_row(&tx, row).await?;
 						tx.informal().clear(&row.key);
 					}
-					for row in &truncate_cleanup.shard_clears {
+					for (row, new_key, new_value) in &truncate_cleanup.shard_prune_writes {
 						fence_truncate_cleanup_row(&tx, row).await?;
-						tx.informal().clear(&row.key);
-					}
-					for (row, value) in &truncate_cleanup.shard_writes {
-						fence_truncate_cleanup_row(&tx, row).await?;
-						tx.informal().set(&row.key, value);
+						tx.informal().set(new_key, new_value);
 					}
 					metrics::observe_commit_phase(
 						&phase_node_id,
@@ -462,6 +458,7 @@ impl Db {
 						write_root_branch_metadata(
 							&tx,
 							branch_id,
+							bucket_id,
 							branch_resolution.bucket_branch_id,
 							&database_id,
 							now_ms,

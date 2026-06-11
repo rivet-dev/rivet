@@ -47,6 +47,7 @@ pub(super) async fn resolve_or_allocate_branch(
 pub(super) async fn write_root_branch_metadata(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
+	bucket_id: BucketId,
 	bucket_branch: BucketBranchId,
 	database_id: &str,
 	now_ms: i64,
@@ -64,6 +65,8 @@ pub(super) async fn write_root_branch_metadata(
 		created_from_restore_point: None,
 		state: BranchState::Live,
 		lifecycle_generation: 0,
+		policy_bucket_id: Some(bucket_id),
+		policy_database_id: Some(database_id.to_string()),
 	};
 	let encoded_record = encode_database_branch_record(record)
 		.context("encode sqlite root database branch record")?;

@@ -79,6 +79,7 @@ async fn gc_pin_recompute_under_restore_point_delete_race() -> Result<()> {
 						fork_before_gc,
 						BucketBranchId::nil(),
 						None,
+						None,
 					)
 					.await
 				},
@@ -115,6 +116,7 @@ async fn gc_pin_recompute_under_restore_point_delete_race() -> Result<()> {
 							commit.versionstamp,
 							fork_after_gc,
 							BucketBranchId::nil(),
+							None,
 							None,
 						)
 						.await

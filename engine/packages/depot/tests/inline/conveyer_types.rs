@@ -49,11 +49,13 @@ fn database_branch_record_round_trips_current_version() {
 		created_from_restore_point: None,
 		state: BranchState::Live,
 		lifecycle_generation: 9,
+		policy_bucket_id: None,
+		policy_database_id: None,
 	};
 
 	let encoded = encode_database_branch_record(record.clone())
 		.expect("database branch record should encode");
-	assert_eq!(u16::from_le_bytes([encoded[0], encoded[1]]), 1);
+	assert_eq!(u16::from_le_bytes([encoded[0], encoded[1]]), 2);
 
 	let decoded =
 		decode_database_branch_record(&encoded).expect("database branch record should decode");

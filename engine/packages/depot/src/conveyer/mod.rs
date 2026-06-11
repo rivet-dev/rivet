@@ -1,6 +1,7 @@
 pub mod branch;
 pub mod commit;
 pub mod constants;
+pub mod coverage;
 pub mod db;
 #[cfg(debug_assertions)]
 pub mod debug;

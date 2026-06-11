@@ -15,6 +15,17 @@ use crate::compaction::test_hooks;
 #[cfg(feature = "test-faults")]
 use crate::fault::ReclaimFaultPoint;
 
+// Watermark delta retention. Reclaim deletes DELTA chunk rows purely by the
+// rule "txid at or below the hot watermark is deletable", with no per-shard or
+// PIDX coverage proof: hot compaction's install already published shard
+// coverage for every covered txid in the same transaction that advanced the
+// watermark, so below-watermark deltas are redundant. The fork-alignment fence
+// (see `conveyer::coverage`) is the other half of this trade. It guarantees no
+// pin, fork, or restore ever targets an uncovered below-watermark txid, so
+// nothing can ever need a delta this rule deletes. Removing either half breaks
+// the other: without alignment a fork could pin a txid whose deltas are gone;
+// without the simple rule, deltas would be retained for the whole PITR window
+// and reclaim would need the deleted per-shard proof.
 #[workflow(DbReclaimerWorkflow)]
 pub async fn depot_db_reclaimer(ctx: &mut WorkflowCtx, input: &DbReclaimerInput) -> Result<()> {
 	run_companion_loop(ctx, input.database_branch_id, CompanionKind::Reclaim).await
@@ -72,7 +83,7 @@ async fn reclaim_fdb_job_tx(
 	.as_deref()
 	.map(decode_database_branch_record)
 	.transpose()
-	.context("decode sqlite database branch record for FDB reclaim")?;
+	.context("decode sqlite database branch record for UDB reclaim")?;
 	if !branch_record_is_live_at_generation(branch_record.as_ref(), input.base_lifecycle_generation)
 	{
 		return Ok(rejected_reclaim_job("database branch lifecycle changed"));
@@ -87,7 +98,7 @@ async fn reclaim_fdb_job_tx(
 	.as_deref()
 	.map(decode_compaction_root)
 	.transpose()
-	.context("decode sqlite compaction root for FDB reclaim")?
+	.context("decode sqlite compaction root for UDB reclaim")?
 	.unwrap_or(CompactionRoot {
 		schema_version: 1,
 		manifest_generation: 0,
@@ -101,35 +112,26 @@ async fn reclaim_fdb_job_tx(
 
 	let mut db_pins =
 		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
-	if resolve_bucket_fork_pins(tx, input.database_branch_id, &mut db_pins).await? {
-		return Ok(rejected_reclaim_job("bucket fork proof is ambiguous"));
-	}
+	// Ambiguous bucket fork proofs only fail-safe the commit/VTX keep-set;
+	// delta, stale-PIDX, and expired-interval deletes never depend on pins.
+	let commit_deletes_blocked =
+		resolve_bucket_fork_pins(tx, input.database_branch_id, &mut db_pins, now_ms).await?;
 	let snapshot = read_reclaim_input_snapshot(
 		tx,
 		input.database_branch_id,
 		&root,
 		&db_pins,
+		commit_deletes_blocked,
+		&input.input_range.shard_gc_cursor,
 		Serializable,
 		now_ms,
 	)
 	.await?;
-	if !input.input_range.txid_refs.is_empty() && snapshot.txid_refs != input.input_range.txid_refs
-	{
-		return Ok(rejected_reclaim_job("reclaim txid set changed"));
-	}
-	if !input.input_range.txid_refs.is_empty() {
-		if !snapshot.pidx_entries.is_empty() {
-			return Ok(rejected_reclaim_job("PIDX still references reclaim txids"));
-		}
-		if !reclaim_coverage_is_complete(&snapshot) {
-			return Ok(rejected_reclaim_job(
-				"replacement SHARD coverage is missing",
-			));
-		}
-	}
-
 	let input_fingerprint = fingerprint_reclaim_inputs(input.database_branch_id, &root, &snapshot);
 	if input_fingerprint != input.input_fingerprint {
+		// Rejected executes still commit this transaction, which is load
+		// bearing: pin materializations performed by resolve_bucket_fork_pins
+		// above must persist so the next pass plans against them.
 		return Ok(rejected_reclaim_job("reclaim input fingerprint changed"));
 	}
 	#[cfg(feature = "test-faults")]
@@ -142,12 +144,6 @@ async fn reclaim_fdb_job_tx(
 		return Ok(output);
 	}
 
-	let selected_reclaim_txids = input
-		.input_range
-		.txid_refs
-		.iter()
-		.map(|txid_ref| txid_ref.txid)
-		.collect::<BTreeSet<_>>();
 	let mut key_count = 0_u32;
 	let mut byte_count = 0_u64;
 	#[cfg(feature = "test-faults")]
@@ -157,13 +153,15 @@ async fn reclaim_fdb_job_tx(
 	{
 		return Ok(output);
 	}
+	// COMMITS, VTX, DELTA, and PIDX rows were debited against the branch quota
+	// at commit time, so their deletion credits it back. PITR interval rows are
+	// never billed.
+	let mut quota_credit_bytes = 0_i64;
 	for (txid, key, value, commit) in &snapshot.commits {
-		if !selected_reclaim_txids.contains(txid) {
-			continue;
-		}
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		quota_credit_bytes = quota_credit_bytes.saturating_add(tracked_row_bytes(key, value));
 
 		let vtx_key = keys::branch_vtx_key(input.database_branch_id, commit.versionstamp);
 		if let Some(vtx_value) = tx_get_value(tx, &vtx_key, Serializable).await? {
@@ -172,16 +170,27 @@ async fn reclaim_fdb_job_tx(
 				key_count = key_count.saturating_add(1);
 				byte_count =
 					byte_count.saturating_add(u64::try_from(vtx_value.len()).unwrap_or(u64::MAX));
+				quota_credit_bytes =
+					quota_credit_bytes.saturating_add(tracked_row_bytes(&vtx_key, &vtx_value));
 			} else {
 				return Ok(rejected_reclaim_job("VTX row changed for reclaim txid"));
 			}
 		}
 	}
 	for (key, value) in &snapshot.delta_chunks {
-		let txid = keys::decode_branch_delta_chunk_txid(input.database_branch_id, key)?;
-		if !selected_reclaim_txids.contains(&txid) {
-			continue;
-		}
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		quota_credit_bytes = quota_credit_bytes.saturating_add(tracked_row_bytes(key, value));
+	}
+	for (key, value) in &snapshot.stale_pidx_entries {
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		quota_credit_bytes = quota_credit_bytes.saturating_add(tracked_row_bytes(key, value));
+	}
+	// Shard versions are not quota-billed, so their deletion has no credit.
+	for (key, value) in &snapshot.stale_shard_versions {
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
@@ -190,6 +199,9 @@ async fn reclaim_fdb_job_tx(
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+	if quota_credit_bytes > 0 {
+		quota::atomic_add_branch(tx, input.database_branch_id, -quota_credit_bytes);
 	}
 	#[cfg(feature = "test-faults")]
 	if let Some(output) =
@@ -306,6 +318,10 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 			max_txid: input.input_range.txids.max_txid,
 		}],
 	})
+}
+
+fn tracked_row_bytes(key: &[u8], value: &[u8]) -> i64 {
+	i64::try_from(key.len() + value.len()).unwrap_or(i64::MAX)
 }
 
 fn rejected_reclaim_job(reason: impl Into<String>) -> ReclaimFdbJobOutput {

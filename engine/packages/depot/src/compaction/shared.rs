@@ -3,6 +3,7 @@ use super::*;
 pub(crate) async fn read_manager_fdb_snapshot(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
+	shard_gc_cursor: &[u8],
 	now_ms: i64,
 ) -> Result<ManagerFdbSnapshot> {
 	let branch_record = tx_get_value(tx, &keys::branches_list_key(branch_id), Serializable)
@@ -43,12 +44,12 @@ pub(crate) async fn read_manager_fdb_snapshot(
 		.context("decode sqlite dirty marker for compaction manager")?;
 	let mut db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
 	let bucket_proof_blocked_reclaim =
-		resolve_bucket_fork_pins(tx, branch_id, &mut db_pins).await?;
-	// Policy overrides currently require resolving a branch back to its bucket and
-	// database by scanning global pointer indexes. Doing that inside manager
-	// refresh can age out the FDB transaction when many actors cross the hot
-	// compaction threshold together.
-	let pitr_policy = PitrPolicy::default();
+		resolve_bucket_fork_pins(tx, branch_id, &mut db_pins, now_ms).await?;
+	// Planning must use the same effective policy that stage and install
+	// validate against, or every coverage selection mismatches and hot jobs
+	// reject forever. The scope is denormalized on the branch record, so this
+	// is two point reads.
+	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
 	let hot_inputs = read_hot_input_snapshot(
 		tx,
 		branch_id,
@@ -59,13 +60,22 @@ pub(crate) async fn read_manager_fdb_snapshot(
 		now_ms,
 	)
 	.await?;
-	let reclaim_inputs =
-		read_reclaim_input_snapshot(tx, branch_id, &root, &db_pins, Snapshot, now_ms).await?;
+	let reclaim_inputs = read_reclaim_input_snapshot(
+		tx,
+		branch_id,
+		&root,
+		&db_pins,
+		bucket_proof_blocked_reclaim,
+		shard_gc_cursor,
+		Snapshot,
+		now_ms,
+	)
+	.await?;
 	let hot_lag = head.as_ref().map_or(0, |head| {
 		head.head_txid.saturating_sub(root.hot_watermark_txid)
 	});
-	let has_actionable_lag = hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
-		|| reclaim_coverage_is_complete(&reclaim_inputs);
+	let has_actionable_lag =
+		hot_lag >= quota::COMPACTION_DELTA_THRESHOLD || reclaim_snapshot_has_work(&reclaim_inputs);
 	let cleared_dirty = if !has_actionable_lag {
 		if let Some(expected_dirty) = dirty_bytes {
 			udb::compare_and_clear(tx, &dirty_key, &expected_dirty);
@@ -94,6 +104,7 @@ pub(crate) async fn resolve_bucket_fork_pins(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
 	db_pins: &mut Vec<DbHistoryPin>,
+	now_ms: i64,
 ) -> Result<bool> {
 	let catalog_rows = tx_scan_prefix_values(
 		tx,
@@ -121,7 +132,7 @@ pub(crate) async fn resolve_bucket_fork_pins(
 			);
 			return Ok(true);
 		}
-		if resolve_bucket_catalog_forks(tx, branch_id, db_pins, &catalog_fact).await? {
+		if resolve_bucket_catalog_forks(tx, branch_id, db_pins, &catalog_fact, now_ms).await? {
 			return Ok(true);
 		}
 	}
@@ -134,6 +145,7 @@ pub(crate) async fn resolve_bucket_catalog_forks(
 	branch_id: DatabaseBranchId,
 	db_pins: &mut Vec<DbHistoryPin>,
 	catalog_fact: &BucketCatalogDbFact,
+	now_ms: i64,
 ) -> Result<bool> {
 	let mut queue = vec![catalog_fact.bucket_branch_id];
 	let mut visited = BTreeSet::new();
@@ -186,7 +198,7 @@ pub(crate) async fn resolve_bucket_catalog_forks(
 				);
 				return Ok(true);
 			}
-			if materialize_bucket_fork_pin(tx, branch_id, db_pins, &child_fact).await? {
+			if materialize_bucket_fork_pin(tx, branch_id, db_pins, &child_fact, now_ms).await? {
 				return Ok(true);
 			}
 			queue.push(child_fact.target_bucket_branch_id);
@@ -244,25 +256,117 @@ pub(crate) async fn materialize_bucket_fork_pin(
 	branch_id: DatabaseBranchId,
 	db_pins: &mut Vec<DbHistoryPin>,
 	fork_fact: &BucketForkFact,
+	now_ms: i64,
 ) -> Result<bool> {
-	let Some((at_txid, at_versionstamp, commit)) =
+	// An already-materialized pin is authoritative. Re-snapping would move the
+	// fork point as interval rows shift or expire.
+	if db_pins.iter().any(|pin| {
+		pin.kind == crate::types::DbHistoryPinKind::BucketFork
+			&& pin.owner_bucket_branch_id == Some(fork_fact.target_bucket_branch_id)
+			&& pin.at_versionstamp <= fork_fact.fork_versionstamp
+	}) {
+		return Ok(false);
+	}
+
+	let watermark_txid = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for bucket fork pin")?
+	.map(|root| root.hot_watermark_txid)
+	.unwrap_or(0);
+
+	// Hybrid resolution: when the latest commit at or before the fork point has
+	// not been folded yet, pin it exactly; the pin feeds coverage staging at the
+	// next install. Commits at or above the watermark are never reclaimed, so
+	// the VTX scan result is trustworthy in that range despite keep-set holes
+	// below it.
+	if let Some((at_txid, at_versionstamp, commit)) =
 		latest_commit_at_or_before_versionstamp(tx, branch_id, fork_fact.fork_versionstamp).await?
-	else {
+		&& at_txid >= watermark_txid
+	{
+		write_materialized_bucket_fork_pin(
+			tx,
+			branch_id,
+			db_pins,
+			fork_fact,
+			at_txid,
+			at_versionstamp,
+			commit.wall_clock_ms,
+		)?;
+		return Ok(false);
+	}
+
+	// Historical fork: snap down to the newest covered point at or before the
+	// fork versionstamp, drawn from retained PITR interval representatives and
+	// existing pins. The fence on pin and fork creation guarantees those points
+	// have shard coverage.
+	let mut best: Option<(u64, [u8; 16], i64)> = None;
+	for (_, coverage) in
+		crate::conveyer::pitr_interval::scan_pitr_interval_coverage(tx, branch_id, Serializable)
+			.await?
+	{
+		// Expired rows are about to lose their commit islands to reclaim, so
+		// they are not deterministic snap targets even while still present.
+		if coverage.expires_at_ms <= now_ms {
+			continue;
+		}
+		if coverage.versionstamp <= fork_fact.fork_versionstamp
+			&& best.map_or(true, |(best_txid, _, _)| coverage.txid > best_txid)
+		{
+			best = Some((coverage.txid, coverage.versionstamp, coverage.wall_clock_ms));
+		}
+	}
+	for pin in db_pins.iter() {
+		if pin.at_versionstamp <= fork_fact.fork_versionstamp
+			&& best.map_or(true, |(best_txid, _, _)| pin.at_txid > best_txid)
+		{
+			best = Some((pin.at_txid, pin.at_versionstamp, pin.created_at_ms));
+		}
+	}
+
+	let Some((at_txid, at_versionstamp, wall_clock_ms)) = best else {
 		tracing::warn!(
 			?branch_id,
 			?fork_fact,
-			"retaining sqlite history because bucket fork versionstamp could not be resolved"
+			"retaining sqlite commit history because bucket fork target predates retained coverage"
 		);
 		return Ok(true);
 	};
+	write_materialized_bucket_fork_pin(
+		tx,
+		branch_id,
+		db_pins,
+		fork_fact,
+		at_txid,
+		at_versionstamp,
+		wall_clock_ms,
+	)?;
 
+	Ok(false)
+}
+
+fn write_materialized_bucket_fork_pin(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	db_pins: &mut Vec<DbHistoryPin>,
+	fork_fact: &BucketForkFact,
+	at_txid: u64,
+	at_versionstamp: [u8; 16],
+	wall_clock_ms: i64,
+) -> Result<()> {
 	history_pin::write_bucket_fork_pin(
 		tx,
 		branch_id,
 		fork_fact.target_bucket_branch_id,
 		at_versionstamp,
 		at_txid,
-		commit.wall_clock_ms,
+		wall_clock_ms,
 	)?;
 	db_pins.retain(|pin| pin.owner_bucket_branch_id != Some(fork_fact.target_bucket_branch_id));
 	db_pins.push(DbHistoryPin {
@@ -272,10 +376,10 @@ pub(crate) async fn materialize_bucket_fork_pin(
 		owner_database_branch_id: None,
 		owner_bucket_branch_id: Some(fork_fact.target_bucket_branch_id),
 		owner_restore_point: None,
-		created_at_ms: commit.wall_clock_ms,
+		created_at_ms: wall_clock_ms,
 	});
 
-	Ok(false)
+	Ok(())
 }
 
 pub(crate) async fn read_effective_pitr_policy_for_branch(
@@ -285,15 +389,19 @@ pub(crate) async fn read_effective_pitr_policy_for_branch(
 	let Some(branch_record) = branch_record else {
 		return Ok(PitrPolicy::default());
 	};
-	let Some((bucket_id, database_id)) =
-		resolve_policy_scope_for_branch(tx, branch_record.branch_id).await?
-	else {
+	// The policy scope is denormalized onto the branch record at creation so
+	// this lookup never scans global pointer indexes. Records predating the
+	// scope fields fall back to the default policy.
+	let (Some(bucket_id), Some(database_id)) = (
+		branch_record.policy_bucket_id,
+		branch_record.policy_database_id.as_deref(),
+	) else {
 		return Ok(PitrPolicy::default());
 	};
 
 	if let Some(policy) = tx_get_value(
 		tx,
-		&keys::database_pitr_policy_key(bucket_id, &database_id),
+		&keys::database_pitr_policy_key(bucket_id, database_id),
 		Serializable,
 	)
 	.await?
@@ -314,110 +422,33 @@ pub(crate) async fn read_effective_pitr_policy_for_branch(
 		.map(|policy| policy.unwrap_or_default())
 }
 
-pub(crate) async fn resolve_policy_scope_for_branch(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-) -> Result<Option<(BucketId, String)>> {
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::database_pointer_cur_prefix(), Serializable).await?
-	{
-		let Ok((bucket_branch_id, database_id)) = keys::decode_database_pointer_cur_key(&key)
-		else {
-			continue;
-		};
-		let pointer = decode_database_pointer(&value)
-			.context("decode sqlite database pointer for PITR policy")?;
-		if pointer.current_branch != branch_id {
-			continue;
-		}
-		let Some(root_bucket_branch_id) = read_bucket_root_branch_id(tx, bucket_branch_id).await?
-		else {
-			return Ok(None);
-		};
-		let Some(bucket_id) = resolve_bucket_id_for_root_branch(tx, root_bucket_branch_id).await?
-		else {
-			return Ok(None);
-		};
-
-		return Ok(Some((bucket_id, database_id)));
-	}
-
-	Ok(None)
-}
-
-pub(crate) async fn read_bucket_root_branch_id(
-	tx: &universaldb::Transaction,
-	bucket_branch_id: crate::types::BucketBranchId,
-) -> Result<Option<crate::types::BucketBranchId>> {
-	let mut current = bucket_branch_id;
-	for _ in 0..=MAX_BUCKET_DEPTH {
-		let Some(record_bytes) =
-			tx_get_value(tx, &keys::bucket_branches_list_key(current), Serializable).await?
-		else {
-			return Ok(None);
-		};
-		let record = crate::types::decode_bucket_branch_record(&record_bytes)
-			.context("decode sqlite bucket branch record for PITR policy")?;
-		let Some(parent) = record.parent else {
-			return Ok(Some(current));
-		};
-		current = parent;
-	}
-
-	Ok(None)
-}
-
-pub(crate) async fn resolve_bucket_id_for_root_branch(
-	tx: &universaldb::Transaction,
-	root_bucket_branch_id: crate::types::BucketBranchId,
-) -> Result<Option<BucketId>> {
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::bucket_pointer_cur_prefix(), Serializable).await?
-	{
-		let Ok(bucket_id) = keys::decode_bucket_pointer_cur_bucket_id(&key) else {
-			continue;
-		};
-		let pointer = decode_bucket_pointer(&value)
-			.context("decode sqlite bucket pointer for PITR policy")?;
-		if pointer.current_branch == root_bucket_branch_id {
-			return Ok(Some(bucket_id));
-		}
-	}
-
-	Ok(None)
-}
-
 pub(crate) async fn latest_commit_at_or_before_versionstamp(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
 	versionstamp_cap: [u8; 16],
 ) -> Result<Option<(u64, [u8; 16], CommitRow)>> {
-	let mut selected = None;
-	let mut inspected_rows = 0_usize;
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_vtx_prefix(branch_id), Serializable).await?
-	{
-		let versionstamp = decode_branch_vtx_versionstamp(branch_id, &key)?;
-		if versionstamp > versionstamp_cap {
-			break;
-		}
-		inspected_rows = inspected_rows.saturating_add(1);
-		if inspected_rows >= CMP_FDB_BATCH_MAX_KEYS {
-			tracing::warn!(
-				?branch_id,
-				row_count = inspected_rows,
-				"retaining sqlite history because bucket VTX proof is too large"
-			);
-			return Ok(None);
-		}
-		let txid = decode_txid_value(&value)?;
-		selected = Some((txid, versionstamp));
-	}
-
-	let Some((txid, versionstamp)) = selected else {
+	// Reverse limit-1 scan: the newest surviving VTX row at or below the cap,
+	// independent of how many older rows survive. A forward scan with a row cap
+	// would structurally miss the head once a branch retains more VTX islands
+	// than the cap.
+	let prefix = keys::branch_vtx_prefix(branch_id);
+	let end = end_of_key_range(&keys::branch_vtx_key(branch_id, versionstamp_cap));
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::Iterator,
+			reverse: true,
+			limit: Some(1),
+			..(prefix.as_slice(), end.as_slice()).into()
+		},
+		Serializable,
+	);
+	let Some(entry) = stream.try_next().await? else {
 		return Ok(None);
 	};
+	let versionstamp = decode_branch_vtx_versionstamp(branch_id, entry.key())?;
+	let txid = decode_txid_value(entry.value())?;
+
 	let Some(commit_bytes) =
 		tx_get_value(tx, &keys::branch_commit_key(branch_id, txid), Serializable).await?
 	else {
@@ -453,6 +484,17 @@ pub(crate) fn decode_txid_value(value: &[u8]) -> Result<u64> {
 
 	Ok(u64::from_be_bytes(bytes))
 }
+
+/// Maximum scan pages per row family per reclaim snapshot. Pages are capped at
+/// CMP_FDB_BATCH_MAX_KEYS rows, so this bounds rows read per family while
+/// letting the scan window slide past dense runs of non-deletable rows.
+const CMP_SCAN_MAX_PAGES: usize = 4;
+
+/// Shard GC pages are small because every row carries a full shard blob.
+const SHARD_GC_SCAN_PAGE_ROWS: usize = 32;
+
+/// Shard GC stops pulling pages once this many blob bytes were scanned.
+const SHARD_GC_SCAN_MAX_VALUE_BYTES: u64 = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy)]
 struct CompactionBatchBudget {
@@ -558,10 +600,19 @@ pub(crate) async fn read_hot_input_snapshot(
 			break;
 		}
 
-		if let Ok(txid) = decode_pidx_txid(&value) {
-			if txid < min_txid || txid > selected_max_txid {
-				continue;
-			}
+		// An undecodable PIDX value must be skipped fail-closed: including it
+		// poisons the install activity, which decodes every selected row, into
+		// a permanent failure loop.
+		let Ok(txid) = decode_pidx_txid(&value) else {
+			tracing::error!(
+				?branch_id,
+				pgno = ?decode_branch_pidx_pgno(branch_id, &key).ok(),
+				"skipping undecodable sqlite PIDX row during hot planning"
+			);
+			continue;
+		};
+		if txid < min_txid || txid > selected_max_txid {
+			continue;
 		}
 		budget.add(1, u64::try_from(value.len()).unwrap_or(u64::MAX));
 		snapshot.pidx_entries.push((key, value));
@@ -591,7 +642,11 @@ pub(crate) fn select_pitr_interval_coverage(
 	let retention_floor_ms = now_ms.saturating_sub(policy.retention_ms);
 	let mut selected_by_bucket = BTreeMap::<i64, PitrIntervalSelection>::new();
 	for (txid, commit) in commits {
-		if commit.wall_clock_ms < retention_floor_ms || commit.wall_clock_ms > now_ms {
+		// Commits stamped in the future by clock skew are selected as-is:
+		// dropping them leaves their txids permanently unreachable for
+		// timestamp forks once the batch folds, and selecting by the commit's
+		// own wall clock keeps plan, stage, and install deterministic.
+		if commit.wall_clock_ms < retention_floor_ms {
 			continue;
 		}
 		let bucket_start_ms =
@@ -628,93 +683,338 @@ pub(crate) async fn read_reclaim_input_snapshot(
 	branch_id: DatabaseBranchId,
 	root: &CompactionRoot,
 	db_pins: &[DbHistoryPin],
+	commit_deletes_blocked: bool,
+	shard_gc_cursor: &[u8],
 	isolation_level: universaldb::utils::IsolationLevel,
 	now_ms: i64,
 ) -> Result<ReclaimInputSnapshot> {
-	let (pitr_interval_retention, expired_pitr_interval_rows) =
+	let (mut pitr_interval_retention, mut expired_pitr_interval_rows) =
 		read_pitr_interval_reclaim_rows(tx, branch_id, now_ms, isolation_level).await?;
-	let Some(max_reclaim_txid) =
-		reclaim_delete_upper_bound(root, db_pins, &pitr_interval_retention)
-	else {
-		return Ok(ReclaimInputSnapshot {
-			expired_pitr_interval_rows,
-			..ReclaimInputSnapshot::default()
+	let has_retained_pitr_intervals = !pitr_interval_retention.is_empty();
+	// Expired-row deletion is batch work like everything else; cap it so a
+	// long-idle database does not clear an unbounded row count in one pass.
+	// Rows deferred past the cap are still present, so their txids must stay in
+	// the keep-set: a row may only leave coverage in the same pass that deletes
+	// it, or the fence's expired-but-present acceptance breaks.
+	let deferred_expired = expired_pitr_interval_rows
+		.split_off(expired_pitr_interval_rows.len().min(CMP_FDB_BATCH_MAX_KEYS));
+	for (bucket_start_ms, _, _, coverage) in deferred_expired {
+		pitr_interval_retention.push(PitrIntervalSelection {
+			bucket_start_ms,
+			coverage,
 		});
-	};
-
+	}
 	let mut snapshot = ReclaimInputSnapshot {
 		expired_pitr_interval_rows,
+		commit_deletes_blocked,
+		has_retained_pitr_intervals,
 		..ReclaimInputSnapshot::default()
 	};
-	let mut budget = CompactionBatchBudget::fdb();
-	let commit_scan_start = keys::branch_commit_key(branch_id, 0);
-	let commit_scan_end = max_reclaim_txid
-		.checked_add(1)
-		.map(|next_txid| keys::branch_commit_key(branch_id, next_txid))
-		.unwrap_or_else(|| end_of_key_range(&keys::branch_commit_prefix(branch_id)));
-	for (key, value) in
-		tx_scan_range_values(tx, &commit_scan_start, &commit_scan_end, isolation_level).await?
-	{
-		let txid = decode_branch_commit_txid(branch_id, &key)?;
-		if txid > max_reclaim_txid {
-			break;
-		}
-		let commit = decode_commit_row(&value).context("decode sqlite commit row for reclaim")?;
-		let delta_chunks = tx_scan_prefix_values(
-			tx,
-			&keys::branch_delta_chunk_prefix(branch_id, txid),
-			isolation_level,
-		)
-		.await?;
-		let txid_value_bytes = u64::try_from(value.len())
-			.unwrap_or(u64::MAX)
-			.saturating_add(
-				delta_chunks
-					.iter()
-					.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
-					.fold(0_u64, u64::saturating_add),
-			);
-		if !budget.can_add(1 + delta_chunks.len(), txid_value_bytes) {
-			break;
-		}
-		budget.add(1 + delta_chunks.len(), txid_value_bytes);
-		snapshot.txid_refs.push(ReclaimTxidRef {
-			txid,
-			versionstamp: commit.versionstamp,
-		});
-		snapshot.commits.push((txid, key, value, commit));
-		snapshot.delta_chunks.extend(delta_chunks);
-	}
-	snapshot.total_value_bytes = budget.value_bytes();
-
-	let selected_txids = snapshot
-		.txid_refs
-		.iter()
-		.map(|txid_ref| txid_ref.txid)
-		.collect::<BTreeSet<_>>();
-	if selected_txids.is_empty() {
+	let watermark_txid = root.hot_watermark_txid;
+	if watermark_txid == 0 {
 		return Ok(snapshot);
 	}
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
-	{
-		if let Ok(txid) = decode_pidx_txid(&value) {
-			if selected_txids.contains(&txid) {
-				snapshot.pidx_entries.push((key, value));
+
+	let mut budget = CompactionBatchBudget::fdb();
+
+	// Every DELTA row at or below the watermark is deletable: the install that
+	// advanced the watermark published shard coverage for it atomically. Group
+	// chunk rows per txid so a batch boundary never splits one delta blob.
+	let delta_scan_start = keys::branch_delta_prefix(branch_id);
+	let delta_scan_end = watermark_txid
+		.checked_add(1)
+		.map(|next_txid| keys::branch_delta_chunk_prefix(branch_id, next_txid))
+		.unwrap_or_else(|| {
+			universaldb::tuple::Subspace::from_bytes(keys::branch_delta_prefix(branch_id))
+				.range()
+				.1
+		});
+	// Every scan below is row-limited so a deep backlog never pulls more than
+	// roughly one batch of rows into a refresh or reclaim transaction; the
+	// remainder drains across subsequent passes.
+	let mut delta_chunks_by_txid = BTreeMap::<u64, Vec<(Vec<u8>, Vec<u8>)>>::new();
+	let delta_scan_limit = CMP_FDB_BATCH_MAX_KEYS * 2;
+	let delta_rows = tx_scan_range_values_limited(
+		tx,
+		&delta_scan_start,
+		&delta_scan_end,
+		isolation_level,
+		delta_scan_limit,
+	)
+	.await?;
+	let delta_scan_truncated = delta_rows.len() == delta_scan_limit;
+	for (key, value) in delta_rows {
+		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
+		if txid > watermark_txid {
+			continue;
+		}
+		delta_chunks_by_txid
+			.entry(txid)
+			.or_default()
+			.push((key, value));
+	}
+	// A truncated scan may have split the last delta's chunk rows; drop the
+	// trailing group so a batch never deletes part of one blob.
+	if delta_scan_truncated {
+		delta_chunks_by_txid.pop_last();
+	}
+	'delta_groups: for (_, chunks) in delta_chunks_by_txid {
+		let group_value_bytes = chunks
+			.iter()
+			.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
+			.fold(0_u64, u64::saturating_add);
+		if !budget.can_add(chunks.len(), group_value_bytes) {
+			break 'delta_groups;
+		}
+		budget.add(chunks.len(), group_value_bytes);
+		snapshot.delta_chunks.extend(chunks);
+	}
+
+	// COMMITS/VTX rows below the watermark are deletable unless a pin or a
+	// retained PITR interval representative still resolves through them. When
+	// bucket fork proofs are ambiguous the pin set may be incomplete, so
+	// commit deletes are skipped entirely for this pass. The scan is paged so a
+	// dense run of keep-set islands at the low end cannot permanently hide
+	// deletable rows beyond a single page window.
+	if !commit_deletes_blocked {
+		let keep_txids = reclaim_keep_txids(db_pins, &pitr_interval_retention);
+		let mut commit_cursor = keys::branch_commit_key(branch_id, 0);
+		let commit_scan_end = keys::branch_commit_key(branch_id, watermark_txid);
+		'commit_pages: for _ in 0..CMP_SCAN_MAX_PAGES {
+			let rows = tx_scan_range_values_limited(
+				tx,
+				&commit_cursor,
+				&commit_scan_end,
+				isolation_level,
+				CMP_FDB_BATCH_MAX_KEYS,
+			)
+			.await?;
+			let page_full = rows.len() == CMP_FDB_BATCH_MAX_KEYS;
+			for (key, value) in rows {
+				commit_cursor = end_of_key_range(&key);
+				let txid = decode_branch_commit_txid(branch_id, &key)?;
+				if txid >= watermark_txid {
+					break 'commit_pages;
+				}
+				if keep_txids.contains(&txid) {
+					continue;
+				}
+				let commit =
+					decode_commit_row(&value).context("decode sqlite commit row for reclaim")?;
+				// Each commit deletion also clears its VTX row.
+				let row_value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+				if !budget.can_add(2, row_value_bytes) {
+					break 'commit_pages;
+				}
+				budget.add(2, row_value_bytes);
+				snapshot.txid_refs.push(ReclaimTxidRef {
+					txid,
+					versionstamp: commit.versionstamp,
+				});
+				snapshot.commits.push((txid, key, value, commit));
+			}
+			if !page_full {
+				break;
 			}
 		}
 	}
 
-	let shard_ids = reclaim_delta_shard_ids(branch_id, &snapshot.delta_chunks)?;
-	snapshot.required_coverage_shard_count = shard_ids.len();
-	for shard_id in shard_ids {
-		let key = keys::branch_shard_key(branch_id, shard_id, root.hot_watermark_txid);
-		if let Some(value) = tx_get_value(tx, &key, isolation_level).await? {
-			snapshot.coverage_shards.push((key, value));
+	// PIDX rows referencing folded txids are stragglers from budget-truncated
+	// installs. Reads already fall back to shard coverage for them; reclaim
+	// clears the rows so they stop looking like live delta references. The scan
+	// always runs at Snapshot isolation and the rows are excluded from the job
+	// fingerprint: every clear is a compare-and-clear of a stale-by-definition
+	// row, so taking a read conflict on the whole PIDX prefix would only make
+	// busy databases reject reclaim passes for no safety gain. Paging keeps
+	// dense runs of live rows at low page numbers from hiding stale rows above
+	// them.
+	let mut pidx_cursor = keys::branch_pidx_prefix(branch_id);
+	let (_, pidx_scan_end) =
+		universaldb::tuple::Subspace::from_bytes(keys::branch_pidx_prefix(branch_id)).range();
+	'pidx_pages: for _ in 0..CMP_SCAN_MAX_PAGES {
+		let rows = tx_scan_range_values_limited(
+			tx,
+			&pidx_cursor,
+			&pidx_scan_end,
+			Snapshot,
+			CMP_FDB_BATCH_MAX_KEYS,
+		)
+		.await?;
+		let page_full = rows.len() == CMP_FDB_BATCH_MAX_KEYS;
+		for (key, value) in rows {
+			pidx_cursor = end_of_key_range(&key);
+			let Ok(txid) = decode_pidx_txid(&value) else {
+				continue;
+			};
+			if txid > watermark_txid {
+				continue;
+			}
+			let row_value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+			if !budget.can_add(1, row_value_bytes) {
+				break 'pidx_pages;
+			}
+			budget.add(1, row_value_bytes);
+			snapshot.stale_pidx_entries.push((key, value));
+		}
+		if !page_full {
+			break;
 		}
 	}
 
+	// SHARD versions are deletable once no covered txid reads through them.
+	// Reads resolve "newest version at or below the cap" and every reachable
+	// cap is a covered txid or above the watermark, so keeping the newest
+	// version at or below each covered point plus everything above the
+	// watermark preserves every readable state. The pin set must be complete
+	// for this proof, so ambiguous bucket fork proofs suppress it.
+	if !commit_deletes_blocked {
+		let mut covered_txids = reclaim_keep_txids(db_pins, &pitr_interval_retention);
+		covered_txids.insert(watermark_txid);
+		// Shard rows carry full blobs, so pages are small and byte-bounded, and
+		// the scan starts from a cursor that rotates across passes; otherwise a
+		// branch wider than one window would never have its tail shards
+		// collected. Deleting a version only needs a scanned newer shadow at or
+		// below every covered point, so a window cut at either end of a shard's
+		// version list can only cause over-keeping, never a wrong delete.
+		let shard_prefix = keys::branch_shard_prefix(branch_id);
+		let (_, shard_scan_end) =
+			universaldb::tuple::Subspace::from_bytes(keys::branch_shard_prefix(branch_id)).range();
+		let mut shard_cursor = if shard_gc_cursor > shard_prefix.as_slice()
+			&& shard_gc_cursor < shard_scan_end.as_slice()
+		{
+			shard_gc_cursor.to_vec()
+		} else {
+			shard_prefix.clone()
+		};
+		let mut versions_by_shard = BTreeMap::<u32, Vec<(u64, Vec<u8>, Vec<u8>)>>::new();
+		let mut scanned_value_bytes = 0_u64;
+		let mut scan_exhausted = false;
+		'shard_pages: for _ in 0..CMP_SCAN_MAX_PAGES {
+			let rows = tx_scan_range_values_limited(
+				tx,
+				&shard_cursor,
+				&shard_scan_end,
+				isolation_level,
+				SHARD_GC_SCAN_PAGE_ROWS,
+			)
+			.await?;
+			let page_full = rows.len() == SHARD_GC_SCAN_PAGE_ROWS;
+			for (key, value) in rows {
+				shard_cursor = end_of_key_range(&key);
+				// An unexpected key under the SHARD prefix must not poison
+				// manager refresh; skip it and leave the row alone.
+				let Ok((shard_id, as_of_txid)) =
+					keys::decode_branch_shard_version_key(branch_id, &key)
+				else {
+					tracing::error!(
+						?branch_id,
+						"skipping undecodable sqlite SHARD key during reclaim planning"
+					);
+					continue;
+				};
+				scanned_value_bytes =
+					scanned_value_bytes.saturating_add(u64::try_from(value.len()).unwrap_or(0));
+				versions_by_shard
+					.entry(shard_id)
+					.or_default()
+					.push((as_of_txid, key, value));
+			}
+			if !page_full {
+				scan_exhausted = true;
+				break;
+			}
+			if scanned_value_bytes >= SHARD_GC_SCAN_MAX_VALUE_BYTES {
+				break 'shard_pages;
+			}
+		}
+		// Rotate the cursor so the next pass continues where this one stopped;
+		// an exhausted scan wraps back to the front.
+		snapshot.shard_gc_next_cursor = if scan_exhausted {
+			Vec::new()
+		} else {
+			shard_cursor
+		};
+		'shards: for (_, versions) in versions_by_shard {
+			let mut keep = BTreeSet::new();
+			for (as_of_txid, _, _) in &versions {
+				if *as_of_txid > watermark_txid {
+					keep.insert(*as_of_txid);
+				}
+			}
+			for covered_txid in &covered_txids {
+				if let Some(keeper) = versions
+					.iter()
+					.filter(|(as_of_txid, _, _)| as_of_txid <= covered_txid)
+					.map(|(as_of_txid, _, _)| *as_of_txid)
+					.max()
+				{
+					keep.insert(keeper);
+				}
+			}
+			for (as_of_txid, key, value) in versions {
+				if keep.contains(&as_of_txid) {
+					continue;
+				}
+				let row_value_bytes = u64::try_from(value.len()).unwrap_or(u64::MAX);
+				if !budget.can_add(1, row_value_bytes) {
+					break 'shards;
+				}
+				budget.add(1, row_value_bytes);
+				snapshot.stale_shard_versions.push((key, value));
+			}
+		}
+	}
+	snapshot.total_value_bytes = budget.value_bytes();
+
 	Ok(snapshot)
+}
+
+pub(crate) async fn tx_scan_range_values_limited(
+	tx: &universaldb::Transaction,
+	start: &[u8],
+	end: &[u8],
+	isolation_level: universaldb::utils::IsolationLevel,
+	limit: usize,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			limit: Some(limit),
+			..(start, end).into()
+		},
+		isolation_level,
+	);
+	let mut rows = Vec::new();
+
+	while let Some(entry) = stream.try_next().await? {
+		rows.push((entry.key().to_vec(), entry.value().to_vec()));
+	}
+
+	Ok(rows)
+}
+
+pub(crate) fn reclaim_keep_txids(
+	db_pins: &[DbHistoryPin],
+	pitr_interval_retention: &[PitrIntervalSelection],
+) -> BTreeSet<u64> {
+	db_pins
+		.iter()
+		.map(|pin| pin.at_txid)
+		.chain(
+			pitr_interval_retention
+				.iter()
+				.map(|selection| selection.coverage.txid),
+		)
+		.collect()
+}
+
+pub(crate) fn reclaim_snapshot_has_work(snapshot: &ReclaimInputSnapshot) -> bool {
+	!snapshot.commits.is_empty()
+		|| !snapshot.delta_chunks.is_empty()
+		|| !snapshot.stale_pidx_entries.is_empty()
+		|| !snapshot.stale_shard_versions.is_empty()
+		|| !snapshot.expired_pitr_interval_rows.is_empty()
 }
 
 type PitrIntervalReclaimRows = (
@@ -752,53 +1052,6 @@ pub(crate) async fn read_pitr_interval_reclaim_rows(
 	}
 
 	Ok((retained, expired))
-}
-
-pub(crate) fn reclaim_delete_upper_bound(
-	root: &CompactionRoot,
-	db_pins: &[DbHistoryPin],
-	pitr_interval_retention: &[PitrIntervalSelection],
-) -> Option<u64> {
-	if root.hot_watermark_txid == 0 {
-		return None;
-	}
-
-	let pinned_floor = db_pins
-		.iter()
-		.filter(|pin| pin.at_txid <= root.hot_watermark_txid)
-		.map(|pin| pin.at_txid)
-		.chain(
-			pitr_interval_retention
-				.iter()
-				.filter(|selection| selection.coverage.txid <= root.hot_watermark_txid)
-				.map(|selection| selection.coverage.txid),
-		)
-		.min();
-	let max_reclaim_txid = pinned_floor
-		.map(|txid| txid.saturating_sub(1))
-		.unwrap_or(root.hot_watermark_txid);
-
-	(max_reclaim_txid > 0).then_some(max_reclaim_txid)
-}
-
-pub(crate) fn reclaim_delta_shard_ids(
-	branch_id: DatabaseBranchId,
-	delta_chunks: &[(Vec<u8>, Vec<u8>)],
-) -> Result<BTreeSet<u32>> {
-	let deltas = decode_hot_delta_chunks(branch_id, delta_chunks)?;
-	let mut shard_ids = BTreeSet::new();
-	for delta in deltas.values() {
-		for page in &delta.pages {
-			shard_ids.insert(page.pgno / keys::SHARD_SIZE);
-		}
-	}
-	Ok(shard_ids)
-}
-
-pub(crate) fn reclaim_coverage_is_complete(snapshot: &ReclaimInputSnapshot) -> bool {
-	!snapshot.delta_chunks.is_empty()
-		&& snapshot.required_coverage_shard_count > 0
-		&& snapshot.coverage_shards.len() == snapshot.required_coverage_shard_count
 }
 
 pub(crate) fn selected_hot_coverage_txids(
@@ -887,20 +1140,11 @@ pub(crate) fn plan_reclaim_job(
 	database_branch_id: DatabaseBranchId,
 	snapshot: &ManagerFdbSnapshot,
 	job_id: Id,
+	shard_gc_cursor: &[u8],
 	now_ms: i64,
 ) -> Option<PlannedReclaimCompactionJob> {
 	let branch_record = snapshot.branch_record.as_ref()?;
-	if snapshot.bucket_proof_blocked_reclaim {
-		return None;
-	}
-	let has_hot_reclaim = !snapshot.reclaim_inputs.txid_refs.is_empty()
-		&& snapshot.reclaim_inputs.pidx_entries.is_empty()
-		&& reclaim_coverage_is_complete(&snapshot.reclaim_inputs);
-	let has_interval_cleanup = !snapshot
-		.reclaim_inputs
-		.expired_pitr_interval_rows
-		.is_empty();
-	if !has_hot_reclaim && !has_interval_cleanup {
+	if !reclaim_snapshot_has_work(&snapshot.reclaim_inputs) {
 		return None;
 	}
 
@@ -918,14 +1162,11 @@ pub(crate) fn plan_reclaim_job(
 		.unwrap_or(snapshot.root.hot_watermark_txid);
 	let input_range = ReclaimJobInputRange {
 		txids: TxidRange { min_txid, max_txid },
-		txid_refs: if has_hot_reclaim {
-			snapshot.reclaim_inputs.txid_refs.clone()
-		} else {
-			Vec::new()
-		},
+		txid_refs: snapshot.reclaim_inputs.txid_refs.clone(),
 		staged_hot_shards: Vec::new(),
 		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
+		shard_gc_cursor: shard_gc_cursor.to_vec(),
 	};
 	let input_fingerprint =
 		fingerprint_reclaim_inputs(database_branch_id, &snapshot.root, &snapshot.reclaim_inputs);
@@ -943,28 +1184,11 @@ pub(crate) fn plan_reclaim_job(
 }
 
 pub(crate) fn reclaim_noop_reason(snapshot: &ManagerFdbSnapshot) -> &'static str {
+	if reclaim_snapshot_has_work(&snapshot.reclaim_inputs) {
+		return "reclaim:work-planned";
+	}
 	if snapshot.bucket_proof_blocked_reclaim {
 		return "reclaim:bucket-proof-blocked";
-	}
-
-	let has_hot_inputs = !snapshot.reclaim_inputs.txid_refs.is_empty();
-	if !has_hot_inputs {
-		if snapshot
-			.reclaim_inputs
-			.expired_pitr_interval_rows
-			.is_empty()
-		{
-			return "reclaim:no-actionable-work";
-		}
-		return "reclaim:expired-pitr-intervals";
-	}
-
-	if !snapshot.reclaim_inputs.pidx_entries.is_empty() {
-		return "reclaim:pidx-dependencies";
-	}
-
-	if has_hot_inputs && !reclaim_coverage_is_complete(&snapshot.reclaim_inputs) {
-		return "reclaim:missing-shard-coverage";
 	}
 
 	"reclaim:no-actionable-work"
@@ -1039,14 +1263,15 @@ pub(crate) fn fingerprint_reclaim_inputs(
 		update_fingerprint(&mut fingerprint, key);
 		update_fingerprint(&mut fingerprint, value);
 	}
-	for (key, value) in &reclaim_inputs.pidx_entries {
-		update_fingerprint(&mut fingerprint, key);
-		update_fingerprint(&mut fingerprint, value);
-	}
-	for (key, value) in &reclaim_inputs.coverage_shards {
-		update_fingerprint(&mut fingerprint, key);
-		update_fingerprint(&mut fingerprint, value);
-	}
+	// Stale PIDX rows and stale shard versions are deliberately not
+	// fingerprinted: the execute pass recomputes its own stale sets under
+	// serializable pin reads and clears them via compare-and-clear, so plan and
+	// execute do not need to agree on the exact sets, and fingerprinting them
+	// would reject passes on busy databases for no safety gain.
+	update_fingerprint(
+		&mut fingerprint,
+		&[u8::from(reclaim_inputs.commit_deletes_blocked)],
+	);
 	for (bucket_start_ms, key, value, coverage) in &reclaim_inputs.expired_pitr_interval_rows {
 		update_fingerprint(&mut fingerprint, &bucket_start_ms.to_be_bytes());
 		update_fingerprint(&mut fingerprint, key);
@@ -1102,18 +1327,14 @@ pub(crate) async fn write_staged_hot_shards(
 	hot_inputs: &HotInputSnapshot,
 ) -> Result<Vec<HotShardOutputRef>> {
 	let deltas = decode_hot_delta_chunks(input.database_branch_id, &hot_inputs.delta_chunks)?;
-	let selected_db_size_pages = hot_inputs
-		.commits
-		.iter()
-		.find_map(|(txid, commit)| {
-			(*txid == input.input_range.txids.max_txid).then_some(commit.db_size_pages)
-		})
-		.context("hot compaction selected commit row is missing")?;
 	let mut output_refs = Vec::new();
 
 	for as_of_txid in &input.input_range.coverage_txids {
-		let pages_by_shard =
-			collect_hot_pages_by_shard(selected_db_size_pages, &deltas, *as_of_txid)?;
+		// Every coverage txid is a commit inside this batch, and folding uses
+		// the per-commit database sizes so writes truncated before the coverage
+		// point are not resurrected and pages live at an earlier pinned txid
+		// are not dropped by a later shrink.
+		let pages_by_shard = collect_hot_pages_by_shard(&hot_inputs.commits, &deltas, *as_of_txid)?;
 
 		for (shard_id, page_updates) in pages_by_shard {
 			let encoded = build_staged_hot_shard_blob(
@@ -1175,7 +1396,7 @@ pub(crate) fn decode_hot_delta_chunks(
 }
 
 pub(crate) fn collect_hot_pages_by_shard(
-	db_size_pages: u32,
+	batch_commits: &[(u64, CommitRow)],
 	deltas: &BTreeMap<u64, DecodedLtx>,
 	as_of_txid: u64,
 ) -> Result<BTreeMap<u32, Vec<(u32, Vec<u8>)>>> {
@@ -1185,9 +1406,23 @@ pub(crate) fn collect_hot_pages_by_shard(
 		if *txid > as_of_txid {
 			continue;
 		}
+		// A page write survives at the coverage txid only if no commit between
+		// the write and the coverage point truncated the database below it.
+		// Folding past a truncate would resurrect dead bytes once the database
+		// regrows over the page.
+		let min_db_size_pages = batch_commits
+			.iter()
+			.filter(|(commit_txid, _)| *commit_txid >= *txid && *commit_txid <= as_of_txid)
+			.map(|(_, commit)| commit.db_size_pages)
+			.min()
+			.context("hot compaction delta txid is missing its commit row")?;
 		for page in &delta.pages {
-			if page.pgno <= db_size_pages {
+			if page.pgno <= min_db_size_pages {
 				pages_by_number.insert(page.pgno, page.bytes.clone());
+			} else {
+				// A truncate killed this page after the write; drop any older
+				// surviving write of it as well.
+				pages_by_number.remove(&page.pgno);
 			}
 		}
 	}

@@ -48,4 +48,5 @@ vbare.workspace = true
 
 [dev-dependencies]
 rivet-test-deps.workspace = true
+serde_bare.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

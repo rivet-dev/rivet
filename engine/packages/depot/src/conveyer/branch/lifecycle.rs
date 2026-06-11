@@ -153,6 +153,7 @@ pub async fn rollback_database(
 					rolled_branch_id,
 					cur_record.bucket_branch,
 					at.restore_point,
+					Some((bucket, database_id.clone())),
 				)
 				.await?;
 				freeze_database_branch(&tx, cur_record).await?;
@@ -213,6 +214,7 @@ pub(crate) async fn rollback_database_to_target_tx(
 		rolled_branch_id,
 		cur_record.bucket_branch,
 		target.restore_point.clone(),
+		Some((bucket, database_id.to_string())),
 	)
 	.await?;
 	freeze_database_branch(tx, cur_record).await?;

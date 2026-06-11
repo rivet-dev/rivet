@@ -1,15 +1,17 @@
 //! Structured, read-only snapshot of a database branch's stored history rows.
 //!
 //! Tests and tooling use this to assert exactly which DELTA, COMMITS, VTX,
-//! PIDX, SHARD, PITR_INTERVAL, and DB_PIN rows survive compaction and reclaim.
-//! Every set is decoded from raw UDB rows inside one transaction so partial
-//! deletes cannot hide behind in-process caches or derived state.
+//! PIDX, SHARD, PITR_INTERVAL, DB_PIN, and staged CMP rows survive compaction
+//! and reclaim. Every set is decoded from raw UDB rows with Serializable reads
+//! inside one transaction, so partial deletes cannot hide behind in-process
+//! caches, derived state, or torn cross-family reads on the RocksDB test
+//! driver, which only enforces transaction consistency for Serializable reads.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result, ensure};
 use futures_util::TryStreamExt;
-use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Snapshot};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Serializable};
 
 use crate::conveyer::{
 	keys,
@@ -26,20 +28,27 @@ pub struct BranchHistorySnapshot {
 	pub head: Option<DBHead>,
 	pub head_at_fork: Option<DBHead>,
 	pub compaction_root: Option<CompactionRoot>,
-	/// Distinct txids that still have at least one DELTA chunk row.
-	pub delta_txids: BTreeSet<u64>,
-	/// Total DELTA chunk rows, including multi-chunk blobs.
-	pub delta_chunk_rows: usize,
+	/// DELTA rows as txid -> surviving chunk indexes, so a partially deleted
+	/// multi-chunk delta is distinguishable from an intact one.
+	pub delta_chunks: BTreeMap<u64, BTreeSet<u32>>,
 	pub commits: BTreeMap<u64, CommitRow>,
 	/// VTX rows as versionstamp -> txid.
 	pub vtx: BTreeMap<[u8; 16], u64>,
 	/// PIDX rows as page number -> owning delta txid.
 	pub pidx: BTreeMap<u32, u64>,
+	/// Raw keys of PIDX rows whose values failed to decode. Surfaced as state
+	/// instead of an error so corruption tests can assert on them.
+	pub undecodable_pidx_keys: Vec<Vec<u8>>,
 	/// Reader-visible shard versions as shard id -> ascending as_of txids.
 	pub shard_versions: BTreeMap<u32, Vec<u64>>,
 	/// PITR interval rows as bucket start ms -> coverage.
 	pub pitr_intervals: BTreeMap<i64, PitrIntervalCoverage>,
 	pub pins: Vec<DbHistoryPin>,
+	/// Staged compaction output rows under CMP/stage that have not been
+	/// published or cleaned up.
+	pub staged_rows: usize,
+	/// Raw `/META/quota` counter value, when present.
+	pub quota_bytes: Option<i64>,
 }
 
 impl BranchHistorySnapshot {
@@ -48,6 +57,10 @@ impl BranchHistorySnapshot {
 			.as_ref()
 			.map(|root| root.hot_watermark_txid)
 			.unwrap_or(0)
+	}
+
+	pub fn delta_txids(&self) -> BTreeSet<u64> {
+		self.delta_chunks.keys().copied().collect()
 	}
 
 	pub fn commit_txids(&self) -> BTreeSet<u64> {
@@ -108,51 +121,64 @@ pub async fn branch_history_snapshot_tx(
 		.map(decode_compaction_root)
 		.transpose()
 		.context("decode sqlite compaction root for history snapshot")?;
+	snapshot.quota_bytes = read_value(tx, &keys::branch_meta_quota_key(branch_id))
+		.await?
+		.as_deref()
+		.map(decode_le_i64_value)
+		.transpose()
+		.context("decode sqlite quota counter for history snapshot")?;
 
 	for (key, _) in scan_prefix(tx, &keys::branch_delta_prefix(branch_id)).await? {
 		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
-		snapshot.delta_txids.insert(txid);
-		snapshot.delta_chunk_rows += 1;
+		let chunk_idx = keys::decode_branch_delta_chunk_idx(branch_id, txid, &key)?;
+		snapshot
+			.delta_chunks
+			.entry(txid)
+			.or_default()
+			.insert(chunk_idx);
 	}
 
-	for (key, value) in scan_prefix(tx, &keys::branch_commit_prefix(branch_id)).await? {
-		let txid = decode_be_u64_suffix(&keys::branch_commit_prefix(branch_id), &key)
+	let commit_prefix = keys::branch_commit_prefix(branch_id);
+	for (key, value) in scan_prefix(tx, &commit_prefix).await? {
+		let txid = decode_be_u64_suffix(&commit_prefix, &key)
 			.context("decode sqlite commit txid for history snapshot")?;
 		let commit =
 			decode_commit_row(&value).context("decode sqlite commit row for history snapshot")?;
 		snapshot.commits.insert(txid, commit);
 	}
 
-	for (key, value) in scan_prefix(tx, &keys::branch_vtx_prefix(branch_id)).await? {
-		let prefix = keys::branch_vtx_prefix(branch_id);
+	let vtx_prefix = keys::branch_vtx_prefix(branch_id);
+	for (key, value) in scan_prefix(tx, &vtx_prefix).await? {
 		let suffix = key
-			.strip_prefix(prefix.as_slice())
+			.strip_prefix(vtx_prefix.as_slice())
 			.context("branch VTX key did not start with expected prefix")?;
 		let versionstamp: [u8; 16] = suffix
 			.try_into()
-			.map_err(|_| anyhow::anyhow!("branch VTX suffix should be 16 bytes"))?;
+			.context("branch VTX suffix should be 16 bytes")?;
 		let txid = decode_be_u64_value(&value)
 			.context("decode sqlite VTX txid value for history snapshot")?;
 		snapshot.vtx.insert(versionstamp, txid);
 	}
 
-	for (key, value) in scan_prefix(tx, &keys::branch_pidx_prefix(branch_id)).await? {
-		let prefix = keys::branch_pidx_prefix(branch_id);
+	let pidx_prefix = keys::branch_pidx_prefix(branch_id);
+	for (key, value) in scan_prefix(tx, &pidx_prefix).await? {
 		let suffix = key
-			.strip_prefix(prefix.as_slice())
+			.strip_prefix(pidx_prefix.as_slice())
 			.context("branch PIDX key did not start with expected prefix")?;
 		let pgno_bytes: [u8; 4] = suffix
 			.try_into()
-			.map_err(|_| anyhow::anyhow!("branch PIDX suffix should be 4 bytes"))?;
-		let txid = decode_be_u64_value(&value)
-			.context("decode sqlite PIDX txid value for history snapshot")?;
+			.context("branch PIDX suffix should be 4 bytes")?;
+		let Ok(txid) = decode_be_u64_value(&value) else {
+			snapshot.undecodable_pidx_keys.push(key);
+			continue;
+		};
 		snapshot.pidx.insert(u32::from_be_bytes(pgno_bytes), txid);
 	}
 
-	for (key, _) in scan_prefix(tx, &keys::branch_shard_prefix(branch_id)).await? {
-		let prefix = keys::branch_shard_prefix(branch_id);
+	let shard_prefix = keys::branch_shard_prefix(branch_id);
+	for (key, _) in scan_prefix(tx, &shard_prefix).await? {
 		let suffix = key
-			.strip_prefix(prefix.as_slice())
+			.strip_prefix(shard_prefix.as_slice())
 			.context("branch SHARD key did not start with expected prefix")?;
 		ensure!(
 			suffix.len() == 4 + 1 + 8 && suffix[4] == b'/',
@@ -188,11 +214,19 @@ pub async fn branch_history_snapshot_tx(
 		snapshot.pins.push(pin);
 	}
 
+	snapshot.staged_rows = scan_prefix(tx, &keys::branch_compaction_stage_prefix(branch_id))
+		.await?
+		.len();
+
 	Ok(snapshot)
 }
 
 async fn read_value(tx: &universaldb::Transaction, key: &[u8]) -> Result<Option<Vec<u8>>> {
-	Ok(tx.informal().get(key, Snapshot).await?.map(Vec::<u8>::from))
+	Ok(tx
+		.informal()
+		.get(key, Serializable)
+		.await?
+		.map(Vec::<u8>::from))
 }
 
 async fn scan_prefix(
@@ -207,7 +241,7 @@ async fn scan_prefix(
 			mode: StreamingMode::WantAll,
 			..RangeOption::from(&prefix_subspace)
 		},
-		Snapshot,
+		Serializable,
 	);
 	let mut rows = Vec::new();
 
@@ -222,17 +256,19 @@ fn decode_be_u64_suffix(prefix: &[u8], key: &[u8]) -> Result<u64> {
 	let suffix = key
 		.strip_prefix(prefix)
 		.context("key did not start with expected prefix")?;
-	let bytes: [u8; 8] = suffix
-		.try_into()
-		.map_err(|_| anyhow::anyhow!("key suffix should be 8 bytes"))?;
+	let bytes: [u8; 8] = suffix.try_into().context("key suffix should be 8 bytes")?;
 
 	Ok(u64::from_be_bytes(bytes))
 }
 
 fn decode_be_u64_value(value: &[u8]) -> Result<u64> {
-	let bytes: [u8; 8] = value
-		.try_into()
-		.map_err(|_| anyhow::anyhow!("value should be 8 bytes"))?;
+	let bytes: [u8; 8] = value.try_into().context("value should be 8 bytes")?;
 
 	Ok(u64::from_be_bytes(bytes))
+}
+
+fn decode_le_i64_value(value: &[u8]) -> Result<i64> {
+	let bytes: [u8; 8] = value.try_into().context("quota value should be 8 bytes")?;
+
+	Ok(i64::from_le_bytes(bytes))
 }

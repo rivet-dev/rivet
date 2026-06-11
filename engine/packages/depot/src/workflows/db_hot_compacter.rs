@@ -306,9 +306,12 @@ async fn install_hot_job_tx(
 
 	let mut db_pins =
 		history_pin::read_db_history_pins(tx, input.database_branch_id, Serializable).await?;
-	if resolve_bucket_fork_pins(tx, input.database_branch_id, &mut db_pins).await? {
-		return Ok(rejected_hot_install("bucket fork proof is ambiguous"));
-	}
+	// An unmaterializable bucket fork must not reject the install: it only
+	// fail-safes commit/VTX reclaim. Installs need pins solely as coverage
+	// targets, and a fork that resolves to no covered point contributes none;
+	// blocking the watermark here would freeze compaction forever on a single
+	// out-of-retention fork.
+	let _ = resolve_bucket_fork_pins(tx, input.database_branch_id, &mut db_pins, now_ms).await?;
 	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
 	let hot_inputs = read_hot_input_snapshot(
 		tx,
@@ -427,6 +430,19 @@ async fn install_hot_job_tx(
 			),
 			staged_blob,
 		);
+		// Publishing consumes the staged row; leaving it behind leaks one staged
+		// copy per install.
+		udb::compare_and_clear(
+			tx,
+			&keys::branch_compaction_stage_hot_shard_key(
+				input.database_branch_id,
+				input.job_id,
+				output_ref.shard_id,
+				output_ref.as_of_txid,
+				0,
+			),
+			staged_blob,
+		);
 	}
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = hot_install_fault_output(
@@ -449,8 +465,16 @@ async fn install_hot_job_tx(
 		decode_pidx_txid(value)?;
 	}
 
+	let mut pidx_credit_bytes = 0_i64;
 	for (key, value) in &hot_inputs.pidx_entries {
 		udb::compare_and_clear(tx, key, value);
+		// PIDX rows are quota-billed at commit time; clearing them here must
+		// credit the counter or installs ratchet quota upward forever.
+		pidx_credit_bytes = pidx_credit_bytes
+			.saturating_add(i64::try_from(key.len() + value.len()).unwrap_or(i64::MAX));
+	}
+	if pidx_credit_bytes > 0 {
+		quota::atomic_add_branch(tx, input.database_branch_id, -pidx_credit_bytes);
 	}
 
 	for selection in &hot_inputs.pitr_interval_coverage {

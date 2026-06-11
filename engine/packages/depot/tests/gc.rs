@@ -3,10 +3,7 @@ mod common;
 use anyhow::Result;
 use depot::{
 	conveyer::history_pin,
-	gc::{
-		VERSIONSTAMP_INFINITY, estimate_branch_gc_pin, sweep_branch_hot_history,
-		sweep_unreferenced_branch,
-	},
+	gc::{VERSIONSTAMP_INFINITY, estimate_branch_gc_pin, sweep_unreferenced_branch},
 	keys::{
 		branch_commit_key, branch_delta_chunk_key, branch_meta_head_key, branch_pidx_key,
 		branch_shard_key, branch_vtx_key, branches_desc_pin_key, branches_list_key,
@@ -71,6 +68,8 @@ async fn seed_branch(
 				created_from_restore_point: None,
 				state: BranchState::Live,
 				lifecycle_generation: 0,
+				policy_bucket_id: None,
+				policy_database_id: None,
 			})?,
 		);
 		tx.informal()
@@ -128,6 +127,8 @@ async fn sweeping_child_branch_releases_parent_refcount_and_fork_pin() -> Result
 						created_from_restore_point: None,
 						state: BranchState::Live,
 						lifecycle_generation: 0,
+						policy_bucket_id: None,
+						policy_database_id: None,
 					})?,
 				);
 				tx.informal().set(
@@ -150,6 +151,8 @@ async fn sweeping_child_branch_releases_parent_refcount_and_fork_pin() -> Result
 						created_from_restore_point: None,
 						state: BranchState::Live,
 						lifecycle_generation: 0,
+						policy_bucket_id: None,
+						policy_database_id: None,
 					})?,
 				);
 				tx.informal().set(
@@ -330,94 +333,6 @@ async fn unreferenced_unpinned_branch_sweep_deletes_hot_branch_data() -> Result<
 			assert_eq!(
 				read_value(&db, branch_shard_key(branch_id, 0, 6)).await?,
 				None
-			);
-
-			Ok(())
-		})
-	})
-	.await
-}
-
-#[tokio::test]
-async fn branch_hot_gc_uses_vtx_floor_for_commits_vtx_and_delta() -> Result<()> {
-	common::test_matrix("depot-gc-hot-history", |_tier, ctx| {
-		Box::pin(async move {
-			let db = ctx.udb.clone();
-			let branch_id = branch_id();
-			seed_branch(&db, 1, [6; 16]).await?;
-			write_commit(&db, 3, [3; 16]).await?;
-			write_commit(&db, 4, [4; 16]).await?;
-			write_commit(&db, 6, [6; 16]).await?;
-			write_commit(&db, 8, [8; 16]).await?;
-
-			db.txn("test_depotgc", move |tx| async move {
-				tx.informal()
-					.set(&branch_delta_chunk_key(branch_id, 2, 0), b"delta-two");
-				tx.informal()
-					.set(&branch_delta_chunk_key(branch_id, 5, 0), b"delta-five");
-				tx.informal()
-					.set(&branch_delta_chunk_key(branch_id, 6, 0), b"delta-six");
-				Ok(())
-			})
-			.await?;
-
-			let outcome = sweep_branch_hot_history(&db, branch_id)
-				.await?
-				.expect("branch should be swept");
-			assert_eq!(outcome.gc_pin, [6; 16]);
-			assert_eq!(outcome.txid_floor, Some(6));
-			assert_eq!(outcome.commits_deleted, 2);
-			assert_eq!(outcome.vtx_deleted, 2);
-			assert_eq!(outcome.delta_chunks_deleted, 2);
-
-			assert_eq!(
-				read_value(&db, branch_commit_key(branch_id, 3)).await?,
-				None
-			);
-			assert_eq!(
-				read_value(&db, branch_commit_key(branch_id, 4)).await?,
-				None
-			);
-			assert!(
-				read_value(&db, branch_commit_key(branch_id, 6))
-					.await?
-					.is_some()
-			);
-			assert!(
-				read_value(&db, branch_commit_key(branch_id, 8))
-					.await?
-					.is_some()
-			);
-			assert_eq!(
-				read_value(&db, branch_vtx_key(branch_id, [3; 16])).await?,
-				None
-			);
-			assert_eq!(
-				read_value(&db, branch_vtx_key(branch_id, [4; 16])).await?,
-				None
-			);
-			assert!(
-				read_value(&db, branch_vtx_key(branch_id, [6; 16]))
-					.await?
-					.is_some()
-			);
-			assert!(
-				read_value(&db, branch_vtx_key(branch_id, [8; 16]))
-					.await?
-					.is_some()
-			);
-			assert_eq!(
-				read_value(&db, branch_delta_chunk_key(branch_id, 2, 0)).await?,
-				None
-			);
-			assert_eq!(
-				read_value(&db, branch_delta_chunk_key(branch_id, 5, 0)).await?,
-				None
-			);
-			assert!(
-				read_value(&db, branch_delta_chunk_key(branch_id, 6, 0))
-					.await?
-					.is_some()
 			);
 
 			Ok(())

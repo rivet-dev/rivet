@@ -249,6 +249,7 @@ async fn derive_branch_at_snapshots_head_and_writes_branch_metadata() -> Result<
 				new_branch_id,
 				bucket_branch_id,
 				None,
+				None,
 			)
 			.await
 		})
@@ -332,6 +333,7 @@ async fn derive_branch_at_rejects_expired_pin_before_copying_head() -> Result<()
 					new_branch_id,
 					bucket_branch_id,
 					None,
+					None,
 				)
 				.await
 			})
@@ -378,6 +380,8 @@ async fn derive_branch_at_rejects_versionstamp_below_parent_gc_floor() -> Result
 					created_from_restore_point: None,
 					state: BranchState::Live,
 					lifecycle_generation: 0,
+					policy_bucket_id: None,
+					policy_database_id: None,
 				})?,
 			);
 			tx.informal().set(
@@ -409,6 +413,7 @@ async fn derive_branch_at_rejects_versionstamp_below_parent_gc_floor() -> Result
 					old_versionstamp,
 					new_branch_id,
 					bucket_branch_id,
+					None,
 					None,
 				)
 				.await
@@ -457,6 +462,7 @@ async fn derive_branch_at_enforces_max_fork_depth() -> Result<()> {
 					[1; 16],
 					new_branch_id,
 					bucket_branch_id,
+					None,
 					None,
 				)
 				.await
@@ -1349,6 +1355,8 @@ async fn seed_branch_record(
 		created_from_restore_point: None,
 		state: BranchState::Live,
 		lifecycle_generation: 0,
+		policy_bucket_id: None,
+		policy_database_id: None,
 	};
 	let encoded_record = encode_database_branch_record(record)?;
 	db.txn("test_depotconveyer_branch", move |tx| {
@@ -1392,4 +1400,55 @@ async fn seed_bucket_branch_record(
 		}
 	})
 	.await
+}
+
+/// Version 1 database branch records, written before the denormalized policy
+/// scope fields existed, must decode with empty scope and otherwise identical
+/// fields.
+#[test]
+fn database_branch_record_v1_decodes_with_empty_policy_scope() -> Result<()> {
+	use serde::Serialize;
+
+	#[derive(Serialize)]
+	struct LegacyDatabaseBranchRecordV1 {
+		branch_id: DatabaseBranchId,
+		bucket_branch: BucketBranchId,
+		parent: Option<DatabaseBranchId>,
+		parent_versionstamp: Option<[u8; 16]>,
+		root_versionstamp: [u8; 16],
+		fork_depth: u8,
+		created_at_ms: i64,
+		created_from_restore_point: Option<u8>,
+		state: BranchState,
+		lifecycle_generation: u64,
+	}
+
+	let branch_id = DatabaseBranchId::new_v4();
+	let bucket_branch = BucketBranchId::new_v4();
+	let legacy = LegacyDatabaseBranchRecordV1 {
+		branch_id,
+		bucket_branch,
+		parent: None,
+		parent_versionstamp: None,
+		root_versionstamp: [7; 16],
+		fork_depth: 3,
+		created_at_ms: 42,
+		created_from_restore_point: None,
+		state: BranchState::Live,
+		lifecycle_generation: 9,
+	};
+	let mut payload = 1u16.to_le_bytes().to_vec();
+	payload.extend(serde_bare::to_vec(&legacy)?);
+
+	let record = depot::types::decode_database_branch_record(&payload)?;
+	assert_eq!(record.branch_id, branch_id);
+	assert_eq!(record.bucket_branch, bucket_branch);
+	assert_eq!(record.root_versionstamp, [7; 16]);
+	assert_eq!(record.fork_depth, 3);
+	assert_eq!(record.created_at_ms, 42);
+	assert_eq!(record.lifecycle_generation, 9);
+	assert_eq!(record.policy_bucket_id, None);
+	assert_eq!(record.policy_database_id, None);
+
+	Ok(())
 }
