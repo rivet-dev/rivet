@@ -6,9 +6,10 @@ import {
 	useQuery,
 } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "@tanstack/react-router";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { ImagesTable } from "@/app/images-table";
 import {
+	Badge,
 	Button,
 	cn,
 	DiscreteCopyButton,
@@ -22,6 +23,7 @@ import {
 	useCloudNamespaceDataProvider,
 	useDataProvider,
 } from "@/components/actors";
+import { isAgentOsDemoName } from "@/components/actors/agent-os/use-agent-os-inspector";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { ActorIcon } from "@/components/lazy-icon";
 import { VisibilitySensor } from "@/components/visibility-sensor";
@@ -68,6 +70,39 @@ function ActorGridCardSkeleton() {
 	);
 }
 
+const AGENT_FILTERS = ["all", "actors", "agents"] as const;
+type AgentFilter = (typeof AGENT_FILTERS)[number];
+
+// Prototype-only segmented filter (shown when features.agentOsInspector is on)
+// to separate agentOS instances from standard actors in the grid.
+function AgentFilterToggle({
+	value,
+	onChange,
+}: {
+	value: AgentFilter;
+	onChange: (value: AgentFilter) => void;
+}) {
+	return (
+		<div className="flex items-center gap-0.5 rounded-md border border-foreground/10 p-0.5">
+			{AGENT_FILTERS.map((filter) => (
+				<button
+					key={filter}
+					type="button"
+					onClick={() => onChange(filter)}
+					className={cn(
+						"rounded px-2 py-1 text-xs capitalize transition-colors",
+						value === filter
+							? "bg-foreground/10 text-foreground"
+							: "text-muted-foreground hover:text-foreground",
+					)}
+				>
+					{filter}
+				</button>
+			))}
+		</div>
+	);
+}
+
 export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 	const dataProvider = useDataProvider();
 	const nsDataProvider = useCloudNamespaceDataProvider();
@@ -105,6 +140,18 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 
 	const builds = data ?? [];
 	const sorted = builds.toSorted((a, b) => a.id.localeCompare(b.id));
+
+	// Prototype: filter the grid by actor kind. agentOS-ness is a fixture/demo
+	// signal (isAgentOsDemoName); the live impl reads kind from the engine.
+	const [agentFilter, setAgentFilter] = useState<AgentFilter>("all");
+	const filtered =
+		features.agentOsInspector && agentFilter !== "all"
+			? sorted.filter((b) =>
+					agentFilter === "agents"
+						? isAgentOsDemoName(b.id)
+						: !isAgentOsDemoName(b.id),
+				)
+			: sorted;
 
 	const namespaceName = namespaceLabel ?? "Namespace";
 
@@ -162,24 +209,32 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 							<h2 className="text-base font-semibold text-foreground">
 								Actors
 							</h2>
-							{builds.length > 0 ? (
-								<Button
-									variant="outline"
-									size="sm"
-									startIcon={<Icon icon={faPlus} />}
-									onClick={() => {
-										navigate({
-											to: ".",
-											search: (old) => ({
-												...old,
-												modal: "create-actor",
-											}),
-										});
-									}}
-								>
-									Create Actor
-								</Button>
-							) : null}
+							<div className="flex items-center gap-2">
+								{features.agentOsInspector ? (
+									<AgentFilterToggle
+										value={agentFilter}
+										onChange={setAgentFilter}
+									/>
+								) : null}
+								{builds.length > 0 ? (
+									<Button
+										variant="outline"
+										size="sm"
+										startIcon={<Icon icon={faPlus} />}
+										onClick={() => {
+											navigate({
+												to: ".",
+												search: (old) => ({
+													...old,
+													modal: "create-actor",
+												}),
+											});
+										}}
+									>
+										Create Actor
+									</Button>
+								) : null}
+							</div>
 						</header>
 
 						{isLoading ? (
@@ -222,7 +277,7 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 						) : (
 							<>
 								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-									{sorted.map((build) => {
+									{filtered.map((build) => {
 										const meta = build.name.metadata as
 											| Record<string, unknown>
 											| undefined;
@@ -234,6 +289,9 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 											typeof meta?.name === "string"
 												? meta.name
 												: build.id;
+										const isAgent = isAgentOsDemoName(
+											build.id,
+										);
 
 										return (
 											<Link
@@ -252,6 +310,14 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 													"min-h-[110px] cursor-pointer",
 												)}
 											>
+												{isAgent ? (
+													<Badge
+														variant="secondary"
+														className="absolute right-2 top-2 px-1.5 py-0 text-[10px]"
+													>
+														agentOS
+													</Badge>
+												) : null}
 												<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
 													<ActorIcon
 														iconValue={iconValue}
