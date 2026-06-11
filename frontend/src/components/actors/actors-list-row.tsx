@@ -104,7 +104,7 @@ function Id({ actorId }: { actorId: ActorId }) {
 		: actorId.substring(0, 8);
 	return (
 		<CopyTrigger value={actorId}>
-			<span className="group/id inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-muted-foreground hover:text-foreground tabular-nums font-mono-console transition-colors">
+			<span className="group/id inline-flex items-center gap-1 min-w-0 max-w-full justify-self-start cursor-pointer text-muted-foreground hover:text-foreground tabular-nums font-mono-console transition-colors">
 				<span className="truncate min-w-0">{shortId}</span>
 				<Icon
 					icon={faCopy}
@@ -156,7 +156,7 @@ function Tags({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<CopyTrigger value={data}>
-			<span className="group/key inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-foreground transition-colors">
+			<span className="group/key inline-flex items-center gap-1 min-w-0 max-w-full justify-self-start cursor-pointer text-foreground transition-colors">
 				<span className="truncate min-w-0">{data}</span>
 				<Icon
 					icon={faCopy}
@@ -177,7 +177,7 @@ function Timestamp({ actorId }: { actorId: ActorId }) {
 	const timestamp = ts ? new Date(ts) : null;
 
 	return (
-		<SmallText className="text-right text-muted-foreground justify-end inline-flex tabular-nums">
+		<SmallText className="text-right text-xs text-muted-foreground justify-end inline-flex tabular-nums">
 			{isLoading ? (
 				<Skeleton className="h-5 w-10" />
 			) : timestamp ? (
@@ -202,7 +202,7 @@ export function ActorsListHeader() {
 				className="bg-foreground/[0.04] grid items-center gap-3 px-3 h-8 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
 				style={{ gridTemplateColumns: template }}
 			>
-				<div>Status</div>
+				<div />
 				{showIds ? <div>ID</div> : null}
 				{showDatacenter ? <div>Region</div> : null}
 				<div>Key</div>

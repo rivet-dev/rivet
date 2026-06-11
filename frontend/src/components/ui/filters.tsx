@@ -1403,7 +1403,7 @@ export function FiltersDisplay({
 		<Popover>
 			<PopoverTrigger asChild>
 				<Button
-					variant="outline"
+					variant="ghost"
 					size="sm"
 					startIcon={<Icon icon={faSliders} />}
 				>

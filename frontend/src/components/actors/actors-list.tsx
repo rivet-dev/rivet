@@ -171,7 +171,7 @@ function InstanceSearchTrigger() {
 			<WithTooltip
 				trigger={
 					<Button
-						variant="outline"
+						variant="ghost"
 						size="icon-sm"
 						onClick={() => setOpen(true)}
 						aria-label="Open Actor by ID"
