@@ -2,7 +2,38 @@ use super::dispatch::*;
 use super::http::*;
 use super::*;
 use crate::error::{ProtocolError, client_error_message};
+use crate::inspector::InspectorTabEntry;
 use ::http;
+
+// Inspector-UI frontend bundle. Embedded at build time from
+// frontend/dist/inspector-ui/ via build.rs. Served from
+// /inspector/ui/<path> below; identical for every actor.
+//
+// In debug builds we additionally try reading from this filesystem path on
+// every request so iterating on the UI only requires
+// `vite build --config vite.inspector-ui.config.ts --watch` — no engine
+// rebuild. Release builds skip the filesystem entirely.
+#[cfg(not(target_arch = "wasm32"))]
+static INSPECTOR_UI_DIR: include_dir::Dir<'_> = include_dir::include_dir!("$OUT_DIR/inspector-ui");
+
+#[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
+const INSPECTOR_UI_DEV_DIR: &str = concat!(
+	env!("CARGO_MANIFEST_DIR"),
+	"/../../../frontend/dist/inspector-ui"
+);
+
+// Shared stylesheet served to custom inspector tabs at /inspector/tab.css.
+// Authored in frontend/scripts/generate-inspector-tab-css.mjs, which mirrors
+// the dashboard's design tokens so tabs that <link> to it look native.
+#[cfg(not(target_arch = "wasm32"))]
+static INSPECTOR_TAB_DIR: include_dir::Dir<'_> =
+	include_dir::include_dir!("$OUT_DIR/inspector-tab");
+
+#[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
+const INSPECTOR_TAB_DEV_DIR: &str = concat!(
+	env!("CARGO_MANIFEST_DIR"),
+	"/../../../frontend/dist/inspector-tab"
+);
 
 #[derive(rivet_error::RivetError, serde::Serialize)]
 #[error(
@@ -26,6 +57,37 @@ impl RegistryDispatcher {
 		if !url.path().starts_with("/inspector/") {
 			return Ok(None);
 		}
+
+		// Serve the inspector-UI bundle (HTML/JS/CSS) without auth: same
+		// static files for every actor, no actor data leaked. Auth still gates
+		// every data-bearing route below. Native only — wasm runtimes do not
+		// host actor inspector HTTP endpoints.
+		#[cfg(not(target_arch = "wasm32"))]
+		if request.method() == http::Method::GET {
+			if let Some(rel) = url.path().strip_prefix("/inspector/ui/") {
+				return Ok(Some(serve_inspector_ui_asset(rel)));
+			}
+			// Shared stylesheet for custom inspector tabs. Mirrors the
+			// dashboard's design tokens under the `--rivet-*` namespace.
+			// Generated from `theme.css` by the inspector-ui build.
+			if url.path() == "/inspector/tab.css" {
+				return Ok(Some(serve_inspector_tab_stylesheet()));
+			}
+			// Tab config: descriptors for custom tabs + built-in hides.
+			// Unauthenticated for the same reason as /inspector/ui/* —
+			// neither tab ids nor labels are sensitive, and the bundle
+			// bytes the SPA fetches based on this list are also public.
+			if url.path() == "/inspector/tab-config" {
+				return Ok(Some(serve_tab_config(instance.factory.config())));
+			}
+			if let Some(rest) = url.path().strip_prefix("/inspector/custom-tabs/") {
+				return Ok(Some(serve_custom_tab_asset(
+					instance.factory.config(),
+					rest,
+				)));
+			}
+		}
+
 		if self.handle_inspector_http_in_runtime {
 			return Ok(None);
 		}
@@ -768,4 +830,242 @@ pub(super) fn parse_u32_query_param(
 			&format!("Invalid query parameter `{key}`: {error}"),
 		)
 	})
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn serve_inspector_ui_asset(rel: &str) -> HttpResponse {
+	// Single-entry SPA: /inspector/ui/ serves index.html, every other
+	// path under that prefix is an asset relative to the bundle root.
+	let stripped = rel.trim_start_matches('/');
+	let candidate = if stripped.is_empty() || stripped.ends_with('/') {
+		format!("{stripped}index.html")
+	} else {
+		stripped.to_owned()
+	};
+
+	#[cfg(debug_assertions)]
+	if let Some(response) = read_inspector_ui_from_disk(&candidate) {
+		return response;
+	}
+
+	if let Some(file) = INSPECTOR_UI_DIR.get_file(&candidate) {
+		return inspector_ui_response(&candidate, file.contents().to_vec());
+	}
+
+	inspector_error_response(
+		StatusCode::NOT_FOUND,
+		"inspector",
+		"ui_asset_not_found",
+		"Inspector UI asset was not found in the embedded bundle",
+	)
+}
+
+// Serves the shared custom-tab stylesheet at /inspector/tab.css. The
+// stylesheet mirrors the dashboard's design tokens so author-shipped tabs
+// that <link> to it look dashboard-native. Same dev-disk-fallback shape
+// as serve_inspector_ui_asset: in debug builds we try the filesystem
+// first so iterating on the generator doesn't require an engine rebuild.
+#[cfg(not(target_arch = "wasm32"))]
+fn serve_inspector_tab_stylesheet() -> HttpResponse {
+	const FILE: &str = "styles.css";
+
+	#[cfg(debug_assertions)]
+	{
+		use std::path::PathBuf;
+		let dev_path = PathBuf::from(INSPECTOR_TAB_DEV_DIR).join(FILE);
+		if let Ok(bytes) = std::fs::read(&dev_path) {
+			tracing::debug!(
+				path = %dev_path.display(),
+				"served inspector tab stylesheet from dev disk"
+			);
+			return inspector_ui_response("tab.css", bytes);
+		}
+	}
+
+	if let Some(file) = INSPECTOR_TAB_DIR.get_file(FILE) {
+		return inspector_ui_response("tab.css", file.contents().to_vec());
+	}
+
+	inspector_error_response(
+		StatusCode::NOT_FOUND,
+		"inspector",
+		"tab_stylesheet_unavailable",
+		"Inspector tab stylesheet was not bundled into this engine",
+	)
+}
+
+#[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
+fn read_inspector_ui_from_disk(candidate: &str) -> Option<HttpResponse> {
+	use std::path::{Component, Path, PathBuf};
+
+	// Reject path-traversal attempts (.. / absolute paths) before touching FS.
+	let rel = Path::new(candidate);
+	if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
+		return None;
+	}
+
+	let dev_dir = PathBuf::from(INSPECTOR_UI_DEV_DIR);
+	let absolute = dev_dir.join(rel);
+	let bytes = std::fs::read(&absolute).ok()?;
+	tracing::debug!(path = %absolute.display(), "served inspector UI asset from dev disk");
+	Some(inspector_ui_response(candidate, bytes))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn inspector_ui_response(path: &str, body: Vec<u8>) -> HttpResponse {
+	let mut headers = HashMap::new();
+	headers.insert(
+		http::header::CONTENT_TYPE.to_string(),
+		inspector_ui_mime(path).to_owned(),
+	);
+	headers.insert(
+		http::header::CACHE_CONTROL.to_string(),
+		"no-cache".to_owned(),
+	);
+	HttpResponse {
+		status: StatusCode::OK.as_u16(),
+		headers,
+		body: Some(body),
+		body_stream: None,
+	}
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn serve_tab_config(config: &crate::ActorConfig) -> HttpResponse {
+	let tabs: Vec<JsonValue> = config
+		.inspector_tabs
+		.iter()
+		.map(|entry| match entry {
+			InspectorTabEntry::Custom {
+				id, label, icon, ..
+			} => json!({ "id": id, "label": label, "icon": icon }),
+			InspectorTabEntry::HideBuiltin { id } => {
+				json!({ "id": id, "hidden": true })
+			}
+		})
+		.collect();
+	json_http_response(StatusCode::OK, &json!({ "tabs": tabs }))
+		.unwrap_or_else(|e| inspector_anyhow_response(e.context("serialize tab-config")))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn serve_custom_tab_asset(config: &crate::ActorConfig, rest: &str) -> HttpResponse {
+	use std::path::{Component, Path};
+
+	// Split <tab-id>/<asset-path>. An empty asset path means index.html.
+	let (tab_id, asset_rel) = rest.split_once('/').unwrap_or((rest, ""));
+
+	let Some(root) = config.inspector_tabs.iter().find_map(|entry| match entry {
+		InspectorTabEntry::Custom { id, root, .. } if id == tab_id => Some(root),
+		_ => None,
+	}) else {
+		return inspector_error_response(
+			StatusCode::NOT_FOUND,
+			"inspector",
+			"custom_tab_not_found",
+			"Inspector custom tab id was not registered on this actor",
+		);
+	};
+
+	let candidate = if asset_rel.is_empty() || asset_rel.ends_with('/') {
+		format!("{asset_rel}index.html")
+	} else {
+		asset_rel.to_owned()
+	};
+
+	// Path-traversal guard — only Normal path components allowed.
+	let rel_path = Path::new(&candidate);
+	if rel_path
+		.components()
+		.any(|c| !matches!(c, Component::Normal(_)))
+	{
+		return inspector_error_response(
+			StatusCode::BAD_REQUEST,
+			"inspector",
+			"invalid_request",
+			"Invalid inspector custom-tab asset path",
+		);
+	}
+
+	let absolute = root.join(rel_path);
+
+	// Containment check: even though the component guard rejects `..`, a
+	// symlink inside the bundle directory could still resolve to a target
+	// outside `root`. `canonicalize` follows every symlink in the chain;
+	// requiring the result to start with the canonical root closes that
+	// edge case. Canonicalize on every request because the bundle root
+	// can be deleted or replaced after registry construction.
+	let Ok(canonical_root) = root.canonicalize() else {
+		// Debug rather than warn: this is "happy path is deleted" and the
+		// TS layer already statSync'd the root at registry construction.
+		// In a deployment where the directory was rm-rf'd post-startup we
+		// don't want to spam warn per request.
+		tracing::debug!(
+			tab_id,
+			root = %root.display(),
+			"inspector custom-tab root failed to canonicalize"
+		);
+		return inspector_error_response(
+			StatusCode::NOT_FOUND,
+			"inspector",
+			"custom_tab_asset_not_found",
+			"Inspector custom-tab asset was not found in the tab's source directory",
+		);
+	};
+	let Ok(canonical) = absolute.canonicalize() else {
+		return inspector_error_response(
+			StatusCode::NOT_FOUND,
+			"inspector",
+			"custom_tab_asset_not_found",
+			"Inspector custom-tab asset was not found in the tab's source directory",
+		);
+	};
+	if !canonical.starts_with(&canonical_root) {
+		tracing::warn!(
+			tab_id,
+			root = %canonical_root.display(),
+			resolved = %canonical.display(),
+			"inspector custom-tab asset escaped its source root via symlink"
+		);
+		return inspector_error_response(
+			StatusCode::BAD_REQUEST,
+			"inspector",
+			"invalid_request",
+			"Invalid inspector custom-tab asset path",
+		);
+	}
+
+	let Ok(bytes) = std::fs::read(&canonical) else {
+		return inspector_error_response(
+			StatusCode::NOT_FOUND,
+			"inspector",
+			"custom_tab_asset_not_found",
+			"Inspector custom-tab asset was not found in the tab's source directory",
+		);
+	};
+	tracing::debug!(
+		tab_id,
+		path = %canonical.display(),
+		"served inspector custom-tab asset"
+	);
+	inspector_ui_response(&candidate, bytes)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn inspector_ui_mime(path: &str) -> &'static str {
+	match path.rsplit('.').next().unwrap_or("") {
+		"html" => "text/html; charset=utf-8",
+		"js" | "mjs" => "text/javascript; charset=utf-8",
+		"css" => "text/css; charset=utf-8",
+		"json" => "application/json; charset=utf-8",
+		"map" => "application/json; charset=utf-8",
+		"svg" => "image/svg+xml",
+		"png" => "image/png",
+		"jpg" | "jpeg" => "image/jpeg",
+		"gif" => "image/gif",
+		"woff" => "font/woff",
+		"woff2" => "font/woff2",
+		"wasm" => "application/wasm",
+		_ => "application/octet-stream",
+	}
 }

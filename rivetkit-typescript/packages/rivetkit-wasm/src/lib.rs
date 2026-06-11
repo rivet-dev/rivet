@@ -472,6 +472,9 @@ impl WasmActorFactory {
 			serde_wasm_bindgen::from_value(config)?
 		};
 		let config = ActorConfig::from_input(input.into());
+		config
+			.validate()
+			.map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
 		let callbacks = WasmCallbacks::new(callbacks);
 		let factory = CoreActorFactory::new_with_manual_startup_ready(config, move |start| {
 			let callbacks = callbacks.clone();

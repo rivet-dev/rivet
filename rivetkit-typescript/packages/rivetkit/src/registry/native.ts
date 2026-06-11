@@ -71,12 +71,15 @@ import type {
 	RuntimeActorConfig,
 	RuntimeBytes,
 	RuntimeHttpResponse,
+	RuntimeInspectorTabEntry,
 	RuntimeQueueMessage,
 	RuntimeServeConfig,
 	RuntimeStateDeltaPayload,
 	WebSocketHandle,
 } from "./runtime";
 import { loadWasmRuntime } from "./wasm-runtime";
+import nodeFs from "node:fs";
+import nodePath from "node:path";
 import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
@@ -3323,7 +3326,85 @@ function buildActorConfig(
 		actions: Object.keys((config.actions ?? {}) as Record<string, unknown>)
 			.sort()
 			.map((name) => ({ name })),
+		inspectorTabs: buildInspectorTabs(config.inspector),
 	};
+}
+
+function buildInspectorTabs(
+	inspector: unknown,
+): Array<RuntimeInspectorTabEntry> | undefined {
+	if (!inspector || typeof inspector !== "object") return undefined;
+	const tabs = (inspector as { tabs?: unknown }).tabs;
+	if (!Array.isArray(tabs) || tabs.length === 0) return undefined;
+	return tabs.map((raw) => {
+		const entry = raw as {
+			id: string;
+			label?: string;
+			source?: string;
+			icon?: string;
+			hidden?: boolean;
+		};
+		if (entry.hidden === true) {
+			return { id: entry.id, hidden: true };
+		}
+		// Resolve the author's source path against the current working
+		// directory so the Rust runtime gets an absolute path. The author
+		// runs the actor process from their project root by convention.
+		const resolved =
+			entry.source !== undefined
+				? nodePath.resolve(entry.source)
+				: undefined;
+		if (resolved !== undefined) {
+			validateInspectorTabSource(entry.id, resolved);
+		}
+		return {
+			id: entry.id,
+			label: entry.label,
+			icon: entry.icon,
+			source: resolved,
+		};
+	});
+}
+
+function validateInspectorTabSource(tabId: string, resolved: string): void {
+	// Catch obviously dangerous misconfigurations at registry construction
+	// rather than silently exposing the wrong subtree over the unauthenticated
+	// `/inspector/custom-tabs/<id>/*` route. Fail loudly so misconfigured
+	// actors never start.
+	if (resolved === nodePath.parse(resolved).root) {
+		throw new Error(
+			`inspector.tabs[id="${tabId}"].source resolves to the filesystem root (${resolved}). ` +
+				"Point it at the tab's own static-asset directory instead.",
+		);
+	}
+	let stat: import("node:fs").Stats;
+	try {
+		stat = nodeFs.statSync(resolved);
+	} catch (err) {
+		const code = (err as NodeJS.ErrnoException)?.code;
+		if (code === "ENOENT") {
+			throw new Error(
+				`inspector.tabs[id="${tabId}"].source (${resolved}) does not exist.`,
+			);
+		}
+		if (code === "EACCES") {
+			throw new Error(
+				`inspector.tabs[id="${tabId}"].source (${resolved}) is not readable (EACCES).`,
+			);
+		}
+		throw new Error(
+			`inspector.tabs[id="${tabId}"].source (${resolved}) could not be stat'd: ${
+				(err as Error)?.message ?? err
+			}`,
+		);
+	}
+	if (!stat.isDirectory()) {
+		throw new Error(
+			`inspector.tabs[id="${tabId}"].source (${resolved}) must be a directory, got ${
+				stat.isFile() ? "file" : "non-directory"
+			}.`,
+		);
+	}
 }
 
 export function buildNativeFactory(
