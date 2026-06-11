@@ -37,6 +37,7 @@ const footer = {
 	],
 	resources: [
 		{ name: "Cookbooks", href: "/cookbook" },
+		{ name: "Compare", href: "/compare" },
 		{ name: "Blog", href: "/blog" },
 		{ name: "YC & Speedrun Deal", href: "/startups" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
