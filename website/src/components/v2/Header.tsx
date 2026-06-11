@@ -471,7 +471,7 @@ export function Header({
 										href="/cookbook"
 										ariaCurrent={active === "cookbook" ? "page" : undefined}
 									>
-										Cookbook
+										Cookbooks
 									</TextNavItem>
 								)}
 								{!isLightTheme && (
@@ -555,7 +555,7 @@ export function Header({
 						href="/cookbook"
 						ariaCurrent={active === "cookbook" ? "page" : undefined}
 					>
-						Cookbook
+						Cookbooks
 					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
@@ -607,6 +607,7 @@ function DocsMobileNavigation({
 		]
 		: [
 			{ href: "/docs", label: "Documentation" },
+			{ href: "/cookbook", label: "Cookbooks" },
 			{ href: "/cloud", label: "Pricing" },
 		];
 

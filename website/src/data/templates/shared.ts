@@ -115,6 +115,16 @@ export const templates: Template[] = [
 		technologies: ["react"],
 		providers: { vercel: null },
 	},
+	{
+		name: "multiplayer-game-patterns",
+		displayName: "Multiplayer Game Patterns",
+		description:
+			"Working matchmaking, lobby, and tick-loop actors for battle royale, arena, IO style, open world, party, ranked, turn-based, and idle games.",
+		tags: ["realtime"],
+		technologies: ["websocket"],
+		providers: { vercel: null },
+		noFrontend: true,
+	},
 ];
 
 export const TAGS: Tag[] = [
