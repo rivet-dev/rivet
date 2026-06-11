@@ -1501,6 +1501,7 @@ mod tests {
 				let start = wrap_start::<EmptyActor>(rivetkit_core::ActorStart {
 					ctx: rivetkit_core::ActorContext::new("actor-id", "test", Vec::new(), "local"),
 					input: None,
+					is_new: true,
 					snapshot: None,
 					hibernated: Vec::new(),
 					events: event_rx.into(),

@@ -138,6 +138,7 @@ mod tests {
 			.start(ActorStart {
 				ctx: rivetkit_core::ActorContext::new("actor-id", "empty", Vec::new(), "local"),
 				input: None,
+				is_new: true,
 				snapshot: None,
 				hibernated: Vec::new(),
 				events: event_rx.into(),

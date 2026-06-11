@@ -542,6 +542,7 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	let ActorStart {
 		ctx: core_ctx,
 		input,
+		is_new,
 		snapshot,
 		hibernated: _,
 		mut events,
@@ -549,7 +550,7 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	} = start;
 
 	let ctx = WasmActorContext::from_core(core_ctx.clone(), callbacks.clone());
-	let preamble = run_preamble(&callbacks, &ctx, input, snapshot).await;
+	let preamble = run_preamble(&callbacks, &ctx, input, is_new, snapshot).await;
 	if let Some(reply) = startup_ready {
 		let _ = reply.send(
 			preamble
@@ -593,10 +594,9 @@ async fn run_preamble(
 	callbacks: &WasmCallbacks,
 	ctx: &WasmActorContext,
 	input: Option<Vec<u8>>,
+	is_new: bool,
 	snapshot: Option<Vec<u8>>,
 ) -> Result<()> {
-	let is_new = snapshot.is_none();
-
 	if let Some(callback) = &callbacks.on_migrate {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
@@ -624,6 +624,17 @@ async fn run_preamble(
 		}
 	} else if let Some(snapshot) = snapshot {
 		ctx.inner.set_state_initial(snapshot);
+	} else if let Some(callback) = &callbacks.create_state {
+		let payload = object();
+		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
+		if let Some(input) = input.as_ref() {
+			set_anyhow(&payload, "input", bytes_to_js(input))?;
+		}
+		let state = call_callback_bytes(callback, &payload.into()).await?;
+		ctx.inner.set_state_initial(state.clone());
+		ctx.inner
+			.save_state(vec![StateDelta::ActorState(state)])
+			.await?;
 	}
 
 	if let Some(callback) = &callbacks.create_vars {

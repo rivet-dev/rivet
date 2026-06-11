@@ -90,6 +90,7 @@ impl From<mpsc::UnboundedReceiver<ActorEvent>> for ActorEvents {
 pub struct ActorStart {
 	pub ctx: ActorContext,
 	pub input: Option<Vec<u8>>,
+	pub is_new: bool,
 	pub snapshot: Option<Vec<u8>>,
 	pub hibernated: Vec<(ConnHandle, Vec<u8>)>,
 	pub events: ActorEvents,

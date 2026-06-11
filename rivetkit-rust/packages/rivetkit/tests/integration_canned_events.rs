@@ -54,6 +54,7 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 	let start = wrap_start::<CounterActor>(ActorStart {
 		ctx: ActorContext::new("actor-id", "counter", Vec::new(), "local"),
 		input: None,
+		is_new: true,
 		snapshot: None,
 		hibernated: Vec::new(),
 		events: event_rx.into(),

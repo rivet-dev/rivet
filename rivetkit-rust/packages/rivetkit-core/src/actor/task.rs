@@ -1353,6 +1353,7 @@ impl ActorTask {
 		let start = ActorStart {
 			ctx: self.ctx.clone(),
 			input: self.ctx.persisted_actor().input.clone(),
+			is_new,
 			snapshot: (!is_new).then(|| self.ctx.state()),
 			hibernated: self
 				.ctx

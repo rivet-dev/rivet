@@ -16,6 +16,7 @@ use crate::{
 pub struct Start<A: Actor> {
 	pub ctx: Ctx<A>,
 	pub input: Input<A>,
+	pub is_new: bool,
 	pub snapshot: Snapshot,
 	pub hibernated: Vec<Hibernated<A>>,
 	pub events: Events<A>,
@@ -64,22 +65,23 @@ impl<A: Actor> Input<A> {
 
 #[derive(Debug)]
 pub struct Snapshot {
+	is_new: bool,
 	bytes: Option<Vec<u8>>,
 }
 
 impl Snapshot {
 	pub fn is_new(&self) -> bool {
-		self.bytes.is_none()
+		self.is_new
 	}
 
 	pub fn decode<S>(&self) -> Result<Option<S>>
 	where
 		S: DeserializeOwned,
 	{
-		self.bytes
-			.as_deref()
-			.map(|bytes| decode_cbor(bytes, "actor snapshot"))
-			.transpose()
+		let Some(bytes) = self.bytes.as_deref().filter(|bytes| !bytes.is_empty()) else {
+			return Ok(None);
+		};
+		decode_cbor(bytes, "actor snapshot").map(Some)
 	}
 
 	pub fn decode_or_default<S>(&self) -> Result<S>
@@ -162,6 +164,7 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 	let ActorStart {
 		ctx,
 		input,
+		is_new,
 		snapshot,
 		hibernated,
 		events,
@@ -186,7 +189,11 @@ pub fn wrap_start<A: Actor>(core_start: ActorStart) -> Result<Start<A>> {
 			bytes: input,
 			_p: PhantomData,
 		},
-		snapshot: Snapshot { bytes: snapshot },
+		is_new,
+		snapshot: Snapshot {
+			is_new,
+			bytes: snapshot,
+		},
 		hibernated,
 		events: Events {
 			ctx,
@@ -278,6 +285,7 @@ mod tests {
 	#[test]
 	fn snapshot_decode_round_trips_map_struct() {
 		let snapshot = Snapshot {
+			is_new: false,
 			bytes: Some(cbor(&ExampleState {
 				count: 9,
 				label: "hi".into(),
@@ -296,7 +304,10 @@ mod tests {
 
 	#[test]
 	fn snapshot_decode_or_default_uses_default_when_missing() {
-		let snapshot = Snapshot { bytes: None };
+		let snapshot = Snapshot {
+			is_new: true,
+			bytes: None,
+		};
 
 		assert!(snapshot.is_new());
 		assert_eq!(
@@ -308,12 +319,29 @@ mod tests {
 	}
 
 	#[test]
+	fn empty_snapshot_decodes_as_missing_without_changing_newness() {
+		let snapshot = Snapshot {
+			is_new: false,
+			bytes: Some(Vec::new()),
+		};
+
+		assert!(!snapshot.is_new());
+		assert_eq!(
+			snapshot
+				.decode_or_default::<ExampleState>()
+				.expect("default empty snapshot"),
+			ExampleState::default()
+		);
+	}
+
+	#[test]
 	fn wrap_start_rehydrates_hibernated_connection_state() {
 		let (tx, rx) = unbounded_channel();
 		drop(tx);
 		let start = wrap_start::<ConnActor>(ActorStart {
 			ctx: rivetkit_core::ActorContext::new("actor-id", "test", Vec::new(), "local"),
 			input: None,
+			is_new: true,
 			snapshot: None,
 			hibernated: vec![(
 				rivetkit_core::ConnHandle::new(
