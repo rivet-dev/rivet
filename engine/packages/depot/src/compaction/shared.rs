@@ -268,69 +268,9 @@ pub(crate) async fn materialize_bucket_fork_pin(
 		return Ok(false);
 	}
 
-	let watermark_txid = tx_get_value(
-		tx,
-		&keys::branch_compaction_root_key(branch_id),
-		Serializable,
-	)
-	.await?
-	.as_deref()
-	.map(decode_compaction_root)
-	.transpose()
-	.context("decode sqlite compaction root for bucket fork pin")?
-	.map(|root| root.hot_watermark_txid)
-	.unwrap_or(0);
-
-	// Hybrid resolution: when the latest commit at or before the fork point has
-	// not been folded yet, pin it exactly; the pin feeds coverage staging at the
-	// next install. Commits at or above the watermark are never reclaimed, so
-	// the VTX scan result is trustworthy in that range despite keep-set holes
-	// below it.
-	if let Some((at_txid, at_versionstamp, commit)) =
-		latest_commit_at_or_before_versionstamp(tx, branch_id, fork_fact.fork_versionstamp).await?
-		&& at_txid >= watermark_txid
-	{
-		write_materialized_bucket_fork_pin(
-			tx,
-			branch_id,
-			db_pins,
-			fork_fact,
-			at_txid,
-			at_versionstamp,
-			commit.wall_clock_ms,
-		)?;
-		return Ok(false);
-	}
-
-	// Historical fork: snap down to the newest covered point at or before the
-	// fork versionstamp, drawn from retained PITR interval representatives and
-	// existing pins. The fence on pin and fork creation guarantees those points
-	// have shard coverage.
-	let mut best: Option<(u64, [u8; 16], i64)> = None;
-	for (_, coverage) in
-		crate::conveyer::pitr_interval::scan_pitr_interval_coverage(tx, branch_id, Serializable)
-			.await?
-	{
-		// Expired rows are about to lose their commit islands to reclaim, so
-		// they are not deterministic snap targets even while still present.
-		if coverage.expires_at_ms <= now_ms {
-			continue;
-		}
-		if coverage.versionstamp <= fork_fact.fork_versionstamp
-			&& best.map_or(true, |(best_txid, _, _)| coverage.txid > best_txid)
-		{
-			best = Some((coverage.txid, coverage.versionstamp, coverage.wall_clock_ms));
-		}
-	}
-	for pin in db_pins.iter() {
-		if pin.at_versionstamp <= fork_fact.fork_versionstamp
-			&& best.map_or(true, |(best_txid, _, _)| pin.at_txid > best_txid)
-		{
-			best = Some((pin.at_txid, pin.at_versionstamp, pin.created_at_ms));
-		}
-	}
-
-	let Some((at_txid, at_versionstamp, wall_clock_ms)) = best else {
+	let Some((at_txid, at_versionstamp, wall_clock_ms)) =
+		snap_covered_target(tx, branch_id, fork_fact.fork_versionstamp, now_ms, db_pins).await?
+	else {
 		tracing::warn!(
 			?branch_id,
 			?fork_fact,
@@ -349,6 +289,73 @@ pub(crate) async fn materialize_bucket_fork_pin(
 	)?;
 
 	Ok(false)
+}
+
+/// Resolves the snapshot target for a versionstamp cap under the alignment
+/// invariant: the exact latest commit when it has not been folded yet, else
+/// the newest covered point (retained interval representative or pin) at or
+/// below the cap. Returns the target txid, versionstamp, and wall clock, or
+/// `None` when the cap predates all retained coverage.
+pub(crate) async fn snap_covered_target(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	versionstamp_cap: [u8; 16],
+	now_ms: i64,
+	db_pins: &[DbHistoryPin],
+) -> Result<Option<(u64, [u8; 16], i64)>> {
+	let watermark_txid = tx_get_value(
+		tx,
+		&keys::branch_compaction_root_key(branch_id),
+		Serializable,
+	)
+	.await?
+	.as_deref()
+	.map(decode_compaction_root)
+	.transpose()
+	.context("decode sqlite compaction root for snapshot target")?
+	.map(|root| root.hot_watermark_txid)
+	.unwrap_or(0);
+
+	// Hybrid resolution: when the latest commit at or before the cap has not
+	// been folded yet, target it exactly; the resulting pin feeds coverage
+	// staging at the next install. Commits at or above the watermark are never
+	// reclaimed, so the VTX scan result is trustworthy in that range despite
+	// keep-set holes below it.
+	if let Some((at_txid, at_versionstamp, commit)) =
+		latest_commit_at_or_before_versionstamp(tx, branch_id, versionstamp_cap).await?
+		&& at_txid >= watermark_txid
+	{
+		return Ok(Some((at_txid, at_versionstamp, commit.wall_clock_ms)));
+	}
+
+	// Historical target: snap down to the newest covered point at or before
+	// the cap. The fence on pin and fork creation guarantees those points have
+	// shard coverage.
+	let mut best: Option<(u64, [u8; 16], i64)> = None;
+	for (_, coverage) in
+		crate::conveyer::pitr_interval::scan_pitr_interval_coverage(tx, branch_id, Serializable)
+			.await?
+	{
+		// Expired rows are about to lose their commit islands to reclaim, so
+		// they are not deterministic snap targets even while still present.
+		if coverage.expires_at_ms <= now_ms {
+			continue;
+		}
+		if coverage.versionstamp <= versionstamp_cap
+			&& best.map_or(true, |(best_txid, _, _)| coverage.txid > best_txid)
+		{
+			best = Some((coverage.txid, coverage.versionstamp, coverage.wall_clock_ms));
+		}
+	}
+	for pin in db_pins {
+		if pin.at_versionstamp <= versionstamp_cap
+			&& best.map_or(true, |(best_txid, _, _)| pin.at_txid > best_txid)
+		{
+			best = Some((pin.at_txid, pin.at_versionstamp, pin.created_at_ms));
+		}
+	}
+
+	Ok(best)
 }
 
 fn write_materialized_bucket_fork_pin(

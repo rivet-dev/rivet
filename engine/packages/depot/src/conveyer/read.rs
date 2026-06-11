@@ -151,6 +151,8 @@ impl Db {
 						bucket_id,
 						&database_id,
 						cached_ancestry.as_ref(),
+						now_ms,
+						read_mode.allows_side_effects(),
 					)
 					.await?;
 					metrics::observe_get_pages_phase(
