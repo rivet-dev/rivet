@@ -56,16 +56,26 @@ WORKDIR /app/website
 # Build the website (static export to 'dist' directory)
 RUN SKIP_TYPECHECK_CODE_BLOCKS=1 pnpm run build
 
+# Generate the Caddy redirect snippet from the shared redirect map
+RUN node scripts/generate-caddy-redirects.mjs
+
 # =============================================================================
 # Stage 2: Serve with Caddy
 # =============================================================================
-FROM caddy:alpine
+# Pin to caddy 2.x: the redirect snippet uses {http.request.uri.prefixed_query},
+# which requires Caddy >= 2.8.
+FROM caddy:2-alpine
 
-# Copy Caddyfile configuration
+# Copy Caddyfile configuration and the generated redirect snippet (imported by
+# the Caddyfile relative to its own directory)
 COPY website/Caddyfile /etc/caddy/Caddyfile
+COPY --from=builder /app/website/redirects.caddy /etc/caddy/redirects.caddy
 
 # Copy built files from builder stage
 COPY --from=builder /app/website/dist /srv
+
+# Fail the build on a broken config instead of crash-looping at runtime
+RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
 # Default port (platform injects PORT env var)
 ENV PORT=80

@@ -2,10 +2,11 @@
 User-agent: *
 Allow: /
 
-# Disallow API, internal routes, and TypeDoc (generic meta descriptions)
+# Disallow API and internal routes.
+# /typedoc/ is intentionally crawlable so crawlers can see its X-Robots-Tag:
+# noindex header (set in the Caddyfile); a Disallow here would hide that header.
 Disallow: /api/
 Disallow: /internal/
-Disallow: /typedoc/
 
 # Sitemap
 Sitemap: https://rivet.dev/sitemap-index.xml
