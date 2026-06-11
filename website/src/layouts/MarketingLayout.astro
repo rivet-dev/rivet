@@ -8,13 +8,14 @@ interface Props {
 	canonicalUrl?: string;
 	ogImage?: string;
 	keywords?: string[];
+	active?: "product" | "docs" | "cookbook" | "blog" | "pricing" | "learn";
 }
 
-const { title, description, canonicalUrl, ogImage, keywords } = Astro.props;
+const { title, description, canonicalUrl, ogImage, keywords, active } = Astro.props;
 const pathname = Astro.url.pathname;
 ---
 
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage} keywords={keywords}>
-	<Header variant="floating" initialPathname={pathname} client:load />
+	<Header variant="floating" initialPathname={pathname} active={active} client:load />
 	<slot />
 </BaseLayout>

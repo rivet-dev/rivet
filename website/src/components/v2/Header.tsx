@@ -468,6 +468,14 @@ export function Header({
 								)}
 								{!isLightTheme && (
 									<TextNavItem
+										href="/cookbook"
+										ariaCurrent={active === "cookbook" ? "page" : undefined}
+									>
+										Cookbook
+									</TextNavItem>
+								)}
+								{!isLightTheme && (
+									<TextNavItem
 										href="/cloud"
 										ariaCurrent={active === "pricing" ? "page" : undefined}
 									>
@@ -542,6 +550,12 @@ export function Header({
 						ariaCurrent={active === "docs" ? "page" : undefined}
 					>
 						Documentation
+					</TextNavItem>
+					<TextNavItem
+						href="/cookbook"
+						ariaCurrent={active === "cookbook" ? "page" : undefined}
+					>
+						Cookbook
 					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
