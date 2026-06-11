@@ -72,13 +72,16 @@ docker-compose up -d
 - Do not edit `self-host/compose/dev*` configs directly. Edit the template in `self-host/compose/template/` and rerun (`cd self-host/compose/template && pnpm start`) to regenerate.
 - Rebuild publish base images with `scripts/docker-builder-base/build-push.sh <base-name|all> --push`. Update `BASE_TAG` when rebuilding shared builder bases; engine bases are published per commit in `publish.yaml`.
 
-### Git + PRs
+### Version control (jj)
 
-- Use conventional commits with a single-line commit message, no co-author: `git commit -m "chore(my-pkg): foo bar"`.
-- We use Graphite for stacked PRs. Diff against the parent branch (`gt ls` to see the stack), not `main`.
-- To revert a file to the version before this branch's changes, checkout from the first child branch (below in the stack), not from `main` or the parent. Child branches contain the pre-this-branch state of files modified by branches further down the stack.
-
-**Never push to `main` unless explicitly specified by the user.**
+- This repo uses jj (Jujutsu) on top of git. **jj's workflow is inverted from git:** the working copy is itself a revision that auto-tracks edits, so you create a new revision *before* making changes (with `jj new`) rather than committing *after* (`git commit`). The description is set separately via `jj describe`. There is no staging step.
+- Before making changes, check whether jj is initialized by running `jj status`. If it fails (e.g. "There is no jj repo in '.'"), run `jj git init --colocate` from the repo root so jj lives alongside the existing `.git` directory. Do NOT run `jj git init` without `--colocate` — that creates a standalone jj repo and breaks the git workflow.
+- **MUST run `jj new` before making any file edits for a new task.** This is the first step of any task that touches files. Run it before reading, before planning, before editing. The only exception is when you are directly fixing or finishing the change at `@` that you just made in this same session. In that case use `jj squash --into <rev>` or `jj edit <rev>`. If you already started editing without running `jj new`, stop and split the changes with `JJ_EDITOR=true jj split <paths>` before continuing. Each revision must be one self-contained change reviewable on its own. Never mix unrelated work into one revision.
+- Set the revision description with `jj describe -m "[SLOP({full-model-id}-{reasoning})] {conventional commit message}"`. Use conventional commits (`feat`, `fix`, `chore`, `docs`, `refactor`, etc.) with a single-line message. `{full-model-id}` is the canonical model ID (e.g. `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`). `{reasoning}` is the reasoning effort (`high`, `medium`, `low`, `off`) — include it only if the runtime exposes it; otherwise omit the `-{reasoning}` suffix entirely.
+- Examples: `[SLOP(claude-opus-4-7-high)] feat(metrics): record depot sqlite phase timings` or, when reasoning is not known, `[SLOP(claude-opus-4-7)] fix(pegboard): handle empty ack batch`.
+- **Never add a co-author trailer** (no `Co-Authored-By: ...` line). Descriptions are single-line only.
+- **Never push to `main` unless explicitly specified by the user.**
+- **Safety:** Never run destructive jj or git commands (`jj git push`, `jj abandon`, `jj squash` into a non-current revision, `jj op restore`, `jj op undo` past your own work, `jj rebase -d main`, `git push --force`, `git reset --hard`) unless the user explicitly requests it.
 
 ## Assets
 
