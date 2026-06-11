@@ -1,6 +1,6 @@
 # SQLite Storage Structure
 
-This is the key-format reference for the branchable Depot layer. Update it whenever FDB layout changes.
+This is the key-format reference for the branchable Depot layer. Update it whenever UDB layout changes.
 
 ## Identity Model
 
@@ -9,11 +9,11 @@ Depot has two external ids:
 - `BucketId`: the bucket branch id. There is no separate bucket pointer id.
 - `DatabaseId`: the database branch id. There is no separate database pointer id.
 
-Branch records are append-only for ancestry fields. Database branch records also carry mutable lifecycle state and a monotonic lifecycle generation used to reject stale workflow compaction work. Forks allocate a new id and write a parent pointer to the source branch plus the fork versionstamp. Engine-layer rollback is implemented outside this crate by forking a database and changing the engine's database-to-database mapping.
+Branch records are append-only for ancestry fields. Database branch records also carry mutable lifecycle state, a monotonic lifecycle generation used to reject stale workflow compaction work, and a denormalized policy scope (`policy_bucket_id`, `policy_database_id`, record version 2) so compaction resolves the effective PITR policy with point reads. Forks allocate a new id and write a parent pointer to the source branch plus the fork versionstamp. Engine-layer rollback is implemented outside this crate by forking a database and changing the engine's database-to-database mapping.
 
-Bucket database membership is stored in `BUCKET_CATALOG`. Bucket forks do not copy catalog entries. Reads walk bucket parents and accept inherited entries only when the entry versionstamp is at or before the walking branch's `parent_versionstamp`.
+Bucket database membership is stored in `BUCKET_CATALOG`. Bucket forks do not copy catalog entries. Reads walk bucket parents and accept inherited entries only when the entry versionstamp is at or before the walking branch's `parent_versionstamp`. The first data access through a forked bucket materializes a capped database fork (newest covered point at or below the fork chain's versionstamp cap) and writes a local pointer plus catalog marker.
 
-## FDB Prefixes
+## UDB Prefixes
 
 All Depot keys live under the crate-owned `[0x02]` prefix. The next byte is the partition.
 
@@ -50,7 +50,7 @@ Database pointer resolution walks bucket parents when a current bucket branch do
 
 ```text
 BUCKET_CATALOG/{bucket_id_uuid_be:16}/{database_id_uuid_be:16}
-  -> 16-byte FDB versionstamp via SetVersionstampedValue
+  -> 16-byte UDB versionstamp via SetVersionstampedValue
 ```
 
 The value is the database membership versionstamp. Parent walks use it as the AS-OF cap for `fork_bucket`. Database tombstones on the bucket branch hide matching inherited catalog entries.
@@ -106,7 +106,7 @@ BR/{database_id_be:16}/PITR_INTERVAL/{bucket_start_ms_be:8}
 
 `COMMITS` stores commit metadata, including wall-clock time, captured versionstamp, size in pages, and post-apply checksum. `VTX` maps a versionstamp back to txid for restore point resolution and GC. `PIDX` maps a page number to the DELTA txid that currently owns it.
 
-`SHARD` is versioned by `as_of_txid`. Reads choose the largest `as_of_txid <= read_txid`. Hot compaction writes new SHARD versions and does not overwrite older ones.
+`SHARD` is versioned by `as_of_txid`. Reads choose the largest `as_of_txid <= read_txid`. Hot compaction writes new SHARD versions at coverage txids, truncate publishes pruned versions at the truncating txid, and workflow reclaim deletes versions once they are not the newest at or below any covered txid.
 
 ## Workflow Compaction Metadata
 

@@ -5,28 +5,28 @@ This page records the constraints that shape the PITR/forking storage design. Th
 ## Binding Constraints
 
 - **Single writer per database.** Pegboard exclusivity is the release-mode concurrency fence. Storage does not implement multi-writer conflict resolution.
-- **No local SQLite files.** The durable database state is in FDB. Local files would make storage stateful and non-migratable.
-- **Lazy reads.** Forks do not copy data. Reads walk branch ancestry and hydrate from FDB DELTA/SHARD rows only when needed.
+- **No local SQLite files.** The durable database state is in UDB. Local files would make storage stateful and non-migratable.
+- **Lazy reads.** Forks do not copy data. Reads walk branch ancestry and hydrate from UDB DELTA/SHARD rows only when needed.
 - **Per-commit granularity.** PITR targets commits/versionstamps, not individual WAL frames inside a commit.
-- **FDB is the source of truth.** OSS Depot has no object-backed cold tier.
+- **UDB is the source of truth.** OSS Depot has no object-backed cold tier.
 - **Branches are immutable.** A bucket id is its bucket branch id, and a database id is its database branch id.
 - **Rollback is engine-owned.** Storage exposes fork primitives; the engine decides which database id a database currently uses.
 - **Persisted wire/storage records use vbare.** Raw fixed-width bytes are reserved for atomic counters and simple indexes such as `VTX`.
 
 ## Rough PITR By Default
 
-The design keeps rough PITR cheap by preserving enough FDB history for branch-at-position recovery without writing a full image for every commit. Exact recovery is opt-in through restore points, which write FDB history pins that workflow compaction must preserve.
+The design keeps rough PITR cheap by preserving enough UDB history for branch-at-position recovery without writing a full image for every commit. Exact recovery is opt-in through restore points, which write UDB history pins that workflow compaction must preserve.
 
 Compared with Neon's exact-PITR posture, this trades precision for lower steady-state cost. That fits Rivet Database-style workloads where "fork near this point" is usually enough, and exact restore points can be created explicitly for critical moments.
 
 ## Pages Are Self-Describing
 
-LTX layers carry page numbers and checksums. That lets the system move bytes between DELTA and SHARD rows without a separate opaque page map. FDB PIDX remains the hot routing index.
+LTX layers carry page numbers and checksums. That lets the system move bytes between DELTA and SHARD rows without a separate opaque page map. UDB PIDX remains the hot routing index.
 
 The result is an LSM-shaped flow:
 
-- L0: DELTAs in FDB.
-- L1: versioned SHARDs in FDB.
+- L0: DELTAs in UDB.
+- L1: versioned SHARDs in UDB.
 
 ## Why Versioned SHARDs
 
@@ -127,7 +127,7 @@ align to are durable rows recorded per database branch:
 - `DB_PIN` rows: concrete `(txid, versionstamp)` for restore points, database
   forks, and bucket forks.
 
-Snapping then compares **FoundationDB versionstamps** (monotonic, globally
+Snapping then compares **UDB versionstamps** (monotonic, globally
 ordered commit tokens) against those recorded rows: it picks the covered row
 with the largest txid whose `versionstamp <= fork_versionstamp`. No clock is
 consulted in that decision. A bucket fork carries one `fork_versionstamp`, and
