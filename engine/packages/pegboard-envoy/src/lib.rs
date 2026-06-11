@@ -8,6 +8,7 @@ use rivet_error::RivetError;
 use rivet_guard_core::{
 	ResponseBody, WebSocketHandle, custom_serve::CustomServeTrait, request_context::RequestContext,
 };
+use std::sync::atomic::Ordering;
 use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::CloseFrame;
 use universalpubsub::PublishOpts;
@@ -133,10 +134,46 @@ impl CustomServeTrait for PegboardEnvoyWs {
 		})?;
 		tracing::trace!(%topic, %eviction_topic, "subscribed to envoy topics");
 
+		let namespace_id_str = namespace.namespace_id.to_string();
+		let pool_name_str = url_data.pool_name.clone();
+		let protocol_version_str = url_data.protocol_version.to_string();
+		metrics::inc_envoy_connection_state(
+			namespace_id_str.as_str(),
+			&pool_name_str,
+			protocol_version_str.as_str(),
+			metrics::EnvoyState::Starting,
+			"websocket_accepted",
+		);
+
 		// Create the connection.
-		let conn = conn::init_conn(&ctx, ws_handle.clone(), url_data)
-			.await
-			.context("failed to initialize envoy connection")?;
+		let conn = match conn::init_conn(&ctx, ws_handle.clone(), url_data).await {
+			Ok(conn) => conn,
+			Err(err) => {
+				metrics::transition_envoy_connection_state(
+					namespace_id_str.as_str(),
+					&pool_name_str,
+					protocol_version_str.as_str(),
+					metrics::EnvoyState::Starting,
+					metrics::EnvoyState::Disconnected,
+					"init_failed",
+				);
+				metrics::dec_envoy_connection_state(
+					namespace_id_str.as_str(),
+					&pool_name_str,
+					protocol_version_str.as_str(),
+					metrics::EnvoyState::Disconnected,
+				);
+				return Err(err).context("failed to initialize envoy connection");
+			}
+		};
+		metrics::transition_envoy_connection_state(
+			conn.namespace_id.to_string().as_str(),
+			&conn.pool_name,
+			conn.protocol_version.to_string().as_str(),
+			metrics::EnvoyState::Starting,
+			metrics::EnvoyState::Connected,
+			"init_complete",
+		);
 
 		// Publish eviction message to evict any currently connected envoys with the same key. This happens
 		// after subscribing to prevent race conditions.
@@ -297,6 +334,8 @@ impl CustomServeTrait for PegboardEnvoyWs {
 		// initiated the close); `outgoing_*` is what we would send back, derived from the lifecycle
 		// result. Mirrors `rivet_guard_core::utils::err_to_close_frame` (including the `#{ray_id}`
 		// suffix) so the strings match what the envoy actually receives.
+		let (final_envoy_state, final_state_reason) =
+			classify_final_envoy_state(&lifecycle_res, &conn);
 		let (
 			lifecycle_kind,
 			incoming_close_code,
@@ -373,6 +412,34 @@ impl CustomServeTrait for PegboardEnvoyWs {
 			"envoy websocket closed"
 		);
 
+		let previous_envoy_state = match final_envoy_state {
+			metrics::EnvoyState::Stopped => metrics::EnvoyState::Stopping,
+			metrics::EnvoyState::Disconnected | metrics::EnvoyState::Lost => {
+				if conn.reported_stopping.load(Ordering::SeqCst) {
+					metrics::EnvoyState::Stopping
+				} else {
+					metrics::EnvoyState::Connected
+				}
+			}
+			metrics::EnvoyState::Starting
+			| metrics::EnvoyState::Connected
+			| metrics::EnvoyState::Stopping => metrics::EnvoyState::Connected,
+		};
+		metrics::transition_envoy_connection_state(
+			conn.namespace_id.to_string().as_str(),
+			&conn.pool_name,
+			conn.protocol_version.to_string().as_str(),
+			previous_envoy_state,
+			final_envoy_state,
+			final_state_reason,
+		);
+		metrics::dec_envoy_connection_state(
+			conn.namespace_id.to_string().as_str(),
+			&conn.pool_name,
+			conn.protocol_version.to_string().as_str(),
+			final_envoy_state,
+		);
+
 		metrics::CONNECTION_ACTIVE
 			.with_label_values(&[
 				conn.namespace_id.to_string().as_str(),
@@ -389,5 +456,30 @@ impl CustomServeTrait for PegboardEnvoyWs {
 
 		// This will determine the close frame sent back to the envoy websocket
 		lifecycle_res.map(|_| None)
+	}
+}
+
+fn classify_final_envoy_state(
+	lifecycle_res: &Result<LifecycleResult>,
+	conn: &conn::Conn,
+) -> (metrics::EnvoyState, &'static str) {
+	match lifecycle_res {
+		Ok(LifecycleResult::Closed { .. }) if conn.reported_stopping.load(Ordering::SeqCst) => {
+			(metrics::EnvoyState::Stopped, "graceful_shutdown_complete")
+		}
+		Ok(LifecycleResult::Closed { .. }) => {
+			(metrics::EnvoyState::Disconnected, "websocket_closed")
+		}
+		Ok(LifecycleResult::Evicted) => (metrics::EnvoyState::Disconnected, "evicted"),
+		Ok(LifecycleResult::Aborted) => (metrics::EnvoyState::Disconnected, "connection_error"),
+		Err(err) => {
+			let rivet_err = err.chain().find_map(|x| x.downcast_ref::<RivetError>());
+			match rivet_err.map(|e| (e.group(), e.code())) {
+				Some(("ws", "timed_out")) => (metrics::EnvoyState::Lost, "ping_timeout"),
+				Some(("ws", "eviction")) => (metrics::EnvoyState::Disconnected, "evicted"),
+				Some(("ws", "going_away")) => (metrics::EnvoyState::Disconnected, "going_away"),
+				_ => (metrics::EnvoyState::Disconnected, "connection_error"),
+			}
+		}
 	}
 }

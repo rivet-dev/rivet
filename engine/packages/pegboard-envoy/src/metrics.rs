@@ -2,6 +2,38 @@ use rivet_metrics::{
 	BUCKETS, LIFETIME_BUCKETS, MICRO_BUCKETS, PAGE_COUNT_BUCKETS, REGISTRY, prometheus::*,
 };
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum EnvoyState {
+	Starting,
+	Connected,
+	Stopping,
+	Disconnected,
+	Lost,
+	Stopped,
+}
+
+impl EnvoyState {
+	pub const ALL: [Self; 6] = [
+		Self::Starting,
+		Self::Connected,
+		Self::Stopping,
+		Self::Disconnected,
+		Self::Lost,
+		Self::Stopped,
+	];
+
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Starting => "starting",
+			Self::Connected => "connected",
+			Self::Stopping => "stopping",
+			Self::Disconnected => "disconnected",
+			Self::Lost => "lost",
+			Self::Stopped => "stopped",
+		}
+	}
+}
+
 lazy_static::lazy_static! {
 	pub static ref CONNECTION_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"envoy_connection_total",
@@ -21,6 +53,18 @@ lazy_static::lazy_static! {
 		"envoy_connection_active",
 		"Count of envoy connections currently active.",
 		&["namespace_id", "pool_name", "protocol_version"],
+		*REGISTRY
+	).unwrap();
+	pub static ref ENVOY_CONNECTIONS_BY_STATE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"pegboard_envoy_connections_by_state",
+		"Current envoy WebSocket connections by lifecycle state. Each connection should contribute to exactly one state.",
+		&["namespace_id", "pool_name", "protocol_version", "envoy_state"],
+		*REGISTRY
+	).unwrap();
+	pub static ref ENVOY_STATE_TRANSITION_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_envoy_state_transition_total",
+		"Count of envoy WebSocket lifecycle state transitions.",
+		&["namespace_id", "pool_name", "protocol_version", "envoy_state", "reason"],
 		*REGISTRY
 	).unwrap();
 	pub static ref ENVOY_CONNECTED: IntGaugeVec = register_int_gauge_vec_with_registry!(
@@ -242,8 +286,122 @@ lazy_static::lazy_static! {
 	).unwrap();
 }
 
+pub fn inc_envoy_connection_state(
+	namespace_id: &str,
+	pool_name: &str,
+	protocol_version: &str,
+	state: EnvoyState,
+	reason: &'static str,
+) {
+	ENVOY_CONNECTIONS_BY_STATE
+		.with_label_values(&[namespace_id, pool_name, protocol_version, state.as_str()])
+		.inc();
+	ENVOY_STATE_TRANSITION_TOTAL
+		.with_label_values(&[
+			namespace_id,
+			pool_name,
+			protocol_version,
+			state.as_str(),
+			reason,
+		])
+		.inc();
+}
+
+pub fn dec_envoy_connection_state(
+	namespace_id: &str,
+	pool_name: &str,
+	protocol_version: &str,
+	state: EnvoyState,
+) {
+	ENVOY_CONNECTIONS_BY_STATE
+		.with_label_values(&[namespace_id, pool_name, protocol_version, state.as_str()])
+		.dec();
+}
+
+pub fn transition_envoy_connection_state(
+	namespace_id: &str,
+	pool_name: &str,
+	protocol_version: &str,
+	from: EnvoyState,
+	to: EnvoyState,
+	reason: &'static str,
+) {
+	if from == to {
+		ENVOY_STATE_TRANSITION_TOTAL
+			.with_label_values(&[
+				namespace_id,
+				pool_name,
+				protocol_version,
+				to.as_str(),
+				reason,
+			])
+			.inc();
+		return;
+	}
+
+	dec_envoy_connection_state(namespace_id, pool_name, protocol_version, from);
+	inc_envoy_connection_state(namespace_id, pool_name, protocol_version, to, reason);
+}
+
+pub fn set_envoy_connection_state(
+	namespace_id: &str,
+	pool_name: &str,
+	protocol_version: &str,
+	from: Option<EnvoyState>,
+	to: Option<EnvoyState>,
+	reason: &'static str,
+) {
+	match (from, to) {
+		(Some(from), Some(to)) => {
+			transition_envoy_connection_state(
+				namespace_id,
+				pool_name,
+				protocol_version,
+				from,
+				to,
+				reason,
+			);
+		}
+		(Some(from), None) => {
+			dec_envoy_connection_state(namespace_id, pool_name, protocol_version, from);
+		}
+		(None, Some(to)) => {
+			inc_envoy_connection_state(namespace_id, pool_name, protocol_version, to, reason);
+		}
+		(None, None) => {}
+	}
+}
+
 pub fn prepopulate() {
 	ENVOY_CONNECTED.with_label_values(&["", ""]).set(0);
+	for state in EnvoyState::ALL {
+		ENVOY_CONNECTIONS_BY_STATE
+			.with_label_values(&["", "", "", state.as_str()])
+			.set(0);
+	}
+	for (state, reasons) in [
+		(EnvoyState::Starting, &["websocket_accepted"][..]),
+		(EnvoyState::Connected, &["init_complete"][..]),
+		(EnvoyState::Stopping, &["envoy_reported_stopping"][..]),
+		(
+			EnvoyState::Disconnected,
+			&[
+				"init_failed",
+				"websocket_closed",
+				"evicted",
+				"going_away",
+				"connection_error",
+			][..],
+		),
+		(EnvoyState::Lost, &["ping_timeout"][..]),
+		(EnvoyState::Stopped, &["graceful_shutdown_complete"][..]),
+	] {
+		for reason in reasons {
+			ENVOY_STATE_TRANSITION_TOTAL
+				.with_label_values(&["", "", "", state.as_str(), reason])
+				.inc_by(0);
+		}
+	}
 	let _ = ENVOY_LIFETIME_SECONDS.with_label_values(&["", ""]);
 	let _ = ENVOY_PING_LAG_SECONDS.with_label_values(&["", ""]);
 	for result in ["ok", "no_subscribers", "error"] {

@@ -746,6 +746,17 @@ async fn dispatch_message(
 			task_manager.enqueue_control(control_task::Message::AckCommands(ack))?;
 		}
 		protocol::ToRivet::ToRivetStopping => {
+			if !conn.reported_stopping.swap(true, Ordering::SeqCst) {
+				metrics::transition_envoy_connection_state(
+					conn.namespace_id.to_string().as_str(),
+					&conn.pool_name,
+					conn.protocol_version.to_string().as_str(),
+					metrics::EnvoyState::Connected,
+					metrics::EnvoyState::Stopping,
+					"envoy_reported_stopping",
+				);
+			}
+
 			// For serverful, remove from lb
 			if !conn.is_serverless() {
 				ctx.op(pegboard::ops::envoy::expire::Input {

@@ -1,7 +1,7 @@
 use std::{
 	sync::{
 		Arc,
-		atomic::{AtomicI64, AtomicU32},
+		atomic::{AtomicBool, AtomicI64, AtomicU32},
 	},
 	time::Instant,
 };
@@ -55,6 +55,7 @@ pub struct Conn {
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
 	pub last_ping_ts: AtomicI64,
+	pub reported_stopping: AtomicBool,
 }
 
 impl Conn {
@@ -380,6 +381,7 @@ pub async fn init_conn(
 		connected_at: Instant::now(),
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
+		reported_stopping: AtomicBool::new(false),
 	});
 
 	// Send missed commands after the init packet.
