@@ -10,7 +10,7 @@ import {
 	queueMetadataKey,
 	workflowStoragePrefix,
 } from "@/actor/keys";
-import { ENGINE_ENDPOINT } from "@/common/engine";
+import { ENGINE_ENDPOINT, isLocalEngineEndpoint } from "@/common/engine";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { VERSION } from "@/utils";
 import { tryParseEndpoint } from "@/utils/endpoint-parser";
@@ -312,11 +312,16 @@ export const RegistryConfigSchema = z
 				})
 			: undefined;
 
-		// Can't start a local engine and connect to a remote endpoint.
-		if (config.startEngine && parsedEndpoint) {
+		// Starting a local engine with an explicit endpoint is supported for
+		// alternate local ports, but remote endpoints cannot be spawned locally.
+		if (
+			config.startEngine &&
+			parsedEndpoint &&
+			!isLocalEngineEndpoint(parsedEndpoint.endpoint)
+		) {
 			ctx.addIssue({
 				code: "custom",
-				message: "cannot specify both startEngine and endpoint",
+				message: "startEngine can only be used with a local endpoint",
 			});
 		}
 
@@ -329,10 +334,11 @@ export const RegistryConfigSchema = z
 			});
 		}
 
-		// Flatten the endpoint and apply defaults for namespace/token
-		// If startEngine is enabled, set endpoint to the engine endpoint.
+		// Flatten the endpoint and apply defaults for namespace/token.
+		// If startEngine is enabled, use an explicit local endpoint if provided
+		// so callers can choose the local engine port; otherwise use the default.
 		const endpoint = config.startEngine
-			? ENGINE_ENDPOINT
+			? (parsedEndpoint?.endpoint ?? ENGINE_ENDPOINT)
 			: (parsedEndpoint?.endpoint ??
 				(isDevEnv ? ENGINE_ENDPOINT : undefined));
 		const validateServerlessEndpoint = Boolean(
@@ -367,7 +373,7 @@ export const RegistryConfigSchema = z
 		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && config.startEngine ? ENGINE_ENDPOINT : undefined);
+			(isDevEnv && config.startEngine ? endpoint : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;

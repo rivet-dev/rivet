@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { ENGINE_ENDPOINT } from "@/common/engine";
+import { isLocalEngineEndpoint } from "@/common/engine";
 import { configureServerlessPool } from "@/serverless/configure";
 import { detectRuntime, VERSION } from "@/utils";
 import { crossPlatformServe, loadRuntimeServeStatic } from "@/utils/serve";
@@ -700,7 +700,9 @@ export class Registry<A extends RegistryActors> {
 
 		if (config.endpoint) {
 			const endpointType =
-				config.endpoint === ENGINE_ENDPOINT ? "local native" : "remote";
+				config.startEngine || isLocalEngineEndpoint(config.endpoint)
+					? "local native"
+					: "remote";
 			logLine("Endpoint", `${config.endpoint} (${endpointType})`);
 		}
 
