@@ -1,6 +1,8 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import PricingPageClient from '@/components/marketing/pricing/PricingPageClient';
+import FaqJsonLd from '@/components/faq/FaqJsonLd.astro';
+import { cloudFaqs } from '@/data/faqs/cloud';
 
 // Product schema with pricing tiers
 const productSchema = {
@@ -64,5 +66,6 @@ const productSchema = {
 	ogImage="https://assets.rivet.dev/website/public/promo/og-cloud.png"
 >
 	<script type="application/ld+json" set:html={JSON.stringify(productSchema)} />
+	<FaqJsonLd items={cloudFaqs} />
 	<PricingPageClient client:load />
 </MarketingLayout>

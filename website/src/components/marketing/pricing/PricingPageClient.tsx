@@ -19,6 +19,8 @@ import {
 import rivetLogoWhite from '@/images/rivet-logos/icon-white.svg';
 import imgYC from '@/images/logos/yc.svg';
 import imgA16z from '@/images/logos/a16z.svg';
+import { FaqSection } from '@/components/faq/FaqSection';
+import { cloudFaqs } from '@/data/faqs/cloud';
 
 // --- Page Sections ---
 
@@ -534,7 +536,7 @@ const Pricing = () => {
     const plans = isCloud ? cloudPlans : selfHostedPlans;
 
     const usagePricing = [
-        { resource: "Awake Actors", price: "$0.05", unit: "per 1k awake actor-hours" },
+        { resource: "Awake Actors", price: "$0.05", unit: "per 1k Awake Actor Hours" },
         { resource: "State Storage", price: "$0.40", unit: "per GB-month" },
         { resource: "Reads*", price: "$0.20", unit: "per million reads" },
         { resource: "Writes*", price: "$1", unit: "per million writes" },
@@ -696,6 +698,7 @@ export default function PricingPageClient() {
     <div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
       <main>
         <Pricing />
+        <FaqSection items={cloudFaqs} />
       </main>
     </div>
   );

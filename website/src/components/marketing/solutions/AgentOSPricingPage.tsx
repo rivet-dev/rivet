@@ -11,6 +11,8 @@ import {
 	Terminal,
 	Copy,
 } from 'lucide-react';
+import { FaqSection } from '@/components/faq/FaqSection';
+import { agentOsPricingFaqs } from '@/data/faqs/agent-os-pricing';
 
 const pricingTiers = [
 	{
@@ -166,55 +168,6 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 	);
 };
 
-const FAQSection = () => {
-	const faqs = [
-		{
-			question: 'Is agentOS really free?',
-			answer: 'Yes. agentOS is open source under the Apache 2.0 license. You can run it on your own infrastructure at no cost. Rivet Cloud is a paid service for those who want managed infrastructure.',
-		},
-		{
-			question: 'What is the difference between self-hosted and Rivet Cloud?',
-			answer: 'Self-hosted means you run agentOS on your own servers. You handle deployment, scaling, and maintenance. Rivet Cloud is a fully managed service where we handle all of that for you.',
-		},
-		{
-			question: 'Can I switch from self-hosted to Rivet Cloud later?',
-			answer: 'Absolutely. agentOS uses the same API whether you self-host or use Rivet Cloud. You can migrate with minimal code changes.',
-		},
-		{
-			question: 'What support is available for open source users?',
-			answer: 'Open source users can get help through our Discord community and GitHub issues. Enterprise customers receive dedicated support channels with guaranteed response times.',
-		},
-		{
-			question: 'Do you offer volume discounts?',
-			answer: 'Yes. Contact our sales team for custom pricing on high-volume usage or enterprise deployments.',
-		},
-	];
-
-	return (
-		<motion.section
-			initial={{ opacity: 0, y: 20 }}
-			whileInView={{ opacity: 1, y: 0 }}
-			viewport={{ once: true }}
-			transition={{ duration: 0.5 }}
-			className="border-t border-zinc-200 px-6 py-24"
-		>
-			<div className="mx-auto max-w-3xl">
-				<h2 className="mb-12 text-center text-3xl font-normal tracking-tight text-zinc-900 md:text-4xl">
-					Frequently asked questions
-				</h2>
-				<div className="space-y-6">
-					{faqs.map((faq) => (
-						<div key={faq.question} className="border-b border-zinc-200 pb-6">
-							<h3 className="mb-2 text-lg font-medium text-zinc-900">{faq.question}</h3>
-							<p className="text-sm leading-relaxed text-zinc-500">{faq.answer}</p>
-						</div>
-					))}
-				</div>
-			</div>
-		</motion.section>
-	);
-};
-
 const CTASection = () => (
 	<motion.section
 		initial={{ opacity: 0, y: 20 }}
@@ -283,7 +236,14 @@ export default function AgentOSPricingPage() {
 					</div>
 				</section>
 
-				<FAQSection />
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+				>
+					<FaqSection items={agentOsPricingFaqs} theme="light" />
+				</motion.div>
 				<CTASection />
 			</main>
 		</div>
