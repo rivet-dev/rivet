@@ -867,6 +867,9 @@ fn serve_inspector_ui_asset(rel: &str) -> HttpResponse {
 // first so iterating on the generator doesn't require an engine rebuild.
 #[cfg(not(target_arch = "wasm32"))]
 fn serve_inspector_tab_stylesheet() -> HttpResponse {
+	// Must match the output filename written by
+	// `frontend/scripts/generate-inspector-tab-css.mjs`. Renaming the
+	// generator output without updating this constant produces a silent 404.
 	const FILE: &str = "styles.css";
 
 	#[cfg(debug_assertions)]

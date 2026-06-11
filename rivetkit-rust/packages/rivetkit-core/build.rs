@@ -14,6 +14,10 @@ fn main() -> Result<()> {
 	let manifest_dir = env::var("CARGO_MANIFEST_DIR")?;
 	let out_dir = env::var("OUT_DIR")?;
 
+	// Once any `cargo:rerun-if-changed` is emitted Cargo stops rerunning on
+	// generic source changes, so the script itself must opt in explicitly.
+	println!("cargo:rerun-if-changed=build.rs");
+
 	stage_dir(
 		&manifest_dir,
 		&out_dir,

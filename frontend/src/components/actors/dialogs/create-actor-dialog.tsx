@@ -1,5 +1,5 @@
 import { useMutation } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import type { DialogContentProps } from "@/components/hooks";
 import {
 	Accordion,
@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/accordion";
 import { features } from "@/lib/features";
 import { getRandomKey } from "@/lib/words";
+import { queryClient } from "@/queries/global";
 import {
 	DialogDescription,
 	DialogFooter,
@@ -17,15 +18,28 @@ import {
 } from "../../ui/dialog";
 import { Flex } from "../../ui/flex";
 import { useActorsView } from "../actors-view-context-provider";
-import { useDataProvider } from "../data-provider";
+import { useEngineCompatDataProvider } from "../data-provider";
 import * as ActorCreateForm from "../form/actor-create-form";
 
-interface ContentProps extends DialogContentProps {}
-
-export default function CreateActorDialog({ onClose }: ContentProps) {
-	const { mutateAsync } = useMutation(
-		useDataProvider().createActorMutationOptions(),
-	);
+export default function CreateActorDialog() {
+	const dataProvider = useEngineCompatDataProvider();
+	const navigate = useNavigate();
+	const { mutateAsync } = useMutation({
+		...dataProvider.createActorMutationOptions(),
+		onSuccess: async (data) => {
+			const stringKeys = dataProvider
+				.actorsQueryOptions({})
+				.queryKey.filter((k): k is string => typeof k === "string");
+			await queryClient.invalidateQueries({
+				predicate: (query) =>
+					stringKeys.every((k) => query.queryKey.includes(k)),
+			});
+			return navigate({
+				to: ".",
+				search: (old) => ({ ...old, modal: undefined, actorId: data }),
+			});
+		},
+	});
 	const name = useSearch({
 		from: "/_context",
 		select: (state) => state.n?.[0],
@@ -44,7 +58,6 @@ export default function CreateActorDialog({ onClose }: ContentProps) {
 					runnerNameSelector: values.runnerNameSelector || "default",
 					crashPolicy: "destroy",
 				});
-				onClose?.();
 			}}
 			defaultValues={{
 				name,

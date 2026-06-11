@@ -155,15 +155,17 @@ function Tags({ actorId }: { actorId: ActorId }) {
 	}
 
 	return (
-		<CopyTrigger value={data}>
-			<span className="group/key inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-foreground transition-colors">
-				<span className="truncate min-w-0">{data}</span>
-				<Icon
-					icon={faCopy}
-					className="opacity-0 group-hover/key:opacity-100 transition-opacity shrink-0 size-3"
-				/>
-			</span>
-		</CopyTrigger>
+		<div>
+			<CopyTrigger value={data}>
+				<span className="group/key inline-flex items-center gap-1 min-w-0 max-w-full cursor-pointer text-foreground transition-colors">
+					<span className="truncate min-w-0">{data}</span>
+					<Icon
+						icon={faCopy}
+						className="opacity-0 group-hover/key:opacity-100 transition-opacity shrink-0 size-3"
+					/>
+				</span>
+			</CopyTrigger>
+		</div>
 	);
 }
 
