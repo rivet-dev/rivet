@@ -109,7 +109,7 @@ export const temporal: CompareEntry = {
 						text: (
 							<>
 								Rivet Cloud with a free tier.{' '}
-								<a href="https://rivet.dev/cloud">See pricing</a>.
+								<a href="https://rivet.dev/cloud/">See pricing</a>.
 							</>
 						),
 					},
@@ -129,7 +129,7 @@ export const temporal: CompareEntry = {
 					feature: 'Serves user-facing traffic directly',
 					rivet: {
 						status: 'yes',
-						text: 'Actors terminate HTTP, WebSocket, and SSE connections themselves',
+						text: 'Actors terminate HTTP and WebSocket connections themselves',
 					},
 					competitor: {
 						status: 'no',
@@ -171,7 +171,7 @@ export const temporal: CompareEntry = {
 						text: (
 							<>
 								Each actor owns persistent KV state and an embedded{' '}
-								<a href="https://rivet.dev/docs/actors/sqlite">SQLite database</a>
+								<a href="https://rivet.dev/docs/actors/sqlite/">SQLite database</a>
 							</>
 						),
 					},
@@ -194,7 +194,7 @@ export const temporal: CompareEntry = {
 						text: (
 							<>
 								Replay-safe workflows with steps, timers, queue waits, and rollback.{' '}
-								<a href="https://rivet.dev/docs/actors/workflows">Learn more</a>.
+								<a href="https://rivet.dev/docs/actors/workflows/">Learn more</a>.
 							</>
 						),
 					},
@@ -209,7 +209,7 @@ export const temporal: CompareEntry = {
 					feature: 'Scheduling and cron',
 					rivet: {
 						status: 'yes',
-						text: 'Built-in scheduling for one-shot and recurring work',
+						text: 'Durable one-shot timers built in with schedule.after and schedule.at; recurring jobs re-arm themselves',
 					},
 					competitor: {
 						status: 'yes',
@@ -329,22 +329,22 @@ export const temporal: CompareEntry = {
 		{
 			question: 'Is Rivet an alternative to Temporal?',
 			answerHtml:
-				'For many workloads, yes. Rivet provides durable, replayable workflows inside Rivet Actors, plus realtime serving that Temporal does not offer. If your workload is pure backend orchestration across many languages, Temporal is a strong choice. If it combines durable logic with stateful realtime serving, Rivet covers both in one runtime. See <a href="https://rivet.dev/docs/actors/workflows">Rivet workflows</a>.',
+				'For many workloads, yes. Rivet provides durable, replayable workflows inside Rivet Actors, plus realtime serving that Temporal does not offer. If your workload is pure backend orchestration across many languages, Temporal is a strong choice. If it combines durable logic with stateful realtime serving, Rivet covers both in one runtime. See <a href="https://rivet.dev/docs/actors/workflows/">Rivet workflows</a>.',
 		},
 		{
 			question: 'Does Rivet support durable execution like Temporal?',
 			answerHtml:
-				'Yes. Rivet workflows persist progress automatically, replay safely after restarts and crashes, and support steps, durable timers, queue waits, and rollback. They run inside Rivet Actors, so durable logic lives next to the state it operates on. See the <a href="https://rivet.dev/docs/actors/workflows">workflow documentation</a>.',
+				'Yes. Rivet workflows persist progress automatically, replay safely after restarts and crashes, and support steps, durable timers, queue waits, and rollback. They run inside Rivet Actors, so durable logic lives next to the state it operates on. See the <a href="https://rivet.dev/docs/actors/workflows/">workflow documentation</a>.',
 		},
 		{
 			question: 'Can Temporal serve WebSockets or user-facing traffic?',
 			answerHtml:
-				'No. Temporal workers poll task queues over outbound connections and do not terminate HTTP or WebSocket traffic; you build a separate API layer that communicates with workflows through the Temporal Service. Rivet Actors serve HTTP, WebSocket, and SSE traffic directly from the runtime that holds state.',
+				'No. Temporal workers poll task queues over outbound connections and do not terminate HTTP or WebSocket traffic; you build a separate API layer that communicates with workflows through the Temporal Service. Rivet Actors serve HTTP and WebSocket traffic directly from the runtime that holds state.',
 		},
 		{
 			question: 'How does pricing differ between Rivet Cloud and Temporal Cloud?',
 			answerHtml:
-				'Temporal Cloud bills per action: workflow starts, activities and their retries, signals, queries, updates, and timers all count, with plan minimums starting at $100 per month and no perpetual free tier. Rivet Cloud bills primarily on compute through Awake Actor Hours and includes a free tier, so message-heavy realtime sessions do not multiply costs. See <a href="https://rivet.dev/cloud">Rivet Cloud pricing</a>.',
+				'Temporal Cloud bills per action: workflow starts, activities and their retries, signals, queries, updates, and timers all count, with plan minimums starting at $100 per month and no perpetual free tier. Rivet Cloud bills primarily on compute through Awake Actor Hours and includes a free tier, so message-heavy realtime sessions do not multiply costs. See <a href="https://rivet.dev/cloud/">Rivet Cloud pricing</a>.',
 		},
 		{
 			question: 'Is Rivet open source like Temporal?',

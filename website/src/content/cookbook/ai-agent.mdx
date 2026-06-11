@@ -1,6 +1,6 @@
 ---
 title: "AI Agent"
-description: "Patterns for building an AI agent backend with persistent conversation memory: one Rivet Actor per conversation, queue-driven message handling, streaming LLM responses as realtime events, and sandboxed coding agents."
+description: "Build an AI agent backend with persistent memory: one Rivet Actor per conversation, queued message handling, and streaming LLM responses as realtime events."
 templates: ["ai-agent"]
 ---
 
@@ -127,7 +127,7 @@ sequenceDiagram
 The examples ship without auth so they stay minimal. Apply this baseline before exposing an agent backend.
 
 - **API keys stay server-side**: `OPENAI_API_KEY` (or `ANTHROPIC_API_KEY`) is read by the AI SDK inside the actor process. The key never reaches the browser; clients only talk to the actor over RivetKit. The sandbox variant forwards keys into the sandbox env, never to the client.
-- **Add authentication**: The examples have no auth, so anyone who reaches the server can create agents, list them, and message any agent whose key they can guess. Add `onAuth` and scoped tokens as a recommended extension. See [Authentication](/docs/actors/authentication).
+- **Add authentication**: The examples have no auth, so anyone who reaches the server can create agents, list them, and message any agent whose key they can guess. Add `onBeforeConnect` or `createConnState` checks with scoped tokens as a recommended extension. See [Authentication](/docs/actors/authentication).
 - **Validate and rate-limit queue payloads**: The example only skips bodies without a string `text`. Enforce payload size limits, schema validation, and per-connection rate limits as a recommended extension.
 - **Derive sender identity server-side**: The example trusts the client-supplied `sender` field verbatim. Bind sender identity to the authenticated connection instead.
 - **Cap or trim message history**: The example sends the full transcript on every model call with no cap. Trim or summarize old messages as a recommended extension so prompts and state stay bounded.

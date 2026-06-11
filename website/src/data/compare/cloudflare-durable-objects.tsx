@@ -111,8 +111,8 @@ export const cloudflareDurableObjects: CompareEntry = {
 						text: 'Full control over data residency and network isolation within your VPC',
 					},
 					competitor: {
-						status: 'no',
-						text: "Data processed on Cloudflare's global network with limited control",
+						status: 'partial',
+						text: 'Jurisdictions restrict where Durable Objects run and store data (EU, FedRAMP), but there is no VPC or network isolation',
 					},
 					importance:
 						'Data sovereignty ensures compliance with data governance requirements and maintains complete network isolation',
@@ -194,7 +194,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 						text: (
 							<>
 								Built-in SQLite database per actor with raw SQL and Drizzle support.{' '}
-								<a href="https://rivet.dev/docs/actors/sqlite">Learn more</a>.
+								<a href="https://rivet.dev/docs/actors/sqlite/">Learn more</a>.
 							</>
 						),
 					},
@@ -222,7 +222,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 					feature: 'Automatic connection handling',
 					rivet: {
 						status: 'yes',
-						text: 'Optionally provides abstraction over HTTP, WebSockets, and SSE with intelligent failure and reconnection handling',
+						text: 'Optionally provides abstraction over HTTP and WebSockets with intelligent failure and reconnection handling',
 					},
 					competitor: {
 						status: 'no',
@@ -277,8 +277,8 @@ export const cloudflareDurableObjects: CompareEntry = {
 						text: 'Flexible draining mechanism with configurable lifecycle management',
 					},
 					competitor: {
-						status: 'partial',
-						text: '60s grace period',
+						status: 'no',
+						text: 'No shutdown hooks or lifecycle callbacks; in-flight requests get up to 30 seconds during runtime restarts',
 					},
 					importance:
 						'Customizable lifecycle management allows for graceful state transfers and prevents data loss',
@@ -463,7 +463,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 		{
 			question: 'Is Rivet an alternative to Cloudflare Durable Objects?',
 			answerHtml:
-				'Yes. Rivet Actors provide the same stateful actor model as Durable Objects, including persistent state, WebSockets, and scheduling, as an open-source platform that runs on Rivet Cloud or your own infrastructure. See the <a href="https://rivet.dev/docs/actors">Rivet Actors documentation</a> for details.',
+				'Yes. Rivet Actors provide the same stateful actor model as Durable Objects, including persistent state, WebSockets, and scheduling, as an open-source platform that runs on Rivet Cloud or your own infrastructure. See the <a href="https://rivet.dev/docs/actors/">Rivet Actors documentation</a> for details.',
 		},
 		{
 			question: 'Can I run Rivet Actors outside of a single cloud provider?',
@@ -473,7 +473,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 		{
 			question: 'Do Rivet Actors support SQLite storage like Durable Objects?',
 			answerHtml:
-				'Yes. Each Rivet Actor can use built-in key-value state or its own embedded SQLite database, with raw SQL or Drizzle ORM. See the <a href="https://rivet.dev/docs/actors/sqlite">SQLite documentation</a>.',
+				'Yes. Each Rivet Actor can use built-in key-value state or its own embedded SQLite database, with raw SQL or Drizzle ORM. See the <a href="https://rivet.dev/docs/actors/sqlite/">SQLite documentation</a>.',
 		},
 		{
 			question: 'Is Rivet open source?',
@@ -483,7 +483,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 		{
 			question: 'How hard is it to migrate from Cloudflare Durable Objects to Rivet?',
 			answerHtml:
-				'Durable Objects and Rivet Actors share the same core concepts, so most migrations map each Durable Object class to a Rivet Actor with state, actions, and scheduling. Our team also provides hands-on migration assistance. <a href="https://rivet.dev/talk-to-an-engineer">Talk to an engineer</a> to plan a migration.',
+				'Durable Objects and Rivet Actors share the same core concepts, so most migrations map each Durable Object class to a Rivet Actor with state, actions, and scheduling. Our team also provides hands-on migration assistance. <a href="https://rivet.dev/talk-to-an-engineer/">Talk to an engineer</a> to plan a migration.',
 		},
 		{
 			question: 'Do Rivet Actors support WebSockets and realtime connections?',

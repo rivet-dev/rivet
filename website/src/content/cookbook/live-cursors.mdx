@@ -1,6 +1,6 @@
 ---
 title: "Live Cursors and Presence"
-description: "Patterns for live cursors and multiplayer presence with Rivet Actors: per-connection cursor state, realtime cursor sharing over typed events or raw WebSockets, presence join and leave cleanup, and update throttling guidance."
+description: "Live cursors and multiplayer presence with Rivet Actors: per-connection cursor state, realtime updates over events or raw WebSockets, and throttling."
 templates: ["cursors", "cursors-raw-websocket"]
 ---
 
@@ -75,7 +75,7 @@ Neither example throttles. Both frontends send a cursor update on every raw `mou
 - **Key**: `cursorRoom[roomId]` (resolved via `client.cursorRoom.getOrCreate(roomId)`)
 - **Responsibility**: Exposes a raw WebSocket endpoint, tracks live sockets and their cursors in a `createVars` map keyed by a `sessionId` query parameter, persists text labels, and manually fans JSON frames out to every socket.
 - **Actions**
-  - `getOrCreate` (stub returning `{ status: "ok" }`, used only so the frontend can resolve the actor ID before dialing the WebSocket)
+  - `getOrCreate` (stub returning `{ status: "ok" }`; the frontend resolves the actor ID with the client handle's `getOrCreate(roomId).resolve()`, which creates the actor without dispatching this action)
   - `getRoomState`
 - **Queues**
   - None

@@ -1,6 +1,6 @@
 ---
 title: "Chat Room"
-description: "Build a realtime chat room backend with Rivet Actors. One actor per room key, SQLite-backed message history, and WebSocket broadcast of new messages to every connected client, plus extension patterns for typing indicators, presence, and per-user inboxes."
+description: "Build a realtime chat room backend with Rivet Actors: one actor per room, SQLite-backed message history, and WebSocket broadcast to every connected client."
 templates: ["chat-room"]
 ---
 
@@ -91,7 +91,7 @@ sequenceDiagram
 	participant R as chatRoom
 
 	A->>R: connect with key [roomId]
-	Note over R: first start runs onMigrate (CREATE TABLE messages)
+	Note over R: every start runs onMigrate (CREATE TABLE IF NOT EXISTS messages)
 	A->>R: getHistory()
 	R-->>A: Message[] ordered by id
 	B->>R: connect with key [roomId]
