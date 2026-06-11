@@ -75,7 +75,7 @@ rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_actor/str:actor_
 
 ## Depot tests
 
-- For Depot key layout, component responsibilities, VFS interaction, design constraints, and prior-art comparisons, read `docs-internal/engine/sqlite/`.
+- For Depot key layout, component responsibilities, VFS interaction, design constraints, and prior-art comparisons, read `docs-internal/engine/depot/` (start with `overview.md`).
 - `depot` tests live in `engine/packages/depot/tests/`; do not add inline module test blocks.
 - Run `depot` tests against temp RocksDB-backed UniversalDB via `test_db()`, `checkpoint_test_db(...)`, and `reopen_test_db(...)` instead of mocked storage paths.
 - `depot` PIDX entries are stored as the PIDX key prefix plus a big-endian `u32` page number, with the value encoded as a raw big-endian `u64` txid.
@@ -86,8 +86,9 @@ rivet-engine udb -q 'ls 0/1/2/workflow/by_name_and_tag/pegboard_actor/str:actor_
 - `depot` LTX decoders should validate the varint page index against the actual page-frame layout instead of trusting footer offsets alone.
 - `depot` `get_pages(...)` should keep `/META/head`, cold PIDX loads, and DELTA/SHARD blob fetches inside one UDB transaction, then decode each unique blob once and evict stale cached PIDX rows that now need SHARD fallback.
 - `depot` fast-path commits should update an already-cached PIDX in memory after the store write, but must not load PIDX from store just to mutate it or the one-RTT path is gone.
-- `depot` shrink writes must delete above-EOF PIDX rows and fully-above-EOF SHARD blobs inside the same commit/takeover transaction; compaction only cleans partial shards by filtering pages at or below `head.db_size_pages`.
-- `depot` compaction should choose shard passes from the live PIDX scan, then delete DELTA blobs by comparing all existing delta keys against the remaining global PIDX references so multi-shard and overwritten deltas only disappear when every page ref is gone.
+- `depot` shrink writes delete above-EOF PIDX rows and publish pruned SHARD versions at the truncating txid inside the same commit transaction; historical SHARD versions are never deleted or rewritten by truncate because pins and PITR coverage read through them.
+- `depot` reclaim deletes DELTA rows at or below the hot watermark with no per-shard proof; COMMITS/VTX below the watermark survive only as keep-set islands (pins plus retained PITR interval representatives), and superseded SHARD versions are deleted once no covered txid reads through them.
+- `depot` snapshot targets (pins, forks, restores) must land on covered txids or above the hot watermark; creation paths fence on `CMP/root` serializably and versionstamp targets snap down to the newest covered point.
 - `depot` metrics should record compaction pass duration and totals in `compactor/worker.rs`, while shard outcome metrics such as folded pages, deleted deltas, delta gauge updates, and lag stay in `compactor/shard.rs` to avoid double counting.
 - `depot` quota accounting bills `/META/head`, COMMITS, VTX, DELTA, and PIDX keys at commit time and credits them when installs or reclaim delete them; SHARD versions and PITR interval rows are never billed. `/META/quota` tracks the sum with signed atomic-add deltas.
 - `depot` latency tests that depend on `UDB_SIMULATED_LATENCY_MS` should live in a dedicated integration test binary, because UniversalDB caches that env var once per process with `OnceLock`.
