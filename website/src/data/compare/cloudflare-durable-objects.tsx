@@ -14,7 +14,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 	rivetSummary:
 		'Rivet Actors bring the actor model to your existing infrastructure as an open-source library. Build stateful, distributed applications with your preferred technology stack, deployed on your own infrastructure.',
 	competitorSummary:
-		"Cloudflare Durable Objects provide stateful serverless computing that runs on Cloudflare's global edge network. Built on Cloudflare's proprietary platform, Durable Objects offer strong consistency and state persistence for JavaScript/TypeScript applications.",
+		"Cloudflare Durable Objects provide stateful serverless computing that runs on Cloudflare's global edge network. Built on Cloudflare's platform, Durable Objects offer strong consistency and state persistence for applications built on the Workers runtime.",
 	whenToChooseRivet: [
 		{
 			title: 'Developer-friendly experience',
@@ -49,9 +49,9 @@ export const cloudflareDurableObjects: CompareEntry = {
 				"When you're already committed to Cloudflare Workers and want stateful capabilities",
 		},
 		{
-			title: 'JavaScript/TypeScript only',
+			title: 'Building on the Workers runtime',
 			description:
-				"When your team exclusively works with Cloudflare's limited JavaScript/TypeScript runtime and doesn't need access to the broader npm ecosystem",
+				'When your team is comfortable working within the Workers runtime, with JavaScript/TypeScript, Python in beta, or Rust via workers-rs, and nodejs_compat covers the npm packages you need',
 		},
 		{
 			title: "Don't mind platform constraints",
@@ -80,8 +80,8 @@ export const cloudflareDurableObjects: CompareEntry = {
 						),
 					},
 					competitor: {
-						status: 'no',
-						text: 'No, Cloudflare is a closed-source, proprietary platform',
+						status: 'partial',
+						text: 'The workerd runtime is open source under Apache 2.0, but the Durable Objects platform (control plane, storage, distribution) is proprietary',
 					},
 					importance:
 						'Building your core technology on open-source software is vital to ensure portability and flexibility as your needs change',
@@ -138,7 +138,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 					},
 					competitor: {
 						status: 'partial',
-						text: "Limited to Cloudflare's limited JavaScript/TypeScript runtime, not compatible with many npm packages",
+						text: 'Limited to Workers runtime languages (JavaScript/TypeScript, Python in beta, Rust); nodejs_compat covers many npm packages but not native dependencies',
 					},
 					importance:
 						'Technology flexibility lets you use your existing skills and codebase',
@@ -239,7 +239,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 					},
 					competitor: {
 						status: 'partial',
-						text: 'Requires complex setup or third-party solutions like PartyKit',
+						text: 'Requires hand-rolling fanout over the WebSocket API or adopting a framework like PartyServer',
 					},
 					importance:
 						'Native event system enables real-time features with minimal setup',
@@ -329,8 +329,8 @@ export const cloudflareDurableObjects: CompareEntry = {
 						text: 'Built-in monitoring for development and production',
 					},
 					competitor: {
-						status: 'no',
-						text: 'Custom monitoring required',
+						status: 'partial',
+						text: 'Per-namespace Durable Objects metrics and GraphQL analytics in the Cloudflare dashboard',
 					},
 					importance:
 						'Integrated monitoring simplifies operations and debugging',
@@ -342,8 +342,8 @@ export const cloudflareDurableObjects: CompareEntry = {
 						text: 'Supports your existing logging infrastructure',
 					},
 					competitor: {
-						status: 'no',
-						text: 'Provides no logging for Durable Objects',
+						status: 'yes',
+						text: 'Durable Object logs are available through Workers Logs, wrangler tail, and Logpush',
 					},
 					importance:
 						'Built-in logging reduces setup time and operational complexity',
@@ -373,8 +373,8 @@ export const cloudflareDurableObjects: CompareEntry = {
 						text: 'Built-in tools to inspect and modify actor state',
 					},
 					competitor: {
-						status: 'no',
-						text: 'No built-in state inspection tools',
+						status: 'partial',
+						text: 'Data Studio can view and edit SQLite-backed Durable Object storage from the dashboard; in-memory state is not inspectable',
 					},
 					importance:
 						'Ability to view & edit actor state in real time simplifies debugging and management',

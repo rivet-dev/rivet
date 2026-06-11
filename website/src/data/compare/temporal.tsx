@@ -3,7 +3,7 @@ import type { CompareEntry } from './types';
 // Facts about Temporal verified against temporal.io and docs.temporal.io in
 // June 2026: pricing plans and per-action billing, the documented ~100ms
 // minimum end-to-end Cloud latency, worker poll architecture with no ingress,
-// eight first-party SDKs, MIT server license, and self-hosting requirements.
+// seven GA SDKs plus a preview Rust SDK, MIT server license, and self-hosting requirements.
 // Re-verify pricing before major updates since pricing pages churn.
 export const temporal: CompareEntry = {
 	slug: 'rivet-vs-temporal',
@@ -27,7 +27,7 @@ export const temporal: CompareEntry = {
 		{
 			title: 'Low-latency interactive workloads',
 			description:
-				'When user-facing requests need to hit stateful code directly instead of round-tripping through a task queue; Temporal documents a minimum end-to-end latency of around 100ms on Temporal Cloud',
+				"When user-facing requests need to hit stateful code directly instead of round-tripping through a task queue; Temporal's own engineering blog puts minimum end-to-end workflow latency on Temporal Cloud at around 100ms",
 		},
 		{
 			title: 'Long-lived stateful entities',
@@ -159,7 +159,7 @@ export const temporal: CompareEntry = {
 					},
 					competitor: {
 						status: 'partial',
-						text: 'Temporal documents a minimum end-to-end latency of around 100ms on Temporal Cloud and recommends keeping it out of the hot path for interactive transactions',
+						text: "Temporal's own engineering blog puts minimum end-to-end workflow latency at around 100ms on Temporal Cloud and describes tuning techniques to reduce it",
 					},
 					importance:
 						'Latency floors compound across every user interaction in interactive products',
@@ -257,7 +257,7 @@ export const temporal: CompareEntry = {
 					},
 					competitor: {
 						status: 'yes',
-						text: 'Eight first-party SDKs: Go, Java, TypeScript, Python, .NET, PHP, and Ruby, with Rust in preview',
+						text: 'Seven GA SDKs: Go, Java, TypeScript, Python, .NET, PHP, and Ruby, plus Rust in preview',
 					},
 					importance:
 						'SDK breadth matters when teams orchestrate work across several languages',
@@ -354,7 +354,7 @@ export const temporal: CompareEntry = {
 		{
 			question: 'Which languages do Rivet and Temporal support?',
 			answerHtml:
-				'Temporal has eight first-party SDKs, including Go, Java, TypeScript, Python, .NET, PHP, and Ruby, with Rust in preview. Rivet is TypeScript-first with a Rust SDK in preview. If your team orchestrates workflows across many languages today, Temporal has the broader SDK surface.',
+				'Temporal has seven GA SDKs (Go, Java, TypeScript, Python, .NET, PHP, and Ruby), with Rust available in preview. Rivet is TypeScript-first with a Rust SDK in preview. If your team orchestrates workflows across many languages today, Temporal has the broader SDK surface.',
 		},
 	],
 	lastUpdated: '2026-06-11',
