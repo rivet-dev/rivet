@@ -3,6 +3,7 @@ import MarketingLayout from "@/layouts/MarketingLayout.astro";
 import { getCollection, render } from "astro:content";
 import { templates as allTemplates, type Template } from "@/data/templates/shared";
 import * as mdxComponents from "@/components/mdx";
+import { jsonLdString } from "@/lib/jsonLd";
 
 export async function getStaticPaths() {
 	const cookbook = await getCollection("cookbook");
@@ -106,8 +107,8 @@ const resolvedTemplates = resolveTemplates(templates);
 	canonicalUrl={canonicalUrl}
 	active="cookbook"
 >
-	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
-	<script type="application/ld+json" set:html={JSON.stringify(techArticleSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(breadcrumbSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(techArticleSchema)} />
 	<main class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 		<div class="relative overflow-hidden pb-12 pt-32 md:pt-48">
 			<div class="mx-auto max-w-7xl px-6">

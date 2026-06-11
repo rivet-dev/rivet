@@ -1,6 +1,7 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { compareEntries } from '@/data/compare';
+import { jsonLdString } from '@/lib/jsonLd';
 
 const title = 'Rivet vs Alternatives';
 const description =
@@ -41,8 +42,8 @@ const collectionSchema = {
 ---
 
 <MarketingLayout title={title} description={description} canonicalUrl={canonicalUrl}>
-	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
-	<script type="application/ld+json" set:html={JSON.stringify(collectionSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(breadcrumbSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(collectionSchema)} />
 	<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 		<main>
 			<section class="relative flex flex-col justify-center px-6 pt-32 pb-16">

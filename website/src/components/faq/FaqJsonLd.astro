@@ -11,6 +11,7 @@
 //   AI-answer extraction; the schema is nearly free since it derives from the
 //   same data module as the visible rendering.
 import { faqPageSchema, type FaqItem } from '@/data/faqs/types';
+import { jsonLdString } from '@/lib/jsonLd';
 
 interface Props {
 	items: FaqItem[];
@@ -18,8 +19,7 @@ interface Props {
 
 const { items } = Astro.props;
 
-// Escape < so HTML in answer text can never terminate the script element.
-const json = JSON.stringify(faqPageSchema(items)).replace(/</g, '\\u003c');
+const json = jsonLdString(faqPageSchema(items));
 ---
 
 <script type="application/ld+json" set:html={json} />

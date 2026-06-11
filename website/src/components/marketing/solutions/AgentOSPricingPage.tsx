@@ -236,14 +236,9 @@ export default function AgentOSPricingPage() {
 					</div>
 				</section>
 
-				<motion.div
-					initial={{ opacity: 0, y: 20 }}
-					whileInView={{ opacity: 1, y: 0 }}
-					viewport={{ once: true }}
-					transition={{ duration: 0.5 }}
-				>
-					<FaqSection items={agentOsPricingFaqs} theme="light" />
-				</motion.div>
+				{/* No motion wrapper here. The FAQ must stay visible without JavaScript
+				    because the page's FaqJsonLd requires the content to be on-page. */}
+				<FaqSection items={agentOsPricingFaqs} theme="light" />
 				<CTASection />
 			</main>
 		</div>

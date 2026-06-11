@@ -3,6 +3,7 @@ import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import FaqJsonLd from '@/components/faq/FaqJsonLd.astro';
 import { ComparePage } from '@/components/marketing/compare/ComparePage';
 import { compareEntries, getCompareEntry } from '@/data/compare';
+import { jsonLdString } from '@/lib/jsonLd';
 
 export async function getStaticPaths() {
 	return compareEntries.map((entry) => ({
@@ -11,9 +12,9 @@ export async function getStaticPaths() {
 }
 
 const { slug } = Astro.params;
-// The island receives only the slug because CompareEntry contains JSX cell
-// text that cannot be serialized across the island boundary; both this
-// frontmatter and the island read the same registry.
+if (!slug) {
+	throw new Error('Missing compare slug param');
+}
 const entry = getCompareEntry(slug);
 if (!entry) {
 	throw new Error(`Unknown compare slug: ${slug}`);
@@ -53,8 +54,8 @@ const webPageSchema = {
 	canonicalUrl={canonicalUrl}
 	keywords={entry.keywords}
 >
-	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
-	<script type="application/ld+json" set:html={JSON.stringify(webPageSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(breadcrumbSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(webPageSchema)} />
 	<FaqJsonLd items={entry.faq} />
-	<ComparePage slug={entry.slug} client:load />
+	<ComparePage slug={entry.slug} />
 </MarketingLayout>
