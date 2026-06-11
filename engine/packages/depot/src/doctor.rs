@@ -31,8 +31,8 @@ use crate::conveyer::{
 	types::{
 		BucketId, CommitRow, DatabaseBranchId, DatabaseBranchRecord, DepotReadMode,
 		GetPagesOptions, PageSourceKind, PageSourceProvenance as DepotPageSourceProvenance,
-		decode_bucket_pointer, decode_commit_row, decode_database_branch_record,
-		decode_database_pointer, decode_db_head,
+		decode_bucket_pointer, decode_commit_row, decode_compaction_root,
+		decode_database_branch_record, decode_database_pointer, decode_db_head,
 	},
 };
 
@@ -550,6 +550,8 @@ pub async fn doctor(db: &universaldb::Database, input: DoctorInput) -> Result<Do
 		selected_txid,
 		storage.selected_db_size_pages,
 		&privacy,
+		storage.replay_floor_txid,
+		&storage.hot_shards,
 	)?;
 
 	tracing::info!(
@@ -631,7 +633,7 @@ pub async fn doctor(db: &universaldb::Database, input: DoctorInput) -> Result<Do
 		if !sqlite_checks_ok(&sequential_checks) {
 			Some(find_first_bad_txid(
 				&temp_dir,
-				&storage.commits,
+				&storage,
 				first_bad_min_txid,
 				selected_txid,
 				!input.skip.full_integrity_check,
@@ -658,7 +660,7 @@ pub async fn doctor(db: &universaldb::Database, input: DoctorInput) -> Result<Do
 		} else {
 			Some(find_first_bad_txid(
 				&temp_dir,
-				&storage.commits,
+				&storage,
 				first_bad_min_txid,
 				selected_txid,
 				!input.skip.full_integrity_check,
@@ -671,7 +673,8 @@ pub async fn doctor(db: &universaldb::Database, input: DoctorInput) -> Result<Do
 	tracing::info!(phase = "snapshot", "capturing depot doctor end snapshot");
 	let end_snapshot = capture_snapshot(db, selected_branch, &privacy).await?;
 	let changed = snapshot_changed(&start_snapshot, &end_snapshot);
-	let commit_chain_analysis = analyze_commit_chain(&storage.commits, selected_txid);
+	let commit_chain_analysis =
+		analyze_commit_chain(&storage.commits, selected_txid, storage.replay_floor_txid);
 	let versionstamp_index_analysis = analyze_vtx(&storage);
 	let delta_integrity_analysis = analyze_delta_integrity(&replay);
 	let pidx_integrity_analysis = preliminary_pidx_integrity;
@@ -813,6 +816,11 @@ struct StorageFacts {
 	hot_shard_facts: Vec<HotShardFact>,
 	hot_shards: Vec<HotShardData>,
 	selected_db_size_pages: u32,
+	/// History at or below this txid is reconstructed from shard coverage:
+	/// reclaim deletes deltas at or below the hot watermark and keeps only
+	/// pinned/interval commit rows, so contiguous replay is only possible
+	/// above it.
+	replay_floor_txid: u64,
 }
 
 impl StorageFacts {
@@ -1471,6 +1479,8 @@ async fn load_storage_facts(
 		},
 	});
 
+	let watermark_txid = read_hot_watermark_txid(db, branch_id).await?;
+
 	Ok(StorageFacts {
 		inventory,
 		compaction,
@@ -1481,7 +1491,31 @@ async fn load_storage_facts(
 		hot_shard_facts,
 		hot_shards,
 		selected_db_size_pages,
+		replay_floor_txid: watermark_txid.min(selected_txid),
 	})
+}
+
+async fn read_hot_watermark_txid(
+	db: &universaldb::Database,
+	branch_id: DatabaseBranchId,
+) -> Result<u64> {
+	db.txn("depot_doctor_root", move |tx| async move {
+		Ok(tx
+			.informal()
+			.get(
+				&keys::branch_compaction_root_key(branch_id),
+				universaldb::utils::IsolationLevel::Snapshot,
+			)
+			.await?
+			.map(Vec::<u8>::from)
+			.as_deref()
+			.map(decode_compaction_root)
+			.transpose()
+			.context("decode sqlite compaction root for doctor")?
+			.map(|root| root.hot_watermark_txid)
+			.unwrap_or(0))
+	})
+	.await
 }
 
 fn delta_chunk_metadata(
@@ -1534,6 +1568,8 @@ fn build_sequential_replay(
 	selected_txid: u64,
 	selected_db_size_pages: u32,
 	privacy: &Privacy,
+	replay_floor_txid: u64,
+	hot_shards: &[HotShardData],
 ) -> Result<ReplayResult> {
 	let mut file = File::create(path).context("create sequential replay SQLite image")?;
 	let mut page_size = PAGE_SIZE;
@@ -1544,7 +1580,64 @@ fn build_sequential_replay(
 	let mut delta_facts = Vec::new();
 	let mut current_size = 0u32;
 
-	for commit in commits.iter().filter(|commit| commit.txid <= selected_txid) {
+	// History at or below the replay floor has no contiguous delta history;
+	// seed the image from the newest shard coverage at or below the floor and
+	// replay only the commits above it.
+	let replay_floor_txid = replay_floor_txid.min(selected_txid);
+	if replay_floor_txid > 0 {
+		let floor_commit = commits
+			.iter()
+			.find(|commit| commit.txid == replay_floor_txid)
+			.context("hot watermark commit row is missing for sequential replay")?;
+		current_size = floor_commit.row.db_size_pages;
+
+		let mut newest_by_shard = BTreeMap::<u32, &HotShardData>::new();
+		for shard in hot_shards {
+			if shard.as_of_txid > replay_floor_txid {
+				continue;
+			}
+			let replace = newest_by_shard
+				.get(&shard.shard_id)
+				.map_or(true, |existing| shard.as_of_txid > existing.as_of_txid);
+			if replace {
+				newest_by_shard.insert(shard.shard_id, shard);
+			}
+		}
+		if let Some(shard) = newest_by_shard.values().next() {
+			page_size = shard.decoded.header.page_size;
+		}
+		file.set_len(u64::from(current_size) * u64::from(page_size))?;
+		for shard in newest_by_shard.values() {
+			for page in &shard.decoded.pages {
+				if page.pgno == 0 || page.pgno > current_size {
+					continue;
+				}
+				ensure!(
+					page.bytes.len() == page_size as usize,
+					"shard base page {} had {} bytes, expected {}",
+					page.pgno,
+					page.bytes.len(),
+					page_size
+				);
+				let offset = u64::from(page.pgno - 1) * u64::from(page_size);
+				file.seek(SeekFrom::Start(offset))?;
+				file.write_all(&page.bytes)?;
+			}
+		}
+		for pgno in 1..=current_size {
+			let covered = newest_by_shard
+				.values()
+				.any(|shard| shard.decoded.pages.iter().any(|page| page.pgno == pgno));
+			if !covered {
+				zero_filled_pages.insert(pgno);
+			}
+		}
+	}
+
+	for commit in commits
+		.iter()
+		.filter(|commit| commit.txid > replay_floor_txid && commit.txid <= selected_txid)
+	{
 		let mut dirty_pages = Vec::new();
 		let mut decode_status = "missing_delta".to_string();
 		let mut decode_error = None;
@@ -2184,11 +2277,14 @@ fn compare_images(replay: &ReplayResult, resolver: &ResolverResult, page_count: 
 
 fn find_first_bad_txid(
 	temp_dir: &TempDir,
-	commits: &[CommitData],
+	storage: &StorageFacts,
 	min_txid: u64,
 	selected_txid: u64,
 	full_integrity: bool,
 ) -> Result<Value> {
+	let commits = &storage.commits;
+	// Sub-replays are only meaningful above the replay floor.
+	let min_txid = min_txid.max(storage.replay_floor_txid.saturating_add(1));
 	let mut previous_good_txid = None;
 	for commit in commits
 		.iter()
@@ -2204,6 +2300,8 @@ fn find_first_bad_txid(
 			commit.txid,
 			commit.row.db_size_pages,
 			&privacy,
+			storage.replay_floor_txid,
+			&storage.hot_shards,
 		)?;
 		let checks = sqlite_checks("first_bad_candidate", &replay.path, full_integrity)?;
 		if sqlite_checks_ok(&checks) {
@@ -2257,6 +2355,8 @@ async fn find_first_resolver_divergence(
 	privacy: &Privacy,
 ) -> Result<Value> {
 	let mut previous_good_txid = None;
+	// Sub-replays are only meaningful above the replay floor.
+	let min_txid = min_txid.max(storage.replay_floor_txid.saturating_add(1));
 	for commit in storage
 		.commits
 		.iter()
@@ -2275,6 +2375,8 @@ async fn find_first_resolver_divergence(
 			commit.txid,
 			commit.row.db_size_pages,
 			privacy,
+			storage.replay_floor_txid,
+			&storage.hot_shards,
 		)?;
 		let mut storage_at_txid = storage.clone();
 		storage_at_txid.selected_db_size_pages = commit.row.db_size_pages;
@@ -2445,18 +2547,25 @@ fn analysis_ok(value: &Value) -> bool {
 	value.get("ok").and_then(Value::as_bool).unwrap_or(true)
 }
 
-fn analyze_commit_chain(commits: &[CommitData], selected_txid: u64) -> Value {
+fn analyze_commit_chain(
+	commits: &[CommitData],
+	selected_txid: u64,
+	replay_floor_txid: u64,
+) -> Value {
 	let txids = commits.iter().map(|commit| commit.txid).collect::<Vec<_>>();
+	// Commits at or below the replay floor are keep-set islands by design;
+	// contiguity is only guaranteed above the hot watermark.
 	let missing = if txids.is_empty() {
 		Vec::new()
 	} else {
-		(1..=selected_txid)
+		(replay_floor_txid.saturating_add(1)..=selected_txid)
 			.filter(|txid| !txids.binary_search(txid).is_ok())
 			.collect::<Vec<_>>()
 	};
 	json!({
 		"ok": missing.is_empty(),
 		"selected_txid": selected_txid,
+		"replay_floor_txid": replay_floor_txid,
 		"commit_count": commits.len(),
 		"missing_txids": LimitedRows::from_rows(missing),
 	})
