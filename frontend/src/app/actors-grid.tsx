@@ -25,9 +25,9 @@ import {
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { ActorIcon } from "@/components/lazy-icon";
 import { VisibilitySensor } from "@/components/visibility-sensor";
-import { cloudEnv, getRivetRunUrl } from "@/lib/env";
 import { features } from "@/lib/features";
 import { getRivetRunUrl } from "../lib/env";
+import { RouteLayout } from "./route-layout";
 
 function _GridCard({
 	children,
@@ -293,6 +293,43 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 				</div>
 			</ScrollArea>
 		</div>
+	);
+}
+
+ActorsGrid.Skeleton = function ActorsGridSkeleton() {
+	return (
+		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
+			<ScrollArea className="h-full w-full">
+				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
+					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
+						<Skeleton className="h-8 w-48" />
+						<Skeleton className="size-8 rounded-md" />
+					</header>
+
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<Skeleton className="h-5 w-20" />
+							<Skeleton className="h-8 w-32 rounded-md" />
+						</header>
+
+						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+							{Array.from({ length: 8 }).map((_, i) => (
+								// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton cards
+								<ActorGridCardSkeleton key={i} />
+							))}
+						</div>
+					</section>
+				</div>
+			</ScrollArea>
+		</div>
+	);
+};
+
+export function NamespaceLandingPending() {
+	return (
+		<RouteLayout>
+			<ActorsGrid.Skeleton />
+		</RouteLayout>
 	);
 }
 
