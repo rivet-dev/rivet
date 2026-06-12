@@ -18,8 +18,6 @@ pub async fn open_raw_ws(url: &str) -> Result<Ws> {
 		"Sec-WebSocket-Protocol",
 		HeaderValue::from_static("rivet, rivet_encoding.json"),
 	);
-	let (ws, _resp) = connect_async(req)
-		.await
-		.context("websocket connect failed")?;
+	let (ws, _resp) = connect_async(req).await.context("websocket connect failed")?;
 	Ok(ws)
 }

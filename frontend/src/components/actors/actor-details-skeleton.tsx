@@ -49,7 +49,10 @@ export function ActorDetailsSkeleton({ shimmer, children, className }: Props) {
 	return (
 		<Tabs
 			value={undefined}
-			className={cn("flex-1 min-h-0 min-w-0 flex flex-col", className)}
+			className={cn(
+				"flex-1 min-h-0 min-w-0 flex flex-col",
+				className,
+			)}
 		>
 			<div className="relative flex items-center border-b h-[45px]">
 				<TabsList className="flex border-none h-full items-end min-w-0 overflow-hidden w-full">
