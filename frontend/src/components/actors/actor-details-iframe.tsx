@@ -313,6 +313,11 @@ function ActorDetailsIframePath({
 	// authenticated bundle/asset GETs reach EE. Inspector responses set
 	// `Referrer-Policy: no-referrer` so the token does not leak via
 	// `Referer` on cross-origin sub-resource fetches.
+	//
+	// Residual risk: tokens-in-URLs are inherently exposed to browser history,
+	// server/proxy access logs, and browser extensions that can read the path.
+	// The `Referer` vector is the only one mitigated here; the rest are accepted
+	// trade-offs of iframe navigation requiring the token in-path.
 	const src = useMemo(() => {
 		const actorSegment = rivetToken
 			? `${encodeURIComponent(actorId)}@${encodeURIComponent(rivetToken)}`

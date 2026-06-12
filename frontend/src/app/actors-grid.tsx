@@ -74,9 +74,11 @@ export function ActorGridCardSkeleton() {
 export function ActorBuildCard({
 	build,
 }: {
-	build: { id: string; name?: { metadata?: unknown } };
+	// Shape produced by `buildsQueryOptions().select` (id + the `names` map
+	// value), shared by the cloud and engine grids.
+	build: { id: string; name: { metadata?: Record<string, unknown> } };
 }) {
-	const meta = build.name?.metadata as Record<string, unknown> | undefined;
+	const meta = build.name.metadata;
 	const iconValue = typeof meta?.icon === "string" ? meta.icon : null;
 	const displayName = typeof meta?.name === "string" ? meta.name : build.id;
 

@@ -435,7 +435,10 @@ function useEngineNamespaceReady() {
 		from: "/_context/ns/$namespace",
 		shouldThrow: false,
 	});
-	return Boolean(match?.loaderData);
+	// Check the resolved `dataProvider` rather than truthiness of `loaderData`
+	// so an in-between empty object during a namespace switch is not treated as
+	// ready (the namespace-scoped content hooks need the provider populated).
+	return match?.loaderData?.dataProvider != null;
 }
 
 function NamespaceSettingsSkeleton() {
