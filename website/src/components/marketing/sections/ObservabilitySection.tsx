@@ -1,9 +1,28 @@
 'use client';
 
-import { Database, GitBranch, Activity, Terminal, ArrowRight } from 'lucide-react';
+import { Database, GitBranch, Activity, Terminal, ArrowRight, Sun, Moon } from 'lucide-react';
 import { motion } from 'framer-motion';
-const imgInspector = { src: "https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/inspector-6.png", width: 5984, height: 3224, format: "png" };
+import { useState } from 'react';
+
+const inspectorImages = {
+  dark: {
+    src: 'https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/rivet-actor-inspector-dark.png',
+    width: 2446,
+    height: 1658,
+  },
+  light: {
+    src: 'https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/rivet-actor-inspector-light.png',
+    width: 2446,
+    height: 1658,
+  },
+} as const;
+
+type InspectorTheme = keyof typeof inspectorImages;
+
 export const ObservabilitySection = () => {
+  const [theme, setTheme] = useState<InspectorTheme>('dark');
+  const inspector = inspectorImages[theme];
+
   const features = [
     {
       title: 'SQLite Viewer',
@@ -40,12 +59,38 @@ export const ObservabilitySection = () => {
             transition={{ duration: 0.5 }}
             className='relative'
           >
-            <div className='overflow-hidden rounded-lg border border-white/10'>
-              <div className='relative w-full' style={{ aspectRatio: `${imgInspector.width} / ${imgInspector.height}` }}>
-                <img src={imgInspector.src}
-                  alt='Rivet Inspector Dashboard'
+            <div className='relative overflow-hidden rounded-lg border border-white/10'>
+              <div className='relative w-full' style={{ aspectRatio: `${inspector.width} / ${inspector.height}` }}>
+                <img src={inspector.src}
+                  alt={`Rivet Actor Inspector in ${theme} mode`}
                   className='h-full w-full object-cover'
                 />
+              </div>
+
+              {/* Light/dark mode toggle */}
+              <div className='absolute bottom-3 right-3 flex items-center gap-0.5 rounded-md border border-white/10 bg-black/60 p-0.5 backdrop-blur'>
+                <button
+                  type='button'
+                  onClick={() => setTheme('light')}
+                  aria-label='Show inspector in light mode'
+                  aria-pressed={theme === 'light'}
+                  className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
+                    theme === 'light' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Sun className='h-3.5 w-3.5' />
+                </button>
+                <button
+                  type='button'
+                  onClick={() => setTheme('dark')}
+                  aria-label='Show inspector in dark mode'
+                  aria-pressed={theme === 'dark'}
+                  className={`flex h-7 w-7 items-center justify-center rounded transition-colors ${
+                    theme === 'dark' ? 'bg-white text-black' : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  <Moon className='h-3.5 w-3.5' />
+                </button>
               </div>
             </div>
           </motion.div>
