@@ -34,13 +34,13 @@ The management API runs on the manager base path (default root path) and is used
 |---|---|
 | **Local development** | No authentication required. All endpoints are accessible without tokens. |
 | **Self-hosted engine** | Set `RIVET_TOKEN` to enable authenticated access to restricted endpoints like KV. |
-| **Rivet Cloud** | Authentication is enforced by your deployment entrypoint. For manager KV access, use the manager token header below when enabled. |
+| **Rivet Cloud** | Authentication is enforced by your deployment entrypoint. For manager KV access, use the bearer token header below when enabled. |
 
-Restricted endpoints (like KV reads) require the `x-rivet-token` header when `RIVET_TOKEN` is configured:
+Restricted endpoints (like KV reads) require the `Authorization: Bearer` header when `RIVET_TOKEN` is configured:
 
 ```bash
 curl "$RIVET_API/actors/{actor_id}/kv/keys/{base64_key}" \
-  -H "x-rivet-token: $RIVET_TOKEN"
+  -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 
 ### List Actors
@@ -128,7 +128,7 @@ Requires authentication (see above).
 
 ```bash
 curl "$RIVET_API/actors/{actor_id}/kv/keys/{base64_key}" \
-  -H "x-rivet-token: $RIVET_TOKEN"
+  -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 
 Returns the value stored at the given key.
@@ -271,9 +271,11 @@ Standard actor endpoints (health, actions, requests) and inspector endpoints hav
 
 Each actor generates a unique inspector token on first start and persists it in its internal KV store at key `0x03` (base64 `Aw==`). Pass it as a bearer token in the `Authorization` header.
 
+Inspector endpoints always require the actor's inspector token, including in local development. There is no local-development bypass.
+
 | Environment | Authentication |
 |---|---|
-| **Local development** | No authentication required. |
+| **Local development** | Bearer the actor's inspector token in the `Authorization` header. Fetch it through the management KV endpoint (see below). |
 | **Self-hosted engine** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 | **Rivet Cloud** | Bearer the actor's inspector token in the `Authorization` header. The Rivet dashboard fetches it automatically; for direct API access, fetch it through the management KV endpoint (see below). |
 
@@ -282,9 +284,9 @@ curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
   -H 'Authorization: Bearer YOUR_INSPECTOR_TOKEN'
 ```
 
-#### Retrieving the Inspector Token (Rivet Cloud)
+#### Retrieving the Inspector Token
 
-In Rivet Cloud, each actor generates a unique inspector token on first start and persists it in its internal KV store. The Rivet dashboard retrieves this token automatically, but if you need it for direct API access, fetch it from the management KV endpoint.
+Each actor generates a unique inspector token on first start and persists it in its internal KV store. The Rivet dashboard retrieves this token automatically, but if you need it for direct API access, fetch it from the management KV endpoint. This applies in every environment, including local development.
 
 The inspector token is stored at internal KV key `0x03` (base64: `Aw==`). The response value is also base64-encoded.
 
@@ -293,7 +295,7 @@ The inspector token is stored at internal KV key `0x03` (base64: `Aw==`). The re
 ACTOR_ID="your-actor-id"
 
 RESPONSE=$(curl -s "$RIVET_API/actors/$ACTOR_ID/kv/keys/Aw==" \
-  -H "x-rivet-token: $RIVET_TOKEN")
+  -H "Authorization: Bearer $RIVET_TOKEN")
 
 # Extract and decode the base64 value
 INSPECTOR_TOKEN=$(echo "$RESPONSE" | jq -r '.value' | base64 -d)
@@ -319,11 +321,6 @@ curl -X POST $RIVET_API/gateway/{actor_id}/action/myAction \
   -H 'Content-Type: application/json' \
   -d '{"args": [1, 2, 3]}'
 
-# Send queue message (body includes queue name)
-curl -X POST $RIVET_API/gateway/{actor_id}/queue \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"jobs","body":{"id":"job-1"}}'
-
 # Send queue message (queue name in path)
 curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
   -H 'Content-Type: application/json' \
@@ -338,10 +335,16 @@ curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
 curl $RIVET_API/gateway/{actor_id}/request/my/custom/path
 ```
 
-Queue send responses include:
+Queue send responses always include a `status` field:
 
 ```json
-{ "status": "completed", "response": null }
+{ "status": "completed" }
+```
+
+The `response` field is only present when the queue handler returns a value:
+
+```json
+{ "status": "completed", "response": { "result": "ok" } }
 ```
 
 If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
@@ -349,6 +352,8 @@ If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
 ### Inspector Endpoints
 
 The inspector HTTP API exposes JSON endpoints for querying and modifying actor internals at runtime. These are designed for agent-based debugging and tooling.
+
+Every inspector endpoint requires the actor's inspector token as a bearer token, including in local development. The examples below omit the `Authorization` header for brevity, but you must add `-H "Authorization: Bearer $INSPECTOR_TOKEN"` to each request. See [Retrieving the Inspector Token](#retrieving-the-inspector-token) above.
 
 #### Get State
 
@@ -448,40 +453,6 @@ Returns queue status with messages:
   "messages": [
     { "id": 1, "name": "process", "createdAtMs": 1706000000000 }
   ]
-}
-```
-
-#### Get Traces
-
-Query trace spans in OTLP JSON format:
-
-```bash
-curl "$RIVET_API/gateway/{actor_id}/inspector/traces?startMs=0&endMs=9999999999999&limit=100"
-```
-
-Returns:
-
-```json
-{
-  "otlp": {
-    "resourceSpans": [
-      {
-        "scopeSpans": [
-          {
-            "spans": [
-              {
-                "traceId": "abc123",
-                "spanId": "def456",
-                "name": "increment",
-                "startTimeUnixNano": "1706000000000000000"
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  "clamped": false
 }
 ```
 
@@ -654,18 +625,7 @@ Returns:
 }
 ```
 
-When workflow history is present in `/inspector/summary`, `workflowHistory` is returned as the same encoded byte array used by `/inspector/workflow-history`.
-
-#### Get Metrics (Experimental)
-
-```bash
-curl $RIVET_API/gateway/{actor_id}/inspector/metrics
-```
-
-Returns in-memory metrics for the current actor wake cycle. Metrics are not persisted and reset when the actor sleeps and wakes again.
-
-Includes counters for `action_calls`, `action_errors`, `action_duration_ms`, `connections_opened`, `connections_closed`, `sql_statements`, `sql_duration_ms`, and `kv_operations`.
-
+When workflow history is present in `/inspector/summary`, `workflowHistory` is returned as the same decoded JSON shape as `/inspector/workflow-history`.
 
 ### Polling
 
@@ -673,7 +633,9 @@ Inspector endpoints are safe to poll. For live monitoring, poll at 1-5 second in
 
 ## OpenAPI Spec
 
-The full OpenAPI specification including all management and actor endpoints is available:
+An OpenAPI specification covering many of the management and actor endpoints is available:
 
 - In the repository at [`rivetkit-openapi/openapi.json`](https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi)
 - Served at `/doc` on the manager when running locally
+
+The checked-in spec does not yet list every endpoint documented on this page (for example the actor metadata and queue routes and the inspector database routes), so treat this page as the authoritative reference where they differ.

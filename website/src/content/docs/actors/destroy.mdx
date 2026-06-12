@@ -115,7 +115,7 @@ const userActor = actor({
 
 ## Accessing Actor After Destroy
 
-Once an actor is destroyed, any subsequent requests to it will return an `actor_not_found` error. The actor's state is permanently deleted.
+Once an actor is destroyed, any subsequent requests to it will fail with an `actor.not_found` error (`{ group: "actor", code: "not_found" }`). The actor's state is permanently deleted.
 
 ## API Reference
 

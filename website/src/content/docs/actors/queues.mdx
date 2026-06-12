@@ -59,8 +59,8 @@ await handle.send("increment", { amount: 5 });
 
 Use this when you want explicit completion/ack semantics but do not need to return data.
 
-- If processing fails before `message.complete()`, the message is not acknowledged.
-- Unacknowledged messages are retried, so mutation handlers should be idempotent.
+- `message.complete()` resolves a sender waiting on `wait: true` (or `enqueueAndWait`). It does not change durability: messages are removed from queue storage when they are received, not when they are completed.
+- If processing fails before `message.complete()`, the message is not redelivered, and any waiting sender times out instead of receiving a completion.
 - `status: "timedOut"` means sender timeout elapsed before `message.complete(...)`.
 
 <CodeGroup workspace>

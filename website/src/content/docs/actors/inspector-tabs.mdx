@@ -165,12 +165,10 @@ arrives.
 }
 ```
 
-For tabs with sub-views, the dashboard also sends `set-active-tab`
-when the user switches:
-
-```ts @nocheck
-{ type: "set-active-tab", v: 1, tab: string }
-```
+Multi-view tabs can read the optional `activeTab` field on `init` to
+seed their initial sub-view. The dashboard does not send a separate
+message when the user switches custom tabs — it navigates the iframe
+`src` instead, so the tab reloads and receives a fresh `init`.
 
 ### From the tab
 

@@ -301,7 +301,7 @@ State must be serializable.
 
 - `null`, `undefined`, `boolean`, `string`, `number`, `BigInt`
 - `Date`, `RegExp`, `Error`
-- Typed arrays (`Uint8Array`, `Int8Array`, `Float32Array`, etc.)
+- `ArrayBuffer` and typed arrays (`Uint8Array`, `Int8Array`, `Float32Array`, etc.)
 - `Map`, `Set`, `Array`
 - Plain objects
 
@@ -434,7 +434,7 @@ For the full query API, schema migrations, transactions, and the Drizzle ORM, se
 
 ## Debugging
 
-- `GET /inspector/state` returns the actor's current persisted state and `isStateEnabled`.
+- `GET /inspector/state` returns the actor's current state and `isStateEnabled`.
 - `PATCH /inspector/state` lets you set state directly while debugging.
 - In non-dev mode, inspector endpoints require authorization.
 

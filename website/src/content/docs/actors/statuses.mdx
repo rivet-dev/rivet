@@ -10,17 +10,17 @@ These are the statuses you can see in the dashboard for each actor.
 
 | Status | Description |
 |---|---|
-| **Starting** | The actor has been created and a runner has been allocated, but the actor process has not yet reported that it is ready. |
+| **Starting** | The actor has been created but has not yet become connectable. |
 | **Running** | The actor is live and accepting connections. |
-| **Stopped** | The actor has been gracefully destroyed. |
+| **Destroyed** | The actor has been gracefully destroyed. |
 | **Crashed** | The actor failed to start or encountered a fatal error. See [Troubleshooting](/docs/actors/troubleshooting#actor-status-is-crashed) for common failure reasons. |
 | **Sleeping** | The actor has been put to sleep from inactivity. It will be woken up automatically when a new request arrives. |
 | **Pending** | The actor is waiting to be allocated to a runner. This happens when no runner is available to handle the actor. See [Troubleshooting](/docs/actors/troubleshooting#actor-status-is-pending) for common causes. |
-| **Crash-Loop** | The actor failed to allocate and is waiting to retry with a backoff. This typically means repeated allocation failures. The backoff prevents overloading your infrastructure in the case of a widespread misconfiguration in your backend. See [Troubleshooting](/docs/actors/troubleshooting#actor-status-is-crashed) for common failure reasons. |
+| **Crash Loop Backoff** | The actor failed to allocate and is waiting to retry with a backoff. This typically means repeated allocation failures. The backoff prevents overloading your infrastructure in the case of a widespread misconfiguration in your backend. See [Troubleshooting](/docs/actors/troubleshooting#actor-status-is-crashed) for common failure reasons. |
 
 ## API Representation
 
-The actor object returned by the API includes the following timestamp fields used to derive status:
+The actor object returned by the full engine API (used by the dashboard) includes the following timestamp fields used to derive status:
 
 | Field | Description |
 |---|---|

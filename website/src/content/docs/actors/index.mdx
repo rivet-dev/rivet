@@ -113,7 +113,6 @@ interface CounterState {
 }
 
 const counter = actor({
-  state: { count: 0 } as CounterState,
   createState: (c, input: { start?: number }): CounterState => ({
     count: input.start ?? 0,
   }),
@@ -273,7 +272,7 @@ const chatRoom = actor({
 
 ### Connections
 
-Access the current connection via `c.conn` or all connected clients via `c.conns`. Use `c.conn.id` or `c.conn.state` to securely identify who is calling an action. Connection state is initialized via `connState` or `createConnState`, which receives parameters passed by the client on connect.
+Access the current connection via `c.conn` or all connected clients via `c.conns`. Use `c.conn.id` or `c.conn.state` to securely identify who is calling an action. `c.conn` is only available for actions invoked through a connected client; stateless actor-handle calls run without a connection, so guard against that. Connection state is initialized via `connState` or `createConnState`, which receives parameters passed by the client on connect.
 
 <Tabs>
 <Tab title="Static Connection Initial State">
@@ -486,9 +485,6 @@ interface ConnState {
 }
 
 const chatRoom = actor({
-	state: { users: {} } as RoomState,
-	vars: { startTime: 0 },
-	connState: { userId: "", joinedAt: 0 } as ConnState,
 	events: {
 		stateChanged: event<RoomState>(),
 	},
@@ -602,12 +598,22 @@ c.state.username = username;
 </Tab>
 <Tab title="Client">
 ```ts
-import { actor, setup } from "rivetkit";
+import { actor, setup, UserError } from "rivetkit";
 import { createClient, ActorError } from "rivetkit/client";
 
 const user = actor({
   state: { username: "" },
-  actions: { updateUsername: (c, username: string) => { c.state.username = username; } }
+  actions: {
+    updateUsername: (c, username: string) => {
+      if (username.length < 3) {
+        throw new UserError("Username too short", {
+          code: "username_too_short",
+          metadata: { minLength: 3, actual: username.length },
+        });
+      }
+      c.state.username = username;
+    },
+  },
 });
 
 const registry = setup({ use: { user } });
