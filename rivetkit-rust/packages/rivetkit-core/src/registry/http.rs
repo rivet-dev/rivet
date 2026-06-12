@@ -834,19 +834,13 @@ pub(super) fn decode_http_action_args(
 		HttpResponseEncoding::Json => {
 			let request: HttpActionRequestJson =
 				serde_json::from_slice(body).context("decode json HTTP action request")?;
-			let args = match request.args {
-				JsonValue::Array(args) => args,
-				_ => Vec::new(),
-			};
+			let args = normalize_json_args(request.args);
 			encode_json_as_cbor(&args)
 		}
 		HttpResponseEncoding::Cbor => {
 			let request: HttpActionRequestJson = ciborium::from_reader(Cursor::new(body))
 				.context("decode cbor HTTP action request")?;
-			let args = match request.args {
-				JsonValue::Array(args) => args,
-				_ => Vec::new(),
-			};
+			let args = normalize_json_args(request.args);
 			encode_json_as_cbor(&args)
 		}
 		HttpResponseEncoding::Bare => {
@@ -855,6 +849,14 @@ pub(super) fn decode_http_action_args(
 					.context("decode bare HTTP action request")?;
 			Ok(request.args)
 		}
+	}
+}
+
+fn normalize_json_args(args: JsonValue) -> Vec<JsonValue> {
+	match args {
+		JsonValue::Array(args) => args,
+		JsonValue::Null => Vec::new(),
+		value => vec![value],
 	}
 }
 

@@ -224,8 +224,31 @@ pub(crate) fn encode_action_args<M: Action>(action: &M) -> Result<Vec<JsonValue>
 }
 
 fn decode_event<E: Event>(event: &ClientEvent) -> Result<E> {
-	ciborium::from_reader(Cursor::new(&event.raw_args))
-		.with_context(|| format!("decode typed event '{}'", E::NAME))
+	decode_event_args(&event.raw_args).with_context(|| format!("decode typed event '{}'", E::NAME))
+}
+
+fn decode_event_args<E: Event>(raw_args: &[u8]) -> Result<E> {
+	let value: CborValue =
+		ciborium::from_reader(Cursor::new(raw_args)).context("decode typed event args as cbor")?;
+	match value {
+		CborValue::Array(values) if values.is_empty() => {
+			crate::event::deserialize_cbor_value(CborValue::Null)
+				.map_err(|error| anyhow::anyhow!(error.to_string()))
+				.context("decode typed event from empty args")
+		}
+		CborValue::Array(mut values) if values.len() == 1 => {
+			let value = values.remove(0);
+			crate::event::deserialize_cbor_value(value)
+				.map_err(|error| anyhow::anyhow!(error.to_string()))
+				.context("decode typed event from single arg")
+		}
+		CborValue::Array(values) => crate::event::deserialize_cbor_value(CborValue::Array(values))
+			.map_err(|error| anyhow::anyhow!(error.to_string()))
+			.context("decode typed event from positional args"),
+		value => crate::event::deserialize_cbor_value(value)
+			.map_err(|error| anyhow::anyhow!(error.to_string()))
+			.context("decode typed event from legacy payload"),
+	}
 }
 
 fn cbor_to_json(value: CborValue) -> Result<JsonValue> {

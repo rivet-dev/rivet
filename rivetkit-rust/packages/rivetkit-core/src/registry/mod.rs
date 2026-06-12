@@ -251,6 +251,7 @@ struct InspectorPatchStateBody {
 #[serde(default)]
 struct InspectorActionBody {
 	args: Vec<JsonValue>,
+	properties: Option<JsonValue>,
 }
 
 #[derive(Debug, Default, Deserialize)]

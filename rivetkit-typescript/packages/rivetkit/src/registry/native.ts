@@ -630,6 +630,14 @@ function encodeValue(value: unknown): RuntimeBytes {
 	return encodeCborCompat(value as JsonCompatValue);
 }
 
+function normalizeArgs(value: unknown): unknown[] {
+	return Array.isArray(value)
+		? value
+		: value === undefined || value === null
+			? []
+			: [value];
+}
+
 function unwrapTsfnPayload<T>(error: unknown, payload: T): T {
 	if (error !== null && error !== undefined) {
 		throw error;
@@ -1096,11 +1104,7 @@ function wrapNativeCallback<Args extends Array<unknown>, Result>(
 
 function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 	const decoded = decodeValue<unknown>(value);
-	return Array.isArray(decoded)
-		? decoded
-		: decoded === undefined
-			? []
-			: [decoded];
+	return normalizeArgs(decoded);
 }
 
 function buildRequest(init: {
@@ -3837,14 +3841,38 @@ export function buildNativeFactory(
 						404,
 					);
 				}
-				const body = (await jsRequest.json()) as { args?: unknown[] };
+				const body = (await jsRequest.json()) as {
+					args?: unknown;
+					properties?: unknown;
+				};
+				if (body.args !== undefined && body.properties !== undefined) {
+					return jsonResponse(
+						{ error: "use either args or properties, not both" },
+						{ status: 400 },
+					);
+				}
+				if (
+					body.properties !== undefined &&
+					(body.properties === null ||
+						typeof body.properties !== "object" ||
+						Array.isArray(body.properties))
+				) {
+					return jsonResponse(
+						{ error: "properties must be an object" },
+						{ status: 400 },
+					);
+				}
+				const args =
+					body.properties !== undefined
+						? [body.properties]
+						: normalizeArgs(body.args);
 				try {
 					const output = await action(
 						actorCtx,
 						...validateActionArgs(
 							schemaConfig.actionInputSchemas,
 							actionName,
-							body.args ?? [],
+							args,
 						),
 					);
 					return jsonResponse({ output });
