@@ -21,12 +21,17 @@ pub trait Action: serde::Serialize + DeserializeOwned + Send + Sync + 'static {
 }
 
 pub fn encode_positional<T: Serialize>(value: &T) -> Result<Vec<u8>> {
+	encode_varargs(value, "action args")
+}
+
+pub(crate) fn encode_varargs<T: Serialize>(value: &T, label: &str) -> Result<Vec<u8>> {
 	let mut encoded = Vec::new();
-	ciborium::into_writer(value, &mut encoded).context("encode action args as cbor")?;
+	ciborium::into_writer(value, &mut encoded)
+		.with_context(|| format!("encode {label} as cbor"))?;
 	let value: Value = ciborium::from_reader(Cursor::new(&encoded))
-		.context("decode action args into cbor value")?;
+		.with_context(|| format!("decode {label} into cbor value"))?;
 	let value = positional_value(value);
-	encode_value(&value)
+	encode_value(&value, label)
 }
 
 pub fn decode_positional<T: DeserializeOwned>(args: &[u8]) -> Result<T> {
@@ -54,16 +59,17 @@ pub fn decode_positional<T: DeserializeOwned>(args: &[u8]) -> Result<T> {
 
 fn positional_value(value: Value) -> Value {
 	match value {
-		Value::Map(entries) => Value::Array(entries.into_iter().map(|(_, value)| value).collect()),
+		Value::Map(_) => Value::Array(vec![value]),
 		Value::Array(values) => Value::Array(values),
 		Value::Null => Value::Array(Vec::new()),
 		value => Value::Array(vec![value]),
 	}
 }
 
-fn encode_value(value: &Value) -> Result<Vec<u8>> {
+fn encode_value(value: &Value, label: &str) -> Result<Vec<u8>> {
 	let mut encoded = Vec::new();
-	ciborium::into_writer(value, &mut encoded).context("encode positional action args as cbor")?;
+	ciborium::into_writer(value, &mut encoded)
+		.with_context(|| format!("encode positional {label} as cbor"))?;
 	Ok(encoded)
 }
 
@@ -339,14 +345,17 @@ mod tests {
 	}
 
 	#[test]
-	fn positional_encode_has_ts_byte_parity() {
+	fn positional_encode_matches_ts_action_args() {
 		assert_eq!(
 			encode_positional(&NamedArgs {
 				first: "a".into(),
 				second: "b".into(),
 			})
 			.expect("encode named args"),
-			vec![0x82, 0x61, b'a', 0x61, b'b']
+			vec![
+				0x81, 0xa2, 0x65, b'f', b'i', b'r', b's', b't', 0x61, b'a', 0x66, b's', b'e', b'c',
+				b'o', b'n', b'd', 0x61, b'b',
+			]
 		);
 		assert_eq!(
 			encode_positional(&NewtypeArg(5)).expect("encode newtype arg"),
@@ -410,6 +419,13 @@ mod tests {
 		}))
 		.expect("decode named args from map");
 		assert_eq!(from_map, from_seq);
+
+		let from_single_map_arg = decode_positional::<NamedArgs>(&cbor(&vec![NamedArgs {
+			first: "a".into(),
+			second: "b".into(),
+		}]))
+		.expect("decode named args from single object arg");
+		assert_eq!(from_single_map_arg, from_seq);
 	}
 
 	#[test]
@@ -425,7 +441,7 @@ mod tests {
 	}
 
 	#[test]
-	fn positional_encode_leaves_nested_struct_as_map() {
+	fn positional_encode_wraps_named_struct_as_single_arg() {
 		let bytes = encode_positional(&WithNested {
 			nested: Nested {
 				value: 7,
@@ -440,9 +456,11 @@ mod tests {
 		let ciborium::Value::Array(values) = value else {
 			panic!("top-level args should be an array");
 		};
-		assert_eq!(values.len(), 2);
-		assert!(matches!(values[0], ciborium::Value::Map(_)));
-		assert!(matches!(values[1], ciborium::Value::Bool(true)));
+		assert_eq!(values.len(), 1);
+		let ciborium::Value::Map(fields) = &values[0] else {
+			panic!("named struct arg should remain a map");
+		};
+		assert_eq!(fields.len(), 2);
 	}
 
 	fn cbor<T: Serialize>(value: &T) -> Vec<u8> {

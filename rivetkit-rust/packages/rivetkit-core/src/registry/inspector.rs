@@ -144,8 +144,33 @@ impl RegistryDispatcher {
 					Ok(body) => body,
 					Err(response) => return Ok(Some(response)),
 				};
+				if !body.args.is_empty() && body.properties.is_some() {
+					return Ok(Some(json_http_response(
+						StatusCode::BAD_REQUEST,
+						&json!({
+							"error": "use either args or properties, not both",
+						}),
+					)?));
+				}
+				if body
+					.properties
+					.as_ref()
+					.is_some_and(|properties| !properties.is_object())
+				{
+					return Ok(Some(json_http_response(
+						StatusCode::BAD_REQUEST,
+						&json!({
+							"error": "properties must be an object",
+						}),
+					)?));
+				}
+				let args = if let Some(properties) = body.properties {
+					vec![properties]
+				} else {
+					body.args
+				};
 				match self
-					.execute_inspector_action(instance, &action_name, body.args)
+					.execute_inspector_action(instance, &action_name, args)
 					.await
 				{
 					Ok(output) => json_http_response(

@@ -21,6 +21,7 @@ use rivetkit_core::{
 use serde::{Serialize, de::DeserializeOwned};
 use tokio_util::sync::CancellationToken;
 
+use crate::action;
 use crate::actor::Actor;
 use crate::event::Event;
 use crate::queue::Queue;
@@ -345,7 +346,7 @@ impl<A: Actor> Ctx<A> {
 	}
 
 	pub fn broadcast<E: Serialize>(&self, name: &str, event: &E) -> Result<()> {
-		let event_bytes = encode_cbor(event, "broadcast event")?;
+		let event_bytes = action::encode_varargs(event, "event args")?;
 		self.inner.broadcast(name, &event_bytes);
 		Ok(())
 	}
@@ -514,7 +515,7 @@ impl<A: Actor> ConnCtx<A> {
 	}
 
 	pub fn send<E: Serialize>(&self, name: &str, event: &E) -> Result<()> {
-		let event_bytes = encode_cbor(event, "connection event")?;
+		let event_bytes = action::encode_varargs(event, "connection event args")?;
 		self.inner.send(name, &event_bytes);
 		Ok(())
 	}

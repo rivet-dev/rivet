@@ -198,15 +198,16 @@ const client = createClient("http://localhost:6420");
 
 const counter = client.counter.getOrCreate(["my-counter"]);
 
-const count = await counter.increment(3);
+const counterConnection = counter.connect();
+counterConnection.on("newCount", (event) => {
+	console.log("Event count:", event.count);
+});
+
+const count = await counterConnection.increment(3);
 console.log("New count:", count);
 
-await counter.connect().increment(1);
+await counterConnection.increment(1);
 ```
-
-<Note>
-Events emitted by a Rust actor with `ctx.emit(...)` are broadcast as a single serialized struct value. The TypeScript and React clients deliver event arguments positionally, so consuming a Rust struct event from JavaScript is not supported yet. Call actions across languages, and subscribe to events from Rust clients.
-</Note>
 
 See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
@@ -229,9 +230,12 @@ function Counter() {
 	});
 
 	const increment = async () => {
-		const next = await counter.connection?.increment(1);
-		if (typeof next === "number") setCount(next);
+		await counter.connection?.increment(1);
 	};
+
+	counter.useEvent("newCount", (event) => {
+		setCount(event.count);
+	});
 
 	return (
 		<div>
@@ -241,10 +245,6 @@ function Counter() {
 	);
 }
 ```
-
-<Note>
-Events emitted by a Rust actor with `ctx.emit(...)` are broadcast as a single serialized struct value. The TypeScript and React clients deliver event arguments positionally, so `useEvent` cannot consume a Rust struct event yet. This example reads the action return value instead.
-</Note>
 
 See the [React documentation](/docs/clients/react) for more information.
 

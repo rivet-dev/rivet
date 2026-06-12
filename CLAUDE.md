@@ -131,6 +131,7 @@ docker-compose up -d
 - Use `scripts/cargo/check-rivetkit-core-wasm.sh` as the canonical wasm gate for `rivetkit-core`; it checks the wasm build, scans native dependency leaks, and verifies native transport/runtime features fail on wasm.
 - The high-level `rivetkit` crate stays a thin typed wrapper over `rivetkit-core` and re-exports shared transport/config types instead of redefining them.
 - When `rivetkit` needs ergonomic helpers on a `rivetkit-core` type it re-exports, prefer an extension trait plus `prelude` re-export instead of wrapping and replacing the core type.
+- RivetKit action and event protocol `args` must always be array-shaped before crossing the client protocol boundary. Normalize at the server/source side, not in client delivery code: named structs/objects become `[object]`, tuples/arrays stay positional, scalars become `[scalar]`, and unit/null becomes `[]`.
 - `engine/sdks/*/api-*` are auto-generated SDK outputs; update the source API schema and regenerate them instead of editing them by hand.
 
 ### RivetKit Test Fixtures

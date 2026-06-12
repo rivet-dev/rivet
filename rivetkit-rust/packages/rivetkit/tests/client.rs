@@ -293,10 +293,10 @@ async fn typed_event_connection(mut socket: WebSocket) {
 			socket
 				.send(connection_message(wire::ToClientBody::Event(wire::Event {
 					name: "notice".to_owned(),
-					args: cbor(&SiblingNotice {
+					args: cbor(&vec![SiblingNotice {
 						message: "typed-event".to_owned(),
 						count: 7,
-					}),
+					}]),
 				})))
 				.await
 				.unwrap();

@@ -4,7 +4,7 @@ description: "Actors store state in memory for instant reads and writes. State c
 skill: true
 ---
 
-## Durable vs Ephemeral
+## Types of State
 
 There are three ways to store data in an actor, depending on what it looks like and whether it needs to survive restarts.
 
@@ -150,19 +150,21 @@ function createEventEmitter(): EventEmitter {
 import { actor } from "rivetkit";
 import { Pool } from "pg";
 
+// One shared pool for the whole process, created once and reused by every actor
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const userActor = actor({
   state: { profile: null as Record<string, unknown> | null },
 
-  // Open a connection and load initial data on every start
+  // Load this actor's row from the shared pool on each start
   createVars: async (c) => {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-    const result = await pool.query("SELECT * FROM users WHERE id = $1", [c.key[0]]);
-    return { pool, profile: result.rows[0] };
+    const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [c.key[0]]);
+    return { profile: rows[0] };
   },
 
   actions: {
     updateEmail: async (c, email: string) => {
-      await c.vars.pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, c.key[0]]);
+      await pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, c.key[0]]);
     }
   }
 });
@@ -340,24 +342,26 @@ const room = actor({
 
 ### Loading from external sources
 
-`createVars` can be `async`, so open a connection and load initial data on each start. The connection lives only in memory:
+Create the connection pool once at module scope and share it across all actors, then use `createVars` (which can be `async`) to load this actor's data from it on each start:
 
 ```typescript @nocheck
 import { actor } from "rivetkit";
 import { Pool } from "pg";
 
+// One shared pool for the whole process, not one per actor
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
 const profile = actor({
   state: { cachedName: "" },
 
   createVars: async (c) => {
-    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     const { rows } = await pool.query("SELECT * FROM users WHERE id = $1", [c.key[0]]);
-    return { pool, user: rows[0] };
+    return { user: rows[0] };
   },
 
   actions: {
     updateEmail: async (c, email: string) => {
-      await c.vars.pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, c.key[0]]);
+      await pool.query("UPDATE users SET email = $1 WHERE id = $2", [email, c.key[0]]);
     }
   }
 });
@@ -367,15 +371,18 @@ When the actor owns its data, prefer [durable state](#durable-state) or [SQLite]
 
 ### Cleanup
 
-`vars` is dropped when the actor stops, but external resources are not closed for you. Release them in `onSleep` and `onDestroy`:
+`vars` is dropped when the actor stops, but per-actor resources like timers, subscriptions, and dedicated connections aren't cleaned up for you. Release them in `onSleep` and `onDestroy`. A shared pool stays open for the whole process, so don't close it per actor.
 
 ```typescript @nocheck
-const profile = actor({
-  createVars: () => ({ pool: new Pool() }),
+const poller = actor({
+  state: { ticks: 0 },
 
-  // Close the connection before the actor sleeps or is destroyed
-  onSleep: (c) => c.vars.pool.end(),
-  onDestroy: (c) => c.vars.pool.end(),
+  // Per-actor timer started on each wake
+  createVars: (c) => ({ timer: setInterval(() => c.state.ticks++, 5000) }),
+
+  // Clear it before the actor sleeps or is destroyed
+  onSleep: (c) => clearInterval(c.vars.timer),
+  onDestroy: (c) => clearInterval(c.vars.timer),
 
   actions: { /* ... */ }
 });
