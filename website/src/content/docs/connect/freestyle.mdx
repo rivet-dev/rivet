@@ -107,27 +107,31 @@ Run this deployment script to push your application to Freestyle.
 Update the runner configuration on the Rivet side to connect with your Freestyle deployment. Create a configuration script and run it after your Freestyle deployment is live:
 
 ```typescript @nocheck
-import { RivetClient } from "rivetkit/client";
+import { RivetClient } from "@rivetkit/engine-api-full";
 
 const rivet = new RivetClient({
-	endpoint: "api.rivet.dev",
+	environment: "https://api.rivet.dev",
 	token: process.env.RIVET_API_TOKEN,
 });
 
 const FREESTYLE_DOMAIN = "my-domain.style.dev"; // Change to your desired Freestyle domain
 const RIVET_NAMESPACE = "my-rivet-namespace"; // Change to your Rivet namespace
 
-await rivet.runnerConfigs.upsert("freestyle-runner", {
-	serverless: {
-		url: `https://${FREESTYLE_DOMAIN}/start`,
-		runnersMargin: 1,
-		minRunners: 1,
-		maxRunners: 1,
-		slotsPerRunner: 1,
-		// Must be shorter than Freestyle request `timeout` config
-		requestLifespan: 60 * 5 - 5,
-	},
+await rivet.runnerConfigsUpsert("freestyle-runner", {
 	namespace: RIVET_NAMESPACE,
+	datacenters: {
+		default: {
+			serverless: {
+				url: `https://${FREESTYLE_DOMAIN}/start`,
+				runnersMargin: 1,
+				minRunners: 1,
+				maxRunners: 1,
+				slotsPerRunner: 1,
+				// Must be shorter than Freestyle request `timeout` config
+				requestLifespan: 60 * 5 - 5,
+			},
+		},
+	},
 });
 ```
 
