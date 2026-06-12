@@ -17,22 +17,26 @@ Configure a pool via the dashboard, the API directly, or the TypeScript SDK:
 
 <CodeGroup>
 
-```typescript SDK
-import { RivetClient } from "rivetkit/client";
+```typescript SDK @nocheck
+import { RivetClient } from "@rivetkit/engine-api-full";
 
 const rivet = new RivetClient({
-  endpoint: "https://api.rivet.dev",
+  environment: "https://api.rivet.dev",
   token: process.env.RIVET_TOKEN,
 });
 
-await rivet.runnerConfigs.upsert("default", {
+await rivet.runnerConfigsUpsert("default", {
   namespace: "default",
-  serverless: {
-    url: "https://my-app.example.com/api/rivet",
-    requestLifespan: 60 * 15,
-    actorEvictionDelay: 5,
-    actorEvictionPeriod: 60,
-    actorEvictionRate: 1,
+  datacenters: {
+    default: {
+      serverless: {
+        url: "https://my-app.example.com/api/rivet",
+        requestLifespan: 60 * 15,
+        actorEvictionDelay: 5,
+        actorEvictionPeriod: 60,
+        actorEvictionRate: 1,
+      },
+    },
   },
 });
 ```
