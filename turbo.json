@@ -15,6 +15,16 @@
 			"outputs": ["dist/**"],
 			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD", "SKIP_WASM_BUILD"]
 		},
+		"build:engine": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"tsconfig.json",
+				"package.json"
+			],
+			"outputs": ["dist/**"],
+			"env": ["BASE_URL", "VITE_APP_*", "VITE_FEATURE_FLAGS"]
+		},
 		"build:ladle": {
 			"dependsOn": ["^build"],
 			"inputs": [

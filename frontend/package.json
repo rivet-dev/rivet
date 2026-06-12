@@ -8,6 +8,7 @@
     "dev:inspector": "vite build --config vite.inspector-ui.config.ts --watch",
     "check-types": "tsc --noEmit",
     "build": "NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production",
+    "build:engine": "BASE_URL=/ui/ NODE_OPTIONS='--max-old-space-size=8192' vite build --mode=production",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
