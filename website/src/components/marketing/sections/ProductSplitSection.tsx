@@ -2,6 +2,8 @@
 
 import { Database, Globe, Infinity, Layers, Wifi, GitBranch, ListOrdered, Clock, Shield, FolderOpen, Code, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { Eyebrow } from '../editorial/Eyebrow';
 import agentosLogoUrl from '@/images/products/agentos-logo.svg';
 
 const actorFeatures = [
@@ -120,27 +122,27 @@ const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, de
 		whileInView={{ opacity: 1, y: 0 }}
 		viewport={{ once: true }}
 		transition={{ duration: 0.5, delay }}
-		className='flex flex-col rounded-xl border border-white/10 bg-white/[0.03] p-6 md:p-8'
+		className='flex flex-col border border-ink/10 bg-white/55 p-6 md:p-8'
 	>
 		<div className='mb-4 flex items-center gap-3'>
 			{icon}
-			<h3 className='text-xl font-medium text-white'>{title}</h3>
+			<h3 className='text-xl font-medium text-ink'>{title}</h3>
 		</div>
 
-		<p className='mb-6 text-sm leading-relaxed text-zinc-400'>
+		<p className='mb-6 text-sm leading-relaxed text-ink-soft'>
 			{tagline}
 		</p>
 
 		<div className='mb-8 flex flex-wrap gap-3'>
 			<a
 				href={docsHref}
-				className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200'
+				className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
 			>
 				Documentation
 			</a>
 			<a
 				href={detailsHref}
-				className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
+				className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink'
 			>
 				Details
 				<ArrowRight className='h-3.5 w-3.5' />
@@ -153,10 +155,10 @@ const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, de
 				return (
 					<div key={feature.title} className='flex flex-col gap-1.5'>
 						<div className='flex items-center gap-2'>
-							<Icon className='h-3.5 w-3.5 text-zinc-500' />
-							<span className='text-sm font-medium text-white'>{feature.title}</span>
+							<Icon className='h-3.5 w-3.5 text-olive' />
+							<span className='text-sm font-medium text-ink'>{feature.title}</span>
 						</div>
-						<p className='text-xs leading-relaxed text-zinc-500'>{feature.description}</p>
+						<p className='text-xs leading-relaxed text-ink-faint'>{feature.description}</p>
 					</div>
 				);
 			})}
@@ -165,31 +167,31 @@ const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, de
 );
 
 export const ProductSplitSection = () => (
-	<section className='relative border-t border-white/10 px-6 py-16 lg:py-24'>
+	<section className='relative border-t border-ink/10 px-6 py-16 lg:py-24'>
 		<div className='mx-auto w-full max-w-7xl'>
 			<div className='mb-12 max-w-3xl'>
-				<motion.h2
+				<motion.div
 					initial={{ opacity: 0, y: 20 }}
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
-					className='text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'
 				>
-					Two products, one platform.
-				</motion.h2>
+					<Eyebrow index='01' label='Platform' className='mb-4' />
+					<h2 className={SECTION_H2_CLASS}>Two products, one platform.</h2>
+				</motion.div>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5, delay: 0.05 }}
-					className='mt-4 text-base leading-relaxed text-zinc-500'
+					className={SUBTITLE_CLASS}
 				>
 					Rivet Actors give agents and realtime apps durable, stateful compute in your existing Node.js or Bun backend. agentOS gives agents a portable OS to run in. Use them alone or together.
 				</motion.p>
 			</div>
 			<div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
 				<ProductCard
-					icon={<RivetActorIcon className='text-white' />}
+					icon={<RivetActorIcon className='text-ink' />}
 					title='Actors'
 					tagline='The primitive for stateful workloads.'
 					docsHref='/docs'

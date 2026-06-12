@@ -2,7 +2,8 @@
 
 import { LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { Eyebrow } from '../editorial/Eyebrow';
 
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },
@@ -15,7 +16,7 @@ const frameworks = [
 ];
 
 export const IntegrationsSection = () => (
-  <section className='relative overflow-hidden border-t border-white/10 py-16 md:py-48'>
+  <section className='relative overflow-hidden border-t border-ink/10 py-16 md:py-32'>
     <div className='relative z-10 mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.div
@@ -25,8 +26,9 @@ export const IntegrationsSection = () => (
           transition={{ duration: 0.5 }}
           className='max-w-xl'
         >
-          <h2 className='mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'>Works with your stack.</h2>
-          <p className='text-base leading-relaxed text-zinc-500'>
+          <Eyebrow index='03' label='Compatibility' className='mb-4' />
+          <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>Works with your stack.</h2>
+          <p className={SUBTITLE_CLASS}>
             Standard Node.js, Bun, and Deno. Your frameworks, your tools. No custom runtime, no rewrite.
           </p>
         </motion.div>
@@ -34,18 +36,18 @@ export const IntegrationsSection = () => (
 
       <div className='grid grid-cols-1 gap-8 md:grid-cols-3'>
         {/* Category 1: Frameworks */}
-        <div className='border-t border-white/10 pt-6'>
+        <div className='border-t border-ink/10 pt-6'>
           <div className='mb-4 flex items-center gap-3'>
-            <LayoutGrid className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Frameworks</h4>
+            <LayoutGrid className='h-4 w-4 text-olive' />
+            <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Frameworks</h4>
           </div>
-          <div className='flex flex-wrap gap-2'>
+          <div className='flex flex-wrap gap-x-5 gap-y-2.5'>
             {frameworks.map(tech => (
               <a
                 key={tech.name}
                 href={tech.href}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+                className='text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink hover:decoration-pine'
               >
                 {tech.name}
               </a>
@@ -54,12 +56,12 @@ export const IntegrationsSection = () => (
         </div>
 
         {/* Category 2: Runtimes */}
-        <div className='border-t border-white/10 pt-6'>
+        <div className='border-t border-ink/10 pt-6'>
           <div className='mb-4 flex items-center gap-3'>
-            <Terminal className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Runtimes</h4>
+            <Terminal className='h-4 w-4 text-olive' />
+            <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Runtimes</h4>
           </div>
-          <div className='flex flex-wrap gap-2'>
+          <div className='flex flex-wrap gap-x-5 gap-y-2.5'>
             {[
               { name: 'Node.js', href: '/docs/actors/quickstart/backend' },
               { name: 'Bun', href: '/docs/actors/quickstart/backend' },
@@ -69,7 +71,7 @@ export const IntegrationsSection = () => (
                 key={tech.name}
                 href={tech.href}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+                className='text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink hover:decoration-pine'
               >
                 {tech.name}
               </a>
@@ -78,12 +80,12 @@ export const IntegrationsSection = () => (
         </div>
 
         {/* Category 3: Tools */}
-        <div className='border-t border-white/10 pt-6'>
+        <div className='border-t border-ink/10 pt-6'>
           <div className='mb-4 flex items-center gap-3'>
-            <Wrench className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Tools</h4>
+            <Wrench className='h-4 w-4 text-olive' />
+            <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Tools</h4>
           </div>
-          <div className='flex flex-wrap gap-2'>
+          <div className='flex flex-wrap gap-x-5 gap-y-2.5'>
             {[
               { name: 'Vitest', href: '/docs/actors/testing' },
               { name: 'Pino', href: '/docs/general/logging' },
@@ -96,7 +98,7 @@ export const IntegrationsSection = () => (
                 key={tech.name}
                 href={tech.href}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+                className='text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink hover:decoration-pine'
               >
                 {tech.name}
               </a>
