@@ -34,11 +34,11 @@ export const invoiceActor = actor({
     status: "idle" as "idle" | "complete",
   },
   run: workflow(async (ctx) => {
-    const subtotal = await ctx.step("load-subtotal", async () =>
+    const subtotal = await ctx.step("load-subtotal", async (ctx) =>
       loadSubtotal(),
     );
 
-    const tax = await ctx.step("calculate-tax", async () =>
+    const tax = await ctx.step("calculate-tax", async (ctx) =>
       calculateTax(subtotal),
     );
 
@@ -472,17 +472,17 @@ export const dashboardActor = actor({
         const summary = await loopCtx.join("fetch-summary", {
           users: {
             run: async (branchCtx) => {
-              return await branchCtx.step("fetch-users", () => fetchCount("/users"));
+              return await branchCtx.step("fetch-users", (branchCtx) => fetchCount("/users"));
             },
           },
           orders: {
             run: async (branchCtx) => {
-              return await branchCtx.step("fetch-orders", () => fetchCount("/orders"));
+              return await branchCtx.step("fetch-orders", (branchCtx) => fetchCount("/orders"));
             },
           },
           revenue: {
             run: async (branchCtx) => {
-              return await branchCtx.step("fetch-revenue", () => fetchCount("/revenue"));
+              return await branchCtx.step("fetch-revenue", (branchCtx) => fetchCount("/revenue"));
             },
           },
         });
@@ -534,7 +534,7 @@ export const auctionActor = actor({
     bids: queue<{ amount: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("list-item", () => listItem("item-123"));
+    await ctx.step("list-item", (ctx) => listItem("item-123"));
 
     const { winner } = await ctx.race("bid-or-expire", [
       {
@@ -626,7 +626,7 @@ export const timeoutActor = actor({
           maxRetries: 5,
           retryBackoffBase: 200,
           retryBackoffMax: 2_000,
-          run: async () => await chargeCard(message.body.orderId),
+          run: async (loopCtx) => await chargeCard(message.body.orderId),
         });
 
         await loopCtx.step("save-charge", async (step) => {
@@ -657,7 +657,7 @@ export const paymentActor = actor({
     const charge = await ctx.tryStep({
       name: "charge-card",
       maxRetries: 3,
-      run: async () => await chargeCard("order-123"),
+      run: async (ctx) => await chargeCard("order-123"),
     });
 
     await ctx.step("store-charge-result", async (step) => {
@@ -688,10 +688,10 @@ Use `try` when you want to recover from terminal `step`, `join`, or `race` failu
 ```ts
 async function runPaymentFlow(ctx: any) {
   return await ctx.try("payment-flow", async (blockCtx: any) => {
-    const auth = await blockCtx.step("authorize", async () =>
+    const auth = await blockCtx.step("authorize", async (blockCtx) =>
       authorizeOrder("order-123"),
     );
-    const capture = await blockCtx.step("capture", async () =>
+    const capture = await blockCtx.step("capture", async (blockCtx) =>
       captureOrder("order-123"),
     );
     return { auth, capture };
@@ -737,7 +737,7 @@ export const errorHookActor = actor({
         maxRetries: 3,
         retryBackoffBase: 250,
         retryBackoffMax: 1_000,
-        run: async () => {
+        run: async (ctx) => {
           throw new Error("ledger unavailable");
         },
       });
@@ -778,7 +778,7 @@ export const checkoutActor = actor({
 
         await loopCtx.step<string>({
           name: "reserve-inventory",
-          run: () => reserveInventory(message.body.orderId),
+          run: (loopCtx) => reserveInventory(message.body.orderId),
           rollback: async (_rollbackCtx, id) => {
             await releaseInventory(id as string);
           },
@@ -786,7 +786,7 @@ export const checkoutActor = actor({
 
         await loopCtx.step<string>({
           name: "charge-card",
-          run: () => chargeCard(message.body.orderId),
+          run: (loopCtx) => chargeCard(message.body.orderId),
           rollback: async (_rollbackCtx, chargeId) => {
             await refundCharge(chargeId as string);
           },
@@ -1160,15 +1160,15 @@ export const fanInOutActor = actor({
         const joined = await loopCtx.join("parallel-work", {
           users: {
             run: async (branchCtx) =>
-              await branchCtx.step("fetch-users", () => fetchCount("/users")),
+              await branchCtx.step("fetch-users", (branchCtx) => fetchCount("/users")),
           },
           orders: {
             run: async (branchCtx) =>
-              await branchCtx.step("fetch-orders", () => fetchCount("/orders")),
+              await branchCtx.step("fetch-orders", (branchCtx) => fetchCount("/orders")),
           },
           invoices: {
             run: async (branchCtx) =>
-              await branchCtx.step("fetch-invoices", () => fetchCount("/invoices")),
+              await branchCtx.step("fetch-invoices", (branchCtx) => fetchCount("/invoices")),
           },
         });
 
@@ -1615,7 +1615,6 @@ async function reserveInventoryForCheckout(
 }
 
 async function releaseInventoryForCheckout(
-  ctx: WorkflowStepContextOf<typeof checkoutSagaActor>,
   reservationId: string,
 ): Promise<void> {
   await fetch("https://api.example.com/inventory/release", {
@@ -1634,7 +1633,6 @@ async function chargeCheckout(
 }
 
 async function refundCheckout(
-  ctx: WorkflowStepContextOf<typeof checkoutSagaActor>,
   chargeId: string,
 ): Promise<void> {
   await fetch("https://api.example.com/billing/refund", {
@@ -1980,7 +1978,7 @@ export const checkpointFriendlyActor = actor({
 
         await loopCtx.rollbackCheckpoint("apply-payment-checkpoint");
 
-        const plan = (await loopCtx.step("build-plan", async () =>
+        const plan = (await loopCtx.step("build-plan", async (loopCtx) =>
           buildPaymentPlan(payment),
         )) as { paymentId: string; amount: number };
 

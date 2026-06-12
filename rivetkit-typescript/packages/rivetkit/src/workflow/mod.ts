@@ -290,10 +290,17 @@ export function workflow<
 		[RUN_FUNCTION_CONFIG_SYMBOL]?: {
 			icon?: string;
 			inspectorFactory?: (actor: unknown) => unknown;
+			disposeInspector?: (actorId: string) => void;
 		};
 	};
 	runWithConfig[RUN_FUNCTION_CONFIG_SYMBOL] = {
 		icon: "diagram-project",
+		// Drop the per-actor inspector when the actor is destroyed so this map
+		// does not retain one inspector (and its encoded history) per actor id
+		// for the process lifetime.
+		disposeInspector: (actorId) => {
+			workflowInspectors.delete(actorId);
+		},
 		inspectorFactory: (actor) => {
 			const actorId = resolveWorkflowInspectorActorId(actor);
 			return {

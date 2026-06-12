@@ -28,11 +28,11 @@ import { workflow } from "rivetkit/workflow";
 
 const onboarding = actor({
   run: workflow(async (ctx) => {
-    const customerId = await ctx.step("create-customer", () => createCustomer());
+    const customerId = await ctx.step("create-customer", (ctx) => createCustomer());
 
-    await ctx.step("send-welcome-email", () => sendWelcomeEmail(customerId));
+    await ctx.step("send-welcome-email", (ctx) => sendWelcomeEmail(customerId));
 
-    await ctx.step("track-signup", () => trackSignup(customerId));
+    await ctx.step("track-signup", (ctx) => trackSignup(customerId));
   }),
 });
 
@@ -71,15 +71,15 @@ const order = actor({
     approval: queue<{ approved: boolean }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("validate-order", async () => validateOrderStep(ctx, "order-123"));
+    await ctx.step("validate-order", async (ctx) => validateOrderStep(ctx, "order-123"));
 
     // Pauses here until a human approves or rejects. Could be minutes or days.
     const decision = await ctx.queue.next("wait-approval");
 
     if (decision.body.approved) {
-      await ctx.step("fulfill-order", async () => fulfillOrderStep(ctx, "order-123"));
+      await ctx.step("fulfill-order", async (ctx) => fulfillOrderStep(ctx, "order-123"));
     } else {
-      await ctx.step("cancel-order", async () => cancelOrderStep(ctx, "order-123"));
+      await ctx.step("cancel-order", async (ctx) => cancelOrderStep(ctx, "order-123"));
     }
   }),
   actions: {
@@ -138,7 +138,7 @@ const counter = actor({
         completable: true,
       });
 
-      const newCount = await loopCtx.step("apply-delta", async () =>
+      const newCount = await loopCtx.step("apply-delta", async (loopCtx) =>
         applyDelta(loopCtx, message.body.delta),
       );
 
@@ -174,7 +174,7 @@ const worker = actor({
     await ctx.loop("task-loop", async (loopCtx) => {
       const message = await loopCtx.queue.next("wait-task");
 
-      await loopCtx.step("process-task", async () =>
+      await loopCtx.step("process-task", async (loopCtx) =>
         processTaskStep(loopCtx, message.body.url),
       );
     });
@@ -206,17 +206,17 @@ import { type WorkflowContextOf, workflow } from "rivetkit/workflow";
 const emailDrip = actor({
   state: { emailsSent: 0 },
   run: workflow(async (ctx) => {
-    await ctx.step("send-welcome", async () => sendEmailStep(ctx, "welcome"));
+    await ctx.step("send-welcome", async (ctx) => sendEmailStep(ctx, "welcome"));
 
     // Sleep for 3 days without consuming compute
     await ctx.sleep("wait-3-days", 3 * 24 * 60 * 60 * 1000);
 
-    await ctx.step("send-tips", async () => sendEmailStep(ctx, "tips"));
+    await ctx.step("send-tips", async (ctx) => sendEmailStep(ctx, "tips"));
 
     // Sleep for 7 more days
     await ctx.sleep("wait-7-days", 7 * 24 * 60 * 60 * 1000);
 
-    await ctx.step("send-offer", async () => sendEmailStep(ctx, "offer"));
+    await ctx.step("send-offer", async (ctx) => sendEmailStep(ctx, "offer"));
   }),
   actions: {
     getState: (c) => c.state,
@@ -252,28 +252,28 @@ const migration = actor({
     await ctx.join("update-all", {
       users: {
         run: async (branchCtx) => {
-          await branchCtx.step("update-users", () =>
+          await branchCtx.step("update-users", (branchCtx) =>
             migrateRecords("https://api.example.com/users/migrate"),
           );
         },
       },
       orders: {
         run: async (branchCtx) => {
-          await branchCtx.step("update-orders", () =>
+          await branchCtx.step("update-orders", (branchCtx) =>
             migrateRecords("https://api.example.com/orders/migrate"),
           );
         },
       },
       products: {
         run: async (branchCtx) => {
-          await branchCtx.step("update-products", () =>
+          await branchCtx.step("update-products", (branchCtx) =>
             migrateRecords("https://api.example.com/products/migrate"),
           );
         },
       },
     });
 
-    await ctx.step("mark-complete", async () => {
+    await ctx.step("mark-complete", async (ctx) => {
       await fetch("https://api.example.com/migration/complete", { method: "POST" });
       ctx.state.completed = true;
     });
@@ -300,7 +300,7 @@ const auction = actor({
     bids: queue<{ amount: number }>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("list-item", () => listItem("item-123"));
+    await ctx.step("list-item", (ctx) => listItem("item-123"));
 
     // First bid wins, or the auction expires after 24 hours
     const { winner } = await ctx.race("bid-or-expire", [
@@ -320,7 +320,7 @@ const auction = actor({
       },
     ]);
 
-    await ctx.step("finalize", async () => {
+    await ctx.step("finalize", async (ctx) => {
       await finalizeAuction("item-123", winner);
       ctx.state.result = winner === "bid" ? "sold" : "expired";
     });
@@ -360,17 +360,17 @@ const checkout = actor({
 
       await loopCtx.step<string>({
         name: "reserve-inventory",
-        run: () => reserveInventory(message.body.orderId),
+        run: (loopCtx) => reserveInventory(message.body.orderId),
         rollback: releaseInventoryRollback,
       });
 
       await loopCtx.step<string>({
         name: "charge-card",
-        run: () => chargeCard(message.body.orderId),
+        run: (loopCtx) => chargeCard(message.body.orderId),
         rollback: refundChargeRollback,
       });
 
-      await loopCtx.step("confirm", async () => {
+      await loopCtx.step("confirm", async (loopCtx) => {
         loopCtx.state.status = "confirmed";
       });
     });
@@ -460,18 +460,18 @@ const agent = actor({
       const message = await loopCtx.queue.next("wait-prompt");
 
       // Save user message to SQLite
-      await loopCtx.step("save-user-message", async () =>
+      await loopCtx.step("save-user-message", async (loopCtx) =>
         saveUserMessage(loopCtx, message.body.content),
       );
 
       // Load full chat history
-      const history = await loopCtx.step("load-history", async () => loadHistory(loopCtx));
+      const history = await loopCtx.step("load-history", async (loopCtx) => loadHistory(loopCtx));
 
       // Generate AI response with tool use
-      const result = await loopCtx.step("generate", async () => generateReply(history));
+      const result = await loopCtx.step("generate", async (loopCtx) => generateReply(history));
 
       // Save assistant response to SQLite
-      await loopCtx.step("save-response", async () =>
+      await loopCtx.step("save-response", async (loopCtx) =>
         saveAssistantResponse(loopCtx, result.text),
       );
     });
@@ -567,11 +567,11 @@ export const orderProcessor = actor({
     statusUpdated: event<string>(),
   },
   run: workflow(async (ctx) => {
-    await ctx.step("validate", async () => validateAndBroadcast(ctx));
+    await ctx.step("validate", async (ctx) => validateAndBroadcast(ctx));
 
-    await ctx.step("charge-payment", async () => chargeAndBroadcast(ctx));
+    await ctx.step("charge-payment", async (ctx) => chargeAndBroadcast(ctx));
 
-    await ctx.step("fulfill", async () => fulfillAndBroadcast(ctx));
+    await ctx.step("fulfill", async (ctx) => fulfillAndBroadcast(ctx));
   }),
   actions: {
     getState: (c) => c.state,

@@ -36,22 +36,22 @@ export const workflowCounterActor = actor({
 		history: [] as number[],
 	},
 	run: workflow(async (ctx) => {
-		let leakedStep:
+		let leakedCtx:
 			| WorkflowStepContextOf<typeof workflowCounterActor>
 			| undefined;
 		await ctx.loop("counter", async (loopCtx) => {
-			await loopCtx.step("increment", async (step) => {
-				incrementWorkflowCounter(step);
+			await loopCtx.step("increment", async (c) => {
+				incrementWorkflowCounter(c);
 				// Capture the step context to verify it cannot be used after
 				// its step has finished.
-				leakedStep = step;
+				leakedCtx = c;
 			});
 
 			// Using a finished step context outside its step should throw.
-			if (leakedStep) {
+			if (leakedCtx) {
 				try {
 					// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-					leakedStep.state;
+					leakedCtx.state;
 				} catch {}
 			}
 
@@ -90,8 +90,8 @@ export const workflowQueueActor = actor({
 				return Loop.continue(undefined);
 			}
 			const complete = message.complete;
-			await loopCtx.step("store-message", async (step) => {
-				await storeWorkflowQueueMessage(step, message.body, complete);
+			await loopCtx.step("store-message", async (c) => {
+				await storeWorkflowQueueMessage(c, message.body, complete);
 			});
 			return Loop.continue(undefined);
 		});
@@ -136,8 +136,8 @@ export const workflowNestedLoopActor = actor({
 
 				await subLoopCtx.step(
 					`process-item-${itemIndex}`,
-					async (step) => {
-						step.state.processed.push(item);
+					async (c) => {
+						c.state.processed.push(item);
 					},
 				);
 				itemIndex += 1;
@@ -184,8 +184,8 @@ export const workflowNestedJoinActor = actor({
 							run: async (branchCtx) =>
 								await branchCtx.step(
 									`process-item-${index}`,
-									async (step) => {
-										step.state.processed.push(item);
+									async (c) => {
+										c.state.processed.push(item);
 										return item;
 									},
 								),
@@ -231,8 +231,8 @@ export const workflowNestedRaceActor = actor({
 					{
 						name: "fast",
 						run: async (raceCtx) =>
-							await raceCtx.step("process-fast", async (step) => {
-								step.state.processed.push(item);
+							await raceCtx.step("process-fast", async (c) => {
+								c.state.processed.push(item);
 								return item;
 							}),
 					},
@@ -278,8 +278,8 @@ export const workflowSpawnChildActor = actor({
 		work: queue<{ task: string }, { ok: true }>(),
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("mark-started", async (step) => {
-			step.state.started = true;
+		await ctx.step("mark-started", async (c) => {
+			c.state.started = true;
 		});
 
 		await ctx.loop("cmd-loop", async (loopCtx) => {
@@ -290,8 +290,8 @@ export const workflowSpawnChildActor = actor({
 					completable: true,
 				},
 			);
-			await loopCtx.step("process-cmd", async (step) => {
-				step.state.processed.push(message.body.task);
+			await loopCtx.step("process-cmd", async (c) => {
+				c.state.processed.push(message.body.task);
 			});
 			await message.complete?.({ ok: true });
 			return Loop.continue(undefined);
@@ -326,9 +326,9 @@ export const workflowSpawnParentActor = actor({
 				},
 			);
 
-			await loopCtx.step("spawn-child", async (step) => {
+			await loopCtx.step("spawn-child", async (c) => {
 				try {
-					const client = step.client<typeof registry>();
+					const client = c.client<typeof registry>();
 					const handle = client.workflowSpawnChildActor.getOrCreate(
 						[message.body.key],
 						{
@@ -343,13 +343,13 @@ export const workflowSpawnParentActor = actor({
 							timeout: 500,
 						},
 					);
-					step.state.results.push({
+					c.state.results.push({
 						key: message.body.key,
 						result,
 						error: null,
 					});
 				} catch (error) {
-					step.state.results.push({
+					c.state.results.push({
 						key: message.body.key,
 						result: null,
 						error:
@@ -394,14 +394,14 @@ export const workflowAccessActor = actor({
 		insideClientAvailable: false,
 	},
 	run: workflow(async (ctx) => {
-		let leakedStep:
+		let leakedCtx:
 			| WorkflowStepContextOf<typeof workflowAccessActor>
 			| undefined;
 		await ctx.loop("access", async (loopCtx) => {
-			await loopCtx.step("access-step", async (step) => {
+			await loopCtx.step("access-step", async (c) => {
 				// Inside a step, db and client are reachable.
-				await updateWorkflowAccessInsideState(step);
-				leakedStep = step;
+				await updateWorkflowAccessInsideState(c);
+				leakedCtx = c;
 			});
 
 			// db and client on a finished step context should throw the
@@ -410,21 +410,21 @@ export const workflowAccessActor = actor({
 			let outsideClientError: string | null = null;
 			try {
 				// biome-ignore lint/style/noUnusedExpressions: intentionally checking accessor.
-				leakedStep?.db;
+				leakedCtx?.db;
 			} catch (error) {
 				outsideDbError =
 					error instanceof Error ? error.message : String(error);
 			}
 			try {
-				leakedStep?.client<typeof registry>();
+				leakedCtx?.client<typeof registry>();
 			} catch (error) {
 				outsideClientError =
 					error instanceof Error ? error.message : String(error);
 			}
 
-			await loopCtx.step("record-access", async (step) => {
-				step.state.outsideDbError = outsideDbError;
-				step.state.outsideClientError = outsideClientError;
+			await loopCtx.step("record-access", async (c) => {
+				c.state.outsideDbError = outsideDbError;
+				c.state.outsideClientError = outsideClientError;
 			});
 
 			await loopCtx.sleep("idle", 25);
@@ -442,8 +442,8 @@ export const workflowSleepActor = actor({
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("sleep", async (loopCtx) => {
-			await loopCtx.step("tick", async (step) => {
-				incrementWorkflowSleepTick(step);
+			await loopCtx.step("tick", async (c) => {
+				incrementWorkflowSleepTick(c);
 			});
 			await loopCtx.sleep("delay", 40);
 			return Loop.continue(undefined);
@@ -475,9 +475,9 @@ export const workflowTryActor = actor({
 		const stepResult = await ctx.tryStep({
 			name: "charge-card",
 			maxRetries: 0,
-			run: async (step) => {
-				step.state.innerWrites += 1;
-				step.vars.innerWrites += 1;
+			run: async (c) => {
+				c.state.innerWrites += 1;
+				c.vars.innerWrites += 1;
 				throw new Error("card declined");
 			},
 		});
@@ -495,17 +495,17 @@ export const workflowTryActor = actor({
 			});
 		});
 
-		await ctx.step("store-try-results", async (step) => {
-			step.vars.recoveryWrites += 1;
+		await ctx.step("store-try-results", async (c) => {
+			c.vars.recoveryWrites += 1;
 			if (!stepResult.ok) {
-				step.state.tryStepFailure = {
+				c.state.tryStepFailure = {
 					kind: stepResult.failure.kind,
 					message: stepResult.failure.error.message,
 					attempts: stepResult.failure.attempts,
 				};
 			}
 			if (!joinResult.ok) {
-				step.state.tryJoinFailure = `${joinResult.failure.source}:${joinResult.failure.name}`;
+				c.state.tryJoinFailure = `${joinResult.failure.source}:${joinResult.failure.name}`;
 			}
 		});
 	}),
@@ -531,18 +531,18 @@ export const workflowStepRollbackActor = actor({
 		const stepResult = await ctx.try(
 			"recover-failed-step",
 			async (tryCtx) => {
-				await tryCtx.step("failing-step", async (step) => {
-					step.state.failedStateWrites += 1;
-					step.vars.failedVarsWrites += 1;
+				await tryCtx.step("failing-step", async (c) => {
+					c.state.failedStateWrites += 1;
+					c.vars.failedVarsWrites += 1;
 					throw new Error("step rollback");
 				});
 			},
 		);
 
-		await ctx.step("record-recovery", async (step) => {
-			step.state.recoveryStateWrites += 1;
-			step.vars.recoveryVarsWrites += 1;
-			step.state.failureCaught = !stepResult.ok;
+		await ctx.step("record-recovery", async (c) => {
+			c.state.recoveryStateWrites += 1;
+			c.vars.recoveryVarsWrites += 1;
+			c.state.failureCaught = !stepResult.ok;
 		});
 	}),
 	actions: {
@@ -600,8 +600,8 @@ export const workflowCompleteActor = actor({
 		c.state.sleepCount += 1;
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("complete", async (step) => {
-			step.state.runCount += 1;
+		await ctx.step("complete", async (c) => {
+			c.state.runCount += 1;
 		});
 	}),
 	actions: {
@@ -619,8 +619,8 @@ export const workflowDestroyActor = actor({
 		await observer.notifyDestroyed(c.key.join("/"));
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("destroy", async (step) => {
-			step.destroy();
+		await ctx.step("destroy", async (c) => {
+			c.destroy();
 		});
 	}),
 });
@@ -639,15 +639,15 @@ export const workflowFailedStepActor = actor({
 		c.state.sleepCount += 1;
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("prepare", async (step) => {
-			step.state.timeline.push("prepare");
+		await ctx.step("prepare", async (c) => {
+			c.state.timeline.push("prepare");
 		});
 		await ctx.step({
 			name: "fail",
 			maxRetries: 2,
-			run: async (step) => {
-				step.state.runCount += 1;
-				step.state.timeline.push("fail");
+			run: async (c) => {
+				c.state.runCount += 1;
+				c.state.timeline.push("fail");
 				throw new Error("workflow step failed");
 			},
 		});
@@ -672,9 +672,9 @@ export const workflowErrorHookActor = actor({
 				maxRetries: 2,
 				retryBackoffBase: 1,
 				retryBackoffMax: 1,
-				run: async (step) => {
-					step.state.attempts += 1;
-					if (step.state.attempts === 1) {
+				run: async (c) => {
+					c.state.attempts += 1;
+					if (c.state.attempts === 1) {
 						throw new Error("workflow hook failed");
 					}
 				},
@@ -712,9 +712,9 @@ export const workflowErrorHookSleepActor = actor({
 				maxRetries: 2,
 				retryBackoffBase: 1,
 				retryBackoffMax: 1,
-				run: async (step) => {
-					step.state.attempts += 1;
-					if (step.state.attempts === 1) {
+				run: async (c) => {
+					c.state.attempts += 1;
+					if (c.state.attempts === 1) {
 						throw new Error("workflow hook failed");
 					}
 				},
@@ -758,9 +758,9 @@ export const workflowErrorHookEffectsActor = actor({
 				maxRetries: 2,
 				retryBackoffBase: 1,
 				retryBackoffMax: 1,
-				run: async (step) => {
-					step.state.attempts += 1;
-					if (step.state.attempts === 1) {
+				run: async (c) => {
+					c.state.attempts += 1;
+					if (c.state.attempts === 1) {
 						throw new Error("workflow hook failed");
 					}
 				},
@@ -800,11 +800,11 @@ export const workflowReplayActor = actor({
 		timeline: [] as string[],
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("one", async (step) => {
-			step.state.timeline.push("one");
+		await ctx.step("one", async (c) => {
+			c.state.timeline.push("one");
 		});
-		await ctx.step("two", async (step) => {
-			step.state.timeline.push("two");
+		await ctx.step("two", async (c) => {
+			c.state.timeline.push("two");
 		});
 	}),
 	actions: {
@@ -820,22 +820,22 @@ export const workflowRunningStepActor = actor({
 		finishedAt: null as number | null,
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("prepare", async () => {});
-		await ctx.step("block", async (step) => {
+		await ctx.step("prepare", async (ctx) => {});
+		await ctx.step("block", async (c) => {
 			const deferred = createWorkflowRunningStepDeferred();
-			workflowRunningStepDeferreds.set(step.actorId, deferred);
-			if (workflowRunningStepReleased.delete(step.actorId)) {
+			workflowRunningStepDeferreds.set(c.actorId, deferred);
+			if (workflowRunningStepReleased.delete(c.actorId)) {
 				deferred.resolve();
 			}
 			try {
 				await deferred.promise;
 			} finally {
-				workflowRunningStepDeferreds.delete(step.actorId);
-				workflowRunningStepReleased.delete(step.actorId);
+				workflowRunningStepDeferreds.delete(c.actorId);
+				workflowRunningStepReleased.delete(c.actorId);
 			}
 		});
-		await ctx.step("finish", async (step) => {
-			step.state.finishedAt = Date.now();
+		await ctx.step("finish", async (c) => {
+			c.state.finishedAt = Date.now();
 		});
 	}),
 	actions: {
@@ -855,41 +855,41 @@ export const workflowRunningStepActor = actor({
 });
 
 function incrementWorkflowCounter(
-	step: WorkflowStepContextOf<typeof workflowCounterActor>,
+	ctx: WorkflowStepContextOf<typeof workflowCounterActor>,
 ): void {
-	step.state.runCount += 1;
-	step.state.history.push(step.state.runCount);
+	ctx.state.runCount += 1;
+	ctx.state.history.push(ctx.state.runCount);
 }
 
 async function storeWorkflowQueueMessage(
-	step: WorkflowStepContextOf<typeof workflowQueueActor>,
+	ctx: WorkflowStepContextOf<typeof workflowQueueActor>,
 	body: unknown,
 	complete: (response: { echo: unknown }) => Promise<void>,
 ): Promise<void> {
-	step.state.received.push(body);
+	ctx.state.received.push(body);
 	await complete({ echo: body });
 }
 
 async function updateWorkflowAccessInsideState(
-	step: WorkflowStepContextOf<typeof workflowAccessActor>,
+	ctx: WorkflowStepContextOf<typeof workflowAccessActor>,
 ): Promise<void> {
-	await step.db.execute(
+	await ctx.db.execute(
 		`INSERT INTO workflow_access_log (created_at) VALUES (${Date.now()})`,
 	);
-	const counts = await step.db.execute<{ count: number }>(
+	const counts = await ctx.db.execute<{ count: number }>(
 		`SELECT COUNT(*) as count FROM workflow_access_log`,
 	);
-	const client = step.client<typeof registry>();
+	const client = ctx.client<typeof registry>();
 
-	step.state.insideDbCount = counts[0]?.count ?? 0;
-	step.state.insideClientAvailable =
+	ctx.state.insideDbCount = counts[0]?.count ?? 0;
+	ctx.state.insideClientAvailable =
 		typeof client.workflowQueueActor.getForId === "function";
 }
 
 function incrementWorkflowSleepTick(
-	step: WorkflowStepContextOf<typeof workflowSleepActor>,
+	ctx: WorkflowStepContextOf<typeof workflowSleepActor>,
 ): void {
-	step.state.ticks += 1;
+	ctx.state.ticks += 1;
 }
 
 export { WORKFLOW_NESTED_QUEUE_NAME, WORKFLOW_QUEUE_NAME };

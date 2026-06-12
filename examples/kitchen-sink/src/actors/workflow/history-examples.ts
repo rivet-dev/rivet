@@ -140,7 +140,7 @@ export const workflowHistoryJoin = actor({
 		const results = await ctx.join("parallel-tasks", {
 			"fetch-api": {
 				run: async (branchCtx) => {
-					await branchCtx.step("task-a", async () => {
+					await branchCtx.step("task-a", async (branchCtx) => {
 						await delay(120);
 						return { fetched: true };
 					});
@@ -149,7 +149,7 @@ export const workflowHistoryJoin = actor({
 			},
 			"query-db": {
 				run: async (branchCtx) => {
-					await branchCtx.step("task-b", async () => {
+					await branchCtx.step("task-b", async (branchCtx) => {
 						await delay(200);
 						return { queried: true };
 					});
@@ -158,7 +158,7 @@ export const workflowHistoryJoin = actor({
 			},
 			"check-cache": {
 				run: async (branchCtx) => {
-					await branchCtx.step("task-c", async () => {
+					await branchCtx.step("task-c", async (branchCtx) => {
 						await delay(60);
 						return { checked: true };
 					});
@@ -356,21 +356,21 @@ export const workflowHistoryFull = actor({
 
 				await loopCtx.step(
 					`fetch-item-${loopState.index}`,
-					async () => {
+					async (loopCtx) => {
 						return { itemId: item.id, basePrice: item.basePrice };
 					},
 				);
 
 				await loopCtx.step(
 					`compute-tax-${loopState.index}`,
-					async () => {
+					async (loopCtx) => {
 						return item.tax;
 					},
 				);
 
 				await loopCtx.step(
 					`reserve-inventory-${loopState.index}`,
-					async () => ({
+					async (loopCtx) => ({
 						reservationId: `res-${loopState.index}`,
 						itemId: item.id,
 					}),
@@ -391,7 +391,7 @@ export const workflowHistoryFull = actor({
 		await ctx.sleep("cooldown-sleep", 60);
 		await ctx.sleep("wait-until-deadline", 45);
 
-		await ctx.step("compute-deadlines", async () => {
+		await ctx.step("compute-deadlines", async (ctx) => {
 			const readyBy = Date.now() + 800;
 			const readyBatchBy = Date.now() + 1100;
 			return { readyBy, readyBatchBy };
@@ -432,7 +432,7 @@ export const workflowHistoryFull = actor({
 				run: async (branchCtx) => {
 					const reserved = await branchCtx.step(
 						"inventory-audit",
-						async () => 4,
+						async (branchCtx) => 4,
 					);
 					await branchCtx.sleep("join-inventory-sleep", 35);
 					return {
@@ -446,7 +446,7 @@ export const workflowHistoryFull = actor({
 				run: async (branchCtx) => {
 					const method = await branchCtx.step(
 						"pricing-method",
-						async () => "promo",
+						async (branchCtx) => "promo",
 					);
 					return {
 						subtotal: 504,
@@ -460,7 +460,7 @@ export const workflowHistoryFull = actor({
 				run: async (branchCtx) => {
 					const zone = await branchCtx.step(
 						"shipping-zone",
-						async () => "us-east",
+						async (branchCtx) => "us-east",
 					);
 					await branchCtx.sleep("join-shipping-sleep", 35);
 					return { method: "ground", etaDays: 4, zone };
@@ -617,7 +617,7 @@ export const workflowHistoryFailed = actor({
 			return { initialized: true };
 		});
 
-		await ctx.step("validate", async () => {
+		await ctx.step("validate", async (ctx) => {
 			return { valid: true };
 		});
 

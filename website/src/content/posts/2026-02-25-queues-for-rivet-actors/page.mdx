@@ -466,13 +466,13 @@ const worker = actor({
   // Workflow replays safely on crash or restart
   run: workflow(async (ctx) => {
     for await (const message of ctx.queue.iter()) {
-      await ctx.step("charge", async () =>
+      await ctx.step("charge", async (ctx) =>
         charge(message.body.orderId),
       );
-      await ctx.step("fulfill", async () =>
+      await ctx.step("fulfill", async (ctx) =>
         fulfill(message.body.orderId),
       );
-      await ctx.step("notify", async () =>
+      await ctx.step("notify", async (ctx) =>
         notify(message.body.orderId),
       );
     }

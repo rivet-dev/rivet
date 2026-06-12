@@ -511,11 +511,11 @@ const automator = actor({
       const { repo, issue } = message.body;
       const agentHandle = c.actors.vm.getOrCreate([`fix-${issue}`]);
 
-      await c.step("clone-repo", async () => {
+      await c.step("clone-repo", async (c) => {
         return agentHandle.exec(`git clone ${repo} /home/user/repo`);
       });
 
-      await c.step("fix-bug", async () => {
+      await c.step("fix-bug", async (c) => {
         const session = await agentHandle.createSession("pi", {
           env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
         });
@@ -527,7 +527,7 @@ const automator = actor({
         return response;
       });
 
-      await c.step("run-tests", async () => {
+      await c.step("run-tests", async (c) => {
         return agentHandle.exec("cd /home/user/repo && npm test");
       });
 
