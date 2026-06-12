@@ -336,7 +336,7 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 ### Comments
 
 - Write comments as normal, complete sentences. Avoid fragmented structures with parentheticals and dashes like `// Spawn engine (if configured) - regardless of start kind`. Instead, write `// Spawn the engine if configured`. Especially avoid dashes (hyphens are OK).
-- Do not use em dashes (—). Use periods to separate sentences instead.
+- Never use em dashes (—) in any plain-English writing (docs, comments, PR descriptions, prose). Use periods to separate sentences instead.
 - Documenting deltas is not important or useful. A developer who has never worked on the project will not gain extra information if you add a comment stating that something was removed or changed because they don't know what was there before. The only time you would be adding a comment for something NOT being there is if its unintuitive for why its not there in the first place.
 
 ### Match statements
