@@ -177,7 +177,7 @@ export default function AgentOSUseCasesPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5, delay: 0.05 }}
-							className='mb-6 text-4xl font-medium leading-[1.1] tracking-tight text-zinc-900 md:text-6xl'
+							className='mb-6 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-zinc-900 md:text-6xl'
 						>
 							Who is agentOS for?
 						</motion.h1>
@@ -211,7 +211,7 @@ export default function AgentOSUseCasesPage() {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-2xl font-medium tracking-tight text-zinc-900 md:text-4xl'
+							className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'
 						>
 							Ready to build?
 						</motion.h2>

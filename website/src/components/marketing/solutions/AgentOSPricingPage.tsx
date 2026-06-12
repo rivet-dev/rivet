@@ -105,7 +105,7 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 				}`}>
 					<Icon className={`h-6 w-6 ${tier.highlight ? 'text-white' : 'text-zinc-700'}`} />
 				</div>
-				<h3 className="text-xl font-semibold">{tier.name}</h3>
+				<h3 className="text-xl font-medium">{tier.name}</h3>
 				<p className={`mt-1 text-sm ${tier.highlight ? 'text-zinc-400' : 'text-zinc-500'}`}>
 					{tier.description}
 				</p>
@@ -113,7 +113,7 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 
 			<div className="mb-6">
 				<div className="flex items-baseline gap-2">
-					<span className="text-3xl font-bold">{tier.price}</span>
+					<span className="text-3xl font-medium">{tier.price}</span>
 				</div>
 				<p className={`text-sm ${tier.highlight ? 'text-zinc-400' : 'text-zinc-500'}`}>
 					{tier.priceSuffix}
@@ -177,7 +177,7 @@ const CTASection = () => (
 		className="border-t border-zinc-200 px-6 py-24"
 	>
 		<div className="mx-auto max-w-3xl text-center">
-			<h2 className="mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-4xl">
+			<h2 className="mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl">
 				Ready to get started?
 			</h2>
 			<p className="mb-8 text-base leading-relaxed text-zinc-500 md:text-lg">
@@ -215,7 +215,7 @@ export default function AgentOSPricingPage() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
 						>
-							<h1 className="mb-4 text-4xl font-medium tracking-tight text-zinc-900 md:text-5xl lg:text-6xl">
+							<h1 className="mb-4 text-4xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl lg:text-6xl">
 								Free and open source.
 							</h1>
 							<p className="mx-auto max-w-2xl text-base leading-relaxed text-zinc-500 md:text-lg">

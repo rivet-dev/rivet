@@ -66,3 +66,9 @@ Import from `@rivet-gg/icons`. The full Font Awesome Pro library is available. C
 
 - Marketing headings and card titles use `font-medium` (h1 heroes, section h2s, h3/h4 card titles, FAQ headings, price figures). Do not introduce `font-normal` headings.
 - `font-normal` remains correct only for deliberate de-emphasis: table `th` de-bolding (UsagePricingModal), quiet `dt` labels (MobilePricingTabs), and input-like UI (TypesenseSearch).
+- Hero h1s and section h2s use the class constants in `src/components/marketing/typography.tsx` (`tracking-[-0.015em]`, h1 `leading-[1.06]`). Do not hand-write `tracking-tight` on headings at `text-2xl` or larger; `tracking-tight` stays acceptable on `text-base` and smaller card titles.
+
+## Theme
+
+- Marketing pages are dark (black background) by default. Sanctioned light surfaces: agentOS product pages (`/agent-os/*`) as a deliberate product sub-brand, and the Learn section's classical editorial treatment. No other page may introduce a light theme.
+- No drop shadows on marketing cards or imagery; depth comes from `border-white/10..25` and `bg-white/[0.03]` opacity layering. Shadows stay acceptable on functional overlays (dropdowns, tooltips, modals).

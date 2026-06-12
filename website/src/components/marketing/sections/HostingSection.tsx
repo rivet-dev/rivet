@@ -13,7 +13,7 @@ export const HostingSection = () => (
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'
+          className='mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'
         >
           Start local. Scale to millions.
         </motion.h2>

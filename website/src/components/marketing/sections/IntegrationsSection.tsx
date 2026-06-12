@@ -16,7 +16,7 @@ const frameworks = [
 ];
 
 export const IntegrationsSection = () => (
-  <section className='relative overflow-hidden border-t border-white/5 py-16 md:py-48'>
+  <section className='relative overflow-hidden border-t border-white/10 py-16 md:py-48'>
     <div className='relative z-10 mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.div
@@ -26,7 +26,7 @@ export const IntegrationsSection = () => (
           transition={{ duration: 0.5 }}
           className='max-w-xl'
         >
-          <h2 className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'>Runs where you do.</h2>
+          <h2 className='mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'>Runs where you do.</h2>
           <p className='text-base leading-relaxed text-zinc-500'>
             Serverless, containers, or your own servers — Rivet Actors work with your existing infrastructure, frameworks, and tools.
           </p>
