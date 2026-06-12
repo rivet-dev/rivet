@@ -23,17 +23,17 @@ const Era = ({ year, title, lead, body, children, future, delay = 0 }: EraProps)
 	>
 		<div className='flex items-start gap-4 md:flex-col md:items-center'>
 			<span
-				className={`font-mono text-sm font-medium ${future ? 'text-zinc-900' : 'text-zinc-500'}`}
+				className={`font-mono text-sm font-medium ${future ? 'text-white' : 'text-zinc-500'}`}
 			>
 				{year}
 			</span>
 			<div
-				className={`hidden h-full w-px md:block ${future ? 'bg-zinc-900' : 'bg-zinc-200'}`}
+				className={`hidden h-full w-px md:block ${future ? 'bg-white/40' : 'bg-white/10'}`}
 			/>
 		</div>
 		<div className='pb-16'>
 			<h2
-				className={`mb-4 tracking-tight text-zinc-900 ${future ? 'text-3xl font-medium md:text-4xl' : 'text-2xl font-medium md:text-3xl'}`}
+				className={`mb-4 tracking-[-0.015em] text-white ${future ? 'text-3xl font-medium md:text-4xl' : 'text-2xl font-medium md:text-3xl'}`}
 			>
 				{title}
 			</h2>
@@ -51,7 +51,7 @@ const Era = ({ year, title, lead, body, children, future, delay = 0 }: EraProps)
 );
 
 const PrincipleChip = ({ label, text }: { label: string; text: string }) => (
-	<div className='border-t border-zinc-200 pt-4'>
+	<div className='border-t border-white/10 pt-4'>
 		<span className='mb-2 block font-mono text-[11px] font-medium uppercase tracking-wider text-zinc-500'>
 			{label}
 		</span>
@@ -61,7 +61,7 @@ const PrincipleChip = ({ label, text }: { label: string; text: string }) => (
 
 export default function TimelinePage() {
 	return (
-		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='min-h-screen overflow-x-hidden bg-black font-sans text-zinc-400 selection:bg-[#ff4f00] selection:text-black'>
 			<main>
 				{/* Hero */}
 				<section className='relative flex min-h-[60svh] flex-col items-center justify-center px-6 pt-32'>
@@ -70,7 +70,7 @@ export default function TimelinePage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-4xl font-medium leading-[1.1] tracking-tight text-zinc-900 md:text-6xl'
+							className='mb-4 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl'
 						>
 							From Unix to Agents
 						</motion.h1>
@@ -86,7 +86,7 @@ export default function TimelinePage() {
 				</section>
 
 				{/* Timeline */}
-				<section className='border-t border-zinc-200 py-16 md:py-24'>
+				<section className='border-t border-white/10 py-16 md:py-24'>
 					<div className='mx-auto max-w-7xl px-6'>
 						<Era
 							year='1969'
@@ -94,18 +94,18 @@ export default function TimelinePage() {
 							lead='Before Unix, every computer spoke a different language. Programs written for one machine couldn&apos;t run on another. Computing was fragmented, expensive, and inaccessible.'
 							body='Unix changed everything. It introduced a radical idea: a portable operating system with a universal interface. Files, processes, pipes, permissions. Simple primitives that composed into infinite complexity.'
 						>
-							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
+							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-white/10'>
 								<img
 									src='https://assets.rivet.dev/website/public/images/agent-os/ken-thompson-dennis-ritchie-1973.jpg'
 									alt='Ken Thompson and Dennis Ritchie, creators of Unix, 1973'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
 								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
+								<p className='bg-white/[0.03] px-4 py-2 text-xs text-zinc-500'>
 									Ken Thompson and Dennis Ritchie, 1973.{' '}
 									<a
 										href='https://commons.wikimedia.org/w/index.php?curid=31308'
-										className='underline hover:text-zinc-600'
+										className='underline hover:text-zinc-300'
 										target='_blank'
 										rel='noopener noreferrer'
 									>
@@ -136,18 +136,18 @@ export default function TimelinePage() {
 							body='This openness sparked an explosion of innovation. The kernel became the backbone of servers, phones, cars, and spacecraft. Open source became the default way to build software.'
 							delay={0.1}
 						>
-							<div className='mt-4 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
+							<div className='mt-4 max-w-2xl overflow-hidden rounded-lg border border-white/10'>
 								<img
 									src='https://assets.rivet.dev/website/public/images/agent-os/first-web-server.jpg'
 									alt='The first web server at CERN'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
 								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
+								<p className='bg-white/[0.03] px-4 py-2 text-xs text-zinc-500'>
 									The first web server at CERN. Photo by Coolcaesar,{' '}
 									<a
 										href='https://commons.wikimedia.org/w/index.php?curid=395096'
-										className='underline hover:text-zinc-600'
+										className='underline hover:text-zinc-300'
 										target='_blank'
 										rel='noopener noreferrer'
 									>
@@ -164,18 +164,18 @@ export default function TimelinePage() {
 							body='But the fundamental model stayed the same: humans writing code, humans operating systems, humans in the loop at every step. The cloud made computing elastic, but it was still computing for humans.'
 							delay={0.2}
 						>
-							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
+							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-white/10'>
 								<img
 									src='https://assets.rivet.dev/website/public/images/agent-os/nersc-server-racks.jpg'
 									alt='Server racks at NERSC'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
 								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
+								<p className='bg-white/[0.03] px-4 py-2 text-xs text-zinc-500'>
 									Server racks at NERSC. Photo by Derrick Coetzee,{' '}
 									<a
 										href='https://commons.wikimedia.org/w/index.php?curid=17445617'
-										className='underline hover:text-zinc-600'
+										className='underline hover:text-zinc-300'
 										target='_blank'
 										rel='noopener noreferrer'
 									>
@@ -202,18 +202,18 @@ export default function TimelinePage() {
 							body='But agents have different needs than humans. They need persistent memory that survives crashes. They need secure execution environments they can&apos;t escape. They need real-time communication with other agents and systems.'
 							future
 						>
-							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
+							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-white/10'>
 								<img
 									src='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 									alt='Data flock (digits) by Philipp Schmitt'
 									className='w-full object-cover opacity-90'
 									loading='lazy'
 								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
+								<p className='bg-white/[0.03] px-4 py-2 text-xs text-zinc-500'>
 									"Data flock (digits)" by Philipp Schmitt,{' '}
 									<a
 										href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg'
-										className='underline hover:text-zinc-600'
+										className='underline hover:text-zinc-300'
 										target='_blank'
 										rel='noopener noreferrer'
 									>
@@ -226,15 +226,15 @@ export default function TimelinePage() {
 								whileInView={{ opacity: 1 }}
 								viewport={{ once: true }}
 								transition={{ duration: 0.5, delay: 0.2 }}
-								className='mb-8 text-lg font-medium text-zinc-900'
+								className='mb-8 text-lg font-medium text-white'
 							>
 								They need an operating system built for them.
 							</motion.p>
 
-							<div className='border-t border-zinc-200 pt-6'>
+							<div className='border-t border-white/10 pt-6'>
 								<div className='mb-4 flex gap-3'>
-									<div className='h-6 flex-1 rounded bg-zinc-200' />
-									<div className='h-6 flex-[3] rounded bg-zinc-900' />
+									<div className='h-6 flex-1 rounded bg-white/10' />
+									<div className='h-6 flex-[3] rounded bg-white' />
 								</div>
 								<div className='flex justify-between text-xs text-zinc-500'>
 									<span>Human operators</span>
@@ -250,14 +250,14 @@ export default function TimelinePage() {
 				</section>
 
 				{/* CTA */}
-				<section className='border-t border-zinc-200 px-6 py-16 md:py-28 text-center'>
+				<section className='border-t border-white/10 px-6 py-16 md:py-28 text-center'>
 					<div className='mx-auto max-w-3xl'>
 						<motion.h2
 							initial={{ opacity: 0, y: 20 }}
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-2xl font-medium tracking-tight text-zinc-900 md:text-4xl'
+							className='mb-4 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'
 						>
 							The shift is happening now.
 						</motion.h2>
@@ -277,7 +277,7 @@ export default function TimelinePage() {
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: 0.2 }}
 							href='/agent-os'
-							className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+							className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200'
 						>
 							Explore agentOS
 						</motion.a>

@@ -5,7 +5,7 @@ export default function TalkToAnEngineerPageClient() {
 		<main className="min-h-screen w-full bg-black selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<div className="relative overflow-hidden pt-32 md:pt-48 pb-12">
 				<div className="mx-auto max-w-md px-6">
-					<h1 className="mb-4 text-4xl font-medium leading-[1.1] tracking-tight text-white text-center whitespace-nowrap">
+					<h1 className="mb-4 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white text-center">
 						Talk to an Engineer
 					</h1>
 					<p className="mb-10 text-base leading-relaxed text-zinc-500 text-center">

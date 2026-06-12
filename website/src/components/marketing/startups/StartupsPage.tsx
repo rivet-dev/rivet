@@ -118,62 +118,6 @@ const StartupImageCycler = ({ images }: { images: { src: string; alt: string; mo
 	);
 };
 
-// Demo day dates - update these when new dates are announced
-const YC_DEMO_DAY = new Date('2026-03-24T00:00:00-07:00');
-const A16Z_DEMO_DAY = new Date('2026-04-14T00:00:00-07:00');
-
-function getTimeRemaining(targetDate: Date) {
-	const now = new Date();
-	const diff = targetDate.getTime() - now.getTime();
-
-	if (diff <= 0) return null;
-
-	const totalHours = Math.floor(diff / (1000 * 60 * 60));
-	const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-	const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-	return { totalHours, minutes, seconds };
-}
-
-function DemoCountdown() {
-	const [ycCountdown, setYcCountdown] = useState(getTimeRemaining(YC_DEMO_DAY));
-	const [a16zCountdown, setA16zCountdown] = useState(getTimeRemaining(A16Z_DEMO_DAY));
-
-	useEffect(() => {
-		const interval = setInterval(() => {
-			setYcCountdown(getTimeRemaining(YC_DEMO_DAY));
-			setA16zCountdown(getTimeRemaining(A16Z_DEMO_DAY));
-		}, 1000);
-
-		return () => clearInterval(interval);
-	}, []);
-
-	const formatCountdown = (countdown: { totalHours: number; minutes: number; seconds: number } | null) => {
-		if (!countdown) return 'Passed';
-		const h = String(countdown.totalHours).padStart(2, '0');
-		const m = String(countdown.minutes).padStart(2, '0');
-		const s = String(countdown.seconds).padStart(2, '0');
-		return `${h}:${m}:${s}`;
-	};
-
-	return (
-		<div className="flex flex-wrap gap-6 font-mono text-xs">
-			{ycCountdown && (
-				<div className="flex items-center gap-2">
-					<span className="text-zinc-500">YC Demo Day</span>
-					<span className="text-zinc-300">{formatCountdown(ycCountdown)}</span>
-				</div>
-			)}
-			{a16zCountdown && (
-				<div className="flex items-center gap-2">
-					<span className="text-zinc-500">a16z Demo Day</span>
-					<span className="text-zinc-300">{formatCountdown(a16zCountdown)}</span>
-				</div>
-			)}
-		</div>
-	);
-}
-
 interface CollapsibleSectionProps {
 	title: string;
 	children: React.ReactNode;
@@ -190,7 +134,7 @@ function CollapsibleSection({ title, children, defaultOpen = false }: Collapsibl
 					onClick={() => setIsOpen(!isOpen)}
 					className="flex h-28 w-full items-center justify-between text-left"
 				>
-					<h2 className="text-2xl font-medium tracking-tight text-white md:text-4xl">
+					<h2 className="text-2xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 						{title}
 					</h2>
 					<ChevronDown
@@ -246,7 +190,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 					<div className="mx-auto w-full max-w-7xl">
 						<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-12 lg:gap-20">
 							<div className="max-w-xl">
-								<h1 className="mb-6 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl">
+								<h1 className="mb-6 text-4xl font-medium leading-[1.1] tracking-[-0.015em] text-white md:text-6xl">
 									Built for Demo Day and Beyond
 								</h1>
 								<p className="text-base leading-relaxed text-zinc-500">
@@ -304,9 +248,6 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 				{/* Bottom section */}
 				<div className="px-6 py-12 lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:py-0 lg:pb-24">
 					<div className="mx-auto w-full max-w-7xl">
-						<div className="mb-6">
-							<DemoCountdown />
-						</div>
 						<div className="mb-8 h-px w-full bg-white/10" />
 						<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
 							<div>
@@ -378,7 +319,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 			{/* CTA */}
 			<div className="border-t border-white/10 py-24 px-6">
 				<div className="mx-auto w-full max-w-7xl text-center">
-					<h2 className="mb-6 text-2xl font-medium tracking-tight text-white md:text-4xl">
+					<h2 className="mb-6 text-2xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 						Ready to build?
 					</h2>
 					<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">

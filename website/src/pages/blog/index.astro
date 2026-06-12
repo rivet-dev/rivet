@@ -1,6 +1,7 @@
 ---
 import { getCollection } from 'astro:content';
 import BlogLayout from '@/layouts/BlogLayout.astro';
+import { CATEGORIES } from '@/lib/article';
 import { formatTimestamp } from '@/lib/formatDate';
 import { getPostImage } from '@/lib/postImage';
 import { Icon, faRss } from '@rivet-gg/icons';
@@ -55,7 +56,7 @@ for (const entry of changelogPosts) {
 <BlogLayout title="Blog - Rivet">
 	<div class="mx-auto mt-20 w-full max-w-7xl px-6 pb-32 md:mt-32 md:pb-48" style="--header-height: 5rem;">
 		<div class="mt-8 flex w-full items-center justify-between">
-			<h1 class="text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl">Blog</h1>
+			<h1 class="text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl">Blog</h1>
 			<a
 				href="/rss/feed.xml"
 				class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
@@ -106,10 +107,10 @@ for (const entry of changelogPosts) {
 			</aside>
 
 			<!-- Blog posts -->
-			<div class="order-first grid grid-cols-1 gap-6 lg:order-none">
+			<div class="order-first grid grid-cols-1 gap-6 md:grid-cols-2 lg:order-none">
 				{blogPosts.map((article) => (
 					<a href={`/blog/${article.slug}/`} class="size-full">
-						<article class="flex size-full flex-col items-start justify-between rounded-md border border-white/10 p-4 transition-colors hover:border-white/20">
+						<article class="flex size-full flex-col items-start justify-between rounded-xl border border-white/10 p-4 transition-colors hover:border-white/25">
 							<div class="w-full">
 								{article.image && (
 									<div class="relative w-full">
@@ -125,6 +126,11 @@ for (const entry of changelogPosts) {
 									</div>
 								)}
 								<div class="mt-4 flex items-center gap-x-3 text-xs">
+									{CATEGORIES[article.data.category] && (
+										<span class="text-accent font-medium uppercase tracking-[0.1em]">
+											{CATEGORIES[article.data.category].name}
+										</span>
+									)}
 									<time datetime={article.data.published.toISOString()} class="text-zinc-500">
 										{formatTimestamp(article.data.published)}
 									</time>

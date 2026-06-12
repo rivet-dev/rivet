@@ -108,7 +108,7 @@ export const NotFoundPage = ({ thinkingImage }: NotFoundPageProps) => {
           transition={{ duration: 0.6 }}
           className="relative w-[280px] h-[350px] sm:w-[320px] sm:h-[400px]"
         >
-          <div className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 rounded-lg overflow-hidden border border-white/10">
             <img
               src={thinkingImage}
               alt="Classical artwork depicting contemplation"
