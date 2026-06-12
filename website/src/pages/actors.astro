@@ -12,6 +12,32 @@ import { ScrollObserver } from '@/components/ScrollObserver';
 import { FaqSection } from '@/components/faq/FaqSection';
 import FaqJsonLd from '@/components/faq/FaqJsonLd.astro';
 import { actorsFaqs } from '@/data/faqs/actors';
+import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
+import { CatalogCard } from '@/components/marketing/editorial/CatalogCard';
+import { HERO_H1_CLASS, SECTION_H2_CLASS, SUBTITLE_CLASS } from '@/components/marketing/typography';
+
+const useCases = [
+	{
+		title: 'AI agents',
+		body: "One Actor per agent. Persistent memory, tool execution, and long-running context that survives restarts — in your existing Node.js or Bun backend.",
+		href: '/docs/actors/ai-and-user-generated-actors',
+	},
+	{
+		title: 'Realtime & multiplayer',
+		body: 'WebSockets and event broadcast built in. One Actor per room, match, or channel keeps every client in sync without a separate realtime service.',
+		href: '/docs/actors/events',
+	},
+	{
+		title: 'Collaborative state',
+		body: 'One Actor per document or workspace. State lives next to compute, so concurrent edits stay consistent without cache-invalidation gymnastics.',
+		href: '/docs/actors/sharing-and-joining-state',
+	},
+	{
+		title: 'Durable workflows',
+		body: 'Queues, schedules, and timers on the same primitive. Multi-step operations pick up where they left off, even across sleeps and deploys.',
+		href: '/docs/actors/queues',
+	},
+];
 ---
 
 <MarketingLayout
@@ -22,22 +48,23 @@ import { actorsFaqs } from '@/data/faqs/actors';
 >
 	<FaqJsonLd items={actorsFaqs} />
 	<ScrollObserver client:load>
-		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
 				<!-- Hero -->
 				<section class="relative flex min-h-[88svh] flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
 					<div class="mx-auto w-full max-w-3xl">
-						<h1 class="mb-4 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl">
+						<Eyebrow label="Rivet Actors" className="mb-5" />
+						<h1 class={`mb-4 ${HERO_H1_CLASS}`}>
 							The primitive for<br />stateful workloads.
 						</h1>
-						<p class="mb-8 text-lg text-zinc-400 md:text-xl">
+						<p class="mb-8 text-lg text-ink-soft md:text-xl">
 							One Actor per agent, per session, per user. The same primitive powers realtime apps, multiplayer, and collaborative state.
 						</p>
 						<div class="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-							<a href="/docs" class="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
+							<a href="/docs" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent">
 								Start Building
 							</a>
-							<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/30 hover:text-white">
+							<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink">
 								Quickstart Guide
 							</a>
 						</div>
@@ -45,49 +72,27 @@ import { actorsFaqs } from '@/data/faqs/actors';
 				</section>
 
 				<!-- Use cases -->
-				<section class="border-t border-white/10 px-6 py-16 md:py-32">
+				<section class="border-t border-ink/10 px-6 py-16 md:py-32">
 					<div class="mx-auto w-full max-w-7xl">
 						<div class="mb-12 max-w-3xl">
-							<h2 class="text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">One primitive, every stateful workload.</h2>
-							<p class="mt-4 text-base leading-relaxed text-zinc-500">
+							<h2 class={SECTION_H2_CLASS}>One primitive, every stateful workload.</h2>
+							<p class={SUBTITLE_CLASS}>
 								The same Actor that holds an agent's memory holds a game lobby, a shared document, or a running workflow.
 							</p>
 						</div>
 						<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
 							{
-								[
-									{
-										title: 'AI agents',
-										body: "One Actor per agent. Persistent memory, tool execution, and long-running context that survives restarts — in your existing Node.js or Bun backend.",
-										href: '/docs/actors/ai-and-user-generated-actors',
-									},
-									{
-										title: 'Realtime & multiplayer',
-										body: 'WebSockets and event broadcast built in. One Actor per room, match, or channel keeps every client in sync without a separate realtime service.',
-										href: '/docs/actors/events',
-									},
-									{
-										title: 'Collaborative state',
-										body: 'One Actor per document or workspace. State lives next to compute, so concurrent edits stay consistent without cache-invalidation gymnastics.',
-										href: '/docs/actors/sharing-and-joining-state',
-									},
-									{
-										title: 'Durable workflows',
-										body: 'Queues, schedules, and timers on the same primitive. Multi-step operations pick up where they left off, even across sleeps and deploys.',
-										href: '/docs/actors/queues',
-									},
-								].map((useCase) => (
-									<a
+								useCases.map((useCase, i) => (
+									<CatalogCard
+										eyebrow="Use case"
+										index={String(i + 1).padStart(2, '0')}
+										title={useCase.title}
 										href={useCase.href}
-										class="group flex flex-col rounded-xl border border-white/10 p-7 transition-colors hover:border-white/25"
+										linkLabel="Read the docs"
+										className="flex h-full flex-col"
 									>
-										<h3 class="text-base font-medium text-white">{useCase.title}</h3>
-										<p class="mt-2 flex-1 text-sm leading-relaxed text-zinc-500">{useCase.body}</p>
-										<span class="mt-5 inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors group-hover:text-white">
-											Read the docs
-											<span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">→</span>
-										</span>
-									</a>
+										<p class="mt-2 flex-1 text-sm leading-relaxed text-ink-soft">{useCase.body}</p>
+									</CatalogCard>
 								))
 							}
 						</div>
@@ -99,7 +104,7 @@ import { actorsFaqs } from '@/data/faqs/actors';
 				<BenchmarksSection client:visible />
 				<ObservabilitySection client:visible />
 				<!-- Static render with no client directive. FaqSection is hook-free and uses native details/summary, so it needs no JS. -->
-				<FaqSection items={actorsFaqs} />
+				<FaqSection items={actorsFaqs} theme="light" />
 				<RedesignedCTA client:visible />
 			</main>
 		</div>

@@ -3,14 +3,15 @@
 import { useState, useRef, useEffect } from 'react';
 import { ArrowDown, ArrowUp, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { Eyebrow } from '../editorial/Eyebrow';
+import { InkPanel } from '../editorial/InkPanel';
+import { PixelGridChart } from '../art/PixelGridChart';
 
 interface BarEntry {
 	label: string;
 	value: string;
-	/** Numeric value used to compute bar width proportionally. */
-	rawValue: number;
 	highlight?: boolean;
-	infinite?: boolean;
 	/** Hover note explaining the benchmark context. */
 	note?: string;
 }
@@ -20,10 +21,8 @@ interface BenchmarkCard {
 	subtitle: string;
 	direction: 'lower is better' | 'higher is better';
 	bars: BarEntry[];
-	/** Hide bar charts and show only labels and values. */
-	noBars?: boolean;
-	/** Use a logarithmic scale for bar widths. */
-	logarithmic?: boolean;
+	/** Relative magnitudes (0..1) per entry, rendered as pixel-grid columns. */
+	chart: number[];
 }
 
 function Tooltip({ note }: { note: string }) {
@@ -45,7 +44,7 @@ function Tooltip({ note }: { note: string }) {
 			<button
 				ref={iconRef}
 				type='button'
-				className='ml-1 inline-flex items-center text-zinc-600 transition-colors hover:text-zinc-400'
+				className='ml-1 inline-flex items-center text-cream/35 transition-colors hover:text-cream/70'
 				onMouseEnter={() => setVisible(true)}
 				onMouseLeave={() => setVisible(false)}
 				onClick={() => setVisible((v) => !v)}
@@ -56,7 +55,7 @@ function Tooltip({ note }: { note: string }) {
 			{visible && (
 				<div
 					ref={tooltipRef}
-					className={`absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border border-white/10 bg-zinc-900 px-3 py-2 text-[11px] leading-relaxed text-zinc-300 shadow-xl ${
+					className={`absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border border-cream/15 bg-ink px-3 py-2 text-[11px] leading-relaxed text-cream/80 shadow-xl ${
 						position === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
 					}`}
 				>
@@ -67,48 +66,27 @@ function Tooltip({ note }: { note: string }) {
 	);
 }
 
-/** Compute bar widths as percentages from raw values, with a minimum of 2%. */
-function computeBarWidths(bars: BarEntry[], logarithmic?: boolean): number[] {
-	const finiteValues = bars.filter((b) => !b.infinite).map((b) => b.rawValue);
-	const maxValue = Math.max(...finiteValues);
-	if (logarithmic) {
-		const logMax = Math.log10(Math.max(maxValue, 1));
-		return bars.map((bar) => {
-			if (bar.infinite) return 100;
-			if (bar.rawValue <= 0) return 2;
-			return Math.max((Math.log10(bar.rawValue) / logMax) * 100, 2);
-		});
-	}
-	return bars.map((bar) => {
-		if (bar.infinite) return 100;
-		if (maxValue === 0) return 2;
-		return Math.max((bar.rawValue / maxValue) * 100, 2);
-	});
-}
-
 const benchmarks: BenchmarkCard[] = [
 	{
 		title: 'Cold Start',
 		subtitle: 'Time to first request',
 		direction: 'lower is better',
+		chart: [0.09, 0.62, 1],
 		bars: [
 			{
-			label: 'Rivet Actor',
-			value: '~20ms',
-			rawValue: 20,
-			highlight: true,
-			note: 'Includes durable state init, not just a process spawn. No actor key, so no cross-region locking. Measured with Node.js and FoundationDB.',
-		},
+				label: 'Rivet Actor',
+				value: '~20ms',
+				highlight: true,
+				note: 'Includes durable state init, not just a process spawn. No actor key, so no cross-region locking. Measured with Node.js and FoundationDB.',
+			},
 			{
 				label: 'Kubernetes Pod',
 				value: '~6s',
-				rawValue: 6000,
 				note: 'Node.js 24 Alpine image (56MB compressed) on AWS EKS with a pre-provisioned m5.large node. Breakdown: ~1s image pull and extraction, ~3-4s scheduling and container runtime setup, ~1s container start.',
 			},
 			{
 				label: 'Virtual Machine',
 				value: '~30s',
-				rawValue: 30000,
 				note: 'AWS EC2 t3.nano instance from launch to SSH-ready, using an Amazon Linux 2 AMI. t3.nano is the smallest available EC2 instance (512MB RAM).',
 			},
 		],
@@ -117,24 +95,22 @@ const benchmarks: BenchmarkCard[] = [
 		title: 'Memory Per Instance',
 		subtitle: 'Overhead per instance',
 		direction: 'lower is better',
+		chart: [0.09, 0.55, 1],
 		bars: [
 			{
 				label: 'Rivet Actor',
 				value: '~0.6KB',
-				rawValue: 0.6,
 				highlight: true,
 				note: 'RSS (resident set size) delta divided by actor count, measured by spawning 10,000 actors in Node.js v24 on Linux x86.',
 			},
 			{
 				label: 'Kubernetes Pod',
 				value: '~50MB',
-				rawValue: 50,
 				note: 'Minimum idle Node.js container on Linux x86: Node.js v24 runtime (~43MB RSS), containerd-shim (~3MB), pause container (~1MB), and kubelet per-pod tracking (~2MB).',
 			},
 			{
 				label: 'Virtual Machine',
 				value: '~512MB',
-				rawValue: 512,
 				note: 'AWS EC2 t3.nano, the smallest available EC2 instance with 512MB allocated memory.',
 			},
 		],
@@ -143,24 +119,22 @@ const benchmarks: BenchmarkCard[] = [
 		title: 'Read Latency',
 		subtitle: 'State read latency',
 		direction: 'lower is better',
+		chart: [0.09, 0.35, 1],
 		bars: [
 			{
 				label: 'Rivet Actor',
 				value: '0ms',
-				rawValue: 0.01,
 				highlight: true,
 				note: 'State is read from co-located SQLite/KV storage on the same machine as the actor, with no network round-trip.',
 			},
 			{
 				label: 'Redis',
 				value: '~1ms',
-				rawValue: 1,
 				note: 'AWS ElastiCache Redis (cache.t3.micro) in the same availability zone as the application.',
 			},
 			{
 				label: 'Postgres',
 				value: '~5ms',
-				rawValue: 5,
 				note: 'AWS RDS PostgreSQL (db.t3.micro) in the same availability zone as the application.',
 			},
 		],
@@ -169,24 +143,22 @@ const benchmarks: BenchmarkCard[] = [
 		title: 'Idle Cost',
 		subtitle: 'Cost when not in use',
 		direction: 'lower is better',
+		chart: [0.09, 0.3, 1],
 		bars: [
 			{
 				label: 'Rivet Actor',
 				value: '$0',
-				rawValue: 0.01,
 				highlight: true,
 				note: 'Assumes Rivet Actors running on a serverless platform. Actors scale to zero with no idle infrastructure costs. Traditional container deployments may incur idle costs.',
 			},
 			{
 				label: 'Virtual Machine',
 				value: '~$5/mo',
-				rawValue: 5,
 				note: 'AWS EC2 t3.nano ($0.0052/hr compute + $1.60/mo for 20GB gp3 storage) running 24/7. t3.nano is the smallest available EC2 instance (512MB RAM).',
 			},
 			{
 				label: 'Kubernetes Cluster',
 				value: '~$85/mo',
-				rawValue: 85,
 				note: 'AWS EKS control plane ($73/mo) plus a single t3.nano worker node with 20GB gp3 storage, running 24/7. t3.nano is the smallest available EC2 instance (512MB RAM).',
 			},
 		],
@@ -195,41 +167,37 @@ const benchmarks: BenchmarkCard[] = [
 		title: 'Horizontal Scale',
 		subtitle: 'Maximum capacity',
 		direction: 'higher is better',
-		noBars: true,
+		chart: [1, 0.45, 0.09],
 		bars: [
 			{
 				label: 'Rivet Actors',
 				value: 'Infinite',
-				rawValue: 0,
 				highlight: true,
 				note: 'Rivet Actors scale linearly by adding nodes with no single cluster size limit.',
 			},
 			{
 				label: 'Kubernetes',
 				value: '~5k nodes',
-				rawValue: 5000,
 				note: 'Kubernetes officially supports clusters of up to 5,000 nodes per the Kubernetes scalability documentation.',
 			},
-			{ label: 'Postgres', value: '1 primary', rawValue: 1 },
+			{ label: 'Postgres', value: '1 primary' },
 		],
 	},
 	{
 		title: 'Multi-Region',
 		subtitle: 'Deploy actors close to your users',
 		direction: 'lower is better',
-		noBars: true,
+		chart: [1, 0.18],
 		bars: [
 			{
 				label: 'Rivet',
 				value: 'Global edge network',
-				rawValue: 0,
 				highlight: true,
 				note: 'Rivet automatically spawns actors near your users and handles routing across regions for a seamless edge network.',
 			},
 			{
 				label: 'Traditional Deployment',
 				value: '1 region',
-				rawValue: 0,
 			},
 		],
 	},
@@ -237,7 +205,7 @@ const benchmarks: BenchmarkCard[] = [
 
 export const BenchmarksSection = () => {
 	return (
-		<section className='border-t border-white/10 px-6 py-16 lg:py-24'>
+		<section className='border-t border-ink/10 px-6 py-16 lg:py-24'>
 			<div className='mx-auto w-full max-w-7xl'>
 				<motion.div
 					initial={{ opacity: 0, y: 20 }}
@@ -246,91 +214,85 @@ export const BenchmarksSection = () => {
 					transition={{ duration: 0.5 }}
 					className='mb-10'
 				>
-					<h2 className='mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'>
+					<Eyebrow index='03' label='Measurements' className='mb-4' />
+					<h2 className={SECTION_H2_CLASS}>
 						How Actors Compare
 					</h2>
-					<p className='text-base leading-relaxed text-zinc-500'>
+					<p className={SUBTITLE_CLASS}>
 						Rivet Actors vs. traditional infrastructure.
 					</p>
 				</motion.div>
 
 				<div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
 					{benchmarks.map((card, idx) => {
-						const widths = computeBarWidths(card.bars, card.logarithmic);
+						const accentIdx = card.bars.findIndex((bar) => bar.highlight);
+						const rivetStat = card.bars[accentIdx]?.value ?? '';
 						return (
-						<motion.div
-							key={card.title}
-							initial={{ opacity: 0, y: 16 }}
-							whileInView={{ opacity: 1, y: 0 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.4, delay: idx * 0.05 }}
-							className='rounded-xl border border-white/10 bg-white/[0.03] p-6'
-						>
-							<div className='mb-4 flex items-start justify-between'>
-								<div>
-									<h3 className='text-sm font-medium text-white'>{card.title}</h3>
-									<p className='text-xs text-zinc-500'>{card.subtitle}</p>
-								</div>
-								<span className='flex items-center gap-1 text-[10px] uppercase tracking-wider text-zinc-600'>
-									{card.direction === 'lower is better' ? (
-										<ArrowDown className='h-3 w-3' />
-									) : (
-										<ArrowUp className='h-3 w-3' />
-									)}
-									{card.direction}
-								</span>
-							</div>
+							<motion.div
+								key={card.title}
+								initial={{ opacity: 0, y: 16 }}
+								whileInView={{ opacity: 1, y: 0 }}
+								viewport={{ once: true }}
+								transition={{ duration: 0.4, delay: idx * 0.05 }}
+							>
+								<InkPanel className='h-full'>
+									<div className='flex h-full flex-col p-6'>
+										<div className='mb-5 flex items-start justify-between gap-4'>
+											<span className='font-mono text-[11px] uppercase tracking-[0.16em] text-sage'>
+												{card.title}
+											</span>
+											<span className='flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-cream/40'>
+												{card.direction === 'lower is better' ? (
+													<ArrowDown className='h-3 w-3' />
+												) : (
+													<ArrowUp className='h-3 w-3' />
+												)}
+												{card.direction}
+											</span>
+										</div>
 
-							<div className='flex flex-col gap-3'>
-								{card.bars.map((bar, barIdx) => (
-									<div key={bar.label} className='flex flex-col gap-1'>
-										<div className='flex items-center justify-between text-xs'>
-											<span className={`inline-flex items-center ${bar.highlight ? 'text-white' : 'text-zinc-500'}`}>
-												{bar.label}
-												{bar.note && <Tooltip note={bar.note} />}
-											</span>
-											<span className={bar.highlight ? 'font-medium text-[#FF4500]' : 'text-zinc-500'}>
-												{bar.value}
-											</span>
-										</div>
-										{!card.noBars && (
-										<div className={`w-full ${bar.infinite ? 'relative' : ''}`}>
-											{bar.infinite ? (
-												<>
-													<div className='h-1.5 w-full overflow-hidden rounded-full bg-white/5'>
-														<div className='h-full w-full rounded-full bg-[#FF4500]' />
-													</div>
-													<div
-														className='absolute right-8 top-1/2 -translate-y-1/2 rotate-12'
-														style={{
-															width: '6px',
-															height: '14px',
-															backgroundColor: '#020202',
-															borderLeft: '1.5px solid #FF4500',
-															borderRight: '1.5px solid #FF4500',
-														}}
-													/>
-												</>
-											) : (
-												<div className='h-1.5 w-full overflow-hidden rounded-full bg-white/5'>
-													<motion.div
-														className={`h-full rounded-full ${bar.highlight ? 'bg-[#FF4500]' : 'bg-zinc-600'}`}
-														initial={{ width: 0 }}
-														whileInView={{ width: `${widths[barIdx]}%` }}
-														viewport={{ once: true }}
-														transition={{ duration: 0.6, delay: 0.2 }}
-													/>
+										<div className='flex items-end justify-between gap-6'>
+											<div className='min-w-0'>
+												<div className='text-2xl font-medium leading-tight text-cream md:text-3xl'>
+													{rivetStat}
 												</div>
-											)}
+												<div className='mt-1 text-sm text-cream/55'>{card.subtitle}</div>
+											</div>
+											<PixelGridChart
+												values={card.chart}
+												rows={7}
+												accentColumn={accentIdx}
+												className='h-20 w-auto flex-shrink-0'
+											/>
 										</div>
-										)}
+
+										<div className='mt-6 flex flex-1 flex-col justify-end gap-2 border-t border-cream/10 pt-4'>
+											{card.bars.map((bar) => (
+												<div key={bar.label} className='flex items-center justify-between gap-4 text-xs'>
+													<span
+														className={`inline-flex items-center ${
+															bar.highlight ? 'text-cream' : 'text-cream/55'
+														}`}
+													>
+														{bar.label}
+														{bar.note && <Tooltip note={bar.note} />}
+													</span>
+													<span className={bar.highlight ? 'font-medium text-sage' : 'text-cream/55'}>
+														{bar.value}
+													</span>
+												</div>
+											))}
+										</div>
 									</div>
-								))}
-							</div>
-						</motion.div>
-					);
+								</InkPanel>
+							</motion.div>
+						);
 					})}
 				</div>
+
+				<p className='mt-8 font-mono text-xs text-ink-faint'>
+					Methodology — figures are directional, measured on commodity AWS infrastructure. Hover each entry for the measurement setup.
+				</p>
 			</div>
 		</section>
 	);
