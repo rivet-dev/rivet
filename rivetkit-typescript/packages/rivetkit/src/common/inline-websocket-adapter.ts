@@ -211,14 +211,3 @@ export class InlineWebSocketAdapter {
 		}
 	}
 }
-
-/**
- * Creates an InlineWebSocketAdapter and returns the client-side WebSocket.
- * This is the main entry point for creating inline WebSocket connections.
- */
-export function createInlineWebSocket(
-	handler: UpgradeWebSocketArgs,
-): UniversalWebSocket {
-	const adapter = new InlineWebSocketAdapter(handler);
-	return adapter.clientWebSocket;
-}

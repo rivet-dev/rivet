@@ -1,38 +1,13 @@
-// TODO: Go back to dynamic import for this
-import getPort from "get-port";
 import type { Hono } from "hono";
 import type { RegistryConfig } from "@/registry/config";
 import { logger } from "@/registry/log";
 import { detectRuntime, type Runtime, stringifyError } from "../utils";
 
-const DEFAULT_PORT = 6421;
 export type ServeStatic =
 	typeof import("@hono/node-server/serve-static").serveStatic;
 const serveStaticLoaderPromises: Partial<
 	Record<Runtime, Promise<ServeStatic>>
 > = {};
-
-/**
- * Finds a free port starting from the given port.
- *
- * Tries ports incrementally until a free one is found.
- */
-export async function findFreePort(
-	startPort: number = DEFAULT_PORT,
-): Promise<number> {
-	// TODO: Fix this
-	// const getPortModule = "get-port";
-	// const { default: getPort } = await import(/* webpackIgnore: true */ getPortModule);
-
-	// Create an iterable of ports starting from startPort
-	function* portRange(start: number, count: number = 100): Iterable<number> {
-		for (let i = 0; i < count; i++) {
-			yield start + i;
-		}
-	}
-
-	return getPort({ port: portRange(startPort) });
-}
 
 export async function crossPlatformServe(
 	config: RegistryConfig,

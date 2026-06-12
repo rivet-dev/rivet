@@ -16,11 +16,6 @@ export const ActorSchema = z.object({
 });
 export type Actor = z.infer<typeof ActorSchema>;
 
-export const ActorNameSchema = z.object({
-	metadata: z.record(z.string(), z.unknown()),
-});
-export type ActorName = z.infer<typeof ActorNameSchema>;
-
 // MARK: GET /actors
 export const ActorsListResponseSchema = z.object({
 	actors: z.array(ActorSchema),
@@ -67,17 +62,3 @@ export type ActorsGetOrCreateResponse = z.infer<
 // MARK: DELETE /actors/{}
 export const ActorsDeleteResponseSchema = z.object({});
 export type ActorsDeleteResponse = z.infer<typeof ActorsDeleteResponseSchema>;
-
-// MARK: GET /actors/names
-export const ActorsListNamesResponseSchema = z.object({
-	names: z.record(z.string(), ActorNameSchema),
-});
-export type ActorsListNamesResponse = z.infer<
-	typeof ActorsListNamesResponseSchema
->;
-
-// MARK: GET /actors/{actor_id}/kv/keys/{key}
-export const ActorsKvGetResponseSchema = z.object({
-	value: z.string().nullable(),
-});
-export type ActorsKvGetResponse = z.infer<typeof ActorsKvGetResponseSchema>;

@@ -15,7 +15,6 @@ let nodeFs: typeof import("node:fs/promises") | undefined;
 let nodePath: typeof import("node:path") | undefined;
 let nodeOs: typeof import("node:os") | undefined;
 let nodeChildProcess: typeof import("node:child_process") | undefined;
-let nodeStream: typeof import("node:stream/promises") | undefined;
 let nodeUrl: typeof import("node:url") | undefined;
 
 let hasImportedDependencies = false;
@@ -59,9 +58,6 @@ export function importNodeDependencies(): void {
 		nodeOs = requireFn(/* webpackIgnore: true */ "node:os");
 		nodeChildProcess = requireFn(
 			/* webpackIgnore: true */ "node:child_process",
-		);
-		nodeStream = requireFn(
-			/* webpackIgnore: true */ "node:stream/promises",
 		);
 		nodeUrl = requireFn(/* webpackIgnore: true */ "node:url");
 		hasImportedDependencies = true;
@@ -153,20 +149,8 @@ export function getNodeChildProcess(): typeof import("node:child_process") {
 }
 
 /**
- * Gets the Node.js stream/promises module.
- * @throws Error if stream/promises module is not loaded
- */
-export function getNodeStream(): typeof import("node:stream/promises") {
-	if (!nodeStream) {
-		throw new Error(
-			"Node stream/promises module not loaded. Ensure importNodeDependencies() has been called.",
-		);
-	}
-	return nodeStream;
-}
-
-/**
- * Gets the Node.js url module lazily.
+ * Gets the Node.js url module.
+ * @throws Error if url module is not loaded
  */
 export function getNodeUrl(): typeof import("node:url") {
 	if (!nodeUrl) {

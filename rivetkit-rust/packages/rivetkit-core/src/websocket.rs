@@ -48,12 +48,6 @@ impl WebSocket {
 		}))
 	}
 
-	pub fn from_sender(sender: WebSocketSender) -> Self {
-		let websocket = Self::new();
-		websocket.configure_sender(sender);
-		websocket
-	}
-
 	pub fn send(&self, msg: WsMessage) {
 		if let Err(error) = self.try_send(msg) {
 			tracing::error!(?error, "failed to send websocket message");

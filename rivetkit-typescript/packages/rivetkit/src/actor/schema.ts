@@ -229,31 +229,6 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
 	);
 }
 
-export async function validateSchema<T extends AnySchemaConfig>(
-	schemas: T | undefined,
-	key: keyof T & string,
-	data: unknown,
-): Promise<ValidationResult<InferSchemaMap<T>[typeof key]>> {
-	const schema = getValidationSchema(schemas?.[key]);
-
-	if (!schema) {
-		return { success: true, data: data as InferSchemaMap<T>[typeof key] };
-	}
-
-	if (isStandardSchema(schema)) {
-		const result = await schema["~standard"].validate(data);
-		if (result.issues) {
-			return { success: false, issues: [...result.issues] };
-		}
-		return {
-			success: true,
-			data: result.value as InferSchemaMap<T>[typeof key],
-		};
-	}
-
-	return { success: true, data: data as InferSchemaMap<T>[typeof key] };
-}
-
 export function validateSchemaSync<T extends AnySchemaConfig>(
 	schemas: T | undefined,
 	key: keyof T & string,

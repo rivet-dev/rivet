@@ -1,11 +1,4 @@
 import { z } from "zod/v4";
-import {
-	HEADER_ACTOR_ID,
-	HEADER_ACTOR_QUERY,
-	HEADER_CONN_PARAMS,
-	HEADER_ENCODING,
-} from "@/common/actor-router-consts";
-import { EncodingSchema } from "@/common/encoding";
 
 // Maximum size of a key component in bytes
 // Set to 128 bytes to allow for separators and escape characters in the full key
@@ -63,36 +56,11 @@ export const ActorQuerySchema = z.union([
 	}),
 ]);
 
-export const ConnectRequestSchema = z.object({
-	query: ActorQuerySchema.describe(HEADER_ACTOR_QUERY),
-	encoding: EncodingSchema.describe(HEADER_ENCODING),
-	connParams: z.string().optional().describe(HEADER_CONN_PARAMS),
-});
-
-export const ConnectWebSocketRequestSchema = z.object({
-	query: ActorQuerySchema.describe("query"),
-	encoding: EncodingSchema.describe("encoding"),
-	connParams: z.unknown().optional().describe("conn_params"),
-});
-
-export const ConnMessageRequestSchema = z.object({
-	actorId: z.string().describe(HEADER_ACTOR_ID),
-	encoding: EncodingSchema.describe(HEADER_ENCODING),
-});
-
-export const ResolveRequestSchema = z.object({
-	query: ActorQuerySchema.describe(HEADER_ACTOR_QUERY),
-	connParams: z.string().optional().describe(HEADER_CONN_PARAMS),
-});
-
 export type ActorQuery = z.infer<typeof ActorQuerySchema>;
 export type ActorGatewayQuery = Extract<
 	ActorQuery,
 	{ getForKey: unknown } | { getOrCreateForKey: unknown }
 >;
-export type GetForKeyRequest = z.infer<typeof GetForKeyRequestSchema>;
-export type GetOrCreateRequest = z.infer<typeof GetOrCreateRequestSchema>;
-export type ConnectQuery = z.infer<typeof ConnectRequestSchema>;
 /**
  * Interface representing a request to create a actor.
  */

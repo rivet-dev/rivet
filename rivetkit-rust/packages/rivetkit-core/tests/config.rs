@@ -84,7 +84,6 @@ mod moved_tests {
 			config.can_hibernate_websocket,
 			super::CanHibernateWebSocket::Bool(false),
 		));
-		assert!(config.overrides.is_none());
 	}
 
 	#[test]

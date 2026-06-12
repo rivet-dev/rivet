@@ -43,11 +43,6 @@ impl Default for CanHibernateWebSocket {
 	}
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct ActorConfigOverrides {
-	pub sleep_grace_period: Option<Duration>,
-}
-
 #[derive(Clone, Debug)]
 pub struct ActionDefinition {
 	pub name: String,
@@ -84,7 +79,6 @@ pub struct ActorConfig {
 	pub max_outgoing_message_size: u32,
 	pub preload_max_workflow_bytes: Option<u64>,
 	pub preload_max_connections_bytes: Option<u64>,
-	pub overrides: Option<ActorConfigOverrides>,
 	pub actions: Vec<ActionDefinition>,
 	/// Author-declared inspector tab entries (custom tabs + built-in
 	/// hides). Validated upstream (Zod / builder).
@@ -201,12 +195,7 @@ impl ActorConfig {
 	}
 
 	pub fn effective_sleep_grace_period(&self) -> Duration {
-		cap_duration(
-			self.sleep_grace_period,
-			self.overrides
-				.as_ref()
-				.and_then(|overrides| overrides.sleep_grace_period),
-		)
+		self.sleep_grace_period
 	}
 
 	/// Runtime authority for rejecting malformed config that bypassed the
@@ -247,18 +236,9 @@ impl Default for ActorConfig {
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
 			preload_max_workflow_bytes: None,
 			preload_max_connections_bytes: None,
-			overrides: None,
 			actions: Vec::new(),
 			inspector_tabs: Vec::new(),
 		}
-	}
-}
-
-fn cap_duration(duration: Duration, override_duration: Option<Duration>) -> Duration {
-	if let Some(override_duration) = override_duration {
-		duration.min(override_duration)
-	} else {
-		duration
 	}
 }
 

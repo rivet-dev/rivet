@@ -21,7 +21,6 @@ export const ACTOR_CONTEXT_INTERNAL_SYMBOL = Symbol(
 	"rivetkit.actor_context_internal",
 );
 export const RAW_STATE_SYMBOL = Symbol("rivetkit.raw_state");
-export const CONN_DRIVER_SYMBOL = Symbol("rivetkit.conn_driver");
 export const CONN_STATE_MANAGER_SYMBOL = Symbol("rivetkit.conn_state_manager");
 
 export interface ActorLogger {

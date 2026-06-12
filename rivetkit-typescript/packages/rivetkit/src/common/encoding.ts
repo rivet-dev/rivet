@@ -1,7 +1,6 @@
 import type { VersionedDataHandler } from "vbare";
 import { z } from "zod/v4";
 import { serializeWithEncoding } from "@/serde";
-import { assertUnreachable } from "./utils";
 
 /** Data that can be deserialized. */
 export type InputData = string | Buffer | Blob | ArrayBufferLike | Uint8Array;
@@ -442,17 +441,6 @@ export function reviveJsonCompatValue(
 		return decoded;
 	}
 	return input;
-}
-
-/** Converts data that was encoded to a string. Some formats do not support raw binary data. */
-export function encodeDataToString(message: OutputData): string {
-	if (typeof message === "string") {
-		return message;
-	}
-	if (message instanceof Uint8Array) {
-		return base64EncodeUint8Array(message);
-	}
-	assertUnreachable(message);
 }
 
 function base64DecodeToUint8Array(base64: string): Uint8Array {

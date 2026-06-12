@@ -8,13 +8,7 @@ export type IndexedWebSocketPayload =
 	| Blob
 	| ArrayBufferView;
 
-export type IndexedWebSocketSender = (
-	data: IndexedWebSocketPayload,
-	rivetMessageIndex?: number,
-) => void | Promise<void>;
-
 export interface IndexedWebSocketTestHook {
-	__rivetSendWithMessageIndex?: IndexedWebSocketSender;
 	__rivetGetHibernatableAckState?: () => HibernatableWebSocketAckStateSnapshot;
 	__rivetWaitForHibernatableAck?: (
 		serverMessageIndex: number,
@@ -39,25 +33,6 @@ const REMOTE_HIBERNATABLE_WEBSOCKET_ACK_HOOKS = new Map<
 
 export interface HibernatableWebSocketAckStateTestRequest {
 	__rivetkitTestHibernatableAckStateV1: true;
-}
-
-export function setIndexedWebSocketTestSender(
-	websocket: UniversalWebSocket,
-	sender: IndexedWebSocketSender,
-	enabled: boolean,
-): void {
-	if (!enabled) {
-		return;
-	}
-
-	(websocket as IndexedWebSocketTestHook).__rivetSendWithMessageIndex =
-		sender;
-}
-
-export function getIndexedWebSocketTestSender(
-	websocket: UniversalWebSocket,
-): IndexedWebSocketSender | undefined {
-	return (websocket as IndexedWebSocketTestHook).__rivetSendWithMessageIndex;
 }
 
 export function setHibernatableWebSocketAckTestHooks(
@@ -143,21 +118,6 @@ export function setRemoteHibernatableWebSocketAckTestHooks(
 		},
 		enabled,
 	);
-}
-
-export async function waitForHibernatableWebSocketAck(
-	websocket: UniversalWebSocket,
-	serverMessageIndex: number,
-): Promise<void> {
-	const waitForAck = (websocket as IndexedWebSocketTestHook)
-		.__rivetWaitForHibernatableAck;
-	if (!waitForAck) {
-		throw new Error(
-			"hibernatable websocket ack test hook is unavailable on this transport",
-		);
-	}
-
-	await waitForAck(serverMessageIndex);
 }
 
 export function parseHibernatableWebSocketAckStateTestRequest(

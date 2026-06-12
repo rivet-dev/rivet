@@ -1,5 +1,4 @@
 import type { SqliteNativeMetrics } from "@/common/database/config";
-import type { RegistryConfig } from "./config";
 
 declare const handleBrand: unique symbol;
 
@@ -71,11 +70,6 @@ export interface RuntimeQueueInspectMessage {
 	id: number;
 	name: string;
 	createdAtMs: number;
-}
-
-export interface RuntimeQueueSendResult {
-	status: string;
-	response?: RuntimeBytes;
 }
 
 export interface RuntimeQueueNextBatchOptions {
@@ -568,46 +562,4 @@ export interface CoreRuntime {
 		ws: WebSocketHandle,
 		callback: (event: RuntimeWebSocketEvent) => void,
 	): void;
-}
-
-export interface RuntimeBundle {
-	runtime: CoreRuntime;
-}
-
-export async function buildServeConfig(
-	config: RegistryConfig,
-	loadEnginePath: () => Promise<string>,
-	version: string,
-): Promise<RuntimeServeConfig> {
-	if (!config.endpoint) {
-		throw new Error("registry endpoint is required");
-	}
-
-	const serveConfig: RuntimeServeConfig = {
-		version: config.envoy.version,
-		endpoint: config.endpoint,
-		token: config.token,
-		namespace: config.namespace,
-		poolName: config.envoy.poolName,
-		handleInspectorHttpInRuntime: true,
-		serverlessBasePath: config.serverless.basePath,
-		serverlessPackageVersion: version,
-		serverlessClientEndpoint: config.publicEndpoint,
-		serverlessClientNamespace: config.publicNamespace,
-		serverlessClientToken: config.publicToken,
-		serverlessValidateEndpoint: config.validateServerlessEndpoint,
-		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
-	};
-
-	if (config.startEngine) {
-		serveConfig.engineBinaryPath = await loadEnginePath();
-		serveConfig.engineHost = config.engineHost;
-		serveConfig.enginePort = config.enginePort;
-	}
-	if (config.test?.enabled) {
-		serveConfig.inspectorTestToken =
-			process.env._RIVET_TEST_INSPECTOR_TOKEN ?? "token";
-	}
-
-	return serveConfig;
 }

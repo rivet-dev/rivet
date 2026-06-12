@@ -227,10 +227,6 @@ function fakeWasmBindings(
 		ActorContext: class {},
 		ConnHandle: class {},
 		WebSocketHandle: class {},
-		bridgeRivetErrorPrefix: () => BRIDGE_RIVET_ERROR_PREFIX,
-		roundTripBytes: (bytes: Uint8Array) => bytes,
-		uint8ArrayFromBytes: (bytes: Uint8Array) => bytes,
-		awaitPromise: async <T>(promise: Promise<T>) => await promise,
 		default: defaultFn,
 	} as unknown as WasmBindings;
 }

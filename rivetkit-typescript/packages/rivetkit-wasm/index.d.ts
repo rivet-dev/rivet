@@ -1,8 +1,4 @@
 export function start(): void;
-export function awaitPromise(promise: Promise<any>): Promise<any>;
-export function uint8ArrayFromBytes(bytes: Uint8Array): Uint8Array;
-export function bridgeRivetErrorPrefix(): string;
-export function roundTripBytes(bytes: Uint8Array): Uint8Array;
 
 export class ActorContext {
 	free(): void;

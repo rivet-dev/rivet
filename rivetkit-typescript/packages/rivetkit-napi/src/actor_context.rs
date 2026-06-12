@@ -209,11 +209,6 @@ impl ActorContext {
 		conn.set_state_initial(bytes);
 		Ok(())
 	}
-
-	#[allow(dead_code)]
-	pub(crate) fn has_conn_changes(&self) -> bool {
-		self.inner.conns().any(|conn| conn.is_hibernatable())
-	}
 }
 
 #[napi]

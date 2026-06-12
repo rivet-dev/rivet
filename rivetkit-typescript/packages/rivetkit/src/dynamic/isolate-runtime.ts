@@ -50,10 +50,6 @@ export class DynamicActorIsolateRuntime {
 
 	async onAlarm(): Promise<void> {}
 
-	async cleanupPersistedConnections(_reason?: string): Promise<number> {
-		return 0;
-	}
-
 	async getHibernatingWebSockets(): Promise<
 		DynamicHibernatingWebSocketMetadata[]
 	> {

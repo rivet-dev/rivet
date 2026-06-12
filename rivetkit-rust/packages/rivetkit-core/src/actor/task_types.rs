@@ -1,7 +1,3 @@
-use std::{any::Any, fmt};
-
-use anyhow::Result;
-
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum LifecycleState {
 	#[default]
@@ -66,7 +62,6 @@ impl UserTaskKind {
 pub enum StateMutationReason {
 	InternalReplace,
 	ScheduledEventsUpdate,
-	InputSet,
 	HasInitialized,
 }
 
@@ -75,36 +70,7 @@ impl StateMutationReason {
 		match self {
 			Self::InternalReplace => "internal_replace",
 			Self::ScheduledEventsUpdate => "scheduled_events_update",
-			Self::InputSet => "input_set",
 			Self::HasInitialized => "has_initialized",
-		}
-	}
-}
-
-pub enum ActorChildOutcome {
-	UserTaskFinished {
-		kind: UserTaskKind,
-		result: Result<()>,
-	},
-	UserTaskPanicked {
-		kind: UserTaskKind,
-		payload: Box<dyn Any + Send>,
-	},
-}
-
-impl fmt::Debug for ActorChildOutcome {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			ActorChildOutcome::UserTaskFinished { kind, result } => f
-				.debug_struct("UserTaskFinished")
-				.field("kind", kind)
-				.field("result", result)
-				.finish(),
-			ActorChildOutcome::UserTaskPanicked { kind, .. } => f
-				.debug_struct("UserTaskPanicked")
-				.field("kind", kind)
-				.field("payload", &"<panic payload>")
-				.finish(),
 		}
 	}
 }

@@ -233,12 +233,6 @@ impl CoreServerlessRuntime {
 		}
 	}
 
-	pub async fn active_envoy_actor_count(&self) -> Option<usize> {
-		self.active_envoy_status()
-			.await
-			.map(|status| status.active_actor_count)
-	}
-
 	pub async fn active_envoy_status(&self) -> Option<CoreEnvoyStatus> {
 		self.envoy
 			.lock()

@@ -21,7 +21,7 @@ pub mod task_types;
 pub(crate) mod work_registry;
 
 pub use action::ActionDispatchError;
-pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
+pub use config::{ActionDefinition, ActorConfig, CanHibernateWebSocket};
 pub use connection::ConnHandle;
 pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};
@@ -40,5 +40,5 @@ pub use task::{
 	ActionDispatchResult, ActorTask, DispatchCommand, HttpDispatchResult, LifecycleCommand,
 	LifecycleEvent, LifecycleState,
 };
-pub use task_types::{ActorChildOutcome, ShutdownKind, StateMutationReason, UserTaskKind};
+pub use task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
 pub use work_registry::{ActorWorkKind, ActorWorkPolicy};
