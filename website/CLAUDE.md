@@ -65,7 +65,7 @@ Import from `@rivet-gg/icons`. The full Font Awesome Pro library is available. C
 ## Typography
 
 - Marketing headings and card titles use `font-medium` (h1 heroes, section h2s, h3/h4 card titles, FAQ headings, price figures). Do not introduce `font-normal` headings.
-- `font-normal` remains correct only for deliberate de-emphasis: table `th` de-bolding (UsagePricingModal), quiet `dt` labels (MobilePricingTabs), and input-like UI (TypesenseSearch).
+- `font-normal` remains correct only for deliberate de-emphasis: table `th` de-bolding, quiet `dt` labels, and input-like UI (TypesenseSearch).
 - Hero h1s and section h2s use the class constants in `src/components/marketing/typography.tsx` (`tracking-[-0.015em]`, h1 `leading-[1.06]`). Do not hand-write `tracking-tight` on headings at `text-2xl` or larger; `tracking-tight` stays acceptable on `text-base` and smaller card titles.
 - Manrope is the only marketing typeface; JetBrains Mono covers code, eyebrows, and captions. No serif headings on marketing pages; the Learn section's serif treatment is the only exception.
 - Section labels use the eyebrow convention (`EYEBROW_CLASS` or `editorial/Eyebrow`): mono, uppercase, `tracking-[0.18em]`, pine on porcelain, sage inside ink panels. Plate and panel captions use `CAPTION_CLASS` (`Fig. NN — ...`).

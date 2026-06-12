@@ -28,13 +28,13 @@ const themeStyles: Record<
 		sectionBorder: 'border-white/10',
 	},
 	light: {
-		divider: 'divide-zinc-200 border-zinc-200',
-		question: 'text-zinc-900',
-		answer: 'text-zinc-500',
-		answerLinks: '[&_a]:text-zinc-900 [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-zinc-600 [&_strong]:text-zinc-700 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mt-1',
-		icon: 'text-zinc-400',
-		heading: 'text-zinc-900',
-		sectionBorder: 'border-zinc-200',
+		divider: 'divide-ink/10 border-ink/10',
+		question: 'text-ink',
+		answer: 'text-ink-soft',
+		answerLinks: '[&_a]:text-pine [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-ink [&_strong]:text-ink [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mt-1',
+		icon: 'text-ink-faint',
+		heading: 'text-ink',
+		sectionBorder: 'border-ink/10',
 	},
 };
 

@@ -33,11 +33,11 @@ export function CopyCommand({ children, command, className }: CopyCommandProps) 
       )}
       onClick={handleCopy}
     >
-      <div className='flex h-6 w-6 items-center justify-center text-white/40 transition-colors duration-200 group-hover:text-white/80'>
+      <div className='flex h-6 w-6 items-center justify-center text-ink-faint transition-colors duration-200 group-hover:text-ink'>
         <Icon icon={faArrowRight} className='h-4 w-4' />
       </div>
 
-      <div className='font-mono text-sm font-medium text-white/40 transition-colors duration-200 group-hover:text-white/80'>
+      <div className='font-mono text-sm font-medium text-ink-faint transition-colors duration-200 group-hover:text-ink'>
         {command || children}
       </div>
 
@@ -47,10 +47,10 @@ export function CopyCommand({ children, command, className }: CopyCommandProps) 
             copied ? 'opacity-0' : 'opacity-0 group-hover:opacity-100'
           }`}
         >
-          <Icon icon={faCopy} className='h-4 w-4 text-white/40 transition-colors group-hover:text-white/80' />
+          <Icon icon={faCopy} className='h-4 w-4 text-ink-faint transition-colors group-hover:text-ink' />
         </div>
         <div className={`absolute transition-opacity duration-200 ${copied ? 'opacity-100' : 'opacity-0'}`}>
-          <Icon icon={faCheck} className='h-4 w-4 text-green-400' />
+          <Icon icon={faCheck} className='h-4 w-4 text-pine' />
         </div>
       </div>
     </div>
