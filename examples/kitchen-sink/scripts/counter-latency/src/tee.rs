@@ -11,15 +11,12 @@ static LOG_FILE_PATH: OnceLock<String> = OnceLock::new();
 pub fn init(id: &str) -> std::io::Result<String> {
 	let path = format!("/tmp/counter-latency-{}.txt", id);
 	let file = File::create(&path)?;
-	LOG_FILE.set(Mutex::new(file)).map_err(|_| {
-		std::io::Error::new(
-			std::io::ErrorKind::AlreadyExists,
-			"log file already initialized",
-		)
-	})?;
-	LOG_FILE_PATH.set(path.clone()).map_err(|_| {
-		std::io::Error::new(std::io::ErrorKind::AlreadyExists, "log path already set")
-	})?;
+	LOG_FILE
+		.set(Mutex::new(file))
+		.map_err(|_| std::io::Error::new(std::io::ErrorKind::AlreadyExists, "log file already initialized"))?;
+	LOG_FILE_PATH
+		.set(path.clone())
+		.map_err(|_| std::io::Error::new(std::io::ErrorKind::AlreadyExists, "log path already set"))?;
 	Ok(path)
 }
 

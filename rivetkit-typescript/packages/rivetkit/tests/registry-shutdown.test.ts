@@ -76,10 +76,7 @@ function createFake(): Fake {
 		handleServerlessRequest: async (
 			_registry: unknown,
 			_req: unknown,
-			onStreamEvent: (
-				error: unknown,
-				event?: { kind: string },
-			) => unknown,
+			onStreamEvent: (error: unknown, event?: { kind: string }) => unknown,
 		) => {
 			await onStreamEvent(null, { kind: "end" });
 			return { status: 200, headers: {} };
@@ -90,9 +87,7 @@ function createFake(): Fake {
 		state.builderCalls += 1;
 		// A distinct handle per build so fan-out can prove both modes were
 		// torn down (Mode A and Mode B build separate registries).
-		const registry = {
-			id: state.builderCalls,
-		} as unknown as RegistryHandle;
+		const registry = { id: state.builderCalls } as unknown as RegistryHandle;
 		const serveConfig = {
 			serverlessBasePath: "/api/rivet",
 			serverlessMaxStartPayloadBytes: 1024,

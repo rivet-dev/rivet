@@ -29,9 +29,7 @@ export function ActorNotFound({ actorId }: { actorId?: ActorId }) {
 								icon={faQuestionSquare}
 								className="text-4xl"
 							/>
-							<p className="max-w-[400px]">
-								{copy.actorNotFound}
-							</p>
+							<p className="max-w-[400px]">{copy.actorNotFound}</p>
 							<p className="max-w-[400px] text-sm text-muted-foreground">
 								{copy.actorNotFoundDescription}
 							</p>

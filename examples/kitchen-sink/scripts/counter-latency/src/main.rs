@@ -21,7 +21,7 @@ use std::sync::Arc;
 use crate::args::{Args, EnvConfig};
 use crate::concurrent::{WorkloadCtx, print_concurrent_summary, spawn_scale_down};
 use crate::endpoint::Endpoint;
-use crate::log::{BOLD, COLOR_MAX_MS, COLOR_MIN_MS, DIM, RESET, gradient_color};
+use crate::log::{BOLD, COLOR_MIN_MS, COLOR_MAX_MS, DIM, RESET, gradient_color};
 use crate::stats::State;
 
 fn main() {

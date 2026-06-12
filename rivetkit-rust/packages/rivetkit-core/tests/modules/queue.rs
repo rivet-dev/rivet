@@ -150,23 +150,11 @@ mod moved_tests {
 		let metrics = render_global_metrics();
 		let sent_line = metrics
 			.lines()
-			.find(|line| {
-				metric_line_for_actor(
-					line,
-					"rivetkit_actor_queue_messages_sent_total",
-					"queue-metrics",
-				)
-			})
+			.find(|line| metric_line_for_actor(line, "rivetkit_actor_queue_messages_sent_total", "queue-metrics"))
 			.expect("sent metric line");
 		let received_line = metrics
 			.lines()
-			.find(|line| {
-				metric_line_for_actor(
-					line,
-					"rivetkit_actor_queue_messages_received_total",
-					"queue-metrics",
-				)
-			})
+			.find(|line| metric_line_for_actor(line, "rivetkit_actor_queue_messages_received_total", "queue-metrics"))
 			.expect("received metric line");
 
 		assert!(sent_line.ends_with(" 1"));
