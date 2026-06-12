@@ -1,7 +1,7 @@
 ---
-// Page lane: /actors is the canonical home of the Actor primitive and of the
-// realtime, multiplayer, and collaborative use cases. Keep non-agent workloads
-// first-class here. The agent-builder story lives at /agent.
+// Page lane: /actors is the canonical home of the Actor primitive and every
+// use case built on it: AI agents, realtime, multiplayer, collaborative state,
+// and durable workflows. There is no separate agent solution page.
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { BuiltInFeatures } from '@/components/marketing/sections/BuiltInFeatures';
 import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
@@ -41,9 +41,56 @@ import { actorsFaqs } from '@/data/faqs/actors';
 								Quickstart Guide
 							</a>
 						</div>
-						<p class="mt-6 text-sm text-zinc-500">
-							Building AI agents? <a href="/agent" class="text-zinc-300 transition-colors hover:text-white">Start at Rivet for Agents</a>
-						</p>
+					</div>
+				</section>
+
+				<!-- Use cases -->
+				<section class="border-t border-white/10 px-6 py-16 md:py-32">
+					<div class="mx-auto w-full max-w-7xl">
+						<div class="mb-12 max-w-3xl">
+							<h2 class="text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">One primitive, every stateful workload.</h2>
+							<p class="mt-4 text-base leading-relaxed text-zinc-500">
+								The same Actor that holds an agent's memory holds a game lobby, a shared document, or a running workflow.
+							</p>
+						</div>
+						<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+							{
+								[
+									{
+										title: 'AI agents',
+										body: "One Actor per agent. Persistent memory, tool execution, and long-running context that survives restarts — in your existing Node.js or Bun backend.",
+										href: '/docs/actors/ai-and-user-generated-actors',
+									},
+									{
+										title: 'Realtime & multiplayer',
+										body: 'WebSockets and event broadcast built in. One Actor per room, match, or channel keeps every client in sync without a separate realtime service.',
+										href: '/docs/actors/events',
+									},
+									{
+										title: 'Collaborative state',
+										body: 'One Actor per document or workspace. State lives next to compute, so concurrent edits stay consistent without cache-invalidation gymnastics.',
+										href: '/docs/actors/sharing-and-joining-state',
+									},
+									{
+										title: 'Durable workflows',
+										body: 'Queues, schedules, and timers on the same primitive. Multi-step operations pick up where they left off, even across sleeps and deploys.',
+										href: '/docs/actors/queues',
+									},
+								].map((useCase) => (
+									<a
+										href={useCase.href}
+										class="group flex flex-col rounded-xl border border-white/10 p-7 transition-colors hover:border-white/25"
+									>
+										<h3 class="text-base font-medium text-white">{useCase.title}</h3>
+										<p class="mt-2 flex-1 text-sm leading-relaxed text-zinc-500">{useCase.body}</p>
+										<span class="mt-5 inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors group-hover:text-white">
+											Read the docs
+											<span aria-hidden="true" class="transition-transform group-hover:translate-x-0.5">→</span>
+										</span>
+									</a>
+								))
+							}
+						</div>
 					</div>
 				</section>
 
