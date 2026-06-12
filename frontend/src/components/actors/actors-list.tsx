@@ -464,9 +464,25 @@ function EmptyState({ count }: { count: number }) {
 						No Actor Name selected.
 						<br />
 						<span className="text-sm text-muted-foreground">
-							Select an Actor Name from the list on the left.
+							Pick an Actor Name to see its instances.
 						</span>
 					</p>
+					<Button
+						variant="outline"
+						onClick={() =>
+							navigate({
+								to: ".",
+								search: (prev) => ({
+									...prev,
+									n: undefined,
+									actorId: undefined,
+									actorKey: undefined,
+								}),
+							})
+						}
+					>
+						Browse Actor Names
+					</Button>
 				</div>
 			) : count === 0 ? (
 				filtersCount === 0 ? (
