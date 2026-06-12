@@ -4,9 +4,9 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**normal** | [**serde_json::Value**](.md) |  | 
+**normal** | [**models::RunnerConfigKindOneOfNormal**](RunnerConfigKind_oneOf_normal.md) |  | 
 **serverless** | [**models::RunnerConfigKindOneOf1Serverless**](RunnerConfigKind_oneOf_1_serverless.md) |  | 
-**drain_on_version_upgrade** | Option<**bool**> |  | [optional]
+**drain_on_version_upgrade** | Option<**bool**> | Deprecated. | [optional]
 **metadata** | Option<[**serde_json::Value**](.md)> |  | [optional]
 **protocol_version** | Option<**i32**> |  | [optional]
 **runner_pool_error** | Option<[**serde_json::Value**](.md)> |  | [optional]

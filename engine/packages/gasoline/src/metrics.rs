@@ -179,6 +179,27 @@ lazy_static::lazy_static! {
 		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
+	pub static ref SIGNAL_SEND_DURATION_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_signal_send_duration_seconds",
+		"Duration of the database write performed by a signal send. Fire-and-forget bump publish time is not included.",
+		&["workflow_name", "signal_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref SIGNAL_WAKEUP_TO_PULL_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_signal_wakeup_to_pull_seconds",
+		"Duration from a workflow signal wakeup to the next database pull attempt. Non-zero values under load indicate tokio scheduling pressure on the workflow task.",
+		&["workflow_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+	pub static ref SIGNAL_DB_PULL_SECONDS: HistogramVec = register_histogram_vec_with_registry!(
+		"gasoline_signal_db_pull_seconds",
+		"Duration of pulling pending workflow signals from the database.",
+		&["workflow_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
 
 	pub static ref MESSAGE_PUBLISHED: IntCounterVec = register_int_counter_vec_with_registry!(
 		"gasoline_message_published",
@@ -254,7 +275,13 @@ lazy_static::lazy_static! {
 	// MARK: Load Shedding
 	pub static ref CPU_USAGE: Histogram = register_histogram_with_registry!(
 		"gasoline_cpu_usage",
-		"CPU usage (100 per core).",
+		"CPU usage (1 per core).",
+		vec![0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0],
+		*REGISTRY
+	).unwrap();
+	pub static ref CPU_USAGE_SMOOTHED: Histogram = register_histogram_with_registry!(
+		"gasoline_cpu_usage_smoothed",
+		"CPU usage (1 per core) after being smoothed by EMA.",
 		vec![0.1, 0.25, 0.5, 1.0, 1.5, 2.0, 4.0, 8.0, 16.0],
 		*REGISTRY
 	).unwrap();

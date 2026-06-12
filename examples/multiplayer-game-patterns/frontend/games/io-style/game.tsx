@@ -1,8 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { GameClient } from "../../client.ts";
-import type { IoStyleMatchInfo } from "./menu.tsx";
-import { IoGame } from "./io-game.ts";
 import { IoBot } from "./bot.ts";
+import { IoGame } from "./io-game.ts";
+import type { IoStyleMatchInfo } from "./menu.tsx";
 
 export function IoStyleGame({
 	client,
@@ -39,8 +39,12 @@ export function IoStyleGame({
 			<div className="game-header">
 				<h2>IO-Style</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={addBot}>Add Bot</button>
-					<button className="btn btn-secondary" onClick={onLeave}>Leave</button>
+					<button className="btn btn-secondary" onClick={addBot}>
+						Add Bot
+					</button>
+					<button className="btn btn-secondary" onClick={onLeave}>
+						Leave
+					</button>
 				</div>
 			</div>
 			<p className="controls-hint">WASD or arrow keys to move</p>

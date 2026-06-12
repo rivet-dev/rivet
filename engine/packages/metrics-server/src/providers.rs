@@ -3,6 +3,7 @@ use opentelemetry::trace::{SamplingResult, SpanKind};
 use opentelemetry_otlp::WithExportConfig;
 use opentelemetry_sdk::{
 	Resource,
+	propagation::TraceContextPropagator,
 	trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
 };
 use opentelemetry_semantic_conventions::{SCHEMA_URL, attribute::SERVICE_VERSION};
@@ -112,6 +113,8 @@ pub fn init_otel_providers() -> Option<OtelProviderGuard> {
 	let enable_otel = std::env::var("RIVET_OTEL_ENABLED").map_or(false, |x| x == "1");
 
 	if enable_otel {
+		opentelemetry::global::set_text_map_propagator(TraceContextPropagator::new());
+
 		let tracer_provider = init_tracer_provider();
 
 		Some(OtelProviderGuard { tracer_provider })

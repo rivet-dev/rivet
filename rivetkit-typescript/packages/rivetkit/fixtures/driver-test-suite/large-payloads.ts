@@ -9,7 +9,7 @@ export const largePayloadActor = actor({
 		/**
 		 * Accepts a large request payload and returns its size
 		 */
-		processLargeRequest: (c, data: { items: string[] }) => {
+		processLargeRequest: (_c, data: { items: string[] }) => {
 			return {
 				itemCount: data.items.length,
 				firstItem: data.items[0],
@@ -20,7 +20,7 @@ export const largePayloadActor = actor({
 		/**
 		 * Returns a large response payload
 		 */
-		getLargeResponse: (c, itemCount: number) => {
+		getLargeResponse: (_c, itemCount: number) => {
 			const items: string[] = [];
 			for (let i = 0; i < itemCount; i++) {
 				items.push(
@@ -33,7 +33,7 @@ export const largePayloadActor = actor({
 		/**
 		 * Echo back the request data
 		 */
-		echo: (c, data: unknown) => {
+		echo: (_c, data: unknown) => {
 			return data;
 		},
 	},
@@ -63,7 +63,7 @@ export const largePayloadConnActor = actor({
 		/**
 		 * Returns a large response payload
 		 */
-		getLargeResponse: (c, itemCount: number) => {
+		getLargeResponse: (_c, itemCount: number) => {
 			const items: string[] = [];
 			for (let i = 0; i < itemCount; i++) {
 				items.push(
@@ -76,7 +76,7 @@ export const largePayloadConnActor = actor({
 		/**
 		 * Echo back the request data
 		 */
-		echo: (c, data: unknown) => {
+		echo: (_c, data: unknown) => {
 			return data;
 		},
 

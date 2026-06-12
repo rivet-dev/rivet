@@ -1,4 +1,5 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { type Rivet } from "@rivetkit/engine-api-full";
+import { infiniteQueryOptions, useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Combobox } from "@/components";
 import { useEngineCompatDataProvider } from "./data-provider";
@@ -7,6 +8,17 @@ interface ConnectedRunnerSelectProps {
 	onValueChange: (value: string) => void;
 	value: string;
 }
+
+const emptyRunnerNamesQueryOptions = infiniteQueryOptions({
+	queryKey: ["noop-runner-names"] as readonly unknown[],
+	queryFn: async (): Promise<Rivet.RunnersListNamesResponse> => ({
+		names: [],
+		pagination: {},
+	}),
+	initialPageParam: undefined as string | undefined,
+	getNextPageParam: () => undefined,
+	select: (data) => data.pages.flatMap((page) => page.names),
+});
 
 export function ConnectedRunnerSelect({
 	onValueChange,
@@ -20,10 +32,16 @@ export function ConnectedRunnerSelect({
 		fetchNextPage,
 		isLoading,
 		isFetchingNextPage,
-	} = useInfiniteQuery({
+	} = useInfiniteQuery<
+		Rivet.RunnersListNamesResponse,
+		Error,
+		string[],
+		readonly unknown[],
+		string | undefined
+	>({
 		...(hasRunnerNames
 			? dataProvider.runnerNamesQueryOptions()
-			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+			: emptyRunnerNamesQueryOptions),
 		enabled: hasRunnerNames,
 	});
 

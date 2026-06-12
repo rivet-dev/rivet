@@ -5,16 +5,17 @@
 import * as serializers from "../index";
 import * as Rivet from "../../api/index";
 import * as core from "../../core";
+import { RunnerConfigKindNormalNormal } from "./RunnerConfigKindNormalNormal";
 
 export const RunnerConfigKindNormal: core.serialization.ObjectSchema<
     serializers.RunnerConfigKindNormal.Raw,
     Rivet.RunnerConfigKindNormal
 > = core.serialization.object({
-    normal: core.serialization.record(core.serialization.string(), core.serialization.unknown()),
+    normal: RunnerConfigKindNormalNormal,
 });
 
 export declare namespace RunnerConfigKindNormal {
     export interface Raw {
-        normal: Record<string, unknown>;
+        normal: RunnerConfigKindNormalNormal.Raw;
     }
 }

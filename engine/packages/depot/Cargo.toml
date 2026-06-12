@@ -1,26 +1,27 @@
 [package]
 name = "depot"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
 edition.workspace = true
 
 [features]
-default = []
+default = ["pidx-cache"]
+pidx-cache = []
 test-faults = []
 
 [dependencies]
 anyhow.workspace = true
 async-channel.workspace = true
 async-trait.workspace = true
-aws-config = "1"
-aws-sdk-s3 = "1"
 base64.workspace = true
 depot-client-types.workspace = true
 futures-util.workspace = true
 gas.workspace = true
 lazy_static.workspace = true
 lz4_flex.workspace = true
+moka.workspace = true
 namespace.workspace = true
 parking_lot.workspace = true
 rivet-cache.workspace = true
@@ -34,6 +35,8 @@ serde.workspace = true
 serde_bare.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+rusqlite.workspace = true
+tempfile.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 tracing.workspace = true
@@ -45,5 +48,4 @@ vbare.workspace = true
 
 [dev-dependencies]
 rivet-test-deps.workspace = true
-tempfile.workspace = true
 tokio = { workspace = true, features = ["test-util"] }

@@ -196,7 +196,9 @@ export const buildServerlessConfig = async (
 				const customName = isCustom
 					? values.customName?.trim() || undefined
 					: undefined;
-				const customIcon = isCustom ? values.customIcon || undefined : undefined;
+				const customIcon = isCustom
+					? values.customIcon || undefined
+					: undefined;
 				const config = {
 					serverless,
 					metadata: {

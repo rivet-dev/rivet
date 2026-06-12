@@ -5,7 +5,6 @@ import {
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
 import * as ConnectVercelForm from "@/app/forms/connect-vercel-form";
 import { type DialogContentProps, Frame } from "@/components";

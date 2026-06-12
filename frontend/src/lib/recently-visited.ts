@@ -1,7 +1,9 @@
 export const RECENT_PROJECTS_KEY = "rivet:recent_projects";
 export const RECENT_NAMESPACES_KEY = "rivet:recent_namespaces";
 
-type RecentlyVisitedType = typeof RECENT_PROJECTS_KEY | typeof RECENT_NAMESPACES_KEY;
+type RecentlyVisitedType =
+	| typeof RECENT_PROJECTS_KEY
+	| typeof RECENT_NAMESPACES_KEY;
 
 type RecentMap = Record<string, number>;
 
@@ -19,6 +21,9 @@ export function recordRecentVisit(key: RecentlyVisitedType, name: string) {
 	localStorage.setItem(key, JSON.stringify(map));
 }
 
-export function getRecentTimestamp(key: RecentlyVisitedType, name: string): number {
+export function getRecentTimestamp(
+	key: RecentlyVisitedType,
+	name: string,
+): number {
 	return getRecentMap(key)[name] ?? 0;
 }

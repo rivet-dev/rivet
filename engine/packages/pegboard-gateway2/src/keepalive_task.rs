@@ -12,7 +12,7 @@ use crate::shared_state::InFlightRequestHandle;
 /// next actor start.
 ///
 /// Only ran for hibernating requests.
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(name = "keepalive_task", skip_all)]
 pub async fn task(
 	in_flight_req: InFlightRequestHandle,
 	ctx: StandaloneCtx,

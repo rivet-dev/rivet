@@ -96,7 +96,11 @@ interface AggregateRow {
 	total: number;
 }
 
-function positiveInteger(value: number | undefined, fallback: number, name: string) {
+function positiveInteger(
+	value: number | undefined,
+	fallback: number,
+	name: string,
+) {
 	const resolved = value ?? fallback;
 	if (!Number.isInteger(resolved) || resolved < 1) {
 		throw new Error(`${name} must be a positive integer`);
@@ -129,7 +133,9 @@ function typedRows<T>(rows: unknown[]): T[] {
 async function queryPageCount(database: {
 	execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
 }) {
-	const [row] = typedRows<PageCountRow>(await database.execute("PRAGMA page_count"));
+	const [row] = typedRows<PageCountRow>(
+		await database.execute("PRAGMA page_count"),
+	);
 	return row?.page_count ?? 0;
 }
 
@@ -174,11 +180,21 @@ async function resetSqlRush(database: {
 async function resetMigration(database: {
 	execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
 }) {
-	await database.execute("DROP INDEX IF EXISTS idx_rw_migration_source_account");
-	await database.execute("DROP INDEX IF EXISTS idx_rw_migration_source_created");
-	await database.execute("DROP INDEX IF EXISTS idx_rw_migration_source_status_total");
-	await database.execute("DROP INDEX IF EXISTS idx_rw_migration_source_skew_account");
-	await database.execute("DROP INDEX IF EXISTS idx_rw_migration_source_skew_status");
+	await database.execute(
+		"DROP INDEX IF EXISTS idx_rw_migration_source_account",
+	);
+	await database.execute(
+		"DROP INDEX IF EXISTS idx_rw_migration_source_created",
+	);
+	await database.execute(
+		"DROP INDEX IF EXISTS idx_rw_migration_source_status_total",
+	);
+	await database.execute(
+		"DROP INDEX IF EXISTS idx_rw_migration_source_skew_account",
+	);
+	await database.execute(
+		"DROP INDEX IF EXISTS idx_rw_migration_source_skew_status",
+	);
 	await database.execute("DROP TABLE IF EXISTS rw_migration_source_rebuilt");
 	await database.execute("DROP TABLE IF EXISTS rw_migration_source");
 	await database.execute("DROP TABLE IF EXISTS rw_migration_audit");
@@ -219,7 +235,11 @@ async function seedCommerce(
 	const startedAt = performance.now();
 
 	await withTransaction(database, async () => {
-		for (let offset = 0; offset < customerCount; offset += ORDER_BATCH_ROWS) {
+		for (
+			let offset = 0;
+			offset < customerCount;
+			offset += ORDER_BATCH_ROWS
+		) {
 			const placeholders: string[] = [];
 			const args: unknown[] = [];
 			const batchEnd = Math.min(customerCount, offset + ORDER_BATCH_ROWS);
@@ -243,7 +263,11 @@ async function seedCommerce(
 	for (let txStart = 0; txStart < rows; txStart += SETUP_TRANSACTION_ROWS) {
 		const txEnd = Math.min(rows, txStart + SETUP_TRANSACTION_ROWS);
 		await withTransaction(database, async () => {
-			for (let offset = txStart; offset < txEnd; offset += ORDER_BATCH_ROWS) {
+			for (
+				let offset = txStart;
+				offset < txEnd;
+				offset += ORDER_BATCH_ROWS
+			) {
 				const orderPlaceholders: string[] = [];
 				const orderArgs: unknown[] = [];
 				const itemPlaceholders: string[] = [];
@@ -256,7 +280,9 @@ async function seedCommerce(
 					const id = i + 1;
 					const customerId = (pseudoRandom(i) % customerCount) + 1;
 					const createdAt = 1_700_000_000_000 + i * 1000;
-					const status = ["pending", "paid", "shipped", "refunded"][i % 4];
+					const status = ["pending", "paid", "shipped", "refunded"][
+						i % 4
+					];
 					const totalCents = 500 + (pseudoRandom(i + 17) % 25_000);
 					const note = payload(`order-${id}-${status}:`, rowBytes);
 
@@ -331,7 +357,11 @@ async function seedDocs(
 	for (let txStart = 0; txStart < rows; txStart += SETUP_TRANSACTION_ROWS) {
 		const txEnd = Math.min(rows, txStart + SETUP_TRANSACTION_ROWS);
 		await withTransaction(database, async () => {
-			for (let offset = txStart; offset < txEnd; offset += DOC_BATCH_ROWS) {
+			for (
+				let offset = txStart;
+				offset < txEnd;
+				offset += DOC_BATCH_ROWS
+			) {
 				const placeholders: string[] = [];
 				const args: unknown[] = [];
 				const batchEnd = Math.min(txEnd, offset + DOC_BATCH_ROWS);
@@ -378,7 +408,11 @@ async function seedLedger(
 	for (let txStart = 0; txStart < rows; txStart += SETUP_TRANSACTION_ROWS) {
 		const txEnd = Math.min(rows, txStart + SETUP_TRANSACTION_ROWS);
 		await withTransaction(database, async () => {
-			for (let offset = txStart; offset < txEnd; offset += LEDGER_BATCH_ROWS) {
+			for (
+				let offset = txStart;
+				offset < txEnd;
+				offset += LEDGER_BATCH_ROWS
+			) {
 				const placeholders: string[] = [];
 				const args: unknown[] = [];
 				const batchEnd = Math.min(txEnd, offset + LEDGER_BATCH_ROWS);
@@ -391,7 +425,10 @@ async function seedLedger(
 						entryId,
 						(i % 2 === 0 ? 1 : -1) * (100 + (i % 10_000)),
 						1_700_000_000_000 + i * 1000,
-						payload(`ledger-${accountId}-${entryId}:`, Math.min(rowBytes, 512)),
+						payload(
+							`ledger-${accountId}-${entryId}:`,
+							Math.min(rowBytes, 512),
+						),
 					);
 				}
 				await database.execute(
@@ -438,7 +475,10 @@ async function seedChatLog(
 				batchIndex < CHAT_LOG_INSERT_BATCH_SIZE && remainingBytes > 0;
 				batchIndex += 1
 			) {
-				const contentBytes = Math.min(CHAT_LOG_CHUNK_BYTES, remainingBytes);
+				const contentBytes = Math.min(
+					CHAT_LOG_CHUNK_BYTES,
+					remainingBytes,
+				);
 				const seq = rows;
 				const role = seq % 2 === 0 ? "user" : "assistant";
 
@@ -558,11 +598,21 @@ async function seedSqlRush(
 		for (let i = 0; i < SQL_RUSH_KV_COUNT; i += 1) {
 			kvRows.push([`kv_${i}`, payload("kv:", 128), now]);
 		}
-		await batchInsert(database, "INSERT INTO kv (key, value, updated_at)", kvRows, 40);
+		await batchInsert(
+			database,
+			"INSERT INTO kv (key, value, updated_at)",
+			kvRows,
+			40,
+		);
 
 		const toolsRows: unknown[][] = [];
 		for (let i = 0; i < SQL_RUSH_TOOLS_COUNT; i += 1) {
-			toolsRows.push(["exec-1", `tool_${i}`, payload("tool:", 1024), now]);
+			toolsRows.push([
+				"exec-1",
+				`tool_${i}`,
+				payload("tool:", 1024),
+				now,
+			]);
 		}
 		await batchInsert(
 			database,
@@ -575,7 +625,12 @@ async function seedSqlRush(
 		for (let i = 0; i < SQL_RUSH_META_COUNT; i += 1) {
 			metaRows.push([`key_${i}`, payload("meta:", 64)]);
 		}
-		await batchInsert(database, "INSERT INTO meta (key, value)", metaRows, 12);
+		await batchInsert(
+			database,
+			"INSERT INTO meta (key, value)",
+			metaRows,
+			12,
+		);
 	});
 
 	return {
@@ -617,7 +672,11 @@ async function seedMigrationSource(
 	for (let txStart = 0; txStart < rows; txStart += SETUP_TRANSACTION_ROWS) {
 		const txEnd = Math.min(rows, txStart + SETUP_TRANSACTION_ROWS);
 		await withTransaction(database, async () => {
-			for (let offset = txStart; offset < txEnd; offset += ORDER_BATCH_ROWS) {
+			for (
+				let offset = txStart;
+				offset < txEnd;
+				offset += ORDER_BATCH_ROWS
+			) {
 				const placeholders: string[] = [];
 				const args: unknown[] = [];
 				const batchEnd = Math.min(txEnd, offset + ORDER_BATCH_ROWS);
@@ -836,7 +895,11 @@ export const sqliteRealworldBench = actor({
 
 		setupWorkload: async (c, input: SetupInput) => {
 			assertWorkload(input.workload);
-			const rowBytes = positiveInteger(input.rowBytes, DEFAULT_ROW_BYTES, "rowBytes");
+			const rowBytes = positiveInteger(
+				input.rowBytes,
+				DEFAULT_ROW_BYTES,
+				"rowBytes",
+			);
 			if (input.workload === "migration-ddl-small") {
 				await resetMigration(c.db);
 				return {
@@ -889,7 +952,12 @@ export const sqliteRealworldBench = actor({
 				case "migration-create-indexes-large":
 					return seedMigrationSource(c.db, targetBytes, rowBytes);
 				case "migration-create-indexes-skewed-large":
-					return seedMigrationSource(c.db, targetBytes, rowBytes, true);
+					return seedMigrationSource(
+						c.db,
+						targetBytes,
+						rowBytes,
+						true,
+					);
 				case "migration-table-rebuild-large":
 				case "migration-add-column-large":
 					return seedMigrationSource(c.db, targetBytes, rowBytes);
@@ -921,9 +989,13 @@ export const sqliteRealworldBench = actor({
 					const tables = await c.db.execute(
 						"SELECT name, type FROM sqlite_master WHERE type IN ('table', 'index') ORDER BY name",
 					);
-					const columns = await c.db.execute("PRAGMA table_info(rw_orders)");
+					const columns = await c.db.execute(
+						"PRAGMA table_info(rw_orders)",
+					);
 					const [count] = typedRows<CountRow>(
-						await c.db.execute("SELECT COUNT(*) AS rows FROM rw_orders"),
+						await c.db.execute(
+							"SELECT COUNT(*) AS rows FROM rw_orders",
+						),
 					);
 					details = {
 						objects: tables.length,
@@ -942,7 +1014,10 @@ export const sqliteRealworldBench = actor({
 					break;
 				}
 				case "secondary-index-covering-range": {
-					const rows = typedRows<{ external_key: string; row_rank: number }>(
+					const rows = typedRows<{
+						external_key: string;
+						row_rank: number;
+					}>(
 						await c.db.execute(
 							`SELECT external_key, row_rank FROM rw_docs
 						WHERE external_key BETWEEN 'doc-00000000' AND 'doc-ffffffff'
@@ -950,7 +1025,8 @@ export const sqliteRealworldBench = actor({
 						),
 					);
 					let checksum = 0;
-					for (const row of rows) checksum = (checksum + row.row_rank) >>> 0;
+					for (const row of rows)
+						checksum = (checksum + row.row_rank) >>> 0;
 					details = { rows: rows.length, checksum };
 					break;
 				}
@@ -1021,43 +1097,39 @@ export const sqliteRealworldBench = actor({
 					break;
 				}
 				case "parallel-read-aggregates": {
-					const [
-						statusRows,
-						bucketRows,
-						tenantRows,
-						joinRows,
-					] = await Promise.all([
-						c.db.execute(
-							`SELECT status, COUNT(*) AS rows, SUM(total_cents) AS total
+					const [statusRows, bucketRows, tenantRows, joinRows] =
+						await Promise.all([
+							c.db.execute(
+								`SELECT status, COUNT(*) AS rows, SUM(total_cents) AS total
 						FROM rw_orders
 						GROUP BY status
 						ORDER BY status`,
-						),
-						c.db.execute(
-							`SELECT (created_at / 300000) AS bucket, COUNT(*) AS rows, SUM(total_cents) AS total
+							),
+							c.db.execute(
+								`SELECT (created_at / 300000) AS bucket, COUNT(*) AS rows, SUM(total_cents) AS total
 						FROM rw_orders
 						GROUP BY bucket
 						ORDER BY bucket`,
-						),
-						c.db.execute(
-							`SELECT e.event_type, COUNT(*) AS rows, SUM(o.total_cents) AS total
+							),
+							c.db.execute(
+								`SELECT e.event_type, COUNT(*) AS rows, SUM(o.total_cents) AS total
 						FROM rw_events e
 						JOIN rw_orders o ON o.id = CAST(substr(e.entity_key, 7) AS INTEGER)
 						WHERE e.account_id = ? AND e.created_at BETWEEN ? AND ?
 						GROUP BY e.event_type
 						ORDER BY e.event_type`,
-							"acct-7",
-							1_700_000_000_000,
-							1_700_000_000_000 + 86_400_000,
-						),
-						c.db.execute(
-							`SELECT o.status, COUNT(*) AS rows, SUM(oi.quantity * oi.price_cents) AS total
+								"acct-7",
+								1_700_000_000_000,
+								1_700_000_000_000 + 86_400_000,
+							),
+							c.db.execute(
+								`SELECT o.status, COUNT(*) AS rows, SUM(oi.quantity * oi.price_cents) AS total
 						FROM rw_orders o
 						JOIN rw_order_items oi ON oi.order_id = o.id
 						GROUP BY o.status
 						ORDER BY o.status`,
-						),
-					]);
+							),
+						]);
 					const aggregates = [
 						...typedRows<AggregateRow>(statusRows),
 						...typedRows<AggregateRow>(bucketRows),
@@ -1067,8 +1139,14 @@ export const sqliteRealworldBench = actor({
 					details = {
 						ops: 4,
 						groups: aggregates.length,
-						rows: aggregates.reduce((sum, row) => sum + row.rows, 0),
-						total: aggregates.reduce((sum, row) => sum + row.total, 0),
+						rows: aggregates.reduce(
+							(sum, row) => sum + row.rows,
+							0,
+						),
+						total: aggregates.reduce(
+							(sum, row) => sum + row.total,
+							0,
+						),
 					};
 					break;
 				}
@@ -1092,12 +1170,13 @@ export const sqliteRealworldBench = actor({
 					const readAfterWrite = c.db.execute(
 						"SELECT COUNT(*) AS rows FROM rw_orders WHERE shard BETWEEN 0 AND 7",
 					);
-					const [statusRows, joinRows, , shardRows] = await Promise.all([
-						readStatus,
-						readJoin,
-						writeHotShard,
-						readAfterWrite,
-					]);
+					const [statusRows, joinRows, , shardRows] =
+						await Promise.all([
+							readStatus,
+							readJoin,
+							writeHotShard,
+							readAfterWrite,
+						]);
 					const aggregates = [
 						...typedRows<AggregateRow>(statusRows),
 						...typedRows<AggregateRow>(joinRows),
@@ -1111,7 +1190,10 @@ export const sqliteRealworldBench = actor({
 						rows:
 							aggregates.reduce((sum, row) => sum + row.rows, 0) +
 							(shardCount?.rows ?? 0),
-						total: aggregates.reduce((sum, row) => sum + row.total, 0),
+						total: aggregates.reduce(
+							(sum, row) => sum + row.total,
+							0,
+						),
 					};
 					break;
 				}
@@ -1139,7 +1221,8 @@ export const sqliteRealworldBench = actor({
 							FEED_PAGE_ROWS,
 						),
 					);
-					const cursor = firstPage.at(-1)?.created_at ?? 1_700_000_000_000;
+					const cursor =
+						firstPage.at(-1)?.created_at ?? 1_700_000_000_000;
 					const secondPage = await c.db.execute(
 						`SELECT id, customer_id, created_at, status, total_cents
 						FROM rw_orders
@@ -1149,7 +1232,10 @@ export const sqliteRealworldBench = actor({
 						cursor,
 						FEED_PAGE_ROWS,
 					);
-					details = { firstPageRows: firstPage.length, rows: secondPage.length };
+					details = {
+						firstPageRows: firstPage.length,
+						rows: secondPage.length,
+					};
 					break;
 				}
 				case "join-order-items": {
@@ -1171,7 +1257,9 @@ export const sqliteRealworldBench = actor({
 				}
 				case "random-point-lookups": {
 					const [count] = typedRows<CountRow>(
-						await c.db.execute("SELECT COUNT(*) AS rows FROM rw_orders"),
+						await c.db.execute(
+							"SELECT COUNT(*) AS rows FROM rw_orders",
+						),
 					);
 					const rows = Math.max(1, count?.rows ?? 1);
 					let bytes = 0;
@@ -1237,8 +1325,11 @@ export const sqliteRealworldBench = actor({
 					const expectedRows = Math.max(
 						1,
 						Math.ceil(
-							positiveInteger(input.targetBytes, CHAT_LOG_CHUNK_BYTES, "targetBytes") /
+							positiveInteger(
+								input.targetBytes,
 								CHAT_LOG_CHUNK_BYTES,
+								"targetBytes",
+							) / CHAT_LOG_CHUNK_BYTES,
 						),
 					);
 					const lowerBound = Math.max(0, expectedRows - 100);
@@ -1274,31 +1365,37 @@ export const sqliteRealworldBench = actor({
 					const expectedRows = Math.max(
 						1,
 						Math.ceil(
-							positiveInteger(input.targetBytes, CHAT_LOG_CHUNK_BYTES, "targetBytes") /
+							positiveInteger(
+								input.targetBytes,
 								CHAT_LOG_CHUNK_BYTES,
+								"targetBytes",
+							) / CHAT_LOG_CHUNK_BYTES,
 						),
 					);
 					const lowerBound = Math.max(0, expectedRows - 100);
-					const [limitRows, indexedRows, countRows, sumRows] = await Promise.all([
-						c.db.execute(
-							"SELECT seq, role, substr(content, 1, 128) AS preview FROM rw_chat_log ORDER BY created_at DESC LIMIT 100",
-						),
-						c.db.execute(
-							"SELECT seq, role, content_bytes FROM rw_chat_log WHERE thread_id = ? AND seq >= ? ORDER BY seq DESC LIMIT 100",
-							CHAT_THREAD_ID,
-							lowerBound,
-						),
-						c.db.execute(
-							"SELECT COUNT(*) AS count FROM rw_chat_log WHERE thread_id = ?",
-							CHAT_THREAD_ID,
-						),
-						c.db.execute(
-							"SELECT SUM(content_bytes) AS total_bytes FROM rw_chat_log WHERE thread_id = ?",
-							CHAT_THREAD_ID,
-						),
-					]);
+					const [limitRows, indexedRows, countRows, sumRows] =
+						await Promise.all([
+							c.db.execute(
+								"SELECT seq, role, substr(content, 1, 128) AS preview FROM rw_chat_log ORDER BY created_at DESC LIMIT 100",
+							),
+							c.db.execute(
+								"SELECT seq, role, content_bytes FROM rw_chat_log WHERE thread_id = ? AND seq >= ? ORDER BY seq DESC LIMIT 100",
+								CHAT_THREAD_ID,
+								lowerBound,
+							),
+							c.db.execute(
+								"SELECT COUNT(*) AS count FROM rw_chat_log WHERE thread_id = ?",
+								CHAT_THREAD_ID,
+							),
+							c.db.execute(
+								"SELECT SUM(content_bytes) AS total_bytes FROM rw_chat_log WHERE thread_id = ?",
+								CHAT_THREAD_ID,
+							),
+						]);
 					const [countRow] = typedRows<{ count: number }>(countRows);
-					const [sumRow] = typedRows<{ total_bytes: number | null }>(sumRows);
+					const [sumRow] = typedRows<{ total_bytes: number | null }>(
+						sumRows,
+					);
 					details = {
 						ops: 4,
 						limitRows: limitRows.length,
@@ -1337,7 +1434,9 @@ export const sqliteRealworldBench = actor({
 							"SELECT id, name, length(spec) AS bytes FROM tools WHERE executor_id = ? ORDER BY updated_at DESC",
 							"exec-1",
 						),
-						c.db.execute("SELECT key, length(value) AS bytes FROM meta"),
+						c.db.execute(
+							"SELECT key, length(value) AS bytes FROM meta",
+						),
 						c.db.execute(`SELECT m.id, m.role, count(tr.id) AS pending_refs
 							FROM msgs m
 							LEFT JOIN tool_refs tr ON tr.msg_id = m.id AND tr.status = 'pending'
@@ -1360,14 +1459,24 @@ export const sqliteRealworldBench = actor({
 				}
 				case "write-batch-after-wake": {
 					const [count] = typedRows<CountRow>(
-						await c.db.execute("SELECT COUNT(*) AS rows FROM rw_orders"),
+						await c.db.execute(
+							"SELECT COUNT(*) AS rows FROM rw_orders",
+						),
 					);
 					const startId = (count?.rows ?? 0) + 1;
 					await c.db.execute("BEGIN");
-					for (let offset = 0; offset < 1000; offset += ORDER_BATCH_ROWS) {
+					for (
+						let offset = 0;
+						offset < 1000;
+						offset += ORDER_BATCH_ROWS
+					) {
 						const placeholders: string[] = [];
 						const args: unknown[] = [];
-						for (let i = offset; i < offset + ORDER_BATCH_ROWS; i += 1) {
+						for (
+							let i = offset;
+							i < offset + ORDER_BATCH_ROWS;
+							i += 1
+						) {
 							const id = startId + i;
 							placeholders.push("(?, ?, ?, ?, ?, ?, ?)");
 							args.push(
@@ -1377,7 +1486,10 @@ export const sqliteRealworldBench = actor({
 								"pending",
 								1000 + i,
 								i % 128,
-								payload(`wake-insert-${id}:`, DEFAULT_ROW_BYTES),
+								payload(
+									`wake-insert-${id}:`,
+									DEFAULT_ROW_BYTES,
+								),
 							);
 						}
 						await c.db.execute(
@@ -1402,7 +1514,9 @@ export const sqliteRealworldBench = actor({
 					break;
 				}
 				case "delete-churn-range-read": {
-					await c.db.execute("DELETE FROM rw_orders WHERE shard BETWEEN 0 AND 15");
+					await c.db.execute(
+						"DELETE FROM rw_orders WHERE shard BETWEEN 0 AND 15",
+					);
 					const result = await readRowidRange(c.db, "forward");
 					details = {
 						...result,
@@ -1468,7 +1582,9 @@ export const sqliteRealworldBench = actor({
 						tenant_id TEXT NOT NULL,
 						created_at INTEGER NOT NULL
 					)`);
-					await c.db.execute("ALTER TABLE rw_migration_empty ADD COLUMN status TEXT");
+					await c.db.execute(
+						"ALTER TABLE rw_migration_empty ADD COLUMN status TEXT",
+					);
 					await c.db.execute(
 						"CREATE INDEX idx_rw_migration_empty_tenant_created ON rw_migration_empty(tenant_id, created_at)",
 					);

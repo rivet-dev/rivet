@@ -16,10 +16,15 @@ import type {
 	WakeContext,
 	WebSocketContext,
 } from "@/actor/config";
+
 export type { ActorContextOf } from "@/actor/config";
-import type { AnyActorDefinition, BaseActorDefinition } from "@/actor/definition";
-import type { AnyDatabaseProvider } from "@/common/database/config";
+
+import type {
+	AnyActorDefinition,
+	BaseActorDefinition,
+} from "@/actor/definition";
 import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
+import type { AnyDatabaseProvider } from "@/common/database/config";
 
 export type ActionContextOf<AD extends AnyActorDefinition> =
 	AD extends BaseActorDefinition<

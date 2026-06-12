@@ -1,4 +1,13 @@
-use std::{env, future::Future, sync::Arc, time::Duration};
+use std::{
+	env,
+	future::Future,
+	ops::Range,
+	sync::{
+		Arc, OnceLock,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Duration,
+};
 
 use rivet_metrics_server::init_otel_providers;
 use tokio::sync::{Notify, OnceCell};
@@ -62,9 +71,13 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	rt_builder.on_task_spawn(move |_| metrics::TOKIO_TASK_TOTAL.inc());
 
 	if env::var("TOKIO_RUNTIME_METRICS").is_ok() {
-		rt_builder.on_before_task_poll(|_| {
+		let last_seen_poll_counts = Arc::new(OnceLock::new());
+
+		rt_builder.on_before_task_poll(move |_| {
 			let metrics = tokio::runtime::Handle::current().metrics();
 			let buckets = metrics.poll_time_histogram_num_buckets();
+			let last_seen_poll_counts = last_seen_poll_counts
+				.get_or_init(|| poll_count_state(metrics.num_workers(), buckets));
 
 			metrics::TOKIO_GLOBAL_QUEUE_DEPTH.set(metrics.global_queue_depth() as i64);
 			metrics::TOKIO_ACTIVE_TASK_COUNT.set(metrics.num_alive_tasks() as i64);
@@ -77,28 +90,18 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 					.with_label_values(&[&worker.to_string()])
 					.set(metrics.worker_local_queue_depth(worker) as i64);
 
-				use rivet_metrics::prometheus::core::Metric;
-				// Has some sort of internal lock, must read data before loop
-				let prom_buckets = {
-					metrics::TOKIO_TASK_POLL_DURATION
-						.metric()
-						.get_histogram()
-						.get_bucket()
-						.iter()
-						.map(|bucket| bucket.cumulative_count())
-						.collect::<Vec<_>>()
-				};
+				if let Some(worker_counts) = last_seen_poll_counts.get(worker) {
+					for bucket in 0..buckets {
+						if let Some(last_seen_count) = worker_counts.get(bucket) {
+							let range = metrics.poll_time_histogram_bucket_range(bucket);
+							let count = metrics.poll_time_histogram_bucket_count(worker, bucket);
+							let diff = poll_bucket_delta(last_seen_count, count);
+							let observe_value = poll_bucket_observe_value(range);
 
-				for (bucket, prom_bucket_count) in (0..buckets).zip(prom_buckets) {
-					let range = metrics.poll_time_histogram_bucket_range(bucket);
-					let count = metrics.poll_time_histogram_bucket_count(worker, bucket);
-					// Calculate difference in tokio's internal bucket counts and
-					// prom's internal count
-					let diff = count.saturating_sub(prom_bucket_count);
-
-					// Match prom's count with tokio's for given bucket
-					for _ in 0..diff {
-						metrics::TOKIO_TASK_POLL_DURATION.observe(range.start.as_secs_f64());
+							for _ in 0..diff {
+								metrics::TOKIO_TASK_POLL_DURATION.observe(observe_value);
+							}
+						}
 					}
 				}
 			}
@@ -151,4 +154,35 @@ fn build_tokio_runtime_builder() -> tokio::runtime::Builder {
 	}
 
 	rt_builder
+}
+
+fn poll_count_state(workers: usize, buckets: usize) -> Vec<Vec<AtomicU64>> {
+	(0..workers)
+		.map(|_| (0..buckets).map(|_| AtomicU64::new(0)).collect())
+		.collect()
+}
+
+fn poll_bucket_delta(last_seen: &AtomicU64, current: u64) -> u64 {
+	loop {
+		let previous = last_seen.load(Ordering::Relaxed);
+		if current <= previous {
+			return 0;
+		}
+
+		if last_seen
+			.compare_exchange(previous, current, Ordering::Relaxed, Ordering::Relaxed)
+			.is_ok()
+		{
+			return current - previous;
+		}
+	}
+}
+
+fn poll_bucket_observe_value(range: Range<Duration>) -> f64 {
+	let start = range.start.as_secs_f64();
+	if range.end == Duration::from_nanos(u64::MAX) {
+		return start * 2.0;
+	}
+
+	start + (range.end.as_secs_f64() - start) / 2.0
 }

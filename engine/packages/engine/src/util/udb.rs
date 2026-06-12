@@ -24,14 +24,11 @@ pub enum SimpleTupleValue {
 	String(String),
 	Nested(Vec<SimpleTupleValue>),
 	Bytes(Vec<u8>),
+	/// Is written to database as-is, not encoded as bytes.
 	Unknown(Vec<u8>),
 }
 
 impl SimpleTupleValue {
-	fn parse_str(value: &str) -> Self {
-		Self::parse_str_inner(value, true, true)
-	}
-
 	fn parse_str_inner(value: &str, convert_keys: bool, nested: bool) -> Self {
 		if let Ok(v) = value.parse::<u64>() {
 			SimpleTupleValue::U64(v)
@@ -400,71 +397,12 @@ pub struct SimpleTupleSegment {
 }
 
 impl SimpleTupleSegment {
-	fn parse_str(prefix: Option<&str>, value: &str) -> Result<Self> {
-		let parsed_value = match prefix {
-			Some("u64") => value
-				.parse::<u64>()
-				.map(SimpleTupleValue::U64)
-				.with_context(|| format!("Could not parse `{value}` as u64"))?,
-			Some("i64") => value
-				.parse::<i64>()
-				.map(SimpleTupleValue::I64)
-				.with_context(|| format!("Could not parse `{value}` as i64"))?,
-			Some("f64") => value
-				.parse::<f64>()
-				.map(SimpleTupleValue::F64)
-				.with_context(|| format!("Could not parse `{value}` as f64"))?,
-			Some("uuid") => Uuid::from_str(value)
-				.map(SimpleTupleValue::Uuid)
-				.with_context(|| format!("Could not parse `{value}` as UUID"))?,
-			Some("id") => rivet_util::Id::from_str(value)
-				.map(SimpleTupleValue::Id)
-				.with_context(|| format!("Could not parse `{value}` as ID"))?,
-			Some("str") => SimpleTupleValue::String(value.to_string()),
-			Some("nested") => {
-				if !value.trim().starts_with('[') && !value.trim().ends_with(']') {
-					bail!("nested segment must start and end with [ ]");
-				}
+	pub fn new(value: SimpleTupleValue) -> Self {
+		SimpleTupleSegment { value }
+	}
 
-				let mut items = Vec::new();
-				let mut last = 0;
-				let mut prefix = None;
-				let mut escaped = false;
-
-				for (i, c) in value.chars().enumerate() {
-					match c {
-						'\\' if !escaped => escaped = true,
-						',' if !escaped => {
-							items.push(
-								SimpleTupleSegment::parse_str(prefix.take(), &value[last..i])?
-									.value,
-							);
-							last = i;
-						}
-						':' if !escaped => {
-							prefix = Some(&value[last..i]);
-							last = i;
-						}
-						_ => escaped = false,
-					}
-				}
-
-				items.push(SimpleTupleSegment::parse_str(prefix.take(), &value[last..])?.value);
-
-				SimpleTupleValue::Nested(items)
-			}
-			Some("bytes") | Some("b") => {
-				let bytes = hex::decode(value.as_bytes())
-					.with_context(|| format!("Could not parse `{value}` as hex encoded bytes"))?;
-				SimpleTupleValue::Bytes(bytes)
-			}
-			Some(prefix) => bail!("unknown type: `{prefix}`"),
-			_ => SimpleTupleValue::parse_str(value),
-		};
-
-		Ok(SimpleTupleSegment {
-			value: parsed_value,
-		})
+	pub fn value(&self) -> &SimpleTupleValue {
+		&self.value
 	}
 }
 
@@ -509,84 +447,6 @@ impl SimpleTuple {
 		SimpleTuple {
 			segments: self.segments.iter().take(n).cloned().collect(),
 		}
-	}
-
-	pub fn parse(value: &str) -> Result<(Self, bool, usize)> {
-		let mut segments = Vec::new();
-		let mut back_count = 0;
-		let mut normal_segment_encountered = false;
-		let mut start = 0;
-		let mut prefix = None;
-		let mut escaped = false;
-		let mut depth = 0usize;
-
-		for (i, c) in value.chars().enumerate() {
-			match c {
-				'/' => {
-					if depth == 0 {
-						if i > start {
-							let segment = &value[start..i];
-
-							// Parse back
-							if segment == ".." {
-								if normal_segment_encountered {
-									bail!("Invalid path: '..' cannot go after other segments");
-								}
-
-								back_count += 1;
-							} else if segment == "." {
-								// Noop
-							} else {
-								// Parse normal segment
-								normal_segment_encountered = true;
-								segments.push(SimpleTupleSegment::parse_str(
-									prefix.take(),
-									segment.trim(),
-								)?);
-							}
-						} else if start != 0 && i == start {
-							segments.push(SimpleTupleSegment::parse_str(prefix.take(), "")?);
-						}
-
-						start = i + 1;
-					}
-				}
-				'\\' if !escaped => escaped = true,
-				':' if !escaped && prefix.is_none() => {
-					prefix = Some(&value[start..i]);
-					start = i + 1;
-				}
-				'[' if !escaped => {
-					depth += 1;
-				}
-				']' if !escaped => {
-					depth = depth.saturating_sub(1);
-				}
-				_ => escaped = false,
-			}
-		}
-
-		let segment = value[start..].trim();
-		if segment == ".." {
-			if normal_segment_encountered {
-				bail!("Invalid path: '..' cannot go after other segments");
-			}
-
-			back_count += 1;
-		} else if segment == "." {
-			// Noop
-		} else if !segment.is_empty() {
-			segments.push(SimpleTupleSegment::parse_str(
-				prefix.take(),
-				segment.trim(),
-			)?);
-		}
-
-		Ok((
-			SimpleTuple { segments },
-			!value.starts_with('/'),
-			back_count,
-		))
 	}
 
 	pub fn print(&self, list_style: &ListStyle, last_key: &SimpleTuple) {

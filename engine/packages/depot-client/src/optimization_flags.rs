@@ -23,17 +23,20 @@ pub const VFS_PAGE_CACHE_CAPACITY_PAGES_ENV: &str =
 	"RIVETKIT_SQLITE_OPT_VFS_PAGE_CACHE_CAPACITY_PAGES";
 pub const VFS_PROTECTED_CACHE_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES";
 pub const VFS_STAGING_CACHE_TTL_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS";
+pub const PAGER_CACHE_SIZE_KIB_ENV: &str = "RIVETKIT_SQLITE_OPT_PAGER_CACHE_SIZE_KIB";
 
-pub const DEFAULT_STARTUP_PRELOAD_MAX_BYTES: usize = 1024 * 1024;
-pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 8 * 1024 * 1024;
-pub const DEFAULT_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 1;
-pub const MAX_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 256;
+pub const DEFAULT_STARTUP_PRELOAD_MAX_BYTES: usize = 2 * 1024 * 1024;
+pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 64 * 1024 * 1024;
+pub const DEFAULT_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 128;
+pub const MAX_STARTUP_PRELOAD_FIRST_PAGE_COUNT: u32 = 16_384;
 pub const DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 50_000;
 pub const MAX_VFS_PAGE_CACHE_CAPACITY_PAGES: u64 = 500_000;
 pub const DEFAULT_VFS_PROTECTED_CACHE_PAGES: usize = 512;
 pub const MAX_VFS_PROTECTED_CACHE_PAGES: usize = 8_192;
 pub const DEFAULT_VFS_STAGING_CACHE_TTL_MS: u64 = 30_000;
 pub const MAX_VFS_STAGING_CACHE_TTL_MS: u64 = 300_000;
+pub const DEFAULT_PAGER_CACHE_SIZE_KIB: u64 = 8 * 1024;
+pub const MAX_PAGER_CACHE_SIZE_KIB: u64 = 256 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteReadAheadMode {
@@ -106,6 +109,7 @@ pub struct SqliteOptimizationFlags {
 	pub vfs_page_cache_capacity_pages: u64,
 	pub vfs_protected_cache_pages: usize,
 	pub vfs_staging_cache_ttl_ms: u64,
+	pub pager_cache_size_kib: u64,
 }
 
 impl Default for SqliteOptimizationFlags {
@@ -133,6 +137,7 @@ impl Default for SqliteOptimizationFlags {
 			vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
 			vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES,
 			vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS,
+			pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
 		}
 	}
 }
@@ -206,6 +211,11 @@ impl SqliteOptimizationFlags {
 				DEFAULT_VFS_STAGING_CACHE_TTL_MS,
 				MAX_VFS_STAGING_CACHE_TTL_MS,
 			),
+			pager_cache_size_kib: u64_bounded_by_default(
+				read_env(PAGER_CACHE_SIZE_KIB_ENV).as_deref(),
+				DEFAULT_PAGER_CACHE_SIZE_KIB,
+				MAX_PAGER_CACHE_SIZE_KIB,
+			),
 		}
 	}
 }
@@ -228,6 +238,7 @@ fn enabled_by_default(value: Option<&str>) -> bool {
 		_ => true,
 	}
 }
+
 fn usize_bounded_by_default(value: Option<&str>, default: usize, max: usize) -> usize {
 	value
 		.and_then(|value| value.trim().parse::<usize>().ok())
@@ -382,6 +393,7 @@ mod tests {
 			}
 			VFS_PROTECTED_CACHE_PAGES_ENV => Some((MAX_VFS_PROTECTED_CACHE_PAGES + 1).to_string()),
 			VFS_STAGING_CACHE_TTL_MS_ENV => Some((MAX_VFS_STAGING_CACHE_TTL_MS + 1).to_string()),
+			PAGER_CACHE_SIZE_KIB_ENV => Some((MAX_PAGER_CACHE_SIZE_KIB + 1).to_string()),
 			_ => None,
 		});
 		assert_eq!(
@@ -404,5 +416,6 @@ mod tests {
 			clamped.vfs_staging_cache_ttl_ms,
 			MAX_VFS_STAGING_CACHE_TTL_MS
 		);
+		assert_eq!(clamped.pager_cache_size_kib, MAX_PAGER_CACHE_SIZE_KIB);
 	}
 }

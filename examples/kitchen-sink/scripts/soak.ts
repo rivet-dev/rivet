@@ -14,13 +14,13 @@
 // baselines are clean and metrics can be filtered by revision_name.
 
 import { execFile } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { createWriteStream, type WriteStream } from "node:fs";
 import { tmpdir } from "node:os";
-import { promisify } from "node:util";
-import { randomBytes } from "node:crypto";
-import { setTimeout as sleep } from "node:timers/promises";
 import { performance } from "node:perf_hooks";
-import { createClient, type Client } from "rivetkit/client";
+import { setTimeout as sleep } from "node:timers/promises";
+import { promisify } from "node:util";
+import { type Client, createClient } from "rivetkit/client";
 import type { registry } from "../src/index.ts";
 
 const execFileAsync = promisify(execFile);
@@ -177,7 +177,10 @@ async function getCurrentRevision(): Promise<string> {
 	return rev;
 }
 
-async function bumpRevision(runId: string, prevRevision: string | null): Promise<string> {
+async function bumpRevision(
+	runId: string,
+	prevRevision: string | null,
+): Promise<string> {
 	await execFileAsync(
 		"gcloud",
 		[
@@ -198,11 +201,16 @@ async function bumpRevision(runId: string, prevRevision: string | null): Promise
 		if (rev !== prevRevision) return rev;
 		await sleep(2000);
 	}
-	throw new Error(`revision did not change from ${prevRevision} within 60s after bump`);
+	throw new Error(
+		`revision did not change from ${prevRevision} within 60s after bump`,
+	);
 }
 
 async function gcloudAccessToken(): Promise<string> {
-	const { stdout } = await execFileAsync("gcloud", ["auth", "print-access-token"]);
+	const { stdout } = await execFileAsync("gcloud", [
+		"auth",
+		"print-access-token",
+	]);
 	return stdout.trim();
 }
 
@@ -231,7 +239,10 @@ function pointValue(p: { value: Record<string, unknown> }): number | null {
 	if (typeof v.doubleValue === "number") return v.doubleValue;
 	if (typeof v.int64Value === "string") return Number(v.int64Value);
 	if (typeof v.int64Value === "number") return v.int64Value;
-	if (v.distributionValue && typeof (v.distributionValue as { mean?: number }).mean === "number") {
+	if (
+		v.distributionValue &&
+		typeof (v.distributionValue as { mean?: number }).mean === "number"
+	) {
 		return (v.distributionValue as { mean: number }).mean;
 	}
 	return null;
@@ -379,27 +390,41 @@ async function runChurn(
 				// Full lifecycle through destroyActor: create + setValue + destroy.
 				const key = [`soak-${runId}-destroy-${cycleId}`];
 				const handle = client.destroyActor.getOrCreate(key);
-				const ok = await safeCall(jsonl, "churn_destroy", { key }, async () => {
-					const v = await handle.setValue(localCycle);
-					if (v !== localCycle) {
-						throw new Error(`setValue returned ${v}, expected ${localCycle}`);
-					}
-					await handle.destroy();
-					return true;
-				});
+				const ok = await safeCall(
+					jsonl,
+					"churn_destroy",
+					{ key },
+					async () => {
+						const v = await handle.setValue(localCycle);
+						if (v !== localCycle) {
+							throw new Error(
+								`setValue returned ${v}, expected ${localCycle}`,
+							);
+						}
+						await handle.destroy();
+						return true;
+					},
+				);
 				if (!ok) stats.failures += 1;
 			} else {
 				// Sleep cycle: wake + triggerSleep on the sleep actor.
 				const key = [`soak-${runId}-sleep-${cycleId}`];
 				const handle = client.sleep.getOrCreate(key);
-				const ok = await safeCall(jsonl, "churn_sleep", { key }, async () => {
-					const counts = await handle.getCounts();
-					if (typeof counts.startCount !== "number") {
-						throw new Error("getCounts returned non-numeric startCount");
-					}
-					await handle.triggerSleep();
-					return true;
-				});
+				const ok = await safeCall(
+					jsonl,
+					"churn_sleep",
+					{ key },
+					async () => {
+						const counts = await handle.getCounts();
+						if (typeof counts.startCount !== "number") {
+							throw new Error(
+								"getCounts returned non-numeric startCount",
+							);
+						}
+						await handle.triggerSleep();
+						return true;
+					},
+				);
 				if (!ok) stats.failures += 1;
 			}
 			stats.cycles += 1;
@@ -409,7 +434,10 @@ async function runChurn(
 
 	const shutdown = new AbortController();
 	const reporter = (async () => {
-		while (performance.now() - startedAt < durationMs && !shutdown.signal.aborted) {
+		while (
+			performance.now() - startedAt < durationMs &&
+			!shutdown.signal.aborted
+		) {
 			try {
 				await sleep(60_000, undefined, { signal: shutdown.signal });
 			} catch {
@@ -452,7 +480,9 @@ async function runSteady(
 	const heldKeys: { kind: "counter" | "sqlite" | "kv"; key: string[] }[] = [];
 
 	for (const target of STEPS) {
-		progress(`steady step target=${target} (currently held=${heldKeys.length})`);
+		progress(
+			`steady step target=${target} (currently held=${heldKeys.length})`,
+		);
 		while (heldKeys.length < target) {
 			const i = createdCount;
 			createdCount += 1;
@@ -462,16 +492,25 @@ async function runSteady(
 			else if (r < 4) kind = "sqlite";
 			else kind = "kv";
 			const key = [`soak-${runId}-${kind}-${i}`];
-			const ok = await safeCall(jsonl, "steady_create", { kind, key }, async () => {
-				if (kind === "counter") {
-					await client.counter.getOrCreate(key).increment(1);
-				} else if (kind === "sqlite") {
-					await client.sqliteRawActor.getOrCreate(key).addTodo(`row-${i}`);
-				} else {
-					await client.kvActor.getOrCreate(key).putText(`k${i}`, `v${i}`);
-				}
-				return true;
-			});
+			const ok = await safeCall(
+				jsonl,
+				"steady_create",
+				{ kind, key },
+				async () => {
+					if (kind === "counter") {
+						await client.counter.getOrCreate(key).increment(1);
+					} else if (kind === "sqlite") {
+						await client.sqliteRawActor
+							.getOrCreate(key)
+							.addTodo(`row-${i}`);
+					} else {
+						await client.kvActor
+							.getOrCreate(key)
+							.putText(`k${i}`, `v${i}`);
+					}
+					return true;
+				},
+			);
 			if (ok) {
 				heldKeys.push({ kind, key });
 				stats.cycles += 1;
@@ -479,8 +518,14 @@ async function runSteady(
 				stats.failures += 1;
 			}
 		}
-		jsonl.write({ event: "step_reached", target, holding: heldKeys.length });
-		progress(`step ${target} reached, holding ${STEP_HOLD_MS / 1000}s before next step`);
+		jsonl.write({
+			event: "step_reached",
+			target,
+			holding: heldKeys.length,
+		});
+		progress(
+			`step ${target} reached, holding ${STEP_HOLD_MS / 1000}s before next step`,
+		);
 		await sleep(STEP_HOLD_MS);
 		jsonl.write({ event: "step_sample", target });
 	}
@@ -503,7 +548,11 @@ async function runScale(
 	const stats: Stats = { cycles: 0, failures: 0 };
 
 	progress(`opening ${N_WS} websockets...`);
-	type WsHandle = { ws: WebSocket; key: string[]; pingTimer?: NodeJS.Timeout };
+	type WsHandle = {
+		ws: WebSocket;
+		key: string[];
+		pingTimer?: NodeJS.Timeout;
+	};
 	const conns: WsHandle[] = [];
 	for (let i = 0; i < N_WS; i += 1) {
 		const key = [`soak-${runId}-ws-${i}`];
@@ -512,17 +561,35 @@ async function runScale(
 			const ws = (await handle.webSocket()) as unknown as WebSocket;
 			if (ws.readyState !== WebSocket.OPEN) {
 				await new Promise<void>((resolve, reject) => {
-					ws.addEventListener("open", () => resolve(), { once: true });
-					ws.addEventListener("error", () => reject(new Error("ws error")), { once: true });
-					ws.addEventListener("close", () => reject(new Error("ws closed before open")), { once: true });
+					ws.addEventListener("open", () => resolve(), {
+						once: true,
+					});
+					ws.addEventListener(
+						"error",
+						() => reject(new Error("ws error")),
+						{ once: true },
+					);
+					ws.addEventListener(
+						"close",
+						() => reject(new Error("ws closed before open")),
+						{ once: true },
+					);
 				});
 			}
 			ws.addEventListener("error", (ev) => {
-				jsonl.write({ event: "ws_error", key, message: String((ev as { message?: string }).message ?? "") });
+				jsonl.write({
+					event: "ws_error",
+					key,
+					message: String((ev as { message?: string }).message ?? ""),
+				});
 				stats.failures += 1;
 			});
 			ws.addEventListener("close", (ev) => {
-				jsonl.write({ event: "ws_close", key, code: (ev as CloseEvent).code });
+				jsonl.write({
+					event: "ws_close",
+					key,
+					code: (ev as CloseEvent).code,
+				});
 			});
 			conns.push({ ws, key });
 			if (i % 50 === 49) progress(`opened ${i + 1}/${N_WS} websockets`);
@@ -536,7 +603,9 @@ async function runScale(
 		}
 	}
 	jsonl.write({ event: "ws_opened", count: conns.length, target: N_WS });
-	progress(`websockets opened: ${conns.length}/${N_WS}. holding ${durationMs / 1000}s`);
+	progress(
+		`websockets opened: ${conns.length}/${N_WS}. holding ${durationMs / 1000}s`,
+	);
 
 	let pingCount = 0;
 	let counterRpcCount = 0;
@@ -555,14 +624,22 @@ async function runScale(
 	const shutdown = new AbortController();
 	const counterTask = (async () => {
 		const intervalMs = Math.max(1, Math.floor(1000 / N_RPS_TARGET));
-		while (performance.now() - startedAt < durationMs && !shutdown.signal.aborted) {
+		while (
+			performance.now() - startedAt < durationMs &&
+			!shutdown.signal.aborted
+		) {
 			const i = nextCounterIdx;
 			nextCounterIdx += 1;
 			const key = [`soak-${runId}-c-${i}`];
-			const ok = await safeCall(jsonl, "scale_counter", { key }, async () => {
-				await client.counter.getOrCreate(key).noop();
-				return true;
-			});
+			const ok = await safeCall(
+				jsonl,
+				"scale_counter",
+				{ key },
+				async () => {
+					await client.counter.getOrCreate(key).noop();
+					return true;
+				},
+			);
 			if (!ok) stats.failures += 1;
 			else counterRpcCount += 1;
 			try {
@@ -574,7 +651,10 @@ async function runScale(
 	})();
 
 	const reporter = (async () => {
-		while (performance.now() - startedAt < durationMs && !shutdown.signal.aborted) {
+		while (
+			performance.now() - startedAt < durationMs &&
+			!shutdown.signal.aborted
+		) {
 			try {
 				await sleep(30_000, undefined, { signal: shutdown.signal });
 			} catch {
@@ -582,7 +662,9 @@ async function runScale(
 			}
 			const elapsedS = Math.floor((performance.now() - startedAt) / 1000);
 			const totalS = Math.floor(durationMs / 1000);
-			const open = conns.filter((c) => c.ws.readyState === WebSocket.OPEN).length;
+			const open = conns.filter(
+				(c) => c.ws.readyState === WebSocket.OPEN,
+			).length;
 			progress(
 				`scale ${elapsedS}/${totalS}s ws_open=${open} pings=${pingCount} rpcs=${counterRpcCount}`,
 			);
@@ -640,13 +722,25 @@ function computeVerdict(
 	const notes: string[] = [];
 	let pass = true;
 
-	const memSeries = metrics.filter((m) => m.metric.endsWith("/memory/utilizations"));
-	const cpuSeries = metrics.filter((m) => m.metric.endsWith("/cpu/utilizations"));
-	const instSeries = metrics.filter((m) => m.metric.endsWith("/instance_count"));
+	const memSeries = metrics.filter((m) =>
+		m.metric.endsWith("/memory/utilizations"),
+	);
+	const cpuSeries = metrics.filter((m) =>
+		m.metric.endsWith("/cpu/utilizations"),
+	);
+	const instSeries = metrics.filter((m) =>
+		m.metric.endsWith("/instance_count"),
+	);
 
-	const memValues = memSeries.flatMap((s) => s.points.map((p) => p.value).filter((v): v is number => v !== null));
-	const cpuValues = cpuSeries.flatMap((s) => s.points.map((p) => p.value).filter((v): v is number => v !== null));
-	const instValues = instSeries.flatMap((s) => s.points.map((p) => p.value).filter((v): v is number => v !== null));
+	const memValues = memSeries.flatMap((s) =>
+		s.points.map((p) => p.value).filter((v): v is number => v !== null),
+	);
+	const cpuValues = cpuSeries.flatMap((s) =>
+		s.points.map((p) => p.value).filter((v): v is number => v !== null),
+	);
+	const instValues = instSeries.flatMap((s) =>
+		s.points.map((p) => p.value).filter((v): v is number => v !== null),
+	);
 
 	const memMax = memValues.length ? Math.max(...memValues) : null;
 	const memP95 = quantile(memValues, 0.95);
@@ -671,7 +765,9 @@ function computeVerdict(
 		}
 		if (memMax !== null && memMax >= 0.95) {
 			pass = false;
-			notes.push(`memory utilization reached ${(memMax * 100).toFixed(1)}% (>=95%)`);
+			notes.push(
+				`memory utilization reached ${(memMax * 100).toFixed(1)}% (>=95%)`,
+			);
 		}
 	}
 
@@ -716,7 +812,9 @@ async function main(): Promise<void> {
 		progress(`reusing revision=${revision} (no bump)`);
 	} else {
 		const prevRevision = await getCurrentRevision();
-		progress(`bumping SOAK_RUN_ID env var (prev revision=${prevRevision})...`);
+		progress(
+			`bumping SOAK_RUN_ID env var (prev revision=${prevRevision})...`,
+		);
 		revision = await bumpRevision(runId, prevRevision);
 		progress(`revision=${revision}`);
 	}
@@ -757,7 +855,13 @@ async function main(): Promise<void> {
 		const allMetrics: MetricSeries[] = [];
 		for (const m of METRIC_TYPES) {
 			try {
-				const series = await fetchMetricSeries(m, revision, startISO, endISO, monToken);
+				const series = await fetchMetricSeries(
+					m,
+					revision,
+					startISO,
+					endISO,
+					monToken,
+				);
 				for (const s of series) {
 					jsonl.write({ event: "metric", ...s });
 					allMetrics.push(s);
@@ -778,7 +882,8 @@ async function main(): Promise<void> {
 		let errorLogs: LogEntry[] = [];
 		try {
 			errorLogs = await fetchErrorLogs(revision, startISO, endISO);
-			for (const e of errorLogs) jsonl.write({ event: "log_error", entry: e });
+			for (const e of errorLogs)
+				jsonl.write({ event: "log_error", entry: e });
 		} catch (err) {
 			jsonl.write({
 				event: "log_fetch_failed",
@@ -798,7 +903,7 @@ async function main(): Promise<void> {
 		);
 		if (verdict.memory_max_util !== null) {
 			progress(
-				`memory max=${(verdict.memory_max_util * 100).toFixed(1)}% p95=${verdict.memory_p95_util !== null ? (verdict.memory_p95_util * 100).toFixed(1) + "%" : "n/a"}`,
+				`memory max=${(verdict.memory_max_util * 100).toFixed(1)}% p95=${verdict.memory_p95_util !== null ? `${(verdict.memory_p95_util * 100).toFixed(1)}%` : "n/a"}`,
 			);
 		}
 		if (verdict.cpu_max_util !== null) {
@@ -820,10 +925,14 @@ process.on("SIGINT", () => {
 		process.exit(130);
 	}
 	sigintFired = true;
-	process.stderr.write("[soak] SIGINT received, attempting graceful shutdown...\n");
+	process.stderr.write(
+		"[soak] SIGINT received, attempting graceful shutdown...\n",
+	);
 });
 
 main().catch((err) => {
-	process.stderr.write(`[soak] fatal: ${err instanceof Error ? err.stack : String(err)}\n`);
+	process.stderr.write(
+		`[soak] fatal: ${err instanceof Error ? err.stack : String(err)}\n`,
+	);
 	process.exit(1);
 });

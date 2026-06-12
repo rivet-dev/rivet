@@ -2,8 +2,8 @@ import { faHashtag, faKey } from "@rivet-gg/icons";
 import { useSearch } from "@tanstack/react-router";
 import { createContext, useContext } from "react";
 import { useReadLocalStorage } from "usehooks-ts";
-import { ls } from "../lib/utils";
 import { features } from "@/lib/features";
+import { ls } from "../lib/utils";
 import {
 	createFiltersPicker,
 	createFiltersRemover,

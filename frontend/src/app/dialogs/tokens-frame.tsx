@@ -78,7 +78,8 @@ function SecretToken() {
 	const namespace = dataProvider.engineNamespace;
 
 	const endpoint = features.platform
-		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
+		? regions.find((r) => r.name === selectedDatacenter)?.url ||
+			cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 
 	const envVars = `RIVET_ENDPOINT=${endpoint}
@@ -132,9 +133,9 @@ function PublishableToken() {
 		dataProvider.publishableTokenQueryOptions(),
 	);
 
-	const namespace = dataProvider.engineNamespace;
+	const _namespace = dataProvider.engineNamespace;
 
-	const endpoint = features.platform
+	const _endpoint = features.platform
 		? cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 

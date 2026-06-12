@@ -1,18 +1,14 @@
 import invariant from "invariant";
 import type { VersionedDataHandler } from "vbare";
 import type { z } from "zod/v4";
+import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/common/client-protocol-versioned";
+import { HttpResponseErrorSchema } from "@/common/client-protocol-zod";
 import type { Encoding } from "@/common/encoding";
 import { assertUnreachable } from "@/common/utils";
-import { HTTP_RESPONSE_ERROR_VERSIONED } from "@/common/client-protocol-versioned";
-import {
-	type HttpResponseError as HttpResponseErrorJson,
-	HttpResponseErrorSchema,
-} from "@/common/client-protocol-zod";
 import {
 	contentTypeForEncoding,
 	decodeCborCompat,
 	deserializeWithEncoding,
-	encodingIsBinary,
 	serializeWithEncoding,
 } from "@/serde";
 import { httpUserAgent } from "@/utils";

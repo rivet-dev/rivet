@@ -8,6 +8,7 @@ use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, Threadsafe
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
 use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
+use rivetkit_core::inspector::InspectorTabEntry;
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
 	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request, Response,
@@ -58,6 +59,25 @@ pub struct JsActionDefinition {
 	pub name: String,
 }
 
+/// One entry in the actor's `inspector.tabs[]` declaration. Either a
+/// custom-tab descriptor (id + label + source dir) or a built-in modifier
+/// (id + hidden=true). Validation already happened on the TS side; the
+/// runtime just splits the discriminator.
+#[napi(object)]
+#[derive(Clone)]
+pub struct JsInspectorTabEntry {
+	pub id: String,
+	/// Required for custom entries; omitted for HideBuiltin.
+	pub label: Option<String>,
+	/// Required for custom entries — absolute path to the source directory.
+	pub source: Option<String>,
+	/// Optional icon id for custom entries. Dashboard maps strings to
+	/// glyphs; unknown ids fall back to a generic icon.
+	pub icon: Option<String>,
+	/// Set to true for HideBuiltin entries.
+	pub hidden: Option<bool>,
+}
+
 #[napi(object)]
 #[derive(Clone, Default)]
 pub struct JsActorConfig {
@@ -91,6 +111,7 @@ pub struct JsActorConfig {
 	pub preload_max_workflow_bytes: Option<f64>,
 	pub preload_max_connections_bytes: Option<f64>,
 	pub actions: Option<Vec<JsActionDefinition>>,
+	pub inspector_tabs: Option<Vec<JsInspectorTabEntry>>,
 }
 
 #[derive(Clone)]
@@ -303,8 +324,12 @@ impl NapiActorFactory {
 		let adapter_config = Arc::new(AdapterConfig::from_js_config(&js_config));
 		let adapter_bindings = Arc::clone(&bindings);
 		let loop_config = Arc::clone(&adapter_config);
+		let actor_config = ActorConfig::from_input(ActorConfigInput::from(js_config));
+		// Reject malformed config (empty ids/labels, duplicate ids, custom
+		// tabs colliding with built-in ids, etc.) before the actor starts.
+		actor_config.validate().map_err(napi_anyhow_error)?;
 		let inner = Arc::new(CoreActorFactory::new_with_manual_startup_ready(
-			ActorConfig::from_input(ActorConfigInput::from(js_config)),
+			actor_config,
 			move |start| {
 				let bindings = Arc::clone(&adapter_bindings);
 				let config = Arc::clone(&loop_config);
@@ -1020,6 +1045,40 @@ impl From<JsActorConfig> for ActorConfigInput {
 				actions
 					.into_iter()
 					.map(|action| ActionDefinition { name: action.name })
+					.collect()
+			}),
+			inspector_tabs: value.inspector_tabs.map(|tabs| {
+				tabs.into_iter()
+					.map(|tab| {
+						if tab.hidden == Some(true) {
+							InspectorTabEntry::HideBuiltin { id: tab.id }
+						} else {
+							// `label` and `source` are required on the TS
+							// side but typed `Option<String>` on the NAPI
+							// boundary to share one struct with the
+							// HideBuiltin variant. Surface the real cause
+							// instead of silently defaulting to "" and
+							// letting downstream validation report an
+							// empty-label/empty-source error.
+							let id = tab.id.clone();
+							let label = tab.label.unwrap_or_else(|| {
+								panic!(
+									"inspector tab `{id}` is missing `label` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
+								)
+							});
+							let source = tab.source.unwrap_or_else(|| {
+								panic!(
+									"inspector tab `{id}` is missing `source` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
+								)
+							});
+							InspectorTabEntry::Custom {
+								id: tab.id,
+								label,
+								icon: tab.icon,
+								root: std::path::PathBuf::from(source),
+							}
+						}
+					})
 					.collect()
 			}),
 		}

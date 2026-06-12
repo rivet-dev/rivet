@@ -28,7 +28,7 @@ pub async fn pegboard_actor_hibernating_request_list(
 		.hibernating_request_eligible_threshold();
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_hibernating_request_list", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let ping_threshold_ts = util::timestamp::now() - hibernating_request_eligible_threshold;

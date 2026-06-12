@@ -523,11 +523,11 @@ const rateLimitedActor = actor({
 });
 ```
 
-The limits in this example are [ephemeral](/docs/actors/state#ephemeral-variables-vars). If you wish to persist rate limits, you can optionally replace `vars` with `state`.
+The limits in this example are [ephemeral](/docs/actors/state#ephemeral-variables). If you wish to persist rate limits, you can optionally replace `vars` with `state`.
 
 ### Caching Tokens
 
-Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/docs/actors/state#ephemeral-variables-vars) for more details.
+Cache validated tokens in `c.vars` to avoid redundant validation on repeated connections. See [ephemeral variables](/docs/actors/state#ephemeral-variables) for more details.
 
 ```typescript
 import { actor, UserError } from "rivetkit";

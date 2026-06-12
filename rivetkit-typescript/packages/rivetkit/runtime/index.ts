@@ -1,4 +1,5 @@
 import { convertRegistryConfigToClientConfig } from "@/client/config";
+import { ENGINE_ENDPOINT } from "@/common/engine";
 import { configureBaseLogger, configureDefaultLogger } from "@/common/log";
 import {
 	getDatacenters,
@@ -6,7 +7,6 @@ import {
 } from "@/engine-client/api-endpoints";
 import type { EngineControlClient } from "@/engine-client/driver";
 import { RemoteEngineControlClient } from "@/engine-client/mod";
-import { ENGINE_ENDPOINT } from "@/common/engine";
 import type { Registry } from "@/registry";
 import type { RegistryActors, RegistryConfig } from "@/registry/config";
 import { getNodeFsSync, importNodeDependencies } from "@/utils/node";

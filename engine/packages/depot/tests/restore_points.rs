@@ -49,7 +49,7 @@ async fn database_branch_id(
 ) -> Result<DatabaseBranchId> {
 	let bucket_id = BucketId::from_gas_id(bucket_id);
 
-	db.run(move |tx| async move {
+	db.txn("test_depotrestore_points", move |tx| async move {
 		branch::resolve_database_branch(&tx, bucket_id, database_id, Serializable)
 			.await?
 			.context("database branch should exist")
@@ -127,7 +127,7 @@ async fn restore_point_is_ready_without_legacy_cold_handoff_or_crash_window() ->
 			let branch_id = database_branch_id(&db, source_bucket, &database_id).await?;
 			let row = commit_row(&db, branch_id, 1).await?;
 
-			db.run(move |tx| async move {
+			db.txn("test_depotrestore_points", move |tx| async move {
 				tx.informal().set(
 					&branch_meta_compact_key(branch_id),
 					&encode_meta_compact(depot::types::MetaCompact {
@@ -263,7 +263,7 @@ async fn restore_point_survives_hot_commit_and_vtx_reclaim() -> Result<()> {
 			let branch_id = database_branch_id(&db, nil_bucket(), &database_id).await?;
 			let old_row = commit_row(&db, branch_id, 1).await?;
 
-			db.run(move |tx| async move {
+			db.txn("test_depotrestore_points", move |tx| async move {
 				tx.informal().clear(&branch_commit_key(branch_id, 1));
 				tx.informal()
 					.clear(&branch_vtx_key(branch_id, old_row.versionstamp));

@@ -11,15 +11,15 @@ use std::{
 
 use anyhow::{Context, Result, anyhow};
 use crossbeam_channel::{Receiver, Sender, TrySendError};
-use libsqlite3_sys::{SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE};
+use libsqlite3_sys::{SQLITE_OPEN_CREATE, SQLITE_OPEN_READWRITE, sqlite3_get_autocommit};
 use parking_lot::Mutex;
 use tokio::sync::{Notify, oneshot};
 
 use crate::{
 	query::{BindParam, ExecuteResult, QueryResult, exec_statements, execute_single_statement},
 	vfs::{
-		NativeConnection, NativeVfsHandle, SqliteVfsMetrics, configure_connection_for_database,
-		open_connection, verify_batch_atomic_writes,
+		NativeConnection, NativeVfsHandle, SqliteRoundTripCounts, SqliteVfsMetrics,
+		configure_connection_for_database, open_connection, verify_batch_atomic_writes,
 	},
 };
 
@@ -27,6 +27,10 @@ use crate::{
 // actor.overloaded so callers get explicit backpressure instead of hidden work.
 pub const SQLITE_WORKER_QUEUE_CAPACITY: usize = 128;
 const SQLITE_WORKER_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
+// Transactions slower than this are logged at warn so operators can spot SQLite
+// work that is stalling on engine round trips. Everything below still logs at
+// debug and records its round trip count to the histogram.
+const SQLITE_SLOW_TRANSACTION_THRESHOLD: Duration = Duration::from_millis(2500);
 
 const STATE_RUNNING: u8 = 0;
 const STATE_CLOSING: u8 = 1;
@@ -68,6 +72,18 @@ enum SqliteCommand {
 }
 
 struct CloseRequest;
+
+/// Tracks an in-progress SQLite transaction so its wall-clock duration and the
+/// network round trips it issued can be reported once it commits or rolls back.
+///
+/// A transaction begins on the first command run while none is open and ends
+/// when the connection returns to autocommit mode (an autocommit statement
+/// finishes, or an explicit `COMMIT`/`ROLLBACK` runs).
+struct TransactionTracker {
+	started_at: Instant,
+	start_round_trips: SqliteRoundTripCounts,
+	statement_count: u64,
+}
 
 struct WorkerContext {
 	sql_rx: Receiver<SqliteCommand>,
@@ -354,6 +370,7 @@ fn worker_main(mut ctx: WorkerContext) {
 		}
 	};
 
+	let mut transaction: Option<TransactionTracker> = None;
 	loop {
 		if ctx.close_rx.try_recv().is_ok()
 			|| ctx.inner.state.load(Ordering::Acquire) == STATE_CLOSING
@@ -391,7 +408,13 @@ fn worker_main(mut ctx: WorkerContext) {
 					fail_queued_sql(&ctx.sql_rx);
 					break;
 				}
-				run_command(&mut db, command, ctx.inner.metrics.as_deref());
+				run_command(
+					&mut db,
+					command,
+					ctx.inner.metrics.as_deref(),
+					&ctx.file_name,
+					&mut transaction,
+				);
 			}
 		}
 	}
@@ -419,6 +442,8 @@ fn run_command(
 	db: &mut NativeConnection,
 	command: SqliteCommand,
 	metrics: Option<&dyn SqliteVfsMetrics>,
+	file_name: &str,
+	transaction: &mut Option<TransactionTracker>,
 ) {
 	let start = Instant::now();
 	match command {
@@ -426,16 +451,34 @@ fn run_command(
 			if reply.is_closed() {
 				return;
 			}
+			begin_transaction_if_needed(db, transaction);
+			// Read the transaction state before running so the label reflects the
+			// transaction the statement executed against, not the state it leaves
+			// behind (a BEGIN flips autocommit off, a COMMIT flips it back on).
+			let in_tx = command_in_tx(db);
+			let stmt_kind = classify_statement(&sql);
 			let result = execute_single_statement(db.as_ptr(), &sql, params.as_deref());
-			record_command_metrics(metrics, "execute", &result, start.elapsed());
+			record_command_metrics(
+				metrics,
+				"execute",
+				in_tx,
+				stmt_kind,
+				&result,
+				start.elapsed(),
+			);
+			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			let _ = reply.send(result);
 		}
 		SqliteCommand::Exec { sql, reply } => {
 			if reply.is_closed() {
 				return;
 			}
+			begin_transaction_if_needed(db, transaction);
+			let in_tx = command_in_tx(db);
+			let stmt_kind = classify_statement(&sql);
 			let result = exec_statements(db.as_ptr(), &sql);
-			record_command_metrics(metrics, "exec", &result, start.elapsed());
+			record_command_metrics(metrics, "exec", in_tx, stmt_kind, &result, start.elapsed());
+			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			let _ = reply.send(result);
 		}
 		#[cfg(test)]
@@ -450,18 +493,156 @@ fn run_command(
 	}
 }
 
+/// Opens a transaction tracker before running a command when none is active.
+///
+/// The first command after autocommit resumes starts a new transaction, whether
+/// it is an autocommit statement or an explicit `BEGIN`. The round trip baseline
+/// is captured here so the delta covers the whole transaction.
+fn begin_transaction_if_needed(
+	db: &mut NativeConnection,
+	transaction: &mut Option<TransactionTracker>,
+) {
+	match transaction {
+		Some(tracker) => tracker.statement_count = tracker.statement_count.saturating_add(1),
+		None => {
+			*transaction = Some(TransactionTracker {
+				started_at: Instant::now(),
+				start_round_trips: db.round_trip_counts(),
+				statement_count: 1,
+			});
+		}
+	}
+}
+
+/// Reports a transaction once the connection returns to autocommit mode.
+///
+/// Always records the round trip count to the histogram and logs at debug.
+/// Transactions slower than `SQLITE_SLOW_TRANSACTION_THRESHOLD` also log at warn.
+fn finalize_transaction_if_complete(
+	db: &mut NativeConnection,
+	metrics: Option<&dyn SqliteVfsMetrics>,
+	file_name: &str,
+	transaction: &mut Option<TransactionTracker>,
+) {
+	// Autocommit off means an explicit transaction is still open across the next
+	// command, so the transaction has not finished yet.
+	if command_in_tx(db) {
+		return;
+	}
+	let Some(tracker) = transaction.take() else {
+		return;
+	};
+
+	let duration = tracker.started_at.elapsed();
+	let round_trips = db.round_trip_counts().since(tracker.start_round_trips);
+
+	if let Some(metrics) = metrics {
+		metrics.observe_transaction_round_trips(round_trips.get_pages, round_trips.commit);
+	}
+
+	if duration >= SQLITE_SLOW_TRANSACTION_THRESHOLD {
+		tracing::warn!(
+			database = %file_name,
+			duration_ms = duration.as_millis() as u64,
+			statement_count = tracker.statement_count,
+			get_pages_round_trips = round_trips.get_pages,
+			commit_round_trips = round_trips.commit,
+			total_round_trips = round_trips.total(),
+			"slow sqlite transaction"
+		);
+	} else {
+		tracing::debug!(
+			database = %file_name,
+			duration_ms = duration.as_millis() as u64,
+			statement_count = tracker.statement_count,
+			get_pages_round_trips = round_trips.get_pages,
+			commit_round_trips = round_trips.commit,
+			total_round_trips = round_trips.total(),
+			"sqlite transaction complete"
+		);
+	}
+}
+
 fn record_command_metrics<T>(
 	metrics: Option<&dyn SqliteVfsMetrics>,
 	operation: &'static str,
+	in_tx: bool,
+	stmt_kind: &'static str,
 	result: &Result<T>,
 	duration: Duration,
 ) {
 	let Some(metrics) = metrics else {
 		return;
 	};
-	metrics.observe_worker_command_duration(operation, duration.as_nanos() as u64);
+	metrics.observe_worker_command_duration(
+		operation,
+		in_tx,
+		stmt_kind,
+		duration.as_nanos() as u64,
+	);
 	if let Err(error) = result {
 		metrics.record_worker_command_error(operation, worker_error_code(error));
+	}
+}
+
+/// Returns whether an explicit transaction is open on the connection.
+///
+/// `sqlite3_get_autocommit` returns non-zero in autocommit mode (no open
+/// transaction) and zero once a `BEGIN` opens one. Implicit per-statement
+/// transactions keep autocommit on, so this only reports explicit transactions.
+fn command_in_tx(db: &mut NativeConnection) -> bool {
+	unsafe { sqlite3_get_autocommit(db.as_ptr()) == 0 }
+}
+
+/// Classifies a SQL command by its leading keyword for metric labeling.
+///
+/// Leading line and block comments are skipped so generated SQL with a header
+/// comment still classifies by its first statement. Multi-statement `exec`
+/// payloads are labeled by their first statement.
+fn classify_statement(sql: &str) -> &'static str {
+	let trimmed = strip_leading_sql_noise(sql);
+	let keyword: String = trimmed
+		.chars()
+		.take_while(|c| c.is_ascii_alphabetic())
+		.collect();
+	match keyword.to_ascii_uppercase().as_str() {
+		"SELECT" | "WITH" => "select",
+		"INSERT" | "REPLACE" => "insert",
+		"UPDATE" => "update",
+		"DELETE" => "delete",
+		"BEGIN" => "begin",
+		"COMMIT" | "END" => "commit",
+		"ROLLBACK" => "rollback",
+		"SAVEPOINT" => "savepoint",
+		"RELEASE" => "release",
+		"PRAGMA" => "pragma",
+		"CREATE" => "create",
+		"DROP" => "drop",
+		"ALTER" => "alter",
+		"VACUUM" => "vacuum",
+		"ANALYZE" => "analyze",
+		"ATTACH" => "attach",
+		"DETACH" => "detach",
+		_ => "other",
+	}
+}
+
+fn strip_leading_sql_noise(sql: &str) -> &str {
+	let mut rest = sql.trim_start();
+	loop {
+		if let Some(after) = rest.strip_prefix("--") {
+			rest = match after.find('\n') {
+				Some(idx) => after[idx + 1..].trim_start(),
+				None => "",
+			};
+		} else if let Some(after) = rest.strip_prefix("/*") {
+			rest = match after.find("*/") {
+				Some(idx) => after[idx + 2..].trim_start(),
+				None => "",
+			};
+		} else {
+			return rest;
+		}
 	}
 }
 

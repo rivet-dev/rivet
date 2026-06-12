@@ -10,6 +10,7 @@ use rivet_pools::UdbPool;
 use rivet_term::console::style;
 use universaldb::prelude::*;
 
+use super::key_parser;
 use crate::util::{
 	format::indent_string,
 	udb::{ListStyle, SimpleTuple, SimpleTupleValue},
@@ -60,6 +61,10 @@ pub enum SubCommand {
 		/// Lists all entries after the current key, not just under it.
 		#[arg(short = 'o', long)]
 		open: bool,
+
+		/// Print string as bytes instead.
+		#[arg(long = "prefer-bytes")]
+		prefer_bytes: bool,
 	},
 
 	/// Calculates or estimates the size of all data under the current key.
@@ -171,7 +176,7 @@ impl SubCommand {
 					return CommandResult::Error;
 				}
 
-				let fut = pool.run(|tx| {
+				let fut = pool.txn("udb_cli_get", |tx| {
 					let current_tuple = current_tuple.clone();
 					async move {
 						let key = universaldb::tuple::pack(&current_tuple);
@@ -210,6 +215,7 @@ impl SubCommand {
 				style: list_style,
 				limit,
 				open,
+				prefer_bytes,
 			} => {
 				let mut current_tuple = current_tuple.clone();
 				if update_current_tuple(&mut current_tuple, key) {
@@ -232,7 +238,7 @@ impl SubCommand {
 					(subspace, range.1)
 				};
 
-				let fut = pool.run(|tx| {
+				let fut = pool.txn("udb_cli_list", |tx| {
 					let subspace = &subspace;
 					let start = start.as_slice();
 					let end = end.as_slice();
@@ -267,6 +273,7 @@ impl SubCommand {
 										max_depth,
 										hide_subspaces,
 										list_style,
+										prefer_bytes,
 										subspace,
 										&mut ctx,
 										entry,
@@ -344,7 +351,7 @@ impl SubCommand {
 
 				let subspace = universaldb::tuple::Subspace::all().subspace(&current_tuple);
 
-				let fut = pool.run(|tx| {
+				let fut = pool.txn("udb_cli_size", |tx| {
 					let subspace = subspace.clone();
 					async move {
 						let (start, end) = subspace.range();
@@ -407,7 +414,7 @@ impl SubCommand {
 					return CommandResult::Error;
 				}
 
-				let fut = pool.run(|tx| {
+				let fut = pool.txn("udb_cli_move", |tx| {
 					let old_tuple = old_tuple.clone();
 					let new_tuple = new_tuple.clone();
 					async move {
@@ -505,7 +512,7 @@ impl SubCommand {
 					}
 				};
 
-				let fut = pool.run(|tx| {
+				let fut = pool.txn("udb_cli_set", |tx| {
 					let current_tuple = current_tuple.clone();
 					let value = parsed_value.clone();
 					async move {
@@ -547,7 +554,7 @@ impl SubCommand {
 					}
 				}
 
-				let fut = pool.run(|tx| {
+				let fut = pool.txn("udb_cli_clear", |tx| {
 					let current_tuple = current_tuple.clone();
 					async move {
 						if clear_range {
@@ -573,7 +580,7 @@ impl SubCommand {
 			SubCommand::Oneoff { command } => {
 				match command {
 					OneoffSubCommand::ReapplyLostServerless { flip, dry_run } => {
-						let fut = pool.run(|tx| async move {
+						let fut = pool.txn("udb_cli_reapply_lost_serverless", |tx| async move {
 							// NOTE: The lost data has no subspace
 							let lost_serverless_desired_slots_subspace = universaldb::Subspace::all().subspace(
 								&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::entire_subspace(),
@@ -660,7 +667,7 @@ impl SubCommand {
 						}
 
 						let (tx_entries, rx_entries) =
-							mpsc::channel::<protocol::ChangelogEntry>(10_000);
+							mpsc::unbounded_channel::<protocol::ChangelogEntry>();
 
 						// Writer task: re-applies v2 entries in txn-bounded batches.
 						// recv_many is called inside each txn iteration when the local buffer
@@ -676,7 +683,7 @@ impl SubCommand {
 								let to_process = std::mem::take(&mut pending);
 
 								let (remaining, applied, closed) = pool_writer
-									.run(|tx| {
+									.txn("udb_cli_apply_changelog_batch", |tx| {
 										let rx = rx_entries.clone();
 										let mut buf = to_process.clone();
 										async move {
@@ -790,7 +797,7 @@ impl SubCommand {
 						}
 
 						let range_lookup = pool
-							.run(|tx| async move {
+							.txn("udb_cli_changelog_range_lookup", |tx| async move {
 								let replica_subspace = epoxy::keys::subspace(replica_id);
 								let changelog_subspace = replica_subspace.subspace(&(CHANGELOG,));
 								let (range_start, range_end) = changelog_subspace.range();
@@ -866,7 +873,7 @@ impl SubCommand {
 
 						'reader: loop {
 							let last_key_for_chunk = last_key.clone();
-							let chunk_fut = pool.run(|tx| {
+							let chunk_fut = pool.txn("udb_cli_scan_changelog_chunk", |tx| {
 								let last_key = last_key_for_chunk.clone();
 								let tx_entries = tx_entries.clone();
 								async move {
@@ -970,7 +977,6 @@ impl SubCommand {
 
 											tx_entries
 												.send(v3_entry)
-												.await
 												.context("writer task closed")?;
 										}
 									}
@@ -1091,15 +1097,15 @@ fn update_current_tuple(current_tuple: &mut SimpleTuple, key: Option<String>) ->
 		return false;
 	};
 
-	match SimpleTuple::parse(key) {
-		Ok((parsed, relative, back_count)) => {
-			if relative {
-				for _ in 0..back_count {
+	match key_parser::parse_path(key) {
+		Ok(parsed) => {
+			if parsed.relative {
+				for _ in 0..parsed.back_count {
 					current_tuple.segments.pop();
 				}
-				current_tuple.segments.extend(parsed.segments);
+				current_tuple.segments.extend(parsed.tuple.segments);
 			} else {
-				*current_tuple = parsed;
+				*current_tuple = parsed.tuple;
 			}
 
 			false
@@ -1124,6 +1130,7 @@ fn render_list_entry(
 	max_depth: usize,
 	hide_subspaces: bool,
 	list_style: ListStyle,
+	prefer_bytes: bool,
 	subspace: &universaldb::tuple::Subspace,
 	ctx: &mut ListRenderContext,
 	entry: universaldb::value::Value,
@@ -1137,6 +1144,14 @@ fn render_list_entry(
 				} else {
 					match SimpleTupleValue::deserialize(None, entry.value()) {
 						Ok(value) => {
+							// Convert string into bytes
+							let value =
+								if prefer_bytes && let SimpleTupleValue::String(value) = value {
+									SimpleTupleValue::Bytes(value.into_bytes())
+								} else {
+									value
+								};
+
 							let mut s = String::new();
 							value.write(&mut s, false).unwrap();
 

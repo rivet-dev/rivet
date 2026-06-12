@@ -1,6 +1,6 @@
 import "./env.ts";
-import { port, useRivetCloud } from "./env.ts";
 import { registry } from "./actors.ts";
+import { port, useRivetCloud } from "./env.ts";
 
 if (useRivetCloud) {
 	const { serve } = await import("@hono/node-server");

@@ -13,9 +13,14 @@ fn main() -> Result<()> {
 		.emit()?;
 
 	println!("cargo:rerun-if-env-changed=OVERRIDE_GIT_SHA");
+	println!("cargo:rerun-if-env-changed=OVERRIDE_BUILD_TIMESTAMP");
 
 	if let Ok(git_sha) = std::env::var("OVERRIDE_GIT_SHA") {
 		println!("cargo:rustc-env=VERGEN_GIT_SHA={git_sha}");
+	}
+
+	if let Ok(ts) = std::env::var("OVERRIDE_BUILD_TIMESTAMP") {
+		println!("cargo:rustc-env=VERGEN_BUILD_TIMESTAMP={ts}");
 	}
 
 	Ok(())

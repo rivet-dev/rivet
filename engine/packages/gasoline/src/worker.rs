@@ -114,8 +114,11 @@ impl Worker {
 				res = bump_sub.next() => {
 					match res {
 						Some(bumps) => {
+							// TODO: Temporarily don't record worker id to reduce metrics cardinality
+							// let worker_id_str = self.worker_id.to_string();
+							let worker_id_str = "worker".to_string();
 							metrics::WORKER_BUMPS_PER_TICK
-								.with_label_values(&[self.worker_id.to_string().as_str()])
+								.with_label_values(&[worker_id_str.as_str()])
 								.observe(bumps.len() as f64);
 						}
 						None => break Err(WorkflowError::SubscriptionUnsubscribed.into()),
@@ -232,10 +235,14 @@ impl Worker {
 			);
 		}
 
+		// TODO: Temporarily don't record worker id to reduce metrics cardinality
+		// let worker_id_str = self.worker_id.to_string();
+		let worker_id_str = "worker".to_string();
+
 		metrics::WORKER_WORKFLOW_ACTIVE.reset();
 		for (_, wf) in &self.running_workflows {
 			metrics::WORKER_WORKFLOW_ACTIVE
-				.with_label_values(&[self.worker_id.to_string().as_str(), wf.name.as_str()])
+				.with_label_values(&[worker_id_str.as_str(), wf.name.as_str()])
 				.inc();
 		}
 

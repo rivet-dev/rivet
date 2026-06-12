@@ -86,7 +86,7 @@ async fn record_ping(
 	let rtt = u32::try_from(start.elapsed().as_millis())?;
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("datacenter_ping_write_rtt", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.write(&keys::LastPingTsKey::new(dc.datacenter_label), now)?;

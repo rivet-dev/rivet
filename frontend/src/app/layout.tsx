@@ -4,7 +4,6 @@ import {
 	faChevronDown,
 	faCog,
 	faDiscord,
-	faFileLines,
 	faGift,
 	faGithub,
 	faLogs,
@@ -16,7 +15,6 @@ import {
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import {
 	Link,
-	useMatch,
 	useMatches,
 	useMatchRoute,
 	useNavigate,
@@ -67,9 +65,9 @@ import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
-import { HelpDropdown } from "./help-dropdown";
 import { FeedbackButton } from "./feedback-button";
 import { HelpButton } from "./help-button";
+import { HelpDropdown } from "./help-dropdown";
 import { Logo as BrandLogo } from "./logo";
 import { NamespaceSelect } from "./namespace-select";
 import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
@@ -843,7 +841,9 @@ export const SidebarlessHeader = () => {
 												style={{
 													backgroundImage:
 														orgConicGradient(
-															paletteForLetter(name),
+															paletteForLetter(
+																name,
+															),
 														),
 												}}
 											>

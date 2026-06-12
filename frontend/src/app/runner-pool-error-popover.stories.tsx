@@ -53,7 +53,7 @@ const CONN_ERROR: RivetActorError = {
 const SSE_INVALID: RivetActorError = {
 	serverless_invalid_sse_payload: {
 		message:
-			"Expected actor_id field in SSE event payload, got: { \"type\": \"start\" }",
+			'Expected actor_id field in SSE event payload, got: { "type": "start" }',
 	},
 };
 

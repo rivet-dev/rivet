@@ -47,6 +47,26 @@ export interface JsQueueSendResult {
 export interface JsActionDefinition {
   name: string
 }
+/**
+ * One entry in the actor's `inspector.tabs[]` declaration. Either a
+ * custom-tab descriptor (id + label + source dir) or a built-in modifier
+ * (id + hidden=true). Validation already happened on the TS side; the
+ * runtime just splits the discriminator.
+ */
+export interface JsInspectorTabEntry {
+  id: string
+  /** Required for custom entries; omitted for HideBuiltin. */
+  label?: string
+  /** Required for custom entries — absolute path to the source directory. */
+  source?: string
+  /**
+   * Optional icon id for custom entries. Dashboard maps strings to
+   * glyphs; unknown ids fall back to a generic icon.
+   */
+  icon?: string
+  /** Set to true for HideBuiltin entries. */
+  hidden?: boolean
+}
 export interface JsActorConfig {
   name?: string
   icon?: string
@@ -78,6 +98,7 @@ export interface JsActorConfig {
   preloadMaxWorkflowBytes?: number
   preloadMaxConnectionsBytes?: number
   actions?: Array<JsActionDefinition>
+  inspectorTabs?: Array<JsInspectorTabEntry>
 }
 export interface JsBindParam {
   kind: string
@@ -174,9 +195,10 @@ export interface JsServerlessResponseHead {
   status: number
   headers: Record<string, string>
 }
-export interface JsRegistryDiagnostics {
-  mode: string
-  envoyActiveActorCount?: number
+export interface JsRegistryRouteResponse {
+  status: number
+  headers: Record<string, string>
+  body: Buffer
 }
 export interface JsServerlessStreamError {
   group: string
@@ -241,6 +263,7 @@ export declare class ActorContext {
   broadcast(name: string, args: Buffer): void
   waitUntil(promise: Promise<any>): void
   waitForTrackedShutdownWork(): Promise<boolean>
+  waitForTrackedShutdownWorkUnbounded(): Promise<void>
   registerTask(promise: Promise<any>): void
   runtimeState(): object
   clearRuntimeState(): void
@@ -288,7 +311,7 @@ export declare class Queue {
   next(options?: JsQueueNextOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage | null>
   nextBatch(options?: JsQueueNextBatchOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Array<QueueMessage>>
   waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage>
-  waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null): Promise<void>
+  waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<void>
   enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
@@ -315,7 +338,10 @@ export declare class CoreRegistry {
    * separately to avoid re-entrancy.
    */
   shutdown(): Promise<void>
-  diagnostics(): Promise<JsRegistryDiagnostics>
+  actorStopThresholdMs(): Promise<number | null>
+  health(): Promise<JsRegistryRouteResponse>
+  metadata(): JsRegistryRouteResponse
+  metrics(): JsRegistryRouteResponse
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {

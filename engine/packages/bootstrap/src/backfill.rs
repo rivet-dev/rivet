@@ -82,7 +82,7 @@ pub async fn run(ctx: &StandaloneCtx) -> Result<()> {
 async fn is_complete(ctx: &StandaloneCtx, name: &str) -> Result<bool> {
 	let complete = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("bootstrap_check_backfill_complete", |tx| {
 			let name = name.to_string();
 			async move {
 				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());

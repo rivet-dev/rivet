@@ -56,7 +56,7 @@ async fn runner_config_get_inner(
 	runners: Vec<(Id, String)>,
 ) -> Result<Vec<RunnerConfig>> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_config_get", |tx| {
 			let runners = runners.clone();
 			async move {
 				futures_util::stream::iter(runners)

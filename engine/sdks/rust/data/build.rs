@@ -15,7 +15,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 	let schema_dir = workspace_root.join("sdks").join("schemas").join("data");
 
-	let cfg = vbare_compiler::Config::with_hashable_map();
+	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	// Append per-schema version constants to generated file

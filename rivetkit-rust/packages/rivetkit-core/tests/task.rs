@@ -6,7 +6,7 @@ mod moved_tests {
 	use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 	use std::sync::{Mutex, OnceLock};
 	use std::task::Poll;
-	use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+	use std::time::{Duration, Instant};
 
 	use futures::{FutureExt, poll};
 	use rivet_envoy_client::config::{
@@ -51,13 +51,6 @@ mod moved_tests {
 	use crate::kv::tests::new_in_memory;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 	use rivet_envoy_client::utils::EnvoyShutdownError;
-
-	fn now_timestamp_ms() -> i64 {
-		let duration = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.unwrap_or_default();
-		i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
-	}
 
 	fn test_hook_lock() -> &'static AsyncMutex<()> {
 		static LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
@@ -181,6 +174,18 @@ mod moved_tests {
 		)
 	}
 
+	#[test]
+	fn request_save_hook_does_not_retain_actor_context() {
+		let ctx = ActorContext::new("actor-hook-drop", "task-hook-drop", Vec::new(), "local");
+		let weak = ctx.downgrade();
+		let task = new_task(ctx.clone());
+
+		drop(task);
+		drop(ctx);
+
+		assert!(weak.upgrade().is_none());
+	}
+
 	struct IdleEnvoyCallbacks;
 
 	impl EnvoyCallbacks for IdleEnvoyCallbacks {
@@ -261,7 +266,7 @@ mod moved_tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
-			last_ping_ts: std::sync::atomic::AtomicI64::new(now_timestamp_ms()),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 

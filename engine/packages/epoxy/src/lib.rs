@@ -12,8 +12,6 @@ pub mod types;
 pub mod utils;
 pub mod workflows;
 
-pub use epoxy_protocol::protocol;
-
 pub fn registry() -> WorkflowResult<Registry> {
 	use workflows::*;
 

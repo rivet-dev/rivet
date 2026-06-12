@@ -81,6 +81,69 @@ pub enum Actor {
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error(
+	"pegboard",
+	"route_subscribe_timeout",
+	"Timed out subscribing to actor routing events.",
+	"Timed out subscribing to actor routing events after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteSubscribeTimeout {
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error(
+	"pegboard",
+	"route_fetch_actor_timeout",
+	"Timed out fetching actor routing state.",
+	"Timed out fetching actor routing state for actor {actor_id} after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteFetchActorTimeout {
+	pub actor_id: String,
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error(
+	"pegboard",
+	"route_auth_check_timeout",
+	"Timed out checking actor route authorization.",
+	"Timed out checking actor route authorization for actor {actor_id} after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteAuthCheckTimeout {
+	pub actor_id: String,
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error(
+	"pegboard",
+	"route_wake_signal_timeout",
+	"Timed out sending actor wake signal.",
+	"Timed out sending actor wake signal for actor {actor_id} after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteWakeSignalTimeout {
+	pub actor_id: String,
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error(
+	"pegboard",
+	"route_resolve_query_timeout",
+	"Timed out resolving actor query route.",
+	"Timed out resolving actor query route after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteResolveQueryTimeout {
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
 #[error("runner")]
 pub enum Runner {
 	#[error("not_found", "The runner does not exist.")]

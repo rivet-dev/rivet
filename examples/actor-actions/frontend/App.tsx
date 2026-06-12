@@ -1,5 +1,5 @@
-import { ActorError, createClient } from "rivetkit/client";
 import { useState } from "react";
+import { ActorError, createClient } from "rivetkit/client";
 import type {
 	CompanyProfile,
 	EmployeeProfile,
@@ -13,12 +13,13 @@ export function App() {
 	const [companyName, setCompanyName] = useState("Acme Corp");
 	const [companyIndustry, setCompanyIndustry] = useState("Technology");
 	const [companyProfile, setCompanyProfile] = useState<CompanyProfile | null>(
-		null
+		null,
 	);
 
 	const [employeeName, setEmployeeName] = useState("Jane Smith");
 	const [employeeEmail, setEmployeeEmail] = useState("jane@acme.com");
-	const [employeePosition, setEmployeePosition] = useState("Software Engineer");
+	const [employeePosition, setEmployeePosition] =
+		useState("Software Engineer");
 	const [createdEmployee, setCreatedEmployee] =
 		useState<EmployeeProfile | null>(null);
 	const [employeeList, setEmployeeList] = useState<string[]>([]);
@@ -44,7 +45,7 @@ export function App() {
 				error.code === "already_exists"
 			) {
 				alert(
-					`Company with EIN "${companyEin}" already exists. Use "Load Profile" to view it.`
+					`Company with EIN "${companyEin}" already exists. Use "Load Profile" to view it.`,
 				);
 			} else {
 				// Re-throw other errors
@@ -85,7 +86,7 @@ export function App() {
 				error.code === "already_exists"
 			) {
 				alert(
-					`Employee with email "${employeeEmail}" already exists. Click on their name in the list to view their profile.`
+					`Employee with email "${employeeEmail}" already exists. Click on their name in the list to view their profile.`,
 				);
 			} else {
 				// Re-throw other errors
@@ -100,14 +101,13 @@ export function App() {
 		setCreatedEmployee(profile);
 	};
 
-
 	return (
 		<div className="container">
 			<div className="header">
 				<h1>Quickstart: Actions</h1>
 				<p>
-					Demonstrates creating actors with input parameters and calling
-					type-safe actions between actors
+					Demonstrates creating actors with input parameters and
+					calling type-safe actions between actors
 				</p>
 			</div>
 
@@ -143,15 +143,10 @@ export function App() {
 						/>
 					</div>
 					<div className="button-group">
-						<button
-							onClick={createCompany}
-							className="primary"
-						>
+						<button onClick={createCompany} className="primary">
 							Create Company
 						</button>
-						<button
-							onClick={loadCompanyProfile}
-						>
+						<button onClick={loadCompanyProfile}>
 							Load Profile
 						</button>
 					</div>
@@ -166,11 +161,14 @@ export function App() {
 								<strong>Name:</strong> {companyProfile.name}
 							</div>
 							<div className="profile-field">
-								<strong>Industry:</strong> {companyProfile.industry}
+								<strong>Industry:</strong>{" "}
+								{companyProfile.industry}
 							</div>
 							<div className="profile-field">
 								<strong>Founded:</strong>{" "}
-								{new Date(companyProfile.foundedAt).toLocaleString()}
+								{new Date(
+									companyProfile.foundedAt,
+								).toLocaleString()}
 							</div>
 						</div>
 					)}
@@ -178,7 +176,13 @@ export function App() {
 					{employeeList.length > 0 && (
 						<div className="profile">
 							<h3>Employees ({employeeList.length})</h3>
-							<div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+							<div
+								style={{
+									display: "flex",
+									flexDirection: "column",
+									gap: "8px",
+								}}
+							>
 								{employeeList.map((email) => (
 									<button
 										key={email}
@@ -226,7 +230,9 @@ export function App() {
 						<input
 							type="text"
 							value={employeePosition}
-							onChange={(e) => setEmployeePosition(e.target.value)}
+							onChange={(e) =>
+								setEmployeePosition(e.target.value)
+							}
 							placeholder="Enter position"
 						/>
 					</div>
@@ -240,7 +246,8 @@ export function App() {
 						<div className="profile">
 							<h3>Employee Profile</h3>
 							<div className="profile-field">
-								<strong>Employee ID:</strong> {createdEmployee.employeeId}
+								<strong>Employee ID:</strong>{" "}
+								{createdEmployee.employeeId}
 							</div>
 							<div className="profile-field">
 								<strong>Name:</strong> {createdEmployee.name}
@@ -249,14 +256,18 @@ export function App() {
 								<strong>Email:</strong> {createdEmployee.email}
 							</div>
 							<div className="profile-field">
-								<strong>Position:</strong> {createdEmployee.position}
+								<strong>Position:</strong>{" "}
+								{createdEmployee.position}
 							</div>
 							<div className="profile-field">
-								<strong>Company ID:</strong> {createdEmployee.companyId}
+								<strong>Company ID:</strong>{" "}
+								{createdEmployee.companyId}
 							</div>
 							<div className="profile-field">
 								<strong>Hired:</strong>{" "}
-								{new Date(createdEmployee.hiredAt).toLocaleString()}
+								{new Date(
+									createdEmployee.hiredAt,
+								).toLocaleString()}
 							</div>
 						</div>
 					)}

@@ -4,7 +4,7 @@ import { actor } from "rivetkit";
 export const statelessActor = actor({
 	actions: {
 		ping: () => "pong",
-		echo: (c, message: string) => message,
+		echo: (_c, message: string) => message,
 		getActorId: (c) => c.actorId,
 		// Try to access state - should throw StateNotEnabled
 		tryGetState: (c) => {

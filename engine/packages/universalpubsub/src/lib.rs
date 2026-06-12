@@ -6,5 +6,5 @@ pub mod pubsub;
 pub mod subject;
 
 pub use driver::*;
-pub use pubsub::{Message, NextOutput, PubSub, Response, Subscriber};
-pub use subject::Subject;
+pub use pubsub::{Message, NextOutput, PubSub, Subscriber};
+pub use subject::{InboxSubject, Subject};

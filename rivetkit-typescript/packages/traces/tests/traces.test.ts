@@ -1,8 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
 import { pack, unpack } from "fdb-tuple";
+import { describe, expect, it, vi } from "vitest";
+import { CHUNK_VERSIONED } from "../schemas/versioned.js";
 import { createTraces } from "../src/index.js";
 import type { TracesDriver } from "../src/types.js";
-import { CHUNK_VERSIONED } from "../schemas/versioned.js";
 
 class InMemoryTracesDriver implements TracesDriver {
 	private store = new Map<string, Uint8Array>();

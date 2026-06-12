@@ -52,7 +52,9 @@ export function DatePicker({
 				{presets ? (
 					<Select
 						onValueChange={(value) =>
-							onDateChange(presets[Number.parseInt(value)].date)
+							onDateChange(
+								presets[Number.parseInt(value, 10)].date,
+							)
 						}
 					>
 						<SelectTrigger>
@@ -125,7 +127,7 @@ export function RangeDatePicker({
 						<Select
 							onValueChange={(value) =>
 								onDateChange(
-									presets[Number.parseInt(value)].date,
+									presets[Number.parseInt(value, 10)].date,
 								)
 							}
 						>

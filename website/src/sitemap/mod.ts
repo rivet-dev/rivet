@@ -133,6 +133,12 @@ export const sitemap = [
 								href: "/docs/actors/quickstart/next-js",
 								icon: faNextjs,
 							},
+							{
+								title: "Rust",
+								href: "/docs/actors/quickstart/rust",
+								icon: faRust,
+								badge: "Preview",
+							},
 						],
 					},
 				]
@@ -141,7 +147,7 @@ export const sitemap = [
 				title: "Features",
 				pages: [
 					{
-						title: "In-Memory State",
+						title: "State & Storage",
 						href: "/docs/actors/state",
 						icon: faFloppyDisk,
 					},
@@ -299,13 +305,9 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
-								title: "Ephemeral Variables",
-								href: "/docs/actors/ephemeral-variables",
-								//icon: faMemory,
-							},
-							{
 								title: "Low-Level KV Storage",
-								href: "/docs/actors/kv"
+								href: "/docs/actors/kv",
+								badge: "Deprecated",
 							},
 							{
 								title: "SQLite + Drizzle",
@@ -328,6 +330,10 @@ export const sitemap = [
 							{
 								title: "Debugging",
 								href: "/docs/actors/debugging",
+							},
+							{
+								title: "Custom Inspector Tabs",
+								href: "/docs/actors/inspector-tabs",
 							},
 							{
 								title: "AI & User-Generated Actors",
@@ -745,6 +751,15 @@ export const sitemap = [
 			{
 				title: "Platforms",
 				pages: deploySidebarPages,
+			},
+			{
+				title: "Reference",
+				pages: [
+					{
+						title: "Pool Configuration",
+						href: "/docs/general/pool-configuration",
+					},
+				],
 			},
 		],
 	},

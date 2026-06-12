@@ -128,9 +128,9 @@ async fn test_streaming_response_should_timeout() {
 	drop(message_sender);
 }
 
-async fn start_streaming_server() -> (SocketAddr, mpsc::Sender<String>) {
+async fn start_streaming_server() -> (SocketAddr, mpsc::UnboundedSender<String>) {
 	// Create a channel for sending messages to the streaming endpoint
-	let (message_tx, _message_rx) = mpsc::channel::<String>(100);
+	let (message_tx, _message_rx) = mpsc::unbounded_channel::<String>();
 
 	// Bind to a random port
 	let listener = TcpListener::bind("127.0.0.1:0")

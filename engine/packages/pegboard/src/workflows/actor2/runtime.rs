@@ -1,11 +1,10 @@
-// runner wf see how signal fail handling
 use base64::Engine;
 use base64::prelude::BASE64_STANDARD;
 use futures_util::TryStreamExt;
-use gas::prelude::*;
-use rand::prelude::SliceRandom;
+use gas::{prelude::*, workflow::StateGuard};
 use rivet_envoy_protocol::{self as protocol, PROTOCOL_VERSION, versioned};
 use rivet_types::runner_configs::RunnerConfigKind;
+use std::{fmt, time::Instant};
 use universaldb::prelude::*;
 use universalpubsub::PublishOpts;
 use vbare::OwnedVersionedData;
@@ -93,6 +92,22 @@ impl Transition {
 	}
 }
 
+impl fmt::Display for Transition {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Transition::Allocating { .. } => write!(f, "allocating"),
+			Transition::Starting { .. } => write!(f, "starting"),
+			Transition::Running { .. } => write!(f, "running"),
+			Transition::SleepIntent { .. } => write!(f, "sleep_intent"),
+			Transition::StopIntent { .. } => write!(f, "stop_intent"),
+			Transition::GoingAway { .. } => write!(f, "going_away"),
+			Transition::Sleeping => write!(f, "sleeping"),
+			Transition::Reallocating { .. } => write!(f, "reallocating"),
+			Transition::Destroying { .. } => write!(f, "destroying"),
+		}
+	}
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct EnvoyState {
 	pub envoy_key: String,
@@ -143,10 +158,14 @@ impl RetryBackoffState {
 	}
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
-pub struct AllocateInput {}
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AllocateInput {
+	// Added property, must use default
+	#[serde(default)]
+	generation: u32,
+}
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Allocation {
 	Serverless,
@@ -161,6 +180,7 @@ pub struct AllocateOutput {
 
 #[activity(Allocate)]
 pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<AllocateOutput> {
+	let start = Instant::now();
 	let mut state = ctx.state::<State>()?;
 
 	// NOTE: Assuming cache is populated, this is faster than reading the runner config in the fdb txn below
@@ -175,11 +195,11 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 		.as_ref()
 		.map(|pool| matches!(pool.config.kind, RunnerConfigKind::Serverless { .. }))
 		.unwrap_or(false);
-	let max_concurrent_actors = pool.and_then(|pool| match pool.config.kind {
+	let max_concurrent_actors = pool.as_ref().and_then(|pool| match &pool.config.kind {
 		RunnerConfigKind::Serverless {
 			max_concurrent_actors,
 			..
-		} => Some(max_concurrent_actors),
+		} => Some(*max_concurrent_actors),
 		_ => None,
 	});
 
@@ -187,132 +207,195 @@ pub async fn allocate(ctx: &ActivityCtx, input: &AllocateInput) -> Result<Alloca
 	let namespace_id = state.namespace_id;
 	let pool_name = &state.pool_name;
 	let envoy_eligible_threshold = ctx.config().pegboard().envoy_eligible_threshold();
-	let actor_allocation_candidate_sample_size = ctx
-		.config()
-		.pegboard()
-		.actor_allocation_candidate_sample_size();
+	let envoy_load_balancer = ctx.config().pegboard().envoy_load_balancer();
+	let pools = ctx.pools().clone();
 
 	// Check if limit has been reached and choose an envoy if serverful
 	let (acquired_slot, allocation, error) = ctx
 		.udb()?
-		.run(|tx| async move {
-			let ping_threshold_ts = util::timestamp::now() - envoy_eligible_threshold;
-			let tx = tx.with_subspace(keys::subspace());
+		.txn("pegboard_actor2_acquire_slot", |tx| {
+			let pools = pools.clone();
+			async move {
+				let now = util::timestamp::now();
+				let tx = tx.with_subspace(keys::subspace());
 
-			let actor_slots_key = keys::ns::ActorSlotsKey::new(namespace_id, pool_name.clone());
+				let actor_slots_key = keys::ns::ActorSlotsKey::new(namespace_id, pool_name.clone());
 
-			let acquired_slot = if let Some(max_concurrent_actors) = max_concurrent_actors {
-				if tx.read_opt(&actor_slots_key, Snapshot).await?.unwrap_or(0)
-					< max_concurrent_actors as i64
-				{
+				let acquired_slot = if let Some(max_concurrent_actors) = max_concurrent_actors {
+					if tx.read_opt(&actor_slots_key, Snapshot).await?.unwrap_or(0)
+						< max_concurrent_actors as i64
+					{
+						tx.atomic_op(&actor_slots_key, &1i64.to_le_bytes(), MutationType::Add);
+
+						true
+					} else {
+						false
+					}
+				} else {
 					tx.atomic_op(&actor_slots_key, &1i64.to_le_bytes(), MutationType::Add);
 
 					true
-				} else {
-					false
-				}
-			} else {
-				tx.atomic_op(&actor_slots_key, &1i64.to_le_bytes(), MutationType::Add);
+				};
 
-				true
-			};
-
-			// Try to send a message to pegboard-outbound
-			let (allocation, error) = if acquired_slot {
-				if is_serverless {
-					(Some(Allocation::Serverless), None)
-				} else {
-					let lb_subspace =
-						keys::subspace().subspace(&keys::ns::EnvoyLoadBalancerIdxKey::subspace(
-							namespace_id,
-							pool_name.clone(),
-						));
-
-					let mut stream = tx.get_ranges_keyvalues(
-						universaldb::RangeOption {
-							mode: StreamingMode::Iterator,
-							..(&lb_subspace).into()
-						},
-						// NOTE: This is not Serializable because we don't need the most up to date data
-						Snapshot,
-					);
-
-					let mut highest_version = None;
-					let mut candidates = Vec::with_capacity(actor_allocation_candidate_sample_size);
-
-					// Select valid envoy candidates for allocation
-					loop {
-						let Some(entry) = stream.try_next().await? else {
-							break;
-						};
-
-						let (lb_key, _) =
-							tx.read_entry::<keys::ns::EnvoyLoadBalancerIdxKey>(&entry)?;
-
-						if let Some(highest_version) = highest_version {
-							// We have passed all of the envoys with the highest version. This is reachable if
-							// the ping of the highest version workers makes them ineligible
-							if lb_key.version < highest_version {
-								break;
-							}
-						} else {
-							highest_version = Some(lb_key.version);
-						}
-
-						// Ignore envoys without valid ping
-						if lb_key.last_ping_ts < ping_threshold_ts {
-							continue;
-						}
-
-						candidates.push(lb_key);
-
-						// Max candidate size reached
-						if candidates.len() >= actor_allocation_candidate_sample_size {
-							break;
-						}
-					}
-
-					// Select a candidate at random
-					if let Some(lb_key) = candidates.choose(&mut rand::thread_rng()) {
-						(
-							Some(Allocation::Serverful {
-								envoy_key: lb_key.envoy_key.clone(),
-							}),
-							None,
-						)
+				let (allocation, error) = if acquired_slot {
+					if is_serverless {
+						(Some(Allocation::Serverless), None)
 					} else {
-						(None, Some(super::ActorError::NoEnvoys))
+						let allocation = super::alloc_serverful::allocate_serverful(
+							namespace_id,
+							&pool_name,
+							&tx,
+							&pools,
+							now,
+							envoy_eligible_threshold,
+							&envoy_load_balancer,
+						)
+						.await?;
+
+						if allocator_debug_enabled() {
+							let ping_threshold_ts = now - envoy_eligible_threshold;
+							let dump = dump_envoy_lb_idx_eligible(
+								&tx,
+								namespace_id,
+								&pool_name,
+								ping_threshold_ts,
+							)
+							.await?;
+							tracing::info!(
+								?namespace_id,
+								%pool_name,
+								?actor_id,
+								now,
+								ping_threshold_ts,
+								eligible_count = dump.len(),
+								chosen_envoy_key = ?allocation,
+								entries = ?dump,
+								"pegboard allocator subspace dump"
+							);
+						}
+
+						let error = allocation.is_none().then_some(super::ActorError::NoEnvoys);
+
+						(
+							allocation.map(|envoy_key| Allocation::Serverful { envoy_key }),
+							error,
+						)
 					}
+				} else {
+					(None, Some(super::ActorError::ConcurrentActorLimitReached))
+				};
+
+				if allocation.is_some() {
+					// Set not sleeping
+					tx.delete(&keys::actor::SleepTsKey::new(actor_id));
+					tx.write(&keys::actor::GenerationKey::new(actor_id), input.generation)?;
 				}
-			} else {
-				(None, Some(super::ActorError::ConcurrentActorLimitReached))
-			};
 
-			if allocation.is_some() {
-				// Set not sleeping
-				tx.delete(&keys::actor::SleepTsKey::new(actor_id));
+				Ok((acquired_slot, allocation, error))
 			}
-
-			Ok((acquired_slot, allocation, error))
 		})
-		.custom_instrument(tracing::info_span!("actor_check_limit_and_lb_tx"))
+		.custom_instrument(tracing::info_span!("actor_allocate_tx"))
 		.await?;
 
 	state.acquired_slot = acquired_slot;
 	state.error = error;
 	state.envoy_last_command_idx = 0;
 
+	let now = util::timestamp::now();
+
 	if allocation.is_some() {
 		state.sleep_ts = None;
+		state.reschedule_ts = None;
 	}
 
-	Ok(AllocateOutput {
-		allocation,
-		now: util::timestamp::now(),
+	let dt = start.elapsed().as_secs_f64();
+	crate::metrics::ACTOR_ALLOCATE_DURATION
+		.with_label_values(&[
+			if is_serverless {
+				"serverless"
+			} else {
+				"serverful"
+			},
+			if allocation.is_some() {
+				"allocated"
+			} else {
+				"not_allocated"
+			},
+		])
+		.observe(dt);
+
+	Ok(AllocateOutput { allocation, now })
+}
+
+fn allocator_debug_enabled() -> bool {
+	static CACHED: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+	*CACHED.get_or_init(|| {
+		std::env::var("RIVET_DEBUG_PEGBOARD_ALLOCATOR")
+			.map(|v| matches!(v.as_str(), "1" | "true" | "TRUE"))
+			.unwrap_or(false)
 	})
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug)]
+#[allow(dead_code)]
+struct LbIdxDumpEntry {
+	version: u32,
+	last_ping_ts: i64,
+	envoy_key: String,
+	gap_before_ms: i64,
+}
+
+// Reads the full envoy LB idx subspace for (namespace_id, pool_name), keeps only entries with
+// last_ping_ts >= ping_threshold_ts, and annotates each entry with the gap to the previous entry
+// of the same version. Uses Snapshot so the scan does not contribute to the txn read-conflict
+// range. Intended for debug-only logging; do not call on a hot path.
+async fn dump_envoy_lb_idx_eligible(
+	tx: &universaldb::Transaction,
+	namespace_id: Id,
+	pool_name: &str,
+	ping_threshold_ts: i64,
+) -> Result<Vec<LbIdxDumpEntry>> {
+	let subspace = keys::subspace().subspace(&keys::ns::EnvoyLoadBalancerIdxKey::subspace(
+		namespace_id,
+		pool_name.to_string(),
+	));
+	let mut stream = tx.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::WantAll,
+			..(&subspace).into()
+		},
+		Snapshot,
+	);
+
+	let mut out = Vec::new();
+	let mut prev_ping_ts: Option<i64> = None;
+	let mut prev_version: Option<u32> = None;
+
+	while let Some(entry) = stream.try_next().await? {
+		let (lb_key, _) = tx.read_entry::<keys::ns::EnvoyLoadBalancerIdxKey>(&entry)?;
+		if lb_key.last_ping_ts < ping_threshold_ts {
+			continue;
+		}
+
+		let gap_before_ms = match (prev_version, prev_ping_ts) {
+			(Some(pv), Some(pt)) if pv == lb_key.version => lb_key.last_ping_ts - pt,
+			_ => 0,
+		};
+		prev_ping_ts = Some(lb_key.last_ping_ts);
+		prev_version = Some(lb_key.version);
+
+		out.push(LbIdxDumpEntry {
+			version: lb_key.version,
+			last_ping_ts: lb_key.last_ping_ts,
+			envoy_key: lb_key.envoy_key,
+			gap_before_ms,
+		});
+	}
+
+	Ok(out)
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SendOutboundInput {
 	pub generation: u32,
 	pub input: Option<String>,
@@ -321,12 +404,10 @@ pub struct SendOutboundInput {
 
 #[activity(SendOutbound)]
 pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Result<()> {
-	let state = ctx.state::<State>()?;
+	let mut state = ctx.state::<State>()?;
 
 	match &input.allocation {
 		Allocation::Serverless => {
-			let subject = crate::pubsub_subjects::ServerlessOutboundSubject.to_string();
-
 			let message_serialized = versioned::ToOutbound::wrap_latest(
 				protocol::ToOutbound::ToOutboundActorStart(protocol::ToOutboundActorStart {
 					namespace_id: state.namespace_id.to_string(),
@@ -341,8 +422,6 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 					actor_config: protocol::ActorConfig {
 						name: state.name.clone(),
 						key: state.key.clone(),
-						// HACK: We should not use dynamic timestamp here, but we don't validate if signal data
-						// changes (like activity inputs) so this is fine for now.
 						create_ts: util::timestamp::now(),
 						input: input
 							.input
@@ -354,7 +433,11 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 			.serialize_with_embedded_version(PROTOCOL_VERSION)?;
 
 			ctx.ups()?
-				.publish(&subject, &message_serialized, PublishOpts::one())
+				.publish(
+					crate::pubsub_subjects::ServerlessOutboundSubject,
+					&message_serialized,
+					PublishOpts::one(),
+				)
 				.await?;
 		}
 		Allocation::Serverful { envoy_key } => {
@@ -374,19 +457,22 @@ pub async fn send_outbound(ctx: &ActivityCtx, input: &SendOutboundInput) -> Resu
 				preloaded_kv: None,
 			});
 
-			// NOTE: Kinda jank but it works
-			drop(state);
-			InsertAndSendCommands::run(
+			insert_and_send_commands_inner(
 				ctx,
 				&InsertAndSendCommandsInput {
 					generation: input.generation,
 					envoy_key: envoy_key.clone(),
 					commands: vec![command],
 				},
+				&mut state,
 			)
 			.await?;
 		}
 	}
+
+	// We record allocate ts only after sending the outbound msg so that when we measure actor start time it
+	// has nothing to do with actor workflow operations
+	state.allocate_ts = Some(util::timestamp::now());
 
 	Ok(())
 }
@@ -397,7 +483,12 @@ pub async fn reschedule_actor(
 	state: &mut LifecycleState,
 	metrics_workflow_id: Id,
 ) -> Result<()> {
-	let allocate_res = ctx.activity(AllocateInput {}).await?;
+	let next_gen = state.generation + 1;
+	let allocate_res = ctx
+		.activity(AllocateInput {
+			generation: next_gen,
+		})
+		.await?;
 
 	if let Some(allocation) = allocate_res.allocation {
 		state.generation += 1;
@@ -489,20 +580,23 @@ pub async fn handle_stopped(
 			.await?;
 		}
 		StoppedVariant::Lost { reason } => {
-			if let Some(envoy) = state.transition.envoy() {
-				// Build error from lost reason
-				let error = match reason {
-					LostReason::EnvoyNoResponse => ActorError::EnvoyNoResponse {
-						envoy_key: envoy.envoy_key.clone(),
-					},
-					LostReason::EnvoyConnectionLost => ActorError::EnvoyConnectionLost {
-						envoy_key: envoy.envoy_key.clone(),
-					},
-				};
+			// Build error from lost reason
+			match reason {
+				LostReason::EnvoyNoResponse => {
+					let error = ActorError::EnvoyNoResponse {
+						envoy_key: state.transition.envoy().map(|x| x.envoy_key.clone()),
+					};
 
-				// Set error if actor was lost unexpectedly.
-				// This is set early (before crash policy handling) because it applies to all crash policies.
-				ctx.activity(SetErrorInput { error }).await?;
+					ctx.activity(SetErrorInput { error }).await?;
+				}
+				LostReason::EnvoyConnectionLost => {
+					if let Some(envoy) = state.transition.envoy() {
+						let error = ActorError::EnvoyConnectionLost {
+							envoy_key: envoy.envoy_key.clone(),
+						};
+						ctx.activity(SetErrorInput { error }).await?;
+					}
+				}
 			}
 		}
 	}
@@ -577,7 +671,12 @@ pub async fn handle_stopped(
 
 	let stopped_res = match decision {
 		Decision::Reallocate => {
-			let allocate_res = ctx.activity(AllocateInput {}).await?;
+			let next_gen = state.generation + 1;
+			let allocate_res = ctx
+				.activity(AllocateInput {
+					generation: next_gen,
+				})
+				.await?;
 
 			if let Some(allocation) = allocate_res.allocation {
 				state.generation += 1;
@@ -645,7 +744,7 @@ pub async fn handle_stopped(
 	Ok(stopped_res)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GetTsInput {}
 
 #[activity(GetTs)]
@@ -653,7 +752,7 @@ pub async fn get_ts(ctx: &ActivityCtx, input: &GetTsInput) -> Result<i64> {
 	Ok(util::timestamp::now())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetErrorInput {
 	pub error: ActorError,
 }
@@ -680,7 +779,7 @@ pub async fn set_error(ctx: &ActivityCtx, input: &SetErrorInput) -> Result<()> {
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RecordEventMetricsInput {
 	pub namespace_id: Id,
 	pub name: String,
@@ -693,7 +792,7 @@ pub async fn record_event_metrics(
 	input: &RecordEventMetricsInput,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_record_event_metrics", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			namespace::keys::metric::inc(
@@ -710,7 +809,7 @@ pub async fn record_event_metrics(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CompareRetryInput {
 	retry_count: usize,
 	last_retry_ts: i64,
@@ -744,7 +843,7 @@ async fn compare_retry(
 	Ok((state.reschedule_ts, now, reset))
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetConnectableInput {
 	pub envoy_key: String,
 	pub generation: u32,
@@ -755,6 +854,44 @@ pub async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> 
 	let mut state = ctx.state::<State>()?;
 	let now = util::timestamp::now();
 
+	// Record start duration metric. Technically measures all of:
+	// - ups msg from actor wf (SendOutbound activity) -> pb envoy
+	// - pb envoy forward msg -> ws
+	// - network time from pb envoy -> envoy client
+	// - envoy client startup procedure for actor
+	// - network time from envoy client -> pb envoy
+	// - ws msg from pb envoy -> actor demuxer
+	// - actor demuxer send signal -> actor wf
+	// - gas worker wake actor wf (if sleeping)
+	// - actor wf recv signal
+	// - this code here
+	if let Some(allocate_ts) = state.allocate_ts {
+		let pool_res = ctx
+			.op(crate::ops::runner_config::get::Input {
+				runners: vec![(state.namespace_id, state.pool_name.clone())],
+				bypass_cache: false,
+			})
+			.await?;
+		let pool = pool_res.into_iter().next();
+		let is_serverless = pool
+			.as_ref()
+			.map(|pool| matches!(pool.config.kind, RunnerConfigKind::Serverless { .. }))
+			.unwrap_or(false);
+
+		let dt = now.saturating_sub(allocate_ts) as f64 / 1000.0;
+		crate::metrics::ACTOR_START_DURATION
+			.with_label_values(&[
+				state.namespace_id.to_string().as_str(),
+				state.pool_name.as_str(),
+				if is_serverless {
+					"serverless"
+				} else {
+					"serverful"
+				},
+			])
+			.observe(dt);
+	}
+
 	if state.start_ts.is_none() {
 		state.start_ts = Some(now);
 	}
@@ -764,7 +901,7 @@ pub async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> 
 	let namespace_id = state.namespace_id;
 	let actor_id = state.actor_id;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_set_connectable", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.write(&keys::actor::ConnectableKey::new(actor_id), ())?;
@@ -792,7 +929,7 @@ pub async fn set_connectable(ctx: &ActivityCtx, input: &SetConnectableInput) -> 
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetNotConnectableInput {}
 
 /// Make the actor not connectable. It is not deallocated yet.
@@ -802,7 +939,7 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 
 	let actor_id = state.actor_id;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_set_not_connectable", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let connectable_key = keys::actor::ConnectableKey::new(actor_id);
@@ -818,7 +955,7 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetSleepingInput {}
 
 /// Make the actor not connectable and set as sleeping. It is not deallocated yet.
@@ -829,7 +966,7 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 
 	let actor_id = state.actor_id;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_set_sleeping", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Make not connectable
@@ -847,7 +984,7 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DeallocateInput {}
 
 #[activity(Deallocate)]
@@ -860,7 +997,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 	let actor_id = state.actor_id;
 	let envoy_key = &state.envoy_key;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_deallocate", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.delete(&keys::actor::ConnectableKey::new(actor_id));
@@ -893,6 +1030,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 		.custom_instrument(tracing::info_span!("actor_deallocate_tx"))
 		.await?;
 
+	state.allocate_ts = None;
 	state.connectable_ts = None;
 	state.envoy_key = None;
 	state.acquired_slot = false;
@@ -900,7 +1038,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<()
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InsertAndSendCommandsInput {
 	pub generation: u32,
 	pub envoy_key: String,
@@ -914,12 +1052,20 @@ pub async fn insert_and_send_commands(
 ) -> Result<()> {
 	let mut state = ctx.state::<State>()?;
 
+	insert_and_send_commands_inner(ctx, input, &mut state).await
+}
+
+async fn insert_and_send_commands_inner(
+	ctx: &ActivityCtx,
+	input: &InsertAndSendCommandsInput,
+	state: &mut StateGuard<'_, State>,
+) -> Result<()> {
 	// This does not have to be part of its own activity because the txn is idempotent
 	let old_last_command_idx = state.envoy_last_command_idx;
 	let namespace_id = state.namespace_id;
 	let actor_id = state.actor_id;
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor2_envoy_send_commands", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			for (i, command) in input.commands.iter().enumerate() {
@@ -961,8 +1107,7 @@ pub async fn insert_and_send_commands(
 	let receiver_subject = crate::pubsub_subjects::EnvoyReceiverSubject::new(
 		state.namespace_id,
 		input.envoy_key.clone(),
-	)
-	.to_string();
+	);
 
 	let message_serialized =
 		versioned::ToEnvoyConn::wrap_latest(protocol::ToEnvoyConn::ToEnvoyCommands(
@@ -989,7 +1134,7 @@ pub async fn insert_and_send_commands(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SendMessagesToEnvoyInput {
 	// The reason we pass namespace id in the input is because reading from state is not allowed when
 	// joining activities
@@ -1006,8 +1151,7 @@ pub async fn send_messages_to_envoy(
 	let receiver_subject = crate::pubsub_subjects::EnvoyReceiverSubject::new(
 		input.namespace_id,
 		input.envoy_key.clone(),
-	)
-	.to_string();
+	);
 
 	for message in &input.messages {
 		let message_serialized = versioned::ToEnvoyConn::wrap_latest(message.clone())

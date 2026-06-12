@@ -3,8 +3,11 @@ name = "rivetkit-shared-types"
 version.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 edition.workspace = true
 workspace = "../../../"
+description = "Shared public types for RivetKit crates"
 
 [dependencies]
 serde.workspace = true

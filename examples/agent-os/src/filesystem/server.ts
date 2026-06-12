@@ -1,6 +1,6 @@
-import { agentOs } from "rivetkit/agent-os";
-import { setup } from "rivetkit";
 import common from "@rivet-dev/agent-os-common";
+import { setup } from "rivetkit";
+import { agentOs } from "rivetkit/agent-os";
 
 // The default agentOS actor mounts an in-memory filesystem at /home/user.
 // You can add custom mounts for S3, host directories, or other backends:

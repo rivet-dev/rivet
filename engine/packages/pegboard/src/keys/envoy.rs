@@ -303,6 +303,65 @@ impl<'de> TupleUnpack<'de> for VersionKey {
 }
 
 #[derive(Debug)]
+pub struct VirtualNodesKey {
+	namespace_id: Id,
+	envoy_key: String,
+}
+
+impl VirtualNodesKey {
+	pub fn new(namespace_id: Id, envoy_key: String) -> Self {
+		VirtualNodesKey {
+			namespace_id,
+			envoy_key,
+		}
+	}
+}
+
+impl FormalKey for VirtualNodesKey {
+	type Value = u8;
+
+	fn deserialize(&self, raw: &[u8]) -> Result<Self::Value> {
+		Ok(u8::from_be_bytes(raw.try_into()?))
+	}
+
+	fn serialize(&self, value: Self::Value) -> Result<Vec<u8>> {
+		Ok(value.to_be_bytes().to_vec())
+	}
+}
+
+impl TuplePack for VirtualNodesKey {
+	fn pack<W: std::io::Write>(
+		&self,
+		w: &mut W,
+		tuple_depth: TupleDepth,
+	) -> std::io::Result<VersionstampOffset> {
+		let t = (
+			NAMESPACE,
+			ENVOY,
+			DATA,
+			self.namespace_id,
+			&self.envoy_key,
+			VIRTUAL_NODES,
+		);
+		t.pack(w, tuple_depth)
+	}
+}
+
+impl<'de> TupleUnpack<'de> for VirtualNodesKey {
+	fn unpack(input: &[u8], tuple_depth: TupleDepth) -> PackResult<(&[u8], Self)> {
+		let (input, (_, _, _, namespace_id, envoy_key, _)) =
+			<(usize, usize, usize, Id, String, usize)>::unpack(input, tuple_depth)?;
+
+		let v = VirtualNodesKey {
+			namespace_id,
+			envoy_key,
+		};
+
+		Ok((input, v))
+	}
+}
+
+#[derive(Debug)]
 pub struct StopTsKey {
 	namespace_id: Id,
 	envoy_key: String,

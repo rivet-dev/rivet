@@ -1,0 +1,5 @@
+{
+  "code": "websocket_open_dropped",
+  "group": "guard",
+  "message": "WebSocket open was dropped."
+}

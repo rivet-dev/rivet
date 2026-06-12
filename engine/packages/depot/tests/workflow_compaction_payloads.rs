@@ -1,6 +1,6 @@
 use depot::workflows::compaction::{
-	ColdJobFinished, DeltasAvailable, DestroyDatabaseBranch, ForceCompaction, HotJobFinished,
-	ReclaimJobFinished, RunColdJob, RunHotJob, RunReclaimJob,
+	DeltasAvailable, DestroyDatabaseBranch, ForceCompaction, HotJobFinished, ReclaimJobFinished,
+	RunHotJob, RunReclaimJob,
 };
 use gas::prelude::SignalTrait;
 
@@ -13,10 +13,6 @@ fn compaction_signal_names_are_stable() {
 	assert_eq!(
 		<HotJobFinished as SignalTrait>::NAME,
 		"depot_sqlite_cmp_hot_job_finished"
-	);
-	assert_eq!(
-		<ColdJobFinished as SignalTrait>::NAME,
-		"depot_sqlite_cmp_cold_job_finished"
 	);
 	assert_eq!(
 		<ReclaimJobFinished as SignalTrait>::NAME,
@@ -33,10 +29,6 @@ fn compaction_signal_names_are_stable() {
 	assert_eq!(
 		<RunHotJob as SignalTrait>::NAME,
 		"depot_sqlite_cmp_run_hot_job"
-	);
-	assert_eq!(
-		<RunColdJob as SignalTrait>::NAME,
-		"depot_sqlite_cmp_run_cold_job"
 	);
 	assert_eq!(
 		<RunReclaimJob as SignalTrait>::NAME,

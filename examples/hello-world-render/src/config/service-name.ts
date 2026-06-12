@@ -5,8 +5,9 @@ import { PROJECT_ROOT } from "./paths";
 function packageJsonName(): string | undefined {
 	try {
 		const pkgPath = path.join(PROJECT_ROOT, "package.json");
-		return (JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { name?: string })
-			.name;
+		return (
+			JSON.parse(fs.readFileSync(pkgPath, "utf8")) as { name?: string }
+		).name;
 	} catch {
 		return undefined;
 	}

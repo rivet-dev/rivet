@@ -1,0 +1,15 @@
+[package]
+name = "rivet-perf"
+publish = false
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+edition.workspace = true
+
+[dependencies]
+prometheus.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+tracing-subscriber.workspace = true

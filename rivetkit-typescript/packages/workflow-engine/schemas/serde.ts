@@ -18,7 +18,6 @@ import type {
 	EntryMetadata as InternalEntryMetadata,
 	EntryStatus as InternalEntryStatus,
 	Location as InternalLocation,
-	LoopIterationMarker as InternalLoopIterationMarker,
 	PathSegment as InternalPathSegment,
 	SleepState as InternalSleepState,
 	WorkflowState as InternalWorkflowState,
@@ -27,7 +26,6 @@ import {
 	CURRENT_VERSION,
 	ENTRY_METADATA_VERSIONED,
 	ENTRY_VERSIONED,
-	WORKFLOW_METADATA_VERSIONED,
 } from "./versioned.js";
 
 // === Helper: ArrayBuffer to/from utilities ===
@@ -74,7 +72,7 @@ function assertString(
 /**
  * Validate that a value is a number.
  */
-function assertNumber(
+function _assertNumber(
 	value: unknown,
 	context: string,
 ): asserts value is number {

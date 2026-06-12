@@ -9,11 +9,9 @@ use tokio::sync::Notify;
 use super::*;
 
 #[cfg(feature = "test-faults")]
-use crate::cold_tier::ColdTier;
-#[cfg(feature = "test-faults")]
 use crate::fault::{
-	ColdCompactionFaultPoint, DepotFaultContext, DepotFaultController, DepotFaultFired,
-	DepotFaultPoint, HotCompactionFaultPoint, ReclaimFaultPoint,
+	DepotFaultContext, DepotFaultController, DepotFaultFired, DepotFaultPoint,
+	HotCompactionFaultPoint, ReclaimFaultPoint,
 };
 
 #[cfg(debug_assertions)]
@@ -68,21 +66,7 @@ static WORKFLOW_FAULT_CONTROLLERS: Mutex<Vec<(DatabaseBranchId, DepotFaultContro
 	Mutex::new(Vec::new());
 
 #[cfg(feature = "test-faults")]
-static COLD_OBJECT_DELETE_GRACE_OVERRIDES: Mutex<Vec<(DatabaseBranchId, i64)>> =
-	Mutex::new(Vec::new());
-
-#[cfg(feature = "test-faults")]
 pub struct WorkflowFaultControllerGuard {
-	database_branch_id: DatabaseBranchId,
-}
-
-#[cfg(feature = "test-faults")]
-pub struct ColdObjectDeleteGraceGuard {
-	database_branch_id: DatabaseBranchId,
-}
-
-#[cfg(feature = "test-faults")]
-pub struct WorkflowColdTierGuard {
 	database_branch_id: DatabaseBranchId,
 }
 
@@ -105,64 +89,11 @@ pub fn register_workflow_fault_controller(
 }
 
 #[cfg(feature = "test-faults")]
-pub fn install_workflow_cold_tier_for_test(
-	database_branch_id: DatabaseBranchId,
-	cold_tier: Arc<dyn ColdTier>,
-) -> WorkflowColdTierGuard {
-	crate::compaction::shared::install_workflow_test_cold_tier_for_test(
-		database_branch_id,
-		cold_tier,
-	);
-	WorkflowColdTierGuard { database_branch_id }
-}
-
-#[cfg(feature = "test-faults")]
-pub fn override_cold_object_delete_grace_for_test(
-	database_branch_id: DatabaseBranchId,
-	grace_ms: i64,
-) -> ColdObjectDeleteGraceGuard {
-	let mut overrides = COLD_OBJECT_DELETE_GRACE_OVERRIDES.lock();
-	if let Some((_, existing)) = overrides
-		.iter_mut()
-		.find(|(branch_id, _)| *branch_id == database_branch_id)
-	{
-		*existing = grace_ms;
-	} else {
-		overrides.push((database_branch_id, grace_ms));
-	}
-
-	ColdObjectDeleteGraceGuard { database_branch_id }
-}
-
-#[cfg(feature = "test-faults")]
-pub(crate) fn cold_object_delete_grace_ms(database_branch_id: DatabaseBranchId) -> i64 {
-	COLD_OBJECT_DELETE_GRACE_OVERRIDES
-		.lock()
-		.iter()
-		.find(|(branch_id, _)| *branch_id == database_branch_id)
-		.map(|(_, grace_ms)| *grace_ms)
-		.unwrap_or(CMP_COLD_OBJECT_DELETE_GRACE_MS)
-}
-
-#[cfg(not(feature = "test-faults"))]
-pub(crate) fn cold_object_delete_grace_ms(_database_branch_id: DatabaseBranchId) -> i64 {
-	CMP_COLD_OBJECT_DELETE_GRACE_MS
-}
-
-#[cfg(feature = "test-faults")]
 pub(crate) async fn maybe_fire_hot_compaction_fault(
 	database_branch_id: DatabaseBranchId,
 	point: HotCompactionFaultPoint,
 ) -> Result<Option<DepotFaultFired>> {
 	maybe_fire_workflow_fault(database_branch_id, DepotFaultPoint::HotCompaction(point)).await
-}
-
-#[cfg(feature = "test-faults")]
-pub(crate) async fn maybe_fire_cold_compaction_fault(
-	database_branch_id: DatabaseBranchId,
-	point: ColdCompactionFaultPoint,
-) -> Result<Option<DepotFaultFired>> {
-	maybe_fire_workflow_fault(database_branch_id, DepotFaultPoint::ColdCompaction(point)).await
 }
 
 #[cfg(feature = "test-faults")]
@@ -208,20 +139,5 @@ impl Drop for WorkflowFaultControllerGuard {
 	fn drop(&mut self) {
 		let mut controllers = WORKFLOW_FAULT_CONTROLLERS.lock();
 		controllers.retain(|(branch_id, _)| *branch_id != self.database_branch_id);
-	}
-}
-
-#[cfg(feature = "test-faults")]
-impl Drop for WorkflowColdTierGuard {
-	fn drop(&mut self) {
-		crate::compaction::shared::clear_workflow_test_cold_tier_for_test(self.database_branch_id);
-	}
-}
-
-#[cfg(feature = "test-faults")]
-impl Drop for ColdObjectDeleteGraceGuard {
-	fn drop(&mut self) {
-		let mut overrides = COLD_OBJECT_DELETE_GRACE_OVERRIDES.lock();
-		overrides.retain(|(branch_id, _)| *branch_id != self.database_branch_id);
 	}
 }

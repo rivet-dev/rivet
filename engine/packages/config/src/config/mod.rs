@@ -14,6 +14,7 @@ pub mod logs;
 pub mod metrics;
 pub mod pegboard;
 pub mod pubsub;
+pub mod pyroscope;
 pub mod runtime;
 pub mod sqlite;
 pub mod telemetry;
@@ -30,6 +31,7 @@ pub use logs::*;
 pub use metrics::*;
 pub use pegboard::*;
 pub use pubsub::PubSub;
+pub use pyroscope::*;
 pub use runtime::*;
 pub use sqlite::*;
 pub use telemetry::*;
@@ -110,6 +112,9 @@ pub struct Root {
 
 	#[serde(default)]
 	pub metrics: Metrics,
+
+	#[serde(default)]
+	pub pyroscope: Option<Pyroscope>,
 }
 
 impl Default for Root {
@@ -130,6 +135,7 @@ impl Default for Root {
 			runtime: Default::default(),
 			sqlite: None,
 			metrics: Default::default(),
+			pyroscope: None,
 		}
 	}
 }
@@ -196,10 +202,14 @@ impl Root {
 		{
 			self.pubsub = Some(PubSub::PostgresNotify(pubsub::Postgres {
 				url: pg.url.clone(),
-				memory_optimization: true,
+				#[allow(deprecated)]
+				memory_optimization: None,
+				disable_memory_optimization: false,
 				ssl: pg.ssl.clone(),
 			}));
 		}
+
+		self.pegboard().validate()?;
 
 		// Validate that all datacenters have valid_hosts configured when there's more than one datacenter
 		let topology = self.topology();
@@ -239,14 +249,14 @@ impl Root {
 			}
 		}
 
-		// Validate force_shutdown_duration is greater than worker and guard shutdown durations
+		// Validate force_shutdown_duration covers worker and guard shutdown durations
 		let worker = self.runtime.worker_shutdown_duration();
 		let guard = self.runtime.guard_shutdown_duration();
 		let force = self.runtime.force_shutdown_duration();
 		let max_graceful = worker.max(guard);
-		if force <= max_graceful {
+		if force < max_graceful {
 			bail!(
-				"force_shutdown_duration ({force:?}) must be greater than both \
+				"force_shutdown_duration ({force:?}) must be greater than or equal to both \
 				worker_shutdown_duration ({worker:?}) and guard_shutdown_duration ({guard:?})"
 			);
 		}

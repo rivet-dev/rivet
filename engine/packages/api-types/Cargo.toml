@@ -1,5 +1,6 @@
 [package]
 name = "rivet-api-types"
+publish = false
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

@@ -231,13 +231,39 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 				state = await actor.getState();
 			}
 
-			expect(state.innerWrites).toBe(1);
+			// Failed workflow steps roll back actor state mutations.
+			expect(state.innerWrites).toBe(0);
+			expect(state.vars.innerWrites).toBe(0);
+			expect(state.vars.recoveryWrites).toBe(1);
 			expect(state.tryStepFailure).toEqual({
 				kind: "exhausted",
 				message: "card declined",
 				attempts: 1,
 			});
 			expect(state.tryJoinFailure).toBe("join:parallel");
+		});
+
+		test("failed workflow step rolls back state and vars", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const actor = client.workflowStepRollbackActor.getOrCreate([
+				"workflow-step-rollback",
+			]);
+
+			let snapshot = await actor.getSnapshot();
+			for (let i = 0; i < 40 && !snapshot.state.failureCaught; i++) {
+				await waitFor(driverTestConfig, 50);
+				snapshot = await actor.getSnapshot();
+			}
+
+			expect(snapshot.state).toMatchObject({
+				failedStateWrites: 0,
+				recoveryStateWrites: 1,
+				failureCaught: true,
+			});
+			expect(snapshot.vars).toMatchObject({
+				failedVarsWrites: 0,
+				recoveryVarsWrites: 1,
+			});
 		});
 
 		test("sleeps and resumes between ticks", async (c) => {

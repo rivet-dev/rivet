@@ -1,7 +1,12 @@
-import type { RegistryConfig } from "@/registry/config";
-import { ActorConfigSchema, type Actions, type ActorConfig, type ActorConfigInput } from "./config";
-import { loggerWithoutContext } from "./log";
 import type { AnyDatabaseProvider } from "@/common/database/config";
+import type { RegistryConfig } from "@/registry/config";
+import {
+	type Actions,
+	type ActorConfig,
+	type ActorConfigInput,
+	ActorConfigSchema,
+} from "./config";
+import { loggerWithoutContext } from "./log";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
 const warnedDeprecatedTimeoutKeys = new Set<string>();
@@ -28,7 +33,7 @@ export interface BaseActorDefinition<
 	DB extends AnyDatabaseProvider,
 	E extends EventSchemaConfig = Record<never, never>,
 	Q extends QueueSchemaConfig = Record<never, never>,
-	R extends Actions<S, CP, CS, V, I, DB, E, Q> = Actions<
+	_R extends Actions<S, CP, CS, V, I, DB, E, Q> = Actions<
 		S,
 		CP,
 		CS,
@@ -39,20 +44,12 @@ export interface BaseActorDefinition<
 		Q
 	>,
 > {
-	readonly config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
+	readonly config: ActorConfig<S, CP, CS, V, I, DB, E, Q, _R>;
 }
 
-export type AnyActorDefinition = BaseActorDefinition<
-	any,
-	any,
-	any,
-	any,
-	any,
-	any,
-	any,
-	any,
-	any
->;
+export interface AnyActorDefinition {
+	readonly config: any;
+}
 
 export type AnyStaticActorDefinition = ActorDefinition<
 	any,
@@ -87,13 +84,13 @@ export class ActorDefinition<
 	>,
 > implements BaseActorDefinition<S, CP, CS, V, I, DB, E, Q, R>
 {
-	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q>;
+	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>;
 
-	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q>) {
+	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>) {
 		this.#config = config;
 	}
 
-	get config(): ActorConfig<S, CP, CS, V, I, DB, E, Q> {
+	get config(): ActorConfig<S, CP, CS, V, I, DB, E, Q, R> {
 		return this.#config;
 	}
 }
@@ -195,7 +192,8 @@ export function actor<
 		TInput,
 		TDatabase,
 		TEvents,
-		TQueues
+		TQueues,
+		TActions
 	>;
 	return new ActorDefinition(config);
 }

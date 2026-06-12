@@ -1,5 +1,6 @@
-import { useInfiniteQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { type Rivet } from "@rivetkit/engine-api-full";
+import { infiniteQueryOptions, useInfiniteQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import { Combobox } from "@/components";
 import { useEngineCompatDataProvider } from "./data-provider";
 
@@ -7,6 +8,29 @@ interface AllRunnerSelectProps {
 	onValueChange: (value: string) => void;
 	value: string;
 }
+
+const emptyRunnerNamesQueryOptions = infiniteQueryOptions({
+	queryKey: ["noop-runner-names"] as readonly unknown[],
+	queryFn: async (): Promise<Rivet.RunnersListNamesResponse> => ({
+		names: [],
+		pagination: {},
+	}),
+	initialPageParam: undefined as string | undefined,
+	getNextPageParam: () => undefined,
+	select: (data) => data.pages.flatMap((page) => page.names),
+});
+
+const emptyRunnerConfigsQueryOptions = infiniteQueryOptions({
+	queryKey: ["noop-runner-configs"] as readonly unknown[],
+	queryFn: async (): Promise<Rivet.RunnerConfigsListResponse> => ({
+		runnerConfigs: {},
+		pagination: {},
+	}),
+	initialPageParam: undefined as string | undefined,
+	getNextPageParam: () => undefined,
+	select: (data) =>
+		data.pages.flatMap((page) => Object.keys(page.runnerConfigs)),
+});
 
 export const useAllRunners = () => {
 	const dataProvider = useEngineCompatDataProvider();
@@ -17,10 +41,16 @@ export const useAllRunners = () => {
 		fetchNextPage: fetchNextRunnersPage,
 		isLoading: runnersIsLoading,
 		isFetchingNextPage: runnersIsFetchingNextPage,
-	} = useInfiniteQuery({
+	} = useInfiniteQuery<
+		Rivet.RunnersListNamesResponse,
+		Error,
+		string[],
+		readonly unknown[],
+		string | undefined
+	>({
 		...(hasRunnerNames
 			? dataProvider.runnerNamesQueryOptions()
-			: { queryKey: ["noop-runner-names"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+			: emptyRunnerNamesQueryOptions),
 		enabled: hasRunnerNames,
 	});
 
@@ -31,10 +61,26 @@ export const useAllRunners = () => {
 		fetchNextPage: fetchNextServerlessPage,
 		isLoading: serverlessIsLoading,
 		isFetchingNextPage: serverlessIsFetchingNextPage,
-	} = useInfiniteQuery({
+	} = useInfiniteQuery<
+		Rivet.RunnerConfigsListResponse,
+		Error,
+		string[],
+		readonly unknown[],
+		string | undefined
+	>({
 		...(hasRunnerConfigs
-			? { ...dataProvider.runnerConfigsQueryOptions({ variant: "serverless" }), select: (data: { pages: { runnerConfigs: Record<string, unknown> }[] }) => data.pages.flatMap((page) => Object.keys(page.runnerConfigs)) }
-			: { queryKey: ["noop-runner-configs"], queryFn: async () => [], initialPageParam: undefined, getNextPageParam: () => undefined }),
+			? {
+					...dataProvider.runnerConfigsQueryOptions({
+						variant: "serverless",
+					}),
+					select: (data: {
+						pages: { runnerConfigs: Record<string, unknown> }[];
+					}) =>
+						data.pages.flatMap((page) =>
+							Object.keys(page.runnerConfigs),
+						),
+				}
+			: emptyRunnerConfigsQueryOptions),
 		enabled: hasRunnerConfigs,
 	});
 

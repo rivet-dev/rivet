@@ -1,5 +1,5 @@
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::Result;
@@ -104,6 +104,7 @@ pub(crate) async fn run_adapter_loop(
 	let ActorStart {
 		ctx: core_ctx,
 		input,
+		is_new,
 		snapshot,
 		hibernated,
 		mut events,
@@ -131,6 +132,7 @@ pub(crate) async fn run_adapter_loop(
 		config.as_ref(),
 		&ctx,
 		input.as_deref(),
+		is_new,
 		snapshot,
 		hibernated,
 	)
@@ -203,11 +205,11 @@ async fn run_preamble(
 	config: &AdapterConfig,
 	ctx: &ActorContext,
 	input: Option<&[u8]>,
+	is_new: bool,
 	snapshot: Option<Vec<u8>>,
 	hibernated: Vec<(rivetkit_core::ConnHandle, Vec<u8>)>,
 ) -> Result<RunHandlerSlot> {
 	let snapshot = normalize_startup_snapshot(bindings.create_state.is_some(), snapshot);
-	let is_new = snapshot.is_none();
 
 	// Run database migrations before any user lifecycle hook so `c.db` is
 	// usable from createState, onCreate, and createVars.
@@ -239,15 +241,26 @@ async fn run_preamble(
 			.await?;
 		}
 		ctx.mark_has_initialized_and_flush().await?;
-	} else {
-		let snapshot = snapshot.ok_or_else(|| {
-			NapiInvalidState {
-				state: "actor wake snapshot".to_owned(),
-				reason: "wake path did not include a persisted snapshot".to_owned(),
-			}
-			.build()
-		})?;
+	} else if let Some(snapshot) = snapshot {
 		ctx.set_state_initial(snapshot)?;
+	} else if let Some(callback) = &bindings.create_state {
+		let bytes = with_timeout(
+			"createState",
+			config.create_state_timeout,
+			call_create_state(callback, ctx, input),
+		)
+		.await?;
+		ctx.set_state_initial(bytes)?;
+		ctx.mark_has_initialized_and_flush().await?;
+	} else {
+		return Err(NapiInvalidState {
+			state: "actor wake snapshot".to_owned(),
+			reason: "wake path did not include a persisted snapshot".to_owned(),
+		}
+		.build());
+	}
+
+	if !is_new {
 		for (conn, bytes) in hibernated {
 			ctx.restore_hibernatable_conn(conn, bytes)?;
 		}

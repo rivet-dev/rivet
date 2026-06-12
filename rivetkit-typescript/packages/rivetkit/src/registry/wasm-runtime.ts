@@ -32,6 +32,7 @@ import type {
 	RuntimeQueueNextBatchOptions,
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
+	RuntimeRegistryRouteResponse,
 	RuntimeRequestSaveOpts,
 	RuntimeServeConfig,
 	RuntimeServerlessRequest,
@@ -270,8 +271,18 @@ export class WasmCoreRuntime implements CoreRuntime {
 		await callWasm(() => asWasmRegistry(registry).shutdown());
 	}
 
-	async registryDiagnostics(): Promise<{ mode: string; envoyActiveActorCount: null }> {
-		return { mode: "wasm", envoyActiveActorCount: null };
+	async registryHealth(): Promise<RuntimeRegistryRouteResponse> {
+		return {
+			status: 200,
+			headers: { "content-type": "application/json" },
+			body: new TextEncoder().encode(
+				JSON.stringify({
+					status: "ok",
+					runtime: "rivetkit",
+					version: "wasm",
+				}),
+			),
+		};
 	}
 
 	async handleServerlessRequest(
@@ -505,6 +516,15 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return await callHandle<Promise<boolean>>(
 			asWasmActorContext(ctx),
 			"waitForTrackedShutdownWork",
+		);
+	}
+
+	async actorWaitForTrackedShutdownWorkUnbounded(
+		ctx: ActorContextHandle,
+	): Promise<void> {
+		await callHandle<Promise<void>>(
+			asWasmActorContext(ctx),
+			"waitForTrackedShutdownWorkUnbounded",
 		);
 	}
 
@@ -753,9 +773,16 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
+		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<void> {
 		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		await callHandleAsync(queue, "waitForNamesAvailable", names, options);
+		await callHandleAsync(
+			queue,
+			"waitForNamesAvailable",
+			names,
+			options,
+			signal,
+		);
 	}
 
 	async actorQueueEnqueueAndWait(

@@ -12,6 +12,7 @@ use rustyline::{DefaultEditor, error::ReadlineError};
 use crate::util::udb::SimpleTuple;
 
 mod cli;
+pub mod key_parser;
 
 #[derive(Parser)]
 pub struct Opts {
@@ -75,58 +76,16 @@ async fn run_commands(
 	current_tuple: &mut SimpleTuple,
 	query: &str,
 ) -> CommandResult {
-	let mut escaped = false;
-	let mut start = 0;
-
-	for (i, c) in query.chars().enumerate() {
-		match c {
-			'&' if !escaped && query.chars().nth(i + 1) == Some('&') => {
-				let command = query[start..i].trim();
-
-				// Parse the command string
-				match cli::SubCommand::try_parse_from(
-					std::iter::once("").chain(command.split_whitespace()),
-				) {
-					Ok(cmd) => match cmd.execute(pool, previous_tuple, current_tuple).await {
-						CommandResult::Ok => {}
-						x => return x,
-					},
-					Err(err) => {
-						if command.trim().is_empty() {
-							println!("expected command");
-						} else {
-							println!("{err}");
-						}
-
-						return CommandResult::Error;
-					}
-				}
-
-				start = i + 2;
-			}
-			'\\' => escaped = !escaped,
-			_ => escaped = false,
-		}
+	let command = query.trim();
+	if command.is_empty() {
+		return CommandResult::Ok;
 	}
 
-	// Run final command
-	let command = query[start..].trim();
-	if !command.is_empty() {
-		// Parse the command string
-		match cli::SubCommand::try_parse_from(std::iter::once("").chain(command.split_whitespace()))
-		{
-			Ok(cmd) => return cmd.execute(pool, previous_tuple, current_tuple).await,
-			Err(err) => {
-				if command.trim().is_empty() {
-					println!("expected command");
-				} else {
-					println!("{err}");
-				}
-
-				return CommandResult::Error;
-			}
+	match cli::SubCommand::try_parse_from(std::iter::once("").chain(command.split_whitespace())) {
+		Ok(cmd) => cmd.execute(pool, previous_tuple, current_tuple).await,
+		Err(err) => {
+			println!("{err}");
+			CommandResult::Error
 		}
 	}
-
-	CommandResult::Ok
 }

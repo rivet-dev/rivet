@@ -26,7 +26,7 @@ pub struct Output {
 pub async fn pegboard_actor_list_for_ns(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let actors_with_wf_ids = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_list_for_ns", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 			let mut results = Vec::new();
 

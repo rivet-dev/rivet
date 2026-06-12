@@ -6,7 +6,7 @@ use tokio::sync::watch;
 use super::LifecycleResult;
 use crate::shared_state::InFlightRequestHandle;
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(name = "ping_task", skip_all)]
 pub async fn task(
 	in_flight_req: InFlightRequestHandle,
 	mut ping_abort_rx: watch::Receiver<()>,

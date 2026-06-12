@@ -1,9 +1,5 @@
 import type * as protocol from "@rivetkit/engine-runner-protocol";
-import type {
-	GatewayId,
-	MessageId,
-	RequestId,
-} from "@rivetkit/engine-runner-protocol";
+import type { GatewayId, RequestId } from "@rivetkit/engine-runner-protocol";
 import type { Logger } from "pino";
 import { type Runner, type RunnerActor, RunnerShutdownError } from "./mod";
 import {

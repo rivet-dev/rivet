@@ -1,5 +1,5 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Lifecycle Hooks", (driverTestConfig) => {

@@ -1,11 +1,8 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { match } from "ts-pattern";
+import { ProjectLandingPending } from "@/app/namespaces-grid";
 import { RouteError } from "@/app/route-error";
-import { FullscreenLoading } from "@/components";
-import {
-	RECENT_PROJECTS_KEY,
-	recordRecentVisit,
-} from "@/lib/recently-visited";
+import { RECENT_PROJECTS_KEY, recordRecentVisit } from "@/lib/recently-visited";
 
 export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project",
@@ -13,7 +10,7 @@ export const Route = createFileRoute(
 	component: RouteComponent,
 	beforeLoad: ({ params, context }) => {
 		recordRecentVisit(RECENT_PROJECTS_KEY, params.project);
-		return  match(context)
+		return match(context)
 			.with({ __type: "cloud" }, (context) => ({
 				dataProvider: context.getOrCreateProjectContext(
 					context.dataProvider,
@@ -29,7 +26,7 @@ export const Route = createFileRoute(
 	errorComponent: RouteError,
 	pendingMinMs: 0,
 	pendingMs: 0,
-	pendingComponent: FullscreenLoading,
+	pendingComponent: ProjectLandingPending,
 });
 
 function RouteComponent() {

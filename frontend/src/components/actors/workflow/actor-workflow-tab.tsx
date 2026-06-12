@@ -1,9 +1,11 @@
 import { faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, type PropsWithChildren } from "react";
+import { type PropsWithChildren, useMemo } from "react";
 import { Button, toast } from "@/components";
-import { useActorInspector } from "../actor-inspector-context";
-import { actorInspectorQueriesKeys } from "../actor-inspector-context";
+import {
+	actorInspectorQueriesKeys,
+	useActorInspector,
+} from "../actor-inspector-context";
 import { useDataProvider } from "../data-provider";
 import type { ActorId } from "../queries";
 import type { HistoryItem, WorkflowHistory } from "./workflow-types";

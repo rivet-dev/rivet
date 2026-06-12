@@ -27,7 +27,7 @@ pub async fn pegboard_runner_list_for_ns(ctx: &OperationCtx, input: &Input) -> R
 
 	let runners = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_list_for_ns", |tx| {
 			let dc_name = dc_name.to_string();
 			async move {
 				let tx = tx.with_subspace(keys::subspace());

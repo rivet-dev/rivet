@@ -1,9 +1,6 @@
-use std::{
-	collections::{BTreeMap, VecDeque},
-	sync::{
-		Arc,
-		atomic::{AtomicU64, Ordering},
-	},
+use std::sync::{
+	Arc,
+	atomic::{AtomicU64, Ordering},
 };
 
 use anyhow::{Context, Result};
@@ -15,59 +12,38 @@ use universaldb::Database;
 
 #[cfg(feature = "test-faults")]
 use crate::fault::DepotFaultController;
-use crate::{cold_tier::ColdTier, workflows::compaction::DeltasAvailable};
+use crate::workflows::compaction::DeltasAvailable;
 
 use super::{
 	branch,
 	constants::{ACCESS_TOUCH_THROTTLE_MS, MAX_FORK_DEPTH},
 	error::SqliteStorageError,
 	keys,
-	read::cache_fill::{ShardCacheFillOptions, ShardCacheFillQueue},
-	types::{BucketId, ColdManifestChunk, DatabaseBranchId},
+	types::{BucketId, DatabaseBranchId},
 };
 
-const COLD_MANIFEST_CACHE_BRANCHES: usize = 16;
+/// Soft byte budget for the per-database decoded-LTX cache. Blobs are immutable
+/// (their source key includes the owning txid), so caching them across reads is
+/// a pure perf cache that never acts as a correctness fence.
+const LTX_BLOB_CACHE_MAX_BYTES: u64 = 32 * 1024 * 1024;
+
+/// Bounded cache of parsed LTX blobs keyed by their immutable source key. Holds
+/// the raw bytes plus the parsed page index so repeated reads of the same shard
+/// or delta within a connection avoid both the FDB re-fetch and the index
+/// re-parse. Bounded by total blob bytes via a moka weigher.
+pub(super) type LtxBlobCache = moka::future::Cache<Vec<u8>, Arc<super::ltx::LtxBlob>>;
+
+pub(super) fn new_ltx_blob_cache() -> LtxBlobCache {
+	moka::future::Cache::builder()
+		.max_capacity(LTX_BLOB_CACHE_MAX_BYTES)
+		.weigher(|key: &Vec<u8>, blob: &Arc<super::ltx::LtxBlob>| {
+			u32::try_from(key.len() + blob.bytes().len()).unwrap_or(u32::MAX)
+		})
+		.build()
+}
 
 pub type CompactionSignaler =
 	Arc<dyn Fn(DeltasAvailable) -> BoxFuture<'static, Result<()>> + Send + Sync>;
-
-#[derive(Debug, Clone)]
-pub(super) struct CachedColdManifest {
-	pub chunks: Vec<ColdManifestChunk>,
-}
-
-#[derive(Debug, Default)]
-pub(super) struct ColdManifestCache {
-	entries: BTreeMap<DatabaseBranchId, CachedColdManifest>,
-	lru: VecDeque<DatabaseBranchId>,
-}
-
-impl ColdManifestCache {
-	pub(super) fn get(&mut self, branch_id: DatabaseBranchId) -> Option<CachedColdManifest> {
-		let manifest = self.entries.get(&branch_id)?.clone();
-		self.touch(branch_id);
-		Some(manifest)
-	}
-
-	pub(super) fn insert(&mut self, branch_id: DatabaseBranchId, manifest: CachedColdManifest) {
-		self.entries.insert(branch_id, manifest);
-		self.touch(branch_id);
-
-		while self.entries.len() > COLD_MANIFEST_CACHE_BRANCHES {
-			let Some(evict) = self.lru.pop_front() else {
-				break;
-			};
-			if self.entries.remove(&evict).is_some() {
-				self.lru.retain(|cached| *cached != evict);
-			}
-		}
-	}
-
-	fn touch(&mut self, branch_id: DatabaseBranchId) {
-		self.lru.retain(|cached| *cached != branch_id);
-		self.lru.push_back(branch_id);
-	}
-}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct BranchAncestry {
@@ -99,6 +75,11 @@ pub(super) struct CacheSnapshot {
 	pub(super) ancestors: BranchAncestry,
 	pub(super) last_access_bucket: Option<i64>,
 	pub(super) pidx: Arc<super::page_index::DeltaPageIndex>,
+	/// Head txid the cached PIDX reflects. The cache is trusted only when this matches the
+	/// head resolved in the read transaction, so a foreign writer advancing the head
+	/// invalidates the cache instead of letting it serve stale page ownership.
+	#[cfg_attr(not(feature = "pidx-cache"), allow(dead_code))]
+	pub(super) cache_head_txid: u64,
 }
 
 pub struct Db {
@@ -108,8 +89,8 @@ pub struct Db {
 	pub(super) node_id: NodeId,
 	/// Cached branch read state. This is a perf cache; FDB remains the source of truth.
 	pub(super) cache_snapshot: RwLock<Option<CacheSnapshot>>,
-	pub(super) cold_tier: Option<Arc<dyn ColdTier>>,
-	pub(super) cold_manifest_cache: RwLock<ColdManifestCache>,
+	/// Cached parsed LTX blobs keyed by immutable source key. Perf cache only.
+	pub(super) ltx_blob_cache: LtxBlobCache,
 	/// Cached `/META/quota`. Loaded once on the first UDB tx.
 	pub(super) storage_used: RwLock<Option<i64>>,
 	/// Bytes written across commits since the last metering rollup.
@@ -119,40 +100,13 @@ pub struct Db {
 	/// Last wall-clock time this database sent a workflow compaction wakeup.
 	pub(super) last_deltas_available_at_ms: RwLock<Option<i64>>,
 	pub(super) compaction_signaler: Option<CompactionSignaler>,
-	pub(super) shard_cache_fill: ShardCacheFillQueue,
 	#[cfg(feature = "test-faults")]
 	pub(super) fault_controller: Option<DepotFaultController>,
 }
 
 impl Db {
 	pub fn new(udb: Arc<Database>, bucket_id: Id, database_id: String, node_id: NodeId) -> Self {
-		Self::new_inner(
-			udb,
-			bucket_id,
-			database_id,
-			node_id,
-			None,
-			None,
-			ShardCacheFillOptions::default(),
-		)
-	}
-
-	pub fn new_with_cold_tier(
-		udb: Arc<Database>,
-		bucket_id: Id,
-		database_id: String,
-		node_id: NodeId,
-		cold_tier: Arc<dyn ColdTier>,
-	) -> Self {
-		Self::new_inner(
-			udb,
-			bucket_id,
-			database_id,
-			node_id,
-			Some(cold_tier),
-			None,
-			ShardCacheFillOptions::default(),
-		)
+		Self::new_inner(udb, bucket_id, database_id, node_id, None)
 	}
 
 	pub fn new_with_compaction_signaler(
@@ -160,7 +114,6 @@ impl Db {
 		bucket_id: Id,
 		database_id: String,
 		node_id: NodeId,
-		cold_tier: Option<Arc<dyn ColdTier>>,
 		compaction_signaler: CompactionSignaler,
 	) -> Self {
 		Self::new_inner(
@@ -168,9 +121,7 @@ impl Db {
 			bucket_id,
 			database_id,
 			node_id,
-			cold_tier,
 			Some(compaction_signaler),
-			ShardCacheFillOptions::default(),
 		)
 	}
 
@@ -182,37 +133,7 @@ impl Db {
 		node_id: NodeId,
 		fault_controller: DepotFaultController,
 	) -> Self {
-		let mut db = Self::new_inner(
-			udb,
-			bucket_id,
-			database_id,
-			node_id,
-			None,
-			None,
-			ShardCacheFillOptions::default(),
-		);
-		db.fault_controller = Some(fault_controller);
-		db
-	}
-
-	#[cfg(feature = "test-faults")]
-	pub fn new_with_cold_tier_and_fault_controller_for_test(
-		udb: Arc<Database>,
-		bucket_id: Id,
-		database_id: String,
-		node_id: NodeId,
-		cold_tier: Arc<dyn ColdTier>,
-		fault_controller: DepotFaultController,
-	) -> Self {
-		let mut db = Self::new_inner(
-			udb,
-			bucket_id,
-			database_id,
-			node_id,
-			Some(cold_tier),
-			None,
-			ShardCacheFillOptions::default(),
-		);
+		let mut db = Self::new_inner(udb, bucket_id, database_id, node_id, None);
 		db.fault_controller = Some(fault_controller);
 		db
 	}
@@ -223,7 +144,6 @@ impl Db {
 		bucket_id: Id,
 		database_id: String,
 		node_id: NodeId,
-		cold_tier: Option<Arc<dyn ColdTier>>,
 		compaction_signaler: CompactionSignaler,
 		fault_controller: DepotFaultController,
 	) -> Self {
@@ -232,36 +152,10 @@ impl Db {
 			bucket_id,
 			database_id,
 			node_id,
-			cold_tier,
 			Some(compaction_signaler),
-			ShardCacheFillOptions::default(),
 		);
 		db.fault_controller = Some(fault_controller);
 		db
-	}
-
-	#[cfg(debug_assertions)]
-	pub fn new_with_cold_tier_and_shard_cache_fill_limits_for_test(
-		udb: Arc<Database>,
-		bucket_id: Id,
-		database_id: String,
-		node_id: NodeId,
-		cold_tier: Arc<dyn ColdTier>,
-		queue_capacity: usize,
-		worker_count: usize,
-	) -> Self {
-		Self::new_inner(
-			udb,
-			bucket_id,
-			database_id,
-			node_id,
-			Some(cold_tier),
-			None,
-			ShardCacheFillOptions {
-				queue_capacity,
-				worker_count,
-			},
-		)
 	}
 
 	fn new_inner(
@@ -269,19 +163,10 @@ impl Db {
 		bucket_id: Id,
 		database_id: String,
 		node_id: NodeId,
-		cold_tier: Option<Arc<dyn ColdTier>>,
 		compaction_signaler: Option<CompactionSignaler>,
-		shard_cache_fill_options: ShardCacheFillOptions,
 	) -> Self {
 		#[cfg(debug_assertions)]
 		crate::takeover::reconcile_nonblocking(udb.clone(), database_id.clone(), node_id);
-
-		let mut shard_cache_fill_options = shard_cache_fill_options;
-		if cold_tier.is_none() {
-			shard_cache_fill_options.worker_count = 0;
-		}
-		let shard_cache_fill =
-			ShardCacheFillQueue::new(udb.clone(), node_id, shard_cache_fill_options);
 
 		Self {
 			udb,
@@ -289,14 +174,12 @@ impl Db {
 			database_id,
 			node_id,
 			cache_snapshot: RwLock::new(None),
-			cold_tier,
-			cold_manifest_cache: RwLock::new(ColdManifestCache::default()),
+			ltx_blob_cache: new_ltx_blob_cache(),
 			storage_used: RwLock::new(None),
 			commit_bytes_since_rollup: AtomicU64::new(0),
 			read_bytes_since_rollup: AtomicU64::new(0),
 			last_deltas_available_at_ms: RwLock::new(None),
 			compaction_signaler,
-			shard_cache_fill,
 			#[cfg(feature = "test-faults")]
 			fault_controller: None,
 		}
@@ -311,35 +194,6 @@ impl Db {
 			self.commit_bytes_since_rollup.swap(0, Ordering::Relaxed),
 			self.read_bytes_since_rollup.swap(0, Ordering::Relaxed),
 		)
-	}
-
-	#[cfg(debug_assertions)]
-	pub async fn wait_for_shard_cache_fill_idle_for_test(&self) {
-		self.shard_cache_fill.wait_idle_for_test().await
-	}
-
-	#[cfg(debug_assertions)]
-	pub fn shard_cache_fill_outstanding_for_test(&self) -> usize {
-		self.shard_cache_fill.outstanding_for_test()
-	}
-
-	#[cfg(debug_assertions)]
-	pub fn set_shard_cache_fill_outstanding_for_test(&self, outstanding: usize) {
-		self.shard_cache_fill.set_outstanding_for_test(outstanding);
-	}
-
-	#[cfg(debug_assertions)]
-	pub fn complete_one_shard_cache_fill_outstanding_for_test(&self) {
-		self.shard_cache_fill.complete_one_outstanding_for_test();
-	}
-
-	#[cfg(debug_assertions)]
-	pub fn set_shard_cache_fill_after_nonzero_load_hook_for_test(
-		&self,
-		hook: Arc<dyn Fn() + Send + Sync>,
-	) {
-		self.shard_cache_fill
-			.set_after_nonzero_load_hook_for_test(hook);
 	}
 
 	#[cfg(debug_assertions)]
@@ -358,18 +212,6 @@ impl Db {
 			snapshot.last_access_bucket,
 			snapshot.pidx.range(0, u32::MAX),
 		))
-	}
-
-	#[cfg(debug_assertions)]
-	pub async fn fill_shard_cache_once_for_test(
-		&self,
-		branch_id: DatabaseBranchId,
-		reference: super::types::ColdShardRef,
-		object_bytes: Vec<u8>,
-	) -> Result<()> {
-		self.shard_cache_fill
-			.fill_once_for_test(branch_id, reference, object_bytes)
-			.await
 	}
 }
 

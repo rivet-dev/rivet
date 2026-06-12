@@ -1,12 +1,12 @@
 [package]
 name = "rivetkit-client"
-version = "0.9.0-rc.2"
+version.workspace = true
 description = "Rust client for RivetKit - the Stateful Serverless Framework for building AI agents, realtime apps, and game servers"
 edition = "2021"
-authors = ["Rivet Gaming, LLC <developer@rivet.dev>"]
-license = "Apache-2.0"
-homepage = "https://rivet.dev"
-repository = "https://github.com/rivet-dev/rivet"
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
 
 [dependencies]
 anyhow = "1.0"
@@ -15,10 +15,10 @@ bytes = { workspace = true }
 futures-util = "0.3.31"
 parking_lot.workspace = true
 reqwest = { version = "0.12.12", default-features = false, features = ["json", "charset", "http2", "macos-system-configuration", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
-rivetkit-client-protocol = { path = "../client-protocol" }
+rivetkit-client-protocol.workspace = true
 scc.workspace = true
 serde = { version = "1.0", features = ["derive"] }
-serde_bare = "0.5.0"
+serde_bare.workspace = true
 serde_cbor = "0.11.2"
 serde_json = "1.0"
 tokio =  { version = "1", features = ["full"] }

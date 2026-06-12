@@ -1,14 +1,18 @@
 // Database migration
+
+// Cron actions
+export { buildCronActions } from "./actor/cron";
 export { migrateAgentOsTables } from "./actor/db";
-// Database-backed VFS
-export {
-	createDatabaseVfs,
-	type DatabaseVfsOptions,
-} from "./fs/database-vfs";
 // Filesystem actions
 export { buildFilesystemActions } from "./actor/filesystem";
 // Actor factory and VM lifecycle helpers
 export { agentOs, ensureVm, runHook, syncPreventSleep } from "./actor/index";
+// Network actions
+export {
+	buildNetworkActions,
+	type VmFetchOptions,
+	type VmFetchResult,
+} from "./actor/network";
 // Preview actions
 export {
 	buildOnRequestHandler,
@@ -27,20 +31,17 @@ export {
 } from "./actor/session";
 // Shell actions
 export { buildShellActions } from "./actor/shell";
-// Cron actions
-export { buildCronActions } from "./actor/cron";
-// Network actions
-export {
-	buildNetworkActions,
-	type VmFetchOptions,
-	type VmFetchResult,
-} from "./actor/network";
 // Config schema and types
 export {
 	type AgentOsActorConfig,
 	type AgentOsActorConfigInput,
 	agentOsActorConfigSchema,
 } from "./config";
+// Database-backed VFS
+export {
+	createDatabaseVfs,
+	type DatabaseVfsOptions,
+} from "./fs/database-vfs";
 // Domain types and event payloads
 export type {
 	AgentOsActionContext,
@@ -48,12 +49,12 @@ export type {
 	AgentOsActorVars,
 	AgentOsEvents,
 	CronEventPayload,
+	PermissionRequestPayload,
 	PersistedSessionEvent,
 	PersistedSessionRecord,
-	PermissionRequestPayload,
-	PromptResult,
 	ProcessExitPayload,
 	ProcessOutputPayload,
+	PromptResult,
 	SerializableCronAction,
 	SerializableCronJobOptions,
 	SessionEventPayload,

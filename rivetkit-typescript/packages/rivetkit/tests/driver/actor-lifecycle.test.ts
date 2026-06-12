@@ -338,9 +338,7 @@ describeDriverMatrix("Actor Lifecycle", (driverTestConfig) => {
 			const state = await statePromise;
 			expect(state.startCompleted).toBe(true);
 
-			const observer = client.lifecycleObserver.getOrCreate([
-				"observer",
-			]);
+			const observer = client.lifecycleObserver.getOrCreate(["observer"]);
 			const events = await observer.getEvents();
 			expect(events).toContainEqual(
 				expect.objectContaining({

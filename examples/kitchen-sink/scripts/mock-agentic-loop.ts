@@ -1,6 +1,6 @@
 #!/usr/bin/env -S pnpm exec tsx
 
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import {
 	existsSync,
 	mkdtempSync,
@@ -38,7 +38,7 @@ const NAMESPACE =
 const TOKEN =
 	process.env.MOCK_AGENTIC_TOKEN ?? process.env.RIVET_TOKEN ?? "dev";
 const POOL_NAME =
-	process.env.MOCK_AGENTIC_POOL ?? process.env.RIVET_POOL ?? "default";
+	process.env.MOCK_AGENTIC_POOL ?? process.env.RIVET_POOL ?? "k8s";
 const KEY_PREFIX = process.env.MOCK_AGENTIC_KEY_PREFIX ?? "mock-agentic-loop";
 const DURATION_MS = numberFromEnv("MOCK_AGENTIC_DURATION_MS", 180_000);
 const INFERENCE_MIN_SECONDS = numberFromEnv(
@@ -60,10 +60,7 @@ const RECONNECT_DELAY_MS = numberFromEnv(
 	"MOCK_AGENTIC_RECONNECT_DELAY_MS",
 	500,
 );
-const MAX_RECONNECT_MS = numberFromEnv(
-	"MOCK_AGENTIC_MAX_RECONNECT_MS",
-	30_000,
-);
+const MAX_RECONNECT_MS = numberFromEnv("MOCK_AGENTIC_MAX_RECONNECT_MS", 30_000);
 const DEFAULT_ON_SLEEP_DELAY_MS = 0;
 const ON_SLEEP_DELAY_MS = numberFromEnv(
 	"MOCK_AGENTIC_ON_SLEEP_DELAY_MS",
@@ -174,7 +171,9 @@ type ActionVerifier = {
 		requestId: string,
 		expectedSeconds: number,
 	) => Promise<ActionVerification>;
-	verifyAll: (expectedRequests: RequestExpectation[]) => Promise<AllVerification>;
+	verifyAll: (
+		expectedRequests: RequestExpectation[],
+	) => Promise<AllVerification>;
 };
 
 type Waiter = {
@@ -284,7 +283,12 @@ async function withTimeout<T>(
 			promise,
 			new Promise<never>((_resolve, reject) => {
 				timeoutHandle = setTimeout(
-					() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)),
+					() =>
+						reject(
+							new Error(
+								`${label} timed out after ${timeoutMs}ms`,
+							),
+						),
 					timeoutMs,
 				);
 			}),
@@ -303,13 +307,9 @@ function portFromUrl(urlString: string): number {
 
 async function listenerPids(port: number): Promise<number[]> {
 	return await new Promise((resolve, reject) => {
-		const child = spawn(
-			"lsof",
-			[`-tiTCP:${port}`, "-sTCP:LISTEN", "-Pn"],
-			{
-				stdio: ["ignore", "pipe", "pipe"],
-			},
-		);
+		const child = spawn("lsof", [`-tiTCP:${port}`, "-sTCP:LISTEN", "-Pn"], {
+			stdio: ["ignore", "pipe", "pipe"],
+		});
 		let stdout = "";
 		let stderr = "";
 		child.stdout.on("data", (chunk) => {
@@ -348,7 +348,9 @@ async function stopListeners(port: number, label: string) {
 	let pids = await listenerPids(port);
 	if (pids.length === 0) return;
 
-	console.log(`[server] stopping ${label} listener port=${port} pids=${pids.join(",")}`);
+	console.log(
+		`[server] stopping ${label} listener port=${port} pids=${pids.join(",")}`,
+	);
 	for (const pid of pids) {
 		try {
 			process.kill(pid, "SIGTERM");
@@ -490,7 +492,9 @@ async function waitForLocalServerReady(
 		}
 
 		try {
-			const response = await fetch(`${serverlessUrl.replace(/\/$/, "")}/metadata`);
+			const response = await fetch(
+				`${serverlessUrl.replace(/\/$/, "")}/metadata`,
+			);
 			if (response.ok) return;
 			lastError = new Error(`metadata returned ${response.status}`);
 		} catch (error) {
@@ -615,7 +619,11 @@ async function waitForOpen(ws: WebSocket): Promise<void> {
 	await new Promise<void>((resolve, reject) => {
 		const timeout = setTimeout(() => {
 			cleanup();
-			reject(new Error(`websocket open timed out after ${OPEN_TIMEOUT_MS}ms`));
+			reject(
+				new Error(
+					`websocket open timed out after ${OPEN_TIMEOUT_MS}ms`,
+				),
+			);
 		}, OPEN_TIMEOUT_MS);
 		const cleanup = () => {
 			clearTimeout(timeout);
@@ -640,18 +648,10 @@ async function waitForOpen(ws: WebSocket): Promise<void> {
 			);
 		};
 		ws.addEventListener("open", onOpen, { once: true });
-		ws.addEventListener(
-			"error",
-			onError,
-			{
-				once: true,
-			},
-		);
-		ws.addEventListener(
-			"close",
-			onClose,
-			{ once: true },
-		);
+		ws.addEventListener("error", onError, {
+			once: true,
+		});
+		ws.addEventListener("close", onClose, { once: true });
 	});
 }
 
@@ -743,7 +743,9 @@ class RawSession {
 
 	waitForClose(timeoutMs: number): Promise<CloseObservation> {
 		if (!this.open && this.closeEvents.length > 0) {
-			return Promise.resolve(this.closeEvents[this.closeEvents.length - 1]);
+			return Promise.resolve(
+				this.closeEvents[this.closeEvents.length - 1],
+			);
 		}
 
 		return new Promise((resolve, reject) => {
@@ -754,7 +756,11 @@ class RawSession {
 					this.#closeWaiters = this.#closeWaiters.filter(
 						(item) => item !== waiter,
 					);
-					reject(new Error(`timed out waiting for close after ${timeoutMs}ms`));
+					reject(
+						new Error(
+							`timed out waiting for close after ${timeoutMs}ms`,
+						),
+					);
 				}, timeoutMs),
 			};
 			this.#closeWaiters.push(waiter);
@@ -904,7 +910,9 @@ function validateHistory(
 		(requestId) => !expectedByRequest.has(requestId),
 	);
 	if (unexpected.length > 0) {
-		throw new Error(`history had unexpected request ids: ${unexpected.join(",")}`);
+		throw new Error(
+			`history had unexpected request ids: ${unexpected.join(",")}`,
+		);
 	}
 
 	for (const request of expectedRequests) {
@@ -990,7 +998,9 @@ async function connectAndValidateHistory(
 			validateHistory(await requestHistory(session), expectedRequests);
 			const elapsedMs = Date.now() - startedAt;
 			if (attempts > 1) {
-				console.log(`[connect-ready] attempts=${attempts} elapsedMs=${elapsedMs}`);
+				console.log(
+					`[connect-ready] attempts=${attempts} elapsedMs=${elapsedMs}`,
+				);
 			}
 			return elapsedMs;
 		} catch (error) {
@@ -1014,33 +1024,37 @@ async function runProbeAttempt(webSocketUrl: string, stats: ProbeStats) {
 	let closePhase = "open";
 
 	try {
-		const closePromise = new Promise<CloseObservation>((resolve, reject) => {
-			const onClose = (event: CloseEvent) => {
-				cleanup();
-				resolve({
-					code: event.code,
-					reason: event.reason,
-					timestamp: Date.now(),
-					phase: closePhase,
-				});
-			};
-			const onError = () => {
-				cleanup();
-				reject(new Error(`probe ${closePhase} websocket error`));
-			};
-			const cleanup = () => {
-				ws.removeEventListener("close", onClose);
-				ws.removeEventListener("error", onError);
-			};
-			ws.addEventListener("close", onClose, { once: true });
-			ws.addEventListener("error", onError, { once: true });
-		});
+		const closePromise = new Promise<CloseObservation>(
+			(resolve, reject) => {
+				const onClose = (event: CloseEvent) => {
+					cleanup();
+					resolve({
+						code: event.code,
+						reason: event.reason,
+						timestamp: Date.now(),
+						phase: closePhase,
+					});
+				};
+				const onError = () => {
+					cleanup();
+					reject(new Error(`probe ${closePhase} websocket error`));
+				};
+				const cleanup = () => {
+					ws.removeEventListener("close", onClose);
+					ws.removeEventListener("error", onError);
+				};
+				ws.addEventListener("close", onClose, { once: true });
+				ws.addEventListener("error", onError, { once: true });
+			},
+		);
 		const timeout = (phase: string) =>
 			new Promise<never>((_resolve, reject) => {
 				setTimeout(
 					() =>
 						reject(
-							new Error(`probe ${phase} timed out after ${PROBE_TIMEOUT_MS}ms`),
+							new Error(
+								`probe ${phase} timed out after ${PROBE_TIMEOUT_MS}ms`,
+							),
 						),
 					PROBE_TIMEOUT_MS,
 				);
@@ -1085,7 +1099,11 @@ async function runProbeAttempt(webSocketUrl: string, stats: ProbeStats) {
 					timestamp: Date.now(),
 					phase: "pong",
 				};
-				reject(Object.assign(new Error("probe closed before pong"), { close }));
+				reject(
+					Object.assign(new Error("probe closed before pong"), {
+						close,
+					}),
+				);
 			};
 			const onError = () => {
 				cleanup();
@@ -1236,7 +1254,9 @@ async function runBypassAttempt(
 				sleepStartedAt?: unknown;
 			};
 			if (body.type !== "bypass" || body.transport !== "http") {
-				throw new Error(`unexpected bypass http body ${JSON.stringify(body)}`);
+				throw new Error(
+					`unexpected bypass http body ${JSON.stringify(body)}`,
+				);
 			}
 			const sleepStatus = validateBypassSleepStatus("bypass http", body);
 			stats.httpSuccesses += 1;
@@ -1272,7 +1292,11 @@ async function runBypassAttempt(
 			const pong = new Promise<void>((resolve, reject) => {
 				const timeoutHandle = setTimeout(() => {
 					cleanup();
-					reject(new Error("bypass websocket timed out waiting for pong"));
+					reject(
+						new Error(
+							"bypass websocket timed out waiting for pong",
+						),
+					);
 				}, BYPASS_TIMEOUT_MS);
 				const cleanup = () => {
 					clearTimeout(timeoutHandle);
@@ -1283,7 +1307,10 @@ async function runBypassAttempt(
 				const onMessage = (event: MessageEvent) => {
 					if (typeof event.data !== "string") return;
 					const message = JSON.parse(event.data) as ServerMessage;
-					if (message.type !== "pong" || message.probeId !== probeId) {
+					if (
+						message.type !== "pong" ||
+						message.probeId !== probeId
+					) {
 						return;
 					}
 					webSocketSleepStarted = validateBypassSleepStatus(
@@ -1499,12 +1526,14 @@ async function runWorkload() {
 	let bypassResultPromise: Promise<BypassStats> | undefined;
 
 	try {
-		await connectAndValidateHistory(session, expectedRequests, MAX_RECONNECT_MS);
+		await connectAndValidateHistory(
+			session,
+			expectedRequests,
+			MAX_RECONNECT_MS,
+		);
 		probeResultPromise = runProbeLoop(webSocketUrl, stopAt);
-		bypassResultPromise = runBypassLoop(
-			bypassHandle,
-			stopAt,
-			() => (sleepStats.posts === 0 ? "beforeSleep" : "afterSleep"),
+		bypassResultPromise = runBypassLoop(bypassHandle, stopAt, () =>
+			sleepStats.posts === 0 ? "beforeSleep" : "afterSleep",
 		);
 
 		while (Date.now() < stopAt) {
@@ -1522,7 +1551,9 @@ async function runWorkload() {
 					const close =
 						session.closeEvents[session.closeEvents.length - 1];
 					if (!close) {
-						throw new Error("main websocket closed without a close event");
+						throw new Error(
+							"main websocket closed without a close event",
+						);
 					}
 					console.log(
 						`[sleep-close] code=${close.code} reason=${close.reason}`,
@@ -1554,7 +1585,9 @@ async function runWorkload() {
 			expectedRequests.push({ requestId, seconds });
 
 			if (sleepStats.posts > sleepPostsObservedByMain) {
-				const close = await session.waitForClose(SLEEP_CLOSE_TIMEOUT_MS);
+				const close = await session.waitForClose(
+					SLEEP_CLOSE_TIMEOUT_MS,
+				);
 				console.log(
 					`[sleep-close] code=${close.code} reason=${close.reason}`,
 				);
@@ -1588,32 +1621,39 @@ async function runWorkload() {
 	const bypassResult =
 		bypassResultPromise !== undefined
 			? await bypassResultPromise
-			: await runBypassLoop(bypassHandle, Date.now(), () => "beforeSleep");
-	validateHistory(await (async () => {
-		const finalSession = new RawSession(webSocketUrl, `${label}:final`);
-		const reconnectMs = await connectAndValidateHistory(
-			finalSession,
-			expectedRequests,
-			MAX_RECONNECT_MS,
-		);
-		reconnectCount += 1;
-		maxReconnectMs = Math.max(maxReconnectMs, reconnectMs);
-		if (reconnectMs > MAX_RECONNECT_MS) {
-			throw new Error(
-				`final reconnect took ${reconnectMs}ms, exceeded ${MAX_RECONNECT_MS}ms`,
+			: await runBypassLoop(
+					bypassHandle,
+					Date.now(),
+					() => "beforeSleep",
+				);
+	validateHistory(
+		await (async () => {
+			const finalSession = new RawSession(webSocketUrl, `${label}:final`);
+			const reconnectMs = await connectAndValidateHistory(
+				finalSession,
+				expectedRequests,
+				MAX_RECONNECT_MS,
 			);
-		}
-		finalSession.send({ type: "history" });
-		const history = await finalSession.waitFor(
-			(message) => message.type === "history",
-			10_000,
-		);
-		if (history.type !== "history") {
-			throw new Error("expected history response");
-		}
-		finalSession.close();
-		return history;
-	})(), expectedRequests);
+			reconnectCount += 1;
+			maxReconnectMs = Math.max(maxReconnectMs, reconnectMs);
+			if (reconnectMs > MAX_RECONNECT_MS) {
+				throw new Error(
+					`final reconnect took ${reconnectMs}ms, exceeded ${MAX_RECONNECT_MS}ms`,
+				);
+			}
+			finalSession.send({ type: "history" });
+			const history = await finalSession.waitFor(
+				(message) => message.type === "history",
+				10_000,
+			);
+			if (history.type !== "history") {
+				throw new Error("expected history response");
+			}
+			finalSession.close();
+			return history;
+		})(),
+		expectedRequests,
+	);
 	await verifyAll(verifier, expectedRequests);
 
 	console.log(
@@ -1688,12 +1728,22 @@ async function runWorkload() {
 		throw new Error("bypass loop did not continue after sleep request");
 	}
 	if (sleepResult.posts > 0 && bypassResult.afterSleepHttpSuccesses === 0) {
-		throw new Error("bypass http had no successful after-sleep actor responses");
+		throw new Error(
+			"bypass http had no successful after-sleep actor responses",
+		);
 	}
-	if (sleepResult.posts > 0 && bypassResult.afterSleepWebSocketSuccesses === 0) {
-		throw new Error("bypass websocket had no successful after-sleep actor responses");
+	if (
+		sleepResult.posts > 0 &&
+		bypassResult.afterSleepWebSocketSuccesses === 0
+	) {
+		throw new Error(
+			"bypass websocket had no successful after-sleep actor responses",
+		);
 	}
-	if (sleepResult.posts > 0 && bypassResult.afterSleepHttpSleepStarted === 0) {
+	if (
+		sleepResult.posts > 0 &&
+		bypassResult.afterSleepHttpSleepStarted === 0
+	) {
 		throw new Error(
 			`bypass http never returned actor sleepStarted proof: ${JSON.stringify(bypassResult)}`,
 		);

@@ -330,7 +330,11 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 	],
 	worker: [{ label: "Get State", action: "getState", args: [] }],
 	workerTimeout: [
-		{ label: "Enqueue Job", action: "enqueueJob", args: ["task from queue timeout"] },
+		{
+			label: "Enqueue Job",
+			action: "enqueueJob",
+			args: ["task from queue timeout"],
+		},
 		{ label: "Set Timeout 1s", action: "setTimeoutMs", args: [1000] },
 		{ label: "Get State", action: "getState", args: [] },
 	],
@@ -368,7 +372,11 @@ export const ACTION_TEMPLATES: Record<string, ActionTemplate[]> = {
 		{ label: "Get State", action: "getState", args: [] },
 	],
 	workflowQueueTimeoutActor: [
-		{ label: "Enqueue Job", action: "enqueueJob", args: ["task from workflow timeout"] },
+		{
+			label: "Enqueue Job",
+			action: "enqueueJob",
+			args: ["task from workflow timeout"],
+		},
 		{ label: "Set Timeout 1s", action: "setTimeoutMs", args: [1000] },
 		{ label: "Get State", action: "getState", args: [] },
 	],
@@ -589,7 +597,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 				docs: [
 					{
 						label: "Ephemeral Variables",
-						href: "https://rivet.dev/docs/actors/ephemeral-variables",
+						href: "https://rivet.dev/docs/actors/state",
 					},
 				],
 				actors: [
@@ -931,62 +939,61 @@ export const PAGE_GROUPS: PageGroup[] = [
 		title: "Queues",
 		icon: "list",
 		pages: [
-				{
-					id: "queue-basics",
-					title: "Queue Basics",
-					description: "Send and receive queue messages from actors.",
+			{
+				id: "queue-basics",
+				title: "Queue Basics",
+				description: "Send and receive queue messages from actors.",
 				docs: [
 					{
 						label: "Queue",
 						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
-					actors: ["worker"],
-					snippet: SNIPPETS.queue,
-				},
-				{
-					id: "queue-patterns",
-					title: "Queue Patterns",
-					description:
-						"Run a worker loop that consumes queued jobs.",
+				actors: ["worker"],
+				snippet: SNIPPETS.queue,
+			},
+			{
+				id: "queue-patterns",
+				title: "Queue Patterns",
+				description: "Run a worker loop that consumes queued jobs.",
 				docs: [
 					{
 						label: "Queue",
 						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
-					actors: ["worker"],
-					snippet: SNIPPETS.queue,
-				},
-				{
-					id: "queue-run-loop",
-					title: "Queue in Run Loop",
-					description: "Consume queue messages inside run handlers.",
+				actors: ["worker"],
+				snippet: SNIPPETS.queue,
+			},
+			{
+				id: "queue-run-loop",
+				title: "Queue in Run Loop",
+				description: "Consume queue messages inside run handlers.",
 				docs: [
 					{
 						label: "Queue",
 						href: "https://rivet.dev/docs/actors/queues",
 					},
 				],
-					actors: ["runWithQueueConsumer"],
-					snippet: SNIPPETS.queue,
-				},
-				{
-					id: "queue-timeout-loop",
-					title: "Queue Timeout Tick",
-					description:
-						"Use queue timeouts to trigger a heartbeat every N seconds while waiting for jobs.",
-					docs: [
-						{
-							label: "Queue",
-							href: "https://rivet.dev/docs/actors/queues",
-						},
-					],
-					actors: ["workerTimeout"],
-					snippet: SNIPPETS.queueTimeout,
-				},
-			],
-		},
+				actors: ["runWithQueueConsumer"],
+				snippet: SNIPPETS.queue,
+			},
+			{
+				id: "queue-timeout-loop",
+				title: "Queue Timeout Tick",
+				description:
+					"Use queue timeouts to trigger a heartbeat every N seconds while waiting for jobs.",
+				docs: [
+					{
+						label: "Queue",
+						href: "https://rivet.dev/docs/actors/queues",
+					},
+				],
+				actors: ["workerTimeout"],
+				snippet: SNIPPETS.queueTimeout,
+			},
+		],
+	},
 	{
 		id: "workflows",
 		title: "Workflows",
@@ -1031,33 +1038,33 @@ export const PAGE_GROUPS: PageGroup[] = [
 				actors: ["batch"],
 				snippet: SNIPPETS.workflow,
 			},
-				{
-					id: "workflow-listen",
-					title: "Listen",
-					description: "Wait for approvals and events in workflows.",
+			{
+				id: "workflow-listen",
+				title: "Listen",
+				description: "Wait for approvals and events in workflows.",
 				docs: [
 					{
 						label: "Workflows",
 						href: "https://rivet.dev/docs/workflows",
 					},
 				],
-					actors: ["approval"],
-					snippet: SNIPPETS.workflow,
-				},
-				{
-					id: "workflow-queue-timeout",
-					title: "Queue Timeout Tick",
-					description:
-						"Wait for queue messages with a timeout and run a periodic heartbeat step between messages.",
-					docs: [
-						{
-							label: "Workflows",
-							href: "https://rivet.dev/docs/actors/workflows",
-						},
-					],
-					actors: ["workflowQueueTimeoutActor"],
-					snippet: SNIPPETS.workflowQueueTimeout,
-				},
+				actors: ["approval"],
+				snippet: SNIPPETS.workflow,
+			},
+			{
+				id: "workflow-queue-timeout",
+				title: "Queue Timeout Tick",
+				description:
+					"Wait for queue messages with a timeout and run a periodic heartbeat step between messages.",
+				docs: [
+					{
+						label: "Workflows",
+						href: "https://rivet.dev/docs/actors/workflows",
+					},
+				],
+				actors: ["workflowQueueTimeoutActor"],
+				snippet: SNIPPETS.workflowQueueTimeout,
+			},
 			{
 				id: "workflow-join",
 				title: "Join",
@@ -1145,8 +1152,7 @@ export const PAGE_GROUPS: PageGroup[] = [
 			{
 				id: "workflow-history-race",
 				title: "History: Race",
-				description:
-					"Record race branches with a winning path.",
+				description: "Record race branches with a winning path.",
 				docs: [
 					{
 						label: "Workflows",

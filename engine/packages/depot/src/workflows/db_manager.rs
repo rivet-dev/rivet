@@ -6,15 +6,10 @@ use crate::compaction::test_hooks;
 use crate::fault::ReclaimFaultPoint;
 
 #[workflow(DbManagerWorkflow)]
-pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result<()> {
+pub async fn depot_db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result<()> {
 	let companion_workflow_ids =
 		dispatch_companion_workflows(ctx, input.database_branch_id).await?;
-	let initial_deadline_ms = ctx.create_ts();
-	let initial_state = if manager_planning_timers_disabled(input) {
-		DbManagerState::new(companion_workflow_ids)
-	} else {
-		DbManagerState::new_with_initial_deadline(companion_workflow_ids, initial_deadline_ms)
-	};
+	let initial_state = DbManagerState::new(companion_workflow_ids);
 
 	ctx.lupe()
 		.commit_interval(1)
@@ -26,12 +21,20 @@ pub async fn db_manager(ctx: &mut WorkflowCtx, input: &DbManagerInput) -> Result
 		.await
 }
 
+#[derive(Copy, Clone, Debug, Default)]
+pub(super) struct WakeTriggers {
+	pub hot: bool,
+	pub reclaim: bool,
+}
+
 async fn run_manager_iteration(
 	ctx: &mut WorkflowCtx,
 	state: &mut DbManagerState,
 	input: &DbManagerInput,
 ) -> Result<Loop<()>> {
-	let signals = listen_for_manager_signals(ctx, input, &state.planning_deadlines).await?;
+	let signals = listen_for_manager_signals(ctx, input, state).await?;
+	let signal_received = !signals.is_empty();
+
 	let effects = manager_effects_for_signals(state, input, signals, ctx.create_ts());
 	execute_manager_effects(ctx, state, input, effects).await?;
 
@@ -42,7 +45,14 @@ async fn run_manager_iteration(
 
 	let forced_work = state.force_compactions.pending_work();
 	let refresh = execute_manager_refresh(ctx, state, input, forced_work).await?;
-	let effects = manager_effects_after_refresh(state, input, &refresh, ctx.create_ts());
+	let now_ms = refresh.refreshed_at_ms;
+
+	let triggers = WakeTriggers {
+		hot: signal_received,
+		reclaim: state.next_reclaim_check_at_ms.is_some_and(|d| now_ms >= d) || forced_work.reclaim,
+	};
+
+	let effects = manager_effects_after_refresh(state, input, &refresh, now_ms, triggers);
 	let should_stop = effects
 		.iter()
 		.any(|effect| matches!(effect, ManagerEffect::StopCompanions { .. }));
@@ -51,7 +61,34 @@ async fn run_manager_iteration(
 		return Ok(Loop::Break(()));
 	}
 
+	schedule_next_wake(state, input, now_ms, signal_received, triggers);
+
 	Ok(Loop::Continue)
+}
+
+fn schedule_next_wake(
+	state: &mut DbManagerState,
+	input: &DbManagerInput,
+	now_ms: i64,
+	signal_received: bool,
+	triggers: WakeTriggers,
+) {
+	use crate::conveyer::constants::MANAGER_RECLAIM_INTERVAL_MS;
+
+	if manager_planning_timers_disabled(input) {
+		state.next_reclaim_check_at_ms = None;
+		return;
+	}
+
+	if triggers.reclaim {
+		state.next_reclaim_check_at_ms = None;
+	}
+
+	if signal_received {
+		if state.next_reclaim_check_at_ms.is_none() {
+			state.next_reclaim_check_at_ms = Some(now_ms + MANAGER_RECLAIM_INTERVAL_MS);
+		}
+	}
 }
 
 #[derive(Debug)]
@@ -63,15 +100,7 @@ pub(super) enum ManagerEffect {
 		signal: HotJobFinished,
 		active_job: ActiveHotCompactionJob,
 	},
-	PublishColdOutput {
-		signal: ColdJobFinished,
-		active_job: ActiveColdCompactionJob,
-	},
 	FinishHotJob {
-		job_id: Id,
-		status: CompactionJobStatus,
-	},
-	FinishColdJob {
 		job_id: Id,
 		status: CompactionJobStatus,
 	},
@@ -83,17 +112,8 @@ pub(super) enum ManagerEffect {
 		signal: HotJobFinished,
 		actor_id: Option<String>,
 	},
-	ScheduleUploadedColdOutputCleanup {
-		signal: ColdJobFinished,
-		base_lifecycle_generation: Option<u64>,
-		repair_action: &'static str,
-		actor_id: Option<String>,
-	},
 	RunHotJob {
 		active_job: PlannedHotCompactionJob,
-	},
-	RunColdJob {
-		active_job: PlannedColdCompactionJob,
 	},
 	RunReclaimJob {
 		active_job: PlannedReclaimCompactionJob,
@@ -129,9 +149,6 @@ pub(super) fn manager_effects_for_signals(
 			}
 			DbManagerSignal::HotJobFinished(signal) => {
 				effects.extend(manager_effects_for_hot_job_finished(state, input, signal));
-			}
-			DbManagerSignal::ColdJobFinished(signal) => {
-				effects.extend(manager_effects_for_cold_job_finished(state, input, signal));
 			}
 			DbManagerSignal::ReclaimJobFinished(signal) => {
 				effects.extend(manager_effects_for_reclaim_job_finished(state, signal));
@@ -188,38 +205,6 @@ pub(super) fn manager_effects_for_hot_job_finished(
 
 	vec![ManagerEffect::ScheduleStaleHotOutputCleanup {
 		signal,
-		actor_id: input.actor_id.clone(),
-	}]
-}
-
-pub(super) fn manager_effects_for_cold_job_finished(
-	state: &mut DbManagerState,
-	input: &DbManagerInput,
-	signal: ColdJobFinished,
-) -> Vec<ManagerEffect> {
-	let active_job = state.active_jobs.cold.clone();
-	if let Some(active_job) = active_job.as_ref()
-		&& cold_job_finished_matches_active(&signal, active_job)
-	{
-		return match &signal.status {
-			CompactionJobStatus::Requested => Vec::new(),
-			CompactionJobStatus::Succeeded => vec![ManagerEffect::PublishColdOutput {
-				signal,
-				active_job: active_job.clone(),
-			}],
-			CompactionJobStatus::Rejected { .. } | CompactionJobStatus::Failed { .. } => {
-				vec![ManagerEffect::FinishColdJob {
-					job_id: signal.job_id,
-					status: signal.status.clone(),
-				}]
-			}
-		};
-	}
-
-	vec![ManagerEffect::ScheduleUploadedColdOutputCleanup {
-		signal,
-		base_lifecycle_generation: state.last_observed_branch_lifecycle_generation,
-		repair_action: "delete_stale_cold_output",
 		actor_id: input.actor_id.clone(),
 	}]
 }
@@ -283,9 +268,6 @@ async fn execute_manager_effects(
 			ManagerEffect::InstallHotOutput { signal, active_job } => {
 				execute_install_hot_output_effect(ctx, state, signal, active_job).await?;
 			}
-			ManagerEffect::PublishColdOutput { signal, active_job } => {
-				execute_publish_cold_output_effect(ctx, state, input, signal, active_job).await?;
-			}
 			ManagerEffect::FinishHotJob { job_id, status } => {
 				state.force_compactions.record_job_finished(
 					CompactionJobKind::Hot,
@@ -293,14 +275,6 @@ async fn execute_manager_effects(
 					&status,
 				);
 				state.active_jobs.hot = None;
-			}
-			ManagerEffect::FinishColdJob { job_id, status } => {
-				state.force_compactions.record_job_finished(
-					CompactionJobKind::Cold,
-					job_id,
-					&status,
-				);
-				state.active_jobs.cold = None;
 			}
 			ManagerEffect::FinishReclaimJob { job_id, status } => {
 				state.force_compactions.record_job_finished(
@@ -313,27 +287,8 @@ async fn execute_manager_effects(
 			ManagerEffect::ScheduleStaleHotOutputCleanup { signal, actor_id } => {
 				schedule_stale_hot_output_cleanup(ctx, state, &signal, actor_id.as_deref()).await?;
 			}
-			ManagerEffect::ScheduleUploadedColdOutputCleanup {
-				signal,
-				base_lifecycle_generation,
-				repair_action,
-				actor_id,
-			} => {
-				schedule_uploaded_cold_output_cleanup(
-					ctx,
-					state,
-					&signal,
-					base_lifecycle_generation,
-					repair_action,
-					actor_id.as_deref(),
-				)
-				.await?;
-			}
 			ManagerEffect::RunHotJob { active_job } => {
 				execute_run_hot_job_effect(ctx, state, active_job).await?;
-			}
-			ManagerEffect::RunColdJob { active_job } => {
-				execute_run_cold_job_effect(ctx, state, active_job).await?;
 			}
 			ManagerEffect::RunReclaimJob { active_job } => {
 				execute_run_reclaim_job_effect(ctx, state, active_job).await?;
@@ -371,11 +326,6 @@ async fn execute_refresh_effect(
 		})
 		.await?;
 
-	state.planning_deadlines = if manager_planning_timers_disabled(input) {
-		ManagerPlanningDeadlines::default()
-	} else {
-		refresh.planning_deadlines.clone()
-	};
 	state.last_observed_branch_lifecycle_generation = refresh.branch_lifecycle_generation;
 	if state.last_dirty_cursor.is_none()
 		&& let Some(dirty) = refresh.observed_dirty.as_ref()
@@ -424,57 +374,6 @@ async fn execute_install_hot_output_effect(
 	Ok(())
 }
 
-async fn execute_publish_cold_output_effect(
-	ctx: &mut WorkflowCtx,
-	state: &mut DbManagerState,
-	input: &DbManagerInput,
-	signal: ColdJobFinished,
-	active_job: ActiveColdCompactionJob,
-) -> Result<()> {
-	let publish = ctx
-		.activity(PublishColdJobInput {
-			database_branch_id: signal.database_branch_id,
-			job_id: signal.job_id,
-			job_kind: signal.job_kind,
-			base_lifecycle_generation: active_job.base_lifecycle_generation,
-			base_manifest_generation: signal.base_manifest_generation,
-			input_fingerprint: signal.input_fingerprint,
-			input_range: active_job.input_range,
-			output_refs: signal.output_refs.clone(),
-		})
-		.await?;
-	match publish.status {
-		CompactionJobStatus::Requested => {}
-		CompactionJobStatus::Succeeded => {
-			state.force_compactions.record_job_finished(
-				CompactionJobKind::Cold,
-				signal.job_id,
-				&publish.status,
-			);
-			state.active_jobs.cold = None;
-		}
-		CompactionJobStatus::Rejected { .. } | CompactionJobStatus::Failed { .. } => {
-			schedule_uploaded_cold_output_cleanup(
-				ctx,
-				state,
-				&signal,
-				Some(active_job.base_lifecycle_generation),
-				"delete_rejected_cold_publish_output",
-				input.actor_id.as_deref(),
-			)
-			.await?;
-			state.force_compactions.record_job_finished(
-				CompactionJobKind::Cold,
-				signal.job_id,
-				&publish.status,
-			);
-			state.active_jobs.cold = None;
-		}
-	}
-
-	Ok(())
-}
-
 async fn execute_run_hot_job_effect(
 	ctx: &mut WorkflowCtx,
 	state: &mut DbManagerState,
@@ -498,33 +397,6 @@ async fn execute_run_hot_job_effect(
 		.force_compactions
 		.record_job_attempted(CompactionJobKind::Hot);
 	state.active_jobs.hot = Some(ActiveHotCompactionJob::from_planned(active_job));
-
-	Ok(())
-}
-
-async fn execute_run_cold_job_effect(
-	ctx: &mut WorkflowCtx,
-	state: &mut DbManagerState,
-	active_job: PlannedColdCompactionJob,
-) -> Result<()> {
-	ctx.signal(RunColdJob {
-		database_branch_id: active_job.database_branch_id,
-		job_id: active_job.job_id,
-		job_kind: CompactionJobKind::Cold,
-		base_lifecycle_generation: active_job.base_lifecycle_generation,
-		base_manifest_generation: active_job.base_manifest_generation,
-		input_fingerprint: active_job.input_fingerprint,
-		status: CompactionJobStatus::Requested,
-		input_range: active_job.input_range.clone(),
-	})
-	.to_workflow_id(state.companion_workflow_ids.cold_compacter_workflow_id)
-	.send()
-	.await?;
-
-	state
-		.force_compactions
-		.record_job_attempted(CompactionJobKind::Cold);
-	state.active_jobs.cold = Some(ActiveColdCompactionJob::from_planned(active_job));
 
 	Ok(())
 }
@@ -582,6 +454,7 @@ pub(super) fn manager_effects_after_refresh(
 	input: &DbManagerInput,
 	refresh: &RefreshManagerOutput,
 	now_ms: i64,
+	triggers: WakeTriggers,
 ) -> Vec<ManagerEffect> {
 	if !refresh.branch_is_live && matches!(state.branch_stop_state, BranchStopState::Running) {
 		return vec![stop_companions_effect(ManagerStopRequest {
@@ -594,20 +467,14 @@ pub(super) fn manager_effects_after_refresh(
 
 	let mut effects = Vec::new();
 	if matches!(state.branch_stop_state, BranchStopState::Running) {
-		let mut cold_will_run = state.active_jobs.cold.is_some();
-		if state.active_jobs.hot.is_none()
+		if triggers.hot
+			&& state.active_jobs.hot.is_none()
 			&& let Some(active_job) = refresh.planned_hot_job.clone()
 		{
 			effects.push(ManagerEffect::RunHotJob { active_job });
 		}
-		if state.active_jobs.cold.is_none()
-			&& let Some(active_job) = refresh.planned_cold_job.clone()
-		{
-			cold_will_run = true;
-			effects.push(ManagerEffect::RunColdJob { active_job });
-		}
-		if state.active_jobs.reclaim.is_none()
-			&& !cold_will_run
+		if triggers.reclaim
+			&& state.active_jobs.reclaim.is_none()
 			&& let Some(active_job) = refresh.planned_reclaim_job.clone()
 		{
 			effects.push(ManagerEffect::RunReclaimJob { active_job });
@@ -634,12 +501,6 @@ async fn dispatch_companion_workflows(
 		.unique()
 		.dispatch()
 		.await?;
-	let cold_compacter_workflow_id = ctx
-		.workflow(DbColdCompacterInput { database_branch_id })
-		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
-		.unique()
-		.dispatch()
-		.await?;
 	let reclaimer_workflow_id = ctx
 		.workflow(DbReclaimerInput { database_branch_id })
 		.tag(DATABASE_BRANCH_ID_TAG, &tag_value)
@@ -649,7 +510,6 @@ async fn dispatch_companion_workflows(
 
 	Ok(CompanionWorkflowIds::new(
 		hot_compacter_workflow_id,
-		cold_compacter_workflow_id,
 		reclaimer_workflow_id,
 	))
 }
@@ -671,11 +531,6 @@ async fn signal_companions_destroy(
 		.send()
 		.await?;
 
-	ctx.signal(destroy.clone())
-		.to_workflow_id(companion_workflow_ids.cold_compacter_workflow_id)
-		.send()
-		.await?;
-
 	ctx.signal(destroy)
 		.to_workflow_id(companion_workflow_ids.reclaimer_workflow_id)
 		.send()
@@ -687,13 +542,15 @@ async fn signal_companions_destroy(
 async fn listen_for_manager_signals(
 	ctx: &mut WorkflowCtx,
 	input: &DbManagerInput,
-	planning_deadlines: &ManagerPlanningDeadlines,
+	state: &DbManagerState,
 ) -> Result<Vec<DbManagerSignal>> {
 	if manager_planning_timers_disabled(input) {
 		return ctx.listen_n::<DbManagerSignal>(256).await;
 	}
 
-	if let Some(deadline) = nearest_planning_deadline(planning_deadlines) {
+	let deadline = state.next_reclaim_check_at_ms;
+
+	if let Some(deadline) = deadline {
 		ctx.listen_n_until::<DbManagerSignal>(deadline, 256).await
 	} else {
 		ctx.listen_n::<DbManagerSignal>(256).await
@@ -710,18 +567,6 @@ fn manager_planning_timers_disabled(_input: &DbManagerInput) -> bool {
 	false
 }
 
-fn nearest_planning_deadline(planning_deadlines: &ManagerPlanningDeadlines) -> Option<i64> {
-	[
-		planning_deadlines.next_hot_check_at_ms,
-		planning_deadlines.next_cold_check_at_ms,
-		planning_deadlines.next_reclaim_check_at_ms,
-		planning_deadlines.final_settle_check_at_ms,
-	]
-	.into_iter()
-	.flatten()
-	.min()
-}
-
 #[activity(RefreshManager)]
 pub async fn refresh_manager(
 	ctx: &ActivityCtx,
@@ -729,14 +574,13 @@ pub async fn refresh_manager(
 ) -> Result<RefreshManagerOutput> {
 	let now_ms = ctx.ts();
 	let database_branch_id = input.database_branch_id;
-	let cold_storage_enabled = workflow_cold_storage_enabled(ctx.config(), database_branch_id);
 	#[cfg(feature = "test-faults")]
 	test_hooks::maybe_fire_reclaim_fault(database_branch_id, ReclaimFaultPoint::PlanBeforeSnapshot)
 		.await?;
 	let snapshot = ctx
 		.udb()?
-		.run(move |tx| async move {
-			read_manager_fdb_snapshot(&tx, database_branch_id, cold_storage_enabled, now_ms).await
+		.txn("depot_manager_refresh", move |tx| async move {
+			read_manager_fdb_snapshot(&tx, database_branch_id, now_ms).await
 		})
 		.await?;
 	#[cfg(feature = "test-faults")]
@@ -762,17 +606,6 @@ pub async fn refresh_manager(
 	} else {
 		None
 	};
-	let planned_cold_job = if branch_is_live && cold_storage_enabled {
-		plan_cold_job(
-			database_branch_id,
-			&snapshot,
-			Id::new_v1(ctx.config().dc_label()),
-			now_ms,
-			input.force.cold,
-		)
-	} else {
-		None
-	};
 	let planned_reclaim_job = if branch_is_live {
 		plan_reclaim_job(
 			database_branch_id,
@@ -790,9 +623,8 @@ pub async fn refresh_manager(
 	};
 
 	Ok(RefreshManagerOutput {
-		planning_deadlines: ManagerPlanningDeadlines::after_refresh(now_ms),
+		refreshed_at_ms: now_ms,
 		planned_hot_job,
-		planned_cold_job,
 		planned_reclaim_job,
 		observed_dirty: if snapshot.cleared_dirty {
 			None
@@ -813,16 +645,6 @@ fn hot_job_finished_matches_active(
 ) -> bool {
 	signal.job_id == active_job.job_id
 		&& signal.job_kind == CompactionJobKind::Hot
-		&& signal.base_manifest_generation == active_job.base_manifest_generation
-		&& signal.input_fingerprint == active_job.input_fingerprint
-}
-
-fn cold_job_finished_matches_active(
-	signal: &ColdJobFinished,
-	active_job: &ActiveColdCompactionJob,
-) -> bool {
-	signal.job_id == active_job.job_id
-		&& signal.job_kind == CompactionJobKind::Cold
 		&& signal.base_manifest_generation == active_job.base_manifest_generation
 		&& signal.input_fingerprint == active_job.input_fingerprint
 }
@@ -873,7 +695,6 @@ async fn schedule_stale_hot_output_cleanup(
 		.collect::<Vec<_>>();
 	let input_range = repair_reclaim_input_range(
 		staged_hot_shards,
-		Vec::new(),
 		signal
 			.output_refs
 			.iter()
@@ -894,54 +715,8 @@ async fn schedule_stale_hot_output_cleanup(
 	.await
 }
 
-async fn schedule_uploaded_cold_output_cleanup(
-	ctx: &mut WorkflowCtx,
-	state: &mut DbManagerState,
-	signal: &ColdJobFinished,
-	base_lifecycle_generation: Option<u64>,
-	repair_action: &'static str,
-	actor_id: Option<&str>,
-) -> Result<()> {
-	if !matches!(signal.status, CompactionJobStatus::Succeeded) || signal.output_refs.is_empty() {
-		return Ok(());
-	}
-	let Some(base_lifecycle_generation) = base_lifecycle_generation else {
-		tracing::warn!(
-			actor_id = log_actor_id(actor_id),
-			?signal.database_branch_id,
-			manifest_generation = signal.base_manifest_generation,
-			?signal.job_id,
-			repair_action = "defer_stale_cold_output_cleanup",
-			"stale cold output cleanup deferred until branch lifecycle is observed"
-		);
-		return Ok(());
-	};
-
-	let input_range = repair_reclaim_input_range(
-		Vec::new(),
-		signal.output_refs.clone(),
-		signal
-			.output_refs
-			.iter()
-			.map(|output_ref| output_ref.as_of_txid),
-	);
-	schedule_repair_reclaim_job(
-		ctx,
-		state,
-		signal.database_branch_id,
-		base_lifecycle_generation,
-		signal.base_manifest_generation,
-		input_range,
-		signal.job_id,
-		repair_action,
-		actor_id,
-	)
-	.await
-}
-
 pub(super) fn repair_reclaim_input_range(
 	staged_hot_shards: Vec<StagedHotShardCleanupRef>,
-	orphan_cold_objects: Vec<ColdShardRef>,
 	txids: impl Iterator<Item = u64>,
 ) -> ReclaimJobInputRange {
 	let mut min_txid = u64::MAX;
@@ -957,10 +732,7 @@ pub(super) fn repair_reclaim_input_range(
 	ReclaimJobInputRange {
 		txids: TxidRange { min_txid, max_txid },
 		txid_refs: Vec::new(),
-		cold_objects: Vec::new(),
-		shard_cache_evictions: Vec::new(),
 		staged_hot_shards,
-		orphan_cold_objects,
 		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
 	}
@@ -999,7 +771,6 @@ async fn schedule_repair_reclaim_job(
 		?cleanup_job_id,
 		repair_action,
 		staged_hot_shard_count = input_range.staged_hot_shards.len(),
-		orphan_cold_object_count = input_range.orphan_cold_objects.len(),
 		"scheduled stale compaction output cleanup"
 	);
 

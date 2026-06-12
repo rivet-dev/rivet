@@ -1,5 +1,5 @@
 use rivet_envoy_protocol as protocol;
-use rivet_util_serde::HashableMap;
+use std::collections::HashMap;
 
 use crate::utils::id_to_str;
 
@@ -7,7 +7,7 @@ fn stringify_bytes(data: &[u8]) -> String {
 	format!("Bytes({})", data.len())
 }
 
-fn stringify_map(map: &HashableMap<String, String>) -> String {
+fn stringify_map(map: &HashMap<String, String>) -> String {
 	let entries: Vec<String> = map
 		.iter()
 		.map(|(k, v)| format!("\"{k}\": \"{v}\""))

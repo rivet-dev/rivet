@@ -120,7 +120,7 @@ pub(crate) struct RescheduleState {
 	retry_count: usize,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct UpdateRunnerInput {
 	actor_id: Id,
 	runner_id: Id,
@@ -139,7 +139,7 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 	state.runner_workflow_id = Some(input.runner_workflow_id);
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_runtime_clear_sleep", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Set actor as not sleeping
@@ -152,7 +152,7 @@ async fn update_runner(ctx: &ActivityCtx, input: &UpdateRunnerInput) -> Result<(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AllocateActorInputV1 {
 	actor_id: Id,
 	generation: u32,
@@ -180,7 +180,7 @@ async fn allocate_actor(
 	bail!("allocate actor v1 should never be called again")
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct AllocateActorInputV2 {
 	actor_id: Id,
 	generation: u32,
@@ -276,7 +276,7 @@ async fn allocate_actor_v2(
 	// client wf
 	let res = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_runtime_allocate_actor", |tx| async move {
 			let ping_threshold_ts = util::timestamp::now() - runner_eligible_threshold;
 
 			let tx = tx.with_subspace(keys::subspace());
@@ -536,7 +536,7 @@ async fn allocate_actor_v2(
 	Ok(res)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetNotConnectableInput {
 	pub actor_id: Id,
 }
@@ -546,14 +546,17 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 	let mut state = ctx.state::<State>()?;
 
 	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+		.txn(
+			"pegboard_actor_runtime_set_not_connectable",
+			|tx| async move {
+				let tx = tx.with_subspace(keys::subspace());
 
-			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
-			tx.clear(&keys::subspace().pack(&connectable_key));
+				let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
+				tx.clear(&keys::subspace().pack(&connectable_key));
 
-			Ok(())
-		})
+				Ok(())
+			},
+		)
 		.custom_instrument(tracing::info_span!("actor_set_not_connectable_tx"))
 		.await?;
 
@@ -562,7 +565,7 @@ pub async fn set_not_connectable(ctx: &ActivityCtx, input: &SetNotConnectableInp
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct DeallocateInput {
 	pub actor_id: Id,
 }
@@ -581,7 +584,7 @@ pub async fn deallocate(ctx: &ActivityCtx, input: &DeallocateInput) -> Result<De
 	let allocated_serverless_slot = state.allocated_serverless_slot;
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_runtime_deallocate", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.delete(&keys::actor::ConnectableKey::new(input.actor_id));
@@ -1131,7 +1134,7 @@ pub async fn reschedule_actor(
 	Ok(spawn_res)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ClearPendingAllocationInput {
 	actor_id: Id,
 	namespace_id: Id,
@@ -1151,37 +1154,40 @@ pub async fn clear_pending_allocation(
 	// Clear self from alloc queue
 	let cleared = ctx
 		.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+		.txn(
+			"pegboard_actor_runtime_clear_alloc_queue",
+			|tx| async move {
+				let tx = tx.with_subspace(keys::subspace());
 
-			let pending_alloc_key = keys::ns::PendingActorByRunnerNameSelectorKey::new(
-				input.namespace_id,
-				input.runner_name_selector.clone(),
-				input.pending_allocation_ts,
-				input.actor_id,
-			);
-			let exists = tx.exists(&pending_alloc_key, Serializable).await?;
+				let pending_alloc_key = keys::ns::PendingActorByRunnerNameSelectorKey::new(
+					input.namespace_id,
+					input.runner_name_selector.clone(),
+					input.pending_allocation_ts,
+					input.actor_id,
+				);
+				let exists = tx.exists(&pending_alloc_key, Serializable).await?;
 
-			if exists {
-				tx.delete(&pending_alloc_key);
+				if exists {
+					tx.delete(&pending_alloc_key);
 
-				// If the pending actor key still exists, we must clear its desired slot because after this
-				// activity the actor will go to sleep or be destroyed. We don't clear the slot if the key
-				// doesn't exist because the actor may either be allocated or destroyed.
-				if allocated_serverless_slot {
-					tx.atomic_op(
-						&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
-							input.namespace_id,
-							input.runner_name_selector.clone(),
-						),
-						&(-1i64).to_le_bytes(),
-						MutationType::Add,
-					);
+					// If the pending actor key still exists, we must clear its desired slot because after this
+					// activity the actor will go to sleep or be destroyed. We don't clear the slot if the key
+					// doesn't exist because the actor may either be allocated or destroyed.
+					if allocated_serverless_slot {
+						tx.atomic_op(
+							&rivet_types::keys::pegboard::ns::ServerlessDesiredSlotsKey::new(
+								input.namespace_id,
+								input.runner_name_selector.clone(),
+							),
+							&(-1i64).to_le_bytes(),
+							MutationType::Add,
+						);
+					}
 				}
-			}
 
-			Ok(exists)
-		})
+				Ok(exists)
+			},
+		)
 		.custom_instrument(tracing::info_span!("actor_clear_pending_alloc_tx"))
 		.await?;
 
@@ -1193,7 +1199,7 @@ pub async fn clear_pending_allocation(
 	Ok(cleared)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct CompareRetryInput {
 	#[serde(default)]
 	retry_count: usize,
@@ -1223,7 +1229,7 @@ async fn compare_retry(ctx: &ActivityCtx, input: &CompareRetryInput) -> Result<(
 	Ok((now, reset))
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetStartedInput {
 	pub actor_id: Id,
 }
@@ -1239,7 +1245,7 @@ pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<(
 	state.connectable_ts = Some(now);
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_runtime_set_started", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let connectable_key = keys::actor::ConnectableKey::new(input.actor_id);
@@ -1256,7 +1262,7 @@ pub async fn set_started(ctx: &ActivityCtx, input: &SetStartedInput) -> Result<(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetSleepingInput {
 	pub actor_id: Id,
 }
@@ -1270,7 +1276,7 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 	state.connectable_ts = None;
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_runtime_set_sleeping", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Make not connectable
@@ -1285,7 +1291,7 @@ pub async fn set_sleeping(ctx: &ActivityCtx, input: &SetSleepingInput) -> Result
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetCompleteInput {}
 
 #[activity(SetComplete)]
@@ -1305,7 +1311,7 @@ fn reschedule_backoff(
 	util::backoff::Backoff::new_at(max_exponent, None, base_retry_timeout, 500, retry_count)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InsertAndSendCommandsInput {
 	pub actor_id: Id,
 	pub generation: u32,
@@ -1327,43 +1333,45 @@ pub async fn insert_and_send_commands(
 	// This does not have to be part of its own activity because the txn is idempotent
 	let last_command_idx = runner_state.last_command_idx;
 	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+		.txn(
+			"pegboard_actor_runtime_insert_and_send_commands",
+			|tx| async move {
+				let tx = tx.with_subspace(keys::subspace());
 
-			tx.write(
-				&keys::runner::ActorLastCommandIdxKey::new(
-					input.runner_id,
-					input.actor_id,
-					input.generation,
-				),
-				last_command_idx,
-			)?;
-
-			for (i, command) in input.commands.iter().enumerate() {
 				tx.write(
-					&keys::runner::ActorCommandKey::new(
+					&keys::runner::ActorLastCommandIdxKey::new(
 						input.runner_id,
 						input.actor_id,
 						input.generation,
-						old_last_command_idx + i as i64 + 1,
 					),
-					match command {
-						protocol::mk2::Command::CommandStartActor(x) => {
-							protocol::mk2::ActorCommandKeyData::CommandStartActor(x.clone())
-						}
-						protocol::mk2::Command::CommandStopActor => {
-							protocol::mk2::ActorCommandKeyData::CommandStopActor
-						}
-					},
+					last_command_idx,
 				)?;
-			}
 
-			Ok(())
-		})
+				for (i, command) in input.commands.iter().enumerate() {
+					tx.write(
+						&keys::runner::ActorCommandKey::new(
+							input.runner_id,
+							input.actor_id,
+							input.generation,
+							old_last_command_idx + i as i64 + 1,
+						),
+						match command {
+							protocol::mk2::Command::CommandStartActor(x) => {
+								protocol::mk2::ActorCommandKeyData::CommandStartActor(x.clone())
+							}
+							protocol::mk2::Command::CommandStopActor => {
+								protocol::mk2::ActorCommandKeyData::CommandStopActor
+							}
+						},
+					)?;
+				}
+
+				Ok(())
+			},
+		)
 		.await?;
 
-	let receiver_subject =
-		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+	let receiver_subject = crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id);
 
 	let message_serialized =
 		versioned::ToRunnerMk2::wrap_latest(protocol::mk2::ToRunner::ToClientCommands(
@@ -1390,7 +1398,7 @@ pub async fn insert_and_send_commands(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SendMessagesToRunnerInput {
 	pub runner_id: Id,
 	pub messages: Vec<protocol::mk2::ToRunner>,
@@ -1401,8 +1409,7 @@ pub async fn send_messages_to_runner(
 	ctx: &ActivityCtx,
 	input: &SendMessagesToRunnerInput,
 ) -> Result<()> {
-	let receiver_subject =
-		crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id).to_string();
+	let receiver_subject = crate::pubsub_subjects::RunnerReceiverSubject::new(input.runner_id);
 
 	for message in &input.messages {
 		let message_serialized = versioned::ToRunnerMk2::wrap_latest(message.clone())
@@ -1416,7 +1423,7 @@ pub async fn send_messages_to_runner(
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct CheckRunnersStubInput {}
 
 #[activity(CheckRunnersStub)]
@@ -1424,7 +1431,7 @@ pub async fn check_runners(ctx: &ActivityCtx, input: &CheckRunnersStubInput) -> 
 	unreachable!();
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SetFailureReasonInput {
 	pub failure_reason: FailureReason,
 }
@@ -1451,7 +1458,7 @@ pub async fn set_failure_reason(ctx: &ActivityCtx, input: &SetFailureReasonInput
 	Ok(())
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct RecordEventMetricsInput {
 	pub namespace_id: Id,
 	pub name: String,
@@ -1464,18 +1471,21 @@ pub async fn record_event_metrics(
 	input: &RecordEventMetricsInput,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| async move {
-			let tx = tx.with_subspace(keys::subspace());
+		.txn(
+			"pegboard_actor_runtime_record_event_metrics",
+			|tx| async move {
+				let tx = tx.with_subspace(keys::subspace());
 
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				input.namespace_id,
-				namespace::keys::metric::Metric::AlarmsSet(input.name.clone()),
-				input.alarms_set as i64,
-			);
+				namespace::keys::metric::inc(
+					&tx.with_subspace(namespace::keys::subspace()),
+					input.namespace_id,
+					namespace::keys::metric::Metric::AlarmsSet(input.name.clone()),
+					input.alarms_set as i64,
+				);
 
-			Ok(())
-		})
+				Ok(())
+			},
+		)
 		.await?;
 
 	Ok(())

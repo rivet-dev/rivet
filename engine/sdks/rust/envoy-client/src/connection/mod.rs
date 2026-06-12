@@ -5,7 +5,7 @@ use rivet_envoy_protocol as protocol;
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
-use rivet_util_serde::HashableMap;
+use std::collections::HashMap;
 use vbare::OwnedVersionedData;
 
 use crate::context::SharedContext;
@@ -15,6 +15,7 @@ use crate::context::WsTxMessage;
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
 use crate::envoy::ToEnvoyMessage;
+use crate::metrics::METRICS;
 #[cfg(any(
 	feature = "native-transport",
 	all(feature = "wasm-transport", target_arch = "wasm32")
@@ -47,7 +48,7 @@ pub use wasm::start_connection;
 	all(feature = "wasm-transport", target_arch = "wasm32")
 ))]
 async fn send_initial_metadata(shared: &SharedContext) {
-	let mut prepopulate_map = HashableMap::new();
+	let mut prepopulate_map = HashMap::new();
 	for (name, actor) in &shared.config.prepopulate_actor_names {
 		prepopulate_map.insert(
 			name.clone(),
@@ -95,9 +96,10 @@ async fn forward_to_envoy(shared: &SharedContext, message: protocol::ToEnvoy) {
 			.await;
 		}
 		other => {
-			let _ = shared
-				.envoy_tx
-				.send(ToEnvoyMessage::ConnMessage { message: other });
+			let _ = crate::envoy::send_to_envoy_tx(
+				shared,
+				ToEnvoyMessage::ConnMessage { message: other },
+			);
 		}
 	}
 }
@@ -108,8 +110,22 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		tracing::debug!(data = stringify_to_rivet(&message), "sending message");
 	}
 
+	let message_kind = to_rivet_kind(&message);
+	let wait_start = crate::time::Instant::now();
 	let guard = shared.ws_tx.lock().await;
+	let wait_elapsed = wait_start.elapsed();
+	METRICS
+		.ws_tx_lock_wait_duration_seconds
+		.with_label_values(&[message_kind])
+		.observe(wait_elapsed.as_secs_f64());
+
+	let hold_start = crate::time::Instant::now();
 	let Some(tx) = guard.as_ref() else {
+		// Still observe hold duration on the early-return path.
+		METRICS
+			.ws_tx_lock_hold_duration_seconds
+			.with_label_values(&[message_kind])
+			.observe(hold_start.elapsed().as_secs_f64());
 		tracing::error!("websocket not available for sending");
 		return true;
 	};
@@ -118,7 +134,29 @@ pub async fn ws_send(shared: &SharedContext, message: protocol::ToRivet) -> bool
 		.serialize(protocol::PROTOCOL_VERSION)
 		.expect("failed to encode message");
 	let _ = tx.send(WsTxMessage::Send(encoded));
+	drop(guard);
+	METRICS
+		.ws_tx_lock_hold_duration_seconds
+		.with_label_values(&[message_kind])
+		.observe(hold_start.elapsed().as_secs_f64());
 	false
+}
+
+/// Bounded label set for `ws_tx` send paths.
+fn to_rivet_kind(message: &protocol::ToRivet) -> &'static str {
+	match message {
+		protocol::ToRivet::ToRivetMetadata(_) => "metadata",
+		protocol::ToRivet::ToRivetEvents(_) => "events",
+		protocol::ToRivet::ToRivetAckCommands(_) => "ack_commands",
+		protocol::ToRivet::ToRivetStopping => "stopping",
+		protocol::ToRivet::ToRivetPong(_) => "pong",
+		protocol::ToRivet::ToRivetKvRequest(_) => "kv_request",
+		protocol::ToRivet::ToRivetSqliteGetPagesRequest(_) => "sqlite_get_pages",
+		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit",
+		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec",
+		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute",
+		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
+	}
 }
 
 #[cfg(any(

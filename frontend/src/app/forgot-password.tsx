@@ -30,7 +30,8 @@ export function ForgotPassword() {
 	const handleSubmit: SubmitHandler = async ({ email }, form) => {
 		if (features.captcha && !turnstileToken) {
 			form.setError("root", {
-				message: "Captcha verification is still loading, please try again",
+				message:
+					"Captcha verification is still loading, please try again",
 			});
 			return;
 		}

@@ -12,8 +12,8 @@ import type { ActorId } from "./queries";
 //   sleep blip during reallocation is too brief to observe.
 //
 // In both cases suppression is cleared once the actor transitions into running
-// again (see GuardConnectableInspector), so normal auto-wake-on-select resumes.
-// The store is in-memory, so a full page reload also clears it.
+// again (see `ActorsActorDetails` in actor-details-iframe.tsx), so normal
+// auto-wake resumes. The store is in-memory, so a full page reload clears it.
 export type AutoWakeSuppression = "sleep" | "reschedule";
 
 const suppressed = new Map<ActorId, AutoWakeSuppression>();

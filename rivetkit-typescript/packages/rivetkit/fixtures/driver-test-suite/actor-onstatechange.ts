@@ -3,6 +3,7 @@ import { actor } from "rivetkit";
 export const onStateChangeActor = actor({
 	state: {
 		value: 0,
+		blob: [] as number[],
 	},
 	vars: {
 		changeCount: 0,
@@ -13,7 +14,8 @@ export const onStateChangeActor = actor({
 			c.state.value = newValue;
 			return c.state.value;
 		},
-		// Action that modifies state multiple times - should trigger onStateChange for each change
+		// Action that modifies state many times in one synchronous burst. The
+		// resulting onStateChange and save are coalesced to once per tick.
 		incrementMultiple: (c, times: number) => {
 			for (let i = 0; i < times; i++) {
 				c.state.value++;
@@ -36,6 +38,28 @@ export const onStateChangeActor = actor({
 		// Reset change counter for testing
 		resetChangeCount: (c) => {
 			c.vars.changeCount = 0;
+		},
+		// Returns true if reading `c.state` twice yields the same object. A
+		// stable identity means the write-through proxy is memoized rather than
+		// rebuilt on every access.
+		stateIdentityStable: (c) => {
+			return c.state === c.state;
+		},
+		// Seed a large state payload so a mutation burst has to re-serialize a
+		// substantial object if serialization is not coalesced.
+		seedLarge: (c, size: number) => {
+			c.state.blob = Array.from({ length: size }, (_, i) => i);
+			return c.state.blob.length;
+		},
+		// Run a synchronous burst of mutations and report how long the burst
+		// blocked the event loop. With per-mutation serialization this scales
+		// with state size times the mutation count.
+		churn: (c, times: number) => {
+			const start = performance.now();
+			for (let i = 0; i < times; i++) {
+				c.state.value++;
+			}
+			return performance.now() - start;
 		},
 	},
 	// Track onStateChange calls

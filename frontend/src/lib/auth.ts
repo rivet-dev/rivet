@@ -13,8 +13,9 @@ const createClient = () =>
 
 type AuthClient = ReturnType<typeof createClient>;
 
-export const authClient: AuthClient =
-	features.auth ? createClient() : (null as unknown as AuthClient);
+export const authClient: AuthClient = features.auth
+	? createClient()
+	: (null as unknown as AuthClient);
 
 const isSafeInternalPath = (path: string | undefined): path is string => {
 	if (!path) return false;
@@ -27,9 +28,11 @@ const isSafeInternalPath = (path: string | undefined): path is string => {
 	return true;
 };
 
-export const redirectToOrganization = async (
-	{ from }: { from?: string } = {},
-) => {
+export const redirectToOrganization = async ({
+	from,
+}: {
+	from?: string;
+} = {}) => {
 	const session = await authClient.getSession();
 	if (session.data) {
 		if (isSafeInternalPath(from)) {
@@ -38,7 +41,9 @@ export const redirectToOrganization = async (
 
 		if (session.data.session.activeOrganizationId) {
 			const org = await authClient.organization.getFullOrganization({
-				query: { organizationId: session.data.session.activeOrganizationId },
+				query: {
+					organizationId: session.data.session.activeOrganizationId,
+				},
 			});
 
 			if (org.error) {

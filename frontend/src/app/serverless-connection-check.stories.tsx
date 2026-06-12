@@ -3,7 +3,8 @@ import type { Rivet } from "@rivetkit/engine-api-full";
 import "../../.ladle/ladle.css";
 import { HealthCheckFailure } from "./serverless-connection-check";
 
-type Failure = Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
+type Failure =
+	Rivet.RunnerConfigsServerlessHealthCheckResponseFailure["failure"];
 
 // Each fixture mirrors the `{message, details, metadata}` envelope the engine
 // emits for a `ServerlessMetadataError` variant (see
@@ -67,8 +68,7 @@ const INVALID_RESPONSE_SCHEMA: Failure = {
 
 const INVALID_ENVOY_PROTOCOL_VERSION: Failure = {
 	error: {
-		message:
-			"envoy protocol version 5 is not supported (max supported: 4)",
+		message: "envoy protocol version 5 is not supported (max supported: 4)",
 		metadata: {
 			kind: "invalid_envoy_protocol_version",
 			envoy_protocol_version: 5,
@@ -96,13 +96,7 @@ function Frame({ children }: { children: React.ReactNode }) {
 	);
 }
 
-function Section({
-	title,
-	error,
-}: {
-	title: string;
-	error: Failure;
-}) {
+function Section({ title, error }: { title: string; error: Failure }) {
 	return (
 		<div className="space-y-1">
 			<h3 className="text-xs font-medium text-muted-foreground">
@@ -130,7 +124,10 @@ export const Gallery: Story = () => (
 			title="invalid_envoy_protocol_version"
 			error={INVALID_ENVOY_PROTOCOL_VERSION}
 		/>
-		<Section title="unknown kind (forward compatible)" error={UNKNOWN_KIND} />
+		<Section
+			title="unknown kind (forward compatible)"
+			error={UNKNOWN_KIND}
+		/>
 	</Frame>
 );
 

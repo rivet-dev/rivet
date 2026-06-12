@@ -46,6 +46,7 @@ docs/RunnerConfigKind.md
 docs/RunnerConfigKindOneOf.md
 docs/RunnerConfigKindOneOf1.md
 docs/RunnerConfigKindOneOf1Serverless.md
+docs/RunnerConfigKindOneOfNormal.md
 docs/RunnerConfigResponse.md
 docs/RunnerConfigVariant.md
 docs/RunnerConfigsDeleteApi.md
@@ -121,6 +122,7 @@ src/models/runner_config_kind.rs
 src/models/runner_config_kind_one_of.rs
 src/models/runner_config_kind_one_of_1.rs
 src/models/runner_config_kind_one_of_1_serverless.rs
+src/models/runner_config_kind_one_of_normal.rs
 src/models/runner_config_response.rs
 src/models/runner_config_variant.rs
 src/models/runner_configs_list_response.rs

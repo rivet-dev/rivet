@@ -79,8 +79,8 @@ export const UnknownIconName: Story = () => {
 			<div className="flex items-center gap-3">
 				<IconPicker value={icon} onChange={setIcon} />
 				<span className="text-sm text-muted-foreground">
-					Value "{icon}" doesn't resolve — trigger falls back to the fa
-					question mark.
+					Value "{icon}" doesn't resolve — trigger falls back to the
+					fa question mark.
 				</span>
 			</div>
 		</Frame>

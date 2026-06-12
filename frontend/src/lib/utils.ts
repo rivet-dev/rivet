@@ -17,7 +17,7 @@ export function hasMethod<TName extends string>(
 		.safeParse(obj).success;
 }
 
-export function noop() { }
+export function noop() {}
 
 export function findDuplicated<const Key extends string>(
 	data: Record<Key, unknown>[],
@@ -78,10 +78,13 @@ export function ensureTrailingSlash(url: string): string {
 	return `${url}/`;
 }
 
+const authError = z
+	.object({ message: z.string(), status: z.number() })
+	.passthrough();
 
-const authError = z.object({ message: z.string(), status: z.number() }).passthrough();
-
-export function isAuthError(error: unknown): error is z.infer<typeof authError> {
+export function isAuthError(
+	error: unknown,
+): error is z.infer<typeof authError> {
 	return authError.safeParse(error).success;
 }
 

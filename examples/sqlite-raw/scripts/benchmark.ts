@@ -38,12 +38,16 @@ interface BenchReport {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../..");
+const agentsDir = process.env.AGENTS_DIR ?? path.join(os.homedir(), ".agents");
 const outputPath = path.join(
-	repoRoot,
-	".agent/research/sqlite/v1-baseline-bench.json",
+	agentsDir,
+	"research/sqlite/v1-baseline-bench.json",
 );
 
-function parseResults(stdout: string): { pageSizeBytes: number; workloads: WorkloadResult[] } {
+function parseResults(stdout: string): {
+	pageSizeBytes: number;
+	workloads: WorkloadResult[];
+} {
 	const workloads: WorkloadResult[] = [];
 	let pageSizeBytes = 4096;
 
@@ -64,12 +68,17 @@ function parseResults(stdout: string): { pageSizeBytes: number; workloads: Workl
 					.slice(1)
 					.map((field) => field.split("=") as [string, string]),
 			);
-			pageSizeBytes = Number.parseInt(fields.page_size_bytes ?? "4096", 10);
+			pageSizeBytes = Number.parseInt(
+				fields.page_size_bytes ?? "4096",
+				10,
+			);
 		}
 	}
 
 	if (workloads.length !== 5) {
-		throw new Error(`expected 5 workload results, found ${workloads.length}`);
+		throw new Error(
+			`expected 5 workload results, found ${workloads.length}`,
+		);
 	}
 
 	return { pageSizeBytes, workloads };
@@ -92,7 +101,8 @@ function buildReport(parsed: {
 			benchmarkHarness:
 				"examples/sqlite-raw wrapper over rivetkit-sqlite-native/examples/v1_baseline_bench.rs",
 			rttMs: 0,
-			storage: "in-memory SqliteKv benchmark driver exercising the v1 native VFS",
+			storage:
+				"in-memory SqliteKv benchmark driver exercising the v1 native VFS",
 			platform: os.platform(),
 			release: os.release(),
 			arch: os.arch(),

@@ -33,9 +33,7 @@ import {
 
 export const ActorsSchema = z.record(
 	z.string(),
-	z.custom<
-		BaseActorDefinition<any, any, any, any, any, any, any, any, any>
-	>(),
+	z.custom<AnyActorDefinition>(),
 );
 export type RegistryActors = z.infer<typeof ActorsSchema>;
 
@@ -264,17 +262,12 @@ export const RegistryConfigSchema = z
 			.object({
 				/**
 				 * Wait this many milliseconds for the serve promise to resolve
-				 * after calling `CoreRegistry::shutdown()`. Defaults to 30s,
-				 * matching Kubernetes `terminationGracePeriodSeconds`.
+				 * after calling `CoreRegistry::shutdown()`. Defaults to the
+				 * engine-provided actor stop threshold once the envoy connects.
 				 *
-				 * Must be >= rivetkit-core's drain timeout (20s) + margin.
+				 * Must be long enough for rivetkit-core to drain the envoy.
 				 */
-				gracePeriodMs: z
-					.number()
-					.int()
-					.min(1_000)
-					.optional()
-					.default(30_000),
+				gracePeriodMs: z.number().int().min(1_000).optional(),
 				/**
 				 * If true, rivetkit will not install SIGINT/SIGTERM handlers.
 				 * Use when the host application owns signal policy and will
@@ -284,7 +277,6 @@ export const RegistryConfigSchema = z
 			})
 			.optional()
 			.default(() => ({
-				gracePeriodMs: 30_000,
 				disableSignalHandlers: false,
 			})),
 	})

@@ -1,0 +1,20 @@
+[package]
+name = "rivet-ups-broadcast"
+publish = false
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow.workspace = true
+futures-util.workspace = true
+gas.workspace = true
+namespace.workspace = true
+rivet-cache.workspace = true
+rivet-config.workspace = true
+rivet-pools.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+universaldb.workspace = true
+universalpubsub.workspace = true

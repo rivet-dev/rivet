@@ -35,7 +35,7 @@ pub async fn scan_prefix_values(
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
 	op_counter.fetch_add(1, Ordering::SeqCst);
 
-	db.run(move |tx| {
+	db.txn("depot_scan_prefix_values", move |tx| {
 		let subspace = subspace.clone();
 		let prefix = prefix.clone();
 		async move {

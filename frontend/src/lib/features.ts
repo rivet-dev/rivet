@@ -8,7 +8,12 @@ const raw = import.meta.env.DEV
 const enabled =
 	raw === undefined
 		? null
-		: new Set(raw.split(",").map((s) => s.trim()).filter(Boolean));
+		: new Set(
+				raw
+					.split(",")
+					.map((s) => s.trim())
+					.filter(Boolean),
+			);
 
 function isEnabled(flag: string): boolean {
 	return enabled === null || enabled.has(flag);

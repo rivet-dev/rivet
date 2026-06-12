@@ -1,0 +1,22 @@
+error[E0277]: the trait bound `TestActor: Handles<MissingAction>` is not satisfied
+  --> tests/ui/action_set_missing_handle.rs:27:11
+   |
+27 |     let _ = <(MissingAction,) as ActionSet<TestActor>>::entries();
+   |              ^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Handles<MissingAction>` is not implemented for `TestActor`
+  --> tests/ui/action_set_missing_handle.rs:4:1
+   |
+ 4 | struct TestActor;
+   | ^^^^^^^^^^^^^^^^
+   = help: the following other types implement trait `ActionSet<A>`:
+             `()` implements `ActionSet<A>`
+             `(A0, A1)` implements `ActionSet<Act>`
+             `(A0, A1, A2)` implements `ActionSet<Act>`
+             `(A0, A1, A2, A3)` implements `ActionSet<Act>`
+             `(A0, A1, A2, A3, A4)` implements `ActionSet<Act>`
+             `(A0, A1, A2, A3, A4, A5)` implements `ActionSet<Act>`
+             `(A0, A1, A2, A3, A4, A5, A6)` implements `ActionSet<Act>`
+             `(A0, A1, A2, A3, A4, A5, A6, A7)` implements `ActionSet<Act>`
+           and $N others
+   = note: required for `(MissingAction,)` to implement `ActionSet<TestActor>`

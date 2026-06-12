@@ -1,5 +1,6 @@
 [package]
 name = "rivet-workflow-worker"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -8,6 +9,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 datacenter.workspace = true
+depot.workspace = true
 epoxy.workspace = true
 gas.workspace = true
 gasoline-runtime.workspace = true

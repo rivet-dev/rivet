@@ -96,6 +96,13 @@ async fn maybe_migrate_v1_to_v2(db: &universaldb::Database, recipient: &Recipien
 	metrics::SQLITE_MIGRATION_ATTEMPTS_TOTAL.inc();
 	let start = Instant::now();
 
+	// Known failure case: if the v1 main file is corrupt or otherwise
+	// unparseable (for example a torn write left by a crash mid-transaction),
+	// reading or validating it returns a deterministic error. That error
+	// propagates out of the activity, so the activity fails and keeps retrying
+	// without making progress. There is no automatic recovery for this. The
+	// actor stays on v1 and requires manual triage to recover or discard its
+	// database.
 	let main = read_v1_main(db, recipient)
 		.await
 		.map_err(|err| migration_error(&actor_id, "read_v1", err))?;
@@ -148,7 +155,7 @@ async fn load_v2_head(
 ) -> Result<Option<DBHead>> {
 	let actor_id = actor_id.to_string();
 	let bucket_id = BucketId::from_gas_id(namespace_id);
-	db.run(move |tx| {
+	db.txn("pegboard_actor_sqlite_get_head", move |tx| {
 		let actor_id = actor_id.clone();
 		let bucket_id = bucket_id;
 		async move {
@@ -184,29 +191,35 @@ fn migration_error(actor_id: &str, phase: &'static str, err: anyhow::Error) -> a
 }
 
 async fn read_v1_main(db: &universaldb::Database, recipient: &Recipient) -> Result<V1File> {
-	let actor_id = recipient.actor_id;
-	if v1_file_exists(db, recipient, FILE_TAG_JOURNAL).await? {
-		// A v1 actor in DELETE journal mode only has a journal sidecar in KV
-		// when a write transaction was in flight at crash time. The current
-		// migration path does not auto-recover; the actor is stuck on v1
-		// until manually triaged.
-		metrics::SQLITE_MIGRATION_REJECTED_JOURNAL_TOTAL.inc();
-		anyhow::bail!(
-			"sqlite v1 actor {actor_id} crashed during a write transaction (journal sidecar present); manual triage required"
-		);
-	}
-	ensure!(
-		!v1_file_exists(db, recipient, FILE_TAG_WAL).await?,
-		"sqlite v1 actor {actor_id} has unexpected WAL sidecar; migration unsupported"
-	);
-	ensure!(
-		!v1_file_exists(db, recipient, FILE_TAG_SHM).await?,
-		"sqlite v1 actor {actor_id} has unexpected SHM sidecar; migration unsupported"
-	);
+	// v1->v2 migration is best-effort: abandon sidecars and import the main
+	// database file as-is.
+	abandon_v1_sidecar_if_exists(db, recipient, FILE_TAG_JOURNAL, "journal").await?;
+	abandon_v1_sidecar_if_exists(db, recipient, FILE_TAG_WAL, "wal").await?;
+	abandon_v1_sidecar_if_exists(db, recipient, FILE_TAG_SHM, "shm").await?;
 
 	read_v1_file(db, recipient, FILE_TAG_MAIN)
 		.await?
 		.context("sqlite v1 main file missing metadata")
+}
+
+async fn abandon_v1_sidecar_if_exists(
+	db: &universaldb::Database,
+	recipient: &Recipient,
+	file_tag: u8,
+	sidecar: &'static str,
+) -> Result<()> {
+	if v1_file_exists(db, recipient, file_tag).await? {
+		metrics::SQLITE_MIGRATION_ABANDONED_SIDECAR_TOTAL
+			.with_label_values(&[sidecar])
+			.inc();
+		tracing::warn!(
+			actor_id = %recipient.actor_id,
+			sidecar,
+			"abandoning sqlite v1 sidecar during v1→v2 migration"
+		);
+	}
+
+	Ok(())
 }
 
 async fn v1_file_exists(
@@ -214,6 +227,12 @@ async fn v1_file_exists(
 	recipient: &Recipient,
 	file_tag: u8,
 ) -> Result<bool> {
+	let (meta_keys, _, _) =
+		crate::actor_kv::get(db, recipient, vec![v1_meta_key(file_tag).to_vec()]).await?;
+	if !meta_keys.is_empty() {
+		return Ok(true);
+	}
+
 	let (keys, _, _) = crate::actor_kv::list(
 		db,
 		recipient,

@@ -77,9 +77,9 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 		})
 	} else {
 		// Original list logic for name/key
-		if query.name.is_none() {
+		let Some(name) = query.name else {
 			bail!("name is required when not using actor_ids")
-		}
+		};
 
 		let namespace = ctx
 			.op(namespace::ops::resolve_for_name_global::Input {
@@ -91,7 +91,7 @@ pub async fn list(ctx: ApiCtx, _path: (), query: ListQuery) -> Result<ListRespon
 		let list_res = ctx
 			.op(pegboard::ops::actor::list_for_ns::Input {
 				namespace_id: namespace.namespace_id,
-				name: query.name.unwrap(),
+				name,
 				key,
 				include_destroyed,
 				created_before: query

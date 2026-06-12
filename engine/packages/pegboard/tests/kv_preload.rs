@@ -57,7 +57,7 @@ async fn preload_oversized_exact_key_is_not_marked_requested() -> Result<()> {
 	let value = vec![42; 256];
 
 	kv::put(db, &recipient, vec![key.clone()], vec![value]).await?;
-	db.run(|tx| {
+	db.txn("test_pegboardkv_preload", |tx| {
 		let actor_name = actor_name.to_string();
 		let key = key.clone();
 		async move {
@@ -111,7 +111,7 @@ async fn preload_missing_exact_key_is_marked_requested() -> Result<()> {
 	let actor_name = "preload-missing-exact-key";
 	let key = b"missing-exact-key".to_vec();
 
-	db.run(|tx| {
+	db.txn("test_pegboardkv_preload", |tx| {
 		let actor_name = actor_name.to_string();
 		let key = key.clone();
 		async move {

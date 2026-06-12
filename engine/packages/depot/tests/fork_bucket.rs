@@ -172,7 +172,7 @@ async fn fork_bucket_restore_point_pin_race_returns_out_of_retention() -> Result
 			let raced = Arc::new(AtomicBool::new(false));
 
 			let err = db
-				.run({
+				.txn("test_depotfork_bucket", {
 					let db = db.clone();
 					let raced = raced.clone();
 					move |tx| {
@@ -189,7 +189,7 @@ async fn fork_bucket_restore_point_pin_race_returns_out_of_retention() -> Result
 							.await?;
 
 							if !raced.swap(true, Ordering::SeqCst) {
-								db.run(move |pin_tx| async move {
+								db.txn("test_depotfork_bucket", move |pin_tx| async move {
 									pin_tx.informal().atomic_op(
 										&bucket_branches_restore_point_pin_key(
 											source_bucket_branch,

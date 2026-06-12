@@ -8,10 +8,12 @@ import {
 	H1,
 	RelativeTime,
 	ScrollArea,
+	Skeleton,
 	SmallText,
 	WithTooltip,
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { RouteLayout } from "./route-layout";
 
 export function NamespacesGrid({
 	organization,
@@ -52,7 +54,10 @@ export function NamespacesGrid({
 										navigate({
 											to: ".",
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												settings: "billing",
 											}),
 										});
@@ -78,7 +83,10 @@ export function NamespacesGrid({
 										navigate({
 											to: ".",
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												modal: "create-ns",
 											}),
 										});
@@ -95,8 +103,8 @@ export function NamespacesGrid({
 									No namespaces yet
 								</h3>
 								<SmallText className="text-muted-foreground max-w-md">
-									Create a namespace to start deploying actors in
-									this project.
+									Create a namespace to start deploying actors
+									in this project.
 								</SmallText>
 								<Button
 									variant="default"
@@ -106,7 +114,10 @@ export function NamespacesGrid({
 										navigate({
 											to: ".",
 											search: (old) => ({
-												...(old as Record<string, unknown>),
+												...(old as Record<
+													string,
+													unknown
+												>),
 												modal: "create-ns",
 											}),
 										});
@@ -145,12 +156,16 @@ export function NamespacesGrid({
 											className="-mx-2 h-auto w-fit font-mono-console text-muted-foreground"
 											onClick={(e) => e.preventDefault()}
 										>
-											<span className="truncate">{ns.name}</span>
+											<span className="truncate">
+												{ns.name}
+											</span>
 										</DiscreteCopyButton>
 										<div className="text-muted-foreground">
 											{ns.createdAt ? (
 												<RelativeTime
-													time={new Date(ns.createdAt)}
+													time={
+														new Date(ns.createdAt)
+													}
 												/>
 											) : (
 												"—"
@@ -164,5 +179,54 @@ export function NamespacesGrid({
 				</div>
 			</ScrollArea>
 		</div>
+	);
+}
+
+NamespacesGrid.Skeleton = function NamespacesGridSkeleton() {
+	return (
+		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
+			<ScrollArea className="h-full w-full">
+				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
+					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
+						<Skeleton className="h-8 w-48" />
+						<Skeleton className="size-8 rounded-md" />
+					</header>
+
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<Skeleton className="h-5 w-28" />
+							<Skeleton className="h-8 w-36 rounded-md" />
+						</header>
+
+						<div className="rounded-md border border-foreground/10 bg-card overflow-hidden">
+							<div className="grid grid-cols-[1fr_1fr_160px] gap-4 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
+								<div>Name</div>
+								<div>Identifier</div>
+								<div>Created</div>
+							</div>
+							{Array.from({ length: 4 }).map((_, i) => (
+								<div
+									// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
+									key={i}
+									className="grid grid-cols-[1fr_1fr_160px] gap-4 items-center px-3 py-2.5 border-b border-foreground/10 last:border-b-0"
+								>
+									<Skeleton className="h-4 w-32" />
+									<Skeleton className="h-4 w-40" />
+									<Skeleton className="h-4 w-20" />
+								</div>
+							))}
+						</div>
+					</section>
+				</div>
+			</ScrollArea>
+		</div>
+	);
+};
+
+export function ProjectLandingPending() {
+	return (
+		<RouteLayout>
+			<NamespacesGrid.Skeleton />
+		</RouteLayout>
 	);
 }

@@ -102,8 +102,8 @@ export function NewOrgPage() {
 						<CardHeader>
 							<CardTitle>Create a new organization</CardTitle>
 							<CardDescription>
-								Organizations are shared workspaces where teammates
-								collaborate across projects.
+								Organizations are shared workspaces where
+								teammates collaborate across projects.
 							</CardDescription>
 						</CardHeader>
 						<CardContent className="flex flex-col gap-6">

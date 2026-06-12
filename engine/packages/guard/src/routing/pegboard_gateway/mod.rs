@@ -13,10 +13,12 @@ use super::{
 	X_RIVET_SKIP_READY_WAIT, X_RIVET_TOKEN, actor_path::ParsedActorPath,
 };
 use crate::{
-	errors,
+	errors, metrics,
 	routing::{
+		Phase,
 		actor_path::{is_actor_gateway_path, parse_actor_path},
 		pegboard_gateway::resolve_actor_query::ResolveQueryActorResult,
+		phase_timeout,
 	},
 	shared_state::SharedState,
 };
@@ -78,34 +80,54 @@ pub async fn route_request_path_based_inner(
 			path.stripped_path.clone(),
 			read_skip_ready_wait_for_path_based(req_ctx)?,
 		),
-		ParsedActorPath::Query(path) => match resolve_query(ctx, &path.query).await? {
-			ResolveQueryActorResult::Found { actor_id } => (
-				actor_id,
-				read_gateway_token_for_path_based(req_ctx, path.token.as_deref())?
-					.map(ToOwned::to_owned),
-				path.stripped_path.clone(),
-				path.query.skip_ready_wait(),
-			),
-			ResolveQueryActorResult::Forward { dc_label } => {
-				let peer_dc = ctx
-					.config()
-					.dc_for_label(dc_label)
-					.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?;
+		ParsedActorPath::Query(path) => {
+			let token = read_gateway_token_for_path_based(req_ctx, path.token.as_deref())?
+				.map(ToOwned::to_owned);
 
-				return Ok(Some(RoutingOutput::Route(RouteConfig {
-					targets: vec![RouteTarget {
-						host: peer_dc
-							.proxy_url_host()
-							.context("bad peer dc proxy url host")?
-							.to_string(),
-						port: peer_dc
-							.proxy_url_port()
-							.context("bad peer dc proxy url port")?,
-						path: req_ctx.path().to_owned(),
-					}],
-				})));
+			match phase_timeout(
+				Phase::new(
+					"route_pegboard_resolve_query",
+					&metrics::ROUTE_PEGBOARD_RESOLVE_QUERY_DURATION,
+				),
+				ctx.config().guard().route_pegboard_resolve_query_timeout(),
+				resolve_query(ctx, &path.query),
+				|elapsed, timeout| {
+					pegboard::errors::RouteResolveQueryTimeout {
+						elapsed_ms: elapsed.as_millis() as u64,
+						timeout_ms: timeout.as_millis() as u64,
+					}
+					.build()
+				},
+			)
+			.await?
+			{
+				ResolveQueryActorResult::Found { actor_id } => (
+					actor_id,
+					token,
+					path.stripped_path.clone(),
+					path.query.skip_ready_wait(),
+				),
+				ResolveQueryActorResult::Forward { dc_label } => {
+					let peer_dc = ctx
+						.config()
+						.dc_for_label(dc_label)
+						.ok_or_else(|| rivet_api_util::errors::Datacenter::NotFound.build())?;
+
+					return Ok(Some(RoutingOutput::Route(RouteConfig {
+						targets: vec![RouteTarget {
+							host: peer_dc
+								.proxy_url_host()
+								.context("bad peer dc proxy url host")?
+								.to_string(),
+							port: peer_dc
+								.proxy_url_port()
+								.context("bad peer dc proxy url port")?,
+							path: req_ctx.path().to_owned(),
+						}],
+					})));
+				}
 			}
-		},
+		}
 	};
 
 	route_request_inner(
@@ -282,22 +304,57 @@ async fn route_request_inner(
 		stopped_sub2,
 		fail_sub2,
 		destroy_sub2,
-	) = tokio::try_join!(
-		ctx.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor::MigratedToV2>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor2::Ready>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor2::Failed>(("actor_id", actor_id)),
-		ctx.subscribe::<pegboard::workflows::actor2::DestroyStarted>(("actor_id", actor_id)),
-	)?;
+	) = phase_timeout(
+		Phase::new(
+			"route_pegboard_subscribe",
+			&metrics::ROUTE_PEGBOARD_SUBSCRIBE_DURATION,
+		)
+		.with_actor_id(actor_id),
+		ctx.config().guard().route_pegboard_subscribe_timeout(),
+		async {
+			tokio::try_join!(
+				ctx.subscribe::<pegboard::workflows::actor::Ready>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor::Stopped>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor::Failed>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor::DestroyStarted>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor::MigratedToV2>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor2::Ready>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor2::Failed>(("actor_id", actor_id)),
+				ctx.subscribe::<pegboard::workflows::actor2::DestroyStarted>((
+					"actor_id", actor_id
+				)),
+			)
+		},
+		|elapsed, timeout| {
+			pegboard::errors::RouteSubscribeTimeout {
+				elapsed_ms: elapsed.as_millis() as u64,
+				timeout_ms: timeout.as_millis() as u64,
+			}
+			.build()
+		},
+	)
+	.await?;
 
 	// Fetch actor info
-	let Some(actor) = ctx
-		.op(pegboard::ops::actor::get_for_gateway::Input { actor_id })
-		.await?
+	let Some(actor) = phase_timeout(
+		Phase::new(
+			"route_pegboard_fetch_actor",
+			&metrics::ROUTE_PEGBOARD_FETCH_ACTOR_DURATION,
+		)
+		.with_actor_id(actor_id),
+		ctx.config().guard().route_pegboard_fetch_actor_timeout(),
+		ctx.op(pegboard::ops::actor::get_for_gateway::Input { actor_id }),
+		|elapsed, timeout| {
+			pegboard::errors::RouteFetchActorTimeout {
+				actor_id: actor_id.to_string(),
+				elapsed_ms: elapsed.as_millis() as u64,
+				timeout_ms: timeout.as_millis() as u64,
+			}
+			.build()
+		},
+	)
+	.await?
 	else {
 		return Err(pegboard::errors::Actor::NotFound.build());
 	};
@@ -366,22 +423,77 @@ async fn handle_actor_v2(
 ) -> Result<RoutingOutput> {
 	// Wake actor if sleeping
 	if actor.sleeping {
-		tracing::debug!(?actor_id, "actor sleeping, waking");
+		tracing::debug!(
+			?actor_id,
+			actor_key = ?actor.key,
+			pool_name = ?actor.runner_name_selector,
+			"actor sleeping, waking"
+		);
 
-		ctx.signal(pegboard::workflows::actor2::Wake {})
-			.to_workflow_id(actor.workflow_id)
-			.send()
-			.await?;
+		phase_timeout(
+			Phase::new(
+				"route_pegboard_wake_signal",
+				&metrics::ROUTE_PEGBOARD_WAKE_SIGNAL_DURATION,
+			)
+			.with_namespace_id(actor.namespace_id)
+			.with_actor_id(actor_id),
+			ctx.config().guard().route_pegboard_wake_signal_timeout(),
+			ctx.signal(pegboard::workflows::actor2::Wake {})
+				.to_workflow_id(actor.workflow_id)
+				.send(),
+			|elapsed, timeout| {
+				pegboard::errors::RouteWakeSignalTimeout {
+					actor_id: actor_id.to_string(),
+					elapsed_ms: elapsed.as_millis() as u64,
+					timeout_ms: timeout.as_millis() as u64,
+				}
+				.build()
+			},
+		)
+		.await?;
 	}
 
-	let envoy_key = if let (Some(envoy_key), true) =
-		(actor.envoy_key, actor.connectable || skip_ready_wait)
-	{
+	let actor_envoy_key = actor.envoy_key.clone();
+	let was_sleeping = actor.sleeping;
+	let envoy_key = if let (Some(envoy_key), true) = (
+		actor_envoy_key.clone(),
+		actor.connectable || skip_ready_wait,
+	) {
 		envoy_key
 	} else {
-		tracing::debug!(?actor_id, "waiting for actor to become ready");
+		tracing::debug!(
+			?actor_id,
+			actor_key = ?actor.key,
+			pool_name = ?actor.runner_name_selector,
+			"waiting for actor to become ready"
+		);
 
 		let mut wake_retries = 0;
+		let ready_wait_started_at = std::time::Instant::now();
+		let ready_wait_namespace_id = actor.namespace_id.to_string();
+		let ready_wait_pool_name = actor
+			.runner_name_selector
+			.as_deref()
+			.unwrap_or("unknown")
+			.to_string();
+		let was_sleeping_label = if was_sleeping { "true" } else { "false" };
+		let record_ready_wait = |outcome: &'static str, wake_retries: u32| {
+			let wake_retries_bucket = match wake_retries {
+				0 => "0",
+				1 => "1",
+				2 => "2",
+				_ => "3+",
+			};
+			metrics::ROUTE_PEGBOARD_READY_WAIT_DURATION
+				.with_label_values(&[
+					ready_wait_namespace_id.as_str(),
+					ready_wait_pool_name.as_str(),
+					was_sleeping_label,
+					wake_retries_bucket,
+					outcome,
+				])
+				.observe(ready_wait_started_at.elapsed().as_secs_f64());
+		};
 
 		// Create pool error check future
 		let pool_error_check_fut = check_runner_pool_error_loop(
@@ -394,62 +506,127 @@ async fn handle_actor_v2(
 		// Wait for ready, fail, or destroy
 		loop {
 			tokio::select! {
-				res = ready_sub.next() => break res?.into_body().envoy_key,
+				res = ready_sub.next() => {
+					let envoy_key = res?.into_body().envoy_key;
+					record_ready_wait("ready", wake_retries);
+					break envoy_key;
+				}
 				res = stopped_sub.next() => {
 					res?;
 
 					if wake_retries < 8 {
-						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
+						tracing::debug!(
+							?actor_id,
+							actor_key = ?actor.key,
+							pool_name = ?actor.runner_name_selector,
+							?wake_retries,
+							"actor stopped while we were waiting for it to become ready, attempting rewake"
+						);
 						wake_retries += 1;
 
-						let res = ctx.signal(pegboard::workflows::actor2::Wake {})
-						.to_workflow_id(actor.workflow_id)
-						.graceful_not_found()
-						.send()
+						let res = phase_timeout(
+							Phase::new(
+								"route_pegboard_wake_signal",
+								&metrics::ROUTE_PEGBOARD_WAKE_SIGNAL_DURATION,
+							)
+							.with_namespace_id(actor.namespace_id)
+							.with_actor_id(actor_id),
+							ctx.config().guard().route_pegboard_wake_signal_timeout(),
+							ctx.signal(pegboard::workflows::actor2::Wake {})
+								.to_workflow_id(actor.workflow_id)
+								.graceful_not_found()
+								.send(),
+							|elapsed, timeout| {
+								pegboard::errors::RouteWakeSignalTimeout {
+									actor_id: actor_id.to_string(),
+									elapsed_ms: elapsed.as_millis() as u64,
+									timeout_ms: timeout.as_millis() as u64,
+								}
+								.build()
+							},
+						)
 						.await?;
 
 						if res.is_none() {
 							tracing::warn!(
 								?actor_id,
+								actor_key = ?actor.key,
+								pool_name = ?actor.runner_name_selector,
 								"actor workflow not found for rewake"
 							);
+							record_ready_wait("rewake_not_found", wake_retries);
 							return Err(pegboard::errors::Actor::NotFound.build());
 						}
 					} else {
-						tracing::warn!("actor retried waking 8 times, has not yet started");
-						return Err(rivet_guard_core::errors::ServiceUnavailable.build());
+						tracing::warn!(
+							?actor_id,
+							actor_key = ?actor.key,
+							pool_name = ?actor.runner_name_selector,
+							"actor retried waking 8 times, has not yet started"
+						);
+						record_ready_wait("stopped", wake_retries);
+						return Err(rivet_guard_core::errors::ActorWakeRetriesExceeded {
+							actor_id: actor_id.to_string(),
+							wake_retries,
+							reason: "actor_stopped_before_ready".to_owned(),
+						}
+						.build());
 					}
 				}
 				res = fail_sub.next() => {
 					let msg = res?;
+					record_ready_wait("failed", wake_retries);
 					return Err(msg.error.clone().build());
 				}
 				res = destroy_sub.next() => {
 					res?;
+					record_ready_wait("destroyed", wake_retries);
 					return Err(pegboard::errors::Actor::DestroyedWhileWaitingForReady.build());
 				}
 				res = &mut pool_error_check_fut => {
 					if res? {
+						record_ready_wait("pool_error", wake_retries);
 						return Err(errors::ActorRunnerFailed { actor_id }.build());
 					}
 				}
 				// Ready timeout
 				_ = tokio::time::sleep(ctx.config().guard().actor_ready_timeout()) => {
+					tracing::warn!(
+						?actor_id,
+						actor_key = ?actor.key,
+						pool_name = ?actor.runner_name_selector,
+						"timed out waiting for actor to become ready"
+					);
+					record_ready_wait("timeout", wake_retries);
 					return Err(errors::ActorReadyTimeout { actor_id }.build());
 				}
 			}
 		}
 	};
 
-	tracing::debug!(?actor_id, %envoy_key, "actor ready");
+	let pool_name = actor
+		.runner_name_selector
+		.clone()
+		.unwrap_or_else(|| "unknown".to_string());
+
+	tracing::debug!(
+		?actor_id,
+		actor_key = ?actor.key,
+		%pool_name,
+		%envoy_key,
+		"actor ready"
+	);
 
 	// Return pegboard-gateway2 instance with path
 	let gateway = pegboard_gateway2::PegboardGateway2::new(
 		ctx.clone(),
 		shared_state.pegboard_gateway2.clone(),
 		actor.namespace_id,
+		pool_name,
 		envoy_key,
 		actor_id,
+		actor.key,
+		None,
 		stripped_path.to_string(),
 	);
 	Ok(RoutingOutput::CustomServe(std::sync::Arc::new(gateway)))
@@ -476,13 +653,30 @@ async fn handle_actor_v1(
 	if actor.sleeping {
 		tracing::debug!(?actor_id, "actor sleeping, waking");
 
-		ctx.signal(pegboard::workflows::actor::Wake {
-			allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
-				pending_timeout: Some(ctx.config().guard().actor_force_wake_pending_timeout()),
+		phase_timeout(
+			Phase::new(
+				"route_pegboard_wake_signal",
+				&metrics::ROUTE_PEGBOARD_WAKE_SIGNAL_DURATION,
+			)
+			.with_namespace_id(actor.namespace_id)
+			.with_actor_id(actor_id),
+			ctx.config().guard().route_pegboard_wake_signal_timeout(),
+			ctx.signal(pegboard::workflows::actor::Wake {
+				allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
+					pending_timeout: Some(ctx.config().guard().actor_force_wake_pending_timeout()),
+				},
+			})
+			.to_workflow_id(actor.workflow_id)
+			.send(),
+			|elapsed, timeout| {
+				pegboard::errors::RouteWakeSignalTimeout {
+					actor_id: actor_id.to_string(),
+					elapsed_ms: elapsed.as_millis() as u64,
+					timeout_ms: timeout.as_millis() as u64,
+				}
+				.build()
 			},
-		})
-		.to_workflow_id(actor.workflow_id)
-		.send()
+		)
 		.await?;
 	}
 
@@ -512,16 +706,33 @@ async fn handle_actor_v1(
 						tracing::debug!(?actor_id, ?wake_retries, "actor stopped while we were waiting for it to become ready, attempting rewake");
 						wake_retries += 1;
 
-						let res = ctx.signal(pegboard::workflows::actor::Wake {
-							allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
-								pending_timeout: Some(
-									ctx.config().guard().actor_force_wake_pending_timeout(),
-								),
+						let res = phase_timeout(
+							Phase::new(
+								"route_pegboard_wake_signal",
+								&metrics::ROUTE_PEGBOARD_WAKE_SIGNAL_DURATION,
+							)
+							.with_namespace_id(actor.namespace_id)
+							.with_actor_id(actor_id),
+							ctx.config().guard().route_pegboard_wake_signal_timeout(),
+							ctx.signal(pegboard::workflows::actor::Wake {
+								allocation_override: pegboard::workflows::actor::AllocationOverride::DontSleep {
+									pending_timeout: Some(
+										ctx.config().guard().actor_force_wake_pending_timeout(),
+									),
+								},
+							})
+							.to_workflow_id(actor.workflow_id)
+							.graceful_not_found()
+							.send(),
+							|elapsed, timeout| {
+								pegboard::errors::RouteWakeSignalTimeout {
+									actor_id: actor_id.to_string(),
+									elapsed_ms: elapsed.as_millis() as u64,
+									timeout_ms: timeout.as_millis() as u64,
+								}
+								.build()
 							},
-						})
-						.to_workflow_id(actor.workflow_id)
-						.graceful_not_found()
-						.send()
+						)
 						.await?;
 
 						if res.is_none() {
@@ -533,7 +744,12 @@ async fn handle_actor_v1(
 						}
 					} else {
 						tracing::warn!("actor retried waking 8 times, has not yet started");
-						return Err(rivet_guard_core::errors::ServiceUnavailable.build());
+						return Err(rivet_guard_core::errors::ActorWakeRetriesExceeded {
+							actor_id: actor_id.to_string(),
+							wake_retries,
+							reason: "actor_stopped_before_ready".to_owned(),
+						}
+						.build());
 					}
 				}
 				res = fail_sub.next() => {

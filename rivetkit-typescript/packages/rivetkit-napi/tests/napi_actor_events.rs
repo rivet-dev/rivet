@@ -460,6 +460,7 @@ mod moved_tests {
 			ActorStart {
 				ctx: core_ctx,
 				input: None,
+				is_new: true,
 				snapshot: Some(Vec::new()),
 				hibernated: Vec::new(),
 				events: ActorEvents::from(events_rx),
@@ -501,7 +502,7 @@ mod moved_tests {
 			.set_state_initial(vec![9, 9, 9])
 			.expect("initial state should set");
 
-		run_preamble(&bindings, &config, &first_ctx, None, None, Vec::new())
+		run_preamble(&bindings, &config, &first_ctx, None, true, None, Vec::new())
 			.await
 			.expect("first-create preamble should succeed");
 
@@ -530,9 +531,17 @@ mod moved_tests {
 		let snapshot = persisted.has_initialized.then_some(persisted.state.clone());
 		assert!(snapshot.is_some());
 
-		run_preamble(&bindings, &config, &second_ctx, None, snapshot, Vec::new())
-			.await
-			.expect("wake preamble should succeed");
+		run_preamble(
+			&bindings,
+			&config,
+			&second_ctx,
+			None,
+			false,
+			snapshot,
+			Vec::new(),
+		)
+		.await
+		.expect("wake preamble should succeed");
 
 		assert_eq!(second_ctx.inner().state(), vec![9, 9, 9]);
 	}

@@ -82,7 +82,7 @@ export class ActorWorkerContainer {
 			const worker = new ActorWorker({ name: `actor-${meta.actorId}` });
 			signal.throwIfAborted();
 			// now worker needs to check if the actor is supported
-			this.#setupWorker(worker);
+			await this.#setupWorker(worker);
 			signal.throwIfAborted();
 			return worker;
 		} catch (e) {

@@ -1,13 +1,8 @@
 import type { ComponentProps } from "react";
 import z from "zod";
 import {
-	Accordion,
-	AccordionContent,
-	AccordionItem,
-	AccordionTrigger,
 	Button,
 	createSchemaForm,
-	FormDescription,
 	FormField,
 	FormItem,
 	FormLabel,

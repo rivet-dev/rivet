@@ -43,7 +43,9 @@ export function EnvVariables({
 				<Label asChild className="text-muted-foreground text-xs mb-1">
 					<p>Value</p>
 				</Label>
-				{showPublicEndpoint && showEndpoint && <RivetPublicEndpointEnv endpoint={endpoint} />}
+				{showPublicEndpoint && showEndpoint && (
+					<RivetPublicEndpointEnv endpoint={endpoint} />
+				)}
 				{showEndpoint && <RivetRunnerEndpointEnv endpoint={endpoint} />}
 				{showRunnerName && <RivetRunnerEnv runnerName={runnerName} />}
 			</div>

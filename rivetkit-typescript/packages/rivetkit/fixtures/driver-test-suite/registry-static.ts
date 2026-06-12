@@ -22,7 +22,12 @@ import {
 import { dbActorRaw, dbRemoteLifecycleProbe } from "./actor-db-raw";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
+import { counterWithParams } from "./conn-params";
 import { connPreflightVisibilityActor } from "./conn-preflight-visibility";
+import { connStateActor } from "./conn-state";
+// Import actors from individual files
+import { counter } from "./counter";
+import { counterConn } from "./counter-conn";
 import {
 	dbInitOrderCreateStateActor,
 	dbInitOrderCreateVarsActor,
@@ -32,17 +37,13 @@ import {
 	dbInitOrderOnSleepActor,
 	dbInitOrderOnWakeActor,
 } from "./db-init-order";
-import { dbPragmaMigrationActor } from "./db-pragma-migration";
-import { counterWithParams } from "./conn-params";
-import { connStateActor } from "./conn-state";
-// Import actors from individual files
-import { counter } from "./counter";
-import { counterConn } from "./counter-conn";
 import {
 	dbLifecycle,
 	dbLifecycleFailing,
 	dbLifecycleObserver,
 } from "./db-lifecycle";
+import { dbPragmaMigrationActor } from "./db-pragma-migration";
+import { dbStressActor } from "./db-stress";
 import {
 	destroyAbortSignalActor,
 	destroyActor,
@@ -51,16 +52,16 @@ import {
 import { customTimeoutActor, errorHandlingActor } from "./error-handling";
 import { fileSystemHibernationCleanupActor } from "./file-system-hibernation-cleanup";
 import { hibernationActor, hibernationSleepWindowActor } from "./hibernation";
-import {
-	beforeConnectTimeoutActor,
-	beforeConnectRejectActor,
-	beforeConnectGenericErrorActor,
-	stateChangeRecursionActor,
-	stateChangeReentrantMutationActor,
-} from "./lifecycle-hooks";
 import { kvActor } from "./kv";
 import { largePayloadActor, largePayloadConnActor } from "./large-payloads";
 import { counterWithLifecycle } from "./lifecycle";
+import {
+	beforeConnectGenericErrorActor,
+	beforeConnectRejectActor,
+	beforeConnectTimeoutActor,
+	stateChangeRecursionActor,
+	stateChangeReentrantMutationActor,
+} from "./lifecycle-hooks";
 import { metadataActor } from "./metadata";
 import {
 	manyQueueActionParentActor,
@@ -85,61 +86,60 @@ import {
 import { rejectConnectionActor } from "./reject-connection";
 import { requestAccessActor } from "./request-access";
 import {
+	runIgnoresAbortStopTimeout,
 	runSelfInitiatedDestroy,
 	runSelfInitiatedSleep,
-	runIgnoresAbortStopTimeout,
 	runWithEarlyExit,
 	runWithError,
 	runWithoutHandler,
 	runWithQueueConsumer,
 	runWithTicks,
 } from "./run";
+import { saveStateActor, saveStateObserver } from "./save-state";
 import { scheduled } from "./scheduled";
-import { dbStressActor } from "./db-stress";
 import { scheduledDb } from "./scheduled-db";
 import {
+	counterWaitUntilProbe,
 	sleep,
+	sleepAbortListenerVarsActor,
 	sleepRawWsAddEventListenerClose,
 	sleepRawWsAddEventListenerMessage,
+	sleepRawWsDelayedSendOnSleep,
+	sleepRawWsOnClose,
+	sleepRawWsOnMessage,
+	sleepRawWsSendOnSleep,
+	sleepRawWsVarsExceedsGrace,
+	sleepWaitUntilVarsDuringGrace,
 	sleepWithLongRpc,
 	sleepWithNoSleepOption,
 	sleepWithRawHttp,
 	sleepWithRawWebSocket,
-	sleepWithWaitUntilMessage,
-	counterWaitUntilProbe,
-	sleepRawWsOnClose,
-	sleepRawWsOnMessage,
-	sleepRawWsSendOnSleep,
-	sleepRawWsDelayedSendOnSleep,
 	sleepWithWaitUntilInOnWake,
-	sleepAbortListenerVarsActor,
-	sleepWaitUntilVarsDuringGrace,
-	sleepRawWsVarsExceedsGrace,
+	sleepWithWaitUntilMessage,
 } from "./sleep";
 import {
-	sleepWithDb,
-	sleepWithSlowScheduledDb,
-	sleepWithDbConn,
-	sleepWithDbAction,
-	sleepWithRawWsCloseDb,
-	sleepWithRawWsCloseDbListener,
-	sleepWsMessageExceedsGrace,
-	sleepWsConcurrentDbExceedsGrace,
-	sleepWaitUntil,
-	sleepNestedWaitUntil,
 	sleepEnqueue,
-	sleepScheduleAfter,
+	sleepKeepAwakeUntilIdle,
+	sleepNestedWaitUntil,
 	sleepOnSleepThrows,
+	sleepScheduleAfter,
+	sleepWaitUntil,
 	sleepWaitUntilRejects,
 	sleepWaitUntilState,
+	sleepWithDb,
+	sleepWithDbAction,
+	sleepWithDbConn,
 	sleepWithRawWs,
+	sleepWithRawWsCloseDb,
+	sleepWithRawWsCloseDbListener,
+	sleepWithSlowScheduledDb,
 	sleepWsActiveDbExceedsGrace,
-	sleepKeepAwakeUntilIdle,
+	sleepWsConcurrentDbExceedsGrace,
+	sleepWsMessageExceedsGrace,
 } from "./sleep-db";
-import { saveStateActor, saveStateObserver } from "./save-state";
 import { lifecycleObserver, startStopRaceActor } from "./start-stop-race";
-import { statelessActor } from "./stateless";
 import { stateZodCoercionActor } from "./state-zod-coercion";
+import { statelessActor } from "./stateless";
 import {
 	driverCtxActor,
 	dynamicVarActor,
@@ -147,6 +147,7 @@ import {
 	staticVarActor,
 	uniqueVarActor,
 } from "./vars";
+import { warmupActor } from "./warmup";
 import {
 	workflowAccessActor,
 	workflowCompleteActor,
@@ -160,15 +161,15 @@ import {
 	workflowNestedLoopActor,
 	workflowNestedRaceActor,
 	workflowQueueActor,
-	workflowRunningStepActor,
 	workflowReplayActor,
+	workflowRunningStepActor,
 	workflowSleepActor,
 	workflowSpawnChildActor,
 	workflowSpawnParentActor,
+	workflowStepRollbackActor,
 	workflowStopTeardownActor,
 	workflowTryActor,
 } from "./workflow";
-import { warmupActor } from "./warmup";
 
 let agentOsTestActor:
 	| Awaited<typeof import("./agent-os")>["agentOsTestActor"]
@@ -322,6 +323,7 @@ export const registry = setup({
 		workflowRunningStepActor,
 		workflowReplayActor,
 		workflowSleepActor,
+		workflowStepRollbackActor,
 		workflowTryActor,
 		warmupActor,
 		workflowStopTeardownActor,

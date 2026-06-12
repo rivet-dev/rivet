@@ -59,11 +59,11 @@ const openDevtools = () => {
 		console.error("RivetKit Devtools: No client config found");
 		return;
 	}
-	const url = new URL("http://localhost:6420/ui");
 	if (!config.endpoint) {
 		console.error("RivetKit Devtools: No endpoint found in client config");
 		return;
 	}
+	const url = new URL(`${config.endpoint.replace(/\/$/, "")}/ui`);
 	url.searchParams.set("u", config.endpoint);
 	if (config.token) {
 		url.searchParams.set("t", config.token);

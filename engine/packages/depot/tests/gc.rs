@@ -26,7 +26,7 @@ fn branch_id() -> DatabaseBranchId {
 }
 
 async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotgc", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx
@@ -57,7 +57,7 @@ async fn seed_branch(
 	root_versionstamp: [u8; 16],
 ) -> Result<()> {
 	let branch_id = branch_id();
-	db.run(move |tx| async move {
+	db.txn("test_depotgc", move |tx| async move {
 		tx.informal().set(
 			&branches_list_key(branch_id),
 			&encode_database_branch_record(DatabaseBranchRecord {
@@ -82,7 +82,7 @@ async fn seed_branch(
 
 async fn write_commit(db: &universaldb::Database, txid: u64, versionstamp: [u8; 16]) -> Result<()> {
 	let branch_id = branch_id();
-	db.run(move |tx| async move {
+	db.txn("test_depotgc", move |tx| async move {
 		tx.informal().set(
 			&branch_commit_key(branch_id, txid),
 			&encode_commit_row(CommitRow {
@@ -114,7 +114,7 @@ async fn sweeping_child_branch_releases_parent_refcount_and_fork_pin() -> Result
 			));
 			let fork_versionstamp = [2; 16];
 
-			db.run(move |tx| async move {
+			db.txn("test_depotgc", move |tx| async move {
 				tx.informal().set(
 					&branches_list_key(parent_branch_id),
 					&encode_database_branch_record(DatabaseBranchRecord {
@@ -209,7 +209,7 @@ async fn branch_gc_pin_recomputes_from_current_counters_without_ratchet() -> Res
 			let branch_id = branch_id();
 			seed_branch(&db, 1, [10; 16]).await?;
 
-			db.run(move |tx| async move {
+			db.txn("test_depotgc", move |tx| async move {
 				tx.informal()
 					.set(&branches_desc_pin_key(branch_id), &[4; 16]);
 				tx.informal()
@@ -222,7 +222,7 @@ async fn branch_gc_pin_recomputes_from_current_counters_without_ratchet() -> Res
 				.expect("branch should have a GC pin");
 			assert_eq!(pin.gc_pin, [4; 16]);
 
-			db.run(move |tx| async move {
+			db.txn("test_depotgc", move |tx| async move {
 				tx.informal()
 					.set(&branches_desc_pin_key(branch_id), &VERSIONSTAMP_INFINITY);
 				Ok(())
@@ -233,7 +233,7 @@ async fn branch_gc_pin_recomputes_from_current_counters_without_ratchet() -> Res
 				.expect("branch should have a GC pin");
 			assert_eq!(pin.gc_pin, [8; 16]);
 
-			db.run(move |tx| async move {
+			db.txn("test_depotgc", move |tx| async move {
 				tx.informal()
 					.set(&branches_refcount_key(branch_id), &0_i64.to_le_bytes());
 				tx.informal().set(
@@ -264,7 +264,7 @@ async fn unreferenced_unpinned_branch_sweep_deletes_hot_branch_data() -> Result<
 			write_commit(&db, 3, [3; 16]).await?;
 			write_commit(&db, 6, [6; 16]).await?;
 
-			db.run(move |tx| async move {
+			db.txn("test_depotgc", move |tx| async move {
 				tx.informal()
 					.set(&branches_desc_pin_key(branch_id), &VERSIONSTAMP_INFINITY);
 				tx.informal().set(
@@ -350,7 +350,7 @@ async fn branch_hot_gc_uses_vtx_floor_for_commits_vtx_and_delta() -> Result<()> 
 			write_commit(&db, 6, [6; 16]).await?;
 			write_commit(&db, 8, [8; 16]).await?;
 
-			db.run(move |tx| async move {
+			db.txn("test_depotgc", move |tx| async move {
 				tx.informal()
 					.set(&branch_delta_chunk_key(branch_id, 2, 0), b"delta-two");
 				tx.informal()

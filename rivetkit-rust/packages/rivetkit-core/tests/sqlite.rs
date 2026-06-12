@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::Mutex as StdMutex;
 use std::sync::atomic::AtomicBool;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use super::*;
 use depot_client_types::{HEAD_FENCE_MISMATCH_CODE, HEAD_FENCE_MISMATCH_GROUP};
@@ -33,13 +32,6 @@ struct SqliteOperationLog {
 	group: Option<String>,
 	code: Option<String>,
 	error_message: Option<String>,
-}
-
-fn now_timestamp_ms() -> i64 {
-	let duration = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap_or_default();
-	i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
 #[derive(Clone)]
@@ -181,7 +173,7 @@ fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>)
 		ws_tx: Arc::new(AsyncMutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
 		protocol_metadata: Arc::new(AsyncMutex::new(None)),
 		shutting_down: AtomicBool::new(false),
-		last_ping_ts: std::sync::atomic::AtomicI64::new(now_timestamp_ms()),
+		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
 		stopped_tx: tokio::sync::watch::channel(true).0,
 	});
 

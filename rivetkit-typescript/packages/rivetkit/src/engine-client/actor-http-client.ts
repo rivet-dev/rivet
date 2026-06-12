@@ -5,7 +5,7 @@ import {
 	HEADER_RIVET_TARGET,
 	HEADER_RIVET_TOKEN,
 } from "@/common/actor-router-consts";
-import { shouldSkipReadyWait, type GatewayRequestOptions } from "./driver";
+import { type GatewayRequestOptions, shouldSkipReadyWait } from "./driver";
 
 export interface HttpGatewayRequestOptions extends GatewayRequestOptions {
 	directActorId?: string;

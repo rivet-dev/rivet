@@ -1,12 +1,12 @@
 import { Derived, Effect, Store } from "@tanstack/store";
 import equal from "fast-deep-equal";
 import type { AnyActorDefinition, Registry } from "rivetkit";
-import {
-	type ActorConn,
-	type ActorConnStatus,
-	type ActorHandle,
-	type Client,
-	type ExtractActorsFromRegistry,
+import type {
+	ActorConn,
+	ActorConnStatus,
+	ActorHandle,
+	Client,
+	ExtractActorsFromRegistry,
 } from "rivetkit/client";
 
 export type AnyActorRegistry = Registry<any>;
@@ -342,7 +342,7 @@ function getOrCreateActor<
 			// Effect doesn't run immediately on mount, only on state changes.
 			// Trigger initial connection if actor is enabled and idle.
 			const actor = store.state.actors[key];
-			if (actor && actor.opts.enabled && actor.connStatus === "idle") {
+			if (actor?.opts.enabled && actor.connStatus === "idle") {
 				(create as Function)(client, store, key);
 			}
 		}
@@ -400,10 +400,11 @@ function getOrCreateActor<
 	};
 }
 
-function create<
-	Registry extends AnyActorRegistry,
-	ActorName extends keyof ExtractActorsFromRegistry<Registry> & string,
->(client: Client<Registry>, store: Store<InternalRivetKitStore>, key: string) {
+function create<Registry extends AnyActorRegistry>(
+	client: Client<Registry>,
+	store: Store<InternalRivetKitStore>,
+	key: string,
+) {
 	const actor = store.state.actors[key];
 	if (!actor) {
 		throw new Error(
@@ -429,16 +430,19 @@ function create<
 				});
 
 		const connection = handle.connect();
+		const storedHandle = handle as ActorHandle<AnyActorDefinition>;
+		const storedConnection = connection as ActorConn<AnyActorDefinition>;
 
 		// Store connection BEFORE registering callbacks to avoid race condition
 		// where status change fires before connection is stored
+		// framework-base stores every handle in a store typed as
+		// ActorHandle<AnyActorDefinition>, so the specific actor type is
+		// erased here regardless. Cast straight to the store's field type to
+		// avoid relating the deep Registry-generic type against
+		// AnyActorDefinition, which exceeds TS's instantiation-depth limit.
 		updateActor(store, key, {
-			handle: handle as ActorHandle<
-				ExtractActorsFromRegistry<Registry>[ActorName]
-			>,
-			connection: connection as ActorConn<
-				ExtractActorsFromRegistry<Registry>[ActorName]
-			>,
+			handle: storedHandle,
+			connection: storedConnection,
 		});
 
 		// Subscribe to connection state changes

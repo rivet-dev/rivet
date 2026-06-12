@@ -1,5 +1,5 @@
 import { faSparkle, Icon } from "@rivet-gg/icons";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useLocalStorage } from "usehooks-ts";
 import {
 	Avatar,

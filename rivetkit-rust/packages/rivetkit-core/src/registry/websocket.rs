@@ -357,6 +357,16 @@ impl RegistryDispatcher {
 							let actor_id = ctx.actor_id().to_owned();
 							RuntimeSpawner::spawn(
 								async move {
+									if conn.is_hibernatable() && ctx.sleep_requested() {
+										tracing::debug!(
+											conn_id = conn.id(),
+											message_index,
+											action_name = %request.name,
+											"deferring hibernatable actor websocket action while actor is entering sleep"
+										);
+										return;
+									}
+
 									let response = match dispatch_action_through_task(
 										&dispatch,
 										conn.clone(),
@@ -848,7 +858,7 @@ pub(super) fn websocket_conn_params(headers: &HashMap<String, String>) -> Result
 	let Some(encoded_params) = websocket_protocols(headers)
 		.find_map(|protocol| protocol.strip_prefix(WS_PROTOCOL_CONN_PARAMS))
 	else {
-		return Ok(Vec::new());
+		return encode_json_as_cbor(&serde_json::Value::Null);
 	};
 
 	let decoded = Url::parse(&format!("http://actor/?value={encoded_params}"))

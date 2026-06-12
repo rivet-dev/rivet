@@ -34,8 +34,7 @@ pub struct SharedContext {
 	pub shutting_down: AtomicBool,
 	/// Epoch ms timestamp of the most recent ping packet received from the engine. Used by
 	/// `EnvoyHandle::is_ping_healthy` to surface a dead engine link to upstream health checks.
-	/// Initialized to the construction time so a freshly created envoy reports healthy until
-	/// its first ping arrives or the threshold elapses without one.
+	/// Zero means no ping has been received yet.
 	pub last_ping_ts: AtomicI64,
 	// Latched signal fired by `envoy_loop` after its cleanup block completes.
 	// Waiters observing `true` are guaranteed that the loop has exited and

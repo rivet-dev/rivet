@@ -94,7 +94,7 @@ async fn verify_engine_version(
 
 	pools
 		.udb()?
-		.run(|tx| async move {
+		.txn("engine_check_version_rollback", |tx| async move {
 			let current_version = semver::Version::parse(env!("CARGO_PKG_VERSION")).context("failed to parse cargo pkg version as semver")?;
 
 			if let Some(existing_version) = tx.read_opt(&keys::EngineVersionKey {}, Serializable).await? {

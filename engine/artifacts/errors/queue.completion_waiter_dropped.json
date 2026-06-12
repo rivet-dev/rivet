@@ -1,0 +1,5 @@
+{
+  "code": "completion_waiter_dropped",
+  "group": "queue",
+  "message": "Queue completion waiter dropped before response"
+}

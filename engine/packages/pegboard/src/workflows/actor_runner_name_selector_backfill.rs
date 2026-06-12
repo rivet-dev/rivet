@@ -86,7 +86,7 @@ pub struct MarkCompleteInput {
 #[activity(MarkComplete)]
 pub async fn mark_complete(ctx: &ActivityCtx, input: &MarkCompleteInput) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_name_backfill_mark_complete", |tx| {
 			let name = input.name.clone();
 			async move {
 				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());
@@ -130,7 +130,7 @@ pub async fn backfill_batch(
 	// Find actors missing runner_name_selector key
 	let (actors_to_backfill, errored_count): (Vec<(Id, Id)>, usize) = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_name_backfill_find_actors", |tx| {
 			let after_actor_id = input.after_actor_id;
 			let batch_size = input.batch_size;
 			async move {
@@ -239,7 +239,7 @@ pub async fn backfill_batch(
 	// Write runner_name_selector keys
 	if !backfill_data.is_empty() {
 		ctx.udb()?
-			.run(|tx| {
+			.txn("pegboard_runner_name_backfill_write", |tx| {
 				let backfill_data = backfill_data.clone();
 				async move {
 					let tx = tx.with_subspace(keys::subspace());

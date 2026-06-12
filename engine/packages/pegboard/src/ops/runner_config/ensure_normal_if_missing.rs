@@ -25,9 +25,13 @@ pub async fn pegboard_runner_config_ensure_normal_if_missing(
 			namespace_id: input.namespace_id,
 			name: input.name.clone(),
 			config: rivet_types::runner_configs::RunnerConfig {
-				kind: rivet_types::runner_configs::RunnerConfigKind::Normal {},
+				kind: rivet_types::runner_configs::RunnerConfigKind::Normal {
+					drain_on_version_upgrade: false,
+					actor_eviction_delay: 0,
+					actor_eviction_period: 0,
+					actor_eviction_rate: 1.0,
+				},
 				metadata: None,
-				drain_on_version_upgrade: false,
 			},
 		})
 		.await?;

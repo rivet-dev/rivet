@@ -1,6 +1,5 @@
 import type { Story } from "@ladle/react";
-import { faPlus } from "@rivet-gg/icons";
-import { Icon } from "@rivet-gg/icons";
+import { faPlus, Icon } from "@rivet-gg/icons";
 import "../../../.ladle/ladle.css";
 import { Button } from "@/components";
 import { SettingsCard } from "./settings-card";
@@ -20,7 +19,15 @@ function Frame({ children }: { children: React.ReactNode }) {
 	);
 }
 
-function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
+function Row({
+	label,
+	value,
+	last,
+}: {
+	label: string;
+	value: string;
+	last?: boolean;
+}) {
 	return (
 		<div
 			className={

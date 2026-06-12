@@ -52,10 +52,16 @@ function RouteComponent() {
 			<Content>
 				<div className="h-full flex flex-col items-center justify-center gap-3">
 					<p className="text-muted-foreground">
-						Deployments are only accessible on namespaces running on Rivet Compute.
+						Deployments are only accessible on namespaces running on
+						Rivet Compute.
 					</p>
-					<Link to="/orgs/$organization/projects/$project/ns/$namespace" params={Route.useParams()}>
-						<Button variant="outline" size="sm">Go back</Button>
+					<Link
+						to="/orgs/$organization/projects/$project/ns/$namespace"
+						params={Route.useParams()}
+					>
+						<Button variant="outline" size="sm">
+							Go back
+						</Button>
 					</Link>
 				</div>
 			</Content>

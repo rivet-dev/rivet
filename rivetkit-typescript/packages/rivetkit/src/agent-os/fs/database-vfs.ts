@@ -497,7 +497,7 @@ export function createDatabaseVfs(
 			return backend.stat(p);
 		},
 
-		async link(oldPath: string, newPath: string): Promise<void> {
+		async link(_oldPath: string, _newPath: string): Promise<void> {
 			throwENOSYS("link");
 		},
 

@@ -1,5 +1,6 @@
 [package]
 name = "pegboard-envoy"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -24,6 +25,7 @@ rivet-data.workspace = true
 rivet-error.workspace = true
 rivet-guard-core.workspace = true
 rivet-metrics.workspace = true
+rivet-perf.workspace = true
 rivet-pools.workspace = true
 rivet-envoy-protocol.workspace = true
 depot-client.workspace = true
@@ -45,6 +47,7 @@ universalpubsub.workspace = true
 url.workspace = true
 vbare.workspace = true
 rusqlite.workspace = true
+xxhash-rust.workspace = true
 
 pegboard.workspace = true
 namespace.workspace = true

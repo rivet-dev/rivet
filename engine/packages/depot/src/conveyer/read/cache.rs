@@ -1,14 +1,17 @@
-use std::{
-	collections::{BTreeMap, BTreeSet},
-	time::{SystemTime, UNIX_EPOCH},
-};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+#[cfg(feature = "pidx-cache")]
+use std::collections::{BTreeMap, BTreeSet};
 
 use anyhow::{Context, Result};
 
-use crate::conveyer::{page_index::DeltaPageIndex, types::DatabaseBranchId};
+#[cfg(feature = "pidx-cache")]
+use crate::conveyer::page_index::DeltaPageIndex;
+use crate::conveyer::types::DatabaseBranchId;
 
 use super::plan::{ReadSource, StorageScope};
 
+#[cfg(feature = "pidx-cache")]
 pub(super) fn snapshot_pidx_cache(
 	cache: &DeltaPageIndex,
 	pgnos: &[u32],
@@ -33,6 +36,7 @@ pub(super) fn cache_source_for_scope(scope: &StorageScope) -> Option<ReadSource>
 	}
 }
 
+#[cfg(feature = "pidx-cache")]
 pub(super) fn store_loaded_pidx_rows(
 	cache: &DeltaPageIndex,
 	loaded_pidx_rows: Vec<(u32, u64)>,
@@ -50,6 +54,7 @@ pub(super) fn store_loaded_pidx_rows(
 	}
 }
 
+#[cfg(feature = "pidx-cache")]
 pub(super) fn clear_stale_pidx_rows(cache: &DeltaPageIndex, stale_pidx_pgnos: BTreeSet<u32>) {
 	for pgno in stale_pidx_pgnos {
 		cache.remove(pgno);

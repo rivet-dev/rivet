@@ -178,7 +178,9 @@ export const dbStressActor = actor({
 				dataCount: dataRows[0]?.count ?? 0,
 				payloadCount: payloadRows[0]?.count ?? 0,
 				pageCount: Number(Object.values(pageRows[0] ?? {})[0] ?? 0),
-				integrity: String(Object.values(integrityRows[0] ?? {})[0] ?? ""),
+				integrity: String(
+					Object.values(integrityRows[0] ?? {})[0] ?? "",
+				),
 			};
 		},
 

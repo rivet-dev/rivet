@@ -2,9 +2,9 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
-	RAW_STATE_SYMBOL,
 	getRunFunction,
 	getRunInspectorConfig,
+	RAW_STATE_SYMBOL,
 	type WorkflowInspectorConfig,
 } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
@@ -33,11 +33,8 @@ import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
+import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
-import {
-	assertJsonCompatValue,
-	type JsonCompatValue,
-} from "@/common/encoding";
 import { deconstructError, stringifyError } from "@/common/utils";
 import type {
 	RivetCloseEvent,
@@ -52,14 +49,9 @@ import type {
 	RuntimeKind,
 	SqliteBackend,
 } from "@/registry/config";
-import {
-	decodeCborCompat,
-	decodeCborJsonCompat,
-	encodeCborCompat,
-} from "@/serde";
+import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
 import { logger } from "./log";
-import { createWriteThroughProxy } from "./write-through-proxy";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
 	type NativeValidationConfig,
@@ -79,12 +71,16 @@ import type {
 	RuntimeActorConfig,
 	RuntimeBytes,
 	RuntimeHttpResponse,
+	RuntimeInspectorTabEntry,
 	RuntimeQueueMessage,
 	RuntimeServeConfig,
 	RuntimeStateDeltaPayload,
 	WebSocketHandle,
 } from "./runtime";
 import { loadWasmRuntime } from "./wasm-runtime";
+import nodeFs from "node:fs";
+import nodePath from "node:path";
+import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -249,6 +245,14 @@ type NativePersistActorState = {
 	state: unknown;
 	isInOnStateChange: boolean;
 	connStates: Map<string, NativePersistConnState>;
+	// Memoized deep write-through proxy and the state object it wraps. Rebuilt
+	// only when the underlying state object identity changes.
+	stateProxy?: unknown;
+	stateProxyTarget?: unknown;
+	// Set when a coalesced save and onStateChange flush is pending for the
+	// current event loop tick.
+	saveScheduled?: boolean;
+	pendingSaveHandle?: ReturnType<typeof setImmediate>;
 };
 type NativeDestroyGate = {
 	destroyCompletion?: Promise<void>;
@@ -420,8 +424,33 @@ function clearNativeRuntimeState(
 async function cleanupNativeSleepRuntimeState(
 	runtime: CoreRuntime,
 	ctx: ActorContextHandle,
+	afterTrackedWorkDrained?: () => Promise<void>,
 ): Promise<void> {
-	await runtime.actorWaitForTrackedShutdownWork(ctx);
+	// The bounded wait gives shutdown work one grace-period chance to finish.
+	// Drained means all tracked shutdown work completed before the deadline, so
+	// we can save final state and clear runtime state immediately. If it did not
+	// drain, close database handles now, then defer the final save and clear until
+	// the tracked work finishes without a deadline.
+	const drained = await runtime.actorWaitForTrackedShutdownWork(ctx);
+	if (!drained) {
+		await closeNativeDatabaseClient(runtime, ctx);
+		await closeNativeSqlDatabase(runtime, ctx);
+		void runtime
+			.actorWaitForTrackedShutdownWorkUnbounded(ctx)
+			.then(async () => {
+				await afterTrackedWorkDrained?.();
+				clearNativeRuntimeState(runtime, ctx);
+			})
+			.catch((error) => {
+				logger().warn({
+					msg: "deferred native sleep cleanup failed",
+					error: stringifyError(error),
+				});
+			});
+		return;
+	}
+
+	await afterTrackedWorkDrained?.();
 	await closeNativeDatabaseClient(runtime, ctx);
 	await closeNativeSqlDatabase(runtime, ctx);
 	clearNativeRuntimeState(runtime, ctx);
@@ -594,7 +623,7 @@ function decodeValue<T>(value?: RuntimeBytes | null): T {
 		return undefined as T;
 	}
 
-	return decodeCborJsonCompat(value);
+	return decodeCborCompat(value);
 }
 
 function encodeValue(value: unknown): RuntimeBytes {
@@ -931,6 +960,7 @@ function serializeWorkflowEntryKind(
 	}
 }
 
+// TODO: Switch inspector routes to CBOR encoding
 function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 	nameRegistry: string[];
 	entries: Array<{
@@ -964,7 +994,7 @@ function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 
 	const history = decodeWorkflowHistoryTransport(data);
 
-	return {
+	return jsonSafe({
 		nameRegistry: [...history.nameRegistry],
 		entries: history.entries.map((entry) => ({
 			id: entry.id,
@@ -994,7 +1024,7 @@ function serializeWorkflowHistoryForJson(data: ArrayBuffer | null): {
 				],
 			),
 		),
-	};
+	});
 }
 
 function toHttpJsonCompatible<T>(value: T): T {
@@ -1072,7 +1102,6 @@ function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 			? []
 			: [decoded];
 }
-
 
 function buildRequest(init: {
 	method: string;
@@ -1169,11 +1198,15 @@ class NativeConnAdapter {
 
 	get state(): unknown {
 		const nextState = this.#readState();
-		return createWriteThroughProxy(nextState, (nextValue) => {
-			this.#writeState(nextValue, { writeNative: true });
-		}, (newValue) => {
-			assertJsonCompatValue(newValue);
-		});
+		return createWriteThroughProxy(
+			nextState,
+			(nextValue) => {
+				this.#writeState(nextValue, { writeNative: true });
+			},
+			(newValue) => {
+				assertJsonCompatValue(newValue);
+			},
+		);
 	}
 
 	set state(value: unknown) {
@@ -1649,7 +1682,12 @@ class NativeQueueAdapter {
 			signal?: AbortSignal;
 		},
 	) {
-		if (!options?.signal) {
+		const { token, cleanup } = await createCancellationTokenHandle(
+			this.#runtime,
+			options?.signal,
+		);
+
+		try {
 			await callNative(() =>
 				this.#runtime.actorQueueWaitForNamesAvailable(
 					this.#ctx,
@@ -1657,57 +1695,11 @@ class NativeQueueAdapter {
 					{
 						timeoutMs: options?.timeout,
 					},
+					token,
 				),
 			);
-			return;
-		}
-
-		const deadline =
-			options.timeout === undefined
-				? undefined
-				: Date.now() + options.timeout;
-
-		for (;;) {
-			if (options.signal.aborted) {
-				throw actorAbortedError();
-			}
-
-			const remainingTimeout =
-				deadline === undefined
-					? undefined
-					: Math.max(0, deadline - Date.now());
-			const sliceTimeout =
-				remainingTimeout === undefined
-					? 100
-					: Math.min(remainingTimeout, 100);
-
-			try {
-				await callNative(() =>
-					this.#runtime.actorQueueWaitForNamesAvailable(
-						this.#ctx,
-						[...names],
-						{
-							timeoutMs: sliceTimeout,
-						},
-					),
-				);
-				return;
-			} catch (error) {
-				if (
-					(error as { group?: string; code?: string }).group ===
-						"queue" &&
-					(error as { group?: string; code?: string }).code ===
-						"timed_out"
-				) {
-					if (
-						remainingTimeout === undefined ||
-						remainingTimeout > 100
-					) {
-						continue;
-					}
-				}
-				throw error;
-			}
+		} finally {
+			cleanup?.();
 		}
 	}
 
@@ -2326,9 +2318,7 @@ class NativeConnectionMap implements ReadonlyMap<string, NativeConnAdapter> {
 
 	get(key: string): NativeConnAdapter | undefined {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		const conn = conns.find(
-			(c) => this.#runtime.connId(c) === key,
-		);
+		const conn = conns.find((c) => this.#runtime.connId(c) === key);
 		if (!conn) return undefined;
 		return this.#connToAdapter(conn);
 	}
@@ -2340,23 +2330,39 @@ class NativeConnectionMap implements ReadonlyMap<string, NativeConnAdapter> {
 
 	keys(): MapIterator<string> {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		return conns.map((c) => this.#runtime.connId(c))[Symbol.iterator]() satisfies MapIterator<string>;
+		return conns
+			.map((c) => this.#runtime.connId(c))
+			[Symbol.iterator]() satisfies MapIterator<string>;
 	}
 
 	values(): MapIterator<NativeConnAdapter> {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		return conns.map((c) => this.#connToAdapter(c))[Symbol.iterator]() satisfies MapIterator<NativeConnAdapter>;
+		return conns
+			.map((c) => this.#connToAdapter(c))
+			[Symbol.iterator]() satisfies MapIterator<NativeConnAdapter>;
 	}
 
 	entries(): MapIterator<[string, NativeConnAdapter]> {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
-		return conns.map(
-			(c) => [this.#runtime.connId(c), this.#connToAdapter(c)] as [string, NativeConnAdapter],
-		)[Symbol.iterator]() satisfies MapIterator<[string, NativeConnAdapter]>;
+		return conns
+			.map(
+				(c) =>
+					[this.#runtime.connId(c), this.#connToAdapter(c)] as [
+						string,
+						NativeConnAdapter,
+					],
+			)
+			[Symbol.iterator]() satisfies MapIterator<
+			[string, NativeConnAdapter]
+		>;
 	}
 
 	forEach(
-		callback: (value: NativeConnAdapter, key: string, map: ReadonlyMap<string, NativeConnAdapter>) => void,
+		callback: (
+			value: NativeConnAdapter,
+			key: string,
+			map: ReadonlyMap<string, NativeConnAdapter>,
+		) => void,
 		thisArg?: unknown,
 	): void {
 		const conns = callNativeSync(() => this.#runtime.actorConns(this.#ctx));
@@ -2471,17 +2477,29 @@ export class ActorContextHandleAdapter {
 		if (!this.#stateEnabled) {
 			throw stateNotEnabledError();
 		}
+		const actorState = getNativePersistState(this.#runtime, this.#ctx);
 		const nextState = this.#readState();
-		return createWriteThroughProxy(
-			nextState,
-			(nextValue) => {
-				this.#writeState(nextValue, { scheduleSave: true });
-			},
-			(newValue) => {
-				this.#assertCanMutateState();
-				assertJsonCompatValue(newValue);
-			},
-		);
+		// Reading `c.state` rebuilds the deep write-through proxy, which
+		// allocates fresh on-change caches and rewraps the whole tree. Memoize
+		// the proxy keyed on the underlying state object so repeated reads and
+		// deep read cascades reuse a single proxy.
+		if (
+			actorState.stateProxy === undefined ||
+			actorState.stateProxyTarget !== nextState
+		) {
+			actorState.stateProxyTarget = nextState;
+			actorState.stateProxy = createWriteThroughProxy(
+				nextState,
+				(nextValue) => {
+					this.#writeState(nextValue, { scheduleSave: true });
+				},
+				(newValue) => {
+					this.#assertCanMutateState();
+					assertJsonCompatValue(newValue);
+				},
+			);
+		}
+		return actorState.stateProxy;
 	}
 
 	set state(value: unknown) {
@@ -2558,7 +2576,11 @@ export class ActorContextHandleAdapter {
 
 	get conns(): ReadonlyMap<string, NativeConnAdapter> {
 		if (!this.#connMap) {
-			this.#connMap = new NativeConnectionMap(this.#runtime, this.#ctx, this.#schemas);
+			this.#connMap = new NativeConnectionMap(
+				this.#runtime,
+				this.#ctx,
+				this.#schemas,
+			);
 		}
 		return this.#connMap;
 	}
@@ -2879,6 +2901,7 @@ export class ActorContextHandleAdapter {
 	}
 
 	sleep(): void {
+		this.#flushStateChange();
 		callNativeSync(() => this.#runtime.actorSleep(this.#ctx));
 	}
 
@@ -2902,6 +2925,9 @@ export class ActorContextHandleAdapter {
 	}
 
 	async dispose(): Promise<void> {
+		// Flush any save coalesced for this tick before the context is torn
+		// down so the request-save and onStateChange always run.
+		this.#flushStateChange();
 		this.#abortSignalCleanup?.();
 		this.#sql = undefined;
 	}
@@ -2937,13 +2963,12 @@ export class ActorContextHandleAdapter {
 			scheduleSave: boolean;
 		},
 	): void {
-		encodeValue(value);
 		const actorState = getNativePersistState(this.#runtime, this.#ctx);
 		actorState.state = value;
 		if (!options.scheduleSave) {
 			return;
 		}
-		this.#handleStateChange();
+		this.#scheduleSave();
 	}
 
 	#assertCanMutateState(): void {
@@ -2953,9 +2978,33 @@ export class ActorContextHandleAdapter {
 		}
 	}
 
-	#handleStateChange(): void {
+	// Coalesce the request-save and onStateChange work to once per event loop
+	// tick. A synchronous burst of mutations (for example
+	// `Object.assign(c.state, ...)`) would otherwise cross the NAPI boundary and
+	// run onStateChange once per field, re-serializing the whole state each time
+	// and pinning the event loop on large state.
+	#scheduleSave(): void {
 		const actorState = getNativePersistState(this.#runtime, this.#ctx);
-		encodeValue(actorState.state);
+		if (actorState.saveScheduled) {
+			return;
+		}
+		actorState.saveScheduled = true;
+		actorState.pendingSaveHandle = setImmediate(() => {
+			this.#flushStateChange();
+		});
+	}
+
+	#flushStateChange(): void {
+		const actorState = getNativePersistState(this.#runtime, this.#ctx);
+		if (!actorState.saveScheduled) {
+			return;
+		}
+		actorState.saveScheduled = false;
+		if (actorState.pendingSaveHandle !== undefined) {
+			clearImmediate(actorState.pendingSaveHandle);
+			actorState.pendingSaveHandle = undefined;
+		}
+
 		callNativeSync(() =>
 			this.#runtime.actorRequestSave(this.#ctx, { immediate: false }),
 		);
@@ -3277,7 +3326,85 @@ function buildActorConfig(
 		actions: Object.keys((config.actions ?? {}) as Record<string, unknown>)
 			.sort()
 			.map((name) => ({ name })),
+		inspectorTabs: buildInspectorTabs(config.inspector),
 	};
+}
+
+function buildInspectorTabs(
+	inspector: unknown,
+): Array<RuntimeInspectorTabEntry> | undefined {
+	if (!inspector || typeof inspector !== "object") return undefined;
+	const tabs = (inspector as { tabs?: unknown }).tabs;
+	if (!Array.isArray(tabs) || tabs.length === 0) return undefined;
+	return tabs.map((raw) => {
+		const entry = raw as {
+			id: string;
+			label?: string;
+			source?: string;
+			icon?: string;
+			hidden?: boolean;
+		};
+		if (entry.hidden === true) {
+			return { id: entry.id, hidden: true };
+		}
+		// Resolve the author's source path against the current working
+		// directory so the Rust runtime gets an absolute path. The author
+		// runs the actor process from their project root by convention.
+		const resolved =
+			entry.source !== undefined
+				? nodePath.resolve(entry.source)
+				: undefined;
+		if (resolved !== undefined) {
+			validateInspectorTabSource(entry.id, resolved);
+		}
+		return {
+			id: entry.id,
+			label: entry.label,
+			icon: entry.icon,
+			source: resolved,
+		};
+	});
+}
+
+function validateInspectorTabSource(tabId: string, resolved: string): void {
+	// Catch obviously dangerous misconfigurations at registry construction
+	// rather than silently exposing the wrong subtree over the unauthenticated
+	// `/inspector/custom-tabs/<id>/*` route. Fail loudly so misconfigured
+	// actors never start.
+	if (resolved === nodePath.parse(resolved).root) {
+		throw new Error(
+			`inspector.tabs[id="${tabId}"].source resolves to the filesystem root (${resolved}). ` +
+				"Point it at the tab's own static-asset directory instead.",
+		);
+	}
+	let stat: import("node:fs").Stats;
+	try {
+		stat = nodeFs.statSync(resolved);
+	} catch (err) {
+		const code = (err as NodeJS.ErrnoException)?.code;
+		if (code === "ENOENT") {
+			throw new Error(
+				`inspector.tabs[id="${tabId}"].source (${resolved}) does not exist.`,
+			);
+		}
+		if (code === "EACCES") {
+			throw new Error(
+				`inspector.tabs[id="${tabId}"].source (${resolved}) is not readable (EACCES).`,
+			);
+		}
+		throw new Error(
+			`inspector.tabs[id="${tabId}"].source (${resolved}) could not be stat'd: ${
+				(err as Error)?.message ?? err
+			}`,
+		);
+	}
+	if (!stat.isDirectory()) {
+		throw new Error(
+			`inspector.tabs[id="${tabId}"].source (${resolved}) must be a directory, got ${
+				stat.isFile() ? "file" : "non-directory"
+			}.`,
+		);
+	}
 }
 
 export function buildNativeFactory(
@@ -3916,26 +4043,35 @@ export function buildNativeFactory(
 			async (error: unknown, payload: { ctx: ActorContextHandle }) => {
 				const { ctx } = unwrapTsfnPayload(error, payload);
 				const actorCtx = makeActorCtx(ctx);
+				// TODO: Move this save hook into cleanupNativeSleepRuntimeState
+				// so immediate and deferred sleep cleanup share one save-state
+				// path instead of passing a callback through cleanup.
+				const saveActorState = async () => {
+					if (runtime.kind === "wasm") {
+						// Wasm cannot use the native context save helper here because
+						// the runtime owns the serialized state handoff.
+						await runtime.actorSaveState(
+							ctx,
+							actorCtx.serializeForTick("save"),
+						);
+					} else {
+						await actorCtx.saveState({
+							immediate: true,
+						});
+					}
+				};
 				try {
 					if (onSleep) {
-						try {
-							await onSleep(actorCtx);
-						} finally {
-							if (runtime.kind === "wasm") {
-								// Wasm cannot use the native context save helper here because
-								// the runtime owns the serialized state handoff.
-								await runtime.actorSaveState(
-									ctx,
-									actorCtx.serializeForTick("save"),
-								);
-							} else {
-								await actorCtx.saveState({ immediate: true });
-							}
-						}
+						await onSleep(actorCtx);
 					}
+					await saveActorState();
 				} finally {
 					try {
-						await cleanupNativeSleepRuntimeState(runtime, ctx);
+						await cleanupNativeSleepRuntimeState(
+							runtime,
+							ctx,
+							saveActorState,
+						);
 					} finally {
 						await actorCtx.dispose();
 					}

@@ -1,15 +1,12 @@
-import type { GameClient } from "../../client.ts";
-import type { Physics2dMatchInfo } from "./menu.tsx";
 import {
-	SCALE,
 	CORRECTION_ALPHA,
 	PLAYER_RADIUS,
+	SCALE,
 	SCENE_STATIC,
 } from "../../../src/actors/physics-2d/config.ts";
-
-type Physics2dConn = ReturnType<
-	ReturnType<GameClient["physics2dWorld"]["getOrCreate"]>["connect"]
->;
+import type { Physics2dConn } from "../../actor-types.ts";
+import type { GameClient } from "../../client.ts";
+import type { Physics2dMatchInfo } from "./menu.tsx";
 
 interface BodySnapshot {
 	id: string;
@@ -26,7 +23,10 @@ interface Snapshot {
 	tick: number;
 	serverTime: number;
 	bodies: BodySnapshot[];
-	players: Record<string, { x: number; y: number; name: string; color: string }>;
+	players: Record<
+		string,
+		{ x: number; y: number; name: string; color: string }
+	>;
 }
 
 interface DisplayBody {
@@ -69,8 +69,7 @@ export class Physics2dGame {
 		});
 		this.conn = handle.connect();
 
-		this.conn.on("snapshot", (raw: unknown) => {
-			const snap = raw as Snapshot;
+		this.conn.on("snapshot", (snap) => {
 			const now = Date.now();
 
 			// Measure tick interval and one-way latency estimate.
@@ -150,8 +149,8 @@ export class Physics2dGame {
 
 	private sendInput() {
 		let ix = 0;
-		if (this.keys["a"] || this.keys["A"] || this.keys["ArrowLeft"]) ix -= 1;
-		if (this.keys["d"] || this.keys["D"] || this.keys["ArrowRight"]) ix += 1;
+		if (this.keys.a || this.keys.A || this.keys.ArrowLeft) ix -= 1;
+		if (this.keys.d || this.keys.D || this.keys.ArrowRight) ix += 1;
 		const jump = !!this.keys[" "];
 
 		if (ix !== this.lastIx || (jump && !this.lastJump)) {
@@ -248,8 +247,15 @@ export class Physics2dGame {
 		ctx.fillStyle = "#ffffff";
 		ctx.font = "11px monospace";
 		ctx.textAlign = "right";
-		const tps = this.tickIntervalMs > 0 ? (1000 / this.tickIntervalMs).toFixed(1) : "—";
-		ctx.fillText(`TPS: ${tps}  Interval: ${this.tickIntervalMs}ms`, W - 8, 18);
+		const tps =
+			this.tickIntervalMs > 0
+				? (1000 / this.tickIntervalMs).toFixed(1)
+				: "—";
+		ctx.fillText(
+			`TPS: ${tps}  Interval: ${this.tickIntervalMs}ms`,
+			W - 8,
+			18,
+		);
 		ctx.fillText(`Latency: ~${this.latencyMs}ms`, W - 8, 34);
 
 		this.rafId = requestAnimationFrame(this.draw);

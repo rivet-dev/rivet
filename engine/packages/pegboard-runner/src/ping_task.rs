@@ -42,6 +42,16 @@ pub async fn task(
 			);
 		}
 
+		// Check if the last pong is past the timeout threshold (mk2 only)
+		if protocol::is_mk2(conn.protocol_version) {
+			let last_ping_ts = conn.last_ping_ts.load(Ordering::Relaxed);
+			let now = util::timestamp::now();
+			ensure!(
+				now - last_ping_ts <= ping_timeout_ms,
+				"runner ws ping timed out"
+			);
+		}
+
 		update_runner_ping(&ctx, &conn).await?;
 
 		// Send ping to runner

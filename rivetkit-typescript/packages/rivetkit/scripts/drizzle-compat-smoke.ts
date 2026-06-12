@@ -1,5 +1,11 @@
 import { actor } from "rivetkit";
-import { db, defineConfig, integer, sqliteTable, text } from "rivetkit/db/drizzle";
+import {
+	db,
+	defineConfig,
+	integer,
+	sqliteTable,
+	text,
+} from "rivetkit/db/drizzle";
 
 const todos = sqliteTable("todos", {
 	id: text("id").primaryKey(),

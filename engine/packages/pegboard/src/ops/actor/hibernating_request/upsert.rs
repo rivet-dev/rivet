@@ -17,7 +17,7 @@ pub async fn pegboard_actor_hibernating_request_upsert(
 	input: &Input,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_hibernating_request_upsert", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let last_ping_ts_key =

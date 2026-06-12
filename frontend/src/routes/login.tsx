@@ -8,8 +8,10 @@ import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/login")({
 	component: RouteComponent,
-	validateSearch: z.object({ emailVerified: z.coerce.number().optional(), 
-			from: z.string().optional(), }),
+	validateSearch: z.object({
+		emailVerified: z.coerce.number().optional(),
+		from: z.string().optional(),
+	}),
 	beforeLoad: async ({ search }) => {
 		if (search.emailVerified) {
 			toast.success("Email verified successfully. You can now sign in.", {
@@ -22,7 +24,8 @@ export const Route = createFileRoute("/login")({
 			const session = await authClient.getSession();
 			if (session.data) {
 				await redirectToOrganization({
-					from: "from" in search ? (search.from as string) : undefined,
+					from:
+						"from" in search ? (search.from as string) : undefined,
 				});
 			}
 		}

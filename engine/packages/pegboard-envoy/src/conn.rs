@@ -7,21 +7,26 @@ use std::{
 };
 
 use anyhow::Context;
-use depot::{cold_tier::ColdTier, conveyer::Db};
+use depot::conveyer::Db;
 use depot_client::database::NativeDatabaseHandle;
 use futures_util::StreamExt;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use hyper_tungstenite::tungstenite::Message;
+use pegboard::keys::{envoy::VirtualNodesKey, ns::EnvoyHashIdxKey};
+use rivet_config::config::pegboard::EnvoyLoadBalancer;
 use rivet_envoy_protocol::{self as protocol, versioned};
 use rivet_guard_core::WebSocketHandle;
 use rivet_pools::NodeId;
-use rivet_types::runner_configs::RunnerConfigKind;
+use rivet_types::runner_configs::{RunnerConfig, RunnerConfigKind};
 use scc::HashMap;
 use universaldb::prelude::*;
 use vbare::OwnedVersionedData;
+use xxhash_rust::xxh3::xxh3_128_with_seed;
 
-use crate::{actor_lifecycle, errors, hibernating_requests, metrics, utils::UrlData};
+use crate::{
+	actor_lifecycle, errors, hibernating_requests, metrics, utils::UrlData, ws_to_tunnel_task,
+};
 
 pub type RemoteSqliteExecutors =
 	HashMap<(String, u64), Arc<tokio::sync::OnceCell<NativeDatabaseHandle>>>;
@@ -34,18 +39,28 @@ pub struct Conn {
 	pub protocol_version: u16,
 	pub ws_handle: WebSocketHandle,
 	pub authorized_tunnel_routes: HashMap<(protocol::GatewayId, protocol::RequestId), ()>,
+	/// Tracks in-flight ToEnvoyWebSocketOpen sends so we can observe envoy-side
+	/// actor wake duration when the matching ToRivetWebSocketOpen (or
+	/// ToRivetWebSocketClose) reply arrives back from the envoy.
+	pub pending_websocket_opens: HashMap<(protocol::GatewayId, protocol::RequestId), Instant>,
 	pub udb: Arc<universaldb::Database>,
 	pub node_id: NodeId,
-	pub sqlite_cold_tier: Option<Arc<dyn ColdTier>>,
 	/// This is a perf-only SQLite conveyer cache, not authoritative actor presence tracking.
 	/// Envoys can reconnect to different worker nodes mid-flight, so request handlers
 	/// lazily populate it and lifecycle commands only evict stale cache entries.
 	pub actor_dbs: HashMap<String, Arc<Db>>,
 	pub remote_sqlite_executors: RemoteSqliteExecutors,
-	pub is_serverless: bool,
+	pub pool: RunnerConfig,
+	pub connected_at: Instant,
 	pub last_rtt: AtomicU32,
 	/// Timestamp (epoch ms) of the last pong received from the envoy.
 	pub last_ping_ts: AtomicI64,
+}
+
+impl Conn {
+	pub fn is_serverless(&self) -> bool {
+		matches!(self.pool.kind, RunnerConfigKind::Serverless { .. })
+	}
 }
 
 #[tracing::instrument(skip_all)]
@@ -82,7 +97,6 @@ pub async fn init_conn(
 		}
 		.build());
 	};
-	let is_serverless = matches!(pool.config.kind, RunnerConfigKind::Serverless { .. });
 
 	tracing::debug!(namespace_id=?namespace.namespace_id, "new envoy connection");
 
@@ -100,7 +114,6 @@ pub async fn init_conn(
 	let udb = ctx.udb()?;
 	let conn_udb = Arc::new((*udb).clone());
 	let node_id = ctx.pools().node_id();
-	let sqlite_cold_tier = depot::cold_tier::cold_tier_from_config(ctx.config()).await?;
 	let (_, (mut missed_commands, runner_config_protocol_changed)) = tokio::try_join!(
 		// Send init packet as soon as possible
 		async {
@@ -121,10 +134,19 @@ pub async fn init_conn(
 				.send(Message::Binary(init_msg_serialized.into()))
 				.await
 		},
-		udb.run(|tx| {
+		udb.txn("envoy_conn_register", |tx| {
 			let namespace_id = namespace.namespace_id;
 			let envoy_key = &envoy_key;
 			let pool_name = &pool_name;
+			// Only populate the hash-ring index when the operator has selected the
+			// Hash strategy. Writing V hash positions + a VirtualNodesKey on every
+			// envoy connect under legacy strategies is pure FDB write waste. If
+			// the operator later toggles to Hash, the next heartbeat-driven
+			// reconnect backfills the entries.
+			let virtual_nodes = match ctx.config().pegboard().envoy_load_balancer() {
+				EnvoyLoadBalancer::Hash { virtual_nodes, .. } => Some(virtual_nodes),
+				_ => None,
+			};
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
 
@@ -141,6 +163,18 @@ pub async fn init_conn(
 					tx.read_opt(&last_ping_ts_key, Serializable),
 					tx.read_opt(&version_key, Serializable),
 				)?;
+
+				if let Some(old_version) = version_entry {
+					if old_version != version {
+						tracing::warn!(
+							?namespace_id,
+							%envoy_key,
+							old_version = old_version,
+							new_version = version,
+							"envoy_key reconnected with changed version; operationally prohibited - investigate"
+						);
+					}
+				}
 
 				// Write init data
 				tx.write(
@@ -233,6 +267,24 @@ pub async fn init_conn(
 					),
 					(),
 				)?;
+				if let Some(virtual_nodes) = virtual_nodes {
+					tx.write(
+						&VirtualNodesKey::new(namespace_id, envoy_key.to_string()),
+						virtual_nodes,
+					)?;
+					for i in 0..virtual_nodes {
+						tx.write(
+							&EnvoyHashIdxKey::new(
+								namespace_id,
+								pool_name.to_string(),
+								version,
+								xxh3_128_with_seed(envoy_key.as_bytes(), i as u64).to_be_bytes(),
+								envoy_key.to_string(),
+							),
+							(),
+						)?;
+					}
+				}
 
 				// Update the pool's protocol version. This is required for serverful pools because normally
 				// the pool's protocol version is updated via the metadata_poller wf but that only runs for
@@ -319,12 +371,13 @@ pub async fn init_conn(
 		protocol_version,
 		ws_handle,
 		authorized_tunnel_routes: HashMap::new(),
+		pending_websocket_opens: HashMap::new(),
 		udb: conn_udb,
 		node_id,
-		sqlite_cold_tier,
 		actor_dbs: HashMap::new(),
 		remote_sqlite_executors: HashMap::new(),
-		is_serverless,
+		pool: pool.config,
+		connected_at: Instant::now(),
 		last_rtt: AtomicU32::new(0),
 		last_ping_ts: AtomicI64::new(util::timestamp::now()),
 	});
@@ -349,17 +402,20 @@ pub async fn init_conn(
 		let msg =
 			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(missed_commands));
 		let msg_serialized = msg.serialize(protocol_version)?;
+		let _in_flight = ws_to_tunnel_task::WsResponseInFlightGuard::new();
 		if let Err(err) = conn
 			.ws_handle
 			.send(Message::Binary(msg_serialized.into()))
 			.await
 		{
+			drop(_in_flight);
 			actor_lifecycle::shutdown_conn_actors(&conn).await;
 			return Err(err.into());
 		}
+		drop(_in_flight);
 	}
 
-	if is_serverless {
+	if conn.is_serverless() {
 		report_success(ctx, namespace.namespace_id, &conn.pool_name).await;
 	}
 

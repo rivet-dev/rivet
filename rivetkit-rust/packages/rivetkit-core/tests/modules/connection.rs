@@ -21,8 +21,8 @@ mod moved_tests {
 	use crate::actor::callbacks::ActorInstanceCallbacks;
 	use crate::actor::config::ActorConfig;
 	use crate::actor::context::ActorContext;
-	use crate::actor::keys::make_connection_key;
 	use crate::actor::context::tests::new_with_kv;
+	use crate::actor::keys::make_connection_key;
 
 	use super::metrics_helpers::{metric_line_for_actor, render_global_metrics};
 
@@ -266,16 +266,13 @@ mod moved_tests {
 		conn.disconnect(None).await?;
 
 		let metrics = render_global_metrics();
-		let active_line = metrics
-			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_active_connections", "conn-metrics-actor:"))
-			.expect("active connections metric line");
 		let total_line = metrics
 			.lines()
-			.find(|line| metric_line_for_actor(line, "rivet_actor_connections_total", "conn-metrics-actor:"))
+			.find(|line| {
+				metric_line_for_actor(line, "rivetkit_actor_connections_total", "conn-metrics")
+			})
 			.expect("connections total metric line");
 
-		assert!(active_line.ends_with(" 0"));
 		assert!(total_line.ends_with(" 1"));
 		Ok(())
 	}

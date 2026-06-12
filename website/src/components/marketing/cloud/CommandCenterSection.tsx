@@ -1,6 +1,6 @@
 "use client";
 
-import imgHub from "@/images/screenshots/rivet-hub.png";
+const imgHub = { src: "https://assets.rivet.dev/website/images/screenshots/rivet-hub.png", width: 2967, height: 1826, format: "png" };
 import {
 	faCodeBranch,
 	faFlask,

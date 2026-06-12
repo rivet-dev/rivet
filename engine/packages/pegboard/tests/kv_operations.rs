@@ -283,7 +283,9 @@ async fn test_kv_operations() -> Result<()> {
 	// Test 12: Test storage size
 	tracing::info!("test 12: testing storage size");
 	let size = db
-		.run(|tx| async move { kv::estimate_kv_size(&tx, actor_id).await })
+		.txn("test_pegboardkv_operations", |tx| async move {
+			kv::estimate_kv_size(&tx, actor_id).await
+		})
 		.await
 		.unwrap();
 	assert_eq!(size, 0, "storage size should be 0 after delete_all");
@@ -310,7 +312,9 @@ async fn test_kv_operations() -> Result<()> {
 	// Note: Storage size estimation may not be accurate on all backends (e.g., FileSystem)
 	tracing::info!("test 14: verifying storage size with data");
 	let size_with_data = db
-		.run(|tx| async move { kv::estimate_kv_size(&tx, actor_id).await })
+		.txn("test_pegboardkv_operations", |tx| async move {
+			kv::estimate_kv_size(&tx, actor_id).await
+		})
 		.await
 		.unwrap();
 	tracing::info!(

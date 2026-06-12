@@ -48,11 +48,7 @@ export function getDriverMatrixCells(
 	const encodings = applyDriverMatrixEnv(
 		"RIVETKIT_DRIVER_TEST_ENCODING",
 		options.encodings ?? ["bare", "cbor", "json"],
-		[
-			"bare",
-			"cbor",
-			"json",
-		],
+		["bare", "cbor", "json"],
 	);
 	const runtimes = applyDriverMatrixEnv(
 		"RIVETKIT_DRIVER_TEST_RUNTIME",
@@ -62,10 +58,7 @@ export function getDriverMatrixCells(
 	const sqliteBackends = applyDriverMatrixEnv(
 		"RIVETKIT_DRIVER_TEST_SQLITE",
 		options.sqliteBackends ?? ["local", "remote"],
-		[
-			"local",
-			"remote",
-		],
+		["local", "remote"],
 	);
 	const cells: DriverMatrixCell[] = [];
 

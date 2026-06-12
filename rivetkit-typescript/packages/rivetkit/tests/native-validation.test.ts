@@ -13,7 +13,9 @@ describe("native validation helpers", () => {
 		expect(
 			validateActionArgs(
 				{
-					increment: z.tuple([z.object({ amount: z.number().int() })]),
+					increment: z.tuple([
+						z.object({ amount: z.number().int() }),
+					]),
 				},
 				"increment",
 				[{ amount: 2 }],
@@ -25,7 +27,9 @@ describe("native validation helpers", () => {
 		expectValidationError(() =>
 			validateActionArgs(
 				{
-					increment: z.tuple([z.object({ amount: z.number().int() })]),
+					increment: z.tuple([
+						z.object({ amount: z.number().int() }),
+					]),
 				},
 				"increment",
 				[{ amount: "bad" }],
@@ -35,16 +39,14 @@ describe("native validation helpers", () => {
 
 	test("validateConnParams enforces the configured schema", () => {
 		expect(
-			validateConnParams(
-				z.object({ userId: z.string().min(1) }),
-				{ userId: "abc" },
-			),
+			validateConnParams(z.object({ userId: z.string().min(1) }), {
+				userId: "abc",
+			}),
 		).toEqual({ userId: "abc" });
 		expectValidationError(() =>
-			validateConnParams(
-				z.object({ userId: z.string().min(1) }),
-				{ userId: 42 },
-			),
+			validateConnParams(z.object({ userId: z.string().min(1) }), {
+				userId: 42,
+			}),
 		);
 	});
 

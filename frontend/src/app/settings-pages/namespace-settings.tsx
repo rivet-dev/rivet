@@ -267,59 +267,61 @@ function DangerZone() {
 			}
 		>
 			<div className="flex items-start justify-between gap-4 px-5 py-4 border-b border-foreground/10">
-					<div className="min-w-0">
-						<div className="text-sm font-medium text-foreground">
-							Archive namespace
-						</div>
-						<SmallText className="text-muted-foreground">
-							Permanently removes all associated Rivet Actors, Runners, and configurations. Cannot be undone.
-						</SmallText>
+				<div className="min-w-0">
+					<div className="text-sm font-medium text-foreground">
+						Archive namespace
 					</div>
-					<Button
-						variant="destructive-outline"
-						size="sm"
-						startIcon={<Icon icon={faTrash} />}
-						onClick={() =>
-							navigate({
-								to: ".",
-								search: (old) => ({
-									...(old as Record<string, unknown>),
-									modal: "delete-namespace",
-									displayName: namespace?.displayName,
-								}),
-							})
-						}
-					>
-						Archive
-					</Button>
+					<SmallText className="text-muted-foreground">
+						Permanently removes all associated Rivet Actors,
+						Runners, and configurations. Cannot be undone.
+					</SmallText>
 				</div>
-				<div className="flex items-start justify-between gap-4 px-5 py-4">
-					<div className="min-w-0">
-						<div className="text-sm font-medium text-foreground">
-							Archive project
-						</div>
-						<SmallText className="text-muted-foreground">
-							Permanently removes all associated Rivet Actors, Runners, and configurations. Cannot be undone.
-						</SmallText>
+				<Button
+					variant="destructive-outline"
+					size="sm"
+					startIcon={<Icon icon={faTrash} />}
+					onClick={() =>
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...(old as Record<string, unknown>),
+								modal: "delete-namespace",
+								displayName: namespace?.displayName,
+							}),
+						})
+					}
+				>
+					Archive
+				</Button>
+			</div>
+			<div className="flex items-start justify-between gap-4 px-5 py-4">
+				<div className="min-w-0">
+					<div className="text-sm font-medium text-foreground">
+						Archive project
 					</div>
-					<Button
-						variant="destructive-outline"
-						size="sm"
-						startIcon={<Icon icon={faTrash} />}
-						onClick={() =>
-							navigate({
-								to: ".",
-								search: (old) => ({
-									...(old as Record<string, unknown>),
-									modal: "delete-project",
-									displayName: project?.displayName,
-								}),
-							})
-						}
-					>
-						Archive
-					</Button>
+					<SmallText className="text-muted-foreground">
+						Permanently removes all associated Rivet Actors,
+						Runners, and configurations. Cannot be undone.
+					</SmallText>
 				</div>
+				<Button
+					variant="destructive-outline"
+					size="sm"
+					startIcon={<Icon icon={faTrash} />}
+					onClick={() =>
+						navigate({
+							to: ".",
+							search: (old) => ({
+								...(old as Record<string, unknown>),
+								modal: "delete-project",
+								displayName: project?.displayName,
+							}),
+						})
+					}
+				>
+					Archive
+				</Button>
+			</div>
 		</SettingsCard>
 	);
 }

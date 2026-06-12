@@ -613,6 +613,11 @@ impl ActorContext {
 	}
 
 	#[napi]
+	pub async fn wait_for_tracked_shutdown_work_unbounded(&self) {
+		self.inner.wait_for_tracked_shutdown_work_unbounded().await;
+	}
+
+	#[napi]
 	pub fn register_task(&self, promise: Promise<serde_json::Value>) -> napi::Result<()> {
 		self.shared
 			.register_task(Box::pin(async move {

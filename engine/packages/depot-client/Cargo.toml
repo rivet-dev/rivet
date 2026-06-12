@@ -1,13 +1,16 @@
 [package]
-name = "depot-client"
+name = "rivet-depot-client"
 version.workspace = true
-edition.workspace = true
 authors.workspace = true
 license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
 workspace = "../../../"
 description = "Depot-backed native SQLite VFS client"
 
 [lib]
+name = "depot_client"
 crate-type = ["lib"]
 
 [dependencies]

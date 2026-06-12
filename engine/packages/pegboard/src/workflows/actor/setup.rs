@@ -83,7 +83,7 @@ pub async fn insert_state_and_db(ctx: &ActivityCtx, input: &InitStateAndUdbInput
 	));
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_setup_insert_db", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.write(
@@ -145,7 +145,7 @@ pub async fn add_indexes_and_set_create_complete(
 
 	// Populate indexes
 	ctx.udb()?
-		.run(|tx| {
+		.txn("pegboard_actor_setup_populate_indexes", |tx| {
 			let namespace_id = state.namespace_id;
 			let name = state.name.clone();
 			let create_ts = state.create_ts;
@@ -208,7 +208,7 @@ pub async fn backfill_udb_keys_and_metrics(
 	let state = &ctx.state::<State>()?;
 
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_setup_backfill_udb_keys", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			tx.write(

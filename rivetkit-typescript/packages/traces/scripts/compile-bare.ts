@@ -101,7 +101,7 @@ function postProcess(code: string): string {
 
 	code = code.replace(/@bare-ts\/lib/g, "@rivetkit/bare-ts");
 	code = code.replace(/^import assert from "assert"/m, "");
-	code = POST_PROCESS_MARKER + code + `\n${ASSERT_FUNCTION}`;
+	code = `${POST_PROCESS_MARKER + code}\n${ASSERT_FUNCTION}`;
 
 	if (code.includes("@bare-ts/lib")) {
 		throw new Error("Failed to replace @bare-ts/lib import");

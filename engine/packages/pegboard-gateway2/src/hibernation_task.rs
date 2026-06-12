@@ -4,7 +4,7 @@ use gas::prelude::*;
 use rivet_envoy_protocol as protocol;
 use rivet_guard_core::{
 	WebSocketHandle,
-	errors::{WebSocketServiceTimeout, WebSocketServiceUnavailable},
+	errors::{WebSocketGarbageCollected, WebSocketTunnelSubscriptionClosed},
 	websocket_handle::WebSocketReceiver,
 };
 use std::pin::Pin;
@@ -20,13 +20,13 @@ use crate::shared_state::{InFlightRequestHandle, MsgGcReason};
 use super::HibernationLifecycleResult;
 
 /// Peeks client ws until a message is received.
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(name = "hibernation_task", skip_all)]
 pub async fn task(
 	client_ws: WebSocketHandle,
 	in_flight_req: InFlightRequestHandle,
 	ctx: StandaloneCtx,
 	actor_id: Id,
-	mut msg_rx: mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
+	mut msg_rx: mpsc::UnboundedReceiver<protocol::ToRivetTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	egress_bytes: Arc<AtomicU64>,
 	mut hibernation_abort_rx: watch::Receiver<()>,
@@ -88,12 +88,19 @@ pub async fn task(
 					}
 				} else {
 					tracing::warn!("tunnel sub closed");
-					return Err(WebSocketServiceUnavailable.build());
+					return Err(WebSocketTunnelSubscriptionClosed {
+						phase: "hibernating_websocket".to_owned(),
+					}
+					.build());
 				}
 			}
 			_ = drop_rx.changed() => {
 				tracing::warn!(reason=?drop_rx.borrow().as_ref(), "garbage collected");
-				return Err(WebSocketServiceTimeout.build());
+				return Err(WebSocketGarbageCollected {
+					phase: "hibernating_websocket".to_owned(),
+					reason: format!("{:?}", drop_rx.borrow().as_ref()),
+				}
+				.build());
 			}
 			hibernation_res = peek_ws_during_hibernation(&mut ws_rx) => {
 				let hibernation_res = hibernation_res?;

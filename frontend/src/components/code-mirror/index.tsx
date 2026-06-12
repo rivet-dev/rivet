@@ -21,7 +21,9 @@ const transparentSettings = {
 };
 
 const transparentDarkTheme = githubDarkInit({ settings: transparentSettings });
-const transparentLightTheme = githubLightInit({ settings: transparentSettings });
+const transparentLightTheme = githubLightInit({
+	settings: transparentSettings,
+});
 
 export const CodeMirror = forwardRef<ReactCodeMirrorRef, ReactCodeMirrorProps>(
 	(props, ref) => {
@@ -30,7 +32,9 @@ export const CodeMirror = forwardRef<ReactCodeMirrorRef, ReactCodeMirrorProps>(
 			<ReactCodeMirror
 				ref={ref}
 				theme={
-					theme === "dark" ? transparentDarkTheme : transparentLightTheme
+					theme === "dark"
+						? transparentDarkTheme
+						: transparentLightTheme
 				}
 				{...props}
 			/>
@@ -71,15 +75,15 @@ export type { CompletionContext } from "@codemirror/autocomplete";
 export { defaultKeymap } from "@codemirror/commands";
 export { javascript, javascriptLanguage } from "@codemirror/lang-javascript";
 export { json, jsonParseLinter } from "@codemirror/lang-json";
+export {
+	keywordCompletionSource,
+	type SQLConfig,
+	schemaCompletionSource,
+	sql,
+} from "@codemirror/lang-sql";
 export { Prec } from "@codemirror/state";
 export { EditorView, type KeyBinding, keymap } from "@codemirror/view";
 export type {
 	ReactCodeMirrorProps as CodeMirrorProps,
 	ReactCodeMirrorRef as CodeMirrorRef,
 } from "@uiw/react-codemirror";
-export {
-	sql,
-	keywordCompletionSource,
-	schemaCompletionSource,
-	type SQLConfig,
-} from "@codemirror/lang-sql";

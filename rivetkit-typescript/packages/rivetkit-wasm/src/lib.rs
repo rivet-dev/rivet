@@ -1,3 +1,5 @@
+#![cfg(target_arch = "wasm32")]
+
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -7,19 +9,16 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
-use rivet_error::{
-	ActorSpecifier, RivetError as RivetTransportError, RivetErrorKind,
-};
+use rivet_error::{ActorSpecifier, RivetError as RivetTransportError, RivetErrorKind};
 use rivetkit_core::error::public_error_status_code;
 use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
 	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
-	ActorWorkKind,
-	BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime,
-	EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts, QueueMessage, QueueNextBatchOpts,
-	QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts, QueueWaitOpts, Request,
-	RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason, ServeConfig,
-	ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
+	ActorWorkKind, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry,
+	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
+	QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts,
+	QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
+	ServeConfig, ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -147,6 +146,8 @@ impl From<WasmServeConfig> for ServeConfig {
 			namespace: config.namespace,
 			pool_name: config.pool_name,
 			engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+			engine_spawn: EngineSpawnMode::Never,
+			engine_auto_download: false,
 			handle_inspector_http_in_runtime: config
 				.handle_inspector_http_in_runtime
 				.unwrap_or(false),
@@ -471,6 +472,9 @@ impl WasmActorFactory {
 			serde_wasm_bindgen::from_value(config)?
 		};
 		let config = ActorConfig::from_input(input.into());
+		config
+			.validate()
+			.map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
 		let callbacks = WasmCallbacks::new(callbacks);
 		let factory = CoreActorFactory::new_with_manual_startup_ready(config, move |start| {
 			let callbacks = callbacks.clone();
@@ -543,6 +547,7 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	let ActorStart {
 		ctx: core_ctx,
 		input,
+		is_new,
 		snapshot,
 		hibernated: _,
 		mut events,
@@ -550,7 +555,7 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	} = start;
 
 	let ctx = WasmActorContext::from_core(core_ctx.clone(), callbacks.clone());
-	let preamble = run_preamble(&callbacks, &ctx, input, snapshot).await;
+	let preamble = run_preamble(&callbacks, &ctx, input, is_new, snapshot).await;
 	if let Some(reply) = startup_ready {
 		let _ = reply.send(
 			preamble
@@ -594,10 +599,9 @@ async fn run_preamble(
 	callbacks: &WasmCallbacks,
 	ctx: &WasmActorContext,
 	input: Option<Vec<u8>>,
+	is_new: bool,
 	snapshot: Option<Vec<u8>>,
 ) -> Result<()> {
-	let is_new = snapshot.is_none();
-
 	if let Some(callback) = &callbacks.on_migrate {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
@@ -625,6 +629,17 @@ async fn run_preamble(
 		}
 	} else if let Some(snapshot) = snapshot {
 		ctx.inner.set_state_initial(snapshot);
+	} else if let Some(callback) = &callbacks.create_state {
+		let payload = object();
+		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
+		if let Some(input) = input.as_ref() {
+			set_anyhow(&payload, "input", bytes_to_js(input))?;
+		}
+		let state = call_callback_bytes(callback, &payload.into()).await?;
+		ctx.inner.set_state_initial(state.clone());
+		ctx.inner
+			.save_state(vec![StateDelta::ActorState(state)])
+			.await?;
 	}
 
 	if let Some(callback) = &callbacks.create_vars {
@@ -1405,6 +1420,11 @@ impl WasmActorContext {
 	#[wasm_bindgen(js_name = waitForTrackedShutdownWork)]
 	pub async fn wait_for_tracked_shutdown_work(&self) -> bool {
 		self.inner.wait_for_tracked_shutdown_work().await
+	}
+
+	#[wasm_bindgen(js_name = waitForTrackedShutdownWorkUnbounded)]
+	pub async fn wait_for_tracked_shutdown_work_unbounded(&self) {
+		self.inner.wait_for_tracked_shutdown_work_unbounded().await;
 	}
 
 	#[wasm_bindgen(js_name = keepAwake)]
@@ -2865,9 +2885,7 @@ mod tests {
 	}
 
 	fn transport_message(error: &anyhow::Error) -> String {
-		transport_error(error)
-			.message()
-			.to_owned()
+		transport_error(error).message().to_owned()
 	}
 
 	#[test]

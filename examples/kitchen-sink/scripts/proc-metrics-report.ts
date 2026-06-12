@@ -44,7 +44,7 @@ function usage(exitCode = 1): never {
   pnpm --filter kitchen-sink proc-metrics -- <events.jsonl> [--out-dir <path>]
 
 Examples:
-  pnpm --filter kitchen-sink proc-metrics -- .agent/benchmarks/sqlite-memory-soak/no-delete-sleep-5m-10c/events.jsonl
+  pnpm --filter kitchen-sink proc-metrics -- ~/.agents/benchmarks/sqlite-memory-soak/no-delete-sleep-5m-10c/events.jsonl
 `);
 	process.exit(exitCode);
 }
@@ -96,8 +96,10 @@ function pagesToMiB(pages: unknown, pageSize: unknown): number | null {
 function eventTime(event: Json, firstTimestampMs: number): number {
 	const elapsedMs = numberAt(event.elapsedMs);
 	if (elapsedMs !== null) return elapsedMs / 1000;
-	const timestamp = typeof event.timestamp === "string" ? Date.parse(event.timestamp) : NaN;
-	if (Number.isFinite(timestamp)) return (timestamp - firstTimestampMs) / 1000;
+	const timestamp =
+		typeof event.timestamp === "string" ? Date.parse(event.timestamp) : NaN;
+	if (Number.isFinite(timestamp))
+		return (timestamp - firstTimestampMs) / 1000;
 	return 0;
 }
 
@@ -134,7 +136,12 @@ function rateTrace(
 	for (const event of events) {
 		const value = readCumulative(event);
 		const t = eventTime(event, firstTimestampMs);
-		if (value === null || prevValue === null || prevT === null || t <= prevT) {
+		if (
+			value === null ||
+			prevValue === null ||
+			prevT === null ||
+			t <= prevT
+		) {
 			prevT = t;
 			prevValue = value;
 			continue;
@@ -171,7 +178,10 @@ function activeActorTrace(events: Json[], firstTimestampMs: number): Trace {
 	for (const event of events) {
 		const actorIndex = numberAt(event.actorIndex);
 		if (actorIndex === null) continue;
-		if ((event.kind === "cycle" || event.kind === "actor_reset") && !seen.has(actorIndex)) {
+		if (
+			(event.kind === "cycle" || event.kind === "actor_reset") &&
+			!seen.has(actorIndex)
+		) {
 			seen.add(actorIndex);
 			points.push({ t: eventTime(event, firstTimestampMs), delta: 1 });
 		}
@@ -193,7 +203,10 @@ function activeActorTrace(events: Json[], firstTimestampMs: number): Trace {
 	};
 }
 
-function envoyActiveActorTrace(samples: Json[], firstTimestampMs: number): Trace {
+function envoyActiveActorTrace(
+	samples: Json[],
+	firstTimestampMs: number,
+): Trace {
 	return {
 		name: "envoy active actors",
 		x: samples.map((event) => eventTime(event, firstTimestampMs)),
@@ -230,10 +243,7 @@ function actorWakeTimes(events: Json[], firstTimestampMs: number): number[] {
 	return times.sort((a, b) => a - b);
 }
 
-function addAlignmentOverlays(
-	charts: Chart[],
-	activeActors: Trace,
-): Chart[] {
+function addAlignmentOverlays(charts: Chart[], activeActors: Trace): Chart[] {
 	return charts.map((chart) => {
 		if (chart.id === "actors") {
 			return chart;
@@ -272,7 +282,10 @@ function rollingThroughputTrace(
 	const y: number[] = [];
 	let start = 0;
 	for (let end = 0; end < times.length; end += 1) {
-		while (times[start] !== undefined && times[end] - times[start] > windowSeconds) {
+		while (
+			times[start] !== undefined &&
+			times[end] - times[start] > windowSeconds
+		) {
 			start++;
 		}
 		x.push(times[end]);
@@ -284,7 +297,10 @@ function rollingThroughputTrace(
 function quantile(values: number[], q: number): number | null {
 	if (values.length === 0) return null;
 	const sorted = [...values].sort((a, b) => a - b);
-	return sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ?? null;
+	return (
+		sorted[Math.min(sorted.length - 1, Math.floor(q * sorted.length))] ??
+		null
+	);
 }
 
 function formatMiB(value: number | null): string {
@@ -303,7 +319,12 @@ function jsonForHtml(value: unknown): string {
 	return JSON.stringify(value).replaceAll("<", "\\u003c");
 }
 
-function buildHtml(runId: string, inputPath: string, charts: Chart[], summary: Json): string {
+function buildHtml(
+	runId: string,
+	inputPath: string,
+	charts: Chart[],
+	summary: Json,
+): string {
 	return `<!doctype html>
 <html lang="en">
 <head>
@@ -392,7 +413,9 @@ function main(): void {
 	const runStart = events.find((event) => event.kind === "run_start");
 	const samples = events.filter((event) => event.kind === "memory_sample");
 	const cycles = events.filter((event) => event.kind === "cycle");
-	const sleeps = events.filter((event) => event.kind === "actor_sleep_verified");
+	const sleeps = events.filter(
+		(event) => event.kind === "actor_sleep_verified",
+	);
 	const runId = sanitizeRunId(
 		(typeof runStart?.runId === "string" && runStart.runId) ||
 			(typeof samples[0]?.runId === "string" && samples[0].runId) ||
@@ -400,11 +423,15 @@ function main(): void {
 	);
 	const firstTimestampMs = Date.parse(
 		(typeof events[0]?.timestamp === "string" && events[0].timestamp) ||
-			(typeof samples[0]?.timestamp === "string" && samples[0].timestamp) ||
+			(typeof samples[0]?.timestamp === "string" &&
+				samples[0].timestamp) ||
 			new Date().toISOString(),
 	);
 	const estimatedActiveActors = activeActorTrace(events, firstTimestampMs);
-	const reportedActiveActors = envoyActiveActorTrace(samples, firstTimestampMs);
+	const reportedActiveActors = envoyActiveActorTrace(
+		samples,
+		firstTimestampMs,
+	);
 	const activeActorOverlay = nonEmpty(reportedActiveActors)
 		? reportedActiveActors
 		: estimatedActiveActors;
@@ -441,7 +468,9 @@ function main(): void {
 				bytesToMiB(get(event, ["kitchenSink", "smapsRollup", "Pss"])),
 			),
 			makeTrace("kitchen anon PSS", samples, firstTimestampMs, (event) =>
-				bytesToMiB(get(event, ["kitchenSink", "smapsRollup", "Pss_Anon"])),
+				bytesToMiB(
+					get(event, ["kitchenSink", "smapsRollup", "Pss_Anon"]),
+				),
 			),
 		].filter(nonEmpty),
 	};
@@ -477,82 +506,89 @@ function main(): void {
 					]),
 				),
 			),
-			makeTrace("native non-V8 estimate", samples, firstTimestampMs, (event) =>
-				bytesToMiB(
-					get(event, [
-						"kitchenSinkBreakdown",
-						"estimates",
-						"nativeNonV8ResidentEstimateBytes",
-					]),
-				),
+			makeTrace(
+				"native non-V8 estimate",
+				samples,
+				firstTimestampMs,
+				(event) =>
+					bytesToMiB(
+						get(event, [
+							"kitchenSinkBreakdown",
+							"estimates",
+							"nativeNonV8ResidentEstimateBytes",
+						]),
+					),
 			),
 		].filter(nonEmpty),
 	};
 	const cpuChart: Chart = {
 		id: "cpu",
 		title: "CPU Utilization From /proc",
-			yTitle: "% of one core",
-			traces: [
-				rateTrace(
-					"harness CPU",
-					samples,
-					firstTimestampMs,
-					(event) => numberAt(get(event, ["harness", "cpuTotalSeconds"])),
-					100,
-				),
-				rateTrace(
-					"engine CPU",
-					samples,
-					firstTimestampMs,
-					(event) => numberAt(get(event, ["engine", "cpuTotalSeconds"])),
-					100,
-				),
-				rateTrace(
-					"kitchen CPU",
-					samples,
-					firstTimestampMs,
-					(event) => numberAt(get(event, ["kitchenSink", "cpuTotalSeconds"])),
-					100,
-				),
-			].filter(nonEmpty),
-		};
+		yTitle: "% of one core",
+		traces: [
+			rateTrace(
+				"harness CPU",
+				samples,
+				firstTimestampMs,
+				(event) => numberAt(get(event, ["harness", "cpuTotalSeconds"])),
+				100,
+			),
+			rateTrace(
+				"engine CPU",
+				samples,
+				firstTimestampMs,
+				(event) => numberAt(get(event, ["engine", "cpuTotalSeconds"])),
+				100,
+			),
+			rateTrace(
+				"kitchen CPU",
+				samples,
+				firstTimestampMs,
+				(event) =>
+					numberAt(get(event, ["kitchenSink", "cpuTotalSeconds"])),
+				100,
+			),
+		].filter(nonEmpty),
+	};
 	const ioChart: Chart = {
 		id: "io",
-			title: "Process I/O Throughput",
-			yTitle: "MiB/s",
-			traces: [
-				rateTrace(
-					"engine read",
-					samples,
-					firstTimestampMs,
-					(event) => bytesToMiB(get(event, ["engine", "io", "readBytes"])),
-					1,
-				),
-				rateTrace(
-					"engine write",
-					samples,
-					firstTimestampMs,
-					(event) => bytesToMiB(get(event, ["engine", "io", "writeBytes"])),
-					1,
-				),
-				rateTrace(
-					"kitchen read",
-					samples,
-					firstTimestampMs,
-					(event) =>
-						bytesToMiB(get(event, ["kitchenSink", "io", "readBytes"])),
-					1,
-				),
-				rateTrace(
-					"kitchen write",
-					samples,
-					firstTimestampMs,
-					(event) =>
-						bytesToMiB(get(event, ["kitchenSink", "io", "writeBytes"])),
-					1,
-				),
-			].filter(nonEmpty),
-		};
+		title: "Process I/O Throughput",
+		yTitle: "MiB/s",
+		traces: [
+			rateTrace(
+				"engine read",
+				samples,
+				firstTimestampMs,
+				(event) =>
+					bytesToMiB(get(event, ["engine", "io", "readBytes"])),
+				1,
+			),
+			rateTrace(
+				"engine write",
+				samples,
+				firstTimestampMs,
+				(event) =>
+					bytesToMiB(get(event, ["engine", "io", "writeBytes"])),
+				1,
+			),
+			rateTrace(
+				"kitchen read",
+				samples,
+				firstTimestampMs,
+				(event) =>
+					bytesToMiB(get(event, ["kitchenSink", "io", "readBytes"])),
+				1,
+			),
+			rateTrace(
+				"kitchen write",
+				samples,
+				firstTimestampMs,
+				(event) =>
+					bytesToMiB(get(event, ["kitchenSink", "io", "writeBytes"])),
+				1,
+			),
+		].filter(nonEmpty),
+	};
 	const threadsFdsChart: Chart = {
 		id: "threads-fds",
 		title: "Threads And File Descriptors",
@@ -578,11 +614,17 @@ function main(): void {
 		yTitle: "count",
 		traces: [
 			activeActorOverlay,
-			countSeries("actors slept", events, firstTimestampMs, (event) =>
-				event.kind === "actor_sleep_verified",
+			countSeries(
+				"actors slept",
+				events,
+				firstTimestampMs,
+				(event) => event.kind === "actor_sleep_verified",
 			),
-			countSeries("cycles completed", events, firstTimestampMs, (event) =>
-				event.kind === "cycle",
+			countSeries(
+				"cycles completed",
+				events,
+				firstTimestampMs,
+				(event) => event.kind === "cycle",
 			),
 		].filter(nonEmpty),
 	};
@@ -600,13 +642,13 @@ function main(): void {
 				10,
 			),
 			{
-					name: "cycle latency",
-					x: cycles.map((event) => eventTime(event, firstTimestampMs)),
-					y: cycles.map((event) => numberAt(event.durationMs)),
-					mode: "markers" as const,
-					type: "scatter" as const,
-					yaxis: "y2" as const,
-				},
+				name: "cycle latency",
+				x: cycles.map((event) => eventTime(event, firstTimestampMs)),
+				y: cycles.map((event) => numberAt(event.durationMs)),
+				mode: "markers" as const,
+				type: "scatter" as const,
+				yaxis: "y2" as const,
+			},
 		].filter(nonEmpty),
 	};
 	const vfsChart: Chart = {
@@ -633,18 +675,22 @@ function main(): void {
 				),
 			),
 			{
-				...makeTrace("cache entries", cycles, firstTimestampMs, (event) =>
-					numberAt(
-						get(event, [
-							"result",
-							"storage",
-							"vfs",
-							"pageCacheEntries",
-						]),
-					),
-					),
-					yaxis: "y2" as const,
-				},
+				...makeTrace(
+					"cache entries",
+					cycles,
+					firstTimestampMs,
+					(event) =>
+						numberAt(
+							get(event, [
+								"result",
+								"storage",
+								"vfs",
+								"pageCacheEntries",
+							]),
+						),
+				),
+				yaxis: "y2" as const,
+			},
 			{
 				...makeTrace("dirty pages", cycles, firstTimestampMs, (event) =>
 					numberAt(
@@ -655,23 +701,26 @@ function main(): void {
 							"writeBufferDirtyPages",
 						]),
 					),
-					),
-					yaxis: "y2" as const,
-				},
+				),
+				yaxis: "y2" as const,
+			},
 		].filter(nonEmpty),
 	};
 
-	const charts = addAlignmentOverlays([
-		memoryChart,
-		pssChart,
-		kitchenChart,
-		cpuChart,
-		ioChart,
-		threadsFdsChart,
-		actorChart,
-		cycleChart,
-		vfsChart,
-	].filter((chart) => chart.traces.length > 0), activeActorOverlay);
+	const charts = addAlignmentOverlays(
+		[
+			memoryChart,
+			pssChart,
+			kitchenChart,
+			cpuChart,
+			ioChart,
+			threadsFdsChart,
+			actorChart,
+			cycleChart,
+			vfsChart,
+		].filter((chart) => chart.traces.length > 0),
+		activeActorOverlay,
+	);
 
 	const engineRss = samples
 		.map((event) => bytesToMiB(get(event, ["engine", "rssBytes"])))
@@ -683,14 +732,20 @@ function main(): void {
 		.map((event) => numberAt(event.durationMs))
 		.filter((value): value is number => value !== null);
 	const summary: Json = {
-		"samples": samples.length,
-		"cycles": cycles.length,
+		samples: samples.length,
+		cycles: cycles.length,
 		"actors slept": sleeps.length,
 		"actor wakes": wakeTimes.length,
-		"active actor source": nonEmpty(reportedActiveActors) ? "envoy" : "harness estimate",
-		"engine RSS max": formatMiB(engineRss.length ? Math.max(...engineRss) : null),
+		"active actor source": nonEmpty(reportedActiveActors)
+			? "envoy"
+			: "harness estimate",
+		"engine RSS max": formatMiB(
+			engineRss.length ? Math.max(...engineRss) : null,
+		),
 		"engine RSS final": formatMiB(engineRss.at(-1) ?? null),
-		"kitchen RSS max": formatMiB(kitchenRss.length ? Math.max(...kitchenRss) : null),
+		"kitchen RSS max": formatMiB(
+			kitchenRss.length ? Math.max(...kitchenRss) : null,
+		),
 		"kitchen RSS final": formatMiB(kitchenRss.at(-1) ?? null),
 		"cycle latency p95": `${
 			quantile(cycleLatencies, 0.95)?.toFixed(1) ?? "n/a"
@@ -703,7 +758,10 @@ function main(): void {
 	const htmlPath = join(outputDir, "index.html");
 	const jsonPath = join(outputDir, "charts.json");
 	writeFileSync(htmlPath, html);
-	writeFileSync(jsonPath, JSON.stringify({ runId, inputPath, summary, charts }, null, 2));
+	writeFileSync(
+		jsonPath,
+		JSON.stringify({ runId, inputPath, summary, charts }, null, 2),
+	);
 	console.log(`wrote ${htmlPath}`);
 	console.log(`wrote ${jsonPath}`);
 }

@@ -23,7 +23,7 @@ pub async fn resolve_restore_point(
 	database_id: String,
 	restore_point: RestorePointId,
 ) -> Result<ResolvedVersionstamp> {
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_resolve", move |tx| {
 		let database_id = database_id.clone();
 		let restore_point = restore_point.clone();
 
@@ -51,7 +51,7 @@ pub async fn resolve_restore_target(
 	selector: SnapshotSelector,
 ) -> Result<ResolvedRestoreTarget> {
 	let now_ms = now_ms()?;
-	udb.run(move |tx| {
+	udb.txn("depot_restore_point_resolve", move |tx| {
 		let database_id = database_id.clone();
 		let selector = selector.clone();
 

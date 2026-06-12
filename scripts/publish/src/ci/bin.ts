@@ -12,6 +12,7 @@
  */
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve as resolvePath } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 import { Command } from "commander";
 import { $ } from "execa";
@@ -37,9 +38,27 @@ import {
 	uploadFile,
 	uploadInstallScripts,
 } from "../lib/r2.js";
-import { bumpPackageJsons } from "../lib/version.js";
+import { bumpCargoVersions, bumpPackageJsons } from "../lib/version.js";
 
 const log = scoped("ci");
+
+const RUST_CRATES = [
+	"rivet-error-macros",
+	"rivet-error",
+	"rivet-metrics",
+	"rivet-util-serde",
+	"rivet-depot-client-types",
+	"rivet-depot-client",
+	"rivet-envoy-protocol",
+	"rivetkit-shared-types",
+	"rivet-envoy-client",
+	"rivetkit-actor-persist",
+	"rivetkit-client-protocol",
+	"rivetkit-inspector-protocol",
+	"rivetkit-client",
+	"rivetkit-core",
+	"rivetkit",
+] as const;
 
 function findRepoRoot(): string {
 	if (process.env.GITHUB_WORKSPACE) return process.env.GITHUB_WORKSPACE;
@@ -54,6 +73,72 @@ function findRepoRoot(): string {
 		}
 	}
 	throw new Error("could not locate repo root");
+}
+
+async function crateVersionExists(name: string, version: string): Promise<boolean> {
+	const response = await fetch(
+		`https://crates.io/api/v1/crates/${encodeURIComponent(name)}/${encodeURIComponent(version)}`,
+		{
+			headers: {
+				"User-Agent": "rivet-release-publisher (https://github.com/rivet-dev/rivet)",
+			},
+		},
+	);
+	if (response.status === 200) return true;
+	if (response.status === 404) return false;
+	throw new Error(
+		`crates.io lookup failed for ${name}@${version}: ${response.status} ${response.statusText}`,
+	);
+}
+
+async function waitForCrateVersion(
+	name: string,
+	version: string,
+	timeoutSeconds: number,
+): Promise<void> {
+	const deadline = Date.now() + timeoutSeconds * 1000;
+	while (Date.now() < deadline) {
+		if (await crateVersionExists(name, version)) return;
+		await sleep(10_000);
+	}
+	throw new Error(
+		`timed out waiting for crates.io to index ${name}@${version}`,
+	);
+}
+
+async function cargoPublishWithRateLimitRetry(
+	repoRoot: string,
+	args: string[],
+): Promise<void> {
+	for (;;) {
+		const result = await $({
+			all: true,
+			cwd: repoRoot,
+			reject: false,
+		})`cargo ${args}`;
+
+		if (result.all) process.stdout.write(result.all);
+		if (result.exitCode === 0) return;
+
+		const retryAt = parseCratesIoRateLimitRetry(result.all ?? "");
+		if (retryAt === undefined) {
+			throw new Error(`cargo ${args.join(" ")} failed with exit code ${result.exitCode}`);
+		}
+
+		const waitMs = Math.max(retryAt.getTime() - Date.now() + 5_000, 10_000);
+		log.info(
+			`crates.io rate limited publish; retrying at ${retryAt.toISOString()}`,
+		);
+		await sleep(waitMs);
+	}
+}
+
+function parseCratesIoRateLimitRetry(output: string): Date | undefined {
+	const match = output.match(/try again after (.+? GMT)/);
+	if (!match) return undefined;
+	const retryAt = new Date(match[1]);
+	if (Number.isNaN(retryAt.getTime())) return undefined;
+	return retryAt;
 }
 
 const program = new Command();
@@ -105,6 +190,9 @@ program
 			includeReleaseOnlyPackages: ctx.trigger === "release",
 			versionOnly: !!opts.versionOnly,
 		});
+		await bumpCargoVersions(repoRoot, version, {
+			dryRun: !!opts.dryRun,
+		});
 	});
 
 // ---------------------------------------------------------------------------
@@ -135,6 +223,54 @@ program
 			retries: Number(opts.retries),
 			releaseMode,
 		});
+	});
+
+// ---------------------------------------------------------------------------
+// publish-crates — ordered, idempotent crates.io publish
+// ---------------------------------------------------------------------------
+program
+	.command("publish-crates")
+	.description("Publish Rust SDK crates to crates.io in dependency order")
+	.option("--version <version>", "Version to publish (defaults to resolved context)")
+	.option("--wait-seconds <n>", "Max wait for crates.io indexing per crate", "600")
+	.option("--dry-run", "Run cargo publish --dry-run for the first crate only")
+	.option("--allow-dirty", "Pass --allow-dirty to cargo publish")
+	.action(async (opts) => {
+		const repoRoot = findRepoRoot();
+		const version = opts.version ?? (await resolveContext()).version;
+		const waitSeconds = Number(opts.waitSeconds);
+		if (!Number.isFinite(waitSeconds) || waitSeconds <= 0) {
+			throw new Error("--wait-seconds must be a positive number");
+		}
+
+		if (opts.dryRun) {
+			const crate = RUST_CRATES[0];
+			log.info(
+				`dry-running ${crate}; later crates require earlier versions to exist in the crates.io index`,
+			);
+			const args = ["publish", "-p", crate, "--dry-run"];
+			if (opts.allowDirty) args.push("--allow-dirty");
+			await $({ stdio: "inherit", cwd: repoRoot })`cargo ${args}`;
+			return;
+		}
+
+		if (!process.env.CARGO_REGISTRY_TOKEN) {
+			throw new Error("CARGO_REGISTRY_TOKEN must be set to publish crates");
+		}
+
+		for (const crate of RUST_CRATES) {
+			if (await crateVersionExists(crate, version)) {
+				log.info(`skipping ${crate}@${version}; already published`);
+				continue;
+			}
+
+			log.info(`publishing ${crate}@${version}`);
+			const args = ["publish", "-p", crate];
+			if (opts.allowDirty) args.push("--allow-dirty");
+			await cargoPublishWithRateLimitRetry(repoRoot, args);
+			log.info(`waiting for crates.io to index ${crate}@${version}`);
+			await waitForCrateVersion(crate, version, waitSeconds);
+		}
 	});
 
 // ---------------------------------------------------------------------------

@@ -15,10 +15,13 @@ import {
 	ThemeToggle,
 } from "render-dds";
 import type { Message } from "../../src/actors.ts";
-import { rivetClientBase, type AppRegistry } from "./rivet-client";
+import { type AppRegistry, rivetClientBase } from "./rivet-client";
 
 export function App() {
-	const rivet = useMemo(() => createRivetKit<AppRegistry>(rivetClientBase()), []);
+	const rivet = useMemo(
+		() => createRivetKit<AppRegistry>(rivetClientBase()),
+		[],
+	);
 	const { useActor } = rivet;
 
 	const [username, setUsername] = useState("User");
@@ -30,7 +33,8 @@ export function App() {
 	const live = Boolean(chatRoom.connection);
 
 	useEffect(() => {
-		if (chatRoom.connection) chatRoom.connection.getMessages().then(setMessages);
+		if (chatRoom.connection)
+			chatRoom.connection.getMessages().then(setMessages);
 	}, [chatRoom.connection]);
 
 	chatRoom.useEvent("newMessage", (msg: Message) => {
@@ -41,7 +45,7 @@ export function App() {
 
 	useEffect(() => {
 		bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-	}, [messages]);
+	}, []);
 
 	const send = async () => {
 		if (chatRoom.connection && messageText.trim()) {
@@ -56,7 +60,13 @@ export function App() {
 
 	return (
 		<div className="relative flex min-h-screen flex-col bg-background text-foreground">
-			<GridDecoration position="top-right" className="pointer-events-none" height={280} opacity={0.28} width={280} />
+			<GridDecoration
+				position="top-right"
+				className="pointer-events-none"
+				height={280}
+				opacity={0.28}
+				width={280}
+			/>
 
 			<Navigation
 				className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm"
@@ -64,8 +74,12 @@ export function App() {
 					<div className="flex items-center gap-3">
 						<RenderLogo variant="mark" height={28} />
 						<div className="flex flex-col">
-							<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">RivetKit</span>
-							<span className="text-sm font-semibold leading-tight text-foreground">State</span>
+							<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								RivetKit
+							</span>
+							<span className="text-sm font-semibold leading-tight text-foreground">
+								State
+							</span>
 						</div>
 					</div>
 				}
@@ -73,7 +87,13 @@ export function App() {
 					<div className="flex items-center gap-2">
 						<Badge variant={live ? "green" : "red-light"}>
 							<span className="inline-flex items-center gap-1.5">
-								<span className={live ? "size-1.5 rounded-full bg-green-500" : "size-1.5 animate-pulse rounded-full bg-red-400"} />
+								<span
+									className={
+										live
+											? "size-1.5 rounded-full bg-green-500"
+											: "size-1.5 animate-pulse rounded-full bg-red-400"
+									}
+								/>
 								{live ? "Connected" : "Connecting"}
 							</span>
 						</Badge>
@@ -88,30 +108,59 @@ export function App() {
 						State Management
 					</h1>
 					<p className="mx-auto mt-3 max-w-xl text-base text-muted-foreground sm:text-lg">
-						Persistent actor state — messages survive server restarts with automatic serialization.
+						Persistent actor state — messages survive server
+						restarts with automatic serialization.
 					</p>
 				</div>
 
-				<FormField id="username" label="Username" value={username} onChange={(e) => setUsername(e.target.value)} />
+				<FormField
+					id="username"
+					label="Username"
+					value={username}
+					onChange={(e) => setUsername(e.target.value)}
+				/>
 
-				<Card variant="elevated" className="flex flex-1 flex-col overflow-hidden border-border shadow-lg shadow-black/5 dark:shadow-black/20">
+				<Card
+					variant="elevated"
+					className="flex flex-1 flex-col overflow-hidden border-border shadow-lg shadow-black/5 dark:shadow-black/20"
+				>
 					<div className="border-b border-border bg-muted/30 px-5 py-3 dark:bg-muted/15">
-						<span className="text-sm font-semibold text-foreground">Persistent Chat</span>
-						<p className="mt-0.5 text-xs text-muted-foreground">Messages survive server restarts</p>
+						<span className="text-sm font-semibold text-foreground">
+							Persistent Chat
+						</span>
+						<p className="mt-0.5 text-xs text-muted-foreground">
+							Messages survive server restarts
+						</p>
 					</div>
 
-					<CardContent className="flex-1 overflow-y-auto px-5 py-4" style={{ maxHeight: 400 }}>
+					<CardContent
+						className="flex-1 overflow-y-auto px-5 py-4"
+						style={{ maxHeight: 400 }}
+					>
 						{messages.length === 0 ? (
-							<p className="py-10 text-center text-sm italic text-muted-foreground">No messages yet.</p>
+							<p className="py-10 text-center text-sm italic text-muted-foreground">
+								No messages yet.
+							</p>
 						) : (
 							<div className="space-y-3">
 								{messages.map((msg) => (
-									<div key={msg.id} className="rounded-lg border border-border bg-muted/20 px-4 py-3 dark:bg-muted/10">
+									<div
+										key={msg.id}
+										className="rounded-lg border border-border bg-muted/20 px-4 py-3 dark:bg-muted/10"
+									>
 										<div className="flex items-baseline justify-between">
-											<span className="text-sm font-semibold text-primary">{msg.sender}</span>
-											<span className="text-xs text-muted-foreground">{new Date(msg.timestamp).toLocaleTimeString()}</span>
+											<span className="text-sm font-semibold text-primary">
+												{msg.sender}
+											</span>
+											<span className="text-xs text-muted-foreground">
+												{new Date(
+													msg.timestamp,
+												).toLocaleTimeString()}
+											</span>
 										</div>
-										<p className="mt-1 text-sm text-foreground">{msg.text}</p>
+										<p className="mt-1 text-sm text-foreground">
+											{msg.text}
+										</p>
 									</div>
 								))}
 								<div ref={bottomRef} />
@@ -128,17 +177,34 @@ export function App() {
 							disabled={!live}
 							className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
 						/>
-						<Button variant="default" disabled={!live || !messageText.trim()} onClick={send}>Send</Button>
-						<Button variant="destructive" disabled={!live} onClick={clear}>Clear</Button>
+						<Button
+							variant="default"
+							disabled={!live || !messageText.trim()}
+							onClick={send}
+						>
+							Send
+						</Button>
+						<Button
+							variant="destructive"
+							disabled={!live}
+							onClick={clear}
+						>
+							Clear
+						</Button>
 					</div>
 				</Card>
 			</main>
 
 			<section className="flex justify-center px-4 pb-10 pt-2 md:pb-14">
 				<div className="w-full max-w-md">
-					<Card variant="outlined" className="border-dashed border-border/80 text-center">
+					<Card
+						variant="outlined"
+						className="border-dashed border-border/80 text-center"
+					>
 						<CardHeader className="pb-2">
-							<CardTitle className="text-base">Deploy on Render</CardTitle>
+							<CardTitle className="text-base">
+								Deploy on Render
+							</CardTitle>
 						</CardHeader>
 						<CardContent className="flex justify-center pt-0">
 							<a

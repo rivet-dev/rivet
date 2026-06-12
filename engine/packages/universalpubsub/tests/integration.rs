@@ -86,6 +86,79 @@ async fn test_nats_driver_without_memory() {
 }
 
 #[tokio::test]
+async fn test_nats_no_responders() {
+	setup_logging();
+
+	let test_id = Uuid::new_v4();
+	let (pubsub_config, docker_config) = TestPubSub::Nats.config(test_id, 1).await.unwrap();
+	let mut docker = docker_config.unwrap();
+	docker.start().await.unwrap();
+	tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+
+	let rivet_config::config::PubSub::Nats(nats) = pubsub_config else {
+		unreachable!();
+	};
+
+	use std::str::FromStr;
+	let server_addrs = nats
+		.addresses
+		.iter()
+		.map(|addr| format!("nats://{addr}"))
+		.map(|url| async_nats::ServerAddr::from_str(url.as_ref()))
+		.collect::<Result<Vec<_>, _>>()
+		.unwrap();
+
+	let driver = universalpubsub::driver::nats::NatsDriver::connect(
+		async_nats::ConnectOptions::new(),
+		&server_addrs[..],
+	)
+	.await
+	.unwrap();
+	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
+
+	test_no_responders(&pubsub).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_postgres_no_responders() {
+	setup_logging();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, docker_config) = TestDatabase::Postgres.config(test_id, 1).await.unwrap();
+	let mut docker = docker_config.unwrap();
+	docker.start().await.unwrap();
+	tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+
+	let rivet_config::config::Database::Postgres(pg) = db_config else {
+		unreachable!();
+	};
+	let url = pg.url.read().clone();
+
+	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
+		.await
+		.unwrap();
+	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
+
+	test_no_responders(&pubsub).await.unwrap();
+}
+
+#[tokio::test]
+async fn test_memory_no_responders() {
+	setup_logging();
+
+	let test_id = Uuid::new_v4();
+	let (pubsub_config, _docker_config) = TestPubSub::Memory.config(test_id, 1).await.unwrap();
+	let rivet_config::config::PubSub::Memory(memory) = pubsub_config else {
+		unreachable!();
+	};
+
+	let driver = universalpubsub::driver::memory::MemoryDriver::new(memory.channel);
+	let pubsub = PubSub::new(Arc::new(driver));
+
+	test_no_responders(&pubsub).await.unwrap();
+}
+
+#[tokio::test]
 async fn test_postgres_driver_with_memory() {
 	setup_logging();
 
@@ -100,10 +173,9 @@ async fn test_postgres_driver_with_memory() {
 	};
 	let url = pg.url.read().clone();
 
-	let driver =
-		universalpubsub::driver::postgres::PostgresDriver::connect(url, true, None, None, None)
-			.await
-			.unwrap();
+	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
+		.await
+		.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
 
 	test_inner(&pubsub).await;
@@ -124,10 +196,9 @@ async fn test_postgres_driver_without_memory() {
 	};
 	let url = pg.url.read().clone();
 
-	let driver =
-		universalpubsub::driver::postgres::PostgresDriver::connect(url, false, None, None, None)
-			.await
-			.unwrap();
+	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
+		.await
+		.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
 	test_inner(&pubsub).await;
@@ -187,6 +258,10 @@ async fn test_inner(pubsub: &PubSub) {
 	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_request_timeout completed");
 
 	let start = Instant::now();
+	test_expired_request_reply_rejected(&pubsub).await.unwrap();
+	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_expired_request_reply_rejected completed");
+
+	let start = Instant::now();
 	test_large_payloads(&pubsub).await.unwrap();
 	tracing::info!(duration_ms = ?start.elapsed().as_millis(), "test_large_payloads completed");
 }
@@ -211,6 +286,9 @@ async fn test_basic_pub_sub(pubsub: &PubSub) -> Result<()> {
 		}
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe");
+		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders");
 		}
 	}
 
@@ -239,6 +317,9 @@ async fn test_multiple_subscribers(pubsub: &PubSub) -> Result<()> {
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe for sub1");
 		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders");
+		}
 	}
 
 	match sub2.next().await? {
@@ -247,6 +328,9 @@ async fn test_multiple_subscribers(pubsub: &PubSub) -> Result<()> {
 		}
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe for sub2");
+		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders");
 		}
 	}
 
@@ -274,6 +358,9 @@ async fn test_unsubscribe(pubsub: &PubSub) -> Result<()> {
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe");
 		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders");
+		}
 	}
 
 	// Drop the subscriber to unsubscribe
@@ -296,6 +383,9 @@ async fn test_unsubscribe(pubsub: &PubSub) -> Result<()> {
 		}
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe for new subscriber");
+		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders for new subscriber");
 		}
 	}
 
@@ -321,11 +411,21 @@ async fn test_request_response(pubsub: &PubSub) -> Result<()> {
 		ready_rx.await.unwrap();
 	}
 
-	let req = pubsub
+	match pubsub
 		.request("test.request_response", payload)
 		.await
-		.unwrap();
-	assert_eq!(req.payload, payload);
+		.unwrap()
+	{
+		NextOutput::Message(msg) => {
+			assert_eq!(msg.payload, payload);
+		}
+		NextOutput::Unsubscribed => {
+			panic!("unexpected unsubscribe");
+		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders");
+		}
+	}
 
 	Ok(())
 }
@@ -353,15 +453,44 @@ async fn test_multiple_request_response(pubsub: &PubSub) -> Result<()> {
 				ready_rx.await.unwrap();
 			}
 
-			let req = pubsub
+			match pubsub
 				.request("test.request_response", &payload)
 				.await
-				.unwrap();
-			assert_eq!(req.payload, payload);
+				.unwrap()
+			{
+				NextOutput::Message(msg) => {
+					assert_eq!(msg.payload, payload);
+				}
+				NextOutput::Unsubscribed => {
+					panic!("unexpected unsubscribe");
+				}
+				NextOutput::NoResponders => {
+					panic!("unexpected no responders");
+				}
+			}
 		})
 		.buffer_unordered(50)
 		.collect::<()>()
 		.await;
+
+	Ok(())
+}
+
+async fn test_no_responders(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing request with no responders");
+
+	let subject = format!("test.no_responders.{}", Uuid::new_v4());
+	let payload = b"orphan request";
+
+	let result = pubsub
+		.request_with_timeout(&subject, payload, Duration::from_secs(5))
+		.await?;
+
+	match result {
+		NextOutput::NoResponders => {}
+		NextOutput::Message(_) => panic!("unexpected message reply"),
+		NextOutput::Unsubscribed => panic!("unexpected unsubscribe"),
+	}
 
 	Ok(())
 }
@@ -380,6 +509,54 @@ async fn test_request_timeout(pubsub: &PubSub) -> Result<()> {
 		.await;
 
 	let err = result.err().unwrap();
+	let err = err
+		.downcast_ref::<RivetError>()
+		.expect("expected errors::Ups");
+	assert_eq!(err.group(), "ups");
+	assert_eq!(err.code(), "request_timeout");
+
+	Ok(())
+}
+
+async fn test_expired_request_reply_rejected(pubsub: &PubSub) -> Result<()> {
+	tracing::info!("testing expired request reply rejection");
+
+	let subject = format!("test.expired_request_reply.{}", Uuid::new_v4());
+	let payload = b"slow request";
+	let timeout = Duration::from_millis(50);
+	let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
+	let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+
+	{
+		let pubsub = pubsub.clone();
+		let subject = subject.clone();
+		tokio::spawn(async move {
+			let mut sub = pubsub.subscribe(&subject).await.unwrap();
+			ready_tx.send(()).unwrap();
+			let NextOutput::Message(msg) = sub.next().await.unwrap() else {
+				panic!("expected request message");
+			};
+
+			assert!(!msg.is_request_expired());
+			tokio::time::sleep(timeout + Duration::from_millis(25)).await;
+			assert!(msg.is_request_expired());
+			reply_tx.send(msg.reply(&msg.payload).await).unwrap();
+		});
+		ready_rx.await.unwrap();
+	}
+
+	let result = pubsub
+		.request_with_timeout(&subject, payload, timeout)
+		.await;
+	let err = result.err().unwrap();
+	let err = err
+		.downcast_ref::<RivetError>()
+		.expect("expected errors::Ups");
+	assert_eq!(err.group(), "ups");
+	assert_eq!(err.code(), "request_timeout");
+
+	let reply_result = reply_rx.await.unwrap();
+	let err = reply_result.err().unwrap();
 	let err = err
 		.downcast_ref::<RivetError>()
 		.expect("expected errors::Ups");
@@ -425,6 +602,7 @@ async fn test_queue_subscribe_single(pubsub: &PubSub) -> Result<()> {
 			assert_eq!(msg.payload, message);
 		}
 		Ok(Ok(NextOutput::Unsubscribed)) => panic!("unexpected unsubscribe"),
+		Ok(Ok(NextOutput::NoResponders)) => panic!("unexpected no responders"),
 		Ok(Err(e)) => panic!("error: {e}"),
 		Err(_) => panic!("timed out waiting for queue message"),
 	}
@@ -522,12 +700,14 @@ async fn test_queue_subscribe_multi_group(pubsub: &PubSub) -> Result<()> {
 	match recv_a {
 		Ok(Ok(NextOutput::Message(msg))) => assert_eq!(msg.payload, message),
 		Ok(Ok(NextOutput::Unsubscribed)) => panic!("group-a unexpected unsubscribe"),
+		Ok(Ok(NextOutput::NoResponders)) => panic!("group-a unexpected no responders"),
 		Ok(Err(e)) => panic!("group-a error: {e}"),
 		Err(_) => panic!("group-a timed out"),
 	}
 	match recv_b {
 		Ok(Ok(NextOutput::Message(msg))) => assert_eq!(msg.payload, message),
 		Ok(Ok(NextOutput::Unsubscribed)) => panic!("group-b unexpected unsubscribe"),
+		Ok(Ok(NextOutput::NoResponders)) => panic!("group-b unexpected no responders"),
 		Ok(Err(e)) => panic!("group-b error: {e}"),
 		Err(_) => panic!("group-b timed out"),
 	}
@@ -575,6 +755,9 @@ async fn test_payload_size(pubsub: &PubSub, size: usize, label: &str) -> Result<
 		}
 		NextOutput::Unsubscribed => {
 			panic!("unexpected unsubscribe for {}", label);
+		}
+		NextOutput::NoResponders => {
+			panic!("unexpected no responders for {}", label);
 		}
 	}
 

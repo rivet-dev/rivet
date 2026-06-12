@@ -1,8 +1,8 @@
-import { agentOs } from "rivetkit/agent-os";
-import { setup } from "rivetkit";
-import { hostTool, toolKit } from "@rivet-dev/agent-os-core";
 import common from "@rivet-dev/agent-os-common";
+import { hostTool, toolKit } from "@rivet-dev/agent-os-core";
 import pi from "@rivet-dev/agent-os-pi";
+import { setup } from "rivetkit";
+import { agentOs } from "rivetkit/agent-os";
 import { z } from "zod";
 
 const weatherToolkit = toolKit({
@@ -22,7 +22,10 @@ const weatherToolkit = toolKit({
 				conditions: "sunny",
 			}),
 			examples: [
-				{ description: "3-day forecast for Paris", input: { city: "Paris", days: 3 } },
+				{
+					description: "3-day forecast for Paris",
+					input: { city: "Paris", days: 3 },
+				},
 			],
 		}),
 	},

@@ -7,7 +7,7 @@
 - Do not add arbitrary byte corruption, UDB driver faults, Gasoline correctness tests, or global Rivet fault injection here.
 - Tests must validate with native SQLite oracle comparison and depot invariant scanning.
 - Ambiguous post-commit tests must classify old or new oracle state after reload instead of assuming the new state committed.
-- Depot invariant verification must use a non-faulting cold-tier view and must run after expected workload faults are asserted.
+- Depot invariant verification must use a non-faulting view and must run after expected workload faults are asserted.
 - Replay assertions should check exact fault points and workload/verification phase, not only boundary counts.
 - Database reload tests must reopen with fresh VFS state and a fresh depot `Db` handle.
 - Happy-path reload smoke tests must use non-failing read faults; failing read faults during initial page fetch should surface as reload errors.
@@ -17,8 +17,7 @@
 - Overlap tests with `FaultScenarioCtx` should use same-task future joining around depot pause handles instead of spawning.
 - Forced compaction tests must use depot compaction entry points and assert depot-level `ForceCompactionResult` contents.
 - Every expected fault must assert that it fired, and unfired expected faults must fail the test.
-- End-to-end cold compaction or reclaim scenarios must create cold refs through forced depot workflows; handcrafted cold refs are only for clearly named harness regression tests.
+- End-to-end reclaim scenarios must drive deletion through forced depot workflows.
 - Heavy pager workloads should use large pseudorandom blobs when proving delta-chunk or shard-boundary coverage; small or patterned blobs may compress below depot thresholds.
 - Depot invariant scans should shape-check hot shard rows below the compaction root but not require compacted-away commit rows.
-- Depot invariant scans must verify cold-backed PIDX pages exist in the decoded cold object, not only in the cold ref txid range.
 - `depot/test-faults` must stay dev/test-only and must not leak into production builds.

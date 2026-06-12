@@ -1,10 +1,13 @@
+import {
+	VERSION as ENVOY_PROTOCOL_VERSION,
+	encodeToEnvoy,
+} from "@rivetkit/engine-envoy-protocol";
+import { describe, expect, test } from "vitest";
 import { setup } from "@/mod";
 import { counter } from "../../fixtures/driver-test-suite/counter";
-import { describeDriverMatrix } from "./shared-matrix";
 import { getOrStartSharedEngine, TOKEN } from "./shared-harness";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
-import { describe, expect, test } from "vitest";
-import { encodeToEnvoy, VERSION as ENVOY_PROTOCOL_VERSION } from "@rivetkit/engine-envoy-protocol";
 
 const ACTOR_NAME = "counter";
 
@@ -173,14 +176,17 @@ describeDriverMatrix(
 				expect(body).toMatchObject({
 					group: "request",
 					code: "invalid",
-					});
-					expect(body.metadata?.reason).toMatch(
-						/^x-rivet-(endpoint|pool-name|namespace-name) header is required$/,
-					);
 				});
+				expect(body.metadata?.reason).toMatch(
+					/^x-rivet-(endpoint|pool-name|namespace-name) header is required$/,
+				);
+			});
 
 			test("accepts a serverless start payload and streams pings", async (c) => {
-				const { client, namespace } = await setupDriverTest(c, driverTestConfig);
+				const { client, namespace } = await setupDriverTest(
+					c,
+					driverTestConfig,
+				);
 				const engine = await getOrStartSharedEngine();
 				const poolName = `serverless-${crypto.randomUUID()}`;
 				await upsertNormalRunnerConfig({
@@ -218,14 +224,22 @@ describeDriverMatrix(
 				);
 
 				expect(response.status).toBe(200);
-				expect(response.headers.get("content-type")).toBe("text/event-stream");
+				expect(response.headers.get("content-type")).toBe(
+					"text/event-stream",
+				);
 				const reader = response.body?.getReader();
 				expect(reader).toBeDefined();
 
 				const firstChunk = await Promise.race([
-					reader!.read(),
+					reader?.read(),
 					new Promise<never>((_, reject) =>
-						setTimeout(() => reject(new Error("timed out waiting for SSE ping")), 10_000),
+						setTimeout(
+							() =>
+								reject(
+									new Error("timed out waiting for SSE ping"),
+								),
+							10_000,
+						),
 					),
 				]);
 				expect(new TextDecoder().decode(firstChunk.value)).toContain(
@@ -234,9 +248,17 @@ describeDriverMatrix(
 
 				abort.abort();
 				const closed = await Promise.race([
-					reader!.read(),
+					reader?.read(),
 					new Promise<never>((_, reject) =>
-						setTimeout(() => reject(new Error("timed out waiting for SSE close")), 10_000),
+						setTimeout(
+							() =>
+								reject(
+									new Error(
+										"timed out waiting for SSE close",
+									),
+								),
+							10_000,
+						),
 					),
 				]);
 				expect(closed.done).toBe(true);

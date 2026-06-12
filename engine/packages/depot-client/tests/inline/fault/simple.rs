@@ -1,8 +1,7 @@
 use anyhow::{Context, Result};
 use depot::fault::{
-	ColdCompactionFaultPoint, ColdTierFaultPoint, CommitFaultPoint, DepotFaultPoint,
-	DepotFaultReplayEvent, DepotFaultReplayEventKind, FaultBoundary, HotCompactionFaultPoint,
-	ReadFaultPoint, ReclaimFaultPoint,
+	CommitFaultPoint, DepotFaultPoint, DepotFaultReplayEventKind, FaultBoundary,
+	HotCompactionFaultPoint, ReadFaultPoint, ReclaimFaultPoint,
 };
 use depot::workflows::compaction::{CompactionJobKind, ForceCompactionWork};
 use std::time::Duration;
@@ -37,7 +36,6 @@ fn fault_scenario_runs_setup_workload_reload_and_verify() -> Result<()> {
 			let result = ctx
 				.force_compaction(ForceCompactionWork {
 					hot: false,
-					cold: false,
 					reclaim: false,
 					final_settle: true,
 				})
@@ -293,256 +291,6 @@ fn simple_failed_hot_compaction_preserves_vfs_state() -> Result<()> {
 }
 
 #[test]
-fn simple_failed_cold_publish_preserves_vfs_state() -> Result<()> {
-	FaultScenario::new("simple_failed_cold_publish_preserves_vfs_state")
-		.seed(1_204)
-		.profile(FaultProfile::Simple)
-		.setup(create_kv_table)
-		.faults(|faults| {
-			faults
-				.at(DepotFaultPoint::ColdCompaction(
-					ColdCompactionFaultPoint::PublishBeforeColdRefWrite,
-				))
-				.once()
-				.fail("simple cold publish failure")?;
-			Ok(())
-		})
-		.workload(|ctx| async move {
-			ctx.exec(LogicalOp::Put {
-				key: "cold".to_string(),
-				value: vec![0xca, 0xfe],
-			})
-			.await?;
-			let restore_point = ctx.create_restore_point().await?;
-			let result = ctx
-				.force_compaction(ForceCompactionWork {
-					hot: true,
-					cold: true,
-					reclaim: false,
-					final_settle: false,
-				})
-				.await?;
-			assert!(
-				result
-					.attempted_job_kinds
-					.contains(&CompactionJobKind::Cold)
-			);
-			assert!(
-				result
-					.terminal_error
-					.as_deref()
-					.is_some_and(|err| err.contains("simple cold publish failure"))
-			);
-			ctx.delete_restore_point(restore_point).await?;
-			ctx.checkpoint("after-failed-cold-publish").await?;
-			ctx.reload_database().await
-		})
-		.verify(|ctx| async move {
-			assert_kv_rows(&ctx, vec![("cold", "CAFE")]).await?;
-			verify_simple_replay(
-				&ctx,
-				1_204,
-				&["after-failed-cold-publish"],
-				&[(
-					DepotFaultPoint::ColdCompaction(
-						ColdCompactionFaultPoint::PublishBeforeColdRefWrite,
-					),
-					FaultBoundary::WorkflowOnly,
-				)],
-			)
-			.await
-		})
-		.run()
-}
-
-#[test]
-fn simple_workflow_cold_upload_uses_fault_controller_cold_tier() -> Result<()> {
-	FaultScenario::new("simple_workflow_cold_upload_uses_fault_controller_cold_tier")
-		.seed(1_207)
-		.profile(FaultProfile::Simple)
-		.setup(create_kv_table)
-		.faults(|faults| {
-			faults
-				.at(DepotFaultPoint::ColdTier(ColdTierFaultPoint::PutObject))
-				.once()
-				.fail("workflow cold tier put failure")?;
-			Ok(())
-		})
-		.workload(|ctx| async move {
-			ctx.exec(LogicalOp::Put {
-				key: "workflow-cold-put".to_string(),
-				value: vec![0x17],
-			})
-			.await?;
-			let restore_point = ctx.create_restore_point().await?;
-			let result = ctx
-				.force_compaction(ForceCompactionWork {
-					hot: true,
-					cold: true,
-					reclaim: false,
-					final_settle: false,
-				})
-				.await?;
-			assert!(
-				result
-					.attempted_job_kinds
-					.contains(&CompactionJobKind::Cold)
-			);
-			ctx.fault_controller().assert_expected_fired()?;
-			assert_fault_points(
-				&ctx.fault_controller().replay_log(),
-				&[DepotFaultPoint::ColdTier(ColdTierFaultPoint::PutObject)],
-			);
-			ctx.delete_restore_point(restore_point).await?;
-			ctx.checkpoint("after-workflow-cold-put-fault").await?;
-			ctx.reload_database().await
-		})
-		.verify(|ctx| async move {
-			assert_kv_rows(&ctx, vec![("workflow-cold-put", "17")]).await?;
-			verify_simple_replay(
-				&ctx,
-				1_207,
-				&["after-workflow-cold-put-fault"],
-				&[(
-					DepotFaultPoint::ColdTier(ColdTierFaultPoint::PutObject),
-					FaultBoundary::WorkflowOnly,
-				)],
-			)
-			.await
-		})
-		.run()
-}
-
-#[test]
-fn simple_workflow_cold_object_missing_after_reclaim_recovers_on_reload() -> Result<()> {
-	FaultScenario::new("simple_workflow_cold_object_missing_after_reclaim_recovers_on_reload")
-		.seed(1_205)
-		.profile(FaultProfile::Simple)
-		.setup(create_kv_table)
-		.faults(|faults| {
-			faults
-				.at(DepotFaultPoint::ColdCompaction(
-					ColdCompactionFaultPoint::UploadAfterPutObject,
-				))
-				.once()
-				.delay(Duration::from_millis(1))?;
-			Ok(())
-		})
-		.workload(|ctx| async move {
-			ctx.exec(LogicalOp::Put {
-				key: "cold-missing".to_string(),
-				value: vec![0x01],
-			})
-			.await?;
-			ctx.force_compaction(ForceCompactionWork {
-				hot: true,
-				cold: true,
-				reclaim: false,
-				final_settle: false,
-			})
-			.await?;
-			let result = ctx
-				.force_compaction(ForceCompactionWork {
-					hot: false,
-					cold: false,
-					reclaim: true,
-					final_settle: true,
-				})
-				.await?;
-			assert_eq!(result.requested_work.reclaim, true);
-			assert!(result.terminal_error.is_none());
-			ctx.checkpoint("after-cold-reclaim").await?;
-			ctx.fault_controller()
-				.at(DepotFaultPoint::Read(ReadFaultPoint::AfterShardBlobLoad))
-				.once()
-				.drop_artifact()?;
-			ctx.fault_controller()
-				.at(DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject))
-				.once()
-				.drop_artifact()?;
-			let before_cold_gets = ctx.cold_gets();
-			let mut saw_missing_cold_object = false;
-			let mut read_errors = Vec::new();
-			for pgno in 1..=4 {
-				let read = ctx.read_page_from_depot(pgno).await;
-				if let Err(err) = read.as_ref() {
-					read_errors.push(format!("page {pgno}: {err:#}"));
-				}
-				if read
-					.as_ref()
-					.err()
-					.is_some_and(|err| format!("{err:#}").contains("shard coverage is missing"))
-				{
-					saw_missing_cold_object = true;
-					break;
-				}
-			}
-			assert!(
-				saw_missing_cold_object,
-				"cold object fault should surface shard coverage missing, errors: {read_errors:?}"
-			);
-			assert!(ctx.cold_gets() > before_cold_gets);
-			ctx.reload_database().await
-		})
-		.verify(|ctx| async move {
-			assert_kv_rows(&ctx, vec![("cold-missing", "01")]).await?;
-			verify_simple_replay(
-				&ctx,
-				1_205,
-				&["after-cold-reclaim"],
-				&[
-					(
-						DepotFaultPoint::ColdCompaction(
-							ColdCompactionFaultPoint::UploadAfterPutObject,
-						),
-						FaultBoundary::WorkflowOnly,
-					),
-					(
-						DepotFaultPoint::Read(ReadFaultPoint::AfterShardBlobLoad),
-						FaultBoundary::ReadOnly,
-					),
-					(
-						DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject),
-						FaultBoundary::ReadOnly,
-					),
-				],
-			)
-			.await
-		})
-		.run()
-}
-
-#[test]
-fn simple_harness_seeded_cold_ref_verifier_cold_get_fault_is_not_counted() -> Result<()> {
-	FaultScenario::new("simple_harness_seeded_cold_ref_verifier_cold_get_fault_is_not_counted")
-		.seed(1_208)
-		.profile(FaultProfile::Simple)
-		.setup(create_kv_table)
-		.faults(|faults| {
-			faults
-				.at(DepotFaultPoint::ColdTier(ColdTierFaultPoint::GetObject))
-				.optional()
-				.once()
-				.fail("verifier cold get should be isolated")?;
-			Ok(())
-		})
-		.workload(|ctx| async move {
-			ctx.exec(LogicalOp::Put {
-				key: "verifier-cold-get".to_string(),
-				value: vec![0x88],
-			})
-			.await?;
-			ctx.seed_page_as_cold_ref_for_harness_test(1).await?;
-			ctx.checkpoint("after-verifier-cold-ref").await
-		})
-		.verify(|ctx| async move {
-			assert_kv_rows(&ctx, vec![("verifier-cold-get", "88")]).await?;
-			verify_simple_replay(&ctx, 1_208, &["after-verifier-cold-ref"], &[]).await
-		})
-		.run()
-}
-
-#[test]
 fn simple_forced_compaction_noops_report_all_requested_work() -> Result<()> {
 	FaultScenario::new("simple_forced_compaction_noops_report_all_requested_work")
 		.seed(1_206)
@@ -557,22 +305,15 @@ fn simple_forced_compaction_noops_report_all_requested_work() -> Result<()> {
 			let settle = ctx
 				.force_compaction(ForceCompactionWork {
 					hot: true,
-					cold: true,
 					reclaim: true,
 					final_settle: true,
 				})
 				.await?;
 			assert!(settle.terminal_error.is_none());
 			assert!(settle.attempted_job_kinds.contains(&CompactionJobKind::Hot));
-			assert!(
-				settle
-					.attempted_job_kinds
-					.contains(&CompactionJobKind::Cold)
-			);
 			let noop = ctx
 				.force_compaction(ForceCompactionWork {
 					hot: true,
-					cold: true,
 					reclaim: true,
 					final_settle: true,
 				})
@@ -581,10 +322,6 @@ fn simple_forced_compaction_noops_report_all_requested_work() -> Result<()> {
 			assert!(
 				noop.skipped_noop_reasons
 					.contains(&"hot:no-actionable-lag".to_string())
-			);
-			assert!(
-				noop.skipped_noop_reasons
-					.contains(&"cold:no-actionable-lag".to_string())
 			);
 			assert!(
 				noop.attempted_job_kinds
@@ -736,6 +473,109 @@ fn simple_heavy_workload_truncates_and_regrows_database() -> Result<()> {
 }
 
 #[test]
+fn simple_thread_actor_schema_survives_forced_compaction_reload() -> Result<()> {
+	FaultScenario::new("simple_thread_actor_schema_survives_forced_compaction_reload")
+		.seed(1_249)
+		.profile(FaultProfile::Simple)
+		.setup(create_thread_actor_schema)
+		.workload(|ctx| async move {
+			for cycle in 0..24 {
+				thread_actor_write_cycle(&ctx, cycle, 128 * 1024).await?;
+				if cycle % 6 == 5 {
+					thread_actor_assert_reads(&ctx, "pre-compaction").await?;
+					ctx.reload_database().await?;
+				}
+			}
+			thread_actor_assert_reads(&ctx, "before-hot").await?;
+			let before_pages = page_count(&ctx).await?;
+			assert!(
+				before_pages > depot::keys::SHARD_SIZE,
+				"thread-actor-shaped workload should cross at least one depot shard, page_count={before_pages}"
+			);
+
+			let restore_point = ctx.create_restore_point().await?;
+			let hot = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					reclaim: false,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				hot.terminal_error.is_none(),
+				"forced hot compaction should succeed: {hot:?}"
+			);
+			ctx.reload_database().await?;
+			thread_actor_assert_reads(&ctx, "after-hot-reload").await?;
+
+			for cycle in 24..32 {
+				thread_actor_write_cycle(&ctx, cycle, 128 * 1024).await?;
+			}
+			ctx.delete_restore_point(restore_point).await?;
+			let reclaim = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					reclaim: true,
+					final_settle: true,
+				})
+				.await?;
+			assert!(
+				reclaim.terminal_error.is_none(),
+				"forced reclaim compaction should succeed: {reclaim:?}"
+			);
+			ctx.checkpoint("after-thread-actor-hot-reclaim").await?;
+			ctx.reload_database().await?;
+			thread_actor_assert_reads(&ctx, "after-reclaim-reload").await
+		})
+		.verify(|ctx| async move {
+			thread_actor_assert_reads(&ctx, "verify").await?;
+			verify_simple_replay(&ctx, 1_249, &["after-thread-actor-hot-reclaim"], &[]).await
+		})
+		.run()
+}
+
+#[test]
+#[ignore = "focused investigation for hot compaction input cap corruption"]
+fn simple_hot_compaction_window_cap_reopens_cleanly() -> Result<()> {
+	FaultScenario::new("simple_hot_compaction_window_cap_reopens_cleanly")
+		.seed(1_250)
+		.profile(FaultProfile::Simple)
+		.setup(create_hot_cap_schema)
+		.workload(|ctx| async move {
+			for cycle in 0..540 {
+				hot_cap_write_cycle(&ctx, cycle).await?;
+			}
+			hot_cap_assert_reads(&ctx, "before-hot").await?;
+
+			let result = ctx
+				.force_compaction(ForceCompactionWork {
+					hot: true,
+					reclaim: false,
+					final_settle: true,
+				})
+				.await?;
+			assert_eq!(result.attempted_job_kinds, vec![CompactionJobKind::Hot]);
+			assert!(
+				result.terminal_error.is_none(),
+				"forced hot compaction should succeed: {result:?}"
+			);
+
+			ctx.checkpoint("after-window-cap-hot-compaction").await?;
+			ctx.reload_database().await?;
+			hot_cap_assert_reads(&ctx, "after-hot-reload").await?;
+
+			hot_cap_write_cycle(&ctx, 540).await?;
+			ctx.reload_database().await?;
+			hot_cap_assert_reads(&ctx, "after-post-hot-commit-reload").await
+		})
+		.verify(|ctx| async move {
+			hot_cap_assert_reads(&ctx, "verify").await?;
+			verify_simple_replay(&ctx, 1_250, &["after-window-cap-hot-compaction"], &[]).await
+		})
+		.run()
+}
+
+#[test]
 fn simple_high_risk_fault_matrix() -> Result<()> {
 	for case in high_risk_fault_matrix_cases() {
 		run_high_risk_fault_matrix_case(case)?;
@@ -759,13 +599,12 @@ enum HighRiskFaultMatrixWorkload {
 	CommitAmbiguous,
 	CommitDurableError,
 	HotCompaction,
-	ColdCompaction,
 	Reclaim,
 }
 
 fn high_risk_fault_matrix_cases() -> Vec<HighRiskFaultMatrixCase> {
 	use HighRiskFaultMatrixWorkload::{
-		ColdCompaction, CommitAmbiguous, CommitDurableError, HotCompaction, Reclaim,
+		CommitAmbiguous, CommitDurableError, HotCompaction, Reclaim,
 	};
 
 	vec![
@@ -837,37 +676,6 @@ fn high_risk_fault_matrix_cases() -> Vec<HighRiskFaultMatrixCase> {
 			expected_hex: "B3",
 		},
 		HighRiskFaultMatrixCase {
-			name: "cold_upload_after_put_object",
-			seed: 1_237,
-			point: DepotFaultPoint::ColdCompaction(ColdCompactionFaultPoint::UploadAfterPutObject),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: ColdCompaction,
-			value: &[0xc0],
-			expected_hex: "C0",
-		},
-		HighRiskFaultMatrixCase {
-			name: "cold_publish_after_cold_ref_write",
-			seed: 1_238,
-			point: DepotFaultPoint::ColdCompaction(
-				ColdCompactionFaultPoint::PublishAfterColdRefWriteBeforeRootUpdate,
-			),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: ColdCompaction,
-			value: &[0xc1],
-			expected_hex: "C1",
-		},
-		HighRiskFaultMatrixCase {
-			name: "cold_publish_after_root_update",
-			seed: 1_239,
-			point: DepotFaultPoint::ColdCompaction(
-				ColdCompactionFaultPoint::PublishAfterRootUpdate,
-			),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: ColdCompaction,
-			value: &[0xc2],
-			expected_hex: "C2",
-		},
-		HighRiskFaultMatrixCase {
 			name: "reclaim_before_hot_delete",
 			seed: 1_240,
 			point: DepotFaultPoint::Reclaim(ReclaimFaultPoint::BeforeHotDelete),
@@ -884,42 +692,6 @@ fn high_risk_fault_matrix_cases() -> Vec<HighRiskFaultMatrixCase> {
 			workload: Reclaim,
 			value: &[0xd1],
 			expected_hex: "D1",
-		},
-		HighRiskFaultMatrixCase {
-			name: "reclaim_before_cold_retire",
-			seed: 1_242,
-			point: DepotFaultPoint::Reclaim(ReclaimFaultPoint::BeforeColdRetire),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: Reclaim,
-			value: &[0xd2],
-			expected_hex: "D2",
-		},
-		HighRiskFaultMatrixCase {
-			name: "reclaim_after_cold_retire",
-			seed: 1_243,
-			point: DepotFaultPoint::Reclaim(ReclaimFaultPoint::AfterColdRetire),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: Reclaim,
-			value: &[0xd3],
-			expected_hex: "D3",
-		},
-		HighRiskFaultMatrixCase {
-			name: "reclaim_before_cold_delete",
-			seed: 1_244,
-			point: DepotFaultPoint::Reclaim(ReclaimFaultPoint::BeforeColdDelete),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: Reclaim,
-			value: &[0xd4],
-			expected_hex: "D4",
-		},
-		HighRiskFaultMatrixCase {
-			name: "reclaim_after_cold_delete",
-			seed: 1_245,
-			point: DepotFaultPoint::Reclaim(ReclaimFaultPoint::AfterColdDelete),
-			boundary: FaultBoundary::WorkflowOnly,
-			workload: Reclaim,
-			value: &[0xd5],
-			expected_hex: "D5",
 		},
 		HighRiskFaultMatrixCase {
 			name: "reclaim_before_cleanup_rows",
@@ -995,35 +767,7 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 							case.name
 						);
 					}
-					HighRiskFaultMatrixWorkload::ColdCompaction => {
-						ctx.exec(LogicalOp::Put {
-							key: case.name.to_string(),
-							value,
-						})
-						.await?;
-						let restore_point = ctx.create_restore_point().await?;
-						let result = ctx
-							.force_compaction(ForceCompactionWork {
-								hot: true,
-								cold: true,
-								reclaim: false,
-								final_settle: false,
-							})
-							.await?;
-						assert!(
-							result
-								.attempted_job_kinds
-								.contains(&CompactionJobKind::Cold)
-						);
-						assert!(
-							result.terminal_error.is_some(),
-							"{} should report a terminal cold compaction error: {result:?}",
-							case.name
-						);
-						ctx.delete_restore_point(restore_point).await?;
-					}
 					HighRiskFaultMatrixWorkload::Reclaim => {
-						let _grace_guard = ctx.override_cold_object_delete_grace(0).await?;
 						ctx.exec(LogicalOp::Put {
 							key: case.name.to_string(),
 							value: vec![0xee],
@@ -1033,7 +777,6 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 						let settle = ctx
 							.force_compaction(ForceCompactionWork {
 								hot: true,
-								cold: true,
 								reclaim: false,
 								final_settle: false,
 							})
@@ -1048,7 +791,6 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 						let result = ctx
 							.force_compaction(ForceCompactionWork {
 								hot: true,
-								cold: true,
 								reclaim: true,
 								final_settle: false,
 							})
@@ -1081,7 +823,6 @@ fn run_high_risk_fault_matrix_case(case: HighRiskFaultMatrixCase) -> Result<()> 
 				}
 				HighRiskFaultMatrixWorkload::CommitDurableError
 				| HighRiskFaultMatrixWorkload::HotCompaction
-				| HighRiskFaultMatrixWorkload::ColdCompaction
 				| HighRiskFaultMatrixWorkload::Reclaim => {
 					assert_kv_rows(&ctx, vec![(verify_case.name, verify_case.expected_hex)])
 						.await?;
@@ -1118,6 +859,239 @@ fn configure_heavy_page_size(
 		)
 		.await
 	}
+}
+
+fn create_thread_actor_schema(
+	ctx: super::scenario::FaultScenarioCtx,
+) -> impl std::future::Future<Output = Result<()>> {
+	async move {
+		ctx.sql(
+			"CREATE TABLE compaction_summaries (
+				summary_id TEXT PRIMARY KEY,
+				summary_text TEXT NOT NULL,
+				cut_message_id TEXT NOT NULL,
+				created_at TEXT NOT NULL
+			);
+			CREATE INDEX idx_compaction_summaries_created_at
+				ON compaction_summaries(created_at);
+			CREATE TABLE tool_calls (
+				call_id TEXT PRIMARY KEY,
+				message_id TEXT NOT NULL,
+				state TEXT NOT NULL,
+				created_at TEXT NOT NULL,
+				payload TEXT NOT NULL
+			);
+			CREATE INDEX idx_tool_calls_state ON tool_calls(state);
+			CREATE TABLE messages (
+				message_id TEXT PRIMARY KEY,
+				body TEXT NOT NULL,
+				created_at TEXT NOT NULL
+			);
+			CREATE TABLE thread_events (
+				event_id INTEGER PRIMARY KEY AUTOINCREMENT,
+				event_type TEXT NOT NULL,
+				message_id TEXT,
+				created_at TEXT NOT NULL
+			);",
+		)
+		.await
+	}
+}
+
+fn create_hot_cap_schema(
+	ctx: super::scenario::FaultScenarioCtx,
+) -> impl std::future::Future<Output = Result<()>> {
+	async move {
+		ctx.sql(
+			"CREATE TABLE hot_cap (
+				id INTEGER PRIMARY KEY,
+				bucket TEXT NOT NULL,
+				payload BLOB NOT NULL,
+				updated_at TEXT NOT NULL
+			);
+			CREATE INDEX hot_cap_bucket_idx ON hot_cap(bucket, id);",
+		)
+		.await
+	}
+}
+
+async fn hot_cap_write_cycle(ctx: &super::scenario::FaultScenarioCtx, cycle: usize) -> Result<()> {
+	let id = cycle + 1;
+	ctx.exec(LogicalOp::Sql(format!(
+		"INSERT INTO hot_cap (id, bucket, payload, updated_at)
+		 VALUES ({id}, 'b{}', zeroblob(3072), '2026-05-16T08:{:02}:{:02}.{:03}Z')
+		 ON CONFLICT(id) DO UPDATE SET
+			bucket = excluded.bucket,
+			payload = excluded.payload,
+			updated_at = excluded.updated_at;",
+		id % 11,
+		cycle % 60,
+		(cycle * 7) % 60,
+		(cycle * 13) % 1000,
+	)))
+	.await
+}
+
+async fn hot_cap_assert_reads(ctx: &super::scenario::FaultScenarioCtx, phase: &str) -> Result<()> {
+	let snapshot = hot_cap_snapshot(ctx, phase).await;
+	ctx.verify_sqlite_integrity_rows()
+		.await
+		.with_context(|| format!("hot cap sqlite integrity failed during {phase}: {snapshot}"))?;
+	let row_count = ctx
+		.query("SELECT count(*) FROM hot_cap;")
+		.await
+		.with_context(|| format!("hot cap count failed during {phase}"))?;
+	assert_eq!(
+		row_count,
+		vec![vec![
+			if phase == "after-post-hot-commit-reload" || phase == "verify" {
+				"541".to_string()
+			} else {
+				"540".to_string()
+			}
+		]],
+		"hot cap row count mismatch during {phase}: {row_count:?}"
+	);
+	let indexed = ctx
+		.query(
+			"SELECT id, length(payload)
+			 FROM hot_cap
+			 WHERE bucket = 'b3'
+			 ORDER BY id DESC
+			 LIMIT 8;",
+		)
+		.await
+		.with_context(|| format!("hot cap indexed read failed during {phase}"))?;
+	assert!(
+		!indexed.is_empty(),
+		"hot cap indexed read should return rows during {phase}"
+	);
+	Ok(())
+}
+
+async fn hot_cap_snapshot(ctx: &super::scenario::FaultScenarioCtx, phase: &str) -> String {
+	let page_count = ctx.query("PRAGMA page_count;").await;
+	let freelist_count = ctx.query("PRAGMA freelist_count;").await;
+	let row_count = ctx.query("SELECT count(*) FROM hot_cap;").await;
+	let max_id = ctx.query("SELECT coalesce(max(id), 0) FROM hot_cap;").await;
+	format!(
+		"phase={phase} page_count={page_count:?} freelist_count={freelist_count:?} row_count={row_count:?} max_id={max_id:?}"
+	)
+}
+
+async fn thread_actor_write_cycle(
+	ctx: &super::scenario::FaultScenarioCtx,
+	cycle: usize,
+	payload_bytes: usize,
+) -> Result<()> {
+	let summary_payload_blob_bytes = (payload_bytes / 2).max(1);
+	let tool_payload_blob_bytes = (payload_bytes / 32).max(1);
+	let mut sql = "BEGIN;".to_string();
+	for summary_idx in 0..5 {
+		sql.push_str(&format!(
+			"INSERT INTO compaction_summaries
+				(summary_id, summary_text, cut_message_id, created_at)
+			VALUES
+				('CS-{summary_idx}', lower(hex(zeroblob({summary_payload_blob_bytes}))) || '-{cycle:04}-{summary_idx:02}',
+				 'M-cut-{cycle:04}-{summary_idx:02}', '2026-05-16T04:{:02}:{:02}.{:03}Z')
+			ON CONFLICT(summary_id) DO UPDATE SET
+				summary_text = excluded.summary_text,
+				cut_message_id = excluded.cut_message_id,
+				created_at = excluded.created_at;",
+			(cycle + summary_idx) % 60,
+			(cycle * 7 + summary_idx) % 60,
+			(cycle * 37 + summary_idx) % 1000,
+		));
+	}
+	for tool_idx in 0..32 {
+		let state = match (cycle + tool_idx) % 4 {
+			0 => "running",
+			1 => "completed",
+			2 => "failed",
+			3 => "cancelled",
+			_ => unreachable!(),
+		};
+		sql.push_str(&format!(
+			"INSERT INTO tool_calls (call_id, message_id, state, created_at, payload)
+			VALUES
+				('TC-{cycle:04}-{tool_idx:02}', 'M-{cycle:04}', '{state}',
+				 '2026-05-16T07:{:02}:{:02}.{:03}Z',
+				 lower(hex(zeroblob({tool_payload_blob_bytes}))))
+			ON CONFLICT(call_id) DO UPDATE SET
+				state = excluded.state,
+				payload = excluded.payload;",
+			cycle % 60,
+			(cycle * 11 + tool_idx) % 60,
+			(cycle * 13 + tool_idx) % 1000,
+		));
+	}
+	sql.push_str(&format!(
+		"INSERT INTO messages (message_id, body, created_at)
+		VALUES ('M-{cycle:04}', 'are you working? {cycle}', '2026-05-16T07:39:03.509Z')
+		ON CONFLICT(message_id) DO UPDATE SET body = excluded.body;
+		INSERT INTO thread_events (event_type, message_id, created_at)
+		VALUES ('message_added', 'M-{cycle:04}', '2026-05-16T07:39:03.509Z');"
+	));
+	if cycle % 7 == 0 {
+		sql.push_str(
+			"DELETE FROM tool_calls WHERE rowid IN (
+				SELECT rowid FROM tool_calls ORDER BY created_at ASC, rowid ASC LIMIT 8
+			);",
+		);
+	}
+	sql.push_str("COMMIT;");
+	ctx.exec(LogicalOp::Sql(sql)).await
+}
+
+async fn thread_actor_assert_reads(
+	ctx: &super::scenario::FaultScenarioCtx,
+	phase: &str,
+) -> Result<()> {
+	ctx.verify_sqlite_integrity_rows()
+		.await
+		.with_context(|| format!("thread actor sqlite integrity failed during {phase}"))?;
+	let summaries = ctx
+		.query(
+			"SELECT summary_id, length(summary_text), cut_message_id, created_at
+			 FROM compaction_summaries
+			 ORDER BY created_at ASC, rowid ASC;",
+		)
+		.await
+		.with_context(|| format!("thread actor getAll query failed during {phase}"))?;
+	assert_eq!(
+		summaries.len(),
+		5,
+		"thread actor getAll should return five summaries during {phase}: {summaries:?}"
+	);
+	let latest = ctx
+		.query(
+			"SELECT summary_id, length(summary_text), cut_message_id, created_at
+			 FROM compaction_summaries
+			 ORDER BY created_at DESC, rowid DESC
+			 LIMIT 1;",
+		)
+		.await
+		.with_context(|| format!("thread actor getLatest query failed during {phase}"))?;
+	assert_eq!(
+		latest.len(),
+		1,
+		"thread actor getLatest should return one summary during {phase}: {latest:?}"
+	);
+	let running_tools = ctx
+		.query(
+			"SELECT call_id, state
+			 FROM tool_calls
+			 WHERE state = 'running'
+			 ORDER BY created_at DESC, rowid DESC
+			 LIMIT 16;",
+		)
+		.await
+		.with_context(|| format!("thread actor tool_calls index query failed during {phase}"))?;
+	assert!(
+		!running_tools.is_empty(),
+		"thread actor tool_calls indexed query should return running tools during {phase}"
+	);
+	Ok(())
 }
 
 async fn assert_shard_boundary_page_count(ctx: &super::scenario::FaultScenarioCtx) -> Result<u32> {
@@ -1260,13 +1234,5 @@ fn assert_faults(
 		assert_eq!(event.event.point, *point);
 		assert_eq!(event.event.boundary, *boundary);
 		assert_eq!(event.phase, *phase);
-	}
-}
-
-fn assert_fault_points(events: &[DepotFaultReplayEvent], points: &[DepotFaultPoint]) {
-	assert_eq!(events.len(), points.len());
-	for (event, point) in events.iter().zip(points) {
-		assert_eq!(event.kind, DepotFaultReplayEventKind::Fired);
-		assert_eq!(event.point, *point);
 	}
 }

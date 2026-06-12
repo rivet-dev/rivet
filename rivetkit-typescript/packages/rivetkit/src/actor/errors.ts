@@ -106,7 +106,9 @@ function isActorSpecifier(value: unknown): value is ActorSpecifier {
 		typeof value.actorId === "string" &&
 		"generation" in value &&
 		typeof value.generation === "number" &&
-		(!("key" in value) || value.key === undefined || typeof value.key === "string")
+		(!("key" in value) ||
+			value.key === undefined ||
+			typeof value.key === "string")
 	);
 }
 
@@ -237,7 +239,11 @@ export function decodeBridgeRivetErrorPayload(
 		if (!isRivetErrorLike(payload)) {
 			return undefined;
 		}
-		if (payload.actor !== undefined && payload.actor !== null && !isActorSpecifier(payload.actor)) {
+		if (
+			payload.actor !== undefined &&
+			payload.actor !== null &&
+			!isActorSpecifier(payload.actor)
+		) {
 			return undefined;
 		}
 

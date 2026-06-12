@@ -9,6 +9,10 @@ pub const MICRO_BUCKETS: &[f64] = &[
 	5.0, 10.0, 25.0, 50.0,
 ];
 
+pub const LIFETIME_BUCKETS: &[f64] = &[1.0, 10.0, 60.0, 300.0, 600.0, 1200.0, 1800.0, 3600.0];
+
+pub const PAGE_COUNT_BUCKETS: &[f64] = &[0.0, 1.0, 4.0, 16.0, 64.0, 256.0, 1024.0, 4096.0, 8192.0];
+
 // Calculated based on the LogHistogram configuration in `packages/common/runtime/src/lib.rs`
 pub const TASK_POLL_BUCKETS: &[f64] = &[
 	0.00002,

@@ -1,6 +1,6 @@
-import { ChildProcess, spawn } from "node:child_process";
-import { fileURLToPath } from "node:url";
+import { type ChildProcess, spawn } from "node:child_process";
 import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import getPort from "get-port";
 import { afterEach, describe, expect, test } from "vitest";
 import { createClient } from "../src/client/mod";
@@ -16,12 +16,7 @@ let runtimeLogs = {
 
 function childOutput(child: ChildProcess): string {
 	void child;
-	return [
-		runtimeLogs.stdout,
-		runtimeLogs.stderr,
-	]
-		.filter(Boolean)
-		.join("\n");
+	return [runtimeLogs.stdout, runtimeLogs.stderr].filter(Boolean).join("\n");
 }
 
 async function waitForHealth(
@@ -107,11 +102,11 @@ async function waitForActorReady<T>(
 			if (
 				!(
 					(errorCode &&
-						/^(no_envoys|actor_ready_timeout|service_unavailable)$/.test(
+						/^(no_envoys|actor_ready_timeout|actor_wake_retries_exceeded|service_unavailable)$/.test(
 							errorCode,
 						)) ||
 					(error instanceof Error &&
-						/(no_envoys|actor_ready_timeout|service_unavailable)/.test(
+						/(no_envoys|actor_ready_timeout|actor_wake_retries_exceeded|service_unavailable)/.test(
 							error.message,
 						))
 				)
@@ -196,7 +191,9 @@ async function upsertNormalRunnerConfig(
 	const datacenter = datacentersBody.datacenters[0]?.name;
 
 	if (!datacenter) {
-		throw new Error(`engine returned no datacenters\n${childOutput(child)}`);
+		throw new Error(
+			`engine returned no datacenters\n${childOutput(child)}`,
+		);
 	}
 
 	const response = await fetch(
@@ -257,137 +254,140 @@ describe.sequential("native NAPI runtime integration", () => {
 		}
 	}, 30_000);
 
-	test(
-		"runs a TS actor through registry, NAPI, core, envoy, and engine",
-		async () => {
-			const poolName = "default";
-			const port = await getPort({ host: "127.0.0.1" });
-			const endpoint = `http://127.0.0.1:${port}`;
-			runtimeLogs = { stdout: "", stderr: "" };
-			runtime = spawn(process.execPath, ["--import", "tsx", FIXTURE_PATH], {
-				cwd: dirname(TEST_DIR),
-				env: {
-					...process.env,
-					RIVET_TOKEN: TOKEN,
-					RIVET_NAMESPACE: NAMESPACE,
-					RIVETKIT_TEST_ENDPOINT: endpoint,
-					RIVETKIT_TEST_POOL_NAME: poolName,
-				},
-				stdio: ["ignore", "pipe", "pipe"],
-			});
-			runtime.stdout?.on("data", (chunk) => {
-				runtimeLogs.stdout += chunk.toString();
-			});
-			runtime.stderr?.on("data", (chunk) => {
-				runtimeLogs.stderr += chunk.toString();
-			});
+	test("runs a TS actor through registry, NAPI, core, envoy, and engine", async () => {
+		const poolName = "default";
+		const port = await getPort({ host: "127.0.0.1" });
+		const endpoint = `http://127.0.0.1:${port}`;
+		runtimeLogs = { stdout: "", stderr: "" };
+		runtime = spawn(process.execPath, ["--import", "tsx", FIXTURE_PATH], {
+			cwd: dirname(TEST_DIR),
+			env: {
+				...process.env,
+				RIVET_TOKEN: TOKEN,
+				RIVET_NAMESPACE: NAMESPACE,
+				RIVETKIT_TEST_ENDPOINT: endpoint,
+				RIVETKIT_TEST_POOL_NAME: poolName,
+			},
+			stdio: ["ignore", "pipe", "pipe"],
+		});
+		runtime.stdout?.on("data", (chunk) => {
+			runtimeLogs.stdout += chunk.toString();
+		});
+		runtime.stderr?.on("data", (chunk) => {
+			runtimeLogs.stderr += chunk.toString();
+		});
 
-			await waitForHealth(runtime, endpoint, 90_000);
-			await upsertNormalRunnerConfig(runtime, endpoint, poolName);
-			await waitForEnvoy(runtime, endpoint, poolName, 30_000);
+		await waitForHealth(runtime, endpoint, 90_000);
+		await upsertNormalRunnerConfig(runtime, endpoint, poolName);
+		await waitForEnvoy(runtime, endpoint, poolName, 30_000);
 
-			const client = createClient<any>({
-				endpoint,
-				token: TOKEN,
-				namespace: NAMESPACE,
-				poolName,
-				disableMetadataLookup: true,
-			}) as any;
+		const client = createClient<any>({
+			endpoint,
+			token: TOKEN,
+			namespace: NAMESPACE,
+			poolName,
+			disableMetadataLookup: true,
+		}) as any;
 
-			const handle = await waitForActorReady(
-				() =>
-					client.integrationActor.create([
-						`napi-runtime-${crypto.randomUUID()}`,
-					]),
+		const handle = await waitForActorReady(
+			() =>
+				client.integrationActor.create([
+					`napi-runtime-${crypto.randomUUID()}`,
+				]),
+			30_000,
+		);
+		const actorId = await handle.resolve();
+
+		expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(
+			0,
+		);
+		expect(
+			await waitForActorReady(
+				() => handle.validatedAction({ amount: 4 }),
 				30_000,
-			);
-			const actorId = await handle.resolve();
+			),
+		).toBe(4);
+		await expect(
+			waitForActorReady(
+				() => handle.validatedAction({ amount: "bad" }),
+				30_000,
+			),
+		).rejects.toMatchObject({
+			group: "actor",
+			code: "validation_error",
+		});
+		expect(
+			await waitForActorReady(
+				() => handle.emitValidatedEvent({ count: 2 }),
+				30_000,
+			),
+		).toBe(2);
+		await expect(
+			waitForActorReady(
+				() => handle.emitValidatedEvent({ count: "bad" }),
+				30_000,
+			),
+		).rejects.toMatchObject({
+			group: "actor",
+			code: "validation_error",
+		});
+		expect(
+			await waitForActorReady(
+				() => handle.enqueueValidatedJob({ id: "job-1" }),
+				30_000,
+			),
+		).toBe("job-1");
+		await expect(
+			waitForActorReady(
+				() => handle.enqueueValidatedJob({ id: "" }),
+				30_000,
+			),
+		).rejects.toMatchObject({
+			group: "actor",
+			code: "validation_error",
+		});
 
-			expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(0);
-			expect(
-				await waitForActorReady(
-					() => handle.validatedAction({ amount: 4 }),
-					30_000,
-				),
-			).toBe(4);
-			await expect(
-				waitForActorReady(
-					() => handle.validatedAction({ amount: "bad" }),
-					30_000,
-				),
-			).rejects.toMatchObject({
-				group: "actor",
-				code: "validation_error",
-			});
-			expect(
-				await waitForActorReady(
-					() => handle.emitValidatedEvent({ count: 2 }),
-					30_000,
-				),
-			).toBe(2);
-			await expect(
-				waitForActorReady(
-					() => handle.emitValidatedEvent({ count: "bad" }),
-					30_000,
-				),
-			).rejects.toMatchObject({
-				group: "actor",
-				code: "validation_error",
-			});
-			expect(
-				await waitForActorReady(
-					() => handle.enqueueValidatedJob({ id: "job-1" }),
-					30_000,
-				),
-			).toBe("job-1");
-			await expect(
-				waitForActorReady(
-					() => handle.enqueueValidatedJob({ id: "" }),
-					30_000,
-				),
-			).rejects.toMatchObject({
-				group: "actor",
-				code: "validation_error",
-			});
+		expect(
+			await waitForActorReady(() => handle.increment(2), 30_000),
+		).toEqual({
+			count: 2,
+			sqliteValues: [2],
+		});
+		expect(await handle.snapshot()).toEqual({
+			count: 2,
+			kvCount: 2,
+			sqliteValues: [2],
+		});
 
-			expect(await waitForActorReady(() => handle.increment(2), 30_000)).toEqual({
-				count: 2,
-				sqliteValues: [2],
-			});
-			expect(await handle.snapshot()).toEqual({
-				count: 2,
-				kvCount: 2,
-				sqliteValues: [2],
-			});
+		expect(await handle.goToSleep()).toEqual({ ok: true });
+		await waitForActorSleep(endpoint, actorId, 30_000);
 
-			expect(await handle.goToSleep()).toEqual({ ok: true });
-			await waitForActorSleep(endpoint, actorId, 30_000);
-
-			expect(
-				await waitForActorReady(() => handle.incrementWithoutSql(3), 30_000),
-			).toEqual({
-				count: 5,
-			});
-			expect(await handle.getCountViaClient()).toBe(5);
-			expect(await handle.stateSnapshot()).toEqual({
-				count: 5,
-				kvCount: 5,
-			});
-			await expect(handle.throwTypedError()).rejects.toMatchObject({
-				group: "user",
-				code: "boom",
-				message: "native typed error",
-				metadata: {
-					source: "native",
-				},
-			});
-			await expect(handle.throwUntypedError()).rejects.toMatchObject({
-				group: "core",
-				code: "internal_error",
-				message: "An internal error occurred",
-			});
-			await client.dispose();
-		},
-		120_000,
-	);
+		expect(
+			await waitForActorReady(
+				() => handle.incrementWithoutSql(3),
+				30_000,
+			),
+		).toEqual({
+			count: 5,
+		});
+		expect(await handle.getCountViaClient()).toBe(5);
+		expect(await handle.stateSnapshot()).toEqual({
+			count: 5,
+			kvCount: 5,
+		});
+		await expect(handle.throwTypedError()).rejects.toMatchObject({
+			group: "user",
+			code: "boom",
+			message: "native typed error",
+			metadata: {
+				source: "native",
+			},
+		});
+		await expect(handle.throwUntypedError()).rejects.toMatchObject({
+			group: "core",
+			code: "internal_error",
+			message: "An internal error occurred",
+		});
+		await client.dispose();
+	}, 120_000);
 });

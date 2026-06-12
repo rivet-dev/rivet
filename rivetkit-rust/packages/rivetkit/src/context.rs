@@ -1,23 +1,99 @@
+use std::fmt;
 use std::future::Future;
 use std::io::Cursor;
 use std::marker::PhantomData;
-use std::sync::{Arc, OnceLock};
+use std::ops::{Deref, DerefMut};
+use std::sync::{
+	Arc, OnceLock,
+	atomic::{AtomicBool, Ordering},
+};
 
 use anyhow::{Context, Result};
+use parking_lot::{
+	MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
+};
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
+use rivetkit_core::actor::state::OnStateChangeGuard;
 use rivetkit_core::{
-	ActorContext, ActorKey, ConnHandle, ConnId, Kv, RequestSaveOpts, SqliteDb, StateDelta,
-	actor::connection::ConnHandles, error::ActorRuntime,
+	ActorContext, ActorKey, ConnHandle, ConnId, KeepAwakeRegion, Kv, RequestSaveOpts, SqliteDb,
+	StateDelta, actor::connection::ConnHandles, error::ActorRuntime,
 };
 use serde::{Serialize, de::DeserializeOwned};
+use tokio_util::sync::CancellationToken;
 
 use crate::actor::Actor;
+use crate::event::Event;
+use crate::queue::Queue;
 
-#[derive(Debug)]
 pub struct Ctx<A: Actor> {
 	inner: ActorContext,
+	state: Arc<StateCell<A::State>>,
 	client: Arc<OnceLock<Client>>,
+	conn: Option<ConnCtx<A>>,
 	_p: PhantomData<fn() -> A>,
+}
+
+impl<A: Actor> fmt::Debug for Ctx<A> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("Ctx")
+			.field("inner", &self.inner)
+			.field("state_initialized", &self.state.value.read().is_some())
+			.field("state_dirty", &self.state_dirty())
+			.field("conn_id", &self.conn.as_ref().map(|conn| conn.id()))
+			.finish_non_exhaustive()
+	}
+}
+
+#[derive(Debug)]
+struct StateCell<S> {
+	value: RwLock<Option<S>>,
+	dirty: AtomicBool,
+}
+
+impl<S> StateCell<S> {
+	fn empty() -> Self {
+		Self {
+			value: RwLock::new(None),
+			dirty: AtomicBool::new(false),
+		}
+	}
+
+	fn with_value(value: S) -> Self {
+		Self {
+			value: RwLock::new(Some(value)),
+			dirty: AtomicBool::new(false),
+		}
+	}
+}
+
+pub struct StateRef<'a, S> {
+	guard: MappedRwLockReadGuard<'a, S>,
+}
+
+impl<S> Deref for StateRef<'_, S> {
+	type Target = S;
+
+	fn deref(&self) -> &Self::Target {
+		&self.guard
+	}
+}
+
+pub struct StateMut<'a, S> {
+	guard: MappedRwLockWriteGuard<'a, S>,
+}
+
+impl<S> Deref for StateMut<'_, S> {
+	type Target = S;
+
+	fn deref(&self) -> &Self::Target {
+		&self.guard
+	}
+}
+
+impl<S> DerefMut for StateMut<'_, S> {
+	fn deref_mut(&mut self) -> &mut Self::Target {
+		&mut self.guard
+	}
 }
 
 pub struct Schedule<'a> {
@@ -28,7 +104,9 @@ impl<A: Actor> Clone for Ctx<A> {
 	fn clone(&self) -> Self {
 		Self {
 			inner: self.inner.clone(),
+			state: self.state.clone(),
 			client: self.client.clone(),
+			conn: self.conn.clone(),
 			_p: PhantomData,
 		}
 	}
@@ -38,9 +116,82 @@ impl<A: Actor> Ctx<A> {
 	pub fn new(inner: ActorContext) -> Self {
 		Self {
 			inner,
+			state: Arc::new(StateCell::empty()),
 			client: Arc::new(OnceLock::new()),
+			conn: None,
 			_p: PhantomData,
 		}
+	}
+
+	pub fn with_state(inner: ActorContext, state: A::State) -> Self {
+		Self {
+			inner,
+			state: Arc::new(StateCell::with_value(state)),
+			client: Arc::new(OnceLock::new()),
+			conn: None,
+			_p: PhantomData,
+		}
+	}
+
+	pub(crate) fn with_conn(&self, conn: Option<ConnCtx<A>>) -> Self {
+		Self {
+			inner: self.inner.clone(),
+			state: self.state.clone(),
+			client: self.client.clone(),
+			conn,
+			_p: PhantomData,
+		}
+	}
+
+	pub fn conn(&self) -> Option<&ConnCtx<A>> {
+		self.conn.as_ref()
+	}
+
+	pub fn state(&self) -> StateRef<'_, A::State> {
+		StateRef {
+			guard: RwLockReadGuard::map(self.state.value.read(), |state| {
+				state.as_ref().expect("actor state not initialized")
+			}),
+		}
+	}
+
+	pub fn state_mut(&self) -> StateMut<'_, A::State> {
+		self.state.dirty.store(true, Ordering::Release);
+		StateMut {
+			guard: RwLockWriteGuard::map(self.state.value.write(), |state| {
+				state.as_mut().expect("actor state not initialized")
+			}),
+		}
+	}
+
+	pub fn set_state(&self, state: A::State) {
+		*self.state.value.write() = Some(state);
+		self.state.dirty.store(true, Ordering::Release);
+	}
+
+	pub fn state_dirty(&self) -> bool {
+		self.state.dirty.load(Ordering::Acquire)
+	}
+
+	pub fn clear_state_dirty(&self) {
+		self.state.dirty.store(false, Ordering::Release);
+	}
+
+	pub fn encode_state_delta(&self) -> Result<StateDelta> {
+		let mut encoded = Vec::new();
+		ciborium::into_writer(&*self.state(), &mut encoded)
+			.context("encode actor state snapshot as cbor")?;
+		Ok(StateDelta::ActorState(encoded))
+	}
+
+	pub fn decode_state_snapshot(bytes: &[u8]) -> Result<A::State> {
+		decode_cbor(bytes, "actor state snapshot")
+	}
+
+	pub fn set_state_from_snapshot(&self, bytes: &[u8]) -> Result<()> {
+		self.set_state(Self::decode_state_snapshot(bytes)?);
+		self.clear_state_dirty();
+		Ok(())
 	}
 
 	pub fn actor_id(&self) -> &str {
@@ -67,19 +218,101 @@ impl<A: Actor> Ctx<A> {
 		self.inner.sql()
 	}
 
-	pub fn queue(&self) -> &ActorContext {
-		self.inner.queue()
+	pub fn queue(&self) -> Queue<'_, A> {
+		Queue::new(&self.inner)
 	}
 
 	pub fn schedule(&self) -> Schedule<'_> {
 		Schedule { inner: &self.inner }
 	}
 
+	/// Holds the actor awake for the duration of `future` and returns its
+	/// output. Mirrors the TypeScript `ctx.waitUntil`/keep-awake semantics:
+	/// the actor will not sleep while the future is in flight.
+	pub async fn keep_awake<F>(&self, future: F) -> F::Output
+	where
+		F: Future,
+	{
+		self.inner.keep_awake(future).await
+	}
+
+	/// Acquires a keep-awake region that holds the actor awake until the
+	/// returned guard is dropped. Use when the awake window does not map
+	/// cleanly to a single future.
+	pub fn keep_awake_region(&self) -> KeepAwakeRegion {
+		self.inner.keep_awake_region()
+	}
+
+	/// Registers runtime-owned background work that must drain during shutdown.
+	/// Unlike `wait_until`, registered tasks are raced against the shutdown
+	/// grace deadline by core.
+	pub fn register_task(&self, future: impl Future<Output = ()> + Send + 'static) {
+		self.inner.register_task(future);
+	}
+
+	/// Returns the actor abort signal. The token is cancelled when the actor is
+	/// being torn down so in-flight work can observe shutdown.
+	pub fn abort_signal(&self) -> CancellationToken {
+		self.inner.actor_abort_signal()
+	}
+
+	/// Returns `true` once the actor abort signal has fired.
+	pub fn aborted(&self) -> bool {
+		self.inner.actor_aborted()
+	}
+
+	/// Runs `future` inside an on-state-change region, mirroring the TypeScript
+	/// `onStateChange` hook. While the future is in flight the actor will not
+	/// sleep, and shutdown waits for the region to finish before serializing
+	/// final state. Call this after mutating actor state to react to the change.
+	pub async fn on_state_change<F>(&self, future: F) -> F::Output
+	where
+		F: Future,
+	{
+		let _guard = self.inner.begin_on_state_change();
+		future.await
+	}
+
+	/// Begins an on-state-change region tracked by core. The returned guard
+	/// keeps the actor awake until dropped. Prefer `on_state_change` when the
+	/// reaction maps cleanly to a single future.
+	pub fn begin_state_change(&self) -> OnStateChangeGuard {
+		self.inner.begin_on_state_change()
+	}
+
+	/// Executes a single SQL statement against the actor database, returning the
+	/// CBOR-encoded result. Convenience over `sql()` for the CBOR boundary.
+	pub async fn db_exec(&self, sql: &str) -> Result<Vec<u8>> {
+		self.inner.db_exec(sql).await
+	}
+
+	/// Runs a read query with optional CBOR-encoded bind params, returning
+	/// CBOR-encoded rows.
+	pub async fn db_query(&self, sql: &str, params: Option<&[u8]>) -> Result<Vec<u8>> {
+		self.inner.db_query(sql, params).await
+	}
+
+	/// Runs a write query with optional CBOR-encoded bind params, returning the
+	/// CBOR-encoded execution result.
+	pub async fn db_execute(&self, sql: &str, params: Option<&[u8]>) -> Result<Vec<u8>> {
+		self.inner.db_execute(sql, params).await
+	}
+
+	/// Runs a statement with optional CBOR-encoded bind params, discarding the
+	/// result.
+	pub async fn db_run(&self, sql: &str, params: Option<&[u8]>) -> Result<()> {
+		self.inner.db_run(sql, params).await
+	}
+
 	/// Requests a save without surfacing delivery failures to the caller.
 	///
 	/// If save-request delivery must be observed, use the error-aware
 	/// `request_save_and_wait` path on the underlying core context instead.
-	pub fn request_save(&self, opts: RequestSaveOpts) {
+	pub fn request_save(&self) {
+		self.request_save_with_opts(RequestSaveOpts::default());
+	}
+
+	pub fn request_save_with_opts(&self, opts: RequestSaveOpts) {
 		self.inner.request_save(opts);
 	}
 
@@ -115,6 +348,10 @@ impl<A: Actor> Ctx<A> {
 		let event_bytes = encode_cbor(event, "broadcast event")?;
 		self.inner.broadcast(name, &event_bytes);
 		Ok(())
+	}
+
+	pub fn emit<E: Event>(&self, event: E) -> Result<()> {
+		self.broadcast(E::NAME, &event)
 	}
 
 	pub fn conns(&self) -> ConnIter<'_, A> {

@@ -4,7 +4,6 @@ import {
 	usePrefetchInfiniteQuery,
 	useSuspenseInfiniteQuery,
 } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 import { useWatch } from "react-hook-form";
 import z from "zod";
 import * as ConnectRailwayForm from "@/app/forms/connect-railway-form";

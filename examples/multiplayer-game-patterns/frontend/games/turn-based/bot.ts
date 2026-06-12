@@ -1,5 +1,9 @@
+import type {
+	CellValue,
+	GameResult,
+} from "../../../src/actors/turn-based/config.ts";
+import type { TurnBasedMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
-import type { CellValue, GameResult } from "../../../src/actors/turn-based/config.ts";
 
 interface GameSnapshot {
 	board: CellValue[][];
@@ -9,39 +13,48 @@ interface GameSnapshot {
 }
 
 export class TurnBasedBot {
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	private conn: any = null;
+	private conn: TurnBasedMatchConn | null = null;
 	private destroyed = false;
 	private playerId = "";
 	private symbol: "X" | "O" = "O";
 
-	constructor(private client: GameClient, inviteCode: string) {
+	constructor(
+		private client: GameClient,
+		inviteCode: string,
+	) {
 		this.start(inviteCode);
 	}
 
 	private async start(inviteCode: string) {
 		try {
-			const mm = this.client.turnBasedMatchmaker.getOrCreate(["main"]).connect();
+			const mm = this.client.turnBasedMatchmaker
+				.getOrCreate(["main"])
+				.connect();
 			const result = await mm.send(
 				"joinByCode",
-				{ inviteCode, playerName: `Bot-${Math.random().toString(36).slice(2, 6)}` },
+				{
+					inviteCode,
+					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
+				},
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: { matchId: string; playerId: string } })?.response;
+			const response = result.response;
 			if (!response || this.destroyed) return;
 
 			this.playerId = response.playerId;
 
 			this.conn = this.client.turnBasedMatch
-				.get([response.matchId], { params: { playerId: response.playerId } })
+				.get([response.matchId], {
+					params: { playerId: response.playerId },
+				})
 				.connect();
 
-			this.conn.on("gameUpdate", (raw: unknown) => {
-				this.tryMove(raw as GameSnapshot);
+			this.conn.on("gameUpdate", (snap) => {
+				this.tryMove(snap);
 			});
 
-			this.conn.getSnapshot().then((snap: unknown) => {
+			this.conn.getSnapshot().then((snap) => {
 				this.tryMove(snap as GameSnapshot);
 			});
 		} catch {
@@ -59,13 +72,14 @@ export class TurnBasedBot {
 		// Find empty cells and pick one randomly.
 		const emptyCells: [number, number][] = [];
 		for (let r = 0; r < snap.board.length; r++) {
-			for (let c = 0; c < snap.board[r]!.length; c++) {
-				if (snap.board[r]![c] === "") emptyCells.push([r, c]);
+			for (let c = 0; c < snap.board[r]?.length; c++) {
+				if (snap.board[r]?.[c] === "") emptyCells.push([r, c]);
 			}
 		}
 		if (emptyCells.length === 0) return;
 
-		const [row, col] = emptyCells[Math.floor(Math.random() * emptyCells.length)]!;
+		const [row, col] =
+			emptyCells[Math.floor(Math.random() * emptyCells.length)]!;
 		setTimeout(() => {
 			if (!this.destroyed) {
 				this.conn?.makeMove({ row, col }).catch(() => {});

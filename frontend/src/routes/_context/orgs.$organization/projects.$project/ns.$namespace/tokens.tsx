@@ -22,7 +22,6 @@ import {
 } from "@tanstack/react-router";
 import { useState } from "react";
 import { EnvVariables, useRivetDsn } from "@/app/env-variables";
-import { features } from "@/lib/features";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { PublishableTokenCodeGroup } from "@/app/publishable-token-code-group";
 import { SettingsCard } from "@/app/settings-pages/settings-card";
@@ -62,6 +61,7 @@ import { RegionSelect } from "@/components/actors/region-select";
 import { useRootLayout } from "@/components/actors/root-layout-context";
 import { docsLinks } from "@/content/data";
 import { cloudEnv } from "@/lib/env";
+import { features } from "@/lib/features";
 import { queryClient } from "@/queries/global";
 
 export const Route = createFileRoute(
@@ -284,7 +284,8 @@ function RunnersModeInfo() {
 	);
 
 	const endpoint = features.platform
-		? regions.find((r) => r.name === selectedDatacenter)?.url || cloudEnv().VITE_APP_API_URL
+		? regions.find((r) => r.name === selectedDatacenter)?.url ||
+			cloudEnv().VITE_APP_API_URL
 		: getConfig().apiUrl;
 
 	const codeSnippet = `import { registry } from "./registry";

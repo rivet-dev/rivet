@@ -33,7 +33,7 @@ export function PartyMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (result as { response?: PartyMatchInfo })?.response;
+			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to create party");
 			onReady(response);
 		} catch (err) {
@@ -54,16 +54,7 @@ export function PartyMenu({
 				{ wait: true, timeout: 10_000 },
 			);
 			mm.dispose();
-			const response = (
-				result as {
-					response?: {
-						matchId: string;
-						playerId: string;
-						joinToken: string;
-						playerName: string;
-					};
-				}
-			)?.response;
+			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to join party");
 			onReady({ ...response, partyCode: joinCode.trim().toUpperCase() });
 		} catch (err) {
@@ -80,8 +71,8 @@ export function PartyMenu({
 			<div className="menu-container">
 				<h2>Party</h2>
 				<p className="menu-description">
-					Create or join a party lobby with invite codes. Host controls the game
-					flow.
+					Create or join a party lobby with invite codes. Host
+					controls the game flow.
 				</p>
 
 				<button
@@ -93,10 +84,23 @@ export function PartyMenu({
 					{status === "loading" ? "Loading..." : "Create Party"}
 				</button>
 
-				<div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
-					<div style={{ flex: 1, height: 1, background: "#2c2c2e" }} />
-					<span style={{ color: "#8e8e93", fontSize: 12 }}>OR JOIN WITH CODE</span>
-					<div style={{ flex: 1, height: 1, background: "#2c2c2e" }} />
+				<div
+					style={{
+						display: "flex",
+						alignItems: "center",
+						gap: 12,
+						marginBottom: 20,
+					}}
+				>
+					<div
+						style={{ flex: 1, height: 1, background: "#2c2c2e" }}
+					/>
+					<span style={{ color: "#8e8e93", fontSize: 12 }}>
+						OR JOIN WITH CODE
+					</span>
+					<div
+						style={{ flex: 1, height: 1, background: "#2c2c2e" }}
+					/>
 				</div>
 
 				<input
@@ -109,7 +113,8 @@ export function PartyMenu({
 					style={{
 						width: "100%",
 						marginBottom: 12,
-						fontFamily: "ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace",
+						fontFamily:
+							"ui-monospace, SFMono-Regular, 'SF Mono', Consolas, monospace",
 						fontSize: 18,
 						letterSpacing: 4,
 						textAlign: "center",

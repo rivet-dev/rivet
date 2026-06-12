@@ -101,6 +101,12 @@ PostgreSQL is the recommended backend for multi-node self-hosted deployments tod
   </Step>
 </Steps>
 
+## WebSocket Timeouts
+
+Rivet uses long-lived WebSocket connections for both client traffic (browsers, SDKs) and envoy traffic (actor hosts connecting back to the engine). Render's HTTP proxy supports WebSockets, but its default idle timeout will close connections that have no traffic for too long.
+
+If you front the engine with your own reverse proxy (NGINX, Caddy, etc.) on Render, raise its idle / read timeout to at least 1 hour (`3600` seconds). The same guidance applies to the Render service hosting your RivetKit app, since envoys connect to it over WebSocket.
+
 ## Connecting Your Application
 
 To connect a RivetKit application to your self-hosted engine, set these environment variables in your app:

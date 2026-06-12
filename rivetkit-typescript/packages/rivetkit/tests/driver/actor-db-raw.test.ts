@@ -30,9 +30,9 @@ describeDriverMatrix("Actor Db Raw", (driverTestConfig) => {
 				const row = await instance.insertValueAndReadBack(input);
 
 				expect(row).not.toBeNull();
-				expect(row!.value).toBe(input);
-				expect(row!.hex_value).toBe("610062");
-				expect(row!.sqlite_length).toBe(1);
+				expect(row?.value).toBe(input);
+				expect(row?.hex_value).toBe("610062");
+				expect(row?.sqlite_length).toBe(1);
 			});
 
 			test("persists data across actor instances", async (c) => {
@@ -57,8 +57,10 @@ describeDriverMatrix("Actor Db Raw", (driverTestConfig) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const actor1Key = ["actor-1"];
 				const actor2Key = ["actor-2"];
-				const getActor1 = () => client.dbActorRaw.getOrCreate(actor1Key);
-				const getActor2 = () => client.dbActorRaw.getOrCreate(actor2Key);
+				const getActor1 = () =>
+					client.dbActorRaw.getOrCreate(actor1Key);
+				const getActor2 = () =>
+					client.dbActorRaw.getOrCreate(actor2Key);
 
 				// First actor
 				await getActor1().insertValue("A");
@@ -91,6 +93,5 @@ describeDriverMatrix("Actor Db Raw", (driverTestConfig) => {
 				expect(values[0].value).toBe("test");
 			});
 		});
-
 	});
 });

@@ -12,7 +12,7 @@ describe("setLongTimeout", () => {
 
 	test("executes callback for short timeouts", () => {
 		const callback = vi.fn();
-		const handle = setLongTimeout(callback, 100);
+		const _handle = setLongTimeout(callback, 100);
 
 		expect(callback).not.toHaveBeenCalled();
 

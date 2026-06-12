@@ -82,6 +82,7 @@ export const sleepWithRawHttp = actor({
 		if (url.pathname === "/long-request") {
 			const duration = parseInt(
 				url.searchParams.get("duration") || "1000",
+				10,
 			);
 			c.log.info({ msg: "starting long fetch request", duration });
 			await new Promise((resolve) => setTimeout(resolve, duration));
