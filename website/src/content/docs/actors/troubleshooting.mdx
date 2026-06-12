@@ -65,6 +65,22 @@ The server running your actor lost its connection to Rivet. This is usually caus
 
 Your server is shutting down and the actor did not finish in time. Consider handling graceful shutdown in your actor or increasing your shutdown timeout.
 
+### `concurrent_actor_limit_reached`
+
+The actor could not be allocated because the concurrent actor limit was reached. Reduce the number of concurrently running actors or increase your limit.
+
+### `no_envoys`
+
+No server was available to run your actor. This is equivalent to `no_capacity` on the current allocation path. See the `no_capacity` section above for the causes and fixes for your [runtime mode](/docs/general/runtime-modes).
+
+### `envoy_no_response`
+
+The server running your actor did not respond in time. This can happen if your server is overloaded or experienced a network issue. Try restarting your server or checking its health.
+
+### `envoy_connection_lost`
+
+The server running your actor lost its connection to Rivet. This is usually caused by a network interruption or your server restarting.
+
 ### `serverless_http_error`
 
 Your serverless endpoint returned an HTTP error. Common causes:
@@ -116,7 +132,7 @@ Without versioning, Rivet has no way to distinguish old deployments from new one
 - **Serverless**: Old requests may still be open from the previous deployment, so actors continue running on the old version's connection until those requests close.
 - **Runners**: The old runner container is still running and will continue accepting new actors. New actors may be scheduled on the old runner instead of the new one.
 
-To fix this, configure a version number in your [registry configuration](/docs/connect/registry-configuration). When a new version is deployed, Rivet will allocate new actors to the latest version and optionally drain old actors to migrate them.
+To fix this, configure a version number in your [registry configuration](/docs/general/registry-configuration). When a new version is deployed, Rivet will allocate new actors to the latest version and optionally drain old actors to migrate them.
 
 ## Actor status is pending
 

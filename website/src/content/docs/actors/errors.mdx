@@ -358,7 +358,7 @@ try {
 } catch (error) {
   if (error instanceof ActorError) {
     console.log(error.code); // "internal_error"
-    console.log(error.message); // "Internal error. Read the server logs for more details."
+    console.log(error.message); // "An internal error occurred"
 
     // Original error details are NOT exposed to the client
     // Check your server logs to see the actual error message
@@ -392,7 +392,7 @@ try {
 } catch (error) {
   if (error instanceof ActorError) {
     console.log(error.code); // "internal_error"
-    console.log(error.message); // "Internal error. Read the server logs for more details."
+    console.log(error.message); // "An internal error occurred"
 
     // Original error details are NOT exposed to the client
     // Check your server logs to see the actual error message
@@ -420,10 +420,7 @@ The client receives only a generic "Internal error" message for security, but yo
 
 **Warning:** Only enable error exposure in development environments. In production, this will leak sensitive internal details to clients.
 
-For faster debugging during development, you can automatically expose internal error details to clients. This is enabled when:
-
-- `NODE_ENV=development` - Automatically enabled in development mode
-- `RIVET_EXPOSE_ERRORS=1` - Explicitly enable error exposure
+For faster debugging during development, you can expose internal error details to clients by setting `RIVET_EXPOSE_ERRORS=1`.
 
 With error exposure enabled, clients will see the full error message instead of the generic "Internal error" response:
 
@@ -440,14 +437,14 @@ const registry = setup({ use: { payment } });
 const client = createClient<typeof registry>("http://localhost:6420");
 const paymentActor = client.payment.getOrCreate([]);
 
-// With NODE_ENV=development or RIVET_EXPOSE_ERRORS=1
+// With RIVET_EXPOSE_ERRORS=1
 try {
   await paymentActor.processPayment(100);
 } catch (error) {
   if (error instanceof ActorError) {
     console.log(error.message);
     // "Payment API returned 402: Insufficient funds"
-    // Instead of: "Internal error. Read the server logs for more details."
+    // Instead of: "An internal error occurred"
   }
 }
 ```

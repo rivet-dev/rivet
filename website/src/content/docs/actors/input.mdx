@@ -21,7 +21,6 @@ interface GameInput {
 }
 
 const game = actor({
-  state: { gameMode: "", maxPlayers: 0, difficulty: "medium" },
   createState: (c, input: GameInput) => ({
     gameMode: input.gameMode,
     maxPlayers: input.maxPlayers,
@@ -53,7 +52,7 @@ const gameHandle2 = client.game.getOrCreate(["game-456"], {
 
 ## Accessing Input in Lifecycle Hooks
 
-Input is available in lifecycle hooks via the `opts.input` parameter:
+Input is available as the second argument to the `createState` and `onCreate` lifecycle hooks:
 
 ```typescript
 import { actor } from "rivetkit";
@@ -78,7 +77,6 @@ function setupPrivateRoomLogging(roomName: string) {
 }
 
 const chatRoom = actor({
-  state: { name: "", isPrivate: false, maxUsers: 50, users: {}, messages: [] } as ChatRoomState,
   createState: (c, input: ChatRoomInput): ChatRoomState => ({
     name: input?.roomName ?? "Unnamed Room",
     isPrivate: input?.isPrivate ?? false,
@@ -133,7 +131,6 @@ interface GameState {
 }
 
 const game = actor({
-  state: { gameMode: "", maxPlayers: 0, difficulty: "medium", players: {}, gameState: "waiting" } as GameState,
   createState: (c, inputRaw: GameInput): GameState => {
     // Validate input
     const input = GameInputSchema.parse(inputRaw);
@@ -179,9 +176,7 @@ import { createClient } from "rivetkit/client";
 interface RoomInput { roomName: string; isPrivate: boolean; }
 
 const chatRoom = actor({
-  state: { name: "", isPrivate: false },
   createState: (c, input: RoomInput) => ({ name: input.roomName, isPrivate: input.isPrivate }),
-  connState: { userId: "", displayName: "" },
   createConnState: (c, params: { userId: string; displayName: string }) => ({
     userId: params.userId,
     displayName: params.displayName,
@@ -223,7 +218,6 @@ interface GameState {
 }
 
 const game = actor({
-  state: { gameMode: "", maxPlayers: 0, difficulty: "medium" } as GameState,
   createState: (c, input: GameInput): GameState => ({
     gameMode: input.gameMode,
     maxPlayers: input.maxPlayers,
@@ -262,11 +256,6 @@ interface GameState {
 }
 
 const game = actor({
-  state: {
-    config: { gameMode: "", maxPlayers: 0, difficulty: "medium" },
-    players: {},
-    gameState: "waiting"
-  } as GameState,
   createState: (c, input: GameInput): GameState => ({
     // Store input configuration in state
     config: {
@@ -292,4 +281,4 @@ const game = actor({
 
 - [`CreateOptions`](/typedoc/interfaces/rivetkit.client_mod.CreateOptions.html) - Options for creating actors
 - [`CreateRequest`](/typedoc/types/rivetkit.client_mod.CreateRequest.html) - Request type for creation
-- [`ActorDefinition`](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html) - Interface for defining input types
+- [`ActorDefinition`](/typedoc/classes/rivetkit.mod.ActorDefinition.html) - Actor definition returned by `actor()`

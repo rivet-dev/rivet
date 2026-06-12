@@ -325,10 +325,6 @@ export const sitemap = [
 								href: "/docs/actors/inspector-tabs",
 							},
 							{
-								title: "AI & User-Generated Actors",
-								href: "/docs/actors/ai-and-user-generated-actors",
-							},
-							{
 								title: "Types",
 								href: "/docs/actors/types",
 								//icon: faCode,

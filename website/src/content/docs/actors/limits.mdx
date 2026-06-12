@@ -11,7 +11,7 @@ There are two types of limits:
 - **Soft Limit**: Application-level limit, configurable in RivetKit. These cannot exceed the hard limit.
 - **Hard Limit**: Infrastructure-level limit that cannot be configured.
 
-Soft limits can be configured in RivetKit by passing options to `setup`:
+Soft limits are configured in two places. Registry-level WebSocket message-size limits are passed to `setup`:
 
 ```typescript
 import { setup } from "rivetkit";
@@ -20,6 +20,20 @@ const rivet = setup({
   use: { /* ... */ },
   maxIncomingMessageSize: 1_048_576,
   maxOutgoingMessageSize: 10_485_760,
+});
+```
+
+Per-actor limits such as queue sizes and lifecycle timeouts are passed to `actor(...)` via `options`:
+
+```typescript
+import { actor } from "rivetkit";
+
+const myActor = actor({
+  options: {
+    maxQueueSize: 1000,
+    actionTimeout: 60_000,
+    stateSaveInterval: 1_000,
+  },
   // ...
 });
 ```

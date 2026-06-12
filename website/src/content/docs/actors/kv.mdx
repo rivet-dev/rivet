@@ -34,7 +34,7 @@ const greetings = actor({
 
 ## Value Types
 
-You can store binary values by passing `Uint8Array` or `ArrayBuffer` directly. Use `type` when reading to get the right return type.
+You can store binary values by passing `Uint8Array` or `ArrayBuffer`. Use `type` on both reads and writes to get the right value type: `binary` for `Uint8Array` and `arrayBuffer` for `ArrayBuffer`.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -49,7 +49,10 @@ const assets = actor({
 			return await c.kv.get("avatar", { type: "binary" });
 		},
 		putSnapshot: async (c, data: ArrayBuffer) => {
-			await c.kv.put("snapshot", data);
+			await c.kv.put("snapshot", data, { type: "arrayBuffer" });
+		},
+		getSnapshot: async (c) => {
+			return await c.kv.get("snapshot", { type: "arrayBuffer" });
 		},
 	},
 });
@@ -110,15 +113,11 @@ const example = actor({
 	state: {},
 	actions: {
 		pruneAndScan: async (c) => {
-			const encoder = new TextEncoder();
-			const active = await c.kv.listRange(
-				encoder.encode("job:"),
-				encoder.encode("joc:"),
-				{
-					keyType: "text",
-				},
-			);
+			const active = await c.kv.listRange("job:", "joc:", {
+				keyType: "text",
+			});
 
+			const encoder = new TextEncoder();
 			await c.kv.deleteRange(
 				encoder.encode("job:old:"),
 				encoder.encode("job:old;"),
@@ -132,7 +131,7 @@ const example = actor({
 
 ## Batch Operations
 
-KV supports batch operations for efficiency. Defaults are still `text` for both keys and values.
+KV supports batch operations for efficiency. `batchPut` and `batchGet` work on raw `Uint8Array` keys and values, so encode strings before passing them in.
 
 ```typescript
 import { actor } from "rivetkit";
@@ -141,12 +140,17 @@ const example = actor({
 	state: {},
 	actions: {
 		batchOps: async (c) => {
-			await c.kv.putBatch([
-				["alpha", "1"],
-				["beta", "2"],
+			const encoder = new TextEncoder();
+
+			await c.kv.batchPut([
+				[encoder.encode("alpha"), encoder.encode("1")],
+				[encoder.encode("beta"), encoder.encode("2")],
 			]);
 
-			const values = await c.kv.getBatch(["alpha", "beta"]);
+			const values = await c.kv.batchGet([
+				encoder.encode("alpha"),
+				encoder.encode("beta"),
+			]);
 		},
 	},
 });
