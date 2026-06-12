@@ -14,6 +14,7 @@ import { useMatch } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { Suspense, useState } from "react";
 import { BillingPlans } from "@/app/billing/billing-plans";
+import { ComputeUsageRows } from "@/app/billing/compute-card";
 import { useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { formatMetricValue, type MetricType } from "@/app/billing/usage-card";
@@ -254,6 +255,12 @@ function BillingDrawerBody() {
 							/>
 						);
 					})}
+				</SettingsCard>
+			</div>
+
+			<div>
+				<SettingsCard divided>
+					<ComputeUsageRows />
 				</SettingsCard>
 			</div>
 		</div>

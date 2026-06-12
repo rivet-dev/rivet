@@ -87,3 +87,27 @@ export const BILLING = {
 		gateway_egress: 150n,
 	} satisfies Record<BilledMetrics, bigint>,
 };
+
+/**
+ * Rivet Compute pricing. Compute is billed per active second based on each
+ * actor's configured CPU and memory.
+ *
+ * cost = active_seconds × (vcpus × cpu_per_vcpu_second + memory_gib × memory_per_gib_second)
+ *
+ * One vCPU is half a physical core. The Free plan is limited to 1 vCPU; paid
+ * plans allow up to 8 vCPU.
+ */
+export const COMPUTE = {
+	cpuPerVcpuSecond: 0.000033,
+	memoryPerGibSecond: 0.0000029,
+	maxVcpu: 8,
+	freeMaxVcpu: 1,
+};
+
+/** Compute cost in dollars per active second for the given actor config. */
+export function computeCostPerSecond(vcpus: number, memoryMb: number): number {
+	return (
+		vcpus * COMPUTE.cpuPerVcpuSecond +
+		(memoryMb / 1024) * COMPUTE.memoryPerGibSecond
+	);
+}
