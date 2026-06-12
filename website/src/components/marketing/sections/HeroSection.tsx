@@ -11,7 +11,7 @@ export function HeroSection() {
         <div className='flex flex-grow flex-col justify-center'>
           <div className='mx-auto max-w-7xl text-center'>
             {/* Title */}
-            <h1 className='hero-bg-exclude max-w-full text-4xl font-normal leading-[1.3] tracking-[-0.03em] text-white sm:leading-[1.1] md:text-5xl'>
+            <h1 className='hero-bg-exclude max-w-full text-4xl font-medium leading-[1.3] tracking-[-0.03em] text-white sm:leading-[1.1] md:text-5xl'>
               The Primitive for Real-Time and Agent Applications
             </h1>
 

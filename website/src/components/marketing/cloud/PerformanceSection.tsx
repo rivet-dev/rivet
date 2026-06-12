@@ -61,7 +61,7 @@ export const PerformanceSection = () => {
 											/>
 										</div>
 									</div>
-									<h3 className="text-xl font-normal text-white mb-1">
+									<h3 className="text-xl font-medium text-white mb-1">
 										{stat.title}
 									</h3>
 									<p className="text-sm text-white/60">

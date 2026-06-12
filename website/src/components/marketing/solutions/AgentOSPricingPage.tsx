@@ -177,7 +177,7 @@ const CTASection = () => (
 		className="border-t border-zinc-200 px-6 py-24"
 	>
 		<div className="mx-auto max-w-3xl text-center">
-			<h2 className="mb-4 text-3xl font-normal tracking-tight text-zinc-900 md:text-4xl">
+			<h2 className="mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-4xl">
 				Ready to get started?
 			</h2>
 			<p className="mb-8 text-base leading-relaxed text-zinc-500 md:text-lg">
@@ -215,7 +215,7 @@ export default function AgentOSPricingPage() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
 						>
-							<h1 className="mb-4 text-4xl font-normal tracking-tight text-zinc-900 md:text-5xl lg:text-6xl">
+							<h1 className="mb-4 text-4xl font-medium tracking-tight text-zinc-900 md:text-5xl lg:text-6xl">
 								Free and open source.
 							</h1>
 							<p className="mx-auto max-w-2xl text-base leading-relaxed text-zinc-500 md:text-lg">

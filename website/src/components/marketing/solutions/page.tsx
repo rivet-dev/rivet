@@ -117,7 +117,7 @@ const FeatureItem = ({ title, description, icon: Icon }: { title: string; descri
 		<div className="mb-3 text-zinc-500">
 			<Icon className="h-4 w-4" />
 		</div>
-		<h3 className="mb-1 text-sm font-normal text-white">{title}</h3>
+		<h3 className="mb-1 text-sm font-medium text-white">{title}</h3>
 		<p className="text-sm leading-relaxed text-zinc-500">{description}</p>
 	</div>
 );
@@ -134,7 +134,7 @@ const Hero = () => (
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5 }}
-						className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl"
+						className="mb-6 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl"
 					>
 						Build AI Agents
 					</motion.h1>
@@ -207,7 +207,7 @@ const MemoryArchitecture = () => {
 		<section className="border-t border-white/10 py-48">
 			<div className="mx-auto max-w-7xl px-6">
 				<div className="mb-12">
-					<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
+					<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
 						Why Actors for Agents?
 					</h2>
 					<p className="max-w-2xl text-base leading-relaxed text-zinc-500">
@@ -278,7 +278,7 @@ const MemoryArchitecture = () => {
 							<div className="mb-3 text-zinc-500">
 								<Database className="w-4 h-4" />
 							</div>
-							<h3 className="mb-1 text-sm font-normal text-white">Zero-Latency Context</h3>
+							<h3 className="mb-1 text-sm font-medium text-white">Zero-Latency Context</h3>
 							<p className="text-zinc-500 text-sm leading-relaxed">
 								Conversation history and embedding vectors stay in the Actor's heap. No database queries required to "rehydrate" the agent state for each message.
 							</p>
@@ -293,7 +293,7 @@ const MemoryArchitecture = () => {
 							<div className="mb-3 text-zinc-500">
 								<Clock className="w-4 h-4" />
 							</div>
-							<h3 className="mb-1 text-sm font-normal text-white">Long-Running "Thought" Loops</h3>
+							<h3 className="mb-1 text-sm font-medium text-white">Long-Running "Thought" Loops</h3>
 							<p className="text-zinc-500 text-sm leading-relaxed">
 								Agents often need to chain multiple tool calls (CoT). Actors can run for minutes or hours, maintaining their state throughout the entire reasoning chain without timeouts.
 							</p>
@@ -308,7 +308,7 @@ const MemoryArchitecture = () => {
 							<div className="mb-3 text-zinc-500">
 								<Users className="w-4 h-4" />
 							</div>
-							<h3 className="mb-1 text-sm font-normal text-white">Multi-User Collaboration</h3>
+							<h3 className="mb-1 text-sm font-medium text-white">Multi-User Collaboration</h3>
 							<p className="text-zinc-500 text-sm leading-relaxed">
 								Since the Actor is a live process, multiple users can connect to the same Agent instance simultaneously via WebSockets to collaborate or monitor execution.
 							</p>
@@ -359,7 +359,7 @@ const AgentCapabilities = () => {
 			<div className="mx-auto max-w-7xl px-6">
 				<div className="flex flex-col gap-12">
 					<div className="max-w-xl">
-						<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">Built for the Agentic Future</h2>
+						<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">Built for the Agentic Future</h2>
 						<p className="text-base leading-relaxed text-zinc-500">The infrastructure primitives you need to move beyond simple chatbots.</p>
 					</div>
 
@@ -380,7 +380,7 @@ const UseCases = () => (
 			<div className="grid md:grid-cols-2 gap-16 items-center">
 				<div>
 					<Badge text="Case Study" />
-					<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
+					<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
 						Customer Support Swarms
 					</h2>
 					<p className="mb-8 text-base leading-relaxed text-zinc-500">
@@ -458,7 +458,7 @@ export const manager = actor({
 					</div>
 					<div className="flex-1 order-1 lg:order-2">
 						<Badge text="Multi-Agent Systems" />
-						<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
+						<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
 							Orchestrate Agent Swarms
 						</h2>
 						<p className="mb-8 text-base leading-relaxed text-zinc-500">
@@ -487,7 +487,7 @@ export const manager = actor({
 const Ecosystem = () => (
 	<section className="border-t border-white/10 py-48">
 		<div className="mx-auto max-w-7xl px-6 text-center">
-			<h2 className="mb-8 text-2xl font-normal tracking-tight text-white md:text-4xl">
+			<h2 className="mb-8 text-2xl font-medium tracking-tight text-white md:text-4xl">
 				Works with your stack
 			</h2>
 			<div className="flex flex-wrap justify-center gap-2">
@@ -518,7 +518,7 @@ export default function AgentsPage() {
 				{/* CTA Section */}
 				<section className="border-t border-white/10 py-48">
 					<div className="mx-auto max-w-3xl px-6 text-center">
-						<h2 className="mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl">
+						<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
 							Stop building generic bots.
 						</h2>
 						<p className="mb-8 text-base leading-relaxed text-zinc-500">

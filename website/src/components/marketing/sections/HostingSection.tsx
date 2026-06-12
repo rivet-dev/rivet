@@ -13,7 +13,7 @@ export const HostingSection = () => (
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'
+          className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'
         >
           Start local. Scale to millions.
         </motion.h2>
@@ -40,7 +40,7 @@ export const HostingSection = () => (
           <div className='mb-3 text-zinc-500'>
             <Package className='h-4 w-4' />
           </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Just a Library</h3>
+          <h3 className='mb-2 text-base font-medium text-white'>Just a Library</h3>
           <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
             Install a package and run locally. No servers, no infrastructure. Actors run in your process during development.
           </p>
@@ -65,7 +65,7 @@ export const HostingSection = () => (
           <div className='mb-3 text-zinc-500'>
             <Server className='h-4 w-4' />
           </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Self-Host</h3>
+          <h3 className='mb-2 text-base font-medium text-white'>Self-Host</h3>
           <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
             Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB (enterprise). Full dashboard included.
           </p>
@@ -90,7 +90,7 @@ export const HostingSection = () => (
           <div className='mb-3'>
             <img className='h-5 w-5 opacity-50' src={imgLogo.src} alt='Rivet' />
           </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Rivet Cloud</h3>
+          <h3 className='mb-2 text-base font-medium text-white'>Rivet Cloud</h3>
           <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
             Fully managed Actors and agentOS. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
           </p>

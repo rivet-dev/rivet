@@ -61,3 +61,8 @@ Import from `@rivet-gg/icons`. The full Font Awesome Pro library is available. C
 - Do not split related multi-file examples into separate non-workspace code blocks.
 
 - If any code block fails type checking, the build fails.
+
+## Typography
+
+- Marketing headings and card titles use `font-medium` (h1 heroes, section h2s, h3/h4 card titles, FAQ headings, price figures). Do not introduce `font-normal` headings.
+- `font-normal` remains correct only for deliberate de-emphasis: table `th` de-bolding (UsagePricingModal), quiet `dt` labels (MobilePricingTabs), and input-like UI (TypesenseSearch).

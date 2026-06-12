@@ -270,7 +270,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl'
+              className='mb-4 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl'
             >
               Infrastructure for <br />
               the agentic era.

@@ -30,7 +30,7 @@ export const OnPremSection = () => (
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.05 }}
-          className='mb-4 text-2xl font-normal tracking-tight text-white md:text-4xl'
+          className='mb-4 text-2xl font-medium tracking-tight text-white md:text-4xl'
         >
           Run it where your data lives.
         </motion.h2>
@@ -60,7 +60,7 @@ export const OnPremSection = () => (
               <div className='mb-3 text-zinc-500'>
                 <Icon className='h-4 w-4' />
               </div>
-              <h3 className='mb-2 text-base font-normal text-white'>{point.title}</h3>
+              <h3 className='mb-2 text-base font-medium text-white'>{point.title}</h3>
               <p className='text-sm leading-relaxed text-zinc-500'>{point.body}</p>
             </motion.div>
           );

@@ -110,7 +110,7 @@ const Hero = () => (
 				transition={{ duration: 0.5 }}
 				className='text-center'
 			>
-				<h1 className='mb-6 text-4xl font-normal tracking-tight text-zinc-900 md:text-6xl'>
+				<h1 className='mb-6 text-4xl font-medium tracking-tight text-zinc-900 md:text-6xl'>
 					agentOS Registry
 				</h1>
 				<p className='mx-auto max-w-2xl text-lg text-zinc-500'>

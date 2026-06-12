@@ -102,7 +102,7 @@ export const ObservabilitySection = () => {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
-              className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'
+              className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'
             >
               Built-In Observability
             </motion.h2>
@@ -127,7 +127,7 @@ export const ObservabilitySection = () => {
                   className='border-t border-white/10 py-6 pr-8'
                 >
                   <div className='mb-2 text-zinc-600'>{feat.icon}</div>
-                  <h3 className='mb-1 text-sm font-normal text-white'>{feat.title}</h3>
+                  <h3 className='mb-1 text-sm font-medium text-white'>{feat.title}</h3>
                   <p className='text-sm leading-relaxed text-zinc-500'>{feat.description}</p>
                 </motion.div>
               ))}

@@ -9,7 +9,7 @@ export function AnimatedCTATitle() {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className='text-2xl font-normal tracking-tight text-white md:text-4xl'
+      className='text-2xl font-medium tracking-tight text-white md:text-4xl'
     >
       Infrastructure for <br />
       the agentic era.

@@ -32,7 +32,7 @@ export const DynamicActorsSection = () => {
 						viewport={{ once: true }}
 						transition={{ duration: 0.5 }}
 					>
-						<h2 className='mb-4 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+						<h2 className='mb-4 text-2xl font-medium tracking-tight text-white md:text-4xl'>
 							Securely Run AI-Generated Code
 						</h2>
 						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>

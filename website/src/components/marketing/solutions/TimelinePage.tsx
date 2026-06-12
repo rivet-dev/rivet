@@ -33,7 +33,7 @@ const Era = ({ year, title, lead, body, children, future, delay = 0 }: EraProps)
 		</div>
 		<div className='pb-16'>
 			<h2
-				className={`mb-4 tracking-tight text-zinc-900 ${future ? 'text-3xl font-normal md:text-4xl' : 'text-2xl font-normal md:text-3xl'}`}
+				className={`mb-4 tracking-tight text-zinc-900 ${future ? 'text-3xl font-medium md:text-4xl' : 'text-2xl font-medium md:text-3xl'}`}
 			>
 				{title}
 			</h2>
@@ -70,7 +70,7 @@ export default function TimelinePage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-zinc-900 md:text-6xl'
+							className='mb-4 text-4xl font-medium leading-[1.1] tracking-tight text-zinc-900 md:text-6xl'
 						>
 							From Unix to Agents
 						</motion.h1>
@@ -257,7 +257,7 @@ export default function TimelinePage() {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-2xl font-normal tracking-tight text-zinc-900 md:text-4xl'
+							className='mb-4 text-2xl font-medium tracking-tight text-zinc-900 md:text-4xl'
 						>
 							The shift is happening now.
 						</motion.h2>

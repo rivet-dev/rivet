@@ -246,7 +246,7 @@ export const BenchmarksSection = () => {
 					transition={{ duration: 0.5 }}
 					className='mb-10'
 				>
-					<h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+					<h2 className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'>
 						How Actors Compare
 					</h2>
 					<p className='text-base leading-relaxed text-zinc-500'>

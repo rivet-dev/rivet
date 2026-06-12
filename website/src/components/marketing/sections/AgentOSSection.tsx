@@ -71,7 +71,7 @@ export const AgentOSSection = () => (
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.05 }}
-          className='mb-4 text-2xl font-normal tracking-tight text-white md:text-4xl'
+          className='mb-4 text-2xl font-medium tracking-tight text-white md:text-4xl'
         >
           Need more than primitives? Try agentOS.
         </motion.h2>

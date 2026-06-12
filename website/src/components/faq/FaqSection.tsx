@@ -99,7 +99,7 @@ export function FaqSection({
 		<section id={id} className={`border-t px-6 py-24 ${styles.sectionBorder} ${className}`}>
 			<div className="mx-auto max-w-3xl">
 				<h2
-					className={`mb-12 text-center text-3xl font-normal tracking-tight md:text-4xl ${styles.heading}`}
+					className={`mb-12 text-center text-3xl font-medium tracking-tight md:text-4xl ${styles.heading}`}
 				>
 					{title}
 				</h2>

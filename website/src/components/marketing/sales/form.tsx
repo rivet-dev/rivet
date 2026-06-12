@@ -47,7 +47,7 @@ export function SalesForm() {
 	if (isSubmitted) {
 		return (
 			<div className="mt-8 text-center">
-				<p className="text-2xl font-normal text-white mb-4">
+				<p className="text-2xl font-medium text-white mb-4">
 					Thank you for your interest!
 				</p>
 				<p className="text-zinc-400">

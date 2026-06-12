@@ -112,7 +112,7 @@ export const CodeWalkthrough = () => {
           transition={{ duration: 0.5 }}
           className='mb-12 lg:hidden'
         >
-          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+          <h2 className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'>
             How Actors work.
           </h2>
           <p className='max-w-xl text-base leading-relaxed text-zinc-500'>
@@ -131,7 +131,7 @@ export const CodeWalkthrough = () => {
                 transition={{ duration: 0.5 }}
                 className='mb-8'
               >
-                <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+                <h2 className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'>
                   How Actors work.
                 </h2>
                 <p className='max-w-xl text-base leading-relaxed text-zinc-500'>
@@ -193,7 +193,7 @@ export const CodeWalkthrough = () => {
                     {String(idx + 1).padStart(2, '0')}/{String(steps.length).padStart(2, '0')}
                   </span>
                   <h3
-                    className={`mt-1 text-lg font-normal transition-colors ${
+                    className={`mt-1 text-lg font-medium transition-colors ${
                       idx === activeStep ? 'text-white' : 'text-zinc-500'
                     }`}
                   >

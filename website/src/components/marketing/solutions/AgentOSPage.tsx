@@ -962,7 +962,7 @@ const FeatureCard = ({
 		<div className='mb-3 text-zinc-500'>
 			<IconComponent className='h-4 w-4' />
 		</div>
-		<h3 className='mb-2 text-base font-normal text-zinc-900'>
+		<h3 className='mb-2 text-base font-medium text-zinc-900'>
 			{title}
 		</h3>
 		<p className='mb-4 text-sm leading-relaxed text-zinc-500'>{description}</p>
@@ -980,7 +980,7 @@ const FeatureCard = ({
 		)}
 		{metric && (
 			<div className='flex items-baseline gap-2'>
-				<span className='font-mono text-3xl font-normal text-zinc-900'>
+				<span className='font-mono text-3xl font-medium text-zinc-900'>
 					{metric.value}
 				</span>
 				<span className='text-sm text-zinc-500'>{metric.label}</span>
@@ -1153,7 +1153,7 @@ const StackingFeatureCards = () => {
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
-					className='mx-auto max-w-4xl text-center text-3xl font-normal tracking-tight text-zinc-900 md:text-5xl'
+					className='mx-auto max-w-4xl text-center text-3xl font-medium tracking-tight text-zinc-900 md:text-5xl'
 				>
 					Meet your agent&apos;s new operating system.
 				</motion.h2>
@@ -1185,7 +1185,7 @@ const StackingFeatureCards = () => {
 										<IconBox>
 											<Icon className='h-4 w-4 text-zinc-900 md:h-5 md:w-5' />
 										</IconBox>
-										<h2 className='mb-4 text-2xl font-normal tracking-tight text-zinc-900 md:text-4xl'>
+										<h2 className='mb-4 text-2xl font-medium tracking-tight text-zinc-900 md:text-4xl'>
 											{feature.title}
 										</h2>
 										<p className='mb-4 max-w-2xl text-base leading-relaxed text-zinc-500 md:text-lg'>
@@ -1212,7 +1212,7 @@ const StackingFeatureCards = () => {
 											<div className='grid grid-cols-2 gap-8 md:gap-12'>
 												{feature.metrics.map((m) => (
 													<div key={m.value} className='flex flex-col'>
-														<span className='font-mono text-5xl font-normal text-zinc-900 md:text-7xl'>
+														<span className='font-mono text-5xl font-medium text-zinc-900 md:text-7xl'>
 															{m.value}
 														</span>
 														<span className='mt-2 text-sm text-zinc-500 md:text-base'>{m.label}</span>
@@ -1346,7 +1346,7 @@ const ThemedFeatureSections = () => (
 						transition={{ duration: 0.6 }}
 						className='mb-10'
 					>
-						<h2 className='mb-4 text-3xl font-normal tracking-tight text-zinc-900 md:text-5xl lg:text-6xl'>
+						<h2 className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-5xl lg:text-6xl'>
 							{section.title}
 						</h2>
 						<p className='max-w-xl text-base text-zinc-500 md:text-lg'>
@@ -1382,7 +1382,7 @@ const RegistryCallout = () => (
 			>
 				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
 					<div>
-						<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
+						<h3 className='mb-2 text-2xl font-medium tracking-tight text-zinc-900 md:text-3xl'>
 							agentOS Registry
 						</h3>
 						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
@@ -1717,7 +1717,7 @@ function BenchmarkSection() {
 			transition={{ duration: 0.5 }}
 		>
 			<div className='mb-8'>
-				<h3 className='mb-2 text-2xl font-normal tracking-tight text-zinc-900 md:text-3xl'>
+				<h3 className='mb-2 text-2xl font-medium tracking-tight text-zinc-900 md:text-3xl'>
 					Performance benchmarks
 				</h3>
 				<p className='text-base leading-relaxed text-zinc-500'>
@@ -1775,7 +1775,7 @@ const TechnologyAndBenchmarks = () => (
 				transition={{ duration: 0.5 }}
 				className='mb-16'
 			>
-				<h2 className='mb-4 text-3xl font-normal tracking-tight text-zinc-900 md:text-5xl'>
+				<h2 className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-5xl'>
 					A new operating system architecture.
 				</h2>
 				<p className='mb-6 max-w-3xl text-base leading-relaxed text-zinc-500 md:text-lg'>
@@ -1905,7 +1905,7 @@ const SisterProducts = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.05 }}
-						className='mb-4 text-3xl font-normal tracking-tight text-zinc-900 md:text-4xl'
+						className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-4xl'
 					>
 						Pairs with agentOS.
 					</motion.h2>
@@ -1981,7 +1981,7 @@ const FromUnixToAgents = () => (
 					transition={{ duration: 0.5, delay: 0.1 }}
 					className='flex-1'
 				>
-					<h2 className='mb-4 text-3xl font-normal tracking-tight text-zinc-900 md:text-4xl'>
+					<h2 className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-4xl'>
 						From humans to agents
 					</h2>
 					<p className='mb-6 text-base leading-relaxed text-zinc-500 md:text-lg'>

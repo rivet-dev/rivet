@@ -124,7 +124,7 @@ const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, de
 	>
 		<div className='mb-4 flex items-center gap-3'>
 			{icon}
-			<h3 className='text-xl font-normal text-white'>{title}</h3>
+			<h3 className='text-xl font-medium text-white'>{title}</h3>
 		</div>
 
 		<p className='mb-6 text-sm leading-relaxed text-zinc-400'>
