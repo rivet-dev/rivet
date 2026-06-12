@@ -1,9 +1,12 @@
+import { useSuspenseQuery } from "@tanstack/react-query";
 import {
 	CatchBoundary,
 	createFileRoute,
 	redirect,
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
+import { ActorsGrid } from "@/app/actors-grid";
+import { useEngineNamespaceDataProvider } from "@/components/actors";
 
 export const Route = createFileRoute("/_context/ns/$namespace/")({
 	component: RouteComponent,
@@ -40,17 +43,22 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 			return;
 		}
 
-		const builds = await context.queryClient.fetchInfiniteQuery(
-			dataProvider.buildsQueryOptions(),
-		);
-		const firstBuildId = Object.keys(builds.pages[0]?.names ?? {})[0];
+		const n: string[] = deps.n || [];
 
-		if (!firstBuildId) {
-			await runnerPrefetch;
+		// Without a selected actor name, render the grid landing instead of
+		// auto-redirecting into the first build's instances.
+		if (!n[0]) {
+			await Promise.all([
+				runnerPrefetch,
+				context.queryClient.prefetchQuery(
+					dataProvider.currentNamespaceQueryOptions(),
+				),
+				context.queryClient.prefetchInfiniteQuery(
+					dataProvider.buildsQueryOptions(),
+				),
+			]);
 			return;
 		}
-
-		const n = [firstBuildId];
 
 		const [actors] = await Promise.all([
 			context.queryClient.fetchInfiniteQuery(
@@ -72,14 +80,46 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 			replace: true,
 		});
 	},
+	pendingComponent: PendingComponent,
 });
 
 export function RouteComponent() {
-	const { actorId } = Route.useSearch();
+	const search = Route.useSearch() as Record<string, unknown>;
+	const actorId = search.actorId as string | undefined;
+	const actorKey = search.actorKey as string | undefined;
+	const n = search.n as string[] | undefined;
+	const hasSelection = !!(actorId || actorKey || n?.length);
 
+	if (!hasSelection) {
+		return <NamespaceLanding />;
+	}
+
+	const id = actorKey ?? actorId;
 	return (
-		<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
-			<Actors actorId={actorId} />
+		<CatchBoundary getResetKey={() => id ?? "no-actor-id"}>
+			<Actors actorId={id} />
 		</CatchBoundary>
 	);
+}
+
+function NamespaceLanding() {
+	const dataProvider = useEngineNamespaceDataProvider();
+	const { data: namespace } = useSuspenseQuery(
+		dataProvider.currentNamespaceQueryOptions(),
+	);
+
+	return <ActorsGrid namespaceLabel={namespace?.displayName} />;
+}
+
+function PendingComponent() {
+	const search = Route.useSearch() as Record<string, unknown>;
+	const actorId = search.actorId as string | undefined;
+	const actorKey = search.actorKey as string | undefined;
+	const n = search.n as string[] | undefined;
+	const hasSelection = !!(actorId || actorKey || n?.length);
+
+	if (!hasSelection) {
+		return <ActorsGrid.Skeleton />;
+	}
+	return null;
 }

@@ -139,6 +139,20 @@ function ContextSwitcherInner({
 		);
 	}
 
+	// Engine flavor (/ns/$namespace): a namespace segment plus the actor
+	// segment. The legacy popover below requires an organization param, so it
+	// renders an empty dropdown on engine routes.
+	if (inline && match && "namespace" in match && !("project" in match)) {
+		return (
+			<div className="flex items-center min-w-0">
+				<EngineNamespaceSegmentPopover
+					currentNamespace={match.namespace}
+				/>
+				<ActorBreadcrumbSegment />
+			</div>
+		);
+	}
+
 	return (
 		<Popover open={isOpen} onOpenChange={setIsOpen}>
 			<PopoverTrigger asChild>
@@ -266,6 +280,179 @@ function NamespaceSegmentPopover({
 				/>
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+function EngineNamespaceSegmentPopover({
+	currentNamespace,
+}: {
+	currentNamespace: string;
+}) {
+	const [open, setOpen] = useState(false);
+	const { data: nsData } = useQuery(
+		useEngineCompatDataProvider().namespaceQueryOptions(currentNamespace),
+	);
+	const label = nsData?.displayName ?? currentNamespace;
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button
+					variant="ghost"
+					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground hover:bg-foreground/[0.06]"
+					endIcon={
+						<Icon
+							icon={faChevronDown}
+							className="size-2.5 opacity-60"
+						/>
+					}
+				>
+					<span className="truncate">{label}</span>
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
+				<EngineNamespaceList
+					currentNamespace={currentNamespace}
+					onClose={() => setOpen(false)}
+				/>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function EngineNamespaceList({
+	currentNamespace,
+	onClose,
+}: {
+	currentNamespace: string;
+	onClose?: () => void;
+}) {
+	const { data, hasNextPage, isLoading, isFetchingNextPage, fetchNextPage } =
+		useInfiniteQuery(
+			useEngineCompatDataProvider().namespacesQueryOptions(),
+		);
+	const navigate = useNavigate();
+	const leafFullPath = useMatches({
+		select: (matches) => matches[matches.length - 1]?.fullPath,
+	});
+	const namespaceBase = "/ns/$namespace";
+	const namespaceTo = (
+		typeof leafFullPath === "string" &&
+		leafFullPath.startsWith(namespaceBase)
+			? leafFullPath
+			: namespaceBase
+	) as "/ns/$namespace";
+
+	return (
+		<div className="w-full">
+			<Command loop>
+				<CommandInput placeholder="Find namespace..." />
+				<CommandList
+					className="relative p-1 w-full"
+					defaultValue={currentNamespace}
+				>
+					<CommandGroup heading="Namespaces" className="w-full">
+						{!isLoading ? (
+							<CommandEmpty>No namespaces found.</CommandEmpty>
+						) : null}
+
+						{data
+							?.sort((a, b) => {
+								const aTime = getRecentTimestamp(
+									RECENT_NAMESPACES_KEY,
+									a.name,
+								);
+								const bTime = getRecentTimestamp(
+									RECENT_NAMESPACES_KEY,
+									b.name,
+								);
+								return bTime - aTime;
+							})
+							.map((ns) => {
+								const isCurrent = ns.name === currentNamespace;
+								return (
+									<CommandItem
+										key={ns.id}
+										value={ns.name}
+										keywords={[ns.displayName, ns.name]}
+										className="static w-full"
+										onSelect={() => {
+											onClose?.();
+											// Builds and actors are namespace-scoped, so
+											// drop the current selection and land on the
+											// new namespace's grid.
+											return navigate({
+												to: namespaceTo,
+												params: {
+													namespace: ns.name,
+												},
+												search: (old) => ({
+													...(old as Record<
+														string,
+														unknown
+													>),
+													actorId: undefined,
+													actorKey: undefined,
+													n: undefined,
+												}),
+											});
+										}}
+									>
+										<Icon
+											icon={faCheck}
+											className={cn(
+												"mr-2 size-3 shrink-0 text-primary",
+												isCurrent
+													? "opacity-100"
+													: "opacity-0",
+											)}
+										/>
+										<span className="truncate flex-1">
+											{ns.displayName}
+										</span>
+									</CommandItem>
+								);
+							})}
+						{isLoading || isFetchingNextPage ? (
+							<>
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+							</>
+						) : null}
+
+						<CommandItem
+							keywords={["create", "new", "namespace"]}
+							className="text-primary"
+							onSelect={() => {
+								onClose?.();
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: "create-ns",
+									}),
+								});
+							}}
+						>
+							<Icon
+								icon={faPlus}
+								className="mr-2 size-3 text-primary"
+							/>
+							New Namespace
+						</CommandItem>
+
+						{hasNextPage && !isFetchingNextPage ? (
+							<VisibilitySensor onChange={fetchNextPage} />
+						) : null}
+					</CommandGroup>
+				</CommandList>
+			</Command>
+		</div>
 	);
 }
 

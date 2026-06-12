@@ -70,27 +70,10 @@ function ActorGridCardSkeleton() {
 
 export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 	const dataProvider = useDataProvider();
-	const nsDataProvider = useCloudNamespaceDataProvider();
-	const { organization, project, namespace } = useParams({
-		strict: false,
-	}) as {
-		organization: string;
-		project: string;
-		namespace: string;
-	};
 	const navigate = useNavigate();
 	const { data, isLoading, hasNextPage, fetchNextPage, isFetchingNextPage } =
 		useInfiniteQuery(dataProvider.buildsQueryOptions());
 
-	const { data: managedPool } = useQuery({
-		...nsDataProvider.currentProjectManagedPoolQueryOptions({
-			namespace,
-			pool: "default",
-			safe: true,
-		}),
-		enabled: features.compute,
-	});
-	const hasCompute = features.compute && managedPool != null;
 	const { data: runnerNamesCount = 0 } = useInfiniteQuery({
 		...dataProvider.runnerNamesQueryOptions(),
 		select: (data) => data.pages.flatMap((page) => page.names).length,
@@ -115,24 +98,7 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
 						<H1 className="text-2xl truncate">{namespaceName}</H1>
 						<div className="flex items-center gap-2">
-							{hasCompute ? (
-								<Link
-									to="/orgs/$organization/projects/$project/ns/$namespace/logs"
-									params={{
-										organization,
-										project,
-										namespace,
-									}}
-								>
-									<Button
-										variant="outline"
-										size="sm"
-										startIcon={<Icon icon={faLogs} />}
-									>
-										Logs
-									</Button>
-								</Link>
-							) : null}
+							{features.compute ? <NamespaceLogsButton /> : null}
 							<WithTooltip
 								content="Namespace settings"
 								trigger={
@@ -333,7 +299,58 @@ export function NamespaceLandingPending() {
 	);
 }
 
+function NamespaceLogsButton() {
+	const { organization, project, namespace } = useParams({
+		strict: false,
+	}) as {
+		organization: string;
+		project: string;
+		namespace: string;
+	};
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: managedPool } = useQuery(
+		dataProvider.currentProjectManagedPoolQueryOptions({
+			namespace,
+			pool: "default",
+			safe: true,
+		}),
+	);
+
+	if (managedPool == null) {
+		return null;
+	}
+
+	return (
+		<Link
+			to="/orgs/$organization/projects/$project/ns/$namespace/logs"
+			params={{
+				organization,
+				project,
+				namespace,
+			}}
+		>
+			<Button
+				variant="outline"
+				size="sm"
+				startIcon={<Icon icon={faLogs} />}
+			>
+				Logs
+			</Button>
+		</Link>
+	);
+}
+
+// The deployments section consumes cloud-namespace data providers, which only
+// exist in the cloud route tree. The wrapper keeps the engine flavor from
+// mounting those hooks at all.
 function DeploymentsSection() {
+	if (!features.compute) {
+		return null;
+	}
+	return <DeploymentsSectionInner />;
+}
+
+function DeploymentsSectionInner() {
 	const { organization, project, namespace } = useParams({
 		strict: false,
 	}) as {
@@ -351,12 +368,11 @@ function DeploymentsSection() {
 			pool: "default",
 			safe: true,
 		}),
-		enabled: features.compute,
 		refetchInterval: (query) => (query.state.data === null ? false : 5_000),
 		refetchOnWindowFocus: (query) => query.state.data !== null,
 	});
 
-	const hasPool = features.compute && managedPool != null;
+	const hasPool = managedPool != null;
 
 	const {
 		data: images,
