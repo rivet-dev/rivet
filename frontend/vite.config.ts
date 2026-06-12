@@ -70,6 +70,7 @@ export default defineConfig(({ mode }) => {
 					env.VITE_DEPLOYMENT_TYPE || "production",
 				),
 				configuration: {
+					path: env.BASE_URL ?? "/",
 					theme_color: "#FF4F00",
 					background: "transparent",
 				},
