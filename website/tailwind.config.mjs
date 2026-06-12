@@ -96,6 +96,25 @@ export default {
 			typography: ({ theme }) => ({
 				DEFAULT: {
 					css: {
+						// Light (non-inverted) prose palette for porcelain
+						// surfaces. Dark shells use prose-invert, which reads
+						// the --tw-prose-invert-* values below instead.
+						"--tw-prose-body": "#56524A",
+						"--tw-prose-headings": "#1B1916",
+						"--tw-prose-lead": "#56524A",
+						"--tw-prose-links": "#2E4034",
+						"--tw-prose-bold": "#1B1916",
+						"--tw-prose-counters": "#8A8478",
+						"--tw-prose-bullets": "#8A8478",
+						"--tw-prose-hr": "rgba(27, 25, 22, 0.1)",
+						"--tw-prose-quotes": "#56524A",
+						"--tw-prose-quote-borders": "#2E4034",
+						"--tw-prose-captions": "#8A8478",
+						"--tw-prose-code": "#1B1916",
+						"--tw-prose-pre-code": "#F4F1E7",
+						"--tw-prose-pre-bg": "#1B1916",
+						"--tw-prose-th-borders": "rgba(27, 25, 22, 0.15)",
+						"--tw-prose-td-borders": "rgba(27, 25, 22, 0.1)",
 						"--tw-prose-invert-body":
 							"hsl(var(--muted-foreground))",
 						"--tw-prose-invert-headings": "hsl(var(--foreground))",

@@ -27,7 +27,7 @@ export function CookbookCard({ page }: { page: CookbookPageCardData }) {
 	return (
 		<a
 			href={page.href}
-			className="group relative block aspect-[5/7] overflow-hidden rounded-lg border border-white/10 bg-zinc-950 transition-colors hover:border-white/25 [container-type:inline-size]"
+			className="group relative block aspect-[5/7] overflow-hidden rounded-lg border border-ink/15 bg-ink transition-colors hover:border-pine/60 [container-type:inline-size]"
 		>
 			{page.cover && (
 				<>

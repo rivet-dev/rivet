@@ -54,12 +54,12 @@ for (const entry of changelogPosts) {
 ---
 
 <BlogLayout title="Blog - Rivet">
-	<div class="mx-auto mt-20 w-full max-w-7xl px-6 pb-32 md:mt-32 md:pb-48" style="--header-height: 5rem;">
+	<div class="mx-auto w-full max-w-7xl px-6 pb-32 pt-20 md:pb-48 md:pt-32" style="--header-height: 5rem;">
 		<div class="mt-8 flex w-full items-center justify-between">
-			<h1 class="text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl">Blog</h1>
+			<h1 class="text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink md:text-6xl">Blog</h1>
 			<a
 				href="/rss/feed.xml"
-				class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+				class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink"
 			>
 				<Icon icon={faRss} />
 				RSS Feed
@@ -70,14 +70,14 @@ for (const entry of changelogPosts) {
 			<!-- Changelog calendar -->
 			<aside class="order-last lg:order-none">
 				<div class="lg:sticky lg:top-32">
-					<div class="border-b border-white/10 pb-3">
-						<h2 class="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">Changelog</h2>
+					<div class="border-b border-ink/10 pb-3">
+						<h2 class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">Changelog</h2>
 					</div>
 					<div class="relative">
 						<div class="mt-5 max-h-[calc(100vh-14rem)] space-y-6 overflow-y-auto pb-6 pr-1">
 							{changelogMonths.map((month) => (
 							<div>
-								<p class="text-[0.7rem] font-semibold uppercase tracking-[0.1em] text-zinc-600">{month.label}</p>
+								<p class="font-mono text-[0.7rem] font-medium uppercase tracking-[0.1em] text-ink-faint">{month.label}</p>
 								<ul class="mt-2">
 									{month.items.map((item) => (
 										<li>
@@ -87,11 +87,11 @@ for (const entry of changelogPosts) {
 											>
 												<time
 													datetime={item.published.toISOString()}
-													class="w-6 shrink-0 pt-px text-right text-xs tabular-nums text-zinc-600 transition-colors group-hover:text-accent"
+													class="w-6 shrink-0 pt-px text-right font-mono text-xs tabular-nums text-ink-faint transition-colors group-hover:text-pine"
 												>
 													{item.published.getDate()}
 												</time>
-												<span class="text-sm leading-snug text-zinc-400 transition-colors group-hover:text-white">
+												<span class="text-sm leading-snug text-ink-soft transition-colors group-hover:text-ink">
 													{item.title}
 												</span>
 											</a>
@@ -101,7 +101,7 @@ for (const entry of changelogPosts) {
 							</div>
 						))}
 						</div>
-						<div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black to-transparent"></div>
+						<div class="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-paper to-transparent"></div>
 					</div>
 				</div>
 			</aside>
@@ -110,7 +110,7 @@ for (const entry of changelogPosts) {
 			<div class="order-first grid grid-cols-1 gap-6 md:grid-cols-2 lg:order-none">
 				{blogPosts.map((article) => (
 					<a href={`/blog/${article.slug}/`} class="size-full">
-						<article class="flex size-full flex-col items-start justify-between rounded-xl border border-white/10 p-4 transition-colors hover:border-white/25">
+						<article class="flex size-full flex-col items-start justify-between border border-ink/10 bg-white/55 p-4 transition-colors hover:border-ink/25">
 							<div class="w-full">
 								{article.image && (
 									<div class="relative w-full">
@@ -119,7 +119,7 @@ for (const entry of changelogPosts) {
 											alt={article.title}
 											width={1200}
 											height={600}
-											class="aspect-[2/1] w-full rounded-md border border-white/10 object-cover"
+											class="aspect-[2/1] w-full rounded-md border border-ink/10 object-cover"
 											loading="lazy"
 											decoding="async"
 										/>
@@ -127,19 +127,19 @@ for (const entry of changelogPosts) {
 								)}
 								<div class="mt-4 flex items-center gap-x-3 text-xs">
 									{CATEGORIES[article.data.category] && (
-										<span class="text-accent font-medium uppercase tracking-[0.1em]">
+										<span class="font-medium uppercase tracking-[0.1em] text-pine">
 											{CATEGORIES[article.data.category].name}
 										</span>
 									)}
-									<time datetime={article.data.published.toISOString()} class="text-zinc-500">
+									<time datetime={article.data.published.toISOString()} class="text-ink-faint">
 										{formatTimestamp(article.data.published)}
 									</time>
 								</div>
 								<div class="group relative">
-									<h3 class="mt-2 text-xl font-medium leading-7 text-white">
+									<h3 class="mt-2 text-xl font-medium leading-7 text-ink">
 										{article.title}
 									</h3>
-									<p class="mt-2 line-clamp-2 text-sm leading-relaxed text-zinc-500">
+									<p class="mt-2 line-clamp-2 text-sm leading-relaxed text-ink-soft">
 										{article.description}
 									</p>
 								</div>
