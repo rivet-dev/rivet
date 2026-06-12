@@ -182,6 +182,12 @@ impl CoreServerlessRuntime {
 			config.handle_inspector_http_in_runtime,
 		));
 		let base_path = normalize_base_path(config.serverless_base_path.as_deref());
+		crate::metrics_endpoint::record_rivetkit_info(
+			config.serverless_package_version.clone(),
+			config.version,
+			"serverless",
+			config.pool_name.clone(),
+		);
 
 		Ok(Self {
 			settings: Arc::new(ServerlessSettings {
@@ -320,6 +326,12 @@ impl CoreServerlessRuntime {
 	async fn start_response(&self, req: ServerlessRequest) -> Result<ServerlessResponse> {
 		let headers = parse_start_headers(&req.headers)?;
 		self.validate_start_headers(&headers)?;
+		crate::metrics_endpoint::record_rivetkit_info(
+			self.settings.package_version.clone(),
+			self.settings.version,
+			"serverless",
+			headers.pool_name.clone(),
+		);
 		if req.body.len() > self.settings.max_start_payload_bytes {
 			return Err(IncomingMessageTooLong {
 				size: req.body.len(),

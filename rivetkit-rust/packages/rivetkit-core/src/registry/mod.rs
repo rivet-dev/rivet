@@ -565,6 +565,13 @@ impl CoreRegistry {
 		shutdown: CancellationToken,
 		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
 	) -> Result<()> {
+		crate::metrics_endpoint::record_rivetkit_info(
+			config.serverless_package_version.clone(),
+			config.version,
+			"serverful",
+			config.pool_name.clone(),
+		);
+
 		let dispatcher = self.into_dispatcher(&config);
 		#[cfg(feature = "native-runtime")]
 		let _engine_process = if should_manage_engine(&config.endpoint, config.engine_spawn)? {

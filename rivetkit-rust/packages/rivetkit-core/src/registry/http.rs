@@ -452,17 +452,12 @@ fn handle_metadata_fetch(
 	if request.method() != http::Method::GET {
 		return method_not_allowed_response(request, actor);
 	}
-	let runtime_type = if std::env::var("NODE_ENV").as_deref() == Ok("production") {
-		"deployed"
-	} else {
-		"local"
-	};
 	json_http_response(
 		StatusCode::OK,
 		&serde_json::json!({
 			"runtime": "rivetkit",
 			"version": env!("CARGO_PKG_VERSION"),
-			"type": runtime_type,
+			"type": crate::metrics_endpoint::runtime_type(),
 		}),
 	)
 }
