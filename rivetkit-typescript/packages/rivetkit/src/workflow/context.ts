@@ -135,7 +135,6 @@ export class ActorWorkflowContext<
 	>;
 	#actorAccessDepth = 0;
 	#allowActorAccess = false;
-	#guardViolation = false;
 
 	constructor(
 		inner: WorkflowContextInterface,
@@ -642,18 +641,11 @@ export class ActorWorkflowContext<
 
 	#ensureActorAccess(feature: string): void {
 		if (!this.#allowActorAccess) {
-			this.#guardViolation = true;
 			this.#markGuardTriggered();
 			throw new Error(
 				`${feature} is only available inside workflow steps`,
 			);
 		}
-	}
-
-	consumeGuardViolation(): boolean {
-		const violated = this.#guardViolation;
-		this.#guardViolation = false;
-		return violated;
 	}
 
 	#markGuardTriggered(): void {

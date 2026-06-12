@@ -62,5 +62,4 @@ export const ServerlessConfigSchema = z.object({
 	// cannot use different namespaces. The namespace is extracted from the
 	// publicEndpoint URL auth syntax if provided.
 });
-export type ServerlessConfigInput = z.input<typeof ServerlessConfigSchema>;
 export type ServerlessConfig = z.infer<typeof ServerlessConfigSchema>;

@@ -73,9 +73,6 @@ pub enum ActorLifecycle {
 	#[error("destroying", "Actor is destroying.")]
 	Destroying,
 
-	#[error("shutdown_timeout", "Actor shutdown timed out.")]
-	ShutdownTimeout,
-
 	#[error("dropped_reply", "Actor reply channel was dropped without a response.")]
 	DroppedReply,
 

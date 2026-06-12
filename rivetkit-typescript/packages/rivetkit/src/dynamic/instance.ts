@@ -18,10 +18,6 @@ export class DynamicActorInstance {
 		await this.runtime.onAlarm();
 	}
 
-	async cleanupPersistedConnections(reason?: string): Promise<number> {
-		return await this.runtime.cleanupPersistedConnections(reason);
-	}
-
 	async getHibernatingWebSockets() {
 		return await this.runtime.getHibernatingWebSockets();
 	}

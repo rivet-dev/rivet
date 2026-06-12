@@ -179,12 +179,14 @@ mod moved_tests {
 		schedule.configure_schedule_envoy(handle, Some(8));
 
 		let future_ts = now_timestamp_ms() + 60_000;
-		schedule.set_scheduled_events(vec![PersistedScheduleEvent {
-			event_id: "event-1".to_owned(),
-			timestamp: future_ts,
-			action: "tick".to_owned(),
-			args: Some(vec![1, 2, 3]),
-		}]);
+		schedule.update_scheduled_events(|events| {
+			*events = vec![PersistedScheduleEvent {
+				event_id: "event-1".to_owned(),
+				timestamp: future_ts,
+				action: "tick".to_owned(),
+				args: Some(vec![1, 2, 3]),
+			}];
+		});
 
 		schedule.sync_future_alarm_logged();
 		assert_eq!(

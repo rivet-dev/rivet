@@ -112,9 +112,7 @@ pub mod websocket;
 pub use actor::{kv, sqlite};
 
 pub use actor::action::ActionDispatchError;
-pub use actor::config::{
-	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
-};
+pub use actor::config::{ActionDefinition, ActorConfig, ActorConfigInput, CanHibernateWebSocket};
 pub use actor::connection::ConnHandle;
 pub use actor::context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use actor::factory::{ActorEntryFn, ActorFactory};
@@ -141,7 +139,7 @@ pub use actor::work_registry::{ActorWorkKind, ActorWorkPolicy};
 pub use error::ActorLifecycle;
 pub use inspector::{Inspector, InspectorSnapshot};
 pub use registry::{CoreRegistry, EngineSpawnMode, ServeConfig};
-pub use runtime::{RuntimeBoxFuture, RuntimeSpawner, boxed_runtime_future};
+pub use runtime::{RuntimeBoxFuture, RuntimeSpawner};
 pub use serverless::{CoreServerlessRuntime, ServerlessRequest, ServerlessResponse};
 pub use types::{
 	ActorKey, ActorKeySegment, ConnId, ListOpts, SaveStateOpts, WsMessage, format_actor_key,

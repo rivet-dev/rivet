@@ -1992,26 +1992,6 @@ impl WasmSqliteDb {
 	}
 }
 
-#[wasm_bindgen(js_name = bridgeRivetErrorPrefix)]
-pub fn bridge_rivet_error_prefix() -> String {
-	BRIDGE_RIVET_ERROR_PREFIX.to_string()
-}
-
-#[wasm_bindgen(js_name = roundTripBytes)]
-pub fn round_trip_bytes(bytes: Vec<u8>) -> Vec<u8> {
-	bytes
-}
-
-#[wasm_bindgen(js_name = uint8ArrayFromBytes)]
-pub fn uint8_array_from_bytes(bytes: Vec<u8>) -> Uint8Array {
-	Uint8Array::from(bytes.as_slice())
-}
-
-#[wasm_bindgen(js_name = awaitPromise)]
-pub async fn await_promise(promise: Promise) -> Result<JsValue, JsValue> {
-	JsFuture::from(promise).await
-}
-
 #[derive(Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct WasmRequestSaveOpts {

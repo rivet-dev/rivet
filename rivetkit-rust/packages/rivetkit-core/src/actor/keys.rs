@@ -16,8 +16,6 @@ pub const PERSIST_DATA_KEY: &[u8] = &[1];
 pub const CONN_PREFIX: [u8; 1] = [2];
 // The inspector auth token lives at [3].
 pub const INSPECTOR_TOKEN_KEY: [u8; 1] = [3];
-// User KV entries live under [4, ...user_key].
-pub const KV_PREFIX: [u8; 1] = [4];
 // Queue storage lives under [5, ...].
 pub const QUEUE_PREFIX: [u8; 1] = [5];
 // Workflow storage lives under [6, ...].
@@ -70,22 +68,6 @@ pub const TRACES_STORAGE_PREFIX: [u8; 2] = [TRACES_PREFIX[0], TRACES_STORAGE_VER
 )]
 struct QueueInvalidMessageKey {
 	reason: String,
-}
-
-pub fn make_prefixed_key(key: &[u8]) -> Vec<u8> {
-	concat_prefix(&KV_PREFIX, key)
-}
-
-pub fn remove_prefix_from_key(prefixed_key: &[u8]) -> &[u8] {
-	&prefixed_key[KV_PREFIX.len()..]
-}
-
-pub fn make_workflow_key(key: &[u8]) -> Vec<u8> {
-	concat_prefix(&WORKFLOW_STORAGE_PREFIX, key)
-}
-
-pub fn make_traces_key(key: &[u8]) -> Vec<u8> {
-	concat_prefix(&TRACES_STORAGE_PREFIX, key)
 }
 
 pub fn make_connection_key(conn_id: &str) -> Vec<u8> {

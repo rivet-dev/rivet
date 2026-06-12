@@ -141,20 +141,6 @@ impl SqliteDb {
 		self.backend
 	}
 
-	pub async fn get_pages(
-		&self,
-		request: protocol::SqliteGetPagesRequest,
-	) -> Result<protocol::SqliteGetPagesResponse> {
-		self.handle()?.sqlite_get_pages(request).await
-	}
-
-	pub async fn commit(
-		&self,
-		request: protocol::SqliteCommitRequest,
-	) -> Result<protocol::SqliteCommitResponse> {
-		self.handle()?.sqlite_commit(request).await
-	}
-
 	pub async fn open(&self) -> Result<()> {
 		match self.backend {
 			SqliteBackend::LocalNative => {

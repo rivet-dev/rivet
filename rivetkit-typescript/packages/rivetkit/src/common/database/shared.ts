@@ -37,13 +37,6 @@ export function isSqliteBindingObject(
 	return Object.values(value).every((entry) => isSqliteBindingValue(entry));
 }
 
-export function isSqliteBindingArray(value: unknown): value is unknown[] {
-	return (
-		Array.isArray(value) &&
-		value.every((entry) => isSqliteBindingValue(entry))
-	);
-}
-
 export function toSqliteBindings(
 	input: unknown[] | SqliteBindingObject,
 ): SqliteBindings {

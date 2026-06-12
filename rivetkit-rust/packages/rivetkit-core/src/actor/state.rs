@@ -511,15 +511,6 @@ impl ActorContext {
 		self.0.persisted.read().scheduled_events.clone()
 	}
 
-	pub fn set_scheduled_events(&self, scheduled_events: Vec<PersistedScheduleEvent>) {
-		self.0.persisted.write().scheduled_events = scheduled_events;
-		self.0
-			.metrics
-			.inc_state_mutation(StateMutationReason::ScheduledEventsUpdate);
-		self.mark_dirty();
-		self.schedule_save(None);
-	}
-
 	pub(crate) fn update_scheduled_events<R>(
 		&self,
 		update: impl FnOnce(&mut Vec<PersistedScheduleEvent>) -> R,
@@ -535,19 +526,6 @@ impl ActorContext {
 		self.mark_dirty();
 		self.schedule_save(None);
 		result
-	}
-
-	pub fn set_input(&self, input: Option<Vec<u8>>) {
-		self.0.persisted.write().input = input;
-		self.0
-			.metrics
-			.inc_state_mutation(StateMutationReason::InputSet);
-		self.mark_dirty();
-		self.schedule_save(None);
-	}
-
-	pub fn input(&self) -> Option<Vec<u8>> {
-		self.0.persisted.read().input.clone()
 	}
 
 	pub fn set_has_initialized(&self, has_initialized: bool) {

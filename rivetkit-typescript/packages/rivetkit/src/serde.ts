@@ -26,16 +26,6 @@ export function uint8ArrayToBase64(uint8Array: Uint8Array): string {
 	return btoa(binary);
 }
 
-export function encodingIsBinary(encoding: Encoding): boolean {
-	if (encoding === "json") {
-		return false;
-	} else if (encoding === "cbor" || encoding === "bare") {
-		return true;
-	} else {
-		assertUnreachable(encoding);
-	}
-}
-
 export function contentTypeForEncoding(encoding: Encoding): string {
 	if (encoding === "json") {
 		return "application/json";
@@ -58,18 +48,6 @@ export function decodeCborJsonCompat<T>(buffer: Uint8Array): T {
 	return reviveJsonCompatValue(cbor.decode(buffer), {
 		coerceSafeIntegerBigInts: true,
 	}) as T;
-}
-
-export function wsBinaryTypeForEncoding(
-	encoding: Encoding,
-): "arraybuffer" | "blob" {
-	if (encoding === "json") {
-		return "blob";
-	} else if (encoding === "cbor" || encoding === "bare") {
-		return "arraybuffer";
-	} else {
-		assertUnreachable(encoding);
-	}
 }
 
 export function serializeWithEncoding<TBare, TJson, T = TBare>(

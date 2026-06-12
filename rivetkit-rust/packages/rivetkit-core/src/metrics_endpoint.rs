@@ -125,13 +125,6 @@ pub fn render_prometheus_metrics() -> Result<RenderedMetrics> {
 	})
 }
 
-pub fn authorization_bearer_token(headers: &http::HeaderMap) -> Option<&str> {
-	headers
-		.get(http::header::AUTHORIZATION)
-		.and_then(|value| value.to_str().ok())
-		.and_then(bearer_token_from_authorization)
-}
-
 pub fn authorization_bearer_token_map(headers: &HashMap<String, String>) -> Option<&str> {
 	headers
 		.iter()

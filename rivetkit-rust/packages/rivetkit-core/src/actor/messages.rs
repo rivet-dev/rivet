@@ -66,10 +66,6 @@ impl Request {
 		)
 	}
 
-	pub fn into_inner(self) -> http::Request<Vec<u8>> {
-		self.0
-	}
-
 	pub fn into_body(self) -> Vec<u8> {
 		self.0.into_body()
 	}
@@ -152,10 +148,6 @@ impl Response {
 				.collect(),
 			self.body().clone(),
 		)
-	}
-
-	pub fn into_inner(self) -> http::Response<Vec<u8>> {
-		self.0
 	}
 
 	pub fn into_body(self) -> Vec<u8> {
