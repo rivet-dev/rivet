@@ -6,6 +6,9 @@ import { BenchmarksSection } from '@/components/marketing/sections/BenchmarksSec
 import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
 import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
 import { ScrollObserver } from '@/components/ScrollObserver';
+import { FaqSection } from '@/components/faq/FaqSection';
+import FaqJsonLd from '@/components/faq/FaqJsonLd.astro';
+import { actorsFaqs } from '@/data/faqs/actors';
 ---
 
 <MarketingLayout
@@ -14,6 +17,7 @@ import { ScrollObserver } from '@/components/ScrollObserver';
 	canonicalUrl="https://rivet.dev/actors/"
 	keywords={["actors", "stateful", "workflows", "websockets", "real-time", "backend infrastructure", "serverless", "open source", "self-hosted", "AI infrastructure", "long-running processes", "state management"]}
 >
+	<FaqJsonLd items={actorsFaqs} />
 	<ScrollObserver client:load>
 		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
 			<main>
@@ -41,6 +45,8 @@ import { ScrollObserver } from '@/components/ScrollObserver';
 				<ProblemSection client:visible />
 				<BenchmarksSection client:visible />
 				<ObservabilitySection client:visible />
+				<!-- Static render with no client directive. FaqSection is hook-free and uses native details/summary, so it needs no JS. -->
+				<FaqSection items={actorsFaqs} />
 				<RedesignedCTA client:visible />
 			</main>
 		</div>

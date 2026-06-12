@@ -89,7 +89,7 @@
 	font-family: "Perfectly Nineties";
 	src: url("/fonts/perfectly-nineties/PerfectlyNineties-Black.otf")
 		format("truetype");
-	font-weight: normal;
+	font-weight: 900;
 	font-style: normal;
 }
 
@@ -97,7 +97,7 @@
 	font-family: "Perfectly Nineties";
 	src: url("/fonts/perfectly-nineties/PerfectlyNineties-BlackItalic.otf")
 		format("truetype");
-	font-weight: normal;
+	font-weight: 900;
 	font-style: italic;
 }
 
@@ -121,7 +121,7 @@
 	font-family: "Perfectly Nineties";
 	src: url("/fonts/perfectly-nineties/PerfectlyNineties-Extrabold.otf")
 		format("truetype");
-	font-weight: normal;
+	font-weight: 800;
 	font-style: normal;
 }
 
@@ -129,7 +129,7 @@
 	font-family: "Perfectly Nineties";
 	src: url("/fonts/perfectly-nineties/PerfectlyNineties-ExtraboldItalic.otf")
 		format("truetype");
-	font-weight: normal;
+	font-weight: 800;
 	font-style: italic;
 }
 
@@ -153,7 +153,7 @@
 	font-family: "Perfectly Nineties";
 	src: url("/fonts/perfectly-nineties/PerfectlyNineties-Semibold.otf")
 		format("truetype");
-	font-weight: normal;
+	font-weight: 600;
 	font-style: normal;
 }
 
@@ -161,7 +161,7 @@
 	font-family: "Perfectly Nineties";
 	src: url("/fonts/perfectly-nineties/PerfectlyNineties-SemiboldItalic.otf")
 		format("truetype");
-	font-weight: normal;
+	font-weight: 600;
 	font-style: italic;
 }
 

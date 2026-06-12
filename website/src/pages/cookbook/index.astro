@@ -30,6 +30,7 @@ const pages: CookbookPageListItem[] = cookbook
 		).sort();
 
 		return {
+			slug: cleanId,
 			title: entry.data.title,
 			description: entry.data.description,
 			href,
@@ -51,6 +52,7 @@ const allTechnologies = Array.from(new Set(pages.flatMap((p) => p.technologies))
 	title="Cookbooks - Rivet"
 	description="Step-by-step guides that link to working Rivet templates and example code."
 	canonicalUrl="https://rivet.dev/cookbook/"
+	active="cookbook"
 >
 	<CookbookPageContent pages={pages} allTags={allTags} allTechnologies={allTechnologies} client:load />
 </MarketingLayout>

@@ -691,7 +691,7 @@ const Pricing = () => {
     const plans = isCloud ? cloudPlans : selfHostedPlans;
 
     const usagePricing = [
-        { resource: "Awake Actors", price: "$0.05", unit: "per 1k awake actor-hours" },
+        { resource: "Awake Actors", price: "$0.05", unit: "per 1k Awake Actor Hours" },
         { resource: "State Storage", price: "$0.40", unit: "per GB-month" },
         { resource: "Reads*", price: "$0.20", unit: "per million reads" },
         { resource: "Writes*", price: "$1", unit: "per million writes" },

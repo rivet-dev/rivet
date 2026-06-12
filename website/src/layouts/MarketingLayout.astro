@@ -1,4 +1,5 @@
 ---
+import type { ComponentProps } from 'react';
 import BaseLayout from './BaseLayout.astro';
 import { Header } from '@/components/v2/Header';
 
@@ -8,13 +9,14 @@ interface Props {
 	canonicalUrl?: string;
 	ogImage?: string;
 	keywords?: string[];
+	active?: ComponentProps<typeof Header>['active'];
 }
 
-const { title, description, canonicalUrl, ogImage, keywords } = Astro.props;
+const { title, description, canonicalUrl, ogImage, keywords, active } = Astro.props;
 const pathname = Astro.url.pathname;
 ---
 
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage} keywords={keywords}>
-	<Header variant="floating" initialPathname={pathname} client:load />
+	<Header variant="floating" initialPathname={pathname} active={active} client:load />
 	<slot />
 </BaseLayout>

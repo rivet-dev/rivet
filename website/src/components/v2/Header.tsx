@@ -468,6 +468,14 @@ export function Header({
 								)}
 								{!isLightTheme && (
 									<TextNavItem
+										href="/cookbook"
+										ariaCurrent={active === "cookbook" ? "page" : undefined}
+									>
+										Cookbooks
+									</TextNavItem>
+								)}
+								{!isLightTheme && (
+									<TextNavItem
 										href="/cloud"
 										ariaCurrent={active === "pricing" ? "page" : undefined}
 									>
@@ -544,6 +552,12 @@ export function Header({
 						Documentation
 					</TextNavItem>
 					<TextNavItem
+						href="/cookbook"
+						ariaCurrent={active === "cookbook" ? "page" : undefined}
+					>
+						Cookbooks
+					</TextNavItem>
+					<TextNavItem
 						href="/cloud"
 						ariaCurrent={active === "pricing" ? "page" : undefined}
 					>
@@ -593,6 +607,7 @@ function DocsMobileNavigation({
 		]
 		: [
 			{ href: "/docs", label: "Documentation" },
+			{ href: "/cookbook", label: "Cookbooks" },
 			{ href: "/cloud", label: "Pricing" },
 		];
 

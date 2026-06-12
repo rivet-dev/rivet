@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { MagnifyingGlassIcon } from "@heroicons/react/24/outline";
 import { TECHNOLOGIES, TAGS } from "@/data/templates/shared";
 import { CookbookCard, type CookbookPageCardData } from "./CookbookCard";
+import { CookbookCoverDefs, COVER_SERIF, toRoman } from "./CookbookCover";
 
 export interface CookbookPageListItem extends CookbookPageCardData {
 	tags: string[];
@@ -108,15 +109,26 @@ export function CookbookPageContent({ pages, allTags, allTechnologies }: Cookboo
 
 	const hasActiveFilters = selectedTags.length > 0 || selectedTechnologies.length > 0 || searchQuery.trim().length > 0;
 
+	// Numerals come from the full alphabetical list so filtering never renumbers covers.
+	const numerals = useMemo(
+		() => new Map(pages.map((p, i) => [p.slug, toRoman(i + 1)])),
+		[pages],
+	);
+
 	const toggle = (list: string[], setList: (v: string[]) => void, item: string) => {
 		setList(list.includes(item) ? list.filter((x) => x !== item) : [...list, item]);
 	};
 
 	return (
 		<div className="min-h-screen bg-black">
+			<CookbookCoverDefs />
 			<div className="relative overflow-hidden pb-12 pt-32 md:pt-48">
-				<div className="mx-auto max-w-4xl px-6">
-					<h1 className="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+				<div className="mx-auto max-w-7xl px-6">
+					<p className="mb-4 text-[11px] uppercase tracking-[0.32em] text-zinc-500">Rivet</p>
+					<h1
+						className="mb-6 text-5xl font-normal leading-[1.05] tracking-[0.01em] text-[#ece9e2] md:text-6xl"
+						style={{ fontFamily: COVER_SERIF }}
+					>
 						Cookbooks
 					</h1>
 					<p className="mb-8 text-base leading-relaxed text-zinc-500 max-w-xl">
@@ -126,7 +138,7 @@ export function CookbookPageContent({ pages, allTags, allTechnologies }: Cookboo
 			</div>
 
 			<div className="border-t border-white/10 py-12">
-				<div className="mx-auto max-w-4xl px-6">
+				<div className="mx-auto max-w-7xl px-6">
 					<div className="mb-8 space-y-4">
 						<div className="max-w-sm mx-auto">
 							<SearchInput value={searchQuery} onChange={setSearchQuery} />
@@ -169,9 +181,9 @@ export function CookbookPageContent({ pages, allTags, allTechnologies }: Cookboo
 					{filteredPages.length === 0 ? (
 						<div className="text-center py-12 text-zinc-400">No guides found matching your filters</div>
 					) : (
-						<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+						<div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 sm:gap-6">
 							{filteredPages.map((page) => (
-								<CookbookCard key={page.href} page={page} />
+								<CookbookCard key={page.href} page={page} numeral={numerals.get(page.slug) ?? ""} />
 							))}
 						</div>
 					)}
