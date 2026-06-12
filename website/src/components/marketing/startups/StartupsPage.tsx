@@ -73,7 +73,7 @@ const StartupImageCycler = ({ images }: { images: { src: string; alt: string; mo
 				return (
 					<div
 						key={`fan-${i}`}
-						className="absolute inset-0 rounded-lg overflow-hidden border border-white/10 transition-all duration-300 ease-out"
+						className="absolute inset-0 overflow-hidden border border-ink/15 bg-mat p-2 transition-all duration-300 ease-out"
 						style={{
 							transform: `rotate(${rotation}deg) translateX(${translateX}px) translateY(${translateY}px) scale(${scale})`,
 							zIndex: 3 - i,
@@ -94,7 +94,7 @@ const StartupImageCycler = ({ images }: { images: { src: string; alt: string; mo
 
 			{/* Main card */}
 			<div
-				className="absolute inset-0 rounded-lg overflow-hidden border border-white/10 transition-transform duration-300 ease-out"
+				className="absolute inset-0 overflow-hidden border border-ink/15 bg-mat p-2 transition-transform duration-300 ease-out"
 				style={{
 					zIndex: 10,
 					transform: showFan ? 'rotate(-3deg) translateX(-10px)' : 'rotate(0deg) translateX(0px)',
@@ -128,17 +128,17 @@ function CollapsibleSection({ title, children, defaultOpen = false }: Collapsibl
 	const [isOpen, setIsOpen] = useState(defaultOpen);
 
 	return (
-		<div className="border-t border-white/10 px-6">
+		<div className="border-t border-ink/10 px-6">
 			<div className="mx-auto w-full max-w-7xl">
 				<button
 					onClick={() => setIsOpen(!isOpen)}
 					className="flex h-28 w-full items-center justify-between text-left"
 				>
-					<h2 className="text-2xl font-medium tracking-[-0.015em] text-white md:text-4xl">
+					<h2 className="text-2xl font-medium tracking-[-0.015em] text-ink md:text-4xl">
 						{title}
 					</h2>
 					<ChevronDown
-						className={`h-6 w-6 text-zinc-500 transition-transform duration-200 ${
+						className={`h-6 w-6 text-ink-faint transition-transform duration-200 ${
 							isOpen ? 'rotate-180' : ''
 						}`}
 					/>
@@ -182,7 +182,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 	];
 
 	return (
-		<div className="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div className="paper-grain min-h-screen font-sans text-ink-soft">
 			{/* Hero Section */}
 			<section className="relative flex flex-col overflow-hidden lg:min-h-screen">
 				{/* Centered content */}
@@ -190,17 +190,17 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 					<div className="mx-auto w-full max-w-7xl">
 						<div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-12 lg:gap-20">
 							<div className="max-w-xl">
-								<h1 className="mb-6 text-4xl font-medium leading-[1.1] tracking-[-0.015em] text-white md:text-6xl">
+								<h1 className="mb-6 text-4xl font-medium leading-[1.1] tracking-[-0.015em] text-ink md:text-6xl">
 									Built for Demo Day and Beyond
 								</h1>
-								<p className="text-base leading-relaxed text-zinc-500">
+								<p className="text-base leading-relaxed text-ink-soft">
 									As{' '}
-									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-sm text-zinc-300 align-middle">
+									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/15 bg-white/55 px-2.5 py-0.5 text-sm text-ink-soft align-middle">
 										<img src={imgYC.src} alt="Y Combinator logo" width={16} height={16} className="h-4 w-auto" loading="eager" decoding="async" />
 										<span>YC W23</span>
 									</span>
 									{' '}and{' '}
-									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-sm text-zinc-300 align-middle">
+									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/15 bg-white/55 px-2.5 py-0.5 text-sm text-ink-soft align-middle">
 										<img src={imgA16z.src} alt="Andreessen Horowitz (a16z) logo" width={16} height={12} className="h-3 w-auto" loading="eager" decoding="async" />
 										<span>a16z SR002</span>
 									</span>
@@ -209,7 +209,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 							</div>
 							{/* Desktop: Overlapping photos */}
 							<div className="hidden lg:block flex-shrink-0 relative w-[500px] h-[400px]">
-								<div className="absolute top-0 left-0 w-[320px] h-[240px] overflow-hidden rounded-lg border border-white/10">
+								<div className="absolute top-0 left-0 w-[320px] h-[240px] overflow-hidden border border-ink/15 bg-mat p-2">
 									<img
 										src={foundersImage}
 										alt="Rivet founders Nathan Flurry and Nicholas Kissel at Y Combinator W23 Demo Day"
@@ -220,7 +220,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 										className="w-full h-full object-cover"
 									/>
 								</div>
-								<div className="absolute bottom-0 right-0 w-[320px] h-[240px] overflow-hidden rounded-lg border border-white/10">
+								<div className="absolute bottom-0 right-0 w-[320px] h-[240px] overflow-hidden border border-ink/15 bg-mat p-2">
 									<img
 										src={speedrunImage}
 										alt="Andreessen Horowitz a16z Speedrun SR002 cohort presentation"
@@ -248,13 +248,13 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 				{/* Bottom section */}
 				<div className="px-6 py-12 lg:absolute lg:bottom-0 lg:left-0 lg:right-0 lg:py-0 lg:pb-24">
 					<div className="mx-auto w-full max-w-7xl">
-						<div className="mb-8 h-px w-full bg-white/10" />
+						<div className="mb-8 h-px w-full bg-ink/10" />
 						<div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
 							<div>
-								<h2 className="text-base font-medium text-white">
+								<h2 className="text-base font-medium text-ink">
 									50% off Rivet Cloud for 12 months
 								</h2>
-								<p className="mt-1 text-sm text-zinc-500">
+								<p className="mt-1 text-sm text-ink-soft">
 									Everything you need to build and scale stateful workloads at startup speed.
 								</p>
 							</div>
@@ -262,7 +262,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 								href="https://forms.gle/J8USsTND8NAKJ18W9"
 								target="_blank"
 								rel="noopener noreferrer"
-								className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+								className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent"
 							>
 								Claim the deal
 								<ArrowRight className="h-4 w-4" />
@@ -274,14 +274,14 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 
 			{/* What You Get */}
 			<CollapsibleSection title="What you get">
-				<p className="mb-12 max-w-xl text-base leading-relaxed text-zinc-500">
+				<p className="mb-12 max-w-xl text-base leading-relaxed text-ink-soft">
 					Everything you need to build and scale stateful workloads at startup speed.
 				</p>
 				<div className="grid grid-cols-1 gap-8 md:grid-cols-3">
 					{benefits.map((benefit, idx) => (
-						<div key={idx} className="flex flex-col border-t border-white/10 pt-6">
-							<h3 className="mb-2 text-base font-medium text-white">{benefit.title}</h3>
-							<p className="text-sm leading-relaxed text-zinc-500">{benefit.description}</p>
+						<div key={idx} className="flex flex-col border-t border-ink/10 pt-6">
+							<h3 className="mb-2 text-base font-medium text-ink">{benefit.title}</h3>
+							<p className="text-sm leading-relaxed text-ink-soft">{benefit.description}</p>
 						</div>
 					))}
 				</div>
@@ -291,11 +291,11 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 			<CollapsibleSection title="Eligibility">
 				<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
 					{eligibility.map((item, idx) => (
-						<div key={idx} className="flex items-center gap-3 rounded-md border border-white/10 p-4">
+						<div key={idx} className="flex items-center gap-3 rounded-md border border-ink/10 bg-white/55 p-4">
 							<div className="flex h-5 w-5 flex-shrink-0 items-center justify-center">
-								<Check className="h-4 w-4 text-zinc-500" />
+								<Check className="h-4 w-4 text-pine" />
 							</div>
-							<span className="text-sm text-zinc-300">{item}</span>
+							<span className="text-sm text-ink-soft">{item}</span>
 						</div>
 					))}
 				</div>
@@ -305,21 +305,21 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 			<CollapsibleSection title="How to claim">
 				<div className="grid grid-cols-1 gap-8 md:grid-cols-3">
 					{steps.map((step, idx) => (
-						<div key={idx} className="flex flex-col border-t border-white/10 pt-6">
-							<div className="mb-3 flex h-6 w-6 items-center justify-center rounded-full border border-white/10 text-xs text-zinc-500">
+						<div key={idx} className="flex flex-col border-t border-ink/10 pt-6">
+							<div className="mb-3 flex h-6 w-6 items-center justify-center rounded-full border border-pine/30 font-mono text-xs text-pine">
 								{step.number}
 							</div>
-							<h3 className="mb-2 text-base font-medium text-white">{step.title}</h3>
-							<p className="text-sm leading-relaxed text-zinc-500">{step.description}</p>
+							<h3 className="mb-2 text-base font-medium text-ink">{step.title}</h3>
+							<p className="text-sm leading-relaxed text-ink-soft">{step.description}</p>
 						</div>
 					))}
 				</div>
 			</CollapsibleSection>
 
 			{/* CTA */}
-			<div className="border-t border-white/10 py-24 px-6">
+			<div className="border-t border-ink/10 py-24 px-6">
 				<div className="mx-auto w-full max-w-7xl text-center">
-					<h2 className="mb-6 text-2xl font-medium tracking-[-0.015em] text-white md:text-4xl">
+					<h2 className="mb-6 text-2xl font-medium tracking-[-0.015em] text-ink md:text-4xl">
 						Ready to build?
 					</h2>
 					<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -327,15 +327,15 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 							href="https://forms.gle/J8USsTND8NAKJ18W9"
 							target="_blank"
 							rel="noopener noreferrer"
-							className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+							className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent"
 						>
 							Claim the deal
 							<ArrowRight className="h-4 w-4" />
 						</a>
 					</div>
-					<p className="mt-8 text-sm text-zinc-500">
+					<p className="mt-8 text-sm text-ink-soft">
 						Questions?{' '}
-						<a href="/support" className="text-zinc-300 transition-colors hover:text-white">
+						<a href="/support" className="text-pine transition-colors hover:text-ink">
 							Contact us
 						</a>
 					</p>

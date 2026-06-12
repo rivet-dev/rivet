@@ -17,21 +17,21 @@ try {
 	description="Other companies whose code & culture mirrors that at Rivet."
 	canonicalUrl="https://rivet.dev/oss-friends/"
 >
-	<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+	<div class="paper-grain min-h-screen font-sans text-ink-soft">
 		<div class="relative overflow-hidden pb-12 pt-32 md:pt-48">
 			<div class="mx-auto max-w-7xl px-6">
 				<div class="max-w-2xl">
-					<h1 class="mb-6 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl">
+					<h1 class="mb-6 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink md:text-6xl">
 						Open Source Friends
 					</h1>
-					<p class="text-base leading-relaxed text-zinc-500">
+					<p class="text-base leading-relaxed text-ink-soft">
 						Other companies whose code & culture mirrors that at Rivet.
 					</p>
 				</div>
 			</div>
 		</div>
 
-		<div class="border-t border-white/10 py-16">
+		<div class="border-t border-ink/10 py-16">
 			<div class="mx-auto max-w-7xl px-6">
 				<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
 					{items.map((friend: any) => (
@@ -39,12 +39,12 @@ try {
 							href={friend.href}
 							target="_blank"
 							rel="noopener noreferrer"
-							class="group flex flex-col rounded-xl border border-white/10 p-6 transition-colors hover:border-white/20"
+							class="group flex flex-col border border-ink/10 bg-white/55 p-6 transition-colors hover:border-ink/25"
 						>
-							<h3 class="mb-2 text-base font-medium text-white">
+							<h3 class="mb-2 text-base font-medium text-ink">
 								{friend.name}
 							</h3>
-							<p class="text-sm leading-relaxed text-zinc-500">
+							<p class="text-sm leading-relaxed text-ink-soft">
 								{friend.description}
 							</p>
 						</a>
