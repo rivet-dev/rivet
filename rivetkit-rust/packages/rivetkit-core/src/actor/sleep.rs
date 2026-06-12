@@ -523,6 +523,12 @@ impl ActorContext {
 				);
 				return false;
 			}
+			// Reap completed tasks so the JoinSet stays bounded to in-flight
+			// work. Without this the set is only drained at shutdown, so a
+			// long-lived actor that keeps spawning work (for example a workflow
+			// loop registering keep-awake tasks each tick) accumulates finished
+			// task handles for its entire lifetime.
+			while shutdown_tasks.try_join_next().is_some() {}
 			let region = self.begin_work_region(kind);
 			shutdown_tasks.spawn(self.build_spawned_work_task(kind, policy, region, fut));
 		} else {
@@ -535,6 +541,7 @@ impl ActorContext {
 				);
 				return false;
 			}
+			while unabortable_shutdown_tasks.try_join_next().is_some() {}
 			let region = self.begin_work_region(kind);
 			unabortable_shutdown_tasks
 				.spawn(self.build_spawned_work_task(kind, policy, region, fut));
@@ -591,6 +598,10 @@ impl ActorContext {
 			);
 			return false;
 		}
+
+		// Reap finished tasks so the Vec stays bounded to in-flight work
+		// instead of only draining at shutdown.
+		local_shutdown_tasks.retain_mut(|task| matches!(task.complete_rx.try_recv(), Ok(None)));
 
 		let policy = kind.policy();
 		let region = self.begin_work_region(kind);

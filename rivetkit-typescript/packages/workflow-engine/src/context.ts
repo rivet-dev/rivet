@@ -71,7 +71,6 @@ import type {
 	WorkflowQueueNextBatchOptions,
 	WorkflowQueueNextOptions,
 } from "./types.js";
-import { sleep } from "./utils.js";
 
 /**
  * Default values for step configuration.
@@ -606,20 +605,34 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	 * The event listener uses { once: true } to auto-remove after firing,
 	 * preventing memory leaks if this method is called multiple times.
 	 */
-	waitForEviction(): Promise<never> {
-		return new Promise((_, reject) => {
-			if (this.abortSignal.aborted) {
-				reject(new EvictedError());
-				return;
+	/**
+	 * Wait for `ms`, rejecting early with EvictedError if the workflow is
+	 * evicted. Both the timer and the abort listener are torn down on either
+	 * outcome, so a completed sleep never leaves a dangling listener on the
+	 * long-lived run abort signal.
+	 */
+	private async sleepOrEvict(ms: number): Promise<void> {
+		if (this.abortSignal.aborted) {
+			throw new EvictedError();
+		}
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		let onAbort: (() => void) | undefined;
+		try {
+			await new Promise<void>((resolve, reject) => {
+				timer = setTimeout(resolve, ms);
+				onAbort = () => reject(new EvictedError());
+				this.abortSignal.addEventListener("abort", onAbort, {
+					once: true,
+				});
+			});
+		} finally {
+			if (timer !== undefined) {
+				clearTimeout(timer);
 			}
-			this.abortSignal.addEventListener(
-				"abort",
-				() => {
-					reject(new EvictedError());
-				},
-				{ once: true },
-			);
-		});
+			if (onAbort) {
+				this.abortSignal.removeEventListener("abort", onAbort);
+			}
+		}
 	}
 
 	// === Step ===
@@ -1484,7 +1497,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 
 		// Short sleep: wait in memory
 		if (remaining < this.driver.workerPollInterval) {
-			await Promise.race([sleep(remaining), this.waitForEviction()]);
+			await this.sleepOrEvict(remaining);
 
 			this.checkEvicted();
 

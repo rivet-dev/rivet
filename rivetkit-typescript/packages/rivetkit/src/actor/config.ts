@@ -873,6 +873,8 @@ interface RunFunctionConfig {
 	icon?: string;
 	inspector?: RunInspectorConfig;
 	inspectorFactory?: (actor: unknown) => RunInspectorConfig | undefined;
+	/** Release any per-actor inspector state held for this actor id. */
+	disposeInspector?: (actorId: string) => void;
 }
 
 type RunFunctionWithConfig = ((...args: any[]) => any) & {
@@ -921,6 +923,18 @@ export function getRunInspectorConfig(
 			: config?.inspector;
 	}
 	return run.inspector;
+}
+
+/** Release per-actor inspector state for a destroyed actor, if the run handler registered a disposer. */
+export function disposeRunInspector(
+	run: ((...args: any[]) => any) | AnyRunConfig | undefined,
+	actorId: string,
+): void {
+	if (!run || typeof run !== "function") {
+		return;
+	}
+	const config = (run as RunFunctionWithConfig)[RUN_FUNCTION_CONFIG_SYMBOL];
+	config?.disposeInspector?.(actorId);
 }
 
 // This schema is used to validate the input at runtime. The generic types are defined below in `ActorConfig`.

@@ -532,26 +532,46 @@ async function executeLiveWorkflow<TInput, TOutput>(
 		const hasDeadline = result.sleepUntil !== undefined;
 
 		if (hasMessages && hasDeadline) {
-			// Wait for EITHER a message OR the deadline (for queue.next timeout)
+			// Wait for EITHER a message OR the deadline (for queue.next timeout).
+			// Scope both waiters to a per-iteration controller chained to the run
+			// signal so that whichever loses the race is cancelled immediately.
+			// Otherwise the loser (a message waiter or an armed sleep timer) stays
+			// registered on the long-lived run signal and leaks once per cycle.
+			const iterationAbort = new AbortController();
+			const onRunAbort = () => iterationAbort.abort();
+			if (abortController.signal.aborted) {
+				iterationAbort.abort();
+			} else {
+				abortController.signal.addEventListener("abort", onRunAbort, {
+					once: true,
+				});
+			}
+			const messagePromise = awaitWithEviction(
+				driver.waitForMessages(
+					result.waitingForMessages!,
+					iterationAbort.signal,
+				),
+				iterationAbort.signal,
+			);
+			const sleepPromise = waitForSleep(
+				runtime,
+				result.sleepUntil!,
+				iterationAbort.signal,
+			);
+			// Swallow the loser's rejection once it is aborted below so it does
+			// not surface as an unhandled rejection.
+			messagePromise.catch(() => {});
+			sleepPromise.catch(() => {});
 			try {
-				const messagePromise = awaitWithEviction(
-					driver.waitForMessages(
-						result.waitingForMessages!,
-						abortController.signal,
-					),
-					abortController.signal,
-				);
-				const sleepPromise = waitForSleep(
-					runtime,
-					result.sleepUntil!,
-					abortController.signal,
-				);
 				await Promise.race([messagePromise, sleepPromise]);
 			} catch (error) {
 				if (error instanceof EvictedError) {
 					return lastResult;
 				}
 				throw error;
+			} finally {
+				iterationAbort.abort();
+				abortController.signal.removeEventListener("abort", onRunAbort);
 			}
 			continue;
 		}
