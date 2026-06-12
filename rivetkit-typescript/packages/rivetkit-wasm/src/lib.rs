@@ -239,6 +239,9 @@ impl From<WasmActorConfig> for ActorConfigInput {
 					.map(|action| rivetkit_core::ActionDefinition { name: action.name })
 					.collect()
 			}),
+			// Custom inspector tabs serve assets from a filesystem `root`, which is a
+			// native/server feature that has no meaning in a browser wasm host.
+			inspector_tabs: None,
 		}
 	}
 }
