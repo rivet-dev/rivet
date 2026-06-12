@@ -2,6 +2,8 @@
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import RegistryPageClient from '@/components/marketing/registry/RegistryPageClient';
 import { registry } from '@/data/registry';
+import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
+import { HERO_H1_CLASS } from '@/components/marketing/typography';
 ---
 
 <MarketingLayout
@@ -10,13 +12,14 @@ import { registry } from '@/data/registry';
 	canonicalUrl="https://rivet.dev/agent-os/registry/"
 	ogImage="https://assets.rivet.dev/website/public/images/agent-os/agentos-og.png"
 >
-	<main class="min-h-screen w-full bg-white selection:bg-zinc-200 selection:text-zinc-900" style="overflow-x: clip;">
+	<main class="paper-grain min-h-screen w-full font-sans text-ink-soft" style="overflow-x: clip;">
 		<div class="relative isolate pt-40">
 			<div class="mx-auto max-w-4xl px-6 text-center lg:px-8">
-				<h1 class="text-6xl leading-[1.1] tracking-normal text-zinc-900">
+				<Eyebrow label="agentOS" className="mb-5" />
+				<h1 class={HERO_H1_CLASS}>
 					agentOS Registry
 				</h1>
-				<p class="mx-auto mt-6 max-w-3xl text-xl font-medium leading-[1.2] tracking-tight text-zinc-500">
+				<p class="mx-auto mt-6 max-w-3xl text-lg leading-relaxed text-ink-soft md:text-xl">
 					Browse agents, tools, file systems, and sandbox mounting for agentOS.
 				</p>
 				<div class="mt-8 flex items-center justify-center gap-3">
@@ -24,7 +27,7 @@ import { registry } from '@/data/registry';
 						href="https://github.com/rivet-dev/agent-os/blob/main/registry/CONTRIBUTING.md"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 no-underline transition-all duration-200 hover:border-zinc-300 hover:text-zinc-900"
+						class="inline-flex items-center gap-2 rounded-lg border border-ink/20 px-5 py-2.5 text-sm font-medium text-ink-soft no-underline transition-colors hover:border-ink/40 hover:text-ink"
 					>
 						Publish a Package
 						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>
@@ -33,7 +36,7 @@ import { registry } from '@/data/registry';
 						href="https://github.com/rivet-dev/agent-os/issues"
 						target="_blank"
 						rel="noopener noreferrer"
-						class="inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 no-underline transition-all duration-200 hover:border-zinc-300 hover:text-zinc-900"
+						class="inline-flex items-center gap-2 rounded-lg border border-ink/20 px-5 py-2.5 text-sm font-medium text-ink-soft no-underline transition-colors hover:border-ink/40 hover:text-ink"
 					>
 						Request an Extension
 						<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 7h10v10"/><path d="M7 17 17 7"/></svg>

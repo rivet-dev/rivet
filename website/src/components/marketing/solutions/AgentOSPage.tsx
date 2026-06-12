@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import {
+	ArrowDown,
 	ArrowRight,
 	Shield,
 	Terminal,
@@ -33,6 +34,9 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Icon, faNodeJs, faPython } from '@rivet-gg/icons';
 import type { IconProp } from '@rivet-gg/icons';
 import agentosLogo from '@/images/products/agentos-logo.svg';
+import { InkPanel } from '../editorial/InkPanel';
+import { Eyebrow } from '../editorial/Eyebrow';
+import { PixelGridChart } from '../art/PixelGridChart';
 
 interface HeroTabCode {
 	key: string;
@@ -435,8 +439,8 @@ const ImageCycler = ({ images }: { images: HeroImage[] }) => {
 				}`}
 				style={{ zIndex: 20 }}
 			>
-				<p className='text-sm font-medium text-zinc-900'>{currentImage.title}</p>
-				<p className='text-xs text-zinc-500'>{currentImage.caption}</p>
+				<p className='text-sm font-medium text-ink'>{currentImage.title}</p>
+				<p className='text-xs text-ink-faint'>{currentImage.caption}</p>
 			</div>
 		</div>
 	);
@@ -455,11 +459,11 @@ const CopyCommand = ({ command }: { command: string }) => {
 	return (
 		<button
 			onClick={handleCopy}
-			className='group inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-4 py-2 text-sm transition-colors hover:border-zinc-400 sm:w-auto'
+			className='group inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm transition-colors hover:border-ink/40 sm:w-auto'
 		>
-			<Terminal className='h-4 w-4 text-zinc-400' />
-			<span className='text-zinc-700'>{command}</span>
-			{copied && <Check className='h-4 w-4 text-emerald-500' />}
+			<Terminal className='h-4 w-4 text-ink-faint' />
+			<span className='text-ink-soft transition-colors group-hover:text-ink'>{command}</span>
+			{copied && <Check className='h-4 w-4 text-pine' />}
 		</button>
 	);
 };
@@ -505,8 +509,8 @@ const HandwrittenText = ({ text, className }: { text: string; className?: string
 					fontFamily: '"Gloria Hallelujah", cursive',
 					fontSize: '72px',
 					fontWeight: 400,
-					fill: 'black',
-					stroke: 'black',
+					fill: '#1B1916',
+					stroke: '#1B1916',
 					strokeWidth: 1,
 					paintOrder: 'stroke fill',
 				}}
@@ -536,30 +540,30 @@ interface TermLine {
 }
 
 const terminalLines: TermLine[] = [
-	{ text: '$ npx agentos start', color: 'text-zinc-900', delay: 0, typing: true },
+	{ text: '$ npx agentos start', color: 'text-cream', delay: 0, typing: true },
 	{ text: '', delay: 600 },
-	{ text: AGENTOS_ASCII, color: 'text-zinc-900', delay: 800 },
+	{ text: AGENTOS_ASCII, color: 'text-cream', delay: 800 },
 	{ text: '', delay: 1200 },
-	{ text: '  v0.1.0  |  runtime ready', color: 'text-zinc-400', delay: 1400 },
+	{ text: '  v0.1.0  |  runtime ready', color: 'text-cream/45', delay: 1400 },
 	{ text: '', delay: 1600 },
-	{ text: '✓ V8 isolate pool initialized (12 workers)', color: 'text-emerald-600', delay: 1800 },
-	{ text: '✓ File system mounted → /workspace', color: 'text-emerald-600', delay: 2100 },
-	{ text: '✓ Tool registry loaded (git, curl, python, node)', color: 'text-emerald-600', delay: 2400 },
-	{ text: '✓ Network policy applied → allowlist mode', color: 'text-emerald-600', delay: 2700 },
+	{ text: '✓ V8 isolate pool initialized (12 workers)', color: 'text-sage', delay: 1800 },
+	{ text: '✓ File system mounted → /workspace', color: 'text-sage', delay: 2100 },
+	{ text: '✓ Tool registry loaded (git, curl, python, node)', color: 'text-sage', delay: 2400 },
+	{ text: '✓ Network policy applied → allowlist mode', color: 'text-sage', delay: 2700 },
 	{ text: '', delay: 3000 },
-	{ text: '● Agent session created  sid=a8f3c2e1', color: 'text-blue-600', delay: 3200 },
-	{ text: '  → Claude Code connected', color: 'text-zinc-500', delay: 3500 },
-	{ text: '  → Prompt: "Set up a Next.js app with auth"', color: 'text-zinc-500', delay: 3800 },
+	{ text: '● Agent session created  sid=a8f3c2e1', color: 'text-cream/85', delay: 3200 },
+	{ text: '  → Claude Code connected', color: 'text-cream/55', delay: 3500 },
+	{ text: '  → Prompt: "Set up a Next.js app with auth"', color: 'text-cream/55', delay: 3800 },
 	{ text: '', delay: 4100 },
-	{ text: '  ▸ agent  npm create next-app@latest /workspace/app', color: 'text-zinc-600', delay: 4400 },
-	{ text: '  ▸ agent  npm install next-auth@5 prisma @prisma/client', color: 'text-zinc-600', delay: 5000 },
-	{ text: '  ▸ agent  Writing 7 files...', color: 'text-zinc-600', delay: 5600 },
-	{ text: '  ▸ agent  npx prisma db push', color: 'text-zinc-600', delay: 6200 },
+	{ text: '  ▸ agent  npm create next-app@latest /workspace/app', color: 'text-cream/70', delay: 4400 },
+	{ text: '  ▸ agent  npm install next-auth@5 prisma @prisma/client', color: 'text-cream/70', delay: 5000 },
+	{ text: '  ▸ agent  Writing 7 files...', color: 'text-cream/70', delay: 5600 },
+	{ text: '  ▸ agent  npx prisma db push', color: 'text-cream/70', delay: 6200 },
 	{ text: '', delay: 6800 },
-	{ text: '✓ Task complete  duration=14.2s  tokens=3,847  cost=$0.012', color: 'text-emerald-600', delay: 7000 },
-	{ text: '  → Preview: http://localhost:3000', color: 'text-zinc-500', delay: 7300 },
+	{ text: '✓ Task complete  duration=14.2s  tokens=3,847  cost=$0.012', color: 'text-sage', delay: 7000 },
+	{ text: '  → Preview: http://localhost:3000', color: 'text-cream/55', delay: 7300 },
 	{ text: '', delay: 7600 },
-	{ text: '● Listening for new sessions...', color: 'text-blue-600', delay: 7800 },
+	{ text: '● Listening for new sessions...', color: 'text-cream/85', delay: 7800 },
 ];
 
 const FakeTerminal = () => {
@@ -605,35 +609,35 @@ const FakeTerminal = () => {
 	}, [visibleCount, typedText]);
 
 	return (
-		<div className='overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg'>
-			<div className='flex items-center gap-2 border-b border-zinc-100 px-4 py-3'>
-				<div className='h-3 w-3 rounded-full bg-zinc-200' />
-				<div className='h-3 w-3 rounded-full bg-zinc-200' />
-				<div className='h-3 w-3 rounded-full bg-zinc-200' />
-				<span className='ml-2 text-xs text-zinc-400'>terminal</span>
+		<InkPanel>
+			<div className='flex items-center gap-2 border-b border-cream/10 px-4 py-3'>
+				<div className='h-3 w-3 rounded-full bg-cream/15' />
+				<div className='h-3 w-3 rounded-full bg-cream/15' />
+				<div className='h-3 w-3 rounded-full bg-cream/15' />
+				<span className='ml-2 font-mono text-xs text-cream/45'>terminal</span>
 			</div>
 			<div
 				ref={scrollRef}
 				className='h-[360px] overflow-y-auto p-4 font-mono text-[11px] leading-relaxed md:h-[420px] md:text-xs'
 			>
 				{terminalLines.slice(0, visibleCount).map((line, i) => (
-					<div key={i} className={`${line.color || 'text-zinc-400'} whitespace-pre-wrap`}>
+					<div key={i} className={`${line.color || 'text-cream/45'} whitespace-pre-wrap`}>
 						{line.text || '\u00A0'}
 					</div>
 				))}
 				{isTyping && (
-					<div className={`${terminalLines[visibleCount]?.color || 'text-zinc-400'} whitespace-pre-wrap`}>
+					<div className={`${terminalLines[visibleCount]?.color || 'text-cream/45'} whitespace-pre-wrap`}>
 						{typedText}
 						<span className='animate-pulse'>▌</span>
 					</div>
 				)}
 				{visibleCount >= terminalLines.length && (
-					<div className='text-zinc-400'>
+					<div className='text-cream/45'>
 						<span className='animate-pulse'>▌</span>
 					</div>
 				)}
 			</div>
-		</div>
+		</InkPanel>
 	);
 };
 
@@ -686,12 +690,12 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 			{/* Left fade + arrow */}
 			{canScrollLeft && (
 				<div
-					className='absolute inset-y-0 left-0 z-20 flex w-20 items-center justify-start bg-gradient-to-r from-white from-30% via-white/70 via-60% to-transparent'
+					className='absolute inset-y-0 left-0 z-20 flex w-20 items-center justify-start bg-gradient-to-r from-paper from-30% via-paper/70 via-60% to-transparent'
 				>
 					<button
 						type='button'
 						onClick={() => scroll('left')}
-						className='ml-1 flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 hover:text-zinc-800'
+						className='ml-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-faint hover:text-ink'
 						aria-label='Scroll tabs left'
 					>
 						<ChevronLeft className='h-4 w-4' />
@@ -700,8 +704,8 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 			)}
 
 			{/* Scrollable tabs */}
-			<div ref={scrollRef} className='scrollbar-hide overflow-x-auto'>
-				<div className='flex min-w-max flex-nowrap items-center justify-start gap-1.5 px-1'>
+			<div ref={scrollRef} className='scrollbar-hide overflow-x-auto border-b border-ink/10'>
+				<div className='flex min-w-max flex-nowrap items-center justify-start gap-1'>
 					{tabs.map((tab, idx) => {
 						const LucideIcon = tab.icon;
 						return (
@@ -709,23 +713,18 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 								key={tab.label}
 								type='button'
 								onClick={() => onTabChange(idx)}
-								className='relative inline-flex shrink-0 items-center gap-1.5 rounded-lg px-4 py-1.5 text-xs whitespace-nowrap transition-colors md:px-5 md:text-sm'
+								className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 font-mono text-xs transition-colors md:px-4 ${
+									activeTab === idx
+										? 'border-pine text-ink'
+										: 'border-transparent text-ink-soft hover:text-ink'
+								}`}
 							>
-								{activeTab === idx && (
-									<motion.div
-										layoutId='activeTab'
-										className='absolute inset-0 rounded-lg bg-zinc-200'
-										transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
-									/>
-								)}
-								<span className={`relative z-10 flex items-center gap-2 ${activeTab === idx ? 'text-zinc-900' : 'text-zinc-500 hover:text-zinc-700'}`}>
-									{tab.faIcon ? (
-										<Icon icon={tab.faIcon} className='h-4 w-4' />
-									) : LucideIcon ? (
-										<LucideIcon className='h-4 w-4' />
-									) : null}
-									{tab.label}
-								</span>
+								{tab.faIcon ? (
+									<Icon icon={tab.faIcon} className='h-4 w-4' />
+								) : LucideIcon ? (
+									<LucideIcon className='h-4 w-4' />
+								) : null}
+								{tab.label}
 							</button>
 						);
 					})}
@@ -735,12 +734,12 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 			{/* Right fade + arrow */}
 			{canScrollRight && (
 				<div
-					className='absolute inset-y-0 right-0 z-20 flex w-20 items-center justify-end bg-gradient-to-l from-white from-30% via-white/70 via-60% to-transparent'
+					className='absolute inset-y-0 right-0 z-20 flex w-20 items-center justify-end bg-gradient-to-l from-paper from-30% via-paper/70 via-60% to-transparent'
 				>
 					<button
 						type='button'
 						onClick={() => scroll('right')}
-						className='mr-1 flex h-8 w-8 items-center justify-center rounded-full text-zinc-500 hover:text-zinc-800'
+						className='mr-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-faint hover:text-ink'
 						aria-label='Scroll tabs right'
 					>
 						<ChevronRight className='h-4 w-4' />
@@ -828,7 +827,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 				>
 					<div className='relative'>
 						<AnimatedAgentOSLogo className='h-12 w-auto md:h-16 lg:h-20' displayedAgent={displayedAgent} />
-						<span className='absolute -right-[8px] -top-[7px] rounded-full border border-zinc-900 bg-white px-2 py-0.5 text-[10px] font-medium text-zinc-900'>Beta</span>
+						<span className='absolute -right-[8px] -top-[7px] rounded-full border border-ink bg-paper px-2 py-0.5 text-[10px] font-medium text-ink'>Beta</span>
 					</div>
 				</motion.div>
 
@@ -837,7 +836,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					initial={{ opacity: 0, y: 20 }}
 					animate={{ opacity: 1, y: 0 }}
 					transition={{ duration: 0.5, delay: 0.1 }}
-					className='mb-10 max-w-2xl text-center text-base text-zinc-500 md:text-left md:text-lg'
+					className='mb-10 max-w-2xl text-center text-base text-ink-soft md:text-left md:text-lg'
 				>
 					A portable open-source operating system for agents. ~6 ms coldstarts, 32x cheaper than sandboxes. Powered by WebAssembly and V8 isolates.
 				</motion.p>
@@ -849,21 +848,21 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					transition={{ duration: 0.5, delay: 0.12 }}
 					className='mb-10 flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'
 				>
-					<span className='text-xs text-zinc-400 uppercase tracking-wider'>Works with</span>
+					<span className='font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint'>Works with</span>
 					<div className='flex flex-wrap items-center justify-center gap-2 md:justify-start md:gap-4'>
 						{agents.map((agent) => (
 							<div
 								key={agent.name}
-								className='flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-zinc-100'
+								className='flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 transition-colors hover:bg-ink/5'
 								onMouseEnter={() => autoPlayComplete && setHoveredAgent(agent)}
 								onMouseLeave={() => autoPlayComplete && setHoveredAgent(null)}
 							>
 								<img src={agent.src} alt={agent.name} className='h-4 w-4' />
-								<span className='text-sm text-zinc-500'>{agent.name}{agent.comingSoon && '*'}</span>
+								<span className='text-sm text-ink-soft'>{agent.name}{agent.comingSoon && '*'}</span>
 							</div>
 						))}
 					</div>
-					<span className='text-xs text-zinc-400'>*Coming Soon</span>
+					<span className='text-xs text-ink-faint'>*Coming Soon</span>
 				</motion.div>
 
 				{/* Code snippets */}
@@ -876,12 +875,12 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					<HeroTabs tabs={getStartedTabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
 					{/* Code block */}
-					<div className='overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50'>
-						<div className='flex items-center gap-2 border-b border-zinc-200 px-4 py-3'>
-							<div className='h-3 w-3 rounded-full bg-zinc-200' />
-							<div className='h-3 w-3 rounded-full bg-zinc-200' />
-							<div className='h-3 w-3 rounded-full bg-zinc-200' />
-							<span className='ml-2 text-xs text-zinc-600'>{getStartedTabs[activeTab]?.fileName ?? 'index.ts'}</span>
+					<InkPanel caption={<>Fig. 01 — {getStartedTabs[activeTab]?.label ?? 'agentOS'}</>}>
+						<div className='flex items-center gap-2 border-b border-cream/10 px-4 py-3'>
+							<div className='h-3 w-3 rounded-full bg-cream/15' />
+							<div className='h-3 w-3 rounded-full bg-cream/15' />
+							<div className='h-3 w-3 rounded-full bg-cream/15' />
+							<span className='ml-2 font-mono text-xs text-cream/45'>{getStartedTabs[activeTab]?.fileName ?? 'index.ts'}</span>
 						</div>
 						<div className='relative h-[380px] overflow-y-auto'>
 							<AnimatePresence mode='wait'>
@@ -891,7 +890,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 									animate={{ opacity: 1 }}
 									exit={{ opacity: 0 }}
 									transition={{ duration: 0.2 }}
-									className='overflow-x-auto p-6 font-mono text-sm leading-relaxed text-zinc-600 [&_.line]:break-all [&_.shiki]:!m-0 [&_.shiki]:!bg-transparent [&_.shiki]:!p-0 [&_.shiki]:font-mono [&_.shiki]:text-sm [&_.shiki]:leading-relaxed'
+									className='overflow-x-auto p-6 font-mono text-sm leading-relaxed text-cream/80 [&_.line]:break-all [&_.shiki]:!m-0 [&_.shiki]:!bg-transparent [&_.shiki]:!p-0 [&_.shiki]:font-mono [&_.shiki]:text-sm [&_.shiki]:leading-relaxed'
 								>
 									<span
 										className='not-prose code'
@@ -901,7 +900,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 								</motion.div>
 							</AnimatePresence>
 						</div>
-					</div>
+					</InkPanel>
 				</motion.div>
 
 				{/* Buttons */}
@@ -913,7 +912,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 				>
 					<a
 						href='/docs/agent-os'
-						className='selection-dark inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 sm:w-auto'
+						className='selection-dark inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent sm:w-auto'
 					>
 						Read the Docs
 						<ArrowRight className='h-4 w-4' />
@@ -922,7 +921,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					<div className='flex-1' />
 					<a
 						href='/agent-os/registry'
-						className='inline-flex items-center gap-2 whitespace-nowrap text-sm text-zinc-500 transition-colors hover:text-zinc-900'
+						className='inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft transition-colors hover:text-pine'
 					>
 						<Package className='h-4 w-4' />
 						View Package Registry
@@ -957,21 +956,21 @@ const FeatureCard = ({
 		whileInView={{ opacity: 1, y: 0 }}
 		viewport={{ once: true }}
 		transition={{ duration: 0.5, delay }}
-		className='border-t border-zinc-200 pt-6'
+		className='border-t border-ink/10 pt-6'
 	>
-		<div className='mb-3 text-zinc-500'>
+		<div className='mb-3 text-olive'>
 			<IconComponent className='h-4 w-4' />
 		</div>
-		<h3 className='mb-2 text-base font-medium text-zinc-900'>
+		<h3 className='mb-2 text-base font-medium text-ink'>
 			{title}
 		</h3>
-		<p className='mb-4 text-sm leading-relaxed text-zinc-500'>{description}</p>
+		<p className='mb-4 text-sm leading-relaxed text-ink-soft'>{description}</p>
 		{tags && (
 			<div className='flex flex-wrap gap-2'>
 				{tags.map((tag) => (
 					<span
 						key={tag}
-						className='rounded bg-zinc-100 px-2.5 py-1 font-mono text-xs text-zinc-500'
+						className='rounded bg-ink/5 px-2.5 py-1 font-mono text-xs text-ink-soft'
 					>
 						{tag}
 					</span>
@@ -980,10 +979,10 @@ const FeatureCard = ({
 		)}
 		{metric && (
 			<div className='flex items-baseline gap-2'>
-				<span className='font-mono text-3xl font-medium text-zinc-900'>
+				<span className='font-mono text-3xl font-medium text-ink'>
 					{metric.value}
 				</span>
-				<span className='text-sm text-zinc-500'>{metric.label}</span>
+				<span className='text-sm text-ink-soft'>{metric.label}</span>
 			</div>
 		)}
 	</motion.div>
@@ -992,7 +991,7 @@ const FeatureCard = ({
 const DocsLink = ({ href }: { href: string }) => (
 	<a
 		href={href}
-		className='inline-flex items-center gap-1 text-sm text-zinc-500 transition-colors hover:text-zinc-900'
+		className='inline-flex items-center gap-1 text-sm text-ink-soft transition-colors hover:text-pine'
 	>
 		Docs <span aria-hidden='true'>→</span>
 	</a>
@@ -1000,7 +999,7 @@ const DocsLink = ({ href }: { href: string }) => (
 
 // --- Icon Box (rounded square outline like Rivet/agentOS logos) ---
 const IconBox = ({ children }: { children: React.ReactNode }) => (
-	<div className='relative mb-6 flex h-10 w-10 items-center justify-center md:h-12 md:w-12'>
+	<div className='relative mb-6 flex h-10 w-10 items-center justify-center text-olive md:h-12 md:w-12'>
 		<svg
 			className='absolute inset-0 h-full w-full'
 			viewBox='0 0 172 172'
@@ -1134,13 +1133,13 @@ const StackingFeatureCards = () => {
 	];
 
 	return (
-		<section ref={sectionRef} className='border-t border-zinc-200'>
+		<section ref={sectionRef} className='border-t border-ink/10'>
 			{/* Fade gradient overlay at bottom - only show when section is in view */}
 			{isInView && (
 				<div
 					className='pointer-events-none fixed bottom-0 left-0 right-0 z-20 h-64'
 					style={{
-						background: 'linear-gradient(to top, white 0%, white 20%, transparent 100%)',
+						background: 'linear-gradient(to top, #EFEFEF 0%, #EFEFEF 20%, transparent 100%)',
 					}}
 				/>
 			)}
@@ -1153,7 +1152,7 @@ const StackingFeatureCards = () => {
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
-					className='mx-auto max-w-4xl text-center text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl'
+					className='mx-auto max-w-4xl text-center text-3xl font-medium tracking-[-0.015em] text-ink md:text-5xl'
 				>
 					Meet your agent&apos;s new operating system.
 				</motion.h2>
@@ -1176,23 +1175,22 @@ const StackingFeatureCards = () => {
 									}}
 								>
 									<div
-										className='mb-6 flex min-h-0 flex-col rounded-2xl border border-zinc-200 bg-zinc-50 p-8 shadow-2xl md:p-12'
+										className='mb-6 flex min-h-0 flex-col rounded-2xl border border-ink/15 bg-paper-mid p-8 md:p-12'
 										style={{
 											minHeight: `${CARD_HEIGHT - 24}px`,
-											boxShadow: '0 -20px 60px rgba(0, 0, 0, 0.08), 0 -4px 30px rgba(0, 0, 0, 0.04)',
 										}}
 									>
 										<IconBox>
-											<Icon className='h-4 w-4 text-zinc-900 md:h-5 md:w-5' />
+											<Icon className='h-4 w-4 text-olive md:h-5 md:w-5' />
 										</IconBox>
-										<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'>
+										<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-4xl'>
 											{feature.title}
 										</h2>
-										<p className='mb-4 max-w-2xl text-base leading-relaxed text-zinc-500 md:text-lg'>
+										<p className='mb-4 max-w-2xl text-base leading-relaxed text-ink-soft md:text-lg'>
 											{feature.description}
 										</p>
 										{feature.detail && (
-											<p className='mb-6 max-w-2xl text-sm leading-relaxed text-zinc-500 md:text-base'>
+											<p className='mb-6 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
 												{feature.detail}
 											</p>
 										)}
@@ -1201,7 +1199,7 @@ const StackingFeatureCards = () => {
 												{feature.tags.map((tag) => (
 													<span
 														key={tag}
-														className='rounded-full border border-zinc-200 bg-zinc-100 px-4 py-1.5 font-mono text-sm text-zinc-500'
+														className='rounded-full border border-ink/10 bg-white/55 px-4 py-1.5 font-mono text-sm text-ink-soft'
 													>
 														{tag}
 													</span>
@@ -1212,10 +1210,10 @@ const StackingFeatureCards = () => {
 											<div className='grid grid-cols-2 gap-8 md:gap-12'>
 												{feature.metrics.map((m) => (
 													<div key={m.value} className='flex flex-col'>
-														<span className='font-mono text-5xl font-medium text-zinc-900 md:text-7xl'>
+														<span className='font-mono text-5xl font-medium text-ink md:text-7xl'>
 															{m.value}
 														</span>
-														<span className='mt-2 text-sm text-zinc-500 md:text-base'>{m.label}</span>
+														<span className='mt-2 text-sm text-ink-soft md:text-base'>{m.label}</span>
 													</div>
 												))}
 											</div>
@@ -1275,20 +1273,20 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 						return (
 							<div
 								key={feature.title}
-								className='relative flex w-[280px] flex-shrink-0 flex-col rounded-2xl bg-zinc-50 p-6'
+								className='relative flex w-[280px] flex-shrink-0 flex-col rounded-2xl border border-ink/10 bg-white/55 p-6'
 							>
 							{feature.comingSoon && (
-								<span className='absolute top-4 right-4 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium text-amber-700'>
+								<span className='absolute top-4 right-4 rounded-full border border-ink/10 bg-mat px-2 py-0.5 text-[10px] font-medium text-ink-soft'>
 									Coming Soon
 								</span>
 							)}
-							<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-200/60'>
-								<Icon className='h-5 w-5 text-zinc-600' />
+							<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-ink/5'>
+								<Icon className='h-5 w-5 text-olive' />
 							</div>
-							<h3 className='mb-2 text-sm font-medium text-zinc-900'>
+							<h3 className='mb-2 text-sm font-medium text-ink'>
 								{feature.title}
 							</h3>
-								<p className='text-sm leading-relaxed text-zinc-500'>
+								<p className='text-sm leading-relaxed text-ink-soft'>
 									{feature.description}
 								</p>
 								{feature.docsHref && (
@@ -1308,8 +1306,8 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 					disabled={!canScrollLeft}
 					className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${
 						canScrollLeft
-							? 'border-zinc-300 text-zinc-900 hover:bg-zinc-100'
-							: 'border-zinc-200 text-zinc-300 cursor-default'
+							? 'border-ink/20 text-ink hover:border-ink/40'
+							: 'border-ink/10 text-ink/25 cursor-default'
 					}`}
 				>
 					<ChevronLeft className='h-4 w-4' />
@@ -1319,8 +1317,8 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 					disabled={!canScrollRight}
 					className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${
 						canScrollRight
-							? 'border-zinc-300 text-zinc-900 hover:bg-zinc-100'
-							: 'border-zinc-200 text-zinc-300 cursor-default'
+							? 'border-ink/20 text-ink hover:border-ink/40'
+							: 'border-ink/10 text-ink/25 cursor-default'
 					}`}
 				>
 					<ChevronRight className='h-4 w-4' />
@@ -1332,10 +1330,10 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 
 const ThemedFeatureSections = () => (
 	<div className='mt-16 md:mt-48'>
-		{themedSections.map((section) => (
+		{themedSections.map((section, sectionIdx) => (
 			<section
 				key={section.category}
-				className='border-t border-zinc-200 px-6 py-24 md:py-40'
+				className='border-t border-ink/10 px-6 py-24 md:py-40'
 			>
 				<div className='mx-auto max-w-7xl'>
 					{/* Section header */}
@@ -1346,10 +1344,15 @@ const ThemedFeatureSections = () => (
 						transition={{ duration: 0.6 }}
 						className='mb-10'
 					>
-						<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl lg:text-6xl'>
+						<Eyebrow
+							index={String(sectionIdx + 1).padStart(2, '0')}
+							label={section.category}
+							className='mb-4'
+						/>
+						<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-5xl lg:text-6xl'>
 							{section.title}
 						</h2>
-						<p className='max-w-xl text-base text-zinc-500 md:text-lg'>
+						<p className='max-w-xl text-base text-ink-soft md:text-lg'>
 							{section.subtitle}
 						</p>
 					</motion.div>
@@ -1371,27 +1374,27 @@ const ThemedFeatureSections = () => (
 
 // --- agentOS Features Section ---
 const RegistryCallout = () => (
-	<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
+	<section className='border-t border-ink/10 px-6 py-24 md:py-40'>
 		<div className='mx-auto max-w-7xl'>
 			<motion.div
 				initial={{ opacity: 0, y: 20 }}
 				whileInView={{ opacity: 1, y: 0 }}
 				viewport={{ once: true }}
 				transition={{ duration: 0.5 }}
-				className='rounded-xl border border-zinc-200 bg-zinc-50 p-8 md:p-12'
+				className='rounded-xl border border-ink/10 bg-white/55 p-8 md:p-12'
 			>
 				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
 					<div>
-						<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-zinc-900 md:text-3xl'>
+						<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-ink md:text-3xl'>
 							agentOS Registry
 						</h3>
-						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
+						<p className='max-w-lg text-base leading-relaxed text-ink-soft'>
 							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
 						</p>
 					</div>
 					<a
 						href='/agent-os/registry'
-						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
 					>
 						Explore the Registry
 						<ArrowRight className='h-4 w-4' />
@@ -1411,26 +1414,110 @@ const AgentOSFeatures = () => (
 );
 
 // --- Benchmarks ---
-const BENCH_ACCENT = '#18181b';
-const BENCH_ACCENT_LIGHT = '#3f3f46';
-
 // Benchmark data (computed from raw inputs in bench.ts)
 import { benchColdStart, benchWorkloads, BENCHMARK_DATE, SANDBOX_COLDSTART_PROVIDER, SANDBOX_COST_PROVIDER, type WorkloadKey } from '@/data/bench';
 
+// Floor for pixel-grid columns so the tiny agentOS values still render a visible cell.
+const BENCH_CHART_FLOOR = 0.09;
+
 function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
+	// The wrapper is intentionally not positioned so the tooltip spans the ink
+	// card itself (the nearest positioned ancestor) instead of clipping at the
+	// panel's overflow-hidden edge.
 	return (
-		<span className='group/tip relative ml-1.5 inline-flex align-middle'>
+		<span className='group/tip ml-1.5 inline-flex align-middle'>
 			<svg
-				className='h-3.5 w-3.5 cursor-help text-zinc-600 transition-colors group-hover/tip:text-zinc-500'
+				className='h-3.5 w-3.5 cursor-help text-cream/35 transition-colors group-hover/tip:text-cream/70'
 				viewBox='0 0 16 16'
 				fill='currentColor'
 			>
 				<path d='M8 0a8 8 0 100 16A8 8 0 008 0zm1 12H7V7h2v5zm-1-6a1 1 0 110-2 1 1 0 010 2z' />
 			</svg>
-			<span className='pointer-events-none absolute bottom-full left-0 z-50 mb-2 w-80 rounded-lg border border-zinc-200 bg-white/95 p-3 text-[11px] leading-relaxed text-zinc-600 opacity-0 shadow-xl backdrop-blur-sm transition-opacity duration-200 group-hover/tip:pointer-events-auto group-hover/tip:opacity-100 [&_a]:text-zinc-900 [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-medium [&_strong]:text-zinc-800'>
+			<span className='pointer-events-none absolute inset-x-3 bottom-12 z-50 rounded-lg border border-cream/15 bg-ink p-3 text-left text-[11px] leading-relaxed text-cream/80 opacity-0 shadow-xl transition-opacity duration-200 group-hover/tip:pointer-events-auto group-hover/tip:opacity-100 [&_a]:text-sage [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-medium [&_strong]:text-cream'>
 				{children}
 			</span>
 		</span>
+	);
+}
+
+function BenchToggle({ options, active, onChange }: { options: string[]; active: number; onChange: (idx: number) => void }) {
+	return (
+		<div className='flex flex-wrap justify-end gap-1'>
+			{options.map((label, i) => (
+				<button
+					key={label}
+					onClick={() => onChange(i)}
+					className={`rounded px-2 py-1 font-mono text-[10px] tracking-wider transition-colors ${
+						i === active ? 'bg-cream/10 text-cream' : 'text-cream/45 hover:text-cream/70'
+					}`}
+				>
+					{label}
+				</button>
+			))}
+		</div>
+	);
+}
+
+interface BenchRowEntry {
+	label: React.ReactNode;
+	value: string;
+	highlight?: boolean;
+}
+
+// Dark ink data card matching the BenchmarksSection pattern on /actors:
+// sage mono title, direction tag, headline stat beside a pixel-grid chart,
+// and label/value rows pinned to the card's foot.
+function BenchCard({
+	title,
+	stat,
+	statNote,
+	chart,
+	toggle,
+	rows,
+	note,
+}: {
+	title: string;
+	stat: string;
+	statNote: string;
+	chart: number[];
+	toggle?: React.ReactNode;
+	rows: BenchRowEntry[];
+	note?: string;
+}) {
+	return (
+		<InkPanel className='h-full'>
+			<div className='flex h-full flex-col p-6'>
+				<div className='mb-5 flex items-start justify-between gap-4'>
+					<span className='font-mono text-[11px] uppercase tracking-[0.16em] text-sage'>{title}</span>
+					<span className='flex items-center gap-1 text-right font-mono text-[10px] uppercase tracking-wider text-cream/40'>
+						<ArrowDown className='h-3 w-3 flex-shrink-0' />
+						lower is better
+					</span>
+				</div>
+
+				<div className='flex items-end justify-between gap-6'>
+					<div className='min-w-0'>
+						<div className='text-2xl font-medium leading-tight text-cream md:text-3xl'>{stat}</div>
+						<div className='mt-1 text-sm text-cream/55'>{statNote}</div>
+					</div>
+					<PixelGridChart values={chart} rows={7} accentColumn={0} className='h-20 w-auto flex-shrink-0' />
+				</div>
+
+				{toggle ? <div className='mt-5 flex justify-end'>{toggle}</div> : null}
+
+				<div className='mt-6 flex flex-1 flex-col justify-end gap-2 border-t border-cream/10 pt-4'>
+					{rows.map((row, i) => (
+						<div key={i} className='flex items-center justify-between gap-4 text-xs'>
+							<span className={`inline-flex items-center ${row.highlight ? 'text-cream' : 'text-cream/55'}`}>
+								{row.label}
+							</span>
+							<span className={row.highlight ? 'font-medium text-sage' : 'text-cream/55'}>{row.value}</span>
+						</div>
+					))}
+					{note ? <p className='mt-1 text-[11px] leading-relaxed text-cream/40'>{note}</p> : null}
+				</div>
+			</div>
+		</InkPanel>
 	);
 }
 
@@ -1438,173 +1525,71 @@ function BenchColdStartChart() {
 	const groups = benchColdStart;
 	const [active, setActive] = useState(2);
 	const g = groups[active];
-	const pct = Math.max((g.agentOS / g.sandbox) * 100, 1);
 
 	return (
-		<motion.div
-			className='space-y-4'
-			initial='hidden'
-			whileInView='visible'
-			viewport={{ once: true, margin: '-100px' }}
-		>
-			<div className='flex items-center gap-4'>
-				<div>
-					<h4 className='flex items-center text-sm font-medium text-zinc-900'>
-						Cold start
-						<BenchInfoTooltip>
-							<strong>What&apos;s measured:</strong> Time from requesting an execution to first code running.
-							<br /><br />
-							<strong>Why the gap:</strong> agentOS runs agents in-process — V8 isolates and Wasm inside your host. No VM to boot, no network hop, no disk image. Sandboxes must boot an entire environment, allocate memory, and establish a network connection before code can run.
-							<br /><br />
-							<strong>Sandbox baseline:</strong> {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of {BENCHMARK_DATE}.
-							<br /><br />
-							<strong>agentOS:</strong> Median of 10,000 runs (100 iterations x 100 samples) on Intel i7-12700KF.
-						</BenchInfoTooltip>
-					</h4>
-					<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better</p>
-				</div>
-				<div className='ml-auto flex gap-1'>
-					{groups.map((t, i) => (
-						<button
-							key={t.label}
-							onClick={() => setActive(i)}
-							className={`rounded px-2.5 py-1 font-mono text-[11px] uppercase tracking-wider transition-colors ${
-								i === active ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-600 hover:text-zinc-500'
-							}`}
-						>
-							{t.label}
-						</button>
-					))}
-				</div>
-			</div>
-			<div className='space-y-1.5'>
-				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
-					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
-						<motion.div
-							key={`coldstart-${active}`}
-							initial={{ width: 0 }}
-							animate={{ width: `${pct}%` }}
-							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-							className='absolute inset-y-0 left-0 rounded-sm'
-							style={{ background: `linear-gradient(90deg, ${BENCH_ACCENT}, ${BENCH_ACCENT_LIGHT})` }}
-						/>
-						<motion.span
-							key={`label-coldstart-${active}`}
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ duration: 0.4, delay: 0.5 }}
-							className='absolute inset-y-0 z-10 flex items-center gap-2 font-mono text-xs font-medium text-zinc-500'
-							style={{ left: `calc(${pct}% + 8px)` }}
-						>
-							{g.agentOS} ms
-							<span className='text-[11px] font-semibold' style={{ color: BENCH_ACCENT_LIGHT }}>
-								{Math.round(g.sandbox / g.agentOS)}x faster
-							</span>
-						</motion.span>
-					</div>
-				</div>
-				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>Fastest sandbox</span>
-					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
-						<motion.div
-							key={`coldstart-sandbox-${active}`}
-							initial={{ width: 0 }}
-							animate={{ width: '100%' }}
-							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-							className='absolute inset-y-0 left-0 rounded-sm bg-zinc-400'
-						/>
-						<motion.span
-							key={`sandbox-label-coldstart-${active}`}
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ duration: 0.4, delay: 0.6 }}
-							className='absolute inset-y-0 left-2 z-10 flex items-center font-mono text-xs text-zinc-700'
-						>
-							{g.sandbox.toLocaleString()} ms
-						</motion.span>
-					</div>
-				</div>
-			</div>
-		</motion.div>
+		<BenchCard
+			title='Cold Start'
+			stat={`${g.agentOS} ms`}
+			statNote={`${Math.round(g.sandbox / g.agentOS)}x faster`}
+			chart={[Math.max(g.agentOS / g.sandbox, BENCH_CHART_FLOOR), 1]}
+			toggle={<BenchToggle options={groups.map((t) => t.label)} active={active} onChange={setActive} />}
+			rows={[
+				{
+					label: (
+						<>
+							agentOS
+							<BenchInfoTooltip>
+								<strong>What&apos;s measured:</strong> Time from requesting an execution to first code running.
+								<br /><br />
+								<strong>Why the gap:</strong> agentOS runs agents in-process — V8 isolates and Wasm inside your host. No VM to boot, no network hop, no disk image. Sandboxes must boot an entire environment, allocate memory, and establish a network connection before code can run.
+								<br /><br />
+								<strong>Sandbox baseline:</strong> {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of {BENCHMARK_DATE}.
+								<br /><br />
+								<strong>agentOS:</strong> Median of 10,000 runs (100 iterations x 100 samples) on Intel i7-12700KF.
+							</BenchInfoTooltip>
+						</>
+					),
+					value: `${g.agentOS} ms`,
+					highlight: true,
+				},
+				{ label: 'Fastest sandbox', value: `${g.sandbox.toLocaleString()} ms` },
+			]}
+		/>
 	);
 }
 
 function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
 	const mem = benchWorkloads[workload].memory;
-	const barMin = Math.max(mem.agentOSBar, 1);
+
 	return (
-		<motion.div
-			className='space-y-4'
-			initial='hidden'
-			whileInView='visible'
-			viewport={{ once: true, margin: '-100px' }}
-		>
-			<div>
-				<h4 className='flex items-center text-sm font-medium text-zinc-900'>
-					Memory per instance
-					<BenchInfoTooltip>
-						<strong>What&apos;s measured:</strong> Memory footprint added per concurrent execution.
-						<br /><br />
-						<strong>Why the gap:</strong> In-process isolates share the host's memory. Each additional execution only adds its own heap and stack. Sandboxes allocate a dedicated environment with a minimum memory reservation, even if the code inside uses far less.
-						<br /><br />
-						<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE}. Default sandbox: 1 vCPU + 1 GiB RAM.
-						<br /><br />
-						<strong>agentOS:</strong> {workload === 'agent' ? `${benchWorkloads.agent.memory.agentOS} for a full Pi coding agent session with MCP servers and file system mounts.` : `${benchWorkloads.shell.memory.agentOS} for the minimal shell workload under sustained load.`}
-					</BenchInfoTooltip>
-				</h4>
-				<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better. Sandboxes reserve idle RAM per agent.</p>
-			</div>
-			<div className='space-y-1.5'>
-				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
-					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
-						<motion.div
-							key={workload}
-							initial={{ width: 0 }}
-							animate={{ width: `${barMin}%` }}
-							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-							className='absolute inset-y-0 left-0 rounded-sm'
-							style={{ background: `linear-gradient(90deg, ${BENCH_ACCENT}, ${BENCH_ACCENT_LIGHT})` }}
-						/>
-						<motion.span
-							key={`mem-label-${workload}`}
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ duration: 0.4, delay: 0.5 }}
-							className='absolute inset-y-0 z-10 flex items-center gap-2 font-mono text-xs font-medium text-zinc-500'
-							style={{ left: `calc(${barMin}% + 8px)` }}
-						>
-							{mem.agentOS}
-							<span className='text-[11px] font-semibold' style={{ color: BENCH_ACCENT_LIGHT }}>
-								{mem.multiplier}
-							</span>
-						</motion.span>
-					</div>
-				</div>
-				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>Cheapest sandbox</span>
-					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
-						<motion.div
-							initial={{ width: 0 }}
-							whileInView={{ width: `${mem.sandboxBar}%` }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-							className='absolute inset-y-0 left-0 rounded-sm bg-zinc-400'
-						/>
-						<motion.span
-							initial={{ opacity: 0 }}
-							whileInView={{ opacity: 1 }}
-							viewport={{ once: true }}
-							transition={{ duration: 0.4, delay: 0.6 }}
-							className='absolute inset-y-0 left-2 z-10 flex items-center font-mono text-xs text-zinc-700'
-						>
-							{mem.sandbox}
-						</motion.span>
-					</div>
-				</div>
-			</div>
-		</motion.div>
+		<BenchCard
+			title='Memory Per Instance'
+			stat={mem.agentOS}
+			statNote={mem.multiplier}
+			chart={[Math.max(mem.agentOSBar / 100, BENCH_CHART_FLOOR), 1]}
+			rows={[
+				{
+					label: (
+						<>
+							agentOS
+							<BenchInfoTooltip>
+								<strong>What&apos;s measured:</strong> Memory footprint added per concurrent execution.
+								<br /><br />
+								<strong>Why the gap:</strong> In-process isolates share the host's memory. Each additional execution only adds its own heap and stack. Sandboxes allocate a dedicated environment with a minimum memory reservation, even if the code inside uses far less.
+								<br /><br />
+								<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE}. Default sandbox: 1 vCPU + 1 GiB RAM.
+								<br /><br />
+								<strong>agentOS:</strong> {workload === 'agent' ? `${benchWorkloads.agent.memory.agentOS} for a full Pi coding agent session with MCP servers and file system mounts.` : `${benchWorkloads.shell.memory.agentOS} for the minimal shell workload under sustained load.`}
+							</BenchInfoTooltip>
+						</>
+					),
+					value: mem.agentOS,
+					highlight: true,
+				},
+				{ label: 'Cheapest sandbox', value: mem.sandbox },
+			]}
+			note='Sandboxes reserve idle RAM per agent.'
+		/>
 	);
 }
 
@@ -1613,95 +1598,37 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 	const sandboxCost = benchWorkloads[workload].sandboxCost;
 	const [active, setActive] = useState(0);
 	const t = tiers[active];
-	const barMin = Math.max(t.bar, 1);
 
 	return (
-		<motion.div
-			className='space-y-4'
-			initial='hidden'
-			whileInView='visible'
-			viewport={{ once: true, margin: '-100px' }}
-		>
-			<div className='flex items-center gap-4'>
-				<div>
-					<h4 className='flex items-center text-sm font-medium text-zinc-900'>
-						Cost per execution-second
-						<BenchInfoTooltip>
-							<strong>What&apos;s measured:</strong> <code className='rounded bg-zinc-200 px-1 py-0.5 text-[10px]'>server price per second / concurrent executions per server</code>
-							<br /><br />
-							<strong>Why it&apos;s cheaper:</strong> Each execution uses {benchWorkloads[workload].memory.agentOS} instead of a {benchWorkloads[workload].memory.sandbox} sandbox minimum. And you run on your own hardware, which is significantly cheaper than per-second sandbox billing.
-							<br /><br />
-							<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE}. Default sandbox: 1 vCPU + 1 GiB RAM at $0.0504/vCPU-h + $0.0162/GiB-h.
-							<br /><br />
-							<strong>agentOS:</strong> {benchWorkloads[workload].memory.agentOS} baseline per execution, assuming 70% utilization (industry-standard HPA scaling threshold). Select a hardware tier above to compare.
-						</BenchInfoTooltip>
-					</h4>
-					<p className='mt-1 text-[11px] italic text-zinc-600'>Lower is better. Assumes one agent per sandbox, needed for isolation.</p>
-				</div>
-				<div className='ml-auto flex gap-1'>
-					{tiers.map((tier, i) => (
-						<button
-							key={tier.label}
-							onClick={() => setActive(i)}
-							className={`rounded px-2.5 py-1 font-mono text-[11px] tracking-wider transition-colors ${
-								i === active ? 'bg-zinc-200 text-zinc-900' : 'text-zinc-600 hover:text-zinc-500'
-							}`}
-						>
-							{tier.label}
-						</button>
-					))}
-				</div>
-			</div>
-			<div className='space-y-1.5'>
-				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>agentOS</span>
-					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
-						<motion.div
-							key={`${workload}-${active}`}
-							initial={{ width: 0 }}
-							animate={{ width: `${barMin}%` }}
-							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-							className='absolute inset-y-0 left-0 rounded-sm'
-							style={{ background: `linear-gradient(90deg, ${BENCH_ACCENT}, ${BENCH_ACCENT_LIGHT})` }}
-						/>
-						<motion.span
-							key={`cost-label-${workload}-${active}`}
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ duration: 0.4, delay: 0.5 }}
-							className='absolute inset-y-0 z-10 flex items-center gap-2 font-mono text-xs font-medium text-zinc-500'
-							style={{ left: `calc(${barMin}% + 8px)` }}
-						>
-							{t.value}
-							<span className='text-[11px] font-semibold' style={{ color: BENCH_ACCENT_LIGHT }}>
-								{t.multiplier}
-							</span>
-						</motion.span>
-					</div>
-				</div>
-				<div className='flex items-center gap-4'>
-					<span className='w-48 shrink-0 font-mono text-xs text-zinc-500'>Cheapest sandbox</span>
-					<div className='relative h-7 flex-1 overflow-hidden rounded-sm bg-zinc-100'>
-						<motion.div
-							key={`${workload}-${active}`}
-							initial={{ width: 0 }}
-							animate={{ width: '100%' }}
-							transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1], delay: 0.1 }}
-							className='absolute inset-y-0 left-0 rounded-sm bg-zinc-400'
-						/>
-						<motion.span
-							key={`sandbox-cost-${workload}-${active}`}
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							transition={{ duration: 0.4, delay: 0.6 }}
-							className='absolute inset-y-0 left-2 z-10 flex items-center font-mono text-xs text-zinc-700'
-						>
-							{sandboxCost}
-						</motion.span>
-					</div>
-				</div>
-			</div>
-		</motion.div>
+		<BenchCard
+			title='Cost Per Execution-Second'
+			stat={t.value}
+			statNote={t.multiplier}
+			chart={[Math.max(t.bar / 100, BENCH_CHART_FLOOR), 1]}
+			toggle={<BenchToggle options={tiers.map((tier) => tier.label)} active={active} onChange={setActive} />}
+			rows={[
+				{
+					label: (
+						<>
+							agentOS
+							<BenchInfoTooltip>
+								<strong>What&apos;s measured:</strong> <code className='rounded bg-cream/10 px-1 py-0.5 text-[10px]'>server price per second / concurrent executions per server</code>
+								<br /><br />
+								<strong>Why it&apos;s cheaper:</strong> Each execution uses {benchWorkloads[workload].memory.agentOS} instead of a {benchWorkloads[workload].memory.sandbox} sandbox minimum. And you run on your own hardware, which is significantly cheaper than per-second sandbox billing.
+								<br /><br />
+								<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE}. Default sandbox: 1 vCPU + 1 GiB RAM at $0.0504/vCPU-h + $0.0162/GiB-h.
+								<br /><br />
+								<strong>agentOS:</strong> {benchWorkloads[workload].memory.agentOS} baseline per execution, assuming 70% utilization (industry-standard HPA scaling threshold). Select a hardware tier above to compare.
+							</BenchInfoTooltip>
+						</>
+					),
+					value: t.value,
+					highlight: true,
+				},
+				{ label: 'Cheapest sandbox', value: sandboxCost },
+			]}
+			note='Assumes one agent per sandbox, needed for isolation.'
+		/>
 	);
 }
 
@@ -1717,44 +1644,43 @@ function BenchmarkSection() {
 			transition={{ duration: 0.5 }}
 		>
 			<div className='mb-8'>
-				<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-zinc-900 md:text-3xl'>
+				<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-ink md:text-3xl'>
 					Performance benchmarks
 				</h3>
-				<p className='text-base leading-relaxed text-zinc-500'>
+				<p className='text-base leading-relaxed text-ink-soft'>
 					agentOS vs. traditional sandboxes.
 				</p>
 			</div>
 
-			<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-8'>
-				<BenchColdStartChart />
-				<div className='my-8 border-t border-zinc-100' />
-				<div className='mb-4 flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2'>
-					<p className='text-xs text-zinc-400 max-sm:order-2 max-sm:px-1 max-sm:leading-relaxed'>Workload: {wl.description}</p>
-					<div className='flex gap-1 rounded-lg border border-zinc-200 bg-white p-1 max-sm:order-1 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:rounded-xl'>
-						{(Object.keys(benchWorkloads) as WorkloadKey[]).map((key) => (
-							<button
-								key={key}
-								onClick={() => setWorkload(key)}
-								aria-pressed={workload === key}
-								className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors max-sm:flex max-sm:min-h-10 max-sm:w-full max-sm:items-center max-sm:justify-center max-sm:rounded-lg max-sm:py-2 max-sm:text-center ${
-									workload === key ? 'bg-zinc-900 text-white max-sm:shadow-sm' : 'text-zinc-500 hover:text-zinc-700'
-								}`}
-							>
-								{benchWorkloads[key].label}
-							</button>
-						))}
-					</div>
+			<div className='mb-6 flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2'>
+				<p className='text-xs text-ink-faint max-sm:order-2 max-sm:px-1 max-sm:leading-relaxed'>Workload: {wl.description}</p>
+				<div className='flex gap-1 rounded-lg border border-ink/10 bg-white/55 p-1 max-sm:order-1 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:rounded-xl'>
+					{(Object.keys(benchWorkloads) as WorkloadKey[]).map((key) => (
+						<button
+							key={key}
+							onClick={() => setWorkload(key)}
+							aria-pressed={workload === key}
+							className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors max-sm:flex max-sm:min-h-10 max-sm:w-full max-sm:items-center max-sm:justify-center max-sm:rounded-lg max-sm:py-2 max-sm:text-center ${
+								workload === key ? 'bg-ink text-cream' : 'text-ink-soft hover:text-ink'
+							}`}
+						>
+							{benchWorkloads[key].label}
+						</button>
+					))}
 				</div>
+			</div>
+
+			<div className='grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3'>
+				<BenchColdStartChart />
 				<BenchMemoryBar workload={workload} />
-				<div className='my-8 border-t border-zinc-100' />
 				<BenchCostChart workload={workload} />
 			</div>
 
-			<p className='mt-4 text-[11px] leading-relaxed text-zinc-400'>
+			<p className='mt-8 font-mono text-xs leading-relaxed text-ink-faint'>
 				Measured on Intel i7-12700KF. Cold start baseline: {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of {BENCHMARK_DATE}. Cost baseline: {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE} (1 vCPU + 1 GiB default). Cost assumes 70% utilization on self-hosted hardware vs. per-second sandbox billing.{' '}
 				<a
 					href='/docs/agent-os/benchmarks'
-					className='inline-flex items-center gap-1 text-zinc-500 underline underline-offset-2 transition-colors hover:text-zinc-700'
+					className='inline-flex items-center gap-1 text-ink-soft underline underline-offset-2 transition-colors hover:text-pine'
 				>
 					Benchmark document
 					<ExternalLink className='h-3 w-3' />
@@ -1765,7 +1691,7 @@ function BenchmarkSection() {
 }
 
 const TechnologyAndBenchmarks = () => (
-	<section className='border-t border-zinc-200 py-16 md:py-32'>
+	<section className='border-t border-ink/10 py-16 md:py-32'>
 		<div className='mx-auto max-w-5xl px-6'>
 			{/* Technology intro */}
 			<motion.div
@@ -1775,32 +1701,32 @@ const TechnologyAndBenchmarks = () => (
 				transition={{ duration: 0.5 }}
 				className='mb-16'
 			>
-				<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl'>
+				<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-5xl'>
 					A new operating system architecture.
 				</h2>
-				<p className='mb-6 max-w-3xl text-base leading-relaxed text-zinc-500 md:text-lg'>
+				<p className='mb-6 max-w-3xl text-base leading-relaxed text-ink-soft md:text-lg'>
 					Built from the ground up for lightweight agents. agentOS provides the flexibility of Linux with lower overhead than sandboxes.
 				</p>
 				<div className='grid gap-6 md:grid-cols-2'>
-					<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-6'>
+					<div className='rounded-xl border border-ink/10 bg-white/55 p-6'>
 						<div className='mb-3 flex items-center gap-3'>
-							<div className='flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-200'>
+							<div className='flex h-10 w-10 items-center justify-center rounded-lg bg-ink/5'>
 								<img src='/images/agent-os/webassembly-logo.svg' alt='WebAssembly' className='h-6 w-6 grayscale opacity-70' />
 							</div>
-							<h3 className='text-lg font-medium text-zinc-900'>WebAssembly + V8 Isolates</h3>
+							<h3 className='text-lg font-medium text-ink'>WebAssembly + V8 Isolates</h3>
 						</div>
-						<p className='text-sm leading-relaxed text-zinc-500'>
+						<p className='text-sm leading-relaxed text-ink-soft'>
 							High-performance virtualization without specialized infrastructure. The same battle-hardened isolation technology that powers Google Chrome.
 						</p>
 					</div>
-					<div className='rounded-xl border border-zinc-200 bg-zinc-50 p-6'>
+					<div className='rounded-xl border border-ink/10 bg-white/55 p-6'>
 						<div className='mb-3 flex items-center gap-3'>
-							<div className='flex h-10 w-10 items-center justify-center rounded-lg bg-zinc-200'>
-								<Globe className='h-5 w-5 text-zinc-700' />
+							<div className='flex h-10 w-10 items-center justify-center rounded-lg bg-ink/5'>
+								<Globe className='h-5 w-5 text-olive' />
 							</div>
-							<h3 className='text-lg font-medium text-zinc-900'>Battle-tested technology</h3>
+							<h3 className='text-lg font-medium text-ink'>Battle-tested technology</h3>
 						</div>
-						<p className='text-sm leading-relaxed text-zinc-500'>
+						<p className='text-sm leading-relaxed text-ink-soft'>
 							You&apos;re probably using this technology right now to view this page. Bring the same power to your agents. No VMs, no containers, no overhead.
 						</p>
 					</div>
@@ -1844,7 +1770,7 @@ const BeforeAfterSlider = ({ before, after }: { before: string; after: string })
 			{/* Divider */}
 			<div className='absolute top-0 bottom-0 z-10 w-0.5 bg-white' style={{ left: `${position}%` }}>
 				<div className='absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-lg cursor-ew-resize'>
-					<svg width='16' height='16' viewBox='0 0 16 16' fill='none'><path d='M5 3L2 8L5 13M11 3L14 8L11 13' stroke='#18181b' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round'/></svg>
+					<svg width='16' height='16' viewBox='0 0 16 16' fill='none'><path d='M5 3L2 8L5 13M11 3L14 8L11 13' stroke='#1B1916' strokeWidth='1.5' strokeLinecap='round' strokeLinejoin='round'/></svg>
 				</div>
 			</div>
 			{/* Labels */}
@@ -1888,7 +1814,7 @@ const SisterProducts = () => {
 	];
 
 	return (
-		<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
+		<section className='border-t border-ink/10 px-6 py-24 md:py-40'>
 			<div className='mx-auto max-w-5xl'>
 				<div className='mb-12 max-w-3xl'>
 					<motion.span
@@ -1896,7 +1822,7 @@ const SisterProducts = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5 }}
-						className='mb-4 inline-block text-xs font-medium uppercase tracking-[0.18em] text-zinc-500'
+						className='mb-4 inline-block font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-pine'
 					>
 						The Rest of the Suite
 					</motion.span>
@@ -1905,7 +1831,7 @@ const SisterProducts = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.05 }}
-						className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'
+						className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-4xl'
 					>
 						Pairs with agentOS.
 					</motion.h2>
@@ -1914,7 +1840,7 @@ const SisterProducts = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.1 }}
-						className='text-base leading-relaxed text-zinc-500 md:text-lg'
+						className='text-base leading-relaxed text-ink-soft md:text-lg'
 					>
 						agentOS is where agents live. Secure Exec is how you safely run the code they generate. Sandbox Agent SDK is how you control coding agents over HTTP.
 					</motion.p>
@@ -1931,19 +1857,19 @@ const SisterProducts = () => {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: 0.05 * idx }}
-							className='group flex flex-col rounded-xl border border-zinc-200 bg-white p-6 transition-colors hover:border-zinc-300'
+							className='group flex flex-col rounded-xl border border-ink/10 bg-white/55 p-6 transition-colors hover:border-ink/25'
 						>
-							<h3 className='mb-2 text-lg font-medium text-zinc-900'>{product.name}</h3>
-							<p className='mb-6 text-sm leading-relaxed text-zinc-600'>{product.tagline}</p>
+							<h3 className='mb-2 text-lg font-medium text-ink'>{product.name}</h3>
+							<p className='mb-6 text-sm leading-relaxed text-ink-soft'>{product.tagline}</p>
 							<ul className='mb-8 flex flex-grow flex-col gap-2'>
 								{product.bullets.map((bullet) => (
-									<li key={bullet} className='flex items-start gap-2 text-sm leading-relaxed text-zinc-500'>
-										<span className='mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-zinc-400' />
+									<li key={bullet} className='flex items-start gap-2 text-sm leading-relaxed text-ink-soft'>
+										<span className='mt-2 h-1 w-1 flex-shrink-0 rounded-full bg-ink/30' />
 										<span>{bullet}</span>
 									</li>
 								))}
 							</ul>
-							<div className='inline-flex items-center gap-2 text-sm font-medium text-zinc-900 transition-colors group-hover:text-zinc-600'>
+							<div className='inline-flex items-center gap-2 text-sm font-medium text-ink transition-colors group-hover:text-pine'>
 								{product.cta}
 								<ArrowRight className='h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5' />
 							</div>
@@ -1956,7 +1882,7 @@ const SisterProducts = () => {
 };
 
 const FromUnixToAgents = () => (
-	<section className='border-t border-zinc-200 px-6 py-24 md:py-40'>
+	<section className='border-t border-ink/10 px-6 py-24 md:py-40'>
 		<div className='mx-auto max-w-5xl'>
 			<div className='flex flex-col gap-10 md:flex-row md:items-center md:gap-16'>
 				<motion.div
@@ -1970,8 +1896,8 @@ const FromUnixToAgents = () => (
 						before='https://assets.rivet.dev/website/public/images/agent-os/unix-timesharing-uw-madison-1978.jpg'
 						after='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 					/>
-					<p className='mt-2 text-xs text-zinc-400'>
-						Left: Unix timesharing, UW-Madison, 1978. Right: "Data flock (digits)" by Philipp Schmitt, <a href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg' className='underline hover:text-zinc-600' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>
+					<p className='mt-2 font-mono text-xs text-ink-faint'>
+						Left: Unix timesharing, UW-Madison, 1978. Right: "Data flock (digits)" by Philipp Schmitt, <a href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg' className='underline hover:text-pine' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>
 					</p>
 				</motion.div>
 				<motion.div
@@ -1981,15 +1907,15 @@ const FromUnixToAgents = () => (
 					transition={{ duration: 0.5, delay: 0.1 }}
 					className='flex-1'
 				>
-					<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'>
+					<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-4xl'>
 						From humans to agents
 					</h2>
-					<p className='mb-6 text-base leading-relaxed text-zinc-500 md:text-lg'>
+					<p className='mb-6 text-base leading-relaxed text-ink-soft md:text-lg'>
 						The operating system is changing for the next generation of software operators.
 					</p>
 					<a
 						href='/from-unix-to-agents'
-						className='inline-flex items-center gap-2 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+						className='selection-dark inline-flex items-center gap-2 rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
 					>
 						Learn more
 						<ArrowRight className='h-4 w-4' />
@@ -2003,7 +1929,7 @@ const FromUnixToAgents = () => (
 // --- Main Page ---
 export default function AgentOSPage({ heroTabs }: AgentOSPageProps) {
 	return (
-		<div className='min-h-screen bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900' style={{ overflowX: 'clip' }}>
+		<div className='paper-grain min-h-screen font-sans text-ink-soft' style={{ overflowX: 'clip' }}>
 			<main>
 				<Hero heroTabs={heroTabs} />
 				<TechnologyAndBenchmarks />

@@ -4,6 +4,15 @@ import { FaqList } from '@/components/faq/FaqSection';
 import { formatTimestamp } from '@/lib/formatDate';
 import { compareEntries, getCompareEntry } from '@/data/compare';
 import type { CompareEntry } from '@/data/compare/types';
+import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
+import { CatalogCard } from '@/components/marketing/editorial/CatalogCard';
+import { Spirograph } from '@/components/marketing/art/Spirograph';
+import {
+	CAPTION_CLASS,
+	HERO_H1_CLASS,
+	SECTION_H2_CLASS,
+	SUBTITLE_CLASS,
+} from '@/components/marketing/typography';
 import { ComparisonTable } from './ComparisonTable';
 
 // This component is server-rendered by Astro with no client directive, so it
@@ -13,19 +22,28 @@ interface ComparePageProps {
 	slug: string;
 }
 
+// Warm oil-paint texture behind the closing band, mirroring the sitewide CTA
+// colophon. The veil keeps text readable even if the image fails to load.
+const OIL_TEXTURE_SRC = '/images/textures/oil-olive-landscape.jpg';
+
 function SectionHeading({
+	index,
+	eyebrow,
 	title,
 	subtitle,
 	center = false,
 }: {
+	index?: string;
+	eyebrow?: ReactNode;
 	title: string;
 	subtitle?: string;
 	center?: boolean;
 }) {
 	return (
 		<div className={center ? 'mx-auto max-w-2xl text-center' : 'max-w-2xl'}>
-			<h2 className="text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">{title}</h2>
-			{subtitle && <p className="mt-4 text-base leading-relaxed text-zinc-500">{subtitle}</p>}
+			{eyebrow ? <Eyebrow index={index} label={eyebrow} className="mb-4" /> : null}
+			<h2 className={SECTION_H2_CLASS}>{title}</h2>
+			{subtitle && <p className={SUBTITLE_CLASS}>{subtitle}</p>}
 		</div>
 	);
 }
@@ -35,27 +53,28 @@ function HeroSection({ entry }: { entry: CompareEntry }) {
 		<section className="px-6 pb-24 pt-32 md:pb-28 md:pt-44">
 			<div className="mx-auto w-full max-w-7xl">
 				<div className="max-w-3xl">
-					<h1 className="text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-[3.75rem]">
+					<Eyebrow label="Comparison" className="mb-5" />
+					<h1 className={HERO_H1_CLASS}>
 						{entry.rivetProductName} vs <br />
 						{entry.competitorName}
 					</h1>
-					<p className="mt-7 max-w-2xl text-lg leading-8 text-zinc-400">{entry.heroSubtitle}</p>
+					<p className="mt-7 max-w-2xl text-lg leading-8 text-ink-soft">{entry.heroSubtitle}</p>
 					<div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
 						<a
 							href="/docs/actors/quickstart/backend"
-							className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+							className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent"
 						>
 							Get Started with {entry.rivetProductName}
 							<Icon icon={faArrowRight} />
 						</a>
 						<a
 							href="/talk-to-an-engineer"
-							className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+							className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink"
 						>
 							Talk to an engineer
 						</a>
 					</div>
-					<p className="mt-8 text-sm text-zinc-600">
+					<p className={`mt-8 ${CAPTION_CLASS}`}>
 						Last updated {formatTimestamp(entry.lastUpdated)}
 					</p>
 				</div>
@@ -64,15 +83,29 @@ function HeroSection({ entry }: { entry: CompareEntry }) {
 	);
 }
 
-function ChoiceList({ heading, choices }: { heading: string; choices: CompareEntry['whenToChooseRivet'] }) {
+function ChoiceList({
+	heading,
+	choices,
+	headingTone = 'faint',
+}: {
+	heading: string;
+	choices: CompareEntry['whenToChooseRivet'];
+	headingTone?: 'pine' | 'faint';
+}) {
 	return (
 		<div>
-			<div className="text-[11px] font-medium uppercase tracking-wider text-zinc-600">{heading}</div>
+			<div
+				className={`font-mono text-[11px] font-medium uppercase tracking-[0.16em] ${
+					headingTone === 'pine' ? 'text-pine' : 'text-ink-faint'
+				}`}
+			>
+				{heading}
+			</div>
 			<div className="mt-5 space-y-5">
 				{choices.map((choice) => (
 					<div key={choice.title}>
-						<div className="text-[15px] font-medium text-zinc-200">{choice.title}</div>
-						<div className="mt-1 text-sm leading-relaxed text-zinc-500">{choice.description}</div>
+						<div className="text-[15px] font-medium text-ink">{choice.title}</div>
+						<div className="mt-1 text-sm leading-relaxed text-ink-soft">{choice.description}</div>
 					</div>
 				))}
 			</div>
@@ -80,6 +113,9 @@ function ChoiceList({ heading, choices }: { heading: string; choices: CompareEnt
 	);
 }
 
+// Catalog-card treatment for the two overview plates. The Rivet plate is
+// highlighted with a pine frame, so this stays local markup rather than the
+// shared CatalogCard, whose hairline border is fixed.
 function OverviewPanel({
 	icon,
 	name,
@@ -95,16 +131,16 @@ function OverviewPanel({
 }) {
 	return (
 		<div
-			className={`flex flex-col rounded-xl border p-8 ${
-				highlight ? 'border-white/15 bg-white/[0.03]' : 'border-white/10'
+			className={`flex flex-col border bg-white/55 p-8 ${
+				highlight ? 'border-pine/60' : 'border-ink/10'
 			}`}
 		>
 			<div className="flex items-center gap-3">
-				<span className="text-zinc-500">{icon}</span>
-				<h3 className="text-lg font-medium tracking-tight text-white">{name}</h3>
+				<span className={highlight ? 'text-pine' : 'text-olive'}>{icon}</span>
+				<h3 className="text-lg font-medium tracking-[-0.01em] text-ink">{name}</h3>
 			</div>
-			<p className="mt-4 text-sm leading-relaxed text-zinc-500">{summary}</p>
-			<div className="my-7 h-px bg-white/10" />
+			<p className="mt-4 text-sm leading-relaxed text-ink-soft">{summary}</p>
+			<div className="my-7 h-px bg-ink/10" />
 			{children}
 		</div>
 	);
@@ -112,9 +148,11 @@ function OverviewPanel({
 
 function OverviewSection({ entry }: { entry: CompareEntry }) {
 	return (
-		<section className="px-6 py-20 md:py-24">
+		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-7xl">
 				<SectionHeading
+					index="01"
+					eyebrow="Overview"
 					title="Two approaches, side by side"
 					subtitle="What each platform is, and the situations where it is the right choice."
 				/>
@@ -128,11 +166,12 @@ function OverviewSection({ entry }: { entry: CompareEntry }) {
 						<ChoiceList
 							heading={`When to choose ${entry.rivetProductName}`}
 							choices={entry.whenToChooseRivet}
+							headingTone="pine"
 						/>
 						<div className="mt-8">
 							<a
 								href="/docs/actors/quickstart/backend"
-								className="group inline-flex items-center gap-2 text-sm font-medium text-white"
+								className="group inline-flex items-center gap-2 text-sm font-medium text-pine hover:text-ink"
 							>
 								Get started with {entry.rivetProductName}
 								<Icon
@@ -161,9 +200,11 @@ function OverviewSection({ entry }: { entry: CompareEntry }) {
 
 function ComparisonSection({ entry }: { entry: CompareEntry }) {
 	return (
-		<section className="px-6 py-20 md:py-24">
+		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-7xl">
 				<SectionHeading
+					index="02"
+					eyebrow="Features"
 					title="Feature comparison"
 					subtitle="A detailed breakdown of capabilities across both platforms."
 				/>
@@ -182,17 +223,17 @@ function ComparisonSection({ entry }: { entry: CompareEntry }) {
 
 function VerdictSection({ entry }: { entry: CompareEntry }) {
 	return (
-		<section className="px-6 py-20 md:py-24">
+		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-2xl text-center">
-				<SectionHeading title="Which should you pick?" center />
+				<SectionHeading index="03" eyebrow="Verdict" title="Which should you pick?" center />
 				<div className="mt-8 space-y-5">
 					{entry.verdict.map((paragraph, index) => (
 						<p
 							key={paragraph}
 							className={
 								index === 0
-									? 'text-lg leading-8 text-zinc-300'
-									: 'text-base leading-relaxed text-zinc-500'
+									? 'text-lg leading-8 text-ink'
+									: 'text-base leading-relaxed text-ink-soft'
 							}
 						>
 							{paragraph}
@@ -206,14 +247,14 @@ function VerdictSection({ entry }: { entry: CompareEntry }) {
 
 function MigrationSection({ migration }: { migration: NonNullable<CompareEntry['migration']> }) {
 	return (
-		<section className="px-6 py-20 md:py-24">
+		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-2xl text-center">
-				<SectionHeading title={migration.heading} center />
-				<p className="mt-8 text-base leading-relaxed text-zinc-500">{migration.body}</p>
+				<SectionHeading index="04" eyebrow="Migration" title={migration.heading} center />
+				<p className="mt-8 text-base leading-relaxed text-ink-soft">{migration.body}</p>
 				<div className="mt-8">
 					<a
 						href="/talk-to-an-engineer"
-						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink"
 					>
 						Talk to an engineer
 					</a>
@@ -223,46 +264,39 @@ function MigrationSection({ migration }: { migration: NonNullable<CompareEntry['
 	);
 }
 
-function FaqSectionDark({ entry }: { entry: CompareEntry }) {
+function FaqSectionLight({ entry, index }: { entry: CompareEntry; index: string }) {
 	return (
-		<section className="px-6 py-20 md:py-24">
+		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-3xl">
-				<SectionHeading title="Frequently asked questions" />
+				<SectionHeading index={index} eyebrow="FAQ" title="Frequently asked questions" />
 				<div className="mt-10">
-					<FaqList items={entry.faq} theme="dark" />
+					<FaqList items={entry.faq} theme="light" />
 				</div>
 			</div>
 		</section>
 	);
 }
 
-function OtherComparisonsSection({ entry }: { entry: CompareEntry }) {
+function OtherComparisonsSection({ entry, index }: { entry: CompareEntry; index: string }) {
 	const others = compareEntries.filter((other) => other.slug !== entry.slug);
 	if (others.length === 0) {
 		return null;
 	}
 
 	return (
-		<section className="px-6 py-20 md:py-24">
+		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-7xl">
-				<SectionHeading title="Other comparisons" />
+				<SectionHeading index={index} eyebrow="Catalog" title="Other comparisons" />
 				<div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
 					{others.map((other) => (
-						<a
+						<CatalogCard
 							key={other.slug}
 							href={`/compare/${other.slug}/`}
-							className="group flex flex-col rounded-xl border border-white/10 p-7 transition-colors hover:border-white/25"
+							title={other.title}
+							linkLabel="Read the comparison"
 						>
-							<h3 className="text-base font-medium tracking-tight text-white">{other.title}</h3>
-							<p className="mt-2 text-sm leading-relaxed text-zinc-500">{other.description}</p>
-							<span className="mt-5 inline-flex items-center gap-2 text-sm text-zinc-400 transition-colors group-hover:text-white">
-								Read the comparison
-								<Icon
-									icon={faArrowRight}
-									className="transition-transform group-hover:translate-x-0.5"
-								/>
-							</span>
-						</a>
+							<p className="mt-2 text-sm leading-relaxed text-ink-soft">{other.description}</p>
+						</CatalogCard>
 					))}
 				</div>
 			</div>
@@ -272,24 +306,48 @@ function OtherComparisonsSection({ entry }: { entry: CompareEntry }) {
 
 function CTASection() {
 	return (
-		<section className="border-t border-white/10 px-6 py-32 text-center md:py-44">
-			<div className="mx-auto max-w-3xl">
-				<h2 className="text-3xl font-medium tracking-[-0.015em] text-white md:text-5xl">
+		<section className="selection-paper relative overflow-hidden bg-ink px-6 py-24 text-center text-cream md:py-36">
+			{/* Oil-paint backdrop under a darkening veil */}
+			<div
+				aria-hidden="true"
+				className="absolute inset-0 bg-cover"
+				style={{ backgroundImage: `url('${OIL_TEXTURE_SRC}')`, backgroundPosition: 'center 60%' }}
+			/>
+			<div
+				aria-hidden="true"
+				className="absolute inset-0"
+				style={{
+					background:
+						'linear-gradient(180deg, rgba(20,19,16,0.66), rgba(20,19,16,0.5) 50%, rgba(20,19,16,0.72))',
+				}}
+			/>
+			<div className="relative mx-auto max-w-3xl">
+				<div className="mb-8 flex justify-center" aria-hidden="true">
+					<Spirograph
+						variant="moire"
+						size={56}
+						stroke="#93A286"
+						strokeWidth={2.6}
+						strokeOpacity={0.7}
+						copies={12}
+					/>
+				</div>
+				<h2 className="text-3xl font-medium tracking-[-0.015em] text-cream md:text-5xl">
 					The primitive for stateful workloads.
 				</h2>
-				<p className="mt-6 text-base leading-relaxed text-zinc-500">
+				<p className="mt-6 text-base leading-relaxed text-cream/65">
 					The next generation of software needs a new kind of backend. This is it.
 				</p>
 				<div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
 					<a
 						href="/docs"
-						className="selection-dark inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+						className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-cream px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white"
 					>
 						Start Building
 					</a>
 					<a
 						href="/talk-to-an-engineer"
-						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-cream/30 px-4 py-2 text-sm text-cream transition-colors hover:border-cream/60"
 					>
 						Talk to an Engineer
 					</a>
@@ -305,16 +363,21 @@ export function ComparePage({ slug }: ComparePageProps) {
 		throw new Error(`Unknown compare entry: ${slug}`);
 	}
 
+	// Section eyebrows are numbered sequentially; the migration section is
+	// optional, so the indices after it shift when it is absent.
+	const faqIndex = entry.migration ? '05' : '04';
+	const othersIndex = entry.migration ? '06' : '05';
+
 	return (
-		<div className="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div className="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
 				<HeroSection entry={entry} />
 				<OverviewSection entry={entry} />
 				<ComparisonSection entry={entry} />
 				<VerdictSection entry={entry} />
 				{entry.migration && <MigrationSection migration={entry.migration} />}
-				<FaqSectionDark entry={entry} />
-				<OtherComparisonsSection entry={entry} />
+				<FaqSectionLight entry={entry} index={faqIndex} />
+				<OtherComparisonsSection entry={entry} index={othersIndex} />
 				<CTASection />
 			</main>
 		</div>

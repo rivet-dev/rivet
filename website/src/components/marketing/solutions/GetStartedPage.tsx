@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, Copy, ArrowRight } from 'lucide-react';
 
+// The single ink moment on this page: an InkChip-style command strip with a
+// copy affordance. Kept local because the shared InkChip has no copy button.
 const CopyCommand = ({ command }: { command: string }) => {
 	const [copied, setCopied] = useState(false);
 
@@ -14,14 +16,17 @@ const CopyCommand = ({ command }: { command: string }) => {
 	};
 
 	return (
-		<div className='group relative flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-6 py-4 font-mono text-sm'>
-			<span className='text-zinc-500'>$</span>
-			<code className='flex-1 text-zinc-200'>{command}</code>
+		<div className='selection-paper group relative flex items-center gap-3 rounded-lg border border-ink/20 bg-ink px-6 py-4 font-mono text-sm text-cream/85'>
+			<span aria-hidden='true' className='select-none text-sage'>
+				$
+			</span>
+			<code className='flex-1 text-left'>{command}</code>
 			<button
 				onClick={handleCopy}
-				className='flex h-8 w-8 items-center justify-center rounded-md border border-white/10 text-zinc-400 transition-colors hover:border-white/25 hover:text-white'
+				aria-label='Copy install command'
+				className='flex h-8 w-8 items-center justify-center rounded-md border border-cream/15 text-cream/60 transition-colors hover:border-cream/35 hover:text-cream'
 			>
-				{copied ? <Check className='h-4 w-4 text-emerald-500' /> : <Copy className='h-4 w-4' />}
+				{copied ? <Check className='h-4 w-4 text-sage' /> : <Copy className='h-4 w-4' />}
 			</button>
 		</div>
 	);
@@ -29,7 +34,7 @@ const CopyCommand = ({ command }: { command: string }) => {
 
 export default function GetStartedPage() {
 	return (
-		<div className='flex min-h-screen flex-col items-center justify-center overflow-x-hidden bg-black selection:bg-[#FF4500]/30 selection:text-orange-200'>
+		<div className='paper-grain flex min-h-screen flex-col items-center justify-center overflow-x-hidden font-sans text-ink-soft'>
 			{/* Hero */}
 			<section className='px-6'>
 				<div className='mx-auto max-w-3xl text-center'>
@@ -42,7 +47,7 @@ export default function GetStartedPage() {
 						<img
 							src='/images/agent-os/agentos-hero-logo.svg'
 							alt='agentOS'
-							className='h-16 w-auto invert md:h-20'
+							className='h-16 w-auto md:h-20'
 						/>
 					</motion.div>
 
@@ -50,12 +55,12 @@ export default function GetStartedPage() {
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5, delay: 0.1 }}
-						className='mx-auto max-w-xl flex flex-col gap-4'
+						className='mx-auto flex max-w-xl flex-col gap-4'
 					>
 						<CopyCommand command='npm install rivetkit' />
 						<a
 							href='/docs/agent-os/quickstart'
-							className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200'
+							className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink'
 						>
 							Quickstart Guide
 							<ArrowRight className='h-4 w-4' />

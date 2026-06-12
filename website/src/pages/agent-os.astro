@@ -350,7 +350,7 @@ registry.start();` },
 const heroTabs = await Promise.all(
 	heroTabSnippets.map(async (tab) => ({
 		...tab,
-		highlightedCode: await highlightCodeHtml(tab.code, 'ts'),
+		highlightedCode: await highlightCodeHtml(tab.code, 'ts', 'ayu-dark'),
 	})),
 );
 ---

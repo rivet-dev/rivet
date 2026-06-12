@@ -14,6 +14,8 @@ import {
 	Check,
 	Terminal,
 } from 'lucide-react';
+import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
+import { HERO_H1_CLASS, SECTION_H2_CLASS } from '@/components/marketing/typography';
 
 // --- Copy Install Button ---
 const CopyInstallButton = () => {
@@ -32,9 +34,9 @@ const CopyInstallButton = () => {
 	return (
 		<button
 			onClick={handleCopy}
-			className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-zinc-300 px-6 py-3 text-sm text-zinc-500 transition-colors hover:border-zinc-400 hover:text-zinc-900'
+			className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-6 py-3 font-mono text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink'
 		>
-			{copied ? <Check className='h-4 w-4 text-green-500' /> : <Terminal className='h-4 w-4' />}
+			{copied ? <Check className='h-4 w-4 text-pine' /> : <Terminal className='h-4 w-4' />}
 			npm install rivetkit
 		</button>
 	);
@@ -55,25 +57,25 @@ const UseCase = ({ icon: Icon, title, description, benefits, example, delay = 0 
 		whileInView={{ opacity: 1, y: 0 }}
 		viewport={{ once: true }}
 		transition={{ duration: 0.5, delay }}
-		className='rounded-2xl border border-zinc-200 bg-white p-8'
+		className='flex flex-col border border-ink/10 bg-white/55 p-7'
 	>
-		<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100'>
-			<Icon className='h-6 w-6 text-zinc-700' />
+		<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-ink/10'>
+			<Icon className='h-6 w-6 text-olive' />
 		</div>
-		<h3 className='mb-3 text-xl font-medium text-zinc-900'>{title}</h3>
-		<p className='mb-4 text-sm leading-relaxed text-zinc-500'>{description}</p>
-		<ul className='mb-4 space-y-2'>
+		<h3 className='mb-3 text-lg font-medium tracking-[-0.01em] text-ink md:text-xl'>{title}</h3>
+		<p className='mb-4 text-sm leading-relaxed text-ink-soft'>{description}</p>
+		<ul className='mb-5 space-y-2'>
 			{benefits.map((benefit, i) => (
-				<li key={i} className='flex items-start gap-2 text-sm text-zinc-600'>
-					<span className='mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-zinc-400' />
+				<li key={i} className='flex items-start gap-2.5 text-sm text-ink-soft'>
+					<span className='mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-pine/60' />
 					{benefit}
 				</li>
 			))}
 		</ul>
 		{example && (
-			<div className='rounded-lg bg-zinc-50 px-4 py-3'>
-				<span className='text-xs font-medium uppercase tracking-wider text-zinc-400'>Example</span>
-				<p className='mt-1 text-sm text-zinc-600'>{example}</p>
+			<div className='mt-auto border-t border-ink/10 pt-4'>
+				<span className='font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint'>Example</span>
+				<p className='mt-1.5 text-sm leading-relaxed text-ink-soft'>{example}</p>
 			</div>
 		)}
 	</motion.div>
@@ -168,16 +170,23 @@ const useCases: UseCaseProps[] = [
 
 export default function AgentOSUseCasesPage() {
 	return (
-		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='paper-grain min-h-screen overflow-x-hidden font-sans text-ink-soft'>
 			<main>
 				{/* Hero */}
-				<section className='relative flex min-h-[50svh] flex-col items-center justify-center px-6 pt-32 overflow-hidden'>
+				<section className='relative flex min-h-[50svh] flex-col items-center justify-center overflow-hidden px-6 pt-32'>
 					<div className='mx-auto w-full max-w-4xl text-center'>
-							<motion.h1
+						<motion.div
+							initial={{ opacity: 0, y: 20 }}
+							animate={{ opacity: 1, y: 0 }}
+							transition={{ duration: 0.5 }}
+						>
+							<Eyebrow label='agentOS Use Cases' className='mb-5' />
+						</motion.div>
+						<motion.h1
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5, delay: 0.05 }}
-							className='mb-6 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-zinc-900 md:text-6xl'
+							className={`mb-6 ${HERO_H1_CLASS}`}
 						>
 							Who is agentOS for?
 						</motion.h1>
@@ -185,7 +194,7 @@ export default function AgentOSUseCasesPage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5, delay: 0.1 }}
-							className='mx-auto max-w-2xl text-lg text-zinc-500 md:text-xl'
+							className='mx-auto max-w-2xl text-lg text-ink-soft md:text-xl'
 						>
 							From personal assistants to enterprise fleets, agentOS powers every kind of AI agent.
 						</motion.p>
@@ -193,8 +202,9 @@ export default function AgentOSUseCasesPage() {
 				</section>
 
 				{/* Use Cases Grid */}
-				<section className='border-t border-zinc-200 px-6 py-16 md:py-24'>
+				<section className='border-t border-ink/10 px-6 py-16 md:py-32'>
 					<div className='mx-auto max-w-7xl'>
+						<Eyebrow index='01' label='Use Cases' className='mb-8' />
 						<div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
 							{useCases.map((useCase, i) => (
 								<UseCase key={useCase.title} {...useCase} delay={i * 0.05} />
@@ -204,14 +214,14 @@ export default function AgentOSUseCasesPage() {
 				</section>
 
 				{/* CTA */}
-				<section className='border-t border-zinc-200 px-6 py-16 md:py-24'>
+				<section className='border-t border-ink/10 px-6 py-16 md:py-32'>
 					<div className='mx-auto max-w-3xl text-center'>
 						<motion.h2
 							initial={{ opacity: 0, y: 20 }}
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'
+							className={`mb-4 ${SECTION_H2_CLASS}`}
 						>
 							Ready to build?
 						</motion.h2>
@@ -220,7 +230,7 @@ export default function AgentOSUseCasesPage() {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: 0.1 }}
-							className='mb-8 text-base leading-relaxed text-zinc-500'
+							className='mb-8 text-base leading-relaxed text-ink-soft'
 						>
 							Get started with agentOS in minutes. One npm install, zero infrastructure.
 						</motion.p>
@@ -233,7 +243,7 @@ export default function AgentOSUseCasesPage() {
 						>
 							<a
 								href='/docs'
-								className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+								className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-6 py-3 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
 							>
 								Read the Docs
 								<ArrowRight className='h-4 w-4' />

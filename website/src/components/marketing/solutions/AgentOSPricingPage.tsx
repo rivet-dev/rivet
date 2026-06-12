@@ -8,11 +8,12 @@ import {
 	Server,
 	Cloud,
 	Headphones,
-	Terminal,
 	Copy,
 } from 'lucide-react';
 import { FaqSection } from '@/components/faq/FaqSection';
 import { agentOsPricingFaqs } from '@/data/faqs/agent-os-pricing';
+import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
+import { HERO_H1_CLASS, SECTION_H2_CLASS } from '@/components/marketing/typography';
 
 const pricingTiers = [
 	{
@@ -56,7 +57,9 @@ const pricingTiers = [
 	},
 ];
 
-const CopyButton = ({ command, highlight = false }: { command: string; highlight?: boolean }) => {
+// Ink command strip with a copy affordance. The install command is the free
+// tier's call to action, so it gets the page's single code moment treatment.
+const CopyButton = ({ command }: { command: string }) => {
 	const [copied, setCopied] = useState(false);
 
 	const handleCopy = async () => {
@@ -72,15 +75,17 @@ const CopyButton = ({ command, highlight = false }: { command: string; highlight
 	return (
 		<button
 			onClick={handleCopy}
-			className="mb-8 flex w-full items-center justify-center gap-2 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm font-mono text-zinc-700 transition-colors hover:border-zinc-300 hover:bg-zinc-100"
+			className='selection-paper mb-8 flex w-full items-center gap-2.5 rounded-lg border border-ink/20 bg-ink px-4 py-3 font-mono text-[13px] text-cream/85 transition-colors hover:border-ink/40'
 		>
+			<span aria-hidden='true' className='select-none text-sage'>
+				$
+			</span>
+			<span className='truncate'>{command}</span>
 			{copied ? (
-				<Check className="h-4 w-4 text-emerald-600" />
+				<Check className='ml-auto h-3.5 w-3.5 text-sage' />
 			) : (
-				<Terminal className="h-4 w-4 text-zinc-500" />
+				<Copy className='ml-auto h-3.5 w-3.5 text-cream/45' />
 			)}
-			<span className="truncate">{command}</span>
-			{!copied && <Copy className="h-3.5 w-3.5 ml-auto text-zinc-400" />}
 		</button>
 	);
 };
@@ -93,74 +98,56 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 			initial={{ opacity: 0, y: 20 }}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.5, delay: index * 0.1 }}
-			className={`relative flex flex-col rounded-2xl border ${
-				tier.highlight
-					? 'border-zinc-900 bg-zinc-900 text-white'
-					: 'border-zinc-200 bg-white text-zinc-900'
-			} p-8`}
+			className='relative flex flex-col border border-ink/10 bg-white/55 p-8'
 		>
-			<div className="mb-6">
-				<div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${
-					tier.highlight ? 'bg-white/10' : 'bg-zinc-100'
-				}`}>
-					<Icon className={`h-6 w-6 ${tier.highlight ? 'text-white' : 'text-zinc-700'}`} />
+			<div className='mb-6'>
+				<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-ink/10'>
+					<Icon className='h-6 w-6 text-olive' />
 				</div>
-				<h3 className="text-xl font-medium">{tier.name}</h3>
-				<p className={`mt-1 text-sm ${tier.highlight ? 'text-zinc-400' : 'text-zinc-500'}`}>
-					{tier.description}
-				</p>
+				<h3 className='text-xl font-medium text-ink'>{tier.name}</h3>
+				<p className='mt-1 text-sm text-ink-soft'>{tier.description}</p>
 			</div>
 
-			<div className="mb-6">
-				<div className="flex items-baseline gap-2">
-					<span className="text-3xl font-medium">{tier.price}</span>
+			<div className='mb-6'>
+				<div className='flex items-baseline gap-2'>
+					<span className='text-3xl font-medium text-ink'>{tier.price}</span>
 				</div>
-				<p className={`text-sm ${tier.highlight ? 'text-zinc-400' : 'text-zinc-500'}`}>
-					{tier.priceSuffix}
-				</p>
+				<p className='font-mono text-xs uppercase tracking-[0.16em] text-ink-faint'>{tier.priceSuffix}</p>
 			</div>
 
 			{tier.copyCommand ? (
-				<CopyButton command={tier.copyCommand} highlight={tier.highlight} />
+				<CopyButton command={tier.copyCommand} />
 			) : (
 				<a
 					href={tier.ctaHref}
-					className={`mb-8 flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
-						tier.highlight
-							? 'bg-white text-zinc-900 hover:bg-zinc-100'
-							: 'bg-zinc-900 text-white hover:bg-zinc-700'
-					}`}
+					className='mb-8 flex items-center justify-center gap-2 rounded-lg bg-ink px-4 py-3 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
 				>
 					{tier.cta}
-					<ArrowRight className="h-4 w-4" />
+					<ArrowRight className='h-4 w-4' />
 				</a>
 			)}
 
-			<ul className="space-y-3">
+			<ul className='space-y-3'>
 				{tier.features.map((feature) => (
-					<li key={feature.text} className="flex items-start gap-3">
-						<Check className={`mt-0.5 h-4 w-4 flex-shrink-0 ${
-							tier.highlight ? 'text-emerald-400' : 'text-emerald-600'
-						}`} />
-						<span className={`text-sm ${tier.highlight ? 'text-zinc-300' : 'text-zinc-600'}`}>
-							{feature.text}
-						</span>
+					<li key={feature.text} className='flex items-start gap-3'>
+						<Check className='mt-0.5 h-4 w-4 flex-shrink-0 text-pine' />
+						<span className='text-sm text-ink-soft'>{feature.text}</span>
 					</li>
 				))}
 			</ul>
 
 			{showCloudNotice && (
-				<div className="mt-6 pt-6 border-t border-zinc-200">
+				<div className='mt-6 border-t border-ink/10 pt-6'>
 					<a
-						href="https://dashboard.rivet.dev"
-						className="group flex items-center gap-3 rounded-lg bg-zinc-50 p-4 transition-colors hover:bg-zinc-100"
+						href='https://dashboard.rivet.dev'
+						className='group flex items-center gap-3 rounded-lg border border-ink/10 p-4 transition-colors hover:border-ink/25'
 					>
-						<Cloud className="h-5 w-5 text-zinc-500 group-hover:text-zinc-700 transition-colors" />
-						<div className="flex-1">
-							<p className="text-sm font-medium text-zinc-900">Deploy on Rivet Cloud</p>
-							<p className="text-xs text-zinc-500">Scale your agents with managed infrastructure</p>
+						<Cloud className='h-5 w-5 text-olive' />
+						<div className='flex-1'>
+							<p className='text-sm font-medium text-ink'>Deploy on Rivet Cloud</p>
+							<p className='text-xs text-ink-soft'>Scale your agents with managed infrastructure</p>
 						</div>
-						<ArrowRight className="h-4 w-4 text-zinc-400 group-hover:text-zinc-700 transition-colors" />
+						<ArrowRight className='h-4 w-4 text-ink-faint transition-colors group-hover:text-ink' />
 					</a>
 				</div>
 			)}
@@ -174,28 +161,26 @@ const CTASection = () => (
 		whileInView={{ opacity: 1, y: 0 }}
 		viewport={{ once: true }}
 		transition={{ duration: 0.5 }}
-		className="border-t border-zinc-200 px-6 py-24"
+		className='border-t border-ink/10 px-6 py-24'
 	>
-		<div className="mx-auto max-w-3xl text-center">
-			<h2 className="mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl">
-				Ready to get started?
-			</h2>
-			<p className="mb-8 text-base leading-relaxed text-zinc-500 md:text-lg">
+		<div className='mx-auto max-w-3xl text-center'>
+			<h2 className={`mb-4 ${SECTION_H2_CLASS}`}>Ready to get started?</h2>
+			<p className='mb-8 text-base leading-relaxed text-ink-soft md:text-lg'>
 				Deploy agentOS today. Start with the open source version or try Rivet Cloud for free.
 			</p>
-			<div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+			<div className='flex flex-col items-center justify-center gap-4 sm:flex-row'>
 				<a
-					href="/docs/agent-os"
-					className="inline-flex items-center gap-2 rounded-lg bg-zinc-900 px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+					href='/docs/agent-os'
+					className='inline-flex items-center gap-2 rounded-md bg-accent-deep px-6 py-3 text-sm font-medium text-white transition-colors hover:bg-accent'
 				>
 					Start for Free
-					<ArrowRight className="h-4 w-4" />
+					<ArrowRight className='h-4 w-4' />
 				</a>
 				<a
-					href="/sales"
-					className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-6 py-3 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50"
+					href='/sales'
+					className='inline-flex items-center gap-2 rounded-md border border-ink/20 px-6 py-3 text-sm font-medium text-ink-soft transition-colors hover:border-ink/40 hover:text-ink'
 				>
-					<Headphones className="h-4 w-4" />
+					<Headphones className='h-4 w-4' />
 					Talk to Sales
 				</a>
 			</div>
@@ -205,20 +190,19 @@ const CTASection = () => (
 
 export default function AgentOSPricingPage() {
 	return (
-		<div className="min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900">
+		<div className='paper-grain min-h-screen overflow-x-hidden font-sans text-ink-soft'>
 			<main>
 				{/* Hero */}
-				<section className="px-6 pt-24 pb-16 md:pt-32">
-					<div className="mx-auto max-w-5xl text-center">
+				<section className='px-6 pt-24 pb-16 md:pt-32'>
+					<div className='mx-auto max-w-5xl text-center'>
 						<motion.div
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
 						>
-							<h1 className="mb-4 text-4xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl lg:text-6xl">
-								Free and open source.
-							</h1>
-							<p className="mx-auto max-w-2xl text-base leading-relaxed text-zinc-500 md:text-lg">
+							<Eyebrow label='agentOS Pricing' className='mb-5' />
+							<h1 className={`mb-4 ${HERO_H1_CLASS}`}>Free and open source.</h1>
+							<p className='mx-auto max-w-2xl text-base leading-relaxed text-ink-soft md:text-lg'>
 								agentOS is Apache 2.0 licensed and free to self-host. Use Rivet Cloud for managed infrastructure, or contact us for enterprise support.
 							</p>
 						</motion.div>
@@ -226,9 +210,10 @@ export default function AgentOSPricingPage() {
 				</section>
 
 				{/* Pricing Cards */}
-				<section className="px-6 pb-24">
-					<div className="mx-auto max-w-4xl">
-						<div className="grid gap-8 md:grid-cols-2">
+				<section className='px-6 pb-16 md:pb-32'>
+					<div className='mx-auto max-w-4xl'>
+						<Eyebrow index='01' label='Plans' className='mb-8' />
+						<div className='grid gap-6 md:grid-cols-2'>
 							{pricingTiers.map((tier, index) => (
 								<PricingCard key={tier.name} tier={tier} index={index} showCloudNotice={index === 0} />
 							))}
@@ -238,7 +223,7 @@ export default function AgentOSPricingPage() {
 
 				{/* No motion wrapper here. The FAQ must stay visible without JavaScript
 				    because the page's FaqJsonLd requires the content to be on-page. */}
-				<FaqSection items={agentOsPricingFaqs} theme="light" />
+				<FaqSection items={agentOsPricingFaqs} theme='light' />
 				<CTASection />
 			</main>
 		</div>

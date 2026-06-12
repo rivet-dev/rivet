@@ -28,14 +28,15 @@ let highlighter: shiki.Highlighter;
 export async function highlightCodeHtml(
 	code: string,
 	lang: shiki.BundledLanguage | string = "ts",
+	theme: shiki.BundledTheme | string = heroTheme.name,
 ) {
 	highlighter ??= await shiki.getSingletonHighlighter({
 		langs: LANGS,
-		themes: [heroTheme],
+		themes: [heroTheme, "ayu-dark"],
 	});
 
 	return highlighter.codeToHtml(code, {
 		lang: (lang as shiki.BundledLanguage) || "text",
-		theme: heroTheme.name,
+		theme,
 	});
 }
