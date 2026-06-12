@@ -913,8 +913,8 @@ const myActor = actor({
     // Total graceful shutdown budget for both sleep and destroy. Default: 15000ms.
     sleepGracePeriod: 15_000,
 
-    // Interval for saving state (default: 10000ms)
-    stateSaveInterval: 10_000,
+    // Interval for saving state (default: 1000ms)
+    stateSaveInterval: 1_000,
 
     // Timeout for action execution (default: 60000ms)
     actionTimeout: 60_000,
@@ -943,7 +943,7 @@ const myActor = actor({
 | `createConnStateTimeout` | 5000ms | Timeout for `createConnState` function |
 | `onConnectTimeout` | 5000ms | Timeout for `onConnect` hook |
 | `sleepGracePeriod` | 15000ms | Total graceful shutdown window for both sleep and destroy |
-| `stateSaveInterval` | 10000ms | Interval for persisting state |
+| `stateSaveInterval` | 1000ms | Interval for persisting state |
 | `actionTimeout` | 60000ms | Timeout for action execution |
 | `connectionLivenessTimeout` | 2500ms | Timeout for connection liveness check |
 | `connectionLivenessInterval` | 5000ms | Interval for connection liveness check |

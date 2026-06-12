@@ -133,7 +133,7 @@ See [Actor Input](/docs/actors/input) for details.
 | On connect timeout | 5 seconds | — | Timeout for `onConnect` hook. Configurable via `onConnectTimeout`. |
 | Sleep grace period | 15 seconds | — | Total graceful shutdown budget for both sleep and destroy. Covers `onSleep`/`onDestroy`, run handler shutdown, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and connection cleanup. Configurable via `sleepGracePeriod`. |
 | Sleep timeout | 30 seconds | — | Time of inactivity before actor hibernates. Configurable via `sleepTimeout`. |
-| State save interval | 10 seconds | — | Interval between automatic state saves. Configurable via `stateSaveInterval`. |
+| State save interval | 1 second | — | Interval between automatic state saves. Configurable via `stateSaveInterval`. |
 
 ### Serverless Shutdown
 

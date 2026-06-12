@@ -207,17 +207,6 @@ export const sitemap = [
 				]
 			},
 			{
-				title: "Extensions",
-				pages: [
-					{
-						title: "Sandbox Actor",
-						href: "/docs/actors/sandbox",
-						icon: faSquareTerminal,
-						badge: "Beta",
-					},
-				]
-			},
-			{
 				title: "Concepts",
 				pages: [
 					{
