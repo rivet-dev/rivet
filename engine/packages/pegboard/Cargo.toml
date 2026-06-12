@@ -1,5 +1,6 @@
 [package]
 name = "pegboard"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -35,8 +36,10 @@ rivet-types.workspace = true
 rivet-util.workspace = true
 rivetkit-shared-types.workspace = true
 scc.workspace = true
+scopeguard.workspace = true
 serde_bare.workspace = true
 serde_json.workspace = true
+xxhash-rust.workspace = true
 serde.workspace = true
 depot.workspace = true
 strum.workspace = true

@@ -64,7 +64,7 @@ async function evaluateCode(code: string, args: Record<string, unknown>) {
 		}
 
 		jsCode = toJs(program);
-	} catch (e) {
+	} catch (_e) {
 		throw new ReplError("syntax", "Syntax error");
 	}
 

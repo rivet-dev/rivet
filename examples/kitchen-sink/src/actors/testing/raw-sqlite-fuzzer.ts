@@ -130,18 +130,7 @@ const DEFAULT_MAX_PAYLOAD_BYTES = 8 * 1024;
 const DEFAULT_GROWTH_TARGET_BYTES = 1024 * 1024;
 const LARGE_WRITE_CHUNK_BYTES = 96 * 1024;
 const PAGE_BOUNDARY_SIZES = [
-	1,
-	4095,
-	4096,
-	4097,
-	8191,
-	8192,
-	8193,
-	32768,
-	65535,
-	65536,
-	98304,
-	131072,
+	1, 4095, 4096, 4097, 8191, 8192, 8193, 32768, 65535, 65536, 98304, 131072,
 ];
 
 function hashSeed(input: string): number {
@@ -189,7 +178,9 @@ function payloadFor(
 }
 
 async function queryOne<T>(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	sql: string,
 	...args: unknown[]
 ): Promise<T | undefined> {
@@ -198,7 +189,9 @@ async function queryOne<T>(
 }
 
 async function transaction<T>(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	fn: () => Promise<T>,
 ): Promise<T> {
 	await database.execute("BEGIN");
@@ -213,7 +206,9 @@ async function transaction<T>(
 }
 
 async function recordProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 	scenario: string,
 	name: string,
@@ -241,9 +236,9 @@ function firstColumn(row: unknown): unknown {
 	return values[0];
 }
 
-async function ensureAccounts(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
-): Promise<void> {
+async function ensureAccounts(database: {
+	execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+}): Promise<void> {
 	await database.execute("BEGIN");
 	try {
 		for (let i = 0; i < ACCOUNT_COUNT; i += 1) {
@@ -261,7 +256,9 @@ async function ensureAccounts(
 }
 
 async function recordItemEvent(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 	localIndex: number,
 	kind: string,
@@ -294,7 +291,9 @@ async function recordItemEvent(
 }
 
 async function upsertLiveItem(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	row: ItemRow,
 	payload: string,
 ): Promise<void> {
@@ -323,7 +322,9 @@ async function upsertLiveItem(
 }
 
 async function applyItemOperation(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -372,16 +373,25 @@ async function applyItemOperation(
 				current !== undefined,
 			);
 		} catch (error) {
-			throw new Error(`item operation event insert failed for delete key ${JSON.stringify(opts.itemKey)}`, {
-				cause: error,
-			});
+			throw new Error(
+				`item operation event insert failed for delete key ${JSON.stringify(opts.itemKey)}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		try {
-			await database.execute("DELETE FROM fuzz_items WHERE item_key = ?", opts.itemKey);
+			await database.execute(
+				"DELETE FROM fuzz_items WHERE item_key = ?",
+				opts.itemKey,
+			);
 		} catch (error) {
-			throw new Error(`item operation delete failed for key ${JSON.stringify(opts.itemKey)}`, {
-				cause: error,
-			});
+			throw new Error(
+				`item operation delete failed for key ${JSON.stringify(opts.itemKey)}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		return;
 	}
@@ -450,7 +460,9 @@ async function applyItemOperation(
 }
 
 async function applyHotUpdates(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -480,7 +492,9 @@ async function applyHotUpdates(
 }
 
 async function applyTransfer(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		phase: number;
 		localIndex: number;
@@ -526,7 +540,9 @@ async function applyTransfer(
 }
 
 async function applyEdgePayloads(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -568,9 +584,12 @@ async function applyEdgePayloads(
 					Date.now(),
 				);
 			} catch (error) {
-				throw new Error(`edge payload row upsert failed for ${sizeLabel}`, {
-					cause: error,
-				});
+				throw new Error(
+					`edge payload row upsert failed for ${sizeLabel}`,
+					{
+						cause: error,
+					},
+				);
 			}
 			try {
 				await database.execute(
@@ -586,9 +605,12 @@ async function applyEdgePayloads(
 					payloadBytes,
 				);
 			} catch (error) {
-				throw new Error(`edge payload expectation upsert failed for ${sizeLabel}`, {
-					cause: error,
-				});
+				throw new Error(
+					`edge payload expectation upsert failed for ${sizeLabel}`,
+					{
+						cause: error,
+					},
+				);
 			}
 			try {
 				await database.execute("COMMIT");
@@ -603,7 +625,9 @@ async function applyEdgePayloads(
 		}
 	};
 
-	const sizes = PAGE_BOUNDARY_SIZES.filter((size) => size <= opts.maxPayloadBytes);
+	const sizes = PAGE_BOUNDARY_SIZES.filter(
+		(size) => size <= opts.maxPayloadBytes,
+	);
 	if (!sizes.includes(opts.maxPayloadBytes)) sizes.push(opts.maxPayloadBytes);
 
 	let ops = 0;
@@ -630,16 +654,21 @@ async function applyEdgePayloads(
 			"unicode escaped-nul payload",
 		);
 	} catch (error) {
-		throw new Error("edge payload write failed for unicode escaped-nul payload", {
-			cause: error,
-		});
+		throw new Error(
+			"edge payload write failed for unicode escaped-nul payload",
+			{
+				cause: error,
+			},
+		);
 	}
 
 	return ops + 1;
 }
 
 async function applyActualNulPayload(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -680,7 +709,9 @@ async function applyActualNulPayload(
 }
 
 async function applyFragmentationChurn(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -693,7 +724,11 @@ async function applyFragmentationChurn(
 	let ops = 0;
 
 	for (let i = 0; i < rows; i += 1) {
-		const size = intBetween(opts.rng, 32, Math.max(32, opts.maxPayloadBytes));
+		const size = intBetween(
+			opts.rng,
+			32,
+			Math.max(32, opts.maxPayloadBytes),
+		);
 		const id = `frag-${opts.phase}-${i}`;
 		const payload = payloadFor(opts.seed, opts.phase, 10_000 + i, size);
 		try {
@@ -713,9 +748,12 @@ async function applyFragmentationChurn(
 				Date.now(),
 			);
 		} catch (error) {
-			throw new Error(`fragmentation payload upsert failed for ${id} at size ${size}`, {
-				cause: error,
-			});
+			throw new Error(
+				`fragmentation payload upsert failed for ${id} at size ${size}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		try {
 			await database.execute(
@@ -731,9 +769,12 @@ async function applyFragmentationChurn(
 				payload.length,
 			);
 		} catch (error) {
-			throw new Error(`fragmentation expectation upsert failed for ${id} at size ${size}`, {
-				cause: error,
-			});
+			throw new Error(
+				`fragmentation expectation upsert failed for ${id} at size ${size}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		ops += 1;
 	}
@@ -741,7 +782,10 @@ async function applyFragmentationChurn(
 	for (let i = 0; i < rows; i += 3) {
 		const id = `frag-${opts.phase}-${i}`;
 		try {
-			await database.execute("DELETE FROM fuzz_edge_payloads WHERE id = ?", id);
+			await database.execute(
+				"DELETE FROM fuzz_edge_payloads WHERE id = ?",
+				id,
+			);
 		} catch (error) {
 			throw new Error(`fragmentation delete failed for ${id}`, {
 				cause: error,
@@ -759,9 +803,12 @@ async function applyFragmentationChurn(
 				id,
 			);
 		} catch (error) {
-			throw new Error(`fragmentation tombstone expectation failed for ${id}`, {
-				cause: error,
-			});
+			throw new Error(
+				`fragmentation tombstone expectation failed for ${id}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		ops += 1;
 	}
@@ -782,9 +829,12 @@ async function applyFragmentationChurn(
 				id,
 			);
 		} catch (error) {
-			throw new Error(`fragmentation payload rewrite failed for ${id} at size ${size}`, {
-				cause: error,
-			});
+			throw new Error(
+				`fragmentation payload rewrite failed for ${id} at size ${size}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		try {
 			await database.execute(
@@ -796,9 +846,12 @@ async function applyFragmentationChurn(
 				id,
 			);
 		} catch (error) {
-			throw new Error(`fragmentation expectation rewrite failed for ${id} at size ${size}`, {
-				cause: error,
-			});
+			throw new Error(
+				`fragmentation expectation rewrite failed for ${id} at size ${size}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		ops += 1;
 	}
@@ -807,9 +860,12 @@ async function applyFragmentationChurn(
 		try {
 			await database.execute("VACUUM");
 		} catch (error) {
-			throw new Error(`fragmentation vacuum failed for phase ${opts.phase}`, {
-				cause: error,
-			});
+			throw new Error(
+				`fragmentation vacuum failed for phase ${opts.phase}`,
+				{
+					cause: error,
+				},
+			);
 		}
 		ops += 1;
 	}
@@ -818,7 +874,9 @@ async function applyFragmentationChurn(
 }
 
 async function applySchemaChurn(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 ): Promise<number> {
 	const table = `fuzz_schema_phase_${phase}`;
@@ -834,18 +892,25 @@ async function applySchemaChurn(
 			extra TEXT
 		)`,
 	);
-	await database.execute(`CREATE INDEX IF NOT EXISTS ${index} ON ${table}(name, value)`);
+	await database.execute(
+		`CREATE INDEX IF NOT EXISTS ${index} ON ${table}(name, value)`,
+	);
 	try {
-		await database.execute(`ALTER TABLE ${table} ADD COLUMN altered_${phase} TEXT DEFAULT 'altered'`);
+		await database.execute(
+			`ALTER TABLE ${table} ADD COLUMN altered_${phase} TEXT DEFAULT 'altered'`,
+		);
 	} catch {
 		const column = await queryOne<{ count: number }>(
 			database,
 			`SELECT COUNT(*) AS count FROM pragma_table_info('${table}') WHERE name = ?`,
 			`altered_${phase}`,
 		);
-		if ((column?.count ?? 0) !== 1) throw new Error(`failed to add altered_${phase}`);
+		if ((column?.count ?? 0) !== 1)
+			throw new Error(`failed to add altered_${phase}`);
 	}
-	await database.execute(`CREATE VIEW IF NOT EXISTS ${view} AS SELECT id, name, value FROM ${table}`);
+	await database.execute(
+		`CREATE VIEW IF NOT EXISTS ${view} AS SELECT id, name, value FROM ${table}`,
+	);
 	await database.execute(
 		`INSERT INTO ${table} (name, value, extra)
 		VALUES (?, ?, ?)
@@ -897,10 +962,17 @@ async function applySchemaChurn(
 		);
 	}
 
-	await database.execute("CREATE TEMP TABLE IF NOT EXISTS fuzz_temp_probe (id INTEGER PRIMARY KEY, value TEXT)");
-	await database.execute("INSERT INTO fuzz_temp_probe (value) VALUES (?)", `temp-${phase}`);
+	await database.execute(
+		"CREATE TEMP TABLE IF NOT EXISTS fuzz_temp_probe (id INTEGER PRIMARY KEY, value TEXT)",
+	);
+	await database.execute(
+		"INSERT INTO fuzz_temp_probe (value) VALUES (?)",
+		`temp-${phase}`,
+	);
 	await database.execute("DROP TABLE fuzz_temp_probe");
-	await database.execute(`CREATE INDEX IF NOT EXISTS ${dropIndex} ON fuzz_schema_registry(type)`);
+	await database.execute(
+		`CREATE INDEX IF NOT EXISTS ${dropIndex} ON fuzz_schema_registry(type)`,
+	);
 	await database.execute(`DROP INDEX IF EXISTS ${dropIndex}`);
 	const dropped = await queryOne<{ count: number }>(
 		database,
@@ -921,7 +993,9 @@ async function applySchemaChurn(
 }
 
 async function applyIndexProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -943,7 +1017,12 @@ async function applyIndexProbe(
 				bucket,
 				score,
 				label,
-				payloadFor(opts.seed, opts.phase, 30_000 + i, intBetween(opts.rng, 8, 256)),
+				payloadFor(
+					opts.seed,
+					opts.phase,
+					30_000 + i,
+					intBetween(opts.rng, 8, 256),
+				),
 			);
 		}
 	});
@@ -951,7 +1030,9 @@ async function applyIndexProbe(
 }
 
 async function applyPreparedChurn(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1001,7 +1082,12 @@ async function applyPreparedChurn(
 		repeatedId,
 	);
 	for (let i = 0; i < rows; i += 1) {
-		const payload = payloadFor(opts.seed, opts.phase, 80_000 + i, Math.min(512, opts.maxPayloadBytes));
+		const payload = payloadFor(
+			opts.seed,
+			opts.phase,
+			80_000 + i,
+			Math.min(512, opts.maxPayloadBytes),
+		);
 		await database.execute(
 			`UPDATE fuzz_prepared_churn
 			SET value = value + ?, payload = ?, payload_checksum = ?
@@ -1012,7 +1098,12 @@ async function applyPreparedChurn(
 			repeatedId,
 		);
 	}
-	const finalPayload = payloadFor(opts.seed, opts.phase, 80_000 + rows - 1, Math.min(512, opts.maxPayloadBytes));
+	const finalPayload = payloadFor(
+		opts.seed,
+		opts.phase,
+		80_000 + rows - 1,
+		Math.min(512, opts.maxPayloadBytes),
+	);
 	await database.execute(
 		`INSERT INTO fuzz_prepared_expectations (id, value, payload_checksum)
 		VALUES (?, ?, ?)
@@ -1028,7 +1119,9 @@ async function applyPreparedChurn(
 }
 
 async function applyReadWriteProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1036,7 +1129,14 @@ async function applyReadWriteProbe(
 		iterations: number;
 	},
 ): Promise<number> {
-	if ((await queryOne<{ count: number }>(database, "SELECT COUNT(*) AS count FROM fuzz_indexed"))?.count === 0) {
+	if (
+		(
+			await queryOne<{ count: number }>(
+				database,
+				"SELECT COUNT(*) AS count FROM fuzz_indexed",
+			)
+		)?.count === 0
+	) {
 		await applyIndexProbe(database, opts);
 	}
 
@@ -1055,7 +1155,9 @@ async function applyReadWriteProbe(
 		iterations: Math.max(10, Math.floor(opts.iterations / 2)),
 	});
 	const [readRows, writeOps] = await Promise.all([read, write]);
-	const row = readRows[0] as { joined_rows?: number; score_sum?: number } | undefined;
+	const row = readRows[0] as
+		| { joined_rows?: number; score_sum?: number }
+		| undefined;
 	const joinedRows = Number(row?.joined_rows ?? -1);
 	const scoreSum = Number(row?.score_sum ?? Number.NaN);
 	await recordProbe(
@@ -1071,7 +1173,9 @@ async function applyReadWriteProbe(
 }
 
 async function applyBoundaryKeys(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1126,12 +1230,22 @@ async function applyBoundaryKeys(
 		}
 		ops += 1;
 	}
-	await recordProbe(database, opts.phase, "boundary-keys", "keys-written", 136, ops, ops !== 136);
+	await recordProbe(
+		database,
+		opts.phase,
+		"boundary-keys",
+		"keys-written",
+		136,
+		ops,
+		ops !== 136,
+	);
 	return ops;
 }
 
 async function applyGrowthProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1139,7 +1253,10 @@ async function applyGrowthProbe(
 		growthTargetBytes: number;
 	},
 ): Promise<number> {
-	const chunkBytes = Math.max(1, Math.min(LARGE_WRITE_CHUNK_BYTES, opts.maxPayloadBytes));
+	const chunkBytes = Math.max(
+		1,
+		Math.min(LARGE_WRITE_CHUNK_BYTES, opts.maxPayloadBytes),
+	);
 	const rows = Math.max(1, Math.ceil(opts.growthTargetBytes / chunkBytes));
 	let written = 0;
 	for (let i = 0; i < rows; i += 1) {
@@ -1188,7 +1305,9 @@ async function applyGrowthProbe(
 }
 
 async function applyTruncateRecreateProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1199,7 +1318,12 @@ async function applyTruncateRecreateProbe(
 	const largeSize = Math.max(1, Math.min(opts.maxPayloadBytes, 131072));
 	const largePayload = payloadFor(opts.seed, opts.phase, 110_000, largeSize);
 	const tinyPayload = payloadFor(opts.seed, opts.phase, 110_001, 1);
-	const recreatedPayload = payloadFor(opts.seed, opts.phase, 110_002, Math.min(4096, largeSize));
+	const recreatedPayload = payloadFor(
+		opts.seed,
+		opts.phase,
+		110_002,
+		Math.min(4096, largeSize),
+	);
 
 	await database.execute(
 		`INSERT INTO fuzz_edge_payloads (
@@ -1252,7 +1376,9 @@ async function applyTruncateRecreateProbe(
 }
 
 async function updateShadowChecksums(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 ): Promise<number> {
 	const item = await queryOne<{ rows: number; value: number }>(
@@ -1287,7 +1413,9 @@ async function updateShadowChecksums(
 }
 
 async function applyConstraintChaos(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 ): Promise<number> {
 	await database.execute("PRAGMA foreign_keys = ON");
@@ -1325,12 +1453,22 @@ async function applyConstraintChaos(
 		{
 			name: `not-null-${phase}-${runSeq}`,
 			sql: "INSERT INTO fuzz_constraints (id, must_not_null, qty, uniq) VALUES (?, ?, ?, ?)",
-			args: [`bad-null-${phase}-${runSeq}`, null, 1, `bad-null-${phase}-${runSeq}`],
+			args: [
+				`bad-null-${phase}-${runSeq}`,
+				null,
+				1,
+				`bad-null-${phase}-${runSeq}`,
+			],
 		},
 		{
 			name: `check-${phase}-${runSeq}`,
 			sql: "INSERT INTO fuzz_constraints (id, must_not_null, qty, uniq) VALUES (?, ?, ?, ?)",
-			args: [`bad-check-${phase}-${runSeq}`, "ok", -1, `bad-check-${phase}-${runSeq}`],
+			args: [
+				`bad-check-${phase}-${runSeq}`,
+				"ok",
+				-1,
+				`bad-check-${phase}-${runSeq}`,
+			],
 		},
 		{
 			name: `unique-${phase}-${runSeq}`,
@@ -1411,7 +1549,8 @@ async function applyConstraintChaos(
 		"fk-cascade-delete",
 		0,
 		childAfterDelete?.count ?? -1,
-		(childBeforeDelete?.count ?? 0) !== 1 || (childAfterDelete?.count ?? -1) !== 0,
+		(childBeforeDelete?.count ?? 0) !== 1 ||
+			(childAfterDelete?.count ?? -1) !== 0,
 	);
 
 	const fkBefore = await queryOne<{ count: number }>(
@@ -1446,15 +1585,37 @@ async function applyConstraintChaos(
 }
 
 async function applyPragmaProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 ): Promise<number> {
 	let ops = 0;
 	for (const [name, setupSql, checkSql, expected] of [
-		["journal_mode", "PRAGMA journal_mode = DELETE", "PRAGMA journal_mode", "nonempty"],
-		["synchronous", "PRAGMA synchronous = NORMAL", "PRAGMA synchronous", "nonempty"],
-		["cache_size", "PRAGMA cache_size = -2000", "PRAGMA cache_size", "-2000"],
-		["foreign_keys", "PRAGMA foreign_keys = ON", "PRAGMA foreign_keys", "1"],
+		[
+			"journal_mode",
+			"PRAGMA journal_mode = DELETE",
+			"PRAGMA journal_mode",
+			"nonempty",
+		],
+		[
+			"synchronous",
+			"PRAGMA synchronous = NORMAL",
+			"PRAGMA synchronous",
+			"nonempty",
+		],
+		[
+			"cache_size",
+			"PRAGMA cache_size = -2000",
+			"PRAGMA cache_size",
+			"-2000",
+		],
+		[
+			"foreign_keys",
+			"PRAGMA foreign_keys = ON",
+			"PRAGMA foreign_keys",
+			"1",
+		],
 		["auto_vacuum", "PRAGMA auto_vacuum", "PRAGMA auto_vacuum", "nonempty"],
 	] as const) {
 		try {
@@ -1468,7 +1629,9 @@ async function applyPragmaProbe(
 				name,
 				expected,
 				actual,
-				expected === "nonempty" ? actual.length === 0 : actual !== expected,
+				expected === "nonempty"
+					? actual.length === 0
+					: actual !== expected,
 			);
 		} catch (err) {
 			await recordProbe(
@@ -1487,7 +1650,9 @@ async function applyPragmaProbe(
 }
 
 async function applySavepointScenario(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 ): Promise<number> {
 	const keepId = `save-keep-${phase}`;
@@ -1536,7 +1701,9 @@ async function applySavepointScenario(
 }
 
 async function applyIdempotentReplay(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 ): Promise<number> {
 	const targetId = `idem-target-${phase % 3}`;
@@ -1575,9 +1742,9 @@ async function applyIdempotentReplay(
 	return 24;
 }
 
-async function ensureRelationalSeed(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
-): Promise<void> {
+async function ensureRelationalSeed(database: {
+	execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+}): Promise<void> {
 	await transaction(database, async () => {
 		for (let i = 0; i < 8; i += 1) {
 			await database.execute(
@@ -1607,7 +1774,9 @@ async function ensureRelationalSeed(
 }
 
 async function applyRelationalOrder(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		phase: number;
 		localIndex: number;
@@ -1676,7 +1845,9 @@ async function applyRelationalOrder(
 }
 
 async function applyRollbackProbe(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	phase: number,
 	rowCount = 20,
 ): Promise<number> {
@@ -1722,7 +1893,9 @@ async function applyRollbackProbe(
 }
 
 async function applyNastyScript(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1760,7 +1933,9 @@ async function applyNastyScript(
 	ops += hotUpdates;
 
 	if (opts.intense) {
-		await database.execute("CREATE INDEX IF NOT EXISTS idx_nasty_heavy_write ON fuzz_items(value, version)");
+		await database.execute(
+			"CREATE INDEX IF NOT EXISTS idx_nasty_heavy_write ON fuzz_items(value, version)",
+		);
 		for (let i = 0; i < 10_000; i += 1) {
 			await applyItemOperation(database, {
 				seed: opts.seed,
@@ -1794,7 +1969,9 @@ async function applyNastyScript(
 }
 
 async function applyDeterministicNastyScript(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1807,8 +1984,16 @@ async function applyDeterministicNastyScript(
 	let finalGrowPayload = "";
 	await transaction(database, async () => {
 		for (let i = 0; i < 256; i += 1) {
-			const size = Math.max(1, Math.floor(1 + ((maxGrowBytes - 1) * i) / 255));
-			const payload = payloadFor(opts.seed, opts.phase, 160_000 + i, size);
+			const size = Math.max(
+				1,
+				Math.floor(1 + ((maxGrowBytes - 1) * i) / 255),
+			);
+			const payload = payloadFor(
+				opts.seed,
+				opts.phase,
+				160_000 + i,
+				size,
+			);
 			finalGrowPayload = payload;
 			await database.execute(
 				`INSERT INTO fuzz_edge_payloads (
@@ -1871,7 +2056,9 @@ async function applyDeterministicNastyScript(
 	);
 
 	const groupId = `nasty-bulk-${opts.phase}`;
-	await database.execute("CREATE INDEX IF NOT EXISTS idx_fuzz_nasty_rows_group_n ON fuzz_nasty_rows(group_id, n)");
+	await database.execute(
+		"CREATE INDEX IF NOT EXISTS idx_fuzz_nasty_rows_group_n ON fuzz_nasty_rows(group_id, n)",
+	);
 	await transaction(database, async () => {
 		for (let i = 0; i < 10_000; i += 1) {
 			await database.execute(
@@ -1884,7 +2071,10 @@ async function applyDeterministicNastyScript(
 			);
 			ops += 1;
 		}
-		await database.execute("DELETE FROM fuzz_nasty_rows WHERE group_id = ? AND n % 2 = 0", groupId);
+		await database.execute(
+			"DELETE FROM fuzz_nasty_rows WHERE group_id = ? AND n % 2 = 0",
+			groupId,
+		);
 		ops += 1;
 	});
 	await database.execute("DROP INDEX IF EXISTS idx_fuzz_nasty_rows_group_n");
@@ -1956,12 +2146,17 @@ async function applyDeterministicNastyScript(
 	return ops;
 }
 
-function shouldRunDeepScenario(mode: WorkloadMode, scenario: WorkloadMode): boolean {
+function shouldRunDeepScenario(
+	mode: WorkloadMode,
+	scenario: WorkloadMode,
+): boolean {
 	return mode === scenario || mode === "kitchen-sink" || mode === "nasty";
 }
 
 async function applyDeepScenarios(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	opts: {
 		seed: string;
 		phase: number;
@@ -1973,12 +2168,19 @@ async function applyDeepScenarios(
 		ops: Record<string, number>;
 	},
 ): Promise<void> {
-	const runScenario = async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+	const runScenario = async <T>(
+		name: string,
+		fn: () => Promise<T>,
+	): Promise<T> => {
 		try {
 			return await fn();
 		} catch (error) {
 			const detail =
-				error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
+				error instanceof Error
+					? error.message
+					: typeof error === "string"
+						? error
+						: String(error);
 			throw new Error(
 				`deep scenario ${name} failed in mode ${opts.mode} during phase ${opts.phase}: ${detail}`,
 				{ cause: error },
@@ -1987,85 +2189,136 @@ async function applyDeepScenarios(
 	};
 
 	if (shouldRunDeepScenario(opts.mode, "edge") || opts.mode === "payloads") {
-		opts.ops.edgePayload = (opts.ops.edgePayload ?? 0) +
-			await runScenario("edge", () => applyEdgePayloads(database, opts));
+		opts.ops.edgePayload =
+			(opts.ops.edgePayload ?? 0) +
+			(await runScenario("edge", () =>
+				applyEdgePayloads(database, opts),
+			));
 	}
 	if (opts.mode === "actual-nul") {
-		opts.ops.actualNul = (opts.ops.actualNul ?? 0) +
-			await runScenario("actual-nul", () => applyActualNulPayload(database, opts));
+		opts.ops.actualNul =
+			(opts.ops.actualNul ?? 0) +
+			(await runScenario("actual-nul", () =>
+				applyActualNulPayload(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "fragmentation")) {
-		opts.ops.fragmentation = (opts.ops.fragmentation ?? 0) +
-			await runScenario("fragmentation", () => applyFragmentationChurn(database, opts));
+		opts.ops.fragmentation =
+			(opts.ops.fragmentation ?? 0) +
+			(await runScenario("fragmentation", () =>
+				applyFragmentationChurn(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "schema")) {
-		opts.ops.schema = (opts.ops.schema ?? 0) +
-			await runScenario("schema", () => applySchemaChurn(database, opts.phase));
+		opts.ops.schema =
+			(opts.ops.schema ?? 0) +
+			(await runScenario("schema", () =>
+				applySchemaChurn(database, opts.phase),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "index")) {
-		opts.ops.index = (opts.ops.index ?? 0) +
-			await runScenario("index", () => applyIndexProbe(database, opts));
+		opts.ops.index =
+			(opts.ops.index ?? 0) +
+			(await runScenario("index", () => applyIndexProbe(database, opts)));
 	}
 	if (shouldRunDeepScenario(opts.mode, "constraints")) {
-		opts.ops.constraints = (opts.ops.constraints ?? 0) +
-			await runScenario("constraints", () => applyConstraintChaos(database, opts.phase));
+		opts.ops.constraints =
+			(opts.ops.constraints ?? 0) +
+			(await runScenario("constraints", () =>
+				applyConstraintChaos(database, opts.phase),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "savepoints")) {
-		opts.ops.savepoints = (opts.ops.savepoints ?? 0) +
-			await runScenario("savepoints", () => applySavepointScenario(database, opts.phase));
+		opts.ops.savepoints =
+			(opts.ops.savepoints ?? 0) +
+			(await runScenario("savepoints", () =>
+				applySavepointScenario(database, opts.phase),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "pragma")) {
-		opts.ops.pragma = (opts.ops.pragma ?? 0) +
-			await runScenario("pragma", () => applyPragmaProbe(database, opts.phase));
+		opts.ops.pragma =
+			(opts.ops.pragma ?? 0) +
+			(await runScenario("pragma", () =>
+				applyPragmaProbe(database, opts.phase),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "prepared")) {
-		opts.ops.prepared = (opts.ops.prepared ?? 0) +
-			await runScenario("prepared", () => applyPreparedChurn(database, opts));
+		opts.ops.prepared =
+			(opts.ops.prepared ?? 0) +
+			(await runScenario("prepared", () =>
+				applyPreparedChurn(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "growth")) {
-		opts.ops.growth = (opts.ops.growth ?? 0) +
-			await runScenario("growth", () => applyGrowthProbe(database, opts));
+		opts.ops.growth =
+			(opts.ops.growth ?? 0) +
+			(await runScenario("growth", () =>
+				applyGrowthProbe(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "readwrite")) {
-		opts.ops.readwrite = (opts.ops.readwrite ?? 0) +
-			await runScenario("readwrite", () => applyReadWriteProbe(database, opts));
+		opts.ops.readwrite =
+			(opts.ops.readwrite ?? 0) +
+			(await runScenario("readwrite", () =>
+				applyReadWriteProbe(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "truncate")) {
-		opts.ops.truncate = (opts.ops.truncate ?? 0) +
-			await runScenario("truncate", () => applyTruncateRecreateProbe(database, opts));
+		opts.ops.truncate =
+			(opts.ops.truncate ?? 0) +
+			(await runScenario("truncate", () =>
+				applyTruncateRecreateProbe(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "boundary-keys")) {
-		opts.ops.boundaryKeys = (opts.ops.boundaryKeys ?? 0) +
-			await runScenario("boundary-keys", () => applyBoundaryKeys(database, opts));
+		opts.ops.boundaryKeys =
+			(opts.ops.boundaryKeys ?? 0) +
+			(await runScenario("boundary-keys", () =>
+				applyBoundaryKeys(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "relational")) {
 		const orders = Math.max(1, Math.floor(opts.iterations / 20));
 		for (let i = 0; i < orders; i += 1) {
-			opts.ops.relational = (opts.ops.relational ?? 0) +
-				await runScenario("relational", () =>
+			opts.ops.relational =
+				(opts.ops.relational ?? 0) +
+				(await runScenario("relational", () =>
 					applyRelationalOrder(database, {
 						phase: opts.phase,
 						localIndex: i,
 						rng: opts.rng,
 					}),
-				);
+				));
 		}
 	}
 	if (opts.mode === "kitchen-sink" || opts.mode === "nasty") {
-		opts.ops.idempotent = (opts.ops.idempotent ?? 0) +
-			await runScenario("idempotent", () => applyIdempotentReplay(database, opts.phase));
-		opts.ops.nasty = (opts.ops.nasty ?? 0) +
-			await runScenario("nasty", () =>
-				applyNastyScript(database, { ...opts, intense: opts.mode === "nasty" }),
-			);
+		opts.ops.idempotent =
+			(opts.ops.idempotent ?? 0) +
+			(await runScenario("idempotent", () =>
+				applyIdempotentReplay(database, opts.phase),
+			));
+		opts.ops.nasty =
+			(opts.ops.nasty ?? 0) +
+			(await runScenario("nasty", () =>
+				applyNastyScript(database, {
+					...opts,
+					intense: opts.mode === "nasty",
+				}),
+			));
 	}
 	if (opts.mode === "nasty-script") {
-		opts.ops.nasty = (opts.ops.nasty ?? 0) +
-			await runScenario("nasty-script", () => applyDeterministicNastyScript(database, opts));
+		opts.ops.nasty =
+			(opts.ops.nasty ?? 0) +
+			(await runScenario("nasty-script", () =>
+				applyDeterministicNastyScript(database, opts),
+			));
 	}
 	if (shouldRunDeepScenario(opts.mode, "shadow")) {
-		opts.ops.shadow = (opts.ops.shadow ?? 0) +
-			await runScenario("shadow", () => updateShadowChecksums(database, opts.phase));
+		opts.ops.shadow =
+			(opts.ops.shadow ?? 0) +
+			(await runScenario("shadow", () =>
+				updateShadowChecksums(database, opts.phase),
+			));
 	}
 }
 
@@ -2100,9 +2353,9 @@ function chooseKind(
 	return "transfer";
 }
 
-async function validate(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
-): Promise<ValidationSummary> {
+async function validate(database: {
+	execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+}): Promise<ValidationSummary> {
 	const integrity = await queryOne<{ integrity_check: string }>(
 		database,
 		"PRAGMA integrity_check",
@@ -2450,7 +2703,9 @@ async function validate(
 }
 
 async function debugItemMismatches(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	limit = 5,
 ): Promise<{
 	itemMismatches: ItemMismatchDebugRow[];
@@ -2877,14 +3132,19 @@ export const rawSqliteFuzzer = actor({
 		runPhase: async (c, input: RunPhaseInput): Promise<PhaseResult> => {
 			const mode = input.mode ?? "balanced";
 			const iterations = Math.max(1, Math.floor(input.iterations));
-			const keySpace = Math.max(1, Math.floor(input.keySpace ?? DEFAULT_KEY_SPACE));
+			const keySpace = Math.max(
+				1,
+				Math.floor(input.keySpace ?? DEFAULT_KEY_SPACE),
+			);
 			const maxPayloadBytes = Math.max(
 				1,
 				Math.floor(input.maxPayloadBytes ?? DEFAULT_MAX_PAYLOAD_BYTES),
 			);
 			const growthTargetBytes = Math.max(
 				1,
-				Math.floor(input.growthTargetBytes ?? DEFAULT_GROWTH_TARGET_BYTES),
+				Math.floor(
+					input.growthTargetBytes ?? DEFAULT_GROWTH_TARGET_BYTES,
+				),
 			);
 			const rng = makeRng(`${input.seed}:${input.phase}:${mode}`);
 			const ops: Record<string, number> = {};
@@ -2901,7 +3161,8 @@ export const rawSqliteFuzzer = actor({
 					if (kind === "transfer") {
 						const fromIndex = intBetween(rng, 0, ACCOUNT_COUNT - 1);
 						let toIndex = intBetween(rng, 0, ACCOUNT_COUNT - 1);
-						if (toIndex === fromIndex) toIndex = (toIndex + 1) % ACCOUNT_COUNT;
+						if (toIndex === fromIndex)
+							toIndex = (toIndex + 1) % ACCOUNT_COUNT;
 						const fromAccount = `acct-${fromIndex}`;
 						const toAccount = `acct-${toIndex}`;
 						try {
@@ -2920,7 +3181,11 @@ export const rawSqliteFuzzer = actor({
 						}
 					} else if (kind === "hot") {
 						const itemKey = `hot-${intBetween(rng, 0, 3)}`;
-						const updates = intBetween(rng, 2, mode === "hot" ? 12 : 5);
+						const updates = intBetween(
+							rng,
+							2,
+							mode === "hot" ? 12 : 5,
+						);
 						try {
 							await applyHotUpdates(c.db, {
 								seed: input.seed,
@@ -2928,7 +3193,11 @@ export const rawSqliteFuzzer = actor({
 								localIndex: i,
 								itemKey,
 								updates,
-								payloadBytes: intBetween(rng, 1, maxPayloadBytes),
+								payloadBytes: intBetween(
+									rng,
+									1,
+									maxPayloadBytes,
+								),
 							});
 						} catch (error) {
 							throw new Error(
@@ -2943,7 +3212,11 @@ export const rawSqliteFuzzer = actor({
 								: `item-${intBetween(rng, 0, keySpace - 1)}`;
 						const payloadBytes =
 							mode === "payloads"
-								? intBetween(rng, Math.min(256, maxPayloadBytes), maxPayloadBytes)
+								? intBetween(
+										rng,
+										Math.min(256, maxPayloadBytes),
+										maxPayloadBytes,
+									)
 								: intBetween(rng, 1, maxPayloadBytes);
 						try {
 							await applyItemOperation(c.db, {
@@ -2986,7 +3259,11 @@ export const rawSqliteFuzzer = actor({
 				};
 			} catch (error) {
 				const detail =
-					error instanceof Error ? error.message : typeof error === "string" ? error : String(error);
+					error instanceof Error
+						? error.message
+						: typeof error === "string"
+							? error
+							: String(error);
 				throw new Error(
 					`runPhase failed during ${stage} for mode ${mode} phase ${input.phase} seed ${input.seed}: ${detail}`,
 					{ cause: error },

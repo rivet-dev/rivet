@@ -1,5 +1,6 @@
 [package]
 name = "namespace"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -10,6 +11,7 @@ anyhow.workspace = true
 epoxy-protocol.workspace = true
 epoxy.workspace = true
 gas.workspace = true
+rand.workspace = true
 rivet-api-builder.workspace = true
 rivet-api-util.workspace = true
 rivet-data.workspace = true

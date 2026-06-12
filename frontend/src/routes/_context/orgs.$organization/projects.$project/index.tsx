@@ -4,7 +4,7 @@ import {
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { NamespacesGrid } from "@/app/namespaces-grid";
+import { NamespacesGrid, ProjectLandingPending } from "@/app/namespaces-grid";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
 import { features } from "@/lib/features";
@@ -23,6 +23,9 @@ export const Route = createFileRoute(
 		);
 	},
 	component: RouteComponent,
+	pendingMinMs: 0,
+	pendingMs: 0,
+	pendingComponent: ProjectLandingPending,
 });
 
 function RouteComponent() {

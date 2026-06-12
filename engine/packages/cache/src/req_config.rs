@@ -369,7 +369,7 @@ impl RequestConfig {
 
 			if let Err(err) = ups
 				.publish(
-					CACHE_PURGE_TOPIC,
+					CachePurgeSubject,
 					&payload,
 					universalpubsub::PublishOpts::broadcast(),
 				)

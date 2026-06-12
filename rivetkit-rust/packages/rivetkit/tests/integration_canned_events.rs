@@ -7,13 +7,17 @@ use rivetkit_core::{
 use serde::Deserialize;
 use tokio::sync::{mpsc, oneshot};
 
-use rivetkit::{Actor, Event, Start, start::wrap_start};
+use rivetkit::{Actor, RuntimeEvent, Start, start::wrap_start};
 
 #[derive(Debug)]
 struct CounterActor;
 
 impl Actor for CounterActor {
+	type State = ();
 	type Input = ();
+	type Actions = ();
+	type Events = ();
+	type Queue = ();
 	type ConnParams = ();
 	type ConnState = ();
 	type Action = CounterAction;
@@ -32,15 +36,15 @@ async fn run(start: Start<CounterActor>) -> Result<()> {
 
 	while let Some(event) = events.recv().await {
 		match event {
-			Event::Action(action) => match action.decode()? {
+			RuntimeEvent::Action(action) => match action.decode()? {
 				CounterAction::Increment => {
 					count += 1;
 					action.ok(&());
 				}
 				CounterAction::Get => action.ok(&count),
 			},
-			Event::SerializeState(save) => save.save(&count),
-			Event::Sleep(sleep) => sleep.ok(),
+			RuntimeEvent::SerializeState(save) => save.save(&count),
+			RuntimeEvent::Sleep(sleep) => sleep.ok(),
 			other => panic!("unexpected canned event: {other:?}"),
 		}
 	}
@@ -54,6 +58,7 @@ async fn canned_actor_start_drives_typed_counter_actor() {
 	let start = wrap_start::<CounterActor>(ActorStart {
 		ctx: ActorContext::new("actor-id", "counter", Vec::new(), "local"),
 		input: None,
+		is_new: true,
 		snapshot: None,
 		hibernated: Vec::new(),
 		events: event_rx.into(),

@@ -18,7 +18,10 @@ interface NamespaceMetricsChartProps {
 	isOverviewError?: boolean;
 }
 
-function parseRawDataPoints(metricsData: Rivet.namespaces.MetricsGetResponse | undefined, metricName: MetricConfig["name"]) {
+function parseRawDataPoints(
+	metricsData: Rivet.namespaces.MetricsGetResponse | undefined,
+	metricName: MetricConfig["name"],
+) {
 	const dataPoints: { ts: string; value: number }[] = [];
 	if (metricsData) {
 		for (let i = 0; i < metricsData.name.length; i++) {
@@ -40,10 +43,18 @@ function parseApiSeriesZeroFilled(
 	endAt: string,
 	resolution: number,
 ): VisxAreaChartSeries[] {
-	const filled = zeroFillDataPoints(parseRawDataPoints(metricsData, metricName), { startAt, endAt, resolution });
-	return [{ key: "value", color: "hsl(var(--chart-1))", data: filled.map((d) => ({ ts: new Date(d.ts), value: d.value })) }];
+	const filled = zeroFillDataPoints(
+		parseRawDataPoints(metricsData, metricName),
+		{ startAt, endAt, resolution },
+	);
+	return [
+		{
+			key: "value",
+			color: "hsl(var(--chart-1))",
+			data: filled.map((d) => ({ ts: new Date(d.ts), value: d.value })),
+		},
+	];
 }
-
 
 export function NamespaceMetricsChart({
 	metric,
@@ -63,13 +74,33 @@ export function NamespaceMetricsChart({
 	} = useSingleNamespaceDetailMetrics({ brushDomain });
 
 	const overviewSeries = useMemo(
-		() => parseApiSeriesZeroFilled(overviewData, metric.name, overviewStartAt, overviewEndAt, OVERVIEW_RESOLUTION),
+		() =>
+			parseApiSeriesZeroFilled(
+				overviewData,
+				metric.name,
+				overviewStartAt,
+				overviewEndAt,
+				OVERVIEW_RESOLUTION,
+			),
 		[overviewData, metric.name, overviewStartAt, overviewEndAt],
 	);
 
 	const detailSeries = useMemo(
-		() => parseApiSeriesZeroFilled(detailQuery.data, metric.name, detailStartAt, detailEndAt, detailResolution),
-		[detailQuery.data, metric.name, detailStartAt, detailEndAt, detailResolution],
+		() =>
+			parseApiSeriesZeroFilled(
+				detailQuery.data,
+				metric.name,
+				detailStartAt,
+				detailEndAt,
+				detailResolution,
+			),
+		[
+			detailQuery.data,
+			metric.name,
+			detailStartAt,
+			detailEndAt,
+			detailResolution,
+		],
 	);
 
 	if (isOverviewLoading) {
@@ -91,7 +122,9 @@ export function NamespaceMetricsChart({
 			<Card>
 				<CardHeader className="pb-2">
 					<CardTitle className="text-base">{metric.title}</CardTitle>
-					<p className="text-sm text-muted-foreground">{metric.description}</p>
+					<p className="text-sm text-muted-foreground">
+						{metric.description}
+					</p>
 				</CardHeader>
 				<CardContent>
 					<div className="h-[200px] flex items-center justify-center text-muted-foreground">
@@ -106,11 +139,17 @@ export function NamespaceMetricsChart({
 		<Card>
 			<CardHeader className="pb-2">
 				<CardTitle className="text-base">{metric.title}</CardTitle>
-				<p className="text-sm text-muted-foreground">{metric.description}</p>
+				<p className="text-sm text-muted-foreground">
+					{metric.description}
+				</p>
 			</CardHeader>
 			<CardContent className="pb-4">
 				<VisxAreaChart
-					series={detailQuery.isLoading || detailQuery.isError ? overviewSeries : detailSeries}
+					series={
+						detailQuery.isLoading || detailQuery.isError
+							? overviewSeries
+							: detailSeries
+					}
 					formatValue={metric.formatValue}
 				/>
 				<VisxBrushChart series={overviewSeries} />

@@ -7,6 +7,7 @@ use tokio::sync::oneshot;
 
 use crate::context::SharedContext;
 use crate::envoy::{ActorInfo, ToEnvoyMessage};
+use crate::metrics::METRICS;
 use crate::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse, SqliteRequest, SqliteResponse};
 use crate::tunnel::HibernatingWebSocketMetadata;
 
@@ -36,9 +37,9 @@ impl EnvoyHandle {
 		self.shared.shutting_down.store(true, Ordering::Release);
 
 		if immediate {
-			let _ = self.shared.envoy_tx.send(ToEnvoyMessage::Stop);
+			let _ = crate::envoy::send_to_envoy_tx(&self.shared, ToEnvoyMessage::Stop);
 		} else {
-			let _ = self.shared.envoy_tx.send(ToEnvoyMessage::Shutdown);
+			let _ = crate::envoy::send_to_envoy_tx(&self.shared, ToEnvoyMessage::Shutdown);
 		}
 	}
 
@@ -78,11 +79,15 @@ impl EnvoyHandle {
 	/// Threshold for `is_ping_healthy`.
 	pub const PING_HEALTHY_THRESHOLD_MS: i64 = 20_000;
 
-	/// True when the engine sent a ping within `PING_HEALTHY_THRESHOLD_MS`. Returns false once
-	/// the engine link has been silently dead long enough that an upstream health check should
-	/// treat this envoy as unhealthy and recycle it.
+	/// True after the engine has sent at least one ping and the most recent ping is within
+	/// `PING_HEALTHY_THRESHOLD_MS`. Returns false when the engine link has never completed
+	/// the ping handshake or has gone silently dead long enough that an upstream health check
+	/// should treat this envoy as unhealthy and recycle it.
 	pub fn is_ping_healthy(&self) -> bool {
 		let last = self.shared.last_ping_ts.load(Ordering::Acquire);
+		if last == 0 {
+			return false;
+		}
 		crate::time::now_millis() - last < Self::PING_HEALTHY_THRESHOLD_MS
 	}
 
@@ -133,42 +138,52 @@ impl EnvoyHandle {
 	}
 
 	pub fn sleep_actor(&self, actor_id: String, generation: Option<u32>) {
-		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::ActorIntent {
-			actor_id,
-			generation,
-			intent: protocol::ActorIntent::ActorIntentSleep,
-			error: None,
-		});
+		let _ = crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::ActorIntent {
+				actor_id,
+				generation,
+				intent: protocol::ActorIntent::ActorIntentSleep,
+				error: None,
+			},
+		);
 	}
 
 	pub fn stop_actor(&self, actor_id: String, generation: Option<u32>, error: Option<String>) {
-		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::ActorIntent {
-			actor_id,
-			generation,
-			intent: protocol::ActorIntent::ActorIntentStop,
-			error,
-		});
+		let _ = crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::ActorIntent {
+				actor_id,
+				generation,
+				intent: protocol::ActorIntent::ActorIntentStop,
+				error,
+			},
+		);
 	}
 
 	pub fn destroy_actor(&self, actor_id: String, generation: Option<u32>) {
-		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::ActorIntent {
-			actor_id,
-			generation,
-			intent: protocol::ActorIntent::ActorIntentStop,
-			error: None,
-		});
+		let _ = crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::ActorIntent {
+				actor_id,
+				generation,
+				intent: protocol::ActorIntent::ActorIntentStop,
+				error: None,
+			},
+		);
 	}
 
 	pub async fn get_actor(&self, actor_id: &str, generation: Option<u32>) -> Option<ActorInfo> {
 		let (tx, rx) = tokio::sync::oneshot::channel();
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::GetActor {
+		crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::GetActor {
 				actor_id: actor_id.to_string(),
 				generation,
 				response_tx: tx,
-			})
-			.ok()?;
+			},
+		)
+		.ok()?;
 		rx.await.ok().flatten()
 	}
 
@@ -282,12 +297,15 @@ impl EnvoyHandle {
 		generation: Option<u32>,
 		ack_tx: Option<oneshot::Sender<()>>,
 	) {
-		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::SetAlarm {
-			actor_id,
-			generation,
-			alarm_ts,
-			ack_tx,
-		});
+		let _ = crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::SetAlarm {
+				actor_id,
+				generation,
+				alarm_ts,
+				ack_tx,
+			},
+		);
 	}
 
 	pub async fn kv_get(
@@ -542,11 +560,14 @@ impl EnvoyHandle {
 		request_id: protocol::RequestId,
 		client_message_index: u16,
 	) {
-		let _ = self.shared.envoy_tx.send(ToEnvoyMessage::HwsAck {
-			gateway_id,
-			request_id,
-			envoy_message_index: client_message_index,
-		});
+		let _ = crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::HwsAck {
+				gateway_id,
+				request_id,
+				envoy_message_index: client_message_index,
+			},
+		);
 	}
 
 	/// Inject a serverless start payload into the envoy.
@@ -567,9 +588,7 @@ impl EnvoyHandle {
 			data = crate::stringify::stringify_to_envoy(&message),
 			"received serverless start"
 		);
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::ConnMessage { message })
+		crate::envoy::send_to_envoy_tx(&self.shared, ToEnvoyMessage::ConnMessage { message })
 			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
 
 		Ok(())
@@ -641,45 +660,90 @@ impl EnvoyHandle {
 		data: protocol::KvRequestData,
 	) -> anyhow::Result<protocol::KvResponseData> {
 		let (tx, rx) = tokio::sync::oneshot::channel();
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::KvRequest {
+		crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::KvRequest {
 				actor_id,
 				data,
 				response_tx: tx,
-			})
-			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+			},
+		)
+		.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
 		rx.await
 			.map_err(|_| anyhow::anyhow!("kv response channel closed"))?
 	}
 
 	async fn send_sqlite_request(&self, request: SqliteRequest) -> anyhow::Result<SqliteResponse> {
+		let kind = request.kind();
+		let total_start = crate::time::Instant::now();
+		let submit_start = crate::time::Instant::now();
 		let (tx, rx) = tokio::sync::oneshot::channel();
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::SqliteRequest {
+		crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::SqliteRequest {
 				request,
 				response_tx: tx,
-			})
-			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
-		rx.await
-			.map_err(|_| anyhow::anyhow!("sqlite response channel closed"))?
+			},
+		)
+		.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		let submit_elapsed = submit_start.elapsed();
+		METRICS
+			.sqlite_request_submit_duration_seconds
+			.with_label_values(&[kind])
+			.observe(submit_elapsed.as_secs_f64());
+
+		let wait_start = crate::time::Instant::now();
+		let result = rx
+			.await
+			.map_err(|_| anyhow::anyhow!("sqlite response channel closed"))?;
+		let wait_elapsed = wait_start.elapsed();
+		METRICS
+			.sqlite_request_wait_duration_seconds
+			.with_label_values(&[kind])
+			.observe(wait_elapsed.as_secs_f64());
+		METRICS
+			.sqlite_request_total_duration_seconds
+			.with_label_values(&[kind])
+			.observe(total_start.elapsed().as_secs_f64());
+		result
 	}
 
 	async fn send_remote_sqlite_request(
 		&self,
 		request: RemoteSqliteRequest,
 	) -> anyhow::Result<RemoteSqliteResponse> {
+		let kind = request.kind();
+		let total_start = crate::time::Instant::now();
+		let submit_start = crate::time::Instant::now();
 		let (tx, rx) = tokio::sync::oneshot::channel();
-		self.shared
-			.envoy_tx
-			.send(ToEnvoyMessage::RemoteSqliteRequest {
+		crate::envoy::send_to_envoy_tx(
+			&self.shared,
+			ToEnvoyMessage::RemoteSqliteRequest {
 				request,
 				response_tx: tx,
-			})
-			.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
-		rx.await
-			.map_err(|_| anyhow::anyhow!("remote sqlite response channel closed"))?
+			},
+		)
+		.map_err(|_| anyhow::anyhow!("envoy channel closed"))?;
+		let submit_elapsed = submit_start.elapsed();
+		METRICS
+			.sqlite_request_submit_duration_seconds
+			.with_label_values(&[kind])
+			.observe(submit_elapsed.as_secs_f64());
+
+		let wait_start = crate::time::Instant::now();
+		let result = rx
+			.await
+			.map_err(|_| anyhow::anyhow!("remote sqlite response channel closed"))?;
+		let wait_elapsed = wait_start.elapsed();
+		METRICS
+			.sqlite_request_wait_duration_seconds
+			.with_label_values(&[kind])
+			.observe(wait_elapsed.as_secs_f64());
+		METRICS
+			.sqlite_request_total_duration_seconds
+			.with_label_values(&[kind])
+			.observe(total_start.elapsed().as_secs_f64());
+		result
 	}
 }
 

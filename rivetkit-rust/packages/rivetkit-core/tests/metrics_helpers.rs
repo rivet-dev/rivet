@@ -10,6 +10,6 @@ pub(crate) fn render_global_metrics() -> String {
 	String::from_utf8(encoded).expect("metrics should be utf-8")
 }
 
-pub(crate) fn metric_line_for_actor(line: &str, name: &str, actor_id_gen: &str) -> bool {
-	line.starts_with(name) && line.contains(&format!("actor_id_gen=\"{actor_id_gen}\""))
+pub(crate) fn metric_line_for_actor(line: &str, name: &str, actor_name: &str) -> bool {
+	line.starts_with(name) && line.contains(&format!("actor_name=\"{actor_name}\""))
 }

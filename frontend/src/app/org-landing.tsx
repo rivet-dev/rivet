@@ -24,18 +24,20 @@ import {
 	H1,
 	RelativeTime,
 	ScrollArea,
+	Skeleton,
 	SmallText,
 	toast,
 	WithTooltip,
 } from "@/components";
-import { queryClient } from "@/queries/global";
 import { useCloudDataProvider } from "@/components/actors";
+import { RouteLayout } from "./route-layout";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import {
 	getRecentTimestamp,
 	RECENT_PROJECTS_KEY,
 } from "@/lib/recently-visited";
+import { queryClient } from "@/queries/global";
 import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
 
 export function OrgLanding({ organization }: { organization: string }) {
@@ -132,94 +134,103 @@ export function OrgLanding({ organization }: { organization: string }) {
 							) : null}
 						</header>
 
-					{!isLoading && sorted.length === 0 ? (
-						<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
-							<H1 className="text-base">No projects yet</H1>
-							<SmallText className="text-muted-foreground max-w-md">
-								Create a project to start deploying actors in this
-								organization.
-							</SmallText>
-							<Button
-								variant="default"
-								size="sm"
-								startIcon={<Icon icon={faPlus} />}
-								onClick={() => {
-									navigate({
-										to: ".",
-										search: (old) => ({
-											...(old as Record<string, unknown>),
-											modal: "create-project",
-											organization,
-										}),
-									});
-								}}
-							>
-								Create Project
-							</Button>
-						</div>
-					) : (
-						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-							{sorted.map((project) => (
-								<div
-									key={project.id}
-									className="group relative min-h-[130px]"
+						{!isLoading && sorted.length === 0 ? (
+							<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
+								<H1 className="text-base">No projects yet</H1>
+								<SmallText className="text-muted-foreground max-w-md">
+									Create a project to start deploying actors
+									in this organization.
+								</SmallText>
+								<Button
+									variant="default"
+									size="sm"
+									startIcon={<Icon icon={faPlus} />}
+									onClick={() => {
+										navigate({
+											to: ".",
+											search: (old) => ({
+												...(old as Record<
+													string,
+													unknown
+												>),
+												modal: "create-project",
+												organization,
+											}),
+										});
+									}}
 								>
-									<Link
-										to="/orgs/$organization/projects/$project"
-										params={{
-											organization,
-											project: project.name,
-										}}
-										className={cn(
-											"flex h-full flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
-											"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
-											"active:translate-y-0 active:shadow-none",
-											"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-											"cursor-pointer",
-										)}
+									Create Project
+								</Button>
+							</div>
+						) : (
+							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+								{sorted.map((project) => (
+									<div
+										key={project.id}
+										className="group relative min-h-[130px]"
 									>
-										<div className="font-medium text-sm leading-tight truncate pr-14 w-full">
-											{project.displayName}
-										</div>
-										<SmallText className="text-muted-foreground text-xs leading-tight font-mono-console truncate w-full">
-											{project.name}
-										</SmallText>
-										{project.createdAt ? (
-											<SmallText className="text-muted-foreground text-[11px] mt-auto pt-1">
-												Created{" "}
-												<RelativeTime
-													time={new Date(project.createdAt)}
-												/>
+										<Link
+											to="/orgs/$organization/projects/$project"
+											params={{
+												organization,
+												project: project.name,
+											}}
+											className={cn(
+												"flex h-full flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
+												"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
+												"active:translate-y-0 active:shadow-none",
+												"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+												"cursor-pointer",
+											)}
+										>
+											<div className="font-medium text-sm leading-tight truncate pr-14 w-full">
+												{project.displayName}
+											</div>
+											<SmallText className="text-muted-foreground text-xs leading-tight font-mono-console truncate w-full">
+												{project.name}
 											</SmallText>
-										) : null}
-									</Link>
-									<button
-										type="button"
-										onClick={(e) => {
-											e.preventDefault();
-											e.stopPropagation();
-											void navigate({
-												to: "/orgs/$organization/projects/$project",
-												params: {
-													organization,
-													project: project.name,
-												},
-												search: { settings: "billing" },
-											});
-										}}
-										title="Manage billing"
-										aria-label="Manage billing"
-										className="absolute top-3 right-3 z-10 rounded-full transition-all duration-150 group-hover:-translate-y-0.5 group-active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-									>
-										<LazyBillingPlanBadge
-											project={project.name}
-											organization={organization}
-										/>
-									</button>
-								</div>
-							))}
-						</div>
-					)}
+											{project.createdAt ? (
+												<SmallText className="text-muted-foreground text-[11px] mt-auto pt-1">
+													Created{" "}
+													<RelativeTime
+														time={
+															new Date(
+																project.createdAt,
+															)
+														}
+													/>
+												</SmallText>
+											) : null}
+										</Link>
+										<button
+											type="button"
+											onClick={(e) => {
+												e.preventDefault();
+												e.stopPropagation();
+												void navigate({
+													to: "/orgs/$organization/projects/$project",
+													params: {
+														organization,
+														project: project.name,
+													},
+													search: {
+														settings: "billing",
+													},
+												});
+											}}
+											title="Manage billing"
+											aria-label="Manage billing"
+											className="absolute top-3 right-3 z-10 rounded-full transition-all duration-150 group-hover:-translate-y-0.5 group-active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+										>
+											<LazyBillingPlanBadge
+												project={project.name}
+												organization={organization}
+											/>
+										</button>
+									</div>
+								))}
+							</div>
+						)}
 					</section>
 
 					<MembersSection
@@ -233,6 +244,80 @@ export function OrgLanding({ organization }: { organization: string }) {
 	);
 }
 
+OrgLanding.Skeleton = function OrgLandingSkeleton() {
+	return (
+		<div className="flex flex-1 min-h-0 my-2 mr-2 overflow-hidden rounded-xl border border-foreground/10 bg-card">
+			<ScrollArea className="h-full w-full">
+				<div className="px-6 py-6 max-w-6xl mx-auto space-y-8">
+					<header className="flex items-center justify-between gap-4 pb-6 border-b border-foreground/10">
+						<div className="flex items-center gap-3 min-w-0">
+							<Skeleton className="size-10 rounded-full shrink-0" />
+							<Skeleton className="h-8 w-48" />
+						</div>
+						<Skeleton className="size-8 rounded-md" />
+					</header>
+
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<Skeleton className="h-5 w-20" />
+							<Skeleton className="h-8 w-32 rounded-md" />
+						</header>
+						<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+							{Array.from({ length: 4 }).map((_, i) => (
+								<div
+									// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton cards
+									key={i}
+									className="flex min-h-[130px] flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4"
+								>
+									<Skeleton className="h-4 w-28" />
+									<Skeleton className="h-3 w-20" />
+									<Skeleton className="h-3 w-16 mt-auto" />
+								</div>
+							))}
+						</div>
+					</section>
+
+					<section>
+						<header className="flex items-center justify-between gap-4 mb-3">
+							<Skeleton className="h-5 w-20" />
+							<Skeleton className="h-8 w-32 rounded-md" />
+						</header>
+						<div className="rounded-md border border-foreground/10 bg-card overflow-hidden">
+							<div className="grid grid-cols-[1fr_120px_28px] gap-4 items-center px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground border-b border-foreground/10 bg-foreground/[0.02]">
+								<div>Member</div>
+								<div>Role</div>
+								<div />
+							</div>
+							{Array.from({ length: 3 }).map((_, i) => (
+								<div
+									// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton rows
+									key={i}
+									className="grid grid-cols-[1fr_120px_28px] gap-4 items-center px-3 py-2.5 border-b border-foreground/10 last:border-b-0"
+								>
+									<div className="flex items-center gap-2 min-w-0">
+										<Skeleton className="size-6 rounded-full shrink-0" />
+										<Skeleton className="h-4 w-32" />
+									</div>
+									<Skeleton className="h-5 w-16 rounded-full" />
+									<div />
+								</div>
+							))}
+						</div>
+					</section>
+				</div>
+			</ScrollArea>
+		</div>
+	);
+};
+
+export function OrgLandingPending() {
+	return (
+		<RouteLayout>
+			<OrgLanding.Skeleton />
+		</RouteLayout>
+	);
+}
+
 function MembersSection({
 	organization,
 	members,
@@ -243,7 +328,11 @@ function MembersSection({
 		id: string;
 		userId: string;
 		role?: string;
-		user?: { name?: string | null; email?: string | null; image?: string | null };
+		user?: {
+			name?: string | null;
+			email?: string | null;
+			image?: string | null;
+		};
 	}>;
 	currentUserId: string | undefined;
 }) {
@@ -329,7 +418,8 @@ function MembersSection({
 										setShowInvite(false);
 									} catch {
 										form.setError("root", {
-											message: "Failed to send invitation.",
+											message:
+												"Failed to send invitation.",
 										});
 									}
 								}}
@@ -362,8 +452,9 @@ function MembersSection({
 						{visible.map((member) => {
 							const user = member.user;
 							const initial =
-								(user?.name ?? user?.email ?? "?")[0]?.toUpperCase() ??
-								"?";
+								(user?.name ??
+									user?.email ??
+									"?")[0]?.toUpperCase() ?? "?";
 							const isSelf = member.userId === currentUserId;
 							const role = member.role ?? "member";
 							return (
@@ -373,13 +464,19 @@ function MembersSection({
 								>
 									<div className="flex items-center gap-2 min-w-0">
 										<Avatar className="size-6 shrink-0">
-											<AvatarImage src={user?.image ?? undefined} />
-											<AvatarFallback>{initial}</AvatarFallback>
+											<AvatarImage
+												src={user?.image ?? undefined}
+											/>
+											<AvatarFallback>
+												{initial}
+											</AvatarFallback>
 										</Avatar>
 										<div className="min-w-0">
 											<div className="flex items-center gap-1.5">
 												<span className="font-medium text-foreground truncate">
-													{user?.name ?? user?.email ?? "Unknown"}
+													{user?.name ??
+														user?.email ??
+														"Unknown"}
 												</span>
 												{isSelf ? (
 													<span className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-1.5 py-0 text-[10px] font-medium text-primary">
@@ -387,7 +484,8 @@ function MembersSection({
 													</span>
 												) : null}
 											</div>
-											{user?.email && user.email !== user.name ? (
+											{user?.email &&
+											user.email !== user.name ? (
 												<div className="text-muted-foreground truncate text-[11px]">
 													{user.email}
 												</div>

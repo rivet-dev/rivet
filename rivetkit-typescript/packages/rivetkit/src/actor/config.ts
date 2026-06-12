@@ -1,24 +1,18 @@
 import { z } from "zod/v4";
-import type { UniversalWebSocket } from "@/common/websocket-interface";
+import type { Client } from "@/client/client";
 import type {
 	AnyDatabaseProvider,
 	InferDatabaseClient,
-	RawDatabaseClient,
-	DrizzleDatabaseClient,
-	NativeDatabaseProvider,
 } from "@/common/database/config";
-import type { Client } from "@/client/client";
+import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { Registry } from "@/registry";
 import type { BaseActorDefinition } from "./definition";
 import type {
 	EventSchemaConfig,
-	PrimitiveSchema,
-	QueueSchemaConfig,
-} from "./schema";
-import type {
-	InferEventArgs,
 	InferQueueCompleteMap,
 	InferSchemaMap,
+	PrimitiveSchema,
+	QueueSchemaConfig,
 } from "./schema";
 
 export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
@@ -98,7 +92,10 @@ export interface ActorKv {
 		end: Uint8Array | string,
 		options?: ActorKvListOptions<T, K>,
 	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
-	list<T extends ActorKvValueType = "text", K extends ActorKvKeyType = "text">(
+	list<
+		T extends ActorKvValueType = "text",
+		K extends ActorKvKeyType = "text",
+	>(
 		prefix: Uint8Array | string,
 		options?: ActorKvListOptions<T, K>,
 	): Promise<Array<[ActorKvKeyTypeMap[K], ActorKvValueTypeMap[T]]>>;
@@ -119,7 +116,8 @@ export type QueueMessageOf<Name extends string, Body> = {
 	[key: string]: unknown;
 };
 
-export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues & string;
+export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues &
+	string;
 export type QueueFilterName<TQueues extends QueueSchemaConfig> =
 	keyof TQueues extends never ? string : QueueName<TQueues>;
 
@@ -229,7 +227,9 @@ export interface QueueIterOptions<
 	completable?: TCompletable;
 }
 
-export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, never>> {
+export interface ActorQueue<
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> {
 	send<TName extends QueueFilterName<TQueues>>(
 		name: TName,
 		body: QueueMessageForName<TQueues, TName>["body"],
@@ -237,15 +237,11 @@ export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, ne
 	next<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueNextOptions<TName, TCompletable>,
-	): Promise<any>;
+	>(opts?: QueueNextOptions<TName, TCompletable>): Promise<any>;
 	nextBatch<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueNextBatchOptions<TName, TCompletable>,
-	): Promise<any[]>;
+	>(opts?: QueueNextBatchOptions<TName, TCompletable>): Promise<any[]>;
 	waitForNames<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
@@ -261,33 +257,27 @@ export interface ActorQueue<TQueues extends QueueSchemaConfig = Record<never, ne
 	tryNext<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueTryNextOptions<TName, TCompletable>,
-	): Promise<any>;
+	>(opts?: QueueTryNextOptions<TName, TCompletable>): Promise<any>;
 	tryNextBatch<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueTryNextBatchOptions<TName, TCompletable>,
-	): Promise<any[]>;
+	>(opts?: QueueTryNextBatchOptions<TName, TCompletable>): Promise<any[]>;
 	iter<
 		const TName extends QueueFilterName<TQueues>,
 		const TCompletable extends boolean = false,
-	>(
-		opts?: QueueIterOptions<TName, TCompletable>,
-	): AsyncIterable<any>;
+	>(opts?: QueueIterOptions<TName, TCompletable>): AsyncIterable<any>;
 	[key: string]: any;
 }
 
 export interface Conn<
-	TState = unknown,
+	_TState = unknown,
 	TConnParams = unknown,
 	TConnState = unknown,
-	TVars = unknown,
-	TInput = unknown,
-	TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
-	TEvents extends EventSchemaConfig = Record<never, never>,
-	TQueues extends QueueSchemaConfig = Record<never, never>,
+	_TVars = unknown,
+	_TInput = unknown,
+	_TDatabase extends AnyDatabaseProvider = AnyDatabaseProvider,
+	_TEvents extends EventSchemaConfig = Record<never, never>,
+	_TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
 	id: string;
 	params: TConnParams;
@@ -323,7 +313,19 @@ export interface ActorContext<
 	readonly name: string;
 	readonly key: string[];
 	readonly region: string;
-	readonly conns: Map<string, Conn<TState, TConnParams, TConnState, TVars, TInput, TDatabase, TEvents, TQueues>>;
+	readonly conns: Map<
+		string,
+		Conn<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>
+	>;
 	readonly log: ActorLogger;
 	readonly abortSignal: AbortSignal;
 	readonly aborted: boolean;
@@ -654,7 +656,9 @@ export type WebSocketContext<
 	TQueues
 >;
 
-export type ActorContextOf<AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, any>> =
+export type ActorContextOf<
+	AD extends BaseActorDefinition<any, any, any, any, any, any, any, any, any>,
+> =
 	AD extends BaseActorDefinition<
 		infer TState,
 		infer TConnParams,
@@ -730,6 +734,88 @@ const RunInspectorConfigSchema = z
 		workflow: WorkflowInspectorConfigSchema.optional(),
 	})
 	.optional();
+
+/**
+ * Built-in inspector tabs the dashboard ships. Used to validate
+ * `hidden: true` entries and reject custom-tab ids that collide with
+ * a built-in.
+ */
+export const BUILTIN_INSPECTOR_TAB_IDS = [
+	"workflow",
+	"database",
+	"state",
+	"queue",
+	"connections",
+	"console",
+] as const;
+
+export const BuiltinInspectorTabIdSchema = z.enum(BUILTIN_INSPECTOR_TAB_IDS);
+
+// Custom tab id grammar — mirrored in Rust at
+// `rivetkit-rust/packages/rivetkit-core/src/inspector/tabs.rs`. Slashes are
+// forbidden because the runtime splits `/inspector/custom-tabs/<id>/<rest>`
+// on the first `/`.
+const CUSTOM_INSPECTOR_TAB_ID_RE = /^[A-Za-z0-9_-]+$/;
+
+export const CustomInspectorTabEntrySchema = z
+	.object({
+		id: z
+			.string()
+			.regex(
+				CUSTOM_INSPECTOR_TAB_ID_RE,
+				"inspector.tabs[].id must contain only letters, digits, underscore, or dash",
+			),
+		label: z.string().min(1),
+		source: z.string().min(1),
+		/**
+		 * Optional icon id. The dashboard maps strings to glyphs (see its
+		 * icon registry); unknown ids fall back to a generic icon.
+		 */
+		icon: z.string().min(1).optional(),
+		hidden: z.literal(false).optional(),
+	})
+	.strict();
+
+export const HideInspectorTabEntrySchema = z
+	.object({
+		id: BuiltinInspectorTabIdSchema,
+		hidden: z.literal(true),
+	})
+	.strict();
+
+export const InspectorTabEntrySchema = z.union([
+	CustomInspectorTabEntrySchema,
+	HideInspectorTabEntrySchema,
+]);
+
+export const ActorInspectorConfigSchema = z
+	.object({
+		tabs: z.array(InspectorTabEntrySchema).default(() => []),
+	})
+	.strict()
+	.refine(
+		(data) => {
+			const ids = data.tabs.map((t) => t.id);
+			return new Set(ids).size === ids.length;
+		},
+		{ message: "Duplicate id in inspector.tabs", path: ["tabs"] },
+	)
+	.refine(
+		(data) => {
+			// A custom entry's id must not collide with a built-in id.
+			const builtinSet = new Set(BUILTIN_INSPECTOR_TAB_IDS);
+			return data.tabs.every(
+				(t) => t.hidden === true || !builtinSet.has(t.id as any),
+			);
+		},
+		{
+			message:
+				"Custom inspector tab id collides with a built-in (use hidden: true to hide a built-in)",
+			path: ["tabs"],
+		},
+	);
+
+export type ActorInspectorConfig = z.input<typeof ActorInspectorConfigSchema>;
 
 // Schema for run handler with metadata
 export const RunConfigSchema = z.object({
@@ -947,6 +1033,7 @@ export const ActorConfigSchema = z
 		db: z.any().optional(),
 		createVars: zFunction().optional(),
 		options: ActorOptionsSchema,
+		inspector: ActorInspectorConfigSchema.optional(),
 	})
 	.strict()
 	.refine(
@@ -982,9 +1069,9 @@ export const ActorConfigSchema = z
 // Data returned from this handler will be available on `c.state`.
 type CreateState<
 	TState,
-	TConnParams,
-	TConnState,
-	TVars,
+	_TConnParams,
+	_TConnState,
+	_TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig,
@@ -1039,8 +1126,8 @@ type CreateConnState<
  */
 type CreateVars<
 	TState,
-	TConnParams,
-	TConnState,
+	_TConnParams,
+	_TConnState,
 	TVars,
 	TInput,
 	TDatabase extends AnyDatabaseProvider,
@@ -1501,6 +1588,25 @@ export type ActorConfig<
 	TDatabase extends AnyDatabaseProvider,
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
+	TActions extends Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	> = Actions<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>,
 > = Omit<
 	z.infer<typeof ActorConfigSchema>,
 	| "actions"
@@ -1536,16 +1642,7 @@ export type ActorConfig<
 		TDatabase,
 		TEvents,
 		TQueues,
-		Actions<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase,
-			TEvents,
-			TQueues
-		>
+		TActions
 	> &
 	CreateState<
 		TState,

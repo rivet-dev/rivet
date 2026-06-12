@@ -70,7 +70,9 @@ function copyNativeMetrics(
 }
 
 async function queryOne<T>(
-	database: { execute: (sql: string, ...args: unknown[]) => Promise<unknown[]> },
+	database: {
+		execute: (sql: string, ...args: unknown[]) => Promise<unknown[]>;
+	},
 	sql: string,
 	...args: unknown[]
 ): Promise<T> {
@@ -220,7 +222,10 @@ export const sqliteMemoryPressure = actor({
 			// 	1,
 			// 	finiteInt(input.retainRows, DEFAULT_RETAIN_ROWS),
 			// );
-			const scanRows = Math.max(1, finiteInt(input.scanRows, DEFAULT_SCAN_ROWS));
+			const scanRows = Math.max(
+				1,
+				finiteInt(input.scanRows, DEFAULT_SCAN_ROWS),
+			);
 			const now = Date.now();
 			let insertedRows = 0;
 			const logStage = (
@@ -305,7 +310,9 @@ export const sqliteMemoryPressure = actor({
 				}
 				await executeTimed("commit", "COMMIT");
 			} catch (err) {
-				await executeTimed("rollback", "ROLLBACK").catch(() => undefined);
+				await executeTimed("rollback", "ROLLBACK").catch(
+					() => undefined,
+				);
 				throw err;
 			}
 
@@ -326,7 +333,7 @@ export const sqliteMemoryPressure = actor({
 				Math.min(scanRows, insertRows),
 			);
 
-			let deletedRows = 0;
+			const deletedRows = 0;
 			// const beforeDelete = await queryOne<CountRow>(
 			// 	c.db,
 			// 	"SELECT COUNT(*) AS count FROM pressure_rows",

@@ -3,10 +3,7 @@
 use std::{future::Future, pin::Pin, sync::Arc};
 
 use anyhow::{Context, Result};
-use depot::{
-	cold_tier::{ColdTier, FilesystemColdTier},
-	conveyer::Db,
-};
+use depot::conveyer::Db;
 use gas::prelude::Id;
 use rivet_pools::NodeId;
 use tempfile::{Builder, TempDir};
@@ -41,14 +38,12 @@ pub fn make_db(
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TierMode {
 	Disabled,
-	Filesystem,
 }
 
 impl TierMode {
 	pub fn label(self) -> &'static str {
 		match self {
-			TierMode::Disabled => "cold_disabled",
-			TierMode::Filesystem => "cold_filesystem",
+			TierMode::Disabled => "fdb_only",
 		}
 	}
 }
@@ -58,24 +53,17 @@ pub struct TestDb {
 	pub udb: Arc<universaldb::Database>,
 	pub bucket_id: Id,
 	pub database_id: String,
-	pub cold_tier: Option<Arc<dyn ColdTier>>,
 	_udb_dir: TempDir,
-	_cold_dir: Option<TempDir>,
 }
 
 impl TestDb {
 	pub fn make_db(&self, bucket_id: Id, database_id: impl Into<String>) -> Db {
-		let database_id = database_id.into();
-		match &self.cold_tier {
-			Some(cold_tier) => Db::new_with_cold_tier(
-				self.udb.clone(),
-				bucket_id,
-				database_id,
-				NodeId::new(),
-				cold_tier.clone(),
-			),
-			None => Db::new(self.udb.clone(), bucket_id, database_id, NodeId::new()),
-		}
+		Db::new(
+			self.udb.clone(),
+			bucket_id,
+			database_id.into(),
+			NodeId::new(),
+		)
 	}
 }
 
@@ -84,24 +72,8 @@ pub async fn build_test_db(prefix: &str, tier: TierMode) -> Result<TestDb> {
 	let bucket_id = Id::new_v1(1);
 	let database_id = format!("{prefix}-db");
 
-	let (db, cold_tier, cold_dir) = match tier {
-		TierMode::Disabled => (
-			Db::new(udb.clone(), bucket_id, database_id.clone(), NodeId::new()),
-			None,
-			None,
-		),
-		TierMode::Filesystem => {
-			let dir = tempfile::tempdir()?;
-			let tier: Arc<dyn ColdTier> = Arc::new(FilesystemColdTier::new(dir.path()));
-			let db = Db::new_with_cold_tier(
-				udb.clone(),
-				bucket_id,
-				database_id.clone(),
-				NodeId::new(),
-				tier.clone(),
-			);
-			(db, Some(tier), Some(dir))
-		}
+	let db = match tier {
+		TierMode::Disabled => Db::new(udb.clone(), bucket_id, database_id.clone(), NodeId::new()),
 	};
 
 	Ok(TestDb {
@@ -109,9 +81,7 @@ pub async fn build_test_db(prefix: &str, tier: TierMode) -> Result<TestDb> {
 		udb,
 		bucket_id,
 		database_id,
-		cold_tier,
 		_udb_dir: udb_dir,
-		_cold_dir: cold_dir,
 	})
 }
 
@@ -119,20 +89,19 @@ pub async fn test_matrix<F>(prefix: &str, body: F) -> Result<()>
 where
 	F: Fn(TierMode, TestDb) -> Pin<Box<dyn Future<Output = Result<()>> + Send>>,
 {
-	for tier in [TierMode::Disabled, TierMode::Filesystem] {
-		let ctx = build_test_db(prefix, tier)
-			.await
-			.with_context(|| format!("[{}] failed to build TestDb", tier.label()))?;
-		body(tier, ctx)
-			.await
-			.with_context(|| format!("[{}] body failed", tier.label()))?;
-	}
+	let tier = TierMode::Disabled;
+	let ctx = build_test_db(prefix, tier)
+		.await
+		.with_context(|| format!("[{}] failed to build TestDb", tier.label()))?;
+	body(tier, ctx)
+		.await
+		.with_context(|| format!("[{}] body failed", tier.label()))?;
 
 	Ok(())
 }
 
 pub async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotcommon_mod", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx

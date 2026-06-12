@@ -142,6 +142,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 		else {
 			let signal_id = Id::new_v1(self.ctx.config().dc_label());
 			let start_instant = Instant::now();
+			let db_write_duration;
 
 			// Serialize input
 			let input_val = serde_json::value::to_raw_value(&self.body)
@@ -190,6 +191,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 						}
 					};
 
+					let db_write_started = Instant::now();
 					self.ctx
 						.db()
 						.publish_signal_from_workflow(
@@ -204,6 +206,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 							self.ctx.loop_location(),
 						)
 						.await?;
+					db_write_duration = db_write_started.elapsed();
 				}
 				(None, Some(workflow_id), true) => {
 					tracing::debug!(
@@ -211,6 +214,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 						"dispatching signal via workflow id"
 					);
 
+					let db_write_started = Instant::now();
 					self.ctx
 						.db()
 						.publish_signal_from_workflow(
@@ -225,6 +229,7 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 							self.ctx.loop_location(),
 						)
 						.await?;
+					db_write_duration = db_write_started.elapsed();
 				}
 				(None, None, false) => {
 					return Err(BuilderError::InvalidSignalSend(
@@ -256,6 +261,9 @@ impl<'a, T: Signal + Serialize> SignalBuilder<'a, T> {
 			metrics::SIGNAL_SEND_DURATION
 				.with_label_values(&[self.ctx.name(), T::NAME])
 				.observe(dt);
+			metrics::SIGNAL_SEND_DURATION_SECONDS
+				.with_label_values(&[self.ctx.name(), T::NAME])
+				.observe(db_write_duration.as_secs_f64());
 			metrics::SIGNAL_PUBLISHED
 				.with_label_values(&[self.ctx.name(), T::NAME])
 				.inc();

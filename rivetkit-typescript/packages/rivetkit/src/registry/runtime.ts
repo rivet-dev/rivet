@@ -225,6 +225,22 @@ export interface RuntimeActorConfig {
 	preloadMaxWorkflowBytes?: number;
 	preloadMaxConnectionsBytes?: number;
 	actions?: Array<{ name: string }>;
+	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
+}
+
+export interface RuntimeInspectorTabEntry {
+	id: string;
+	/** Required for custom entries; omitted for built-in hides. */
+	label?: string;
+	/**
+	 * Required for custom entries — absolute path to the source directory.
+	 * Resolved on the TS side before being handed to the runtime.
+	 */
+	source?: string;
+	/** Optional icon id for custom entries. */
+	icon?: string;
+	/** Set to true for built-in hide entries. */
+	hidden?: boolean;
 }
 
 export interface RuntimeServeConfig {
@@ -257,9 +273,10 @@ export interface RuntimeServerlessResponseHead {
 	headers: Record<string, string>;
 }
 
-export interface RuntimeRegistryDiagnostics {
-	mode: string;
-	envoyActiveActorCount?: number | null;
+export interface RuntimeRegistryRouteResponse {
+	status: number;
+	headers: Record<string, string>;
+	body: RuntimeBytes;
 }
 
 export type RuntimeServerlessStreamEvent =
@@ -309,6 +326,9 @@ export interface CoreRuntime {
 		config: RuntimeServeConfig,
 	): Promise<void>;
 	shutdownRegistry(registry: RegistryHandle): Promise<void>;
+	registryActorStopThresholdMs?(
+		registry: RegistryHandle,
+	): Promise<number | undefined>;
 	handleServerlessRequest(
 		registry: RegistryHandle,
 		req: RuntimeServerlessRequest,
@@ -316,9 +336,15 @@ export interface CoreRuntime {
 		cancelToken: CancellationTokenHandle,
 		config: RuntimeServeConfig,
 	): Promise<RuntimeServerlessResponseHead>;
-	registryDiagnostics?(
+	registryHealth?(
 		registry: RegistryHandle,
-	): Promise<RuntimeRegistryDiagnostics>;
+	): Promise<RuntimeRegistryRouteResponse>;
+	registryMetadata?(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse>;
+	registryMetrics?(
+		registry: RegistryHandle,
+	): Promise<RuntimeRegistryRouteResponse>;
 	createActorFactory(
 		callbacks: object,
 		config?: RuntimeActorConfig | undefined | null,
@@ -389,6 +415,9 @@ export interface CoreRuntime {
 	): void;
 	actorWaitUntil(ctx: ActorContextHandle, promise: Promise<unknown>): void;
 	actorWaitForTrackedShutdownWork(ctx: ActorContextHandle): Promise<boolean>;
+	actorWaitForTrackedShutdownWorkUnbounded(
+		ctx: ActorContextHandle,
+	): Promise<void>;
 	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void;
 	actorBeginKeepAwake(ctx: ActorContextHandle): number;
 	actorEndKeepAwake(ctx: ActorContextHandle, regionId: number): void;
@@ -481,6 +510,7 @@ export interface CoreRuntime {
 		ctx: ActorContextHandle,
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
+		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<void>;
 	actorQueueEnqueueAndWait(
 		ctx: ActorContextHandle,

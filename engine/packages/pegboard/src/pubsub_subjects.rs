@@ -1,6 +1,10 @@
+use std::borrow::Cow;
+
 use gas::prelude::*;
 use rivet_runner_protocol as protocol;
+use universalpubsub::Subject;
 
+#[derive(Clone)]
 pub struct RunnerReceiverSubject {
 	runner_id: Id,
 }
@@ -17,6 +21,13 @@ impl std::fmt::Display for RunnerReceiverSubject {
 	}
 }
 
+impl Subject for RunnerReceiverSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.runner"))
+	}
+}
+
+#[derive(Clone)]
 pub struct RunnerEvictionByIdSubject {
 	runner_id: Id,
 }
@@ -33,6 +44,13 @@ impl std::fmt::Display for RunnerEvictionByIdSubject {
 	}
 }
 
+impl Subject for RunnerEvictionByIdSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.runner.eviction-by-id"))
+	}
+}
+
+#[derive(Clone)]
 pub struct RunnerEvictionByNameSubject {
 	namespace_id: Id,
 	runner_name: String,
@@ -59,6 +77,13 @@ impl std::fmt::Display for RunnerEvictionByNameSubject {
 	}
 }
 
+impl Subject for RunnerEvictionByNameSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.runner.eviction-by-name"))
+	}
+}
+
+#[derive(Clone)]
 pub struct GatewayReceiverSubject {
 	gateway_id: protocol::GatewayId,
 }
@@ -79,6 +104,13 @@ impl std::fmt::Display for GatewayReceiverSubject {
 	}
 }
 
+impl Subject for GatewayReceiverSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.gateway"))
+	}
+}
+
+#[derive(Clone)]
 pub struct EnvoyReceiverSubject {
 	namespace_id: Id,
 	envoy_key: String,
@@ -99,6 +131,13 @@ impl std::fmt::Display for EnvoyReceiverSubject {
 	}
 }
 
+impl Subject for EnvoyReceiverSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.envoy"))
+	}
+}
+
+#[derive(Clone)]
 pub struct EnvoyEvictionSubject {
 	namespace_id: Id,
 	envoy_key: String,
@@ -123,10 +162,23 @@ impl std::fmt::Display for EnvoyEvictionSubject {
 	}
 }
 
+impl Subject for EnvoyEvictionSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.envoy.eviction"))
+	}
+}
+
+#[derive(Clone)]
 pub struct ServerlessOutboundSubject;
 
 impl std::fmt::Display for ServerlessOutboundSubject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "pegboard.serverless.outbound",)
+	}
+}
+
+impl Subject for ServerlessOutboundSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("pegboard.serverless.outbound"))
 	}
 }

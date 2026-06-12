@@ -10,9 +10,9 @@ import { zodValidator } from "@tanstack/zod-adapter";
 import posthog from "posthog-js";
 import { useEffect } from "react";
 import z from "zod";
-import { getConfig, ls } from "@/components";
 import { SettingsDrawerHost } from "@/app/settings-drawer";
 import { useDialog } from "@/app/use-dialog";
+import { getConfig, ls } from "@/components";
 import { ModalRenderer } from "@/components/modal-renderer";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
@@ -82,7 +82,6 @@ export const Route = createFileRoute("/_context")({
 			if (!session.data.user.emailVerified) {
 				throw redirect({ to: "/verify-email-pending" });
 			}
-
 		}
 	},
 	loader: ({ context }) => ({ dataProvider: context.dataProvider }),

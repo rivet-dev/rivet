@@ -7,9 +7,6 @@
 # Use Debian-based Node image (required for Playwright/mermaid rendering)
 FROM node:22-bookworm AS builder
 
-# Install git-lfs and Playwright system dependencies
-RUN apt-get update && apt-get install -y git-lfs && rm -rf /var/lib/apt/lists/*
-
 # Install pnpm
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -31,10 +28,6 @@ COPY rivetkit-typescript/packages/ rivetkit-typescript/packages/
 COPY rivetkit-openapi/ rivetkit-openapi/
 COPY rivetkit-asyncapi/ rivetkit-asyncapi/
 COPY shared/typescript/ shared/typescript/
-
-# Fetch LFS files if build platform doesn't support Git LFS natively
-COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
-RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
 
 # Arguments required before installing dependencies
 ARG FONTAWESOME_PACKAGE_TOKEN=""
@@ -63,16 +56,26 @@ WORKDIR /app/website
 # Build the website (static export to 'dist' directory)
 RUN SKIP_TYPECHECK_CODE_BLOCKS=1 pnpm run build
 
+# Generate the Caddy redirect snippet from the shared redirect map
+RUN node scripts/generate-caddy-redirects.mjs
+
 # =============================================================================
 # Stage 2: Serve with Caddy
 # =============================================================================
-FROM caddy:alpine
+# Pin to caddy 2.x: the redirect snippet uses {http.request.uri.prefixed_query},
+# which requires Caddy >= 2.8.
+FROM caddy:2-alpine
 
-# Copy Caddyfile configuration
+# Copy Caddyfile configuration and the generated redirect snippet (imported by
+# the Caddyfile relative to its own directory)
 COPY website/Caddyfile /etc/caddy/Caddyfile
+COPY --from=builder /app/website/redirects.caddy /etc/caddy/redirects.caddy
 
 # Copy built files from builder stage
 COPY --from=builder /app/website/dist /srv
+
+# Fail the build on a broken config instead of crash-looping at runtime
+RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 
 # Default port (platform injects PORT env var)
 ENV PORT=80

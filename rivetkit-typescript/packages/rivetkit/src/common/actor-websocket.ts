@@ -30,7 +30,9 @@ export function parseWebSocketProtocols(
 	let ackHookTokenRaw: string | undefined;
 
 	if (protocols) {
-		for (const protocol of protocols.split(",").map((value) => value.trim())) {
+		for (const protocol of protocols
+			.split(",")
+			.map((value) => value.trim())) {
 			if (protocol.startsWith(WS_PROTOCOL_ENCODING)) {
 				encodingRaw = protocol.substring(WS_PROTOCOL_ENCODING.length);
 			} else if (protocol.startsWith(WS_PROTOCOL_CONN_PARAMS)) {

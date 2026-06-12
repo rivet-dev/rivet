@@ -1,5 +1,6 @@
 [package]
 name = "rivet-api-public-openapi-gen"
+publish = false
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

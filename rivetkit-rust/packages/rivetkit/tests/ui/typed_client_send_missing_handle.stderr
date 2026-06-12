@@ -1,0 +1,61 @@
+error[E0277]: the trait bound `TestActor: Handles<_>` is not satisfied
+  --> tests/ui/typed_client_send_missing_handle.rs:27:22
+   |
+27 |     let _ = handle.send(MissingAction).await;
+   |                    ---- ^^^^^^^^^^^^^ unsatisfied trait bound
+   |                    |
+   |                    required by a bound introduced by this call
+   |
+help: the trait `Handles<_>` is not implemented for `TestActor`
+  --> tests/ui/typed_client_send_missing_handle.rs:4:1
+   |
+ 4 | struct TestActor;
+   | ^^^^^^^^^^^^^^^^
+note: required by a bound in `TypedActorHandle::<A>::send`
+  --> src/typed_client.rs
+   |
+   |     pub async fn send<M>(&self, action: M) -> Result<M::Output>
+   |                  ---- required by a bound in this associated function
+   |     where
+   |         A: Handles<M>,
+   |            ^^^^^^^^^^ required by this bound in `TypedActorHandle::<A>::send`
+
+error[E0277]: the trait bound `TestActor: Handles<MissingAction>` is not satisfied
+  --> tests/ui/typed_client_send_missing_handle.rs:27:10
+   |
+27 |     let _ = handle.send(MissingAction).await;
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |
+help: the trait `Handles<MissingAction>` is not implemented for `TestActor`
+  --> tests/ui/typed_client_send_missing_handle.rs:4:1
+   |
+ 4 | struct TestActor;
+   | ^^^^^^^^^^^^^^^^
+note: required by a bound in `TypedActorHandle::<A>::send`
+  --> src/typed_client.rs
+   |
+   |     pub async fn send<M>(&self, action: M) -> Result<M::Output>
+   |                  ---- required by a bound in this associated function
+   |     where
+   |         A: Handles<M>,
+   |            ^^^^^^^^^^ required by this bound in `TypedActorHandle::<A>::send`
+
+error[E0277]: the trait bound `TestActor: Handles<MissingAction>` is not satisfied
+  --> tests/ui/typed_client_send_missing_handle.rs:27:37
+   |
+27 |     let _ = handle.send(MissingAction).await;
+   |                                        ^^^^^ unsatisfied trait bound
+   |
+help: the trait `Handles<MissingAction>` is not implemented for `TestActor`
+  --> tests/ui/typed_client_send_missing_handle.rs:4:1
+   |
+ 4 | struct TestActor;
+   | ^^^^^^^^^^^^^^^^
+note: required by a bound in `TypedActorHandle::<A>::send`
+  --> src/typed_client.rs
+   |
+   |     pub async fn send<M>(&self, action: M) -> Result<M::Output>
+   |                  ---- required by a bound in this associated function
+   |     where
+   |         A: Handles<M>,
+   |            ^^^^^^^^^^ required by this bound in `TypedActorHandle::<A>::send`

@@ -1,0 +1,5 @@
+{
+  "code": "route_fetch_actor_timeout",
+  "group": "pegboard",
+  "message": "Timed out fetching actor routing state."
+}

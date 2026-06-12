@@ -24,7 +24,7 @@ pub struct PostgresTransactionDriver {
 	pool: Pool,
 	operations: TransactionOperations,
 	committed: AtomicBool,
-	tx_sender: OnceCell<mpsc::Sender<TransactionCommand>>,
+	tx_sender: OnceCell<mpsc::UnboundedSender<TransactionCommand>>,
 }
 
 impl PostgresTransactionDriver {
@@ -38,10 +38,10 @@ impl PostgresTransactionDriver {
 	}
 
 	/// Get or create the transaction task
-	async fn ensure_transaction(&self) -> Result<&mpsc::Sender<TransactionCommand>> {
+	async fn ensure_transaction(&self) -> Result<&mpsc::UnboundedSender<TransactionCommand>> {
 		self.tx_sender
 			.get_or_try_init(|| async {
-				let (sender, receiver) = mpsc::channel(100);
+				let (sender, receiver) = mpsc::unbounded_channel();
 
 				// Spawn the transaction task with serializable isolation
 				let task = TransactionTask::new(self.pool.clone(), receiver);
@@ -78,7 +78,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 							key: key.clone(),
 							response: response_tx,
 						})
-						.await
 						.context("failed to send postgres transaction command")?;
 
 					// Wait for response
@@ -115,7 +114,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 							offset,
 							response: response_tx,
 						})
-						.await
 						.context("failed to send postgres transaction command")?;
 
 					// Wait for response
@@ -166,7 +164,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 							reverse,
 							response: response_tx,
 						})
-						.await
 						.context("failed to send postgres transaction command")?;
 
 					// Wait for response
@@ -230,7 +227,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 					conflict_ranges,
 					response: response_tx,
 				})
-				.await
 				.context("failed to send postgres transaction command")?;
 
 			// Wait for commit response
@@ -288,7 +284,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 					end,
 					response: response_tx,
 				})
-				.await
 				.context("failed to send postgres command")?;
 
 			// Wait for response
@@ -320,7 +315,6 @@ impl TransactionDriver for PostgresTransactionDriver {
 					conflict_ranges,
 					response: response_tx,
 				})
-				.await
 				.context("failed to send postgres transaction command")?;
 
 			// Wait for commit response

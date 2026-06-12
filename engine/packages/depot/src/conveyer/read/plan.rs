@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
-use universaldb::utils::IsolationLevel::Snapshot;
+use universaldb::utils::IsolationLevel::Serializable;
 
 use crate::conveyer::{
 	branch,
 	db::{BranchAncestry, load_branch_ancestry},
 	error::SqliteStorageError,
-	keys::{self, SHARD_SIZE},
+	keys,
 	types::{BucketId, DBHead, DatabaseBranchId, decode_db_head},
 };
 
@@ -24,22 +24,6 @@ impl StorageScope {
 	pub(super) fn branch_ancestry(&self) -> BranchAncestry {
 		match self {
 			Self::Branch(plan) => plan.ancestry.clone(),
-		}
-	}
-
-	pub(super) fn cold_layer_candidates(&self, pgno: u32) -> Vec<super::cold::ColdLayerCandidate> {
-		match self {
-			Self::Branch(plan) => plan
-				.sources
-				.iter()
-				.map(|source| match source {
-					ReadSource::Branch(source) => super::cold::ColdLayerCandidate {
-						branch_id: source.branch_id,
-						owner_txid: source.max_txid,
-						shard_id: pgno / SHARD_SIZE,
-					},
-				})
-				.collect(),
 		}
 	}
 }
@@ -127,7 +111,16 @@ pub(super) async fn resolve_storage_scope(
 	cached_ancestry: Option<&BranchAncestry>,
 ) -> Result<StorageScope> {
 	Ok(
-		match branch::resolve_database_branch(tx, bucket_id, database_id, Snapshot).await? {
+		match branch::resolve_database_branch(
+			tx,
+			bucket_id,
+			database_id,
+			// TODO: This can probably be made Snapshot again to reduce contention if
+			// read side freshness is not worth the cost.
+			Serializable,
+		)
+		.await?
+		{
 			Some(branch_id) => {
 				StorageScope::Branch(load_branch_read_plan(tx, branch_id, cached_ancestry).await?)
 			}

@@ -18,13 +18,13 @@ import {
 import { useWatch } from "react-hook-form";
 import { useDebounceValue } from "usehooks-ts";
 import z from "zod";
-import { WithTooltip } from "@/components";
-import { useEngineCompatDataProvider } from "@/components/actors";
 import {
 	endpointSchema,
 	formatServerlessMetadataError,
 	HEALTH_CHECK_FALLBACK_ERROR,
 } from "@/app/serverless-connection-check";
+import { WithTooltip } from "@/components";
+import { useEngineCompatDataProvider } from "@/components/actors";
 
 type Status = "idle" | "loading" | "success" | "error";
 
@@ -52,7 +52,10 @@ export function EndpointHealthCheckProvider({
 			return { ...prev, [id]: status };
 		});
 	}, []);
-	const value = useMemo(() => ({ statuses, setStatus }), [statuses, setStatus]);
+	const value = useMemo(
+		() => ({ statuses, setStatus }),
+		[statuses, setStatus],
+	);
 	return (
 		<EndpointHealthCheckContext.Provider value={value}>
 			{children}
@@ -123,8 +126,7 @@ export function EndpointHealthIndicator({
 	});
 
 	const isSuccess = !!(data && "success" in data && data.success);
-	const isFailure =
-		!!(data && "failure" in data && data.failure) || isError;
+	const isFailure = !!(data && "failure" in data && data.failure) || isError;
 	const status: Status = !enabled
 		? "idle"
 		: isLoading
@@ -165,7 +167,6 @@ export function EndpointHealthIndicator({
 		return (
 			<div className="absolute right-3 top-1/2 -translate-y-1/2">
 				<WithTooltip
-
 					delayDuration={0}
 					trigger={
 						<span className="cursor-help">

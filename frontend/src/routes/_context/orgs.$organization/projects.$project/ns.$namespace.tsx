@@ -10,14 +10,15 @@ import {
 	isConnectProviderModal,
 } from "@/app/dialogs/connect-provider-sheet";
 import { EditRunnerConfigSheet } from "@/app/dialogs/edit-runner-config-sheet";
+import { NamespaceLandingPending } from "@/app/actors-grid";
 import { GettingStarted } from "@/app/getting-started";
 import { SidebarlessHeader } from "@/app/layout";
 import { NotFoundCard } from "@/app/not-found-card";
 import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
 import { useDialog } from "@/app/use-dialog";
+import { ls } from "@/components";
 import { CreateActorSheet } from "@/components/actors/dialogs/create-actor-sheet";
-import { FullscreenLoading, ls } from "@/components";
 import {
 	deriveOnboardingState,
 	type RunnerConfigsInfiniteData,
@@ -136,7 +137,8 @@ export const Route = createFileRoute(
 			);
 
 		const cachedHasConfigs =
-			Object.keys(runnerConfigs?.pages[0]?.runnerConfigs ?? {}).length > 0;
+			Object.keys(runnerConfigs?.pages[0]?.runnerConfigs ?? {}).length >
+			0;
 		const cachedHasNames = (runnerNames?.pages[0]?.names.length ?? 0) > 0;
 
 		// Cache-first: only skip the slow blocking runner-config fetch when the
@@ -158,14 +160,18 @@ export const Route = createFileRoute(
 
 		return {
 			dataProvider: context.dataProvider,
-			...deriveOnboardingState({ runnerNames, runnerConfigs, actorCount }),
+			...deriveOnboardingState({
+				runnerNames,
+				runnerConfigs,
+				actorCount,
+			}),
 		};
 	},
 	notFoundComponent: () => <NotFoundCard />,
 	errorComponent: RouteError,
 	pendingMinMs: 0,
 	pendingMs: 0,
-	pendingComponent: FullscreenLoading,
+	pendingComponent: NamespaceLandingPending,
 });
 
 function RouteComponent() {

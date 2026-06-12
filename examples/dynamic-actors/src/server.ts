@@ -31,7 +31,10 @@ app.post("/api/source", async (c) => {
 
 app.get("/api/dynamic/:dynamicKey/count", async (c) => {
 	const dynamicKey = c.req.param("dynamicKey");
-	const count = await dynamicActorHandle(dynamicKey).getCount();
+	const count = await dynamicActorHandle(dynamicKey).action<[], number>({
+		name: "getCount",
+		args: [],
+	});
 	return c.json({ count });
 });
 
@@ -42,7 +45,12 @@ app.post("/api/dynamic/:dynamicKey/increment", async (c) => {
 		typeof body.amount === "number" && Number.isFinite(body.amount)
 			? body.amount
 			: 1;
-	const count = await dynamicActorHandle(dynamicKey).increment(amount);
+	const count = await dynamicActorHandle(dynamicKey).action<[number], number>(
+		{
+			name: "increment",
+			args: [amount],
+		},
+	);
 	return c.json({ count });
 });
 

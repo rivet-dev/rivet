@@ -8,7 +8,11 @@ export const scheduled = actor({
 	},
 	events: {
 		scheduled: event<{ time: number; count: number }>(),
-		scheduledWithId: event<{ taskId: string; time: number; count: number }>(),
+		scheduledWithId: event<{
+			taskId: string;
+			time: number;
+			count: number;
+		}>(),
 	},
 	actions: {
 		// Schedule using 'at' with specific timestamp

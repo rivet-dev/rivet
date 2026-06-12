@@ -5,23 +5,19 @@ use std::{
 };
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-	let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+	let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR")?);
 	let out_dir = PathBuf::from(std::env::var("OUT_DIR")?);
-	let workspace_root = Path::new(&manifest_dir)
+	let workspace_root = manifest_dir
 		.parent()
 		.and_then(|p| p.parent())
 		.and_then(|p| p.parent())
 		.ok_or("Failed to find workspace root")?;
 
-	let schema_dir = workspace_root
-		.join("sdks")
-		.join("schemas")
-		.join("envoy-protocol");
+	let schema_dir = manifest_dir.join("schemas");
 
 	// Rust SDK generation
-	let cfg = vbare_compiler::Config::with_hashable_map();
+	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
-	post_process_generated_rust(&out_dir)?;
 
 	// Append protocol version constant to generated file
 	let (highest_version, _) = find_highest_version(&schema_dir);
@@ -45,34 +41,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 			"cargo:warning=TypeScript SDK generation skipped: cli.js not found at {}. Run `pnpm install` to install.",
 			cli_js_path.display()
 		);
-	}
-
-	Ok(())
-}
-
-fn post_process_generated_rust(out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-	for entry in fs::read_dir(out_dir)?.flatten() {
-		let path = entry.path();
-		if path.extension().and_then(|ext| ext.to_str()) != Some("rs") {
-			continue;
-		}
-
-		let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
-			continue;
-		};
-		if !file_name.ends_with("_generated.rs") {
-			continue;
-		}
-
-		let content = fs::read_to_string(&path)?;
-		let rewritten = content.replace(
-			"rivet_util::serde::HashableMap",
-			"rivet_util_serde::HashableMap",
-		);
-
-		if rewritten != content {
-			fs::write(path, rewritten)?;
-		}
 	}
 
 	Ok(())

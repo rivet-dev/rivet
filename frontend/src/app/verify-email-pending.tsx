@@ -16,13 +16,16 @@ import { isAuthError, isDate } from "@/lib/utils";
 
 export function VerifyEmailPending() {
 	const { data: session } = authClient.useSession();
-	const searchEmail = useSearch({ strict: false, select: (s: { email?: string }) => s?.email });
+	const searchEmail = useSearch({
+		strict: false,
+		select: (s: { email?: string }) => s?.email,
+	});
 	const email = session?.user.email ?? searchEmail;
 	const navigate = useNavigate();
 
 	const handleBackToSignIn = async () => {
 		await authClient.signOut();
-		navigate({ to: "/login" });
+		await navigate({ to: "/login" });
 	};
 
 	const { mutate, isPending, isError, error, reset } = useMutation({

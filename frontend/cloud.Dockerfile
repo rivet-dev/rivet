@@ -1,7 +1,7 @@
 # Frontend (Cloud) Dockerfile
 FROM node:22-alpine AS builder
 
-RUN apk add --no-cache git git-lfs coreutils
+RUN apk add --no-cache git coreutils
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -37,9 +37,6 @@ COPY rivetkit-asyncapi/ rivetkit-asyncapi/
 COPY rivetkit-openapi/ rivetkit-openapi/
 
 # Fetch LFS files
-COPY scripts/docker/fetch-lfs.sh /tmp/fetch-lfs.sh
-RUN chmod +x /tmp/fetch-lfs.sh && /tmp/fetch-lfs.sh
-
 ARG FONTAWESOME_PACKAGE_TOKEN=""
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 
@@ -73,7 +70,7 @@ ENV VITE_APP_POSTHOG_HOST=${VITE_APP_POSTHOG_HOST}
 ENV VITE_FEATURE_FLAGS=${VITE_FEATURE_FLAGS}
 ENV VITE_APP_TURNSTILE_SITE_KEY=${VITE_APP_TURNSTILE_SITE_KEY}
 ENV VITE_APP_SENTRY_ENV=${DEPLOYMENT_TYPE}
-ENV DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
+ENV VITE_DEPLOYMENT_TYPE=${DEPLOYMENT_TYPE}
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 ENV VITE_APP_SENTRY_TUNNEL="/tunnel"
 

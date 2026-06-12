@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{borrow::Cow, collections::HashMap, sync::Arc, time::Duration};
 
 use anyhow::Result;
 use futures_util::stream::BoxStream;
@@ -153,6 +153,7 @@ pub trait Database: Send {
 		loop_location: Option<&Location>,
 		limit: usize,
 		last_attempt: bool,
+		related_sleep_location: Option<&Location>,
 	) -> WorkflowResult<Vec<SignalData>>;
 
 	/// Retrieves a workflow with the given ID. Can only be called from a workflow context.
@@ -201,14 +202,6 @@ pub trait Database: Send {
 		loop_location: Option<&Location>,
 		unique: bool,
 	) -> WorkflowResult<Id>;
-
-	/// Updates workflow tags.
-	async fn update_workflow_tags(
-		&self,
-		workflow_id: Id,
-		workflow_name: &str,
-		tags: &serde_json::Value,
-	) -> WorkflowResult<()>;
 
 	/// Updates workflow state.
 	async fn update_workflow_state(
@@ -363,7 +356,34 @@ pub struct SignalData {
 
 pub enum BumpSubSubject {
 	Worker,
-	WorkflowCreated { tag: String },
 	WorkflowComplete { workflow_id: Id },
 	SignalPublish { to_workflow_id: Id },
+}
+
+impl std::fmt::Display for BumpSubSubject {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			BumpSubSubject::Worker => write!(f, "gasoline.worker.bump"),
+			BumpSubSubject::WorkflowComplete { workflow_id } => {
+				write!(f, "gasoline.workflow.complete.{workflow_id}")
+			}
+			BumpSubSubject::SignalPublish { to_workflow_id } => {
+				write!(f, "gasoline.signal.for-workflow.{to_workflow_id}")
+			}
+		}
+	}
+}
+
+impl universalpubsub::Subject for BumpSubSubject {
+	fn root<'a>() -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed("gasoline.bump"))
+	}
+
+	fn subject_root<'a>(&'a self) -> Option<Cow<'a, str>> {
+		Some(Cow::Borrowed(match self {
+			BumpSubSubject::Worker => "gasoline.worker.bump",
+			BumpSubSubject::WorkflowComplete { .. } => "gasoline.workflow.complete",
+			BumpSubSubject::SignalPublish { .. } => "gasoline.signal.for-workflow",
+		}))
+	}
 }

@@ -100,7 +100,7 @@ async fn handle_message_mk2(
 	let to_client_msg = match msg {
 		protocol::mk2::ToRunner::ToRunnerPing(ping) => {
 			// Publish pong to UPS
-			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
+			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id);
 			let msg_serialized = versioned::ToGateway::wrap_latest(
 				protocol::mk2::ToGateway::ToGatewayPong(protocol::mk2::ToGatewayPong {
 					request_id: ping.request_id,
@@ -196,7 +196,7 @@ async fn handle_message_mk1(
 	let to_client_msg = match msg {
 		protocol::ToRunner::ToRunnerPing(ping) => {
 			// Publish pong to UPS
-			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id).to_string();
+			let gateway_reply_to = GatewayReceiverSubject::new(ping.gateway_id);
 			let msg_serialized = versioned::ToGateway::wrap_latest(
 				protocol::mk2::ToGateway::ToGatewayPong(protocol::mk2::ToGatewayPong {
 					request_id: ping.request_id,

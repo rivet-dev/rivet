@@ -1,13 +1,4 @@
 import {
-	Badge,
-	Button,
-	Flex,
-	Input,
-	ScrollArea,
-	Textarea,
-	WithTooltip,
-} from "@/components";
-import {
 	faChevronLeft,
 	faChevronRight,
 	faCode,
@@ -19,6 +10,15 @@ import {
 } from "@rivet-gg/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+	Badge,
+	Button,
+	Flex,
+	Input,
+	ScrollArea,
+	Textarea,
+	WithTooltip,
+} from "@/components";
 import { ShimmerLine } from "../shimmer-line";
 import {
 	Select,
@@ -28,15 +28,15 @@ import {
 	SelectValue,
 } from "../ui/select";
 import {
+	actorInspectorQueriesKeys,
 	type DatabaseColumn,
 	type DatabaseExecuteRequest,
 	type DatabaseExecuteResult,
-	actorInspectorQueriesKeys,
 	useActorInspector,
 } from "./actor-inspector-context";
 import {
-	type DatabaseTableCellContext,
 	DatabaseTable,
+	type DatabaseTableCellContext,
 	isBlobColumn,
 	renderDatabaseCellValue,
 } from "./database/database-table";
@@ -184,7 +184,7 @@ function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 		setEditingValue("");
 		setStagedEdits({});
 		setTableEditError(null);
-	}, [selectedTable]);
+	}, []);
 
 	const totalRows = currentTable?.records ?? 0;
 	const totalPages = Math.max(1, Math.ceil(totalRows / PAGE_SIZE));

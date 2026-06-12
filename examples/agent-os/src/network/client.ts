@@ -31,10 +31,9 @@ console.log("Spawned server process:", proc.pid);
 await new Promise((r) => setTimeout(r, 1000));
 
 // vmFetch routes HTTP requests to the VM's localhost
-const response = (await agent.vmFetch(
-	3000,
-	"http://localhost/api/test",
-)) as { body: Uint8Array };
+const response = (await agent.vmFetch(3000, "http://localhost/api/test")) as {
+	body: Uint8Array;
+};
 const body = JSON.parse(new TextDecoder().decode(response.body));
 console.log("vmFetch response:", body);
 

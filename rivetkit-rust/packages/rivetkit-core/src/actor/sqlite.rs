@@ -10,9 +10,9 @@ use depot_client_types::is_head_fence_mismatch;
 pub use depot_client_types::{BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult};
 #[cfg(feature = "sqlite-local")]
 use parking_lot::Mutex;
-use rivet_error::{ActorSpecifier, RivetError};
 use rivet_envoy_client::protocol;
 use rivet_envoy_client::{handle::EnvoyHandle, utils::RemoteSqliteIndeterminateResultError};
+use rivet_error::{ActorSpecifier, RivetError};
 use serde::Serialize;
 use serde_json::{Map as JsonMap, Value as JsonValue};
 #[cfg(feature = "sqlite-local")]
@@ -185,6 +185,9 @@ impl SqliteDb {
 					)?;
 					self.start_worker_failure_monitor(native_db.clone(), config);
 					*self.db.lock() = Some(native_db);
+					if let Some(metrics) = self.vfs_metrics.as_ref() {
+						metrics.set_worker_active(true);
+					}
 					Ok(())
 				}
 
@@ -363,6 +366,9 @@ impl SqliteDb {
 					if let Some(native_db) = native_db {
 						let result = self.map_local_worker_result(native_db.close().await);
 						self.abort_worker_failure_monitor();
+						if let Some(metrics) = self.vfs_metrics.as_ref() {
+							metrics.set_worker_active(false);
+						}
 						result?;
 					}
 				}
@@ -507,8 +513,7 @@ impl SqliteDb {
 	}
 
 	fn actor_specifier(&self) -> Option<ActorSpecifier> {
-		let mut specifier =
-			ActorSpecifier::new(self.actor_id.as_ref()?.clone(), self.generation?);
+		let mut specifier = ActorSpecifier::new(self.actor_id.as_ref()?.clone(), self.generation?);
 		if let Some(key) = self.actor_key.as_ref() {
 			specifier = specifier.with_key(key.clone());
 		}

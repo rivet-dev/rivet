@@ -8,20 +8,22 @@ use gas::prelude::*;
 use rivet_envoy_protocol as protocol;
 use rivet_guard_core::{
 	WebSocketHandle,
-	errors::{WebSocketServiceHibernate, WebSocketServiceTimeout, WebSocketServiceUnavailable},
+	errors::{
+		WebSocketGarbageCollected, WebSocketServiceHibernate, WebSocketTunnelSubscriptionClosed,
+	},
 };
 use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::LifecycleResult;
-use crate::shared_state::{InFlightRequestHandle, MsgGcReason};
+use crate::shared_state::{InFlightRequestHandle, MsgGcReason, display_id};
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(name = "tunnel_to_ws_task", skip_all)]
 pub async fn task(
 	in_flight_req: InFlightRequestHandle,
 	client_ws: WebSocketHandle,
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
-	mut msg_rx: mpsc::Receiver<protocol::ToRivetTunnelMessageKind>,
+	mut msg_rx: mpsc::UnboundedReceiver<protocol::ToRivetTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	can_hibernate: bool,
 	egress_bytes: Arc<AtomicU64>,
@@ -33,10 +35,12 @@ pub async fn task(
 				if let Some(msg) = res {
 					match msg {
 						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => {
+							let data_len = ws_msg.data.len();
+							let binary = ws_msg.binary;
 							tracing::trace!(
-								request_id=%protocol::util::id_to_string(&in_flight_req.request_id),
-								data_len=ws_msg.data.len(),
-								binary=ws_msg.binary,
+								request_id=%display_id(&in_flight_req.request_id),
+								data_len,
+								binary,
 								"forwarding websocket message to client"
 							);
 							let msg = if ws_msg.binary {
@@ -49,10 +53,16 @@ pub async fn task(
 
 							egress_bytes.fetch_add(msg.len() as u64, Ordering::AcqRel);
 							client_ws.send(msg).await?;
+							tracing::trace!(
+								request_id=%display_id(&in_flight_req.request_id),
+								data_len,
+								binary,
+								"sent websocket message to client"
+							);
 						}
 						protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(ack) => {
 							tracing::debug!(
-								request_id=%protocol::util::id_to_string(&in_flight_req.request_id),
+								request_id=%display_id(&in_flight_req.request_id),
 								ack_index=?ack.index,
 								"received WebSocketMessageAck from envoy"
 							);
@@ -74,7 +84,10 @@ pub async fn task(
 					}
 				} else {
 					tracing::warn!("tunnel sub closed");
-					return Err(WebSocketServiceUnavailable.build());
+					return Err(WebSocketTunnelSubscriptionClosed {
+						phase: "active_websocket".to_owned(),
+					}
+					.build());
 				}
 			}
 			_ = stopped_sub.next() => {
@@ -92,7 +105,11 @@ pub async fn task(
 			}
 			_ = drop_rx.changed() => {
 				tracing::warn!(reason=?drop_rx.borrow().as_ref(), "garbage collected");
-				return Err(WebSocketServiceTimeout.build());
+				return Err(WebSocketGarbageCollected {
+					phase: "active_websocket".to_owned(),
+					reason: format!("{:?}", drop_rx.borrow().as_ref()),
+				}
+				.build());
 			}
 			_ = tunnel_to_ws_abort_rx.changed() => {
 				tracing::debug!("task aborted");

@@ -231,9 +231,11 @@ describe("cross-actor communication", () => {
 
 		// Find laptop and phone items
 		const laptopItem = summary.items.find(
-			(i) => i.itemId === "laptop-multi",
+			(i: { itemId: string }) => i.itemId === "laptop-multi",
 		);
-		const phoneItem = summary.items.find((i) => i.itemId === "phone-multi");
+		const phoneItem = summary.items.find(
+			(i: { itemId: string }) => i.itemId === "phone-multi",
+		);
 
 		expect(laptopItem).toMatchObject({
 			itemName: "Laptop",

@@ -100,11 +100,7 @@ function OrgIdentity() {
 			<span className="size-5 rounded-full overflow-hidden flex items-center justify-center shrink-0">
 				{logo ? (
 					// biome-ignore lint/performance/noImgElement: small avatar, no Next runtime
-					<img
-						src={logo}
-						alt=""
-						className="size-full object-cover"
-					/>
+					<img src={logo} alt="" className="size-full object-cover" />
 				) : (
 					<span
 						className="size-full flex items-center justify-center text-[10px] font-semibold text-white"
@@ -118,9 +114,7 @@ function OrgIdentity() {
 					</span>
 				)}
 			</span>
-			<span className="text-sm">
-				{isPending && !org ? "…" : name}
-			</span>
+			<span className="text-sm">{isPending && !org ? "…" : name}</span>
 		</>
 	);
 }

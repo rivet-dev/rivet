@@ -1,4 +1,8 @@
-import { actor, type RivetMessageEvent, type UniversalWebSocket } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	type UniversalWebSocket,
+} from "rivetkit";
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));

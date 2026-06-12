@@ -1,0 +1,5 @@
+{
+  "code": "websocket_open_timeout",
+  "group": "guard",
+  "message": "Timed out waiting for WebSocket open."
+}

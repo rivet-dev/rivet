@@ -3,7 +3,7 @@ import { actor, type RequestContext } from "rivetkit";
 export const rawHttpRequestPropertiesActor = actor({
 	actions: {},
 	onRequest(
-		ctx: RequestContext<any, any, any, any, any, any>,
+		_ctx: RequestContext<any, any, any, any, any, any>,
 		request: Request,
 	) {
 		// Extract all relevant Request properties
@@ -33,7 +33,7 @@ export const rawHttpRequestPropertiesActor = actor({
 					const text = await request.text();
 					return text || null; // Return null for empty bodies
 				}
-			} catch (error) {
+			} catch (_error) {
 				// If body parsing fails, return null
 				return null;
 			}

@@ -22,46 +22,41 @@ const Tabs = React.forwardRef<
 	React.ElementRef<typeof TabsPrimitive.Root>,
 	React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root> &
 		Partial<CommonHelperProps>
->(
-	(
-		{ className, value, defaultValue, onValueChange, ...props },
-		ref,
-	) => {
-		const rest = omitCommonHelperProps(props);
-		const indicatorId = React.useId();
-		const isControlled = value !== undefined;
-		const [internalValue, setInternalValue] = React.useState<
-			string | undefined
-		>(defaultValue);
-		const activeValue = isControlled ? value : internalValue;
+>(({ className, value, defaultValue, onValueChange, ...props }, ref) => {
+	const rest = omitCommonHelperProps(props);
+	const indicatorId = React.useId();
+	const isControlled = value !== undefined;
+	const [internalValue, setInternalValue] = React.useState<
+		string | undefined
+	>(defaultValue);
+	const activeValue = isControlled ? value : internalValue;
 
-		const handleValueChange = React.useCallback(
-			(next: string) => {
-				if (!isControlled) setInternalValue(next);
-				onValueChange?.(next);
-			},
-			[isControlled, onValueChange],
-		);
+	const handleValueChange = React.useCallback(
+		(next: string) => {
+			if (!isControlled) setInternalValue(next);
+			onValueChange?.(next);
+		},
+		[isControlled, onValueChange],
+	);
 
-		const ctx = React.useMemo<TabsInstance>(
-			() => ({ activeValue, indicatorId }),
-			[activeValue, indicatorId],
-		);
+	const ctx = React.useMemo<TabsInstance>(
+		() => ({ activeValue, indicatorId }),
+		[activeValue, indicatorId],
+	);
 
-		return (
-			<TabsContext.Provider value={ctx}>
-				<TabsPrimitive.Root
-					ref={ref}
-					value={activeValue}
-					defaultValue={isControlled ? undefined : defaultValue}
-					onValueChange={handleValueChange}
-					className={cn(className, getCommonHelperClass(props))}
-					{...rest}
-				/>
-			</TabsContext.Provider>
-		);
-	},
-);
+	return (
+		<TabsContext.Provider value={ctx}>
+			<TabsPrimitive.Root
+				ref={ref}
+				value={activeValue}
+				defaultValue={isControlled ? undefined : defaultValue}
+				onValueChange={handleValueChange}
+				className={cn(className, getCommonHelperClass(props))}
+				{...rest}
+			/>
+		</TabsContext.Provider>
+	);
+});
 Tabs.displayName = TabsPrimitive.Root.displayName;
 
 const TabsList = React.forwardRef<

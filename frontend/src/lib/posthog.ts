@@ -4,8 +4,10 @@
 
 import type { default as PostHogType } from "posthog-js";
 
-type CaptureArgs = Parameters<typeof PostHogType["capture"]>;
-type SetPersonPropertiesArgs = Parameters<typeof PostHogType["setPersonProperties"]>;
+type CaptureArgs = Parameters<(typeof PostHogType)["capture"]>;
+type SetPersonPropertiesArgs = Parameters<
+	(typeof PostHogType)["setPersonProperties"]
+>;
 type QueuedCall =
 	| { method: "capture"; args: CaptureArgs }
 	| { method: "setPersonProperties"; args: SetPersonPropertiesArgs };
@@ -13,7 +15,11 @@ type QueuedCall =
 let queue: QueuedCall[] = [];
 let instance: typeof PostHogType | null = null;
 
-export async function initPosthog(apiKey: string, apiHost: string, debug: boolean) {
+export async function initPosthog(
+	apiKey: string,
+	apiHost: string,
+	debug: boolean,
+) {
 	const { default: ph } = await import("posthog-js");
 	ph.init(apiKey, { api_host: apiHost, debug });
 	instance = ph;

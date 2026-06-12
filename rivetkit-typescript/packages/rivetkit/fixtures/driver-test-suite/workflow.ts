@@ -455,12 +455,17 @@ export const workflowTryActor = actor({
 		} | null,
 		tryJoinFailure: null as string | null,
 	},
+	vars: {
+		innerWrites: 0,
+		recoveryWrites: 0,
+	},
 	run: workflow(async (ctx) => {
 		const stepResult = await ctx.tryStep({
 			name: "charge-card",
 			maxRetries: 0,
 			run: async () => {
 				ctx.state.innerWrites += 1;
+				ctx.vars.innerWrites += 1;
 				throw new Error("card declined");
 			},
 		});
@@ -479,6 +484,7 @@ export const workflowTryActor = actor({
 		});
 
 		await ctx.step("store-try-results", async () => {
+			ctx.vars.recoveryWrites += 1;
 			if (!stepResult.ok) {
 				ctx.state.tryStepFailure = {
 					kind: stepResult.failure.kind,
@@ -492,7 +498,43 @@ export const workflowTryActor = actor({
 		});
 	}),
 	actions: {
-		getState: (c) => c.state,
+		getState: (c) => ({ ...c.state, vars: c.vars }),
+	},
+	options: {
+		sleepTimeout: 50,
+	},
+});
+
+export const workflowStepRollbackActor = actor({
+	state: {
+		failedStateWrites: 0,
+		recoveryStateWrites: 0,
+		failureCaught: false,
+	},
+	vars: {
+		failedVarsWrites: 0,
+		recoveryVarsWrites: 0,
+	},
+	run: workflow(async (ctx) => {
+		const stepResult = await ctx.try(
+			"recover-failed-step",
+			async (tryCtx) => {
+				await tryCtx.step("failing-step", async () => {
+					tryCtx.state.failedStateWrites += 1;
+					tryCtx.vars.failedVarsWrites += 1;
+					throw new Error("step rollback");
+				});
+			},
+		);
+
+		await ctx.step("record-recovery", async () => {
+			ctx.state.recoveryStateWrites += 1;
+			ctx.vars.recoveryVarsWrites += 1;
+			ctx.state.failureCaught = !stepResult.ok;
+		});
+	}),
+	actions: {
+		getSnapshot: (c) => ({ state: c.state, vars: c.vars }),
 	},
 	options: {
 		sleepTimeout: 50,

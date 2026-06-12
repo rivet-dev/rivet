@@ -1,6 +1,6 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { createRequire } from "node:module";
 import { describe, expect, test } from "vitest";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 const require = createRequire(import.meta.url);

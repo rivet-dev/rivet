@@ -1,0 +1,9 @@
+FROM node:22-trixie-slim
+
+WORKDIR /app
+ENV NODE_OPTIONS=--max-old-space-size=7168
+
+COPY app/ ./
+
+EXPOSE 8080
+CMD ["node", "--import", "@rivetkit/sql-loader", "--import", "tsx", "src/server.ts"]

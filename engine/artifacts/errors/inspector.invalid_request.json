@@ -1,0 +1,5 @@
+{
+  "code": "invalid_request",
+  "group": "inspector",
+  "message": "Invalid inspector request"
+}

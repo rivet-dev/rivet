@@ -2,8 +2,7 @@
 import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { NotFoundPage } from '@/components/marketing/NotFoundPage';
-import imgThinker from '@/images/thinking/thinker.jpg';
-
+const imgThinker = { src: "https://assets.rivet.dev/website/images/thinking/thinker.jpg", width: 3140, height: 4000, format: "jpg" };
 const optimizedImage = await getImage({
   src: imgThinker,
   width: 800,

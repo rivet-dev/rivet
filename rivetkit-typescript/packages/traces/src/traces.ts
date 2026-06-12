@@ -5,14 +5,13 @@ import { performance } from "node:perf_hooks";
 import { decode as decodeCbor, encode as encodeCbor } from "cbor-x";
 import { pack, unpack } from "fdb-tuple";
 import {
-	CHUNK_VERSIONED,
-	CURRENT_VERSION,
-	encodeRecord,
 	type ActiveSpanRef,
 	type Attributes,
+	CHUNK_VERSIONED,
 	type Chunk,
+	CURRENT_VERSION,
+	encodeRecord,
 	type KeyValue,
-	type Record as TraceRecord,
 	type RecordBody,
 	type SpanEnd,
 	type SpanEvent,
@@ -26,6 +25,7 @@ import {
 	type SpanUpdate,
 	type StringId,
 	type TraceId,
+	type Record as TraceRecord,
 } from "../schemas/versioned.js";
 import {
 	hexFromBytes,
@@ -43,7 +43,6 @@ import type {
 	SpanStatusInput,
 	StartSpanOptions,
 	Traces,
-	TracesDriver,
 	TracesOptions,
 	UpdateSpanOptions,
 } from "./types.js";
@@ -55,7 +54,7 @@ const KEY_PREFIX = {
 	DATA: 1,
 };
 
-const MAX_CHUNK_ID = 0xffff_ffff;
+const _MAX_CHUNK_ID = 0xffff_ffff;
 const AFTER_MAX_CHUNK_ID = 0x1_0000_0000;
 
 const DEFAULT_BUCKET_SIZE_SEC = 3600;
@@ -170,7 +169,7 @@ export function createTraces(
 	let lastWriteError: unknown = null;
 	const bucketChunkCounters = new Map<number, number>();
 
-	function nowUnixMs(): number {
+	function _nowUnixMs(): number {
 		return timeAnchor.unixMs + (performance.now() - timeAnchor.monoMs);
 	}
 
@@ -288,7 +287,7 @@ export function createTraces(
 		dropped: number;
 	} {
 		const result: SpanLink[] = [];
-		let dropped = 0;
+		const dropped = 0;
 		if (!links) {
 			return { links: result, dropped };
 		}
@@ -438,9 +437,7 @@ export function createTraces(
 			const key = strings[kv.key] ?? "";
 			try {
 				map.set(key, decodeCbor(toUint8Array(kv.value)) as unknown);
-			} catch {
-				continue;
-			}
+			} catch {}
 		}
 		return map;
 	}
@@ -463,7 +460,7 @@ export function createTraces(
 		dropped: number;
 	} {
 		const result: SpanLink[] = [];
-		let dropped = 0;
+		const dropped = 0;
 		for (const link of links) {
 			const { attributes, dropped: droppedAttributes } =
 				encodeAttributeMap(link.attributes);
@@ -1184,11 +1181,11 @@ export function createTraces(
 		return parent.depth + 1;
 	}
 
-	function randomSpanId(): SpanId {
+	function _randomSpanId(): SpanId {
 		return toArrayBuffer(randomBytes(SPAN_ID_BYTES));
 	}
 
-	function randomTraceId(): TraceId {
+	function _randomTraceId(): TraceId {
 		return toArrayBuffer(randomBytes(TRACE_ID_BYTES));
 	}
 
@@ -1205,7 +1202,6 @@ export function createTraces(
 				return SpanStatusCode.OK;
 			case "ERROR":
 				return SpanStatusCode.ERROR;
-			case "UNSET":
 			default:
 				return SpanStatusCode.UNSET;
 		}

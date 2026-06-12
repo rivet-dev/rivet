@@ -84,7 +84,9 @@ function BrushChart({
 	// Compute the initial brush position once on first render with valid scale data.
 	// We use a ref so that subsequent xScale changes (from data loading) don't reset
 	// the brush position back to the default.
-	const initialBrushPositionRef = useRef<{ start: { x: number }; end: { x: number } } | undefined>(undefined);
+	const initialBrushPositionRef = useRef<
+		{ start: { x: number }; end: { x: number } } | undefined
+	>(undefined);
 	if (initialBrushPositionRef.current === undefined && minDate < maxDate) {
 		initialBrushPositionRef.current = {
 			start: { x: xScale(brushDomain[0]) },
@@ -145,8 +147,10 @@ function BrushChart({
 						scale={xScale}
 						tickFormat={(d) => {
 							const date = d as Date;
-							const rangeMs = maxDate.getTime() - minDate.getTime();
-							if (rangeMs > 2 * 24 * 60 * 60 * 1000) return format(date, "MMM d");
+							const rangeMs =
+								maxDate.getTime() - minDate.getTime();
+							if (rangeMs > 2 * 24 * 60 * 60 * 1000)
+								return format(date, "MMM d");
 							return format(date, "MMM d HH:mm");
 						}}
 						stroke="transparent"

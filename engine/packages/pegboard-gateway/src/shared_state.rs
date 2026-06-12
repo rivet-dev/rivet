@@ -1,6 +1,7 @@
 use anyhow::Result;
 use gas::prelude::*;
-use rivet_guard_core::errors::WebSocketServiceTimeout;
+use pegboard::pubsub_subjects::GatewayReceiverSubject;
+use rivet_guard_core::errors::WebSocketTunnelPingTimeout;
 use rivet_runner_protocol::{
 	self as protocol, PROTOCOL_MK1_VERSION, PROTOCOL_MK2_VERSION, versioned,
 };
@@ -17,7 +18,7 @@ use vbare::OwnedVersionedData;
 use crate::{WebsocketPendingLimitReached, metrics};
 
 pub struct InFlightRequestHandle {
-	pub msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
+	pub msg_rx: mpsc::UnboundedReceiver<protocol::mk2::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	///
 	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
@@ -81,7 +82,7 @@ struct InFlightRequest {
 	protocol_version: u16,
 	state: InFlightRequestState,
 	/// Sender for incoming messages to this request.
-	msg_tx: mpsc::Sender<protocol::mk2::ToServerTunnelMessageKind>,
+	msg_tx: mpsc::UnboundedSender<protocol::mk2::ToServerTunnelMessageKind>,
 	/// Used to check if the request handler has been dropped.
 	drop_tx: watch::Sender<Option<MsgGcReason>>,
 	/// True once first message for this request has been sent (so runner learned reply_to).
@@ -125,7 +126,7 @@ pub enum MsgGcReason {
 pub struct SharedStateInner {
 	ups: PubSub,
 	gateway_id: protocol::mk2::GatewayId,
-	receiver_subject: String,
+	receiver_subject: GatewayReceiverSubject,
 	in_flight_requests: HashMap<protocol::mk2::RequestId, InFlightRequest>,
 	hibernation_timeout: i64,
 	// Config values
@@ -142,8 +143,7 @@ impl SharedState {
 	pub fn new(config: &rivet_config::Config, ups: PubSub) -> Self {
 		let gateway_id = protocol::util::generate_gateway_id();
 		tracing::info!(gateway_id = %protocol::util::id_to_string(&gateway_id), "setting up shared state for gateway");
-		let receiver_subject =
-			pegboard::pubsub_subjects::GatewayReceiverSubject::new(gateway_id).to_string();
+		let receiver_subject = GatewayReceiverSubject::new(gateway_id);
 
 		let pegboard_config = config.pegboard();
 		Self(Arc::new(SharedStateInner {
@@ -184,7 +184,7 @@ impl SharedState {
 		request_id: protocol::mk2::RequestId,
 		state: InFlightRequestState,
 	) -> InFlightRequestHandle {
-		let (msg_tx, msg_rx) = mpsc::channel(128);
+		let (msg_tx, msg_rx) = mpsc::unbounded_channel();
 		let (drop_tx, drop_rx) = watch::channel(None);
 
 		let new = match self.in_flight_requests.entry_async(request_id).await {
@@ -326,9 +326,14 @@ impl SharedState {
 		let now = util::timestamp::now();
 
 		// Verify ping timeout
-		if now.saturating_sub(req.last_pong) > self.tunnel_ping_timeout {
+		let last_pong_age_ms = now.saturating_sub(req.last_pong);
+		if last_pong_age_ms > self.tunnel_ping_timeout {
 			tracing::warn!(runner_topic=%req.receiver_subject, "tunnel timeout");
-			return Err(WebSocketServiceTimeout.build());
+			return Err(WebSocketTunnelPingTimeout {
+				timeout_ms: self.tunnel_ping_timeout as u64,
+				last_pong_age_ms: last_pong_age_ms as u64,
+			}
+			.build());
 		}
 
 		let message_serialized = if protocol::is_mk2(req.protocol_version) {
@@ -400,6 +405,12 @@ impl SharedState {
 					Ok(NextOutput::Unsubscribed) => {
 						tracing::error!(
 							"gateway subscription unsubscribed, in flight messages may be lost"
+						);
+						break;
+					}
+					Ok(NextOutput::NoResponders) => {
+						tracing::error!(
+							"gateway subscription no responders, in flight messages may be lost"
 						);
 						break;
 					}
@@ -478,12 +489,7 @@ impl SharedState {
 							inner_size,
 							"forwarding message to request handler"
 						);
-						if in_flight
-							.msg_tx
-							.send(msg.message_kind.clone())
-							.await
-							.is_err()
-						{
+						if in_flight.msg_tx.send(msg.message_kind.clone()).is_err() {
 							tracing::warn!(
 								gateway_id=%protocol::util::id_to_string(&message_id.gateway_id),
 								request_id=%protocol::util::id_to_string(&message_id.request_id),

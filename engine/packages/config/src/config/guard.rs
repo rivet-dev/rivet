@@ -16,8 +16,27 @@ pub struct Guard {
 	pub enable_websocket_health_route: Option<bool>,
 	/// TTL for cached route lookups in milliseconds.
 	pub route_cache_ttl_ms: Option<u64>,
-	/// Timeout for route resolution in milliseconds.
+	/// Backstop timeout for route resolution in milliseconds. Primary timeout signals live
+	/// inside each guard routing phase.
 	pub route_timeout_ms: Option<u64>,
+	/// Timeout for dispatching to each guard routing module in milliseconds.
+	pub route_dispatch_timeout_ms: Option<u64>,
+	/// Timeout for resolving api-public routes in milliseconds.
+	pub route_api_public_timeout_ms: Option<u64>,
+	/// Timeout for resolving compute routes in milliseconds.
+	pub route_compute_timeout_ms: Option<u64>,
+	/// Timeout for guard-owned route authorization checks in milliseconds.
+	pub route_auth_check_timeout_ms: Option<u64>,
+	/// Timeout for subscribing to pegboard actor routing events in milliseconds.
+	pub route_pegboard_subscribe_timeout_ms: Option<u64>,
+	/// Timeout for fetching pegboard actor routing state in milliseconds.
+	pub route_pegboard_fetch_actor_timeout_ms: Option<u64>,
+	/// Timeout for pegboard actor route authorization checks in milliseconds.
+	pub route_pegboard_auth_check_timeout_ms: Option<u64>,
+	/// Timeout for sending pegboard actor wake signals in milliseconds.
+	pub route_pegboard_wake_signal_timeout_ms: Option<u64>,
+	/// Timeout for resolving pegboard actor query routes in milliseconds.
+	pub route_pegboard_resolve_query_timeout_ms: Option<u64>,
 	/// Timeout for waiting for an actor to become ready in milliseconds.
 	pub actor_ready_timeout_ms: Option<u64>,
 	/// Timeout sent with actor force-wake requests in milliseconds.
@@ -26,6 +45,10 @@ pub struct Guard {
 	pub https: Option<Https>,
 	/// Max HTTP request body size in bytes (first line of defense).
 	pub http_max_request_body_size: Option<usize>,
+
+	/// Enables W3C trace context propagation (extract from incoming requests, inject into
+	/// upstream requests/websockets).
+	pub trace_propagation: Option<bool>,
 }
 
 impl Guard {
@@ -50,11 +73,56 @@ impl Guard {
 	}
 
 	pub fn route_timeout(&self) -> std::time::Duration {
-		std::time::Duration::from_millis(self.route_timeout_ms.unwrap_or(15_000))
+		std::time::Duration::from_millis(self.route_timeout_ms.unwrap_or(60_000))
+	}
+
+	pub fn route_dispatch_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.route_dispatch_timeout_ms.unwrap_or(55_000))
+	}
+
+	pub fn route_api_public_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.route_api_public_timeout_ms.unwrap_or(5_000))
+	}
+
+	pub fn route_compute_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.route_compute_timeout_ms.unwrap_or(10_000))
+	}
+
+	pub fn route_auth_check_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.route_auth_check_timeout_ms.unwrap_or(5_000))
+	}
+
+	pub fn route_pegboard_subscribe_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.route_pegboard_subscribe_timeout_ms.unwrap_or(2_000))
+	}
+
+	pub fn route_pegboard_fetch_actor_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(
+			self.route_pegboard_fetch_actor_timeout_ms.unwrap_or(5_000),
+		)
+	}
+
+	pub fn route_pegboard_auth_check_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(self.route_pegboard_auth_check_timeout_ms.unwrap_or(5_000))
+	}
+
+	pub fn route_pegboard_wake_signal_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(
+			self.route_pegboard_wake_signal_timeout_ms.unwrap_or(5_000),
+		)
+	}
+
+	pub fn route_pegboard_resolve_query_timeout(&self) -> std::time::Duration {
+		std::time::Duration::from_millis(
+			self.route_pegboard_resolve_query_timeout_ms
+				.unwrap_or(15_000),
+		)
 	}
 
 	pub fn actor_ready_timeout(&self) -> std::time::Duration {
-		std::time::Duration::from_millis(self.actor_ready_timeout_ms.unwrap_or(10_000))
+		// Keep this high because serverless cold starts can take 10 to 20 seconds.
+		// If this grows again, verify route_timeout_ms and route_dispatch_timeout_ms leave enough outer budget.
+		std::time::Duration::from_millis(self.actor_ready_timeout_ms.unwrap_or(30_000))
 	}
 
 	pub fn actor_force_wake_pending_timeout(&self) -> i64 {
@@ -64,6 +132,10 @@ impl Guard {
 
 	pub fn http_max_request_body_size(&self) -> usize {
 		self.http_max_request_body_size.unwrap_or(20 * 1024 * 1024) // 20 MiB
+	}
+
+	pub fn trace_propagation(&self) -> bool {
+		self.trace_propagation.unwrap_or(false)
 	}
 }
 

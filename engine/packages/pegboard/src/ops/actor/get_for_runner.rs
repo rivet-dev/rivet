@@ -24,7 +24,7 @@ pub async fn pegboard_actor_get_for_runner(
 ) -> Result<Option<Output>> {
 	let res = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_get_for_runner", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let workflow_id_key = keys::actor::WorkflowIdKey::new(input.actor_id);

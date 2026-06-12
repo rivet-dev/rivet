@@ -1,0 +1,5 @@
+{
+  "code": "route_resolve_query_timeout",
+  "group": "pegboard",
+  "message": "Timed out resolving actor query route."
+}

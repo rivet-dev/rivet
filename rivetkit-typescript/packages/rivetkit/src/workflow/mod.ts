@@ -1,33 +1,33 @@
 // @ts-nocheck
-import {
-	ACTOR_CONTEXT_INTERNAL_SYMBOL,
-	RUN_FUNCTION_CONFIG_SYMBOL,
-} from "@/actor/config";
-import type { RunContext } from "@/actor/config";
-import type { AnyDatabaseProvider } from "@/common/database/config";
-import type { AnyStaticActorInstance } from "@/actor/definition";
-import { RivetError } from "@/actor/errors";
-import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
-import { stringifyError } from "@/utils";
+
 import {
 	CriticalError,
 	EntryInProgressError,
 	HistoryDivergedError,
 	JoinError,
 	RaceError,
-	replayWorkflowFromStep,
 	RollbackCheckpointError,
 	RollbackError,
+	replayWorkflowFromStep,
 	runWorkflow,
 	StepExhaustedError,
 	type WorkflowErrorEvent,
 } from "@rivetkit/workflow-engine";
 import invariant from "invariant";
-import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
+import type { RunContext } from "@/actor/config";
+import {
+	ACTOR_CONTEXT_INTERNAL_SYMBOL,
+	RUN_FUNCTION_CONFIG_SYMBOL,
+} from "@/actor/config";
+import type { AnyStaticActorInstance } from "@/actor/definition";
+import { RivetError } from "@/actor/errors";
+import type { EventSchemaConfig, QueueSchemaConfig } from "@/actor/schema";
+import type { AnyDatabaseProvider } from "@/common/database/config";
+import { stringifyError } from "@/utils";
 import { ActorWorkflowContext } from "./context";
+import { ActorWorkflowControlDriver, ActorWorkflowDriver } from "./driver";
 import { createWorkflowInspectorAdapter } from "./inspector";
 
-export { Loop } from "@rivetkit/workflow-engine";
 export type {
 	TryBlockCatchKind,
 	TryBlockConfig,
@@ -40,6 +40,7 @@ export type {
 	WorkflowError,
 	WorkflowErrorEvent,
 } from "@rivetkit/workflow-engine";
+export { Loop } from "@rivetkit/workflow-engine";
 export {
 	ActorWorkflowContext,
 	type WorkflowBranchContextOf,
@@ -317,10 +318,7 @@ function resolveWorkflowInspectorActorId(actor: unknown): string | undefined {
 	if (typeof candidate.id === "string" && candidate.id.length > 0) {
 		return candidate.id;
 	}
-	if (
-		typeof candidate.actorId === "string" &&
-		candidate.actorId.length > 0
-	) {
+	if (typeof candidate.actorId === "string" && candidate.actorId.length > 0) {
 		return candidate.actorId;
 	}
 

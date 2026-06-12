@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { MODE_CONFIG, type Mode } from "../../../src/actors/arena/config.ts";
+import type { ArenaMatchmakerConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
-import { type Mode, MODE_CONFIG } from "../../../src/actors/arena/config.ts";
 import { ArenaBot } from "./bot.ts";
 import { waitForAssignment } from "./wait-for-assignment.ts";
 
@@ -34,8 +35,7 @@ export function ArenaMenu({
 	const [queueCount, setQueueCount] = useState(0);
 	const [error, setError] = useState("");
 
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle type
-	const mmRef = useRef<any>(null);
+	const mmRef = useRef<ArenaMatchmakerConn | null>(null);
 	const abortRef = useRef(false);
 	const botsRef = useRef<ArenaBot[]>([]);
 	const matchedRef = useRef(false);
@@ -83,8 +83,7 @@ export function ArenaMenu({
 				}, 1500);
 			};
 
-			mm.on("queueUpdate", (raw: unknown) => {
-				const data = raw as { counts: Record<string, number> };
+			mm.on("queueUpdate", (data) => {
 				setQueueCount(data.counts[mode] ?? 0);
 			});
 
@@ -92,13 +91,13 @@ export function ArenaMenu({
 
 			const response = await mm.queueForMatch({
 				mode,
-			}) as { playerId?: string };
+			});
 			if (!response?.playerId || abortRef.current)
 				throw new Error("Failed to queue");
 			myPlayerId = response.playerId;
 
 			const sizes = await mm.getQueueSizes();
-			if (!abortRef.current) setQueueCount((sizes as Record<string, number>)[mode] ?? 0);
+			if (!abortRef.current) setQueueCount(sizes[mode] ?? 0);
 
 			const assignment = await waitForAssignment<ArenaMatchInfo>(
 				mm,
@@ -191,7 +190,9 @@ export function ArenaMenu({
 								}}
 							/>
 						</div>
-						<div style={{ display: "flex", gap: 12, marginTop: 20 }}>
+						<div
+							style={{ display: "flex", gap: 12, marginTop: 20 }}
+						>
 							<button
 								className="btn btn-secondary"
 								onClick={addBot}

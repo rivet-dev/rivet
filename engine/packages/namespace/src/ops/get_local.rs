@@ -26,7 +26,7 @@ pub async fn namespace_get_local(ctx: &OperationCtx, input: &Input) -> Result<Ve
 				let namespace_ids = &namespace_ids;
 				let namespaces = ctx
 					.udb()?
-					.run(|tx| async move {
+					.txn("namespace_get_local", |tx| async move {
 						futures_util::stream::iter(namespace_ids.clone())
 							.map(|namespace_id| {
 								let tx = tx.clone();

@@ -1,29 +1,8 @@
 use super::*;
 
-pub(crate) async fn read_retired_cold_object_by_object_key(
-	tx: &universaldb::Transaction,
-	database_branch_id: DatabaseBranchId,
-	object_key: &str,
-) -> Result<Option<RetiredColdObject>> {
-	tx_get_value(
-		tx,
-		&keys::branch_compaction_retired_cold_object_key(
-			database_branch_id,
-			content_hash(object_key.as_bytes()),
-		),
-		Serializable,
-	)
-	.await?
-	.as_deref()
-	.map(decode_retired_cold_object)
-	.transpose()
-	.context("decode sqlite retired cold object for repair")
-}
-
 pub(crate) async fn read_manager_fdb_snapshot(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
-	cold_storage_enabled: bool,
 	now_ms: i64,
 ) -> Result<ManagerFdbSnapshot> {
 	let branch_record = tx_get_value(tx, &keys::branches_list_key(branch_id), Serializable)
@@ -65,9 +44,11 @@ pub(crate) async fn read_manager_fdb_snapshot(
 	let mut db_pins = history_pin::read_db_history_pins(tx, branch_id, Serializable).await?;
 	let bucket_proof_blocked_reclaim =
 		resolve_bucket_fork_pins(tx, branch_id, &mut db_pins).await?;
-	let pitr_policy = read_effective_pitr_policy_for_branch(tx, branch_record.as_ref()).await?;
-	let shard_cache_policy =
-		read_effective_shard_cache_policy_for_branch(tx, branch_record.as_ref()).await?;
+	// Policy overrides currently require resolving a branch back to its bucket and
+	// database by scanning global pointer indexes. Doing that inside manager
+	// refresh can age out the FDB transaction when many actors cross the hot
+	// compaction threshold together.
+	let pitr_policy = PitrPolicy::default();
 	let hot_inputs = read_hot_input_snapshot(
 		tx,
 		branch_id,
@@ -78,31 +59,12 @@ pub(crate) async fn read_manager_fdb_snapshot(
 		now_ms,
 	)
 	.await?;
-	let cold_inputs = if cold_storage_enabled {
-		read_cold_input_snapshot(tx, branch_id, &root, Snapshot).await?
-	} else {
-		ColdInputSnapshot::default()
-	};
-	let reclaim_inputs = read_reclaim_input_snapshot(
-		tx,
-		branch_id,
-		&root,
-		&db_pins,
-		branch_record.as_ref(),
-		shard_cache_policy,
-		Snapshot,
-		cold_storage_enabled,
-		now_ms,
-	)
-	.await?;
+	let reclaim_inputs =
+		read_reclaim_input_snapshot(tx, branch_id, &root, &db_pins, Snapshot, now_ms).await?;
 	let hot_lag = head.as_ref().map_or(0, |head| {
 		head.head_txid.saturating_sub(root.hot_watermark_txid)
 	});
-	let cold_lag = head.as_ref().map_or(0, |head| {
-		head.head_txid.saturating_sub(root.cold_watermark_txid)
-	});
 	let has_actionable_lag = hot_lag >= quota::COMPACTION_DELTA_THRESHOLD
-		|| (cold_lag >= HOT_BURST_COLD_LAG_THRESHOLD_TXIDS && !cold_inputs.shard_blobs.is_empty())
 		|| reclaim_coverage_is_complete(&reclaim_inputs);
 	let cleared_dirty = if !has_actionable_lag {
 		if let Some(expected_dirty) = dirty_bytes {
@@ -122,7 +84,6 @@ pub(crate) async fn read_manager_fdb_snapshot(
 		dirty,
 		db_pins,
 		hot_inputs,
-		cold_inputs,
 		reclaim_inputs,
 		bucket_proof_blocked_reclaim,
 		cleared_dirty,
@@ -353,46 +314,6 @@ pub(crate) async fn read_effective_pitr_policy_for_branch(
 		.map(|policy| policy.unwrap_or_default())
 }
 
-pub(crate) async fn read_effective_shard_cache_policy_for_branch(
-	tx: &universaldb::Transaction,
-	branch_record: Option<&DatabaseBranchRecord>,
-) -> Result<ShardCachePolicy> {
-	let Some(branch_record) = branch_record else {
-		return Ok(ShardCachePolicy::default());
-	};
-	let Some((bucket_id, database_id)) =
-		resolve_policy_scope_for_branch(tx, branch_record.branch_id).await?
-	else {
-		return Ok(ShardCachePolicy::default());
-	};
-
-	if let Some(policy) = tx_get_value(
-		tx,
-		&keys::database_shard_cache_policy_key(bucket_id, &database_id),
-		Serializable,
-	)
-	.await?
-	.as_deref()
-	.map(decode_shard_cache_policy)
-	.transpose()
-	.context("decode sqlite database shard cache policy for compaction manager")?
-	{
-		return Ok(policy);
-	}
-
-	tx_get_value(
-		tx,
-		&keys::bucket_policy_shard_cache_key(bucket_id),
-		Serializable,
-	)
-	.await?
-	.as_deref()
-	.map(decode_shard_cache_policy)
-	.transpose()
-	.context("decode sqlite bucket shard cache policy for compaction manager")
-	.map(|policy| policy.unwrap_or_default())
-}
-
 pub(crate) async fn resolve_policy_scope_for_branch(
 	tx: &universaldb::Transaction,
 	branch_id: DatabaseBranchId,
@@ -533,11 +454,37 @@ pub(crate) fn decode_txid_value(value: &[u8]) -> Result<u64> {
 	Ok(u64::from_be_bytes(bytes))
 }
 
-pub(crate) fn decode_i64_le(value: &[u8]) -> Result<i64> {
-	let bytes = <[u8; 8]>::try_from(value)
-		.map_err(|_| anyhow::anyhow!("i64 value had {} bytes, expected 8", value.len()))?;
+#[derive(Debug, Clone, Copy)]
+struct CompactionBatchBudget {
+	max_keys: usize,
+	max_value_bytes: u64,
+	key_count: usize,
+	value_bytes: u64,
+}
 
-	Ok(i64::from_le_bytes(bytes))
+impl CompactionBatchBudget {
+	fn fdb() -> Self {
+		CompactionBatchBudget {
+			max_keys: CMP_FDB_BATCH_MAX_KEYS,
+			max_value_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
+			key_count: 0,
+			value_bytes: 0,
+		}
+	}
+
+	fn can_add(&self, row_count: usize, value_bytes: u64) -> bool {
+		self.key_count.saturating_add(row_count) <= self.max_keys
+			&& self.value_bytes.saturating_add(value_bytes) <= self.max_value_bytes
+	}
+
+	fn add(&mut self, row_count: usize, value_bytes: u64) {
+		self.key_count = self.key_count.saturating_add(row_count);
+		self.value_bytes = self.value_bytes.saturating_add(value_bytes);
+	}
+
+	fn value_bytes(&self) -> u64 {
+		self.value_bytes
+	}
 }
 
 pub(crate) async fn read_hot_input_snapshot(
@@ -559,60 +506,67 @@ pub(crate) async fn read_hot_input_snapshot(
 	let min_txid = root.hot_watermark_txid.saturating_add(1);
 	let max_txid = head.head_txid;
 	let mut snapshot = HotInputSnapshot::default();
+	let mut budget = CompactionBatchBudget::fdb();
 
+	let commit_scan_start = keys::branch_commit_key(branch_id, min_txid);
+	let commit_scan_end = max_txid
+		.checked_add(1)
+		.map(|next_txid| keys::branch_commit_key(branch_id, next_txid))
+		.unwrap_or_else(|| end_of_key_range(&keys::branch_commit_prefix(branch_id)));
 	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
+		tx_scan_range_values(tx, &commit_scan_start, &commit_scan_end, isolation_level).await?
 	{
 		let txid = decode_branch_commit_txid(branch_id, &key)?;
-		if txid < min_txid || txid > max_txid {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.commits.push((
-			txid,
-			decode_commit_row(&value).context("decode sqlite commit row for hot planning")?,
-		));
-	}
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), isolation_level).await?
-	{
-		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
-		if txid < min_txid || txid > max_txid {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.delta_chunks.push((key, value));
-		if snapshot.delta_chunks.len() + snapshot.commits.len() >= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
+		if txid > max_txid {
 			break;
 		}
+		let commit =
+			decode_commit_row(&value).context("decode sqlite commit row for hot planning")?;
+		let delta_chunks = tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_chunk_prefix(branch_id, txid),
+			isolation_level,
+		)
+		.await?;
+		let txid_value_bytes = u64::try_from(value.len())
+			.unwrap_or(u64::MAX)
+			.saturating_add(
+				delta_chunks
+					.iter()
+					.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
+					.fold(0_u64, u64::saturating_add),
+			);
+
+		if !budget.can_add(1 + delta_chunks.len(), txid_value_bytes) {
+			break;
+		}
+
+		budget.add(1 + delta_chunks.len(), txid_value_bytes);
+		snapshot.commits.push((txid, commit));
+		snapshot.delta_chunks.extend(delta_chunks);
+		snapshot.selected_max_txid = Some(txid);
 	}
+
+	let Some(selected_max_txid) = snapshot.selected_max_txid else {
+		return Ok(snapshot);
+	};
 
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
+		if !budget.can_add(1, u64::try_from(value.len()).unwrap_or(u64::MAX)) {
+			break;
+		}
+
 		if let Ok(txid) = decode_pidx_txid(&value) {
-			if txid < min_txid || txid > max_txid {
+			if txid < min_txid || txid > selected_max_txid {
 				continue;
 			}
 		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		budget.add(1, u64::try_from(value.len()).unwrap_or(u64::MAX));
 		snapshot.pidx_entries.push((key, value));
-		if snapshot.pidx_entries.len() + snapshot.delta_chunks.len() + snapshot.commits.len()
-			>= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
-			break;
-		}
 	}
+	snapshot.total_value_bytes = budget.value_bytes();
 
 	snapshot.pitr_interval_coverage =
 		select_pitr_interval_coverage(&pitr_policy, &snapshot.commits, now_ms)?;
@@ -674,51 +628,25 @@ pub(crate) async fn read_reclaim_input_snapshot(
 	branch_id: DatabaseBranchId,
 	root: &CompactionRoot,
 	db_pins: &[DbHistoryPin],
-	branch_record: Option<&DatabaseBranchRecord>,
-	shard_cache_policy: ShardCachePolicy,
 	isolation_level: universaldb::utils::IsolationLevel,
-	cold_storage_enabled: bool,
 	now_ms: i64,
 ) -> Result<ReclaimInputSnapshot> {
-	let cold_object_refs = if cold_storage_enabled {
-		read_reclaim_cold_object_refs(tx, branch_id, root, isolation_level).await?
-	} else {
-		Vec::new()
-	};
 	let (pitr_interval_retention, expired_pitr_interval_rows) =
 		read_pitr_interval_reclaim_rows(tx, branch_id, now_ms, isolation_level).await?;
-	let shard_cache_evictions = if cold_storage_enabled {
-		read_shard_cache_eviction_candidates(
-			tx,
-			branch_id,
-			branch_record,
-			db_pins,
-			&pitr_interval_retention,
-			shard_cache_policy,
-			isolation_level,
-			now_ms,
-		)
-		.await?
-	} else {
-		Vec::new()
-	};
 	let Some(max_reclaim_txid) =
 		reclaim_delete_upper_bound(root, db_pins, &pitr_interval_retention)
 	else {
 		return Ok(ReclaimInputSnapshot {
-			cold_object_refs,
-			shard_cache_evictions,
 			expired_pitr_interval_rows,
 			..ReclaimInputSnapshot::default()
 		});
 	};
 
 	let mut snapshot = ReclaimInputSnapshot {
-		cold_object_refs,
-		shard_cache_evictions,
 		expired_pitr_interval_rows,
 		..ReclaimInputSnapshot::default()
 	};
+	let mut budget = CompactionBatchBudget::fdb();
 	let commit_scan_start = keys::branch_commit_key(branch_id, 0);
 	let commit_scan_end = max_reclaim_txid
 		.checked_add(1)
@@ -732,15 +660,32 @@ pub(crate) async fn read_reclaim_input_snapshot(
 			break;
 		}
 		let commit = decode_commit_row(&value).context("decode sqlite commit row for reclaim")?;
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		let delta_chunks = tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_chunk_prefix(branch_id, txid),
+			isolation_level,
+		)
+		.await?;
+		let txid_value_bytes = u64::try_from(value.len())
+			.unwrap_or(u64::MAX)
+			.saturating_add(
+				delta_chunks
+					.iter()
+					.map(|(_, value)| u64::try_from(value.len()).unwrap_or(u64::MAX))
+					.fold(0_u64, u64::saturating_add),
+			);
+		if !budget.can_add(1 + delta_chunks.len(), txid_value_bytes) {
+			break;
+		}
+		budget.add(1 + delta_chunks.len(), txid_value_bytes);
 		snapshot.txid_refs.push(ReclaimTxidRef {
 			txid,
 			versionstamp: commit.versionstamp,
 		});
 		snapshot.commits.push((txid, key, value, commit));
+		snapshot.delta_chunks.extend(delta_chunks);
 	}
+	snapshot.total_value_bytes = budget.value_bytes();
 
 	let selected_txids = snapshot
 		.txid_refs
@@ -750,25 +695,6 @@ pub(crate) async fn read_reclaim_input_snapshot(
 	if selected_txids.is_empty() {
 		return Ok(snapshot);
 	}
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_delta_prefix(branch_id), isolation_level).await?
-	{
-		let txid = keys::decode_branch_delta_chunk_txid(branch_id, &key)?;
-		if !selected_txids.contains(&txid) {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.delta_chunks.push((key, value));
-		if snapshot.txid_refs.len() + snapshot.delta_chunks.len() >= CMP_FDB_BATCH_MAX_KEYS
-			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
-		{
-			break;
-		}
-	}
-
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
@@ -828,208 +754,6 @@ pub(crate) async fn read_pitr_interval_reclaim_rows(
 	Ok((retained, expired))
 }
 
-pub(crate) async fn read_reclaim_cold_object_refs(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-	root: &CompactionRoot,
-	isolation_level: universaldb::utils::IsolationLevel,
-) -> Result<Vec<ReclaimColdObjectRef>> {
-	let mut refs = Vec::new();
-
-	for (_, value) in tx_scan_prefix_values(
-		tx,
-		&keys::branch_compaction_cold_shard_prefix(branch_id),
-		isolation_level,
-	)
-	.await?
-	{
-		let cold_ref =
-			decode_cold_shard_ref(&value).context("decode sqlite cold shard ref for reclaim")?;
-		if cold_ref.as_of_txid >= root.cold_watermark_txid {
-			continue;
-		}
-		refs.push(reclaim_cold_object_ref(&cold_ref));
-		if refs.len() >= CMP_S3_DELETE_MAX_OBJECTS {
-			break;
-		}
-	}
-
-	Ok(refs)
-}
-
-pub(crate) async fn read_shard_cache_eviction_candidates(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-	branch_record: Option<&DatabaseBranchRecord>,
-	db_pins: &[DbHistoryPin],
-	pitr_interval_retention: &[PitrIntervalSelection],
-	shard_cache_policy: ShardCachePolicy,
-	isolation_level: universaldb::utils::IsolationLevel,
-	now_ms: i64,
-) -> Result<Vec<ShardCacheEvictionCandidate>> {
-	if !branch_record.is_some_and(|record| record.state == BranchState::Live) {
-		return Ok(Vec::new());
-	}
-	if branch_access_is_recent(tx, branch_id, shard_cache_policy, isolation_level, now_ms).await? {
-		return Ok(Vec::new());
-	}
-
-	let mut candidates = Vec::new();
-	for (shard_key, shard_bytes) in
-		tx_scan_prefix_values(tx, &keys::branch_shard_prefix(branch_id), isolation_level).await?
-	{
-		let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &shard_key)?
-		else {
-			continue;
-		};
-		if shard_cache_version_is_retained(as_of_txid, db_pins, pitr_interval_retention) {
-			continue;
-		}
-
-		let cold_ref_key = keys::branch_compaction_cold_shard_key(branch_id, shard_id, as_of_txid);
-		let Some(cold_ref_bytes) = tx_get_value(tx, &cold_ref_key, isolation_level).await? else {
-			continue;
-		};
-		let cold_ref = decode_cold_shard_ref(&cold_ref_bytes)
-			.context("decode sqlite cold shard ref for shard cache eviction")?;
-		let content_hash = content_hash(&shard_bytes);
-		if cold_ref.shard_id != shard_id
-			|| cold_ref.as_of_txid != as_of_txid
-			|| cold_ref.content_hash != content_hash
-			|| cold_ref.size_bytes != u64::try_from(shard_bytes.len()).unwrap_or(u64::MAX)
-		{
-			continue;
-		}
-
-		candidates.push(ShardCacheEvictionCandidate {
-			reference: ShardCacheEvictionRef {
-				shard_id,
-				as_of_txid,
-				size_bytes: cold_ref.size_bytes,
-				content_hash,
-			},
-			shard_key,
-			shard_bytes,
-			cold_ref_key,
-			cold_ref_bytes,
-		});
-		if candidates.len() >= CMP_FDB_BATCH_MAX_KEYS {
-			break;
-		}
-	}
-
-	Ok(candidates)
-}
-
-pub(crate) async fn branch_access_is_recent(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-	shard_cache_policy: ShardCachePolicy,
-	isolation_level: universaldb::utils::IsolationLevel,
-	now_ms: i64,
-) -> Result<bool> {
-	let current_bucket = now_ms.div_euclid(ACCESS_TOUCH_THROTTLE_MS);
-	let retention_buckets = shard_cache_policy
-		.retention_ms
-		.saturating_add(ACCESS_TOUCH_THROTTLE_MS - 1)
-		.div_euclid(ACCESS_TOUCH_THROTTLE_MS);
-	let oldest_recent_bucket = current_bucket.saturating_sub(retention_buckets);
-	let Some(last_access_bucket) = tx_get_value(
-		tx,
-		&keys::branch_manifest_last_access_bucket_key(branch_id),
-		isolation_level,
-	)
-	.await?
-	.as_deref()
-	.map(decode_i64_le)
-	.transpose()
-	.context("decode sqlite branch access bucket for shard cache eviction")?
-	else {
-		return Ok(false);
-	};
-
-	Ok(last_access_bucket >= oldest_recent_bucket)
-}
-
-pub(crate) fn shard_cache_version_is_retained(
-	as_of_txid: u64,
-	db_pins: &[DbHistoryPin],
-	pitr_interval_retention: &[PitrIntervalSelection],
-) -> bool {
-	db_pins.iter().any(|pin| pin.at_txid == as_of_txid)
-		|| pitr_interval_retention
-			.iter()
-			.any(|selection| selection.coverage.txid == as_of_txid)
-}
-
-pub(crate) async fn read_cold_input_snapshot(
-	tx: &universaldb::Transaction,
-	branch_id: DatabaseBranchId,
-	root: &CompactionRoot,
-	isolation_level: universaldb::utils::IsolationLevel,
-) -> Result<ColdInputSnapshot> {
-	if root.hot_watermark_txid <= root.cold_watermark_txid {
-		return Ok(ColdInputSnapshot::default());
-	}
-
-	let min_txid = root.cold_watermark_txid.saturating_add(1);
-	let max_txid = root.hot_watermark_txid;
-	let mut snapshot = ColdInputSnapshot::default();
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_commit_prefix(branch_id), isolation_level).await?
-	{
-		let txid = decode_branch_commit_txid(branch_id, &key)?;
-		if txid < min_txid || txid > max_txid {
-			continue;
-		}
-		let commit =
-			decode_commit_row(&value).context("decode sqlite commit row for cold planning")?;
-		if snapshot.commits.is_empty() {
-			snapshot.min_versionstamp = commit.versionstamp;
-			snapshot.max_versionstamp = commit.versionstamp;
-		} else {
-			snapshot.min_versionstamp = snapshot.min_versionstamp.min(commit.versionstamp);
-			snapshot.max_versionstamp = snapshot.max_versionstamp.max(commit.versionstamp);
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.commits.push((txid, commit));
-	}
-
-	if snapshot.commits.is_empty() {
-		return Ok(ColdInputSnapshot::default());
-	}
-
-	for (key, value) in
-		tx_scan_prefix_values(tx, &keys::branch_shard_prefix(branch_id), isolation_level).await?
-	{
-		let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &key)? else {
-			continue;
-		};
-		if as_of_txid != max_txid {
-			continue;
-		}
-		snapshot.total_value_bytes = snapshot
-			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
-		snapshot.shard_blobs.push(ColdShardBlob {
-			shard_id,
-			as_of_txid,
-			key,
-			bytes: value,
-		});
-		if snapshot.shard_blobs.len() >= CMP_S3_UPLOAD_MAX_OBJECTS
-			|| snapshot.total_value_bytes >= CMP_S3_UPLOAD_LIMIT_BYTES as u64
-		{
-			break;
-		}
-	}
-
-	Ok(snapshot)
-}
-
 pub(crate) fn reclaim_delete_upper_bound(
 	root: &CompactionRoot,
 	db_pins: &[DbHistoryPin],
@@ -1079,21 +803,21 @@ pub(crate) fn reclaim_coverage_is_complete(snapshot: &ReclaimInputSnapshot) -> b
 
 pub(crate) fn selected_hot_coverage_txids(
 	root: &CompactionRoot,
-	head: &DBHead,
+	selected_max_txid: u64,
 	db_pins: &[DbHistoryPin],
 	pitr_interval_coverage: &[PitrIntervalSelection],
 ) -> Vec<u64> {
 	let mut coverage_txids = BTreeSet::new();
-	coverage_txids.insert(head.head_txid);
+	coverage_txids.insert(selected_max_txid);
 
 	for pin in db_pins {
-		if pin.at_txid > root.hot_watermark_txid && pin.at_txid <= head.head_txid {
+		if pin.at_txid > root.hot_watermark_txid && pin.at_txid <= selected_max_txid {
 			coverage_txids.insert(pin.at_txid);
 		}
 	}
 	for selection in pitr_interval_coverage {
 		let txid = selection.coverage.txid;
-		if txid > root.hot_watermark_txid && txid <= head.head_txid {
+		if txid > root.hot_watermark_txid && txid <= selected_max_txid {
 			coverage_txids.insert(txid);
 		}
 	}
@@ -1116,15 +840,16 @@ pub(crate) fn plan_hot_job(
 	let hot_lag = head
 		.head_txid
 		.saturating_sub(snapshot.root.hot_watermark_txid);
+	let selected_max_txid = snapshot.hot_inputs.selected_max_txid?;
 	let coverage_txids = selected_hot_coverage_txids(
 		&snapshot.root,
-		head,
+		selected_max_txid,
 		&snapshot.db_pins,
 		&snapshot.hot_inputs.pitr_interval_coverage,
 	);
 	let has_uncovered_pin = coverage_txids
 		.iter()
-		.any(|txid| *txid != head.head_txid && *txid > snapshot.root.hot_watermark_txid);
+		.any(|txid| *txid != selected_max_txid && *txid > snapshot.root.hot_watermark_txid);
 	if hot_lag < quota::COMPACTION_DELTA_THRESHOLD && !has_uncovered_pin && !force {
 		return None;
 	}
@@ -1132,7 +857,7 @@ pub(crate) fn plan_hot_job(
 	let input_range = HotJobInputRange {
 		txids: TxidRange {
 			min_txid: snapshot.root.hot_watermark_txid.saturating_add(1),
-			max_txid: head.head_txid,
+			max_txid: selected_max_txid,
 		},
 		coverage_txids: coverage_txids.clone(),
 		max_pages: u32::try_from(snapshot.hot_inputs.pidx_entries.len()).unwrap_or(u32::MAX),
@@ -1158,49 +883,6 @@ pub(crate) fn plan_hot_job(
 	})
 }
 
-pub(crate) fn plan_cold_job(
-	database_branch_id: DatabaseBranchId,
-	snapshot: &ManagerFdbSnapshot,
-	job_id: Id,
-	now_ms: i64,
-	force: bool,
-) -> Option<PlannedColdCompactionJob> {
-	let branch_record = snapshot.branch_record.as_ref()?;
-	if snapshot.cold_inputs.shard_blobs.is_empty() {
-		return None;
-	}
-	let cold_lag = snapshot
-		.root
-		.hot_watermark_txid
-		.saturating_sub(snapshot.root.cold_watermark_txid);
-	if cold_lag < HOT_BURST_COLD_LAG_THRESHOLD_TXIDS && !force {
-		return None;
-	}
-
-	let input_range = ColdJobInputRange {
-		txids: TxidRange {
-			min_txid: snapshot.root.cold_watermark_txid.saturating_add(1),
-			max_txid: snapshot.root.hot_watermark_txid,
-		},
-		min_versionstamp: snapshot.cold_inputs.min_versionstamp,
-		max_versionstamp: snapshot.cold_inputs.max_versionstamp,
-		max_bytes: snapshot.cold_inputs.total_value_bytes,
-	};
-	let input_fingerprint =
-		fingerprint_cold_inputs(database_branch_id, &snapshot.root, &snapshot.cold_inputs);
-
-	Some(PlannedColdCompactionJob {
-		database_branch_id,
-		job_id,
-		base_lifecycle_generation: branch_record.lifecycle_generation,
-		base_manifest_generation: snapshot.root.manifest_generation,
-		input_fingerprint,
-		input_range,
-		planned_at_ms: now_ms,
-		attempt: 0,
-	})
-}
-
 pub(crate) fn plan_reclaim_job(
 	database_branch_id: DatabaseBranchId,
 	snapshot: &ManagerFdbSnapshot,
@@ -1214,13 +896,11 @@ pub(crate) fn plan_reclaim_job(
 	let has_hot_reclaim = !snapshot.reclaim_inputs.txid_refs.is_empty()
 		&& snapshot.reclaim_inputs.pidx_entries.is_empty()
 		&& reclaim_coverage_is_complete(&snapshot.reclaim_inputs);
-	let has_cold_reclaim = !snapshot.reclaim_inputs.cold_object_refs.is_empty();
-	let has_shard_cache_eviction = !snapshot.reclaim_inputs.shard_cache_evictions.is_empty();
 	let has_interval_cleanup = !snapshot
 		.reclaim_inputs
 		.expired_pitr_interval_rows
 		.is_empty();
-	if !has_hot_reclaim && !has_cold_reclaim && !has_shard_cache_eviction && !has_interval_cleanup {
+	if !has_hot_reclaim && !has_interval_cleanup {
 		return None;
 	}
 
@@ -1229,13 +909,13 @@ pub(crate) fn plan_reclaim_job(
 		.txid_refs
 		.first()
 		.map(|txid_ref| txid_ref.txid)
-		.unwrap_or(snapshot.root.cold_watermark_txid);
+		.unwrap_or(snapshot.root.hot_watermark_txid);
 	let max_txid = snapshot
 		.reclaim_inputs
 		.txid_refs
 		.last()
 		.map(|txid_ref| txid_ref.txid)
-		.unwrap_or(snapshot.root.cold_watermark_txid);
+		.unwrap_or(snapshot.root.hot_watermark_txid);
 	let input_range = ReclaimJobInputRange {
 		txids: TxidRange { min_txid, max_txid },
 		txid_refs: if has_hot_reclaim {
@@ -1243,15 +923,7 @@ pub(crate) fn plan_reclaim_job(
 		} else {
 			Vec::new()
 		},
-		cold_objects: snapshot.reclaim_inputs.cold_object_refs.clone(),
-		shard_cache_evictions: snapshot
-			.reclaim_inputs
-			.shard_cache_evictions
-			.iter()
-			.map(|candidate| candidate.reference.clone())
-			.collect(),
 		staged_hot_shards: Vec::new(),
-		orphan_cold_objects: Vec::new(),
 		max_keys: CMP_FDB_BATCH_MAX_KEYS as u32,
 		max_bytes: CMP_FDB_BATCH_MAX_VALUE_BYTES as u64,
 	};
@@ -1276,9 +948,7 @@ pub(crate) fn reclaim_noop_reason(snapshot: &ManagerFdbSnapshot) -> &'static str
 	}
 
 	let has_hot_inputs = !snapshot.reclaim_inputs.txid_refs.is_empty();
-	let has_cold_inputs = !snapshot.reclaim_inputs.cold_object_refs.is_empty();
-	let has_cache_evictions = !snapshot.reclaim_inputs.shard_cache_evictions.is_empty();
-	if !has_hot_inputs && !has_cold_inputs && !has_cache_evictions {
+	if !has_hot_inputs {
 		if snapshot
 			.reclaim_inputs
 			.expired_pitr_interval_rows
@@ -1359,39 +1029,6 @@ pub(crate) fn fingerprint_reclaim_inputs(
 		update_fingerprint(&mut fingerprint, &txid_ref.txid.to_be_bytes());
 		update_fingerprint(&mut fingerprint, &txid_ref.versionstamp);
 	}
-	for cold_object in &reclaim_inputs.cold_object_refs {
-		update_fingerprint(&mut fingerprint, cold_object.object_key.as_bytes());
-		update_fingerprint(
-			&mut fingerprint,
-			&cold_object.object_generation_id.as_bytes(),
-		);
-		update_fingerprint(&mut fingerprint, &cold_object.content_hash);
-		update_fingerprint(
-			&mut fingerprint,
-			&cold_object.expected_publish_generation.to_be_bytes(),
-		);
-		update_fingerprint(&mut fingerprint, &cold_object.shard_id.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &cold_object.as_of_txid.to_be_bytes());
-	}
-	for candidate in &reclaim_inputs.shard_cache_evictions {
-		update_fingerprint(
-			&mut fingerprint,
-			&candidate.reference.shard_id.to_be_bytes(),
-		);
-		update_fingerprint(
-			&mut fingerprint,
-			&candidate.reference.as_of_txid.to_be_bytes(),
-		);
-		update_fingerprint(
-			&mut fingerprint,
-			&candidate.reference.size_bytes.to_be_bytes(),
-		);
-		update_fingerprint(&mut fingerprint, &candidate.reference.content_hash);
-		update_fingerprint(&mut fingerprint, &candidate.shard_key);
-		update_fingerprint(&mut fingerprint, &candidate.shard_bytes);
-		update_fingerprint(&mut fingerprint, &candidate.cold_ref_key);
-		update_fingerprint(&mut fingerprint, &candidate.cold_ref_bytes);
-	}
 	for (txid, key, value, commit) in &reclaim_inputs.commits {
 		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
 		update_fingerprint(&mut fingerprint, key);
@@ -1443,43 +1080,6 @@ pub(crate) fn fingerprint_repair_reclaim_range(
 		);
 		update_fingerprint(&mut fingerprint, &staged.output_ref.content_hash);
 	}
-	for cold_ref in &input_range.orphan_cold_objects {
-		update_fingerprint(&mut fingerprint, cold_ref.object_key.as_bytes());
-		update_fingerprint(&mut fingerprint, &cold_ref.object_generation_id.as_bytes());
-		update_fingerprint(&mut fingerprint, &cold_ref.content_hash);
-		update_fingerprint(&mut fingerprint, &cold_ref.publish_generation.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &cold_ref.shard_id.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &cold_ref.as_of_txid.to_be_bytes());
-	}
-	finish_fingerprint(fingerprint)
-}
-
-pub(crate) fn fingerprint_cold_inputs(
-	database_branch_id: DatabaseBranchId,
-	root: &CompactionRoot,
-	cold_inputs: &ColdInputSnapshot,
-) -> CompactionInputFingerprint {
-	let mut fingerprint = Sha256::new();
-	update_fingerprint(&mut fingerprint, database_branch_id.as_uuid().as_bytes());
-	update_fingerprint(&mut fingerprint, &root.manifest_generation.to_be_bytes());
-	update_fingerprint(&mut fingerprint, &root.hot_watermark_txid.to_be_bytes());
-	update_fingerprint(&mut fingerprint, &root.cold_watermark_txid.to_be_bytes());
-	update_fingerprint(&mut fingerprint, &root.cold_watermark_versionstamp);
-	update_fingerprint(&mut fingerprint, &cold_inputs.min_versionstamp);
-	update_fingerprint(&mut fingerprint, &cold_inputs.max_versionstamp);
-	for (txid, commit) in &cold_inputs.commits {
-		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &commit.wall_clock_ms.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &commit.versionstamp);
-		update_fingerprint(&mut fingerprint, &commit.db_size_pages.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &commit.post_apply_checksum.to_be_bytes());
-	}
-	for blob in &cold_inputs.shard_blobs {
-		update_fingerprint(&mut fingerprint, &blob.shard_id.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &blob.as_of_txid.to_be_bytes());
-		update_fingerprint(&mut fingerprint, &blob.key);
-		update_fingerprint(&mut fingerprint, &blob.bytes);
-	}
 	finish_fingerprint(fingerprint)
 }
 
@@ -1498,14 +1098,22 @@ pub(crate) fn finish_fingerprint(fingerprint: Sha256) -> CompactionInputFingerpr
 pub(crate) async fn write_staged_hot_shards(
 	tx: &universaldb::Transaction,
 	input: &StageHotJobInput,
-	head: &DBHead,
+	_head: &DBHead,
 	hot_inputs: &HotInputSnapshot,
 ) -> Result<Vec<HotShardOutputRef>> {
 	let deltas = decode_hot_delta_chunks(input.database_branch_id, &hot_inputs.delta_chunks)?;
+	let selected_db_size_pages = hot_inputs
+		.commits
+		.iter()
+		.find_map(|(txid, commit)| {
+			(*txid == input.input_range.txids.max_txid).then_some(commit.db_size_pages)
+		})
+		.context("hot compaction selected commit row is missing")?;
 	let mut output_refs = Vec::new();
 
 	for as_of_txid in &input.input_range.coverage_txids {
-		let pages_by_shard = collect_hot_pages_by_shard(head, &deltas, *as_of_txid)?;
+		let pages_by_shard =
+			collect_hot_pages_by_shard(selected_db_size_pages, &deltas, *as_of_txid)?;
 
 		for (shard_id, page_updates) in pages_by_shard {
 			let encoded = build_staged_hot_shard_blob(
@@ -1567,7 +1175,7 @@ pub(crate) fn decode_hot_delta_chunks(
 }
 
 pub(crate) fn collect_hot_pages_by_shard(
-	head: &DBHead,
+	db_size_pages: u32,
 	deltas: &BTreeMap<u64, DecodedLtx>,
 	as_of_txid: u64,
 ) -> Result<BTreeMap<u32, Vec<(u32, Vec<u8>)>>> {
@@ -1578,7 +1186,7 @@ pub(crate) fn collect_hot_pages_by_shard(
 			continue;
 		}
 		for page in &delta.pages {
-			if page.pgno <= head.db_size_pages {
+			if page.pgno <= db_size_pages {
 				pages_by_number.insert(page.pgno, page.bytes.clone());
 			}
 		}
@@ -1694,73 +1302,6 @@ pub(crate) fn content_hash(bytes: &[u8]) -> [u8; 32] {
 	hash
 }
 
-pub(crate) fn expected_cold_output_refs(
-	input: &PublishColdJobInput,
-	cold_inputs: &ColdInputSnapshot,
-	publish_generation: u64,
-) -> Vec<ColdShardRef> {
-	cold_inputs
-		.shard_blobs
-		.iter()
-		.map(|blob| {
-			let content_hash = content_hash(&blob.bytes);
-			ColdShardRef {
-				object_key: cold_shard_object_key(
-					input.database_branch_id,
-					blob.shard_id,
-					blob.as_of_txid,
-					input.job_id,
-					content_hash,
-				),
-				object_generation_id: input.job_id,
-				shard_id: blob.shard_id,
-				as_of_txid: blob.as_of_txid,
-				min_txid: input.input_range.txids.min_txid,
-				max_txid: blob.as_of_txid,
-				min_versionstamp: input.input_range.min_versionstamp,
-				max_versionstamp: input.input_range.max_versionstamp,
-				size_bytes: u64::try_from(blob.bytes.len()).unwrap_or(u64::MAX),
-				content_hash,
-				publish_generation,
-			}
-		})
-		.collect()
-}
-
-pub(crate) fn reclaim_cold_object_ref(cold_ref: &ColdShardRef) -> ReclaimColdObjectRef {
-	ReclaimColdObjectRef {
-		object_key: cold_ref.object_key.clone(),
-		object_generation_id: cold_ref.object_generation_id,
-		content_hash: cold_ref.content_hash,
-		expected_publish_generation: cold_ref.publish_generation,
-		shard_id: cold_ref.shard_id,
-		as_of_txid: cold_ref.as_of_txid,
-	}
-}
-
-pub(crate) fn retired_matches_cold_object(
-	retired: &RetiredColdObject,
-	cold_object: &ReclaimColdObjectRef,
-) -> bool {
-	retired.object_key == cold_object.object_key
-		&& retired.object_generation_id == cold_object.object_generation_id
-		&& retired.content_hash == cold_object.content_hash
-}
-
-pub(crate) fn cold_shard_object_key(
-	branch_id: DatabaseBranchId,
-	shard_id: u32,
-	as_of_txid: u64,
-	object_generation_id: Id,
-	content_hash: [u8; 32],
-) -> String {
-	format!(
-		"db/{}/shard/{shard_id:08x}/{as_of_txid:016x}-{object_generation_id}-{}.ltx",
-		branch_id.as_uuid().simple(),
-		hex_lower(&content_hash)
-	)
-}
-
 pub(crate) fn hex_lower(bytes: &[u8]) -> String {
 	const HEX: &[u8; 16] = b"0123456789abcdef";
 	let mut out = String::with_capacity(bytes.len() * 2);
@@ -1769,98 +1310,6 @@ pub(crate) fn hex_lower(bytes: &[u8]) -> String {
 		out.push(HEX[(byte & 0x0f) as usize] as char);
 	}
 	out
-}
-
-pub(crate) fn workflow_cold_storage_enabled(
-	config: &rivet_config::Config,
-	database_branch_id: DatabaseBranchId,
-) -> bool {
-	#[cfg(not(feature = "test-faults"))]
-	let _ = database_branch_id;
-
-	#[cfg(feature = "test-faults")]
-	if WORKFLOW_TEST_COLD_TIERS
-		.lock()
-		.iter()
-		.any(|(branch_id, _)| *branch_id == database_branch_id)
-	{
-		return true;
-	}
-
-	config.sqlite().workflow_cold_storage().is_some()
-}
-
-pub(crate) async fn workflow_cold_tier(
-	config: &rivet_config::Config,
-	database_branch_id: DatabaseBranchId,
-) -> Result<Option<Arc<dyn ColdTier>>> {
-	#[cfg(not(feature = "test-faults"))]
-	let _ = database_branch_id;
-
-	#[cfg(feature = "test-faults")]
-	if let Some(cold_tier) = WORKFLOW_TEST_COLD_TIERS
-		.lock()
-		.iter()
-		.find(|(branch_id, _)| *branch_id == database_branch_id)
-		.map(|(_, cold_tier)| Arc::clone(cold_tier))
-	{
-		return Ok(Some(cold_tier));
-	}
-
-	cold_tier_from_config(config).await
-}
-
-#[cfg(feature = "test-faults")]
-pub(crate) fn install_workflow_test_cold_tier_for_test(
-	database_branch_id: DatabaseBranchId,
-	cold_tier: Arc<dyn ColdTier>,
-) {
-	let mut cold_tiers = WORKFLOW_TEST_COLD_TIERS.lock();
-	if let Some((_, existing)) = cold_tiers
-		.iter_mut()
-		.find(|(branch_id, _)| *branch_id == database_branch_id)
-	{
-		*existing = cold_tier;
-	} else {
-		cold_tiers.push((database_branch_id, cold_tier));
-	}
-}
-
-#[cfg(feature = "test-faults")]
-pub(crate) fn clear_workflow_test_cold_tier_for_test(database_branch_id: DatabaseBranchId) {
-	WORKFLOW_TEST_COLD_TIERS
-		.lock()
-		.retain(|(branch_id, _)| *branch_id != database_branch_id);
-}
-
-pub(crate) fn decode_branch_shard_version_key(
-	branch_id: DatabaseBranchId,
-	key: &[u8],
-) -> Result<Option<(u32, u64)>> {
-	let prefix = keys::branch_shard_prefix(branch_id);
-	let suffix = key
-		.strip_prefix(prefix.as_slice())
-		.context("branch shard key did not start with expected prefix")?;
-	if suffix.len() == std::mem::size_of::<u32>() {
-		return Ok(None);
-	}
-	if suffix.len() != std::mem::size_of::<u32>() + 1 + std::mem::size_of::<u64>()
-		|| suffix[std::mem::size_of::<u32>()] != b'/'
-	{
-		bail!("branch shard version key suffix had invalid length");
-	}
-	let shard_id = u32::from_be_bytes(
-		suffix[..std::mem::size_of::<u32>()]
-			.try_into()
-			.context("decode branch shard id")?,
-	);
-	let as_of_txid = u64::from_be_bytes(
-		suffix[std::mem::size_of::<u32>() + 1..]
-			.try_into()
-			.context("decode branch shard txid")?,
-	);
-
-	Ok(Some((shard_id, as_of_txid)))
 }
 
 pub(crate) fn decode_branch_commit_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {

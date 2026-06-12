@@ -60,7 +60,7 @@ export function ResetPassword() {
 		);
 
 		if (error && isRedirect(error)) {
-			navigate(error.options);
+			await navigate(error.options);
 			return;
 		}
 

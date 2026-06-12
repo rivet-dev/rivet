@@ -1,25 +1,42 @@
 use anyhow::{Context, Result, ensure};
-use futures_util::TryStreamExt;
+use futures_util::{TryStreamExt, future::try_join_all};
 use universaldb::{
 	RangeOption,
 	options::StreamingMode,
-	utils::{IsolationLevel::Snapshot, end_of_key_range},
+	utils::{IsolationLevel::Serializable, end_of_key_range},
 };
 
-use crate::conveyer::keys;
+use crate::conveyer::{db::LtxBlobCache, keys};
 
 use super::plan::{ReadSource, StorageScope};
 
 pub(super) async fn tx_load_delta_blob(
 	tx: &universaldb::Transaction,
 	delta_prefix: &[u8],
-) -> Result<Option<Vec<u8>>> {
-	let mut delta_chunks = super::tx::tx_scan_prefix_values(tx, delta_prefix).await?;
-	if delta_chunks.is_empty() {
-		return Ok(None);
+	cache: &LtxBlobCache,
+) -> Result<DeltaBlobLoad> {
+	// Serve immutable delta blobs from the per-database cache without re-fetching
+	// from FDB. The delta prefix includes the owning txid, so the key uniquely
+	// identifies immutable content.
+	if let Some(cached) = cache.get(delta_prefix).await {
+		return Ok(DeltaBlobLoad {
+			blob: Some(cached.bytes().to_vec()),
+			chunk_rows_scanned: 0,
+		});
 	}
-	delta_chunks.sort_by_key(|(key, _)| key.clone());
 
+	let delta_chunks = super::tx::tx_scan_prefix_values(tx, delta_prefix).await?;
+	if delta_chunks.is_empty() {
+		return Ok(DeltaBlobLoad {
+			blob: None,
+			chunk_rows_scanned: 0,
+		});
+	}
+	let chunk_rows_scanned = delta_chunks.len();
+
+	// FDB returns rows in key order, and the chunk index is the big-endian u32
+	// key suffix, so the natural scan order already matches chunk order. The
+	// contiguity check below relies on that order without re-sorting.
 	let mut delta_blob = Vec::new();
 	for (expected_idx, (key, chunk)) in delta_chunks.into_iter().enumerate() {
 		let chunk_idx = decode_delta_chunk_idx(delta_prefix, &key)?;
@@ -30,7 +47,15 @@ pub(super) async fn tx_load_delta_blob(
 		delta_blob.extend_from_slice(&chunk);
 	}
 
-	Ok(Some(delta_blob))
+	Ok(DeltaBlobLoad {
+		blob: Some(delta_blob),
+		chunk_rows_scanned,
+	})
+}
+
+pub(super) struct DeltaBlobLoad {
+	pub(super) blob: Option<Vec<u8>>,
+	pub(super) chunk_rows_scanned: usize,
 }
 
 fn decode_delta_chunk_idx(delta_prefix: &[u8], key: &[u8]) -> Result<u32> {
@@ -53,44 +78,70 @@ pub(super) async fn tx_load_latest_shard_blob(
 	tx: &universaldb::Transaction,
 	scope: &StorageScope,
 	shard_id: u32,
-) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
-	let sources = match scope {
-		StorageScope::Branch(plan) => plan.sources.clone(),
-	};
+) -> Result<ShardBlobLoad> {
+	let StorageScope::Branch(plan) = scope;
 
-	for source in sources {
-		let as_of_txid = match source {
-			ReadSource::Branch(source) => source.max_txid,
-		};
-		let prefix = match source {
-			ReadSource::Branch(source) => {
-				keys::branch_shard_version_prefix(source.branch_id, shard_id)
-			}
-		};
-		let end_key = match source {
-			ReadSource::Branch(source) => {
-				keys::branch_shard_key(source.branch_id, shard_id, as_of_txid)
-			}
-		};
-		let end = end_of_key_range(&end_key);
-		let informal = tx.informal();
-		let mut stream = informal.get_ranges_keyvalues(
-			RangeOption {
-				mode: StreamingMode::WantAll,
-				..(prefix.as_slice(), end.as_slice()).into()
-			},
-			Snapshot,
-		);
+	// Scan every source's latest shard version concurrently. Each scan is a
+	// reverse range limited to one row, so it reads only the newest version at or
+	// below the source's cap instead of streaming every historical version.
+	let per_source = try_join_all(
+		plan.sources
+			.iter()
+			.map(|source| tx_load_source_shard_blob(tx, *source, shard_id)),
+	)
+	.await?;
 
-		let mut latest = None;
-		while let Some(entry) = stream.try_next().await? {
-			latest = Some((entry.key().to_vec(), entry.value().to_vec()));
-		}
-
-		if latest.is_some() {
-			return Ok(latest);
+	// Sources are ordered most specific first, so the first source with a hit
+	// wins, matching the sequential fallback order.
+	let mut rows_scanned = 0usize;
+	let mut latest = None;
+	for (source, found) in per_source {
+		rows_scanned += found;
+		if latest.is_none() && source.is_some() {
+			latest = source;
 		}
 	}
 
-	Ok(None)
+	Ok(ShardBlobLoad {
+		source: latest,
+		rows_scanned,
+	})
+}
+
+async fn tx_load_source_shard_blob(
+	tx: &universaldb::Transaction,
+	source: ReadSource,
+	shard_id: u32,
+) -> Result<(Option<(Vec<u8>, Vec<u8>)>, usize)> {
+	let ReadSource::Branch(source) = source;
+	let prefix = keys::branch_shard_version_prefix(source.branch_id, shard_id);
+	let end_key = keys::branch_shard_key(source.branch_id, shard_id, source.max_txid);
+	let end = end_of_key_range(&end_key);
+
+	let informal = tx.informal();
+	let mut stream = informal.get_ranges_keyvalues(
+		RangeOption {
+			mode: StreamingMode::Iterator,
+			reverse: true,
+			limit: Some(1),
+			..(prefix.as_slice(), end.as_slice()).into()
+		},
+		// TODO: This can probably be made Snapshot again to reduce contention if
+		// read side freshness is not worth the cost.
+		Serializable,
+	);
+
+	let mut rows_scanned = 0usize;
+	let mut latest = None;
+	while let Some(entry) = stream.try_next().await? {
+		rows_scanned += 1;
+		latest = Some((entry.key().to_vec(), entry.value().to_vec()));
+	}
+
+	Ok((latest, rows_scanned))
+}
+
+pub(super) struct ShardBlobLoad {
+	pub(super) source: Option<(Vec<u8>, Vec<u8>)>,
+	pub(super) rows_scanned: usize,
 }

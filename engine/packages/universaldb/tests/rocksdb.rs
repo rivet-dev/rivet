@@ -115,7 +115,7 @@ async fn rocksdb_udb() {
 		.unwrap();
 	let db = Database::new(Arc::new(driver));
 
-	db.run(|tx| async move {
+	db.txn("test_universaldbrocksdb", |tx| async move {
 		for i in 0..=255 {
 			for j in 0..=0 {
 				let key = vec![1, 2, 3, i, j];
@@ -140,7 +140,7 @@ async fn rocksdb_udb() {
 			let start = Instant::now();
 
 			let alloc = db
-				.run(|tx| {
+				.txn("test_universaldbrocksdb", |tx| {
 					let tries = &tries;
 
 					async move {
@@ -263,4 +263,94 @@ async fn rocksdb_udb() {
 			println!("{start:?}-{end:?}: {count}");
 		}
 	}
+}
+
+/// A reverse range read with a limit must return the highest keys in the range,
+/// matching FoundationDB semantics. Regression test for the RocksDB driver
+/// applying the limit during a forward scan and only reversing afterward, which
+/// returned the lowest keys instead.
+#[tokio::test]
+async fn rocksdb_reverse_range_with_limit() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("debug")
+		.with_test_writer()
+		.try_init();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, _docker_config) = TestDatabase::FileSystem.config(test_id, 1).await.unwrap();
+
+	let rivet_config::config::Database::FileSystem(fs_config) = db_config else {
+		unreachable!()
+	};
+
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(fs_config.path)
+		.await
+		.unwrap();
+	let db = Database::new(Arc::new(driver));
+
+	// Seed keys [1, 2, 3, 0] through [1, 2, 3, 4].
+	db.txn("seed", |tx| async move {
+		for i in 0..=4u8 {
+			tx.set(&[1, 2, 3, i], &[i]);
+		}
+		Ok(())
+	})
+	.await
+	.unwrap();
+
+	let collect = |reverse: bool, limit: Option<usize>| {
+		let db = db.clone();
+		async move {
+			db.txn("scan", move |tx| async move {
+				let mut stream = tx.get_ranges_keyvalues(
+					RangeOption {
+						mode: StreamingMode::WantAll,
+						reverse,
+						limit,
+						..(&[1u8, 2, 3, 0][..], &[1u8, 2, 3, 5][..]).into()
+					},
+					Serializable,
+				);
+				let mut keys = Vec::new();
+				while let Some(entry) = stream.try_next().await? {
+					keys.push(entry.key().to_vec());
+				}
+				Ok(keys)
+			})
+			.await
+			.unwrap()
+		}
+	};
+
+	// Reverse with a limit returns the highest keys, highest first.
+	assert_eq!(
+		collect(true, Some(1)).await,
+		vec![vec![1, 2, 3, 4]],
+		"reverse limit 1 must return the single highest key"
+	);
+	assert_eq!(
+		collect(true, Some(2)).await,
+		vec![vec![1, 2, 3, 4], vec![1, 2, 3, 3]],
+		"reverse limit 2 must return the two highest keys in descending order"
+	);
+
+	// Forward with a limit returns the lowest keys, lowest first.
+	assert_eq!(
+		collect(false, Some(2)).await,
+		vec![vec![1, 2, 3, 0], vec![1, 2, 3, 1]],
+		"forward limit 2 must return the two lowest keys in ascending order"
+	);
+
+	// Reverse without a limit returns the whole range, highest first.
+	assert_eq!(
+		collect(true, None).await,
+		vec![
+			vec![1, 2, 3, 4],
+			vec![1, 2, 3, 3],
+			vec![1, 2, 3, 2],
+			vec![1, 2, 3, 1],
+			vec![1, 2, 3, 0],
+		],
+		"reverse without a limit must return every key in descending order"
+	);
 }

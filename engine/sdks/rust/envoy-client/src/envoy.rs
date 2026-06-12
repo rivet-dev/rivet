@@ -24,6 +24,7 @@ use crate::kv::{
 	KV_CLEANUP_INTERVAL_MS, KvRequestEntry, cleanup_old_kv_requests, handle_kv_request,
 	handle_kv_response, process_unsent_kv_requests,
 };
+use crate::metrics::METRICS;
 use crate::sqlite::{
 	RemoteSqliteRequest, RemoteSqliteRequestEntry, RemoteSqliteResponse, SqliteRequest,
 	SqliteRequestEntry, SqliteResponse, cleanup_old_remote_sqlite_requests,
@@ -307,7 +308,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		ws_tx: Arc::new(tokio::sync::Mutex::new(None)),
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
-		last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+		last_ping_ts: std::sync::atomic::AtomicI64::new(0),
 		stopped_tx,
 	});
 
@@ -352,9 +353,17 @@ async fn envoy_loop(
 	let mut lost_timeout: Option<SleepFuture> = None;
 
 	loop {
+		let iter_start = crate::time::Instant::now();
+		#[allow(unused_assignments)]
+		let mut branch: &'static str = "unknown";
 		tokio::select! {
 			msg = rx.recv() => {
-				let Some(msg) = msg else { break };
+				branch = "envoy_msg";
+				let Some(msg) = msg else {
+					observe_envoy_loop_iteration(branch, iter_start);
+					break;
+				};
+				METRICS.envoy_tx_depth.dec();
 
 				match msg {
 					ToEnvoyMessage::ConnMessage { message } => {
@@ -363,7 +372,10 @@ async fn envoy_loop(
 					ToEnvoyMessage::ConnClose { evict } => {
 						fail_sent_remote_sqlite_requests_with_indeterminate_result(&mut ctx);
 						lost_timeout = handle_conn_close(&ctx, lost_timeout);
-						if evict { break; }
+						if evict {
+							observe_envoy_loop_iteration(branch, iter_start);
+							break;
+						}
 					}
 					ToEnvoyMessage::SendEvents { events } => {
 						handle_send_events(&mut ctx, events).await;
@@ -426,15 +438,18 @@ async fn envoy_loop(
 						handle_shutdown(&mut ctx).await;
 					}
 					ToEnvoyMessage::Stop => {
+						observe_envoy_loop_iteration(branch, iter_start);
 						break;
 					}
 				}
 			}
 			_ = ack_tick.as_mut() => {
+				branch = "ack_tick";
 				send_command_ack(&mut ctx).await;
 				ack_tick = boxed_sleep(std::time::Duration::from_millis(ACK_COMMANDS_INTERVAL_MS));
 			}
 			_ = kv_cleanup_tick.as_mut() => {
+				branch = "cleanup_tick";
 				cleanup_old_kv_requests(&mut ctx);
 				cleanup_old_sqlite_requests(&mut ctx);
 				cleanup_old_remote_sqlite_requests(&mut ctx);
@@ -446,8 +461,10 @@ async fn envoy_loop(
 					None => std::future::pending::<()>().await,
 				}
 			} => {
+				branch = "lost_timeout";
 				// Lost timeout fired
 				for (_id, request) in ctx.kv_requests.drain() {
+					METRICS.kv_requests_inflight.dec();
 					let _ = request.response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
 				}
 				fail_sqlite_requests_with_shutdown(&mut ctx);
@@ -473,6 +490,7 @@ async fn envoy_loop(
 				lost_timeout = None;
 			}
 		}
+		observe_envoy_loop_iteration(branch, iter_start);
 	}
 
 	// Cleanup
@@ -484,6 +502,7 @@ async fn envoy_loop(
 	}
 
 	for (_id, request) in ctx.kv_requests.drain() {
+		METRICS.kv_requests_inflight.dec();
 		let _ = request
 			.response_tx
 			.send(Err(anyhow::anyhow!("envoy shutting down")));
@@ -506,6 +525,30 @@ async fn envoy_loop(
 	// any future callers of `wait_stopped` resolve immediately because watch
 	// retains the last value.
 	let _ = ctx.shared.stopped_tx.send(true);
+}
+
+fn observe_envoy_loop_iteration(branch: &'static str, start: crate::time::Instant) {
+	let elapsed = start.elapsed();
+	METRICS
+		.envoy_loop_iteration_duration_seconds
+		.with_label_values(&[branch])
+		.observe(elapsed.as_secs_f64());
+}
+
+/// Send a message into the envoy_loop's mpsc and bump the depth gauge.
+/// Producers should prefer this over calling `shared.envoy_tx.send` directly
+/// so the `envoy_tx_depth` gauge stays in sync.
+pub fn send_to_envoy_tx(
+	shared: &crate::context::SharedContext,
+	msg: ToEnvoyMessage,
+) -> Result<(), tokio::sync::mpsc::error::SendError<ToEnvoyMessage>> {
+	match shared.envoy_tx.send(msg) {
+		Ok(()) => {
+			METRICS.envoy_tx_depth.inc();
+			Ok(())
+		}
+		Err(e) => Err(e),
+	}
 }
 
 async fn handle_conn_message(
@@ -604,7 +647,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		.map(|entry| entry.handle.clone())
 		.collect();
 
-	let envoy_tx = ctx.shared.envoy_tx.clone();
+	let shared = ctx.shared.clone();
 	let shutdown_span = tracing::debug_span!(
 		parent: tracing::Span::current(),
 		"envoy_graceful_shutdown",
@@ -614,7 +657,7 @@ async fn handle_shutdown(ctx: &mut EnvoyContext) {
 		async move {
 			futures_util::future::join_all(actor_handles.iter().map(|h| h.closed())).await;
 			tracing::debug!("all actors stopped during graceful shutdown");
-			let _ = envoy_tx.send(ToEnvoyMessage::Stop);
+			let _ = send_to_envoy_tx(&shared, ToEnvoyMessage::Stop);
 		}
 		.instrument(shutdown_span),
 	);

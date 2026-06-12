@@ -1,6 +1,6 @@
 import type {
-	BaseActorDefinition,
 	AnyActorDefinition,
+	BaseActorDefinition,
 } from "@/actor/definition";
 import type {
 	EventSchemaConfig,
@@ -31,6 +31,36 @@ export type ActorActionFunction<
 	...args: Args extends [unknown, ...infer Rest] ? Rest : Args
 ) => Promise<Response>;
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+type LooseEventSubscribe = (
+	eventName: string,
+	callback: (...args: any[]) => void,
+) => () => void;
+
+type ActorActionMap<R> = {
+	[K in keyof NonNullable<R>]: NonNullable<R>[K] extends (
+		...args: infer Args
+	) => infer Return
+		? ActorActionFunction<Args, Awaited<Return>>
+		: never;
+};
+
+type ActionsOf<AD extends AnyActorDefinition> =
+	AD extends BaseActorDefinition<
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		any,
+		infer R
+	>
+		? R
+		: never;
+
 export interface ActorGatewayOptions {
 	skipReadyWait?: boolean;
 }
@@ -41,7 +71,8 @@ export function resolveActorGatewayOptions(
 	defaults: ActorGatewayOptions = {},
 	overrides?: ActorGatewayOptions,
 ): ResolvedActorGatewayOptions {
-	const skipReadyWait = overrides?.skipReadyWait ?? defaults.skipReadyWait ?? false;
+	const skipReadyWait =
+		overrides?.skipReadyWait ?? defaults.skipReadyWait ?? false;
 
 	return {
 		skipReadyWait,
@@ -63,25 +94,9 @@ export type ActorWebSocketOptions = ActorGatewayOptions;
  */
 export type ActorDefinitionActions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends BaseActorDefinition<
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		infer R
-	>
-		? {
-				[K in keyof R]: R[K] extends (
-					...args: infer Args
-				) => infer Return
-					? ActorActionFunction<Args, Return>
-					: never;
-			}
-		: never;
+	IsAny<AD> extends true
+		? Record<string, ActorActionFunction<any[], any>>
+		: ActorActionMap<ActionsOf<AD>>;
 
 type ActorQueueSend<TQueues extends QueueSchemaConfig> = {
 	<K extends keyof TQueues & string>(
@@ -119,39 +134,57 @@ type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
 
 export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends BaseActorDefinition<
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		infer Q,
-		any
-	>
-		? Q extends QueueSchemaConfig
-			? { send: ActorQueueSend<Q> }
-			: never
-		: never;
+	IsAny<AD> extends true
+		? { send: ActorQueueSend<Record<string, any>> }
+		: AD extends { config: { queues?: infer Q } }
+			? Q extends QueueSchemaConfig
+				? { send: ActorQueueSend<Q> }
+				: {}
+			: AD extends BaseActorDefinition<
+						any,
+						any,
+						any,
+						any,
+						any,
+						any,
+						any,
+						infer Q,
+						any
+					>
+				? Q extends QueueSchemaConfig
+					? { send: ActorQueueSend<Q> }
+					: {}
+				: {};
 
 export type ActorDefinitionEventSubscriptions<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
-	AD extends BaseActorDefinition<
-		any,
-		any,
-		any,
-		any,
-		any,
-		any,
-		infer E,
-		any,
-		any
-	>
-		? E extends EventSchemaConfig
-			? {
-					on: ActorEventSubscribe<E>;
-					once: ActorEventSubscribe<E>;
-				}
-			: never
-		: never;
+	IsAny<AD> extends true
+		? {
+				on: LooseEventSubscribe;
+				once: LooseEventSubscribe;
+			}
+		: AD extends { config: { events?: infer E } }
+			? E extends EventSchemaConfig
+				? {
+						on: ActorEventSubscribe<E>;
+						once: ActorEventSubscribe<E>;
+					}
+				: {}
+			: AD extends BaseActorDefinition<
+						any,
+						any,
+						any,
+						any,
+						any,
+						any,
+						infer E,
+						any,
+						any
+					>
+				? E extends EventSchemaConfig
+					? {
+							on: ActorEventSubscribe<E>;
+							once: ActorEventSubscribe<E>;
+						}
+					: {}
+				: {};

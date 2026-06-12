@@ -1,5 +1,6 @@
 [package]
 name = "rivet-config"
+publish = false
 version.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -7,6 +8,7 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+chrono.workspace = true
 config.workspace = true
 dirs.workspace = true
 glob.workspace = true

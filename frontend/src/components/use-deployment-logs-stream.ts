@@ -1,6 +1,12 @@
 import type { Rivet, RivetSse } from "@rivet-gg/cloud";
 import * as Sentry from "@sentry/react";
-import { startTransition, useCallback, useEffect, useRef, useState } from "react";
+import {
+	startTransition,
+	useCallback,
+	useEffect,
+	useRef,
+	useState,
+} from "react";
 import { cloudEnv } from "@/lib/env";
 
 const MAX_RETRIES = 8;
@@ -103,7 +109,6 @@ async function sleep(ms: number, signal: AbortSignal) {
 	});
 }
 
-
 const HISTORY_PAGE_SIZE = 100;
 const INITIAL_HISTORY_SIZE = 50;
 
@@ -112,7 +117,12 @@ async function fetchLogsHistory(
 	project: string,
 	namespace: string,
 	pool: string,
-	params: { before?: string; limit?: number; region?: string; contains?: string },
+	params: {
+		before?: string;
+		limit?: number;
+		region?: string;
+		contains?: string;
+	},
 ): Promise<Rivet.LogHistoryResponseItem[]> {
 	const qs = new URLSearchParams();
 	if (params.before) qs.set("before", params.before);
@@ -130,7 +140,9 @@ async function fetchLogsHistory(
 
 	if (!response.ok) {
 		const body = await response.text();
-		throw new Error(`fetchLogsHistory failed with status ${response.status}: ${body}`);
+		throw new Error(
+			`fetchLogsHistory failed with status ${response.status}: ${body}`,
+		);
 	}
 
 	return response.json();
@@ -159,7 +171,9 @@ function rewriteLogEntry<T extends { message: string; stream?: string }>(
 	return data;
 }
 
-function historyToLogEvent(item: Rivet.LogHistoryResponseItem): RivetSse.LogStreamEvent.Log {
+function historyToLogEvent(
+	item: Rivet.LogHistoryResponseItem,
+): RivetSse.LogStreamEvent.Log {
 	return { event: "log", data: rewriteLogEntry(item) };
 }
 
@@ -339,9 +353,7 @@ export function useDeploymentLogsStream({
 			if ((err as Error).name !== "AbortError") {
 				console.error("Log stream fatal error:", err);
 				setIsLoading(false);
-				setError(
-					"An unexpected error occurred while streaming logs.",
-				);
+				setError("An unexpected error occurred while streaming logs.");
 			}
 		});
 
@@ -361,7 +373,7 @@ export function useDeploymentLogsStream({
 	// Reset hasMore when filters change.
 	useEffect(() => {
 		setHasMore(true);
-	}, [project, namespace, pool, filter, region]);
+	}, []);
 
 	const loadMoreHistory = useCallback(async () => {
 		if (isLoadingMore || !hasMore) return;
@@ -371,9 +383,10 @@ export function useDeploymentLogsStream({
 			// The history API only accepts a timestamp cursor. Multiple
 			// entries can share a timestamp, so `seenInsertIdsRef` below
 			// filters out any overlap at the page boundary.
-			const before = currentLogs.length > 0
-				? currentLogs[0].data.timestamp
-				: new Date().toISOString();
+			const before =
+				currentLogs.length > 0
+					? currentLogs[0].data.timestamp
+					: new Date().toISOString();
 
 			const items = await fetchLogsHistory(
 				cloudEnv().VITE_APP_CLOUD_API_URL,

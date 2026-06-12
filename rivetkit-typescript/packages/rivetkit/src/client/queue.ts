@@ -1,5 +1,7 @@
-import type { Encoding } from "@/common/encoding";
-import { HEADER_CONN_PARAMS, HEADER_ENCODING } from "@/common/actor-router-consts";
+import {
+	HEADER_CONN_PARAMS,
+	HEADER_ENCODING,
+} from "@/common/actor-router-consts";
 import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -12,7 +14,7 @@ import {
 	type HttpQueueSendResponse as HttpQueueSendResponseJson,
 	HttpQueueSendResponseSchema,
 } from "@/common/client-protocol-zod";
-import type { JsonCompatValue } from "@/common/encoding";
+import type { Encoding, JsonCompatValue } from "@/common/encoding";
 import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { bufferToArrayBuffer } from "@/utils";
 import { sendHttpRequest } from "./utils";
@@ -112,7 +114,9 @@ export function createQueueSender(
 			}),
 			requestToBare: (value): protocol.HttpQueueSendRequest => ({
 				name: value.name ?? name,
-				body: bufferToArrayBuffer(encodeCborCompat(value.body as JsonCompatValue)),
+				body: bufferToArrayBuffer(
+					encodeCborCompat(value.body as JsonCompatValue),
+				),
 				wait: value.wait ?? false,
 				timeout:
 					value.timeout !== undefined ? BigInt(value.timeout) : null,

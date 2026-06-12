@@ -65,7 +65,7 @@ export default function CreateProjectFrameContent({
 					return;
 				}
 
-				navigate({
+				await navigate({
 					to: "/orgs/$organization/projects/$project",
 					params: {
 						organization: values.organization,

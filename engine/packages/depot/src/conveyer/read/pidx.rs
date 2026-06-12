@@ -9,6 +9,13 @@ const PIDX_TXID_BYTES: usize = std::mem::size_of::<u64>();
 pub(super) struct PageRef {
 	pub(super) source: super::plan::ReadSource,
 	pub(super) txid: u64,
+	pub(super) kind: PageRefKind,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(super) enum PageRefKind {
+	Pidx,
+	HistoricalDelta,
 }
 
 pub(super) fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {

@@ -14,16 +14,19 @@ use tokio::task::JoinHandle;
 use universalpubsub::NextOutput;
 use vbare::OwnedVersionedData;
 
-mod metrics;
+pub mod metrics;
 
 const X_RIVET_ENDPOINT: HeaderName = HeaderName::from_static("x-rivet-endpoint");
 const X_RIVET_POOL_NAME: HeaderName = HeaderName::from_static("x-rivet-pool-name");
 const X_RIVET_TOKEN: HeaderName = HeaderName::from_static("x-rivet-token");
 const X_RIVET_NAMESPACE_NAME: HeaderName = HeaderName::from_static("x-rivet-namespace-name");
 const SHUTDOWN_PROGRESS_INTERVAL: Duration = Duration::from_secs(7);
+const SSE_OPEN_WARN_THRESHOLD: Duration = Duration::from_secs(5);
 
 #[tracing::instrument(skip_all)]
 pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> Result<()> {
+	metrics::prepopulate();
+
 	let cache = rivet_cache::CacheInner::from_env(&config, pools.clone())?;
 	let ctx = StandaloneCtx::new(
 		db::DatabaseKv::new(config.clone(), pools.clone()).await?,
@@ -60,7 +63,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 
 	let shutdown_start = Instant::now();
 	loop {
-		// Future will resolve once all workflow tasks complete
+		// Future will resolve once all tasks complete
 		let complete_fut = async { while let Some(_) = conn_futs.next().await {} };
 
 		tokio::select! {
@@ -100,7 +103,7 @@ pub async fn start(config: rivet_config::Config, pools: rivet_pools::Pools) -> R
 async fn inner(ctx: &StandaloneCtx, conns: &mut Vec<OutboundHandler>) -> Result<()> {
 	let mut sub = ctx
 		.ups()?
-		.queue_subscribe(&ServerlessOutboundSubject.to_string(), "service")
+		.queue_subscribe(ServerlessOutboundSubject, "service")
 		.await?;
 	let mut term_signal = TermSignal::get();
 
@@ -111,6 +114,7 @@ async fn inner(ctx: &StandaloneCtx, conns: &mut Vec<OutboundHandler>) -> Result<
 					NextOutput::Message(msg) => {
 						match protocol::versioned::ToOutbound::deserialize_with_embedded_version(&msg.payload) {
 							Ok(packet) => {
+								// TODO: Use interval for gc instead of for every packet
 								// Clean up finished conns
 								conns.retain(|c| !c.handle.is_finished());
 
@@ -122,6 +126,7 @@ async fn inner(ctx: &StandaloneCtx, conns: &mut Vec<OutboundHandler>) -> Result<
 						}
 					},
 					NextOutput::Unsubscribed => bail!("outbound sub unsubscribed"),
+					NextOutput::NoResponders => bail!("outbound sub no responders"),
 				}
 			}
 			_ = term_signal.recv() => return Ok(()),
@@ -150,7 +155,7 @@ impl OutboundHandler {
 	}
 }
 
-#[tracing::instrument(skip_all)]
+#[tracing::instrument(skip_all, fields(namespace_id = tracing::field::Empty, pool_name = tracing::field::Empty, actor_id = tracing::field::Empty, url = tracing::field::Empty))]
 async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()> {
 	let (namespace_id, pool_name, checkpoint, actor_config) = match packet {
 		protocol::ToOutbound::ToOutboundActorStart(protocol::ToOutboundActorStart {
@@ -169,6 +174,14 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	let namespace_id = Id::parse(&namespace_id)?;
 	let actor_id = Id::parse(&checkpoint.actor_id)?;
 	let generation = checkpoint.generation;
+	let namespace_id_str = namespace_id.to_string();
+	metrics::REQ_BY_GENERATION_TOTAL
+		.with_label_values(&[
+			namespace_id_str.as_str(),
+			pool_name.as_str(),
+			generation_bucket(generation),
+		])
+		.inc();
 
 	tracing::debug!(?namespace_id, %pool_name, ?actor_id, ?generation, "received outbound request");
 
@@ -250,15 +263,15 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 			.send()
 			.await?;
 
-		metrics::REQ_ACTIVE
-			.with_label_values(&[&namespace_id.to_string(), &pool_name])
-			.inc();
-
 		let token = if let Some(auth) = &ctx.config().auth {
 			Some(auth.admin_token.read().as_str())
 		} else {
 			None
 		};
+
+		metrics::REQ_ACTIVE
+			.with_label_values(&[&namespace_id.to_string(), &pool_name])
+			.inc();
 
 		let res = serverless_outbound_req(
 			ctx,
@@ -285,6 +298,96 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 	.await;
 
 	res
+}
+
+fn generation_bucket(generation: u32) -> &'static str {
+	match generation {
+		0 => "0",
+		1 => "1",
+		2 => "2",
+		3..=5 => "3-5",
+		6..=10 => "6-10",
+		11..=u32::MAX => "11+",
+	}
+}
+
+#[allow(dead_code)]
+#[derive(Clone, Copy)]
+enum DrainReason {
+	LifespanReached,
+	GoingAway,
+	Stopping,
+	ConnectionLost,
+	TermSignal,
+}
+
+fn error_label(error: &RunnerPoolError) -> &'static str {
+	match error {
+		RunnerPoolError::ServerlessHttpError { .. } => "http_error",
+		RunnerPoolError::ServerlessConnectionError { .. } => "connection_error",
+		RunnerPoolError::ServerlessStreamEndedEarly => "stream_ended_early",
+		RunnerPoolError::ServerlessInvalidSsePayload { .. } => "invalid_payload",
+		RunnerPoolError::Downgrade => "downgrade",
+		RunnerPoolError::InternalError => "internal",
+	}
+}
+
+fn status_label(error: &RunnerPoolError) -> &'static str {
+	match error {
+		RunnerPoolError::ServerlessHttpError { status_code, .. } => match status_code {
+			429 => "429",
+			503 => "503",
+			500..=599 => "5xx",
+			400..=499 => "4xx",
+			200..=299 => "2xx",
+			_ => "other",
+		},
+		RunnerPoolError::ServerlessConnectionError { .. }
+		| RunnerPoolError::ServerlessStreamEndedEarly
+		| RunnerPoolError::ServerlessInvalidSsePayload { .. }
+		| RunnerPoolError::Downgrade
+		| RunnerPoolError::InternalError => "",
+	}
+}
+
+fn error_result_label(error: &RunnerPoolError) -> &'static str {
+	match error {
+		RunnerPoolError::ServerlessHttpError { status_code, .. } => match status_code {
+			429 => "error_http_429",
+			503 => "error_http_503",
+			500..=599 => "error_http_5xx",
+			400..=499 => "error_http_4xx",
+			_ => "error_http_other",
+		},
+		RunnerPoolError::ServerlessConnectionError { .. } => "error_connection",
+		RunnerPoolError::ServerlessStreamEndedEarly => "error_stream_ended",
+		RunnerPoolError::ServerlessInvalidSsePayload { .. } => "error_invalid_payload",
+		RunnerPoolError::Downgrade => "error_downgrade",
+		RunnerPoolError::InternalError => "error_internal",
+	}
+}
+
+fn drain_reason_label(reason: DrainReason) -> &'static str {
+	match reason {
+		DrainReason::LifespanReached => "lifespan_reached",
+		DrainReason::GoingAway => "going_away",
+		DrainReason::Stopping => "stopping",
+		DrainReason::ConnectionLost => "connection_lost",
+		DrainReason::TermSignal => "term_signal",
+	}
+}
+
+fn observe_req_duration(
+	namespace_id: Id,
+	pool_name: &str,
+	req_start: Instant,
+	result: &str,
+	drain_reason: &str,
+) {
+	let namespace_id = namespace_id.to_string();
+	metrics::REQ_DURATION_SECONDS
+		.with_label_values(&[namespace_id.as_str(), pool_name, result, drain_reason])
+		.observe(req_start.elapsed().as_secs_f64());
 }
 
 #[tracing::instrument(skip_all)]
@@ -341,45 +444,67 @@ async fn serverless_outbound_req(
 		.post(endpoint_url.clone())
 		.body(payload)
 		.headers(headers);
+	let req_start = Instant::now();
 	let mut source = sse::EventSource::new(req).context("failed creating event source")?;
 
 	tracing::debug!(%endpoint_url, "sending outbound req");
 
+	let namespace_id_label = namespace_id.to_string();
 	let stream_handler = async {
-		tracing::debug!(%endpoint_url, "stream handler future");
-
 		while let Some(event) = source.next().await {
 			match event {
 				Ok(event) => match event {
 					sse::Event::Open => {
-						tracing::debug!(%endpoint_url, "sse stream opened");
-					}
-					sse::Event::Message(msg) => match msg.event.as_str() {
-						"ping" => {}
-						// Special message that allows the client to close first. This is used when the
-						// envoy's actor stops so that it can close early instead of waiting for the entire
-						// request lifespan.
-						"stopping" => return Ok(()),
-						event => {
+						let open_duration = req_start.elapsed();
+						metrics::REQ_SSE_OPEN_DURATION
+							.with_label_values(&[namespace_id_label.as_str(), pool_name])
+							.observe(open_duration.as_secs_f64());
+
+						if open_duration > SSE_OPEN_WARN_THRESHOLD {
 							tracing::warn!(
-								event,
-								"received unknown serverless sse message event kind"
+								?namespace_id,
+								%pool_name,
+								?actor_id,
+								%generation,
+								%endpoint_url,
+								duration_ms = open_duration.as_millis(),
+								threshold_ms = SSE_OPEN_WARN_THRESHOLD.as_millis(),
+								"serverless outbound sse open was slow"
 							);
 						}
-					},
+
+						tracing::debug!(%endpoint_url, "sse stream opened");
+					}
+					sse::Event::Message(msg) => {
+						match msg.event.as_str() {
+							"ping" => {}
+							// Special message that allows the client to close first. This is used when the
+							// envoy's actor stops so that it can close early instead of waiting for the entire
+							// request lifespan.
+							"stopping" => return Ok(Some(DrainReason::Stopping)),
+							event => {
+								tracing::warn!(
+									event,
+									"received unknown serverless sse message event kind"
+								);
+							}
+						}
+					}
 				},
 				Err(sse::Error::StreamEnded) => {
 					tracing::debug!("outbound req stopped early");
 
-					report_error(
-						ctx,
+					let error = RunnerPoolError::ServerlessStreamEndedEarly;
+					report_error(ctx, namespace_id, &pool_name, error.clone()).await;
+					observe_req_duration(
 						namespace_id,
-						&pool_name,
-						RunnerPoolError::ServerlessStreamEndedEarly,
-					)
-					.await;
+						pool_name,
+						req_start,
+						error_result_label(&error),
+						"",
+					);
 
-					return Ok(());
+					return Ok(None);
 				}
 				Err(sse::Error::InvalidStatusCode(code, res)) => {
 					let body = res
@@ -388,59 +513,66 @@ async fn serverless_outbound_req(
 						.unwrap_or_else(|_| "<could not read body>".to_string());
 					let body_slice = util::safe_slice(&body, 0, 512).to_string();
 
-					report_error(
-						ctx,
+					let error = RunnerPoolError::ServerlessHttpError {
+						status_code: code.as_u16(),
+						body: body_slice.clone(),
+					};
+					report_error(ctx, namespace_id, &pool_name, error.clone()).await;
+					observe_req_duration(
 						namespace_id,
-						&pool_name,
-						RunnerPoolError::ServerlessHttpError {
-							status_code: code.as_u16(),
-							body: body_slice.clone(),
-						},
-					)
-					.await;
+						pool_name,
+						req_start,
+						error_result_label(&error),
+						"",
+					);
 
 					bail!("invalid status code ({code}):\n{body_slice}");
 				}
-				Err(reqwest_eventsource::Error::InvalidContentType(value, _)) => {
-					report_error(
-						ctx,
+				Err(sse::Error::InvalidContentType(value, _)) => {
+					let error = RunnerPoolError::ServerlessConnectionError {
+						message: format!(
+							"expected Content-Type header to be text/event-stream, received {value:?}"
+						),
+					};
+					report_error(ctx, namespace_id, &pool_name, error.clone()).await;
+					observe_req_duration(
 						namespace_id,
-						&pool_name,
-						RunnerPoolError::ServerlessConnectionError {
-							message: format!(
-								"expected Content-Type header to be text/event-stream, received {value:?}"
-							),
-						},
-					)
-					.await;
+						pool_name,
+						req_start,
+						error_result_label(&error),
+						"",
+					);
 
 					bail!("invalid content type: {value:?}");
 				}
 				Err(err) => {
 					let wrapped_err = anyhow::Error::from(err);
 
-					report_error(
-						ctx,
+					let error = RunnerPoolError::ServerlessConnectionError {
+						// Print entire error chain
+						message: wrapped_err
+							.chain()
+							.map(|err| err.to_string())
+							.collect::<Vec<_>>()
+							.join("\n"),
+					};
+					report_error(ctx, namespace_id, &pool_name, error.clone()).await;
+					observe_req_duration(
 						namespace_id,
-						&pool_name,
-						RunnerPoolError::ServerlessConnectionError {
-							// Print entire error chain
-							message: wrapped_err
-								.chain()
-								.map(|err| err.to_string())
-								.collect::<Vec<_>>()
-								.join("\n"),
-						},
-					)
-					.await;
+						pool_name,
+						req_start,
+						error_result_label(&error),
+						"",
+					);
 
 					return Err(wrapped_err);
 				}
 			}
 		}
 
-		anyhow::Ok(())
-	};
+		anyhow::Ok(None)
+	}
+	.instrument(tracing::info_span!("stream_handler"));
 
 	metrics::REQ_TOTAL
 		.with_label_values(&[namespace_id.to_string().as_str(), pool_name])
@@ -448,7 +580,7 @@ async fn serverless_outbound_req(
 
 	let sleep_until_drain =
 		Duration::from_secs(request_lifespan.saturating_sub(drain_grace_period) as u64);
-	tokio::select! {
+	let drain_reason = tokio::select! {
 		res = stream_handler => {
 			// Mark actor as lost for immediate reallocation if SSE errors
 			if res.is_err() {
@@ -470,11 +602,21 @@ async fn serverless_outbound_req(
 				}
 			}
 
-			return res;
+			if let Ok(Some(drain_reason)) = &res {
+				observe_req_duration(
+					namespace_id,
+					pool_name,
+					req_start,
+					"success",
+					drain_reason_label(*drain_reason),
+				);
+			}
+
+			return res.map(|_| ());
 		}
-		_ = tokio::time::sleep(sleep_until_drain) => {}
-		_ = term_signal.recv() => {}
-	}
+		_ = tokio::time::sleep(sleep_until_drain) => DrainReason::LifespanReached,
+		_ = term_signal.recv() => DrainReason::TermSignal,
+	};
 
 	tracing::debug!("connection reached lifespan, starting drain");
 
@@ -491,10 +633,41 @@ async fn serverless_outbound_req(
 		tracing::warn!(?actor_id, "actor workflow not found for going away signal");
 	}
 
-	// Wait for the grace period
-	tokio::time::sleep(Duration::from_secs(drain_grace_period as u64)).await;
+	// Check if stream closed
+	if !matches!(source.ready_state(), sse::ReadyState::Closed) {
+		// Handle sse events as no-op while we drain. This checks for early exits
+		let stream_handler = async {
+			while let Some(event) = source.next().await {
+				match event {
+					Ok(event) => match event {
+						sse::Event::Open => {}
+						sse::Event::Message(msg) => match msg.event.as_str() {
+							"ping" => {}
+							"stopping" => return,
+							_ => {}
+						},
+					},
+					Err(_) => return,
+				}
+			}
+		};
+
+		tokio::select! {
+			_ = stream_handler => {}
+			// Wait for the grace period
+			_ = tokio::time::sleep(Duration::from_secs(drain_grace_period as u64)) => {}
+		}
+	}
 
 	tracing::debug!("outbound req stopped");
+
+	observe_req_duration(
+		namespace_id,
+		pool_name,
+		req_start,
+		"success",
+		drain_reason_label(drain_reason),
+	);
 
 	Ok(())
 }
@@ -507,6 +680,16 @@ async fn report_error(
 	pool_name: &str,
 	error: RunnerPoolError,
 ) {
+	let namespace_id_str = namespace_id.to_string();
+	metrics::REQ_ERROR_TOTAL
+		.with_label_values(&[
+			namespace_id_str.as_str(),
+			pool_name,
+			error_label(&error),
+			status_label(&error),
+		])
+		.inc();
+
 	if let Err(err) = ctx
 		.signal(pegboard::workflows::runner_pool_error_tracker::ReportError { error })
 		.to_workflow::<pegboard::workflows::runner_pool_error_tracker::Workflow>()

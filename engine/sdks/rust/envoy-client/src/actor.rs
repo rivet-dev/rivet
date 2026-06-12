@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
-use rivet_util_serde::HashableMap;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -302,11 +301,14 @@ async fn actor_inner(
 							);
 							continue;
 						}
+
+						ctx.error = Some("actor lost due to timeout".to_string());
+
 						match begin_stop(
 							&mut ctx,
 							&handle,
 							&mut http_request_tasks,
-							protocol::StopActorReason::Lost,
+							protocol::StopActorReason::SleepIntent,
 						)
 						.await
 						{
@@ -376,12 +378,12 @@ async fn actor_inner(
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {
 	let checkpoint = increment_checkpoint(ctx);
-	let _ = ctx
-		.shared
-		.envoy_tx
-		.send(crate::envoy::ToEnvoyMessage::SendEvents {
+	let _ = crate::envoy::send_to_envoy_tx(
+		&ctx.shared,
+		crate::envoy::ToEnvoyMessage::SendEvents {
 			events: vec![protocol::EventWrapper { checkpoint, inner }],
-		});
+		},
+	);
 }
 
 async fn begin_stop(
@@ -390,12 +392,23 @@ async fn begin_stop(
 	_http_request_tasks: &mut JoinSet<()>,
 	reason: protocol::StopActorReason,
 ) -> StopProgress {
-	let mut stop_code = if ctx.error.is_some() {
-		protocol::StopCode::Error
+	// A Lost stop must surface as Stopped(Error). The runner side detected its
+	// own WS to pegboard-envoy was unhealthy and gave up on the actor; that is
+	// not a graceful exit. If we emitted Stopped(Ok) here, pegboard's
+	// `handle_stopped` would see Stopped(Ok) from `Transition::Running` (no
+	// prior `ActorIntent` was sent) and take `Decision::Destroy`, wiping the
+	// actor and its KV after every transient WS flap that exceeds
+	// `envoy_lost_threshold`.
+	let (mut stop_code, mut stop_message) = if let Some(err) = ctx.error.clone() {
+		(protocol::StopCode::Error, Some(err))
+	} else if matches!(reason, protocol::StopActorReason::Lost) {
+		(
+			protocol::StopCode::Error,
+			Some("envoy connection lost".to_string()),
+		)
 	} else {
-		protocol::StopCode::Ok
+		(protocol::StopCode::Ok, None)
 	};
-	let mut stop_message = ctx.error.clone();
 	let (stop_tx, mut stop_rx) = oneshot::channel();
 
 	let stop_result = ctx
@@ -1268,10 +1281,10 @@ async fn send_actor_message(
 				"buffering tunnel message, socket not connected to engine"
 			);
 		}
-		let _ = ctx
-			.shared
-			.envoy_tx
-			.send(crate::envoy::ToEnvoyMessage::BufferTunnelMsg { msg: buffer_msg });
+		let _ = crate::envoy::send_to_envoy_tx(
+			&ctx.shared,
+			crate::envoy::ToEnvoyMessage::BufferTunnelMsg { msg: buffer_msg },
+		);
 	}
 }
 
@@ -1281,7 +1294,7 @@ async fn send_response(
 	request_id: protocol::RequestId,
 	mut response: HttpResponse,
 ) {
-	let mut headers = HashableMap::new();
+	let mut headers = HashMap::new();
 	for (k, v) in response.headers {
 		headers.insert(k, v);
 	}
@@ -1355,7 +1368,7 @@ async fn send_fetch_error_response(
 	let body =
 		br#"{"group":"envoy","code":"fetch_failed","message":"actor fetch failed","metadata":{}}"#
 			.to_vec();
-	let mut headers = HashableMap::new();
+	let mut headers = HashMap::new();
 	headers.insert("content-type".to_string(), "application/json".to_string());
 	headers.insert("content-length".to_string(), body.len().to_string());
 	headers.insert(
@@ -1661,7 +1674,7 @@ mod tests {
 			)),
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: std::sync::atomic::AtomicBool::new(false),
-			last_ping_ts: std::sync::atomic::AtomicI64::new(crate::time::now_millis()),
+			last_ping_ts: std::sync::atomic::AtomicI64::new(0),
 			stopped_tx: tokio::sync::watch::channel(true).0,
 		});
 		(shared, envoy_rx)
@@ -1681,7 +1694,7 @@ mod tests {
 			actor_id: "test-actor".to_string(),
 			method: "GET".to_string(),
 			path: "/test".to_string(),
-			headers: HashableMap::new(),
+			headers: HashMap::new(),
 			body: None,
 			stream: false,
 		}

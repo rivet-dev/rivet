@@ -82,7 +82,10 @@ export const SingleProviderServerlessOneEndpoint: Story = () => (
 					"api",
 					{
 						datacenters: {
-							atl: serverless("https://api.vercel.app/_rivet", "vercel"),
+							atl: serverless(
+								"https://api.vercel.app/_rivet",
+								"vercel",
+							),
 						},
 					},
 				],

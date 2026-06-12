@@ -10,7 +10,7 @@ use vbare::OwnedVersionedData;
 /// This uses raw `serde_bare` serialization rather than the versioned protocol path because
 /// accepted state is transient. It is cleared on every commit and never survives a full
 /// consensus round, so forward-compatible deserialization is not needed.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct KvAcceptedValue {
 	pub value: Vec<u8>,
 	pub ballot: protocol::Ballot,

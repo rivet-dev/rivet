@@ -96,7 +96,7 @@ export function DevButton({ children, onClick }: DevButtonProps) {
 			dragRef.current = node;
 			refs.setReference(node);
 		},
-		[refs],
+		[refs, dragRef],
 	);
 
 	// Close tooltip when dragging starts

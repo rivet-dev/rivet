@@ -31,14 +31,14 @@ pub async fn pegboard_envoy_drain_older_versions(ctx: &OperationCtx, input: &Inp
 	};
 
 	// Use config's drain_on_version_upgrade if config exists, otherwise default to false
-	if !pool.config.drain_on_version_upgrade {
+	if !pool.config.drain_on_version_upgrade() {
 		return Ok(());
 	}
 
 	// Scan EnvoyLoadBalancerIdxKey for older versions
 	let older_envoys = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_envoy_drain", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 			let mut older_envoys = Vec::new();
 
@@ -85,8 +85,7 @@ pub async fn pegboard_envoy_drain_older_versions(ctx: &OperationCtx, input: &Inp
 
 		for envoy_key in older_envoys {
 			let receiver_subject =
-				crate::pubsub_subjects::EnvoyReceiverSubject::new(input.namespace_id, envoy_key)
-					.to_string();
+				crate::pubsub_subjects::EnvoyReceiverSubject::new(input.namespace_id, envoy_key);
 
 			let message_serialized =
 				versioned::ToEnvoyConn::wrap_latest(protocol::ToEnvoyConn::ToEnvoyConnClose)

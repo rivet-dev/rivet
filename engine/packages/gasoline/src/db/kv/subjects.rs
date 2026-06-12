@@ -1,16 +1,7 @@
 use crate::db::BumpSubSubject;
 
+#[deprecated(note = "pass BumpSubSubject directly to universalpubsub")]
+#[allow(dead_code)]
 pub fn convert(subject: BumpSubSubject) -> String {
-	match subject {
-		BumpSubSubject::Worker => "gasoline.worker.bump".into(),
-		BumpSubSubject::WorkflowCreated { tag } => {
-			format!("gasoline.workflow.created.{}", hex::encode(tag))
-		}
-		BumpSubSubject::WorkflowComplete { workflow_id } => {
-			format!("gasoline.workflow.complete.{workflow_id}")
-		}
-		BumpSubSubject::SignalPublish { to_workflow_id } => {
-			format!("gasoline.signal.for-workflow.{to_workflow_id}")
-		}
-	}
+	subject.to_string()
 }

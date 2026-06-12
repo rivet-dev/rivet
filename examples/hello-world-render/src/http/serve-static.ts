@@ -1,5 +1,5 @@
-import type { IncomingMessage, ServerResponse } from "node:http";
 import fs from "node:fs";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
 import { contentType } from "./mime";
 import { wantsHtmlDocument } from "./probe";
@@ -16,7 +16,9 @@ export function createStaticAndProbeHandler(options: {
 		url: URL,
 	): Promise<void> {
 		if (url.pathname === "/health") {
-			res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+			res.writeHead(200, {
+				"Content-Type": "application/json; charset=utf-8",
+			});
 			res.end(JSON.stringify({ status: "ok" }));
 			return;
 		}
@@ -26,8 +28,12 @@ export function createStaticAndProbeHandler(options: {
 			req.method === "GET" &&
 			!wantsHtmlDocument(req)
 		) {
-			res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
-			res.end(JSON.stringify({ status: "ok", service: getServiceName() }));
+			res.writeHead(200, {
+				"Content-Type": "application/json; charset=utf-8",
+			});
+			res.end(
+				JSON.stringify({ status: "ok", service: getServiceName() }),
+			);
 			return;
 		}
 
@@ -53,7 +59,9 @@ export function createStaticAndProbeHandler(options: {
 								resolve();
 								return;
 							}
-							res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+							res.writeHead(200, {
+								"Content-Type": "text/html; charset=utf-8",
+							});
 							res.end(html);
 							resolve();
 						});

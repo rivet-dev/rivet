@@ -1,9 +1,8 @@
 import { createFileRoute, notFound, redirect } from "@tanstack/react-router";
 import { match } from "ts-pattern";
-import { OrgLanding } from "@/app/org-landing";
+import { OrgLanding, OrgLandingPending } from "@/app/org-landing";
 import { RouteError } from "@/app/route-error";
 import { RouteLayout } from "@/app/route-layout";
-import { FullscreenLoading } from "@/components";
 
 export const Route = createFileRoute("/_context/orgs/$organization/")({
 	loader: async ({ context, params }) => {
@@ -36,7 +35,7 @@ export const Route = createFileRoute("/_context/orgs/$organization/")({
 	wrapInSuspense: true,
 	pendingMinMs: 0,
 	pendingMs: 0,
-	pendingComponent: FullscreenLoading,
+	pendingComponent: OrgLandingPending,
 	component: RouteComponent,
 	errorComponent: RouteError,
 });

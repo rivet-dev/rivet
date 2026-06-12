@@ -3,7 +3,8 @@
 }
 
 :{$PORT:80} {
-	root * /srv
+	# Overridable root so the config can be tested locally against ./dist.
+	root * {$SITE_ROOT:/srv}
 
 	# Gzip compression
 	encode gzip
@@ -14,6 +15,10 @@
 		X-Content-Type-Options "nosniff"
 		X-XSS-Protection "1; mode=block"
 	}
+
+	# Keep /typedoc/ out of search indexes. A robots.txt Disallow cannot be used
+	# because it hides the page from crawlers before they can see a noindex.
+	header /typedoc/* X-Robots-Tag "noindex"
 
 	# CORS for *.rivet.dev subdomains to fetch changelog.json
 	@cors_preflight {
@@ -44,6 +49,26 @@
 		path *.html
 	}
 	header @html Cache-Control "no-store, no-cache, must-revalidate"
+
+	# www -> apex. Railway terminates TLS upstream, so always redirect to https.
+	# Only takes effect when www.rivet.dev is attached to the Railway service.
+	@www host www.rivet.dev
+	redir @www https://rivet.dev{uri} 301
+
+	# Real HTTP 301s for legacy/moved URLs. Generated from redirects.mjs by
+	# scripts/generate-caddy-redirects.mjs. The import path resolves relative to
+	# this Caddyfile, so it works both locally and in-container.
+	import redirects.caddy
+
+	# /path -> /path/ only when the directory index actually exists. File-like
+	# paths (/llms.txt, /rss/feed.xml, assets) never match, and unknown paths
+	# fall through to a clean 404 instead of a 301 -> 404 chain.
+	@needsSlash {
+		not path */
+		not path /health
+		file {path}/index.html
+	}
+	redir @needsSlash {path}/{http.request.uri.prefixed_query} 301
 
 	# Health check endpoint
 	handle /health {

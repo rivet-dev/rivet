@@ -1,10 +1,10 @@
+import { describe, expect, test } from "vitest";
 import { actor, setup } from "@/mod";
 import { RivetError } from "../src/actor/errors";
 import {
-	NativeActorContextAdapter,
 	buildNativeRegistry,
+	NativeActorContextAdapter,
 } from "../src/registry/native";
-import { describe, expect, test } from "vitest";
 
 const testActor = actor({
 	state: {},

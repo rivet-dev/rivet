@@ -10,9 +10,9 @@ use crate::time::{Instant, SystemTime, UNIX_EPOCH};
 use anyhow::{Context as AnyhowContext, Result};
 use futures::future::BoxFuture;
 use parking_lot::{Mutex, RwLock};
-use rivet_error::ActorSpecifier;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
+use rivet_error::ActorSpecifier;
 use scc::HashMap as SccHashMap;
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex as AsyncMutex, Notify, OnceCell, broadcast, mpsc, oneshot};
@@ -224,18 +224,13 @@ impl ActorContext {
 		name: String,
 		key: ActorKey,
 		region: String,
-		generation: Option<u32>,
-		envoy_key: String,
+		_generation: Option<u32>,
+		_envoy_key: String,
 		config: ActorConfig,
 		kv: Kv,
 		sql: SqliteDb,
 	) -> Self {
-		let metrics = ActorMetrics::new(
-			actor_id.clone(),
-			generation,
-			format_actor_key(&key),
-			envoy_key,
-		);
+		let metrics = ActorMetrics::new(name.clone());
 		#[cfg(feature = "sqlite-local")]
 		let mut sql = sql;
 		#[cfg(feature = "sqlite-local")]
@@ -1352,6 +1347,7 @@ impl ActorContext {
 			return None;
 		}
 		let region = match kind {
+			ActorWorkKind::Action => self.internal_keep_awake_region(),
 			ActorWorkKind::KeepAwake => self.keep_awake_region_state(),
 			ActorWorkKind::InternalKeepAwake => self.internal_keep_awake_region(),
 			ActorWorkKind::WaitUntil => return None,
@@ -1369,20 +1365,71 @@ impl ActorContext {
 	}
 
 	fn configure_sleep_hooks(&self) {
-		let internal_keep_awake_ctx = self.clone();
+		let keep_awake_ctx = self.downgrade();
+		self.0
+			.sleep
+			.work
+			.keep_awake
+			.register_change_callback(Arc::new(move || {
+				if let Some(ctx) = ActorContext::from_weak(&keep_awake_ctx) {
+					ctx.0
+						.metrics
+						.set_keep_awake_active(ctx.sleep_keep_awake_count());
+				}
+			}));
+
+		let internal_keep_awake_metric_ctx = self.downgrade();
+		self.0
+			.sleep
+			.work
+			.internal_keep_awake
+			.register_change_callback(Arc::new(move || {
+				if let Some(ctx) = ActorContext::from_weak(&internal_keep_awake_metric_ctx) {
+					ctx.0
+						.metrics
+						.set_internal_keep_awake_active(ctx.sleep_internal_keep_awake_count());
+				}
+			}));
+
+		let shutdown_tasks_ctx = self.downgrade();
+		self.0
+			.sleep
+			.work
+			.shutdown_counter
+			.register_change_callback(Arc::new(move || {
+				if let Some(ctx) = ActorContext::from_weak(&shutdown_tasks_ctx) {
+					ctx.0
+						.metrics
+						.set_shutdown_tasks_active(ctx.shutdown_task_count());
+				}
+			}));
+
+		let internal_keep_awake_ctx = self.downgrade();
 		self.set_internal_keep_awake(Some(Arc::new(move |future| {
-			let ctx = internal_keep_awake_ctx.clone();
-			Box::pin(async move { ctx.internal_keep_awake_task(future).await })
+			let ctx = ActorContext::from_weak(&internal_keep_awake_ctx);
+			Box::pin(async move {
+				let Some(ctx) = ctx else {
+					return Err(ActorRuntime::NotConfigured {
+						component: "actor context".to_owned(),
+					}
+					.build());
+				};
+				ctx.internal_keep_awake_task(future).await
+			})
 		})));
 
-		let queue_ctx = self.clone();
+		let queue_ctx = self.downgrade();
 		self.set_wait_activity_callback(Some(Arc::new(move || {
-			queue_ctx.reset_sleep_timer();
+			if let Some(ctx) = ActorContext::from_weak(&queue_ctx) {
+				ctx.reset_sleep_timer();
+			}
 		})));
 
-		let queue_ctx = self.clone();
+		let queue_ctx = self.downgrade();
 		self.set_inspector_update_callback(Some(Arc::new(move |queue_size| {
-			queue_ctx.record_queue_updated(queue_size);
+			if let Some(ctx) = ActorContext::from_weak(&queue_ctx) {
+				ctx.record_queue_updated(queue_size);
+			}
 		})));
 	}
 

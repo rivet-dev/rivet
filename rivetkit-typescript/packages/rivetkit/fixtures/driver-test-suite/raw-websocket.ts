@@ -150,7 +150,7 @@ export const rawWebSocketActor = actor({
 });
 
 export const rawWebSocketBinaryActor = actor({
-	onWebSocket(ctx, websocket) {
+	onWebSocket(_ctx, websocket) {
 		// Handle binary data
 		websocket.addEventListener("message", (event: any) => {
 			const data = event.data;

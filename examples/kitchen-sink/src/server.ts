@@ -1,18 +1,18 @@
-import { registry } from "./index.ts";
-import { serve } from "@hono/node-server";
-import { Hono } from "hono";
 import type { Server as HttpServer } from "node:http";
 import * as v8 from "node:v8";
+import { serve } from "@hono/node-server";
+import { Hono } from "hono";
+import { registry } from "./index.ts";
+import { resolveMode } from "./mode.ts";
 
 const app = new Hono();
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
-const serverlessMode =
-	process.env.RIVET_RUN_ENGINE === "1" ||
-	process.env.RIVET_SERVERLESS_URL !== undefined ||
-	process.env.KITCHEN_SINK_SERVERLESS_URL !== undefined;
+const mode = resolveMode();
 
 process.on("exit", (code) => {
-	console.log(JSON.stringify({ kind: "process_exit", code, pid: process.pid }));
+	console.log(
+		JSON.stringify({ kind: "process_exit", code, pid: process.pid }),
+	);
 });
 if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS === "1") {
 	for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -31,7 +31,9 @@ if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS === "1") {
 	}
 }
 process.on("beforeExit", (code) => {
-	console.log(JSON.stringify({ kind: "process_before_exit", code, pid: process.pid }));
+	console.log(
+		JSON.stringify({ kind: "process_before_exit", code, pid: process.pid }),
+	);
 });
 process.on("uncaughtException", (error) => {
 	console.error(
@@ -45,7 +47,10 @@ process.on("unhandledRejection", (reason) => {
 	console.error(
 		JSON.stringify({
 			kind: "unhandled_rejection",
-			error: reason instanceof Error ? reason.stack ?? reason.message : String(reason),
+			error:
+				reason instanceof Error
+					? (reason.stack ?? reason.message)
+					: String(reason),
 		}),
 	);
 });
@@ -58,16 +63,6 @@ async function memoryBreakdown(forceGc: boolean) {
 	const heap = v8.getHeapStatistics();
 	const spaces = v8.getHeapSpaceStatistics();
 	const nativeNonV8Estimate = Math.max(0, memory.rss - heap.total_heap_size);
-	const diagnostics =
-		"diagnostics" in registry &&
-		typeof registry.diagnostics === "function"
-			? registry.diagnostics.bind(registry)
-			: undefined;
-	const registryDiagnostics = diagnostics
-		? await diagnostics().catch((error: unknown) => ({
-				error: error instanceof Error ? error.message : String(error),
-			}))
-		: { error: "registry diagnostics unavailable" };
 
 	return {
 		pid: process.pid,
@@ -103,12 +98,11 @@ async function memoryBreakdown(forceGc: boolean) {
 			v8ExternalBytes: memory.external,
 			nativeNonV8ResidentEstimateBytes: nativeNonV8Estimate,
 		},
-		registry: registryDiagnostics,
 		resourceUsage: process.resourceUsage(),
 	};
 }
 
-function requestHeaders(headers: Headers) {
+function _requestHeaders(headers: Headers) {
 	const entries: Array<[string, string]> = [];
 	headers.forEach((value, key) => {
 		entries.push([
@@ -126,6 +120,10 @@ app.get("/debug/memory", async (c) => {
 	return c.json(await memoryBreakdown(forceGc));
 });
 
+app.get("/health", () => registry.routes.health());
+app.get("/metadata", () => registry.routes.metadata());
+app.get("/metrics", (c) => registry.routes.prometheusMetrics(c.req.raw));
+
 app.post("/debug/heap-snapshot", (c) => {
 	if (process.env.SQLITE_MEMORY_SOAK_DIAGNOSTICS !== "1") {
 		return c.json({ error: "disabled" }, 404);
@@ -140,8 +138,8 @@ app.post("/debug/heap-snapshot", (c) => {
 	return c.json({ path: writtenPath });
 });
 
-app.use("*", async (c, next) => {
-	const startedAt = Date.now();
+app.use("*", async (_c, next) => {
+	const _startedAt = Date.now();
 	await next();
 	// console.log(
 	// 	JSON.stringify({
@@ -155,21 +153,25 @@ app.use("*", async (c, next) => {
 	// );
 });
 
-if (serverlessMode) {
+// Only wire the serverless handler in serverless modes. In `serverful` mode
+// the runner connects via `registry.start()` and any stray hit on
+// `/api/rivet/start` would spin up a second envoy alongside the persistent
+// one.
+if (mode === "serverful") {
+	registry.start();
+} else {
 	app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 	app.all("/api/rivet", (c) => registry.handler(c.req.raw));
-} else {
-	registry.start();
 }
 
 const server = serve({ fetch: app.fetch, port }, () => {
-	if (serverlessMode) {
+	if (mode === "serverful") {
 		console.log(
-			`serverless RivetKit listening on http://127.0.0.1:${port}/api/rivet`,
+			`kitchen sink (serverful) listening on http://127.0.0.1:${port}`,
 		);
 	} else {
 		console.log(
-			`kitchen sink diagnostics listening on http://127.0.0.1:${port}`,
+			`kitchen sink (${mode}) listening on http://127.0.0.1:${port}/api/rivet`,
 		);
 	}
 });

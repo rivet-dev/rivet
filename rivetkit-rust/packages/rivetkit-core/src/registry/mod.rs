@@ -20,6 +20,9 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
 use rivet_error::{ActorSpecifier, RivetError};
 use rivetkit_client_protocol as client_protocol;
+use rivetkit_shared_types::serverless_metadata::{
+	ActorName, ServerlessMetadataEnvoy, ServerlessMetadataEnvoyKind, ServerlessMetadataPayload,
+};
 use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
 use serde::{Deserialize, Serialize};
 use serde_bytes::ByteBuf;
@@ -46,7 +49,7 @@ use crate::actor::task::{
 };
 use crate::actor::task_types::ShutdownKind;
 #[cfg(feature = "native-runtime")]
-use crate::engine_process::EngineProcessManager;
+use crate::engine_process::{EngineProcessManager, EngineResolverConfig};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::protocol::{
 	self as inspector_protocol, ServerMessage as InspectorServerMessage,
@@ -71,14 +74,40 @@ mod websocket;
 use inspector::build_actor_inspector;
 use websocket::is_actor_connect_path;
 
-/// Bound on `handle.shutdown_and_wait` inside `serve_with_config` teardown.
-/// Protects against indefinite hangs if the envoy reconnect loop is stuck;
-/// the TS/outer-host grace period is the ultimate backstop.
-const SHUTDOWN_DRAIN_TIMEOUT: Duration = Duration::from_secs(20);
-
 #[derive(Debug, Default)]
 pub struct CoreRegistry {
 	factories: HashMap<String, Arc<ActorFactory>>,
+}
+
+#[derive(Clone)]
+pub struct CoreEnvoyHandle {
+	handle: EnvoyHandle,
+}
+
+#[derive(Clone, Debug)]
+pub struct CoreEnvoyStatus {
+	pub active_actor_count: usize,
+	pub ping_healthy: bool,
+}
+
+impl CoreEnvoyHandle {
+	pub(crate) fn new(handle: EnvoyHandle) -> Self {
+		Self { handle }
+	}
+
+	pub fn status(&self) -> CoreEnvoyStatus {
+		CoreEnvoyStatus {
+			active_actor_count: self.handle.active_actor_count(),
+			ping_healthy: self.handle.is_ping_healthy(),
+		}
+	}
+
+	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
+		self.handle
+			.get_protocol_metadata()
+			.await
+			.map(|metadata| metadata.actor_stop_threshold)
+	}
 }
 
 #[derive(Clone)]
@@ -157,6 +186,8 @@ struct ServeSettings {
 	namespace: String,
 	pool_name: String,
 	engine_binary_path: Option<PathBuf>,
+	engine_spawn: EngineSpawnMode,
+	engine_auto_download: bool,
 	handle_inspector_http_in_runtime: bool,
 	serverless_base_path: Option<String>,
 	serverless_package_version: String,
@@ -167,6 +198,24 @@ struct ServeSettings {
 	serverless_max_start_payload_bytes: usize,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum EngineSpawnMode {
+	#[default]
+	Auto,
+	Always,
+	Never,
+}
+
+impl EngineSpawnMode {
+	pub(crate) fn from_env() -> Self {
+		match env::var("RIVETKIT_ENGINE_SPAWN") {
+			Ok(value) if value.eq_ignore_ascii_case("always") => Self::Always,
+			Ok(value) if value.eq_ignore_ascii_case("never") => Self::Never,
+			_ => Self::Auto,
+		}
+	}
+}
+
 #[derive(Clone, Debug)]
 pub struct ServeConfig {
 	pub version: u32,
@@ -175,6 +224,8 @@ pub struct ServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<PathBuf>,
+	pub engine_spawn: EngineSpawnMode,
+	pub engine_auto_download: bool,
 	pub handle_inspector_http_in_runtime: bool,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -240,6 +291,61 @@ impl Default for HttpActionRequestJson {
 		Self {
 			args: JsonValue::Array(Vec::new()),
 		}
+	}
+}
+
+pub(crate) fn should_manage_engine(endpoint: &str, spawn_mode: EngineSpawnMode) -> Result<bool> {
+	match spawn_mode {
+		EngineSpawnMode::Always => Ok(true),
+		EngineSpawnMode::Never => Ok(false),
+		EngineSpawnMode::Auto => is_loopback_endpoint(endpoint),
+	}
+}
+
+fn is_loopback_endpoint(endpoint: &str) -> Result<bool> {
+	let url =
+		Url::parse(endpoint).with_context(|| format!("parse engine endpoint `{endpoint}`"))?;
+	let Some(host) = url.host_str() else {
+		anyhow::bail!("engine endpoint `{endpoint}` is invalid: missing host");
+	};
+
+	if host == "localhost" || host.ends_with(".localhost") {
+		return Ok(true);
+	}
+
+	let ip_host = host
+		.strip_prefix('[')
+		.and_then(|value| value.strip_suffix(']'))
+		.unwrap_or(host);
+
+	Ok(ip_host
+		.parse::<std::net::IpAddr>()
+		.map(|ip| ip.is_loopback() || ip.is_unspecified())
+		.unwrap_or(false))
+}
+
+#[cfg(test)]
+mod engine_spawn_tests {
+	use super::{EngineSpawnMode, should_manage_engine};
+
+	#[test]
+	fn auto_manages_loopback_endpoints() {
+		assert!(should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Auto).unwrap());
+		assert!(should_manage_engine("http://localhost:6420", EngineSpawnMode::Auto).unwrap());
+		assert!(should_manage_engine("http://dev.localhost:6420", EngineSpawnMode::Auto).unwrap());
+		assert!(should_manage_engine("http://[::1]:6420", EngineSpawnMode::Auto).unwrap());
+	}
+
+	#[test]
+	fn auto_leaves_remote_endpoints_connect_only() {
+		assert!(!should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Auto).unwrap());
+		assert!(!should_manage_engine("http://192.0.2.10:6420", EngineSpawnMode::Auto).unwrap());
+	}
+
+	#[test]
+	fn explicit_spawn_mode_overrides_endpoint_shape() {
+		assert!(should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Always).unwrap());
+		assert!(!should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Never).unwrap());
 	}
 }
 
@@ -419,6 +525,22 @@ impl CoreRegistry {
 		self.factories.insert(name.to_owned(), factory);
 	}
 
+	pub fn normal_metadata_payload(&self, config: &ServeConfig) -> ServerlessMetadataPayload {
+		serverless_metadata_payload(
+			build_actor_metadata_map_from_factories(&self.factories),
+			config,
+			ServerlessMetadataEnvoyKind::Normal {},
+		)
+	}
+
+	pub fn serverless_metadata_payload(&self, config: &ServeConfig) -> ServerlessMetadataPayload {
+		serverless_metadata_payload(
+			build_actor_metadata_map_from_factories(&self.factories),
+			config,
+			ServerlessMetadataEnvoyKind::Serverless {},
+		)
+	}
+
 	pub async fn serve(self, shutdown: CancellationToken) -> Result<()> {
 		self.serve_with_config(ServeConfig::from_env(), shutdown)
 			.await
@@ -429,16 +551,32 @@ impl CoreRegistry {
 		config: ServeConfig,
 		shutdown: CancellationToken,
 	) -> Result<()> {
+		self.serve_with_config_and_handle_observer(config, shutdown, |_| {})
+			.await
+	}
+
+	pub async fn serve_with_config_and_handle_observer(
+		self,
+		config: ServeConfig,
+		shutdown: CancellationToken,
+		on_handle: impl FnOnce(CoreEnvoyHandle) + Send + 'static,
+	) -> Result<()> {
 		let dispatcher = self.into_dispatcher(&config);
 		#[cfg(feature = "native-runtime")]
-		let _engine_process = match config.engine_binary_path.as_ref() {
-			Some(binary_path) => {
-				Some(EngineProcessManager::start(binary_path, &config.endpoint).await?)
-			}
-			None => None,
+		let _engine_process = if should_manage_engine(&config.endpoint, config.engine_spawn)? {
+			Some(
+				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
+					&config.endpoint,
+					config.engine_binary_path.clone(),
+					config.engine_auto_download,
+				))
+				.await?,
+			)
+		} else {
+			None
 		};
 		#[cfg(not(feature = "native-runtime"))]
-		if config.engine_binary_path.is_some() {
+		if should_manage_engine(&config.endpoint, config.engine_spawn)? {
 			anyhow::bail!("engine process spawning requires the `native-runtime` feature");
 		}
 
@@ -468,6 +606,7 @@ impl CoreRegistry {
 			callbacks,
 		})
 		.await;
+		on_handle(CoreEnvoyHandle::new(handle.clone()));
 
 		// Do not install `tokio::signal::ctrl_c()` here. It calls
 		// `sigaction(SIGINT, ...)` at the POSIX level, which overrides the
@@ -476,10 +615,22 @@ impl CoreRegistry {
 		// trip the `shutdown` token instead.
 		shutdown.cancelled().await;
 
+		// TODO: Move into envoy-client since timing out has to do with protocol compliance
+		// Read threshold from protocol metadata, fall back to 30 min
+		let stop_threshold = handle
+			.get_protocol_metadata()
+			.await
+			.map(|x| x.actor_stop_threshold)
+			.unwrap_or(30 * 60 * 1000);
 		// Bounded drain. If envoy cannot reach the engine (reconnect loop stuck),
 		// we fall back to immediate `Stop` rather than hanging indefinitely.
 		// The outer host (TS signal handler / Rust binary) is the backstop.
-		match timeout(SHUTDOWN_DRAIN_TIMEOUT, handle.shutdown_and_wait(false)).await {
+		match timeout(
+			Duration::from_millis(stop_threshold as u64),
+			handle.shutdown_and_wait(false),
+		)
+		.await
+		{
 			Ok(()) => {}
 			Err(_) => {
 				tracing::warn!("envoy shutdown drain exceeded timeout; forcing immediate stop");
@@ -522,49 +673,88 @@ impl RegistryDispatcher {
 	}
 
 	pub(crate) fn build_actor_metadata_map(&self) -> HashMap<String, JsonValue> {
-		self.factories
-			.iter()
-			.map(|(actor_name, factory)| {
-				let config = factory.config();
-				let mut metadata = serde_json::Map::new();
-				if let Some(icon) = &config.icon {
-					metadata.insert("icon".to_owned(), json!(icon));
-				}
-				if let Some(name) = &config.name {
-					metadata.insert("name".to_owned(), json!(name));
-				}
-				metadata.insert(
-					"preload".to_owned(),
-					json!({
-						"keys": [
-							[1],
-							[3],
-							[5, 1, 1],
-							[6],
-						],
-						"prefixes": [
-							{
-								"prefix": [6, 1],
-								"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
-								"partial": false,
-							},
-							{
-								"prefix": [2],
-								"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
-								"partial": false,
-							},
-							{
-								"prefix": [5, 1, 2],
-								"maxBytes": 65_536,
-								"partial": false,
-							},
-						],
-					}),
-				);
-				(actor_name.clone(), JsonValue::Object(metadata))
-			})
-			.collect()
+		build_actor_metadata_map_from_factories(&self.factories)
 	}
+}
+
+pub(crate) fn serverless_metadata_payload(
+	actor_metadata: HashMap<String, JsonValue>,
+	config: &ServeConfig,
+	envoy_kind: ServerlessMetadataEnvoyKind,
+) -> ServerlessMetadataPayload {
+	let actor_names = actor_metadata
+		.into_iter()
+		.map(|(name, metadata)| {
+			(
+				name,
+				ActorName {
+					metadata: Some(metadata),
+				},
+			)
+		})
+		.collect::<HashMap<_, _>>();
+
+	ServerlessMetadataPayload {
+		runtime: "rivetkit".to_owned(),
+		version: config.serverless_package_version.clone(),
+		envoy_protocol_version: Some(protocol::PROTOCOL_VERSION),
+		actor_names,
+		envoy: Some(ServerlessMetadataEnvoy {
+			kind: Some(envoy_kind),
+			version: Some(config.version),
+		}),
+		runner: None,
+		client_endpoint: config.serverless_client_endpoint.clone(),
+		client_namespace: config.serverless_client_namespace.clone(),
+		client_token: config.serverless_client_token.clone(),
+	}
+}
+
+fn build_actor_metadata_map_from_factories(
+	factories: &HashMap<String, Arc<ActorFactory>>,
+) -> HashMap<String, JsonValue> {
+	factories
+		.iter()
+		.map(|(actor_name, factory)| {
+			let config = factory.config();
+			let mut metadata = serde_json::Map::new();
+			if let Some(icon) = &config.icon {
+				metadata.insert("icon".to_owned(), json!(icon));
+			}
+			if let Some(name) = &config.name {
+				metadata.insert("name".to_owned(), json!(name));
+			}
+			metadata.insert(
+				"preload".to_owned(),
+				json!({
+					"keys": [
+						[1],
+						[3],
+						[5, 1, 1],
+						[6],
+					],
+					"prefixes": [
+						{
+							"prefix": [6, 1],
+							"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
+							"partial": false,
+						},
+						{
+							"prefix": [2],
+							"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
+							"partial": false,
+						},
+						{
+							"prefix": [5, 1, 2],
+							"maxBytes": 65_536,
+							"partial": false,
+						},
+					],
+				}),
+			);
+			(actor_name.clone(), JsonValue::Object(metadata))
+		})
+		.collect()
 }
 
 impl RegistryDispatcher {
@@ -625,11 +815,8 @@ impl RegistryDispatcher {
 
 		let (start_tx, start_rx) = oneshot::channel();
 		let result: Result<Arc<ActorTaskHandle>> = async {
-			try_send_lifecycle_command(
-				&lifecycle_tx,
-				LifecycleCommand::Start { reply: start_tx },
-			)
-			.context("send actor task start command")?;
+			try_send_lifecycle_command(&lifecycle_tx, LifecycleCommand::Start { reply: start_tx })
+				.context("send actor task start command")?;
 			start_rx
 				.await
 				.context("receive actor task start reply")?

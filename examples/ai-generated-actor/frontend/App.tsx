@@ -1,7 +1,7 @@
-import { createRivetKit } from "@rivetkit/react";
-import { createClient } from "rivetkit/client";
 import Editor from "@monaco-editor/react";
+import { createRivetKit } from "@rivetkit/react";
 import { useEffect, useRef, useState } from "react";
+import { createClient } from "rivetkit/client";
 import type {
 	ChatMessage,
 	CodeAgentState,
@@ -58,14 +58,14 @@ function ChatColumn({
 			onApiKeyStatus(!state.hasApiKey);
 			onCodeUpdate(state.code, state.codeRevision);
 		});
-	}, [agent.connection]);
+	}, [agent.connection, onApiKeyStatus, onCodeUpdate]);
 
 	// Scroll to bottom when messages change
 	useEffect(() => {
 		if (timelineRef.current) {
 			timelineRef.current.scrollTop = timelineRef.current.scrollHeight;
 		}
-	}, [messages]);
+	}, []);
 
 	agent.useEvent("response", (payload: ResponseEvent) => {
 		if (payload.error) {
@@ -221,7 +221,7 @@ function CodeColumn({
 		<div className="column">
 			<div className="column-header">
 				<span className="column-title">Code Editor</span>
-				</div>
+			</div>
 			<div className="column-body code-body">
 				<Editor
 					height="100%"
@@ -274,12 +274,12 @@ function ActorInterfaceColumn({
 		if (logRef.current) {
 			logRef.current.scrollTop = logRef.current.scrollHeight;
 		}
-	}, [log]);
+	}, []);
 
 	// Reset the action log when the actor key or deploy version changes.
 	useEffect(() => {
 		setLog([]);
-	}, [actorKey, deployVersion]);
+	}, []);
 
 	const callAction = async () => {
 		if (!actionName.trim()) return;
@@ -385,8 +385,7 @@ function ActorInterfaceColumn({
 								<div key={entry.id} className="log-entry">
 									<div className="log-entry__header">
 										<span className="log-entry__action">
-											{entry.action}(
-											{entry.args})
+											{entry.action}({entry.args})
 										</span>
 										<span className="log-entry__time">
 											{new Date(
@@ -418,7 +417,7 @@ export function App() {
 	const [deployVersion, setDeployVersion] = useState(1);
 	const [apiKeyMissing, setApiKeyMissing] = useState(false);
 	const [code, setCode] = useState("");
-	const [codeRevision, setCodeRevision] = useState(0);
+	const [_codeRevision, setCodeRevision] = useState(0);
 
 	const handleDeploy = async () => {
 		// Save the current editor code to the codeAgent before deploying so the
@@ -435,7 +434,7 @@ export function App() {
 
 	useEffect(() => {
 		setDeployVersion(1);
-	}, [actorKey]);
+	}, []);
 
 	return (
 		<div className="app">
@@ -464,10 +463,7 @@ export function App() {
 					onApiKeyStatus={setApiKeyMissing}
 					onCodeUpdate={handleCodeUpdate}
 				/>
-				<CodeColumn
-					code={code}
-					onCodeChange={setCode}
-				/>
+				<CodeColumn code={code} onCodeChange={setCode} />
 				<ActorInterfaceColumn
 					actorKey={actorKey}
 					deployVersion={deployVersion}

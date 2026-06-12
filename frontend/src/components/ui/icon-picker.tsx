@@ -1,6 +1,11 @@
 "use client";
 
-import { faMagnifyingGlass, faQuestion, Icon, type IconProp } from "@rivet-gg/icons";
+import {
+	faMagnifyingGlass,
+	faQuestion,
+	Icon,
+	type IconProp,
+} from "@rivet-gg/icons";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
 	type ComponentPropsWithoutRef,
@@ -150,7 +155,12 @@ interface IconPickerBodyProps {
 	cellSize: number;
 }
 
-function IconPickerBody({ value, onChange, columns, cellSize }: IconPickerBodyProps) {
+function IconPickerBody({
+	value,
+	onChange,
+	columns,
+	cellSize,
+}: IconPickerBodyProps) {
 	const [query, setQuery] = useState("");
 	const [entries, setEntries] = useState<IconEntry[] | null>(null);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -227,7 +237,10 @@ function IconPickerBody({ value, onChange, columns, cellSize }: IconPickerBodyPr
 					>
 						{rowVirtualizer.getVirtualItems().map((row) => {
 							const start = row.index * columns;
-							const rowItems = filtered.slice(start, start + columns);
+							const rowItems = filtered.slice(
+								start,
+								start + columns,
+							);
 							return (
 								<div
 									key={row.key}
@@ -243,7 +256,9 @@ function IconPickerBody({ value, onChange, columns, cellSize }: IconPickerBodyPr
 											key={entry.key}
 											entry={entry}
 											selected={entry.iconName === value}
-											onSelect={() => onChange(entry.iconName)}
+											onSelect={() =>
+												onChange(entry.iconName)
+											}
 										/>
 									))}
 								</div>
@@ -262,7 +277,13 @@ interface IconCellProps extends ComponentPropsWithoutRef<"button"> {
 	onSelect: () => void;
 }
 
-function IconCell({ entry, selected, onSelect, className, ...rest }: IconCellProps) {
+function IconCell({
+	entry,
+	selected,
+	onSelect,
+	className,
+	...rest
+}: IconCellProps) {
 	return (
 		<button
 			type="button"

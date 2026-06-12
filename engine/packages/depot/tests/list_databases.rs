@@ -30,7 +30,7 @@ fn page(pgno: u32, fill: u8) -> DirtyPage {
 }
 
 async fn read_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
-	db.run(move |tx| {
+	db.txn("test_depotlist_databases", move |tx| {
 		let key = key.clone();
 		async move {
 			Ok(tx

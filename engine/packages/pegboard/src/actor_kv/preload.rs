@@ -67,7 +67,7 @@ pub(crate) async fn batch_preload(
 		.map(|r| (r.max_bytes, r.partial))
 		.collect();
 
-	db.run(|tx| {
+	db.txn("pegboard_kv_preload", |tx| {
 		let subspace = subspace.clone();
 		let get_keys = get_keys.clone();
 		let prefix_keys = prefix_keys.clone();
@@ -307,7 +307,7 @@ pub async fn fetch_preloaded_kv(
 ) -> Result<Option<ep::PreloadedKv>> {
 	// Read actor name metadata from FDB.
 	let metadata = db
-		.run(|tx| {
+		.txn("pegboard_kv_read_actor_metadata", |tx| {
 			let tx = tx.with_subspace(keys::subspace());
 			let name_key = keys::ns::ActorNameKey::new(namespace_id, actor_name.to_string());
 			async move { tx.read_opt(&name_key, Snapshot).await }

@@ -1,6 +1,6 @@
 import { faChevronDown, faCopy, Icon } from "@rivet-gg/icons";
 import { useMutation } from "@tanstack/react-query";
-import { useSearch } from "@tanstack/react-router";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import {
@@ -15,8 +15,9 @@ import {
 } from "@/components";
 import { features } from "@/lib/features";
 import { getRandomKey } from "@/lib/words";
+import { queryClient } from "@/queries/global";
 import { useActorsView } from "../actors-view-context-provider";
-import { useDataProvider } from "../data-provider";
+import { useEngineCompatDataProvider } from "../data-provider";
 import * as ActorCreateForm from "../form/actor-create-form";
 
 interface CreateActorSheetProps {
@@ -24,10 +25,29 @@ interface CreateActorSheetProps {
 	onOpenChange: (open: boolean) => void;
 }
 
-export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) {
-	const { mutateAsync } = useMutation(
-		useDataProvider().createActorMutationOptions(),
-	);
+export function CreateActorSheet({
+	open,
+	onOpenChange,
+}: CreateActorSheetProps) {
+	const dataProvider = useEngineCompatDataProvider();
+	const navigate = useNavigate();
+	const { mutateAsync } = useMutation({
+		...dataProvider.createActorMutationOptions(),
+		onSuccess: async (data) => {
+			onOpenChange(false);
+			const stringKeys = dataProvider
+				.actorsQueryOptions({})
+				.queryKey.filter((k): k is string => typeof k === "string");
+			await queryClient.invalidateQueries({
+				predicate: (query) =>
+					stringKeys.every((k) => query.queryKey.includes(k)),
+			});
+			return navigate({
+				to: ".",
+				search: (old) => ({ ...old, modal: undefined, actorId: data }),
+			});
+		},
+	});
 	const name = useSearch({
 		from: "/_context",
 		select: (state) => state.n?.[0],
@@ -69,7 +89,6 @@ export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) 
 								values.runnerNameSelector || "default",
 							crashPolicy: "destroy",
 						});
-						onOpenChange(false);
 					}}
 					defaultValues={{
 						name,
@@ -108,9 +127,7 @@ export function CreateActorSheet({ open, onOpenChange }: CreateActorSheetProps) 
 							<div className="mt-1 border-t border-border/60 pt-2">
 								<AdvancedDisclosure
 									open={advancedOpen}
-									onToggle={() =>
-										setAdvancedOpen((v) => !v)
-									}
+									onToggle={() => setAdvancedOpen((v) => !v)}
 								/>
 								<CollapsibleRegion open={advancedOpen}>
 									<AdvancedFields />
@@ -258,7 +275,12 @@ function DialogFooter({ onCancel }: { onCancel: () => void }) {
 				</div>
 			) : null}
 			<div className="flex items-center justify-end gap-2 px-6 py-3">
-				<Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+				<Button
+					type="button"
+					variant="ghost"
+					size="sm"
+					onClick={onCancel}
+				>
 					Cancel
 				</Button>
 				<ActorCreateForm.Submit allowPristine type="submit" size="sm">

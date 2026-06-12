@@ -1,4 +1,4 @@
-use std::{fmt::Debug, hash::Hash};
+use std::fmt::Debug;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -19,6 +19,6 @@ pub trait Activity {
 	async fn run(ctx: &ActivityCtx, input: &Self::Input) -> Result<Self::Output>;
 }
 
-pub trait ActivityInput: Serialize + DeserializeOwned + Debug + Hash + Send {
+pub trait ActivityInput: Serialize + DeserializeOwned + Debug + Send {
 	type Activity: Activity;
 }

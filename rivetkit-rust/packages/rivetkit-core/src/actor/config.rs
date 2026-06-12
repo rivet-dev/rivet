@@ -4,6 +4,8 @@ use std::time::Duration;
 
 use rivet_envoy_client::config::HttpRequest;
 
+use crate::inspector::InspectorTabEntry;
+
 const DEFAULT_STATE_SAVE_INTERVAL: Duration = Duration::from_secs(1);
 const DEFAULT_CREATE_VARS_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_CREATE_CONN_STATE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -84,6 +86,9 @@ pub struct ActorConfig {
 	pub preload_max_connections_bytes: Option<u64>,
 	pub overrides: Option<ActorConfigOverrides>,
 	pub actions: Vec<ActionDefinition>,
+	/// Author-declared inspector tab entries (custom tabs + built-in
+	/// hides). Validated upstream (Zod / builder).
+	pub inspector_tabs: Vec<InspectorTabEntry>,
 }
 
 /// Sparse, serialization-friendly actor configuration. All fields are optional with millisecond integers instead of Duration. Used at runtime boundaries (NAPI, config files). Convert to ActorConfig via ActorConfig::from_input().
@@ -114,6 +119,7 @@ pub struct ActorConfigInput {
 	pub preload_max_workflow_bytes: Option<f64>,
 	pub preload_max_connections_bytes: Option<f64>,
 	pub actions: Option<Vec<ActionDefinition>>,
+	pub inspector_tabs: Option<Vec<InspectorTabEntry>>,
 }
 
 impl ActorConfig {
@@ -187,6 +193,9 @@ impl ActorConfig {
 		if let Some(actions) = config.actions {
 			actor_config.actions = actions;
 		}
+		if let Some(tabs) = config.inspector_tabs {
+			actor_config.inspector_tabs = tabs;
+		}
 
 		actor_config
 	}
@@ -198,6 +207,15 @@ impl ActorConfig {
 				.as_ref()
 				.and_then(|overrides| overrides.sleep_grace_period),
 		)
+	}
+
+	/// Runtime authority for rejecting malformed config that bypassed the
+	/// TypeScript Zod layer (direct Rust builders, NAPI shim corruption,
+	/// etc.). Call this before constructing an `ActorFactory` from this
+	/// config so the actor never starts with garbage state.
+	pub fn validate(&self) -> anyhow::Result<()> {
+		crate::inspector::validate_inspector_tabs(&self.inspector_tabs)?;
+		Ok(())
 	}
 }
 
@@ -231,6 +249,7 @@ impl Default for ActorConfig {
 			preload_max_connections_bytes: None,
 			overrides: None,
 			actions: Vec::new(),
+			inspector_tabs: Vec::new(),
 		}
 	}
 }

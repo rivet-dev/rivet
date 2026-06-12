@@ -13,6 +13,8 @@ export const MetadataGetResponse: core.serialization.ObjectSchema<
     buildTimestamp: core.serialization.property("build_timestamp", core.serialization.string()),
     cargoProfile: core.serialization.property("cargo_profile", core.serialization.string()),
     cargoTarget: core.serialization.property("cargo_target", core.serialization.string()),
+    envoyProtocolVersion: core.serialization.property("envoy_protocol_version", core.serialization.number()),
+    epoxyProtocolVersion: core.serialization.property("epoxy_protocol_version", core.serialization.number()),
     gitSha: core.serialization.property("git_sha", core.serialization.string()),
     runtime: core.serialization.string(),
     rustcHost: core.serialization.property("rustc_host", core.serialization.string()),
@@ -25,6 +27,8 @@ export declare namespace MetadataGetResponse {
         build_timestamp: string;
         cargo_profile: string;
         cargo_target: string;
+        envoy_protocol_version: number;
+        epoxy_protocol_version: number;
         git_sha: string;
         runtime: string;
         rustc_host: string;

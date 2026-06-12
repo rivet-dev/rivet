@@ -69,7 +69,7 @@ export type EventSchemaConfig<TContext = any> = Record<
 	string,
 	EventSchema<TContext>
 >;
-export type QueueSchemaConfig<TContext = any> = Record<string, QueueSchema>;
+export type QueueSchemaConfig<_TContext = any> = Record<string, QueueSchema>;
 export type AnySchemaConfig = EventSchemaConfig | QueueSchemaConfig;
 
 /** @deprecated Use `EventSchema` or `QueueSchema`. */
@@ -155,7 +155,7 @@ export function hasSchemaConfigKey<T extends AnySchemaConfig>(
 	if (!schemas) {
 		return false;
 	}
-	return Object.prototype.hasOwnProperty.call(schemas, key);
+	return Object.hasOwn(schemas, key);
 }
 
 export function getEventCanSubscribe<TContext = any>(

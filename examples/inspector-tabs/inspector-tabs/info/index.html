@@ -1,0 +1,253 @@
+<!doctype html>
+<!--
+================================================================================
+Custom inspector tab: "Info"
+================================================================================
+
+A read-only sibling of the Counter tab. Where Counter demonstrates invoking
+actions (POST /inspector/action/<name>), this tab demonstrates calling
+multiple inspector endpoints in parallel and rendering them as a metadata
+panel.
+
+The Counter tab carries the deeper inline tutorial for the postMessage
+handshake; this file uses the same pattern with shorter comments. See
+`../counter/index.html` for the full walkthrough.
+
+Structure:
+  1. <head>         — <link> to the shared stylesheet
+  2. <body> markup  — three metadata panels + an error region
+  3. <script>:
+     3a. CONFIG     — trusted shell origin (REQUIRED)
+     3b. STATE      — token + actor id (populated by `v1Init`)
+     3c. FETCH      — small JSON helper with auth + 401 handling
+     3d. RENDER     — pull state + rpcs in parallel, render each panel
+     3e. HANDSHAKE  — `v1Init` receiver + `ready` signal (REQUIRED)
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Info Tab</title>
+
+		<!-- The shared stylesheet lives at `/gateway/<actorId>/inspector/tab.css`,
+		     which is `../../tab.css` relative to this bundle. Absolute
+		     `/inspector/...` would resolve to the engine root and 404. -->
+		<link rel="stylesheet" href="../../tab.css" />
+
+		<style>
+			body {
+				display: flex;
+				flex-direction: column;
+				padding: var(--rivet-space-6);
+				gap: var(--rivet-space-5);
+				height: 100vh;
+				overflow: auto;
+			}
+			dl {
+				margin: 0;
+				display: grid;
+				grid-template-columns: max-content 1fr;
+				gap: var(--rivet-space-2) var(--rivet-space-4);
+			}
+			dt {
+				color: var(--rivet-muted-foreground);
+				font-size: 12px;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+			}
+			dd {
+				margin: 0;
+				font-family: var(--rivet-font-mono);
+				font-size: 13px;
+				word-break: break-all;
+			}
+			ul.actions {
+				margin: 0;
+				padding: 0;
+				list-style: none;
+				display: flex;
+				flex-wrap: wrap;
+				gap: var(--rivet-space-2);
+			}
+			ul.actions li {
+				background: var(--rivet-muted);
+				border-radius: var(--rivet-radius-sm);
+				padding: var(--rivet-space-1) var(--rivet-space-3);
+				font-size: 12px;
+				font-family: var(--rivet-font-mono);
+			}
+			pre {
+				margin: 0;
+				white-space: pre-wrap;
+				word-break: break-word;
+				font-family: var(--rivet-font-mono);
+				font-size: 12px;
+			}
+		</style>
+	</head>
+	<body>
+		<section class="rivet-card">
+			<div class="rivet-section-header">Identity</div>
+			<div class="rivet-section-body">
+				<dl>
+					<dt>Actor id</dt>
+					<dd id="actor-id">…</dd>
+					<dt>Engine origin</dt>
+					<dd id="engine-origin">…</dd>
+				</dl>
+			</div>
+		</section>
+
+		<section class="rivet-card">
+			<div class="rivet-section-header">Registered actions</div>
+			<div class="rivet-section-body">
+				<ul id="rpcs" class="actions">
+					<li>…</li>
+				</ul>
+			</div>
+		</section>
+
+		<section class="rivet-card">
+			<div class="rivet-section-header">
+				Live state (polled every 2 s)
+			</div>
+			<div class="rivet-section-body">
+				<pre id="state">…</pre>
+			</div>
+		</section>
+
+		<div id="error" class="rivet-error" style="display: none"></div>
+
+		<script>
+			// =================================================================
+			// 3a. CONFIG — trusted shell origin (REQUIRED)
+			// =================================================================
+			//
+			// The dashboard always sets `?shellOrigin=<dashboard origin>`
+			// on the iframe URL. The tab uses it as the targetOrigin on
+			// every outbound postMessage AND validates inbound `event.origin`
+			// against it. Without that validation an attacker who frames
+			// this tab can forge an `init` message and feed us a fake
+			// actorId + token.
+
+			function getTrustedShellOrigin() {
+				const p = new URLSearchParams(window.location.search).get(
+					"shellOrigin",
+				);
+				if (!p) return null;
+				try {
+					return new URL(p).origin;
+				} catch {
+					return null;
+				}
+			}
+			const SHELL_ORIGIN =
+				getTrustedShellOrigin() ?? window.location.origin;
+
+			// =================================================================
+			// 3b. STATE
+			// =================================================================
+
+			let authToken = null;
+			let actorId = null;
+
+			function showError(msg) {
+				const el = document.getElementById("error");
+				el.style.display = "block";
+				el.textContent = msg;
+			}
+			function clearError() {
+				const el = document.getElementById("error");
+				el.style.display = "none";
+				el.textContent = "";
+			}
+
+			// =================================================================
+			// 3c. FETCH — JSON helper with auth + 401 handling
+			// =================================================================
+			//
+			// Same pattern as `../counter/index.html`. Two things to notice:
+			//
+			//   • Relative path. The iframe is at
+			//     `/inspector/custom-tabs/info/`, so `../../state` resolves
+			//     to `/inspector/state` on the same actor.
+			//
+			//   • 401 → token-refresh-needed. The tab must NOT silently
+			//     retry; instead it notifies the dashboard, which refreshes
+			//     and re-issues `v1Init` with a fresh token.
+
+			async function fetchJson(rel) {
+				const r = await fetch(rel, {
+					headers: { Authorization: `Bearer ${authToken}` },
+				});
+				if (r.status === 401) {
+					window.parent.postMessage(
+						{ type: "token-refresh-needed", v: 1 },
+						SHELL_ORIGIN,
+					);
+					return null;
+				}
+				if (!r.ok) {
+					throw new Error(`Inspector ${rel} failed: ${r.status}`);
+				}
+				return r.json();
+			}
+
+			// =================================================================
+			// 3d. RENDER — parallel fetches, populate each panel
+			// =================================================================
+
+			async function refreshOnce() {
+				try {
+					const [stateRes, rpcsRes] = await Promise.all([
+						fetchJson("../../state"),
+						fetchJson("../../rpcs"),
+					]);
+					if (stateRes) {
+						document.getElementById("state").textContent =
+							JSON.stringify(stateRes.state ?? {}, null, 2);
+					}
+					if (rpcsRes) {
+						const ul = document.getElementById("rpcs");
+						const names = Array.isArray(rpcsRes.rpcs)
+							? rpcsRes.rpcs
+							: [];
+						ul.innerHTML = names.length
+							? names.map((n) => `<li>${n}</li>`).join("")
+							: "<li>(none)</li>";
+					}
+					clearError();
+				} catch (err) {
+					showError(err?.stack ?? String(err));
+				}
+			}
+
+			// =================================================================
+			// 3e. HANDSHAKE — REQUIRED postMessage contract
+			// =================================================================
+
+			window.addEventListener("message", (event) => {
+				if (event.origin !== SHELL_ORIGIN) return;
+				const msg = event.data;
+				if (!msg || typeof msg !== "object") return;
+				if (msg.type === "init" && msg.v === 1) {
+					actorId = msg.actorId;
+					authToken = msg.authToken;
+					// Match the dashboard's active theme — the shared
+					// stylesheet drives tokens off the `dark` class.
+					document.documentElement.classList.toggle(
+						"dark",
+						(msg.theme ?? "dark") === "dark",
+					);
+					document.getElementById("actor-id").textContent = actorId;
+					document.getElementById("engine-origin").textContent =
+						window.location.origin;
+					refreshOnce();
+					setInterval(refreshOnce, 2000);
+				}
+			});
+
+			window.parent.postMessage({ type: "ready", v: 1 }, SHELL_ORIGIN);
+		</script>
+	</body>
+</html>

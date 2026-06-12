@@ -90,7 +90,7 @@ pub async fn backfill_chunk(
 	let replica_id = ctx.config().epoxy_replica_id();
 
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_backfill_chunk", |tx| {
 			let input = input.clone();
 			async move {
 				let legacy_subspace = keys::legacy_subspace(replica_id);
@@ -191,7 +191,7 @@ pub struct MarkCompleteInput {
 #[activity(MarkComplete)]
 pub async fn mark_complete(ctx: &ActivityCtx, input: &MarkCompleteInput) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_backfill_mark_complete", |tx| {
 			let name = input.name.clone();
 			async move {
 				let tx = tx.with_subspace(rivet_types::keys::backfill::subspace());

@@ -1,4 +1,4 @@
-import { actor, event, queue } from "rivetkit";
+import { actor, queue } from "rivetkit";
 import type { registry } from "../../index.ts";
 
 export const RUN_SLEEP_TIMEOUT = 500;

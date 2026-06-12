@@ -1,6 +1,6 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test } from "vitest";
 import type { ActorError } from "@/client/mod";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
 describeDriverMatrix("Actor Handle", (driverTestConfig) => {

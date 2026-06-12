@@ -1,17 +1,11 @@
-import type { Context as HonoContext, Next } from "hono";
 import * as envoyProtocol from "@rivetkit/engine-envoy-protocol";
+import type { Context as HonoContext, Next } from "hono";
 import type { ActorSpecifier } from "@/actor/errors";
 import {
 	HEADER_ACTOR_GENERATION,
 	HEADER_ACTOR_ID,
 	HEADER_ACTOR_KEY,
 } from "@/common/actor-router-consts";
-import type { JsonCompatValue, Encoding } from "@/common/encoding";
-import {
-	getRequestEncoding,
-	getRequestExposeInternalError,
-} from "@/common/router-request";
-import { buildActorNames, type RegistryConfig } from "@/registry/config";
 import type * as protocol from "@/common/client-protocol";
 import {
 	CURRENT_VERSION as CLIENT_PROTOCOL_CURRENT_VERSION,
@@ -21,15 +15,17 @@ import {
 	type HttpResponseError as HttpResponseErrorJson,
 	HttpResponseErrorSchema,
 } from "@/common/client-protocol-zod";
+import type { Encoding, JsonCompatValue } from "@/common/encoding";
 import {
-	encodeCborCompat,
-	encodingIsBinary,
-	serializeWithEncoding,
-} from "@/serde";
+	getRequestEncoding,
+	getRequestExposeInternalError,
+} from "@/common/router-request";
+import { buildActorNames, type RegistryConfig } from "@/registry/config";
+import { encodeCborCompat, serializeWithEncoding } from "@/serde";
 import { bufferToArrayBuffer, VERSION } from "@/utils";
 import { getLogHeaders } from "@/utils/env-vars";
 import { getLogger, type Logger } from "./log";
-import { deconstructError, stringifyError } from "./utils";
+import { deconstructError } from "./utils";
 
 export function logger() {
 	return getLogger("router");
@@ -67,10 +63,8 @@ export function handleRouteNotFound(c: HonoContext) {
 export function handleRouteError(error: unknown, c: HonoContext) {
 	const exposeInternalError = getRequestExposeInternalError(c.req.raw);
 
-	const { statusCode, group, code, message, metadata, actor } = deconstructError(
-		error,
-		exposeInternalError,
-	);
+	const { statusCode, group, code, message, metadata, actor } =
+		deconstructError(error, exposeInternalError);
 
 	if (actor) {
 		logger().warn({
@@ -111,7 +105,9 @@ export function handleRouteError(error: unknown, c: HonoContext) {
 			code: value.code,
 			message: value.message,
 			metadata: value.metadata
-				? bufferToArrayBuffer(encodeCborCompat(value.metadata as JsonCompatValue))
+				? bufferToArrayBuffer(
+						encodeCborCompat(value.metadata as JsonCompatValue),
+					)
 				: null,
 			actor: value.actor
 				? {

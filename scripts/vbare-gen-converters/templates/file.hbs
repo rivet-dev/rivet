@@ -1,0 +1,14 @@
+// @generated initial scaffold by scripts/vbare-gen-converters
+// from: {{fromFile}}, to: {{toFile}}
+// Replace each todo!() with the migration semantics, then drop the @generated marker.
+
+#![allow(dead_code, unused_variables)]
+
+use anyhow::Result;
+
+use crate::generated::{ {{~fromNs}}, {{toNs~}} };
+
+{{#each converters}}
+{{{this.body}}}
+
+{{/each}}

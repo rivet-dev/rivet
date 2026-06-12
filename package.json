@@ -11,8 +11,11 @@
 		"test": "npx turbo test",
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",
+		"counter-latency": "pnpm --dir examples/kitchen-sink counter-latency",
+		"slow-reconnect": "pnpm --dir examples/kitchen-sink slow-reconnect",
 		"lint": "pnpm biome check .",
-		"fmt": "pnpm biome check --write --diagnostic-level=error ."
+		"fmt": "pnpm biome format --write .",
+		"fmt:agent": "node ./scripts/format/agent-format.mjs"
 	},
 	"devDependencies": {
 		"@bare-ts/tools": "0.15.0",
@@ -29,7 +32,8 @@
 		"@babel/runtime": "^7.29.2",
 		"@iarna/toml": "^2.2.5",
 		"@sentry/vite-plugin": "^2.23.1",
-		"fast-glob": "^3.3.3"
+		"fast-glob": "^3.3.3",
+		"handlebars": "^4.7.9"
 	},
 	"resolutions": {
 		"rivetkit": "workspace:*",
@@ -54,8 +58,7 @@
 			"@codemirror/view": "6.38.2",
 			"@codemirror/autocomplete": "6.18.7",
 			"@codemirror/commands": "6.8.1",
-			"@codemirror/lint": "6.8.5",
-			"wasm-pack": "=0.13.1"
+			"@codemirror/lint": "6.8.5"
 		}
 	}
 }

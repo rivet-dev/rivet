@@ -1,4 +1,4 @@
-use rivet_metrics::{MICRO_BUCKETS, REGISTRY, prometheus::*};
+use rivet_metrics::{BUCKETS, MICRO_BUCKETS, REGISTRY, prometheus::*};
 
 lazy_static::lazy_static! {
 	pub static ref ACTOR_PENDING_ALLOCATION: IntGaugeVec = register_int_gauge_vec_with_registry!(
@@ -27,6 +27,14 @@ lazy_static::lazy_static! {
 		"Total duration to allocate an actor.",
 		&["kind", "result"],
 		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ACTOR_START_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"pegboard_actor_start_duration",
+		"Total duration from allocation to running.",
+		&["namespace_id", "pool_name", "kind"],
+		BUCKETS.to_vec(),
 		*REGISTRY
 	).unwrap();
 
@@ -91,9 +99,110 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
-	pub static ref SQLITE_MIGRATION_REJECTED_JOURNAL_TOTAL: IntCounter = register_int_counter_with_registry!(
-		"pegboard_sqlite_migration_rejected_journal_total",
-		"Total number of v1 actors rejected from migration because a rollback journal sidecar was present (actor crashed during a write transaction).",
+	pub static ref SQLITE_MIGRATION_ABANDONED_SIDECAR_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"pegboard_sqlite_migration_abandoned_sidecar_total",
+		"Total number of sidecars abandoned during sqlite v1 to v2 migration.",
+		&["sidecar"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_EXPIRE_SCHEDULER_ENQUEUED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_expire_scheduler_enqueued_total",
+		"Count of read-path envoy expire scheduler enqueue attempts.",
+		&["namespace_id", "result"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_EXPIRE_SCHEDULER_COMPLETED_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_expire_scheduler_completed_total",
+		"Count of read-path envoy expire scheduler worker completions.",
+		&["namespace_id", "result"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_EXPIRE_SCHEDULER_IN_FLIGHT: IntGauge = register_int_gauge_with_registry!(
+		"envoy_expire_scheduler_in_flight",
+		"Count of read-path envoy expire scheduler workers currently invoking expire.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_EXPIRE_SCHEDULER_PENDING: IntGauge = register_int_gauge_with_registry!(
+		"envoy_expire_scheduler_pending",
+		"Count of read-path envoy expire scheduler envoys currently queued or in flight.",
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_EXPIRE_SCHEDULER_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"envoy_expire_scheduler_duration_seconds",
+		"Duration of read-path envoy expire scheduler workers, including semaphore wait time.",
+		&["namespace_id"],
+		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_ALLOCATION_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lb_allocation_total",
+		"Count of successful envoy load-balancer allocations.",
+		&["namespace_id", "pool_name", "strategy"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_NO_ENVOY_AVAILABLE_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lb_no_envoy_available_total",
+		"Count of envoy load-balancer allocation attempts with no envoy available.",
+		&["namespace_id", "pool_name", "strategy"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_ALLOC_DURATION: HistogramVec = register_histogram_vec_with_registry!(
+		"envoy_lb_alloc_duration_seconds",
+		"Duration of envoy load-balancer allocation attempts.",
+		&["namespace_id", "pool_name", "strategy"],
+		MICRO_BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_SCAN_DEPTH: HistogramVec = register_histogram_vec_with_registry!(
+		"envoy_lb_scan_depth",
+		"Count of envoy load-balancer index entries scanned per allocation attempt.",
+		&["namespace_id", "pool_name", "strategy"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_WRAP_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lb_wrap_total",
+		"Count of envoy load-balancer allocation scans that used the wrap path.",
+		&["namespace_id", "pool_name", "strategy"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_SAMPLES_EFFECTIVE: HistogramVec = register_histogram_vec_with_registry!(
+		"envoy_lb_samples_effective",
+		"Count of unique hash load-balancer candidates considered per allocation attempt.",
+		&["namespace_id", "pool_name"],
+		BUCKETS.to_vec(),
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_SAMPLE_DEDUPE_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lb_sample_dedupe_total",
+		"Count of hash load-balancer samples deduped because they resolved to an existing candidate.",
+		&["namespace_id", "pool_name"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_TIED_MIN_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lb_tied_min_total",
+		"Count of hash load-balancer allocations that needed a random tiebreak among minimum-slot candidates.",
+		&["namespace_id", "pool_name"],
+		*REGISTRY
+	).unwrap();
+
+	pub static ref ENVOY_LB_SCAN_CIRCUIT_BREAKER_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
+		"envoy_lb_scan_circuit_breaker_total",
+		"Count of hash load-balancer scans aborted after hitting the stale-entry circuit breaker.",
+		&["namespace_id", "pool_name", "strategy"],
 		*REGISTRY
 	).unwrap();
 }

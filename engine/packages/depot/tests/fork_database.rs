@@ -118,7 +118,7 @@ async fn fork_database_from_timestamp_selector_uses_resolved_snapshot() -> Resul
 			let source_branch =
 				read_database_branch_id(&db, source_bucket, &source_database_id).await?;
 			let first = read_commit(&db, source_branch, 1).await?;
-			db.run(move |tx| async move {
+			db.txn("test_depotfork_database", move |tx| async move {
 				write_pitr_interval_coverage(
 					&tx,
 					source_branch,
@@ -307,7 +307,7 @@ async fn fork_database_restore_point_pin_race_returns_out_of_retention() -> Resu
 			let raced = Arc::new(AtomicBool::new(false));
 
 			let err = db
-				.run({
+				.txn("test_depotfork_database", {
 					let db = db.clone();
 					let raced = raced.clone();
 					move |tx| {
@@ -325,7 +325,7 @@ async fn fork_database_restore_point_pin_race_returns_out_of_retention() -> Resu
 							.await?;
 
 							if !raced.swap(true, Ordering::SeqCst) {
-								db.run(move |pin_tx| async move {
+								db.txn("test_depotfork_database", move |pin_tx| async move {
 									pin_tx.informal().atomic_op(
 										&branches_restore_point_pin_key(source_branch),
 										&pin_after_fork_point,

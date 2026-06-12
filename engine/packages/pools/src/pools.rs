@@ -8,6 +8,7 @@ use crate::{ClickHousePool, Error, NodeId, UdbPool, UpsPool};
 
 // TODO: Automatically shutdown all pools on drop
 pub(crate) struct PoolsInner {
+	pub(crate) config: Config,
 	pub(crate) node_id: NodeId,
 	pub(crate) _guard: DropGuard,
 	pub(crate) ups: Option<UpsPool>,
@@ -35,6 +36,7 @@ impl Pools {
 		let clickhouse = crate::db::clickhouse::setup(&config)?;
 
 		let pool = Pools(Arc::new(PoolsInner {
+			config,
 			node_id,
 			_guard: token.clone().drop_guard(),
 			ups: Some(ups),
@@ -65,6 +67,7 @@ impl Pools {
 		)?;
 
 		let pool = Pools(Arc::new(PoolsInner {
+			config,
 			node_id,
 			_guard: token.clone().drop_guard(),
 			ups: Some(ups),
@@ -76,6 +79,10 @@ impl Pools {
 	}
 
 	// MARK: Getters
+	pub fn config(&self) -> &Config {
+		&self.0.config
+	}
+
 	pub fn node_id(&self) -> NodeId {
 		self.0.node_id
 	}

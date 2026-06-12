@@ -1,6 +1,6 @@
-import { describeDriverMatrix } from "./shared-matrix";
 import { describe, expect, test, vi } from "vitest";
 import { getHibernatableWebSocketAckState } from "@/common/websocket-test-hooks";
+import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
 const HIBERNATABLE_ACK_SETTLE_TIMEOUT_MS = 12_000;
@@ -302,7 +302,7 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 					// Restore cleanup runs after the wake connection is accepted.
 					await vi.waitFor(
 						async () => {
-							const counts = await wakeConn!.getCounts();
+							const counts = await wakeConn?.getCounts();
 							expect(counts.sleepCount).toBeGreaterThanOrEqual(1);
 							expect(counts.wakeCount).toBeGreaterThanOrEqual(2);
 						},
@@ -313,7 +313,7 @@ describeDriverMatrix("Hibernatable Websocket Protocol", (driverTestConfig) => {
 					await vi.waitFor(
 						async () => {
 							const disconnectWakeCounts =
-								await wakeConn!.getDisconnectWakeCounts();
+								await wakeConn?.getDisconnectWakeCounts();
 							expect(disconnectWakeCounts).toEqual([2]);
 						},
 						{ timeout: 5_000, interval: 100 },

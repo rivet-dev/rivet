@@ -24,8 +24,6 @@ fn db_head_round_trips_with_embedded_version() {
 		db_size_pages: 128,
 		post_apply_checksum: 9,
 		branch_id: super::DatabaseBranchId::nil(),
-		#[cfg(debug_assertions)]
-		generation: 7,
 	};
 
 	let encoded = encode_db_head(head.clone()).expect("db head should encode");

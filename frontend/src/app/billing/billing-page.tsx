@@ -12,6 +12,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { BillingPlans } from "@/app/billing/billing-plans";
 import { BillingStatus } from "@/app/billing/billing-status";
+import { ComputeUsageCard } from "@/app/billing/compute-card";
 import { CurrentBillTotal } from "@/app/billing/current-bill-card";
 import { useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
@@ -90,7 +91,7 @@ export function BillingPage() {
 	const metrics = useBilledMetrics();
 	const plan = data?.billing.activePlan || "free";
 
-	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
+	const _totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
 		const current = metrics[key] || 0n;
 		const includedInPlan = BILLING.included[plan][key];
 		return (
@@ -186,6 +187,7 @@ export function BillingBody() {
 					);
 				},
 			)}
+			<ComputeUsageCard />
 		</div>
 	);
 }

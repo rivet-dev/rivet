@@ -1,9 +1,7 @@
-use epoxy::{
-	ops::propose::{
-		CheckAndSetCommand, Command, CommandKind, ConsensusFailedReason, Proposal, ProposalResult,
-	},
-	protocol::ReplicaId,
+use epoxy::ops::propose::{
+	CheckAndSetCommand, Command, CommandKind, ConsensusFailedReason, Proposal, ProposalResult,
 };
+use epoxy_protocol::protocol::ReplicaId;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use rivet_data::converted::ActorByKeyKeyData;
@@ -169,7 +167,7 @@ pub async fn lookup_key_optimistic(
 		.op(epoxy::ops::kv::get_optimistic::Input {
 			replica_id: ctx.config().epoxy_replica_id(),
 			key: keys::subspace().pack(&reservation_key),
-			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			caching_behavior: epoxy_protocol::protocol::CachingBehavior::Optimistic,
 			target_replicas: None,
 			save_empty: false,
 		})
@@ -284,7 +282,7 @@ pub async fn reserve_actor_key(
 ) -> Result<ReserveActorKeyOutput> {
 	let res = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_reserve_key", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			// Check if there are any actors that share the same key that are not destroyed

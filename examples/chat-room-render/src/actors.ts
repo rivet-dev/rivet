@@ -1,4 +1,4 @@
-import { actor, setup, event } from "rivetkit";
+import { actor, event, setup } from "rivetkit";
 
 export type Message = { sender: string; text: string; timestamp: number };
 

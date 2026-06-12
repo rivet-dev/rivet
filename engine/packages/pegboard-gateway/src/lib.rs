@@ -10,16 +10,18 @@ use rivet_guard_core::{
 	ResponseBody, WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{
-		ActorStoppedWhileWaiting, GatewayResponseStartTimeout, TunnelMessageTimeout,
-		TunnelRequestAborted, TunnelResponseClosed, WebSocketServiceUnavailable,
+		ActorStoppedWhileWaiting, ActorStoppedWhileWaitingForWebSocketOpen,
+		GatewayResponseStartTimeout, TunnelMessageTimeout, TunnelRequestAborted,
+		TunnelResponseClosed, WebSocketClosedBeforeOpen, WebSocketOpenDropped,
+		WebSocketOpenResponseClosed, WebSocketOpenTimeout,
 	},
 	request_context::RequestContext,
 	utils::is_ws_hibernate,
 	websocket_handle::WebSocketReceiver,
 };
 use rivet_runner_protocol::{self as protocol, PROTOCOL_MK1_VERSION};
-use rivet_util::serde::HashableMap;
 use std::{
+	collections::HashMap,
 	sync::{Arc, atomic::AtomicU64},
 	time::Duration,
 };
@@ -49,6 +51,8 @@ mod ws_to_tunnel_task;
 pub struct WebsocketPendingLimitReached;
 
 const UPDATE_METRICS_INTERVAL: Duration = Duration::from_secs(15);
+const PHASE_WAITING_FOR_RESPONSE_START: &str = "waiting_for_response_start";
+const PHASE_WAITING_FOR_WEBSOCKET_OPEN: &str = "waiting_for_websocket_open";
 
 #[derive(Debug)]
 enum LifecycleResult {
@@ -105,7 +109,7 @@ impl PegboardGateway {
 					.ok()
 					.map(|value_str| (name.to_string(), value_str.to_string()))
 			})
-			.collect::<HashableMap<_, _>>();
+			.collect::<HashMap<_, _>>();
 
 		// NOTE: Size constraints have already been applied by guard
 		let body_bytes = req
@@ -171,7 +175,10 @@ impl PegboardGateway {
 								}
 								protocol::mk2::ToServerTunnelMessageKind::ToServerResponseAbort => {
 									tracing::warn!("request aborted");
-									return Err(TunnelRequestAborted.build());
+									return Err(TunnelRequestAborted {
+										phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+									}
+									.build());
 								}
 								_ => {
 									tracing::warn!("received non-response message from pubsub");
@@ -182,16 +189,27 @@ impl PegboardGateway {
 								request_id=%protocol::util::id_to_string(&request_id),
 								"received no message response during request init",
 							);
-							return Err(TunnelResponseClosed.build());
+							return Err(TunnelResponseClosed {
+								phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+							}
+							.build());
 						}
 					}
 					_ = stopped_sub.next() => {
 						tracing::debug!("actor stopped while waiting for request response");
-						return Err(ActorStoppedWhileWaiting.build());
+						return Err(ActorStoppedWhileWaiting {
+							actor_id: self.actor_id.to_string(),
+							phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+						}
+						.build());
 					}
 					_ = drop_rx.changed() => {
 						tracing::warn!(reason=?drop_rx.borrow(), "tunnel message timeout");
-						return Err(TunnelMessageTimeout.build());
+						return Err(TunnelMessageTimeout {
+							phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+							reason: format!("{:?}", drop_rx.borrow().as_ref()),
+						}
+						.build());
 					}
 				}
 			}
@@ -207,7 +225,11 @@ impl PegboardGateway {
 			.map_err(|_| {
 				tracing::warn!("timed out waiting for response start from runner");
 
-				GatewayResponseStartTimeout.build()
+				GatewayResponseStartTimeout {
+					phase: "response_start".to_owned(),
+					timeout_ms: response_start_timeout.as_millis() as u64,
+				}
+				.build()
 			})??;
 		tracing::debug!("response handler task ended");
 
@@ -237,7 +259,7 @@ impl PegboardGateway {
 		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Extract headers
-		let mut request_headers = HashableMap::new();
+		let mut request_headers = HashMap::new();
 		for (name, value) in req_ctx.headers() {
 			if let Result::Ok(value_str) = value.to_str() {
 				request_headers.insert(name.to_string(), value_str.to_string());
@@ -308,7 +330,14 @@ impl PegboardGateway {
 									}
 									protocol::mk2::ToServerTunnelMessageKind::ToServerWebSocketClose(close) => {
 										tracing::warn!(?close, "websocket closed before opening");
-										return Err(WebSocketServiceUnavailable.build());
+										return Err(WebSocketClosedBeforeOpen {
+											close_code: close
+												.code
+												.map(|code| code.to_string())
+												.unwrap_or_else(|| "none".to_owned()),
+											close_reason: close.reason.unwrap_or_else(|| "none".to_owned()),
+										}
+										.build());
 									}
 									_ => {
 										tracing::warn!(
@@ -326,16 +355,27 @@ impl PegboardGateway {
 						}
 						_ = stopped_sub.next() => {
 							tracing::debug!("actor stopped while waiting for websocket open");
-							return Err(WebSocketServiceUnavailable.build());
+							return Err(ActorStoppedWhileWaitingForWebSocketOpen {
+								actor_id: self.actor_id.to_string(),
+								phase: PHASE_WAITING_FOR_WEBSOCKET_OPEN.to_owned(),
+							}
+							.build());
 						}
 						_ = drop_rx.changed() => {
 							tracing::warn!(reason=?drop_rx.borrow(), "websocket open timeout");
-							return Err(WebSocketServiceUnavailable.build());
+							return Err(WebSocketOpenDropped {
+								phase: PHASE_WAITING_FOR_WEBSOCKET_OPEN.to_owned(),
+								reason: format!("{:?}", drop_rx.borrow().as_ref()),
+							}
+							.build());
 						}
 					}
 				}
 
-				Err(WebSocketServiceUnavailable.build())
+				Err(WebSocketOpenResponseClosed {
+					phase: PHASE_WAITING_FOR_WEBSOCKET_OPEN.to_owned(),
+				}
+				.build())
 			};
 
 			let websocket_open_timeout = Duration::from_millis(
@@ -349,7 +389,10 @@ impl PegboardGateway {
 				.map_err(|_| {
 					tracing::warn!("timed out waiting for websocket open from runner");
 
-					WebSocketServiceUnavailable.build()
+					WebSocketOpenTimeout {
+						timeout_ms: websocket_open_timeout.as_millis() as u64,
+					}
+					.build()
 				})??;
 
 			self.shared_state
@@ -843,7 +886,7 @@ async fn hibernate_ws(ws_rx: Arc<Mutex<WebSocketReceiver>>) -> Result<Hibernatio
 
 async fn get_runner_protocol_version(ctx: &StandaloneCtx, runner_id: Id) -> Result<u16> {
 	ctx.udb()?
-		.run(|tx| async move {
+		.txn("gateway_get_runner_protocol_version", |tx| async move {
 			let tx = tx.with_subspace(pegboard::keys::subspace());
 
 			let protocol_version_entry = tx
@@ -879,7 +922,7 @@ async fn record_req_metrics(
 	// Read runner protocol version
 	let (protocol_version, has_name, actor_workflow_id) = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("gateway_record_req_metrics_lookup", |tx| async move {
 			let tx = tx.with_subspace(pegboard::keys::subspace());
 
 			let protocol_version_key = pegboard::keys::runner::ProtocolVersionKey::new(runner_id);
@@ -920,7 +963,7 @@ async fn record_req_metrics(
 
 		// Record metrics
 		ctx.udb()?
-			.run(|tx| async move {
+			.txn("gateway_record_req_metrics_inc", |tx| async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
 				metric_inc(&tx, actor_state.namespace_id, &actor_state.name, metric);
 

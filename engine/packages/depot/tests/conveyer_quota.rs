@@ -14,7 +14,7 @@ async fn quota_defaults_to_zero() -> Result<()> {
 			let database_id = ctx.database_id.clone();
 
 			let storage_used = db
-				.run(move |tx| {
+				.txn("test_depotconveyer_quota", move |tx| {
 					let database_id = database_id.clone();
 					async move { read(&tx, &database_id).await }
 				})
@@ -35,7 +35,7 @@ async fn atomic_add_uses_signed_little_endian_counter() -> Result<()> {
 			let db = ctx.udb.clone();
 			let database_id = ctx.database_id.clone();
 
-			db.run({
+			db.txn("test_depotconveyer_quota", {
 				let database_id = database_id.clone();
 				move |tx| {
 					let database_id = database_id.clone();
@@ -49,7 +49,7 @@ async fn atomic_add_uses_signed_little_endian_counter() -> Result<()> {
 			.await?;
 
 			let storage_used = db
-				.run(move |tx| {
+				.txn("test_depotconveyer_quota", move |tx| {
 					let database_id = database_id.clone();
 					async move { read(&tx, &database_id).await }
 				})

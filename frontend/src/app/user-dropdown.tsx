@@ -12,7 +12,12 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMatchRoute, useNavigate, useParams, useRouter } from "@tanstack/react-router";
+import {
+	useMatchRoute,
+	useNavigate,
+	useParams,
+	useRouter,
+} from "@tanstack/react-router";
 import { useState } from "react";
 import {
 	Avatar,
@@ -32,12 +37,12 @@ import {
 	Skeleton,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { BillingPlanBadge } from "./billing/billing-plan-badge";
-import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { useTheme } from "@/lib/theme";
 import { queryClient } from "@/queries/global";
+import { BillingPlanBadge } from "./billing/billing-plan-badge";
+import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 
 export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const params = useParams({
@@ -108,7 +113,10 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						});
 					}}
 				>
-					<Icon icon={faUserCircle} className="mr-2 size-3.5 text-muted-foreground" />
+					<Icon
+						icon={faUserCircle}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
 					Account
 				</DropdownMenuItem>
 				<DropdownMenuItem
@@ -122,12 +130,18 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						});
 					}}
 				>
-					<Icon icon={faGear} className="mr-2 size-3.5 text-muted-foreground" />
+					<Icon
+						icon={faGear}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
 					Settings
 				</DropdownMenuItem>
 				{isMatchingProjectRoute ? (
 					<DropdownMenuItem onSelect={goToBilling}>
-						<Icon icon={faCreditCard} className="mr-2 size-3.5 text-muted-foreground" />
+						<Icon
+							icon={faCreditCard}
+							className="mr-2 size-3.5 text-muted-foreground"
+						/>
 						Billing
 						<span className="ml-auto flex items-center gap-1">
 							<BillingUsageGauge />
@@ -139,7 +153,10 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 				{params.organization ? (
 					<DropdownMenuSub>
 						<DropdownMenuSubTrigger>
-							<Icon icon={faRightLeft} className="mr-2 size-3.5 text-muted-foreground" />
+							<Icon
+								icon={faRightLeft}
+								className="mr-2 size-3.5 text-muted-foreground"
+							/>
 							Switch Organization
 						</DropdownMenuSubTrigger>
 						<DropdownMenuPortal>
@@ -167,7 +184,10 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						);
 					}}
 				>
-					<Icon icon={faSparkles} className="mr-2 size-3.5 text-muted-foreground" />
+					<Icon
+						icon={faSparkles}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
 					What's new
 				</DropdownMenuItem>
 				<DropdownMenuItem
@@ -191,7 +211,10 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						return navigate({ to: "/login" });
 					}}
 				>
-					<Icon icon={faArrowRightFromBracket} className="mr-2 size-3.5 text-muted-foreground" />
+					<Icon
+						icon={faArrowRightFromBracket}
+						className="mr-2 size-3.5 text-muted-foreground"
+					/>
 					Sign out
 				</DropdownMenuItem>
 			</DropdownMenuContent>
@@ -319,7 +342,12 @@ function OrganizationSwitcher({
 				onSelect={() => {
 					navigate({ to: "/new-org" });
 				}}
-				indicator={<Icon icon={faPlus} className="size-4 text-muted-foreground" />}
+				indicator={
+					<Icon
+						icon={faPlus}
+						className="size-4 text-muted-foreground"
+					/>
+				}
 			>
 				Create a new organization
 			</DropdownMenuItem>

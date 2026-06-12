@@ -1,7 +1,4 @@
-pub(crate) use std::{
-	collections::{BTreeMap, BTreeSet},
-	sync::Arc,
-};
+pub(crate) use std::collections::{BTreeMap, BTreeSet};
 
 pub(crate) use anyhow::{Context, Result, bail, ensure};
 pub(crate) use futures_util::{FutureExt, TryStreamExt};
@@ -18,25 +15,19 @@ pub(crate) use universaldb::{
 };
 
 pub(crate) use crate::{
-	ACCESS_TOUCH_THROTTLE_MS, CMP_COLD_OBJECT_DELETE_GRACE_MS, CMP_FDB_BATCH_MAX_KEYS,
-	CMP_FDB_BATCH_MAX_VALUE_BYTES, CMP_S3_DELETE_MAX_OBJECTS, CMP_S3_UPLOAD_LIMIT_BYTES,
-	CMP_S3_UPLOAD_MAX_OBJECTS, HOT_BURST_COLD_LAG_THRESHOLD_TXIDS, MAX_BUCKET_DEPTH,
-	cold_tier::{ColdTier, cold_tier_from_config},
+	CMP_FDB_BATCH_MAX_KEYS, CMP_FDB_BATCH_MAX_VALUE_BYTES, MAX_BUCKET_DEPTH,
 	conveyer::{
 		history_pin, keys,
 		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 		quota,
 		types::{
-			BranchState, BucketCatalogDbFact, BucketForkFact, BucketId, ColdShardRef, CommitRow,
-			CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord, DbHistoryPin,
-			DirtyPage, PitrIntervalCoverage, PitrPolicy, RetiredColdObject,
-			RetiredColdObjectDeleteState, ShardCachePolicy, SqliteCmpDirty,
-			decode_bucket_catalog_db_fact, decode_bucket_fork_fact, decode_bucket_pointer,
-			decode_cold_shard_ref, decode_commit_row, decode_compaction_root,
-			decode_database_branch_record, decode_database_pointer, decode_db_head,
-			decode_pitr_interval_coverage, decode_pitr_policy, decode_retired_cold_object,
-			decode_shard_cache_policy, decode_sqlite_cmp_dirty, encode_cold_shard_ref,
-			encode_compaction_root, encode_pitr_interval_coverage, encode_retired_cold_object,
+			BranchState, BucketCatalogDbFact, BucketForkFact, BucketId, CommitRow, CompactionRoot,
+			DBHead, DatabaseBranchId, DatabaseBranchRecord, DbHistoryPin, DirtyPage,
+			PitrIntervalCoverage, PitrPolicy, SqliteCmpDirty, decode_bucket_catalog_db_fact,
+			decode_bucket_fork_fact, decode_bucket_pointer, decode_commit_row,
+			decode_compaction_root, decode_database_branch_record, decode_database_pointer,
+			decode_db_head, decode_pitr_interval_coverage, decode_pitr_policy,
+			decode_sqlite_cmp_dirty, encode_compaction_root, encode_pitr_interval_coverage,
 		},
 		udb,
 	},
@@ -45,12 +36,6 @@ pub(crate) use crate::{
 pub const DATABASE_BRANCH_ID_TAG: &str = "database_branch_id";
 
 pub type CompactionInputFingerprint = [u8; 32];
-
-#[cfg(feature = "test-faults")]
-lazy_static::lazy_static! {
-	pub(crate) static ref WORKFLOW_TEST_COLD_TIERS: parking_lot::Mutex<Vec<(DatabaseBranchId, Arc<dyn ColdTier>)>> =
-		parking_lot::Mutex::new(Vec::new());
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DbManagerInput {
@@ -91,11 +76,6 @@ pub struct DbHotCompacterInput {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DbColdCompacterInput {
-	pub database_branch_id: DatabaseBranchId,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DbReclaimerInput {
 	pub database_branch_id: DatabaseBranchId,
 }
@@ -103,7 +83,6 @@ pub struct DbReclaimerInput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum CompactionJobKind {
 	Hot,
-	Cold,
 	Reclaim,
 }
 
@@ -130,22 +109,10 @@ pub struct HotJobInputRange {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ColdJobInputRange {
-	pub txids: TxidRange,
-	pub min_versionstamp: [u8; 16],
-	pub max_versionstamp: [u8; 16],
-	pub max_bytes: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ReclaimJobInputRange {
 	pub txids: TxidRange,
 	pub txid_refs: Vec<ReclaimTxidRef>,
-	pub cold_objects: Vec<ReclaimColdObjectRef>,
-	#[serde(default)]
-	pub shard_cache_evictions: Vec<ShardCacheEvictionRef>,
 	pub staged_hot_shards: Vec<StagedHotShardCleanupRef>,
-	pub orphan_cold_objects: Vec<ColdShardRef>,
 	pub max_keys: u32,
 	pub max_bytes: u64,
 }
@@ -154,24 +121,6 @@ pub struct ReclaimJobInputRange {
 pub struct ReclaimTxidRef {
 	pub txid: u64,
 	pub versionstamp: [u8; 16],
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ReclaimColdObjectRef {
-	pub object_key: String,
-	pub object_generation_id: Id,
-	pub content_hash: [u8; 32],
-	pub expected_publish_generation: u64,
-	pub shard_id: u32,
-	pub as_of_txid: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct ShardCacheEvictionRef {
-	pub shard_id: u32,
-	pub as_of_txid: u64,
-	pub size_bytes: u64,
-	pub content_hash: [u8; 32],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -219,18 +168,6 @@ pub struct HotJobFinished {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[signal("depot_sqlite_cmp_cold_job_finished")]
-pub struct ColdJobFinished {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub job_kind: CompactionJobKind,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub status: CompactionJobStatus,
-	pub output_refs: Vec<ColdShardRef>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[signal("depot_sqlite_cmp_reclaim_job_finished")]
 pub struct ReclaimJobFinished {
 	pub database_branch_id: DatabaseBranchId,
@@ -273,19 +210,6 @@ pub struct RunHotJob {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-#[signal("depot_sqlite_cmp_run_cold_job")]
-pub struct RunColdJob {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub job_kind: CompactionJobKind,
-	pub base_lifecycle_generation: u64,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub status: CompactionJobStatus,
-	pub input_range: ColdJobInputRange,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
 #[signal("depot_sqlite_cmp_run_reclaim_job")]
 pub struct RunReclaimJob {
 	pub database_branch_id: DatabaseBranchId,
@@ -305,7 +229,8 @@ pub struct DbManagerState {
 	#[serde(default)]
 	pub force_compactions: ForceCompactionTracker,
 	pub retry_cursors: ManagerRetryCursors,
-	pub planning_deadlines: ManagerPlanningDeadlines,
+	#[serde(default)]
+	pub next_reclaim_check_at_ms: Option<i64>,
 	pub branch_stop_state: BranchStopState,
 	pub last_dirty_cursor: Option<DirtyCursor>,
 	#[serde(default)]
@@ -319,27 +244,17 @@ impl DbManagerState {
 			active_jobs: ManagerActiveJobs::default(),
 			force_compactions: ForceCompactionTracker::default(),
 			retry_cursors: ManagerRetryCursors::default(),
-			planning_deadlines: ManagerPlanningDeadlines::default(),
+			next_reclaim_check_at_ms: None,
 			branch_stop_state: BranchStopState::Running,
 			last_dirty_cursor: None,
 			last_observed_branch_lifecycle_generation: None,
 		}
-	}
-
-	pub fn new_with_initial_deadline(
-		companion_workflow_ids: CompanionWorkflowIds,
-		now_ms: i64,
-	) -> Self {
-		let mut state = Self::new(companion_workflow_ids);
-		state.planning_deadlines = ManagerPlanningDeadlines::after_refresh(now_ms);
-		state
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 pub struct ManagerActiveJobs {
 	pub hot: Option<ActiveHotCompactionJob>,
-	pub cold: Option<ActiveColdCompactionJob>,
 	pub reclaim: Option<ActiveReclaimCompactionJob>,
 }
 
@@ -352,20 +267,18 @@ impl ManagerActiveJobs {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 pub struct ForceCompactionWork {
 	pub hot: bool,
-	pub cold: bool,
 	pub reclaim: bool,
 	pub final_settle: bool,
 }
 
 impl ForceCompactionWork {
 	pub(crate) fn is_empty(self) -> bool {
-		!self.hot && !self.cold && !self.reclaim && !self.final_settle
+		!self.hot && !self.reclaim && !self.final_settle
 	}
 
 	pub(crate) fn includes(self, job_kind: CompactionJobKind) -> bool {
 		match job_kind {
 			CompactionJobKind::Hot => self.hot,
-			CompactionJobKind::Cold => self.cold,
 			CompactionJobKind::Reclaim => self.reclaim,
 		}
 	}
@@ -373,7 +286,6 @@ impl ForceCompactionWork {
 	pub(crate) fn union(self, other: Self) -> Self {
 		ForceCompactionWork {
 			hot: self.hot || other.hot,
-			cold: self.cold || other.cold,
 			reclaim: self.reclaim || other.reclaim,
 			final_settle: self.final_settle || other.final_settle,
 		}
@@ -420,19 +332,13 @@ pub struct ForceCompactionResult {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CompanionWorkflowIds {
 	pub hot_compacter_workflow_id: Id,
-	pub cold_compacter_workflow_id: Id,
 	pub reclaimer_workflow_id: Id,
 }
 
 impl CompanionWorkflowIds {
-	pub fn new(
-		hot_compacter_workflow_id: Id,
-		cold_compacter_workflow_id: Id,
-		reclaimer_workflow_id: Id,
-	) -> Self {
+	pub fn new(hot_compacter_workflow_id: Id, reclaimer_workflow_id: Id) -> Self {
 		CompanionWorkflowIds {
 			hot_compacter_workflow_id,
-			cold_compacter_workflow_id,
 			reclaimer_workflow_id,
 		}
 	}
@@ -446,18 +352,6 @@ pub struct PlannedHotCompactionJob {
 	pub base_manifest_generation: u64,
 	pub input_fingerprint: CompactionInputFingerprint,
 	pub input_range: HotJobInputRange,
-	pub planned_at_ms: i64,
-	pub attempt: u32,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PlannedColdCompactionJob {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub base_lifecycle_generation: u64,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub input_range: ColdJobInputRange,
 	pub planned_at_ms: i64,
 	pub attempt: u32,
 }
@@ -502,33 +396,6 @@ impl ActiveHotCompactionJob {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ActiveColdCompactionJob {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub base_lifecycle_generation: u64,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub input_range: ColdJobInputRange,
-	pub planned_at_ms: i64,
-	pub attempt: u32,
-}
-
-impl ActiveColdCompactionJob {
-	pub(crate) fn from_planned(planned_job: PlannedColdCompactionJob) -> Self {
-		ActiveColdCompactionJob {
-			database_branch_id: planned_job.database_branch_id,
-			job_id: planned_job.job_id,
-			base_lifecycle_generation: planned_job.base_lifecycle_generation,
-			base_manifest_generation: planned_job.base_manifest_generation,
-			input_fingerprint: planned_job.input_fingerprint,
-			input_range: planned_job.input_range,
-			planned_at_ms: planned_job.planned_at_ms,
-			attempt: planned_job.attempt,
-		}
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActiveReclaimCompactionJob {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
@@ -558,7 +425,6 @@ impl ActiveReclaimCompactionJob {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ManagerRetryCursors {
 	pub hot: RetryCursor,
-	pub cold: RetryCursor,
 	pub reclaim: RetryCursor,
 }
 
@@ -566,7 +432,6 @@ impl Default for ManagerRetryCursors {
 	fn default() -> Self {
 		ManagerRetryCursors {
 			hot: RetryCursor::default(),
-			cold: RetryCursor::default(),
 			reclaim: RetryCursor::default(),
 		}
 	}
@@ -585,36 +450,6 @@ impl Default for RetryCursor {
 			attempt: 0,
 			next_attempt_at_ms: None,
 			last_error: None,
-		}
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ManagerPlanningDeadlines {
-	pub next_hot_check_at_ms: Option<i64>,
-	pub next_cold_check_at_ms: Option<i64>,
-	pub next_reclaim_check_at_ms: Option<i64>,
-	pub final_settle_check_at_ms: Option<i64>,
-}
-
-impl Default for ManagerPlanningDeadlines {
-	fn default() -> Self {
-		ManagerPlanningDeadlines {
-			next_hot_check_at_ms: None,
-			next_cold_check_at_ms: None,
-			next_reclaim_check_at_ms: None,
-			final_settle_check_at_ms: None,
-		}
-	}
-}
-
-impl ManagerPlanningDeadlines {
-	pub(crate) fn after_refresh(now_ms: i64) -> Self {
-		ManagerPlanningDeadlines {
-			next_hot_check_at_ms: Some(now_ms + 500),
-			next_cold_check_at_ms: Some(now_ms + 5_000),
-			next_reclaim_check_at_ms: Some(now_ms + 10_000),
-			final_settle_check_at_ms: Some(now_ms + 30_000),
 		}
 	}
 }
@@ -721,41 +556,6 @@ pub struct InstallHotJobOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct UploadColdJobInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub job_kind: CompactionJobKind,
-	pub base_lifecycle_generation: u64,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub input_range: ColdJobInputRange,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UploadColdJobOutput {
-	pub status: CompactionJobStatus,
-	pub output_refs: Vec<ColdShardRef>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct PublishColdJobInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub job_kind: CompactionJobKind,
-	pub base_lifecycle_generation: u64,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub input_range: ColdJobInputRange,
-	pub output_refs: Vec<ColdShardRef>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PublishColdJobOutput {
-	pub status: CompactionJobStatus,
-	pub output_refs: Vec<ColdShardRef>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct ReclaimFdbJobInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub job_id: Id,
@@ -773,74 +573,6 @@ pub struct ReclaimFdbJobOutput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct RetireColdObjectsInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub job_id: Id,
-	pub job_kind: CompactionJobKind,
-	pub base_lifecycle_generation: u64,
-	pub base_manifest_generation: u64,
-	pub input_fingerprint: CompactionInputFingerprint,
-	pub cold_objects: Vec<ReclaimColdObjectRef>,
-	pub retired_at_ms: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RetireColdObjectsOutput {
-	pub status: CompactionJobStatus,
-	pub retired_objects: Vec<RetiredColdObject>,
-	pub delete_after_ms: Option<i64>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct DeleteRetiredColdObjectsInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub cold_objects: Vec<ReclaimColdObjectRef>,
-	pub now_ms: i64,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeleteRetiredColdObjectsOutput {
-	pub status: CompactionJobStatus,
-	pub deleted_object_keys: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct CleanupRetiredColdObjectsInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub cold_objects: Vec<ReclaimColdObjectRef>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CleanupRetiredColdObjectsOutput {
-	pub status: CompactionJobStatus,
-	pub cleaned_object_keys: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct DeleteOrphanColdObjectsInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub base_lifecycle_generation: u64,
-	pub orphan_cold_objects: Vec<ColdShardRef>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeleteOrphanColdObjectsOutput {
-	pub status: CompactionJobStatus,
-	pub deleted_object_keys: Vec<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
-pub struct ValidateReclaimColdObjectsInput {
-	pub database_branch_id: DatabaseBranchId,
-	pub cold_objects: Vec<ReclaimColdObjectRef>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValidateReclaimColdObjectsOutput {
-	pub status: CompactionJobStatus,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
 pub struct RefreshManagerInput {
 	pub database_branch_id: DatabaseBranchId,
 	pub force: ForceCompactionWork,
@@ -848,9 +580,9 @@ pub struct RefreshManagerInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RefreshManagerOutput {
-	pub planning_deadlines: ManagerPlanningDeadlines,
+	#[serde(default)]
+	pub refreshed_at_ms: i64,
 	pub planned_hot_job: Option<PlannedHotCompactionJob>,
-	pub planned_cold_job: Option<PlannedColdCompactionJob>,
 	pub planned_reclaim_job: Option<PlannedReclaimCompactionJob>,
 	pub observed_dirty: Option<SqliteCmpDirty>,
 	pub head_txid: Option<u64>,
@@ -972,7 +704,6 @@ impl ForceCompactionTracker {
 		requested_work: ForceCompactionWork,
 	) -> bool {
 		(requested_work.hot && active_jobs.hot.is_some())
-			|| (requested_work.cold && active_jobs.cold.is_some())
 			|| (requested_work.reclaim && active_jobs.reclaim.is_some())
 	}
 
@@ -981,7 +712,6 @@ impl ForceCompactionTracker {
 		requested_work: ForceCompactionWork,
 	) -> bool {
 		(requested_work.hot && refresh.planned_hot_job.is_some())
-			|| (requested_work.cold && refresh.planned_cold_job.is_some())
 			|| (requested_work.reclaim && refresh.planned_reclaim_job.is_some())
 	}
 
@@ -1000,13 +730,6 @@ impl ForceCompactionTracker {
 				.contains(&CompactionJobKind::Hot)
 		{
 			reasons.push("hot:no-actionable-lag".to_string());
-		}
-		if request.requested_work.cold
-			&& !request
-				.attempted_job_kinds
-				.contains(&CompactionJobKind::Cold)
-		{
-			reasons.push("cold:no-actionable-lag".to_string());
 		}
 		if request.requested_work.reclaim
 			&& !request
@@ -1045,9 +768,6 @@ impl ManagerActiveJobs {
 		if requested_work.hot && self.hot.is_some() {
 			job_kinds.push(CompactionJobKind::Hot);
 		}
-		if requested_work.cold && self.cold.is_some() {
-			job_kinds.push(CompactionJobKind::Cold);
-		}
 		if requested_work.reclaim && self.reclaim.is_some() {
 			job_kinds.push(CompactionJobKind::Reclaim);
 		}
@@ -1063,7 +783,6 @@ pub(crate) struct ManagerFdbSnapshot {
 	pub(crate) dirty: Option<SqliteCmpDirty>,
 	pub(crate) db_pins: Vec<DbHistoryPin>,
 	pub(crate) hot_inputs: HotInputSnapshot,
-	pub(crate) cold_inputs: ColdInputSnapshot,
 	pub(crate) reclaim_inputs: ReclaimInputSnapshot,
 	pub(crate) bucket_proof_blocked_reclaim: bool,
 	pub(crate) cleared_dirty: bool,
@@ -1076,6 +795,7 @@ pub(crate) struct HotInputSnapshot {
 	pub(crate) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) total_value_bytes: u64,
+	pub(crate) selected_max_txid: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1085,27 +805,8 @@ pub(crate) struct PitrIntervalSelection {
 }
 
 #[derive(Debug, Default)]
-pub(crate) struct ColdInputSnapshot {
-	pub(crate) commits: Vec<(u64, CommitRow)>,
-	pub(crate) shard_blobs: Vec<ColdShardBlob>,
-	pub(crate) total_value_bytes: u64,
-	pub(crate) min_versionstamp: [u8; 16],
-	pub(crate) max_versionstamp: [u8; 16],
-}
-
-#[derive(Debug, Clone)]
-pub(crate) struct ColdShardBlob {
-	pub(crate) shard_id: u32,
-	pub(crate) as_of_txid: u64,
-	pub(crate) key: Vec<u8>,
-	pub(crate) bytes: Vec<u8>,
-}
-
-#[derive(Debug, Default)]
 pub(crate) struct ReclaimInputSnapshot {
 	pub(crate) txid_refs: Vec<ReclaimTxidRef>,
-	pub(crate) cold_object_refs: Vec<ReclaimColdObjectRef>,
-	pub(crate) shard_cache_evictions: Vec<ShardCacheEvictionCandidate>,
 	pub(crate) expired_pitr_interval_rows: Vec<(i64, Vec<u8>, Vec<u8>, PitrIntervalCoverage)>,
 	pub(crate) commits: Vec<(u64, Vec<u8>, Vec<u8>, CommitRow)>,
 	pub(crate) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
@@ -1115,19 +816,9 @@ pub(crate) struct ReclaimInputSnapshot {
 	pub(crate) total_value_bytes: u64,
 }
 
-#[derive(Debug, Clone)]
-pub(crate) struct ShardCacheEvictionCandidate {
-	pub(crate) reference: ShardCacheEvictionRef,
-	pub(crate) shard_key: Vec<u8>,
-	pub(crate) shard_bytes: Vec<u8>,
-	pub(crate) cold_ref_key: Vec<u8>,
-	pub(crate) cold_ref_bytes: Vec<u8>,
-}
-
 gas::prelude::join_signal!(pub DbManagerSignal {
 	DeltasAvailable,
 	HotJobFinished,
-	ColdJobFinished,
 	ReclaimJobFinished,
 	ForceCompaction,
 	DestroyDatabaseBranch,
@@ -1135,11 +826,6 @@ gas::prelude::join_signal!(pub DbManagerSignal {
 
 gas::prelude::join_signal!(pub DbHotCompacterSignal {
 	RunHotJob,
-	DestroyDatabaseBranch,
-});
-
-gas::prelude::join_signal!(pub DbColdCompacterSignal {
-	RunColdJob,
 	DestroyDatabaseBranch,
 });
 
@@ -1153,7 +839,6 @@ impl DbManagerSignal {
 		match self {
 			DbManagerSignal::DeltasAvailable(signal) => signal.database_branch_id,
 			DbManagerSignal::HotJobFinished(signal) => signal.database_branch_id,
-			DbManagerSignal::ColdJobFinished(signal) => signal.database_branch_id,
 			DbManagerSignal::ReclaimJobFinished(signal) => signal.database_branch_id,
 			DbManagerSignal::ForceCompaction(signal) => signal.database_branch_id,
 			DbManagerSignal::DestroyDatabaseBranch(signal) => signal.database_branch_id,
@@ -1166,15 +851,6 @@ impl DbHotCompacterSignal {
 		match self {
 			DbHotCompacterSignal::RunHotJob(signal) => signal.database_branch_id,
 			DbHotCompacterSignal::DestroyDatabaseBranch(signal) => signal.database_branch_id,
-		}
-	}
-}
-
-impl DbColdCompacterSignal {
-	pub fn database_branch_id(&self) -> DatabaseBranchId {
-		match self {
-			DbColdCompacterSignal::RunColdJob(signal) => signal.database_branch_id,
-			DbColdCompacterSignal::DestroyDatabaseBranch(signal) => signal.database_branch_id,
 		}
 	}
 }

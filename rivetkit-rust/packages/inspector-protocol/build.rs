@@ -13,7 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 		.and_then(|p| p.parent())
 		.ok_or("Failed to find repository root")?;
 
-	let cfg = vbare_compiler::Config::with_hash_map();
+	let cfg = vbare_compiler::Config::default();
 	vbare_compiler::process_schemas_with_config(&schema_dir, &cfg)?;
 
 	typescript::generate_versions(repo_root, &schema_dir, "inspector");

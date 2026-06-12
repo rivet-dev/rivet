@@ -56,7 +56,7 @@ async fn load_from_store_reads_scan_prefix_entries() -> Result<()> {
 		Box::pin(async move {
 			let db = ctx.udb.clone();
 			let subspace = Subspace::new(&("depot-page-index", Uuid::new_v4().to_string()));
-			db.run({
+			db.txn("test_depotconveyer_page_index", {
 				let subspace = subspace.clone();
 				move |tx| {
 					let subspace = subspace.clone();

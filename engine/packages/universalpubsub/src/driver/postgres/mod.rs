@@ -68,15 +68,13 @@ pub struct PostgresDriver {
 }
 
 impl PostgresDriver {
-	#[tracing::instrument(skip(conn_str), fields(memory_optimization))]
+	#[tracing::instrument(skip(conn_str))]
 	pub async fn connect(
 		conn_str: String,
-		memory_optimization: bool,
 		ssl_root_cert_path: Option<PathBuf>,
 		ssl_client_cert_path: Option<PathBuf>,
 		ssl_client_key_path: Option<PathBuf>,
 	) -> Result<Self> {
-		tracing::debug!(?memory_optimization, "connecting to postgres");
 		// Create deadpool config from connection string
 		let mut config = Config::new();
 		config.url = Some(conn_str.clone());
@@ -482,7 +480,11 @@ impl PostgresDriver {
 
 #[async_trait]
 impl PubSubDriver for PostgresDriver {
-	async fn subscribe(&self, subject: &str) -> Result<SubscriberDriverHandle> {
+	async fn subscribe(
+		&self,
+		subject: &str,
+		_reply_id: Option<Uuid>,
+	) -> Result<SubscriberDriverHandle> {
 		// TODO: To match NATS implementation, LISTEN must be pipelined (i.e. wait for the command
 		// to reach the server, but not wait for it to respond). However, this has to ensure that
 		// NOTIFY & LISTEN are called on the same connection (not diff connections in a pool) or
@@ -648,7 +650,12 @@ impl PubSubDriver for PostgresDriver {
 		}))
 	}
 
-	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
+	async fn publish(
+		&self,
+		subject: &str,
+		payload: &[u8],
+		_reply_subject: Option<&str>,
+	) -> Result<()> {
 		// TODO: See `subscribe` about pipelining
 
 		// Encode payload to base64 and send NOTIFY

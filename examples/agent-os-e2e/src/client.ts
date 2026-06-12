@@ -30,8 +30,14 @@ assert(text.includes("Hello from Agent OS!"), "filesystem round-trip");
 
 await agent.mkdir("/home/user/project");
 const entries = (await agent.readdir("/home/user/project")) as string[];
-console.log("mkdir + readdir:", entries.filter((e) => e !== "." && e !== ".."));
-console.log("exists /home/user/project:", await agent.exists("/home/user/project"));
+console.log(
+	"mkdir + readdir:",
+	entries.filter((e) => e !== "." && e !== ".."),
+);
+console.log(
+	"exists /home/user/project:",
+	await agent.exists("/home/user/project"),
+);
 console.log("exists /nonexistent:", await agent.exists("/nonexistent"));
 
 // --- Step 2: Subprocess execution ---
@@ -60,7 +66,10 @@ assert(grep.stdout.includes("apricot"), "grep apricot");
 
 const cat = (await agent.exec("cat /tmp/hello.txt")) as { stdout: string };
 console.log(`exec cat: "${cat.stdout.trim()}"`);
-assert(cat.stdout.includes("Hello from Agent OS!"), "cat reads file written by writeFile");
+assert(
+	cat.stdout.includes("Hello from Agent OS!"),
+	"cat reads file written by writeFile",
+);
 
 // --- Step 3: Preview URL ---
 console.log("\n=== Step 3: Preview URL ===");
@@ -140,7 +149,9 @@ console.log(`\n\nPrompt completed: ${response?.stopReason ?? "done"}`);
 // --- Step 5: Verify agent wrote the file ---
 console.log("\n=== Step 5: Verify agent output ===");
 try {
-	const agentData = (await agent.readFile("/tmp/e2e-result.txt")) as Uint8Array;
+	const agentData = (await agent.readFile(
+		"/tmp/e2e-result.txt",
+	)) as Uint8Array;
 	const agentText = new TextDecoder().decode(agentData);
 	console.log(`Agent wrote: "${agentText.trim()}"`);
 	assert(agentText.includes("E2E test passed!"), "agent file content");

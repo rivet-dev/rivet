@@ -9,18 +9,15 @@ import {
 	Icon,
 	type IconProp,
 } from "@rivet-gg/icons";
-import { TwinklingSparkles } from "@/components/twinkling-sparkles";
 import { useQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { Suspense, useState } from "react";
 import { BillingPlans } from "@/app/billing/billing-plans";
+import { ComputeUsageRows } from "@/app/billing/compute-card";
 import { useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
-import {
-	formatMetricValue,
-	type MetricType,
-} from "@/app/billing/usage-card";
+import { formatMetricValue, type MetricType } from "@/app/billing/usage-card";
 import {
 	Button,
 	cn,
@@ -34,6 +31,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { TwinklingSparkles } from "@/components/twinkling-sparkles";
 import { BILLING } from "@/content/billing";
 import { ResourcePicker } from "./resource-picker";
 import { SettingsCard } from "./settings-card";
@@ -173,21 +171,14 @@ function BillingDrawerBody() {
 		return <BillingSkeleton />;
 	}
 
-	const totalOverageCents = USAGE_METRICS.reduce(
-		(total, { key }) => {
-			const current = metrics[key] || 0n;
-			const includedInPlan = planIncluded[key];
-			return (
-				total +
-				calculateOverageCost(
-					current,
-					includedInPlan,
-					BILLING.prices[key],
-				)
-			);
-		},
-		0n,
-	);
+	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
+		const current = metrics[key] || 0n;
+		const includedInPlan = planIncluded[key];
+		return (
+			total +
+			calculateOverageCost(current, includedInPlan, BILLING.prices[key])
+		);
+	}, 0n);
 
 	const periodStart = data.billing.currentPeriodStart
 		? new Date(data.billing.currentPeriodStart)
@@ -266,6 +257,12 @@ function BillingDrawerBody() {
 					})}
 				</SettingsCard>
 			</div>
+
+			<div>
+				<SettingsCard divided>
+					<ComputeUsageRows />
+				</SettingsCard>
+			</div>
 		</div>
 	);
 }
@@ -306,10 +303,7 @@ function CurrentPlanCard({
 				<ManageBillingButton variant="ghost" size="sm">
 					<span className="inline-flex items-center gap-1">
 						Manage billing
-						<Icon
-							icon={faArrowUpRight}
-							className="size-3"
-						/>
+						<Icon icon={faArrowUpRight} className="size-3" />
 					</span>
 				</ManageBillingButton>
 			</div>
@@ -328,8 +322,11 @@ function CurrentBillCard({
 }) {
 	const now = Date.now();
 	const totalMs = periodEnd.getTime() - periodStart.getTime();
-	const elapsedMs = Math.max(0, Math.min(totalMs, now - periodStart.getTime()));
-	const pct = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
+	const elapsedMs = Math.max(
+		0,
+		Math.min(totalMs, now - periodStart.getTime()),
+	);
+	const _pct = totalMs > 0 ? (elapsedMs / totalMs) * 100 : 0;
 	const daysLeft = Math.max(
 		0,
 		Math.ceil((periodEnd.getTime() - now) / (24 * 60 * 60 * 1000)),
@@ -358,7 +355,9 @@ function CurrentBillCard({
 				{formatCurrency(total)}
 			</div>
 			<div className="flex items-center justify-between text-xs">
-				<span className="text-muted-foreground">{fmtDate(periodStart)} – {fmtDate(periodEnd)}</span>
+				<span className="text-muted-foreground">
+					{fmtDate(periodStart)} – {fmtDate(periodEnd)}
+				</span>
 				<span className="text-foreground">{daysLeft} days left</span>
 			</div>
 		</SettingsCard>

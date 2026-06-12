@@ -8,9 +8,8 @@ use depot::{
 	keys::PAGE_SIZE,
 	types::{BucketId, DatabaseBranchId, DirtyPage},
 	workflows::compaction::{
-		CompactionJobKind, DATABASE_BRANCH_ID_TAG, DbColdCompacterWorkflow, DbHotCompacterWorkflow,
-		DbManagerState, DbManagerWorkflow, DbReclaimerWorkflow, DepotCompactionTestDriver,
-		ForceCompactionWork,
+		CompactionJobKind, DATABASE_BRANCH_ID_TAG, DbHotCompacterWorkflow, DbManagerState,
+		DbManagerWorkflow, DbReclaimerWorkflow, DepotCompactionTestDriver, ForceCompactionWork,
 	},
 };
 use gas::{
@@ -31,9 +30,6 @@ fn build_registry() -> Registry {
 	registry.register_workflow::<DbManagerWorkflow>().unwrap();
 	registry
 		.register_workflow::<DbHotCompacterWorkflow>()
-		.unwrap();
-	registry
-		.register_workflow::<DbColdCompacterWorkflow>()
 		.unwrap();
 	registry.register_workflow::<DbReclaimerWorkflow>().unwrap();
 	registry
@@ -62,7 +58,7 @@ async fn read_database_branch_id(
 ) -> Result<DatabaseBranchId> {
 	let db = test_ctx.pools().udb()?;
 	let database_id = database_id.to_string();
-	db.run(move |tx| {
+	db.txn("test_depotforced_compaction_test_driver", move |tx| {
 		let database_id = database_id.clone();
 		async move {
 			branch::resolve_database_branch(
@@ -103,7 +99,6 @@ async fn test_driver_forces_noop_without_planning_timers() -> Result<()> {
 
 	let requested_work = ForceCompactionWork {
 		hot: false,
-		cold: true,
 		reclaim: false,
 		final_settle: true,
 	};
@@ -119,14 +114,9 @@ async fn test_driver_forces_noop_without_planning_timers() -> Result<()> {
 	assert!(
 		result
 			.skipped_noop_reasons
-			.contains(&"cold:no-actionable-lag".to_string())
-	);
-	assert!(
-		result
-			.skipped_noop_reasons
 			.contains(&"final-settle:refreshed".to_string())
 	);
-	assert_eq!(manager_state.planning_deadlines, Default::default());
+	assert_eq!(manager_state.next_reclaim_check_at_ms, None);
 
 	test_ctx.shutdown().await?;
 	Ok(())
@@ -146,7 +136,6 @@ async fn test_driver_forces_hot_compaction_and_exposes_result_fields() -> Result
 
 	let requested_work = ForceCompactionWork {
 		hot: true,
-		cold: false,
 		reclaim: false,
 		final_settle: false,
 	};
@@ -160,7 +149,7 @@ async fn test_driver_forces_hot_compaction_and_exposes_result_fields() -> Result
 	assert_eq!(result.completed_job_ids.len(), 1);
 	assert!(result.skipped_noop_reasons.is_empty());
 	assert!(result.terminal_error.is_none());
-	assert_eq!(manager_state.planning_deadlines, Default::default());
+	assert_eq!(manager_state.next_reclaim_check_at_ms, None);
 
 	let tag_value = depot::workflows::compaction::database_branch_tag_value(database_branch_id);
 	assert_eq!(

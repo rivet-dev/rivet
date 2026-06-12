@@ -67,6 +67,7 @@ impl TestPubSub {
 				let config =
 					rivet_config::config::PubSub::Memory(rivet_config::config::pubsub::Memory {
 						channel: format!("test-{}", test_id),
+						disable_memory_optimization: false,
 					});
 
 				Ok((config, None))

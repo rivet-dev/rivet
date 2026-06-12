@@ -49,7 +49,10 @@ interface RunnerConfigsTableProps {
 	fetchNextPage?: () => void;
 	configs: [string, Rivet.RunnerConfigsListResponseRunnerConfigsValue][];
 	totalDatacenterCount?: number;
-	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 	onEditConfig: (name: string) => void;
 	onDeleteConfig: (name: string) => void;
 }
@@ -72,7 +75,9 @@ export function RunnerConfigsTable({
 					<TableHead className="w-8"></TableHead>
 					<TableHead className="pl-8">Name</TableHead>
 					<TableHead>Provider</TableHead>
-					<TableHead className="w-[220px] max-w-[220px]">Endpoint</TableHead>
+					<TableHead className="w-[220px] max-w-[220px]">
+						Endpoint
+					</TableHead>
 					<TableHead>Datacenter</TableHead>
 					<TableHead></TableHead>
 				</TableRow>
@@ -172,7 +177,10 @@ function Row({
 }: {
 	name: string;
 	totalDatacenterCount?: number;
-	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 	onEditConfig: (name: string) => void;
 	onDeleteConfig: (name: string) => void;
 } & Rivet.RunnerConfigsListResponseRunnerConfigsValue) {
@@ -246,7 +254,10 @@ function StatusCell({
 	renderRegion,
 }: {
 	datacenters: Record<string, Rivet.RunnerConfigResponse>;
-	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 }) {
 	const errors = useMemo(() => {
 		const errorMap: Record<string, RivetActorError | undefined> = {};
@@ -302,9 +313,7 @@ function getProviderLabel(provider: string | undefined): string {
 
 type RunnerKind = "serverless" | "runner";
 
-function getDatacenterKind(
-	config: Rivet.RunnerConfigResponse,
-): RunnerKind {
+function getDatacenterKind(config: Rivet.RunnerConfigResponse): RunnerKind {
 	return config.serverless ? "serverless" : "runner";
 }
 
@@ -313,7 +322,10 @@ function ProviderSummary({
 	renderRegion,
 }: {
 	datacenters: [string, Rivet.RunnerConfigResponse][];
-	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 }) {
 	const breakdown = useMemo(() => {
 		const rows = datacenters.map(([dc, config]) => {
@@ -373,27 +385,35 @@ function ProviderSummary({
 		<WithTooltip
 			content={
 				<ul className="space-y-1">
-					{breakdown.rows.map(({ dc, provider, customName, customIcon, kind }) => (
-						<li key={dc} className="flex items-center gap-2">
-							{renderRegion(dc, { abbreviated: false })}
-							{showProviderInTooltip ? (
-								<>
-									<span className="text-muted-foreground">·</span>
-									<ProviderInline
-										provider={provider}
-										customName={customName}
-										customIcon={customIcon}
-									/>
-								</>
-							) : null}
-							{showKindInTooltip ? (
-								<>
-									<span className="text-muted-foreground">·</span>
-									<span className="capitalize">{kind}</span>
-								</>
-							) : null}
-						</li>
-					))}
+					{breakdown.rows.map(
+						({ dc, provider, customName, customIcon, kind }) => (
+							<li key={dc} className="flex items-center gap-2">
+								{renderRegion(dc, { abbreviated: false })}
+								{showProviderInTooltip ? (
+									<>
+										<span className="text-muted-foreground">
+											·
+										</span>
+										<ProviderInline
+											provider={provider}
+											customName={customName}
+											customIcon={customIcon}
+										/>
+									</>
+								) : null}
+								{showKindInTooltip ? (
+									<>
+										<span className="text-muted-foreground">
+											·
+										</span>
+										<span className="capitalize">
+											{kind}
+										</span>
+									</>
+								) : null}
+							</li>
+						),
+					)}
 				</ul>
 			}
 			trigger={
@@ -418,12 +438,16 @@ function Endpoints({
 	renderRegion,
 }: {
 	datacenters: [string, Rivet.RunnerConfigResponse][];
-	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 }) {
 	const perDatacenter = useMemo(() => {
-		return datacenters
-			.filter(([, config]) => config.serverless?.url)
-			.map(([dc, config]) => [dc, config.serverless!.url] as const);
+		return datacenters.flatMap(([dc, config]) => {
+			const endpoint = config.serverless?.url;
+			return endpoint ? [[dc, endpoint] as const] : [];
+		});
 	}, [datacenters]);
 
 	const uniqueEndpoints = useMemo(
@@ -551,7 +575,10 @@ function Regions({
 }: {
 	regions: string[];
 	totalDatacenterCount?: number;
-	renderRegion: (regionId: string, opts: { abbreviated?: boolean }) => ReactNode;
+	renderRegion: (
+		regionId: string,
+		opts: { abbreviated?: boolean },
+	) => ReactNode;
 }) {
 	if (
 		totalDatacenterCount !== undefined &&

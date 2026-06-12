@@ -22,7 +22,7 @@ pub struct Output {
 pub async fn pegboard_actor_list_names(ctx: &OperationCtx, input: &Input) -> Result<Output> {
 	let names = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_actor_list_names", |tx| async move {
 			let tx = tx.with_subspace(keys::subspace());
 
 			let actor_name_subspace =

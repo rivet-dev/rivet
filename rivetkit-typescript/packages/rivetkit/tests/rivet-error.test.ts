@@ -1,8 +1,8 @@
 import { describe, expect, test } from "vitest";
 import {
-	RivetError,
 	decodeBridgeRivetError,
 	encodeBridgeRivetError,
+	RivetError,
 	toRivetError,
 } from "../src/actor/errors";
 import { deconstructError } from "../src/common/utils";
@@ -73,9 +73,11 @@ describe("RivetError bridge helpers", () => {
 	});
 
 	test("does not treat plain objects as structured errors", () => {
-		const result = deconstructError(
-			{ group: "foo", code: "bar", message: "baz" },
-		);
+		const result = deconstructError({
+			group: "foo",
+			code: "bar",
+			message: "baz",
+		});
 
 		expect(result).toMatchObject({
 			statusCode: 500,

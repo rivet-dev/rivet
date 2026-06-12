@@ -42,7 +42,7 @@ pub async fn datacenter_list_by_ping(ctx: &OperationCtx, input: &Input) -> Resul
 			move |mut cache, dc_labels| async move {
 				let res = ctx
 					.udb()?
-					.run(|tx| {
+					.txn("datacenter_list_by_ping_read_rtts", |tx| {
 						let dc_labels = dc_labels.clone();
 
 						async move {

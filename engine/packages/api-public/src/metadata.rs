@@ -19,6 +19,8 @@ pub struct GetResponse {
 	rustc_host: String,
 	cargo_target: String,
 	cargo_profile: String,
+	epoxy_protocol_version: u16,
+	envoy_protocol_version: u16,
 }
 
 /// Returns metadata about the API including runtime and version
@@ -50,5 +52,7 @@ pub async fn get_inner(ctx: ApiCtx) -> Result<GetResponse> {
 		rustc_host: build_meta::RUSTC_HOST.to_string(),
 		cargo_target: build_meta::CARGO_TARGET.to_string(),
 		cargo_profile: build_meta::cargo_profile().to_string(),
+		epoxy_protocol_version: epoxy_protocol::PROTOCOL_VERSION,
+		envoy_protocol_version: rivet_envoy_protocol::PROTOCOL_VERSION,
 	})
 }

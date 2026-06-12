@@ -177,3 +177,53 @@ pub struct QueryInvalidCborInput {
 pub struct QueryInvalidPercentEncoding {
 	pub name: String,
 }
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"route_dispatch_timeout",
+	"Timed out dispatching route resolution to a routing module.",
+	"Timed out dispatching route resolution to {router} after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteDispatchTimeout {
+	pub router: String,
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"route_api_public_timeout",
+	"Timed out resolving the api-public route.",
+	"Timed out resolving the api-public route after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteApiPublicTimeout {
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"route_compute_timeout",
+	"Timed out resolving the compute gateway route.",
+	"Timed out resolving the compute gateway route after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteComputeTimeout {
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}
+
+#[derive(RivetError, Serialize)]
+#[error(
+	"guard",
+	"route_auth_check_timeout",
+	"Timed out checking route authorization.",
+	"Timed out checking route authorization for {target} after {elapsed_ms}ms (timeout {timeout_ms}ms)."
+)]
+pub struct RouteAuthCheckTimeout {
+	pub target: String,
+	pub elapsed_ms: u64,
+	pub timeout_ms: u64,
+}

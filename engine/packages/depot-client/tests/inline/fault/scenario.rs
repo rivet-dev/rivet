@@ -1,25 +1,19 @@
 use std::ffi::{CStr, CString};
 use std::future::Future;
-use std::path::Path;
 use std::pin::Pin;
 use std::ptr;
 use std::sync::{Arc, LazyLock};
 use std::time::Duration;
 
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, bail};
 use depot::{
-	cold_tier::{ColdTier, FaultyColdTier, FilesystemColdTier},
 	fault::{DepotFaultCheckpoint, DepotFaultController, DepotFaultReplayEvent},
 	keys,
-	ltx::{decode_ltx_v3, encode_ltx_v3},
-	types::{
-		DatabaseBranchId, DirtyPage, RestorePointId, SnapshotSelector, decode_cold_shard_ref,
-		encode_cold_shard_ref,
-	},
+	types::{DatabaseBranchId, RestorePointId, SnapshotSelector},
 	workflows::compaction::{
-		DbColdCompacterWorkflow, DbHotCompacterWorkflow, DbManagerWorkflow, DbReclaimerWorkflow,
-		DepotCompactionTestDriver, ForceCompactionResult, ForceCompactionWork,
-		test_hooks::{self, WorkflowColdTierGuard, WorkflowFaultControllerGuard},
+		DbHotCompacterWorkflow, DbManagerWorkflow, DbReclaimerWorkflow, DepotCompactionTestDriver,
+		ForceCompactionResult, ForceCompactionWork,
+		test_hooks::{self, WorkflowFaultControllerGuard},
 	},
 };
 use futures_util::TryStreamExt;
@@ -33,14 +27,8 @@ use libsqlite3_sys::{
 use parking_lot::Mutex;
 use rivet_pools::__rivet_util::Id;
 use rivet_test_deps::TestDeps;
-use sha2::{Digest, Sha256};
-use tempfile::TempDir;
 use tokio::runtime::Builder;
-use universaldb::{
-	RangeOption,
-	options::StreamingMode,
-	utils::IsolationLevel::{Serializable, Snapshot},
-};
+use universaldb::{RangeOption, options::StreamingMode, utils::IsolationLevel::Snapshot};
 
 use super::super::{
 	DirectDepotTransport, DirectStorage, DirectStorageStats, NativeDatabase, SqliteVfs, VfsConfig,
@@ -86,8 +74,6 @@ struct FaultScenarioInner {
 	actor_id: String,
 	handle: tokio::runtime::Handle,
 	storage: Arc<DirectStorage>,
-	verification_cold_tier: Arc<dyn ColdTier>,
-	_cold_dir: TempDir,
 	database: Mutex<Option<NativeDatabase>>,
 	oracle: Mutex<NativeSqliteOracle>,
 	faults: DepotFaultController,
@@ -99,7 +85,6 @@ struct FaultScenarioInner {
 	ambiguous_oracle_outcome: Mutex<Option<AmbiguousOracleOutcome>>,
 	manager_workflow_id: tokio::sync::Mutex<Option<Id>>,
 	workflow_fault_guard: Mutex<Option<WorkflowFaultControllerGuard>>,
-	workflow_cold_tier_guard: Mutex<Option<WorkflowColdTierGuard>>,
 	test_ctx: tokio::sync::Mutex<TestCtx>,
 }
 
@@ -261,22 +246,13 @@ impl FaultScenario {
 
 impl FaultScenarioCtx {
 	async fn new(scenario: &FaultScenario) -> Result<Self> {
-		let cold_dir = tempfile::tempdir().context("cold tier temp dir should build")?;
-		let test_ctx = test_ctx_with_cold_tier(cold_dir.path()).await?;
+		let test_ctx = build_test_ctx().await?;
 		let udb = test_ctx.pools().udb()?;
 		let handle = tokio::runtime::Handle::current();
 		let actor_id = super::super::next_test_name("sqlite-fault-actor");
 		let faults = DepotFaultController::new();
-		let cold_tier = Arc::new(FaultyColdTier::new_with_fault_controller_for_test(
-			FilesystemColdTier::new(cold_dir.path()),
-			"sqlite-fault-cold-tier",
-			faults.clone(),
-		)) as Arc<dyn ColdTier>;
-		let verification_cold_tier =
-			Arc::new(FilesystemColdTier::new(cold_dir.path())) as Arc<dyn ColdTier>;
-		let storage = Arc::new(DirectStorage::new_with_cold_tier_and_fault_controller(
+		let storage = Arc::new(DirectStorage::new_with_fault_controller(
 			(*udb).clone(),
-			cold_tier,
 			faults.clone(),
 		));
 
@@ -288,8 +264,6 @@ impl FaultScenarioCtx {
 				actor_id,
 				handle,
 				storage,
-				verification_cold_tier,
-				_cold_dir: cold_dir,
 				database: Mutex::new(None),
 				oracle: Mutex::new(NativeSqliteOracle::open()?),
 				faults,
@@ -301,7 +275,6 @@ impl FaultScenarioCtx {
 				ambiguous_oracle_outcome: Mutex::new(None),
 				manager_workflow_id: tokio::sync::Mutex::new(None),
 				workflow_fault_guard: Mutex::new(None),
-				workflow_cold_tier_guard: Mutex::new(None),
 				test_ctx: tokio::sync::Mutex::new(test_ctx),
 			}),
 		})
@@ -411,18 +384,6 @@ impl FaultScenarioCtx {
 	pub(crate) async fn force_hot_compaction(&self) -> Result<ForceCompactionResult> {
 		self.force_compaction(ForceCompactionWork {
 			hot: true,
-			cold: false,
-			reclaim: false,
-			final_settle: false,
-		})
-		.await
-	}
-
-	#[allow(dead_code)]
-	pub(crate) async fn force_cold_compaction(&self) -> Result<ForceCompactionResult> {
-		self.force_compaction(ForceCompactionWork {
-			hot: false,
-			cold: true,
 			reclaim: false,
 			final_settle: false,
 		})
@@ -433,7 +394,6 @@ impl FaultScenarioCtx {
 	pub(crate) async fn force_reclaim(&self) -> Result<ForceCompactionResult> {
 		self.force_compaction(ForceCompactionWork {
 			hot: false,
-			cold: false,
 			reclaim: true,
 			final_settle: false,
 		})
@@ -510,7 +470,6 @@ impl FaultScenarioCtx {
 	pub(crate) async fn verify_depot_invariants(&self) -> Result<()> {
 		DepotInvariantScanner::new(
 			self.inner.storage.depot_database(),
-			Some(Arc::clone(&self.inner.verification_cold_tier)),
 			self.inner.actor_id.clone(),
 		)
 		.verify()
@@ -593,7 +552,6 @@ impl FaultScenarioCtx {
 	async fn shutdown(&self) -> Result<()> {
 		self.close_database();
 		self.inner.workflow_fault_guard.lock().take();
-		self.inner.workflow_cold_tier_guard.lock().take();
 		let mut test_ctx = self.inner.test_ctx.lock().await;
 		test_ctx.shutdown().await
 	}
@@ -629,127 +587,6 @@ impl FaultScenarioCtx {
 			.await
 	}
 
-	pub(crate) async fn override_cold_object_delete_grace(
-		&self,
-		grace_ms: i64,
-	) -> Result<test_hooks::ColdObjectDeleteGraceGuard> {
-		let database_branch_id = self.database_branch_id().await?;
-		Ok(test_hooks::override_cold_object_delete_grace_for_test(
-			database_branch_id,
-			grace_ms,
-		))
-	}
-
-	pub(crate) async fn seed_page_as_cold_ref_for_harness_test(&self, pgno: u32) -> Result<()> {
-		let dirty_pages = self.with_database_blocking(|db| {
-			let ctx = db._vfs.ctx();
-			let state = ctx.state.read();
-			(1..=state.db_size_pages)
-				.filter(|candidate_pgno| {
-					*candidate_pgno / depot::keys::SHARD_SIZE == pgno / depot::keys::SHARD_SIZE
-				})
-				.map(|candidate_pgno| {
-					let bytes = state
-						.cached_page(&ctx.config, candidate_pgno)
-						.with_context(|| {
-							format!(
-								"page {candidate_pgno} should be present in VFS cache before cold-ref seed"
-							)
-						})?;
-					Ok(DirtyPage {
-						pgno: candidate_pgno,
-						bytes,
-					})
-				})
-				.collect::<Result<Vec<_>>>()
-		})?;
-		self.inner
-			.storage
-			.seed_pages_as_cold_ref(&self.inner.actor_id, pgno, dirty_pages)
-			.await
-	}
-
-	pub(crate) async fn remove_page_from_seeded_cold_ref_for_harness_test(
-		&self,
-		pgno: u32,
-	) -> Result<()> {
-		let cold_tier = self
-			.inner
-			.storage
-			.cold_tier()
-			.context("fault scenario cold tier should be configured")?;
-		let (branch_id, head_txid) = self
-			.inner
-			.storage
-			.read_branch_head(&self.inner.actor_id)
-			.await?;
-		let shard_id = pgno / keys::SHARD_SIZE;
-		let cold_ref_key = keys::branch_compaction_cold_shard_key(branch_id, shard_id, head_txid);
-		let mut reference = self
-			.inner
-			.storage
-			.depot_database()
-			.run(move |tx| {
-				let cold_ref_key = cold_ref_key.clone();
-				async move {
-					let value = tx
-						.informal()
-						.get(&cold_ref_key, Serializable)
-						.await?
-						.context("seeded cold ref should exist")?;
-					decode_cold_shard_ref(&value)
-				}
-			})
-			.await?;
-
-		let object_bytes = cold_tier
-			.get_object(&reference.object_key)
-			.await?
-			.context("seeded cold object should exist")?;
-		let decoded = decode_ltx_v3(&object_bytes)?;
-		let mut removed = false;
-		let pages = decoded
-			.pages
-			.into_iter()
-			.filter(|page| {
-				if page.pgno == pgno {
-					removed = true;
-					false
-				} else {
-					true
-				}
-			})
-			.collect::<Vec<_>>();
-		ensure!(removed, "seeded cold object did not contain page {pgno}");
-
-		let rewritten_bytes = encode_ltx_v3(decoded.header, &pages)?;
-		let digest = Sha256::digest(&rewritten_bytes);
-		reference.size_bytes = rewritten_bytes.len() as u64;
-		reference.content_hash.copy_from_slice(&digest);
-		cold_tier
-			.put_object(&reference.object_key, &rewritten_bytes)
-			.await?;
-
-		self.inner
-			.storage
-			.depot_database()
-			.run(move |tx| {
-				let reference = reference.clone();
-				async move {
-					tx.informal().set(
-						&keys::branch_compaction_cold_shard_key(branch_id, shard_id, head_txid),
-						&encode_cold_shard_ref(reference)?,
-					);
-					tx.informal().set(
-						&keys::branch_pidx_key(branch_id, pgno),
-						&head_txid.to_be_bytes(),
-					);
-					Ok(())
-				}
-			})
-			.await
-	}
-
 	pub(crate) async fn read_page_from_depot(&self, pgno: u32) -> Result<()> {
 		self.inner
 			.storage
@@ -769,29 +606,28 @@ impl FaultScenarioCtx {
 			.read_branch_head(&self.inner.actor_id)
 			.await?;
 		let db = self.inner.storage.depot_database();
-		db.run(move |tx| async move {
-			let prefix = keys::branch_delta_chunk_prefix(branch_id, head_txid);
-			let prefix_subspace =
-				universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
-			let informal = tx.informal();
-			let mut stream = informal.get_ranges_keyvalues(
-				RangeOption {
-					mode: StreamingMode::WantAll,
-					..RangeOption::from(&prefix_subspace)
-				},
-				Snapshot,
-			);
-			let mut count = 0;
-			while stream.try_next().await?.is_some() {
-				count += 1;
-			}
-			Ok(count)
-		})
+		db.txn(
+			"test_depot_clientinline_fault_scenario",
+			move |tx| async move {
+				let prefix = keys::branch_delta_chunk_prefix(branch_id, head_txid);
+				let prefix_subspace =
+					universaldb::Subspace::from(universaldb::tuple::Subspace::from_bytes(prefix));
+				let informal = tx.informal();
+				let mut stream = informal.get_ranges_keyvalues(
+					RangeOption {
+						mode: StreamingMode::WantAll,
+						..RangeOption::from(&prefix_subspace)
+					},
+					Snapshot,
+				);
+				let mut count = 0;
+				while stream.try_next().await?.is_some() {
+					count += 1;
+				}
+				Ok(count)
+			},
+		)
 		.await
-	}
-
-	pub(crate) fn cold_gets(&self) -> u64 {
-		self.inner.storage.stats().cold_gets
 	}
 
 	async fn capture_branch_head_before_faults(&self) -> Result<()> {
@@ -819,16 +655,6 @@ impl FaultScenarioCtx {
 				database_branch_id,
 				self.inner.faults.clone(),
 			));
-		if self.inner.workflow_cold_tier_guard.lock().is_none() {
-			let cold_tier = self
-				.inner
-				.storage
-				.cold_tier()
-				.context("fault scenario cold tier should be configured")?;
-			*self.inner.workflow_cold_tier_guard.lock() = Some(
-				test_hooks::install_workflow_cold_tier_for_test(database_branch_id, cold_tier),
-			);
-		}
 		let manager_workflow_id = DepotCompactionTestDriver::new(&test_ctx)
 			.start_manager(database_branch_id, Some(self.inner.actor_id.clone()), true)
 			.await?;
@@ -859,24 +685,12 @@ fn build_registry() -> Registry {
 	registry
 		.register_workflow::<DbHotCompacterWorkflow>()
 		.unwrap();
-	registry
-		.register_workflow::<DbColdCompacterWorkflow>()
-		.unwrap();
 	registry.register_workflow::<DbReclaimerWorkflow>().unwrap();
 	registry
 }
 
-async fn test_ctx_with_cold_tier(root: &Path) -> Result<TestCtx> {
-	let mut test_deps = TestDeps::new().await?;
-	let mut config_root = (**test_deps.config()).clone();
-	config_root.sqlite = Some(rivet_config::config::Sqlite {
-		workflow_cold_storage: Some(rivet_config::config::SqliteWorkflowColdStorage::FileSystem(
-			rivet_config::config::SqliteWorkflowColdStorageFileSystem {
-				root: root.display().to_string(),
-			},
-		)),
-	});
-	test_deps.config = rivet_config::Config::from_root(config_root);
+async fn build_test_ctx() -> Result<TestCtx> {
+	let test_deps = TestDeps::new().await?;
 	TestCtx::new_with_deps(build_registry(), test_deps).await
 }
 

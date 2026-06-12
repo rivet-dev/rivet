@@ -3,26 +3,27 @@ mod vfs_support;
 
 pub(super) use vfs_support::{
 	DirectDepotTransport, DirectMirrorTransport, DirectStorage, DirectStorageStats,
-	storage_dirty_page,
+	sqlite_error_response, storage_dirty_page,
 };
 
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::mem::ManuallyDrop;
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
 use std::time::Duration;
 
 use async_trait::async_trait;
-use depot::cold_tier::FilesystemColdTier;
 use parking_lot::Mutex as SyncMutex;
 use rivet_envoy_protocol as protocol;
 use tempfile::TempDir;
 use tokio::runtime::Builder;
-use tokio::sync::OnceCell;
+use tokio::sync::{Notify, OnceCell};
 
 use crate::optimization_flags::{
-	DEFAULT_STARTUP_PRELOAD_MAX_BYTES, DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES,
-	DEFAULT_VFS_PROTECTED_CACHE_PAGES, DEFAULT_VFS_STAGING_CACHE_TTL_MS, SqliteOptimizationFlags,
-	SqliteReadAheadMode, SqliteVfsPageCacheMode,
+	DEFAULT_PAGER_CACHE_SIZE_KIB, DEFAULT_STARTUP_PRELOAD_MAX_BYTES,
+	DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES, DEFAULT_VFS_PROTECTED_CACHE_PAGES,
+	DEFAULT_VFS_STAGING_CACHE_TTL_MS, SqliteOptimizationFlags, SqliteReadAheadMode,
+	SqliteVfsPageCacheMode,
 };
 use crate::query::{BindParam, ColumnValue};
 use crate::vfs::SqliteVfsMetrics;
@@ -57,6 +58,8 @@ fn vfs_config_wires_optimization_flags() {
 		vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES / 2,
 		vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2,
 		vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS / 2,
+		vfs_retain_read_cache: true,
+		pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
 	};
 
 	let config = VfsConfig::from_optimization_flags(flags);
@@ -80,6 +83,7 @@ fn vfs_config_wires_optimization_flags() {
 	assert_eq!(config.startup_preload_first_page_count, 7);
 	assert!(!config.preload_hints_on_open);
 	assert!(!config.preload_hint_early_pages);
+	assert!(config.retain_read_cache);
 	assert_eq!(config.recent_hint_page_budget, 0);
 	assert!(config.recent_hint_range_budget > 0);
 }
@@ -119,6 +123,79 @@ impl SqliteTransport for RecordingInitialPagesTransport {
 	}
 }
 
+struct CappedAtomicCommitTransport {
+	inner: DirectDepotTransport,
+	max_dirty_bytes: usize,
+	rejected: AtomicBool,
+	max_seen_dirty_bytes: AtomicUsize,
+	max_seen_dirty_pages: AtomicUsize,
+}
+
+impl CappedAtomicCommitTransport {
+	fn new(engine: Arc<DirectStorage>, max_dirty_bytes: usize) -> Self {
+		Self {
+			inner: DirectDepotTransport::new(engine),
+			max_dirty_bytes,
+			rejected: AtomicBool::new(false),
+			max_seen_dirty_bytes: AtomicUsize::new(0),
+			max_seen_dirty_pages: AtomicUsize::new(0),
+		}
+	}
+
+	fn rejected(&self) -> bool {
+		self.rejected.load(Ordering::SeqCst)
+	}
+
+	fn max_seen_dirty_bytes(&self) -> usize {
+		self.max_seen_dirty_bytes.load(Ordering::SeqCst)
+	}
+
+	fn max_seen_dirty_pages(&self) -> usize {
+		self.max_seen_dirty_pages.load(Ordering::SeqCst)
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for CappedAtomicCommitTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		self.inner.get_pages(request).await
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		let dirty_bytes = request
+			.dirty_pages
+			.iter()
+			.map(|page| page.bytes.len())
+			.sum::<usize>();
+		self.max_seen_dirty_bytes
+			.fetch_max(dirty_bytes, Ordering::SeqCst);
+		self.max_seen_dirty_pages
+			.fetch_max(request.dirty_pages.len(), Ordering::SeqCst);
+
+		if dirty_bytes > self.max_dirty_bytes {
+			self.rejected.store(true, Ordering::SeqCst);
+			return Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					group: "sqlite".to_string(),
+					code: "transaction_too_large".to_string(),
+					message: format!(
+						"simulated atomic commit cap exceeded: dirty_bytes={dirty_bytes} max_dirty_bytes={}",
+						self.max_dirty_bytes
+					),
+				},
+			));
+		}
+
+		self.inner.commit(request).await
+	}
+}
+
 struct MissingDbTransport;
 
 #[async_trait]
@@ -144,6 +221,68 @@ impl SqliteTransport for MissingDbTransport {
 	}
 }
 
+struct DelayCapturedGetPagesTransport {
+	inner: Arc<DirectDepotTransport>,
+	delay_pgno: u32,
+	enabled: AtomicBool,
+	delayed: AtomicBool,
+	captured: Arc<Notify>,
+	release: Arc<Notify>,
+}
+
+impl DelayCapturedGetPagesTransport {
+	fn new(inner: Arc<DirectDepotTransport>, delay_pgno: u32) -> Self {
+		Self {
+			inner,
+			delay_pgno,
+			enabled: AtomicBool::new(false),
+			delayed: AtomicBool::new(false),
+			captured: Arc::new(Notify::new()),
+			release: Arc::new(Notify::new()),
+		}
+	}
+
+	fn enable(&self) {
+		self.enabled.store(true, Ordering::SeqCst);
+	}
+
+	async fn wait_captured(&self) {
+		self.captured.notified().await;
+	}
+
+	fn release(&self) {
+		self.release.notify_one();
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for DelayCapturedGetPagesTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		let should_delay = self.enabled.load(Ordering::SeqCst)
+			&& (self.delay_pgno == 0 || request.pgnos.contains(&self.delay_pgno))
+			&& !self.delayed.swap(true, Ordering::SeqCst);
+		if !should_delay {
+			return self.inner.get_pages(request).await;
+		}
+
+		// Capture real Depot bytes first, then release them after another writer advances the head.
+		let response = self.inner.get_pages(request).await?;
+		self.captured.notify_one();
+		self.release.notified().await;
+		Ok(response)
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		self.inner.commit(request).await
+	}
+}
+
 #[test]
 fn startup_initial_pages_do_not_require_preload_hints_on_open() {
 	let runtime = direct_runtime();
@@ -161,6 +300,7 @@ fn startup_initial_pages_do_not_require_preload_hints_on_open() {
 		.block_on(fetch_initial_pages_for_registration(
 			transport.clone(),
 			"startup-preload-actor",
+			0,
 			&config,
 		))
 		.expect("initial pages should load");
@@ -253,11 +393,12 @@ fn evicted_empty_page_one_can_be_synthesized_before_first_commit() {
 	let config = VfsConfig::default();
 	let ctx = VfsContext::new(
 		next_test_name("missing-db-actor"),
+		None,
 		runtime.handle().clone(),
 		Arc::new(MissingDbTransport),
 		config.clone(),
 		unsafe { std::mem::zeroed() },
-		Vec::new(),
+		InitialPages::default(),
 		None,
 	)
 	.expect("vfs context should build");
@@ -280,7 +421,6 @@ fn next_test_name(prefix: &str) -> String {
 struct DirectEngineHarness {
 	actor_id: String,
 	db_dir: TempDir,
-	cold_dir: Option<TempDir>,
 	storage: OnceCell<Arc<DirectStorage>>,
 }
 
@@ -289,16 +429,6 @@ impl DirectEngineHarness {
 		Self {
 			actor_id: next_test_name("sqlite-direct-actor"),
 			db_dir: tempfile::tempdir().expect("temp dir should build"),
-			cold_dir: None,
-			storage: OnceCell::new(),
-		}
-	}
-
-	fn new_with_cold_tier() -> Self {
-		Self {
-			actor_id: next_test_name("sqlite-direct-actor"),
-			db_dir: tempfile::tempdir().expect("temp dir should build"),
-			cold_dir: Some(tempfile::tempdir().expect("cold temp dir should build")),
 			storage: OnceCell::new(),
 		}
 	}
@@ -315,14 +445,7 @@ impl DirectEngineHarness {
 				.expect("rocksdb driver should build");
 				let db = universaldb::Database::new(Arc::new(driver));
 
-				Arc::new(if let Some(cold_dir) = &self.cold_dir {
-					DirectStorage::new_with_cold_tier(
-						db,
-						Arc::new(FilesystemColdTier::new(cold_dir.path())),
-					)
-				} else {
-					DirectStorage::new(db)
-				})
+				Arc::new(DirectStorage::new(db))
 			})
 			.await;
 		Arc::clone(storage)
@@ -336,6 +459,16 @@ impl DirectEngineHarness {
 		config: VfsConfig,
 	) -> NativeDatabase {
 		let transport = Arc::new(DirectDepotTransport::new(engine));
+		self.open_db_with_transport(runtime, transport, actor_id, config)
+	}
+
+	fn open_db_with_transport(
+		&self,
+		runtime: &tokio::runtime::Runtime,
+		transport: SqliteTransportHandle,
+		actor_id: &str,
+		config: VfsConfig,
+	) -> NativeDatabase {
 		let initial_main_page = runtime
 			.block_on(fetch_initial_main_page_for_registration(
 				transport.clone(),
@@ -365,11 +498,12 @@ impl DirectEngineHarness {
 		let engine = runtime.block_on(self.open_engine());
 		VfsContext::new(
 			self.actor_id.clone(),
+			None,
 			runtime.handle().clone(),
 			Arc::new(DirectDepotTransport::new(engine)),
 			VfsConfig::default(),
 			unsafe { std::mem::zeroed() },
-			Vec::new(),
+			InitialPages::default(),
 			None,
 		)
 		.expect("vfs context should build")
@@ -407,6 +541,7 @@ fn open_worker_handle_with_vfs(
 		.block_on(fetch_initial_pages_for_registration(
 			transport.clone(),
 			&harness.actor_id,
+			0,
 			&config,
 		))
 		.expect("initial pages preload should succeed");
@@ -451,7 +586,13 @@ impl SqliteVfsMetrics for WorkerTestMetrics {
 		self.overloads.fetch_add(1, Ordering::AcqRel);
 	}
 
-	fn observe_worker_command_duration(&self, _operation: &'static str, _duration_ns: u64) {
+	fn observe_worker_command_duration(
+		&self,
+		_operation: &'static str,
+		_in_tx: bool,
+		_stmt_kind: &'static str,
+		_duration_ns: u64,
+	) {
 		self.command_durations.fetch_add(1, Ordering::AcqRel);
 	}
 
@@ -883,6 +1024,74 @@ fn predictor_prefers_stride_after_repeated_reads() {
 }
 
 #[test]
+fn classify_recognizes_btree_and_overflow_pages() {
+	let page_size = DEFAULT_PAGE_SIZE;
+	for type_byte in [0x02u8, 0x05, 0x0a, 0x0d] {
+		let mut page = vec![0u8; page_size];
+		page[0] = type_byte;
+		assert_eq!(classify(2, &page), PageClass::Btree);
+	}
+
+	// An overflow page leads with a 4-byte next-page pointer, not a page type.
+	let mut overflow = vec![0u8; page_size];
+	overflow[0..4].copy_from_slice(&7u32.to_be_bytes());
+	assert_eq!(classify(2, &overflow), PageClass::Overflow);
+
+	// Page 1 carries the b-tree type byte after the 100-byte database header.
+	let mut header_page = vec![0u8; page_size];
+	header_page[100] = 0x0d;
+	assert_eq!(classify(1, &header_page), PageClass::Btree);
+}
+
+#[test]
+fn interleaved_overflow_reads_hide_leaf_forward_scan() {
+	// A single read-ahead tracker fed the merged leaf/overflow access stream of
+	// a scan over overflowing rows never sees a monotonic stride, so it never
+	// escalates to forward-scan read-ahead. This documents the behavior the
+	// per-class trackers fix.
+	let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags::default());
+	let mut tracker = AdaptiveReadAhead::default();
+	let mut mode = ReadAheadMode::Bounded;
+	for pgno in [2, 20, 3, 21, 4, 22, 5, 23, 6, 24] {
+		mode = tracker.record_and_plan(&[pgno], &config).mode;
+	}
+	assert_eq!(mode, ReadAheadMode::Bounded);
+}
+
+#[test]
+fn separated_leaf_reads_escalate_forward_scan() {
+	// With overflow pages routed to a separate tracker, the leaf tracker sees a
+	// clean monotonic stride and escalates to forward-scan read-ahead.
+	let config = VfsConfig::from_optimization_flags(SqliteOptimizationFlags::default());
+	let mut tracker = AdaptiveReadAhead::default();
+	let mut mode = ReadAheadMode::Bounded;
+	for pgno in [2, 3, 4, 5, 6] {
+		mode = tracker.record_and_plan(&[pgno], &config).mode;
+	}
+	assert_eq!(mode, ReadAheadMode::ForwardScan);
+}
+
+#[test]
+fn classified_predictor_keeps_per_class_strides_independent() {
+	// Interleaving leaf and overflow accesses must not destroy either stream's
+	// stride signal: each class predicts its own forward run.
+	let mut predictor = ClassifiedPredictor::default();
+	for (leaf, overflow) in [(2, 20), (3, 21), (4, 22), (5, 23)] {
+		predictor.record(PageClass::Btree, leaf);
+		predictor.record(PageClass::Overflow, overflow);
+	}
+
+	assert_eq!(
+		predictor.multi_predict(PageClass::Btree, 5, 3, 100),
+		vec![6, 7, 8]
+	);
+	assert_eq!(
+		predictor.multi_predict(PageClass::Overflow, 23, 3, 100),
+		vec![24, 25, 26]
+	);
+}
+
+#[test]
 fn direct_engine_open_engine_is_concurrency_safe() {
 	let runtime = direct_runtime();
 	let handle = runtime.handle().clone();
@@ -1024,6 +1233,162 @@ fn direct_engine_handles_large_rows_and_multi_page_growth() {
 		sqlite_query_i64(db.as_ptr(), "SELECT max(length(payload)) FROM blobs;")
 			.expect("max payload length should succeed")
 			>= 9000
+	);
+}
+
+#[test]
+fn batch_atomic_commit_does_not_depend_on_aux_journal_open() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db(&runtime);
+	let ctx = direct_vfs_ctx(&db);
+
+	ctx.fail_next_aux_open("InjectedAuxOpenError: journal open should not be needed");
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE batch_atomic_no_journal (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+	)
+	.expect("batch atomic create should not need rollback journal open");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO batch_atomic_no_journal (id, value) VALUES (1, 'ok');",
+	)
+	.expect("batch atomic insert should not need rollback journal open");
+
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should succeed"),
+		"ok"
+	);
+}
+
+#[test]
+fn batch_atomic_oversized_commit_fails_closed_and_reopens_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let actor_id = harness.actor_id.clone();
+	let transport = Arc::new(CappedAtomicCommitTransport::new(
+		Arc::clone(&engine),
+		256 * 1024,
+	));
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&actor_id,
+		VfsConfig::default(),
+	);
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE atomic_cap (id INTEGER PRIMARY KEY, payload BLOB NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO atomic_cap (id, payload) VALUES (1, zeroblob(1024));",
+	)
+	.expect("seed insert should succeed");
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;")
+			.expect("pre-cap integrity_check should succeed"),
+		"ok"
+	);
+
+	sqlite_exec(db.as_ptr(), "BEGIN IMMEDIATE;").expect("large transaction should begin");
+	for id in 2..=130 {
+		sqlite_exec(
+			db.as_ptr(),
+			&format!("INSERT INTO atomic_cap (id, payload) VALUES ({id}, randomblob(4096));"),
+		)
+		.expect("large transaction insert should succeed");
+	}
+	let commit_err = sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("oversized commit should fail");
+	assert!(
+		commit_err.contains("disk I/O error") || commit_err.contains("transaction_too_large"),
+		"unexpected commit error: {commit_err}",
+	);
+	assert!(
+		transport.rejected(),
+		"test did not exceed the simulated atomic commit cap; max_seen_dirty_bytes={} max_seen_dirty_pages={}",
+		transport.max_seen_dirty_bytes(),
+		transport.max_seen_dirty_pages(),
+	);
+	drop(db);
+
+	let reopened = harness.open_db_on_engine(&runtime, engine, &actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM atomic_cap;")
+			.expect("count after capped commit should succeed"),
+		1
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA quick_check;")
+			.expect("quick_check after capped commit should succeed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check after capped commit should succeed"),
+		"ok"
+	);
+}
+
+#[test]
+fn volatile_rollback_journal_without_batch_atomic_can_make_failed_commit_durable() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(Arc::clone(&engine)));
+	let hooks = transport.direct_hooks();
+	let actor_id = harness.actor_id.clone();
+	let mut config = VfsConfig::default();
+	config.assert_batch_atomic = false;
+	config.advertise_batch_atomic = false;
+	let db = harness.open_db_with_transport(&runtime, transport, &actor_id, config);
+
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE rollback_journal_loss (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO rollback_journal_loss (id, value) VALUES (1, 'before');",
+	)
+	.expect("seed insert should succeed");
+
+	hooks.fail_next_commit_after_apply("InjectedTransportError: main db sync response lost");
+	sqlite_exec(db.as_ptr(), "BEGIN IMMEDIATE;").expect("transaction should begin");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO rollback_journal_loss (id, value) VALUES (2, 'failed-commit');",
+	)
+	.expect("transaction insert should succeed");
+	let commit_err =
+		sqlite_exec(db.as_ptr(), "COMMIT;").expect_err("commit response loss should fail");
+	assert!(
+		commit_err.contains("disk I/O error"),
+		"unexpected commit error: {commit_err}"
+	);
+
+	let leaked = ManuallyDrop::new(db);
+	let _fatal_after_failed_commit = direct_vfs_ctx(&leaked).clone_fatal_error();
+
+	let reopened = harness.open_db_on_engine(&runtime, engine, &actor_id, VfsConfig::default());
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity_check should succeed after simulated crash"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_i64(
+			reopened.as_ptr(),
+			"SELECT COUNT(*) FROM rollback_journal_loss;"
+		)
+		.expect("count after simulated crash should succeed"),
+		2,
+		"without batch atomic, a lost main-db sync response can make a failed commit durable because the rollback journal was process-local",
 	);
 }
 
@@ -1177,111 +1542,6 @@ fn direct_mirror_transport_reopens_from_mirror_pages() {
 	assert_eq!(stats.depot_get_pages, 0);
 	assert!(stats.mirror_reads > 0);
 	assert!(stats.mirror_seeds > 0);
-}
-
-#[test]
-fn strict_direct_reopen_counts_cold_tier_get_for_cold_covered_page() {
-	let runtime = direct_runtime();
-	let harness = DirectEngineHarness::new_with_cold_tier();
-	let page_count;
-
-	{
-		let db = harness.open_db(&runtime);
-		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 808;")
-			.expect("user_version write should succeed");
-		page_count = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
-			.expect("page count should succeed") as u32;
-	}
-
-	let engine = runtime.block_on(harness.open_engine());
-	let page = runtime
-		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect("page 1 should be fetched from depot")
-		.pages
-		.into_iter()
-		.find(|page| page.pgno == 1)
-		.and_then(|page| page.bytes)
-		.expect("page 1 should be present");
-	assert_eq!(&page[..16], b"SQLite format 3\0");
-	runtime
-		.block_on(engine.seed_page_as_cold_ref(&harness.actor_id, 1, page))
-		.expect("cold ref should seed");
-	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xcd; 4096], page_count));
-	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
-
-	let before = engine.stats();
-	let reopened = harness.open_db(&runtime);
-	assert_eq!(
-		sqlite_query_i64(reopened.as_ptr(), "PRAGMA user_version;")
-			.expect("strict reopen should read cold-backed state"),
-		808
-	);
-	let after = engine.stats();
-	assert!(after.depot_get_pages > before.depot_get_pages);
-	assert!(after.cold_gets > before.cold_gets);
-	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_seeds, before.mirror_seeds);
-}
-
-#[test]
-fn strict_direct_warmed_shard_cache_does_not_count_as_cold_tier_evidence() {
-	let runtime = direct_runtime();
-	let harness = DirectEngineHarness::new_with_cold_tier();
-	let page_count;
-
-	{
-		let db = harness.open_db(&runtime);
-		sqlite_exec(db.as_ptr(), "PRAGMA user_version = 909;")
-			.expect("user_version write should succeed");
-		page_count = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
-			.expect("page count should succeed") as u32;
-	}
-
-	let engine = runtime.block_on(harness.open_engine());
-	let page = runtime
-		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect("page 1 should be fetched from depot")
-		.pages
-		.into_iter()
-		.find(|page| page.pgno == 1)
-		.and_then(|page| page.bytes)
-		.expect("page 1 should be present");
-	assert_eq!(&page[..16], b"SQLite format 3\0");
-	runtime
-		.block_on(engine.seed_page_as_cold_ref(&harness.actor_id, 1, page))
-		.expect("cold ref should seed");
-	runtime.block_on(engine.poison_mirror_page(&harness.actor_id, 1, vec![0xcd; 4096], page_count));
-	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
-
-	let before_warm = engine.stats();
-	let cold_page = runtime
-		.block_on(engine.get_pages(&harness.actor_id, &[1]))
-		.expect("strict direct read should hit cold tier")
-		.pages
-		.into_iter()
-		.find(|page| page.pgno == 1)
-		.and_then(|page| page.bytes)
-		.expect("cold-backed page should be present");
-	assert_eq!(&cold_page[..16], b"SQLite format 3\0");
-	let after_warm = engine.stats();
-	assert!(after_warm.cold_gets > before_warm.cold_gets);
-
-	let actor_db = runtime.block_on(engine.actor_db(harness.actor_id.clone()));
-	runtime.block_on(actor_db.wait_for_shard_cache_fill_idle_for_test());
-	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
-
-	let before = engine.stats();
-	let reopened = harness.open_db(&runtime);
-	assert_eq!(
-		sqlite_query_i64(reopened.as_ptr(), "PRAGMA user_version;")
-			.expect("strict reopen should read shard-cache-backed state"),
-		909
-	);
-	let after = engine.stats();
-	assert!(after.depot_get_pages > before.depot_get_pages);
-	assert_eq!(after.cold_gets, before.cold_gets);
-	assert_eq!(after.mirror_reads, before.mirror_reads);
-	assert_eq!(after.mirror_seeds, before.mirror_seeds);
 }
 
 #[test]
@@ -2688,11 +2948,12 @@ fn concurrent_reader_during_commit_atomic_observes_consistent_snapshot() {
 	let hooks = transport.direct_hooks();
 	let ctx = VfsContext::new(
 		harness.actor_id.clone(),
+		None,
 		runtime.handle().clone(),
 		transport,
 		VfsConfig::default(),
 		unsafe { std::mem::zeroed() },
-		Vec::new(),
+		InitialPages::default(),
 		None,
 	)
 	.expect("vfs context should build");
@@ -3619,11 +3880,12 @@ fn resolve_pages_surfaces_read_path_error_response() {
 	let hooks = transport.direct_hooks();
 	let ctx = VfsContext::new(
 		harness.actor_id.clone(),
+		None,
 		runtime.handle().clone(),
 		transport,
 		VfsConfig::default(),
 		unsafe { std::mem::zeroed() },
-		Vec::new(),
+		InitialPages::default(),
 		None,
 	)
 	.expect("vfs context should build");
@@ -3637,6 +3899,149 @@ fn resolve_pages_surfaces_read_path_error_response() {
 		GetPagesError::Other(ref message)
 			if message.contains("InjectedGetPagesError")
 	));
+}
+
+#[test]
+fn dead_vfs_rejects_cache_only_reads_before_serving_page_cache() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let config = VfsConfig::default();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		None,
+		runtime.handle().clone(),
+		transport,
+		config.clone(),
+		unsafe { std::mem::zeroed() },
+		InitialPages::default(),
+		None,
+	)
+	.expect("vfs context should build");
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.cache_page(&config, PageCacheInsertKind::Target, 2, vec![0x42; 4096]);
+	}
+
+	ctx.mark_fatal("generation fence lost".to_string());
+	let err = ctx
+		.resolve_pages(&[2], false)
+		.expect_err("dead VFS should not serve cached pages");
+	assert!(matches!(
+		err,
+		GetPagesError::Other(ref message) if message.contains("lost its fence")
+	));
+	assert!(
+		hooks.get_pages_requests().is_empty(),
+		"dead cache-only read should fail before calling Depot"
+	);
+}
+
+#[test]
+fn head_fence_mismatch_on_xread_poisoned_vfs_fails_later_operations_closed() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	runtime
+		.block_on(async {
+			engine
+				.actor_db(harness.actor_id.clone())
+				.await
+				.commit(
+					vec![depot::types::DirtyPage {
+						pgno: 2,
+						bytes: vec![0x55; 4096],
+					}],
+					2,
+					sqlite_now_ms().expect("now ms should build"),
+				)
+				.await
+		})
+		.expect("seed commit should advance Depot head");
+
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let config = VfsConfig::default();
+	let ctx = VfsContext::new(
+		harness.actor_id.clone(),
+		None,
+		runtime.handle().clone(),
+		transport,
+		config.clone(),
+		unsafe { std::mem::zeroed() },
+		InitialPages::default(),
+		None,
+	)
+	.expect("vfs context should build");
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.head_txid = Some(0);
+		state.cache_page(&config, PageCacheInsertKind::Target, 1, empty_db_page());
+	}
+
+	let mut file = VfsFile {
+		base: unsafe { std::mem::zeroed() },
+		ctx: &ctx,
+		aux: ptr::null_mut(),
+	};
+	let mut buf = vec![0; 4096];
+	let rc = unsafe {
+		io_read(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			buf.as_mut_ptr().cast(),
+			buf.len() as c_int,
+			4096,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_READ);
+	assert!(ctx.is_dead());
+	assert!(
+		ctx.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"head fence mismatch should be retained as the fatal reason"
+	);
+	assert_eq!(hooks.get_pages_requests().len(), 1);
+
+	let rc = unsafe {
+		io_read(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			buf.as_mut_ptr().cast(),
+			buf.len() as c_int,
+			0,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_READ);
+	assert_eq!(
+		hooks.get_pages_requests().len(),
+		1,
+		"dead cache-only read should not call Depot again"
+	);
+
+	let source = vec![0x7a; 4096];
+	let rc = unsafe {
+		io_write(
+			(&mut file as *mut VfsFile).cast::<sqlite3_file>(),
+			source.as_ptr().cast(),
+			source.len() as c_int,
+			0,
+		)
+	};
+	assert_eq!(rc, SQLITE_IOERR_WRITE);
+
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.dirty.insert(1, empty_db_page());
+	}
+	let rc = unsafe { io_sync((&mut file as *mut VfsFile).cast::<sqlite3_file>(), 0) };
+	assert_eq!(rc, SQLITE_IOERR_FSYNC);
+	assert!(
+		hooks.commit_requests().is_empty(),
+		"dead VFS should fail writes and sync before committing"
+	);
 }
 
 #[test]
@@ -3658,11 +4063,12 @@ fn resolve_pages_sends_known_head_txid_as_read_fence() {
 	let hooks = transport.direct_hooks();
 	let ctx = VfsContext::new(
 		harness.actor_id.clone(),
+		None,
 		runtime.handle().clone(),
 		transport,
 		VfsConfig::default(),
 		unsafe { std::mem::zeroed() },
-		Vec::new(),
+		InitialPages::default(),
 		None,
 	)
 	.expect("vfs context should build");
@@ -3759,6 +4165,1946 @@ fn head_fence_ioerr_maps_to_fatal_worker_error_and_future_operations_fail_closed
 	runtime
 		.block_on(writer.close())
 		.expect("writer worker should close cleanly");
+}
+
+#[test]
+fn stale_vfs_page_cache_writer_fails_head_fence_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	let db_a =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE cached_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=64 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO cached_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, zeroblob(512)));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+
+	let cached_before = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT payload FROM cached_rows WHERE id = 32;",
+	)
+	.expect("stale handle should read target row");
+	assert!(cached_before.starts_with("0032:"));
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE cached_rows SET payload = 'writer-b-new-value' WHERE id = 32;",
+	)
+	.expect("fresh writer should commit");
+	assert_eq!(
+		sqlite_query_text(
+			db_b.as_ptr(),
+			"SELECT payload FROM cached_rows WHERE id = 32;"
+		)
+		.expect("fresh writer should read its update"),
+		"writer-b-new-value"
+	);
+
+	let stale_update = sqlite_exec(
+		db_a.as_ptr(),
+		"UPDATE cached_rows SET payload = 'stale-writer-value' WHERE id = 32;",
+	);
+	assert!(
+		stale_update
+			.as_ref()
+			.expect_err("stale writer must fail the head fence")
+			.contains("disk I/O error"),
+		"unexpected stale writer error: {stale_update:?}"
+	);
+	assert!(
+		direct_vfs_ctx(&db_a)
+			.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"stale VFS should retain the head fence mismatch"
+	);
+
+	drop(db_a);
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after stale writer failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(
+			db_c.as_ptr(),
+			"SELECT payload FROM cached_rows WHERE id = 32;"
+		)
+		.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
+fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+	let db_setup =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_setup.as_ptr(),
+		"CREATE TABLE delayed_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=96 {
+		sqlite_exec(
+			db_setup.as_ptr(),
+			&format!(
+				"INSERT INTO delayed_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, hex(zeroblob(2048))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	let page_count = sqlite_query_i64(db_setup.as_ptr(), "PRAGMA page_count;")
+		.expect("page count should be readable");
+	assert!(
+		page_count >= 12,
+		"test setup should create enough pages for read-ahead, got {page_count}"
+	);
+	drop(db_setup);
+
+	let delaying_transport = Arc::new(DelayCapturedGetPagesTransport::new(
+		Arc::new(DirectDepotTransport::new(engine.clone())),
+		0,
+	));
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		delaying_transport.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+
+	let ctx = direct_vfs_ctx(&db_a);
+	ctx.resolve_pages(&[2], false)
+		.expect("training read page 2 should succeed");
+	ctx.resolve_pages(&[3], false)
+		.expect("training read page 3 should succeed");
+	ctx.resolve_pages(&[4], false)
+		.expect("training read page 4 should succeed");
+
+	delaying_transport.enable();
+	let vfs_a = db_a._vfs.clone();
+	let delayed_read = thread::spawn(move || {
+		vfs_a
+			.ctx()
+			.resolve_pages(&[5], true)
+			.expect("delayed read-ahead fetch should eventually succeed")
+	});
+
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured()).await
+		})
+		.expect("delayed get_pages response should be captured before writer B commits");
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE delayed_rows SET payload = 'writer-b-new-value' WHERE id = 48;",
+	)
+	.expect("fresh writer should commit while delayed response is held");
+
+	delaying_transport.release();
+	let delayed_pages = delayed_read
+		.join()
+		.expect("delayed read thread should not panic");
+	assert!(
+		delayed_pages.contains_key(&5),
+		"delayed read should resolve the target page"
+	);
+
+	let stale_update = sqlite_exec(
+		db_a.as_ptr(),
+		"UPDATE delayed_rows SET payload = 'stale-writer-value' WHERE id = 48;",
+	);
+	assert!(
+		stale_update
+			.as_ref()
+			.expect_err("stale writer must fail after delayed old response")
+			.contains("disk I/O error"),
+		"unexpected stale writer error: {stale_update:?}"
+	);
+	assert!(
+		direct_vfs_ctx(&db_a)
+			.clone_fatal_error()
+			.is_some_and(|message| message.contains("head fence mismatch")),
+		"stale VFS should retain the head fence mismatch"
+	);
+
+	drop(db_a);
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after delayed stale writer failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(
+			db_c.as_ptr(),
+			"SELECT payload FROM delayed_rows WHERE id = 48;"
+		)
+		.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
+fn delayed_startup_preload_response_fails_closed_and_reopen_is_clean() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		startup_preload_first_pages: true,
+		startup_preload_first_page_count: 8,
+		startup_preload_max_bytes: DEFAULT_PAGE_SIZE * 8,
+		..VfsConfig::default()
+	};
+	let db_setup =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+
+	sqlite_exec(
+		db_setup.as_ptr(),
+		"CREATE TABLE preload_rows (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create should succeed");
+	for id in 1..=96 {
+		sqlite_exec(
+			db_setup.as_ptr(),
+			&format!(
+				"INSERT INTO preload_rows (id, payload) VALUES ({id}, printf('%04d:%s', {id}, hex(zeroblob(2048))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	let page_count = sqlite_query_i64(db_setup.as_ptr(), "PRAGMA page_count;")
+		.expect("page count should be readable");
+	assert!(
+		page_count >= 12,
+		"test setup should create enough pages for startup preload, got {page_count}"
+	);
+	drop(db_setup);
+
+	let delaying_transport = Arc::new(DelayCapturedGetPagesTransport::new(
+		Arc::new(DirectDepotTransport::new(engine.clone())),
+		0,
+	));
+	delaying_transport.enable();
+	let actor_id = harness.actor_id.clone();
+	let config_a = config.clone();
+	let runtime_handle = runtime.handle().clone();
+	let open_transport = delaying_transport.clone();
+	let opening = thread::spawn(move || {
+		let initial_pages = runtime_handle
+			.block_on(fetch_initial_pages_for_registration(
+				open_transport.clone(),
+				&actor_id,
+				0,
+				&config_a,
+			))
+			.expect("startup preload should eventually succeed");
+		let vfs = SqliteVfs::register_with_transport_and_initial_pages(
+			&next_test_name("sqlite-startup-preload-vfs"),
+			open_transport,
+			actor_id.clone(),
+			runtime_handle,
+			config_a,
+			initial_pages,
+			None,
+		)
+		.expect("vfs should register after startup preload");
+		open_database(vfs, &actor_id)
+	});
+
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(5), delaying_transport.wait_captured()).await
+		})
+		.expect("startup preload response should be captured before writer B commits");
+
+	let db_b =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db_b.as_ptr(),
+		"UPDATE preload_rows SET payload = 'writer-b-new-value' WHERE id = 48;",
+	)
+	.expect("fresh writer should commit while startup preload response is held");
+
+	delaying_transport.release();
+	let opened_a = opening
+		.join()
+		.expect("startup preload open thread should not panic");
+	if let Ok(db_a) = opened_a {
+		let stale_update = sqlite_exec(
+			db_a.as_ptr(),
+			"UPDATE preload_rows SET payload = 'stale-writer-value' WHERE id = 48;",
+		);
+		assert!(
+			stale_update
+				.as_ref()
+				.expect_err("stale writer must fail after delayed startup preload")
+				.contains("disk I/O error"),
+			"unexpected stale writer error: {stale_update:?}"
+		);
+		assert!(
+			direct_vfs_ctx(&db_a)
+				.clone_fatal_error()
+				.is_some_and(|message| message.contains("head fence mismatch")),
+			"stale VFS should retain the head fence mismatch"
+		);
+		drop(db_a);
+	} else {
+		let Err(err) = opened_a else {
+			unreachable!("startup preload result was already checked");
+		};
+		assert!(
+			err.contains("disk I/O error"),
+			"unexpected startup preload open error: {err}"
+		);
+	}
+	drop(db_b);
+
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(
+		sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;")
+			.expect("integrity check should run after stale startup preload failed"),
+		"ok"
+	);
+	assert_eq!(
+		sqlite_query_text(
+			db_c.as_ptr(),
+			"SELECT payload FROM preload_rows WHERE id = 48;"
+		)
+		.expect("fresh reopen should see writer B value"),
+		"writer-b-new-value"
+	);
+}
+
+#[test]
+fn warm_pidx_stale_read_then_rmw_commit_produces_malformed_db() {
+	// Reproduction attempt for the Depot warm-PIDX-cache hazard described in
+	// `.agent/notes/sqlite-corruption-deep-dive-findings.md` (Tier 1B / 2C):
+	//
+	// 1. Handle A populates the shared `Db` instance's warm PIDX cache while building real
+	//    SQLite schema + rows. The warm cache records `(pgno -> owner_txid)` for sqlite_master
+	//    and several root pages.
+	// 2. A second, independent `Db` instance over the same UniversalDB performs a real
+	//    schema-mutating commit (`CREATE INDEX`). This advances the head and rewrites pgno 1
+	//    in FDB, but only updates the second `Db`'s cache; the shared `Db`'s warm PIDX keeps
+	//    the pre-mutation `(pgno=1 -> old txid)` row.
+	// 3. A fresh VFS handle B opens through the shared `Db`. B starts with
+	//    `state.head_txid = None`, so the read fence cannot trigger. The warm PIDX hands
+	//    back pgno 1 bytes from the old owner DELTA blob paired with the current head txid.
+	// 4. B runs SQLite `CREATE INDEX`, forcing an RMW on pgno 1 (sqlite_master) computed
+	//    from the stale bytes. B commits with `expected_head_txid = current head`, the
+	//    fence passes, and the stale-derived pgno 1 lands durably.
+	// 5. All handles drop; the test reopens with a fresh `Db` (no warm cache) and runs
+	//    `PRAGMA integrity_check` plus schema queries to look for corruption signatures.
+	use depot::conveyer::Db;
+	use depot::types::{CommitOptions, DirtyPage};
+	use rivet_pools::__rivet_util::Id;
+	use rivet_pools::NodeId;
+
+	struct PinnedDbTransport {
+		db: Arc<Db>,
+		actor_id: String,
+	}
+
+	#[async_trait]
+	impl SqliteTransport for PinnedDbTransport {
+		async fn get_pages(
+			&self,
+			request: protocol::SqliteGetPagesRequest,
+		) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+			// The pinned `Db` is the only routing target; reject actor-id drift loudly.
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			match self
+				.db
+				.get_pages_with_options(
+					request.pgnos.clone(),
+					depot::types::GetPagesOptions {
+						expected_head_txid: request.expected_head_txid,
+						..Default::default()
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+					protocol::SqliteGetPagesOk {
+						pages: result
+							.pages
+							.into_iter()
+							.map(|page| protocol::SqliteFetchedPage {
+								pgno: page.pgno,
+								bytes: page.bytes,
+							})
+							.collect(),
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+
+		async fn commit(
+			&self,
+			request: protocol::SqliteCommitRequest,
+		) -> anyhow::Result<protocol::SqliteCommitResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			let dirty_pages = request
+				.dirty_pages
+				.into_iter()
+				.map(|page| DirtyPage {
+					pgno: page.pgno,
+					bytes: page.bytes,
+				})
+				.collect::<Vec<_>>();
+			match self
+				.db
+				.commit_with_options(
+					dirty_pages,
+					request.db_size_pages,
+					request.now_ms,
+					CommitOptions {
+						expected_head_txid: request.expected_head_txid,
+						..Default::default()
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk {
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+	}
+
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let udb = engine.depot_database();
+
+	// Two independent `Db` instances sharing the same actor id and UniversalDB.
+	// `db_shared` is the cache-warming `Db` reused by handle A and (later) handle B.
+	// `db_writer` is the "second pegboard-envoy WS conn" that commits without touching
+	// `db_shared`'s warm PIDX cache.
+	let db_shared = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+	let db_writer = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+
+	// Step 1: handle A builds a real schema with enough rows to span btree internal pages.
+	// A's commits flow through `db_shared`, populating its warm PIDX cache.
+	let transport_a: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_shared.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		transport_a.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE t1 (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(db_a.as_ptr(), "CREATE INDEX idx_t1_payload ON t1(payload);")
+		.expect("create initial index should succeed");
+	sqlite_exec(db_a.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=2000 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO t1 (id, payload) VALUES ({id}, printf('payload-%05d-%s', {id}, hex(zeroblob(64))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	sqlite_exec(db_a.as_ptr(), "COMMIT;").expect("commit should succeed");
+
+	let page_count_after_a = sqlite_query_i64(db_a.as_ptr(), "PRAGMA page_count;")
+		.expect("page_count should be readable");
+	assert!(
+		page_count_after_a >= 32,
+		"setup should produce enough pages to span btree internals, got {page_count_after_a}"
+	);
+	// Step 1b: reads that exercise sqlite_master + index root + table btree internals so
+	// the shared `Db` PIDX cache is warm for the pages production probes would touch.
+	let _row_count =
+		sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;").expect("count should succeed");
+	let _sample = sqlite_query_i64(db_a.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
+		.expect("indexed lookup should succeed");
+
+	// Snapshot the post-A schema so we can detect mutations or rollback after the bug.
+	let schema_after_a = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query should succeed");
+	assert!(
+		schema_after_a.contains("idx_t1_payload"),
+		"baseline schema should include the seed index: {schema_after_a}"
+	);
+	drop(db_a);
+
+	// Step 1c: directly call `db_shared.get_pages(...)` for the low-numbered pages that
+	// future B reads will request. SQLite + the VFS page cache may have suppressed the
+	// per-page transport calls during A's operations, leaving the warm PIDX cache empty.
+	// We need entries in `db_shared.cache_snapshot.pidx` for the warm-cache hazard.
+	let warm_pgnos: Vec<u32> = (1..=10).collect();
+	let warm_result =
+		runtime
+			.block_on(db_shared.get_pages_with_options(
+				warm_pgnos.clone(),
+				depot::types::GetPagesOptions::default(),
+			))
+			.expect("warm read through db_shared should succeed");
+	tracing::info!(
+		?warm_pgnos,
+		warm_head_txid = warm_result.head_txid,
+		"warm pidx repro: warmed db_shared cache via direct get_pages"
+	);
+
+	// Step 2: an independent `Db` instance commits schema mutations on the same actor.
+	// This represents the other pegboard-envoy WS conn in production. The commit rewrites
+	// pgno 1 (sqlite_master) in FDB and advances the head, but `db_shared`'s warm PIDX
+	// cache is not touched.
+	let transport_writer: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_writer.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_writer_handle = harness.open_db_with_transport(
+		&runtime,
+		transport_writer.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_writer_handle.as_ptr(),
+		"CREATE INDEX idx_t1_payload2 ON t1(payload, id);",
+	)
+	.expect("writer CREATE INDEX should commit");
+	sqlite_exec(db_writer_handle.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=200 {
+		sqlite_exec(
+			db_writer_handle.as_ptr(),
+			&format!("UPDATE t1 SET payload = 'writer-rewrite-{id}' WHERE id = {id};"),
+		)
+		.expect("writer update should succeed");
+	}
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;").expect("writer commit should succeed");
+	let writer_head = runtime
+		.block_on(
+			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),
+		)
+		.expect("writer head fetch should succeed")
+		.head_txid;
+	drop(db_writer_handle);
+
+	// Diagnostic: inspect the shared `Db` warm PIDX cache before B reads. If pgno 1
+	// is present with the OLD owner txid (from A's commits) while `db_writer`'s cache
+	// shows pgno 1 with the NEW owner txid (from the writer commit), the warm-cache
+	// hazard is set up.
+	let shared_cache_pidx = runtime
+		.block_on(db_shared.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let writer_cache_pidx = runtime
+		.block_on(db_writer.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let shared_pg1 = shared_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let writer_pg1 = writer_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	eprintln!(
+		"warm-pidx-repro: db_shared cache rows = {} (pgno 1 owner = {:?}), db_writer cache rows = {} (pgno 1 owner = {:?})",
+		shared_cache_pidx.len(),
+		shared_pg1,
+		writer_cache_pidx.len(),
+		writer_pg1,
+	);
+
+	// Step 3: open a fresh handle B through the warm `db_shared`. The startup preload
+	// requests pgno 1 with `expected_head_txid = None`, hitting the warm PIDX cache and
+	// returning old pgno 1 bytes paired with the current head. B then adopts the current
+	// head as its own.
+	let db_b = harness.open_db_with_transport(
+		&runtime,
+		transport_a.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	let schema_seen_by_b = sqlite_query_text(
+		db_b.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query through B should succeed");
+	tracing::info!(
+		schema_after_a = %schema_after_a,
+		schema_seen_by_b = %schema_seen_by_b,
+		writer_head = ?writer_head,
+		"warm pidx repro: schema visibility through stale Db"
+	);
+
+	// Step 4: RMW on pgno 1 from the stale view. SQLite rewrites sqlite_master with a new
+	// schema row, allocates a new root, and commits. With the warm cache hazard the
+	// commit's expected_head_txid matches the current head, the fence passes, and the
+	// stale-derived pgno 1 lands durably.
+	let stale_create = sqlite_exec(
+		db_b.as_ptr(),
+		"CREATE INDEX idx_t1_payload_stale ON t1(payload, id, id);",
+	);
+	let mut stale_commit_observed = stale_create.is_ok();
+	if let Err(message) = &stale_create {
+		tracing::info!(?message, "stale RMW create index failed");
+	}
+	// Force a freelist mutation via DELETE so the stale RMW may also rewrite the
+	// freelist trunk page from stale base bytes.
+	let stale_delete = sqlite_exec(db_b.as_ptr(), "DELETE FROM t1 WHERE id <= 50;");
+	if stale_delete.is_ok() {
+		stale_commit_observed = true;
+	}
+
+	drop(db_b);
+	drop(db_shared);
+	drop(db_writer);
+	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
+
+	// Step 5: fresh reopen with no warm cache. Run integrity check + schema scan.
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	let integrity = sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;");
+	let quick_check = sqlite_query_text(db_c.as_ptr(), "PRAGMA quick_check;");
+	let schema_after_reopen = sqlite_query_text(
+		db_c.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	);
+	let row_count = sqlite_query_i64(db_c.as_ptr(), "SELECT COUNT(*) FROM t1;");
+
+	// Exercise the schema and indexes more thoroughly so SQLite has to walk btree
+	// internal pages, indexes, and intermediate result sets. The literal runtime
+	// "database disk image is malformed" string typically surfaces during page
+	// reads through these paths rather than via PRAGMA integrity_check.
+	//
+	// Ordering matters: passive scans must run BEFORE any REINDEX. REINDEX rebuilds
+	// the index from a fresh table scan and writes a new root page, which would mask
+	// the malformation for any probe running afterwards. Probes that walk the stale
+	// index (page 165) are sequenced first.
+	let select_indexed_by_grouped = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT payload, COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999' GROUP BY payload);",
+	);
+	let select_indexed_by_count_star = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let select_distinct_via_index = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT DISTINCT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload >= 'payload-');",
+	);
+	let update_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"UPDATE t1 SET payload = payload || '-tag' WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let delete_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"DELETE FROM t1 WHERE payload IN (SELECT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00500' AND 'payload-00600');",
+	);
+	let analyze_stale = sqlite_exec(db_c.as_ptr(), "ANALYZE idx_t1_payload_stale;");
+	let reindex_stale = sqlite_exec(db_c.as_ptr(), "REINDEX idx_t1_payload_stale;");
+
+	let runtime_probes: [(&str, Result<String, String>); 7] = [
+		(
+			"select_indexed_by_grouped",
+			select_indexed_by_grouped
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_indexed_by_count_star",
+			select_indexed_by_count_star
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_distinct_via_index",
+			select_distinct_via_index
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"update_through_index",
+			update_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"delete_through_index",
+			delete_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"analyze",
+			analyze_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"reindex_stale",
+			reindex_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+	];
+
+	let mut runtime_corrupt_observed: Option<String> = None;
+	for (label, result) in &runtime_probes {
+		if let Err(message) = result {
+			if message.contains("database disk image is malformed")
+				&& runtime_corrupt_observed.is_none()
+			{
+				runtime_corrupt_observed = Some(format!("{label}: {message}"));
+			}
+		}
+	}
+
+	// Escalation: if none of the structured probes surfaced the literal substring,
+	// try a writable_schema toggle plus direct keyed lookups at probable leaf
+	// boundary payloads to force reads of cells 0 / 15 on page 165.
+	let mut escalation_probes: Vec<(String, Result<String, String>)> = Vec::new();
+	if runtime_corrupt_observed.is_none() {
+		let pragma_writable_schema_on = sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
+		escalation_probes.push((
+			"pragma_writable_schema_on".to_string(),
+			pragma_writable_schema_on
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		));
+		for boundary_id in [125u32, 126, 127, 250, 251, 252, 375, 376, 377] {
+			let q = format!(
+				"SELECT id FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload = printf('payload-%05d-%s', {boundary_id}, hex(zeroblob(64)));"
+			);
+			let result = sqlite_query_i64(db_c.as_ptr(), &q);
+			escalation_probes.push((
+				format!("direct_page165_boundary_{boundary_id}"),
+				result
+					.as_ref()
+					.map(|v| v.to_string())
+					.map_err(|e| e.clone()),
+			));
+		}
+		for (label, result) in &escalation_probes {
+			if let Err(message) = result {
+				if message.contains("database disk image is malformed")
+					&& runtime_corrupt_observed.is_none()
+				{
+					runtime_corrupt_observed = Some(format!("{label}: {message}"));
+				}
+			}
+		}
+	}
+
+	tracing::warn!(
+		?integrity,
+		?quick_check,
+		?schema_after_reopen,
+		?row_count,
+		?select_indexed_by_grouped,
+		?select_indexed_by_count_star,
+		?select_distinct_via_index,
+		?update_through_index,
+		?delete_through_index,
+		?analyze_stale,
+		?reindex_stale,
+		?runtime_corrupt_observed,
+		stale_commit_observed,
+		"warm pidx repro: final reopen state"
+	);
+	eprintln!(
+		"warm-pidx-repro: integrity={integrity:?} quick_check={quick_check:?} \
+		 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+		 select_indexed_by_grouped={select_indexed_by_grouped:?} \
+		 select_indexed_by_count_star={select_indexed_by_count_star:?} \
+		 select_distinct_via_index={select_distinct_via_index:?} \
+		 update_through_index={update_through_index:?} \
+		 delete_through_index={delete_through_index:?} \
+		 analyze_stale={analyze_stale:?} reindex_stale={reindex_stale:?} \
+		 runtime_corrupt_observed={runtime_corrupt_observed:?} \
+		 stale_commit_observed={stale_commit_observed}"
+	);
+	for (label, result) in &runtime_probes {
+		eprintln!("warm-pidx-repro: probe[{label}] = {result:?}");
+	}
+	for (label, result) in &escalation_probes {
+		eprintln!("warm-pidx-repro: escalation[{label}] = {result:?}");
+	}
+
+	// Primary assertion: detect any malformed-DB signature.
+	//
+	// Any non-"ok" result from `PRAGMA integrity_check` or `PRAGMA quick_check` is a
+	// malformed-DB signal; SQLite returns "ok" exactly when both pass. SQLite reports
+	// btree structure violations (e.g. "Tree N page X cell Y: 2nd reference to page Z"),
+	// orphan rows, dangling pointers, header mismatches, etc. as multi-line text.
+	let malformed_keywords = [
+		"malformed",
+		"corrupt",
+		"wrong page type",
+		"reference to page",
+		"out of order",
+		"page is never used",
+		"missing from index",
+		"row count",
+		"unordered",
+	];
+	let is_malformed_text = |text: &str| -> bool {
+		text != "ok"
+			&& (malformed_keywords.iter().any(|k| text.contains(k))
+				|| text.contains("***")
+				|| text.lines().count() > 1)
+	};
+	let mut malformed = false;
+	for probe in [&integrity, &quick_check] {
+		match probe {
+			Ok(text) => {
+				if is_malformed_text(text) {
+					malformed = true;
+				}
+			}
+			Err(message) => {
+				if malformed_keywords.iter().any(|k| message.contains(k)) {
+					malformed = true;
+				}
+			}
+		}
+	}
+	if let Err(message) = &row_count {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if let Err(message) = &schema_after_reopen {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if runtime_corrupt_observed.is_some() {
+		malformed = true;
+	}
+
+	if malformed {
+		panic!(
+			"REPRO: warm-pidx-cache hazard produced a malformed DB after reopen. \
+			 integrity={integrity:?} quick_check={quick_check:?} \
+			 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+			 runtime_corrupt_observed={runtime_corrupt_observed:?}. \
+			 Likely landing site: depot-client/src/vfs.rs (VFS adopts response head_txid \
+			 unconditionally around line 1396-1399) + depot/src/conveyer/read.rs:413 \
+			 (warm PIDX returns stale bytes paired with current head)."
+		);
+	}
+
+	// No repro on this run. The test stands as a documented attempt and regression guard;
+	// see the doc comment at the top for production landing sites. Variations to try next:
+	//   - VACUUM through `db_writer` to renumber pages, then warm-stale-read a btree
+	//     internal page rather than sqlite_master.
+	//   - Larger DB (>= 20k rows) so the freelist trunk page is referenced by the warm
+	//     cache and the stale RMW lands on the freelist instead of sqlite_master.
+	//   - Force PRAGMA auto_vacuum = FULL during open so page renumbering happens
+	//     transparently after the writer's DELETE.
+	//   - Replicate the production batch-atomic probe sequence (CREATE TABLE
+	//     __rivet_batch_probe / INSERT / DELETE / DROP) exactly to mirror the 30-second
+	//     post-Started window.
+	// Note: once handle B's open-time read populates state.head_txid from the stale warm
+	// cache response, all subsequent get_pages still pass the fence (the response
+	// advertised the current head). The dangerous `(stale bytes, current head)` pair is
+	// what the test deliberately preserves; if the underlying repro hits it should show up
+	// in integrity_check or schema queries after the fresh reopen above.
+	tracing::info!(
+		"warm pidx repro: no malformed DB observed on this run; see eprintln for details"
+	);
+}
+
+#[test]
+fn warm_pidx_stale_read_then_rmw_commit_natural_repro() {
+	// Sibling of `warm_pidx_stale_read_then_rmw_commit_produces_malformed_db` that
+	// removes the artificial Step 1c warm-up call (`db_shared.get_pages_with_options`).
+	// Production code never calls `get_pages_with_options` directly; the warm PIDX cache
+	// is supposed to be populated naturally by commits flowing through `db_shared`
+	// (see `apply.rs` `pidx.insert(pgno, result.txid)` for each dirty pgno on commit).
+	// This test checks whether the warm-cache hazard reproduces under those natural
+	// conditions, i.e. with cache entries only from commit-side population.
+	use depot::conveyer::Db;
+	use depot::types::{CommitOptions, DirtyPage};
+	use rivet_pools::__rivet_util::Id;
+	use rivet_pools::NodeId;
+
+	struct PinnedDbTransport {
+		db: Arc<Db>,
+		actor_id: String,
+	}
+
+	#[async_trait]
+	impl SqliteTransport for PinnedDbTransport {
+		async fn get_pages(
+			&self,
+			request: protocol::SqliteGetPagesRequest,
+		) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			match self
+				.db
+				.get_pages_with_options(
+					request.pgnos.clone(),
+					depot::types::GetPagesOptions {
+						expected_head_txid: request.expected_head_txid,
+						..Default::default()
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+					protocol::SqliteGetPagesOk {
+						pages: result
+							.pages
+							.into_iter()
+							.map(|page| protocol::SqliteFetchedPage {
+								pgno: page.pgno,
+								bytes: page.bytes,
+							})
+							.collect(),
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+
+		async fn commit(
+			&self,
+			request: protocol::SqliteCommitRequest,
+		) -> anyhow::Result<protocol::SqliteCommitResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			let dirty_pages = request
+				.dirty_pages
+				.into_iter()
+				.map(|page| DirtyPage {
+					pgno: page.pgno,
+					bytes: page.bytes,
+				})
+				.collect::<Vec<_>>();
+			match self
+				.db
+				.commit_with_options(
+					dirty_pages,
+					request.db_size_pages,
+					request.now_ms,
+					CommitOptions {
+						expected_head_txid: request.expected_head_txid,
+						..Default::default()
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk {
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+	}
+
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let udb = engine.depot_database();
+
+	let db_shared = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+	let db_writer = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		..VfsConfig::default()
+	};
+
+	// Step 1: handle A builds a real schema with enough rows to span btree internal pages.
+	// A's commits flow through `db_shared`, populating its warm PIDX cache naturally via
+	// the commit-side `pidx.insert(pgno, result.txid)` path.
+	let transport_a: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_shared.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		transport_a.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE t1 (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(db_a.as_ptr(), "CREATE INDEX idx_t1_payload ON t1(payload);")
+		.expect("create initial index should succeed");
+	sqlite_exec(db_a.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=2000 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO t1 (id, payload) VALUES ({id}, printf('payload-%05d-%s', {id}, hex(zeroblob(64))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	sqlite_exec(db_a.as_ptr(), "COMMIT;").expect("commit should succeed");
+
+	let page_count_after_a = sqlite_query_i64(db_a.as_ptr(), "PRAGMA page_count;")
+		.expect("page_count should be readable");
+	assert!(
+		page_count_after_a >= 32,
+		"setup should produce enough pages to span btree internals, got {page_count_after_a}"
+	);
+	let _row_count =
+		sqlite_query_i64(db_a.as_ptr(), "SELECT COUNT(*) FROM t1;").expect("count should succeed");
+	let _sample = sqlite_query_i64(db_a.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
+		.expect("indexed lookup should succeed");
+
+	let schema_after_a = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query should succeed");
+	assert!(
+		schema_after_a.contains("idx_t1_payload"),
+		"baseline schema should include the seed index: {schema_after_a}"
+	);
+	drop(db_a);
+
+	// NOTE: Step 1c removed. No explicit `db_shared.get_pages_with_options(...)` call.
+	// We rely entirely on commit-side `pidx.insert(...)` from handle A's commits to
+	// populate `db_shared.cache_snapshot.pidx`.
+
+	// Step 2: an independent `Db` instance commits schema mutations on the same actor.
+	let transport_writer: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_writer.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_writer_handle = harness.open_db_with_transport(
+		&runtime,
+		transport_writer.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_writer_handle.as_ptr(),
+		"CREATE INDEX idx_t1_payload2 ON t1(payload, id);",
+	)
+	.expect("writer CREATE INDEX should commit");
+	sqlite_exec(db_writer_handle.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=200 {
+		sqlite_exec(
+			db_writer_handle.as_ptr(),
+			&format!("UPDATE t1 SET payload = 'writer-rewrite-{id}' WHERE id = {id};"),
+		)
+		.expect("writer update should succeed");
+	}
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;").expect("writer commit should succeed");
+	let writer_head = runtime
+		.block_on(
+			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),
+		)
+		.expect("writer head fetch should succeed")
+		.head_txid;
+	drop(db_writer_handle);
+
+	// Diagnostic: inspect the shared `Db` warm PIDX cache. Without the explicit warm-up
+	// call, this shows whether commits alone populate the cache for the test's workload.
+	let shared_cache_pidx = runtime
+		.block_on(db_shared.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let writer_cache_pidx = runtime
+		.block_on(db_writer.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let shared_pg1 = shared_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let writer_pg1 = writer_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let shared_pgnos: Vec<u32> = shared_cache_pidx.iter().map(|(p, _)| *p).collect();
+	eprintln!(
+		"warm-pidx-natural-repro: db_shared cache rows = {} (pgno 1 owner = {:?}), db_writer cache rows = {} (pgno 1 owner = {:?}), db_shared pgnos = {:?}",
+		shared_cache_pidx.len(),
+		shared_pg1,
+		writer_cache_pidx.len(),
+		writer_pg1,
+		shared_pgnos,
+	);
+
+	// Step 3: open a fresh handle B through `db_shared`.
+	let db_b = harness.open_db_with_transport(
+		&runtime,
+		transport_a.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	let schema_seen_by_b = sqlite_query_text(
+		db_b.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query through B should succeed");
+	tracing::info!(
+		schema_after_a = %schema_after_a,
+		schema_seen_by_b = %schema_seen_by_b,
+		writer_head = ?writer_head,
+		"warm pidx natural repro: schema visibility through stale Db"
+	);
+
+	// Step 4: RMW on pgno 1 from the (possibly stale) view.
+	let stale_create = sqlite_exec(
+		db_b.as_ptr(),
+		"CREATE INDEX idx_t1_payload_stale ON t1(payload, id, id);",
+	);
+	let mut stale_commit_observed = stale_create.is_ok();
+	if let Err(message) = &stale_create {
+		tracing::info!(?message, "stale RMW create index failed");
+	}
+	let stale_delete = sqlite_exec(db_b.as_ptr(), "DELETE FROM t1 WHERE id <= 50;");
+	if stale_delete.is_ok() {
+		stale_commit_observed = true;
+	}
+
+	drop(db_b);
+	drop(db_shared);
+	drop(db_writer);
+	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
+
+	// Step 5: fresh reopen with no warm cache. Run integrity check + schema scan + the
+	// post-reopen probes that surface `database disk image is malformed` at runtime.
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	let integrity = sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;");
+	let quick_check = sqlite_query_text(db_c.as_ptr(), "PRAGMA quick_check;");
+	let schema_after_reopen = sqlite_query_text(
+		db_c.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	);
+	let row_count = sqlite_query_i64(db_c.as_ptr(), "SELECT COUNT(*) FROM t1;");
+
+	// Ordering matters: passive scans before REINDEX (which would mask malformation).
+	let select_indexed_by_grouped = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT payload, COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999' GROUP BY payload);",
+	);
+	let select_indexed_by_count_star = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let select_distinct_via_index = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT DISTINCT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload >= 'payload-');",
+	);
+	let update_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"UPDATE t1 SET payload = payload || '-tag' WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let delete_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"DELETE FROM t1 WHERE payload IN (SELECT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00500' AND 'payload-00600');",
+	);
+	let analyze_stale = sqlite_exec(db_c.as_ptr(), "ANALYZE idx_t1_payload_stale;");
+	let reindex_stale = sqlite_exec(db_c.as_ptr(), "REINDEX idx_t1_payload_stale;");
+
+	let runtime_probes: [(&str, Result<String, String>); 7] = [
+		(
+			"select_indexed_by_grouped",
+			select_indexed_by_grouped
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_indexed_by_count_star",
+			select_indexed_by_count_star
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_distinct_via_index",
+			select_distinct_via_index
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"update_through_index",
+			update_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"delete_through_index",
+			delete_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"analyze",
+			analyze_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"reindex_stale",
+			reindex_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+	];
+
+	let mut runtime_corrupt_observed: Option<String> = None;
+	for (label, result) in &runtime_probes {
+		if let Err(message) = result {
+			if message.contains("database disk image is malformed")
+				&& runtime_corrupt_observed.is_none()
+			{
+				runtime_corrupt_observed = Some(format!("{label}: {message}"));
+			}
+		}
+	}
+
+	let mut escalation_probes: Vec<(String, Result<String, String>)> = Vec::new();
+	if runtime_corrupt_observed.is_none() {
+		let pragma_writable_schema_on = sqlite_exec(db_c.as_ptr(), "PRAGMA writable_schema = ON;");
+		escalation_probes.push((
+			"pragma_writable_schema_on".to_string(),
+			pragma_writable_schema_on
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		));
+		for boundary_id in [125u32, 126, 127, 250, 251, 252, 375, 376, 377] {
+			let q = format!(
+				"SELECT id FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload = printf('payload-%05d-%s', {boundary_id}, hex(zeroblob(64)));"
+			);
+			let result = sqlite_query_i64(db_c.as_ptr(), &q);
+			escalation_probes.push((
+				format!("direct_page165_boundary_{boundary_id}"),
+				result
+					.as_ref()
+					.map(|v| v.to_string())
+					.map_err(|e| e.clone()),
+			));
+		}
+		for (label, result) in &escalation_probes {
+			if let Err(message) = result {
+				if message.contains("database disk image is malformed")
+					&& runtime_corrupt_observed.is_none()
+				{
+					runtime_corrupt_observed = Some(format!("{label}: {message}"));
+				}
+			}
+		}
+	}
+
+	tracing::warn!(
+		?integrity,
+		?quick_check,
+		?schema_after_reopen,
+		?row_count,
+		?select_indexed_by_grouped,
+		?select_indexed_by_count_star,
+		?select_distinct_via_index,
+		?update_through_index,
+		?delete_through_index,
+		?analyze_stale,
+		?reindex_stale,
+		?runtime_corrupt_observed,
+		stale_commit_observed,
+		"warm pidx natural repro: final reopen state"
+	);
+	eprintln!(
+		"warm-pidx-natural-repro: integrity={integrity:?} quick_check={quick_check:?} \
+		 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+		 select_indexed_by_grouped={select_indexed_by_grouped:?} \
+		 select_indexed_by_count_star={select_indexed_by_count_star:?} \
+		 select_distinct_via_index={select_distinct_via_index:?} \
+		 update_through_index={update_through_index:?} \
+		 delete_through_index={delete_through_index:?} \
+		 analyze_stale={analyze_stale:?} reindex_stale={reindex_stale:?} \
+		 runtime_corrupt_observed={runtime_corrupt_observed:?} \
+		 stale_commit_observed={stale_commit_observed}"
+	);
+	for (label, result) in &runtime_probes {
+		eprintln!("warm-pidx-natural-repro: probe[{label}] = {result:?}");
+	}
+	for (label, result) in &escalation_probes {
+		eprintln!("warm-pidx-natural-repro: escalation[{label}] = {result:?}");
+	}
+
+	let malformed_keywords = [
+		"malformed",
+		"corrupt",
+		"wrong page type",
+		"reference to page",
+		"out of order",
+		"page is never used",
+		"missing from index",
+		"row count",
+		"unordered",
+	];
+	let is_malformed_text = |text: &str| -> bool {
+		text != "ok"
+			&& (malformed_keywords.iter().any(|k| text.contains(k))
+				|| text.contains("***")
+				|| text.lines().count() > 1)
+	};
+	let mut malformed = false;
+	for probe in [&integrity, &quick_check] {
+		match probe {
+			Ok(text) => {
+				if is_malformed_text(text) {
+					malformed = true;
+				}
+			}
+			Err(message) => {
+				if malformed_keywords.iter().any(|k| message.contains(k)) {
+					malformed = true;
+				}
+			}
+		}
+	}
+	if let Err(message) = &row_count {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if let Err(message) = &schema_after_reopen {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if runtime_corrupt_observed.is_some() {
+		malformed = true;
+	}
+
+	if malformed {
+		panic!(
+			"REPRO (natural): warm-pidx-cache hazard produced a malformed DB after reopen \
+			 WITHOUT explicit cache warm-up. integrity={integrity:?} quick_check={quick_check:?} \
+			 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+			 runtime_corrupt_observed={runtime_corrupt_observed:?}."
+		);
+	}
+
+	tracing::info!(
+		"warm pidx natural repro: no malformed DB observed on this run; see eprintln for details"
+	);
+}
+
+#[test]
+fn warm_pidx_stale_read_then_rmw_commit_via_natural_reopen() {
+	// Sibling of `warm_pidx_stale_read_then_rmw_commit_natural_repro` that populates
+	// `db_shared.cache_snapshot.pidx` entirely through natural VFS open/SELECT/commit
+	// paths. The previous natural test showed `db_shared cache rows = 0` because
+	// commits route through `PinnedDbTransport::commit` -> `db_shared.commit_with_options`,
+	// which populates the writer-side cache through `apply.rs`, but the `db_shared` cache
+	// remained empty because none of A's commits routed back through `db_shared`'s own
+	// get_pages path during steady-state SQLite operations (VFS-level caches absorbed
+	// them).
+	//
+	// This variant adds a "handle A_warm" step: an extra VFS handle opened through
+	// `db_shared` after A1's commits land. Its startup preload calls
+	// `db_shared.get_pages_with_options(vec![1..=N], expected_head_txid=None)` through
+	// the natural `fetch_initial_pages_for_registration` path, which populates
+	// `db_shared.cache_snapshot.pidx`. A few representative SELECTs follow to give the
+	// VFS more cache misses to route through depot. Then A_warm drops, the writer
+	// advances FDB head, and handle C opens through the still-warm-but-now-stale
+	// `db_shared`.
+	//
+	// No explicit `db_shared.get_pages_with_options(...)` is called outside the
+	// transport. The cache is populated entirely by the production-equivalent startup
+	// preload path.
+	use depot::conveyer::Db;
+	use depot::types::{CommitOptions, DirtyPage};
+	use rivet_pools::__rivet_util::Id;
+	use rivet_pools::NodeId;
+
+	struct PinnedDbTransport {
+		db: Arc<Db>,
+		actor_id: String,
+	}
+
+	#[async_trait]
+	impl SqliteTransport for PinnedDbTransport {
+		async fn get_pages(
+			&self,
+			request: protocol::SqliteGetPagesRequest,
+		) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			match self
+				.db
+				.get_pages_with_options(
+					request.pgnos.clone(),
+					depot::types::GetPagesOptions {
+						expected_head_txid: request.expected_head_txid,
+						..Default::default()
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+					protocol::SqliteGetPagesOk {
+						pages: result
+							.pages
+							.into_iter()
+							.map(|page| protocol::SqliteFetchedPage {
+								pgno: page.pgno,
+								bytes: page.bytes,
+							})
+							.collect(),
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+
+		async fn commit(
+			&self,
+			request: protocol::SqliteCommitRequest,
+		) -> anyhow::Result<protocol::SqliteCommitResponse> {
+			assert_eq!(request.actor_id, self.actor_id, "pinned transport actor id");
+			let dirty_pages = request
+				.dirty_pages
+				.into_iter()
+				.map(|page| DirtyPage {
+					pgno: page.pgno,
+					bytes: page.bytes,
+				})
+				.collect::<Vec<_>>();
+			match self
+				.db
+				.commit_with_options(
+					dirty_pages,
+					request.db_size_pages,
+					request.now_ms,
+					CommitOptions {
+						expected_head_txid: request.expected_head_txid,
+					},
+				)
+				.await
+			{
+				Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk {
+						head_txid: Some(result.head_txid),
+					},
+				)),
+				Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				)),
+			}
+		}
+	}
+
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let udb = engine.depot_database();
+
+	let db_shared = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+	let db_writer = Arc::new(Db::new(
+		udb.clone(),
+		Id::nil(),
+		harness.actor_id.clone(),
+		NodeId::new(),
+	));
+
+	// Pump the preload up so the startup preload requests multiple pages, giving the
+	// natural warming step a wider footprint to populate `db_shared.cache_snapshot.pidx`.
+	let config = VfsConfig {
+		page_cache_mode: SqliteVfsPageCacheMode::All,
+		startup_preload_first_pages: true,
+		startup_preload_first_page_count: 32,
+		startup_preload_max_bytes: 32 * 4096,
+		..VfsConfig::default()
+	};
+
+	let transport_shared: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_shared.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+
+	// Step 1: handle A1 builds a real schema with enough rows to span btree internals.
+	let db_a = harness.open_db_with_transport(
+		&runtime,
+		transport_shared.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_a.as_ptr(),
+		"CREATE TABLE t1 (id INTEGER PRIMARY KEY, payload TEXT NOT NULL);",
+	)
+	.expect("create table should succeed");
+	sqlite_exec(db_a.as_ptr(), "CREATE INDEX idx_t1_payload ON t1(payload);")
+		.expect("create initial index should succeed");
+	sqlite_exec(db_a.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=2000 {
+		sqlite_exec(
+			db_a.as_ptr(),
+			&format!(
+				"INSERT INTO t1 (id, payload) VALUES ({id}, printf('payload-%05d-%s', {id}, hex(zeroblob(64))));"
+			),
+		)
+		.expect("insert should succeed");
+	}
+	sqlite_exec(db_a.as_ptr(), "COMMIT;").expect("commit should succeed");
+
+	let page_count_after_a = sqlite_query_i64(db_a.as_ptr(), "PRAGMA page_count;")
+		.expect("page_count should be readable");
+	assert!(
+		page_count_after_a >= 32,
+		"setup should produce enough pages to span btree internals, got {page_count_after_a}"
+	);
+	let schema_after_a = sqlite_query_text(
+		db_a.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query should succeed");
+	assert!(
+		schema_after_a.contains("idx_t1_payload"),
+		"baseline schema should include the seed index: {schema_after_a}"
+	);
+	drop(db_a);
+
+	// Step 1.5: open A_warm through `db_shared` and let the startup preload populate
+	// `db_shared.cache_snapshot.pidx` naturally via `fetch_initial_pages_for_registration`.
+	// Also run representative SELECTs to widen the VFS cache miss footprint, sending more
+	// `get_pages` requests through `db_shared`.
+	let db_a_warm = harness.open_db_with_transport(
+		&runtime,
+		transport_shared.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	let _ = sqlite_query_i64(db_a_warm.as_ptr(), "SELECT COUNT(*) FROM t1;")
+		.expect("count through A_warm should succeed");
+	let _ = sqlite_query_i64(
+		db_a_warm.as_ptr(),
+		"SELECT id FROM t1 WHERE payload LIKE 'payload-00500%' LIMIT 1;",
+	)
+	.expect("indexed lookup through A_warm should succeed");
+	let _ = sqlite_query_i64(db_a_warm.as_ptr(), "SELECT id FROM t1 WHERE id = 1;")
+		.expect("pk lookup through A_warm should succeed");
+	let _ = sqlite_query_text(
+		db_a_warm.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema scan through A_warm should succeed");
+	drop(db_a_warm);
+
+	// Snapshot db_shared.cache_snapshot.pidx after the natural warming step so we know
+	// whether the startup preload alone is enough to populate it.
+	let shared_cache_after_warm = runtime
+		.block_on(db_shared.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let shared_pg1_after_warm = shared_cache_after_warm
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let shared_pgnos_after_warm: Vec<u32> =
+		shared_cache_after_warm.iter().map(|(p, _)| *p).collect();
+	eprintln!(
+		"warm-pidx-natural-reopen: after A_warm db_shared cache rows = {} (pgno 1 owner = {:?}), pgnos = {:?}",
+		shared_cache_after_warm.len(),
+		shared_pg1_after_warm,
+		shared_pgnos_after_warm,
+	);
+
+	// Step 2: independent `Db` instance commits schema mutations on the same actor.
+	let transport_writer: Arc<dyn SqliteTransport + Send + Sync> = Arc::new(PinnedDbTransport {
+		db: db_writer.clone(),
+		actor_id: harness.actor_id.clone(),
+	});
+	let db_writer_handle = harness.open_db_with_transport(
+		&runtime,
+		transport_writer.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	sqlite_exec(
+		db_writer_handle.as_ptr(),
+		"CREATE INDEX idx_t1_payload2 ON t1(payload, id);",
+	)
+	.expect("writer CREATE INDEX should commit");
+	sqlite_exec(db_writer_handle.as_ptr(), "BEGIN;").expect("begin should succeed");
+	for id in 1..=200 {
+		sqlite_exec(
+			db_writer_handle.as_ptr(),
+			&format!("UPDATE t1 SET payload = 'writer-rewrite-{id}' WHERE id = {id};"),
+		)
+		.expect("writer update should succeed");
+	}
+	sqlite_exec(db_writer_handle.as_ptr(), "COMMIT;").expect("writer commit should succeed");
+	let writer_head = runtime
+		.block_on(
+			db_writer.get_pages_with_options(vec![1], depot::types::GetPagesOptions::default()),
+		)
+		.expect("writer head fetch should succeed")
+		.head_txid;
+	drop(db_writer_handle);
+
+	// Diagnostic: inspect the shared `Db` warm PIDX cache. Step 2 must NOT have touched
+	// it. If `shared_cache_after_warm` matches what we see now and writer pgno 1 owner is
+	// fresher, the hazard is set up.
+	let shared_cache_pidx = runtime
+		.block_on(db_shared.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let writer_cache_pidx = runtime
+		.block_on(db_writer.branch_cache_snapshot_for_test())
+		.map(|(_, _, _, pidx)| pidx)
+		.unwrap_or_default();
+	let shared_pg1 = shared_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let writer_pg1 = writer_cache_pidx
+		.iter()
+		.find(|(pgno, _)| *pgno == 1)
+		.copied();
+	let shared_pgnos: Vec<u32> = shared_cache_pidx.iter().map(|(p, _)| *p).collect();
+	eprintln!(
+		"warm-pidx-natural-reopen: db_shared cache rows = {} (pgno 1 owner = {:?}), db_writer cache rows = {} (pgno 1 owner = {:?}), db_shared pgnos = {:?}",
+		shared_cache_pidx.len(),
+		shared_pg1,
+		writer_cache_pidx.len(),
+		writer_pg1,
+		shared_pgnos,
+	);
+
+	// Step 3: open a fresh handle B (the "C" of the spec, but kept as `db_b` for symmetry
+	// with the sibling test) through the still-warm `db_shared`. Startup preload sees
+	// `db_shared.cache_snapshot.pidx` with stale pgno 1 entries.
+	let db_b = harness.open_db_with_transport(
+		&runtime,
+		transport_shared.clone(),
+		&harness.actor_id,
+		config.clone(),
+	);
+	let schema_seen_by_b = sqlite_query_text(
+		db_b.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	)
+	.expect("schema query through B should succeed");
+	tracing::info!(
+		schema_after_a = %schema_after_a,
+		schema_seen_by_b = %schema_seen_by_b,
+		writer_head = ?writer_head,
+		"warm pidx natural reopen repro: schema visibility through stale Db"
+	);
+
+	// Step 4: RMW on pgno 1 from the (possibly stale) view.
+	let stale_create = sqlite_exec(
+		db_b.as_ptr(),
+		"CREATE INDEX idx_t1_payload_stale ON t1(payload, id, id);",
+	);
+	let mut stale_commit_observed = stale_create.is_ok();
+	if let Err(message) = &stale_create {
+		tracing::info!(?message, "stale RMW create index failed");
+	}
+	let stale_delete = sqlite_exec(db_b.as_ptr(), "DELETE FROM t1 WHERE id <= 50;");
+	if stale_delete.is_ok() {
+		stale_commit_observed = true;
+	}
+
+	drop(db_b);
+	drop(db_shared);
+	drop(db_writer);
+	runtime.block_on(engine.evict_actor_db(&harness.actor_id));
+
+	// Step 5: fresh reopen with no warm cache. Run integrity check + schema scan + the
+	// post-reopen probes that surface `database disk image is malformed` at runtime.
+	let db_c = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	let integrity = sqlite_query_text(db_c.as_ptr(), "PRAGMA integrity_check;");
+	let quick_check = sqlite_query_text(db_c.as_ptr(), "PRAGMA quick_check;");
+	let schema_after_reopen = sqlite_query_text(
+		db_c.as_ptr(),
+		"SELECT group_concat(name, ',') FROM sqlite_master ORDER BY name;",
+	);
+	let row_count = sqlite_query_i64(db_c.as_ptr(), "SELECT COUNT(*) FROM t1;");
+
+	let select_indexed_by_grouped = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT payload, COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999' GROUP BY payload);",
+	);
+	let select_indexed_by_count_star = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let select_distinct_via_index = sqlite_query_i64(
+		db_c.as_ptr(),
+		"SELECT COUNT(*) FROM (SELECT DISTINCT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload >= 'payload-');",
+	);
+	let update_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"UPDATE t1 SET payload = payload || '-tag' WHERE payload BETWEEN 'payload-00000' AND 'payload-99999';",
+	);
+	let delete_through_index = sqlite_exec(
+		db_c.as_ptr(),
+		"DELETE FROM t1 WHERE payload IN (SELECT payload FROM t1 INDEXED BY idx_t1_payload_stale WHERE payload BETWEEN 'payload-00500' AND 'payload-00600');",
+	);
+	let analyze_stale = sqlite_exec(db_c.as_ptr(), "ANALYZE idx_t1_payload_stale;");
+	let reindex_stale = sqlite_exec(db_c.as_ptr(), "REINDEX idx_t1_payload_stale;");
+
+	let runtime_probes: [(&str, Result<String, String>); 7] = [
+		(
+			"select_indexed_by_grouped",
+			select_indexed_by_grouped
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_indexed_by_count_star",
+			select_indexed_by_count_star
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"select_distinct_via_index",
+			select_distinct_via_index
+				.as_ref()
+				.map(|v| v.to_string())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"update_through_index",
+			update_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"delete_through_index",
+			delete_through_index
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"analyze",
+			analyze_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+		(
+			"reindex_stale",
+			reindex_stale
+				.as_ref()
+				.map(|_| String::new())
+				.map_err(|e| e.clone()),
+		),
+	];
+
+	let mut runtime_corrupt_observed: Option<String> = None;
+	for (label, result) in &runtime_probes {
+		if let Err(message) = result {
+			if message.contains("database disk image is malformed")
+				&& runtime_corrupt_observed.is_none()
+			{
+				runtime_corrupt_observed = Some(format!("{label}: {message}"));
+			}
+		}
+	}
+
+	tracing::warn!(
+		?integrity,
+		?quick_check,
+		?schema_after_reopen,
+		?row_count,
+		?select_indexed_by_grouped,
+		?select_indexed_by_count_star,
+		?select_distinct_via_index,
+		?update_through_index,
+		?delete_through_index,
+		?analyze_stale,
+		?reindex_stale,
+		?runtime_corrupt_observed,
+		stale_commit_observed,
+		"warm pidx natural reopen repro: final reopen state"
+	);
+	eprintln!(
+		"warm-pidx-natural-reopen: integrity={integrity:?} quick_check={quick_check:?} \
+		 schema_after_reopen={schema_after_reopen:?} row_count={row_count:?} \
+		 select_indexed_by_grouped={select_indexed_by_grouped:?} \
+		 select_indexed_by_count_star={select_indexed_by_count_star:?} \
+		 select_distinct_via_index={select_distinct_via_index:?} \
+		 update_through_index={update_through_index:?} \
+		 delete_through_index={delete_through_index:?} \
+		 analyze_stale={analyze_stale:?} reindex_stale={reindex_stale:?} \
+		 runtime_corrupt_observed={runtime_corrupt_observed:?} \
+		 stale_commit_observed={stale_commit_observed}"
+	);
+	for (label, result) in &runtime_probes {
+		eprintln!("warm-pidx-natural-reopen: probe[{label}] = {result:?}");
+	}
+
+	let malformed_keywords = [
+		"malformed",
+		"corrupt",
+		"wrong page type",
+		"reference to page",
+		"out of order",
+		"page is never used",
+		"missing from index",
+		"row count",
+		"unordered",
+	];
+	let is_malformed_text = |text: &str| -> bool {
+		text != "ok"
+			&& (malformed_keywords.iter().any(|k| text.contains(k))
+				|| text.contains("***")
+				|| text.lines().count() > 1)
+	};
+	let mut malformed = false;
+	for probe in [&integrity, &quick_check] {
+		match probe {
+			Ok(text) => {
+				if is_malformed_text(text) {
+					malformed = true;
+				}
+			}
+			Err(message) => {
+				if malformed_keywords.iter().any(|k| message.contains(k)) {
+					malformed = true;
+				}
+			}
+		}
+	}
+	if let Err(message) = &row_count {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if let Err(message) = &schema_after_reopen {
+		if malformed_keywords.iter().any(|k| message.contains(k)) {
+			malformed = true;
+		}
+	}
+	if runtime_corrupt_observed.is_some() {
+		malformed = true;
+	}
+
+	if malformed {
+		panic!(
+			"REPRO (natural reopen): warm-pidx-cache hazard produced a malformed DB after reopen \
+			 with cache populated entirely by VFS startup preload. integrity={integrity:?} \
+			 quick_check={quick_check:?} schema_after_reopen={schema_after_reopen:?} \
+			 row_count={row_count:?} runtime_corrupt_observed={runtime_corrupt_observed:?}."
+		);
+	}
+
+	tracing::info!(
+		"warm pidx natural reopen repro: no malformed DB observed on this run; see eprintln for details"
+	);
 }
 
 #[test]

@@ -6,9 +6,10 @@ use napi::JsObject;
 use napi::bindgen_prelude::{Buffer, Env, Promise};
 use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
 use napi_derive::napi;
+use parking_lot::Mutex as ParkingMutex;
 use rivetkit_core::{
-	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, ServeConfig, ServerlessRequest,
-	serverless::ServerlessStreamError,
+	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, EngineSpawnMode, ServeConfig,
+	ServerlessRequest, registry::CoreEnvoyHandle, serverless::ServerlessStreamError,
 };
 use tokio::sync::{Mutex as TokioMutex, Notify};
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -50,9 +51,11 @@ pub struct JsServerlessResponseHead {
 }
 
 #[napi(object)]
-pub struct JsRegistryDiagnostics {
-	pub mode: String,
-	pub envoy_active_actor_count: Option<u32>,
+#[derive(Clone)]
+pub struct JsRegistryRouteResponse {
+	pub status: u16,
+	pub headers: HashMap<String, String>,
+	pub body: Buffer,
 }
 
 #[napi(object)]
@@ -95,6 +98,9 @@ enum RegistryState {
 #[derive(Clone)]
 pub struct CoreRegistry {
 	state: Arc<TokioMutex<RegistryState>>,
+	serving_envoy: Arc<ParkingMutex<Option<CoreEnvoyHandle>>>,
+	route_metadata: Arc<ParkingMutex<Option<JsRegistryRouteResponse>>>,
+	route_package_version: Arc<ParkingMutex<Option<String>>>,
 	shutdown_token: CoreCancellationToken,
 	/// Notified whenever the state transitions out of `BuildingServerless`
 	/// (to `Serverless(_)` on success, or `ShutDown` on failure/shutdown).
@@ -114,6 +120,9 @@ impl CoreRegistry {
 			state: Arc::new(TokioMutex::new(RegistryState::Registering(
 				NativeCoreRegistry::new(),
 			))),
+			serving_envoy: Arc::new(ParkingMutex::new(None)),
+			route_metadata: Arc::new(ParkingMutex::new(None)),
+			route_package_version: Arc::new(ParkingMutex::new(None)),
 			shutdown_token: CoreCancellationToken::new(),
 			build_complete: Arc::new(Notify::new()),
 		}
@@ -165,32 +174,25 @@ impl CoreRegistry {
 			}
 		};
 
-		registry
-			.serve_with_config(
-				ServeConfig {
-					version: config.version,
-					endpoint: config.endpoint,
-					token: config.token,
-					namespace: config.namespace,
-					pool_name: config.pool_name,
-					engine_binary_path: config.engine_binary_path.map(PathBuf::from),
-					handle_inspector_http_in_runtime: config
-						.handle_inspector_http_in_runtime
-						.unwrap_or(false),
-					serverless_base_path: config.serverless_base_path,
-					serverless_package_version: config.serverless_package_version,
-					serverless_client_endpoint: config.serverless_client_endpoint,
-					serverless_client_namespace: config.serverless_client_namespace,
-					serverless_client_token: config.serverless_client_token,
-					serverless_validate_endpoint: config.serverless_validate_endpoint,
-					serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
-						as usize,
-					serverless_cache_envoy: true,
-				},
+		let serve_config = serve_config_from_js(config, false, true);
+		*self.route_package_version.lock() = Some(serve_config.serverless_package_version.clone());
+		*self.route_metadata.lock() = Some(metadata_response(
+			registry.normal_metadata_payload(&serve_config),
+		)?);
+
+		*self.serving_envoy.lock() = None;
+		let serving_envoy = self.serving_envoy.clone();
+		let result = registry
+			.serve_with_config_and_handle_observer(
+				serve_config,
 				self.shutdown_token.clone(),
+				move |handle| {
+					*serving_envoy.lock() = Some(handle);
+				},
 			)
-			.await
-			.map_err(napi_anyhow_error)
+			.await;
+		*self.serving_envoy.lock() = None;
+		result.map_err(napi_anyhow_error)
 	}
 
 	/// Trip the shutdown token and tear down any live serverless runtime.
@@ -241,39 +243,109 @@ impl CoreRegistry {
 		Ok(())
 	}
 
-	#[napi]
-	pub async fn diagnostics(&self) -> napi::Result<JsRegistryDiagnostics> {
-		let guard = self.state.lock().await;
-		let diagnostics = match &*guard {
-			RegistryState::Registering(_) => JsRegistryDiagnostics {
-				mode: "registering".to_owned(),
-				envoy_active_actor_count: None,
-			},
-			RegistryState::BuildingServerless => JsRegistryDiagnostics {
-				mode: "building_serverless".to_owned(),
-				envoy_active_actor_count: None,
-			},
-			RegistryState::Serving => JsRegistryDiagnostics {
-				mode: "serving".to_owned(),
-				envoy_active_actor_count: None,
-			},
-			RegistryState::Serverless(runtime) => JsRegistryDiagnostics {
-				mode: "serverless".to_owned(),
-				envoy_active_actor_count: runtime
-					.active_envoy_actor_count()
-					.await
-					.map(|count| count as u32),
-			},
-			RegistryState::ShuttingDown => JsRegistryDiagnostics {
-				mode: "shutting_down".to_owned(),
-				envoy_active_actor_count: None,
-			},
-			RegistryState::ShutDown => JsRegistryDiagnostics {
-				mode: "shut_down".to_owned(),
-				envoy_active_actor_count: None,
-			},
+	#[napi(js_name = "actorStopThresholdMs")]
+	pub async fn actor_stop_threshold_ms(&self) -> napi::Result<Option<i64>> {
+		let (active_envoy, serverless_runtime) = {
+			let guard = self.state.lock().await;
+			match &*guard {
+				RegistryState::Serving => (self.serving_envoy.lock().clone(), None),
+				RegistryState::Serverless(runtime) => (None, Some(runtime.clone())),
+				RegistryState::Registering(_)
+				| RegistryState::BuildingServerless
+				| RegistryState::ShuttingDown
+				| RegistryState::ShutDown => (None, None),
+			}
 		};
-		Ok(diagnostics)
+
+		if let Some(runtime) = serverless_runtime {
+			return Ok(runtime.active_envoy_actor_stop_threshold_ms().await);
+		}
+
+		match active_envoy {
+			Some(envoy) => Ok(envoy.actor_stop_threshold_ms().await),
+			None => Ok(None),
+		}
+	}
+
+	#[napi]
+	pub async fn health(&self) -> napi::Result<JsRegistryRouteResponse> {
+		let version = self.route_package_version();
+		let serverless_runtime = {
+			let guard = self.state.lock().await;
+			match &*guard {
+				RegistryState::Registering(_) => {
+					return Ok(health_response(503, "not_started", &version));
+				}
+				RegistryState::BuildingServerless => {
+					return Ok(health_response(503, "starting", &version));
+				}
+				RegistryState::Serving => match self
+					.serving_envoy
+					.lock()
+					.as_ref()
+					.map(CoreEnvoyHandle::status)
+				{
+					Some(envoy) => {
+						return Ok(health_response(
+							if envoy.ping_healthy { 200 } else { 503 },
+							if envoy.ping_healthy {
+								"ok"
+							} else {
+								"engine_ping_stale"
+							},
+							&version,
+						));
+					}
+					None => return Ok(health_response(503, "starting", &version)),
+				},
+				RegistryState::Serverless(runtime) => runtime.clone(),
+				RegistryState::ShuttingDown => {
+					return Ok(health_response(503, "shutting_down", &version));
+				}
+				RegistryState::ShutDown => {
+					return Ok(health_response(503, "shut_down", &version));
+				}
+			}
+		};
+
+		let response = match serverless_runtime.active_envoy_status().await {
+			Some(envoy) => health_response(
+				if envoy.ping_healthy { 200 } else { 503 },
+				if envoy.ping_healthy {
+					"ok"
+				} else {
+					"engine_ping_stale"
+				},
+				&version,
+			),
+			None => health_response(503, "engine_ping_stale", &version),
+		};
+		Ok(response)
+	}
+
+	#[napi]
+	pub fn metadata(&self) -> napi::Result<JsRegistryRouteResponse> {
+		self.route_metadata.lock().clone().ok_or_else(|| {
+			napi_anyhow_error(
+				NapiInvalidState {
+					state: "metadata_unavailable".to_owned(),
+					reason: "registry metadata is not available until the registry has started"
+						.to_owned(),
+				}
+				.build(),
+			)
+		})
+	}
+
+	#[napi]
+	pub fn metrics(&self) -> napi::Result<JsRegistryRouteResponse> {
+		let metrics = rivetkit_core::metrics_endpoint::render_prometheus_metrics()
+			.map_err(napi_anyhow_error)?;
+		Ok(JsRegistryRouteResponse {
+			status: 200,
+			headers: HashMap::from([("content-type".to_owned(), metrics.content_type)]),
+			body: Buffer::from(metrics.body),
+		})
 	}
 
 	#[napi(ts_return_type = "Promise<JsServerlessResponseHead>")]
@@ -401,28 +473,13 @@ impl CoreRegistry {
 		registry: NativeCoreRegistry,
 		config: JsServeConfig,
 	) -> napi::Result<CoreServerlessRuntime> {
-		let build_result = registry
-			.into_serverless_runtime(ServeConfig {
-				version: config.version,
-				endpoint: config.endpoint,
-				token: config.token,
-				namespace: config.namespace,
-				pool_name: config.pool_name,
-				engine_binary_path: config.engine_binary_path.map(PathBuf::from),
-				handle_inspector_http_in_runtime: config
-					.handle_inspector_http_in_runtime
-					.unwrap_or(true),
-				serverless_base_path: config.serverless_base_path,
-				serverless_package_version: config.serverless_package_version,
-				serverless_client_endpoint: config.serverless_client_endpoint,
-				serverless_client_namespace: config.serverless_client_namespace,
-				serverless_client_token: config.serverless_client_token,
-				serverless_validate_endpoint: config.serverless_validate_endpoint,
-				serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes
-					as usize,
-				serverless_cache_envoy: true,
-			})
-			.await;
+		let serve_config = serve_config_from_js(config, true, true);
+		*self.route_package_version.lock() = Some(serve_config.serverless_package_version.clone());
+		*self.route_metadata.lock() = Some(metadata_response(
+			registry.serverless_metadata_payload(&serve_config),
+		)?);
+
+		let build_result = registry.into_serverless_runtime(serve_config).await;
 
 		// Re-acquire the lock and re-check state. Shutdown may have run during
 		// the build. If so, tear down the freshly-built runtime rather than
@@ -464,6 +521,13 @@ impl CoreRegistry {
 		// runtime or the shutdown error.
 		self.build_complete.notify_waiters();
 		result
+	}
+
+	fn route_package_version(&self) -> String {
+		self.route_package_version
+			.lock()
+			.clone()
+			.unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_owned())
 	}
 }
 
@@ -510,6 +574,57 @@ impl From<ServerlessStreamError> for JsServerlessStreamError {
 			code: value.code,
 			message: value.message,
 		}
+	}
+}
+
+fn health_response(status_code: u16, status: &str, version: &str) -> JsRegistryRouteResponse {
+	let body = serde_json::json!({
+		"status": status,
+		"runtime": "rivetkit",
+		"version": version,
+	});
+
+	JsRegistryRouteResponse {
+		status: status_code,
+		headers: HashMap::from([("content-type".to_owned(), "application/json".to_owned())]),
+		body: Buffer::from(serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec())),
+	}
+}
+
+fn metadata_response(payload: impl serde::Serialize) -> napi::Result<JsRegistryRouteResponse> {
+	let body = serde_json::to_vec(&payload).map_err(|error| napi_anyhow_error(error.into()))?;
+	Ok(JsRegistryRouteResponse {
+		status: 200,
+		headers: HashMap::from([("content-type".to_owned(), "application/json".to_owned())]),
+		body: Buffer::from(body),
+	})
+}
+
+fn serve_config_from_js(
+	config: JsServeConfig,
+	default_handle_inspector_http_in_runtime: bool,
+	serverless_cache_envoy: bool,
+) -> ServeConfig {
+	ServeConfig {
+		version: config.version,
+		endpoint: config.endpoint,
+		token: config.token,
+		namespace: config.namespace,
+		pool_name: config.pool_name,
+		engine_binary_path: config.engine_binary_path.map(PathBuf::from),
+		engine_spawn: EngineSpawnMode::Auto,
+		engine_auto_download: false,
+		handle_inspector_http_in_runtime: config
+			.handle_inspector_http_in_runtime
+			.unwrap_or(default_handle_inspector_http_in_runtime),
+		serverless_base_path: config.serverless_base_path,
+		serverless_package_version: config.serverless_package_version,
+		serverless_client_endpoint: config.serverless_client_endpoint,
+		serverless_client_namespace: config.serverless_client_namespace,
+		serverless_client_token: config.serverless_client_token,
+		serverless_validate_endpoint: config.serverless_validate_endpoint,
+		serverless_max_start_payload_bytes: config.serverless_max_start_payload_bytes as usize,
+		serverless_cache_envoy,
 	}
 }
 

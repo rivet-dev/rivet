@@ -4,30 +4,61 @@
 
 ### Cloud Run Deploys
 
-- Deploy the kitchen-sink to Cloud Run from an isolated temp build context that pins the published `rivetkit` preview version, so root workspace `resolutions` do not silently swap in local packages.
-- Copy `examples/kitchen-sink` to a temp directory and edit that temp copy instead of building from the monorepo root.
-- Pin the temp copy to the exact published preview packages you want to test, such as `rivetkit@0.0.0-pr.4667.33279e9` and `@rivetkit/react@0.0.0-pr.4667.33279e9`.
-- Build and push the image from that temp context, then update the target Cloud Run service to that image.
-- Do not build the repo workspace directly when validating a published preview package, because the root `package.json` `resolutions` will route the app back to local workspace packages.
+There are two Cloud Run services maintained for the kitchen-sink in `dev-projects-491221` / `us-east4`:
+
+- `kitchen-sink-staging` -> engine namespace `kitchen-sink-gv34-staging-52gh` on `api.staging.rivet.dev`.
+- `rivet-kitchen-sink` -> engine namespace under `kitchen-sink-29a8-cloud-run-*` on `api.rivet.dev`.
+
+#### Deploying the current workspace (with local rivetkit changes)
+
+Use `examples/kitchen-sink/scripts/deploy-cloud-run.sh`. It builds `examples/kitchen-sink/Dockerfile` from the monorepo root, tags with `manual-<sha>`, pushes to the `cloud-run-source-deploy` Artifact Registry repo, and updates `rivet-kitchen-sink` (prod). Pass `--also-staging` to also update `kitchen-sink-staging`. The script curls `/api/rivet/health` after each update to verify the new revision came up.
+
+```bash
+# Build the napi binary once if it's missing.
+cd rivetkit-typescript/packages/rivetkit-napi && pnpm build:release && cd -
+
+# Deploy.
+examples/kitchen-sink/scripts/deploy-cloud-run.sh
+```
+
+Things that must be true for the deploy to actually start serving on Rivet Cloud:
+
+- Container listens on `$PORT` (default 8080). `examples/kitchen-sink/Dockerfile` bakes `ENV PORT=8080`.
+- `server.ts` must enter serverless mode (`registry.handler(...)`, not `registry.start()`). The Dockerfile sets `ENV KITCHEN_SINK_SERVERLESS_URL=cloud` to force that. Do NOT use `RIVET_RUN_ENGINE=1`. It also turns on `startEngine`, which collides with the engine endpoint Rivet Cloud injects (`ZodError: cannot specify both startEngine and endpoint`).
+- `serverlessPoolConfig()` in `examples/kitchen-sink/src/index.ts` returns `undefined` whenever `_RIVET_COMPUTE=1` (Rivet Cloud managed compute) or `SANDBOX_MODE=serverless` (Cloud Run via Rivet's deploy pipeline) is set. The platform configures the runner pool itself; the in-process `configurePool` would try to hit `GET /datacenters`, which the per-namespace `sk_` token cannot do (`no permission to list datacenters in namespace any with target any`).
+- Rivet-injected envs on Cloud Run: `RIVET_PUBLIC_ENDPOINT` (pk_) + `RIVET_ENDPOINT` (sk_) + `SANDBOX_MODE=serverless` + (on the managed-pool path) `RIVET_RUNNER_VERSION` + `_RIVET_COMPUTE=1`. Do not duplicate them in the image.
+
+#### Deploying a host-built local image to staging
+
+- Deploy local kitchen-sink builds with `scripts/docker/build-push-kitchen-sink-local.sh`; it builds RivetKit packages with Turbo on the host, packs workspace packages into tarballs, installs a portable app `node_modules`, copies the built NAPI `.node`, and Docker copies only the prepared app.
+- Use `PUSH=0` for local image smoke tests and default `PUSH=1` for staging deploy images.
+- After building and pushing, update Cloud Run service `kitchen-sink-staging` in project `dev-projects-491221`, region `us-east4`, to the pushed image tag.
+- Verify staging with `curl -fsS "$(gcloud run services describe kitchen-sink-staging --region us-east4 --project dev-projects-491221 --format='value(status.url)')/api/rivet/metadata"`.
+
+- Only use the old temp-copy preview-package flow when explicitly validating already-published npm preview packages instead of local workspace code.
 
 Example flow:
 
 ```bash
-# 1. Copy the kitchen-sink out of the workspace.
-cp -R examples/kitchen-sink /tmp/kitchen-sink-cloud-run
+# 1. Build and push a host-built local workspace image.
+./scripts/docker/build-push-kitchen-sink-local.sh
 
-# 2. Edit /tmp/kitchen-sink-cloud-run/package.json to pin the published preview packages.
-
-# 3. Build and push the image from the temp context.
-docker build -t us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag> /tmp/kitchen-sink-cloud-run
-docker push us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag>
-
-# 4. Point Cloud Run at that image.
-gcloud run services update <service> \
+# 2. Point Cloud Run at that image.
+gcloud run services update kitchen-sink-staging \
   --region us-east4 \
-  --project <project> \
-  --image us-east4-docker.pkg.dev/<project>/<repo>/<image>:<tag>
+  --project dev-projects-491221 \
+  --image "us-east4-docker.pkg.dev/dev-projects-491221/cloud-run-source-deploy/rivet-dev-rivet/rivet-kitchen-sink:$(git rev-parse HEAD)"
 ```
+
+#### Deploying a published rivetkit preview build instead
+
+When validating a published rivetkit preview instead of the local workspace, build from an isolated temp context so the root `package.json` `resolutions` do not silently swap the published package back to the workspace copy:
+
+- Copy `examples/kitchen-sink` to a temp directory and edit that temp copy instead of building from the monorepo root.
+- Pin the temp copy to the exact published preview packages you want to test, such as `rivetkit@0.0.0-pr.4667.33279e9` and `@rivetkit/react@0.0.0-pr.4667.33279e9`.
+- Build and push the image from that temp context, then update the target Cloud Run service to that image.
+- Do not build the repo workspace directly when validating a published preview package, because the root `package.json` `resolutions` will route the app back to local workspace packages.
+- Only use the temp-copy preview-package flow when explicitly validating already-published npm preview packages instead of local workspace code.
 
 The kitchen-sink is deployed on Railway via Rivet Cloud. To test actors and inspect their SQLite databases, use the Rivet gateway API.
 
@@ -49,7 +80,7 @@ export GW="https://api.rivet.dev/gateway"
 curl -s -X PUT "https://api.rivet.dev/actors?namespace=${RIVET_NS}" \
   -H "Authorization: Bearer ${RIVET_TOKEN}" \
   -H 'Content-Type: application/json' \
-  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"default","crash_policy":"sleep"}'
+  -d '{"name":"<actorName>","key":"<key>","runner_name_selector":"k8s","crash_policy":"sleep"}'
 ```
 
 This returns `{"actor":{"actor_id":"<ACTOR_ID>", ...}, "created": true/false}`.
@@ -114,7 +145,7 @@ The kitchen-sink has three SQLite actor types to test:
 
 ### `scripts/sqlite-realworld-bench.ts` — SQLite real-world harness
 
-- Measure only server-reported SQLite time for the cold-wake main phase; write comparable JSON results under `.agent/benchmarks/sqlite-realworld/`.
+- Measure only server-reported SQLite time for the cold-wake main phase; write comparable JSON results under `~/.agents/benchmarks/sqlite-realworld/` (override with `$AGENTS_DIR`).
 
 ### `scripts/soak.ts` — Cloud Run soak harness
 

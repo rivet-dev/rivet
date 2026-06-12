@@ -76,7 +76,7 @@ async fn store_config(ctx: &ActivityCtx, input: &StoreConfigInput) -> Result<()>
 	};
 
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_replica_setup_store_config", |tx| {
 			let update_req = update_req.clone();
 			async move { crate::replica::update_config::update_config(&*tx, replica_id, update_req) }
 		})

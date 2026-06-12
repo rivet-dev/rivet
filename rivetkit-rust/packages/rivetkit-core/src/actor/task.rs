@@ -51,9 +51,11 @@ use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
 	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
 };
+use crate::actor::metrics::startup_phase::StartupPhase;
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
 use crate::actor::state::{PersistedActor, decode_last_pushed_alarm, decode_persisted_actor};
 use crate::actor::task_types::ShutdownKind;
+use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
 #[cfg(test)]
@@ -387,11 +389,13 @@ impl ActorTask {
 			Arc::clone(&inspector_attach_count),
 			inspector_overlay_tx.clone(),
 		);
-		let inspector_ctx = ctx.clone();
+		let inspector_ctx = ctx.downgrade();
 		let inspector_attach_count_for_hook = Arc::clone(&inspector_attach_count);
 		ctx.on_request_save(Box::new(move |_opts| {
 			if inspector_attach_count_for_hook.load(Ordering::SeqCst) > 0 {
-				inspector_ctx.notify_inspector_serialize_requested();
+				if let Some(ctx) = ActorContext::from_weak(&inspector_ctx) {
+					ctx.notify_inspector_serialize_requested();
+				}
 			}
 		}));
 		Self {
@@ -444,6 +448,7 @@ impl ActorTask {
 		let exit = self.run_live().await;
 		let LiveExit::Shutdown { reason } = exit else {
 			self.record_inbox_depths();
+			self.ctx.metrics().record_actor_stopped();
 			return Ok(());
 		};
 
@@ -457,6 +462,7 @@ impl ActorTask {
 		self.deliver_shutdown_reply(reason, &result);
 		self.transition_to(LifecycleState::Terminated);
 		self.record_inbox_depths();
+		self.ctx.metrics().record_actor_stopped();
 		result
 	}
 
@@ -881,16 +887,11 @@ impl ActorTask {
 						self.log_dispatch_command_handled(command_kind, "enqueued");
 						let actor_id = self.ctx.actor_id().to_owned();
 						let ctx = self.ctx.clone();
-						let action_keep_awake = self
-							.ctx
-							.internal_keep_awake_region()
-							.with_log_fields("dispatch_action", Some(actor_id.clone()));
-						self.ctx.reset_sleep_timer();
-						self.ctx.wait_until(async move {
-							let _action_keep_awake = action_keep_awake;
+						self.ctx.spawn_work(ActorWorkKind::Action, async move {
 							match tracked_reply_rx.await {
 								Ok(result) => {
-									let result = result.map_err(|error| ctx.attach_actor_to_error(error));
+									let result =
+										result.map_err(|error| ctx.attach_actor_to_error(error));
 									tracing::info!(
 										actor_id = %actor_id,
 										action_name = %action_name_for_log,
@@ -1103,7 +1104,7 @@ impl ActorTask {
 	}
 
 	async fn start_actor(&mut self) -> Result<()> {
-		let startup_started_at = Instant::now();
+		let mut startup_timer = self.ctx.metrics().begin_startup_timer();
 		let actor_id = self.ctx.actor_id().to_owned();
 		if !self.ctx.started() {
 			self.ctx.configure_sleep(self.factory.config().clone());
@@ -1115,65 +1116,111 @@ impl ActorTask {
 		self.ctx.configure_queue_preload(self.preloaded_kv.clone());
 
 		let load_state_started_at = Instant::now();
-		let persisted = self.load_persisted_startup().await?;
+		let load_state_result = self.load_persisted_startup().await;
+		let persisted = self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::LoadPersisted,
+			None,
+			load_state_started_at,
+			load_state_result,
+		)?;
+		let is_new = !persisted.actor.has_initialized;
+		startup_timer.set_is_new(is_new);
 		tracing::debug!(
 			actor_id = %actor_id,
 			duration_ms = duration_ms_f64(load_state_started_at.elapsed()),
 			"perf internal: loadStateMs"
 		);
-		let is_new = !persisted.actor.has_initialized;
-		self.ctx.load_persisted_actor(persisted.actor);
-		self.ctx.load_last_pushed_alarm(persisted.last_pushed_alarm);
-		// New manual-startup runtimes must not persist initialization until the
-		// runtime startup_ready handshake completes. The runtime preamble owns
-		// initial state creation.
-		if !is_new || !self.factory.requires_manual_startup_ready() {
-			self.ctx.set_has_initialized(true);
+
+		self.ctx.metrics().set_startup_phase(StartupPhase::CoreInit);
+		let core_init_started_at = Instant::now();
+		let core_init_result: Result<()> = async {
+			self.ctx.load_persisted_actor(persisted.actor);
+			self.ctx.load_last_pushed_alarm(persisted.last_pushed_alarm);
+			// New manual-startup runtimes must not persist initialization until the
+			// runtime startup_ready handshake completes. The runtime preamble owns
+			// initial state creation.
+			if !is_new || !self.factory.requires_manual_startup_ready() {
+				self.ctx.set_has_initialized(true);
+				self.ctx
+					.persist_state(SaveStateOpts { immediate: true })
+					.await
+					.context("persist actor initialization")?;
+			}
+			let init_inspector_token_started_at = Instant::now();
+			crate::inspector::auth::init_inspector_token_with_preload(
+				&self.ctx,
+				self.preloaded_kv.as_ref(),
+			)
+			.await
+			.context("initialize inspector token")?;
+			tracing::debug!(
+				actor_id = %actor_id,
+				duration_ms = duration_ms_f64(init_inspector_token_started_at.elapsed()),
+				"perf internal: initInspectorTokenMs"
+			);
 			self.ctx
-				.persist_state(SaveStateOpts { immediate: true })
+				.restore_hibernatable_connections_with_preload(self.preloaded_kv.as_ref())
 				.await
-				.context("persist actor initialization")?;
+				.context("restore hibernatable connections")?;
+			Self::settle_hibernated_connections(self.ctx.clone())
+				.await
+				.context("settle hibernated connections")?;
+			self.ctx.init_alarms();
+			Ok(())
 		}
-		let init_inspector_token_started_at = Instant::now();
-		crate::inspector::auth::init_inspector_token_with_preload(
-			&self.ctx,
-			self.preloaded_kv.as_ref(),
-		)
-		.await
-		.context("initialize inspector token")?;
-		tracing::debug!(
-			actor_id = %actor_id,
-			duration_ms = duration_ms_f64(init_inspector_token_started_at.elapsed()),
-			"perf internal: initInspectorTokenMs"
-		);
-		self.ctx
-			.restore_hibernatable_connections_with_preload(self.preloaded_kv.as_ref())
-			.await
-			.context("restore hibernatable connections")?;
-		Self::settle_hibernated_connections(self.ctx.clone())
-			.await
-			.context("settle hibernated connections")?;
-		self.ctx.init_alarms();
+		.await;
+		self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::CoreInit,
+			Some(is_new),
+			core_init_started_at,
+			core_init_result,
+		)?;
 
 		self.transition_to(LifecycleState::Started);
-		self.spawn_run_handle(is_new).await?;
-		if is_new {
-			// Manual-startup runtimes usually mark initialization during their
-			// preamble. This is the fallback for runtimes that completed startup
-			// without doing so.
-			if !self.ctx.persisted_actor().has_initialized {
-				self.ctx.set_has_initialized(true);
+		self.ctx
+			.metrics()
+			.set_startup_phase(StartupPhase::RuntimePreamble);
+		let runtime_preamble_started_at = Instant::now();
+		let runtime_preamble_result = self.spawn_run_handle(is_new).await;
+		self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::RuntimePreamble,
+			Some(is_new),
+			runtime_preamble_started_at,
+			runtime_preamble_result,
+		)?;
+
+		self.ctx
+			.metrics()
+			.set_startup_phase(StartupPhase::PostReady);
+		let post_ready_started_at = Instant::now();
+		let post_ready_result: Result<()> = async {
+			if is_new {
+				// Manual-startup runtimes usually mark initialization during their
+				// preamble. This is the fallback for runtimes that completed startup
+				// without doing so.
+				if !self.ctx.persisted_actor().has_initialized {
+					self.ctx.set_has_initialized(true);
+				}
+				self.ctx
+					.persist_state(SaveStateOpts { immediate: true })
+					.await
+					.context("persist actor startup state")?;
 			}
-			self.ctx
-				.persist_state(SaveStateOpts { immediate: true })
-				.await
-				.context("persist actor startup state")?;
+			self.reset_sleep_deadline().await;
+			self.ctx.drain_overdue_scheduled_events().await?;
+			Ok(())
 		}
-		self.reset_sleep_deadline().await;
-		self.ctx.drain_overdue_scheduled_events().await?;
+		.await;
+		self.ctx.metrics().observe_startup_phase_result(
+			StartupPhase::PostReady,
+			Some(is_new),
+			post_ready_started_at,
+			post_ready_result,
+		)?;
+		let startup_elapsed = startup_timer.finish_success();
 		tracing::debug!(
 			actor_id = %actor_id,
-			duration_ms = duration_ms_f64(startup_started_at.elapsed()),
+			duration_ms = duration_ms_f64(startup_elapsed),
 			is_new,
 			"perf internal: startupTotalMs"
 		);
@@ -1306,6 +1353,7 @@ impl ActorTask {
 		let start = ActorStart {
 			ctx: self.ctx.clone(),
 			input: self.ctx.persisted_actor().input.clone(),
+			is_new,
 			snapshot: (!is_new).then(|| self.ctx.state()),
 			hibernated: self
 				.ctx

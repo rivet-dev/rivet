@@ -19,7 +19,10 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 	},
 	async loader({ context, deps, location }) {
 		const dataProvider = context.dataProvider;
-		const { actorId } = location.search as Record<string, string | undefined>;
+		const { actorId } = location.search as Record<
+			string,
+			string | undefined
+		>;
 
 		// Prefetch runner configs so EmptyState doesn't flash "No Providers Connected"
 		// while the queries are loading.

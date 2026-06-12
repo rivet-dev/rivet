@@ -23,3 +23,5 @@ Required fields:
 Optional fields:
 
 - `keywords` (string array)
+- `image` (`true` or `{ format: string }`) — hero image flag. Presence means the post has a hero image in R2 at `website/blog/{post-slug}/image.{format}`; use `image: true` for the default `image.png` or `image: { format: "gif" }` for another extension. The URL is derived from the slug and dimensions are fixed (2:1), so do not write `src`, `width`, or `height`. Resolved by `website/src/lib/postImage.ts`.
+- `unpublished` (boolean)

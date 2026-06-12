@@ -6,9 +6,7 @@ import { SidebarlessHeader } from "@/app/layout";
 import { Card } from "@/components";
 import { TEST_IDS } from "@/utils/test-ids";
 
-export const Route = createFileRoute(
-	"/_context/orgs/$organization/new/",
-)({
+export const Route = createFileRoute("/_context/orgs/$organization/new/")({
 	component: RouteComponent,
 	validateSearch: zodValidator(
 		z.object({

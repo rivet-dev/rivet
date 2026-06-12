@@ -51,8 +51,7 @@ export function ResourcePicker({
 	// Two-step case: caller wants a namespace, but we don't have a project
 	// in the URL yet. Show the project picker first with step-appropriate
 	// copy (the caller's title/description describes the namespace step).
-	const projectStepTitle =
-		target === "namespace" ? "Pick a project" : title;
+	const projectStepTitle = target === "namespace" ? "Pick a project" : title;
 	const projectStepDescription =
 		target === "namespace"
 			? "Settings are scoped to a namespace. Choose a project first to find one."
@@ -91,7 +90,9 @@ function ProjectPicker({
 	return (
 		<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
 			<header className="px-5 py-3 border-b border-foreground/10">
-				<h3 className="text-sm font-semibold text-foreground">{title}</h3>
+				<h3 className="text-sm font-semibold text-foreground">
+					{title}
+				</h3>
 				<SmallText className="text-muted-foreground">
 					{description}
 				</SmallText>
@@ -174,13 +175,18 @@ function NamespacePicker({
 	const navigate = useNavigate();
 	const dataProvider = useCloudDataProvider();
 	const { data: namespaces = [], isLoading } = useInfiniteQuery(
-		dataProvider.orgProjectNamespacesQueryOptions({ organization, project }),
+		dataProvider.orgProjectNamespacesQueryOptions({
+			organization,
+			project,
+		}),
 	);
 
 	return (
 		<div className="rounded-lg border border-foreground/10 bg-card overflow-hidden">
 			<header className="px-5 py-3 border-b border-foreground/10">
-				<h3 className="text-sm font-semibold text-foreground">{title}</h3>
+				<h3 className="text-sm font-semibold text-foreground">
+					{title}
+				</h3>
 				<SmallText className="text-muted-foreground">
 					{description}
 				</SmallText>

@@ -14,7 +14,7 @@ pub struct Input {
 pub async fn pegboard_runner_config_delete(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	let delete_pool = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_config_delete", |tx| async move {
 			let tx = tx.with_subspace(namespace::keys::subspace());
 
 			// Read existing config to determine variant

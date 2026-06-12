@@ -23,12 +23,15 @@ const NAMESPACE =
 const TOKEN = process.env.FUZZ_TOKEN ?? process.env.RIVET_TOKEN ?? "dev";
 const PARALLELISM = Number(process.env.FUZZ_PARALLELISM ?? "10");
 const DURATION_MS = Number(process.env.FUZZ_DURATION_MS ?? "60000");
-const WAIT_BEFORE_SLEEP_MS = Number(process.env.FUZZ_WAIT_BEFORE_SLEEP_MS ?? "2000");
+const WAIT_BEFORE_SLEEP_MS = Number(
+	process.env.FUZZ_WAIT_BEFORE_SLEEP_MS ?? "2000",
+);
 const WAIT_BEFORE_SLEEP_JITTER_MS = Number(
 	process.env.FUZZ_WAIT_BEFORE_SLEEP_JITTER_MS ?? "3000",
 );
 const LEAK_THRESHOLD_MS = Number(process.env.FUZZ_LEAK_THRESHOLD_MS ?? "30000");
-const KEY_PREFIX = process.env.FUZZ_KEY_PREFIX ?? `sleep-close-fuzz-${Date.now()}`;
+const KEY_PREFIX =
+	process.env.FUZZ_KEY_PREFIX ?? `sleep-close-fuzz-${Date.now()}`;
 const STAGGER_MS = Number(process.env.FUZZ_STAGGER_MS ?? "100");
 const VERBOSE = process.env.FUZZ_VERBOSE === "1";
 
@@ -85,7 +88,10 @@ function buildWebSocketUrl(actorId: string): string {
 async function waitForOpen(ws: WebSocket, timeoutMs: number): Promise<void> {
 	if (ws.readyState === WebSocket.OPEN) return;
 	await new Promise<void>((resolve, reject) => {
-		const t = setTimeout(() => reject(new Error("ws open timeout")), timeoutMs);
+		const t = setTimeout(
+			() => reject(new Error("ws open timeout")),
+			timeoutMs,
+		);
 		ws.addEventListener(
 			"open",
 			() => {
@@ -173,7 +179,8 @@ async function runIteration(
 
 	// Run for a few seconds with random jitter so sleep timing varies across iterations.
 	const wait =
-		WAIT_BEFORE_SLEEP_MS + Math.floor(Math.random() * WAIT_BEFORE_SLEEP_JITTER_MS);
+		WAIT_BEFORE_SLEEP_MS +
+		Math.floor(Math.random() * WAIT_BEFORE_SLEEP_JITTER_MS);
 	await sleep(wait);
 
 	const tSleepStart = Date.now();
@@ -190,7 +197,9 @@ async function runIteration(
 		sleepPostStatus = response.status;
 		if (!response.ok) {
 			const body = await response.text();
-			throw new Error(`sleep POST status=${response.status} body=${body}`);
+			throw new Error(
+				`sleep POST status=${response.status} body=${body}`,
+			);
 		}
 	} catch (error) {
 		try {
@@ -218,7 +227,9 @@ async function runIteration(
 
 	if (result === "timeout") {
 		// Leak: close did not arrive in time. Force-close client side and flag it.
-		const stillOpen = ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING;
+		const stillOpen =
+			ws.readyState === WebSocket.OPEN ||
+			ws.readyState === WebSocket.CONNECTING;
 		try {
 			ws.close(4000, "fuzz leak forced close");
 		} catch {}
@@ -302,7 +313,10 @@ function summarize(results: IterationResult[]) {
 
 	function pct(p: number): number {
 		if (closeMs.length === 0) return 0;
-		const i = Math.min(closeMs.length - 1, Math.floor((p / 100) * closeMs.length));
+		const i = Math.min(
+			closeMs.length - 1,
+			Math.floor((p / 100) * closeMs.length),
+		);
 		return closeMs[i];
 	}
 
@@ -354,7 +368,9 @@ async function main() {
 	const results: IterationResult[] = [];
 	const stopAt = Date.now() + DURATION_MS;
 	await Promise.all(
-		Array.from({ length: PARALLELISM }, (_, i) => runWorker(i, stopAt, results)),
+		Array.from({ length: PARALLELISM }, (_, i) =>
+			runWorker(i, stopAt, results),
+		),
 	);
 	summarize(results);
 

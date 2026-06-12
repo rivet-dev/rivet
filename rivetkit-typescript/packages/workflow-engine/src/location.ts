@@ -159,7 +159,7 @@ export function getChildEntries(
 		const isChild =
 			parentKey === ""
 				? true
-				: key.startsWith(parentKey + "/") || key === parentKey;
+				: key.startsWith(`${parentKey}/`) || key === parentKey;
 
 		if (isChild) {
 			// Return the actual entry's location, not the parent location

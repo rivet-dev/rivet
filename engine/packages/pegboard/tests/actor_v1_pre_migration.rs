@@ -53,7 +53,7 @@ async fn actor_v1_pre_migration() {
 	let workflow_id = ctx
 		.udb()
 		.unwrap()
-		.run(|tx| async move {
+		.txn("test_pegboardactor_v1_pre_migration", |tx| async move {
 			let tx = tx.with_subspace(pegboard::keys::subspace());
 
 			tx.read(

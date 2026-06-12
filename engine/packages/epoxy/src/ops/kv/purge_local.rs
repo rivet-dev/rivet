@@ -14,7 +14,7 @@ pub struct Input {
 #[operation]
 pub async fn epoxy_kv_purge_local(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("epoxy_kv_purge_local", |tx| {
 			let entries = input.entries.clone();
 			async move {
 				let tx = tx.with_subspace(keys::subspace(input.replica_id));

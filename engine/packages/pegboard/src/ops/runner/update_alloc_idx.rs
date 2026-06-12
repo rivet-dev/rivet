@@ -50,7 +50,7 @@ pub async fn pegboard_runner_update_alloc_idx(ctx: &OperationCtx, input: &Input)
 
 	let notifications = ctx
 		.udb()?
-		.run(|tx| {
+		.txn("pegboard_runner_update_alloc_idx", |tx| {
 			let runners = input.runners.clone();
 
 			async move {

@@ -7,10 +7,10 @@ export const shortTimeoutActor = actor({
 		actionTimeout: 50, // 50ms timeout
 	},
 	actions: {
-		quickAction: async (c) => {
+		quickAction: async (_c) => {
 			return "quick response";
 		},
-		slowAction: async (c) => {
+		slowAction: async (_c) => {
 			// This action should timeout
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			return "slow response";
@@ -25,7 +25,7 @@ export const longTimeoutActor = actor({
 		actionTimeout: 200, // 200ms timeout
 	},
 	actions: {
-		delayedAction: async (c) => {
+		delayedAction: async (_c) => {
 			// This action should complete within timeout
 			await new Promise((resolve) => setTimeout(resolve, 100));
 			return "delayed response";
@@ -37,7 +37,7 @@ export const longTimeoutActor = actor({
 export const defaultTimeoutActor = actor({
 	state: { value: 0 },
 	actions: {
-		normalAction: async (c) => {
+		normalAction: async (_c) => {
 			await new Promise((resolve) => setTimeout(resolve, 50));
 			return "normal response";
 		},
@@ -51,7 +51,7 @@ export const syncTimeoutActor = actor({
 		actionTimeout: 50, // 50ms timeout
 	},
 	actions: {
-		syncAction: (c) => {
+		syncAction: (_c) => {
 			return "sync response";
 		},
 	},

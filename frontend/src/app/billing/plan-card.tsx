@@ -77,6 +77,8 @@ export const CommunityPlan = (props: Partial<PlanCardProps>) => {
 			title="Free"
 			price="$0"
 			features={[
+				{ icon: faCheck, label: "1 vCPU Max" },
+				{ icon: faCheck, label: "$5 /mo Compute Limit" },
 				{ icon: faCheck, label: "5 Million Writes /mo Limit" },
 				{ icon: faCheck, label: "200 Million Reads /mo Limit" },
 				{ icon: faCheck, label: "5GiB Storage Limit" },
@@ -96,6 +98,7 @@ export const ProPlan = (props: Partial<PlanCardProps>) => {
 			price="$20"
 			usageBased
 			features={[
+				{ icon: faPlus, label: "Up to 8 vCPU" },
 				{
 					icon: faPlus,
 					label: "25 Billion Read /mo included",
@@ -124,6 +127,7 @@ export const TeamPlan = (props: Partial<PlanCardProps>) => {
 			price="$200"
 			usageBased
 			features={[
+				{ icon: faPlus, label: "Up to 8 vCPU" },
 				{ icon: faPlus, label: "25 Billion Reads /mo included" },
 				{ icon: faPlus, label: "50 Million Writes /mo included" },
 				{ icon: faPlus, label: "5GiB Storage included" },

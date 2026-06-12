@@ -823,7 +823,7 @@ async fn ack_commands(
 	ack: protocol::mk2::ToServerAckCommands,
 ) -> Result<()> {
 	ctx.udb()?
-		.run(|tx| {
+		.txn("runner_ack_commands", |tx| {
 			let ack = ack.clone();
 			async move {
 				let tx = tx.with_subspace(pegboard::keys::subspace());
@@ -877,7 +877,7 @@ async fn handle_tunnel_message_mk2(
 	// 	);
 	// }
 
-	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
+	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id);
 	let msg_serialized =
 		versioned::ToGateway::wrap_latest(protocol::mk2::ToGateway::ToServerTunnelMessage(msg))
 			.serialize_with_embedded_version(PROTOCOL_MK2_VERSION)
@@ -939,7 +939,7 @@ async fn handle_tunnel_message_mk1(
 	// }
 
 	// Publish message to UPS
-	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id).to_string();
+	let gateway_reply_to = GatewayReceiverSubject::new(msg.message_id.gateway_id);
 	let msg_serialized = versioned::ToGateway::v3_to_v7(versioned::ToGateway::V3(
 		protocol::ToGateway::ToServerTunnelMessage(msg),
 	))?

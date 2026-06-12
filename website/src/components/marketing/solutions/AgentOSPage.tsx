@@ -248,45 +248,45 @@ interface HeroImage {
 const heroImages: HeroImage[] = [
 	// Human work
 	{
-		src: '/images/agent-os/division-classification-cataloging.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/division-classification-cataloging.jpg',
 		title: 'Division of Classification and Cataloging',
 		caption: 'Manual human labor at scale',
 	},
 	{
-		src: '/images/agent-os/crowded-office-space.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/crowded-office-space.jpg',
 		title: 'Crowded Office Space',
 		caption: 'Rooms full of human operators',
 	},
 	// Automation with computers
 	{
-		src: '/images/agent-os/early-computer-room.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/early-computer-room.jpg',
 		title: 'Early Computer Room',
 		caption: 'The first machines',
 	},
 	{
-		src: '/images/agent-os/unix-timesharing-uw-madison-1978.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/unix-timesharing-uw-madison-1978.jpg',
 		title: 'Unix Timesharing',
 		caption: 'UW-Madison, 1978',
 	},
 	{
-		src: '/images/agent-os/early-computing-workstation.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/early-computing-workstation.jpg',
 		title: 'Early Computing Workstation',
 		caption: 'Humans operating computers',
 	},
 	{
-		src: '/images/agent-os/apollo-14-mission-control.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/apollo-14-mission-control.jpg',
 		title: 'Apollo 14: Mission Control Center',
 		caption: 'Computers in mission-critical work',
 	},
 	// Modern work
 	{
-		src: '/images/agent-os/modern-office.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/modern-office.jpg',
 		title: 'Modern Office',
 		caption: "Today's human operators",
 	},
 	// AI agents of tomorrow
 	{
-		src: '/images/agent-os/data-flock.jpg',
+		src: 'https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg',
 		title: 'Data Flock (digits)',
 		caption: 'The agent era',
 	},
@@ -1967,8 +1967,8 @@ const FromUnixToAgents = () => (
 					className='flex-1'
 				>
 					<BeforeAfterSlider
-						before='/images/agent-os/unix-timesharing-uw-madison-1978.jpg'
-						after='/images/agent-os/data-flock.jpg'
+						before='https://assets.rivet.dev/website/public/images/agent-os/unix-timesharing-uw-madison-1978.jpg'
+						after='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 					/>
 					<p className='mt-2 text-xs text-zinc-400'>
 						Left: Unix timesharing, UW-Madison, 1978. Right: "Data flock (digits)" by Philipp Schmitt, <a href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg' className='underline hover:text-zinc-600' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>

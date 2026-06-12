@@ -14,10 +14,13 @@ import {
 	RenderLogo,
 	ThemeToggle,
 } from "render-dds";
-import { rivetClientBase, type AppRegistry } from "./rivet-client";
+import { type AppRegistry, rivetClientBase } from "./rivet-client";
 
 export function App() {
-	const rivet = useMemo(() => createRivetKit<AppRegistry>(rivetClientBase()), []);
+	const rivet = useMemo(
+		() => createRivetKit<AppRegistry>(rivetClientBase()),
+		[],
+	);
 	const { useActor } = rivet;
 
 	const [topValues, setTopValues] = useState<number[]>([]);
@@ -38,14 +41,21 @@ export function App() {
 		}
 	}, [stream.connection]);
 
-	stream.useEvent("updated", (u: { topValues: number[]; totalCount: number; highestValue: number | null }) => {
-		setTopValues(u.topValues);
-		setTotalCount(u.totalCount);
-		setHighestValue(u.highestValue);
-	});
+	stream.useEvent(
+		"updated",
+		(u: {
+			topValues: number[];
+			totalCount: number;
+			highestValue: number | null;
+		}) => {
+			setTopValues(u.topValues);
+			setTotalCount(u.totalCount);
+			setHighestValue(u.highestValue);
+		},
+	);
 
 	const addValue = async () => {
-		if (stream.connection && !isNaN(newValue)) {
+		if (stream.connection && !Number.isNaN(newValue)) {
 			await stream.connection.addValue(newValue);
 			setNewValue(0);
 		}
@@ -62,7 +72,13 @@ export function App() {
 
 	return (
 		<div className="relative flex min-h-screen flex-col bg-background text-foreground">
-			<GridDecoration position="top-right" className="pointer-events-none" height={280} opacity={0.28} width={280} />
+			<GridDecoration
+				position="top-right"
+				className="pointer-events-none"
+				height={280}
+				opacity={0.28}
+				width={280}
+			/>
 
 			<Navigation
 				className="relative z-10 border-b border-border bg-background/80 backdrop-blur-sm"
@@ -70,8 +86,12 @@ export function App() {
 					<div className="flex items-center gap-3">
 						<RenderLogo variant="mark" height={28} />
 						<div className="flex flex-col">
-							<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">RivetKit</span>
-							<span className="text-sm font-semibold leading-tight text-foreground">Stream Processor</span>
+							<span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+								RivetKit
+							</span>
+							<span className="text-sm font-semibold leading-tight text-foreground">
+								Stream Processor
+							</span>
 						</div>
 					</div>
 				}
@@ -79,7 +99,13 @@ export function App() {
 					<div className="flex items-center gap-2">
 						<Badge variant={live ? "green" : "red-light"}>
 							<span className="inline-flex items-center gap-1.5">
-								<span className={live ? "size-1.5 rounded-full bg-green-500" : "size-1.5 animate-pulse rounded-full bg-red-400"} />
+								<span
+									className={
+										live
+											? "size-1.5 rounded-full bg-green-500"
+											: "size-1.5 animate-pulse rounded-full bg-red-400"
+									}
+								/>
 								{live ? "Connected" : "Connecting"}
 							</span>
 						</Badge>
@@ -94,39 +120,65 @@ export function App() {
 						Stream Processor
 					</h1>
 					<p className="mx-auto mt-3 max-w-xl text-base text-muted-foreground sm:text-lg">
-						Real-time top-K processing — add values and watch the leaderboard update live across all clients.
+						Real-time top-K processing — add values and watch the
+						leaderboard update live across all clients.
 					</p>
 				</div>
 
 				<div className="grid gap-3 sm:grid-cols-3">
 					{[
 						{ label: "Total Values", value: totalCount },
-						{ label: "Highest", value: highestValue?.toLocaleString() ?? "\u2014" },
+						{
+							label: "Highest",
+							value: highestValue?.toLocaleString() ?? "\u2014",
+						},
 						{ label: "Top Count", value: topValues.length },
 					].map((s) => (
-						<Card key={s.label} variant="outlined" className="border-border text-center">
+						<Card
+							key={s.label}
+							variant="outlined"
+							className="border-border text-center"
+						>
 							<CardContent className="py-4">
-								<p className="text-2xl font-bold tabular-nums text-primary">{s.value}</p>
-								<p className="mt-1 text-xs text-muted-foreground">{s.label}</p>
+								<p className="text-2xl font-bold tabular-nums text-primary">
+									{s.value}
+								</p>
+								<p className="mt-1 text-xs text-muted-foreground">
+									{s.label}
+								</p>
 							</CardContent>
 						</Card>
 					))}
 				</div>
 
 				<div className="grid gap-6 md:grid-cols-2">
-					<Card variant="elevated" className="border-border shadow-lg shadow-black/5 dark:shadow-black/20">
+					<Card
+						variant="elevated"
+						className="border-border shadow-lg shadow-black/5 dark:shadow-black/20"
+					>
 						<div className="border-b border-border bg-muted/30 px-5 py-4 dark:bg-muted/15">
-							<span className="text-sm font-semibold text-foreground">Top 3 Values</span>
+							<span className="text-sm font-semibold text-foreground">
+								Top 3 Values
+							</span>
 						</div>
 						<CardContent className="px-5 py-4">
 							{topValues.length === 0 ? (
-								<p className="py-8 text-center text-sm italic text-muted-foreground">No values yet.</p>
+								<p className="py-8 text-center text-sm italic text-muted-foreground">
+									No values yet.
+								</p>
 							) : (
 								<div className="space-y-2">
 									{topValues.map((v, i) => (
-										<div key={`${v}-${i}`} className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-4 py-3 dark:bg-muted/10">
-											<span className="text-sm font-medium text-muted-foreground">#{i + 1}</span>
-											<span className="text-lg font-bold tabular-nums text-foreground">{v.toLocaleString()}</span>
+										<div
+											key={`${v}-${i}`}
+											className="flex items-center justify-between rounded-md border border-border bg-muted/20 px-4 py-3 dark:bg-muted/10"
+										>
+											<span className="text-sm font-medium text-muted-foreground">
+												#{i + 1}
+											</span>
+											<span className="text-lg font-bold tabular-nums text-foreground">
+												{v.toLocaleString()}
+											</span>
 										</div>
 									))}
 								</div>
@@ -134,9 +186,14 @@ export function App() {
 						</CardContent>
 					</Card>
 
-					<Card variant="elevated" className="border-border shadow-lg shadow-black/5 dark:shadow-black/20">
+					<Card
+						variant="elevated"
+						className="border-border shadow-lg shadow-black/5 dark:shadow-black/20"
+					>
 						<div className="border-b border-border bg-muted/30 px-5 py-4 dark:bg-muted/15">
-							<span className="text-sm font-semibold text-foreground">Add Value</span>
+							<span className="text-sm font-semibold text-foreground">
+								Add Value
+							</span>
 						</div>
 						<CardContent className="space-y-4 px-5 py-5">
 							<form
@@ -150,11 +207,18 @@ export function App() {
 									label="Number"
 									type="number"
 									value={newValue || ""}
-									onChange={(e) => setNewValue(Number(e.target.value))}
+									onChange={(e) =>
+										setNewValue(Number(e.target.value))
+									}
 									placeholder="Enter any number"
 									disabled={!live}
 								/>
-								<Button variant="default" className="mt-3 w-full" type="submit" disabled={!live || isNaN(newValue)}>
+								<Button
+									variant="default"
+									className="mt-3 w-full"
+									type="submit"
+									disabled={!live || Number.isNaN(newValue)}
+								>
 									Add to Stream
 								</Button>
 							</form>
@@ -162,11 +226,21 @@ export function App() {
 								<Button
 									variant="outline"
 									className="flex-1"
-									onClick={() => setNewValue(Math.floor(Math.random() * 1000) + 1)}
+									onClick={() =>
+										setNewValue(
+											Math.floor(Math.random() * 1000) +
+												1,
+										)
+									}
 								>
 									Random
 								</Button>
-								<Button variant="destructive" className="flex-1" disabled={!live} onClick={reset}>
+								<Button
+									variant="destructive"
+									className="flex-1"
+									disabled={!live}
+									onClick={reset}
+								>
 									Reset
 								</Button>
 							</div>
@@ -177,9 +251,14 @@ export function App() {
 
 			<section className="flex justify-center px-4 pb-10 pt-2 md:pb-14">
 				<div className="w-full max-w-md">
-					<Card variant="outlined" className="border-dashed border-border/80 text-center">
+					<Card
+						variant="outlined"
+						className="border-dashed border-border/80 text-center"
+					>
 						<CardHeader className="pb-2">
-							<CardTitle className="text-base">Deploy on Render</CardTitle>
+							<CardTitle className="text-base">
+								Deploy on Render
+							</CardTitle>
 						</CardHeader>
 						<CardContent className="flex justify-center pt-0">
 							<a

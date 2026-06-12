@@ -17,10 +17,9 @@ use crate::{
 		keys,
 		types::{
 			BucketId, DatabaseBranchId, decode_bucket_branch_record, decode_bucket_pointer,
-			decode_cold_shard_ref, decode_commit_row, decode_compaction_root,
-			decode_database_branch_record, decode_database_pointer, decode_db_head,
-			decode_db_history_pin, decode_pitr_interval_coverage, decode_retired_cold_object,
-			decode_sqlite_cmp_dirty,
+			decode_commit_row, decode_compaction_root, decode_database_branch_record,
+			decode_database_pointer, decode_db_head, decode_db_history_pin,
+			decode_pitr_interval_coverage, decode_sqlite_cmp_dirty,
 		},
 	},
 	gc,
@@ -100,8 +99,6 @@ pub enum RowFamily {
 	Pidx,
 	Deltas,
 	Shards,
-	ColdShards,
-	RetiredColdObjects,
 	PitrIntervals,
 	Pins,
 	StagedHotShards,
@@ -114,8 +111,6 @@ impl RowFamily {
 			"pidx" => Ok(Self::Pidx),
 			"deltas" => Ok(Self::Deltas),
 			"shards" => Ok(Self::Shards),
-			"cold-shards" => Ok(Self::ColdShards),
-			"retired-cold-objects" => Ok(Self::RetiredColdObjects),
 			"pitr-intervals" => Ok(Self::PitrIntervals),
 			"pins" => Ok(Self::Pins),
 			"staged-hot-shards" => Ok(Self::StagedHotShards),
@@ -129,8 +124,6 @@ impl RowFamily {
 			Self::Pidx => "pidx",
 			Self::Deltas => "deltas",
 			Self::Shards => "shards",
-			Self::ColdShards => "cold-shards",
-			Self::RetiredColdObjects => "retired-cold-objects",
 			Self::PitrIntervals => "pitr-intervals",
 			Self::Pins => "pins",
 			Self::StagedHotShards => "staged-hot-shards",
@@ -143,10 +136,6 @@ impl RowFamily {
 			Self::Pidx => keys::branch_pidx_prefix(branch_id),
 			Self::Deltas => keys::branch_delta_prefix(branch_id),
 			Self::Shards => keys::branch_shard_prefix(branch_id),
-			Self::ColdShards => keys::branch_compaction_cold_shard_prefix(branch_id),
-			Self::RetiredColdObjects => {
-				keys::branch_compaction_retired_cold_object_prefix(branch_id)
-			}
 			Self::PitrIntervals => keys::branch_pitr_interval_prefix(branch_id),
 			Self::Pins => keys::db_pin_prefix(branch_id),
 			Self::StagedHotShards => keys::branch_compaction_stage_prefix(branch_id),
@@ -156,7 +145,7 @@ impl RowFamily {
 
 pub async fn summary(db: &universaldb::Database, node_id: NodeId) -> Result<InspectResponse> {
 	let counters = db
-		.run(|tx| async move {
+		.txn("depot_inspect_summary_counters", |tx| async move {
 			Ok(json!({
 				"bucket_pointers": count_prefix(&tx, keys::bucket_pointer_cur_prefix()).await?,
 				"database_pointers": count_prefix(&tx, keys::database_pointer_cur_prefix()).await?,
@@ -172,7 +161,6 @@ pub async fn summary(db: &universaldb::Database, node_id: NodeId) -> Result<Insp
 		node_id,
 		json!({ "kind": "summary" }),
 		json!({
-			"cold_tier": { "configured": false, "kind": "unknown" },
 			"counters": counters,
 		}),
 	)
@@ -192,7 +180,7 @@ pub async fn catalog(
 		.transpose()?;
 	let database_filter = query.database_id.clone();
 	let rows = db
-		.run(move |tx| {
+		.txn("depot_inspect_catalog", move |tx| {
 			let cursor = cursor.clone();
 			let database_filter = database_filter.clone();
 			async move {
@@ -293,7 +281,7 @@ pub async fn bucket(
 	let sample_limit = sample_limit(query.sample_limit)?;
 	let include_history = query.include_history.unwrap_or(false);
 	let data = db
-		.run(move |tx| async move {
+		.txn("depot_inspect_bucket", move |tx| async move {
 			let pointer = tx_get_decoded(
 				&tx,
 				keys::bucket_pointer_cur_key(bucket_id),
@@ -374,7 +362,7 @@ pub async fn database(
 	let sample_limit = sample_limit(query.sample_limit)?;
 	let scope_database_id = database_id.clone();
 	let data = db
-		.run(move |tx| {
+		.txn("depot_inspect_database", move |tx| {
 			let database_id = database_id.clone();
 			async move {
 				let bucket_pointer = tx_get_decoded(
@@ -426,7 +414,9 @@ pub async fn branch(
 ) -> Result<InspectResponse> {
 	let sample_limit = sample_limit(query.sample_limit)?;
 	let data = db
-		.run(move |tx| async move { branch_blob_in_tx(&tx, branch_id, sample_limit).await })
+		.txn("depot_inspect_branch", move |tx| async move {
+			branch_blob_in_tx(&tx, branch_id, sample_limit).await
+		})
 		.await?;
 
 	response(
@@ -448,7 +438,7 @@ pub async fn branch_rows(
 	let prefix = family.scan_prefix(branch_id);
 	let include_bytes = query.include_bytes.unwrap_or(false);
 	let scan = db
-		.run(move |tx| {
+		.txn("depot_inspect_branch_rows", move |tx| {
 			let prefix = prefix.clone();
 			let cursor = cursor.clone();
 			async move { scan_prefix_page(&tx, prefix, cursor.as_deref(), limit).await }
@@ -484,7 +474,7 @@ pub async fn raw_key(
 	key: Vec<u8>,
 ) -> Result<InspectResponse> {
 	let value = db
-		.run({
+		.txn("depot_inspect_raw_key", {
 			let key = key.clone();
 			move |tx| {
 				let key = key.clone();
@@ -522,7 +512,7 @@ pub async fn raw_scan(
 	let cursor = decode_optional_key(query.start_after.as_deref())?;
 	let decode = query.decode.unwrap_or(true);
 	let scan = db
-		.run(move |tx| {
+		.txn("depot_inspect_raw_scan", move |tx| {
 			let prefix = prefix.clone();
 			let cursor = cursor.clone();
 			async move { scan_prefix_page(&tx, prefix, cursor.as_deref(), limit).await }
@@ -568,7 +558,7 @@ pub async fn page_trace(
 	pgno: u32,
 ) -> Result<InspectResponse> {
 	let head = db
-		.run(move |tx| async move {
+		.txn("depot_inspect_page_trace", move |tx| async move {
 			tx_get_decoded(&tx, keys::branch_meta_head_key(branch_id), decode_db_head).await
 		})
 		.await?;
@@ -810,8 +800,6 @@ async fn branch_blob_in_tx(
 		RowFamily::Pidx,
 		RowFamily::Deltas,
 		RowFamily::Shards,
-		RowFamily::ColdShards,
-		RowFamily::RetiredColdObjects,
 		RowFamily::PitrIntervals,
 		RowFamily::Pins,
 		RowFamily::StagedHotShards,
@@ -953,8 +941,6 @@ fn decode_row_value(
 			"value_size": value.len(),
 			"sha256": digest_value(value),
 		}),
-		RowFamily::ColdShards => value_or_error(decode_cold_shard_ref(value)),
-		RowFamily::RetiredColdObjects => value_or_error(decode_retired_cold_object(value)),
 		RowFamily::PitrIntervals => json!({
 			"bucket_start_ms": keys::decode_branch_pitr_interval_bucket(branch_id, key).ok(),
 			"coverage": result_to_value(decode_pitr_interval_coverage(value)),

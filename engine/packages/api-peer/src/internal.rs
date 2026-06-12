@@ -1,13 +1,13 @@
 use anyhow::*;
 use base64::Engine;
-use epoxy::{
-	ops::propose::{Command, CommandKind, Proposal, SetCommand},
-	protocol::ReplicaId,
-};
+use epoxy::ops::propose::{Command, CommandKind, Proposal, SetCommand};
+use epoxy_protocol::protocol::ReplicaId;
 use futures_util::TryStreamExt;
 use gas::prelude::*;
 use indexmap::IndexMap;
 use rivet_api_builder::ApiCtx;
+use rivet_profiling::pubsub_subjects::{ProfileConfigSubject, SetProfileConfigMessage};
+use rivet_tracing_reconfigure::pubsub_subjects::TracingConfigSubject;
 use serde::{Deserialize, Serialize};
 use universaldb::{
 	RangeOption,
@@ -62,11 +62,10 @@ pub async fn set_tracing_config(
 	body: SetTracingConfigRequest,
 ) -> Result<SetTracingConfigResponse> {
 	// Broadcast message to all services via UPS
-	let subject = "rivet.debug.tracing.config";
 	let message = serde_json::to_vec(&body)?;
 
 	ctx.ups()?
-		.publish(subject, &message, PublishOpts::broadcast())
+		.publish(TracingConfigSubject, &message, PublishOpts::broadcast())
 		.await?;
 
 	tracing::info!(
@@ -76,6 +75,44 @@ pub async fn set_tracing_config(
 	);
 
 	Ok(SetTracingConfigResponse {})
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetProfileConfigRequest {
+	pub enabled: bool,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub sample_rate: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetProfileConfigResponse {}
+
+#[tracing::instrument(skip_all)]
+pub async fn set_profiling_config(
+	ctx: ApiCtx,
+	_path: (),
+	_query: (),
+	body: SetProfileConfigRequest,
+) -> Result<SetProfileConfigResponse> {
+	// Broadcast message to all services via UPS
+	let message = serde_json::to_vec(&SetProfileConfigMessage {
+		enabled: body.enabled,
+		sample_rate: body.sample_rate,
+	})?;
+
+	ctx.ups()?
+		.publish(ProfileConfigSubject, &message, PublishOpts::broadcast())
+		.await?;
+
+	tracing::info!(
+		enabled = body.enabled,
+		sample_rate = ?body.sample_rate,
+		"broadcasted profile config update"
+	);
+
+	Ok(SetProfileConfigResponse {})
 }
 
 #[derive(Serialize, Deserialize)]
@@ -230,7 +267,7 @@ pub async fn get_epoxy_replica_debug(
 
 	let config = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("api_peer_read_epoxy_config", |tx| async move {
 			let config = epoxy::utils::read_config(&tx, replica_id).await?;
 			Result::Ok(config)
 		})
@@ -391,7 +428,7 @@ pub async fn get_epoxy_key_debug_fanout(
 	// Get cluster config to find all replicas
 	let config: epoxy::types::ClusterConfig = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("api_peer_read_epoxy_cluster_config", |tx| async move {
 			let config = epoxy::utils::read_config(&tx, replica_id).await?;
 			Result::Ok(config.into())
 		})
@@ -450,7 +487,7 @@ pub async fn get_epoxy_key_debug_fanout(
 	Ok(GetEpoxyKeyDebugFanoutResponse { replicas, errors })
 }
 
-fn debug_ballot(ballot: epoxy::protocol::Ballot) -> EpoxyBallot {
+fn debug_ballot(ballot: epoxy_protocol::protocol::Ballot) -> EpoxyBallot {
 	EpoxyBallot {
 		counter: ballot.counter,
 		replica_id: ballot.replica_id,
@@ -463,7 +500,7 @@ async fn read_epoxy_key_state(
 	key: Vec<u8>,
 ) -> Result<EpoxyKeyState> {
 	ctx.udb()?
-		.run(move |tx| {
+		.txn("api_peer_read_epoxy_key_state", move |tx| {
 			let key = key.clone();
 			async move {
 				let replica_subspace = epoxy::keys::subspace(replica_id);
@@ -626,7 +663,7 @@ pub async fn get_epoxy_kv_optimistic(
 		.op(epoxy::ops::kv::get_optimistic::Input {
 			replica_id,
 			key: key_bytes,
-			caching_behavior: epoxy::protocol::CachingBehavior::Optimistic,
+			caching_behavior: epoxy_protocol::protocol::CachingBehavior::Optimistic,
 			target_replicas: None,
 			save_empty: false,
 		})

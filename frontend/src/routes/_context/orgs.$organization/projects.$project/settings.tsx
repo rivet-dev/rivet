@@ -1,4 +1,9 @@
-import { faQuestionCircle, faTrash, faTriangleExclamation, Icon } from "@rivet-gg/icons";
+import {
+	faQuestionCircle,
+	faTrash,
+	faTriangleExclamation,
+	Icon,
+} from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, notFound, useNavigate } from "@tanstack/react-router";
 import { HelpDropdown } from "@/app/help-dropdown";
@@ -12,10 +17,9 @@ export const Route = createFileRoute(
 	"/_context/orgs/$organization/projects/$project/settings",
 )({
 	beforeLoad: () => {
-		if(!features.platform) {
+		if (!features.platform) {
 			throw notFound();
 		}
-	
 	},
 	component: RouteComponent,
 });
@@ -77,7 +81,9 @@ function DangerZone() {
 								Archive project
 							</div>
 							<SmallText className="text-muted-foreground">
-								Permanently removes all associated namespaces, Rivet Actors, Runners, and configurations. Cannot be undone.
+								Permanently removes all associated namespaces,
+								Rivet Actors, Runners, and configurations.
+								Cannot be undone.
 							</SmallText>
 						</div>
 						<Button

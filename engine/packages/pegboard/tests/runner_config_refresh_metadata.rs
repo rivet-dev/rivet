@@ -84,12 +84,15 @@ async fn refresh_metadata_purges_runner_config_protocol_cache() -> Result<()> {
 			max_runners: 0,
 			runners_margin: 0,
 			metadata_poll_interval: None,
+			drain_on_version_upgrade: true,
+			actor_eviction_delay: 0,
+			actor_eviction_period: 0,
+			actor_eviction_rate: 1.0,
 		},
 		metadata: None,
-		drain_on_version_upgrade: true,
 	};
 	ctx.udb()?
-		.run(|tx| {
+		.txn("test_pegboardrunner_config_refresh_metad", |tx| {
 			let runner_name = runner_name.clone();
 			let runner_config = runner_config.clone();
 			async move {

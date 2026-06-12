@@ -10,13 +10,13 @@ import {
 	Icon,
 	type IconProp,
 } from "@rivet-gg/icons";
+import { useQuery } from "@tanstack/react-query";
 import {
 	useMatch,
 	useMatchRoute,
 	useNavigate,
 	useSearch,
 } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useState } from "react";
 import { cn, VisuallyHidden } from "@/components";
 import {
@@ -52,9 +52,7 @@ const NAV_SECTIONS: Array<{
 	},
 	{
 		label: "Project",
-		items: [
-			{ key: "billing", label: "Billing", icon: faCreditCard },
-		],
+		items: [{ key: "billing", label: "Billing", icon: faCreditCard }],
 	},
 	{
 		label: "Namespace",
@@ -71,16 +69,11 @@ const NAV_SECTIONS: Array<{
 	},
 	{
 		label: "Other",
-		items: [
-			{ key: "whats-new", label: "What's new", icon: faSparkles },
-		],
+		items: [{ key: "whats-new", label: "What's new", icon: faSparkles }],
 	},
 ];
 
-const TAB_META: Record<
-	SettingsTab,
-	{ title: string; description?: string }
-> = {
+const TAB_META: Record<SettingsTab, { title: string; description?: string }> = {
 	profile: {
 		title: "Account",
 		description: "Manage your account info.",
@@ -119,7 +112,6 @@ interface SettingsDrawerProps {
 // TopBar is `h-11` with `mt-2` (8 + 44 = 52px). Add another 8px gap to match the
 // content view's `my-2` so the drawer's top edge aligns with the card below.
 const TOP_BAR_OUTER_HEIGHT = "60px";
-
 
 export function SettingsDrawer({
 	open,
@@ -185,7 +177,9 @@ export function SettingsDrawer({
 					onFocusOutside={(e) => e.preventDefault()}
 				>
 					<VisuallyHidden>
-						<DialogPrimitive.Title>{meta.title}</DialogPrimitive.Title>
+						<DialogPrimitive.Title>
+							{meta.title}
+						</DialogPrimitive.Title>
 					</VisuallyHidden>
 
 					<div className="flex h-full min-h-0">
@@ -202,7 +196,9 @@ export function SettingsDrawer({
 												icon={item.icon}
 												label={item.label}
 												active={activeTab === item.key}
-												onClick={() => switchTab(item.key)}
+												onClick={() =>
+													switchTab(item.key)
+												}
 												trailing={
 													item.key === "billing" &&
 													activeTab !== "billing" ? (

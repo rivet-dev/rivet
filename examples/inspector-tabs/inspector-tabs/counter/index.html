@@ -1,0 +1,394 @@
+<!doctype html>
+<!--
+================================================================================
+Custom inspector tab: "Counter"
+================================================================================
+
+A copy-pasteable template for a Rivet Actor custom inspector tab. Plain
+HTML + a single inline <script>. No bundler, no build step.
+
+This version uses the dashboard's shared stylesheet (`/inspector/tab.css`)
+for tokens + sensible defaults. Replace it with your own CSS when you want
+a different look.
+
+File layout:
+  1. <head>           — <link> to the shared stylesheet
+  2. <body> markup    — the demo UI: value, buttons, history, error region
+  3. <script>:
+     3a. CONFIG         — read trusted shell origin from the URL
+     3b. STATE          — variables the tab owns
+     3c. HELPERS        — DOM helpers (errors, busy state)
+     3d. INSPECTOR HTTP — fetchState / invokeAction wrappers
+     3e. RENDERING      — translate actor state into DOM
+     3f. HANDSHAKE      — postMessage receiver + `ready` signal (REQUIRED)
+     3g. WIRING         — connect buttons to actions (UI-specific)
+
+REQUIRED markers below highlight the contract between every tab and the
+dashboard. Everything else is demo-specific.
+-->
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Counter Tab</title>
+
+		<!-- ============================================================
+		     SHARED STYLESHEET
+		     ============================================================
+		     `/inspector/tab.css` is served by every actor's gateway path,
+		     so it lives at `../../tab.css` relative to this bundle
+		     (`/inspector/custom-tabs/<id>/`). An absolute `/inspector/...`
+		     href would resolve to the engine root and 404 — always use
+		     the relative form.
+
+		     The stylesheet exposes the dashboard's design tokens as
+		     `--rivet-*` CSS variables, mirrors the dashboard's light +
+		     dark token blocks, and ships sensible body/button/input
+		     defaults. The tab applies the dashboard's active theme by
+		     toggling the `dark` class on `<html>` from the `v1Init`
+		     handler below.
+
+		     You can omit this link and bring your own CSS — the inspector
+		     tab API doesn't require it. -->
+		<link rel="stylesheet" href="../../tab.css" />
+
+		<style>
+			/* Demo-specific layout on top of the shared sheet. */
+			body {
+				display: flex;
+				flex-direction: column;
+				padding: var(--rivet-space-6);
+				gap: var(--rivet-space-5);
+				height: 100vh;
+				overflow: hidden;
+			}
+			.value {
+				font-size: 64px;
+				font-weight: 700;
+				color: var(--rivet-primary);
+				font-variant-numeric: tabular-nums;
+				line-height: 1;
+				font-family: var(--rivet-font-mono);
+			}
+			.actions {
+				display: flex;
+				gap: var(--rivet-space-2);
+				flex-wrap: wrap;
+			}
+			.history {
+				flex: 1;
+				min-height: 0;
+				overflow: auto;
+				display: flex;
+				flex-direction: column;
+			}
+			.history-list {
+				flex: 1;
+				min-height: 0;
+				overflow: auto;
+				padding: var(--rivet-space-2) 0;
+			}
+			.history-entry {
+				display: flex;
+				justify-content: space-between;
+				padding: var(--rivet-space-2) var(--rivet-space-4);
+				font-size: 13px;
+				font-family: var(--rivet-font-mono);
+			}
+			.history-entry .ts {
+				color: var(--rivet-muted-foreground);
+				font-size: 11px;
+			}
+			.empty {
+				color: var(--rivet-muted-foreground);
+				font-style: italic;
+				text-align: center;
+				padding: var(--rivet-space-6);
+			}
+		</style>
+	</head>
+	<body>
+		<!-- ============================================================
+		     DEMO UI MARKUP
+		     ============================================================ -->
+
+		<div>
+			<h1 class="rivet-muted">Current value</h1>
+			<div id="value" class="value">…</div>
+		</div>
+
+		<div class="actions">
+			<button id="inc-1" class="rivet-primary">+1</button>
+			<button id="inc-5">+5</button>
+			<button id="inc-10">+10</button>
+			<button id="reset">Reset</button>
+		</div>
+
+		<div class="rivet-card history">
+			<div class="rivet-section-header">Recent changes</div>
+			<div id="history" class="history-list">
+				<div class="empty">Waiting for parent handshake…</div>
+			</div>
+		</div>
+
+		<div id="error" class="rivet-error" style="display: none"></div>
+
+		<script>
+			// =================================================================
+			// 3a. CONFIG — trusted shell origin
+			// =================================================================
+			//
+			// REQUIRED. The dashboard always loads the tab with a `shellOrigin`
+			// URL parameter that names the dashboard's own origin. The tab
+			// uses it to validate inbound postMessages — without this check
+			// any third-party page that frames the tab could forge an `init`
+			// message and feed the tab arbitrary state.
+			//
+			// We fall back to window.location.origin when the param is
+			// missing so the tab is still developable in isolation (open
+			// the bundle URL directly in a browser and paste a token
+			// manually). In production the dashboard always supplies it.
+
+			function getTrustedShellOrigin() {
+				const p = new URLSearchParams(window.location.search).get(
+					"shellOrigin",
+				);
+				if (!p) return null;
+				try {
+					return new URL(p).origin;
+				} catch {
+					return null;
+				}
+			}
+			const SHELL_ORIGIN =
+				getTrustedShellOrigin() ?? window.location.origin;
+
+			// =================================================================
+			// 3b. STATE
+			// =================================================================
+			//
+			// `authToken` and `actorId` arrive in the `v1Init` postMessage.
+			// They are unavailable until the handshake fires, so every
+			// fetch helper below short-circuits while they are null.
+
+			let authToken = null;
+			let actorId = null;
+			let pollTimer = null;
+
+			// =================================================================
+			// 3c. HELPERS — small DOM utilities
+			// =================================================================
+
+			function showError(msg) {
+				const el = document.getElementById("error");
+				el.style.display = "block";
+				el.textContent = msg;
+			}
+			function clearError() {
+				const el = document.getElementById("error");
+				el.style.display = "none";
+				el.textContent = "";
+			}
+			function setBusy(busy) {
+				for (const id of ["inc-1", "inc-5", "inc-10", "reset"]) {
+					document.getElementById(id).disabled = busy;
+				}
+			}
+
+			// =================================================================
+			// 3d. INSPECTOR HTTP — fetch state and invoke actions
+			// =================================================================
+			//
+			// REQUIRED PATTERN.
+			//
+			// The iframe runs at `/inspector/custom-tabs/counter/` on the
+			// actor's gateway URL, so inspector data routes live two
+			// directories up. We use relative paths (`../../state`,
+			// `../../action/<name>`) so we don't need to know the engine
+			// origin or the actor id — the browser resolves them for us.
+			//
+			// Two auth rules from the contract:
+			//   1. Every authenticated request MUST include
+			//      `Authorization: Bearer ${authToken}`.
+			//   2. On a 401 response, the tab MUST post
+			//      `{ type: "token-refresh-needed", v: 1 }` to
+			//      `window.parent` with `targetOrigin: SHELL_ORIGIN`. The
+			//      dashboard refreshes the token and re-issues `v1Init`.
+			//      Do NOT silently retry — the token is stale until init
+			//      fires again.
+
+			async function fetchState() {
+				try {
+					const r = await fetch("../../state", {
+						headers: { Authorization: `Bearer ${authToken}` },
+					});
+					if (r.status === 401) {
+						window.parent.postMessage(
+							{ type: "token-refresh-needed", v: 1 },
+							SHELL_ORIGIN,
+						);
+						return;
+					}
+					if (!r.ok) {
+						throw new Error(
+							`Inspector state request failed: ${r.status}`,
+						);
+					}
+					const { state } = await r.json();
+					render(state ?? {});
+					clearError();
+				} catch (err) {
+					showError(err?.stack ?? String(err));
+				}
+			}
+
+			// `POST /inspector/action/<name>` body:
+			//   { args: [...] }                 — positional args (this demo)
+			//   { properties: {...} }           — keyed args (alternative)
+			// Returns: { output: <return value> } on success.
+
+			async function invokeAction(name, args = []) {
+				setBusy(true);
+				try {
+					const r = await fetch(`../../action/${name}`, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${authToken}`,
+						},
+						body: JSON.stringify({ args }),
+					});
+					if (!r.ok) {
+						const payload = await r
+							.json()
+							.catch(() => ({ message: r.statusText }));
+						throw new Error(
+							`Inspector action "${name}" failed: ${
+								payload?.message ?? r.status
+							}`,
+						);
+					}
+					clearError();
+					// Refetch state immediately so the UI feels snappy
+					// instead of waiting for the next 1 s poll tick.
+					await fetchState();
+				} catch (err) {
+					showError(err?.stack ?? String(err));
+				} finally {
+					setBusy(false);
+				}
+			}
+
+			// =================================================================
+			// 3e. RENDERING — translate state into DOM
+			// =================================================================
+
+			function render(state) {
+				document.getElementById("value").textContent = String(
+					state.value ?? 0,
+				);
+				const hist = Array.isArray(state.history)
+					? [...state.history].reverse()
+					: [];
+				const container = document.getElementById("history");
+				if (!hist.length) {
+					container.innerHTML =
+						'<div class="empty">No changes yet — press a button above.</div>';
+					return;
+				}
+				container.innerHTML = hist
+					.map(
+						(entry) =>
+							`<div class="history-entry"><span>${entry.value}</span><span class="ts">${new Date(entry.at).toLocaleTimeString()}</span></div>`,
+					)
+					.join("");
+			}
+
+			// =================================================================
+			// 3f. HANDSHAKE — REQUIRED postMessage contract
+			// =================================================================
+			//
+			// The dashboard ↔ tab handshake follows a tiny envelope:
+			//
+			//   Dashboard → tab (`v1Init`):
+			//     { type: "init", v: 1, actorId, authToken, rivetToken?,
+			//       activeTab? }
+			//
+			//   Tab → dashboard (`v1Ready`):
+			//     { type: "ready", v: 1 }
+			//
+			//   Tab → dashboard (`v1TokenRefreshNeeded`):
+			//     { type: "token-refresh-needed", v: 1 }
+			//
+			// If you're building the tab with TypeScript, import the types:
+			//
+			//   import type {
+			//     ShellToTabMessage,
+			//     TabToShellMessage,
+			//     V1Init,
+			//   } from "rivetkit/inspector-tab";
+			//
+			// REQUIRED CHECKS in the receiver:
+			//   1. `event.origin === SHELL_ORIGIN` — drop messages from any
+			//      other origin. Without this an attacker who frames the
+			//      tab can forge `init`.
+			//   2. The message shape must validate; do NOT trust fields
+			//      blindly. We only accept `init`/`v=1` here.
+			//
+			// IMPORTANT: subsequent `init` messages mean the dashboard sent
+			// a fresh token (typically after a token-refresh-needed flow).
+			// Always replace the cached token; don't ignore late inits.
+
+			window.addEventListener("message", (event) => {
+				if (event.origin !== SHELL_ORIGIN) return;
+				const msg = event.data;
+				if (!msg || typeof msg !== "object") return;
+				if (msg.type === "init" && msg.v === 1) {
+					actorId = msg.actorId;
+					authToken = msg.authToken;
+					// Mirror the dashboard's active theme by toggling
+					// the `dark` class on <html>. The shared stylesheet
+					// drives `--rivet-*` tokens off that class. If the
+					// dashboard omits `theme`, default to dark.
+					document.documentElement.classList.toggle(
+						"dark",
+						(msg.theme ?? "dark") === "dark",
+					);
+					if (pollTimer) clearInterval(pollTimer);
+					fetchState();
+					// Poll every second. For higher-frequency UIs prefer a
+					// WebSocket-based pattern; the inspector HTTP routes
+					// are designed for occasional reads.
+					pollTimer = setInterval(fetchState, 1000);
+				}
+			});
+
+			// =================================================================
+			// 3g. WIRING — connect UI events to actions (demo-specific)
+			// =================================================================
+
+			document
+				.getElementById("inc-1")
+				.addEventListener("click", () => invokeAction("increment", [1]));
+			document
+				.getElementById("inc-5")
+				.addEventListener("click", () => invokeAction("increment", [5]));
+			document
+				.getElementById("inc-10")
+				.addEventListener("click", () => invokeAction("increment", [10]));
+			document
+				.getElementById("reset")
+				.addEventListener("click", () => invokeAction("reset", []));
+
+			// =================================================================
+			// REQUIRED: signal `ready` so the dashboard hides the
+			// "Connecting to inspector…" overlay. Do this once, after the
+			// message listener is registered, before any `init` could
+			// arrive. If you never send this, the dashboard times out
+			// after 8 s and shows "Inspector UI didn't load."
+			// =================================================================
+
+			window.parent.postMessage({ type: "ready", v: 1 }, SHELL_ORIGIN);
+		</script>
+	</body>
+</html>

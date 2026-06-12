@@ -63,7 +63,7 @@ enum BackfillOutput {
 async fn backfill_chunk(ctx: &ActivityCtx, input: &BackfillChunkInput) -> Result<BackfillOutput> {
 	let (entries, new_last_key) = ctx
 		.udb()?
-		.run(|tx| async move {
+		.txn("pegboard_runner_pool_backfill_chunk", |tx| async move {
 			let start = Instant::now();
 			let tx = tx.with_subspace(namespace::keys::subspace());
 			let mut new_last_key = Vec::new();

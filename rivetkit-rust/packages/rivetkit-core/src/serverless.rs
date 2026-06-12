@@ -20,8 +20,11 @@ use url::Url;
 
 use crate::actor::factory::ActorFactory;
 #[cfg(feature = "native-runtime")]
-use crate::engine_process::EngineProcessManager;
-use crate::registry::{RegistryCallbacks, RegistryDispatcher, ServeConfig};
+use crate::engine_process::{EngineProcessManager, EngineResolverConfig};
+use crate::registry::{
+	CoreEnvoyHandle, CoreEnvoyStatus, RegistryCallbacks, RegistryDispatcher, ServeConfig,
+	should_manage_engine,
+};
 use crate::runtime::RuntimeSpawner;
 use crate::time::{sleep, timeout};
 
@@ -155,14 +158,20 @@ impl CoreServerlessRuntime {
 		config: ServeConfig,
 	) -> Result<Self> {
 		#[cfg(feature = "native-runtime")]
-		let engine_process = match config.engine_binary_path.as_ref() {
-			Some(binary_path) => {
-				Some(EngineProcessManager::start(binary_path, &config.endpoint).await?)
-			}
-			None => None,
+		let engine_process = if should_manage_engine(&config.endpoint, config.engine_spawn)? {
+			Some(
+				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
+					&config.endpoint,
+					config.engine_binary_path.clone(),
+					config.engine_auto_download,
+				))
+				.await?,
+			)
+		} else {
+			None
 		};
 		#[cfg(not(feature = "native-runtime"))]
-		if config.engine_binary_path.is_some() {
+		if should_manage_engine(&config.endpoint, config.engine_spawn)? {
 			anyhow::bail!("engine process spawning requires the `native-runtime` feature");
 		}
 
@@ -217,11 +226,22 @@ impl CoreServerlessRuntime {
 	}
 
 	pub async fn active_envoy_actor_count(&self) -> Option<usize> {
+		self.active_envoy_status()
+			.await
+			.map(|status| status.active_actor_count)
+	}
+
+	pub async fn active_envoy_status(&self) -> Option<CoreEnvoyStatus> {
 		self.envoy
 			.lock()
 			.await
 			.as_ref()
-			.map(EnvoyHandle::active_actor_count)
+			.map(|handle| CoreEnvoyHandle::new(handle.clone()).status())
+	}
+
+	pub async fn active_envoy_actor_stop_threshold_ms(&self) -> Option<i64> {
+		let handle = self.envoy.lock().await.as_ref().cloned()?;
+		CoreEnvoyHandle::new(handle).actor_stop_threshold_ms().await
 	}
 
 	pub async fn handle_request(&self, req: ServerlessRequest) -> ServerlessResponse {
@@ -248,26 +268,18 @@ impl CoreServerlessRuntime {
 				"This is a RivetKit server.\n\nLearn more at https://rivet.dev",
 			)),
 			("GET", "/health") => {
-				// Report unhealthy when an envoy is currently running but its link to the
-				// engine has gone silent. A 503 is the conventional "recycle me" signal for
-				// container hosts (Cloud Run, k8s, etc.) running behind an HTTP health probe.
-				let envoy_unhealthy = {
+				// Healthy if no envoy is connected yet or if the envoy has received a
+				// recent engine ping. Unhealthy only when an envoy exists but has not
+				// received a recent ping. 503 is the conventional "recycle me" signal
+				// for container hosts running behind an HTTP health probe.
+				let runtime_healthy = {
 					let guard = self.envoy.lock().await;
 					guard
 						.as_ref()
-						.map(|handle| !handle.is_ping_healthy())
-						.unwrap_or(false)
+						.map(|handle| handle.is_ping_healthy())
+						.unwrap_or(true)
 				};
-				if envoy_unhealthy {
-					Ok(json_response(
-						StatusCode::SERVICE_UNAVAILABLE,
-						json!({
-							"status": "engine_ping_stale",
-							"runtime": "rivetkit",
-							"version": self.settings.package_version,
-						}),
-					))
-				} else {
+				if runtime_healthy {
 					Ok(json_response(
 						StatusCode::OK,
 						json!({
@@ -276,9 +288,19 @@ impl CoreServerlessRuntime {
 							"version": self.settings.package_version,
 						}),
 					))
+				} else {
+					Ok(json_response(
+						StatusCode::SERVICE_UNAVAILABLE,
+						json!({
+							"status": "engine_ping_stale",
+							"runtime": "rivetkit",
+							"version": self.settings.package_version,
+						}),
+					))
 				}
 			}
 			("GET", "/metadata") => Ok(self.metadata_response()),
+			("GET", "/metrics") => Ok(metrics_response(&req.headers)),
 			("GET", "/start") | ("POST", "/start") => self.start_response(req).await,
 			("OPTIONS", _) => Ok(bytes_response(
 				StatusCode::NO_CONTENT,
@@ -623,6 +645,30 @@ fn json_response(status: StatusCode, body: serde_json::Value) -> ServerlessRespo
 		HashMap::from([("content-type".to_owned(), "application/json".to_owned())]),
 		serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec()),
 	)
+}
+
+fn metrics_response(headers: &HashMap<String, String>) -> ServerlessResponse {
+	let bearer_token = crate::metrics_endpoint::authorization_bearer_token_map(headers);
+	match crate::metrics_endpoint::authorize_metrics_request(bearer_token) {
+		Ok(()) => match crate::metrics_endpoint::render_prometheus_metrics() {
+			Ok(metrics) => bytes_response(
+				StatusCode::OK,
+				HashMap::from([("content-type".to_owned(), metrics.content_type)]),
+				metrics.body,
+			),
+			Err(error) => error_response(error),
+		},
+		Err(crate::metrics_endpoint::MetricsAccessError::NotEnabled) => text_response(
+			StatusCode::FORBIDDEN,
+			"text/plain; charset=utf-8",
+			"metrics not enabled\n",
+		),
+		Err(crate::metrics_endpoint::MetricsAccessError::Unauthorized) => text_response(
+			StatusCode::UNAUTHORIZED,
+			"text/plain; charset=utf-8",
+			"metrics request requires a valid bearer token\n",
+		),
+	}
 }
 
 fn bytes_response(

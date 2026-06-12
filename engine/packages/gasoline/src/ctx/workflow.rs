@@ -274,7 +274,6 @@ impl WorkflowCtx {
 
 		let ctx = ActivityCtx::new(
 			self.workflow_id,
-			self.name.clone(),
 			(*self
 				.state
 				.try_lock()
@@ -364,17 +363,13 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				let is_recoverable = err
-					.chain()
-					.find_map(|x| x.downcast_ref::<WorkflowError>())
-					.map(|err| err.is_recoverable())
-					.unwrap_or_default();
-
-				if !is_recoverable {
-					metrics::ACTIVITY_ERRORS
-						.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
-						.inc();
-				}
+				// TODO: Temporarily don't record err to reduce metrics cardinality
+				// if !is_recoverable {
+				// 	metrics::ACTIVITY_ERRORS
+				// 		.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+				// 		.inc();
+				// }
+				let err_str = String::new();
 				metrics::ACTIVITY_DURATION
 					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
 					.observe(dt);
@@ -401,9 +396,11 @@ impl WorkflowCtx {
 					)
 					.await?;
 
-				metrics::ACTIVITY_ERRORS
-					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
-					.inc();
+				// TODO: Temporarily don't record err to reduce metrics cardinality
+				// metrics::ACTIVITY_ERRORS
+				// 	.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
+				// 	.inc();
+				let err_str = String::new();
 				metrics::ACTIVITY_DURATION
 					.with_label_values(&[self.name.as_str(), A::NAME, err_str.as_str()])
 					.observe(dt);
@@ -720,9 +717,17 @@ impl WorkflowCtx {
 			interval.tick().await;
 
 			let mut ctx = ListenCtx::new(self, &location);
+			let mut next_wakeup_at = None;
 
 			loop {
-				ctx.reset(retries == 0);
+				let wakeup_to_pull = next_wakeup_at.take().map(|wakeup_at: Instant| {
+					let duration = wakeup_at.elapsed();
+					metrics::SIGNAL_WAKEUP_TO_PULL_SECONDS
+						.with_label_values(&[self.name()])
+						.observe(duration.as_secs_f64());
+					duration
+				});
+				ctx.reset(retries == 0, wakeup_to_pull);
 
 				match T::listen(&mut ctx, limit).in_current_span().await {
 					Ok(res) => break res,
@@ -736,11 +741,14 @@ impl WorkflowCtx {
 				}
 
 				// Poll and wait for a wake at the same time
-				tokio::select! {
-					_ = bump_sub.next() => {},
-					_ = interval.tick() => {},
-					res = self.wait_stop() => res?,
-				}
+				next_wakeup_at = tokio::select! {
+					_ = bump_sub.next() => Some(Instant::now()),
+					_ = interval.tick() => Some(Instant::now()),
+					res = self.wait_stop() => {
+						res?;
+						None
+					},
+				};
 			}
 		};
 
@@ -886,9 +894,6 @@ impl WorkflowCtx {
 		Ok(signals.into_iter().next())
 	}
 
-	// TODO: Potential bad transaction: if the signal gets pulled and saved in history but an error occurs
-	// before the sleep event state is set to "interrupted", the next time this workflow is run it will error
-	// because it tries to pull a signal again
 	/// Listens for signals until the given timestamp. Returns an empty vec if the timestamp is reached.
 	///
 	/// Internally this is a sleep event and a signal event.
@@ -971,7 +976,7 @@ impl WorkflowCtx {
 		let signals = if duration <= 0 {
 			// After timeout is over, check once for signals
 			if matches!(state, SleepState::Normal) {
-				let mut ctx = ListenCtx::new(self, &signals_location);
+				let mut ctx = ListenCtx::new_with_sleep(self, &signals_location, &sleep_location);
 
 				match T::listen(&mut ctx, limit).in_current_span().await {
 					Ok(x) => x,
@@ -1003,10 +1008,19 @@ impl WorkflowCtx {
 					// Skip first tick, we wait after the db call instead of before
 					interval.tick().await;
 
-					let mut ctx = ListenCtx::new(self, &signals_location);
+					let mut ctx =
+						ListenCtx::new_with_sleep(self, &signals_location, &sleep_location);
+					let mut next_wakeup_at = None;
 
 					loop {
-						ctx.reset(false);
+						let wakeup_to_pull = next_wakeup_at.take().map(|wakeup_at: Instant| {
+							let duration = wakeup_at.elapsed();
+							metrics::SIGNAL_WAKEUP_TO_PULL_SECONDS
+								.with_label_values(&[self.name()])
+								.observe(duration.as_secs_f64());
+							duration
+						});
+						ctx.reset(false, wakeup_to_pull);
 
 						match T::listen(&mut ctx, limit).in_current_span().await {
 							// Retry
@@ -1015,11 +1029,14 @@ impl WorkflowCtx {
 						}
 
 						// Poll and wait for a wake at the same time
-						tokio::select! {
-							_ = bump_sub.next() => {},
-							_ = interval.tick() => {},
-							res = self.wait_stop() => res?,
-						}
+						next_wakeup_at = tokio::select! {
+							_ = bump_sub.next() => Some(Instant::now()),
+							_ = interval.tick() => Some(Instant::now()),
+							res = self.wait_stop() => {
+								res?;
+								None
+							},
+						};
 					}
 				})
 				.in_current_span(),
@@ -1052,10 +1069,18 @@ impl WorkflowCtx {
 			// Skip first tick, we wait after the db call instead of before
 			interval.tick().await;
 
-			let mut ctx = ListenCtx::new(self, &signals_location);
+			let mut ctx = ListenCtx::new_with_sleep(self, &signals_location, &sleep_location);
+			let mut next_wakeup_at = None;
 
 			loop {
-				ctx.reset(retries == 0);
+				let wakeup_to_pull = next_wakeup_at.take().map(|wakeup_at: Instant| {
+					let duration = wakeup_at.elapsed();
+					metrics::SIGNAL_WAKEUP_TO_PULL_SECONDS
+						.with_label_values(&[self.name()])
+						.observe(duration.as_secs_f64());
+					duration
+				});
+				ctx.reset(retries == 0, wakeup_to_pull);
 
 				match T::listen(&mut ctx, limit).in_current_span().await {
 					Ok(res) => break res,
@@ -1071,25 +1096,20 @@ impl WorkflowCtx {
 				}
 
 				// Poll and wait for a wake at the same time
-				tokio::select! {
-					_ = bump_sub.next() => {},
-					_ = interval.tick() => {},
-					res = self.wait_stop() => res?,
-				}
+				next_wakeup_at = tokio::select! {
+					_ = bump_sub.next() => Some(Instant::now()),
+					_ = interval.tick() => Some(Instant::now()),
+					res = self.wait_stop() => {
+						res?;
+						None
+					},
+				};
 			}
 		};
 
 		// Update sleep state
 		if !signals.is_empty() {
-			self.db
-				.update_workflow_sleep_event_state(
-					self.workflow_id,
-					&sleep_location,
-					SleepState::Interrupted,
-				)
-				.await?;
-
-			// Move to next event
+			// Move to next event, sleep state already updated by pull signals tx
 			self.cursor.update(&signals_location);
 		} else if matches!(state, SleepState::Normal) {
 			self.db

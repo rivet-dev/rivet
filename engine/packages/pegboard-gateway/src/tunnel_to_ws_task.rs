@@ -7,7 +7,7 @@ use anyhow::Result;
 use gas::prelude::*;
 use rivet_guard_core::{
 	WebSocketHandle,
-	errors::{WebSocketServiceHibernate, WebSocketServiceTimeout},
+	errors::{WebSocketGarbageCollected, WebSocketServiceHibernate},
 };
 use rivet_runner_protocol as protocol;
 use tokio::sync::{mpsc, watch};
@@ -21,7 +21,7 @@ pub async fn task(
 	client_ws: WebSocketHandle,
 	request_id: protocol::RequestId,
 	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor::Stopped>,
-	mut msg_rx: mpsc::Receiver<protocol::mk2::ToServerTunnelMessageKind>,
+	mut msg_rx: mpsc::UnboundedReceiver<protocol::mk2::ToServerTunnelMessageKind>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	can_hibernate: bool,
 	egress_bytes: Arc<AtomicU64>,
@@ -92,7 +92,11 @@ pub async fn task(
 			}
 			_ = drop_rx.changed() => {
 				tracing::warn!(reason=?drop_rx.borrow().as_ref(), "garbage collected");
-				return Err(WebSocketServiceTimeout.build());
+				return Err(WebSocketGarbageCollected {
+					phase: "active_websocket".to_owned(),
+					reason: format!("{:?}", drop_rx.borrow().as_ref()),
+				}
+				.build());
 			}
 			_ = tunnel_to_ws_abort_rx.changed() => {
 				tracing::debug!("task aborted");

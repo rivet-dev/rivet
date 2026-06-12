@@ -7,6 +7,7 @@ use async_trait::async_trait;
 use rand::seq::SliceRandom;
 use scc::HashMap;
 use tokio::sync::mpsc;
+use uuid::Uuid;
 
 use crate::driver::{PubSubDriver, SubscriberDriver, SubscriberDriverHandle};
 use crate::metrics;
@@ -16,12 +17,17 @@ use crate::pubsub::DriverOutput;
 const MEMORY_MAX_MESSAGE_SIZE: usize = 10 * 1024 * 1024; // 10MiB
 const GC_INTERVAL: Duration = Duration::from_secs(60);
 
+enum MemoryMessage {
+	Payload(Vec<u8>),
+	NoResponders,
+}
+
 pub struct MemoryDriverInner {
 	channel: String,
 	// Map<topic, Vec<sub>>
-	subscribers: HashMap<String, Vec<mpsc::UnboundedSender<Vec<u8>>>>,
+	subscribers: HashMap<String, Vec<mpsc::UnboundedSender<MemoryMessage>>>,
 	// Map<topic, Map<queue, Vec<sub>>>
-	queue_subscribers: HashMap<String, HashMap<String, Vec<mpsc::UnboundedSender<Vec<u8>>>>>,
+	queue_subscribers: HashMap<String, HashMap<String, Vec<mpsc::UnboundedSender<MemoryMessage>>>>,
 }
 
 #[derive(Clone)]
@@ -99,7 +105,11 @@ impl MemoryDriver {
 
 #[async_trait]
 impl PubSubDriver for MemoryDriver {
-	async fn subscribe(&self, subject: &str) -> Result<SubscriberDriverHandle> {
+	async fn subscribe(
+		&self,
+		subject: &str,
+		_reply_id: Option<Uuid>,
+	) -> Result<SubscriberDriverHandle> {
 		let (tx, rx) = mpsc::unbounded_channel();
 		let subject_with_channel = self.subject_with_channel(subject);
 
@@ -138,20 +148,30 @@ impl PubSubDriver for MemoryDriver {
 		}))
 	}
 
-	async fn publish(&self, subject: &str, payload: &[u8]) -> Result<()> {
+	async fn publish(
+		&self,
+		subject: &str,
+		payload: &[u8],
+		reply_subject: Option<&str>,
+	) -> Result<()> {
 		let subject_with_channel = self.subject_with_channel(subject);
 
-		tokio::join!(
+		let (delivered_subs, delivered_queues) = tokio::join!(
 			// Send to subs
 			async {
+				let mut delivered = 0usize;
 				if let Some(subs) = self.subscribers.get_async(&subject_with_channel).await {
 					for tx in &*subs {
-						let _ = tx.send(payload.to_vec());
+						if tx.send(MemoryMessage::Payload(payload.to_vec())).is_ok() {
+							delivered += 1;
+						}
 					}
 				}
+				delivered
 			},
 			// Send to queue subs
 			async {
+				let mut delivered = 0usize;
 				if let Some(queues) = self
 					.queue_subscribers
 					.get_async(&subject_with_channel)
@@ -161,15 +181,32 @@ impl PubSubDriver for MemoryDriver {
 						.iter_async(|_, subs| {
 							// Choose random sub to receive message
 							if let Some(tx) = subs.choose(&mut rand::thread_rng()) {
-								let _ = tx.send(payload.to_vec());
+								if tx.send(MemoryMessage::Payload(payload.to_vec())).is_ok() {
+									delivered += 1;
+								}
 							}
 
 							true
 						})
 						.await;
 				}
+				delivered
 			},
 		);
+
+		// If a reply was requested but nobody received the message, notify the reply
+		// subject's subscribers with a NoResponders signal (mirrors NATS behavior).
+		if let Some(reply_subject) = reply_subject
+			&& delivered_subs == 0
+			&& delivered_queues == 0
+		{
+			let reply_with_channel = self.subject_with_channel(reply_subject);
+			if let Some(subs) = self.subscribers.get_async(&reply_with_channel).await {
+				for tx in &*subs {
+					let _ = tx.send(MemoryMessage::NoResponders);
+				}
+			}
+		}
 
 		Ok(())
 	}
@@ -185,17 +222,18 @@ impl PubSubDriver for MemoryDriver {
 
 pub struct MemorySubscriber {
 	subject: String,
-	rx: mpsc::UnboundedReceiver<Vec<u8>>,
+	rx: mpsc::UnboundedReceiver<MemoryMessage>,
 }
 
 #[async_trait]
 impl SubscriberDriver for MemorySubscriber {
 	async fn next(&mut self) -> Result<DriverOutput> {
 		match self.rx.recv().await {
-			Some(payload) => Ok(DriverOutput::Message {
+			Some(MemoryMessage::Payload(payload)) => Ok(DriverOutput::Message {
 				subject: self.subject.clone(),
 				payload,
 			}),
+			Some(MemoryMessage::NoResponders) => Ok(DriverOutput::NoResponders),
 			None => Ok(DriverOutput::Unsubscribed),
 		}
 	}

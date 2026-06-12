@@ -18,7 +18,7 @@ const EVENT_ACK_BATCH_SIZE: i64 = 250;
 /// How long an actor with crash_policy Restart should wait pending before setting itself to sleep.
 const RESTART_PENDING_TIMEOUT_MS: i64 = util::duration::seconds(60);
 
-#[derive(Clone, Debug, Serialize, Deserialize, Hash)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Input {
 	pub actor_id: Id,
 	pub name: String,
@@ -983,7 +983,7 @@ impl State {
 /// Reason why an actor failed to allocate or run.
 ///
 /// Distinct from `errors::Actor` which represents user-facing API errors.
-#[derive(Debug, Clone, Serialize, Deserialize, Hash)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FailureReason {
 	/// Actor cannot allocate due to no available runner capacity. Only set if `failure_reason`
@@ -1328,7 +1328,7 @@ async fn handle_stopped(
 	Ok(StoppedResult::Continue)
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash)]
+#[derive(Debug, Serialize, Deserialize)]
 struct GetTsInput {}
 
 #[activity(GetTs)]

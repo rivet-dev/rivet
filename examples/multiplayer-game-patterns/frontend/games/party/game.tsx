@@ -1,13 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PartyMatchConn } from "../../actor-types.ts";
 import type { GameClient } from "../../client.ts";
-import type { PartyMatchInfo } from "./menu.tsx";
 import { PartyBot } from "./bot.ts";
+import type { PartyMatchInfo } from "./menu.tsx";
 
 interface PartySnapshot {
 	matchId: string;
 	partyCode: string;
 	phase: "waiting" | "playing" | "finished";
-	members: Record<string, { name: string; color: string; isHost: boolean; isReady: boolean; connected: boolean }>;
+	members: Record<
+		string,
+		{
+			name: string;
+			color: string;
+			isHost: boolean;
+			isReady: boolean;
+			connected: boolean;
+		}
+	>;
 }
 
 export function PartyGame({
@@ -20,9 +30,10 @@ export function PartyGame({
 	onLeave: () => void;
 }) {
 	const [snapshot, setSnapshot] = useState<PartySnapshot | null>(null);
-	const [nameInput, setNameInput] = useState(matchInfo.playerName || "Player");
-	// biome-ignore lint/suspicious/noExplicitAny: connection handle
-	const connRef = useRef<any>(null);
+	const [nameInput, setNameInput] = useState(
+		matchInfo.playerName || "Player",
+	);
+	const connRef = useRef<PartyMatchConn | null>(null);
 	const botsRef = useRef<PartyBot[]>([]);
 	const nameTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,14 +54,13 @@ export function PartyGame({
 			.connect();
 		connRef.current = conn;
 
-		conn.on("partyUpdate", (raw: unknown) => {
-			setSnapshot(raw as PartySnapshot);
+		conn.on("partyUpdate", (snap) => {
+			setSnapshot(snap);
 		});
 
-		conn.getSnapshot().then((snap: unknown) => {
-			const s = snap as PartySnapshot;
-			setSnapshot(s);
-			const myName = s.members[matchInfo.playerId]?.name;
+		conn.getSnapshot().then((snap) => {
+			setSnapshot(snap);
+			const myName = snap.members[matchInfo.playerId]?.name;
 			if (myName) setNameInput(myName);
 		});
 
@@ -94,8 +104,18 @@ export function PartyGame({
 			<div className="game-header">
 				<h2>Party</h2>
 				<div className="btn-row">
-					<button className="btn btn-secondary" onClick={addBot}>Add Bot</button>
-					<button className="btn btn-secondary" onClick={() => { cleanup(); onLeave(); }}>Leave</button>
+					<button className="btn btn-secondary" onClick={addBot}>
+						Add Bot
+					</button>
+					<button
+						className="btn btn-secondary"
+						onClick={() => {
+							cleanup();
+							onLeave();
+						}}
+					>
+						Leave
+					</button>
 				</div>
 			</div>
 
@@ -114,7 +134,14 @@ export function PartyGame({
 				)}
 
 				<div style={{ marginBottom: 16 }}>
-					<label style={{ display: "block", color: "#8e8e93", fontSize: 12, marginBottom: 4 }}>
+					<label
+						style={{
+							display: "block",
+							color: "#8e8e93",
+							fontSize: 12,
+							marginBottom: 4,
+						}}
+					>
 						Your Name
 					</label>
 					<input
@@ -133,14 +160,29 @@ export function PartyGame({
 					</div>
 					{memberList.map(([id, member]) => (
 						<div key={id} className="party-member-row">
-							<span className="party-member-name" style={{ color: member.color }}>
+							<span
+								className="party-member-name"
+								style={{ color: member.color }}
+							>
 								{member.name}
 								{id === matchInfo.playerId ? " (You)" : ""}
 							</span>
 							<span className="party-member-badges">
-								{member.isHost && <span className="badge badge-live">Host</span>}
-								{member.isReady && <span className="badge badge-live">Ready</span>}
-								{!member.connected && <span className="badge badge-finished">Offline</span>}
+								{member.isHost && (
+									<span className="badge badge-live">
+										Host
+									</span>
+								)}
+								{member.isReady && (
+									<span className="badge badge-live">
+										Ready
+									</span>
+								)}
+								{!member.connected && (
+									<span className="badge badge-finished">
+										Offline
+									</span>
+								)}
 							</span>
 						</div>
 					))}
@@ -155,7 +197,10 @@ export function PartyGame({
 							{myMember?.isReady ? "Unready" : "Ready"}
 						</button>
 						{isHost && (
-							<button className="btn btn-primary" onClick={startGame}>
+							<button
+								className="btn btn-primary"
+								onClick={startGame}
+							>
 								Start Game
 							</button>
 						)}
@@ -164,11 +209,20 @@ export function PartyGame({
 
 				{snapshot?.phase === "playing" && (
 					<div style={{ marginTop: 16, textAlign: "center" }}>
-						<p style={{ color: "#8e8e93", fontSize: 14, marginBottom: 12 }}>
+						<p
+							style={{
+								color: "#8e8e93",
+								fontSize: 14,
+								marginBottom: 12,
+							}}
+						>
 							Game is in progress
 						</p>
 						{isHost ? (
-							<button className="btn btn-primary" onClick={finishGame}>
+							<button
+								className="btn btn-primary"
+								onClick={finishGame}
+							>
 								Finish Game
 							</button>
 						) : (
@@ -180,7 +234,10 @@ export function PartyGame({
 				)}
 
 				{snapshot?.phase === "finished" && (
-					<div className="match-found-text" style={{ textAlign: "center", marginTop: 16 }}>
+					<div
+						className="match-found-text"
+						style={{ textAlign: "center", marginTop: 16 }}
+					>
 						Game Complete!
 					</div>
 				)}

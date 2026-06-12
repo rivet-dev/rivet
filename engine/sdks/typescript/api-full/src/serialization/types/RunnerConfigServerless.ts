@@ -10,29 +10,40 @@ export const RunnerConfigServerless: core.serialization.ObjectSchema<
     serializers.RunnerConfigServerless.Raw,
     Rivet.RunnerConfigServerless
 > = core.serialization.object({
+    actorEvictionDelay: core.serialization.property("actor_eviction_delay", core.serialization.number().optional()),
+    actorEvictionPeriod: core.serialization.property("actor_eviction_period", core.serialization.number().optional()),
+    actorEvictionRate: core.serialization.property("actor_eviction_rate", core.serialization.number().optional()),
     drainGracePeriod: core.serialization.property("drain_grace_period", core.serialization.number().optional()),
+    drainOnVersionUpgrade: core.serialization.property(
+        "drain_on_version_upgrade",
+        core.serialization.boolean().optional(),
+    ),
     headers: core.serialization.record(core.serialization.string(), core.serialization.string()).optional(),
     maxConcurrentActors: core.serialization.property("max_concurrent_actors", core.serialization.number().optional()),
-    maxRunners: core.serialization.property("max_runners", core.serialization.number()),
+    maxRunners: core.serialization.property("max_runners", core.serialization.number().optional()),
     metadataPollInterval: core.serialization.property("metadata_poll_interval", core.serialization.number().optional()),
     minRunners: core.serialization.property("min_runners", core.serialization.number().optional()),
     requestLifespan: core.serialization.property("request_lifespan", core.serialization.number()),
     runnersMargin: core.serialization.property("runners_margin", core.serialization.number().optional()),
-    slotsPerRunner: core.serialization.property("slots_per_runner", core.serialization.number()),
+    slotsPerRunner: core.serialization.property("slots_per_runner", core.serialization.number().optional()),
     url: core.serialization.string(),
 });
 
 export declare namespace RunnerConfigServerless {
     export interface Raw {
+        actor_eviction_delay?: number | null;
+        actor_eviction_period?: number | null;
+        actor_eviction_rate?: number | null;
         drain_grace_period?: number | null;
+        drain_on_version_upgrade?: boolean | null;
         headers?: Record<string, string> | null;
         max_concurrent_actors?: number | null;
-        max_runners: number;
+        max_runners?: number | null;
         metadata_poll_interval?: number | null;
         min_runners?: number | null;
         request_lifespan: number;
         runners_margin?: number | null;
-        slots_per_runner: number;
+        slots_per_runner?: number | null;
         url: string;
     }
 }

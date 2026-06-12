@@ -135,7 +135,7 @@ export function deserializeActorKey(keyString: string | undefined): ActorKey {
 	// Add the last part
 	if (escaping) {
 		// Incomplete escape at the end - treat as literal backslash
-		parts.push(currentPart + "\\");
+		parts.push(`${currentPart}\\`);
 	} else if (isEmptyStringMarker) {
 		parts.push("");
 	} else if (currentPart !== "" || parts.length > 0) {

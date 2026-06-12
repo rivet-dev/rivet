@@ -57,14 +57,14 @@ pub enum TransactionCommand {
 pub struct TransactionTask {
 	db: Arc<OptimisticTransactionDB>,
 	txn_conflict_tracker: TransactionConflictTracker,
-	receiver: mpsc::Receiver<TransactionCommand>,
+	receiver: mpsc::UnboundedReceiver<TransactionCommand>,
 }
 
 impl TransactionTask {
 	pub fn new(
 		db: Arc<OptimisticTransactionDB>,
 		txn_conflict_tracker: TransactionConflictTracker,
-		receiver: mpsc::Receiver<TransactionCommand>,
+		receiver: mpsc::UnboundedReceiver<TransactionCommand>,
 	) -> Self {
 		TransactionTask {
 			db,
@@ -439,32 +439,55 @@ impl TransactionTask {
 		let resolved_end =
 			self.resolve_key_selector_for_range(&txn, &end, end_or_equal, end_offset)?;
 
-		// Now execute the range query with resolved keys
-		let iter = txn.iterator_opt(
-			rocksdb::IteratorMode::From(&resolved_begin, rocksdb::Direction::Forward),
-			read_opts,
-		);
-
 		let mut results = Vec::new();
 		let limit = limit.unwrap_or(usize::MAX);
 
-		for item in iter {
-			let (k, v) = item.context("failed to iterate rocksdb for get range")?;
-			// Check if we've reached the end key
-			if k.as_ref() >= resolved_end.as_slice() {
-				break;
-			}
-
-			results.push(KeyValue::new(k.to_vec(), v.to_vec()));
-
-			if results.len() >= limit {
-				break;
-			}
-		}
-
-		// Apply reverse if needed
+		// When reversing, iterate descending from the end so that `limit` selects
+		// the highest keys in range (matching FDB semantics). Applying `limit`
+		// during a forward scan and reversing afterward would instead return the
+		// lowest keys, which is wrong for reverse range reads.
 		if reverse {
-			results.reverse();
+			let iter = txn.iterator_opt(
+				rocksdb::IteratorMode::From(&resolved_end, rocksdb::Direction::Reverse),
+				read_opts,
+			);
+
+			for item in iter {
+				let (k, v) = item.context("failed to iterate rocksdb for get range")?;
+				// The end key is exclusive, so skip anything at or above it.
+				if k.as_ref() >= resolved_end.as_slice() {
+					continue;
+				}
+				// The begin key is inclusive; once we drop below it we are done.
+				if k.as_ref() < resolved_begin.as_slice() {
+					break;
+				}
+
+				results.push(KeyValue::new(k.to_vec(), v.to_vec()));
+
+				if results.len() >= limit {
+					break;
+				}
+			}
+		} else {
+			let iter = txn.iterator_opt(
+				rocksdb::IteratorMode::From(&resolved_begin, rocksdb::Direction::Forward),
+				read_opts,
+			);
+
+			for item in iter {
+				let (k, v) = item.context("failed to iterate rocksdb for get range")?;
+				// Check if we've reached the end key
+				if k.as_ref() >= resolved_end.as_slice() {
+					break;
+				}
+
+				results.push(KeyValue::new(k.to_vec(), v.to_vec()));
+
+				if results.len() >= limit {
+					break;
+				}
+			}
 		}
 
 		Ok(Values::new(results))

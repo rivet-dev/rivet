@@ -1,4 +1,8 @@
-import { actor, type RivetMessageEvent, type UniversalWebSocket } from "rivetkit";
+import {
+	actor,
+	type RivetMessageEvent,
+	type UniversalWebSocket,
+} from "rivetkit";
 
 // Minimal non-hibernatable WebSocket actor for fuzz-testing the
 // force-sleep → gateway close path. Keeps state intentionally tiny so the

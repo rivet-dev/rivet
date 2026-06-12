@@ -1,0 +1,5 @@
+{
+  "code": "route_compute_timeout",
+  "group": "guard",
+  "message": "Timed out resolving the compute gateway route."
+}
