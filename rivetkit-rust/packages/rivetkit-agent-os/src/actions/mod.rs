@@ -6,8 +6,12 @@
 //! `JSON_COMPAT_UINT8_ARRAY` convention thanks to `Action::ok` running
 //! through `encode_json_compat`.
 
+pub mod cron;
 pub mod filesystem;
+pub mod network;
+pub mod preview;
 pub mod process;
+pub mod session;
 
 use agent_os_client::AgentOs;
 use anyhow::{Result, anyhow};
@@ -18,7 +22,15 @@ use filesystem::{WriteFileContent, WriteFilesEntryArg};
 
 /// Dispatch one action against a live VM. Each arm decodes its args,
 /// calls the helper, and replies through `action.ok` / `action.err`.
-pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
+///
+/// `previews` is the actor-scoped signed-preview-URL table. Only the
+/// `createSignedPreviewUrl` / `expireSignedPreviewUrl` arms touch it; the
+/// run loop also reads it when proxying `/preview/{token}` HTTP requests.
+pub async fn dispatch(
+	vm: &AgentOs,
+	previews: &mut preview::PreviewStore,
+	action: Action<AgentOsActor>,
+) {
 	let name = action.name().to_owned();
 	match name.as_str() {
 		"readFile" => {
@@ -103,9 +115,20 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 			}
 		}
 		"deleteFile" => {
-			let args: Result<(String,)> = action.decode_as();
-			match args {
-				Ok((path,)) => match filesystem::delete_file(vm, &path).await {
+			// TS may omit the trailing options object, so the CBOR array has
+			// length 1 or 2. Try the two-arg shape first, then fall back to
+			// the one-arg shape (ciborium rejects a short array for a fixed
+			// tuple, so a plain `Option` tuple is not enough).
+			let decoded = action
+				.decode_as::<(String, Option<filesystem::DeleteOptionsArg>)>()
+				.map(|(path, options)| (path, options.unwrap_or_default().recursive))
+				.or_else(|_| {
+					action
+						.decode_as::<(String,)>()
+						.map(|(path,)| (path, false))
+				});
+			match decoded {
+				Ok((path, recursive)) => match filesystem::delete_file(vm, &path, recursive).await {
 					Ok(()) => action.ok(&()),
 					Err(error) => action.err(error),
 				},
@@ -234,6 +257,102 @@ pub async fn dispatch(vm: &AgentOs, action: Action<AgentOsActor>) {
 					Ok(()) => action.ok(&()),
 					Err(error) => action.err(error),
 				},
+				Err(error) => action.err(error),
+			}
+		}
+		"vmFetch" => {
+			// Trailing options object is optional (length 2 or 3).
+			let decoded = action
+				.decode_as::<(u16, String, Option<network::FetchOptions>)>()
+				.map(|(port, url, options)| (port, url, options.unwrap_or_default()))
+				.or_else(|_| {
+					action
+						.decode_as::<(u16, String)>()
+						.map(|(port, url)| (port, url, network::FetchOptions::default()))
+				});
+			match decoded {
+				Ok((port, url, options)) => match network::fetch(vm, port, &url, options).await {
+					Ok(response) => action.ok(&response),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"scheduleCron" => {
+			let args: Result<(cron::CronJobOptionsDto,)> = action.decode_as();
+			match args {
+				Ok((options,)) => match cron::schedule_cron(vm, options) {
+					Ok(handle) => action.ok(&handle),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"listCronJobs" => action.ok(&cron::list_cron_jobs(vm)),
+		"cancelCronJob" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((id,)) => {
+					cron::cancel_cron_job(vm, &id);
+					action.ok(&());
+				}
+				Err(error) => action.err(error),
+			}
+		}
+		"createSession" => {
+			// Trailing options object is optional (length 1 or 2).
+			let decoded = action
+				.decode_as::<(String, Option<session::CreateSessionOptionsDto>)>()
+				.map(|(agent_type, options)| (agent_type, options.unwrap_or_default()))
+				.or_else(|_| {
+					action
+						.decode_as::<(String,)>()
+						.map(|(agent_type,)| (agent_type, session::CreateSessionOptionsDto::default()))
+				});
+			match decoded {
+				Ok((agent_type, options)) => {
+					match session::create_session(vm, &agent_type, options).await {
+						Ok(id) => action.ok(&id),
+						Err(error) => action.err(error),
+					}
+				}
+				Err(error) => action.err(error),
+			}
+		}
+		"sendPrompt" => {
+			let args: Result<(String, String)> = action.decode_as();
+			match args {
+				Ok((session_id, text)) => match session::send_prompt(vm, &session_id, &text).await {
+					Ok(result) => action.ok(&result),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"closeSession" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((session_id,)) => match session::close_session(vm, &session_id) {
+					Ok(()) => action.ok(&()),
+					Err(error) => action.err(error),
+				},
+				Err(error) => action.err(error),
+			}
+		}
+		"createSignedPreviewUrl" => {
+			let args: Result<(u16,)> = action.decode_as();
+			match args {
+				Ok((port,)) => action.ok(&preview::create(previews, port)),
+				Err(error) => action.err(error),
+			}
+		}
+		"expireSignedPreviewUrl" => {
+			let args: Result<(String,)> = action.decode_as();
+			match args {
+				Ok((token,)) => {
+					preview::expire(previews, &token);
+					action.ok(&());
+				}
 				Err(error) => action.err(error),
 			}
 		}

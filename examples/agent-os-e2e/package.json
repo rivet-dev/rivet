@@ -11,7 +11,7 @@
 	"dependencies": {
 		"rivetkit": "*",
 		"@rivet-dev/agent-os-common": "*",
-		"@rivet-dev/agent-os-pi": "^0.1.1"
+		"@rivet-dev/agent-os-pi": "0.0.0-claude-rust-review-and-runtime-fixes.5955345"
 	},
 	"devDependencies": {
 		"@types/node": "^22.13.9",

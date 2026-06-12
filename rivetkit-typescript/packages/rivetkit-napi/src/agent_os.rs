@@ -23,6 +23,11 @@ pub struct NapiAgentOsOptions {
 	/// are intentionally absent; passing them in the JSON envelope must
 	/// fail loud (enforced by `deny_unknown_fields`).
 	pub config_json: Option<String>,
+	/// Absolute path to the prebuilt `agent-os-sidecar` binary, resolved on
+	/// the TypeScript side from the `@rivet-dev/agent-os-sidecar` npm package.
+	/// Forwarded to the agent-os client via its `AGENT_OS_SIDECAR_BIN` env so
+	/// the client spawns the bundled binary instead of relying on `PATH`.
+	pub sidecar_binary_path: Option<String>,
 }
 
 /// Serializable mirror of [`AgentOsConfig`] for the Phase 1b minimal scope.
@@ -63,6 +68,21 @@ impl AgentOsConfigJson {
 pub(crate) fn parse_agent_os_options(
 	options: NapiAgentOsOptions,
 ) -> napi::Result<AgentOsActorConfig> {
+	// Forward the npm-resolved sidecar binary path to the agent-os client. The
+	// client reads `AGENT_OS_SIDECAR_BIN` when spawning the native sidecar, so
+	// setting it here makes the bundled binary authoritative for this process.
+	if let Some(path) = options.sidecar_binary_path.as_deref() {
+		if !path.is_empty() {
+			// SAFETY: runs once during factory construction at registry setup,
+			// before any VM (and thus any agent-os client thread that reads this
+			// var via `std::env::var`) is created. No other code reads
+			// `AGENT_OS_SIDECAR_BIN` concurrently with this write.
+			unsafe {
+				std::env::set_var("AGENT_OS_SIDECAR_BIN", path);
+			}
+		}
+	}
+
 	let parsed: AgentOsConfigJson = match options.config_json.as_deref() {
 		Some(json) => serde_json::from_str(json).map_err(|error| {
 			napi_anyhow_error(

@@ -105,9 +105,14 @@ const preview = (await agent.createSignedPreviewUrl(8080, 60)) as {
 console.log(`Preview path: ${preview.path}`);
 console.log(`Preview token: ${preview.token}`);
 
-// Fetch through the preview proxy
+// Fetch through the preview proxy. getGatewayUrl() returns a routing URL that
+// already carries a query string (rvt-namespace/rvt-method/rvt-crash-policy/...),
+// so the preview path must be inserted into the pathname before the query rather
+// than naively appended (which would land inside the rvt-crash-policy value).
 const gatewayUrl = await agent.getGatewayUrl();
-const previewUrl = `${gatewayUrl}${preview.path}`;
+const previewUrlObj = new URL(gatewayUrl);
+previewUrlObj.pathname = previewUrlObj.pathname.replace(/\/$/, "") + preview.path;
+const previewUrl = previewUrlObj.toString();
 console.log(`Fetching preview URL: ${previewUrl}`);
 const previewResponse = await fetch(previewUrl);
 const previewBody = await previewResponse.text();

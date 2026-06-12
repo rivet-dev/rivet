@@ -30,7 +30,7 @@ http.workspace = true
 rivet-error.workspace = true
 rivetkit-core = { workspace = true, features = ["sqlite"] }
 rivetkit-agent-os = { path = "../../../rivetkit-rust/packages/rivetkit-agent-os" }
-agent-os-client = { path = "../../../ext/agent-os/crates/client" }
+agent-os-client = { path = "/home/nathan/a5/crates/client" }
 
 [build-dependencies]
 napi-build = "2"

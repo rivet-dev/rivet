@@ -88,3 +88,6 @@ scripts/ralph/codex-streams/
 # Agent working files now live user-scoped in ~/.agents (or $AGENTS_DIR).
 # This entry is a safety net so a stray in-repo .agent/ never gets committed.
 .agent/
+
+# Local rivet-engine binary placed for engine-cli getEnginePath resolution
+rivetkit-typescript/packages/engine-cli/rivet-engine
