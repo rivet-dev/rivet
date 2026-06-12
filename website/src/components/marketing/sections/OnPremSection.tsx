@@ -22,7 +22,7 @@ const points = [
 ];
 
 export const OnPremSection = () => (
-  <section className='border-t border-white/10 px-6 py-16 md:py-32'>
+  <section className='border-t border-white/10 px-6 py-16 md:py-48'>
     <div className='mx-auto max-w-7xl'>
       <div className='mb-12 max-w-3xl'>
         <motion.h2
@@ -30,7 +30,7 @@ export const OnPremSection = () => (
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.05 }}
-          className='mb-4 text-2xl font-medium tracking-tight text-white md:text-4xl'
+          className='mb-4 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'
         >
           Run it where your data lives.
         </motion.h2>
@@ -41,7 +41,13 @@ export const OnPremSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='text-base leading-relaxed text-zinc-500 md:text-lg'
         >
-          A single binary you control. Deploy Rivet inside your VPC, your customer’s VPC, or fully air-gapped. Use the compliance you already have instead of waiting on someone else’s.
+          A single binary you control. Deploy Rivet inside your VPC, your customer’s VPC, or fully air-gapped. Use the compliance you already have instead of waiting on someone else’s.{' '}
+          <a
+            href='/compare/cloudflare-durable-objects/'
+            className='text-zinc-300 underline decoration-zinc-600 underline-offset-4 transition-colors hover:text-white'
+          >
+            Runs where Cloudflare Durable Objects can’t reach.
+          </a>
         </motion.p>
       </div>
 

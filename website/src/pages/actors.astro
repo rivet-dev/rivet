@@ -1,4 +1,7 @@
 ---
+// Page lane: /actors is the canonical home of the Actor primitive and of the
+// realtime, multiplayer, and collaborative use cases. Keep non-agent workloads
+// first-class here. The agent-builder story lives at /agent.
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { BuiltInFeatures } from '@/components/marketing/sections/BuiltInFeatures';
 import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
@@ -24,11 +27,11 @@ import { actorsFaqs } from '@/data/faqs/actors';
 				<!-- Hero -->
 				<section class="relative flex min-h-[88svh] flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
 					<div class="mx-auto w-full max-w-3xl">
-						<h1 class="mb-4 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl">
+						<h1 class="mb-4 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl">
 							The primitive for<br />stateful workloads.
 						</h1>
 						<p class="mb-8 text-lg text-zinc-400 md:text-xl">
-							One Actor per agent, per session, per user. State, storage, and networking included.
+							One Actor per agent, per session, per user. The same primitive powers realtime apps, multiplayer, and collaborative state.
 						</p>
 						<div class="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
 							<a href="/docs" class="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
@@ -38,6 +41,9 @@ import { actorsFaqs } from '@/data/faqs/actors';
 								Quickstart Guide
 							</a>
 						</div>
+						<p class="mt-6 text-sm text-zinc-500">
+							Building AI agents? <a href="/agent" class="text-zinc-300 transition-colors hover:text-white">Start at Rivet for Agents</a>
+						</p>
 					</div>
 				</section>
 

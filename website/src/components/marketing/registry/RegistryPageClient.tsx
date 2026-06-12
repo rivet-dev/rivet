@@ -22,7 +22,7 @@ const CATEGORY_ORDER: { type: string; label: string; description: string }[] = [
 		type: "file-system",
 		label: "File Systems",
 		description:
-			"Mount these file systems as the root or at any sub-path inside the VM.",
+			"Mount these file systems as the root or at any sub-path inside the agent's environment.",
 	},
 	{
 		type: "sandbox-extension",
@@ -34,7 +34,7 @@ const CATEGORY_ORDER: { type: string; label: string; description: string }[] = [
 		type: "software",
 		label: "Software",
 		description:
-			"WASM command packages that run inside the VM. Install individually or use meta-packages.",
+			"Wasm command packages that run inside the agent's environment. Install individually or use meta-packages.",
 	},
 ];
 

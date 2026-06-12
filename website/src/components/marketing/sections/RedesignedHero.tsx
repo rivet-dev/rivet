@@ -270,7 +270,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5 }}
-              className='mb-4 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl'
+              className='mb-4 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl'
             >
               Infrastructure for <br />
               the agentic era.
@@ -282,7 +282,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               transition={{ duration: 0.5, delay: 0.05 }}
               className='mb-6 text-lg text-zinc-400 md:text-xl'
             >
-              Actors are the primitive for AI agents, real-time apps,<br/>and durable workflows. They burst when traffic spikes,<br/>sleep when idle, run for hours, and hold state across regions.
+              Actors are the primitive for AI agents — and the realtime<br/>apps and workflows around them. They burst when traffic spikes, sleep<br/>when idle, and run anywhere: Rivet Cloud, your VPC, or fully air-gapped.
             </motion.p>
 
             <motion.div

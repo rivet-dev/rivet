@@ -10,7 +10,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 	description:
 		'Compare Rivet Actors and Cloudflare Durable Objects: open-source stateful actors on your own infrastructure versus stateful compute tied to Cloudflare.',
 	heroSubtitle:
-		'Cloudflare Durable Objects provide stateful serverless computing with vendor lock-in. Rivet Actors give you the same capabilities as an open-source library that works with your existing infrastructure and technology stack.',
+		'Cloudflare Durable Objects provide stateful serverless computing with vendor lock-in. Rivet Actors give you the same capabilities as an open-source library that works with your existing infrastructure and technology stack. If your workloads must run on-prem, in a customer VPC, or air-gapped, Durable Objects are not an option. Rivet is built for exactly that.',
 	rivetSummary:
 		'Rivet Actors bring the actor model to your existing infrastructure as an open-source library. Build stateful, distributed applications with your preferred technology stack, deployed on your own infrastructure.',
 	competitorSummary:
@@ -248,7 +248,7 @@ export const cloudflareDurableObjects: CompareEntry = {
 					feature: 'Built-in scheduling',
 					rivet: {
 						status: 'yes',
-						text: 'Powerful built-in scheduling system',
+						text: 'Built-in scheduling with durable timers and cron',
 					},
 					competitor: {
 						status: 'partial',

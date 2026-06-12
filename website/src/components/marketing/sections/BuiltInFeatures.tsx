@@ -52,8 +52,8 @@ const features = [
   },
   {
     icon: Layers,
-    title: 'Scales infinitely, scales to zero',
-    description: 'Supports bursty workloads and is cost-efficient.',
+    title: 'Scales to zero, bursts to thousands',
+    description: 'Sleeps at near-zero cost when idle, fans out when traffic spikes.',
     href: '/docs/actors/design-patterns',
   },
   {
@@ -99,7 +99,7 @@ export const BuiltInFeatures = () => {
           transition={{ duration: 0.5 }}
           className='mb-10'
         >
-          <h2 className='mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl'>
+          <h2 className='mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'>
             A lightweight primitive with powerful capabilities.
           </h2>
           <p className='text-base leading-relaxed text-zinc-500'>

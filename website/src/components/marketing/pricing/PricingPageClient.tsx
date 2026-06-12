@@ -27,12 +27,12 @@ const Hero = () => (
     <div className="mx-auto max-w-7xl px-6">
       <div className="flex flex-col items-center text-center">
         <div className="max-w-3xl mb-16">
-          <h1 className="mb-6 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl">
+          <h1 className="mb-6 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl">
             Rivet Cloud
           </h1>
 
           <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-zinc-500">
-             Rivet sits between your clients and your infrastructure. We manage the persistent connections, global routing, and actor state orchestrating your logic wherever it runs.
+             The managed way to run Rivet. We operate the persistent connections, global routing, and actor state so you don't — and because Rivet is open source, the same runtime runs in your own infrastructure when you need it to.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -245,7 +245,7 @@ const CloudFeatures = () => {
             <div className="mx-auto max-w-7xl px-6">
                 <div className="flex flex-col gap-12">
                     <div className="max-w-xl">
-                        <h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">Platform Features</h2>
+                        <h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">Platform Features</h2>
                         <p className="text-base leading-relaxed text-zinc-500">Everything you need to run stateful workloads in production.</p>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -271,15 +271,15 @@ const SelfHostingComparison = () => {
       <div className="mx-auto max-w-7xl px-6">
         <div className="flex flex-col gap-12">
           <div className="max-w-xl">
-            <h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">Compare Deployment Models</h2>
+            <h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">Compare Deployment Models</h2>
             <p className="text-base leading-relaxed text-zinc-500">
-                Rivet is open source. Run it yourself for total control, or use Rivet Cloud for a hands-off experience.
+                Rivet is open source. Use Rivet Cloud for managed infrastructure, or self-host in your VPC, your customers' environments, or air-gapped networks.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
               {/* Rivet Cloud Card */}
-              <div className="rounded-lg border border-[#FF4500]/20 bg-black p-8 flex flex-col">
+              <div className="rounded-xl border border-white/15 bg-white/[0.03] p-8 flex flex-col">
                   <div className="mb-6 flex items-center gap-3">
                        <img src={rivetLogoWhite.src} alt="Rivet" className="h-10 w-10" />
                        <h3 className="text-lg font-medium text-white">Rivet Cloud</h3>
@@ -314,14 +314,14 @@ const SelfHostingComparison = () => {
                   </a>
               </div>
 
-              {/* Open Source Card */}
-              <div className="rounded-lg border border-white/10 bg-black p-8 flex flex-col">
+              {/* Self-Hosted Card */}
+              <div className="rounded-xl border border-white/10 bg-black p-8 flex flex-col">
                   <div className="mb-6 flex items-center gap-3">
                        <Server className="h-6 w-6 text-zinc-500" />
-                       <h3 className="text-lg font-medium text-white">Open Source</h3>
+                       <h3 className="text-lg font-medium text-white">Self-Hosted</h3>
                   </div>
                   <p className="text-sm leading-relaxed text-zinc-500 mb-8">
-                      Maximum control for air-gapped environments or specific compliance requirements.
+                      Maximum control for air-gapped environments and regulated workloads. Deploy inside the boundary your existing controls already cover.
                   </p>
 
                   <div className="space-y-4 flex-grow font-mono text-sm">
@@ -346,8 +346,11 @@ const SelfHostingComparison = () => {
                   <a href="https://github.com/rivet-dev/rivet"
                       className="mt-8 w-full rounded-md border border-white/10 py-3 text-center text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
                   >
-                      View on Github
+                      View on GitHub
                   </a>
+                  <p className="mt-4 text-center text-xs text-zinc-500">
+                      High-touch deployment? <a href="/enterprise" className="text-zinc-300 transition-colors hover:text-white">Rivet for Enterprise</a>
+                  </p>
               </div>
           </div>
         </div>
@@ -384,7 +387,7 @@ const ComparisonTable = () => {
 
     return (
         <div className="mt-24 border-t border-white/10 pt-16">
-            <h3 className="mb-12 text-2xl font-medium tracking-tight text-white">Compare Plans</h3>
+            <h3 className="mb-12 text-2xl font-medium tracking-[-0.015em] text-white">Compare Plans</h3>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[800px] border-collapse">
                     <thead>
@@ -547,7 +550,7 @@ const Pricing = () => {
             <div className="mx-auto max-w-7xl px-6">
                 <div className="flex flex-col gap-12">
                     <div className="flex flex-col items-center text-center">
-                        <h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
+                        <h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
                             {isCloud ? "Simple, predictable pricing" : "Run it where your data lives"}
                         </h2>
                         <p className="mb-6 max-w-xl text-base leading-relaxed text-zinc-500">
@@ -588,9 +591,9 @@ const Pricing = () => {
                         {plans.map((plan, idx) => (
                             <div
                                key={idx}
-                               className={`flex flex-col rounded-lg border p-6 ${
+                               className={`flex flex-col rounded-xl border p-6 ${
                                    plan.highlight
-                                   ? 'border-[#FF4500]/30 bg-black'
+                                   ? 'border-white/15 bg-white/[0.03]'
                                    : 'border-white/10 bg-black'
                                }`}
                             >
@@ -600,10 +603,12 @@ const Pricing = () => {
                                     <div className="mb-6">
                                         {plan.prefix && <span className="text-zinc-500 text-xs font-medium uppercase tracking-wider block mb-1">{plan.prefix}</span>}
                                         <div className="flex items-baseline gap-1">
-                                            <span className="text-3xl font-medium tracking-tight text-white">{plan.price}</span>
+                                            <span className="text-3xl font-medium tracking-[-0.015em] text-white">{plan.price}</span>
                                             {plan.period && <span className="ml-1 font-mono text-xs text-zinc-500">{plan.period}</span>}
                                         </div>
                                     </div>
+
+                                    <div className="mb-6 h-px bg-white/10" />
 
                                     {plan.desc && <p className="mb-6 min-h-[2.5rem] text-sm leading-relaxed text-zinc-400">{plan.desc}</p>}
 
@@ -666,7 +671,7 @@ const Pricing = () => {
                         <>
                             {/* Usage Pricing Section */}
                             <div className="border-t border-white/10 pt-16 mt-12">
-                                <h3 className="mb-3 text-2xl font-medium tracking-tight text-white">Usage Pricing</h3>
+                                <h3 className="mb-3 text-2xl font-medium tracking-[-0.015em] text-white">Usage Pricing</h3>
                                 <p className="mb-8 text-base leading-relaxed text-zinc-500">Metered costs for scaling beyond plan limits.</p>
 
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
@@ -696,6 +701,7 @@ export default function PricingPageClient() {
     <div className="min-h-screen bg-black text-zinc-300 font-sans selection:bg-[#FF4500]/30 selection:text-orange-200">
       <main>
         <Pricing />
+        <SelfHostingComparison />
       </main>
     </div>
   );

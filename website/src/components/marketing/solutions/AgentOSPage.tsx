@@ -1153,7 +1153,7 @@ const StackingFeatureCards = () => {
 					whileInView={{ opacity: 1, y: 0 }}
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
-					className='mx-auto max-w-4xl text-center text-3xl font-medium tracking-tight text-zinc-900 md:text-5xl'
+					className='mx-auto max-w-4xl text-center text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl'
 				>
 					Meet your agent&apos;s new operating system.
 				</motion.h2>
@@ -1185,7 +1185,7 @@ const StackingFeatureCards = () => {
 										<IconBox>
 											<Icon className='h-4 w-4 text-zinc-900 md:h-5 md:w-5' />
 										</IconBox>
-										<h2 className='mb-4 text-2xl font-medium tracking-tight text-zinc-900 md:text-4xl'>
+										<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'>
 											{feature.title}
 										</h2>
 										<p className='mb-4 max-w-2xl text-base leading-relaxed text-zinc-500 md:text-lg'>
@@ -1285,7 +1285,7 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 							<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-200/60'>
 								<Icon className='h-5 w-5 text-zinc-600' />
 							</div>
-							<h3 className='mb-2 text-sm font-semibold text-zinc-900'>
+							<h3 className='mb-2 text-sm font-medium text-zinc-900'>
 								{feature.title}
 							</h3>
 								<p className='text-sm leading-relaxed text-zinc-500'>
@@ -1346,7 +1346,7 @@ const ThemedFeatureSections = () => (
 						transition={{ duration: 0.6 }}
 						className='mb-10'
 					>
-						<h2 className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-5xl lg:text-6xl'>
+						<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl lg:text-6xl'>
 							{section.title}
 						</h2>
 						<p className='max-w-xl text-base text-zinc-500 md:text-lg'>
@@ -1382,7 +1382,7 @@ const RegistryCallout = () => (
 			>
 				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
 					<div>
-						<h3 className='mb-2 text-2xl font-medium tracking-tight text-zinc-900 md:text-3xl'>
+						<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-zinc-900 md:text-3xl'>
 							agentOS Registry
 						</h3>
 						<p className='max-w-lg text-base leading-relaxed text-zinc-500'>
@@ -1415,7 +1415,7 @@ const BENCH_ACCENT = '#18181b';
 const BENCH_ACCENT_LIGHT = '#3f3f46';
 
 // Benchmark data (computed from raw inputs in bench.ts)
-import { benchColdStart, benchWorkloads, SANDBOX_COLDSTART_PROVIDER, SANDBOX_COST_PROVIDER, type WorkloadKey } from '@/data/bench';
+import { benchColdStart, benchWorkloads, BENCHMARK_DATE, SANDBOX_COLDSTART_PROVIDER, SANDBOX_COST_PROVIDER, type WorkloadKey } from '@/data/bench';
 
 function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
 	return (
@@ -1454,9 +1454,9 @@ function BenchColdStartChart() {
 						<BenchInfoTooltip>
 							<strong>What&apos;s measured:</strong> Time from requesting an execution to first code running.
 							<br /><br />
-							<strong>Why the gap:</strong> agentOS boots a lightweight VM inside the host process. No network hop, no disk image. Sandboxes must boot an entire environment, allocate memory, and establish a network connection before code can run.
+							<strong>Why the gap:</strong> agentOS runs agents in-process — V8 isolates and Wasm inside your host. No VM to boot, no network hop, no disk image. Sandboxes must boot an entire environment, allocate memory, and establish a network connection before code can run.
 							<br /><br />
-							<strong>Sandbox baseline:</strong> {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of March 30, 2026.
+							<strong>Sandbox baseline:</strong> {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of {BENCHMARK_DATE}.
 							<br /><br />
 							<strong>agentOS:</strong> Median of 10,000 runs (100 iterations x 100 samples) on Intel i7-12700KF.
 						</BenchInfoTooltip>
@@ -1546,9 +1546,9 @@ function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
 					<BenchInfoTooltip>
 						<strong>What&apos;s measured:</strong> Memory footprint added per concurrent execution.
 						<br /><br />
-						<strong>Why the gap:</strong> Lightweight VMs share the host process. Each additional execution only adds its own heap and stack. Sandboxes allocate a dedicated environment with a minimum memory reservation, even if the code inside uses far less.
+						<strong>Why the gap:</strong> In-process isolates share the host's memory. Each additional execution only adds its own heap and stack. Sandboxes allocate a dedicated environment with a minimum memory reservation, even if the code inside uses far less.
 						<br /><br />
-						<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of March 30, 2026. Default sandbox: 1 vCPU + 1 GiB RAM.
+						<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE}. Default sandbox: 1 vCPU + 1 GiB RAM.
 						<br /><br />
 						<strong>agentOS:</strong> {workload === 'agent' ? `${benchWorkloads.agent.memory.agentOS} for a full Pi coding agent session with MCP servers and file system mounts.` : `${benchWorkloads.shell.memory.agentOS} for the minimal shell workload under sustained load.`}
 					</BenchInfoTooltip>
@@ -1631,7 +1631,7 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 							<br /><br />
 							<strong>Why it&apos;s cheaper:</strong> Each execution uses {benchWorkloads[workload].memory.agentOS} instead of a {benchWorkloads[workload].memory.sandbox} sandbox minimum. And you run on your own hardware, which is significantly cheaper than per-second sandbox billing.
 							<br /><br />
-							<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of March 30, 2026. Default sandbox: 1 vCPU + 1 GiB RAM at $0.0504/vCPU-h + $0.0162/GiB-h.
+							<strong>Sandbox baseline:</strong> {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE}. Default sandbox: 1 vCPU + 1 GiB RAM at $0.0504/vCPU-h + $0.0162/GiB-h.
 							<br /><br />
 							<strong>agentOS:</strong> {benchWorkloads[workload].memory.agentOS} baseline per execution, assuming 70% utilization (industry-standard HPA scaling threshold). Select a hardware tier above to compare.
 						</BenchInfoTooltip>
@@ -1717,7 +1717,7 @@ function BenchmarkSection() {
 			transition={{ duration: 0.5 }}
 		>
 			<div className='mb-8'>
-				<h3 className='mb-2 text-2xl font-medium tracking-tight text-zinc-900 md:text-3xl'>
+				<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-zinc-900 md:text-3xl'>
 					Performance benchmarks
 				</h3>
 				<p className='text-base leading-relaxed text-zinc-500'>
@@ -1751,7 +1751,7 @@ function BenchmarkSection() {
 			</div>
 
 			<p className='mt-4 text-[11px] leading-relaxed text-zinc-400'>
-				Measured on Intel i7-12700KF. Cold start baseline: {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of March 30, 2026. Cost baseline: {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of March 30, 2026 (1 vCPU + 1 GiB default). Cost assumes 70% utilization on self-hosted hardware vs. per-second sandbox billing.{' '}
+				Measured on Intel i7-12700KF. Cold start baseline: {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of {BENCHMARK_DATE}. Cost baseline: {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE} (1 vCPU + 1 GiB default). Cost assumes 70% utilization on self-hosted hardware vs. per-second sandbox billing.{' '}
 				<a
 					href='/docs/agent-os/benchmarks'
 					className='inline-flex items-center gap-1 text-zinc-500 underline underline-offset-2 transition-colors hover:text-zinc-700'
@@ -1775,7 +1775,7 @@ const TechnologyAndBenchmarks = () => (
 				transition={{ duration: 0.5 }}
 				className='mb-16'
 			>
-				<h2 className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-5xl'>
+				<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-5xl'>
 					A new operating system architecture.
 				</h2>
 				<p className='mb-6 max-w-3xl text-base leading-relaxed text-zinc-500 md:text-lg'>
@@ -1905,7 +1905,7 @@ const SisterProducts = () => {
 						whileInView={{ opacity: 1, y: 0 }}
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.05 }}
-						className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-4xl'
+						className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'
 					>
 						Pairs with agentOS.
 					</motion.h2>
@@ -1981,7 +1981,7 @@ const FromUnixToAgents = () => (
 					transition={{ duration: 0.5, delay: 0.1 }}
 					className='flex-1'
 				>
-					<h2 className='mb-4 text-3xl font-medium tracking-tight text-zinc-900 md:text-4xl'>
+					<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-zinc-900 md:text-4xl'>
 						From humans to agents
 					</h2>
 					<p className='mb-6 text-base leading-relaxed text-zinc-500 md:text-lg'>

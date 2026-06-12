@@ -1,5 +1,9 @@
 "use client";
 
+// Page lane: /agent is the use-case page for agent builders. It frames Rivet Actors
+// through the agent lens and owns the deploy-anywhere story. The primitive itself and
+// the realtime, multiplayer, and collaborative use cases live at /actors.
+
 import { useState, useEffect } from "react";
 import {
 	Terminal,
@@ -28,6 +32,9 @@ import {
 	Brain,
 	Sparkles,
 	Network,
+	Lock,
+	Building2,
+	ShieldCheck,
 } from "lucide-react";
 import { motion } from "framer-motion";
 
@@ -134,7 +141,7 @@ const Hero = () => (
 						initial={{ opacity: 0, y: 20 }}
 						animate={{ opacity: 1, y: 0 }}
 						transition={{ duration: 0.5 }}
-						className="mb-6 text-4xl font-medium leading-[1.1] tracking-tight text-white md:text-6xl"
+						className="mb-6 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-white md:text-6xl"
 					>
 						Build AI Agents
 					</motion.h1>
@@ -145,7 +152,7 @@ const Hero = () => (
 						transition={{ duration: 0.5, delay: 0.1 }}
 						className="mb-8 max-w-lg text-base leading-relaxed text-zinc-500"
 					>
-						LLMs are stateless. Agents shouldn't be. Rivet Actors provide the persistent memory, tool execution environment, and long-running context your agents need to thrive.
+						LLMs are stateless. Agents shouldn't be. Rivet Actors give each agent persistent memory, a tool execution environment, and long-running context — on Rivet Cloud, your Kubernetes cluster, or fully air-gapped.
 					</motion.p>
 					<motion.div
 						initial={{ opacity: 0, y: 20 }}
@@ -161,6 +168,17 @@ const Hero = () => (
 							View Documentation
 						</a>
 					</motion.div>
+					<motion.p
+						initial={{ opacity: 0, y: 20 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.5, delay: 0.25 }}
+						className="mt-6 text-sm text-zinc-500"
+					>
+						Agents are one thing Rivet Actors do.{" "}
+						<a href="/actors" className="text-zinc-300 transition-colors hover:text-white">
+							See the primitive
+						</a>
+					</motion.p>
 				</div>
 				<div className="flex-1 w-full max-w-xl">
 					<CodeBlock
@@ -207,7 +225,7 @@ const MemoryArchitecture = () => {
 		<section className="border-t border-white/10 py-48">
 			<div className="mx-auto max-w-7xl px-6">
 				<div className="mb-12">
-					<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
+					<h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 						Why Actors for Agents?
 					</h2>
 					<p className="max-w-2xl text-base leading-relaxed text-zinc-500">
@@ -359,7 +377,7 @@ const AgentCapabilities = () => {
 			<div className="mx-auto max-w-7xl px-6">
 				<div className="flex flex-col gap-12">
 					<div className="max-w-xl">
-						<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">Built for the Agentic Future</h2>
+						<h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">Built for the Agentic Future</h2>
 						<p className="text-base leading-relaxed text-zinc-500">The infrastructure primitives you need to move beyond simple chatbots.</p>
 					</div>
 
@@ -380,7 +398,7 @@ const UseCases = () => (
 			<div className="grid md:grid-cols-2 gap-16 items-center">
 				<div>
 					<Badge text="Case Study" />
-					<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
+					<h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 						Customer Support Swarms
 					</h2>
 					<p className="mb-8 text-base leading-relaxed text-zinc-500">
@@ -458,7 +476,7 @@ export const manager = actor({
 					</div>
 					<div className="flex-1 order-1 lg:order-2">
 						<Badge text="Multi-Agent Systems" />
-						<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
+						<h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 							Orchestrate Agent Swarms
 						</h2>
 						<p className="mb-8 text-base leading-relaxed text-zinc-500">
@@ -484,10 +502,72 @@ export const manager = actor({
 	);
 };
 
+const deployAnywherePoints = [
+	{
+		icon: Lock,
+		title: "Air-gapped and on-prem",
+		body: "Run the same Rivet that powers our cloud entirely inside your perimeter. No outbound calls, no telemetry leaving your boundary.",
+	},
+	{
+		icon: Building2,
+		title: "Embed in your customers",
+		body: "Ship Rivet inside your customer's VPC, regulated environment, or on-prem hardware. They keep their data, you keep your product.",
+	},
+	{
+		icon: ShieldCheck,
+		title: "Your compliance posture, intact",
+		body: "FedRAMP, HIPAA, regulated industries, sovereign clouds. Deploying inside the boundary your existing controls already cover keeps the audit story simple.",
+	},
+];
+
+const DeployAnywhere = () => (
+	<section className="border-t border-white/10 py-48">
+		<div className="mx-auto max-w-7xl px-6">
+			<div className="mb-12 max-w-3xl">
+				<h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
+					Runs where managed platforms can't.
+				</h2>
+				<p className="text-base leading-relaxed text-zinc-500">
+					Durable Objects only run on Cloudflare. Rivet is open source: deploy agents inside your VPC, your customers' environments, or air-gapped networks on the same open-source runtime.
+				</p>
+			</div>
+			<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+				{deployAnywherePoints.map((point) => {
+					const Icon = point.icon;
+					return (
+						<div key={point.title} className="border-t border-white/10 pt-6">
+							<div className="mb-3 text-zinc-500">
+								<Icon className="h-4 w-4" />
+							</div>
+							<h3 className="mb-1 text-sm font-medium text-white">{point.title}</h3>
+							<p className="text-sm leading-relaxed text-zinc-500">{point.body}</p>
+						</div>
+					);
+				})}
+			</div>
+			<div className="mt-12 flex flex-col items-center justify-center gap-3 sm:flex-row">
+				<a
+					href="/enterprise"
+					className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white"
+				>
+					Rivet for Enterprise
+				</a>
+				<a
+					href="/compare/cloudflare-durable-objects/"
+					className="group inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-white"
+				>
+					See the Cloudflare comparison
+					<ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+				</a>
+			</div>
+		</div>
+	</section>
+);
+
 const Ecosystem = () => (
 	<section className="border-t border-white/10 py-48">
 		<div className="mx-auto max-w-7xl px-6 text-center">
-			<h2 className="mb-8 text-2xl font-medium tracking-tight text-white md:text-4xl">
+			<h2 className="mb-8 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 				Works with your stack
 			</h2>
 			<div className="flex flex-wrap justify-center gap-2">
@@ -513,12 +593,13 @@ export default function AgentsPage() {
 				<AgentCapabilities />
 				<UseCases />
 				<OrchestrationSection />
+				<DeployAnywhere />
 				<Ecosystem />
 
 				{/* CTA Section */}
 				<section className="border-t border-white/10 py-48">
 					<div className="mx-auto max-w-3xl px-6 text-center">
-						<h2 className="mb-2 text-2xl font-medium tracking-tight text-white md:text-4xl">
+						<h2 className="mb-2 text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl">
 							Stop building generic bots.
 						</h2>
 						<p className="mb-8 text-base leading-relaxed text-zinc-500">

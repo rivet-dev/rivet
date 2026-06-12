@@ -17,8 +17,8 @@ const actorFeatures = [
 	},
 	{
 		icon: Layers,
-		title: 'Scales infinitely, scales to zero',
-		description: 'Supports bursty workloads and is cost-efficient.',
+		title: 'Scales to zero, bursts to thousands',
+		description: 'Sleeps at near-zero cost when idle, fans out when traffic spikes.',
 	},
 	{
 		icon: Globe,
@@ -45,8 +45,8 @@ const agentOSFeatures = [
 	},
 	{
 		icon: Layers,
-		title: '32x cheaper than sandboxes',
-		description: 'V8 isolates + WASM instead of full VMs.',
+		title: 'An order of magnitude cheaper',
+		description: 'V8 isolates + Wasm instead of full VM sandboxes.',
 	},
 	{
 		icon: Code,
@@ -167,6 +167,26 @@ const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, de
 export const ProductSplitSection = () => (
 	<section className='relative border-t border-white/10 px-6 py-16 lg:py-24'>
 		<div className='mx-auto w-full max-w-7xl'>
+			<div className='mb-12 max-w-3xl'>
+				<motion.h2
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+					className='text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'
+				>
+					One runtime, two products.
+				</motion.h2>
+				<motion.p
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.05 }}
+					className='mt-4 text-base leading-relaxed text-zinc-500'
+				>
+					Rivet Actors give agents and realtime apps durable, stateful compute. agentOS gives agents a portable OS to run in. Use them alone or together.
+				</motion.p>
+			</div>
 			<div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>
 				<ProductCard
 					icon={<RivetActorIcon className='text-white' />}
@@ -180,7 +200,7 @@ export const ProductSplitSection = () => (
 				<ProductCard
 					icon={<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6' />}
 					title='agentOS'
-					tagline='A lightweight open-source operating system for any type of agent. Built on WASM & V8.'
+					tagline='A portable, lightweight in-process OS for agents. Open source, built on Wasm + V8.'
 					docsHref='/docs/agent-os'
 					detailsHref='/agent-os'
 					features={agentOSFeatures}
