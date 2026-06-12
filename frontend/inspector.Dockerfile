@@ -22,6 +22,8 @@ COPY rivetkit-typescript/packages/engine-runner-protocol/ rivetkit-typescript/pa
 # Copy rivetkit dependencies
 COPY rivetkit-typescript/packages/rivetkit/ rivetkit-typescript/packages/rivetkit/
 COPY rivetkit-typescript/packages/rivetkit-wasm/ rivetkit-typescript/packages/rivetkit-wasm/
+COPY rivetkit-typescript/packages/rivetkit-napi/ rivetkit-typescript/packages/rivetkit-napi/
+COPY rivetkit-typescript/packages/engine-cli/ rivetkit-typescript/packages/engine-cli/
 COPY rivetkit-typescript/packages/traces/ rivetkit-typescript/packages/traces/
 COPY rivetkit-typescript/packages/workflow-engine/ rivetkit-typescript/packages/workflow-engine/
 
@@ -40,11 +42,13 @@ COPY rivetkit-openapi/ rivetkit-openapi/
 ARG FONTAWESOME_PACKAGE_TOKEN=""
 ENV FONTAWESOME_PACKAGE_TOKEN=${FONTAWESOME_PACKAGE_TOKEN}
 
-# Skip the wasm-pack build for @rivetkit/rivetkit-wasm. The frontend bundle
-# only needs the committed type declarations (index.d.ts) for the rivetkit DTS
-# build to resolve `typeof import("@rivetkit/rivetkit-wasm")`; wasm-pack
-# requires a Rust toolchain we don't ship in this image.
+# Skip the native builds for @rivetkit/rivetkit-wasm and @rivetkit/rivetkit-napi.
+# The frontend bundle only needs the committed type declarations (index.d.ts) for
+# the rivetkit DTS build to resolve `import("@rivetkit/rivetkit-wasm")` and
+# `import("@rivetkit/rivetkit-napi")`; both native builds require a Rust toolchain
+# we don't ship in this image.
 ENV SKIP_WASM_BUILD=1
+ENV SKIP_NAPI_BUILD=1
 
 RUN --mount=type=cache,id=s/11ac71ef-9b68-4d4c-bc8a-bc8b45000c14-pnpm-store,target=/pnpm/store \
     pnpm install --frozen-lockfile
