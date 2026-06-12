@@ -105,7 +105,7 @@ Each entry in `inspector.tabs[]` is either a **custom tab** or a
 
 ### Custom tab
 
-```ts
+```ts @nocheck
 {
   id: string,         // URL-safe id: /^[A-Za-z0-9_-]+$/
   label: string,      // Shown in the tab strip
@@ -125,7 +125,7 @@ Each entry in `inspector.tabs[]` is either a **custom tab** or a
 
 ### Hide a built-in tab
 
-```ts
+```ts @nocheck
 {
   id: "workflow" | "database" | "state" | "queue" | "connections" | "console",
   hidden: true,
@@ -154,7 +154,7 @@ The dashboard sends an `init` message on load and again whenever the
 inspector token rotates. Always overwrite the cached token when it
 arrives.
 
-```ts
+```ts @nocheck
 {
   type: "init",
   v: 1,
@@ -168,7 +168,7 @@ arrives.
 For tabs with sub-views, the dashboard also sends `set-active-tab`
 when the user switches:
 
-```ts
+```ts @nocheck
 { type: "set-active-tab", v: 1, tab: string }
 ```
 
@@ -176,7 +176,7 @@ when the user switches:
 
 Send `ready` once your message listener is registered:
 
-```ts
+```ts @nocheck
 { type: "ready", v: 1 }
 ```
 
@@ -184,7 +184,7 @@ If a fetch returns 401, the token has rotated. Ask the dashboard for a
 fresh one and wait for the next `init` — don't retry with the stale
 token:
 
-```ts
+```ts @nocheck
 { type: "token-refresh-needed", v: 1 }
 ```
 
