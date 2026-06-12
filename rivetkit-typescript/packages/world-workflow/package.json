@@ -1,0 +1,64 @@
+{
+	"name": "@rivetkit/world-workflow",
+	"version": "0.1.0",
+	"description": "Vercel Workflow SDK World implementation backed by Rivet Actors",
+	"license": "Apache-2.0",
+	"keywords": [
+		"workflow",
+		"vercel",
+		"rivet",
+		"world",
+		"durable"
+	],
+	"files": [
+		"dist",
+		"src",
+		"package.json",
+		"README.md"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/tsup/index.d.ts",
+				"default": "./dist/tsup/index.js"
+			},
+			"require": {
+				"types": "./dist/tsup/index.d.cts",
+				"default": "./dist/tsup/index.cjs"
+			}
+		},
+		"./registry": {
+			"import": {
+				"types": "./dist/tsup/registry.d.ts",
+				"default": "./dist/tsup/registry.js"
+			},
+			"require": {
+				"types": "./dist/tsup/registry.d.cts",
+				"default": "./dist/tsup/registry.cjs"
+			}
+		}
+	},
+	"engines": {
+		"node": ">=20.0.0"
+	},
+	"scripts": {
+		"build": "tsup src/index.ts src/registry.ts",
+		"check-types": "tsc --noEmit",
+		"lint": "biome check .",
+		"lint:fix": "biome check --write .",
+		"test": "vitest run",
+		"test:watch": "vitest"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*",
+		"uuid": "^12.0.0"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.3",
+		"@types/node": "^22.13.1",
+		"tsup": "^8.4.0",
+		"typescript": "^5.7.3",
+		"vitest": "^3.1.1"
+	}
+}
