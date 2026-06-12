@@ -239,6 +239,8 @@ impl From<WasmActorConfig> for ActorConfigInput {
 					.map(|action| rivetkit_core::ActionDefinition { name: action.name })
 					.collect()
 			}),
+			// The wasm config surface does not expose inspector tabs.
+			inspector_tabs: None,
 		}
 	}
 }
