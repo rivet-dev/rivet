@@ -95,6 +95,7 @@ docker-compose up -d
 
 - For any frontend visual change, use the `agent-browser` skill to view the result in a browser instead of working blind. If it is not installed, prompt the user to install it.
 - The frontend dashboard dev server always runs at `http://localhost:43708/`. Check that it is already serving there before starting a new one.
+- The same change can render differently per deployment flavor. Verify visual changes in OSS and cloud (at minimum), not just whichever flavor the dev server defaults to. See [Frontend Feature Flags](#frontend-feature-flags).
 
 ## Frontend Forms
 
@@ -105,7 +106,7 @@ docker-compose up -d
 - The dashboard serves multiple deployment flavors (cloud / OSS / enterprise) from one build via flags in `frontend/src/lib/features.ts`; consume them through `import { features } from "@/lib/features"`, never by reading `VITE_FEATURE_FLAGS` directly.
 - Ship a new pack of features behind a feature flag whenever it is significant (a whole panel/page/subsystem) or not universally available across flavors, so each flavor can freely enable or disable it. Do not gate small universal changes, and do not make flags for everything.
 - If unsure whether a feature needs a flag, confirm the need with the user before adding or omitting one.
-- See [Feature flags](.claude/reference/feature-flags.md) for the flag list, flavor mapping, and consistency rules.
+- Test frontend changes across flavors before calling them done, especially OSS (it turns the most off and regresses most often). Switch flavors in dev by setting `localStorage.FEATURE_FLAGS` and reloading. See [Feature flags](.claude/reference/feature-flags.md) for the flag list, flavor mapping, the per-flavor flag sets, and consistency rules.
 
 ## Frontend Routing (TanStack Router)
 

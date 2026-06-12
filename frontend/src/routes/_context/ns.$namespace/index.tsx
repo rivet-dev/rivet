@@ -4,6 +4,7 @@ import {
 	redirect,
 } from "@tanstack/react-router";
 import { Actors } from "@/app/actors";
+import { EngineNamespaceLanding } from "@/app/engine-namespace-landing";
 
 export const Route = createFileRoute("/_context/ns/$namespace/")({
 	component: RouteComponent,
@@ -40,17 +41,20 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 			return;
 		}
 
-		const builds = await context.queryClient.fetchInfiniteQuery(
-			dataProvider.buildsQueryOptions(),
-		);
-		const firstBuildId = Object.keys(builds.pages[0]?.names ?? {})[0];
+		const n: string[] = deps.n || [];
 
-		if (!firstBuildId) {
-			await runnerPrefetch;
+		// Without a selected Actor name, render the namespace landing (the Actor
+		// grid) instead of auto-redirecting into the first build's instances.
+		// Matches the cloud route so OSS and platform behave the same.
+		if (!n[0]) {
+			await Promise.all([
+				runnerPrefetch,
+				context.queryClient.prefetchInfiniteQuery(
+					dataProvider.buildsQueryOptions(),
+				),
+			]);
 			return;
 		}
-
-		const n = [firstBuildId];
 
 		const [actors] = await Promise.all([
 			context.queryClient.fetchInfiniteQuery(
@@ -75,11 +79,32 @@ export const Route = createFileRoute("/_context/ns/$namespace/")({
 });
 
 export function RouteComponent() {
-	const { actorId } = Route.useSearch();
+	const { actorId, n } = Route.useSearch();
 
 	return (
 		<CatchBoundary getResetKey={() => actorId ?? "no-actor-id"}>
-			<Actors actorId={actorId} />
+			<NamespaceActors
+				actorId={actorId}
+				hasSelection={!!(n && n.length > 0)}
+			/>
 		</CatchBoundary>
 	);
+}
+
+// With no Actor name selected, show the full-page namespace landing (the Actor
+// grid, which itself surfaces the no-providers / no-actors states). Selecting a
+// build sets `n` and switches to the Actor list/detail. Mirrors the cloud route
+// so OSS and platform behave the same.
+function NamespaceActors({
+	actorId,
+	hasSelection,
+}: {
+	actorId: string | undefined;
+	hasSelection: boolean;
+}) {
+	if (!hasSelection) {
+		return <EngineNamespaceLanding />;
+	}
+
+	return <Actors actorId={actorId} />;
 }

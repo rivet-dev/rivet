@@ -48,7 +48,7 @@ interface ActorDetailsProps {
 // first ships. For development before the first release that includes
 // the iframe route, the threshold is high enough to force the legacy path
 // in default test setups; override via MSW to verify the iframe path.
-export const IFRAME_INSPECTOR_MIN_VERSION = "2.1.7";
+export const IFRAME_INSPECTOR_MIN_VERSION = "2.3.0";
 
 /**
  * Dashboard right panel for a selected actor.
@@ -306,18 +306,34 @@ function ActorDetailsIframePath({
 	// author-bundled static UI for that tab. Built-in↔built-in switches
 	// stay inside the SPA (no src change); built-in↔custom and
 	// custom↔custom trigger an iframe reload.
+	//
+	// X-Rivet-Token rides into the URL as a `@<token>` segment after the
+	// actor id (gateway path syntax: `/gateway/<id>@<token>/...`). Iframe
+	// navigation cannot attach custom headers, so this is the only way the
+	// authenticated bundle/asset GETs reach EE. Inspector responses set
+	// `Referrer-Policy: no-referrer` so the token does not leak via
+	// `Referer` on cross-origin sub-resource fetches.
 	const src = useMemo(() => {
+		const actorSegment = rivetToken
+			? `${encodeURIComponent(actorId)}@${encodeURIComponent(rivetToken)}`
+			: encodeURIComponent(actorId);
 		const path =
 			isActiveCustomTab && activeInspectorTabId
-				? `/gateway/${encodeURIComponent(actorId)}/inspector/custom-tabs/${encodeURIComponent(
+				? `/gateway/${actorSegment}/inspector/custom-tabs/${encodeURIComponent(
 						activeInspectorTabId,
 					)}/`
-				: `/gateway/${encodeURIComponent(actorId)}/inspector/ui/`;
+				: `/gateway/${actorSegment}/inspector/ui/`;
 		const url = new URL(path, engineUrl);
 		url.searchParams.set("actorId", actorId);
 		url.searchParams.set("shellOrigin", window.location.origin);
 		return url.href;
-	}, [actorId, engineUrl, isActiveCustomTab, activeInspectorTabId]);
+	}, [
+		actorId,
+		engineUrl,
+		isActiveCustomTab,
+		activeInspectorTabId,
+		rivetToken,
+	]);
 
 	// Every src change reloads the iframe — reset the listening + boot
 	// timeout state so the "Connecting…" skeleton shows again. Don't clear

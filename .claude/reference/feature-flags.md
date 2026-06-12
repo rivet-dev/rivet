@@ -36,6 +36,31 @@ if (features.platform) {
 
 Deployment flavors map to flag sets roughly as: **cloud** = all on; **OSS** = `auth`/`platform`/`acl` off; **enterprise** = `acl` on, `auth`/`platform` off (engine enforces auth without a login UI). Do not treat `platform`/`auth` as "engine requires credentials" — that is `acl`. **`compute` is opt-in even on cloud** — each Railway service adds it to `VITE_FEATURE_FLAGS` per-environment (e.g. staging on, prod off) rather than inheriting the cloud default-on set.
 
+## Testing across flavors (required for frontend changes)
+
+A bug can exist in only one flavor. Whatever flavor your dev server happens to default to hides breakage in the others, so testing a single flavor is not enough. **OSS is the most important and the most commonly regressed flavor** because it turns the most off (`auth`/`platform`/`acl` all off), so any code that assumes cloud context (org/project params, auth session, cloud data providers) silently breaks there. The OSS namespace dropdown, sidebar, context switcher, and onboarding all take different code paths than cloud.
+
+**Before considering any frontend change done, verify it in at least OSS and cloud.** If a surface renders conditionally on `features.*` (or differs by flavor at all: sidebar, context switcher, onboarding, settings, auth, billing), exercise each affected flavor in the browser, not just the default.
+
+Switch flavors in dev without restarting the server by setting the `localStorage` override and reloading (the dev build reads `localStorage.FEATURE_FLAGS` ahead of `VITE_FEATURE_FLAGS`):
+
+```js
+// OSS self-host: everything off
+localStorage.setItem("FEATURE_FLAGS", ""); location.reload();
+
+// Full cloud: all flags on (see the commented canonical list in frontend/.env.local)
+localStorage.setItem(
+  "FEATURE_FLAGS",
+  "compute,platform,acl,auth,captcha,branding,support,billing,datacenter,danger-zone,multitenancy",
+);
+location.reload();
+
+// Enterprise: acl on, no login UI
+localStorage.setItem("FEATURE_FLAGS", "acl,branding,support,datacenter,danger-zone"); location.reload();
+```
+
+In an agent-browser / DevTools session, paste those into the page console. `localStorage` persists across reloads, so run `localStorage.removeItem("FEATURE_FLAGS")` to return to the env default when finished. Confirm the active flavor with `JSON.stringify(features)` after importing, or just observe whether auth/cloud chrome is present.
+
 ## When to add a new flag
 
 **A new pack of features must ship behind a feature flag whenever it is significant or not universally available across deployment flavors.** The goal is that every flavor can freely enable or disable it.

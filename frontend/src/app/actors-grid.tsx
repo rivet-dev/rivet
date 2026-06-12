@@ -58,13 +58,56 @@ function _GridCard({
 	);
 }
 
-function ActorGridCardSkeleton() {
+export function ActorGridCardSkeleton() {
 	return (
 		<div className="flex min-h-[110px] flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4">
 			<Skeleton className="h-9 w-9 rounded-md" />
 			<Skeleton className="h-4 w-24" />
 			<Skeleton className="h-3 w-16" />
 		</div>
+	);
+}
+
+// Shared so the cloud `ActorsGrid` and the engine namespace landing render
+// identical Actor cards. Keep both landings using this so OSS and platform do
+// not visually diverge.
+export function ActorBuildCard({
+	build,
+}: {
+	build: { id: string; name?: { metadata?: unknown } };
+}) {
+	const meta = build.name?.metadata as Record<string, unknown> | undefined;
+	const iconValue = typeof meta?.icon === "string" ? meta.icon : null;
+	const displayName = typeof meta?.name === "string" ? meta.name : build.id;
+
+	return (
+		<Link
+			to="."
+			search={(old) => ({
+				...old,
+				actorId: undefined,
+				actorKey: undefined,
+				n: [build.id],
+			})}
+			className={cn(
+				"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
+				"hover:border-foreground/20 hover:bg-foreground/[0.05]",
+				"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+				"min-h-[110px] cursor-pointer",
+			)}
+		>
+			<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
+				<ActorIcon iconValue={iconValue} className="text-lg" />
+			</div>
+			<div className="font-medium text-sm leading-tight">
+				{displayName}
+			</div>
+			{displayName !== build.id ? (
+				<SmallText className="text-muted-foreground text-xs leading-tight">
+					{build.id}
+				</SmallText>
+			) : null}
+		</Link>
 	);
 }
 
@@ -222,53 +265,12 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 						) : (
 							<>
 								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-									{sorted.map((build) => {
-										const meta = build.name.metadata as
-											| Record<string, unknown>
-											| undefined;
-										const iconValue =
-											typeof meta?.icon === "string"
-												? meta.icon
-												: null;
-										const displayName =
-											typeof meta?.name === "string"
-												? meta.name
-												: build.id;
-
-										return (
-											<Link
-												key={build.id}
-												to="."
-												search={(old) => ({
-													...old,
-													actorId: undefined,
-													actorKey: undefined,
-													n: [build.id],
-												})}
-												className={cn(
-													"group relative flex flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-colors",
-													"hover:border-foreground/20 hover:bg-foreground/[0.05]",
-													"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-													"min-h-[110px] cursor-pointer",
-												)}
-											>
-												<div className="flex h-9 w-9 items-center justify-center rounded-md bg-foreground/[0.06] text-foreground/80">
-													<ActorIcon
-														iconValue={iconValue}
-														className="text-lg"
-													/>
-												</div>
-												<div className="font-medium text-sm leading-tight">
-													{displayName}
-												</div>
-												{displayName !== build.id ? (
-													<SmallText className="text-muted-foreground text-xs leading-tight">
-														{build.id}
-													</SmallText>
-												) : null}
-											</Link>
-										);
-									})}
+									{sorted.map((build) => (
+										<ActorBuildCard
+											key={build.id}
+											build={build}
+										/>
+									))}
 									{isFetchingNextPage
 										? Array.from({ length: 4 }).map(
 												(_, i) => (
