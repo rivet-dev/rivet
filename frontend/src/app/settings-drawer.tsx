@@ -23,6 +23,7 @@ import {
 	useCloudNamespaceDataProvider,
 	useCloudProjectDataProvider,
 } from "@/components/actors/data-provider";
+import { features } from "@/lib/features";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { BillingPanel } from "./settings-pages/billing-panel";
 import {
@@ -146,6 +147,12 @@ export function SettingsDrawer({
 		fuzzy: true,
 	});
 
+	// Engine flavors only expose namespace-scoped settings (no account, billing,
+	// or organization), so the nav collapses to the Namespace section.
+	const navSections = features.platform
+		? NAV_SECTIONS
+		: NAV_SECTIONS.filter((section) => section.label === "Namespace");
+
 	const meta = TAB_META[activeTab];
 	const titleNode: ReactNode =
 		activeTab === "settings" && onNamespace ? (
@@ -185,7 +192,7 @@ export function SettingsDrawer({
 					<div className="flex h-full min-h-0">
 						<aside className="w-44 shrink-0 border-r border-border p-3 overflow-y-auto">
 							<nav className="flex flex-col gap-4">
-								{NAV_SECTIONS.map((section) => (
+								{navSections.map((section) => (
 									<div key={section.label}>
 										<div className="px-2 pb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
 											{section.label}
@@ -365,7 +372,16 @@ function ProjectBillingTitleInner({ fallback }: { fallback: string }) {
 	return <>{displayName ? `${displayName} Billing` : fallback}</>;
 }
 
+// Engine flavors scope settings to the route's namespace, so there is no
+// project/namespace resource picker. Cloud flavors pick a namespace first.
 function SettingsTabBody() {
+	if (!features.platform) {
+		return <EngineNamespaceSettings />;
+	}
+	return <CloudSettingsTabBody />;
+}
+
+function CloudSettingsTabBody() {
 	// `useMatch` with `shouldThrow: false` returns `undefined` when the
 	// namespace route is not in the active match tree. This is stricter than
 	// `useMatchRoute` (which can flicker during transitions) and lets us bail
@@ -394,6 +410,37 @@ function SettingsTabBody() {
 	return <NamespaceSettingsContent />;
 }
 
+// The `/ns/$namespace` route fixes the namespace, so engine settings render
+// their content directly once the route loader has resolved (no resource
+// picker). The readiness check guards the brief window during a namespace
+// switch where the match is in the tree but its loader has not landed yet.
+function EngineNamespaceSettings() {
+	return useEngineNamespaceReady() ? (
+		<NamespaceSettingsContent />
+	) : (
+		<NamespaceSettingsSkeleton />
+	);
+}
+
+function EngineNamespaceAdvanced() {
+	return useEngineNamespaceReady() ? (
+		<NamespaceAdvancedContent />
+	) : (
+		<NamespaceSettingsSkeleton />
+	);
+}
+
+function useEngineNamespaceReady() {
+	const match = useMatch({
+		from: "/_context/ns/$namespace",
+		shouldThrow: false,
+	});
+	// Check the resolved `dataProvider` rather than truthiness of `loaderData`
+	// so an in-between empty object during a namespace switch is not treated as
+	// ready (the namespace-scoped content hooks need the provider populated).
+	return match?.loaderData?.dataProvider != null;
+}
+
 function NamespaceSettingsSkeleton() {
 	return (
 		<div className="space-y-4">
@@ -405,6 +452,13 @@ function NamespaceSettingsSkeleton() {
 }
 
 function AdvancedTabBody() {
+	if (!features.platform) {
+		return <EngineNamespaceAdvanced />;
+	}
+	return <CloudAdvancedTabBody />;
+}
+
+function CloudAdvancedTabBody() {
 	const namespaceMatch = useMatch({
 		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
 		shouldThrow: false,

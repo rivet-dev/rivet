@@ -13,30 +13,39 @@ export function ActorNotFound({ actorId }: { actorId?: ActorId }) {
 	const navigate = useNavigate();
 	const hasDevMode = false;
 
-	const { isLoading } = useQuery({
+	const { isFetched } = useQuery({
 		// biome-ignore lint/style/noNonNullAssertion: enabled guarantees actorId is defined
 		...useDataProvider().actorQueryOptions(actorId!),
 		enabled: !!actorId,
 	});
 
+	// Gate on `isFetched` rather than `isLoading`: the actor query keeps polling
+	// on an interval and retries on error, so `isLoading` flips back true on every
+	// background refetch and would blank the message to a bare skeleton each cycle.
+	// Once the actor has resolved as not-found at least once, keep the message
+	// shown steadily. The shimmer skeleton only appears on the genuine first load.
+	const isResolved = isFetched;
+
 	return (
 		<div className="flex flex-col h-full flex-1">
-			<ActorDetailsSkeleton shimmer={isLoading}>
+			<ActorDetailsSkeleton shimmer={!isResolved}>
 				<div className="flex text-center text-foreground flex-1 justify-center items-center flex-col gap-2">
-					{!isLoading ? (
+					{isResolved ? (
 						<>
 							<Icon
 								icon={faQuestionSquare}
 								className="text-4xl"
 							/>
-							<p className="max-w-[400px]">{copy.actorNotFound}</p>
+							<p className="max-w-[400px]">
+								{copy.actorNotFound}
+							</p>
 							<p className="max-w-[400px] text-sm text-muted-foreground">
 								{copy.actorNotFoundDescription}
 							</p>
 						</>
 					) : null}
 
-					{!hasDevMode && !isLoading ? (
+					{!hasDevMode && isResolved ? (
 						<Button
 							className="mt-3"
 							variant="outline"

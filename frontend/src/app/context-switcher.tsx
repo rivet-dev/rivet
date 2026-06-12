@@ -20,7 +20,7 @@ import {
 	useParams,
 	useSearch,
 } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	Button,
 	Command,
@@ -135,6 +135,27 @@ function ContextSwitcherInner({
 					organization={match.organization}
 					currentProject={match.project}
 				/>
+			</div>
+		);
+	}
+
+	// Engine (OSS) namespace case: there is no organization/project, so the
+	// cloud popovers above and the legacy 2-column `Content` (which bails when
+	// `params.organization` is absent) don't apply. Render a single namespace
+	// segment that lists engine namespaces and navigates to `/ns/$namespace`.
+	if (
+		inline &&
+		match &&
+		"namespace" in match &&
+		!("organization" in match) &&
+		!("project" in match)
+	) {
+		return (
+			<div className="flex items-center min-w-0">
+				<EngineNamespaceSegmentPopover
+					currentNamespace={match.namespace}
+				/>
+				<ActorBreadcrumbSegment />
 			</div>
 		);
 	}
@@ -266,6 +287,226 @@ function NamespaceSegmentPopover({
 				/>
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+function EngineNamespaceSegmentPopover({
+	currentNamespace,
+}: {
+	currentNamespace: string;
+}) {
+	const [open, setOpen] = useState(false);
+	const { data: nsData } = useQuery(
+		useEngineCompatDataProvider().namespaceQueryOptions(currentNamespace),
+	);
+	const label = nsData?.displayName ?? currentNamespace;
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<PopoverTrigger asChild>
+				<Button
+					variant="ghost"
+					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground hover:bg-foreground/[0.06]"
+					endIcon={
+						<Icon
+							icon={faChevronDown}
+							className="size-2.5 opacity-60"
+						/>
+					}
+				>
+					<span className="truncate">{label}</span>
+				</Button>
+			</PopoverTrigger>
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
+				<EngineNamespaceList
+					currentNamespace={currentNamespace}
+					onClose={() => setOpen(false)}
+				/>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function EngineNamespaceList({
+	currentNamespace,
+	onClose,
+}: {
+	currentNamespace: string;
+	onClose?: () => void;
+}) {
+	const { data, hasNextPage, isLoading, isFetchingNextPage, fetchNextPage } =
+		useInfiniteQuery(
+			useEngineCompatDataProvider().namespacesQueryOptions(),
+		);
+	const navigate = useNavigate();
+	const leafFullPath = useMatches({
+		select: (matches) => matches[matches.length - 1]?.fullPath,
+	});
+	const namespaceBase = "/ns/$namespace";
+	const namespaceTo = (
+		typeof leafFullPath === "string" &&
+		leafFullPath.startsWith(namespaceBase)
+			? leafFullPath
+			: namespaceBase
+	) as "/ns/$namespace";
+
+	// Sort a copy (recently visited first) in a memo so we neither mutate the
+	// query cache array nor re-sort on every render.
+	const sortedNamespaces = useMemo(
+		() =>
+			[...(data ?? [])].sort((a, b) => {
+				const aTime = getRecentTimestamp(RECENT_NAMESPACES_KEY, a.name);
+				const bTime = getRecentTimestamp(RECENT_NAMESPACES_KEY, b.name);
+				return bTime - aTime;
+			}),
+		[data],
+	);
+
+	return (
+		<div className="w-full">
+			<Command loop>
+				<CommandInput placeholder="Find namespace..." />
+				<CommandList
+					className="relative p-1 w-full"
+					defaultValue={currentNamespace}
+				>
+					<CommandGroup heading="Namespaces" className="w-full">
+						{!isLoading && (data?.length ?? 0) === 0 ? (
+							<CommandEmpty>
+								No namespaces found.
+								<Button
+									className="mt-1"
+									variant="outline"
+									size="sm"
+									startIcon={<Icon icon={faPlus} />}
+									onClick={() => {
+										onClose?.();
+										return navigate({
+											to: ".",
+											search: (old) => ({
+												...old,
+												modal: "create-ns",
+											}),
+										});
+									}}
+								>
+									New Namespace
+								</Button>
+							</CommandEmpty>
+						) : null}
+
+						{sortedNamespaces.map((ns) => {
+							const isCurrent = ns.name === currentNamespace;
+							return (
+								<CommandItem
+									key={ns.id}
+									value={ns.name}
+									keywords={[ns.displayName, ns.name]}
+									className="group static w-full"
+									onSelect={() => {
+										onClose?.();
+										return navigate({
+											to: namespaceTo,
+											params: { namespace: ns.name },
+											search: (old) => ({ ...old }),
+										});
+									}}
+								>
+									<Icon
+										icon={faCheck}
+										className={cn(
+											"mr-2 size-3 shrink-0 text-primary",
+											isCurrent
+												? "opacity-100"
+												: "opacity-0",
+										)}
+									/>
+									<span className="truncate flex-1">
+										{ns.displayName}
+									</span>
+									<button
+										type="button"
+										aria-label={`Settings for ${ns.displayName}`}
+										title="Namespace settings"
+										onPointerDown={(e) => {
+											// Keep cmdk's row onSelect from firing so the
+											// gear is its own navigation, not a row switch.
+											e.stopPropagation();
+										}}
+										onClick={(e) => {
+											e.stopPropagation();
+											e.preventDefault();
+											onClose?.();
+											void navigate({
+												to: "/ns/$namespace",
+												params: {
+													namespace: ns.name,
+												},
+												search: {
+													settings: "settings",
+												},
+											});
+										}}
+										// No opacity transition: the gear reveals in step
+										// with the row's instant highlight (the row has no
+										// transition). Kept identical to the cloud
+										// `NamespaceList` gear.
+										className={cn(
+											"relative z-10 ml-2 -my-1 size-6 rounded inline-flex items-center justify-center shrink-0",
+											"text-muted-foreground hover:text-foreground hover:bg-foreground/[0.08]",
+											"opacity-0",
+											"group-hover:opacity-100 group-data-[selected=true]:opacity-100 focus-visible:opacity-100",
+											"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+										)}
+									>
+										<Icon
+											icon={faGear}
+											className="size-3"
+										/>
+									</button>
+								</CommandItem>
+							);
+						})}
+						{isLoading || isFetchingNextPage ? (
+							<>
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+							</>
+						) : null}
+
+						<CommandItem
+							keywords={["create", "new", "namespace"]}
+							className="text-primary"
+							onSelect={() => {
+								onClose?.();
+								return navigate({
+									to: ".",
+									search: (old) => ({
+										...old,
+										modal: "create-ns",
+									}),
+								});
+							}}
+						>
+							<Icon
+								icon={faPlus}
+								className="mr-2 size-3 text-primary"
+							/>
+							New Namespace
+						</CommandItem>
+
+						{hasNextPage && !isFetchingNextPage ? (
+							<VisibilitySensor onChange={fetchNextPage} />
+						) : null}
+					</CommandGroup>
+				</CommandList>
+			</Command>
+		</div>
 	);
 }
 
@@ -1056,11 +1297,14 @@ function NamespaceList({
 												// parent paints a click-eating `::before` corridor
 												// at `z-index: 1` that overlaps this column.
 												// Without lifting the button above it, the
-												// gear is unclickable on hover.
+												// gear is unclickable on hover. No opacity
+												// transition: the gear reveals in step with the
+												// row's instant highlight; kept in sync with the
+												// engine `EngineNamespaceList` gear.
 												className={cn(
 													"relative z-10 ml-2 -my-1 size-6 rounded inline-flex items-center justify-center shrink-0",
 													"text-muted-foreground hover:text-foreground hover:bg-foreground/[0.08]",
-													"opacity-0 transition-opacity",
+													"opacity-0",
 													"group-hover:opacity-100 group-data-[selected=true]:opacity-100 focus-visible:opacity-100",
 													"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
 												)}

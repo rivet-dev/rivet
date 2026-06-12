@@ -689,6 +689,15 @@ pub(super) fn json_http_response(
 		http::header::CONTENT_TYPE.to_string(),
 		"application/json".to_owned(),
 	);
+	// The gateway accepts a path-segment token (`/gateway/<id>@<token>/...`),
+	// which the dashboard iframe uses to ride X-Rivet-Token auth into
+	// header-less navigations. Without `Referrer-Policy: no-referrer` the
+	// token would leak via `Referer` on any cross-origin sub-resource
+	// fetch from inside the iframe (fonts, images, analytics).
+	headers.insert(
+		http::header::REFERRER_POLICY.to_string(),
+		"no-referrer".to_owned(),
+	);
 	Ok(HttpResponse {
 		status: status.as_u16(),
 		headers,
@@ -924,6 +933,12 @@ fn inspector_ui_response(path: &str, body: Vec<u8>) -> HttpResponse {
 	headers.insert(
 		http::header::CACHE_CONTROL.to_string(),
 		"no-cache".to_owned(),
+	);
+	// See note on json_http_response: keep the iframe's path-segment token
+	// out of `Referer` on any cross-origin sub-resource fetch.
+	headers.insert(
+		http::header::REFERRER_POLICY.to_string(),
+		"no-referrer".to_owned(),
 	);
 	HttpResponse {
 		status: StatusCode::OK.as_u16(),

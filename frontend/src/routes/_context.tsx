@@ -110,7 +110,10 @@ function RouteComponent() {
 			<Modals />
 			{!features.platform && <EngineModals />}
 			{features.platform && <CloudModals />}
-			{features.platform && <SettingsDrawerHost />}
+			{/* The host self-gates on the `settings` search param and renders a
+			    namespace-only nav on engine flavors, so it is safe to mount for
+			    every flavor. */}
+			<SettingsDrawerHost />
 		</>
 	);
 }
