@@ -41,13 +41,7 @@ export const OnPremSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='text-base leading-relaxed text-zinc-500 md:text-lg'
         >
-          A single binary you control. Deploy Rivet inside your VPC, your customer’s VPC, or fully air-gapped. Use the compliance you already have instead of waiting on someone else’s.{' '}
-          <a
-            href='/compare/cloudflare-durable-objects/'
-            className='text-zinc-300 underline decoration-zinc-600 underline-offset-4 transition-colors hover:text-white'
-          >
-            Runs where Cloudflare Durable Objects can’t reach.
-          </a>
+          A single binary you control. Deploy Rivet inside your VPC, your customer’s VPC, or fully air-gapped. Use the compliance you already have instead of waiting on someone else’s.
         </motion.p>
       </div>
 

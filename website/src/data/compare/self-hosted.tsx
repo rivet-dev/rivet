@@ -19,7 +19,7 @@ export const selfHosted: CompareEntry = {
 	heroSubtitle:
 		'Managed platforms run your stateful workloads on infrastructure you do not control. Rivet is an open-source platform you can run yourself: a self-contained engine that deploys with Docker Compose or Kubernetes, inside the boundary your existing controls already cover.',
 	rivetSummary:
-		'Rivet is an open-source runtime for stateful backends that runs entirely on your own infrastructure. The engine is self-contained: deploy it as a single container, with Docker Compose, or on Kubernetes, and your actors, durable workflows, and realtime connections stay inside your own network with no usage metering.',
+		'Rivet is an open-source platform for stateful backends that runs entirely on your own infrastructure. The engine is self-contained: deploy it as a single container, with Docker Compose, or on Kubernetes, and your actors, durable workflows, and realtime connections stay inside your own network with no usage metering.',
 	competitorSummary:
 		"Managed platforms such as Temporal Cloud and Cloudflare Durable Objects run the control plane, and often your code, on vendor-operated infrastructure. Temporal can also be self-hosted as a multi-service cluster, while Durable Objects run only on Cloudflare's network. In exchange for control, someone else operates, scales, and upgrades the platform.",
 	whenToChooseRivet: [
@@ -92,7 +92,7 @@ export const selfHosted: CompareEntry = {
 						text: "Temporal can be self-hosted; Cloudflare Durable Objects are locked to Cloudflare's infrastructure and cannot run anywhere else",
 					},
 					importance:
-						'Owning the runtime keeps deployment, data, and upgrades under your control as requirements change',
+						'Owning the platform keeps deployment, data, and upgrades under your control as requirements change',
 				},
 				{
 					feature: 'Open-source',

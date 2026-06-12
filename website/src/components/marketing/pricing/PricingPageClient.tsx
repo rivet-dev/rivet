@@ -32,7 +32,7 @@ const Hero = () => (
           </h1>
 
           <p className="mx-auto mb-8 max-w-2xl text-base leading-relaxed text-zinc-500">
-             The managed way to run Rivet. We operate the persistent connections, global routing, and actor state so you don't — and because Rivet is open source, the same runtime runs in your own infrastructure when you need it to.
+             The managed way to run Rivet. We operate the persistent connections, global routing, and actor state so you don't — and because Rivet is open source, the same platform runs in your own infrastructure when you need it to.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -513,7 +513,7 @@ const Pricing = () => {
             period: "",
             desc: "Production self-host bundle for teams running Rivet inside their own VPC, customer environments, or regulated networks.",
             features: [
-                "Actor orchestration runtime",
+                "Actor orchestration engine",
                 "FoundationDB persistence layer",
                 "Cloud layer for multi-tenant",
                 "SQLite backup",

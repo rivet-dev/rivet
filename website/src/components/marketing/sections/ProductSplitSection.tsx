@@ -175,7 +175,7 @@ export const ProductSplitSection = () => (
 					transition={{ duration: 0.5 }}
 					className='text-3xl font-medium tracking-[-0.015em] text-white md:text-4xl'
 				>
-					One runtime, two products.
+					Two products, one platform.
 				</motion.h2>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}
@@ -184,7 +184,7 @@ export const ProductSplitSection = () => (
 					transition={{ duration: 0.5, delay: 0.05 }}
 					className='mt-4 text-base leading-relaxed text-zinc-500'
 				>
-					Rivet Actors give agents and realtime apps durable, stateful compute. agentOS gives agents a portable OS to run in. Use them alone or together.
+					Rivet Actors give agents and realtime apps durable, stateful compute in your existing Node.js or Bun backend. agentOS gives agents a portable OS to run in. Use them alone or together.
 				</motion.p>
 			</div>
 			<div className='grid grid-cols-1 gap-6 lg:grid-cols-2'>

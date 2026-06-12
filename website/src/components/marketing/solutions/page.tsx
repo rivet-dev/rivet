@@ -528,7 +528,7 @@ const DeployAnywhere = () => (
 					Runs where managed platforms can't.
 				</h2>
 				<p className="text-base leading-relaxed text-zinc-500">
-					Durable Objects only run on Cloudflare. Rivet is open source: deploy agents inside your VPC, your customers' environments, or air-gapped networks on the same open-source runtime.
+					Rivet is open source and works with your existing infrastructure: deploy agents inside your VPC, your customers' environments, or fully air-gapped networks.
 				</p>
 			</div>
 			<div className="grid grid-cols-1 gap-6 md:grid-cols-3">
