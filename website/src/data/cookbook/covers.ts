@@ -85,4 +85,13 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		objectPosition: "50% 40%",
 		filter: "brightness(0.95)",
 	},
+	"vpc-air-gapped": {
+		artwork: "A Scholar in His Study ('Faust'), Rembrandt, ca. 1652",
+		src: "https://assets.rivet.dev/website/images/thinking/thinker6.jpg",
+		width: 2523,
+		height: 3347,
+		objectPosition: "50% 38%",
+		transform: "scale(1.12)",
+		filter: "brightness(0.95)",
+	},
 };

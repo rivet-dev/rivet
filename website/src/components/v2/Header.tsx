@@ -47,14 +47,16 @@ function TextNavItem({
 	ariaCurrent,
 }: TextNavItemProps) {
 	return (
-		<div
-			className={cn(
-				"px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200",
-				className,
-			)}
-		>
+		<div className={cn("px-2.5 py-2", className)}>
 			<RivetHeader.NavItem asChild>
-				<a href={href} className="text-white" aria-current={ariaCurrent}>
+				<a
+					href={href}
+					className={cn(
+						"text-zinc-400 hover:text-white transition-colors duration-200",
+						ariaCurrent === "page" && "text-white",
+					)}
+					aria-current={ariaCurrent}
+				>
 					{children}
 				</a>
 			</RivetHeader.NavItem>
@@ -132,10 +134,7 @@ function ProductsDropdown({
 
 	return (
 		<div
-			className={cn(
-				"px-2.5 py-2 opacity-60 hover:opacity-100 transition-all duration-200",
-				lightTheme && "opacity-100",
-			)}
+			className="px-2.5 py-2"
 			onMouseEnter={handleMouseEnter}
 			onMouseLeave={handleMouseLeave}
 		>
@@ -145,9 +144,9 @@ function ProductsDropdown({
 						<button
 							type="button"
 							className={cn(
-								"cursor-pointer flex items-center gap-1 relative",
-								lightTheme ? "!text-zinc-600 hover:!text-zinc-900" : "!text-white",
-								active && "opacity-100",
+								"cursor-pointer flex items-center gap-1 relative transition-colors duration-200",
+								lightTheme ? "!text-zinc-600 hover:!text-zinc-900" : "!text-zinc-400 hover:!text-white",
+								active && !lightTheme && "!text-white",
 								"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
 							)}
 							onPointerDown={handlePointerDown}
@@ -437,7 +436,7 @@ export function Header({
 						sheetClassName={isLightTheme ? "!bg-white [&>button]:!bg-white [&>button]:!text-zinc-900 [&>button]:!border-zinc-200" : undefined}
 						lightTheme={isLightTheme}
 						breadcrumbs={
-							<div className={cn("flex items-center font-v2 subpixel-antialiased", isLightTheme && "[&_a]:!text-zinc-600 [&_button]:!text-zinc-600")}>
+							<div className={cn("flex items-center font-v2 subpixel-antialiased", isLightTheme && "[&_a]:!text-zinc-600 [&_a:hover]:!text-zinc-900 [&_button]:!text-zinc-600")}>
 								{!isLightTheme && <ProductsDropdown active={active === "product"} />}
 								<TextNavItem
 									href={isLightTheme ? AGENT_OS_DOCS_HREF : "/docs"}
@@ -472,6 +471,11 @@ export function Header({
 										ariaCurrent={active === "cookbook" ? "page" : undefined}
 									>
 										Cookbooks
+									</TextNavItem>
+								)}
+								{!isLightTheme && (
+									<TextNavItem href="/enterprise">
+										Enterprise
 									</TextNavItem>
 								)}
 								{!isLightTheme && (
@@ -557,6 +561,9 @@ export function Header({
 					>
 						Cookbooks
 					</TextNavItem>
+					<TextNavItem href="/enterprise">
+						Enterprise
+					</TextNavItem>
 					<TextNavItem
 						href="/cloud"
 						ariaCurrent={active === "pricing" ? "page" : undefined}
@@ -608,6 +615,7 @@ function DocsMobileNavigation({
 		: [
 			{ href: "/docs", label: "Documentation" },
 			{ href: "/cookbook", label: "Cookbooks" },
+			{ href: "/enterprise", label: "Enterprise" },
 			{ href: "/cloud", label: "Pricing" },
 		];
 
