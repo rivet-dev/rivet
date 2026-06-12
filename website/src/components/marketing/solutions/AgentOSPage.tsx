@@ -502,7 +502,7 @@ const HandwrittenText = ({ text, className }: { text: string; className?: string
 				x='10'
 				y={measured ? measured.height * 0.75 : 90}
 				style={{
-					fontFamily: '"Playwrite IE", cursive',
+					fontFamily: '"Gloria Hallelujah", cursive',
 					fontSize: '72px',
 					fontWeight: 400,
 					fill: 'black',

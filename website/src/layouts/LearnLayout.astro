@@ -21,7 +21,12 @@ const { title, description, canonicalUrl, act, subtitle, tableOfContents = [], i
 const pageTitle = title.replace(/ - Rivet$/, '');
 ---
 
-<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} themeColor="#1c1917">
+	<Fragment slot="head-fonts">
+		<link rel="preconnect" href="https://fonts.googleapis.com" />
+		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+		<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Courier+Prime&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet" />
+	</Fragment>
 	<Header active="learn" variant="full-width" learnMode client:load />
 
 	<div class="learn-container">

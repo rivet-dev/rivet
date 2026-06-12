@@ -33,6 +33,21 @@ export default {
 				'text-secondary': '#A0A0A0',
 				'border': '#252525',
 				'accent': '#FF4500',
+				// Porcelain editorial palette. Marketing pages are light: a cool
+				// porcelain field with warm ink, warm mats, and forest green
+				// structure. Orange remains the single CTA spark per page.
+				'paper': '#EFEFEF',
+				'paper-deep': '#DCDCDE',
+				'paper-mid': '#E3E3E5',
+				'mat': '#EFE9DC',
+				'ink': '#1B1916',
+				'ink-soft': '#56524A',
+				'ink-faint': '#8A8478',
+				'cream': '#F4F1E7',
+				'pine': '#2E4034',
+				'olive': '#5C6B4F',
+				'sage': '#93A286',
+				'accent-deep': '#D63E00',
 				'code-keyword': '#c084fc',
 				'code-function': '#60a5fa',
 				'code-string': '#4ade80',
@@ -51,6 +66,7 @@ export default {
 				'hero-visual': 'hero-p 0.8s ease-out 1s forwards',
 				'infinite-scroll': 'infinite-scroll 25s linear infinite',
 				'pulse-slow': 'pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+				'spin-slow': 'spin 120s linear infinite',
 			},
 			keyframes: {
 				'fade-in-up': {

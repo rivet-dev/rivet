@@ -20,3 +20,11 @@ const pathname = Astro.url.pathname;
 	<Header variant="floating" initialPathname={pathname} active={active} client:load />
 	<slot />
 </BaseLayout>
+
+<!-- Marketing pages sit on the porcelain field. The body itself is painted
+     so overscroll and short pages never flash the dark docs background. -->
+<style is:global>
+	body {
+		background-color: #efefef;
+	}
+</style>

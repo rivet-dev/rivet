@@ -135,12 +135,12 @@ export function PageNextPrevious({ navigation }) {
 
 function SmallPrint() {
 	return (
-		<div className="mx-auto max-w-7xl w-full py-16 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div className="mx-auto max-w-7xl w-full py-16">
 			<div className="grid grid-cols-1 min-[440px]:grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
 				{/* Brand column */}
 				<div className="col-span-1 min-[440px]:col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
 					<img className="h-8 w-8" src={imgLogo.src} alt="Rivet" />
-					<p className="text-sm text-zinc-500">
+					<p className="text-sm text-ink-faint">
 						Infrastructure for the agentic era
 					</p>
 					<div className="flex gap-4">
@@ -148,7 +148,7 @@ function SmallPrint() {
 							<a
 								key={item.name}
 								href={item.href}
-								className="text-zinc-600 hover:text-white transition-colors"
+								className="text-ink-faint hover:text-ink transition-colors"
 							>
 								<span className="sr-only">{item.name}</span>
 								<Icon icon={item.icon} aria-hidden="true" />
@@ -159,14 +159,14 @@ function SmallPrint() {
 
 				{/* Product */}
 				<div>
-					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Product</h3>
+					<h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint mb-4">Product</h3>
 					<ul className="space-y-3">
 						{footer.product.map((item) => (
 							<li key={item.name}>
 								<a
 									href={item.href}
 									target={item.target}
-									className="text-sm text-zinc-400 hover:text-white transition-colors"
+									className="text-sm text-ink-soft hover:text-ink transition-colors"
 								>
 									{item.name}
 								</a>
@@ -177,14 +177,14 @@ function SmallPrint() {
 
 				{/* Developers */}
 				<div>
-					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Developers</h3>
+					<h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint mb-4">Developers</h3>
 					<ul className="space-y-3">
 						{footer.devs.map((item) => (
 							<li key={item.name}>
 								<a
 									href={item.href}
 									target={item.target}
-									className="text-sm text-zinc-400 hover:text-white transition-colors"
+									className="text-sm text-ink-soft hover:text-ink transition-colors"
 								>
 									{item.name}
 								</a>
@@ -195,14 +195,14 @@ function SmallPrint() {
 
 				{/* Resources */}
 				<div>
-					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Resources</h3>
+					<h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint mb-4">Resources</h3>
 					<ul className="space-y-3">
 						{footer.resources.map((item) => (
 							<li key={item.name}>
 								<a
 									href={item.href}
 									target={item.newTab ? "_blank" : null}
-									className="text-sm text-zinc-400 hover:text-white transition-colors"
+									className="text-sm text-ink-soft hover:text-ink transition-colors"
 								>
 									{item.name}
 								</a>
@@ -213,13 +213,13 @@ function SmallPrint() {
 
 				{/* Legal */}
 				<div>
-					<h3 className="text-xs font-medium uppercase tracking-wider text-zinc-500 mb-4">Legal</h3>
+					<h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint mb-4">Legal</h3>
 					<ul className="space-y-3">
 						{footer.legal.map((item) => (
 							<li key={item.name}>
 								<a
 									href={item.href}
-									className="text-sm text-zinc-400 hover:text-white transition-colors"
+									className="text-sm text-ink-soft hover:text-ink transition-colors"
 								>
 									{item.name}
 								</a>
@@ -231,20 +231,20 @@ function SmallPrint() {
 
 			{/* Investor badges */}
 			<div className="mt-12 flex flex-col min-[440px]:flex-row flex-wrap items-start min-[440px]:items-center gap-4">
-				<span className="text-xs text-zinc-600">Backed by</span>
+				<span className="text-xs text-ink-faint">Backed by</span>
 				<div className="flex flex-wrap items-center gap-2">
-					<div className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">
+					<div className="flex items-center gap-2 rounded-full border border-ink/10 px-3 py-1.5 text-xs text-ink-soft">
 						<img src={imgYC.src} alt="Y Combinator" className="h-4 w-auto" />
 						<span>Y Combinator</span>
 					</div>
-					<div className="flex items-center gap-2 rounded-full border border-white/10 px-3 py-1.5 text-xs text-zinc-400">
+					<div className="flex items-center gap-2 rounded-full border border-ink/10 px-3 py-1.5 text-xs text-ink-soft">
 						<img src={imgA16z.src} alt="a16z" className="h-3 w-auto footer-invert" />
 						<span>a16z Speedrun</span>
 					</div>
 				</div>
 				<a
 					href="/startups"
-					className="text-xs text-zinc-500 hover:text-white transition-colors"
+					className="text-xs text-ink-faint hover:text-ink transition-colors"
 					style={{
 						backgroundImage: 'radial-gradient(circle, currentColor 1px, transparent 1px)',
 						backgroundSize: '6px 1px',
@@ -255,7 +255,7 @@ function SmallPrint() {
 				>
 					Are you as well?
 				</a>
-				<span className="ml-auto flex items-center gap-1.5 text-xs text-zinc-600">
+				<span className="ml-auto flex items-center gap-1.5 text-xs text-ink-faint">
 					<svg width="14" height="10" viewBox="0 0 14 10" fill="none">
 						<rect width="14" height="10" fill="white" />
 						<rect y="0" width="14" height="1.2" fill="black" />
@@ -270,11 +270,11 @@ function SmallPrint() {
 			</div>
 
 			{/* Copyright */}
-			<div className="mt-12 border-t border-white/10 pt-8">
-				<p className="text-xs text-zinc-600">
+			<div className="mt-12 border-t border-ink/10 pt-8">
+				<p className="text-xs text-ink-faint">
 					&copy; {new Date().getFullYear()} Rivet Gaming, Inc. All rights reserved.
 				</p>
-				<p className="mt-2 text-xs text-zinc-700">
+				<p className="mt-2 text-xs text-ink-faint/80">
 					Cloudflare® and Durable Objects™ are trademarks of Cloudflare, Inc. No affiliation or endorsement implied.
 				</p>
 			</div>
@@ -282,15 +282,26 @@ function SmallPrint() {
 	);
 }
 
-const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/pricing', '/agent-os/registry', '/from-unix-to-agents', '/install'];
+// The footer is light by default to match the porcelain marketing surfaces.
+// Docs and Learn keep their dark shells, so those paths apply a dark override
+// wrapper instead.
+const DARK_THEMED_PATH_PREFIXES = ['/docs', '/learn'];
 
-export function Footer() {
-	const pathname = usePathname();
-	const isWhite = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
+export function Footer({ initialPathname = "" }) {
+	// usePathname returns "" during SSR; fall back to the server-provided path
+	// so docs pages do not flash a light footer before hydration.
+	const pathname = usePathname() || initialPathname;
+	const isDark = DARK_THEMED_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(p + '/'));
 
 	return (
-		<div className={isWhite ? 'bg-white [&_*]:!border-zinc-200 [&_a]:!text-zinc-500 [&_a:hover]:!text-zinc-900 [&_hr]:!border-zinc-200 [&_.footer-invert]:invert' : ''}>
-			<hr className="mb-8 border-white/10" />
+		<div
+			className={
+				isDark
+					? '[&_*]:!border-white/10 [&_a]:!text-zinc-400 [&_a:hover]:!text-white [&_h3]:!text-zinc-500 [&_p]:!text-zinc-600 [&_span]:!text-zinc-500'
+					: 'bg-paper [&_.footer-invert]:invert'
+			}
+		>
+			<hr className={isDark ? 'mb-8 border-white/10' : 'mb-8 border-ink/10'} />
 
 			<footer
 				aria-labelledby="footer-heading"

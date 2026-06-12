@@ -13,7 +13,7 @@ interface Props {
 const { title, description, canonicalUrl, sidebar } = Astro.props;
 ---
 
-<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl}>
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} themeColor="#0c0a09">
 	<Header variant="full-width" showDocsTabs={true} sidebarData={sidebar} client:load />
 	<div class="w-full relative z-10 font-sans">
 		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs" style="--header-height: 6.5rem;">

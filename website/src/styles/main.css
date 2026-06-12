@@ -52,6 +52,19 @@
   color: white;
 }
 
+/* Pine selection for porcelain marketing surfaces */
+.selection-paper ::selection,
+.selection-paper::selection {
+  background-color: #2e4034;
+  color: #f4f1e7;
+}
+
+.selection-paper ::-moz-selection,
+.selection-paper::-moz-selection {
+  background-color: #2e4034;
+  color: #f4f1e7;
+}
+
 .shiki .line {
   @apply break-all;
 }
@@ -277,37 +290,27 @@
 		transform: translate(0, 0) rotate(60deg) scaleY(0.9);
 	}
 
-	/* Bento glow effect */
-	.bento-box {
-		position: relative;
-		overflow: hidden;
-		transition: all 0.3s ease;
+	/* Porcelain editorial surface. The page field is a cool porcelain gray
+	   with a fine paper grain baked into the tile at ~4% opacity. */
+	.paper-grain {
+		background-color: #efefef;
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.045 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
 	}
 
-	.bento-box:hover {
-		border-color: #444;
-		transform: scale(1.02);
+	/* Cream-noise variant for large ink panels */
+	.ink-grain {
+		background-color: #1b1916;
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0.96 0 0 0 0 0.95 0 0 0 0 0.91 0 0 0 0.03 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
 	}
 
-	.bento-box::before {
-		content: "";
-		position: absolute;
-		top: 0;
-		left: 0;
-		width: 100%;
-		height: 100%;
-		background: radial-gradient(
-			circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
-			rgba(255, 255, 255, 0.08),
-			transparent 40%
+	/* Studio-backdrop depth: darker porcelain pooling in the bottom-left
+	   corner, like a product-photography sweep. Layer over .paper-grain. */
+	.depth-wash {
+		background-image: radial-gradient(
+			115% 105% at 0% 100%,
+			#dcdcde 0%,
+			rgba(220, 220, 222, 0) 58%
 		);
-		opacity: 0;
-		transition: opacity 0.3s ease;
-		pointer-events: none;
-	}
-
-	.bento-box:hover::before {
-		opacity: 1;
 	}
 
 	/* Scroll-triggered animations */
@@ -490,4 +493,13 @@
 ::view-transition-old(root),
 ::view-transition-new(root) {
 	animation: none;
+}
+
+/* Decorative animations stop entirely under reduced motion */
+@media (prefers-reduced-motion: reduce) {
+	.animate-spin-slow,
+	.animate-infinite-scroll,
+	.animate-pulse-slow {
+		animation: none;
+	}
 }

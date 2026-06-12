@@ -6,10 +6,13 @@ import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
 import type { SidebarItem } from "@/lib/sitemap";
 import { registry } from "@/data/registry";
 import logoUrl from "@/images/rivet-logos/icon-text-white.svg";
+import logoTextBlackUrl from "@/images/rivet-logos/icon-text-black.svg";
 import logoIconUrl from "@/images/rivet-logos/icon-white.svg";
 import logoIconWhiteUrl from "@/images/rivet-logos/icon-white.svg";
 
-const WHITE_THEMED_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/pricing', '/agent-os/registry', '/from-unix-to-agents', '/install'];
+// Marketing chrome is light by default; these paths additionally swap the nav
+// content for the agentOS sub-brand (logo lockup, registry links, Install CTA).
+const AGENT_OS_PATHS = ['/agent-os', '/agent-os/use-cases', '/agent-os/pricing', '/agent-os/registry', '/from-unix-to-agents', '/install'];
 const REGISTRY_PACKAGE_COUNT = registry.length;
 const AGENT_OS_DOCS_HREF = "/docs/agent-os";
 const AGENT_OS_REGISTRY_HREF = "/agent-os/registry";
@@ -284,7 +287,10 @@ export function Header({
 
 	const clientPathname = usePathname();
 	const pathname = clientPathname || initialPathname;
-	const isLightTheme = WHITE_THEMED_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
+	// The floating variant only renders on marketing pages, which are all
+	// porcelain now. The full-width variant (docs, learn) stays dark.
+	const isLightTheme = variant === "floating";
+	const isAgentOs = AGENT_OS_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
 	const isRegistryPage =
 		pathname === AGENT_OS_REGISTRY_HREF || pathname === `${AGENT_OS_REGISTRY_HREF}/`;
 
@@ -317,22 +323,21 @@ export function Header({
 				<div
 					className={cn(
 						"hero-bg-exclude",
-						isLightTheme
-							? 'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-zinc-200 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block'
-							: 'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-white/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
+						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-ink/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
 					)}
 				>
-					<div className={cn("absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl backdrop-blur-lg md:block", isLightTheme ? "bg-white/80" : "bg-background/80")} />
+					{/* White glass pill: bright inner edge over a saturated blur. */}
+					<div className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[18px] backdrop-saturate-[1.4] md:block" />
 					<RivetHeader
 						className={cn(
 							headerStyles,
-							isLightTheme && "md:bg-transparent [&_button[data-mobile-menu-trigger]]:text-zinc-900 bg-white/95 backdrop-blur-lg md:backdrop-blur-none"
+							"md:bg-transparent [&_button[data-mobile-menu-trigger]]:text-ink bg-paper/95 backdrop-blur-lg md:backdrop-blur-none"
 						)}
 						logo={
 							<>
 								{/* Mobile logo */}
 								<div className="md:hidden ml-1">
-									{isLightTheme ? (
+									{isAgentOs ? (
 										<a href="/" className="flex items-center gap-2">
 											<img
 												src={logoIconWhiteUrl.src}
@@ -341,7 +346,7 @@ export function Header({
 												className="h-6 w-6"
 												alt="Rivet logo"
 											/>
-											<div className="h-4 w-px bg-zinc-300" />
+											<div className="h-4 w-px bg-ink/20" />
 											<img
 												src="/images/agent-os/agentos-hero-logo.svg"
 												className="h-4 w-auto"
@@ -351,7 +356,7 @@ export function Header({
 									) : (
 										<a href="/">
 											<img
-												src={logoUrl.src}
+												src={logoTextBlackUrl.src}
 												width={80}
 												height={24}
 												className="w-20 shrink-0"
@@ -362,7 +367,7 @@ export function Header({
 								</div>
 								{/* Desktop logo */}
 								<div className="hidden md:block">
-									{isLightTheme ? (
+									{isAgentOs ? (
 										<div className="ml-1 flex items-center gap-3">
 											<a href="/">
 												<img
@@ -373,7 +378,7 @@ export function Header({
 													alt="Rivet logo"
 												/>
 											</a>
-											<div className="h-5 w-px bg-zinc-300" />
+											<div className="h-5 w-px bg-ink/20" />
 											<a href="/agent-os">
 												<img
 													src="/images/agent-os/agentos-hero-logo.svg"
@@ -386,7 +391,7 @@ export function Header({
 										<LogoContextMenu>
 											<a href="/">
 												<img
-													src={logoUrl.src}
+													src={logoTextBlackUrl.src}
 													width={80}
 													height={24}
 													className="ml-1 w-20 shrink-0"
@@ -404,22 +409,22 @@ export function Header({
 							<div className="flex flex-row items-center">
 								{variant === "full-width" && <HeaderSearch />}
 								<RivetHeader.NavItem asChild className="p-2 mr-4">
-									<a href="https://rivet.dev/discord" className={isLightTheme ? "text-zinc-500 hover:text-zinc-900" : "text-white/90"}>
-										<Icon icon={faDiscord} className="drop-shadow-md" />
+									<a href="https://rivet.dev/discord" className="text-ink-faint hover:text-ink transition-colors">
+										<Icon icon={faDiscord} />
 									</a>
 								</RivetHeader.NavItem>
-								<GitHubDropdown className={cn("inline-flex items-center justify-center whitespace-nowrap rounded-md border px-4 py-2 h-10 text-sm mr-2 transition-colors", isLightTheme ? "border-zinc-200 text-zinc-500 hover:border-zinc-300 hover:text-zinc-900" : "border-white/10 text-white/90 hover:border-white/20 hover:text-white")} />
-								{isLightTheme ? (
+								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border px-4 py-2 h-10 text-sm mr-2 transition-colors border-ink/15 text-ink-soft hover:border-ink/30 hover:text-ink" />
+								{isAgentOs ? (
 									<a
 										href="/install"
-										className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-zinc-200 bg-zinc-900 px-4 py-2 text-sm text-white shadow-sm hover:bg-zinc-700 transition-colors"
+										className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm text-cream hover:bg-ink/85 transition-colors"
 									>
 										Install
 									</a>
 								) : (
 									<a
 										href="https://dashboard.rivet.dev"
-										className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
+										className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm text-cream hover:bg-ink/85 transition-colors"
 									>
 										Sign In
 									</a>
@@ -431,20 +436,21 @@ export function Header({
 								tree={mobileSidebar}
 								sidebarData={sidebarData}
 								isLightTheme={isLightTheme}
+								isAgentOs={isAgentOs}
 							/>
 						}
-						sheetClassName={isLightTheme ? "!bg-white [&>button]:!bg-white [&>button]:!text-zinc-900 [&>button]:!border-zinc-200" : undefined}
+						sheetClassName="!bg-paper [&>button]:!bg-paper [&>button]:!text-ink [&>button]:!border-ink/15"
 						lightTheme={isLightTheme}
 						breadcrumbs={
-							<div className={cn("flex items-center font-v2 subpixel-antialiased", isLightTheme && "[&_a]:!text-zinc-600 [&_a:hover]:!text-zinc-900 [&_button]:!text-zinc-600")}>
-								{!isLightTheme && <ProductsDropdown active={active === "product"} />}
+							<div className="flex items-center font-v2 subpixel-antialiased [&_a]:!text-ink-soft [&_a:hover]:!text-ink [&_a[aria-current=page]]:!text-ink [&_button]:!text-ink-soft">
+								{!isAgentOs && <ProductsDropdown active={active === "product"} lightTheme />}
 								<TextNavItem
-									href={isLightTheme ? AGENT_OS_DOCS_HREF : "/docs"}
+									href={isAgentOs ? AGENT_OS_DOCS_HREF : "/docs"}
 									ariaCurrent={active === "docs" ? "page" : undefined}
 								>
 									Documentation
 								</TextNavItem>
-								{isLightTheme && (
+								{isAgentOs && (
 									<>
 										<TextNavItem href="/agent-os/use-cases">
 											Use Cases
@@ -455,7 +461,7 @@ export function Header({
 										>
 											<span className="inline-flex items-center gap-2">
 												<span>Registry</span>
-												<span className="inline-flex min-w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium leading-none text-zinc-600">
+												<span className="inline-flex min-w-6 items-center justify-center rounded-full border border-ink/15 bg-ink/5 px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-soft">
 													{REGISTRY_PACKAGE_COUNT}
 												</span>
 											</span>
@@ -465,7 +471,7 @@ export function Header({
 										</TextNavItem>
 									</>
 								)}
-								{!isLightTheme && (
+								{!isAgentOs && (
 									<TextNavItem
 										href="/cookbook"
 										ariaCurrent={active === "cookbook" ? "page" : undefined}
@@ -473,12 +479,12 @@ export function Header({
 										Cookbooks
 									</TextNavItem>
 								)}
-								{!isLightTheme && (
+								{!isAgentOs && (
 									<TextNavItem href="/enterprise">
 										Enterprise
 									</TextNavItem>
 								)}
-								{!isLightTheme && (
+								{!isAgentOs && (
 									<TextNavItem
 										href="/cloud"
 										ariaCurrent={active === "pricing" ? "page" : undefined}
@@ -580,10 +586,12 @@ function DocsMobileNavigation({
 	tree,
 	sidebarData,
 	isLightTheme = false,
+	isAgentOs = false,
 }: {
 	tree?: ReactNode;
 	sidebarData?: SidebarItem[];
 	isLightTheme?: boolean;
+	isAgentOs?: boolean;
 }) {
 	const pathname = usePathname() || "";
 	const isDocsPage = pathname.startsWith("/docs");
@@ -605,7 +613,7 @@ function DocsMobileNavigation({
 		{ id: "api", label: "API Reference", href: "/docs/api" },
 	];
 
-	const mainLinks = isLightTheme
+	const mainLinks = isAgentOs
 		? [
 			{ href: AGENT_OS_DOCS_HREF, label: "Documentation" },
 			{ href: "/agent-os/use-cases", label: "Use Cases" },
@@ -638,7 +646,7 @@ function DocsMobileNavigation({
 
 	const currentSection = sections.find((s) => s.id === getCurrentSection());
 
-	if (isLightTheme) {
+	if (isLightTheme && isAgentOs) {
 		return (
 			<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
 				{/* Home logo with agentOS */}
@@ -650,7 +658,7 @@ function DocsMobileNavigation({
 						height={24}
 						className="h-6 w-6"
 					/>
-					<div className="h-4 w-px bg-zinc-300" />
+					<div className="h-4 w-px bg-ink/20" />
 					<img
 						src="/images/agent-os/agentos-hero-logo.svg"
 						className="h-4 w-auto"
@@ -663,19 +671,82 @@ function DocsMobileNavigation({
 					<a
 						key={href}
 						href={href}
-						className="text-zinc-900 py-2 px-2 hover:bg-zinc-100 rounded-sm transition-colors"
+						className="text-ink py-2 px-2 hover:bg-ink/5 rounded-sm transition-colors"
 					>
 						{label}
 					</a>
 				))}
 
 				{/* Install button */}
-				<div className="mt-4 pt-4 border-t border-zinc-200">
+				<div className="mt-4 pt-4 border-t border-ink/10">
 					<a
 						href="/install"
-						className="flex items-center justify-center w-full rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700"
+						className="flex items-center justify-center w-full rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85"
 					>
 						Install
+					</a>
+				</div>
+			</div>
+		);
+	}
+
+	if (isLightTheme) {
+		return (
+			<div className="flex flex-col gap-2 font-v2 subpixel-antialiased text-sm">
+				{/* Home logo */}
+				<a href="/" className="py-3 px-2">
+					<img
+						src={logoTextBlackUrl.src}
+						alt="Rivet"
+						width={80}
+						height={24}
+						className="w-20"
+					/>
+				</a>
+
+				{/* Products section */}
+				<div className="text-ink-faint py-2 px-2 text-xs uppercase tracking-wide">
+					Products
+				</div>
+				{products.map((product) => (
+					<a
+						key={product.href}
+						href={product.href}
+						target={product.external ? "_blank" : undefined}
+						rel={product.external ? "noopener noreferrer" : undefined}
+						className="text-ink py-2 px-2 pl-4 hover:bg-ink/5 rounded-sm transition-colors flex items-center gap-2"
+					>
+						<img
+							src={product.logo.src}
+							alt={product.label}
+							width={16}
+							height={16}
+							className="h-4 w-4"
+							loading="lazy"
+							decoding="async"
+						/>
+						{product.label}
+					</a>
+				))}
+
+				{/* Main navigation links */}
+				{mainLinks.map(({ href, label }) => (
+					<a
+						key={href}
+						href={href}
+						className="text-ink py-2 px-2 hover:bg-ink/5 rounded-sm transition-colors"
+					>
+						{label}
+					</a>
+				))}
+
+				{/* Dashboard button */}
+				<div className="mt-4 pt-4 border-t border-ink/10">
+					<a
+						href="https://dashboard.rivet.dev/"
+						className="flex items-center justify-center w-full rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85"
+					>
+						Dashboard
 					</a>
 				</div>
 			</div>
