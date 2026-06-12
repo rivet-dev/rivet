@@ -2,6 +2,7 @@
 
 import { Package, Server, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { deployOptions } from '@rivetkit/shared-data';
 import imgLogo from '@/images/rivet-logos/icon-white.svg';
 
 export const HostingSection = () => (
@@ -24,7 +25,7 @@ export const HostingSection = () => (
           transition={{ duration: 0.5, delay: 0.1 }}
           className='max-w-xl text-base leading-relaxed text-zinc-500'
         >
-          RivetKit is a library. Connect it to Rivet Cloud or self-host when you need scaling, fault tolerance, and observability.
+          A library in development, a platform in production. Your backend keeps deploying wherever it already does — Rivet connects to it.
         </motion.p>
       </div>
 
@@ -60,32 +61,7 @@ export const HostingSection = () => (
           </div>
         </div>
 
-        {/* Card 2: Self-Host */}
-        <div className='flex flex-col border-t border-white/10 pt-6'>
-          <div className='mb-3 text-zinc-500'>
-            <Server className='h-4 w-4' />
-          </div>
-          <h3 className='mb-2 text-base font-medium text-white'>Self-Host</h3>
-          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
-            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB (enterprise). Full dashboard included.
-          </p>
-          <div className='mb-6 font-mono text-xs text-zinc-500'>
-            <div className='flex gap-2'>
-              <span className='select-none text-zinc-600'>$</span>
-              <span>docker run -p 6420:6420 rivetdev/engine</span>
-            </div>
-          </div>
-          <div className='mt-auto'>
-            <a
-              href='/docs/self-hosting'
-              className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
-            >
-              View Self-Hosting Docs
-            </a>
-          </div>
-        </div>
-
-        {/* Card 3: Rivet Cloud */}
+        {/* Card 2: Rivet Cloud */}
         <div className='flex flex-col border-t border-white/10 pt-6'>
           <div className='mb-3'>
             <img className='h-5 w-5 opacity-50' src={imgLogo.src} alt='Rivet' />
@@ -112,6 +88,50 @@ export const HostingSection = () => (
             </a>
           </div>
         </div>
+
+        {/* Card 3: Self-Host */}
+        <div className='flex flex-col border-t border-white/10 pt-6'>
+          <div className='mb-3 text-zinc-500'>
+            <Server className='h-4 w-4' />
+          </div>
+          <h3 className='mb-2 text-base font-medium text-white'>Self-Host</h3>
+          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
+            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB (enterprise). Full dashboard included.
+          </p>
+          <div className='mb-6 font-mono text-xs text-zinc-500'>
+            <div className='flex gap-2'>
+              <span className='select-none text-zinc-600'>$</span>
+              <span>docker run -p 6420:6420 rivetdev/engine</span>
+            </div>
+          </div>
+          <div className='mt-auto'>
+            <a
+              href='/docs/self-hosting'
+              className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
+            >
+              View Self-Hosting Docs
+            </a>
+          </div>
+        </div>
+      </motion.div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className='mt-12 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-white/10 pt-6'
+      >
+        <span className='text-xs uppercase tracking-wider text-zinc-600'>Your backend deploys to</span>
+        {deployOptions.map(({ displayName, shortTitle, href }) => (
+          <a
+            key={displayName}
+            href={href}
+            className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+          >
+            {shortTitle || displayName}
+          </a>
+        ))}
       </motion.div>
 
     </div>
