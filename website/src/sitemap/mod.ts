@@ -327,10 +327,6 @@ export const sitemap = [
 								href: "/docs/actors/debugging",
 							},
 							{
-								title: "Custom Inspector Tabs",
-								href: "/docs/actors/inspector-tabs",
-							},
-							{
 								title: "Types",
 								href: "/docs/actors/types",
 								//icon: faCode,
@@ -347,6 +343,10 @@ export const sitemap = [
 							{
 								title: "Icons & Names",
 								href: "/docs/actors/appearance",
+							},
+							{
+								title: "Custom Inspector Tabs",
+								href: "/docs/actors/inspector-tabs",
 							},
 							{
 								title: "Limits",
