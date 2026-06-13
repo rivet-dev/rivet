@@ -4,6 +4,7 @@ export interface CookbookCardCover {
 	transform?: string;
 	transformOrigin?: string;
 	filter?: string;
+	ken?: { x: string; y: string; scale: number };
 }
 
 export interface CookbookPageCardData {
@@ -23,27 +24,12 @@ export interface CookbookPageCardData {
 	}>;
 }
 
-// Documentary-style pan vectors. Each cover gets one deterministically from
-// its slug so the gallery wall drifts in varied directions rather than in
-// lockstep. Pan magnitude stays under the scale overshoot so the frame edge
-// never shows through.
-const KEN_BURNS_DRIFTS = [
-	{ x: "3%", y: "-3%", scale: 1.13 },
-	{ x: "-3%", y: "-2%", scale: 1.12 },
-	{ x: "2%", y: "3%", scale: 1.14 },
-	{ x: "-2%", y: "2%", scale: 1.12 },
-] as const;
-
-function driftForSlug(slug: string) {
-	let hash = 0;
-	for (let i = 0; i < slug.length; i++) {
-		hash = (hash + slug.charCodeAt(i)) % 9973;
-	}
-	return KEN_BURNS_DRIFTS[hash % KEN_BURNS_DRIFTS.length];
-}
+// Fallback for any cover that has not tuned its own documentary motion: a
+// gentle straight push-in.
+const DEFAULT_KEN = { x: "0%", y: "0%", scale: 1.16 };
 
 export function CookbookCard({ page }: { page: CookbookPageCardData }) {
-	const drift = driftForSlug(page.slug);
+	const drift = page.cover?.ken ?? DEFAULT_KEN;
 	return (
 		<a
 			href={page.href}
