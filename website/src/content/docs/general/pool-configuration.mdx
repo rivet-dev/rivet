@@ -13,7 +13,11 @@ There are two pool kinds:
 
 ## Setting the Configuration
 
-Configure a pool via the dashboard, the API directly, or the TypeScript SDK:
+Configure a pool from the [Rivet dashboard](https://dashboard.rivet.dev) under your namespace's runner settings. The dashboard is the recommended way to manage pool configuration.
+
+<Accordion title="Advanced: set the configuration manually">
+
+You can also set pool configuration directly through the API or the TypeScript SDK:
 
 <CodeGroup>
 
@@ -63,6 +67,8 @@ curl -X PUT "https://api.rivet.dev/runner-configs/default?namespace=default" \
 </CodeGroup>
 
 The HTTP API uses `snake_case`. The TypeScript SDK uses `camelCase`. The field names below use `camelCase`.
+
+</Accordion>
 
 ## Common Options
 
