@@ -1,0 +1,68 @@
+---
+title: "Deploying to Cloudflare Workers"
+description: "Deploy an existing Rivet project to Cloudflare Workers."
+skill: true
+---
+
+This guide covers deploying an existing Rivet project to Cloudflare Workers.
+
+## Prerequisites
+
+- [Cloudflare account](https://dash.cloudflare.com/)
+- [`wrangler`](https://developers.cloudflare.com/workers/wrangler/) configured for your account
+- A Rivet namespace from the [Rivet Dashboard](https://dashboard.rivet.dev/) or a self-hosted Rivet Engine
+
+## Steps
+
+<Steps>
+<Step title="Set up your project">
+
+Follow the [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare) to set up your project locally.
+
+</Step>
+<Step title="Configure Wrangler">
+
+Set your Rivet connection values as Worker variables. The pool name must match the serverless runner configured in Rivet.
+
+```toml wrangler.toml
+name = "rivetkit-cloudflare"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+RIVET_ENDPOINT = "https://api.rivet.dev"
+RIVET_NAMESPACE = "your-namespace"
+RIVET_POOL = "cloudflare-workers"
+RIVET_TOKEN = "sk_..."
+RIVET_PUBLIC_ENDPOINT = "https://your-namespace:pk_...@api.rivet.dev"
+```
+
+</Step>
+<Step title="Deploy">
+
+```sh
+npx wrangler deploy
+```
+
+</Step>
+<Step title="Register the Serverless Runner URL">
+
+After deploy, set the Worker URL with the `/api/rivet` path as the serverless runner URL in Rivet.
+
+</Step>
+</Steps>
+
+## Runtime Notes
+
+- Use `runtime: "wasm"` in `setup(...)` for Workers. You can also set `RIVETKIT_RUNTIME=wasm` in environments where the registry config does not set `runtime`.
+- Pass `wasm: { bindings, initInput }` explicitly from `@rivetkit/rivetkit-wasm`.
+- Use remote SQLite on Workers. Leaving SQLite unset with `runtime: "wasm"` selects remote SQLite automatically.
+- Keep `RIVET_PUBLIC_ENDPOINT` pointed at the client-facing Rivet endpoint. Register the Worker URL separately as the serverless runner URL.
+- Local Workers runtimes must support outbound WebSockets for the Rivet envoy connection.
+
+## Related
+
+- [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare)
+- [Deploying to Supabase Functions](/docs/deploy/supabase)
+- [SQLite](/docs/actors/sqlite)

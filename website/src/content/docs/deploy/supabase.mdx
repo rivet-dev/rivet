@@ -1,0 +1,63 @@
+---
+title: "Deploying to Supabase Functions"
+description: "Deploy an existing Rivet project to Supabase Edge Functions."
+skill: true
+---
+
+This guide covers deploying an existing Rivet project to Supabase Edge Functions.
+
+## Prerequisites
+
+- [Supabase project](https://supabase.com/)
+- [Supabase CLI](https://supabase.com/docs/guides/cli) configured for your project
+- A Rivet namespace from the [Rivet Dashboard](https://dashboard.rivet.dev/) or a self-hosted Rivet Engine
+
+## Steps
+
+<Steps>
+<Step title="Set up your project">
+
+Follow the [Supabase Functions Quickstart](/docs/actors/quickstart/supabase) to set up your project locally.
+
+</Step>
+<Step title="Set Secrets">
+
+Set the Rivet connection values as Supabase secrets. The pool name must match the serverless runner configured in Rivet.
+
+```sh
+npx supabase secrets set \
+  RIVET_ENDPOINT=https://api.rivet.dev \
+  RIVET_PUBLIC_ENDPOINT=https://your-namespace:pk_...@api.rivet.dev \
+  RIVET_NAMESPACE=your-namespace \
+  RIVET_POOL=supabase-functions \
+  RIVET_TOKEN=sk_...
+```
+
+</Step>
+<Step title="Deploy">
+
+```sh
+npx supabase functions deploy rivet
+```
+
+</Step>
+<Step title="Register the Serverless Runner URL">
+
+After deploy, set the function URL with the `/api/rivet` path as the serverless runner URL in Rivet. For a function named `rivet`, this is usually `https://your-project.functions.supabase.co/functions/v1/rivet/api/rivet`.
+
+</Step>
+</Steps>
+
+## Runtime Notes
+
+- Use `runtime: "wasm"` in `setup(...)` for Supabase Functions. You can also set `RIVETKIT_RUNTIME=wasm` in environments where the registry config does not set `runtime`.
+- Pass `wasm: { bindings, initInput }` explicitly from `@rivetkit/rivetkit-wasm`.
+- Use remote SQLite on Supabase Functions. Leaving SQLite unset with `runtime: "wasm"` selects remote SQLite automatically.
+- Keep `RIVET_PUBLIC_ENDPOINT` pointed at the client-facing Rivet endpoint. Register the function URL separately as the serverless runner URL.
+- Supabase Functions run in Deno, so load the wasm module with Deno-friendly bytes, URL, response, or module input.
+
+## Related
+
+- [Supabase Functions Quickstart](/docs/actors/quickstart/supabase)
+- [Deploying to Cloudflare Workers](/docs/deploy/cloudflare)
+- [SQLite](/docs/actors/sqlite)

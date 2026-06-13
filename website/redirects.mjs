@@ -26,6 +26,23 @@ export const redirects = {
 	'/docs/platforms/next-js': '/docs/clients/javascript/',
 	// Registry configuration moved
 	'/docs/connect/registry-configuration': '/docs/general/registry-configuration/',
+	// Quickstart index merged into the Actors introduction
+	'/docs/actors/quickstart': '/docs/actors/',
+	// Connect tab renamed to Deploy
+	'/docs/connect': '/docs/deploy/',
+	'/docs/connect/aws-ecs': '/docs/deploy/aws-ecs/',
+	'/docs/connect/aws-lambda': '/docs/deploy/aws-lambda/',
+	'/docs/connect/cloudflare': '/docs/deploy/cloudflare/',
+	'/docs/connect/custom': '/docs/deploy/custom/',
+	'/docs/connect/freestyle': '/docs/deploy/freestyle/',
+	'/docs/connect/gcp-cloud-run': '/docs/deploy/gcp-cloud-run/',
+	'/docs/connect/hetzner': '/docs/deploy/hetzner/',
+	'/docs/connect/kubernetes': '/docs/deploy/kubernetes/',
+	'/docs/connect/railway': '/docs/deploy/railway/',
+	'/docs/connect/rivet-compute': '/docs/deploy/rivet-compute/',
+	'/docs/connect/supabase': '/docs/deploy/supabase/',
+	'/docs/connect/vercel': '/docs/deploy/vercel/',
+	'/docs/connect/vm-and-bare-metal': '/docs/deploy/vm-and-bare-metal/',
 	// Cloud docs removed - redirect to relevant sections
 	'/docs/cloud': '/docs/self-hosting/',
 	'/docs/cloud/api/actors/create': '/docs/actors/',

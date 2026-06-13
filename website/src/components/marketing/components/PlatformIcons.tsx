@@ -142,25 +142,25 @@ export function PlatformIcons() {
       tooltip: 'Railway'
     },
     {
-      href: '/docs/connect/kubernetes',
+      href: '/docs/deploy/kubernetes',
       src: kubernetesLogo,
       alt: 'Kubernetes',
       tooltip: 'Kubernetes'
     },
     {
-      href: '/docs/connect/aws-ecs',
+      href: '/docs/deploy/aws-ecs',
       src: awsLogo,
       alt: 'AWS ECS',
       tooltip: 'AWS ECS'
     },
     {
-      href: '/docs/connect/gcp-cloud-run',
+      href: '/docs/deploy/gcp-cloud-run',
       src: gcpLogo,
       alt: 'GCP Cloud Run',
       tooltip: 'GCP Cloud Run'
     },
     {
-      href: '/docs/connect/hetzner',
+      href: '/docs/deploy/hetzner',
       src: hetznerLogo,
       alt: 'Hetzner',
       tooltip: 'Hetzner'

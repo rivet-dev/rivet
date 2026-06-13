@@ -27,7 +27,7 @@ export function DocsTabs() {
 					>
 						{tab.title}
 						{tab.badge && (
-							<span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border px-1 py-px rounded">
+							<span className="ml-1.5 px-[6px] py-0 text-[10px] font-medium bg-muted border border-white/10 text-muted-foreground rounded-sm whitespace-nowrap">
 								{tab.badge}
 							</span>
 						)}

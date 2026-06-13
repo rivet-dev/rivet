@@ -50,7 +50,7 @@ const BASE_SKILL_CONFIGS = {
 		baseTemplate: skillBaseRivetkit,
 		content: {
 			collection: "docs",
-			docId: "actors/index",
+			docId: "actors/crash-course",
 			fallbackDocIds: ["actors"],
 			startMarker: "{/* SKILL_OVERVIEW_START */}",
 			endMarker: "{/* SKILL_OVERVIEW_END */}",
