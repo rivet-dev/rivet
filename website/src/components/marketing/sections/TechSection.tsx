@@ -168,7 +168,7 @@ export function TechSection() {
           <TechSectionSubsections>
             <TechSubSection title='Infrastructure'>
               <TechLink
-                href='/docs/connect/vercel'
+                href='/docs/deploy/vercel'
                 name='Vercel'
                 icon={vercelLogo}
                 alt='Vercel'
@@ -183,21 +183,21 @@ export function TechSection() {
                 status='1-click-deploy'
               />
               <TechLink
-                href='/docs/connect/kubernetes'
+                href='/docs/deploy/kubernetes'
                 name='Kubernetes'
                 icon={kubernetesLogo}
                 alt='Kubernetes'
               />
-              <TechLink href='/docs/connect/aws-ecs' name='AWS ECS' icon={awsLogo} alt='AWS ECS' />
+              <TechLink href='/docs/deploy/aws-ecs' name='AWS ECS' icon={awsLogo} alt='AWS ECS' />
               <TechLink
-                href='/docs/connect/gcp-cloud-run'
+                href='/docs/deploy/gcp-cloud-run'
                 name='Google Cloud Run'
                 icon={gcpLogo}
                 alt='Google Cloud Run'
               />
-              <TechLink href='/docs/connect/hetzner' name='Hetzner' icon={hetznerLogo} alt='Hetzner' />
+              <TechLink href='/docs/deploy/hetzner' name='Hetzner' icon={hetznerLogo} alt='Hetzner' />
               <TechLink
-                href='/docs/connect/vm-and-bare-metal'
+                href='/docs/deploy/vm-and-bare-metal'
                 name='VM & Bare Metal'
                 icon={vmBareMetalLogo}
                 alt='VM & Bare Metal'

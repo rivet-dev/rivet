@@ -725,15 +725,15 @@ export const sitemap = [
 	// },
 
 	{
-		title: "Connect",
-		href: "/docs/connect",
+		title: "Deploy",
+		href: "/docs/deploy",
 		sidebar: [
 			{
 				title: "General",
 				pages: [
 					{
 						title: "Overview",
-						href: "/docs/connect",
+						href: "/docs/deploy",
 						icon: faSquareInfo,
 					},
 				]
