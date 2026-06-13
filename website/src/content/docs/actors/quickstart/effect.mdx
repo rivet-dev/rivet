@@ -197,6 +197,62 @@ See the [JavaScript client documentation](/docs/clients/javascript) for more inf
 
 </Steps>
 
+## Feature Support
+
+The Effect SDK wraps the most common actor features with typed, schema-validated APIs. Everything else is still fully usable through the raw RivetKit context (see [Raw Escape Hatch](#raw-escape-hatch) below), so no feature is off limits, it just isn't typed yet.
+
+| Feature | Effect-native API | Access |
+| --- | --- | --- |
+| Actor contract & actions | `Actor.make`, `Action.make` | Typed |
+| Persisted state | `State.get` / `set` / `update` / `updateAndGet` / `changes` | Typed |
+| Typed client | `Actor.client`, `Client.layer` | Typed |
+| Typed errors | `RivetError` | Typed |
+| Logging | `Logger` | Typed |
+| Sleep request | `Actor.Sleep` | Typed |
+| Actor address (`actorId` / `name` / `key`) | `Actor.CurrentAddress` | Typed |
+| Registry serve / test / web handler | `Registry` | Typed |
+| [Events & broadcast](/docs/actors/events) | Not yet wrapped | `rawRivetkitContext.broadcast(...)` |
+| [Schedule](/docs/actors/schedule) | Not yet wrapped | `rawRivetkitContext.schedule.*` |
+| [Embedded SQLite](/docs/actors/sqlite) | Not yet wrapped | `rawRivetkitContext.db.execute(...)` |
+| [Destroy](/docs/actors/lifecycle) | Not yet wrapped | `rawRivetkitContext.destroy()` |
+| Queues, connections, vars, alarms | Not yet wrapped | `rawRivetkitContext.*` |
+| Lifecycle hooks (`onSleep` / `onDestroy`) | Not yet wrapped | `rawRivetkitContext.*` |
+| Raw HTTP / WebSocket handlers | Not yet wrapped | `rawRivetkitContext.*` |
+
+### Raw Escape Hatch
+
+Every wake function receives `rawRivetkitContext`, the underlying RivetKit [actor context](/docs/actors). Reach for it to use any feature that does not have a typed wrapper yet. The typed `state` argument and the raw context point at the same actor, so you can mix both:
+
+```ts src/actors/counter/live.ts @nocheck
+export const CounterLive = Counter.toLayer(
+	Effect.fnUntraced(function* ({ rawRivetkitContext, state }) {
+		return Counter.of({
+			Increment: Effect.fnUntraced(function* ({ payload }) {
+				// Typed state wrapper
+				const next = yield* State.updateAndGet(state, (current) => ({
+					count: current.count + payload.amount,
+				})).pipe(Effect.orDie);
+
+				// Untyped features run through the raw context
+				rawRivetkitContext.broadcast("newCount", next.count);
+				rawRivetkitContext.schedule.after(1_000, "tick", {});
+
+				return next.count;
+			}),
+		});
+	}),
+	{
+		state: {
+			schema: Schema.Struct({ count: Schema.Number }),
+			initialValue: () => ({ count: 0 }),
+		},
+		name: "Counter",
+	},
+);
+```
+
+Calls through `rawRivetkitContext` are not validated by `effect/Schema` and their payloads are typed as they are in the base RivetKit API.
+
 ## Next Steps
 
 <CardGroup>

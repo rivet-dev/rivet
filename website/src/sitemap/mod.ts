@@ -27,7 +27,6 @@ import {
 	faFingerprint,
 	faFloppyDisk,
 	faForward,
-	faFunction,
 	faBoxesStacked,
 	faGear,
 	faGlobe,
@@ -82,7 +81,7 @@ import {
     faHardDrive,
     faMessages,
 } from "@rivet-gg/icons";
-import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
+import { deployOptions, faSupabase, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
@@ -104,7 +103,7 @@ export const sitemap = [
 				title: "General",
 				pages: [
 					{
-						title: "Overview",
+						title: "Introduction",
 						href: "/docs/actors",
 						icon: faSquareInfo,
 					},
@@ -113,11 +112,6 @@ export const sitemap = [
 						icon: faFastForward,
 						collapsible: true,
 						pages: [
-							{
-								title: "Overview",
-								href: "/docs/actors/quickstart",
-								icon: faSquareInfo,
-							},
 							{
 								title: "Node.js & Bun",
 								href: "/docs/actors/quickstart/backend",
@@ -145,6 +139,16 @@ export const sitemap = [
 								icon: faLayerGroup,
 								badge: "Beta",
 							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/actors/quickstart/cloudflare",
+								icon: faCloudflare,
+							},
+							{
+								title: "Supabase Functions",
+								href: "/docs/actors/quickstart/supabase",
+								icon: faSupabase,
+							},
 						],
 					},
 				]
@@ -153,7 +157,7 @@ export const sitemap = [
 				title: "Features",
 				pages: [
 					{
-						title: "State & Storage",
+						title: "In-Memory State",
 						href: "/docs/actors/state",
 						icon: faFloppyDisk,
 					},
@@ -215,6 +219,10 @@ export const sitemap = [
 			{
 				title: "Concepts",
 				pages: [
+					{
+						title: "Crash Course",
+						href: "/docs/actors/crash-course",
+					},
 					{
 						title: "Design Patterns",
 						// icon: faLayerGroup,
@@ -322,10 +330,6 @@ export const sitemap = [
 								href: "/docs/actors/debugging",
 							},
 							{
-								title: "Custom Inspector Tabs",
-								href: "/docs/actors/inspector-tabs",
-							},
-							{
 								title: "Types",
 								href: "/docs/actors/types",
 								//icon: faCode,
@@ -342,6 +346,10 @@ export const sitemap = [
 							{
 								title: "Icons & Names",
 								href: "/docs/actors/appearance",
+							},
+							{
+								title: "Custom Inspector Tabs",
+								href: "/docs/actors/inspector-tabs",
 							},
 							{
 								title: "Limits",
@@ -494,7 +502,7 @@ export const sitemap = [
 				title: "General",
 				pages: [
 					{
-						title: "Overview",
+						title: "Introduction",
 						href: "/docs/agent-os",
 						icon: faSquareInfo,
 					},
@@ -502,6 +510,11 @@ export const sitemap = [
 						title: "Quickstart",
 						href: "/docs/agent-os/quickstart",
 						icon: faRocket,
+					},
+					{
+						title: "Crash Course",
+						href: "/docs/agent-os/crash-course",
+						icon: faLightbulb,
 					},
 					{
 						title: "agentOS vs Sandbox",
@@ -721,15 +734,15 @@ export const sitemap = [
 	// },
 
 	{
-		title: "Connect",
-		href: "/docs/connect",
+		title: "Deploy",
+		href: "/docs/deploy",
 		sidebar: [
 			{
 				title: "General",
 				pages: [
 					{
-						title: "Overview",
-						href: "/docs/connect",
+						title: "Introduction",
+						href: "/docs/deploy",
 						icon: faSquareInfo,
 					},
 				]

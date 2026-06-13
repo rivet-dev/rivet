@@ -55,7 +55,7 @@ interface AnimatedAgentOSLogoProps {
 	displayedAgent?: { src: string; name: string } | null;
 }
 
-const AnimatedAgentOSLogo = ({ className, displayedAgent }: AnimatedAgentOSLogoProps) => {
+export const AnimatedAgentOSLogo = ({ className, displayedAgent }: AnimatedAgentOSLogoProps) => {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [isReady, setIsReady] = useState(false);
 	const osLayerRef = useRef<Element | null>(null);

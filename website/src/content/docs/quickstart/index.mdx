@@ -6,12 +6,12 @@ skill: false
 
 import {
 	faCloudflare,
-	faFunction,
 	faNodeJs,
 	faReact,
 	faNextjs,
 	faRust,
 } from "@rivet-gg/icons";
+import { faSupabase } from "@rivetkit/shared-data";
 
 <CardGroup cols={2}>
 	<Card
@@ -44,16 +44,16 @@ import {
 	</Card>
 	<Card
 		title="Cloudflare Workers"
-		href="/docs/connect/cloudflare"
+		href="/docs/deploy/cloudflare"
 		icon={faCloudflare}
 	>
-		Run RivetKit on Cloudflare Workers with the WebAssembly runtime
+		Run RivetKit on Cloudflare Workers
 	</Card>
 	<Card
 		title="Supabase Functions"
-		href="/docs/connect/supabase"
-		icon={faFunction}
+		href="/docs/deploy/supabase"
+		icon={faSupabase}
 	>
-		Run RivetKit on Supabase Edge Functions with the WebAssembly runtime
+		Run RivetKit on Supabase Edge Functions
 	</Card>
 </CardGroup>
