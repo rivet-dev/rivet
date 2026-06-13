@@ -323,22 +323,37 @@ impl ActorContext {
 		ctx
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub async fn kv_batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
 		self.0.kv.batch_get(keys).await
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub async fn kv_batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
 		self.0.kv.batch_put(entries).await
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub async fn kv_batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
 		self.0.kv.batch_delete(keys).await
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub async fn kv_delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
 		self.0.kv.delete_range(start, end).await
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub async fn kv_list_prefix(
 		&self,
 		prefix: &[u8],
@@ -347,6 +362,9 @@ impl ActorContext {
 		self.0.kv.list_prefix(prefix, opts).await
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub async fn kv_list_range(
 		&self,
 		start: &[u8],
@@ -356,7 +374,18 @@ impl ActorContext {
 		self.0.kv.list_range(start, end, opts).await
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
 	pub fn kv(&self) -> &Kv {
+		&self.0.kv
+	}
+
+	/// Internal accessor for the actor KV store. Core uses KV as the backing
+	/// store for the inspector token and actor startup persistence. Unlike the
+	/// public `kv()` accessor, this is not deprecated because the storage
+	/// machinery itself is not going away, only the public actor-facing API.
+	pub(crate) fn kv_internal(&self) -> &Kv {
 		&self.0.kv
 	}
 

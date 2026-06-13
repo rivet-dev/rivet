@@ -300,11 +300,6 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
-								title: "Low-Level KV Storage",
-								href: "/docs/actors/kv",
-								badge: "Deprecated",
-							},
-							{
 								title: "SQLite + Drizzle",
 								href: "/docs/actors/sqlite-drizzle",
 							},
