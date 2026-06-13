@@ -104,7 +104,7 @@ export const sitemap = [
 				title: "General",
 				pages: [
 					{
-						title: "Overview",
+						title: "Introduction",
 						href: "/docs/actors",
 						icon: faSquareInfo,
 					},
@@ -215,6 +215,10 @@ export const sitemap = [
 			{
 				title: "Concepts",
 				pages: [
+					{
+						title: "Crash Course",
+						href: "/docs/actors/crash-course",
+					},
 					{
 						title: "Design Patterns",
 						// icon: faLayerGroup,
