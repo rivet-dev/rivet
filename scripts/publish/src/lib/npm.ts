@@ -10,6 +10,7 @@ import { scoped } from "./logger.js";
 import {
 	assertDiscoverySanity,
 	discoverPackages,
+	META_PACKAGES,
 	type Package,
 } from "./packages.js";
 
@@ -18,6 +19,8 @@ const log = scoped("npm");
 export interface PublishAllOptions {
 	/** npm dist-tag (e.g. pr-123, main, latest, rc, next). */
 	tag: string;
+	/** Version being published. Used to repair preview latest tags. */
+	version?: string;
 	/** Max simultaneous publishes. */
 	parallel?: number;
 	/** Max retries per package. */
@@ -56,6 +59,11 @@ export interface PublishSummary {
 		failed: number;
 	};
 	elapsedSeconds: number;
+}
+
+interface PublishBatchResult {
+	results: PublishResult[];
+	elapsedMs: number;
 }
 
 const ALREADY_PUBLISHED_PATTERNS = [
@@ -121,6 +129,59 @@ function runNpmPublish(
 	});
 }
 
+function runNpmDistTagAdd(
+	pkg: Package,
+	version: string,
+	tag: string,
+): Promise<{ code: number; output: string }> {
+	return new Promise((resolvePromise) => {
+		const child = spawn("npm", ["dist-tag", "add", `${pkg.name}@${version}`, tag], {
+			cwd: pkg.dir,
+			stdio: ["ignore", "pipe", "pipe"],
+			env: process.env,
+		});
+		const chunks: Buffer[] = [];
+		child.stdout.on("data", (c) => chunks.push(c));
+		child.stderr.on("data", (c) => chunks.push(c));
+		child.on("close", (code) => {
+			resolvePromise({
+				code: code ?? 1,
+				output: Buffer.concat(chunks).toString("utf8"),
+			});
+		});
+	});
+}
+
+function npmViewLatestTag(pkg: Package): Promise<string | undefined> {
+	return new Promise((resolvePromise, reject) => {
+		const child = spawn("npm", ["view", pkg.name, "dist-tags.latest", "--json"], {
+			cwd: pkg.dir,
+			stdio: ["ignore", "pipe", "pipe"],
+			env: process.env,
+		});
+		const chunks: Buffer[] = [];
+		child.stdout.on("data", (c) => chunks.push(c));
+		child.stderr.on("data", (c) => chunks.push(c));
+		child.on("close", (code) => {
+			const output = Buffer.concat(chunks).toString("utf8").trim();
+			if (code !== 0) {
+				reject(new Error(`npm view ${pkg.name} latest failed: ${output}`));
+				return;
+			}
+			if (!output || output === "null") {
+				resolvePromise(undefined);
+				return;
+			}
+			try {
+				const parsed = JSON.parse(output);
+				resolvePromise(typeof parsed === "string" ? parsed : undefined);
+			} catch {
+				resolvePromise(output);
+			}
+		});
+	});
+}
+
 async function publishOne(
 	pkg: Package,
 	opts: Required<
@@ -154,6 +215,38 @@ async function publishOne(
 	return { pkg, status: "failed", attempts: opts.retries + 1 };
 }
 
+export async function repairBranchPreviewLatestTags(
+	repoRoot: string,
+	opts: Required<Pick<PublishAllOptions, "tag" | "version">> &
+		Pick<PublishAllOptions, "includeReleaseOnlyPackages">,
+): Promise<void> {
+	const previewPrefix = `0.0.0-${opts.tag}.`;
+	const packages = discoverPackages(repoRoot, {
+		includeReleaseOnly: opts.includeReleaseOnlyPackages,
+	});
+
+	for (const pkg of packages) {
+		const latest = await npmViewLatestTag(pkg);
+		if (
+			latest === undefined ||
+			latest === opts.version ||
+			!latest.startsWith(previewPrefix)
+		) {
+			continue;
+		}
+
+		log.info(
+			`repairing ${pkg.name} latest tag: ${latest} -> ${opts.version}`,
+		);
+		const result = await runNpmDistTagAdd(pkg, opts.version, "latest");
+		if (result.code !== 0) {
+			throw new Error(
+				`npm dist-tag add ${pkg.name}@${opts.version} latest failed: ${extractError(result.output)}`,
+			);
+		}
+	}
+}
+
 function printResult(r: PublishResult): void {
 	const name = r.pkg.name.padEnd(48);
 	const symbol =
@@ -169,6 +262,42 @@ function printResult(r: PublishResult): void {
 				? ` — ${r.lastError ?? "unknown error"}`
 				: "";
 	log.info(`  ${symbol} ${name}${suffix}`);
+}
+
+async function publishBatch(
+	packages: Package[],
+	opts: Required<
+		Pick<PublishAllOptions, "tag" | "parallel" | "retries" | "initialBackoffMs">
+	>,
+): Promise<PublishBatchResult> {
+	const queue = [...packages];
+	const results: PublishResult[] = [];
+	const startedAt = Date.now();
+
+	async function worker(): Promise<void> {
+		while (true) {
+			const pkg = queue.shift();
+			if (!pkg) return;
+			const result = await publishOne(pkg, {
+				tag: opts.tag,
+				retries: opts.retries,
+				initialBackoffMs: opts.initialBackoffMs,
+			});
+			printResult(result);
+			results.push(result);
+		}
+	}
+
+	const workers: Promise<void>[] = [];
+	for (let i = 0; i < Math.min(opts.parallel, packages.length); i++) {
+		workers.push(worker());
+	}
+	await Promise.all(workers);
+
+	return {
+		results,
+		elapsedMs: Date.now() - startedAt,
+	};
 }
 
 export async function publishAll(
@@ -189,27 +318,42 @@ export async function publishAll(
 		`publishing ${packages.length} packages | tag=${tag} | parallel=${parallel} | retries=${retries}`,
 	);
 
-	const queue = [...packages];
-	const results: PublishResult[] = [];
-	const startedAt = Date.now();
+	const metaNames = new Set(META_PACKAGES.map((p) => p.meta));
+	const platformPackages = packages.filter((p) =>
+		META_PACKAGES.some(({ platformPrefix }) =>
+			p.name.startsWith(platformPrefix),
+		),
+	);
+	const metaPackages = packages.filter((p) => metaNames.has(p.name));
+	const otherPackages = packages.filter(
+		(p) =>
+			!metaNames.has(p.name) &&
+			!META_PACKAGES.some(({ platformPrefix }) =>
+				p.name.startsWith(platformPrefix),
+			),
+	);
 
-	async function worker(): Promise<void> {
-		while (true) {
-			const pkg = queue.shift();
-			if (!pkg) return;
-			const result = await publishOne(pkg, { tag, retries, initialBackoffMs });
-			printResult(result);
-			results.push(result);
+	const batchOpts = { tag, parallel, retries, initialBackoffMs };
+	let elapsedMs = 0;
+	const results: PublishResult[] = [];
+	for (const [label, batch] of [
+		["platform packages", platformPackages],
+		["meta packages", metaPackages],
+		["regular packages", otherPackages],
+	] as const) {
+		if (batch.length === 0) continue;
+		log.info(`publishing ${label} (${batch.length})`);
+		const batchResult = await publishBatch(batch, batchOpts);
+		elapsedMs += batchResult.elapsedMs;
+		results.push(...batchResult.results);
+		const failed = batchResult.results.filter((r) => r.status === "failed");
+		if (failed.length > 0) {
+			log.error(`${label} failed; not publishing later batches`);
+			break;
 		}
 	}
 
-	const workers: Promise<void>[] = [];
-	for (let i = 0; i < Math.min(parallel, packages.length); i++) {
-		workers.push(worker());
-	}
-	await Promise.all(workers);
-
-	const elapsed = (Date.now() - startedAt) / 1000;
+	const elapsed = elapsedMs / 1000;
 	const counts = {
 		success: results.filter((r) => r.status === "success").length,
 		retried: results.filter((r) => r.status === "retried-success").length,

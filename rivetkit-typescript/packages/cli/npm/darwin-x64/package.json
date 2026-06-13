@@ -1,0 +1,19 @@
+{
+	"name": "@rivetkit/cli-darwin-x64",
+	"version": "2.3.0-rc.12",
+	"description": "Rivet CLI for macOS x64",
+	"license": "LicenseRef-RivetEnterprise",
+	"os": [
+		"darwin"
+	],
+	"cpu": [
+		"x64"
+	],
+	"files": [
+		"rivet",
+		"rivet-engine"
+	],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}

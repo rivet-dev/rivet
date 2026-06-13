@@ -204,6 +204,28 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 		.custom_instrument(tracing::info_span!("runner_config_upsert_tx"))
 		.await?;
 
+	if endpoint_config_changed {
+		crate::utils::purge_runner_config_caches(ctx.cache(), input.namespace_id, &input.name)
+			.await?;
+
+		// Update runner metadata before notifying the pool workflow so newer
+		// RivetKit serverless handlers are treated as envoy-backed immediately.
+		if let Some((url, headers)) = serverless_config {
+			tracing::debug!("endpoint config changed, refreshing metadata");
+			if let Err(err) = ctx
+				.op(crate::ops::runner_config::refresh_metadata::Input {
+					namespace_id: input.namespace_id,
+					runner_name: input.name.clone(),
+					url,
+					headers,
+				})
+				.await
+			{
+				tracing::warn!(?err, runner_name=?input.name, "failed to refresh runner config metadata");
+			}
+		}
+	}
+
 	if pool_created {
 		ctx.workflow(crate::workflows::runner_pool::Input {
 			namespace_id: input.namespace_id,
@@ -237,29 +259,6 @@ pub async fn pegboard_runner_config_upsert(ctx: &OperationCtx, input: &Input) ->
 			.unique()
 			.dispatch()
 			.await?;
-		}
-	}
-
-	if endpoint_config_changed {
-		crate::utils::purge_runner_config_caches(ctx.cache(), input.namespace_id, &input.name)
-			.await?;
-
-		// Update runner metadata
-		//
-		// This allows us to populate the actor names immediately upon configuring a serverless runner
-		if let Some((url, headers)) = serverless_config {
-			tracing::debug!("endpoint config changed, refreshing metadata");
-			if let Err(err) = ctx
-				.op(crate::ops::runner_config::refresh_metadata::Input {
-					namespace_id: input.namespace_id,
-					runner_name: input.name.clone(),
-					url,
-					headers,
-				})
-				.await
-			{
-				tracing::warn!(?err, runner_name=?input.name, "failed to refresh runner config metadata");
-			}
 		}
 	}
 

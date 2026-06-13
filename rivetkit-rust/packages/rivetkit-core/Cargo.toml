@@ -15,6 +15,7 @@ default = ["native-runtime"]
 native-runtime = [
 	"dep:nix",
 	"dep:reqwest",
+	"dep:rivetkit-engine-process",
 	"rivet-envoy-client/native-transport",
 ]
 wasm-runtime = ["rivet-envoy-client/wasm-transport"]
@@ -44,6 +45,7 @@ rivet-metrics.workspace = true
 rivetkit-shared-types.workspace = true
 rivetkit-actor-persist.workspace = true
 rivetkit-client-protocol.workspace = true
+rivetkit-engine-process = { workspace = true, optional = true }
 rivetkit-inspector-protocol.workspace = true
 depot-client-types.workspace = true
 depot-client = { workspace = true, optional = true }

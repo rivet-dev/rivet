@@ -1,0 +1,101 @@
+---
+title: "Supabase Functions Quickstart"
+description: "Set up a Rivet project locally targeting Supabase Edge Functions."
+skill: true
+---
+
+Set up a Rivet project locally that runs on Supabase Edge Functions. Use the public `@rivetkit/rivetkit-wasm` package and load the wasm file with Deno.
+
+## Steps
+
+<Steps>
+<Step title="Prerequisites">
+
+- [Node.js](https://nodejs.org/)
+- [Supabase CLI](https://supabase.com/docs/guides/cli)
+- Docker, for Supabase's local Edge Runtime
+
+The CLI runs the local Rivet engine as a bundled native binary, so Docker is only needed for Supabase itself. A Supabase project is only needed to deploy.
+
+</Step>
+<Step title="Create the Function">
+
+```sh
+npx supabase functions new rivet
+```
+
+Add the packages used by the function:
+
+```sh
+npm install rivetkit @rivetkit/rivetkit-wasm
+```
+
+</Step>
+<Step title="Configure the Function">
+
+Supabase Functions run under Deno, so load the wasm bytes from the package export and pass them to `setup({ wasm })`.
+
+```ts supabase/functions/rivet/index.ts @nocheck
+import { actor, setup } from "rivetkit";
+import * as wasmBindings from "@rivetkit/rivetkit-wasm";
+
+const wasmModule = await Deno.readFile(
+  new URL(import.meta.resolve("@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm")),
+);
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount = 1) => {
+      c.state.count += amount;
+      return c.state.count;
+    },
+  },
+});
+
+const registry = setup({
+  runtime: "wasm",
+  wasm: {
+    bindings: wasmBindings,
+    initInput: wasmModule,
+  },
+  use: { counter },
+  endpoint: Deno.env.get("RIVET_ENDPOINT"),
+  namespace: Deno.env.get("RIVET_NAMESPACE"),
+  token: Deno.env.get("RIVET_TOKEN"),
+  envoy: {
+    poolName: Deno.env.get("RIVET_POOL") ?? "default",
+  },
+  serverless: {
+    basePath: "/rivet/api/rivet",
+    publicEndpoint: Deno.env.get("RIVET_PUBLIC_ENDPOINT"),
+  },
+});
+
+Deno.serve(async (request) => {
+  return await registry.handler(request);
+});
+```
+
+</Step>
+<Step title="Run Locally">
+
+Start Rivet. The CLI runs the local engine, spawns `supabase functions serve` for you, and populates the connection values:
+
+```sh
+npx @rivetkit/cli dev --provider supabase
+```
+
+</Step>
+<Step title="Deploy">
+
+Ready to ship? See [Deploying to Supabase Functions](/docs/deploy/supabase).
+
+</Step>
+</Steps>
+
+## Related
+
+- [Quickstart](/docs/actors/quickstart)
+- [Deploying to Supabase Functions](/docs/deploy/supabase)
+- [SQLite](/docs/actors/sqlite)

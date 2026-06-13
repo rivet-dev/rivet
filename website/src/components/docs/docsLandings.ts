@@ -8,8 +8,9 @@ import {
 	faReact,
 	faRust,
 	faScaleBalanced,
+	faSupabase,
 } from "@rivet-gg/icons";
-import { deployOptions, faSupabase } from "@rivetkit/shared-data";
+import { deployOptions } from "@rivetkit/shared-data";
 import type { DocsLandingData } from "./DocsLanding";
 
 const actors: DocsLandingData = {

@@ -1,0 +1,123 @@
+---
+title: "Cloudflare Workers Quickstart"
+description: "Set up a Rivet project locally targeting Cloudflare Workers."
+skill: true
+---
+
+Set up a Rivet project locally that runs on Cloudflare Workers. Use the public `@rivetkit/rivetkit-wasm` package and pass the bindings through `setup({ wasm })`.
+
+## Steps
+
+<Steps>
+<Step title="Prerequisites">
+
+- [Node.js](https://nodejs.org/)
+
+The CLI runs the local Rivet engine as a bundled native binary, so no Docker is required. A Cloudflare account is only needed to deploy.
+
+</Step>
+<Step title="Install Packages">
+
+```sh
+npm install rivetkit @rivetkit/rivetkit-wasm
+npm install --save-dev wrangler
+```
+
+</Step>
+<Step title="Configure Wrangler">
+
+Set local Rivet connection values as Worker variables. `rivet dev` registers the matching serverless runner for you.
+
+```toml wrangler.toml
+name = "rivetkit-cloudflare"
+main = "src/index.ts"
+compatibility_date = "2025-04-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+RIVET_ENDPOINT = "http://localhost:6420"
+RIVET_NAMESPACE = "default"
+RIVET_POOL = "default"
+RIVET_TOKEN = "dev"
+RIVET_PUBLIC_ENDPOINT = "http://localhost:6420"
+```
+
+</Step>
+<Step title="Create the Worker">
+
+```ts src/index.ts @nocheck
+import { actor, setup } from "rivetkit";
+import * as wasmBindings from "@rivetkit/rivetkit-wasm";
+import wasmModule from "@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm";
+
+interface Env {
+  RIVET_ENDPOINT: string;
+  RIVET_NAMESPACE: string;
+  RIVET_POOL: string;
+  RIVET_TOKEN: string;
+  RIVET_PUBLIC_ENDPOINT: string;
+}
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount = 1) => {
+      c.state.count += amount;
+      return c.state.count;
+    },
+  },
+});
+
+let registry: { handler(request: Request): Promise<Response> } | undefined;
+
+function getRegistry(env: Env) {
+  registry ??= setup({
+    runtime: "wasm",
+    wasm: {
+      bindings: wasmBindings,
+      initInput: wasmModule,
+    },
+    use: { counter },
+    endpoint: env.RIVET_ENDPOINT,
+    namespace: env.RIVET_NAMESPACE,
+    token: env.RIVET_TOKEN,
+    envoy: {
+      poolName: env.RIVET_POOL,
+    },
+    serverless: {
+      publicEndpoint: env.RIVET_PUBLIC_ENDPOINT,
+    },
+  });
+
+  return registry;
+}
+
+export default {
+  async fetch(request: Request, env: Env): Promise<Response> {
+    return await getRegistry(env).handler(request);
+  },
+};
+```
+
+</Step>
+<Step title="Run Locally">
+
+Start Rivet. The CLI runs the local engine and spawns `wrangler dev` for you:
+
+```sh
+npx @rivetkit/cli dev --provider cloudflare
+```
+
+</Step>
+<Step title="Deploy">
+
+Ready to ship? See [Deploying to Cloudflare Workers](/docs/deploy/cloudflare).
+
+</Step>
+</Steps>
+
+## Related
+
+- [Quickstart](/docs/actors/quickstart)
+- [Deploying to Cloudflare Workers](/docs/deploy/cloudflare)
+- [SQLite](/docs/actors/sqlite)

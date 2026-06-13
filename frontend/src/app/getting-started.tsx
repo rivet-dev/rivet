@@ -912,6 +912,9 @@ function BackendSetupRivet() {
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
 
+	const deployCmd = cloudToken
+		? `npx @rivetkit/cli deploy --token ${cloudToken}`
+		: "npx @rivetkit/cli deploy --token <RIVET_CLOUD_TOKEN>";
 	const ghSecretCmd = cloudToken
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
@@ -937,15 +940,42 @@ function BackendSetupRivet() {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Add GitHub secret</p>
+					<p className="font-medium mb-2">Deploy to Rivet Compute</p>
 					<p className="text-sm text-muted-foreground mb-3">
-						Add your Rivet token as a repository secret named{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							RIVET_CLOUD_TOKEN
-						</code>
-						.
+						Run the deploy command from your project root. The token
+						is saved locally for future deploys.
 					</p>
 					<CodeGroup className="my-0">
+						{[
+							<CodeFrame
+								key="rivet-deploy"
+								language="bash"
+								title="bash"
+								code={() => deployCmd}
+								className="m-0"
+							>
+								<CodePreview
+									language="bash"
+									className="text-left"
+									code={deployCmd}
+								/>
+							</CodeFrame>,
+						]}
+					</CodeGroup>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={3} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Optionally add CI</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Add your token as a repository secret, then create{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							.github/workflows/rivet-deploy.yml
+						</code>{" "}
+						to deploy on every push and pull request.
+					</p>
+					<CodeGroup className="my-0 mb-3">
 						{[
 							<CodeFrame
 								key="gh-secret"
@@ -962,19 +992,6 @@ function BackendSetupRivet() {
 							</CodeFrame>,
 						]}
 					</CodeGroup>
-				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={3} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Add GitHub Action</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Create{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							.github/workflows/rivet-deploy.yml
-						</code>{" "}
-						to automatically deploy on every push and pull request.
-					</p>
 					<CodeGroup className="my-0">
 						{[
 							<CodeFrame
@@ -997,12 +1014,10 @@ function BackendSetupRivet() {
 			<div className="flex gap-3">
 				<StepNumber n={4} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Deploy to Rivet Compute</p>
+					<p className="font-medium mb-2">Monitor deployment</p>
 					<p className="text-sm text-muted-foreground mb-2">
-						Push your changes to trigger the{" "}
-						<strong>Rivet Deploy</strong> workflow. The status check
-						below will update automatically once your backend is
-						deployed.
+						The status check below updates automatically once your
+						backend is deployed.
 					</p>
 					<div className="border rounded-md py-8">
 						<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
@@ -1300,7 +1315,7 @@ function FrontendSetup() {
 								label="Deploy your backend"
 								sublabel={
 									waitingForFirstImage
-										? "Push your changes to trigger the Rivet Deploy workflow."
+										? "Run npx @rivetkit/cli deploy from your project."
 										: "Deployment detected."
 								}
 							/>

@@ -70,6 +70,9 @@ RUN --mount=type=cache,id=cargo-registry-darwin-x64,target=/usr/local/cargo/regi
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build -p rivet-engine --bin rivet-engine $CARGO_FLAG --target x86_64-apple-darwin && \
         cp target/x86_64-apple-darwin/$PROFILE_DIR/rivet-engine /artifacts/rivet-engine-x86_64-apple-darwin; \
+    elif [ "$BUILD_TARGET" = "cli" ]; then \
+        cargo build -p rivet-cli --bin rivet $CARGO_FLAG --target x86_64-apple-darwin && \
+        cp target/x86_64-apple-darwin/$PROFILE_DIR/rivet /artifacts/rivet-x86_64-apple-darwin; \
     elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         cd rivetkit-typescript/packages/rivetkit-napi && \
         NAPI_RS_CROSS_COMPILE=1 napi build --platform $CARGO_FLAG --target x86_64-apple-darwin && \

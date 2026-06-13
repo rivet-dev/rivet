@@ -238,23 +238,27 @@ async fn handle(ctx: &StandaloneCtx, packet: protocol::ToOutbound) -> Result<()>
 
 	let protocol_version = pool.protocol_version.unwrap_or(PROTOCOL_VERSION);
 	let res = async {
-		let payload = versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
-			protocol::CommandWrapper {
-				checkpoint,
-				inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
-					config: actor_config,
-					hibernating_requests: hibernating_requests
-						.into_iter()
-						.map(|x| protocol::HibernatingRequest {
-							gateway_id: x.gateway_id,
-							request_id: x.request_id,
-						})
-						.collect(),
-					preloaded_kv,
-				}),
-			},
-		]))
-		.serialize_with_embedded_version(protocol_version)?;
+		let payload_body =
+			versioned::ToEnvoy::wrap_latest(protocol::ToEnvoy::ToEnvoyCommands(vec![
+				protocol::CommandWrapper {
+					checkpoint,
+					inner: protocol::Command::CommandStartActor(protocol::CommandStartActor {
+						config: actor_config,
+						hibernating_requests: hibernating_requests
+							.into_iter()
+							.map(|x| protocol::HibernatingRequest {
+								gateway_id: x.gateway_id,
+								request_id: x.request_id,
+							})
+							.collect(),
+						preloaded_kv,
+					}),
+				},
+			]))
+			.serialize(protocol_version)?;
+		let mut payload = Vec::with_capacity(2 + payload_body.len());
+		payload.extend_from_slice(&protocol_version.to_le_bytes());
+		payload.extend_from_slice(&payload_body);
 
 		// Send ack to actor wf before starting an outbound req
 		ctx.signal(pegboard::workflows::actor2::Allocated { generation })
