@@ -1,87 +1,54 @@
 ---
 title: "Deploying to Vercel"
-description: "Deploy your RivetKit app to Vercel."
+description: "Deploy your Next.js Rivet app to Vercel."
 skill: true
 ---
+
+This guide assumes a Next.js app.
+
+## Prerequisites
+
+- [Vercel account](https://vercel.com/)
+- A Next.js Rivet app
+- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
 
 ## Steps
 
 <Steps>
-<Step title="Prerequisites">
+<Step title="Set up your project">
 
-- [Vercel account](https://vercel.com/)
-- Your RivetKit app
-  - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
-- Access to the [Rivet Cloud](https://dashboard.rivet.dev/) or a [self-hosted Rivet Engine](/docs/general/self-hosting)
+Follow the [Next.js Quickstart](/docs/actors/quickstart/next-js) to set up your project.
 
 </Step>
-<Step title="Prepare Your Application">
-
-Make sure your project is configured correctly for Vercel deployment.
-
-<Tabs>
-
-<Tab title="Next.js">
+<Step title="Verify Your Project Structure">
 
 Your Next.js project should have the following structure:
 
 - `src/app/api/rivet/[...all]/route.ts`: RivetKit route handler
-- `src/actors.ts`: Actor definitions and registry
+- `src/rivet/registry.ts`: Actor definitions and registry
 
-See the [Next.js quickstart](/docs/actors/quickstart/next-js) or the [Next.js example](https://github.com/rivet-dev/rivet/tree/main/examples/next-js) to get started.
+The route handler sets `maxDuration` to extend the serverless function timeout so long-lived actor requests are not cut short:
 
-</Tab>
+```ts src/app/api/rivet/[...all]/route.ts @nocheck
+import { toNextHandler } from "@rivetkit/next-js";
+import { registry } from "@/rivet/registry";
 
-<Tab title="Hono">
+export const maxDuration = 300;
 
-Your Hono project needs:
-
-1. A `vercel.json` file with the Hono framework specified:
-
-```json vercel.json
-{
-  "framework": "hono"
-}
+export const { GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS } = toNextHandler(registry);
 ```
 
-2. Your server file must import from `"hono"` for Vercel to recognize the framework:
+</Step>
+<Step title="Set Environment Variables">
 
-```ts src/server.ts @nocheck
-// You MUST import from "hono" for Vercel to detect this as a Hono app
-import { Hono } from "hono";
-import { registry } from "./actors.ts";
+Set `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` in your Vercel project settings using the URL auth format:
 
-const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-export default app;
+```
+RIVET_ENDPOINT=https://my-namespace:sk_****@api.rivet.dev
+RIVET_PUBLIC_ENDPOINT=https://my-namespace:pk_****@api.rivet.dev
 ```
 
-3. Use `.ts` file extensions in imports and configure your `tsconfig.json`:
-
-```json tsconfig.json
-{
-  "compilerOptions": {
-    "allowImportingTsExtensions": true,
-    "rewriteRelativeImportExtensions": true
-  }
-}
-```
-
-See the [Hello World example](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world) for a complete example.
-
-For more details on Hono deployments, see [Vercel's Hono documentation](https://vercel.com/docs/frameworks/backend/hono).
-
-</Tab>
-
-<Tab title="Other">
-
-Vercel currently supports Next.js and Hono frameworks for RivetKit deployments.
-
-For other frameworks, consider deploying to [Railway](/docs/deploy/railway), [Kubernetes](/docs/deploy/kubernetes), or another platform.
-
-</Tab>
-
-</Tabs>
+`RIVET_ENDPOINT` uses the secret token for server-side access. `RIVET_PUBLIC_ENDPOINT` uses the publishable token and tells the metadata endpoint what connection info to provide to clients.
 
 </Step>
 <Step title="Deploy to Vercel">
@@ -182,3 +149,8 @@ If using the [preview-namespace-action](https://github.com/rivet-dev/preview-nam
 
 </Accordion>
 </AccordionGroup>
+
+## Related
+
+- [Next.js Quickstart](/docs/actors/quickstart/next-js)
+- [Self-Hosting](/docs/general/self-hosting)

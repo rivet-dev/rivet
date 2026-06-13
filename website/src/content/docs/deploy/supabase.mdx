@@ -1,104 +1,23 @@
 ---
 title: "Deploying to Supabase Functions"
-description: "Run RivetKit on Supabase Edge Functions."
+description: "Deploy an existing Rivet project to Supabase Edge Functions."
 skill: true
 ---
 
-Supabase Edge Functions run RivetKit. Use the public `@rivetkit/rivetkit-wasm` package, load the wasm file with Deno, and use remote SQLite.
+This guide covers deploying an existing Rivet project to Supabase Edge Functions.
 
-## Steps
-
-<Steps>
-<Step title="Prerequisites">
+## Prerequisites
 
 - [Supabase project](https://supabase.com/)
 - [Supabase CLI](https://supabase.com/docs/guides/cli) configured for your project
 - A Rivet namespace from the [Rivet Dashboard](https://dashboard.rivet.dev/) or a self-hosted Rivet Engine
 
-</Step>
-<Step title="Create the Function">
+## Steps
 
-```sh
-npx supabase functions new rivet
-```
+<Steps>
+<Step title="Set up your project">
 
-Add the packages used by the function:
-
-```sh
-npm install rivetkit @rivetkit/rivetkit-wasm
-```
-
-</Step>
-<Step title="Configure the Function">
-
-Supabase Functions run under Deno, so load the wasm bytes from the package export and pass them to `setup({ wasm })`.
-
-<CodeGroup workspace>
-```ts supabase/functions/rivet/index.ts @nocheck
-import { actor, setup } from "rivetkit";
-import * as wasmBindings from "@rivetkit/rivetkit-wasm";
-
-interface SqliteDatabase {
-  run(sql: string, params?: unknown[]): Promise<void>;
-  query(sql: string, params?: unknown[]): Promise<{ rows: unknown[][] }>;
-}
-
-const wasmModule = await Deno.readFile(
-  new URL(import.meta.resolve("@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm")),
-);
-
-const rawSqlDatabaseProvider = {
-  createClient: async () => ({
-    execute: async () => [],
-    close: async () => {},
-  }),
-  onMigrate: async () => {},
-};
-
-const counter = actor({
-  db: rawSqlDatabaseProvider,
-  actions: {
-    increment: async (ctx, amount = 1) => {
-      const db = ctx.sql as SqliteDatabase;
-      await db.run(
-        "CREATE TABLE IF NOT EXISTS counters (id INTEGER PRIMARY KEY, count INTEGER NOT NULL)",
-      );
-      await db.run(
-        "INSERT INTO counters (id, count) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET count = count + excluded.count",
-        [amount],
-      );
-
-      const result = await db.query("SELECT count FROM counters WHERE id = 1");
-      return Number(result.rows[0]?.[0] ?? 0);
-    },
-  },
-});
-
-const registry = setup({
-  runtime: "wasm",
-  sqlite: "remote",
-  wasm: {
-    bindings: wasmBindings,
-    initInput: wasmModule,
-  },
-  use: { counter },
-  endpoint: Deno.env.get("RIVET_ENDPOINT"),
-  namespace: Deno.env.get("RIVET_NAMESPACE"),
-  token: Deno.env.get("RIVET_TOKEN"),
-  envoy: {
-    poolName: Deno.env.get("RIVET_POOL") ?? "supabase-functions",
-  },
-  serverless: {
-    basePath: "/rivet/api/rivet",
-    publicEndpoint: Deno.env.get("RIVET_PUBLIC_ENDPOINT"),
-  },
-});
-
-Deno.serve(async (request) => {
-  return await registry.handler(request);
-});
-```
-</CodeGroup>
+Follow the [Supabase Functions Quickstart](/docs/actors/quickstart/supabase) to set up your project locally.
 
 </Step>
 <Step title="Set Secrets">
@@ -121,6 +40,9 @@ npx supabase secrets set \
 npx supabase functions deploy rivet
 ```
 
+</Step>
+<Step title="Register the Serverless Runner URL">
+
 After deploy, set the function URL with the `/api/rivet` path as the serverless runner URL in Rivet. For a function named `rivet`, this is usually `https://your-project.functions.supabase.co/functions/v1/rivet/api/rivet`.
 
 </Step>
@@ -136,6 +58,6 @@ After deploy, set the function URL with the `/api/rivet` path as the serverless 
 
 ## Related
 
-- [Quickstart](/docs/actors/quickstart)
-- [Cloudflare Workers](/docs/deploy/cloudflare)
+- [Supabase Functions Quickstart](/docs/actors/quickstart/supabase)
+- [Deploying to Cloudflare Workers](/docs/deploy/cloudflare)
 - [SQLite](/docs/actors/sqlite)

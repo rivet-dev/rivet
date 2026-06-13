@@ -145,6 +145,16 @@ export const sitemap = [
 								icon: faLayerGroup,
 								badge: "Beta",
 							},
+							{
+								title: "Cloudflare Workers",
+								href: "/docs/actors/quickstart/cloudflare",
+								icon: faCloudflare,
+							},
+							{
+								title: "Supabase Functions",
+								href: "/docs/actors/quickstart/supabase",
+								icon: faFunction,
+							},
 						],
 					},
 				]

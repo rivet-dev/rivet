@@ -1,27 +1,23 @@
 ---
 title: "Deploying to Cloudflare Workers"
-description: "Run RivetKit on Cloudflare Workers."
+description: "Deploy an existing Rivet project to Cloudflare Workers."
 skill: true
 ---
 
-Cloudflare Workers run RivetKit. Use the public `@rivetkit/rivetkit-wasm` package, pass the bindings through `setup({ wasm })`, and use remote SQLite.
+This guide covers deploying an existing Rivet project to Cloudflare Workers.
 
-## Steps
-
-<Steps>
-<Step title="Prerequisites">
+## Prerequisites
 
 - [Cloudflare account](https://dash.cloudflare.com/)
 - [`wrangler`](https://developers.cloudflare.com/workers/wrangler/) configured for your account
 - A Rivet namespace from the [Rivet Dashboard](https://dashboard.rivet.dev/) or a self-hosted Rivet Engine
 
-</Step>
-<Step title="Install Packages">
+## Steps
 
-```sh
-npm install rivetkit @rivetkit/rivetkit-wasm
-npm install --save-dev wrangler
-```
+<Steps>
+<Step title="Set up your project">
+
+Follow the [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare) to set up your project locally.
 
 </Step>
 <Step title="Configure Wrangler">
@@ -43,96 +39,14 @@ RIVET_PUBLIC_ENDPOINT = "https://your-namespace:pk_...@api.rivet.dev"
 ```
 
 </Step>
-<Step title="Create the Worker">
-
-This example uses raw SQL to keep the runtime setup visible. When `runtime: "wasm"` is used, unset SQLite defaults to remote SQLite, and `sqlite: "local"` is rejected.
-
-<CodeGroup workspace>
-```ts src/index.ts @nocheck
-import { actor, setup } from "rivetkit";
-import * as wasmBindings from "@rivetkit/rivetkit-wasm";
-import wasmModule from "@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm";
-
-interface Env {
-  RIVET_ENDPOINT: string;
-  RIVET_NAMESPACE: string;
-  RIVET_POOL: string;
-  RIVET_TOKEN: string;
-  RIVET_PUBLIC_ENDPOINT: string;
-}
-
-interface SqliteDatabase {
-  run(sql: string, params?: unknown[]): Promise<void>;
-  query(sql: string, params?: unknown[]): Promise<{ rows: unknown[][] }>;
-}
-
-const rawSqlDatabaseProvider = {
-  createClient: async () => ({
-    execute: async () => [],
-    close: async () => {},
-  }),
-  onMigrate: async () => {},
-};
-
-const counter = actor({
-  db: rawSqlDatabaseProvider,
-  actions: {
-    increment: async (ctx, amount = 1) => {
-      const db = ctx.sql as SqliteDatabase;
-      await db.run(
-        "CREATE TABLE IF NOT EXISTS counters (id INTEGER PRIMARY KEY, count INTEGER NOT NULL)",
-      );
-      await db.run(
-        "INSERT INTO counters (id, count) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET count = count + excluded.count",
-        [amount],
-      );
-
-      const result = await db.query("SELECT count FROM counters WHERE id = 1");
-      return Number(result.rows[0]?.[0] ?? 0);
-    },
-  },
-});
-
-const use = { counter };
-let registry: { handler(request: Request): Promise<Response> } | undefined;
-
-function getRegistry(env: Env) {
-  registry ??= setup({
-    runtime: "wasm",
-    sqlite: "remote",
-    wasm: {
-      bindings: wasmBindings,
-      initInput: wasmModule,
-    },
-    use,
-    endpoint: env.RIVET_ENDPOINT,
-    namespace: env.RIVET_NAMESPACE,
-    token: env.RIVET_TOKEN,
-    envoy: {
-      poolName: env.RIVET_POOL,
-    },
-    serverless: {
-      publicEndpoint: env.RIVET_PUBLIC_ENDPOINT,
-    },
-  });
-
-  return registry;
-}
-
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    return await getRegistry(env).handler(request);
-  },
-};
-```
-</CodeGroup>
-
-</Step>
 <Step title="Deploy">
 
 ```sh
 npx wrangler deploy
 ```
+
+</Step>
+<Step title="Register the Serverless Runner URL">
 
 After deploy, set the Worker URL with the `/api/rivet` path as the serverless runner URL in Rivet.
 
@@ -149,6 +63,6 @@ After deploy, set the Worker URL with the `/api/rivet` path as the serverless ru
 
 ## Related
 
-- [Quickstart](/docs/actors/quickstart)
-- [Supabase Functions](/docs/deploy/supabase)
+- [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare)
+- [Deploying to Supabase Functions](/docs/deploy/supabase)
 - [SQLite](/docs/actors/sqlite)
