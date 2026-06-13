@@ -5,6 +5,7 @@ import { DocsNavigation } from '@/components/DocsNavigation';
 import { DocsTableOfContents } from '@/components/DocsTableOfContents';
 import { DocsPageDropdown } from '@/components/DocsPageDropdown';
 import { Prose } from '@/components/Prose';
+import { ActorsLanding } from '@/components/docs/ActorsLanding';
 import { Button } from '@rivet-gg/components';
 import { Icon, faPencil } from '@rivet-gg/icons';
 import { sitemap } from '@/sitemap/mod';
@@ -50,6 +51,9 @@ const tableOfContents = headings
 
 const { title, description } = entry.data as { title: string; description: string };
 const slugPath = getContentSlugPath(entry.id);
+// The Actors overview renders as a stylized full-width landing page instead of
+// the standard prose article.
+const isLanding = slugPath === 'actors';
 const fullPath = slugPath ? `/docs/${slugPath}/` : '/docs/';
 const foundTab = findActiveTab(fullPath, sitemap);
 const parentPage = foundTab?.page?.parent;
@@ -101,16 +105,20 @@ const breadcrumbSchema = {
 						/>
 					</div>
 				</div>
-				<Prose as="article" className="max-w-prose-docs lg:max-w-prose-docs mx-auto [&>h1:first-of-type]:pr-44">
-					{parentPage && (
-						<div class="eyebrow h-5 text-primary text-sm font-semibold">
-							{parentPage.title}
-						</div>
-					)}
-					<h1>{title}</h1>
-					{description && <p>{description}</p>}
-					<Content components={mdxComponents} />
-				</Prose>
+				{isLanding ? (
+					<ActorsLanding />
+				) : (
+					<Prose as="article" className="max-w-prose-docs lg:max-w-prose-docs mx-auto [&>h1:first-of-type]:pr-44">
+						{parentPage && (
+							<div class="eyebrow h-5 text-primary text-sm font-semibold">
+								{parentPage.title}
+							</div>
+						)}
+						<h1>{title}</h1>
+						{description && <p>{description}</p>}
+						<Content components={mdxComponents} />
+					</Prose>
+				)}
 				<div class="border-t mt-12 pt-6 flex flex-wrap items-center justify-between gap-4">
 					<Button variant="outline" size="sm" asChild>
 						<a
@@ -129,7 +137,7 @@ const breadcrumbSchema = {
 					)}
 				</div>
 			</main>
-			{tableOfContents.length > 0 && (
+			{!isLanding && tableOfContents.length > 0 && (
 				<aside class="hidden xl:block w-64 min-w-0 flex-shrink-0 pb-4">
 					<DocsTableOfContents className="lg:max-h-content" tableOfContents={tableOfContents} client:load />
 				</aside>
