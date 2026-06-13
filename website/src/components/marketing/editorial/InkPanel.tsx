@@ -61,17 +61,24 @@ export const InkPanel = ({
 );
 
 // One-line command strip, e.g. `$ npm install rivetkit`. The `$` renders in
-// sage; pass the command without it.
+// sage on ink, pine on paper; pass the command without it. The default ink
+// variant is a deliberate dark moment; use the paper variant where several
+// commands sit near each other and solid ink would dominate the composition.
 interface InkChipProps {
 	command: string;
+	variant?: 'ink' | 'paper';
 	className?: string;
 }
 
-export const InkChip = ({ command, className }: InkChipProps) => (
+export const InkChip = ({ command, variant = 'ink', className }: InkChipProps) => (
 	<div
-		className={`selection-paper flex items-center gap-2.5 overflow-x-auto rounded-lg border border-ink/20 bg-ink px-4 py-3 font-mono text-[13px] text-cream/85 ${className ?? ''}`}
+		className={`flex items-center gap-2.5 overflow-x-auto rounded-md font-mono text-[13px] ${
+			variant === 'ink'
+				? 'selection-paper border border-ink/20 bg-ink px-4 py-3 text-cream/85'
+				: 'border border-ink/15 bg-white/55 px-3.5 py-2.5 text-ink-soft'
+		} ${className ?? ''}`}
 	>
-		<span aria-hidden="true" className="select-none text-sage">
+		<span aria-hidden="true" className={`select-none ${variant === 'ink' ? 'text-sage' : 'text-pine'}`}>
 			$
 		</span>
 		<span className="whitespace-nowrap">{command}</span>
