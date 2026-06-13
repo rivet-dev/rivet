@@ -488,6 +488,43 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
+  examples/chat-room-effect:
+    dependencies:
+      '@effect/platform-node':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(ioredis@5.10.1)
+      '@rivetkit/effect':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/effect
+      effect:
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66
+      pino:
+        specifier: 9.9.5
+        version: 9.9.5
+      pino-pretty:
+        specifier: 13.1.2
+        version: 13.1.2
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@effect/vitest':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(vitest@4.1.7)
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.7(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/coverage-v8@4.1.7)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
+
   examples/chat-room-render:
     dependencies:
       '@hono/node-server':
@@ -795,37 +832,6 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.15)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
-  examples/effect:
-    dependencies:
-      '@effect/platform-node':
-        specifier: 4.0.0-beta.66
-        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(ioredis@5.10.1)
-      '@rivetkit/effect':
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/effect
-      effect:
-        specifier: 4.0.0-beta.66
-        version: 4.0.0-beta.66
-      pino:
-        specifier: 9.9.5
-        version: 9.9.5
-      pino-pretty:
-        specifier: 13.1.2
-        version: 13.1.2
-      rivetkit:
-        specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit
-    devDependencies:
-      '@types/node':
-        specifier: ^22.13.9
-        version: 22.19.15
-      tsx:
-        specifier: ^4.20.5
-        version: 4.21.0
-      typescript:
-        specifier: ^5.5.2
-        version: 5.9.3
-
   examples/elysia:
     dependencies:
       elysia:
@@ -991,6 +997,43 @@ importers:
       vitest:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
+
+  examples/hello-world-effect:
+    dependencies:
+      '@effect/platform-node':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(ioredis@5.10.1)
+      '@rivetkit/effect':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/effect
+      effect:
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66
+      pino:
+        specifier: 9.9.5
+        version: 9.9.5
+      pino-pretty:
+        specifier: 13.1.2
+        version: 13.1.2
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@effect/vitest':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(vitest@4.1.7)
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.7(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/coverage-v8@4.1.7)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
 
   examples/hello-world-render:
     dependencies:
@@ -4799,6 +4842,12 @@ packages:
     peerDependencies:
       effect: ^4.0.0-beta.66
       ioredis: ^5.7.0
+
+  '@effect/vitest@4.0.0-beta.66':
+    resolution: {integrity: sha512-UHPNtU0xXkKtNgyRQEh2c8jh4nIIm8Mzp3xc4j2ZdFU4nq5ZSySnpovjPMdoWbVClg1ki8UbpNGEZUfxEJo+6Q==}
+    peerDependencies:
+      effect: ^4.0.0-beta.66
+      vitest: ^3.0.0 || ^4.0.0
 
   '@effect/vitest@4.0.0-beta.70':
     resolution: {integrity: sha512-XDteNN0xfOgoMauAVoN5iylxVgEjp7kFsGFq18tZ5XYjek0eOZa0nOoes5s7Bs71VvwjnCeCbFMD7IhxswEt8A==}
@@ -13953,9 +14002,6 @@ packages:
   msgpackr@1.11.12:
     resolution: {integrity: sha512-RBdJ1Un7yGlXWajrkxcSa93nvQ0w4zBf60c0yYv7YtBelP8H2FA7XsfBbMHtXKXUMUxH7zV3Zuozh+kUQWhHvg==}
 
-  msgpackr@1.11.5:
-    resolution: {integrity: sha512-UjkUHN0yqp9RWKy0Lplhh+wlpdt9oQBYgULZOiFhV3VclSF1JnSQWZ5r9gORQlNYaUKQoR8itv7g7z1xDDuACA==}
-
   msw@2.14.4:
     resolution: {integrity: sha512-HVPZJ9Rx4nDCWhjNQ57lKQGSE+0zDHw0xWE2IN2rLOUTLkagEBWNlvWuKYNwG2pQWq96TMd8NiSK/6vO1udnWQ==}
     engines: {node: '>=18'}
@@ -19141,6 +19187,11 @@ snapshots:
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
+
+  '@effect/vitest@4.0.0-beta.66(effect@4.0.0-beta.66)(vitest@4.1.7)':
+    dependencies:
+      effect: 4.0.0-beta.66
+      vitest: 4.1.7(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/coverage-v8@4.1.7)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
 
   '@effect/vitest@4.0.0-beta.70(effect@4.0.0-beta.66)(vitest@4.1.7)':
     dependencies:
@@ -24796,7 +24847,7 @@ snapshots:
       '@vitest/spy': 4.0.18
       '@vitest/utils': 4.0.18
       chai: 6.2.2
-      tinyrainbow: 3.0.3
+      tinyrainbow: 3.1.0
 
   '@vitest/expect@4.1.7':
     dependencies:
@@ -24871,7 +24922,7 @@ snapshots:
 
   '@vitest/pretty-format@4.0.18':
     dependencies:
-      tinyrainbow: 3.0.3
+      tinyrainbow: 3.1.0
 
   '@vitest/pretty-format@4.1.7':
     dependencies:
@@ -24973,7 +25024,7 @@ snapshots:
   '@vitest/utils@4.0.18':
     dependencies:
       '@vitest/pretty-format': 4.0.18
-      tinyrainbow: 3.0.3
+      tinyrainbow: 3.1.0
 
   '@vitest/utils@4.1.7':
     dependencies:
@@ -29199,7 +29250,7 @@ snapshots:
 
   lmdb@3.4.4:
     dependencies:
-      msgpackr: 1.11.5
+      msgpackr: 1.11.12
       node-addon-api: 6.1.0
       node-gyp-build-optional-packages: 5.2.2
       ordered-binary: 1.6.0
@@ -30369,10 +30420,6 @@ snapshots:
     optionalDependencies:
       msgpackr-extract: 3.0.3
 
-  msgpackr@1.11.5:
-    optionalDependencies:
-      msgpackr-extract: 3.0.3
-
   msw@2.14.4(@types/node@20.19.13)(typescript@5.9.3):
     dependencies:
       '@inquirer/confirm': 6.0.12(@types/node@20.19.13)
@@ -30777,7 +30824,7 @@ snapshots:
 
   openapi3-ts@4.5.0:
     dependencies:
-      yaml: 2.8.2
+      yaml: 2.9.0
 
   openapi@1.0.1:
     dependencies:
@@ -31174,7 +31221,7 @@ snapshots:
   postcss-load-config@4.0.2(postcss@8.5.6)(ts-node@10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@25.0.7)(typescript@5.9.3)):
     dependencies:
       lilconfig: 3.1.3
-      yaml: 2.8.2
+      yaml: 2.9.0
     optionalDependencies:
       postcss: 8.5.6
       ts-node: 10.9.2(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@25.0.7)(typescript@5.9.3)
