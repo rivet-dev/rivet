@@ -11,6 +11,7 @@ members = [
   "engine/packages/cache",
   "engine/packages/cache-purge",
   "engine/packages/cache-result",
+  "engine/packages/cli",
   "engine/packages/config",
   "engine/packages/config-schema-gen",
   "engine/packages/datacenter",

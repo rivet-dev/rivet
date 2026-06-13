@@ -2839,6 +2839,8 @@ importers:
         specifier: ^5.7.3
         version: 5.9.3
 
+  rivetkit-typescript/packages/cli: {}
+
   rivetkit-typescript/packages/devtools:
     dependencies:
       '@floating-ui/react':

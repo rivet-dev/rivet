@@ -72,10 +72,16 @@ export const META_PACKAGES: readonly MetaPackageSpec[] = [
 		meta: "@rivetkit/engine-cli",
 		platformPrefix: "@rivetkit/engine-cli-",
 	},
+	{
+		meta: "@rivetkit/cli",
+		platformPrefix: "@rivetkit/cli-",
+	},
 ];
 
 export const RELEASE_ONLY_PACKAGES = new Set<string>([
+	"@rivetkit/rivetkit-napi-win32-x64-msvc",
 	"@rivetkit/engine-cli-win32-x64",
+	"@rivetkit/cli-win32-x64",
 ]);
 
 function isPublishable(pkg: { name?: string; private?: boolean }): boolean {
@@ -126,9 +132,11 @@ export function discoverPackages(
 	//    resolves at install time.
 	//    - rivetkit-napi: the N-API addon (.node files)
 	//    - engine-cli: the rivet-engine binary
+	//    - cli: the rivet CLI binary plus bundled rivet-engine
 	for (const metaRelDir of [
 		"rivetkit-typescript/packages/rivetkit-napi/npm",
 		"rivetkit-typescript/packages/engine-cli/npm",
+		"rivetkit-typescript/packages/cli/npm",
 	]) {
 		const npmDir = join(repoRoot, metaRelDir);
 		if (!existsSync(npmDir)) continue;
@@ -205,6 +213,7 @@ export function assertDiscoverySanity(packages: Package[]): void {
 		"@rivetkit/react",
 		"@rivetkit/rivetkit-napi",
 		"@rivetkit/engine-cli",
+		"@rivetkit/cli",
 	];
 	const missing = required.filter((r) => !byName.has(r));
 	if (missing.length > 0) {

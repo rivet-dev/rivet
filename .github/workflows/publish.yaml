@@ -157,6 +157,44 @@ jobs:
             upload_prefix: engine
             platform: windows-x64
             release_only: true
+          # Rivet Cloud CLI: 4 platforms for preview, 5 for release. The publish
+          # job also places the matching rivet-engine artifact next to the CLI
+          # binary so `rivet dev` works from the npm package.
+          - name: cli (linux-x64-musl)
+            build_target: cli
+            docker: docker/build/linux-x64-musl.Dockerfile
+            artifact: rivet-x86_64-unknown-linux-musl
+            upload_prefix: cli
+            platform: linux-x64-musl
+            release_only: false
+          - name: cli (linux-arm64-musl)
+            build_target: cli
+            docker: docker/build/linux-arm64-musl.Dockerfile
+            artifact: rivet-aarch64-unknown-linux-musl
+            upload_prefix: cli
+            platform: linux-arm64-musl
+            release_only: false
+          - name: cli (darwin-x64)
+            build_target: cli
+            docker: docker/build/darwin-x64.Dockerfile
+            artifact: rivet-x86_64-apple-darwin
+            upload_prefix: cli
+            platform: darwin-x64
+            release_only: false
+          - name: cli (darwin-arm64)
+            build_target: cli
+            docker: docker/build/darwin-arm64.Dockerfile
+            artifact: rivet-aarch64-apple-darwin
+            upload_prefix: cli
+            platform: darwin-arm64
+            release_only: false
+          - name: cli (windows-x64)
+            build_target: cli
+            docker: docker/build/windows-x64.Dockerfile
+            artifact: rivet-x86_64-pc-windows-gnu.exe
+            upload_prefix: cli
+            platform: windows-x64
+            release_only: true
     runs-on: depot-ubuntu-24.04-8
     permissions:
       contents: read
@@ -363,6 +401,12 @@ jobs:
           path: engine-artifacts
           pattern: engine-*
           merge-multiple: true
+      - name: Download CLI artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: cli-artifacts
+          pattern: cli-*
+          merge-multiple: true
       - name: Place native binaries in platform packages
         run: |
           NATIVE_DIR=rivetkit-typescript/packages/rivetkit-napi
@@ -408,6 +452,72 @@ jobs:
             fi
           done
 
+      - name: Place CLI binaries in CLI platform packages
+        run: |
+          CLI_DIR=rivetkit-typescript/packages/cli/npm
+          declare -A TRIPLE_TO_PLATFORM=(
+            [rivet-x86_64-unknown-linux-musl]=linux-x64-musl
+            [rivet-aarch64-unknown-linux-musl]=linux-arm64-musl
+            [rivet-x86_64-apple-darwin]=darwin-x64
+            [rivet-aarch64-apple-darwin]=darwin-arm64
+            [rivet-x86_64-pc-windows-gnu.exe]=win32-x64
+          )
+          for f in cli-artifacts/rivet-*; do
+            [ -e "$f" ] || continue
+            filename=$(basename "$f")
+            platform="${TRIPLE_TO_PLATFORM[$filename]:-}"
+            if [ -z "$platform" ]; then
+              echo "Skipping CLI artifact not mapped to a platform package: $filename"
+              continue
+            fi
+            dest="${CLI_DIR}/${platform}"
+            if [ ! -d "$dest" ]; then
+              echo "Missing CLI platform dir: $dest" >&2
+              exit 1
+            fi
+            if [ "$platform" = "win32-x64" ]; then
+              cp "$f" "$dest/rivet.exe"
+              echo "Placed $filename -> npm/${platform}/rivet.exe"
+            else
+              cp "$f" "$dest/rivet"
+              chmod +x "$dest/rivet"
+              echo "Placed $filename -> npm/${platform}/rivet"
+            fi
+          done
+
+      - name: Place bundled engine in CLI platform packages
+        run: |
+          CLI_DIR=rivetkit-typescript/packages/cli/npm
+          declare -A ENGINE_TO_PLATFORM=(
+            [rivet-engine-x86_64-unknown-linux-musl]=linux-x64-musl
+            [rivet-engine-aarch64-unknown-linux-musl]=linux-arm64-musl
+            [rivet-engine-x86_64-apple-darwin]=darwin-x64
+            [rivet-engine-aarch64-apple-darwin]=darwin-arm64
+            [rivet-engine-x86_64-pc-windows-gnu.exe]=win32-x64
+          )
+          for f in engine-artifacts/rivet-engine-*; do
+            [ -e "$f" ] || continue
+            filename=$(basename "$f")
+            platform="${ENGINE_TO_PLATFORM[$filename]:-}"
+            if [ -z "$platform" ]; then
+              echo "Skipping engine artifact not mapped to a CLI platform package: $filename"
+              continue
+            fi
+            dest="${CLI_DIR}/${platform}"
+            if [ ! -d "$dest" ]; then
+              echo "Missing CLI platform dir: $dest" >&2
+              exit 1
+            fi
+            if [ "$platform" = "win32-x64" ]; then
+              cp "$f" "$dest/rivet-engine.exe"
+              echo "Placed $filename -> npm/${platform}/rivet-engine.exe"
+            else
+              cp "$f" "$dest/rivet-engine"
+              chmod +x "$dest/rivet-engine"
+              echo "Placed $filename -> npm/${platform}/rivet-engine"
+            fi
+          done
+
       - name: Bump package versions for build
         run: |
           pnpm --filter=publish exec tsx src/ci/bin.ts bump-versions \
@@ -418,7 +528,9 @@ jobs:
       - name: Build TypeScript packages
         env:
           SKIP_WASM_BUILD: "1"
-        run: pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
+        run: |
+          pnpm build -F rivetkit
+          pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
 
       # ---- shared publish (runs for all triggers) ----
       - name: Finalize package versions for publish

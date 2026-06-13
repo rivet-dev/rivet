@@ -17,9 +17,26 @@ Using an AI coding agent? Open **Connect** on the [Rivet dashboard](https://dash
 <Steps>
 <Step title="Prerequisites">
 
-- Your RivetKit app in a GitHub repository
+- Your RivetKit app
   - If you don't have one, see the [Quickstart](/docs/actors/quickstart) page or our [Examples](https://github.com/rivet-dev/rivet/tree/main/examples)
 - A [Rivet Cloud](https://dashboard.rivet.dev) account and project
+- Docker running locally
+
+</Step>
+<Step title="Run Locally">
+
+Start a local Rivet engine and point it at your local serverless handler:
+
+```bash
+npx @rivetkit/cli dev --url http://localhost:3000/api/rivet
+```
+
+Provider presets are available for common runtimes:
+
+```bash
+npx @rivetkit/cli dev --provider cloudflare
+npx @rivetkit/cli dev --provider supabase --fn-name rivetkit
+```
 
 </Step>
 <Step title="Configure Serverless Mode">
@@ -62,10 +79,39 @@ CMD ["node", "src/server.js"]
 
 1. Open the [Rivet dashboard](https://dashboard.rivet.dev) and navigate to your project
 2. Click **Connect** and select **Rivet Cloud**
-3. Copy the **`RIVET_CLOUD_TOKEN`** value shown — this is all you need for deployment
+3. Copy the **`RIVET_CLOUD_TOKEN`** value shown
 
 </Step>
-<Step title="Set Up GitHub Actions">
+<Step title="Deploy">
+
+Run the deploy command from your project root:
+
+```bash
+npx @rivetkit/cli deploy --token cloud_api_xxxxx
+```
+
+The `--token` flag saves the token to `~/.rivet/credentials`, so later deploys can be:
+
+```bash
+npx @rivetkit/cli deploy
+```
+
+The CLI handles everything automatically:
+
+- Resolves the project from your Cloud API token
+- Builds your Docker image and pushes it to Rivet's built-in container registry
+- Creates the namespace if needed
+- Upserts the default managed pool
+- Prints the deployment URL on stdout when the pool is ready
+
+</Step>
+<Step title="Optionally Add GitHub Actions">
+
+After local deploys work, you can bootstrap CI:
+
+```bash
+npx @rivetkit/cli init --token cloud_api_xxxxx
+```
 
 Add `RIVET_CLOUD_TOKEN` as a secret in your GitHub repository (**Settings → Secrets and variables → Actions**), then create `.github/workflows/deploy.yml`:
 
@@ -91,18 +137,12 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.1
+      - uses: rivet-dev/deploy-action@v1.1.2
         with:
           rivet-token: ${{ secrets.RIVET_CLOUD_TOKEN }}
 ```
 
-The `deploy-action` handles everything automatically:
-
-- Builds your Docker image and pushes it to Rivet's built-in container registry
-- Creates a `production` namespace on pushes to `main`
-- Creates an isolated `pr-{number}` namespace for each pull request
-- Posts a comment on the PR with a link to the Rivet dashboard
-- Cleans up the PR namespace when the pull request is closed
+The action creates production and pull-request namespaces, posts preview links, and cleans up PR namespaces when pull requests close.
 
 </Step>
 <Step title="Monitor Deployment">

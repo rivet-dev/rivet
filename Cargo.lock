@@ -5214,6 +5214,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-cli"
+version = "2.3.0-rc.12"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "reqwest 0.12.22",
+ "serde",
+ "serde_json",
+ "tokio",
+ "url",
+ "uuid",
+]
+
+[[package]]
 name = "rivet-config"
 version = "2.3.0-rc.12"
 dependencies = [
