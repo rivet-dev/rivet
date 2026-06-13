@@ -3,7 +3,6 @@
 import { LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
 
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },
@@ -14,6 +13,11 @@ const frameworks = [
   { name: 'Elysia', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/elysia', external: true },
   { name: 'tRPC', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/trpc', external: true },
 ];
+
+// Matches DEPLOY_PILL_CLASS in HostingSection so the two index rows read as
+// one vocabulary.
+const STACK_LINK_CLASS =
+  'inline-flex items-center rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft shadow-[0_8px_22px_-20px_rgba(27,25,22,0.45)] transition-colors hover:border-ink/25 hover:bg-paper/70 hover:text-ink';
 
 export const IntegrationsSection = () => (
   <section className='relative overflow-hidden border-t border-ink/10 py-16 md:py-32'>
@@ -26,7 +30,6 @@ export const IntegrationsSection = () => (
           transition={{ duration: 0.5 }}
           className='max-w-xl'
         >
-          <Eyebrow index='03' label='Compatibility' className='mb-4' />
           <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>Works with your stack.</h2>
           <p className={SUBTITLE_CLASS}>
             Standard Node.js, Bun, and Deno. Your frameworks, your tools. No custom runtime, no rewrite.
@@ -41,13 +44,13 @@ export const IntegrationsSection = () => (
             <LayoutGrid className='h-4 w-4 text-olive' />
             <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Frameworks</h4>
           </div>
-          <div className='flex flex-wrap gap-x-5 gap-y-2.5'>
+          <div className='flex flex-wrap gap-2'>
             {frameworks.map(tech => (
               <a
                 key={tech.name}
                 href={tech.href}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink hover:decoration-pine'
+                className={STACK_LINK_CLASS}
               >
                 {tech.name}
               </a>
@@ -61,7 +64,7 @@ export const IntegrationsSection = () => (
             <Terminal className='h-4 w-4 text-olive' />
             <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Runtimes</h4>
           </div>
-          <div className='flex flex-wrap gap-x-5 gap-y-2.5'>
+          <div className='flex flex-wrap gap-2'>
             {[
               { name: 'Node.js', href: '/docs/actors/quickstart/backend' },
               { name: 'Bun', href: '/docs/actors/quickstart/backend' },
@@ -71,7 +74,7 @@ export const IntegrationsSection = () => (
                 key={tech.name}
                 href={tech.href}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink hover:decoration-pine'
+                className={STACK_LINK_CLASS}
               >
                 {tech.name}
               </a>
@@ -85,7 +88,7 @@ export const IntegrationsSection = () => (
             <Wrench className='h-4 w-4 text-olive' />
             <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Tools</h4>
           </div>
-          <div className='flex flex-wrap gap-x-5 gap-y-2.5'>
+          <div className='flex flex-wrap gap-2'>
             {[
               { name: 'Vitest', href: '/docs/actors/testing' },
               { name: 'Pino', href: '/docs/general/logging' },
@@ -98,7 +101,7 @@ export const IntegrationsSection = () => (
                 key={tech.name}
                 href={tech.href}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='text-sm text-ink-soft underline decoration-ink/20 underline-offset-4 transition-colors hover:text-ink hover:decoration-pine'
+                className={STACK_LINK_CLASS}
               >
                 {tech.name}
               </a>
