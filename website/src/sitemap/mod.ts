@@ -137,7 +137,13 @@ export const sitemap = [
 								title: "Rust",
 								href: "/docs/actors/quickstart/rust",
 								icon: faRust,
-								badge: "Preview",
+								badge: "Beta",
+							},
+							{
+								title: "Effect.ts",
+								href: "/docs/actors/quickstart/effect",
+								icon: faLayerGroup,
+								badge: "Beta",
 							},
 						],
 					},
@@ -407,6 +413,10 @@ export const sitemap = [
 						collapsible: true,
 						pages: [
 							{
+								title: "Runtime Modes",
+								href: "/docs/general/runtime-modes",
+							},
+							{
 								title: "Registry Configuration",
 								href: "/docs/general/registry-configuration",
 							},
@@ -417,10 +427,6 @@ export const sitemap = [
 							{
 								title: "Environment Variables",
 								href: "/docs/general/environment-variables",
-							},
-							{
-								title: "Runtime Modes",
-								href: "/docs/general/runtime-modes",
 							},
 							{
 								title: "HTTP Server",
