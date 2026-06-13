@@ -14,7 +14,6 @@ import {
 	Check,
 	Terminal,
 } from 'lucide-react';
-import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
 import { HERO_H1_CLASS, SECTION_H2_CLASS } from '@/components/marketing/typography';
 
 // --- Copy Install Button ---
@@ -36,7 +35,7 @@ const CopyInstallButton = () => {
 			onClick={handleCopy}
 			className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-6 py-3 font-mono text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink'
 		>
-			{copied ? <Check className='h-4 w-4 text-pine' /> : <Terminal className='h-4 w-4' />}
+			{copied ? <Check className='h-4 w-4 text-ink' /> : <Terminal className='h-4 w-4' />}
 			npm install rivetkit
 		</button>
 	);
@@ -60,14 +59,14 @@ const UseCase = ({ icon: Icon, title, description, benefits, example, delay = 0 
 		className='flex flex-col border border-ink/10 bg-white/55 p-7'
 	>
 		<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-ink/10'>
-			<Icon className='h-6 w-6 text-olive' />
+			<Icon className='h-6 w-6 text-ink-soft' />
 		</div>
 		<h3 className='mb-3 text-lg font-medium tracking-[-0.01em] text-ink md:text-xl'>{title}</h3>
 		<p className='mb-4 text-sm leading-relaxed text-ink-soft'>{description}</p>
 		<ul className='mb-5 space-y-2'>
 			{benefits.map((benefit, i) => (
 				<li key={i} className='flex items-start gap-2.5 text-sm text-ink-soft'>
-					<span className='mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-pine/60' />
+					<span className='mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-ink/50' />
 					{benefit}
 				</li>
 			))}
@@ -175,17 +174,10 @@ export default function AgentOSUseCasesPage() {
 				{/* Hero */}
 				<section className='relative flex min-h-[50svh] flex-col items-center justify-center overflow-hidden px-6 pt-32'>
 					<div className='mx-auto w-full max-w-4xl text-center'>
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.5 }}
-						>
-							<Eyebrow label='agentOS Use Cases' className='mb-5' />
-						</motion.div>
 						<motion.h1
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.5, delay: 0.05 }}
+							transition={{ duration: 0.5 }}
 							className={`mb-6 ${HERO_H1_CLASS}`}
 						>
 							Who is agentOS for?
@@ -193,7 +185,7 @@ export default function AgentOSUseCasesPage() {
 						<motion.p
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.5, delay: 0.1 }}
+							transition={{ duration: 0.5, delay: 0.05 }}
 							className='mx-auto max-w-2xl text-lg text-ink-soft md:text-xl'
 						>
 							From personal assistants to enterprise fleets, agentOS powers every kind of AI agent.
@@ -204,7 +196,6 @@ export default function AgentOSUseCasesPage() {
 				{/* Use Cases Grid */}
 				<section className='border-t border-ink/10 px-6 py-16 md:py-32'>
 					<div className='mx-auto max-w-7xl'>
-						<Eyebrow index='01' label='Use Cases' className='mb-8' />
 						<div className='grid gap-6 md:grid-cols-2 lg:grid-cols-3'>
 							{useCases.map((useCase, i) => (
 								<UseCase key={useCase.title} {...useCase} delay={i * 0.05} />

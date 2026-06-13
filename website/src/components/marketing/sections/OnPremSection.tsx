@@ -3,7 +3,6 @@
 import { motion } from 'framer-motion';
 import { ArrowRight, Check } from 'lucide-react';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
 import { PerimeterDiagram } from '../editorial/PerimeterDiagram';
 
 const points = [
@@ -23,8 +22,7 @@ export const OnPremSection = () => (
 						viewport={{ once: true }}
 						transition={{ duration: 0.5, delay: 0.05 }}
 					>
-						<Eyebrow index='05' label='On-prem' className='mb-4' />
-						<h2 className={`mb-4 ${SECTION_H2_CLASS}`}>Run it where your data lives.</h2>
+												<h2 className={`mb-4 ${SECTION_H2_CLASS}`}>Run it where your data lives.</h2>
 					</motion.div>
 					<motion.p
 						initial={{ opacity: 0, y: 20 }}

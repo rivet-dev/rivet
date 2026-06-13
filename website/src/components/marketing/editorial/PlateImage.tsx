@@ -34,7 +34,7 @@ export const PlateImage = ({
 	const captionParts = [title, artist, date].filter(Boolean);
 	return (
 		<figure className={className}>
-			<div className="border border-ink/15 bg-mat p-3">
+			<div className="border border-ink/15 bg-paper-mid p-3">
 				{children ?? (
 					<img
 						src={src}

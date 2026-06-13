@@ -26,11 +26,31 @@ export const PerimeterDiagram = ({
 	footer = 'No outbound connections. No telemetry.',
 	className,
 }: PerimeterDiagramProps) => (
-	<div className={`relative rounded-xl border border-dashed border-pine/50 p-6 md:p-8 ${className ?? ''}`}>
-		<span className='absolute -top-2.5 left-6 bg-paper px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-pine'>
+	<div className={`relative rounded-xl p-6 md:p-8 ${className ?? ''}`}>
+		<svg
+			aria-hidden='true'
+			className='pointer-events-none absolute inset-0 h-full w-full overflow-visible'
+			viewBox='0 0 100 100'
+			preserveAspectRatio='none'
+		>
+			<rect
+				x='0.75'
+				y='0.75'
+				width='98.5'
+				height='98.5'
+				rx='3.5'
+				fill='none'
+				stroke='currentColor'
+				strokeWidth='1'
+				strokeDasharray='4 3.2'
+				className='perimeter-dash-rect text-ink/30'
+				vectorEffect='non-scaling-stroke'
+			/>
+		</svg>
+		<span className='absolute -top-2.5 left-6 z-10 bg-paper px-2 font-mono text-[11px] uppercase tracking-[0.14em] text-pine'>
 			{label}
 		</span>
-		<div className='flex flex-col items-stretch'>
+		<div className='relative z-10 flex flex-col items-stretch'>
 			{nodes.map((node, idx) => (
 				<div key={node.title} className='flex flex-col'>
 					{idx > 0 && <div className='mx-auto h-5 w-px bg-pine/40' />}
@@ -41,7 +61,7 @@ export const PerimeterDiagram = ({
 				</div>
 			))}
 		</div>
-		<div className='mt-6 flex items-center gap-2 border-t border-ink/10 pt-4 font-mono text-[11px] text-pine'>
+		<div className='relative z-10 mt-6 flex items-center gap-2 border-t border-ink/10 pt-4 font-mono text-[11px] text-pine'>
 			<Ban className='h-3.5 w-3.5 text-pine/60' />
 			{footer}
 		</div>

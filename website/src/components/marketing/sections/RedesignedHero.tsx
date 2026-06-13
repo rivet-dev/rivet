@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import { Terminal, ArrowRight, Check } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
-import { HERO_H1_CLASS, CAPTION_CLASS } from '../typography';
-import { Spirograph } from '../art/Spirograph';
+import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
+import { HERO_H1_CLASS } from '../typography';
 
 interface ThinkingImage {
   src: string;
@@ -43,7 +42,7 @@ const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
   };
 
   const getStackIndices = (count: number) => {
-    const indices = [];
+    const indices: number[] = [];
     for (let i = 0; i < count; i++) {
       indices.push((currentIndex + i) % images.length);
     }
@@ -86,7 +85,6 @@ const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
 
   const stackCards = getStackIndices(Math.min(3, images.length));
   const currentImage = images[currentIndex];
-  const figureNumber = String(currentIndex + 1).padStart(2, '0');
 
   return (
     <div
@@ -111,8 +109,8 @@ const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
         return (
           <motion.div
             key={image.src}
-            className="absolute inset-0 overflow-hidden border border-ink/15 bg-mat p-2.5 sm:p-3"
-            style={{ zIndex: 20 - stackPosition }}
+            className="absolute inset-0 overflow-hidden border border-ink/10"
+            style={{ zIndex: 20 - stackPosition, boxShadow: '0 10px 28px -12px rgba(27, 25, 22, 0.16)' }}
             initial={false}
             animate={{ ...pose, opacity: isTopCard || showFan ? 1 : 0 }}
             transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -122,7 +120,7 @@ const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
               alt={`${image.title} by ${image.artist}`}
               loading={isTopCard && currentIndex === 0 ? 'eager' : 'lazy'}
               decoding="async"
-              className="h-full w-full select-none object-cover outline outline-1 outline-ink/10 pointer-events-none"
+              className="h-full w-full select-none object-cover pointer-events-none"
             />
           </motion.div>
         );
@@ -135,8 +133,8 @@ const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
           return (
             <motion.div
               key={card.id}
-              className="pointer-events-none absolute inset-0 overflow-hidden border border-ink/15 bg-mat p-2.5 sm:p-3"
-              style={{ zIndex: 30 }}
+              className="pointer-events-none absolute inset-0 overflow-hidden border border-ink/10"
+              style={{ zIndex: 30, boxShadow: '0 10px 28px -12px rgba(27, 25, 22, 0.16)' }}
               initial={{ ...topPose, opacity: 1 }}
               animate={{ x: topPose.x - 36, y: topPose.y - 2, rotate: topPose.rotate - 7, scale: 0.985, opacity: 0 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
@@ -149,27 +147,32 @@ const ThinkingImageCycler = ({ images }: { images: ThinkingImage[] }) => {
                 alt={`${card.image.title} by ${card.image.artist}`}
                 loading="lazy"
                 decoding="async"
-                className="h-full w-full select-none object-cover outline outline-1 outline-ink/10 pointer-events-none"
+                className="h-full w-full select-none object-cover pointer-events-none"
               />
             </motion.div>
           );
         })}
       </AnimatePresence>
 
-      {/* Printed catalog caption, always visible, cross-fading per plate */}
-      <div className="pointer-events-none absolute left-0 right-0 top-full mt-4" style={{ zIndex: 20 }}>
+      <div
+        className={`pointer-events-none absolute left-0 right-0 top-full mt-5 text-center transition-all duration-200 ${
+          showFan ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'
+        }`}
+        style={{ zIndex: 20 }}
+      >
         <AnimatePresence mode="wait" initial={false}>
-          <motion.p
+          <motion.div
             key={currentImage.src}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className={CAPTION_CLASS}
           >
-            <span className="font-medium text-ink-soft">Fig. {figureNumber}</span> — {currentImage.title} ·{' '}
-            {currentImage.artist} · {currentImage.date}
-          </motion.p>
+            <p className="text-sm font-medium leading-tight text-ink">{currentImage.title}</p>
+            <p className="mt-1 text-xs leading-tight text-ink-faint">
+              {currentImage.artist} · {currentImage.date}
+            </p>
+          </motion.div>
         </AnimatePresence>
       </div>
     </div>
@@ -211,8 +214,30 @@ interface RedesignedHeroProps {
 }
 
 export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
+  const heroRef = useRef<HTMLElement>(null);
+  // Fade the hero out as it scrolls away. Anchored to the hero's own height
+  // (start..end against the top of the viewport) rather than a fixed viewport
+  // fraction, so it behaves on mobile where the stacked text + image make the
+  // hero taller than the screen. Opacity is the only transform, so it stays
+  // calm under prefers-reduced-motion.
+  const { scrollYProgress } = useScroll({
+    target: heroRef,
+    offset: ['start start', 'end start'],
+  });
+  const heroOpacity = useTransform(scrollYProgress, [0, 0.55], [1, 0]);
+
+  const handleChangelogPillMouseMove = (event: MouseEvent<HTMLAnchorElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    event.currentTarget.style.setProperty('--pill-x', `${event.clientX - rect.left}px`);
+    event.currentTarget.style.setProperty('--pill-y', `${event.clientY - rect.top}px`);
+  };
+
   return (
-    <section className='depth-wash relative flex min-h-[100svh] flex-col justify-center overflow-hidden px-6 pt-32 pb-16 md:pt-40 md:pb-24'>
+    <motion.section
+      ref={heroRef}
+      style={{ opacity: heroOpacity }}
+      className='depth-wash relative flex min-h-[100svh] flex-col justify-center overflow-hidden px-6 pt-32 pb-16 will-change-[opacity] md:pt-40 md:pb-24'
+    >
       <div className='relative mx-auto w-full max-w-7xl'>
         <div className='flex flex-col gap-12 lg:flex-row lg:items-center lg:justify-between lg:gap-32 xl:gap-48 2xl:gap-64'>
           <div className='max-w-xl'>
@@ -224,12 +249,21 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
             >
               <a
                 href='/changelog'
-                className='inline-flex items-center gap-2.5 font-mono text-xs tracking-[0.04em] text-ink-faint transition-colors hover:text-ink'
+                className='changelog-pill-border group relative inline-flex rounded-full shadow-[0_8px_24px_-18px_rgba(27,25,22,0.45)] transition-opacity before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-[linear-gradient(120deg,rgba(27,25,22,0.08),rgba(27,25,22,0.26)_48%,rgba(255,255,255,0.88)_72%,rgba(27,25,22,0.1))] before:p-px before:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:p-px after:opacity-0 after:transition-opacity after:duration-150 after:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] after:[-webkit-mask-composite:xor] after:[mask-composite:exclude] hover:opacity-95 hover:after:opacity-100'
+                onMouseMove={handleChangelogPillMouseMove}
               >
-                <span aria-hidden='true' className='h-[5px] w-[5px] bg-pine' />
-                <span className='uppercase tracking-[0.14em]'>Changelog</span>
-                <span className='text-ink-soft'>{latestChangelogTitle}</span>
-                <ArrowRight className='h-3 w-3' />
+                <span className='relative z-10 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-ink'>
+                  <span
+                    aria-hidden='true'
+                    className='h-1 w-1 rounded-full bg-accent'
+                    style={{
+                      boxShadow:
+                        '0 0 2px rgba(203, 90, 51, 0.9), 0 0 6px rgba(203, 90, 51, 0.5), 0 0 14px rgba(171, 69, 31, 0.35)',
+                    }}
+                  />
+                  <span>{latestChangelogTitle}</span>
+                  <ArrowRight className='h-3 w-3 text-ink-soft transition-transform group-hover:translate-x-0.5' />
+                </span>
               </a>
             </motion.div>
 
@@ -274,10 +308,6 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
             transition={{ duration: 0.8, delay: 0.2 }}
             className='relative flex-shrink-0 hidden lg:block'
           >
-            {/* Olive moiré ring bleeding off behind the plate stack */}
-            <div aria-hidden='true' className='pointer-events-none absolute -right-44 -top-40 opacity-60'>
-              <Spirograph variant='ring' size={560} strokeOpacity={0.4} />
-            </div>
             <ThinkingImageCycler images={thinkingImages} />
           </motion.div>
         </div>
@@ -294,6 +324,6 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
           </motion.div>
         </div>
       </div>
-    </section>
+    </motion.section>
   );
 };

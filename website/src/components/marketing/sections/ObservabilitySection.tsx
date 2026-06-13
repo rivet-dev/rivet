@@ -4,8 +4,6 @@ import { Database, GitBranch, Activity, Terminal, Sun, Moon } from 'lucide-react
 import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
-import { InkPanel } from '../editorial/InkPanel';
 
 const inspectorAspect = 2438 / 1613;
 
@@ -26,8 +24,8 @@ type InspectorTheme = keyof typeof inspectorImages;
 const inspectorThemes = Object.keys(inspectorImages) as InspectorTheme[];
 
 export const ObservabilitySection = () => {
-  // The light screenshot reads as the photographic plate inside the dark
-  // panel, so it is the default; the toggle still offers dark.
+  // The light screenshot reads cleanly inside the light frame, so it is the
+  // default; the toggle still offers dark.
   const [theme, setTheme] = useState<InspectorTheme>('light');
 
   const features = [
@@ -58,7 +56,7 @@ export const ObservabilitySection = () => {
     <section className='border-t border-ink/10 py-16 md:py-32'>
       <div className='mx-auto max-w-7xl px-6'>
         <div className='relative'>
-          {/* The dark photographic plate */}
+          {/* The light frame holding the inspector screenshot */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -66,10 +64,7 @@ export const ObservabilitySection = () => {
             transition={{ duration: 0.5 }}
             className='relative'
           >
-            <InkPanel
-              caption='Fig. 02 — Rivet Inspector · live actor state, SQLite, and events'
-              captionAside='rivet.dev/docs'
-            >
+            <div className='relative overflow-hidden rounded-xl border border-ink/10 bg-paper-mid'>
               <div className='relative p-3 md:p-4'>
                 <div className='relative w-full overflow-hidden rounded-md' style={{ aspectRatio: inspectorAspect }}>
                   {inspectorThemes.map((t) => (
@@ -86,7 +81,7 @@ export const ObservabilitySection = () => {
                 </div>
 
                 {/* Light/dark mode toggle */}
-                <div className='absolute bottom-6 right-6 flex items-center gap-1 rounded-full border border-cream/15 bg-ink/70 p-1 backdrop-blur'>
+                <div className='absolute bottom-6 right-6 flex items-center gap-1 rounded-lg border border-white/15 bg-ink/70 p-1 backdrop-blur'>
                   {inspectorThemes.map((t) => {
                     const Icon = inspectorImages[t].icon;
                     const active = theme === t;
@@ -97,18 +92,18 @@ export const ObservabilitySection = () => {
                         onClick={() => setTheme(t)}
                         aria-label={inspectorImages[t].label}
                         aria-pressed={active}
-                        className='relative flex h-7 w-7 items-center justify-center rounded-full'
+                        className='relative flex h-7 w-7 items-center justify-center rounded-md'
                       >
                         {active && (
                           <motion.span
                             layoutId='inspector-theme-active'
-                            className='absolute inset-0 rounded-full bg-cream'
+                            className='absolute inset-0 rounded-md bg-white'
                             transition={{ type: 'spring', stiffness: 500, damping: 35 }}
                           />
                         )}
                         <Icon
                           className={`relative h-3.5 w-3.5 transition-colors ${
-                            active ? 'text-ink' : 'text-cream/50 hover:text-cream'
+                            active ? 'text-ink' : 'text-white/50 hover:text-white'
                           }`}
                         />
                       </button>
@@ -116,7 +111,7 @@ export const ObservabilitySection = () => {
                   })}
                 </div>
               </div>
-            </InkPanel>
+            </div>
           </motion.div>
 
           {/* Text content below */}
@@ -127,7 +122,6 @@ export const ObservabilitySection = () => {
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
             >
-              <Eyebrow index='02' label='Observability' className='mb-4' />
               <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>Built-In Observability</h2>
             </motion.div>
             <motion.p

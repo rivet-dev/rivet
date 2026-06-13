@@ -4,7 +4,6 @@ import { FaqList } from '@/components/faq/FaqSection';
 import { formatTimestamp } from '@/lib/formatDate';
 import { compareEntries, getCompareEntry } from '@/data/compare';
 import type { CompareEntry } from '@/data/compare/types';
-import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
 import { CatalogCard } from '@/components/marketing/editorial/CatalogCard';
 import { Spirograph } from '@/components/marketing/art/Spirograph';
 import {
@@ -24,24 +23,19 @@ interface ComparePageProps {
 
 // Warm oil-paint texture behind the closing band, mirroring the sitewide CTA
 // colophon. The veil keeps text readable even if the image fails to load.
-const OIL_TEXTURE_SRC = '/images/textures/oil-olive-landscape.jpg';
+const OIL_TEXTURE_SRC = '/images/textures/oil-olive-landscape.webp';
 
 function SectionHeading({
-	index,
-	eyebrow,
 	title,
 	subtitle,
 	center = false,
 }: {
-	index?: string;
-	eyebrow?: ReactNode;
 	title: string;
 	subtitle?: string;
 	center?: boolean;
 }) {
 	return (
 		<div className={center ? 'mx-auto max-w-2xl text-center' : 'max-w-2xl'}>
-			{eyebrow ? <Eyebrow index={index} label={eyebrow} className="mb-4" /> : null}
 			<h2 className={SECTION_H2_CLASS}>{title}</h2>
 			{subtitle && <p className={SUBTITLE_CLASS}>{subtitle}</p>}
 		</div>
@@ -53,7 +47,6 @@ function HeroSection({ entry }: { entry: CompareEntry }) {
 		<section className="px-6 pb-24 pt-32 md:pb-28 md:pt-44">
 			<div className="mx-auto w-full max-w-7xl">
 				<div className="max-w-3xl">
-					<Eyebrow label="Comparison" className="mb-5" />
 					<h1 className={HERO_H1_CLASS}>
 						{entry.rivetProductName} vs <br />
 						{entry.competitorName}
@@ -151,8 +144,6 @@ function OverviewSection({ entry }: { entry: CompareEntry }) {
 		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-7xl">
 				<SectionHeading
-					index="01"
-					eyebrow="Overview"
 					title="Two approaches, side by side"
 					subtitle="What each platform is, and the situations where it is the right choice."
 				/>
@@ -203,8 +194,6 @@ function ComparisonSection({ entry }: { entry: CompareEntry }) {
 		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-7xl">
 				<SectionHeading
-					index="02"
-					eyebrow="Features"
 					title="Feature comparison"
 					subtitle="A detailed breakdown of capabilities across both platforms."
 				/>
@@ -225,7 +214,7 @@ function VerdictSection({ entry }: { entry: CompareEntry }) {
 	return (
 		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-2xl text-center">
-				<SectionHeading index="03" eyebrow="Verdict" title="Which should you pick?" center />
+				<SectionHeading title="Which should you pick?" center />
 				<div className="mt-8 space-y-5">
 					{entry.verdict.map((paragraph, index) => (
 						<p
@@ -249,7 +238,7 @@ function MigrationSection({ migration }: { migration: NonNullable<CompareEntry['
 	return (
 		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-2xl text-center">
-				<SectionHeading index="04" eyebrow="Migration" title={migration.heading} center />
+				<SectionHeading title={migration.heading} center />
 				<p className="mt-8 text-base leading-relaxed text-ink-soft">{migration.body}</p>
 				<div className="mt-8">
 					<a
@@ -264,11 +253,11 @@ function MigrationSection({ migration }: { migration: NonNullable<CompareEntry['
 	);
 }
 
-function FaqSectionLight({ entry, index }: { entry: CompareEntry; index: string }) {
+function FaqSectionLight({ entry }: { entry: CompareEntry }) {
 	return (
 		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-3xl">
-				<SectionHeading index={index} eyebrow="FAQ" title="Frequently asked questions" />
+				<SectionHeading title="Frequently asked questions" />
 				<div className="mt-10">
 					<FaqList items={entry.faq} theme="light" />
 				</div>
@@ -277,7 +266,7 @@ function FaqSectionLight({ entry, index }: { entry: CompareEntry; index: string 
 	);
 }
 
-function OtherComparisonsSection({ entry, index }: { entry: CompareEntry; index: string }) {
+function OtherComparisonsSection({ entry }: { entry: CompareEntry }) {
 	const others = compareEntries.filter((other) => other.slug !== entry.slug);
 	if (others.length === 0) {
 		return null;
@@ -286,7 +275,7 @@ function OtherComparisonsSection({ entry, index }: { entry: CompareEntry; index:
 	return (
 		<section className="border-t border-ink/10 px-6 py-16 md:py-32">
 			<div className="mx-auto max-w-7xl">
-				<SectionHeading index={index} eyebrow="Catalog" title="Other comparisons" />
+				<SectionHeading title="Other comparisons" />
 				<div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
 					{others.map((other) => (
 						<CatalogCard
@@ -306,51 +295,55 @@ function OtherComparisonsSection({ entry, index }: { entry: CompareEntry; index:
 
 function CTASection() {
 	return (
-		<section className="selection-paper relative overflow-hidden bg-ink px-6 py-24 text-center text-cream md:py-36">
-			{/* Oil-paint backdrop under a darkening veil */}
-			<div
-				aria-hidden="true"
-				className="absolute inset-0 bg-cover"
-				style={{ backgroundImage: `url('${OIL_TEXTURE_SRC}')`, backgroundPosition: 'center 60%' }}
-			/>
-			<div
-				aria-hidden="true"
-				className="absolute inset-0"
-				style={{
-					background:
-						'linear-gradient(180deg, rgba(20,19,16,0.66), rgba(20,19,16,0.5) 50%, rgba(20,19,16,0.72))',
-				}}
-			/>
-			<div className="relative mx-auto max-w-3xl">
-				<div className="mb-8 flex justify-center" aria-hidden="true">
-					<Spirograph
-						variant="moire"
-						size={56}
-						stroke="#93A286"
-						strokeWidth={2.6}
-						strokeOpacity={0.7}
-						copies={12}
-					/>
-				</div>
-				<h2 className="text-3xl font-medium tracking-[-0.015em] text-cream md:text-5xl">
-					The primitive for stateful workloads.
-				</h2>
-				<p className="mt-6 text-base leading-relaxed text-cream/65">
-					The next generation of software needs a new kind of backend. This is it.
-				</p>
-				<div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
-					<a
-						href="/docs"
-						className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-cream px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white"
-					>
-						Start Building
-					</a>
-					<a
-						href="/talk-to-an-engineer"
-						className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-cream/30 px-4 py-2 text-sm text-cream transition-colors hover:border-cream/60"
-					>
-						Talk to an Engineer
-					</a>
+		<section className="selection-paper bg-paper px-4 py-14 text-center text-cream md:px-6 md:py-24">
+			<div className="relative mx-auto flex min-h-[26rem] max-w-screen-2xl items-center justify-center overflow-hidden px-6 py-20 md:min-h-[34rem] md:px-10 lg:aspect-[2563/1440] lg:min-h-0">
+				<img
+					aria-hidden="true"
+					src={OIL_TEXTURE_SRC}
+					alt=""
+					loading="lazy"
+					decoding="async"
+					className="absolute inset-0 h-full w-full object-contain object-center"
+				/>
+				<div
+					aria-hidden="true"
+					className="absolute inset-0"
+					style={{
+						background:
+							'linear-gradient(180deg, rgba(20,19,16,0.66), rgba(20,19,16,0.5) 50%, rgba(20,19,16,0.72))',
+					}}
+				/>
+				<div className="relative mx-auto max-w-3xl">
+					<div className="mb-8 flex justify-center" aria-hidden="true">
+						<Spirograph
+							variant="moire"
+							size={56}
+							stroke="#93A286"
+							strokeWidth={2.6}
+							strokeOpacity={0.7}
+							copies={12}
+						/>
+					</div>
+					<h2 className="text-3xl font-medium tracking-[-0.015em] text-cream md:text-5xl">
+						The primitive for stateful workloads.
+					</h2>
+					<p className="mt-6 text-base leading-relaxed text-cream/65">
+						The next generation of software needs a new kind of backend. This is it.
+					</p>
+					<div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
+						<a
+							href="/docs"
+							className="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-cream px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white"
+						>
+							Start Building
+						</a>
+						<a
+							href="/talk-to-an-engineer"
+							className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-cream/30 px-4 py-2 text-sm text-cream transition-colors hover:border-cream/60"
+						>
+							Talk to an Engineer
+						</a>
+					</div>
 				</div>
 			</div>
 		</section>
@@ -363,11 +356,6 @@ export function ComparePage({ slug }: ComparePageProps) {
 		throw new Error(`Unknown compare entry: ${slug}`);
 	}
 
-	// Section eyebrows are numbered sequentially; the migration section is
-	// optional, so the indices after it shift when it is absent.
-	const faqIndex = entry.migration ? '05' : '04';
-	const othersIndex = entry.migration ? '06' : '05';
-
 	return (
 		<div className="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
@@ -376,8 +364,8 @@ export function ComparePage({ slug }: ComparePageProps) {
 				<ComparisonSection entry={entry} />
 				<VerdictSection entry={entry} />
 				{entry.migration && <MigrationSection migration={entry.migration} />}
-				<FaqSectionLight entry={entry} index={faqIndex} />
-				<OtherComparisonsSection entry={entry} index={othersIndex} />
+				<FaqSectionLight entry={entry} />
+				<OtherComparisonsSection entry={entry} />
 				<CTASection />
 			</main>
 		</div>

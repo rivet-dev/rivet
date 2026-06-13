@@ -92,7 +92,7 @@ function NavLink({ id, isActive, children }) {
 			<a href={`#${id}`}
 				aria-current={isActive ? "page" : undefined}
 				className={cn(
-					"group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm text-muted-foreground hover:underline aria-current-page:text-foreground",
+					"group flex w-full items-center rounded-md border border-transparent px-2 py-1 text-sm text-ink-soft hover:text-ink aria-current-page:text-ink",
 				)}
 			>
 				<span className="truncate">{children}</span>
@@ -109,13 +109,13 @@ export function ActiveSectionMarker({ prefix }) {
 				layoutId={`${prefix}current-background`}
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
-				className="absolute inset-0 -left-2 bg-charcole-800/2.5 will-change-transform dark:bg-white/2.5"
+				className="absolute inset-0 -left-2 bg-ink/[0.04] will-change-transform"
 				style={{ borderRadius: 8 }}
 			/>
 			<motion.div
 				layout
 				layoutId={`${prefix}current-line`}
-				className="absolute left-0 top-1 h-6 w-px bg-cream-500"
+				className="absolute left-0 top-1 h-6 w-px bg-pine"
 				initial={{ opacity: 0 }}
 				animate={{ opacity: 1 }}
 			/>

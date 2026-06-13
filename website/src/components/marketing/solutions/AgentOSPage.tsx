@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useId, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
 	ArrowDown,
 	ArrowRight,
@@ -30,13 +30,13 @@ import {
 	Container,
 	ShieldCheck,
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Icon, faNodeJs, faPython } from '@rivet-gg/icons';
 import type { IconProp } from '@rivet-gg/icons';
 import agentosLogo from '@/images/products/agentos-logo.svg';
 import { InkPanel } from '../editorial/InkPanel';
-import { Eyebrow } from '../editorial/Eyebrow';
-import { PixelGridChart } from '../art/PixelGridChart';
+import { GLOW_PILL_CLASS, handleGlowPillMouseMove } from '../glowPill';
+import { registry } from '@/data/registry';
 
 interface HeroTabCode {
 	key: string;
@@ -463,7 +463,7 @@ const CopyCommand = ({ command }: { command: string }) => {
 		>
 			<Terminal className='h-4 w-4 text-ink-faint' />
 			<span className='text-ink-soft transition-colors group-hover:text-ink'>{command}</span>
-			{copied && <Check className='h-4 w-4 text-pine' />}
+			{copied && <Check className='h-4 w-4 text-ink' />}
 		</button>
 	);
 };
@@ -546,10 +546,10 @@ const terminalLines: TermLine[] = [
 	{ text: '', delay: 1200 },
 	{ text: '  v0.1.0  |  runtime ready', color: 'text-cream/45', delay: 1400 },
 	{ text: '', delay: 1600 },
-	{ text: '✓ V8 isolate pool initialized (12 workers)', color: 'text-sage', delay: 1800 },
-	{ text: '✓ File system mounted → /workspace', color: 'text-sage', delay: 2100 },
-	{ text: '✓ Tool registry loaded (git, curl, python, node)', color: 'text-sage', delay: 2400 },
-	{ text: '✓ Network policy applied → allowlist mode', color: 'text-sage', delay: 2700 },
+	{ text: '✓ V8 isolate pool initialized (12 workers)', color: 'text-cream/70', delay: 1800 },
+	{ text: '✓ File system mounted → /workspace', color: 'text-cream/70', delay: 2100 },
+	{ text: '✓ Tool registry loaded (git, curl, python, node)', color: 'text-cream/70', delay: 2400 },
+	{ text: '✓ Network policy applied → allowlist mode', color: 'text-cream/70', delay: 2700 },
 	{ text: '', delay: 3000 },
 	{ text: '● Agent session created  sid=a8f3c2e1', color: 'text-cream/85', delay: 3200 },
 	{ text: '  → Claude Code connected', color: 'text-cream/55', delay: 3500 },
@@ -560,7 +560,7 @@ const terminalLines: TermLine[] = [
 	{ text: '  ▸ agent  Writing 7 files...', color: 'text-cream/70', delay: 5600 },
 	{ text: '  ▸ agent  npx prisma db push', color: 'text-cream/70', delay: 6200 },
 	{ text: '', delay: 6800 },
-	{ text: '✓ Task complete  duration=14.2s  tokens=3,847  cost=$0.012', color: 'text-sage', delay: 7000 },
+	{ text: '✓ Task complete  duration=14.2s  tokens=3,847  cost=$0.012', color: 'text-cream/70', delay: 7000 },
 	{ text: '  → Preview: http://localhost:3000', color: 'text-cream/55', delay: 7300 },
 	{ text: '', delay: 7600 },
 	{ text: '● Listening for new sessions...', color: 'text-cream/85', delay: 7800 },
@@ -685,17 +685,26 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 		el.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
 	};
 
+	// Fade the tab strip into the porcelain with a content mask rather than a
+	// solid-color overlay. A flat overlay would cover the page grain and read as
+	// an odd lighter band; masking the content lets the grain show through.
+	const maskImage =
+		canScrollLeft || canScrollRight
+			? `linear-gradient(to right, ${canScrollLeft ? 'transparent 0, #000 6rem' : '#000 0'}, ${canScrollRight ? '#000 calc(100% - 6rem), transparent 100%' : '#000 100%'})`
+			: undefined;
+	const maskStyle = maskImage ? { maskImage, WebkitMaskImage: maskImage } : undefined;
+
 	return (
 		<div className='relative mb-4 overflow-hidden'>
 			{/* Left fade + arrow */}
 			{canScrollLeft && (
 				<div
-					className='absolute inset-y-0 left-0 z-20 flex w-20 items-center justify-start bg-gradient-to-r from-paper from-30% via-paper/70 via-60% to-transparent'
+					className='pointer-events-none absolute inset-y-0 left-0 z-20 flex w-12 items-center justify-start'
 				>
 					<button
 						type='button'
 						onClick={() => scroll('left')}
-						className='ml-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-faint hover:text-ink'
+						className='pointer-events-auto ml-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-faint hover:text-ink'
 						aria-label='Scroll tabs left'
 					>
 						<ChevronLeft className='h-4 w-4' />
@@ -704,7 +713,7 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 			)}
 
 			{/* Scrollable tabs */}
-			<div ref={scrollRef} className='scrollbar-hide overflow-x-auto border-b border-ink/10'>
+			<div ref={scrollRef} className='scrollbar-hide overflow-x-auto' style={maskStyle}>
 				<div className='flex min-w-max flex-nowrap items-center justify-start gap-1'>
 					{tabs.map((tab, idx) => {
 						const LucideIcon = tab.icon;
@@ -713,18 +722,23 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 								key={tab.label}
 								type='button'
 								onClick={() => onTabChange(idx)}
-								className={`-mb-px inline-flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3 py-2 font-mono text-xs transition-colors md:px-4 ${
-									activeTab === idx
-										? 'border-pine text-ink'
-										: 'border-transparent text-ink-soft hover:text-ink'
-								}`}
+								className='relative inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 font-mono text-xs transition-colors md:px-4'
 							>
-								{tab.faIcon ? (
-									<Icon icon={tab.faIcon} className='h-4 w-4' />
-								) : LucideIcon ? (
-									<LucideIcon className='h-4 w-4' />
-								) : null}
-								{tab.label}
+								{activeTab === idx && (
+									<motion.div
+										layoutId='heroTabIndicator'
+										className='absolute inset-0 rounded-lg bg-ink/[0.07]'
+										transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
+									/>
+								)}
+								<span className={`relative z-10 flex items-center gap-2 ${activeTab === idx ? 'font-medium text-ink' : 'text-ink-soft hover:text-ink'}`}>
+									{tab.faIcon ? (
+										<Icon icon={tab.faIcon} className='h-4 w-4' />
+									) : LucideIcon ? (
+										<LucideIcon className='h-4 w-4' />
+									) : null}
+									{tab.label}
+								</span>
 							</button>
 						);
 					})}
@@ -734,12 +748,12 @@ const HeroTabs = ({ tabs, activeTab, onTabChange }: { tabs: HeroTabEntry[]; acti
 			{/* Right fade + arrow */}
 			{canScrollRight && (
 				<div
-					className='absolute inset-y-0 right-0 z-20 flex w-20 items-center justify-end bg-gradient-to-l from-paper from-30% via-paper/70 via-60% to-transparent'
+					className='pointer-events-none absolute inset-y-0 right-0 z-20 flex w-12 items-center justify-end'
 				>
 					<button
 						type='button'
 						onClick={() => scroll('right')}
-						className='mr-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-faint hover:text-ink'
+						className='pointer-events-auto mr-1 flex h-8 w-8 items-center justify-center rounded-full text-ink-faint hover:text-ink'
 						aria-label='Scroll tabs right'
 					>
 						<ChevronRight className='h-4 w-4' />
@@ -875,12 +889,12 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					<HeroTabs tabs={getStartedTabs} activeTab={activeTab} onTabChange={setActiveTab} />
 
 					{/* Code block */}
-					<InkPanel caption={<>Fig. 01 — {getStartedTabs[activeTab]?.label ?? 'agentOS'}</>}>
-						<div className='flex items-center gap-2 border-b border-cream/10 px-4 py-3'>
-							<div className='h-3 w-3 rounded-full bg-cream/15' />
-							<div className='h-3 w-3 rounded-full bg-cream/15' />
-							<div className='h-3 w-3 rounded-full bg-cream/15' />
-							<span className='ml-2 font-mono text-xs text-cream/45'>{getStartedTabs[activeTab]?.fileName ?? 'index.ts'}</span>
+					<div className='overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50'>
+						<div className='flex items-center gap-2 border-b border-zinc-200 px-4 py-3'>
+							<div className='h-3 w-3 rounded-full bg-zinc-200' />
+							<div className='h-3 w-3 rounded-full bg-zinc-200' />
+							<div className='h-3 w-3 rounded-full bg-zinc-200' />
+							<span className='ml-2 text-xs text-zinc-600'>{getStartedTabs[activeTab]?.fileName ?? 'index.ts'}</span>
 						</div>
 						<div className='relative h-[380px] overflow-y-auto'>
 							<AnimatePresence mode='wait'>
@@ -890,7 +904,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 									animate={{ opacity: 1 }}
 									exit={{ opacity: 0 }}
 									transition={{ duration: 0.2 }}
-									className='overflow-x-auto p-6 font-mono text-sm leading-relaxed text-cream/80 [&_.line]:break-all [&_.shiki]:!m-0 [&_.shiki]:!bg-transparent [&_.shiki]:!p-0 [&_.shiki]:font-mono [&_.shiki]:text-sm [&_.shiki]:leading-relaxed'
+									className='overflow-x-auto p-6 font-mono text-sm leading-relaxed text-zinc-600 [&_.line]:break-all [&_.shiki]:!m-0 [&_.shiki]:!bg-transparent [&_.shiki]:!p-0 [&_.shiki]:font-mono [&_.shiki]:text-sm [&_.shiki]:leading-relaxed'
 								>
 									<span
 										className='not-prose code'
@@ -900,7 +914,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 								</motion.div>
 							</AnimatePresence>
 						</div>
-					</InkPanel>
+					</div>
 				</motion.div>
 
 				{/* Buttons */}
@@ -921,7 +935,7 @@ const Hero = ({ heroTabs }: { heroTabs: HeroTabCode[] }) => {
 					<div className='flex-1' />
 					<a
 						href='/agent-os/registry'
-						className='inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft transition-colors hover:text-pine'
+						className='inline-flex items-center gap-2 whitespace-nowrap text-sm text-ink-soft transition-colors hover:text-ink'
 					>
 						<Package className='h-4 w-4' />
 						View Package Registry
@@ -958,7 +972,7 @@ const FeatureCard = ({
 		transition={{ duration: 0.5, delay }}
 		className='border-t border-ink/10 pt-6'
 	>
-		<div className='mb-3 text-olive'>
+		<div className='mb-3 text-ink-soft'>
 			<IconComponent className='h-4 w-4' />
 		</div>
 		<h3 className='mb-2 text-base font-medium text-ink'>
@@ -991,7 +1005,7 @@ const FeatureCard = ({
 const DocsLink = ({ href }: { href: string }) => (
 	<a
 		href={href}
-		className='inline-flex items-center gap-1 text-sm text-ink-soft transition-colors hover:text-pine'
+		className='inline-flex items-center gap-1 text-sm text-ink-soft transition-colors hover:text-ink'
 	>
 		Docs <span aria-hidden='true'>→</span>
 	</a>
@@ -999,7 +1013,7 @@ const DocsLink = ({ href }: { href: string }) => (
 
 // --- Icon Box (rounded square outline like Rivet/agentOS logos) ---
 const IconBox = ({ children }: { children: React.ReactNode }) => (
-	<div className='relative mb-6 flex h-10 w-10 items-center justify-center text-olive md:h-12 md:w-12'>
+	<div className='relative mb-6 flex h-10 w-10 items-center justify-center text-ink-soft md:h-12 md:w-12'>
 		<svg
 			className='absolute inset-0 h-full w-full'
 			viewBox='0 0 172 172'
@@ -1181,7 +1195,7 @@ const StackingFeatureCards = () => {
 										}}
 									>
 										<IconBox>
-											<Icon className='h-4 w-4 text-olive md:h-5 md:w-5' />
+											<Icon className='h-4 w-4 text-ink-soft md:h-5 md:w-5' />
 										</IconBox>
 										<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-4xl'>
 											{feature.title}
@@ -1199,7 +1213,8 @@ const StackingFeatureCards = () => {
 												{feature.tags.map((tag) => (
 													<span
 														key={tag}
-														className='rounded-full border border-ink/10 bg-white/55 px-4 py-1.5 font-mono text-sm text-ink-soft'
+														onMouseMove={handleGlowPillMouseMove}
+														className={`${GLOW_PILL_CLASS} rounded-full border border-ink/10 bg-white/55 px-4 py-1.5 font-mono text-sm text-ink-soft`}
 													>
 														{tag}
 													</span>
@@ -1260,13 +1275,24 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 		el.scrollBy({ left: dir === 'left' ? -cardWidth - 16 : cardWidth + 16, behavior: 'smooth' });
 	};
 
+	// Fade the row's edges wherever a card is cut off, so partially visible
+	// cards dissolve into the page instead of being hard-clipped.
+	const maskImage =
+		canScrollLeft && canScrollRight
+			? 'linear-gradient(to right, transparent, #000 56px, #000 calc(100% - 56px), transparent)'
+			: canScrollRight
+				? 'linear-gradient(to right, #000 calc(100% - 56px), transparent)'
+				: canScrollLeft
+					? 'linear-gradient(to right, transparent, #000 56px, #000)'
+					: undefined;
+
 	return (
 		<div>
 			{/* Cards */}
 			<div
 				ref={scrollRef}
 				className='-mx-6 flex gap-4 overflow-x-auto px-6 pb-4 scrollbar-hide'
-				style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+				style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitMaskImage: maskImage, maskImage }}
 			>
 				{section.features.map((feature) => {
 					const Icon = feature.icon;
@@ -1276,12 +1302,12 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 								className='relative flex w-[280px] flex-shrink-0 flex-col rounded-2xl border border-ink/10 bg-white/55 p-6'
 							>
 							{feature.comingSoon && (
-								<span className='absolute top-4 right-4 rounded-full border border-ink/10 bg-mat px-2 py-0.5 text-[10px] font-medium text-ink-soft'>
+								<span className='absolute top-4 right-4 rounded-full border border-ink/10 bg-ink/5 px-2 py-0.5 text-[10px] font-medium text-ink-soft'>
 									Coming Soon
 								</span>
 							)}
 							<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-ink/5'>
-								<Icon className='h-5 w-5 text-olive' />
+								<Icon className='h-5 w-5 text-ink-soft' />
 							</div>
 							<h3 className='mb-2 text-sm font-medium text-ink'>
 								{feature.title}
@@ -1330,7 +1356,7 @@ const FeatureCardCarousel = ({ section }: { section: ThemedSection }) => {
 
 const ThemedFeatureSections = () => (
 	<div className='mt-16 md:mt-48'>
-		{themedSections.map((section, sectionIdx) => (
+		{themedSections.map((section) => (
 			<section
 				key={section.category}
 				className='border-t border-ink/10 px-6 py-24 md:py-40'
@@ -1344,11 +1370,6 @@ const ThemedFeatureSections = () => (
 						transition={{ duration: 0.6 }}
 						className='mb-10'
 					>
-						<Eyebrow
-							index={String(sectionIdx + 1).padStart(2, '0')}
-							label={section.category}
-							className='mb-4'
-						/>
 						<h2 className='mb-4 text-3xl font-medium tracking-[-0.015em] text-ink md:text-5xl lg:text-6xl'>
 							{section.title}
 						</h2>
@@ -1373,36 +1394,120 @@ const ThemedFeatureSections = () => (
 );
 
 // --- agentOS Features Section ---
+const REGISTRY_TYPE_LABELS: Record<string, string> = {
+  agent: 'Agent',
+  'file-system': 'File System',
+  'sandbox-extension': 'Sandbox',
+  software: 'Software',
+  tool: 'Tool',
+};
+
+// Two marquee rows of registry apps, logo-bearing entries split into
+// opposing-direction tracks. Pulled live from the registry so titles, icons,
+// and status stay in sync.
+const REGISTRY_ROW_A = ['pi', 's3', 'google-drive', 'postgres', 'docker', 'e2b', 'modal', 'vercel'];
+const REGISTRY_ROW_B = ['claude-code', 'codex', 'opencode', 'amp', 'sqlite', 'daytona', 'browserbase', 'computesdk'];
+const pickRegistry = (slugs: string[]) =>
+  slugs
+    .map((slug) => registry.find((entry) => entry.slug === slug))
+    .filter((entry): entry is (typeof registry)[number] => entry !== undefined);
+const registryRowA = pickRegistry(REGISTRY_ROW_A);
+const registryRowB = pickRegistry(REGISTRY_ROW_B);
+
+const RegistryAppTile = ({ entry, hidden }: { entry: (typeof registry)[number]; hidden?: boolean }) => {
+  const available = entry.status === 'available';
+  const category = REGISTRY_TYPE_LABELS[entry.types[0]] ?? 'Integration';
+  return (
+    <a
+      href={`/agent-os/registry/${entry.slug}`}
+      aria-hidden={hidden}
+      tabIndex={hidden ? -1 : undefined}
+      className='group/tile flex w-64 shrink-0 items-center gap-3.5 rounded-xl border border-ink/10 bg-white/55 p-3 transition-colors hover:border-ink/25 hover:bg-white/80'
+    >
+      <div className='flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-ink/10 bg-ink/5'>
+        {entry.image ? (
+          <img src={entry.image} alt={entry.title} width={26} height={26} className='object-contain' />
+        ) : entry.icon ? (
+          <Icon icon={entry.icon} style={{ width: 24, height: 24 }} className='text-ink' />
+        ) : (
+          <span className='font-mono text-base font-medium text-ink-soft'>{entry.title.charAt(0)}</span>
+        )}
+      </div>
+      <div className='min-w-0 flex-1'>
+        <h4 className='truncate text-sm font-medium text-ink'>{entry.title}</h4>
+        <p className='truncate text-xs text-ink-faint'>{category}</p>
+      </div>
+      <span
+        className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold uppercase tracking-wide transition-colors ${
+          available
+            ? 'border-ink/15 text-ink-soft group-hover/tile:border-ink group-hover/tile:bg-ink group-hover/tile:text-cream'
+            : 'border-ink/10 text-ink-faint'
+        }`}
+      >
+        {available ? 'Get' : 'Soon'}
+      </span>
+    </a>
+  );
+};
+
+const RegistryMarqueeRow = ({
+  apps,
+  direction,
+}: {
+  apps: (typeof registry)[number][];
+  direction: 'left' | 'right';
+}) => (
+  <div className='group relative overflow-hidden [-webkit-mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)] [mask-image:linear-gradient(to_right,transparent,#000_6%,#000_94%,transparent)]'>
+    <div
+      className={`flex w-max gap-3 ${
+        direction === 'left'
+          ? 'animate-[registry-marquee-left_46s_linear_infinite]'
+          : 'animate-[registry-marquee-right_46s_linear_infinite]'
+      } group-hover:[animation-play-state:paused] motion-reduce:animate-none`}
+    >
+      {[...apps, ...apps].map((entry, i) => (
+        <RegistryAppTile key={`${entry.slug}-${i}`} entry={entry} hidden={i >= apps.length} />
+      ))}
+    </div>
+  </div>
+);
+
 const RegistryCallout = () => (
-	<section className='border-t border-ink/10 px-6 py-24 md:py-40'>
-		<div className='mx-auto max-w-7xl'>
-			<motion.div
-				initial={{ opacity: 0, y: 20 }}
-				whileInView={{ opacity: 1, y: 0 }}
-				viewport={{ once: true }}
-				transition={{ duration: 0.5 }}
-				className='rounded-xl border border-ink/10 bg-white/55 p-8 md:p-12'
-			>
-				<div className='flex flex-col items-start gap-6 md:flex-row md:items-center md:justify-between'>
-					<div>
-						<h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-ink md:text-3xl'>
-							agentOS Registry
-						</h3>
-						<p className='max-w-lg text-base leading-relaxed text-ink-soft'>
-							Browse and install pre-built tools, integrations, and capabilities for your agents. From file systems to databases to API connectors.
-						</p>
-					</div>
-					<a
-						href='/agent-os/registry'
-						className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
-					>
-						Explore the Registry
-						<ArrowRight className='h-4 w-4' />
-					</a>
-				</div>
-			</motion.div>
-		</div>
-	</section>
+  <section className='border-t border-ink/10 px-6 py-24 md:py-40'>
+    <div className='mx-auto max-w-7xl'>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5 }}
+        className='overflow-hidden rounded-2xl border border-ink/10 bg-white/55 p-6 md:p-10'
+      >
+        <div className='mb-8 max-w-2xl'>
+          <h3 className='mb-2 text-2xl font-medium tracking-[-0.015em] text-ink md:text-3xl'>
+            agentOS Registry
+          </h3>
+          <p className='text-base leading-relaxed text-ink-soft'>
+            A marketplace for agent capabilities. Browse and install pre-built tools, integrations, file systems, databases, and sandboxes &mdash; one command away.
+          </p>
+        </div>
+
+        <div className='flex flex-col gap-3'>
+          <RegistryMarqueeRow apps={registryRowA} direction='left' />
+          <RegistryMarqueeRow apps={registryRowB} direction='right' />
+        </div>
+
+        <div className='mt-8 flex items-center justify-end border-t border-ink/10 pt-5'>
+          <a
+            href='/agent-os/registry'
+            className='selection-dark inline-flex flex-shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
+          >
+            Explore the Registry
+            <ArrowRight className='h-4 w-4' />
+          </a>
+        </div>
+      </motion.div>
+    </div>
+  </section>
 );
 
 const AgentOSFeatures = () => (
@@ -1417,9 +1522,6 @@ const AgentOSFeatures = () => (
 // Benchmark data (computed from raw inputs in bench.ts)
 import { benchColdStart, benchWorkloads, BENCHMARK_DATE, SANDBOX_COLDSTART_PROVIDER, SANDBOX_COST_PROVIDER, type WorkloadKey } from '@/data/bench';
 
-// Floor for pixel-grid columns so the tiny agentOS values still render a visible cell.
-const BENCH_CHART_FLOOR = 0.09;
-
 function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
 	// The wrapper is intentionally not positioned so the tooltip spans the ink
 	// card itself (the nearest positioned ancestor) instead of clipping at the
@@ -1433,7 +1535,7 @@ function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
 			>
 				<path d='M8 0a8 8 0 100 16A8 8 0 008 0zm1 12H7V7h2v5zm-1-6a1 1 0 110-2 1 1 0 010 2z' />
 			</svg>
-			<span className='pointer-events-none absolute inset-x-3 bottom-12 z-50 rounded-lg border border-cream/15 bg-ink p-3 text-left text-[11px] leading-relaxed text-cream/80 opacity-0 shadow-xl transition-opacity duration-200 group-hover/tip:pointer-events-auto group-hover/tip:opacity-100 [&_a]:text-sage [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-medium [&_strong]:text-cream'>
+			<span className='pointer-events-none absolute inset-x-3 bottom-12 z-50 rounded-lg border border-cream/15 bg-ink p-3 text-left text-[11px] leading-relaxed text-cream/80 opacity-0 shadow-xl transition-opacity duration-200 group-hover/tip:pointer-events-auto group-hover/tip:opacity-100 [&_a]:text-cream [&_a]:underline [&_a]:underline-offset-2 [&_strong]:font-medium [&_strong]:text-cream'>
 				{children}
 			</span>
 		</span>
@@ -1441,21 +1543,37 @@ function BenchInfoTooltip({ children }: { children: React.ReactNode }) {
 }
 
 function BenchToggle({ options, active, onChange }: { options: string[]; active: number; onChange: (idx: number) => void }) {
-	return (
-		<div className='flex flex-wrap justify-end gap-1'>
-			{options.map((label, i) => (
-				<button
-					key={label}
-					onClick={() => onChange(i)}
-					className={`rounded px-2 py-1 font-mono text-[10px] tracking-wider transition-colors ${
-						i === active ? 'bg-cream/10 text-cream' : 'text-cream/45 hover:text-cream/70'
-					}`}
-				>
-					{label}
-				</button>
-			))}
-		</div>
-	);
+  const layoutId = useId();
+  const columns = options.length === 3 ? 'grid-cols-3' : 'grid-cols-2';
+
+  return (
+    <div className={`grid w-full gap-1 rounded-lg border border-cream/10 bg-cream/[0.03] p-1 ${columns}`}>
+      {options.map((label, i) => {
+        const isActive = i === active;
+        return (
+          <motion.button
+            key={label}
+            type='button'
+            onClick={() => onChange(i)}
+            aria-pressed={isActive}
+            whileTap={{ scale: 0.94 }}
+            className={`relative flex h-7 min-w-0 items-center justify-center rounded-md px-1.5 text-center font-mono text-[10px] uppercase tracking-[0.12em] transition-colors ${
+              isActive ? 'text-ink' : 'text-cream/45 hover:text-cream/75'
+            }`}
+          >
+            {isActive && (
+              <motion.span
+                layoutId={`bench-toggle-${layoutId}`}
+                className='absolute inset-0 rounded-md bg-cream'
+                transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+              />
+            )}
+            <span className='relative z-[1] truncate'>{label}</span>
+          </motion.button>
+        );
+      })}
+    </div>
+  );
 }
 
 interface BenchRowEntry {
@@ -1464,61 +1582,153 @@ interface BenchRowEntry {
 	highlight?: boolean;
 }
 
-// Dark ink data card matching the BenchmarksSection pattern on /actors:
-// sage mono title, direction tag, headline stat beside a pixel-grid chart,
+// Splits a stat string into a leading symbol prefix, the numeric portion, and a
+// trailing unit suffix so the number can be counted up while the units stay put.
+// Returns null when there is no number to animate (e.g. "Infinite").
+function parseStatNumber(text: string) {
+	const match = text.match(/^([^\d-]*)(-?[\d,]*\.?\d+)(.*)$/);
+	if (!match) return null;
+	const [, prefix, rawNumber, suffix] = match;
+	const normalized = rawNumber.replace(/,/g, '');
+	const decimals = normalized.includes('.') ? normalized.split('.')[1].length : 0;
+	return {
+		prefix,
+		suffix,
+		value: Number.parseFloat(normalized),
+		decimals,
+		grouped: rawNumber.includes(','),
+	};
+}
+
+// Counts the numeric part of a stat from 0 up to its value. The first run is
+// gated on `active` (the card scrolling into view) and only fires once; later
+// value changes (toggling workload or tier) re-trigger the count from the
+// previous value. Honors reduced-motion by rendering the final value outright.
+function CountUpStat({ text, active }: { text: string; active: boolean }) {
+	const parsed = useMemo(() => parseStatNumber(text), [text]);
+	const reducedMotion = useReducedMotion();
+	const target = parsed?.value ?? 0;
+
+	const [display, setDisplay] = useState(0);
+	const startedRef = useRef(false);
+	const fromRef = useRef(0);
+	const rafRef = useRef(0);
+
+	useEffect(() => {
+		if (!parsed) return;
+		if (reducedMotion) {
+			setDisplay(target);
+			fromRef.current = target;
+			startedRef.current = true;
+			return;
+		}
+		// Not yet scrolled into view: stay primed at zero for the first count-up.
+		if (!active) {
+			if (!startedRef.current) setDisplay(0);
+			return;
+		}
+		const from = startedRef.current ? fromRef.current : 0;
+		startedRef.current = true;
+		const duration = 850;
+		let start = 0;
+		const step = (now: number) => {
+			if (!start) start = now;
+			const t = Math.min(1, (now - start) / duration);
+			const eased = 1 - (1 - t) ** 3;
+			setDisplay(from + (target - from) * eased);
+			if (t < 1) {
+				rafRef.current = requestAnimationFrame(step);
+			} else {
+				fromRef.current = target;
+			}
+		};
+		rafRef.current = requestAnimationFrame(step);
+		return () => cancelAnimationFrame(rafRef.current);
+	}, [parsed, target, active, reducedMotion]);
+
+	if (!parsed) return <>{text}</>;
+
+	const formatted = parsed.grouped
+		? display.toLocaleString(undefined, {
+				minimumFractionDigits: parsed.decimals,
+				maximumFractionDigits: parsed.decimals,
+			})
+		: display.toFixed(parsed.decimals);
+
+	return (
+		<span className='tabular-nums'>
+			{parsed.prefix}
+			{formatted}
+			{parsed.suffix}
+		</span>
+	);
+}
+
+// Dark ink data card with a mono title, direction tag, headline stat,
 // and label/value rows pinned to the card's foot.
 function BenchCard({
-	title,
-	stat,
-	statNote,
-	chart,
-	toggle,
-	rows,
-	note,
+  title,
+  statNote,
+  verb,
+  toggle,
+  rows,
+  note,
 }: {
-	title: string;
-	stat: string;
-	statNote: string;
-	chart: number[];
-	toggle?: React.ReactNode;
-	rows: BenchRowEntry[];
-	note?: string;
+  title: string;
+  statNote: string;
+  verb: string;
+  toggle?: React.ReactNode;
+  rows: BenchRowEntry[];
+  note?: string;
 }) {
-	return (
-		<InkPanel className='h-full'>
-			<div className='flex h-full flex-col p-6'>
-				<div className='mb-5 flex items-start justify-between gap-4'>
-					<span className='font-mono text-[11px] uppercase tracking-[0.16em] text-sage'>{title}</span>
-					<span className='flex items-center gap-1 text-right font-mono text-[10px] uppercase tracking-wider text-cream/40'>
-						<ArrowDown className='h-3 w-3 flex-shrink-0' />
-						lower is better
-					</span>
-				</div>
+  // Trigger the count-up the first time the card scrolls into view, once.
+  const [inView, setInView] = useState(false);
 
-				<div className='flex items-end justify-between gap-6'>
-					<div className='min-w-0'>
-						<div className='text-2xl font-medium leading-tight text-cream md:text-3xl'>{stat}</div>
-						<div className='mt-1 text-sm text-cream/55'>{statNote}</div>
-					</div>
-					<PixelGridChart values={chart} rows={7} accentColumn={0} className='h-20 w-auto flex-shrink-0' />
-				</div>
+  return (
+    <InkPanel className='h-full'>
+      <motion.div
+        className='flex h-full flex-col p-6 md:p-7'
+        onViewportEnter={() => setInView(true)}
+        viewport={{ once: true, margin: '-10% 0px' }}
+      >
+        {/* Eyebrow rail */}
+        <div className='flex min-h-[2.5rem] items-start justify-between gap-3'>
+          <span className='font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-sage'>{title}</span>
+          <span className='inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-cream/40'>
+            <ArrowDown className='h-3 w-3 flex-shrink-0' />
+            lower is better
+          </span>
+        </div>
 
-				{toggle ? <div className='mt-5 flex justify-end'>{toggle}</div> : null}
+        {/* Verdict: the headline multiplier */}
+        <div className='mt-5 flex items-baseline gap-2'>
+          <span className='font-sans text-[2.75rem] font-medium leading-[1.0] tracking-[-0.02em] tabular-nums text-cream md:text-5xl'>
+            <CountUpStat text={statNote} active={inView} />
+          </span>
+          <span className='font-sans text-lg font-medium text-cream/45 md:text-xl'>{verb}</span>
+        </div>
 
-				<div className='mt-6 flex flex-1 flex-col justify-end gap-2 border-t border-cream/10 pt-4'>
-					{rows.map((row, i) => (
-						<div key={i} className='flex items-center justify-between gap-4 text-xs'>
-							<span className={`inline-flex items-center ${row.highlight ? 'text-cream' : 'text-cream/55'}`}>
-								{row.label}
-							</span>
-							<span className={row.highlight ? 'font-medium text-sage' : 'text-cream/55'}>{row.value}</span>
-						</div>
-					))}
-					{note ? <p className='mt-1 text-[11px] leading-relaxed text-cream/40'>{note}</p> : null}
-				</div>
-			</div>
-		</InkPanel>
-	);
+        {/* Comparison ledger: ours vs theirs, same unit, right-aligned */}
+        <div className='mb-6 mt-6 divide-y divide-cream/10 border-y border-cream/10'>
+          {rows.map((row, i) => (
+            <div key={i} className='flex items-baseline justify-between gap-4 py-2.5'>
+              <span className={`inline-flex min-w-0 items-baseline font-mono text-[13px] ${row.highlight ? 'font-medium text-cream' : 'font-normal text-cream/45'}`}>
+                {row.label}
+              </span>
+              <span className={`whitespace-nowrap font-mono text-[15px] tabular-nums ${row.highlight ? 'font-medium text-sage' : 'font-normal text-cream/45'}`}>
+                {row.value}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {toggle}
+        {note ? (
+          <p className='mt-auto font-mono text-[10px] leading-relaxed text-cream/35'>{note}</p>
+        ) : null}
+      </motion.div>
+    </InkPanel>
+  );
 }
 
 function BenchColdStartChart() {
@@ -1529,9 +1739,8 @@ function BenchColdStartChart() {
 	return (
 		<BenchCard
 			title='Cold Start'
-			stat={`${g.agentOS} ms`}
-			statNote={`${Math.round(g.sandbox / g.agentOS)}x faster`}
-			chart={[Math.max(g.agentOS / g.sandbox, BENCH_CHART_FLOOR), 1]}
+			statNote={`${Math.round(g.sandbox / g.agentOS)}x`}
+				verb='faster'
 			toggle={<BenchToggle options={groups.map((t) => t.label)} active={active} onChange={setActive} />}
 			rows={[
 				{
@@ -1560,13 +1769,13 @@ function BenchColdStartChart() {
 
 function BenchMemoryBar({ workload }: { workload: WorkloadKey }) {
 	const mem = benchWorkloads[workload].memory;
+	const [memMult, memVerb] = mem.multiplier.split(' ');
 
 	return (
 		<BenchCard
 			title='Memory Per Instance'
-			stat={mem.agentOS}
-			statNote={mem.multiplier}
-			chart={[Math.max(mem.agentOSBar / 100, BENCH_CHART_FLOOR), 1]}
+			statNote={memMult}
+				verb={memVerb}
 			rows={[
 				{
 					label: (
@@ -1598,13 +1807,13 @@ function BenchCostChart({ workload }: { workload: WorkloadKey }) {
 	const sandboxCost = benchWorkloads[workload].sandboxCost;
 	const [active, setActive] = useState(0);
 	const t = tiers[active];
+	const [costMult, costVerb] = t.multiplier.split(' ');
 
 	return (
 		<BenchCard
 			title='Cost Per Execution-Second'
-			stat={t.value}
-			statNote={t.multiplier}
-			chart={[Math.max(t.bar / 100, BENCH_CHART_FLOOR), 1]}
+			statNote={costMult}
+				verb={costVerb}
 			toggle={<BenchToggle options={tiers.map((tier) => tier.label)} active={active} onChange={setActive} />}
 			rows={[
 				{
@@ -1653,20 +1862,45 @@ function BenchmarkSection() {
 			</div>
 
 			<div className='mb-6 flex items-center justify-between max-sm:flex-col max-sm:items-stretch max-sm:gap-2'>
-				<p className='text-xs text-ink-faint max-sm:order-2 max-sm:px-1 max-sm:leading-relaxed'>Workload: {wl.description}</p>
-				<div className='flex gap-1 rounded-lg border border-ink/10 bg-white/55 p-1 max-sm:order-1 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:rounded-xl'>
-					{(Object.keys(benchWorkloads) as WorkloadKey[]).map((key) => (
-						<button
-							key={key}
-							onClick={() => setWorkload(key)}
-							aria-pressed={workload === key}
-							className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors max-sm:flex max-sm:min-h-10 max-sm:w-full max-sm:items-center max-sm:justify-center max-sm:rounded-lg max-sm:py-2 max-sm:text-center ${
-								workload === key ? 'bg-ink text-cream' : 'text-ink-soft hover:text-ink'
-							}`}
+				<p className='text-xs text-ink-faint max-sm:order-2 max-sm:px-1 max-sm:leading-relaxed'>
+					Workload:{' '}
+					<AnimatePresence mode='wait' initial={false}>
+						<motion.span
+							key={workload}
+							initial={{ opacity: 0, y: 4 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -4 }}
+							transition={{ duration: 0.2, ease: 'easeOut' }}
+							className='inline-block'
 						>
-							{benchWorkloads[key].label}
-						</button>
-					))}
+							{wl.description}
+						</motion.span>
+					</AnimatePresence>
+				</p>
+				<div className='flex gap-1 rounded-lg border border-ink/10 bg-white/55 p-1 max-sm:order-1 max-sm:grid max-sm:w-full max-sm:grid-cols-2 max-sm:rounded-xl'>
+					{(Object.keys(benchWorkloads) as WorkloadKey[]).map((key) => {
+              const isActive = workload === key;
+              return (
+                <motion.button
+                  key={key}
+                  onClick={() => setWorkload(key)}
+                  aria-pressed={isActive}
+                  whileTap={{ scale: 0.96 }}
+                  className={`relative rounded-md px-2.5 py-1 text-xs font-medium transition-colors max-sm:flex max-sm:min-h-10 max-sm:w-full max-sm:items-center max-sm:justify-center max-sm:rounded-lg max-sm:py-2 max-sm:text-center ${
+                    isActive ? 'text-cream' : 'text-ink-soft hover:text-ink'
+                  }`}
+                >
+                  {isActive && (
+                    <motion.span
+                      layoutId='bench-workload-toggle'
+                      className='absolute inset-0 rounded-md bg-ink max-sm:rounded-lg'
+                      transition={{ type: 'spring', stiffness: 480, damping: 38 }}
+                    />
+                  )}
+                  <span className='relative z-[1]'>{benchWorkloads[key].label}</span>
+                </motion.button>
+              );
+            })}
 				</div>
 			</div>
 
@@ -1680,7 +1914,7 @@ function BenchmarkSection() {
 				Measured on Intel i7-12700KF. Cold start baseline: {SANDBOX_COLDSTART_PROVIDER}, the fastest mainstream sandbox provider as of {BENCHMARK_DATE}. Cost baseline: {SANDBOX_COST_PROVIDER}, the cheapest mainstream sandbox provider as of {BENCHMARK_DATE} (1 vCPU + 1 GiB default). Cost assumes 70% utilization on self-hosted hardware vs. per-second sandbox billing.{' '}
 				<a
 					href='/docs/agent-os/benchmarks'
-					className='inline-flex items-center gap-1 text-ink-soft underline underline-offset-2 transition-colors hover:text-pine'
+					className='inline-flex items-center gap-1 text-ink-soft underline underline-offset-2 transition-colors hover:text-ink'
 				>
 					Benchmark document
 					<ExternalLink className='h-3 w-3' />
@@ -1722,7 +1956,7 @@ const TechnologyAndBenchmarks = () => (
 					<div className='rounded-xl border border-ink/10 bg-white/55 p-6'>
 						<div className='mb-3 flex items-center gap-3'>
 							<div className='flex h-10 w-10 items-center justify-center rounded-lg bg-ink/5'>
-								<Globe className='h-5 w-5 text-olive' />
+								<Globe className='h-5 w-5 text-ink-soft' />
 							</div>
 							<h3 className='text-lg font-medium text-ink'>Battle-tested technology</h3>
 						</div>
@@ -1817,15 +2051,6 @@ const SisterProducts = () => {
 		<section className='border-t border-ink/10 px-6 py-24 md:py-40'>
 			<div className='mx-auto max-w-5xl'>
 				<div className='mb-12 max-w-3xl'>
-					<motion.span
-						initial={{ opacity: 0, y: 20 }}
-						whileInView={{ opacity: 1, y: 0 }}
-						viewport={{ once: true }}
-						transition={{ duration: 0.5 }}
-						className='mb-4 inline-block font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-pine'
-					>
-						The Rest of the Suite
-					</motion.span>
 					<motion.h2
 						initial={{ opacity: 0, y: 20 }}
 						whileInView={{ opacity: 1, y: 0 }}
@@ -1869,7 +2094,7 @@ const SisterProducts = () => {
 									</li>
 								))}
 							</ul>
-							<div className='inline-flex items-center gap-2 text-sm font-medium text-ink transition-colors group-hover:text-pine'>
+							<div className='inline-flex items-center gap-2 text-sm font-medium text-ink transition-colors group-hover:text-ink'>
 								{product.cta}
 								<ArrowRight className='h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5' />
 							</div>
@@ -1897,7 +2122,7 @@ const FromUnixToAgents = () => (
 						after='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 					/>
 					<p className='mt-2 font-mono text-xs text-ink-faint'>
-						Left: Unix timesharing, UW-Madison, 1978. Right: "Data flock (digits)" by Philipp Schmitt, <a href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg' className='underline hover:text-pine' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>
+						Left: Unix timesharing, UW-Madison, 1978. Right: "Data flock (digits)" by Philipp Schmitt, <a href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg' className='underline hover:text-ink' target='_blank' rel='noopener noreferrer'>CC BY-SA 4.0</a>
 					</p>
 				</motion.div>
 				<motion.div

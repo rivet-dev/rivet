@@ -57,7 +57,7 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 					) : null}
 					<span className="truncate"> {item.title}</span>
 					{"badge" in item && item.badge ? (
-						<span className="ml-2 px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded-full whitespace-nowrap">
+						<span className="ml-2 px-2 py-0.5 text-xs font-medium bg-ink/[0.06] text-ink-soft rounded-full whitespace-nowrap">
 							{item.badge}
 						</span>
 					) : null}
@@ -88,7 +88,7 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 				</span>
 			</span>
 			{"badge" in item && item.badge ? (
-				<span className="ml-2 px-[6px] py-0 text-[10px] font-medium bg-muted border border-white/10 text-muted-foreground rounded-sm whitespace-nowrap">
+				<span className="ml-2 px-[6px] py-0 text-[10px] font-medium bg-ink/[0.06] border border-ink/10 text-ink-soft rounded-sm whitespace-nowrap">
 					{item.badge}
 				</span>
 			) : null}
@@ -163,7 +163,7 @@ export function NavLink({
 			href={href}
 			target={external && "_blank"}
 			className={cn(
-				"group flex w-full items-center border-l-2 border-l-border py-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 aria-current-page:text-foreground aria-current-page:border-l-orange-500",
+				"group flex w-full items-center border-l-2 border-l-ink/15 py-2 text-sm text-ink-soft transition-colors hover:text-ink hover:border-l-ink/30 aria-current-page:text-ink aria-current-page:border-l-pine",
 				getPaddingClass(level),
 				className,
 			)}
@@ -176,7 +176,7 @@ export function NavLink({
 export function DocsNavigation({ sidebar }: { sidebar: SidebarItem[] }) {
 	return (
 		<NavigationStateProvider>
-			<div className="sticky top-header max-h-content text-white pl-8 pr-6 py-6 overflow-y-auto">
+			<div className="sticky top-header max-h-content text-ink pl-8 pr-6 py-6 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)]">
 				<Tree pages={sidebar} />
 			</div>
 		</NavigationStateProvider>

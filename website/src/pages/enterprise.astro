@@ -1,10 +1,8 @@
 ---
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { jsonLdString } from '@/lib/jsonLd';
-import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
 import { PerimeterDiagram } from '@/components/marketing/editorial/PerimeterDiagram';
 import { CatalogCard } from '@/components/marketing/editorial/CatalogCard';
-import { Spirograph } from '@/components/marketing/art/Spirograph';
 import { HERO_H1_CLASS, SECTION_H2_CLASS, SUBTITLE_CLASS } from '@/components/marketing/typography';
 
 const title = 'Rivet Enterprise';
@@ -54,17 +52,14 @@ const guarantees = [
 
 const footprints = [
 	{
-		label: 'single-binary',
 		title: 'Single binary',
 		body: 'One process to install, monitor, and upgrade. Ideal for evaluation, embedded deployments, and air-gapped installs.',
 	},
 	{
-		label: 'docker-compose.yml',
 		title: 'Docker Compose',
 		body: 'A complete environment in one file. Stand up Rivet alongside your existing services without changing how you operate them.',
 	},
 	{
-		label: 'kubernetes',
 		title: 'Kubernetes',
 		body: 'Scale out across nodes and regions when traffic demands it. The same artifact you evaluated runs in production.',
 	},
@@ -80,7 +75,6 @@ const footprints = [
 				<div class="mx-auto w-full max-w-7xl">
 					<div class="grid grid-cols-1 items-center gap-12 lg:grid-cols-2 lg:gap-20">
 						<div>
-							<Eyebrow label="Rivet for Enterprise" className="mb-4" />
 							<h1 class={HERO_H1_CLASS}>Run Rivet inside your perimeter.</h1>
 							<p class="mt-4 max-w-xl text-base leading-relaxed text-ink-soft md:text-lg">
 								Deploy Rivet in your VPC, embed it in your customers’ environments, or run it
@@ -110,7 +104,6 @@ const footprints = [
 			<section class="border-t border-ink/10 px-6 py-16 md:py-32">
 				<div class="mx-auto w-full max-w-7xl">
 					<div class="max-w-3xl">
-						<Eyebrow index="01" label="Deployment" className="mb-4" />
 						<h2 class={SECTION_H2_CLASS}>Three ways to deploy.</h2>
 						<p class={SUBTITLE_CLASS}>
 							Rivet ships as software you run, not a service you call out to. Pick the
@@ -120,7 +113,7 @@ const footprints = [
 					<div class="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
 						{
 							deploymentModels.map((model) => (
-								<CatalogCard eyebrow="Model" index={model.index} title={model.title}>
+								<CatalogCard title={model.title}>
 									<p class="mt-2 text-sm leading-relaxed text-ink-soft">{model.body}</p>
 								</CatalogCard>
 							))
@@ -134,7 +127,6 @@ const footprints = [
 				<div class="mx-auto w-full max-w-7xl">
 					<div class="grid grid-cols-1 items-center gap-10 lg:grid-cols-2 lg:gap-16">
 						<div>
-							<Eyebrow index="02" label="Compliance" className="mb-4" />
 							<h2 class={SECTION_H2_CLASS}>Your compliance posture, intact.</h2>
 							<p class={SUBTITLE_CLASS}>
 								Deploy inside the boundary your existing controls already cover. FedRAMP,
@@ -165,7 +157,6 @@ const footprints = [
 			<section class="px-6 py-16 md:py-32">
 				<div class="mx-auto w-full max-w-7xl">
 					<div class="max-w-3xl">
-						<Eyebrow index="03" label="Footprint" className="mb-4" />
 						<h2 class={SECTION_H2_CLASS}>A footprint your ops team will sign off on.</h2>
 						<p class={SUBTITLE_CLASS}>
 							Rivet self-hosts as a single binary or a Docker Compose file, and scales to
@@ -178,14 +169,9 @@ const footprints = [
 					<div class="mt-12 grid grid-cols-1 gap-6 md:grid-cols-3">
 						{
 							footprints.map((fp) => (
-								<div class="flex flex-col overflow-hidden rounded-xl border border-ink/10 bg-white/55 transition-colors hover:border-ink/25">
-									<div class="selection-paper bg-ink px-4 py-2 font-mono text-xs text-cream/85">
-										{fp.label}
-									</div>
-									<div class="p-7 pt-5">
-										<h3 class="text-base font-medium text-ink">{fp.title}</h3>
-										<p class="mt-2 text-sm leading-relaxed text-ink-soft">{fp.body}</p>
-									</div>
+								<div class="flex flex-col rounded-xl border border-ink/10 bg-white/55 p-7 transition-colors hover:border-ink/25">
+									<h3 class="text-base font-medium text-ink">{fp.title}</h3>
+									<p class="mt-2 text-sm leading-relaxed text-ink-soft">{fp.body}</p>
 								</div>
 							))
 						}
@@ -196,9 +182,6 @@ const footprints = [
 			<!-- Closing CTA -->
 			<section class="border-t border-ink/10 px-6 py-16 md:py-32">
 				<div class="mx-auto w-full max-w-7xl text-center">
-					<div class="mb-8 flex justify-center" aria-hidden="true">
-						<Spirograph variant="ring" size={48} stroke="#2E4034" strokeWidth={2.4} strokeOpacity={0.55} />
-					</div>
 					<h2 class={SECTION_H2_CLASS}>Bring Rivet inside your boundary.</h2>
 					<p class="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-ink-soft">
 						Walk through your deployment model with an engineer, or start with the

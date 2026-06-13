@@ -38,7 +38,8 @@ const footer = {
 	],
 	resources: [
 		{ name: "Cookbooks", href: "/cookbook" },
-		{ name: "Compare", href: "/compare" },
+		{ name: "Rivet vs Cloudflare Durable Objects", href: "/compare/rivet-vs-cloudflare-durable-objects" },
+		{ name: "Rivet vs Temporal", href: "/compare/rivet-vs-temporal" },
 		{ name: "Blog", href: "/blog" },
 		{ name: "YC & Speedrun Deal", href: "/startups" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
@@ -282,10 +283,10 @@ function SmallPrint() {
 	);
 }
 
-// The footer is light by default to match the porcelain marketing surfaces.
-// Docs and Learn keep their dark shells, so those paths apply a dark override
-// wrapper instead.
-const DARK_THEMED_PATH_PREFIXES = ['/docs', '/learn'];
+// The footer is light by default to match the porcelain surfaces (marketing
+// and docs). Only the Learn section keeps its dark shell, so that path applies
+// a dark override wrapper instead.
+const DARK_THEMED_PATH_PREFIXES = ['/learn'];
 
 export function Footer({ initialPathname = "" }) {
 	// usePathname returns "" during SSR; fall back to the server-provided path

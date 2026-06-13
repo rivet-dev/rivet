@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
+import { useEffect, useRef } from 'react';
 import { InkPanel } from '@/components/marketing/editorial/InkPanel';
 import { HERO_H1_CLASS, SECTION_H2_CLASS, CAPTION_CLASS } from '@/components/marketing/typography';
 
@@ -53,32 +53,22 @@ const Era = ({ year, title, lead, body, children, future, delay = 0 }: EraProps)
 	</motion.div>
 );
 
-// Archival exhibit in the museum mat treatment, with a printed catalog
-// caption that keeps the attribution link.
+// Archival exhibit with a printed catalog caption that keeps the
+// attribution link.
 const ArchivalPlate = ({
 	src,
 	alt,
-	figure,
 	caption,
 	className,
 }: {
 	src: string;
 	alt: string;
-	figure: string;
 	caption: React.ReactNode;
 	className?: string;
 }) => (
 	<figure className={`max-w-2xl ${className ?? ''}`}>
-		<div className='border border-ink/15 bg-mat p-3'>
-			<img
-				src={src}
-				alt={alt}
-				className='block h-auto w-full outline outline-1 outline-ink/10'
-				loading='lazy'
-			/>
-		</div>
+		<img src={src} alt={alt} className='block h-auto w-full' loading='lazy' />
 		<figcaption className={`${CAPTION_CLASS} mt-3 [&_a]:underline [&_a:hover]:text-ink-soft`}>
-			<span className='font-medium text-ink-soft'>{figure} — </span>
 			{caption}
 		</figcaption>
 	</figure>
@@ -94,19 +84,42 @@ const PrincipleChip = ({ label, text }: { label: string; text: string }) => (
 );
 
 export default function TimelinePage() {
+	const timelineRef = useRef<HTMLDivElement>(null);
+	const railRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		let frame = 0;
+		const update = () => {
+			frame = 0;
+			const container = timelineRef.current;
+			const rail = railRef.current;
+			if (!container || !rail) return;
+			const rect = container.getBoundingClientRect();
+			// The rail starts filling once the timeline reaches the lower part
+			// of the viewport and is full once its end passes that line.
+			const line = window.innerHeight * 0.6;
+			const progress = Math.min(1, Math.max(0, (line - rect.top) / rect.height));
+			rail.style.transform = `scaleY(${progress})`;
+		};
+		const onScroll = () => {
+			if (!frame) frame = requestAnimationFrame(update);
+		};
+		update();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		window.addEventListener('resize', onScroll);
+		return () => {
+			if (frame) cancelAnimationFrame(frame);
+			window.removeEventListener('scroll', onScroll);
+			window.removeEventListener('resize', onScroll);
+		};
+	}, []);
+
 	return (
 		<div className='paper-grain min-h-screen overflow-x-hidden font-sans text-ink-soft'>
 			<main>
 				{/* Hero */}
 				<section className='relative flex min-h-[60svh] flex-col items-center justify-center px-6 pt-32'>
 					<div className='mx-auto w-full max-w-3xl text-center'>
-						<motion.div
-							initial={{ opacity: 0, y: 20 }}
-							animate={{ opacity: 1, y: 0 }}
-							transition={{ duration: 0.5 }}
-						>
-							<Eyebrow label='agentOS' className='mb-5' />
-						</motion.div>
 						<motion.h1
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -128,7 +141,15 @@ export default function TimelinePage() {
 
 				{/* Timeline */}
 				<section className='border-t border-ink/10 py-16 md:py-32'>
-					<div className='mx-auto max-w-7xl px-6'>
+					<div ref={timelineRef} className='relative mx-auto max-w-7xl px-6'>
+							{/* Scroll-linked rail that draws down the timeline as you read */}
+							<div className='pointer-events-none absolute bottom-0 left-[73px] top-0 hidden w-px bg-pine/15 md:block'>
+								<div
+									ref={railRef}
+									className='h-full w-full origin-top bg-pine transition-transform duration-150 ease-out'
+									style={{ transform: 'scaleY(0)' }}
+								/>
+							</div>
 						<Era
 							year='1969'
 							title='The Unix Foundation'
@@ -138,7 +159,6 @@ export default function TimelinePage() {
 							<ArchivalPlate
 								src='https://assets.rivet.dev/website/public/images/agent-os/ken-thompson-dennis-ritchie-1973.jpg'
 								alt='Ken Thompson and Dennis Ritchie, creators of Unix, 1973'
-								figure='Fig. 01'
 								className='mb-6'
 								caption={
 									<>
@@ -179,7 +199,6 @@ export default function TimelinePage() {
 							<ArchivalPlate
 								src='https://assets.rivet.dev/website/public/images/agent-os/first-web-server.jpg'
 								alt='The first web server at CERN'
-								figure='Fig. 02'
 								className='mt-4'
 								caption={
 									<>
@@ -206,7 +225,6 @@ export default function TimelinePage() {
 							<ArchivalPlate
 								src='https://assets.rivet.dev/website/public/images/agent-os/nersc-server-racks.jpg'
 								alt='Server racks at NERSC'
-								figure='Fig. 03'
 								className='mb-6'
 								caption={
 									<>
@@ -243,7 +261,6 @@ export default function TimelinePage() {
 							<ArchivalPlate
 								src='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
 								alt='Data flock (digits) by Philipp Schmitt'
-								figure='Fig. 04'
 								className='mb-6'
 								caption={
 									<>

@@ -3,7 +3,6 @@
 import { Database, Globe, GitBranch, Clock, Wifi, ListOrdered, Infinity, Layers, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
 
 const RivetActorIcon = ({ className }: { className?: string }) => (
   <svg width="32" height="32" viewBox="0 0 176 173" className={className}>
@@ -101,7 +100,6 @@ export const BuiltInFeatures = () => {
           transition={{ duration: 0.5 }}
           className='mb-10'
         >
-          <Eyebrow index='01' label='Capabilities' className='mb-4' />
           <h2 className={SECTION_H2_CLASS}>
             A lightweight primitive with powerful capabilities.
           </h2>

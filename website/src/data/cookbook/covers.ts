@@ -38,9 +38,9 @@ export interface CookbookCoverArt {
 export const cookbookCovers: Record<string, CookbookCoverArt> = {
 	"ai-agent": {
 		artwork: "The Thinker, Auguste Rodin, modeled 1880",
-		src: "https://assets.rivet.dev/website/images/thinking/thinker.jpg",
-		width: 3140,
-		height: 4000,
+		src: "https://assets.rivet.dev/website/images/thinking/thinker-rodin-closeup.jpg",
+		width: 2673,
+		height: 3722,
 		objectPosition: "50% 28%",
 		// Push up onto the bowed head and hand at the chin.
 		ken: { x: "0%", y: "3%", scale: 1.2 },

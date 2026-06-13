@@ -110,7 +110,7 @@ export function DocsPageDropdown({
 				variant="outline"
 				size="sm"
 				onClick={copyPage}
-				className="h-8 rounded-r-none border-r-0"
+				className="h-8 rounded-r-none border-r-0 border-ink/15 bg-white/55 text-ink hover:border-ink/30 hover:bg-white/70 hover:text-ink"
 			>
 				<Icon icon={faMarkdown} className="mr-1 h-4 w-4" />
 				Copy Markdown
@@ -120,12 +120,12 @@ export function DocsPageDropdown({
 					<Button
 						variant="outline"
 						size="sm"
-						className="h-8 w-8 p-0 rounded-l-none border-l border-l-border/50"
+						className="h-8 w-8 p-0 rounded-l-none border-l border-l-ink/15 border-ink/15 bg-white/55 text-ink hover:border-ink/30 hover:bg-white/70 hover:text-ink"
 					>
 						<Icon icon={faChevronDown} className="h-3 w-3" />
 					</Button>
 				</DropdownMenuTrigger>
-				<DropdownMenuContent align="end" className="w-56 bg-popover">
+				<DropdownMenuContent align="end" className="w-56 bg-white border border-ink/10 text-ink [&_[role=menuitem]]:text-ink [&_[role=menuitem][data-highlighted]]:bg-ink/[0.06] [&_[role=menuitem][data-highlighted]]:text-ink">
 					<DropdownMenuItem onClick={copyLinkToMarkdown}>
 						<Icon icon={faLink} className="mr-2 h-4 w-4" />
 						Copy link to Markdown

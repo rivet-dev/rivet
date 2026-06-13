@@ -5,8 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Cpu, Workflow, Clock, Wifi, Zap, Bot, Users, Timer, Boxes, Radio, MessageSquare, ArrowRight } from 'lucide-react';
 import { codeToHtml } from 'shiki';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
-import { InkPanel } from '../editorial/InkPanel';
+import heroTheme from '@/lib/agent-os-hero-code-theme';
 
 const RivetIcon = ({ className }: { className?: string }) => (
   <svg width="16" height="16" viewBox="0 0 176 173" className={className}>
@@ -55,7 +54,7 @@ const useHighlightedCode = (code: string) => {
 
     codeToHtml(code, {
       lang: 'typescript',
-      theme: 'ayu-dark',
+      theme: heroTheme,
     }).then((result) => {
       cache.current[code] = result;
       setHtml(result);
@@ -270,11 +269,11 @@ const HighlightedCode = ({ code, title }: { code: string; title: string }) => {
 
   return (
     <div>
-      <div className='px-4 py-2 border-b border-cream/10 text-xs text-cream/45 font-mono'>
+      <div className='px-4 py-2 border-b border-zinc-200 text-xs text-zinc-500 font-mono'>
         {title}
       </div>
       {!html ? (
-        <pre className='p-4 font-mono text-xs md:text-sm leading-6 text-cream/70 overflow-x-auto'>
+        <pre className='p-4 font-mono text-xs md:text-sm leading-6 text-zinc-600 overflow-x-auto'>
           <code>{code}</code>
         </pre>
       ) : (
@@ -291,7 +290,7 @@ const HighlightedCode = ({ code, title }: { code: string; title: string }) => {
 const UseCaseCode = ({ config }: { config: UseCaseConfig }) => (
   <div>
     <HighlightedCode code={config.serverCode} title='backend.ts' />
-    <div className='border-t border-cream/10'>
+    <div className='border-t border-zinc-200'>
       <HighlightedCode code={config.clientCode} title='client.ts' />
     </div>
   </div>
@@ -369,7 +368,6 @@ export const ProblemSection = () => {
           transition={{ duration: 0.5 }}
           className='mb-12'
         >
-          <Eyebrow index='02' label='The primitive' className='mb-4' />
           <h2 className={SECTION_H2_CLASS}>
             Actors in action.
           </h2>
@@ -387,15 +385,12 @@ export const ProblemSection = () => {
           transition={{ duration: 0.5, delay: 0.05 }}
           className='grid grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:gap-14'
         >
-          <InkPanel
-            caption='Fig. 01 — One primitive, six workloads'
-            className='order-2 lg:order-1'
-          >
+          <div className='order-2 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 lg:order-1'>
             {/* File-tab strip */}
             <div className='relative'>
               <div
                 ref={tabsScrollRef}
-                className='flex w-full overflow-x-auto scrollbar-hide border-b border-cream/10'
+                className='flex w-full overflow-x-auto scrollbar-hide border-b border-zinc-200'
               >
                 {useCaseOrder.map((useCase) => {
                   const Icon = useCaseIcons[useCase];
@@ -407,8 +402,8 @@ export const ProblemSection = () => {
                       onClick={() => setActiveUseCase(useCase)}
                       className={`-mb-px flex flex-none items-center justify-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 font-mono text-xs transition-colors sm:flex-1 ${
                         active
-                          ? 'border-sage text-cream'
-                          : 'border-transparent text-cream/45 hover:text-cream/70'
+                          ? 'border-pine text-ink'
+                          : 'border-transparent text-ink-soft hover:text-ink'
                       }`}
                     >
                       {Icon && <Icon className='h-3.5 w-3.5' />}
@@ -422,9 +417,9 @@ export const ProblemSection = () => {
                   showScrollHint ? 'opacity-100' : 'opacity-0'
                 }`}
               >
-                <div className='absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-ink to-transparent' />
-                <span className='relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-cream/15 bg-ink/80'>
-                  <ArrowRight className='h-3.5 w-3.5 text-cream/70' />
+                <div className='absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-zinc-50 to-transparent' />
+                <span className='relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50'>
+                  <ArrowRight className='h-3.5 w-3.5 text-ink-soft' />
                 </span>
               </div>
             </div>
@@ -440,7 +435,7 @@ export const ProblemSection = () => {
                 <UseCaseCode config={config} />
               </motion.div>
             </AnimatePresence>
-          </InkPanel>
+          </div>
 
           <div className='order-1 lg:order-2'>
             <AnimatePresence mode='wait'>

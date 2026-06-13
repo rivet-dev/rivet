@@ -12,7 +12,6 @@ import { ScrollObserver } from '@/components/ScrollObserver';
 import { FaqSection } from '@/components/faq/FaqSection';
 import FaqJsonLd from '@/components/faq/FaqJsonLd.astro';
 import { actorsFaqs } from '@/data/faqs/actors';
-import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
 import { CatalogCard } from '@/components/marketing/editorial/CatalogCard';
 import { HERO_H1_CLASS, SECTION_H2_CLASS, SUBTITLE_CLASS } from '@/components/marketing/typography';
 
@@ -50,26 +49,69 @@ const useCases = [
 	<ScrollObserver client:load>
 		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
-				<!-- Hero -->
-				<section class="relative flex min-h-[88svh] flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
-					<div class="mx-auto w-full max-w-3xl">
-						<Eyebrow label="Rivet Actors" className="mb-5" />
-						<h1 class={`mb-4 ${HERO_H1_CLASS}`}>
-							The primitive for<br />stateful workloads.
-						</h1>
-						<p class="mb-8 text-lg text-ink-soft md:text-xl">
-							One Actor per agent, per session, per user. The same primitive powers realtime apps, multiplayer, and collaborative state.
-						</p>
-						<div class="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-							<a href="/docs" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent">
-								Start Building
-							</a>
-							<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink">
-								Quickstart Guide
-							</a>
+				<!-- Hero: full-bleed oil painting fading down into porcelain, text anchored bottom-left -->
+				<section id="actors-hero" class="relative flex min-h-[92svh] flex-col justify-end overflow-hidden pt-32 pb-16 md:pb-24 will-change-[opacity]">
+					<!-- Painting backdrop, a fixed crop inside the clipping box
+					     (overflow-hidden). The gradients sit over it so the
+					     fade-to-porcelain stays put. -->
+					<div class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+						<img
+							src="/images/textures/degas-orchestra-hero.jpg"
+							alt=""
+							loading="eager"
+							fetchpriority="high"
+							decoding="async"
+							class="absolute inset-x-0 -top-[18%] h-[136%] w-full object-cover object-center"
+						/>
+						<!-- Fade to porcelain at the bottom so the hero text reads in ink -->
+						<div class="absolute inset-0 bg-gradient-to-t from-paper from-[18%] via-paper/55 via-[42%] to-transparent to-[78%]"></div>
+						<!-- Gentle left wash for extra legibility behind the copy -->
+						<div class="absolute inset-0 bg-gradient-to-r from-paper/70 via-transparent to-transparent"></div>
+					</div>
+
+					<div class="relative z-10 mx-auto w-full max-w-7xl px-6">
+						<div class="max-w-xl">
+							<h1 class={`mb-4 ${HERO_H1_CLASS}`}>
+								The primitive for<br />stateful workloads.
+							</h1>
+							<p class="mb-8 max-w-lg text-lg text-ink-soft md:text-xl">
+								One Actor per agent, per session, per user. The same primitive powers realtime apps, multiplayer, and collaborative state.
+							</p>
+							<div class="flex flex-col gap-3 sm:flex-row">
+								<a href="/docs" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent">
+									Start Building
+								</a>
+								<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink">
+									Quickstart Guide
+								</a>
+							</div>
 						</div>
 					</div>
 				</section>
+
+				<!-- As the hero scrolls away, fade the whole hero (image + text) out so it
+				     dissolves into the porcelain page below. -->
+				<script>
+					const hero = document.getElementById('actors-hero');
+					if (hero) {
+						let ticking = false;
+						const update = () => {
+							const h = hero.offsetHeight || window.innerHeight;
+							const progress = Math.min(1, Math.max(0, window.scrollY / (h * 0.6)));
+							hero.style.opacity = String(1 - progress);
+							ticking = false;
+						};
+						const onScroll = () => {
+							if (!ticking) {
+								ticking = true;
+								requestAnimationFrame(update);
+							}
+						};
+						update();
+						window.addEventListener('scroll', onScroll, { passive: true });
+						window.addEventListener('resize', onScroll, { passive: true });
+					}
+				</script>
 
 				<!-- Use cases -->
 				<section class="border-t border-ink/10 px-6 py-16 md:py-32">
@@ -82,10 +124,8 @@ const useCases = [
 						</div>
 						<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
 							{
-								useCases.map((useCase, i) => (
+								useCases.map((useCase) => (
 									<CatalogCard
-										eyebrow="Use case"
-										index={String(i + 1).padStart(2, '0')}
 										title={useCase.title}
 										href={useCase.href}
 										linkLabel="Read the docs"
@@ -103,8 +143,7 @@ const useCases = [
 				<ProblemSection client:visible />
 				<BenchmarksSection client:visible />
 				<ObservabilitySection client:visible />
-				<!-- Static render with no client directive. FaqSection is hook-free and uses native details/summary, so it needs no JS. -->
-				<FaqSection items={actorsFaqs} theme="light" />
+				<FaqSection items={actorsFaqs} theme="light" client:visible />
 				<RedesignedCTA client:visible />
 			</main>
 		</div>

@@ -3,7 +3,6 @@
 import { Database, Globe, Infinity, Layers, Wifi, GitBranch, ListOrdered, Clock, Shield, FolderOpen, Code, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
 import agentosLogoUrl from '@/images/products/agentos-logo.svg';
 
 const actorFeatures = [
@@ -176,7 +175,6 @@ export const ProductSplitSection = () => (
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
 				>
-					<Eyebrow index='01' label='Platform' className='mb-4' />
 					<h2 className={SECTION_H2_CLASS}>Two products, one platform.</h2>
 				</motion.div>
 				<motion.p
@@ -200,7 +198,7 @@ export const ProductSplitSection = () => (
 					delay={0}
 				/>
 				<ProductCard
-					icon={<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6' />}
+					icon={<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6 invert' />}
 					title='agentOS'
 					tagline='A portable, lightweight in-process OS for agents. Open source, built on Wasm + V8.'
 					docsHref='/docs/agent-os'

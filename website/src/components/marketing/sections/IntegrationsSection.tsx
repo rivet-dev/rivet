@@ -3,6 +3,7 @@
 import { LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { GLOW_PILL_CLASS, handleGlowPillMouseMove } from '../glowPill';
 
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },
@@ -17,7 +18,7 @@ const frameworks = [
 // Matches DEPLOY_PILL_CLASS in HostingSection so the two index rows read as
 // one vocabulary.
 const STACK_LINK_CLASS =
-  'inline-flex items-center rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft shadow-[0_8px_22px_-20px_rgba(27,25,22,0.45)] transition-colors hover:border-ink/25 hover:bg-paper/70 hover:text-ink';
+  `${GLOW_PILL_CLASS} inline-flex items-center rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft shadow-[0_8px_22px_-20px_rgba(27,25,22,0.45)] transition-colors hover:border-ink/25 hover:text-ink`;
 
 export const IntegrationsSection = () => (
   <section className='relative overflow-hidden border-t border-ink/10 py-16 md:py-32'>
@@ -49,6 +50,7 @@ export const IntegrationsSection = () => (
               <a
                 key={tech.name}
                 href={tech.href}
+                onMouseMove={handleGlowPillMouseMove}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className={STACK_LINK_CLASS}
               >
@@ -73,6 +75,7 @@ export const IntegrationsSection = () => (
               <a
                 key={tech.name}
                 href={tech.href}
+                onMouseMove={handleGlowPillMouseMove}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className={STACK_LINK_CLASS}
               >
@@ -100,6 +103,7 @@ export const IntegrationsSection = () => (
               <a
                 key={tech.name}
                 href={tech.href}
+                onMouseMove={handleGlowPillMouseMove}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
                 className={STACK_LINK_CLASS}
               >

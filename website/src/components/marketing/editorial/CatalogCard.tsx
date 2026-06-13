@@ -1,12 +1,9 @@
 import type { ReactNode } from 'react';
-import { Eyebrow } from './Eyebrow';
 
 // Porcelain catalog entry: hairline border, translucent white fill over the
-// porcelain field, optional numbered eyebrow, pine footer link. Hook-free.
+// porcelain field, optional pine footer link. Hook-free.
 interface CatalogCardProps {
 	title?: ReactNode;
-	eyebrow?: ReactNode;
-	index?: string;
 	href?: string;
 	linkLabel?: ReactNode;
 	children?: ReactNode;
@@ -15,8 +12,6 @@ interface CatalogCardProps {
 
 export const CatalogCard = ({
 	title,
-	eyebrow,
-	index,
 	href,
 	linkLabel,
 	children,
@@ -24,9 +19,8 @@ export const CatalogCard = ({
 }: CatalogCardProps) => {
 	const body = (
 		<>
-			{eyebrow ? <Eyebrow label={eyebrow} index={index} /> : null}
 			{title ? (
-				<h3 className={`text-lg font-medium tracking-[-0.01em] text-ink md:text-xl ${eyebrow ? 'mt-4' : ''}`}>
+				<h3 className="text-lg font-medium tracking-[-0.01em] text-ink md:text-xl">
 					{title}
 				</h3>
 			) : null}

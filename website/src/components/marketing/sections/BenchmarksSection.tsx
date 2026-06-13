@@ -1,12 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { ArrowDown, ArrowUp, Info } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import { Eyebrow } from '../editorial/Eyebrow';
-import { InkPanel } from '../editorial/InkPanel';
-import { PixelGridChart } from '../art/PixelGridChart';
+import { BenchCard, BenchInfoTooltip, type BenchRowEntry } from '../bench/BenchCard';
 
 interface BarEntry {
 	label: string;
@@ -18,60 +14,24 @@ interface BarEntry {
 
 interface BenchmarkCard {
 	title: string;
-	subtitle: string;
 	direction: 'lower is better' | 'higher is better';
+	/** Headline stat. Defaults to the highlighted entry's value when omitted. */
+	hero?: string;
+	/** Comparative shown next to the headline (e.g. "faster"). Only set where the
+	    competitor/Rivet ratio is a finite number; division-by-zero metrics
+	    (0ms reads, $0 idle) and qualitative ones keep their standout value. */
+	verb?: string;
 	bars: BarEntry[];
-	/** Relative magnitudes (0..1) per entry, rendered as pixel-grid columns. */
-	chart: number[];
-}
-
-function Tooltip({ note }: { note: string }) {
-	const [visible, setVisible] = useState(false);
-	const [position, setPosition] = useState<'above' | 'below'>('above');
-	const tooltipRef = useRef<HTMLDivElement>(null);
-	const iconRef = useRef<HTMLButtonElement>(null);
-
-	useEffect(() => {
-		if (visible && iconRef.current) {
-			const rect = iconRef.current.getBoundingClientRect();
-			// Show below if too close to the top of the viewport
-			setPosition(rect.top < 80 ? 'below' : 'above');
-		}
-	}, [visible]);
-
-	return (
-		<span className='relative inline-flex'>
-			<button
-				ref={iconRef}
-				type='button'
-				className='ml-1 inline-flex items-center text-cream/35 transition-colors hover:text-cream/70'
-				onMouseEnter={() => setVisible(true)}
-				onMouseLeave={() => setVisible(false)}
-				onClick={() => setVisible((v) => !v)}
-				aria-label='More info'
-			>
-				<Info className='h-3 w-3' />
-			</button>
-			{visible && (
-				<div
-					ref={tooltipRef}
-					className={`absolute left-1/2 z-50 w-52 -translate-x-1/2 rounded-lg border border-cream/15 bg-ink px-3 py-2 text-[11px] leading-relaxed text-cream/80 shadow-xl ${
-						position === 'above' ? 'bottom-full mb-2' : 'top-full mt-2'
-					}`}
-				>
-					{note}
-				</div>
-			)}
-		</span>
-	);
+	/** Optional caveat pinned to the card foot. */
+	note?: string;
 }
 
 const benchmarks: BenchmarkCard[] = [
 	{
 		title: 'Cold Start',
-		subtitle: 'Time to first request',
 		direction: 'lower is better',
-		chart: [0.09, 0.62, 1],
+		hero: '~300x',
+		verb: 'faster',
 		bars: [
 			{
 				label: 'Rivet Actor',
@@ -93,9 +53,9 @@ const benchmarks: BenchmarkCard[] = [
 	},
 	{
 		title: 'Memory Per Instance',
-		subtitle: 'Overhead per instance',
 		direction: 'lower is better',
-		chart: [0.09, 0.55, 1],
+		hero: '~80,000x',
+		verb: 'smaller',
 		bars: [
 			{
 				label: 'Rivet Actor',
@@ -117,9 +77,7 @@ const benchmarks: BenchmarkCard[] = [
 	},
 	{
 		title: 'Read Latency',
-		subtitle: 'State read latency',
 		direction: 'lower is better',
-		chart: [0.09, 0.35, 1],
 		bars: [
 			{
 				label: 'Rivet Actor',
@@ -141,9 +99,8 @@ const benchmarks: BenchmarkCard[] = [
 	},
 	{
 		title: 'Idle Cost',
-		subtitle: 'Cost when not in use',
 		direction: 'lower is better',
-		chart: [0.09, 0.3, 1],
+		note: 'Actors scale to zero with no idle infrastructure.',
 		bars: [
 			{
 				label: 'Rivet Actor',
@@ -165,9 +122,7 @@ const benchmarks: BenchmarkCard[] = [
 	},
 	{
 		title: 'Horizontal Scale',
-		subtitle: 'Maximum capacity',
 		direction: 'higher is better',
-		chart: [1, 0.45, 0.09],
 		bars: [
 			{
 				label: 'Rivet Actors',
@@ -185,9 +140,8 @@ const benchmarks: BenchmarkCard[] = [
 	},
 	{
 		title: 'Multi-Region',
-		subtitle: 'Deploy actors close to your users',
 		direction: 'lower is better',
-		chart: [1, 0.18],
+		hero: 'Global',
 		bars: [
 			{
 				label: 'Rivet',
@@ -214,83 +168,41 @@ export const BenchmarksSection = () => {
 					transition={{ duration: 0.5 }}
 					className='mb-10'
 				>
-					<Eyebrow index='03' label='Measurements' className='mb-4' />
-					<h2 className={SECTION_H2_CLASS}>
-						How Actors Compare
-					</h2>
-					<p className={SUBTITLE_CLASS}>
-						Rivet Actors vs. traditional infrastructure.
-					</p>
+					<h2 className={SECTION_H2_CLASS}>How Actors Compare</h2>
+					<p className={SUBTITLE_CLASS}>Rivet Actors vs. traditional infrastructure.</p>
 				</motion.div>
 
-				<div className='grid grid-cols-1 gap-6 md:grid-cols-2'>
-					{benchmarks.map((card, idx) => {
-						const accentIdx = card.bars.findIndex((bar) => bar.highlight);
-						const rivetStat = card.bars[accentIdx]?.value ?? '';
+				<div className='grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3'>
+					{benchmarks.map((card) => {
+						const accent = card.bars.find((bar) => bar.highlight);
+						const rows: BenchRowEntry[] = card.bars.map((bar) => ({
+							label: bar.note ? (
+								<>
+									{bar.label}
+									<BenchInfoTooltip>{bar.note}</BenchInfoTooltip>
+								</>
+							) : (
+								bar.label
+							),
+							value: bar.value,
+							highlight: bar.highlight,
+						}));
+
 						return (
-							<motion.div
+							<BenchCard
 								key={card.title}
-								initial={{ opacity: 0, y: 16 }}
-								whileInView={{ opacity: 1, y: 0 }}
-								viewport={{ once: true }}
-								transition={{ duration: 0.4, delay: idx * 0.05 }}
-							>
-								<InkPanel className='h-full'>
-									<div className='flex h-full flex-col p-6'>
-										<div className='mb-5 flex items-start justify-between gap-4'>
-											<span className='font-mono text-[11px] uppercase tracking-[0.16em] text-sage'>
-												{card.title}
-											</span>
-											<span className='flex items-center gap-1 font-mono text-[10px] uppercase tracking-wider text-cream/40'>
-												{card.direction === 'lower is better' ? (
-													<ArrowDown className='h-3 w-3' />
-												) : (
-													<ArrowUp className='h-3 w-3' />
-												)}
-												{card.direction}
-											</span>
-										</div>
-
-										<div className='flex items-end justify-between gap-6'>
-											<div className='min-w-0'>
-												<div className='text-2xl font-medium leading-tight text-cream md:text-3xl'>
-													{rivetStat}
-												</div>
-												<div className='mt-1 text-sm text-cream/55'>{card.subtitle}</div>
-											</div>
-											<PixelGridChart
-												values={card.chart}
-												rows={7}
-												accentColumn={accentIdx}
-												className='h-20 w-auto flex-shrink-0'
-											/>
-										</div>
-
-										<div className='mt-6 flex flex-1 flex-col justify-end gap-2 border-t border-cream/10 pt-4'>
-											{card.bars.map((bar) => (
-												<div key={bar.label} className='flex items-center justify-between gap-4 text-xs'>
-													<span
-														className={`inline-flex items-center ${
-															bar.highlight ? 'text-cream' : 'text-cream/55'
-														}`}
-													>
-														{bar.label}
-														{bar.note && <Tooltip note={bar.note} />}
-													</span>
-													<span className={bar.highlight ? 'font-medium text-sage' : 'text-cream/55'}>
-														{bar.value}
-													</span>
-												</div>
-											))}
-										</div>
-									</div>
-								</InkPanel>
-							</motion.div>
+								title={card.title}
+								statNote={card.hero ?? accent?.value ?? ''}
+								verb={card.verb}
+								direction={card.direction}
+								rows={rows}
+								note={card.note}
+							/>
 						);
 					})}
 				</div>
 
-				<p className='mt-8 font-mono text-xs text-ink-faint'>
+				<p className='mt-8 font-mono text-xs leading-relaxed text-ink-faint'>
 					Methodology — figures are directional, measured on commodity AWS infrastructure. Hover each entry for the measurement setup.
 				</p>
 			</div>

@@ -73,7 +73,7 @@ const StartupImageCycler = ({ images }: { images: { src: string; alt: string; mo
 				return (
 					<div
 						key={`fan-${i}`}
-						className="absolute inset-0 overflow-hidden border border-ink/15 bg-mat p-2 transition-all duration-300 ease-out"
+						className="absolute inset-0 overflow-hidden border border-ink/15 transition-all duration-300 ease-out"
 						style={{
 							transform: `rotate(${rotation}deg) translateX(${translateX}px) translateY(${translateY}px) scale(${scale})`,
 							zIndex: 3 - i,
@@ -94,7 +94,7 @@ const StartupImageCycler = ({ images }: { images: { src: string; alt: string; mo
 
 			{/* Main card */}
 			<div
-				className="absolute inset-0 overflow-hidden border border-ink/15 bg-mat p-2 transition-transform duration-300 ease-out"
+				className="absolute inset-0 overflow-hidden border border-ink/15 transition-transform duration-300 ease-out"
 				style={{
 					zIndex: 10,
 					transform: showFan ? 'rotate(-3deg) translateX(-10px)' : 'rotate(0deg) translateX(0px)',
@@ -201,7 +201,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 									</span>
 									{' '}and{' '}
 									<span className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border border-ink/15 bg-white/55 px-2.5 py-0.5 text-sm text-ink-soft align-middle">
-										<img src={imgA16z.src} alt="Andreessen Horowitz (a16z) logo" width={16} height={12} className="h-3 w-auto" loading="eager" decoding="async" />
+										<img src={imgA16z.src} alt="Andreessen Horowitz (a16z) logo" width={16} height={12} className="h-3 w-auto invert" loading="eager" decoding="async" />
 										<span>a16z SR002</span>
 									</span>
 									{' '}alumni, we're offering fellow YC and Speedrun companies pricing and support to ship faster.
@@ -209,7 +209,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 							</div>
 							{/* Desktop: Overlapping photos */}
 							<div className="hidden lg:block flex-shrink-0 relative w-[500px] h-[400px]">
-								<div className="absolute top-0 left-0 w-[320px] h-[240px] overflow-hidden border border-ink/15 bg-mat p-2">
+								<div className="absolute top-0 left-0 w-[320px] h-[240px] overflow-hidden border border-ink/15">
 									<img
 										src={foundersImage}
 										alt="Rivet founders Nathan Flurry and Nicholas Kissel at Y Combinator W23 Demo Day"
@@ -220,7 +220,7 @@ export default function StartupsPage({ foundersImage, speedrunImage }: StartupsP
 										className="w-full h-full object-cover"
 									/>
 								</div>
-								<div className="absolute bottom-0 right-0 w-[320px] h-[240px] overflow-hidden border border-ink/15 bg-mat p-2">
+								<div className="absolute bottom-0 right-0 w-[320px] h-[240px] overflow-hidden border border-ink/15">
 									<img
 										src={speedrunImage}
 										alt="Andreessen Horowitz a16z Speedrun SR002 cohort presentation"

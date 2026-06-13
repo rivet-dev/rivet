@@ -32,7 +32,7 @@ export default {
 				'text-primary': '#FAFAFA',
 				'text-secondary': '#A0A0A0',
 				'border': '#252525',
-				'accent': '#FF4500',
+				'accent': '#CB5A33',
 				// Porcelain editorial palette. Marketing pages are light: a cool
 				// porcelain field with warm ink, warm mats, and forest green
 				// structure. Orange remains the single CTA spark per page.
@@ -47,7 +47,7 @@ export default {
 				'pine': '#2E4034',
 				'olive': '#5C6B4F',
 				'sage': '#93A286',
-				'accent-deep': '#D63E00',
+				'accent-deep': '#AB451F',
 				'code-keyword': '#c084fc',
 				'code-function': '#60a5fa',
 				'code-string': '#4ade80',

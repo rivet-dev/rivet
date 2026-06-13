@@ -21,7 +21,7 @@ function Eyebrow({ tag, label }) {
 function Anchor({ id, children }) {
   return (
     <div className='group absolute -left-10 top-1 h-full pr-10'>
-      <Button className='not-prose relative hidden group-hover:flex' size='icon-sm' variant='outline' asChild>
+      <Button className='not-prose relative hidden group-hover:flex hover:border-ink hover:bg-ink hover:text-white' size='icon-sm' variant='outline' asChild>
         <a href={`#${id}`}>
           <Icon icon={faLink} />
         </a>

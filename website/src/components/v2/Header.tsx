@@ -28,6 +28,7 @@ import {
 	DropdownMenuTrigger,
 } from "@rivet-gg/components";
 import { faChevronDown } from "@rivet-gg/icons";
+import { ArrowRight } from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
 import agentosLogoUrl from "@/images/products/agentos-logo.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
@@ -70,9 +71,11 @@ function TextNavItem({
 function ProductsDropdown({
 	active,
 	lightTheme = false,
+	align = "center",
 }: {
 	active?: boolean;
 	lightTheme?: boolean;
+	align?: "center" | "start";
 }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -134,6 +137,85 @@ function ProductsDropdown({
 	useEffect(() => {
 		return () => cancelClose();
 	}, []);
+
+	if (lightTheme) {
+		return (
+			<div
+				className={cn("group/products px-2.5 py-2", align === "start" && "relative")}
+				onMouseEnter={handleMouseEnter}
+				onMouseLeave={handleMouseLeave}
+			>
+				<RivetHeader.NavItem asChild>
+					<button
+						type="button"
+						aria-expanded={isOpen}
+						className={cn(
+							"cursor-pointer flex items-center gap-1 relative transition-colors duration-200",
+							"!text-zinc-600 hover:!text-zinc-900",
+							active && "!text-zinc-900",
+							"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
+						)}
+						onPointerDown={handlePointerDown}
+						onMouseEnter={handleMouseEnter}
+					>
+						Products
+						<Icon
+							icon={faChevronDown}
+							className={cn(
+								"h-3 w-3 ml-0.5 transition-transform duration-200",
+								isOpen && "rotate-180",
+							)}
+						/>
+					</button>
+				</RivetHeader.NavItem>
+				<div
+					className={cn(
+						"z-50 -translate-y-1 overflow-hidden rounded-2xl border border-ink/10 bg-paper/80 p-1.5 opacity-0 shadow-[0_18px_50px_-32px_rgba(27,25,22,0.42)] backdrop-blur-[18px] backdrop-saturate-[1.35] transition-all duration-150 pointer-events-none group-hover/products:pointer-events-auto group-hover/products:translate-y-0 group-hover/products:opacity-100",
+						align === "start"
+							? "absolute left-0 top-full mt-3 w-80"
+							: "fixed left-1/2 top-[63px] w-[min(912px,calc(100vw-3rem))] -translate-x-1/2",
+						isOpen
+							? "pointer-events-auto translate-y-0 opacity-100"
+							: "pointer-events-none -translate-y-1 opacity-0",
+					)}
+					onMouseEnter={handleMouseEnter}
+					onMouseLeave={handleMouseLeave}
+				>
+					<div className="flex flex-col">
+						{products.map((product) => (
+							<a
+								key={product.href}
+								href={product.href}
+								className="group/product-row flex items-center gap-2.5 rounded-xl px-3 py-1 text-ink transition-colors hover:bg-ink/[0.07]"
+							>
+								<img
+									src={product.logo.src}
+									alt={product.label}
+									width={18}
+									height={18}
+									className="h-[18px] w-[18px] shrink-0 invert opacity-85"
+									loading="lazy"
+									decoding="async"
+								/>
+								<div className="min-w-0 flex-1">
+									<div className="text-sm font-medium leading-tight text-ink">
+										{product.label}
+									</div>
+									<div className="text-xs leading-tight text-ink-faint">
+										{product.description}
+									</div>
+								</div>
+								<ArrowRight
+									aria-hidden="true"
+									className="invisible h-4 w-4 text-ink-faint opacity-0 transition-all duration-150 group-hover/product-row:visible group-hover/product-row:translate-x-0.5 group-hover/product-row:opacity-100 group-hover/product-row:text-ink"
+								/>
+							</a>
+						))}
+					</div>
+				</div>
+			</div>
+		);
+	}
 
 	return (
 		<div
@@ -256,6 +338,7 @@ interface HeaderProps {
 	variant?: "floating" | "full-width";
 	learnMode?: boolean;
 	showDocsTabs?: boolean;
+	light?: boolean;
 	initialPathname?: string;
 }
 
@@ -267,12 +350,10 @@ export function Header({
 	variant = "full-width",
 	learnMode = false,
 	showDocsTabs = false,
+	light = false,
 	initialPathname = "",
 }: HeaderProps) {
 	const [isScrolled, setIsScrolled] = useState(false);
-
-	// Use DocsTabs as subnav if showDocsTabs is true
-	const effectiveSubnav = showDocsTabs ? <DocsTabs /> : subnav;
 
 	useEffect(() => {
 		if (variant === "floating") {
@@ -288,8 +369,12 @@ export function Header({
 	const clientPathname = usePathname();
 	const pathname = clientPathname || initialPathname;
 	// The floating variant only renders on marketing pages, which are all
-	// porcelain now. The full-width variant (docs, learn) stays dark.
-	const isLightTheme = variant === "floating";
+	// porcelain. The full-width variant is porcelain for docs (light=true) and
+	// stays dark for the Learn section.
+	const isLightTheme = variant === "floating" || light;
+
+	// Use DocsTabs as subnav if showDocsTabs is true
+	const effectiveSubnav = showDocsTabs ? <DocsTabs light={isLightTheme} /> : subnav;
 	const isAgentOs = AGENT_OS_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
 	const isRegistryPage =
 		pathname === AGENT_OS_REGISTRY_HREF || pathname === `${AGENT_OS_REGISTRY_HREF}/`;
@@ -315,7 +400,7 @@ export function Header({
 		return (
 			<div
 				className={cn(
-					"fixed top-0 z-50 w-full max-w-[1200px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-8",
+					"fixed top-0 z-50 w-full max-w-[960px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-6",
 					isLightTheme && "selection:bg-orange-200 selection:text-orange-900"
 				)}
 				data-light-theme={isLightTheme ? "true" : undefined}
@@ -326,8 +411,10 @@ export function Header({
 						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-ink/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
 					)}
 				>
-					{/* White glass pill: bright inner edge over a saturated blur. */}
-					<div className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl border border-white/70 bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur-[18px] backdrop-saturate-[1.4] md:block" />
+					{/* White glass pill: frosted fill with a soft top sheen. The pill's
+						outline is the ink/10 hairline on the parent's ::before, so this
+						layer carries no border of its own. */}
+					<div className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-[18px] backdrop-saturate-[1.4] md:block" />
 					<RivetHeader
 						className={cn(
 							headerStyles,
@@ -409,7 +496,7 @@ export function Header({
 							<div className="flex flex-row items-center">
 								{variant === "full-width" && <HeaderSearch />}
 								<RivetHeader.NavItem asChild className="p-2 mr-4">
-									<a href="https://rivet.dev/discord" className="text-ink-faint hover:text-ink transition-colors">
+									<a href="https://rivet.dev/discord" className="!text-ink-soft hover:!text-ink transition-colors">
 										<Icon icon={faDiscord} />
 									</a>
 								</RivetHeader.NavItem>
@@ -504,19 +591,22 @@ export function Header({
 	return (
 		<RivetHeader
 			className={cn(
-				"sticky top-0 z-50 bg-neutral-950/80 backdrop-blur-lg",
+				"sticky top-0 z-50 backdrop-blur-lg",
+				isLightTheme
+					? "bg-paper/95 border-b border-ink/10 [&_button[data-mobile-menu-trigger]]:text-ink"
+					: "bg-neutral-950/80",
 				"[&>div:first-child]:px-3 md:[&>div:first-child]:max-w-none md:[&>div:first-child]:px-0 md:px-8",
 				// 0 padding on bottom for larger screens when subnav is showing
-				effectiveSubnav ? "pb-2 md:pb-0 md:pt-4" : "md:py-4",
+				effectiveSubnav ? "pb-2 md:pb-0 md:pt-3 md:[&>div:first-child>div:first-child]:min-h-12 md:[&>div:first-child>div:first-child]:mb-3" : "md:py-4",
 				// Learn mode styling
-				learnMode && "bg-[#1c1917] border-b border-[#44403c]",
+				!isLightTheme && learnMode && "bg-[#1c1917] border-b border-[#44403c]",
 			)}
 			logo={
 				<div className="hidden md:block">
 					<LogoContextMenu>
 						<a href="/">
 							<img
-								src={logoUrl.src}
+								src={isLightTheme ? logoTextBlackUrl.src : logoUrl.src}
 								width={80}
 								height={24}
 								className="ml-1 w-20 shrink-0"
@@ -534,27 +624,47 @@ export function Header({
 				<div className="flex flex-row items-center">
 					{!learnMode && (
 						<div className="mr-4">
-							<HeaderSearch />
+							<HeaderSearch light={isLightTheme} />
 						</div>
 					)}
 					<RivetHeader.NavItem asChild className="p-2 mr-4">
-						<a href="https://rivet.dev/discord" className="text-white/90">
+						<a
+							href="https://rivet.dev/discord"
+							className={isLightTheme ? "!text-ink-soft hover:!text-ink transition-colors" : "text-white/90"}
+						>
 							<Icon icon={faDiscord} className="drop-shadow-md" />
 						</a>
 					</RivetHeader.NavItem>
-					<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 h-10 text-sm mr-2 hover:border-white/20 text-white/90 hover:text-white transition-colors" />
+					<GitHubDropdown
+						className={cn(
+							"inline-flex items-center justify-center whitespace-nowrap rounded-md border px-4 py-2 h-10 text-sm mr-2 transition-colors",
+							isLightTheme
+								? "border-ink/15 text-ink-soft hover:border-ink/30 hover:text-ink"
+								: "border-white/10 hover:border-white/20 text-white/90 hover:text-white",
+						)}
+					/>
 					<a
 						href="https://dashboard.rivet.dev"
-						className="font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 bg-white/5 px-4 py-2 text-sm text-white shadow-sm hover:border-white/20 transition-colors"
+						className={cn(
+							"font-v2 subpixel-antialiased inline-flex items-center justify-center whitespace-nowrap rounded-md px-4 py-2 text-sm transition-colors",
+							isLightTheme
+								? "bg-ink text-cream hover:bg-ink/85"
+								: "border border-white/10 bg-white/5 text-white shadow-sm hover:border-white/20",
+						)}
 					>
 						Sign In
 					</a>
 				</div>
 			}
-			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} />}
+			lightTheme={isLightTheme}
+			sheetClassName={isLightTheme ? "!bg-paper [&>button]:!bg-paper [&>button]:!text-ink [&>button]:!border-ink/15" : undefined}
+			mobileBreadcrumbs={<DocsMobileNavigation tree={mobileSidebar} sidebarData={sidebarData} isLightTheme={isLightTheme} />}
 			breadcrumbs={
-				<div className="flex items-center font-v2 subpixel-antialiased">
-					<ProductsDropdown active={active === "product"} />
+				<div className={cn(
+					"flex items-center font-v2 subpixel-antialiased",
+					isLightTheme && "[&_a]:!text-ink-soft [&_a:hover]:!text-ink [&_a[aria-current=page]]:!text-ink [&_button]:!text-ink-soft",
+				)}>
+					<ProductsDropdown active={active === "product"} lightTheme={isLightTheme} align="start" />
 					<TextNavItem
 						href="/docs"
 						ariaCurrent={active === "docs" ? "page" : undefined}
@@ -739,6 +849,43 @@ function DocsMobileNavigation({
 						{label}
 					</a>
 				))}
+
+				{/* Docs section dropdown + sidebar tree */}
+				{isDocsPage && (
+					<>
+						<div className="border-t-2 border-ink/10 my-2" />
+
+						{/* Section dropdown */}
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button
+									variant="outline"
+									className="w-full justify-between h-9 text-sm border-ink/15 bg-white/55 text-ink hover:bg-white/70 hover:border-ink/30"
+								>
+									{currentSection?.label || "Select Section"}
+									<Icon icon={faChevronDown} className="h-3.5 w-3.5 ml-2" />
+								</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent className="w-[calc(100vw-3rem)] bg-white border border-ink/10 text-ink [&_[role=menuitem]]:text-ink [&_[role=menuitem][data-highlighted]]:bg-ink/[0.06] [&_[role=menuitem][data-highlighted]]:text-ink">
+								{sections.map(({ id, label, href }) => (
+									<DropdownMenuItem key={id} asChild>
+										<a href={href}>{label}</a>
+									</DropdownMenuItem>
+								))}
+							</DropdownMenuContent>
+						</DropdownMenu>
+
+						{/* Tree/sidebar content */}
+						{tree && <div className="mt-1">{tree}</div>}
+						{!tree && sidebarData && (
+							<NavigationStateProvider>
+								<div className="mt-1">
+									<Tree pages={sidebarData} />
+								</div>
+							</NavigationStateProvider>
+						)}
+					</>
+				)}
 
 				{/* Dashboard button */}
 				<div className="mt-4 pt-4 border-t border-ink/10">

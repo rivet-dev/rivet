@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { FaqSection } from '@/components/faq/FaqSection';
 import { agentOsPricingFaqs } from '@/data/faqs/agent-os-pricing';
-import { Eyebrow } from '@/components/marketing/editorial/Eyebrow';
 import { HERO_H1_CLASS, SECTION_H2_CLASS } from '@/components/marketing/typography';
 
 const pricingTiers = [
@@ -41,7 +40,7 @@ const pricingTiers = [
 		name: 'Enterprise',
 		description: 'On-premise deployment with dedicated support.',
 		price: 'Custom',
-		priceSuffix: 'contact sales',
+		priceSuffix: '',
 		icon: Server,
 		cta: 'Contact Sales',
 		ctaHref: '/sales',
@@ -77,12 +76,12 @@ const CopyButton = ({ command }: { command: string }) => {
 			onClick={handleCopy}
 			className='selection-paper mb-8 flex w-full items-center gap-2.5 rounded-lg border border-ink/20 bg-ink px-4 py-3 font-mono text-[13px] text-cream/85 transition-colors hover:border-ink/40'
 		>
-			<span aria-hidden='true' className='select-none text-sage'>
+			<span aria-hidden='true' className='select-none text-cream/70'>
 				$
 			</span>
 			<span className='truncate'>{command}</span>
 			{copied ? (
-				<Check className='ml-auto h-3.5 w-3.5 text-sage' />
+				<Check className='ml-auto h-3.5 w-3.5 text-cream/70' />
 			) : (
 				<Copy className='ml-auto h-3.5 w-3.5 text-cream/45' />
 			)}
@@ -102,7 +101,7 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 		>
 			<div className='mb-6'>
 				<div className='mb-4 flex h-12 w-12 items-center justify-center rounded-xl border border-ink/10'>
-					<Icon className='h-6 w-6 text-olive' />
+					<Icon className='h-6 w-6 text-ink-soft' />
 				</div>
 				<h3 className='text-xl font-medium text-ink'>{tier.name}</h3>
 				<p className='mt-1 text-sm text-ink-soft'>{tier.description}</p>
@@ -112,7 +111,9 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 				<div className='flex items-baseline gap-2'>
 					<span className='text-3xl font-medium text-ink'>{tier.price}</span>
 				</div>
-				<p className='font-mono text-xs uppercase tracking-[0.16em] text-ink-faint'>{tier.priceSuffix}</p>
+				{tier.priceSuffix && (
+					<p className='font-mono text-xs uppercase tracking-[0.16em] text-ink-faint'>{tier.priceSuffix}</p>
+				)}
 			</div>
 
 			{tier.copyCommand ? (
@@ -130,7 +131,7 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 			<ul className='space-y-3'>
 				{tier.features.map((feature) => (
 					<li key={feature.text} className='flex items-start gap-3'>
-						<Check className='mt-0.5 h-4 w-4 flex-shrink-0 text-pine' />
+						<Check className='mt-0.5 h-4 w-4 flex-shrink-0 text-ink' />
 						<span className='text-sm text-ink-soft'>{feature.text}</span>
 					</li>
 				))}
@@ -142,7 +143,7 @@ const PricingCard = ({ tier, index, showCloudNotice = false }: { tier: typeof pr
 						href='https://dashboard.rivet.dev'
 						className='group flex items-center gap-3 rounded-lg border border-ink/10 p-4 transition-colors hover:border-ink/25'
 					>
-						<Cloud className='h-5 w-5 text-olive' />
+						<Cloud className='h-5 w-5 text-ink-soft' />
 						<div className='flex-1'>
 							<p className='text-sm font-medium text-ink'>Deploy on Rivet Cloud</p>
 							<p className='text-xs text-ink-soft'>Scale your agents with managed infrastructure</p>
@@ -200,7 +201,6 @@ export default function AgentOSPricingPage() {
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
 						>
-							<Eyebrow label='agentOS Pricing' className='mb-5' />
 							<h1 className={`mb-4 ${HERO_H1_CLASS}`}>Free and open source.</h1>
 							<p className='mx-auto max-w-2xl text-base leading-relaxed text-ink-soft md:text-lg'>
 								agentOS is Apache 2.0 licensed and free to self-host. Use Rivet Cloud for managed infrastructure, or contact us for enterprise support.
@@ -212,7 +212,6 @@ export default function AgentOSPricingPage() {
 				{/* Pricing Cards */}
 				<section className='px-6 pb-16 md:pb-32'>
 					<div className='mx-auto max-w-4xl'>
-						<Eyebrow index='01' label='Plans' className='mb-8' />
 						<div className='grid gap-6 md:grid-cols-2'>
 							{pricingTiers.map((tier, index) => (
 								<PricingCard key={tier.name} tier={tier} index={index} showCloudNotice={index === 0} />

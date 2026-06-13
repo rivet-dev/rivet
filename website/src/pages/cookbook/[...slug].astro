@@ -187,13 +187,9 @@ if (coverArt) {
 				</div>
 
 				<aside class="hidden w-60 flex-shrink-0 lg:block xl:w-64">
-					<div class="h-full space-y-8">
+					<div class="space-y-8 border border-ink/15 p-5">
 						{coverSrc && coverArt && (
 							<div aria-hidden="true" class="group/cover relative">
-								<div class="absolute -inset-x-4 top-0 h-px bg-ink/20"></div>
-								<div class="absolute -inset-x-4 bottom-0 h-px bg-ink/20"></div>
-								<div class="absolute -inset-y-4 left-0 w-px bg-ink/20"></div>
-								<div class="absolute -inset-y-4 right-0 w-px bg-ink/20"></div>
 								<div class="relative overflow-hidden bg-ink" style="aspect-ratio: 5 / 7;">
 									<img
 										src={coverSrc}
@@ -201,27 +197,6 @@ if (coverArt) {
 										class="absolute inset-0 h-full w-full object-cover"
 										style={`object-position: ${coverArt.objectPosition ?? "50% 50%"};${coverArt.transform ? ` transform: ${coverArt.transform};` : ""}${coverArt.transformOrigin ? ` transform-origin: ${coverArt.transformOrigin};` : ""}${coverArt.filter ? ` filter: ${coverArt.filter};` : ""}`}
 									/>
-								</div>
-								<div class="absolute -bottom-5 -right-5 z-10 h-[5.5rem] w-[5.5rem]">
-									<div class="absolute inset-0 rounded-full border border-ink/15 bg-mat"></div>
-									<div class="absolute inset-0 rounded-full bg-[radial-gradient(circle_at_32%_28%,rgba(255,255,255,0.5),transparent_60%)]"></div>
-									<svg
-										viewBox="0 0 100 100"
-										class="absolute inset-0 h-full w-full animate-[spin_16s_linear_infinite]"
-									>
-										<defs>
-											<path id="cookbook-badge-ring" d="M50,50 m-37,0 a37,37 0 1,1 74,0 a37,37 0 1,1 -74,0" fill="none"></path>
-										</defs>
-										<text class="fill-ink/70 font-medium uppercase" style="font-size: 7.5px; letter-spacing: 0.3em;">
-											<textPath href="#cookbook-badge-ring" textLength="231" lengthAdjust="spacingAndGlyphs">Cookbook · Rivet · Cookbook · Rivet ·</textPath>
-										</text>
-									</svg>
-									<div class="absolute inset-0 flex items-center justify-center">
-										<svg viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 opacity-60">
-											<rect x="18.25" y="18.25" width="91.5" height="91.5" rx="25.75" stroke="#1B1916" stroke-width="8.5"></rect>
-											<path fill-rule="evenodd" clip-rule="evenodd" d="M57.694 43.098c0-.622-.505-1.126-1.127-1.126h-8.444a5.114 5.114 0 0 0-5.112 5.111v33.824a5.114 5.114 0 0 0 5.112 5.112h8.444c.622 0 1.127-.505 1.127-1.127V43.098Zm24.424 27.869c-1.238-2.222-4.047-4.026-6.27-4.026H62.923c-.684 0-.93.555-.549 1.239l7.703 13.822c1.239 2.223 4.048 4.026 6.27 4.026h12.927c.683 0 .93-.555.548-1.239l-7.703-13.822Zm.538-18.718c0-5.672-4.605-10.277-10.277-10.277H63.31a1.21 1.21 0 0 0-1.209 1.209v18.137c0 .667.542 1.209 1.21 1.209h9.068c5.672 0 10.277-4.605 10.277-10.278Z" fill="#1B1916"></path>
-										</svg>
-									</div>
 								</div>
 							</div>
 						)}
@@ -254,7 +229,9 @@ if (coverArt) {
 								Agent skill
 							</div>
 							<div class="selection-paper relative mt-3 rounded-md border border-ink/20 bg-ink p-3 pr-11">
-								<code class="select-all break-all font-mono text-xs leading-relaxed text-cream/85">npx skills add rivet-dev/skills -s {skillId}</code>
+								<div class="overflow-x-auto scrollbar-hide">
+									<code class="select-all whitespace-nowrap font-mono text-xs leading-relaxed text-cream/85">npx skills add rivet-dev/skills -s {skillId}</code>
+								</div>
 								<button
 									class="copy-skill-btn absolute right-1.5 top-1.5 rounded p-1.5 text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream"
 									aria-label="Copy to clipboard"
@@ -271,35 +248,35 @@ if (coverArt) {
 								</button>
 							</div>
 						</div>
-
-						{tableOfContents.length > 0 && (
-							<nav id="cookbook-toc" class="sticky top-24">
-								<div class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">
-									On this page
-								</div>
-								<ul class="mt-3 max-h-[calc(100vh-10rem)] space-y-1 overflow-y-auto border-l border-ink/10 pl-4 pr-2 [scrollbar-color:rgba(27,25,22,0.25)_transparent] [scrollbar-width:thin]">
-									{tableOfContents.map((section) => (
-										<li>
-											<a href={`#${section.id}`} data-toc-link={section.id} class="block py-0.5 text-[13px] leading-snug text-ink-faint transition-colors hover:text-ink">
-												{section.title}
-											</a>
-											{section.children.length > 0 && (
-												<ul class="space-y-1 pl-3">
-													{section.children.map((child) => (
-														<li>
-															<a href={`#${child.id}`} data-toc-link={child.id} class="block py-0.5 text-[13px] leading-snug text-ink-faint transition-colors hover:text-ink">
-																{child.title}
-															</a>
-														</li>
-													))}
-												</ul>
-											)}
-										</li>
-									))}
-								</ul>
-							</nav>
-						)}
 					</div>
+
+					{tableOfContents.length > 0 && (
+						<nav id="cookbook-toc" class="sticky top-24 mt-8">
+							<div class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">
+								On this page
+							</div>
+							<ul class="mt-3 max-h-[calc(100vh-9rem)] space-y-1 overflow-y-auto border-l border-ink/10 pl-4 [scrollbar-color:rgba(27,25,22,0.25)_transparent] [scrollbar-width:thin]">
+								{tableOfContents.map((section) => (
+									<li>
+										<a href={`#${section.id}`} data-toc-link={section.id} class="block py-0.5 text-[13px] leading-snug text-ink-faint transition-colors hover:text-ink">
+											{section.title}
+										</a>
+										{section.children.length > 0 && (
+											<ul class="space-y-1 pl-3">
+												{section.children.map((child) => (
+													<li>
+														<a href={`#${child.id}`} data-toc-link={child.id} class="block py-0.5 text-[13px] leading-snug text-ink-faint transition-colors hover:text-ink">
+															{child.title}
+														</a>
+													</li>
+												))}
+											</ul>
+										)}
+									</li>
+								))}
+							</ul>
+						</nav>
+					)}
 				</aside>
 			</div>
 		</div>
