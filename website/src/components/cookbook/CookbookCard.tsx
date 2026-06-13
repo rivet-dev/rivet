@@ -23,7 +23,27 @@ export interface CookbookPageCardData {
 	}>;
 }
 
+// Documentary-style pan vectors. Each cover gets one deterministically from
+// its slug so the gallery wall drifts in varied directions rather than in
+// lockstep. Pan magnitude stays under the scale overshoot so the frame edge
+// never shows through.
+const KEN_BURNS_DRIFTS = [
+	{ x: "3%", y: "-3%", scale: 1.13 },
+	{ x: "-3%", y: "-2%", scale: 1.12 },
+	{ x: "2%", y: "3%", scale: 1.14 },
+	{ x: "-2%", y: "2%", scale: 1.12 },
+] as const;
+
+function driftForSlug(slug: string) {
+	let hash = 0;
+	for (let i = 0; i < slug.length; i++) {
+		hash = (hash + slug.charCodeAt(i)) % 9973;
+	}
+	return KEN_BURNS_DRIFTS[hash % KEN_BURNS_DRIFTS.length];
+}
+
 export function CookbookCard({ page }: { page: CookbookPageCardData }) {
+	const drift = driftForSlug(page.slug);
 	return (
 		<a
 			href={page.href}
@@ -31,7 +51,16 @@ export function CookbookCard({ page }: { page: CookbookPageCardData }) {
 		>
 			{page.cover && (
 				<>
-					<div className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.02]">
+					<div
+						className="ken-burns absolute inset-0"
+						style={
+							{
+								"--kb-x": drift.x,
+								"--kb-y": drift.y,
+								"--kb-scale": String(drift.scale),
+							} as React.CSSProperties
+						}
+					>
 						<img
 							src={page.cover.src}
 							alt=""
