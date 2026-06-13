@@ -44,6 +44,7 @@
 		"@rivetkit/rivetkit-napi": "workspace:*",
 		"@rivetkit/rivetkit-wasm": "workspace:*",
 		"@rivetkit/engine-cli": "workspace:*",
+		"@rivetkit/effect": "workspace:*",
 		"@types/react": "^19",
 		"@types/react-dom": "^19"
 	},

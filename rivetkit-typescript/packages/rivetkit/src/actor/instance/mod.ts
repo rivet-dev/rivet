@@ -1637,10 +1637,10 @@ export class ActorInstance<
 		attributes?: Record<string, unknown>,
 	): Record<string, unknown> {
 		return {
-			"rivet.actor.id": this.#actorId,
-			"rivet.actor.name": this.#name,
-			"rivet.actor.key": this.#actorKeyString,
-			"rivet.actor.region": this.#region,
+			"rivet.actors.actor.id": this.#actorId,
+			"rivet.actors.actor.name": this.#name,
+			"rivet.actors.actor.key": this.#actorKeyString,
+			"rivet.actors.actor.region": this.#region,
 			...(attributes ?? {}),
 		};
 	}

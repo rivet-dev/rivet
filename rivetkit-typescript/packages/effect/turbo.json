@@ -1,0 +1,56 @@
+{
+	"$schema": "https://turbo.build/schema.json",
+	"extends": ["//"],
+	"tasks": {
+		"build": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"package.json",
+				"src/**",
+				"tsconfig.json",
+				"tsconfig.build.json",
+				"../../../tsconfig.base.json"
+			],
+			"outputs": ["dist/**"],
+			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD", "SKIP_WASM_BUILD"]
+		},
+		"check-types": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"package.json",
+				"src/**",
+				"test/**",
+				"tsconfig.json",
+				"../../../tsconfig.base.json",
+				"../rivetkit/tests/shared-engine.ts"
+			]
+		},
+		"lint:publint": {
+			"dependsOn": ["build"],
+			"inputs": [
+				"package.json",
+				"dist/**"
+			]
+		},
+		"lint:attw": {
+			"dependsOn": ["build"],
+			"inputs": [
+				"package.json",
+				"dist/**"
+			]
+		},
+		"test": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"package.json",
+				"src/**",
+				"test/**",
+				"tsconfig.json",
+				"vitest.config.ts",
+				"../../../tsconfig.base.json",
+				"../../../vitest.base.ts",
+				"../rivetkit/tests/shared-engine.ts"
+			]
+		}
+	}
+}

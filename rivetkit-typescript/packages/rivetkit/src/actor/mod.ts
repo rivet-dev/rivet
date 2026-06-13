@@ -52,6 +52,8 @@ export {
 export {
 	ActorError,
 	RivetError,
+	type RivetErrorLike,
+	type RivetErrorOptions,
 	UserError,
 	type UserErrorOptions,
 } from "./errors";

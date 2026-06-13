@@ -1,0 +1,46 @@
+{
+	"name": "@rivetkit/effect",
+	"version": "2.3.0-rc.4",
+	"description": "Effect SDK for Rivet Actors",
+	"license": "Apache-2.0",
+	"type": "module",
+	"sideEffects": false,
+	"files": [
+		"src/**/*.ts",
+		"dist/**/*.js",
+		"dist/**/*.js.map",
+		"dist/**/*.d.ts",
+		"dist/**/*.d.ts.map"
+	],
+	"exports": {
+		".": "./src/mod.ts"
+	},
+	"publishConfig": {
+		"access": "public",
+		"exports": {
+			".": "./dist/mod.js"
+		}
+	},
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check-types": "tsc --noEmit",
+		"lint:publint": "publint --strict",
+		"lint:attw": "attw --pack . --profile esm-only",
+		"test": "vitest --typecheck",
+		"coverage": "vitest run --coverage"
+	},
+	"peerDependencies": {
+		"effect": "^4.0.0-beta.66",
+		"rivetkit": "workspace:*"
+	},
+	"devDependencies": {
+		"@arethetypeswrong/cli": "^0.18.3",
+		"@effect/language-service": "^0.85.1",
+		"@effect/vitest": "^4.0.0-beta.66",
+		"@types/node": "^22.18.1",
+		"@vitest/coverage-v8": "^4.1.7",
+		"publint": "^0.3.21",
+		"typescript": "^5.9.2",
+		"vitest": "^4.1.5"
+	}
+}
