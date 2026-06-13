@@ -62,6 +62,10 @@ type ActorKvListOptions<
 
 type ActorClientFor<T> = T extends Registry<any> ? Client<T> : T;
 
+/**
+ * @deprecated Actor KV is deprecated. Use embedded SQLite (`c.db` / `c.sql`)
+ * or actor state instead.
+ */
 export interface ActorKv {
 	get<T extends ActorKvValueType = "text">(
 		key: Uint8Array | string,
@@ -305,6 +309,10 @@ export interface ActorContext<
 	[RAW_STATE_SYMBOL](): TState;
 	state: TState;
 	vars: TVars;
+	/**
+	 * @deprecated Actor KV is deprecated. Use embedded SQLite (`db` / `sql`)
+	 * or actor state instead.
+	 */
 	readonly kv: ActorKv;
 	readonly db: InferDatabaseClient<TDatabase>;
 	readonly schedule: ActorSchedule;

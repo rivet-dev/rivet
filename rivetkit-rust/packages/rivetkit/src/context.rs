@@ -211,6 +211,10 @@ impl<A: Actor> Ctx<A> {
 		self.inner.region()
 	}
 
+	#[deprecated(
+		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
+	)]
+	#[allow(deprecated)]
 	pub fn kv(&self) -> &Kv {
 		self.inner.kv()
 	}
