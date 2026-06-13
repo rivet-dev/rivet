@@ -1260,7 +1260,7 @@ impl ActorTask {
 
 		let mut values = self
 			.ctx
-			.kv()
+			.kv_internal()
 			.batch_get(&[PERSIST_DATA_KEY, LAST_PUSHED_ALARM_KEY])
 			.await
 			.context("load persisted actor startup data")?
@@ -1298,7 +1298,7 @@ impl ActorTask {
 		}
 
 		self.ctx
-			.kv()
+			.kv_internal()
 			.get(key)
 			.await
 			.context("load persisted actor startup key")

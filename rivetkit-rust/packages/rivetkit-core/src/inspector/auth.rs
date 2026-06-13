@@ -58,7 +58,7 @@ impl InspectorAuth {
 		}
 
 		let stored_token = ctx
-			.kv()
+			.kv_internal()
 			.get(&INSPECTOR_TOKEN_KEY)
 			.await
 			.ok()
@@ -91,7 +91,7 @@ pub(crate) async fn init_inspector_token_with_preload(
 		match preloaded_kv.and_then(|preloaded| preloaded.key_entry(&INSPECTOR_TOKEN_KEY)) {
 			Some(existing) => existing,
 			None => ctx
-				.kv()
+				.kv_internal()
 				.get(&INSPECTOR_TOKEN_KEY)
 				.await
 				.context("load inspector token")?,
@@ -101,7 +101,7 @@ pub(crate) async fn init_inspector_token_with_preload(
 	}
 
 	let token = generate_inspector_token();
-	ctx.kv()
+	ctx.kv_internal()
 		.put(&INSPECTOR_TOKEN_KEY, token.as_bytes())
 		.await
 		.context("persist inspector token")?;
