@@ -8,8 +8,9 @@ import {
 	faReact,
 	faRust,
 	faScaleBalanced,
+	faSupabase,
 } from "@rivet-gg/icons";
-import { deployOptions, faSupabase } from "@rivetkit/shared-data";
+import { deployOptions } from "@rivetkit/shared-data";
 import type { DocsLandingData } from "./DocsLanding";
 
 const actors: DocsLandingData = {
@@ -24,7 +25,7 @@ const actors: DocsLandingData = {
 				{ title: "Node.js & Bun", href: "/docs/actors/quickstart/backend", icon: faNodeJs, description: "Set up actors with Node.js, Bun, and web frameworks." },
 				{ title: "React", href: "/docs/actors/quickstart/react", icon: faReact, description: "Build realtime React applications backed by actors." },
 				{ title: "Next.js", href: "/docs/actors/quickstart/next-js", icon: faNextjs, description: "Server-rendered Next.js experiences backed by actors." },
-				{ title: "Rust", href: "/docs/actors/quickstart/rust", icon: faRust, badge: "Beta", description: "Native Rust with the typed rivetkit crate." },
+				{ title: "Rust", href: "/docs/actors/quickstart/rust", icon: faRust, badge: "Beta", description: "Build a Rivet Actor in Rust." },
 				{ title: "Effect.ts", href: "/docs/actors/quickstart/effect", icon: faLayerGroup, badge: "Beta", description: "The Effect SDK with typed Schema actions." },
 				{ title: "Cloudflare Workers", href: "/docs/actors/quickstart/cloudflare", icon: faCloudflare, description: "Run RivetKit on Cloudflare Workers." },
 				{ title: "Supabase Functions", href: "/docs/actors/quickstart/supabase", icon: faSupabase, description: "Run RivetKit on Supabase Edge Functions." },

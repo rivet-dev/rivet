@@ -1,0 +1,4 @@
+project_id = "hello-world-rivet"
+
+[edge_runtime]
+enabled = true

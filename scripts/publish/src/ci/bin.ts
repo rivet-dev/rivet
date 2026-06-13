@@ -31,7 +31,7 @@ import {
 	tagAndPush,
 } from "../lib/git.js";
 import { scoped } from "../lib/logger.js";
-import { publishAll } from "../lib/npm.js";
+import { publishAll, repairBranchPreviewLatestTags } from "../lib/npm.js";
 import {
 	copyPrefix,
 	uploadDir,
@@ -207,10 +207,10 @@ program
 	.option("--release-mode", "Fail if every package is already published")
 	.action(async (opts) => {
 		const repoRoot = findRepoRoot();
+		const ctx = await resolveContext();
 		let tag: string = opts.tag;
 		let releaseMode: boolean | undefined = opts.releaseMode;
 		if (!tag || releaseMode === undefined) {
-			const ctx = await resolveContext();
 			tag = tag ?? ctx.npmTag;
 			if (opts.releaseMode === undefined) {
 				releaseMode = ctx.trigger === "release";
@@ -218,11 +218,19 @@ program
 		}
 		await publishAll(repoRoot, {
 			tag,
+			version: ctx.version,
 			includeReleaseOnlyPackages: releaseMode,
 			parallel: Number(opts.parallel),
 			retries: Number(opts.retries),
 			releaseMode,
 		});
+		if (!releaseMode) {
+			await repairBranchPreviewLatestTags(repoRoot, {
+				tag,
+				version: ctx.version,
+				includeReleaseOnlyPackages: releaseMode,
+			});
+		}
 	});
 
 // ---------------------------------------------------------------------------
@@ -458,7 +466,7 @@ program
 			"",
 			`All packages published as \`${version}\` with tag \`${tag}\`.`,
 			"",
-			"Engine binary is shipped via `@rivetkit/engine-cli` on linux-x64-musl, linux-arm64-musl, darwin-x64, and darwin-arm64. Windows users should use the release installer or set `RIVET_ENGINE_BINARY`.",
+			"Engine binary is shipped via `@rivetkit/engine-cli` on linux-x64-musl, linux-arm64-musl, darwin-x64, and darwin-arm64. `@rivetkit/cli` ships the `rivet` binary plus bundled engine on the same platforms. Windows users should use release versions or set `RIVET_ENGINE_BINARY` / `RIVET_CLI_BINARY`.",
 			"",
 			"Docker images:",
 			"```sh",

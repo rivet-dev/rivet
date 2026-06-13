@@ -24488,6 +24488,12 @@
         ]
       },
       {
+        "icon": "faSupabase",
+        "aliases": [
+          "faSupabase"
+        ]
+      },
+      {
         "icon": "faTs",
         "aliases": [
           "faTs"

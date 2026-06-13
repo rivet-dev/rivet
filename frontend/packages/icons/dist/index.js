@@ -4928,6 +4928,7 @@ export { faRender } from "./icons/faRender.js";
 export { faRivet } from "./icons/faRivet.js";
 export { faSelect } from "./icons/faSelect.js";
 export { faSqlite } from "./icons/faSqlite.js";
+export { faSupabase } from "./icons/faSupabase.js";
 export { faTs } from "./icons/faTs.js";
 export { faVercel } from "./icons/faVercel.js";
 export { faVscode } from "./icons/faVscode.js";

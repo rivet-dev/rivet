@@ -5214,6 +5214,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "rivet-cli"
+version = "2.3.0-rc.12"
+dependencies = [
+ "anyhow",
+ "clap",
+ "dirs",
+ "reqwest 0.12.22",
+ "rivetkit-engine-process",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
 name = "rivet-config"
 version = "2.3.0-rc.12"
 dependencies = [
@@ -6086,6 +6104,7 @@ dependencies = [
  "rivet-metrics",
  "rivetkit-actor-persist",
  "rivetkit-client-protocol",
+ "rivetkit-engine-process",
  "rivetkit-inspector-protocol",
  "rivetkit-shared-types",
  "scc",
@@ -6106,6 +6125,22 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-time",
+]
+
+[[package]]
+name = "rivetkit-engine-process"
+version = "2.3.0-rc.12"
+dependencies = [
+ "anyhow",
+ "reqwest 0.12.22",
+ "rivet-error",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

@@ -1,0 +1,25 @@
+[package]
+name = "rivetkit-engine-process"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+workspace = "../../../"
+description = "Resolves, spawns, and reuses the rivet-engine subprocess for local hosts and the CLI"
+
+[dependencies]
+anyhow.workspace = true
+reqwest.workspace = true
+rivet-error.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["test-util"] }

@@ -70,6 +70,9 @@ RUN --mount=type=cache,id=cargo-registry-windows-x64,target=/usr/local/cargo/reg
     if [ "$BUILD_TARGET" = "engine" ]; then \
         cargo build -p rivet-engine --bin rivet-engine $CARGO_FLAG --target x86_64-pc-windows-gnu && \
         cp target/x86_64-pc-windows-gnu/$PROFILE_DIR/rivet-engine.exe /artifacts/rivet-engine-x86_64-pc-windows-gnu.exe; \
+    elif [ "$BUILD_TARGET" = "cli" ]; then \
+        cargo build -p rivet-cli --bin rivet $CARGO_FLAG --target x86_64-pc-windows-gnu && \
+        cp target/x86_64-pc-windows-gnu/$PROFILE_DIR/rivet.exe /artifacts/rivet-x86_64-pc-windows-gnu.exe; \
     elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
         cd rivetkit-typescript/packages/rivetkit-napi && \
         napi build --platform $CARGO_FLAG --target x86_64-pc-windows-gnu && \

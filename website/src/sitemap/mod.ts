@@ -80,8 +80,9 @@ import {
     faUsbDrive,
     faHardDrive,
     faMessages,
+    faSupabase,
 } from "@rivet-gg/icons";
-import { deployOptions, faSupabase, type DeployOption } from "@rivetkit/shared-data";
+import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
@@ -754,6 +755,10 @@ export const sitemap = [
 			{
 				title: "Reference",
 				pages: [
+					{
+						title: "CLI",
+						href: "/docs/deploy/cli",
+					},
 					{
 						title: "Pool Configuration",
 						href: "/docs/general/pool-configuration",

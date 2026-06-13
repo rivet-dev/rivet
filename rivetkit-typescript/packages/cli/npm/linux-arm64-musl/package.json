@@ -1,0 +1,19 @@
+{
+	"name": "@rivetkit/cli-linux-arm64-musl",
+	"version": "2.3.0-rc.12",
+	"description": "Rivet CLI for Linux arm64 musl (static)",
+	"license": "LicenseRef-RivetEnterprise",
+	"os": [
+		"linux"
+	],
+	"cpu": [
+		"arm64"
+	],
+	"files": [
+		"rivet",
+		"rivet-engine"
+	],
+	"engines": {
+		"node": ">= 20.0.0"
+	}
+}

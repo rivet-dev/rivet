@@ -83,7 +83,7 @@ function getEnginePath() {
 			const version = require("./package.json").version;
 			if (
 				typeof version === "string" &&
-				(version.includes("-pr.") || version.includes("-main."))
+				version.startsWith("0.0.0-")
 			) {
 				throw new Error(
 					"@rivetkit/engine-cli: Windows x64 binaries are only published for release versions.\n" +

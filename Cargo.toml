@@ -11,6 +11,7 @@ members = [
   "engine/packages/cache",
   "engine/packages/cache-purge",
   "engine/packages/cache-result",
+  "engine/packages/cli",
   "engine/packages/config",
   "engine/packages/config-schema-gen",
   "engine/packages/datacenter",
@@ -67,6 +68,7 @@ members = [
   "engine/sdks/rust/ups-protocol",
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/client",
+  "rivetkit-rust/packages/engine-process",
   "rivetkit-rust/packages/rivetkit",
   "rivetkit-rust/packages/rivetkit-core",
   "rivetkit-rust/packages/shared-types",
@@ -617,6 +619,10 @@ members = [
 
     [workspace.dependencies.rivetkit-core]
     path = "rivetkit-rust/packages/rivetkit-core"
+    version = "=2.3.0-rc.12"
+
+    [workspace.dependencies.rivetkit-engine-process]
+    path = "rivetkit-rust/packages/engine-process"
     version = "=2.3.0-rc.12"
 
     [workspace.dependencies.rivetkit-shared-types]
