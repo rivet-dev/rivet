@@ -385,8 +385,12 @@ export async function publishAll(
 		counts.failed === 0 &&
 		counts.alreadyExists === packages.length
 	) {
-		throw new Error(
-			`release mode: all ${packages.length} packages already published at this version. Did you forget to bump the version?`,
+		// This usually means a forgotten version bump, but it also happens on a
+		// legitimate re-run after npm fully published and a later pipeline step
+		// (crates.io, git tag, GitHub release) failed. Warn instead of failing so
+		// the re-run can reach those downstream steps; they are idempotent.
+		log.warn(
+			`release mode: all ${packages.length} packages already published at this version. Continuing (assuming a re-run); ensure the version was bumped.`,
 		);
 	}
 
