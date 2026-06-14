@@ -40,7 +40,7 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export SKIP_NAPI_BUILD=1 && \
         export SKIP_WASM_BUILD=1 && \
         pnpm install --ignore-scripts && \
-        pnpm --filter @rivetkit/engine-frontend run build:inspector-ui; \
+        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
     fi
 
 RUN --mount=type=cache,id=cargo-registry-linux-x64-musl,target=/usr/local/cargo/registry,sharing=locked \

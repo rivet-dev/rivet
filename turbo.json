@@ -25,6 +25,18 @@
 			"outputs": ["dist/**"],
 			"env": ["BASE_URL", "VITE_APP_*", "VITE_FEATURE_FLAGS"]
 		},
+		"build:inspector-ui": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"apps/inspector-ui/**",
+				"scripts/**",
+				"vite.inspector-ui.config.ts",
+				"tsconfig.json",
+				"package.json"
+			],
+			"outputs": ["dist/inspector-ui/**", "dist/inspector-tab/**"]
+		},
 		"build:ladle": {
 			"dependsOn": ["^build"],
 			"inputs": [
