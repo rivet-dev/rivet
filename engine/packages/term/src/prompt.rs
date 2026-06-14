@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use console::{Term, style};
+use console::{style, Term};
 use derive_builder::Builder;
 
 use crate::{error::Result, status};
