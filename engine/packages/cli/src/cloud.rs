@@ -257,7 +257,9 @@ pub async fn wait_for_pool(
 }
 
 pub fn registry_endpoint(cloud_api: &str) -> Result<String> {
-	derive_endpoint(cloud_api, "registry")
+	let url = derive_endpoint(cloud_api, "registry")?;
+	// Strip the scheme for Docker image references
+	Ok(url.trim_start_matches("https://").trim_start_matches("http://").to_string())
 }
 
 pub fn dashboard_endpoint(cloud_api: &str) -> Result<String> {
