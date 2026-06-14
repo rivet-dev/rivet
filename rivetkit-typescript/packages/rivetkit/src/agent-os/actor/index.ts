@@ -8,6 +8,7 @@
  * configuration and hands it across the bridge.
  */
 
+import { getSidecarPath } from "@rivet-dev/agent-os-sidecar";
 import { actor, type ActorDefinition } from "@/actor/mod";
 import type { DatabaseProvider, RawAccess } from "@/common/database/config";
 import type {
@@ -27,25 +28,61 @@ import type { AgentOsActorState, AgentOsActorVars } from "../types";
  * uses `deny_unknown_fields`, so the envelope must stay in lock-step
  * with `agent_os.rs::AgentOsConfigJson`.
  *
- * `software` is NOT threaded yet. Investigation in 2026-06 showed that
- * even when an absolute `packageDir` / `commandDir` is forwarded as the
- * Rust-side `package` field (and `Path::join` correctly produces a
- * valid `root`), the agent-os-client Rust crate's `ConfigureVm` call
- * passes `mounts: Vec::new()` to the sidecar. Software descriptors get
- * registered but the wasm command directories are never mounted at the
- * guest filesystem path (`/__agentos/commands/{N}/`) that
- * `discover_command_guest_paths` reads. The TS port had software → mount
- * mapping that the Rust port hasn't reproduced. Fixing this requires
- * either modifying `ext/agent-os/crates/client/src/agent_os.rs` to build
- * mount descriptors from software inputs, or building those mounts
- * ourselves in `rivetkit-agent-os::run::ensure_vm` before calling
- * `AgentOs::create`. Until then, `exec` / `shell` / agent sessions that
- * depend on wasm-provided commands cannot work end-to-end.
+ * Software threading: each software descriptor is flattened (meta packages
+ * such as `common` are arrays of descriptors) and mapped to the Rust
+ * `SoftwareInput { package, kind }`. The agent-os-client resolves an
+ * ABSOLUTE `package` directly (its `resolve_software` lets an absolute path
+ * bypass the `node_modules` prefix), so the descriptor's already-resolved
+ * `commandDir` (wasm commands) / `packageDir` (agents/tools) is forwarded as
+ * `package`. `build_command_mounts` then mounts each wasm dir at
+ * `/__agentos/commands/{N}/`, which is what makes `exec`/shell work.
  */
+interface SoftwareDescriptorLike {
+	commandDir?: string;
+	packageDir?: string;
+	agent?: unknown;
+	hostTool?: unknown;
+	toolkit?: unknown;
+}
+
+function flattenSoftware(input: unknown, out: SoftwareDescriptorLike[]): void {
+	if (input == null) return;
+	if (Array.isArray(input)) {
+		for (const item of input) flattenSoftware(item, out);
+		return;
+	}
+	if (typeof input === "object") out.push(input as SoftwareDescriptorLike);
+}
+
 export function buildConfigJson<TConnParams>(
-	_parsed: AgentOsActorConfig<TConnParams>,
+	parsed: AgentOsActorConfig<TConnParams>,
 ): string {
-	return "{}";
+	const descriptors: SoftwareDescriptorLike[] = [];
+	flattenSoftware((parsed.options as { software?: unknown })?.software, descriptors);
+
+	const software: Array<{ package: string; kind?: string }> = [];
+	for (const d of descriptors) {
+		if (typeof d.commandDir === "string") {
+			// Wasm command directory (kind defaults to WasmCommands on the Rust side).
+			software.push({ package: d.commandDir });
+		} else if (typeof d.packageDir === "string") {
+			// Agent SDK / host-tool package: forwarded but not mounted as commands.
+			// `kind` matches the kebab-case serde tags of the Rust `SoftwareKind`
+			// enum (`wasm-commands` / `agent` / `tool`).
+			software.push({
+				package: d.packageDir,
+				kind: d.hostTool || d.toolkit ? "tool" : "agent",
+			});
+		}
+	}
+
+	// `moduleAccessCwd` backs `/root/node_modules` in the VM (agent SDK + transitive
+	// dep resolution). It defaults to the server's cwd, but can be pointed at a
+	// pre-generated flat node_modules via `AGENT_OS_MODULE_ACCESS_CWD` so pnpm-isolated
+	// workspaces can mount a hoisted tree without restructuring the whole workspace.
+	const moduleAccessCwd =
+		process.env.AGENT_OS_MODULE_ACCESS_CWD ?? process.cwd();
+	return JSON.stringify({ software, moduleAccessCwd });
 }
 
 function buildNativeFactoryBuilder<TConnParams>(
@@ -64,6 +101,10 @@ function buildNativeFactoryBuilder<TConnParams>(
 		}
 		const options: NapiAgentOsOptions = {
 			configJson: buildConfigJson(parsed),
+			// Resolve the prebuilt sidecar binary from the npm package and pass
+			// it through to the agent-os client so it spawns the bundled binary
+			// rather than relying on `agent-os-sidecar` being on PATH.
+			sidecarBinaryPath: getSidecarPath(),
 		};
 		return runtime.createAgentOsFactory(options, undefined);
 	};

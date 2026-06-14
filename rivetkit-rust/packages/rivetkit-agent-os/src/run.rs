@@ -2,14 +2,17 @@
 //! that needs it, tears it down on `Sleep` / `Destroy`, dispatches
 //! actions through [`actions::dispatch`].
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use agent_os_client::AgentOs;
 use anyhow::{Result, anyhow};
-use rivetkit::{Ctx, Event, Start};
+use bytes::Bytes;
+use rivetkit::{Ctx, Event, HttpCall, Response, Start};
 use serde::Serialize;
 
 use crate::actions;
+use crate::actions::preview::{self, PreviewStore};
 use crate::actor::AgentOsActor;
 use crate::config::AgentOsActorConfig;
 
@@ -31,6 +34,7 @@ pub async fn run(
 	mut start: Start<AgentOsActor>,
 ) -> Result<()> {
 	let mut vm: Option<AgentOs> = None;
+	let mut previews: PreviewStore = PreviewStore::new();
 
 	while let Some(event) = start.events.recv().await {
 		match event {
@@ -40,9 +44,9 @@ pub async fn run(
 					continue;
 				}
 				let handle = vm.as_ref().expect("vm present after ensure_vm");
-				actions::dispatch(handle, action).await;
+				actions::dispatch(handle, &mut previews, action).await;
 			}
-			Event::Http(http) => http.reply_status(404),
+			Event::Http(http) => proxy_preview(vm.as_ref(), &mut previews, http).await,
 			Event::QueueSend(queue) => queue.err(anyhow!("queue send not supported")),
 			Event::WebSocketOpen(ws) => ws.reject(anyhow!("websocket not supported")),
 			Event::ConnOpen(conn) => conn.accept(()),
@@ -67,6 +71,74 @@ pub async fn run(
 	shutdown_vm(&start.ctx, &mut vm, "error").await;
 
 	Ok(())
+}
+
+/// Proxy a `/preview/{token}/...` HTTP request to the guest port the token
+/// was issued for. The first path segment after `/preview/` is the token;
+/// the remainder is forwarded to the guest service via [`AgentOs::fetch`].
+/// An unmatched path, an unknown or expired token, or a VM that is not yet
+/// up all reply `404`.
+async fn proxy_preview(vm: Option<&AgentOs>, previews: &mut PreviewStore, http: HttpCall) {
+	let path = http
+		.request()
+		.map(|request| request.uri().path().to_owned())
+		.unwrap_or_default();
+	let Some(rest) = path.strip_prefix("/preview/") else {
+		http.reply_status(404);
+		return;
+	};
+	let (token, forward_path) = match rest.split_once('/') {
+		Some((token, tail)) => (token.to_owned(), format!("/{tail}")),
+		None => (rest.to_owned(), "/".to_owned()),
+	};
+
+	let Some(port) = preview::resolve(previews, &token) else {
+		http.reply_status(404);
+		return;
+	};
+	let Some(vm) = vm else {
+		http.reply_status(404);
+		return;
+	};
+
+	let (request, reply) = match http.into_request() {
+		Ok(pair) => pair,
+		Err(error) => {
+			tracing::warn!(?error, "preview request decode failed");
+			return;
+		}
+	};
+	let forward_uri: http::Uri = match forward_path.parse() {
+		Ok(uri) => uri,
+		Err(error) => {
+			reply.reply_err(anyhow!("invalid preview path: {error}"));
+			return;
+		}
+	};
+	let (parts, body) = request.into_inner().into_parts();
+	let mut forwarded = http::Request::new(Bytes::from(body));
+	*forwarded.method_mut() = parts.method;
+	*forwarded.uri_mut() = forward_uri;
+	*forwarded.headers_mut() = parts.headers;
+
+	match vm.fetch(port, forwarded).await {
+		Ok(response) => {
+			let status = response.status().as_u16();
+			let mut headers: HashMap<String, String> = HashMap::new();
+			for (name, value) in response.headers().iter() {
+				headers.insert(
+					name.as_str().to_owned(),
+					String::from_utf8_lossy(value.as_bytes()).into_owned(),
+				);
+			}
+			let body = response.into_body().to_vec();
+			match Response::from_parts(status, headers, body) {
+				Ok(response) => reply.reply(response),
+				Err(error) => reply.reply_err(error),
+			}
+		}
+		Err(error) => reply.reply_err(error),
+	}
 }
 
 /// Bring up the VM if not already running. Broadcasts `vmBooted` on

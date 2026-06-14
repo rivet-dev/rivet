@@ -87,6 +87,13 @@ export interface NapiAgentOsOptions {
    * fail loud (enforced by `deny_unknown_fields`).
    */
   configJson?: string
+  /**
+   * Absolute path to the prebuilt `agent-os-sidecar` binary, resolved on
+   * the TypeScript side from the `@rivet-dev/agent-os-sidecar` npm package.
+   * Forwarded to the agent-os client via its `AGENT_OS_SIDECAR_BIN` env so
+   * the client spawns the bundled binary instead of relying on `PATH`.
+   */
+  sidecarBinaryPath?: string
 }
 export interface JsBindParam {
   kind: string

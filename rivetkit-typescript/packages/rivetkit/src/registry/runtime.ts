@@ -9,6 +9,12 @@ import type { RegistryConfig } from "./config";
  */
 export interface NapiAgentOsOptions {
 	configJson?: string;
+	/**
+	 * Absolute path to the prebuilt `agent-os-sidecar` binary, resolved from
+	 * the `@rivet-dev/agent-os-sidecar` npm package. Forwarded to the agent-os
+	 * client (via `AGENT_OS_SIDECAR_BIN`) so it spawns the bundled binary.
+	 */
+	sidecarBinaryPath?: string;
 }
 
 /**

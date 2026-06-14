@@ -25,7 +25,13 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@rivet-dev/agent-os-common": "^0.0.260331072558",
+		"@rivet-dev/agent-os-core": "0.0.0-claude-rust-review-and-runtime-fixes.5955345",
+		"@rivet-dev/agent-os-pi": "^0.0.0-claude-rust-review-and-runtime-fixes.5955345",
+		"@rivet-dev/agent-os-s3": "0.0.0-claude-rust-review-and-runtime-fixes.5955345",
+		"@rivet-dev/agent-os-sandbox": "0.0.0-claude-rust-review-and-runtime-fixes.5955345",
 		"rivetkit": "*",
+		"sandbox-agent": "^0.4.2",
 		"zod": "^3.25.0"
 	},
 	"devDependencies": {
@@ -34,8 +40,13 @@
 		"typescript": "^5.5.2"
 	},
 	"template": {
-		"technologies": ["typescript"],
-		"tags": ["agent-os", "vm"],
+		"technologies": [
+			"typescript"
+		],
+		"tags": [
+			"agent-os",
+			"vm"
+		],
 		"noFrontend": true,
 		"skipVercel": true
 	},

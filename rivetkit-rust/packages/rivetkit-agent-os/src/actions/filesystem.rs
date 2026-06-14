@@ -52,11 +52,18 @@ pub async fn move_path(vm: &AgentOs, from: &str, to: &str) -> Result<()> {
 	vm.move_path(from, to).await
 }
 
-/// `deleteFile(path)` — port of [`AgentOs::delete`]. Non-recursive by
-/// default; matches JS `deleteFile` semantics (use `delete` for the
-/// recursive variant when added).
-pub async fn delete_file(vm: &AgentOs, path: &str) -> Result<()> {
-	vm.delete(path, DeleteOptions { recursive: false }).await
+/// Options for `deleteFile`. TS sends `{ recursive?: boolean }`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeleteOptionsArg {
+	#[serde(default)]
+	pub recursive: bool,
+}
+
+/// `deleteFile(path, options?)` — port of [`AgentOs::delete`]. Honors the
+/// `recursive` option so directory deletes match JS semantics.
+pub async fn delete_file(vm: &AgentOs, path: &str, recursive: bool) -> Result<()> {
+	vm.delete(path, DeleteOptions { recursive }).await
 }
 
 /// `writeFiles(entries)` — port of [`AgentOs::write_files`]. Per-entry
