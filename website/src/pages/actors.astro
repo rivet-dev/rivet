@@ -1,4 +1,7 @@
 ---
+// Page lane: /actors is the canonical home of the Actor primitive and every
+// use case built on it: AI agents, realtime, multiplayer, collaborative state,
+// and durable workflows. There is no separate agent solution page.
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { BuiltInFeatures } from '@/components/marketing/sections/BuiltInFeatures';
 import { ProblemSection } from '@/components/marketing/sections/ProblemSection';
@@ -9,6 +12,31 @@ import { ScrollObserver } from '@/components/ScrollObserver';
 import { FaqSection } from '@/components/faq/FaqSection';
 import FaqJsonLd from '@/components/faq/FaqJsonLd.astro';
 import { actorsFaqs } from '@/data/faqs/actors';
+import { CatalogCard } from '@/components/marketing/editorial/CatalogCard';
+import { HERO_H1_CLASS, SECTION_H2_CLASS, SUBTITLE_CLASS } from '@/components/marketing/typography';
+
+const useCases = [
+	{
+		title: 'AI agents',
+		body: "One Actor per agent. Persistent memory, tool execution, and long-running context that survives restarts — in your existing Node.js or Bun backend.",
+		href: '/docs/actors/ai-and-user-generated-actors',
+	},
+	{
+		title: 'Realtime & multiplayer',
+		body: 'WebSockets and event broadcast built in. One Actor per room, match, or channel keeps every client in sync without a separate realtime service.',
+		href: '/docs/actors/events',
+	},
+	{
+		title: 'Collaborative state',
+		body: 'One Actor per document or workspace. State lives next to compute, so concurrent edits stay consistent without cache-invalidation gymnastics.',
+		href: '/docs/actors/sharing-and-joining-state',
+	},
+	{
+		title: 'Durable workflows',
+		body: 'Queues, schedules, and timers on the same primitive. Multi-step operations pick up where they left off, even across sleeps and deploys.',
+		href: '/docs/actors/queues',
+	},
+];
 ---
 
 <MarketingLayout
@@ -19,24 +47,112 @@ import { actorsFaqs } from '@/data/faqs/actors';
 >
 	<FaqJsonLd items={actorsFaqs} />
 	<ScrollObserver client:load>
-		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
-				<!-- Hero -->
-				<section class="relative flex min-h-[88svh] flex-col justify-center px-6 pt-32 pb-16 md:pt-40 md:pb-24 text-center">
-					<div class="mx-auto w-full max-w-3xl">
-						<h1 class="mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
-							The primitive for<br />stateful workloads.
-						</h1>
-						<p class="mb-8 text-lg text-zinc-400 md:text-xl">
-							One Actor per agent, per session, per user. State, storage, and networking included.
-						</p>
-						<div class="flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
-							<a href="/docs" class="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200">
-								Start Building
-							</a>
-							<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-white/20 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/30 hover:text-white">
-								Quickstart Guide
-							</a>
+				<!-- Hero: full-bleed oil painting fading down into ink, then grading into porcelain on scroll -->
+				<section id="actors-hero" class="relative flex min-h-[100svh] flex-col justify-end overflow-hidden pt-32 pb-16 md:pb-24" style="--actors-content-fade: 1;">
+					<!-- Painting backdrop, a fixed crop inside the clipping box
+					     (overflow-hidden). The gradients sit over it so the
+					     dark fade can hand off to the porcelain gradient on scroll. -->
+					<div id="actors-hero-bg" class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true" style="will-change: opacity;">
+						<img
+							src="https://assets.rivet.dev/website/images/textures/actors-hero-degas-orchestra.webp"
+							alt=""
+							loading="eager"
+							fetchpriority="high"
+							decoding="async"
+							class="absolute inset-x-0 -top-[18%] h-[136%] w-full object-cover object-[center_28%]"
+						/>
+						<!-- Fade to ink at the bottom so the hero text reads before the paper gradient layers over it. -->
+						<div class="absolute inset-0 bg-gradient-to-t from-ink from-[18%] via-ink/70 via-[42%] to-transparent to-[78%]"></div>
+						<!-- Gentle left wash for extra legibility behind the copy -->
+						<div class="absolute inset-0 bg-gradient-to-r from-ink/60 via-ink/20 to-transparent"></div>
+					</div>
+					<!-- Scroll-driven porcelain wash: a static bottom-up porcelain gradient (solid rgb(234,234,234) at the seam, fading to transparent toward the top) whose opacity JS ramps in on scroll. Opacity-only, so there is no blur or per-frame mask raster to jank the scroll. -->
+					<div
+						id="actors-paper-wash"
+						class="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[78svh]"
+						style="opacity: 0; will-change: opacity; background-image: linear-gradient(to top, rgb(234,234,234) 0%, rgb(234,234,234) 24%, rgba(234,234,234,0) 64%);"
+					></div>
+
+					<div class="relative z-10 mx-auto w-full max-w-7xl px-6" style="opacity: var(--actors-content-fade);">
+						<div class="max-w-xl">
+							<h1 class={`mb-4 ${HERO_H1_CLASS} !text-cream`}>
+								The primitive for<br />stateful workloads.
+							</h1>
+							<p class="mb-8 max-w-lg text-lg text-cream/70 md:text-xl">
+								One Actor per agent, per session, per user. The same primitive powers realtime apps, multiplayer, and collaborative state.
+							</p>
+							<div class="flex flex-col gap-3 sm:flex-row">
+								<a href="/docs/actors" class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white/90">
+									Start Building
+								</a>
+								<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-cream/25 bg-cream/10 px-4 py-2 text-sm text-cream backdrop-blur-md backdrop-saturate-[1.3] transition-colors hover:border-cream/45 hover:bg-cream/20">
+									Quickstart Guide
+								</a>
+							</div>
+						</div>
+					</div>
+				</section>
+
+				<!-- As the hero scrolls away, ramp the porcelain gradient opacity and dim the painting and copy. Opacity-only animation, no blur or masks, keeps the scroll on the compositor. -->
+				<script>
+					const hero = document.getElementById('actors-hero');
+					const wash = document.getElementById('actors-paper-wash');
+					const bg = document.getElementById('actors-hero-bg');
+					if (hero) {
+						let ticking = false;
+						const smoothstep = (value: number) => value * value * (3 - 2 * value);
+						const update = () => {
+							const h = hero.offsetHeight || window.innerHeight;
+							const scrollRatio = window.scrollY / h;
+							// Ramp the porcelain in gently so it spreads toward the top at a
+							// measured pace while the painting and copy fade underneath it.
+							const progress = Math.min(1, Math.max(0, (scrollRatio - 0.04) / 0.55));
+							const eased = smoothstep(progress);
+							const bell = 1 - Math.pow(1 - eased, 3.2);
+							// Opacity-only animation keeps the scroll on the compositor (no blur, no
+							// per-frame mask raster). A static porcelain gradient fades in from the
+							// bottom, the painting dims, and the copy clears ahead of it.
+							if (wash) wash.style.opacity = bell.toFixed(3);
+							if (bg) bg.style.opacity = (1 - bell * 0.7).toFixed(3);
+							hero.style.setProperty('--actors-content-fade', Math.max(0, 1 - bell * 1.5).toFixed(3));
+							ticking = false;
+						};
+						const onScroll = () => {
+							if (!ticking) {
+								ticking = true;
+								requestAnimationFrame(update);
+							}
+						};
+						update();
+						window.addEventListener('scroll', onScroll, { passive: true });
+						window.addEventListener('resize', onScroll, { passive: true });
+					}
+				</script>
+
+				<!-- Use cases -->
+				<section class="bg-[#EAEAEA] px-6 py-16 md:py-32">
+					<div class="mx-auto w-full max-w-7xl">
+						<div class="mb-12 max-w-3xl">
+							<h2 class={SECTION_H2_CLASS}>One primitive, every stateful workload.</h2>
+							<p class={SUBTITLE_CLASS}>
+								The same Actor that holds an agent's memory holds a game lobby, a shared document, or a running workflow.
+							</p>
+						</div>
+						<div class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+							{
+								useCases.map((useCase) => (
+									<CatalogCard
+										title={useCase.title}
+										href={useCase.href}
+										linkLabel="Read the docs"
+										className="flex h-full flex-col"
+									>
+										<p class="mt-2 flex-1 text-sm leading-relaxed text-ink-soft">{useCase.body}</p>
+									</CatalogCard>
+								))
+							}
 						</div>
 					</div>
 				</section>
@@ -45,8 +161,7 @@ import { actorsFaqs } from '@/data/faqs/actors';
 				<ProblemSection client:visible />
 				<BenchmarksSection client:visible />
 				<ObservabilitySection client:visible />
-				<!-- Static render with no client directive. FaqSection is hook-free and uses native details/summary, so it needs no JS. -->
-				<FaqSection items={actorsFaqs} />
+				<FaqSection items={actorsFaqs} theme="light" client:visible />
 				<RedesignedCTA client:visible />
 			</main>
 		</div>

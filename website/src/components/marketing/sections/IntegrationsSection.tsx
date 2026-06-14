@@ -1,9 +1,9 @@
 'use client';
 
-import { Box, LayoutGrid, Terminal, Wrench } from 'lucide-react';
+import { LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { deployOptions } from '@rivetkit/shared-data';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { GLOW_PILL_CLASS, handleGlowPillMouseMove } from '../glowPill';
 
 const frameworks = [
   { name: 'React', href: '/docs/clients/react' },
@@ -15,8 +15,13 @@ const frameworks = [
   { name: 'tRPC', href: 'https://github.com/rivet-dev/rivet/tree/main/examples/trpc', external: true },
 ];
 
+// Matches DEPLOY_PILL_CLASS in HostingSection so the two index rows read as
+// one vocabulary.
+const STACK_LINK_CLASS =
+  `${GLOW_PILL_CLASS} inline-flex items-center rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft shadow-[0_8px_22px_-20px_rgba(27,25,22,0.45)] transition-colors hover:border-ink/25 hover:text-ink`;
+
 export const IntegrationsSection = () => (
-  <section className='relative overflow-hidden border-t border-white/5 py-16 md:py-48'>
+  <section className='relative overflow-hidden border-t border-ink/10 py-16 md:py-32'>
     <div className='relative z-10 mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
         <motion.div
@@ -26,46 +31,28 @@ export const IntegrationsSection = () => (
           transition={{ duration: 0.5 }}
           className='max-w-xl'
         >
-          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>Runs where you do.</h2>
-          <p className='text-base leading-relaxed text-zinc-500'>
-            Serverless, containers, or your own servers — Rivet Actors work with your existing infrastructure, frameworks, and tools.
+          <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>Works with your stack.</h2>
+          <p className={SUBTITLE_CLASS}>
+            Standard Node.js, Bun, and Deno. Your frameworks, your tools. No custom runtime, no rewrite.
           </p>
         </motion.div>
       </div>
 
-      <div className='grid grid-cols-1 gap-8 md:grid-cols-2 lg:grid-cols-4'>
-        {/* Category 1: Infrastructure */}
-        <div className='border-t border-white/10 pt-6'>
+      <div className='grid grid-cols-1 gap-8 md:grid-cols-3'>
+        {/* Category 1: Frameworks */}
+        <div className='border-t border-ink/10 pt-6'>
           <div className='mb-4 flex items-center gap-3'>
-            <Box className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Infrastructure</h4>
-          </div>
-          <div className='flex flex-wrap gap-2'>
-            {deployOptions.map(({ displayName, shortTitle, href }) => (
-              <a
-                key={displayName}
-                href={href}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
-              >
-                {shortTitle || displayName}
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* Category 2: Frameworks */}
-        <div className='border-t border-white/10 pt-6'>
-          <div className='mb-4 flex items-center gap-3'>
-            <LayoutGrid className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Frameworks</h4>
+            <LayoutGrid className='h-4 w-4 text-olive' />
+            <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Frameworks</h4>
           </div>
           <div className='flex flex-wrap gap-2'>
             {frameworks.map(tech => (
               <a
                 key={tech.name}
                 href={tech.href}
+                onMouseMove={handleGlowPillMouseMove}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+                className={STACK_LINK_CLASS}
               >
                 {tech.name}
               </a>
@@ -73,11 +60,11 @@ export const IntegrationsSection = () => (
           </div>
         </div>
 
-        {/* Category 3: Runtimes */}
-        <div className='border-t border-white/10 pt-6'>
+        {/* Category 2: Runtimes */}
+        <div className='border-t border-ink/10 pt-6'>
           <div className='mb-4 flex items-center gap-3'>
-            <Terminal className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Runtimes</h4>
+            <Terminal className='h-4 w-4 text-olive' />
+            <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Runtimes</h4>
           </div>
           <div className='flex flex-wrap gap-2'>
             {[
@@ -88,8 +75,9 @@ export const IntegrationsSection = () => (
               <a
                 key={tech.name}
                 href={tech.href}
+                onMouseMove={handleGlowPillMouseMove}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+                className={STACK_LINK_CLASS}
               >
                 {tech.name}
               </a>
@@ -97,11 +85,11 @@ export const IntegrationsSection = () => (
           </div>
         </div>
 
-        {/* Category 4: Tools */}
-        <div className='border-t border-white/10 pt-6'>
+        {/* Category 3: Tools */}
+        <div className='border-t border-ink/10 pt-6'>
           <div className='mb-4 flex items-center gap-3'>
-            <Wrench className='h-4 w-4 text-zinc-400' />
-            <h4 className='text-sm font-medium uppercase tracking-wider text-white'>Tools</h4>
+            <Wrench className='h-4 w-4 text-olive' />
+            <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Tools</h4>
           </div>
           <div className='flex flex-wrap gap-2'>
             {[
@@ -115,8 +103,9 @@ export const IntegrationsSection = () => (
               <a
                 key={tech.name}
                 href={tech.href}
+                onMouseMove={handleGlowPillMouseMove}
                 {...(tech.external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
-                className='rounded-md border border-white/5 px-2 py-1 text-xs text-zinc-400 transition-colors hover:border-white/20 hover:text-white'
+                className={STACK_LINK_CLASS}
               >
                 {tech.name}
               </a>

@@ -5,7 +5,6 @@ import { DocsNavigation } from '@/components/DocsNavigation';
 import { DocsTableOfContents } from '@/components/DocsTableOfContents';
 import { DocsPageDropdown } from '@/components/DocsPageDropdown';
 import { Prose } from '@/components/Prose';
-import { Button } from '@rivet-gg/components';
 import { Icon, faPencil } from '@rivet-gg/icons';
 import { sitemap } from '@/sitemap/mod';
 import { findActiveTab } from '@/lib/sitemap';
@@ -85,7 +84,7 @@ const breadcrumbSchema = {
 
 <DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl} sidebar={foundTab?.tab?.sidebar}>
 	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
-	<aside class="hidden md:block border-r">
+	<aside class="hidden md:block border-r border-ink/10">
 		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} client:load />}
 	</aside>
 	<div class="flex justify-center w-full min-w-0">
@@ -101,9 +100,9 @@ const breadcrumbSchema = {
 						/>
 					</div>
 				</div>
-				<Prose as="article" className="max-w-prose-docs lg:max-w-prose-docs mx-auto [&>h1:first-of-type]:pr-44">
+				<Prose as="article" surface="paper" className="docs-article max-w-prose-docs lg:max-w-prose-docs mx-auto prose-headings:font-medium prose-headings:tracking-tight [&>h1:first-of-type]:pr-44">
 					{parentPage && (
-						<div class="eyebrow h-5 text-primary text-sm font-semibold">
+						<div class="eyebrow h-5 text-pine text-sm font-semibold">
 							{parentPage.title}
 						</div>
 					)}
@@ -111,19 +110,18 @@ const breadcrumbSchema = {
 					{description && <p>{description}</p>}
 					<Content components={mdxComponents} />
 				</Prose>
-				<div class="border-t mt-12 pt-6 flex flex-wrap items-center justify-between gap-4">
-					<Button variant="outline" size="sm" asChild>
-						<a
-							href={`https://github.com/rivet-dev/rivet/edit/main/website/src/content/${componentSourcePath}`}
-							target="_blank"
-							rel="noreferrer"
-						>
-							<Icon icon={faPencil} />
-							Edit this page
-						</a>
-					</Button>
+				<div class="border-t border-ink/10 mt-12 pt-6 flex flex-wrap items-center justify-between gap-4">
+					<a
+						href={`https://github.com/rivet-dev/rivet/edit/main/website/src/content/${componentSourcePath}`}
+						target="_blank"
+						rel="noreferrer"
+						class="inline-flex items-center gap-2 rounded-md border border-ink/15 bg-white/55 px-3 py-2 text-sm text-ink transition-colors hover:border-ink/30"
+					>
+						<Icon icon={faPencil} className="text-ink-faint" />
+						Edit this page
+					</a>
 					{lastModifiedFormatted && (
-						<span class="text-xs text-muted-foreground">
+						<span class="text-xs text-ink-faint">
 							Last updated {lastModifiedFormatted}
 						</span>
 					)}

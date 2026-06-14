@@ -21,7 +21,7 @@ export function Resource({ children, ...props }) {
 	return (
 		<Button
 			variant="outline"
-			className="not-prose flex h-auto flex-col items-start pb-4 pt-8 text-left"
+			className="not-prose flex h-auto flex-col items-start pb-4 pt-8 text-left border-ink/15 bg-white/55 text-ink hover:border-ink/30 hover:bg-white/70"
 			href={props.href}
 			{...props}
 			startIcon={<Icon icon={props.icon} />}
@@ -30,7 +30,7 @@ export function Resource({ children, ...props }) {
 			<a>
 				<span className="pt-4 font-bold">{titleSegments}</span>
 				{children && (
-					<div className="text-muted-foreground mt-2 min-w-0 text-wrap text-sm leading-5">
+					<div className="text-ink-soft mt-2 min-w-0 text-wrap text-sm leading-5">
 						{children}
 					</div>
 				)}

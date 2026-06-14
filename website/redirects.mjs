@@ -36,6 +36,7 @@ export const redirects = {
 	// Self-hosting redirect
 	'/docs/general/self-hosting': '/docs/self-hosting/',
 	// Removed solution pages
+	'/agent': '/actors/',
 	'/solutions/agents': '/',
 	'/solutions/app-generators': '/',
 	'/solutions/collaborative-state': '/',

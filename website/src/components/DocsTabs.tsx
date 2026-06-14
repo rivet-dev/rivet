@@ -5,13 +5,13 @@ import { findPageForHref } from "@/lib/sitemap";
 import { sitemap } from "@/sitemap/mod";
 import { cn } from "@rivet-gg/components";
 
-export function DocsTabs() {
+export function DocsTabs({ light = false }: { light?: boolean }) {
 	const pathname = usePathname() || "";
 	// Remove trailing slash for consistency
 	const normalizedPath = pathname.replace(/\/$/, "");
 
 	return (
-		<div className="hidden h-14 items-center empty:hidden md:flex gap-4 pt-2">
+		<div className="-mx-8 hidden h-14 items-center gap-4 bg-[#e9e9eb] px-8 empty:hidden md:flex">
 			{sitemap.map((tab) => {
 				const isActive = findPageForHref(normalizedPath, tab);
 				return (
@@ -21,13 +21,18 @@ export function DocsTabs() {
 						target={tab.target}
 						aria-current={isActive ? "page" : undefined}
 						className={cn(
-							"text-muted-foreground px-0 text-sm hover:bg-transparent flex items-center border-b-2 border-transparent rounded-none h-full transition-colors",
-							"aria-[current=page]:text-foreground aria-[current=page]:border-primary"
+							"px-0 text-sm hover:bg-transparent flex items-center border-b-2 border-transparent rounded-none h-full transition-colors",
+							light
+								? "text-ink-faint aria-[current=page]:text-ink aria-[current=page]:border-pine"
+								: "text-muted-foreground aria-[current=page]:text-foreground aria-[current=page]:border-primary"
 						)}
 					>
 						{tab.title}
 						{tab.badge && (
-							<span className="ml-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground border border-border px-1 py-px rounded">
+							<span className={cn(
+								"ml-1.5 whitespace-nowrap rounded-sm border px-[6px] py-0 text-[10px] font-medium",
+								light ? "border-ink/10 bg-ink/[0.06] text-ink-soft" : "border-border bg-white/5 text-muted-foreground",
+							)}>
 								{tab.badge}
 							</span>
 						)}

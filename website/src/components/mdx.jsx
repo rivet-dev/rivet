@@ -1,5 +1,6 @@
 import { Heading } from '@/components/Heading';
 import { SchemaPreview as Schema } from '@/components/SchemaPreview';
+import { Icon, faInfoCircle, faExclamationTriangle, faLightbulbOn } from '@rivet-gg/icons';
 
 // In Astro, we use regular anchor tags instead of Next.js Link
 export const a = (props) => <a {...props} />;
@@ -61,7 +62,7 @@ export const table = function Table(props) {
 
 export const SchemaPreview = ({ schema }) => {
   return (
-    <div className='not-prose rounded-md border p-4'>
+    <div className='not-prose rounded-md border border-ink/10 p-4'>
       <Schema schema={schema} />
     </div>
   );
@@ -76,18 +77,45 @@ export const Lead = ({ children }) => {
 // build-time unwrap step.
 export const LLMOnly = () => null;
 
+// Callouts. The body text inherits the surrounding prose so it stays readable
+// in both the dark docs/learn shells and the porcelain blog. Visual styling
+// lives in the `.mdx-callout` rules in main.css: the default palette suits the
+// dark shells and the `.blog-article` scope swaps to the porcelain palette.
+const Callout = ({ variant, icon, children }) => (
+  <div className={`mdx-callout mdx-callout--${variant}`}>
+    <Icon icon={icon} className='mdx-callout__icon' />
+    <div className='mdx-callout__body'>{children}</div>
+  </div>
+);
+
+export const Note = ({ children }) => (
+  <Callout variant='note' icon={faInfoCircle}>{children}</Callout>
+);
+export const Info = ({ children }) => (
+  <Callout variant='info' icon={faInfoCircle}>{children}</Callout>
+);
+export const Tip = ({ children }) => (
+  <Callout variant='tip' icon={faLightbulbOn}>{children}</Callout>
+);
+export const Warning = ({ children }) => (
+  <Callout variant='warning' icon={faExclamationTriangle}>{children}</Callout>
+);
+
 // Re-export from @rivet-gg/components/mdx but override Tabs with SSR-safe version
+import { Steps as BaseSteps } from '@rivet-gg/components/mdx';
 export {
-  Tip,
-  Warning,
-  Note,
-  Info,
   Image as MdxImage,
   Card as MdxCard,
   CardGroup as MdxCardGroup,
   Step,
-  Steps,
 } from '@rivet-gg/components/mdx';
+
+// The shared Steps draws a left rail and number chips that assume a dark shell.
+// On the porcelain docs page the rail is forced to a warm hairline; the chip
+// palette is handled by the `.docs-article .step:before` rule in main.css.
+export const Steps = ({ className, ...props }) => (
+  <BaseSteps className={`!border-ink/10 ${className ?? ''}`} {...props} />
+);
 // Use our local SSR-safe Tabs instead of the one from @rivet-gg/components/mdx
 export { Tab, Tabs } from '@/components/Tabs';
 export { Resource } from '@/components/Resources';

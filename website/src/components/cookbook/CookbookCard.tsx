@@ -4,6 +4,7 @@ export interface CookbookCardCover {
 	transform?: string;
 	transformOrigin?: string;
 	filter?: string;
+	ken?: { x: string; y: string; scale: number };
 }
 
 export interface CookbookPageCardData {
@@ -23,15 +24,33 @@ export interface CookbookPageCardData {
 	}>;
 }
 
+// Fallback for any cover that has not tuned its own documentary motion: a
+// gentle straight push-in.
+const DEFAULT_KEN = { x: "0%", y: "0%", scale: 1.16 };
+
 export function CookbookCard({ page }: { page: CookbookPageCardData }) {
+	const drift = page.cover?.ken ?? DEFAULT_KEN;
 	return (
-		<a
-			href={page.href}
-			className="group relative block aspect-[5/7] overflow-hidden rounded-lg border border-white/10 bg-zinc-950 transition-colors hover:border-white/25 [container-type:inline-size]"
-		>
+		<div className="group relative">
+			{/* Soft ground beneath the card, mirroring the hero reel's hover glow. */}
+			<div className="pointer-events-none absolute -inset-3 rounded-xl bg-ink/5 opacity-0 blur-xl transition-all duration-300 ease-out group-hover:scale-105 group-hover:opacity-100" />
+			<a
+				href={page.href}
+				style={{ boxShadow: "0 10px 28px -12px rgba(27, 25, 22, 0.16)" }}
+				className="relative block aspect-[5/7] overflow-hidden bg-ink [container-type:inline-size]"
+			>
 			{page.cover && (
 				<>
-					<div className="absolute inset-0 transition-transform duration-500 ease-out group-hover:scale-[1.02]">
+					<div
+						className="ken-burns absolute inset-0"
+						style={
+							{
+								"--kb-x": drift.x,
+								"--kb-y": drift.y,
+								"--kb-scale": String(drift.scale),
+							} as React.CSSProperties
+						}
+					>
 						<img
 							src={page.cover.src}
 							alt=""
@@ -55,6 +74,7 @@ export function CookbookCard({ page }: { page: CookbookPageCardData }) {
 			>
 				{page.title}
 			</h3>
-		</a>
+			</a>
+		</div>
 	);
 }

@@ -27,7 +27,6 @@ const breadcrumbSchema = {
 	'@type': 'BreadcrumbList',
 	itemListElement: [
 		{ name: 'Home', url: 'https://rivet.dev/' },
-		{ name: 'Compare', url: 'https://rivet.dev/compare/' },
 		{ name: entry.title, url: canonicalUrl },
 	].map((item, index) => ({
 		'@type': 'ListItem',
@@ -57,5 +56,5 @@ const webPageSchema = {
 	<script type="application/ld+json" set:html={jsonLdString(breadcrumbSchema)} />
 	<script type="application/ld+json" set:html={jsonLdString(webPageSchema)} />
 	<FaqJsonLd items={entry.faq} />
-	<ComparePage slug={entry.slug} />
+	<ComparePage slug={entry.slug} client:visible />
 </MarketingLayout>

@@ -19,7 +19,7 @@ export function ArticleSocials({ title }) {
 	const siteUrl = getSiteUrl();
 	const articleUrl = siteUrl + pathname;
 	return (
-		<div className="after:bg-secondary relative mt-14 flex items-center justify-center after:absolute after:inset-x-0 after:-z-[1] after:h-[1px]">
+		<div className="relative mt-14 flex items-center justify-center after:absolute after:inset-x-0 after:-z-[1] after:h-[1px] after:bg-ink/10">
 			<SocialIcon url="/rss/feed.xml" icon={faRssSquare} />
 			<SocialIcon
 				url={`https://x.com/share?text=${encodeURIComponent(`${title} ${articleUrl} via @rivet_dev`)}`}
@@ -45,7 +45,7 @@ function SocialIcon({ url, icon }) {
 			href={url}
 			target="_blank"
 			rel="noreferrer"
-			className="text-primary hover:text-primary/80 bg-background px-3 transition-colors"
+			className="bg-paper px-3 text-ink-faint transition-colors hover:text-pine"
 		>
 			<Icon icon={icon} size="xl" />
 		</a>
