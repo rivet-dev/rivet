@@ -831,7 +831,7 @@ function DocsMobileNavigation({
 							alt={product.label}
 							width={16}
 							height={16}
-							className="h-4 w-4"
+							className="h-4 w-4 invert opacity-85"
 							loading="lazy"
 							decoding="async"
 						/>

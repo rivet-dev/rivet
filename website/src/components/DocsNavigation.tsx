@@ -48,7 +48,7 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 			<div>
 				<p
 					className={clsx(
-						"mb-3 text-[15px] font-semibold flex items-center",
+						"mb-3 text-[15px] font-semibold text-ink flex items-center",
 						index > 0 ? "mt-6" : undefined,
 					)}
 				>

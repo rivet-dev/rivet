@@ -54,7 +54,7 @@ const useCases = [
 					<!-- Painting backdrop, a fixed crop inside the clipping box
 					     (overflow-hidden). The gradients sit over it so the
 					     dark fade can hand off to the porcelain gradient on scroll. -->
-					<div id="actors-hero-bg" class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true" style="will-change: filter, opacity;">
+					<div id="actors-hero-bg" class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true" style="will-change: opacity;">
 						<img
 							src="https://assets.rivet.dev/website/images/textures/actors-hero-degas-orchestra.webp"
 							alt=""
@@ -68,20 +68,14 @@ const useCases = [
 						<!-- Gentle left wash for extra legibility behind the copy -->
 						<div class="absolute inset-0 bg-gradient-to-r from-ink/60 via-ink/20 to-transparent"></div>
 					</div>
-					<!-- Scroll-driven porcelain wash. A solid porcelain fill (always exactly
-					     rgb(234,234,234) so it hands off seamlessly to the section below) whose
-					     bell-curve silhouette lives entirely in the mask: a narrow-tall PEAK
-					     ellipse rising in the center, a wide-short BASE ellipse for the soft side
-					     tails, and a thin bottom SEAL strip that guarantees the very bottom edge
-					     covers the seam full-width. JS grows the lobes and fades the alpha in on
-					     scroll, so the white feathers up over the ink fade like a gaussian. -->
+					<!-- Scroll-driven porcelain wash: a static bottom-up porcelain gradient (solid rgb(234,234,234) at the seam, fading to transparent toward the top) whose opacity JS ramps in on scroll. Opacity-only, so there is no blur or per-frame mask raster to jank the scroll. -->
 					<div
 						id="actors-paper-wash"
 						class="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[78svh]"
-						style="background-color: rgb(234, 234, 234); --peak-w: 42%; --peak-h: 8%; --base-w: 92%; --base-h: 6%; --peak-a: 0; --base-a: 0; -webkit-mask-image: radial-gradient(ellipse var(--peak-w) var(--peak-h) at 50% 100%, rgba(0,0,0, var(--peak-a)) 0%, rgba(0,0,0, calc(var(--peak-a) * 0.92)) 28%, rgba(0,0,0, calc(var(--peak-a) * 0.60)) 55%, rgba(0,0,0, calc(var(--peak-a) * 0.26)) 78%, rgba(0,0,0, 0) 100%), radial-gradient(ellipse var(--base-w) var(--base-h) at 50% 100%, rgba(0,0,0, var(--base-a)) 0%, rgba(0,0,0, calc(var(--base-a) * 0.70)) 40%, rgba(0,0,0, calc(var(--base-a) * 0.30)) 72%, rgba(0,0,0, 0) 100%), linear-gradient(to top, rgba(0,0,0, var(--peak-a)) 0, rgba(0,0,0, var(--peak-a)) 4px, rgba(0,0,0, calc(var(--peak-a) * 0.5)) 12px, rgba(0,0,0, 0) 28px); mask-image: radial-gradient(ellipse var(--peak-w) var(--peak-h) at 50% 100%, rgba(0,0,0, var(--peak-a)) 0%, rgba(0,0,0, calc(var(--peak-a) * 0.92)) 28%, rgba(0,0,0, calc(var(--peak-a) * 0.60)) 55%, rgba(0,0,0, calc(var(--peak-a) * 0.26)) 78%, rgba(0,0,0, 0) 100%), radial-gradient(ellipse var(--base-w) var(--base-h) at 50% 100%, rgba(0,0,0, var(--base-a)) 0%, rgba(0,0,0, calc(var(--base-a) * 0.70)) 40%, rgba(0,0,0, calc(var(--base-a) * 0.30)) 72%, rgba(0,0,0, 0) 100%), linear-gradient(to top, rgba(0,0,0, var(--peak-a)) 0, rgba(0,0,0, var(--peak-a)) 4px, rgba(0,0,0, calc(var(--peak-a) * 0.5)) 12px, rgba(0,0,0, 0) 28px); -webkit-mask-composite: source-over; mask-composite: add; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; transform: translateZ(0); will-change: mask-image;"
+						style="opacity: 0; will-change: opacity; background-image: linear-gradient(to top, rgb(234,234,234) 0%, rgb(234,234,234) 24%, rgba(234,234,234,0) 64%);"
 					></div>
 
-					<div class="relative z-10 mx-auto w-full max-w-7xl px-6" style="opacity: var(--actors-content-fade); filter: blur(var(--actors-content-blur, 0px));">
+					<div class="relative z-10 mx-auto w-full max-w-7xl px-6" style="opacity: var(--actors-content-fade);">
 						<div class="max-w-xl">
 							<h1 class={`mb-4 ${HERO_H1_CLASS} !text-cream`}>
 								The primitive for<br />stateful workloads.
@@ -101,8 +95,7 @@ const useCases = [
 					</div>
 				</section>
 
-				<!-- As the hero scrolls away, layer a curved porcelain blur gradient
-				     over the ink fade so the page transitions directionally. -->
+				<!-- As the hero scrolls away, ramp the porcelain gradient opacity and dim the painting and copy. Opacity-only animation, no blur or masks, keeps the scroll on the compositor. -->
 				<script>
 					const hero = document.getElementById('actors-hero');
 					const wash = document.getElementById('actors-paper-wash');
@@ -114,33 +107,16 @@ const useCases = [
 							const h = hero.offsetHeight || window.innerHeight;
 							const scrollRatio = window.scrollY / h;
 							// Ramp the porcelain in gently so it spreads toward the top at a
-							// measured pace while the painting blurs and fades underneath it.
+							// measured pace while the painting and copy fade underneath it.
 							const progress = Math.min(1, Math.max(0, (scrollRatio - 0.04) / 0.55));
 							const eased = smoothstep(progress);
 							const bell = 1 - Math.pow(1 - eased, 3.2);
-							if (wash) {
-								// Center leads, climbing well past the top of the wash so the
-								// porcelain reaches up through the whole painting.
-								wash.style.setProperty('--peak-h', `${(8 + bell * 48).toFixed(2)}%`);
-								wash.style.setProperty('--peak-w', `${(42 + bell * 78).toFixed(2)}%`);
-								// Side tails trail the peak but still rise tall enough, at full
-								// alpha, to bury the dark corners so nothing shows through.
-								wash.style.setProperty('--base-h', `${(4 + bell * 36).toFixed(2)}%`);
-								wash.style.setProperty('--base-w', `${(90 + bell * 80).toFixed(2)}%`);
-								wash.style.setProperty('--peak-a', bell.toFixed(3));
-								wash.style.setProperty('--base-a', bell.toFixed(3));
-							}
-							if (bg) {
-								// The painting itself softens as you scroll: it blurs and fades
-								// toward the porcelain behind it, so the rising wash is not the only
-								// thing dissolving the image.
-								bg.style.filter = `blur(${(bell * 20).toFixed(1)}px)`;
-								bg.style.opacity = (1 - bell * 0.72).toFixed(3);
-							}
-							// Clear the title and buttons ahead of the wash so they dissolve
-							// (fade plus blur) rather than lingering over the softened painting.
+							// Opacity-only animation keeps the scroll on the compositor (no blur, no
+							// per-frame mask raster). A static porcelain gradient fades in from the
+							// bottom, the painting dims, and the copy clears ahead of it.
+							if (wash) wash.style.opacity = bell.toFixed(3);
+							if (bg) bg.style.opacity = (1 - bell * 0.7).toFixed(3);
 							hero.style.setProperty('--actors-content-fade', Math.max(0, 1 - bell * 1.5).toFixed(3));
-							hero.style.setProperty('--actors-content-blur', `${(bell * 8).toFixed(1)}px`);
 							ticking = false;
 						};
 						const onScroll = () => {

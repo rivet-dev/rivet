@@ -15,7 +15,7 @@ export const RedesignedCTA = () => (
         alt=''
         loading='eager'
         decoding='async'
-        className='absolute inset-0 h-full w-full object-contain object-center'
+        className='absolute inset-0 h-full w-full object-cover object-center lg:object-contain'
       />
 
       <div className='relative z-[1] mx-auto max-w-3xl'>
@@ -40,13 +40,13 @@ export const RedesignedCTA = () => (
         >
           <a
             href='/docs/actors'
-            className='inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white/90'
+            className='inline-flex w-full items-center justify-center whitespace-nowrap rounded-md sm:w-auto bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white/90'
           >
             Start Building
           </a>
           <a
             href='/talk-to-an-engineer'
-            className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-cream/25 bg-cream/10 px-4 py-2 text-sm text-cream backdrop-blur-md backdrop-saturate-[1.3] transition-colors hover:border-cream/45 hover:bg-cream/20'
+            className='inline-flex w-full items-center justify-center whitespace-nowrap rounded-md sm:w-auto border border-cream/25 bg-cream/10 px-4 py-2 text-sm text-cream backdrop-blur-md backdrop-saturate-[1.3] transition-colors hover:border-cream/45 hover:bg-cream/20'
           >
             Talk to an Engineer
           </a>
