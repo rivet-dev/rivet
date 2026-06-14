@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/cli-win32-x64",
-	"version": "2.3.0-rc.12",
+	"version": "2.3.0-rc.15",
 	"description": "Rivet CLI for Windows x64",
 	"license": "LicenseRef-RivetEnterprise",
 	"os": [
