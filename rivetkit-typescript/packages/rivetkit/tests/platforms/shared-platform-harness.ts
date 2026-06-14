@@ -97,32 +97,11 @@ export interface TempPlatformApp {
 
 type PlatformWasmInitMode = "cloudflare-module-import" | "deno-read-file";
 
-export function buildPlatformSqliteCounterRegistrySource(
-	wasmInitMode: PlatformWasmInitMode,
-): string {
-	const wasmModuleSource =
-		wasmInitMode === "cloudflare-module-import"
-			? 'import wasmModule from "@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm";'
-			: 'const wasmModule = await Deno.readFile(new URL(import.meta.resolve("@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm")));';
-
-	return `import { actor, setup } from "rivetkit";
-import * as wasmBindings from "@rivetkit/rivetkit-wasm";
-${wasmModuleSource}
-
-interface SqliteDatabase {
+// The shared docs-shaped SQLite counter actor. Used by every platform fixture so
+// they differ only in platform bootstrapping (createHandler / serve / raw setup).
+const PLATFORM_SQLITE_COUNTER_ACTOR_BODY = `interface SqliteDatabase {
 \trun(sql: string, params?: unknown[]): Promise<void>;
 \tquery(sql: string, params?: unknown[]): Promise<{ rows: unknown[][] }>;
-}
-
-interface RegistryConfig {
-\tendpoint: string;
-\tnamespace: string;
-\trunnerName: string;
-\ttoken: string;
-\tserverless?: {
-\t\tbasePath: string;
-\t\tpublicEndpoint: string;
-\t};
 }
 
 const COUNTER_ID = 1;
@@ -182,7 +161,7 @@ async function readLifecycleCounts(db: SqliteDatabase): Promise<{
 \t};
 }
 
-const sqliteCounter = actor({
+export const sqliteCounter = actor({
 \tdb: rawSqlDatabaseProvider,
 \tonWake: async (ctx) => {
 \t\tawait recordLifecycleEvent(ctx.sql as SqliteDatabase, "wake");
@@ -218,7 +197,42 @@ const sqliteCounter = actor({
 \t\tsleepTimeout: 100,
 \t},
 });
+`;
 
+// The shared actor as a standalone module, consumed by the Cloudflare Workers and
+// Supabase Functions fixtures that hide the wasm runtime behind their packages.
+export function buildPlatformSqliteCounterActorSource(): string {
+	return `import { actor } from "rivetkit";
+
+${PLATFORM_SQLITE_COUNTER_ACTOR_BODY}`;
+}
+
+// The raw-`setup()` registry source used by the Deno fixture, which drives the
+// public wasm runtime API directly (Deno has a native outbound WebSocket).
+export function buildPlatformSqliteCounterRegistrySource(
+	wasmInitMode: PlatformWasmInitMode,
+): string {
+	const wasmModuleSource =
+		wasmInitMode === "cloudflare-module-import"
+			? 'import wasmModule from "@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm";'
+			: 'const wasmModule = await Deno.readFile(new URL(import.meta.resolve("@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm")));';
+
+	return `import { actor, setup } from "rivetkit";
+import * as wasmBindings from "@rivetkit/rivetkit-wasm";
+${wasmModuleSource}
+
+interface RegistryConfig {
+\tendpoint: string;
+\tnamespace: string;
+\trunnerName: string;
+\ttoken: string;
+\tserverless?: {
+\t\tbasePath: string;
+\t\tpublicEndpoint: string;
+\t};
+}
+
+${PLATFORM_SQLITE_COUNTER_ACTOR_BODY}
 export function createRegistry(config: RegistryConfig) {
 \treturn setup({
 \t\truntime: "wasm",

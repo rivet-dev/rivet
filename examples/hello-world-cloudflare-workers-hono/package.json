@@ -1,5 +1,5 @@
 {
-	"name": "hello-world-cloudflare-workers",
+	"name": "hello-world-cloudflare-workers-hono",
 	"version": "2.0.21",
 	"private": true,
 	"type": "module",
@@ -17,11 +17,12 @@
 	},
 	"dependencies": {
 		"@rivetkit/cloudflare-workers": "*",
+		"hono": "^4.8.3",
 		"rivetkit": "*"
 	},
 	"stableVersion": "0.8.0",
 	"template": {
-		"technologies": ["rivet", "cloudflare", "typescript"],
+		"technologies": ["rivet", "cloudflare", "hono", "typescript"],
 		"tags": ["serverless"],
 		"noFrontend": true,
 		"skipVercel": true

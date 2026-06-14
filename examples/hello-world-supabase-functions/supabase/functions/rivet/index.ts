@@ -1,12 +1,5 @@
-import * as wasmBindings from "@rivetkit/rivetkit-wasm";
-import { actor, setup } from "rivetkit";
-
-const resolveModule = (
-	import.meta as unknown as { resolve(specifier: string): string }
-).resolve;
-const wasmModule = await Deno.readFile(
-	new URL(resolveModule("@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm")),
-);
+import { serve, setup } from "@rivetkit/supabase";
+import { actor } from "rivetkit";
 
 const counter = actor({
 	state: { count: 0 },
@@ -19,11 +12,7 @@ const counter = actor({
 	},
 });
 
-const registry = setup({
-	runtime: "wasm",
-	wasm: { bindings: wasmBindings, initInput: wasmModule },
-	use: { counter },
-	endpoint: Deno.env.get("RIVET_ENDPOINT"),
-});
+// Exported so `client.ts` can type the client with `typeof registry`.
+export const registry = setup({ use: { counter } });
 
-Deno.serve((request) => registry.handler(request));
+await serve(registry);

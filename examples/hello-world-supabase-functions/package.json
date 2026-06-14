@@ -5,14 +5,17 @@
 	"type": "module",
 	"scripts": {
 		"dev": "npx @rivetkit/cli dev --provider supabase",
+		"client": "tsx scripts/client.ts",
 		"check-types": "tsc --noEmit",
 		"deploy": "npx supabase functions deploy rivet"
 	},
 	"devDependencies": {
+		"@types/node": "^22.13.9",
+		"tsx": "^4.19.2",
 		"typescript": "^5.7.3"
 	},
 	"dependencies": {
-		"@rivetkit/rivetkit-wasm": "*",
+		"@rivetkit/supabase": "*",
 		"rivetkit": "*"
 	},
 	"stableVersion": "0.8.0",

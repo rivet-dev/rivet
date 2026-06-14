@@ -20,7 +20,7 @@ npm run dev
 
 ## Implementation
 
-The function loads the wasm bytes with Deno, creates the registry with `runtime: "wasm"`, and serves the Rivet handler. `RIVET_ENDPOINT` is the only required variable.
+The function calls `serve` from `@rivetkit/supabase`, which loads the WebAssembly runtime and serves the Rivet handler. `RIVET_ENDPOINT` is the only required variable.
 
 See [`supabase/functions/rivet/index.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-supabase-functions/supabase/functions/rivet/index.ts).
 

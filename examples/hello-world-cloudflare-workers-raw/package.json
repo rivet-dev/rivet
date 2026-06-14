@@ -1,5 +1,5 @@
 {
-	"name": "hello-world-cloudflare-workers",
+	"name": "hello-world-cloudflare-workers-raw",
 	"version": "2.0.21",
 	"private": true,
 	"type": "module",

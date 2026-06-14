@@ -16,7 +16,7 @@ import { getEnginePath } from "@rivetkit/engine-cli";
 import getPort from "get-port";
 import { describe, expect, test } from "vitest";
 import {
-	buildPlatformSqliteCounterRegistrySource,
+	buildPlatformSqliteCounterActorSource,
 	createPlatformServerlessRunner,
 	createPlatformSqliteCounterClient,
 	createTempPlatformApp,
@@ -150,6 +150,10 @@ function resolvePackageSource(
 		return RIVETKIT_PACKAGE_DIR;
 	}
 
+	if (packageName === "@rivetkit/supabase") {
+		return resolve(REPO_ROOT, "rivetkit-typescript/packages/supabase");
+	}
+
 	const packagePath = resolve(fromDir, ...packagePathParts(packageName));
 	if (existsSync(packagePath)) {
 		return realpathSync(packagePath);
@@ -211,7 +215,9 @@ function copySupabaseFunctionPackages(app: TempPlatformApp) {
 		"@rivetkit/rivetkit-wasm",
 		"@rivetkit/virtual-websocket",
 		"@rivetkit/bare-ts",
+		"@rivetkit/on-change",
 		"cbor-x",
+		"get-port",
 		"hono",
 		"invariant",
 		"p-retry",
@@ -219,6 +225,9 @@ function copySupabaseFunctionPackages(app: TempPlatformApp) {
 		"rivetkit",
 		"vbare",
 		"zod",
+		// Listed after its dependencies so they are already copied (and in `seen`)
+		// before its own dependency recursion runs.
+		"@rivetkit/supabase",
 	]) {
 		copyPackageTree(
 			destinationNodeModules,
@@ -260,6 +269,11 @@ function writeSupabaseFunctionApp(
 		"@rivetkit/rivetkit-wasm",
 		resolve(REPO_ROOT, "rivetkit-typescript/packages/rivetkit-wasm"),
 	);
+	linkWorkspacePackage(
+		app,
+		"@rivetkit/supabase",
+		resolve(REPO_ROOT, "rivetkit-typescript/packages/supabase"),
+	);
 
 	app.writeFile(
 		"package.json",
@@ -268,6 +282,7 @@ function writeSupabaseFunctionApp(
 				type: "module",
 				dependencies: {
 					"@rivetkit/rivetkit-wasm": "workspace:*",
+					"@rivetkit/supabase": "workspace:*",
 					rivetkit: "workspace:*",
 				},
 			},
@@ -302,35 +317,28 @@ policy = "per_worker"
 `,
 	);
 	app.writeFile(
-		"supabase/functions/rivet/registry.ts",
-		buildPlatformSqliteCounterRegistrySource("deno-read-file"),
+		"supabase/functions/rivet/actor.ts",
+		buildPlatformSqliteCounterActorSource(),
 	);
 	app.writeFile(
 		"supabase/functions/rivet/index.ts",
 		`
-import { createRegistry } from "./registry.ts";
+import { serve, setup } from "@rivetkit/supabase";
+import { sqliteCounter } from "./actor.ts";
 
-const SERVERLESS_BASE_PATH = "/rivet/api/rivet";
+// Mirrors the hello-world example: minimal setup, all connection config sourced
+// from the function environment (provided via --env-file, like \`rivet dev\`).
+const registry = setup({ use: { sqliteCounter }, sqlite: "remote" });
 
-const registry = createRegistry({
-	endpoint: "${endpoint}",
-	namespace: "${namespace}",
-	token: "${token}",
-	runnerName: "${runnerName}",
-	serverless: {
-		basePath: SERVERLESS_BASE_PATH,
-		publicEndpoint: "${publicEndpoint}",
+await serve(registry, {
+	fetch: (request) => {
+		const pathname = new URL(request.url).pathname;
+		console.log(\`\${request.method} \${pathname}\`);
+		if (pathname.endsWith("/health")) {
+			return new Response("ok");
+		}
+		return new Response("not found", { status: 404 });
 	},
-});
-
-Deno.serve(async (request) => {
-	const pathname = new URL(request.url).pathname;
-	console.log(\`\${request.method} \${pathname}\`);
-	if (pathname.endsWith("/health")) {
-		return new Response("ok");
-	}
-
-	return await registry.handler(request);
 });
 `,
 	);
@@ -341,12 +349,22 @@ Deno.serve(async (request) => {
 				type: "module",
 				dependencies: {
 					"@rivetkit/rivetkit-wasm": "workspace:*",
+					"@rivetkit/supabase": "workspace:*",
 					rivetkit: "workspace:*",
 				},
 			},
 			null,
 			2,
 		),
+	);
+	app.writeFile(
+		"supabase/functions/.env",
+		`RIVET_ENDPOINT=${endpoint}
+RIVET_PUBLIC_ENDPOINT=${publicEndpoint}
+RIVET_NAMESPACE=${namespace}
+RIVET_POOL=${runnerName}
+RIVET_TOKEN=${token}
+`,
 	);
 	copySupabaseFunctionPackages(app);
 }
@@ -620,7 +638,13 @@ describe("Supabase Functions wasm platform smoke", () => {
 				label: "supabase-functions",
 				packageName: "supabase",
 				packageVersion: SUPABASE_VERSION,
-				args: ["functions", "serve", "--no-verify-jwt"],
+				args: [
+					"functions",
+					"serve",
+					"--no-verify-jwt",
+					"--env-file",
+					"supabase/functions/.env",
+				],
 				options: {
 					cwd: app.path,
 					env: {

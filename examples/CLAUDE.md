@@ -356,6 +356,21 @@ app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
 export default app;
 ```
 
+### Client Scripts (scripts/client.ts)
+
+- Put runnable client round-trip scripts in `scripts/client.ts` and expose them as a `"client": "tsx scripts/client.ts"` package script.
+- Type the client with `import type { registry }` plus `createClient<typeof registry>(...)`. Do not declare a `export type XXX = typeof registry` alias just to pass the type around.
+- Only `RIVET_ENDPOINT` is needed to connect. The endpoint URL carries the namespace and (optionally) the token via `https://namespace:token@host`, so do not add separate `RIVET_NAMESPACE`/`RIVET_TOKEN` env vars.
+
+```typescript
+import { createClient } from "rivetkit/client";
+import type { registry } from "../src/index.ts";
+
+const client = createClient<typeof registry>({
+  endpoint: process.env.RIVET_ENDPOINT ?? "http://localhost:6420",
+});
+```
+
 ### React Frontend (frontend/App.tsx)
 
 ```typescript

@@ -8,6 +8,8 @@ overrides:
   rivetkit: workspace:*
   '@rivetkit/react': workspace:*
   '@rivetkit/next-js': workspace:*
+  '@rivetkit/cloudflare-workers': workspace:*
+  '@rivetkit/supabase': workspace:*
   '@rivetkit/db': workspace:*
   '@rivetkit/engine-api-full': workspace:*
   '@rivetkit/rivetkit-napi': workspace:*
@@ -1000,13 +1002,66 @@ importers:
 
   examples/hello-world-cloudflare-workers:
     dependencies:
-      '@rivetkit/rivetkit-wasm':
+      '@rivetkit/cloudflare-workers':
         specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit-wasm
+        version: link:../../rivetkit-typescript/packages/cloudflare-workers
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.87.0
+        version: 4.100.0
+
+  examples/hello-world-cloudflare-workers-hono:
+    dependencies:
+      '@rivetkit/cloudflare-workers':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/cloudflare-workers
+      hono:
+        specifier: ^4.8.3
+        version: 4.11.9
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.3
+        version: 5.9.3
+      wrangler:
+        specifier: ^4.87.0
+        version: 4.100.0
+
+  examples/hello-world-cloudflare-workers-raw:
+    dependencies:
+      '@rivetkit/cloudflare-workers':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/cloudflare-workers
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -1105,13 +1160,19 @@ importers:
 
   examples/hello-world-supabase-functions:
     dependencies:
-      '@rivetkit/rivetkit-wasm':
+      '@rivetkit/supabase':
         specifier: workspace:*
-        version: link:../../rivetkit-typescript/packages/rivetkit-wasm
+        version: link:../../rivetkit-typescript/packages/supabase
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
     devDependencies:
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.19.2
+        version: 4.21.0
       typescript:
         specifier: ^5.7.3
         version: 5.9.3
@@ -2870,6 +2931,25 @@ importers:
 
   rivetkit-typescript/packages/cli: {}
 
+  rivetkit-typescript/packages/cloudflare-workers:
+    dependencies:
+      '@rivetkit/rivetkit-wasm':
+        specifier: workspace:*
+        version: link:../rivetkit-wasm
+      rivetkit:
+        specifier: workspace:*
+        version: link:../rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+
   rivetkit-typescript/packages/devtools:
     dependencies:
       '@floating-ui/react':
@@ -3255,6 +3335,25 @@ importers:
       tsup:
         specifier: ^8.5.0
         version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.10))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+
+  rivetkit-typescript/packages/supabase:
+    dependencies:
+      '@rivetkit/rivetkit-wasm':
+        specifier: workspace:*
+        version: link:../rivetkit-wasm
+      rivetkit:
+        specifier: workspace:*
+        version: link:../rivetkit
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.15
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@microsoft/api-extractor@7.53.2(@types/node@22.19.15))(@swc/core@1.15.11(@swc/helpers@0.5.17))(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
 
   rivetkit-typescript/packages/traces:
     dependencies:

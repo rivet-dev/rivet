@@ -4,10 +4,12 @@
 		"lib": ["esnext", "dom"],
 		"module": "esnext",
 		"moduleResolution": "bundler",
-		"types": [],
+		"types": ["node"],
 		"noEmit": true,
 		"strict": true,
-		"skipLibCheck": true
+		"skipLibCheck": true,
+		"allowImportingTsExtensions": true,
+		"rewriteRelativeImportExtensions": true
 	},
-	"include": ["supabase/functions/**/*"]
+	"include": ["supabase/functions/**/*", "scripts/**/*"]
 }

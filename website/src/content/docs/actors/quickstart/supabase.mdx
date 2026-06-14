@@ -4,7 +4,7 @@ description: "Set up a Rivet project locally targeting Supabase Edge Functions."
 skill: true
 ---
 
-Set up a Rivet project locally that runs on Supabase Edge Functions. Use the public `@rivetkit/rivetkit-wasm` package and load the wasm file with Deno.
+Set up a Rivet project locally that runs on Supabase Edge Functions. The `@rivetkit/supabase` package wires the WebAssembly runtime for you.
 
 ## Steps
 
@@ -27,21 +27,17 @@ npx supabase functions new rivet
 Add the packages used by the function:
 
 ```sh
-npm install rivetkit @rivetkit/rivetkit-wasm
+npm install rivetkit @rivetkit/supabase
 ```
 
 </Step>
 <Step title="Configure the Function">
 
-Supabase Functions run under Deno, so load the wasm bytes from the package export and pass them to `setup({ wasm })`.
+Call `serve` from `@rivetkit/supabase`. It loads the WebAssembly runtime and serves the Rivet handler.
 
 ```ts supabase/functions/rivet/index.ts @nocheck
-import { actor, setup } from "rivetkit";
-import * as wasmBindings from "@rivetkit/rivetkit-wasm";
-
-const wasmModule = await Deno.readFile(
-  new URL(import.meta.resolve("@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm")),
-);
+import { actor } from "rivetkit";
+import { serve } from "@rivetkit/supabase";
 
 const counter = actor({
   state: { count: 0 },
@@ -53,19 +49,7 @@ const counter = actor({
   },
 });
 
-const registry = setup({
-  runtime: "wasm",
-  wasm: {
-    bindings: wasmBindings,
-    initInput: wasmModule,
-  },
-  use: { counter },
-  endpoint: Deno.env.get("RIVET_ENDPOINT"),
-});
-
-Deno.serve(async (request) => {
-  return await registry.handler(request);
-});
+await serve({ use: { counter } });
 ```
 
 </Step>

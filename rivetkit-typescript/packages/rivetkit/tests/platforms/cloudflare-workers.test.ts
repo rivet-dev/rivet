@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import getPort from "get-port";
 import { describe, expect, test } from "vitest";
 import {
-	buildPlatformSqliteCounterRegistrySource,
+	buildPlatformSqliteCounterActorSource,
 	createPlatformServerlessRunner,
 	createPlatformSqliteCounterClient,
 	createTempPlatformApp,
@@ -46,6 +46,11 @@ function writeCloudflareWorkerApp(
 		"@rivetkit/rivetkit-wasm",
 		resolve(REPO_ROOT, "rivetkit-typescript/packages/rivetkit-wasm"),
 	);
+	linkWorkspacePackage(
+		app,
+		"@rivetkit/cloudflare-workers",
+		resolve(REPO_ROOT, "rivetkit-typescript/packages/cloudflare-workers"),
+	);
 
 	app.writeFile(
 		"package.json",
@@ -53,6 +58,7 @@ function writeCloudflareWorkerApp(
 			{
 				type: "module",
 				dependencies: {
+					"@rivetkit/cloudflare-workers": "workspace:*",
 					"@rivetkit/rivetkit-wasm": "workspace:*",
 					rivetkit: "workspace:*",
 				},
@@ -76,130 +82,23 @@ RIVET_POOL = "${runnerName}"
 RIVET_TOKEN = "${token}"
 `,
 	);
-	app.writeFile(
-		"src/registry.ts",
-		buildPlatformSqliteCounterRegistrySource("cloudflare-module-import"),
-	);
+	app.writeFile("src/actor.ts", buildPlatformSqliteCounterActorSource());
 	app.writeFile(
 		"src/index.ts",
 		`
-import { createRegistry } from "./registry";
+import { createHandler, setup } from "@rivetkit/cloudflare-workers";
+import { sqliteCounter } from "./actor";
 
-interface Env {
-	RIVET_ENDPOINT: string;
-	RIVET_NAMESPACE: string;
-	RIVET_POOL: string;
-	RIVET_TOKEN: string;
-}
+const registry = setup({ use: { sqliteCounter }, sqlite: "remote" });
 
-type WebSocketProtocolInput = string | string[] | undefined;
-
-class FetchWebSocket {
-	static readonly CONNECTING = 0;
-	static readonly OPEN = 1;
-	static readonly CLOSING = 2;
-	static readonly CLOSED = 3;
-
-	binaryType: BinaryType = "arraybuffer";
-	onopen: ((event: Event) => void) | null = null;
-	onmessage: ((event: MessageEvent) => void) | null = null;
-	onclose: ((event: CloseEvent) => void) | null = null;
-	onerror: ((event: Event) => void) | null = null;
-	readyState = FetchWebSocket.CONNECTING;
-	#socket: WebSocket | undefined;
-	#pending: Array<string | ArrayBuffer | ArrayBufferView> = [];
-
-	constructor(url: string, protocols?: WebSocketProtocolInput) {
-		void this.#connect(url, protocols);
-	}
-
-	async #connect(url: string, protocols?: WebSocketProtocolInput) {
-		try {
-			const protocolList = Array.isArray(protocols)
-				? protocols
-				: protocols
-					? [protocols]
-					: [];
-			const headers = new Headers({ Upgrade: "websocket" });
-			if (protocolList.length > 0) {
-				headers.set("Sec-WebSocket-Protocol", protocolList.join(", "));
-			}
-			const response = await fetch(
-				url.replace(/^ws:/, "http:").replace(/^wss:/, "https:"),
-				{ headers },
-			);
-			const socket = response.webSocket;
-			if (!socket) {
-				throw new Error(
-					\`websocket upgrade failed with status \${response.status}\`,
-				);
-			}
-
-			socket.accept();
-			socket.binaryType = this.binaryType;
-			this.#socket = socket;
-			this.readyState = FetchWebSocket.OPEN;
-			socket.addEventListener("message", (event) => {
-				this.onmessage?.(event);
-			});
-			socket.addEventListener("close", (event) => {
-				this.readyState = FetchWebSocket.CLOSED;
-				this.onclose?.(event);
-			});
-			socket.addEventListener("error", (event) => {
-				this.onerror?.(event);
-			});
-			this.onopen?.(new Event("open"));
-			for (const data of this.#pending.splice(0)) {
-				socket.send(data);
-			}
-		} catch (error) {
-			console.error("rivetkit cloudflare websocket shim failed", error);
-			this.readyState = FetchWebSocket.CLOSED;
-			this.onerror?.(error instanceof Event ? error : new Event("error"));
-			this.onclose?.(new CloseEvent("close", { code: 1006 }));
-		}
-	}
-
-	send(data: string | ArrayBuffer | ArrayBufferView) {
-		if (this.readyState === FetchWebSocket.CONNECTING) {
-			this.#pending.push(data);
-			return;
-		}
-		this.#socket?.send(data);
-	}
-
-	close(code?: number, reason?: string) {
-		this.readyState = FetchWebSocket.CLOSING;
-		this.#socket?.close(code, reason);
-	}
-}
-
-(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket =
-	FetchWebSocket as unknown as typeof WebSocket;
-
-let registry: ReturnType<typeof createRegistry> | undefined;
-
-function getRegistry(env: Env) {
-	registry ??= createRegistry({
-		endpoint: env.RIVET_ENDPOINT,
-		namespace: env.RIVET_NAMESPACE,
-		token: env.RIVET_TOKEN,
-		runnerName: env.RIVET_POOL,
-	});
-
-	return registry;
-}
-
-export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
+export default createHandler(registry, {
+	fetch: (request) => {
 		if (new URL(request.url).pathname === "/health") {
 			return new Response("ok");
 		}
-
-		return await getRegistry(env).handler(request);
+		return new Response("not found", { status: 404 });
 	},
-};
+});
 `,
 	);
 }

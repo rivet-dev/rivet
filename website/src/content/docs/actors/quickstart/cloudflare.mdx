@@ -4,7 +4,7 @@ description: "Set up a Rivet project locally targeting Cloudflare Workers."
 skill: true
 ---
 
-Set up a Rivet project locally that runs on Cloudflare Workers. Use the public `@rivetkit/rivetkit-wasm` package and pass the bindings through `setup({ wasm })`.
+Set up a Rivet project locally that runs on Cloudflare Workers. The `@rivetkit/cloudflare-workers` package wires the WebAssembly runtime for you.
 
 ## Steps
 
@@ -19,7 +19,7 @@ The CLI runs the local Rivet engine as a bundled native binary, so no Docker is 
 <Step title="Install Packages">
 
 ```sh
-npm install rivetkit @rivetkit/rivetkit-wasm
+npm install rivetkit @rivetkit/cloudflare-workers
 npm install --save-dev wrangler
 ```
 
@@ -41,14 +41,17 @@ RIVET_ENDPOINT = "http://localhost:6420"
 </Step>
 <Step title="Create the Worker">
 
-```ts src/index.ts @nocheck
-import { actor, setup } from "rivetkit";
-import * as wasmBindings from "@rivetkit/rivetkit-wasm";
-import wasmModule from "@rivetkit/rivetkit-wasm/rivetkit_wasm_bg.wasm";
+`createHandler` serves the Rivet manager API on `/api/rivet`. Pick how you want to handle your own routes:
 
-interface Env {
-  RIVET_ENDPOINT: string;
-}
+- **Default**: Rivet handles everything.
+- **Hono**: Mount a [Hono](https://hono.dev) app for your routes (`npm install hono`).
+- **Raw**: Provide a `fetch` and route requests yourself.
+
+<CodeGroup>
+
+```ts Default @nocheck
+import { actor } from "rivetkit";
+import { createHandler } from "@rivetkit/cloudflare-workers";
 
 const counter = actor({
   state: { count: 0 },
@@ -60,28 +63,86 @@ const counter = actor({
   },
 });
 
-let registry: { handler(request: Request): Promise<Response> } | undefined;
+export default createHandler({ use: { counter } });
+```
 
-function getRegistry(env: Env) {
-  registry ??= setup({
-    runtime: "wasm",
-    wasm: {
-      bindings: wasmBindings,
-      initInput: wasmModule,
+```ts Hono @nocheck
+import { actor } from "rivetkit";
+import { createClient } from "rivetkit/client";
+import { createHandler, setup } from "@rivetkit/cloudflare-workers";
+import { Hono } from "hono";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount = 1) => {
+      c.state.count += amount;
+      return c.state.count;
     },
-    use: { counter },
-    endpoint: env.RIVET_ENDPOINT,
-  });
+  },
+});
 
-  return registry;
+// `setup` returns a typed registry, so the client below is fully typed.
+const registry = setup({ use: { counter } });
+
+const app = new Hono<{ Bindings: { RIVET_ENDPOINT: string } }>();
+
+app.get("/", (c) => c.text("Hello from Hono + Rivet Actors!"));
+
+app.post("/increment/:name", async (c) => {
+  const client = createClient<typeof registry>({ endpoint: c.env.RIVET_ENDPOINT });
+  const count = await client.counter.getOrCreate(c.req.param("name")).increment(1);
+  return c.json({ count });
+});
+
+// Rivet keeps `/api/rivet`; Hono handles everything else.
+export default createHandler(registry, { fetch: app.fetch });
+```
+
+```ts Raw @nocheck
+import { actor } from "rivetkit";
+import { createClient } from "rivetkit/client";
+import { createHandler, setup } from "@rivetkit/cloudflare-workers";
+
+const counter = actor({
+  state: { count: 0 },
+  actions: {
+    increment: (c, amount = 1) => {
+      c.state.count += amount;
+      return c.state.count;
+    },
+  },
+});
+
+// `setup` returns a typed registry, so the client below is fully typed.
+const registry = setup({ use: { counter } });
+
+interface Env {
+  RIVET_ENDPOINT: string;
 }
 
-export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    return await getRegistry(env).handler(request);
+// Rivet keeps `/api/rivet`; your `fetch` handles everything else.
+export default createHandler(registry, {
+  fetch: async (request: Request, env: Env) => {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/") {
+      return new Response("Hello from a raw Rivet Worker router!");
+    }
+
+    const increment = url.pathname.match(/^\/increment\/(.+)$/);
+    if (request.method === "POST" && increment) {
+      const client = createClient<typeof registry>({ endpoint: env.RIVET_ENDPOINT });
+      const count = await client.counter.getOrCreate(increment[1]).increment(1);
+      return Response.json({ count });
+    }
+
+    return new Response("Not found", { status: 404 });
   },
-};
+});
 ```
+
+</CodeGroup>
 
 </Step>
 <Step title="Run Locally">

@@ -1,8 +1,13 @@
-// Cloudflare Workers do not expose the `new WebSocket()` constructor that the
-// Rivet envoy client uses to reach the engine. This shim implements that
-// constructor on top of the fetch-based WebSocket upgrade that Workers support.
+// Cloudflare Workers do not implement an outbound `new WebSocket(url)` client
+// constructor, but the wasm actor runtime opens its tunnel to the Rivet engine
+// through `globalThis.WebSocket`. This shim translates that constructor into
+// Cloudflare's fetch-based upgrade (`fetch(url, { Upgrade })` + `response.webSocket`)
+// and installs itself on `globalThis` so both the wasm tunnel and the TypeScript
+// client path resolve a working implementation.
 
-type CloudflareWebSocket = WebSocket & { accept(): void };
+type WebSocketProtocolInput = string | string[] | undefined;
+
+type CloudflareSocket = WebSocket & { accept(): void };
 
 class FetchWebSocket {
 	static readonly CONNECTING = 0;
@@ -16,14 +21,14 @@ class FetchWebSocket {
 	onclose: ((event: CloseEvent) => void) | null = null;
 	onerror: ((event: Event) => void) | null = null;
 	readyState = FetchWebSocket.CONNECTING;
-	#socket: CloudflareWebSocket | undefined;
+	#socket: CloudflareSocket | undefined;
 	#pending: Array<string | ArrayBuffer | ArrayBufferView> = [];
 
-	constructor(url: string, protocols?: string | string[]) {
+	constructor(url: string, protocols?: WebSocketProtocolInput) {
 		void this.#connect(url, protocols);
 	}
 
-	async #connect(url: string, protocols?: string | string[]) {
+	async #connect(url: string, protocols?: WebSocketProtocolInput) {
 		try {
 			const protocolList = Array.isArray(protocols)
 				? protocols
@@ -39,7 +44,7 @@ class FetchWebSocket {
 				{ headers },
 			);
 			const socket = (
-				response as unknown as { webSocket: CloudflareWebSocket | null }
+				response as unknown as { webSocket: CloudflareSocket | null }
 			).webSocket;
 			if (!socket) {
 				throw new Error(
@@ -58,16 +63,17 @@ class FetchWebSocket {
 				this.readyState = FetchWebSocket.CLOSED;
 				this.onclose?.(event);
 			});
-			socket.addEventListener("error", () => {
-				this.onerror?.(new Event("error"));
+			socket.addEventListener("error", (event) => {
+				this.onerror?.(event);
 			});
 			this.onopen?.(new Event("open"));
 			for (const data of this.#pending.splice(0)) {
 				socket.send(data);
 			}
-		} catch {
+		} catch (error) {
+			console.error("rivetkit cloudflare websocket shim failed", error);
 			this.readyState = FetchWebSocket.CLOSED;
-			this.onerror?.(new Event("error"));
+			this.onerror?.(error instanceof Event ? error : new Event("error"));
 			this.onclose?.(new CloseEvent("close", { code: 1006 }));
 		}
 	}
@@ -86,5 +92,15 @@ class FetchWebSocket {
 	}
 }
 
-(globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket =
-	FetchWebSocket as unknown as typeof WebSocket;
+const globalScope = globalThis as unknown as {
+	WebSocket: typeof WebSocket;
+	__RIVETKIT_CF_WEBSOCKET_INSTALLED__?: boolean;
+};
+
+// Install once per isolate.
+if (!globalScope.__RIVETKIT_CF_WEBSOCKET_INSTALLED__) {
+	globalScope.WebSocket = FetchWebSocket as unknown as typeof WebSocket;
+	globalScope.__RIVETKIT_CF_WEBSOCKET_INSTALLED__ = true;
+}
+
+export { FetchWebSocket };

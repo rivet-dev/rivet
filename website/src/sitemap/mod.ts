@@ -421,6 +421,10 @@ export const sitemap = [
 								href: "/docs/general/runtime-modes",
 							},
 							{
+								title: "WASM vs Native SDK",
+								href: "/docs/general/wasm-vs-native-sdk",
+							},
+							{
 								title: "Registry Configuration",
 								href: "/docs/general/registry-configuration",
 							},
