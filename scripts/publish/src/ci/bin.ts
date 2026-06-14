@@ -59,6 +59,9 @@ const RUST_CRATES = [
 	"rivetkit-client-protocol",
 	"rivetkit-inspector-protocol",
 	"rivetkit-client",
+	// rivetkit-core has an optional dependency on rivetkit-engine-process, which
+	// cargo still requires to be resolvable on crates.io at publish time.
+	"rivetkit-engine-process",
 	"rivetkit-core",
 	"rivetkit",
 ] as const;
