@@ -1,5 +1,4 @@
 import type { SqliteNativeMetrics } from "@/common/database/config";
-import { isLocalEngineEndpoint } from "@/common/engine";
 import type { RegistryConfig } from "./config";
 
 declare const handleBrand: unique symbol;
@@ -600,16 +599,19 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	// Provide the engine binary path whenever the core will manage a local
-	// engine. The core auto-spawns the engine for any loopback endpoint (its
-	// EngineSpawnMode::Auto), not only when `startEngine` is set, so gating the
-	// binary path on `startEngine` alone leaves auto-spawn unable to locate the
-	// npm-installed engine binary and fail with engine.binary_unavailable.
-	if (config.startEngine || isLocalEngineEndpoint(config.endpoint)) {
+	// Always best-effort resolve the engine binary path and hand it to the core.
+	// The core alone decides whether to actually spawn a local engine, so JS must
+	// not duplicate that decision here. `loadEnginePath` throws when no binary is
+	// available (remote-only install, unsupported platform, optional deps
+	// skipped); in that case leave it unset and let the core report
+	// `engine.binary_unavailable` only if it actually needs one.
+	try {
 		serveConfig.engineBinaryPath = await loadEnginePath();
-		serveConfig.engineHost = config.engineHost;
-		serveConfig.enginePort = config.enginePort;
+	} catch {
+		// No local engine binary resolvable; the core decides whether it needs one.
 	}
+	serveConfig.engineHost = config.engineHost;
+	serveConfig.enginePort = config.enginePort;
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =
 			process.env._RIVET_TEST_INSPECTOR_TOKEN ?? "token";

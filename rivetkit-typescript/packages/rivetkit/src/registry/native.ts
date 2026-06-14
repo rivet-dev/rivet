@@ -31,7 +31,6 @@ import {
 } from "@/client/client";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
-import { isLocalEngineEndpoint } from "@/common/engine";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
@@ -4757,17 +4756,22 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	// Provide the engine binary path whenever the core will manage a local
-	// engine. The core auto-spawns the engine for any loopback endpoint (its
-	// EngineSpawnMode::Auto), not only when `startEngine` is set, so gating the
-	// binary path on `startEngine` alone leaves auto-spawn unable to locate the
-	// npm-installed engine binary and fail with engine.binary_unavailable.
-	if (config.startEngine || isLocalEngineEndpoint(config.endpoint)) {
+	// Always best-effort resolve the npm-installed engine binary and hand its
+	// path to the core. The core alone decides whether to actually spawn a local
+	// engine (its `should_manage_engine`, based on the endpoint + spawn mode), so
+	// JS must not duplicate that decision here. Only JS knows the npm
+	// `node_modules` layout, so it resolves the path; if no binary is available
+	// (remote-only install, unsupported platform, optional deps skipped), leave
+	// it unset and let the core report `engine.binary_unavailable` if it actually
+	// needs one.
+	try {
 		const { getEnginePath } = await loadEngineCli();
 		serveConfig.engineBinaryPath = getEnginePath();
-		serveConfig.engineHost = config.engineHost;
-		serveConfig.enginePort = config.enginePort;
+	} catch {
+		// No local engine binary resolvable; the core decides whether it needs one.
 	}
+	serveConfig.engineHost = config.engineHost;
+	serveConfig.enginePort = config.enginePort;
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =
 			getEnvUniversal("_RIVET_TEST_INSPECTOR_TOKEN") ?? "token";
