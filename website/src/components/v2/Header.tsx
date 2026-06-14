@@ -374,7 +374,7 @@ export function Header({
 	const isLightTheme = variant === "floating" || light;
 
 	// Use DocsTabs as subnav if showDocsTabs is true
-	const effectiveSubnav = showDocsTabs ? <DocsTabs light={isLightTheme} /> : subnav;
+	const effectiveSubnav = showDocsTabs ? <DocsTabs light={isLightTheme} initialPathname={pathname} /> : subnav;
 	const isAgentOs = AGENT_OS_PATHS.some((p) => pathname === p || pathname === p + '/') || pathname.startsWith('/agent-os/registry/');
 	const isRegistryPage =
 		pathname === AGENT_OS_REGISTRY_HREF || pathname === `${AGENT_OS_REGISTRY_HREF}/`;

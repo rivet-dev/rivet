@@ -11,10 +11,11 @@ interface Props {
 }
 
 const { title, description, canonicalUrl, sidebar } = Astro.props;
+const pathname = Astro.url.pathname;
 ---
 
 <BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} themeColor="#EFEFEF">
-	<Header variant="full-width" showDocsTabs={true} light={true} active="docs" sidebarData={sidebar} client:load />
+	<Header variant="full-width" showDocsTabs={true} light={true} active="docs" sidebarData={sidebar} initialPathname={pathname} client:load />
 	<div class="paper-grain selection-paper w-full relative z-10 font-sans">
 		<div class="mx-auto w-full min-h-content flex flex-col md:grid md:grid-cols-docs" style="--header-height: 8.0625rem;">
 			<slot />

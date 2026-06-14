@@ -5,8 +5,15 @@ import { findPageForHref } from "@/lib/sitemap";
 import { sitemap } from "@/sitemap/mod";
 import { cn } from "@rivet-gg/components";
 
-export function DocsTabs({ light = false }: { light?: boolean }) {
-	const pathname = usePathname() || "";
+export function DocsTabs({
+	light = false,
+	initialPathname = "",
+}: { light?: boolean; initialPathname?: string }) {
+	// usePathname is empty during SSR and the first client render, so seed it
+	// from the Astro-provided pathname. Otherwise no tab matches at SSR time and
+	// the tab bar (which is not re-reconciled on the client) never highlights the
+	// active tab.
+	const pathname = usePathname() || initialPathname;
 	// Remove trailing slash for consistency
 	const normalizedPath = pathname.replace(/\/$/, "");
 
