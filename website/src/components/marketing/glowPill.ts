@@ -1,10 +1,11 @@
 import type { MouseEvent } from 'react';
 
-// Structural classes a porcelain pill needs for the cursor-following glow:
-// `relative` anchors the ::after, `overflow-hidden` clips the blurred gradient
-// to the rounded shape, and `glow-pill` owns the ::after (see main.css). Append
-// to a pill's existing className.
-export const GLOW_PILL_CLASS = 'glow-pill relative overflow-hidden';
+// Structural classes a porcelain pill needs for the cursor-following border
+// glow: `relative` anchors the ::after, and `glow-pill` owns the ::after (see
+// main.css) which lights ONLY the pill's border ring as the cursor moves. No
+// `overflow-hidden` here — it would clip the border-aligned ring. Append to a
+// pill's existing className.
+export const GLOW_PILL_CLASS = 'glow-pill relative';
 
 // Feeds the pointer position (relative to the hovered pill) into the
 // --pill-x / --pill-y custom properties the .glow-pill ::after reads. Mirrors

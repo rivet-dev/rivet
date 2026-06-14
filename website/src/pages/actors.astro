@@ -49,39 +49,51 @@ const useCases = [
 	<ScrollObserver client:load>
 		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
-				<!-- Hero: full-bleed oil painting fading down into porcelain, text anchored bottom-left -->
-				<section id="actors-hero" class="relative flex min-h-[92svh] flex-col justify-end overflow-hidden pt-32 pb-16 md:pb-24 will-change-[opacity]">
+				<!-- Hero: full-bleed oil painting fading down into ink, then grading into porcelain on scroll -->
+				<section id="actors-hero" class="relative flex min-h-[100svh] flex-col justify-end overflow-hidden pt-32 pb-16 md:pb-24" style="--actors-content-fade: 1;">
 					<!-- Painting backdrop, a fixed crop inside the clipping box
 					     (overflow-hidden). The gradients sit over it so the
-					     fade-to-porcelain stays put. -->
-					<div class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
+					     dark fade can hand off to the porcelain gradient on scroll. -->
+					<div id="actors-hero-bg" class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true" style="will-change: filter, opacity;">
 						<img
-							src="/images/textures/degas-orchestra-hero.jpg"
+							src="https://assets.rivet.dev/website/images/textures/actors-hero-degas-orchestra.webp"
 							alt=""
 							loading="eager"
 							fetchpriority="high"
 							decoding="async"
-							class="absolute inset-x-0 -top-[18%] h-[136%] w-full object-cover object-center"
+							class="absolute inset-x-0 -top-[18%] h-[136%] w-full object-cover object-[center_28%]"
 						/>
-						<!-- Fade to porcelain at the bottom so the hero text reads in ink -->
-						<div class="absolute inset-0 bg-gradient-to-t from-paper from-[18%] via-paper/55 via-[42%] to-transparent to-[78%]"></div>
+						<!-- Fade to ink at the bottom so the hero text reads before the paper gradient layers over it. -->
+						<div class="absolute inset-0 bg-gradient-to-t from-ink from-[18%] via-ink/70 via-[42%] to-transparent to-[78%]"></div>
 						<!-- Gentle left wash for extra legibility behind the copy -->
-						<div class="absolute inset-0 bg-gradient-to-r from-paper/70 via-transparent to-transparent"></div>
+						<div class="absolute inset-0 bg-gradient-to-r from-ink/60 via-ink/20 to-transparent"></div>
 					</div>
+					<!-- Scroll-driven porcelain wash. A solid porcelain fill (always exactly
+					     rgb(234,234,234) so it hands off seamlessly to the section below) whose
+					     bell-curve silhouette lives entirely in the mask: a narrow-tall PEAK
+					     ellipse rising in the center, a wide-short BASE ellipse for the soft side
+					     tails, and a thin bottom SEAL strip that guarantees the very bottom edge
+					     covers the seam full-width. JS grows the lobes and fades the alpha in on
+					     scroll, so the white feathers up over the ink fade like a gaussian. -->
+					<div
+						id="actors-paper-wash"
+						class="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[78svh]"
+						style="background-color: rgb(234, 234, 234); --peak-w: 42%; --peak-h: 8%; --base-w: 92%; --base-h: 6%; --peak-a: 0; --base-a: 0; -webkit-mask-image: radial-gradient(ellipse var(--peak-w) var(--peak-h) at 50% 100%, rgba(0,0,0, var(--peak-a)) 0%, rgba(0,0,0, calc(var(--peak-a) * 0.92)) 28%, rgba(0,0,0, calc(var(--peak-a) * 0.60)) 55%, rgba(0,0,0, calc(var(--peak-a) * 0.26)) 78%, rgba(0,0,0, 0) 100%), radial-gradient(ellipse var(--base-w) var(--base-h) at 50% 100%, rgba(0,0,0, var(--base-a)) 0%, rgba(0,0,0, calc(var(--base-a) * 0.70)) 40%, rgba(0,0,0, calc(var(--base-a) * 0.30)) 72%, rgba(0,0,0, 0) 100%), linear-gradient(to top, rgba(0,0,0, var(--peak-a)) 0, rgba(0,0,0, var(--peak-a)) 4px, rgba(0,0,0, calc(var(--peak-a) * 0.5)) 12px, rgba(0,0,0, 0) 28px); mask-image: radial-gradient(ellipse var(--peak-w) var(--peak-h) at 50% 100%, rgba(0,0,0, var(--peak-a)) 0%, rgba(0,0,0, calc(var(--peak-a) * 0.92)) 28%, rgba(0,0,0, calc(var(--peak-a) * 0.60)) 55%, rgba(0,0,0, calc(var(--peak-a) * 0.26)) 78%, rgba(0,0,0, 0) 100%), radial-gradient(ellipse var(--base-w) var(--base-h) at 50% 100%, rgba(0,0,0, var(--base-a)) 0%, rgba(0,0,0, calc(var(--base-a) * 0.70)) 40%, rgba(0,0,0, calc(var(--base-a) * 0.30)) 72%, rgba(0,0,0, 0) 100%), linear-gradient(to top, rgba(0,0,0, var(--peak-a)) 0, rgba(0,0,0, var(--peak-a)) 4px, rgba(0,0,0, calc(var(--peak-a) * 0.5)) 12px, rgba(0,0,0, 0) 28px); -webkit-mask-composite: source-over; mask-composite: add; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; transform: translateZ(0); will-change: mask-image;"
+					></div>
 
-					<div class="relative z-10 mx-auto w-full max-w-7xl px-6">
+					<div class="relative z-10 mx-auto w-full max-w-7xl px-6" style="opacity: var(--actors-content-fade); filter: blur(var(--actors-content-blur, 0px));">
 						<div class="max-w-xl">
-							<h1 class={`mb-4 ${HERO_H1_CLASS}`}>
+							<h1 class={`mb-4 ${HERO_H1_CLASS} !text-cream`}>
 								The primitive for<br />stateful workloads.
 							</h1>
-							<p class="mb-8 max-w-lg text-lg text-ink-soft md:text-xl">
+							<p class="mb-8 max-w-lg text-lg text-cream/70 md:text-xl">
 								One Actor per agent, per session, per user. The same primitive powers realtime apps, multiplayer, and collaborative state.
 							</p>
 							<div class="flex flex-col gap-3 sm:flex-row">
-								<a href="/docs" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent">
+								<a href="/docs/actors" class="inline-flex items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-ink transition-colors hover:bg-white/90">
 									Start Building
 								</a>
-								<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink">
+								<a href="/docs/actors/quickstart" class="inline-flex items-center justify-center whitespace-nowrap rounded-md border border-cream/25 bg-cream/10 px-4 py-2 text-sm text-cream backdrop-blur-md backdrop-saturate-[1.3] transition-colors hover:border-cream/45 hover:bg-cream/20">
 									Quickstart Guide
 								</a>
 							</div>
@@ -89,16 +101,46 @@ const useCases = [
 					</div>
 				</section>
 
-				<!-- As the hero scrolls away, fade the whole hero (image + text) out so it
-				     dissolves into the porcelain page below. -->
+				<!-- As the hero scrolls away, layer a curved porcelain blur gradient
+				     over the ink fade so the page transitions directionally. -->
 				<script>
 					const hero = document.getElementById('actors-hero');
+					const wash = document.getElementById('actors-paper-wash');
+					const bg = document.getElementById('actors-hero-bg');
 					if (hero) {
 						let ticking = false;
+						const smoothstep = (value: number) => value * value * (3 - 2 * value);
 						const update = () => {
 							const h = hero.offsetHeight || window.innerHeight;
-							const progress = Math.min(1, Math.max(0, window.scrollY / (h * 0.6)));
-							hero.style.opacity = String(1 - progress);
+							const scrollRatio = window.scrollY / h;
+							// Ramp the porcelain in gently so it spreads toward the top at a
+							// measured pace while the painting blurs and fades underneath it.
+							const progress = Math.min(1, Math.max(0, (scrollRatio - 0.04) / 0.55));
+							const eased = smoothstep(progress);
+							const bell = 1 - Math.pow(1 - eased, 3.2);
+							if (wash) {
+								// Center leads, climbing well past the top of the wash so the
+								// porcelain reaches up through the whole painting.
+								wash.style.setProperty('--peak-h', `${(8 + bell * 48).toFixed(2)}%`);
+								wash.style.setProperty('--peak-w', `${(42 + bell * 78).toFixed(2)}%`);
+								// Side tails trail the peak but still rise tall enough, at full
+								// alpha, to bury the dark corners so nothing shows through.
+								wash.style.setProperty('--base-h', `${(4 + bell * 36).toFixed(2)}%`);
+								wash.style.setProperty('--base-w', `${(90 + bell * 80).toFixed(2)}%`);
+								wash.style.setProperty('--peak-a', bell.toFixed(3));
+								wash.style.setProperty('--base-a', bell.toFixed(3));
+							}
+							if (bg) {
+								// The painting itself softens as you scroll: it blurs and fades
+								// toward the porcelain behind it, so the rising wash is not the only
+								// thing dissolving the image.
+								bg.style.filter = `blur(${(bell * 20).toFixed(1)}px)`;
+								bg.style.opacity = (1 - bell * 0.72).toFixed(3);
+							}
+							// Clear the title and buttons ahead of the wash so they dissolve
+							// (fade plus blur) rather than lingering over the softened painting.
+							hero.style.setProperty('--actors-content-fade', Math.max(0, 1 - bell * 1.5).toFixed(3));
+							hero.style.setProperty('--actors-content-blur', `${(bell * 8).toFixed(1)}px`);
 							ticking = false;
 						};
 						const onScroll = () => {
@@ -114,7 +156,7 @@ const useCases = [
 				</script>
 
 				<!-- Use cases -->
-				<section class="border-t border-ink/10 px-6 py-16 md:py-32">
+				<section class="bg-[#EAEAEA] px-6 py-16 md:py-32">
 					<div class="mx-auto w-full max-w-7xl">
 						<div class="mb-12 max-w-3xl">
 							<h2 class={SECTION_H2_CLASS}>One primitive, every stateful workload.</h2>

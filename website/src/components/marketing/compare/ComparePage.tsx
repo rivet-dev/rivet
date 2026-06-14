@@ -23,7 +23,8 @@ interface ComparePageProps {
 
 // Warm oil-paint texture behind the closing band, mirroring the sitewide CTA
 // colophon. The veil keeps text readable even if the image fails to load.
-const OIL_TEXTURE_SRC = '/images/textures/oil-olive-landscape.webp';
+const FOOTER_PAINTING_SRC =
+	'https://assets.rivet.dev/website/images/textures/footer-abstract.webp';
 
 function SectionHeading({
 	title,
@@ -299,7 +300,7 @@ function CTASection() {
 			<div className="relative mx-auto flex min-h-[26rem] max-w-screen-2xl items-center justify-center overflow-hidden px-6 py-20 md:min-h-[34rem] md:px-10 lg:aspect-[2563/1440] lg:min-h-0">
 				<img
 					aria-hidden="true"
-					src={OIL_TEXTURE_SRC}
+					src={FOOTER_PAINTING_SRC}
 					alt=""
 					loading="lazy"
 					decoding="async"

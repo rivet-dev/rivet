@@ -134,25 +134,28 @@
     filter: blur(2px);
   }
 
-  /* Cursor-following highlight for porcelain pills (deploy row, stack chips).
-     Mirrors the changelog pill glow at the hero: ink-tinted and masked to the
-     border ring rather than pooled under the body, so hover lights only the
-     edge instead of filling the pill. The mousemove handler in glowPill.ts
-     feeds --pill-x / --pill-y; defaults keep it centered so there is no
-     top-left flash before the first move. */
+  /* Cursor-following border glow for porcelain pills (deploy row, stack chips).
+     Lights ONLY the pill's 1px border ring as the pointer moves — not the fill.
+     `inset: -1px` grows the ::after out to the border-box so the masked ring
+     lands exactly on the pill's border (using `inset: 0` put it one pixel
+     inside, which read as a second inner border). `padding: 1px` + the
+     content-box/border-box mask exclude carves the gradient down to that ring;
+     a small blur gives the gaussian softness. The handler in glowPill.ts feeds
+     --pill-x / --pill-y; defaults keep it centered so there is no first-move
+     flash. */
   .glow-pill::after {
     content: "";
     position: absolute;
-    inset: 0;
-    border-radius: 9999px;
+    inset: -1px;
+    border-radius: inherit;
     padding: 1px;
     pointer-events: none;
     opacity: 0;
     transition: opacity 150ms ease;
     background: radial-gradient(
-      46px 32px at var(--pill-x, 50%) var(--pill-y, 50%),
-      rgba(27, 25, 22, 0.45),
-      rgba(27, 25, 22, 0.16) 50%,
+      58px 40px at var(--pill-x, 50%) var(--pill-y, 50%),
+      rgba(27, 25, 22, 0.65),
+      rgba(27, 25, 22, 0.24) 45%,
       rgba(27, 25, 22, 0) 80%
     );
     -webkit-mask:
@@ -160,6 +163,7 @@
       linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
+    filter: blur(1.5px);
   }
   .glow-pill:hover::after {
     opacity: 1;

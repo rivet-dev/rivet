@@ -274,7 +274,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               className={`mb-5 ${HERO_H1_CLASS}`}
             >
               Infrastructure for <br />
-              the agentic era.
+              software that thinks.
             </motion.h1>
 
             <motion.p
