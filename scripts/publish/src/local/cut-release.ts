@@ -24,6 +24,7 @@ import { Command } from "commander";
 import { $ } from "execa";
 import { scoped } from "../lib/logger.js";
 import {
+	bumpCargoVersions,
 	bumpPackageJsons,
 	getLatestGitVersion,
 	listRecentVersions,
@@ -136,6 +137,14 @@ async function main() {
 	// 5. Update non-package.json source files.
 	log.info("updating source files (Cargo.toml, examples)");
 	await updateSourceFiles(repoRoot, version);
+
+	// Bump the Cargo.toml workspace dependency pins (the `version = "=X"`
+	// exact pins on internal crates). updateSourceFiles only rewrites the
+	// [workspace.package] version, so without this the internal crate pins
+	// stay on the previous version and the Rust/wasm build fails to resolve.
+	// Always writes (like updateSourceFiles); dry-run still mutates source
+	// files and only skips the commit/push/trigger tail.
+	await bumpCargoVersions(repoRoot, version);
 
 	// 6. Rewrite package.json version fields via discovery. Uses versionOnly
 	// mode so `workspace:*` dep specs are preserved — the lockfile depends on
