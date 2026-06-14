@@ -1,4 +1,5 @@
 import type { SqliteNativeMetrics } from "@/common/database/config";
+import { isLocalEngineEndpoint } from "@/common/engine";
 import type { RegistryConfig } from "./config";
 
 declare const handleBrand: unique symbol;
@@ -599,7 +600,12 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	if (config.startEngine) {
+	// Provide the engine binary path whenever the core will manage a local
+	// engine. The core auto-spawns the engine for any loopback endpoint (its
+	// EngineSpawnMode::Auto), not only when `startEngine` is set, so gating the
+	// binary path on `startEngine` alone leaves auto-spawn unable to locate the
+	// npm-installed engine binary and fail with engine.binary_unavailable.
+	if (config.startEngine || isLocalEngineEndpoint(config.endpoint)) {
 		serveConfig.engineBinaryPath = await loadEnginePath();
 		serveConfig.engineHost = config.engineHost;
 		serveConfig.enginePort = config.enginePort;

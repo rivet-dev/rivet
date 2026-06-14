@@ -31,6 +31,7 @@ import {
 } from "@/client/client";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
+import { isLocalEngineEndpoint } from "@/common/engine";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
@@ -4756,7 +4757,12 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	if (config.startEngine) {
+	// Provide the engine binary path whenever the core will manage a local
+	// engine. The core auto-spawns the engine for any loopback endpoint (its
+	// EngineSpawnMode::Auto), not only when `startEngine` is set, so gating the
+	// binary path on `startEngine` alone leaves auto-spawn unable to locate the
+	// npm-installed engine binary and fail with engine.binary_unavailable.
+	if (config.startEngine || isLocalEngineEndpoint(config.endpoint)) {
 		const { getEnginePath } = await loadEngineCli();
 		serveConfig.engineBinaryPath = getEnginePath();
 		serveConfig.engineHost = config.engineHost;
