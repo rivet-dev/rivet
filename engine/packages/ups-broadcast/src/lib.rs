@@ -1,4 +1,4 @@
-use anyhow::{Result, ensure};
+use anyhow::{ensure, Result};
 use gas::prelude::*;
 use std::borrow::Cow;
 use universalpubsub::NextOutput;
