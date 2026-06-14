@@ -49,12 +49,12 @@ const useCases = [
 	<ScrollObserver client:load>
 		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
-				<!-- Hero: full-bleed oil painting fading down into ink, then grading into porcelain on scroll -->
-				<section id="actors-hero" class="relative flex min-h-[100svh] flex-col justify-end overflow-hidden pt-32 pb-16 md:pb-24" style="--actors-content-fade: 1;">
+				<!-- Hero: full-bleed oil painting fading down into ink behind the copy -->
+				<section id="actors-hero" class="relative flex min-h-[100svh] flex-col justify-end overflow-hidden pt-32 pb-16 md:pb-24">
 					<!-- Painting backdrop, a fixed crop inside the clipping box
-					     (overflow-hidden). The gradients sit over it so the
-					     dark fade can hand off to the porcelain gradient on scroll. -->
-					<div id="actors-hero-bg" class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true" style="will-change: opacity;">
+					     (overflow-hidden). The dark gradients sit over it so the hero
+					     text reads against the artwork. -->
+					<div id="actors-hero-bg" class="absolute inset-0 z-0 overflow-hidden" aria-hidden="true">
 						<img
 							src="https://assets.rivet.dev/website/images/textures/actors-hero-degas-orchestra.webp"
 							alt=""
@@ -63,19 +63,12 @@ const useCases = [
 							decoding="async"
 							class="absolute inset-x-0 -top-[18%] h-[136%] w-full object-cover object-[center_28%]"
 						/>
-						<!-- Fade to ink at the bottom so the hero text reads before the paper gradient layers over it. -->
+						<!-- Fade to ink at the bottom so the hero text reads against the painting. -->
 						<div class="absolute inset-0 bg-gradient-to-t from-ink from-[18%] via-ink/70 via-[42%] to-transparent to-[78%]"></div>
 						<!-- Gentle left wash for extra legibility behind the copy -->
 						<div class="absolute inset-0 bg-gradient-to-r from-ink/60 via-ink/20 to-transparent"></div>
 					</div>
-					<!-- Scroll-driven porcelain wash: a static bottom-up porcelain gradient (solid rgb(234,234,234) at the seam, fading to transparent toward the top) whose opacity JS ramps in on scroll. Opacity-only, so there is no blur or per-frame mask raster to jank the scroll. -->
-					<div
-						id="actors-paper-wash"
-						class="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-[78svh]"
-						style="opacity: 0; will-change: opacity; background-image: linear-gradient(to top, rgb(234,234,234) 0%, rgb(234,234,234) 24%, rgba(234,234,234,0) 64%);"
-					></div>
-
-					<div class="relative z-10 mx-auto w-full max-w-7xl px-6" style="opacity: var(--actors-content-fade);">
+					<div class="relative z-10 mx-auto w-full max-w-7xl px-6">
 						<div class="max-w-xl">
 							<h1 class={`mb-4 ${HERO_H1_CLASS} !text-cream`}>
 								The primitive for<br />stateful workloads.
@@ -94,42 +87,6 @@ const useCases = [
 						</div>
 					</div>
 				</section>
-
-				<!-- As the hero scrolls away, ramp the porcelain gradient opacity and dim the painting and copy. Opacity-only animation, no blur or masks, keeps the scroll on the compositor. -->
-				<script>
-					const hero = document.getElementById('actors-hero');
-					const wash = document.getElementById('actors-paper-wash');
-					const bg = document.getElementById('actors-hero-bg');
-					if (hero) {
-						let ticking = false;
-						const smoothstep = (value: number) => value * value * (3 - 2 * value);
-						const update = () => {
-							const h = hero.offsetHeight || window.innerHeight;
-							const scrollRatio = window.scrollY / h;
-							// Ramp the porcelain in gently so it spreads toward the top at a
-							// measured pace while the painting and copy fade underneath it.
-							const progress = Math.min(1, Math.max(0, (scrollRatio - 0.04) / 0.55));
-							const eased = smoothstep(progress);
-							const bell = 1 - Math.pow(1 - eased, 3.2);
-							// Opacity-only animation keeps the scroll on the compositor (no blur, no
-							// per-frame mask raster). A static porcelain gradient fades in from the
-							// bottom, the painting dims, and the copy clears ahead of it.
-							if (wash) wash.style.opacity = bell.toFixed(3);
-							if (bg) bg.style.opacity = (1 - bell * 0.7).toFixed(3);
-							hero.style.setProperty('--actors-content-fade', Math.max(0, 1 - bell * 1.5).toFixed(3));
-							ticking = false;
-						};
-						const onScroll = () => {
-							if (!ticking) {
-								ticking = true;
-								requestAnimationFrame(update);
-							}
-						};
-						update();
-						window.addEventListener('scroll', onScroll, { passive: true });
-						window.addEventListener('resize', onScroll, { passive: true });
-					}
-				</script>
 
 				<!-- Use cases -->
 				<section class="bg-[#EAEAEA] px-6 py-16 md:py-32">
