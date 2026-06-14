@@ -7,7 +7,7 @@ skill: true
 import { Hosting } from "@/components/docs/Hosting";
 
 <Note>
-Rust support is in beta. The supported public Rust API is `rivetkit` and `rivetkit-client`; lower-level crates are internal implementation details and do not carry a stability guarantee. See the full API reference on [docs.rs/rivetkit](https://docs.rs/rivetkit).
+Rust support is in beta. The supported public Rust API is `rivetkit` and `rivetkit-client`; lower-level crates are internal implementation details and do not carry a stability guarantee. See the full API reference on [docs.rs/rivetkit](https://docs.rs/rivetkit), or the runnable [`hello-world-rust`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-rust) example.
 </Note>
 
 ## Steps
@@ -18,7 +18,7 @@ Rust support is in beta. The supported public Rust API is `rivetkit` and `rivetk
 Add the `rivetkit` crate and its companions:
 
 ```sh
-cargo add rivetkit@2.3.0-rc.12 anyhow async-trait
+cargo add rivetkit anyhow async-trait
 cargo add serde --features derive
 cargo add tokio --features full
 ```
@@ -134,6 +134,8 @@ RIVETKIT_ENGINE_AUTO_DOWNLOAD=1 cargo run
 ```
 
 Your server now connects to the Rivet Engine on `http://localhost:6420`. Clients connect directly to the engine on this port.
+
+Visit [http://localhost:6420](http://localhost:6420) in your browser (or point your AI agent at it) to open the Rivet developer tools and inspect your actors live.
 
 <Note>
 Already have an engine binary? Set `RIVET_ENGINE_BINARY_PATH=/path/to/rivet-engine` to point at it instead. If you are working inside the [Rivet monorepo](https://github.com/rivet-dev/rivet), a local `cargo build -p rivet-engine` is discovered automatically from `target/debug`.

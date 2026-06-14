@@ -22,7 +22,7 @@ Follow the [Cloudflare Workers Quickstart](/docs/actors/quickstart/cloudflare) t
 </Step>
 <Step title="Configure Wrangler">
 
-Set your Rivet endpoint as a Worker variable. Include your namespace and token in the URL.
+Set your Rivet connection values as Worker variables. Find `RIVET_ENDPOINT` and `RIVET_PUBLIC_ENDPOINT` in the [Rivet Dashboard](https://dashboard.rivet.dev/) under **Settings → Namespace → Advanced → Backend Configuration** and copy them in.
 
 ```toml wrangler.toml
 name = "rivetkit-cloudflare"
@@ -32,6 +32,7 @@ compatibility_flags = ["nodejs_compat"]
 
 [vars]
 RIVET_ENDPOINT = "https://your-namespace:sk_...@api.rivet.dev"
+RIVET_PUBLIC_ENDPOINT = "https://your-namespace@api.rivet.dev"
 ```
 
 </Step>

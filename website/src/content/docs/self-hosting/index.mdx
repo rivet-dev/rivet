@@ -4,12 +4,51 @@ description: "Self-hosting Rivet gives you complete control over the actor orche
 skill: false
 ---
 
-export const imgArch = { src: "https://assets.rivet.dev/website/docs/self-hosting/images/architecture.png", width: 2088, height: 744, format: "png" };
-export const imgByocVsSelfHost = { src: "https://assets.rivet.dev/website/docs/self-hosting/images/byoc-vs-self-host.png", width: 2430, height: 1472, format: "png" };
-
 ## Self-Host vs BYOC
 
-<img alt="Rivet BYOC vs self-hosting" src={imgByocVsSelfHost.src} />
+**Self-Host**
+
+```mermaid
+flowchart LR
+    subgraph infra["Your Infrastructure"]
+        direction LR
+        backend["Your Backend<br/>(Envoy)"]
+        engine["Rivet Engine"]
+        storage["Storage"]
+        backend <--> engine <--> storage
+    end
+
+    classDef envoy fill:#bfdbfe,stroke:#3b82f6,color:#000
+    classDef engineNode fill:#fed7aa,stroke:#f97316,color:#000
+    classDef storageNode fill:#fecaca,stroke:#ef4444,color:#000
+    class backend envoy
+    class engine engineNode
+    class storage storageNode
+```
+
+**BYOC with Rivet Cloud**
+
+```mermaid
+flowchart LR
+    subgraph infra["Your Infrastructure"]
+        direction LR
+        backend["Your Backend<br/>(Envoy)"]
+    end
+    subgraph cloud["Rivet Cloud"]
+        direction LR
+        engine["Rivet Engine"]
+        storage["Storage"]
+        engine <--> storage
+    end
+    backend <--> engine
+
+    classDef envoy fill:#bfdbfe,stroke:#3b82f6,color:#000
+    classDef engineNode fill:#fed7aa,stroke:#f97316,color:#000
+    classDef storageNode fill:#fecaca,stroke:#ef4444,color:#000
+    class backend envoy
+    class engine engineNode
+    class storage storageNode
+```
 
 Rivet supports both BYOC (Bring Your Own Cloud) and self-hosting to fit your deployment needs.
 
@@ -25,12 +64,25 @@ Rivet supports both BYOC (Bring Your Own Cloud) and self-hosting to fit your dep
 | **Documentation** | Continue below | [See connect guides](/docs/deploy) |
 
 ## Architecture
-#
-<img alt="Rivet self-hosting architecture" src={imgArch.src} />
+
+```mermaid
+flowchart LR
+    backend["Your Backend<br/>(Envoy)"]
+    engine["Rivet Engine"]
+    storage["Storage<br/>(PG or FS)"]
+    backend <--> engine <--> storage
+
+    classDef envoy fill:#bfdbfe,stroke:#3b82f6,color:#000
+    classDef engineNode fill:#fed7aa,stroke:#f97316,color:#000
+    classDef storageNode fill:#fecaca,stroke:#ef4444,color:#000
+    class backend envoy
+    class engine engineNode
+    class storage storageNode
+```
 
 Rivet has 3 core components:
 
-- **Your Backend**: Your application server that handles user requests and includes a runner component that executes actor code
+- **Your Backend**: Your application server that handles user requests and includes an envoy component that executes actor code
 - **Rivet Engine**: Main orchestration service that manages actor lifecycle, routes messages, and provides APIs
 - **Storage**: Persistence layer for actor state and messaging infrastructure for real-time communication
 

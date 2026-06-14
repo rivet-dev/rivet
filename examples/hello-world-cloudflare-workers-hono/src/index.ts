@@ -16,18 +16,15 @@ const counter = actor({
 
 export const registry = setup({ use: { counter } });
 
-interface Env {
-	RIVET_ENDPOINT: string;
-}
-
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono();
 
 app.get("/", (c) => c.text("Hello from Hono + Rivet Actors!"));
 
 app.post("/increment/:name", async (c) => {
-	const client = createClient<typeof registry>({
-		endpoint: c.env.RIVET_ENDPOINT,
-	});
+	// `createClient` reads RIVET_ENDPOINT from the environment. `rivet dev`
+	// passes it automatically; in production set it as a Worker var or secret. It
+	// falls back to the local engine at http://localhost:6420 when unset.
+	const client = createClient<typeof registry>();
 	const count = await client.counter
 		.getOrCreate(c.req.param("name"))
 		.increment(1);

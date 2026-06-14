@@ -2,6 +2,3 @@ name = "hello-world-cloudflare-workers-raw"
 main = "src/index.ts"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
-
-[vars]
-RIVET_ENDPOINT = "http://localhost:6420"

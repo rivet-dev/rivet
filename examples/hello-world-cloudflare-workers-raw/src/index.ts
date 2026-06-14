@@ -15,14 +15,10 @@ const counter = actor({
 
 export const registry = setup({ use: { counter } });
 
-interface Env {
-	RIVET_ENDPOINT: string;
-}
-
 // Mount a hand-rolled router alongside Rivet. The Rivet manager API stays on
 // `/api/rivet`; every other route is handled by this `fetch`.
 export default createHandler(registry, {
-	fetch: async (request: Request, env: Env) => {
+	fetch: async (request: Request) => {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/") {
@@ -31,9 +27,10 @@ export default createHandler(registry, {
 
 		const increment = url.pathname.match(/^\/increment\/(.+)$/);
 		if (request.method === "POST" && increment) {
-			const client = createClient<typeof registry>({
-				endpoint: env.RIVET_ENDPOINT,
-			});
+			// `createClient` reads RIVET_ENDPOINT from the environment. `rivet dev`
+			// passes it automatically; in production set it as a Worker var or
+			// secret. It falls back to the local engine when unset.
+			const client = createClient<typeof registry>();
 			const count = await client.counter
 				.getOrCreate(increment[1])
 				.increment(1);

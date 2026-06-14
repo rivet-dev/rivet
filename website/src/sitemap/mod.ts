@@ -413,6 +413,10 @@ export const sitemap = [
 						href: "/docs/general/production-checklist",
 					},
 					{
+						title: "CLI",
+						href: "/docs/cli",
+					},
+					{
 						title: "Configuration",
 						collapsible: true,
 						pages: [
@@ -759,10 +763,6 @@ export const sitemap = [
 			{
 				title: "Reference",
 				pages: [
-					{
-						title: "CLI",
-						href: "/docs/deploy/cli",
-					},
 					{
 						title: "Pool Configuration",
 						href: "/docs/general/pool-configuration",

@@ -151,6 +151,12 @@ impl HandlerPlan {
 					"dev".to_string(),
 					"--port".to_string(),
 					port.to_string(),
+					// Inject the local engine endpoint as a Worker variable so the
+					// handler connects back without any wrangler.toml config. With
+					// `nodejs_compat` this also lands in `process.env`. wrangler
+					// splits `--var` on the first colon, so the URL stays intact.
+					"--var".to_string(),
+					format!("RIVET_ENDPOINT:{DEFAULT_ENGINE_ENDPOINT}"),
 				];
 				args.extend(opts.command.iter().cloned());
 				("npx".to_string(), args, Vec::new())
@@ -403,7 +409,17 @@ mod tests {
 
 		assert_eq!(plan.handler_url, "http://127.0.0.1:8787/api/rivet");
 		assert_eq!(plan.program, "npx");
-		assert_eq!(plan.args, ["wrangler", "dev", "--port", "8787"]);
+		assert_eq!(
+			plan.args,
+			[
+				"wrangler",
+				"dev",
+				"--port",
+				"8787",
+				"--var",
+				"RIVET_ENDPOINT:http://127.0.0.1:6420"
+			]
+		);
 		assert!(plan.env.is_empty());
 	}
 
@@ -423,6 +439,8 @@ mod tests {
 				"dev",
 				"--port",
 				"8788",
+				"--var",
+				"RIVET_ENDPOINT:http://127.0.0.1:6420",
 				"--local-protocol",
 				"http"
 			]

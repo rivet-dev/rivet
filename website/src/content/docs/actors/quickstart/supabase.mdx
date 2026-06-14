@@ -6,6 +6,10 @@ skill: true
 
 Set up a Rivet project locally that runs on Supabase Edge Functions. The `@rivetkit/supabase` package wires the WebAssembly runtime for you.
 
+<Note>
+Prefer to start from a complete project? See the runnable [`hello-world-supabase-functions`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-supabase-functions) example.
+</Note>
+
 ## Steps
 
 <Steps>
@@ -37,7 +41,7 @@ Call `serve` from `@rivetkit/supabase`. It loads the WebAssembly runtime and ser
 
 ```ts supabase/functions/rivet/index.ts @nocheck
 import { actor } from "rivetkit";
-import { serve } from "@rivetkit/supabase";
+import { serve, setup } from "@rivetkit/supabase";
 
 const counter = actor({
   state: { count: 0 },
@@ -49,7 +53,11 @@ const counter = actor({
   },
 });
 
-await serve({ use: { counter } });
+// `setup` returns a typed registry, so a client can type itself with
+// `typeof registry`.
+export const registry = setup({ use: { counter } });
+
+await serve(registry);
 ```
 
 </Step>
@@ -60,6 +68,26 @@ Start Rivet. The CLI runs the local engine, spawns `supabase functions serve` fo
 ```sh
 npx @rivetkit/cli dev --provider supabase
 ```
+
+Visit [http://localhost:6420](http://localhost:6420) in your browser (or point your AI agent at it) to open the Rivet developer tools and inspect your actors live.
+
+</Step>
+<Step title="Call the Actor">
+
+Connect to your actor from a client. This connects directly to the local engine on `http://localhost:6420`:
+
+```ts client.ts @nocheck
+import { createClient } from "rivetkit/client";
+import type { registry } from "./supabase/functions/rivet/index";
+
+const client = createClient<typeof registry>("http://localhost:6420");
+
+const counter = client.counter.getOrCreate(["my-counter"]);
+const count = await counter.increment(3);
+console.log("New count:", count);
+```
+
+See the [JavaScript client documentation](/docs/clients/javascript) for more information.
 
 </Step>
 <Step title="Deploy">
