@@ -1,5 +1,7 @@
+import { stringifyError } from "@/common/utils";
 import type { SqliteNativeMetrics } from "@/common/database/config";
 import type { RegistryConfig } from "./config";
+import { logger } from "./log";
 
 declare const handleBrand: unique symbol;
 
@@ -599,11 +601,25 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	if (config.startEngine) {
+	// Always best-effort resolve the engine binary path and hand it to the core.
+	// The core alone decides whether to actually spawn a local engine, so JS must
+	// not duplicate that decision here. `loadEnginePath` throws when no binary is
+	// available (remote-only install, unsupported platform, optional deps
+	// skipped); in that case leave it unset and let the core report
+	// `engine.binary_unavailable` only if it actually needs one.
+	try {
 		serveConfig.engineBinaryPath = await loadEnginePath();
-		serveConfig.engineHost = config.engineHost;
-		serveConfig.enginePort = config.enginePort;
+	} catch (error) {
+		// The engine binary could not be resolved. The core still decides whether
+		// it needs to spawn a local engine; if it does, it will fail with
+		// engine.binary_unavailable (auto-download is off in the napi runtime).
+		logger().warn({
+			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+			error: stringifyError(error),
+		});
 	}
+	serveConfig.engineHost = config.engineHost;
+	serveConfig.enginePort = config.enginePort;
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =
 			process.env._RIVET_TEST_INSPECTOR_TOKEN ?? "token";

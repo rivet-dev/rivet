@@ -4756,12 +4756,29 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	if (config.startEngine) {
+	// Always best-effort resolve the npm-installed engine binary and hand its
+	// path to the core. The core alone decides whether to actually spawn a local
+	// engine (its `should_manage_engine`, based on the endpoint + spawn mode), so
+	// JS must not duplicate that decision here. Only JS knows the npm
+	// `node_modules` layout, so it resolves the path; if no binary is available
+	// (remote-only install, unsupported platform, optional deps skipped), leave
+	// it unset and let the core report `engine.binary_unavailable` if it actually
+	// needs one.
+	try {
 		const { getEnginePath } = await loadEngineCli();
 		serveConfig.engineBinaryPath = getEnginePath();
-		serveConfig.engineHost = config.engineHost;
-		serveConfig.enginePort = config.enginePort;
+	} catch (error) {
+		// The npm-installed engine binary could not be resolved. The core still
+		// decides whether it needs to spawn a local engine; if it does, it will
+		// fail with engine.binary_unavailable (auto-download is off in the napi
+		// runtime). Warn so the cause is actionable.
+		logger().warn({
+			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+			error: stringifyError(error),
+		});
 	}
+	serveConfig.engineHost = config.engineHost;
+	serveConfig.enginePort = config.enginePort;
 	if (config.test?.enabled) {
 		serveConfig.inspectorTestToken =
 			getEnvUniversal("_RIVET_TEST_INSPECTOR_TOKEN") ?? "token";

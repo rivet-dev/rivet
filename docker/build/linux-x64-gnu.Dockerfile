@@ -39,6 +39,12 @@ RUN if [ "$BUILD_TARGET" = "engine" ] && [ "$BUILD_FRONTEND" = "true" ]; then \
         export SKIP_WASM_BUILD=1 && \
         pnpm install --ignore-scripts && \
         VITE_APP_API_URL="${VITE_APP_API_URL}" VITE_FEATURE_FLAGS="${VITE_FEATURE_FLAGS}" npx turbo build:engine -F @rivetkit/engine-frontend; \
+    elif [ "$BUILD_TARGET" = "rivetkit-napi" ]; then \
+        export NODE_OPTIONS="--max-old-space-size=8192" && \
+        export SKIP_NAPI_BUILD=1 && \
+        export SKIP_WASM_BUILD=1 && \
+        pnpm install --ignore-scripts && \
+        npx turbo build:inspector-ui -F @rivetkit/engine-frontend; \
     fi
 
 # Build binary.

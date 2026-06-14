@@ -47,15 +47,21 @@ const RUST_CRATES = [
 	"rivet-error",
 	"rivet-metrics",
 	"rivet-util-serde",
+	// rivet-envoy-protocol must precede rivet-depot-client, which pins it as an
+	// exact dependency. Publishing depot-client first makes cargo fail to
+	// resolve rivet-envoy-protocol because it is not yet on crates.io.
+	"rivet-envoy-protocol",
 	"rivet-depot-client-types",
 	"rivet-depot-client",
-	"rivet-envoy-protocol",
 	"rivetkit-shared-types",
 	"rivet-envoy-client",
 	"rivetkit-actor-persist",
 	"rivetkit-client-protocol",
 	"rivetkit-inspector-protocol",
 	"rivetkit-client",
+	// rivetkit-core has an optional dependency on rivetkit-engine-process, which
+	// cargo still requires to be resolvable on crates.io at publish time.
+	"rivetkit-engine-process",
 	"rivetkit-core",
 	"rivetkit",
 ] as const;
