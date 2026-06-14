@@ -37,7 +37,7 @@
 			const firstButton = tabsList.querySelector('[data-tab-trigger]');
 			const firstContent = contentContainer.querySelector('[data-tab-content]');
 			if (firstButton) {
-				firstButton.classList.add('border-b-primary', 'text-white');
+				firstButton.classList.add('is-tab-active');
 				firstButton.classList.remove('border-b-transparent', 'text-muted-foreground');
 			}
 			if (firstContent) {
@@ -129,7 +129,7 @@
 				'flex items-center gap-2.5 px-3 py-1.5 text-sm text-left w-full rounded-lg',
 				'transition-colors cursor-pointer',
 				isHidden ? 'opacity-40' : '',
-				id === firstVisibleId ? 'text-white bg-white/10' : 'text-zinc-500 hover:text-zinc-300 hover:bg-white/5',
+				id === firstVisibleId ? 'text-ink bg-ink/10' : 'text-ink-faint hover:text-ink hover:bg-ink/5',
 			].filter(Boolean).join(' ');
 			const iconEl = block.querySelector('[data-code-icon]');
 			if (iconEl) {
@@ -148,7 +148,7 @@
 			const contentWrapper = document.createElement('div');
 			contentWrapper.setAttribute('data-code-group-content', id);
 			contentWrapper.className = [
-				'h-full overflow-hidden rounded-xl border bg-neutral-950',
+				'h-full overflow-hidden rounded-xl border border-cream/10 bg-neutral-950',
 				id === firstVisibleId ? '' : 'hidden',
 			].filter(Boolean).join(' ');
 			contentWrapper.appendChild(clonedBlock);
@@ -284,10 +284,10 @@
 				triggers.forEach((trigger) => {
 					const isActive = trigger.getAttribute('data-tab-trigger') === tabTitle;
 					if (isActive) {
-						trigger.classList.add('border-b-primary', 'text-white');
+						trigger.classList.add('is-tab-active');
 						trigger.classList.remove('border-b-transparent', 'text-muted-foreground');
 					} else {
-						trigger.classList.remove('border-b-primary', 'text-white');
+						trigger.classList.remove('is-tab-active');
 						trigger.classList.add('border-b-transparent', 'text-muted-foreground');
 					}
 				});
@@ -322,11 +322,11 @@
 				triggers.forEach((trigger) => {
 					const isActive = trigger.getAttribute('data-code-group-trigger') === triggerId;
 					if (isActive) {
-						trigger.classList.add('text-white', 'bg-white/10');
-						trigger.classList.remove('text-zinc-500', 'hover:text-zinc-300', 'hover:bg-white/5');
+						trigger.classList.add('text-ink', 'bg-ink/10');
+						trigger.classList.remove('text-ink-faint', 'hover:text-ink', 'hover:bg-ink/5');
 					} else {
-						trigger.classList.remove('text-white', 'bg-white/10');
-						trigger.classList.add('text-zinc-500', 'hover:text-zinc-300', 'hover:bg-white/5');
+						trigger.classList.remove('text-ink', 'bg-ink/10');
+						trigger.classList.add('text-ink-faint', 'hover:text-ink', 'hover:bg-ink/5');
 					}
 				});
 

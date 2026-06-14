@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Database, Cpu, Workflow, Clock, Wifi, Zap, Bot, Users, Timer, Boxes, Radio, MessageSquare, ArrowRight } from 'lucide-react';
 import { codeToHtml } from 'shiki';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import heroTheme from '@/lib/agent-os-hero-code-theme';
 
 const RivetIcon = ({ className }: { className?: string }) => (
   <svg width="16" height="16" viewBox="0 0 176 173" className={className}>
@@ -52,7 +54,7 @@ const useHighlightedCode = (code: string) => {
 
     codeToHtml(code, {
       lang: 'typescript',
-      theme: 'ayu-dark',
+      theme: heroTheme,
     }).then((result) => {
       cache.current[code] = result;
       setHtml(result);
@@ -267,11 +269,11 @@ const HighlightedCode = ({ code, title }: { code: string; title: string }) => {
 
   return (
     <div>
-      <div className='px-4 py-2 border-b border-white/[0.12] text-xs text-zinc-500 font-mono'>
+      <div className='px-4 py-2 border-b border-zinc-200 text-xs text-zinc-500 font-mono'>
         {title}
       </div>
       {!html ? (
-        <pre className='p-4 font-mono text-xs md:text-sm leading-6 text-zinc-400 overflow-x-auto'>
+        <pre className='p-4 font-mono text-xs md:text-sm leading-6 text-zinc-600 overflow-x-auto'>
           <code>{code}</code>
         </pre>
       ) : (
@@ -284,54 +286,50 @@ const HighlightedCode = ({ code, title }: { code: string; title: string }) => {
   );
 };
 
-const UseCaseContent = ({ config }: { config: UseCaseConfig }) => {
-  return (
-    <div className='grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-10 items-start'>
-      {/* Left: Stacked code snippets */}
-      <div className='order-2 lg:order-1 flex flex-col gap-3'>
-        <div className='rounded-lg border border-white/[0.12] bg-white/[0.03] overflow-hidden'>
-          <HighlightedCode code={config.serverCode} title='backend.ts' />
-        </div>
-        <div className='rounded-lg border border-white/[0.12] bg-white/[0.03] overflow-hidden'>
-          <HighlightedCode code={config.clientCode} title='client.ts' />
-        </div>
-      </div>
+// Stacked code snippets that live inside the section's ink plate.
+const UseCaseCode = ({ config }: { config: UseCaseConfig }) => (
+  <div>
+    <HighlightedCode code={config.serverCode} title='backend.ts' />
+    <div className='border-t border-zinc-200'>
+      <HighlightedCode code={config.clientCode} title='client.ts' />
+    </div>
+  </div>
+);
 
-      {/* Right: Description + features */}
-      <div className='order-1 lg:order-2 flex flex-col gap-6'>
-        <div className='flex items-center gap-3'>
-          <RivetIcon className='text-zinc-500' />
-          <div className='flex items-center gap-2'>
-            <span className='text-sm font-medium uppercase tracking-wider text-white'>Rivet Actor</span>
-            <span className='text-sm font-medium uppercase tracking-wider text-zinc-500'>/ {config.title}</span>
-          </div>
-        </div>
-
-        <p className='text-sm leading-relaxed text-zinc-400'>
-          {config.description}
-        </p>
-
-        <div className='flex flex-col gap-3'>
-          {config.features.map((feature, idx) => {
-            const Icon = feature.icon;
-            return (
-              <a
-                key={idx}
-                href={feature.href}
-                className='group w-fit flex items-center gap-3 text-zinc-300 transition-colors duration-200 hover:text-[#FF4500]'
-              >
-                <Icon className='h-4 w-4 flex-shrink-0 text-zinc-500 transition-colors duration-200 group-hover:text-[#FF4500]' />
-                <span className='text-sm'>{feature.label}</span>
-                <span className='text-sm text-zinc-600 transition-colors duration-200 group-hover:text-[#FF4500]/80'>({feature.detail})</span>
-                <ArrowRight className='h-3.5 w-3.5 text-[#FF4500] opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0' />
-              </a>
-            );
-          })}
-        </div>
+// The porcelain caption column that sits beside the ink plate.
+const UseCaseDetails = ({ config }: { config: UseCaseConfig }) => (
+  <div className='flex flex-col gap-6'>
+    <div className='flex items-center gap-3'>
+      <RivetIcon className='text-olive' />
+      <div className='flex items-center gap-2'>
+        <span className='text-sm font-medium uppercase tracking-wider text-ink'>Rivet Actor</span>
+        <span className='text-sm font-medium uppercase tracking-wider text-ink-faint'>/ {config.title}</span>
       </div>
     </div>
-  );
-};
+
+    <p className='text-sm leading-relaxed text-ink-soft'>
+      {config.description}
+    </p>
+
+    <div className='flex flex-col gap-3'>
+      {config.features.map((feature, idx) => {
+        const Icon = feature.icon;
+        return (
+          <a
+            key={idx}
+            href={feature.href}
+            className='group w-fit flex items-center gap-3 text-ink-soft transition-colors duration-200 hover:text-pine'
+          >
+            <Icon className='h-4 w-4 flex-shrink-0 text-ink-faint transition-colors duration-200 group-hover:text-pine' />
+            <span className='text-sm'>{feature.label}</span>
+            <span className='text-sm text-ink-faint transition-colors duration-200 group-hover:text-pine/80'>({feature.detail})</span>
+            <ArrowRight className='h-3.5 w-3.5 text-pine opacity-0 -translate-x-1 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-0' />
+          </a>
+        );
+      })}
+    </div>
+  </div>
+);
 
 export const ProblemSection = () => {
   const [activeUseCase, setActiveUseCase] = useState<UseCaseKey>('AI Agent');
@@ -361,7 +359,7 @@ export const ProblemSection = () => {
   }, []);
 
   return (
-    <section id='problem' className='relative border-b border-white/10 px-4 lg:px-6 py-20 lg:py-32'>
+    <section id='problem' className='relative px-4 lg:px-6 py-16 md:py-32'>
       <div className='mx-auto w-full max-w-7xl'>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -370,76 +368,89 @@ export const ProblemSection = () => {
           transition={{ duration: 0.5 }}
           className='mb-12'
         >
-          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+          <h2 className={SECTION_H2_CLASS}>
             Actors in action.
           </h2>
-          <p className='text-base leading-relaxed text-zinc-500'>
+          <p className={SUBTITLE_CLASS}>
             One primitive that adapts to agents, workflows, collaboration, and more.
           </p>
         </motion.div>
 
-        {/* Segmented control */}
+        {/* Editorial split: the ink plate carries the tabs and code; the
+            porcelain caption column carries the description and features. */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.05 }}
-          className='mb-10'
+          className='grid grid-cols-1 items-start gap-10 lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] lg:gap-14'
         >
-          <div className='relative'>
-            <div
-              ref={tabsScrollRef}
-              className='flex w-full overflow-x-auto scrollbar-hide rounded-lg border border-white/[0.12] bg-white/[0.03] p-1 cursor-pointer'
-            >
-              {useCaseOrder.map((useCase, idx) => {
-                const Icon = useCaseIcons[useCase];
-                return (
-                  <div key={useCase} className='flex flex-none items-center sm:flex-1 sm:min-w-0'>
-                    {idx > 0 && (
-                      <div className='w-px self-stretch my-1.5 mx-1 bg-white/[0.12] flex-shrink-0' />
-                    )}
+          <div className='order-2 overflow-hidden rounded-xl border border-zinc-200 bg-zinc-50 lg:order-1'>
+            {/* File-tab strip */}
+            <div className='relative'>
+              <div
+                ref={tabsScrollRef}
+                className='flex w-full overflow-x-auto scrollbar-hide border-b border-zinc-200'
+              >
+                {useCaseOrder.map((useCase) => {
+                  const Icon = useCaseIcons[useCase];
+                  const active = activeUseCase === useCase;
+                  return (
                     <button
+                      key={useCase}
                       type="button"
                       onClick={() => setActiveUseCase(useCase)}
-                      className={`whitespace-nowrap rounded-md px-4 py-2.5 text-xs md:text-sm transition-all flex items-center justify-center gap-2 flex-none sm:flex-1 ${
-                        activeUseCase === useCase
-                          ? 'bg-[#FF4500]/15 text-[#FF4500] border border-[#FF4500]/20'
-                          : 'text-zinc-500 hover:text-zinc-300 border border-transparent'
+                      className={`-mb-px flex flex-none items-center justify-center gap-2 whitespace-nowrap border-b-2 px-4 py-3 font-mono text-xs transition-colors sm:flex-1 ${
+                        active
+                          ? 'border-pine text-ink'
+                          : 'border-transparent text-ink-soft hover:text-ink'
                       }`}
                     >
                       {Icon && <Icon className='h-3.5 w-3.5' />}
                       {useCaseTabLabels[useCase]}
                     </button>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
+              <div
+                className={`pointer-events-none absolute right-0 top-0 bottom-0 flex items-center pr-2 transition-opacity duration-200 ${
+                  showScrollHint ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
+                <div className='absolute inset-y-0 right-0 w-14 bg-gradient-to-l from-zinc-50 to-transparent' />
+                <span className='relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50'>
+                  <ArrowRight className='h-3.5 w-3.5 text-ink-soft' />
+                </span>
+              </div>
             </div>
-            <div
-              className={`pointer-events-none absolute right-0 top-0 bottom-0 flex items-center pr-2 transition-opacity duration-200 ${
-                showScrollHint ? 'opacity-100' : 'opacity-0'
-              }`}
-            >
-              <div className='absolute inset-y-1 right-0 w-14 rounded-r-lg bg-gradient-to-l from-black/45 to-transparent' />
-              <span className='relative inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/15 bg-black/50'>
-                <ArrowRight className='h-3.5 w-3.5 text-zinc-300' />
-              </span>
-            </div>
+
+            <AnimatePresence mode='wait'>
+              <motion.div
+                key={activeUseCase}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <UseCaseCode config={config} />
+              </motion.div>
+            </AnimatePresence>
+          </div>
+
+          <div className='order-1 lg:order-2'>
+            <AnimatePresence mode='wait'>
+              <motion.div
+                key={activeUseCase}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <UseCaseDetails config={config} />
+              </motion.div>
+            </AnimatePresence>
           </div>
         </motion.div>
-
-        <div>
-          <AnimatePresence mode='wait'>
-            <motion.div
-              key={activeUseCase}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-            >
-              <UseCaseContent config={config} />
-            </motion.div>
-          </AnimatePresence>
-        </div>
       </div>
     </section>
   );

@@ -101,7 +101,7 @@ export function CodeGroup({ children, className, stacked }: CodeGroupProps) {
 
 	return (
 		<div
-			className={cn("code-group group my-4 overflow-hidden rounded-xl", className)}
+			className={cn("code-group group my-4 overflow-hidden rounded-xl border border-cream/10", className)}
 			data-code-group-container
 			data-code-group-workspace
 		>
@@ -234,7 +234,7 @@ export const pre = ({
 		<div
 			className={cn(
 				"not-prose group/code relative group-[.code-group]:my-0 group-[[data-code-group-workspace]]:border-none group-[[data-code-group-workspace]]:overflow-visible",
-				flush ? "" : "my-4 overflow-hidden rounded-xl border"
+				flush ? "" : "my-4 overflow-hidden rounded-xl border border-cream/10"
 			)}
 			data-code-block
 			data-code-title={displayName}

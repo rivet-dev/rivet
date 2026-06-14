@@ -12,7 +12,7 @@ import { RedesignedCTA } from '@/components/marketing/sections/RedesignedCTA';
 import { ScrollObserver } from '@/components/ScrollObserver';
 
 // Import thinking images
-const imgThinker = { src: "https://assets.rivet.dev/website/images/thinking/thinker.jpg", width: 3140, height: 4000, format: "jpg" };
+const imgThinker = { src: "https://assets.rivet.dev/website/images/thinking/thinker-rodin-closeup.jpg", width: 2673, height: 3722, format: "jpg" };
 const imgLadyWriting = { src: "https://assets.rivet.dev/website/images/thinking/a_lady_writing_1962.10.1.jpg", width: 3596, height: 4096, format: "jpg" };
 const imgPortrait = { src: "https://assets.rivet.dev/website/images/thinking/portrait_of_a_man_possibly_jan_snoeck_1967.4.1.jpg", width: 3076, height: 4096, format: "jpg" };
 const imgSaintMark = { src: "https://assets.rivet.dev/website/images/thinking/saint_mark_2012.79.1.jpg", width: 2187, height: 2679, format: "jpg" };
@@ -87,7 +87,7 @@ const latestChangelogTitle = latest?.data.title ?? '';
 	keywords={["agentic infrastructure", "AI agents", "actors", "stateful", "workflows", "long-running processes", "on-prem", "air-gapped", "self-hosted", "agentOS", "durable execution", "VPC"]}
 >
 	<ScrollObserver client:load>
-		<div class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
+		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
 				<RedesignedHero latestChangelogTitle={latestChangelogTitle} thinkingImages={thinkingImages} client:load />
 				<ProductSplitSection client:visible />

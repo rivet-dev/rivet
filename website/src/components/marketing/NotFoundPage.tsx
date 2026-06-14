@@ -84,7 +84,7 @@ const BouncingPill = () => {
     <div ref={containerRef} className="absolute inset-0 overflow-hidden">
       <span
         ref={pillRef}
-        className="absolute inline-flex items-center gap-2 rounded-full bg-black/40 backdrop-blur-md border border-white/10 px-3 py-1.5 text-sm text-zinc-400 transition-colors duration-200"
+        className="absolute inline-flex items-center gap-2 rounded-full bg-paper/70 backdrop-blur-md border border-ink/15 px-3 py-1.5 text-sm text-ink-soft transition-colors duration-200"
         style={{
           left: `${position.x}%`,
           top: `${position.y}%`,
@@ -99,7 +99,7 @@ const BouncingPill = () => {
 
 export const NotFoundPage = ({ thinkingImage }: NotFoundPageProps) => {
   return (
-    <section className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6">
+    <section className="paper-grain depth-wash relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-6">
       <div className="flex flex-col items-center gap-8">
         {/* Thinking image */}
         <motion.div
@@ -108,13 +108,12 @@ export const NotFoundPage = ({ thinkingImage }: NotFoundPageProps) => {
           transition={{ duration: 0.6 }}
           className="relative w-[280px] h-[350px] sm:w-[320px] sm:h-[400px]"
         >
-          <div className="absolute inset-0 rounded-lg overflow-hidden shadow-2xl">
+          <div className="absolute inset-0 overflow-hidden border border-ink/15 bg-paper-mid p-2.5">
             <img
               src={thinkingImage}
               alt="Classical artwork depicting contemplation"
-              className="w-full h-full object-cover"
+              className="h-full w-full object-cover outline outline-1 outline-ink/10"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
           </div>
 
           {/* Bouncing 404 pill */}
@@ -127,7 +126,7 @@ export const NotFoundPage = ({ thinkingImage }: NotFoundPageProps) => {
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.5 }}
-          className="selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200"
+          className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85"
         >
           <ArrowLeft className="h-4 w-4" />
           Back to home

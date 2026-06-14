@@ -24,6 +24,10 @@ export const MEMORY_SHELL_MB = 22;   // memory-sleep.json       (23160422 / 1024
 
 // ── Sandbox baselines (external benchmarks) ──
 
+// Date the external sandbox baselines were last verified. Interpolated wherever
+// marketing copy cites the baselines so a refresh only touches this constant.
+export const BENCHMARK_DATE = 'March 30, 2026';
+
 // Coldstart baseline: E2B (used for cold start comparison only)
 export const SANDBOX_COLDSTART_PROVIDER = 'E2B';
 export const SANDBOX_COLDSTART_MS = { p50: 440, p95: 950, p99: 3150 };

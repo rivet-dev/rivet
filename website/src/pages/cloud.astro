@@ -69,9 +69,9 @@ const productSchema = {
 	<script type="application/ld+json" set:html={JSON.stringify(productSchema)} />
 	<FaqJsonLd items={cloudFaqs} />
 	<PricingPageClient client:load />
-	{/* Rendered statically outside the island so the FAQ content ships only in
-	    HTML and JSON-LD, not a third time in the island bundle. */}
-	<div class="bg-black font-sans text-zinc-300">
-		<FaqSection items={cloudFaqs} />
+	{/* Hydrated on scroll so the accordion animates; content is still SSR'd
+	    into the HTML (and JSON-LD) for crawlers. */}
+	<div class="paper-grain font-sans text-ink-soft">
+		<FaqSection items={cloudFaqs} theme="light" client:visible />
 	</div>
 </MarketingLayout>

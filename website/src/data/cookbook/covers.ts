@@ -8,6 +8,20 @@
 // transformOrigin zooms into a focal point; filter normalizes exposure so the
 // covers sit at an even darkness on the black page.
 
+// Documentary-style hover motion, tuned per artwork so the slow close-up
+// slides toward that painting's subject (a push onto a face, a descent through
+// the dollhouse rooms, a drift toward a light source) rather than in an
+// arbitrary direction. `x`/`y` are the layer translate at full zoom; by the
+// "to move the camera toward a region, translate the image opposite to it"
+// rule, a subject above center pans with positive y and one to the left with
+// positive x. Magnitudes stay under (scale - 1) / 2 so the frame never
+// reveals its backing.
+export interface CookbookKenBurns {
+	x: string;
+	y: string;
+	scale: number;
+}
+
 export interface CookbookCoverArt {
 	// Artwork title, artist, and date, kept for reference.
 	artwork: string;
@@ -18,15 +32,18 @@ export interface CookbookCoverArt {
 	transform?: string;
 	transformOrigin?: string;
 	filter?: string;
+	ken?: CookbookKenBurns;
 }
 
 export const cookbookCovers: Record<string, CookbookCoverArt> = {
 	"ai-agent": {
 		artwork: "The Thinker, Auguste Rodin, modeled 1880",
-		src: "https://assets.rivet.dev/website/images/thinking/thinker.jpg",
-		width: 3140,
-		height: 4000,
+		src: "https://assets.rivet.dev/website/images/thinking/thinker-rodin-closeup.jpg",
+		width: 2673,
+		height: 3722,
 		objectPosition: "50% 28%",
+		// Push up onto the bowed head and hand at the chin.
+		ken: { x: "0%", y: "3%", scale: 1.2 },
 	},
 	"ai-agent-workspace": {
 		artwork:
@@ -37,6 +54,8 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		transform: "scale(1.55)",
 		transformOrigin: "26% 74%",
 		filter: "brightness(1.18)",
+		// Drift into the glowing flask at lower-left.
+		ken: { x: "2%", y: "-2%", scale: 1.16 },
 	},
 	"chat-room": {
 		artwork: "Merry Company on a Terrace, Jan Steen, ca. 1670",
@@ -46,6 +65,8 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		transform: "scale(1.12)",
 		transformOrigin: "45% 42%",
 		filter: "brightness(0.95)",
+		// Lateral pan across the company on the terrace.
+		ken: { x: "-4%", y: "0%", scale: 1.16 },
 	},
 	"collaborative-text-editor": {
 		artwork: "Saint Matthew Writing His Gospel, Carlo Dolci, 1640s",
@@ -54,6 +75,8 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		height: 2897,
 		objectPosition: "45% 22%",
 		transform: "scale(1.12)",
+		// Settle down from the face onto the page being written.
+		ken: { x: "0%", y: "-3%", scale: 1.18 },
 	},
 	"cron-jobs": {
 		artwork: "The November Meteors, Etienne Leopold Trouvelot, 1881-82",
@@ -62,6 +85,8 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		height: 2560,
 		objectPosition: "50% 42%",
 		transform: "scale(1.22)",
+		// Slow diagonal drift across the night sky, like time passing.
+		ken: { x: "3%", y: "3%", scale: 1.16 },
 	},
 	"live-cursors": {
 		artwork: "Curiosity, Gerard ter Borch the Younger, ca. 1660-62",
@@ -69,6 +94,8 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		width: 2935,
 		height: 3638,
 		objectPosition: "50% 30%",
+		// Push in on the peering woman's face.
+		ken: { x: "0%", y: "3%", scale: 1.2 },
 	},
 	"multiplayer-game": {
 		artwork: "The Card Players, Paul Cezanne, 1890-92",
@@ -76,6 +103,8 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		width: 3909,
 		height: 3112,
 		objectPosition: "50% 35%",
+		// Pan across the table between the two players.
+		ken: { x: "-4%", y: "0%", scale: 1.16 },
 	},
 	"per-tenant-database": {
 		artwork: "Dolls' house of Petronella Oortman, c. 1686-1710",
@@ -84,5 +113,18 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		height: 3054,
 		objectPosition: "50% 40%",
 		filter: "brightness(0.95)",
+		// Descend through the dollhouse rooms, tenant by tenant.
+		ken: { x: "0%", y: "-4%", scale: 1.18 },
+	},
+	"vpc-air-gapped": {
+		artwork: "A Scholar in His Study ('Faust'), Rembrandt, ca. 1652",
+		src: "https://assets.rivet.dev/website/images/thinking/thinker6.jpg",
+		width: 2523,
+		height: 3347,
+		objectPosition: "50% 38%",
+		transform: "scale(1.12)",
+		filter: "brightness(0.95)",
+		// Drift toward the radiant disc at the window, upper-right.
+		ken: { x: "-3%", y: "2%", scale: 1.16 },
 	},
 };
