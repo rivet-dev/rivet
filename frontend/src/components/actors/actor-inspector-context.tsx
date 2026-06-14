@@ -190,6 +190,14 @@ export function isVersionAtLeast(
 	if (!parsed || !minParsed) {
 		return false;
 	}
+	// `0.0.0` is the dev/preview placeholder (e.g. `0.0.0-<branch>.<sha>` from
+	// pkg.pr.new or `0.0.0-main.<sha>` snapshots). These are built from the
+	// latest source, so treat them as newer than any release gate. Released
+	// prereleases like `2.3.0-rc.1` keep comparing by major.minor.patch
+	// (`parseSemver` already drops the prerelease suffix), so they pass too.
+	if (parsed.major === 0 && parsed.minor === 0 && parsed.patch === 0) {
+		return true;
+	}
 	return compareSemver(parsed, minParsed) >= 0;
 }
 
