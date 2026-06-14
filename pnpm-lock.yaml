@@ -3588,6 +3588,9 @@ importers:
       '@hono/node-server':
         specifier: ^1.14.1
         version: 1.19.9(hono@4.11.9)
+      '@rivetkit/engine-api-full':
+        specifier: workspace:*
+        version: link:../../../engine/sdks/typescript/api-full
       '@rivetkit/react':
         specifier: workspace:*
         version: link:../../../rivetkit-typescript/packages/react

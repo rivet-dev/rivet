@@ -1,30 +1,81 @@
 'use client';
 
-import { Package, Server, Check } from 'lucide-react';
+import { useState } from 'react';
+import { Package, Server, Check, Copy } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { deployOptions } from '@rivetkit/shared-data';
 import imgLogo from '@/images/rivet-logos/icon-white.svg';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { GLOW_PILL_CLASS, handleGlowPillMouseMove } from '../glowPill';
+
+const DEPLOY_PILL_CLASS =
+  `${GLOW_PILL_CLASS} inline-flex items-center rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft transition-colors hover:border-ink/25 hover:text-ink`;
+
+// Compact terminal command block, matching the command blocks on the cookbook
+// pages: flat ink with a hairline border, monospace, and an absolute copy
+// button. Commands stay on one line and scroll horizontally rather than wrap.
+const COMMAND_BLOCK_CLASS =
+  'selection-paper relative rounded-md border border-ink/20 bg-ink p-3 pr-11 font-mono text-[11px] leading-relaxed text-cream/85';
+
+const CARD_CLASS = 'relative flex h-full flex-col border border-ink/10 bg-white/55 p-6 md:p-8';
+const CARD_TITLE_CLASS = 'text-base font-medium tracking-tight text-ink';
+const BUTTON_BASE =
+  'inline-flex h-10 w-full items-center justify-center gap-2 whitespace-nowrap rounded-md px-4 text-sm font-medium transition-colors';
+const GHOST_BUTTON_CLASS = `${BUTTON_BASE} border border-ink/15 text-ink-soft hover:border-ink/40 hover:text-ink`;
+const WHITE_BUTTON_CLASS = `${BUTTON_BASE} border border-ink/15 bg-white text-ink hover:border-ink/30`;
+
+// Terminal command block. Mirrors the cookbook command-block markup: a
+// horizontally-scrollable single-line command with an absolute copy button.
+const TerminalCommand = ({ command }: { command: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy command:', err);
+    }
+  };
+
+  return (
+    <div className={COMMAND_BLOCK_CLASS}>
+      <div className='scrollbar-hide overflow-x-auto'>
+        <code className='select-all whitespace-nowrap'>{command}</code>
+      </div>
+      <button
+        type='button'
+        onClick={handleCopy}
+        aria-label={copied ? 'Copied' : 'Copy command'}
+        className='absolute right-1.5 top-1.5 rounded p-1.5 text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream'
+      >
+        {copied ? <Check className='h-4 w-4 text-sage' /> : <Copy className='h-4 w-4' />}
+      </button>
+    </div>
+  );
+};
 
 export const HostingSection = () => (
-  <section className='border-t border-white/10 py-16 md:py-48'>
+  <section className='border-t border-ink/10 py-16 md:py-32'>
     <div className='mx-auto max-w-7xl px-6'>
       <div className='mb-12'>
-        <motion.h2
+        <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5 }}
-          className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'
         >
-          Start local. Scale to millions.
-        </motion.h2>
+          <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>Start local. Scale to millions.</h2>
+        </motion.div>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className='max-w-xl text-base leading-relaxed text-zinc-500'
+          className={`max-w-xl ${SUBTITLE_CLASS}`}
         >
-          RivetKit is a library. Connect it to Rivet Cloud or self-host when you need scaling, fault tolerance, and observability.
+          A library in development, a platform in production. Your backend keeps deploying wherever it already does — Rivet connects to it.
         </motion.p>
       </div>
 
@@ -33,87 +84,83 @@ export const HostingSection = () => (
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ duration: 0.5 }}
-        className='grid grid-cols-1 gap-8 md:grid-cols-3'
+        className='grid grid-cols-1 gap-6 md:grid-cols-3 md:items-stretch'
       >
         {/* Card 1: Just a Library */}
-        <div className='flex flex-col border-t border-white/10 pt-6'>
-          <div className='mb-3 text-zinc-500'>
-            <Package className='h-4 w-4' />
+        <div className={CARD_CLASS}>
+          <div className='mb-3 flex h-6 items-center gap-2.5'>
+            <Package className='h-4 w-4 text-olive' />
+            <h3 className={CARD_TITLE_CLASS}>Just a Library</h3>
           </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Just a Library</h3>
-          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
+          <p className='text-sm leading-relaxed text-ink-soft'>
             Install a package and run locally. No servers, no infrastructure. Actors run in your process during development.
           </p>
-          <div className='mb-6 font-mono text-xs text-zinc-500'>
-            <div className='flex gap-2'>
-              <span className='select-none text-zinc-600'>$</span>
-              <span>npm install rivetkit</span>
-            </div>
-          </div>
-          <div className='mt-auto'>
-            <a
-              href='/docs/actors/quickstart'
-              className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
-            >
+          <div className='flex-1' />
+          <div className='mt-6 border-t border-ink/10' />
+          <div className='flex flex-col gap-4 pt-6'>
+            <TerminalCommand command='npm install rivetkit' />
+            <a href='/docs/actors/quickstart' className={GHOST_BUTTON_CLASS}>
               Get Started
             </a>
           </div>
         </div>
 
-        {/* Card 2: Self-Host */}
-        <div className='flex flex-col border-t border-white/10 pt-6'>
-          <div className='mb-3 text-zinc-500'>
-            <Server className='h-4 w-4' />
+        {/* Card 2: Rivet Cloud (primary) */}
+        <div className={`${CARD_CLASS} border-ink/20`}>
+          <div className='mb-3 flex h-6 items-center gap-2.5'>
+            <span className='flex h-4 w-4 items-center justify-center'>
+              <img className='h-4 w-4' src={imgLogo.src} alt='Rivet' />
+            </span>
+            <h3 className={CARD_TITLE_CLASS}>Rivet Cloud</h3>
           </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Self-Host</h3>
-          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
-            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB (enterprise). Full dashboard included.
+          <p className='text-sm leading-relaxed text-ink-soft'>
+            Fully managed Actors and agentOS on a global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you deploy.
           </p>
-          <div className='mb-6 font-mono text-xs text-zinc-500'>
-            <div className='flex gap-2'>
-              <span className='select-none text-zinc-600'>$</span>
-              <span>docker run -p 6420:6420 rivetdev/engine</span>
-            </div>
-          </div>
-          <div className='mt-auto'>
-            <a
-              href='/docs/self-hosting'
-              className='inline-flex items-center justify-center whitespace-nowrap rounded-md border border-white/10 px-4 py-2 text-sm text-zinc-300 transition-colors hover:border-white/20 hover:text-white'
-            >
-              View Self-Hosting Docs
-            </a>
-          </div>
+          <div className='flex-1' />
+          <a
+            href='https://dashboard.rivet.dev'
+            target='_blank'
+            rel='noopener noreferrer'
+            className={WHITE_BUTTON_CLASS}
+          >
+            Sign Up
+          </a>
         </div>
 
-        {/* Card 3: Rivet Cloud */}
-        <div className='flex flex-col border-t border-white/10 pt-6'>
-          <div className='mb-3'>
-            <img className='h-5 w-5 opacity-50' src={imgLogo.src} alt='Rivet' />
+        {/* Card 3: Self-Host */}
+        <div className={CARD_CLASS}>
+          <div className='mb-3 flex h-6 items-center gap-2.5'>
+            <Server className='h-4 w-4 text-olive' />
+            <h3 className={CARD_TITLE_CLASS}>Self-Host</h3>
           </div>
-          <h3 className='mb-2 text-base font-normal text-white'>Rivet Cloud</h3>
-          <p className='mb-6 text-sm leading-relaxed text-zinc-500'>
-            Fully managed Actors and agentOS. Global edge network. Connects to your existing cloud — Vercel, Railway, AWS, wherever you already deploy.
+          <p className='text-sm leading-relaxed text-ink-soft'>
+            Single Rust binary or Docker container. Works with Postgres, file system, or FoundationDB (enterprise). Full dashboard included.
           </p>
-          <ul className='mb-6 space-y-1'>
-            {['Global Edge Network', 'Scales Seamlessly', 'Connects To Your Cloud'].map(item => (
-              <li key={item} className='flex items-center gap-2 text-xs text-zinc-500'>
-                <Check className='h-3 w-3' /> {item}
-              </li>
-            ))}
-          </ul>
-          <div className='mt-auto'>
-            <a
-              href='https://dashboard.rivet.dev'
-              target='_blank'
-              rel='noopener noreferrer'
-              className='selection-dark inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200'
-            >
-              Sign Up
+          <div className='flex-1' />
+          <div className='mt-6 border-t border-ink/10' />
+          <div className='flex flex-col gap-4 pt-6'>
+            <TerminalCommand command='docker run -p 6420:6420 rivetdev/engine' />
+            <a href='/docs/self-hosting' className={GHOST_BUTTON_CLASS}>
+              Self-Hosting Docs
             </a>
           </div>
         </div>
       </motion.div>
 
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        transition={{ duration: 0.5, delay: 0.1 }}
+        className='mt-10 flex flex-wrap items-center gap-x-2 gap-y-2 border-t border-ink/10 pt-6'
+      >
+        <span className='mr-3 font-mono text-[11px] uppercase tracking-[0.16em] text-ink-faint'>Your backend deploys to</span>
+        {deployOptions.map(({ displayName, shortTitle, href }) => (
+          <a key={displayName} href={href} onMouseMove={handleGlowPillMouseMove} className={DEPLOY_PILL_CLASS}>
+            {shortTitle || displayName}
+          </a>
+        ))}
+      </motion.div>
     </div>
   </section>
 );

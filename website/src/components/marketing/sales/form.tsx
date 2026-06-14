@@ -47,17 +47,17 @@ export function SalesForm() {
 	if (isSubmitted) {
 		return (
 			<div className="mt-8 text-center">
-				<p className="text-2xl font-normal text-white mb-4">
+				<p className="text-2xl font-medium text-ink mb-4">
 					Thank you for your interest!
 				</p>
-				<p className="text-zinc-400">
+				<p className="text-ink-soft">
 					We will get back to you within the next few days. In the meantime, feel
 					free to explore our{" "}
-					<a href="/docs" className="text-white hover:text-zinc-300 underline underline-offset-2">
+					<a href="/docs" className="text-pine hover:text-ink underline underline-offset-2">
 						documentation
 					</a>{" "}
 					or{" "}
-					<a href="/changelog" className="text-white hover:text-zinc-300 underline underline-offset-2">
+					<a href="/changelog" className="text-pine hover:text-ink underline underline-offset-2">
 						changelog
 					</a>{" "}
 					for more information.
@@ -66,8 +66,8 @@ export function SalesForm() {
 		);
 	}
 
-	const inputClasses = "block w-full rounded-md border border-white/10 bg-black px-3 py-2 text-sm text-white placeholder:text-zinc-600 focus:border-white/20 focus:outline-none transition-colors";
-	const labelClasses = "block text-sm font-medium text-zinc-400 mb-1.5";
+	const inputClasses = "block w-full rounded-md border border-ink/15 bg-white/55 px-3 py-2 text-sm text-ink placeholder:text-ink-faint focus:border-pine focus:outline-none transition-colors";
+	const labelClasses = "block text-sm font-medium text-ink-soft mb-1.5";
 
 	return (
 		<form
@@ -140,7 +140,7 @@ export function SalesForm() {
 			<div className="mt-6 text-center">
 				<button
 					type="submit"
-					className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed"
+					className="inline-flex items-center justify-center gap-2 rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent disabled:opacity-50 disabled:cursor-not-allowed"
 					disabled={isSubmitting}
 				>
 					{isSubmitting ? "Submitting..." : "Let's talk"}

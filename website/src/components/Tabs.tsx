@@ -40,7 +40,7 @@ export const Tabs = ({ children }: TabsProps) => {
 			<div className="overflow-x-auto">
 				<div
 					data-tabs-list
-					className="inline-flex text-muted-foreground border-b w-full"
+					className="inline-flex text-ink-soft border-b border-ink/10 w-full"
 				>
 				</div>
 			</div>

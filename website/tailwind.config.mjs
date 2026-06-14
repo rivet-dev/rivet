@@ -32,7 +32,22 @@ export default {
 				'text-primary': '#FAFAFA',
 				'text-secondary': '#A0A0A0',
 				'border': '#252525',
-				'accent': '#FF4500',
+				'accent': '#CB5A33',
+				// Porcelain editorial palette. Marketing pages are light: a cool
+				// porcelain field with warm ink, warm mats, and forest green
+				// structure. Orange remains the single CTA spark per page.
+				'paper': '#EFEFEF',
+				'paper-deep': '#DCDCDE',
+				'paper-mid': '#E3E3E5',
+				'mat': '#EFE9DC',
+				'ink': '#1B1916',
+				'ink-soft': '#56524A',
+				'ink-faint': '#8A8478',
+				'cream': '#F4F1E7',
+				'pine': '#2E4034',
+				'olive': '#5C6B4F',
+				'sage': '#93A286',
+				'accent-deep': '#AB451F',
 				'code-keyword': '#c084fc',
 				'code-function': '#60a5fa',
 				'code-string': '#4ade80',
@@ -51,6 +66,7 @@ export default {
 				'hero-visual': 'hero-p 0.8s ease-out 1s forwards',
 				'infinite-scroll': 'infinite-scroll 25s linear infinite',
 				'pulse-slow': 'pulse-slow 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+				'spin-slow': 'spin 120s linear infinite',
 			},
 			keyframes: {
 				'fade-in-up': {
@@ -80,6 +96,25 @@ export default {
 			typography: ({ theme }) => ({
 				DEFAULT: {
 					css: {
+						// Light (non-inverted) prose palette for porcelain
+						// surfaces. Dark shells use prose-invert, which reads
+						// the --tw-prose-invert-* values below instead.
+						"--tw-prose-body": "#56524A",
+						"--tw-prose-headings": "#1B1916",
+						"--tw-prose-lead": "#56524A",
+						"--tw-prose-links": "#2E4034",
+						"--tw-prose-bold": "#1B1916",
+						"--tw-prose-counters": "#8A8478",
+						"--tw-prose-bullets": "#8A8478",
+						"--tw-prose-hr": "rgba(27, 25, 22, 0.1)",
+						"--tw-prose-quotes": "#56524A",
+						"--tw-prose-quote-borders": "#2E4034",
+						"--tw-prose-captions": "#8A8478",
+						"--tw-prose-code": "#1B1916",
+						"--tw-prose-pre-code": "#F4F1E7",
+						"--tw-prose-pre-bg": "#1B1916",
+						"--tw-prose-th-borders": "rgba(27, 25, 22, 0.15)",
+						"--tw-prose-td-borders": "rgba(27, 25, 22, 0.1)",
 						"--tw-prose-invert-body":
 							"hsl(var(--muted-foreground))",
 						"--tw-prose-invert-headings": "hsl(var(--foreground))",

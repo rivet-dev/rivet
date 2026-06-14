@@ -2,6 +2,7 @@
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { Icon } from '@rivet-gg/icons';
 import { registry } from '@/data/registry';
+import { InkChip } from '@/components/marketing/editorial/InkPanel';
 
 export function getStaticPaths() {
 	return registry.map((entry) => ({
@@ -19,13 +20,6 @@ const TYPE_LABELS: Record<string, string> = {
 	"sandbox-extension": "Sandbox Mounting",
 };
 
-const TYPE_COLORS: Record<string, string> = {
-	"file-system": "bg-blue-50 text-blue-600 border-blue-200",
-	tool: "bg-emerald-50 text-emerald-600 border-emerald-200",
-	agent: "bg-orange-50 text-orange-600 border-orange-200",
-	"sandbox-extension": "bg-purple-50 text-purple-600 border-purple-200",
-};
-
 const isComingSoon = entry.status === "coming-soon";
 const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 ---
@@ -35,17 +29,17 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 	description={entry.description}
 	canonicalUrl={`https://rivet.dev/agent-os/registry/${entry.slug}/`}
 >
-	<main class="min-h-screen w-full overflow-x-hidden bg-white selection:bg-zinc-200 selection:text-zinc-900">
+	<main class="paper-grain min-h-screen w-full overflow-x-hidden font-sans text-ink-soft">
 		<div class="relative isolate overflow-hidden pt-40">
 			<div class="mx-auto max-w-3xl px-6 lg:px-8">
 				<a
 					href="/agent-os/registry"
-					class="inline-flex items-center text-sm text-zinc-400 hover:text-zinc-900 mb-8 transition-colors no-underline"
+					class="mb-8 inline-flex items-center text-sm text-ink-faint no-underline transition-colors hover:text-ink"
 				>
 					&larr; Back to Registry
 				</a>
 
-				<div class="flex items-center gap-4 mb-4">
+				<div class="mb-4 flex items-center gap-4">
 					{entry.image && (
 						<img
 							src={entry.image}
@@ -56,55 +50,51 @@ const installCmd = !isComingSoon ? `npm install ${entry.package}` : null;
 						/>
 					)}
 					{entry.icon && (
-						<Icon icon={entry.icon} className="text-zinc-900 w-10 h-10" />
+						<Icon icon={entry.icon} className="h-10 w-10 text-olive" />
 					)}
-					<h1 class="text-5xl font-700 text-zinc-900 leading-[1.1] tracking-normal">
+					<h1 class="text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink md:text-5xl">
 						{entry.title}
 					</h1>
 					{isComingSoon && (
-						<span class="text-xs px-2.5 py-1 rounded-full border border-zinc-200 text-zinc-400">
+						<span class="rounded-full border border-ink/15 px-2.5 py-1 text-xs text-ink-faint">
 							Coming Soon
 						</span>
 					)}
 				</div>
 
-				<div class="flex gap-2 mt-4">
+				<div class="mt-4 flex gap-2">
 					{entry.types.map((type: string) => (
 						<span
-							class={`text-xs px-2 py-0.5 rounded-full border ${TYPE_COLORS[type]}`}
+							class="rounded-full border border-pine/30 bg-pine/5 px-2 py-0.5 font-mono text-[11px] uppercase tracking-[0.12em] text-pine"
 						>
 							{TYPE_LABELS[type]}
 						</span>
 					))}
 				</div>
 
-				<p class="mt-6 text-lg text-zinc-500 leading-relaxed">
+				<p class="mt-6 text-lg leading-relaxed text-ink-soft">
 					{entry.description}
 				</p>
 			</div>
 		</div>
 
-		<div class="mx-auto max-w-3xl px-6 lg:px-8 pt-10 pb-24">
+		<div class="mx-auto max-w-3xl px-6 pt-10 pb-24 lg:px-8">
 			{isComingSoon ? (
-				<div class="rounded-xl border border-zinc-200 bg-zinc-50 p-8 text-center">
-					<p class="text-zinc-400 text-lg">This integration is coming soon.</p>
+				<div class="border border-ink/10 bg-white/55 p-8 text-center">
+					<p class="text-lg text-ink-faint">This integration is coming soon.</p>
 				</div>
 			) : (
 				<>
 					<section>
-						<h2 class="text-xl font-600 text-zinc-900 mb-3">Install</h2>
-						<div class="flex items-center gap-2 bg-zinc-50 rounded-lg border border-zinc-200 px-4 py-3 mb-6">
-							<code class="text-sm text-zinc-700 flex-1 font-mono">
-								{installCmd}
-							</code>
-						</div>
+						<h2 class="mb-3 text-xl font-medium text-ink">Install</h2>
+						<InkChip command={installCmd!} className="mb-6" />
 					</section>
 
 					<a
 						href={`https://www.npmjs.com/package/${entry.package}`}
 						target="_blank"
 						rel="noopener noreferrer"
-						class="inline-flex items-center justify-center rounded-lg bg-zinc-100 hover:bg-zinc-200 border border-zinc-200 text-zinc-700 text-sm font-medium px-4 py-2 transition-colors no-underline"
+						class="inline-flex items-center justify-center rounded-lg border border-ink/20 px-4 py-2 text-sm font-medium text-ink-soft no-underline transition-colors hover:border-ink/40 hover:text-ink"
 					>
 						View on npm
 					</a>

@@ -25,8 +25,8 @@ export function Card({
 	const content = (
 		<div
 			className={clsx(
-				"rounded-xl bg-neutral-950 border border-white/20 shadow-sm transition-all duration-200 relative overflow-hidden flex flex-col w-full h-full",
-				href && "group-hover:border-[white]/40 cursor-pointer",
+				"rounded-xl bg-white/55 border border-ink/15 transition-all duration-200 relative overflow-hidden flex flex-col w-full h-full",
+				href && "group-hover:border-ink/30 cursor-pointer",
 				className,
 			)}
 		>
@@ -34,7 +34,7 @@ export function Card({
 				<div className={clsx("px-8 mt-6", !hasBody && "pb-6")}>
 					<div
 						className={clsx(
-							"flex items-center justify-between text-white text-base",
+							"flex items-center justify-between text-ink text-base",
 							hasBody && "mb-4",
 						)}
 					>
@@ -42,7 +42,7 @@ export function Card({
 							{icon && <Icon icon={icon} />}
 							{title && <h3 className="font-medium">{title}</h3>}
 							{badge && (
-								<span className="text-xs font-medium px-2 py-0.5 rounded-full bg-white/10 text-white/60">
+								<span className="text-xs font-medium px-2 py-0.5 rounded-full bg-ink/[0.06] text-ink-soft">
 									{badge}
 								</span>
 							)}
@@ -50,7 +50,7 @@ export function Card({
 						{href && (
 							<Icon
 								icon={faArrowRight}
-								className="text-sm text-white/40 group-hover:text-white transition-all duration-200 group-hover:translate-x-1"
+								className="text-sm text-ink-faint group-hover:text-ink transition-all duration-200 group-hover:translate-x-1"
 							/>
 						)}
 					</div>

@@ -1,6 +1,9 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useEffect, useRef } from 'react';
+import { InkPanel } from '@/components/marketing/editorial/InkPanel';
+import { HERO_H1_CLASS, SECTION_H2_CLASS, CAPTION_CLASS } from '@/components/marketing/typography';
 
 // --- Timeline Era ---
 interface EraProps {
@@ -23,25 +26,25 @@ const Era = ({ year, title, lead, body, children, future, delay = 0 }: EraProps)
 	>
 		<div className='flex items-start gap-4 md:flex-col md:items-center'>
 			<span
-				className={`font-mono text-sm font-medium ${future ? 'text-zinc-900' : 'text-zinc-500'}`}
+				className={`font-mono text-sm font-medium ${future ? 'text-pine' : 'text-ink-faint'}`}
 			>
 				{year}
 			</span>
 			<div
-				className={`hidden h-full w-px md:block ${future ? 'bg-zinc-900' : 'bg-zinc-200'}`}
+				className={`hidden h-full w-px md:block ${future ? 'bg-pine/60' : 'bg-pine/25'}`}
 			/>
 		</div>
 		<div className='pb-16'>
 			<h2
-				className={`mb-4 tracking-tight text-zinc-900 ${future ? 'text-3xl font-normal md:text-4xl' : 'text-2xl font-normal md:text-3xl'}`}
+				className={`mb-4 font-medium tracking-[-0.015em] text-ink ${future ? 'text-3xl md:text-4xl' : 'text-2xl md:text-3xl'}`}
 			>
 				{title}
 			</h2>
-			<p className='mb-4 text-base leading-relaxed text-zinc-500 md:text-lg'>
+			<p className='mb-4 text-base leading-relaxed text-ink-soft md:text-lg'>
 				{lead}
 			</p>
 			{body && (
-				<p className='mb-6 text-sm leading-relaxed text-zinc-500 md:text-base'>
+				<p className='mb-6 text-sm leading-relaxed text-ink-soft md:text-base'>
 					{body}
 				</p>
 			)}
@@ -50,18 +53,69 @@ const Era = ({ year, title, lead, body, children, future, delay = 0 }: EraProps)
 	</motion.div>
 );
 
+// Archival exhibit with a printed catalog caption that keeps the
+// attribution link.
+const ArchivalPlate = ({
+	src,
+	alt,
+	caption,
+	className,
+}: {
+	src: string;
+	alt: string;
+	caption: React.ReactNode;
+	className?: string;
+}) => (
+	<figure className={`max-w-2xl ${className ?? ''}`}>
+		<img src={src} alt={alt} className='block h-auto w-full' loading='lazy' />
+		<figcaption className={`${CAPTION_CLASS} mt-3 [&_a]:underline [&_a:hover]:text-ink-soft`}>
+			{caption}
+		</figcaption>
+	</figure>
+);
+
 const PrincipleChip = ({ label, text }: { label: string; text: string }) => (
-	<div className='border-t border-zinc-200 pt-4'>
-		<span className='mb-2 block font-mono text-[11px] font-medium uppercase tracking-wider text-zinc-500'>
+	<div className='border border-ink/10 bg-white/55 p-5'>
+		<span className='mb-2 block font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>
 			{label}
 		</span>
-		<p className='text-sm leading-relaxed text-zinc-500'>{text}</p>
+		<p className='text-sm leading-relaxed text-ink-soft'>{text}</p>
 	</div>
 );
 
 export default function TimelinePage() {
+	const timelineRef = useRef<HTMLDivElement>(null);
+	const railRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		let frame = 0;
+		const update = () => {
+			frame = 0;
+			const container = timelineRef.current;
+			const rail = railRef.current;
+			if (!container || !rail) return;
+			const rect = container.getBoundingClientRect();
+			// The rail starts filling once the timeline reaches the lower part
+			// of the viewport and is full once its end passes that line.
+			const line = window.innerHeight * 0.6;
+			const progress = Math.min(1, Math.max(0, (line - rect.top) / rect.height));
+			rail.style.transform = `scaleY(${progress})`;
+		};
+		const onScroll = () => {
+			if (!frame) frame = requestAnimationFrame(update);
+		};
+		update();
+		window.addEventListener('scroll', onScroll, { passive: true });
+		window.addEventListener('resize', onScroll);
+		return () => {
+			if (frame) cancelAnimationFrame(frame);
+			window.removeEventListener('scroll', onScroll);
+			window.removeEventListener('resize', onScroll);
+		};
+	}, []);
+
 	return (
-		<div className='min-h-screen overflow-x-hidden bg-white font-sans text-zinc-600 selection:bg-zinc-200 selection:text-zinc-900'>
+		<div className='paper-grain min-h-screen overflow-x-hidden font-sans text-ink-soft'>
 			<main>
 				{/* Hero */}
 				<section className='relative flex min-h-[60svh] flex-col items-center justify-center px-6 pt-32'>
@@ -70,7 +124,7 @@ export default function TimelinePage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-4xl font-normal leading-[1.1] tracking-tight text-zinc-900 md:text-6xl'
+							className={`mb-4 ${HERO_H1_CLASS}`}
 						>
 							From Unix to Agents
 						</motion.h1>
@@ -78,7 +132,7 @@ export default function TimelinePage() {
 							initial={{ opacity: 0, y: 20 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.5, delay: 0.05 }}
-							className='text-lg text-zinc-500 md:text-xl'
+							className='text-lg text-ink-soft md:text-xl'
 						>
 							The operating system is being reinvented. Again.
 						</motion.p>
@@ -86,33 +140,39 @@ export default function TimelinePage() {
 				</section>
 
 				{/* Timeline */}
-				<section className='border-t border-zinc-200 py-16 md:py-24'>
-					<div className='mx-auto max-w-7xl px-6'>
+				<section className='border-t border-ink/10 py-16 md:py-32'>
+					<div ref={timelineRef} className='relative mx-auto max-w-7xl px-6'>
+							{/* Scroll-linked rail that draws down the timeline as you read */}
+							<div className='pointer-events-none absolute bottom-0 left-[73px] top-0 hidden w-px bg-pine/15 md:block'>
+								<div
+									ref={railRef}
+									className='h-full w-full origin-top bg-pine transition-transform duration-150 ease-out'
+									style={{ transform: 'scaleY(0)' }}
+								/>
+							</div>
 						<Era
 							year='1969'
 							title='The Unix Foundation'
 							lead='Before Unix, every computer spoke a different language. Programs written for one machine couldn&apos;t run on another. Computing was fragmented, expensive, and inaccessible.'
 							body='Unix changed everything. It introduced a radical idea: a portable operating system with a universal interface. Files, processes, pipes, permissions. Simple primitives that composed into infinite complexity.'
 						>
-							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
-								<img
-									src='https://assets.rivet.dev/website/public/images/agent-os/ken-thompson-dennis-ritchie-1973.jpg'
-									alt='Ken Thompson and Dennis Ritchie, creators of Unix, 1973'
-									className='w-full object-cover opacity-90'
-									loading='lazy'
-								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
-									Ken Thompson and Dennis Ritchie, 1973.{' '}
-									<a
-										href='https://commons.wikimedia.org/w/index.php?curid=31308'
-										className='underline hover:text-zinc-600'
-										target='_blank'
-										rel='noopener noreferrer'
-									>
-										Public Domain
-									</a>
-								</p>
-							</div>
+							<ArchivalPlate
+								src='https://assets.rivet.dev/website/public/images/agent-os/ken-thompson-dennis-ritchie-1973.jpg'
+								alt='Ken Thompson and Dennis Ritchie, creators of Unix, 1973'
+								className='mb-6'
+								caption={
+									<>
+										Ken Thompson and Dennis Ritchie, 1973.{' '}
+										<a
+											href='https://commons.wikimedia.org/w/index.php?curid=31308'
+											target='_blank'
+											rel='noopener noreferrer'
+										>
+											Public Domain
+										</a>
+									</>
+								}
+							/>
 							<div className='grid grid-cols-1 gap-3 sm:grid-cols-3'>
 								<PrincipleChip
 									label='Philosophy'
@@ -136,25 +196,23 @@ export default function TimelinePage() {
 							body='This openness sparked an explosion of innovation. The kernel became the backbone of servers, phones, cars, and spacecraft. Open source became the default way to build software.'
 							delay={0.1}
 						>
-							<div className='mt-4 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
-								<img
-									src='https://assets.rivet.dev/website/public/images/agent-os/first-web-server.jpg'
-									alt='The first web server at CERN'
-									className='w-full object-cover opacity-90'
-									loading='lazy'
-								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
-									The first web server at CERN. Photo by Coolcaesar,{' '}
-									<a
-										href='https://commons.wikimedia.org/w/index.php?curid=395096'
-										className='underline hover:text-zinc-600'
-										target='_blank'
-										rel='noopener noreferrer'
-									>
-										CC BY-SA 3.0
-									</a>
-								</p>
-							</div>
+							<ArchivalPlate
+								src='https://assets.rivet.dev/website/public/images/agent-os/first-web-server.jpg'
+								alt='The first web server at CERN'
+								className='mt-4'
+								caption={
+									<>
+										The first web server at CERN. Photo by Coolcaesar,{' '}
+										<a
+											href='https://commons.wikimedia.org/w/index.php?curid=395096'
+											target='_blank'
+											rel='noopener noreferrer'
+										>
+											CC BY-SA 3.0
+										</a>
+									</>
+								}
+							/>
 						</Era>
 
 						<Era
@@ -164,25 +222,23 @@ export default function TimelinePage() {
 							body='But the fundamental model stayed the same: humans writing code, humans operating systems, humans in the loop at every step. The cloud made computing elastic, but it was still computing for humans.'
 							delay={0.2}
 						>
-							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
-								<img
-									src='https://assets.rivet.dev/website/public/images/agent-os/nersc-server-racks.jpg'
-									alt='Server racks at NERSC'
-									className='w-full object-cover opacity-90'
-									loading='lazy'
-								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
-									Server racks at NERSC. Photo by Derrick Coetzee,{' '}
-									<a
-										href='https://commons.wikimedia.org/w/index.php?curid=17445617'
-										className='underline hover:text-zinc-600'
-										target='_blank'
-										rel='noopener noreferrer'
-									>
-										CC0
-									</a>
-								</p>
-							</div>
+							<ArchivalPlate
+								src='https://assets.rivet.dev/website/public/images/agent-os/nersc-server-racks.jpg'
+								alt='Server racks at NERSC'
+								className='mb-6'
+								caption={
+									<>
+										Server racks at NERSC. Photo by Derrick Coetzee,{' '}
+										<a
+											href='https://commons.wikimedia.org/w/index.php?curid=17445617'
+											target='_blank'
+											rel='noopener noreferrer'
+										>
+											CC0
+										</a>
+									</>
+								}
+							/>
 							<div className='grid grid-cols-1 gap-3 sm:grid-cols-2'>
 								<PrincipleChip
 									label='Model'
@@ -202,62 +258,65 @@ export default function TimelinePage() {
 							body='But agents have different needs than humans. They need persistent memory that survives crashes. They need secure execution environments they can&apos;t escape. They need real-time communication with other agents and systems.'
 							future
 						>
-							<div className='mb-6 max-w-2xl overflow-hidden rounded-lg border border-zinc-200'>
-								<img
-									src='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
-									alt='Data flock (digits) by Philipp Schmitt'
-									className='w-full object-cover opacity-90'
-									loading='lazy'
-								/>
-								<p className='bg-zinc-50 px-4 py-2 text-xs text-zinc-600'>
-									"Data flock (digits)" by Philipp Schmitt,{' '}
-									<a
-										href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg'
-										className='underline hover:text-zinc-600'
-										target='_blank'
-										rel='noopener noreferrer'
-									>
-										CC BY-SA 4.0
-									</a>
-								</p>
-							</div>
+							<ArchivalPlate
+								src='https://assets.rivet.dev/website/public/images/agent-os/data-flock.jpg'
+								alt='Data flock (digits) by Philipp Schmitt'
+								className='mb-6'
+								caption={
+									<>
+										"Data flock (digits)" by Philipp Schmitt,{' '}
+										<a
+											href='https://commons.wikimedia.org/wiki/File:Data_flock_(digits)_by_Philipp_Schmitt.jpg'
+											target='_blank'
+											rel='noopener noreferrer'
+										>
+											CC BY-SA 4.0
+										</a>
+									</>
+								}
+							/>
 							<motion.p
 								initial={{ opacity: 0 }}
 								whileInView={{ opacity: 1 }}
 								viewport={{ once: true }}
 								transition={{ duration: 0.5, delay: 0.2 }}
-								className='mb-8 text-lg font-medium text-zinc-900'
+								className='mb-8 text-lg font-medium text-ink'
 							>
 								They need an operating system built for them.
 							</motion.p>
 
-							<div className='border-t border-zinc-200 pt-6'>
-								<div className='mb-4 flex gap-3'>
-									<div className='h-6 flex-1 rounded bg-zinc-200' />
-									<div className='h-6 flex-[3] rounded bg-zinc-900' />
+							<InkPanel
+								caption='Fig. 05 — Computing tasks by operator'
+								className='max-w-2xl'
+							>
+								<div className='p-6'>
+									<div className='mb-4 flex gap-3'>
+										<div className='h-6 flex-1 rounded bg-cream/15' />
+										<div className='h-6 flex-[3] rounded bg-sage' />
+									</div>
+									<div className='flex justify-between font-mono text-[11px] uppercase tracking-[0.16em] text-cream/45'>
+										<span>Human operators</span>
+										<span>AI agents</span>
+									</div>
+									<p className='mt-4 text-sm leading-relaxed text-cream/65'>
+										Soon, more computing tasks will be performed by AI agents than
+										by human operators.
+									</p>
 								</div>
-								<div className='flex justify-between text-xs text-zinc-500'>
-									<span>Human operators</span>
-									<span>AI agents</span>
-								</div>
-								<p className='mt-3 text-sm text-zinc-500'>
-									Soon, more computing tasks will be performed by AI agents than
-									by human operators.
-								</p>
-							</div>
+							</InkPanel>
 						</Era>
 					</div>
 				</section>
 
 				{/* CTA */}
-				<section className='border-t border-zinc-200 px-6 py-16 md:py-28 text-center'>
+				<section className='border-t border-ink/10 px-6 py-16 text-center md:py-28'>
 					<div className='mx-auto max-w-3xl'>
 						<motion.h2
 							initial={{ opacity: 0, y: 20 }}
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5 }}
-							className='mb-4 text-2xl font-normal tracking-tight text-zinc-900 md:text-4xl'
+							className={`mb-4 ${SECTION_H2_CLASS}`}
 						>
 							The shift is happening now.
 						</motion.h2>
@@ -266,7 +325,7 @@ export default function TimelinePage() {
 							whileInView={{ opacity: 1, y: 0 }}
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: 0.1 }}
-							className='mb-8 text-base leading-relaxed text-zinc-500'
+							className='mb-8 text-base leading-relaxed text-ink-soft'
 						>
 							For fifty years, we built operating systems for human operators.
 							But the next wave of computing won't be operated by humans.
@@ -277,7 +336,7 @@ export default function TimelinePage() {
 							viewport={{ once: true }}
 							transition={{ duration: 0.5, delay: 0.2 }}
 							href='/agent-os'
-							className='selection-dark inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700'
+							className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-accent-deep px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent'
 						>
 							Explore agentOS
 						</motion.a>

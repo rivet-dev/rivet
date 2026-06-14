@@ -451,6 +451,13 @@ export function typecheckCodeBlocks(): AstroIntegration {
 							encoding: "utf-8",
 							stdio: ["pipe", "pipe", "pipe"],
 						});
+						// Build the engine API SDK directly with pnpm instead of turbo so it
+						// does not pull its full upstream task graph into the docs typecheck.
+						execSync("pnpm --filter @rivetkit/engine-api-full run build", {
+							cwd: MONOREPO_ROOT,
+							encoding: "utf-8",
+							stdio: ["pipe", "pipe", "pipe"],
+						});
 						rivetKitBuilt = true;
 						logger.info("rivetkit packages built successfully");
 					} catch (buildError: unknown) {

@@ -1,8 +1,11 @@
 ---
 import MarketingLayout from "@/layouts/MarketingLayout.astro";
 import { getCollection, render } from "astro:content";
+import { getImage } from "astro:assets";
 import { templates as allTemplates, type Template } from "@/data/templates/shared";
+import { cookbookCovers } from "@/data/cookbook/covers";
 import * as mdxComponents from "@/components/mdx";
+import { jsonLdString } from "@/lib/jsonLd";
 
 export async function getStaticPaths() {
 	const cookbook = await getCollection("cookbook");
@@ -45,6 +48,32 @@ const slugPath = entry.id.replace(/\/index$/, "");
 const canonicalUrl = `https://rivet.dev/cookbook/${slugPath}/`;
 const skillId = slugPath.replaceAll("/", "-");
 
+const breadcrumbSchema = {
+	"@context": "https://schema.org",
+	"@type": "BreadcrumbList",
+	"itemListElement": [
+		{ name: "Home", url: "https://rivet.dev/" },
+		{ name: "Cookbook", url: "https://rivet.dev/cookbook/" },
+		{ name: title, url: canonicalUrl },
+	].map((item, index) => ({
+		"@type": "ListItem",
+		"position": index + 1,
+		"name": item.name,
+		"item": item.url,
+	})),
+};
+
+// The Organization node is defined in BaseLayout's global @graph.
+const techArticleSchema = {
+	"@context": "https://schema.org",
+	"@type": "TechArticle",
+	"headline": title,
+	"description": description,
+	"url": canonicalUrl,
+	"author": { "@id": "https://rivet.dev/#organization" },
+	"publisher": { "@id": "https://rivet.dev/#organization" },
+};
+
 function resolveTemplates(names?: string[]): Array<Template & { githubUrl: string }> {
 	if (!names?.length) return [];
 	const resolved = [];
@@ -72,135 +101,203 @@ function resolveTemplates(names?: string[]): Array<Template & { githubUrl: strin
 }
 
 const resolvedTemplates = resolveTemplates(templates);
+
+// The cover card in the hero reuses the index card crop so the book the
+// reader clicked is the book that opens.
+const coverArt = cookbookCovers[slugPath];
+let coverSrc: string | undefined;
+if (coverArt) {
+	const optimized = await getImage({
+		src: {
+			src: coverArt.src,
+			width: coverArt.width,
+			height: coverArt.height,
+			format: coverArt.src.endsWith(".png") ? "png" : "jpg",
+		},
+		width: 640,
+		format: "webp",
+		quality: 80,
+	});
+	coverSrc = optimized.src;
+}
 ---
 
 <MarketingLayout
 	title={`${title} - Rivet`}
 	description={description}
 	canonicalUrl={canonicalUrl}
+	active="cookbook"
 >
-	<main class="min-h-screen bg-black font-sans text-zinc-300 selection:bg-[#FF4500]/30 selection:text-orange-200">
-		<div class="relative overflow-hidden pb-12 pt-32 md:pt-48">
-			<div class="mx-auto max-w-7xl px-6">
-				<div class="max-w-2xl mb-12">
-					<a href="/cookbook" class="inline-flex items-center gap-2 text-xs text-zinc-500 hover:text-white transition-colors mb-6">
+	<script type="application/ld+json" set:html={jsonLdString(breadcrumbSchema)} />
+	<script type="application/ld+json" set:html={jsonLdString(techArticleSchema)} />
+	<main class="paper-grain min-h-screen font-sans text-ink-soft">
+		<div class="mx-auto max-w-7xl px-6 pb-28 pt-32 md:pt-40">
+			<div class="flex flex-col gap-16 lg:flex-row lg:gap-20 xl:gap-24">
+				<div class="min-w-0 flex-1">
+					<a href="/cookbook" class="inline-flex items-center gap-2 text-xs text-ink-faint transition-colors hover:text-ink">
 						← Back to Cookbooks
 					</a>
-					<h1 class="mb-6 text-4xl font-normal leading-[1.1] tracking-tight text-white md:text-6xl">
+					<h1 class="mt-8 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink md:text-[3.75rem]">
 						{title}
 					</h1>
 					{description && (
-						<p class="text-base leading-relaxed text-zinc-500">
+						<p class="mt-7 max-w-2xl text-lg leading-8 text-ink-soft">
 							{description}
 						</p>
 					)}
-				</div>
 
-				{resolvedTemplates.length > 0 && (
-					<div class="max-w-2xl">
-						<div class="rounded-lg border border-white/10 bg-white/5 p-5">
-							<div class="text-xs font-medium uppercase tracking-wider text-zinc-500">
-								Working examples
-							</div>
-							<ul class="mt-3 space-y-1">
+					<div class="mt-8 space-y-6 lg:hidden">
+						{resolvedTemplates.length > 0 && (
+							<div class="flex flex-wrap items-center gap-3">
 								{resolvedTemplates.map((tpl) => (
-									<li class="text-sm">
-										<a href={tpl.githubUrl} target="_blank" rel="noreferrer" class="text-white hover:text-zinc-200 transition-colors">
-											{tpl.displayName}
-										</a>
-										<span class="text-zinc-500"> ({tpl.name})</span>
-									</li>
+									<a
+										href={tpl.githubUrl}
+										target="_blank"
+										rel="noreferrer"
+										class="inline-flex items-center gap-2 rounded-md border border-ink/15 bg-white/55 px-3.5 py-2 text-sm text-ink transition-colors hover:border-ink/30"
+									>
+										<span class="text-ink-faint">Example</span>
+										{tpl.displayName}
+										<span aria-hidden="true" class="text-ink-faint">↗</span>
+									</a>
 								))}
-							</ul>
-							<p class="mt-3 text-xs text-zinc-500">
-								If you need a reference implementation, read the raw working example code in these templates.
-							</p>
+							</div>
+						)}
+						<div class="selection-paper relative max-w-md rounded-md border border-ink/20 bg-ink p-3 pr-11">
+							<code class="select-all break-all font-mono text-xs leading-relaxed text-cream/85">npx skills add rivet-dev/skills -s {skillId}</code>
+							<button
+								class="copy-skill-btn absolute right-1.5 top-1.5 rounded p-1.5 text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream"
+								aria-label="Copy to clipboard"
+								data-copy={`npx skills add rivet-dev/skills -s ${skillId}`}
+							>
+								<svg class="copy-icon h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+									<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+								</svg>
+								<svg class="check-icon hidden h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+									<polyline points="20 6 9 17 4 12"></polyline>
+								</svg>
+							</button>
 						</div>
 					</div>
-				)}
-			</div>
-		</div>
 
-		<div class="border-t border-white/10 py-12">
-			<div class="mx-auto max-w-7xl px-6">
-				<div class="max-w-2xl">
-					<h2 class="text-2xl font-normal tracking-tight text-white mb-3">Install skill for coding agents</h2>
-					<div class="relative group">
-						<code id="skill-install-cmd" class="block rounded bg-white/5 border border-white/10 px-4 py-3 pr-12 font-mono text-sm text-zinc-200 select-all">npx skills add rivet-dev/skills -s {skillId}</code>
-						<button
-							id="copy-skill-btn"
-							class="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1.5 text-zinc-500 hover:text-white hover:bg-white/10 transition-colors"
-							aria-label="Copy to clipboard"
-						>
-							<svg id="copy-icon" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-								<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-							</svg>
-							<svg id="check-icon" class="h-4 w-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-								<polyline points="20 6 9 17 4 12"></polyline>
-							</svg>
-						</button>
-					</div>
-					<p class="mt-3 text-xs text-zinc-600">Supports Claude Code, Codex, Cursor, and other AI coding assistants.</p>
+					<article class="prose mt-20 max-w-prose-docs leading-relaxed prose-headings:scroll-mt-28 prose-headings:font-medium prose-headings:tracking-tight prose-h2:mt-14 prose-h2:text-[1.6rem] prose-h3:mt-10">
+						<Content components={mdxComponents} />
+					</article>
 				</div>
-			</div>
-		</div>
 
-		<div class="border-t border-white/10 py-16">
-			<div class="mx-auto max-w-7xl px-6">
-				<div class="flex flex-col lg:flex-row gap-12">
-					<div class="flex-1 min-w-0 max-w-prose-docs">
-						<article class="prose prose-invert prose-zinc max-w-none prose-headings:font-normal prose-headings:tracking-tight prose-p:text-zinc-400 prose-a:text-white prose-code:text-zinc-300">
-							<Content components={mdxComponents} />
-						</article>
-					</div>
-					{tableOfContents.length > 0 && (
-						<aside class="hidden lg:block lg:w-56 flex-shrink-0">
-							<nav id="cookbook-toc" class="lg:sticky lg:top-24 space-y-1">
-								<ul class="space-y-1">
-									{tableOfContents.map((section) => (
+				<aside class="hidden w-60 flex-shrink-0 lg:block xl:w-64">
+					<div class="space-y-8 border border-ink/15 p-5">
+						{coverSrc && coverArt && (
+							<div aria-hidden="true" class="group/cover relative">
+								<div class="relative overflow-hidden bg-ink" style="aspect-ratio: 5 / 7;">
+									<img
+										src={coverSrc}
+										alt=""
+										class="absolute inset-0 h-full w-full object-cover"
+										style={`object-position: ${coverArt.objectPosition ?? "50% 50%"};${coverArt.transform ? ` transform: ${coverArt.transform};` : ""}${coverArt.transformOrigin ? ` transform-origin: ${coverArt.transformOrigin};` : ""}${coverArt.filter ? ` filter: ${coverArt.filter};` : ""}`}
+									/>
+								</div>
+							</div>
+						)}
+
+						{resolvedTemplates.length > 0 && (
+							<div>
+								<div class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">
+									Get started
+								</div>
+								<ul class="mt-3 space-y-2">
+									{resolvedTemplates.map((tpl) => (
 										<li>
-											<a href={`#${section.id}`} data-toc-link={section.id} class="block text-sm text-zinc-500 hover:text-white transition-colors py-0.5">
-												{section.title}
+											<a
+												href={tpl.githubUrl}
+												target="_blank"
+												rel="noreferrer"
+												class="group flex items-center justify-between gap-2 text-sm text-ink-soft transition-colors hover:text-ink"
+											>
+												<span>{tpl.displayName} example</span>
+												<span aria-hidden="true" class="text-ink-faint transition-colors group-hover:text-ink-soft">↗</span>
 											</a>
-											{section.children.length > 0 && (
-												<ul class="pl-3 space-y-1">
-													{section.children.map((child) => (
-														<li>
-															<a href={`#${child.id}`} data-toc-link={child.id} class="block text-sm text-zinc-500 hover:text-white transition-colors py-0.5">
-																{child.title}
-															</a>
-														</li>
-													))}
-												</ul>
-											)}
 										</li>
 									))}
 								</ul>
-							</nav>
-						</aside>
+							</div>
+						)}
+
+						<div>
+							<div class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">
+								Agent skill
+							</div>
+							<div class="selection-paper relative mt-3 rounded-md border border-ink/20 bg-ink p-3 pr-11">
+								<div class="overflow-x-auto scrollbar-hide">
+									<code class="select-all whitespace-nowrap font-mono text-xs leading-relaxed text-cream/85">npx skills add rivet-dev/skills -s {skillId}</code>
+								</div>
+								<button
+									class="copy-skill-btn absolute right-1.5 top-1.5 rounded p-1.5 text-cream/50 transition-colors hover:bg-cream/10 hover:text-cream"
+									aria-label="Copy to clipboard"
+									title="Works with Claude Code, Codex, Cursor, and other AI coding assistants"
+									data-copy={`npx skills add rivet-dev/skills -s ${skillId}`}
+								>
+									<svg class="copy-icon h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+										<path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+									</svg>
+									<svg class="check-icon hidden h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<polyline points="20 6 9 17 4 12"></polyline>
+									</svg>
+								</button>
+							</div>
+						</div>
+					</div>
+
+					{tableOfContents.length > 0 && (
+						<nav id="cookbook-toc" class="sticky top-24 mt-8">
+							<div class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">
+								On this page
+							</div>
+							<ul class="mt-3 max-h-[calc(100vh-9rem)] space-y-1 overflow-y-auto border-l border-ink/10 pl-4 [scrollbar-color:rgba(27,25,22,0.25)_transparent] [scrollbar-width:thin]">
+								{tableOfContents.map((section) => (
+									<li>
+										<a href={`#${section.id}`} data-toc-link={section.id} class="block py-0.5 text-[13px] leading-snug text-ink-faint transition-colors hover:text-ink">
+											{section.title}
+										</a>
+										{section.children.length > 0 && (
+											<ul class="space-y-1 pl-3">
+												{section.children.map((child) => (
+													<li>
+														<a href={`#${child.id}`} data-toc-link={child.id} class="block py-0.5 text-[13px] leading-snug text-ink-faint transition-colors hover:text-ink">
+															{child.title}
+														</a>
+													</li>
+												))}
+											</ul>
+										)}
+									</li>
+								))}
+							</ul>
+						</nav>
 					)}
-				</div>
+				</aside>
 			</div>
 		</div>
 
 		<script>
 			function initCopyButton() {
-				const btn = document.getElementById('copy-skill-btn');
-				const cmd = document.getElementById('skill-install-cmd');
-				const copyIcon = document.getElementById('copy-icon');
-				const checkIcon = document.getElementById('check-icon');
-				if (!btn || !cmd || !copyIcon || !checkIcon) return;
+				for (const btn of document.querySelectorAll<HTMLButtonElement>('.copy-skill-btn')) {
+					const copyIcon = btn.querySelector('.copy-icon');
+					const checkIcon = btn.querySelector('.check-icon');
+					if (!copyIcon || !checkIcon) continue;
 
-				btn.addEventListener('click', () => {
-					navigator.clipboard.writeText(cmd.textContent || '');
-					copyIcon.classList.add('hidden');
-					checkIcon.classList.remove('hidden');
-					setTimeout(() => {
-						copyIcon.classList.remove('hidden');
-						checkIcon.classList.add('hidden');
-					}, 2000);
-				});
+					btn.addEventListener('click', () => {
+						navigator.clipboard.writeText(btn.dataset.copy || '');
+						copyIcon.classList.add('hidden');
+						checkIcon.classList.remove('hidden');
+						setTimeout(() => {
+							copyIcon.classList.remove('hidden');
+							checkIcon.classList.add('hidden');
+						}, 2000);
+					});
+				}
 			}
 
 			initCopyButton();
@@ -232,11 +329,11 @@ const resolvedTemplates = resolveTemplates(templates);
 					tocLinks.forEach(link => {
 						const linkId = link.getAttribute('data-toc-link');
 						if (linkId === activeId) {
-							link.classList.add('text-white');
-							link.classList.remove('text-zinc-500');
+							link.classList.add('text-ink');
+							link.classList.remove('text-ink-faint');
 						} else {
-							link.classList.remove('text-white');
-							link.classList.add('text-zinc-500');
+							link.classList.remove('text-ink');
+							link.classList.add('text-ink-faint');
 						}
 					});
 				}

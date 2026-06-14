@@ -22,7 +22,7 @@ const CATEGORY_ORDER: { type: string; label: string; description: string }[] = [
 		type: "file-system",
 		label: "File Systems",
 		description:
-			"Mount these file systems as the root or at any sub-path inside the VM.",
+			"Mount these file systems as the root or at any sub-path inside the agent's environment.",
 	},
 	{
 		type: "sandbox-extension",
@@ -34,7 +34,7 @@ const CATEGORY_ORDER: { type: string; label: string; description: string }[] = [
 		type: "software",
 		label: "Software",
 		description:
-			"WASM command packages that run inside the VM. Install individually or use meta-packages.",
+			"Wasm command packages that run inside the agent's environment. Install individually or use meta-packages.",
 	},
 ];
 
@@ -73,7 +73,7 @@ function EntryIcon({
 			<Icon
 				icon={entry.icon}
 				style={{ width: size, height: size }}
-				className={theme === "light" ? "text-zinc-900" : "text-white"}
+				className={theme === "light" ? "text-ink" : "text-white"}
 			/>
 		);
 	}
@@ -82,7 +82,7 @@ function EntryIcon({
 		<span
 			className={
 				theme === "light"
-					? "select-none font-mono font-bold text-zinc-600"
+					? "select-none font-mono font-bold text-ink-soft"
 					: "select-none font-mono font-bold text-white/80"
 			}
 			style={{ fontSize: size * 0.6, lineHeight: 1 }}
@@ -123,7 +123,7 @@ function MonoIcon({
 			<Icon
 				icon={entry.icon}
 				style={{ width: size, height: size }}
-				className={theme === "light" ? "text-zinc-400" : "text-white/60"}
+				className={theme === "light" ? "text-ink-faint" : "text-white/60"}
 			/>
 		);
 	}
@@ -132,7 +132,7 @@ function MonoIcon({
 		<span
 			className={
 				theme === "light"
-					? "select-none font-mono font-bold text-zinc-300"
+					? "select-none font-mono font-bold text-ink-faint"
 					: "select-none font-mono font-bold text-white/40"
 			}
 			style={{ fontSize: size * 0.6, lineHeight: 1 }}
@@ -187,7 +187,7 @@ function FeaturedCarousel({
 			<div
 				className={
 					light
-						? "relative h-[320px] overflow-hidden rounded-2xl border border-zinc-200 bg-gradient-to-br from-zinc-50 to-white"
+						? "relative h-[320px] overflow-hidden rounded-2xl border border-ink/10 bg-white/55"
 						: "relative h-[320px] overflow-hidden rounded-2xl border border-white/15 bg-gradient-to-br from-white/8 to-white/2"
 				}
 			>
@@ -209,7 +209,7 @@ function FeaturedCarousel({
 						<h3
 							className={
 								light
-									? "mb-3 text-2xl font-semibold text-zinc-900"
+									? "mb-3 text-2xl font-medium text-ink"
 									: "mb-3 text-2xl font-semibold text-white"
 							}
 						>
@@ -218,7 +218,7 @@ function FeaturedCarousel({
 						<p
 							className={
 								light
-									? "max-w-md line-clamp-3 text-base leading-relaxed text-zinc-500"
+									? "max-w-md line-clamp-3 text-base leading-relaxed text-ink-soft"
 									: "max-w-md line-clamp-3 text-base leading-relaxed text-white/60"
 							}
 						>
@@ -245,7 +245,7 @@ function FeaturedCarousel({
 						<span
 							className={
 								light
-									? "text-xs font-medium text-zinc-900"
+									? `text-xs font-medium ${candidateIndex === index ? "text-pine" : "text-ink"}`
 									: "text-xs font-medium text-white"
 							}
 						>
@@ -283,7 +283,7 @@ function CategorySection({
 			<h2
 				className={
 					light
-						? "mb-2 text-2xl font-semibold text-zinc-900"
+						? "mb-2 text-2xl font-medium text-ink"
 						: "mb-2 text-2xl font-semibold text-white"
 				}
 			>
@@ -291,7 +291,7 @@ function CategorySection({
 			</h2>
 			<p
 				className={
-					light ? "mb-4 text-sm text-zinc-500" : "mb-4 text-sm text-white/50"
+					light ? "mb-4 text-sm text-ink-soft" : "mb-4 text-sm text-white/50"
 				}
 			>
 				{description}
@@ -305,7 +305,7 @@ function CategorySection({
 							entry.status === "coming-soon" ? "opacity-60" : ""
 						} ${
 							light
-								? "border-zinc-200 bg-white hover:border-zinc-300 hover:shadow-sm"
+								? "border-ink/10 bg-white/55 hover:border-ink/25"
 								: "border-white/10 bg-white/2 hover:border-white/25"
 						}`}
 					>
@@ -316,7 +316,7 @@ function CategorySection({
 							<h3
 								className={
 									light
-										? "truncate font-semibold text-zinc-900"
+										? "truncate font-medium text-ink"
 										: "truncate font-semibold text-white"
 								}
 							>
@@ -326,7 +326,7 @@ function CategorySection({
 								<span
 									className={
 										light
-											? "shrink-0 rounded-full border border-zinc-200 px-1.5 py-0.5 text-[10px] text-zinc-400"
+											? "shrink-0 rounded-full border border-ink/15 px-1.5 py-0.5 text-[10px] text-ink-faint"
 											: "shrink-0 rounded-full border border-white/20 px-1.5 py-0.5 text-[10px] text-white/50"
 									}
 								>
@@ -337,7 +337,7 @@ function CategorySection({
 						<p
 							className={
 								light
-									? "line-clamp-3 text-sm leading-relaxed text-zinc-500"
+									? "line-clamp-3 text-sm leading-relaxed text-ink-soft"
 									: "line-clamp-3 text-sm leading-relaxed text-white/60"
 							}
 						>
@@ -351,14 +351,14 @@ function CategorySection({
 						onClick={() => setExpanded(true)}
 						className={
 							light
-								? "flex h-36 flex-col items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 p-5 transition-all duration-200 hover:border-zinc-300"
+								? "flex h-36 flex-col items-center justify-center gap-2 rounded-xl border border-ink/10 bg-white/40 p-5 transition-all duration-200 hover:border-ink/25"
 								: "flex h-36 flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/2 p-5 transition-all duration-200 hover:border-white/25"
 						}
 					>
 						<span
 							className={
 								light
-									? "text-2xl font-light text-zinc-300"
+									? "text-2xl font-light text-ink-faint"
 									: "text-2xl font-light text-white/30"
 							}
 						>
@@ -367,7 +367,7 @@ function CategorySection({
 						<span
 							className={
 								light
-									? "text-sm font-medium text-zinc-500"
+									? "text-sm font-medium text-ink-soft"
 									: "text-sm font-medium text-white/60"
 							}
 						>
@@ -424,13 +424,13 @@ export default function RegistryPageClient({
 			<div
 				className={
 					light
-						? "mt-8 border-t border-zinc-200 pt-8 text-center"
+						? "mt-8 border-t border-ink/10 pt-8 text-center"
 						: "mt-8 border-t border-white/10 pt-8 text-center"
 				}
 			>
 				<p
 					className={
-						light ? "mb-4 text-sm text-zinc-500" : "mb-4 text-sm text-white/50"
+						light ? "mb-4 text-sm text-ink-soft" : "mb-4 text-sm text-white/50"
 					}
 				>
 					Want to add your own package to the registry?
@@ -442,7 +442,7 @@ export default function RegistryPageClient({
 						rel="noopener noreferrer"
 						className={
 							light
-								? "inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 transition-all duration-200 no-underline hover:border-zinc-300 hover:text-zinc-900"
+								? "inline-flex items-center gap-2 rounded-lg border border-ink/20 px-5 py-2.5 text-sm font-medium text-ink-soft transition-all duration-200 no-underline hover:border-ink/40 hover:text-ink"
 								: "inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-2.5 text-sm font-medium text-white/80 transition-all duration-200 no-underline hover:border-white/40 hover:text-white"
 						}
 					>
@@ -468,7 +468,7 @@ export default function RegistryPageClient({
 						rel="noopener noreferrer"
 						className={
 							light
-								? "inline-flex items-center gap-2 rounded-lg border border-zinc-200 px-5 py-2.5 text-sm font-medium text-zinc-600 transition-all duration-200 no-underline hover:border-zinc-300 hover:text-zinc-900"
+								? "inline-flex items-center gap-2 rounded-lg border border-ink/20 px-5 py-2.5 text-sm font-medium text-ink-soft transition-all duration-200 no-underline hover:border-ink/40 hover:text-ink"
 								: "inline-flex items-center gap-2 rounded-lg border border-white/20 px-5 py-2.5 text-sm font-medium text-white/80 transition-all duration-200 no-underline hover:border-white/40 hover:text-white"
 						}
 					>

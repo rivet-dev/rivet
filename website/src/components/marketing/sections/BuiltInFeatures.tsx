@@ -2,6 +2,7 @@
 
 import { Database, Globe, GitBranch, Clock, Wifi, ListOrdered, Infinity, Layers, ArrowRight } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
 
 const RivetActorIcon = ({ className }: { className?: string }) => (
   <svg width="32" height="32" viewBox="0 0 176 173" className={className}>
@@ -52,8 +53,8 @@ const features = [
   },
   {
     icon: Layers,
-    title: 'Scales infinitely, scales to zero',
-    description: 'Supports bursty workloads and is cost-efficient.',
+    title: 'Scales to zero, bursts to thousands',
+    description: 'Sleeps at near-zero cost when idle, fans out when traffic spikes.',
     href: '/docs/actors/design-patterns',
   },
   {
@@ -90,7 +91,7 @@ const features = [
 
 export const BuiltInFeatures = () => {
   return (
-    <section className='relative border-t border-b border-white/10 bg-white/[0.03] px-6 py-16 lg:py-24'>
+    <section className='relative border-y border-ink/10 bg-paper-deep/40 px-6 py-16 lg:py-24'>
       <div className='mx-auto w-full max-w-7xl'>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -99,10 +100,10 @@ export const BuiltInFeatures = () => {
           transition={{ duration: 0.5 }}
           className='mb-10'
         >
-          <h2 className='mb-2 text-2xl font-normal tracking-tight text-white md:text-4xl'>
+          <h2 className={SECTION_H2_CLASS}>
             A lightweight primitive with powerful capabilities.
           </h2>
-          <p className='text-base leading-relaxed text-zinc-500'>
+          <p className={SUBTITLE_CLASS}>
             One Actor per agent, per session, per user — state, storage, and networking included.
           </p>
         </motion.div>
@@ -118,16 +119,16 @@ export const BuiltInFeatures = () => {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.4, delay: idx * 0.05 }}
-                className='group flex items-start justify-between gap-3 rounded-xl px-4 py-4 -mx-4 border border-transparent transition-colors duration-200 hover:bg-[#FF4500]/[0.06] hover:border-[#FF4500]/[0.12]'
+                className='group flex items-start justify-between gap-3 rounded-xl px-4 py-4 -mx-4 border border-transparent transition-colors duration-200 hover:border-ink/25'
               >
                 <div className='flex flex-col gap-2'>
                   <div className='flex items-center gap-2.5'>
-                    <Icon className='h-4 w-4 text-zinc-500' />
-                    <span className='text-sm font-medium text-white'>{feature.title}</span>
+                    <Icon className='h-4 w-4 text-olive' />
+                    <span className='text-sm font-medium text-ink'>{feature.title}</span>
                   </div>
-                  <p className='text-xs leading-relaxed text-zinc-500'>{feature.description}</p>
+                  <p className='text-xs leading-relaxed text-ink-faint'>{feature.description}</p>
                 </div>
-                <ArrowRight className='h-4 w-4 mt-0.5 flex-shrink-0 text-[#FF4500] opacity-0 translate-x-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-1' />
+                <ArrowRight className='h-4 w-4 mt-0.5 flex-shrink-0 text-pine opacity-0 translate-x-0 transition-all duration-200 group-hover:opacity-100 group-hover:translate-x-1' />
               </motion.a>
             );
           })}

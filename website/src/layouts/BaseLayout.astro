@@ -21,6 +21,7 @@ interface Props {
 	articleAuthor?: string;
 	articleSection?: string;
 	robots?: string;
+	themeColor?: string;
 }
 
 const {
@@ -34,6 +35,7 @@ const {
 	articleAuthor,
 	articleSection,
 	robots,
+	themeColor = "#EFEFEF",
 } = Astro.props;
 
 // Only add " - Rivet" suffix if not already present (handles Rivet, Rivet Actors, Rivet Templates)
@@ -159,12 +161,12 @@ const showRssFeed = currentPath.startsWith('/blog') || currentPath.startsWith('/
 			]
 		})} />
 
-		<!-- Fonts - Preconnect and preload for performance. All families are
-		     requested in a single css2 stylesheet to avoid serial round-trips. -->
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-		<link rel="preload" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Courier+Prime&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&family=Open+Sans:wght@400;500;600&display=swap" as="style" />
-		<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Courier+Prime&family=Crimson+Text:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400&family=Open+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+		<!-- Fonts. Manrope and JetBrains Mono are self-hosted variable fonts
+		     declared in fonts.css; preload them to avoid swap flashes. The
+		     Learn section's serif faces load in LearnLayout only. -->
+		<link rel="preload" href="/fonts/manrope/Manrope-Variable-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<link rel="preload" href="/fonts/jetbrains-mono/JetBrainsMono-Variable-latin.woff2" as="font" type="font/woff2" crossorigin />
+		<slot name="head-fonts" />
 
 		<!-- Favicons -->
 		<link rel="apple-touch-icon" sizes="180x180" href="https://assets.rivet.dev/website/public/icons/apple-touch-icon.png?20240925" />
@@ -172,8 +174,8 @@ const showRssFeed = currentPath.startsWith('/blog') || currentPath.startsWith('/
 		<link rel="icon" type="image/png" sizes="16x16" href="https://assets.rivet.dev/website/public/icons/favicon-16x16.png?20240925" />
 		<link rel="manifest" href="/icons/site.webmanifest?20240925" />
 		<link rel="mask-icon" href="/icons/safari-pinned-tab.svg?20240925" color="#5bbad5" />
-		<meta name="msapplication-TileColor" content="#0c0a09" />
-		<meta name="theme-color" content="#0c0a09" />
+		<meta name="msapplication-TileColor" content={themeColor} />
+		<meta name="theme-color" content={themeColor} />
 
 		<!-- Analytics -->
 		<script is:inline async src="https://analytics.ahrefs.com/analytics.js" data-key="9b9IZaKPAs/KhRrWrBjsrw"></script>
@@ -199,7 +201,7 @@ const showRssFeed = currentPath.startsWith('/blog') || currentPath.startsWith('/
 			</Providers>
 		</TooltipProvider>
 		<EmbedDetector client:load />
-		<Footer client:load />
+		<Footer client:load initialPathname={Astro.url.pathname} />
 		<CopyCodeScript />
 		<TabsScript />
 		<MermaidScript />
