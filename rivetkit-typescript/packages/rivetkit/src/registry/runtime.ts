@@ -1,5 +1,7 @@
+import { stringifyError } from "@/common/utils";
 import type { SqliteNativeMetrics } from "@/common/database/config";
 import type { RegistryConfig } from "./config";
+import { logger } from "./log";
 
 declare const handleBrand: unique symbol;
 
@@ -607,8 +609,14 @@ export async function buildServeConfig(
 	// `engine.binary_unavailable` only if it actually needs one.
 	try {
 		serveConfig.engineBinaryPath = await loadEnginePath();
-	} catch {
-		// No local engine binary resolvable; the core decides whether it needs one.
+	} catch (error) {
+		// The engine binary could not be resolved. The core still decides whether
+		// it needs to spawn a local engine; if it does, it will fail with
+		// engine.binary_unavailable (auto-download is off in the napi runtime).
+		logger().warn({
+			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+			error: stringifyError(error),
+		});
 	}
 	serveConfig.engineHost = config.engineHost;
 	serveConfig.enginePort = config.enginePort;

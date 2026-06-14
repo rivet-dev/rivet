@@ -4767,8 +4767,15 @@ export async function buildServeConfig(
 	try {
 		const { getEnginePath } = await loadEngineCli();
 		serveConfig.engineBinaryPath = getEnginePath();
-	} catch {
-		// No local engine binary resolvable; the core decides whether it needs one.
+	} catch (error) {
+		// The npm-installed engine binary could not be resolved. The core still
+		// decides whether it needs to spawn a local engine; if it does, it will
+		// fail with engine.binary_unavailable (auto-download is off in the napi
+		// runtime). Warn so the cause is actionable.
+		logger().warn({
+			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+			error: stringifyError(error),
+		});
 	}
 	serveConfig.engineHost = config.engineHost;
 	serveConfig.enginePort = config.enginePort;
