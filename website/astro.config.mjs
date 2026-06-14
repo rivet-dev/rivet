@@ -53,7 +53,13 @@ export default defineConfig({
 			applyBaseStyles: false,
 		}),
 		sitemap({
-			filter: (page) => !page.includes('/api/') && !page.includes('/internal/'),
+			// Cookbooks and comparison guides are intentionally hidden from the site
+			// and kept out of SEO, so exclude them from the sitemap.
+			filter: (page) =>
+				!page.includes('/api/') &&
+				!page.includes('/internal/') &&
+				!page.includes('/cookbook') &&
+				!page.includes('/compare'),
 		}),
 		sentry({
       		project: "website",

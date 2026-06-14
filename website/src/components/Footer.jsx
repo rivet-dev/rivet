@@ -37,9 +37,6 @@ const footer = {
 		{ name: "Status Page", href: "https://rivet.betteruptime.com/" },
 	],
 	resources: [
-		{ name: "Cookbooks", href: "/cookbook" },
-		{ name: "Rivet vs Cloudflare Durable Objects", href: "/compare/rivet-vs-cloudflare-durable-objects" },
-		{ name: "Rivet vs Temporal", href: "/compare/rivet-vs-temporal" },
 		{ name: "Blog", href: "/blog" },
 		{ name: "YC & Speedrun Deal", href: "/startups" },
 		{ name: "Open-Source Friends", href: "/oss-friends" },
