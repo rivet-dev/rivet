@@ -40,7 +40,7 @@ interface SearchResult {
 	};
 }
 
-export function TypesenseSearch() {
+export function TypesenseSearch({ light = false }: { light?: boolean }) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [query, setQuery] = useState("");
 	const [results, setResults] = useState<SearchResult[]>([]);
@@ -145,12 +145,20 @@ export function TypesenseSearch() {
 				onClick={() => setIsOpen(true)}
 				variant="outline"
 				className={cn(
-					"relative h-8 w-full justify-start rounded-[0.5rem] bg-background text-sm font-normal text-muted-foreground shadow-none hidden md:flex md:w-24 lg:w-40",
+					"relative h-8 w-full justify-start rounded-[0.5rem] text-sm font-normal shadow-none hidden md:flex md:w-24 lg:w-40",
+					light
+						? "bg-white/60 border-ink/15 text-ink-soft hover:bg-white/70 hover:text-ink"
+						: "bg-background text-muted-foreground",
 				)}
 			>
 				<span className="hidden lg:inline-flex">Search...</span>
 				<span className="inline-flex lg:hidden">Search...</span>
-				<Kbd className="absolute right-[0.3rem] top-1/2 -translate-y-1/2 hidden sm:flex">
+				<Kbd
+					className={cn(
+						"absolute right-[0.3rem] top-1/2 -translate-y-1/2 hidden sm:flex",
+						light && "!border-ink/20 !bg-ink/[0.06] !text-ink-soft",
+					)}
+				>
 					<Kbd.Key />K
 				</Kbd>
 			</Button>

@@ -36,6 +36,31 @@
     });
   }
 
+  // Pick a Mermaid theme that is legible against the page it renders on.
+  // Cookbook and other marketing pages use a light porcelain background, while
+  // docs use a dark shell. The <html> element can keep a vestigial `dark` class
+  // on marketing pages, so decide from the actual background luminance behind
+  // the diagram rather than that class.
+  function detectMermaidTheme() {
+    let node = document.querySelector('pre.mermaid');
+    let bg = '';
+    while (node) {
+      const color = getComputedStyle(node).backgroundColor;
+      if (color && color !== 'transparent' && !/rgba?\(0,\s*0,\s*0,\s*0\)/.test(color)) {
+        bg = color;
+        break;
+      }
+      node = node.parentElement;
+    }
+    if (!bg) bg = getComputedStyle(document.body).backgroundColor;
+    const parts = (bg.match(/[\d.]+/g) || []).map(Number);
+    if (parts.length < 3) return 'dark';
+    const [r, g, b] = parts;
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    // Light page -> grayscale 'neutral' (matches the ink/porcelain aesthetic).
+    return luminance > 0.5 ? 'neutral' : 'dark';
+  }
+
   // Only initialize if there are mermaid diagrams on the page
   async function initMermaid() {
     promoteLegacyMermaidBlocks();
@@ -50,7 +75,7 @@
 
     mermaid.initialize({
       startOnLoad: false,
-      theme: 'dark',
+      theme: detectMermaidTheme(),
       securityLevel: 'loose',
       fontFamily: 'inherit',
     });

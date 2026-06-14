@@ -1,9 +1,18 @@
-import { Icon, faArrowRight } from "@rivet-gg/icons";
+export interface CookbookCardCover {
+	src: string;
+	objectPosition?: string;
+	transform?: string;
+	transformOrigin?: string;
+	filter?: string;
+	ken?: { x: string; y: string; scale: number };
+}
 
 export interface CookbookPageCardData {
+	slug: string;
 	title: string;
 	description: string;
 	href: string;
+	cover?: CookbookCardCover;
 	primaryTemplate?: {
 		name: string;
 		displayName: string;
@@ -15,38 +24,57 @@ export interface CookbookPageCardData {
 	}>;
 }
 
+// Fallback for any cover that has not tuned its own documentary motion: a
+// gentle straight push-in.
+const DEFAULT_KEN = { x: "0%", y: "0%", scale: 1.16 };
+
 export function CookbookCard({ page }: { page: CookbookPageCardData }) {
+	const drift = page.cover?.ken ?? DEFAULT_KEN;
 	return (
-		<a href={page.href} className="group block">
-			<div className="rounded-lg border border-white/10 bg-black p-5 transition-all duration-200 group-hover:border-white/20 group-hover:bg-white/[0.02]">
-				<div className="flex items-start justify-between gap-3 mb-2">
-					<h3 className="text-sm font-medium text-white">{page.title}</h3>
-					<Icon
-						icon={faArrowRight}
-						className="text-zinc-600 group-hover:text-white transition-all duration-200 text-xs flex-shrink-0 mt-0.5"
-					/>
-				</div>
-
-				<p className="text-xs text-zinc-500 line-clamp-2 mb-3">{page.description}</p>
-
-				{page.templates.length > 0 && (
-					<div className="flex flex-wrap gap-1.5">
-						{page.templates.slice(0, 3).map((t) => (
-							<span
-								key={t.name}
-								className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-400"
-							>
-								{t.displayName}
-							</span>
-						))}
-						{page.templates.length > 3 && (
-							<span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-zinc-400">
-								+{page.templates.length - 3}
-							</span>
-						)}
+		<div className="group relative">
+			{/* Soft ground beneath the card, mirroring the hero reel's hover glow. */}
+			<div className="pointer-events-none absolute -inset-3 rounded-xl bg-ink/5 opacity-0 blur-xl transition-all duration-300 ease-out group-hover:scale-105 group-hover:opacity-100" />
+			<a
+				href={page.href}
+				style={{ boxShadow: "0 10px 28px -12px rgba(27, 25, 22, 0.16)" }}
+				className="relative block aspect-[5/7] overflow-hidden bg-ink [container-type:inline-size]"
+			>
+			{page.cover && (
+				<>
+					<div
+						className="ken-burns absolute inset-0"
+						style={
+							{
+								"--kb-x": drift.x,
+								"--kb-y": drift.y,
+								"--kb-scale": String(drift.scale),
+							} as React.CSSProperties
+						}
+					>
+						<img
+							src={page.cover.src}
+							alt=""
+							loading="lazy"
+							className="h-full w-full object-cover"
+							style={{
+								objectPosition: page.cover.objectPosition,
+								transform: page.cover.transform,
+								transformOrigin: page.cover.transformOrigin,
+								filter: page.cover.filter,
+							}}
+						/>
 					</div>
-				)}
-			</div>
-		</a>
+					<div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(0,0,0,0.8),rgba(0,0,0,0.3)_32%,transparent_58%)]" />
+				</>
+			)}
+			{/* Title sizes use container-query units so the lockup scales with the card. */}
+			<h3
+				className="absolute inset-x-0 top-0 px-[8cqw] pt-[12cqw] text-center text-[5.6cqw] font-semibold uppercase leading-[1.55] tracking-[0.2em] text-zinc-50 [text-wrap:balance]"
+				style={{ textShadow: "0 2px 16px rgba(0,0,0,0.6)" }}
+			>
+				{page.title}
+			</h3>
+			</a>
+		</div>
 	);
 }

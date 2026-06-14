@@ -89,7 +89,7 @@ export function CollapsibleSidebarItem({
 			<button
 				type="button"
 				className={cn(
-					"flex w-full appearance-none items-center justify-between border-l-2 border-l-border py-2 text-sm text-muted-foreground transition-colors hover:text-foreground hover:border-l-muted-foreground/50 data-[active]:text-foreground data-[active]:border-l-orange-500",
+					"flex w-full appearance-none items-center justify-between border-l-2 border-l-ink/15 py-2 text-sm text-ink-soft transition-colors hover:text-ink hover:border-l-ink/30 data-[active]:text-ink data-[active]:border-l-pine",
 					getPaddingClass(level),
 				)}
 				data-active={isCurrent ? true : undefined}
@@ -108,7 +108,7 @@ export function CollapsibleSidebarItem({
 					) : null}
 					<span className="truncate">{item.title}</span>
 					{"badge" in item && item.badge ? (
-						<span className="px-2 py-0.5 text-xs font-medium bg-muted text-muted-foreground rounded-full whitespace-nowrap">
+						<span className="px-2 py-0.5 text-xs font-medium bg-ink/[0.06] text-ink-soft rounded-full whitespace-nowrap">
 							{item.badge}
 						</span>
 					) : null}
