@@ -250,7 +250,7 @@ export const pre = ({
 					<WithTooltip
 						trigger={
 							<CopyCodeTrigger>
-								<Button size="icon-sm" variant="ghost" data-copy-code className="hover:bg-neutral-700/80">
+								<Button size="icon-sm" variant="ghost" data-copy-code className="hover:bg-cream/10">
 									<Icon icon={faCopy} />
 								</Button>
 							</CopyCodeTrigger>
@@ -260,7 +260,7 @@ export const pre = ({
 				</TooltipProvider>
 			</div>
 
-			<div className="bg-neutral-950 text-sm overflow-x-auto">
+			<div className="bg-ink text-sm overflow-x-auto">
 				<div className="p-4 w-fit min-w-full">
 					{highlightedCode ? (
 						<span
