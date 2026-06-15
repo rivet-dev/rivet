@@ -47,8 +47,16 @@ async function ensureVm<TConnParams>(
 
 	const start = Date.now();
 
+	// `config.options` is either a static AgentOsOptions object OR a
+	// `(c) => AgentOsOptions` factory resolved per actor instance with the
+	// live context so callers can derive mount config from the actor identity.
+	const resolvedUserOptions =
+		typeof config.options === "function"
+			? await config.options(c)
+			: config.options;
+
 	// Build options with in-memory VFS as default working directory mount.
-	const options = buildVmOptions(config.options);
+	const options = buildVmOptions(resolvedUserOptions);
 
 	const agentOs = await AgentOs.create(options);
 	c.vars.agentOs = agentOs;
@@ -211,6 +219,10 @@ export function agentOs<TConnParams = undefined>(
 		...buildShellActions(parsedConfig),
 		...buildCronActions(parsedConfig),
 		...buildNetworkActions(parsedConfig),
+		// Layerr: user-supplied actions merged last so they can extend (or
+		// override) the built-in set. Schema-validated as Record<string,
+		// Function>; the actor({}) call below enforces full signature shape.
+		...(parsedConfig.actions ?? {}),
 	};
 
 	return actor<
@@ -234,8 +246,8 @@ export function agentOs<TConnParams = undefined>(
 		typeof actions
 	>({
 		options: {
-			sleepGracePeriod: 900_000,
-			actionTimeout: 900_000,
+			sleepGracePeriod: parsedConfig.sleepGracePeriod ?? 900_000,
+			actionTimeout: parsedConfig.actionTimeout ?? 900_000,
 		},
 		createState: async () => ({}),
 		createVars: () => ({
