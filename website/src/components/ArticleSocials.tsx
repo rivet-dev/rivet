@@ -3,8 +3,8 @@ import { getSiteUrl } from "@/lib/siteUrl";
 import {
 	Icon,
 	faHackerNews,
-	faReddit,
-	faRssSquare,
+	faRedditAlien,
+	faRss,
 	faXTwitter,
 } from "@rivet-gg/icons";
 import { useState, useEffect } from "react";
@@ -20,7 +20,7 @@ export function ArticleSocials({ title }) {
 	const articleUrl = siteUrl + pathname;
 	return (
 		<div className="relative mt-14 flex items-center justify-center after:absolute after:inset-x-0 after:-z-[1] after:h-[1px] after:bg-ink/10">
-			<SocialIcon url="/rss/feed.xml" icon={faRssSquare} />
+			<SocialIcon url="/rss/feed.xml" icon={faRss} />
 			<SocialIcon
 				url={`https://x.com/share?text=${encodeURIComponent(`${title} ${articleUrl} via @rivet_dev`)}`}
 				icon={faXTwitter}
@@ -33,7 +33,7 @@ export function ArticleSocials({ title }) {
 			/>
 			<SocialIcon
 				url={`https://www.reddit.com/submit?url=${articleUrl}&title=${encodeURIComponent(title)}`}
-				icon={faReddit}
+				icon={faRedditAlien}
 			/>
 		</div>
 	);
