@@ -52,8 +52,6 @@ interface ActorDetailsProps {
 // in default test setups; override via MSW to verify the iframe path.
 export const IFRAME_INSPECTOR_MIN_VERSION = "2.3.0";
 
-const INSPECTOR_UI_CDN_BASE = "https://cdn.rivet.dev/inspector-ui";
-
 /**
  * Dashboard right panel for a selected actor.
  *
@@ -171,7 +169,6 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 				onTabChange={onTabChange}
 				inspectorToken={credentials.inspectorToken}
 				rivetToken={credentials.token}
-				runnerVersion={metadataQuery.data.version}
 				onFallbackToLegacy={() => setForceLegacy(true)}
 			/>
 		);
@@ -250,12 +247,10 @@ function ActorDetailsIframePath({
 	onTabChange,
 	inspectorToken,
 	rivetToken,
-	runnerVersion,
 	onFallbackToLegacy,
 }: ActorDetailsProps & {
 	inspectorToken: string;
 	rivetToken: string;
-	runnerVersion: string;
 	onFallbackToLegacy: () => void;
 }) {
 	const engineUrl = getConfig().apiUrl;
@@ -367,23 +362,6 @@ function ActorDetailsIframePath({
 		[actorSegment, engineUrl],
 	);
 
-	const runnerBundleProbe = useQuery({
-		queryKey: ["inspector-bundle-probe", runnerInspectorUiUrl],
-		queryFn: async () => {
-			try {
-				const r = await fetch(runnerInspectorUiUrl, {
-					method: "GET",
-					redirect: "manual",
-				});
-				return r.ok;
-			} catch {
-				return false;
-			}
-		},
-		staleTime: Number.POSITIVE_INFINITY,
-		gcTime: Number.POSITIVE_INFINITY,
-	});
-
 	const src = useMemo(() => {
 		if (isActiveCustomTab && activeInspectorTabId) {
 			const url = new URL(
@@ -396,13 +374,9 @@ function ActorDetailsIframePath({
 			return url.href;
 		}
 
-		if (runnerBundleProbe.data === undefined) return undefined;
-
-		const base =
-			runnerBundleProbe.data === true
-				? runnerInspectorUiUrl
-				: `${INSPECTOR_UI_CDN_BASE}/v${runnerVersion}/`;
-		const url = new URL(base);
+		// The engine serves the inspector-UI bundle from its embedded memory
+		// for every runner, so always load it from the runner gateway.
+		const url = new URL(runnerInspectorUiUrl);
 		url.searchParams.set("actorId", actorId);
 		url.searchParams.set("shellOrigin", window.location.origin);
 		url.searchParams.set("theme", themeRef.current);
@@ -414,8 +388,6 @@ function ActorDetailsIframePath({
 		activeInspectorTabId,
 		actorSegment,
 		runnerInspectorUiUrl,
-		runnerBundleProbe.data,
-		runnerVersion,
 	]);
 
 	const { reset } = useTimeout(() => {

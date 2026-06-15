@@ -12,16 +12,16 @@
 
 import {
 	ACTOR_ID_PARAM,
+	type InspectorTabDescriptor,
 	POSTMESSAGE_PROTOCOL_VERSION,
 	SHELL_ORIGIN_PARAM,
+	type ShellToTabMessage,
 	ShellToTabMessageSchema,
+	type TabToShellMessage,
 	TabToShellMessageSchema,
 	type V1Init,
 	type V1SetActiveTab,
 	type V1TabsAvailable,
-	type InspectorTabDescriptor,
-	type ShellToTabMessage,
-	type TabToShellMessage,
 } from "rivetkit/inspector-tab";
 
 // Re-export under the names this app already uses so consumers don't move.

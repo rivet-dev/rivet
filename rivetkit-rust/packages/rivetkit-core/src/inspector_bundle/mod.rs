@@ -4,23 +4,36 @@
 //!   GET /inspector/ui/<rel>        -> assets/... or other static files
 //!   GET /inspector/tab.css         -> shared --rivet-* token stylesheet
 //!
-//! Bytes are read from a host-supplied absolute filesystem path.
-//! The dashboard is responsible for routing the iframe to whoever can
-//! actually serve the bundle: for NAPI runners that's the runner process
-//! itself via `ServeConfig::inspector_ui_path`; for wasm runners the
-//! dashboard loads the bundle directly from a CDN and never asks the
-//! runner for `/inspector/ui/*` at all.
+//! The bundle is embedded into the binary at build time via `include_dir!`
+//! (staged from `frontend/dist/inspector-ui` and `frontend/dist/inspector-tab`
+//! by `build.rs`) and served entirely from memory. This is the only serving
+//! path: there is no filesystem-root mode and no CDN fallback, so every runner
+//! (native or wasm) serves the same embedded bytes.
 //!
 //! Per-actor public paths (`/inspector/tab-config`, `/inspector/custom-tabs/*`)
 //! are NOT served here; they depend on the actor's config and live in the
 //! inspector handler itself.
 
 use std::collections::HashMap;
-use std::path::{Component, Path};
 
 use ::http::StatusCode;
+use include_dir::{Dir, include_dir};
 use rivet_envoy_client::config::HttpResponse;
 use serde_json::json;
+
+/// Inspector-UI frontend bundle. Staged into `$OUT_DIR/inspector-ui` by
+/// `build.rs` and embedded at compile time, so the bytes ship inside the
+/// binary on every target including wasm.
+static INSPECTOR_UI_DIR: Dir<'_> = include_dir!("$OUT_DIR/inspector-ui");
+
+/// Shared stylesheet served to custom inspector tabs at `/inspector/tab.css`.
+/// Authored by `frontend/scripts/generate-inspector-tab-css.mjs`, which mirrors
+/// the dashboard's design tokens so tabs that `<link>` to it look native.
+static INSPECTOR_TAB_DIR: Dir<'_> = include_dir!("$OUT_DIR/inspector-tab");
+
+/// Output filename written by `frontend/scripts/generate-inspector-tab-css.mjs`.
+/// Renaming the generator output without updating this produces a silent 404.
+const TAB_STYLESHEET_FILE: &str = "styles.css";
 
 /// Inline HTML shown inside the custom-tab iframe on wasm runtimes, which
 /// cannot read `inspector.tabs[].source` files from disk. The tab still
@@ -46,44 +59,61 @@ pub fn is_public_inspector_bundle_path(method: &str, pathname: &str) -> bool {
 		|| pathname.starts_with("/inspector/ui/")
 }
 
-/// Try to serve a request from the inspector-ui bundle by reading from
-/// `fs_root`.
+/// Try to serve a request from the embedded inspector-UI bundle.
 ///
-/// Returns `Some(HttpResponse)` for any of the shared public paths (a 200
-/// with the bytes, or a 404 if the asset isn't on disk). Returns `None`
-/// for paths that aren't part of the shared bundle so the caller can fall
-/// through to per-actor / authenticated handling.
-pub async fn serve_inspector_bundle(
-	fs_root: &Path,
-	method: &str,
-	pathname: &str,
-) -> Option<HttpResponse> {
+/// Returns `Some(HttpResponse)` for any of the shared public paths (a 200 with
+/// the embedded bytes, or a 404 if the asset isn't bundled). Returns `None` for
+/// paths that aren't part of the shared bundle so the caller can fall through to
+/// per-actor / authenticated handling.
+pub fn serve_inspector_bundle(method: &str, pathname: &str) -> Option<HttpResponse> {
 	if method != "GET" {
 		return None;
 	}
-	let rel = map_pathname_to_rel(pathname)?;
+	if pathname == "/inspector/tab.css" {
+		return Some(serve_tab_stylesheet());
+	}
+	let rel = map_ui_pathname_to_rel(pathname)?;
 	if is_unsafe_rel(&rel) {
 		return Some(not_found_response());
 	}
-	Some(serve_from_fs(fs_root, &rel).await)
+	Some(serve_ui_asset(&rel))
 }
 
 /// Wasm runtimes cannot read `inspector.tabs[].source` files from disk, so
 /// `GET /inspector/custom-tabs/*` short-circuits to this styled HTML page
 /// inside the iframe.
 pub fn serve_wasm_custom_tab_unavailable() -> HttpResponse {
-	let mut headers = HashMap::new();
-	headers.insert(
-		"Content-Type".to_owned(),
-		"text/html; charset=utf-8".to_owned(),
-	);
-	headers.insert("Cache-Control".to_owned(), "no-cache".to_owned());
-	headers.insert("Referrer-Policy".to_owned(), "no-referrer".to_owned());
 	HttpResponse {
 		status: StatusCode::OK.as_u16(),
-		headers,
+		headers: shared_response_headers("text/html; charset=utf-8"),
 		body: Some(WASM_CUSTOM_TAB_UNAVAILABLE_HTML.as_bytes().to_vec()),
 		body_stream: None,
+	}
+}
+
+// =============================================================================
+// Embedded serve
+// =============================================================================
+
+fn serve_ui_asset(rel: &str) -> HttpResponse {
+	// Single-entry SPA: `/inspector/ui/` serves index.html, every other path
+	// under that prefix is an asset relative to the bundle root.
+	let stripped = rel.trim_start_matches('/');
+	let candidate = if stripped.is_empty() || stripped.ends_with('/') {
+		format!("{stripped}index.html")
+	} else {
+		stripped.to_owned()
+	};
+	match INSPECTOR_UI_DIR.get_file(&candidate) {
+		Some(file) => ok_response(mime_of(&candidate), file.contents().to_vec()),
+		None => not_found_response(),
+	}
+}
+
+fn serve_tab_stylesheet() -> HttpResponse {
+	match INSPECTOR_TAB_DIR.get_file(TAB_STYLESHEET_FILE) {
+		Some(file) => ok_response("text/css; charset=utf-8", file.contents().to_vec()),
+		None => not_found_response(),
 	}
 }
 
@@ -91,17 +121,13 @@ pub fn serve_wasm_custom_tab_unavailable() -> HttpResponse {
 // Helpers
 // =============================================================================
 
-fn map_pathname_to_rel(pathname: &str) -> Option<String> {
-	if pathname == "/inspector/tab.css" {
-		return Some("tab.css".to_owned());
-	}
+fn map_ui_pathname_to_rel(pathname: &str) -> Option<String> {
 	if pathname == "/inspector/ui/" || pathname == "/inspector/ui" {
 		return Some("index.html".to_owned());
 	}
-	if let Some(rest) = pathname.strip_prefix("/inspector/ui/") {
-		return Some(rest.to_owned());
-	}
-	None
+	pathname
+		.strip_prefix("/inspector/ui/")
+		.map(|rest| rest.to_owned())
 }
 
 fn is_unsafe_rel(rel: &str) -> bool {
@@ -153,11 +179,20 @@ fn shared_response_headers(content_type: &str) -> HashMap<String, String> {
 	headers
 }
 
+fn ok_response(content_type: &str, body: Vec<u8>) -> HttpResponse {
+	HttpResponse {
+		status: StatusCode::OK.as_u16(),
+		headers: shared_response_headers(content_type),
+		body: Some(body),
+		body_stream: None,
+	}
+}
+
 fn not_found_response() -> HttpResponse {
 	let body = json!({
 		"group": "inspector",
 		"code": "ui_asset_not_found",
-		"message": "Inspector UI asset was not found",
+		"message": "Inspector UI asset was not found in the embedded bundle",
 		"metadata": serde_json::Value::Null,
 	});
 	let bytes = serde_json::to_vec(&body).unwrap_or_else(|_| b"{}".to_vec());
@@ -169,74 +204,6 @@ fn not_found_response() -> HttpResponse {
 	}
 }
 
-// -----------------------------------------------------------------------------
-// Filesystem serve
-// -----------------------------------------------------------------------------
-
-#[cfg(not(target_arch = "wasm32"))]
-async fn serve_from_fs(root: &Path, rel: &str) -> HttpResponse {
-	// Explicit component-by-component guard. The rel-segment check already
-	// rejects `..` and `.` segments, but enforce here as defense in depth in
-	// case the source set a relative path with traversal bytes.
-	let rel_path = Path::new(rel);
-	if rel_path
-		.components()
-		.any(|c| !matches!(c, Component::Normal(_)))
-	{
-		return not_found_response();
-	}
-
-	let target = root.join(rel_path);
-
-	// Containment check: even after rejecting `..`/`.` segments above, a
-	// symlink inside the bundle directory could resolve to a target outside
-	// `root`. Canonicalize the root once and require the resolved target to
-	// stay within it.
-	let canonical_root = match root.canonicalize() {
-		Ok(p) => p,
-		Err(_) => return not_found_response(),
-	};
-	let canonical = match target.canonicalize() {
-		Ok(p) => p,
-		Err(err) => {
-			tracing::debug!(
-				rel,
-				root = %root.display(),
-				error = %err,
-				"inspector bundle fs read failed"
-			);
-			return not_found_response();
-		}
-	};
-	if canonical != canonical_root && !canonical.starts_with(&canonical_root) {
-		tracing::warn!(
-			rel,
-			root = %canonical_root.display(),
-			resolved = %canonical.display(),
-			"inspector bundle asset escaped its root via symlink"
-		);
-		return not_found_response();
-	}
-
-	let bytes = match tokio::fs::read(&canonical).await {
-		Ok(b) => b,
-		Err(_) => return not_found_response(),
-	};
-	HttpResponse {
-		status: StatusCode::OK.as_u16(),
-		headers: shared_response_headers(mime_of(rel)),
-		body: Some(bytes),
-		body_stream: None,
-	}
-}
-
-// Wasm has no real filesystem; if a wasm host somehow ends up with an
-// `inspector_ui_path` set in its `ServeConfig`, fail closed.
-#[cfg(target_arch = "wasm32")]
-async fn serve_from_fs(_root: &Path, _rel: &str) -> HttpResponse {
-	not_found_response()
-}
-
 // =============================================================================
 // Tests
 // =============================================================================
@@ -246,24 +213,20 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn map_pathname_to_rel_maps_known_paths() {
+	fn map_ui_pathname_to_rel_maps_known_paths() {
 		assert_eq!(
-			map_pathname_to_rel("/inspector/tab.css").as_deref(),
-			Some("tab.css"),
-		);
-		assert_eq!(
-			map_pathname_to_rel("/inspector/ui").as_deref(),
+			map_ui_pathname_to_rel("/inspector/ui").as_deref(),
 			Some("index.html"),
 		);
 		assert_eq!(
-			map_pathname_to_rel("/inspector/ui/").as_deref(),
+			map_ui_pathname_to_rel("/inspector/ui/").as_deref(),
 			Some("index.html"),
 		);
 		assert_eq!(
-			map_pathname_to_rel("/inspector/ui/assets/app.js").as_deref(),
+			map_ui_pathname_to_rel("/inspector/ui/assets/app.js").as_deref(),
 			Some("assets/app.js"),
 		);
-		assert!(map_pathname_to_rel("/inspector/state").is_none());
+		assert!(map_ui_pathname_to_rel("/inspector/state").is_none());
 	}
 
 	#[test]
@@ -291,6 +254,12 @@ mod tests {
 	}
 
 	#[test]
+	fn non_get_and_unrelated_paths_are_passthrough() {
+		assert!(serve_inspector_bundle("POST", "/inspector/ui/").is_none());
+		assert!(serve_inspector_bundle("GET", "/inspector/state").is_none());
+	}
+
+	#[test]
 	fn wasm_custom_tab_unavailable_is_html() {
 		let resp = serve_wasm_custom_tab_unavailable();
 		assert_eq!(resp.status, StatusCode::OK.as_u16());
@@ -300,27 +269,5 @@ mod tests {
 		);
 		let body = resp.body.expect("body present");
 		assert!(body.starts_with(b"<!doctype html>"));
-	}
-
-	#[cfg(not(target_arch = "wasm32"))]
-	#[tokio::test]
-	async fn serve_inspector_bundle_reads_from_fs() {
-		let tmp = tempfile::tempdir().expect("tempdir");
-		std::fs::write(tmp.path().join("index.html"), b"<!doctype html><p>ok").expect("write");
-		let resp = serve_inspector_bundle(tmp.path(), "GET", "/inspector/ui/")
-			.await
-			.expect("response");
-		assert_eq!(resp.status, StatusCode::OK.as_u16());
-		assert_eq!(resp.body.unwrap(), b"<!doctype html><p>ok".to_vec());
-	}
-
-	#[cfg(not(target_arch = "wasm32"))]
-	#[tokio::test]
-	async fn serve_inspector_bundle_returns_404_for_missing() {
-		let tmp = tempfile::tempdir().expect("tempdir");
-		let resp = serve_inspector_bundle(tmp.path(), "GET", "/inspector/ui/missing.js")
-			.await
-			.expect("response");
-		assert_eq!(resp.status, StatusCode::NOT_FOUND.as_u16());
 	}
 }

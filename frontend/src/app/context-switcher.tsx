@@ -31,6 +31,7 @@ import {
 import {
 	useCloudDataProvider,
 	useDataProvider,
+	useDataProviderCheck,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
@@ -83,7 +84,7 @@ function ContextSwitcherInner({
 	// biome-ignore lint/correctness/useHookAtTopLevel: usage is stable inside this function
 	const match = useContextSwitcherMatch();
 
-	const dataProvider = useDataProvider();
+	const dataProvider = useDataProviderCheck();
 	if (!dataProvider) {
 		return null;
 	}

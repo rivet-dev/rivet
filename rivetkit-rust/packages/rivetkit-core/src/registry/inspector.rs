@@ -28,6 +28,12 @@ impl RegistryDispatcher {
 			return Ok(None);
 		}
 
+		if let Some(response) =
+			crate::inspector_bundle::serve_inspector_bundle(request.method().as_str(), url.path())
+		{
+			return Ok(Some(response));
+		}
+
 		#[cfg(not(target_arch = "wasm32"))]
 		if request.method() == http::Method::GET {
 			if url.path() == "/inspector/tab-config" {
