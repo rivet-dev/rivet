@@ -7,7 +7,7 @@ Frontend services (including `dashboard.rivet.dev` and `inspect.rivet.dev`, but 
 To promote to production, run:
 
 ```sh
-./scripts/git/promote-prod.sh
+./scripts/frontend/promote-prod.sh
 ```
 
 This will validate that you're on the `main` branch and up to date with the remote before pushing.
@@ -15,7 +15,7 @@ This will validate that you're on the `main` branch and up to date with the remo
 To skip validation and push the current ref directly:
 
 ```sh
-./scripts/git/promote-prod.sh --force
+./scripts/frontend/promote-prod.sh --force
 ```
 
 <details>
