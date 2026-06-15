@@ -3,11 +3,9 @@ import {
 	faChevronDown,
 	faCreditCard,
 	faGear,
-	faMoon,
 	faPlus,
 	faRightLeft,
 	faSparkles,
-	faSun,
 	faUserCircle,
 	Icon,
 } from "@rivet-gg/icons";
@@ -39,7 +37,6 @@ import {
 import { useCloudDataProvider } from "@/components/actors";
 import { authClient } from "@/lib/auth";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
-import { useTheme } from "@/lib/theme";
 import { queryClient } from "@/queries/global";
 import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
@@ -53,7 +50,6 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 	const { data: session } = authClient.useSession();
 	const navigate = useNavigate();
 	const match = useMatchRoute();
-	const { theme, toggle: toggleTheme } = useTheme();
 	const [open, setOpen] = useState(false);
 
 	const isMatchingProjectRoute = match({
@@ -189,18 +185,6 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 						className="mr-2 size-3.5 text-muted-foreground"
 					/>
 					What's new
-				</DropdownMenuItem>
-				<DropdownMenuItem
-					onSelect={(e) => {
-						e.preventDefault();
-						toggleTheme();
-					}}
-				>
-					<Icon
-						icon={theme === "dark" ? faSun : faMoon}
-						className="mr-2 size-3.5 text-muted-foreground"
-					/>
-					{theme === "dark" ? "Light mode" : "Dark mode"}
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem

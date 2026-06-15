@@ -137,16 +137,6 @@ function BootGate({ bridge }: { bridge: BridgeClient }) {
 		bridge.start();
 		const unsubInit = bridge.onInit((msg) => {
 			setInit(msg);
-			// Mirror the dashboard's active theme on the SPA's own
-			// <html>. Without this the SPA stays pinned to the
-			// `class="dark"` baked into index.html and built-in tabs
-			// (Connections, State, etc.) render in dark even when the
-			// dashboard is in light mode. The dashboard re-issues init
-			// on every theme toggle, so this fires automatically.
-			document.documentElement.classList.toggle(
-				"dark",
-				(msg.theme ?? "dark") === "dark",
-			);
 			// Seed activeTab from the first init; ignore activeTab on
 			// subsequent inits (e.g. token refresh) so we don't clobber
 			// any tab switches the shell sent in between.
