@@ -1,4 +1,4 @@
-use console::{StyledObject, style};
+use console::{style, StyledObject};
 use tabled::{Table, Tabled};
 
 pub fn table<T>(iter: impl IntoIterator<Item = T>)
