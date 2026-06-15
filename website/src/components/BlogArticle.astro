@@ -178,7 +178,7 @@ const otherArticles = allPosts
 		color: #1b1916;
 	}
 
-	.blog-article .blog-prose a {
+	.blog-article .blog-prose a:not(.not-prose) {
 		color: #2e4034;
 		text-decoration: underline;
 		text-decoration-color: rgb(46 64 52 / 0.35);
@@ -188,7 +188,7 @@ const otherArticles = allPosts
 		transition: text-decoration-color 0.15s ease, color 0.15s ease;
 	}
 
-	.blog-article .blog-prose a:hover {
+	.blog-article .blog-prose a:not(.not-prose):hover {
 		color: #1b1916;
 		text-decoration-color: rgb(46 64 52 / 0.9);
 	}
@@ -261,9 +261,9 @@ const otherArticles = allPosts
 		color: #1b1916;
 	}
 
-	.blog-article .blog-prose h2 a,
-	.blog-article .blog-prose h3 a,
-	.blog-article .blog-prose h4 a {
+	.blog-article .blog-prose h2 a:not(.not-prose),
+	.blog-article .blog-prose h3 a:not(.not-prose),
+	.blog-article .blog-prose h4 a:not(.not-prose) {
 		color: inherit;
 		text-decoration: none;
 	}
