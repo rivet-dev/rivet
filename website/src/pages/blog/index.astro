@@ -13,16 +13,19 @@ const MONTHS = [
 
 const posts = await getCollection('posts');
 
-// Blog posts for the main column
-const blogPosts = posts
-	.filter((post) => post.data.category !== 'changelog' && !post.data.unpublished)
+// Unified feed of blog posts and changelog entries for the main column, newest
+// first. Changelog entries route to /changelog/, everything else to /blog/.
+const articles = posts
+	.filter((post) => !post.data.unpublished)
 	.sort((a, b) => b.data.published.getTime() - a.data.published.getTime())
 	.map((post) => {
 		const slug = post.id.replace(/\/page$/, '');
 		const data = post.data as unknown as { title: string; description: string };
+		const section = post.data.category === 'changelog' ? 'changelog' : 'blog';
 		return {
 			...post,
 			slug,
+			href: `/${section}/${slug}/`,
 			image: getPostImage(post),
 			title: data.title,
 			description: data.description,
@@ -106,10 +109,10 @@ for (const entry of changelogPosts) {
 				</div>
 			</aside>
 
-			<!-- Blog posts -->
+			<!-- Blog posts + changelog -->
 			<div class="order-first grid grid-cols-1 gap-6 md:grid-cols-2 lg:order-none">
-				{blogPosts.map((article) => (
-					<a href={`/blog/${article.slug}/`} class="size-full">
+				{articles.map((article) => (
+					<a href={article.href} class="size-full">
 						<article class="flex size-full flex-col items-start justify-between border border-ink/10 bg-white/55 p-4 transition-colors hover:border-ink/25">
 							<div class="w-full">
 								{article.image && (
