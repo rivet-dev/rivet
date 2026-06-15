@@ -30,14 +30,18 @@ describe("getRivetkitRuntimeMode", () => {
 		expect(getRivetkitRuntimeMode()).toBe("envoy");
 	});
 
-	test("empty string is envoy", () => {
+	test("empty string is rejected", () => {
 		process.env.RIVETKIT_RUNTIME_MODE = "";
-		expect(getRivetkitRuntimeMode()).toBe("envoy");
+		expect(() => getRivetkitRuntimeMode()).toThrow(
+			/RIVETKIT_RUNTIME_MODE env var must be/,
+		);
 	});
 
-	test("unrecognized value is envoy", () => {
+	test("unrecognized value is rejected", () => {
 		process.env.RIVETKIT_RUNTIME_MODE = "potato";
-		expect(getRivetkitRuntimeMode()).toBe("envoy");
+		expect(() => getRivetkitRuntimeMode()).toThrow(
+			/RIVETKIT_RUNTIME_MODE env var must be/,
+		);
 	});
 });
 

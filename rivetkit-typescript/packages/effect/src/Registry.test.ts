@@ -33,14 +33,7 @@ function makeTestLogger(): PinoLogger {
 		level: "debug",
 		child: () => logger,
 	};
-	for (const level of [
-		"trace",
-		"debug",
-		"info",
-		"warn",
-		"error",
-		"fatal",
-	]) {
+	for (const level of ["trace", "debug", "info", "warn", "error", "fatal"]) {
 		logger[level] = (): void => {};
 	}
 
@@ -207,8 +200,7 @@ describe("Registry.toWebHandler", () => {
 				}),
 			),
 		);
-		const { handler, dispose } =
-			Registry.toWebHandler(WelcomeRegistryLive);
+		const { handler, dispose } = Registry.toWebHandler(WelcomeRegistryLive);
 
 		try {
 			const first = await handler(
@@ -234,8 +226,9 @@ describe("Registry.toWebHandler", () => {
 		const CustomLoggerRegistryLive = RegistryLive.pipe(
 			Layer.provide(Logger.layerPino(baseLogger)),
 		);
-		const { handler, dispose } =
-			Registry.toWebHandler(CustomLoggerRegistryLive);
+		const { handler, dispose } = Registry.toWebHandler(
+			CustomLoggerRegistryLive,
+		);
 
 		try {
 			const response = await handler(

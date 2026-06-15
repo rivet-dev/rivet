@@ -7,10 +7,7 @@ import {
 	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
-import {
-	configureBaseLogger,
-	type Logger as PinoLogger,
-} from "rivetkit/log";
+import { configureBaseLogger, type Logger as PinoLogger } from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
 import * as Logger from "./Logger.ts";
@@ -81,19 +78,19 @@ const setupRivetkitRegistry = (
  */
 export const serve = <E, R>(
 	actorsLayer: Layer.Layer<never, E, R>,
-	): Layer.Layer<never, E, R | Registry> =>
-		Layer.effectDiscard(
-			Effect.gen(function* () {
-				const registry = yield* Registry;
-				const baseLogger = registry.baseLogger;
-				yield* Layer.build(
-					actorsLayer.pipe(
-						Layer.provideMerge(Logger.layerPino(baseLogger)),
-					),
-				);
-				const rivetkitRegistry = setupRivetkitRegistry(registry);
-				yield* Effect.sync(() => rivetkitRegistry.start());
-			}),
+): Layer.Layer<never, E, R | Registry> =>
+	Layer.effectDiscard(
+		Effect.gen(function* () {
+			const registry = yield* Registry;
+			const baseLogger = registry.baseLogger;
+			yield* Layer.build(
+				actorsLayer.pipe(
+					Layer.provideMerge(Logger.layerPino(baseLogger)),
+				),
+			);
+			const rivetkitRegistry = setupRivetkitRegistry(registry);
+			yield* Effect.sync(() => rivetkitRegistry.start());
+		}),
 	);
 
 /**
@@ -137,14 +134,12 @@ export const test: Layer.Layer<Client.Client, never, Registry> = Layer.effect(
 		// to its (warning-emitting) default.
 		const resolvedEndpoint = rivetkitRegistry.parseConfig().endpoint;
 
-			return yield* Client.make({
-				...registry.options,
-				endpoint: registry.options.endpoint ?? resolvedEndpoint,
-			}).pipe(
-				Effect.provideService(BaseLogger, registry.baseLogger),
-			);
-		}),
-	);
+		return yield* Client.make({
+			...registry.options,
+			endpoint: registry.options.endpoint ?? resolvedEndpoint,
+		}).pipe(Effect.provideService(BaseLogger, registry.baseLogger));
+	}),
+);
 
 const makeHttpEffect = (
 	registry: Registry,

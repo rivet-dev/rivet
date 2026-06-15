@@ -20,14 +20,7 @@ function makeTestLogger(
 		level: "debug",
 		child: () => logger,
 	};
-	for (const level of [
-		"trace",
-		"debug",
-		"info",
-		"warn",
-		"error",
-		"fatal",
-	]) {
+	for (const level of ["trace", "debug", "info", "warn", "error", "fatal"]) {
 		logger[level] = (
 			fields: Record<string, unknown>,
 			msg?: string,

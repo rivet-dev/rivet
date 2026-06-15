@@ -120,7 +120,7 @@ app.get("/debug/memory", async (c) => {
 	return c.json(await memoryBreakdown(forceGc));
 });
 
-app.get("/health", () => registry.routes.health());
+app.get("/health", (c) => c.json({ ok: true }));
 app.get("/metadata", () => registry.routes.metadata());
 app.get("/metrics", (c) => registry.routes.prometheusMetrics(c.req.raw));
 

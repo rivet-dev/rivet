@@ -71,36 +71,36 @@ export const make = Effect.fnUntraced(function* <
 	const services = yield* Effect.context<any>();
 	const runPromise = Effect.runPromiseWith(services);
 
-		const makeInstance = Effect.fnUntraced(function* (
-			c: WakeContext<StateDefinition, Database>,
-		): Effect.fn.Return<Instance<ActionHandlers, StateDefinition>, never, any> {
-			const scope = yield* Scope.make();
-			return yield* Effect.gen(function* () {
-				const state = stateAdapter
-					? yield* stateAdapter.makeStateView(c)
-					: undefined;
-				const context = makeContext(c, scope);
-				const actionHandlers = yield* wakeHandler(
-					makeWakeOptions(c, state),
-				).pipe(Effect.provide(context));
-				const runFork = yield* FiberSet.makeRuntime<
-					any,
-					unknown,
-					unknown
-				>().pipe(Effect.provide(Context.merge(services, context)));
+	const makeInstance = Effect.fnUntraced(function* (
+		c: WakeContext<StateDefinition, Database>,
+	): Effect.fn.Return<Instance<ActionHandlers, StateDefinition>, never, any> {
+		const scope = yield* Scope.make();
+		return yield* Effect.gen(function* () {
+			const state = stateAdapter
+				? yield* stateAdapter.makeStateView(c)
+				: undefined;
+			const context = makeContext(c, scope);
+			const actionHandlers = yield* wakeHandler(
+				makeWakeOptions(c, state),
+			).pipe(Effect.provide(context));
+			const runFork = yield* FiberSet.makeRuntime<
+				any,
+				unknown,
+				unknown
+			>().pipe(Effect.provide(Context.merge(services, context)));
 
-				return {
-					actionHandlers,
-					runFork,
-					scope,
-					state,
-				};
-			}).pipe(
-				Effect.onError((cause) =>
-					Scope.close(scope, Exit.failCause(cause)),
-				),
-			);
-		});
+			return {
+				actionHandlers,
+				runFork,
+				scope,
+				state,
+			};
+		}).pipe(
+			Effect.onError((cause) =>
+				Scope.close(scope, Exit.failCause(cause)),
+			),
+		);
+	});
 
 	return {
 		get: (actorId: string) => instances.get(actorId),
