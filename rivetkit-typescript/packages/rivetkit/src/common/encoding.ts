@@ -428,9 +428,18 @@ export function reviveJsonCompatValue(
 					reviveJsonCompatValue(input[1], options),
 				];
 			}
-			throw new Error(
-				`Unknown JSON encoding type: ${input[0]}. This may indicate corrupted data or a version mismatch.`,
-			);
+			// Layerr backward-compat shim: a single-"$" unknown tag is NEVER
+			// emitted by v2.3.0 — the encoder escapes its own "$"-leading
+			// 2-tuples to "$$" (handled above) and otherwise uses exact known
+			// tags. So this can only be pre-v2.3.0 actor state, written before
+			// this $-tagged encoding existed (the new `common/encoding.ts`
+			// landed in 2.3.0). Treat it as the literal 2-element array it
+			// actually is — e.g. ["$35 Sensible 10GB", qty] — so the v2.3.0
+			// runtime can READ v2.2.1-persisted state instead of throwing. The
+			// actor re-saves in the new (escaped) format on its next write, so
+			// this self-heals. Without it, upgrading any namespace with existing
+			// actor state requires a destructive wipe.
+			return [input[0], reviveJsonCompatValue(input[1], options)];
 		}
 		return input.map((value) => reviveJsonCompatValue(value, options));
 	}
