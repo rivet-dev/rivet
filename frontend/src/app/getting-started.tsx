@@ -1,27 +1,20 @@
-import { Accordion, AccordionContent } from "@radix-ui/react-accordion";
 import {
 	faArrowRight,
 	faCheck,
+	faChevronDown,
 	faCopy,
-	faSpinnerThird,
 	Icon,
 } from "@rivet-gg/icons";
 import { deployOptions, type Provider } from "@rivetkit/shared-data";
 import {
-	useInfiniteQuery,
 	useMutation,
 	useQuery,
 	useSuspenseInfiniteQuery,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
-import {
-	Link,
-	useNavigate,
-	useParams,
-	useRouter,
-} from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense, useEffect, useMemo } from "react";
+import { type ReactNode, Suspense } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -29,32 +22,31 @@ import z from "zod";
 import * as ConnectServerfullForm from "@/app/forms/connect-manual-serverfull-form";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
-	AccordionItem,
-	AccordionTrigger,
 	CodeFrame,
-	type CodeFrameLikeElement,
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
-	DiscreteCopyButton,
-	FormField,
 	Skeleton,
 } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
-	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
-import { successfulBackendSetupEffect } from "@/lib/effects";
-import { cloudEnv, engineEnv, getRivetRunUrl } from "@/lib/env";
+import { cloudEnv, engineEnv } from "@/lib/env";
 import { features } from "@/lib/features";
 import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { cn } from "../components/lib/utils";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 import { TEST_IDS } from "../utils/test-ids";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
@@ -72,46 +64,36 @@ import {
 	getComputeAddendum,
 } from "@/content/agent-prompts";
 
+function platformTitle(provider: unknown): string {
+	return (
+		deployOptions.find((o) => o.name === provider)?.displayName ??
+		"Rivet Compute"
+	);
+}
+
 const stepper = defineStepper(
 	{
-		id: "install",
-		title: "Install RivetKit",
+		id: "local",
+		title: "Run locally",
 		description:
-			"Add the Rivet skill so your coding agent knows Rivet, then install the package.",
-		next: "Continue",
+			"Have your coding agent scaffold and run your first Actor, or follow the quickstart.",
+		next: "Continue to deploy",
 		schema: z.object({}),
 		group: "local",
 	},
 	{
-		id: "run",
-		title: "Build your first Actor",
-		description:
-			"Let your coding agent scaffold an Actor, or follow the quickstart yourself.",
-		next: "Continue",
-		schema: z.object({}),
-		group: "local",
-	},
-	{
-		id: "provider",
-		title: "Where do you want to deploy?",
-		description:
-			"Pick a backend. Rivet manages actor orchestration, state, and scaling for you.",
-		next: "Continue",
-		schema: z.object({ provider: z.string().nonempty() }),
-		group: "deploy",
-	},
-	{
-		id: "backend",
-		title: "Connect your backend",
-		description:
-			"Deploy your app and connect it so Rivet can route to your Actors.",
+		id: "deploy",
+		title: "Deploy",
+		titleFor: (values: Record<string, unknown>) =>
+			`Deploy to ${platformTitle(values.provider)}`,
+		next: "Done",
+		previous: "Back",
 		assist: true,
 		group: "deploy",
 		schema: (values: Record<string, unknown>) => {
-			if ((values.provider as string) === "rivet") {
-				return z.object({
-					success: z.literal(true),
-				});
+			const provider = (values.provider as string) || "rivet";
+			if (provider === "rivet") {
+				return z.object({ success: z.literal(true) });
 			}
 			if ((values.mode as string) === "serverfull") {
 				return z.object({
@@ -134,17 +116,6 @@ const stepper = defineStepper(
 				...ConnectServerlessForm.deploymentSchema.shape,
 			});
 		},
-	},
-	{
-		id: "frontend",
-		title: "Verify deployment",
-		description:
-			"We'll detect your first Actor automatically once your backend is live.",
-		assist: true,
-		group: "deploy",
-		schema: z.object({}),
-		previous: "Edit provider",
-		showNext: false,
 	},
 );
 
@@ -216,11 +187,62 @@ export function GettingStarted({
 		headers: [],
 		requestLifespan: 900,
 		drainGracePeriod: 0,
-		provider: provider || "",
+		provider: provider || "rivet",
 		datacenters: {},
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
 		...(initialRunnerConfig || {}),
+	};
+
+	// Saves a non-Rivet provider's runner config on finish. The Rivet path
+	// deploys via the CLI and writes no config here.
+	const saveProviderConfig = async (values: Record<string, unknown>) => {
+		const v = values as unknown as {
+			runnerName: string;
+			provider: string;
+			mode?: "serverless" | "serverfull";
+			datacenter?: string;
+			customName?: string;
+			customIcon?: string;
+		};
+		if (v.mode === "serverfull") {
+			const existingConfig = await queryClient.fetchQuery(
+				dataProvider.runnerConfigQueryOptions({
+					name: v.runnerName,
+					safe: true,
+				}),
+			);
+			const existing = existingConfig?.datacenters || {};
+			const isCustom =
+				v.provider === "custom" || v.provider === "custom-platform";
+			const customName = isCustom
+				? v.customName?.trim() || undefined
+				: undefined;
+			const customIcon = isCustom ? v.customIcon || undefined : undefined;
+			await mutateAsync({
+				name: v.runnerName,
+				config: {
+					...existing,
+					[v.datacenter as string]: {
+						normal: {},
+						metadata: {
+							provider: v.provider,
+							...(customName ? { customName } : {}),
+							...(customIcon ? { customIcon } : {}),
+						},
+					},
+				},
+			});
+		} else {
+			const config = await buildServerlessConfig(
+				dataProvider,
+				values as unknown as Parameters<
+					typeof buildServerlessConfig
+				>[1],
+				{ provider: v.provider },
+			);
+			await mutateAsync({ name: v.runnerName, config });
+		}
 	};
 
 	return (
@@ -234,60 +256,69 @@ export function GettingStarted({
 			>
 				<SkipOnboardingHeaderLink />
 				<div className="flex-1 min-h-0 overflow-auto flex items-safe-center justify-center px-4 py-8 [&_[data-component='stepper']]:w-full [&_[data-component='stepper']>form]:w-full">
-					<div className="w-full max-w-[36rem] rounded-xl border bg-card p-6 sm:p-8 shadow-sm">
+					<div className="relative w-full max-w-[36rem] rounded-xl border bg-card p-6 sm:p-8 shadow-sm">
 						<CodeGroupSyncProvider>
 							<StepperForm
 								{...stepper}
 								singlePage
 								formId="onboarding"
 								className="mt-2"
-								header={<OnboardingProgress />}
+								header={<OnboardingHeader />}
 								initialStep={
-									displayFrontendOnboarding
-										? "frontend"
-										: provider
-											? "backend"
-											: undefined
+									displayFrontendOnboarding || provider
+										? "deploy"
+										: undefined
 								}
 								defaultValues={defaultValues}
 								content={{
-									install: () => (
-										<StepContent>
-											<InstallStep />
-										</StepContent>
-									),
-									run: () => (
+									local: () => (
 										<StepContent>
 											<RunLocallyStep />
 										</StepContent>
 									),
-									provider: () => (
-										<StepContent>
-											<ProviderSetup />
-										</StepContent>
-									),
-									backend: () => (
+									deploy: () => (
 										<StepContent>
 											<Suspense
 												fallback={
 													<div className="space-y-6">
 														<Skeleton className="w-full h-[180px]" />
-														<Skeleton className="w-full h-[250px]" />
 														<Skeleton className="w-full h-[200px]" />
 													</div>
 												}
 											>
-												<BackendSetup />
+												<DeployScreen />
 											</Suspense>
 										</StepContent>
 									),
-									frontend: () => (
-										<StepContent>
-											<FrontendSetup />
-										</StepContent>
-									),
 								}}
-								onSubmit={() => {}}
+								onSubmit={async ({ values, form }) => {
+									// Finish: the deploy step is last. Save a
+									// non-Rivet provider's config, then go to the
+									// dashboard.
+									const accumulated = values as Record<
+										string,
+										unknown
+									>;
+									const live = form.getValues() as Record<
+										string,
+										unknown
+									>;
+									const provider = (accumulated.provider ??
+										live.provider) as string | undefined;
+									if (provider && provider !== "rivet") {
+										await saveProviderConfig({
+											...accumulated,
+											provider,
+										});
+									}
+									await navigate({
+										to: ".",
+										search: (s) => ({
+											...s,
+											skipOnboarding: true,
+										}),
+									});
+								}}
 								onPartialSubmit={async ({
 									stepper,
 									values,
@@ -295,14 +326,21 @@ export function GettingStarted({
 								}) => {
 									// Provider may be lost from accumulated values
 									// after form reset, so read it from the live form.
-									const provider = (values.provider ??
-										form.getValues("provider")) as
-										| string
-										| undefined;
-									if (stepper.current.id === "provider") {
+									const provider = ((
+										values as Record<string, unknown>
+									).provider ??
+										(
+											form.getValues() as Record<
+												string,
+												unknown
+											>
+										).provider) as string | undefined;
+									// On entering the deploy step, default to Rivet
+									// Compute and provision its managed pool.
+									if (stepper.current.id === "local") {
 										if (
 											features.compute &&
-											provider === "rivet"
+											(provider ?? "rivet") === "rivet"
 										) {
 											try {
 												await mutateAsyncManagedPool({
@@ -320,7 +358,7 @@ export function GettingStarted({
 													error,
 												);
 												toast.error(
-													"Couldn't create the default Rivet Compute pool — you can configure it on the next step.",
+													"Couldn't create the default Rivet Compute pool. You can retry from the deploy step.",
 												);
 											}
 										}
@@ -340,95 +378,6 @@ export function GettingStarted({
 												: []),
 											dataProvider.engineAdminTokenQueryOptions(),
 										]);
-										return;
-									}
-									if (
-										stepper.current.id === "backend" &&
-										features.compute &&
-										provider === "rivet"
-									) {
-										return;
-									}
-									if (
-										stepper.current.id === "backend" &&
-										provider !== "rivet"
-									) {
-										const v = values as unknown as {
-											runnerName: string;
-											provider: string;
-											mode?: "serverless" | "serverfull";
-											datacenter?: string;
-											customName?: string;
-											customIcon?: string;
-										};
-
-										if (v.mode === "serverfull") {
-											const existingConfig =
-												await queryClient.fetchQuery(
-													dataProvider.runnerConfigQueryOptions(
-														{
-															name: v.runnerName,
-															safe: true,
-														},
-													),
-												);
-											const existing =
-												existingConfig?.datacenters ||
-												{};
-											const isCustom =
-												v.provider === "custom" ||
-												v.provider ===
-													"custom-platform";
-											const customName = isCustom
-												? v.customName?.trim() ||
-													undefined
-												: undefined;
-											const customIcon = isCustom
-												? v.customIcon || undefined
-												: undefined;
-
-											await mutateAsync({
-												name: v.runnerName,
-												config: {
-													...existing,
-													[v.datacenter as string]: {
-														normal: {},
-														metadata: {
-															provider:
-																v.provider,
-															...(customName
-																? { customName }
-																: {}),
-															...(customIcon
-																? { customIcon }
-																: {}),
-														},
-													},
-												},
-											});
-										} else {
-											const config =
-												await buildServerlessConfig(
-													dataProvider,
-													values as unknown as Parameters<
-														typeof buildServerlessConfig
-													>[1],
-													{ provider: v.provider },
-												);
-
-											await mutateAsync({
-												name: v.runnerName,
-												config,
-											});
-										}
-
-										await navigate({
-											to: ".",
-											search: (s) => ({
-												...s,
-												backendOnboardingSuccess: true,
-											}),
-										});
 									}
 								}}
 							>
@@ -451,27 +400,150 @@ function StepContent({ children }: { children: ReactNode }) {
 }
 
 function StepperFooter() {
-	const s = stepper.useStepper();
+	return null;
+}
 
-	if (s.current.group === "local") {
-		return (
-			<div className="flex flex-col items-center gap-4 mt-6">
+// Header rendered above each step. On the deploy step it also shows the platform
+// switcher pinned to the card's top-right corner.
+function OnboardingHeader() {
+	const s = stepper.useStepper();
+	return (
+		<>
+			{s.current.id === "deploy" ? (
+				<div className="absolute top-4 right-4 z-10">
+					<SwitchPlatform />
+				</div>
+			) : null}
+			<OnboardingProgress />
+		</>
+	);
+}
+
+// Platform switcher pinned top-right on the deploy screen. Defaults to Rivet
+// Compute; selecting another option updates the `provider` form field, which
+// re-tunes the deploy screen.
+function SwitchPlatform() {
+	const { setValue } = useFormContext();
+	const provider = (useWatch({ name: "provider" }) as string) || "rivet";
+	const options = deployOptions.filter(
+		(o) => features.compute || o.name !== "rivet",
+	);
+	return (
+		<DropdownMenu>
+			<DropdownMenuTrigger asChild>
 				<Button
 					type="button"
-					variant="link"
-					size="xs"
+					variant="outline"
+					size="sm"
 					className="text-muted-foreground"
-					onClick={() => s.goTo("provider")}
-					endIcon={<Icon icon={faArrowRight} className="ms-1" />}
-					data-testid={TEST_IDS.Onboarding.StepperSkipToDeploy}
+					endIcon={<Icon icon={faChevronDown} className="ms-1" />}
 				>
-					Already have a project working locally? Skip to deploy
+					Switch platform
 				</Button>
-			</div>
-		);
-	}
+			</DropdownMenuTrigger>
+			<DropdownMenuContent
+				side="bottom"
+				align="end"
+				sideOffset={6}
+				className="w-[22rem] max-h-[60vh] overflow-auto"
+			>
+				{options.map((option) => (
+					<DropdownMenuItem
+						key={option.name}
+						className="items-start gap-3 py-2"
+						onClick={() =>
+							setValue("provider", option.name, {
+								shouldDirty: true,
+								shouldTouch: true,
+								shouldValidate: true,
+							})
+						}
+					>
+						<Icon
+							icon={option.icon}
+							className="!size-4 mt-0.5 shrink-0 text-muted-foreground"
+						/>
+						<div className="min-w-0 flex-1">
+							<div className="flex items-center gap-2">
+								<span className="text-sm font-medium">
+									{option.displayName}
+								</span>
+								{option.badge ? (
+									<Badge
+										variant="outline"
+										className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
+									>
+										{option.badge}
+									</Badge>
+								) : null}
+								{provider === option.name ? (
+									<Icon
+										icon={faCheck}
+										className="size-3 text-primary"
+									/>
+								) : null}
+							</div>
+							<p className="text-xs text-muted-foreground">
+								{option.description}
+							</p>
+						</div>
+					</DropdownMenuItem>
+				))}
+			</DropdownMenuContent>
+		</DropdownMenu>
+	);
+}
 
-	return null;
+// Screen 2: deploy. Rivet Compute (default) uses the CLI + a live deploy check;
+// other platforms reuse the existing connect setup.
+function DeployScreen() {
+	const provider = (useWatch({ name: "provider" }) as string) || "rivet";
+	if (provider === "rivet") {
+		return <RivetDeploy />;
+	}
+	return <BackendSetup />;
+}
+
+function RivetDeploy() {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { data: cloudToken } = useSuspenseQuery(
+		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
+	);
+	const deployCommand = `npx @rivetkit/cli deploy --token ${cloudToken ?? "<RIVET_CLOUD_TOKEN>"}`;
+	return (
+		<div className="flex flex-col gap-5">
+			<div>
+				<p className="text-sm text-muted-foreground mb-3">
+					Run this from your project root. The CLI builds and pushes
+					your image and provisions Rivet Compute. The token is saved
+					to{" "}
+					<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+						~/.rivet/credentials
+					</code>{" "}
+					so later deploys can omit it.
+				</p>
+				<CommandBox command={deployCommand} />
+			</div>
+			<div className="border rounded-lg py-8">
+				<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
+					<DeploymentCheck
+						validateConfig={(data) =>
+							!!data?.find(([, value]) =>
+								Object.values(value.datacenters).some(
+									(dc) =>
+										dc.serverless &&
+										deriveProviderFromMetadata(
+											dc.metadata,
+										) === "rivet",
+								),
+							)
+						}
+						validatePool={(data) => !!data?.config?.image}
+					/>
+				</div>
+			</div>
+		</div>
+	);
 }
 
 function SkipOnboardingHeaderLink() {
@@ -526,125 +598,6 @@ function OnboardingProgress() {
 	);
 }
 
-function ProviderSetup() {
-	const { setValue, control, getValues } = useFormContext();
-
-	useEffect(() => {
-		if (!features.compute) return;
-		if (!getValues("provider")) {
-			setValue("provider", "rivet", {
-				shouldDirty: true,
-				shouldTouch: true,
-				shouldValidate: true,
-			});
-		}
-	}, [setValue, getValues]);
-
-	return (
-		<div data-testid={TEST_IDS.Onboarding.IntegrationProviderSelection}>
-			<FormField
-				control={control}
-				name="provider"
-				render={({ field }) => {
-					return (
-						<div className="flex flex-col gap-2">
-							<div className="grid grid-cols-2 gap-2">
-								{deployOptions
-									.filter(
-										(option) =>
-											features.compute ||
-											option.name !== "rivet",
-									)
-									.map((option) => (
-										<ProviderCard
-											key={option.name}
-											option={option}
-											isSelected={
-												field.value === option.name
-											}
-											onSelect={() =>
-												setValue(
-													"provider",
-													option.name,
-													{
-														shouldDirty: true,
-														shouldTouch: true,
-														shouldValidate: true,
-													},
-												)
-											}
-											className={
-												features.compute &&
-												option.name === "rivet"
-													? "col-span-2 py-5"
-													: undefined
-											}
-										/>
-									))}
-							</div>
-						</div>
-					);
-				}}
-			/>
-		</div>
-	);
-}
-
-function ProviderCard({
-	option,
-	isSelected,
-	onSelect,
-	className,
-	iconClassName,
-}: {
-	option: (typeof deployOptions)[number];
-	isSelected: boolean;
-	onSelect: () => void;
-	className?: string;
-	iconClassName?: string;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={onSelect}
-			data-testid={TEST_IDS.Onboarding.IntegrationProviderOption(
-				option.name,
-			)}
-			className={cn(
-				"flex items-center gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
-				isSelected
-					? "border-primary bg-primary/5"
-					: "border-border hover:border-muted-foreground/50",
-				className,
-			)}
-		>
-			<Icon
-				icon={option.icon}
-				className={cn(
-					"!size-5 shrink-0 text-muted-foreground",
-					iconClassName,
-				)}
-			/>
-			<div className="min-w-0 flex-1">
-				<div className="flex items-center gap-2">
-					<p className="text-sm font-medium">{option.displayName}</p>
-					{option.badge ? (
-						<Badge
-							variant="outline"
-							className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
-						>
-							{option.badge}
-						</Badge>
-					) : null}
-				</div>
-				<p className="text-xs text-muted-foreground">
-					{option.description}
-				</p>
-			</div>
-		</button>
-	);
-}
-
 function OrDivider({ label }: { label: string }) {
 	return (
 		<div className="flex items-center gap-3">
@@ -673,47 +626,6 @@ function CommandBox({ command }: { command: string }) {
 			>
 				<Icon icon={faCopy} className="w-3.5 h-3.5" />
 			</Button>
-		</div>
-	);
-}
-
-function InstallStep() {
-	return (
-		<div className="flex flex-col gap-6">
-			<div className="flex gap-3">
-				<StepNumber n={1} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-1.5">
-						Install the Rivet skill
-					</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Run this in your coding agent. The skill teaches it how
-						to build and deploy with Rivet, then guides you through
-						the rest of this setup.
-					</p>
-					<CommandBox command="npx skills add rivet-dev/skills" />
-				</div>
-			</div>
-
-			<div className="flex gap-3">
-				<StepNumber n={2} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-1.5">
-						Add the RivetKit package
-					</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Install the library your app imports to define and call
-						Actors.
-					</p>
-					<PackageManagerCode
-						npx="npm install rivetkit"
-						yarn="yarn add rivetkit"
-						pnpm="pnpm add rivetkit"
-						bun="bun add rivetkit"
-						deno="deno add npm:rivetkit"
-					/>
-				</div>
-			</div>
 		</div>
 	);
 }
@@ -912,9 +824,6 @@ function BackendSetupRivet() {
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
 
-	const deployCmd = cloudToken
-		? `npx @rivetkit/cli deploy --token ${cloudToken}`
-		: "npx @rivetkit/cli deploy --token <RIVET_CLOUD_TOKEN>";
 	const ghSecretCmd = cloudToken
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
@@ -940,42 +849,15 @@ function BackendSetupRivet() {
 			<div className="flex gap-3">
 				<StepNumber n={2} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Deploy to Rivet Compute</p>
+					<p className="font-medium mb-2">Add GitHub secret</p>
 					<p className="text-sm text-muted-foreground mb-3">
-						Run the deploy command from your project root. The token
-						is saved locally for future deploys.
+						Add your Rivet token as a repository secret named{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							RIVET_CLOUD_TOKEN
+						</code>
+						.
 					</p>
 					<CodeGroup className="my-0">
-						{[
-							<CodeFrame
-								key="rivet-deploy"
-								language="bash"
-								title="bash"
-								code={() => deployCmd}
-								className="m-0"
-							>
-								<CodePreview
-									language="bash"
-									className="text-left"
-									code={deployCmd}
-								/>
-							</CodeFrame>,
-						]}
-					</CodeGroup>
-				</div>
-			</div>
-			<div className="flex gap-3">
-				<StepNumber n={3} />
-				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Optionally add CI</p>
-					<p className="text-sm text-muted-foreground mb-3">
-						Add your token as a repository secret, then create{" "}
-						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
-							.github/workflows/rivet-deploy.yml
-						</code>{" "}
-						to deploy on every push and pull request.
-					</p>
-					<CodeGroup className="my-0 mb-3">
 						{[
 							<CodeFrame
 								key="gh-secret"
@@ -992,6 +874,19 @@ function BackendSetupRivet() {
 							</CodeFrame>,
 						]}
 					</CodeGroup>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={3} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Add GitHub Action</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Create{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							.github/workflows/rivet-deploy.yml
+						</code>{" "}
+						to automatically deploy on every push and pull request.
+					</p>
 					<CodeGroup className="my-0">
 						{[
 							<CodeFrame
@@ -1014,10 +909,12 @@ function BackendSetupRivet() {
 			<div className="flex gap-3">
 				<StepNumber n={4} />
 				<div className="flex-1 min-w-0">
-					<p className="font-medium mb-2">Monitor deployment</p>
+					<p className="font-medium mb-2">Deploy to Rivet Compute</p>
 					<p className="text-sm text-muted-foreground mb-2">
-						The status check below updates automatically once your
-						backend is deployed.
+						Push your changes to trigger the{" "}
+						<strong>Rivet Deploy</strong> workflow. The status check
+						below will update automatically once your backend is
+						deployed.
 					</p>
 					<div className="border rounded-md py-8">
 						<div className="flex gap-2 justify-center items-center flex-col py-2 px-8">
@@ -1200,423 +1097,4 @@ function useServerfullEndpoint() {
 		dataProvider.datacenterQueryOptions(datacenter || "auto"),
 	);
 	return data?.url || engineEnv().VITE_APP_API_URL;
-}
-
-// Cloud + Rivet compute: poll the project image registry. Until the user
-// pushes their first image, no runner config exists and no actor can be
-// scheduled, so the caller hides the "Waiting for an Actor" affordance and
-// shows a deployment-pending caption instead. In non-cloud builds
-// `useCloudNamespaceDataProvider` returns undefined and this is a no-op.
-function useWaitingForFirstImage(provider: string | undefined): boolean {
-	const nsDataProvider = useCloudNamespaceDataProvider();
-	const enabled =
-		features.compute && provider === "rivet" && nsDataProvider != null;
-	const { data: hasImage } = useQuery({
-		...(nsDataProvider
-			? nsDataProvider.currentProjectFirstImagePresentQueryOptions()
-			: {
-					queryKey: ["frontend-setup", "first-image-noop"] as const,
-					queryFn: () => false,
-				}),
-		enabled,
-	});
-	return enabled && hasImage !== true;
-}
-
-function FrontendSetup() {
-	const dataProvider = useDataProvider();
-
-	const { data: builds } = useInfiniteQuery({
-		...dataProvider.buildsQueryOptions(),
-		maxPages: 1,
-	});
-
-	const { data: actors } = useQuery({
-		...dataProvider.actorsCountQueryOptions(),
-		enabled: (builds?.length || 0) > 0,
-		maxPages: 1,
-		refetchInterval: 2500,
-	});
-
-	const hasActors = (actors || 0) > 0;
-
-	const navigate = useNavigate();
-	const router = useRouter();
-
-	const { data: config } = useInfiniteQuery({
-		...dataProvider.runnerConfigsQueryOptions(),
-		select: (data) =>
-			Object.values(data.pages[0].runnerConfigs || {})
-				.flatMap((r) => Object.values(r.datacenters))
-				.filter((dc) => dc.serverless)?.[0].serverless,
-	});
-
-	const provider = useWatch({ name: "provider" });
-	const nsDataProvider = useCloudNamespaceDataProvider();
-	const { namespace: namespaceParam } = useParams({ strict: false }) as {
-		namespace: string;
-	};
-	const { data: nsData } = useQuery(
-		nsDataProvider.currentProjectNamespaceQueryOptions({
-			namespace: namespaceParam,
-		}),
-	);
-	const waitingForFirstImage = useWaitingForFirstImage(provider);
-
-	const deploymentUrl = useMemo(() => {
-		if (provider === "rivet" && nsData?.access?.engineNamespaceName) {
-			return getRivetRunUrl(nsData.access.engineNamespaceName);
-		}
-		if (!config?.url) return null;
-		try {
-			const url = new URL(config.url);
-			url.pathname = "/";
-			return url.toString();
-		} catch {
-			return null;
-		}
-	}, [config?.url, provider, nsData?.access?.engineNamespaceName]);
-
-	useEffect(() => {
-		const success = async () => {
-			successfulBackendSetupEffect();
-			router.invalidate();
-			return navigate({
-				to: ".",
-				search: (s) => ({
-					...s,
-					onboardingSuccess: true,
-				}),
-			});
-		};
-		if (hasActors) {
-			success().catch((error) => {
-				console.error(error);
-			});
-		}
-	}, [hasActors, navigate, router]);
-
-	const endpoint = useEndpoint();
-
-	return (
-		<div
-			className="space-y-4"
-			data-testid={TEST_IDS.Onboarding.VerificationStep}
-		>
-			<div className="border rounded-lg p-6 flex flex-col gap-5">
-				<div
-					className="flex flex-col gap-4"
-					data-testid={TEST_IDS.Onboarding.WaitingForActor}
-				>
-					{provider === "rivet" ? (
-						<>
-							<VerifyStatusRow
-								state={waitingForFirstImage ? "active" : "done"}
-								label="Deploy your backend"
-								sublabel={
-									waitingForFirstImage
-										? "Run npx @rivetkit/cli deploy from your project."
-										: "Deployment detected."
-								}
-							/>
-							<VerifyStatusRow
-								state={
-									waitingForFirstImage ? "pending" : "active"
-								}
-								label="Create your first Actor"
-								sublabel="We'll continue automatically once an Actor is running."
-							/>
-						</>
-					) : (
-						<VerifyStatusRow
-							state="active"
-							label="Waiting for your first Actor"
-							sublabel="We'll continue automatically once an Actor is created."
-						/>
-					)}
-				</div>
-
-				<div className="border-t pt-5 flex items-center flex-wrap justify-between gap-3">
-					{provider === "rivet" ? (
-						<>
-							<Button asChild>
-								<Link to="." search={{ skipOnboarding: true }}>
-									Go to dashboard
-									<Icon
-										icon={faArrowRight}
-										className="ml-1.5"
-									/>
-								</Link>
-							</Button>
-							{deploymentUrl ? (
-								<div className="flex flex-col gap-1 text-sm min-w-0">
-									<span className="text-xs text-muted-foreground">
-										Deployment URL
-									</span>
-									<DiscreteCopyButton
-										value={deploymentUrl}
-										className="font-mono text-xs text-muted-foreground"
-									>
-										{deploymentUrl}
-									</DiscreteCopyButton>
-								</div>
-							) : (
-								<span />
-							)}
-							<Button variant="outline" size="sm" asChild>
-								<Link to="." search={{ skipOnboarding: true }}>
-									Skip to dashboard
-									<Icon
-										icon={faArrowRight}
-										className="ml-1.5"
-									/>
-								</Link>
-							</Button>
-						</>
-					) : (
-						<>
-							<Button asChild>
-								<Link
-									to="."
-									search={(s) => ({
-										...s,
-										modal: "create-actor",
-									})}
-								>
-									Create an Actor
-								</Link>
-							</Button>
-							{deploymentUrl ? (
-								<Button variant="outline" asChild>
-									<a
-										href={deploymentUrl}
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										Visit deployment
-									</a>
-								</Button>
-							) : null}
-						</>
-					)}
-				</div>
-			</div>
-			<TroubleshootingSection endpoint={endpoint} />
-		</div>
-	);
-}
-
-function VerifyStatusRow({
-	state,
-	label,
-	sublabel,
-}: {
-	state: "done" | "active" | "pending";
-	label: string;
-	sublabel?: string;
-}) {
-	return (
-		<div className="flex items-start gap-3">
-			<div className="mt-0.5 shrink-0">
-				{state === "done" ? (
-					<Icon icon={faCheck} className="text-primary w-4 h-4" />
-				) : state === "active" ? (
-					<Icon
-						icon={faSpinnerThird}
-						className="w-4 h-4 animate-spin text-muted-foreground"
-					/>
-				) : (
-					<div className="w-4 h-4 rounded-full border border-muted-foreground/30" />
-				)}
-			</div>
-			<div className="min-w-0">
-				<p
-					className={cn(
-						"text-sm font-medium",
-						state === "pending" && "text-muted-foreground",
-					)}
-				>
-					{label}
-				</p>
-				{sublabel ? (
-					<p className="text-xs text-muted-foreground">{sublabel}</p>
-				) : null}
-			</div>
-		</div>
-	);
-}
-
-function TroubleshootingSection({ endpoint }: { endpoint: string | null }) {
-	const provider = useWatch({ name: "provider" });
-
-	if (provider === "rivet") {
-		return null;
-	}
-
-	return (
-		<Accordion type="single" collapsible className="mt-10">
-			<AccordionItem value="troubleshooting">
-				<AccordionTrigger className="w-full flex items-center justify-between px-4 py-2">
-					Troubleshooting
-				</AccordionTrigger>
-				<AccordionContent className="px-4 py-2  rounded-md border">
-					<p className="mt-2">
-						If your actor isn't showing up, check the following:
-					</p>
-					<ul className="list-disc list-inside mt-2">
-						<li>
-							<span>
-								The actor file is in the correct location and
-								has the correct name.
-							</span>
-						</li>
-						<li>
-							<span>The actor is being exported properly.</span>
-						</li>
-						<li>
-							<span>
-								Check the terminal output for any errors during
-								the build or runtime.
-							</span>
-						</li>
-						<li>
-							<span>
-								Make sure your coding agent has completed the
-								setup steps correctly.
-							</span>
-						</li>
-						<li>
-							<span className="inline-block mb-1">
-								You're using correct environment variables:
-							</span>
-							<Suspense
-								fallback={<Skeleton className="w-full h-20" />}
-							>
-								<EnvVariables endpoint={endpoint ?? ""} />
-							</Suspense>
-						</li>
-					</ul>
-				</AccordionContent>
-			</AccordionItem>
-		</Accordion>
-	);
-}
-
-function PackageManagerCode(props: {
-	npx?: string;
-	yarn?: string;
-	pnpm?: string;
-	bun?: string;
-	deno?: string;
-	git?: string;
-	footer?: ReactNode;
-	header?: ReactNode;
-}) {
-	const npx = props.npx ? (
-		<CodeFrame
-			language="bash"
-			title="npm"
-			footer={props.footer}
-			code={() => props.npx || ""}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={props.npx}
-			/>
-		</CodeFrame>
-	) : null;
-
-	const yarn = props.yarn ? (
-		<CodeFrame
-			language="bash"
-			title="yarn"
-			footer={props.footer}
-			code={() => props.yarn || ""}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={props.yarn}
-			/>
-		</CodeFrame>
-	) : null;
-
-	const pnpm = props.pnpm ? (
-		<CodeFrame
-			language="bash"
-			title="pnpm"
-			footer={props.footer}
-			code={() => props.pnpm || ""}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={props.pnpm}
-			/>
-		</CodeFrame>
-	) : null;
-
-	const bun = props.bun ? (
-		<CodeFrame
-			language="bash"
-			title="bun"
-			footer={props.footer}
-			code={() => props.bun || ""}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={props.bun}
-			/>
-		</CodeFrame>
-	) : null;
-
-	const deno = props.deno ? (
-		<CodeFrame
-			language="bash"
-			title="deno"
-			footer={props.footer}
-			code={() => props.deno || ""}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={props.deno}
-			/>
-		</CodeFrame>
-	) : null;
-
-	const git = props.git ? (
-		<CodeFrame
-			language="bash"
-			title="git"
-			footer={props.footer}
-			code={() => props.git || ""}
-			className="m-0"
-		>
-			<CodePreview
-				language="bash"
-				className="text-left"
-				code={props.git}
-			/>
-		</CodeFrame>
-	) : null;
-
-	return (
-		<CodeGroup
-			className="my-0"
-			syncId="package-manager"
-			header={props.header}
-		>
-			{[npx, yarn, pnpm, bun, deno, git].filter(
-				(el): el is CodeFrameLikeElement => Boolean(el),
-			)}
-		</CodeGroup>
-	);
 }
