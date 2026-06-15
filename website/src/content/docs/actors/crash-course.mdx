@@ -495,8 +495,8 @@ const chatRoom = actor({
 	onBeforeConnect: (c, params) => {
 		/* validate auth */
 	},
-	onConnect: (c, conn) => console.log("connected:", conn.state.userId),
-	onDisconnect: (c, conn) => console.log("disconnected:", conn.state.userId),
+	onConnect: (c, conn) => console.log("connected:", (conn.state as ConnState).userId),
+	onDisconnect: (c, conn) => console.log("disconnected:", (conn.state as ConnState).userId),
 
 	// Networking
 	onRequest: (c, req) => new Response(JSON.stringify(c.state)),
