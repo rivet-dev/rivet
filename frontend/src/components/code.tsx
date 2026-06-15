@@ -168,6 +168,7 @@ interface CodeFrameProps {
 	isInGroup?: boolean;
 	code?: () => string;
 	footer?: ReactNode;
+	hideFooter?: boolean;
 	children?: ReactElement<any>;
 	className?: string;
 }
@@ -178,6 +179,7 @@ export const CodeFrame = ({
 	title,
 	code,
 	footer,
+	hideFooter,
 	isInGroup,
 	className,
 }: CodeFrameProps) => {
@@ -189,7 +191,13 @@ export const CodeFrame = ({
 			)}
 		>
 			<div className="bg-background text-wrap text-sm">
-				<ScrollArea className="w-full [&_[data-radix-scroll-area-viewport]]:px-4 [&_[data-radix-scroll-area-viewport]]:py-4">
+				<ScrollArea
+					className="w-full"
+					viewportProps={{
+						className:
+							"py-4 [&>div]:!w-max [&>div]:min-w-full [&>div]:px-4",
+					}}
+				>
 					<CopyTrigger value={code || ""}>
 						<Button
 							variant="ghost"
@@ -205,7 +213,7 @@ export const CodeFrame = ({
 				</ScrollArea>
 			</div>
 
-			{footer || file || !isInGroup ? (
+			{!hideFooter && (footer || file || !isInGroup) ? (
 				<div className="text-foreground flex items-center justify-between gap-2 border-t p-2 text-xs">
 					<div className="text-muted-foreground flex items-center gap-1">
 						{footer}

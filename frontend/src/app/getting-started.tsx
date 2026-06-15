@@ -610,23 +610,14 @@ function OrDivider({ label }: { label: string }) {
 
 function CommandBox({ command }: { command: string }) {
 	return (
-		<div className="flex items-center justify-between gap-2 rounded-md border bg-muted/40 px-3 py-2">
-			<CodePreview code={command} language="bash" />
-			<Button
-				type="button"
-				variant="ghost"
-				size="sm"
-				className="shrink-0"
-				onClick={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-					navigator.clipboard.writeText(command);
-					toast.success("Copied to clipboard");
-				}}
-			>
-				<Icon icon={faCopy} className="w-3.5 h-3.5" />
-			</Button>
-		</div>
+		<CodeFrame
+			language="bash"
+			code={() => command}
+			hideFooter
+			className="group my-0"
+		>
+			<CodePreview code={command} language="bash" className="text-left" />
+		</CodeFrame>
 	);
 }
 
