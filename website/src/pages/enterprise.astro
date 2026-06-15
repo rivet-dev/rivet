@@ -64,6 +64,24 @@ const footprints = [
 		body: 'Scale out across nodes and regions when traffic demands it. The same artifact you evaluated runs in production.',
 	},
 ];
+
+const enterpriseEditionFeatures = [
+	'Actor orchestration engine',
+	'FoundationDB persistence layer',
+	'Cloud layer for multi-tenant',
+	'SQLite backup',
+	'SQLite PITR',
+	'Forking',
+	'ACL system',
+	'ACL for agents',
+	'Advanced ClickHouse analytics',
+	'OpenTelemetry integration',
+	'Alert manager rules, Prometheus rules, Grafana configs',
+	'Kubernetes manifests',
+	'Air-gapped & sovereign-cloud deployments',
+	'Priority support & SLA',
+	'Hardening guidance for FedRAMP, HIPAA, and regulated industries',
+];
 ---
 
 <MarketingLayout title={title} description={description} canonicalUrl={canonicalUrl}>
@@ -119,6 +137,34 @@ const footprints = [
 							))
 						}
 					</div>
+				</div>
+			</section>
+
+			<!-- Enterprise Edition contents -->
+			<section class="border-t border-ink/10 px-6 py-16 md:py-32">
+				<div class="mx-auto w-full max-w-7xl">
+					<div class="max-w-3xl">
+						<h2 class={SECTION_H2_CLASS}>Everything in Enterprise Edition.</h2>
+						<p class={SUBTITLE_CLASS}>
+							Closed-source, production-grade features on top of the open-source engine. The
+							orchestration, multi-tenancy, and compliance layer to run Rivet at enterprise scale,
+							in your own VPC, customer environments, or regulated networks.
+						</p>
+					</div>
+					<ul class="mt-12 grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+						{
+							enterpriseEditionFeatures.map((feature) => (
+								<li class="flex items-start gap-3 text-sm leading-relaxed text-ink-soft">
+									<span class="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border border-pine/30">
+										<svg class="h-3 w-3 text-pine" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+											<path d="M20 6 9 17l-5-5" />
+										</svg>
+									</span>
+									{feature}
+								</li>
+							))
+						}
+					</ul>
 				</div>
 			</section>
 

@@ -5,12 +5,11 @@ import {
   ArrowRight,
   Check,
   Server,
-  Cloud,
+  ShieldCheck,
   Cpu,
   MemoryStick,
   Clock
 } from 'lucide-react';
-import { AnimatePresence, motion } from 'framer-motion';
 import rivetLogoWhite from '@/images/rivet-logos/icon-white.svg';
 import imgYC from '@/images/logos/yc.svg';
 import imgA16z from '@/images/logos/a16z.svg';
@@ -34,6 +33,13 @@ const SelfHostingComparison = () => {
     { label: 'Updates', value: 'Manual' },
   ];
 
+  const enterpriseSpecs = [
+    { label: 'Scaling', value: 'You Manage' },
+    { label: 'Database', value: 'FoundationDB' },
+    { label: 'Networking', value: 'VPC & air-gapped' },
+    { label: 'Updates', value: 'Guided' },
+  ];
+
   return (
     <section className="border-t border-ink/10 py-16 md:py-32">
       <div className="mx-auto max-w-7xl px-6">
@@ -45,7 +51,7 @@ const SelfHostingComparison = () => {
             </p>
           </div>
 
-          <div className="grid gap-8 md:grid-cols-2">
+          <div className="grid gap-8 md:grid-cols-3">
               {/* Rivet Cloud Card */}
               <div className="flex flex-col border border-ink/10 bg-white/55 p-7">
                   <div className="mb-6 flex items-center gap-3">
@@ -53,7 +59,7 @@ const SelfHostingComparison = () => {
                        <h3 className="text-lg font-medium text-ink">Rivet Cloud</h3>
                   </div>
                   <p className="mb-8 text-sm leading-relaxed text-ink-soft">
-                      Managed cloud solution for personal projects to enterprise.
+                      Managed cloud solution for personal projects to large orgs.
                   </p>
 
                   <div className="flex-grow font-mono text-sm">
@@ -80,7 +86,7 @@ const SelfHostingComparison = () => {
                            <h3 className="text-lg font-medium text-cream">Self-Hosted</h3>
                       </div>
                       <p className="mb-8 text-sm leading-relaxed text-cream/60">
-                          Maximum control for air-gapped environments and regulated workloads. Deploy inside the boundary your existing controls already cover.
+                          Run the open-source version of Rivet on your own infrastructure. Apache 2.0, no usage limits, full source access.
                       </p>
 
                       <div className="flex-grow font-mono text-sm">
@@ -102,6 +108,34 @@ const SelfHostingComparison = () => {
                       </p>
                   </div>
               </InkPanel>
+
+              {/* Enterprise Edition Card */}
+              <InkPanel className="flex flex-col [&>div:first-child]:flex-grow">
+                  <div className="flex h-full flex-col p-7">
+                      <div className="mb-6 flex items-center gap-3">
+                           <ShieldCheck className="h-6 w-6 text-cream" />
+                           <h3 className="text-lg font-medium text-cream">Enterprise Edition</h3>
+                      </div>
+                      <p className="mb-8 text-sm leading-relaxed text-cream/60">
+                          Production-grade closed-source features on top of open-source Rivet. Orchestration, multi-tenancy, and compliance to run at enterprise scale.
+                      </p>
+
+                      <div className="flex-grow font-mono text-sm">
+                          {enterpriseSpecs.map(({ label, value }) => (
+                              <div key={label} className="flex items-center justify-between gap-4 border-b border-cream/10 py-3.5">
+                                  <span className="text-[11px] uppercase tracking-[0.16em] text-cream/50">{label}</span>
+                                  <span className="text-right text-cream">{value}</span>
+                              </div>
+                          ))}
+                      </div>
+
+                      <a href="/sales"
+                          className="mt-8 w-full rounded-md border border-cream/20 py-3 text-center text-sm text-cream/85 transition-colors hover:border-cream/40 hover:text-cream"
+                      >
+                          Contact Sales
+                      </a>
+                  </div>
+              </InkPanel>
           </div>
         </div>
       </div>
@@ -111,21 +145,15 @@ const SelfHostingComparison = () => {
 
 const ComparisonTable = () => {
     const features = [
-      { name: "Awake Actor Hours", free: "100,000 max", hobby: "400,000 included", team: "400,000 included", ent: "Custom" },
-      { name: "Compute", free: "$5 max", hobby: "Usage-based", team: "Usage-based", ent: "Custom" },
-      { name: "Max vCPU", free: "1", hobby: "8", team: "8", ent: "Custom" },
-      { name: "Storage", free: "5GB max", hobby: "5GB included", team: "5GB included", ent: "Custom" },
-      { name: "Reads / mo", free: "200 Million max", hobby: "25 Billion included", team: "25 Billion included", ent: "Custom" },
-      { name: "Writes / mo", free: "5 Million max", hobby: "50 Million included", team: "50 Million included", ent: "Custom" },
-      { name: "Egress", free: "100GB max", hobby: "1TB included", team: "1TB included", ent: "Custom" },
-      { name: "Support", free: "Community", hobby: "Email", team: "Slack & Email", ent: "Slack & Email" },
-      { name: "MFA", free: false, hobby: false, team: true, ent: true },
-      { name: "Custom Regions", free: false, hobby: false, team: false, ent: true },
-      { name: "SLA", free: false, hobby: false, team: false, ent: true },
-      { name: "Audit Logs", free: false, hobby: false, team: false, ent: true },
-      { name: "Custom Roles", free: false, hobby: false, team: false, ent: true },
-      { name: "Device Tracking", free: false, hobby: false, team: false, ent: true },
-      { name: "Volume Pricing", free: false, hobby: false, team: false, ent: true },
+      { name: "Awake Actor Hours", free: "100,000 max", hobby: "400,000 included", team: "400,000 included" },
+      { name: "Compute", free: "$5 max", hobby: "Usage-based", team: "Usage-based" },
+      { name: "Max vCPU", free: "1", hobby: "8", team: "8" },
+      { name: "Storage", free: "5GB max", hobby: "5GB included", team: "5GB included" },
+      { name: "Reads / mo", free: "200 Million max", hobby: "25 Billion included", team: "25 Billion included" },
+      { name: "Writes / mo", free: "5 Million max", hobby: "50 Million included", team: "50 Million included" },
+      { name: "Egress", free: "100GB max", hobby: "1TB included", team: "1TB included" },
+      { name: "Support", free: "Community", hobby: "Email", team: "Slack & Email" },
+      { name: "MFA", free: false, hobby: false, team: true },
     ];
 
     const renderCell = (value) => {
@@ -139,7 +167,7 @@ const ComparisonTable = () => {
 
     return (
         <div className="mt-24 border-t border-ink/10 pt-16">
-            <h3 className="mb-12 text-2xl font-medium tracking-[-0.015em] text-ink">Compare Plans</h3>
+            <h3 className="mb-12 text-2xl font-medium tracking-[-0.015em] text-ink">Compare Cloud Plans</h3>
             <div className="overflow-x-auto">
                 <table className="w-full min-w-[800px] border-collapse">
                     <thead>
@@ -148,7 +176,6 @@ const ComparisonTable = () => {
                             <th className="w-[18%] p-4 text-center text-sm font-medium text-ink">Free</th>
                             <th className="w-[18%] p-4 text-center text-sm font-medium text-pine">Hobby</th>
                             <th className="w-[18%] p-4 text-center text-sm font-medium text-ink">Team</th>
-                            <th className="w-[18%] p-4 text-center text-sm font-medium text-ink">Enterprise</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -158,7 +185,6 @@ const ComparisonTable = () => {
                                 <td className="p-4 text-center">{renderCell(feature.free)}</td>
                                 <td className="p-4 text-center">{renderCell(feature.hobby)}</td>
                                 <td className="p-4 text-center">{renderCell(feature.team)}</td>
-                                <td className="p-4 text-center">{renderCell(feature.ent)}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -330,8 +356,6 @@ interface Plan {
 }
 
 const Pricing = () => {
-    const [isCloud, setIsCloud] = useState(true);
-
     const cloudPlans: Plan[] = [
         {
             name: "Free",
@@ -387,72 +411,41 @@ const Pricing = () => {
             ],
             cta: "Get Started",
             highlight: false
-        },
-        {
-            name: "Enterprise",
-            price: "Custom",
-            period: "",
-            desc: "For high-volume, mission-critical workloads.",
-            features: [
-                "Everything in Team",
-                "Priority Support",
-                "SLA",
-                "OIDC SSO provider",
-                "Audit Logs",
-                "Custom Roles",
-                "Device Tracking",
-                "Volume Pricing"
-            ],
-            cta: "Contact",
-            highlight: false
         }
     ];
 
-    const selfHostedPlans: Plan[] = [
-        {
-            name: "Open Source",
-            price: "Free",
-            period: "Forever",
-            desc: "Rivet is open source. Run it on your own infrastructure with no usage limits.",
-            features: [
-                "Single Rust binary or Docker image",
-                "Air-gapped & on-prem deployments",
-                "BYO database (Postgres or filesystem)",
-                "Apache 2.0 license, full source access",
-                "Community support"
-            ],
-            cta: "Get Started",
-            highlight: false
-        },
-        {
-            name: "Enterprise Edition",
-            price: "Custom",
-            period: "",
-            desc: "Production self-host bundle for teams running Rivet inside their own VPC, customer environments, or regulated networks.",
-            features: [
-                "Actor orchestration engine",
-                "FoundationDB persistence layer",
-                "Cloud layer for multi-tenant",
-                "SQLite backup",
-                "SQLite PITR",
-                "Forking",
-                "ACL system",
-                "ACL for agents",
-                "Advanced ClickHouse analytics",
-                "OpenTelemetry integration",
-                "Alert manager rules, Prometheus rules, Grafana configs",
-                "Kubernetes manifests",
-                "Air-gapped & sovereign-cloud deployments",
-                "Priority support & SLA",
-                "Hardening guidance for FedRAMP, HIPAA, regulated industries"
-            ],
-            cta: "Contact Sales",
-            highlight: false,
-            inkHeader: true
-        }
-    ];
+    // Enterprise Edition is the self-hosted, on-prem offering. It is the only
+    // enterprise tier, so it is shown on both toggle states: alongside the
+    // self-hosted plans, and appended to the cloud plans so it stays visible by
+    // default (it keeps its "Self-Hosted" header tag in either view).
+    const enterpriseEditionPlan: Plan = {
+        name: "Enterprise Edition",
+        price: "Custom",
+        period: "",
+        desc: "Closed-source, production-grade features to run Rivet at enterprise scale in your own VPC, customer environments, or regulated networks.",
+        features: [
+            "Actor orchestration engine",
+            "FoundationDB persistence layer",
+            "Cloud layer for multi-tenant",
+            "SQLite backup",
+            "SQLite PITR",
+            "Forking",
+            "ACL system",
+            "ACL for agents",
+            "Advanced ClickHouse analytics",
+            "OpenTelemetry integration",
+            "Alert manager rules, Prometheus rules, Grafana configs",
+            "Kubernetes manifests",
+            "Air-gapped & sovereign-cloud deployments",
+            "Priority support & SLA",
+            "Hardening guidance for FedRAMP, HIPAA, regulated industries"
+        ],
+        cta: "Contact Sales",
+        highlight: false,
+        inkHeader: true
+    };
 
-    const plans = isCloud ? cloudPlans : selfHostedPlans;
+    const plans = [...cloudPlans, enterpriseEditionPlan];
 
     const usagePricing: { resource: string; price: string; unit: string; prefix?: string }[] = [
         { resource: "Awake Actors", price: "$0.05", unit: "per 1k Awake Actor Hours" },
@@ -468,83 +461,14 @@ const Pricing = () => {
             <div className="mx-auto max-w-7xl px-6">
                 <div className="flex flex-col gap-12">
                     <div className="flex flex-col items-center text-center">
-                        <AnimatePresence mode="wait" initial={false}>
-                            <motion.div
-                                key={isCloud ? 'cloud-copy' : 'self-hosted-copy'}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.2, ease: 'easeOut' }}
-                                className="flex flex-col items-center"
-                            >
-                                <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>
-                                    {isCloud ? "Simple, predictable pricing" : "Run it where your data lives"}
-                                </h2>
-                                <p className="mb-6 mt-2 max-w-xl text-base leading-relaxed text-ink-soft">
-                                    {isCloud
-                                        ? "Pay for coordination, state, and compute. Run your actors and applications on Rivet Compute, or bring your own and run them anywhere."
-                                        : "Deploy Rivet inside your VPC, your customer's environment, or fully air-gapped. Use the compliance posture you already have."
-                                    }
-                                </p>
-                            </motion.div>
-                        </AnimatePresence>
-
-                        {/* On-prem shortcut to the self-host tier. Hidden once
-                            Self-Hosted is selected, since you are already there. */}
-                        {isCloud && (
-                            <button
-                                onClick={() => setIsCloud(false)}
-                                className="mb-6 inline-flex items-center gap-2 rounded-full border border-pine/30 px-3 py-1.5 text-xs text-pine transition-colors hover:border-pine/60"
-                            >
-                                <Server className="h-3 w-3" />
-                                Need on-prem, air-gapped, or in your customer's VPC?
-                                <span className="font-medium">Self-host →</span>
-                            </button>
-                        )}
-
-                        {/* Toggle */}
-                        <div className="inline-flex rounded-lg border border-ink/15 bg-white/40 p-1">
-                            {[
-                                { cloud: true, label: 'Cloud', Icon: Cloud },
-                                { cloud: false, label: 'Self-Hosted', Icon: Server },
-                            ].map(({ cloud, label, Icon }) => {
-                                const active = isCloud === cloud;
-
-                                return (
-                                    <button
-                                        key={label}
-                                        type="button"
-                                        onClick={() => setIsCloud(cloud)}
-                                        aria-pressed={active}
-                                        className="relative flex items-center gap-2 rounded-md px-4 py-2 text-sm transition-colors"
-                                    >
-                                        {active ? (
-                                            <motion.span
-                                                layoutId="pricing-mode-active"
-                                                className="absolute inset-0 rounded-md bg-ink"
-                                                transition={{ type: 'spring', bounce: 0.2, duration: 0.4 }}
-                                            />
-                                        ) : null}
-                                        <span className={`relative z-10 flex items-center gap-2 ${active ? 'text-cream' : 'text-ink-soft hover:text-ink'}`}>
-                                            <Icon className="h-4 w-4" />
-                                            {label}
-                                        </span>
-                                    </button>
-                                );
-                            })}
-                        </div>
+                        <h2 className={`mb-2 ${SECTION_H2_CLASS}`}>Simple, predictable pricing</h2>
+                        <p className="mt-2 max-w-xl text-base leading-relaxed text-ink-soft">
+                            Pay for coordination, state, and compute. Run your actors and applications on Rivet Compute, or bring your own and run them anywhere.
+                        </p>
                     </div>
 
-                    <AnimatePresence mode="wait" initial={false}>
-                        <motion.div
-                            key={isCloud ? 'cloud-pricing' : 'self-hosted-pricing'}
-                            initial={{ opacity: 0, y: 16 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -16 }}
-                            transition={{ duration: 0.24, ease: 'easeOut' }}
-                            className="flex flex-col gap-12"
-                        >
-                            <div className={`grid gap-6 ${isCloud ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2 max-w-4xl mx-auto'}`}>
+                    <div className="flex flex-col gap-12">
+                            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                                 {plans.map((plan, idx) => (
                                     <div
                                        key={idx}
@@ -555,7 +479,7 @@ const Pricing = () => {
                                         {plan.inkHeader ? (
                                             <div className="selection-paper flex items-center justify-between gap-4 bg-ink px-7 py-3">
                                                 <span className="text-sm font-medium text-cream">{plan.name}</span>
-                                                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-cream/60">Self-Hosted</span>
+                                                <span className="font-mono text-[11px] uppercase tracking-[0.16em] text-cream/60">On-Prem</span>
                                             </div>
                                         ) : null}
                                         <div className="flex flex-grow flex-col p-7">
@@ -578,13 +502,13 @@ const Pricing = () => {
                                             <div className="mb-8 space-y-3">
                                                 {plan.features.map((feat, i) => (
                                                     <div key={i} className="flex items-start gap-3 text-xs text-ink-soft">
-                                                        <Check className={`mt-0.5 h-3 w-3 flex-shrink-0 ${isCloud ? 'text-pine' : 'text-ink-soft'}`} />
+                                                        <Check className="mt-0.5 h-3 w-3 flex-shrink-0 text-pine" />
                                                         <span>{feat}</span>
                                                     </div>
                                                 ))}
                                             </div>
 
-                                            <a href={plan.cta === "Contact Sales" || plan.name === "Enterprise" ? "/sales" : "https://dashboard.rivet.dev"}
+                                            <a href={plan.cta === "Contact Sales" ? "/sales" : "https://dashboard.rivet.dev"}
                                                 className={`mt-auto w-full rounded-md py-3 text-center text-sm font-medium transition-colors ${
                                                     plan.highlight
                                                     ? 'bg-accent-deep text-white hover:bg-accent'
@@ -599,8 +523,7 @@ const Pricing = () => {
                             </div>
 
                             {/* YC & a16z Speedrun Callout */}
-                            {isCloud && (
-                                <div className="rounded-lg border border-ink/10 bg-white/55 p-6">
+                            <div className="rounded-lg border border-ink/10 bg-white/55 p-6">
                                     <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
                                         <div>
                                             <p className="mb-2 text-base font-medium text-ink">Startup Deal: 50% off for 12 months</p>
@@ -627,10 +550,8 @@ const Pricing = () => {
                                         </a>
                                     </div>
                                 </div>
-                            )}
 
-                            {/* Only show usage and comparison for Cloud */}
-                            {isCloud && (
+                            {/* Usage pricing, compute calculator, and plan comparison */}
                                 <>
                                     {/* Usage Pricing Section */}
                                     <div className="border-t border-ink/10 pt-16">
@@ -655,9 +576,7 @@ const Pricing = () => {
 
                                     <ComparisonTable />
                                 </>
-                            )}
-                        </motion.div>
-                    </AnimatePresence>
+                    </div>
                 </div>
             </div>
         </section>
