@@ -6,7 +6,11 @@ import {
 	TEST_ENGINE_TOKEN,
 } from "../../rivetkit/tests/shared-engine";
 
-export { getOrStartSharedTestEngine, releaseSharedTestEngine, TEST_ENGINE_TOKEN };
+export {
+	getOrStartSharedTestEngine,
+	releaseSharedTestEngine,
+	TEST_ENGINE_TOKEN,
+};
 export type { SharedTestEngine };
 
 export interface PreparedNamespace {

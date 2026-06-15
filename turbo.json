@@ -25,6 +25,17 @@
 			"outputs": ["dist/**"],
 			"env": ["BASE_URL", "VITE_APP_*", "VITE_FEATURE_FLAGS"]
 		},
+		"build:inspector": {
+			"dependsOn": ["^build"],
+			"inputs": [
+				"src/**",
+				"vite.inspector.config.ts",
+				"tsconfig.json",
+				"package.json"
+			],
+			"outputs": ["dist/**"],
+			"env": ["VITE_APP_*", "VITE_DEPLOYMENT_TYPE"]
+		},
 		"build:inspector-ui": {
 			"dependsOn": ["^build"],
 			"inputs": [

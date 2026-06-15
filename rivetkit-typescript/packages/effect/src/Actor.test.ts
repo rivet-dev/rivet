@@ -58,7 +58,10 @@ describe("Actor.toWakeHandler", () => {
 			const wakeHandler = Actor.toWakeHandler(wake);
 			const actionHandlers = yield* wakeHandler(wakeOptions);
 
-			assert.strictEqual(wakeOptions.rawRivetkitContext, rawRivetkitContext);
+			assert.strictEqual(
+				wakeOptions.rawRivetkitContext,
+				rawRivetkitContext,
+			);
 			assert.strictEqual(yield* actionHandlers.GetKey(), "room/1");
 		}),
 	);

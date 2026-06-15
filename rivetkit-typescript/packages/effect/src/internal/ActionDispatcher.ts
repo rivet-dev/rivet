@@ -10,11 +10,7 @@ import {
 } from "effect";
 import * as Rivetkit from "rivetkit";
 import type * as Action from "../Action.ts";
-import type {
-	ActionHandlersFrom,
-	ActionRequest,
-	Actor,
-} from "../Actor.ts";
+import type { ActionHandlersFrom, ActionRequest, Actor } from "../Actor.ts";
 import type * as Client from "../Client.ts";
 import * as ActionErrorEnvelope from "./ActionErrorEnvelope.ts";
 import { makeActorLogAnnotations } from "./logging.ts";
@@ -96,12 +92,13 @@ export const make = <
 					const decodedPayload = yield* decodePayload(
 						payloadForDecode,
 					).pipe(
-						Effect.mapError(() =>
-							new Rivetkit.RivetError(
-								"request",
-								"invalid",
-								`Invalid payload for action ${actor.name}/${action._tag}`,
-							),
+						Effect.mapError(
+							() =>
+								new Rivetkit.RivetError(
+									"request",
+									"invalid",
+									`Invalid payload for action ${actor.name}/${action._tag}`,
+								),
 						),
 					);
 					// The payload was decoded with this action's schema,

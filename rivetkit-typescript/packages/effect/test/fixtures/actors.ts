@@ -471,7 +471,10 @@ export const CounterLive = Counter.toLayer(
 					Effect.gen(function* () {
 						const key = address.key.join("/");
 						yield* Effect.sync(() => {
-							flags.set(`sleep-during-action-started:${key}`, true);
+							flags.set(
+								`sleep-during-action-started:${key}`,
+								true,
+							);
 						});
 						yield* sleep;
 						return yield* Effect.never.pipe(

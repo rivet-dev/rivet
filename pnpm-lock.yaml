@@ -2992,9 +2992,6 @@ importers:
       effect:
         specifier: ^4.0.0-beta.66
         version: 4.0.0-beta.66
-      rivetkit:
-        specifier: workspace:*
-        version: link:../rivetkit
     devDependencies:
       '@arethetypeswrong/cli':
         specifier: ^0.18.3
@@ -3014,6 +3011,9 @@ importers:
       publint:
         specifier: ^0.3.21
         version: 0.3.21
+      rivetkit:
+        specifier: workspace:*
+        version: link:../rivetkit
       typescript:
         specifier: ^5.9.2
         version: 5.9.3

@@ -52,10 +52,14 @@ export const getRivetkitRuntime = (): string | undefined =>
 	getEnvUniversal("RIVETKIT_RUNTIME");
 export type RuntimeMode = "envoy" | "serverless";
 
-export const getRivetkitRuntimeMode = (): RuntimeMode =>
-	getEnvUniversal("RIVETKIT_RUNTIME_MODE") === "serverless"
-		? "serverless"
-		: "envoy";
+export const getRivetkitRuntimeMode = (): RuntimeMode => {
+	const value = getEnvUniversal("RIVETKIT_RUNTIME_MODE");
+	if (value === undefined) return "envoy";
+	if (value === "envoy" || value === "serverless") return value;
+	throw new Error(
+		`RIVETKIT_RUNTIME_MODE env var must be "envoy" or "serverless"; got "${value}"`,
+	);
+};
 
 export const getRivetkitPublicDir = (): string | undefined => {
 	const value = getEnvUniversal("RIVETKIT_PUBLIC_DIR");

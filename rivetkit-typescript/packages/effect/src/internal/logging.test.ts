@@ -18,14 +18,7 @@ type LogEntry = {
 
 function makeTestLogger(entries: Array<LogEntry>): PinoLogger {
 	const logger: Record<string, unknown> = {};
-	for (const level of [
-		"trace",
-		"debug",
-		"info",
-		"warn",
-		"error",
-		"fatal",
-	]) {
+	for (const level of ["trace", "debug", "info", "warn", "error", "fatal"]) {
 		logger[level] = (
 			fields: Record<string, unknown>,
 			msg?: string,
@@ -137,12 +130,14 @@ describe("internal/logging", () => {
 		}),
 	);
 
-	it.effect("uses References.MinimumLogLevel when creating the base logger", () =>
-		Effect.gen(function* () {
-			const baseLogger = yield* Logging.makeDefaultBaseLogger;
+	it.effect(
+		"uses References.MinimumLogLevel when creating the base logger",
+		() =>
+			Effect.gen(function* () {
+				const baseLogger = yield* Logging.makeDefaultBaseLogger;
 
-			assert.strictEqual(baseLogger.level, "debug");
-		}).pipe(Effect.provideService(References.MinimumLogLevel, "Debug")),
+				assert.strictEqual(baseLogger.level, "debug");
+			}).pipe(Effect.provideService(References.MinimumLogLevel, "Debug")),
 	);
 
 	it.effect("accepts the shared Pino RIVET_LOG_LEVEL values", () =>
@@ -198,91 +193,105 @@ describe("internal/logging", () => {
 		),
 	);
 
-	it.effect("uses Config.logLevel values provided to References.MinimumLogLevel", () =>
-		Effect.gen(function* () {
-			const baseLogger = yield* Logging.makeDefaultBaseLogger;
+	it.effect(
+		"uses Config.logLevel values provided to References.MinimumLogLevel",
+		() =>
+			Effect.gen(function* () {
+				const baseLogger = yield* Logging.makeDefaultBaseLogger;
 
-			assert.strictEqual(baseLogger.level, "trace");
-		}).pipe(
-			Effect.provide(
-				Layer.effect(
-					References.MinimumLogLevel,
-					Config.logLevel("RIVET_LOG_LEVEL"),
+				assert.strictEqual(baseLogger.level, "trace");
+			}).pipe(
+				Effect.provide(
+					Layer.effect(
+						References.MinimumLogLevel,
+						Config.logLevel("RIVET_LOG_LEVEL"),
+					),
+				),
+				Effect.provideService(
+					ConfigProvider.ConfigProvider,
+					ConfigProvider.fromEnv({
+						env: {
+							RIVET_LOG_LEVEL: "Trace",
+						},
+					}),
 				),
 			),
-			Effect.provideService(
-				ConfigProvider.ConfigProvider,
-				ConfigProvider.fromEnv({
-					env: {
-						RIVET_LOG_LEVEL: "Trace",
+	);
+
+	it.effect(
+		"uses References.CurrentLogLevel for plain Effect.log calls",
+		() =>
+			Effect.gen(function* () {
+				const entries: Array<LogEntry> = [];
+				const baseLogger = makeTestLogger(entries);
+
+				yield* Effect.log("plain log").pipe(
+					Effect.provideService(References.CurrentLogLevel, "Debug"),
+					Effect.provideService(References.MinimumLogLevel, "Debug"),
+					Effect.provide(
+						EffectLogger.layer([
+							Logging.makeEffectLogger(baseLogger),
+						]),
+					),
+				);
+
+				assert.deepStrictEqual(entries, [
+					{
+						level: "debug",
+						fields: {},
+						msg: "plain log",
 					},
-				}),
-			),
-		),
+				]);
+			}),
 	);
 
-	it.effect("uses References.CurrentLogLevel for plain Effect.log calls", () =>
-		Effect.gen(function* () {
-			const entries: Array<LogEntry> = [];
-			const baseLogger = makeTestLogger(entries);
+	it.effect(
+		"does not call a Pino method for the None current log level",
+		() =>
+			Effect.gen(function* () {
+				const entries: Array<LogEntry> = [];
+				const baseLogger = makeTestLogger(entries);
 
-			yield* Effect.log("plain log").pipe(
-				Effect.provideService(References.CurrentLogLevel, "Debug"),
-				Effect.provideService(References.MinimumLogLevel, "Debug"),
-				Effect.provide(
-					EffectLogger.layer([Logging.makeEffectLogger(baseLogger)]),
-				),
-			);
+				yield* Effect.log("hidden log").pipe(
+					Effect.provideService(References.CurrentLogLevel, "None"),
+					Effect.provideService(References.MinimumLogLevel, "All"),
+					Effect.provide(
+						EffectLogger.layer([
+							Logging.makeEffectLogger(baseLogger),
+						]),
+					),
+				);
 
-			assert.deepStrictEqual(entries, [
-				{
-					level: "debug",
-					fields: {},
-					msg: "plain log",
-				},
-			]);
-		}),
+				assert.deepStrictEqual(entries, []);
+			}),
 	);
 
-	it.effect("does not call a Pino method for the None current log level", () =>
-		Effect.gen(function* () {
-			const entries: Array<LogEntry> = [];
-			const baseLogger = makeTestLogger(entries);
+	it.effect(
+		"emits References.CurrentLogSpans as structured span durations",
+		() =>
+			Effect.gen(function* () {
+				const entries: Array<LogEntry> = [];
+				const baseLogger = makeTestLogger(entries);
 
-			yield* Effect.log("hidden log").pipe(
-				Effect.provideService(References.CurrentLogLevel, "None"),
-				Effect.provideService(References.MinimumLogLevel, "All"),
-				Effect.provide(
-					EffectLogger.layer([Logging.makeEffectLogger(baseLogger)]),
-				),
-			);
+				yield* Effect.logInfo("checkout complete").pipe(
+					Effect.withLogSpan("checkout"),
+					Effect.provide(
+						EffectLogger.layer([
+							Logging.makeEffectLogger(baseLogger),
+						]),
+					),
+				);
 
-			assert.deepStrictEqual(entries, []);
-		}),
-	);
-
-	it.effect("emits References.CurrentLogSpans as structured span durations", () =>
-		Effect.gen(function* () {
-			const entries: Array<LogEntry> = [];
-			const baseLogger = makeTestLogger(entries);
-
-			yield* Effect.logInfo("checkout complete").pipe(
-				Effect.withLogSpan("checkout"),
-				Effect.provide(
-					EffectLogger.layer([Logging.makeEffectLogger(baseLogger)]),
-				),
-			);
-
-			assert.strictEqual(entries.length, 1);
-			assert.strictEqual(entries[0]?.level, "info");
-			assert.strictEqual(entries[0]?.msg, "checkout complete");
-			assert.deepStrictEqual(Object.keys(entries[0]?.fields ?? {}), [
-				"spans",
-			]);
-			const spans = entries[0]?.fields.spans as
-				| Record<string, unknown>
-				| undefined;
-			assert.strictEqual(typeof spans?.checkout, "number");
-		}),
+				assert.strictEqual(entries.length, 1);
+				assert.strictEqual(entries[0]?.level, "info");
+				assert.strictEqual(entries[0]?.msg, "checkout complete");
+				assert.deepStrictEqual(Object.keys(entries[0]?.fields ?? {}), [
+					"spans",
+				]);
+				const spans = entries[0]?.fields.spans as
+					| Record<string, unknown>
+					| undefined;
+				assert.strictEqual(typeof spans?.checkout, "number");
+			}),
 	);
 });

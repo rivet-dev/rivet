@@ -72,16 +72,16 @@ const TestLayer = ReadyForEnvoy.pipe(
 	Layer.provideMerge(
 		Registry.test.pipe(
 			Layer.provideMerge(
-					Layer.mergeAll(
-						CounterLive,
-						PingerLive,
-						FailingActorLive,
-						FailingWakeCleanupLive,
-						StrictLive,
-						WakeDecodeFailLive,
-						BuildSetRejectedLive,
-						TransformedStateActorLive,
-					),
+				Layer.mergeAll(
+					CounterLive,
+					PingerLive,
+					FailingActorLive,
+					FailingWakeCleanupLive,
+					StrictLive,
+					WakeDecodeFailLive,
+					BuildSetRejectedLive,
+					TransformedStateActorLive,
+				),
 			),
 			Layer.provideMerge(Flags.layer),
 			Layer.provide(GreeterLive),
@@ -368,10 +368,12 @@ layer(TestLayer)("end-to-end", (it) => {
 			const key = "t-action-scope-close";
 			const flags = yield* Flags;
 			const counter = (yield* Counter.client).getOrCreate([key]);
-			const actionFiber = yield* counter.SleepDuringAction().pipe(
-				Effect.flip,
-				Effect.forkChild({ startImmediately: true }),
-			);
+			const actionFiber = yield* counter
+				.SleepDuringAction()
+				.pipe(
+					Effect.flip,
+					Effect.forkChild({ startImmediately: true }),
+				);
 
 			const started = yield* Effect.sync(() =>
 				flags.get(`sleep-during-action-started:${key}`),
@@ -653,11 +655,11 @@ layer(TestLayer)("end-to-end", (it) => {
 		}),
 	);
 
-		it.effect("surfaces an error thrown inside an actor's build effect", () =>
-			Effect.gen(function* () {
-				// `getOrCreate` only builds a typed proxy on the client and
-				// rivetkit's wake is lazy on first action, so the build
-				// defect surfaces on `.Ping()`, not here.
+	it.effect("surfaces an error thrown inside an actor's build effect", () =>
+		Effect.gen(function* () {
+			// `getOrCreate` only builds a typed proxy on the client and
+			// rivetkit's wake is lazy on first action, so the build
+			// defect surfaces on `.Ping()`, not here.
 			const failing = (yield* FailingActor.client).getOrCreate([
 				"t-build-error",
 			]);
@@ -665,44 +667,44 @@ layer(TestLayer)("end-to-end", (it) => {
 			assert.isTrue(exit._tag === "Success");
 			if (exit._tag === "Success") {
 				assert.instanceOf(exit.value, RivetError.RivetError);
+			}
+		}),
+	);
+
+	it.effect(
+		"closes the wake scope when wake fails after registering scoped resources",
+		() =>
+			Effect.gen(function* () {
+				const key = "t-failed-wake-cleanup";
+				const flags = yield* Flags;
+				const actor = (yield* FailingWakeCleanup.client).getOrCreate([
+					key,
+				]);
+
+				const exit = yield* actor.Ping().pipe(Effect.flip, Effect.exit);
+				assert.isTrue(exit._tag === "Success");
+				if (exit._tag === "Success") {
+					assert.instanceOf(exit.value, RivetError.RivetError);
 				}
+
+				assert.strictEqual(
+					flags.get(`failed-wake-started:${key}`),
+					true,
+				);
+				assert.strictEqual(
+					flags.get(`failed-wake-finalizer:${key}`),
+					true,
+				);
+				assert.strictEqual(
+					flags.get(`failed-wake-fiber-interrupted:${key}`),
+					true,
+				);
 			}),
-		);
+	);
 
-		it.effect(
-			"closes the wake scope when wake fails after registering scoped resources",
-			() =>
-				Effect.gen(function* () {
-					const key = "t-failed-wake-cleanup";
-					const flags = yield* Flags;
-					const actor = (yield* FailingWakeCleanup.client).getOrCreate([
-						key,
-					]);
-
-					const exit = yield* actor.Ping().pipe(Effect.flip, Effect.exit);
-					assert.isTrue(exit._tag === "Success");
-					if (exit._tag === "Success") {
-						assert.instanceOf(exit.value, RivetError.RivetError);
-					}
-
-					assert.strictEqual(
-						flags.get(`failed-wake-started:${key}`),
-						true,
-					);
-					assert.strictEqual(
-						flags.get(`failed-wake-finalizer:${key}`),
-						true,
-					);
-					assert.strictEqual(
-						flags.get(`failed-wake-fiber-interrupted:${key}`),
-						true,
-					);
-				}),
-		);
-
-		it.effect(
-			"wake options state decode failure inside build effect surfaces as RivetError",
-			() =>
+	it.effect(
+		"wake options state decode failure inside build effect surfaces as RivetError",
+		() =>
 			Effect.gen(function* () {
 				const failing = (yield* WakeDecodeFail.client).getOrCreate([
 					"t-wake-decode-fail",
