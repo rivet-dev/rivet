@@ -239,9 +239,26 @@ const otherArticles = allPosts
 		margin-bottom: 2.75rem;
 	}
 
+	.blog-article .blog-prose ul,
+	.blog-article .blog-prose ol {
+		padding-left: 1.4em;
+	}
+
+	.blog-article .blog-prose ul {
+		list-style-type: disc;
+	}
+
+	.blog-article .blog-prose ol {
+		list-style-type: decimal;
+	}
+
 	.blog-article .blog-prose li {
 		margin-top: 0.4em;
 		margin-bottom: 0.4em;
+	}
+
+	.blog-article .blog-prose li::marker {
+		color: #1b1916;
 	}
 
 	.blog-article .blog-prose h2 a,
