@@ -64,6 +64,14 @@ These variables configure how clients connect to your actors.
 | `RIVETKIT_RUNTIME` | Runtime binding to use for RivetKit core: `auto`, `native`, or `wasm`. Defaults to `auto`. |
 | `RIVETKIT_STORAGE_PATH` | Overrides the default file-system storage path used by RivetKit when using the default driver. |
 
+## Lifecycle
+
+| Environment Variable | Description |
+|---------------------|-------------|
+| `RIVETKIT_RUNTIME_MODE` | Controls how `registry.start()` runs. Defaults to `envoy`: opens a long-lived WebSocket to the engine (Mode A). Set to `serverless` to bind an HTTP listener via `registry.listen()` (Mode B). |
+| `RIVETKIT_PUBLIC_DIR` | Directory of static assets to serve alongside the framework routes when calling `registry.listen()`. Used as a fallback when `opts.publicDir` is not passed. On auto-listen via `registry.start()`, defaults to `/public` when this env var is unset. |
+| `RIVET_PORT` | Port the listener binds when calling `registry.listen()` without an explicit `opts.port`. Must be an integer between 1 and 65535. Defaults to `3000`. |
+
 ## Logging
 
 | Environment Variable | Description |

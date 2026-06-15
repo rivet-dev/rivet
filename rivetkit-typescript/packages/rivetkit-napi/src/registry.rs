@@ -10,6 +10,7 @@ use parking_lot::Mutex as ParkingMutex;
 use rivetkit_core::{
 	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, EngineSpawnMode, ServeConfig,
 	ServerlessRequest, registry::CoreEnvoyHandle, serverless::ServerlessStreamError,
+	serverless_http::{self, ListenerConfig},
 };
 use tokio::sync::{Mutex as TokioMutex, Notify};
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -36,6 +37,16 @@ pub struct JsServeConfig {
 	pub serverless_client_token: Option<String>,
 	pub serverless_validate_endpoint: bool,
 	pub serverless_max_start_payload_bytes: u32,
+}
+
+#[napi(object)]
+pub struct JsListenerConfig {
+	/// Host to bind. Defaults to `0.0.0.0` when not provided.
+	pub host: Option<String>,
+	pub port: u32,
+	/// Optional static file root mounted as a fallback below the framework
+	/// routes.
+	pub public_dir: Option<String>,
 }
 
 #[napi(object)]
@@ -348,6 +359,27 @@ impl CoreRegistry {
 			headers: HashMap::from([("content-type".to_owned(), metrics.content_type)]),
 			body: Buffer::from(metrics.body),
 		})
+	}
+
+	#[napi]
+	pub async fn serve_listener(
+		&self,
+		listener: JsListenerConfig,
+		config: JsServeConfig,
+	) -> napi::Result<()> {
+		let port: u16 = listener
+			.port
+			.try_into()
+			.map_err(|_| napi_anyhow_error(anyhow::anyhow!("port out of range")))?;
+		let listener_config = ListenerConfig {
+			host: listener.host,
+			port,
+			public_dir: listener.public_dir.map(PathBuf::from),
+		};
+		let runtime = self.ensure_serverless_runtime(config).await?;
+		serverless_http::serve(runtime, listener_config, self.shutdown_token.clone())
+			.await
+			.map_err(napi_anyhow_error)
 	}
 
 	#[napi(ts_return_type = "Promise<JsServerlessResponseHead>")]

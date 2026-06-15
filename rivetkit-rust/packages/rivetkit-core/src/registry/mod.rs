@@ -102,6 +102,9 @@ impl CoreEnvoyHandle {
 		}
 	}
 
+	/// Engine-reported drain threshold in milliseconds. `None` until the
+	/// envoy has completed its first protocol-metadata exchange with the
+	/// engine.
 	pub async fn actor_stop_threshold_ms(&self) -> Option<i64> {
 		self.handle
 			.get_protocol_metadata()

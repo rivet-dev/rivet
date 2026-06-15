@@ -265,6 +265,12 @@ export interface RuntimeServeConfig {
 	serverlessMaxStartPayloadBytes: number;
 }
 
+export interface RuntimeListenerConfig {
+	port: number;
+	host?: string;
+	publicDir?: string;
+}
+
 export interface RuntimeServerlessRequest {
 	method: string;
 	url: string;
@@ -340,6 +346,11 @@ export interface CoreRuntime {
 		cancelToken: CancellationTokenHandle,
 		config: RuntimeServeConfig,
 	): Promise<RuntimeServerlessResponseHead>;
+	serveListener(
+		registry: RegistryHandle,
+		listener: RuntimeListenerConfig,
+		config: RuntimeServeConfig,
+	): Promise<void>;
 	registryHealth?(
 		registry: RegistryHandle,
 	): Promise<RuntimeRegistryRouteResponse>;
