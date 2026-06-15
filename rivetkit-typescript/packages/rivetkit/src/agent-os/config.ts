@@ -43,6 +43,12 @@ export const agentOsActorConfigSchema = z
 		// subsuming the old layerr `runStopTimeout` drain-budget patch (dropped).
 		sleepGracePeriod: z.number().nonnegative().optional(),
 		actionTimeout: z.number().nonnegative().optional(),
+		// Layerr (re-port of 96fab650e): the agent-os actor forwards noSleep +
+		// sleepTimeout to the actor options below, but v2.3.0's agent-os schema
+		// doesn't declare them and strict() would reject them. vmV2/tile-vm set
+		// sleepTimeout to bound idle-sleep per workspace VM.
+		noSleep: z.boolean().optional(),
+		sleepTimeout: z.number().nonnegative().optional(),
 		// Layerr: user-supplied actions merged on top of the built-in agent-os
 		// action set (e.g. gitLog/gitDiff in workspace-git.ts). strict() rejects
 		// unknown keys, so this slot is required to expose actor RPCs without
