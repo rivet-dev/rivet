@@ -5,7 +5,7 @@ export function ActorConfigSchema() {
 	return (
 		<JsonSchemaPreview
 			schema={actorConfigSchema}
-			empty={<p className="text-muted-foreground">No properties</p>}
+			empty={<p className="text-ink-soft">No properties</p>}
 		/>
 	);
 }

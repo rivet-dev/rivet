@@ -5,7 +5,7 @@ export function RegistryConfigSchema() {
 	return (
 		<JsonSchemaPreview
 			schema={registryConfigSchema}
-			empty={<p className="text-muted-foreground">No properties</p>}
+			empty={<p className="text-ink-soft">No properties</p>}
 		/>
 	);
 }
