@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState, type MouseEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Terminal, ArrowRight, Check } from 'lucide-react';
 import { AnimatePresence, motion, useScroll, useTransform } from 'framer-motion';
 import { HERO_H1_CLASS } from '../typography';
+import { GLOW_PILL_CLASS, handleGlowPillMouseMove } from '../glowPill';
 
 interface ThinkingImage {
   src: string;
@@ -226,12 +227,6 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
   });
   const heroOpacity = useTransform(scrollYProgress, [0, 0.55], [1, 0]);
 
-  const handleChangelogPillMouseMove = (event: MouseEvent<HTMLAnchorElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect();
-    event.currentTarget.style.setProperty('--pill-x', `${event.clientX - rect.left}px`);
-    event.currentTarget.style.setProperty('--pill-y', `${event.clientY - rect.top}px`);
-  };
-
   return (
     <motion.section
       ref={heroRef}
@@ -249,21 +244,19 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
             >
               <a
                 href='/changelog'
-                className='changelog-pill-border group relative inline-flex rounded-full shadow-[0_8px_24px_-18px_rgba(27,25,22,0.45)] transition-opacity before:pointer-events-none before:absolute before:inset-0 before:rounded-full before:bg-[linear-gradient(120deg,rgba(27,25,22,0.08),rgba(27,25,22,0.26)_48%,rgba(255,255,255,0.88)_72%,rgba(27,25,22,0.1))] before:p-px before:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] before:[-webkit-mask-composite:xor] before:[mask-composite:exclude] after:pointer-events-none after:absolute after:inset-0 after:rounded-full after:p-px after:opacity-0 after:transition-opacity after:duration-150 after:[-webkit-mask:linear-gradient(#fff_0_0)_content-box,linear-gradient(#fff_0_0)] after:[-webkit-mask-composite:xor] after:[mask-composite:exclude] hover:opacity-95 hover:after:opacity-100'
-                onMouseMove={handleChangelogPillMouseMove}
+                className={`${GLOW_PILL_CLASS} group inline-flex items-center gap-2 rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft shadow-[0_8px_22px_-20px_rgba(27,25,22,0.45)] transition-colors hover:border-ink/25 hover:text-ink`}
+                onMouseMove={handleGlowPillMouseMove}
               >
-                <span className='relative z-10 inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium text-ink'>
-                  <span
-                    aria-hidden='true'
-                    className='h-1 w-1 rounded-full bg-accent'
-                    style={{
-                      boxShadow:
-                        '0 0 2px rgba(203, 90, 51, 0.9), 0 0 6px rgba(203, 90, 51, 0.5), 0 0 14px rgba(171, 69, 31, 0.35)',
-                    }}
-                  />
-                  <span>{latestChangelogTitle}</span>
-                  <ArrowRight className='h-3 w-3 text-ink-soft transition-transform group-hover:translate-x-0.5' />
-                </span>
+                <span
+                  aria-hidden='true'
+                  className='h-1 w-1 rounded-full bg-accent'
+                  style={{
+                    boxShadow:
+                      '0 0 2px rgba(203, 90, 51, 0.9), 0 0 6px rgba(203, 90, 51, 0.5), 0 0 14px rgba(171, 69, 31, 0.35)',
+                  }}
+                />
+                <span>{latestChangelogTitle}</span>
+                <ArrowRight className='h-3 w-3 text-ink-soft transition-transform group-hover:translate-x-0.5' />
               </a>
             </motion.div>
 

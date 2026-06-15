@@ -124,16 +124,6 @@
     animation: trace-around 1s linear infinite, dark-grow-outer 1s ease-in-out infinite;
   }
 
-  .changelog-pill-border::after {
-    background: radial-gradient(
-      42px 30px at var(--pill-x, 50%) var(--pill-y, 50%),
-      rgba(255, 255, 255, 0.95),
-      rgba(255, 255, 255, 0.55) 38%,
-      rgba(255, 255, 255, 0) 76%
-    );
-    filter: blur(2px);
-  }
-
   /* Cursor-following border glow for porcelain pills (deploy row, stack chips).
      Lights ONLY the pill's 1px border ring as the pointer moves — not the fill.
      `inset: -1px` grows the ::after out to the border-box so the masked ring

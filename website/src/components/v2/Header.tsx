@@ -559,14 +559,6 @@ export function Header({
 									</>
 								)}
 								{!isAgentOs && (
-									<TextNavItem
-										href="/cookbook"
-										ariaCurrent={active === "cookbook" ? "page" : undefined}
-									>
-										Cookbooks
-									</TextNavItem>
-								)}
-								{!isAgentOs && (
 									<TextNavItem href="/enterprise">
 										Enterprise
 									</TextNavItem>
@@ -671,12 +663,6 @@ export function Header({
 					>
 						Documentation
 					</TextNavItem>
-					<TextNavItem
-						href="/cookbook"
-						ariaCurrent={active === "cookbook" ? "page" : undefined}
-					>
-						Cookbooks
-					</TextNavItem>
 					<TextNavItem href="/enterprise">
 						Enterprise
 					</TextNavItem>
@@ -732,7 +718,6 @@ function DocsMobileNavigation({
 		]
 		: [
 			{ href: "/docs", label: "Documentation" },
-			{ href: "/cookbook", label: "Cookbooks" },
 			{ href: "/enterprise", label: "Enterprise" },
 			{ href: "/cloud", label: "Pricing" },
 		];

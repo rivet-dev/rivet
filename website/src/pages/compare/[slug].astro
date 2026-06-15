@@ -52,6 +52,7 @@ const webPageSchema = {
 	description={entry.description}
 	canonicalUrl={canonicalUrl}
 	keywords={entry.keywords}
+	robots="noindex, nofollow"
 >
 	<script type="application/ld+json" set:html={jsonLdString(breadcrumbSchema)} />
 	<script type="application/ld+json" set:html={jsonLdString(webPageSchema)} />

@@ -84,6 +84,7 @@ const allTechnologies = Array.from(new Set(pages.flatMap((p) => p.technologies))
 	description="Step-by-step guides that link to working Rivet templates and example code."
 	canonicalUrl="https://rivet.dev/cookbook/"
 	active="cookbook"
+	robots="noindex, nofollow"
 >
 	<CookbookPageContent pages={pages} allTags={allTags} allTechnologies={allTechnologies} client:load />
 </MarketingLayout>

@@ -10,13 +10,14 @@ interface Props {
 	ogImage?: string;
 	keywords?: string[];
 	active?: ComponentProps<typeof Header>['active'];
+	robots?: string;
 }
 
-const { title, description, canonicalUrl, ogImage, keywords, active } = Astro.props;
+const { title, description, canonicalUrl, ogImage, keywords, active, robots } = Astro.props;
 const pathname = Astro.url.pathname;
 ---
 
-<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage} keywords={keywords}>
+<BaseLayout title={title} description={description} canonicalUrl={canonicalUrl} ogImage={ogImage} keywords={keywords} robots={robots}>
 	<Header variant="floating" initialPathname={pathname} active={active} client:load />
 	<slot />
 </BaseLayout>
