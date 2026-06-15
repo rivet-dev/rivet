@@ -25,23 +25,18 @@ native-runtime = [
 ]
 wasm-runtime = ["rivet-envoy-client/wasm-transport"]
 sqlite = ["sqlite-local"]
-sqlite-local = ["native-runtime", "dep:async-trait", "dep:depot-client"]
+sqlite-local = ["native-runtime", "dep:depot-client"]
 sqlite-remote = []
-
-[build-dependencies]
-anyhow.workspace = true
-fs_extra = { workspace = true }
 
 [dependencies]
 anyhow.workspace = true
-async-trait = { workspace = true, optional = true }
+async-trait.workspace = true
 axum = { workspace = true, optional = true }
 base64.workspace = true
 bytes = { workspace = true, optional = true }
 ciborium.workspace = true
 futures.workspace = true
 http.workspace = true
-include_dir = { workspace = true }
 http-body-util = { workspace = true, optional = true }
 nix = { workspace = true, optional = true }
 parking_lot.workspace = true

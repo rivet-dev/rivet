@@ -5,36 +5,6 @@ use crate::error::{ProtocolError, client_error_message};
 use crate::inspector::InspectorTabEntry;
 use ::http;
 
-// Inspector-UI frontend bundle. Embedded at build time from
-// frontend/dist/inspector-ui/ via build.rs. Served from
-// /inspector/ui/<path> below; identical for every actor.
-//
-// In debug builds we additionally try reading from this filesystem path on
-// every request so iterating on the UI only requires
-// `vite build --config vite.inspector-ui.config.ts --watch` — no engine
-// rebuild. Release builds skip the filesystem entirely.
-#[cfg(not(target_arch = "wasm32"))]
-static INSPECTOR_UI_DIR: include_dir::Dir<'_> = include_dir::include_dir!("$OUT_DIR/inspector-ui");
-
-#[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
-const INSPECTOR_UI_DEV_DIR: &str = concat!(
-	env!("CARGO_MANIFEST_DIR"),
-	"/../../../frontend/dist/inspector-ui"
-);
-
-// Shared stylesheet served to custom inspector tabs at /inspector/tab.css.
-// Authored in frontend/scripts/generate-inspector-tab-css.mjs, which mirrors
-// the dashboard's design tokens so tabs that <link> to it look native.
-#[cfg(not(target_arch = "wasm32"))]
-static INSPECTOR_TAB_DIR: include_dir::Dir<'_> =
-	include_dir::include_dir!("$OUT_DIR/inspector-tab");
-
-#[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
-const INSPECTOR_TAB_DEV_DIR: &str = concat!(
-	env!("CARGO_MANIFEST_DIR"),
-	"/../../../frontend/dist/inspector-tab"
-);
-
 #[derive(rivet_error::RivetError, serde::Serialize)]
 #[error(
 	"inspector",
@@ -58,25 +28,8 @@ impl RegistryDispatcher {
 			return Ok(None);
 		}
 
-		// Serve the inspector-UI bundle (HTML/JS/CSS) without auth: same
-		// static files for every actor, no actor data leaked. Auth still gates
-		// every data-bearing route below. Native only — wasm runtimes do not
-		// host actor inspector HTTP endpoints.
 		#[cfg(not(target_arch = "wasm32"))]
 		if request.method() == http::Method::GET {
-			if let Some(rel) = url.path().strip_prefix("/inspector/ui/") {
-				return Ok(Some(serve_inspector_ui_asset(rel)));
-			}
-			// Shared stylesheet for custom inspector tabs. Mirrors the
-			// dashboard's design tokens under the `--rivet-*` namespace.
-			// Generated from `theme.css` by the inspector-ui build.
-			if url.path() == "/inspector/tab.css" {
-				return Ok(Some(serve_inspector_tab_stylesheet()));
-			}
-			// Tab config: descriptors for custom tabs + built-in hides.
-			// Unauthenticated for the same reason as /inspector/ui/* —
-			// neither tab ids nor labels are sensitive, and the bundle
-			// bytes the SPA fetches based on this list are also public.
 			if url.path() == "/inspector/tab-config" {
 				return Ok(Some(serve_tab_config(instance.factory.config())));
 			}
@@ -864,88 +817,6 @@ pub(super) fn parse_u32_query_param(
 			&format!("Invalid query parameter `{key}`: {error}"),
 		)
 	})
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn serve_inspector_ui_asset(rel: &str) -> HttpResponse {
-	// Single-entry SPA: /inspector/ui/ serves index.html, every other
-	// path under that prefix is an asset relative to the bundle root.
-	let stripped = rel.trim_start_matches('/');
-	let candidate = if stripped.is_empty() || stripped.ends_with('/') {
-		format!("{stripped}index.html")
-	} else {
-		stripped.to_owned()
-	};
-
-	#[cfg(debug_assertions)]
-	if let Some(response) = read_inspector_ui_from_disk(&candidate) {
-		return response;
-	}
-
-	if let Some(file) = INSPECTOR_UI_DIR.get_file(&candidate) {
-		return inspector_ui_response(&candidate, file.contents().to_vec());
-	}
-
-	inspector_error_response(
-		StatusCode::NOT_FOUND,
-		"inspector",
-		"ui_asset_not_found",
-		"Inspector UI asset was not found in the embedded bundle",
-	)
-}
-
-// Serves the shared custom-tab stylesheet at /inspector/tab.css. The
-// stylesheet mirrors the dashboard's design tokens so author-shipped tabs
-// that <link> to it look dashboard-native. Same dev-disk-fallback shape
-// as serve_inspector_ui_asset: in debug builds we try the filesystem
-// first so iterating on the generator doesn't require an engine rebuild.
-#[cfg(not(target_arch = "wasm32"))]
-fn serve_inspector_tab_stylesheet() -> HttpResponse {
-	// Must match the output filename written by
-	// `frontend/scripts/generate-inspector-tab-css.mjs`. Renaming the
-	// generator output without updating this constant produces a silent 404.
-	const FILE: &str = "styles.css";
-
-	#[cfg(debug_assertions)]
-	{
-		use std::path::PathBuf;
-		let dev_path = PathBuf::from(INSPECTOR_TAB_DEV_DIR).join(FILE);
-		if let Ok(bytes) = std::fs::read(&dev_path) {
-			tracing::debug!(
-				path = %dev_path.display(),
-				"served inspector tab stylesheet from dev disk"
-			);
-			return inspector_ui_response("tab.css", bytes);
-		}
-	}
-
-	if let Some(file) = INSPECTOR_TAB_DIR.get_file(FILE) {
-		return inspector_ui_response("tab.css", file.contents().to_vec());
-	}
-
-	inspector_error_response(
-		StatusCode::NOT_FOUND,
-		"inspector",
-		"tab_stylesheet_unavailable",
-		"Inspector tab stylesheet was not bundled into this engine",
-	)
-}
-
-#[cfg(all(not(target_arch = "wasm32"), debug_assertions))]
-fn read_inspector_ui_from_disk(candidate: &str) -> Option<HttpResponse> {
-	use std::path::{Component, Path, PathBuf};
-
-	// Reject path-traversal attempts (.. / absolute paths) before touching FS.
-	let rel = Path::new(candidate);
-	if rel.components().any(|c| !matches!(c, Component::Normal(_))) {
-		return None;
-	}
-
-	let dev_dir = PathBuf::from(INSPECTOR_UI_DEV_DIR);
-	let absolute = dev_dir.join(rel);
-	let bytes = std::fs::read(&absolute).ok()?;
-	tracing::debug!(path = %absolute.display(), "served inspector UI asset from dev disk");
-	Some(inspector_ui_response(candidate, bytes))
 }
 
 #[cfg(not(target_arch = "wasm32"))]

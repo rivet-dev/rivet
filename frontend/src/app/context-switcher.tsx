@@ -30,6 +30,7 @@ import {
 } from "@/components";
 import {
 	useCloudDataProvider,
+	useDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
 import { SafeHover } from "@/components/safe-hover";
@@ -81,6 +82,11 @@ function ContextSwitcherInner({
 
 	// biome-ignore lint/correctness/useHookAtTopLevel: usage is stable inside this function
 	const match = useContextSwitcherMatch();
+
+	const dataProvider = useDataProvider();
+	if (!dataProvider) {
+		return null;
+	}
 
 	// Multitenancy inline case: render per-segment popovers so each chevron
 	// opens its own dropdown (project / namespace), matching the v77 + v78

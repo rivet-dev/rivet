@@ -8,6 +8,7 @@ pub mod actor;
 pub mod engine_process;
 pub mod error;
 pub mod inspector;
+pub mod inspector_bundle;
 pub mod metrics_endpoint;
 pub mod registry;
 pub mod runtime;

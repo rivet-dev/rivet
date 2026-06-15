@@ -1,0 +1,69 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Custom tab unavailable</title>
+    <link rel="stylesheet" href="/inspector/tab.css">
+    <style>
+        :root {
+            color-scheme: light dark
+        }
+
+        html,
+        body {
+            margin: 0;
+            height: 100%
+        }
+
+        body {
+            font-family: var(--rivet-font-sans, system-ui, sans-serif);
+            background: var(--rivet-background, #0b0b0c);
+            color: var(--rivet-foreground, #e7e7ea);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            box-sizing: border-box
+        }
+
+        main {
+            max-width: 480px;
+            text-align: center
+        }
+
+        h1 {
+            font-size: 14px;
+            font-weight: 600;
+            margin: 0 0 8px;
+            color: var(--rivet-foreground, #e7e7ea)
+        }
+
+        p {
+            font-size: 13px;
+            line-height: 1.5;
+            margin: 0;
+            color: var(--rivet-muted-foreground, #9a9aa1)
+        }
+
+        code {
+            font-family: var(--rivet-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+            padding: 1px 4px;
+            border-radius: 3px;
+            background: var(--rivet-muted, #1a1a1d);
+            color: var(--rivet-foreground, #e7e7ea);
+            font-size: 12px
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        <h1>Custom inspector tabs are unavailable on this runtime</h1>
+        <p>This actor is hosted on a WebAssembly runner (for example Cloudflare Workers, Vercel Edge, or Deno Deploy),
+            which cannot read <code>inspector.tabs[].source</code> files from disk. Run the actor on a Node, Bun, or
+            self-hosted runner to view custom tabs.</p>
+    </main>
+</body>
+
+</html>

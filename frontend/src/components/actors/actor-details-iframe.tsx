@@ -1,8 +1,9 @@
-import { faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { faSpinnerThird, faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import {
+	Button,
 	cn,
 	getConfig,
 	ShimmerLine,
@@ -11,10 +12,8 @@ import {
 	TabsTrigger,
 	WithTooltip,
 } from "@/components";
-import {
-	actorMetadataQueryOptions,
-	isVersionAtLeast,
-} from "./actor-inspector-context";
+import { useTheme } from "@/lib/theme";
+import { useTimeout } from "../hooks/use-timeout";
 import { ActorDetailsLegacy } from "./actor-details-legacy";
 import {
 	CLOUD_TABS,
@@ -24,6 +23,10 @@ import {
 } from "./actor-details-shared";
 import { ActorDetailsSkeleton } from "./actor-details-skeleton";
 import {
+	actorMetadataQueryOptions,
+	isVersionAtLeast,
+} from "./actor-inspector-context";
+import {
 	resumeAutoWake,
 	useAutoWakeSuppression,
 } from "./auto-wake-suppression";
@@ -32,7 +35,6 @@ import { resolveInspectorTabIcon } from "./inspector-tab-icons";
 import type { InspectorTabDescriptor } from "./inspector-tab-registry";
 import type { ActorId, ActorStatus } from "./queries";
 import { useRivetToken } from "./use-rivet-token";
-import { useTheme } from "@/lib/theme";
 
 interface ActorDetailsProps {
 	actorId: ActorId;
@@ -49,6 +51,8 @@ interface ActorDetailsProps {
 // the iframe route, the threshold is high enough to force the legacy path
 // in default test setups; override via MSW to verify the iframe path.
 export const IFRAME_INSPECTOR_MIN_VERSION = "2.3.0";
+
+const INSPECTOR_UI_CDN_BASE = "https://cdn.rivet.dev/inspector-ui";
 
 /**
  * Dashboard right panel for a selected actor.
@@ -125,6 +129,11 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 		enabled: !!credentials && !isSuppressed,
 	});
 
+	const [forceLegacy, setForceLegacy] = useState(false);
+	useEffect(() => {
+		setForceLegacy(false);
+	}, [actorId]);
+
 	// Don't mount the iframe or legacy inspector while sleep is suppressed: an
 	// "Updating actor…" overlay stands in until the actor settles back into a
 	// state where reconnecting won't wake it.
@@ -147,10 +156,12 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 		);
 	}
 
-	const useIframe = isVersionAtLeast(
-		metadataQuery.data.version,
-		IFRAME_INSPECTOR_MIN_VERSION,
-	);
+	const useIframe =
+		!forceLegacy &&
+		isVersionAtLeast(
+			metadataQuery.data.version,
+			IFRAME_INSPECTOR_MIN_VERSION,
+		);
 
 	if (useIframe) {
 		return (
@@ -160,11 +171,13 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 				onTabChange={onTabChange}
 				inspectorToken={credentials.inspectorToken}
 				rivetToken={credentials.token}
+				runnerVersion={metadataQuery.data.version}
+				onFallbackToLegacy={() => setForceLegacy(true)}
 			/>
 		);
 	}
 
-	return (
+	const legacy = (
 		<ActorDetailsLegacy
 			actorId={actorId}
 			tab={tab}
@@ -172,6 +185,36 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 			inspectorToken={credentials.inspectorToken}
 		/>
 	);
+
+	// When the user opted into the legacy inspector after the iframe failed,
+	// keep a persistent banner so the degraded mode (and any quirks that come
+	// with it) is expected rather than surprising.
+	if (forceLegacy) {
+		return (
+			<div className="flex flex-col h-full flex-1 min-h-0">
+				<div className="flex items-center gap-2 border-b border-warning bg-warning/10 px-3 py-1.5 text-xs text-foreground">
+					<Icon
+						icon={faTriangleExclamation}
+						className="shrink-0 text-warning"
+					/>
+					<span className="min-w-0 flex-1">
+						You're using the legacy inspector. It's an older
+						version, so some things may look or behave differently.
+					</span>
+					<Button
+						variant="ghost"
+						size="xs"
+						onClick={() => setForceLegacy(false)}
+					>
+						Switch back
+					</Button>
+				</div>
+				<div className="flex-1 min-h-0">{legacy}</div>
+			</div>
+		);
+	}
+
+	return legacy;
 });
 
 // ---------------------------------------------------------------------------
@@ -207,7 +250,14 @@ function ActorDetailsIframePath({
 	onTabChange,
 	inspectorToken,
 	rivetToken,
-}: ActorDetailsProps & { inspectorToken: string; rivetToken: string }) {
+	runnerVersion,
+	onFallbackToLegacy,
+}: ActorDetailsProps & {
+	inspectorToken: string;
+	rivetToken: string;
+	runnerVersion: string;
+	onFallbackToLegacy: () => void;
+}) {
 	const engineUrl = getConfig().apiUrl;
 	const queryClient = useQueryClient();
 	const dataProvider = useDataProvider();
@@ -299,57 +349,85 @@ function ActorDetailsIframePath({
 		activeInspectorTabId !== undefined &&
 		customTabIds.has(activeInspectorTabId);
 
-	// Derive iframe src from the active tab. The SPA at /inspector/ui/
-	// renders all built-in tabs and emits descriptors for custom tabs via
-	// tabs-available. When the user activates a custom tab the iframe
-	// navigates to /inspector/custom-tabs/<id>/, which serves the
-	// author-bundled static UI for that tab. Built-in↔built-in switches
-	// stay inside the SPA (no src change); built-in↔custom and
-	// custom↔custom trigger an iframe reload.
-	//
-	// X-Rivet-Token rides into the URL as a `@<token>` segment after the
-	// actor id (gateway path syntax: `/gateway/<id>@<token>/...`). Iframe
-	// navigation cannot attach custom headers, so this is the only way the
-	// authenticated bundle/asset GETs reach EE. Inspector responses set
-	// `Referrer-Policy: no-referrer` so the token does not leak via
-	// `Referer` on cross-origin sub-resource fetches.
-	//
-	// Residual risk: tokens-in-URLs are inherently exposed to browser history,
-	// server/proxy access logs, and browser extensions that can read the path.
-	// The `Referer` vector is the only one mitigated here; the rest are accepted
-	// trade-offs of iframe navigation requiring the token in-path.
+	const { theme } = useTheme();
+
+	const themeRef = useRef(theme);
+	themeRef.current = theme;
+
+	const actorSegment = useMemo(
+		() =>
+			rivetToken
+				? `${encodeURIComponent(actorId)}@${encodeURIComponent(rivetToken)}`
+				: encodeURIComponent(actorId),
+		[actorId, rivetToken],
+	);
+
+	const runnerInspectorUiUrl = useMemo(
+		() => new URL(`/gateway/${actorSegment}/inspector/ui/`, engineUrl).href,
+		[actorSegment, engineUrl],
+	);
+
+	const runnerBundleProbe = useQuery({
+		queryKey: ["inspector-bundle-probe", runnerInspectorUiUrl],
+		queryFn: async () => {
+			try {
+				const r = await fetch(runnerInspectorUiUrl, {
+					method: "GET",
+					redirect: "manual",
+				});
+				return r.ok;
+			} catch {
+				return false;
+			}
+		},
+		staleTime: Number.POSITIVE_INFINITY,
+		gcTime: Number.POSITIVE_INFINITY,
+	});
+
 	const src = useMemo(() => {
-		const actorSegment = rivetToken
-			? `${encodeURIComponent(actorId)}@${encodeURIComponent(rivetToken)}`
-			: encodeURIComponent(actorId);
-		const path =
-			isActiveCustomTab && activeInspectorTabId
-				? `/gateway/${actorSegment}/inspector/custom-tabs/${encodeURIComponent(
-						activeInspectorTabId,
-					)}/`
-				: `/gateway/${actorSegment}/inspector/ui/`;
-		const url = new URL(path, engineUrl);
+		if (isActiveCustomTab && activeInspectorTabId) {
+			const url = new URL(
+				`/gateway/${actorSegment}/inspector/custom-tabs/${encodeURIComponent(activeInspectorTabId)}/`,
+				engineUrl,
+			);
+			url.searchParams.set("actorId", actorId);
+			url.searchParams.set("shellOrigin", window.location.origin);
+			url.searchParams.set("theme", themeRef.current);
+			return url.href;
+		}
+
+		if (runnerBundleProbe.data === undefined) return undefined;
+
+		const base =
+			runnerBundleProbe.data === true
+				? runnerInspectorUiUrl
+				: `${INSPECTOR_UI_CDN_BASE}/v${runnerVersion}/`;
+		const url = new URL(base);
 		url.searchParams.set("actorId", actorId);
 		url.searchParams.set("shellOrigin", window.location.origin);
+		url.searchParams.set("theme", themeRef.current);
 		return url.href;
 	}, [
 		actorId,
 		engineUrl,
 		isActiveCustomTab,
 		activeInspectorTabId,
-		rivetToken,
+		actorSegment,
+		runnerInspectorUiUrl,
+		runnerBundleProbe.data,
+		runnerVersion,
 	]);
 
-	// Every src change reloads the iframe — reset the listening + boot
-	// timeout state so the "Connecting…" skeleton shows again. Don't clear
-	// inspectorTabs because the descriptor list is still accurate across
-	// built-in↔custom switches.
+	const { reset } = useTimeout(() => {
+		setBootTimedOut(true);
+	}, SKELETON_TIMEOUT_MS);
+
 	useEffect(() => {
 		setIframeListening(false);
 		setBootTimedOut(false);
+		reset();
 	}, [src]);
 
-	const { theme } = useTheme();
 	const postInit = useCallback(() => {
 		if (!iframeListening) return;
 		const iframe = iframeRef.current;
@@ -432,12 +510,6 @@ function ActorDetailsIframePath({
 		return () => window.removeEventListener("message", onMessage);
 	}, [expectedOrigin, dataProvider, actorId, queryClient]);
 
-	useEffect(() => {
-		if (iframeListening) return;
-		const t = setTimeout(() => setBootTimedOut(true), SKELETON_TIMEOUT_MS);
-		return () => clearTimeout(t);
-	}, [iframeListening, src]);
-
 	const showIframe = activeTabSpec?.kind === "inspector" || !activeTabSpec;
 	const activeCloudTab =
 		activeTabSpec?.kind === "cloud"
@@ -517,10 +589,40 @@ function ActorDetailsIframePath({
 				{showIframe && !iframeListening && (
 					<div className="absolute inset-0 flex flex-col items-center justify-center bg-card text-sm text-muted-foreground gap-2 px-4 text-center">
 						{bootTimedOut ? (
-							<span>
-								Inspector UI didn't load. Check that the actor
-								is running and reachable.
-							</span>
+							<div className="flex max-w-sm flex-col items-center gap-3">
+								<p>
+									Inspector UI didn't load. Check that the
+									actor is running and reachable.
+								</p>
+								<div className="flex flex-col items-center gap-2">
+									<Button
+										size="sm"
+										onClick={() => {
+											if (!iframeRef.current) return;
+											// Reassigning src reloads the iframe.
+											iframeRef.current.src =
+												iframeRef.current.src;
+											setBootTimedOut(false);
+											reset();
+										}}
+									>
+										Reload
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										className="text-muted-foreground"
+										onClick={onFallbackToLegacy}
+									>
+										Use legacy inspector
+									</Button>
+								</div>
+								<p className="text-xs text-muted-foreground/80">
+									The legacy inspector is an older, less
+									secure version. Only switch to it if the
+									inspector keeps failing to load.
+								</p>
+							</div>
 						) : (
 							<span>Connecting to inspector…</span>
 						)}

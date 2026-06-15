@@ -53,6 +53,7 @@ import type {
 } from "@/registry/config";
 import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
+import { getNodeFsSync, getNodePath } from "@/utils/node";
 import { logger } from "./log";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
@@ -80,12 +81,11 @@ import type {
 	WebSocketHandle,
 } from "./runtime";
 import { loadWasmRuntime } from "./wasm-runtime";
-import nodeFs from "node:fs";
-import nodePath from "node:path";
 import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+
 type ResolvedRuntimeKind = Exclude<RuntimeKind, "auto">;
 type RuntimeHostKind = "node-like" | "edge-like";
 export type RuntimeLoaders = {
@@ -95,6 +95,7 @@ export type RuntimeLoaders = {
 	) => ReturnType<typeof loadWasmRuntime>;
 	detectHost: () => RuntimeHostKind;
 };
+
 type SerializeStateReason = "save" | "inspector";
 type NativeOnStateChangeHandler = (
 	ctx: ActorContextHandleAdapter,
@@ -3282,6 +3283,7 @@ function withConnContext(
 function buildActorConfig(
 	definition: AnyActorDefinition,
 	registryConfig: RegistryConfig,
+	runtimeKind: "napi" | "wasm",
 ): RuntimeActorConfig {
 	const config = definition.config as unknown as Record<string, unknown>;
 	const options = (config.options ?? {}) as Record<string, unknown>;
@@ -3336,12 +3338,13 @@ function buildActorConfig(
 		actions: Object.keys((config.actions ?? {}) as Record<string, unknown>)
 			.sort()
 			.map((name) => ({ name })),
-		inspectorTabs: buildInspectorTabs(config.inspector),
+		inspectorTabs: buildInspectorTabs(config.inspector, runtimeKind),
 	};
 }
 
 function buildInspectorTabs(
 	inspector: unknown,
+	runtimeKind: "napi" | "wasm",
 ): Array<RuntimeInspectorTabEntry> | undefined {
 	if (!inspector || typeof inspector !== "object") return undefined;
 	const tabs = (inspector as { tabs?: unknown }).tabs;
@@ -3357,12 +3360,28 @@ function buildInspectorTabs(
 		if (entry.hidden === true) {
 			return { id: entry.id, hidden: true };
 		}
-		// Resolve the author's source path against the current working
-		// directory so the Rust runtime gets an absolute path. The author
-		// runs the actor process from their project root by convention.
+
+		if (runtimeKind === "wasm") {
+			if (entry.source !== undefined) {
+				logger().warn(
+					{
+						tabId: entry.id,
+						runtimeKind,
+					},
+					"inspector.tabs[].source is not supported on wasm runners (current host: wasm). Tab descriptors will still appear in the dashboard strip but the tab body will render a not-available placeholder.",
+				);
+			}
+			return {
+				id: entry.id,
+				label: entry.label,
+				icon: entry.icon,
+				source: undefined,
+			};
+		}
+
 		const resolved =
 			entry.source !== undefined
-				? nodePath.resolve(entry.source)
+				? getNodePath().resolve(entry.source)
 				: undefined;
 		if (resolved !== undefined) {
 			validateInspectorTabSource(entry.id, resolved);
@@ -3377,11 +3396,7 @@ function buildInspectorTabs(
 }
 
 function validateInspectorTabSource(tabId: string, resolved: string): void {
-	// Catch obviously dangerous misconfigurations at registry construction
-	// rather than silently exposing the wrong subtree over the unauthenticated
-	// `/inspector/custom-tabs/<id>/*` route. Fail loudly so misconfigured
-	// actors never start.
-	if (resolved === nodePath.parse(resolved).root) {
+	if (resolved === getNodePath().parse(resolved).root) {
 		throw new Error(
 			`inspector.tabs[id="${tabId}"].source resolves to the filesystem root (${resolved}). ` +
 				"Point it at the tab's own static-asset directory instead.",
@@ -3389,7 +3404,7 @@ function validateInspectorTabSource(tabId: string, resolved: string): void {
 	}
 	let stat: import("node:fs").Stats;
 	try {
-		stat = nodeFs.statSync(resolved);
+		stat = getNodeFsSync().statSync(resolved);
 	} catch (err) {
 		const code = (err as NodeJS.ErrnoException)?.code;
 		if (code === "ENOENT") {
@@ -3548,15 +3563,23 @@ export function buildNativeFactory(
 				},
 			);
 		};
-		try {
-			await runtime.actorVerifyInspectorAuth(
-				ctx,
-				jsRequest.headers
-					.get("authorization")
-					?.replace(/^Bearer\s+/i, "") ?? null,
-			);
-		} catch (error) {
-			return errorResponse(error, 401);
+
+		const isPublicPerActorPath =
+			jsRequest.method === "GET" &&
+			(url.pathname === "/inspector/tab-config" ||
+				url.pathname.startsWith("/inspector/custom-tabs/"));
+
+		if (!isPublicPerActorPath) {
+			try {
+				await runtime.actorVerifyInspectorAuth(
+					ctx,
+					jsRequest.headers
+						.get("authorization")
+						?.replace(/^Bearer\s+/i, "") ?? null,
+				);
+			} catch (error) {
+				return errorResponse(error, 401);
+			}
 		}
 
 		const workflowHistory = () =>
@@ -4744,7 +4767,7 @@ export function buildNativeFactory(
 
 	return runtime.createActorFactory(
 		callbacks,
-		buildActorConfig(definition, registryConfig),
+		buildActorConfig(definition, registryConfig, runtime.kind),
 	);
 }
 

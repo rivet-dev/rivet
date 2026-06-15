@@ -37,6 +37,7 @@ import { z } from "zod";
 // `defineActor({ inspector: { tabs: [...] } })`.
 // ============================================================================
 
+export type { ActorInspectorConfig } from "../actor/config";
 export {
 	ActorInspectorConfigSchema,
 	BUILTIN_INSPECTOR_TAB_IDS,
@@ -45,7 +46,6 @@ export {
 	HideInspectorTabEntrySchema,
 	InspectorTabEntrySchema,
 } from "../actor/config";
-export type { ActorInspectorConfig } from "../actor/config";
 
 import type {
 	CustomInspectorTabEntrySchema,

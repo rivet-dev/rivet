@@ -74,7 +74,7 @@ mod websocket;
 use inspector::build_actor_inspector;
 use websocket::is_actor_connect_path;
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct CoreRegistry {
 	factories: HashMap<String, Arc<ActorFactory>>,
 }
@@ -221,7 +221,7 @@ impl EngineSpawnMode {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ServeConfig {
 	pub version: u32,
 	pub endpoint: String,

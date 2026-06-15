@@ -198,12 +198,6 @@ fn default_engine_endpoint(host: &str, port: u16) -> String {
 	format!("http://{url_host}:{port}")
 }
 
-impl Default for ServeConfig {
-	fn default() -> Self {
-		Self::from_env()
-	}
-}
-
 impl ServeConfig {
 	pub fn from_env() -> Self {
 		let settings = ServeSettings::from_env();
@@ -227,6 +221,7 @@ impl ServeConfig {
 			serverless_validate_endpoint: settings.serverless_validate_endpoint,
 			serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
 			serverless_cache_envoy: true,
+			..Default::default()
 		}
 	}
 }
