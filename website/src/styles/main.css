@@ -258,9 +258,11 @@
     content: counter(step);
   }
 
-  /* Porcelain step marker for the light docs shell. */
+  /* Porcelain step marker for the light docs shell. Flat ink to match the
+     ink code panels, so the docs read as porcelain + ink rather than
+     porcelain + stark white. */
   .docs-article .step:before {
-    @apply border-ink/15 bg-white text-ink;
+    @apply border-cream/10 bg-ink text-cream;
   }
 
 	/* Hide scrollbar for Chrome, Safari and Opera */
