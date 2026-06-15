@@ -15,6 +15,8 @@ function applyTheme(theme: Theme) {
 
 function readStoredTheme(): Theme {
 	if (typeof window === "undefined") return "dark";
+	const fromUrl = new URLSearchParams(window.location.search).get("theme");
+	if (fromUrl === "light" || fromUrl === "dark") return fromUrl;
 	const stored = window.localStorage.getItem(STORAGE_KEY);
 	if (stored === "light" || stored === "dark") return stored;
 	return "dark";

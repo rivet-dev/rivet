@@ -39,7 +39,8 @@
 		"build": "node scripts/build.mjs",
 		"build:release": "node scripts/build.mjs --release",
 		"build:force": "node scripts/build.mjs --force",
-		"build:force:release": "node scripts/build.mjs --force --release"
+		"build:force:release": "node scripts/build.mjs --force --release",
+		"build:embed": "node scripts/build.mjs"
 	},
 	"dependencies": {
 		"@napi-rs/cli": "^2.18.4",

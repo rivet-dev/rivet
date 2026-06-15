@@ -7,7 +7,7 @@
 	},
 	"scripts": {
 		"start": "npx turbo watch build",
-		"build": "npx turbo build",
+		"build": "npx turbo build build:embed",
 		"test": "npx turbo test",
 		"test:watch": "npx turbo watch test",
 		"check-types": "npx turbo check-types",

@@ -1,5 +1,9 @@
 # rivetkit-typescript/CLAUDE.md
 
+## Inspector UI Embed (two-step build)
+
+- The inspector UI is embedded into the `rivetkit-napi` / `rivetkit-wasm` native binaries by `rivetkit-core`'s `build.rs`, but it's built downstream of them, so a direct turbo `dependsOn` would cycle. A scoped `build:embed` task re-runs the native build after `build:inspector-ui`; `pnpm -w build` (= `turbo build build:embed`) handles it. Any partial build that runs `@rivetkit/rivetkit-napi#build` without `build:embed` leaves the `.node` with an empty bundle and `/inspector/ui/*` returns `ui_asset_not_found` 404. Fix and full context: [Build troubleshooting](../.claude/reference/build-troubleshooting.md#inspector-ui-embed-empty-bundle--ui_asset_not_found-404).
+
 ## Pre-Rust Refactor Reference
 
 - Commit `1761e6f0f` (`chore: rivetkit to rust`, 2026-04-16) is the cutover from the all-TypeScript runtime to the Rust core + NAPI bindings. Use `1761e6f0f^` (or earlier) when comparing current behavior against the original TypeScript implementation, e.g. for lifecycle ordering, persistence layout, or any "what did the TS version do here?" question.

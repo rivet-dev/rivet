@@ -48,6 +48,28 @@
 			],
 			"outputs": ["dist/inspector-ui/**", "dist/inspector-tab/**"]
 		},
+		// Second native build pass for rivetkit-napi / rivetkit-wasm. Their
+		// build.rs embeds frontend/dist/inspector-ui via include_dir!, but the
+		// inspector UI is built downstream of these packages, so the first
+		// `build` pass embeds an empty bundle. This pass re-runs the native build
+		// after build:inspector-ui has produced the real assets. It is terminal
+		// (nothing depends on it), so it does not create a cycle. Scoped to the two
+		// embedding packages so it is not scheduled for the rest of the workspace.
+		// CAVEAT: running `build` for these packages WITHOUT build:embed (a partial
+		// build, --filter, downstream rebuild) relinks the binary with an empty
+		// inspector bundle -> /inspector/ui/* 404s with ui_asset_not_found. Always
+		// build via `pnpm -w build`, or re-run `... build:force` after a partial
+		// build. See .claude/reference/build-troubleshooting.md.
+		"@rivetkit/rivetkit-napi#build:embed": {
+			"dependsOn": ["build", "@rivetkit/engine-frontend#build:inspector-ui"],
+			"cache": false,
+			"env": ["FAST_BUILD", "SKIP_NAPI_BUILD"]
+		},
+		"@rivetkit/rivetkit-wasm#build:embed": {
+			"dependsOn": ["build", "@rivetkit/engine-frontend#build:inspector-ui"],
+			"cache": false,
+			"env": ["SKIP_WASM_BUILD"]
+		},
 		"build:ladle": {
 			"dependsOn": ["^build"],
 			"inputs": [

@@ -53,7 +53,11 @@ import type {
 } from "@/registry/config";
 import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
-import { getNodeFsSync, getNodePath } from "@/utils/node";
+import {
+	getNodeFsSync,
+	getNodePath,
+	importNodeDependencies,
+} from "@/utils/node";
 import { logger } from "./log";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
@@ -4838,6 +4842,13 @@ export async function buildRegistryWithRuntime(
 		getEnvUniversal("_RIVET_TEST_INSPECTOR_TOKEN") === undefined
 	) {
 		trySetProcessEnv("_RIVET_TEST_INSPECTOR_TOKEN", "token");
+	}
+
+	// Custom inspector tab `source` paths are resolved with node:path while
+	// building actor configs below, so the Node modules must be loaded first.
+	// Native (napi) runtime only; wasm has no filesystem.
+	if (runtime.kind === "napi") {
+		importNodeDependencies();
 	}
 
 	const registry = runtime.createRegistry();
