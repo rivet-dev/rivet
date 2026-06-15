@@ -150,16 +150,19 @@ function ProductsDropdown({
 						type="button"
 						aria-expanded={isOpen}
 						className={cn(
-							"cursor-pointer flex items-center gap-1 relative transition-colors duration-200",
+							"cursor-default flex items-center gap-1 relative transition-colors duration-200",
 							"!text-zinc-600 hover:!text-zinc-900",
 							active && "!text-zinc-900",
-							"after:absolute after:left-0 after:right-0 after:top-full after:h-4 after:content-['']",
+							// Invisible hover bridge spanning the visual gap down to the
+							// dropdown panel so moving the mouse from the trigger to the
+							// panel does not cross a dead zone and close the menu.
+							"after:absolute after:left-0 after:right-0 after:top-full after:h-7 after:content-['']",
 						)}
-						onPointerDown={handlePointerDown}
 						onMouseEnter={handleMouseEnter}
 					>
 						Products
 						<Icon
+							aria-hidden="true"
 							icon={faChevronDown}
 							className={cn(
 								"h-3 w-3 ml-0.5 transition-transform duration-200",
