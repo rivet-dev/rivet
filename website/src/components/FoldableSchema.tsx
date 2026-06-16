@@ -16,7 +16,7 @@ export function Foldable({
 			<button
 				type="button"
 				className={cn(
-					"mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors",
+					"mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-ink transition-colors",
 				)}
 				onClick={() => setIsOpen((open) => !open)}
 			>
