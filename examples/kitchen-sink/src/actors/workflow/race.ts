@@ -4,7 +4,6 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-import { actorCtx } from "./_helpers.ts";
 
 export type RaceTask = {
 	id: string;
@@ -16,8 +15,6 @@ export type RaceTask = {
 	completedAt?: number;
 	actualDurationMs?: number;
 };
-
-type State = RaceTask;
 
 export type RaceTaskInput = {
 	workDurationMs?: number;
@@ -43,13 +40,11 @@ export const race = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("race-loop", async (loopCtx) => {
-			const c = actorCtx<State>(loopCtx);
-
 			// Get durations inside a step since state is only available in steps
 			const { workDurationMs, timeoutMs, taskId } = await loopCtx.step(
 				"start-race",
-				async () => {
-					ctx.log.info({
+				async (c) => {
+					c.log.info({
 						msg: "starting race",
 						taskId: c.state.id,
 						workDurationMs: c.state.workDurationMs,
@@ -86,7 +81,7 @@ export const race = actor({
 				},
 			]);
 
-			await loopCtx.step("save-result", async () => {
+			await loopCtx.step("save-result", async (c) => {
 				c.state.completedAt = Date.now();
 				c.state.actualDurationMs =
 					c.state.completedAt - c.state.startedAt;
@@ -94,14 +89,14 @@ export const race = actor({
 				if (winner === "work") {
 					c.state.status = "work_won";
 					c.state.result = value as string;
-					ctx.log.info({
+					c.log.info({
 						msg: "work completed before timeout",
 						taskId: c.state.id,
 						durationMs: c.state.actualDurationMs,
 					});
 				} else {
 					c.state.status = "timeout_won";
-					ctx.log.info({
+					c.log.info({
 						msg: "timeout won the race",
 						taskId: c.state.id,
 						durationMs: c.state.actualDurationMs,

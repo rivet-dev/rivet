@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 import type {
 	EngineDriver,
 	KVEntry,
@@ -12,6 +10,21 @@ import type { AnyStaticActorInstance } from "@/actor/definition";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/keys";
 
 const WORKFLOW_STORAGE_PREFIX = workflowStoragePrefix();
+
+// Mirrors the element shape returned by `queueManager.receive`. The actor
+// instance is reached through a loose type here, so the call's result is
+// untyped and the message must be annotated explicitly.
+interface ReceivedQueueMessage {
+	id: bigint;
+	name: string;
+	body: unknown;
+	createdAt: number;
+	complete?: (response?: unknown) => Promise<void>;
+}
+
+// `kvListPrefix` returns key/value tuples, but the loose actor type erases that
+// so the tuple destructures need an explicit annotation.
+type KVEntryTuple = [Uint8Array, Uint8Array];
 
 function stripWorkflowKey(prefixed: Uint8Array): Uint8Array {
 	return prefixed.slice(WORKFLOW_STORAGE_PREFIX.length);
@@ -62,7 +75,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 				opts.completable,
 			),
 		);
-		return messages.map((message) => ({
+		return messages.map((message: ReceivedQueueMessage) => ({
 			id: message.id.toString(),
 			name: message.name,
 			data: message.body,
@@ -156,7 +169,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 			await this.#runCtx.internalKeepAwake(
 				this.#actor.driver.kvBatchDelete(
 					this.#actor.id,
-					entries.map(([key]) => key),
+					entries.map(([key]: KVEntryTuple) => key),
 				),
 			);
 		}
@@ -179,7 +192,7 @@ export class ActorWorkflowDriver implements EngineDriver {
 				makeWorkflowKey(prefix),
 			),
 		);
-		return entries.map(([key, value]) => ({
+		return entries.map(([key, value]: KVEntryTuple) => ({
 			key: stripWorkflowKey(key),
 			value,
 		}));
@@ -295,7 +308,7 @@ export class ActorWorkflowControlDriver implements EngineDriver {
 		}
 		await this.#actor.driver.kvBatchDelete(
 			this.#actor.id,
-			entries.map(([key]) => key),
+			entries.map(([key]: KVEntryTuple) => key),
 		);
 	}
 
@@ -312,7 +325,7 @@ export class ActorWorkflowControlDriver implements EngineDriver {
 			this.#actor.id,
 			makeWorkflowKey(prefix),
 		);
-		return entries.map(([key, value]) => ({
+		return entries.map(([key, value]: KVEntryTuple) => ({
 			key: stripWorkflowKey(key),
 			value,
 		}));

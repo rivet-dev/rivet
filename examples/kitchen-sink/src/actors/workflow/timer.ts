@@ -4,7 +4,6 @@
 
 import { actor, event } from "rivetkit";
 import { Loop, workflow } from "rivetkit/workflow";
-import { actorCtx } from "./_helpers.ts";
 
 export type Timer = {
 	id: string;
@@ -13,8 +12,6 @@ export type Timer = {
 	startedAt: number;
 	completedAt?: number;
 };
-
-type State = Timer;
 
 export type TimerInput = {
 	name?: string;
@@ -39,11 +36,9 @@ export const timer = actor({
 
 	run: workflow(async (ctx) => {
 		await ctx.loop("timer-loop", async (loopCtx) => {
-			const c = actorCtx<State>(loopCtx);
-
 			// Get duration inside a step since state is only available in steps
-			const durationMs = await loopCtx.step("start-timer", async () => {
-				ctx.log.info({
+			const durationMs = await loopCtx.step("start-timer", async (c) => {
+				c.log.info({
 					msg: "starting timer",
 					timerId: c.state.id,
 					durationMs: c.state.durationMs,
@@ -54,10 +49,13 @@ export const timer = actor({
 
 			await loopCtx.sleep("countdown", durationMs);
 
-			await loopCtx.step("complete-timer", async () => {
+			await loopCtx.step("complete-timer", async (c) => {
 				c.state.completedAt = Date.now();
 				c.broadcast("timerCompleted", c.state);
-				ctx.log.info({ msg: "timer completed", timerId: c.state.id });
+				c.log.info({
+					msg: "timer completed",
+					timerId: c.state.id,
+				});
 			});
 
 			return Loop.break(undefined);
