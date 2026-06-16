@@ -2,18 +2,21 @@
 author: nathan-flurry
 published: "2026-06-16"
 category: changelog
+image: true
 keywords: ["effect", "effect-ts", "actors", "scope", "subscriptionref", "schema", "typescript", "sqlite", "ai-agents", "effect-ai", "open-source"]
 title: "Introducing the Effect SDK for Rivet Actors"
-description: "A first-class Effect SDK for Rivet Actors — your Scope, Ref, and Layer, now durable."
+description: "A first-class Effect SDK for Rivet Actors — your Scope, Ref, and Layer, now stateful."
 ---
 
 Today we're releasing the **[RivetKit Effect SDK](/docs/actors/quickstart/effect)** (beta): a first-class [Effect](https://effect.website) SDK for [Rivet Actors](/docs/actors).
 
 ## Effect, Made Stateful
 
-A Rivet Actor is a lightweight, long-lived process with durability: it holds state in memory, persists it, hibernates when idle, and wakes intact.
+A Rivet Actor is a **lightweight, long-lived process with durability**: it holds state in memory, persists it, hibernates when idle, and wakes intact.
 
-Effect maps onto that model cleanly. Its primitives normally live and die with a single process; on an actor they persist. If you know Effect, the whole thing fits in one line: an actor is a long-lived `Scope` holding a `Ref` that survives restarts. The SDK maps each primitive onto the actor without replacing it:
+Effect fits this model almost exactly. Its primitives are built to **live and die with one process**; on an actor, **they outlive it**.
+
+If you know Effect, that's the whole idea in a sentence: **an actor is a long-lived `Scope` holding a `Ref` that survives restarts**. The SDK maps each primitive onto the actor without replacing it:
 
 - **`Scope`** → a lifetime that spans wake to sleep.
 - **`Ref` / `SubscriptionRef`** → persisted, reactive state that survives restart.
@@ -131,6 +134,32 @@ const program = Effect.gen(function* () {
 }).pipe(Effect.provide(Client.layer({ endpoint: "http://127.0.0.1:6420" })));
 ```
 
+**`Registry.test` wires the actor up for tests.** Same `Counter.client`, no special-casing.
+
+```ts
+import { assert, layer } from "@effect/vitest";
+import { Registry } from "@rivetkit/effect";
+import { Effect, Layer } from "effect";
+import { Counter } from "./api.ts";
+import { CounterLive } from "./live.ts";
+
+const TestLayer = Registry.test.pipe(
+  Layer.provideMerge(CounterLive),
+  Layer.provide(Registry.layer()),
+);
+
+layer(TestLayer)("counter", (it) => {
+  it.effect("increments and reads the count back", () =>
+    Effect.gen(function* () {
+      const counter = (yield* Counter.client).getOrCreate("t-increment");
+      assert.strictEqual(yield* counter.Increment({ amount: 1 }), 1);
+      assert.strictEqual(yield* counter.Increment({ amount: 5 }), 6);
+      assert.strictEqual(yield* counter.GetCount(), 6);
+    }),
+  );
+});
+```
+
 ## Effectful Rivet in Practice
 
 Each section below is one Effect primitive and what an actor adds to it.
@@ -142,8 +171,6 @@ In a normal Effect program a `Scope` lives for one request. An actor wake _is_ a
 - **Spans calls**: the wake scope opens on wake and closes on sleep, not per request.
 - **`Effect.addFinalizer`**: runs on sleep, so it's your hibernation hook.
 - **`Effect.forkScoped`**: background fibers run until the actor sleeps, then cancel automatically.
-
-See [actor lifecycle](/docs/actors/lifecycle) for how wake and sleep are scheduled.
 
 ```ts
 Counter.toLayer(
@@ -167,6 +194,8 @@ Counter.toLayer(
 );
 ```
 
+See [actor lifecycle](/docs/actors/lifecycle) for how wake and sleep are scheduled.
+
 ### Ref & SubscriptionRef: state that outlives the process
 
 `State` keeps the `Ref` / `SubscriptionRef` shape but backs it with persistence:
@@ -185,7 +214,7 @@ const next = yield* State.updateAndGet(state, (s) => ({ count: s.count + 1 }));
 yield* State.changes(state).pipe(Stream.runForEach(render), Effect.forkScoped);
 ```
 
-This is in-memory state read straight from the actor's process; see [actor state](/docs/actors/state) for how it persists and when it saves. For larger or queryable data, each actor also has an embedded [SQLite](/docs/actors/sqlite) database, covered below.
+This is **in-memory state read straight from the actor's process**; see [actor state](/docs/actors/state) for how it persists and when it saves. For larger or queryable data, each actor also has an **embedded [SQLite](/docs/actors/sqlite) database**, covered below.
 
 ### Layers & Services: dependency injection you can test
 
@@ -193,7 +222,6 @@ Effect tracks a program's dependencies in its type. You declare a need for a ser
 
 - **Services in scope**: provide a service's `Layer` and `yield*` it in the wake scope or any handler.
 - **The actor is a `Layer`**: wiring a registry is ordinary `Layer` composition.
-- **No mocks**: `Registry.test` swaps a real engine for an in-process one. The same actor code runs in tests.
 
 <CodeGroup>
 ```ts wiring.ts
@@ -240,9 +268,8 @@ layer(TestLayer)("counter", (it) => {
 
 ### Schema: typed data and errors across the wire
 
-Every cross-boundary call is serialized (CBOR), and the SDK places `Schema` at that boundary:
+Every cross-boundary call is serialized, and the SDK places `Schema` at that boundary:
 
-- **One schema, four uses**: an action's payload, success, and error, plus the persisted state.
 - **Encoded vs decoded types**: rich values like `DateTimeUtc`, `URL`, `bigint`, and `Uint8Array` round-trip safely.
 - **Real tagged errors**: a `Schema.TaggedErrorClass` (or a `Schema.Union` of them) arrives on the caller as an instance you can `catchTag`, not a string or `unknown`.
 
@@ -266,29 +293,15 @@ yield* room.SendMessage({ sender: "Mallory", text: "hello" }).pipe(
 ```
 </CodeGroup>
 
-### Concurrency, tracing, and logging that span actors
+### Observability across actors
 
-- **Concurrency across actors**: a coordinator calls many instances with `Effect.all`, and cancels them as one program.
-- **Distributed spans**: `Effect.withSpan` in a handler nests under the SDK's server-side span, which nests under the client-side span.
-- **Unified logs**: `Logger.layerPino` routes `Effect.log` output and the underlying RivetKit logs through one logger.
+**Traces cross the actor boundary on their own.** An `Effect.withSpan` in a handler nests under the SDK's server-side span, which nests under the client-side span, so a single call from client to actor and back is **one connected trace** with no context-propagation plumbing to wire up.
 
 ```ts
-yield* Effect.all(
-  rooms.map((room) => room.SendMessage({ sender: "Admin", text: "Deploying now" })),
-  { concurrency: 16 },
-).pipe(
+yield* room.SendMessage({ sender: "Admin", text: "Deploying now" }).pipe(
   Effect.withSpan("broadcastAnnouncement", {
-    attributes: { roomCount: rooms.length },
+    attributes: { room: room.key },
   }),
-);
-```
-
-```ts
-import { Logger } from "@rivetkit/effect";
-import { pino } from "pino";
-
-export const PrettyLoggerLayer = Logger.layerPino(
-	pino({ transport: { target: "pino-pretty" } }),
 );
 ```
 
@@ -296,11 +309,7 @@ export const PrettyLoggerLayer = Logger.layerPino(
 
 The rest of the actor surface, reached from inside a handler.
 
-### Actions: typed RPC, even actor-to-actor
-
-- **Schema-validated request/response**: end to end, as shown above.
-- **Same client both directions**: the typed client works client-to-actor and actor-to-actor.
-- **Errors compose**: a callee's typed error flows into the caller's declared error channel.
+**Actions.** The typed client works actor-to-actor, and a callee's typed error flows into the caller's declared error channel.
 
 ```ts
 // Inside ChatRoom's wake scope
@@ -314,11 +323,7 @@ SendMessage: Effect.fnUntraced(function* ({ payload }) {
 }),
 ```
 
-### SQLite: a database per actor
-
-- **Embedded and per-instance**: add `db` to the actor; no connection strings.
-- **Migrations run before wake**: handlers always see a migrated schema.
-- **Local reads, scale to zero**: the database is co-located with the actor and idle when it sleeps.
+**SQLite.** An embedded, per-instance database, migrated before wake and co-located with the actor.
 
 ```ts
 import { db } from "rivetkit/db";
@@ -339,22 +344,19 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		db: db({
 			onMigrate: async (client) => {
 				await client.execute(`
-          CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender TEXT NOT NULL,
-            text TEXT NOT NULL
-          )
-        `);
+					CREATE TABLE IF NOT EXISTS messages (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						sender TEXT NOT NULL,
+						text TEXT NOT NULL
+					)
+				`);
 			},
 		}),
 	},
 );
 ```
 
-### Events: realtime, no extra infrastructure
-
-- **Broadcast from a handler**: every connected client receives it; no pub/sub service or separate WebSocket server.
-- **Pairs with `State.changes`**: gives you a realtime data layer inside the actor.
+**Events.** Broadcast from a handler to every connected client, no pub/sub service or separate WebSocket server.
 
 ```ts
 SendMessage: Effect.fnUntraced(function* ({ payload }) {
@@ -366,11 +368,7 @@ SendMessage: Effect.fnUntraced(function* ({ payload }) {
 }),
 ```
 
-### Queues: durable, ordered work
-
-- **Durable and ordered**: actors carry completable queues for background and fire-and-forget work that outlives a request.
-- **Maps to `forkScoped`**: a queue consumer is a fiber forked into the wake scope, so it lives as long as the actor is awake and tears down on sleep, the same pattern as `State.changes`.
-- **Available today via the scheduler**: typed queue wrappers are landing through the beta; the scheduler is usable now through the actor context.
+**Queues.** Durable, ordered background work; a consumer maps to a `forkScoped` fiber that lives as long as the actor is awake. Available now through the scheduler while typed wrappers land.
 
 ```ts
 // Dispatch an action to run later, by name, with the same payload a client sends
@@ -380,15 +378,11 @@ rawRivetkitContext.schedule.after(1_000, "SendMessage", {
 });
 ```
 
+_(Uses of `rawRivetkitContext` are for parts of Rivet that don't have a native Effect API yet.)_
+
 ## Putting It Together: a realtime chat room
 
-One actor that uses all of the above. The full runnable version is the [`chat-room-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room-effect) example.
-
-- **A service** for domain rules (`RoomPolicy`).
-- **Persisted state** with a forked live change stream.
-- **A sleep finalizer**.
-- **Actor-to-actor RPC** whose typed error flows through this actor's channel.
-- **SQLite** for history and **broadcast** for realtime.
+One actor that uses all of the above: a custom service for domain rules, persisted state with a forked live change stream, a sleep finalizer, actor-to-actor RPC whose typed error flows through this actor's channel, and SQLite plus broadcast for durable history and realtime. The full runnable version is the [`chat-room-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room-effect) example.
 
 ```ts
 import { Actor, State } from "@rivetkit/effect";
@@ -481,12 +475,12 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		db: db({
 			onMigrate: async (client) => {
 				await client.execute(`
-          CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            sender TEXT NOT NULL,
-            text TEXT NOT NULL
-          )
-        `);
+					CREATE TABLE IF NOT EXISTS messages (
+						id INTEGER PRIMARY KEY AUTOINCREMENT,
+						sender TEXT NOT NULL,
+						text TEXT NOT NULL
+					)
+				`);
 			},
 		}),
 		name: "Chat Room",
@@ -497,16 +491,13 @@ export const ChatRoomLive = ChatRoom.toLayer(
 
 ## Building Agents with Effect AI
 
-[Effect AI](https://effect.website/docs/ai/introduction/) (shipped in `effect/unstable/ai`, with providers like `@effect/ai-openai`) gives you a provider-agnostic `LanguageModel` service. An actor gives that agent a durable home. Put together, you get an agent that remembers across calls and restarts, with the model swappable as a `Layer`. The full runnable version is the [`agent-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect) example.
+[Effect AI](https://effect.website/docs/ai/introduction/) gives you a provider-agnostic `LanguageModel` service, and an actor is the perfect place to run it:
 
-Why the two fit:
+- **Memory is just state**: persist the message history in actor state, and the model sees every prior turn, even after a restart.
+- **The model is a `Layer`**: swap a real provider for a mock without touching actor code.
+- **One agent per conversation**: address it by key, single-writer, so concurrent messages can't race on its history.
 
-- **Conversation memory is just state**: persist the message history in actor state, and the model sees every prior turn, even after a restart. No vector store or session cache to wire up for short-term memory.
-- **The model is a `Layer`**: handlers require `LanguageModel` but never construct it, so you provide a real provider in production and a mock in tests without changing actor code.
-- **One agent per conversation**: address an agent by key, single-writer, so concurrent messages to the same agent can't race on its history.
-- **Typed inputs and errors**: guard the request with a `Schema.TaggedErrorClass`, the same as any other action.
-
-The handler persists the user turn, calls the model with the running history, then persists the reply:
+The handler persists the user turn, calls the model with the running history, then persists the reply. The full example is [`ai-agent-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect).
 
 ```ts
 import { Actor, State } from "@rivetkit/effect";
@@ -551,46 +542,18 @@ export const AgentLive = Agent.toLayer(
 );
 ```
 
-The actor stays provider-agnostic. The concrete model is a single `Layer<LanguageModel>` provided where the actor is composed:
-
-```ts
-import { OpenAiClient, OpenAiLanguageModel } from "@effect/ai-openai";
-import { Config, Layer } from "effect";
-import { FetchHttpClient } from "effect/unstable/http";
-
-export const OpenAiModelLayer = OpenAiLanguageModel.layer({
-  model: "gpt-4o-mini",
-}).pipe(
-  Layer.provide(
-    OpenAiClient.layerConfig({
-      apiKey: Config.redacted("OPENAI_API_KEY"),
-      // Point at any OpenAI-compatible endpoint; the test aims this at a mock.
-      apiUrl: Config.string("OPENAI_BASE_URL").pipe(
-        Config.withDefault("https://api.openai.com/v1"),
-      ),
-    }),
-  ),
-  Layer.provide(FetchHttpClient.layer),
-);
-
-// In main.ts, provide it to the actor. Swapping providers is a one-line change.
-const ActorsLayer = AgentLive.pipe(Layer.provide(OpenAiModelLayer));
-```
-
-Because the model is just a layer, the example's tests provide a `LanguageModel` aimed at an in-process mock LLM server (a real server, not a module mock) and run the agent end to end against a real engine, with no API key.
-
 ## Beta & Feature Support
 
 The Effect SDK is in **beta**, and the `@rivetkit/effect` API may change between releases.
 
-- **Typed today**: actions, state, the typed client, typed errors, logging, sleep, actor address, and the registry have typed, schema-validated APIs.
-- **Available via raw context**: events and broadcast, schedule, embedded SQLite, queues, connections, and lifecycle hooks are usable now through the raw actor context while typed wrappers land.
-- **Track it**: the [feature support matrix](/docs/actors/quickstart/effect#feature-support) lists the current state of each feature.
+- **Typed today**: actions, state, the typed client, typed errors, logging, sleep, actor address, and the registry.
+- **Available via raw context**: events and broadcast, schedule, embedded SQLite, queues, connections, and lifecycle hooks, until typed wrappers land.
 
-**The raw escape hatch.** Every wake function receives `rawRivetkitContext`, the underlying RivetKit [actor context](/docs/actors):
+The [feature support matrix](/docs/actors/quickstart/effect#feature-support) tracks the state of each feature.
 
-- It points at the same actor as the typed `state` argument, so you can mix both freely.
-- Calls through it are not validated by `Schema`; payloads are typed as in the base RivetKit API. See [Raw Escape Hatch](/docs/actors/quickstart/effect#raw-escape-hatch).
+### The raw escape hatch
+
+Every wake function receives `rawRivetkitContext`, the underlying RivetKit actor context. It points at the same actor as the typed `state` argument, so you can mix both freely. Calls through it are not validated by `Schema`; payloads are typed as in the base RivetKit API.
 
 ```ts
 Counter.toLayer(
@@ -609,7 +572,9 @@ Counter.toLayer(
 );
 ```
 
-This is the moment to shape the typed surface. If you build with it, tell us what you want wrapped next and what does or doesn't feel right in [Discord](https://rivet.dev/discord) or on [GitHub](https://github.com/rivet-dev/rivet). The matrix moves based on your feedback.
+### Give feedback
+
+The SDK is shaped by what you build with it. Join our [Discord](https://rivet.dev/discord) to tell us what to wrap next and to contribute.
 
 ## Get Started
 
@@ -618,6 +583,6 @@ npm install rivetkit @rivetkit/effect effect @effect/platform-node
 ```
 
 - [Effect SDK quickstart](/docs/actors/quickstart/effect)
-- Example projects: [`hello-world-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-effect), [`chat-room-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room-effect), and [`agent-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect)
+- Example projects: [`hello-world-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/hello-world-effect), [`chat-room-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/chat-room-effect), and [`ai-agent-effect`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect)
 - [GitHub](https://github.com/rivet-dev/rivet)
 - [Discord](https://rivet.dev/discord)

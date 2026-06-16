@@ -16,7 +16,7 @@ The test suite needs neither a key nor network access: it runs a real in-process
 
 ```sh
 git clone https://github.com/rivet-dev/rivet.git
-cd rivet/examples/agent-effect
+cd rivet/examples/ai-agent-effect
 npm install
 npm run dev
 ```
@@ -39,12 +39,12 @@ npm run client
 
 The actor is split into a public contract and a server-only implementation:
 
-- **Contract** ([`src/actors/agent/api.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect/src/actors/agent/api.ts)): Declares the `Agent` actor, the `Message` type, the `SendMessage` / `GetHistory` actions, and the `EmptyMessageError`
-- **Implementation** ([`src/actors/agent/live.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect/src/actors/agent/live.ts)): Implements the wake scope, the conversation-history state schema, and the action handlers that call the LLM
-- **Model wiring** ([`src/model.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect/src/model.ts)): Composes a `Layer<LanguageModel>` from `OpenAiLanguageModel`, `OpenAiClient`, and `FetchHttpClient`
-- **Server** ([`src/main.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect/src/main.ts)): Provides the model Layer to the actor layer and serves it with `Registry.serve`
-- **Client** ([`src/client.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect/src/client.ts)): An Effect client using the typed `Agent.client` accessor
-- **Test** ([`tests/agent.test.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/agent-effect/tests/agent.test.ts)): Runs the actor against a real engine and a real in-process mock LLM server, swapping in a mock model Layer
+- **Contract** ([`src/actors/agent/api.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/actors/agent/api.ts)): Declares the `Agent` actor, the `Message` type, the `SendMessage` / `GetHistory` actions, and the `EmptyMessageError`
+- **Implementation** ([`src/actors/agent/live.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/actors/agent/live.ts)): Implements the wake scope, the conversation-history state schema, and the action handlers that call the LLM
+- **Model wiring** ([`src/model.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/model.ts)): Composes a `Layer<LanguageModel>` from `OpenAiLanguageModel`, `OpenAiClient`, and `FetchHttpClient`
+- **Server** ([`src/main.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/main.ts)): Provides the model Layer to the actor layer and serves it with `Registry.serve`
+- **Client** ([`src/client.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/src/client.ts)): An Effect client using the typed `Agent.client` accessor
+- **Test** ([`tests/agent.test.ts`](https://github.com/rivet-dev/rivet/tree/main/examples/ai-agent-effect/tests/agent.test.ts)): Runs the actor against a real engine and a real in-process mock LLM server, swapping in a mock model Layer
 
 ## Resources
 

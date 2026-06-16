@@ -4,10 +4,8 @@ import { assert, layer } from "@effect/vitest";
 import { Registry } from "@rivetkit/effect";
 import { Effect, Layer, Random, Redacted } from "effect";
 import { FetchHttpClient } from "effect/unstable/http";
-import { inject } from "vitest";
 import { Agent } from "../src/actors/agent/api.ts";
 import { AgentLive } from "../src/actors/agent/live.ts";
-import { prepareNamespace, waitForEnvoy } from "./shared-engine.ts";
 
 // Per repo rules there is no module mocking: a real OpenAI-compatible mock LLM
 // server runs in-process and the Effect AI provider is pointed at its base URL.
@@ -100,35 +98,23 @@ const MockModelLayer = OpenAiLanguageModel.layer({ model: "gpt-4o-mini" }).pipe(
 	Layer.provide(FetchHttpClient.layer),
 );
 
-// Talk to the shared engine (spawned in globalSetup) against a unique namespace
-// + runner pool so envoy registrations can't bleed across runs.
-const { endpoint, token, namespace, poolName } = await prepareNamespace(
-	inject("rivetEngine").endpoint,
+// `Registry.test` boots the actor in-process against a local engine. With no
+// endpoint configured on `Registry.layer`, it auto-spawns a `rivet-engine` for
+// the duration of the suite, the same way the other Effect examples do. The
+// mock model Layer is provided to the actor; only that Layer differs from
+// production.
+const TestLayer = Registry.test.pipe(
+	Layer.provideMerge(AgentLive.pipe(Layer.provide(MockModelLayer))),
+	Layer.provide(Registry.layer()),
 );
 
-// Block until the in-process envoy has registered against the engine's pool;
-// `Registry.test`'s `.start()` returns before that round-trip completes.
-const ReadyForEnvoy = Layer.effectDiscard(
-	Effect.tryPromise(() => waitForEnvoy(endpoint, namespace, poolName)).pipe(
-		Effect.orDie,
-	),
-);
-
-const TestLayer = ReadyForEnvoy.pipe(
-	Layer.provideMerge(
-		Registry.test.pipe(
-			Layer.provideMerge(AgentLive.pipe(Layer.provide(MockModelLayer))),
-			Layer.provide(Registry.layer({ endpoint, token, namespace })),
-		),
-	),
-);
-
+// A fresh agent key per test keeps actor state from bleeding across cases.
 const freshAgent = Effect.gen(function* () {
 	const client = yield* Agent.client;
 	return client.getOrCreate(`agent_${yield* Random.nextUUIDv4}`);
 });
 
-layer(TestLayer, { timeout: 30_000 })("agent-effect", (it) => {
+layer(TestLayer)("ai-agent-effect", (it) => {
 	it.effect("replies via the LLM and persists conversation history", () =>
 		Effect.gen(function* () {
 			const agent = yield* freshAgent;
