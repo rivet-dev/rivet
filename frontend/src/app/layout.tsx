@@ -1,7 +1,6 @@
 import {
 	faArrowUpRight,
 	faBook,
-	faChevronDown,
 	faCog,
 	faDiscord,
 	faGift,
@@ -53,9 +52,7 @@ import {
 } from "@/components/actors";
 import { useRootLayoutOptional } from "@/components/actors/root-layout-context";
 import type { HeaderLinkProps } from "@/components/header/header-link";
-import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
-import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
 import { ensureTrailingSlash } from "@/lib/utils";
 import type { RivetActorError } from "@/queries/types";
 import { TEST_IDS } from "@/utils/test-ids";
@@ -65,12 +62,11 @@ import { BillingPlanBadge } from "./billing/billing-plan-badge";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { Changelog } from "./changelog";
 import { ContextSwitcher } from "./context-switcher";
-import { FeedbackButton } from "./feedback-button";
-import { HelpButton } from "./help-button";
 import { HelpDropdown } from "./help-dropdown";
-import { Logo as BrandLogo } from "./logo";
+import { LogoMark } from "./logo";
 import { NamespaceSelect } from "./namespace-select";
 import { RunnerPoolErrorPopover } from "./runner-pool-error-popover";
+import { TopBarActions } from "./top-bar-actions";
 import { UserDropdown } from "./user-dropdown";
 
 interface RootProps {
@@ -777,89 +773,13 @@ export const Content = ({
 // dropdown). The markup is inlined rather than imported from `./top-bar`
 // to avoid any module-evaluation order issue with this large layout file.
 export const SidebarlessHeader = () => {
-	const { data: org, isPending } = authClient.useActiveOrganization();
-	const { data: session } = authClient.useSession();
-	const name =
-		org?.name ??
-		session?.user?.name ??
-		session?.user?.email?.split("@")[0] ??
-		"Account";
-	const logo = org?.logo ?? undefined;
-	const initial = name[0]?.toUpperCase() ?? "?";
-
 	return (
-		<div className="pl-2">
-			<header className="z-20 flex items-center gap-3 h-11 px-3 mt-2 mr-2 bg-card border border-border rounded-lg shrink-0">
-				<Link to="/" className="flex items-center gap-2 shrink-0">
-					<BrandLogo className="h-5 w-auto text-foreground" />
-				</Link>
-				<ContextSwitcher inline />
-				<div className="ml-auto flex items-center gap-1">
-					<FeedbackButton />
-					{features.support ? <HelpButton /> : null}
-					<Button
-						variant="ghost"
-						size="sm"
-						className="gap-2 text-muted-foreground hover:text-foreground"
-						asChild
-						startIcon={<Icon icon={faBook} className="size-4" />}
-					>
-						<a
-							href="https://www.rivet.dev/docs"
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							Docs
-						</a>
-					</Button>
-					{features.auth ? (
-						<>
-							<div className="mx-1 h-5 w-px bg-border" />
-							<UserDropdown>
-								<Button
-									variant="ghost"
-									size="sm"
-									className="gap-2 text-muted-foreground hover:text-foreground"
-									endIcon={
-										<Icon
-											icon={faChevronDown}
-											className="size-2.5 opacity-60"
-										/>
-									}
-								>
-									<span className="size-5 rounded-full overflow-hidden flex items-center justify-center shrink-0">
-										{logo ? (
-											// biome-ignore lint/performance/noImgElement: small avatar, no Next runtime
-											<img
-												src={logo}
-												alt=""
-												className="size-full object-cover"
-											/>
-										) : (
-											<span
-												className="size-full flex items-center justify-center text-[10px] font-semibold text-white"
-												style={{
-													backgroundImage:
-														orgConicGradient(
-															paletteForLetter(
-																name,
-															),
-														),
-												}}
-											>
-												{initial}
-											</span>
-										)}
-									</span>
-									<span className="text-sm">
-										{isPending && !org ? "…" : name}
-									</span>
-								</Button>
-							</UserDropdown>
-						</>
-					) : null}
-				</div>
-			</header>
-		</div>
+		<header className="z-20 flex items-center gap-2 h-12 px-3 shrink-0 border-b border-border bg-background">
+			<Link to="/" className="flex items-center shrink-0 pr-1">
+				<LogoMark className="h-5 w-auto text-foreground" />
+			</Link>
+			<ContextSwitcher inline />
+			<TopBarActions />
+		</header>
 	);
 };

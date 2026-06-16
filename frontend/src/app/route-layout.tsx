@@ -13,9 +13,9 @@ export function RouteLayout({
 	const sidebarRef = useRef<ImperativePanelHandle>(null);
 
 	return (
-		<div className="flex h-screen flex-col bg-background pl-2">
+		<div className="flex h-screen flex-col bg-background">
 			<TopBar />
-			<main className="flex flex-1 min-h-0 flex-col bg-background min-w-0">
+			<main className="flex flex-1 min-h-0 flex-col bg-background min-w-0 pl-2">
 				{/*
 				 * `isSidebarCollapsed: false` so the inner Content / ActorsListPreview
 				 * components still render their floating card border. There is no

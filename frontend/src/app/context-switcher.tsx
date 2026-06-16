@@ -1,13 +1,5 @@
 import type { Rivet } from "@rivet-gg/cloud";
-import {
-	faCheck,
-	faChevronDown,
-	faGear,
-	faPlus,
-	faPlusCircle,
-	faSlashForward,
-	Icon,
-} from "@rivet-gg/icons";
+import { faCheck, faGear, faPlus, faPlusCircle, Icon } from "@rivet-gg/icons";
 import {
 	useInfiniteQuery,
 	usePrefetchInfiniteQuery,
@@ -18,6 +10,7 @@ import {
 	useMatchRoute,
 	useNavigate,
 	useParams,
+	useRouter,
 	useSearch,
 } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
@@ -101,14 +94,14 @@ function ContextSwitcherInner({
 	) {
 		return (
 			<div className="flex items-center min-w-0">
+				<BreadcrumbSlash />
+				<OrgSegmentPopover organization={match.organization} />
+				<BreadcrumbSlash />
 				<ProjectSegmentPopover
 					organization={match.organization}
 					currentProject={match.project}
 				/>
-				<Icon
-					icon={faSlashForward}
-					className="text-muted-foreground/40 mx-1 shrink-0"
-				/>
+				<BreadcrumbSlash />
 				<NamespaceSegmentPopover
 					organization={match.organization}
 					currentProject={match.project}
@@ -131,6 +124,9 @@ function ContextSwitcherInner({
 	) {
 		return (
 			<div className="flex items-center min-w-0">
+				<BreadcrumbSlash />
+				<OrgSegmentPopover organization={match.organization} />
+				<BreadcrumbSlash />
 				<ProjectSegmentPopover
 					organization={match.organization}
 					currentProject={match.project}
@@ -152,6 +148,7 @@ function ContextSwitcherInner({
 	) {
 		return (
 			<div className="flex items-center min-w-0">
+				<BreadcrumbSlash />
 				<EngineNamespaceSegmentPopover
 					currentNamespace={match.namespace}
 				/>
@@ -169,7 +166,7 @@ function ContextSwitcherInner({
 						inline && "gap-2",
 						"flex h-auto justify-between items-center px-2 py-1.5",
 					)}
-					endIcon={<Icon icon={faChevronDown} />}
+					endIcon={<UnfoldIcon />}
 				>
 					<Breadcrumbs inline={inline} />
 				</Button>
@@ -191,6 +188,195 @@ function ContextSwitcherInner({
 				<Content onClose={() => setIsOpen(false)} />
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+// Thin diagonal slash divider between breadcrumb segments, matching the
+// Supabase dashboard nav. Rendered between the logo and each segment.
+function BreadcrumbSlash({ className }: { className?: string }) {
+	return (
+		<span
+			className={cn(
+				"mx-0.5 shrink-0 text-muted-foreground/40",
+				className,
+			)}
+			aria-hidden
+		>
+			<svg
+				viewBox="0 0 24 24"
+				width="16"
+				height="16"
+				stroke="currentColor"
+				strokeWidth="1"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				fill="none"
+				shapeRendering="geometricPrecision"
+			>
+				<path d="M16 3.549L7.12 20.600" />
+			</svg>
+		</span>
+	);
+}
+
+// Up/down "unfold" chevron used on each segment's switcher trigger.
+function UnfoldIcon({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 24 24"
+			width="14"
+			height="14"
+			stroke="currentColor"
+			strokeWidth="2"
+			strokeLinecap="round"
+			strokeLinejoin="round"
+			fill="none"
+			className={cn("size-3 opacity-60", className)}
+			aria-hidden
+		>
+			<path d="m7 15 5 5 5-5" />
+			<path d="m7 9 5-5 5 5" />
+		</svg>
+	);
+}
+
+function OrgSegmentPopover({ organization }: { organization: string }) {
+	const [open, setOpen] = useState(false);
+	const navigate = useNavigate();
+	const { data: orgData } = useQuery(
+		useCloudDataProvider().organizationQueryOptions({ org: organization }),
+	);
+	const label = orgData?.name ?? organization;
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<div className="flex items-center">
+				<Button
+					variant="ghost"
+					onClick={() => {
+						void navigate({
+							to: "/orgs/$organization",
+							params: { organization },
+							search: (old) => ({
+								...old,
+								n: undefined,
+								actorId: undefined,
+								actorKey: undefined,
+								settings: undefined,
+							}),
+						});
+					}}
+					className="flex h-auto items-center gap-2 px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06]"
+				>
+					<span className="truncate">{label}</span>
+				</Button>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						aria-label="Open organization switcher"
+						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
+					>
+						<UnfoldIcon />
+					</Button>
+				</PopoverTrigger>
+			</div>
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
+				<OrgList
+					currentOrganization={organization}
+					onClose={() => setOpen(false)}
+				/>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function OrgList({
+	currentOrganization,
+	onClose,
+}: {
+	currentOrganization: string;
+	onClose?: () => void;
+}) {
+	const { data: organizations, isPending } =
+		authClient.useListOrganizations();
+	const navigate = useNavigate();
+	const router = useRouter();
+
+	return (
+		<div className="w-full">
+			<Command loop>
+				<CommandInput placeholder="Find organization..." />
+				<CommandList
+					className="relative p-1 w-full"
+					defaultValue={currentOrganization}
+				>
+					<CommandGroup heading="Organizations" className="w-full">
+						{isPending ? (
+							<>
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+								<ListItemSkeleton />
+							</>
+						) : null}
+
+						{organizations?.map((org) => {
+							const isCurrent = org.slug === currentOrganization;
+							return (
+								<CommandItem
+									key={org.id}
+									value={org.slug}
+									keywords={[org.name, org.slug]}
+									className="static w-full"
+									onSelect={async () => {
+										onClose?.();
+										await navigate({
+											to: "/orgs/$organization",
+											params: { organization: org.slug },
+										});
+										// Force a fresh load of the new org's
+										// matches so a prior errored route does
+										// not keep rendering its errorComponent.
+										await router.invalidate();
+									}}
+								>
+									<Icon
+										icon={faCheck}
+										className={cn(
+											"mr-2 size-3 shrink-0 text-primary",
+											isCurrent
+												? "opacity-100"
+												: "opacity-0",
+										)}
+									/>
+									<span className="truncate flex-1">
+										{org.name}
+									</span>
+								</CommandItem>
+							);
+						})}
+
+						<CommandItem
+							keywords={["create", "new", "organization"]}
+							className="text-primary"
+							onSelect={() => {
+								onClose?.();
+								return navigate({ to: "/new-org" });
+							}}
+						>
+							<Icon
+								icon={faPlus}
+								className="mr-2 size-3 text-primary"
+							/>
+							New Organization
+						</CommandItem>
+					</CommandGroup>
+				</CommandList>
+			</Command>
+		</div>
 	);
 }
 
@@ -231,9 +417,13 @@ function ProjectSegmentPopover({
 							}),
 						});
 					}}
-					className="flex h-auto items-center px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06]"
+					className="flex h-auto items-center gap-2 px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06]"
 				>
 					<span className="truncate">{label}</span>
+					<LazyBillingPlanBadge
+						project={currentProject}
+						organization={organization}
+					/>
 				</Button>
 				<PopoverTrigger asChild>
 					<Button
@@ -241,10 +431,7 @@ function ProjectSegmentPopover({
 						aria-label="Open project switcher"
 						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
 					>
-						<Icon
-							icon={faChevronDown}
-							className="size-2.5 opacity-60"
-						/>
+						<UnfoldIcon />
 					</Button>
 				</PopoverTrigger>
 			</div>
@@ -317,10 +504,7 @@ function NamespaceSegmentPopover({
 						aria-label="Open namespace switcher"
 						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
 					>
-						<Icon
-							icon={faChevronDown}
-							className="size-2.5 opacity-60"
-						/>
+						<UnfoldIcon />
 					</Button>
 				</PopoverTrigger>
 			</div>
@@ -380,10 +564,7 @@ function EngineNamespaceSegmentPopover({
 						aria-label="Open namespace switcher"
 						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
 					>
-						<Icon
-							icon={faChevronDown}
-							className="size-2.5 opacity-60"
-						/>
+						<UnfoldIcon />
 					</Button>
 				</PopoverTrigger>
 			</div>
@@ -651,9 +832,7 @@ function Breadcrumbs({ inline }: { inline?: boolean }) {
 						)}
 					/>
 				</div>
-				{inline ? (
-					<Icon icon={faSlashForward} className="shrink-0" />
-				) : null}
+				{inline ? <BreadcrumbSlash /> : null}
 				<div
 					className={cn(
 						!inline && "min-w-0 w-full",
@@ -746,10 +925,7 @@ function ActorBreadcrumbSegment() {
 
 	return (
 		<>
-			<Icon
-				icon={faSlashForward}
-				className="text-muted-foreground/40 mx-1 shrink-0"
-			/>
+			<BreadcrumbSlash />
 			<ActorSegmentPopover currentBuildId={buildId} />
 		</>
 	);
@@ -787,12 +963,7 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 				<Button
 					variant="ghost"
 					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
-					endIcon={
-						<Icon
-							icon={faChevronDown}
-							className="size-2.5 opacity-60"
-						/>
-					}
+					endIcon={<UnfoldIcon />}
 				>
 					<span className="truncate">{currentLabel}</span>
 				</Button>
