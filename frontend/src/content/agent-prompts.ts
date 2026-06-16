@@ -85,17 +85,27 @@ docker build -t rivet-test . && docker run --rm -p 3000:3000 rivet-test
 
 Verify the container starts and is connectable (e.g. \`curl http://localhost:3000/health\`). If Docker is not installed, skip this and proceed.
 
-## Step 4: Add GitHub Secret
+## Step 4: Deploy with the Rivet CLI
 
-Add the secret RIVET_CLOUD_TOKEN to your GitHub repository:
+From the project root, deploy with the Rivet CLI. This builds and pushes your image and provisions Rivet Compute:
+
+\`\`\`bash
+npx @rivetkit/cli deploy --token ${cloudToken}
+\`\`\`
+
+The token is saved to \`~/.rivet/credentials\`, so later deploys can just run \`npx @rivetkit/cli deploy\`. Wait for the command to finish and report that the deployment is live before continuing.
+
+The container must be reachable on port 3000. If your server uses another port, set \`PORT\` accordingly in your deployment configuration.
+
+## Step 5 (optional): Automate deploys with GitHub Actions
+
+To redeploy automatically on every push, add the \`RIVET_CLOUD_TOKEN\` secret:
 
 \`\`\`
 gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
 \`\`\`
 
-## Step 5: Create GitHub Action
-
-Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.2:
+Then create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.2:
 
 \`\`\`
 name: Rivet Deploy
@@ -125,18 +135,9 @@ jobs:
           compute-pool-config: '{"environment":{"PORT":"3000"}}'
 \`\`\`
 
-The container must be reachable on port 3000. If using another port, set \`environment.PORT\` in \`compute-pool-config\` to that port.
+Set \`environment.PORT\` in \`compute-pool-config\` to match your container's port. After pushing, use \`gh run list\` and \`gh run watch\` to monitor the action, and \`gh run view --log-failed\` to inspect any failures.
 
-## Step 6: Push and Verify
-
-Push the changes and monitor the GitHub Action until it completes:
-
-1. Push to the repository.
-2. Use \`gh run list\` and \`gh run watch\` to poll the action status. Do not move on until the run finishes.
-3. If the action succeeds, proceed to Step 7.
-4. If the action fails, inspect the logs with \`gh run view --log-failed\`, fix the issue, push again, and repeat from step 2.
-
-## Step 7: Verify Deployment
+## Step 6: Verify Deployment
 
 **Token types used in this step:**
 - \`cloud_api_*\` (the \`RIVET_CLOUD_TOKEN\` secret) — a management token scoped to the Cloud API (cloud-api.rivet.dev). Use this for admin operations like checking deployment status and fetching logs.
@@ -187,8 +188,8 @@ Once deployed, verify the deployment works:
 
 ## Troubleshooting
 
-- There is no Rivet CLI. Do not attempt to use or install one. All deployment is done via the GitHub Action and all interaction is done via HTTP APIs (curl).
-- Architecture: The GitHub Action builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
+- Deploy with \`npx @rivetkit/cli deploy\`. The CLI builds your Docker image, pushes it to Rivet, and provisions Compute. The GitHub Action in Step 5 wraps the same deploy for CI. Runtime interaction (creating actors, checking status, fetching logs) is done via the HTTP APIs (curl) shown above.
+- Architecture: The deploy builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
 - For more troubleshooting help, see: https://rivet.dev/docs/actors/troubleshooting/`;
 }
 

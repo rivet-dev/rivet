@@ -75,8 +75,7 @@ const stepper = defineStepper(
 	{
 		id: "local",
 		title: "Run locally",
-		description:
-			"Have your coding agent scaffold and run your first Actor, or follow the quickstart.",
+		description: "Get your first Rivet Actor running on your machine.",
 		next: "Continue to deploy",
 		schema: z.object({}),
 		group: "local",
@@ -403,19 +402,15 @@ function StepperFooter() {
 	return null;
 }
 
-// Header rendered above each step. On the deploy step it also shows the platform
-// switcher pinned to the card's top-right corner.
+// Header rendered above each step. A full-width segmented progress bar anchors
+// the top of the card, with the step label and (on the deploy step) the platform
+// switcher on the row below it so nothing competes with the left-aligned title.
 function OnboardingHeader() {
 	const s = stepper.useStepper();
 	return (
-		<>
-			{s.current.id === "deploy" ? (
-				<div className="absolute top-4 right-4 z-10">
-					<SwitchPlatform />
-				</div>
-			) : null}
-			<OnboardingProgress />
-		</>
+		<OnboardingProgress
+			action={s.current.id === "deploy" ? <SwitchPlatform /> : null}
+		/>
 	);
 }
 
@@ -428,17 +423,31 @@ function SwitchPlatform() {
 	const options = deployOptions.filter(
 		(o) => features.compute || o.name !== "rivet",
 	);
+	const otherOptions = options.filter((o) => o.name !== provider);
 	return (
 		<DropdownMenu>
 			<DropdownMenuTrigger asChild>
 				<Button
 					type="button"
 					variant="outline"
-					size="sm"
-					className="text-muted-foreground"
-					endIcon={<Icon icon={faChevronDown} className="ms-1" />}
+					endIcon={<Icon icon={faChevronDown} className="ms-2" />}
 				>
 					Switch platform
+					{otherOptions.length > 0 ? (
+						<span className="ms-2 flex items-center -space-x-1.5">
+							{otherOptions.slice(0, 4).map((option) => (
+								<span
+									key={option.name}
+									className="flex size-5 items-center justify-center rounded-full border bg-background"
+								>
+									<Icon
+										icon={option.icon}
+										className="!size-3 text-muted-foreground"
+									/>
+								</span>
+							))}
+						</span>
+					) : null}
 				</Button>
 			</DropdownMenuTrigger>
 			<DropdownMenuContent
@@ -511,7 +520,9 @@ function RivetDeploy() {
 	);
 	const deployCommand = `npx @rivetkit/cli deploy --token ${cloudToken ?? "<RIVET_CLOUD_TOKEN>"}`;
 	return (
-		<div className="flex flex-col gap-5">
+		<div className="flex flex-col gap-6">
+			<CopyAgentInstructionsButton provider="rivet" />
+			<OrDivider label="or deploy manually" />
 			<div>
 				<p className="text-sm text-muted-foreground mb-3">
 					Run this from your project root. The CLI builds and pushes
@@ -565,34 +576,37 @@ function SkipOnboardingHeaderLink() {
 	);
 }
 
-function OnboardingProgress() {
+function OnboardingProgress({ action }: { action?: ReactNode }) {
 	const s = stepper.useStepper();
 	const steps = s.all;
 	const currentIndex = steps.findIndex((step) => step.id === s.current.id);
 	const total = steps.length;
 	const groupLabel = s.current.group === "local" ? "Local setup" : "Deploy";
 	return (
-		<div
-			role="progressbar"
-			aria-valuemin={1}
-			aria-valuemax={total}
-			aria-valuenow={currentIndex + 1}
-			aria-valuetext={`Step ${currentIndex + 1} of ${total}, ${groupLabel}`}
-			className="flex flex-col items-center gap-2 mt-2 mb-4"
-		>
-			<div className="text-xs text-muted-foreground tabular-nums">
-				Step {currentIndex + 1} of {total} · {groupLabel}
-			</div>
-			<div className="flex gap-1.5">
+		<div className="mb-6 flex flex-col gap-2">
+			<div
+				role="progressbar"
+				aria-valuemin={1}
+				aria-valuemax={total}
+				aria-valuenow={currentIndex + 1}
+				aria-valuetext={`Step ${currentIndex + 1} of ${total}, ${groupLabel}`}
+				className="flex gap-1.5"
+			>
 				{steps.map((step, i) => (
 					<div
 						key={step.id}
 						className={cn(
-							"h-1 w-8 rounded-full transition-colors",
+							"h-1 flex-1 rounded-full transition-colors",
 							i <= currentIndex ? "bg-primary" : "bg-muted",
 						)}
 					/>
 				))}
+			</div>
+			<div className="flex min-h-8 items-center justify-between gap-4">
+				<div className="text-xs text-muted-foreground tabular-nums">
+					Step {currentIndex + 1} of {total} · {groupLabel}
+				</div>
+				{action}
 			</div>
 		</div>
 	);
@@ -627,19 +641,20 @@ function RunLocallyStep() {
 		<div className="flex flex-col gap-6">
 			<AgentPromptBanner
 				code={code}
-				label="Have your coding agent scaffold and run your first Actor for you."
+				title="Use your coding agent"
+				description="Copy a prompt that scaffolds and runs your first Actor for you."
 			/>
 			<OrDivider label="or do it yourself" />
-			<div className="w-full flex items-center justify-between rounded-lg px-4 py-3 border border-border">
-				<div>
-					<p className="font-medium mb-1.5">
+			<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
+				<div className="min-w-0">
+					<p className="font-medium mb-1">
 						Follow the quickstart guide
 					</p>
 					<p className="text-sm text-muted-foreground">
 						Build a Rivet Actor project by hand, step by step.
 					</p>
 				</div>
-				<Button variant="outline" asChild className="shrink-0 ml-4">
+				<Button variant="outline" asChild className="shrink-0">
 					<a
 						href="https://rivet.dev/docs/actors/quickstart/"
 						target="_blank"
@@ -720,11 +735,13 @@ function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 function AgentPromptBanner({
 	code,
 	containsSecret = false,
-	label = "Have your coding agent complete these steps automatically to deploy to Rivet Compute.",
+	title = "Use your coding agent",
+	description = "Have your coding agent complete these steps to deploy to Rivet Compute.",
 }: {
 	code: string;
 	containsSecret?: boolean;
-	label?: string;
+	title?: string;
+	description?: string;
 }) {
 	return (
 		<button
@@ -737,30 +754,24 @@ function AgentPromptBanner({
 						: "Copied to clipboard",
 				);
 			}}
-			className="relative w-full flex items-center justify-between rounded-lg px-4 py-5 border border-primary group cursor-pointer text-left"
+			className="relative w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-primary group cursor-pointer text-left"
 		>
 			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
 				Recommended
 			</Badge>
-			<div className="flex flex-col gap-1 min-w-0">
-				<span className="text-sm font-medium text-foreground">
-					{label}
-				</span>
+			<div className="min-w-0">
+				<p className="font-medium mb-1">{title}</p>
+				<p className="text-sm text-muted-foreground">{description}</p>
 				{containsSecret ? (
-					<span className="text-xs text-muted-foreground">
+					<p className="mt-1 text-xs text-muted-foreground">
 						Includes a secret deploy token. Paste only into your
 						coding agent.
-					</span>
+					</p>
 				) : null}
 			</div>
-			<Button
-				asChild
-				variant="ghost"
-				size="sm"
-				className="relative z-10 flex items-center gap-1.5 text-xs font-semibold shrink-0 ml-4"
-			>
+			<Button asChild variant="outline" className="shrink-0">
 				<div>
-					<Icon icon={faCopy} className="w-3.5 h-3.5 text-primary" />
+					<Icon icon={faCopy} className="me-2 text-primary" />
 					Copy prompt
 				</div>
 			</Button>
@@ -781,7 +792,13 @@ function GenericCopyAgentInstructionsButton({
 	const endpoint = useEndpoint();
 	const runnerName = useWatch({ name: "runnerName" }) as string;
 	const code = useAgentInstructionsCode({ provider, runnerName, endpoint });
-	return <AgentPromptBanner code={code} containsSecret />;
+	return (
+		<AgentPromptBanner
+			code={code}
+			containsSecret
+			description={`Have your coding agent complete these steps to deploy to ${platformTitle(provider)}.`}
+		/>
+	);
 }
 
 const githubActionYaml = `name: Rivet Deploy
