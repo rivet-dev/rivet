@@ -313,6 +313,49 @@ importers:
         specifier: ^3.1.1
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.10)(less@4.4.1)(lightningcss@1.32.0)(msw@2.14.4(@types/node@22.19.10)(typescript@5.9.3))(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)
 
+  examples/ai-agent-effect:
+    dependencies:
+      '@effect/ai-openai':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)
+      '@effect/platform-node':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(ioredis@5.10.1)
+      '@rivetkit/effect':
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/effect
+      effect:
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66
+      pino:
+        specifier: 9.9.5
+        version: 9.9.5
+      pino-pretty:
+        specifier: 13.1.2
+        version: 13.1.2
+      rivetkit:
+        specifier: workspace:*
+        version: link:../../rivetkit-typescript/packages/rivetkit
+    devDependencies:
+      '@copilotkit/llmock':
+        specifier: ^1.6.0
+        version: 1.7.1
+      '@effect/vitest':
+        specifier: 4.0.0-beta.66
+        version: 4.0.0-beta.66(effect@4.0.0-beta.66)(vitest@4.1.7)
+      '@types/node':
+        specifier: ^22.13.9
+        version: 22.19.15
+      tsx:
+        specifier: ^4.20.5
+        version: 4.21.0
+      typescript:
+        specifier: ^5.5.2
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.7(@opentelemetry/api@1.9.0)(@types/node@22.19.15)(@vitest/coverage-v8@4.1.7)(msw@2.14.4(@types/node@22.19.15)(typescript@5.9.3))(vite@7.3.1(@types/node@22.19.15)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0))
+
   examples/ai-and-user-generated-actors-freestyle:
     dependencies:
       '@monaco-editor/react':
@@ -4955,7 +4998,6 @@ packages:
   '@copilotkit/aimock@1.7.0':
     resolution: {integrity: sha512-X6B2z0MgGTg8N/geRg6zRVVgEp3krP+gYapwXCt2w3JU7BSf2q0laa4iHC+BZqPXf29iVDVwDM7BxB5LqhjcAg==}
     engines: {node: '>=20.15.0'}
-    deprecated: This package has moved to @copilotkit/aimock
     hasBin: true
 
   '@copilotkit/llmock@1.7.1':
@@ -4998,6 +5040,11 @@ packages:
   '@durable-streams/writer@https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8bcf1c9b38f1014629e1a8b6c74cc662100':
     resolution: {tarball: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8bcf1c9b38f1014629e1a8b6c74cc662100}
     version: 0.0.0
+
+  '@effect/ai-openai@4.0.0-beta.66':
+    resolution: {integrity: sha512-jhLwvQhyRELKXkSpKFrwGztzCp8ZbQZsdXxVyU5AyxMV2WfkclQRmmHG0RsI//oyYq4Pn6gEw+9rN8YaK/G42Q==}
+    peerDependencies:
+      effect: ^4.0.0-beta.66
 
   '@effect/language-service@0.85.1':
     resolution: {integrity: sha512-EXnJjIy6zQ3nUO/MZ+ynWUb8B895KZPotd1++oTs9JjDkplwM7cb6zo8Zq2zU6piwq+KflO7amXbEfj1UMpHkw==}
@@ -19424,6 +19471,10 @@ snapshots:
     dependencies:
       '@durable-streams/client': https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/client@0323b8bcf1c9b38f1014629e1a8b6c74cc662100
       fastq: 1.20.1
+
+  '@effect/ai-openai@4.0.0-beta.66(effect@4.0.0-beta.66)':
+    dependencies:
+      effect: 4.0.0-beta.66
 
   '@effect/language-service@0.85.1': {}
 
