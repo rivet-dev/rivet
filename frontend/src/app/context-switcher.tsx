@@ -202,6 +202,7 @@ function ProjectSegmentPopover({
 	currentProject: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const navigate = useNavigate();
 	const { data: projectData } = useQuery(
 		useCloudDataProvider().currentOrgProjectQueryOptions({
 			project: currentProject,
@@ -211,20 +212,42 @@ function ProjectSegmentPopover({
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
+			<div className="flex items-center">
 				<Button
 					variant="ghost"
-					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground hover:bg-foreground/[0.06]"
-					endIcon={
+					onClick={() => {
+						authClient.organization.setActive({
+							organizationSlug: organization,
+						});
+						void navigate({
+							to: "/orgs/$organization/projects/$project",
+							params: { organization, project: currentProject },
+							search: (old) => ({
+								...old,
+								n: undefined,
+								actorId: undefined,
+								actorKey: undefined,
+								settings: undefined,
+							}),
+						});
+					}}
+					className="flex h-auto items-center px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06]"
+				>
+					<span className="truncate">{label}</span>
+				</Button>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						aria-label="Open project switcher"
+						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
+					>
 						<Icon
 							icon={faChevronDown}
 							className="size-2.5 opacity-60"
 						/>
-					}
-				>
-					<span className="truncate">{label}</span>
-				</Button>
-			</PopoverTrigger>
+					</Button>
+				</PopoverTrigger>
+			</div>
 			<PopoverContent
 				className="p-0 w-56"
 				align="start"
@@ -250,6 +273,7 @@ function NamespaceSegmentPopover({
 	currentNamespace: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const navigate = useNavigate();
 	const { data: nsData } = useQuery(
 		useCloudDataProvider().currentOrgProjectNamespaceQueryOptions({
 			project: currentProject,
@@ -260,20 +284,46 @@ function NamespaceSegmentPopover({
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
+			<div className="flex items-center">
 				<Button
 					variant="ghost"
-					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground hover:bg-foreground/[0.06]"
-					endIcon={
+					onClick={() => {
+						authClient.organization.setActive({
+							organizationSlug: organization,
+						});
+						void navigate({
+							to: "/orgs/$organization/projects/$project/ns/$namespace",
+							params: {
+								organization,
+								project: currentProject,
+								namespace: currentNamespace,
+							},
+							search: (old) => ({
+								...old,
+								n: undefined,
+								actorId: undefined,
+								actorKey: undefined,
+								settings: undefined,
+							}),
+						});
+					}}
+					className="flex h-auto items-center px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06]"
+				>
+					<span className="truncate">{label}</span>
+				</Button>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						aria-label="Open namespace switcher"
+						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
+					>
 						<Icon
 							icon={faChevronDown}
 							className="size-2.5 opacity-60"
 						/>
-					}
-				>
-					<span className="truncate">{label}</span>
-				</Button>
-			</PopoverTrigger>
+					</Button>
+				</PopoverTrigger>
+			</div>
 			<PopoverContent
 				className="p-0 w-56"
 				align="start"
@@ -296,6 +346,7 @@ function EngineNamespaceSegmentPopover({
 	currentNamespace: string;
 }) {
 	const [open, setOpen] = useState(false);
+	const navigate = useNavigate();
 	const { data: nsData } = useQuery(
 		useEngineCompatDataProvider().namespaceQueryOptions(currentNamespace),
 	);
@@ -303,20 +354,39 @@ function EngineNamespaceSegmentPopover({
 
 	return (
 		<Popover open={open} onOpenChange={setOpen}>
-			<PopoverTrigger asChild>
+			<div className="flex items-center">
 				<Button
 					variant="ghost"
-					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground hover:bg-foreground/[0.06]"
-					endIcon={
+					onClick={() => {
+						void navigate({
+							to: "/ns/$namespace",
+							params: { namespace: currentNamespace },
+							search: (old) => ({
+								...old,
+								n: undefined,
+								actorId: undefined,
+								actorKey: undefined,
+								settings: undefined,
+							}),
+						});
+					}}
+					className="flex h-auto items-center px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06]"
+				>
+					<span className="truncate">{label}</span>
+				</Button>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						aria-label="Open namespace switcher"
+						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
+					>
 						<Icon
 							icon={faChevronDown}
 							className="size-2.5 opacity-60"
 						/>
-					}
-				>
-					<span className="truncate">{label}</span>
-				</Button>
-			</PopoverTrigger>
+					</Button>
+				</PopoverTrigger>
+			</div>
 			<PopoverContent
 				className="p-0 w-56"
 				align="start"
@@ -716,7 +786,7 @@ function ActorSegmentPopover({ currentBuildId }: { currentBuildId: string }) {
 			<PopoverTrigger asChild>
 				<Button
 					variant="ghost"
-					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground hover:bg-foreground/[0.06]"
+					className="flex h-auto items-center gap-1.5 px-2 py-1 text-sm font-medium text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
 					endIcon={
 						<Icon
 							icon={faChevronDown}
