@@ -396,14 +396,14 @@ export function Header({
 
 	if (variant === "floating") {
 		const headerStyles = cn(
-			"md:border-transparent md:static md:bg-transparent md:rounded-2xl md:max-w-[1200px] md:border-transparent md:backdrop-none [&>div:first-child]:px-3 md:backdrop-blur-none transition-all hover:opacity-100",
-			isScrolled ? "opacity-100" : "opacity-80",
+			"border-transparent static bg-transparent rounded-2xl max-w-[960px] md:max-w-[1200px] [&>div:first-child]:px-3 backdrop-blur-none transition-all hover:opacity-100",
+			isScrolled ? "opacity-100" : "opacity-100 md:opacity-80",
 		);
 
 		return (
 			<div
 				className={cn(
-					"fixed top-0 z-50 w-full max-w-[960px] md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-6",
+					"fixed top-2 z-50 w-full max-w-[960px] px-3 md:left-1/2 md:top-4 md:-translate-x-1/2 md:px-6",
 					isLightTheme && "selection:bg-orange-200 selection:text-orange-900"
 				)}
 				data-light-theme={isLightTheme ? "true" : undefined}
@@ -411,18 +411,15 @@ export function Header({
 				<div
 					className={cn(
 						"hero-bg-exclude",
-						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:hidden before:rounded-2xl before:border before:border-ink/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out md:before:block',
+						'relative before:pointer-events-none before:absolute before:inset-[-1px] before:z-20 before:block before:rounded-2xl before:border before:border-ink/10 before:content-[""] before:transition-colors before:duration-300 before:ease-in-out',
 					)}
 				>
 					{/* White glass pill: frosted fill with a soft top sheen. The pill's
 						outline is the ink/10 hairline on the parent's ::before, so this
 						layer carries no border of its own. */}
-					<div className="absolute inset-0 -z-[1] hidden overflow-hidden rounded-2xl bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-[18px] backdrop-saturate-[1.4] md:block" />
+					<div className="absolute inset-0 -z-[1] overflow-hidden rounded-2xl bg-white/60 shadow-[inset_0_1px_0_rgba(255,255,255,0.55)] backdrop-blur-[18px] backdrop-saturate-[1.4]" />
 					<RivetHeader
-						className={cn(
-							headerStyles,
-							"md:bg-transparent [&_button[data-mobile-menu-trigger]]:text-ink bg-paper/95 backdrop-blur-lg md:backdrop-blur-none"
-						)}
+						className={headerStyles}
 						logo={
 							<>
 								{/* Mobile logo */}
@@ -498,12 +495,12 @@ export function Header({
 						links={
 							<div className="flex flex-row items-center">
 								{variant === "full-width" && <HeaderSearch />}
-								<RivetHeader.NavItem asChild className="p-2 mr-4">
+								<RivetHeader.NavItem asChild className="p-2 mr-4 hidden md:flex">
 									<a href="https://rivet.dev/discord" className="!text-ink-soft hover:!text-ink transition-colors">
 										<Icon icon={faDiscord} />
 									</a>
 								</RivetHeader.NavItem>
-								<GitHubDropdown className="inline-flex items-center justify-center whitespace-nowrap rounded-md border px-4 py-2 h-10 text-sm mr-2 transition-colors border-ink/15 text-ink-soft hover:border-ink/30 hover:text-ink" />
+								<GitHubDropdown className="hidden md:inline-flex items-center justify-center whitespace-nowrap rounded-md border px-4 py-2 h-10 text-sm mr-2 transition-colors border-ink/15 text-ink-soft hover:border-ink/30 hover:text-ink" />
 								{isAgentOs ? (
 									<a
 										href="/install"
