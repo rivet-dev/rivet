@@ -204,11 +204,11 @@ export function UserDropdown({ children }: { children?: React.ReactNode }) {
 				</DropdownMenuItem>
 				<DropdownMenuSeparator />
 				<DropdownMenuItem
-					onSelect={() => {
-						authClient.signOut();
-						router.invalidate();
+					onSelect={async () => {
+						await authClient.signOut();
 						queryClient.clear();
-						return navigate({ to: "/login" });
+						await router.invalidate();
+						navigate({ to: "/login" });
 					}}
 				>
 					<Icon

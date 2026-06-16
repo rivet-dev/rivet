@@ -21,7 +21,11 @@ export const Route = createFileRoute("/login")({
 		}
 
 		if (features.auth) {
-			const session = await authClient.getSession();
+			// Bypass the session cookie cache so a just-signed-out user is not
+			// bounced back into the app by a stale cached session.
+			const session = await authClient.getSession({
+				query: { disableCookieCache: true },
+			});
 			if (session.data) {
 				await redirectToOrganization({
 					from:
