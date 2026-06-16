@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useHotkey } from "@tanstack/react-hotkeys";
+import { useState } from "react";
 import {
 	Button,
 	cn,
@@ -16,28 +17,9 @@ export function FeedbackButton({ source = "web" }: { source?: string }) {
 	const [value, setValue] = useState("");
 	const [submitting, setSubmitting] = useState(false);
 
-	// `F` keyboard shortcut to open the popover. Ignore when the user is
-	// already typing in an input/textarea/contenteditable somewhere else.
-	useEffect(() => {
-		const handler = (e: KeyboardEvent) => {
-			if (!e.key && e.key.toLowerCase() !== "f") return;
-			if (e.metaKey || e.ctrlKey || e.altKey) return;
-			const target = e.target as HTMLElement | null;
-			if (!target) return;
-			const tag = target.tagName;
-			if (
-				tag === "INPUT" ||
-				tag === "TEXTAREA" ||
-				target.isContentEditable
-			) {
-				return;
-			}
-			e.preventDefault();
-			setOpen(true);
-		};
-		window.addEventListener("keydown", handler);
-		return () => window.removeEventListener("keydown", handler);
-	}, []);
+	// `F` keyboard shortcut to open the popover. `ignoreInputs` skips the
+	// shortcut while the user is typing in an input/textarea/contenteditable.
+	useHotkey("F", () => setOpen(true), { ignoreInputs: true });
 
 	const submit = async () => {
 		const trimmed = value.trim();
