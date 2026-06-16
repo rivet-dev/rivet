@@ -368,9 +368,9 @@ export function PropertyLabel({
 					className,
 				)}
 			>
-				<code className="text-foreground/90">
+				<code className="text-ink/90">
 					{parent ? <>{parent}.</> : null}
-					<span className="font-bold text-foreground">{name}</span>
+					<span className="font-bold text-ink">{name}</span>
 				</code>
 				<div className="text-xs text-muted-foreground">
 					{getPropertyTypeLabel(schema, defs, nullable)}
@@ -392,7 +392,7 @@ function TypeLabel({ type, description }: TypeLabelProps) {
 	return (
 		<>
 			<div className="scrollbar-hide flex items-center gap-1 overflow-auto">
-				<code className="font-bold text-foreground">
+				<code className="font-bold text-ink">
 					{getTypeLabel(type)}
 				</code>
 			</div>

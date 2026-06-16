@@ -1,7 +1,7 @@
 "use client";
 import type { ReactNode, AnchorHTMLAttributes } from "react";
 import { normalizePath } from "@/lib/normalizePath";
-import { useState, useEffect } from "react";
+import { usePathname } from "@/hooks/usePathname";
 
 export interface ActiveLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 	isActive?: boolean;
@@ -17,11 +17,7 @@ export function ActiveLink({
 	children,
 	...props
 }: ActiveLinkProps) {
-	const [pathname, setPathname] = useState("");
-
-	useEffect(() => {
-		setPathname(window.location.pathname);
-	}, []);
+	const pathname = usePathname();
 
 	const isActive =
 		isActiveOverride ||

@@ -9,7 +9,12 @@ export function usePathname(): string {
 	const [pathname, setPathname] = useState("");
 
 	useEffect(() => {
-		setPathname(window.location.pathname);
+		const update = () => setPathname(window.location.pathname);
+		update();
+		// Astro view transitions swap the page without remounting persisted
+		// islands, so listen for navigation to keep the pathname current.
+		document.addEventListener("astro:page-load", update);
+		return () => document.removeEventListener("astro:page-load", update);
 	}, []);
 
 	return pathname;
