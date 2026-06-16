@@ -107,5 +107,5 @@ cargo doc --open
 
 ## Author
 
-developer@rivet.gg
+developer@rivet.dev
 
