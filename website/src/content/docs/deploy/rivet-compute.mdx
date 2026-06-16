@@ -119,7 +119,7 @@ If the status stays in **Provisioning** for more than a few minutes, verify that
 </Accordion>
 <Accordion title="Deployment error">
 
-If the status shows **Error**, check that your container starts successfully and does not exit immediately. Common causes:
+If the status shows **Error**, check that your container starts successfully and does not exit immediately (you can check this with container logs). Common causes:
 
 - The server file is not calling `registry.startRunner()`
 - A runtime crash on startup — test the image locally with `docker run`
@@ -128,3 +128,9 @@ If the status shows **Error**, check that your container starts successfully and
 </Accordion>
 
 </AccordionGroup>
+
+## Pricing
+
+You are billed for the compute resources your deployment uses while it is running.
+
+<ComputePricing />
