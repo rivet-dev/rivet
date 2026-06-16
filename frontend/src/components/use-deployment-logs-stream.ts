@@ -1,4 +1,4 @@
-import type { Rivet, RivetSse } from "@rivet-gg/cloud";
+import type { Rivet } from "@rivet-gg/cloud";
 import * as Sentry from "@sentry/react";
 import {
 	startTransition,
@@ -12,7 +12,7 @@ import { cloudEnv } from "@/lib/env";
 const MAX_RETRIES = 8;
 const BASE_DELAY_MS = 1_000;
 
-function parseSseEvent(raw: string): RivetSse.LogStreamEvent | null {
+function parseSseEvent(raw: string): Rivet.LogStreamEvent | null {
 	let eventType = "message";
 	let data = "";
 	for (const line of raw.split("\n")) {
@@ -43,7 +43,7 @@ async function* streamLogsWithCredentials(
 		contains?: string;
 		abortSignal?: AbortSignal;
 	},
-): AsyncGenerator<RivetSse.LogStreamEvent> {
+): AsyncGenerator<Rivet.LogStreamEvent> {
 	const params = new URLSearchParams();
 	if (request.region) params.set("region", request.region);
 	if (request.contains) params.set("contains", request.contains);
@@ -173,7 +173,7 @@ function rewriteLogEntry<T extends { message: string; stream?: string }>(
 
 function historyToLogEvent(
 	item: Rivet.LogHistoryResponseItem,
-): RivetSse.LogStreamEvent.Log {
+): Rivet.LogStreamEvent.Log {
 	return { event: "log", data: rewriteLogEntry(item) };
 }
 
@@ -185,7 +185,7 @@ async function streamWithRetry(
 	region: string | undefined,
 	signal: AbortSignal,
 	onConnected: () => void,
-	onEntry: (entry: RivetSse.LogStreamEvent.Log) => void,
+	onEntry: (entry: Rivet.LogStreamEvent.Log) => void,
 ): Promise<"exhausted" | "ended" | "aborted" | { error: string }> {
 	for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
 		if (signal.aborted) return "aborted";
@@ -244,12 +244,12 @@ export function useDeploymentLogsStream({
 	region,
 	paused = false,
 }: UseDeploymentLogsStreamOptions) {
-	const [logs, setLogs] = useState<RivetSse.LogStreamEvent.Log[]>([]);
+	const [logs, setLogs] = useState<Rivet.LogStreamEvent.Log[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	const [hasMore, setHasMore] = useState(true);
-	const pendingRef = useRef<RivetSse.LogStreamEvent.Log[]>([]);
+	const pendingRef = useRef<Rivet.LogStreamEvent.Log[]>([]);
 	const pausedRef = useRef(paused);
 	const logsRef = useRef(logs);
 	logsRef.current = logs;
@@ -272,7 +272,7 @@ export function useDeploymentLogsStream({
 
 		const controller = new AbortController();
 
-		function onEntry(entry: RivetSse.LogStreamEvent.Log) {
+		function onEntry(entry: Rivet.LogStreamEvent.Log) {
 			setIsLoading(false);
 			const insertId = entry.data.insertId;
 			if (seenInsertIdsRef.current.has(insertId)) return;

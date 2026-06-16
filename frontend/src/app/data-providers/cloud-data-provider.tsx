@@ -24,7 +24,6 @@ function createClient() {
 		baseUrl: () => cloudEnv().VITE_APP_CLOUD_API_URL,
 		environment: "",
 		token: async () => "",
-		// @ts-expect-error
 		fetcher: async (args) => {
 			Object.keys(args.headers || {}).forEach((key) => {
 				if (key.toLowerCase().startsWith("x-fern-")) {
@@ -32,7 +31,6 @@ function createClient() {
 				}
 			});
 			return await fetcher(
-				// @ts-expect-error
 				{
 					...args,
 					maxRetries: 1,
@@ -468,6 +466,31 @@ export const createOrganizationContext = ({
 			},
 		});
 
+	const projectComputeMetricsQueryOptions = (opts: {
+		organization: string;
+		project: string;
+		name: Rivet.ComputeMetricName | Rivet.ComputeMetricName[];
+		startAt?: string;
+		endAt?: string;
+		resolution?: number;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "compute-metrics"],
+			queryFn: async () => {
+				const data = await client.projects.metrics.getCompute(
+					opts.project,
+					{
+						name: opts.name,
+						org: opts.organization,
+						startAt: opts.startAt,
+						endAt: opts.endAt,
+						resolution: opts.resolution,
+					},
+				);
+				return data;
+			},
+		});
+
 	const namespaceLatestMetricsQueryOptions = (opts: {
 		organization: string;
 		project: string;
@@ -682,6 +705,17 @@ export const createOrganizationContext = ({
 			>,
 		) {
 			return namespaceMetricsQueryOptions({
+				organization,
+				...opts,
+			});
+		},
+		currentOrganizationProjectComputeMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof projectComputeMetricsQueryOptions>[0],
+				"organization"
+			>,
+		) {
+			return projectComputeMetricsQueryOptions({
 				organization,
 				...opts,
 			});
@@ -944,6 +978,19 @@ export const createProjectContext = ({
 			>,
 		) {
 			return parent.currentOrganizationNamespaceMetricsQueryOptions({
+				project,
+				...opts,
+			});
+		},
+		currentProjectComputeMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentOrganizationProjectComputeMetricsQueryOptions
+				>[0],
+				"project"
+			>,
+		) {
+			return parent.currentOrganizationProjectComputeMetricsQueryOptions({
 				project,
 				...opts,
 			});

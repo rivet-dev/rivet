@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { ComputeUsageProjectBillingPointer } from "@/app/billing/compute-card";
 import { Content } from "@/app/layout";
 import { H1 } from "@/components";
 import { useCloudNamespaceDataProvider } from "@/components/actors";
+import { useHasManagedPool } from "@/components/actors/actor-details-shared";
 import { ChartSyncProvider } from "./chart-sync-context";
 import { ALL_METRICS, METRICS_CONFIG } from "./constants";
 import { OVERVIEW_RANGE_MS, OVERVIEW_RESOLUTION } from "./hooks";
@@ -10,6 +12,7 @@ import { NamespaceMetricsChart } from "./namespace-metrics-chart";
 
 export function NamespaceMetricsPage() {
 	const dataProvider = useCloudNamespaceDataProvider();
+	const hasManagedPool = useHasManagedPool();
 
 	const { startAt, endAt } = useMemo(() => {
 		const now = new Date();
@@ -60,6 +63,12 @@ export function NamespaceMetricsPage() {
 						/>
 					))}
 				</div>
+
+				{hasManagedPool ? (
+					<div className="px-4 max-w-7xl mx-auto @6xl:px-0 pb-8">
+						<ComputeUsageProjectBillingPointer />
+					</div>
+				) : null}
 			</ChartSyncProvider>
 		</Content>
 	);

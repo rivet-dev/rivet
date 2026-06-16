@@ -5,17 +5,18 @@ import {
 	faInfoCircle,
 	faPencil,
 	faRunning,
+	faServer,
 	faSignalStream,
 	Icon,
 	type IconProp,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { useMatch } from "@tanstack/react-router";
+import { Link, useMatch } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { Suspense, useState } from "react";
 import { BillingPlans } from "@/app/billing/billing-plans";
-import { ComputeUsageRows } from "@/app/billing/compute-card";
-import { useBilledMetrics } from "@/app/billing/hooks";
+import { IfNamespaceHasCompute } from "@/app/billing/compute-card";
+import { useBilledComputeCost, useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { formatMetricValue, type MetricType } from "@/app/billing/usage-card";
 import {
@@ -31,8 +32,9 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 import { TwinklingSparkles } from "@/components/twinkling-sparkles";
-import { BILLING } from "@/content/billing";
+import { BILLING, COMPUTE_MONTHLY_CAP_USD } from "@/content/billing";
 import { ResourcePicker } from "./resource-picker";
 import { SettingsCard } from "./settings-card";
 
@@ -163,6 +165,14 @@ function BillingDrawerBody() {
 		dataProvider.currentProjectBillingDetailsQueryOptions(),
 	);
 	const metrics = useBilledMetrics();
+	const compute = useBilledComputeCost();
+	// The billing drawer is project-scoped, but it can be opened from a namespace
+	// context. Compute is billed per project, so we show the usage row only at the
+	// project level and point namespace-context views to Project Billing instead.
+	const namespaceMatch = useMatch({
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+		shouldThrow: false,
+	});
 	const plan = data?.billing.activePlan || "free";
 	const planIncluded = BILLING.included[plan] ?? BILLING.included.free;
 	const [plansOpen, setPlansOpen] = useState(false);
@@ -180,6 +190,19 @@ function BillingDrawerBody() {
 		);
 	}, 0n);
 
+	const inNamespace = Boolean(namespaceMatch?.loaderData);
+	// Show the compute usage row only at the project level; in a namespace context
+	// show a pointer to Project Billing instead.
+	const showComputeRow = features.compute && !inNamespace;
+	const showComputeNote = features.compute && inNamespace;
+	const computeDollars = compute.isError ? 0 : compute.monthToDate;
+	const computeCapUsd = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
+	// Capped plans are billed for compute only up to the cap.
+	const billedCompute =
+		computeCapUsd != null
+			? Math.min(computeDollars, computeCapUsd)
+			: computeDollars;
+
 	const periodStart = data.billing.currentPeriodStart
 		? new Date(data.billing.currentPeriodStart)
 		: startOfMonth(new Date());
@@ -195,7 +218,10 @@ function BillingDrawerBody() {
 					onUpgrade={() => setPlansOpen(true)}
 				/>
 				<CurrentBillCard
-					total={Number(totalOverageCents) / 100}
+					total={
+						Number(totalOverageCents) / 100 +
+						(showComputeRow ? billedCompute : 0)
+					}
 					periodStart={periodStart}
 					periodEnd={periodEnd}
 				/>
@@ -251,18 +277,44 @@ function BillingDrawerBody() {
 								current={current}
 								includedInPlan={includedInPlan}
 								costCents={cost}
-								last={idx === USAGE_METRICS.length - 1}
+								last={
+									!showComputeRow &&
+									idx === USAGE_METRICS.length - 1
+								}
 							/>
 						);
 					})}
+					{showComputeRow ? (
+						<ComputeUsageRow
+							cost={computeDollars}
+							capUsd={computeCapUsd}
+							loading={compute.isLoading}
+							last
+						/>
+					) : null}
 				</SettingsCard>
 			</div>
 
-			<div>
-				<SettingsCard divided>
-					<ComputeUsageRows />
-				</SettingsCard>
-			</div>
+			{showComputeNote && namespaceMatch ? (
+				<IfNamespaceHasCompute>
+					<div className="flex justify-center">
+						<Button asChild variant="outline" size="sm">
+							<Link
+								to="/orgs/$organization/projects/$project"
+								params={{
+									organization:
+										namespaceMatch.params.organization,
+									project: namespaceMatch.params.project,
+								}}
+								search={{ settings: "billing" }}
+							>
+								View Project Billing for Compute Usage
+								<Icon icon={faArrowUpRight} className="size-3" />
+							</Link>
+						</Button>
+					</div>
+				</IfNamespaceHasCompute>
+			) : null}
 		</div>
 	);
 }
@@ -426,6 +478,75 @@ function UsageRow({
 			<div className="text-right">
 				<div className="text-sm tabular-nums font-medium text-foreground">
 					{formatCurrency(cost)}
+				</div>
+				<div className="text-[11px] text-muted-foreground">
+					this period
+				</div>
+			</div>
+		</div>
+	);
+}
+
+// Compute is a dollar amount rather than a metered unit, so it has its own row.
+// Capped plans show progress toward the cap; uncapped plans show "No limit" with
+// no bar. The billed amount (right column + total) is clamped to the cap.
+function ComputeUsageRow({
+	cost,
+	capUsd,
+	loading,
+	last,
+}: {
+	cost: number;
+	capUsd: number | null;
+	loading?: boolean;
+	last: boolean;
+}) {
+	const pct = capUsd ? Math.min(100, (cost / capUsd) * 100) : 0;
+	const billed = capUsd != null ? Math.min(cost, capUsd) : cost;
+
+	return (
+		<div
+			className={cn(
+				"grid grid-cols-[2fr_1fr_1fr_auto] items-center gap-6 px-5 py-3.5",
+				!last && "border-b border-foreground/10",
+			)}
+		>
+			<div className="flex items-start gap-3 min-w-0">
+				<div className="flex size-7 items-center justify-center rounded-md border border-foreground/10 mt-0.5 shrink-0">
+					<Icon icon={faServer} className="size-3.5" />
+				</div>
+				<div className="min-w-0">
+					<div className="text-sm font-medium text-foreground">
+						Compute
+					</div>
+					<div className="text-xs text-muted-foreground truncate">
+						Billed per active second by CPU and memory.
+					</div>
+				</div>
+			</div>
+			<div className="text-sm tabular-nums text-foreground">
+				{loading ? <Skeleton className="h-4 w-12" /> : formatCurrency(cost)}
+			</div>
+			<div className="min-w-0">
+				<div className="text-xs text-muted-foreground">
+					{capUsd != null ? `of ${formatCurrency(capUsd)}` : "No limit"}
+				</div>
+				{capUsd != null ? (
+					<div className="relative h-1 rounded-full bg-foreground/10 mt-1">
+						<div
+							className="absolute h-1 rounded-full bg-primary"
+							style={{ width: `${pct}%` }}
+						/>
+					</div>
+				) : null}
+			</div>
+			<div className="text-right">
+				<div className="text-sm tabular-nums font-medium text-foreground">
+					{loading ? (
+						<Skeleton className="h-4 w-12 ml-auto" />
+					) : (
+						formatCurrency(billed)
+					)}
 				</div>
 				<div className="text-[11px] text-muted-foreground">
 					this period

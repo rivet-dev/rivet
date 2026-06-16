@@ -104,6 +104,18 @@ export const COMPUTE = {
 	freeMaxVcpu: 1,
 };
 
+/**
+ * Monthly compute spend cap in USD per plan. `null` means no cap (and no
+ * progress bar). Only the free plan is capped at $5/month of compute; paid
+ * plans have no compute cap.
+ */
+export const COMPUTE_MONTHLY_CAP_USD: Record<string, number | null> = {
+	free: 5,
+	pro: null,
+	team: null,
+	enterprise: null,
+};
+
 /** Compute cost in dollars per active second for the given actor config. */
 export function computeCostPerSecond(vcpus: number, memoryMb: number): number {
 	return (

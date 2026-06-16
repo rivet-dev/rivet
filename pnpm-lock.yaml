@@ -20,7 +20,7 @@ overrides:
   '@types/react-dom': ^19
   react: 19.1.0
   react-dom: 19.1.0
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
   '@codemirror/state': 6.5.2
   '@codemirror/view': 6.38.2
   '@codemirror/autocomplete': 6.18.7
@@ -362,8 +362,8 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../../engine/sdks/typescript/api-full
@@ -2337,8 +2337,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -3582,8 +3582,8 @@ importers:
         specifier: 25.5.3
         version: 25.5.3
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911
       '@rivet-gg/components':
         specifier: workspace:*
         version: link:../frontend/packages/components
@@ -8048,8 +8048,8 @@ packages:
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -16568,6 +16568,7 @@ packages:
   tsconfck@3.1.6:
     resolution: {integrity: sha512-ks6Vjr/jEw0P1gmOVwutM3B7fWxoWBL2KRDb1JfqGVawBmO5UsvmWOQFGHBPl5yxYz4eERr19E6L7NMv+Fej4w==}
     engines: {node: ^18 || >=20}
+    deprecated: unmaintained
     hasBin: true
     peerDependencies:
       typescript: ^5.0.0
@@ -21451,7 +21452,7 @@ snapshots:
       react-simple-code-editor: 0.14.1(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       serve-handler: 6.1.6
       tailwind-merge: 2.6.0
-      tailwindcss-animate: 1.0.7(tailwindcss@3.4.18(tsx@4.21.0)(yaml@2.9.0))
+      tailwindcss-animate: 1.0.7(tailwindcss@4.2.2)
       zod: 3.25.76
     transitivePeerDependencies:
       - '@cfworker/json-schema'
@@ -22994,7 +22995,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@299':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5

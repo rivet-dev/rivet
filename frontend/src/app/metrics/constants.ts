@@ -1,5 +1,11 @@
 import { bytes, formatBytes } from "@/utils/bytes";
-import type { MetricConfig, MetricName, TimeRangeOption } from "./types";
+import type {
+	ComputeMetricConfig,
+	ComputeMetricName,
+	MetricConfig,
+	MetricName,
+	TimeRangeOption,
+} from "./types";
 
 export const ALL_METRICS: MetricName[] = [
 	"actor_awake",
@@ -12,6 +18,14 @@ export const ALL_METRICS: MetricName[] = [
 	"requests",
 	"active_requests",
 	"alarms_set",
+];
+
+// Raw compute usage metrics fetched from the compute-metrics endpoint. The
+// derived "cost" series is computed frontend-side and is not requested here.
+export const COMPUTE_METRICS: ComputeMetricName[] = [
+	"active_seconds",
+	"cpu",
+	"memory_mib",
 ];
 
 function formatSeconds(value: number): string {
@@ -36,6 +50,19 @@ function formatOperations(value: number): string {
 	if (units >= 1_000_000) return `${(units / 1_000_000).toFixed(2)}M ops`;
 	if (units >= 1_000) return `${(units / 1_000).toFixed(2)}K ops`;
 	return `${Math.round(units)} ops`;
+}
+
+function formatVcpus(value: number): string {
+	return `${value.toFixed(2)} vCPU`;
+}
+
+function formatMib(value: number): string {
+	return formatBytes(bytes.MiB(value));
+}
+
+function formatUsd(value: number): string {
+	if (value > 0 && value < 0.01) return "<$0.01";
+	return `$${value.toFixed(2)}`;
 }
 
 export const METRICS_CONFIG: MetricConfig[] = [
@@ -98,6 +125,36 @@ export const METRICS_CONFIG: MetricConfig[] = [
 		title: "Alarms Set",
 		description: "Number of scheduled alarms",
 		formatValue: formatCount,
+	},
+];
+
+// Compute panels are shown only when the namespace has a compute pool. cpu and
+// memory_mib are active-time-weighted means (not sums); cost is derived
+// frontend-side from all three series using the pricing in @/content/billing.
+export const COMPUTE_METRICS_CONFIG: ComputeMetricConfig[] = [
+	{
+		name: "active_seconds",
+		title: "Active Compute Time",
+		description: "Time compute instances spent actively running",
+		formatValue: formatSeconds,
+	},
+	{
+		name: "cpu",
+		title: "vCPUs",
+		description: "Active-time-weighted vCPU allocation",
+		formatValue: formatVcpus,
+	},
+	{
+		name: "memory_mib",
+		title: "Memory",
+		description: "Active-time-weighted memory allocation",
+		formatValue: formatMib,
+	},
+	{
+		name: "cost",
+		title: "Estimated Cost",
+		description: "Estimated compute spend based on active time, CPU, and memory",
+		formatValue: formatUsd,
 	},
 ];
 

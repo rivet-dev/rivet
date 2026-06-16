@@ -1,8 +1,16 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import { useQuery } from "@tanstack/react-query";
-import { endOfMonth } from "date-fns";
+import { endOfMonth, startOfMonth } from "date-fns";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { BILLING } from "@/content/billing";
+import { features } from "@/lib/features";
+import { COMPUTE_METRICS } from "@/app/metrics/constants";
+import { sumComputeCost } from "@/app/metrics/compute-cost";
+
+// Bucket size (seconds) for the month-to-date compute cost query. Cost is an
+// active-time-weighted sum, so the total is correct at any resolution; this
+// only bounds the number of returned buckets.
+const COMPUTE_COST_RESOLUTION = 800;
 
 const BILLED_METRICS = [
 	"actor_awake",
@@ -36,6 +44,28 @@ export function useBilledMetrics() {
 	}
 
 	return aggregated;
+}
+
+// Aggregate this project's month-to-date compute cost (in dollars) from the
+// project compute metrics endpoint. Compute is billed per active second by
+// configured CPU and memory, so this sums active_seconds *
+// computeCostPerSecond(cpu, memory) across buckets. Project-scoped. See
+// @/app/metrics/compute-cost.
+export function useBilledComputeCost() {
+	const dataProvider = useCloudProjectDataProvider();
+	const now = new Date();
+	const { data, isLoading, isError } = useQuery({
+		...dataProvider.currentProjectComputeMetricsQueryOptions({
+			name: COMPUTE_METRICS,
+			startAt: startOfMonth(now).toISOString(),
+			endAt: endOfMonth(now).toISOString(),
+			resolution: COMPUTE_COST_RESOLUTION,
+		}),
+		// Compute is only billed where the Compute feature is enabled.
+		enabled: features.compute,
+	});
+
+	return { monthToDate: sumComputeCost(data), isLoading, isError };
 }
 
 export function useHighestUsagePercent(): number {

@@ -1,4 +1,4 @@
-import type { RivetSse } from "@rivet-gg/cloud";
+import type { Rivet } from "@rivet-gg/cloud";
 import { faCopy, faDownload, faPause, faPlay, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
@@ -72,7 +72,7 @@ function RouteComponent() {
 	const [search, setSearch] = useState(initialSearch ?? "");
 	const [isPaused, setIsPaused] = useState(false);
 	const [region, setRegion] = useState<string>("all");
-	const logsRef = useRef<RivetSse.LogStreamEvent.Log[]>([]);
+	const logsRef = useRef<Rivet.LogStreamEvent.Log[]>([]);
 
 	const getLogsText = useCallback(
 		() =>

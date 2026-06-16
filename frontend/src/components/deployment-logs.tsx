@@ -1,4 +1,4 @@
-import type { RivetSse } from "@rivet-gg/cloud";
+import type { Rivet } from "@rivet-gg/cloud";
 import { faArrowDown, faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -60,13 +60,13 @@ interface DeploymentLogsProps {
 	filter?: string;
 	region?: string;
 	paused?: boolean;
-	logsRef?: React.MutableRefObject<RivetSse.LogStreamEvent.Log[]>;
+	logsRef?: React.MutableRefObject<Rivet.LogStreamEvent.Log[]>;
 	regionLabelLength?: number;
 }
 
 interface LogRowData {
 	className?: string;
-	entry?: RivetSse.LogStreamEvent.Log;
+	entry?: Rivet.LogStreamEvent.Log;
 	isSentinel?: boolean;
 	isLoadingMore?: boolean;
 	regionColumnWidth?: string;

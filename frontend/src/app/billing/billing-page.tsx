@@ -1,4 +1,5 @@
 import {
+	faArrowUpRight,
 	faBarcodeRead,
 	faDatabase,
 	faPencil,
@@ -9,17 +10,22 @@ import {
 	type IconProp,
 } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { BillingPlans } from "@/app/billing/billing-plans";
 import { BillingStatus } from "@/app/billing/billing-status";
-import { ComputeUsageCard } from "@/app/billing/compute-card";
+import {
+	ComputeUsageCard,
+	IfNamespaceHasCompute,
+} from "@/app/billing/compute-card";
 import { CurrentBillTotal } from "@/app/billing/current-bill-card";
-import { useBilledMetrics } from "@/app/billing/hooks";
+import { useBilledComputeCost, useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { type MetricType, UsageCard } from "@/app/billing/usage-card";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Button, H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
 import { BILLING } from "@/content/billing";
 import { Content } from "../layout";
 
@@ -83,7 +89,19 @@ function calculateOverageCost(
 	return (overage * pricePerBillionUnits) / 1_000_000_000n;
 }
 
-export function BillingPage() {
+/**
+ * Namespace billing page. Compute is billed per project, so instead of a
+ * compute usage figure this surface shows a pointer to Project Billing.
+ */
+export function NamespaceBillingPage() {
+	return <BillingPage namespaceScoped />;
+}
+
+export function BillingPage({
+	namespaceScoped,
+}: {
+	namespaceScoped?: boolean;
+}) {
 	const dataProvider = useCloudProjectDataProvider();
 	const { data } = useSuspenseQuery({
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
@@ -122,7 +140,7 @@ export function BillingPage() {
 
 			<hr className="mb-6" />
 
-			<BillingBody />
+			<BillingBody namespaceScoped={namespaceScoped} />
 		</Content>
 	);
 }
@@ -131,12 +149,17 @@ export function BillingPage() {
  * Headerless billing content (no SidebarToggle / H1 / Help). Safe to render
  * outside `RootLayoutContextProvider`, e.g. inside the settings drawer.
  */
-export function BillingBody() {
+export function BillingBody({
+	namespaceScoped,
+}: {
+	namespaceScoped?: boolean;
+}) {
 	const dataProvider = useCloudProjectDataProvider();
 	const { data } = useSuspenseQuery({
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
 	});
 	const metrics = useBilledMetrics();
+	const compute = useBilledComputeCost();
 	const plan = data?.billing.activePlan || "free";
 	const planIncluded = BILLING.included[plan] ?? BILLING.included.free;
 
@@ -149,10 +172,15 @@ export function BillingBody() {
 		);
 	}, 0n);
 
+	// On the namespace surface compute is shown as a pointer to Project Billing,
+	// so it does not contribute to this surface's total.
+	const computeDollars =
+		namespaceScoped || compute.isError ? 0 : compute.monthToDate;
+
 	return (
 		<div className="px-4  max-w-5xl mx-auto @6xl:px-0 space-y-8 pb-8">
 			<CurrentBillTotal
-				total={Number(totalOverageCents) / 100}
+				total={Number(totalOverageCents) / 100 + computeDollars}
 				periodStart={
 					data.billing.currentPeriodStart
 						? new Date(data.billing.currentPeriodStart)
@@ -187,7 +215,35 @@ export function BillingBody() {
 					);
 				},
 			)}
-			<ComputeUsageCard />
+			{namespaceScoped ? (
+				features.compute ? (
+					<IfNamespaceHasCompute>
+						<div className="flex justify-center pt-2">
+							<Button asChild variant="outline" size="sm">
+								<Link
+									to="."
+									search={(prev) => ({
+										...prev,
+										settings: "billing",
+									})}
+								>
+									View Project Billing for Compute Usage
+									<Icon
+										icon={faArrowUpRight}
+										className="size-3"
+									/>
+								</Link>
+							</Button>
+						</div>
+					</IfNamespaceHasCompute>
+				) : null
+			) : (
+				<ComputeUsageCard
+					monthToDate={compute.monthToDate}
+					isLoading={compute.isLoading}
+					isError={compute.isError}
+				/>
+			)}
 		</div>
 	);
 }
