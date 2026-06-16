@@ -20,7 +20,8 @@ npm run client
 ## Features
 
 - **Effect-native actors**: Define an actor with `Actor.make` and implement it with `toLayer`, returning action handlers from an Effect wake scope
-- **Typed action protocols**: `Increment` and `GetCount` are standalone `Action.make` values with `effect/Schema` payloads and successes validated end to end
+- **Typed action protocols**: `Increment` and `GetCount` are standalone `Action.make` values with `Schema` payloads and successes validated end to end
+- **Typed errors across the wire**: `Increment` declares a `NegativeAmountError` that arrives on the caller as a real tagged instance, caught with `Effect.catchTag`
 - **Persistent state**: The counter value lives in persisted actor state, accessed through a `SubscriptionRef`-like `State` API
 - **Events**: Each increment broadcasts the new count to every connected client
 

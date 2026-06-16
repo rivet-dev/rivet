@@ -1,6 +1,6 @@
 import { Actor, State } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
-import { Counter } from "./api.ts";
+import { Counter, NegativeAmountError } from "./api.ts";
 
 // --- Actor Implementation ---
 
@@ -11,6 +11,15 @@ export const CounterLive = Counter.toLayer(
 	Effect.fnUntraced(function* ({ rawRivetkitContext, state }) {
 		return Counter.of({
 			Increment: Effect.fnUntraced(function* ({ payload }) {
+				// Reject before mutating, so the error path leaves state untouched.
+				// The failure is a value in the typed error channel, not a throw.
+				if (payload.amount < 0) {
+					return yield* new NegativeAmountError({
+						amount: payload.amount,
+						message: `increment amount ${payload.amount} must not be negative`,
+					});
+				}
+
 				// Access the actor's persisted `state` with a `SubscriptionRef`-like API.
 				const next = yield* State.updateAndGet(state, (current) => ({
 					count: current.count + payload.amount,

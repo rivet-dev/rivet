@@ -15,6 +15,15 @@ const program = Effect.gen(function* () {
 	const second = yield* counter.Increment({ amount: 5 });
 	yield* Effect.log(`count is now ${second}`);
 
+	// The declared error arrives as a real tagged instance, caught by tag.
+	yield* counter
+		.Increment({ amount: -1 })
+		.pipe(
+			Effect.catchTag("NegativeAmountError", (err) =>
+				Effect.log(`rejected: ${err.message} (amount ${err.amount})`),
+			),
+		);
+
 	const total = yield* counter.GetCount();
 	yield* Effect.log(`final count: ${total}`);
 });
