@@ -6,7 +6,7 @@ import type { SidebarItem } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
 import { Icon, faArrowUpRight } from "@rivet-gg/icons";
 import clsx from "clsx";
-import type { PropsWithChildren, ReactNode } from "react";
+import { type PropsWithChildren, type ReactNode, useEffect, useRef } from "react";
 
 interface TreeItemProps {
 	index: number;
@@ -173,10 +173,31 @@ export function NavLink({
 	);
 }
 
-export function DocsNavigation({ sidebar }: { sidebar: SidebarItem[] }) {
+export function DocsNavigation({
+	sidebar,
+	tabKey,
+}: { sidebar: SidebarItem[]; tabKey?: string }) {
+	const scrollRef = useRef<HTMLDivElement>(null);
+	const prevTabKey = useRef(tabKey);
+
+	// The sidebar island is persisted across view transitions to keep its scroll
+	// position, so it does not remount when navigating within a tab. Reset the
+	// scroll only when moving to a different tab, whose sidebar is unrelated.
+	useEffect(() => {
+		if (prevTabKey.current !== tabKey) {
+			prevTabKey.current = tabKey;
+			if (scrollRef.current) {
+				scrollRef.current.scrollTop = 0;
+			}
+		}
+	}, [tabKey]);
+
 	return (
 		<NavigationStateProvider>
-			<div className="sticky top-header max-h-content text-ink pl-8 pr-6 py-6 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)]">
+			<div
+				ref={scrollRef}
+				className="sticky top-header max-h-content text-ink pl-8 pr-6 py-6 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)]"
+			>
 				<Tree pages={sidebar} />
 			</div>
 		</NavigationStateProvider>
