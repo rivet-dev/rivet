@@ -468,6 +468,35 @@ export const createOrganizationContext = ({
 			},
 		});
 
+	const namespaceComputeMetricsQueryOptions = (opts: {
+		organization: string;
+		project: string;
+		namespace: string;
+		name: Rivet.ComputeMetricName | Rivet.ComputeMetricName[];
+		startAt?: string;
+		endAt?: string;
+		resolution?: number;
+		pool?: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "compute-metrics"],
+			queryFn: async () => {
+				const data = await client.namespaces.metrics.getCompute(
+					opts.project,
+					opts.namespace,
+					{
+						name: opts.name,
+						org: opts.organization,
+						startAt: opts.startAt,
+						endAt: opts.endAt,
+						resolution: opts.resolution,
+						pool: opts.pool,
+					},
+				);
+				return data;
+			},
+		});
+
 	const namespaceLatestMetricsQueryOptions = (opts: {
 		organization: string;
 		project: string;
@@ -682,6 +711,17 @@ export const createOrganizationContext = ({
 			>,
 		) {
 			return namespaceMetricsQueryOptions({
+				organization,
+				...opts,
+			});
+		},
+		currentOrganizationNamespaceComputeMetricsQueryOptions(
+			opts: Omit<
+				Parameters<typeof namespaceComputeMetricsQueryOptions>[0],
+				"organization"
+			>,
+		) {
+			return namespaceComputeMetricsQueryOptions({
 				organization,
 				...opts,
 			});
@@ -948,6 +988,21 @@ export const createProjectContext = ({
 				...opts,
 			});
 		},
+		currentProjectNamespaceComputeMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentOrganizationNamespaceComputeMetricsQueryOptions
+				>[0],
+				"project"
+			>,
+		) {
+			return parent.currentOrganizationNamespaceComputeMetricsQueryOptions(
+				{
+					project,
+					...opts,
+				},
+			);
+		},
 		currentProjectNamespaceLatestMetricsQueryOptions(
 			opts: Omit<
 				Parameters<
@@ -1169,6 +1224,19 @@ export const createNamespaceContext = ({
 			>,
 		) {
 			return parent.currentProjectNamespaceMetricsQueryOptions({
+				namespace,
+				...opts,
+			});
+		},
+		currentNamespaceComputeMetricsQueryOptions(
+			opts: Omit<
+				Parameters<
+					typeof parent.currentProjectNamespaceComputeMetricsQueryOptions
+				>[0],
+				"namespace"
+			>,
+		) {
+			return parent.currentProjectNamespaceComputeMetricsQueryOptions({
 				namespace,
 				...opts,
 			});

@@ -4,7 +4,7 @@ import {
 	useCloudNamespaceDataProvider,
 	useCloudProjectDataProvider,
 } from "@/components/actors";
-import { ALL_METRICS } from "./constants";
+import { ALL_METRICS, COMPUTE_METRICS } from "./constants";
 import type { MetricName, NamespaceMetricsData } from "./types";
 
 // 7 days overview range for the brush
@@ -134,6 +134,32 @@ export function useSingleNamespaceDetailMetrics({
 	const query = useQuery({
 		...dataProvider.currentNamespaceMetricsQueryOptions({
 			name: ALL_METRICS,
+			startAt,
+			endAt,
+			resolution,
+		}),
+		refetchInterval: 30000,
+		placeholderData: keepPreviousData,
+	});
+
+	return { query, startAt, endAt, resolution };
+}
+
+export function useSingleNamespaceComputeDetailMetrics({
+	brushDomain,
+}: {
+	brushDomain: [Date, Date];
+}) {
+	const dataProvider = useCloudNamespaceDataProvider();
+
+	const { startAt, endAt, resolution } = useMemo(
+		() => detailRangeFromBrush(brushDomain),
+		[brushDomain],
+	);
+
+	const query = useQuery({
+		...dataProvider.currentNamespaceComputeMetricsQueryOptions({
+			name: COMPUTE_METRICS,
 			startAt,
 			endAt,
 			resolution,
