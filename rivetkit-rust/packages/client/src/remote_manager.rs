@@ -1,9 +1,9 @@
-use anyhow::{Context, Result, anyhow};
-use base64::{Engine as _, engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD};
+use anyhow::{anyhow, Context, Result};
+use base64::{engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use bytes::Bytes;
 use reqwest::{
-	Method,
 	header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT},
+	Method,
 };
 use serde::{Deserialize, Serialize};
 use serde_cbor;
@@ -13,11 +13,11 @@ use tokio_tungstenite::tungstenite::client::IntoClientRequest;
 
 use crate::{
 	common::{
-		ActorKey, EncodingKind, HEADER_RIVET_ACTOR, HEADER_RIVET_NAMESPACE, HEADER_RIVET_TARGET,
-		HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET, PATH_WEBSOCKET_PREFIX, RawWebSocket,
-		USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID, WS_PROTOCOL_CONN_PARAMS,
-		WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING, WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET,
-		WS_PROTOCOL_TOKEN, serialize_actor_key,
+		serialize_actor_key, ActorKey, EncodingKind, RawWebSocket, HEADER_RIVET_ACTOR,
+		HEADER_RIVET_NAMESPACE, HEADER_RIVET_TARGET, HEADER_RIVET_TOKEN, PATH_CONNECT_WEBSOCKET,
+		PATH_WEBSOCKET_PREFIX, USER_AGENT_VALUE, WS_PROTOCOL_ACTOR, WS_PROTOCOL_CONN_ID,
+		WS_PROTOCOL_CONN_PARAMS, WS_PROTOCOL_CONN_TOKEN, WS_PROTOCOL_ENCODING,
+		WS_PROTOCOL_STANDARD, WS_PROTOCOL_TARGET, WS_PROTOCOL_TOKEN,
 	},
 	protocol::query::ActorQuery,
 };

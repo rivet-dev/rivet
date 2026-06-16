@@ -9,7 +9,9 @@ use napi_derive::napi;
 use parking_lot::Mutex as ParkingMutex;
 use rivetkit_core::{
 	CoreRegistry as NativeCoreRegistry, CoreServerlessRuntime, EngineSpawnMode, ServeConfig,
-	ServerlessRequest, registry::CoreEnvoyHandle, serverless::ServerlessStreamError,
+	ServerlessRequest,
+	registry::CoreEnvoyHandle,
+	serverless::ServerlessStreamError,
 	serverless_http::{self, ListenerConfig},
 };
 use tokio::sync::{Mutex as TokioMutex, Notify};

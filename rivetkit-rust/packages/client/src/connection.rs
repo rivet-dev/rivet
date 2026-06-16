@@ -1,21 +1,21 @@
 use anyhow::Result;
 use futures_util::FutureExt;
 use parking_lot::Mutex as SyncMutex;
-use scc::{HashMap as SccHashMap, hash_map::Entry as SccEntry};
+use scc::{hash_map::Entry as SccEntry, HashMap as SccHashMap};
 use serde_json::Value;
 use std::fmt::Debug;
 use std::ops::Deref;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::time::Duration;
-use tokio::sync::{Mutex, broadcast, oneshot, watch};
+use tokio::sync::{broadcast, oneshot, watch, Mutex};
 
 use crate::{
-	EncodingKind, TransportKind,
 	backoff::Backoff,
 	drivers::*,
 	protocol::{query::ActorQuery, *},
 	remote_manager::RemoteManager,
+	EncodingKind, TransportKind,
 };
 use tracing::debug;
 
