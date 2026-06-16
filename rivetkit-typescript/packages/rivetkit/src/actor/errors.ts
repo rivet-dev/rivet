@@ -98,6 +98,17 @@ export function isRivetErrorLike(
 	);
 }
 
+// Matches the `actor`/`aborted` error that core raises when an in-flight queue
+// wait is interrupted because the actor is going to sleep. This is the expected
+// way a parked `run` handler unwinds during sleep, not a failure.
+export function isActorAbortedError(error: unknown): boolean {
+	return (
+		isRivetErrorLike(error) &&
+		error.group === "actor" &&
+		error.code === "aborted"
+	);
+}
+
 function isActorSpecifier(value: unknown): value is ActorSpecifier {
 	return (
 		typeof value === "object" &&
