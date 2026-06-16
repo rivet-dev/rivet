@@ -97,13 +97,13 @@ console.log(metadata.tags, metadata.region);`,
 		});
 
 		if (!message) {
-			await loopCtx.step("tick", async () => {
+			await loopCtx.step("tick", async (loopCtx) => {
 				/* heartbeat every N seconds */
 			});
 			return Loop.continue(undefined);
 		}
 
-		await loopCtx.step("process-job", async () => {
+		await loopCtx.step("process-job", async (loopCtx) => {
 			/* process queue message */
 		});
 		return Loop.continue(undefined);

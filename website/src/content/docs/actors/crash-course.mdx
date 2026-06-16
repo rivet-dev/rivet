@@ -338,7 +338,7 @@ const worker = actor({
 		await ctx.loop("task-loop", async (loopCtx) => {
 			const message = await loopCtx.queue.next("wait-task");
 
-			await loopCtx.step("process-task", async () => {
+			await loopCtx.step("process-task", async (loopCtx) => {
 				await processTask(message.body.url);
 				loopCtx.state.processed += 1;
 			});
@@ -788,7 +788,7 @@ const worker = actor({
 		control: queue<ControlMessage>(),
 	},
 	run: workflow(async (ctx) => {
-		await ctx.step("setup", async () => {
+		await ctx.step("setup", async (ctx) => {
 			await fetch("https://api.example.com/workers/init", {
 				method: "POST",
 			});
@@ -802,7 +802,7 @@ const worker = actor({
 			});
 
 			if (message.name === "work") {
-				await loopCtx.step("apply-work", async () => {
+				await loopCtx.step("apply-work", async (loopCtx) => {
 					await fetch("https://api.example.com/workers/process", {
 						method: "POST",
 						body: JSON.stringify({ amount: message.body.amount }),
@@ -816,7 +816,7 @@ const worker = actor({
 			return Loop.break((message.body as ControlMessage).reason);
 		});
 
-		await ctx.step("teardown", async () => {
+		await ctx.step("teardown", async (ctx) => {
 			await fetch("https://api.example.com/workers/shutdown", {
 				method: "POST",
 			});

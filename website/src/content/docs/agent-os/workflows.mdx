@@ -32,12 +32,12 @@ const automator = actor({
       const agentHandle = c.actors.vm.getOrCreate([`fix-${issue}`]);
 
       // Step 1: Clone the repo
-      await c.step("clone-repo", async () => {
+      await c.step("clone-repo", async (c) => {
         return agentHandle.exec(`git clone ${repo} /home/user/repo`);
       });
 
       // Step 2: Agent fixes the bug (session lives within this step)
-      await c.step("fix-bug", async () => {
+      await c.step("fix-bug", async (c) => {
         const session = await agentHandle.createSession("pi", {
           env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
         });
@@ -49,7 +49,7 @@ const automator = actor({
       });
 
       // Step 3: Run tests
-      const tests = await c.step("run-tests", async () => {
+      const tests = await c.step("run-tests", async (c) => {
         return agentHandle.exec("cd /home/user/repo && npm test");
       });
 
@@ -102,7 +102,7 @@ const pipeline = actor({
       const agentHandle = c.actors.vm.getOrCreate([`review-${Date.now()}`]);
 
       // Step 1: Agent reviews code and writes findings to a file
-      await c.step("review", async () => {
+      await c.step("review", async (c) => {
         const session = await agentHandle.createSession("pi", {
           env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
         });
@@ -114,13 +114,13 @@ const pipeline = actor({
       });
 
       // Step 2: Read the review from the filesystem
-      const review = await c.step("read-review", async () => {
+      const review = await c.step("read-review", async (c) => {
         const content = await agentHandle.readFile("/home/user/review.md");
         return new TextDecoder().decode(content);
       });
 
       // Step 3: Second session applies fixes based on the review
-      await c.step("fix", async () => {
+      await c.step("fix", async (c) => {
         const session = await agentHandle.createSession("pi", {
           env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
         });

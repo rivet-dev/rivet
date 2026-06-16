@@ -138,6 +138,39 @@ mod moved_tests {
 	}
 
 	#[tokio::test(start_paused = true)]
+	async fn registered_tasks_are_reaped_and_do_not_accumulate() {
+		let ctx = ActorContext::new_for_sleep_tests("actor-reap");
+
+		// Register many quickly-completing tasks. With no await between spawns
+		// none of them have run yet, so they all accumulate in the JoinSet.
+		for _ in 0..50 {
+			ctx.register_task(async {});
+		}
+
+		// Let every spawned task run to completion.
+		for _ in 0..5 {
+			yield_now().await;
+		}
+
+		// They have completed but their handles are still in the set: completed
+		// JoinSet entries are not auto-reaped.
+		let before = ctx.0.sleep.work.shutdown_tasks.lock().len();
+		assert!(
+			before >= 40,
+			"expected completed task handles to accumulate before the next spawn, got {before}"
+		);
+
+		// Spawning one more reaps the completed handles first, so the set stays
+		// bounded to in-flight work instead of growing for the actor lifetime.
+		ctx.register_task(async {});
+		let after = ctx.0.sleep.work.shutdown_tasks.lock().len();
+		assert!(
+			after <= 2,
+			"expected the JoinSet to be reaped down to in-flight work, got {after}"
+		);
+	}
+
+	#[tokio::test(start_paused = true)]
 	async fn shutdown_task_counter_reaches_zero_after_panic() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-panic");
 

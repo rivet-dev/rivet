@@ -2,6 +2,7 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
+	disposeRunInspector,
 	getRunFunction,
 	getRunInspectorConfig,
 	RAW_STATE_SYMBOL,
@@ -2840,7 +2841,15 @@ export class ActorContextHandleAdapter {
 
 	internalKeepAwake<T>(run: Promise<T> | (() => Promise<T>)): Promise<T> {
 		const promise = typeof run === "function" ? run() : run;
-		const trackedPromise = promise.then(() => null);
+		// Track only completion, swallowing the outcome. The real result/error
+		// is delivered through the returned `promise`; without a rejection
+		// handler here every workflow yield (which rejects with SleepError)
+		// would be funneled into the registered task and logged as a spurious
+		// "keep_awake promise rejected" warning.
+		const trackedPromise = promise.then(
+			() => null,
+			() => null,
+		);
 		try {
 			callNativeSync(() =>
 				this.#runtime.actorRegisterTask(this.#ctx, trackedPromise),
@@ -4112,6 +4121,11 @@ export function buildNativeFactory(
 						await config.onDestroy(actorCtx);
 					}
 				} finally {
+					const actorId = callNativeSync(() => runtime.actorId(ctx));
+					// Release actorId-keyed state so it does not accumulate per
+					// destroyed actor.
+					nativeRunHandlerActiveByActorId.delete(actorId);
+					disposeRunInspector(config.run, actorId);
 					resolveNativeDestroy(runtime, ctx);
 					await actorCtx.closeDatabase();
 					clearNativeRuntimeState(runtime, ctx);
@@ -4515,7 +4529,11 @@ export function buildNativeFactory(
 					try {
 						await run(actorCtx);
 					} finally {
-						nativeRunHandlerActiveByActorId.set(actorId, false);
+						// Delete rather than set(false): an absent entry already
+						// reads as inactive, and deleting keeps this map bounded
+						// to currently-running handlers instead of accumulating an
+						// entry per actor id forever.
+						nativeRunHandlerActiveByActorId.delete(actorId);
 						await actorCtx.dispose();
 					}
 				},
