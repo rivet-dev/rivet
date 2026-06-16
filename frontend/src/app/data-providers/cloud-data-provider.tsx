@@ -24,7 +24,6 @@ function createClient() {
 		baseUrl: () => cloudEnv().VITE_APP_CLOUD_API_URL,
 		environment: "",
 		token: async () => "",
-		// @ts-expect-error
 		fetcher: async (args) => {
 			Object.keys(args.headers || {}).forEach((key) => {
 				if (key.toLowerCase().startsWith("x-fern-")) {
@@ -32,7 +31,6 @@ function createClient() {
 				}
 			});
 			return await fetcher(
-				// @ts-expect-error
 				{
 					...args,
 					maxRetries: 1,
