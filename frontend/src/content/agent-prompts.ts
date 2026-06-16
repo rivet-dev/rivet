@@ -24,33 +24,23 @@ Read https://rivet.dev/llms.txt to understand how RivetKit works (actors, state,
 
 Add a note to the project's \`CLAUDE.md\` / \`AGENTS.md\` (create one if missing) linking to https://rivet.dev/llms.txt as the reference for future RivetKit work.
 
-## Step 2: Switch to serverless mode
+## Step 2: Keep registry.start() (serverless is automatic)
 
-Rivet Compute is a serverless platform, so the project must mount RivetKit as an HTTP handler. Calls like \`registry.start()\` or \`registry.listen()\` run **serverfully** and will not work on Compute.
+Do **not** rewrite the project into a hand-mounted HTTP handler. Keep the existing \`registry.start()\` call as-is.
 
-If the project currently calls \`registry.start()\` or \`registry.listen()\`, replace it with an HTTP server that mounts the registry handler. With Hono on Node:
-
-\`\`\`ts
-import { Hono } from "hono";
-import { serve } from "@hono/node-server";
-import { registry } from "./actors";
-
-const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-serve({ fetch: app.fetch, port: Number(process.env.PORT ?? 3000) });
-\`\`\`
-
-If a frontend calls \`createClient(location.origin)\`, update it to target the mount path:
+When the app runs on Rivet Compute, Compute automatically runs it in serverless mode (it sets \`RIVETKIT_RUNTIME_MODE=serverless\` for you). In that mode \`registry.start()\` binds an HTTP listener instead of opening a long-lived connection to the engine, so no manual Hono handler is needed. The client API is still served under \`/api/rivet\`, so a frontend should target that mount path:
 
 \`\`\`ts
 const client = createClient(location.origin + "/api/rivet");
 \`\`\`
 
+**Serving a frontend:** \`registry.start()\` serves static files automatically. Put the frontend build output in a \`public/\` directory and it is served with zero extra wiring. If the build outputs somewhere else (e.g. \`dist/\`), set \`RIVETKIT_PUBLIC_DIR\` to that directory.
+
 See https://rivet.dev/docs/general/runtime-modes for local vs. serverless modes and https://rivet.dev/docs/connect/rivet-compute for the full Compute integration guide.
 
 ## Step 3: Create Dockerfile
 
-If the project does not already have a \`Dockerfile\`, create one. Use this as a starting point and adjust the package manager (npm/pnpm/yarn), file paths, and entrypoint to match the project:
+\`npx @rivetkit/cli deploy\` builds your project from a \`Dockerfile\`. If the project does not already have one, create it. Use this as a starting point and adjust the package manager (npm/pnpm/yarn), file paths, and entrypoint to match the project. Make sure the frontend build lands in \`public/\` (or set \`RIVETKIT_PUBLIC_DIR\`), and that the entrypoint calls \`registry.start()\`:
 
 \`\`\`dockerfile
 FROM node:24-alpine
@@ -68,6 +58,8 @@ EXPOSE 3000
 CMD ["node", "dist/index.js"]
 \`\`\`
 
+Do **not** set \`RIVETKIT_RUNTIME_MODE\` in the Dockerfile. Compute injects it at deploy time.
+
 If the project does not already have a \`.dockerignore\`, create one:
 
 \`\`\`
@@ -77,69 +69,33 @@ dist/
 .git/
 \`\`\`
 
-If Docker is installed, build and run the image to verify it works before proceeding:
+If Docker is installed, build and run the image to verify it works before proceeding. Pass \`-e RIVETKIT_RUNTIME_MODE=serverless\` to simulate how Compute runs it (otherwise the container defaults to engine/envoy mode and the check is not representative):
 
 \`\`\`bash
-docker build -t rivet-test . && docker run --rm -p 3000:3000 rivet-test
+docker build -t rivet-test . && docker run --rm -p 3000:3000 -e RIVETKIT_RUNTIME_MODE=serverless rivet-test
 \`\`\`
 
 Verify the container starts and is connectable (e.g. \`curl http://localhost:3000/health\`). If Docker is not installed, skip this and proceed.
 
-## Step 4: Add GitHub Secret
+## Step 4: Deploy with the Rivet CLI
 
-Add the secret RIVET_CLOUD_TOKEN to your GitHub repository:
+Deploy the project with a single command. \`@rivetkit/cli\` builds the \`Dockerfile\`, pushes the image to Rivet's registry, and creates/updates the \`default\` managed pool. The project, organization, and namespace are auto-detected from the token, so you do not need to pass them:
 
-\`\`\`
-gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"
-\`\`\`
-
-## Step 5: Create GitHub Action
-
-Create .github/workflows/rivet-deploy.yml using rivet-dev/deploy-action@v1.1.2:
-
-\`\`\`
-name: Rivet Deploy
-
-on:
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-concurrency:
-  group: rivet-deploy-\${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
-jobs:
-  rivet-deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    steps:
-      - uses: actions/checkout@v4
-      - uses: rivet-dev/deploy-action@v1.1.2
-        with:
-          rivet-token: \${{ secrets.RIVET_CLOUD_TOKEN }}
-          compute-pool-config: '{"environment":{"PORT":"3000"}}'
+\`\`\`bash
+npx @rivetkit/cli deploy --token "${cloudToken}" --env PORT=3000
 \`\`\`
 
-The container must be reachable on port 3000. If using another port, set \`environment.PORT\` in \`compute-pool-config\` to that port.
+Notes:
+- The image is built for \`linux/amd64\` and must listen on the port set via \`--env PORT\` (3000 here). If the app listens on a different port, change both the \`EXPOSE\` line and \`--env PORT\` to match.
+- \`--token\` is the \`cloud_api_*\` Cloud API token. The command also caches it to \`~/.rivet/credentials\`, so later \`deploy\` calls can omit \`--token\`.
+- Pass \`--yes\` to skip interactive prompts in non-interactive environments.
 
-## Step 6: Push and Verify
+When the command finishes successfully, proceed to Step 5 to verify the deployment is live.
 
-Push the changes and monitor the GitHub Action until it completes:
-
-1. Push to the repository.
-2. Use \`gh run list\` and \`gh run watch\` to poll the action status. Do not move on until the run finishes.
-3. If the action succeeds, proceed to Step 7.
-4. If the action fails, inspect the logs with \`gh run view --log-failed\`, fix the issue, push again, and repeat from step 2.
-
-## Step 7: Verify Deployment
+## Step 5: Verify Deployment
 
 **Token types used in this step:**
-- \`cloud_api_*\` (the \`RIVET_CLOUD_TOKEN\` secret) — a management token scoped to the Cloud API (cloud-api.rivet.dev). Use this for admin operations like checking deployment status and fetching logs.
+- \`cloud_api_*\` (the \`--token\` passed to \`@rivetkit/cli deploy\`) — a management token scoped to the Cloud API (cloud-api.rivet.dev). Use this for admin operations like checking deployment status and fetching logs.
 - \`pk_*\` (the publishable token below) — a public key scoped to the Rivet Engine API (api.rivet.dev). Use this for creating actors and calling gateway endpoints.
 
 These are different tokens with different scopes. Do not mix them up.
@@ -183,12 +139,12 @@ Once deployed, verify the deployment works:
 5. Common issues:
    - "actor should have a key": The key field was missing from the create request.
    - Token 401: Make sure you're using the correct API URLs (${apiUrl}, ${cloudApiUrl}).
-   - "Failed to start container: Please ensure your container starts successfully on the specified port (8080 if unspecified). Make sure your image was built for linux/amd64.": Ensure the container is connectable on PORT 3000 or whichever PORT is specified in your \`compute-pool-config\` in the GitHub Action.
+   - "Failed to start container: Please ensure your container starts successfully on the specified port (8080 if unspecified). Make sure your image was built for linux/amd64.": Ensure the container is connectable on PORT 3000 or whichever PORT you passed via \`--env PORT\` to \`@rivetkit/cli deploy\`.
 
 ## Troubleshooting
 
-- There is no Rivet CLI. Do not attempt to use or install one. All deployment is done via the GitHub Action and all interaction is done via HTTP APIs (curl).
-- Architecture: The GitHub Action builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
+- Deployment is done with \`npx @rivetkit/cli deploy\`. Status, logs, actor creation, and health checks are done via HTTP APIs (curl) as shown in Step 5.
+- Architecture: \`@rivetkit/cli deploy\` builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
 - For more troubleshooting help, see: https://rivet.dev/docs/actors/troubleshooting/`;
 }
 
