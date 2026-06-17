@@ -30,6 +30,8 @@ enum Commands {
 	Engine(commands::engine::Opts),
 	/// Build and deploy the current project to Rivet Cloud.
 	Deploy(commands::deploy::Opts),
+	/// View logs for the managed pool.
+	Logs(commands::logs::Opts),
 	/// Install the GitHub Actions workflow that deploys to Rivet Cloud.
 	SetupCi(commands::setup_ci::Opts),
 }
@@ -43,6 +45,7 @@ async fn main() -> Result<()> {
 		Commands::Dev(opts) => opts.execute().await,
 		Commands::Engine(opts) => opts.execute().await,
 		Commands::Deploy(opts) => opts.execute().await,
+		Commands::Logs(opts) => opts.execute().await,
 		Commands::SetupCi(opts) => opts.execute().await,
 	}
 }

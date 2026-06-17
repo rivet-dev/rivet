@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
 use reqwest::{Method, StatusCode};
-use serde::{Deserialize, de::DeserializeOwned};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 use tokio::time::sleep;
 use url::Url;
@@ -36,6 +36,17 @@ struct Pagination {
 pub struct Namespace {
 	pub name: String,
 	pub display_name: Option<String>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogEntry {
+	pub timestamp: String,
+	pub severity: String,
+	pub message: String,
+	pub region: String,
+	pub insert_id: String,
+	pub stream: String,
 }
 
 #[derive(Deserialize)]
@@ -100,6 +111,14 @@ impl CloudClient {
 		Ok(Some(serde_json::from_str(&text).with_context(|| {
 			format!("Cloud API returned invalid JSON for {path}")
 		})?))
+	}
+
+	/// Builds an authenticated GET request for the given path. Used for
+	/// streaming responses (e.g. SSE log tails) that the buffered `request`
+	/// helpers cannot consume.
+	pub fn get_builder(&self, path: &str) -> Result<reqwest::RequestBuilder> {
+		let url = self.base.join(path.trim_start_matches('/'))?;
+		Ok(self.http.request(Method::GET, url).bearer_auth(&self.token))
 	}
 
 	pub async fn request_ok<T: DeserializeOwned>(
@@ -186,6 +205,28 @@ pub async fn ensure_namespace(
 		)
 		.await?
 		.context("namespace create returned no body")?;
+	Ok(response.namespace)
+}
+
+/// Looks up an existing namespace, erroring if it does not exist. Unlike
+/// `ensure_namespace`, this never creates the namespace, which is the correct
+/// behavior for read-only commands.
+pub async fn get_namespace(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+	namespace: &str,
+) -> Result<Namespace> {
+	let path = format!(
+		"/projects/{}/namespaces/{}?org={}",
+		encode(project),
+		encode(namespace),
+		encode(org)
+	);
+	let response = cloud
+		.request::<NamespaceResponse>(Method::GET, &path, None)
+		.await?
+		.with_context(|| format!("namespace not found: {namespace}"))?;
 	Ok(response.namespace)
 }
 
