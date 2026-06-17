@@ -2,18 +2,12 @@ export function getComputeAddendum({
 	cloudToken,
 	publishableToken,
 	namespace,
-	project,
-	organization,
-	cloudNamespace,
 	apiUrl,
 	cloudApiUrl,
 }: {
 	cloudToken: string;
 	publishableToken: string;
 	namespace: string;
-	project: string;
-	organization: string;
-	cloudNamespace: string;
 	apiUrl: string;
 	cloudApiUrl: string;
 }) {
@@ -75,7 +69,7 @@ If Docker is installed, build and run the image to verify it works before procee
 docker build -t rivet-test . && docker run --rm -p 3000:3000 -e RIVETKIT_RUNTIME_MODE=serverless rivet-test
 \`\`\`
 
-Verify the container starts and is connectable (e.g. \`curl http://localhost:3000/health\`). If Docker is not installed, skip this and proceed.
+Verify the container starts and is connectable (e.g. \`curl http://localhost:3000/api/rivet/health\` should return 200). If Docker is not installed, skip this and proceed.
 
 ## Step 4: Deploy with the Rivet CLI
 
@@ -86,7 +80,7 @@ npx @rivetkit/cli deploy --token "${cloudToken}" --env PORT=3000
 \`\`\`
 
 Notes:
-- The image is built for \`linux/amd64\` and must listen on the port set via \`--env PORT\` (3000 here). If the app listens on a different port, change both the \`EXPOSE\` line and \`--env PORT\` to match.
+- The image is built for \`linux/amd64\`. \`--env PORT=3000\` tells Rivet Compute which port to route to. \`registry.start()\` binds the port from \`RIVET_PORT\` (default 3000), so the two line up by default. To use a different port, set both \`--env PORT=<port>\` and \`--env RIVET_PORT=<port>\` to the same value and update the \`EXPOSE\` line to match. Setting \`PORT\` alone does not change the port the app listens on.
 - \`--token\` is the \`cloud_api_*\` Cloud API token. The command also caches it to \`~/.rivet/credentials\`, so later \`deploy\` calls can omit \`--token\`.
 - Pass \`--yes\` to skip interactive prompts in non-interactive environments.
 
@@ -95,26 +89,22 @@ When the command finishes successfully, proceed to Step 5 to verify the deployme
 ## Step 5: Verify Deployment
 
 **Token types used in this step:**
-- \`cloud_api_*\` (the \`--token\` passed to \`@rivetkit/cli deploy\`) — a management token scoped to the Cloud API (cloud-api.rivet.dev). Use this for admin operations like checking deployment status and fetching logs.
-- \`pk_*\` (the publishable token below) — a public key scoped to the Rivet Engine API (api.rivet.dev). Use this for creating actors and calling gateway endpoints.
+- \`cloud_api_*\` is the \`--token\` passed to \`@rivetkit/cli deploy\`, cached in \`~/.rivet/credentials\`. It is a management token scoped to the Cloud API (cloud-api.rivet.dev). The CLI uses it for logs.
+- \`pk_*\` is the publishable token below, a public key scoped to the Rivet Engine API (api.rivet.dev). Use this for creating actors and calling gateway endpoints.
 
 These are different tokens with different scopes. Do not mix them up.
 
-Once deployed, verify the deployment works:
+\`@rivetkit/cli deploy\` waits for the managed pool to become ready before it exits, so a successful deploy means the deployment is already live. You do not need to poll deployment status separately.
 
-1. Poll the deployment status every 5 seconds until status is "ready". Stop and investigate if status is "error".
-   \`\`\`bash
-   curl -s "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default?org=${organization}" \\
-     -H "Authorization: Bearer ${cloudToken}"
-   \`\`\`
+If the deploy fails or you need to debug, read the deployment logs with the CLI (it resolves the token from \`~/.rivet/credentials\`):
 
-   If status is "Failed to start container", poll logs history to diagnose:
-   \`\`\`bash
-   curl -s "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default/logs/history?org=${organization}" \\
-     -H "Authorization: Bearer ${cloudToken}"
-   \`\`\`
+\`\`\`bash
+npx @rivetkit/cli logs
+\`\`\`
 
-2. Create an actor. Actors require a key field (string, not array):
+Verify actors work end-to-end:
+
+1. Create an actor. Actors require a key field (string, not array):
    \`\`\`bash
    curl -X POST "${apiUrl}/actors?namespace=${namespace}" \\
      -H "Authorization: Bearer ${publishableToken}" \\
@@ -123,27 +113,26 @@ Once deployed, verify the deployment works:
    \`\`\`
    Replace \`<ACTOR_NAME>\` with a valid actor name from the registry and \`<KEY>\` with an appropriate key string (e.g. "general"). Note the \`actor_id\` from the response.
 
-3. Wait ~10 seconds for the actor to start, then hit its health endpoint through the gateway using the public token:
+2. Wait ~10 seconds for the actor to start, then hit its health endpoint through the gateway using the public token:
    \`\`\`bash
-   curl "${apiUrl}/gateway/<ACTOR_ID>/health" \\
+   curl "${apiUrl}/gateway/<ACTOR_ID>/api/rivet/health" \\
      -H "x-rivet-token: ${publishableToken}"
    \`\`\`
    This should return ok with a 200 status.
 
-4. If the health check returns actor_runner_failed, check the runner logs via SSE to diagnose:
+3. If the health check returns actor_runner_failed, check the logs to diagnose:
    \`\`\`bash
-   curl --max-time 15 "${cloudApiUrl}/projects/${project}/namespaces/${cloudNamespace}/managed-pools/default/logs?org=${organization}" \\
-     -H "Authorization: Bearer ${cloudToken}"
+   npx @rivetkit/cli logs
    \`\`\`
 
-5. Common issues:
+4. Common issues:
    - "actor should have a key": The key field was missing from the create request.
    - Token 401: Make sure you're using the correct API URLs (${apiUrl}, ${cloudApiUrl}).
-   - "Failed to start container: Please ensure your container starts successfully on the specified port (8080 if unspecified). Make sure your image was built for linux/amd64.": Ensure the container is connectable on PORT 3000 or whichever PORT you passed via \`--env PORT\` to \`@rivetkit/cli deploy\`.
+   - "Failed to start container: Please ensure your container starts successfully on the specified port (3000 if unspecified). Make sure your image was built for linux/amd64.": Ensure the container listens on \`RIVET_PORT\` (3000 by default) and that the \`--env PORT\` value passed to \`@rivetkit/cli deploy\` matches it.
 
 ## Troubleshooting
 
-- Deployment is done with \`npx @rivetkit/cli deploy\`. Status, logs, actor creation, and health checks are done via HTTP APIs (curl) as shown in Step 5.
+- Deployment and logs are done with \`npx @rivetkit/cli deploy\` and \`npx @rivetkit/cli logs\`. Actor creation and health checks are done via HTTP APIs (curl) as shown in Step 5.
 - Architecture: \`@rivetkit/cli deploy\` builds your Docker image and pushes it to Rivet. Rivet runs the container serverlessly. When you create an actor, Rivet communicates with the \`/api/rivet/*\` endpoint inside the container to manage its lifecycle.
 - For more troubleshooting help, see: https://rivet.dev/docs/actors/troubleshooting/`;
 }

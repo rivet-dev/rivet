@@ -647,14 +647,13 @@ function CommandBox({ command }: { command: string }) {
 }
 
 function RunLocallyStep() {
-	const code = useAgentInstructionsCode();
 	return (
 		<div className="flex flex-col gap-6">
-			<AgentPromptBanner
-				code={code}
-				title="Use your coding agent"
-				description="Copy a prompt that scaffolds and runs your first Actor for you."
-			/>
+			{features.compute ? (
+				<RunLocallyComputeBanner />
+			) : (
+				<RunLocallyGenericBanner />
+			)}
 			<OrDivider label="or do it yourself" />
 			<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
 				<div className="min-w-0">
@@ -677,6 +676,32 @@ function RunLocallyStep() {
 				</Button>
 			</div>
 		</div>
+	);
+}
+
+// Compute is the default deploy target, so the run-locally prompt ships the
+// compute deployment addendum alongside the onboarding instructions. Copying it
+// gives the agent everything it needs to scaffold, run, and deploy in one paste.
+function RunLocallyComputeBanner() {
+	const code = useComputeInstructionsCode();
+	return (
+		<AgentPromptBanner
+			code={code}
+			containsSecret
+			title="Use your coding agent"
+			description="Copy a prompt that scaffolds, runs, and deploys your first Actor for you."
+		/>
+	);
+}
+
+function RunLocallyGenericBanner() {
+	const code = useAgentInstructionsCode();
+	return (
+		<AgentPromptBanner
+			code={code}
+			title="Use your coding agent"
+			description="Copy a prompt that scaffolds and runs your first Actor for you."
+		/>
 	);
 }
 
@@ -726,9 +751,6 @@ function useComputeInstructionsCode() {
 		cloudToken,
 		publishableToken: publishableRawToken ?? "<PUBLISHABLE_TOKEN>",
 		namespace,
-		project: dataProvider.project,
-		organization: dataProvider.organization,
-		cloudNamespace: dataProvider.cloudNamespace,
 		apiUrl: cloudEnv().VITE_APP_API_URL,
 		cloudApiUrl: cloudEnv().VITE_APP_CLOUD_API_URL,
 	});
