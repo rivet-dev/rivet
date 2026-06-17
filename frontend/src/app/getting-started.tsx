@@ -181,12 +181,22 @@ export function GettingStarted({
 
 	const navigate = useNavigate();
 
+	// Rivet Compute is cloud-only (its deploy path consumes cloud-namespace data
+	// providers and managed-pool APIs). On flavors without compute, default to
+	// the first non-rivet platform so the deploy step renders the engine-backed
+	// connect flow instead of crashing on a missing cloud route.
+	const defaultProvider = features.compute
+		? provider || "rivet"
+		: provider && provider !== "rivet"
+			? provider
+			: (deployOptions.find((o) => o.name !== "rivet")?.name ?? "custom");
+
 	const defaultValues = {
 		runnerName: "default",
 		headers: [],
 		requestLifespan: 900,
 		drainGracePeriod: 0,
-		provider: provider || "rivet",
+		provider: defaultProvider,
 		datacenters: {},
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
@@ -507,7 +517,8 @@ function SwitchPlatform() {
 // other platforms reuse the existing connect setup.
 function DeployScreen() {
 	const provider = (useWatch({ name: "provider" }) as string) || "rivet";
-	if (provider === "rivet") {
+	// The rivet deploy path is cloud-only; never take it without compute.
+	if (provider === "rivet" && features.compute) {
 		return <RivetDeploy />;
 	}
 	return <BackendSetup />;
@@ -726,7 +737,8 @@ function useComputeInstructionsCode() {
 }
 
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
-	if (provider === "rivet") {
+	// The compute prompt reads cloud-namespace data; only available with compute.
+	if (provider === "rivet" && features.compute) {
 		return <ComputeCopyAgentInstructionsButton />;
 	}
 	return <GenericCopyAgentInstructionsButton provider={provider} />;
@@ -956,7 +968,7 @@ function BackendSetup() {
 		| undefined;
 	const { setValue } = useFormContext();
 
-	if (provider === "rivet") {
+	if (provider === "rivet" && features.compute) {
 		return <BackendSetupRivet />;
 	}
 
