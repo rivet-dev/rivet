@@ -30,7 +30,7 @@ enum Commands {
 	Engine(commands::engine::Opts),
 	/// Build and deploy the current project to Rivet Cloud.
 	Deploy(commands::deploy::Opts),
-	/// View logs for the managed pool.
+	/// View logs for your Rivet Compute instances.
 	Logs(commands::logs::Opts),
 	/// Install the GitHub Actions workflow that deploys to Rivet Cloud.
 	SetupCi(commands::setup_ci::Opts),
