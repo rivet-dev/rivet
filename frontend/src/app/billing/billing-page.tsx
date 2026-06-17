@@ -1,5 +1,4 @@
 import {
-	faArrowUpRight,
 	faBarcodeRead,
 	faDatabase,
 	faPencil,
@@ -10,14 +9,10 @@ import {
 	type IconProp,
 } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { BillingPlans } from "@/app/billing/billing-plans";
 import { BillingStatus } from "@/app/billing/billing-status";
-import {
-	ComputeUsageCard,
-	IfNamespaceHasCompute,
-} from "@/app/billing/compute-card";
+import { ComputeUsageCard } from "@/app/billing/compute-card";
 import { CurrentBillTotal } from "@/app/billing/current-bill-card";
 import { useBilledComputeCost, useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
@@ -90,18 +85,14 @@ function calculateOverageCost(
 }
 
 /**
- * Namespace billing page. Compute is billed per project, so instead of a
- * compute usage figure this surface shows a pointer to Project Billing.
+ * Namespace billing page. Billing is always project-scoped, so this renders the
+ * exact same project billing as the project route.
  */
 export function NamespaceBillingPage() {
-	return <BillingPage namespaceScoped />;
+	return <BillingPage />;
 }
 
-export function BillingPage({
-	namespaceScoped,
-}: {
-	namespaceScoped?: boolean;
-}) {
+export function BillingPage() {
 	const dataProvider = useCloudProjectDataProvider();
 	const { data } = useSuspenseQuery({
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
@@ -140,7 +131,7 @@ export function BillingPage({
 
 			<hr className="mb-6" />
 
-			<BillingBody namespaceScoped={namespaceScoped} />
+			<BillingBody />
 		</Content>
 	);
 }
@@ -149,11 +140,7 @@ export function BillingPage({
  * Headerless billing content (no SidebarToggle / H1 / Help). Safe to render
  * outside `RootLayoutContextProvider`, e.g. inside the settings drawer.
  */
-export function BillingBody({
-	namespaceScoped,
-}: {
-	namespaceScoped?: boolean;
-}) {
+export function BillingBody() {
 	const dataProvider = useCloudProjectDataProvider();
 	const { data } = useSuspenseQuery({
 		...dataProvider.currentProjectBillingDetailsQueryOptions(),
@@ -172,10 +159,7 @@ export function BillingBody({
 		);
 	}, 0n);
 
-	// On the namespace surface compute is shown as a pointer to Project Billing,
-	// so it does not contribute to this surface's total.
-	const computeDollars =
-		namespaceScoped || compute.isError ? 0 : compute.monthToDate;
+	const computeDollars = compute.isError ? 0 : compute.monthToDate;
 
 	return (
 		<div className="px-4  max-w-5xl mx-auto @6xl:px-0 space-y-8 pb-8">
@@ -215,35 +199,13 @@ export function BillingBody({
 					);
 				},
 			)}
-			{namespaceScoped ? (
-				features.compute ? (
-					<IfNamespaceHasCompute>
-						<div className="flex justify-center pt-2">
-							<Button asChild variant="outline" size="sm">
-								<Link
-									to="."
-									search={(prev) => ({
-										...prev,
-										settings: "billing",
-									})}
-								>
-									View Project Billing for Compute Usage
-									<Icon
-										icon={faArrowUpRight}
-										className="size-3"
-									/>
-								</Link>
-							</Button>
-						</div>
-					</IfNamespaceHasCompute>
-				) : null
-			) : (
+			{features.compute ? (
 				<ComputeUsageCard
 					monthToDate={compute.monthToDate}
 					isLoading={compute.isLoading}
 					isError={compute.isError}
 				/>
-			)}
+			) : null}
 		</div>
 	);
 }

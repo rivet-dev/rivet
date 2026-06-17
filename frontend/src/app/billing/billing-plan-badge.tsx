@@ -9,8 +9,8 @@ import { VisibilitySensor } from "@/components/visibility-sensor";
 
 const planLabels: Record<string, string> = {
 	free: "Free",
+	pro: "Hobby",
 	team: "Team",
-	pro: "Pro",
 	enterprise: "Enterprise",
 };
 

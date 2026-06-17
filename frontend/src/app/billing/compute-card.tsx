@@ -7,21 +7,10 @@ import {
 	type IconProp,
 } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
-import type { ReactNode } from "react";
 import { formatCurrency } from "@/components";
-import { useHasManagedPool } from "@/components/actors/actor-details-shared";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { COMPUTE } from "@/content/billing";
-
-/**
- * Renders children only when the current namespace actually has Compute enabled
- * (a managed pool). Must be rendered inside a namespace context, since
- * `useHasManagedPool` reads the namespace data provider.
- */
-export function IfNamespaceHasCompute({ children }: { children: ReactNode }) {
-	return useHasManagedPool() ? <>{children}</> : null;
-}
 
 interface ComputeRate {
 	icon: IconProp;

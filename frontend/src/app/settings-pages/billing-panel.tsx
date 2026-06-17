@@ -11,11 +11,10 @@ import {
 	type IconProp,
 } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useMatch } from "@tanstack/react-router";
+import { useMatch } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { Suspense, useState } from "react";
 import { BillingPlans } from "@/app/billing/billing-plans";
-import { IfNamespaceHasCompute } from "@/app/billing/compute-card";
 import { useBilledComputeCost, useBilledMetrics } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
 import { formatMetricValue, type MetricType } from "@/app/billing/usage-card";
@@ -166,13 +165,6 @@ function BillingDrawerBody() {
 	);
 	const metrics = useBilledMetrics();
 	const compute = useBilledComputeCost();
-	// The billing drawer is project-scoped, but it can be opened from a namespace
-	// context. Compute is billed per project, so we show the usage row only at the
-	// project level and point namespace-context views to Project Billing instead.
-	const namespaceMatch = useMatch({
-		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
-		shouldThrow: false,
-	});
 	const plan = data?.billing.activePlan || "free";
 	const planIncluded = BILLING.included[plan] ?? BILLING.included.free;
 	const [plansOpen, setPlansOpen] = useState(false);
@@ -190,11 +182,9 @@ function BillingDrawerBody() {
 		);
 	}, 0n);
 
-	const inNamespace = Boolean(namespaceMatch?.loaderData);
-	// Show the compute usage row only at the project level; in a namespace context
-	// show a pointer to Project Billing instead.
-	const showComputeRow = features.compute && !inNamespace;
-	const showComputeNote = features.compute && inNamespace;
+	// Billing is always project-scoped, even when this drawer is opened from a
+	// namespace URL, so compute usage shows the same regardless of context.
+	const showCompute = features.compute;
 	const computeDollars = compute.isError ? 0 : compute.monthToDate;
 	const computeCapUsd = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
 	// Capped plans are billed for compute only up to the cap.
@@ -220,7 +210,7 @@ function BillingDrawerBody() {
 				<CurrentBillCard
 					total={
 						Number(totalOverageCents) / 100 +
-						(showComputeRow ? billedCompute : 0)
+						(showCompute ? billedCompute : 0)
 					}
 					periodStart={periodStart}
 					periodEnd={periodEnd}
@@ -278,13 +268,13 @@ function BillingDrawerBody() {
 								includedInPlan={includedInPlan}
 								costCents={cost}
 								last={
-									!showComputeRow &&
+									!showCompute &&
 									idx === USAGE_METRICS.length - 1
 								}
 							/>
 						);
 					})}
-					{showComputeRow ? (
+					{showCompute ? (
 						<ComputeUsageRow
 							cost={computeDollars}
 							capUsd={computeCapUsd}
@@ -294,27 +284,6 @@ function BillingDrawerBody() {
 					) : null}
 				</SettingsCard>
 			</div>
-
-			{showComputeNote && namespaceMatch ? (
-				<IfNamespaceHasCompute>
-					<div className="flex justify-center">
-						<Button asChild variant="outline" size="sm">
-							<Link
-								to="/orgs/$organization/projects/$project"
-								params={{
-									organization:
-										namespaceMatch.params.organization,
-									project: namespaceMatch.params.project,
-								}}
-								search={{ settings: "billing" }}
-							>
-								View Project Billing for Compute Usage
-								<Icon icon={faArrowUpRight} className="size-3" />
-							</Link>
-						</Button>
-					</div>
-				</IfNamespaceHasCompute>
-			) : null}
 		</div>
 	);
 }
