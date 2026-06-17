@@ -68,6 +68,13 @@ export default defineConfig({
 		}),
 	],
 	vite: {
+		// Mermaid is large and only dynamically imported by MermaidScript, so Vite
+		// discovers it late and re-optimizes mid-session, which invalidates the
+		// in-flight chunk and serves a 504 "Outdated Optimize Dep" for every
+		// diagram. Pre-bundling it at server start keeps its chunk hash stable.
+		optimizeDeps: {
+			include: ['mermaid'],
+		},
 		ssr: {
 			noExternal: ['@rivet-gg/components', '@rivet-gg/icons'],
 		},
