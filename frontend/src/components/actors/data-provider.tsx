@@ -48,10 +48,14 @@ export const useDataProvider = (): EngineDataProvider | CloudDataProvider => {
 
 export const useDataProviderCheck = () => {
 	const matchRoute = useMatchRoute();
+	// Fuzzy-match the project route so this passes on the project index page
+	// (no namespace selected yet) as well as its nested namespace pages. The
+	// project route and its descendants all carry a data provider in their
+	// loader.
 	return matchRoute({
 		fuzzy: true,
 		to: features.platform
-			? "/orgs/$organization/projects/$project/ns/$namespace"
+			? "/orgs/$organization/projects/$project"
 			: "/ns/$namespace",
 	});
 };
