@@ -42,7 +42,7 @@ const posts = defineCollection({
 	schema: z.object({
 		title: z.string(),
 		description: z.string(),
-		author: z.enum(['nathan-flurry', 'nicholas-kissel', 'forest-anderson']),
+		author: z.enum(['nathan-flurry', 'nicholas-kissel', 'forest-anderson', 'andrew-theberge']),
 		published: z.coerce.date(),
 		category: z.enum(['changelog', 'monthly-update', 'launch-week', 'technical', 'guide', 'frogs']),
 		keywords: z.array(z.string()).optional(),
