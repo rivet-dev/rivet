@@ -16,7 +16,7 @@ Until now, running a RivetKit backend meant bringing your own infrastructure. Yo
 Point the Rivet CLI at your project and deploy:
 
 ```bash
-npx @rivetkit/cli deploy --token cloud_api_xxxxx
+npx @rivetkit/cli deploy
 ```
 
 The CLI resolves your project from the token, builds and pushes your Docker image to Rivet's built-in registry, provisions the managed pool, and prints your deployment URL once the pool is ready. There's no separate registry to configure, no cluster to stand up, and no infrastructure to wire together. Your backend is live as soon as the status reaches **Ready**.
