@@ -211,10 +211,11 @@ const CopyInstallButton = () => {
 
 interface RedesignedHeroProps {
   latestChangelogTitle: string;
+  latestChangelogHref: string;
   thinkingImages: ThinkingImage[];
 }
 
-export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: RedesignedHeroProps) => {
+export const RedesignedHero = ({ latestChangelogTitle, latestChangelogHref, thinkingImages }: RedesignedHeroProps) => {
   const heroRef = useRef<HTMLElement>(null);
   // Fade the hero out as it scrolls away. Anchored to the hero's own height
   // (start..end against the top of the viewport) rather than a fixed viewport
@@ -243,7 +244,7 @@ export const RedesignedHero = ({ latestChangelogTitle, thinkingImages }: Redesig
               className='mb-7'
             >
               <a
-                href='/changelog'
+                href={latestChangelogHref}
                 className={`${GLOW_PILL_CLASS} group inline-flex items-center gap-2 rounded-full border border-ink/12 bg-paper/45 px-2.5 py-1 text-[13px] text-ink-soft shadow-[0_8px_22px_-20px_rgba(27,25,22,0.45)] transition-colors hover:border-ink/25 hover:text-ink`}
                 onMouseMove={handleGlowPillMouseMove}
               >
