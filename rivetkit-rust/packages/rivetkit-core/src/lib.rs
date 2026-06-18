@@ -139,6 +139,7 @@ pub use actor::task::{
 	ActionDispatchResult, ActorTask, DispatchCommand, HttpDispatchResult, LifecycleCommand,
 	LifecycleEvent, LifecycleState,
 };
+pub use rivet_envoy_client::config::{HTTP_BODY_STREAM_CHANNEL_CAPACITY, ResponseChunk};
 pub use actor::task_types::ShutdownKind;
 pub use actor::work_registry::{ActorWorkKind, ActorWorkPolicy};
 pub use error::ActorLifecycle;

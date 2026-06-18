@@ -1154,7 +1154,7 @@ async fn call_http_request(
 	ctx: &ActorContext,
 	request: rivetkit_core::Request,
 	cancel_token: Option<CancellationToken>,
-) -> Result<rivetkit_core::Response> {
+) -> Result<rivetkit_core::ActorHttpResponse> {
 	call_request(
 		"onRequest",
 		callback,
@@ -1162,6 +1162,7 @@ async fn call_http_request(
 			ctx: ctx.inner().clone(),
 			request,
 			cancel_token,
+			response_stream: None,
 		},
 	)
 	.await
