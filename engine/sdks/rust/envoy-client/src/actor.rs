@@ -10,7 +10,9 @@ use tokio::sync::oneshot::error::TryRecvError;
 use tokio::task::{JoinError, JoinSet};
 use tracing::Instrument;
 
-use crate::config::{HttpRequest, HttpResponse, WebSocketMessage};
+use crate::config::{
+	HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequest, HttpResponse, ResponseChunk, WebSocketMessage,
+};
 use crate::connection::ws_send;
 use crate::context::SharedContext;
 use crate::handle::EnvoyHandle;
@@ -66,7 +68,7 @@ pub enum ToActor {
 
 struct PendingRequest {
 	envoy_message_index: u16,
-	body_tx: Option<mpsc::UnboundedSender<Vec<u8>>>,
+	body_tx: Option<mpsc::Sender<Vec<u8>>>,
 }
 
 struct WsEntry {
@@ -529,7 +531,7 @@ fn handle_req_start(
 		.collect();
 
 	let body_stream = if req.stream {
-		let (body_tx, body_rx) = mpsc::unbounded_channel::<Vec<u8>>();
+		let (body_tx, body_rx) = mpsc::channel::<Vec<u8>>(HTTP_BODY_STREAM_CHANNEL_CAPACITY);
 		if let Some(pending) = ctx
 			.pending_requests
 			.get_mut(&[&message_id.gateway_id, &message_id.request_id])
@@ -629,7 +631,9 @@ fn handle_req_chunk(
 		.get(&[&message_id.gateway_id, &message_id.request_id]);
 	if let Some(pending) = pending {
 		if let Some(body_tx) = &pending.body_tx {
-			let _ = body_tx.send(chunk.body);
+			if let Err(error) = body_tx.try_send(chunk.body) {
+				tracing::warn!(?error, "failed to enqueue streamed request chunk");
+			}
 		} else {
 			tracing::warn!("received chunk for pending request without stream controller");
 		}
@@ -1334,24 +1338,47 @@ async fn send_response(
 	if let Some(ref mut body_stream) = response.body_stream {
 		let mut message_index: u16 = 1;
 		while let Some(chunk) = body_stream.recv().await {
-			let finish = chunk.finish;
-			ws_send(
-				shared,
-				protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
-					message_id: protocol::MessageId {
-						gateway_id,
-						request_id,
-						message_index,
-					},
-					message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(
-						protocol::ToRivetResponseChunk {
-							body: chunk.data,
-							finish,
-						},
-					),
-				}),
-			)
-			.await;
+			let finish = match chunk {
+				ResponseChunk::Data { data, finish } => {
+					ws_send(
+						shared,
+						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+							message_id: protocol::MessageId {
+								gateway_id,
+								request_id,
+								message_index,
+							},
+							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(
+								protocol::ToRivetResponseChunk { body: data, finish },
+							),
+						}),
+					)
+					.await;
+					finish
+				}
+				ResponseChunk::Error(detail) => {
+					ws_send(
+						shared,
+						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+							message_id: protocol::MessageId {
+								gateway_id,
+								request_id,
+								message_index,
+							},
+							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
+								protocol::ToRivetResponseAbort {
+									reason: protocol::HttpStreamAbortReason {
+										kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+										detail: Some(detail),
+									},
+								},
+							),
+						}),
+					)
+					.await;
+					true
+				}
+			};
 			message_index = message_index.wrapping_add(1);
 			if finish {
 				break;

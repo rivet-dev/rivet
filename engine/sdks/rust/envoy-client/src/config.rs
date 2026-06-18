@@ -9,6 +9,8 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::handle::EnvoyHandle;
 
+pub const HTTP_BODY_STREAM_CHANNEL_CAPACITY: usize = 16;
+
 #[cfg(not(target_arch = "wasm32"))]
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
@@ -22,7 +24,7 @@ pub struct HttpRequest {
 	pub headers: HashMap<String, String>,
 	pub body: Option<Vec<u8>>,
 	/// If the request is streamed, body chunks arrive on this channel.
-	pub body_stream: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
+	pub body_stream: Option<mpsc::Receiver<Vec<u8>>>,
 }
 
 pub struct HttpResponse {
@@ -31,13 +33,13 @@ pub struct HttpResponse {
 	pub body: Option<Vec<u8>>,
 	/// If set, the response is streamed. The envoy client reads chunks and sends
 	/// `ToRivetResponseChunk` for each one.
-	pub body_stream: Option<mpsc::UnboundedReceiver<ResponseChunk>>,
+	pub body_stream: Option<mpsc::Receiver<ResponseChunk>>,
 }
 
 /// A chunk in a streaming HTTP response.
-pub struct ResponseChunk {
-	pub data: Vec<u8>,
-	pub finish: bool,
+pub enum ResponseChunk {
+	Data { data: Vec<u8>, finish: bool },
+	Error(String),
 }
 
 pub struct EnvoyConfig {
