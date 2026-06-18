@@ -54,7 +54,7 @@ skill: true
 ### architecting for scale
 
 - actors scale by:
-	- having isolated state to each acotr that combines compute and storage for in-memory reads and writes
+	- having isolated state to each actor that combines compute and storage for in-memory reads and writes
 	- communication is stndardized based on actions & events
 	- scale horizontally
 - read more about scalign at (link to scaling doc)
@@ -94,11 +94,11 @@ actors have create, destroy, wake, and sleep lifecycle hooks that you can implem
 
 ### multi-region, globally unique actor keys
 
-- acotrs can optionally have a globally unique "key"
+- actors can optionally have a globally unique "key"
 - when creating an actor with a key
 - this system is highly optimized to reduce wan round trips using per-key Paxos with a custom database called Epoxy (https://github.com/rivet-dev/rivet/tree/main/engine/packages/epoxy)
 - limitation: when creating an actor with a given key, that key will always be pinned to that region even if the actor is destroyed. creating a new actor with the same key will always live in the same region.
-- see the acotr keys document
+- see the actors keys document
 
 ### input
 
@@ -249,7 +249,7 @@ there are 2 types of runners:
 ### runner pool
 
 - runners are pooled together by sharing a common name (ie "default")
-- when an acotr is created, it chooses the pool by selecting the runner name to run on
+- when an actor is created, it chooses the pool by selecting the runner name to run on
 - rivet will automatically load balance actors across these runners
 
 ### runner key
@@ -374,7 +374,7 @@ TODO: copy the rest of this from low-level webosckets document and rephrase
 
 ### globally unique actor keys
 
-- acotr keys are globally unique to be able to benefit from multi-region capabilities without any extra work
+- actor keys are globally unique to be able to benefit from multi-region capabilities without any extra work
 - see more about globally uniuqe actor keys above
 - see the actor keys document
 
