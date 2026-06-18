@@ -127,6 +127,10 @@ pub use actor::messages::{
 	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, SerializeStateReason,
 	StateDelta,
 };
+#[cfg(feature = "native-runtime")]
+pub use actor::native_plugin::build_native_plugin_factory;
+#[cfg(feature = "native-runtime")]
+pub use actor::portable_native::{NativeBackend, build_portable_native_actor_factory};
 pub use actor::queue::{
 	CompletableQueueMessage, EnqueueAndWaitOpts, QueueMessage, QueueNextBatchOpts, QueueNextOpts,
 	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,

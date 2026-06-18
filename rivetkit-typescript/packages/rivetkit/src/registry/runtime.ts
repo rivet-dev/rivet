@@ -3,6 +3,17 @@ import type { SqliteNativeMetrics } from "@/common/database/config";
 import type { RegistryConfig } from "./config";
 import { logger } from "./log";
 
+/**
+ * Options for loading a native actor plugin (cdylib) by path. `configJson` is
+ * an opaque envelope the plugin parses itself; `sidecarPath` is forwarded.
+ */
+export interface NapiNativePluginOptions {
+	pluginPath: string;
+	configJson?: string;
+	sidecarPath?: string;
+}
+
+
 declare const handleBrand: unique symbol;
 
 type OpaqueHandle<Name extends string> = {
@@ -331,6 +342,13 @@ export interface CoreRuntime {
 		name: string,
 		factory: ActorFactoryHandle,
 	): void;
+	/**
+	 * Build a factory from a native actor plugin (cdylib) loaded by path.
+	 * Optional: only the native NAPI runtime implements this; wasm throws.
+	 */
+	createNativePluginFactory?(
+		options: NapiNativePluginOptions,
+	): ActorFactoryHandle;
 	serveRegistry(
 		registry: RegistryHandle,
 		config: RuntimeServeConfig,
@@ -613,8 +631,9 @@ export async function buildServeConfig(
 	};
 
 	// Always best-effort resolve the engine binary path and hand it to the core.
-	// The core alone decides whether to actually spawn a local engine, so JS must
-	// not duplicate that decision here. `loadEnginePath` throws when no binary is
+	// The core alone decides whether to actually spawn a local engine (its
+	// `should_manage_engine`, based on the endpoint + spawn mode), so JS must not
+	// duplicate that decision here. `loadEnginePath` throws when no binary is
 	// available (remote-only install, unsupported platform, optional deps
 	// skipped); in that case leave it unset and let the core report
 	// `engine.binary_unavailable` only if it actually needs one.

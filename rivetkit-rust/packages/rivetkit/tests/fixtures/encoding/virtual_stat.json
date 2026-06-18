@@ -1,0 +1,17 @@
+{
+  "atimeMs": 1780000000000.5,
+  "birthtimeMs": 1780000003000.0625,
+  "blocks": 1,
+  "ctimeMs": 1780000002000.125,
+  "dev": 42,
+  "gid": 1000,
+  "ino": 9876543210,
+  "isDirectory": false,
+  "isSymbolicLink": false,
+  "mode": 33188,
+  "mtimeMs": 1780000001000.25,
+  "nlink": 1,
+  "rdev": 0,
+  "size": 7,
+  "uid": 1000
+}

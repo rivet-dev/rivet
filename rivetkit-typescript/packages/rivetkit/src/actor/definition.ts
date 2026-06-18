@@ -1,5 +1,9 @@
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import type { RegistryConfig } from "@/registry/config";
+import type {
+	ActorFactoryHandle,
+	CoreRuntime,
+} from "@/registry/runtime";
 import {
 	type Actions,
 	type ActorConfig,
@@ -49,6 +53,16 @@ export interface BaseActorDefinition<
 
 export interface AnyActorDefinition {
 	readonly config: any;
+	/**
+	 * Marker for foreign-runtime factories. When set,
+	 * the registry-build ladder calls this closure with the active
+	 * `CoreRuntime` to obtain an `ActorFactoryHandle` directly, bypassing
+	 * the normal JS-callbacks factory built from `actor(...)`.
+	 *
+	 * Out-of-tree native-plugin packages set this; `CoreRuntime::registerActor`
+	 * and the engine actor-driver consume it.
+	 */
+	nativeFactoryBuilder?: (runtime: CoreRuntime) => ActorFactoryHandle;
 }
 
 export type AnyStaticActorDefinition = ActorDefinition<
@@ -85,6 +99,12 @@ export class ActorDefinition<
 > implements BaseActorDefinition<S, CP, CS, V, I, DB, E, Q, R>
 {
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>;
+	/**
+	 * Foreign-runtime factory marker. See [`AnyActorDefinition.nativeFactoryBuilder`].
+	 * Defaults to `undefined`; out-of-tree native-plugin packages set it via
+	 * direct property assignment after construction.
+	 */
+	nativeFactoryBuilder?: (runtime: CoreRuntime) => ActorFactoryHandle;
 
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>) {
 		this.#config = config;

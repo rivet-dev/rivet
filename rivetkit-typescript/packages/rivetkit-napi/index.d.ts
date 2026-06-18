@@ -100,6 +100,12 @@ export interface JsActorConfig {
   actions?: Array<JsActionDefinition>
   inspectorTabs?: Array<JsInspectorTabEntry>
 }
+/** Options for loading a native actor plugin (`cdylib`) by path. */
+export interface NapiNativePluginOptions {
+  pluginPath: string
+  configJson?: string
+  sidecarPath?: string
+}
 export interface JsBindParam {
   kind: string
   intValue?: number
@@ -282,6 +288,13 @@ export declare class ActorContext {
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)
+  /**
+   * Static constructor that loads a native actor plugin (`cdylib`) by path and
+   * adapts it through the generic `rivet-actor-plugin-abi`. RivetKit holds no
+   * plugin-specific knowledge: `config_json` is an opaque envelope the plugin
+   * parses itself, and `sidecar_path` is forwarded verbatim.
+   */
+  static fromNativePlugin(options: NapiNativePluginOptions): NapiActorFactory
 }
 export declare class CancellationToken {
   constructor()

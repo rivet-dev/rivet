@@ -67,6 +67,8 @@ members = [
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
   "rivetkit-rust/packages/actor-persist",
+  "rivetkit-rust/packages/rivet-actor-plugin-abi",
+  "rivetkit-rust/packages/rivet-actor-test-plugin",
   "rivetkit-rust/packages/client",
   "rivetkit-rust/packages/engine-process",
   "rivetkit-rust/packages/rivetkit",
@@ -615,6 +617,10 @@ members = [
     [workspace.dependencies.depot-client-types]
     package = "rivet-depot-client-types"
     path = "engine/packages/depot-client-types"
+    version = "=2.3.2"
+
+    [workspace.dependencies.rivet-actor-plugin-abi]
+    path = "rivetkit-rust/packages/rivet-actor-plugin-abi"
     version = "=2.3.2"
 
     [workspace.dependencies.rivetkit-core]

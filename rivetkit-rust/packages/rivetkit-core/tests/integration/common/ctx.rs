@@ -28,12 +28,14 @@ pub struct IntegrationCtx {
 	guard_port: u16,
 	api_peer_port: u16,
 	metrics_port: u16,
+	sqlite_enabled: bool,
 	stdout_path: PathBuf,
 	stderr_path: PathBuf,
 }
 
 pub struct IntegrationCtxBuilder {
 	snapshot_dir: Option<PathBuf>,
+	sqlite_enabled: bool,
 }
 
 pub struct RegistryTask {
@@ -83,7 +85,10 @@ pub struct ApiActor {
 
 impl IntegrationCtx {
 	pub fn builder() -> IntegrationCtxBuilder {
-		IntegrationCtxBuilder { snapshot_dir: None }
+		IntegrationCtxBuilder {
+			snapshot_dir: None,
+			sqlite_enabled: false,
+		}
 	}
 
 	pub fn serve_registry(&self, registry: CoreRegistry) -> RegistryTask {
@@ -400,6 +405,7 @@ impl IntegrationCtx {
 			self.guard_port,
 			self.api_peer_port,
 			self.metrics_port,
+			self.sqlite_enabled,
 			&self.stdout_path,
 			&self.stderr_path,
 		)
@@ -423,6 +429,11 @@ impl IntegrationCtx {
 impl IntegrationCtxBuilder {
 	pub fn import_snapshot(mut self, snapshot_dir: impl Into<PathBuf>) -> Self {
 		self.snapshot_dir = Some(snapshot_dir.into());
+		self
+	}
+
+	pub fn enable_sqlite(mut self) -> Self {
+		self.sqlite_enabled = true;
 		self
 	}
 
@@ -463,6 +474,7 @@ impl IntegrationCtxBuilder {
 			guard_port,
 			api_peer_port,
 			metrics_port,
+			self.sqlite_enabled,
 			&stdout_path,
 			&stderr_path,
 		)
@@ -482,6 +494,7 @@ impl IntegrationCtxBuilder {
 			guard_port,
 			api_peer_port,
 			metrics_port,
+			sqlite_enabled: self.sqlite_enabled,
 			stdout_path,
 			stderr_path,
 		})
@@ -571,6 +584,7 @@ async fn spawn_engine_child(
 	guard_port: u16,
 	api_peer_port: u16,
 	metrics_port: u16,
+	sqlite_enabled: bool,
 	stdout_path: &Path,
 	stderr_path: &Path,
 ) -> Result<Child> {
@@ -598,6 +612,10 @@ async fn spawn_engine_child(
 		.stdin(Stdio::null())
 		.stdout(Stdio::from(stdout))
 		.stderr(Stdio::from(stderr));
+
+	if sqlite_enabled {
+		command.env("RIVET__SQLITE__UNSTABLE_DISABLE_COMMIT_SIZE_CAP", "false");
+	}
 
 	match database {
 		EngineDatabase::FileSystem => {

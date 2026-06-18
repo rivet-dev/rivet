@@ -19,7 +19,6 @@ export default defineConfig({
 			"@rivetkit/traces/encoding",
 			"@rivetkit/traces/otlp",
 			"@rivetkit/workflow-engine",
-			"@rivet-dev/agent-os-core",
 		];
 	},
 	define: {

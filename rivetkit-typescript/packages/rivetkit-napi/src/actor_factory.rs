@@ -293,6 +293,14 @@ impl std::fmt::Display for BridgeRivetErrorContext {
 
 impl std::error::Error for BridgeRivetErrorContext {}
 
+/// Options for loading a native actor plugin (`cdylib`) by path.
+#[napi(object)]
+pub struct NapiNativePluginOptions {
+	pub plugin_path: String,
+	pub config_json: Option<String>,
+	pub sidecar_path: Option<String>,
+}
+
 #[napi]
 pub struct NapiActorFactory {
 	#[allow(dead_code)]
@@ -342,6 +350,31 @@ impl NapiActorFactory {
 			inner,
 		})
 	}
+
+	/// Static constructor that loads a native actor plugin (`cdylib`) by path and
+	/// adapts it through the generic `rivet-actor-plugin-abi`. RivetKit holds no
+	/// plugin-specific knowledge: `config_json` is an opaque envelope the plugin
+	/// parses itself, and `sidecar_path` is forwarded verbatim.
+	#[napi(factory)]
+	pub fn from_native_plugin(options: NapiNativePluginOptions) -> napi::Result<Self> {
+		crate::init_tracing(None);
+		let mut config = ActorConfig::default();
+		config.has_database = true;
+		let factory = rivetkit_core::build_native_plugin_factory(
+			std::path::Path::new(&options.plugin_path),
+			options.config_json.as_deref().unwrap_or("{}"),
+			options.sidecar_path.as_deref().unwrap_or(""),
+			config,
+		)
+		.map_err(napi_anyhow_error)?;
+		let inner = Arc::new(factory);
+		let bindings = Arc::new(CallbackBindings::empty());
+		tracing::debug!(class = "NapiActorFactory", "constructed via from_native_plugin");
+		Ok(Self {
+			_bindings: bindings,
+			inner,
+		})
+	}
 }
 
 impl Drop for NapiActorFactory {
@@ -375,6 +408,35 @@ impl AdapterConfig {
 }
 
 impl CallbackBindings {
+	/// Construct an empty `CallbackBindings` (no JS callbacks registered).
+	/// Used by native-plugin factories whose actor event loop lives outside JS.
+	pub(crate) fn empty() -> Self {
+		Self {
+			create_state: None,
+			on_create: None,
+			create_conn_state: None,
+			create_vars: None,
+			on_migrate: None,
+			on_wake: None,
+			on_before_actor_start: None,
+			on_sleep: None,
+			on_destroy: None,
+			on_before_connect: None,
+			on_connect: None,
+			on_disconnect_final: None,
+			on_before_subscribe: None,
+			actions: HashMap::new(),
+			on_before_action_response: None,
+			on_request: None,
+			on_queue_send: None,
+			on_websocket: None,
+			run: None,
+			get_workflow_history: None,
+			replay_workflow: None,
+			serialize_state: None,
+		}
+	}
+
 	fn from_js(callbacks: JsObject) -> napi::Result<Self> {
 		let actions = if let Some(actions) = callbacks.get::<_, JsObject>("actions")? {
 			let mut mapped = HashMap::new();
