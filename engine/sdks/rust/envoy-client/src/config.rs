@@ -10,6 +10,7 @@ use tokio::sync::{mpsc, oneshot};
 use crate::handle::EnvoyHandle;
 
 pub const HTTP_BODY_STREAM_CHANNEL_CAPACITY: usize = 16;
+pub const HTTP_BODY_MAX_CHUNK_SIZE: usize = 64 * 1024;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;

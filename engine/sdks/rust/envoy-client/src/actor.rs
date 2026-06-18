@@ -11,7 +11,8 @@ use tokio::task::{JoinError, JoinSet};
 use tracing::Instrument;
 
 use crate::config::{
-	HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequest, HttpResponse, ResponseChunk, WebSocketMessage,
+	HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequest, HttpResponse,
+	ResponseChunk, WebSocketMessage,
 };
 use crate::connection::ws_send;
 use crate::context::SharedContext;
@@ -106,6 +107,12 @@ enum StopProgress {
 	Pending(PendingStop),
 }
 
+/// Counts one HTTP request task from dispatch through the full response drain.
+///
+/// This guard is created before invoking the runtime callback and is held across
+/// `send_response`, including streaming `body_stream` drains. Sleep/shutdown
+/// logic relies on this counter staying non-zero until the final response chunk
+/// is sent or the task is aborted.
 impl ActiveHttpRequestGuard {
 	fn new(active_http_request_count: Arc<AsyncCounter>) -> Self {
 		active_http_request_count.increment();
@@ -1337,54 +1344,135 @@ async fn send_response(
 	// If streaming, read chunks from the body_stream and forward them
 	if let Some(ref mut body_stream) = response.body_stream {
 		let mut message_index: u16 = 1;
+		let mut saw_finish = false;
 		while let Some(chunk) = body_stream.recv().await {
 			let finish = match chunk {
 				ResponseChunk::Data { data, finish } => {
-					ws_send(
+					send_response_data_chunks(
 						shared,
-						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
-							message_id: protocol::MessageId {
-								gateway_id,
-								request_id,
-								message_index,
-							},
-							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(
-								protocol::ToRivetResponseChunk { body: data, finish },
-							),
-						}),
+						gateway_id,
+						request_id,
+						&mut message_index,
+						data,
+						finish,
 					)
 					.await;
 					finish
 				}
 				ResponseChunk::Error(detail) => {
-					ws_send(
+					send_response_abort(
 						shared,
-						protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
-							message_id: protocol::MessageId {
-								gateway_id,
-								request_id,
-								message_index,
-							},
-							message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
-								protocol::ToRivetResponseAbort {
-									reason: protocol::HttpStreamAbortReason {
-										kind: protocol::HttpStreamAbortReasonKind::HandlerError,
-										detail: Some(detail),
-									},
-								},
-							),
-						}),
+						gateway_id,
+						request_id,
+						message_index,
+						protocol::HttpStreamAbortReason {
+							kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+							detail: Some(detail),
+						},
 					)
 					.await;
+					message_index = message_index.wrapping_add(1);
 					true
 				}
 			};
-			message_index = message_index.wrapping_add(1);
 			if finish {
+				saw_finish = true;
 				break;
 			}
 		}
+		if !saw_finish {
+			send_response_abort(
+				shared,
+				gateway_id,
+				request_id,
+				message_index,
+				protocol::HttpStreamAbortReason {
+					kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+					detail: Some("response body stream closed before finish".to_string()),
+				},
+			)
+			.await;
+		}
 	}
+}
+
+async fn send_response_data_chunks(
+	shared: &SharedContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+	message_index: &mut u16,
+	data: Vec<u8>,
+	finish: bool,
+) {
+	if data.is_empty() {
+		send_response_data_chunk(shared, gateway_id, request_id, *message_index, data, finish)
+			.await;
+		*message_index = (*message_index).wrapping_add(1);
+		return;
+	}
+
+	let total_len = data.len();
+	for (idx, chunk) in data.chunks(HTTP_BODY_MAX_CHUNK_SIZE).enumerate() {
+		let end = (idx + 1) * HTTP_BODY_MAX_CHUNK_SIZE;
+		let chunk_finish = finish && end >= total_len;
+		send_response_data_chunk(
+			shared,
+			gateway_id,
+			request_id,
+			*message_index,
+			chunk.to_vec(),
+			chunk_finish,
+		)
+		.await;
+		*message_index = (*message_index).wrapping_add(1);
+	}
+}
+
+async fn send_response_data_chunk(
+	shared: &SharedContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+	message_index: u16,
+	body: Vec<u8>,
+	finish: bool,
+) {
+	ws_send(
+		shared,
+		protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+			message_id: protocol::MessageId {
+				gateway_id,
+				request_id,
+				message_index,
+			},
+			message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(
+				protocol::ToRivetResponseChunk { body, finish },
+			),
+		}),
+	)
+	.await;
+}
+
+async fn send_response_abort(
+	shared: &SharedContext,
+	gateway_id: protocol::GatewayId,
+	request_id: protocol::RequestId,
+	message_index: u16,
+	reason: protocol::HttpStreamAbortReason,
+) {
+	ws_send(
+		shared,
+		protocol::ToRivet::ToRivetTunnelMessage(protocol::ToRivetTunnelMessage {
+			message_id: protocol::MessageId {
+				gateway_id,
+				request_id,
+				message_index,
+			},
+			message_kind: protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
+				protocol::ToRivetResponseAbort { reason },
+			),
+		}),
+	)
+	.await;
 }
 
 async fn send_fetch_error_response(
@@ -1435,6 +1523,7 @@ mod tests {
 	use tokio::sync::Notify;
 	use tokio::sync::oneshot;
 	use tokio::task::yield_now;
+	use vbare::OwnedVersionedData;
 
 	use super::*;
 	use crate::config::{BoxFuture, EnvoyCallbacks, WebSocketHandler, WebSocketSender};
@@ -1492,6 +1581,10 @@ mod tests {
 
 	struct DeferredStopCallbacks {
 		stop_handle_tx: Mutex<Option<oneshot::Sender<crate::config::ActorStopHandle>>>,
+	}
+
+	struct StreamingCallbacks {
+		body_tx: Mutex<Option<oneshot::Sender<mpsc::Sender<ResponseChunk>>>>,
 	}
 
 	impl EnvoyCallbacks for TestCallbacks {
@@ -1673,6 +1766,85 @@ mod tests {
 		}
 	}
 
+	impl EnvoyCallbacks for StreamingCallbacks {
+		fn on_actor_start(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_config: protocol::ActorConfig,
+			_preloaded_kv: Option<protocol::PreloadedKv>,
+		) -> BoxFuture<anyhow::Result<()>> {
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_actor_stop(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_generation: u32,
+			_reason: protocol::StopActorReason,
+		) -> BoxFuture<anyhow::Result<()>> {
+			Box::pin(async { Ok(()) })
+		}
+
+		fn on_shutdown(&self) {}
+
+		fn fetch(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+		) -> BoxFuture<anyhow::Result<HttpResponse>> {
+			let body_tx = self
+				.body_tx
+				.lock()
+				.expect("streaming body mutex poisoned")
+				.take();
+
+			Box::pin(async move {
+				let (tx, rx) = mpsc::channel(HTTP_BODY_STREAM_CHANNEL_CAPACITY);
+				if let Some(body_tx) = body_tx {
+					let _ = body_tx.send(tx);
+				}
+				Ok(HttpResponse {
+					status: 200,
+					headers: HashMap::new(),
+					body: None,
+					body_stream: Some(rx),
+				})
+			})
+		}
+
+		fn websocket(
+			&self,
+			_handle: EnvoyHandle,
+			_actor_id: String,
+			_gateway_id: protocol::GatewayId,
+			_request_id: protocol::RequestId,
+			_request: HttpRequest,
+			_path: String,
+			_headers: HashMap<String, String>,
+			_is_hibernatable: bool,
+			_is_restoring_hibernatable: bool,
+			_sender: WebSocketSender,
+		) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
+			Box::pin(async { anyhow::bail!("websocket should not be called in streaming test") })
+		}
+
+		fn can_hibernate(
+			&self,
+			_actor_id: &str,
+			_gateway_id: &protocol::GatewayId,
+			_request_id: &protocol::RequestId,
+			_request: &HttpRequest,
+		) -> BoxFuture<anyhow::Result<bool>> {
+			Box::pin(async { Ok(false) })
+		}
+	}
+
 	fn build_shared_context(
 		callbacks: Arc<dyn EnvoyCallbacks>,
 	) -> (Arc<SharedContext>, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
@@ -1742,6 +1914,31 @@ mod tests {
 				.await,
 			"timed out waiting for active HTTP request count to reach zero"
 		);
+	}
+
+	async fn recv_ws_tunnel_msg(
+		ws_rx: &mut mpsc::UnboundedReceiver<WsTxMessage>,
+	) -> protocol::ToRivetTunnelMessage {
+		tokio::time::timeout(Duration::from_secs(2), async {
+			loop {
+				let Some(msg) = ws_rx.recv().await else {
+					panic!("websocket channel closed before tunnel message");
+				};
+				let WsTxMessage::Send(bytes) = msg else {
+					continue;
+				};
+				let message = protocol::versioned::ToRivet::deserialize(
+					&bytes,
+					protocol::PROTOCOL_VERSION,
+				)
+				.expect("failed to decode ToRivet message");
+				if let protocol::ToRivet::ToRivetTunnelMessage(msg) = message {
+					return msg;
+				}
+			}
+		})
+		.await
+		.expect("timed out waiting for tunnel message")
 	}
 
 	async fn wait_for_stopped_event(envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>) {
@@ -1880,6 +2077,92 @@ mod tests {
 			})
 			.expect("failed to send stop");
 		wait_for_stopped_event(&mut envoy_rx).await;
+	}
+
+	#[tokio::test]
+	async fn active_http_request_count_spans_streaming_response_drain() {
+		let (body_tx_tx, body_tx_rx) = oneshot::channel();
+		let callbacks = Arc::new(StreamingCallbacks {
+			body_tx: Mutex::new(Some(body_tx_tx)),
+		});
+		let (shared, _envoy_rx) = build_shared_context(callbacks);
+		let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
+		*shared.ws_tx.lock().await = Some(ws_tx);
+		let (actor_tx, active_http_request_count) = create_actor(
+			shared,
+			"actor-stream".to_string(),
+			1,
+			actor_config(),
+			Vec::new(),
+			None,
+		);
+
+		actor_tx
+			.send(ToActor::ReqStart {
+				message_id: message_id(),
+				req: request_start(),
+			})
+			.expect("failed to send request start");
+
+		let body_tx = tokio::time::timeout(Duration::from_secs(2), body_tx_rx)
+			.await
+			.expect("timed out waiting for response body sender")
+			.expect("response body sender dropped");
+		let start_msg = recv_ws_tunnel_msg(&mut ws_rx).await;
+		assert!(matches!(
+			start_msg.message_kind,
+			protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
+				protocol::ToRivetResponseStart { stream: true, .. }
+			)
+		));
+		assert_eq!(active_http_request_count.load(), 1);
+
+		body_tx
+			.send(ResponseChunk::Data {
+				data: vec![7; HTTP_BODY_MAX_CHUNK_SIZE + 3],
+				finish: false,
+			})
+			.await
+			.expect("failed to send response data");
+
+		let first = recv_ws_tunnel_msg(&mut ws_rx).await;
+		let second = recv_ws_tunnel_msg(&mut ws_rx).await;
+		match first.message_kind {
+			protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => {
+				assert_eq!(first.message_id.message_index, 1);
+				assert_eq!(chunk.body.len(), HTTP_BODY_MAX_CHUNK_SIZE);
+				assert!(!chunk.finish);
+			}
+			other => panic!("expected first response chunk, got {other:?}"),
+		}
+		match second.message_kind {
+			protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => {
+				assert_eq!(second.message_id.message_index, 2);
+				assert_eq!(chunk.body.len(), 3);
+				assert!(!chunk.finish);
+			}
+			other => panic!("expected second response chunk, got {other:?}"),
+		}
+		assert_eq!(active_http_request_count.load(), 1);
+
+		body_tx
+			.send(ResponseChunk::Data {
+				data: Vec::new(),
+				finish: true,
+			})
+			.await
+			.expect("failed to finish response stream");
+		let finish = recv_ws_tunnel_msg(&mut ws_rx).await;
+		match finish.message_kind {
+			protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => {
+				assert_eq!(finish.message_id.message_index, 3);
+				assert!(chunk.body.is_empty());
+				assert!(chunk.finish);
+			}
+			other => panic!("expected finish response chunk, got {other:?}"),
+		}
+
+		wait_for_zero(&active_http_request_count).await;
 	}
 
 	#[tokio::test]
