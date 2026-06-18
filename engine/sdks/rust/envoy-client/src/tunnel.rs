@@ -29,7 +29,7 @@ pub async fn handle_tunnel_message(ctx: &mut EnvoyContext, msg: protocol::ToEnvo
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(chunk) => {
 			handle_request_chunk(ctx, message_id, chunk);
 		}
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => {
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(_) => {
 			handle_request_abort(ctx, message_id);
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(open) => {

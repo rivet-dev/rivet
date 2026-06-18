@@ -1400,7 +1400,7 @@ fn tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) -> &'stat
 	match kind {
 		ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
 		ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
-		ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
+		ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => "ToRivetResponseAbort",
 		ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ToRivetWebSocketMessage",
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => "ToRivetWebSocketMessageAck",
@@ -2067,7 +2067,7 @@ fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> u
 		}
 		ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => chunk.body.len(),
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessage(msg) => msg.data.len(),
-		ToRivetTunnelMessageKind::ToRivetResponseAbort
+		ToRivetTunnelMessageKind::ToRivetResponseAbort(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => 0,

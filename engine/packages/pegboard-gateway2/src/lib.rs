@@ -244,7 +244,7 @@ impl PegboardGateway2 {
 									) => {
 										return anyhow::Ok(response_start);
 									}
-									protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => {
+									protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => {
 										tracing::warn!("request aborted");
 										return Err(TunnelRequestAborted {
 											phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),

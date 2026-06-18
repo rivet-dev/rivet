@@ -69,7 +69,7 @@ fn to_envoy_tunnel_message_kind_name(kind: &protocol::ToEnvoyTunnelMessageKind) 
 	match kind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_) => "ToEnvoyRequestStart",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(_) => "ToEnvoyRequestChunk",
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => "ToEnvoyRequestAbort",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(_) => "ToEnvoyRequestAbort",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_) => "ToEnvoyWebSocketOpen",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => "ToEnvoyWebSocketMessage",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => "ToEnvoyWebSocketClose",
@@ -80,7 +80,7 @@ fn to_rivet_tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) 
 	match kind {
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => "ToRivetResponseAbort",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ToRivetWebSocketMessage",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => {
