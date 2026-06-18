@@ -1,6 +1,6 @@
 {
 	"name": "@rivetkit/cli-darwin-x64",
-	"version": "2.3.1",
+	"version": "2.3.2",
 	"description": "Rivet CLI for macOS x64",
 	"license": "LicenseRef-RivetEnterprise",
 	"os": [
