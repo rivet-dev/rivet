@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
+const DRIVER_API_TOKEN = "dev";
 const require = createRequire(import.meta.url);
 const hasAgentOsCore = (() => {
 	try {
@@ -12,6 +13,57 @@ const hasAgentOsCore = (() => {
 		return false;
 	}
 })();
+
+async function forceActorSleep(input: {
+	endpoint: string;
+	namespace: string;
+	actorId: string;
+}) {
+	const response = await fetch(
+		`${input.endpoint}/actors/${encodeURIComponent(input.actorId)}/sleep?namespace=${encodeURIComponent(input.namespace)}`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${DRIVER_API_TOKEN}`,
+				"Content-Type": "application/json",
+			},
+			body: "{}",
+		},
+	);
+	if (!response.ok) {
+		throw new Error(
+			`failed to force actor sleep: ${response.status} ${await response.text()}`,
+		);
+	}
+}
+
+async function waitForActorSleep(input: {
+	endpoint: string;
+	namespace: string;
+	actorId: string;
+	timeoutMs: number;
+}) {
+	const deadline = Date.now() + input.timeoutMs;
+	while (Date.now() < deadline) {
+		const response = await fetch(
+			`${input.endpoint}/actors?actor_ids=${encodeURIComponent(input.actorId)}&namespace=${encodeURIComponent(input.namespace)}`,
+			{
+				headers: {
+					Authorization: `Bearer ${DRIVER_API_TOKEN}`,
+				},
+			},
+		);
+		expect(response.ok).toBe(true);
+		const body = (await response.json()) as {
+			actors: Array<{ sleep_ts?: number | null }>;
+		};
+		if (body.actors[0]?.sleep_ts) {
+			return;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	}
+	throw new Error(`timed out waiting for actor ${input.actorId} to sleep`);
+}
 
 describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 	describe.skipIf(driverTestConfig.skip?.agentOs || !hasAgentOsCore)(
@@ -32,6 +84,41 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				const data = await actor.readFile("/home/user/hello.txt");
 				expect(new TextDecoder().decode(data)).toBe("hello world");
 			}, 60_000);
+
+			test.skipIf(driverTestConfig.skip?.sleep)(
+				"filesystem survives sleep and wake",
+				async (c) => {
+					const { client, endpoint, namespace } =
+						await setupDriverTest(c, {
+							...driverTestConfig,
+							useRealTimers: true,
+						});
+					const actorKey = `fs-sleep-${crypto.randomUUID()}`;
+					const path = "/home/user/sleep-persist.txt";
+					const actor = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+
+					await actor.writeFile(path, "durable hello");
+					const actorId = await actor.resolve();
+					await forceActorSleep({ endpoint, namespace, actorId });
+					await waitForActorSleep({
+						endpoint,
+						namespace,
+						actorId,
+						timeoutMs: 30_000,
+					});
+
+					const actorAfterWake = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					const data = await actorAfterWake.readFile(path);
+					expect(new TextDecoder().decode(data)).toBe(
+						"durable hello",
+					);
+				},
+				90_000,
+			);
 
 			test("mkdir and readdir", async (c) => {
 				const { client } = await setupDriverTest(c, {
@@ -137,6 +224,42 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				expect(new TextDecoder().decode(readResults[1].content)).toBe(
 					"bbb",
 				);
+			}, 60_000);
+
+			// Partial-failure verification for the batch DTO mapping.
+			// `BatchReadResultDto` uses `Option<ByteBuf>` content and
+			// `Option<String>` error, both `skip_serializing_if`. A bug
+			// where the partial shape doesn't make it across the encoding
+			// wire (e.g. None elided incorrectly, error string not
+			// surfaced) would be silent without this test.
+			test("readFiles surfaces per-entry error for missing paths", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`partial-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile("/home/user/exists.txt", "present");
+
+				const results = await actor.readFiles([
+					"/home/user/exists.txt",
+					"/home/user/does-not-exist.txt",
+				]);
+
+				expect(results).toHaveLength(2);
+				// Successful entry: content present, no error field.
+				expect(results[0].path).toBe("/home/user/exists.txt");
+				expect(new TextDecoder().decode(results[0].content)).toBe(
+					"present",
+				);
+				expect(results[0].error).toBeUndefined();
+				// Failed entry: no content, error string surfaced.
+				expect(results[1].path).toBe("/home/user/does-not-exist.txt");
+				expect(results[1].content).toBeUndefined();
+				expect(typeof results[1].error).toBe("string");
+				expect(results[1].error?.length).toBeGreaterThan(0);
 			}, 60_000);
 
 			test("readdirRecursive lists nested files", async (c) => {

@@ -9,9 +9,11 @@ import type {
 import type {
 	ActorContextHandle,
 	ActorFactoryHandle,
+	AgentOsToolCallbacks,
 	CancellationTokenHandle,
 	ConnHandle,
 	CoreRuntime,
+	NapiAgentOsOptions,
 	RegistryHandle,
 	RuntimeActorConfig,
 	RuntimeBytes,
@@ -189,6 +191,17 @@ export class NapiCoreRuntime implements CoreRuntime {
 		factory: ActorFactoryHandle,
 	): void {
 		asNativeRegistry(registry).register(name, asNativeFactory(factory));
+	}
+
+	createAgentOsFactory(
+		options: NapiAgentOsOptions,
+		toolCallbacks: AgentOsToolCallbacks,
+	): ActorFactoryHandle {
+		const factory = this.#bindings.NapiActorFactory.fromAgentOs(
+			options,
+			toolCallbacks ?? undefined,
+		);
+		return asActorFactoryHandle(factory);
 	}
 
 	async serveRegistry(

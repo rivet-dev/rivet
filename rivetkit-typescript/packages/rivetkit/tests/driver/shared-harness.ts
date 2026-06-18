@@ -435,7 +435,11 @@ export function createWasmDriverTestConfig(
 		runtime: "wasm",
 		sqliteBackend: "remote",
 		encoding: options.encoding,
-		skip: options.skip,
+		// agent-os requires the NAPI runtime; rivetkit-agent-os depends
+		// on agent-os-client which uses tokio::process (native-only).
+		// Default-skip the agent-os suite on wasm; callers can override
+		// by passing `skip: { agentOs: false }` explicitly.
+		skip: { agentOs: true, ...options.skip },
 		features: {
 			hibernatableWebSocketProtocol: false,
 			...options.features,

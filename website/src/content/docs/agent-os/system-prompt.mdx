@@ -6,7 +6,7 @@ skill: true
 
 agentOS automatically injects a system prompt into every agent session that describes the VM environment and available tools. The prompt is additive and never replaces the agent's own instructions (CLAUDE.md, AGENTS.md, etc.).
 
-The base prompt lives at `/etc/agentos/instructions.md` inside the VM.
+The prompt is assembled and injected at the start of each session rather than baked into the VM image, so it always reflects the tools currently exposed to that session.
 
 ## Customization
 
