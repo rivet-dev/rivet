@@ -2,7 +2,9 @@ use std::collections::HashMap;
 use std::ops::{Deref, DerefMut};
 
 use anyhow::Result;
+use rivet_envoy_client::config::ResponseChunk;
 use serde::{Deserialize, Serialize};
+use tokio::sync::mpsc;
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::lifecycle_hooks::Reply;
@@ -211,6 +213,59 @@ impl From<Response> for http::Response<Vec<u8>> {
 	}
 }
 
+pub struct StreamingResponse {
+	status: u16,
+	headers: HashMap<String, String>,
+	body_stream: mpsc::Receiver<ResponseChunk>,
+}
+
+impl StreamingResponse {
+	pub fn from_parts(
+		status: u16,
+		headers: HashMap<String, String>,
+		body_stream: mpsc::Receiver<ResponseChunk>,
+	) -> Result<Self> {
+		let status_code: http::StatusCode = status
+			.try_into()
+			.map_err(|error| invalid_http_response("status", format!("{status}: {error}")))?;
+		for (name, value) in &headers {
+			let _: http::header::HeaderName = name.parse().map_err(|error| {
+				invalid_http_response("header name", format!("{name}: {error}"))
+			})?;
+			let _: http::header::HeaderValue = value.parse().map_err(|error| {
+				invalid_http_response("header value", format!("{name}: {error}"))
+			})?;
+		}
+
+		Ok(Self {
+			status: status_code.as_u16(),
+			headers,
+			body_stream,
+		})
+	}
+
+	pub fn into_parts(self) -> (u16, HashMap<String, String>, mpsc::Receiver<ResponseChunk>) {
+		(self.status, self.headers, self.body_stream)
+	}
+}
+
+pub enum ActorHttpResponse {
+	Buffered(Response),
+	Stream(StreamingResponse),
+}
+
+impl From<Response> for ActorHttpResponse {
+	fn from(value: Response) -> Self {
+		Self::Buffered(value)
+	}
+}
+
+impl From<StreamingResponse> for ActorHttpResponse {
+	fn from(value: StreamingResponse) -> Self {
+		Self::Stream(value)
+	}
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StateDelta {
 	ActorState(Vec<u8>),
@@ -273,7 +328,7 @@ pub enum ActorEvent {
 	},
 	HttpRequest {
 		request: Request,
-		reply: Reply<Response>,
+		reply: Reply<ActorHttpResponse>,
 	},
 	QueueSend {
 		name: String,

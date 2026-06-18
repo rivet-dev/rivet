@@ -70,6 +70,7 @@ impl RegistryDispatcher {
 		request: Request,
 	) -> Result<HttpResponse> {
 		let encoding = request_encoding(request.headers());
+		let request_method = request.method().clone();
 		let (reply_tx, reply_rx) = oneshot::channel();
 		try_send_dispatch_command(
 			&instance.dispatch,
@@ -86,7 +87,7 @@ impl RegistryDispatcher {
 		{
 			Ok(response) => {
 				rearm_sleep_after_request(instance.ctx.clone());
-				build_envoy_response(response)
+				build_envoy_response(response, &request_method)
 			}
 			Err(error) => {
 				tracing::error!(
@@ -663,15 +664,47 @@ pub(super) fn is_actor_request_path(path: &str) -> bool {
 			.is_some_and(|byte| matches!(byte, b'/' | b'?'))
 }
 
-pub(super) fn build_envoy_response(response: Response) -> Result<HttpResponse> {
-	let (status, headers, body) = response.to_parts();
+pub(super) fn build_envoy_response(
+	response: ActorHttpResponse,
+	request_method: &http::Method,
+) -> Result<HttpResponse> {
+	match response {
+		ActorHttpResponse::Buffered(response) => {
+			let (status, headers, body) = response.to_parts();
+			Ok(HttpResponse {
+				status,
+				headers,
+				body: Some(if response_body_forbidden(request_method, status) {
+					Vec::new()
+				} else {
+					body
+				}),
+				body_stream: None,
+			})
+		}
+		ActorHttpResponse::Stream(response) => {
+			let (status, headers, body_stream) = response.into_parts();
+			if response_body_forbidden(request_method, status) {
+				Ok(HttpResponse {
+					status,
+					headers,
+					body: Some(Vec::new()),
+					body_stream: None,
+				})
+			} else {
+				Ok(HttpResponse {
+					status,
+					headers,
+					body: None,
+					body_stream: Some(body_stream),
+				})
+			}
+		}
+	}
+}
 
-	Ok(HttpResponse {
-		status,
-		headers,
-		body: Some(body),
-		body_stream: None,
-	})
+pub(super) fn response_body_forbidden(request_method: &http::Method, status: u16) -> bool {
+	*request_method == http::Method::HEAD || matches!(status, 100..=199 | 204 | 304)
 }
 
 fn actor_specifier_for_instance(instance: &ActorTaskHandle) -> ActorSpecifier {

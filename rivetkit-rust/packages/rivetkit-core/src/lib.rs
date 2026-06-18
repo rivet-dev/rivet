@@ -124,8 +124,8 @@ pub use actor::factory::{ActorEntryFn, ActorFactory};
 pub use actor::kv::Kv;
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use actor::messages::{
-	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, SerializeStateReason,
-	StateDelta,
+	ActorEvent, ActorHttpResponse, QueueSendResult, QueueSendStatus, Request, Response,
+	SerializeStateReason, StateDelta, StreamingResponse,
 };
 pub use actor::queue::{
 	CompletableQueueMessage, EnqueueAndWaitOpts, QueueMessage, QueueNextBatchOpts, QueueNextOpts,

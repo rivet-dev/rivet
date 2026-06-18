@@ -6,16 +6,20 @@ mod moved_tests {
 
 	use super::{
 		HttpResponseEncoding, authorization_bearer_token, authorization_bearer_token_map,
-		framework_action_error_response, framework_anyhow_error_response_with_actor,
-		is_actor_request_path, message_boundary_error_response,
+		build_envoy_response, framework_action_error_response,
+		framework_anyhow_error_response_with_actor, is_actor_request_path,
+		message_boundary_error_response,
 		message_boundary_error_response_with_actor, normalize_actor_request_path, request_encoding,
 		workflow_dispatch_result,
 	};
 	use crate::actor::action::ActionDispatchError;
+	use crate::actor::messages::{ActorHttpResponse, Response, StreamingResponse};
 	use crate::error::ActorLifecycle as ActorLifecycleError;
 	use http::StatusCode;
+	use rivet_envoy_client::config::ResponseChunk;
 	use rivet_error::{ActorSpecifier, MacroMarker, RivetError, RivetErrorSchema};
 	use serde_json::json;
+	use tokio::sync::mpsc;
 	use vbare::OwnedVersionedData;
 
 	#[derive(RivetError)]
@@ -55,6 +59,76 @@ mod moved_tests {
 		let error = rivet_error::RivetError::extract(&error);
 		assert_eq!(error.group(), "actor");
 		assert_eq!(error.code(), "destroying");
+	}
+
+	#[tokio::test]
+	async fn build_envoy_response_preserves_stream_body() {
+		let (tx, rx) = mpsc::channel(1);
+		let stream = StreamingResponse::from_parts(
+			StatusCode::OK.as_u16(),
+			HashMap::from([("content-type".to_owned(), "text/event-stream".to_owned())]),
+			rx,
+		)
+		.expect("streaming response should build");
+
+		let mut response =
+			build_envoy_response(ActorHttpResponse::Stream(stream), &http::Method::GET)
+				.expect("envoy response should build");
+
+		assert_eq!(response.status, StatusCode::OK.as_u16());
+		assert_eq!(response.body, None);
+		assert!(response.body_stream.is_some());
+
+		tx.send(ResponseChunk::Data {
+			data: b"data: ok\n\n".to_vec(),
+			finish: true,
+		})
+		.await
+		.expect("send response chunk");
+		let chunk = response
+			.body_stream
+			.as_mut()
+			.expect("body stream should exist")
+			.recv()
+			.await
+			.expect("stream chunk should arrive");
+		match chunk {
+			ResponseChunk::Data { data, finish } => {
+				assert_eq!(data, b"data: ok\n\n");
+				assert!(finish);
+			}
+			ResponseChunk::Error(error) => panic!("unexpected response chunk error: {error}"),
+		}
+	}
+
+	#[test]
+	fn build_envoy_response_drops_stream_for_body_forbidden_status() {
+		let (_tx, rx) = mpsc::channel(1);
+		let stream =
+			StreamingResponse::from_parts(StatusCode::NO_CONTENT.as_u16(), HashMap::new(), rx)
+				.expect("streaming response should build");
+
+		let response = build_envoy_response(ActorHttpResponse::Stream(stream), &http::Method::GET)
+			.expect("envoy response should build");
+
+		assert_eq!(response.status, StatusCode::NO_CONTENT.as_u16());
+		assert_eq!(response.body, Some(Vec::new()));
+		assert!(response.body_stream.is_none());
+	}
+
+	#[test]
+	fn build_envoy_response_drops_buffered_body_for_head() {
+		let response =
+			Response::from_parts(StatusCode::OK.as_u16(), HashMap::new(), b"body".to_vec())
+				.expect("buffered response should build");
+
+		let response =
+			build_envoy_response(ActorHttpResponse::Buffered(response), &http::Method::HEAD)
+				.expect("envoy response should build");
+
+		assert_eq!(response.status, StatusCode::OK.as_u16());
+		assert_eq!(response.body, Some(Vec::new()));
+		assert!(response.body_stream.is_none());
 	}
 
 	#[test]

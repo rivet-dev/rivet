@@ -49,7 +49,7 @@ use crate::actor::factory::ActorFactory;
 use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
-	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
+	ActorEvent, ActorHttpResponse, QueueSendResult, Request, SerializeStateReason, StateDelta,
 };
 use crate::actor::metrics::startup_phase::StartupPhase;
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
@@ -65,7 +65,7 @@ use crate::types::{SaveStateOpts, format_actor_key};
 use crate::websocket::WebSocket;
 
 pub type ActionDispatchResult = std::result::Result<Vec<u8>, ActionDispatchError>;
-pub type HttpDispatchResult = Result<Response>;
+pub type HttpDispatchResult = Result<ActorHttpResponse>;
 
 const SERIALIZE_STATE_SHUTDOWN_SANITY_CAP: Duration = Duration::from_secs(15);
 #[cfg(test)]
