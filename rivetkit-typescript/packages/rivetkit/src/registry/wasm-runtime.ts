@@ -6,7 +6,7 @@ import type {
 	CoreRegistry as WasmCoreRegistry,
 	WebSocketHandle as WasmWebSocketHandle,
 } from "@rivetkit/rivetkit-wasm";
-import { decodeBridgeRivetError, RivetError } from "@/actor/errors";
+import { decodeBridgeRivetError } from "@/actor/errors";
 import type {
 	WasmRuntimeBindings,
 	WasmRuntimeConfig,
@@ -51,7 +51,6 @@ import { normalizeRuntimeSqlExecuteResult } from "./runtime";
 
 type WasmBindings = WasmRuntimeBindings;
 export type WasmInitInput = WasmRuntimeInitInput;
-type AnyFunction = (...args: unknown[]) => unknown;
 type WasmRuntimeLoadConfig = Pick<WasmRuntimeConfig, "bindings" | "initInput">;
 
 function asWasmRegistry(handle: RegistryHandle): WasmCoreRegistry {
@@ -179,50 +178,6 @@ function callWasmSync<T>(invoke: () => T): T {
 	}
 }
 
-function unsupportedWasmMethod(method: string): never {
-	throw new RivetError(
-		"runtime",
-		"unsupported",
-		`Unsupported wasm runtime method: ${method}`,
-		{
-			metadata: {
-				runtime: "wasm",
-				method,
-			},
-		},
-	);
-}
-
-function method<T extends AnyFunction>(target: unknown, name: string): T {
-	if (
-		typeof target === "object" &&
-		target !== null &&
-		name in target &&
-		typeof target[name as keyof typeof target] === "function"
-	) {
-		return target[name as keyof typeof target] as T;
-	}
-	return unsupportedWasmMethod(name);
-}
-
-function callHandle<T>(handle: unknown, name: string, ...args: unknown[]): T {
-	return callWasmSync(() => method(handle, name).apply(handle, args) as T);
-}
-
-async function callHandleAsync<T>(
-	handle: unknown,
-	name: string,
-	...args: unknown[]
-): Promise<T> {
-	return await callWasm(
-		async () => (await method(handle, name).apply(handle, args)) as T,
-	);
-}
-
-function childHandle<T>(handle: unknown, name: string): T {
-	return callHandle<T>(handle, name);
-}
-
 export class WasmCoreRuntime implements CoreRuntime {
 	readonly kind = "wasm";
 
@@ -237,7 +192,9 @@ export class WasmCoreRuntime implements CoreRuntime {
 		const wasmCtx = asWasmActorContext(ctx);
 		let database = this.#sql.get(wasmCtx);
 		if (!database) {
-			database = callHandle<RuntimeSqlDatabase>(wasmCtx, "sql");
+			database = callWasmSync(
+				() => wasmCtx.sql() as unknown as RuntimeSqlDatabase,
+			);
 			this.#sql.set(wasmCtx, database);
 		}
 		return database;
@@ -281,14 +238,14 @@ export class WasmCoreRuntime implements CoreRuntime {
 		cancelToken: CancellationTokenHandle,
 		config: RuntimeServeConfig,
 	): Promise<RuntimeServerlessResponseHead> {
-		return await callHandleAsync<RuntimeServerlessResponseHead>(
-			asWasmRegistry(registry),
-			"handleServerlessRequest",
-			req,
-			onStreamEvent,
-			asWasmCancellationToken(cancelToken),
-			config,
-		);
+		return (await callWasm(() =>
+			asWasmRegistry(registry).handleServerlessRequest(
+				req,
+				onStreamEvent as unknown as Function,
+				asWasmCancellationToken(cancelToken),
+				config,
+			),
+		)) as RuntimeServerlessResponseHead;
 	}
 
 	createActorFactory(
@@ -327,30 +284,23 @@ export class WasmCoreRuntime implements CoreRuntime {
 	}
 
 	actorState(ctx: ActorContextHandle): RuntimeBytes {
-		return toBytes(
-			callHandle<RuntimeBytes | Uint8Array>(
-				asWasmActorContext(ctx),
-				"state",
-			),
-		);
+		return toBytes(callWasmSync(() => asWasmActorContext(ctx).state()));
 	}
 
 	actorBeginOnStateChange(ctx: ActorContextHandle): void {
-		callHandle(asWasmActorContext(ctx), "beginOnStateChange");
+		callWasmSync(() => asWasmActorContext(ctx).beginOnStateChange());
 	}
 
 	actorEndOnStateChange(ctx: ActorContextHandle): void {
-		callHandle(asWasmActorContext(ctx), "endOnStateChange");
+		callWasmSync(() => asWasmActorContext(ctx).endOnStateChange());
 	}
 
 	actorSetAlarm(
 		ctx: ActorContextHandle,
 		timestampMs?: number | bigint | undefined | null,
 	): void {
-		callHandle(
-			asWasmActorContext(ctx),
-			"setAlarm",
-			optionalWasmNumber(timestampMs),
+		callWasmSync(() =>
+			asWasmActorContext(ctx).setAlarm(optionalWasmNumber(timestampMs)),
 		);
 	}
 
@@ -358,22 +308,21 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		opts?: RuntimeRequestSaveOpts | undefined | null,
 	): void {
-		callHandle(asWasmActorContext(ctx), "requestSave", opts);
+		callWasmSync(() => asWasmActorContext(ctx).requestSave(opts));
 	}
 
 	async actorRequestSaveAndWait(
 		ctx: ActorContextHandle,
 		opts?: RuntimeRequestSaveOpts | undefined | null,
 	): Promise<void> {
-		await callHandleAsync(
-			asWasmActorContext(ctx),
-			"requestSaveAndWait",
-			opts,
-		);
+		await callWasm(() => asWasmActorContext(ctx).requestSaveAndWait(opts));
 	}
 
 	actorInspectorSnapshot(ctx: ActorContextHandle): RuntimeInspectorSnapshot {
-		return callHandle(asWasmActorContext(ctx), "inspectorSnapshot");
+		return callWasmSync(
+			() =>
+				asWasmActorContext(ctx).inspectorSnapshot() as RuntimeInspectorSnapshot,
+		);
 	}
 
 	actorDecodeInspectorRequest(
@@ -382,11 +331,12 @@ export class WasmCoreRuntime implements CoreRuntime {
 		advertisedVersion: number,
 	): RuntimeBytes {
 		return toBytes(
-			callHandle<RuntimeBytes | Uint8Array>(
-				asWasmActorContext(ctx),
-				"decodeInspectorRequest",
-				bytes,
-				advertisedVersion,
+			callWasmSync(() =>
+				// @ts-expect-error WASM parity P1.1: implement decodeInspectorRequest on WasmActorContext
+				asWasmActorContext(ctx).decodeInspectorRequest(
+					bytes,
+					advertisedVersion,
+				),
 			),
 		);
 	}
@@ -397,11 +347,9 @@ export class WasmCoreRuntime implements CoreRuntime {
 		targetVersion: number,
 	): RuntimeBytes {
 		return toBytes(
-			callHandle<RuntimeBytes | Uint8Array>(
-				asWasmActorContext(ctx),
-				"encodeInspectorResponse",
-				bytes,
-				targetVersion,
+			callWasmSync(() =>
+				// @ts-expect-error WASM parity P1.1: implement encodeInspectorResponse on WasmActorContext
+				asWasmActorContext(ctx).encodeInspectorResponse(bytes, targetVersion),
 			),
 		);
 	}
@@ -410,10 +358,8 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		bearerToken?: string | undefined | null,
 	): Promise<void> {
-		await callHandleAsync(
-			asWasmActorContext(ctx),
-			"verifyInspectorAuth",
-			bearerToken,
+		await callWasm(() =>
+			asWasmActorContext(ctx).verifyInspectorAuth(bearerToken),
 		);
 	}
 
@@ -421,57 +367,69 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		connId: string,
 	): void {
-		callHandle(asWasmActorContext(ctx), "queueHibernationRemoval", connId);
+		callWasmSync(() =>
+			// @ts-expect-error WASM parity P1.2: implement queueHibernationRemoval on WasmActorContext
+			asWasmActorContext(ctx).queueHibernationRemoval(connId),
+		);
 	}
 
 	actorTakePendingHibernationChanges(ctx: ActorContextHandle): string[] {
-		return callHandle(
-			asWasmActorContext(ctx),
-			"takePendingHibernationChanges",
+		return callWasmSync(
+			() =>
+				asWasmActorContext(ctx).takePendingHibernationChanges() as string[],
 		);
 	}
 
 	actorDirtyHibernatableConns(ctx: ActorContextHandle): ConnHandle[] {
-		return callHandle(asWasmActorContext(ctx), "dirtyHibernatableConns");
+		return callWasmSync(
+			() =>
+				asWasmActorContext(ctx).dirtyHibernatableConns() as unknown as ConnHandle[],
+		);
 	}
 
 	async actorSaveState(
 		ctx: ActorContextHandle,
 		payload: RuntimeStateDeltaPayload,
 	): Promise<void> {
-		await callHandleAsync(asWasmActorContext(ctx), "saveState", payload);
+		await callWasm(() => asWasmActorContext(ctx).saveState(payload));
 	}
 
 	actorId(ctx: ActorContextHandle): string {
-		return callHandle(asWasmActorContext(ctx), "actorId");
+		return callWasmSync(() => asWasmActorContext(ctx).actorId());
 	}
 
 	actorName(ctx: ActorContextHandle): string {
-		return callHandle(asWasmActorContext(ctx), "name");
+		return callWasmSync(() => asWasmActorContext(ctx).name());
 	}
 
 	actorKey(ctx: ActorContextHandle): RuntimeActorKeySegment[] {
-		return callHandle(asWasmActorContext(ctx), "key");
+		return callWasmSync(
+			() => asWasmActorContext(ctx).key() as RuntimeActorKeySegment[],
+		);
 	}
 
 	actorRegion(ctx: ActorContextHandle): string {
-		return callHandle(asWasmActorContext(ctx), "region");
+		return callWasmSync(() => asWasmActorContext(ctx).region());
 	}
 
 	actorSleep(ctx: ActorContextHandle): void {
-		callHandle(asWasmActorContext(ctx), "sleep");
+		callWasmSync(() => asWasmActorContext(ctx).sleep());
 	}
 
 	actorDestroy(ctx: ActorContextHandle): void {
-		callHandle(asWasmActorContext(ctx), "destroy");
+		callWasmSync(() => asWasmActorContext(ctx).destroy());
 	}
 
 	actorAbortSignal(ctx: ActorContextHandle): AbortSignal {
-		return callHandle(asWasmActorContext(ctx), "abortSignal");
+		return callWasmSync(
+			() => asWasmActorContext(ctx).abortSignal() as AbortSignal,
+		);
 	}
 
 	actorConns(ctx: ActorContextHandle): ConnHandle[] {
-		return callHandle(asWasmActorContext(ctx), "conns");
+		return callWasmSync(
+			() => asWasmActorContext(ctx).conns() as unknown as ConnHandle[],
+		);
 	}
 
 	async actorConnectConn(
@@ -479,12 +437,9 @@ export class WasmCoreRuntime implements CoreRuntime {
 		params: RuntimeBytes,
 		request?: RuntimeHttpRequest | undefined | null,
 	): Promise<ConnHandle> {
-		return await callHandleAsync(
-			asWasmActorContext(ctx),
-			"connectConn",
-			params,
-			request,
-		);
+		return (await callWasm(() =>
+			asWasmActorContext(ctx).connectConn(params, request),
+		)) as unknown as ConnHandle;
 	}
 
 	actorBroadcast(
@@ -492,41 +447,45 @@ export class WasmCoreRuntime implements CoreRuntime {
 		name: string,
 		args: RuntimeBytes,
 	): void {
-		callHandle(asWasmActorContext(ctx), "broadcast", name, args);
+		callWasmSync(() => asWasmActorContext(ctx).broadcast(name, args));
 	}
 
 	actorWaitUntil(ctx: ActorContextHandle, promise: Promise<unknown>): void {
-		callHandle(asWasmActorContext(ctx), "waitUntil", promise);
+		callWasmSync(() =>
+			asWasmActorContext(ctx).waitUntil(promise as Promise<unknown>),
+		);
 	}
 
 	actorKeepAwake(ctx: ActorContextHandle, promise: Promise<unknown>): void {
 		const wasmCtx = asWasmActorContext(ctx);
-		const regionId = callHandle<number>(wasmCtx, "beginKeepAwake");
+		const regionId = callWasmSync(() => wasmCtx.beginKeepAwake());
 		const trackedPromise = Promise.resolve(promise)
 			.finally(() => {
-				callHandle(wasmCtx, "endKeepAwake", regionId);
+				callWasmSync(() => wasmCtx.endKeepAwake(regionId));
 			})
 			.then(() => null);
-		callHandle(wasmCtx, "registerTask", trackedPromise);
+		callWasmSync(() => wasmCtx.registerTask(trackedPromise));
 	}
 
 	actorBeginKeepAwake(ctx: ActorContextHandle): number {
-		return callHandle<number>(asWasmActorContext(ctx), "beginKeepAwake");
+		return callWasmSync(() => asWasmActorContext(ctx).beginKeepAwake());
 	}
 
 	actorEndKeepAwake(ctx: ActorContextHandle, regionId: number): void {
-		callHandle(asWasmActorContext(ctx), "endKeepAwake", regionId);
+		callWasmSync(() => asWasmActorContext(ctx).endKeepAwake(regionId));
 	}
 
 	actorRegisterTask(
 		ctx: ActorContextHandle,
 		promise: Promise<unknown>,
 	): void {
-		callHandle(asWasmActorContext(ctx), "registerTask", promise);
+		callWasmSync(() => asWasmActorContext(ctx).registerTask(promise));
 	}
 
 	actorRuntimeState(ctx: ActorContextHandle): object {
-		return callHandle(asWasmActorContext(ctx), "runtimeState");
+		return callWasmSync(
+			() => asWasmActorContext(ctx).runtimeState() as object,
+		);
 	}
 
 	actorClearRuntimeState(ctx: ActorContextHandle): void {
@@ -537,23 +496,27 @@ export class WasmCoreRuntime implements CoreRuntime {
 	}
 
 	actorRestartRunHandler(ctx: ActorContextHandle): void {
-		callHandle(asWasmActorContext(ctx), "restartRunHandler");
+		callWasmSync(() => asWasmActorContext(ctx).restartRunHandler());
 	}
 
 	actorBeginWebsocketCallback(ctx: ActorContextHandle): number {
-		return callHandle(asWasmActorContext(ctx), "beginWebsocketCallback");
+		return callWasmSync(() =>
+			asWasmActorContext(ctx).beginWebsocketCallback(),
+		);
 	}
 
 	actorEndWebsocketCallback(ctx: ActorContextHandle, regionId: number): void {
-		callHandle(asWasmActorContext(ctx), "endWebsocketCallback", regionId);
+		callWasmSync(() =>
+			asWasmActorContext(ctx).endWebsocketCallback(regionId),
+		);
 	}
 
 	async actorKvGet(
 		ctx: ActorContextHandle,
 		key: RuntimeBytes,
 	): Promise<RuntimeBytes | null> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		return optionalBytes(await callHandleAsync(kv, "get", key));
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		return optionalBytes(await callWasm(() => kv.get(key)));
 	}
 
 	async actorKvPut(
@@ -561,16 +524,16 @@ export class WasmCoreRuntime implements CoreRuntime {
 		key: RuntimeBytes,
 		value: RuntimeBytes,
 	): Promise<void> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		await callHandleAsync(kv, "put", key, value);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		await callWasm(() => kv.put(key, value));
 	}
 
 	async actorKvDelete(
 		ctx: ActorContextHandle,
 		key: RuntimeBytes,
 	): Promise<void> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		await callHandleAsync(kv, "delete", key);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		await callWasm(() => kv.delete(key));
 	}
 
 	async actorKvDeleteRange(
@@ -578,8 +541,8 @@ export class WasmCoreRuntime implements CoreRuntime {
 		start: RuntimeBytes,
 		end: RuntimeBytes,
 	): Promise<void> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		await callHandleAsync(kv, "deleteRange", start, end);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		await callWasm(() => kv.deleteRange(start, end));
 	}
 
 	async actorKvListPrefix(
@@ -587,13 +550,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		prefix: RuntimeBytes,
 		options?: RuntimeKvListOptions | undefined | null,
 	): Promise<RuntimeKvEntry[]> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		const entries = await callHandleAsync<RuntimeKvEntry[]>(
-			kv,
-			"listPrefix",
-			prefix,
-			options,
-		);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		const entries = (await callWasm(() =>
+			kv.listPrefix(prefix, options),
+		)) as RuntimeKvEntry[];
 		return entries.map(normalizeKvEntry);
 	}
 
@@ -603,14 +563,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		end: RuntimeBytes,
 		options?: RuntimeKvListOptions | undefined | null,
 	): Promise<RuntimeKvEntry[]> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		const entries = await callHandleAsync<RuntimeKvEntry[]>(
-			kv,
-			"listRange",
-			start,
-			end,
-			options,
-		);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		const entries = (await callWasm(() =>
+			kv.listRange(start, end, options),
+		)) as RuntimeKvEntry[];
 		return entries.map(normalizeKvEntry);
 	}
 
@@ -618,10 +574,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		keys: RuntimeBytes[],
 	): Promise<Array<RuntimeBytes | undefined | null>> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		const values = await callHandleAsync<
-			Array<RuntimeBytes | Uint8Array | null | undefined>
-		>(kv, "batchGet", keys);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		const values = (await callWasm(() => kv.batchGet(keys))) as Array<
+			RuntimeBytes | Uint8Array | null | undefined
+		>;
 		return values.map((value) =>
 			value === undefined ? undefined : optionalBytes(value),
 		);
@@ -631,16 +587,16 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		entries: RuntimeKvEntry[],
 	): Promise<void> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		await callHandleAsync(kv, "batchPut", entries);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		await callWasm(() => kv.batchPut(entries));
 	}
 
 	async actorKvBatchDelete(
 		ctx: ActorContextHandle,
 		keys: RuntimeBytes[],
 	): Promise<void> {
-		const kv = childHandle(asWasmActorContext(ctx), "kv");
-		await callHandleAsync(kv, "batchDelete", keys);
+		const kv = callWasmSync(() => asWasmActorContext(ctx).kv());
+		await callWasm(() => kv.batchDelete(keys));
 	}
 
 	async actorSqlExec(
@@ -701,9 +657,9 @@ export class WasmCoreRuntime implements CoreRuntime {
 		name: string,
 		body: RuntimeBytes,
 	): Promise<RuntimeQueueMessage> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
 		return normalizeQueueMessage(
-			await callHandleAsync(queue, "send", name, body),
+			(await callWasm(() => queue.send(name, body))) as RuntimeQueueMessage,
 		);
 	}
 
@@ -712,13 +668,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueNextBatchOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeQueueMessage[]> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		const messages = await callHandleAsync<RuntimeQueueMessage[]>(
-			queue,
-			"nextBatch",
-			options,
-			signal ? asWasmCancellationToken(signal) : signal,
-		);
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
+		const messages = (await callWasm(() =>
+			queue.nextBatch(options, signal ? asWasmCancellationToken(signal) : null),
+		)) as RuntimeQueueMessage[];
 		return messages.map(normalizeQueueMessage);
 	}
 
@@ -728,15 +681,15 @@ export class WasmCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeQueueMessage> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
 		return normalizeQueueMessage(
-			await callHandleAsync(
-				queue,
-				"waitForNames",
-				names,
-				options,
-				signal ? asWasmCancellationToken(signal) : signal,
-			),
+			(await callWasm(() =>
+				queue.waitForNames(
+					names,
+					options,
+					signal ? asWasmCancellationToken(signal) : null,
+				),
+			)) as unknown as RuntimeQueueMessage,
 		);
 	}
 
@@ -745,8 +698,8 @@ export class WasmCoreRuntime implements CoreRuntime {
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
 	): Promise<void> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		await callHandleAsync(queue, "waitForNamesAvailable", names, options);
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
+		await callWasm(() => queue.waitForNamesAvailable(names, options));
 	}
 
 	async actorQueueEnqueueAndWait(
@@ -756,15 +709,15 @@ export class WasmCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueEnqueueAndWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeBytes | null> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
 		return optionalBytes(
-			await callHandleAsync(
-				queue,
-				"enqueueAndWait",
-				name,
-				body,
-				options,
-				signal ? asWasmCancellationToken(signal) : signal,
+			await callWasm(() =>
+				queue.enqueueAndWait(
+					name,
+					body,
+					options,
+					signal ? asWasmCancellationToken(signal) : null,
+				),
 			),
 		);
 	}
@@ -773,24 +726,24 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		options?: RuntimeQueueTryNextBatchOptions | undefined | null,
 	): RuntimeQueueMessage[] {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		return callHandle<RuntimeQueueMessage[]>(
-			queue,
-			"tryNextBatch",
-			options,
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
+		return (
+			callWasmSync(() => queue.tryNextBatch(options)) as RuntimeQueueMessage[]
 		).map(normalizeQueueMessage);
 	}
 
 	actorQueueMaxSize(ctx: ActorContextHandle): number {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		return callHandle(queue, "maxSize");
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
+		return callWasmSync(() => queue.maxSize());
 	}
 
 	async actorQueueInspectMessages(
 		ctx: ActorContextHandle,
 	): Promise<RuntimeQueueInspectMessage[]> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		return await callHandleAsync(queue, "inspectMessages");
+		const queue = callWasmSync(() => asWasmActorContext(ctx).queue());
+		return (await callWasm(() =>
+			queue.inspectMessages(),
+		)) as RuntimeQueueInspectMessage[];
 	}
 
 	actorScheduleAfter(
@@ -799,8 +752,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		actionName: string,
 		args: RuntimeBytes,
 	): void {
-		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
-		callHandle(schedule, "after", wasmNumber(durationMs), actionName, args);
+		const schedule = callWasmSync(() => asWasmActorContext(ctx).schedule());
+		callWasmSync(() =>
+			schedule.after(wasmNumber(durationMs), actionName, args),
+		);
 	}
 
 	actorScheduleAt(
@@ -809,39 +764,41 @@ export class WasmCoreRuntime implements CoreRuntime {
 		actionName: string,
 		args: RuntimeBytes,
 	): void {
-		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
-		callHandle(schedule, "at", wasmNumber(timestampMs), actionName, args);
+		const schedule = callWasmSync(() => asWasmActorContext(ctx).schedule());
+		callWasmSync(() =>
+			schedule.at(wasmNumber(timestampMs), actionName, args),
+		);
 	}
 
 	connId(conn: ConnHandle): string {
-		return callHandle(asWasmConn(conn), "id");
+		return callWasmSync(() => asWasmConn(conn).id());
 	}
 
 	connParams(conn: ConnHandle): RuntimeBytes {
-		return toBytes(callHandle(asWasmConn(conn), "params"));
+		return toBytes(callWasmSync(() => asWasmConn(conn).params()));
 	}
 
 	connState(conn: ConnHandle): RuntimeBytes {
-		return toBytes(callHandle(asWasmConn(conn), "state"));
+		return toBytes(callWasmSync(() => asWasmConn(conn).state()));
 	}
 
 	connSetState(conn: ConnHandle, state: RuntimeBytes): void {
-		callHandle(asWasmConn(conn), "setState", state);
+		callWasmSync(() => asWasmConn(conn).setState(state));
 	}
 
 	connIsHibernatable(conn: ConnHandle): boolean {
-		return callHandle(asWasmConn(conn), "isHibernatable");
+		return callWasmSync(() => asWasmConn(conn).isHibernatable());
 	}
 
 	connSend(conn: ConnHandle, name: string, args: RuntimeBytes): void {
-		callHandle(asWasmConn(conn), "send", name, args);
+		callWasmSync(() => asWasmConn(conn).send(name, args));
 	}
 
 	async connDisconnect(
 		conn: ConnHandle,
 		reason?: string | undefined | null,
 	): Promise<void> {
-		await callHandleAsync(asWasmConn(conn), "disconnect", reason);
+		await callWasm(() => asWasmConn(conn).disconnect(reason));
 	}
 
 	webSocketSend(
@@ -849,7 +806,7 @@ export class WasmCoreRuntime implements CoreRuntime {
 		data: RuntimeBytes,
 		binary: boolean,
 	): void {
-		callHandle(asWasmWebSocket(ws), "send", data, binary);
+		callWasmSync(() => asWasmWebSocket(ws).send(data, binary));
 	}
 
 	async webSocketClose(
@@ -857,26 +814,26 @@ export class WasmCoreRuntime implements CoreRuntime {
 		code?: number | undefined | null,
 		reason?: string | undefined | null,
 	): Promise<void> {
-		await callHandleAsync(asWasmWebSocket(ws), "close", code, reason);
+		await callWasm(() => asWasmWebSocket(ws).close(code, reason));
 	}
 
 	webSocketSetEventCallback(
 		ws: WebSocketHandle,
 		callback: (event: RuntimeWebSocketEvent) => void,
 	): void {
-		callHandle(
-			asWasmWebSocket(ws),
-			"setEventCallback",
-			(event: RuntimeWebSocketEvent) => {
-				if (event.kind === "message" && event.binary) {
-					callback({
-						...event,
-						data: toBytes(event.data as RuntimeBytes | Uint8Array),
-					});
-					return;
-				}
-				callback(event);
-			},
+		callWasmSync(() =>
+			asWasmWebSocket(ws).setEventCallback(
+				((event: RuntimeWebSocketEvent) => {
+					if (event.kind === "message" && event.binary) {
+						callback({
+							...event,
+							data: toBytes(event.data as RuntimeBytes | Uint8Array),
+						});
+						return;
+					}
+					callback(event);
+				}) as unknown as Function,
+			),
 		);
 	}
 }
