@@ -103,6 +103,11 @@ function enrichNativeDatabaseError(
 	}
 
 	const kvError = database.takeLastKvError?.();
+	const bridgedKvError =
+		typeof kvError === "string" ? decodeBridgeRivetError(kvError) : undefined;
+	if (bridgedKvError) {
+		throw bridgedKvError;
+	}
 	if (
 		error instanceof Error &&
 		kvError &&

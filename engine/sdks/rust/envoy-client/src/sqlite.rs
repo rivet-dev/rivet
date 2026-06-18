@@ -10,11 +10,21 @@ use crate::utils::{EnvoyShutdownError, RemoteSqliteIndeterminateResultError};
 pub enum SqliteRequest {
 	GetPages(protocol::SqliteGetPagesRequest),
 	Commit(protocol::SqliteCommitRequest),
+	CommitStageBegin(protocol::SqliteCommitStageBeginRequest),
+	CommitStagePages(protocol::SqliteCommitStagePagesRequest),
+	CommitStageComplete(protocol::SqliteCommitStageCompleteRequest),
+	CommitStageFinalize(protocol::SqliteCommitStageFinalizeRequest),
+	CommitStageAbort(protocol::SqliteCommitStageAbortRequest),
 }
 
 pub enum SqliteResponse {
 	GetPages(protocol::SqliteGetPagesResponse),
 	Commit(protocol::SqliteCommitResponse),
+	CommitStageBegin(protocol::SqliteCommitStageBeginResponse),
+	CommitStagePages(protocol::SqliteCommitStagePagesResponse),
+	CommitStageComplete(protocol::SqliteCommitStageCompleteResponse),
+	CommitStageFinalize(protocol::SqliteCommitResponse),
+	CommitStageAbort(protocol::SqliteCommitStageAbortResponse),
 }
 
 #[derive(Clone, Debug)]
@@ -130,6 +140,66 @@ pub async fn handle_sqlite_commit_response(
 	);
 }
 
+pub async fn handle_sqlite_commit_stage_begin_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteCommitStageBeginResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::CommitStageBegin(response.data),
+		"sqlite_commit_stage_begin",
+	);
+}
+
+pub async fn handle_sqlite_commit_stage_pages_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteCommitStagePagesResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::CommitStagePages(response.data),
+		"sqlite_commit_stage_pages",
+	);
+}
+
+pub async fn handle_sqlite_commit_stage_complete_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteCommitStageCompleteResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::CommitStageComplete(response.data),
+		"sqlite_commit_stage_complete",
+	);
+}
+
+pub async fn handle_sqlite_commit_stage_finalize_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteCommitStageFinalizeResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::CommitStageFinalize(response.data),
+		"sqlite_commit_stage_finalize",
+	);
+}
+
+pub async fn handle_sqlite_commit_stage_abort_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteCommitStageAbortResponse,
+) {
+	handle_sqlite_response(
+		ctx,
+		response.request_id,
+		SqliteResponse::CommitStageAbort(response.data),
+		"sqlite_commit_stage_abort",
+	);
+}
+
 pub async fn handle_remote_sqlite_exec_response(
 	ctx: &mut EnvoyContext,
 	response: protocol::ToEnvoySqliteExecResponse,
@@ -207,6 +277,31 @@ pub async fn send_single_sqlite_request(ctx: &mut EnvoyContext, request_id: u32)
 			SqliteRequest::Commit(data) => protocol::ToRivet::ToRivetSqliteCommitRequest(
 				protocol::ToRivetSqliteCommitRequest { request_id, data },
 			),
+			SqliteRequest::CommitStageBegin(data) => {
+				protocol::ToRivet::ToRivetSqliteCommitStageBeginRequest(
+					protocol::ToRivetSqliteCommitStageBeginRequest { request_id, data },
+				)
+			}
+			SqliteRequest::CommitStagePages(data) => {
+				protocol::ToRivet::ToRivetSqliteCommitStagePagesRequest(
+					protocol::ToRivetSqliteCommitStagePagesRequest { request_id, data },
+				)
+			}
+			SqliteRequest::CommitStageComplete(data) => {
+				protocol::ToRivet::ToRivetSqliteCommitStageCompleteRequest(
+					protocol::ToRivetSqliteCommitStageCompleteRequest { request_id, data },
+				)
+			}
+			SqliteRequest::CommitStageFinalize(data) => {
+				protocol::ToRivet::ToRivetSqliteCommitStageFinalizeRequest(
+					protocol::ToRivetSqliteCommitStageFinalizeRequest { request_id, data },
+				)
+			}
+			SqliteRequest::CommitStageAbort(data) => {
+				protocol::ToRivet::ToRivetSqliteCommitStageAbortRequest(
+					protocol::ToRivetSqliteCommitStageAbortRequest { request_id, data },
+				)
+			}
 		};
 
 	ws_send(&ctx.shared, message).await;
@@ -379,6 +474,7 @@ pub fn fail_sent_remote_sqlite_requests_with_indeterminate_result(ctx: &mut Envo
 mod tests {
 	use std::collections::HashMap;
 	use std::sync::Arc;
+	use std::time::Duration;
 
 	use vbare::OwnedVersionedData;
 
@@ -626,6 +722,47 @@ mod tests {
 			.downcast_ref::<RemoteSqliteIndeterminateResultError>()
 			.expect("error should describe indeterminate remote sqlite result");
 		assert_eq!(indeterminate.operation, "execute");
+		assert!(ctx.remote_sqlite_requests.is_empty());
+	}
+
+	#[tokio::test]
+	#[ignore = "repro for sent remote SQL timeout being reported as a generic timeout"]
+	async fn repro_sent_remote_sqlite_timeout_is_not_indeterminate() {
+		let mut ctx = new_envoy_context();
+		let (ws_tx, mut ws_rx) = tokio::sync::mpsc::unbounded_channel();
+		*ctx.shared.ws_tx.lock().await = Some(ws_tx);
+		let (tx, rx) = oneshot::channel();
+
+		handle_remote_sqlite_request(
+			&mut ctx,
+			RemoteSqliteRequest::Execute(execute_request()),
+			tx,
+		)
+		.await;
+		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+		let entry = ctx
+			.remote_sqlite_requests
+			.get_mut(&0)
+			.expect("request should be pending");
+		assert!(entry.sent);
+		entry.timestamp =
+			crate::time::Instant::now() - Duration::from_millis(KV_EXPIRE_MS + 1);
+
+		cleanup_old_remote_sqlite_requests(&mut ctx);
+
+		let err = rx
+			.await
+			.expect("response sender should complete")
+			.expect_err("sent remote SQL should time out");
+		assert!(
+			err.downcast_ref::<RemoteSqliteIndeterminateResultError>()
+				.is_none(),
+			"current cleanup reports a generic timeout instead of indeterminate"
+		);
+		assert!(
+			err.to_string().contains("remote sqlite request timed out"),
+			"unexpected timeout error: {err:#}"
+		);
 		assert!(ctx.remote_sqlite_requests.is_empty());
 	}
 

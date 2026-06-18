@@ -30,6 +30,7 @@ const META_HEAD_AT_FORK_PATH: &[u8] = b"/META/head_at_fork";
 const META_COMPACT_PATH: &[u8] = b"/META/compact";
 const META_COLD_COMPACT_PATH: &[u8] = b"/META/cold_compact";
 const META_QUOTA_PATH: &[u8] = b"/META/quota";
+const META_STAGED_QUOTA_PATH: &[u8] = b"/META/staged_quota";
 const META_COMPACTOR_LEASE_PATH: &[u8] = b"/META/compactor_lease";
 const META_COLD_LEASE_PATH: &[u8] = b"/META/cold_lease";
 const CMP_ROOT_PATH: &[u8] = b"/CMP/root";
@@ -38,7 +39,20 @@ const CMP_RETIRED_COLD_OBJECT_PATH: &[u8] = b"/CMP/retired_cold_object/";
 const CMP_STAGE_PATH: &[u8] = b"/CMP/stage/";
 const CMP_STAGE_HOT_SHARD_PATH: &[u8] = b"/hot_shard/";
 const SHARD_PATH: &[u8] = b"/SHARD/";
+const SHARD_CHUNK_PATH: &[u8] = b"/SHARD_CHUNK/";
 const DELTA_PATH: &[u8] = b"/DELTA/";
+const STAGE_COMMIT_PATH: &[u8] = b"/STAGE/commit/";
+const STAGE_META_PATH: &[u8] = b"/meta";
+const STAGE_PAGES_PATH: &[u8] = b"/pages/";
+const STAGE_COMPLETE_PATH: &[u8] = b"/complete";
+const STAGE_FINALIZED_PATH: &[u8] = b"/finalized";
+const STAGE_COMMIT_BY_ID_PATH: &[u8] = b"/STAGE_COMMIT_BY_ID/";
+const DELTA_OBJ_PATH: &[u8] = b"/DELTA_OBJ/";
+const DELTA_OBJ_CHUNK_PATH: &[u8] = b"/chunk/";
+const DELTA_OBJ_META_PATH: &[u8] = b"/meta";
+const DELTA_OBJ_REF_PATH: &[u8] = b"/DELTA_OBJ_REF/";
+const DELTA_MANIFEST_PATH: &[u8] = b"/DELTA_MANIFEST/";
+const DELTA_PAGEIDX_PATH: &[u8] = b"/DELTA_PAGEIDX/";
 const PIDX_DELTA_PATH: &[u8] = b"/PIDX/delta/";
 const BR_PIDX_PATH: &[u8] = b"/PIDX/";
 const COMMITS_PATH: &[u8] = b"/COMMITS/";
@@ -446,6 +460,10 @@ pub fn branch_meta_quota_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), META_QUOTA_PATH)
 }
 
+pub fn branch_meta_staged_quota_key(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), META_STAGED_QUOTA_PATH)
+}
+
 pub fn branch_meta_compactor_lease_key(branch_id: DatabaseBranchId) -> Vec<u8> {
 	with_suffix(database_branch_base(branch_id), META_COMPACTOR_LEASE_PATH)
 }
@@ -554,6 +572,18 @@ pub fn branch_compaction_stage_hot_shard_version_prefix(
 	key
 }
 
+pub fn branch_compaction_stage_hot_shard_chunk_prefix(
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+	shard_id: u32,
+	as_of_txid: u64,
+) -> Vec<u8> {
+	let mut key = branch_compaction_stage_hot_shard_version_prefix(branch_id, job_id, shard_id);
+	key.extend_from_slice(&as_of_txid.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
 pub fn branch_compaction_stage_hot_shard_key(
 	branch_id: DatabaseBranchId,
 	job_id: Id,
@@ -561,9 +591,8 @@ pub fn branch_compaction_stage_hot_shard_key(
 	as_of_txid: u64,
 	chunk_idx: u32,
 ) -> Vec<u8> {
-	let mut key = branch_compaction_stage_hot_shard_version_prefix(branch_id, job_id, shard_id);
-	key.extend_from_slice(&as_of_txid.to_be_bytes());
-	key.push(b'/');
+	let mut key =
+		branch_compaction_stage_hot_shard_chunk_prefix(branch_id, job_id, shard_id, as_of_txid);
 	key.extend_from_slice(&chunk_idx.to_be_bytes());
 	key
 }
@@ -642,6 +671,227 @@ pub fn branch_delta_chunk_key(branch_id: DatabaseBranchId, txid: u64, chunk_idx:
 	key
 }
 
+pub fn branch_commit_stage_prefix(branch_id: DatabaseBranchId, stage_id: uuid::Uuid) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), STAGE_COMMIT_PATH);
+	append_uuid(&mut key, stage_id);
+	key
+}
+
+pub fn branch_commit_stage_meta_key(branch_id: DatabaseBranchId, stage_id: uuid::Uuid) -> Vec<u8> {
+	with_suffix(branch_commit_stage_prefix(branch_id, stage_id), STAGE_META_PATH)
+}
+
+pub fn branch_commit_stage_pages_key(
+	branch_id: DatabaseBranchId,
+	stage_id: uuid::Uuid,
+	batch_idx: u32,
+) -> Vec<u8> {
+	let mut key = with_suffix(branch_commit_stage_prefix(branch_id, stage_id), STAGE_PAGES_PATH);
+	key.extend_from_slice(&batch_idx.to_be_bytes());
+	key
+}
+
+pub fn branch_commit_stage_complete_key(
+	branch_id: DatabaseBranchId,
+	stage_id: uuid::Uuid,
+) -> Vec<u8> {
+	with_suffix(
+		branch_commit_stage_prefix(branch_id, stage_id),
+		STAGE_COMPLETE_PATH,
+	)
+}
+
+pub fn branch_commit_stage_finalized_key(
+	branch_id: DatabaseBranchId,
+	stage_id: uuid::Uuid,
+) -> Vec<u8> {
+	with_suffix(
+		branch_commit_stage_prefix(branch_id, stage_id),
+		STAGE_FINALIZED_PATH,
+	)
+}
+
+pub fn commit_stage_lookup_key(stage_id: uuid::Uuid) -> Vec<u8> {
+	let mut key = commit_stage_lookup_prefix();
+	append_uuid(&mut key, stage_id);
+	key
+}
+
+pub fn commit_stage_lookup_prefix() -> Vec<u8> {
+	with_suffix(partition_prefix(BR_PARTITION), STAGE_COMMIT_BY_ID_PATH)
+}
+
+pub fn decode_commit_stage_lookup_id(key: &[u8]) -> Result<uuid::Uuid> {
+	let prefix = commit_stage_lookup_prefix();
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("commit stage lookup key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == std::mem::size_of::<uuid::Uuid>(),
+		"commit stage lookup key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<uuid::Uuid>()
+	);
+	uuid::Uuid::from_slice(suffix).context("commit stage lookup suffix should decode as uuid")
+}
+
+pub fn branch_delta_object_root_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), DELTA_OBJ_PATH)
+}
+
+pub fn branch_delta_object_prefix(branch_id: DatabaseBranchId, object_id: uuid::Uuid) -> Vec<u8> {
+	let mut key = branch_delta_object_root_prefix(branch_id);
+	append_uuid(&mut key, object_id);
+	key
+}
+
+pub fn branch_delta_object_chunk_prefix(
+	branch_id: DatabaseBranchId,
+	object_id: uuid::Uuid,
+) -> Vec<u8> {
+	with_suffix(
+		branch_delta_object_prefix(branch_id, object_id),
+		DELTA_OBJ_CHUNK_PATH,
+	)
+}
+
+pub fn branch_delta_object_chunk_key(
+	branch_id: DatabaseBranchId,
+	object_id: uuid::Uuid,
+	chunk_idx: u32,
+) -> Vec<u8> {
+	let mut key = branch_delta_object_chunk_prefix(branch_id, object_id);
+	key.extend_from_slice(&chunk_idx.to_be_bytes());
+	key
+}
+
+pub fn branch_delta_object_meta_key(
+	branch_id: DatabaseBranchId,
+	object_id: uuid::Uuid,
+) -> Vec<u8> {
+	with_suffix(
+		branch_delta_object_prefix(branch_id, object_id),
+		DELTA_OBJ_META_PATH,
+	)
+}
+
+pub fn decode_branch_delta_object_meta_object_id(
+	branch_id: DatabaseBranchId,
+	key: &[u8],
+) -> Result<uuid::Uuid> {
+	let prefix = branch_delta_object_root_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch delta object meta key did not start with expected prefix")?;
+	let expected_len = std::mem::size_of::<uuid::Uuid>() + DELTA_OBJ_META_PATH.len();
+	ensure!(
+		suffix.len() == expected_len,
+		"branch delta object meta key suffix had {} bytes, expected {}",
+		suffix.len(),
+		expected_len
+	);
+	let object_id = &suffix[..std::mem::size_of::<uuid::Uuid>()];
+	let meta_suffix = &suffix[std::mem::size_of::<uuid::Uuid>()..];
+	ensure!(
+		meta_suffix == DELTA_OBJ_META_PATH,
+		"branch delta object meta key did not end with meta suffix"
+	);
+	uuid::Uuid::from_slice(object_id)
+		.context("branch delta object meta suffix should decode as uuid")
+}
+
+pub fn branch_delta_object_ref_key(branch_id: DatabaseBranchId, object_id: uuid::Uuid) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), DELTA_OBJ_REF_PATH);
+	append_uuid(&mut key, object_id);
+	key
+}
+
+pub fn branch_delta_manifest_key(branch_id: DatabaseBranchId, txid: u64) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), DELTA_MANIFEST_PATH);
+	key.extend_from_slice(&txid.to_be_bytes());
+	key
+}
+
+pub fn branch_delta_manifest_prefix(branch_id: DatabaseBranchId) -> Vec<u8> {
+	with_suffix(database_branch_base(branch_id), DELTA_MANIFEST_PATH)
+}
+
+pub fn branch_delta_pageidx_prefix(branch_id: DatabaseBranchId, txid: u64) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), DELTA_PAGEIDX_PATH);
+	key.extend_from_slice(&txid.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
+pub fn branch_delta_pageidx_key(
+	branch_id: DatabaseBranchId,
+	txid: u64,
+	pgno: u32,
+) -> Vec<u8> {
+	let mut key = branch_delta_pageidx_prefix(branch_id, txid);
+	key.extend_from_slice(&pgno.to_be_bytes());
+	key
+}
+
+pub fn decode_branch_delta_manifest_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {
+	let prefix = branch_delta_manifest_prefix(branch_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch delta manifest key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == std::mem::size_of::<u64>(),
+		"branch delta manifest key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u64>()
+	);
+
+	Ok(u64::from_be_bytes(suffix.try_into().context(
+		"branch delta manifest txid suffix should decode as u64",
+	)?))
+}
+
+pub fn decode_branch_delta_pageidx_pgno(
+	branch_id: DatabaseBranchId,
+	txid: u64,
+	key: &[u8],
+) -> Result<u32> {
+	let prefix = branch_delta_pageidx_prefix(branch_id, txid);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch delta page index key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == std::mem::size_of::<u32>(),
+		"branch delta page index key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u32>()
+	);
+
+	Ok(u32::from_be_bytes(suffix.try_into().context(
+		"branch delta page index pgno suffix should decode as u32",
+	)?))
+}
+
+pub fn decode_branch_delta_object_chunk_idx(
+	branch_id: DatabaseBranchId,
+	object_id: uuid::Uuid,
+	key: &[u8],
+) -> Result<u32> {
+	let prefix = branch_delta_object_chunk_prefix(branch_id, object_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("branch delta object chunk key did not start with expected prefix")?;
+	ensure!(
+		suffix.len() == std::mem::size_of::<u32>(),
+		"branch delta object chunk key suffix had {} bytes, expected {}",
+		suffix.len(),
+		std::mem::size_of::<u32>()
+	);
+
+	Ok(u32::from_be_bytes(suffix.try_into().context(
+		"branch delta object chunk suffix should decode as u32",
+	)?))
+}
+
 pub fn decode_branch_delta_chunk_txid(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u64> {
 	let prefix = branch_delta_prefix(branch_id);
 	ensure!(
@@ -704,6 +954,30 @@ pub fn branch_shard_version_prefix(branch_id: DatabaseBranchId, shard_id: u32) -
 pub fn branch_shard_key(branch_id: DatabaseBranchId, shard_id: u32, as_of_txid: u64) -> Vec<u8> {
 	let mut key = branch_shard_version_prefix(branch_id, shard_id);
 	key.extend_from_slice(&as_of_txid.to_be_bytes());
+	key
+}
+
+pub fn branch_shard_chunk_prefix(
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+) -> Vec<u8> {
+	let mut key = with_suffix(database_branch_base(branch_id), SHARD_CHUNK_PATH);
+	key.extend_from_slice(&shard_id.to_be_bytes());
+	key.push(b'/');
+	key.extend_from_slice(&as_of_txid.to_be_bytes());
+	key.push(b'/');
+	key
+}
+
+pub fn branch_shard_chunk_key(
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	as_of_txid: u64,
+	chunk_idx: u32,
+) -> Vec<u8> {
+	let mut key = branch_shard_chunk_prefix(branch_id, shard_id, as_of_txid);
+	key.extend_from_slice(&chunk_idx.to_be_bytes());
 	key
 }
 

@@ -1,33 +1,43 @@
-use std::sync::Arc;
+use std::{collections::BTreeMap, sync::Arc};
 
 use anyhow::Result;
 use gas::prelude::Id;
+use rivet_pools::NodeId;
 use sha2::{Digest, Sha256};
 use tempfile::Builder;
 use universaldb::utils::IsolationLevel::Snapshot;
 use uuid::Uuid;
 
+use crate::DELTA_OBJECT_CHUNK_BYTES;
 use super::{
 	ActiveColdCompactionJob, ActiveHotCompactionJob, ActiveReclaimCompactionJob, BranchStopState,
 	ColdInputSnapshot, ColdJobFinished, ColdJobInputRange, ColdShardBlob, ColdShardRef,
-	CompactionJobKind, CompactionJobStatus, CompactionRoot, CompanionWorkflowIds, DatabaseBranchId,
-	DatabaseBranchRecord, DbManagerInput, DbManagerState, ForceCompaction, ForceCompactionTracker,
-	ForceCompactionWork, HotInputSnapshot, HotJobFinished, HotJobInputRange, HotShardOutputRef,
-	ManagerActiveJobs, ManagerEffect, ManagerFdbSnapshot, ManagerPlanningDeadlines,
+	CompactionInputFingerprint, CompactionJobKind, CompactionJobStatus, CompactionRoot,
+	CompanionWorkflowIds, DatabaseBranchId, DatabaseBranchRecord, DbManagerInput, DbManagerState,
+	ForceCompaction, ForceCompactionTracker, ForceCompactionWork, HotInputSnapshot,
+	HotJobFinished, HotJobInputRange, HotShardOutputRef, InstallHotJobInput, ManagerActiveJobs,
+	ManagerEffect, ManagerFdbSnapshot, ManagerPlanningDeadlines,
 	ManagerStopReason, PlannedColdCompactionJob, PlannedHotCompactionJob,
 	PlannedReclaimCompactionJob, ReclaimFdbJobInput, ReclaimInputSnapshot, ReclaimJobFinished,
-	ReclaimJobInputRange, RefreshManagerOutput, ShardCachePolicy, StagedHotShardCleanupRef,
-	TxidRange, cleanup_repair_fdb_outputs_tx, fingerprint_repair_reclaim_range,
+	ReclaimJobInputRange, RefreshManagerOutput, ShardCachePolicy, StageHotJobInput,
+	StagedHotShardCleanupRef, TxidRange, cleanup_repair_fdb_outputs_tx,
+	fingerprint_hot_inputs, fingerprint_reclaim_inputs, fingerprint_repair_reclaim_range,
 	manager_effect_for_requested_stop, manager_effects_after_refresh,
 	manager_effects_for_cold_job_finished, manager_effects_for_hot_job_finished,
-	manager_effects_for_reclaim_job_finished, plan_cold_job, plan_hot_job,
-	plan_orphan_cold_object_deletes_tx, read_reclaim_input_snapshot, repair_reclaim_input_range,
+	manager_effects_for_reclaim_job_finished, install_hot_job_tx, plan_cold_job, plan_hot_job,
+	plan_orphan_cold_object_deletes_tx, load_staged_hot_shard_blob, read_hot_input_snapshot,
+	read_reclaim_input_snapshot, reclaim_coverage_is_complete, reclaim_fdb_job_tx,
+	repair_reclaim_input_range, write_staged_hot_shards,
 };
 use crate::conveyer::{
-	keys,
+	Db, branch, keys,
+	ltx::{LtxEncoder, LtxHeader, decode_ltx_v3},
 	types::{
-		BranchState, BucketBranchId, CommitRow, DBHead, encode_commit_row, encode_compaction_root,
-		encode_database_branch_record,
+		BranchState, BucketBranchId, BucketId, CommitRow, DBHead, DeltaManifest,
+		DeltaObjectMeta, DeltaObjectState, DeltaPageIndexEntry, DirtyPage, decode_db_head,
+		encode_commit_row, encode_compaction_root, encode_database_branch_record,
+		encode_db_head, encode_delta_manifest, encode_delta_object_meta,
+		encode_delta_page_index_entry, PitrPolicy,
 	},
 };
 
@@ -116,6 +126,82 @@ fn update_expected_fingerprint(fingerprint: &mut Sha256, bytes: &[u8]) {
 	fingerprint.update(bytes);
 }
 
+fn patterned_page(pgno: u32) -> Vec<u8> {
+	let mut state = (pgno as u64)
+		.wrapping_mul(0x9e37_79b9_7f4a_7c15)
+		.wrapping_add(0xd1b5_4a32_d192_ed03);
+	let mut bytes = vec![0; keys::PAGE_SIZE as usize];
+	for byte in &mut bytes {
+		state ^= state << 13;
+		state ^= state >> 7;
+		state ^= state << 17;
+		*byte = (state >> 32) as u8;
+	}
+	bytes
+}
+
+fn patterned_dirty_page(pgno: u32) -> DirtyPage {
+	DirtyPage {
+		pgno,
+		bytes: patterned_page(pgno),
+	}
+}
+
+fn patterned_dirty_pages(count: u32) -> Vec<DirtyPage> {
+	(1..=count).map(patterned_dirty_page).collect()
+}
+
+async fn read_test_branch_id(
+	db: &universaldb::Database,
+	bucket_id: Id,
+	database_id: &str,
+) -> Result<DatabaseBranchId> {
+	let database_id = database_id.to_string();
+	db.run(move |tx| {
+		let database_id = database_id.clone();
+		async move {
+			branch::resolve_database_branch(
+				&tx,
+				BucketId::from_gas_id(bucket_id),
+				&database_id,
+				Snapshot,
+			)
+			.await?
+			.ok_or_else(|| anyhow::anyhow!("database branch should exist"))
+		}
+	})
+	.await
+}
+
+async fn read_test_head(
+	db: &universaldb::Database,
+	database_branch_id: DatabaseBranchId,
+) -> Result<DBHead> {
+	db.run(move |tx| async move {
+		let bytes = tx
+			.informal()
+			.get(&keys::branch_meta_head_key(database_branch_id), Snapshot)
+			.await?
+			.ok_or_else(|| anyhow::anyhow!("database head should exist"))?;
+		decode_db_head(&bytes)
+	})
+	.await
+}
+
+async fn read_test_value(db: &universaldb::Database, key: Vec<u8>) -> Result<Option<Vec<u8>>> {
+	db.run(move |tx| {
+		let key = key.clone();
+		async move {
+			Ok(tx
+				.informal()
+				.get(&key, Snapshot)
+				.await?
+				.map(Vec::<u8>::from))
+		}
+	})
+	.await
+}
+
 fn planned_hot_job(
 	database_branch_id: DatabaseBranchId,
 	job_id: Id,
@@ -189,6 +275,140 @@ fn reclaim_range() -> ReclaimJobInputRange {
 		max_keys: 10,
 		max_bytes: 4096,
 	}
+}
+
+struct SeededLargeDelta {
+	object_id: Uuid,
+	chunk_count: u32,
+	pages: Vec<DirtyPage>,
+}
+
+fn complete_large_delta_rows(
+	database_branch_id: DatabaseBranchId,
+	txid: u64,
+	pages: Vec<DirtyPage>,
+) -> Result<(Vec<(Vec<u8>, Vec<u8>)>, SeededLargeDelta)> {
+	let object_id = Uuid::from_u128(0xfeed_0000_0000_0000_0000_0000_0000_0001);
+	let stage_id = Uuid::from_u128(0xfeed_0000_0000_0000_0000_0000_0000_0002);
+	let encoded = LtxEncoder::new(LtxHeader::delta(txid, 1, 1_000)).encode_with_index(&pages)?;
+	let object_hash = Sha256::digest(&encoded.bytes);
+	let mut object_hash_bytes = [0_u8; 32];
+	object_hash_bytes.copy_from_slice(&object_hash);
+	let chunks = encoded
+		.bytes
+		.chunks(DELTA_OBJECT_CHUNK_BYTES)
+		.map(Vec::from)
+		.collect::<Vec<_>>();
+	let chunk_count = u32::try_from(chunks.len())?;
+	let pages_by_pgno = pages
+		.iter()
+		.map(|page| (page.pgno, page.bytes.clone()))
+		.collect::<BTreeMap<_, _>>();
+	let db_size_pages = pages.iter().map(|page| page.pgno).max().unwrap_or(0);
+	let txid_bytes = txid.to_be_bytes().to_vec();
+	let versionstamp = [txid as u8; 16];
+	let root = root_with_watermarks(1, txid, 0);
+	let head = DBHead {
+		head_txid: txid,
+		db_size_pages,
+		post_apply_checksum: 0,
+		branch_id: database_branch_id,
+		#[cfg(debug_assertions)]
+		generation: 0,
+	};
+	let commit_row = CommitRow {
+		wall_clock_ms: 1_234,
+		versionstamp,
+		db_size_pages,
+		post_apply_checksum: 0,
+	};
+	let manifest = DeltaManifest {
+		txid,
+		object_id,
+		chunk_count,
+		encoded_len: encoded.bytes.len() as u64,
+		object_hash: object_hash_bytes,
+	};
+	let object_meta = DeltaObjectMeta {
+		object_id,
+		stage_id,
+		staged_txid: txid,
+		chunk_count,
+		encoded_len: encoded.bytes.len() as u64,
+		object_hash: object_hash_bytes,
+		state: DeltaObjectState::Committed { txid },
+		created_at_ms: 1_000,
+		expires_after_ms: 0,
+	};
+
+	let mut rows = vec![
+		(
+			keys::branches_list_key(database_branch_id),
+			encode_database_branch_record(branch_record(database_branch_id, 1))?,
+		),
+		(
+			keys::branch_compaction_root_key(database_branch_id),
+			encode_compaction_root(root)?,
+		),
+		(
+			keys::branch_meta_head_key(database_branch_id),
+			encode_db_head(head)?,
+		),
+		(
+			keys::branch_commit_key(database_branch_id, txid),
+			encode_commit_row(commit_row)?,
+		),
+		(keys::branch_vtx_key(database_branch_id, versionstamp), txid_bytes.clone()),
+		(
+			keys::branch_delta_manifest_key(database_branch_id, txid),
+			encode_delta_manifest(manifest)?,
+		),
+		(
+			keys::branch_delta_object_ref_key(database_branch_id, object_id),
+			txid_bytes,
+		),
+		(
+			keys::branch_delta_object_meta_key(database_branch_id, object_id),
+			encode_delta_object_meta(object_meta)?,
+		),
+		(
+			keys::branch_shard_key(database_branch_id, 0, txid),
+			encoded.bytes.clone(),
+		),
+	];
+	for (chunk_idx, chunk) in chunks.into_iter().enumerate() {
+		rows.push((
+			keys::branch_delta_object_chunk_key(database_branch_id, object_id, chunk_idx as u32),
+			chunk,
+		));
+	}
+	for page_index in encoded.page_index {
+		let page_bytes = pages_by_pgno
+			.get(&page_index.pgno)
+			.ok_or_else(|| anyhow::anyhow!("missing encoded page {}", page_index.pgno))?;
+		let page_hash = Sha256::digest(page_bytes);
+		let mut page_hash_bytes = [0_u8; 32];
+		page_hash_bytes.copy_from_slice(&page_hash);
+		rows.push((
+			keys::branch_delta_pageidx_key(database_branch_id, txid, page_index.pgno),
+			encode_delta_page_index_entry(DeltaPageIndexEntry {
+				txid,
+				object_id,
+				encoded_offset: page_index.offset,
+				encoded_size: u32::try_from(page_index.size)?,
+				page_hash: page_hash_bytes,
+			})?,
+		));
+	}
+
+	Ok((
+		rows,
+		SeededLargeDelta {
+			object_id,
+			chunk_count,
+			pages,
+		},
+	))
 }
 
 fn refresh_without_planned_work() -> RefreshManagerOutput {
@@ -651,6 +871,8 @@ fn hot_planning_uses_sha256_fingerprint_and_changes_with_inputs() {
 	let mut hot_inputs = HotInputSnapshot {
 		commits: vec![(1, commit(1)), (2, commit(2))],
 		delta_chunks: vec![(b"delta-key".to_vec(), b"delta-value".to_vec())],
+		large_delta_manifests: Vec::new(),
+		large_delta_pageidx_entries: Vec::new(),
 		pidx_entries: vec![(b"pidx-key".to_vec(), b"pidx-value".to_vec())],
 		pitr_interval_coverage: Vec::new(),
 		total_value_bytes: 24,
@@ -706,6 +928,156 @@ fn hot_planning_uses_sha256_fingerprint_and_changes_with_inputs() {
 	let changed_job = plan_hot_job(database_branch_id, &snapshot, Id::new_v1(3602), 1_002, true)
 		.expect("hot job should be planned");
 	assert_ne!(first_job.input_fingerprint, changed_job.input_fingerprint);
+}
+
+#[tokio::test]
+async fn hot_staging_loads_large_delta_pages_from_chunked_object() -> Result<()> {
+	let db = Arc::new(test_db().await?);
+	let bucket_id = Id::new_v1(4_600);
+	let database_id = "hot-staging-large-delta";
+	let database_db = Db::new(
+		Arc::clone(&db),
+		bucket_id,
+		database_id.to_string(),
+		NodeId::new(),
+	);
+	let dirty_pages = patterned_dirty_pages(2_049);
+	let expected_page = dirty_pages[127].bytes.clone();
+
+	database_db.commit(dirty_pages, 2_049, 1_000).await?;
+	let database_branch_id = read_test_branch_id(&db, bucket_id, database_id).await?;
+	let head = read_test_head(&db, database_branch_id).await?;
+	let root = root_with_watermarks(0, 0, 0);
+	let job_id = Id::new_v1(4_601);
+
+	let (output_refs, input_range, input_fingerprint): (
+		Vec<HotShardOutputRef>,
+		HotJobInputRange,
+		CompactionInputFingerprint,
+	) = db
+		.run({
+			let head = head.clone();
+			let root = root.clone();
+			move |tx| {
+				let head = head.clone();
+				let root = root.clone();
+				async move {
+					let hot_inputs = read_hot_input_snapshot(
+						&tx,
+						database_branch_id,
+						Some(&head),
+						&root,
+						Snapshot,
+						PitrPolicy::default(),
+						2_000,
+					)
+					.await?;
+					assert!(hot_inputs.delta_chunks.is_empty());
+					assert_eq!(hot_inputs.large_delta_manifests.len(), 1);
+					assert!(hot_inputs.large_delta_pageidx_entries.len() < 2_049);
+					assert!(hot_inputs.large_delta_pageidx_entries.len() >= 400);
+					assert!(hot_inputs.large_delta_manifests[0].3.chunk_count > 1);
+
+					let coverage_txids = vec![1];
+					let input_fingerprint = fingerprint_hot_inputs(
+						database_branch_id,
+						&root,
+						&head,
+						&coverage_txids,
+						&hot_inputs,
+					);
+					let input_range = HotJobInputRange {
+						txids: TxidRange {
+							min_txid: 1,
+							max_txid: 1,
+						},
+						coverage_txids,
+						max_pages: hot_inputs.large_delta_pageidx_entries.len() as u32,
+						max_bytes: hot_inputs.total_value_bytes,
+					};
+					let input = StageHotJobInput {
+						database_branch_id,
+						job_id,
+						job_kind: CompactionJobKind::Hot,
+						base_lifecycle_generation: 0,
+						base_manifest_generation: 0,
+						input_fingerprint,
+						input_range: input_range.clone(),
+					};
+					let output_refs = write_staged_hot_shards(&tx, &input, &head, &hot_inputs).await?;
+					Ok((output_refs, input_range, input_fingerprint))
+				}
+			}
+		})
+		.await?;
+
+	assert!(
+		output_refs.len() > 1,
+		"large delta should stage all touched shards"
+	);
+	let shard_two = output_refs
+		.iter()
+		.find(|output_ref| output_ref.shard_id == 2)
+		.expect("page 128 should land in staged shard 2");
+	let staged_blob = db
+		.run({
+			let shard_two = shard_two.clone();
+			move |tx| {
+				let shard_two = shard_two.clone();
+				async move {
+					load_staged_hot_shard_blob(&tx, database_branch_id, job_id, &shard_two, Snapshot)
+						.await
+				}
+			}
+		})
+		.await?
+		.expect("staged shard blob should exist");
+	let decoded = decode_ltx_v3(&staged_blob)?;
+	assert_eq!(decoded.get_page(128), Some(expected_page.as_slice()));
+
+	let install_input = InstallHotJobInput {
+		database_branch_id,
+		job_id,
+		job_kind: CompactionJobKind::Hot,
+		base_lifecycle_generation: 0,
+		base_manifest_generation: 0,
+		input_fingerprint,
+		input_range,
+		output_refs: output_refs.clone(),
+	};
+	let install_output = db
+		.run({
+			let install_input = install_input.clone();
+			move |tx| {
+				let install_input = install_input.clone();
+				async move { install_hot_job_tx(&tx, &install_input, 2_001).await }
+			}
+		})
+		.await?;
+	assert_eq!(install_output.status, CompactionJobStatus::Succeeded);
+	let published_row = read_test_value(
+		&db,
+		keys::branch_shard_key(database_branch_id, shard_two.shard_id, shard_two.as_of_txid),
+	)
+	.await?
+	.expect("published hot shard manifest should exist");
+	assert!(published_row.len() < staged_blob.len());
+	let published_chunk = read_test_value(
+		&db,
+		keys::branch_shard_chunk_key(
+			database_branch_id,
+			shard_two.shard_id,
+			shard_two.as_of_txid,
+			0,
+		),
+	)
+	.await?
+	.expect("published hot shard chunk should exist");
+	assert!(published_chunk.len() <= DELTA_OBJECT_CHUNK_BYTES);
+	let fetched = database_db.get_pages(vec![128]).await?;
+	assert_eq!(fetched[0].bytes.as_deref(), Some(expected_page.as_slice()));
+
+	Ok(())
 }
 
 #[test]
@@ -965,6 +1337,152 @@ async fn reclaim_input_snapshot_bounds_commit_scan_by_reclaim_ceiling() -> Resul
 		vec![10]
 	);
 	assert_eq!(snapshot.commits.len(), 1);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn reclaim_fdb_job_removes_complete_large_delta_rows() -> Result<()> {
+	let db = test_db().await?;
+	let database_branch_id = database_branch_id(0x3701);
+	let txid = 1;
+	let root = root_with_watermarks(1, txid, 0);
+	let (rows, seeded) = complete_large_delta_rows(
+		database_branch_id,
+		txid,
+		patterned_dirty_pages(20),
+	)?;
+	assert!(
+		seeded.chunk_count > 1,
+		"test large delta object should span multiple chunks"
+	);
+
+	db.run({
+		let rows = rows.clone();
+		move |tx| {
+			let rows = rows.clone();
+			async move {
+				for (key, value) in rows {
+					tx.informal().set(&key, &value);
+				}
+				Ok(())
+			}
+		}
+	})
+	.await?;
+
+	let snapshot = db
+		.run({
+			let root = root.clone();
+			move |tx| {
+				let root = root.clone();
+				async move {
+					read_reclaim_input_snapshot(
+						&tx,
+						database_branch_id,
+						&root,
+						&[],
+						None,
+						ShardCachePolicy::default(),
+						Snapshot,
+						false,
+						2_000,
+					)
+					.await
+				}
+			}
+		})
+		.await?;
+	assert_eq!(snapshot.txid_refs.len(), 1);
+	assert_eq!(snapshot.large_delta_manifests.len(), 1);
+	assert_eq!(snapshot.large_delta_pageidx_entries.len(), seeded.pages.len());
+	assert_eq!(snapshot.large_delta_complete_txids, vec![txid]);
+	assert_eq!(
+		snapshot.large_delta_object_chunks.len(),
+		seeded.chunk_count as usize
+	);
+	assert!(reclaim_coverage_is_complete(&snapshot));
+
+	let input_range = ReclaimJobInputRange {
+		txids: TxidRange {
+			min_txid: txid,
+			max_txid: txid,
+		},
+		txid_refs: snapshot.txid_refs.clone(),
+		cold_objects: Vec::new(),
+		shard_cache_evictions: Vec::new(),
+		staged_hot_shards: Vec::new(),
+		orphan_cold_objects: Vec::new(),
+		max_keys: 500,
+		max_bytes: 2 * 1024 * 1024,
+	};
+	let input = ReclaimFdbJobInput {
+		database_branch_id,
+		job_id: Id::new_v1(3_701),
+		job_kind: CompactionJobKind::Reclaim,
+		base_lifecycle_generation: 1,
+		base_manifest_generation: root.manifest_generation,
+		input_fingerprint: fingerprint_reclaim_inputs(database_branch_id, &root, &snapshot),
+		input_range,
+	};
+	let output = db
+		.run({
+			let input = input.clone();
+			move |tx| {
+				let input = input.clone();
+				async move { reclaim_fdb_job_tx(&tx, &input, false, 2_000).await }
+			}
+		})
+		.await?;
+	assert_eq!(output.status, CompactionJobStatus::Succeeded);
+	assert_eq!(output.output_refs.len(), 1);
+
+	assert!(
+		read_test_value(&db, keys::branch_commit_key(database_branch_id, txid))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_test_value(&db, keys::branch_delta_manifest_key(database_branch_id, txid))
+			.await?
+			.is_none()
+	);
+	assert!(
+		read_test_value(
+			&db,
+			keys::branch_delta_object_ref_key(database_branch_id, seeded.object_id),
+		)
+		.await?
+		.is_none()
+	);
+	assert!(
+		read_test_value(
+			&db,
+			keys::branch_delta_object_meta_key(database_branch_id, seeded.object_id),
+		)
+		.await?
+		.is_none()
+	);
+	for chunk_idx in 0..seeded.chunk_count {
+		assert!(
+			read_test_value(
+				&db,
+				keys::branch_delta_object_chunk_key(database_branch_id, seeded.object_id, chunk_idx),
+			)
+			.await?
+			.is_none()
+		);
+	}
+	for page in &seeded.pages {
+		assert!(
+			read_test_value(
+				&db,
+				keys::branch_delta_pageidx_key(database_branch_id, txid, page.pgno),
+			)
+			.await?
+			.is_none()
+		);
+	}
 
 	Ok(())
 }

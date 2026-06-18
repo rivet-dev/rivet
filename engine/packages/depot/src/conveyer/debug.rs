@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, ensure};
 use futures_util::TryStreamExt;
 use universaldb::{
 	RangeOption,
@@ -11,16 +11,19 @@ use universaldb::{
 };
 
 use crate::{
+	compaction::shared::load_large_delta_page,
 	conveyer::{
 		Db, branch,
 		db::load_branch_ancestry,
 		keys,
 		ltx::{DecodedLtx, decode_ltx_v3},
+		shard_blob::resolve_branch_shard_value,
 		types::{
 			ColdManifestChunk, ColdManifestIndex, CommitRow, DatabaseBranchId, FetchedPage,
-			LayerEntry, LayerKind, RestorePointIndexEntry, SQLITE_STORAGE_COLD_SCHEMA_VERSION,
-			decode_cold_manifest_chunk, decode_cold_manifest_index, decode_commit_row,
-			decode_restore_point_record,
+			DeltaManifest, DeltaPageIndexEntry, LayerEntry, LayerKind, RestorePointIndexEntry,
+			SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_cold_manifest_chunk,
+			decode_cold_manifest_index, decode_commit_row, decode_delta_manifest,
+			decode_delta_page_index_entry, decode_restore_point_record,
 		},
 	},
 	gc,
@@ -54,6 +57,12 @@ pub struct PageState {
 struct DebugReadSource {
 	branch_id: DatabaseBranchId,
 	max_txid: u64,
+}
+
+#[derive(Debug, Clone)]
+struct DebugLargeDeltaEntry {
+	pgno: u32,
+	page_index: DeltaPageIndexEntry,
 }
 
 pub async fn dump_database_ancestry(db: &Db) -> Result<Vec<(DatabaseBranchId, Option<[u8; 16]>)>> {
@@ -279,20 +288,58 @@ async fn load_pages_from_hot_tier(
 		.collect::<BTreeMap<_, _>>();
 
 	for source in sources {
-		for (_txid, blob) in tx_load_delta_blobs(tx, *source).await? {
-			let decoded = decode_ltx_v3(&blob).with_context(|| {
-				format!(
-					"decode sqlite debug delta for branch {:?}",
-					source.branch_id
-				)
-			})?;
-			for pgno in 1..=db_size_pages {
-				if pages.get(&pgno).is_some_and(Option::is_some) {
-					continue;
+		let legacy_blobs = tx_load_delta_blobs(tx, *source)
+			.await?
+			.into_iter()
+			.collect::<BTreeMap<_, _>>();
+		let large_entries = tx_load_large_delta_entries(tx, *source).await?;
+		let mut txids = legacy_blobs
+			.keys()
+			.chain(large_entries.keys())
+			.copied()
+			.collect::<Vec<_>>();
+		txids.sort_unstable();
+		txids.dedup();
+
+		for txid in txids.into_iter().rev() {
+			if let Some(blob) = legacy_blobs.get(&txid) {
+				let decoded = decode_ltx_v3(blob).with_context(|| {
+					format!(
+						"decode sqlite debug delta for branch {:?}",
+						source.branch_id
+					)
+				})?;
+				for page in decoded.pages {
+					if page.pgno > db_size_pages
+						|| pages.get(&page.pgno).is_some_and(Option::is_some)
+					{
+						continue;
+					}
+					pages.insert(page.pgno, Some(page.bytes));
 				}
-				if let Some(bytes) = decoded.get_page(pgno) {
-					pages.insert(pgno, Some(bytes.to_vec()));
+			}
+
+			if let Some((manifest, entries)) = large_entries.get(&txid) {
+				for entry in entries {
+					if entry.pgno > db_size_pages
+						|| pages.get(&entry.pgno).is_some_and(Option::is_some)
+					{
+						continue;
+					}
+					let page = load_large_delta_page(
+						tx,
+						source.branch_id,
+						manifest,
+						&entry.page_index,
+						entry.pgno,
+					)
+					.await?;
+					pages.insert(page.pgno, Some(page.bytes));
 				}
+			}
+
+			if pages.values().all(Option::is_some) {
+				break;
 			}
 		}
 	}
@@ -527,6 +574,58 @@ async fn tx_load_delta_blobs(
 	Ok(blobs)
 }
 
+async fn tx_load_large_delta_entries(
+	tx: &universaldb::Transaction,
+	source: DebugReadSource,
+) -> Result<BTreeMap<u64, (DeltaManifest, Vec<DebugLargeDeltaEntry>)>> {
+	let mut manifests = BTreeMap::<u64, DeltaManifest>::new();
+	for (key, value) in scan_prefix(tx, &keys::branch_delta_manifest_prefix(source.branch_id)).await?
+	{
+		let txid = keys::decode_branch_delta_manifest_txid(source.branch_id, &key)?;
+		if txid > source.max_txid {
+			continue;
+		}
+		let manifest = decode_delta_manifest(&value)
+			.context("decode sqlite debug large delta manifest")?;
+		ensure!(
+			manifest.txid == txid,
+			"sqlite debug large delta manifest txid {} did not match key txid {}",
+			manifest.txid,
+			txid
+		);
+		manifests.insert(txid, manifest);
+	}
+
+	let mut entries_by_txid = BTreeMap::new();
+	for (txid, manifest) in manifests {
+		let mut entries = Vec::new();
+		for (key, value) in scan_prefix(
+			tx,
+			&keys::branch_delta_pageidx_prefix(source.branch_id, txid),
+		)
+		.await?
+		{
+			let pgno = keys::decode_branch_delta_pageidx_pgno(source.branch_id, txid, &key)?;
+			let page_index = decode_delta_page_index_entry(&value)
+				.context("decode sqlite debug large delta page index")?;
+			ensure!(
+				page_index.txid == txid,
+				"sqlite debug large delta page index txid {} did not match key txid {}",
+				page_index.txid,
+				txid
+			);
+			ensure!(
+				page_index.object_id == manifest.object_id,
+				"sqlite debug large delta page index object did not match manifest object"
+			);
+			entries.push(DebugLargeDeltaEntry { pgno, page_index });
+		}
+		entries_by_txid.insert(txid, (manifest, entries));
+	}
+
+	Ok(entries_by_txid)
+}
+
 async fn tx_load_latest_shard_blob(
 	tx: &universaldb::Transaction,
 	sources: &[DebugReadSource],
@@ -550,12 +649,36 @@ async fn tx_load_latest_shard_blob(
 			latest = Some((entry.key().to_vec(), entry.value().to_vec()));
 		}
 
-		if latest.is_some() {
-			return Ok(latest);
+		if let Some((key, value)) = latest {
+			let as_of_txid = decode_branch_shard_as_of_txid(source.branch_id, shard_id, &key)?;
+			let blob =
+				resolve_branch_shard_value(tx, source.branch_id, shard_id, as_of_txid, &value, Snapshot)
+					.await?;
+			return Ok(Some((key, blob)));
 		}
 	}
 
 	Ok(None)
+}
+
+fn decode_branch_shard_as_of_txid(
+	branch_id: DatabaseBranchId,
+	shard_id: u32,
+	key: &[u8],
+) -> Result<u64> {
+	let prefix = keys::branch_shard_version_prefix(branch_id, shard_id);
+	let suffix = key
+		.strip_prefix(prefix.as_slice())
+		.context("sqlite debug branch shard key did not start with expected prefix")?;
+	let bytes: [u8; std::mem::size_of::<u64>()] = suffix.try_into().with_context(|| {
+		format!(
+			"sqlite debug branch shard key suffix had {} bytes, expected {}",
+			suffix.len(),
+			std::mem::size_of::<u64>()
+		)
+	})?;
+
+	Ok(u64::from_be_bytes(bytes))
 }
 
 fn cold_manifest_index_object_key(branch_id: DatabaseBranchId) -> String {

@@ -1,0 +1,5 @@
+{
+  "code": "sqlite_commit_page_limit_exceeded",
+  "group": "depot",
+  "message": "SQLite transaction touched too many pages."
+}

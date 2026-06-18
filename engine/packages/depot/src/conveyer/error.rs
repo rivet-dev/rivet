@@ -35,6 +35,31 @@ pub enum SqliteStorageError {
 	},
 
 	#[error(
+		"sqlite_commit_page_limit_exceeded",
+		"SQLite transaction touched too many pages.",
+		"SQLite transaction touched {dirty_page_count} pages, but the limit is {max_dirty_pages} pages of {page_size_bytes} bytes."
+	)]
+	SqliteCommitPageLimitExceeded {
+		dirty_page_count: u32,
+		max_dirty_pages: u32,
+		page_size_bytes: u32,
+	},
+
+	#[error(
+		"sqlite_commit_stage_not_found",
+		"SQLite commit stage was not found.",
+		"SQLite commit stage {stage_id} was not found."
+	)]
+	SqliteCommitStageNotFound { stage_id: uuid::Uuid },
+
+	#[error(
+		"sqlite_commit_stage_invalid",
+		"SQLite commit stage is invalid.",
+		"SQLite commit stage is invalid: {reason}."
+	)]
+	SqliteCommitStageInvalid { reason: String },
+
+	#[error(
 		"head_fence_mismatch",
 		"SQLite head fence mismatch.",
 		"SQLite head fence mismatch. Expected head txid {expected_head_txid}, but current head txid is {actual_head_txid}."
@@ -149,6 +174,20 @@ impl fmt::Display for SqliteStorageError {
 				f,
 				"CommitTooLarge: raw dirty pages were {actual_size_bytes} bytes, limit is {max_size_bytes} bytes"
 			),
+			SqliteStorageError::SqliteCommitPageLimitExceeded {
+				dirty_page_count,
+				max_dirty_pages,
+				page_size_bytes,
+			} => write!(
+				f,
+				"sqlite transaction touched too many pages: {dirty_page_count} pages, limit is {max_dirty_pages} pages of {page_size_bytes} bytes"
+			),
+			SqliteStorageError::SqliteCommitStageNotFound { stage_id } => {
+				write!(f, "sqlite commit stage {stage_id} was not found")
+			}
+			SqliteStorageError::SqliteCommitStageInvalid { reason } => {
+				write!(f, "sqlite commit stage is invalid: {reason}")
+			}
 			SqliteStorageError::HeadFenceMismatch {
 				expected_head_txid,
 				actual_head_txid,

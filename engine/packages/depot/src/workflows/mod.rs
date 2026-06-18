@@ -19,11 +19,15 @@ pub mod compaction {
 
 #[cfg(test)]
 use crate::compaction::shared::{
-	content_hash, fingerprint_repair_reclaim_range, plan_cold_job, plan_hot_job,
-	read_reclaim_input_snapshot,
+	content_hash, fingerprint_hot_inputs, fingerprint_reclaim_inputs,
+	fingerprint_repair_reclaim_range, load_staged_hot_shard_blob, plan_cold_job, plan_hot_job,
+	read_hot_input_snapshot, read_reclaim_input_snapshot,
+	reclaim_coverage_is_complete, write_staged_hot_shards,
 };
 #[cfg(test)]
 use compaction::*;
+#[cfg(test)]
+use db_hot_compacter::install_hot_job_tx;
 #[cfg(test)]
 use db_manager::{
 	ManagerEffect, manager_effect_for_requested_stop, manager_effects_after_refresh,
@@ -31,7 +35,9 @@ use db_manager::{
 	manager_effects_for_reclaim_job_finished, repair_reclaim_input_range,
 };
 #[cfg(test)]
-use db_reclaimer::{cleanup_repair_fdb_outputs_tx, plan_orphan_cold_object_deletes_tx};
+use db_reclaimer::{
+	cleanup_repair_fdb_outputs_tx, plan_orphan_cold_object_deletes_tx, reclaim_fdb_job_tx,
+};
 
 #[cfg(test)]
 #[path = "../../tests/inline/workflows_compaction.rs"]

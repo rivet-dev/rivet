@@ -1861,12 +1861,14 @@ dependencies = [
  "rivet-pools",
  "rivet-test-deps",
  "scc",
+ "serde_json",
  "sha2",
  "tempfile",
  "tokio",
  "tracing",
  "universaldb",
  "universalpubsub",
+ "uuid",
 ]
 
 [[package]]
@@ -1880,6 +1882,7 @@ dependencies = [
  "rivet-envoy-protocol",
  "rivet-error",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
@@ -4274,6 +4277,7 @@ dependencies = [
  "universaldb",
  "universalpubsub",
  "url",
+ "uuid",
  "vbare",
 ]
 

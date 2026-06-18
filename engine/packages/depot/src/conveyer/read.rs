@@ -29,10 +29,10 @@ use crate::conveyer::{
 };
 
 use self::{
-	cold::{ColdLayerCandidate, ColdPageCandidate, tx_load_latest_compaction_cold_ref},
+	cold::{ColdPageCandidate, tx_load_latest_compaction_cold_ref},
 	pidx::{PageRef, decode_pidx_txid},
 	plan::{ReadSource, StorageScope, resolve_storage_scope},
-	shard::{tx_load_delta_blob, tx_load_latest_shard_blob},
+	shard::{tx_load_delta_blob, tx_load_large_delta_page, tx_load_latest_shard_blob},
 	tx::tx_scan_prefix_values,
 };
 
@@ -163,6 +163,7 @@ impl Db {
 							loaded_pidx_rows: None,
 							page_sources: BTreeMap::new(),
 							source_blobs: BTreeMap::new(),
+							large_delta_pages: BTreeMap::new(),
 							shard_cache_read_outcomes: BTreeMap::new(),
 							cold_page_candidates: BTreeMap::new(),
 							stale_pidx_pgnos: BTreeSet::new(),
@@ -237,7 +238,7 @@ impl Db {
 
 					let mut page_sources = BTreeMap::new();
 					let mut source_blobs = BTreeMap::new();
-					let mut missing_delta_prefixes = BTreeSet::new();
+					let mut large_delta_pages = BTreeMap::new();
 					let mut shard_sources = BTreeMap::<u32, Option<(Vec<u8>, Vec<u8>)>>::new();
 					let mut stale_pidx_pgnos = BTreeSet::new();
 					let mut cold_page_candidates = BTreeMap::<u32, Vec<ColdPageCandidate>>::new();
@@ -257,16 +258,8 @@ impl Db {
 							)
 						});
 
-						if preferred_delta
-							.as_ref()
-							.is_some_and(|(prefix, _, _)| missing_delta_prefixes.contains(prefix))
-						{
-							stale_pidx_pgnos.insert(*pgno);
-						}
-
-						if let Some((delta_prefix, delta_source, delta_txid)) = preferred_delta
-							.as_ref()
-							.filter(|(prefix, _, _)| !missing_delta_prefixes.contains(prefix))
+						if let Some((delta_prefix, delta_source, delta_txid)) =
+							preferred_delta.as_ref()
 						{
 							if !source_blobs.contains_key(delta_prefix) {
 								let blob = tx_load_delta_blob(&tx, delta_prefix).await?;
@@ -297,17 +290,18 @@ impl Db {
 								if let Some(blob) = blob {
 									source_blobs.insert(delta_prefix.clone(), blob);
 								} else {
-									missing_delta_prefixes.insert(delta_prefix.clone());
+									if let Some(bytes) = tx_load_large_delta_page(
+										&tx,
+										*delta_source,
+										*delta_txid,
+										*pgno,
+									)
+									.await?
+									{
+										large_delta_pages.insert(*pgno, bytes);
+										continue;
+									}
 									stale_pidx_pgnos.insert(*pgno);
-									let ReadSource::Branch(source) = *delta_source;
-									cold_candidates.push(
-										ColdLayerCandidate {
-											branch_id: source.branch_id,
-											owner_txid: *delta_txid,
-											shard_id: pgno / SHARD_SIZE,
-										}
-										.into(),
-									);
 								}
 							}
 
@@ -415,6 +409,7 @@ impl Db {
 						loaded_pidx_rows,
 						page_sources,
 						source_blobs,
+						large_delta_pages,
 						shard_cache_read_outcomes,
 						cold_page_candidates,
 						stale_pidx_pgnos,
@@ -458,7 +453,9 @@ impl Db {
 				continue;
 			}
 
-			let bytes = if let Some(source_key) = tx_result.page_sources.get(&pgno) {
+			let bytes = if let Some(bytes) = tx_result.large_delta_pages.get(&pgno) {
+				bytes.clone()
+			} else if let Some(source_key) = tx_result.page_sources.get(&pgno) {
 				let blob = tx_result
 					.source_blobs
 					.get(source_key)
@@ -601,6 +598,7 @@ struct GetPagesTxResult {
 	loaded_pidx_rows: Option<Vec<(u32, u64)>>,
 	page_sources: BTreeMap<u32, Vec<u8>>,
 	source_blobs: BTreeMap<Vec<u8>, Vec<u8>>,
+	large_delta_pages: BTreeMap<u32, Vec<u8>>,
 	shard_cache_read_outcomes: BTreeMap<u32, ShardCacheReadOutcome>,
 	cold_page_candidates: BTreeMap<u32, Vec<ColdPageCandidate>>,
 	stale_pidx_pgnos: BTreeSet<u32>,

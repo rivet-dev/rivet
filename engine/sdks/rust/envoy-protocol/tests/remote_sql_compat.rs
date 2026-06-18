@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rivet_envoy_protocol::{
-	generated::{v4, v5},
+	generated::{v4, v6},
 	versioned::{
 		ProtocolCompatibilityDirection, ProtocolCompatibilityError, ProtocolCompatibilityFeature,
 		ToEnvoy, ToRivet,
@@ -8,10 +8,10 @@ use rivet_envoy_protocol::{
 };
 use vbare::OwnedVersionedData;
 
-fn remote_sql_request_exec() -> v5::ToRivet {
-	v5::ToRivet::ToRivetSqliteExecRequest(v5::ToRivetSqliteExecRequest {
+fn remote_sql_request_exec() -> v6::ToRivet {
+	v6::ToRivet::ToRivetSqliteExecRequest(v6::ToRivetSqliteExecRequest {
 		request_id: 1,
-		data: v5::SqliteExecRequest {
+		data: v6::SqliteExecRequest {
 			namespace_id: "namespace".into(),
 			actor_id: "actor".into(),
 			generation: 7,
@@ -20,39 +20,41 @@ fn remote_sql_request_exec() -> v5::ToRivet {
 	})
 }
 
-fn remote_sql_request_execute() -> v5::ToRivet {
-	v5::ToRivet::ToRivetSqliteExecuteRequest(v5::ToRivetSqliteExecuteRequest {
+fn remote_sql_request_execute() -> v6::ToRivet {
+	v6::ToRivet::ToRivetSqliteExecuteRequest(v6::ToRivetSqliteExecuteRequest {
 		request_id: 2,
-		data: v5::SqliteExecuteRequest {
+		data: v6::SqliteExecuteRequest {
 			namespace_id: "namespace".into(),
 			actor_id: "actor".into(),
 			generation: 7,
 			sql: "select ?".into(),
-			params: Some(vec![v5::SqliteBindParam::SqliteValueInteger(
-				v5::SqliteValueInteger { value: 1 },
+			params: Some(vec![v6::SqliteBindParam::SqliteValueInteger(
+				v6::SqliteValueInteger { value: 1 },
 			)]),
 		},
 	})
 }
 
-fn remote_sql_response_exec() -> v5::ToEnvoy {
-	v5::ToEnvoy::ToEnvoySqliteExecResponse(v5::ToEnvoySqliteExecResponse {
+fn remote_sql_response_exec() -> v6::ToEnvoy {
+	v6::ToEnvoy::ToEnvoySqliteExecResponse(v6::ToEnvoySqliteExecResponse {
 		request_id: 1,
-		data: v5::SqliteExecResponse::SqliteErrorResponse(v5::SqliteErrorResponse {
+		data: v6::SqliteExecResponse::SqliteErrorResponse(v6::SqliteErrorResponse {
 			group: "sqlite".into(),
 			code: "remote_unavailable".into(),
 			message: "remote sql execution is unavailable".into(),
+			metadata: None,
 		}),
 	})
 }
 
-fn remote_sql_response_execute() -> v5::ToEnvoy {
-	v5::ToEnvoy::ToEnvoySqliteExecuteResponse(v5::ToEnvoySqliteExecuteResponse {
+fn remote_sql_response_execute() -> v6::ToEnvoy {
+	v6::ToEnvoy::ToEnvoySqliteExecuteResponse(v6::ToEnvoySqliteExecuteResponse {
 		request_id: 2,
-		data: v5::SqliteExecuteResponse::SqliteErrorResponse(v5::SqliteErrorResponse {
+		data: v6::SqliteExecuteResponse::SqliteErrorResponse(v6::SqliteErrorResponse {
 			group: "sqlite".into(),
 			code: "remote_unavailable".into(),
 			message: "remote sql execution is unavailable".into(),
+			metadata: None,
 		}),
 	})
 }
@@ -75,6 +77,54 @@ fn assert_compatibility_error(
 	assert_eq!(err.target_version, target_version);
 }
 
+fn staged_commit_request_begin() -> v6::ToRivet {
+	v6::ToRivet::ToRivetSqliteCommitStageBeginRequest(
+		v6::ToRivetSqliteCommitStageBeginRequest {
+			request_id: 3,
+			data: v6::SqliteCommitStageBeginRequest {
+				actor_id: "actor".into(),
+				db_size_pages: 64,
+				now_ms: 1_000,
+				expected_generation: Some(7),
+				expected_head_txid: Some(1),
+				dirty_pgnos: vec![1, 2, 3],
+			},
+		},
+	)
+}
+
+fn staged_commit_response_finalize() -> v6::ToEnvoy {
+	v6::ToEnvoy::ToEnvoySqliteCommitStageFinalizeResponse(
+		v6::ToEnvoySqliteCommitStageFinalizeResponse {
+			request_id: 3,
+			data: v6::SqliteCommitResponse::SqliteErrorResponse(v6::SqliteErrorResponse {
+				group: "depot".into(),
+				code: "sqlite_commit_page_limit_exceeded".into(),
+				message: "SQLite transaction touched too many pages.".into(),
+				metadata: Some(r#"{"max_dirty_pages":8192}"#.into()),
+			}),
+		},
+	)
+}
+
+fn assert_stage_compatibility_error(
+	err: anyhow::Error,
+	direction: ProtocolCompatibilityDirection,
+	target_version: u16,
+) {
+	let err = err
+		.downcast_ref::<ProtocolCompatibilityError>()
+		.expect("expected structured protocol compatibility error");
+
+	assert_eq!(
+		err.feature,
+		ProtocolCompatibilityFeature::SqliteCommitStaging
+	);
+	assert_eq!(err.direction, direction);
+	assert_eq!(err.required_version, 6);
+	assert_eq!(err.target_version, target_version);
+}
+
 #[test]
 fn old_core_new_pegboard_envoy_rejects_remote_sql_request() {
 	let err = ToRivet::wrap_latest(remote_sql_request_exec())
@@ -82,6 +132,35 @@ fn old_core_new_pegboard_envoy_rejects_remote_sql_request() {
 		.expect_err("remote SQL requests must not serialize below v4");
 
 	assert_compatibility_error(err, ProtocolCompatibilityDirection::ToRivet, 3);
+}
+
+#[test]
+fn staged_commit_messages_require_v6() {
+	let request_err = ToRivet::wrap_latest(staged_commit_request_begin())
+		.serialize(5)
+		.expect_err("staged commit requests must not serialize below v6");
+	let response_err = ToEnvoy::wrap_latest(staged_commit_response_finalize())
+		.serialize(5)
+		.expect_err("staged commit responses must not serialize below v6");
+
+	assert_stage_compatibility_error(request_err, ProtocolCompatibilityDirection::ToRivet, 5);
+	assert_stage_compatibility_error(response_err, ProtocolCompatibilityDirection::ToEnvoy, 5);
+}
+
+#[test]
+fn staged_commit_error_metadata_roundtrips_in_v6() -> Result<()> {
+	let response = ToEnvoy::wrap_latest(staged_commit_response_finalize()).serialize(6)?;
+	let v6::ToEnvoy::ToEnvoySqliteCommitStageFinalizeResponse(decoded) =
+		ToEnvoy::deserialize(&response, 6)?
+	else {
+		panic!("expected staged finalize response");
+	};
+	let v6::SqliteCommitResponse::SqliteErrorResponse(error) = decoded.data else {
+		panic!("expected staged finalize error response");
+	};
+	assert_eq!(error.metadata, Some(r#"{"max_dirty_pages":8192}"#.into()));
+
+	Ok(())
 }
 
 #[test]
@@ -113,11 +192,11 @@ fn new_core_new_pegboard_envoy_allows_remote_sql_both_directions() -> Result<()>
 
 	assert!(matches!(
 		ToRivet::deserialize(&request, 4)?,
-		v5::ToRivet::ToRivetSqliteExecRequest(_)
+		v6::ToRivet::ToRivetSqliteExecRequest(_)
 	));
 	assert!(matches!(
 		ToEnvoy::deserialize(&response, 4)?,
-		v5::ToEnvoy::ToEnvoySqliteExecResponse(_)
+		v6::ToEnvoy::ToEnvoySqliteExecResponse(_)
 	));
 
 	Ok(())

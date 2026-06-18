@@ -20,6 +20,7 @@ tracing.workspace = true
 getrandom = "0.2"
 rivet-envoy-protocol.workspace = true
 depot-client-types.workspace = true
+serde_json.workspace = true
 moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
 scc.workspace = true
@@ -36,3 +37,4 @@ sha2.workspace = true
 tempfile.workspace = true
 universaldb.workspace = true
 universalpubsub.workspace = true
+uuid.workspace = true

@@ -108,6 +108,7 @@ fn commit_response_ok_and_err_roundtrip() -> anyhow::Result<()> {
 					group: "depot".into(),
 					code: "quota_exceeded".into(),
 					message: "quota exceeded".into(),
+					metadata: None,
 				},
 			),
 		},
@@ -168,7 +169,7 @@ fn expected_generation_optional_present_and_absent() -> anyhow::Result<()> {
 
 #[test]
 fn protocol_version_constant_matches_schema_version() {
-	assert_eq!(PROTOCOL_VERSION, 5);
+	assert_eq!(PROTOCOL_VERSION, 6);
 }
 
 #[test]

@@ -16,24 +16,28 @@ pub(crate) use universaldb::{
 		end_of_key_range,
 	},
 };
+pub(crate) use uuid::Uuid;
 
 pub(crate) use crate::{
 	ACCESS_TOUCH_THROTTLE_MS, CMP_COLD_OBJECT_DELETE_GRACE_MS, CMP_FDB_BATCH_MAX_KEYS,
 	CMP_FDB_BATCH_MAX_VALUE_BYTES, CMP_S3_DELETE_MAX_OBJECTS, CMP_S3_UPLOAD_LIMIT_BYTES,
-	CMP_S3_UPLOAD_MAX_OBJECTS, HOT_BURST_COLD_LAG_THRESHOLD_TXIDS, MAX_BUCKET_DEPTH,
+	CMP_S3_UPLOAD_MAX_OBJECTS, DELTA_OBJECT_CHUNK_BYTES, HOT_BURST_COLD_LAG_THRESHOLD_TXIDS,
+	MAX_BUCKET_DEPTH,
 	cold_tier::{ColdTier, cold_tier_from_config},
 	conveyer::{
 		history_pin, keys,
-		ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
+		ltx::{DecodedLtx, LtxHeader, decode_ltx_page_frame, decode_ltx_v3, encode_ltx_v3},
 		quota,
 		types::{
 			BranchState, BucketCatalogDbFact, BucketForkFact, BucketId, ColdShardRef, CommitRow,
 			CompactionRoot, DBHead, DatabaseBranchId, DatabaseBranchRecord, DbHistoryPin,
-			DirtyPage, PitrIntervalCoverage, PitrPolicy, RetiredColdObject,
+			DeltaManifest, DeltaObjectMeta, DeltaPageIndexEntry, DirtyPage, PitrIntervalCoverage,
+			PitrPolicy, RetiredColdObject,
 			RetiredColdObjectDeleteState, ShardCachePolicy, SqliteCmpDirty,
 			decode_bucket_catalog_db_fact, decode_bucket_fork_fact, decode_bucket_pointer,
 			decode_cold_shard_ref, decode_commit_row, decode_compaction_root,
 			decode_database_branch_record, decode_database_pointer, decode_db_head,
+			decode_delta_manifest, decode_delta_object_meta, decode_delta_page_index_entry,
 			decode_pitr_interval_coverage, decode_pitr_policy, decode_retired_cold_object,
 			decode_shard_cache_policy, decode_sqlite_cmp_dirty, encode_cold_shard_ref,
 			encode_compaction_root, encode_pitr_interval_coverage, encode_retired_cold_object,
@@ -1074,6 +1078,8 @@ pub(crate) struct HotInputSnapshot {
 	pub(crate) commits: Vec<(u64, CommitRow)>,
 	pub(crate) pitr_interval_coverage: Vec<PitrIntervalSelection>,
 	pub(crate) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
+	pub(crate) large_delta_manifests: Vec<(u64, Vec<u8>, Vec<u8>, DeltaManifest)>,
+	pub(crate) large_delta_pageidx_entries: Vec<(u64, u32, Vec<u8>, Vec<u8>, DeltaPageIndexEntry)>,
 	pub(crate) pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) total_value_bytes: u64,
 }
@@ -1109,6 +1115,12 @@ pub(crate) struct ReclaimInputSnapshot {
 	pub(crate) expired_pitr_interval_rows: Vec<(i64, Vec<u8>, Vec<u8>, PitrIntervalCoverage)>,
 	pub(crate) commits: Vec<(u64, Vec<u8>, Vec<u8>, CommitRow)>,
 	pub(crate) delta_chunks: Vec<(Vec<u8>, Vec<u8>)>,
+	pub(crate) large_delta_manifests: Vec<(u64, Vec<u8>, Vec<u8>, DeltaManifest)>,
+	pub(crate) large_delta_complete_txids: Vec<u64>,
+	pub(crate) large_delta_pageidx_entries: Vec<(u64, u32, Vec<u8>, Vec<u8>, DeltaPageIndexEntry)>,
+	pub(crate) large_delta_object_refs: Vec<(Uuid, Vec<u8>, Vec<u8>)>,
+	pub(crate) large_delta_object_metas: Vec<(Uuid, Vec<u8>, Vec<u8>, DeltaObjectMeta)>,
+	pub(crate) large_delta_object_chunks: Vec<(Uuid, Vec<u8>, Vec<u8>)>,
 	pub(crate) pidx_entries: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) coverage_shards: Vec<(Vec<u8>, Vec<u8>)>,
 	pub(crate) required_coverage_shard_count: usize,
@@ -1119,6 +1131,7 @@ pub(crate) struct ReclaimInputSnapshot {
 pub(crate) struct ShardCacheEvictionCandidate {
 	pub(crate) reference: ShardCacheEvictionRef,
 	pub(crate) shard_key: Vec<u8>,
+	pub(crate) shard_row_bytes: Vec<u8>,
 	pub(crate) shard_bytes: Vec<u8>,
 	pub(crate) cold_ref_key: Vec<u8>,
 	pub(crate) cold_ref_bytes: Vec<u8>,

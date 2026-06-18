@@ -4,6 +4,7 @@ use crate::{
 		shared::*,
 		test_hooks, *,
 	},
+	conveyer::shard_blob::clear_branch_shard_chunks,
 	conveyer::metrics,
 	workflows::db_manager::branch_record_is_live_at_generation,
 };
@@ -62,7 +63,7 @@ fn record_shard_cache_eviction_metrics(input: &ReclaimFdbJobInput, output: &Recl
 	}
 }
 
-async fn reclaim_fdb_job_tx(
+pub(crate) async fn reclaim_fdb_job_tx(
 	tx: &universaldb::Transaction,
 	input: &ReclaimFdbJobInput,
 	cold_storage_enabled: bool,
@@ -189,6 +190,22 @@ async fn reclaim_fdb_job_tx(
 		.iter()
 		.map(|txid_ref| txid_ref.txid)
 		.collect::<BTreeSet<_>>();
+	let large_delta_txids = snapshot
+		.large_delta_manifests
+		.iter()
+		.map(|(txid, _, _, _)| *txid)
+		.collect::<BTreeSet<_>>();
+	let complete_large_delta_txids = snapshot
+		.large_delta_complete_txids
+		.iter()
+		.copied()
+		.collect::<BTreeSet<_>>();
+	let complete_large_delta_objects = snapshot
+		.large_delta_manifests
+		.iter()
+		.filter(|(txid, _, _, _)| complete_large_delta_txids.contains(txid))
+		.map(|(_, _, _, manifest)| manifest.object_id)
+		.collect::<BTreeSet<_>>();
 	let mut key_count = 0_u32;
 	let mut byte_count = 0_u64;
 	#[cfg(feature = "test-faults")]
@@ -200,6 +217,9 @@ async fn reclaim_fdb_job_tx(
 	}
 	for (txid, key, value, commit) in &snapshot.commits {
 		if !selected_reclaim_txids.contains(txid) {
+			continue;
+		}
+		if large_delta_txids.contains(txid) && !complete_large_delta_txids.contains(txid) {
 			continue;
 		}
 		udb::compare_and_clear(tx, key, value);
@@ -227,6 +247,46 @@ async fn reclaim_fdb_job_tx(
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
 	}
+	for (txid, key, value, _) in &snapshot.large_delta_manifests {
+		if !selected_reclaim_txids.contains(txid) {
+			continue;
+		}
+		if !complete_large_delta_txids.contains(txid) {
+			continue;
+		}
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+	for (txid, _, key, value, _) in &snapshot.large_delta_pageidx_entries {
+		if !selected_reclaim_txids.contains(txid) {
+			continue;
+		}
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+	for (object_id, key, value) in &snapshot.large_delta_object_refs {
+		if !complete_large_delta_objects.contains(object_id) {
+			continue;
+		}
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+	for (object_id, key, value, _) in &snapshot.large_delta_object_metas {
+		if !complete_large_delta_objects.contains(object_id) {
+			continue;
+		}
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
+	for (_, key, value) in &snapshot.large_delta_object_chunks {
+		udb::compare_and_clear(tx, key, value);
+		key_count = key_count.saturating_add(1);
+		byte_count = byte_count.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+	}
 	for (_, key, value, _) in &snapshot.expired_pitr_interval_rows {
 		udb::compare_and_clear(tx, key, value);
 		key_count = key_count.saturating_add(1);
@@ -240,7 +300,14 @@ async fn reclaim_fdb_job_tx(
 		{
 			continue;
 		}
-		udb::compare_and_clear(tx, &candidate.shard_key, &candidate.shard_bytes);
+		udb::compare_and_clear(tx, &candidate.shard_key, &candidate.shard_row_bytes);
+		clear_branch_shard_chunks(
+			tx,
+			input.database_branch_id,
+			candidate.reference.shard_id,
+			candidate.reference.as_of_txid,
+			&candidate.shard_row_bytes,
+		)?;
 		key_count = key_count.saturating_add(1);
 		byte_count = byte_count
 			.saturating_add(u64::try_from(candidate.shard_bytes.len()).unwrap_or(u64::MAX));
@@ -309,14 +376,15 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 	let mut key_count = 0_u32;
 	let mut byte_count = 0_u64;
 	for staged in &input.input_range.staged_hot_shards {
-		let stage_key = keys::branch_compaction_stage_hot_shard_key(
+		let Some(stage_value) = load_staged_hot_shard_blob(
+			tx,
 			input.database_branch_id,
 			staged.job_id,
-			staged.output_ref.shard_id,
-			staged.output_ref.as_of_txid,
-			0,
-		);
-		let Some(stage_value) = tx_get_value(tx, &stage_key, Serializable).await? else {
+			&staged.output_ref,
+			Serializable,
+		)
+		.await?
+		else {
 			continue;
 		};
 		if staged.output_ref.size_bytes != u64::try_from(stage_value.len()).unwrap_or(u64::MAX)
@@ -345,7 +413,14 @@ pub(super) async fn cleanup_repair_fdb_outputs_tx(
 			repair_action = "clear_staged_hot_output",
 			"clearing orphan staged hot shard output"
 		);
-		udb::compare_and_clear(tx, &stage_key, &stage_value);
+		clear_staged_hot_shard_blob(
+			tx,
+			input.database_branch_id,
+			staged.job_id,
+			&staged.output_ref,
+			Serializable,
+		)
+		.await?;
 		key_count = key_count.saturating_add(1);
 		byte_count =
 			byte_count.saturating_add(u64::try_from(stage_value.len()).unwrap_or(u64::MAX));

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { BRIDGE_RIVET_ERROR_PREFIX, RivetError } from "../../actor/errors";
 import {
 	type JsNativeDatabaseLike,
 	wrapJsNativeDatabase,
@@ -21,6 +22,7 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 	active = 0;
 	maxActive = 0;
 	closed = false;
+	kvError: string | null = null;
 	executeCalls: { sql: string; params?: NativeParams; write: boolean }[] = [];
 	#pending: ReturnType<typeof deferred<NativeExecuteResult>>[] = [];
 
@@ -43,7 +45,7 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 	}
 
 	takeLastKvError() {
-		return null;
+		return this.kvError;
 	}
 
 	async close() {
@@ -62,6 +64,14 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 			lastInsertRowId: null,
 			...result,
 		});
+	}
+
+	rejectNext(error: unknown) {
+		const pending = this.#pending.shift();
+		if (!pending) {
+			throw new Error("no pending native execute call");
+		}
+		pending.reject(error);
 	}
 
 	async #startExecute(
@@ -152,6 +162,36 @@ describe("wrapJsNativeDatabase", () => {
 		await expect(fallback).resolves.toMatchObject({
 			rows: [[7]],
 		});
+	});
+
+	test("throws structured RivetError from native kv last error", async () => {
+		const native = new FakeNativeDatabase();
+		native.kvError = `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify({
+			group: "depot",
+			code: "sqlite_commit_page_limit_exceeded",
+			message: "SQLite transaction touched too many pages.",
+			metadata: {
+				dirty_page_count: 8193,
+				max_dirty_pages: 8192,
+				page_size_bytes: 4096,
+			},
+			public: true,
+		})}`;
+		const db = wrapJsNativeDatabase(native);
+
+		const query = db.query("SELECT 1");
+		native.rejectNext(new Error("disk I/O error"));
+
+		await expect(query).rejects.toMatchObject({
+			group: "depot",
+			code: "sqlite_commit_page_limit_exceeded",
+			metadata: {
+				dirty_page_count: 8193,
+				max_dirty_pages: 8192,
+				page_size_bytes: 4096,
+			},
+		});
+		await expect(query).rejects.toBeInstanceOf(RivetError);
 	});
 
 	test("close waits for admitted native calls and rejects new work", async () => {

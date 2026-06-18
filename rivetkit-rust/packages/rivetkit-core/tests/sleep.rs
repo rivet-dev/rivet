@@ -155,7 +155,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test(start_paused = true)]
-	async fn teardown_aborts_tracked_shutdown_tasks() {
+	async fn deadline_teardown_aborts_tracked_shutdown_tasks() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-shutdown-teardown");
 		let (drop_tx, drop_rx) = oneshot::channel();
 		let (_never_tx, never_rx) = oneshot::channel::<()>();
@@ -168,6 +168,7 @@ mod moved_tests {
 
 		assert_eq!(ctx.shutdown_task_count(), 1);
 
+		ctx.mark_shutdown_deadline_reached();
 		ctx.teardown_sleep_state().await;
 		advance(Duration::from_millis(1)).await;
 

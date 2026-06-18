@@ -98,13 +98,31 @@ BR/{database_id_be:16}/PIDX/{pgno_be:4}
   -> u64 BE owner_txid
 BR/{database_id_be:16}/DELTA/{txid_be:8}/{chunk_be:4}
   -> LTX chunk blob
+BR/{database_id_be:16}/STAGE/commit/{stage_id:16}/meta
+  -> CommitStageMeta (vbare-versioned)
+BR/{database_id_be:16}/STAGE/commit/{stage_id:16}/pages/{batch_be:4}
+  -> DirtyPageBatch (vbare-versioned)
+BR/{database_id_be:16}/STAGE/commit/{stage_id:16}/complete
+  -> CommitStageComplete (vbare-versioned)
+BR/{database_id_be:16}/STAGE/commit/{stage_id:16}/finalized
+  -> CommitStageFinalized (vbare-versioned)
+BR/{database_id_be:16}/DELTA_OBJ/{object_id:16}/chunk/{chunk_be:4}
+  -> Large LTX object chunk blob
+BR/{database_id_be:16}/DELTA_OBJ/{object_id:16}/meta
+  -> DeltaObjectMeta (vbare-versioned)
+BR/{database_id_be:16}/DELTA_OBJ_REF/{object_id:16}
+  -> u64 BE committed_txid
+BR/{database_id_be:16}/DELTA_MANIFEST/{txid_be:8}
+  -> DeltaManifest (vbare-versioned)
+BR/{database_id_be:16}/DELTA_PAGEIDX/{txid_be:8}/{pgno_be:4}
+  -> DeltaPageIndexEntry (vbare-versioned)
 BR/{database_id_be:16}/SHARD/{shard_id_be:4}/{as_of_txid_be:8}
   -> LTX shard blob
 BR/{database_id_be:16}/PITR_INTERVAL/{bucket_start_ms_be:8}
   -> PitrIntervalCoverage (vbare-versioned)
 ```
 
-`COMMITS` stores commit metadata, including wall-clock time, captured versionstamp, size in pages, and post-apply checksum. `VTX` maps a versionstamp back to txid for restore point resolution and GC. `PIDX` maps a page number to the DELTA txid that currently owns it.
+`COMMITS` stores commit metadata, including wall-clock time, captured versionstamp, size in pages, and post-apply checksum. `VTX` maps a versionstamp back to txid for restore point resolution and GC. `PIDX` maps a page number to the delta txid that currently owns it. Small commits store that delta as legacy `DELTA/{txid}/{chunk}` rows. Large commits store immutable bytes in `DELTA_OBJ`, publish `DELTA_MANIFEST`, and use `DELTA_PAGEIDX` so sparse reads can fetch only the chunks covering one page frame.
 
 `SHARD` is versioned by `as_of_txid`. Reads choose the largest `as_of_txid <= read_txid`. Hot compaction writes new SHARD versions and does not overwrite older ones. When cold storage is enabled, the same FDB SHARD rows are also the shard cache for manager-published `CMP/cold_shard` refs; read-through fill can repopulate an evicted row without advancing manifest watermarks.
 

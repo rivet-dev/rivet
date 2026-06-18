@@ -132,6 +132,7 @@ impl SqliteTransport for MissingDbTransport {
 				group: "depot".to_string(),
 				code: "database_not_found".to_string(),
 				message: "sqlite database was not found in this bucket branch".to_string(),
+				metadata: None,
 			},
 		))
 	}
@@ -141,6 +142,50 @@ impl SqliteTransport for MissingDbTransport {
 		_request: protocol::SqliteCommitRequest,
 	) -> anyhow::Result<protocol::SqliteCommitResponse> {
 		anyhow::bail!("missing-db transport test does not commit")
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RecordedGetPagesFailure {
+	pgnos: Vec<u32>,
+	expected_generation: Option<u64>,
+	expected_head_txid: Option<u64>,
+	message: String,
+}
+
+#[derive(Default)]
+struct RecordingMissingDbTransport {
+	failures: SyncMutex<Vec<RecordedGetPagesFailure>>,
+}
+
+#[async_trait]
+impl SqliteTransport for RecordingMissingDbTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		let message = "sqlite database was not found in this bucket branch".to_string();
+		self.failures.lock().push(RecordedGetPagesFailure {
+			pgnos: request.pgnos.clone(),
+			expected_generation: request.expected_generation,
+			expected_head_txid: request.expected_head_txid,
+			message: message.clone(),
+		});
+		Ok(protocol::SqliteGetPagesResponse::SqliteErrorResponse(
+			protocol::SqliteErrorResponse {
+				group: "depot".to_string(),
+				code: "database_not_found".to_string(),
+				message,
+				metadata: None,
+			},
+		))
+	}
+
+	async fn commit(
+		&self,
+		_request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		anyhow::bail!("recording missing-db transport test does not commit")
 	}
 }
 
@@ -172,6 +217,80 @@ fn startup_initial_pages_do_not_require_preload_hints_on_open() {
 		.collect::<Vec<_>>();
 	assert_eq!(*transport.requested_pgnos.lock(), vec![1, 2, 3, 4]);
 	assert_eq!(loaded_pgnos, vec![1, 2, 3, 4]);
+}
+
+#[test]
+fn missing_db_engine_log_for_initial_page_is_empty_database_bootstrap() {
+	let runtime = direct_runtime();
+	let transport = Arc::new(RecordingMissingDbTransport::default());
+	let config = VfsConfig {
+		startup_preload_first_pages: false,
+		..VfsConfig::default()
+	};
+
+	let pages = runtime
+		.block_on(fetch_initial_pages_for_registration(
+			transport.clone(),
+			"missing-db-bootstrap-actor",
+			&config,
+		))
+		.expect("missing initial database should bootstrap an empty sqlite file");
+
+	assert_eq!(pages.head_txid, Some(0));
+	assert!(pages.pages.is_empty());
+	assert_eq!(
+		*transport.failures.lock(),
+		vec![RecordedGetPagesFailure {
+			pgnos: vec![1],
+			expected_generation: None,
+			expected_head_txid: None,
+			message: "sqlite database was not found in this bucket branch".to_string(),
+		}]
+	);
+}
+
+#[test]
+fn missing_db_for_non_initial_page_is_not_empty_database_bootstrap() {
+	let runtime = direct_runtime();
+	let config = VfsConfig::default();
+	let transport = Arc::new(RecordingMissingDbTransport::default());
+	let ctx = VfsContext::new(
+		next_test_name("missing-db-non-initial-page"),
+		runtime.handle().clone(),
+		transport.clone(),
+		config,
+		unsafe { std::mem::zeroed() },
+		Vec::new(),
+		None,
+	)
+	.expect("vfs context should build");
+
+	let err = ctx
+		.resolve_pages(&[11], true)
+		.expect_err("missing non-initial page should remain a VFS error");
+
+	match err {
+		GetPagesError::Other(message) => {
+			assert!(
+				message.contains("sqlite database was not found in this bucket branch"),
+				"unexpected missing db error: {message}",
+			);
+			assert!(
+				message.contains("\"code\":\"database_not_found\""),
+				"missing db error should preserve the structured depot code: {message}",
+			);
+		}
+		GetPagesError::Fatal(message) => panic!("unexpected fatal get_pages error: {message}"),
+	}
+	assert_eq!(
+		*transport.failures.lock(),
+		vec![RecordedGetPagesFailure {
+			pgnos: vec![11],
+			expected_generation: None,
+			expected_head_txid: None,
+			message: "sqlite database was not found in this bucket branch".to_string(),
+		}]
+	);
 }
 
 #[test]
@@ -421,11 +540,49 @@ impl SqliteTransport for CommitTooLargeTransport {
 						dirty_pages * 4096,
 						(self.min_dirty_pages - 1) * 4096
 					),
+					metadata: None,
 				},
 			));
 		}
 
 		self.inner.commit(request).await
+	}
+}
+
+struct NoHeadDepotTransport {
+	inner: Arc<DirectDepotTransport>,
+}
+
+impl NoHeadDepotTransport {
+	fn new(storage: Arc<DirectStorage>) -> Self {
+		Self {
+			inner: Arc::new(DirectDepotTransport::new(storage)),
+		}
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for NoHeadDepotTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		let mut response = self.inner.get_pages(request).await?;
+		if let protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) = &mut response {
+			ok.head_txid = None;
+		}
+		Ok(response)
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		let mut response = self.inner.commit(request).await?;
+		if let protocol::SqliteCommitResponse::SqliteCommitOk(ok) = &mut response {
+			ok.head_txid = None;
+		}
+		Ok(response)
 	}
 }
 
@@ -837,6 +994,211 @@ fn worker_records_basic_metrics() {
 	assert_eq!(metrics.command_errors.load(Ordering::Acquire), 0);
 }
 
+#[test]
+#[ignore = "repro for missing actor-generation fencing on native VFS requests"]
+fn repro_native_vfs_requests_do_not_include_actor_generation() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+
+	let db = runtime
+		.block_on(crate::database::open_database_from_transport(
+			transport,
+			harness.actor_id.clone(),
+			42,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("sqlite database should open");
+
+	runtime.block_on(async {
+		db.exec("CREATE TABLE generation_probe(id INTEGER PRIMARY KEY);".to_owned())
+			.await
+			.expect("create table should commit");
+		db.close().await.expect("worker should close");
+	});
+
+	assert!(
+		hooks
+			.get_pages_requests()
+			.iter()
+			.all(|request| request.expected_generation.is_none()),
+		"native VFS get_pages requests should currently omit expected_generation"
+	);
+	assert!(
+		hooks
+			.commit_requests()
+			.iter()
+			.all(|request| request.expected_generation.is_none()),
+		"native VFS commit requests should currently omit expected_generation"
+	);
+}
+
+#[test]
+#[ignore = "repro for stale actor generation winning the Depot head fence race"]
+fn repro_stale_actor_generation_can_commit_before_replacement() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+
+	let stale = runtime
+		.block_on(crate::database::open_database_from_transport(
+			Arc::new(DirectDepotTransport::new(engine.clone())),
+			harness.actor_id.clone(),
+			1,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("stale generation database should open");
+
+	runtime.block_on(async {
+		stale
+			.exec(
+				"CREATE TABLE generation_rows(id INTEGER PRIMARY KEY, label TEXT NOT NULL);"
+					.to_owned(),
+			)
+			.await
+			.expect("stale generation should create schema");
+	});
+
+	runtime.block_on(async {
+		stale
+			.execute(
+				"INSERT INTO generation_rows(id, label) VALUES (1, 'stale-writer');".to_owned(),
+				None,
+			)
+			.await
+			.expect("stale generation commit is incorrectly accepted before replacement writes");
+
+		stale.close().await.expect("stale worker should close");
+	});
+
+	let reopened = runtime
+		.block_on(crate::database::open_database_from_transport(
+			Arc::new(DirectDepotTransport::new(engine)),
+			harness.actor_id.clone(),
+			3,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("database should reopen");
+
+	runtime.block_on(async {
+		let rows = reopened
+			.query(
+				"SELECT id, label FROM generation_rows ORDER BY id;".to_owned(),
+				None,
+			)
+			.await
+			.expect("reopened database should query");
+		assert_eq!(
+			rows.rows,
+			vec![vec![
+				ColumnValue::Integer(1),
+				ColumnValue::Text("stale-writer".to_owned()),
+			]],
+			"durable state should show the stale actor generation won"
+		);
+		reopened.close().await.expect("reopened worker should close");
+	});
+}
+
+#[test]
+#[ignore = "repro for old no-head SQLite protocol responses disabling Depot head fencing"]
+fn repro_no_head_txid_responses_allow_lost_update_between_writers() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+
+	let seed = runtime
+		.block_on(crate::database::open_database_from_transport(
+			Arc::new(DirectDepotTransport::new(engine.clone())),
+			harness.actor_id.clone(),
+			0,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("seed database should open");
+	runtime.block_on(async {
+		seed.exec(
+			"CREATE TABLE no_head_rows(id INTEGER PRIMARY KEY, label TEXT NOT NULL);".to_owned(),
+		)
+		.await
+		.expect("schema should commit");
+		seed.execute(
+			"INSERT INTO no_head_rows(id, label) VALUES (1, 'seed');".to_owned(),
+			None,
+		)
+		.await
+		.expect("seed row should commit");
+		seed.close().await.expect("seed worker should close");
+	});
+
+	let first = runtime
+		.block_on(crate::database::open_database_from_transport(
+			Arc::new(NoHeadDepotTransport::new(engine.clone())),
+			harness.actor_id.clone(),
+			1,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("first no-head database should open");
+	let second = runtime
+		.block_on(crate::database::open_database_from_transport(
+			Arc::new(NoHeadDepotTransport::new(engine.clone())),
+			harness.actor_id.clone(),
+			2,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("second no-head database should open");
+
+	runtime.block_on(async {
+		first
+			.execute(
+				"UPDATE no_head_rows SET label = 'first' WHERE id = 1;".to_owned(),
+				None,
+			)
+			.await
+			.expect("first no-head writer should commit");
+		second
+			.execute(
+				"UPDATE no_head_rows SET label = 'second' WHERE id = 1;".to_owned(),
+				None,
+			)
+			.await
+			.expect("second no-head writer should also commit without a head fence");
+
+		first.close().await.expect("first worker should close");
+		second.close().await.expect("second worker should close");
+	});
+
+	let reopened = runtime
+		.block_on(crate::database::open_database_from_transport(
+			Arc::new(DirectDepotTransport::new(engine)),
+			harness.actor_id.clone(),
+			3,
+			runtime.handle().clone(),
+			None,
+		))
+		.expect("database should reopen");
+
+	runtime.block_on(async {
+		let rows = reopened
+			.query("SELECT label FROM no_head_rows WHERE id = 1;".to_owned(), None)
+			.await
+			.expect("rows should query after reload");
+		assert_eq!(
+			rows.rows,
+			vec![vec![ColumnValue::Text("second".to_owned())]],
+			"both no-head writers reported success, but the later stale snapshot overwrote the earlier write"
+		);
+		reopened.close().await.expect("reopened worker should close");
+	});
+}
+
 fn sqlite_query_i64(db: *mut sqlite3, sql: &str) -> std::result::Result<i64, String> {
 	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
 	let mut stmt = ptr::null_mut();
@@ -1175,6 +1537,70 @@ fn direct_depot_transport_rejects_mirror_fallback() {
 	assert!(!err.to_string().is_empty());
 	let after = engine.stats();
 	assert_eq!(after.mirror_reads, before.mirror_reads);
+}
+
+#[test]
+fn direct_get_pages_falls_back_when_cached_pidx_delta_was_reclaimed() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let actor_db = runtime.block_on(engine.actor_db(harness.actor_id.clone()));
+	let page = empty_db_page();
+
+	runtime
+		.block_on(actor_db.commit(
+			vec![depot::types::DirtyPage {
+				pgno: 1,
+				bytes: page.clone(),
+			}],
+			1,
+			1,
+		))
+		.expect("seed commit should succeed");
+
+	let warmed = runtime
+		.block_on(engine.get_pages(&harness.actor_id, &[1]))
+		.expect("initial read should warm the pidx cache");
+	assert_eq!(warmed.pages[0].bytes.as_deref(), Some(page.as_slice()));
+
+	let (branch_id, head_txid) = runtime
+		.block_on(engine.read_branch_head(&harness.actor_id))
+		.expect("branch head should exist");
+	let shard_blob = depot::ltx::encode_ltx_v3(
+		depot::ltx::LtxHeader::delta(head_txid, 1, 0),
+		&[depot::types::DirtyPage {
+			pgno: 1,
+			bytes: page.clone(),
+		}],
+	)
+	.expect("hot shard blob should encode");
+	let db = engine.depot_database();
+	runtime
+		.block_on(db.run(move |tx| {
+			let shard_blob = shard_blob.clone();
+			async move {
+				tx.informal().set(
+					&depot::keys::branch_shard_key(branch_id, 0, head_txid),
+					&shard_blob,
+				);
+				tx.informal()
+					.clear(&depot::keys::branch_delta_chunk_key(branch_id, head_txid, 0));
+				tx.informal()
+					.clear(&depot::keys::branch_pidx_key(branch_id, 1));
+				Ok(())
+			}
+		}))
+		.expect("simulated reclaim should update depot rows");
+
+	let fetched = runtime
+		.block_on(engine.get_pages(&harness.actor_id, &[1]))
+		.expect("stale cached pidx should fall back to hot shard coverage");
+	assert_eq!(fetched.pages[0].bytes.as_deref(), Some(page.as_slice()));
+
+	let fetched_again = runtime
+		.block_on(engine.get_pages(&harness.actor_id, &[1]))
+		.expect("stale pidx eviction should keep later reads healthy");
+	assert_eq!(fetched_again.pages[0].bytes.as_deref(), Some(page.as_slice()));
 }
 
 #[test]
@@ -2532,6 +2958,10 @@ fn depot_commit_too_large_response_reproduces_dead_vfs_chain() {
 		"unexpected kv error: {kv_error}",
 	);
 	assert!(
+		kv_error.contains("\"code\":\"commit_too_large\""),
+		"commit_too_large should preserve the structured depot code: {kv_error}",
+	);
+	assert!(
 		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM too_large;").is_err(),
 		"later SQL on the same handle should fail once the VFS is dead",
 	);
@@ -3779,6 +4209,234 @@ fn commit_buffered_pages_uses_fast_path() {
 	assert!(metrics.serialize_ns > 0);
 	assert!(metrics.transport_ns > 0);
 	assert_eq!(hooks.commit_requests().len(), 1);
+	assert!(hooks.stage_begin_requests().is_empty());
+	assert!(hooks.stage_pages_requests().is_empty());
+	assert!(hooks.stage_complete_requests().is_empty());
+	assert!(hooks.stage_finalize_requests().is_empty());
+	assert!(hooks.stage_abort_requests().is_empty());
+}
+
+#[test]
+fn commit_buffered_pages_uses_slow_path_for_large_dirty_set() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+
+	let dirty_pages = (1..=2049)
+		.map(|pgno| {
+			let mut bytes = vec![0; 4096];
+			if pgno == 1 {
+				bytes = empty_db_page();
+			}
+			protocol::SqliteDirtyPage { pgno, bytes }
+		})
+		.collect::<Vec<_>>();
+
+	let outcome = runtime
+		.block_on(commit_buffered_pages(
+			&*transport,
+			BufferedCommitRequest {
+				actor_id: harness.actor_id.clone(),
+				new_db_size_pages: 2049,
+				expected_head_txid: None,
+				dirty_pages,
+			},
+		))
+		.expect("slow-path commit should succeed");
+	let (outcome, metrics) = outcome;
+
+	assert_eq!(outcome.path, CommitPath::Slow);
+	assert_eq!(outcome.db_size_pages, 2049);
+	assert_eq!(outcome.head_txid, Some(1));
+	assert!(metrics.serialize_ns > 0);
+	assert!(metrics.transport_ns > 0);
+	assert!(hooks.commit_requests().is_empty());
+	assert_eq!(hooks.stage_begin_requests().len(), 1);
+	assert!(
+		hooks.stage_pages_requests().len() > 1,
+		"slow path should split dirty pages into bounded stage batches"
+	);
+	assert_eq!(hooks.stage_complete_requests().len(), 1);
+	assert_eq!(hooks.stage_finalize_requests().len(), 1);
+	assert!(hooks.stage_abort_requests().is_empty());
+}
+
+#[test]
+fn commit_buffered_pages_aborts_stage_when_page_batch_fails() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(Arc::clone(&engine)));
+	let hooks = transport.direct_hooks();
+	hooks.fail_next_stage_pages("injected stage page upload failure");
+
+	let err = runtime
+		.block_on(commit_buffered_pages(
+			&*transport,
+			BufferedCommitRequest {
+				actor_id: harness.actor_id.clone(),
+				new_db_size_pages: 2_049,
+				expected_head_txid: None,
+				dirty_pages: staged_dirty_pages(2_049),
+			},
+		))
+		.expect_err("stage page failure should reject the staged commit");
+
+	let CommitBufferError::Other(message) = err else {
+		panic!("stage page failure should be a normal commit error");
+	};
+	assert!(message.contains("injected stage page upload failure"));
+	assert_eq!(hooks.stage_begin_requests().len(), 1);
+	assert_eq!(hooks.stage_pages_requests().len(), 1);
+	assert!(hooks.stage_complete_requests().is_empty());
+	assert!(hooks.stage_finalize_requests().is_empty());
+	assert_aborted_stage_lookup_removed(&runtime, &engine, &hooks);
+}
+
+#[test]
+fn commit_buffered_pages_aborts_stage_when_complete_fails() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(Arc::clone(&engine)));
+	let hooks = transport.direct_hooks();
+	hooks.fail_next_stage_complete("injected stage complete failure");
+
+	let err = runtime
+		.block_on(commit_buffered_pages(
+			&*transport,
+			BufferedCommitRequest {
+				actor_id: harness.actor_id.clone(),
+				new_db_size_pages: 2_049,
+				expected_head_txid: None,
+				dirty_pages: staged_dirty_pages(2_049),
+			},
+		))
+		.expect_err("stage complete failure should reject the staged commit");
+
+	let CommitBufferError::Other(message) = err else {
+		panic!("stage complete failure should be a normal commit error");
+	};
+	assert!(message.contains("injected stage complete failure"));
+	assert_eq!(hooks.stage_begin_requests().len(), 1);
+	assert!(hooks.stage_pages_requests().len() > 1);
+	assert_eq!(hooks.stage_complete_requests().len(), 1);
+	assert!(hooks.stage_finalize_requests().is_empty());
+	assert_aborted_stage_lookup_removed(&runtime, &engine, &hooks);
+}
+
+#[test]
+fn commit_buffered_pages_allows_documented_dirty_page_limit() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+
+	let dirty_pages = (1..=8_192)
+		.map(|pgno| {
+			let bytes = if pgno == 1 {
+				empty_db_page()
+			} else {
+				vec![(pgno % 251) as u8; DEFAULT_PAGE_SIZE]
+			};
+			protocol::SqliteDirtyPage { pgno, bytes }
+		})
+		.collect::<Vec<_>>();
+
+	let outcome = runtime
+		.block_on(commit_buffered_pages(
+			&*transport,
+			BufferedCommitRequest {
+				actor_id: harness.actor_id.clone(),
+				new_db_size_pages: 8_192,
+				expected_head_txid: None,
+				dirty_pages,
+			},
+		))
+		.expect("32 MiB staged commit at documented dirty-page limit should succeed");
+	let (outcome, _metrics) = outcome;
+
+	assert_eq!(outcome.path, CommitPath::Slow);
+	assert_eq!(outcome.db_size_pages, 8_192);
+	assert_eq!(outcome.head_txid, Some(1));
+	assert!(hooks.commit_requests().is_empty());
+	assert_eq!(hooks.stage_begin_requests().len(), 1);
+	assert_eq!(hooks.stage_complete_requests().len(), 1);
+	assert_eq!(hooks.stage_finalize_requests().len(), 1);
+	assert!(hooks.stage_abort_requests().is_empty());
+
+	let stage_pages = hooks.stage_pages_requests();
+	assert_eq!(
+		stage_pages
+			.iter()
+			.map(|request| request.dirty_pages.len())
+			.sum::<usize>(),
+		8_192
+	);
+	assert!(
+		stage_pages
+			.iter()
+			.all(|request| request.dirty_pages.len() <= 16),
+		"stage page batches should stay bounded"
+	);
+}
+
+fn staged_dirty_pages(count: u32) -> Vec<protocol::SqliteDirtyPage> {
+	(1..=count)
+		.map(|pgno| {
+			let bytes = if pgno == 1 {
+				empty_db_page()
+			} else {
+				vec![(pgno % 251) as u8; DEFAULT_PAGE_SIZE]
+			};
+			protocol::SqliteDirtyPage { pgno, bytes }
+		})
+		.collect()
+}
+
+fn assert_aborted_stage_lookup_removed(
+	runtime: &tokio::runtime::Runtime,
+	engine: &Arc<DirectStorage>,
+	hooks: &vfs_support::DirectTransportHooks,
+) {
+	let stage_id = {
+		let abort_requests = hooks.stage_abort_requests();
+		assert_eq!(abort_requests.len(), 1);
+		uuid::Uuid::from_slice(&abort_requests[0].stage_id)
+			.expect("abort request stage id should decode")
+	};
+	let lookup = read_depot_value(
+		runtime,
+		engine,
+		depot::keys::commit_stage_lookup_key(stage_id),
+	);
+	assert!(
+		lookup.is_none(),
+		"stage abort should remove the global stage lookup"
+	);
+}
+
+fn read_depot_value(
+	runtime: &tokio::runtime::Runtime,
+	engine: &Arc<DirectStorage>,
+	key: Vec<u8>,
+) -> Option<Vec<u8>> {
+	let db = engine.depot_database();
+	runtime
+		.block_on(db.run(move |tx| {
+			let key = key.clone();
+			async move {
+				Ok(tx
+					.informal()
+					.get(&key, universaldb::utils::IsolationLevel::Serializable)
+					.await?
+					.map(Vec::<u8>::from))
+			}
+		}))
+		.expect("depot value read should succeed")
 }
 
 #[test]
@@ -4343,18 +5001,23 @@ fn bench_large_tx_insert_500kb() {
 }
 
 #[test]
-fn bench_large_tx_insert_10mb_rejects_transaction_too_large() {
-	large_tx_insert_rejects_transaction_too_large(10 * 1024 * 1024);
+fn bench_large_tx_insert_10mb_uses_slow_path() {
+	large_tx_insert(10 * 1024 * 1024);
 }
 
 #[test]
-fn bench_large_tx_insert_50mb_rejects_transaction_too_large() {
-	large_tx_insert_rejects_transaction_too_large(50 * 1024 * 1024);
+fn bench_large_tx_insert_24mb_reopens_and_integrity_checks() {
+	large_tx_insert_reopens_and_integrity_checks(24 * 1024 * 1024);
 }
 
 #[test]
-fn bench_large_tx_insert_100mb_rejects_transaction_too_large() {
-	large_tx_insert_rejects_transaction_too_large(100 * 1024 * 1024);
+fn bench_large_tx_insert_50mb_rejects_page_limit() {
+	large_tx_insert_rejects_page_limit(50 * 1024 * 1024);
+}
+
+#[test]
+fn bench_large_tx_insert_100mb_rejects_page_limit() {
+	large_tx_insert_rejects_page_limit(100 * 1024 * 1024);
 }
 
 fn large_tx_insert(target_bytes: usize) {
@@ -4390,9 +5053,13 @@ fn large_tx_insert(target_bytes: usize) {
 		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM large_tx;").unwrap(),
 		rows as i64
 	);
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;").unwrap(),
+		"ok"
+	);
 }
 
-fn large_tx_insert_rejects_transaction_too_large(target_bytes: usize) {
+fn large_tx_insert_rejects_page_limit(target_bytes: usize) {
 	let runtime = direct_runtime();
 	let db = open_bench_db(&runtime);
 	sqlite_exec(
@@ -4413,17 +5080,67 @@ fn large_tx_insert_rejects_transaction_too_large(target_bytes: usize) {
 	}
 
 	let err = sqlite_exec(db.as_ptr(), "COMMIT")
-		.expect_err("large transaction should be rejected before local UDB commit");
+		.expect_err("large transaction should be rejected by the dirty-page limit");
 	assert!(
 		err.contains("I/O") || err.contains("disk I/O"),
-		"sqlite should surface transaction-too-large as an IO error: {err}",
+		"sqlite should surface page-limit failure as an IO error: {err}",
 	);
 	let vfs_err = direct_vfs_ctx(&db)
 		.clone_last_error()
-		.expect("transaction-too-large should be recorded as the VFS last error");
+		.expect("page-limit failure should be recorded as the VFS last error");
 	assert!(
-		vfs_err.contains("CommitTooLarge") || vfs_err.contains("commit too large"),
+		vfs_err.contains("too many pages"),
 		"unexpected VFS error: {vfs_err}",
+	);
+	assert!(
+		vfs_err.contains("\"code\":\"sqlite_commit_page_limit_exceeded\""),
+		"page-limit error should preserve the structured depot code: {vfs_err}",
+	);
+	assert!(
+		vfs_err.contains("\"max_dirty_pages\":8192"),
+		"page-limit error should preserve metadata: {vfs_err}",
+	);
+}
+
+fn large_tx_insert_reopens_and_integrity_checks(target_bytes: usize) {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db(&runtime);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE large_tx (id INTEGER PRIMARY KEY AUTOINCREMENT, payload BLOB NOT NULL);",
+	)
+	.unwrap();
+
+	let row_size = 4 * 1024;
+	let rows = (target_bytes + row_size - 1) / row_size;
+	sqlite_exec(db.as_ptr(), "BEGIN").unwrap();
+	for _ in 0..rows {
+		sqlite_exec(
+			db.as_ptr(),
+			&format!("INSERT INTO large_tx (payload) VALUES (randomblob({row_size}));"),
+		)
+		.unwrap();
+	}
+	sqlite_exec(db.as_ptr(), "COMMIT").unwrap();
+	assert_eq!(
+		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM large_tx;").unwrap(),
+		rows as i64
+	);
+	assert_eq!(
+		sqlite_query_text(db.as_ptr(), "PRAGMA integrity_check;").unwrap(),
+		"ok"
+	);
+	drop(db);
+
+	let reopened = harness.open_db(&runtime);
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM large_tx;").unwrap(),
+		rows as i64
+	);
+	assert_eq!(
+		sqlite_query_text(reopened.as_ptr(), "PRAGMA integrity_check;").unwrap(),
+		"ok"
 	);
 }
 

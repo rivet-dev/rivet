@@ -82,115 +82,23 @@
 // }
 
 use std::{
-	sync::{
-		Arc,
-		atomic::{AtomicBool, Ordering},
-	},
+	sync::Arc,
 	time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::Result;
+use depot::conveyer::Db;
 use depot_client::types::{BindParam, ColumnValue};
-use sqlite_storage::{engine::SqliteEngine, error::SqliteStorageError, open::OpenConfig};
-use tokio::{
-	sync::{Notify, Semaphore},
-	time::{Duration, Instant, timeout},
-};
-use universaldb::{Subspace, driver::RocksDbDatabaseDriver};
+use gas::prelude::Id;
+use rivet_pools::NodeId;
+use universaldb::driver::RocksDbDatabaseDriver;
 
 use super::{
-	actor_lifecycle::{
-		ActiveActor, ActiveActorState, clear_remote_sqlite_executors,
-		remove_remote_sqlite_executor_generation, remove_remote_sqlite_executors_for_actor,
-	},
-	cached_active_sqlite_actor, cached_serverless_sqlite_generation, remote_sqlite_executor_cell,
-	remote_sqlite_executor_from_parts, spawn_tracked_remote_sqlite_task,
-	validate_remote_sqlite_params, validate_sqlite_get_page_range_request,
+	clear_remote_sqlite_executors, remote_sqlite_executor_cell, remote_sqlite_executor_from_parts,
+	remove_remote_sqlite_executor_generation, remove_remote_sqlite_executors_for_actor,
+	validate_remote_sqlite_params,
 };
-use crate::conn::{
-	RemoteSqliteExecutors, RemoteSqliteInflight, remote_sqlite_inflight_count,
-	remove_remote_sqlite_inflight_generation_if_idle, wait_remote_sqlite_inflight_generation,
-};
-
-#[tokio::test]
-async fn cached_active_sqlite_actor_accepts_running_actor_generation() {
-	let active_actors = scc::HashMap::new();
-	active_actors
-		.insert_async(
-			"actor-a".to_string(),
-			ActiveActor {
-				actor_generation: 1,
-				sqlite_generation: Some(7),
-				state: ActiveActorState::Running,
-			},
-		)
-		.await
-		.expect("insert active actor");
-
-	assert!(cached_active_sqlite_actor(&active_actors, "actor-a", 7).await);
-	assert!(!cached_active_sqlite_actor(&active_actors, "actor-a", 8).await);
-	assert!(!cached_active_sqlite_actor(&active_actors, "actor-b", 7).await);
-}
-
-#[tokio::test]
-async fn cached_active_sqlite_actor_rejects_starting_actor() {
-	let active_actors = scc::HashMap::new();
-	active_actors
-		.insert_async(
-			"actor-a".to_string(),
-			ActiveActor {
-				actor_generation: 1,
-				sqlite_generation: Some(7),
-				state: ActiveActorState::Starting,
-			},
-		)
-		.await
-		.expect("insert active actor");
-
-	assert!(!cached_active_sqlite_actor(&active_actors, "actor-a", 7).await);
-}
-
-#[tokio::test]
-async fn cached_serverless_sqlite_generation_accepts_matching_generation() {
-	let serverless_sqlite_actors = scc::HashMap::new();
-	serverless_sqlite_actors
-		.insert_async("actor-a".to_string(), 7)
-		.await
-		.expect("insert serverless actor");
-
-	assert!(
-		cached_serverless_sqlite_generation(&serverless_sqlite_actors, "actor-a", 7)
-			.await
-			.expect("matching cached generation succeeds")
-	);
-	assert!(
-		!cached_serverless_sqlite_generation(&serverless_sqlite_actors, "actor-b", 7)
-			.await
-			.expect("missing cached generation falls back")
-	);
-}
-
-#[tokio::test]
-async fn cached_serverless_sqlite_generation_reports_fence_mismatch() {
-	let serverless_sqlite_actors = scc::HashMap::new();
-	serverless_sqlite_actors
-		.insert_async("actor-a".to_string(), 7)
-		.await
-		.expect("insert serverless actor");
-
-	let err = cached_serverless_sqlite_generation(&serverless_sqlite_actors, "actor-a", 8)
-		.await
-		.expect_err("stale generation should be fenced");
-
-	assert!(matches!(
-		err.downcast_ref::<SqliteStorageError>(),
-		Some(SqliteStorageError::FenceMismatch { .. })
-	));
-	assert!(
-		err.to_string()
-			.contains("did not match cached generation 7")
-	);
-}
+use crate::conn::RemoteSqliteExecutors;
 
 #[tokio::test]
 async fn remote_sqlite_executor_cache_is_lazy_and_actor_generation_scoped() {
@@ -232,158 +140,18 @@ async fn remote_sqlite_executor_cleanup_removes_actor_scoped_entries() {
 }
 
 #[tokio::test]
-async fn tracked_remote_sqlite_tasks_are_bounded_and_visible_to_stop_waiters() {
-	let worker_permits = Arc::new(Semaphore::new(1));
-	let in_flight = RemoteSqliteInflight::new();
-	let first_started = Arc::new(Notify::new());
-	let first_release = Arc::new(Notify::new());
-	let second_started = Arc::new(Notify::new());
-	let second_release = Arc::new(Notify::new());
-	let second_ran = Arc::new(AtomicBool::new(false));
-
-	spawn_tracked_remote_sqlite_task(
-		worker_permits.clone(),
-		&in_flight,
-		"actor-a".to_string(),
-		7,
-		"test sqlite execute",
-		{
-			let first_started = first_started.clone();
-			let first_release = first_release.clone();
-			async move {
-				first_started.notify_waiters();
-				first_release.notified().await;
-			}
-		},
-	)
-	.await;
-	first_started.notified().await;
-
-	spawn_tracked_remote_sqlite_task(
-		worker_permits,
-		&in_flight,
-		"actor-a".to_string(),
-		7,
-		"test sqlite execute",
-		{
-			let second_started = second_started.clone();
-			let second_release = second_release.clone();
-			let second_ran = second_ran.clone();
-			async move {
-				second_ran.store(true, Ordering::SeqCst);
-				second_started.notify_waiters();
-				second_release.notified().await;
-			}
-		},
-	)
-	.await;
-
-	assert_eq!(
-		remote_sqlite_inflight_count(&in_flight, "actor-a", 7).await,
-		2
-	);
-	assert!(!second_ran.load(Ordering::SeqCst));
-	assert!(
-		!wait_remote_sqlite_inflight_generation(
-			&in_flight,
-			"actor-a",
-			7,
-			Instant::now() + Duration::from_millis(1),
-		)
-		.await
-	);
-
-	first_release.notify_waiters();
-	timeout(Duration::from_secs(1), second_started.notified())
-		.await
-		.expect("second task should start after the first releases its worker permit");
-	second_release.notify_waiters();
-	assert!(
-		wait_remote_sqlite_inflight_generation(
-			&in_flight,
-			"actor-a",
-			7,
-			Instant::now() + Duration::from_secs(1),
-		)
-		.await
-	);
-
-	remove_remote_sqlite_inflight_generation_if_idle(&in_flight, "actor-a", 7).await;
-	assert_eq!(
-		remote_sqlite_inflight_count(&in_flight, "actor-a", 7).await,
-		0
-	);
-}
-
-#[tokio::test]
-async fn remote_sqlite_stop_wait_does_not_finish_before_running_task() {
-	let worker_permits = Arc::new(Semaphore::new(1));
-	let in_flight = RemoteSqliteInflight::new();
-	let task_started = Arc::new(Notify::new());
-	let task_release = Arc::new(Notify::new());
-
-	spawn_tracked_remote_sqlite_task(
-		worker_permits,
-		&in_flight,
-		"actor-a".to_string(),
-		7,
-		"test sqlite execute",
-		{
-			let task_started = task_started.clone();
-			let task_release = task_release.clone();
-			async move {
-				task_started.notify_waiters();
-				task_release.notified().await;
-			}
-		},
-	)
-	.await;
-	task_started.notified().await;
-
-	assert!(
-		timeout(
-			Duration::from_millis(20),
-			wait_remote_sqlite_inflight_generation(
-				&in_flight,
-				"actor-a",
-				7,
-				Instant::now() + Duration::from_secs(1),
-			),
-		)
-		.await
-		.is_err()
-	);
-	task_release.notify_waiters();
-	assert!(
-		wait_remote_sqlite_inflight_generation(
-			&in_flight,
-			"actor-a",
-			7,
-			Instant::now() + Duration::from_secs(1),
-		)
-		.await
-	);
-}
-
-#[tokio::test]
 async fn remote_sqlite_executor_reopens_fresh_cell_with_persisted_contents() -> Result<()> {
 	let actor_id = unique_actor_id("remote-sqlite-lazy");
-	let db_dir = tempfile::tempdir()?;
-	let driver = RocksDbDatabaseDriver::new(db_dir.path().to_path_buf()).await?;
-	let db = universaldb::Database::new(Arc::new(driver));
-	let (engine, _compaction_rx) =
-		SqliteEngine::new(db, Subspace::new(&("remote-sqlite-lazy", &actor_id)));
-	let engine = Arc::new(engine);
+	let actor_db = test_actor_db(&actor_id).await?;
 	let executors = RemoteSqliteExecutors::new();
-	let opened = engine.open(&actor_id, OpenConfig::new(1)).await?;
 
 	assert_eq!(executors.len(), 0);
 
 	let handle = remote_sqlite_executor_from_parts(
 		&executors,
-		Arc::clone(&engine),
+		Arc::clone(&actor_db),
 		&actor_id,
-		opened.generation,
+		1,
 	)
 	.await?;
 	assert_eq!(executors.len(), 1);
@@ -400,15 +168,13 @@ async fn remote_sqlite_executor_reopens_fresh_cell_with_persisted_contents() -> 
 		)
 		.await?;
 	handle.close().await?;
-	remove_remote_sqlite_executor_generation(&executors, &actor_id, opened.generation).await;
-	engine.close(&actor_id, opened.generation).await?;
+	remove_remote_sqlite_executor_generation(&executors, &actor_id, 1).await;
 
-	let reopened = engine.open(&actor_id, OpenConfig::new(2)).await?;
 	let fresh_handle = remote_sqlite_executor_from_parts(
 		&executors,
-		Arc::clone(&engine),
+		Arc::clone(&actor_db),
 		&actor_id,
-		reopened.generation,
+		2,
 	)
 	.await?;
 	let result = fresh_handle
@@ -423,34 +189,8 @@ async fn remote_sqlite_executor_reopens_fresh_cell_with_persisted_contents() -> 
 	);
 
 	fresh_handle.close().await?;
-	remove_remote_sqlite_executor_generation(&executors, &actor_id, reopened.generation).await;
-	engine.close(&actor_id, reopened.generation).await?;
+	remove_remote_sqlite_executor_generation(&executors, &actor_id, 2).await;
 	Ok(())
-}
-
-#[test]
-fn validate_sqlite_get_page_range_request_rejects_empty_bounds() {
-	let valid = rivet_envoy_protocol::SqliteGetPageRangeRequest {
-		actor_id: "actor-a".to_string(),
-		generation: 7,
-		start_pgno: 1,
-		max_pages: 1,
-		max_bytes: 4096,
-	};
-
-	validate_sqlite_get_page_range_request(&valid).expect("valid range request");
-
-	let mut invalid = valid.clone();
-	invalid.start_pgno = 0;
-	assert!(validate_sqlite_get_page_range_request(&invalid).is_err());
-
-	let mut invalid = valid.clone();
-	invalid.max_pages = 0;
-	assert!(validate_sqlite_get_page_range_request(&invalid).is_err());
-
-	let mut invalid = valid;
-	invalid.max_bytes = 0;
-	assert!(validate_sqlite_get_page_range_request(&invalid).is_err());
 }
 
 #[test]
@@ -486,6 +226,18 @@ async fn has_remote_sqlite_executor(
 ) -> bool {
 	let key = (actor_id.to_string(), generation);
 	executors.read_async(&key, |_, _| ()).await.is_some()
+}
+
+async fn test_actor_db(actor_id: &str) -> Result<Arc<Db>> {
+	let db_dir = tempfile::tempdir()?.keep();
+	let driver = RocksDbDatabaseDriver::new(db_dir).await?;
+	let db = Arc::new(universaldb::Database::new(Arc::new(driver)));
+	Ok(Arc::new(Db::new(
+		db,
+		Id::new_v1(1),
+		actor_id.to_string(),
+		NodeId::new(),
+	)))
 }
 
 fn unique_actor_id(prefix: &str) -> String {

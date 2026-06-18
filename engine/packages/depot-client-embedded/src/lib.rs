@@ -15,6 +15,7 @@ use depot_client::{
 };
 use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
+use uuid::Uuid;
 
 pub struct EmbeddedDepotSqliteTransport {
 	db: Arc<depot::conveyer::Db>,
@@ -111,6 +112,125 @@ impl SqliteTransport for EmbeddedDepotSqliteTransport {
 			)),
 		}
 	}
+
+	async fn commit_stage_begin(
+		&self,
+		request: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		match self
+			.db
+			.commit_stage_begin(
+				request.dirty_pgnos,
+				request.db_size_pages,
+				request.now_ms,
+				depot::types::CommitOptions {
+					expected_head_txid: request.expected_head_txid,
+				},
+			)
+			.await
+		{
+			Ok(result) => Ok(
+				protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+					protocol::SqliteCommitStageBeginOk {
+						stage_id: *result.stage_id.as_bytes(),
+						max_pages_per_batch: result.max_pages_per_batch,
+						max_batch_bytes: result.max_batch_bytes,
+						observed_head_txid: result.observed_head_txid,
+						staged_txid: result.staged_txid,
+					},
+				),
+			),
+			Err(err) => Ok(protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit_stage_pages(
+		&self,
+		request: protocol::SqliteCommitStagePagesRequest,
+	) -> Result<protocol::SqliteCommitStagePagesResponse> {
+		match self
+			.db
+			.commit_stage_pages(
+				stage_id_from_protocol(&request.stage_id)?,
+				request.batch_idx,
+				request
+					.dirty_pages
+					.into_iter()
+					.map(|page| depot::types::DirtyPage {
+						pgno: page.pgno,
+						bytes: page.bytes,
+					})
+					.collect(),
+			)
+			.await
+		{
+			Ok(()) => Ok(protocol::SqliteCommitStagePagesResponse::SqliteCommitStagePagesOk),
+			Err(err) => Ok(protocol::SqliteCommitStagePagesResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit_stage_complete(
+		&self,
+		request: protocol::SqliteCommitStageCompleteRequest,
+	) -> Result<protocol::SqliteCommitStageCompleteResponse> {
+		match self
+			.db
+			.commit_stage_complete(
+				stage_id_from_protocol(&request.stage_id)?,
+				request.page_batch_count,
+			)
+			.await
+		{
+			Ok(()) => Ok(
+				protocol::SqliteCommitStageCompleteResponse::SqliteCommitStageCompleteOk,
+			),
+			Err(err) => Ok(
+				protocol::SqliteCommitStageCompleteResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				),
+			),
+		}
+	}
+
+	async fn commit_stage_finalize(
+		&self,
+		request: protocol::SqliteCommitStageFinalizeRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		match self
+			.db
+			.commit_stage_finalize(stage_id_from_protocol(&request.stage_id)?)
+			.await
+		{
+			Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+				protocol::SqliteCommitOk {
+					head_txid: Some(result.head_txid),
+				},
+			)),
+			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit_stage_abort(
+		&self,
+		request: protocol::SqliteCommitStageAbortRequest,
+	) -> Result<protocol::SqliteCommitStageAbortResponse> {
+		match self
+			.db
+			.commit_stage_abort(stage_id_from_protocol(&request.stage_id)?)
+			.await
+		{
+			Ok(()) => Ok(protocol::SqliteCommitStageAbortResponse::SqliteCommitStageAbortOk),
+			Err(err) => Ok(protocol::SqliteCommitStageAbortResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
 }
 
 fn sqlite_error_reason(err: &anyhow::Error) -> String {
@@ -128,7 +248,12 @@ fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErrorResponse {
 		group: structured.group().to_string(),
 		code: structured.code().to_string(),
 		message: sqlite_error_reason(err),
+		metadata: structured.metadata().map(|metadata| metadata.to_string()),
 	}
+}
+
+fn stage_id_from_protocol(stage_id: &protocol::SqliteStageId) -> Result<Uuid> {
+	Uuid::from_slice(stage_id).map_err(Into::into)
 }
 
 fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {

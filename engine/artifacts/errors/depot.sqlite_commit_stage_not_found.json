@@ -1,0 +1,5 @@
+{
+  "code": "sqlite_commit_stage_not_found",
+  "group": "depot",
+  "message": "SQLite commit stage was not found."
+}

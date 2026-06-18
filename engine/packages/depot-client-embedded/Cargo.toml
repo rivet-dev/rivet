@@ -18,3 +18,4 @@ depot-client.workspace = true
 rivet-envoy-protocol.workspace = true
 rivet-error.workspace = true
 tokio.workspace = true
+uuid.workspace = true

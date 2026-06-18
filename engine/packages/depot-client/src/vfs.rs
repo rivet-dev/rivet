@@ -30,10 +30,12 @@ const DEFAULT_MAX_PREFETCH_BYTES: usize = 256 * 1024;
 const DEFAULT_ADAPTIVE_PREFETCH_DEPTH: usize = 256;
 const DEFAULT_ADAPTIVE_MAX_PREFETCH_BYTES: usize = 1024 * 1024;
 const DEFAULT_MAX_PAGES_PER_STAGE: usize = 4_000;
+const SLOW_COMMIT_DIRTY_BYTES_THRESHOLD: usize = 8 * 1024 * 1024;
 const DEFAULT_RECENT_HINT_PAGE_BUDGET: usize = 128;
 const DEFAULT_RECENT_HINT_RANGE_BUDGET: usize = 16;
 const DEFAULT_PAGE_SIZE: usize = 4096;
 const NATIVE_DATABASE_DROP_FLUSH_TIMEOUT: Duration = Duration::from_millis(250);
+const BRIDGE_RIVET_ERROR_PREFIX: &str = "__RIVET_ERROR_JSON__:";
 const MIN_RECENT_SCAN_RANGE_PAGES: u32 = 8;
 const FORWARD_SCAN_SCORE_THRESHOLD: i32 = 6;
 const FORWARD_SCAN_SCORE_MAX: i32 = 12;
@@ -117,6 +119,41 @@ pub trait SqliteTransport: Send + Sync {
 		&self,
 		request: protocol::SqliteCommitRequest,
 	) -> Result<protocol::SqliteCommitResponse>;
+
+	async fn commit_stage_begin(
+		&self,
+		_request: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		anyhow::bail!("sqlite commit staging unsupported by transport")
+	}
+
+	async fn commit_stage_pages(
+		&self,
+		_request: protocol::SqliteCommitStagePagesRequest,
+	) -> Result<protocol::SqliteCommitStagePagesResponse> {
+		anyhow::bail!("sqlite commit staging unsupported by transport")
+	}
+
+	async fn commit_stage_complete(
+		&self,
+		_request: protocol::SqliteCommitStageCompleteRequest,
+	) -> Result<protocol::SqliteCommitStageCompleteResponse> {
+		anyhow::bail!("sqlite commit staging unsupported by transport")
+	}
+
+	async fn commit_stage_finalize(
+		&self,
+		_request: protocol::SqliteCommitStageFinalizeRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		anyhow::bail!("sqlite commit staging unsupported by transport")
+	}
+
+	async fn commit_stage_abort(
+		&self,
+		_request: protocol::SqliteCommitStageAbortRequest,
+	) -> Result<protocol::SqliteCommitStageAbortResponse> {
+		anyhow::bail!("sqlite commit staging unsupported by transport")
+	}
 }
 
 pub type SqliteTransportHandle = Arc<dyn SqliteTransport>;
@@ -1455,9 +1492,9 @@ impl VfsContext {
 					return Ok(resolved);
 				}
 				if is_head_fence_mismatch_response(&error) {
-					return Err(GetPagesError::Fatal(error.message));
+					return Err(GetPagesError::Fatal(sqlite_response_message(&error)));
 				}
-				Err(GetPagesError::Other(error.message))
+				Err(GetPagesError::Other(sqlite_response_message(&error)))
 			}
 		}
 	}
@@ -1834,7 +1871,7 @@ async fn fetch_initial_pages(
 			if !is_initial_main_page_missing(&error.message) {
 				return Err(format!(
 					"sqlite initial page fetch failed: {}",
-					error.message
+					sqlite_response_message(&error)
 				));
 			}
 			tracing::debug!(
@@ -1872,6 +1909,19 @@ async fn commit_buffered_pages(
 	request: BufferedCommitRequest,
 ) -> std::result::Result<(BufferedCommitOutcome, CommitTransportMetrics), CommitBufferError> {
 	let mut metrics = CommitTransportMetrics::default();
+	let dirty_bytes = request
+		.dirty_pages
+		.iter()
+		.map(|page| page.bytes.len())
+		.sum::<usize>();
+	let path = if dirty_bytes > SLOW_COMMIT_DIRTY_BYTES_THRESHOLD {
+		CommitPath::Slow
+	} else {
+		CommitPath::Fast
+	};
+	if matches!(path, CommitPath::Slow) {
+		return commit_buffered_pages_staged(transport, request).await;
+	}
 	let serialize_start = Instant::now();
 	let commit_request = protocol::SqliteCommitRequest {
 		actor_id: request.actor_id.clone(),
@@ -1892,7 +1942,7 @@ async fn commit_buffered_pages(
 			metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
 			Ok((
 				BufferedCommitOutcome {
-					path: CommitPath::Fast,
+					path,
 					db_size_pages: request.new_db_size_pages,
 					head_txid: ok.head_txid,
 				},
@@ -1900,13 +1950,172 @@ async fn commit_buffered_pages(
 			))
 		}
 		protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
+			let message = sqlite_response_message(&error);
 			if is_head_fence_mismatch_response(&error) {
-				Err(CommitBufferError::FenceMismatch(error.message))
+				Err(CommitBufferError::FenceMismatch(message))
 			} else {
-				Err(CommitBufferError::Other(error.message))
+				Err(CommitBufferError::Other(message))
 			}
 		}
 	}
+}
+
+async fn commit_buffered_pages_staged(
+	transport: &dyn SqliteTransport,
+	request: BufferedCommitRequest,
+) -> std::result::Result<(BufferedCommitOutcome, CommitTransportMetrics), CommitBufferError> {
+	let mut metrics = CommitTransportMetrics::default();
+	let serialize_start = Instant::now();
+	let now_ms = sqlite_now_ms().map_err(|err| CommitBufferError::Other(err.to_string()))?;
+	let mut dirty_pages = request.dirty_pages.clone();
+	dirty_pages.sort_by_key(|page| page.pgno);
+	let dirty_pgnos = dirty_pages.iter().map(|page| page.pgno).collect::<Vec<_>>();
+	let begin_request = protocol::SqliteCommitStageBeginRequest {
+		actor_id: request.actor_id.clone(),
+		db_size_pages: request.new_db_size_pages,
+		now_ms,
+		expected_generation: None,
+		expected_head_txid: request.expected_head_txid,
+		dirty_pgnos,
+	};
+	metrics.serialize_ns += serialize_start.elapsed().as_nanos() as u64;
+
+	let transport_start = Instant::now();
+	let begin = match transport
+		.commit_stage_begin(begin_request)
+		.await
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?
+	{
+		protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(ok) => ok,
+		protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(error) => {
+			return Err(sqlite_response_to_commit_error(error));
+		}
+	};
+	metrics.transport_ns += transport_start.elapsed().as_nanos() as u64;
+
+	let max_pages = usize::try_from(begin.max_pages_per_batch)
+		.ok()
+		.filter(|value| *value > 0)
+		.unwrap_or(1);
+	let mut page_batch_count = 0u32;
+	for (batch_idx, batch) in dirty_pages.chunks(max_pages).enumerate() {
+		let batch_idx = u32::try_from(batch_idx)
+			.map_err(|err| CommitBufferError::Other(err.to_string()))?;
+		page_batch_count = batch_idx.saturating_add(1);
+		let batch_request = protocol::SqliteCommitStagePagesRequest {
+			actor_id: request.actor_id.clone(),
+			stage_id: begin.stage_id.clone(),
+			batch_idx,
+			dirty_pages: batch.to_vec(),
+			expected_generation: None,
+		};
+		let batch_start = Instant::now();
+		match transport
+			.commit_stage_pages(batch_request)
+			.await
+			.map_err(|err| CommitBufferError::Other(err.to_string()))?
+		{
+			protocol::SqliteCommitStagePagesResponse::SqliteCommitStagePagesOk => {
+				metrics.transport_ns += batch_start.elapsed().as_nanos() as u64;
+			}
+			protocol::SqliteCommitStagePagesResponse::SqliteErrorResponse(error) => {
+				abort_commit_stage_best_effort(transport, &request.actor_id, begin.stage_id.clone()).await;
+				return Err(sqlite_response_to_commit_error(error));
+			}
+		}
+	}
+
+	let complete_start = Instant::now();
+	match transport
+		.commit_stage_complete(protocol::SqliteCommitStageCompleteRequest {
+			actor_id: request.actor_id.clone(),
+			stage_id: begin.stage_id.clone(),
+			page_batch_count,
+			expected_generation: None,
+		})
+		.await
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?
+	{
+		protocol::SqliteCommitStageCompleteResponse::SqliteCommitStageCompleteOk => {
+			metrics.transport_ns += complete_start.elapsed().as_nanos() as u64;
+		}
+		protocol::SqliteCommitStageCompleteResponse::SqliteErrorResponse(error) => {
+			abort_commit_stage_best_effort(transport, &request.actor_id, begin.stage_id.clone()).await;
+			return Err(sqlite_response_to_commit_error(error));
+		}
+	}
+
+	let finalize_start = Instant::now();
+	match transport
+		.commit_stage_finalize(protocol::SqliteCommitStageFinalizeRequest {
+			actor_id: request.actor_id.clone(),
+			stage_id: begin.stage_id.clone(),
+			expected_generation: None,
+		})
+		.await
+		.map_err(|err| CommitBufferError::Other(err.to_string()))?
+	{
+		protocol::SqliteCommitResponse::SqliteCommitOk(ok) => {
+			metrics.transport_ns += finalize_start.elapsed().as_nanos() as u64;
+			Ok((
+				BufferedCommitOutcome {
+					path: CommitPath::Slow,
+					db_size_pages: request.new_db_size_pages,
+					head_txid: ok.head_txid,
+				},
+				metrics,
+			))
+		}
+		protocol::SqliteCommitResponse::SqliteErrorResponse(error) => {
+			Err(sqlite_response_to_commit_error(error))
+		}
+	}
+}
+
+async fn abort_commit_stage_best_effort(
+	transport: &dyn SqliteTransport,
+	actor_id: &str,
+	stage_id: protocol::SqliteStageId,
+) {
+	if let Err(err) = transport
+		.commit_stage_abort(protocol::SqliteCommitStageAbortRequest {
+			actor_id: actor_id.to_string(),
+			stage_id,
+			expected_generation: None,
+		})
+		.await
+	{
+		tracing::warn!(?err, "failed to abort sqlite commit stage after staged commit error");
+	}
+}
+
+fn sqlite_response_to_commit_error(error: protocol::SqliteErrorResponse) -> CommitBufferError {
+	let message = sqlite_response_message(&error);
+	if is_head_fence_mismatch_response(&error) {
+		CommitBufferError::FenceMismatch(message)
+	} else {
+		CommitBufferError::Other(message)
+	}
+}
+
+fn sqlite_response_message(error: &protocol::SqliteErrorResponse) -> String {
+	if error.group.is_empty() || error.code.is_empty() {
+		return error.message.clone();
+	}
+	let metadata = error
+		.metadata
+		.as_deref()
+		.and_then(|metadata| serde_json::from_str::<serde_json::Value>(metadata).ok());
+	format!(
+		"{BRIDGE_RIVET_ERROR_PREFIX}{}",
+		serde_json::json!({
+			"group": error.group,
+			"code": error.code,
+			"message": error.message,
+			"metadata": metadata,
+			"public": true,
+		})
+	)
 }
 
 fn is_head_fence_mismatch_response(error: &protocol::SqliteErrorResponse) -> bool {

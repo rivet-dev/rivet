@@ -19,10 +19,15 @@ mod conn {
 	use std::sync::Arc;
 
 	use depot::conveyer::Db;
+	use depot_client::database::NativeDatabaseHandle;
 	use scc::HashMap;
+
+	pub type RemoteSqliteExecutors =
+		HashMap<(String, u64), Arc<tokio::sync::OnceCell<NativeDatabaseHandle>>>;
 
 	pub struct Conn {
 		pub actor_dbs: HashMap<String, Arc<Db>>,
+		pub remote_sqlite_executors: RemoteSqliteExecutors,
 	}
 }
 
@@ -98,13 +103,18 @@ fn new_actor_db(db: Arc<universaldb::Database>, namespace_label: u16, actor_id: 
 	))
 }
 
+fn new_conn() -> conn::Conn {
+	conn::Conn {
+		actor_dbs: HashMap::new(),
+		remote_sqlite_executors: HashMap::new(),
+	}
+}
+
 #[tokio::test]
 async fn stop_actor_evicts_cached_actor_db() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	let actor_db = new_actor_db(db, TEST_NAMESPACE_LABEL, TEST_ACTOR);
-	let conn = conn::Conn {
-		actor_dbs: HashMap::new(),
-	};
+	let conn = new_conn();
 
 	assert!(
 		conn.actor_dbs
@@ -120,12 +130,49 @@ async fn stop_actor_evicts_cached_actor_db() -> Result<()> {
 }
 
 #[tokio::test]
+async fn stop_actor_evicts_cached_remote_sqlite_executors() -> Result<()> {
+	let conn = new_conn();
+	assert!(
+		conn.remote_sqlite_executors
+			.insert_async(
+				(TEST_ACTOR.to_string(), 7),
+				Arc::new(tokio::sync::OnceCell::new()),
+			)
+			.await
+			.is_ok()
+	);
+	assert!(
+		conn.remote_sqlite_executors
+			.insert_async(
+				("other-actor".to_string(), 7),
+				Arc::new(tokio::sync::OnceCell::new()),
+			)
+			.await
+			.is_ok()
+	);
+
+	actor_lifecycle::stop_actor(&conn, &checkpoint(TEST_ACTOR)).await?;
+
+	assert!(
+		conn.remote_sqlite_executors
+			.read_async(&(TEST_ACTOR.to_string(), 7), |_, _| ())
+			.await
+			.is_none()
+	);
+	assert!(
+		conn.remote_sqlite_executors
+			.read_async(&("other-actor".to_string(), 7), |_, _| ())
+			.await
+			.is_some()
+	);
+	Ok(())
+}
+
+#[tokio::test]
 async fn stop_actor_does_not_touch_udb() -> Result<()> {
 	let db = Arc::new(test_db().await?);
 	let actor_db = new_actor_db(Arc::clone(&db), TEST_NAMESPACE_LABEL, TEST_ACTOR);
-	let conn = conn::Conn {
-		actor_dbs: HashMap::new(),
-	};
+	let conn = new_conn();
 	assert!(
 		conn.actor_dbs
 			.insert_async(TEST_ACTOR.to_string(), actor_db)
@@ -147,9 +194,7 @@ async fn stop_actor_does_not_touch_udb() -> Result<()> {
 
 #[tokio::test]
 async fn stop_actor_allows_missing_cache_entry() -> Result<()> {
-	let conn = conn::Conn {
-		actor_dbs: HashMap::new(),
-	};
+	let conn = new_conn();
 
 	actor_lifecycle::stop_actor(&conn, &checkpoint(TEST_ACTOR)).await?;
 
@@ -160,9 +205,7 @@ async fn stop_actor_allows_missing_cache_entry() -> Result<()> {
 #[tokio::test]
 async fn shutdown_conn_actors_evicts_all_cached_actor_dbs() -> Result<()> {
 	let db = Arc::new(test_db().await?);
-	let conn = conn::Conn {
-		actor_dbs: HashMap::new(),
-	};
+	let conn = new_conn();
 
 	for (idx, actor_id) in ["shutdown-actor-a", "shutdown-actor-b"]
 		.into_iter()
@@ -181,4 +224,24 @@ async fn shutdown_conn_actors_evicts_all_cached_actor_dbs() -> Result<()> {
 
 	assert!(conn.actor_dbs.is_empty());
 	Ok(())
+}
+
+#[tokio::test]
+async fn shutdown_conn_actors_evicts_all_cached_remote_sqlite_executors() {
+	let conn = new_conn();
+	for (actor_id, generation) in [("shutdown-actor-a", 7), ("shutdown-actor-b", 8)] {
+		assert!(
+			conn.remote_sqlite_executors
+				.insert_async(
+					(actor_id.to_string(), generation),
+					Arc::new(tokio::sync::OnceCell::new()),
+				)
+				.await
+				.is_ok()
+		);
+	}
+
+	actor_lifecycle::shutdown_conn_actors(&conn).await;
+
+	assert!(conn.remote_sqlite_executors.is_empty());
 }

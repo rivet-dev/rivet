@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DirtyPage {
@@ -33,4 +34,13 @@ pub struct CommitOptions {
 pub struct CommitResult {
 	pub head_txid: u64,
 	pub db_size_pages: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommitStageBeginResult {
+	pub stage_id: Uuid,
+	pub max_pages_per_batch: u32,
+	pub max_batch_bytes: u32,
+	pub observed_head_txid: u64,
+	pub staged_txid: u64,
 }

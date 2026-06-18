@@ -30,7 +30,10 @@ use crate::sqlite::{
 	fail_sent_remote_sqlite_requests_with_indeterminate_result, fail_sqlite_requests_with_shutdown,
 	handle_remote_sqlite_exec_response, handle_remote_sqlite_execute_response,
 	handle_remote_sqlite_request, handle_sqlite_commit_response, handle_sqlite_get_pages_response,
-	handle_sqlite_request, process_unsent_remote_sqlite_requests, process_unsent_sqlite_requests,
+	handle_sqlite_commit_stage_abort_response, handle_sqlite_commit_stage_begin_response,
+	handle_sqlite_commit_stage_complete_response, handle_sqlite_commit_stage_finalize_response,
+	handle_sqlite_commit_stage_pages_response, handle_sqlite_request,
+	process_unsent_remote_sqlite_requests, process_unsent_sqlite_requests,
 };
 use crate::tunnel::{
 	handle_tunnel_message, resend_buffered_tunnel_messages, send_hibernatable_ws_message_ack,
@@ -543,6 +546,21 @@ async fn handle_conn_message(
 		}
 		protocol::ToEnvoy::ToEnvoySqliteCommitResponse(response) => {
 			handle_sqlite_commit_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageBeginResponse(response) => {
+			handle_sqlite_commit_stage_begin_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStagePagesResponse(response) => {
+			handle_sqlite_commit_stage_pages_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageCompleteResponse(response) => {
+			handle_sqlite_commit_stage_complete_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageFinalizeResponse(response) => {
+			handle_sqlite_commit_stage_finalize_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteCommitStageAbortResponse(response) => {
+			handle_sqlite_commit_stage_abort_response(ctx, response).await;
 		}
 		protocol::ToEnvoy::ToEnvoySqliteExecResponse(response) => {
 			handle_remote_sqlite_exec_response(ctx, response).await;

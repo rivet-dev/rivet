@@ -46,9 +46,9 @@ SQLite commits call Depot through the conveyer path:
 
 ```text
 1. Resolve DBPTR and read the current branch head in the UDB transaction.
-2. Encode dirty pages into LTX DELTA chunks.
-3. Write COMMITS, VTX, DELTA, and PIDX rows.
-4. Update META/head and quota counters.
+2. Use the fast path for commits whose encoded LTX bytes and metadata fit in one UDB transaction.
+3. For large commits, write immutable LTX bytes under DELTA_OBJ chunks before the publish transaction.
+4. Publish COMMITS, VTX, PIDX, quota, META/head, and either DELTA chunks or DELTA_MANIFEST plus DELTA_PAGEIDX rows.
 5. After commit, update SQLITE_CMP_DIRTY and send a throttled DeltasAvailable wake when lag crosses thresholds.
 ```
 

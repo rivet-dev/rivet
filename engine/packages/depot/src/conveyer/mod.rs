@@ -15,6 +15,7 @@ pub mod policy;
 pub mod quota;
 pub mod read;
 pub mod restore_point;
+pub mod shard_blob;
 pub mod types;
 pub mod udb;
 

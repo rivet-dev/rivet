@@ -412,7 +412,8 @@ impl ActorContext {
 			};
 		}
 		if self.0.sleep_requested.swap(true, Ordering::SeqCst) {
-			return Ok(());
+			return Err(ActorLifecycleError::Stopping.build())
+				.context("sleep already requested for this generation");
 		}
 		self.cancel_sleep_timer();
 		if Handle::try_current().is_ok() {
