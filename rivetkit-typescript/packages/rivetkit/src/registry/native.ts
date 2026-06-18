@@ -97,6 +97,11 @@ interface NativeHttpResponseBodyStream {
 	error(message: string): Promise<void>;
 }
 
+interface NativeHttpRequestBodyStream {
+	read(): Promise<Uint8Array | null | undefined>;
+	cancel(): Promise<void>;
+}
+
 type ResolvedRuntimeKind = Exclude<RuntimeKind, "auto">;
 type RuntimeHostKind = "node-like" | "edge-like";
 export type RuntimeLoaders = {
@@ -1126,21 +1131,41 @@ function buildRequest(init: {
 	uri: string;
 	headers?: Record<string, string>;
 	body?: RuntimeBytes;
+	bodyStream?: NativeHttpRequestBodyStream;
 	signal?: AbortSignal;
 }): Request {
 	const url = init.uri.startsWith("http")
 		? init.uri
 		: new URL(init.uri, "http://127.0.0.1").toString();
-	const body =
-		init.body && init.body.length > 0
-			? runtimeBytesToArrayBuffer(init.body)
-			: undefined;
+	const method = init.method.toUpperCase();
+	const bodyForbidden = method === "GET" || method === "HEAD";
+	const body = bodyForbidden
+		? undefined
+		: init.bodyStream
+			? new ReadableStream<Uint8Array>({
+					async pull(controller) {
+						const chunk = await init.bodyStream?.read();
+						if (!chunk) {
+							controller.close();
+							return;
+						}
+						controller.enqueue(chunk);
+					},
+					async cancel() {
+						await init.bodyStream?.cancel();
+					},
+				})
+			: init.body && init.body.length > 0
+				? runtimeBytesToArrayBuffer(init.body)
+				: undefined;
+	const streamInit = init.bodyStream && !bodyForbidden ? { duplex: "half" } : {};
 	return new Request(url, {
-		method: init.method,
+		method,
 		headers: init.headers,
 		body,
 		signal: init.signal,
-	});
+		...streamInit,
+	} as RequestInit);
 }
 
 function concatUint8Arrays(chunks: Uint8Array[]): Uint8Array {
@@ -1264,6 +1289,7 @@ async function toRuntimeHttpResponse(
 }
 
 export const nativeRegistryTestInternals = {
+	buildRequest,
 	toRuntimeHttpResponse,
 };
 
@@ -4545,6 +4571,7 @@ export function buildNativeFactory(
 						uri: string;
 						headers?: Record<string, string>;
 						body?: RuntimeBytes;
+						bodyStream?: NativeHttpRequestBodyStream;
 					};
 					cancelToken?: CancellationTokenHandle;
 					responseBodyStream?: NativeHttpResponseBodyStream;

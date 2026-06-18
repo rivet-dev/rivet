@@ -15,12 +15,20 @@ impl RegistryDispatcher {
 		request: HttpRequest,
 	) -> Result<HttpResponse> {
 		let original_path = request.path.clone();
-		let request = build_http_request(request).await?;
+		let request = build_http_request(request)?;
 		let route = RegistryHttpRoute::from_paths(
 			&original_path,
 			request.uri().path(),
 			self.handle_inspector_http_in_runtime,
 		)?;
+		let built_in_inspector_route =
+			request.uri().path().starts_with("/inspector/") && !self.handle_inspector_http_in_runtime;
+		let request = if matches!(route, RegistryHttpRoute::Framework(_)) || built_in_inspector_route
+		{
+			request.into_buffered().await
+		} else {
+			request
+		};
 		if matches!(
 			route,
 			RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)
@@ -623,16 +631,16 @@ pub(super) fn authorization_bearer_token_map(headers: &HashMap<String, String>) 
 		.and_then(|(_, value)| bearer_token_from_authorization(value))
 }
 
-pub(super) async fn build_http_request(request: HttpRequest) -> Result<Request> {
-	let mut body = request.body.unwrap_or_default();
-	if let Some(mut body_stream) = request.body_stream {
-		while let Some(chunk) = body_stream.recv().await {
-			body.extend_from_slice(&chunk);
-		}
-	}
-
+pub(super) fn build_http_request(request: HttpRequest) -> Result<Request> {
+	let body = request.body.unwrap_or_default();
 	let request_path = normalize_actor_request_path(&request.path);
-	Request::from_parts(&request.method, &request_path, request.headers, body)
+	Request::from_parts_with_stream(
+		&request.method,
+		&request_path,
+		request.headers,
+		body,
+		request.body_stream,
+	)
 		.with_context(|| format!("build actor request for `{}`", request.path))
 }
 

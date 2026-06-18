@@ -2,6 +2,29 @@ import { describe, expect, test } from "vitest";
 import { nativeRegistryTestInternals } from "../src/registry/native";
 
 describe("native http response streaming", () => {
+	test("constructs requests with streaming bodies and abort signals", async () => {
+		const chunks = [new Uint8Array([1]), new Uint8Array([2])];
+		const controller = new AbortController();
+		const request = nativeRegistryTestInternals.buildRequest({
+			method: "POST",
+			uri: "/upload",
+			bodyStream: {
+				async read() {
+					return chunks.shift() ?? null;
+				},
+				async cancel() {},
+			},
+			signal: controller.signal,
+		});
+
+		controller.abort();
+
+		expect(request.signal.aborted).toBe(true);
+		expect(new Uint8Array(await request.arrayBuffer())).toEqual(
+			new Uint8Array([1, 2]),
+		);
+	});
+
 	test("streams multi-chunk responses through the native body stream", async () => {
 		const writes: Uint8Array[] = [];
 		let finish!: () => void;

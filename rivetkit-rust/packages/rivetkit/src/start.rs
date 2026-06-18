@@ -278,6 +278,7 @@ async fn handle_actor_event<A: Actor>(
 			}
 		}
 		ActorEvent::HttpRequest { request, reply } => {
+			let request = request.into_buffered().await;
 			reply.send(
 				actor
 					.on_fetch(ctx, request)

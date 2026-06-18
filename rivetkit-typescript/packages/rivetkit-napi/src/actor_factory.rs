@@ -105,6 +105,51 @@ impl HttpResponseBodyStream {
 	}
 }
 
+#[napi]
+pub struct HttpRequestBodyStream {
+	initial_body: Arc<TokioMutex<Option<Vec<u8>>>>,
+	rx: Arc<TokioMutex<Option<mpsc::Receiver<Vec<u8>>>>>,
+}
+
+impl HttpRequestBodyStream {
+	fn new(initial_body: Vec<u8>, rx: mpsc::Receiver<Vec<u8>>) -> Self {
+		Self {
+			initial_body: Arc::new(TokioMutex::new(Some(initial_body))),
+			rx: Arc::new(TokioMutex::new(Some(rx))),
+		}
+	}
+}
+
+#[napi]
+impl HttpRequestBodyStream {
+	#[napi]
+	pub async fn read(&self) -> napi::Result<Option<Buffer>> {
+		if let Some(initial_body) = self.initial_body.lock().await.take() {
+			if !initial_body.is_empty() {
+				return Ok(Some(Buffer::from(initial_body)));
+			}
+		}
+
+		let mut rx_guard = self.rx.lock().await;
+		let Some(rx) = rx_guard.as_mut() else {
+			return Ok(None);
+		};
+		match rx.recv().await {
+			Some(chunk) => Ok(Some(Buffer::from(chunk))),
+			None => {
+				rx_guard.take();
+				Ok(None)
+			}
+		}
+	}
+
+	#[napi]
+	pub async fn cancel(&self) -> napi::Result<()> {
+		self.rx.lock().await.take();
+		Ok(())
+	}
+}
+
 #[napi(object)]
 pub struct JsQueueSendResult {
 	pub status: String,
@@ -1031,11 +1076,21 @@ fn build_serialize_state_payload(
 
 fn build_request_object(env: &Env, request: Request) -> napi::Result<JsObject> {
 	let (method, uri, headers, body) = request.to_parts();
+	let body_stream = request.take_body_stream();
 	let mut request_object = env.create_object()?;
 	request_object.set("method", method)?;
 	request_object.set("uri", uri)?;
 	request_object.set("headers", headers)?;
-	request_object.set("body", Buffer::from(body))?;
+	if let Some(body_stream) = body_stream {
+		request_object.set("body", env.get_undefined()?)?;
+		request_object.set(
+			"bodyStream",
+			HttpRequestBodyStream::new(body, body_stream),
+		)?;
+	} else {
+		request_object.set("body", Buffer::from(body))?;
+		request_object.set("bodyStream", env.get_undefined()?)?;
+	}
 	Ok(request_object)
 }
 
