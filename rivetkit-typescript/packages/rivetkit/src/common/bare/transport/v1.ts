@@ -521,6 +521,28 @@ export function writeWorkflowRemovedEntry(
 	write1(bc, x.originalName);
 }
 
+export type WorkflowVersionCheckEntry = {
+	readonly resolved: u32;
+	readonly latest: u32;
+};
+
+export function readWorkflowVersionCheckEntry(
+	bc: bare.ByteCursor,
+): WorkflowVersionCheckEntry {
+	return {
+		resolved: bare.readU32(bc),
+		latest: bare.readU32(bc),
+	};
+}
+
+export function writeWorkflowVersionCheckEntry(
+	bc: bare.ByteCursor,
+	x: WorkflowVersionCheckEntry,
+): void {
+	bare.writeU32(bc, x.resolved);
+	bare.writeU32(bc, x.latest);
+}
+
 export type WorkflowEntryKind =
 	| { readonly tag: "WorkflowStepEntry"; readonly val: WorkflowStepEntry }
 	| { readonly tag: "WorkflowLoopEntry"; readonly val: WorkflowLoopEntry }
@@ -538,6 +560,10 @@ export type WorkflowEntryKind =
 	| {
 			readonly tag: "WorkflowRemovedEntry";
 			readonly val: WorkflowRemovedEntry;
+	  }
+	| {
+			readonly tag: "WorkflowVersionCheckEntry";
+			readonly val: WorkflowVersionCheckEntry;
 	  };
 
 export function readWorkflowEntryKind(bc: bare.ByteCursor): WorkflowEntryKind {
@@ -571,6 +597,11 @@ export function readWorkflowEntryKind(bc: bare.ByteCursor): WorkflowEntryKind {
 			return {
 				tag: "WorkflowRemovedEntry",
 				val: readWorkflowRemovedEntry(bc),
+			};
+		case 8:
+			return {
+				tag: "WorkflowVersionCheckEntry",
+				val: readWorkflowVersionCheckEntry(bc),
 			};
 		default: {
 			bc.offset = offset;
@@ -622,6 +653,11 @@ export function writeWorkflowEntryKind(
 		case "WorkflowRemovedEntry": {
 			bare.writeU8(bc, 7);
 			writeWorkflowRemovedEntry(bc, x.val);
+			break;
+		}
+		case "WorkflowVersionCheckEntry": {
+			bare.writeU8(bc, 8);
+			writeWorkflowVersionCheckEntry(bc, x.val);
 			break;
 		}
 	}

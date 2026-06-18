@@ -960,6 +960,10 @@ export class WorkflowContext<
 		await this.#wrapActive(() => this.#inner.removed(name, originalType));
 	}
 
+	getVersion(name: string, latest: number): Promise<number> {
+		return this.#wrapActive(() => this.#inner.getVersion(name, latest));
+	}
+
 	isEvicted(): boolean {
 		return this.#inner.isEvicted();
 	}

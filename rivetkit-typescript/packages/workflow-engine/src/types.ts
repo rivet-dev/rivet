@@ -136,6 +136,17 @@ export interface RemovedEntry {
 }
 
 /**
+ * Version check entry data - records which version of a code path this
+ * workflow instance is pinned to at a given location.
+ */
+export interface VersionCheckEntry {
+	/** The version this instance resolved to at this location. */
+	resolved: number;
+	/** The `latest` value seen when this entry was first resolved (diagnostics). */
+	latest: number;
+}
+
+/**
  * All possible entry kind types.
  */
 export type EntryKindType =
@@ -146,7 +157,8 @@ export type EntryKindType =
 	| "rollback_checkpoint"
 	| "join"
 	| "race"
-	| "removed";
+	| "removed"
+	| "version_check";
 
 /**
  * Type-specific entry data.
@@ -159,7 +171,8 @@ export type EntryKind =
 	| { type: "rollback_checkpoint"; data: RollbackCheckpointEntry }
 	| { type: "join"; data: JoinEntry }
 	| { type: "race"; data: RaceEntry }
-	| { type: "removed"; data: RemovedEntry };
+	| { type: "removed"; data: RemovedEntry }
+	| { type: "version_check"; data: VersionCheckEntry };
 
 /**
  * An entry in the workflow history.
@@ -538,6 +551,8 @@ export interface WorkflowContextInterface {
 	): Promise<{ winner: string; value: T }>;
 
 	removed(name: string, originalType: EntryKindType): Promise<void>;
+
+	getVersion(name: string, latest: number): Promise<number>;
 
 	isEvicted(): boolean;
 }

@@ -122,6 +122,14 @@ type RemovedEntry struct {
 	originalName: optional<str>
 }
 
+# MARK: Version Check Entry
+type VersionCheckEntry struct {
+	# The version this instance resolved to at this location
+	resolved: u32
+	# The `latest` value seen when first resolved (diagnostics)
+	latest: u32
+}
+
 # MARK: Entry Kind
 # Type-specific entry data
 type EntryKind union {
@@ -132,7 +140,8 @@ type EntryKind union {
 	RollbackCheckpointEntry |
 	JoinEntry |
 	RaceEntry |
-	RemovedEntry
+	RemovedEntry |
+	VersionCheckEntry
 }
 
 # MARK: Entry

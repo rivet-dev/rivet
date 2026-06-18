@@ -188,6 +188,17 @@ describe("inspector workflow transport", () => {
 						},
 					},
 				},
+				{
+					id: "entry-2",
+					location: [{ tag: "WorkflowNameIndex", val: 1 }],
+					kind: {
+						tag: "WorkflowVersionCheckEntry",
+						val: {
+							resolved: 1,
+							latest: 2,
+						},
+					},
+				},
 			],
 			entryMetadata: new Map([
 				[

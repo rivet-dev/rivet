@@ -307,6 +307,14 @@ function entryKindToBare(kind: InternalEntryKind): v1.EntryKind {
 					originalName: kind.data.originalName ?? null,
 				},
 			};
+		case "version_check":
+			return {
+				tag: "VersionCheckEntry",
+				val: {
+					resolved: kind.data.resolved,
+					latest: kind.data.latest,
+				},
+			};
 	}
 }
 
@@ -394,6 +402,14 @@ function entryKindFromBare(kind: v1.EntryKind): InternalEntryKind {
 					originalType: kind.val
 						.originalType as InternalEntryKind["type"],
 					originalName: kind.val.originalName ?? undefined,
+				},
+			};
+		case "VersionCheckEntry":
+			return {
+				type: "version_check",
+				data: {
+					resolved: kind.val.resolved,
+					latest: kind.val.latest,
 				},
 			};
 		default:

@@ -89,6 +89,12 @@ export const TYPE_COLORS: Record<
 		icon: "#71717a",
 		iconBg: "#71717a15",
 	},
+	version_check: {
+		bg: "hsl(var(--card))",
+		border: "hsl(var(--border))",
+		icon: "#6366f1",
+		iconBg: "#6366f115",
+	},
 	input: {
 		bg: "hsl(var(--card))",
 		border: "hsl(var(--border))",

@@ -144,6 +144,14 @@ function transformEntryKind(kind: TransportWorkflowEntry["kind"]): EntryKind {
 					originalName: kind.val.originalName ?? undefined,
 				},
 			};
+		case "WorkflowVersionCheckEntry":
+			return {
+				type: "version_check",
+				data: {
+					resolved: kind.val.resolved,
+					latest: kind.val.latest,
+				},
+			};
 	}
 }
 
