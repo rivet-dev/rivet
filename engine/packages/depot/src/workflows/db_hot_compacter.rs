@@ -3,6 +3,7 @@ use crate::compaction::{
 	shared::*,
 	*,
 };
+use crate::conveyer::shard_blob::write_branch_shard_blob;
 use crate::workflows::db_manager::branch_record_is_live_at_generation;
 
 #[cfg(feature = "test-faults")]
@@ -182,14 +183,14 @@ async fn hot_stage_after_shard_write_fault_output(
 	{
 		Ok(Some(fired)) if fired.action == DepotFaultAction::DropArtifact => {
 			for output_ref in output_refs {
-				tx.informal()
-					.clear(&keys::branch_compaction_stage_hot_shard_key(
-						input.database_branch_id,
-						input.job_id,
-						output_ref.shard_id,
-						output_ref.as_of_txid,
-						0,
-					));
+				clear_staged_hot_shard_blob(
+					tx,
+					input.database_branch_id,
+					input.job_id,
+					output_ref,
+					Serializable,
+				)
+				.await?;
 			}
 			Ok(Some(StageHotJobOutput {
 				status: CompactionJobStatus::Succeeded,
@@ -227,7 +228,7 @@ pub async fn install_hot_job(
 		.await
 }
 
-async fn install_hot_job_tx(
+pub(crate) async fn install_hot_job_tx(
 	tx: &universaldb::Transaction,
 	input: &InstallHotJobInput,
 	now_ms: i64,
@@ -357,14 +358,15 @@ async fn install_hot_job_tx(
 			));
 		}
 
-		let stage_key = keys::branch_compaction_stage_hot_shard_key(
+		let Some(staged_blob) = load_staged_hot_shard_blob(
+			tx,
 			input.database_branch_id,
 			input.job_id,
-			output_ref.shard_id,
-			output_ref.as_of_txid,
-			0,
-		);
-		let Some(staged_blob) = tx_get_value(tx, &stage_key, Serializable).await? else {
+			output_ref,
+			Serializable,
+		)
+		.await?
+		else {
 			return Ok(rejected_hot_install("staged hot shard is missing"));
 		};
 		if output_ref.size_bytes != u64::try_from(staged_blob.len()).unwrap_or(u64::MAX)
@@ -394,14 +396,13 @@ async fn install_hot_job_tx(
 		return Ok(output);
 	}
 	for (output_ref, staged_blob) in &staged_blobs {
-		tx.informal().set(
-			&keys::branch_shard_key(
-				input.database_branch_id,
-				output_ref.shard_id,
-				output_ref.as_of_txid,
-			),
+		write_branch_shard_blob(
+			tx,
+			input.database_branch_id,
+			output_ref.shard_id,
+			output_ref.as_of_txid,
 			staged_blob,
-		);
+		)?;
 	}
 	#[cfg(feature = "test-faults")]
 	if let Some(output) = hot_install_fault_output(
@@ -497,14 +498,14 @@ async fn hot_install_before_staged_read_fault_output(
 	{
 		Ok(Some(fired)) if fired.action == DepotFaultAction::DropArtifact => {
 			for output_ref in &input.output_refs {
-				tx.informal()
-					.clear(&keys::branch_compaction_stage_hot_shard_key(
-						input.database_branch_id,
-						input.job_id,
-						output_ref.shard_id,
-						output_ref.as_of_txid,
-						0,
-					));
+				clear_staged_hot_shard_blob(
+					tx,
+					input.database_branch_id,
+					input.job_id,
+					output_ref,
+					Serializable,
+				)
+				.await?;
 			}
 			Ok(None)
 		}

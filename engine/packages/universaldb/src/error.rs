@@ -7,6 +7,24 @@ pub enum DatabaseError {
 	#[error("transaction is too old to perform reads or be committed")]
 	TransactionTooOld,
 
+	#[error("transaction is too large: {actual_size_bytes} bytes, limit is {max_size_bytes} bytes")]
+	TransactionTooLarge {
+		actual_size_bytes: usize,
+		max_size_bytes: usize,
+	},
+
+	#[error("key is too large: {actual_size_bytes} bytes, limit is {max_size_bytes} bytes")]
+	KeyTooLarge {
+		actual_size_bytes: usize,
+		max_size_bytes: usize,
+	},
+
+	#[error("value is too large: {actual_size_bytes} bytes, limit is {max_size_bytes} bytes")]
+	ValueTooLarge {
+		actual_size_bytes: usize,
+		max_size_bytes: usize,
+	},
+
 	#[error("max number of transaction retries reached")]
 	MaxRetriesReached,
 

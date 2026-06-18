@@ -33,6 +33,18 @@ pub fn atomic_add_branch(
 	);
 }
 
+pub fn atomic_add_branch_staged(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	delta_bytes: i64,
+) {
+	tx.informal().atomic_op(
+		&keys::branch_meta_staged_quota_key(branch_id),
+		&delta_bytes.to_le_bytes(),
+		MutationType::Add,
+	);
+}
+
 pub async fn read(tx: &universaldb::Transaction, database_id: &str) -> Result<i64> {
 	read_in_bucket(tx, BucketId::nil(), database_id).await
 }
@@ -85,6 +97,30 @@ pub async fn read_branch(
 		Vec::from(value).try_into().map_err(|value: Vec<u8>| {
 			Error::msg(format!(
 				"sqlite branch quota counter had {} bytes, expected {}",
+				value.len(),
+				std::mem::size_of::<i64>()
+			))
+		})?;
+
+	Ok(i64::from_le_bytes(bytes))
+}
+
+pub async fn read_branch_staged(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+) -> Result<i64> {
+	let Some(value) = tx
+		.informal()
+		.get(&keys::branch_meta_staged_quota_key(branch_id), Snapshot)
+		.await?
+	else {
+		return Ok(0);
+	};
+
+	let bytes: [u8; std::mem::size_of::<i64>()] =
+		Vec::from(value).try_into().map_err(|value: Vec<u8>| {
+			Error::msg(format!(
+				"sqlite branch staged quota counter had {} bytes, expected {}",
 				value.len(),
 				std::mem::size_of::<i64>()
 			))

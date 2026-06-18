@@ -90,6 +90,7 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Max storage size per actor | — | 10 GiB | Maximum total storage size for a single actor. This limit is shared with KV storage. |
+| Max SQLite dirty pages per transaction | — | 8,192 pages and 32 MiB of dirty page bytes | Large SQLite transactions below this page count may change more than 10 MB of data. Depot stages those page bytes internally and publishes the commit atomically. Transactions above the page-count limit, or transactions whose final metadata publish would exceed infrastructure limits, fail with a SQLite storage limit error. The dirty-page limit error code is `depot.sqlite_commit_page_limit_exceeded`. |
 
 ### KV Preloading
 

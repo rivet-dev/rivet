@@ -285,6 +285,63 @@ pub fn decode_ltx_v3(bytes: &[u8]) -> Result<DecodedLtx> {
 	LtxDecoder::new(bytes).decode()
 }
 
+pub fn decode_ltx_page_frame(frame: &[u8], expected_pgno: u32, page_size: u32) -> Result<DirtyPage> {
+	ensure!(
+		frame.len() >= LTX_PAGE_HEADER_SIZE + std::mem::size_of::<u32>(),
+		"ltx page frame too small: {} bytes",
+		frame.len()
+	);
+
+	let pgno = u32::from_be_bytes(
+		frame[..4]
+			.try_into()
+			.expect("page frame pgno should decode"),
+	);
+	let flags = u16::from_be_bytes(
+		frame[4..LTX_PAGE_HEADER_SIZE]
+			.try_into()
+			.expect("page frame flags should decode"),
+	);
+	ensure!(
+		pgno == expected_pgno,
+		"ltx page frame pgno {} did not match expected {}",
+		pgno,
+		expected_pgno
+	);
+	ensure!(
+		flags == LTX_PAGE_HEADER_FLAG_SIZE,
+		"unsupported page flags 0x{:04x} for page {}",
+		flags,
+		pgno
+	);
+
+	let compressed_size_start = LTX_PAGE_HEADER_SIZE;
+	let compressed_start = compressed_size_start + std::mem::size_of::<u32>();
+	let compressed_size = u32::from_be_bytes(
+		frame[compressed_size_start..compressed_start]
+			.try_into()
+			.expect("compressed size should decode"),
+	) as usize;
+	ensure!(
+		frame.len() == compressed_start + compressed_size,
+		"page {} frame had {} bytes, expected {}",
+		pgno,
+		frame.len(),
+		compressed_start + compressed_size
+	);
+
+	let bytes = lz4_flex::block::decompress(&frame[compressed_start..], page_size as usize)?;
+	ensure!(
+		bytes.len() == page_size as usize,
+		"page {} decompressed to {} bytes, expected {}",
+		pgno,
+		bytes.len(),
+		page_size
+	);
+
+	Ok(DirtyPage { pgno, bytes })
+}
+
 fn append_uvarint(buf: &mut Vec<u8>, mut value: u64) {
 	while value >= 0x80 {
 		buf.push((value as u8 & 0x7f) | 0x80);

@@ -35,6 +35,10 @@ use super::{
 	branch_init::{resolve_or_allocate_branch, write_root_branch_metadata},
 	dirty::admit_deltas_available,
 	helpers::{tracked_entry_size, tx_get_value},
+	large::{
+		MAX_SQLITE_COMMIT_DIRTY_BYTES, MAX_SQLITE_COMMIT_DIRTY_PAGES,
+		SLOW_COMMIT_DIRTY_BYTES_THRESHOLD,
+	},
 	test_hooks,
 	truncate::{collect_truncate_cleanup, fence_truncate_cleanup_row},
 };
@@ -60,7 +64,7 @@ impl Db {
 		now_ms: i64,
 		options: CommitOptions,
 	) -> Result<CommitResult> {
-		validate_dirty_pages(&dirty_pages)?;
+		let dirty_bytes = validate_dirty_pages(&dirty_pages)?;
 		#[cfg(feature = "test-faults")]
 		maybe_fire_commit_fault(
 			&self.fault_controller,
@@ -78,6 +82,12 @@ impl Db {
 		metrics::SQLITE_PUMP_COMMIT_DIRTY_PAGE_COUNT
 			.with_label_values(labels)
 			.observe(dirty_pages.len() as f64);
+
+		if dirty_bytes > SLOW_COMMIT_DIRTY_BYTES_THRESHOLD {
+			return self
+				.commit_slow_with_options(dirty_pages, db_size_pages, now_ms, options)
+				.await;
+		}
 
 		let cached_storage_used = *self.storage_used.read().await;
 		let cached_snapshot = self.cache_snapshot.read().await.clone();
@@ -461,7 +471,8 @@ impl Db {
 					})
 				}
 			})
-			.await?;
+			.await
+			.map_err(map_udb_commit_error)?;
 		#[cfg(feature = "test-faults")]
 		maybe_fire_commit_fault(
 			&self.fault_controller,
@@ -521,7 +532,7 @@ impl Db {
 		})
 	}
 
-	async fn publish_deltas_available_if_needed(
+	pub(super) async fn publish_deltas_available_if_needed(
 		&self,
 		signal: Option<DeltasAvailable>,
 		branch_id: DatabaseBranchId,
@@ -563,8 +574,26 @@ impl Db {
 	}
 }
 
+fn map_udb_commit_error(err: anyhow::Error) -> anyhow::Error {
+	for source in err.chain() {
+		if let Some(universaldb::error::DatabaseError::TransactionTooLarge {
+			actual_size_bytes,
+			max_size_bytes,
+		}) = source.downcast_ref::<universaldb::error::DatabaseError>()
+		{
+			return SqliteStorageError::CommitTooLarge {
+				actual_size_bytes: *actual_size_bytes as u64,
+				max_size_bytes: *max_size_bytes as u64,
+			}
+			.into();
+		}
+	}
+
+	err
+}
+
 #[cfg(feature = "test-faults")]
-async fn maybe_fire_commit_fault(
+pub(super) async fn maybe_fire_commit_fault(
 	controller: &Option<DepotFaultController>,
 	database_id: &str,
 	point: CommitFaultPoint,
@@ -584,8 +613,18 @@ async fn maybe_fire_commit_fault(
 	Ok(())
 }
 
-fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<()> {
+fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<usize> {
+	if dirty_pages.len() > MAX_SQLITE_COMMIT_DIRTY_PAGES {
+		return Err(SqliteStorageError::SqliteCommitPageLimitExceeded {
+			dirty_page_count: u32::try_from(dirty_pages.len()).unwrap_or(u32::MAX),
+			max_dirty_pages: MAX_SQLITE_COMMIT_DIRTY_PAGES as u32,
+			page_size_bytes: keys::PAGE_SIZE,
+		}
+		.into());
+	}
+
 	let mut seen = BTreeSet::new();
+	let mut dirty_bytes = 0usize;
 	for page in dirty_pages {
 		ensure!(page.pgno > 0, "sqlite commit does not accept page 0");
 		ensure!(
@@ -600,9 +639,20 @@ fn validate_dirty_pages(dirty_pages: &[DirtyPage]) -> Result<()> {
 			"sqlite commit duplicated page {} in a single request",
 			page.pgno
 		);
+		dirty_bytes = dirty_bytes
+			.checked_add(page.bytes.len())
+			.context("sqlite dirty page byte count overflowed")?;
 	}
 
-	Ok(())
+	if dirty_bytes > MAX_SQLITE_COMMIT_DIRTY_BYTES {
+		return Err(SqliteStorageError::CommitTooLarge {
+			actual_size_bytes: dirty_bytes as u64,
+			max_size_bytes: MAX_SQLITE_COMMIT_DIRTY_BYTES as u64,
+		}
+		.into());
+	}
+
+	Ok(dirty_bytes)
 }
 
 struct CommitTxResult {

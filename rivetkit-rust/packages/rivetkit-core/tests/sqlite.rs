@@ -224,6 +224,7 @@ fn remote_head_fence_mismatch_stops_actor_once() {
 		group: HEAD_FENCE_MISMATCH_GROUP.to_string(),
 		code: HEAD_FENCE_MISMATCH_CODE.to_string(),
 		message: "head fence mismatch in remote sqlite".to_string(),
+		metadata: None,
 	});
 	let structured = rivet_error::RivetError::extract(&mapped);
 	assert_eq!(structured.group(), "sqlite");
@@ -252,6 +253,7 @@ fn remote_head_fence_mismatch_stops_actor_once() {
 		group: HEAD_FENCE_MISMATCH_GROUP.to_string(),
 		code: HEAD_FENCE_MISMATCH_CODE.to_string(),
 		message: "second head fence mismatch".to_string(),
+		metadata: None,
 	});
 	assert!(envoy_rx.try_recv().is_err());
 }

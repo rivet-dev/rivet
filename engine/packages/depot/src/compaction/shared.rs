@@ -1,3 +1,5 @@
+use crate::conveyer::shard_blob::resolve_branch_shard_value;
+
 use super::*;
 
 pub(crate) async fn read_retired_cold_object_by_object_key(
@@ -594,6 +596,79 @@ pub(crate) async fn read_hot_input_snapshot(
 		}
 	}
 
+	for (key, value) in tx_scan_prefix_values(
+		tx,
+		&keys::branch_delta_manifest_prefix(branch_id),
+		isolation_level,
+	)
+	.await?
+	{
+		let txid = keys::decode_branch_delta_manifest_txid(branch_id, &key)?;
+		if txid < min_txid || txid > max_txid {
+			continue;
+		}
+		let manifest =
+			decode_delta_manifest(&value).context("decode sqlite large delta manifest for hot planning")?;
+		ensure!(
+			manifest.txid == txid,
+			"sqlite large delta manifest txid {} did not match key txid {}",
+			manifest.txid,
+			txid
+		);
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+		snapshot
+			.large_delta_manifests
+			.push((txid, key, value, manifest));
+		if hot_snapshot_key_count(&snapshot) >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
+	let large_manifest_txids = snapshot
+		.large_delta_manifests
+		.iter()
+		.map(|(txid, _, _, _)| *txid)
+		.collect::<BTreeSet<_>>();
+	for txid in large_manifest_txids {
+		for (key, value) in tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_pageidx_prefix(branch_id, txid),
+			isolation_level,
+		)
+		.await?
+		{
+			let pgno = keys::decode_branch_delta_pageidx_pgno(branch_id, txid, &key)?;
+			let entry = decode_delta_page_index_entry(&value)
+				.context("decode sqlite large delta page index for hot planning")?;
+			ensure!(
+				entry.txid == txid,
+				"sqlite large delta page index txid {} did not match key txid {}",
+				entry.txid,
+				txid
+			);
+			snapshot.total_value_bytes = snapshot
+				.total_value_bytes
+				.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+			snapshot
+				.large_delta_pageidx_entries
+				.push((txid, pgno, key, value, entry));
+			if hot_snapshot_key_count(&snapshot) >= CMP_FDB_BATCH_MAX_KEYS
+				|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+			{
+				break;
+			}
+		}
+		if hot_snapshot_key_count(&snapshot) >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
@@ -618,6 +693,14 @@ pub(crate) async fn read_hot_input_snapshot(
 		select_pitr_interval_coverage(&pitr_policy, &snapshot.commits, now_ms)?;
 
 	Ok(snapshot)
+}
+
+fn hot_snapshot_key_count(snapshot: &HotInputSnapshot) -> usize {
+	snapshot.commits.len()
+		+ snapshot.delta_chunks.len()
+		+ snapshot.large_delta_manifests.len()
+		+ snapshot.large_delta_pageidx_entries.len()
+		+ snapshot.pidx_entries.len()
 }
 
 pub(crate) fn select_pitr_interval_coverage(
@@ -769,6 +852,130 @@ pub(crate) async fn read_reclaim_input_snapshot(
 		}
 	}
 
+	for txid in &selected_txids {
+		let manifest_key = keys::branch_delta_manifest_key(branch_id, *txid);
+		let Some(manifest_value) = tx_get_value(tx, &manifest_key, isolation_level).await? else {
+			continue;
+		};
+		let mut large_delta_complete = true;
+		let manifest = decode_delta_manifest(&manifest_value)
+			.context("decode sqlite large delta manifest for reclaim")?;
+		ensure!(
+			manifest.txid == *txid,
+			"sqlite large delta manifest txid {} did not match key txid {}",
+			manifest.txid,
+			txid
+		);
+		snapshot.total_value_bytes = snapshot
+			.total_value_bytes
+			.saturating_add(u64::try_from(manifest_value.len()).unwrap_or(u64::MAX));
+		snapshot.large_delta_manifests.push((
+			*txid,
+			manifest_key,
+			manifest_value,
+			manifest.clone(),
+		));
+
+		for (key, value) in tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_pageidx_prefix(branch_id, *txid),
+			isolation_level,
+		)
+		.await?
+		{
+			let pgno = keys::decode_branch_delta_pageidx_pgno(branch_id, *txid, &key)?;
+			let entry = decode_delta_page_index_entry(&value)
+				.context("decode sqlite large delta page index for reclaim")?;
+			ensure!(
+				entry.txid == *txid,
+				"sqlite large delta page index txid {} did not match key txid {}",
+				entry.txid,
+				txid
+			);
+			snapshot.total_value_bytes = snapshot
+				.total_value_bytes
+				.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+			snapshot
+				.large_delta_pageidx_entries
+				.push((*txid, pgno, key, value, entry));
+			if reclaim_snapshot_key_count(&snapshot) >= CMP_FDB_BATCH_MAX_KEYS
+				|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+			{
+				large_delta_complete = false;
+				break;
+			}
+		}
+
+		let object_ref_key = keys::branch_delta_object_ref_key(branch_id, manifest.object_id);
+		if let Some(object_ref_value) = tx_get_value(tx, &object_ref_key, isolation_level).await? {
+			ensure!(
+				decode_txid_value(&object_ref_value)? == *txid,
+				"sqlite large delta object ref did not match manifest txid"
+			);
+			snapshot.total_value_bytes = snapshot
+				.total_value_bytes
+				.saturating_add(u64::try_from(object_ref_value.len()).unwrap_or(u64::MAX));
+			snapshot.large_delta_object_refs.push((
+				manifest.object_id,
+				object_ref_key,
+				object_ref_value,
+			));
+		}
+
+		let object_meta_key = keys::branch_delta_object_meta_key(branch_id, manifest.object_id);
+		if let Some(object_meta_value) = tx_get_value(tx, &object_meta_key, isolation_level).await? {
+			let object_meta = decode_delta_object_meta(&object_meta_value)
+				.context("decode sqlite large delta object meta for reclaim")?;
+			ensure!(
+				object_meta.object_id == manifest.object_id
+					&& object_meta.chunk_count == manifest.chunk_count
+					&& object_meta.encoded_len == manifest.encoded_len
+					&& object_meta.object_hash == manifest.object_hash,
+				"sqlite large delta object meta did not match manifest"
+			);
+			snapshot.total_value_bytes = snapshot
+				.total_value_bytes
+				.saturating_add(u64::try_from(object_meta_value.len()).unwrap_or(u64::MAX));
+			snapshot.large_delta_object_metas.push((
+				manifest.object_id,
+				object_meta_key,
+				object_meta_value,
+				object_meta,
+			));
+		}
+
+		for (key, value) in tx_scan_prefix_values(
+			tx,
+			&keys::branch_delta_object_chunk_prefix(branch_id, manifest.object_id),
+			isolation_level,
+		)
+		.await?
+		{
+			snapshot.total_value_bytes = snapshot
+				.total_value_bytes
+				.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+			snapshot
+				.large_delta_object_chunks
+				.push((manifest.object_id, key, value));
+			if reclaim_snapshot_key_count(&snapshot) >= CMP_FDB_BATCH_MAX_KEYS
+				|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+			{
+				large_delta_complete = false;
+				break;
+			}
+		}
+
+		if large_delta_complete {
+			snapshot.large_delta_complete_txids.push(*txid);
+		}
+
+		if reclaim_snapshot_key_count(&snapshot) >= CMP_FDB_BATCH_MAX_KEYS
+			|| snapshot.total_value_bytes >= CMP_FDB_BATCH_MAX_VALUE_BYTES as u64
+		{
+			break;
+		}
+	}
+
 	for (key, value) in
 		tx_scan_prefix_values(tx, &keys::branch_pidx_prefix(branch_id), isolation_level).await?
 	{
@@ -779,7 +986,7 @@ pub(crate) async fn read_reclaim_input_snapshot(
 		}
 	}
 
-	let shard_ids = reclaim_delta_shard_ids(branch_id, &snapshot.delta_chunks)?;
+	let shard_ids = reclaim_delta_shard_ids(branch_id, &snapshot)?;
 	snapshot.required_coverage_shard_count = shard_ids.len();
 	for shard_id in shard_ids {
 		let key = keys::branch_shard_key(branch_id, shard_id, root.hot_watermark_txid);
@@ -789,6 +996,23 @@ pub(crate) async fn read_reclaim_input_snapshot(
 	}
 
 	Ok(snapshot)
+}
+
+fn reclaim_snapshot_key_count(snapshot: &ReclaimInputSnapshot) -> usize {
+	snapshot.txid_refs.len()
+		+ snapshot.cold_object_refs.len()
+		+ snapshot.shard_cache_evictions.len()
+		+ snapshot.expired_pitr_interval_rows.len()
+		+ snapshot.commits.len()
+		+ snapshot.delta_chunks.len()
+		+ snapshot.large_delta_manifests.len()
+		+ snapshot.large_delta_complete_txids.len()
+		+ snapshot.large_delta_pageidx_entries.len()
+		+ snapshot.large_delta_object_refs.len()
+		+ snapshot.large_delta_object_metas.len()
+		+ snapshot.large_delta_object_chunks.len()
+		+ snapshot.pidx_entries.len()
+		+ snapshot.coverage_shards.len()
 }
 
 type PitrIntervalReclaimRows = (
@@ -875,7 +1099,7 @@ pub(crate) async fn read_shard_cache_eviction_candidates(
 	}
 
 	let mut candidates = Vec::new();
-	for (shard_key, shard_bytes) in
+	for (shard_key, shard_row_bytes) in
 		tx_scan_prefix_values(tx, &keys::branch_shard_prefix(branch_id), isolation_level).await?
 	{
 		let Some((shard_id, as_of_txid)) = decode_branch_shard_version_key(branch_id, &shard_key)?
@@ -892,6 +1116,15 @@ pub(crate) async fn read_shard_cache_eviction_candidates(
 		};
 		let cold_ref = decode_cold_shard_ref(&cold_ref_bytes)
 			.context("decode sqlite cold shard ref for shard cache eviction")?;
+		let shard_bytes = resolve_branch_shard_value(
+			tx,
+			branch_id,
+			shard_id,
+			as_of_txid,
+			&shard_row_bytes,
+			isolation_level,
+		)
+		.await?;
 		let content_hash = content_hash(&shard_bytes);
 		if cold_ref.shard_id != shard_id
 			|| cold_ref.as_of_txid != as_of_txid
@@ -909,6 +1142,7 @@ pub(crate) async fn read_shard_cache_eviction_candidates(
 				content_hash,
 			},
 			shard_key,
+			shard_row_bytes,
 			shard_bytes,
 			cold_ref_key,
 			cold_ref_bytes,
@@ -1011,14 +1245,17 @@ pub(crate) async fn read_cold_input_snapshot(
 		if as_of_txid != max_txid {
 			continue;
 		}
+		let bytes =
+			resolve_branch_shard_value(tx, branch_id, shard_id, as_of_txid, &value, isolation_level)
+				.await?;
 		snapshot.total_value_bytes = snapshot
 			.total_value_bytes
-			.saturating_add(u64::try_from(value.len()).unwrap_or(u64::MAX));
+			.saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
 		snapshot.shard_blobs.push(ColdShardBlob {
 			shard_id,
 			as_of_txid,
 			key,
-			bytes: value,
+			bytes,
 		});
 		if snapshot.shard_blobs.len() >= CMP_S3_UPLOAD_MAX_OBJECTS
 			|| snapshot.total_value_bytes >= CMP_S3_UPLOAD_LIMIT_BYTES as u64
@@ -1059,22 +1296,27 @@ pub(crate) fn reclaim_delete_upper_bound(
 
 pub(crate) fn reclaim_delta_shard_ids(
 	branch_id: DatabaseBranchId,
-	delta_chunks: &[(Vec<u8>, Vec<u8>)],
+	snapshot: &ReclaimInputSnapshot,
 ) -> Result<BTreeSet<u32>> {
-	let deltas = decode_hot_delta_chunks(branch_id, delta_chunks)?;
+	let deltas = decode_hot_delta_chunks(branch_id, &snapshot.delta_chunks)?;
 	let mut shard_ids = BTreeSet::new();
 	for delta in deltas.values() {
 		for page in &delta.pages {
 			shard_ids.insert(page.pgno / keys::SHARD_SIZE);
 		}
 	}
+	for (_, pgno, _, _, _) in &snapshot.large_delta_pageidx_entries {
+		shard_ids.insert(*pgno / keys::SHARD_SIZE);
+	}
 	Ok(shard_ids)
 }
 
 pub(crate) fn reclaim_coverage_is_complete(snapshot: &ReclaimInputSnapshot) -> bool {
-	!snapshot.delta_chunks.is_empty()
-		&& snapshot.required_coverage_shard_count > 0
-		&& snapshot.coverage_shards.len() == snapshot.required_coverage_shard_count
+	(!snapshot.delta_chunks.is_empty()
+		|| !snapshot.large_delta_manifests.is_empty()
+		|| !snapshot.large_delta_pageidx_entries.is_empty())
+		&& (snapshot.required_coverage_shard_count == 0
+			|| snapshot.coverage_shards.len() == snapshot.required_coverage_shard_count)
 }
 
 pub(crate) fn selected_hot_coverage_txids(
@@ -1135,7 +1377,14 @@ pub(crate) fn plan_hot_job(
 			max_txid: head.head_txid,
 		},
 		coverage_txids: coverage_txids.clone(),
-		max_pages: u32::try_from(snapshot.hot_inputs.pidx_entries.len()).unwrap_or(u32::MAX),
+		max_pages: u32::try_from(
+			snapshot
+				.hot_inputs
+				.pidx_entries
+				.len()
+				.saturating_add(snapshot.hot_inputs.large_delta_pageidx_entries.len()),
+		)
+		.unwrap_or(u32::MAX),
 		max_bytes: snapshot.hot_inputs.total_value_bytes,
 	};
 	let input_fingerprint = fingerprint_hot_inputs(
@@ -1339,6 +1588,25 @@ pub(crate) fn fingerprint_hot_inputs(
 		update_fingerprint(&mut fingerprint, key);
 		update_fingerprint(&mut fingerprint, value);
 	}
+	for (txid, key, value, manifest) in &hot_inputs.large_delta_manifests {
+		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+		update_fingerprint(&mut fingerprint, manifest.object_id.as_bytes());
+		update_fingerprint(&mut fingerprint, &manifest.chunk_count.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &manifest.encoded_len.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &manifest.object_hash);
+	}
+	for (txid, pgno, key, value, entry) in &hot_inputs.large_delta_pageidx_entries {
+		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &pgno.to_be_bytes());
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+		update_fingerprint(&mut fingerprint, entry.object_id.as_bytes());
+		update_fingerprint(&mut fingerprint, &entry.encoded_offset.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &entry.encoded_size.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &entry.page_hash);
+	}
 	for (key, value) in &hot_inputs.pidx_entries {
 		update_fingerprint(&mut fingerprint, key);
 		update_fingerprint(&mut fingerprint, value);
@@ -1388,6 +1656,7 @@ pub(crate) fn fingerprint_reclaim_inputs(
 		);
 		update_fingerprint(&mut fingerprint, &candidate.reference.content_hash);
 		update_fingerprint(&mut fingerprint, &candidate.shard_key);
+		update_fingerprint(&mut fingerprint, &candidate.shard_row_bytes);
 		update_fingerprint(&mut fingerprint, &candidate.shard_bytes);
 		update_fingerprint(&mut fingerprint, &candidate.cold_ref_key);
 		update_fingerprint(&mut fingerprint, &candidate.cold_ref_bytes);
@@ -1399,6 +1668,47 @@ pub(crate) fn fingerprint_reclaim_inputs(
 		update_fingerprint(&mut fingerprint, &commit.versionstamp);
 	}
 	for (key, value) in &reclaim_inputs.delta_chunks {
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+	}
+	for (txid, key, value, manifest) in &reclaim_inputs.large_delta_manifests {
+		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+		update_fingerprint(&mut fingerprint, manifest.object_id.as_bytes());
+		update_fingerprint(&mut fingerprint, &manifest.chunk_count.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &manifest.encoded_len.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &manifest.object_hash);
+	}
+	for txid in &reclaim_inputs.large_delta_complete_txids {
+		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+	}
+	for (txid, pgno, key, value, entry) in &reclaim_inputs.large_delta_pageidx_entries {
+		update_fingerprint(&mut fingerprint, &txid.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &pgno.to_be_bytes());
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+		update_fingerprint(&mut fingerprint, entry.object_id.as_bytes());
+		update_fingerprint(&mut fingerprint, &entry.encoded_offset.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &entry.encoded_size.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &entry.page_hash);
+	}
+	for (object_id, key, value) in &reclaim_inputs.large_delta_object_refs {
+		update_fingerprint(&mut fingerprint, object_id.as_bytes());
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+	}
+	for (object_id, key, value, meta) in &reclaim_inputs.large_delta_object_metas {
+		update_fingerprint(&mut fingerprint, object_id.as_bytes());
+		update_fingerprint(&mut fingerprint, key);
+		update_fingerprint(&mut fingerprint, value);
+		update_fingerprint(&mut fingerprint, &meta.staged_txid.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &meta.chunk_count.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &meta.encoded_len.to_be_bytes());
+		update_fingerprint(&mut fingerprint, &meta.object_hash);
+	}
+	for (object_id, key, value) in &reclaim_inputs.large_delta_object_chunks {
+		update_fingerprint(&mut fingerprint, object_id.as_bytes());
 		update_fingerprint(&mut fingerprint, key);
 		update_fingerprint(&mut fingerprint, value);
 	}
@@ -1501,7 +1811,7 @@ pub(crate) async fn write_staged_hot_shards(
 	head: &DBHead,
 	hot_inputs: &HotInputSnapshot,
 ) -> Result<Vec<HotShardOutputRef>> {
-	let deltas = decode_hot_delta_chunks(input.database_branch_id, &hot_inputs.delta_chunks)?;
+	let deltas = load_hot_delta_pages(tx, input.database_branch_id, hot_inputs).await?;
 	let mut output_refs = Vec::new();
 
 	for as_of_txid in &input.input_range.coverage_txids {
@@ -1516,16 +1826,16 @@ pub(crate) async fn write_staged_hot_shards(
 				page_updates,
 			)
 			.await?;
-			let key = keys::branch_compaction_stage_hot_shard_key(
+			let content_hash = content_hash(&encoded);
+
+			write_staged_hot_shard_chunks(
+				tx,
 				input.database_branch_id,
 				input.job_id,
 				shard_id,
 				*as_of_txid,
-				0,
-			);
-			let content_hash = content_hash(&encoded);
-
-			tx.informal().set(&key, &encoded);
+				&encoded,
+			)?;
 			output_refs.push(HotShardOutputRef {
 				shard_id,
 				as_of_txid: *as_of_txid,
@@ -1538,6 +1848,226 @@ pub(crate) async fn write_staged_hot_shards(
 	}
 
 	Ok(output_refs)
+}
+
+fn write_staged_hot_shard_chunks(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+	shard_id: u32,
+	as_of_txid: u64,
+	blob: &[u8],
+) -> Result<()> {
+	for (chunk_idx, chunk) in blob.chunks(DELTA_OBJECT_CHUNK_BYTES).enumerate() {
+		let chunk_idx =
+			u32::try_from(chunk_idx).context("sqlite staged hot shard chunk index exceeded u32")?;
+		tx.informal().set(
+			&keys::branch_compaction_stage_hot_shard_key(
+				branch_id, job_id, shard_id, as_of_txid, chunk_idx,
+			),
+			chunk,
+		);
+	}
+
+	Ok(())
+}
+
+pub(crate) async fn load_staged_hot_shard_blob(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+	output_ref: &HotShardOutputRef,
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<Option<Vec<u8>>> {
+	let prefix = keys::branch_compaction_stage_hot_shard_chunk_prefix(
+		branch_id,
+		job_id,
+		output_ref.shard_id,
+		output_ref.as_of_txid,
+	);
+	let mut chunks = tx_scan_prefix_values(tx, &prefix, isolation_level).await?;
+	if chunks.is_empty() {
+		return Ok(None);
+	}
+	chunks.sort_by_key(|(key, _)| key.clone());
+
+	let mut blob = Vec::new();
+	for (expected_idx, (key, chunk)) in chunks.into_iter().enumerate() {
+		let chunk_idx = decode_staged_hot_shard_chunk_idx(&prefix, &key)?;
+		ensure!(
+			chunk_idx == u32::try_from(expected_idx).unwrap_or(u32::MAX),
+			"sqlite staged hot shard chunks must be contiguous from chunk 0"
+		);
+		blob.extend_from_slice(&chunk);
+	}
+
+	Ok(Some(blob))
+}
+
+pub(crate) async fn clear_staged_hot_shard_blob(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	job_id: Id,
+	output_ref: &HotShardOutputRef,
+	isolation_level: universaldb::utils::IsolationLevel,
+) -> Result<()> {
+	let prefix = keys::branch_compaction_stage_hot_shard_chunk_prefix(
+		branch_id,
+		job_id,
+		output_ref.shard_id,
+		output_ref.as_of_txid,
+	);
+	for (key, _) in tx_scan_prefix_values(tx, &prefix, isolation_level).await? {
+		tx.informal().clear(&key);
+	}
+
+	Ok(())
+}
+
+fn decode_staged_hot_shard_chunk_idx(prefix: &[u8], key: &[u8]) -> Result<u32> {
+	let suffix = key
+		.strip_prefix(prefix)
+		.context("sqlite staged hot shard chunk key did not start with expected prefix")?;
+	let bytes: [u8; std::mem::size_of::<u32>()] = suffix.try_into().with_context(|| {
+		format!(
+			"sqlite staged hot shard chunk key suffix had {} bytes, expected {}",
+			suffix.len(),
+			std::mem::size_of::<u32>()
+		)
+	})?;
+
+	Ok(u32::from_be_bytes(bytes))
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct HotDeltaPages {
+	pub(crate) pages: Vec<DirtyPage>,
+}
+
+pub(crate) async fn load_hot_delta_pages(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	hot_inputs: &HotInputSnapshot,
+) -> Result<BTreeMap<u64, HotDeltaPages>> {
+	let mut deltas = decode_hot_delta_chunks(branch_id, &hot_inputs.delta_chunks)?
+		.into_iter()
+		.map(|(txid, decoded)| {
+			(
+				txid,
+				HotDeltaPages {
+					pages: decoded.pages,
+				},
+			)
+		})
+		.collect::<BTreeMap<_, _>>();
+	let manifests = hot_inputs
+		.large_delta_manifests
+		.iter()
+		.map(|(txid, _, _, manifest)| (*txid, manifest.clone()))
+		.collect::<BTreeMap<_, _>>();
+
+	for (txid, pgno, _, _, page_index) in &hot_inputs.large_delta_pageidx_entries {
+		let manifest = manifests
+			.get(txid)
+			.with_context(|| format!("sqlite large delta manifest missing for hot txid {txid}"))?;
+		let page = load_large_delta_page(tx, branch_id, manifest, page_index, *pgno).await?;
+		deltas
+			.entry(*txid)
+			.or_insert_with(|| HotDeltaPages { pages: Vec::new() })
+			.pages
+			.push(page);
+	}
+
+	for delta in deltas.values_mut() {
+		delta.pages.sort_by_key(|page| page.pgno);
+	}
+
+	Ok(deltas)
+}
+
+pub(crate) async fn load_large_delta_page(
+	tx: &universaldb::Transaction,
+	branch_id: DatabaseBranchId,
+	manifest: &DeltaManifest,
+	page_index: &DeltaPageIndexEntry,
+	pgno: u32,
+) -> Result<DirtyPage> {
+	ensure!(
+		page_index.txid == manifest.txid,
+		"sqlite large delta page index txid {} did not match manifest txid {}",
+		page_index.txid,
+		manifest.txid
+	);
+	ensure!(
+		page_index.object_id == manifest.object_id,
+		"sqlite large delta page index object did not match manifest object"
+	);
+
+	let encoded_size = page_index.encoded_size as u64;
+	let encoded_end = page_index
+		.encoded_offset
+		.checked_add(encoded_size)
+		.context("sqlite large delta page byte range overflowed")?;
+	ensure!(
+		encoded_end <= manifest.encoded_len,
+		"sqlite large delta page byte range exceeded object length"
+	);
+
+	let first_chunk = page_index.encoded_offset / DELTA_OBJECT_CHUNK_BYTES as u64;
+	let last_chunk = (encoded_end.saturating_sub(1)) / DELTA_OBJECT_CHUNK_BYTES as u64;
+	ensure!(
+		last_chunk < u64::from(manifest.chunk_count),
+		"sqlite large delta page byte range exceeded object chunk count"
+	);
+
+	let mut object_bytes = Vec::new();
+	for chunk_idx in first_chunk..=last_chunk {
+		let chunk_idx =
+			u32::try_from(chunk_idx).context("sqlite large delta chunk index exceeded u32")?;
+		let chunk = tx_get_value(
+			tx,
+			&keys::branch_delta_object_chunk_key(branch_id, manifest.object_id, chunk_idx),
+			Snapshot,
+		)
+		.await?
+		.with_context(|| {
+			format!(
+				"sqlite large delta object chunk missing for txid {} chunk {}",
+				manifest.txid, chunk_idx
+			)
+		})?;
+		object_bytes.extend_from_slice(&chunk);
+	}
+
+	let chunk_base_offset = first_chunk * DELTA_OBJECT_CHUNK_BYTES as u64;
+	let slice_start = usize::try_from(page_index.encoded_offset - chunk_base_offset)
+		.context("sqlite large delta slice start exceeded usize")?;
+	let slice_len =
+		usize::try_from(encoded_size).context("sqlite large delta slice length exceeded usize")?;
+	let slice_end = slice_start
+		.checked_add(slice_len)
+		.context("sqlite large delta slice end overflowed")?;
+	ensure!(
+		slice_end <= object_bytes.len(),
+		"sqlite large delta page byte range exceeded fetched chunks"
+	);
+
+	let page = decode_ltx_page_frame(&object_bytes[slice_start..slice_end], pgno, keys::PAGE_SIZE)
+		.with_context(|| {
+			format!(
+				"decode sqlite large delta page frame for txid {} page {}",
+				manifest.txid, pgno
+			)
+		})?;
+	let digest = Sha256::digest(&page.bytes);
+	ensure!(
+		digest.as_slice() == page_index.page_hash,
+		"sqlite large delta page hash mismatch for txid {} page {}",
+		manifest.txid,
+		pgno
+	);
+
+	Ok(page)
 }
 
 pub(crate) fn decode_hot_delta_chunks(
@@ -1568,7 +2098,7 @@ pub(crate) fn decode_hot_delta_chunks(
 
 pub(crate) fn collect_hot_pages_by_shard(
 	head: &DBHead,
-	deltas: &BTreeMap<u64, DecodedLtx>,
+	deltas: &BTreeMap<u64, HotDeltaPages>,
 	as_of_txid: u64,
 ) -> Result<BTreeMap<u32, Vec<(u32, Vec<u8>)>>> {
 	let mut pages_by_number = BTreeMap::<u32, Vec<u8>>::new();
@@ -1669,10 +2199,30 @@ pub(crate) async fn load_latest_branch_shard_blob(
 
 	let mut latest = None;
 	while let Some(entry) = stream.try_next().await? {
-		latest = Some(entry.value().to_vec());
+		latest = Some((entry.key().to_vec(), entry.value().to_vec()));
 	}
 
-	Ok(latest)
+	let Some((key, value)) = latest else {
+		return Ok(None);
+	};
+	let Some((latest_shard_id, latest_as_of_txid)) = decode_branch_shard_version_key(branch_id, &key)?
+	else {
+		return Ok(None);
+	};
+	ensure!(
+		latest_shard_id == shard_id,
+		"sqlite latest branch shard key did not match requested shard"
+	);
+	resolve_branch_shard_value(
+		tx,
+		branch_id,
+		latest_shard_id,
+		latest_as_of_txid,
+		&value,
+		Snapshot,
+	)
+	.await
+	.map(Some)
 }
 
 pub(crate) fn decode_branch_pidx_pgno(branch_id: DatabaseBranchId, key: &[u8]) -> Result<u32> {

@@ -52,6 +52,9 @@ pub const CMP_S3_UPLOAD_MAX_OBJECTS: usize = 1;
 /// Workflow compaction caps cold shard upload activity payloads.
 pub const CMP_S3_UPLOAD_LIMIT_BYTES: usize = 64 * 1024 * 1024;
 
+/// Large SQLite delta objects use values below UniversalDB's 100 KB value limit.
+pub const DELTA_OBJECT_CHUNK_BYTES: usize = 64 * 1024;
+
 /// Workflow compaction caps S3 delete activity batches.
 pub const CMP_S3_DELETE_MAX_OBJECTS: usize = 100;
 

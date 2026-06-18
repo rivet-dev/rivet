@@ -11,17 +11,19 @@ use depot::{
 	error::SqliteStorageError,
 	keys::{
 		PAGE_SIZE, branch_commit_key, branch_compaction_cold_shard_key, branch_compaction_root_key,
-		branch_delta_chunk_key, branch_delta_chunk_prefix, branch_manifest_last_access_bucket_key,
-		branch_manifest_last_access_ts_ms_key, branch_meta_head_key, branch_pidx_key,
-		branch_shard_key,
+		branch_delta_chunk_key, branch_delta_chunk_prefix, branch_delta_manifest_key,
+		branch_delta_object_chunk_key, branch_delta_pageidx_key,
+		branch_manifest_last_access_bucket_key, branch_manifest_last_access_ts_ms_key,
+		branch_meta_head_key, branch_pidx_key, branch_shard_key,
 	},
 	ltx::{LtxHeader, encode_ltx_v3},
 	types::{
 		ColdManifestChunk, ColdManifestChunkRef, ColdManifestIndex, ColdShardRef, CompactionRoot,
 		DBHead, DatabaseBranchId, DirtyPage, FetchedPage, LayerEntry, LayerKind,
 		ResolvedVersionstamp, SQLITE_STORAGE_COLD_SCHEMA_VERSION, decode_commit_row,
-		decode_compaction_root, encode_cold_manifest_chunk, encode_cold_manifest_index,
-		encode_cold_shard_ref, encode_compaction_root, encode_db_head,
+		decode_compaction_root, decode_delta_manifest, decode_delta_page_index_entry,
+		encode_cold_manifest_chunk, encode_cold_manifest_index, encode_cold_shard_ref,
+		encode_compaction_root, encode_db_head, encode_delta_page_index_entry,
 	},
 };
 #[cfg(feature = "test-faults")]
@@ -65,6 +67,12 @@ fn dirty_page(pgno: u32, fill: u8) -> DirtyPage {
 		pgno,
 		bytes: page(fill),
 	}
+}
+
+fn large_dirty_pages(count: u32) -> Vec<DirtyPage> {
+	(1..=count)
+		.map(|pgno| dirty_page(pgno, (pgno % 251) as u8))
+		.collect()
 }
 
 fn encoded_blob(txid: u64, pages: &[(u32, u8)]) -> Result<Vec<u8>> {
@@ -890,6 +898,138 @@ async fn get_pages_errors_for_corrupted_delta_source() -> Result<()> {
 
 		Ok(())
 	})
+}
+
+#[tokio::test]
+async fn get_pages_errors_when_large_delta_page_index_is_missing() -> Result<()> {
+	let db = common::test_db_arc("depot-read-large-delta-missing-pageidx").await?;
+	let database_db = common::make_db(Arc::clone(&db), test_bucket(), TEST_DATABASE);
+	let target_pgno = 128;
+
+	database_db
+		.commit(large_dirty_pages(2_049), 2_049, 1_000)
+		.await?;
+	let branch_id = read_database_branch_id(&db).await?;
+	seed(
+		&db,
+		Vec::new(),
+		vec![branch_delta_pageidx_key(branch_id, 1, target_pgno)],
+	)
+	.await?;
+
+	let err = database_db
+		.get_pages(vec![target_pgno])
+		.await
+		.expect_err("missing large delta page index should be a hard storage error");
+	assert!(
+		err.chain()
+			.any(|cause| cause.to_string().contains("large delta page index missing")),
+		"unexpected error chain: {err:?}"
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_errors_when_large_delta_manifest_is_missing() -> Result<()> {
+	let db = common::test_db_arc("depot-read-large-delta-missing-manifest").await?;
+	let database_db = common::make_db(Arc::clone(&db), test_bucket(), TEST_DATABASE);
+	let target_pgno = 128;
+
+	database_db
+		.commit(large_dirty_pages(2_049), 2_049, 1_000)
+		.await?;
+	let branch_id = read_database_branch_id(&db).await?;
+	seed(
+		&db,
+		Vec::new(),
+		vec![branch_delta_manifest_key(branch_id, 1)],
+	)
+	.await?;
+
+	let err = database_db
+		.get_pages(vec![target_pgno])
+		.await
+		.expect_err("missing large delta manifest should be a hard storage error");
+	assert!(
+		err.chain()
+			.any(|cause| cause.to_string().contains("large delta manifest missing")),
+		"unexpected error chain: {err:?}"
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_errors_when_large_delta_object_chunk_is_missing() -> Result<()> {
+	let db = common::test_db_arc("depot-read-large-delta-missing-chunk").await?;
+	let database_db = common::make_db(Arc::clone(&db), test_bucket(), TEST_DATABASE);
+
+	database_db
+		.commit(large_dirty_pages(2_049), 2_049, 1_000)
+		.await?;
+	let branch_id = read_database_branch_id(&db).await?;
+	let manifest_bytes = read_value(&db, branch_delta_manifest_key(branch_id, 1))
+		.await?
+		.expect("large delta manifest should exist");
+	let manifest = decode_delta_manifest(&manifest_bytes)?;
+	seed(
+		&db,
+		Vec::new(),
+		vec![branch_delta_object_chunk_key(branch_id, manifest.object_id, 0)],
+	)
+	.await?;
+
+	let err = database_db
+		.get_pages(vec![1])
+		.await
+		.expect_err("missing large delta object chunk should be a hard storage error");
+	assert!(
+		err.chain()
+			.any(|cause| cause.to_string().contains("large delta object chunk missing")),
+		"unexpected error chain: {err:?}"
+	);
+
+	Ok(())
+}
+
+#[tokio::test]
+async fn get_pages_errors_when_large_delta_page_hash_is_bad() -> Result<()> {
+	let db = common::test_db_arc("depot-read-large-delta-bad-page-hash").await?;
+	let database_db = common::make_db(Arc::clone(&db), test_bucket(), TEST_DATABASE);
+	let target_pgno = 128;
+
+	database_db
+		.commit(large_dirty_pages(2_049), 2_049, 1_000)
+		.await?;
+	let branch_id = read_database_branch_id(&db).await?;
+	let page_index_key = branch_delta_pageidx_key(branch_id, 1, target_pgno);
+	let page_index_bytes = read_value(&db, page_index_key.clone())
+		.await?
+		.expect("large delta page index should exist");
+	let mut page_index = decode_delta_page_index_entry(&page_index_bytes)?;
+	page_index.page_hash[0] ^= 0xff;
+	seed(
+		&db,
+		vec![(
+			page_index_key,
+			encode_delta_page_index_entry(page_index)?,
+		)],
+		Vec::new(),
+	)
+	.await?;
+
+	let err = database_db
+		.get_pages(vec![target_pgno])
+		.await
+		.expect_err("bad large delta page hash should be a hard storage error");
+	assert!(
+		err.chain()
+			.any(|cause| cause.to_string().contains("large delta page hash mismatch")),
+		"unexpected error chain: {err:?}"
+	);
+
+	Ok(())
 }
 
 #[tokio::test]

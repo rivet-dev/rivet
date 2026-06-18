@@ -16,6 +16,7 @@ use universaldb::{Database, utils::IsolationLevel::Serializable};
 use crate::conveyer::{
 	error::SqliteStorageError,
 	keys, metrics,
+	shard_blob::{resolve_branch_shard_value, write_branch_shard_blob},
 	types::{ColdShardRef, DatabaseBranchId, encode_cold_shard_ref},
 };
 
@@ -335,7 +336,16 @@ async fn fill_job_tx(
 
 	let shard_key = keys::branch_shard_key(job.key.branch_id, job.key.shard_id, job.key.as_of_txid);
 	if let Some(existing) = tx.informal().get(&shard_key, Serializable).await? {
-		if existing.as_slice() == job.object_bytes.as_slice() {
+		let existing_blob = resolve_branch_shard_value(
+			tx,
+			job.key.branch_id,
+			job.key.shard_id,
+			job.key.as_of_txid,
+			&existing,
+			Serializable,
+		)
+		.await?;
+		if existing_blob.as_slice() == job.object_bytes.as_slice() {
 			return Ok(ShardCacheFillOutcome::Succeeded { bytes_written: 0 });
 		}
 		return Err(SqliteStorageError::ShardCacheCorrupt {
@@ -345,7 +355,13 @@ async fn fill_job_tx(
 		.into());
 	}
 
-	tx.informal().set(&shard_key, &job.object_bytes);
+	write_branch_shard_blob(
+		tx,
+		job.key.branch_id,
+		job.key.shard_id,
+		job.key.as_of_txid,
+		&job.object_bytes,
+	)?;
 
 	Ok(ShardCacheFillOutcome::Succeeded {
 		bytes_written: u64::try_from(job.object_bytes.len()).unwrap_or(u64::MAX),

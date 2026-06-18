@@ -13,7 +13,7 @@ Rules for the SQLite VFS implementation.
 
 - SQLite VFS aux-file create/open paths mutate `BTreeMap` state under one write lock with `entry(...).or_insert_with(...)`. Avoid read-then-write upgrade patterns.
 - SQLite VFS v2 storage keys use literal ASCII path segments under the `0x02` subspace prefix with big-endian numeric suffixes so `scan_prefix` and `BTreeMap` ordering stay numerically correct.
-- SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
+- SQLite v2 large commits keep legacy DELTA keys for small commits, but publish large commits through `DELTA_OBJ`, `DELTA_MANIFEST`, and `DELTA_PAGEIDX`. Tests and recovery code must treat both encodings as committed delta artifacts.
 
 ## Read-mode/write-mode connection manager
 

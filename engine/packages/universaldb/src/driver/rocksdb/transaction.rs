@@ -16,7 +16,7 @@ use crate::{
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
 	range_option::RangeOption,
-	tx_ops::TransactionOperations,
+	tx_ops::{TransactionOperations, validate_commit_limits},
 	utils::IsolationLevel,
 	value::{Slice, Value, Values},
 };
@@ -238,6 +238,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			self.committed.store(true, Ordering::SeqCst);
 
 			let (operations, conflict_ranges) = self.operations.consume();
+			validate_commit_limits(&operations, &conflict_ranges)?;
 
 			let tx_sender = self.ensure_transaction().await?;
 
@@ -327,6 +328,7 @@ impl TransactionDriver for RocksDbTransactionDriver {
 			self.committed.store(true, Ordering::SeqCst);
 
 			let (operations, conflict_ranges) = self.operations.consume();
+			validate_commit_limits(&operations, &conflict_ranges)?;
 
 			// We have operations but no transaction - create one just for commit
 			let tx_sender = self.ensure_transaction().await?;

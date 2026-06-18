@@ -7,12 +7,17 @@ use anyhow::Result;
 
 use crate::{
 	atomic::apply_atomic_op,
+	error::DatabaseError,
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
 	range_option::RangeOption,
 	utils::{IsolationLevel, end_of_key_range},
 	value::{KeyValue, Slice, Values},
 };
+
+pub const MAX_TRANSACTION_SIZE: usize = 10_000_000;
+pub const MAX_KEY_SIZE: usize = 10_000;
+pub const MAX_VALUE_SIZE: usize = 100_000;
 
 #[derive(Debug, Clone)]
 pub enum Operation {
@@ -422,4 +427,84 @@ impl TransactionOperations {
 			.unwrap()
 			.push((begin.to_vec(), end.to_vec(), conflict_type));
 	}
+}
+
+pub fn validate_commit_limits(
+	operations: &[Operation],
+	conflict_ranges: &[(Vec<u8>, Vec<u8>, ConflictRangeType)],
+) -> Result<()> {
+	let mut size = 0usize;
+
+	for op in operations {
+		match op {
+			Operation::SetValue { key, value } => {
+				validate_key(key)?;
+				validate_value(value)?;
+				add_size(&mut size, key.len())?;
+				add_size(&mut size, value.len())?;
+			}
+			Operation::Clear { key } => {
+				validate_key(key)?;
+				add_size(&mut size, key.len())?;
+			}
+			Operation::ClearRange { begin, end } => {
+				validate_key(begin)?;
+				validate_key(end)?;
+				add_size(&mut size, begin.len())?;
+				add_size(&mut size, end.len())?;
+			}
+			Operation::AtomicOp { key, param, .. } => {
+				validate_key(key)?;
+				validate_value(param)?;
+				add_size(&mut size, key.len())?;
+				add_size(&mut size, param.len())?;
+			}
+		}
+	}
+
+	for (begin, end, _) in conflict_ranges {
+		validate_key(begin)?;
+		validate_key(end)?;
+		add_size(&mut size, begin.len())?;
+		add_size(&mut size, end.len())?;
+	}
+
+	Ok(())
+}
+
+fn validate_key(key: &[u8]) -> Result<()> {
+	if key.len() > MAX_KEY_SIZE {
+		return Err(DatabaseError::KeyTooLarge {
+			actual_size_bytes: key.len(),
+			max_size_bytes: MAX_KEY_SIZE,
+		}
+		.into());
+	}
+
+	Ok(())
+}
+
+fn validate_value(value: &[u8]) -> Result<()> {
+	if value.len() > MAX_VALUE_SIZE {
+		return Err(DatabaseError::ValueTooLarge {
+			actual_size_bytes: value.len(),
+			max_size_bytes: MAX_VALUE_SIZE,
+		}
+		.into());
+	}
+
+	Ok(())
+}
+
+fn add_size(size: &mut usize, amount: usize) -> Result<()> {
+	*size = size.saturating_add(amount);
+	if *size > MAX_TRANSACTION_SIZE {
+		return Err(DatabaseError::TransactionTooLarge {
+			actual_size_bytes: *size,
+			max_size_bytes: MAX_TRANSACTION_SIZE,
+		}
+		.into());
+	}
+
+	Ok(())
 }

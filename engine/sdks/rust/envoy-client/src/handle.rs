@@ -476,6 +476,71 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn sqlite_commit_stage_begin(
+		&self,
+		request: protocol::SqliteCommitStageBeginRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStageBegin(request))
+			.await?
+		{
+			SqliteResponse::CommitStageBegin(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit stage begin response type"),
+		}
+	}
+
+	pub async fn sqlite_commit_stage_pages(
+		&self,
+		request: protocol::SqliteCommitStagePagesRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStagePagesResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStagePages(request))
+			.await?
+		{
+			SqliteResponse::CommitStagePages(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit stage pages response type"),
+		}
+	}
+
+	pub async fn sqlite_commit_stage_complete(
+		&self,
+		request: protocol::SqliteCommitStageCompleteRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageCompleteResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStageComplete(request))
+			.await?
+		{
+			SqliteResponse::CommitStageComplete(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit stage complete response type"),
+		}
+	}
+
+	pub async fn sqlite_commit_stage_finalize(
+		&self,
+		request: protocol::SqliteCommitStageFinalizeRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStageFinalize(request))
+			.await?
+		{
+			SqliteResponse::CommitStageFinalize(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit stage finalize response type"),
+		}
+	}
+
+	pub async fn sqlite_commit_stage_abort(
+		&self,
+		request: protocol::SqliteCommitStageAbortRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageAbortResponse> {
+		match self
+			.send_sqlite_request(SqliteRequest::CommitStageAbort(request))
+			.await?
+		{
+			SqliteResponse::CommitStageAbort(response) => Ok(response),
+			_ => anyhow::bail!("unexpected sqlite commit stage abort response type"),
+		}
+	}
+
 	pub async fn remote_sqlite_exec(
 		&self,
 		request: protocol::SqliteExecRequest,

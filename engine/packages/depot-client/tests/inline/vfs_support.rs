@@ -240,6 +240,15 @@ impl DirectStorage {
 		if dirty_pages.is_empty() {
 			bail!("cold-ref seed requires at least one page");
 		}
+		let covered_pgnos = dirty_pages
+			.iter()
+			.map(|page| {
+				if page.pgno / SHARD_SIZE != shard_id {
+					bail!("cold-ref seed page {} is outside shard {shard_id}", page.pgno);
+				}
+				Ok(page.pgno)
+			})
+			.collect::<Result<Vec<_>>>()?;
 		let object_bytes = encode_ltx_v3(LtxHeader::delta(head_txid, 1, 1_000), &dirty_pages)?;
 		let digest = Sha256::digest(&object_bytes);
 		let mut content_hash = [0_u8; 32];
@@ -263,6 +272,7 @@ impl DirectStorage {
 		self.db
 			.run(move |tx| {
 				let cold_ref = cold_ref.clone();
+				let covered_pgnos = covered_pgnos.clone();
 				async move {
 					tx.informal().set(
 						&branch_compaction_cold_shard_key(branch_id, shard_id, head_txid),
@@ -278,7 +288,9 @@ impl DirectStorage {
 							cold_watermark_versionstamp: [2; 16],
 						})?,
 					);
-					tx.informal().clear(&branch_pidx_key(branch_id, pgno));
+					for covered_pgno in covered_pgnos {
+						tx.informal().clear(&branch_pidx_key(branch_id, covered_pgno));
+					}
 					for txid in 1..=head_txid {
 						tx.informal()
 							.clear(&branch_delta_chunk_key(branch_id, txid, 0));
@@ -490,6 +502,159 @@ impl SqliteTransport for DirectDepotTransport {
 			)),
 		}
 	}
+
+	async fn commit_stage_begin(
+		&self,
+		request: protocol::SqliteCommitStageBeginRequest,
+	) -> Result<protocol::SqliteCommitStageBeginResponse> {
+		self.storage
+			.hooks
+			.record_stage_begin_request(request.clone());
+
+		let actor_id = request.actor_id.clone();
+		let actor_db = self.storage.actor_db(actor_id).await;
+		match actor_db
+			.commit_stage_begin(
+				request.dirty_pgnos,
+				request.db_size_pages,
+				request.now_ms,
+				depot::types::CommitOptions {
+					expected_head_txid: request.expected_head_txid,
+				},
+			)
+			.await
+		{
+			Ok(result) => Ok(
+				protocol::SqliteCommitStageBeginResponse::SqliteCommitStageBeginOk(
+					protocol::SqliteCommitStageBeginOk {
+						stage_id: *result.stage_id.as_bytes(),
+						max_pages_per_batch: result.max_pages_per_batch,
+						max_batch_bytes: result.max_batch_bytes,
+						observed_head_txid: result.observed_head_txid,
+						staged_txid: result.staged_txid,
+					},
+				),
+			),
+			Err(err) => Ok(protocol::SqliteCommitStageBeginResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit_stage_pages(
+		&self,
+		request: protocol::SqliteCommitStagePagesRequest,
+	) -> Result<protocol::SqliteCommitStagePagesResponse> {
+		self.storage
+			.hooks
+			.record_stage_pages_request(request.clone());
+		if let Some(message) = self.storage.hooks.take_stage_pages_error() {
+			return Ok(protocol::SqliteCommitStagePagesResponse::SqliteErrorResponse(
+				injected_sqlite_error_response(message),
+			));
+		}
+
+		let actor_id = request.actor_id.clone();
+		let actor_db = self.storage.actor_db(actor_id).await;
+		match actor_db
+			.commit_stage_pages(
+				stage_id_from_protocol(&request.stage_id)?,
+				request.batch_idx,
+				request
+					.dirty_pages
+					.into_iter()
+					.map(storage_dirty_page)
+					.collect(),
+			)
+			.await
+		{
+			Ok(()) => Ok(protocol::SqliteCommitStagePagesResponse::SqliteCommitStagePagesOk),
+			Err(err) => Ok(protocol::SqliteCommitStagePagesResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit_stage_complete(
+		&self,
+		request: protocol::SqliteCommitStageCompleteRequest,
+	) -> Result<protocol::SqliteCommitStageCompleteResponse> {
+		self.storage
+			.hooks
+			.record_stage_complete_request(request.clone());
+		if let Some(message) = self.storage.hooks.take_stage_complete_error() {
+			return Ok(
+				protocol::SqliteCommitStageCompleteResponse::SqliteErrorResponse(
+					injected_sqlite_error_response(message),
+				),
+			);
+		}
+
+		let actor_id = request.actor_id.clone();
+		let actor_db = self.storage.actor_db(actor_id).await;
+		match actor_db
+			.commit_stage_complete(
+				stage_id_from_protocol(&request.stage_id)?,
+				request.page_batch_count,
+			)
+			.await
+		{
+			Ok(()) => Ok(
+				protocol::SqliteCommitStageCompleteResponse::SqliteCommitStageCompleteOk,
+			),
+			Err(err) => Ok(
+				protocol::SqliteCommitStageCompleteResponse::SqliteErrorResponse(
+					sqlite_error_response(&err),
+				),
+			),
+		}
+	}
+
+	async fn commit_stage_finalize(
+		&self,
+		request: protocol::SqliteCommitStageFinalizeRequest,
+	) -> Result<protocol::SqliteCommitResponse> {
+		self.storage
+			.hooks
+			.record_stage_finalize_request(request.clone());
+
+		let actor_id = request.actor_id.clone();
+		let actor_db = self.storage.actor_db(actor_id).await;
+		match actor_db
+			.commit_stage_finalize(stage_id_from_protocol(&request.stage_id)?)
+			.await
+		{
+			Ok(result) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+				protocol::SqliteCommitOk {
+					head_txid: Some(result.head_txid),
+				},
+			)),
+			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
+
+	async fn commit_stage_abort(
+		&self,
+		request: protocol::SqliteCommitStageAbortRequest,
+	) -> Result<protocol::SqliteCommitStageAbortResponse> {
+		self.storage
+			.hooks
+			.record_stage_abort_request(request.clone());
+
+		let actor_id = request.actor_id.clone();
+		let actor_db = self.storage.actor_db(actor_id).await;
+		match actor_db
+			.commit_stage_abort(stage_id_from_protocol(&request.stage_id)?)
+			.await
+		{
+			Ok(()) => Ok(protocol::SqliteCommitStageAbortResponse::SqliteCommitStageAbortOk),
+			Err(err) => Ok(protocol::SqliteCommitStageAbortResponse::SqliteErrorResponse(
+				sqlite_error_response(&err),
+			)),
+		}
+	}
 }
 
 pub(crate) struct DirectMirrorTransport {
@@ -604,10 +769,17 @@ impl ColdTier for CountingColdTier {
 pub(crate) struct DirectTransportHooks {
 	fail_next_commit: Mutex<Option<String>>,
 	fail_next_get_pages: Mutex<Option<String>>,
+	fail_next_stage_pages: Mutex<Option<String>>,
+	fail_next_stage_complete: Mutex<Option<String>>,
 	hang_next_commit: Mutex<bool>,
 	pause_next_commit: Mutex<Option<DirectCommitGate>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
+	stage_begin_requests: Mutex<Vec<protocol::SqliteCommitStageBeginRequest>>,
+	stage_pages_requests: Mutex<Vec<protocol::SqliteCommitStagePagesRequest>>,
+	stage_complete_requests: Mutex<Vec<protocol::SqliteCommitStageCompleteRequest>>,
+	stage_finalize_requests: Mutex<Vec<protocol::SqliteCommitStageFinalizeRequest>>,
+	stage_abort_requests: Mutex<Vec<protocol::SqliteCommitStageAbortRequest>>,
 }
 
 impl DirectTransportHooks {
@@ -617,6 +789,14 @@ impl DirectTransportHooks {
 
 	pub(crate) fn fail_next_get_pages(&self, message: impl Into<String>) {
 		*self.fail_next_get_pages.lock() = Some(message.into());
+	}
+
+	pub(crate) fn fail_next_stage_pages(&self, message: impl Into<String>) {
+		*self.fail_next_stage_pages.lock() = Some(message.into());
+	}
+
+	pub(crate) fn fail_next_stage_complete(&self, message: impl Into<String>) {
+		*self.fail_next_stage_complete.lock() = Some(message.into());
 	}
 
 	pub(crate) fn hang_next_commit(&self) {
@@ -635,12 +815,77 @@ impl DirectTransportHooks {
 		self.get_pages_requests.lock()
 	}
 
+	pub(crate) fn stage_begin_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStageBeginRequest>> {
+		self.stage_begin_requests.lock()
+	}
+
+	pub(crate) fn stage_pages_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStagePagesRequest>> {
+		self.stage_pages_requests.lock()
+	}
+
+	pub(crate) fn stage_complete_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStageCompleteRequest>> {
+		self.stage_complete_requests.lock()
+	}
+
+	pub(crate) fn stage_finalize_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStageFinalizeRequest>> {
+		self.stage_finalize_requests.lock()
+	}
+
+	pub(crate) fn stage_abort_requests(
+		&self,
+	) -> parking_lot::MutexGuard<'_, Vec<protocol::SqliteCommitStageAbortRequest>> {
+		self.stage_abort_requests.lock()
+	}
+
 	pub(crate) fn record_get_pages_request(&self, req: protocol::SqliteGetPagesRequest) {
 		self.get_pages_requests.lock().push(req);
 	}
 
 	pub(crate) fn record_commit_request(&self, req: protocol::SqliteCommitRequest) {
 		self.commit_requests.lock().push(req);
+	}
+
+	pub(crate) fn record_stage_begin_request(
+		&self,
+		req: protocol::SqliteCommitStageBeginRequest,
+	) {
+		self.stage_begin_requests.lock().push(req);
+	}
+
+	pub(crate) fn record_stage_pages_request(
+		&self,
+		req: protocol::SqliteCommitStagePagesRequest,
+	) {
+		self.stage_pages_requests.lock().push(req);
+	}
+
+	pub(crate) fn record_stage_complete_request(
+		&self,
+		req: protocol::SqliteCommitStageCompleteRequest,
+	) {
+		self.stage_complete_requests.lock().push(req);
+	}
+
+	pub(crate) fn record_stage_finalize_request(
+		&self,
+		req: protocol::SqliteCommitStageFinalizeRequest,
+	) {
+		self.stage_finalize_requests.lock().push(req);
+	}
+
+	pub(crate) fn record_stage_abort_request(
+		&self,
+		req: protocol::SqliteCommitStageAbortRequest,
+	) {
+		self.stage_abort_requests.lock().push(req);
 	}
 
 	pub(crate) fn pause_next_commit(&self) -> DirectCommitPause {
@@ -662,6 +907,14 @@ impl DirectTransportHooks {
 
 	pub(crate) fn take_get_pages_error(&self) -> Option<String> {
 		self.fail_next_get_pages.lock().take()
+	}
+
+	pub(crate) fn take_stage_pages_error(&self) -> Option<String> {
+		self.fail_next_stage_pages.lock().take()
+	}
+
+	pub(crate) fn take_stage_complete_error(&self) -> Option<String> {
+		self.fail_next_stage_complete.lock().take()
 	}
 
 	pub(crate) fn take_commit_hang(&self) -> bool {
@@ -746,7 +999,21 @@ pub(crate) fn sqlite_error_response(err: &anyhow::Error) -> protocol::SqliteErro
 		group: structured.group().to_string(),
 		code: structured.code().to_string(),
 		message: sqlite_error_reason(err),
+		metadata: structured.metadata().map(|metadata| metadata.to_string()),
 	}
+}
+
+fn injected_sqlite_error_response(message: String) -> protocol::SqliteErrorResponse {
+	protocol::SqliteErrorResponse {
+		group: "depot".to_string(),
+		code: "injected_stage_error".to_string(),
+		message,
+		metadata: None,
+	}
+}
+
+fn stage_id_from_protocol(stage_id: &protocol::SqliteStageId) -> Result<uuid::Uuid> {
+	uuid::Uuid::from_slice(stage_id).map_err(Into::into)
 }
 
 fn depot_error(err: &anyhow::Error) -> Option<&SqliteStorageError> {
