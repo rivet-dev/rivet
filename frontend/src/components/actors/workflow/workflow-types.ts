@@ -73,6 +73,11 @@ export interface RemovedEntry {
 	originalName?: string;
 }
 
+export interface VersionCheckEntry {
+	resolved: number;
+	latest: number;
+}
+
 export type EntryKindType =
 	| "step"
 	| "loop"
@@ -81,7 +86,8 @@ export type EntryKindType =
 	| "rollback_checkpoint"
 	| "join"
 	| "race"
-	| "removed";
+	| "removed"
+	| "version_check";
 
 export type EntryKind =
 	| { type: "step"; data: StepEntry }
@@ -91,7 +97,8 @@ export type EntryKind =
 	| { type: "rollback_checkpoint"; data: RollbackCheckpointEntry }
 	| { type: "join"; data: JoinEntry }
 	| { type: "race"; data: RaceEntry }
-	| { type: "removed"; data: RemovedEntry };
+	| { type: "removed"; data: RemovedEntry }
+	| { type: "version_check"; data: VersionCheckEntry };
 
 export type EntryStatus =
 	| "pending"

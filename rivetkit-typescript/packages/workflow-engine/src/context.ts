@@ -2581,4 +2581,97 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		setEntry(this.storage, location, entry);
 		await this.flushStorage();
 	}
+
+	// === Version ===
+
+	async getVersion(name: string, latest: number): Promise<number> {
+		this.assertNotInProgress();
+		this.checkEvicted();
+
+		this.entryInProgress = true;
+		try {
+			return await this.executeGetVersion(name, latest);
+		} finally {
+			this.entryInProgress = false;
+		}
+	}
+
+	private async executeGetVersion(
+		name: string,
+		latest: number,
+	): Promise<number> {
+		if (!Number.isInteger(latest) || latest < 1) {
+			throw new Error(
+				`getVersion("${name}", ${latest}): latest must be an integer >= 1`,
+			);
+		}
+
+		// Check for duplicate name in current execution
+		this.checkDuplicateName(name);
+
+		const location = appendName(this.storage, this.currentLocation, name);
+		const key = locationToKey(this.storage, location);
+		const existing = this.storage.history.entries.get(key);
+
+		// Mark this entry as visited for validateComplete
+		this.markVisited(key);
+
+		this.stopRollbackIfMissing(existing);
+
+		if (existing) {
+			if (existing.kind.type !== "version_check") {
+				throw new HistoryDivergedError(
+					`Expected version_check at ${key}, found ${existing.kind.type}`,
+				);
+			}
+			// Pure replay: this instance is already pinned at this location.
+			return existing.kind.data.resolved;
+		}
+
+		// No recorded version at this location. Decide whether this instance
+		// already executed past this point under older code (old in-flight) or
+		// is reaching it fresh at the live frontier.
+		//
+		// The discriminator is "is there any unvisited history entry under the
+		// current scope?". Entries created earlier in this same run are already
+		// marked visited, so the only unvisited entries under the scope are
+		// leftovers from a prior run, which proves this scope already executed
+		// under code that predates this gate. Such instances resolve to the
+		// implicit floor version 1 (old branch); fresh instances resolve to
+		// `latest`.
+		const resolved = this.hasUnvisitedUnderCurrentScope(key) ? 1 : latest;
+
+		const entry = createEntry(location, {
+			type: "version_check",
+			data: { resolved, latest },
+		});
+		setEntry(this.storage, location, entry);
+		await this.flushStorage();
+
+		return resolved;
+	}
+
+	/**
+	 * Returns true if any history entry under the current location scope
+	 * (other than `excludeKey`) has not yet been visited this run. Used by
+	 * getVersion to detect an old in-flight instance whose scope was already
+	 * executed by code that predates a version gate.
+	 */
+	private hasUnvisitedUnderCurrentScope(excludeKey: string): boolean {
+		const prefix = locationToKey(this.storage, this.currentLocation);
+
+		for (const key of this.storage.history.entries.keys()) {
+			if (key === excludeKey) {
+				continue;
+			}
+			const isUnderPrefix =
+				prefix === ""
+					? true
+					: key.startsWith(`${prefix}/`) || key === prefix;
+			if (isUnderPrefix && !this.visitedKeys.has(key)) {
+				return true;
+			}
+		}
+		return false;
+	}
 }

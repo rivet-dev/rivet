@@ -907,6 +907,10 @@ function serializeWorkflowEntryKind(
 	| {
 			tag: "WorkflowRemovedEntry";
 			val: { originalType: string; originalName: string | null };
+	  }
+	| {
+			tag: "WorkflowVersionCheckEntry";
+			val: { resolved: number; latest: number };
 	  } {
 	switch (kind.tag) {
 		case "WorkflowStepEntry":
@@ -970,6 +974,14 @@ function serializeWorkflowEntryKind(
 				val: {
 					originalType: kind.val.originalType,
 					originalName: kind.val.originalName,
+				},
+			};
+		case "WorkflowVersionCheckEntry":
+			return {
+				tag: kind.tag,
+				val: {
+					resolved: kind.val.resolved,
+					latest: kind.val.latest,
 				},
 			};
 	}
