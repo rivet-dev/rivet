@@ -39,6 +39,7 @@ export interface JsHttpResponse {
   status?: number
   headers?: Record<string, string>
   body?: Buffer
+  stream?: boolean
 }
 export interface JsQueueSendResult {
   status: string
@@ -279,6 +280,15 @@ export declare class ActorContext {
   registerTask(promise: Promise<any>): void
   runtimeState(): object
   clearRuntimeState(): void
+}
+export declare class HttpResponseBodyStream {
+  write(chunk: Buffer): Promise<void>
+  end(): Promise<void>
+  error(message: string): Promise<void>
+}
+export declare class HttpRequestBodyStream {
+  read(): Promise<Buffer | null>
+  cancel(): Promise<void>
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)

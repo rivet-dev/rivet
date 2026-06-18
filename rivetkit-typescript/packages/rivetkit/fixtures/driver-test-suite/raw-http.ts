@@ -5,7 +5,7 @@ export const rawHttpActor = actor({
 	state: {
 		requestCount: 0,
 	},
-	onRequest(
+	async onRequest(
 		ctx: RequestContext<any, any, any, any, any, any>,
 		request: Request,
 	) {
@@ -29,6 +29,50 @@ export const rawHttpActor = actor({
 			return new Response(request.body, {
 				headers: request.headers,
 			});
+		}
+
+		if (url.pathname === "/api/stream") {
+			const encoder = new TextEncoder();
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					async start(controller) {
+						controller.enqueue(encoder.encode("data: first\n\n"));
+						await new Promise((resolve) =>
+							setTimeout(resolve, 150),
+						);
+						controller.enqueue(encoder.encode("data: second\n\n"));
+						controller.close();
+					},
+				}),
+				{
+					headers: { "Content-Type": "text/event-stream" },
+				},
+			);
+		}
+
+		if (url.pathname === "/api/upload-stream" && method === "POST") {
+			const reader = request.body?.getReader();
+			const sizes: number[] = [];
+			let totalBytes = 0;
+			if (reader) {
+				for (;;) {
+					const next = await reader.read();
+					if (next.done) break;
+					sizes.push(next.value.byteLength);
+					totalBytes += next.value.byteLength;
+				}
+			}
+			return new Response(
+				JSON.stringify({
+					chunkCount: sizes.length,
+					contentLength: request.headers.get("content-length"),
+					sizes,
+					totalBytes,
+				}),
+				{
+					headers: { "Content-Type": "application/json" },
+				},
+			);
 		}
 
 		if (url.pathname === "/api/state") {

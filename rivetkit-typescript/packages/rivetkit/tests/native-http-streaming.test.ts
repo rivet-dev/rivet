@@ -8,6 +8,7 @@ describe("native http response streaming", () => {
 		const request = nativeRegistryTestInternals.buildRequest({
 			method: "POST",
 			uri: "/upload",
+			body: chunks.shift(),
 			bodyStream: {
 				async read() {
 					return chunks.shift() ?? null;
@@ -23,6 +24,40 @@ describe("native http response streaming", () => {
 		expect(new Uint8Array(await request.arrayBuffer())).toEqual(
 			new Uint8Array([1, 2]),
 		);
+	});
+
+	test("preserves native request stream chunks through Request bodies", async () => {
+		const chunkSizes = [13_093, 16_384, 32_768, 19_675];
+		const chunks = chunkSizes.map((size, index) => {
+			const chunk = new Uint8Array(size);
+			chunk.fill(index + 1);
+			return chunk;
+		});
+		const request = nativeRegistryTestInternals.buildRequest({
+			method: "POST",
+			uri: "/upload",
+			bodyStream: {
+				async read() {
+					return chunks.shift() ?? null;
+				},
+				async cancel() {},
+			},
+		});
+
+		const reader = request.body?.getReader();
+		expect(reader).toBeDefined();
+
+		const sizes: number[] = [];
+		let totalBytes = 0;
+		for (;;) {
+			const next = await reader!.read();
+			if (next.done) break;
+			sizes.push(next.value.byteLength);
+			totalBytes += next.value.byteLength;
+		}
+
+		expect(sizes).toEqual(chunkSizes);
+		expect(totalBytes).toBe(80 * 1024);
 	});
 
 	test("streams multi-chunk responses through the native body stream", async () => {

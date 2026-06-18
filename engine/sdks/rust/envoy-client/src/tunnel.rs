@@ -64,9 +64,28 @@ async fn handle_request_start(
 	);
 
 	let actor = ctx.get_actor(&actor_id, None).unwrap();
-	let _ = actor
-		.handle
-		.send(crate::actor::ToActor::ReqStart { message_id, req });
+	let actor_handle = actor.handle.clone();
+	let _ = actor_handle.send(crate::actor::ToActor::ReqStart {
+		message_id: message_id.clone(),
+		req,
+	});
+
+	if let Some(chunks) = ctx
+		.pending_request_chunks
+		.remove(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		for chunk in chunks {
+			let finish = chunk.finish;
+			let _ = actor_handle.send(crate::actor::ToActor::ReqChunk {
+				message_id: message_id.clone(),
+				chunk,
+			});
+			if finish {
+				ctx.request_to_actor
+					.remove(&[&message_id.gateway_id, &message_id.request_id]);
+			}
+		}
+	}
 }
 
 fn handle_request_chunk(
@@ -87,10 +106,22 @@ fn handle_request_chunk(
 				message_id: message_id.clone(),
 				chunk,
 			});
+		} else {
+			tracing::warn!(actor_id = %actor_id, "received request chunk for unknown actor");
 		}
+	} else if let Some(chunks) = ctx
+		.pending_request_chunks
+		.get_mut(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		chunks.push(chunk);
+	} else {
+		ctx.pending_request_chunks.insert(
+			&[&message_id.gateway_id, &message_id.request_id],
+			vec![chunk],
+		);
 	}
 
-	if finish {
+	if actor_id.is_some() && finish {
 		ctx.request_to_actor
 			.remove(&[&message_id.gateway_id, &message_id.request_id]);
 	}
@@ -110,6 +141,8 @@ fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId)
 	}
 
 	ctx.request_to_actor
+		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	ctx.pending_request_chunks
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
 }
 

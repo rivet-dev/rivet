@@ -1,9 +1,12 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use gas::prelude::*;
-use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode, body::Body};
+use http_body_util::{BodyExt, Full, Limited};
+use hyper::{
+	Method, Request, Response, StatusCode,
+	body::{Body, Incoming as BodyIncoming, SizeHint},
+};
 use rivet_envoy_protocol as protocol;
 use rivet_error::*;
 use rivet_guard_core::{
@@ -57,8 +60,10 @@ fn should_stream_http_request_body(body_len: usize) -> bool {
 	body_len > HTTP_BODY_CHUNK_SIZE
 }
 
-fn http_request_body_chunk_count(body_len: usize) -> usize {
-	body_len.div_ceil(HTTP_BODY_CHUNK_SIZE)
+fn should_stream_http_request_body_hint(size_hint: &SizeHint) -> bool {
+	size_hint
+		.upper()
+		.map_or(true, |body_len| should_stream_http_request_body(body_len as usize))
 }
 
 fn advance_http_stream_message_index(
@@ -81,14 +86,6 @@ mod tests {
 		assert!(!should_stream_http_request_body(0));
 		assert!(!should_stream_http_request_body(HTTP_BODY_CHUNK_SIZE));
 		assert!(should_stream_http_request_body(HTTP_BODY_CHUNK_SIZE + 1));
-	}
-
-	#[test]
-	fn request_body_chunk_count_rounds_up() {
-		assert_eq!(http_request_body_chunk_count(0), 0);
-		assert_eq!(http_request_body_chunk_count(1), 1);
-		assert_eq!(http_request_body_chunk_count(HTTP_BODY_CHUNK_SIZE), 1);
-		assert_eq!(http_request_body_chunk_count(HTTP_BODY_CHUNK_SIZE + 1), 2);
 	}
 
 	#[test]
@@ -182,31 +179,67 @@ async fn send_to_envoy_or_actor_stopped(
 	}
 }
 
-async fn send_http_request_body_chunks(
+async fn send_streaming_http_request_body_chunks<B>(
 	in_flight_req: &InFlightRequestHandle,
 	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
 	actor_id: Id,
-	body: Bytes,
-) -> Result<()> {
-	let chunk_count = http_request_body_chunk_count(body.len());
-	for (idx, chunk) in body.chunks(HTTP_BODY_CHUNK_SIZE).enumerate() {
-		let finish = idx + 1 == chunk_count;
-		let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
-			protocol::ToEnvoyRequestChunk {
-				body: chunk.to_vec(),
-				finish,
-			},
-		);
-		send_to_envoy_or_actor_stopped(
-			in_flight_req,
-			stopped_sub,
-			actor_id,
-			PHASE_PRE_REQUEST,
-			message,
-			false,
-		)
-		.await?;
+	mut body: B,
+) -> Result<()>
+where
+	B: Body<Data = Bytes> + Unpin,
+	B::Error: std::fmt::Display,
+{
+	while let Some(frame) = body.frame().await {
+		let frame = match frame {
+			Ok(frame) => frame,
+			Err(error) => {
+				send_http_request_abort(
+					in_flight_req,
+					protocol::HttpStreamAbortReasonKind::ClientDisconnect,
+					Some(error.to_string()),
+				)
+				.await;
+				return Err(anyhow!("failed to read streaming request body: {error}"));
+			}
+		};
+		let Ok(data) = frame.into_data() else {
+			continue;
+		};
+
+		for chunk in data.chunks(HTTP_BODY_CHUNK_SIZE) {
+			let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
+				protocol::ToEnvoyRequestChunk {
+					body: chunk.to_vec(),
+					finish: false,
+				},
+			);
+			send_to_envoy_or_actor_stopped(
+				in_flight_req,
+				stopped_sub,
+				actor_id,
+				PHASE_PRE_REQUEST,
+				message,
+				false,
+			)
+			.await?;
+		}
 	}
+
+	let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
+		protocol::ToEnvoyRequestChunk {
+			body: Vec::new(),
+			finish: true,
+		},
+	);
+	send_to_envoy_or_actor_stopped(
+		in_flight_req,
+		stopped_sub,
+		actor_id,
+		PHASE_PRE_REQUEST,
+		message,
+		false,
+	)
+	.await?;
 
 	Ok(())
 }
@@ -442,19 +475,27 @@ impl PegboardGateway2 {
 }
 
 impl PegboardGateway2 {
-	async fn handle_request_inner(
+	async fn handle_request_inner<B>(
 		&self,
 		ctx: &StandaloneCtx,
-		req: Request<Full<Bytes>>,
+		req: Request<B>,
 		req_ctx: &mut RequestContext,
-	) -> Result<Response<ResponseBody>> {
+	) -> Result<Response<ResponseBody>>
+	where
+		B: Body<Data = Bytes> + Unpin,
+		B::Error: std::error::Error + Send + Sync + 'static,
+	{
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Extract request parts
-		let headers = req
-			.headers()
+		let request_body_size_hint = req.body().size_hint();
+		let request_stream = !matches!(req_ctx.method(), &Method::GET | &Method::HEAD)
+			&& should_stream_http_request_body_hint(&request_body_size_hint);
+		let (req_parts, body) = req.into_parts();
+		let headers = req_parts
+			.headers
 			.iter()
 			.filter_map(|(name, value)| {
 				value
@@ -463,14 +504,18 @@ impl PegboardGateway2 {
 					.map(|value_str| (name.to_string(), value_str.to_string()))
 			})
 			.collect::<HashMap<_, _>>();
-
-		// NOTE: Size constraints have already been applied by guard
-		let body_bytes = req
-			.into_body()
-			.collect()
-			.await
-			.context("failed to read body")?
-			.to_bytes();
+		let (body_bytes, streaming_body) = if request_stream {
+			(Bytes::new(), Some(body))
+		} else {
+			(
+				Limited::new(body, ctx.config().guard().http_max_request_body_size())
+					.collect()
+					.await
+					.map_err(|error| anyhow!("failed to read body: {error}"))?
+					.to_bytes(),
+				None,
+			)
+		};
 
 		let mut stopped_sub = ctx
 			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
@@ -534,7 +579,6 @@ impl PegboardGateway2 {
 
 		let res = async {
 			// Start request
-			let request_stream = should_stream_http_request_body(body_bytes.len());
 			let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(
 				protocol::ToEnvoyRequestStart {
 					actor_id: actor_id.clone(),
@@ -560,12 +604,12 @@ impl PegboardGateway2 {
 			)
 			.await?;
 
-			if request_stream {
-				send_http_request_body_chunks(
+			if let Some(body) = streaming_body {
+				send_streaming_http_request_body_chunks(
 					&in_flight_req,
 					&mut stopped_sub,
 					self.actor_id,
-					body_bytes,
+					body,
 				)
 				.await?;
 			}
@@ -1290,10 +1334,73 @@ impl PegboardGateway2 {
 
 #[async_trait]
 impl CustomServeTrait for PegboardGateway2 {
+	fn streams_request_body(&self) -> bool {
+		true
+	}
+
 	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, actor_key=?self.actor_key, actor_generation=?self.actor_generation, namespace_id=?self.namespace_id, pool_name=%self.pool_name, envoy_key=%self.envoy_key))]
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
+		req_ctx: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
+		let req_body_size_hint = req.body().size_hint();
+
+		let (res, metrics_res) = tokio::join!(
+			self.handle_request_inner(&ctx, req, req_ctx),
+			record_req_metrics(
+				&ctx,
+				self.actor_id,
+				self.namespace_id,
+				Metric::HttpIngress(
+					req_body_size_hint
+						.upper()
+						.unwrap_or(req_body_size_hint.lower()) as usize
+				),
+			),
+		);
+
+		let response_size = match &res {
+			Ok(res) => res.size_hint().upper().unwrap_or(res.size_hint().lower()),
+			Err(_) => 0,
+		};
+
+		if let Err(err) = metrics_res {
+			tracing::error!(?err, "http req ingress metrics failed");
+		} else {
+			let actor_id = self.actor_id;
+			let namespace_id = self.namespace_id;
+			let envoy_key = self.envoy_key.clone();
+			tokio::spawn(
+				async move {
+					if let Err(err) = record_req_metrics(
+						&ctx,
+						actor_id,
+						namespace_id,
+						Metric::HttpEgress(response_size as usize),
+					)
+					.await
+					{
+						tracing::error!(
+							?err,
+							?namespace_id,
+							%envoy_key,
+							"http req egress metrics failed, likely corrupt now",
+						);
+					}
+				}
+				.in_current_span(),
+			);
+		}
+
+		res
+	}
+
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, actor_key=?self.actor_key, actor_generation=?self.actor_generation, namespace_id=?self.namespace_id, pool_name=%self.pool_name, envoy_key=%self.envoy_key))]
+	async fn handle_streaming_request(
+		&self,
+		req: Request<BodyIncoming>,
 		req_ctx: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;

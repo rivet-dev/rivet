@@ -102,6 +102,10 @@ interface NativeHttpRequestBodyStream {
 	cancel(): Promise<void>;
 }
 
+type NativeReadableStreamReadResult = Awaited<
+	ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>
+>;
+
 type ResolvedRuntimeKind = Exclude<RuntimeKind, "auto">;
 type RuntimeHostKind = "node-like" | "edge-like";
 export type RuntimeLoaders = {
@@ -1144,12 +1148,21 @@ function buildRequest(init: {
 		: init.bodyStream
 			? new ReadableStream<Uint8Array>({
 					async pull(controller) {
-						const chunk = await init.bodyStream?.read();
-						if (!chunk) {
-							controller.close();
-							return;
+						try {
+							if (init.body && init.body.length > 0) {
+								controller.enqueue(new Uint8Array(init.body));
+								init.body = undefined;
+								return;
+							}
+							const chunk = await init.bodyStream?.read();
+							if (!chunk) {
+								controller.close();
+							} else {
+								controller.enqueue(new Uint8Array(chunk));
+							}
+						} catch (error) {
+							controller.error(error);
 						}
-						controller.enqueue(chunk);
 					},
 					async cancel() {
 						await init.bodyStream?.cancel();
@@ -1192,13 +1205,15 @@ async function pumpRuntimeHttpResponseBody(
 	reader: ReadableStreamDefaultReader<Uint8Array>,
 	stream: NativeHttpResponseBodyStream,
 	initialChunks: Uint8Array[],
+	pendingRead?: Promise<NativeReadableStreamReadResult>,
 ) {
 	try {
 		for (const chunk of initialChunks) {
 			await writeHttpResponseChunk(stream, chunk);
 		}
 		for (;;) {
-			const next = await reader.read();
+			const next = pendingRead ? await pendingRead : await reader.read();
+			pendingRead = undefined;
 			if (next.done) {
 				await stream.end();
 				return;
@@ -1251,7 +1266,50 @@ async function toRuntimeHttpResponse(
 	}
 
 	const firstChunk = first.value ?? new Uint8Array();
-	const second = await reader.read();
+	const secondRead = reader.read();
+	const secondResult = await Promise.race<
+		| { kind: "ready"; value: NativeReadableStreamReadResult }
+		| { kind: "pending" }
+	>([
+		secondRead.then((value) => ({ kind: "ready", value }) as const),
+		Promise.resolve({ kind: "pending" } as const),
+	]);
+	if (secondResult.kind === "pending") {
+		if (!responseBodyStream) {
+			const chunks = [firstChunk];
+			for (;;) {
+				const next = await secondRead;
+				if (next.done) break;
+				if (next.value) chunks.push(next.value);
+				break;
+			}
+			for (;;) {
+				const next = await reader.read();
+				if (next.done) break;
+				if (next.value) chunks.push(next.value);
+			}
+			reader.releaseLock();
+			return {
+				status: response.status,
+				headers,
+				body: concatUint8Arrays(chunks),
+			};
+		}
+
+		void pumpRuntimeHttpResponseBody(
+			reader,
+			responseBodyStream,
+			[firstChunk],
+			secondRead,
+		);
+		return {
+			status: response.status,
+			headers,
+			stream: true,
+		};
+	}
+
+	const second = secondResult.value;
 	if (second.done) {
 		reader.releaseLock();
 		return {
@@ -3676,19 +3734,22 @@ export function buildNativeFactory(
 		);
 	const maybeHandleNativeInspectorRequest = async (
 		ctx: ActorContextHandle,
-		_rawRequest: {
+		rawRequest: {
 			method: string;
 			uri: string;
 			headers?: Record<string, string>;
 			body?: RuntimeBytes;
 		},
-		jsRequest: Request,
 	): Promise<Response | undefined> => {
-		const url = new URL(jsRequest.url);
+		const rawUrl = rawRequest.uri.startsWith("http")
+			? rawRequest.uri
+			: new URL(rawRequest.uri, "http://127.0.0.1").toString();
+		const url = new URL(rawUrl);
 		if (!url.pathname.startsWith("/inspector/")) {
 			return undefined;
 		}
 
+		const jsRequest = buildRequest(rawRequest);
 		const jsonResponse = (body: unknown, init?: ResponseInit) =>
 			new Response(JSON.stringify(body), {
 				status: init?.status ?? 200,
@@ -4584,12 +4645,10 @@ export function buildNativeFactory(
 						cancelToken,
 						responseBodyStream,
 					} = unwrapTsfnPayload(error, payload);
-					const jsRequest = buildRequest(request);
 					const inspectorResponse =
 						await maybeHandleNativeInspectorRequest(
 							ctx,
 							request,
-							jsRequest,
 						);
 					if (inspectorResponse) {
 						return await toRuntimeHttpResponse(
@@ -4605,8 +4664,9 @@ export function buildNativeFactory(
 						);
 					}
 
+					const handlerRequest = buildRequest(request);
 					const rawConnParams =
-						jsRequest.headers.get(HEADER_CONN_PARAMS);
+						handlerRequest.headers.get(HEADER_CONN_PARAMS);
 					let requestCtx:
 						| ReturnType<typeof withConnContext>
 						| undefined;
@@ -4628,13 +4688,9 @@ export function buildNativeFactory(
 						requestCtx = makeConnCtx(
 							ctx,
 							conn,
-							jsRequest,
+							handlerRequest,
 							cancelToken,
 						);
-						const handlerRequest = buildRequest({
-							...request,
-							signal: requestCtx.abortSignal,
-						});
 						const response = await config.onRequest(
 							requestCtx,
 							handlerRequest,

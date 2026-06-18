@@ -87,6 +87,7 @@ struct ActorContext {
 	event_index: i64,
 	error: Option<String>,
 	pending_requests: BufferMap<PendingRequest>,
+	early_request_chunks: BufferMap<Vec<protocol::ToEnvoyRequestChunk>>,
 	ws_entries: BufferMap<WsEntry>,
 	hibernating_requests: Vec<protocol::HibernatingRequest>,
 	active_http_request_count: Arc<AsyncCounter>,
@@ -184,6 +185,7 @@ async fn actor_inner(
 		event_index: 0,
 		error: None,
 		pending_requests: BufferMap::new(),
+		early_request_chunks: BufferMap::new(),
 		ws_entries: BufferMap::new(),
 		hibernating_requests,
 		active_http_request_count,
@@ -335,10 +337,10 @@ async fn actor_inner(
 						}
 					}
 					ToActor::ReqStart { message_id, req } => {
-						handle_req_start(&mut ctx, &handle, &mut http_request_tasks, message_id, req);
+						handle_req_start(&mut ctx, &handle, &mut http_request_tasks, message_id, req).await;
 					}
 					ToActor::ReqChunk { message_id, chunk } => {
-						handle_req_chunk(&mut ctx, message_id, chunk);
+						handle_req_chunk(&mut ctx, message_id, chunk).await;
 					}
 					ToActor::ReqAbort { message_id } => {
 						handle_req_abort(&mut ctx, message_id);
@@ -517,7 +519,7 @@ fn send_stopped_event(
 	);
 }
 
-fn handle_req_start(
+async fn handle_req_start(
 	ctx: &mut ActorContext,
 	handle: &EnvoyHandle,
 	http_request_tasks: &mut JoinSet<()>,
@@ -590,6 +592,15 @@ fn handle_req_start(
 	#[cfg(not(target_arch = "wasm32"))]
 	http_request_tasks.spawn(task);
 
+	if let Some(chunks) = ctx
+		.early_request_chunks
+		.remove(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		for chunk in chunks {
+			handle_req_chunk(ctx, message_id.clone(), chunk).await;
+		}
+	}
+
 	if !req.stream {
 		ctx.pending_requests
 			.remove(&[&message_id.gateway_id, &message_id.request_id]);
@@ -627,25 +638,39 @@ async fn abort_and_join_http_request_tasks(
 	}
 }
 
-fn handle_req_chunk(
+async fn handle_req_chunk(
 	ctx: &mut ActorContext,
 	message_id: protocol::MessageId,
 	chunk: protocol::ToEnvoyRequestChunk,
 ) {
 	let finish = chunk.finish;
-	let pending = ctx
+	let body_tx = ctx
 		.pending_requests
-		.get(&[&message_id.gateway_id, &message_id.request_id]);
-	if let Some(pending) = pending {
-		if let Some(body_tx) = &pending.body_tx {
-			if let Err(error) = body_tx.try_send(chunk.body) {
+		.get(&[&message_id.gateway_id, &message_id.request_id])
+		.map(|pending| pending.body_tx.clone());
+	match body_tx {
+		Some(Some(body_tx)) => {
+			if !chunk.body.is_empty() && let Err(error) = body_tx.send(chunk.body).await {
 				tracing::warn!(?error, "failed to enqueue streamed request chunk");
 			}
-		} else {
+		}
+		Some(None) => {
 			tracing::warn!("received chunk for pending request without stream controller");
 		}
-	} else {
-		tracing::warn!("received chunk for unknown pending request");
+		None => {
+			if let Some(chunks) = ctx
+				.early_request_chunks
+				.get_mut(&[&message_id.gateway_id, &message_id.request_id])
+			{
+				chunks.push(chunk);
+			} else {
+				ctx.early_request_chunks.insert(
+					&[&message_id.gateway_id, &message_id.request_id],
+					vec![chunk],
+				);
+			}
+			return;
+		}
 	}
 
 	if finish {
@@ -656,6 +681,8 @@ fn handle_req_chunk(
 
 fn handle_req_abort(ctx: &mut ActorContext, message_id: protocol::MessageId) {
 	ctx.pending_requests
+		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	ctx.early_request_chunks
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
 }
 

@@ -926,6 +926,10 @@ impl ProxyService {
 				.build());
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
+				if handler.streams_request_body() {
+					return handler.handle_streaming_request(req, req_ctx).await;
+				}
+
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
 				let req_body =

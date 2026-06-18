@@ -611,6 +611,8 @@ const chatRoom = actor({
 
 The `onRequest` hook handles HTTP requests sent to your actor at `/actors/{actorName}/http/*` endpoints. Can be async. It receives the request context and a standard `Request` object, and should return a `Response` object.
 
+HTTP bodies use standard Web Streams. In the native runtime, `request.body` can be read incrementally and `Response` bodies backed by `ReadableStream` are sent to the client chunk by chunk, which works for SSE and upload-style handlers without a Rivet-specific opt-in header.
+
 See [Request Handler](/docs/actors/request-handler) for more details.
 
 ```typescript
