@@ -43,6 +43,24 @@ pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
 const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(5); // Keep TCP connection open briefly after WebSocket close
 
+// The WebSocket subprotocol that Rivet clients offer and the gateway speaks.
+const RIVET_WS_SUBPROTOCOL: &str = "rivet";
+
+// Returns whether the client offered the `rivet` WebSocket subprotocol in its
+// `Sec-WebSocket-Protocol` request header. Per RFC 6455 a server may only select
+// a subprotocol the client offered, and browsers reject a handshake response that
+// echoes an unsolicited subprotocol. Non-Rivet raw clients (for example tldraw's
+// `useSync`) connect without offering `rivet`, so the gateway must only echo it
+// when the client actually offered it.
+fn client_offered_rivet_subprotocol(headers: &hyper::HeaderMap) -> bool {
+	headers
+		.get_all(hyper::header::SEC_WEBSOCKET_PROTOCOL)
+		.iter()
+		.filter_map(|value| value.to_str().ok())
+		.flat_map(|value| value.split(','))
+		.any(|proto| proto.trim() == RIVET_WS_SUBPROTOCOL)
+}
+
 // State shared across all request handlers
 pub struct ProxyState {
 	config: rivet_config::Config,
@@ -543,12 +561,17 @@ impl ProxyService {
 							// Extract the parts from the response but preserve all headers and status
 							let (mut parts, _) = client_response.into_parts();
 
-							// Add Sec-WebSocket-Protocol header to the response
-							// Many WebSocket clients (e.g. node-ws & Cloudflare) require a protocol in the response
-							parts.headers.insert(
-								"sec-websocket-protocol",
-								hyper::header::HeaderValue::from_static("rivet"),
-							);
+							// Echo the Sec-WebSocket-Protocol header only when the client
+							// offered the `rivet` subprotocol. Many WebSocket clients (e.g.
+							// node-ws & Cloudflare) require a protocol in the response, but
+							// browsers reject a response that echoes a subprotocol the client
+							// did not offer.
+							if client_offered_rivet_subprotocol(&req_ctx.headers) {
+								parts.headers.insert(
+									"sec-websocket-protocol",
+									hyper::header::HeaderValue::from_static(RIVET_WS_SUBPROTOCOL),
+								);
+							}
 
 							// Create a new response with an empty body - WebSocket upgrades don't need a body
 							Response::from_parts(
@@ -1860,12 +1883,16 @@ impl ProxyService {
 		// Extract the parts from the response but preserve all headers and status
 		let (mut parts, _) = client_response.into_parts();
 
-		// Add Sec-WebSocket-Protocol header to the response
-		// Many WebSocket clients (e.g. node-ws & Cloudflare) require a protocol in the response
-		parts.headers.insert(
-			"sec-websocket-protocol",
-			hyper::header::HeaderValue::from_static("rivet"),
-		);
+		// Echo the Sec-WebSocket-Protocol header only when the client offered the
+		// `rivet` subprotocol. Many WebSocket clients (e.g. node-ws & Cloudflare)
+		// require a protocol in the response, but browsers reject a response that
+		// echoes a subprotocol the client did not offer.
+		if client_offered_rivet_subprotocol(&req_ctx.headers) {
+			parts.headers.insert(
+				"sec-websocket-protocol",
+				hyper::header::HeaderValue::from_static(RIVET_WS_SUBPROTOCOL),
+			);
+		}
 
 		// Create a new response with an empty body - WebSocket upgrades don't need a body
 		Ok(Response::from_parts(
