@@ -655,6 +655,16 @@ lto = "fat"
 codegen-units = 1
 opt-level = 3
 
+# Release-grade optimization with DWARF line info and no symbol stripping so
+# heaptrack can resolve native allocation backtraces during leak investigation.
+# Uses thin LTO and more codegen units to keep frames un-inlined and builds fast.
+[profile.profiling]
+inherits = "release"
+debug = 1
+lto = "thin"
+codegen-units = 16
+strip = false
+
 [profile.quick]
 inherits = "dev"
 debug = false          # no debug info → faster link, smaller binary
