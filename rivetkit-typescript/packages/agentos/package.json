@@ -1,0 +1,84 @@
+{
+	"name": "@rivet-dev/agentos",
+	"version": "2.3.0-rc.12",
+	"description": "User-facing Agent OS integration for RivetKit actors",
+	"license": "Apache-2.0",
+	"keywords": [
+		"rivetkit",
+		"agent-os",
+		"agentos",
+		"agents",
+		"actors",
+		"ai"
+	],
+	"sideEffects": false,
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"import": {
+				"types": "./dist/mod.d.ts",
+				"default": "./dist/mod.js"
+			},
+			"require": {
+				"types": "./dist/mod.d.cts",
+				"default": "./dist/mod.cjs"
+			}
+		},
+		"./client": {
+			"import": {
+				"browser": {
+					"types": "./dist/client.d.ts",
+					"default": "./dist/client.js"
+				},
+				"types": "./dist/client.d.ts",
+				"default": "./dist/client.js"
+			},
+			"require": {
+				"types": "./dist/client.d.cts",
+				"default": "./dist/client.cjs"
+			}
+		},
+		"./react": {
+			"import": {
+				"types": "./dist/react.d.ts",
+				"default": "./dist/react.js"
+			},
+			"require": {
+				"types": "./dist/react.d.cts",
+				"default": "./dist/react.cjs"
+			}
+		}
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"scripts": {
+		"build": "tsup src/mod.ts src/client.ts src/react.ts",
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:^",
+		"@rivetkit/react": "workspace:*"
+	},
+	"peerDependencies": {
+		"react": "^18 || ^19",
+		"react-dom": "^18 || ^19"
+	},
+	"peerDependenciesMeta": {
+		"react": {
+			"optional": true
+		},
+		"react-dom": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"tsup": "^8.4.0",
+		"typescript": "^5.7.3"
+	},
+	"stableVersion": "0.8.0"
+}
