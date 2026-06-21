@@ -191,7 +191,7 @@
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
 		"@hono/zod-openapi": "^1.1.5",
-		"@rivet-dev/agent-os-core": "^0.1.1",
+		"@rivet-dev/agent-os-core": "link:../../../../agent-os/packages/core",
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
@@ -210,13 +210,14 @@
 		"pino": "^9.5.0",
 		"uuid": "^12.0.0",
 		"vbare": "^0.0.4",
-		"zod": "^4.1.0"
+		"zod": "^4.1.0",
+		"@rivet-dev/agent-os-sidecar": "link:../../../../agent-os/packages/sidecar-binary"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^2.3",
 		"@copilotkit/llmock": "^1.6.0",
-		"@rivet-dev/agent-os-common": "*",
-		"@rivet-dev/agent-os-pi": "^0.1.1",
+		"@rivet-dev/agent-os-pi": "link:../../../../agent-os/registry/agent/pi",
+		"@rivet-dev/agent-os-common": "0.0.260331072558",
 		"@standard-schema/spec": "^1.0.0",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",

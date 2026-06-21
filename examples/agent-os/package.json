@@ -25,7 +25,13 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@agent-os-pkgs/common": "0.0.0-split-runtime-preview.5d46b14",
+		"@rivet-dev/agent-os-core": "link:../../../agent-os/packages/core",
+		"@rivet-dev/agent-os-pi": "link:../../../agent-os/registry/agent/pi",
+		"@rivet-dev/agent-os-sandbox": "link:../../../agent-os/packages/agent-os-sandbox",
+		"@secure-exec/s3": "0.0.0-split-runtime-preview.5d46b14",
 		"rivetkit": "*",
+		"sandbox-agent": "^0.4.2",
 		"zod": "^3.25.0"
 	},
 	"devDependencies": {
@@ -34,8 +40,13 @@
 		"typescript": "^5.5.2"
 	},
 	"template": {
-		"technologies": ["typescript"],
-		"tags": ["agent-os", "vm"],
+		"technologies": [
+			"typescript"
+		],
+		"tags": [
+			"agent-os",
+			"vm"
+		],
 		"noFrontend": true,
 		"skipVercel": true
 	},

@@ -1,5 +1,6 @@
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import type { RegistryConfig } from "@/registry/config";
+import type { ActorFactoryHandle, CoreRuntime } from "@/registry/runtime";
 import {
 	type Actions,
 	type ActorConfig,
@@ -49,6 +50,16 @@ export interface BaseActorDefinition<
 
 export interface AnyActorDefinition {
 	readonly config: any;
+	/**
+	 * Marker for foreign-runtime factories (e.g. `agentOs(...)`). When set,
+	 * the registry-build ladder calls this closure with the active
+	 * `CoreRuntime` to obtain an `ActorFactoryHandle` directly, bypassing
+	 * the normal JS-callbacks factory built from `actor(...)`.
+	 *
+	 * Set by the Rust-backed `agentOs()` definition; read by
+	 * `CoreRuntime::registerActor` and by the engine actor-driver.
+	 */
+	nativeFactoryBuilder?: (runtime: CoreRuntime) => ActorFactoryHandle;
 }
 
 export type AnyStaticActorDefinition = ActorDefinition<
@@ -85,6 +96,12 @@ export class ActorDefinition<
 > implements BaseActorDefinition<S, CP, CS, V, I, DB, E, Q, R>
 {
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>;
+	/**
+	 * Foreign-runtime factory marker. See [`AnyActorDefinition.nativeFactoryBuilder`].
+	 * Defaults to `undefined`; the Rust-backed `agentOs(...)` definition sets it
+	 * via direct property assignment after construction.
+	 */
+	nativeFactoryBuilder?: (runtime: CoreRuntime) => ActorFactoryHandle;
 
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>) {
 		this.#config = config;

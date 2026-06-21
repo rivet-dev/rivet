@@ -133,6 +133,19 @@ docker-compose up -d
 - When `rivetkit` needs ergonomic helpers on a `rivetkit-core` type it re-exports, prefer an extension trait plus `prelude` re-export instead of wrapping and replacing the core type.
 - `engine/sdks/*/api-*` are auto-generated SDK outputs; update the source API schema and regenerate them instead of editing them by hand.
 
+### Agent OS dependency (local dev vs preview publish)
+
+rivet consumes agent-os two ways: the **npm `@rivet-dev/agent-os-*`** packages (`core`, `sidecar`, `pi`, `common`, `sandbox`) and the Rust **`agent-os-client`** crate (path-depended by `rivetkit-agent-os` and `rivetkit-napi`). Both are switched together by `scripts/agent-os-dep.mjs`, mirroring how agent-os switches its own secure-exec dependency (`agent-os/scripts/secure-exec-dep.mjs`). Same two modes:
+
+- **`local`** (hacking on agent-os) — every agent-os dependency is redirected at the sibling `../agent-os` checkout: npm via `link:` and the cargo crate via `path = ".../agent-os/crates/client"`. This is the local dev loop: edit agent-os, rebuild rivet, no publish. `just agent-os-local` (then `pnpm install` + a cargo/napi build).
+- **`pinned`** (CI/release default) — npm resolves the published `@rivet-dev/agent-os-*` version; the cargo crate resolves a pinned git rev. CI needs no sibling checkout. `just agent-os-pinned`.
+
+Rules:
+- **Never hand-edit the agent-os dep paths/versions** in individual `Cargo.toml`/`package.json` files. Always go through `scripts/agent-os-dep.mjs` (`just agent-os-local` / `agent-os-pinned` / `agent-os-set-version <v>` / `agent-os-status`) so all consumers stay consistent and paths are sibling-relative (portable), not absolute.
+- **agent-os ↔ rivet ship in same-version lockstep** (the protocol has no back-compat). When agent-os changes the ACP wire protocol or the `agent-os-client` API, rebuild rivet against it in `local` mode; for a release, agent-os preview-publishes first, then bump rivet with `agent-os-set-version <published-version>` and re-pin.
+- **`agent-os-common`** is renamed from `agent-os/registry/software/common` at publish time; `local` mode links it only when that source dir exists, otherwise it stays at the pinned version (harmless).
+- The Rust crate is not on crates.io, so `pinned` cargo mode needs a git rev (`PINNED_GIT.rev` in the script). Until that's set, `pinned` leaves the cargo path dep unchanged and warns — local dev is unaffected.
+
 ### RivetKit Test Fixtures
 
 - Core tests that touch the `_RIVET_TEST_INSPECTOR_TOKEN` env override must share a process-wide lock with startup tests that assert inspector-token initialization side effects; otherwise parallel `cargo test` runs can flip `init_inspector_token(...)` between the env-override no-op path and the KV-backed path.

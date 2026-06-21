@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest";
 import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest } from "./shared-utils";
 
+const DRIVER_API_TOKEN = "dev";
 const require = createRequire(import.meta.url);
 const hasAgentOsCore = (() => {
 	try {
@@ -12,6 +13,113 @@ const hasAgentOsCore = (() => {
 		return false;
 	}
 })();
+
+async function forceActorSleep(input: {
+	endpoint: string;
+	namespace: string;
+	actorId: string;
+}) {
+	const response = await fetch(
+		`${input.endpoint}/actors/${encodeURIComponent(input.actorId)}/sleep?namespace=${encodeURIComponent(input.namespace)}`,
+		{
+			method: "POST",
+			headers: {
+				Authorization: `Bearer ${DRIVER_API_TOKEN}`,
+				"Content-Type": "application/json",
+			},
+			body: "{}",
+		},
+	);
+	if (!response.ok) {
+		throw new Error(
+			`failed to force actor sleep: ${response.status} ${await response.text()}`,
+		);
+	}
+}
+
+async function waitForActorSleep(input: {
+	endpoint: string;
+	namespace: string;
+	actorId: string;
+	timeoutMs: number;
+}) {
+	const deadline = Date.now() + input.timeoutMs;
+	while (Date.now() < deadline) {
+		const response = await fetch(
+			`${input.endpoint}/actors?actor_ids=${encodeURIComponent(input.actorId)}&namespace=${encodeURIComponent(input.namespace)}`,
+			{
+				headers: {
+					Authorization: `Bearer ${DRIVER_API_TOKEN}`,
+				},
+			},
+		);
+		expect(response.ok).toBe(true);
+		const body = (await response.json()) as {
+			actors: Array<{ sleep_ts?: number | null }>;
+		};
+		if (body.actors[0]?.sleep_ts) {
+			return;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	}
+	throw new Error(`timed out waiting for actor ${input.actorId} to sleep`);
+}
+
+async function waitForSessionEvents(input: {
+	actor: any;
+	sessionId: string;
+	predicate: (events: any[]) => boolean;
+	timeoutMs: number;
+}): Promise<any[]> {
+	const deadline = Date.now() + input.timeoutMs;
+	let lastEvents: any[] = [];
+	while (Date.now() < deadline) {
+		lastEvents = (await input.actor.getSessionEvents(
+			input.sessionId,
+		)) as any[];
+		if (input.predicate(lastEvents)) {
+			return lastEvents;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(
+		`timed out waiting for session events; last events=${JSON.stringify(lastEvents)}`,
+	);
+}
+
+function hasUpdate(events: any[], kind: string): boolean {
+	return events.some((event) => {
+		const update = event?.params?.update;
+		return update?.sessionUpdate === kind;
+	});
+}
+
+function expectPromptBeforeFollowingUpdate(events: any[], promptText: string) {
+	const promptIndex = events.findIndex(
+		(event) =>
+			event?.method === "user_prompt" &&
+			event?.params?.text === promptText,
+	);
+	expect(promptIndex).toBeGreaterThanOrEqual(0);
+
+	const updateIndex = events.findIndex(
+		(event, index) =>
+			index > promptIndex && event?.method === "session/update",
+	);
+	expect(updateIndex).toBeGreaterThan(promptIndex);
+}
+
+function parsePromptBlocks(
+	text: string,
+): Array<{ type: string; text: string }> {
+	return JSON.parse(text) as Array<{ type: string; text: string }>;
+}
+
+function parseProbeBlock(blocks: Array<{ type: string; text: string }>) {
+	const probe = blocks.find((block) => block.type === "probe");
+	expect(probe).toBeDefined();
+	return JSON.parse(probe!.text) as { cwd?: string; env?: string };
+}
 
 describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 	describe.skipIf(driverTestConfig.skip?.agentOs || !hasAgentOsCore)(
@@ -32,6 +140,270 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				const data = await actor.readFile("/home/user/hello.txt");
 				expect(new TextDecoder().decode(data)).toBe("hello world");
 			}, 60_000);
+
+			test.skipIf(driverTestConfig.skip?.sleep)(
+				"filesystem survives sleep and wake",
+				async (c) => {
+					const { client, endpoint, namespace } =
+						await setupDriverTest(c, {
+							...driverTestConfig,
+							useRealTimers: true,
+						});
+					const actorKey = `fs-sleep-${crypto.randomUUID()}`;
+					const path = "/home/user/sleep-persist.txt";
+					const actor = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+
+					await actor.writeFile(path, "durable hello");
+					const actorId = await actor.resolve();
+					await forceActorSleep({ endpoint, namespace, actorId });
+					await waitForActorSleep({
+						endpoint,
+						namespace,
+						actorId,
+						timeoutMs: 30_000,
+					});
+
+					const actorAfterWake = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					const data = await actorAfterWake.readFile(path);
+					expect(new TextDecoder().decode(data)).toBe(
+						"durable hello",
+					);
+				},
+				90_000,
+			);
+
+			test("session capture persists tool calls and message chunks", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`session-capture-${crypto.randomUUID()}`,
+				]);
+
+				const { sessionId } = (await actor.createSession("opencode", {
+					env: { MOCK_RESUME_SCENARIO: "native" },
+				})) as { sessionId: string };
+				const result = (await actor.sendPrompt(
+					sessionId,
+					"capture both update kinds",
+				)) as { text: string };
+				expect(parsePromptBlocks(result.text).at(-1)?.text).toBe(
+					"capture both update kinds",
+				);
+
+				const events = await waitForSessionEvents({
+					actor,
+					sessionId,
+					timeoutMs: 10_000,
+					predicate: (events) =>
+						hasUpdate(events, "tool_call") &&
+						hasUpdate(events, "agent_message_chunk"),
+				});
+				expect(hasUpdate(events, "tool_call")).toBe(true);
+				expect(hasUpdate(events, "agent_message_chunk")).toBe(true);
+				expectPromptBeforeFollowingUpdate(
+					events,
+					"capture both update kinds",
+				);
+			}, 90_000);
+
+			test.skipIf(driverTestConfig.skip?.sleep)(
+				"session fallback resume survives real sleep/wake with external id remap",
+				async (c) => {
+					const { client, endpoint, namespace } =
+						await setupDriverTest(c, {
+							...driverTestConfig,
+							useRealTimers: true,
+						});
+					const actorKey = `session-fallback-${crypto.randomUUID()}`;
+					const actor = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					const cwd = `/home/user/fallback-cwd-${crypto.randomUUID()}`;
+					const envProbe = `fallback-env-${crypto.randomUUID()}`;
+					await actor.mkdir(cwd);
+
+					const { sessionId } = (await actor.createSession(
+						"opencode",
+						{
+							cwd,
+							env: {
+								MOCK_RESUME_SCENARIO: "fallthrough",
+								MOCK_CWD_ENV_PROBE: envProbe,
+							},
+						},
+					)) as { sessionId: string };
+					await actor.sendPrompt(sessionId, "remember alpha");
+					await waitForSessionEvents({
+						actor,
+						sessionId,
+						timeoutMs: 10_000,
+						predicate: (events) =>
+							hasUpdate(events, "tool_call") &&
+							hasUpdate(events, "agent_message_chunk"),
+					});
+
+					const actorId = await actor.resolve();
+					await forceActorSleep({ endpoint, namespace, actorId });
+					await waitForActorSleep({
+						endpoint,
+						namespace,
+						actorId,
+						timeoutMs: 30_000,
+					});
+
+					const actorAfterWake = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					const resumed = (await actorAfterWake.sendPrompt(
+						sessionId,
+						"continue after fallback",
+					)) as { text: string };
+					const blocks = parsePromptBlocks(resumed.text);
+					expect(blocks).toHaveLength(3);
+					expect(blocks[0].text).toContain(
+						"You are continuing an earlier session",
+					);
+					expect(blocks[0].text).toContain(
+						`/root/.agentos/threads/${sessionId}.md`,
+					);
+					expect(blocks[1].text).toBe("continue after fallback");
+					expect(parseProbeBlock(blocks)).toEqual({
+						cwd,
+						env: envProbe,
+					});
+
+					const events = await waitForSessionEvents({
+						actor: actorAfterWake,
+						sessionId,
+						timeoutMs: 10_000,
+						predicate: (events) =>
+							events.filter(
+								(event) => event?.method === "user_prompt",
+							).length >= 2 &&
+							hasUpdate(events, "tool_call") &&
+							hasUpdate(events, "agent_message_chunk"),
+					});
+					expect(
+						events.some((event) => event?.method === "user_prompt"),
+					).toBe(true);
+					expectPromptBeforeFollowingUpdate(
+						events,
+						"continue after fallback",
+					);
+				},
+				120_000,
+			);
+
+			test.skipIf(driverTestConfig.skip?.sleep)(
+				"session native resume survives real sleep/wake without preamble",
+				async (c) => {
+					const { client, endpoint, namespace } =
+						await setupDriverTest(c, {
+							...driverTestConfig,
+							useRealTimers: true,
+						});
+					const actorKey = `session-native-${crypto.randomUUID()}`;
+					const actor = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					const cwd = `/home/user/native-cwd-${crypto.randomUUID()}`;
+					const envProbe = `native-env-${crypto.randomUUID()}`;
+					await actor.mkdir(cwd);
+
+					const { sessionId } = (await actor.createSession(
+						"opencode",
+						{
+							cwd,
+							env: {
+								MOCK_RESUME_SCENARIO: "native",
+								MOCK_CWD_ENV_PROBE: envProbe,
+							},
+						},
+					)) as { sessionId: string };
+					await actor.sendPrompt(sessionId, "before native sleep");
+
+					const actorId = await actor.resolve();
+					await forceActorSleep({ endpoint, namespace, actorId });
+					await waitForActorSleep({
+						endpoint,
+						namespace,
+						actorId,
+						timeoutMs: 30_000,
+					});
+
+					const actorAfterWake = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					const resumed = (await actorAfterWake.sendPrompt(
+						sessionId,
+						"continue after native",
+					)) as { text: string };
+					const blocks = parsePromptBlocks(resumed.text);
+					expect(blocks).toHaveLength(2);
+					expect(blocks[0].text).toBe("continue after native");
+					expect(parseProbeBlock(blocks)).toEqual({
+						cwd,
+						env: envProbe,
+					});
+				},
+				120_000,
+			);
+
+			test.skipIf(driverTestConfig.skip?.sleep)(
+				"closeSession removes persisted session after sleep before lazy resume",
+				async (c) => {
+					const { client, endpoint, namespace } =
+						await setupDriverTest(c, {
+							...driverTestConfig,
+							useRealTimers: true,
+						});
+					const actorKey = `session-close-slept-${crypto.randomUUID()}`;
+					const actor = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+
+					const { sessionId } = (await actor.createSession(
+						"opencode",
+						{
+							env: { MOCK_RESUME_SCENARIO: "native" },
+						},
+					)) as { sessionId: string };
+					await actor.sendPrompt(sessionId, "before close sleep");
+
+					const actorId = await actor.resolve();
+					await forceActorSleep({ endpoint, namespace, actorId });
+					await waitForActorSleep({
+						endpoint,
+						namespace,
+						actorId,
+						timeoutMs: 30_000,
+					});
+
+					const actorAfterWake = client.agentOsTestActor.getOrCreate([
+						actorKey,
+					]);
+					await actorAfterWake.closeSession(sessionId);
+					const sessions =
+						(await actorAfterWake.listPersistedSessions()) as Array<{
+							sessionId: string;
+						}>;
+					expect(
+						sessions.some(
+							(session) => session.sessionId === sessionId,
+						),
+					).toBe(false);
+					expect(
+						await actorAfterWake.getSessionEvents(sessionId),
+					).toEqual([]);
+				},
+				120_000,
+			);
 
 			test("mkdir and readdir", async (c) => {
 				const { client } = await setupDriverTest(c, {
@@ -137,6 +509,42 @@ describeDriverMatrix("Actor Agent Os", (driverTestConfig) => {
 				expect(new TextDecoder().decode(readResults[1].content)).toBe(
 					"bbb",
 				);
+			}, 60_000);
+
+			// Partial-failure verification for the batch DTO mapping.
+			// `BatchReadResultDto` uses `Option<ByteBuf>` content and
+			// `Option<String>` error, both `skip_serializing_if`. A bug
+			// where the partial shape doesn't make it across the encoding
+			// wire (e.g. None elided incorrectly, error string not
+			// surfaced) would be silent without this test.
+			test("readFiles surfaces per-entry error for missing paths", async (c) => {
+				const { client } = await setupDriverTest(c, {
+					...driverTestConfig,
+					useRealTimers: true,
+				});
+				const actor = client.agentOsTestActor.getOrCreate([
+					`partial-${crypto.randomUUID()}`,
+				]);
+
+				await actor.writeFile("/home/user/exists.txt", "present");
+
+				const results = await actor.readFiles([
+					"/home/user/exists.txt",
+					"/home/user/does-not-exist.txt",
+				]);
+
+				expect(results).toHaveLength(2);
+				// Successful entry: content present, no error field.
+				expect(results[0].path).toBe("/home/user/exists.txt");
+				expect(new TextDecoder().decode(results[0].content)).toBe(
+					"present",
+				);
+				expect(results[0].error).toBeUndefined();
+				// Failed entry: no content, error string surfaced.
+				expect(results[1].path).toBe("/home/user/does-not-exist.txt");
+				expect(results[1].content).toBeUndefined();
+				expect(typeof results[1].error).toBe("string");
+				expect(results[1].error?.length).toBeGreaterThan(0);
 			}, 60_000);
 
 			test("readdirRecursive lists nested files", async (c) => {

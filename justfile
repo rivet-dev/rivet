@@ -6,6 +6,27 @@ release *ARGS:
 preview-publish REF:
 	gh workflow run .github/workflows/publish.yaml --ref "{{ REF }}"
 
+# Point rivet at the sibling ../agent-os checkout for local hacking on agent-os
+# (npm `link:`, cargo `path`). The local dev loop: edit agent-os, rebuild here.
+[group('agent-os')]
+agent-os-local:
+	node scripts/agent-os-dep.mjs local
+
+# Point rivet at PUBLISHED agent-os versions (CI/release default).
+[group('agent-os')]
+agent-os-pinned:
+	node scripts/agent-os-dep.mjs pinned
+
+# Bump the pinned @rivet-dev/agent-os-* npm version (after an agent-os preview publish).
+[group('agent-os')]
+agent-os-set-version VERSION:
+	node scripts/agent-os-dep.mjs set-version "{{ VERSION }}"
+
+# Show the current agent-os dependency mode + pinned versions.
+[group('agent-os')]
+agent-os-status:
+	node scripts/agent-os-dep.mjs status
+
 [group('docker')]
 docker-build:
 	docker build -f engine/docker/universal/Dockerfile --target engine-full -t rivetdev/engine:local --platform linux/x86_64 .

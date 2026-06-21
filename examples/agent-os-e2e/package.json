@@ -4,16 +4,21 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"test:server": "tsx src/server.ts",
+		"prepare-agent-modules": "node scripts/prepare-agent-modules.mjs",
+		"test:server": "npm run prepare-agent-modules && tsx src/server.ts",
+		"test:opencode-resume-server": "tsx src/opencode-resume-server.ts",
 		"test": "tsx src/client.ts",
+		"test:opencode-resume": "tsx src/opencode-resume-client.ts",
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
 		"rivetkit": "*",
-		"@rivet-dev/agent-os-common": "*",
-		"@rivet-dev/agent-os-pi": "^0.1.1"
+		"@rivet-dev/agent-os-common": "0.0.260331072558",
+		"@rivet-dev/agent-os-opencode": "link:../../../agent-os/registry/agent/opencode",
+		"@rivet-dev/agent-os-pi": "link:../../../agent-os/registry/agent/pi"
 	},
 	"devDependencies": {
+		"@copilotkit/llmock": "^1.6.0",
 		"@types/node": "^22.13.9",
 		"tsx": "^3.12.7",
 		"typescript": "^5.5.2"

@@ -1,6 +1,28 @@
 import type { SqliteNativeMetrics } from "@/common/database/config";
 import type { RegistryConfig } from "./config";
 
+/**
+ * Opaque JSON-encoded config envelope for the Rust-backed agent-os actor.
+ * Built by the TS shim from `AgentOsActorConfig` and passed through to the
+ * Rust crate's `AgentOsConfigJson` deserializer. See `agent_os.rs` in
+ * rivetkit-napi.
+ */
+export interface NapiAgentOsOptions {
+	configJson?: string;
+	/**
+	 * Absolute path to the prebuilt `agent-os-sidecar` binary, resolved from
+	 * the `@rivet-dev/agent-os-sidecar` npm package. Forwarded to the agent-os
+	 * client (via `AGENT_OS_SIDECAR_BIN`) so it spawns the bundled binary.
+	 */
+	sidecarBinaryPath?: string;
+}
+
+/**
+ * Tool callback bag accepted by `createAgentOsFactory`. Reserved for Phase 5
+ * (toolkit dispatch); currently always `undefined`.
+ */
+export type AgentOsToolCallbacks = Record<string, unknown> | undefined | null;
+
 declare const handleBrand: unique symbol;
 
 type OpaqueHandle<Name extends string> = {
@@ -323,6 +345,15 @@ export interface CoreRuntime {
 		name: string,
 		factory: ActorFactoryHandle,
 	): void;
+	/**
+	 * Build a Rust-backed agent-os factory. Returns an `ActorFactoryHandle`
+	 * suitable for `registerActor`. Optional: only the native NAPI runtime
+	 * implements this; wasm runtimes throw.
+	 */
+	createAgentOsFactory?(
+		options: NapiAgentOsOptions,
+		toolCallbacks: AgentOsToolCallbacks,
+	): ActorFactoryHandle;
 	serveRegistry(
 		registry: RegistryHandle,
 		config: RuntimeServeConfig,

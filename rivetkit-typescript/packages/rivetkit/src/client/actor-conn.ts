@@ -998,9 +998,21 @@ export class ActorConnRaw {
 		const listeners = this.#eventSubscriptions.get(name);
 		if (!listeners) return;
 
+		// Normalize the callback argument list. JS-side `c.broadcast(name, ...args)`
+		// delivers `args` as an array (spread into the listener). Native
+		// (Rust/NAPI) factory actors broadcast a SINGLE payload value via
+		// `ctx.broadcast(name, payload)`, so `args` arrives as one object (e.g.
+		// `{}` for vmBooted, `{ reason }` for vmShutdown, the JSON-RPC notification
+		// for sessionEvent). Spreading a non-iterable object throws
+		// "Spread syntax requires ...iterable", which would kill this handler — so
+		// wrap a non-array payload as a single positional argument.
+		const callbackArgs: unknown[] = Array.isArray(args)
+			? (args as unknown[])
+			: [args];
+
 		// Create a new array to avoid issues with listeners being removed during iteration
 		for (const listener of [...listeners]) {
-			listener.callback(...(args as unknown[]));
+			listener.callback(...callbackArgs);
 
 			// Remove if this was a one-time listener
 			if (listener.once) {

@@ -20,6 +20,7 @@
 	"devDependencies": {
 		"@bare-ts/tools": "0.15.0",
 		"@biomejs/biome": "^2.3",
+		"@rivetkit/engine-cli-linux-x64-musl": "2.3.0-rc.12",
 		"commander": "^12.1.0",
 		"lefthook": "^1.12.4",
 		"semver": "^7.7.3",

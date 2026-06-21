@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use crate::{
+	EncodingKind, TransportKind,
 	protocol::{query, to_client, to_server},
 	remote_manager::RemoteManager,
-	EncodingKind, TransportKind,
 };
 use anyhow::Result;
 use serde_json::Value;

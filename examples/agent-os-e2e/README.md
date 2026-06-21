@@ -1,10 +1,10 @@
 # Agent OS E2E Smoke Test
 
-End-to-end smoke test for agentOS via the rivetkit actor wrapper. Boots a VM with WASM coreutils and the Pi coding agent, then exercises filesystem operations, subprocess execution, and an LLM-driven agent session.
+End-to-end smoke test for agentOS via the rivetkit actor wrapper. Boots a VM with WASM coreutils and the Pi coding agent, then exercises filesystem operations, subprocess execution, preview URLs, and an llmock-backed agent session resume.
 
 ## Prerequisites
 
-- `ANTHROPIC_API_KEY` environment variable
+- No real model API key is required. The client starts `@copilotkit/llmock` on `E2E_LLMOCK_PORT` (default `41235`), and the server exempts that loopback port for the VM.
 
 ## Getting Started
 
@@ -31,8 +31,8 @@ npx tsx src/client.ts
 - Filesystem round-trip: write, read, mkdir, readdir, exists
 - Subprocess execution: echo, pipes, grep, cat
 - Preview URL: spawn HTTP server in VM, create signed preview URL, fetch through proxy
-- Pi agent session with streaming events
-- Host-side verification of agent-created files
+- Pi agent session with streaming events through host llmock
+- Session resume after a forced actor sleep/wake
 
 ## Implementation
 

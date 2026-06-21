@@ -68,6 +68,7 @@ members = [
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/client",
   "rivetkit-rust/packages/rivetkit",
+  "rivetkit-rust/packages/rivetkit-agent-os",
   "rivetkit-rust/packages/rivetkit-core",
   "rivetkit-rust/packages/shared-types",
   "rivetkit-typescript/packages/rivetkit-napi",

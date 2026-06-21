@@ -6,8 +6,8 @@ use tokio_tungstenite::tungstenite::Message;
 use tracing::debug;
 
 use crate::{
-	protocol::{codec, to_client, to_server},
 	EncodingKind,
+	protocol::{codec, to_client, to_server},
 };
 
 use super::{

@@ -1,48 +1,24 @@
-// Database migration
+// Rust-backed agent-os actor surface.
+//
+// Phase 1c: only the `agentOs()` definition function, the config schema,
+// and the public domain types are re-exported. Legacy JS-port action
+// builders (cron/db/filesystem/network/preview/process/session/shell)
+// were removed along with the JS-port implementation files. Subsequent
+// phases (3+) add new action arms to the Rust crate, not new TS modules.
 
-// Cron actions
-export { buildCronActions } from "./actor/cron";
-export { migrateAgentOsTables } from "./actor/db";
-// Filesystem actions
-export { buildFilesystemActions } from "./actor/filesystem";
-// Actor factory and VM lifecycle helpers
-export { agentOs, ensureVm, runHook, syncPreventSleep } from "./actor/index";
-// Network actions
 export {
-	buildNetworkActions,
-	type VmFetchOptions,
-	type VmFetchResult,
-} from "./actor/network";
-// Preview actions
-export {
-	buildOnRequestHandler,
-	buildPreviewActions,
-	generateToken,
-} from "./actor/preview";
-// Process actions
-export { buildProcessActions } from "./actor/process";
-// Session actions
-export {
-	buildConfigActions,
-	buildPromptActions,
-	buildSessionActions,
-	buildSessionPersistenceActions,
-	subscribeToSession,
-} from "./actor/session";
-// Shell actions
-export { buildShellActions } from "./actor/shell";
-// Config schema and types
+	agentOs,
+	type AgentOsActorDefinition,
+	nodeModulesMount,
+	type NodeModulesMountConfig,
+} from "./actor/index";
+
 export {
 	type AgentOsActorConfig,
 	type AgentOsActorConfigInput,
 	agentOsActorConfigSchema,
 } from "./config";
-// Database-backed VFS
-export {
-	createDatabaseVfs,
-	type DatabaseVfsOptions,
-} from "./fs/database-vfs";
-// Domain types and event payloads
+
 export type {
 	AgentOsActionContext,
 	AgentOsActorState,
