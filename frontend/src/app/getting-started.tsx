@@ -128,18 +128,6 @@ export function GettingStarted({
 	const dataProvider = useEngineCompatDataProvider();
 	useSuspenseInfiniteQuery(dataProvider.datacentersQueryOptions());
 
-	const { mutateAsync: mutateAsyncManagedPool } = useMutation(
-		"upsertCurrentNamespaceManagedPoolMutationOptions" in dataProvider
-			? dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions()
-			: {
-					mutationFn: async () => {
-						throw new Error(
-							"Managed pools are only available in cloud",
-						);
-					},
-				},
-	);
-
 	const { data: initialRunnerConfig } = useSuspenseQuery({
 		...dataProvider.runnerConfigQueryOptions({
 			name: "default",
@@ -328,50 +316,11 @@ export function GettingStarted({
 										}),
 									});
 								}}
-								onPartialSubmit={async ({
-									stepper,
-									values,
-									form,
-								}) => {
-									// Provider may be lost from accumulated values
-									// after form reset, so read it from the live form.
-									const provider = ((
-										values as Record<string, unknown>
-									).provider ??
-										(
-											form.getValues() as Record<
-												string,
-												unknown
-											>
-										).provider) as string | undefined;
-									// On entering the deploy step, default to Rivet
-									// Compute and provision its managed pool.
+								onPartialSubmit={async ({ stepper }) => {
+									// The managed pool is created by the Rivet CLI
+									// during deploy, not by the dashboard, so we only
+									// prefetch the data the deploy step renders here.
 									if (stepper.current.id === "local") {
-										if (
-											features.compute &&
-											(provider ?? "rivet") === "rivet"
-										) {
-											try {
-												await mutateAsyncManagedPool({
-													displayName: "default",
-													pool: "default",
-													image: undefined,
-													maxConcurrentActors: 50_000,
-													environment: {},
-													command: undefined,
-													args: [],
-												});
-											} catch (error) {
-												console.error(
-													"Failed to create default managed pool during onboarding",
-													error,
-												);
-												toast.error(
-													"Couldn't create the default Rivet Compute pool. You can retry from the deploy step.",
-												);
-											}
-										}
-
 										await Promise.all([
 											...(features.auth &&
 											"publishableTokenQueryOptions" in

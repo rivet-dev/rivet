@@ -5,7 +5,7 @@ import {
 	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Suspense, useEffect } from "react";
 import { useRivetDsn } from "@/app/env-variables";
 import {
@@ -23,7 +23,6 @@ import { Button } from "@/components/ui/button";
 import { getAgentInstructionsPrompt } from "@/content/agent-prompts";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { successfulBackendSetupEffect } from "@/lib/effects";
-import { queryClient } from "@/queries/global";
 
 interface ConnectRivetFrameContentProps extends DialogContentProps {}
 
@@ -31,27 +30,6 @@ export default function ConnectRivetFrameContent({
 	onClose,
 }: ConnectRivetFrameContentProps) {
 	const dataProvider = useCloudNamespaceDataProvider();
-
-	const { mutate: upsertManagedPool } = useMutation({
-		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
-		onSuccess: async () => {
-			await queryClient.invalidateQueries(
-				dataProvider.runnerConfigsQueryOptions(),
-			);
-		},
-	});
-
-	useEffect(() => {
-		upsertManagedPool({
-			displayName: "default",
-			pool: "default",
-			image: undefined,
-			maxConcurrentActors: 50_000,
-			environment: {},
-			command: undefined,
-			args: [],
-		});
-	}, [upsertManagedPool]);
 
 	const { data: runnerConfigs } = useInfiniteQuery({
 		...dataProvider.runnerConfigsQueryOptions(),
