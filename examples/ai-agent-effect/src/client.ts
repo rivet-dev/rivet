@@ -2,7 +2,7 @@ import { NodeRuntime } from "@effect/platform-node";
 import { Client } from "@rivetkit/effect";
 import { Effect } from "effect";
 import { Agent } from "./actors/mod.ts";
-import { PrettyLoggerLayer } from "./logger.ts";
+import { TelemetryLayer } from "./telemetry.ts";
 
 const program = Effect.gen(function* () {
 	// `Actor.client` yields a typed accessor backed by the Effect SDK client layer.
@@ -34,5 +34,5 @@ const program = Effect.gen(function* () {
 const ClientLayer = Client.layer({ endpoint: "http://127.0.0.1:6420" });
 
 program
-	.pipe(Effect.provide(ClientLayer), Effect.provide(PrettyLoggerLayer))
+	.pipe(Effect.provide(ClientLayer), Effect.provide(TelemetryLayer))
 	.pipe(NodeRuntime.runMain);
