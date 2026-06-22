@@ -87,7 +87,14 @@ const TestLayer = ReadyForEnvoy.pipe(
 			Layer.provide(GreeterLive),
 			Layer.provideMerge(MultiplierLive),
 			Layer.provideMerge(TestTracer.layer()),
-			Layer.provide(Registry.layer({ endpoint, token, namespace })),
+			Layer.provide(
+				Registry.layer({
+					endpoint,
+					token,
+					namespace,
+					sqlite: "remote",
+				}),
+			),
 		),
 	),
 );
@@ -595,12 +602,9 @@ layer(TestLayer)("end-to-end", (it) => {
 			Effect.gen(function* () {
 				// `Unregistered` is defined in the fixtures module but its
 				// `*Live` layer is intentionally not provided, so the engine
-				// has no runner that can serve the actor. The engine logs
-				// the precise `not_registered: Actor factory 'Unregistered'
-				// is not registered.` reason but flattens it on the wire to
-				// a generic `guard/service_unavailable` — the same code a
-				// transient engine outage would surface as. Callers can't
-				// distinguish the two without an engine-side change.
+				// has no runner that can serve the actor. The engine retries
+				// wake until the actor stops before becoming ready and then
+				// surfaces the retry-exhaustion guard error.
 				const ghost = (yield* Unregistered.client).getOrCreate([
 					"t-unregistered",
 				]);
@@ -610,14 +614,14 @@ layer(TestLayer)("end-to-end", (it) => {
 					assert.instanceOf(exit.value, RivetError.RivetError);
 					assert.instanceOf(
 						exit.value.reason,
-						RivetError.GuardServiceUnavailable,
+						RivetError.GuardActorWakeRetriesExceeded,
 					);
 					assert.strictEqual(
 						(
 							exit.value
-								.reason as RivetError.GuardServiceUnavailable
+								.reason as RivetError.GuardActorWakeRetriesExceeded
 						).code,
-						"service_unavailable",
+						"actor_wake_retries_exceeded",
 					);
 				}
 			}),

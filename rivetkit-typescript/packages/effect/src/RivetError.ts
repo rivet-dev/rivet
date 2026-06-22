@@ -426,6 +426,38 @@ export class GuardActorReadyTimeout extends Schema.TaggedErrorClass<GuardActorRe
 	}
 }
 
+export class GuardActorWakeRetriesExceeded extends Schema.TaggedErrorClass<GuardActorWakeRetriesExceeded>(
+	`${ReasonTypeId}/GuardActorWakeRetriesExceeded`,
+)("GuardActorWakeRetriesExceeded", {
+	cause: Schema.instanceOf(RivetkitErrors.RivetError),
+}) {
+	readonly [ReasonTypeId] = ReasonTypeId;
+	override get message() {
+		return this.cause.message;
+	}
+	get group() {
+		return this.cause.group;
+	}
+	get code() {
+		return this.cause.code;
+	}
+	get metadata() {
+		return this.cause.metadata;
+	}
+	get actor() {
+		return this.cause.actor;
+	}
+	get statusCode() {
+		return this.cause.statusCode;
+	}
+	get public() {
+		return this.cause.public;
+	}
+	get isRetryable(): boolean {
+		return true;
+	}
+}
+
 export class GuardActorRunnerFailed extends Schema.TaggedErrorClass<GuardActorRunnerFailed>(
 	`${ReasonTypeId}/GuardActorRunnerFailed`,
 )("GuardActorRunnerFailed", {
@@ -816,6 +848,7 @@ export type RivetErrorReason =
 	| InvalidEncoding
 	| InvalidRequest
 	| GuardActorReadyTimeout
+	| GuardActorWakeRetriesExceeded
 	| GuardActorRunnerFailed
 	| GuardServiceUnavailable
 	| GuardActorStoppedWhileWaiting
@@ -843,6 +876,7 @@ export const RivetErrorReason: Schema.Union<
 		typeof InvalidEncoding,
 		typeof InvalidRequest,
 		typeof GuardActorReadyTimeout,
+		typeof GuardActorWakeRetriesExceeded,
 		typeof GuardActorRunnerFailed,
 		typeof GuardServiceUnavailable,
 		typeof GuardActorStoppedWhileWaiting,
@@ -869,6 +903,7 @@ export const RivetErrorReason: Schema.Union<
 	InvalidEncoding,
 	InvalidRequest,
 	GuardActorReadyTimeout,
+	GuardActorWakeRetriesExceeded,
 	GuardActorRunnerFailed,
 	GuardServiceUnavailable,
 	GuardActorStoppedWhileWaiting,
@@ -993,6 +1028,8 @@ const reasonByCode: { [key: string]: MakeRivetErrorReason | undefined } = {
 	"request.invalid": (error) => new InvalidRequest({ cause: error }),
 	"guard.actor_ready_timeout": (error) =>
 		new GuardActorReadyTimeout({ cause: error }),
+	"guard.actor_wake_retries_exceeded": (error) =>
+		new GuardActorWakeRetriesExceeded({ cause: error }),
 	"guard.actor_runner_failed": (error) =>
 		new GuardActorRunnerFailed({ cause: error }),
 	"guard.service_unavailable": (error) =>

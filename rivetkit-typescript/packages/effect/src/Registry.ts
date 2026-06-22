@@ -19,7 +19,7 @@ type ServerlessOptions = NonNullable<
 
 export type Options = Pick<
 	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>,
-	"endpoint" | "token" | "namespace" | "noWelcome"
+	"endpoint" | "token" | "namespace" | "noWelcome" | "sqlite"
 >;
 
 export interface Registry {
