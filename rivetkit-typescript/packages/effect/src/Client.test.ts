@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Client, Logger, RivetError } from "@rivetkit/effect";
+import { Client, RivetError, RivetLogger } from "@rivetkit/effect";
 import { Effect, Layer, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
 import {
@@ -43,7 +43,7 @@ describe("Client", () => {
 				);
 				yield* Client.make({
 					endpoint: "http://127.0.0.1:6420",
-				}).pipe(Effect.provide(Logger.layerPino(baseLogger)));
+				}).pipe(Effect.provide(RivetLogger.layerFromPino(baseLogger)));
 
 				assert.strictEqual(getBaseLogger(), baseLogger);
 			}),
@@ -73,7 +73,9 @@ describe("Client", () => {
 						Client.layer({
 							endpoint: "http://127.0.0.1:6420",
 						}).pipe(
-							Layer.provideMerge(Logger.layerPino(baseLogger)),
+							Layer.provideMerge(
+								RivetLogger.layerFromPino(baseLogger),
+							),
 						),
 					),
 				);

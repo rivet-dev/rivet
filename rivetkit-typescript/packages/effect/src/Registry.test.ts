@@ -1,5 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import { Action, Actor, Logger, Registry } from "@rivetkit/effect";
+import { Action, Actor, Registry, RivetLogger } from "@rivetkit/effect";
 import { Effect, Layer } from "effect";
 import { HttpEffect } from "effect/unstable/http";
 import {
@@ -224,7 +224,7 @@ describe("Registry.toWebHandler", () => {
 	it("uses a custom logger layer for the underlying RivetKit registry", async () => {
 		const baseLogger = makeTestLogger();
 		const CustomLoggerRegistryLive = RegistryLive.pipe(
-			Layer.provide(Logger.layerPino(baseLogger)),
+			Layer.provide(RivetLogger.layerFromPino(baseLogger)),
 		);
 		const { handler, dispose } = Registry.toWebHandler(
 			CustomLoggerRegistryLive,

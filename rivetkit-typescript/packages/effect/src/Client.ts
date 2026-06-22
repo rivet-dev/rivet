@@ -7,7 +7,7 @@ import type * as Actor from "./Actor.ts";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope.ts";
 import { getOrCreateBaseLogger } from "./internal/logging.ts";
 import { rpcSystem, type TraceMeta } from "./internal/tracing.ts";
-import * as Logger from "./Logger.ts";
+import * as RivetLogger from "./RivetLogger.ts";
 import * as RivetError from "./RivetError.ts";
 
 const TypeId = "~@rivetkit/effect/Client";
@@ -146,7 +146,7 @@ export const layer = (options: Options = {}): Layer.Layer<Client> =>
 	Layer.unwrap(
 		Effect.map(getOrCreateBaseLogger, (baseLogger) =>
 			Layer.effect(Client, make(options)).pipe(
-				Layer.provideMerge(Logger.layerPino(baseLogger)),
+				Layer.provideMerge(RivetLogger.layerFromPino(baseLogger)),
 			),
 		),
 	);

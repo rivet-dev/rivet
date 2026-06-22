@@ -25,7 +25,7 @@ type ActorLogContext = {
 };
 
 export class BaseLogger extends Context.Service<BaseLogger, PinoLogger>()(
-	"@rivetkit/effect/Logger/BaseLogger",
+	"@rivetkit/effect/RivetLogger/BaseLogger",
 ) {}
 
 const PinoLevelByEffectLevel: Record<LogLevel.LogLevel, PinoLogLevel> = {

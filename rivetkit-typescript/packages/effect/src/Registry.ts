@@ -10,7 +10,7 @@ import * as Rivetkit from "rivetkit";
 import { configureBaseLogger, type Logger as PinoLogger } from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
-import * as Logger from "./Logger.ts";
+import * as RivetLogger from "./RivetLogger.ts";
 
 const TypeId = "~@rivetkit/effect/Registry";
 type ServerlessOptions = NonNullable<
@@ -85,7 +85,7 @@ export const serve = <E, R>(
 			const baseLogger = registry.baseLogger;
 			yield* Layer.build(
 				actorsLayer.pipe(
-					Layer.provideMerge(Logger.layerPino(baseLogger)),
+					Layer.provideMerge(RivetLogger.layerFromPino(baseLogger)),
 				),
 			);
 			const rivetkitRegistry = setupRivetkitRegistry(registry);
@@ -179,7 +179,7 @@ export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	Scope.Scope
 > {
 	const context = yield* Layer.build(
-		registryLayer.pipe(Layer.provideMerge(Logger.layer)),
+		registryLayer.pipe(Layer.provideMerge(RivetLogger.defaultLayer)),
 	);
 	// @effect-diagnostics-next-line returnEffectInGen:off
 	return makeHttpEffect(Context.get(context, Registry), options).pipe(
@@ -221,7 +221,7 @@ export const toWebHandler = <E>(
 	}
 
 	const registryLayerWithLogging = registryLayer.pipe(
-		Layer.provideMerge(Logger.layer),
+		Layer.provideMerge(RivetLogger.defaultLayer),
 	);
 
 	return HttpEffect.toWebHandlerLayerWith(registryLayerWithLogging, {
