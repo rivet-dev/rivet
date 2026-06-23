@@ -35,20 +35,16 @@ export interface Registry {
 export const Registry: Context.Service<Registry, Registry> =
 	Context.Service<Registry>("@rivetkit/effect/Registry");
 
-const make = (options: Options, baseLogger: RivetkitLog.Logger): Registry => {
-	return Registry.of({
-		[TypeId]: TypeId,
-		options,
-		baseLogger,
-		rivetkitActors: new Map(),
-	});
-};
-
 export const layer = (options: Options = {}): Layer.Layer<Registry> =>
 	Layer.effect(
 		Registry,
 		Effect.map(getOrCreateBaseLogger, (baseLogger) =>
-			make(options, baseLogger),
+			Registry.of({
+				[TypeId]: TypeId,
+				options,
+				baseLogger,
+				rivetkitActors: new Map(),
+			}),
 		),
 	);
 
