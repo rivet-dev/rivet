@@ -291,7 +291,7 @@ function RunnersModeInfo() {
 	const codeSnippet = `import { registry } from "./registry";
 
 // Automatically reads token from env
-registry.startRunner();`;
+registry.startEnvoy();`;
 	return (
 		<div className="space-y-8">
 			<p>
