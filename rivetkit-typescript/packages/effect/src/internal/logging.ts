@@ -3,7 +3,7 @@ import {
 	Config,
 	Context,
 	Effect,
-	Logger as EffectLogger,
+	Logger,
 	Option,
 	type LogLevel,
 	References,
@@ -195,8 +195,8 @@ function extractMessageAndFields(message: unknown): {
 
 export function makeEffectLogger(
 	baseLogger: RivetkitLog.Logger,
-): EffectLogger.Logger<unknown, void> {
-	return EffectLogger.make(({ cause, date, fiber, logLevel, message }) => {
+): Logger.Logger<unknown, void> {
+	return Logger.make(({ cause, date, fiber, logLevel, message }) => {
 		const { msg, fields } = extractMessageAndFields(message);
 
 		for (const [key, value] of Object.entries(

@@ -4,7 +4,7 @@ import {
 	ConfigProvider,
 	Effect,
 	Layer,
-	Logger as EffectLogger,
+	Logger,
 	References,
 } from "effect";
 import * as RivetkitLog from "rivetkit/log";
@@ -66,7 +66,7 @@ describe("internal/logging", () => {
 					actorId: "actor-1",
 				}),
 				Effect.provide(
-					EffectLogger.layer([Logging.makeEffectLogger(baseLogger)]),
+					Logger.layer([Logging.makeEffectLogger(baseLogger)]),
 				),
 			);
 
@@ -93,7 +93,7 @@ describe("internal/logging", () => {
 
 			yield* Effect.logError(error).pipe(
 				Effect.provide(
-					EffectLogger.layer([Logging.makeEffectLogger(baseLogger)]),
+					Logger.layer([Logging.makeEffectLogger(baseLogger)]),
 				),
 			);
 
@@ -116,7 +116,7 @@ describe("internal/logging", () => {
 				action: "SendMessage",
 			}).pipe(
 				Effect.provide(
-					EffectLogger.layer([Logging.makeEffectLogger(baseLogger)]),
+					Logger.layer([Logging.makeEffectLogger(baseLogger)]),
 				),
 			);
 
@@ -229,9 +229,7 @@ describe("internal/logging", () => {
 					Effect.provideService(References.CurrentLogLevel, "Debug"),
 					Effect.provideService(References.MinimumLogLevel, "Debug"),
 					Effect.provide(
-						EffectLogger.layer([
-							Logging.makeEffectLogger(baseLogger),
-						]),
+						Logger.layer([Logging.makeEffectLogger(baseLogger)]),
 					),
 				);
 
@@ -256,9 +254,7 @@ describe("internal/logging", () => {
 					Effect.provideService(References.CurrentLogLevel, "None"),
 					Effect.provideService(References.MinimumLogLevel, "All"),
 					Effect.provide(
-						EffectLogger.layer([
-							Logging.makeEffectLogger(baseLogger),
-						]),
+						Logger.layer([Logging.makeEffectLogger(baseLogger)]),
 					),
 				);
 
@@ -276,9 +272,7 @@ describe("internal/logging", () => {
 				yield* Effect.logInfo("checkout complete").pipe(
 					Effect.withLogSpan("checkout"),
 					Effect.provide(
-						EffectLogger.layer([
-							Logging.makeEffectLogger(baseLogger),
-						]),
+						Logger.layer([Logging.makeEffectLogger(baseLogger)]),
 					),
 				);
 
