@@ -4,6 +4,7 @@ import {
 	Context,
 	Effect,
 	Logger as EffectLogger,
+	Option,
 	type LogLevel,
 	References,
 } from "effect";
@@ -89,9 +90,9 @@ export const makeDefaultBaseLogger: Effect.Effect<RivetkitLog.Logger> =
 
 export const getOrCreateBaseLogger: Effect.Effect<RivetkitLog.Logger> =
 	Effect.gen(function* () {
-		const provided = yield* Effect.serviceOption(BaseLogger);
-		if (provided._tag === "Some") {
-			return provided.value;
+		const maybeBaseLogger = yield* Effect.serviceOption(BaseLogger);
+		if (Option.isSome(maybeBaseLogger)) {
+			return maybeBaseLogger.value;
 		}
 
 		return yield* makeDefaultBaseLogger;
