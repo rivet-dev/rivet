@@ -375,6 +375,29 @@ export const make = <
 	return self;
 };
 
+/**
+ * Normalizes any supported actor wake declaration into a wake function.
+ *
+ * @remarks
+ * {@link Actor.toLayer|`Actor.toLayer()`} accepts several equivalent shapes so actor
+ * implementations can choose the amount of initialization they need:
+ *
+ * - a plain action-handler object
+ * - an `Effect` that builds an action-handler object
+ * - a wake function that receives `wakeOptions` and returns handlers
+ * - a wake function that returns an `Effect` of handlers
+ * - an `Effect` that builds one of those wake functions
+ *
+ * This helper resolves those forms lazily for each actor wake and returns a
+ * single `(wakeOptions) => Effect<handlers>` representation. It does not run a
+ * wake function until the returned function is invoked, so per-wake resources,
+ * services, and state are scoped to the specific actor instance that is waking.
+ *
+ * @param wake - A supported wake declaration shape.
+ * @returns A function that resolves action handlers for one actor wake.
+ *
+ * @internal
+ */
 export function toWakeHandler<
 	ActionHandlers extends object,
 	R,
