@@ -78,7 +78,7 @@ macro_rules! json_from_slice {
 }
 pub use json_from_slice;
 
-/// Wraps `serde_bare::to_vec` with observability.
+/// Wraps `rivet_util::serde::bare_to_vec!` with observability.
 #[macro_export]
 macro_rules! bare_to_vec {
 	($value:expr) => {{
@@ -93,7 +93,7 @@ macro_rules! bare_to_vec {
 }
 pub use bare_to_vec;
 
-/// Wraps `serde_bare::to_vec` with observability.
+/// Wraps `rivet_util::serde::bare_to_vec!` with observability.
 #[macro_export]
 macro_rules! bare_from_slice {
 	($value:expr) => {{
