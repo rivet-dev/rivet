@@ -70,11 +70,40 @@ const setupRivetkitRegistry = (
 };
 
 /**
- * Runs an actor registration layer against the configured engine.
+ * Serves the actors registered by `actorsLayer`.
  *
- * The actor layer is built in the server layer scope. Registered Rivet Actors
- * are collected from `Registry`, materialized into a single underlying RivetKit
- * registry, and started.
+ * @remarks
+ * Provide this with {@link layer|`Registry.layer()`} at the application root.
+ * Building the returned layer evaluates the actor layer, collects its registered
+ * actors, and starts the underlying RivetKit runtime using the options from
+ * {@link layer|`Registry.layer()`}. Launch the resulting layer with
+ * {@link Layer.launch|`Layer.launch()`} to keep the server process alive.
+ *
+ * @param actorsLayer - A layer containing one or more
+ * {@link Actor.Actor.toLayer|`Actor.toLayer()`} registrations.
+ *
+ * @returns A side-effecting startup layer that requires the
+ * {@link Registry|`Registry.Registry`} service and the services required by
+ * `actorsLayer`.
+ *
+ * @example
+ * ```ts
+ * import { Registry } from "@rivetkit/effect"
+ * import { Layer } from "effect"
+ *
+ * const ActorsLayer = Layer.mergeAll(ChatRoomLive, ModeratorLive)
+ *
+ * const MainLayer = Registry.serve(ActorsLayer).pipe(
+ *   Layer.provide(Registry.layer({ endpoint: "http://127.0.0.1:6420" }))
+ * )
+ *
+ * Layer.launch(MainLayer).pipe(NodeRuntime.runMain);
+ * ```
+ *
+ * @see {@link toWebHandler|`Registry.toWebHandler()`} for Fetch-compatible
+ * serverless handlers.
+ * @see {@link toHttpEffect|`Registry.toHttpEffect()`} for Effect HTTP handlers.
+ *
  */
 export const serve = <E, R>(
 	actorsLayer: Layer.Layer<never, E, R>,
