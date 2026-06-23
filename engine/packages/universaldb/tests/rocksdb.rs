@@ -354,3 +354,148 @@ async fn rocksdb_reverse_range_with_limit() {
 		"reverse without a limit must return every key in descending order"
 	);
 }
+
+/// Regression test for a RocksDB driver crash on zero-length (empty) values.
+///
+/// RocksDB hands back a NULL data pointer for zero-length values on some
+/// platforms (observed on macOS arm64; Linux returns a non-null pointer, so this
+/// test does not abort here but does on macOS). The driver previously scanned
+/// ranges with rocksdb's boxing `DBIterator`, whose `Iterator::next` copies every
+/// value into a `Box<[u8]>` via `copy_nonoverlapping` even when the caller only
+/// needs keys (clear_range, key selectors). Copying from the null pointer
+/// violates `copy_nonoverlapping`'s non-null precondition and aborts the engine
+/// the instant an actor commits state. This exercises every rewritten iteration
+/// path (get_range forward/reverse, get_key selectors, and the clear_range commit
+/// path) over empty-valued keys.
+#[tokio::test]
+async fn rocksdb_empty_values() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("debug")
+		.with_test_writer()
+		.try_init();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, _docker_config) = TestDatabase::FileSystem.config(test_id, 1).await.unwrap();
+
+	let rivet_config::config::Database::FileSystem(fs_config) = db_config else {
+		unreachable!()
+	};
+
+	let driver = universaldb::driver::RocksDbDatabaseDriver::new(fs_config.path)
+		.await
+		.unwrap();
+	let db = Database::new(Arc::new(driver));
+
+	// Seed keys [1, 2, 3, 0] through [1, 2, 3, 16] with EMPTY values.
+	db.txn("seed", |tx| async move {
+		for i in 0..=16u8 {
+			tx.set(&[1, 2, 3, i], b"");
+		}
+		Ok(())
+	})
+	.await
+	.unwrap();
+
+	// Forward range read over empty-valued keys returns every key with an empty
+	// value. Pre-fix, the boxing iterator aborted boxing the null empty value.
+	let forward = db
+		.txn("forward", |tx| async move {
+			let mut stream = tx.get_ranges_keyvalues(
+				RangeOption {
+					mode: StreamingMode::WantAll,
+					..(&[1u8, 2, 3, 0][..], &[1u8, 2, 3, 17][..]).into()
+				},
+				Serializable,
+			);
+			let mut out = Vec::new();
+			while let Some(entry) = stream.try_next().await? {
+				out.push((entry.key().to_vec(), entry.value().to_vec()));
+			}
+			Ok(out)
+		})
+		.await
+		.unwrap();
+	assert_eq!(forward.len(), 17, "forward range must return all empty-valued keys");
+	assert!(
+		forward.iter().all(|(_, value)| value.is_empty()),
+		"every value must round-trip as empty"
+	);
+	assert_eq!(forward.first().unwrap().0, vec![1, 2, 3, 0]);
+	assert_eq!(forward.last().unwrap().0, vec![1, 2, 3, 16]);
+
+	// Reverse range read over the same empty-valued keys, highest first.
+	let reverse = db
+		.txn("reverse", |tx| async move {
+			let mut stream = tx.get_ranges_keyvalues(
+				RangeOption {
+					mode: StreamingMode::WantAll,
+					reverse: true,
+					..(&[1u8, 2, 3, 0][..], &[1u8, 2, 3, 17][..]).into()
+				},
+				Serializable,
+			);
+			let mut out = Vec::new();
+			while let Some(entry) = stream.try_next().await? {
+				out.push(entry.key().to_vec());
+			}
+			Ok(out)
+		})
+		.await
+		.unwrap();
+	assert_eq!(reverse.first().unwrap(), &vec![1, 2, 3, 16]);
+	assert_eq!(reverse.last().unwrap(), &vec![1, 2, 3, 0]);
+
+	// Key selectors resolve over empty-valued keys (exercises handle_get_key).
+	let selected = db
+		.txn("selectors", |tx| async move {
+			let geq = tx
+				.get_key(&KeySelector::first_greater_or_equal(vec![1, 2, 3, 5]), Serializable)
+				.await?;
+			let gt = tx
+				.get_key(&KeySelector::first_greater_than(vec![1, 2, 3, 5]), Serializable)
+				.await?;
+			let lt = tx
+				.get_key(&KeySelector::last_less_than(vec![1, 2, 3, 5]), Serializable)
+				.await?;
+			let leq = tx
+				.get_key(&KeySelector::last_less_or_equal(vec![1, 2, 3, 5]), Serializable)
+				.await?;
+			Ok((geq.to_vec(), gt.to_vec(), lt.to_vec(), leq.to_vec()))
+		})
+		.await
+		.unwrap();
+	assert_eq!(selected.0, vec![1, 2, 3, 5], "first_greater_or_equal");
+	assert_eq!(selected.1, vec![1, 2, 3, 6], "first_greater_than");
+	assert_eq!(selected.2, vec![1, 2, 3, 4], "last_less_than");
+	assert_eq!(selected.3, vec![1, 2, 3, 5], "last_less_or_equal");
+
+	// clear_range over the empty-valued keys. This is the exact path that aborts
+	// on macOS the instant an actor persists state, because clear_range iterates
+	// the range and (pre-fix) boxed each null empty value.
+	db.txn("clear", |tx| async move {
+		tx.clear_range(&[1, 2, 3, 0], &[1, 2, 3, 17]);
+		Ok(())
+	})
+	.await
+	.unwrap();
+
+	// The range is now empty.
+	let remaining = db
+		.txn("verify", |tx| async move {
+			let mut stream = tx.get_ranges_keyvalues(
+				RangeOption {
+					mode: StreamingMode::WantAll,
+					..(&[1u8, 2, 3, 0][..], &[1u8, 2, 3, 17][..]).into()
+				},
+				Serializable,
+			);
+			let mut count = 0usize;
+			while stream.try_next().await?.is_some() {
+				count += 1;
+			}
+			Ok(count)
+		})
+		.await
+		.unwrap();
+	assert_eq!(remaining, 0, "clear_range must delete every key in the range");
+}
