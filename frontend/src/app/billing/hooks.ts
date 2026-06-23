@@ -54,7 +54,7 @@ export function useBilledMetrics() {
 export function useBilledComputeCost() {
 	const dataProvider = useCloudProjectDataProvider();
 	const now = new Date();
-	const { data, isLoading, isError } = useQuery({
+	const { data, isLoading, isError, error } = useQuery({
 		...dataProvider.currentProjectComputeMetricsQueryOptions({
 			name: COMPUTE_METRICS,
 			startAt: startOfMonth(now).toISOString(),
@@ -65,7 +65,22 @@ export function useBilledComputeCost() {
 		enabled: features.compute,
 	});
 
-	return { monthToDate: sumComputeCost(data), isLoading, isError };
+	// A project with no compute pools 404s, and one that has pools but no
+	// recorded usage returns an empty columnar result. In both cases the
+	// project isn't using compute, so the billing page omits the compute card
+	// entirely. Other errors (e.g. a transient 500) keep the card so it can
+	// surface an error state rather than silently hiding billing info.
+	const isNotFound =
+		isError &&
+		(error as { statusCode?: number } | null)?.statusCode === 404;
+	const isEmpty = !!data && data.name.length === 0;
+
+	return {
+		monthToDate: sumComputeCost(data),
+		isLoading,
+		isError,
+		isUnavailable: isNotFound || isEmpty,
+	};
 }
 
 export function useHighestUsagePercent(): number {

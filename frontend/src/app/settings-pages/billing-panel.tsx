@@ -184,7 +184,10 @@ function BillingDrawerBody() {
 
 	// Billing is always project-scoped, even when this drawer is opened from a
 	// namespace URL, so compute usage shows the same regardless of context.
-	const showCompute = features.compute;
+	// Hide the compute row entirely when the project isn't using compute (no
+	// compute pools 404s, or an empty usage result), rather than rendering a
+	// row of zeros / skeletons.
+	const showCompute = features.compute && !compute.isUnavailable;
 	const computeDollars = compute.isError ? 0 : compute.monthToDate;
 	const computeCapUsd = COMPUTE_MONTHLY_CAP_USD[plan] ?? null;
 	// Capped plans are billed for compute only up to the cap.
