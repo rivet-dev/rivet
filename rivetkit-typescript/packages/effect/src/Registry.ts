@@ -82,10 +82,9 @@ export const serve = <E, R>(
 	Layer.effectDiscard(
 		Effect.gen(function* () {
 			const registry = yield* Registry;
-			const baseLogger = registry.baseLogger;
 			yield* Layer.build(
 				actorsLayer.pipe(
-					Layer.provideMerge(RivetLogger.layerFromPino(baseLogger)),
+					Layer.provideMerge(RivetLogger.layerFromPino(registry.baseLogger)),
 				),
 			);
 			const rivetkitRegistry = setupRivetkitRegistry(registry);
