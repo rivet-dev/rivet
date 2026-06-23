@@ -489,6 +489,10 @@ export const createOrganizationContext = ({
 				);
 				return data;
 			},
+			// A project with no compute pools 404s here. Fail fast instead of
+			// retrying so the billing page can drop the usage figure
+			// immediately rather than showing a long loading skeleton.
+			...no404Retry(),
 		});
 
 	const namespaceLatestMetricsQueryOptions = (opts: {

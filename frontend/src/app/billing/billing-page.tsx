@@ -199,7 +199,7 @@ export function BillingBody() {
 					);
 				},
 			)}
-			{features.compute ? (
+			{features.compute && !compute.isUnavailable ? (
 				<ComputeUsageCard
 					monthToDate={compute.monthToDate}
 					isLoading={compute.isLoading}
