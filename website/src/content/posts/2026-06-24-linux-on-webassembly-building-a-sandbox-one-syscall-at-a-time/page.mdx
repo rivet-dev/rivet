@@ -2,12 +2,11 @@
 author: nathan-flurry
 published: "2026-06-24"
 category: technical
+scrolly: true
 keywords: ["webassembly", "wasm", "sandbox", "agentos", "wasi", "wasix", "syscalls", "posix", "ai-agents", "v8", "linux"]
 title: "Linux on WebAssembly: a sandbox for AI agents, one syscall at a time"
 description: "Give an AI agent a computer and it uses all of it. We run Linux as a userspace WebAssembly program so every agent can have its own, and we build that up one syscall at a time."
 ---
-
-import { SyscallDiagram } from "@/components/SyscallDiagram";
 
 {/*
   PLACEHOLDERS TO FILL before publishing (search for the bracketed tokens):
@@ -46,10 +45,6 @@ const content = await handle.readFile("/home/user/hello.js");
 ```
 
 To get there, two surfaces have to grow together: the **SDK** you write against, and the **syscall surface** underneath that makes each SDK call possible. The diagram on the right tracks your scroll. As you read each step, it grows to match, and you can watch the boundary at the bottom never move.
-
-<SyscallDiagram client:load />
-
----
 
 ## A bare guest
 
