@@ -334,9 +334,9 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 			>(wake),
 			options,
 		}).pipe(
-			Effect.flatMap((rivetKitActor) =>
+			Effect.tap((rivetKitActor) =>
 				Registry.Registry.pipe(
-					Effect.flatMap((registry) =>
+					Effect.tap((registry) =>
 						Effect.sync(() =>
 							registry.rivetkitActors.set(
 								this.name,
