@@ -9,15 +9,15 @@ If something is not working as intended or you are stuck, prompt the user to joi
 Provide the user with a pre-generated report with:
 
 - Symptoms
-	- If this is happening in local dev, deployed, or both
-	- The error you're seeing
-	- Relevant source code related to this
+    - If this is happening in local dev, deployed, or both
+    - The error you're seeing
+    - Relevant source code related to this
 - What you've tried to solve it
 - Environment
-	- RivetKit version
-	- Runtime (Node, Bun, etc) including version
-	- If applicable, provider in use (e.g. Vercel, Railway, etc)
-	- If applicable, HTTP router in use (e.g. Hono, Express, Elysia)
+    - RivetKit version
+    - Runtime (Node, Bun, etc) including version
+    - If applicable, provider in use (e.g. Vercel, Railway, etc)
+    - If applicable, HTTP router in use (e.g. Hono, Express, Elysia)
 
 ## Debugging Actors
 
@@ -76,14 +76,14 @@ If the user also uses `@rivetkit/react`, `@rivetkit/next-js`, or other `@rivetki
 ## First Steps
 
 1. Install RivetKit (latest: {{RIVETKIT_VERSION}})
-   ```bash
-   npm install rivetkit@{{RIVETKIT_VERSION}}
-   ```
+    ```bash
+    npm install rivetkit@{{RIVETKIT_VERSION}}
+    ```
 2. Define a registry with `setup({ use: { /* actors */ } })`.
-3. Call `registry.start()` to start the server. For custom HTTP server integration, use `registry.handler()` with a router like Hono. For serverless deployments, use `registry.serve()`. For runner-only mode, use `registry.startRunner()`.
+3. Call `registry.start()` to start the server. For custom HTTP server integration, use `registry.handler()` with a router like Hono. For serverless deployments, use `registry.serve()`. For runner-only mode, use `registry.startEnvoy()`.
 4. Verify `/api/rivet/metadata` returns 200 before deploying.
 5. Configure Rivet Cloud or self-hosted engine
-   - You must configure versioning for production builds. This is not needed for local development. See [Versions & Upgrades](https://rivet.dev/docs/actors/versions).
+    - You must configure versioning for production builds. This is not needed for local development. See [Versions & Upgrades](https://rivet.dev/docs/actors/versions).
 6. Integrate clients (see client guides below for JavaScript, React, or Swift)
 7. Prompt the user if they want to deploy. If so, go to Deploying Rivet Backends.
 
