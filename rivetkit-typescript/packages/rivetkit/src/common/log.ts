@@ -62,15 +62,10 @@ export function configureBaseLogger(logger: Logger): void {
 }
 
 /**
- * Configure the default logger with optional log level.
+ * Create the default logger with optional log level.
  */
-export function configureDefaultLogger(logLevel?: LogLevel) {
-	// Store the configured log level
-	if (logLevel) {
-		configuredLogLevel = logLevel;
-	}
-
-	baseLogger = pino(
+export function makeDefaultLogger(logLevel?: LogLevel): Logger {
+	return pino(
 		{
 			level: getPinoLevel(logLevel),
 			messageKey: "msg",
@@ -87,7 +82,18 @@ export function configureDefaultLogger(logLevel?: LogLevel) {
 		},
 		createLogfmtDestination(),
 	);
+}
 
+/**
+ * Configure the default logger with optional log level.
+ */
+export function configureDefaultLogger(logLevel?: LogLevel) {
+	// Store the configured log level
+	if (logLevel) {
+		configuredLogLevel = logLevel;
+	}
+
+	baseLogger = makeDefaultLogger(logLevel);
 	loggerCache.clear();
 }
 

@@ -82,10 +82,9 @@ export const makeDefaultBaseLogger: Effect.Effect<RivetkitLog.Logger> =
 					? envLogLevel.value
 					: yield* References.MinimumLogLevel;
 
-		return yield* Effect.sync(() => {
-			RivetkitLog.configureDefaultLogger(toPinoLevel(logLevel));
-			return RivetkitLog.getBaseLogger();
-		});
+		return yield* Effect.sync(() =>
+			RivetkitLog.makeDefaultLogger(toPinoLevel(logLevel)),
+		);
 	});
 
 export const getOrCreateBaseLogger: Effect.Effect<RivetkitLog.Logger> =

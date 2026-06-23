@@ -1,4 +1,5 @@
 import { isLocalEngineEndpoint } from "@/common/engine";
+import { configureBaseLogger } from "@/common/log";
 import { configureServerlessPool } from "@/serverless/configure";
 import { VERSION } from "@/utils";
 import {
@@ -82,6 +83,9 @@ export class Registry<A extends RegistryActors> {
 
 	constructor(config: RegistryConfigInput<A>, deps?: Partial<RegistryDeps>) {
 		this.#config = config;
+		if (config.logging?.baseLogger) {
+			configureBaseLogger(config.logging.baseLogger);
+		}
 		this.#buildConfiguredRegistry =
 			deps?.buildConfiguredRegistry ?? buildConfiguredRegistry;
 		this.routes = {

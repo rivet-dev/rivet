@@ -49,6 +49,8 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 	const baseLogger = yield* getOrCreateBaseLogger;
 	const rivetkitClient = yield* Effect.acquireRelease(
 		Effect.sync(() => {
+			// Raw RivetKit clients do not accept a logger in their config,
+			// so install the Effect-selected logger before construction.
 			RivetkitLog.configureBaseLogger(baseLogger);
 			return RivetkitClient.createClient(options);
 		}),
