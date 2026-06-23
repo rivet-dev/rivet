@@ -1,5 +1,5 @@
 import { Effect, Logger, Layer } from "effect";
-import type { Logger as PinoLogger } from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import {
 	BaseLogger,
 	getOrCreateBaseLogger,
@@ -24,7 +24,7 @@ import {
  * ```
  */
 export const fromPino = (
-	baseLogger: PinoLogger,
+	baseLogger: RivetkitLog.Logger,
 ): Logger.Logger<unknown, void> => makeEffectLogger(baseLogger);
 
 /**
@@ -36,7 +36,7 @@ export const fromPino = (
  * to active traces.
  */
 export const layerFromPino = (
-	baseLogger: PinoLogger,
+	baseLogger: RivetkitLog.Logger,
 	options?: {
 		readonly mergeWithExisting?: boolean | undefined;
 	},

@@ -8,12 +8,7 @@ import {
 	References,
 } from "effect";
 import type * as Rivetkit from "rivetkit";
-import {
-	configureDefaultLogger,
-	getBaseLogger,
-	type Logger as PinoLogger,
-	type LogLevel as PinoLogLevel,
-} from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 
 const EMPTY_KEY = "/";
 const KEY_SEPARATOR = "/";
@@ -24,39 +19,43 @@ type ActorLogContext = {
 	readonly actorId: string;
 };
 
-export class BaseLogger extends Context.Service<BaseLogger, PinoLogger>()(
-	"@rivetkit/effect/RivetLogger/BaseLogger",
-) {}
+export class BaseLogger extends Context.Service<
+	BaseLogger,
+	RivetkitLog.Logger
+>()("@rivetkit/effect/RivetLogger/BaseLogger") {}
 
-const PinoLevelByEffectLevel: Record<LogLevel.LogLevel, PinoLogLevel> = {
-	All: "trace",
-	Trace: "trace",
-	Debug: "debug",
-	Info: "info",
-	Warn: "warn",
-	Error: "error",
-	Fatal: "fatal",
-	None: "silent",
-};
+const PinoLevelByEffectLevel: Record<LogLevel.LogLevel, RivetkitLog.LogLevel> =
+	{
+		All: "trace",
+		Trace: "trace",
+		Debug: "debug",
+		Info: "info",
+		Warn: "warn",
+		Error: "error",
+		Fatal: "fatal",
+		None: "silent",
+	};
 
-export const toPinoLevel = (logLevel: LogLevel.LogLevel): PinoLogLevel =>
-	PinoLevelByEffectLevel[logLevel];
+export const toPinoLevel = (
+	logLevel: LogLevel.LogLevel,
+): RivetkitLog.LogLevel => PinoLevelByEffectLevel[logLevel];
 
-const EffectLevelByPinoLevel: Record<PinoLogLevel, LogLevel.LogLevel> = {
-	trace: "Trace",
-	debug: "Debug",
-	info: "Info",
-	warn: "Warn",
-	error: "Error",
-	fatal: "Fatal",
-	silent: "None",
-};
+const EffectLevelByPinoLevel: Record<RivetkitLog.LogLevel, LogLevel.LogLevel> =
+	{
+		trace: "Trace",
+		debug: "Debug",
+		info: "Info",
+		warn: "Warn",
+		error: "Error",
+		fatal: "Fatal",
+		silent: "None",
+	};
 
 const pinoLogLevelFromEnv = Config.string("RIVET_LOG_LEVEL").pipe(
 	Config.map((value) => {
 		const pinoLevel = value.toLowerCase();
 		if (pinoLevel in EffectLevelByPinoLevel) {
-			return EffectLevelByPinoLevel[pinoLevel as PinoLogLevel];
+			return EffectLevelByPinoLevel[pinoLevel as RivetkitLog.LogLevel];
 		}
 
 		return "Info";
@@ -68,8 +67,8 @@ const logLevelFromEnv = Config.logLevel("RIVET_LOG_LEVEL").pipe(
 	Effect.option,
 );
 
-export const makeDefaultBaseLogger: Effect.Effect<PinoLogger> = Effect.gen(
-	function* () {
+export const makeDefaultBaseLogger: Effect.Effect<RivetkitLog.Logger> =
+	Effect.gen(function* () {
 		const context = yield* Effect.context();
 		const providedMinimumLogLevel = Context.getOrUndefined(
 			context,
@@ -84,22 +83,20 @@ export const makeDefaultBaseLogger: Effect.Effect<PinoLogger> = Effect.gen(
 					: yield* References.MinimumLogLevel;
 
 		return yield* Effect.sync(() => {
-			configureDefaultLogger(toPinoLevel(logLevel));
-			return getBaseLogger();
+			RivetkitLog.configureDefaultLogger(toPinoLevel(logLevel));
+			return RivetkitLog.getBaseLogger();
 		});
-	},
-);
+	});
 
-export const getOrCreateBaseLogger: Effect.Effect<PinoLogger> = Effect.gen(
-	function* () {
+export const getOrCreateBaseLogger: Effect.Effect<RivetkitLog.Logger> =
+	Effect.gen(function* () {
 		const provided = yield* Effect.serviceOption(BaseLogger);
 		if (provided._tag === "Some") {
 			return provided.value;
 		}
 
 		return yield* makeDefaultBaseLogger;
-	},
-);
+	});
 
 export function makeActorLogAnnotations(context: ActorLogContext): {
 	readonly actor: string;
@@ -197,7 +194,7 @@ function extractMessageAndFields(message: unknown): {
 }
 
 export function makeEffectLogger(
-	baseLogger: PinoLogger,
+	baseLogger: RivetkitLog.Logger,
 ): EffectLogger.Logger<unknown, void> {
 	return EffectLogger.make(({ cause, date, fiber, logLevel, message }) => {
 		const { msg, fields } = extractMessageAndFields(message);

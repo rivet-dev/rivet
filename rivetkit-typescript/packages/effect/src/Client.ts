@@ -1,7 +1,7 @@
 import { Context, Effect, Layer, Record, Result, Schema } from "effect";
 import * as RivetkitClient from "rivetkit/client";
 import * as RivetkitErrors from "rivetkit/errors";
-import { configureBaseLogger } from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import type * as Action from "./Action.ts";
 import type * as Actor from "./Actor.ts";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope.ts";
@@ -49,7 +49,7 @@ export const make = Effect.fnUntraced(function* (options: Options = {}) {
 	const baseLogger = yield* getOrCreateBaseLogger;
 	const rivetkitClient = yield* Effect.acquireRelease(
 		Effect.sync(() => {
-			configureBaseLogger(baseLogger);
+			RivetkitLog.configureBaseLogger(baseLogger);
 			return RivetkitClient.createClient(options);
 		}),
 		(c) => Effect.promise(() => c.dispose()),

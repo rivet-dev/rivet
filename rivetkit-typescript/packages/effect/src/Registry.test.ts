@@ -2,11 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Action, Actor, Registry, RivetLogger } from "@rivetkit/effect";
 import { Effect, Layer } from "effect";
 import { HttpEffect } from "effect/unstable/http";
-import {
-	configureDefaultLogger,
-	getBaseLogger,
-	type Logger as PinoLogger,
-} from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import { vi } from "vitest";
 
 const TestActor = Actor.make("TestActor", {
@@ -28,7 +24,7 @@ const RegistryLive = ActorsLayer.pipe(
 	),
 );
 
-function makeTestLogger(): PinoLogger {
+function makeTestLogger(): RivetkitLog.Logger {
 	const logger: Record<string, unknown> = {
 		level: "debug",
 		child: () => logger,
@@ -37,7 +33,7 @@ function makeTestLogger(): PinoLogger {
 		logger[level] = (): void => {};
 	}
 
-	return logger as unknown as PinoLogger;
+	return logger as unknown as RivetkitLog.Logger;
 }
 
 describe("Registry.toWebHandler", () => {
@@ -236,10 +232,10 @@ describe("Registry.toWebHandler", () => {
 			);
 
 			assert.strictEqual(response.status, 200);
-			assert.strictEqual(getBaseLogger(), baseLogger);
+			assert.strictEqual(RivetkitLog.getBaseLogger(), baseLogger);
 		} finally {
 			await dispose();
-			configureDefaultLogger("silent");
+			RivetkitLog.configureDefaultLogger("silent");
 		}
 	});
 

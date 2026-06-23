@@ -7,7 +7,7 @@ import {
 	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
-import { type Logger as PinoLogger } from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
 import * as RivetLogger from "./RivetLogger.ts";
@@ -27,7 +27,7 @@ export interface Registry {
 
 	readonly options: Options;
 
-	readonly baseLogger: PinoLogger;
+	readonly baseLogger: RivetkitLog.Logger;
 
 	readonly rivetkitActors: Map<string, Rivetkit.AnyActorDefinition>;
 }
@@ -35,7 +35,7 @@ export interface Registry {
 export const Registry: Context.Service<Registry, Registry> =
 	Context.Service<Registry>("@rivetkit/effect/Registry");
 
-const make = (options: Options, baseLogger: PinoLogger): Registry => {
+const make = (options: Options, baseLogger: RivetkitLog.Logger): Registry => {
 	return Registry.of({
 		[TypeId]: TypeId,
 		options,

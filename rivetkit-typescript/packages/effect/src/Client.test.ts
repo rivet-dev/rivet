@@ -2,11 +2,7 @@ import { assert, describe, it } from "@effect/vitest";
 import { Client, RivetError, RivetLogger } from "@rivetkit/effect";
 import { Effect, Layer, Schema } from "effect";
 import * as RivetkitErrors from "rivetkit/errors";
-import {
-	configureDefaultLogger,
-	getBaseLogger,
-	type Logger as PinoLogger,
-} from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import * as ActionErrorEnvelope from "./internal/ActionErrorEnvelope";
 
 function makeTestLogger(
@@ -15,7 +11,7 @@ function makeTestLogger(
 		readonly fields: Record<string, unknown>;
 		readonly msg: string | undefined;
 	}>,
-): PinoLogger {
+): RivetkitLog.Logger {
 	const logger: Record<string, unknown> = {
 		level: "debug",
 		child: () => logger,
@@ -29,7 +25,7 @@ function makeTestLogger(
 		};
 	}
 
-	return logger as unknown as PinoLogger;
+	return logger as unknown as RivetkitLog.Logger;
 }
 
 describe("Client", () => {
@@ -39,13 +35,15 @@ describe("Client", () => {
 				const baseLogger = makeTestLogger();
 
 				yield* Effect.addFinalizer(() =>
-					Effect.sync(() => configureDefaultLogger("silent")),
+					Effect.sync(() =>
+						RivetkitLog.configureDefaultLogger("silent"),
+					),
 				);
 				yield* Client.make({
 					endpoint: "http://127.0.0.1:6420",
 				}).pipe(Effect.provide(RivetLogger.layerFromPino(baseLogger)));
 
-				assert.strictEqual(getBaseLogger(), baseLogger);
+				assert.strictEqual(RivetkitLog.getBaseLogger(), baseLogger);
 			}),
 		),
 	);
@@ -61,7 +59,9 @@ describe("Client", () => {
 				const baseLogger = makeTestLogger(entries);
 
 				yield* Effect.addFinalizer(() =>
-					Effect.sync(() => configureDefaultLogger("silent")),
+					Effect.sync(() =>
+						RivetkitLog.configureDefaultLogger("silent"),
+					),
 				);
 				yield* Effect.gen(function* () {
 					yield* Client.Client;

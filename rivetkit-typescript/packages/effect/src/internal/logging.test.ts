@@ -7,7 +7,7 @@ import {
 	Logger as EffectLogger,
 	References,
 } from "effect";
-import type { Logger as PinoLogger } from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import * as Logging from "./logging.ts";
 
 type LogEntry = {
@@ -16,7 +16,7 @@ type LogEntry = {
 	readonly msg: string | undefined;
 };
 
-function makeTestLogger(entries: Array<LogEntry>): PinoLogger {
+function makeTestLogger(entries: Array<LogEntry>): RivetkitLog.Logger {
 	const logger: Record<string, unknown> = {};
 	for (const level of ["trace", "debug", "info", "warn", "error", "fatal"]) {
 		logger[level] = (
@@ -27,7 +27,7 @@ function makeTestLogger(entries: Array<LogEntry>): PinoLogger {
 		};
 	}
 
-	return logger as unknown as PinoLogger;
+	return logger as unknown as RivetkitLog.Logger;
 }
 
 describe("internal/logging", () => {
