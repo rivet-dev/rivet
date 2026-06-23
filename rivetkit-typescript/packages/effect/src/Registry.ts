@@ -35,6 +35,39 @@ export interface Registry {
 export const Registry: Context.Service<Registry, Registry> =
 	Context.Service<Registry>("@rivetkit/effect/Registry");
 
+/**
+ * Creates the shared registry that actor layers register into.
+ *
+ * @remarks
+ * Actor layers created with {@link Actor.Actor.toLayer|`Actor.toLayer()`}
+ * register into this service. Registry entrypoints such as
+ * {@link serve|`Registry.serve()`}, {@link toWebHandler|`Registry.toWebHandler()`},
+ * and {@link toHttpEffect|`Registry.toHttpEffect()`} later use the collected
+ * actors to create the underlying RivetKit runtime.
+ *
+ * @param options - RivetKit runtime options shared by the registered actors.
+ *
+ * @returns A layer that provides the {@link Registry|`Registry.Registry`}
+ * service.
+ *
+ * @example
+ * ```ts
+ * import { Registry } from "@rivetkit/effect"
+ * import { Layer } from "effect"
+ *
+ * const ActorsLayer = Layer.mergeAll(ChatRoomLive, ModeratorLive)
+ *
+ * const MainLayer = Registry.serve(ActorsLayer).pipe(
+ *   Layer.provide(Registry.layer({ endpoint: "http://127.0.0.1:6420" }))
+ * )
+ * ```
+ *
+ * @see {@link serve|`Registry.serve()`} for starting a long-running actor
+ * server.
+ * @see {@link toWebHandler|`Registry.toWebHandler()`} for Fetch-compatible
+ * serverless handlers.
+ * @see {@link toHttpEffect|`Registry.toHttpEffect()`} for Effect HTTP handlers.
+ */
 export const layer = (options: Options = {}): Layer.Layer<Registry> =>
 	Layer.effect(
 		Registry,
