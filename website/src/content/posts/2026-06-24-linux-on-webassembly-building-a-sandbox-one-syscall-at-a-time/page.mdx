@@ -1,0 +1,161 @@
+---
+author: nathan-flurry
+published: "2026-06-24"
+category: technical
+keywords: ["webassembly", "wasm", "sandbox", "agentos", "wasi", "wasix", "syscalls", "posix", "ai-agents", "v8", "linux"]
+title: "Linux on WebAssembly: building a sandbox one syscall at a time"
+description: "We run Linux as a userspace WebAssembly program, so a sandbox is something you log into, not a host you boot. This post builds that sandbox up from a bare wasm guest to a coding agent, one syscall at a time."
+---
+
+import { SyscallDiagram } from "@/components/SyscallDiagram";
+
+Most code sandboxes make you choose: a container that's slow to start and expensive to keep around, or a microVM that's secure but heavy. We took a different bet. We run Linux as a *userspace program*, a WebAssembly guest, so a sandbox is something you log into, not a host you boot.
+
+This post builds that sandbox up from nothing. We start with a bare wasm guest that can barely do I/O, and add one capability at a time until it can run a coding agent that writes files, starts a dev server, and serves a live preview URL. At each step, two things grow in lockstep: the **SDK surface** you write against, and the **syscall surface** underneath that makes it possible.
+
+Here's the code we're working toward. By the end, every line of it runs on a POSIX surface we assemble from scratch:
+
+```ts
+const session = await handle.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await handle.sendPrompt(session.sessionId, "Write a hello world script to /home/user/hello.js");
+const content = await handle.readFile("/home/user/hello.js");
+```
+
+The diagram below tracks your scroll. As you move through each step, it grows to match, the SDK surface on the left, the syscall surface underneath.
+
+<SyscallDiagram client:load />
+
+---
+
+## Step 1: A bare guest
+
+<div data-syscall-step="1" />
+
+The atom is a single wasm module running in isolation. We boot a VM with nothing installed:
+
+```ts
+import { agentOS, setup } from "@rivet-dev/agentos";
+
+const vm = agentOS();
+
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+**Syscalls.** The base standard for wasm system access is WASI (`wasip1`), and it's intentionally minimal: preopened file descriptors, clocks, randomness, and basic file I/O. That's the whole surface. There is no process model (no `fork` / `exec` / `wait`), no users (no `getuid` / `getgid`), and no general sockets (no `connect` / `listen`). A real command-line program expects all three. The rest of this post is closing that gap, without ever handing the guest real host access.
+
+---
+
+## Step 2: Processes, make it an OS, not a function
+
+<div data-syscall-step="2" />
+
+A guest that can't spawn a process isn't an operating system; it's a function call. So the first thing we add is a process model. Now the SDK can run commands and long-running processes:
+
+```ts
+// One-shot
+const result = await agent.exec("echo hello && ls /home/user");
+console.log(result.stdout, result.exitCode);
+
+// Long-running, streamed
+const { pid } = await agent.spawn("node", ["/home/user/server.js"]);
+```
+
+**Syscalls.** WASI can't express `fork` / `exec` at all, so we add them as a custom host import module, `host_process`, that the runtime implements and guest libc calls as if it were an ordinary syscall. It spawns a child (argv, env, inherited stdio, working directory) and waits for exit, all routed through the kernel's process table. We add `host_user` in the same step so tools that call `getuid` / `getgid` see the VM's virtualized identity instead of failing. This is exactly the POSIX gap WASIX exists to fill, worth a callout for readers who know the wasm ecosystem. We'll come back to it in the comparison.
+
+---
+
+## Step 3: Filesystem, a real working tree, backed by S3
+
+<div data-syscall-step="3" />
+
+Now that multiple processes exist, files become interesting: they're the shared state processes read and write. Each VM gets its own virtual filesystem whose calls never touch the host disk. You can back any guest path with external storage, here, an S3 bucket:
+
+```ts
+const vm = agentOS({
+  software: [pi],
+  mounts: [
+    {
+      path: "/workspace/data",
+      plugin: { id: "s3", config: { bucket: "my-bucket", prefix: "agent-data/", region: "us-east-1" } },
+    },
+  ],
+});
+```
+
+```ts
+await agent.writeFile("/workspace/hello.txt", "Hello, world!");
+const content = await agent.readFile("/workspace/hello.txt");
+```
+
+**Syscalls.** This is the other half of the model, the Layer 2 shim that adapts the *standard* WASI calls so a normal libc behaves correctly. `fd_read` / `fd_write` on the standard descriptors go through the kernel stdio bridge instead of host file descriptors. Mounts are mirrored into the guest's preopen table, so `path_open("/workspace/data/x")` resolves *under that mount's root* and nowhere else. The `..` segments can't climb out into a sibling mount or a host path. Read-only mounts reject create/truncate/write flags while still allowing traversal, so `ls` and `find` keep working on inputs you don't want mutated.
+
+---
+
+## Step 4: Network, an embedded stack, no proxy
+
+<div data-syscall-step="4" />
+
+A dev environment that can't open a port is half a dev environment. Guest code binds a loopback port exactly like any Node process, and you reach it without a sidecar proxy:
+
+```ts
+const { pid } = await agent.spawn("node", ["/home/user/server.js"]); // listens on :3000
+
+// Server-to-server
+const res = await agent.vmFetch(3000, "/");
+
+// Shareable, time-limited public URL
+const preview = await agent.createSignedPreviewUrl(3000);
+console.log(preview.path, preview.expiresAt);
+```
+
+**Syscalls.** Base WASI has no general socket API, so we add `host_net`, TCP connect, listen, send, receive, through the kernel's socket table, gated by the same permission policy as everything else and loopback-only by default. The network stack is embedded in the kernel, which is why there's no proxy to run: `vmFetch` and preview URLs are just the host side of that same socket table.
+
+> **That's one sandbox.** A bare guest is now a Linux box with processes, files, and a network, and notice the host boundary never moved. Every syscall we added bottoms out in a kernel-owned table, not a host call. Now we make it cheap enough to run ten thousand of them.
+
+---
+
+## Step 5: Make it fast
+
+<div data-syscall-step="5" />
+
+None of the above is useful for agents if a sandbox takes seconds to start. Because the guest is a wasm module on a shared runtime rather than a booted VM, a new sandbox is an isolate, not a machine, so cold starts are measured in milliseconds and idle memory in megabytes. The v8 accelerator runs the JavaScript guest at near-native speed, and snapshotting lets a sandbox sleep and wake with its filesystem intact.
+
+**Syscalls.** None added. This is the payoff of building on a kernel boundary instead of a hypervisor: the thing we optimize is startup and memory, and the security surface stays exactly where it was in Step 4.
+
+---
+
+## Step 6: Agents on top
+
+<div data-syscall-step="7" />
+
+Cheap, fast sandboxes are what make per-agent isolation practical: hand every agent its own throwaway VM. And here's the punchline, an agent is just a program that uses the surface we already built. Spawning the agent is `host_process`. Its edits are `path_open`. Its dev server is `host_net`. Nothing new goes underneath.
+
+```ts
+import { agentOS, setup } from "@rivet-dev/agentos";
+import pi from "@agentos-software/pi";
+
+const vm = agentOS({ software: [pi] });
+export const registry = setup({ use: { vm } });
+registry.start();
+```
+
+```ts
+const session = await handle.createSession("pi", {
+  env: { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY! },
+});
+await handle.sendPrompt(session.sessionId, "Write a hello world script to /home/user/hello.js");
+const content = await handle.readFile("/home/user/hello.js");
+```
+
+**Syscalls.** Still none. The agent loop is the same `host_process` + `path_open` + `host_net` calls from Steps 2 through 4, driven by a model instead of a shell.
+
+---
+
+## Where this leaves us
+
+Two surfaces grew together. The SDK went from `agentOS()` to a full agent session; the syscall surface went from bare `wasip1` to a virtualized POSIX, `host_process`, `host_user`, `host_net`, and a kernel-backed shim, without the host boundary ever moving.
+
+*(Next sections to write: the honest numbers, cost, cold-start, memory; how it compares to a wasm x64 interpreter, an x64 precompiler, WASIX, and StackBlitz; and yes, it runs Doom.)*
