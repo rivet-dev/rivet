@@ -57,16 +57,17 @@ const setupRivetkitRegistry = (
 	options?: {
 		readonly serverless?: ServerlessOptions | undefined;
 	},
-) => {
-	return Rivetkit.setup({
-		use: Object.fromEntries(registry.rivetkitActors),
-		...registry.options,
-		logging: { baseLogger: registry.baseLogger },
-		...(options?.serverless === undefined
-			? {}
-			: { serverless: options.serverless }),
-	});
-};
+) =>
+	Effect.sync(() =>
+		Rivetkit.setup({
+			use: Object.fromEntries(registry.rivetkitActors),
+			...registry.options,
+			logging: { baseLogger: registry.baseLogger },
+			...(options?.serverless === undefined
+				? {}
+				: { serverless: options.serverless }),
+		}),
+	);
 
 /**
  * Serves the actors registered by `actorsLayer`.
@@ -112,10 +113,12 @@ export const serve = <E, R>(
 			const registry = yield* Registry;
 			yield* Layer.build(
 				actorsLayer.pipe(
-					Layer.provideMerge(RivetLogger.layerFromPino(registry.baseLogger)),
+					Layer.provideMerge(
+						RivetLogger.layerFromPino(registry.baseLogger),
+					),
 				),
 			);
-			const rivetkitRegistry = setupRivetkitRegistry(registry);
+			const rivetkitRegistry = yield* setupRivetkitRegistry(registry);
 			yield* Effect.sync(() => rivetkitRegistry.start());
 		}),
 	);
@@ -134,7 +137,7 @@ export const test: Layer.Layer<Client.Client, never, Registry> = Layer.effect(
 	Client.Client,
 	Effect.gen(function* () {
 		const registry = yield* Registry;
-		const rivetkitRegistry = setupRivetkitRegistry(registry);
+		const rivetkitRegistry = yield* setupRivetkitRegistry(registry);
 		rivetkitRegistry.config.test = {
 			...rivetkitRegistry.config.test,
 			enabled: true,
@@ -172,17 +175,21 @@ const makeHttpEffect = (
 	registry: Registry,
 	options?: ToHttpEffectOptions,
 ): Effect.Effect<
-	HttpServerResponse.HttpServerResponse,
-	HttpServerError.HttpServerError,
-	HttpServerRequest.HttpServerRequest
-> => {
-	const rivetkitRegistry = setupRivetkitRegistry(registry, {
-		serverless: options,
-	});
-	return HttpEffect.fromWebHandler((request) =>
-		rivetkitRegistry.handler(request),
+	Effect.Effect<
+		HttpServerResponse.HttpServerResponse,
+		HttpServerError.HttpServerError,
+		HttpServerRequest.HttpServerRequest
+	>
+> =>
+	Effect.map(
+		setupRivetkitRegistry(registry, {
+			serverless: options,
+		}),
+		(rivetkitRegistry) =>
+			HttpEffect.fromWebHandler((request) =>
+				rivetkitRegistry.handler(request),
+			),
 	);
-};
 
 export type ToHttpEffectOptions = ServerlessOptions;
 
@@ -208,10 +215,12 @@ export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	const context = yield* Layer.build(
 		registryLayer.pipe(Layer.provideMerge(RivetLogger.defaultLayer)),
 	);
-	// @effect-diagnostics-next-line returnEffectInGen:off
-	return makeHttpEffect(Context.get(context, Registry), options).pipe(
-		Effect.provide(context),
+	const httpEffect = yield* makeHttpEffect(
+		Context.get(context, Registry),
+		options,
 	);
+	// @effect-diagnostics-next-line returnEffectInGen:off
+	return httpEffect.pipe(Effect.provide(context));
 });
 
 export type ToWebHandlerOptions = ServerlessOptions & {
@@ -253,11 +262,12 @@ export const toWebHandler = <E>(
 
 	return HttpEffect.toWebHandlerLayerWith(registryLayerWithLogging, {
 		toHandler: (context) =>
-			Effect.succeed(
+			Effect.map(
 				makeHttpEffect(
 					Context.get(context, Registry),
 					serverlessOptions,
-				).pipe(Effect.provide(context)),
+				),
+				(httpEffect) => httpEffect.pipe(Effect.provide(context)),
 			),
 		middleware,
 		memoMap,
