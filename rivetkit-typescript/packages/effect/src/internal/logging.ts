@@ -1,10 +1,11 @@
 import {
-	Cause,
 	Config,
 	Context,
 	Effect,
 	Logger,
 	Option,
+	Predicate,
+	Record as EffectRecord,
 	type LogLevel,
 	References,
 } from "effect";
@@ -25,66 +26,52 @@ export class BaseLogger extends Context.Service<
 	RivetkitLog.Logger
 >()("@rivetkit/effect/RivetLogger/BaseLogger") {}
 
-const PinoLevelByEffectLevel: Record<LogLevel.LogLevel, RivetkitLog.LogLevel> =
-	{
-		All: "trace",
-		Trace: "trace",
-		Debug: "debug",
-		Info: "info",
-		Warn: "warn",
-		Error: "error",
-		Fatal: "fatal",
-		None: "silent",
-	};
+const RivetkitLogLevels = RivetkitLog.LogLevelSchema.options;
 
-export const toPinoLevel = (
-	logLevel: LogLevel.LogLevel,
-): RivetkitLog.LogLevel => PinoLevelByEffectLevel[logLevel];
+const EffectLevelByRivetkitLevel = {
+	trace: "Trace",
+	debug: "Debug",
+	info: "Info",
+	warn: "Warn",
+	error: "Error",
+	fatal: "Fatal",
+	silent: "None",
+} as const satisfies Record<
+	RivetkitLog.LogLevel,
+	Exclude<LogLevel.LogLevel, "All">
+>;
 
-const EffectLevelByPinoLevel: Record<RivetkitLog.LogLevel, LogLevel.LogLevel> =
-	{
-		trace: "Trace",
-		debug: "Debug",
-		info: "Info",
-		warn: "Warn",
-		error: "Error",
-		fatal: "Fatal",
-		silent: "None",
-	};
+const RivetkitLevelByEffectLevel = {
+	...Object.fromEntries(
+		RivetkitLogLevels.map((level) => [
+			EffectLevelByRivetkitLevel[level],
+			level,
+		]),
+	),
+	All: "trace",
+} as Record<LogLevel.LogLevel, RivetkitLog.LogLevel>;
 
-const pinoLogLevelFromEnv = Config.string("RIVET_LOG_LEVEL").pipe(
-	Config.map((value) => {
-		const pinoLevel = value.toLowerCase();
-		if (pinoLevel in EffectLevelByPinoLevel) {
-			return EffectLevelByPinoLevel[pinoLevel as RivetkitLog.LogLevel];
-		}
-
-		return "Info";
-	}),
-);
-
-const logLevelFromEnv = Config.logLevel("RIVET_LOG_LEVEL").pipe(
-	Config.orElse(() => pinoLogLevelFromEnv),
+const rivetLogLevelFromEnv = Config.string("RIVET_LOG_LEVEL").pipe(
 	Effect.option,
+	Effect.map((maybeRivetLogLevel) => {
+		if (Option.isNone(maybeRivetLogLevel)) return Option.none();
+
+		const parsed = RivetkitLog.LogLevelSchema.safeParse(
+			maybeRivetLogLevel.value.toLowerCase(),
+		);
+		return parsed.success ? Option.some(parsed.data) : Option.none();
+	}),
 );
 
 export const makeDefaultBaseLogger: Effect.Effect<RivetkitLog.Logger> =
 	Effect.gen(function* () {
-		const context = yield* Effect.context();
-		const providedMinimumLogLevel = Context.getOrUndefined(
-			context,
-			References.MinimumLogLevel,
-		);
-		const envLogLevel = yield* logLevelFromEnv;
-		const logLevel =
-			providedMinimumLogLevel !== undefined
-				? providedMinimumLogLevel
-				: envLogLevel._tag === "Some"
-					? envLogLevel.value
-					: yield* References.MinimumLogLevel;
+		const maybeRivetLogLevel = yield* rivetLogLevelFromEnv;
+		const logLevel = Option.isSome(maybeRivetLogLevel)
+			? maybeRivetLogLevel.value
+			: RivetkitLevelByEffectLevel[yield* References.MinimumLogLevel];
 
 		return yield* Effect.sync(() =>
-			RivetkitLog.makeDefaultLogger(toPinoLevel(logLevel)),
+			RivetkitLog.makeDefaultLogger(logLevel),
 		);
 	});
 
@@ -128,59 +115,64 @@ export function serializeActorKey(key: Rivetkit.ActorKey): string {
 		.join(KEY_SEPARATOR);
 }
 
-function structuredValue(value: unknown): unknown {
-	if (value instanceof Error) {
-		return value;
-	}
+export function makeLogger(
+	baseLogger: RivetkitLog.Logger,
+): Logger.Logger<unknown, void> {
+	return Logger.make((options) => {
+		if (options.logLevel === "None") return;
+		const rivetkitLevel = RivetkitLevelByEffectLevel[options.logLevel];
+		const structured = Logger.formatStructured.log(options);
+		const { msg, fields: messageFields } = extractMessage(
+			structured.message,
+		);
+		const fields: Record<string, unknown> = {
+			...messageFields,
+			...structured.annotations,
+			fiberId: structured.fiberId,
+		};
 
-	return value;
+		if (!EffectRecord.isEmptyRecord(structured.spans)) {
+			fields.spans = structured.spans;
+		}
+		if (structured.cause !== undefined) {
+			fields.cause = structured.cause;
+		}
+
+		const logger = baseLogger[rivetkitLevel];
+		if (msg === undefined) {
+			logger.call(baseLogger, fields);
+		} else {
+			logger.call(baseLogger, fields, msg);
+		}
+	});
 }
 
-function extractMessageAndFields(message: unknown): {
+function extractMessage(message: unknown): {
 	readonly msg: string | undefined;
 	readonly fields: Record<string, unknown>;
 } {
 	const values = Array.isArray(message) ? message : [message];
-	if (values.length === 0) {
-		return { msg: undefined, fields: {} };
-	}
-
-	const [first, ...rest] = values;
 	const fields: Record<string, unknown> = {};
+	const args: Array<unknown> = [];
 	let msg: string | undefined;
 
-	if (first instanceof Error) {
-		fields.error = first;
-		msg = first.message;
-	} else if (first !== null && typeof first === "object") {
-		const firstFields = first as Record<string, unknown>;
-		for (const [key, value] of Object.entries(firstFields)) {
-			if (key === "msg") {
-				if (value !== undefined) {
-					msg = String(value);
-				}
-			} else {
-				fields[key] = structuredValue(value);
-			}
-		}
-	} else if (first !== undefined) {
-		msg = String(first);
-	}
-
-	const args: Array<unknown> = [];
-	for (const value of rest) {
-		if (value instanceof Error) {
+	for (const [index, value] of values.entries()) {
+		if (Predicate.isError(value)) {
 			fields.error = value;
-		} else if (
-			value !== null &&
-			typeof value === "object" &&
-			!Array.isArray(value)
-		) {
-			for (const [key, fieldValue] of Object.entries(
-				value as Record<string, unknown>,
-			)) {
-				fields[key] = structuredValue(fieldValue);
+			if (index === 0) msg = value.message;
+		} else if (isStructuredError(value)) {
+			fields.error = value;
+			if (index === 0) msg = value.error;
+		} else if (Predicate.isObject(value)) {
+			if (index === 0) {
+				const { msg: valueMsg, ...rest } = value;
+				Object.assign(fields, rest);
+				if (valueMsg !== undefined) msg = String(valueMsg);
+			} else {
+				Object.assign(fields, value);
 			}
+		} else if (index === 0) {
+			msg = value === undefined ? undefined : String(value);
 		} else {
 			args.push(value);
 		}
@@ -193,42 +185,13 @@ function extractMessageAndFields(message: unknown): {
 	return { msg, fields };
 }
 
-export function makeEffectLogger(
-	baseLogger: RivetkitLog.Logger,
-): Logger.Logger<unknown, void> {
-	return Logger.make(({ cause, date, fiber, logLevel, message }) => {
-		const { msg, fields } = extractMessageAndFields(message);
-
-		for (const [key, value] of Object.entries(
-			fiber.getRef(References.CurrentLogAnnotations),
-		)) {
-			fields[key] = structuredValue(value);
-		}
-
-		const spans: Record<string, number> = {};
-		for (const [label, startTime] of fiber.getRef(
-			References.CurrentLogSpans,
-		)) {
-			spans[label] = date.getTime() - startTime;
-		}
-		if (Object.keys(spans).length > 0) {
-			fields.spans = spans;
-		}
-
-		if (cause.reasons.length > 0) {
-			fields.cause = Cause.pretty(cause);
-		}
-
-		const pinoLevel = toPinoLevel(logLevel);
-		if (pinoLevel === "silent") {
-			return;
-		}
-
-		const logger = baseLogger[pinoLevel];
-		if (msg === undefined) {
-			logger.call(baseLogger, fields);
-		} else {
-			logger.call(baseLogger, fields, msg);
-		}
-	});
+function isStructuredError(
+	value: unknown,
+): value is { readonly error: string; readonly name: string } {
+	return (
+		Predicate.hasProperty(value, "error") &&
+		Predicate.hasProperty(value, "name") &&
+		Predicate.isString(value.error) &&
+		Predicate.isString(value.name)
+	);
 }

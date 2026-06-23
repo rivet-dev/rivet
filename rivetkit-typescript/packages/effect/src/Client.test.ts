@@ -80,11 +80,12 @@ describe("Client", () => {
 					),
 				);
 
-				assert.deepStrictEqual(entries[0], {
-					level: "info",
-					fields: { clientId: "test-client" },
-					msg: "client effect log",
-				});
+				const entry = entries[0];
+				assert.ok(entry !== undefined);
+				assert.strictEqual(entry.level, "info");
+				assert.strictEqual(entry.msg, "client effect log");
+				assert.strictEqual(entry.fields.clientId, "test-client");
+				assert.strictEqual(typeof entry.fields.fiberId, "string");
 				assert.ok(
 					entries.some(
 						(entry) =>

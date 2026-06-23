@@ -1,12 +1,5 @@
 import { assert, describe, it } from "@effect/vitest";
-import {
-	Config,
-	ConfigProvider,
-	Effect,
-	Layer,
-	Logger,
-	References,
-} from "effect";
+import { ConfigProvider, Effect, Logger, References } from "effect";
 import * as RivetkitLog from "rivetkit/log";
 import * as Logging from "./logging.ts";
 
@@ -65,23 +58,21 @@ describe("internal/logging", () => {
 					key: "room-1",
 					actorId: "actor-1",
 				}),
-				Effect.provide(
-					Logger.layer([Logging.makeEffectLogger(baseLogger)]),
-				),
+				Effect.provide(Logger.layer([Logging.makeLogger(baseLogger)])),
 			);
 
-			assert.deepStrictEqual(entries, [
-				{
-					level: "info",
-					fields: {
-						roomId: "abc",
-						actor: "ChatRoom",
-						key: "room-1",
-						actorId: "actor-1",
-					},
-					msg: "room awake",
-				},
-			]);
+			const entry = entries[0];
+			assert.ok(entry !== undefined);
+			assert.strictEqual(entry.level, "info");
+			assert.strictEqual(entry.msg, "room awake");
+			assert.deepStrictEqual(entry.fields, {
+				roomId: "abc",
+				actor: "ChatRoom",
+				key: "room-1",
+				actorId: "actor-1",
+				fiberId: entry.fields.fiberId,
+			});
+			assert.strictEqual(typeof entry.fields.fiberId, "string");
 		}),
 	);
 
@@ -92,9 +83,7 @@ describe("internal/logging", () => {
 			const error = new Error("room failed to wake");
 
 			yield* Effect.logError(error).pipe(
-				Effect.provide(
-					Logger.layer([Logging.makeEffectLogger(baseLogger)]),
-				),
+				Effect.provide(Logger.layer([Logging.makeLogger(baseLogger)])),
 			);
 
 			const entry = entries[0];
@@ -115,9 +104,7 @@ describe("internal/logging", () => {
 				actorId: "actor-1",
 				action: "SendMessage",
 			}).pipe(
-				Effect.provide(
-					Logger.layer([Logging.makeEffectLogger(baseLogger)]),
-				),
+				Effect.provide(Logger.layer([Logging.makeLogger(baseLogger)])),
 			);
 
 			const entry = entries[0];
@@ -130,17 +117,7 @@ describe("internal/logging", () => {
 		}),
 	);
 
-	it.effect(
-		"uses References.MinimumLogLevel when creating the base logger",
-		() =>
-			Effect.gen(function* () {
-				const baseLogger = yield* Logging.makeDefaultBaseLogger;
-
-				assert.strictEqual(baseLogger.level, "debug");
-			}).pipe(Effect.provideService(References.MinimumLogLevel, "Debug")),
-	);
-
-	it.effect("accepts the shared Pino RIVET_LOG_LEVEL values", () =>
+	it.effect("accepts RIVET_LOG_LEVEL values", () =>
 		Effect.gen(function* () {
 			const baseLogger = yield* Logging.makeDefaultBaseLogger;
 
@@ -157,11 +134,62 @@ describe("internal/logging", () => {
 		),
 	);
 
-	it.effect("prefers References.MinimumLogLevel over shared env values", () =>
+	it.effect("accepts uppercase RIVET_LOG_LEVEL values", () =>
 		Effect.gen(function* () {
 			const baseLogger = yield* Logging.makeDefaultBaseLogger;
 
 			assert.strictEqual(baseLogger.level, "debug");
+		}).pipe(
+			Effect.provideService(
+				ConfigProvider.ConfigProvider,
+				ConfigProvider.fromEnv({
+					env: {
+						RIVET_LOG_LEVEL: "DEBUG",
+					},
+				}),
+			),
+		),
+	);
+
+	it.effect("ignores Effect-only RIVET_LOG_LEVEL values", () =>
+		Effect.gen(function* () {
+			const baseLogger = yield* Logging.makeDefaultBaseLogger;
+
+			assert.strictEqual(baseLogger.level, "info");
+		}).pipe(
+			Effect.provideService(References.MinimumLogLevel, "Info"),
+			Effect.provideService(
+				ConfigProvider.ConfigProvider,
+				ConfigProvider.fromEnv({
+					env: {
+						RIVET_LOG_LEVEL: "None",
+					},
+				}),
+			),
+		),
+	);
+
+	it.effect("falls back to References.MinimumLogLevel without env", () =>
+		Effect.gen(function* () {
+			const baseLogger = yield* Logging.makeDefaultBaseLogger;
+
+			assert.strictEqual(baseLogger.level, "debug");
+		}).pipe(
+			Effect.provideService(References.MinimumLogLevel, "Debug"),
+			Effect.provideService(
+				ConfigProvider.ConfigProvider,
+				ConfigProvider.fromEnv({
+					env: {},
+				}),
+			),
+		),
+	);
+
+	it.effect("RIVET_LOG_LEVEL overrides References.MinimumLogLevel", () =>
+		Effect.gen(function* () {
+			const baseLogger = yield* Logging.makeDefaultBaseLogger;
+
+			assert.strictEqual(baseLogger.level, "silent");
 		}).pipe(
 			Effect.provideService(References.MinimumLogLevel, "Debug"),
 			Effect.provideService(
@@ -175,49 +203,6 @@ describe("internal/logging", () => {
 		),
 	);
 
-	it.effect("preserves an explicit Info minimum log level", () =>
-		Effect.gen(function* () {
-			const baseLogger = yield* Logging.makeDefaultBaseLogger;
-
-			assert.strictEqual(baseLogger.level, "info");
-		}).pipe(
-			Effect.provideService(References.MinimumLogLevel, "Info"),
-			Effect.provideService(
-				ConfigProvider.ConfigProvider,
-				ConfigProvider.fromEnv({
-					env: {
-						RIVET_LOG_LEVEL: "silent",
-					},
-				}),
-			),
-		),
-	);
-
-	it.effect(
-		"uses Config.logLevel values provided to References.MinimumLogLevel",
-		() =>
-			Effect.gen(function* () {
-				const baseLogger = yield* Logging.makeDefaultBaseLogger;
-
-				assert.strictEqual(baseLogger.level, "trace");
-			}).pipe(
-				Effect.provide(
-					Layer.effect(
-						References.MinimumLogLevel,
-						Config.logLevel("RIVET_LOG_LEVEL"),
-					),
-				),
-				Effect.provideService(
-					ConfigProvider.ConfigProvider,
-					ConfigProvider.fromEnv({
-						env: {
-							RIVET_LOG_LEVEL: "Trace",
-						},
-					}),
-				),
-			),
-	);
-
 	it.effect(
 		"uses References.CurrentLogLevel for plain Effect.log calls",
 		() =>
@@ -229,17 +214,18 @@ describe("internal/logging", () => {
 					Effect.provideService(References.CurrentLogLevel, "Debug"),
 					Effect.provideService(References.MinimumLogLevel, "Debug"),
 					Effect.provide(
-						Logger.layer([Logging.makeEffectLogger(baseLogger)]),
+						Logger.layer([Logging.makeLogger(baseLogger)]),
 					),
 				);
 
-				assert.deepStrictEqual(entries, [
-					{
-						level: "debug",
-						fields: {},
-						msg: "plain log",
-					},
-				]);
+				const entry = entries[0];
+				assert.ok(entry !== undefined);
+				assert.strictEqual(entry.level, "debug");
+				assert.strictEqual(entry.msg, "plain log");
+				assert.deepStrictEqual(entry.fields, {
+					fiberId: entry.fields.fiberId,
+				});
+				assert.strictEqual(typeof entry.fields.fiberId, "string");
 			}),
 	);
 
@@ -254,7 +240,7 @@ describe("internal/logging", () => {
 					Effect.provideService(References.CurrentLogLevel, "None"),
 					Effect.provideService(References.MinimumLogLevel, "All"),
 					Effect.provide(
-						Logger.layer([Logging.makeEffectLogger(baseLogger)]),
+						Logger.layer([Logging.makeLogger(baseLogger)]),
 					),
 				);
 
@@ -272,16 +258,13 @@ describe("internal/logging", () => {
 				yield* Effect.logInfo("checkout complete").pipe(
 					Effect.withLogSpan("checkout"),
 					Effect.provide(
-						Logger.layer([Logging.makeEffectLogger(baseLogger)]),
+						Logger.layer([Logging.makeLogger(baseLogger)]),
 					),
 				);
 
 				assert.strictEqual(entries.length, 1);
 				assert.strictEqual(entries[0]?.level, "info");
 				assert.strictEqual(entries[0]?.msg, "checkout complete");
-				assert.deepStrictEqual(Object.keys(entries[0]?.fields ?? {}), [
-					"spans",
-				]);
 				const spans = entries[0]?.fields.spans as
 					| Record<string, unknown>
 					| undefined;

@@ -3,7 +3,7 @@ import * as RivetkitLog from "rivetkit/log";
 import {
 	BaseLogger,
 	getOrCreateBaseLogger,
-	makeEffectLogger,
+	makeLogger,
 } from "./internal/logging.ts";
 
 /**
@@ -25,7 +25,7 @@ import {
  */
 export const fromPino = (
 	baseLogger: RivetkitLog.Logger,
-): Logger.Logger<unknown, void> => makeEffectLogger(baseLogger);
+): Logger.Logger<unknown, void> => makeLogger(baseLogger);
 
 /**
  * Builds a logging layer from a custom Pino-compatible logger.
@@ -51,7 +51,7 @@ export const layerFromPino = (
 /**
  * Default RivetKit Effect logging layer.
  *
- * The layer creates a base logger from `References.MinimumLogLevel` and installs
+ * The layer creates a base logger from RivetKit log configuration and installs
  * the Effect logger adapter. Applications that want custom formatting or
  * transports should provide {@link layerFromPino} instead.
  */
