@@ -177,7 +177,11 @@ fn print_line(entry: &LogEntry, json: bool, color: bool) -> Result<()> {
 	}
 
 	let severity = if color {
-		format!("\x1b[{}m{}\x1b[0m", severity_color(&entry.severity), entry.severity)
+		format!(
+			"\x1b[{}m{}\x1b[0m",
+			severity_color(&entry.severity),
+			entry.severity
+		)
 	} else {
 		entry.severity.clone()
 	};
