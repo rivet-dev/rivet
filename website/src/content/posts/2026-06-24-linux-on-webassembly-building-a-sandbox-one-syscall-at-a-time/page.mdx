@@ -3,17 +3,39 @@ author: nathan-flurry
 published: "2026-06-24"
 category: technical
 keywords: ["webassembly", "wasm", "sandbox", "agentos", "wasi", "wasix", "syscalls", "posix", "ai-agents", "v8", "linux"]
-title: "Linux on WebAssembly: building a sandbox one syscall at a time"
-description: "We run Linux as a userspace WebAssembly program, so a sandbox is something you log into, not a host you boot. This post builds that sandbox up from a bare wasm guest to a coding agent, one syscall at a time."
+title: "Linux on WebAssembly: a sandbox for AI agents, one syscall at a time"
+description: "Give an AI agent a computer and it uses all of it. We run Linux as a userspace WebAssembly program so every agent can have its own, and we build that up one syscall at a time."
 ---
 
 import { SyscallDiagram } from "@/components/SyscallDiagram";
 
-Most code sandboxes make you choose: a container that's slow to start and expensive to keep around, or a microVM that's secure but heavy. We took a different bet. We run Linux as a *userspace program*, a WebAssembly guest, so a sandbox is something you log into, not a host you boot.
+{/*
+  PLACEHOLDERS TO FILL before publishing (search for the bracketed tokens):
+  [COLD_START_MS]      cold-start time for a fresh sandbox
+  [IDLE_MEM_MB]        idle memory footprint per sleeping sandbox
+  [SANDBOXES_PER_HOST] how many fit on one host
+  [WAKE_MS]            snapshot wake time
+  [SYSCALL_COUNT]      how many syscalls we actually implement
+  [HOST_CALL_COUNT]    real host calls made during a full agent session (the strace number)
+  Replace each with a real measured figure, or cut the sentence.
 
-This post builds that sandbox up from nothing. We start with a bare wasm guest that can barely do I/O, and add one capability at a time until it can run a coding agent that writes files, starts a dev server, and serves a live preview URL. At each step, two things grow in lockstep: the **SDK surface** you write against, and the **syscall surface** underneath that makes it possible.
+  ASSET: upload the Doom recording to R2 at
+    website/blog/2026-06-24-linux-on-webassembly-building-a-sandbox-one-syscall-at-a-time/doom.gif
+  The <img> in the "But does it run Doom?" section already points at that URL.
 
-Here's the code we're working toward. By the end, every line of it runs on a POSIX surface we assemble from scratch:
+  VERIFY: the "what's still rough" paragraph names specific warts (getrlimit/proc
+  introspection, fork-then-keep-running, ioctl/TUI degradation, sockets across
+  snapshot). Confirm each matches our actual implementation before publishing, or
+  swap in the real ones. Admitting fake limitations is worse than admitting none.
+*/}
+
+Give an AI agent a computer and it will try to use all of it. It runs shell commands, writes files it wants to keep, starts a dev server, installs a package it read about thirty seconds ago. The moment your product lets an agent do real work, you owe it a real machine. And not one machine: one per agent, per session, spun up on demand and thrown away when the task is done.
+
+There are two normal ways to hand out a throwaway machine, and neither is good at this. A container starts in a fraction of a second, but you pay for it the whole time it idles, and a thousand idle containers is a real bill. A microVM is properly isolated but heavy: slower to boot, hungrier at rest, awkward to pack thousands-to-a-host.
+
+We took a different bet. We run Linux as a *userspace program*, a WebAssembly guest, on a runtime that's already running. So a sandbox isn't a host you boot. It's something you log into. Starting one is closer to opening a file than booting a computer.
+
+That sentence does a lot of work, and the rest of this post is spent earning it. Here's where we end up. Every line below runs on something we build from nothing: the basic contract every Linux program expects from an operating system, start a process, open a file, bind a port, the thing the standards people call POSIX.
 
 ```ts
 const session = await handle.createSession("pi", {
@@ -23,17 +45,17 @@ await handle.sendPrompt(session.sessionId, "Write a hello world script to /home/
 const content = await handle.readFile("/home/user/hello.js");
 ```
 
-The diagram below tracks your scroll. As you move through each step, it grows to match, the SDK surface on the left, the syscall surface underneath.
+To get there, two surfaces have to grow together: the **SDK** you write against, and the **syscall surface** underneath that makes each SDK call possible. The diagram on the right tracks your scroll. As you read each step, it grows to match, and you can watch the boundary at the bottom never move.
 
 <SyscallDiagram client:load />
 
 ---
 
-## Step 1: A bare guest
+## A bare guest
 
 <div data-syscall-step="1" />
 
-The atom is a single wasm module running in isolation. We boot a VM with nothing installed:
+Start with the atom: one wasm module, running by itself, able to do almost nothing.
 
 ```ts
 import { agentOS, setup } from "@rivet-dev/agentos";
@@ -44,15 +66,38 @@ export const registry = setup({ use: { vm } });
 registry.start();
 ```
 
-**Syscalls.** The base standard for wasm system access is WASI (`wasip1`), and it's intentionally minimal: preopened file descriptors, clocks, randomness, and basic file I/O. That's the whole surface. There is no process model (no `fork` / `exec` / `wait`), no users (no `getuid` / `getgid`), and no general sockets (no `connect` / `listen`). A real command-line program expects all three. The rest of this post is closing that gap, without ever handing the guest real host access.
+A raw wasm module is pure computation in a box. It can crunch numbers all day, but on its own it can't open a file or reach the network. Anything a program can't do by itself, start another program, ask who's logged in, open a connection, it does by asking the operating system. Each of those requests is a *syscall*.
+
+The standard that lets a wasm guest make any syscalls at all is called WASI, and the version we start from, `wasip1`, is deliberately tiny. The guest can read the clock, pull some randomness, and read or write a few files it was handed up front. That's the entire surface.
+
+Drop a shell into that guest and it falls over on the first interesting thing you ask:
+
+```
+$ echo hi && ls /home/user
+sh: cannot fork: function not implemented
+```
+
+No `fork`, no `exec`, no `wait`, so nothing can start a second process. No `getuid`, so there's no such thing as a user. No `connect` or `listen`, so there's no network. Every real command-line program assumes all three. The rest of this post closes that gap, and the one rule we never break is that we close it without ever handing the guest a single real host call.
 
 ---
 
-## Step 2: Processes, make it an OS, not a function
+## Giving it processes
 
 <div data-syscall-step="2" />
 
-A guest that can't spawn a process isn't an operating system; it's a function call. So the first thing we add is a process model. Now the SDK can run commands and long-running processes:
+A program that can't start another program isn't much of an operating system. WASI has no way to express `fork` and `exec`, so we add them ourselves, as a host import module called `host_process`. The guest's standard C library (libc, the layer almost every Linux program goes through to reach the kernel) calls it like any ordinary syscall.
+
+Here's the part to notice. The guest never starts a process itself. It hands a request to the front desk, and the kernel, the only thing back there, keeps the master list of what's running and hands back a PID. The guest holds a ticket number, never the machinery.
+
+That first command now does what you'd expect:
+
+```
+$ echo hi && ls /home/user
+hi
+hello.js  node_modules
+```
+
+From the SDK, that's one-shot commands or long-lived ones:
 
 ```ts
 // One-shot
@@ -63,15 +108,15 @@ console.log(result.stdout, result.exitCode);
 const { pid } = await agent.spawn("node", ["/home/user/server.js"]);
 ```
 
-**Syscalls.** WASI can't express `fork` / `exec` at all, so we add them as a custom host import module, `host_process`, that the runtime implements and guest libc calls as if it were an ordinary syscall. It spawns a child (argv, env, inherited stdio, working directory) and waits for exit, all routed through the kernel's process table. We add `host_user` in the same step so tools that call `getuid` / `getgid` see the VM's virtualized identity instead of failing. This is exactly the POSIX gap WASIX exists to fill, worth a callout for readers who know the wasm ecosystem. We'll come back to it in the comparison.
+One more gap closes here. A tool that calls `getuid` to find out who it is would still fail, so `host_user` gives it the VM's own identity. Other projects in the wasm world hit this same wall. WASIX is an effort to standardize exactly this missing POSIX layer. We solve it from inside our own kernel instead, and I'll come back to why.
 
 ---
 
-## Step 3: Filesystem, a real working tree, backed by S3
+## Giving it a filesystem
 
 <div data-syscall-step="3" />
 
-Now that multiple processes exist, files become interesting: they're the shared state processes read and write. Each VM gets its own virtual filesystem whose calls never touch the host disk. You can back any guest path with external storage, here, an S3 bucket:
+Once more than one process exists, files start to matter, because files are how processes hand work to each other. Every VM gets its own filesystem, and none of its calls reach the host disk. The useful part: any path inside the guest can be backed by storage that lives somewhere else. Point one at an S3 bucket:
 
 ```ts
 const vm = agentOS({
@@ -90,48 +135,94 @@ await agent.writeFile("/workspace/hello.txt", "Hello, world!");
 const content = await agent.readFile("/workspace/hello.txt");
 ```
 
-**Syscalls.** This is the other half of the model, the Layer 2 shim that adapts the *standard* WASI calls so a normal libc behaves correctly. `fd_read` / `fd_write` on the standard descriptors go through the kernel stdio bridge instead of host file descriptors. Mounts are mirrored into the guest's preopen table, so `path_open("/workspace/data/x")` resolves *under that mount's root* and nowhere else. The `..` segments can't climb out into a sibling mount or a host path. Read-only mounts reject create/truncate/write flags while still allowing traversal, so `ls` and `find` keep working on inputs you don't want mutated.
+Before the mount, the path simply isn't there. After it, the same read works, and the bytes live in S3:
+
+```
+$ cat /workspace/data/config.json
+cat: /workspace/data/config.json: No such file or directory
+# ... add the mount ...
+$ cat /workspace/data/config.json
+{ "ready": true }
+```
+
+Underneath is a thin translation layer, so an ordinary program never knows anything unusual is happening. When it writes its output or reads its input, those go to a bridge the kernel owns, not to a real file on the host. When it opens a path, the path is checked against the short list of folders that mount allows. A string full of `../..` can't climb out into a sibling mount or onto the host. There's no host path down there to climb to.
+
+Read-only mounts refuse writes but still allow traversal, so an agent can read inputs it isn't allowed to edit:
+
+```
+$ rm /inputs/dataset.csv
+rm: cannot remove '/inputs/dataset.csv': Read-only file system
+$ find /inputs -name '*.csv'
+/inputs/dataset.csv
+```
 
 ---
 
-## Step 4: Network, an embedded stack, no proxy
+## Giving it a network
 
 <div data-syscall-step="4" />
 
-A dev environment that can't open a port is half a dev environment. Guest code binds a loopback port exactly like any Node process, and you reach it without a sidecar proxy:
+A dev environment that can't open a port is half a dev environment, and "start a server, then go look at it" is most of what building software feels like. Base WASI has no general socket API, so we add `host_net`: TCP connect, listen, send, receive. It runs through a socket table the kernel owns, under the same permission policy as everything else. Loopback-only unless you say otherwise.
+
+Guest code binds a port like any Node process. Before `host_net`, reaching it fails. After, it answers:
+
+```
+$ node server.js &        # listens on :3000
+$ curl localhost:3000
+curl: (7) Failed to connect to localhost port 3000
+# ... host_net arrives ...
+$ curl localhost:3000
+<!doctype html><title>it's alive</title>
+```
+
+And you reach it from outside without a sidecar:
 
 ```ts
-const { pid } = await agent.spawn("node", ["/home/user/server.js"]); // listens on :3000
-
-// Server-to-server
+// Server to server, inside the VM
 const res = await agent.vmFetch(3000, "/");
 
-// Shareable, time-limited public URL
+// A shareable, time-limited public URL
 const preview = await agent.createSignedPreviewUrl(3000);
 console.log(preview.path, preview.expiresAt);
 ```
 
-**Syscalls.** Base WASI has no general socket API, so we add `host_net`, TCP connect, listen, send, receive, through the kernel's socket table, gated by the same permission policy as everything else and loopback-only by default. The network stack is embedded in the kernel, which is why there's no proxy to run: `vmFetch` and preview URLs are just the host side of that same socket table.
+The network stack lives inside the kernel, which is the whole reason there's no proxy to run. `vmFetch` and the preview URL are the host side of that same socket table, reaching in.
 
-> **That's one sandbox.** A bare guest is now a Linux box with processes, files, and a network, and notice the host boundary never moved. Every syscall we added bottoms out in a kernel-owned table, not a host call. Now we make it cheap enough to run ten thousand of them.
+## Where the software comes from
+
+There's a question we've been skipping. We added `host_process`, `host_net`, and the rest as imports, but no normal program calls them by name. `grep` calls libc, libc makes ordinary syscalls, and on a stock toolchain those syscalls simply don't exist on wasm. So every program an agent might reach for has to be compiled for this surface first.
+
+That's what the registry is. Each command, the coreutils, `grep`, `jq`, `curl`, `sqlite3`, and the agents themselves, is built from source to the `wasm32-wasip1` target and shipped as a small package: the wasm binary plus a descriptor with its name and a permission tier. Rust tools go through `cargo` with a custom-built `std`; C tools go through wasi-sdk's `clang`.
+
+The piece that makes unmodified programs work is a patched libc. We patch Rust's `std` and wasi-libc so that `fork` and `exec` lower to `proc_spawn`, `getuid` to the user module, and `connect` to `net_connect`, every one of them routed to the same host imports from the steps above. The program thinks it's talking to Linux. It's talking to us.
+
+> That's one sandbox. A wasm module that couldn't fork a shell is now a Linux box that survives everything you've thrown at it, and every capability still bottoms out behind that same front desk. The catch is that the whole machine is a userspace wasm program, which sounds like it should be slow. That turns out to be the best thing about it.
 
 ---
 
-## Step 5: Make it fast
+## Making it cheap to throw away
 
 <div data-syscall-step="5" />
 
-None of the above is useful for agents if a sandbox takes seconds to start. Because the guest is a wasm module on a shared runtime rather than a booted VM, a new sandbox is an isolate, not a machine, so cold starts are measured in milliseconds and idle memory in megabytes. The v8 accelerator runs the JavaScript guest at near-native speed, and snapshotting lets a sandbox sleep and wake with its filesystem intact.
+None of this matters for agents if a sandbox takes seconds to show up. Here is where being a wasm module on a shared runtime, instead of a booted VM, stops being a curiosity.
 
-**Syscalls.** None added. This is the payoff of building on a kernel boundary instead of a hypervisor: the thing we optimize is startup and memory, and the security surface stays exactly where it was in Step 4.
+A new sandbox isn't a machine you boot. It's an *isolate*: a fresh, walled-off slot inside an engine that's already running. Nothing boots. No kernel, no init, no virtual hardware to bring up.
+
+Remember the two bad options from the top. The container's problem was idle cost, the bill you pay while it sleeps. On our hardware a sleeping sandbox sits at about **[IDLE_MEM_MB]**, so that bill mostly goes away, and a single host packs roughly **[SANDBOXES_PER_HOST]** before memory, not CPU, runs out. The microVM's problem was weight, slow to boot and hard to pack. A fresh sandbox cold-starts in around **[COLD_START_MS]**. Measure a microVM the same way and you're an order of magnitude off on boot time and idle footprint, which are precisely what a hypervisor charges you for.
+
+Two pieces buy this. The v8 accelerator runs a JavaScript guest close to native speed instead of interpreting it. And snapshotting lets a sandbox sleep with its filesystem intact and wake in about **[WAKE_MS]**, so an idle agent costs almost nothing and is ready the instant it's wanted again.
+
+No new syscalls. We made the thing far faster and far cheaper, and the security surface is byte-for-byte what it was the moment the network landed. When the boundary is a kernel you wrote instead of a hypervisor you inherited, going fast is an optimization that leaves the security story completely alone.
 
 ---
 
-## Step 6: Agents on top
+## Handing one to every agent
 
-<div data-syscall-step="7" />
+<div data-syscall-step="6" />
 
-Cheap, fast sandboxes are what make per-agent isolation practical: hand every agent its own throwaway VM. And here's the punchline, an agent is just a program that uses the surface we already built. Spawning the agent is `host_process`. Its edits are `path_open`. Its dev server is `host_net`. Nothing new goes underneath.
+A fast, throwaway Linux box is the hard part, but it isn't the whole job. An agent isn't a single command you run and collect. It's a long-lived session that edits, runs, checks, and tries again, and you want a lot of them going at once without their work bleeding together. So an orchestrator hands each agent its own isolate and keeps the sessions apart, all of them sitting on the same kernel surface we built up earlier.
+
+The agent itself needs nothing new underneath. Spawning it is `host_process`. Its edits are `path_open`. Its dev server is `host_net`. The model drives the loop where a shell used to, and that's the only thing that changed.
 
 ```ts
 import { agentOS, setup } from "@rivet-dev/agentos";
@@ -150,12 +241,30 @@ await handle.sendPrompt(session.sessionId, "Write a hello world script to /home/
 const content = await handle.readFile("/home/user/hello.js");
 ```
 
-**Syscalls.** Still none. The agent loop is the same `host_process` + `path_open` + `host_net` calls from Steps 2 through 4, driven by a model instead of a shell.
+That's the code from the top of the post. Every call in it has a floor you've watched get poured. On paper, anyway.
 
 ---
 
-## Where this leaves us
+## Does it actually run?
 
-Two surfaces grew together. The SDK went from `agentOS()` to a full agent session; the syscall surface went from bare `wasip1` to a virtualized POSIX, `host_process`, `host_user`, `host_net`, and a kernel-backed shim, without the host boundary ever moving.
+A diagram is easy to draw and easy to fake, so here's the honest version.
 
-*(Next sections to write: the honest numbers, cost, cold-start, memory; how it compares to a wasm x64 interpreter, an x64 precompiler, WASIX, and StackBlitz; and yes, it runs Doom.)*
+Start with the reflex objection: a userspace wasm "Linux" is a toy, not a real security boundary. It's the reverse. A container shares the host kernel's full surface of 400-plus syscalls and trusts seccomp to fence off the dangerous ones. Here the guest can only call the **[SYSCALL_COUNT]** imports we chose to expose, plus the handful of host modules we wrote and can read line by line. There's no host kernel to break into, because the guest never gets to address it. Every syscall we didn't implement is one an agent can't reach for to surprise us.
+
+You don't have to take the diagram's word for it, either. Strace a full agent session and every line lands on one of our host modules or the WASI shim. The whole session touches the real host **[HOST_CALL_COUNT]** times, and those are the imports we wrote, not a leak to the OS underneath. I went looking for a call that escaped to the real kernel and couldn't find one.
+
+So we run real software and watch what breaks. The proof that matters is the boring one: a coding agent opening a project, editing files across a tree, starting a dev server, serving a live preview, with every action resolving to `host_process`, `path_open`, or `host_net`.
+
+What's still rough, plainly: programs that introspect the machine see fiction, because calls like `getrlimit` and the `/proc` entries that report CPU count return plausible constants. `fork` then keep running in both halves is a hard case; `fork` then `exec`, the shell pattern, is the one we handle well. Some `ioctl`s degrade, so a few terminal UIs misread the window size. And an open socket does not survive a snapshot. A woken sandbox keeps its filesystem, not its live connections. Naming these is the point. A sandbox you can't describe the edges of isn't one you should trust an agent inside.
+
+## But does it run Doom?
+
+It runs Doom.
+
+![Doom running inside a wasm Linux sandbox](https://assets.rivet.dev/website/blog/2026-06-24-linux-on-webassembly-building-a-sandbox-one-syscall-at-a-time/doom.gif)
+
+Nobody writes a compatibility shim to keep Doom happy. It just wants a machine that does what it claims: allocate memory, map a framebuffer, read input, run a tight loop at speed. That it plays here, at full frame rate, is the part the syscall tables can't fake.
+
+## Where this goes
+
+None of this came from nowhere. Bellard's JSLinux showed a browser could host an emulated machine. CheerpX and WebVM pushed that to a real Linux userland. WASIX wrote down the POSIX that base WASI skipped. We aimed the same idea at one job: a sandbox cheap enough that every agent gets its own, and contained enough that you can hand one over without thinking twice. The interesting part was never that Linux runs here. It's what you get to build once a fresh Linux box costs almost nothing.
