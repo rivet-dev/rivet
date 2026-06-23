@@ -17,6 +17,24 @@ use crate::{
 	versionstamp::{generate_versionstamp, substitute_raw_versionstamp},
 };
 
+/// Copy bytes borrowed from a rocksdb iterator into an owned `Vec`.
+///
+/// RocksDB hands back a null data pointer for zero-length keys and values.
+/// Copying from a null pointer (which `<[u8]>::to_vec` does internally via
+/// `ptr::copy_nonoverlapping`) violates its non-null precondition and aborts the
+/// process on builds compiled with UB checks (debug assertions) enabled, even
+/// though the copy length is zero. This is also why the boxing `DBIterator`
+/// adapter must be avoided here: its `Iterator::next` unconditionally boxes the
+/// value via `Box::<[u8]>::from(&[])`, hitting the same null-pointer copy. Guard
+/// the empty case so we never copy from the null pointer.
+fn iter_bytes_to_vec(bytes: &[u8]) -> Vec<u8> {
+	if bytes.is_empty() {
+		Vec::new()
+	} else {
+		bytes.to_vec()
+	}
+}
+
 pub enum TransactionCommand {
 	Get {
 		key: Vec<u8>,
@@ -174,67 +192,62 @@ impl TransactionTask {
 		match (or_equal, offset) {
 			(false, 1) => {
 				// first_greater_or_equal: find first key >= search_key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-					read_opts,
-				);
-				for item in iter {
-					let (k, _v) =
-						item.context("failed to iterate rocksdb for first_greater_or_equal")?;
-					return Ok(Some(k.to_vec().into()));
-				}
-				Ok(None)
+				let mut iter = txn.raw_iterator_opt(read_opts);
+				iter.seek(key);
+				let result = iter.key().map(iter_bytes_to_vec);
+				iter.status()
+					.context("failed to iterate rocksdb for first_greater_or_equal")?;
+				Ok(result.map(Into::into))
 			}
 			(true, 1) => {
 				// first_greater_than: find first key > search_key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-					read_opts,
-				);
-				for item in iter {
-					let (k, _v) =
-						item.context("failed to iterate rocksdb for first_greater_than")?;
+				let mut iter = txn.raw_iterator_opt(read_opts);
+				iter.seek(key);
+				while iter.valid() {
+					let k = iter.key().expect("iterator should be valid");
 					// Skip if it's the exact key
-					if k.as_ref() == key {
+					if k == key {
+						iter.next();
 						continue;
 					}
-					return Ok(Some(k.to_vec().into()));
+					return Ok(Some(iter_bytes_to_vec(k).into()));
 				}
+				iter.status()
+					.context("failed to iterate rocksdb for first_greater_than")?;
 				Ok(None)
 			}
 			(false, 0) => {
 				// last_less_than: find last key < search_key
 				// Use reverse iterator starting just before the key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Reverse),
-					read_opts,
-				);
-
-				for item in iter {
-					let (k, _v) = item.context("failed to iterate rocksdb for last_less_than")?;
+				let mut iter = txn.raw_iterator_opt(read_opts);
+				iter.seek_for_prev(key);
+				while iter.valid() {
+					let k = iter.key().expect("iterator should be valid");
 					// We want strictly less than
-					if k.as_ref() < key {
-						return Ok(Some(k.to_vec().into()));
+					if k < key {
+						return Ok(Some(iter_bytes_to_vec(k).into()));
 					}
+					iter.prev();
 				}
+				iter.status()
+					.context("failed to iterate rocksdb for last_less_than")?;
 				Ok(None)
 			}
 			(true, 0) => {
 				// last_less_or_equal: find last key <= search_key
 				// Use reverse iterator starting from the key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Reverse),
-					read_opts,
-				);
-
-				for item in iter {
-					let (k, _v) =
-						item.context("failed to iterate rocksdb for last_less_or_equal")?;
+				let mut iter = txn.raw_iterator_opt(read_opts);
+				iter.seek_for_prev(key);
+				while iter.valid() {
+					let k = iter.key().expect("iterator should be valid");
 					// We want less than or equal
-					if k.as_ref() <= key {
-						return Ok(Some(k.to_vec().into()));
+					if k <= key {
+						return Ok(Some(iter_bytes_to_vec(k).into()));
 					}
+					iter.prev();
 				}
+				iter.status()
+					.context("failed to iterate rocksdb for last_less_or_equal")?;
 				Ok(None)
 			}
 			_ => {
@@ -261,20 +274,21 @@ impl TransactionTask {
 		}
 
 		// Create an iterator to find the key
-		let iter = txn.iterator_opt(
-			rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-			ReadOptions::default(),
-		);
+		let mut iter = txn.raw_iterator_opt(ReadOptions::default());
+		iter.seek(key);
 
 		let mut keys: Vec<Vec<u8>> = Vec::new();
 
-		for item in iter {
-			let (k, _v) = item.context("failed to iterate rocksdb for key selector")?;
-			keys.push(k.to_vec());
+		while iter.valid() {
+			let k = iter.key().expect("iterator should be valid");
+			keys.push(iter_bytes_to_vec(k));
 			if keys.len() > (offset.abs() + 1) as usize {
 				break;
 			}
+			iter.next();
 		}
+		iter.status()
+			.context("failed to iterate rocksdb for key selector")?;
 
 		// Apply the selector logic
 		let idx = if or_equal {
@@ -328,19 +342,28 @@ impl TransactionTask {
 						.context("failed to delete key from rocksdb")?;
 				}
 				Operation::ClearRange { begin, end } => {
-					// RocksDB doesn't have a native clear_range, so we need to iterate and delete
+					// RocksDB doesn't have a native clear_range, so we need to iterate and delete.
+					// Collect the in-range keys first, then delete after dropping the iterator, so
+					// we never mutate the transaction's write batch while iterating it.
 					let read_opts = ReadOptions::default();
-					let iter = txn.iterator_opt(
-						rocksdb::IteratorMode::From(&begin, rocksdb::Direction::Forward),
-						read_opts,
-					);
+					let mut iter = txn.raw_iterator_opt(read_opts);
+					iter.seek(&begin);
 
-					for item in iter {
-						let (k, _v) = item.context("failed to iterate rocksdb for clear range")?;
-						if k.as_ref() >= end.as_slice() {
+					let mut keys_to_delete: Vec<Vec<u8>> = Vec::new();
+					while iter.valid() {
+						let k = iter.key().expect("iterator should be valid");
+						if k >= end.as_slice() {
 							break;
 						}
-						txn.delete(&k)
+						keys_to_delete.push(iter_bytes_to_vec(k));
+						iter.next();
+					}
+					iter.status()
+						.context("failed to iterate rocksdb for clear range")?;
+					drop(iter);
+
+					for key in keys_to_delete {
+						txn.delete(&key)
 							.context("failed to delete key in range from rocksdb")?;
 					}
 				}
@@ -447,47 +470,54 @@ impl TransactionTask {
 		// during a forward scan and reversing afterward would instead return the
 		// lowest keys, which is wrong for reverse range reads.
 		if reverse {
-			let iter = txn.iterator_opt(
-				rocksdb::IteratorMode::From(&resolved_end, rocksdb::Direction::Reverse),
-				read_opts,
-			);
+			let mut iter = txn.raw_iterator_opt(read_opts);
+			iter.seek_for_prev(&resolved_end);
 
-			for item in iter {
-				let (k, v) = item.context("failed to iterate rocksdb for get range")?;
+			while iter.valid() {
+				let k = iter.key().expect("iterator should be valid");
 				// The end key is exclusive, so skip anything at or above it.
-				if k.as_ref() >= resolved_end.as_slice() {
+				if k >= resolved_end.as_slice() {
+					iter.prev();
 					continue;
 				}
 				// The begin key is inclusive; once we drop below it we are done.
-				if k.as_ref() < resolved_begin.as_slice() {
+				if k < resolved_begin.as_slice() {
 					break;
 				}
 
-				results.push(KeyValue::new(k.to_vec(), v.to_vec()));
+				let key = iter_bytes_to_vec(k);
+				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
+				results.push(KeyValue::new(key, value));
 
 				if results.len() >= limit {
 					break;
 				}
+				iter.prev();
 			}
+			iter.status()
+				.context("failed to iterate rocksdb for get range")?;
 		} else {
-			let iter = txn.iterator_opt(
-				rocksdb::IteratorMode::From(&resolved_begin, rocksdb::Direction::Forward),
-				read_opts,
-			);
+			let mut iter = txn.raw_iterator_opt(read_opts);
+			iter.seek(&resolved_begin);
 
-			for item in iter {
-				let (k, v) = item.context("failed to iterate rocksdb for get range")?;
+			while iter.valid() {
+				let k = iter.key().expect("iterator should be valid");
 				// Check if we've reached the end key
-				if k.as_ref() >= resolved_end.as_slice() {
+				if k >= resolved_end.as_slice() {
 					break;
 				}
 
-				results.push(KeyValue::new(k.to_vec(), v.to_vec()));
+				let key = iter_bytes_to_vec(k);
+				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
+				results.push(KeyValue::new(key, value));
 
 				if results.len() >= limit {
 					break;
 				}
+				iter.next();
 			}
+			iter.status()
+				.context("failed to iterate rocksdb for get range")?;
 		}
 
 		Ok(Values::new(results))
@@ -511,35 +541,31 @@ impl TransactionTask {
 		match (or_equal, offset) {
 			(false, 1) => {
 				// first_greater_or_equal: find first key >= search_key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-					read_opts,
-				);
-				for item in iter {
-					let (k, _v) = item.context(
-						"failed to iterate rocksdb for range selector first_greater_or_equal",
-					)?;
-					return Ok(k.to_vec());
-				}
+				let mut iter = txn.raw_iterator_opt(read_opts);
+				iter.seek(key);
+				let result = iter.key().map(iter_bytes_to_vec);
+				iter.status().context(
+					"failed to iterate rocksdb for range selector first_greater_or_equal",
+				)?;
 				// If no key found, return a key that will make the range empty
-				Ok(vec![0xff; 255])
+				Ok(result.unwrap_or_else(|| vec![0xff; 255]))
 			}
 			(true, 1) => {
 				// first_greater_than: find first key > search_key
-				let iter = txn.iterator_opt(
-					rocksdb::IteratorMode::From(key, rocksdb::Direction::Forward),
-					read_opts,
-				);
-				for item in iter {
-					let (k, _v) = item.context(
-						"failed to iterate rocksdb for range selector first_greater_than",
-					)?;
+				let mut iter = txn.raw_iterator_opt(read_opts);
+				iter.seek(key);
+				while iter.valid() {
+					let k = iter.key().expect("iterator should be valid");
 					// Skip if it's the exact key
-					if k.as_ref() == key {
+					if k == key {
+						iter.next();
 						continue;
 					}
-					return Ok(k.to_vec());
+					return Ok(iter_bytes_to_vec(k));
 				}
+				iter.status().context(
+					"failed to iterate rocksdb for range selector first_greater_than",
+				)?;
 				// If no key found, return a key that will make the range empty
 				Ok(vec![0xff; 255])
 			}
