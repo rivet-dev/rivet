@@ -33,7 +33,7 @@ impl<'a, T: DeserializeOwned + Serialize> StateGuard<'a, T> {
 	pub(crate) fn new(
 		guard: MutexGuard<'a, (Box<serde_json::value::RawValue>, bool)>,
 	) -> Result<Self> {
-		let value = rivet_util::observe!(serde_json::from_str::<T>(guard.0.get())?);
+		let value = rivet_util::serde::json_from_str!(guard.0.get())?;
 
 		Ok(Self {
 			guard,
