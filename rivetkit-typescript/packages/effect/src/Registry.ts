@@ -7,7 +7,7 @@ import {
 	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
-import { configureBaseLogger, type Logger as PinoLogger } from "rivetkit/log";
+import { type Logger as PinoLogger } from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
 import * as RivetLogger from "./RivetLogger.ts";
@@ -58,7 +58,6 @@ const setupRivetkitRegistry = (
 		readonly serverless?: ServerlessOptions | undefined;
 	},
 ) => {
-	configureBaseLogger(registry.baseLogger);
 	return Rivetkit.setup({
 		use: Object.fromEntries(registry.rivetkitActors),
 		...registry.options,
