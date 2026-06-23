@@ -443,7 +443,7 @@ export function toWakeHandler<
 
 		return wakeEffect.pipe(
 			Effect.flatMap((resolvedWake) => {
-				if (typeof resolvedWake === "function") {
+				if (Predicate.isFunction(resolvedWake)) {
 					const actionHandlers = resolvedWake(wakeOptions);
 					return Effect.isEffect(actionHandlers)
 						? actionHandlers
