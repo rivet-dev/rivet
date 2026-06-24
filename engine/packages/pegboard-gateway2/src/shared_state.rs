@@ -661,7 +661,7 @@ impl InFlightRequestHandle {
 		// Cap retries so a permanently-gone receiver fails fast instead of pinning the
 		// request forever. Worst-case backoff total is ~19s, which stays under the default
 		// tunnel ping timeout (30s) so the ping path can take over if the receiver is truly lost.
-		let mut backoff = rivet_util::backoff::Backoff::new(6, Some(8), 100, 5);
+		let mut backoff = rivet_util::throttle::Backoff::new(6, Some(8), 100, 5);
 		let first_attempt_at = Instant::now();
 		let mut attempt = 0;
 		loop {

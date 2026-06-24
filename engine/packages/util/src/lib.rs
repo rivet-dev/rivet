@@ -4,7 +4,6 @@ pub use id::Id;
 pub use rivet_util_id as id;
 
 pub mod async_counter;
-pub mod backoff;
 pub mod billing;
 pub mod build_meta;
 pub mod check;
@@ -19,6 +18,7 @@ pub mod req;
 pub mod serde;
 pub mod size;
 pub mod sort;
+pub mod throttle;
 pub mod timestamp;
 pub mod url;
 

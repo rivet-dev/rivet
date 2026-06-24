@@ -139,7 +139,7 @@ impl MessageCtx {
 		M: Message,
 	{
 		// Infinite backoff since we want to wait until the service reboots.
-		let mut backoff = rivet_util::backoff::Backoff::default_infinite();
+		let mut backoff = rivet_util::throttle::Backoff::default_infinite();
 		loop {
 			// Ignore for infinite backoff
 			backoff.tick().await;
