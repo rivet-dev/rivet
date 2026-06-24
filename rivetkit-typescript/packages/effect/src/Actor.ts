@@ -175,7 +175,8 @@ type WakeOptionsFor<
 	: {
 			readonly state: State.State<
 				StateOptions.Decoded<StateDefinition>,
-				Schema.SchemaError
+				Schema.SchemaError,
+				StateOptions.Services<StateDefinition>
 			>;
 		});
 
@@ -232,6 +233,7 @@ type ToLayerRequirements<
 	| ExcludeBuiltInWakeServices<R, State>
 	| ExcludeBuiltInWakeServices<RX, State>
 	| UnknownToNever<ActionHandlerServices<ActionHandlers>>
+	| UnknownToNever<StateOptions.Services<State>>
 	| UnknownToNever<Action.ServicesServer<Actions>>
 	| UnknownToNever<Action.ServicesClient<Actions>>
 	| Registry.Registry;

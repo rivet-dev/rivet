@@ -4,7 +4,8 @@ import type * as StateOptions from "./StateOptions.ts";
 
 export type ActorState<StateDefinition extends StateOptions.Any> = State.State<
 	StateOptions.Decoded<StateDefinition>,
-	Schema.SchemaError
+	Schema.SchemaError,
+	StateOptions.Services<StateDefinition>
 >;
 
 type StateInstance<StateDefinition extends StateOptions.Any> = {
