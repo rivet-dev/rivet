@@ -6,9 +6,9 @@ use rocksdb::{
 };
 use tokio::sync::{mpsc, oneshot};
 
-use super::transaction_conflict_tracker::TransactionConflictTracker;
 use crate::{
 	atomic::apply_atomic_op,
+	conflict_tracker::TransactionConflictTracker,
 	error::DatabaseError,
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
@@ -389,9 +389,11 @@ impl TransactionTask {
 			}
 		}
 
+		// rocksdb generates both start and commit versions from the in-process counter.
+		let commit_version = self.txn_conflict_tracker.next_global_version();
 		if self
 			.txn_conflict_tracker
-			.check_and_insert(start_version, conflict_ranges)
+			.check_and_insert(start_version, commit_version, conflict_ranges)
 			.await
 		{
 			return Err(DatabaseError::NotCommitted.into());
