@@ -37,3 +37,6 @@ napi-build = "2"
 [dev-dependencies]
 rivetkit-actor-persist.workspace = true
 vbare.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+serde_bytes.workspace = true

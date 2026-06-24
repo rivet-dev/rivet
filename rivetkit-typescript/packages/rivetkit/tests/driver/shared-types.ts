@@ -7,7 +7,6 @@ export interface SkipTests {
 	schedule?: boolean;
 	sleep?: boolean;
 	hibernation?: boolean;
-	agentOs?: boolean;
 }
 
 export interface DriverTestFeatures {

@@ -57,6 +57,7 @@
 			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911",
 			"rivetkit": "workspace:*",
 			"@rivetkit/engine-api-full": "workspace:*",
+			"@types/mime": "3.0.4",
 			"@codemirror/state": "6.5.2",
 			"@codemirror/view": "6.38.2",
 			"@codemirror/autocomplete": "6.18.7",

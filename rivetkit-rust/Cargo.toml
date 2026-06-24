@@ -1,9 +1,0 @@
-[workspace]
-resolver = "2"
-members = [
-	"packages/client",
-]
-
-[workspace.package]
-edition = "2021"
-license = "Apache-2.0"

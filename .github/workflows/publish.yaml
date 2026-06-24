@@ -525,6 +525,9 @@ jobs:
             --version-only
 
       # ---- build TypeScript packages (turbo dep graph picks up native) ----
+      # The napi `.node` is built in the dedicated build job and placed above;
+      # types are committed. SKIP_NAPI_BUILD avoids the publish runner (no Rust
+      # toolchain) recompiling napi on a turbo cache miss (e.g. Cargo.lock churn).
       - name: Build TypeScript packages
         env:
           SKIP_WASM_BUILD: "1"

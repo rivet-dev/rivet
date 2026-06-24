@@ -12,6 +12,7 @@ import type {
 	CancellationTokenHandle,
 	ConnHandle,
 	CoreRuntime,
+	NapiNativePluginOptions,
 	RegistryHandle,
 	RuntimeActorConfig,
 	RuntimeBytes,
@@ -190,6 +191,13 @@ export class NapiCoreRuntime implements CoreRuntime {
 		factory: ActorFactoryHandle,
 	): void {
 		asNativeRegistry(registry).register(name, asNativeFactory(factory));
+	}
+
+	createNativePluginFactory(
+		options: NapiNativePluginOptions,
+	): ActorFactoryHandle {
+		const factory = this.#bindings.NapiActorFactory.fromNativePlugin(options);
+		return asActorFactoryHandle(factory);
 	}
 
 	async serveRegistry(

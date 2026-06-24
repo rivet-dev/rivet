@@ -171,18 +171,6 @@ import {
 	workflowTryActor,
 } from "./workflow";
 
-let agentOsTestActor:
-	| Awaited<typeof import("./agent-os")>["agentOsTestActor"]
-	| undefined;
-
-try {
-	({ agentOsTestActor } = await import("./agent-os"));
-} catch (error) {
-	if (!(error instanceof Error) || !error.message.includes("agent-os")) {
-		throw error;
-	}
-}
-
 // Consolidated setup with all actors
 export const registry = setup({
 	use: {
@@ -370,11 +358,5 @@ export const registry = setup({
 		beforeConnectGenericErrorActor,
 		stateChangeRecursionActor,
 		stateChangeReentrantMutationActor,
-		...(agentOsTestActor
-			? {
-					// From agent-os.ts
-					agentOsTestActor,
-				}
-			: {}),
 	},
 });

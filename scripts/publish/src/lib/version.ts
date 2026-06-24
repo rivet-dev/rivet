@@ -61,6 +61,7 @@ const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivetkit-client",
 	"rivetkit-core",
 	"rivetkit-engine-process",
+	"rivet-actor-plugin-abi",
 ]);
 
 export interface BumpOptions {

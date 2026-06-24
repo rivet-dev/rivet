@@ -1,0 +1,16 @@
+[package]
+name = "rivet-actor-plugin-abi"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
+workspace = "../../../"
+description = "Stable C-ABI contract + generic actor wire codec for RivetKit native actor plugins loaded via dlopen."
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+ciborium.workspace = true
+serde = { workspace = true, features = ["derive"] }

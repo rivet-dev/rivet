@@ -4,7 +4,7 @@
 // container lifecycle. The sandbox filesystem is mounted at /sandbox and
 // the toolkit exposes process management as CLI commands.
 
-import common from "@rivet-dev/agent-os-common";
+import common from "@agent-os-pkgs/common";
 import {
 	createSandboxFs,
 	createSandboxToolkit,

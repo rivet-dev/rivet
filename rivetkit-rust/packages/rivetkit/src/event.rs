@@ -242,7 +242,8 @@ impl<A: Actor> ActionCall<A> {
 	}
 
 	pub fn ok<T: Serialize>(mut self, value: &T) {
-		let result = encode_cbor(value, "encode action response as cbor");
+		let result =
+			crate::encoding::encode_json_compat_to_vec(value).context("encode action response");
 		if let Some(reply) = self.reply.take() {
 			reply.send(result);
 		}
@@ -887,7 +888,6 @@ fn encode_cbor<T: Serialize>(value: &T, context: &'static str) -> AnyhowResult<V
 	ciborium::into_writer(value, &mut encoded).context(context)?;
 	Ok(encoded)
 }
-
 fn expect_signed<T>(value: Value, expected: &'static str) -> Result<T, de::value::Error>
 where
 	T: TryFrom<i128>,
@@ -1392,6 +1392,93 @@ impl<A: Actor> Destroy<A> {
 	}
 }
 
+#[derive(Debug)]
+#[must_use = "reply to workflow history or dropping it sends actor/dropped_reply"]
+pub struct WfHistory {
+	pub(crate) reply: Option<Reply<Option<Vec<u8>>>>,
+}
+
+impl Drop for WfHistory {
+	fn drop(&mut self) {
+		if self.reply.is_some() {
+			warn_dropped_event("WorkflowHistory", "history");
+		}
+	}
+}
+
+impl WfHistory {
+	pub fn reply<T: Serialize>(self, history: Option<&T>) {
+		match history {
+			Some(history) => match crate::encoding::encode_json_compat_to_vec(history)
+				.context("encode workflow history")
+			{
+				Ok(bytes) => self.reply_raw(Some(bytes)),
+				Err(error) => self.reply_err(error),
+			},
+			None => self.reply_raw(None),
+		}
+	}
+
+	pub fn reply_raw(mut self, bytes: Option<Vec<u8>>) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Ok(bytes));
+		}
+	}
+
+	pub fn reply_err(mut self, err: anyhow::Error) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Err(err));
+		}
+	}
+}
+
+#[derive(Debug)]
+#[must_use = "reply to workflow replay or dropping it sends actor/dropped_reply"]
+pub struct WfReplay {
+	pub(crate) entry_id: Option<String>,
+	pub(crate) reply: Option<Reply<Option<Vec<u8>>>>,
+}
+
+impl Drop for WfReplay {
+	fn drop(&mut self) {
+		if self.reply.is_some() {
+			warn_dropped_event(
+				"WorkflowReplay",
+				self.entry_id.as_deref().unwrap_or("<start>"),
+			);
+		}
+	}
+}
+
+impl WfReplay {
+	pub fn entry_id(&self) -> Option<&str> {
+		self.entry_id.as_deref()
+	}
+
+	pub fn reply<T: Serialize>(self, value: Option<&T>) {
+		match value {
+			Some(value) => match crate::encoding::encode_json_compat_to_vec(value)
+				.context("encode workflow replay")
+			{
+				Ok(bytes) => self.reply_raw(Some(bytes)),
+				Err(error) => self.reply_err(error),
+			},
+			None => self.reply_raw(None),
+		}
+	}
+
+	pub fn reply_raw(mut self, bytes: Option<Vec<u8>>) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Ok(bytes));
+		}
+	}
+
+	pub fn reply_err(mut self, err: anyhow::Error) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Err(err));
+		}
+	}
+}
 fn warn_dropped_event(variant: &'static str, identifying: impl fmt::Display) {
 	tracing::warn!(
 		variant,

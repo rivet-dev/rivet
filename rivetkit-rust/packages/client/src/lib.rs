@@ -10,6 +10,7 @@ pub mod client;
 mod common;
 pub mod connection;
 pub mod drivers;
+pub mod encoding;
 pub mod handle;
 pub mod protocol;
 mod remote_manager;

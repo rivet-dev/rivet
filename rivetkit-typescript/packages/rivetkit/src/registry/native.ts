@@ -4854,11 +4854,12 @@ export async function buildRegistryWithRuntime(
 	const registry = runtime.createRegistry();
 
 	for (const [name, definition] of Object.entries(config.use)) {
-		runtime.registerActor(
-			registry,
-			name,
-			buildNativeFactory(runtime, config, definition),
-		);
+		// Dispatch: foreign-runtime factories bypass `buildNativeFactory` and
+		// own their entry loop directly.
+		const factory = definition.nativeFactoryBuilder
+			? definition.nativeFactoryBuilder(runtime)
+			: buildNativeFactory(runtime, config, definition);
+		runtime.registerActor(registry, name, factory);
 	}
 
 	return {

@@ -12,3 +12,7 @@ mod sqlite_corruption_fuzz;
 
 #[path = "migration/v2_2_1/mod.rs"]
 mod migration_v2_2_1;
+
+#[cfg(feature = "native-runtime")]
+#[path = "native_plugin_integration.rs"]
+mod native_plugin_integration;

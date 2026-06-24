@@ -204,6 +204,26 @@ impl ActorContext {
 		)
 	}
 
+	pub fn new_with_sqlite(
+		actor_id: impl Into<String>,
+		name: impl Into<String>,
+		key: ActorKey,
+		region: impl Into<String>,
+		sql: SqliteDb,
+	) -> Self {
+		Self::build(
+			actor_id.into(),
+			name.into(),
+			key,
+			region.into(),
+			None,
+			String::new(),
+			ActorConfig::default(),
+			Kv::default(),
+			sql,
+		)
+	}
+
 	#[cfg(test)]
 	pub(crate) fn new_for_state_tests(kv: Kv, config: ActorConfig) -> Self {
 		Self::build(

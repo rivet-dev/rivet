@@ -11,8 +11,7 @@
 			"rivetkit/db/drizzle": ["./src/db/drizzle.ts"],
 			"rivetkit/dynamic": ["./src/dynamic/mod.ts"],
 			"rivetkit/errors": ["./src/actor/errors.ts"],
-			"rivetkit/utils": ["./src/utils.ts"],
-			"rivetkit/agent-os": ["./src/agent-os/index.ts"]
+			"rivetkit/utils": ["./src/utils.ts"]
 		}
 	},
 	"include": [

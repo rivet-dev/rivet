@@ -9,7 +9,11 @@ pub mod kv;
 pub mod lifecycle_hooks;
 pub mod messages;
 pub mod metrics;
+#[cfg(feature = "native-runtime")]
+pub mod native_plugin;
 pub mod persist;
+#[cfg(feature = "native-runtime")]
+pub mod portable_native;
 pub(crate) mod preload;
 pub mod queue;
 pub mod schedule;
@@ -28,6 +32,8 @@ pub use factory::{ActorEntryFn, ActorFactory};
 pub use kv::Kv;
 pub use lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use messages::{ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, StateDelta};
+#[cfg(feature = "native-runtime")]
+pub use portable_native::{NativeBackend, build_portable_native_actor_factory};
 pub use queue::{
 	CompletableQueueMessage, EnqueueAndWaitOpts, QueueMessage, QueueNextBatchOpts, QueueNextOpts,
 	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,

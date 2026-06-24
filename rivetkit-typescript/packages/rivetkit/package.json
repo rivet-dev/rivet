@@ -151,16 +151,6 @@
 				"types": "./dist/tsup/utils.d.cts",
 				"default": "./dist/tsup/utils.cjs"
 			}
-		},
-		"./agent-os": {
-			"import": {
-				"types": "./dist/tsup/agent-os/index.d.ts",
-				"default": "./dist/tsup/agent-os/index.js"
-			},
-			"require": {
-				"types": "./dist/tsup/agent-os/index.d.cts",
-				"default": "./dist/tsup/agent-os/index.cjs"
-			}
 		}
 	},
 	"engines": {
@@ -171,7 +161,7 @@
 		"./dist/tsup/chunk-*.cjs"
 	],
 	"scripts": {
-		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/inspector-tab/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts && tsup src/agent-os/index.ts --no-clean --out-dir dist/tsup/agent-os",
+		"build": "tsup src/mod.ts src/client/mod.ts src/common/log.ts src/common/websocket.ts src/actor/errors.ts src/utils.ts src/workflow/mod.ts src/test/mod.ts src/inspector/mod.ts src/inspector-tab/mod.ts src/db/mod.ts src/db/drizzle.ts src/dynamic/mod.ts",
 		"build:browser": "tsup --config tsup.browser.config.ts",
 		"check-types": "tsc --noEmit",
 		"lint": "biome check . && pnpm run check:test-skips && pnpm run check:wait-for-comments",
@@ -189,7 +179,6 @@
 	},
 	"dependencies": {
 		"@hono/zod-openapi": "^1.1.5",
-		"@rivet-dev/agent-os-core": "^0.1.1",
 		"@rivetkit/bare-ts": "^0.6.2",
 		"@rivetkit/engine-cli": "workspace:*",
 		"@rivetkit/engine-envoy-protocol": "workspace:*",
@@ -214,8 +203,6 @@
 		"@copilotkit/llmock": "^1.6.0",
 		"@hono/node-server": "^1.18.2",
 		"@hono/node-ws": "^1.1.1",
-		"@rivet-dev/agent-os-common": "*",
-		"@rivet-dev/agent-os-pi": "^0.1.1",
 		"@standard-schema/spec": "^1.0.0",
 		"@types/invariant": "^2",
 		"@types/node": "^22.13.1",
