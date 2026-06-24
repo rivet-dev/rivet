@@ -107,15 +107,7 @@ export const make = Effect.fnUntraced(function* <
 	return {
 		get: (actorId: string) => instances.get(actorId),
 		onWake: async (c: WakeContext<StateDefinition, Database>) => {
-			await runPromise(
-				makeInstance(c).pipe(
-					Effect.tap((instance) =>
-						Effect.sync(() => {
-							instances.set(c.actorId, instance);
-						}),
-					),
-				),
-			);
+			instances.set(c.actorId, await runPromise(makeInstance(c)));
 		},
 		onStateChange: stateAdapter
 			? (
