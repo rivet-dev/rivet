@@ -577,6 +577,10 @@ fn write_error_doc(group: &str, code: &str, message: &str) -> std::io::Result<()
 	use std::fs;
 	use std::io::Write;
 
+	if std::env::var_os("DOCS_RS").is_some() {
+		return Ok(());
+	}
+
 	let workspace_root = find_workspace_root()?;
 	let errors_dir = if std::env::var("RIVET_ERROR_OUTPUT_DIR").is_ok() {
 		// If custom dir is specified, errors go directly there
