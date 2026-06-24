@@ -25,21 +25,26 @@ pub async fn task(
 	let mut ws_rx = ws_rx.lock().await;
 
 	// Leaky bucket rate limit on consuming ws messages
-	let pegboard_config = ctx.config().pegboard();
 	let mut rate_limit = rivet_util::throttle::RateLimiter::new(
 		rivet_util::throttle::RateLimitMethod::LeakyBucket {
-			requests: pegboard_config.gateway_websocket_rate_limit_requests(),
+			requests: ctx
+				.config()
+				.pegboard()
+				.gateway_websocket_rate_limit_requests(),
 			drip_rate: Duration::from_millis(
-				pegboard_config.gateway_websocket_rate_limit_drip_rate_ms(),
+				ctx.config()
+					.pegboard()
+					.gateway_websocket_rate_limit_drip_rate_ms(),
 			),
 		},
 	);
 
 	loop {
-		rate_limit.acquire().await;
-
 		tokio::select! {
-			res = ws_rx.try_next() => {
+			res = async {
+				rate_limit.acquire().await;
+				ws_rx.try_next().await
+			} => {
 				if let Some(msg) = res? {
 					ingress_bytes.fetch_add(msg.len() as u64, Ordering::AcqRel);
 
