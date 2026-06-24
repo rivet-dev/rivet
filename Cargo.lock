@@ -4001,6 +4001,7 @@ dependencies = [
  "rivet-pools",
  "rivet-runtime",
  "rivet-types",
+ "rivet-util",
  "rusqlite",
  "scc",
  "serde",
