@@ -77,7 +77,9 @@ export const make = Effect.fnUntraced(function* <
 		const scope = yield* Scope.make();
 		return yield* Effect.gen(function* () {
 			const state = stateAdapter
-				? yield* stateAdapter.makeStateView(c)
+				? yield* stateAdapter
+						.makeStateView(c)
+						.pipe(Effect.provideService(Scope.Scope, scope))
 				: undefined;
 			const context = makeContext(c, scope);
 			const actionHandlers = yield* wakeHandler(

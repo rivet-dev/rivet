@@ -1,4 +1,3 @@
-import { Actor, State } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
 import { LanguageModel, Prompt } from "effect/unstable/ai";
 import { Agent, EmptyMessageError, Message } from "./api.ts";
@@ -37,10 +36,12 @@ export const AgentLive = Agent.toLayer(
 				// Append the user turn to persisted state first, so the model
 				// always sees the message it is replying to even if the actor
 				// restarts mid-call.
-				const withUser = yield* State.updateAndGet(state, (history) => [
-					...history,
-					{ role: "user", content } satisfies Message,
-				]).pipe(Effect.orDie);
+				const withUser = yield* state
+					.updateAndGet((history) => [
+						...history,
+						{ role: "user", content } satisfies Message,
+					])
+					.pipe(Effect.orDie);
 
 				// Call the LLM with the running history. The system prompt plus
 				// every persisted turn is sent on each call, which is what gives
@@ -52,14 +53,16 @@ export const AgentLive = Agent.toLayer(
 				const reply = response.text;
 
 				// Append the assistant turn and persist it.
-				yield* State.update(state, (history) => [
-					...history,
-					{ role: "assistant", content: reply } satisfies Message,
-				]).pipe(Effect.orDie);
+				yield* state
+					.update((history) => [
+						...history,
+						{ role: "assistant", content: reply } satisfies Message,
+					])
+					.pipe(Effect.orDie);
 
 				return reply;
 			}),
-			GetHistory: () => State.get(state).pipe(Effect.orDie),
+			GetHistory: () => state.get.pipe(Effect.orDie),
 		});
 	}),
 	{
