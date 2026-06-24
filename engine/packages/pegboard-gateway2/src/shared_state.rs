@@ -160,7 +160,6 @@ pub struct SharedState(Arc<SharedStateInner>);
 
 impl SharedState {
 	pub fn new(config: &rivet_config::Config, ups: PubSub) -> Self {
-		metrics::prepopulate();
 		init_slow_ping_threshold_from_env();
 
 		let gateway_id = protocol::util::generate_gateway_id();

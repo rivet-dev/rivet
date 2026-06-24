@@ -37,7 +37,7 @@ pub struct Output {
 
 #[operation]
 pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<Output> {
-	let rate_limiter = RATE_LIMITERS
+	let rate_limit = RATE_LIMITERS
 		.get_or_init(|| {
 			Cache::builder()
 				.max_capacity(10_000)
@@ -59,7 +59,7 @@ pub async fn pegboard_actor_create(ctx: &OperationCtx, input: &Input) -> Result<
 		.await;
 
 	// Limit actor creation per namespace id
-	if !rate_limiter.value().lock().await.try_acquire() {
+	if !rate_limit.value().lock().await.try_acquire() {
 		return Err(crate::errors::Actor::CreationRateLimit.build());
 	}
 

@@ -837,6 +837,24 @@
           ],
           "format": "int64"
         },
+        "actor_create_rate_limit_drip_rate_ms": {
+          "description": "Time to regain one actor creation token per namespace.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "actor_create_rate_limit_requests": {
+          "description": "Max burst of actor creations per namespace before throttling.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "actor_retry_duration_threshold": {
           "description": "How long to wait after starting to attempt to reallocate before before setting actor to sleep.\n\nUnit is in milliseconds.",
           "type": [
@@ -968,6 +986,24 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "envoy_websocket_rate_limit_drip_rate_us": {
+          "description": "Time to regain one inbound WebSocket message token on a single envoy connection.\n\nUnit is in microseconds. The envoy connection multiplexes every actor on a runner, so the sustained ceiling is far higher than the per-client gateway limit and needs sub-millisecond granularity to express.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "envoy_websocket_rate_limit_requests": {
+          "description": "Max burst of inbound WebSocket messages on a single envoy connection before throttling.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "gateway_gc_interval_ms": {
           "description": "GC interval for in-flight requests in milliseconds.",
           "type": [
@@ -1032,6 +1068,24 @@
         },
         "gateway_websocket_open_timeout_ms": {
           "description": "WebSocket open/handshake timeout in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_websocket_rate_limit_drip_rate_ms": {
+          "description": "Time to regain one inbound WebSocket message token on a single connection.\n\nUnit is in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
+        "gateway_websocket_rate_limit_requests": {
+          "description": "Max burst of inbound WebSocket messages on a single connection before throttling.",
           "type": [
             "integer",
             "null"
