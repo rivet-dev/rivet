@@ -77,7 +77,9 @@ export const make = Effect.fnUntraced(function* <
 		const scope = yield* Scope.make();
 		return yield* Effect.gen(function* () {
 			const state = stateAdapter
-				? yield* stateAdapter.makeStateView(c)
+				? yield* stateAdapter
+						.makeStateView(c)
+						.pipe(Effect.provideService(Scope.Scope, scope))
 				: undefined;
 			const context = makeContext(c, scope);
 			const actionHandlers = yield* wakeHandler(
@@ -105,15 +107,7 @@ export const make = Effect.fnUntraced(function* <
 	return {
 		get: (actorId: string) => instances.get(actorId),
 		onWake: async (c: WakeContext<StateDefinition, Database>) => {
-			await runPromise(
-				makeInstance(c).pipe(
-					Effect.tap((instance) =>
-						Effect.sync(() => {
-							instances.set(c.actorId, instance);
-						}),
-					),
-				),
-			);
+			instances.set(c.actorId, await runPromise(makeInstance(c)));
 		},
 		onStateChange: stateAdapter
 			? (

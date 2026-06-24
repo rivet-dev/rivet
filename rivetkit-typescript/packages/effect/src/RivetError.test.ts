@@ -121,6 +121,13 @@ describe("RivetError", () => {
 				"actor ready timeout",
 			),
 		);
+		const wakeRetriesExceeded = RivetError.fromUnknown(
+			new RivetkitErrors.RivetError(
+				"guard",
+				"actor_wake_retries_exceeded",
+				"actor wake retries exceeded",
+			),
+		);
 		const tunnelTimeout = RivetError.fromUnknown(
 			new RivetkitErrors.RivetError(
 				"guard",
@@ -136,6 +143,10 @@ describe("RivetError", () => {
 		assert.instanceOf(
 			readyTimeout.reason,
 			RivetError.GuardActorReadyTimeout,
+		);
+		assert.instanceOf(
+			wakeRetriesExceeded.reason,
+			RivetError.GuardActorWakeRetriesExceeded,
 		);
 		assert.instanceOf(
 			tunnelTimeout.reason,

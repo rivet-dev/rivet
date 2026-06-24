@@ -175,7 +175,8 @@ type WakeOptionsFor<
 	: {
 			readonly state: State.State<
 				StateOptions.Decoded<StateDefinition>,
-				Schema.SchemaError
+				Schema.SchemaError,
+				StateOptions.Services<StateDefinition>
 			>;
 		});
 
@@ -232,6 +233,7 @@ type ToLayerRequirements<
 	| ExcludeBuiltInWakeServices<R, State>
 	| ExcludeBuiltInWakeServices<RX, State>
 	| UnknownToNever<ActionHandlerServices<ActionHandlers>>
+	| UnknownToNever<StateOptions.Services<State>>
 	| UnknownToNever<Action.ServicesServer<Actions>>
 	| UnknownToNever<Action.ServicesClient<Actions>>
 	| Registry.Registry;
@@ -334,9 +336,9 @@ const Proto: Omit<Actor<any, any>, "name" | "actions"> = {
 			>(wake),
 			options,
 		}).pipe(
-			Effect.flatMap((rivetKitActor) =>
+			Effect.tap((rivetKitActor) =>
 				Registry.Registry.pipe(
-					Effect.flatMap((registry) =>
+					Effect.tap((registry) =>
 						Effect.sync(() =>
 							registry.rivetkitActors.set(
 								this.name,
@@ -375,6 +377,29 @@ export const make = <
 	return self;
 };
 
+/**
+ * Normalizes any supported actor wake declaration into a wake function.
+ *
+ * @remarks
+ * {@link Actor.toLayer|`Actor.toLayer()`} accepts several equivalent shapes so actor
+ * implementations can choose the amount of initialization they need:
+ *
+ * - a plain action-handler object
+ * - an `Effect` that builds an action-handler object
+ * - a wake function that receives `wakeOptions` and returns handlers
+ * - a wake function that returns an `Effect` of handlers
+ * - an `Effect` that builds one of those wake functions
+ *
+ * This helper resolves those forms lazily for each actor wake and returns a
+ * single `(wakeOptions) => Effect<handlers>` representation. It does not run a
+ * wake function until the returned function is invoked, so per-wake resources,
+ * services, and state are scoped to the specific actor instance that is waking.
+ *
+ * @param wake - A supported wake declaration shape.
+ * @returns A function that resolves action handlers for one actor wake.
+ *
+ * @internal
+ */
 export function toWakeHandler<
 	ActionHandlers extends object,
 	R,
@@ -443,7 +468,7 @@ export function toWakeHandler<
 
 		return wakeEffect.pipe(
 			Effect.flatMap((resolvedWake) => {
-				if (typeof resolvedWake === "function") {
+				if (Predicate.isFunction(resolvedWake)) {
 					const actionHandlers = resolvedWake(wakeOptions);
 					return Effect.isEffect(actionHandlers)
 						? actionHandlers

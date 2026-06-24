@@ -1,4 +1,4 @@
-import { Actor, State } from "@rivetkit/effect";
+import { Actor } from "@rivetkit/effect";
 import { Context, DateTime, Effect, Layer, Schema, Stream } from "effect";
 import { db } from "rivetkit/db";
 import { Moderator } from "../moderator/api.ts";
@@ -58,7 +58,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		yield* Effect.addFinalizer(
 			Effect.fnUntraced(function* () {
 				// Access the actor's persisted `state` with a `SubscriptionRef`-like API
-				const roomName = yield* State.get(state).pipe(
+				const roomName = yield* state.get.pipe(
 					Effect.orDie,
 					Effect.map((s) => s.name),
 				);
@@ -70,8 +70,8 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			}),
 		);
 
-		// `State.changes` streams every committed state change for this actor wake.
-		yield* State.changes(state).pipe(
+		// `state.changes` streams every committed state change for this actor wake.
+		yield* state.changes.pipe(
 			Stream.runForEach((current) =>
 				Effect.log("room state changed", {
 					actorId: address.actorId,
@@ -84,7 +84,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 
 		// Combine persisted actor state with a custom service-owned domain guard.
 		const ensureMember = (name: string) =>
-			State.get(state).pipe(
+			state.get.pipe(
 				Effect.orDie,
 				Effect.flatMap((current) =>
 					roomPolicy.requireMember(current.members, name),
@@ -101,7 +101,7 @@ export const ChatRoomLive = ChatRoom.toLayer(
 		// 	yield* Match.value(msg).pipe(
 		// 		Match.tag("Reset", () =>
 		// 			Effect.gen(function* () {
-		// 				yield* State.set(state, 0)
+		// 				yield* state.set(0)
 		// 				yield* PubSub.publish(events.countChanged, 0)
 		// 			})
 		// 		),
@@ -119,24 +119,28 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			Initialize: ({ payload }) =>
 				// This replaces `createState(input)`. Callers should initialize
 				// a room before actions that depend on a persisted room name.
-				State.update(state, (current) => {
-					if (current.initialized) return current;
-					return {
-						...current,
-						name: payload.name,
-						initialized: true,
-					};
-				}).pipe(Effect.orDie),
+				state
+					.update((current) => {
+						if (current.initialized) return current;
+						return {
+							...current,
+							name: payload.name,
+							initialized: true,
+						};
+					})
+					.pipe(Effect.orDie),
 			Join: Effect.fnUntraced(function* ({ payload }) {
 				const joinedAt = yield* DateTime.now;
 				const member = {
 					name: payload.name,
 					joinedAt,
 				};
-				const next = yield* State.updateAndGet(state, (current) => ({
-					...current,
-					members: [...current.members, member],
-				})).pipe(Effect.orDie);
+				const next = yield* state
+					.updateAndGet((current) => ({
+						...current,
+						members: [...current.members, member],
+					}))
+					.pipe(Effect.orDie);
 
 				rawRivetkitContext.broadcast("memberJoined", {
 					member: {
@@ -157,12 +161,14 @@ export const ChatRoomLive = ChatRoom.toLayer(
 			Leave: Effect.fnUntraced(function* ({ payload }) {
 				yield* ensureMember(payload.name);
 
-				yield* State.update(state, (current) => ({
-					...current,
-					members: current.members.filter(
-						(member) => member.name !== payload.name,
-					),
-				})).pipe(Effect.orDie);
+				yield* state
+					.update((current) => ({
+						...current,
+						members: current.members.filter(
+							(member) => member.name !== payload.name,
+						),
+					}))
+					.pipe(Effect.orDie);
 
 				rawRivetkitContext.broadcast("memberLeft", {
 					name: payload.name,

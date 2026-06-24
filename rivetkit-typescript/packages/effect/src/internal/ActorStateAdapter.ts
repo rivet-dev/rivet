@@ -1,10 +1,11 @@
-import { Effect, type Fiber, Schema, Semaphore } from "effect";
+import { Effect, type Fiber, Schema } from "effect";
 import * as State from "../State.ts";
 import type * as StateOptions from "./StateOptions.ts";
 
 export type ActorState<StateDefinition extends StateOptions.Any> = State.State<
 	StateOptions.Decoded<StateDefinition>,
-	Schema.SchemaError
+	Schema.SchemaError,
+	StateOptions.Services<StateDefinition>
 >;
 
 type StateInstance<StateDefinition extends StateOptions.Any> = {
@@ -71,15 +72,8 @@ export const make = Effect.fnUntraced(function* <
 					const state = yield* Effect.fromNullishOr(
 						instance.state,
 					).pipe(Effect.orDie);
-
-					yield* Semaphore.withPermit(
-						state.semaphore,
-						Effect.gen(function* () {
-							const decoded = yield* stateCodec
-								.decodeUnknown(newState)
-								.pipe(Effect.orDie);
-							State.publishUnsafe(state, decoded);
-						}),
+					yield* state[State.RuntimeTypeId].publishEffect(
+						stateCodec.decodeUnknown(newState).pipe(Effect.orDie),
 					);
 				}),
 			);

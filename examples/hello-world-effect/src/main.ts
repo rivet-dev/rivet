@@ -2,7 +2,7 @@ import { NodeRuntime } from "@effect/platform-node";
 import { Client, Registry } from "@rivetkit/effect";
 import { Layer } from "effect";
 import { CounterLive } from "./actors/counter/live.ts";
-import { PrettyLoggerLayer } from "./logger.ts";
+import { TelemetryLayer } from "./telemetry.ts";
 
 const endpoint = process.env.RIVET_ENDPOINT ?? "http://127.0.0.1:6420";
 
@@ -15,7 +15,7 @@ const ActorsLayer = CounterLive.pipe(Layer.provide(Client.layer({ endpoint })));
 //   RIVET_ENGINE_BINARY=$(pwd)/target/debug/rivet-engine pnpm start
 const MainLayer = Registry.serve(ActorsLayer).pipe(
 	Layer.provide(Registry.layer()),
-	Layer.provide(PrettyLoggerLayer),
+	Layer.provide(TelemetryLayer),
 );
 
 // Keeps the layer alive. Tears down on SIGINT/SIGTERM.
@@ -25,6 +25,6 @@ Layer.launch(MainLayer).pipe(NodeRuntime.runMain);
 export const { handler, dispose } = Registry.toWebHandler(
 	ActorsLayer.pipe(
 		Layer.provideMerge(Registry.layer()),
-		Layer.provide(PrettyLoggerLayer),
+		Layer.provide(TelemetryLayer),
 	),
 );

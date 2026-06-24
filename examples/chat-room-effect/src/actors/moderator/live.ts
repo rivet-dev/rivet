@@ -1,4 +1,3 @@
-import { State } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
 import { BannedWordsError, Moderator } from "./api.ts";
 
@@ -8,10 +7,12 @@ export const ModeratorLive = Moderator.toLayer(
 	Effect.fnUntraced(function* ({ state }) {
 		return Moderator.of({
 			Review: Effect.fnUntraced(function* ({ payload }) {
-				yield* State.update(state, (current) => ({
-					...current,
-					reviewed: current.reviewed + 1,
-				})).pipe(Effect.orDie);
+				yield* state
+					.update((current) => ({
+						...current,
+						reviewed: current.reviewed + 1,
+					}))
+					.pipe(Effect.orDie);
 
 				const lower = payload.text.toLowerCase();
 				const hit = bannedWords.find((word) => lower.includes(word));

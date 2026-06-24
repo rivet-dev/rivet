@@ -7,10 +7,10 @@ import {
 	type HttpServerResponse,
 } from "effect/unstable/http";
 import * as Rivetkit from "rivetkit";
-import { configureBaseLogger, type Logger as PinoLogger } from "rivetkit/log";
+import * as RivetkitLog from "rivetkit/log";
 import * as Client from "./Client.ts";
 import { BaseLogger, getOrCreateBaseLogger } from "./internal/logging.ts";
-import * as Logger from "./Logger.ts";
+import * as RivetLogger from "./RivetLogger.ts";
 
 const TypeId = "~@rivetkit/effect/Registry";
 type ServerlessOptions = NonNullable<
@@ -19,7 +19,7 @@ type ServerlessOptions = NonNullable<
 
 export type Options = Pick<
 	Rivetkit.RegistryConfigInput<Rivetkit.RegistryActors>,
-	"endpoint" | "token" | "namespace" | "noWelcome"
+	"endpoint" | "token" | "namespace" | "noWelcome" | "sqlite"
 >;
 
 export interface Registry {
@@ -27,7 +27,7 @@ export interface Registry {
 
 	readonly options: Options;
 
-	readonly baseLogger: PinoLogger;
+	readonly baseLogger: RivetkitLog.Logger;
 
 	readonly rivetkitActors: Map<string, Rivetkit.AnyActorDefinition>;
 }
@@ -35,20 +35,49 @@ export interface Registry {
 export const Registry: Context.Service<Registry, Registry> =
 	Context.Service<Registry>("@rivetkit/effect/Registry");
 
-const make = (options: Options, baseLogger: PinoLogger): Registry => {
-	return Registry.of({
-		[TypeId]: TypeId,
-		options,
-		baseLogger,
-		rivetkitActors: new Map(),
-	});
-};
-
+/**
+ * Creates the shared registry that actor layers register into.
+ *
+ * @remarks
+ * Actor layers created with {@link Actor.Actor.toLayer|`Actor.toLayer()`}
+ * register into this service. Registry entrypoints such as
+ * {@link serve|`Registry.serve()`}, {@link toWebHandler|`Registry.toWebHandler()`},
+ * and {@link toHttpEffect|`Registry.toHttpEffect()`} later use the collected
+ * actors to create the underlying RivetKit runtime.
+ *
+ * @param options - RivetKit runtime options shared by the registered actors.
+ *
+ * @returns A layer that provides the {@link Registry|`Registry.Registry`}
+ * service.
+ *
+ * @example
+ * ```ts
+ * import { Registry } from "@rivetkit/effect"
+ * import { Layer } from "effect"
+ *
+ * const ActorsLayer = Layer.mergeAll(ChatRoomLive, ModeratorLive)
+ *
+ * const MainLayer = Registry.serve(ActorsLayer).pipe(
+ *   Layer.provide(Registry.layer({ endpoint: "http://127.0.0.1:6420" }))
+ * )
+ * ```
+ *
+ * @see {@link serve|`Registry.serve()`} for starting a long-running actor
+ * server.
+ * @see {@link toWebHandler|`Registry.toWebHandler()`} for Fetch-compatible
+ * serverless handlers.
+ * @see {@link toHttpEffect|`Registry.toHttpEffect()`} for Effect HTTP handlers.
+ */
 export const layer = (options: Options = {}): Layer.Layer<Registry> =>
 	Layer.effect(
 		Registry,
 		Effect.map(getOrCreateBaseLogger, (baseLogger) =>
-			make(options, baseLogger),
+			Registry.of({
+				[TypeId]: TypeId,
+				options,
+				baseLogger,
+				rivetkitActors: new Map(),
+			}),
 		),
 	);
 
@@ -57,24 +86,53 @@ const setupRivetkitRegistry = (
 	options?: {
 		readonly serverless?: ServerlessOptions | undefined;
 	},
-) => {
-	configureBaseLogger(registry.baseLogger);
-	return Rivetkit.setup({
-		use: Object.fromEntries(registry.rivetkitActors),
-		...registry.options,
-		logging: { baseLogger: registry.baseLogger },
-		...(options?.serverless === undefined
-			? {}
-			: { serverless: options.serverless }),
-	});
-};
+) =>
+	Effect.sync(() =>
+		Rivetkit.setup({
+			use: Object.fromEntries(registry.rivetkitActors),
+			...registry.options,
+			logging: { baseLogger: registry.baseLogger },
+			...(options?.serverless === undefined
+				? {}
+				: { serverless: options.serverless }),
+		}),
+	);
 
 /**
- * Runs an actor registration layer against the configured engine.
+ * Serves the actors registered by `actorsLayer`.
  *
- * The actor layer is built in the server layer scope. Registered Rivet Actors
- * are collected from `Registry`, materialized into a single underlying RivetKit
- * registry, and started.
+ * @remarks
+ * Provide this with {@link layer|`Registry.layer()`} at the application root.
+ * Building the returned layer evaluates the actor layer, collects its registered
+ * actors, and starts the underlying RivetKit runtime using the options from
+ * {@link layer|`Registry.layer()`}. Launch the resulting layer with
+ * {@link Layer.launch|`Layer.launch()`} to keep the server process alive.
+ *
+ * @param actorsLayer - A layer containing one or more
+ * {@link Actor.Actor.toLayer|`Actor.toLayer()`} registrations.
+ *
+ * @returns A side-effecting startup layer that requires the
+ * {@link Registry|`Registry.Registry`} service and the services required by
+ * `actorsLayer`.
+ *
+ * @example
+ * ```ts
+ * import { Registry } from "@rivetkit/effect"
+ * import { Layer } from "effect"
+ *
+ * const ActorsLayer = Layer.mergeAll(ChatRoomLive, ModeratorLive)
+ *
+ * const MainLayer = Registry.serve(ActorsLayer).pipe(
+ *   Layer.provide(Registry.layer({ endpoint: "http://127.0.0.1:6420" }))
+ * )
+ *
+ * Layer.launch(MainLayer).pipe(NodeRuntime.runMain);
+ * ```
+ *
+ * @see {@link toWebHandler|`Registry.toWebHandler()`} for Fetch-compatible
+ * serverless handlers.
+ * @see {@link toHttpEffect|`Registry.toHttpEffect()`} for Effect HTTP handlers.
+ *
  */
 export const serve = <E, R>(
 	actorsLayer: Layer.Layer<never, E, R>,
@@ -82,13 +140,14 @@ export const serve = <E, R>(
 	Layer.effectDiscard(
 		Effect.gen(function* () {
 			const registry = yield* Registry;
-			const baseLogger = registry.baseLogger;
 			yield* Layer.build(
 				actorsLayer.pipe(
-					Layer.provideMerge(Logger.layerPino(baseLogger)),
+					Layer.provideMerge(
+						RivetLogger.layerFromPino(registry.baseLogger),
+					),
 				),
 			);
-			const rivetkitRegistry = setupRivetkitRegistry(registry);
+			const rivetkitRegistry = yield* setupRivetkitRegistry(registry);
 			yield* Effect.sync(() => rivetkitRegistry.start());
 		}),
 	);
@@ -107,7 +166,7 @@ export const test: Layer.Layer<Client.Client, never, Registry> = Layer.effect(
 	Client.Client,
 	Effect.gen(function* () {
 		const registry = yield* Registry;
-		const rivetkitRegistry = setupRivetkitRegistry(registry);
+		const rivetkitRegistry = yield* setupRivetkitRegistry(registry);
 		rivetkitRegistry.config.test = {
 			...rivetkitRegistry.config.test,
 			enabled: true,
@@ -145,17 +204,21 @@ const makeHttpEffect = (
 	registry: Registry,
 	options?: ToHttpEffectOptions,
 ): Effect.Effect<
-	HttpServerResponse.HttpServerResponse,
-	HttpServerError.HttpServerError,
-	HttpServerRequest.HttpServerRequest
-> => {
-	const rivetkitRegistry = setupRivetkitRegistry(registry, {
-		serverless: options,
-	});
-	return HttpEffect.fromWebHandler((request) =>
-		rivetkitRegistry.handler(request),
+	Effect.Effect<
+		HttpServerResponse.HttpServerResponse,
+		HttpServerError.HttpServerError,
+		HttpServerRequest.HttpServerRequest
+	>
+> =>
+	Effect.map(
+		setupRivetkitRegistry(registry, {
+			serverless: options,
+		}),
+		(rivetkitRegistry) =>
+			HttpEffect.fromWebHandler((request) =>
+				rivetkitRegistry.handler(request),
+			),
 	);
-};
 
 export type ToHttpEffectOptions = ServerlessOptions;
 
@@ -179,12 +242,14 @@ export const toHttpEffect = Effect.fnUntraced(function* <E>(
 	Scope.Scope
 > {
 	const context = yield* Layer.build(
-		registryLayer.pipe(Layer.provideMerge(Logger.layer)),
+		registryLayer.pipe(Layer.provideMerge(RivetLogger.defaultLayer)),
+	);
+	const httpEffect = yield* makeHttpEffect(
+		Context.get(context, Registry),
+		options,
 	);
 	// @effect-diagnostics-next-line returnEffectInGen:off
-	return makeHttpEffect(Context.get(context, Registry), options).pipe(
-		Effect.provide(context),
-	);
+	return httpEffect.pipe(Effect.provide(context));
 });
 
 export type ToWebHandlerOptions = ServerlessOptions & {
@@ -221,16 +286,17 @@ export const toWebHandler = <E>(
 	}
 
 	const registryLayerWithLogging = registryLayer.pipe(
-		Layer.provideMerge(Logger.layer),
+		Layer.provideMerge(RivetLogger.defaultLayer),
 	);
 
 	return HttpEffect.toWebHandlerLayerWith(registryLayerWithLogging, {
 		toHandler: (context) =>
-			Effect.succeed(
+			Effect.map(
 				makeHttpEffect(
 					Context.get(context, Registry),
 					serverlessOptions,
-				).pipe(Effect.provide(context)),
+				),
+				(httpEffect) => httpEffect.pipe(Effect.provide(context)),
 			),
 		middleware,
 		memoMap,

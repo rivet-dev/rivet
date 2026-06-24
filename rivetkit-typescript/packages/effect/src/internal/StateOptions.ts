@@ -10,6 +10,10 @@ export interface Any {
 	readonly initialValue: () => unknown;
 }
 
+export type Services<State extends Any> =
+	| State["schema"]["DecodingServices"]
+	| State["schema"]["EncodingServices"];
+
 export type Encoded<State extends Any> =
 	| State["schema"]["Encoded"]
 	| ([State] extends [never] ? undefined : never);

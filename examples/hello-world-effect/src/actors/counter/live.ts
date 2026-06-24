@@ -1,4 +1,4 @@
-import { Actor, State } from "@rivetkit/effect";
+import { Actor } from "@rivetkit/effect";
 import { Effect, Schema } from "effect";
 import { Counter, NegativeAmountError } from "./api.ts";
 
@@ -21,9 +21,11 @@ export const CounterLive = Counter.toLayer(
 				}
 
 				// Access the actor's persisted `state` with a `SubscriptionRef`-like API.
-				const next = yield* State.updateAndGet(state, (current) => ({
-					count: current.count + payload.amount,
-				})).pipe(Effect.orDie);
+				const next = yield* state
+					.updateAndGet((current) => ({
+						count: current.count + payload.amount,
+					}))
+					.pipe(Effect.orDie);
 
 				// Broadcast the new value to every connected client.
 				rawRivetkitContext.broadcast("newCount", next.count);
@@ -31,7 +33,7 @@ export const CounterLive = Counter.toLayer(
 				return next.count;
 			}),
 			GetCount: () =>
-				State.get(state).pipe(
+				state.get.pipe(
 					Effect.map((current) => current.count),
 					Effect.orDie,
 				),

@@ -76,6 +76,13 @@ const ServiceDependentActor = Actor.make("ServiceDependentActor", {
 	actions: [ServiceDependentAction],
 });
 
+const ServiceDependentState = {
+	schema: Schema.Struct({
+		count: ServiceDependentNumber,
+	}),
+	initialValue: () => ({ count: 0 }),
+};
+
 const TransformedState = {
 	schema: Schema.Struct({
 		when: Schema.DateFromString,
@@ -180,6 +187,31 @@ describe("Actor.make(...).toLayer", () => {
 			},
 			{ state: TestState },
 		);
+	});
+
+	test("state schema services surface in State effects and actor layers", () => {
+		const layer = TestActor.toLayer(
+			(wakeOptions) => {
+				type StateGetServices = Effect.Services<
+					typeof wakeOptions.state.get
+				>;
+
+				expectTypeOf<SomeDep>().toExtend<StateGetServices>();
+
+				return {
+					Ping: () =>
+						wakeOptions.state.get.pipe(
+							Effect.map((current) => current.count),
+							Effect.orDie,
+						),
+				};
+			},
+			{ state: ServiceDependentState },
+		);
+		type LayerServices = Layer.Services<typeof layer>;
+		type LayerHasSomeDep = SomeDep extends LayerServices ? true : false;
+
+		expectTypeOf<LayerHasSomeDep>().toEqualTypeOf<true>();
 	});
 
 	test("wake options carry the transformed state type", () => {
