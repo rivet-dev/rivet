@@ -85,7 +85,7 @@ services:
         condition: service_healthy
   postgres-dc-a:
     restart: unless-stopped
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -235,7 +235,7 @@ services:
       - rivet-network-dc-a
   postgres-dc-b:
     restart: unless-stopped
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres
@@ -377,7 +377,7 @@ services:
       - rivet-network-dc-b
   postgres-dc-c:
     restart: unless-stopped
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     environment:
       - POSTGRES_USER=postgres
       - POSTGRES_PASSWORD=postgres

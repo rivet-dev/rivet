@@ -1,0 +1,70 @@
+# Commit-queue wire format for the Postgres leader-resolver UDB driver.
+#
+# Followers encode a CommitRequest into the `payload` column of
+# `udb_commit_requests`; the leader decodes it to resolve and apply.
+# Rust-only (never leaves the engine), but versioned so rolling deploys can
+# skew follower vs leader code.
+
+type ConflictRangeType enum {
+	READ
+	WRITE
+}
+
+type ConflictRange struct {
+	begin: data
+	end: data
+	kind: ConflictRangeType
+}
+
+# Order MUST match universaldb::options::MutationType declaration order so the
+# enum tag round-trips. 15 variants today; never reorder, only append.
+type MutationType enum {
+	ADD
+	AND
+	BIT_AND
+	OR
+	BIT_OR
+	XOR
+	BIT_XOR
+	APPEND_IF_FITS
+	MAX
+	MIN
+	SET_VERSIONSTAMPED_KEY
+	SET_VERSIONSTAMPED_VALUE
+	BYTE_MIN
+	BYTE_MAX
+	COMPARE_AND_CLEAR
+}
+
+type SetValue struct {
+	key: data
+	value: data
+}
+
+type Clear struct {
+	key: data
+}
+
+type ClearRange struct {
+	begin: data
+	end: data
+}
+
+type AtomicOp struct {
+	key: data
+	param: data
+	opType: MutationType
+}
+
+type Operation union {
+	SetValue |
+	Clear |
+	ClearRange |
+	AtomicOp
+}
+
+type CommitRequest struct {
+	readVersion: u64
+	conflictRanges: list<ConflictRange>
+	operations: list<Operation>
+}

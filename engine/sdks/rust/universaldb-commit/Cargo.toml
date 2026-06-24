@@ -1,5 +1,5 @@
 [package]
-name = "rivet-depot-protocol"
+name = "rivet-universaldb-commit"
 publish = false
 version.workspace = true
 authors.workspace = true
@@ -8,7 +8,6 @@ edition.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-rivet-util.workspace = true
 serde_bare.workspace = true
 serde.workspace = true
 vbare.workspace = true
