@@ -116,10 +116,10 @@ On startup, your backend calls `registry.startEnvoy()` which opens a persistent 
 
 #### Runner Pool
 
-Use `RIVET_RUNNER` to assign runners to a pool. This lets you control which runners handle specific actors.
+Use `RIVET_POOL` to assign runners to a pool. This lets you control which runners handle specific actors.
 
 ```bash
-RIVET_RUNNER=gpu-workers
+RIVET_POOL=gpu-workers
 ```
 
 ```typescript

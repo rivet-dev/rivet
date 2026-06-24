@@ -19,7 +19,7 @@ public struct ClientConfig: Sendable {
         let env = ProcessInfo.processInfo.environment
         let tokenValue = token ?? env["RIVET_TOKEN"]
         let namespaceValue = namespace ?? env["RIVET_NAMESPACE"]
-        let runnerValue = runnerName ?? env["RIVET_RUNNER"] ?? "default"
+        let runnerValue = runnerName ?? env["RIVET_POOL"] ?? env["RIVET_RUNNER"] ?? "default"
 
         let parsed = try EndpointParser.parse(
             endpoint: endpoint,

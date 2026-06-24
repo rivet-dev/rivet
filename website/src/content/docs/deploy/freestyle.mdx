@@ -77,7 +77,7 @@ declare const buildDir: string;
 const res = await freestyle.deployWeb(buildDir, {
 	envVars: {
 		FREESTYLE_ENDPOINT: `https://${FREESTYLE_DOMAIN}`,
-		RIVET_RUNNER_KIND: "serverless",
+		RIVETKIT_RUNTIME_MODE: "serverless",
 		// For self-hosted instances:
 		// RIVET_ENDPOINT: "http://127.0.0.1:6420",
 		RIVET_ENDPOINT: "api.rivet.dev",

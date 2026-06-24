@@ -114,13 +114,13 @@ dist/
 
 ### Dockerfile
 
-Use this as a base Dockerfile for deploying a RivetKit project. The `RIVET_RUNNER_VERSION` build arg is only needed when self-hosting or using a custom runner (not needed for Rivet Compute). It lets Rivet track which version of the actor is running and drain old actors on deploy. See https://rivet.dev/docs/actors/versions for details.
+Use this as a base Dockerfile for deploying a RivetKit project. The `RIVET_ENVOY_VERSION` build arg is only needed when self-hosting or using a custom runner (not needed for Rivet Compute). It lets Rivet track which version of the actor is running and drain old actors on deploy. See https://rivet.dev/docs/actors/versions for details.
 
 ```dockerfile
 FROM node:24-alpine
 
-ARG RIVET_RUNNER_VERSION
-ENV RIVET_RUNNER_VERSION=$RIVET_RUNNER_VERSION
+ARG RIVET_ENVOY_VERSION
+ENV RIVET_ENVOY_VERSION=$RIVET_ENVOY_VERSION
 
 WORKDIR /app
 
@@ -136,7 +136,7 @@ CMD ["node", "dist/index.js"]
 Build with:
 
 ```bash
-docker build --build-arg RIVET_RUNNER_VERSION=$(date +%s) .
+docker build --build-arg RIVET_ENVOY_VERSION=$(date +%s) .
 ```
 
 Adjust the `CMD` to match the project's entry point. If the project uses a different output directory or start command, update accordingly.
