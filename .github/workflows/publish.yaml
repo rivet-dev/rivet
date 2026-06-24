@@ -577,7 +577,8 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           pnpm --filter=publish exec tsx src/ci/bin.ts publish-crates \
-            --version ${{ needs.context.outputs.version }}
+            --version ${{ needs.context.outputs.version }} \
+            --allow-dirty
 
       - name: Create Docker multi-arch manifests
         run: pnpm --filter=publish exec tsx src/ci/bin.ts docker-manifest --sha ${{ needs.context.outputs.sha }}
