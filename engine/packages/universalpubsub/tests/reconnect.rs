@@ -43,7 +43,7 @@ async fn test_nats_driver_with_memory_reconnect() {
 	.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
 
-	test_all_inner(&pubsub, &docker).await;
+	test_all_inner(&pubsub, &docker, true).await;
 }
 
 #[tokio::test]
@@ -77,7 +77,7 @@ async fn test_nats_driver_without_memory_reconnect() {
 	.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
-	test_all_inner(&pubsub, &docker).await;
+	test_all_inner(&pubsub, &docker, true).await;
 }
 
 #[tokio::test]
@@ -95,13 +95,12 @@ async fn test_postgres_driver_with_memory_reconnect() {
 	};
 	let url = pg.url.read().clone();
 
-	let driver =
-		universalpubsub::driver::postgres::PostgresDriver::connect(url, true, None, None, None)
-			.await
-			.unwrap();
+	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
+		.await
+		.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
 
-	test_all_inner(&pubsub, &docker).await;
+	test_all_inner(&pubsub, &docker, false).await;
 }
 
 #[tokio::test]
@@ -119,19 +118,27 @@ async fn test_postgres_driver_without_memory_reconnect() {
 	};
 	let url = pg.url.read().clone();
 
-	let driver =
-		universalpubsub::driver::postgres::PostgresDriver::connect(url, false, None, None, None)
-			.await
-			.unwrap();
+	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
+		.await
+		.unwrap();
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
-	test_all_inner(&pubsub, &docker).await;
+	test_all_inner(&pubsub, &docker, false).await;
 }
 
-async fn test_all_inner(pubsub: &PubSub, docker: &rivet_test_deps_docker::DockerRunConfig) {
+async fn test_all_inner(
+	pubsub: &PubSub,
+	docker: &rivet_test_deps_docker::DockerRunConfig,
+	supports_subscribe_while_stopped: bool,
+) {
 	test_reconnect_inner(&pubsub, &docker).await;
 	test_publish_while_stopped(&pubsub, &docker).await;
-	test_subscribe_while_stopped(&pubsub, &docker).await;
+	// The table-backed Postgres driver must read its cursor and register in the
+	// responder table when subscribing, so it cannot subscribe while the backend is
+	// fully down. NATS buffers the subscribe and reconnects, so it can.
+	if supports_subscribe_while_stopped {
+		test_subscribe_while_stopped(&pubsub, &docker).await;
+	}
 }
 
 async fn test_reconnect_inner(pubsub: &PubSub, docker: &rivet_test_deps_docker::DockerRunConfig) {
