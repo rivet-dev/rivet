@@ -1,6 +1,8 @@
 import * as yaml from "js-yaml";
 import { CORE_NETWORK_NAME, type TemplateContext } from "./context";
 
+const RUNNER_CONFIG_INIT_SERVICE = "runner-config-init";
+
 export function generateDockerCompose(context: TemplateContext) {
 	const config = context.config;
 
@@ -172,6 +174,10 @@ export function generateDockerCompose(context: TemplateContext) {
 		services[postgresServiceName] = {
 			restart: "unless-stopped",
 			image: "postgres:18-alpine",
+			// Each engine opens a UDB connection pool (up to 64 connections) plus a
+			// dedicated LISTEN connection and pubsub, so a multi-engine datacenter
+			// needs far more than the default max_connections of 100.
+			command: ["postgres", "-c", "max_connections=500"],
 			environment: [
 				"POSTGRES_USER=postgres",
 				"POSTGRES_PASSWORD=postgres",
@@ -179,7 +185,7 @@ export function generateDockerCompose(context: TemplateContext) {
 			],
 			volumes: [
 				`./${context.getDatacenterServicePath("postgres", datacenter.name)}/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh`,
-				`${postgresVolumeName}:/var/lib/postgresql/data`,
+				`${postgresVolumeName}:/var/lib/postgresql`,
 			],
 			ports: isPrimary ? [`5432:5432`] : undefined,
 			healthcheck: {
@@ -194,7 +200,7 @@ export function generateDockerCompose(context: TemplateContext) {
 
 		services[shellServiceName] = {
 			build: {
-				context: "../../..",
+				context: "../..",
 				dockerfile: "docker/engine/Dockerfile",
 				target: "engine-full",
 				args: {
@@ -275,7 +281,7 @@ export function generateDockerCompose(context: TemplateContext) {
 
 			services[serviceName] = {
 				build: {
-					context: "../../..",
+					context: "../..",
 					dockerfile: "docker/engine/Dockerfile",
 					target: "engine-full",
 					args: {
@@ -335,29 +341,78 @@ export function generateDockerCompose(context: TemplateContext) {
 
 			services[serviceName] = {
 				build: {
-					context: "../../..",
-					dockerfile: "engine/sdks/rust/test-envoy/Dockerfile",
+					context: "../..",
+					dockerfile: "examples/kitchen-sink/Dockerfile",
+					// The runner copies the host-built napi binary, so the base
+					// image must have a glibc at least as new as the build host.
+					args: {
+						NODE_IMAGE: "node:22-trixie-slim",
+					},
 				},
 				platform: "linux/amd64",
 				restart: "unless-stopped",
 				environment: [
+					`RIVET_KITCHEN_SINK_MODE=serverful`,
 					`RIVET_ENDPOINT=http://${context.getServiceHost("rivet-engine", datacenter.name, 0)}:6420`,
-					`INTERNAL_SERVER_PORT=5050`,
-					`RIVET_POOL_NAME=test-envoy`,
-					`AUTOSTART_ENVOY=1`,
-					`AUTOCONFIGURE_SERVERLESS=0`
+					`RIVET_TOKEN=dev`,
+					`RIVET_NAMESPACE=default`,
+					`RIVET_POOL=default`,
+					`PORT=8080`,
 				],
 				stop_grace_period: "4s",
-				ports: isPrimary && i === 0 ? [`5050:5050`] : undefined,
+				ports: isPrimary && i === 0 ? [`5050:8080`] : undefined,
 				depends_on: {
 					[engineServiceName]: {
 						condition: "service_healthy",
+					},
+					[RUNNER_CONFIG_INIT_SERVICE]: {
+						condition: "service_completed_successfully",
 					},
 				},
 				networks: [dcNetworkName],
 			};
 		}
 	});
+
+	// Serverful runners are rejected with `no_runner_config` until a runner
+	// config exists for their pool, so a one-shot init container upserts a
+	// `normal` runner config for the `default` pool across every datacenter once
+	// the leader engine is healthy. The runners wait for this to finish.
+	const primaryDc = config.datacenters[0];
+	const primaryEngineHost = context.getServiceHost(
+		"rivet-engine",
+		primaryDc.name,
+		0,
+	);
+	const primaryEngineService = context.getServiceName(
+		"rivet-engine",
+		primaryDc.name,
+		0,
+	);
+	const runnerConfigBody = JSON.stringify({
+		datacenters: Object.fromEntries(
+			config.datacenters.map((dc) => [dc.name, { normal: {} }]),
+		),
+	});
+	const runnerConfigScript = [
+		`until curl -fsS -X PUT`,
+		`"http://${primaryEngineHost}:6420/runner-configs/default?namespace=default"`,
+		`-H "Authorization: Bearer dev"`,
+		`-H "Content-Type: application/json"`,
+		`-d '${runnerConfigBody}';`,
+		`do echo "waiting for engine to accept runner config"; sleep 2; done;`,
+		`echo "runner config upserted"`,
+	].join(" ");
+	services[RUNNER_CONFIG_INIT_SERVICE] = {
+		image: "curlimages/curl:latest",
+		restart: "no",
+		depends_on: {
+			[primaryEngineService]: { condition: "service_healthy" },
+		},
+		entrypoint: ["sh", "-c"],
+		command: [runnerConfigScript],
+		networks: [context.getDatacenterNetworkName(primaryDc.name)],
+	};
 
 	const dockerComposeConfig = {
 		services,
