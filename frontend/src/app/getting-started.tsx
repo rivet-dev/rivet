@@ -678,7 +678,7 @@ function AgentOsKeyNotice() {
 					from the host process, so your server passes it to each
 					session.{" "}
 					<a
-						href="https://rivet.dev/docs/agent-os/llm-credentials"
+						href="https://agentos-sdk.dev/docs/llm-credentials/"
 						target="_blank"
 						rel="noreferrer"
 						className="text-primary hover:underline"
