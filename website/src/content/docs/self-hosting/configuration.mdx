@@ -76,5 +76,5 @@ Use `samples: 1` for a uniform random pick that skips slot reads. Use `samples >
 ## Related
 
 - RivetKit actor runtime persistence lives in SQLite. Existing actor KV data is imported into SQLite the first time an actor wakes on the migrated runtime, then the original KV data is left frozen for downgrade safety.
-- [PostgreSQL](/docs/self-hosting/postgres): Configure the PostgreSQL backend for multi-node deployments
-- [File System](/docs/self-hosting/filesystem): Configure file system storage for development
+- [PostgreSQL](/docs/self-hosting/postgres): Configure the PostgreSQL backend for multi-node and multi-region deployments
+- [File System](/docs/self-hosting/filesystem): Configure file system storage for single-node deployments

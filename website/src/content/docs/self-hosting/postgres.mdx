@@ -8,6 +8,16 @@ skill: true
 PostgreSQL is the recommended backend for multi-node self-hosted deployments. It is production-ready for light-to-moderate workloads, up to roughly 1,000 concurrent actors, but is not built for enterprise scale beyond that. For a single-node deployment, use the file system backend (RocksDB-based). Teams running larger or high-throughput realtime workloads should contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 </Warning>
 
+## Overview
+
+PostgreSQL is the storage and coordination backend for self-hosted Rivet deployments that run more than one engine node. Multiple engine nodes can share a single PostgreSQL instance with no extra coordination service to deploy. Rivet handles leader election, failover, and version sequencing internally.
+
+Use PostgreSQL when you need:
+
+- **Multiple engine nodes** behind a load balancer for redundancy and horizontal scaling.
+- **Multi-region deployments** (deploy one PostgreSQL instance per region, see [Multi-Region](/docs/self-hosting/multi-region)).
+- **High availability** with a managed or self-managed primary/replica failover setup.
+
 ## Choosing a Backend
 
 Pick your database backend based on how many engine nodes you run:
@@ -58,6 +68,41 @@ Multi-node PostgreSQL deployments require NATS as the pub/sub backend so engine 
 </CodeGroup>
 
 See the [production checklist](/docs/self-hosting/production-checklist#nats) and [Configuration](/docs/self-hosting/configuration) for details.
+
+## Requirements and Recommendations
+
+### Version
+
+Use PostgreSQL 14 or newer. Rivet is tested against PostgreSQL 18, which is recommended for new deployments.
+
+### Connection Limits
+
+Each Rivet engine node opens a pool of direct connections to PostgreSQL and can use well over a hundred connections per node under load. PostgreSQL's default `max_connections` of `100` is too low for even a single busy engine node.
+
+- Set PostgreSQL `max_connections` to comfortably exceed `(number of engine nodes × 150)` plus headroom for backups, monitoring, and your own queries.
+- If you use a managed PostgreSQL service, confirm its connection limit is high enough or pick a tier that allows raising it. Connection exhaustion shows up as engine startup failures or stalled requests under load.
+
+<Warning>
+Do not work around the connection limit with a connection pooler. See [Do Not Use Connection Poolers](#do-not-use-connection-poolers) below.
+</Warning>
+
+### Resources
+
+PostgreSQL is the system of record for the entire deployment, so size it accordingly:
+
+- Give PostgreSQL dedicated CPU, memory, and fast disk (SSD/NVMe with high IOPS). Avoid co-locating it with other heavy workloads.
+- Rivet generates steady write and row-turnover on its internal tables. Keep autovacuum enabled and healthy so dead tuples do not accumulate.
+
+### High Availability and Backups
+
+A single PostgreSQL instance is a single point of failure for your whole deployment.
+
+- Configure a standby replica with automatic failover (managed services such as Amazon RDS, Cloud SQL, and Azure Database provide this).
+- Enable automated backups and point-in-time recovery, and periodically test restoring from them.
+
+### Multi-Region
+
+Deploy one PostgreSQL instance per region or datacenter. Engine nodes connect to the PostgreSQL instance in their own region. See [Multi-Region](/docs/self-hosting/multi-region) for the full topology.
 
 ## Managed Postgres Compatibility
 
@@ -209,3 +254,15 @@ Do not use:
 - PgBouncer
 - Supavisor
 - AWS RDS Proxy
+
+
+## Troubleshooting
+
+### Too Many Connections
+
+Errors like `FATAL: sorry, too many clients already` or engine nodes failing to start under load mean PostgreSQL's `max_connections` is too low. Raise it to account for every engine node (see [Connection Limits](#connection-limits)). Do not add a connection pooler to work around this.
+
+### Connection Refused or TLS Errors
+
+- Confirm the engine connects directly to PostgreSQL and not through a pooler (PgBouncer, Supavisor, RDS Proxy). Rivet requires direct connections.
+- For TLS errors, verify `sslmode` matches your server and, for custom certificate authorities, that `ssl.root_cert_path` points to the correct CA certificate. See [SSL/TLS Support](#ssltls-support).
