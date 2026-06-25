@@ -12,7 +12,10 @@ use crate::{
 		ensure_namespace, registry_endpoint, wait_for_pool,
 	},
 	credentials::{resolve_token, write_credentials},
-	util::{default_image_tag, docker_build, docker_login, encode, parse_env_vars, run_command},
+	util::{
+		build_resources, default_image_tag, docker_build, docker_login, encode, parse_env_vars,
+		run_command,
+	},
 };
 
 #[derive(Parser)]
@@ -50,6 +53,20 @@ pub struct Opts {
 	/// Image tag. Defaults to the current git short SHA, or a timestamp outside git.
 	#[arg(long)]
 	tag: Option<String>,
+	/// vCPU count per actor. Range 0.08 to 8; must be 1, 2, 4, or 8, or a value
+	/// in [0.08, 1) with at most two decimals. Defaults to 1 server-side.
+	#[arg(long)]
+	cpu: Option<f64>,
+	/// Memory per actor as <number>Mi or <number>Gi, between 512Mi and 4Gi.
+	/// Defaults to 512Mi server-side.
+	#[arg(long)]
+	memory: Option<String>,
+	/// Minimum number of actors to keep running. Range 0 to 100. Defaults to 0 server-side.
+	#[arg(long)]
+	min_scale: Option<u32>,
+	/// Maximum number of actors to scale to. Range 1 to 500. Defaults to 1 server-side.
+	#[arg(long)]
+	max_scale: Option<u32>,
 }
 
 impl Opts {
@@ -62,6 +79,14 @@ impl Opts {
 		if !self.dockerfile.exists() {
 			bail!("Dockerfile not found: {}", self.dockerfile.display());
 		}
+
+		// Validate compute resources client-side before doing any build work.
+		let resources = build_resources(
+			self.cpu,
+			self.memory.as_deref(),
+			self.min_scale,
+			self.max_scale,
+		)?;
 
 		let cloud = CloudClient::new(&self.cloud_api, token.clone())?;
 		tracing::info!("inspecting Rivet Cloud token");
@@ -127,6 +152,9 @@ impl Opts {
 		let env_map = parse_env_vars(&self.env_vars)?;
 		if !env_map.is_empty() {
 			pool_body["environment"] = serde_json::to_value(env_map)?;
+		}
+		if let Some(resources) = resources {
+			pool_body["resources"] = resources;
 		}
 		create_or_update_pool(&cloud, &project, &organization, &namespace.name, pool_body).await?;
 		wait_for_pool(&cloud, &project, &organization, &namespace.name, true).await?;
