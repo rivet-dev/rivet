@@ -39,7 +39,11 @@ type SiteTab = {
 	title: string;
 	href: Href;
 	external?: boolean;
-	sidebar: SidebarItem[];
+	// Anchor target, e.g. "_blank" for tabs that link out to another site.
+	target?: string;
+	// Optional for tabs that link out to an external site and have no in-site
+	// sidebar tree of their own.
+	sidebar?: SidebarItem[];
 	badge?: string;
 };
 
@@ -89,7 +93,7 @@ export function findPageForHref(
 			const found = findPageForHref(normalizedPath, childPage, page);
 			if (found) return found;
 		}
-	} else if ("sidebar" in page) {
+	} else if ("sidebar" in page && page.sidebar) {
 		for (const childPage of page.sidebar) {
 			const found = findPageForHref(normalizedPath, childPage, page);
 			if (found) return found;

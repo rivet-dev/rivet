@@ -1,5 +1,4 @@
 import { Icon } from "@rivet-gg/icons";
-import { AnimatedAgentOSLogo } from "@/components/marketing/solutions/AgentOSPage";
 import actorsLogo from "@/images/products/actors-logo.svg";
 
 export interface DocsLandingItem {
@@ -18,10 +17,9 @@ export interface DocsLandingSection {
 export interface DocsLandingData {
 	title: string;
 	subtitle?: string;
-	// Optional product logo shown above the title in the hero. "agentos" renders
-	// the animated agentOS logo reused from the marketing page; "actors" renders
+	// Optional product logo shown above the title in the hero. "actors" renders
 	// the static actors logo.
-	logo?: "agentos" | "actors";
+	logo?: "actors";
 	sections: DocsLandingSection[];
 }
 
@@ -30,18 +28,8 @@ function HeroTitle({
 	logo,
 }: {
 	title: string;
-	logo?: "agentos" | "actors";
+	logo?: "actors";
 }) {
-	if (logo === "agentos") {
-		// The animated agentOS logo is the wordmark, so it stands in for the title.
-		// The source wordmark is black, which reads correctly on the light
-		// porcelain docs background.
-		return (
-			<div className="mb-4 flex items-center justify-center">
-				<AnimatedAgentOSLogo className="h-12 w-auto md:h-16" />
-			</div>
-		);
-	}
 	if (logo === "actors") {
 		return (
 			<div className="mb-4 flex items-center justify-center gap-3">

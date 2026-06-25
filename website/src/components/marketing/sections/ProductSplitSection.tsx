@@ -113,9 +113,10 @@ interface ProductCardProps {
 	detailsHref: string;
 	features: { icon: typeof Database; title: string; description: string }[];
 	delay: number;
+	external?: boolean;
 }
 
-const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, delay }: ProductCardProps) => (
+const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, delay, external }: ProductCardProps) => (
 	<motion.div
 		initial={{ opacity: 0, y: 20 }}
 		whileInView={{ opacity: 1, y: 0 }}
@@ -135,12 +136,16 @@ const ProductCard = ({ icon, title, tagline, docsHref, detailsHref, features, de
 		<div className='mb-8 flex flex-wrap gap-3'>
 			<a
 				href={docsHref}
+				target={external ? '_blank' : undefined}
+				rel={external ? 'noopener noreferrer' : undefined}
 				className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md bg-ink px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-ink/85'
 			>
 				Documentation
 			</a>
 			<a
 				href={detailsHref}
+				target={external ? '_blank' : undefined}
+				rel={external ? 'noopener noreferrer' : undefined}
 				className='inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md border border-ink/20 px-4 py-2 text-sm text-ink-soft transition-colors hover:border-ink/40 hover:text-ink'
 			>
 				Details
@@ -201,10 +206,11 @@ export const ProductSplitSection = () => (
 					icon={<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6 invert' />}
 					title='agentOS'
 					tagline='A portable, lightweight in-process OS for agents. Open source, built on Wasm + V8.'
-					docsHref='/docs/agent-os'
-					detailsHref='/agent-os'
+					docsHref='https://agentos-sdk.dev'
+					detailsHref='https://agentos-sdk.dev'
 					features={agentOSFeatures}
 					delay={0.1}
+					external
 				/>
 			</div>
 		</div>

@@ -45,18 +45,6 @@ export const cookbookCovers: Record<string, CookbookCoverArt> = {
 		// Push up onto the bowed head and hand at the chin.
 		ken: { x: "0%", y: "3%", scale: 1.2 },
 	},
-	"ai-agent-workspace": {
-		artwork:
-			"The Alchymist Discovering Phosphorus, William Pether after Joseph Wright of Derby, 1771",
-		src: "https://assets.rivet.dev/website/images/cookbook/alchymist-discovering-phosphorus.jpg",
-		width: 2679,
-		height: 3400,
-		transform: "scale(1.55)",
-		transformOrigin: "26% 74%",
-		filter: "brightness(1.18)",
-		// Drift into the glowing flask at lower-left.
-		ken: { x: "2%", y: "-2%", scale: 1.16 },
-	},
 	"chat-room": {
 		artwork: "Merry Company on a Terrace, Jan Steen, ca. 1670",
 		src: "https://assets.rivet.dev/website/images/cookbook/merry-company-on-a-terrace.jpg",

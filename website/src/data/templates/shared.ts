@@ -33,16 +33,6 @@ export const templates: Template[] = [
 		providers: { vercel: null },
 	},
 	{
-		name: "agent-os",
-		displayName: "agentOS",
-		description:
-			"Runnable agentOS examples covering the workspace filesystem, processes, networking with signed preview URLs, cron, host tools, agent sessions, and sandbox mounting.",
-		tags: ["ai"],
-		technologies: [],
-		providers: { vercel: null },
-		noFrontend: true,
-	},
-	{
 		name: "chat-room",
 		displayName: "Chat Room",
 		description:

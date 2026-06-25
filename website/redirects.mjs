@@ -4,9 +4,15 @@
 // fallback pages stay in sync) and by `scripts/generate-caddy-redirects.mjs`
 // (which emits real HTTP 301s at the Caddy layer for production).
 //
-// Keys and values are path-only (no origin). Targets should end in `/` to
-// match the site's canonical trailing-slash form and avoid a second redirect
-// hop.
+// Keys and values are path-only (no origin) for internal redirects. Internal
+// targets should end in `/` to match the site's canonical trailing-slash form
+// and avoid a second redirect hop.
+//
+// External redirects to the agentOS site (`https://agentos-sdk.dev`) are also
+// supported. agentOS was split out into its own site, so every `/agent-os` and
+// `/docs/agent-os` path redirects out to it. See `EXTERNAL_REDIRECT_HOST` and
+// `wildcardRedirects` below, and the matching handling in
+// `scripts/generate-caddy-redirects.mjs`.
 export const redirects = {
 	'/docs': '/docs/actors/',
 	// Documentation restructure
@@ -66,4 +72,34 @@ export const redirects = {
 	'/solutions/workflows': '/',
 	// Changelog list view merged into the blog index
 	'/changelog': '/blog/',
+	// agentOS moved to its own site at https://agentos-sdk.dev.
+	// Marketing pages and the former "From Unix to Agents" essay all point at the
+	// new site root. Per-page marketing paths do not have a clean 1:1 mapping on
+	// the new site, so the whole `/agent-os` prefix collapses to the root.
+	'/agent-os': 'https://agentos-sdk.dev',
+	'/agent-os/pricing': 'https://agentos-sdk.dev',
+	'/agent-os/use-cases': 'https://agentos-sdk.dev',
+	'/agent-os/registry': 'https://agentos-sdk.dev',
+	'/from-unix-to-agents': 'https://agentos-sdk.dev',
+	'/install': 'https://agentos-sdk.dev',
+	'/registry': 'https://agentos-sdk.dev',
+	// agentOS docs collapse to the new site root.
+	'/docs/agent-os': 'https://agentos-sdk.dev',
+	// The agentOS workspace cookbook moved with the rest of agentOS.
+	'/cookbook/ai-agent-workspace': 'https://agentos-sdk.dev',
 };
+
+// External host that wildcard and absolute-URL redirect targets are restricted
+// to. Used by both the Astro config and the Caddy generator so neither consumer
+// can accidentally emit a redirect to an arbitrary host.
+export const EXTERNAL_REDIRECT_HOST = 'agentos-sdk.dev';
+
+// Wildcard (prefix) redirects. Any request under `from` (at any depth) is sent
+// to `to`. agentOS moved to its own site as a single destination, so every
+// `/agent-os/*` and `/docs/agent-os/*` sub-path collapses to the new site root
+// rather than mapping its suffix through. The `/agent-os` prefix subsumes
+// `/agent-os/registry/*` and any other deep marketing path.
+export const wildcardRedirects = [
+	{ from: '/agent-os', to: 'https://agentos-sdk.dev' },
+	{ from: '/docs/agent-os', to: 'https://agentos-sdk.dev' },
+];
