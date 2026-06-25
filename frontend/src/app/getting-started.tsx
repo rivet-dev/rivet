@@ -1,8 +1,10 @@
 import {
+	faActors,
 	faArrowRight,
 	faCheck,
 	faChevronDown,
 	faCopy,
+	faKey,
 	Icon,
 } from "@rivet-gg/icons";
 import { deployOptions, type Provider } from "@rivetkit/shared-data";
@@ -14,7 +16,7 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { type ReactNode, Suspense } from "react";
+import { type ReactNode, Suspense, useContext, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
@@ -26,6 +28,7 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	FormField,
 	Skeleton,
 } from "@/components";
 import {
@@ -56,8 +59,15 @@ import {
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
 import { EnvVariables, useRivetDsn } from "./env-variables";
-import { StepperForm } from "./forms/stepper-form";
+import { StepperForm, StepVisibilityContext } from "./forms/stepper-form";
 import { Content } from "./layout";
+import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
+import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
+import {
+	DEFAULT_AGENT,
+	DEFAULT_PACKAGES,
+	DEFAULT_SANDBOX_PROVIDER,
+} from "@/components/onboarding/agent-os/catalog";
 import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
 import {
 	getAgentInstructionsPrompt,
@@ -75,10 +85,42 @@ const stepper = defineStepper(
 	{
 		id: "local",
 		title: "Run locally",
+		titleFor: (values: Record<string, unknown>) =>
+			values.template === "agent-os"
+				? "What are you building?"
+				: "Run locally",
 		description: "Get your first Rivet Actor running on your machine.",
+		next: "Continue",
+		// `template` is carried in the step schema so the stepper accumulates it
+		// into its running values. The agentOS steps below gate on it via
+		// isVisible, so it must survive navigation past this step.
+		schema: z.object({
+			template: z.enum(["actor", "agent-os"]).optional(),
+		}),
+		group: "local",
+	},
+	// agentOS-only steps. Hidden for the actor path via isVisible, so the
+	// stepper skips them and the wizard stays a two-step local -> deploy flow.
+	{
+		id: "agent",
+		title: "Choose your agent",
+		description: "Pick the coding agent to run inside agentOS.",
+		next: "Continue",
+		schema: z.object({ agent: z.string().nonempty() }),
+		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
+	},
+	{
+		id: "handoff",
+		title: "Set up agentOS",
+		description:
+			"Boot an agentOS instance and run your first session, locally.",
 		next: "Continue to deploy",
 		schema: z.object({}),
 		group: "local",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "agent-os",
 	},
 	{
 		id: "deploy",
@@ -188,6 +230,13 @@ export function GettingStarted({
 		datacenters: {},
 		datacenter: "",
 		mode: "serverless" as "serverless" | "serverfull",
+		template: "actor" as "actor" | "agent-os",
+		agent: DEFAULT_AGENT,
+		packages: DEFAULT_PACKAGES,
+		sandbox: { enabled: false, provider: DEFAULT_SANDBOX_PROVIDER } as {
+			enabled: boolean;
+			provider?: string;
+		},
 		...(initialRunnerConfig || {}),
 	};
 
@@ -271,6 +320,16 @@ export function GettingStarted({
 									local: () => (
 										<StepContent>
 											<RunLocallyStep />
+										</StepContent>
+									),
+									agent: () => (
+										<StepContent>
+											<AgentSelectStep />
+										</StepContent>
+									),
+									handoff: () => (
+										<StepContent>
+											<AgentOsHandoff />
 										</StepContent>
 									),
 									deploy: () => (
@@ -479,8 +538,10 @@ function RivetDeploy() {
 		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
 	);
 	const deployCommand = `npx @rivetkit/cli deploy --token ${cloudToken ?? "<RIVET_CLOUD_TOKEN>"}`;
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider="rivet" />
 			<OrDivider label="or deploy manually" />
 			<div>
@@ -538,9 +599,13 @@ function SkipOnboardingHeaderLink() {
 
 function OnboardingProgress({ action }: { action?: ReactNode }) {
 	const s = stepper.useStepper();
-	const steps = s.all;
-	const currentIndex = steps.findIndex((step) => step.id === s.current.id);
-	const total = steps.length;
+	const { isStepVisible, visibleStepIndex, visibleStepCount } =
+		useContext(StepVisibilityContext);
+	// Count only steps visible for the current path (agentOS adds steps that are
+	// hidden for the actor path), so "Step X of N" and the dots stay accurate.
+	const steps = s.all.filter((step) => isStepVisible(step.id));
+	const currentIndex = Math.max(0, visibleStepIndex(s.current.id));
+	const total = visibleStepCount;
 	const groupLabel = s.current.group === "local" ? "Local setup" : "Deploy";
 	return (
 		<div className="mb-6 flex flex-col gap-2">
@@ -595,34 +660,269 @@ function CommandBox({ command }: { command: string }) {
 	);
 }
 
+function AgentOsKeyNotice() {
+	return (
+		<div className="flex gap-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
+			<Icon
+				icon={faKey}
+				className="mt-0.5 shrink-0 text-muted-foreground"
+			/>
+			<div className="space-y-1">
+				<p className="font-medium">agentOS needs an LLM key</p>
+				<p className="text-muted-foreground text-xs">
+					Set{" "}
+					<code className="rounded bg-muted px-1 py-0.5 text-foreground">
+						ANTHROPIC_API_KEY
+					</code>{" "}
+					as a secret on your deployment. agentOS doesn't inherit it
+					from the host process, so your server passes it to each
+					session.{" "}
+					<a
+						href="https://agentos-sdk.dev/docs/llm-credentials/"
+						target="_blank"
+						rel="noreferrer"
+						className="text-primary hover:underline"
+					>
+						Learn more
+					</a>
+				</p>
+			</div>
+		</div>
+	);
+}
+
+// agentOS brand mark (rounded square + "OS") drawn in currentColor so it adapts
+// to the theme, unlike the white-only marketing SVG.
+function AgentOsLogo({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 32 32"
+			fill="none"
+			className={className}
+			aria-hidden="true"
+		>
+			<rect
+				x="2.75"
+				y="2.75"
+				width="26.5"
+				height="26.5"
+				rx="8"
+				stroke="currentColor"
+				strokeWidth="2.5"
+			/>
+			<text
+				x="16"
+				y="20.5"
+				textAnchor="middle"
+				fontSize="11"
+				fontWeight="700"
+				fontFamily="inherit"
+				fill="currentColor"
+			>
+				OS
+			</text>
+		</svg>
+	);
+}
+
+function BuildTargetCard({
+	icon,
+	label,
+	description,
+	badge,
+	isSelected,
+	onSelect,
+}: {
+	icon: ReactNode;
+	label: string;
+	description: string;
+	badge?: string;
+	isSelected: boolean;
+	onSelect: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onSelect}
+			className={cn(
+				"flex items-start gap-3 rounded-lg border px-4 py-3 text-left transition-colors cursor-pointer",
+				isSelected
+					? "border-primary bg-primary/5"
+					: "border-border hover:border-muted-foreground/50",
+			)}
+		>
+			<span className="text-muted-foreground mt-0.5 shrink-0">{icon}</span>
+			<div className="min-w-0">
+				<div className="flex items-center gap-2">
+					<p className="text-sm font-medium">{label}</p>
+					{badge ? (
+						<Badge
+							variant="outline"
+							className="text-[10px] leading-none py-0.5 px-1.5 font-medium"
+						>
+							{badge}
+						</Badge>
+					) : null}
+				</div>
+				<p className="text-xs text-muted-foreground">{description}</p>
+			</div>
+		</button>
+	);
+}
+
+// "What are you building?" selector shown atop the first step when the agentOS
+// feature flag is on. Picking agentOS reveals the agent/software/sandbox/handoff
+// steps (gated by `template === "agent-os"` via the stepper's isVisible).
+function BuildTargetSelector() {
+	const { control, setValue } = useFormContext();
+	return (
+		<FormField
+			control={control}
+			name="template"
+			render={({ field }) => (
+				<div>
+					<p className="font-medium mb-2">What are you building?</p>
+					<div className="grid grid-cols-2 gap-2">
+						<BuildTargetCard
+							icon={<Icon icon={faActors} className="!size-5" />}
+							label="Rivet Actors"
+							description="Realtime, state, and multiplayer for any app"
+							isSelected={field.value !== "agent-os"}
+							onSelect={() =>
+								setValue("template", "actor", {
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								})
+							}
+						/>
+						<BuildTargetCard
+							icon={<AgentOsLogo className="size-5" />}
+							label="agentOS"
+							badge="Beta"
+							description="An open-source OS for agents. Runs in-process with ~6 ms cold starts."
+							isSelected={field.value === "agent-os"}
+							onSelect={() =>
+								setValue("template", "agent-os", {
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								})
+							}
+						/>
+					</div>
+				</div>
+			)}
+		/>
+	);
+}
+
 function RunLocallyStep() {
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	return (
 		<div className="flex flex-col gap-6">
-			{features.compute ? (
-				<RunLocallyComputeBanner />
-			) : (
-				<RunLocallyGenericBanner />
+			{features.agentOs ? <BuildTargetSelector /> : null}
+			{isAgentOs ? null : (
+				<>
+					{features.compute ? (
+						<RunLocallyComputeBanner />
+					) : (
+						<RunLocallyGenericBanner />
+					)}
+					<OrDivider label="or do it yourself" />
+					<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
+						<div className="min-w-0">
+							<p className="font-medium mb-1">
+								Follow the quickstart guide
+							</p>
+							<p className="text-sm text-muted-foreground">
+								Build a Rivet Actor project by hand, step by
+								step.
+							</p>
+						</div>
+						<Button variant="outline" asChild className="shrink-0">
+							<a
+								href="https://rivet.dev/docs/actors/quickstart/"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								Quickstart guide
+								<Icon icon={faArrowRight} className="ms-2" />
+							</a>
+						</Button>
+					</div>
+				</>
 			)}
-			<OrDivider label="or do it yourself" />
-			<div className="w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-border">
-				<div className="min-w-0">
-					<p className="font-medium mb-1">
-						Follow the quickstart guide
-					</p>
-					<p className="text-sm text-muted-foreground">
-						Build a Rivet Actor project by hand, step by step.
-					</p>
+		</div>
+	);
+}
+
+// agentOS handoff: turns the agent/software/sandbox selections into the install
+// command, server.ts/client.ts, and a copy-prompt for the coding agent. Shown
+// as the final local-group step on the agentOS path.
+function AgentOsHandoff() {
+	const agent = useWatch({ name: "agent" }) as string | undefined;
+	const packages = useWatch({ name: "packages" }) as string[] | undefined;
+	const sandbox = useWatch({ name: "sandbox" }) as
+		| { enabled: boolean; provider?: string }
+		| undefined;
+
+	const setup = useMemo(
+		() =>
+			buildAgentOsSetup({
+				agent: agent ?? DEFAULT_AGENT,
+				packages: packages ?? DEFAULT_PACKAGES,
+				sandbox: sandbox ?? {
+					enabled: false,
+					provider: DEFAULT_SANDBOX_PROVIDER,
+				},
+			}),
+		[agent, packages, sandbox],
+	);
+
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={setup.prompt}
+				title="Use your coding agent"
+				description="Have your coding agent set up agentOS and run a session for you."
+			/>
+			<OrDivider label="or set it up yourself" />
+			<div className="flex flex-col gap-4">
+				<div>
+					<p className="font-medium mb-1.5">Install</p>
+					<CommandBox command={setup.installCommand} />
 				</div>
-				<Button variant="outline" asChild className="shrink-0">
-					<a
-						href="https://rivet.dev/docs/actors/quickstart/"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						Quickstart guide
-						<Icon icon={faArrowRight} className="ms-2" />
-					</a>
-				</Button>
+				<CodeGroup className="my-0">
+					{[
+						<CodeFrame
+							key="server"
+							language="typescript"
+							title="server.ts"
+							code={() => setup.serverCode}
+							className="m-0"
+						>
+							<CodePreview
+								language="typescript"
+								className="text-left"
+								code={setup.serverCode}
+							/>
+						</CodeFrame>,
+						<CodeFrame
+							key="client"
+							language="typescript"
+							title="client.ts"
+							code={() => setup.clientCode}
+							className="m-0"
+						>
+							<CodePreview
+								language="typescript"
+								className="text-left"
+								code={setup.clientCode}
+							/>
+						</CodeFrame>,
+					]}
+				</CodeGroup>
 			</div>
 		</div>
 	);
@@ -818,9 +1118,11 @@ function BackendSetupRivet() {
 	const ghSecretCmd = cloudToken
 		? `gh secret set RIVET_CLOUD_TOKEN --body "${cloudToken}"`
 		: "gh secret set RIVET_CLOUD_TOKEN";
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider="rivet" />
 			<OrDivider label="or set it up manually" />
 			<div className="flex gap-3">
@@ -933,6 +1235,7 @@ function BackendSetupRivet() {
 
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
+	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	const mode = useWatch({ name: "mode" }) as
 		| "serverless"
 		| "serverfull"
@@ -945,6 +1248,7 @@ function BackendSetup() {
 
 	return (
 		<div className="flex flex-col gap-6">
+			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider={provider} />
 			<OrDivider label="or set it up manually" />
 			<div>

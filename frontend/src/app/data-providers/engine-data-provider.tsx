@@ -201,7 +201,7 @@ export const createNamespaceContext = ({
 					);
 
 					for (const page of regions.pages) {
-						for (const region of page.datacenters) {
+						for (const region of page.datacenters ?? []) {
 							if (region.name === name) {
 								return region;
 							}
@@ -383,7 +383,7 @@ export const createNamespaceContext = ({
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
-					if (Object.keys(lastPage.names).length < RECORDS_PER_PAGE) {
+					if (Object.keys(lastPage.names ?? {}).length < RECORDS_PER_PAGE) {
 						return undefined;
 					}
 					return lastPage.pagination?.cursor;
@@ -627,7 +627,7 @@ export const createNamespaceContext = ({
 					return data;
 				},
 				getNextPageParam: (lastPage) => {
-					if (lastPage.names.length < RECORDS_PER_PAGE) {
+					if ((lastPage.names ?? []).length < RECORDS_PER_PAGE) {
 						return undefined;
 					}
 					return lastPage.pagination.cursor;
@@ -752,11 +752,11 @@ export const createNamespaceContext = ({
 
 				select: (data) =>
 					data.pages.flatMap((page) =>
-						Object.entries(page.runnerConfigs),
+						Object.entries(page.runnerConfigs ?? {}),
 					),
 				getNextPageParam: (lastPage) => {
 					if (
-						Object.values(lastPage.runnerConfigs).length <
+						Object.values(lastPage.runnerConfigs ?? {}).length <
 						RECORDS_PER_PAGE
 					) {
 						return undefined;
@@ -848,7 +848,10 @@ export const createNamespaceContext = ({
 						limit: 100,
 					});
 
-					const names = Object.keys(namesList.names);
+					// The engine may return `names` as null/undefined (rather than
+					// an empty object) for a namespace with no actors; guard so the
+					// existence probe resolves to 0 instead of throwing.
+					const names = Object.keys(namesList.names ?? {});
 					const BATCH_SIZE = 32;
 
 					for (let i = 0; i < names.length; i += BATCH_SIZE) {
@@ -910,7 +913,7 @@ export function hasProvider(
 ): boolean {
 	if (!configs) return false;
 	return configs.some(([, config]) =>
-		Object.values(config.datacenters).some(
+		Object.values(config.datacenters ?? {}).some(
 			(datacenter) =>
 				datacenter.metadata &&
 				hasMetadataProvider(datacenter.metadata) &&

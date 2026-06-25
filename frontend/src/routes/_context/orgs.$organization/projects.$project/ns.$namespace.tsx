@@ -139,7 +139,7 @@ export const Route = createFileRoute(
 		const cachedHasConfigs =
 			Object.keys(runnerConfigs?.pages[0]?.runnerConfigs ?? {}).length >
 			0;
-		const cachedHasNames = (runnerNames?.pages[0]?.names.length ?? 0) > 0;
+		const cachedHasNames = (runnerNames?.pages[0]?.names?.length ?? 0) > 0;
 
 		// Cache-first: only skip the slow blocking runner-config fetch when the
 		// cache already proves the backend is configured. An absent or empty
@@ -219,6 +219,21 @@ function CloudNamespaceModals() {
 		<>
 			<CreateActorSheet
 				open={search?.modal === "create-actor"}
+				onOpenChange={(value) => {
+					if (!value) {
+						return navigate({
+							to: ".",
+							search: (old) => ({
+								...old,
+								modal: undefined,
+							}),
+						});
+					}
+				}}
+			/>
+			<CreateActorSheet
+				variant="agent-os"
+				open={search?.modal === "create-agent-os"}
 				onOpenChange={(value) => {
 					if (!value) {
 						return navigate({

@@ -43,15 +43,18 @@ export function deriveOnboardingState(opts: {
 
 	const provider = (runnerConfigs?.pages ?? [])
 		.flatMap((page) =>
-			Object.values(page.runnerConfigs).flatMap((config) =>
-				Object.values(config.datacenters).map((dc) =>
+			// The engine may return `runnerConfigs` / a config's `datacenters`
+			// as null/undefined rather than empty objects; guard so deriving the
+			// onboarding state doesn't throw on a sparse backend response.
+			Object.values(page.runnerConfigs ?? {}).flatMap((config) =>
+				Object.values(config.datacenters ?? {}).map((dc) =>
 					deriveProviderFromMetadata(dc.metadata),
 				),
 			),
 		)
 		.find((p) => p !== undefined);
 
-	const hasRunnerNames = (runnerNames?.pages[0]?.names.length ?? 0) > 0;
+	const hasRunnerNames = (runnerNames?.pages[0]?.names?.length ?? 0) > 0;
 	// A runner-config datacenter counts as "user-onboarded" only when
 	// `metadata.provider` is set. Both onboarding signals write it: the
 	// serverless `upsertRunnerConfig` call here in the frontend, and the
@@ -61,8 +64,8 @@ export function deriveOnboardingState(opts: {
 	// keeps seeing the provider/backend onboarding step instead of being
 	// pushed straight to "Waiting for an Actor".
 	const hasConfiguredDatacenter = (runnerConfigs?.pages ?? []).some((page) =>
-		Object.values(page.runnerConfigs).some((config) =>
-			Object.values(config.datacenters).some(
+		Object.values(page.runnerConfigs ?? {}).some((config) =>
+			Object.values(config.datacenters ?? {}).some(
 				(dc) => deriveProviderFromMetadata(dc.metadata) !== undefined,
 			),
 		),
