@@ -19,6 +19,12 @@ const useDefaultOrg = () => {
 export type CreateProjectSuccessVars = {
 	displayName: string;
 	organization: string;
+	/**
+	 * Name of the namespace to land on after creation. The backend auto-creates
+	 * a "Production" namespace on project create, and landing on it triggers the
+	 * onboarding flow. Undefined if no namespace could be resolved.
+	 */
+	namespace: string | undefined;
 };
 
 export default function CreateProjectFrameContent({
@@ -43,6 +49,25 @@ export default function CreateProjectFrameContent({
 		...provider.createProjectMutationOptions(),
 	});
 
+	// Resolve the auto-created "Production" namespace so we can land on it and
+	// trigger the onboarding flow right after the project is created.
+	const resolveOnboardingNamespace = async (
+		organization: string,
+		project: string,
+	) => {
+		const data = await queryClient.fetchInfiniteQuery(
+			provider.orgProjectNamespacesQueryOptions({
+				organization,
+				project,
+			}),
+		);
+		const namespaces = data.pages.flatMap((page) => page.namespaces);
+		const production = namespaces.find(
+			(ns) => ns.displayName === "Production",
+		);
+		return (production ?? namespaces[0])?.name;
+	};
+
 	return (
 		<CreateProjectForm.Form
 			onSubmit={async (values) => {
@@ -55,13 +80,31 @@ export default function CreateProjectFrameContent({
 					provider.currentOrgProjectsQueryOptions(),
 				);
 
+				const namespace = await resolveOnboardingNamespace(
+					values.organization,
+					result.project.name,
+				);
+
 				const successVars: CreateProjectSuccessVars = {
 					displayName: values.name,
 					organization: values.organization,
+					namespace,
 				};
 
 				if (onSuccess) {
 					onSuccess(result, successVars);
+					return;
+				}
+
+				if (namespace) {
+					await navigate({
+						to: "/orgs/$organization/projects/$project/ns/$namespace",
+						params: {
+							organization: values.organization,
+							project: result.project.name,
+							namespace,
+						},
+					});
 					return;
 				}
 
