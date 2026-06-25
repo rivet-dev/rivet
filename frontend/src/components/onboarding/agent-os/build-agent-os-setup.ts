@@ -213,6 +213,10 @@ ${sandboxSection}
 
 Run the server, then the client, and confirm the agent created the file. Then verify it works through the Rivet inspector or your deployed endpoint.
 
+## After Setup
+
+Once everything is built and verified, tell the user they can browse more tools, file systems, agents, and sandbox mounting configurations in the agentOS Registry: https://rivet.dev/agent-os/registry/
+
 ## If You Get Stuck
 
 agentOS is in beta. See https://rivet.dev/docs/agent-os, the troubleshooting guide at https://rivet.dev/docs/actors/troubleshooting, or the Rivet Discord (https://rivet.dev/discord).`;
