@@ -1,48 +1,34 @@
-# Build stage
 FROM node:22-slim AS builder
 
 WORKDIR /app
 
-# Copy Docker-specific package.json (without workspace dependencies)
-COPY rivetkit-typescript/packages/mcp-hub/package.docker.json ./package.json
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+ENV SKIP_TYPECHECK_CODE_BLOCKS=1
 
-# Copy Docker-specific configs (without workspace references)
-COPY rivetkit-typescript/packages/mcp-hub/tsup.docker.config.ts ./tsup.config.ts
-COPY rivetkit-typescript/packages/mcp-hub/tsconfig.docker.json ./tsconfig.json
+RUN corepack enable
 
-# Copy source
-COPY rivetkit-typescript/packages/mcp-hub/src ./src
+COPY . .
 
-# Copy docs metadata
-COPY rivetkit-typescript/packages/mcp-hub/data/docs.json ./data/docs.json
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter rivet-website run build
+RUN pnpm --filter @rivetkit/mcp-hub run build
 
-# Install all dependencies (including dev for build)
-RUN npm install
-
-# Build the package
-RUN npm run build
-
-# Production stage
 FROM node:22-slim AS runner
 
 WORKDIR /app
 
-# Copy built artifacts
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/data ./data
-
-# Install production dependencies only
+COPY --from=builder /app/rivetkit-typescript/packages/mcp-hub/package.json ./package.json
 RUN npm install --omit=dev
 
-# Default port
+COPY --from=builder /app/rivetkit-typescript/packages/mcp-hub/dist ./dist
+COPY --from=builder /app/website/dist/metadata/docs.json ./metadata/docs.json
+
 ENV PORT=7332
-ENV DOCS_METADATA_PATH=/app/data/docs.json
+ENV DOCS_METADATA_PATH=/app/metadata/docs.json
 EXPOSE 7332
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD node -e "fetch('http://localhost:' + (process.env.PORT || 7332) + '/mcp', {method: 'POST'}).then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"
+	CMD node -e "fetch('http://localhost:' + (process.env.PORT || 7332) + '/mcp', {method: 'POST'}).then(r => process.exit(r.status < 500 ? 0 : 1)).catch(() => process.exit(1))"
 
-# Run the MCP server
 CMD ["node", "dist/cli.js"]

@@ -1,5 +1,6 @@
 import type { APIRoute } from "astro";
 import { getCollection } from "astro:content";
+import { slugifyWithCounter } from "@sindresorhus/slugify";
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -110,9 +111,10 @@ function ensureHeadings(headings: HeadingRecord[], fallbackTitle: string) {
 	if (headings.length > 0) {
 		return headings;
 	}
+	const slugify = slugifyWithCounter();
 	return [
 		{
-			anchor: slugifyText(fallbackTitle),
+			anchor: slugify(fallbackTitle),
 			level: 1,
 			title: fallbackTitle,
 			startLine: 1,
@@ -124,6 +126,7 @@ function ensureHeadings(headings: HeadingRecord[], fallbackTitle: string) {
 function extractHeadings(markdown: string) {
 	const lines = markdown.split(/\r?\n/);
 	const records: HeadingRecord[] = [];
+	const slugify = slugifyWithCounter();
 
 	for (let i = 0; i < lines.length; i += 1) {
 		const line = lines[i];
@@ -133,7 +136,7 @@ function extractHeadings(markdown: string) {
 		const title = cleanInlineText(match[2] ?? "").trim();
 		if (!title) continue;
 		records.push({
-			anchor: slugifyText(title),
+			anchor: slugify(title),
 			level,
 			title,
 			startLine: i + 1,
@@ -203,17 +206,6 @@ function toSnippet(content: string) {
 	const text = content.replace(/\s+/g, " ").trim();
 	const limit = 220;
 	return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
-}
-
-function slugifyText(value: string) {
-	return (
-		value
-			.normalize("NFKD")
-			.replace(/[\u0300-\u036f]/g, "")
-			.toLowerCase()
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "") || "section"
-	);
 }
 
 function cleanInlineText(value: string) {
