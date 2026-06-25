@@ -27,7 +27,7 @@ tempfile.workspace = true
 thiserror.workspace = true
 tokio-postgres-rustls.workspace = true
 tokio-postgres.workspace = true
-tokio-util.workspace = true
+tokio-util = { workspace = true, features = ["rt"] }
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
