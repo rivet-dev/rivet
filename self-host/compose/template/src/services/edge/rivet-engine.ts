@@ -35,32 +35,24 @@ export function generateDatacenterRivetEngine(
 			datacenters,
 		};
 
-		// Config structure matching Rust schema in packages/common/config/src/config/mod.rs
+		// Config structure matching Rust schema in engine/packages/config/src/config/mod.rs.
+		// Values that match the engine's defaults are omitted.
 		const config = {
 			auth: {
 				admin_token: "dev",
 			},
-			guard: {
-				port: GUARD_PORT,
-				// https is optional and not configured for local development
-			},
 			api_peer: {
 				host: "0.0.0.0",
-				port: API_PEER_PORT,
 			},
 			topology,
 			postgres: {
 				url: `postgresql://postgres:postgres@${context.getServiceHost("postgres", datacenter.name)}:5432/rivet_engine`,
 			},
-			cache: {
-				driver: "in_memory",
-			},
 			clickhouse: {
-				http_url: `http://${clickhouseHost}:9300`, // TODO:
-				native_url: `http://${clickhouseHost}:9301`, // TODO:
+				http_url: `http://${clickhouseHost}:9300`,
+				native_url: `http://${clickhouseHost}:9301`,
 				username: "system",
 				password: "default",
-				secure: false,
 			},
 		};
 
