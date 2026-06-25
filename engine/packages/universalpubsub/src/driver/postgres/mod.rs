@@ -40,9 +40,12 @@ const POLL_INTERVAL: Duration = Duration::from_secs(1);
 /// rather than a cluster outage.
 const LISTEN_IDLE_IN_TRANSACTION_TIMEOUT_MS: i64 = 30_000;
 
-const QUEUE_SUB_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
-/// How long a queue subscriber's heartbeat must be within to be considered active.
-const QUEUE_SUB_TTL_SECS: i64 = 30;
+/// How often this process refreshes its node liveness heartbeat. One heartbeat per
+/// process keeps all of its subscriber registrations alive at once.
+const NODE_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(10);
+/// How recent a node's heartbeat must be for its subscribers to count as live
+/// responders.
+const NODE_TTL_SECS: i64 = 30;
 
 /// How often to GC expired broadcast messages.
 const MESSAGE_GC_INTERVAL: Duration = Duration::from_secs(5);
@@ -51,19 +54,34 @@ const MESSAGE_GC_INTERVAL: Duration = Duration::from_secs(5);
 /// messages, matching NATS-core at-most-once semantics for slow consumers.
 const MESSAGE_MAX_AGE_SECS: i64 = 10;
 
+/// How often to GC dead nodes and the subscriber rows orphaned by them.
+const REGISTRY_GC_INTERVAL: Duration = Duration::from_secs(30);
+
 /// How often to GC orphaned queue messages.
 const QUEUE_MESSAGE_GC_INTERVAL: Duration = Duration::from_secs(300);
 /// Max age before an unconsumed queue message is garbage collected.
 const QUEUE_MESSAGE_MAX_AGE_SECS: i64 = 3600;
 
+/// Per-shard signal carried over a subscriber's in-process wakeup channel.
+#[derive(Clone)]
+enum ShardSignal {
+	/// A doorbell NOTIFY landed for this shard. Poll the table.
+	Wakeup,
+	/// A local request found no responders for the given reply subject. The matching
+	/// reply subscriber surfaces a no-responders result.
+	NoResponders { subject: String },
+}
+
 #[derive(Clone)]
 pub struct PostgresDriver {
 	pool: Arc<Pool>,
 	client: Arc<Mutex<Option<tokio_postgres::Client>>>,
+	/// Identifies this process in the subscriber registry. A single heartbeat keeps
+	/// all of this node's registrations live.
+	node_id: String,
 	/// Wakeup channels keyed by doorbell shard channel name. Shared by broadcast and
-	/// queue subscribers whose subjects map to the same shard. Carries empty wakeups
-	/// only; payload lives in the table.
-	shard_subscriptions: Arc<HashMap<String, broadcast::Sender<()>>>,
+	/// queue subscribers whose subjects map to the same shard.
+	shard_subscriptions: Arc<HashMap<String, broadcast::Sender<ShardSignal>>>,
 	doorbell: Arc<Doorbell>,
 	client_ready: tokio::sync::watch::Receiver<bool>,
 }
@@ -105,9 +123,10 @@ impl PostgresDriver {
 		tracing::debug!("postgres pool created successfully");
 
 		let pool = Arc::new(pool);
-		let shard_subscriptions: Arc<HashMap<String, broadcast::Sender<()>>> =
+		let shard_subscriptions: Arc<HashMap<String, broadcast::Sender<ShardSignal>>> =
 			Arc::new(HashMap::new());
 		let client: Arc<Mutex<Option<tokio_postgres::Client>>> = Arc::new(Mutex::new(None));
+		let node_id = Uuid::new_v4().to_string();
 
 		// Create channel for client ready notifications
 		let (ready_tx, client_ready) = tokio::sync::watch::channel(false);
@@ -128,6 +147,7 @@ impl PostgresDriver {
 		let driver = Self {
 			pool,
 			client,
+			node_id,
 			shard_subscriptions,
 			doorbell,
 			client_ready,
@@ -138,6 +158,7 @@ impl PostgresDriver {
 
 		// Create tables eagerly so they exist before any publish or subscribe.
 		{
+			tracing::debug!("configuring postgres udb tables");
 			let conn = driver
 				.pool
 				.get()
@@ -157,11 +178,23 @@ impl PostgresDriver {
 				 ); \
 				 CREATE INDEX IF NOT EXISTS ups_messages_subject_id \
 				     ON ups_messages (subject_hash, id); \
+				 CREATE TABLE IF NOT EXISTS ups_nodes ( \
+				     node_id TEXT PRIMARY KEY, \
+				     heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW() \
+				 ); \
+				 CREATE TABLE IF NOT EXISTS ups_subs ( \
+				     id TEXT PRIMARY KEY, \
+				     node_id TEXT NOT NULL, \
+				     subject_hash TEXT NOT NULL, \
+				     subject TEXT NOT NULL \
+				 ); \
+				 CREATE INDEX IF NOT EXISTS ups_subs_subject \
+				     ON ups_subs (subject_hash); \
 				 CREATE TABLE IF NOT EXISTS ups_queue_subs ( \
 				     id TEXT PRIMARY KEY, \
+				     node_id TEXT NOT NULL, \
 				     subject_hash TEXT NOT NULL, \
-				     queue_hash TEXT NOT NULL, \
-				     heartbeat_at TIMESTAMPTZ NOT NULL DEFAULT NOW() \
+				     queue_hash TEXT NOT NULL \
 				 ); \
 				 CREATE INDEX IF NOT EXISTS ups_queue_subs_subject_queue \
 				     ON ups_queue_subs (subject_hash, queue_hash); \
@@ -177,8 +210,23 @@ impl PostgresDriver {
 			)
 			.await
 			.context("failed to create tables")?;
-			tracing::debug!("tables ready");
+			tracing::debug!("postgres udb tables ready");
 		}
+
+		// Register this node and start its liveness heartbeat.
+		driver.heartbeat_node().await?;
+		let heartbeat_driver = driver.clone();
+		tokio::spawn(async move {
+			let mut interval = tokio::time::interval(NODE_HEARTBEAT_INTERVAL);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			loop {
+				interval.tick().await;
+				if let Err(e) = heartbeat_driver.heartbeat_node().await {
+					tracing::warn!(?e, "failed to heartbeat node");
+				}
+			}
+		});
 
 		// Spawn GC task for expired broadcast messages
 		let message_gc_driver = driver.clone();
@@ -198,6 +246,49 @@ impl PostgresDriver {
 						.await;
 					if let Err(e) = result {
 						tracing::warn!(?e, "failed to gc broadcast messages");
+					}
+				}
+			}
+		});
+
+		// Spawn GC task for dead nodes and orphaned subscriber rows.
+		let registry_gc_driver = driver.clone();
+		tokio::spawn(async move {
+			let mut interval = tokio::time::interval(REGISTRY_GC_INTERVAL);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			loop {
+				interval.tick().await;
+				if let Ok(conn) = registry_gc_driver.pool.get().await {
+					if let Err(e) = conn
+						.execute(
+							"DELETE FROM ups_nodes \
+							 WHERE heartbeat_at < NOW() - ($1::bigint * INTERVAL '1 second')",
+							&[&NODE_TTL_SECS],
+						)
+						.await
+					{
+						tracing::warn!(?e, "failed to gc dead nodes");
+					}
+					if let Err(e) = conn
+						.execute(
+							"DELETE FROM ups_subs \
+							 WHERE node_id NOT IN (SELECT node_id FROM ups_nodes)",
+							&[],
+						)
+						.await
+					{
+						tracing::warn!(?e, "failed to gc orphaned subs");
+					}
+					if let Err(e) = conn
+						.execute(
+							"DELETE FROM ups_queue_subs \
+							 WHERE node_id NOT IN (SELECT node_id FROM ups_nodes)",
+							&[],
+						)
+						.await
+					{
+						tracing::warn!(?e, "failed to gc orphaned queue subs");
 					}
 				}
 			}
@@ -232,7 +323,7 @@ impl PostgresDriver {
 	/// Manages the connection lifecycle with automatic reconnection
 	async fn spawn_connection_lifecycle(
 		conn_str: String,
-		shard_subscriptions: Arc<HashMap<String, broadcast::Sender<()>>>,
+		shard_subscriptions: Arc<HashMap<String, broadcast::Sender<ShardSignal>>>,
 		client: Arc<Mutex<Option<tokio_postgres::Client>>>,
 		ready_tx: tokio::sync::watch::Sender<bool>,
 		ssl_root_cert_path: Option<PathBuf>,
@@ -337,7 +428,7 @@ impl PostgresDriver {
 	/// Polls the connection for notifications until it closes or errors
 	async fn poll_connection<T>(
 		mut conn: tokio_postgres::Connection<tokio_postgres::Socket, T>,
-		shard_subscriptions: Arc<HashMap<String, broadcast::Sender<()>>>,
+		shard_subscriptions: Arc<HashMap<String, broadcast::Sender<ShardSignal>>>,
 	) where
 		T: tokio_postgres::tls::TlsStream + Unpin,
 	{
@@ -348,7 +439,7 @@ impl PostgresDriver {
 					// Doorbell notifications are payload-free wakeup signals only.
 					// Subscribers read their payload from the table.
 					if let Some(sub) = shard_subscriptions.get_async(note.channel()).await {
-						let _ = sub.send(());
+						let _ = sub.send(ShardSignal::Wakeup);
 					} else {
 						tracing::trace!(channel = %note.channel(), "wakeup for unknown shard");
 					}
@@ -404,6 +495,24 @@ impl PostgresDriver {
 		format!("{:x}", hasher.finish())
 	}
 
+	/// Upserts this node's liveness heartbeat. Re-inserts the row if a GC pass removed
+	/// it after a transient stall.
+	async fn heartbeat_node(&self) -> Result<()> {
+		let conn = self
+			.pool
+			.get()
+			.await
+			.context("failed to get connection for node heartbeat")?;
+		conn.execute(
+			"INSERT INTO ups_nodes (node_id, heartbeat_at) VALUES ($1, NOW()) \
+			 ON CONFLICT (node_id) DO UPDATE SET heartbeat_at = NOW()",
+			&[&self.node_id],
+		)
+		.await
+		.context("failed to upsert node heartbeat")?;
+		Ok(())
+	}
+
 	/// Returns the current max broadcast message id, used as a subscriber's starting
 	/// cursor so it only sees future messages (NATS at-most-once, no replay).
 	async fn current_max_id(&self) -> Result<i64> {
@@ -424,7 +533,10 @@ impl PostgresDriver {
 	async fn ensure_shard_listen(
 		&self,
 		shard: usize,
-	) -> (broadcast::Receiver<()>, tokio_util::sync::DropGuard) {
+	) -> (
+		broadcast::Receiver<ShardSignal>,
+		tokio_util::sync::DropGuard,
+	) {
 		let channel = shard_channel(shard);
 
 		match self.shard_subscriptions.entry_async(channel.clone()).await {
@@ -465,7 +577,7 @@ impl PostgresDriver {
 	fn spawn_shard_cleanup_task(
 		&self,
 		channel: String,
-		tx: broadcast::Sender<()>,
+		tx: broadcast::Sender<ShardSignal>,
 	) -> tokio_util::sync::DropGuard {
 		let driver = self.clone();
 		let token = tokio_util::sync::CancellationToken::new();
@@ -515,14 +627,15 @@ impl PostgresDriver {
 		.await
 		.context("failed to insert broadcast message")?;
 
-		// Queue rows for every active queue group on this subject. Batched into the
-		// same transaction so a crash never strands a row mid-publish.
+		// Queue rows for every live queue group on this subject. Batched into the same
+		// transaction so a crash never strands a row mid-publish.
 		let rows = tx
 			.query(
-				"SELECT DISTINCT queue_hash FROM ups_queue_subs \
-				 WHERE subject_hash = $1 \
-				 AND heartbeat_at > NOW() - ($2::bigint * INTERVAL '1 second')",
-				&[&subject_hash, &QUEUE_SUB_TTL_SECS],
+				"SELECT DISTINCT s.queue_hash FROM ups_queue_subs s \
+				 JOIN ups_nodes n ON s.node_id = n.node_id \
+				 WHERE s.subject_hash = $1 \
+				 AND n.heartbeat_at > NOW() - ($2::bigint * INTERVAL '1 second')",
+				&[&subject_hash, &NODE_TTL_SECS],
 			)
 			.await
 			.context("failed to query active queue subs")?;
@@ -542,6 +655,50 @@ impl PostgresDriver {
 
 		Ok(())
 	}
+
+	/// Returns whether any live subscriber (broadcast or queue) exists for the subject
+	/// anywhere in the fleet. Used to decide whether a request surfaces a no-responders
+	/// result instead of waiting out its timeout.
+	async fn has_responders(&self, subject_hash: &str, subject: &str) -> Result<bool> {
+		let conn = self
+			.pool
+			.get()
+			.await
+			.context("failed to get connection for responder check")?;
+		let row = conn
+			.query_one(
+				"SELECT \
+				     EXISTS( \
+				         SELECT 1 FROM ups_subs s \
+				         JOIN ups_nodes n ON s.node_id = n.node_id \
+				         WHERE s.subject_hash = $1 AND s.subject = $2 \
+				         AND n.heartbeat_at > NOW() - ($3::bigint * INTERVAL '1 second') \
+				     ) \
+				     OR EXISTS( \
+				         SELECT 1 FROM ups_queue_subs s \
+				         JOIN ups_nodes n ON s.node_id = n.node_id \
+				         WHERE s.subject_hash = $1 \
+				         AND n.heartbeat_at > NOW() - ($3::bigint * INTERVAL '1 second') \
+				     )",
+				&[&subject_hash, &subject, &NODE_TTL_SECS],
+			)
+			.await
+			.context("failed to check responders")?;
+		Ok(row.get(0))
+	}
+
+	/// Delivers a no-responders result to the local reply subscriber. The requester is
+	/// always in this process, so the signal is routed in-memory over the reply
+	/// subject's shard channel rather than the table.
+	async fn signal_no_responders(&self, reply_subject: &str) {
+		let reply_hash = self.hash_subject(reply_subject);
+		let channel = shard_channel(shard_for(&reply_hash));
+		if let Some(tx) = self.shard_subscriptions.get_async(&channel).await {
+			let _ = tx.send(ShardSignal::NoResponders {
+				subject: reply_subject.to_string(),
+			});
+		}
+	}
 }
 
 #[async_trait]
@@ -549,7 +706,7 @@ impl PubSubDriver for PostgresDriver {
 	async fn subscribe(
 		&self,
 		subject: &str,
-		_reply_id: Option<Uuid>,
+		reply_id: Option<Uuid>,
 	) -> Result<SubscriberDriverHandle> {
 		let subject_hash = self.hash_subject(subject);
 		let shard = shard_for(&subject_hash);
@@ -561,6 +718,28 @@ impl PubSubDriver for PostgresDriver {
 
 		let (rx, drop_guard) = self.ensure_shard_listen(shard).await;
 
+		// Register in the responder registry so requests to this subject can detect
+		// responders. Reply inboxes are never request targets, so they skip the
+		// registry to keep request latency off this path.
+		let sub_id = if reply_id.is_none() {
+			let sub_id = Uuid::new_v4().to_string();
+			let conn = self
+				.pool
+				.get()
+				.await
+				.context("failed to get connection for subscribe")?;
+			conn.execute(
+				"INSERT INTO ups_subs (id, node_id, subject_hash, subject) \
+				 VALUES ($1, $2, $3, $4)",
+				&[&sub_id, &self.node_id, &subject_hash, &subject],
+			)
+			.await
+			.context("failed to register subscriber")?;
+			Some(sub_id)
+		} else {
+			None
+		};
+
 		Ok(Box::new(PostgresSubscriber {
 			subject: subject.to_string(),
 			subject_hash,
@@ -568,6 +747,7 @@ impl PubSubDriver for PostgresDriver {
 			cursor,
 			buffer: VecDeque::new(),
 			rx,
+			sub_id,
 			_drop_guard: drop_guard,
 		}))
 	}
@@ -586,43 +766,15 @@ impl PubSubDriver for PostgresDriver {
 				.await
 				.context("failed to get connection for queue subscribe")?;
 			conn.execute(
-				"INSERT INTO ups_queue_subs (id, subject_hash, queue_hash) VALUES ($1, $2, $3)",
-				&[&sub_id, &subject_hash, &queue_hash],
+				"INSERT INTO ups_queue_subs (id, node_id, subject_hash, queue_hash) \
+				 VALUES ($1, $2, $3, $4)",
+				&[&sub_id, &self.node_id, &subject_hash, &queue_hash],
 			)
 			.await
 			.context("failed to register queue subscriber")?;
 		}
 
 		let (rx, drop_guard) = self.ensure_shard_listen(shard).await;
-
-		// Spawn heartbeat task to keep the registration alive
-		let pool = self.pool.clone();
-		let sub_id_for_heartbeat = sub_id.clone();
-		let heartbeat_token = tokio_util::sync::CancellationToken::new();
-		let heartbeat_token_child = heartbeat_token.clone();
-		tokio::spawn(async move {
-			let mut interval = tokio::time::interval(QUEUE_SUB_HEARTBEAT_INTERVAL);
-			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
-			loop {
-				tokio::select! {
-					_ = heartbeat_token_child.cancelled() => break,
-					_ = interval.tick() => {
-						if let Ok(conn) = pool.get().await {
-							if let Err(e) = conn
-								.execute(
-									"UPDATE ups_queue_subs SET heartbeat_at = NOW() WHERE id = $1",
-									&[&sub_id_for_heartbeat],
-								)
-								.await
-							{
-								tracing::warn!(?e, id = %sub_id_for_heartbeat, "failed to heartbeat queue sub");
-							}
-						}
-					}
-				}
-			}
-		});
 
 		Ok(Box::new(PostgresQueueSubscriber {
 			subject: subject.to_string(),
@@ -632,7 +784,6 @@ impl PubSubDriver for PostgresDriver {
 			pool: self.pool.clone(),
 			rx,
 			_drop_guard: drop_guard,
-			_heartbeat_token: heartbeat_token,
 		}))
 	}
 
@@ -640,10 +791,28 @@ impl PubSubDriver for PostgresDriver {
 		&self,
 		subject: &str,
 		payload: &[u8],
-		_reply_subject: Option<&str>,
+		reply_subject: Option<&str>,
 	) -> Result<()> {
 		let subject_hash = self.hash_subject(subject);
 		let shard = shard_for(&subject_hash);
+
+		// Request semantics: if a reply is expected and no responder exists anywhere,
+		// surface a no-responders result immediately instead of persisting a message
+		// nobody will read.
+		if let Some(reply_subject) = reply_subject {
+			match self.has_responders(&subject_hash, subject).await {
+				Result::Ok(false) => {
+					self.signal_no_responders(reply_subject).await;
+					return Ok(());
+				}
+				Result::Ok(true) => {}
+				Result::Err(e) => {
+					// On a failed check, fall through to a normal publish rather than
+					// risk a false no-responders result.
+					tracing::warn!(?e, %subject, "responder check failed, publishing anyway");
+				}
+			}
+		}
 
 		// Persist the message, retrying on transient connection errors. The row is
 		// committed before the doorbell rings so any wakeup observes it.
@@ -686,7 +855,9 @@ pub struct PostgresSubscriber {
 	pool: Arc<Pool>,
 	cursor: i64,
 	buffer: VecDeque<Vec<u8>>,
-	rx: broadcast::Receiver<()>,
+	rx: broadcast::Receiver<ShardSignal>,
+	/// Responder-registry row id, present for non-inbox subscriptions. Deleted on drop.
+	sub_id: Option<String>,
 	_drop_guard: tokio_util::sync::DropGuard,
 }
 
@@ -744,11 +915,17 @@ impl SubscriberDriver for PostgresSubscriber {
 				continue;
 			}
 
-			// Wait for a doorbell wakeup or the poll backstop, whichever is first.
+			// Wait for a doorbell wakeup, a no-responders signal, or the poll backstop.
 			tokio::select! {
 				res = self.rx.recv() => {
 					match res {
-						std::result::Result::Ok(()) => {}
+						std::result::Result::Ok(ShardSignal::Wakeup) => {}
+						std::result::Result::Ok(ShardSignal::NoResponders { subject })
+							if subject == self.subject =>
+						{
+							return Ok(DriverOutput::NoResponders);
+						}
+						std::result::Result::Ok(ShardSignal::NoResponders { .. }) => {}
 						Err(broadcast::error::RecvError::Lagged(_)) => {}
 						Err(broadcast::error::RecvError::Closed) => {
 							return Ok(DriverOutput::Unsubscribed);
@@ -761,15 +938,33 @@ impl SubscriberDriver for PostgresSubscriber {
 	}
 }
 
+impl Drop for PostgresSubscriber {
+	fn drop(&mut self) {
+		let Some(sub_id) = self.sub_id.take() else {
+			return;
+		};
+		let pool = self.pool.clone();
+		tokio::spawn(async move {
+			if let Ok(conn) = pool.get().await {
+				if let Err(e) = conn
+					.execute("DELETE FROM ups_subs WHERE id = $1", &[&sub_id])
+					.await
+				{
+					tracing::warn!(?e, %sub_id, "failed to deregister subscriber");
+				}
+			}
+		});
+	}
+}
+
 pub struct PostgresQueueSubscriber {
 	subject: String,
 	subject_hash: String,
 	queue_hash: String,
 	sub_id: String,
 	pool: Arc<Pool>,
-	rx: broadcast::Receiver<()>,
+	rx: broadcast::Receiver<ShardSignal>,
 	_drop_guard: tokio_util::sync::DropGuard,
-	_heartbeat_token: tokio_util::sync::CancellationToken,
 }
 
 impl PostgresQueueSubscriber {
@@ -820,11 +1015,11 @@ impl SubscriberDriver for PostgresQueueSubscriber {
 				}
 			}
 
-			// Wait for a doorbell wakeup or the poll backstop, then loop back to claim.
+			// Wait for any shard signal or the poll backstop, then loop back to claim.
 			tokio::select! {
 				res = self.rx.recv() => {
 					match res {
-						std::result::Result::Ok(()) => {}
+						std::result::Result::Ok(_) => {}
 						Err(broadcast::error::RecvError::Lagged(_)) => {}
 						Err(broadcast::error::RecvError::Closed) => {
 							return Ok(DriverOutput::Unsubscribed);
