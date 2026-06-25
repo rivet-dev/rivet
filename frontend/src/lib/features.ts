@@ -35,7 +35,7 @@ export const features = {
 	// deployments, logs, and the Rivet provider option. Cloud-platform-only
 	// because every surface consumes cloud-namespace data providers.
 	compute: isEnabled("compute") && platform,
-	// `agentOs` gates the agentOS (coding-agent VM) onboarding template. Preview.
+	// `agentOs` gates the agentOS (coding-agent VM) onboarding template. Beta.
 	agentOs: isEnabled("agent-os"),
 	support: isEnabled("support"),
 	branding: isEnabled("branding"),

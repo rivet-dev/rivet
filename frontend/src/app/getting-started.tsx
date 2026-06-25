@@ -837,7 +837,7 @@ function BuildTargetSelector() {
 						<BuildTargetCard
 							icon={<AgentOsLogo className="size-5" />}
 							label="agentOS"
-							badge="Preview"
+							badge="Beta"
 							description="An open-source OS for agents. Runs in-process with ~6 ms cold starts."
 							isSelected={field.value === "agent-os"}
 							onSelect={() =>

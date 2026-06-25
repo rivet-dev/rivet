@@ -108,7 +108,7 @@ function CreateMenu({ buttonVariant }: { buttonVariant: "outline" | "default" })
 						variant="outline"
 						className="ml-2 text-[10px] leading-none py-0.5 px-1.5 font-medium"
 					>
-						Preview
+						Beta
 					</Badge>
 				</DropdownMenuItem>
 			</DropdownMenuContent>
