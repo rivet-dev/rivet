@@ -76,5 +76,5 @@ Use `samples: 1` for a uniform random pick that skips slot reads. Use `samples >
 ## Related
 
 - SQLite actor startup picks the storage schema by probing the actor KV subspace for legacy v1 data. Existing v1 data stays on v1, and actors without v1 data start on v2.
-- [PostgreSQL](/docs/self-hosting/postgres): Configure the experimental PostgreSQL backend
-- [File System](/docs/self-hosting/filesystem): Configure file system storage for development
+- [PostgreSQL](/docs/self-hosting/postgres): Configure the PostgreSQL backend for multi-node and multi-region deployments
+- [File System](/docs/self-hosting/filesystem): Configure file system storage for single-node deployments

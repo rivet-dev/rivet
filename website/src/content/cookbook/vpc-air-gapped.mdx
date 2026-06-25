@@ -107,10 +107,10 @@ If you ship software that runs inside your customers' VPCs, the same setup turns
 | Backend | Use when | Status |
 | --- | --- | --- |
 | [File System](/docs/self-hosting/filesystem) (RocksDB-based) | Single-node deployments, including air-gapped installs | Production-ready, single node only |
-| [PostgreSQL](/docs/self-hosting/postgres) | Multi-node deployments | Recommended for multi-node today, but experimental |
+| [PostgreSQL](/docs/self-hosting/postgres) | Multi-node and multi-region deployments | Production-ready for multi-node |
 | FoundationDB | Largest production deployments | [Enterprise](/sales) |
 
-For multi-node deployments, run two or more engine nodes behind a load balancer and add NATS for pub/sub, which replaces the default PostgreSQL `LISTEN`/`NOTIFY` path at high throughput. Neither is needed for a single-node file system install. See the [Production Checklist](/docs/self-hosting/production-checklist).
+For multi-node deployments, run two or more engine nodes behind a load balancer, all sharing one PostgreSQL instance. The built-in PostgreSQL pub/sub is sufficient for most deployments; very high-throughput deployments can add NATS as a dedicated pub/sub layer. Neither is needed for a single-node file system install. See the [Production Checklist](/docs/self-hosting/production-checklist).
 
 ## Perimeter Checklist
 
