@@ -178,7 +178,7 @@ This setup mounts a ${provider} sandbox at \`/sandbox\` for heavy workloads. It 
 
 I want to add agentOS to this project using RivetKit. agentOS is a portable, open-source operating system for agents that runs in your process. Software is baked into the build at build time and is immutable after deploy, so these choices are made up front. An agentOS actor is a normal Rivet Actor and deploys like any other.
 
-Read https://rivet.dev/docs/agent-os/quickstart before making changes. agentOS is in beta.
+Read https://agentos-sdk.dev/docs/quickstart/ before making changes. agentOS is in beta.
 
 ## Selections
 
@@ -215,7 +215,7 @@ Run the server, then the client, and confirm the agent created the file. Then ve
 
 ## After Setup
 
-Once everything is built and verified, tell the user they can browse more tools, file systems, agents, and sandbox mounting configurations in the agentOS Registry: https://rivet.dev/agent-os/registry/
+Once everything is built and verified, tell the user they can browse more tools, file systems, agents, and sandbox mounting configurations in the agentOS Registry: https://agentos-sdk.dev/registry/
 
 ## If You Get Stuck
 
