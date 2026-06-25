@@ -217,3 +217,73 @@ async fn test_postgres_leader_failover() {
 
 	drop(db2);
 }
+
+/// Exercises graceful leader handoff: a leader that is shut down cleanly (SIGTERM path) releases its
+/// lease immediately instead of letting it expire, so a standby takes over well within the lease TTL
+/// rather than after it. This is what turns a rolling deploy from a ~TTL commit stall into a
+/// near-instant handoff.
+#[tokio::test]
+async fn test_postgres_graceful_handoff() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("info")
+		.with_test_writer()
+		.try_init();
+
+	let (db_config, docker_config) = TestDatabase::Postgres
+		.config(Uuid::new_v4(), 1)
+		.await
+		.unwrap();
+	let mut docker_config = docker_config.unwrap();
+	docker_config.start().await.unwrap();
+
+	tokio::time::sleep(Duration::from_secs(4)).await;
+
+	let rivet_config::config::Database::Postgres(postgres_config) = db_config else {
+		unreachable!();
+	};
+	let connection_string = postgres_config.url.read().clone();
+
+	let raw = connect_raw(&connection_string).await;
+
+	// Node 1 wins the first election; node 2 joins as a follower.
+	let db1 = make_db(&connection_string).await;
+	let lease1 = wait_for_lease(&raw, Duration::from_secs(15), |l| l.epoch == 1).await;
+	let leader1_addr = lease1.leader_addr.clone();
+	let db2 = make_db(&connection_string).await;
+
+	write_key(&db1, ALPHA_KEY, b"1").await;
+	let lease_before = read_lease(&raw).await.unwrap();
+
+	// Gracefully shut down the leader. Unlike a hard drop, this releases the lease in place and
+	// wakes the standby, so takeover must complete in well under the 10s TTL.
+	let handoff_start = tokio::time::Instant::now();
+	db1.shutdown().await;
+
+	// The lease TTL is 10s; a graceful handoff must take over well under that. The 5s deadline here
+	// is itself below the TTL, so reaching this line already proves the lease was not waited out.
+	let lease_after = wait_for_lease(&raw, Duration::from_secs(5), |l| {
+		l.epoch > lease_before.epoch
+	})
+	.await;
+	let handoff_elapsed = handoff_start.elapsed();
+	assert!(
+		handoff_elapsed < Duration::from_secs(8),
+		"graceful handoff must beat the lease TTL (took {handoff_elapsed:?})"
+	);
+	assert_ne!(
+		lease_after.leader_addr, leader1_addr,
+		"the standby must become the new leader after a graceful handoff"
+	);
+
+	// The new leader serves the old leader's data and accepts fresh commits.
+	assert_eq!(
+		read_key(&db2, ALPHA_KEY).await,
+		Some(b"1".to_vec()),
+		"committed data must survive graceful handoff"
+	);
+	write_key(&db2, BETA_KEY, b"2").await;
+	assert_eq!(read_key(&db2, BETA_KEY).await, Some(b"2".to_vec()));
+
+	drop(db1);
+	drop(db2);
+}

@@ -62,6 +62,30 @@ pub async fn renew(pool: &Pool, node_id: &str, epoch: i64) -> Result<bool> {
 	Ok(updated == 1)
 }
 
+/// Gracefully release the lease so a standby node can take over immediately instead of waiting out
+/// the TTL. Expires the lease in place, fenced on this node's address so it never clobbers a
+/// successor that already took over. Returns `true` if our lease was released (i.e. we were the
+/// leader); `false` is the normal no-op when this node is a follower. Renewal must already be
+/// stopped before calling this, otherwise a racing renew could re-extend the lease.
+pub async fn release(pool: &Pool, node_id: &str) -> Result<bool> {
+	let conn = pool
+		.get()
+		.await
+		.context("failed to get connection for lease release")?;
+
+	let updated = conn
+		.execute(
+			"UPDATE udb_lease
+			   SET expires_at = now()
+			 WHERE id = $1 AND leader_addr = $2",
+			&[&LEASE_ID, &node_id],
+		)
+		.await
+		.context("failed to release lease")?;
+
+	Ok(updated == 1)
+}
+
 /// Read the current durable version (`udb_lease.durable_version`). Used by a freshly elected leader
 /// to learn the watermark floor it must continue from.
 pub async fn current_durable_version(pool: &Pool) -> Result<i64> {
