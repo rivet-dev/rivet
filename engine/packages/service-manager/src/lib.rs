@@ -393,13 +393,16 @@ pub async fn start(
 				if abort {
 					// Give time for services to handle final abort
 					tokio::time::sleep(Duration::from_millis(50)).await;
-					rivet_runtime::shutdown().await; // TODO: Fix `JoinHandle polled after completion` error
+					rivet_runtime::shutdown().await;
 
 					break;
 				}
 			}
 		}
 	}
+
+	// Shut down udb
+	pools.udb()?.shutdown().await;
 
 	// Stops term signal handler bg task
 	rivet_runtime::TermSignal::stop();
