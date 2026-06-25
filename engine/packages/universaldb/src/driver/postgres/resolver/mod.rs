@@ -33,9 +33,10 @@ enum DrainOutcome {
 }
 
 /// Spawn the per-process resolver task. Every node runs this; only the elected leader drains the
-/// commit queue.
-pub fn spawn(shared: Arc<PostgresShared>) {
-	tokio::spawn(run(shared));
+/// commit queue. The returned handle is aborted when the owning driver drops, which stops lease
+/// renewal so the lease expires and another node can take over (node-death / failover path).
+pub fn spawn(shared: Arc<PostgresShared>) -> tokio::task::JoinHandle<()> {
+	tokio::spawn(run(shared))
 }
 
 async fn run(shared: Arc<PostgresShared>) {

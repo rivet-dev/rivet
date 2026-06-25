@@ -160,8 +160,6 @@ pub async fn start(
 	let shutting_down = Arc::new(AtomicBool::new(false));
 
 	for service in services {
-		tracing::debug!(name=%service.name, kind=?service.kind, "server starting service");
-
 		match service.kind.behavior() {
 			ServiceBehavior::Service => {
 				let config = config.clone();

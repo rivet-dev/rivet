@@ -40,17 +40,6 @@
         }
       ]
     },
-    "api_public": {
-      "default": null,
-      "anyOf": [
-        {
-          "$ref": "#/definitions/ApiPublic"
-        },
-        {
-          "type": "null"
-        }
-      ]
-    },
     "auth": {
       "default": null,
       "anyOf": [
@@ -210,27 +199,6 @@
           ],
           "format": "uint16",
           "minimum": 0.0
-        }
-      },
-      "additionalProperties": false
-    },
-    "ApiPublic": {
-      "description": "Configuration for the public API service.",
-      "type": "object",
-      "properties": {
-        "respect_forwarded_for": {
-          "description": "Flag to respect the X-Forwarded-For header for client IP addresses.\n\nWill be ignored in favor of CF-Connecting-IP if DNS provider is configured as Cloudflare.",
-          "type": [
-            "boolean",
-            "null"
-          ]
-        },
-        "verbose_errors": {
-          "description": "Flag to enable verbose error reporting.",
-          "type": [
-            "boolean",
-            "null"
-          ]
         }
       },
       "additionalProperties": false

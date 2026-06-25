@@ -163,7 +163,7 @@ impl SharedState {
 		init_slow_ping_threshold_from_env();
 
 		let gateway_id = protocol::util::generate_gateway_id();
-		tracing::info!(gateway_id = %display_id(&gateway_id), "setting up shared state for gateway");
+		tracing::debug!(gateway_id = %display_id(&gateway_id), "setting up shared state for gateway");
 		let receiver_subject = GatewayReceiverSubject::new(gateway_id);
 
 		let pegboard_config = config.pegboard();
@@ -194,25 +194,7 @@ impl SharedState {
 		let self_clone = self.clone();
 		tokio::spawn(async move { self_clone.gc().await });
 
-		let self_clone = self.clone();
-		tokio::spawn(async move { self_clone.shutdown_watcher().await });
-
 		Ok(())
-	}
-
-	#[tracing::instrument(skip_all)]
-	async fn shutdown_watcher(&self) {
-		let mut term_signal = __rivet_runtime::TermSignal::get();
-		term_signal.recv().await;
-
-		let in_flight_aborted = self.in_flight_requests.len();
-		if in_flight_aborted > 0 {
-			metrics::SHUTDOWN_IN_FLIGHT_ABORTED_TOTAL.inc_by(in_flight_aborted as u64);
-		}
-		tracing::info!(
-			in_flight_aborted,
-			"gateway shutdown in-flight requests abandoned without close"
-		);
 	}
 
 	#[tracing::instrument(skip_all)]

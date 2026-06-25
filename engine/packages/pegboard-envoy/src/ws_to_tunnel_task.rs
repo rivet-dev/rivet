@@ -474,9 +474,14 @@ pub async fn task_inner(
 	// backpressure to the runner rather than dropping protocol messages.
 	let mut rate_limit = rivet_util::throttle::RateLimiter::new(
 		rivet_util::throttle::RateLimitMethod::LeakyBucket {
-			requests: ctx.config().pegboard().envoy_websocket_rate_limit_requests(),
+			requests: ctx
+				.config()
+				.pegboard()
+				.envoy_websocket_rate_limit_requests(),
 			drip_rate: Duration::from_micros(
-				ctx.config().pegboard().envoy_websocket_rate_limit_drip_rate_us(),
+				ctx.config()
+					.pegboard()
+					.envoy_websocket_rate_limit_drip_rate_us(),
 			),
 		},
 	);

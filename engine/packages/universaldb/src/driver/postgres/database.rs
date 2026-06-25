@@ -59,6 +59,7 @@ impl PostgresConfig {
 pub struct PostgresDatabaseDriver {
 	shared: Arc<PostgresShared>,
 	max_retries: AtomicI32,
+	resolver_handle: JoinHandle<()>,
 	gc_handle: JoinHandle<()>,
 }
 
@@ -112,13 +113,14 @@ impl PostgresDatabaseDriver {
 		let shared = PostgresShared::new(pool, node_id, listener);
 
 		// Every node runs the resolver; only the elected leader drains the commit queue.
-		resolver::spawn(shared.clone());
+		let resolver_handle = resolver::spawn(shared.clone());
 
 		let gc_handle = Self::spawn_gc(shared.clone());
 
 		Ok(PostgresDatabaseDriver {
 			shared,
 			max_retries: AtomicI32::new(100),
+			resolver_handle,
 			gc_handle,
 		})
 	}
@@ -292,6 +294,9 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 
 impl Drop for PostgresDatabaseDriver {
 	fn drop(&mut self) {
+		// Abort the resolver so a dropped node stops renewing its lease; the lease then expires and
+		// another node can take over. Without this a dropped leader would renew its lease forever.
+		self.resolver_handle.abort();
 		self.gc_handle.abort();
 	}
 }
