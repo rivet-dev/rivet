@@ -13,6 +13,7 @@ use rivet_postgres_util::build_tls_config;
 use tokio::task::JoinHandle;
 use tokio_postgres_rustls::MakeRustlsConnect;
 use url::Url;
+use uuid::Uuid;
 
 use crate::{
 	RetryableTransaction, Transaction,
@@ -22,9 +23,15 @@ use crate::{
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
 
-use super::transaction::PostgresTransactionDriver;
+use super::{
+	listener::PgListener, resolver, shared::PostgresShared, transaction::PostgresTransactionDriver,
+};
 
-const GC_INTERVAL: Duration = Duration::from_secs(5);
+const GC_INTERVAL: Duration = Duration::from_secs(30);
+/// Terminal and orphaned commit-request rows older than this are garbage collected. Must be well
+/// beyond the longest a follower could spend awaiting a result, so a result is never deleted before
+/// it is observed.
+const COMMIT_ROW_MAX_AGE_SECS: i64 = 60;
 
 #[derive(Clone, Debug)]
 pub struct PostgresConfig {
@@ -50,7 +57,7 @@ impl PostgresConfig {
 }
 
 pub struct PostgresDatabaseDriver {
-	pool: Pool,
+	shared: Arc<PostgresShared>,
 	max_retries: AtomicI32,
 	gc_handle: JoinHandle<()>,
 }
@@ -63,7 +70,60 @@ impl PostgresDatabaseDriver {
 			"creating PostgresDatabaseDriver"
 		);
 
-		// Create deadpool config from connection string
+		let ssl_disabled = if let Ok(url) = Url::parse(&config.connection_string) {
+			url.query_pairs()
+				.any(|(k, v)| k == "sslmode" && v == "disable")
+		} else {
+			false
+		};
+
+		let pool = Self::build_pool(&config, ssl_disabled)?;
+
+		// Initialize the schema (idempotent).
+		{
+			let conn = pool
+				.get()
+				.await
+				.context("failed to get connection from postgres pool")?;
+			Self::init_schema(&conn).await?;
+		}
+
+		// Unique per-process node id (no hyphens) used to name this node's NOTIFY channels. Kept
+		// short so `udb_commit_<node_id>` stays within Postgres's 63-byte identifier limit.
+		let node_id = Uuid::new_v4().simple().to_string();
+
+		let listener = PgListener::new(
+			config.connection_string.clone(),
+			ssl_disabled,
+			config
+				.ssl_config
+				.as_ref()
+				.and_then(|c| c.ssl_root_cert_path.clone()),
+			config
+				.ssl_config
+				.as_ref()
+				.and_then(|c| c.ssl_client_cert_path.clone()),
+			config
+				.ssl_config
+				.as_ref()
+				.and_then(|c| c.ssl_client_key_path.clone()),
+		);
+
+		let shared = PostgresShared::new(pool, node_id, listener);
+
+		// Every node runs the resolver; only the elected leader drains the commit queue.
+		resolver::spawn(shared.clone());
+
+		let gc_handle = Self::spawn_gc(shared.clone());
+
+		Ok(PostgresDatabaseDriver {
+			shared,
+			max_retries: AtomicI32::new(100),
+			gc_handle,
+		})
+	}
+
+	fn build_pool(config: &PostgresConfig, ssl_disabled: bool) -> Result<Pool> {
 		let mut pool_config = Config::new();
 		pool_config.url = Some(config.connection_string.clone());
 		pool_config.pool = Some(PoolConfig {
@@ -74,21 +134,10 @@ impl PostgresDatabaseDriver {
 			recycling_method: RecyclingMethod::Fast,
 		});
 
-		tracing::debug!("creating Postgres pool");
-
-		let ssl_disabled = if let Ok(url) = Url::parse(&config.connection_string) {
-			url.query_pairs()
-				.any(|(k, v)| k == "sslmode" && v == "disable")
-		} else {
-			false
-		};
-
-		let pool = if ssl_disabled {
-			let tls = tokio_postgres::NoTls;
-
+		if ssl_disabled {
 			pool_config
-				.create_pool(Some(Runtime::Tokio1), tls)
-				.context("failed to create postgres connection pool")?
+				.create_pool(Some(Runtime::Tokio1), tokio_postgres::NoTls)
+				.context("failed to create postgres connection pool")
 		} else {
 			let tls_config = build_tls_config(
 				config
@@ -104,139 +153,87 @@ impl PostgresDatabaseDriver {
 					.as_ref()
 					.and_then(|c| c.ssl_client_key_path.as_ref()),
 			)?;
-			let tls = MakeRustlsConnect::new(tls_config);
-
 			pool_config
-				.create_pool(Some(Runtime::Tokio1), tls)
-				.context("failed to create postgres connection pool")?
-		};
+				.create_pool(Some(Runtime::Tokio1), MakeRustlsConnect::new(tls_config))
+				.context("failed to create postgres connection pool")
+		}
+	}
 
-		tracing::debug!("Getting Postgres connection from pool");
-		// Get a connection from the pool to create the table
-		let conn = pool
-			.get()
-			.await
-			.context("failed to get connection from postgres pool")?;
-
-		// Enable btree gist
-		conn.execute("CREATE EXTENSION IF NOT EXISTS btree_gist", &[])
-			.await
-			.context("failed to create btree_gist extension")?;
-
-		conn.execute("CREATE UNLOGGED SEQUENCE IF NOT EXISTS global_version_seq START WITH 1 INCREMENT BY 1 MINVALUE 1", &[])
-			.await
-			.context("failed to create global version sequence")?;
-
-		// Create the KV table if it doesn't exist
-		conn.execute(
+	async fn init_schema(conn: &deadpool_postgres::Client) -> Result<()> {
+		// Durable latest-value store.
+		conn.batch_execute(
 			"CREATE TABLE IF NOT EXISTS kv (
 				key BYTEA PRIMARY KEY,
 				value BYTEA NOT NULL
-			)",
-			&[],
+			);
+
+			CREATE TABLE IF NOT EXISTS udb_lease (
+				id              INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+				epoch           BIGINT NOT NULL,
+				leader_addr     TEXT   NOT NULL,
+				durable_version BIGINT NOT NULL DEFAULT 0,
+				expires_at      TIMESTAMPTZ NOT NULL
+			);
+
+			CREATE SEQUENCE IF NOT EXISTS udb_version_seq AS BIGINT
+				START WITH 1 INCREMENT BY 1 MINVALUE 1;
+
+			CREATE TABLE IF NOT EXISTS udb_commit_requests (
+				id             BIGSERIAL PRIMARY KEY,
+				epoch          BIGINT NOT NULL,
+				read_version   BIGINT NOT NULL,
+				payload        BYTEA  NOT NULL,
+				reply_channel  TEXT   NOT NULL,
+				status         TEXT   NOT NULL DEFAULT 'pending',
+				commit_version BIGINT,
+				created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+			);
+
+			CREATE INDEX IF NOT EXISTS udb_commit_requests_pending
+				ON udb_commit_requests (id) WHERE status = 'pending';",
 		)
 		.await
-		.context("failed to create kv table")?;
+		.context("failed to initialize postgres schema")?;
 
-		// Create range_type type if it doesn't exist
-		conn.execute(
-			"DO $$ BEGIN
-				CREATE TYPE range_type AS ENUM ('read', 'write');
-			EXCEPTION
-				WHEN duplicate_object THEN null;
-			END $$",
-			&[],
-		)
-		.await
-		.context("failed to create range_type enum")?;
+		Ok(())
+	}
 
-		// Create bytearange type if it doesn't exist
-		conn.execute(
-			"DO $$ BEGIN
-				CREATE TYPE bytearange AS RANGE (
-					SUBTYPE = bytea,
-					SUBTYPE_OPCLASS = bytea_ops
-				);
-			EXCEPTION
-				WHEN duplicate_object THEN null;
-			END $$",
-			&[],
-		)
-		.await
-		.context("failed to create bytearange type")?;
-
-		// Create the conflict ranges table for non-snapshot reads
-		// This enforces consistent reads for ranges by preventing overlapping conflict ranges
-		conn.execute(
-			"CREATE UNLOGGED TABLE IF NOT EXISTS conflict_ranges (
-				range_data BYTEARANGE NOT NULL,
-				conflict_type range_type NOT NULL,
-				start_version BIGINT NOT NULL,
-				commit_version BIGINT NOT NULL,
-				ts timestamp NOT NULL DEFAULT now(),
-
-				EXCLUDE USING gist (
-					-- Conflict if byte range overlaps...
-					range_data WITH &&,
-					-- And if conflict types are different...
-					conflict_type WITH <>,
-					-- And if the txn versions overlap...
-					int8range(start_version, commit_version, '[]') WITH &&,
-					-- But not if the start_version is the same (from the same txn)
-					start_version WITH <>
-				)
-			)",
-			&[],
-		)
-		.await
-		.context("failed to create conflict_ranges table")?;
-
-		// Create index on ts column for efficient garbage collection
-		conn.execute(
-			"CREATE INDEX IF NOT EXISTS idx_conflict_ranges_ts ON conflict_ranges (ts)",
-			&[],
-		)
-		.await
-		.context("failed to create index on conflict_ranges ts column")?;
-
-		let pool2 = pool.clone();
-		let gc_handle = tokio::spawn(async move {
+	fn spawn_gc(shared: Arc<PostgresShared>) -> JoinHandle<()> {
+		tokio::spawn(async move {
 			let mut interval = tokio::time::interval(GC_INTERVAL);
 			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 			loop {
 				interval.tick().await;
 
-				tracing::debug!(status=?pool2.status(), "postgres pool status");
+				let conn = match shared.pool.get().await {
+					Ok(conn) => conn,
+					Err(err) => {
+						tracing::debug!(?err, "failed to get connection for commit gc");
+						continue;
+					}
+				};
 
-				// NOTE: Transactions have a max limit of 5 seconds, we delete after 10 seconds for extra padding
-				// Delete old conflict ranges
 				if let Err(err) = conn
 					.execute(
-						"DELETE FROM conflict_ranges where ts < now() - interval '10 seconds'",
-						&[],
+						"DELETE FROM udb_commit_requests
+						 WHERE created_at < now() - ($1::bigint * interval '1 second')",
+						&[&COMMIT_ROW_MAX_AGE_SECS],
 					)
 					.await
 				{
-					tracing::error!(?err, "failed postgres gc task");
+					tracing::error!(?err, "failed postgres commit-queue gc");
 				}
 			}
-		});
-
-		Ok(PostgresDatabaseDriver {
-			pool,
-			max_retries: AtomicI32::new(100),
-			gc_handle,
 		})
 	}
 }
 
 impl DatabaseDriver for PostgresDatabaseDriver {
 	fn create_txn(&self) -> Result<Transaction> {
-		// Pass the connection pool and config to the transaction driver
-		Ok(Transaction::new(Arc::new(
-			PostgresTransactionDriver::with_config(self.pool.clone()),
-		)))
+		Ok(Transaction::new(Arc::new(PostgresTransactionDriver::new(
+			self.shared.clone(),
+		))))
 	}
 
 	fn run<'a>(

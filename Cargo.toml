@@ -66,6 +66,7 @@ members = [
   "engine/sdks/rust/depot-protocol",
   "engine/sdks/rust/test-envoy",
   "engine/sdks/rust/ups-protocol",
+  "engine/sdks/rust/universaldb-commit",
   "rivetkit-rust/packages/actor-persist",
   "rivetkit-rust/packages/client",
   "rivetkit-rust/packages/engine-process",
@@ -637,6 +638,9 @@ members = [
 
     [workspace.dependencies.rivet-ups-protocol]
     path = "engine/sdks/rust/ups-protocol"
+
+    [workspace.dependencies.rivet-universaldb-commit]
+    path = "engine/sdks/rust/universaldb-commit"
 
 [profile.dev]
 overflow-checks = false

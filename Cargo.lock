@@ -5323,6 +5323,7 @@ name = "rivet-depot-protocol"
 version = "2.3.2"
 dependencies = [
  "anyhow",
+ "rivet-util",
  "rivet-vbare-compiler",
  "serde",
  "serde_bare",
@@ -5881,6 +5882,17 @@ dependencies = [
  "strum",
  "universaldb",
  "utoipa",
+ "vbare",
+]
+
+[[package]]
+name = "rivet-universaldb-commit"
+version = "2.3.2"
+dependencies = [
+ "anyhow",
+ "rivet-vbare-compiler",
+ "serde",
+ "serde_bare",
  "vbare",
 ]
 
@@ -8186,6 +8198,7 @@ version = "2.3.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "base64 0.22.1",
  "deadpool-postgres",
  "foundationdb-tuple",
  "futures-util",
@@ -8199,17 +8212,21 @@ dependencies = [
  "rivet-postgres-util",
  "rivet-test-deps-docker",
  "rivet-tracing-utils",
+ "rivet-universaldb-commit",
  "rocksdb",
+ "scc",
  "serde",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "tokio-postgres",
  "tokio-postgres-rustls",
+ "tokio-util",
  "tracing",
  "tracing-subscriber",
  "url",
  "uuid",
+ "vbare",
 ]
 
 [[package]]
