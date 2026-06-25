@@ -34,6 +34,20 @@ function RouteComponent() {
 						<CreateProjectFrameContent
 							organization={params.organization}
 							onSuccess={(data, vars) => {
+								if (vars.namespace) {
+									return navigate({
+										to: "/orgs/$organization/projects/$project/ns/$namespace",
+										params: {
+											organization: vars.organization,
+											project: data.project.name,
+											namespace: vars.namespace,
+										},
+										search: {
+											flow: search.flow,
+										},
+									});
+								}
+
 								return navigate({
 									to: "/orgs/$organization/projects/$project",
 									params: {
