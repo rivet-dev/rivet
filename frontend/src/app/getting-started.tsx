@@ -62,8 +62,6 @@ import { EnvVariables, useRivetDsn } from "./env-variables";
 import { StepperForm, StepVisibilityContext } from "./forms/stepper-form";
 import { Content } from "./layout";
 import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
-import { SoftwareSelectStep } from "@/components/onboarding/agent-os/software-select-step";
-import { SandboxMountStep } from "@/components/onboarding/agent-os/sandbox-mount-step";
 import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
 import {
 	DEFAULT_AGENT,
@@ -109,32 +107,6 @@ const stepper = defineStepper(
 		description: "Pick the coding agent to run inside agentOS.",
 		next: "Continue",
 		schema: z.object({ agent: z.string().nonempty() }),
-		group: "local",
-		isVisible: (values: Record<string, unknown>) =>
-			values.template === "agent-os",
-	},
-	{
-		id: "software",
-		title: "Choose software",
-		description: "Select the packages baked into your build image.",
-		next: "Continue",
-		schema: z.object({ packages: z.array(z.string()) }),
-		group: "local",
-		isVisible: (values: Record<string, unknown>) =>
-			values.template === "agent-os",
-	},
-	{
-		id: "sandbox",
-		title: "Sandbox & mounts",
-		description:
-			"Optionally mount a full sandbox for heavy workloads. Off by default.",
-		next: "Continue",
-		schema: z.object({
-			sandbox: z.object({
-				enabled: z.boolean(),
-				provider: z.string().optional(),
-			}),
-		}),
 		group: "local",
 		isVisible: (values: Record<string, unknown>) =>
 			values.template === "agent-os",
@@ -353,16 +325,6 @@ export function GettingStarted({
 									agent: () => (
 										<StepContent>
 											<AgentSelectStep />
-										</StepContent>
-									),
-									software: () => (
-										<StepContent>
-											<SoftwareSelectStep />
-										</StepContent>
-									),
-									sandbox: () => (
-										<StepContent>
-											<SandboxMountStep />
 										</StepContent>
 									),
 									handoff: () => (
