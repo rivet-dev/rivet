@@ -8,6 +8,7 @@ import skillBaseRivetkit from "./skill-base-rivetkit.md?raw";
 import skillBaseRivetkitCookbook from "./skill-base-rivetkit-cookbook.md?raw";
 import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.md?raw";
 import skillBaseClientReact from "./skill-base-rivetkit-client-react.md?raw";
+import skillBaseClientRust from "./skill-base-rivetkit-client-rust.md?raw";
 import skillBaseClientSwift from "./skill-base-rivetkit-client-swift.md?raw";
 import skillBaseClientSwiftUI from "./skill-base-rivetkit-client-swiftui.md?raw";
 
@@ -15,6 +16,7 @@ export type BaseSkillId =
 	| "rivetkit"
 	| "rivetkit-client-javascript"
 	| "rivetkit-client-react"
+	| "rivetkit-client-rust"
 	| "rivetkit-client-swift"
 	| "rivetkit-client-swiftui";
 
@@ -82,6 +84,20 @@ const BASE_SKILL_CONFIGS = {
 		content: {
 			collection: "docs",
 			docId: "clients/react",
+		},
+		includeReferences: false,
+		includeOpenApi: false,
+	},
+	"rivetkit-client-rust": {
+		id: "rivetkit-client-rust",
+		name: "rivetkit-client-rust",
+		directory: "rivetkit-client-rust",
+		description:
+			"RivetKit Rust client guidance. Use for Rust clients and backends that connect to Rivet Actors with rivetkit::client, create typed actor handles, call actions, or manage connections.",
+		baseTemplate: skillBaseClientRust,
+		content: {
+			collection: "docs",
+			docId: "clients/rust",
 		},
 		includeReferences: false,
 		includeOpenApi: false,

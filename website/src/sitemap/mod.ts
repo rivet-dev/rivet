@@ -373,6 +373,11 @@ export const sitemap = [
 								icon: faReact,
 							},
 							{
+								title: "Rust",
+								href: "/docs/clients/rust",
+								icon: faRust,
+							},
+							{
 								title: "Swift",
 								href: "/docs/clients/swift",
 								icon: faSwift,
