@@ -12,7 +12,12 @@ import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
 import { skillVersion } from './src/integrations/skill-version';
 import { redirects } from './redirects.mjs';
 
-
+// Wildcard sub-path redirects (`wildcardRedirects` in redirects.mjs) are applied
+// only at the Caddy layer in production. Astro's static output treats a redirect
+// key containing a rest param (`[...slug]`) as a dynamic route that needs
+// `getStaticPaths`, so feeding external-URL wildcards here aborts the build. The
+// explicit non-wildcard entries below still cover every real former route on the
+// dev server; deep sub-paths fall through to Caddy in production.
 export default defineConfig({
 	site: 'https://rivet.dev',
 	output: 'static',
@@ -25,7 +30,7 @@ export default defineConfig({
 	// serves them on the dev server. The same map drives real HTTP 301s at the
 	// Caddy layer in production (see scripts/generate-caddy-redirects.mjs), so it
 	// lives in a shared module to keep the two from drifting.
-	redirects,
+	redirects: redirects,
 	prefetch: {
 		prefetchAll: true,
 		defaultStrategy: 'hover',

@@ -2,10 +2,8 @@
 
 // Benchmark card primitives: the dark "ink" data card with a mono eyebrow, a
 // count-up headline, a comparison ledger, an optional toggle, and floating info
-// tooltips. This mirrors the agentOS solution page's benchmark cards (agentOS
-// vs. sandboxes) so the Actors marketing page (Actors vs. traditional
-// infrastructure) shares the exact same style and animation. The agentOS page
-// keeps its own data-bound copy of these cards; keep the two visually in sync.
+// tooltips. Used by the Actors marketing page (Actors vs. traditional
+// infrastructure).
 
 import { useId, useMemo, useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';

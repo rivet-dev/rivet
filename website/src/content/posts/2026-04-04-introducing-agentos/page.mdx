@@ -8,7 +8,7 @@ title: "Introducing agentOS"
 description: "A lightweight VM for AI agents, powered by WebAssembly and V8 isolates. ~6 ms cold start, 32x cheaper than sandboxes, full POSIX environment."
 ---
 
-Unix gave humans a common language to control machines. Today we're releasing **[agentOS](/docs/agent-os)** to give agents the same power.
+Unix gave humans a common language to control machines. Today we're releasing **[agentOS](https://agentos-sdk.dev)** to give agents the same power.
 
 agentOS is a lightweight VM powered by WebAssembly and V8 isolates. Each agent gets its own POSIX-compliant filesystem, processes, and networking. The same isolation technology trusted by every Chrome tab on the planet, now purpose-built for AI agents. Fully open-source under Apache 2.0.
 
@@ -18,7 +18,7 @@ agentOS is a lightweight VM powered by WebAssembly and V8 isolates. Each agent g
 - **Host tools**: expose your backend functions to agents as CLI commands inside the VM. Direct binding with near-zero latency. Automatic code mode for up to 80% token reduction.
 - **Mount anything as a filesystem**: S3, Google Drive, host directories, or the default persistent filesystem. Up to 10 GB per agent, survives sleep/wake automatically.
 - **Multiplayer**: multiple clients connect to the same agent in realtime. Stream session events, process output, and shell data to every observer.
-- **Hybrid sandboxes**: agents run in the lightweight VM by default and can spin up a full sandbox on demand. The sandbox is [mounted into the VM](/docs/agent-os/sandbox) as a native filesystem directory, like mounting a hard drive. Use the VM for most work, the sandbox for browsers, native compilation, and desktop automation.
+- **Hybrid sandboxes**: agents run in the lightweight VM by default and can spin up a full sandbox on demand. The sandbox is [mounted into the VM](https://agentos-sdk.dev) as a native filesystem directory, like mounting a hard drive. Use the VM for most work, the sandbox for browsers, native compilation, and desktop automation.
 - **Orchestration**: workflows, queues, cron jobs, and multi-agent coordination. Schedule agents, chain them together, and build durable pipelines.
 
 ## Show Me The Code
@@ -83,7 +83,7 @@ agentOS takes a different approach. The VM runs inside your Node.js process usin
 | **Permissions** | Granular, deny-by-default | Coarse-grained (container-level) |
 | **Infrastructure** | `npm install` | Vendor account + API keys |
 
-When you need a real Linux kernel for browsers, compilation, or desktop automation, agentOS can spin up a full sandbox on demand and [mount it into the VM](/docs/agent-os/sandbox) as a native filesystem directory. The agent reads and writes sandbox files the same way it reads local files.
+When you need a real Linux kernel for browsers, compilation, or desktop automation, agentOS can spin up a full sandbox on demand and [mount it into the VM](https://agentos-sdk.dev) as a native filesystem directory. The agent reads and writes sandbox files the same way it reads local files.
 
 ## Host Tools
 
@@ -176,7 +176,7 @@ agentOS is Apache 2.0 licensed and free to self-host. It's just an npm package. 
 
 ## Get Started
 
-- [agentOS documentation](/docs/agent-os)
-- [Quickstart guide](/docs/agent-os/quickstart)
+- [agentOS documentation](https://agentos-sdk.dev)
+- [Quickstart guide](https://agentos-sdk.dev)
 - [GitHub](https://github.com/rivet-dev/rivet)
 - [Discord](https://rivet.dev/discord)

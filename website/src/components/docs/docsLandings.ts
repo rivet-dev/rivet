@@ -1,13 +1,10 @@
 import {
 	faCloudflare,
-	faFastForward,
 	faLayerGroup,
-	faLightbulb,
 	faNextjs,
 	faNodeJs,
 	faReact,
 	faRust,
-	faScaleBalanced,
 	faSupabase,
 } from "@rivet-gg/icons";
 import { deployOptions } from "@rivetkit/shared-data";
@@ -50,25 +47,7 @@ const deploy: DocsLandingData = {
 	],
 };
 
-const agentOs: DocsLandingData = {
-	title: "agentOS",
-	subtitle:
-		"Run coding agents inside isolated VMs with full filesystem, process, and network control.",
-	logo: "agentos",
-	sections: [
-		{
-			title: "Get Started",
-			items: [
-				{ title: "Quickstart", href: "/docs/agent-os/quickstart", icon: faFastForward, description: "Boot a VM and run your first coding agent." },
-				{ title: "Crash Course", href: "/docs/agent-os/crash-course", icon: faLightbulb, description: "Learn the core agentOS concepts." },
-				{ title: "agentOS vs Sandbox", href: "/docs/agent-os/versus-sandbox", icon: faScaleBalanced, description: "How agentOS compares to a plain sandbox." },
-			],
-		},
-	],
-};
-
 export const docsLandings: Record<string, DocsLandingData> = {
 	actors,
 	deploy,
-	"agent-os": agentOs,
 };

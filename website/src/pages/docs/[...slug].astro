@@ -51,9 +51,9 @@ const tableOfContents = headings
 
 const { title, description } = entry.data as { title: string; description: string };
 const slugPath = getContentSlugPath(entry.id);
-// Section overviews (actors, deploy, agent-os) render as a custom icon-grid
-// landing instead of the standard prose article. The markdown chrome
-// (edit button, breadcrumb, TOC, page dropdown) is suppressed for these.
+// Section overviews (actors, deploy) render as a custom icon-grid landing
+// instead of the standard prose article. The markdown chrome (edit button,
+// breadcrumb, TOC, page dropdown) is suppressed for these.
 const landing = docsLandings[slugPath ?? ''];
 const isLanding = Boolean(landing);
 const fullPath = slugPath ? `/docs/${slugPath}/` : '/docs/';
@@ -98,11 +98,7 @@ const breadcrumbSchema = {
 		<div class="flex gap-8 max-w-6xl w-full min-w-0">
 			<main class:list={["w-full px-8 lg:mx-0 mx-auto lg:max-w-none min-w-0", landing ? "" : "py-8 max-w-prose-docs"]}>
 				{landing ? (
-					landing.logo === 'agentos' ? (
-						<DocsLanding {...landing} client:load />
-					) : (
-						<DocsLanding {...landing} />
-					)
+					<DocsLanding {...landing} />
 				) : (
 					<Fragment>
 						<div class="relative flex justify-end">
