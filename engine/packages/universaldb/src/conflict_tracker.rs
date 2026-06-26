@@ -1,4 +1,6 @@
 use std::{
+	collections::BTreeMap,
+	ops::Bound,
 	sync::{
 		Arc,
 		atomic::{AtomicU64, Ordering},
@@ -18,7 +20,6 @@ const TXN_CONFLICT_TTL: Duration = Duration::from_secs(10);
 struct PreviousTransaction {
 	insert_instant: Instant,
 	start_version: u64,
-	commit_version: u64,
 	conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 }
 
@@ -33,18 +34,18 @@ struct PreviousTransaction {
 /// `check_and_insert` takes the commit version from the caller instead of generating it.
 #[derive(Clone)]
 pub struct TransactionConflictTracker {
-	// NOTE: We use a mutex because we need to lock reads across all active txns. This could be optimized to
-	// only lock txns that have overlapping ranges with the currently checking one, but its a small
-	// optimization because most txns are going to be very recent and this only stores the last 10 seconds of
-	// txns.
-	txns: Arc<Mutex<Vec<PreviousTransaction>>>,
+	// Keyed by commit version, which is unique per committed transaction (unlike start version, which
+	// concurrent transactions can share). The ordering lets the conflict scan skip transactions whose
+	// commit version cannot overlap the committing transaction, and lets pruning drop expired entries
+	// from the front since commit versions grow with commit time.
+	txns: Arc<Mutex<BTreeMap<u64, PreviousTransaction>>>,
 	global_version: Arc<AtomicU64>,
 }
 
 impl TransactionConflictTracker {
 	pub fn new() -> Self {
 		TransactionConflictTracker {
-			txns: Arc::new(Mutex::new(Vec::new())),
+			txns: Arc::new(Mutex::new(BTreeMap::new())),
 			global_version: Arc::new(AtomicU64::new(0)),
 		}
 	}
@@ -67,13 +68,23 @@ impl TransactionConflictTracker {
 	) -> bool {
 		let mut txns = self.txns.lock().await;
 
-		// Prune old entries
-		txns.retain(|txn| txn.insert_instant.elapsed() < TXN_CONFLICT_TTL);
+		// Prune old entries. Commit versions grow with commit time, so expired entries are
+		// contiguous at the front of the map.
+		while let Some((_, txn)) = txns.first_key_value() {
+			if txn.insert_instant.elapsed() < TXN_CONFLICT_TTL {
+				break;
+			}
 
-		for txn2 in &*txns {
+			txns.pop_first();
+		}
+
+		// A retained transaction can only conflict if its commit version is greater than this
+		// transaction's start version, so skip everything at or below it.
+		for (txn2_commit_version, txn2) in
+			txns.range((Bound::Excluded(txn1_start_version), Bound::Unbounded))
+		{
 			// Check txn versions overlap (intersection or encapsulation)
-			if txn1_start_version < txn2.commit_version && txn2.start_version < txn1_commit_version
-			{
+			if txn2.start_version < txn1_commit_version {
 				for (cr1_start, cr1_end, cr1_type) in &txn1_conflict_ranges {
 					for (cr2_start, cr2_end, cr2_type) in &txn2.conflict_ranges {
 						// Check conflict ranges overlap
@@ -88,7 +99,7 @@ impl TransactionConflictTracker {
 								txn1_start_version,
 								txn1_commit_version,
 								txn2_start_version = txn2.start_version,
-								txn2_commit_version = txn2.commit_version,
+								txn2_commit_version = %txn2_commit_version,
 								"transaction conflict detected"
 							);
 							return true;
@@ -99,25 +110,26 @@ impl TransactionConflictTracker {
 		}
 
 		// If no conflicts were detected, save txn data
-		txns.push(PreviousTransaction {
-			insert_instant: Instant::now(),
-			start_version: txn1_start_version,
-			commit_version: txn1_commit_version,
-			conflict_ranges: txn1_conflict_ranges,
-		});
+		txns.insert(
+			txn1_commit_version,
+			PreviousTransaction {
+				insert_instant: Instant::now(),
+				start_version: txn1_start_version,
+				conflict_ranges: txn1_conflict_ranges,
+			},
+		);
 
 		false
 	}
 
-	pub async fn remove(&self, txn_start_version: u64) {
+	pub async fn remove(&self, txn_commit_version: u64) {
 		let mut txns = self.txns.lock().await;
+		txns.remove(&txn_commit_version);
+	}
 
-		if let Some(i) = txns
-			.iter()
-			.enumerate()
-			.find_map(|(i, txn)| (txn.start_version == txn_start_version).then_some(i))
-		{
-			txns.remove(i);
-		}
+	/// Current retained transaction count. Diagnostic: the conflict scan in `check_and_insert` is
+	/// O(this) per commit, so a growing map directly inflates per-commit service time.
+	pub async fn len(&self) -> usize {
+		self.txns.lock().await.len()
 	}
 }
