@@ -125,3 +125,18 @@ mod moved_tests {
 		assert!(logs.contains("parse_err"));
 	}
 }
+
+#[test]
+fn native_plugin_actor_config_uses_long_finite_runtime_timeouts() {
+	let config = native_plugin_actor_config();
+	let long = Duration::from_secs(3600);
+
+	assert!(config.has_database);
+	assert_eq!(config.connection_liveness_timeout, long);
+	assert_eq!(config.sleep_timeout, long);
+	assert_eq!(config.action_timeout, long);
+	assert_eq!(config.on_connect_timeout, long);
+	assert_eq!(config.on_before_connect_timeout, long);
+	assert_eq!(config.create_conn_state_timeout, long);
+	assert_eq!(config.create_vars_timeout, long);
+}

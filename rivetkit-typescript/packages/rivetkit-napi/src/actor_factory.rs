@@ -301,6 +301,24 @@ pub struct NapiNativePluginOptions {
 	pub sidecar_path: Option<String>,
 }
 
+fn native_plugin_actor_config() -> ActorConfig {
+	let mut config = ActorConfig::default();
+	config.has_database = true;
+	// Native-plugin (agent-os) actors run multi-second VM boots, long agent
+	// turns, and keep live event streams open. The stock defaults (2.5s
+	// connection liveness, 30s sleep, 60s action, 5s connect) drop connections
+	// mid-session and race live `sessionEvent` subscriptions.
+	let long = Duration::from_secs(3600);
+	config.connection_liveness_timeout = long;
+	config.sleep_timeout = long;
+	config.action_timeout = long;
+	config.on_connect_timeout = long;
+	config.on_before_connect_timeout = long;
+	config.create_conn_state_timeout = long;
+	config.create_vars_timeout = long;
+	config
+}
+
 #[napi]
 pub struct NapiActorFactory {
 	#[allow(dead_code)]
@@ -358,13 +376,11 @@ impl NapiActorFactory {
 	#[napi(factory)]
 	pub fn from_native_plugin(options: NapiNativePluginOptions) -> napi::Result<Self> {
 		crate::init_tracing(None);
-		let mut config = ActorConfig::default();
-		config.has_database = true;
 		let factory = rivetkit_core::build_native_plugin_factory(
 			std::path::Path::new(&options.plugin_path),
 			options.config_json.as_deref().unwrap_or("{}"),
 			options.sidecar_path.as_deref().unwrap_or(""),
-			config,
+			native_plugin_actor_config(),
 		)
 		.map_err(napi_anyhow_error)?;
 		let inner = Arc::new(factory);
