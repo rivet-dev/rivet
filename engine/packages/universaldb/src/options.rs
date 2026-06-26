@@ -1,4 +1,4 @@
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub enum StreamingMode {
 	/// Client intends to consume the entire range and would like it all transferred as early as possible.
@@ -16,7 +16,7 @@ pub enum StreamingMode {
 	/// Transfer data in batches large enough that an individual client can get reasonable read bandwidth from the database. If the client stops iteration early, considerable disk and network bandwidth may be wasted.
 	Serial,
 }
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub enum MutationType {
 	/// addend
@@ -80,7 +80,7 @@ pub enum MutationType {
 	/// Performs an atomic ``compare and clear`` operation. If the existing value in the database is equal to the given value, then given key is cleared.
 	CompareAndClear,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub enum ConflictRangeType {
 	/// Used to add a read conflict range
@@ -88,7 +88,7 @@ pub enum ConflictRangeType {
 	/// Used to add a write conflict range
 	Write,
 }
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Deserialize, serde::Serialize)]
 #[non_exhaustive]
 pub enum Priority {
 	Low,

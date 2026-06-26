@@ -13,9 +13,11 @@ use crate::{
 
 pub mod postgres;
 pub mod rocksdb;
+pub mod slatedb;
 
 pub use postgres::PostgresDatabaseDriver;
 pub use rocksdb::RocksDbDatabaseDriver;
+pub use slatedb::SlateDbDatabaseDriver;
 
 pub type BoxFut<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 pub type Erased = Box<dyn Any + Send>;

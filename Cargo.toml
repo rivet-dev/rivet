@@ -93,6 +93,7 @@ members = [
   anyhow = "1.0.82"
   pyroscope = "2.0"
   scopeguard = "1.2"
+  slatedb = "0.14.0"
   xxhash-rust = { version = "=0.8.15", features = [ "xxh3" ] }
   async-channel = "2.1.1"
   # Rivet fork of async-nats published as rivet-async-nats. Source: https://github.com/NathanFlurry/nats.rs (branch rivet-async-nats). Carries the SlowConsumer subject enrichment plus subscription backpressure stats; upstream these before returning to the official crate.

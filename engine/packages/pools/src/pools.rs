@@ -29,10 +29,8 @@ impl Pools {
 
 		install_rustls_provider();
 
-		let (ups, udb) = tokio::try_join!(
-			crate::db::ups::setup(&config, client_name),
-			crate::db::udb::setup(&config),
-		)?;
+		let ups = crate::db::ups::setup(&config, client_name).await?;
+		let udb = crate::db::udb::setup(&config, Some(ups.clone()), node_id.as_uuid()).await?;
 		let clickhouse = crate::db::clickhouse::setup(&config)?;
 
 		let pool = Pools(Arc::new(PoolsInner {
@@ -61,10 +59,8 @@ impl Pools {
 
 		install_rustls_provider();
 
-		let (ups, udb) = tokio::try_join!(
-			crate::db::ups::setup(&config, client_name),
-			crate::db::udb::setup(&config),
-		)?;
+		let ups = crate::db::ups::setup(&config, client_name).await?;
+		let udb = crate::db::udb::setup(&config, Some(ups.clone()), node_id.as_uuid()).await?;
 
 		let pool = Pools(Arc::new(PoolsInner {
 			config,

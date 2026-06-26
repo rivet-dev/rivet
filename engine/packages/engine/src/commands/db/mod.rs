@@ -63,6 +63,9 @@ impl SubCommand {
 						println!("Complete");
 						Ok(())
 					}
+					rivet_config::config::Database::SlateDb(_) => {
+						bail!("nuke SlateDB object-store prefixes is not implemented");
+					}
 				}
 			}
 		}
