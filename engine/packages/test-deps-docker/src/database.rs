@@ -8,6 +8,7 @@ use crate::DockerRunConfig;
 pub enum TestDatabase {
 	Postgres,
 	FileSystem,
+	SlateDb,
 }
 
 impl TestDatabase {
@@ -17,6 +18,7 @@ impl TestDatabase {
 			Ok(val) => match val.as_str() {
 				"postgres" => TestDatabase::Postgres,
 				"filesystem" => TestDatabase::FileSystem,
+				"slatedb" => TestDatabase::SlateDb,
 				_ => TestDatabase::FileSystem, // Default
 			},
 			Err(_) => TestDatabase::FileSystem, // Default
@@ -86,6 +88,16 @@ impl TestDatabase {
 
 				Ok((config, None))
 			}
+			TestDatabase::SlateDb => {
+				let config =
+					rivet_config::config::Database::SlateDb(rivet_config::config::db::SlateDb {
+						object_store_url: "memory:///".to_string(),
+						path: Some(format!("rivet-test-slatedb-{}-{}", test_id, dc_label)),
+						lease: None,
+					});
+
+				Ok((config, None))
+			}
 		}
 	}
 
@@ -95,6 +107,7 @@ impl TestDatabase {
 				wait_for_postgres_ready(docker_config.port_mapping.0, 10).await
 			}
 			TestDatabase::FileSystem => Ok(()),
+			TestDatabase::SlateDb => Ok(()),
 		}
 	}
 }

@@ -1,15 +1,30 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
+use async_trait::async_trait;
 use rivet_test_deps_docker::TestDatabase;
-use std::{borrow::Cow, sync::Arc};
+use std::{
+	borrow::Cow,
+	collections::BTreeMap,
+	sync::{
+		Arc,
+		atomic::{AtomicUsize, Ordering},
+	},
+	time::Duration,
+};
+use parking_lot::RwLock;
 use universaldb::{
 	Database,
+	driver::slatedb::{
+		SlateDbForwardingClient, SlateDbForwardingDatabaseDriver, SlateDbForwardingHandler,
+		SlateDbForwardingServer, SlateDbForwardingServerHandle, SlateDbForwardingTransport,
+	},
 	key_selector::KeySelector,
-	options::{ConflictRangeType, StreamingMode},
+	options::{ConflictRangeType, MutationType, StreamingMode},
 	range_option::RangeOption,
 	tuple::{Element, Subspace, Versionstamp, pack_with_versionstamp},
 	utils::IsolationLevel::*,
 	versionstamp::generate_versionstamp,
 };
+use slatedb::object_store::{ObjectStore, memory::InMemory, path::Path as ObjectStorePath};
 use uuid::Uuid;
 
 mod integration_gas;
@@ -64,6 +79,383 @@ async fn test_rocksdb_driver() {
 	let db = Database::new(Arc::new(driver));
 
 	run_all_tests(db).await;
+}
+
+#[tokio::test]
+async fn test_slatedb_driver() {
+	let _ = tracing_subscriber::fmt::try_init();
+
+	let test_id = Uuid::new_v4();
+	let (db_config, _docker_config) = TestDatabase::SlateDb.config(test_id, 1).await.unwrap();
+
+	let rivet_config::config::Database::SlateDb(slatedb_config) = db_config else {
+		unreachable!()
+	};
+
+	let driver = universaldb::driver::SlateDbDatabaseDriver::new(
+		universaldb::driver::slatedb::SlateDbConfig {
+			object_store_url: slatedb_config.object_store_url,
+			path: slatedb_config.path,
+			lease: None,
+		},
+	)
+	.await
+	.unwrap();
+	let db = Database::new(Arc::new(driver));
+
+	run_all_tests(db).await;
+}
+
+#[tokio::test]
+async fn test_slatedb_forwarding_driver() {
+	let _ = tracing_subscriber::fmt::try_init();
+
+	let subject = format!("udb.slatedb.test.{}", Uuid::new_v4());
+	let transport = Arc::new(TestForwardingTransport::new());
+	let local_driver = Arc::new(
+		universaldb::driver::SlateDbDatabaseDriver::new(
+			universaldb::driver::slatedb::SlateDbConfig {
+				object_store_url: "memory:///".to_string(),
+				path: Some(format!("rivet-test-slatedb-forwarding-{}", Uuid::new_v4())),
+				lease: None,
+			},
+		)
+		.await
+		.unwrap(),
+	);
+	let _server =
+		SlateDbForwardingServer::spawn(transport.clone(), subject.clone(), local_driver)
+			.await
+			.unwrap();
+	let forwarding_client = SlateDbForwardingClient::new(transport, None, subject);
+	let forwarding_driver = SlateDbForwardingDatabaseDriver::new(forwarding_client);
+	let db = Database::new(Arc::new(forwarding_driver));
+
+	run_all_tests(db).await;
+}
+
+#[tokio::test]
+async fn test_slatedb_managed_forwarding_failover() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("info")
+		.with_test_writer()
+		.try_init();
+
+	let subject = format!("udb.slatedb.managed.{}", Uuid::new_v4());
+	let transport = Arc::new(TestForwardingTransport::new());
+	let object_store: Arc<dyn ObjectStore> = Arc::new(InMemory::new());
+	let db_path = ObjectStorePath::from(format!("managed-failover-{}", Uuid::new_v4()));
+	let config = universaldb::driver::slatedb::SlateDbConfig {
+		object_store_url: "memory:///".to_string(),
+		path: None,
+		lease: Some(universaldb::driver::slatedb::SlateDbLeaseConfig {
+			ttl_ms: 250,
+			heartbeat_ms: 50,
+			nats_subject: Some(subject),
+		}),
+	};
+	let key = Subspace::from("test-slatedb-managed-failover").pack(&("key",));
+
+	let leader_driver = universaldb::driver::SlateDbDatabaseDriver::new_managed_with_object_store(
+		config.clone(),
+		object_store.clone(),
+		db_path.clone(),
+		transport.clone(),
+		Uuid::new_v4(),
+	)
+	.await
+	.unwrap();
+	let follower_driver = universaldb::driver::SlateDbDatabaseDriver::new_managed_with_object_store(
+		config,
+		object_store,
+		db_path,
+		transport,
+		Uuid::new_v4(),
+	)
+	.await
+	.unwrap();
+
+	let leader_db = Database::new(leader_driver.clone());
+	let follower_db = Database::new(follower_driver.clone());
+
+	leader_db
+		.txn("test_universaldbintegration", |tx| {
+			let key = key.clone();
+			async move {
+				tx.set(&key, b"leader");
+				Ok(())
+			}
+		})
+		.await
+		.unwrap();
+
+	let forwarded_value = follower_db
+		.txn("test_universaldbintegration", |tx| {
+			let key = key.clone();
+			async move { tx.get(&key, Serializable).await }
+		})
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(forwarded_value.as_slice(), b"leader");
+
+	drop(leader_db);
+	drop(leader_driver);
+	tokio::time::sleep(Duration::from_millis(800)).await;
+
+	follower_db
+		.txn("test_universaldbintegration", |tx| {
+			let key = key.clone();
+			async move {
+				tx.set(&key, b"new-leader");
+				Ok(())
+			}
+		})
+		.await
+		.unwrap();
+
+	let value = follower_db
+		.txn("test_universaldbintegration", |tx| {
+			let key = key.clone();
+			async move { tx.get(&key, Serializable).await }
+		})
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(value.as_slice(), b"new-leader");
+}
+
+#[derive(Clone)]
+struct TestForwardingTransport {
+	handlers: Arc<RwLock<BTreeMap<String, Arc<dyn SlateDbForwardingHandler>>>>,
+}
+
+impl TestForwardingTransport {
+	fn new() -> Self {
+		Self {
+			handlers: Arc::new(RwLock::new(BTreeMap::new())),
+		}
+	}
+}
+
+#[async_trait]
+impl SlateDbForwardingTransport for TestForwardingTransport {
+	async fn request(
+		&self,
+		subject: &str,
+		payload: &[u8],
+		_timeout: Duration,
+	) -> Result<Option<Vec<u8>>> {
+		let Some(handler) = self.handlers.read().get(subject).cloned() else {
+			return Ok(None);
+		};
+
+		Ok(Some(handler.handle(payload.to_vec()).await?))
+	}
+
+	async fn serve(
+		&self,
+		subject: String,
+		handler: Arc<dyn SlateDbForwardingHandler>,
+	) -> Result<Box<dyn SlateDbForwardingServerHandle>> {
+		let existing = self.handlers.write().insert(subject.clone(), handler);
+		if existing.is_some() {
+			return Err(anyhow!("duplicate SlateDB forwarding subject: {subject}"));
+		}
+		Ok(Box::new(TestForwardingServerHandle {
+			handlers: self.handlers.clone(),
+			subject,
+		}))
+	}
+}
+
+struct TestForwardingServerHandle {
+	handlers: Arc<RwLock<BTreeMap<String, Arc<dyn SlateDbForwardingHandler>>>>,
+	subject: String,
+}
+
+impl SlateDbForwardingServerHandle for TestForwardingServerHandle {}
+
+impl Drop for TestForwardingServerHandle {
+	fn drop(&mut self) {
+		self.handlers.write().remove(&self.subject);
+	}
+}
+
+#[tokio::test]
+async fn test_slatedb_write_skew_retries() {
+	let _ = tracing_subscriber::fmt()
+		.with_env_filter("info")
+		.with_test_writer()
+		.try_init();
+
+	let db = create_memory_slatedb_database("write-skew").await;
+	let test_subspace = Subspace::from("test-slatedb-write-skew");
+	let key_a = test_subspace.pack(&("a",));
+	let key_b = test_subspace.pack(&("b",));
+
+	let barrier = Arc::new(tokio::sync::Barrier::new(2));
+	let attempts_a = Arc::new(AtomicUsize::new(0));
+	let attempts_b = Arc::new(AtomicUsize::new(0));
+
+	let task_a = {
+		let db = db.clone();
+		let barrier = barrier.clone();
+		let attempts = attempts_a.clone();
+		let key_a = key_a.clone();
+		let key_b = key_b.clone();
+		tokio::spawn(async move {
+			db.txn("test_universaldbintegration", |tx| {
+				let barrier = barrier.clone();
+				let attempts = attempts.clone();
+				let key_a = key_a.clone();
+				let key_b = key_b.clone();
+				async move {
+					let attempt = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+					let _ = tx.get(&key_a, Serializable).await?;
+					if attempt == 1 {
+						barrier.wait().await;
+					}
+					tx.set(&key_b, b"from-a");
+					Ok(())
+				}
+			})
+			.await
+		})
+	};
+
+	let task_b = {
+		let db = db.clone();
+		let barrier = barrier.clone();
+		let attempts = attempts_b.clone();
+		let key_a = key_a.clone();
+		let key_b = key_b.clone();
+		tokio::spawn(async move {
+			db.txn("test_universaldbintegration", |tx| {
+				let barrier = barrier.clone();
+				let attempts = attempts.clone();
+				let key_a = key_a.clone();
+				let key_b = key_b.clone();
+				async move {
+					let attempt = attempts.fetch_add(1, Ordering::SeqCst) + 1;
+					let _ = tx.get(&key_b, Serializable).await?;
+					if attempt == 1 {
+						barrier.wait().await;
+					}
+					tx.set(&key_a, b"from-b");
+					Ok(())
+				}
+			})
+			.await
+		})
+	};
+
+	task_a.await.unwrap().unwrap();
+	task_b.await.unwrap().unwrap();
+
+	let total_attempts = attempts_a.load(Ordering::SeqCst) + attempts_b.load(Ordering::SeqCst);
+	assert!(
+		total_attempts > 2,
+		"write-skew repro should force at least one retry, got {total_attempts} attempts"
+	);
+}
+
+#[tokio::test]
+async fn test_slatedb_clear_range_atomic_overlay() {
+	let db = create_memory_slatedb_database("clear-range-atomic").await;
+	let test_subspace = Subspace::from("test-slatedb-clear-range-atomic");
+	let key = test_subspace.pack(&("counter",));
+	let (begin, end) = test_subspace.range();
+
+	db.txn("test_universaldbintegration", |tx| {
+		let key = key.clone();
+		async move {
+			tx.set(&key, &100i64.to_le_bytes());
+			Ok(())
+		}
+	})
+	.await
+	.unwrap();
+
+	db.txn("test_universaldbintegration", |tx| {
+		let key = key.clone();
+		let begin = begin.clone();
+		let end = end.clone();
+		async move {
+			tx.clear_range(&begin, &end);
+			tx.informal()
+				.atomic_op(&key, &1i64.to_le_bytes(), MutationType::Add);
+			Ok(())
+		}
+	})
+	.await
+	.unwrap();
+
+	let value = db
+		.txn("test_universaldbintegration", |tx| {
+			let key = key.clone();
+			async move { tx.get(&key, Serializable).await }
+		})
+		.await
+		.unwrap()
+		.unwrap();
+	assert_eq!(i64::from_le_bytes(value.as_slice().try_into().unwrap()), 1);
+}
+
+#[tokio::test]
+async fn test_slatedb_durability_reopen() {
+	let temp_dir = tempfile::tempdir().unwrap();
+	let config = universaldb::driver::slatedb::SlateDbConfig {
+		object_store_url: format!("file://{}", temp_dir.path().join("udb").display()),
+		path: None,
+		lease: None,
+	};
+	let key = Subspace::from("test-slatedb-durability").pack(&("key",));
+
+	let driver = universaldb::driver::SlateDbDatabaseDriver::new(config.clone())
+		.await
+		.unwrap();
+	let driver = Arc::new(driver);
+	let db = Database::new(driver.clone());
+	db.txn("test_universaldbintegration", |tx| {
+		let key = key.clone();
+		async move {
+			tx.set(&key, b"durable");
+			Ok(())
+		}
+	})
+	.await
+	.unwrap();
+
+	drop(db);
+	driver.close().await.unwrap();
+
+	let driver = universaldb::driver::SlateDbDatabaseDriver::new(config)
+		.await
+		.unwrap();
+	let db = Database::new(Arc::new(driver));
+	let value = db
+		.txn("test_universaldbintegration", |tx| {
+			let key = key.clone();
+			async move { tx.get(&key, Serializable).await }
+		})
+		.await
+		.unwrap();
+
+	assert_eq!(value.unwrap().as_slice(), b"durable");
+}
+
+async fn create_memory_slatedb_database(name: &str) -> Database {
+	let driver = universaldb::driver::SlateDbDatabaseDriver::new(
+		universaldb::driver::slatedb::SlateDbConfig {
+			object_store_url: "memory:///".to_string(),
+			path: Some(format!("rivet-test-slatedb-{}-{}", name, Uuid::new_v4())),
+			lease: None,
+		},
+	)
+	.await
+	.unwrap();
+	Database::new(Arc::new(driver))
 }
 
 async fn run_all_tests(db: universaldb::Database) {
@@ -137,11 +529,9 @@ async fn test_database_options(db: &Database) {
 	use std::sync::Arc;
 	use std::sync::atomic::{AtomicU32, Ordering};
 	use universaldb::error::DatabaseError;
-	use universaldb::options::DatabaseOption;
 
 	// Test setting transaction retry limit
-	db.set_option(DatabaseOption::TransactionRetryLimit(5))
-		.unwrap();
+	db.txn_retry_limit(5).unwrap();
 
 	// Test that retry limit is respected by forcing conflicts
 	let conflict_counter = Arc::new(AtomicU32::new(0));
@@ -172,8 +562,7 @@ async fn test_database_options(db: &Database) {
 	assert_eq!(final_attempts, 3, "Should have taken 3 attempts");
 
 	// Now set a very low retry limit and verify it fails
-	db.set_option(DatabaseOption::TransactionRetryLimit(1))
-		.unwrap();
+	db.txn_retry_limit(1).unwrap();
 
 	let conflict_counter2 = Arc::new(AtomicU32::new(0));
 	let counter_clone2 = conflict_counter2.clone();
@@ -204,8 +593,7 @@ async fn test_database_options(db: &Database) {
 	assert!(attempts <= 2, "Should not retry more than limit + 1");
 
 	// Reset to a reasonable retry limit
-	db.set_option(DatabaseOption::TransactionRetryLimit(100))
-		.unwrap();
+	db.txn_retry_limit(100).unwrap();
 }
 
 async fn clear_test_namespace(db: &Database) -> Result<()> {

@@ -12,6 +12,7 @@ pub use postgres::{Postgres, PostgresSsl};
 pub enum Database {
 	Postgres(Postgres),
 	FileSystem(FileSystem),
+	SlateDb(SlateDb),
 }
 
 impl Default for Database {
@@ -34,4 +35,26 @@ impl Default for FileSystem {
 
 		Self { path: default_path }
 	}
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SlateDb {
+	/// Object-store URL, e.g. "memory:///", "file:///var/lib/rivet/udb", or "s3://bucket/prefix".
+	pub object_store_url: String,
+	/// Optional database path/prefix inside the object store. Defaults to the path from `object_store_url`.
+	pub path: Option<String>,
+	/// Optional writer lease tuning for multi-node SlateDB.
+	pub lease: Option<SlateDbLease>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct SlateDbLease {
+	/// Lease TTL in milliseconds. Defaults to 15 seconds when omitted by the pool mapping.
+	pub ttl_ms: Option<u64>,
+	/// Heartbeat interval in milliseconds. Defaults to 5 seconds when omitted by the pool mapping.
+	pub heartbeat_ms: Option<u64>,
+	/// Optional NATS subject advertised by the leader.
+	pub nats_subject: Option<String>,
 }
