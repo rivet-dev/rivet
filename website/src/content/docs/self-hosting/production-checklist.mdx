@@ -8,9 +8,9 @@ skill: true
 We recommend passing this page to your coding agent to verify your configuration before deploying.
 </Tip>
 
-<Warning>
-PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
-</Warning>
+<Note>
+PostgreSQL is the recommended backend for production multi-node and multi-region self-hosted Rivet deployments. For single-node deployments, the file system backend (RocksDB-based) is simpler. Enterprise teams running at very large scale can contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
+</Note>
 
 Also review the [general production checklist](/docs/general/production-checklist).
 
@@ -29,20 +29,24 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 - **Configure autoscaling for the Rivet Engine.** Set target CPU utilization to 70% and memory to 80% to ensure headroom for traffic spikes. In Kubernetes, this is configured via a Horizontal Pod Autoscaler (HPA).
 - **Use 2+ engine nodes for redundancy.** Running a single engine node is a single point of failure. Deploy at least two engine instances behind a load balancer.
-- **RocksDB only supports a single node.** Do not run multiple RocksDB nodes. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). For multi-node deployments, PostgreSQL is the recommended backend today, though it remains experimental as we evaluate the best fit for scalability and performance.
+- **RocksDB only supports a single node.** Do not run multiple RocksDB nodes. The file system backend (RocksDB-based) is for single-node deployments. For multi-node and multi-region deployments, use the PostgreSQL backend.
 - **Validate the rate limit on your serverless actor host.** Actor start requests are sent from your engine instances, so they all originate from a small set of IPs. Per-IP rate limits on the actor host will throttle the engine before they would throttle end-user traffic. Size the limit to your peak actor create and wake rate, and configure platform max concurrency (e.g. on GCP Cloud Run) to match your expected concurrent actor count.
 
 ## PostgreSQL
 
-- **PostgreSQL is recommended for multi-node deployments, but remains experimental.** Validate the deployment carefully before rollout.
-- **Configure automated backups.** Set up regular backups for your PostgreSQL database to prevent data loss.
-- **Configure failover.** Set up a standby replica with automatic failover to ensure high availability.
-- **Use FoundationDB for the most scalable production-ready deployments.** FoundationDB provides the best performance, scalability, and uptime for Rivet. Contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
+- **Use PostgreSQL for multi-node and multi-region deployments.** Multiple engine nodes can share one PostgreSQL instance; no extra coordination service is required. See [PostgreSQL](/docs/self-hosting/postgres).
+- **Raise `max_connections`.** Each engine node opens well over a hundred connections under load. Size `max_connections` to at least `(number of engine nodes × 150)` plus headroom. PostgreSQL's default of `100` is too low. See [Connection Limits](/docs/self-hosting/postgres#connection-limits).
+- **Do not use a connection pooler.** Rivet requires direct connections. Do not put PgBouncer, Supavisor, or RDS Proxy in front of PostgreSQL.
+- **Give PostgreSQL dedicated resources.** Provision dedicated CPU, memory, and fast disk, and keep autovacuum healthy. PostgreSQL is the system of record for the whole deployment.
+- **Configure automated backups.** Set up regular backups and point-in-time recovery, and test restoring from them.
+- **Configure failover.** Set up a standby replica with automatic failover to ensure high availability. A single instance is a single point of failure.
+- **Use one PostgreSQL instance per region.** For multi-region deployments, deploy a separate PostgreSQL instance in each region.
+- **Use FoundationDB for the largest deployments.** Enterprise teams running at very large scale can contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
 
 ## NATS
 
-- **Use NATS for pub/sub (recommended).** By default, Rivet uses PostgreSQL `LISTEN`/`NOTIFY` for pub/sub which has limited throughput. NATS significantly improves performance for high-traffic deployments. This is not needed if using RocksDB. See [Configuration](/docs/self-hosting/configuration).
-- **Deploy 2+ NATS replicas.** Run at least two NATS replicas for high availability.
+- **Use NATS for very high-throughput pub/sub (optional).** By default, Rivet uses PostgreSQL for pub/sub, which is sufficient for most deployments. For very high-traffic deployments, NATS can be used as a dedicated pub/sub layer. This is not needed if using RocksDB. See [Configuration](/docs/self-hosting/configuration).
+- **Deploy 2+ NATS replicas.** If you use NATS, run at least two replicas for high availability.
 
 ## Monitoring
 

@@ -4,9 +4,21 @@ description: "Configure PostgreSQL for self-hosted Rivet deployments."
 skill: true
 ---
 
-<Warning>
-PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
-</Warning>
+<Note>
+PostgreSQL is the recommended backend for production multi-node and multi-region self-hosted Rivet deployments. For single-node deployments, the [file system backend](/docs/self-hosting/filesystem) (RocksDB-based) is simpler. Enterprise teams running at very large scale can contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
+</Note>
+
+## Overview
+
+PostgreSQL is the storage and coordination backend for self-hosted Rivet deployments that run more than one engine node. Multiple engine nodes can share a single PostgreSQL instance with no extra coordination service to deploy. Rivet handles leader election, failover, and version sequencing internally.
+
+Use PostgreSQL when you need:
+
+- **Multiple engine nodes** behind a load balancer for redundancy and horizontal scaling.
+- **Multi-region deployments** (deploy one PostgreSQL instance per region, see [Multi-Region](/docs/self-hosting/multi-region)).
+- **High availability** with a managed or self-managed primary/replica failover setup.
+
+For a single-node deployment, the file system backend is simpler and requires no separate database. For the largest, most demanding production workloads, FoundationDB ([enterprise](/sales)) scales further.
 
 ## Basic Configuration
 
@@ -28,6 +40,41 @@ RIVET__database__postgres__url="postgresql://user:password@host:5432/database"
 
 </CodeGroup>
 
+## Requirements and Recommendations
+
+### Version
+
+Use PostgreSQL 14 or newer. Rivet is tested against PostgreSQL 18, which is recommended for new deployments.
+
+### Connection Limits
+
+Each Rivet engine node opens a pool of direct connections to PostgreSQL and can use well over a hundred connections per node under load. PostgreSQL's default `max_connections` of `100` is too low for even a single busy engine node.
+
+- Set PostgreSQL `max_connections` to comfortably exceed `(number of engine nodes × 150)` plus headroom for backups, monitoring, and your own queries.
+- If you use a managed PostgreSQL service, confirm its connection limit is high enough or pick a tier that allows raising it. Connection exhaustion shows up as engine startup failures or stalled requests under load.
+
+<Warning>
+Do not work around the connection limit with a connection pooler. See [Do Not Use Connection Poolers](#do-not-use-connection-poolers) below.
+</Warning>
+
+### Resources
+
+PostgreSQL is the system of record for the entire deployment, so size it accordingly:
+
+- Give PostgreSQL dedicated CPU, memory, and fast disk (SSD/NVMe with high IOPS). Avoid co-locating it with other heavy workloads.
+- Rivet generates steady write and row-turnover on its internal tables. Keep autovacuum enabled and healthy so dead tuples do not accumulate.
+
+### High Availability and Backups
+
+A single PostgreSQL instance is a single point of failure for your whole deployment.
+
+- Configure a standby replica with automatic failover (managed services such as Amazon RDS, Cloud SQL, and Azure Database provide this).
+- Enable automated backups and point-in-time recovery, and periodically test restoring from them.
+
+### Multi-Region
+
+Deploy one PostgreSQL instance per region or datacenter. Engine nodes connect to the PostgreSQL instance in their own region. See [Multi-Region](/docs/self-hosting/multi-region) for the full topology.
+
 ## Managed Postgres Compatibility
 
 Some hosted PostgreSQL platforms require additional configuration due to platform-specific restrictions.
@@ -43,8 +90,7 @@ Use direct connection (not connection pooler).
 {
   "database": {
     "postgres": {
-      "url": "postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require",
-      "unstable_disable_lock_customization": true
+      "url": "postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
     }
   }
 }
@@ -52,7 +98,6 @@ Use direct connection (not connection pooler).
 
 ```bash Environment-variables
 RIVET__database__postgres__url="postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
-RIVET__database__postgres__unstable_disable_lock_customization=true
 ```
 
 </CodeGroup>
@@ -71,8 +116,7 @@ Use direct connection on port `5432` (not connection pooler).
 {
   "database": {
     "postgres": {
-      "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable",
-      "unstable_disable_lock_customization": true
+      "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
     }
   }
 }
@@ -80,7 +124,6 @@ Use direct connection on port `5432` (not connection pooler).
 
 ```bash Environment-variables
 RIVET__database__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
-RIVET__database__postgres__unstable_disable_lock_customization=true
 ```
 
 </CodeGroup>
@@ -96,7 +139,6 @@ Download the root certificate from your Supabase dashboard and specify its path.
   "database": {
     "postgres": {
       "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require",
-      "unstable_disable_lock_customization": true,
       "ssl": {
         "root_cert_path": "/path/to/supabase-ca.crt"
       }
@@ -107,7 +149,6 @@ Download the root certificate from your Supabase dashboard and specify its path.
 
 ```bash Environment-variables
 RIVET__database__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require"
-RIVET__database__postgres__unstable_disable_lock_customization=true
 RIVET__database__postgres__ssl__root_cert_path="/path/to/supabase-ca.crt"
 ```
 
@@ -198,26 +239,11 @@ Do not use:
 
 ## Troubleshooting
 
-### Permission Denied Errors
+### Too Many Connections
 
-If you see errors like:
+Errors like `FATAL: sorry, too many clients already` or engine nodes failing to start under load mean PostgreSQL's `max_connections` is too low. Raise it to account for every engine node (see [Connection Limits](#connection-limits)). Do not add a connection pooler to work around this.
 
-```
-ERROR: permission denied to set parameter "deadlock_timeout"
-ERROR: current transaction is aborted, commands ignored until end of transaction block
-```
+### Connection Refused or TLS Errors
 
-Add `unstable_disable_lock_customization: true` to your configuration:
-
-```json
-{
-  "database": {
-    "postgres": {
-      "url": "postgresql://...",
-      "unstable_disable_lock_customization": true
-    }
-  }
-}
-```
-
-This disables Rivet's attempt to set `lock_timeout = 0` and `deadlock_timeout = 10ms`. Since `lock_timeout` defaults to `0` in PostgreSQL, skipping these settings is safe. Deadlock detection will use the default `1s` timeout instead of `10ms`.
+- Confirm the engine connects directly to PostgreSQL and not through a pooler (PgBouncer, Supavisor, RDS Proxy). Rivet requires direct connections.
+- For TLS errors, verify `sslmode` matches your server and, for custom certificate authorities, that `ssl.root_cert_path` points to the correct CA certificate. See [SSL/TLS Support](#ssltls-support).
