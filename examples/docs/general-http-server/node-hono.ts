@@ -1,0 +1,11 @@
+import { Hono } from "hono";
+import { serve } from "@hono/node-server";
+import { actor, setup } from "rivetkit";
+
+const myActor = actor({ state: {}, actions: {} });
+const registry = setup({ use: { myActor } });
+
+const app = new Hono();
+app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
+
+serve({ fetch: app.fetch, port: 3000 });

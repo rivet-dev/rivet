@@ -26,35 +26,9 @@ For a worked queue-driven pattern, see the cookbook: [AI Agent](/cookbook/ai-age
 
 This is the default pattern. Define queue names in `queues`, process them in `run`, and publish from the client with `handle.send(...)`.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const counter = actor({
-  state: { value: 0 },
-  queues: {
-    increment: queue<{ amount: number }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      c.state.value += message.body.amount;
-    }
-  },
-});
-
-export const registry = setup({ use: { counter } });
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.counter.getOrCreate(["main"]);
-
-await handle.send("increment", { amount: 1 });
-await handle.send("increment", { amount: 5 });
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-queues/basic/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/basic/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Completable messages
@@ -65,90 +39,18 @@ Use this when you want explicit completion/ack semantics but do not need to retu
 - If processing fails before `message.complete()`, the message is not redelivered, and any waiting sender times out instead of receiving a completion.
 - `status: "timedOut"` means sender timeout elapsed before `message.complete(...)`.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const counter = actor({
-  state: { value: 0 },
-  queues: {
-    increment: queue<{ amount: number }, undefined>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter({ completable: true })) {
-      c.state.value += message.body.amount;
-      await message.complete();
-    }
-  },
-});
-
-export const registry = setup({ use: { counter } });
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.counter.getOrCreate(["main"]);
-
-const result = await handle.send(
-  "increment",
-  { amount: 5 },
-  { wait: true, timeout: 5_000 },
-);
-
-if (result.status === "completed") {
-  console.log("applied");
-} else if (result.status === "timedOut") {
-  console.log("timed out");
-}
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-queues/completable/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/completable/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Request/reply pattern
 
 Use this when the sender needs data back from queued work.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const counter = actor({
-  state: { value: 0 },
-  queues: {
-    increment: queue<{ amount: number }, { value: number }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter({ completable: true })) {
-      c.state.value += message.body.amount;
-      await message.complete({ value: c.state.value });
-    }
-  },
-});
-
-export const registry = setup({ use: { counter } });
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.counter.getOrCreate(["main"]);
-
-const result = await handle.send(
-  "increment",
-  { amount: 5 },
-  { wait: true, timeout: 5_000 },
-);
-
-if (result.status === "completed") {
-  console.log(result.response); // { value: 5 }
-} else if (result.status === "timedOut") {
-  console.log("timed out");
-}
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-queues/request-reply/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/request-reply/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Queue messages from within an actor
@@ -159,65 +61,16 @@ Queueing is useful from inside actor logic too, not just from clients.
 - You can also call `c.queue.send(...)` from other parts of `run` when needed.
 - `c.queue.send(...)` confirms durable enqueue. It does not wait for processing to finish.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const counter = actor({
-  state: { value: 0 },
-  queues: {
-    mutate: queue<{ delta: number }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      c.state.value += message.body.delta;
-    }
-  },
-  actions: {
-    increment: async (c, delta: number) => {
-      await c.queue.send("mutate", { delta });
-    },
-  },
-});
-
-export const registry = setup({ use: { counter } });
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.counter.getOrCreate(["main"]);
-
-await handle.increment(5);
-await handle.increment(2);
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-queues/from-actor/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/from-actor/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Defining queue schemas
 
 You can define queue types with `queue<TMessage, TComplete>()` or with schema objects. Schema objects support [Standard Schema](https://standardschema.dev/) validators, including [Zod](https://zod.dev/).
 
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-import { z } from "zod";
-
-export const worker = actor({
-  state: {},
-  queues: {
-    // Use generic queue typing when you want compile-time typing only.
-    foo: queue<{ id: string }, { ok: true }>(),
-    // Use schema objects when you want runtime validation for message and completion payloads.
-    bar: {
-      message: z.object({ id: z.string() }),
-      complete: z.object({ ok: z.boolean() }),
-    },
-  },
-});
-
-export const registry = setup({ use: { worker } });
-```
+<CodeSnippet file="examples/docs/actors-queues/schemas.ts" title="index.ts" />
 
 ## Pull messages with `next` and `nextBatch`
 
@@ -227,33 +80,7 @@ Use `nextBatch` when you want to wait for multiple queue messages.
 - Waits until messages are available unless timeout is hit.
 - Omit `timeout` to wait indefinitely.
 
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const queueWorker = actor({
-  state: {},
-  queues: {
-    jobs: queue<{ id: string }>(),
-  },
-  actions: {
-    pull: async (c) => {
-      const batch = await c.queue.nextBatch({
-        count: 10,
-        timeout: 1_000,
-      });
-
-      const oneWithoutTimeout = await c.queue.next();
-
-      return {
-        batchCount: batch.length,
-        receivedOneWithoutTimeout: oneWithoutTimeout !== undefined,
-      };
-    },
-  },
-});
-
-export const registry = setup({ use: { queueWorker } });
-```
+<CodeSnippet file="examples/docs/actors-queues/next-batch.ts" title="index.ts" />
 
 ## Poll messages
 
@@ -262,87 +89,15 @@ Use `tryNextBatch` for non-blocking batch reads.
 
 - Returns immediately and never waits.
 
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const queueWorker = actor({
-  state: {},
-  queues: {
-    jobs: queue<{ id: string }>(),
-  },
-  actions: {
-    poll: async (c) => {
-      const immediate = await c.queue.tryNext();
-
-      const immediateBatch = await c.queue.tryNextBatch({
-        count: 10,
-      });
-
-      return {
-        hasImmediate: immediate !== undefined,
-        immediateBatchCount: immediateBatch.length,
-      };
-    },
-  },
-});
-
-export const registry = setup({ use: { queueWorker } });
-```
+<CodeSnippet file="examples/docs/actors-queues/poll.ts" title="index.ts" />
 
 ## Abort signals
 
 Use `signal` when your receive loop needs external cancellation semantics in addition to actor shutdown behavior.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-import { joinSignals } from "rivetkit/utils";
-
-export const signalWorker = actor({
-  state: {},
-  createVars: () => ({
-    cancelController: new AbortController(),
-  }),
-  queues: {
-    jobs: queue<{ id: string }>(),
-  },
-  actions: {
-    cancelProcessing: async (c) => {
-      c.vars.cancelController.abort();
-    },
-  },
-  run: async (c) => {
-    while (!c.aborted) {
-      const signal = joinSignals(c.abortSignal, c.vars.cancelController.signal);
-
-      try {
-        const message = await c.queue.next({ signal });
-        if (!message) continue;
-        console.log("Processing job", message.body.id);
-      } catch (error) {
-        if (c.vars.cancelController.signal.aborted && !c.aborted) {
-          c.vars.cancelController = new AbortController();
-          continue;
-        }
-        throw error;
-      }
-    }
-  },
-});
-
-export const registry = setup({ use: { signalWorker } });
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.signalWorker.getOrCreate(["main"]);
-
-await handle.send("jobs", { id: "job-1" });
-await handle.cancelProcessing();
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-queues/abort-signals/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/abort-signals/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Multiple queues
@@ -351,64 +106,9 @@ Multiple queues let you separate message flows by purpose. By default, receive c
 
 Use `iter({ names: ["prompt"] })` as the main stream and `next({ names: ["stop"] })` as a stop signal.
 
-<CodeGroup workspace>
-```ts index.ts
-import { openai } from "@ai-sdk/openai";
-import { generateText } from "ai";
-import { actor, queue, setup } from "rivetkit";
-import { joinSignals } from "rivetkit/utils";
-
-export const agent = actor({
-  state: { running: false, messages: [] as string[] },
-  queues: {
-    prompt: queue<{ prompt: string }, undefined>(),
-    stop: queue<{ reason?: string }>(),
-  },
-  run: async (c) => {
-    for await (const promptMessage of c.queue.iter({ names: ["prompt"], completable: true })) {
-      // Create a stop controller for this prompt run.
-      const stopController = new AbortController();
-      const runSignal = joinSignals(c.abortSignal, stopController.signal);
-
-      // Watch for stop messages while generation is running.
-      const stopWatcher = c.queue
-        .next({ names: ["stop"], signal: runSignal })
-        .then((stopMessage) => {
-          if (stopMessage) stopController.abort();
-        })
-        .catch(() => {});
-
-      // Generate a response for the prompt.
-      c.state.running = true;
-      const { text } = await generateText({
-        model: openai("gpt-5"),
-        prompt: promptMessage.body.prompt,
-        abortSignal: runSignal,
-      }).finally(async () => {
-        stopController.abort();
-        c.state.running = false;
-      });
-
-      // Append each model response to actor state and acknowledge the prompt.
-      c.state.messages.push(text);
-      await promptMessage.complete();
-    }
-  },
-});
-
-export const registry = setup({ use: { agent } });
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.agent.getOrCreate(["main"]);
-
-await handle.send("prompt", { prompt: "summarize latest logs" });
-await handle.send("stop", { reason: "user canceled" });
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-queues/multiple-queues/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/multiple-queues/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Sleeping behavior
@@ -448,58 +148,12 @@ Reserve `wait: true` for external callers (HTTP handlers, CLI tools, client apps
 
 Every queue message includes a `createdAt` timestamp. Use this to skip or discard stale messages in your run loop:
 
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const worker = actor({
-  state: {},
-  queues: {
-    jobs: queue<{ task: string }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      const ageMs = Date.now() - message.createdAt;
-      if (ageMs > 60_000) {
-        // Message is older than 60 seconds, skip it.
-        continue;
-      }
-      console.log("Processing", message.body.task);
-    }
-  },
-});
-
-export const registry = setup({ use: { worker } });
-```
+<CodeSnippet file="examples/docs/actors-queues/message-ttl.ts" title="index.ts" />
 
 ### Delayed delivery
 
 Use [`c.schedule`](/docs/actors/schedule) to enqueue messages at a future time instead of processing them immediately:
 
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-
-export const reminder = actor({
-  state: {},
-  queues: {
-    notify: queue<{ userId: string }>(),
-  },
-  actions: {
-    scheduleReminder: async (c, userId: string) => {
-      // Enqueue a message in 30 seconds.
-      c.schedule.after(30_000, "enqueueReminder", userId);
-    },
-    enqueueReminder: async (c, userId: string) => {
-      await c.queue.send("notify", { userId });
-    },
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      console.log("Sending reminder to", message.body.userId);
-    }
-  },
-});
-
-export const registry = setup({ use: { reminder } });
-```
+<CodeSnippet file="examples/docs/actors-queues/delayed-delivery.ts" title="index.ts" />
 
 See [Schedule](/docs/actors/schedule) for the full scheduling API.

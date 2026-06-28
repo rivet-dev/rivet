@@ -17,13 +17,7 @@ The native runtime is the default and requires no configuration. It loads
 platform-specific native bindings for the best performance and full feature
 support on Node.js and Bun.
 
-```typescript
-import { actor, setup } from "rivetkit";
-
-const counter = actor({ state: { count: 0 }, actions: {} });
-
-const registry = setup({ use: { counter } });
-```
+<CodeSnippet file="examples/docs/general-wasm-vs-native-sdk/native-runtime.ts" />
 
 ## WebAssembly runtime
 

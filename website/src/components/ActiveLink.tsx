@@ -1,7 +1,16 @@
 "use client";
+import { createContext, useContext } from "react";
 import type { ReactNode, AnchorHTMLAttributes } from "react";
 import { normalizePath } from "@/lib/normalizePath";
 import { usePathname } from "@/hooks/usePathname";
+
+// SSR seed for path-derived state (active-link highlight + which collapsible
+// sidebar section is open). Server-rendered islands have no `window`, and in
+// `astro dev` docs islands don't hydrate at all — so without this seed the
+// active section/link only resolves after hydration (or never, in dev). A
+// parent (DocsNavigation) supplies the current path so it's correct at render
+// time; the client `usePathname` effect then keeps it live across navigation.
+export const SsrPathnameContext = createContext("");
 
 export interface ActiveLinkProps extends AnchorHTMLAttributes<HTMLAnchorElement> {
 	isActive?: boolean;
@@ -17,7 +26,7 @@ export function ActiveLink({
 	children,
 	...props
 }: ActiveLinkProps) {
-	const pathname = usePathname();
+	const pathname = usePathname(useContext(SsrPathnameContext));
 
 	const isActive =
 		isActiveOverride ||

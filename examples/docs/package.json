@@ -1,0 +1,40 @@
+{
+	"name": "docs-snippets",
+	"version": "2.0.21",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"check-types": "tsc --noEmit"
+	},
+	"dependencies": {
+		"rivetkit": "workspace:*",
+		"@rivetkit/react": "workspace:*",
+		"@rivetkit/engine-api-full": "workspace:*",
+		"@rivetkit/next-js": "workspace:*",
+		"@rivetkit/cloudflare-workers": "workspace:*",
+		"@rivetkit/rivetkit-wasm": "workspace:*",
+		"@rivetkit/supabase": "workspace:*",
+		"@rivetkit/effect": "workspace:*",
+		"effect": "4.0.0-beta.66",
+		"@effect/platform-node": "4.0.0-beta.66",
+		"@ai-sdk/openai": "^3.0.30",
+		"ai": "^6.0.92",
+		"hono": "^4.7.0",
+		"zod": "^4.1.0",
+		"elysia": "^1.2.25",
+		"@hono/node-server": "^1.14.1",
+		"pg": "^8.14.1",
+		"vitest": "^3.0.9",
+		"pino": "^9.7.0",
+		"react": "^19.2.0",
+		"react-dom": "^19.2.0"
+	},
+	"devDependencies": {
+		"typescript": "^5.7.3",
+		"@types/node": "^22.13.1",
+		"@types/pg": "^8.11.14",
+		"@types/react": "^19.1.6",
+		"@types/react-dom": "^19.1.6",
+		"drizzle-orm": "^0.38.0"
+	}
+}

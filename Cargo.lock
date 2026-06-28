@@ -1831,13 +1831,10 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "futures-util",
- "reqwest 0.12.22",
  "rivetkit",
  "serde",
  "serde_json",
  "tokio",
- "tokio-tungstenite",
 ]
 
 [[package]]

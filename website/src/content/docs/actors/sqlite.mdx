@@ -49,70 +49,9 @@ Define `db: db({ onMigrate })` on your actor, create your schema in `onMigrate`,
 
 RivetKit wraps `onMigrate` in a SQLite savepoint, so migration steps are atomic. If `onMigrate` throws, all SQL run by that hook is rolled back before the actor starts.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, setup } from "rivetkit";
-import { db } from "rivetkit/db";
-
-export const todoList = actor({
-  db: db({
-    onMigrate: async (db) => {
-      await db.execute(`
-        CREATE TABLE IF NOT EXISTS todos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL
-        );
-      `);
-
-      await db.execute(`
-        CREATE TABLE IF NOT EXISTS comments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          todo_id INTEGER NOT NULL,
-          body TEXT NOT NULL,
-          FOREIGN KEY(todo_id) REFERENCES todos(id)
-        );
-      `);
-    },
-  }),
-  actions: {
-    addTodo: async (c, title: string) => {
-      await c.db.execute("INSERT INTO todos (title) VALUES (?)", title);
-    },
-    addComment: async (c, todoId: number, body: string) => {
-      await c.db.execute(
-        "INSERT INTO comments (todo_id, body) VALUES (?, ?)",
-        todoId,
-        body,
-      );
-    },
-    getTodos: async (c) => {
-      return (await c.db.execute(
-        "SELECT id, title FROM todos ORDER BY id DESC",
-      )) as {
-        id: number;
-        title: string;
-      }[];
-    },
-  },
-});
-
-export const registry = setup({ use: { todoList } });
-registry.start();
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.todoList.getOrCreate(["main"]);
-
-await handle.addTodo("Write SQLite docs");
-await handle.addTodo("Ship docs update");
-
-const todos = await handle.getTodos();
-console.log(todos);
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-sqlite/basic/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-sqlite/basic/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Queries
@@ -172,77 +111,9 @@ try {
 
 It's recommended to use queues for mutations and actions for read-only queries. This is the same code structure as the basic setup, but mutation writes are routed through queues.
 
-<CodeGroup workspace>
-```ts index.ts
-import { actor, queue, setup } from "rivetkit";
-import { db } from "rivetkit/db";
-
-export const todoList = actor({
-  db: db({
-    onMigrate: async (db) => {
-      await db.execute(`
-        CREATE TABLE IF NOT EXISTS todos (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL
-        );
-      `);
-
-      await db.execute(`
-        CREATE TABLE IF NOT EXISTS comments (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          todo_id INTEGER NOT NULL,
-          body TEXT NOT NULL,
-          FOREIGN KEY(todo_id) REFERENCES todos(id)
-        );
-      `);
-    },
-  }),
-  queues: {
-    addTodo: queue<{ title: string }>(),
-    addComment: queue<{ todoId: number; body: string }>(),
-  },
-  run: async (c) => {
-    for await (const message of c.queue.iter()) {
-      if (message.name === "addTodo") {
-        await c.db.execute("INSERT INTO todos (title) VALUES (?)", message.body.title);
-      } else if (message.name === "addComment") {
-        await c.db.execute(
-          "INSERT INTO comments (todo_id, body) VALUES (?, ?)",
-          message.body.todoId,
-          message.body.body,
-        );
-      }
-    }
-  },
-  actions: {
-    getTodos: async (c) => {
-      return (await c.db.execute(
-        "SELECT id, title FROM todos ORDER BY id DESC",
-      )) as {
-        id: number;
-        title: string;
-      }[];
-    },
-  },
-});
-
-export const registry = setup({ use: { todoList } });
-registry.start();
-```
-
-```ts client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-const handle = client.todoList.getOrCreate(["main"]);
-
-await handle.send("addTodo", { title: "Write SQLite docs" });
-await handle.send("addTodo", { title: "Ship docs update" });
-
-const todos = await handle.getTodos();
-console.log(todos);
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-sqlite/queues/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-sqlite/queues/client.ts" title="client.ts" />
 </CodeGroup>
 
 ## Debugging

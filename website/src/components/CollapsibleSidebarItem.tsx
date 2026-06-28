@@ -1,11 +1,12 @@
 "use client";
 
 import { usePathname } from "@/hooks/usePathname";
+import { SsrPathnameContext } from "@/components/ActiveLink";
 import type { SidebarItem, SidebarSection } from "@/lib/sitemap";
 import { cn } from "@rivet-gg/components";
 import { Icon, faChevronDown } from "@rivet-gg/icons";
 import { motion } from "framer-motion";
-import { type ReactNode, useMemo, useEffect, useState, useRef } from "react";
+import { type ReactNode, useMemo, useEffect, useState, useRef, useContext } from "react";
 import { normalizePath } from "@/lib/normalizePath";
 import { useNavigationState } from "@/providers/NavigationStateProvider";
 
@@ -22,7 +23,7 @@ export function CollapsibleSidebarItem({
 	level = 0,
 	parentPath = "",
 }: CollapsibleSidebarItemProps) {
-	const pathname = usePathname() || "";
+	const pathname = usePathname(useContext(SsrPathnameContext)) || "";
 	const { isOpen, setIsOpen, toggleOpen } = useNavigationState();
 	const hasActiveChild = findActiveItem(item.pages, pathname) !== null;
 	const isCurrent = false; // Never highlight collapsible sections themselves
@@ -47,7 +48,10 @@ export function CollapsibleSidebarItem({
 		} catch (error) {
 			// Ignore localStorage errors
 		}
-		// If no saved state, open if has active child
+		// No saved state → open only if this section contains the active page
+		// (collapsed otherwise — sections are NOT open-by-default). The
+		// `hasActiveChild` effect below re-opens the active section once
+		// `usePathname()` resolves after mount, since it is empty on first render.
 		return hasActiveChild;
 	};
 
@@ -70,6 +74,18 @@ export function CollapsibleSidebarItem({
 			setIsItemOpen(globalIsOpen);
 		}
 	}, [isOpen, itemId, isItemOpen]);
+
+	// Always keep a section open while the active page is inside it, even if the
+	// user previously collapsed it — reacts to `hasActiveChild` flipping true once
+	// `usePathname()` resolves after mount / on view-transition navigation.
+	useEffect(() => {
+		if (hasActiveChild && !isItemOpen) {
+			hasInteracted.current = false; // open instantly, no animation
+			setIsItemOpen(true);
+			setIsOpen(itemId, true);
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [hasActiveChild]);
 
 	const getPaddingClass = (level: number) => {
 		switch (level) {

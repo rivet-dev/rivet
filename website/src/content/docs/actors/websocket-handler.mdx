@@ -10,34 +10,7 @@ For most use cases, [actions](/docs/actors/actions) and [events](/docs/actors/ev
 
 The `onWebSocket` handler manages low-level WebSocket connections. It receives the actor context and a `WebSocket` object.
 
-```typescript
-import { actor } from "rivetkit";
-
-export const chatActor = actor({
-    state: { messages: [] as string[] },
-    onWebSocket: (c, websocket) => {
-        websocket.addEventListener("open", () => {
-            // Send existing messages to new connection
-            websocket.send(JSON.stringify({
-                type: "history",
-                messages: c.state.messages,
-            }));
-        });
-
-        websocket.addEventListener("message", (event) => {
-            // Store message
-            c.state.messages.push(event.data as string);
-
-            // Echo message back
-            websocket.send(event.data as string);
-
-            // Manually save state since WebSocket connections are long-lived
-            c.saveState({ immediate: true });
-        });
-    },
-    actions: {}
-});
-```
+<CodeSnippet file="examples/docs/actors-websocket-handler/chat-actor.ts" />
 
 See also the [raw WebSocket handler example](https://github.com/rivet-dev/rivet/tree/main/examples/raw-websocket-handler).
 
@@ -197,55 +170,7 @@ See the [HTTP API reference](/docs/actors/http-api) for more information on WebS
 
 You can proxy WebSocket connections from your own server to actor handlers using the RivetKit client. This is useful when you need to add custom authentication or connection management before forwarding to actors.
 
-```typescript
-import { Hono } from "hono";
-import type { WSContext, WSMessageReceive } from "hono/ws";
-import { upgradeWebSocket } from "hono/bun";
-import { createClient } from "rivetkit/client";
-import { actor, setup } from "rivetkit";
-
-const chatActor = actor({
-    state: { messages: [] as string[] },
-    onWebSocket: (c, websocket) => {
-        websocket.addEventListener("message", (event) => {
-            c.state.messages.push(event.data as string);
-            websocket.send(event.data as string);
-        });
-    },
-    actions: {}
-});
-
-const registry = setup({ use: { chat: chatActor } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-const app = new Hono();
-
-// Proxy WebSocket connections to actor's onWebSocket handler
-app.get("/ws/:id", upgradeWebSocket(async (c) => {
-    const actorId = c.req.param("id");
-    const actorHandle = client.chat.get([actorId]);
-    const actorWs = await actorHandle.webSocket("/");
-
-    return {
-        onOpen: (evt: Event, ws: WSContext) => {
-            actorWs.addEventListener("message", (event: MessageEvent) => {
-                ws.send(event.data);
-            });
-            actorWs.addEventListener("close", () => {
-                ws.close();
-            });
-        },
-        onMessage: (evt: MessageEvent<WSMessageReceive>, ws: WSContext) => {
-            actorWs.send(evt.data as string);
-        },
-        onClose: () => {
-            actorWs.close();
-        },
-    };
-}));
-
-export default app;
-```
+<CodeSnippet file="examples/docs/actors-websocket-handler/proxy.ts" />
 
 See also the [raw WebSocket handler with proxy example](https://github.com/rivet-dev/rivet/tree/main/examples/raw-websocket-handler-proxy).
 
@@ -267,17 +192,7 @@ WebSocket hibernation allows actors to go to sleep while keeping WebSocket conne
 
 Enable hibernation by setting `canHibernateWebSocket: true`. You can also pass a function `(request) => boolean` for conditional control.
 
-```typescript
-import { actor } from "rivetkit";
-
-export const myActor = actor({
-    state: {},
-    options: {
-        canHibernateWebSocket: true,
-    },
-    actions: {}
-});
-```
+<CodeSnippet file="examples/docs/actors-websocket-handler/hibernation.ts" />
 
 Since `open` only fires once when the client first connects, use `c.conn.state` to store per-connection data that persists across sleep cycles. See [connections](/docs/actors/connections) for more details.
 
@@ -285,21 +200,7 @@ Since `open` only fires once when the client first connects, use `c.conn.state` 
 
 The underlying HTTP request is available via `c.request`. This is useful for accessing the path or query parameters.
 
-```typescript
-import { actor } from "rivetkit";
-
-const myActor = actor({
-    state: {},
-    onWebSocket: (c, websocket) => {
-        if (c.request) {
-            const url = new URL(c.request.url);
-            console.log(url.pathname); // e.g., "/admin"
-            console.log(url.searchParams.get("foo")); // e.g., "bar"
-        }
-    },
-    actions: {}
-});
-```
+<CodeSnippet file="examples/docs/actors-websocket-handler/accessing-request.ts" />
 
 ### Skip Ready Wait
 
@@ -309,27 +210,7 @@ Connections are normally held at the gateway until the actor is ready. Pass `ski
 
 The `onWebSocket` handler can be async, allowing you to perform async code before setting up event listeners:
 
-```typescript
-import { actor } from "rivetkit";
-
-const myActor = actor({
-    state: {},
-    onWebSocket: async (c, websocket) => {
-        // Perform async operations before the connection is ready
-        const metadata = await fetch("https://api.example.com/metadata").then(r => r.json());
-
-        websocket.addEventListener("open", () => {
-            // Send metadata on connection
-            websocket.send(JSON.stringify({ metadata }));
-        });
-
-        websocket.addEventListener("message", (event) => {
-            // Handle messages
-        });
-    },
-    actions: {}
-});
-```
+<CodeSnippet file="examples/docs/actors-websocket-handler/async-handler.ts" />
 
 ## API Reference
 

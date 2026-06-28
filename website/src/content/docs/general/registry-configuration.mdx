@@ -13,43 +13,15 @@ import RegistryConfigSchema from "@/components/docs/RegistryConfigSchemaClient.a
 
 ### Basic Setup
 
-```typescript
-import { setup, actor } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-
-const registry = setup({
-  use: { myActor },
-});
-```
+<CodeSnippet file="examples/docs/general-registry-configuration/basic-setup.ts" />
 
 ### Connecting to Rivet Engine
 
 <CodeGroup>
 
-```typescript Environment-Variables
-import { setup, actor } from "rivetkit";
+<CodeSnippet file="examples/docs/general-registry-configuration/environment-variables.ts" title="Environment-Variables" />
 
-const myActor = actor({ state: {}, actions: {} });
-
-// Reads from RIVET_ENDPOINT, RIVET_TOKEN, and RIVET_NAMESPACE
-const registry = setup({
-  use: { myActor },
-});
-```
-
-```typescript Config
-import { setup, actor } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-
-const registry = setup({
-  use: { myActor },
-  endpoint: "https://api.rivet.dev",
-  token: process.env.RIVET_TOKEN,
-  namespace: "production",
-});
-```
+<CodeSnippet file="examples/docs/general-registry-configuration/config.ts" title="Config" />
 
 </CodeGroup>
 
@@ -59,45 +31,13 @@ After configuring your registry, start it:
 
 <CodeGroup>
 
-```typescript registry.start()
-import { actor, setup } from "rivetkit";
+<CodeSnippet file="examples/docs/general-registry-configuration/registry-start.ts" title="registry.start()" />
 
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
+<CodeSnippet file="examples/docs/general-registry-configuration/serverless.ts" title="Serverless" />
 
-registry.start();
-```
+<CodeSnippet file="examples/docs/general-registry-configuration/serverless-with-router.ts" title="Serverless-with-Router" />
 
-```typescript Serverless
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
-
-export default registry.serve();
-```
-
-```typescript Serverless-with-Router
-import { Hono } from "hono";
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
-
-const app = new Hono();
-app.all("/api/rivet/*", (c) => registry.handler(c.req.raw));
-
-export default app;
-```
-
-```typescript Envoy
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({ state: {}, actions: {} });
-const registry = setup({ use: { myActor } });
-
-registry.startEnvoy();
-```
+<CodeSnippet file="examples/docs/general-registry-configuration/envoy.ts" title="Envoy" />
 
 </CodeGroup>
 

@@ -19,6 +19,7 @@ function formatNumber(num: number): string {
 
 const REPOS = [
 	"rivet-dev/rivet",
+	"rivet-dev/agentos",
 	"rivet-dev/secure-exec",
 	"rivet-dev/sandbox-agent",
 	"rivet-dev/antiox",
