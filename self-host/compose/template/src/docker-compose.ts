@@ -120,7 +120,12 @@ export function generateDockerCompose(context: TemplateContext) {
 		const dcEnginePeerNetworkName = `${dcNetworkName}-engine-peer`;
 		const dcToCoreNetworkName = `${dcNetworkName}-to-core`;
 
-		//const natsServiceName = context.getServiceName("nats", datacenter.name);
+		// A datacenter with more than one engine needs NATS: the engines coordinate the UniversalDB
+		// leader/follower commit transport and the UPS pubsub across nodes through it. A single-engine
+		// datacenter runs UniversalDB single-node (in-process resolver) and UPS in-process Memory, so it
+		// needs no NATS.
+		const useNats = datacenter.engines > 1;
+		const natsServiceName = context.getServiceName("nats", datacenter.name);
 		const vectorServerServiceName = context.getServiceName(
 			"vector-server",
 			datacenter.name,
@@ -154,18 +159,25 @@ export function generateDockerCompose(context: TemplateContext) {
 			driver: "bridge",
 		};
 
-		//services[natsServiceName] = {
-		//   restart: "unless-stopped",
-		//   image: "nats:2.10.22-scratch",
-		//   networks: [dcNetworkName],
-		//   ports: isPrimary ? [`4222:4222`] : undefined,
-		//   healthcheck: {
-		//      test: ["CMD", "nats-server", "--health"],
-		//      interval: "2s",
-		//      timeout: "10s",
-		//      retries: 10,
-		//   },
-		//};
+		if (useNats) {
+			services[natsServiceName] = {
+				restart: "unless-stopped",
+				image: "nats:2.10.22-alpine",
+				// Enable the HTTP monitoring port so the healthcheck can hit /healthz.
+				command: ["-m", "8222"],
+				networks: [dcNetworkName],
+				ports: isPrimary ? [`4222:4222`] : undefined,
+				healthcheck: {
+					test: [
+						"CMD-SHELL",
+						"wget -q -O /dev/null http://127.0.0.1:8222/healthz || exit 1",
+					],
+					interval: "2s",
+					timeout: "10s",
+					retries: 10,
+				},
+			};
+		}
 
 		const postgresVolumeName = context.getVolumeName(
 			"postgres",
@@ -174,9 +186,9 @@ export function generateDockerCompose(context: TemplateContext) {
 		services[postgresServiceName] = {
 			restart: "unless-stopped",
 			image: "postgres:18-alpine",
-			// Each engine opens a UDB connection pool (up to 64 connections) plus a
-			// dedicated LISTEN connection and pubsub, so a multi-engine datacenter
-			// needs far more than the default max_connections of 100.
+			// Each engine opens a UDB connection pool (up to 64 connections), so a
+			// multi-engine datacenter needs far more than the default max_connections
+			// of 100.
 			command: ["postgres", "-c", "max_connections=500"],
 			environment: [
 				"POSTGRES_USER=postgres",
@@ -213,7 +225,9 @@ export function generateDockerCompose(context: TemplateContext) {
 			command: "infinity",
 			stop_grace_period: "0s",
 			depends_on: {
-				//[natsServiceName]: { condition: "service_healthy" },
+				...(useNats
+					? { [natsServiceName]: { condition: "service_healthy" } }
+					: {}),
 				[postgresServiceName]: { condition: "service_healthy" },
 			},
 			volumes: [
@@ -300,7 +314,9 @@ export function generateDockerCompose(context: TemplateContext) {
 				],
 				stop_grace_period: "0s",
 				depends_on: {
-					//[natsServiceName]: { condition: "service_healthy" },
+					...(useNats
+						? { [natsServiceName]: { condition: "service_healthy" } }
+						: {}),
 					[vectorClientServiceName]: {
 						condition: "service_started",
 					},

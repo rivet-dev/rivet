@@ -1226,45 +1226,16 @@
         "url"
       ],
       "properties": {
-        "ssl": {
-          "description": "SSL configuration options",
+        "nats": {
+          "description": "NATS configuration for UniversalDB multi-node mode.\n\nWhen set, UniversalDB runs in multi-node mode and uses NATS for follower-to-leader commit transport instead of an in-process resolver. When absent, UniversalDB runs single-node. If unset but the UPS pubsub is configured for NATS, this is inherited from that config at startup (see `Root::validate_and_set_defaults`).",
           "default": null,
           "anyOf": [
             {
-              "$ref": "#/definitions/PostgresSsl"
+              "$ref": "#/definitions/Nats"
             },
             {
               "type": "null"
             }
-          ]
-        },
-        "url": {
-          "description": "URL to connect to Postgres with\n\nSupports standard PostgreSQL connection parameters including `sslmode`. Supported sslmode values: `disable`, `prefer` (default), `require`. To verify server certificates, use `sslmode=require` with `ssl.root_cert_path`.\n\nExample with sslmode: `postgresql://user:pass@host:5432/db?sslmode=require`\n\nSee: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Secret<String>"
-            }
-          ]
-        }
-      },
-      "additionalProperties": false
-    },
-    "Postgres2": {
-      "type": "object",
-      "required": [
-        "url"
-      ],
-      "properties": {
-        "disable_memory_optimization": {
-          "description": "When true, force every UPS publish to round-trip through the postgres driver instead of taking the in-process fast path for subjects that have a local subscriber on the same engine pod. Opt-in diagnostic; default false.",
-          "default": false,
-          "type": "boolean"
-        },
-        "memory_optimization": {
-          "deprecated": true,
-          "type": [
-            "boolean",
-            "null"
           ]
         },
         "ssl": {
@@ -1280,7 +1251,7 @@
           ]
         },
         "url": {
-          "description": "URL to connect to Postgres with\n\nSupports standard PostgreSQL connection parameters including `sslmode`. Supported sslmode values: `disable`, `prefer` (default), `require`. To verify server certificates, use `sslmode=require` with `ssl.root_cert_path`.\n\nSee: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url",
+          "description": "URL to connect to Postgres with\n\nSupports standard PostgreSQL connection parameters including `sslmode`. Supported sslmode values: `disable`, `prefer` (default), `require`. To verify server certificates, use `sslmode=require` with `ssl.root_cert_path`.\n\nExample with sslmode: `postgresql://user:pass@host:5432/db?sslmode=require`\n\nSee: https://docs.rs/postgres/0.19.10/postgres/config/struct.Config.html#url",
           "allOf": [
             {
               "$ref": "#/definitions/Secret<String>"

@@ -185,17 +185,14 @@ impl Root {
 	}
 
 	pub fn validate_and_set_defaults(&mut self) -> Result<()> {
-		// Set default pubsub to Postgres if configured for database
-		if self.pubsub.is_none()
-			&& let Some(Database::Postgres(pg)) = &self.database
+		// When UDB runs on Postgres without an explicit NATS config, inherit the UPS NATS config if
+		// one is set. The presence of NATS is what selects UDB multi-node mode, so this lets a
+		// single `pubsub: nats` config drive both UPS and UDB across nodes.
+		if let Some(PubSub::Nats(nats)) = self.pubsub.clone()
+			&& let Some(Database::Postgres(pg)) = &mut self.database
+			&& pg.nats.is_none()
 		{
-			self.pubsub = Some(PubSub::PostgresNotify(pubsub::Postgres {
-				url: pg.url.clone(),
-				#[allow(deprecated)]
-				memory_optimization: None,
-				disable_memory_optimization: false,
-				ssl: pg.ssl.clone(),
-			}));
+			pg.nats = Some(nats);
 		}
 
 		self.pegboard().validate()?;

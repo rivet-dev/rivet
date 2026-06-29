@@ -57,7 +57,7 @@ impl TransactionConflictTracker {
 		self.global_version.fetch_add(1, Ordering::SeqCst)
 	}
 
-	/// Returns `true` on conflict (same polarity as the original rocksdb tracker). The caller
+	/// Returns `true` on conflicts. The caller
 	/// supplies `commit_version` (e.g. `nextval('udb_version_seq')` on the postgres leader, or
 	/// `next_global_version()` on rocksdb) so version assignment stays the caller's responsibility.
 	pub async fn check_and_insert(
@@ -125,11 +125,5 @@ impl TransactionConflictTracker {
 	pub async fn remove(&self, txn_commit_version: u64) {
 		let mut txns = self.txns.lock().await;
 		txns.remove(&txn_commit_version);
-	}
-
-	/// Current retained transaction count. Diagnostic: the conflict scan in `check_and_insert` is
-	/// O(this) per commit, so a growing map directly inflates per-commit service time.
-	pub async fn len(&self) -> usize {
-		self.txns.lock().await.len()
 	}
 }
