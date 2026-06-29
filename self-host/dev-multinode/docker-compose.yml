@@ -79,6 +79,23 @@ services:
         condition: service_healthy
       prometheus:
         condition: service_healthy
+  nats:
+    restart: unless-stopped
+    image: nats:2.10.22-alpine
+    command:
+      - '-m'
+      - '8222'
+    networks:
+      - rivet-network
+    ports:
+      - '4222:4222'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8222/healthz || exit 1
+      interval: 2s
+      timeout: 10s
+      retries: 10
   postgres:
     restart: unless-stopped
     image: postgres:18-alpine
@@ -117,6 +134,8 @@ services:
     command: infinity
     stop_grace_period: 0s
     depends_on:
+      nats:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     volumes:
@@ -185,6 +204,8 @@ services:
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector:4317
     stop_grace_period: 0s
     depends_on:
+      nats:
+        condition: service_healthy
       vector-client:
         condition: service_started
       otel-collector:
@@ -226,6 +247,8 @@ services:
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector:4317
     stop_grace_period: 0s
     depends_on:
+      nats:
+        condition: service_healthy
       vector-client:
         condition: service_started
       otel-collector:
@@ -265,6 +288,8 @@ services:
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector:4317
     stop_grace_period: 0s
     depends_on:
+      nats:
+        condition: service_healthy
       vector-client:
         condition: service_started
       otel-collector:

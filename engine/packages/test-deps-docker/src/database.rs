@@ -58,6 +58,7 @@ impl TestDatabase {
 					rivet_config::config::Database::Postgres(rivet_config::config::db::Postgres {
 						url: rivet_config::secret::Secret::new(connection_string.clone()),
 						ssl: None,
+						nats: None,
 					});
 
 				let docker_config = DockerRunConfig {

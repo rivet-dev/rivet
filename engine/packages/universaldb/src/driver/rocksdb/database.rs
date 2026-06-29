@@ -48,7 +48,7 @@ impl RocksDbDatabaseDriver {
 
 		Ok(RocksDbDatabaseDriver {
 			db: Arc::new(db),
-			max_retries: AtomicI32::new(100),
+			max_retries: AtomicI32::new(10),
 			txn_conflict_tracker: TransactionConflictTracker::new(),
 		})
 	}

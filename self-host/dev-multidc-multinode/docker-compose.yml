@@ -83,6 +83,23 @@ services:
         condition: service_healthy
       prometheus:
         condition: service_healthy
+  nats-dc-a:
+    restart: unless-stopped
+    image: nats:2.10.22-alpine
+    command:
+      - '-m'
+      - '8222'
+    networks:
+      - rivet-network-dc-a
+    ports:
+      - '4222:4222'
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8222/healthz || exit 1
+      interval: 2s
+      timeout: 10s
+      retries: 10
   postgres-dc-a:
     restart: unless-stopped
     image: postgres:18-alpine
@@ -122,6 +139,8 @@ services:
     command: infinity
     stop_grace_period: 0s
     depends_on:
+      nats-dc-a:
+        condition: service_healthy
       postgres-dc-a:
         condition: service_healthy
     volumes:
@@ -187,11 +206,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-a:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-a:
+        condition: service_healthy
       vector-client-dc-a:
         condition: service_started
       otel-collector-dc-a:
@@ -230,11 +252,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-a:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-a:
+        condition: service_healthy
       vector-client-dc-a:
         condition: service_started
       otel-collector-dc-a:
@@ -271,11 +296,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-a:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-a:
+        condition: service_healthy
       vector-client-dc-a:
         condition: service_started
       otel-collector-dc-a:
@@ -372,6 +400,21 @@ services:
         condition: service_completed_successfully
     networks:
       - rivet-network-dc-a
+  nats-dc-b:
+    restart: unless-stopped
+    image: nats:2.10.22-alpine
+    command:
+      - '-m'
+      - '8222'
+    networks:
+      - rivet-network-dc-b
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8222/healthz || exit 1
+      interval: 2s
+      timeout: 10s
+      retries: 10
   postgres-dc-b:
     restart: unless-stopped
     image: postgres:18-alpine
@@ -409,6 +452,8 @@ services:
     command: infinity
     stop_grace_period: 0s
     depends_on:
+      nats-dc-b:
+        condition: service_healthy
       postgres-dc-b:
         condition: service_healthy
     volumes:
@@ -472,11 +517,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-b:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-b:
+        condition: service_healthy
       vector-client-dc-b:
         condition: service_started
       otel-collector-dc-b:
@@ -513,11 +561,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-b:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-b:
+        condition: service_healthy
       vector-client-dc-b:
         condition: service_started
       otel-collector-dc-b:
@@ -554,11 +605,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-b:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-b:
+        condition: service_healthy
       vector-client-dc-b:
         condition: service_started
       otel-collector-dc-b:
@@ -653,6 +707,21 @@ services:
         condition: service_completed_successfully
     networks:
       - rivet-network-dc-b
+  nats-dc-c:
+    restart: unless-stopped
+    image: nats:2.10.22-alpine
+    command:
+      - '-m'
+      - '8222'
+    networks:
+      - rivet-network-dc-c
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - wget -q -O /dev/null http://127.0.0.1:8222/healthz || exit 1
+      interval: 2s
+      timeout: 10s
+      retries: 10
   postgres-dc-c:
     restart: unless-stopped
     image: postgres:18-alpine
@@ -690,6 +759,8 @@ services:
     command: infinity
     stop_grace_period: 0s
     depends_on:
+      nats-dc-c:
+        condition: service_healthy
       postgres-dc-c:
         condition: service_healthy
     volumes:
@@ -753,11 +824,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-c:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-c:
+        condition: service_healthy
       vector-client-dc-c:
         condition: service_started
       otel-collector-dc-c:
@@ -794,11 +868,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-c:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-c:
+        condition: service_healthy
       vector-client-dc-c:
         condition: service_started
       otel-collector-dc-c:
@@ -835,11 +912,14 @@ services:
     restart: unless-stopped
     environment:
       - RUST_LOG_ANSI_COLOR=1
+      - RUST_LOG=universaldb::driver::postgres=debug
       - RIVET_OTEL_ENABLED=1
       - RIVET_OTEL_SAMPLER_RATIO=1
       - RIVET_OTEL_GRPC_ENDPOINT=http://otel-collector-dc-c:4317
     stop_grace_period: 0s
     depends_on:
+      nats-dc-c:
+        condition: service_healthy
       vector-client-dc-c:
         condition: service_started
       otel-collector-dc-c:

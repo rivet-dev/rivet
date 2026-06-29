@@ -1,85 +1,88 @@
 use std::{
 	sync::{
 		Arc,
-		atomic::{AtomicI64, Ordering},
+		atomic::{AtomicI64, AtomicU64, Ordering},
 	},
 	time::Duration,
 };
 
 use deadpool_postgres::Pool;
+use futures_util::StreamExt;
 use tokio::sync::{Notify, watch};
 
-use super::listener::PgListener;
+use super::transport::Transport;
 
 /// The singleton row id of `udb_lease`.
 pub const LEASE_ID: i32 = 1;
 
-/// How often the follower refreshes its cached lease row (epoch, leader channel, watermark) as a
-/// backstop to the `udb_watermark` NOTIFY. A stale-but-older watermark only widens the conflict
-/// window, so this can be loose.
+/// How often a node refreshes its cached lease row (epoch, leader id, watermark) as a backstop to the
+/// watermark broadcast. A stale-but-older watermark only widens the conflict window, so this can be
+/// loose.
 const LEASE_REFRESH_INTERVAL: Duration = Duration::from_millis(500);
-
-/// Channel a follower NOTIFYs (and the leader LISTENs) to wake the leader's drain loop.
-pub fn commit_channel(node_id: &str) -> String {
-	format!("udb_commit_{node_id}")
-}
-
-/// Channel the leader NOTIFYs (and a follower LISTENs) to deliver a commit result.
-pub fn reply_channel(node_id: &str) -> String {
-	format!("udb_reply_{node_id}")
-}
-
-/// Channel the leader NOTIFYs on every watermark advance; all nodes LISTEN.
-pub const WATERMARK_CHANNEL: &str = "udb_watermark";
-
-/// Channel a departing leader NOTIFYs after releasing its lease so a standby candidate elects
-/// immediately instead of waiting out `ELECTION_RETRY`. All non-leader candidates LISTEN.
-pub const ELECTION_CHANNEL: &str = "udb_election";
 
 /// Cached view of the current leader lease, as seen by a follower.
 #[derive(Clone, Debug)]
 pub struct LeaseInfo {
 	pub epoch: i64,
-	/// Node id of the current leader, used to build its commit channel.
+	/// Node id of the current leader, used to build its commit subject.
 	pub leader_addr: String,
 }
 
-/// Process-wide state shared by the follower transaction tasks and the leader resolver. Every node
-/// is both a follower (it submits its own commits) and a candidate leader.
+/// Process-wide state shared by the follower transaction tasks and the leader resolver. Every node is
+/// both a follower (it submits its own commits) and, in multi-node mode, a candidate leader.
 pub struct PostgresShared {
 	pub pool: Pool,
-	/// Unique per-process id used to name this node's NOTIFY channels.
+	/// Unique per-process id. Names this node's commit subject and is the dedup `client_node_id`.
 	pub node_id: String,
-	pub listener: PgListener,
+	/// How follower commits reach the leader (in-process channel or NATS).
+	pub transport: Transport,
 	/// Highest durable commit version (`udb_lease.durable_version`); the follower read version.
 	durable_version: AtomicI64,
 	/// Pinged whenever `durable_version` advances.
 	watermark_notify: Notify,
+	/// Per-process monotonic commit sequence, the dedup `client_seq`.
+	commit_seq: AtomicU64,
 	lease_tx: watch::Sender<Option<LeaseInfo>>,
 	lease_rx: watch::Receiver<Option<LeaseInfo>>,
 }
 
 impl PostgresShared {
-	pub fn new(pool: Pool, node_id: String, listener: PgListener) -> Arc<Self> {
+	pub fn new(pool: Pool, node_id: String, transport: Transport) -> Arc<Self> {
 		let (lease_tx, lease_rx) = watch::channel(None);
 		let shared = Arc::new(Self {
 			pool,
 			node_id,
-			listener,
+			transport,
 			durable_version: AtomicI64::new(0),
 			watermark_notify: Notify::new(),
+			commit_seq: AtomicU64::new(0),
 			lease_tx,
 			lease_rx,
 		});
 
-		tokio::spawn(Self::cache_refresh_task(shared.clone()));
+		// Single-node advances `durable_version` and the lease cache in-process, so it needs no
+		// cross-process refresh. Multi-node refreshes from the NATS watermark broadcast and a lease
+		// row poll.
+		if matches!(shared.transport, Transport::MultiNode(_)) {
+			tokio::spawn(Self::cache_refresh_task(shared.clone()));
+		}
 
 		shared
+	}
+
+	/// Whether this driver is running in multi-node mode.
+	pub fn is_multi_node(&self) -> bool {
+		matches!(self.transport, Transport::MultiNode(_))
 	}
 
 	/// The cached follower read version (`durable_version`).
 	pub fn read_version(&self) -> i64 {
 		self.durable_version.load(Ordering::SeqCst)
+	}
+
+	/// Allocate the next per-process commit sequence for the failover dedup key.
+	pub fn next_commit_seq(&self) -> i64 {
+		self.commit_seq.fetch_add(1, Ordering::Relaxed) as i64
 	}
 
 	/// Advance the cached watermark monotonically and wake any waiters.
@@ -104,7 +107,7 @@ impl PostgresShared {
 			.map(|prev| prev.epoch != lease.epoch || prev.leader_addr != lease.leader_addr)
 			.unwrap_or(true);
 		if changed {
-			tracing::info!(
+			tracing::debug!(
 				epoch = lease.epoch,
 				leader_addr = %lease.leader_addr,
 				self_node = %self.node_id,
@@ -115,33 +118,57 @@ impl PostgresShared {
 		let _ = self.lease_tx.send(Some(lease));
 	}
 
-	/// Background task: keep `durable_version` and the cached lease fresh via the `udb_watermark`
-	/// NOTIFY plus a periodic poll of `udb_lease`.
+	/// Background task (multi-node only): keep `durable_version` and the cached lease fresh via the
+	/// NATS watermark broadcast plus a periodic poll of `udb_lease`.
 	async fn cache_refresh_task(shared: Arc<Self>) {
-		let mut watermark_rx = shared.listener.listen(WATERMARK_CHANNEL).await;
+		let Transport::MultiNode(nats) = &shared.transport else {
+			return;
+		};
+
+		let mut watermark_sub = match nats.client.subscribe(nats.subjects.watermark()).await {
+			Ok(sub) => sub,
+			Err(err) => {
+				tracing::error!(
+					?err,
+					"failed to subscribe to udb watermark; relying on lease poll"
+				);
+				return shared.lease_poll_only().await;
+			}
+		};
+
 		let mut interval = tokio::time::interval(LEASE_REFRESH_INTERVAL);
 		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
 		loop {
 			tokio::select! {
-				notify = watermark_rx.recv() => {
-					match notify {
-						Ok(payload) => {
-							if let Ok(version) = payload.parse::<i64>() {
-								shared.advance_durable_version(version);
+				msg = watermark_sub.next() => {
+					match msg {
+						Some(msg) => {
+							match super::codec::decode_watermark(&msg.payload) {
+								Ok(version) => shared.advance_durable_version(version),
+								Err(err) => {
+									tracing::debug!(?err, "failed to decode udb watermark")
+								}
 							}
 						}
-						Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
-						Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-							// Re-subscribe; the listener recreates the channel on reconnect.
-							watermark_rx = shared.listener.listen(WATERMARK_CHANNEL).await;
-						}
+						// The subscription ended (client closed). Fall back to lease polling only.
+						None => return shared.lease_poll_only().await,
 					}
 				}
 				_ = interval.tick() => {
 					shared.refresh_lease_row().await;
 				}
 			}
+		}
+	}
+
+	/// Degraded refresh path: poll the lease row when the watermark subscription is unavailable.
+	async fn lease_poll_only(self: Arc<Self>) {
+		let mut interval = tokio::time::interval(LEASE_REFRESH_INTERVAL);
+		interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+		loop {
+			interval.tick().await;
+			self.refresh_lease_row().await;
 		}
 	}
 
