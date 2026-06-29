@@ -19,6 +19,7 @@ export type {
 	RemovedEntry,
 	SleepEntry,
 	StepEntry,
+	VersionCheckEntry,
 	WorkflowMetadata,
 } from "../dist/schemas/v1.js";
 

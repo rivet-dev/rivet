@@ -184,6 +184,14 @@ function toWorkflowEntryKind(kind: EntryKind): transport.WorkflowEntryKind {
 					originalName: kind.data.originalName ?? null,
 				},
 			};
+		case "version_check":
+			return {
+				tag: "WorkflowVersionCheckEntry",
+				val: {
+					resolved: kind.data.resolved,
+					latest: kind.data.latest,
+				},
+			};
 		default:
 			assertUnreachable(kind as never);
 	}
