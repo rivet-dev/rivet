@@ -351,11 +351,19 @@ async fn drain_batch(
 		.await
 		.context("failed to start drain batch txn")?;
 
-	// Claim a batch in id order. FOR UPDATE SKIP LOCKED holds the rows for this txn so they are
-	// stamped terminal on COMMIT with no intermediate 'claimed' state to clean up.
+	// Claim a batch in id order and allocate every commit version in the SAME round-trip via an
+	// inline `nextval`, instead of a separate version-allocation query. FOR UPDATE SKIP LOCKED holds
+	// the rows for this txn so they are stamped terminal on COMMIT with no intermediate 'claimed'
+	// state to clean up.
+	//
+	// Postgres does NOT guarantee `nextval` is evaluated in output (id) order, so the per-row `cv`
+	// here may not be monotonic in id. The versions are collected, sorted, and re-assigned to rows in
+	// id order below, exactly as the separate-query path did, because versionstamp monotonicity with
+	// commit order is load-bearing (epoxy changelog catch-up + depot PITR).
 	let rows = txn
 		.query(
-			"SELECT id, read_version, payload, reply_channel
+			"SELECT id, read_version, payload, reply_channel,
+			        nextval('udb_version_seq') AS cv
 			 FROM udb_commit_requests
 			 WHERE status = 'pending' AND epoch = $1
 			 ORDER BY id
@@ -380,20 +388,10 @@ async fn drain_batch(
 	let mut conflict_count = 0u32;
 	let mut cold_reject_count = 0u32;
 
-	// Allocate all commit versions for the batch in one round-trip instead of a `nextval` per row.
-	// They are assigned to rows in id order (winners and losers alike; losers' versions are
-	// harmlessly skipped), so versionstamps stay monotonic with commit order. The defensive sort
-	// keeps assignment monotonic regardless of how Postgres orders the per-row `nextval` evaluation.
-	let mut versions: Vec<i64> = txn
-		.query(
-			"SELECT nextval('udb_version_seq') FROM generate_series(1, $1::bigint)",
-			&[&(batch_len as i64)],
-		)
-		.await
-		.context("failed to allocate commit versions")?
-		.iter()
-		.map(|row| row.get::<_, i64>(0))
-		.collect();
+	// Re-assign the inline-allocated versions to rows in id order (winners and losers alike; losers'
+	// versions are harmlessly skipped) so versionstamps stay monotonic with commit order. The sort
+	// keeps assignment monotonic regardless of how Postgres ordered the per-row `nextval` evaluation.
+	let mut versions: Vec<i64> = rows.iter().map(|row| row.get::<_, i64>(4)).collect();
 	versions.sort_unstable();
 
 	// Resolve every request in memory in id order. Winners are collected with their version and
@@ -403,6 +401,11 @@ async fn drain_batch(
 	let mut stamp_statuses: Vec<&str> = Vec::with_capacity(batch_len);
 	let mut stamp_versions: Vec<Option<i64>> = Vec::with_capacity(batch_len);
 
+	// Sub-phase timers to decompose batch_ms and confirm whether the service time is constant (pure
+	// M/M/1 queueing) or itself inflates under load.
+	let mut decode_dur = Duration::ZERO;
+	let mut conflict_dur = Duration::ZERO;
+
 	for (i, row) in rows.iter().enumerate() {
 		let id: i64 = row.get(0);
 		let read_version: i64 = row.get(1);
@@ -410,8 +413,10 @@ async fn drain_batch(
 		let reply_channel: String = row.get(3);
 		let commit_version = versions[i];
 
+		let decode_start = Instant::now();
 		let decoded = super::codec::decode_commit_request(&payload)
 			.context("failed to decode commit payload")?;
+		decode_dur += decode_start.elapsed();
 
 		let start_version = read_version.max(0) as u64;
 
@@ -422,13 +427,16 @@ async fn drain_batch(
 			cold_reject_count += 1;
 			true
 		} else {
-			tracker
+			let conflict_start = Instant::now();
+			let res = tracker
 				.check_and_insert(
 					start_version,
 					commit_version.max(0) as u64,
 					decoded.conflict_ranges,
 				)
-				.await
+				.await;
+			conflict_dur += conflict_start.elapsed();
+			res
 		};
 
 		stamp_ids.push(id);
@@ -460,6 +468,8 @@ async fn drain_batch(
 		});
 	}
 
+	let t_resolved = Instant::now();
+
 	// Bulk-read the pre-batch value of every key a winner's atomic op reads in one query, then fold
 	// all winners into a single materialized write-set in memory. This collapses the per-row apply
 	// round-trips to a fixed count independent of batch size.
@@ -478,63 +488,74 @@ async fn drain_batch(
 		.collect()
 	};
 
+	let t_read = Instant::now();
+
 	let apply::WriteSet {
 		upserts,
 		point_deletes,
 		range_deletes,
 	} = apply::fold_winners(winners, &base).context("failed to fold batch winners")?;
 
-	// Materialize the write-set in O(1) statements per kind. Range deletes run first so a key whose
-	// final state is a set but that fell inside an earlier range clear is re-inserted by the upsert,
-	// not removed.
-	for (begin, end) in &range_deletes {
-		txn.execute("DELETE FROM kv WHERE key >= $1 AND key < $2", &[begin, end])
-			.await
-			.context("failed to clear range")?;
-	}
-	if !point_deletes.is_empty() {
+	let t_fold = Instant::now();
+
+	let (upsert_keys, upsert_values): (Vec<Vec<u8>>, Vec<Vec<u8>>) = upserts.into_iter().unzip();
+	let (range_begins, range_ends): (Vec<Vec<u8>>, Vec<Vec<u8>>) =
+		range_deletes.into_iter().unzip();
+
+	// Range deletes run in their OWN statement BEFORE the apply CTE. Postgres data-modifying CTE
+	// sub-statements all observe the same snapshot and never see each other's effects, so a range
+	// delete and an in-range upsert in one CTE would have unspecified results. `range_deletes` are
+	// ranges (not materialized per-key) and can overlap an upsert key (a key inside a cleared range
+	// that is also re-set), so the range clear must commit its effect first; the upsert then
+	// re-inserts the key. Collapsed from a per-range loop into one statement over a pair of arrays.
+	if !range_begins.is_empty() {
 		txn.execute(
-			"DELETE FROM kv WHERE key = ANY($1::bytea[])",
-			&[&point_deletes],
+			"DELETE FROM kv USING unnest($1::bytea[], $2::bytea[]) AS r(b, e)
+			 WHERE key >= r.b AND key < r.e",
+			&[&range_begins, &range_ends],
 		)
 		.await
-		.context("failed to bulk-delete cleared keys")?;
-	}
-	if !upserts.is_empty() {
-		let (keys, values): (Vec<Vec<u8>>, Vec<Vec<u8>>) = upserts.into_iter().unzip();
-		txn.execute(
-			"INSERT INTO kv (key, value)
-			 SELECT * FROM unnest($1::bytea[], $2::bytea[])
-			 ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-			&[&keys, &values],
-		)
-		.await
-		.context("failed to bulk-upsert kv")?;
+		.context("failed to clear ranges")?;
 	}
 
-	// Stamp every request's terminal status in one statement instead of a per-row UPDATE.
-	txn.execute(
-		"UPDATE udb_commit_requests AS r
-		   SET status = b.status, commit_version = b.cv
-		 FROM unnest($1::bigint[], $2::text[], $3::bigint[]) AS b(id, status, cv)
-		 WHERE r.id = b.id",
-		&[&stamp_ids, &stamp_statuses, &stamp_versions],
-	)
-	.await
-	.context("failed to stamp commit statuses")?;
-
-	// Advance the watermark, fenced on our epoch. A zombie old leader whose epoch was bumped sees
-	// zero rows updated and must step down before any of its writes become visible.
+	// Apply the rest of the batch in one CTE: point deletes, the kv upsert, the terminal status
+	// stamp, and the epoch-fenced watermark advance. This is safe to fold because the write sets are
+	// disjoint: `apply::WriteSet` guarantees each key appears at most once across `upserts` and
+	// `point_deletes` (see apply.rs), and the three tables (`kv`, `udb_commit_requests`, `udb_lease`)
+	// are independent. The watermark UPDATE is fenced on our epoch: a zombie old leader whose epoch
+	// was bumped sees zero rows returned and must step down before any of its writes become visible.
 	let new_durable: i64 = match txn
 		.query_opt(
-			"UPDATE udb_lease
-			   SET durable_version = GREATEST(durable_version, $1)
-			 WHERE id = $2 AND epoch = $3
+			"WITH pdel AS (
+				DELETE FROM kv WHERE key = ANY($1::bytea[])
+			), up AS (
+				INSERT INTO kv (key, value)
+				SELECT * FROM unnest($2::bytea[], $3::bytea[])
+				ON CONFLICT (key) DO UPDATE SET value = excluded.value
+			), stamp AS (
+				UPDATE udb_commit_requests AS r
+				   SET status = b.status, commit_version = b.cv
+				 FROM unnest($4::bigint[], $5::text[], $6::bigint[]) AS b(id, status, cv)
+				 WHERE r.id = b.id
+			)
+			UPDATE udb_lease
+			   SET durable_version = GREATEST(durable_version, $7)
+			 WHERE id = $8 AND epoch = $9
 			 RETURNING durable_version",
-			&[&max_winner_cv, &LEASE_ID, &epoch],
+			&[
+				&point_deletes,
+				&upsert_keys,
+				&upsert_values,
+				&stamp_ids,
+				&stamp_statuses,
+				&stamp_versions,
+				&max_winner_cv,
+				&LEASE_ID,
+				&epoch,
+			],
 		)
 		.await
-		.context("failed to advance watermark")?
+		.context("failed to apply batch and advance watermark")?
 	{
 		Some(row) => row.get(0),
 		None => {
@@ -543,13 +564,21 @@ async fn drain_batch(
 		}
 	};
 
+	let t_applied = Instant::now();
+
 	txn.commit().await.context("failed to commit drain batch")?;
+
+	let t_committed = Instant::now();
 
 	// Watermark advances strictly after the apply txn is durably committed and visible, so a
 	// reader handed this read_version can never miss a write with commit_version <= read_version.
 	shared.advance_durable_version(new_durable);
 
 	notify_after_commit(&conn, new_durable, &replies).await;
+
+	let t_notified = Instant::now();
+
+	let tracker_len = tracker.len().await;
 
 	tracing::info!(
 		epoch,
@@ -560,6 +589,17 @@ async fn drain_batch(
 		cold_window,
 		new_durable,
 		batch_ms = batch_start.elapsed().as_millis() as u64,
+		// Sub-phase decomposition of batch_ms (micros) to separate constant service time from
+		// load-dependent service inflation.
+		tracker_len,
+		decode_us = decode_dur.as_micros() as u64,
+		conflict_us = conflict_dur.as_micros() as u64,
+		resolve_us = (t_resolved - batch_start).as_micros() as u64,
+		read_us = (t_read - t_resolved).as_micros() as u64,
+		fold_us = (t_fold - t_read).as_micros() as u64,
+		apply_us = (t_applied - t_fold).as_micros() as u64,
+		commit_us = (t_committed - t_applied).as_micros() as u64,
+		notify_us = (t_notified - t_committed).as_micros() as u64,
 		"udb leader processed commit batch"
 	);
 

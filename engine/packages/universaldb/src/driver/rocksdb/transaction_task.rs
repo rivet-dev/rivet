@@ -404,7 +404,7 @@ impl TransactionTask {
 			Ok(_) => Ok(()),
 			Err(e) => {
 				// If the txn failed due to a rocksdb error, remove it from the conflict tracker
-				self.txn_conflict_tracker.remove(start_version).await;
+				self.txn_conflict_tracker.remove(commit_version).await;
 
 				let err_str = e.to_string();
 
