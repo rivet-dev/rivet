@@ -810,25 +810,21 @@ fn read_gateway_token_for_path_based<'a>(
 	}
 
 	if req_ctx.is_websocket() {
-		let protocols_header = req_ctx
+		// The gateway token may be supplied via the `rivet_token.*` entry in the
+		// sec-websocket-protocol header. It is optional: a plain browser WebSocket
+		// client (for example tldraw's `useSync`) connects without offering any
+		// subprotocol, so the absence of the header simply means no token. Auth, if
+		// required, is enforced downstream; do not reject the upgrade here.
+		Ok(req_ctx
 			.headers()
 			.get(SEC_WEBSOCKET_PROTOCOL)
 			.and_then(|protocols| protocols.to_str().ok())
-			.ok_or_else(|| {
-				crate::errors::MissingHeader {
-					header: "sec-websocket-protocol".to_string(),
-				}
-				.build()
-			})?;
-
-		let protocols = protocols_header
-			.split(',')
-			.map(|p| p.trim())
-			.collect::<Vec<&str>>();
-
-		Ok(protocols
-			.iter()
-			.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN)))
+			.and_then(|protocols_header| {
+				protocols_header
+					.split(',')
+					.map(|p| p.trim())
+					.find_map(|p| p.strip_prefix(WS_PROTOCOL_TOKEN))
+			}))
 	} else {
 		req_ctx
 			.headers()
