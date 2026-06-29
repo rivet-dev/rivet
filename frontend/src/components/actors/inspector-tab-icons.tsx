@@ -1,13 +1,19 @@
 import {
+	faBoxArchive,
+	faComments,
 	faCubesStacked,
 	faDatabase,
 	faDiagramProject,
+	faFolderTree,
+	faHardDrive,
 	faInbox,
 	faLogs,
+	faMicrochip,
 	faPlug,
 	faQuestionSquare,
 	faTag,
 	faTerminal,
+	faWrench,
 } from "@rivet-gg/icons";
 
 type IconDefinition = typeof faQuestionSquare;
@@ -29,6 +35,12 @@ const ICON_REGISTRY: Record<string, IconDefinition> = {
 	terminal: faTerminal,
 	tag: faTag,
 	logs: faLogs,
+	comments: faComments,
+	"folder-tree": faFolderTree,
+	microchip: faMicrochip,
+	wrench: faWrench,
+	"hard-drive": faHardDrive,
+	"box-archive": faBoxArchive,
 };
 
 export function resolveInspectorTabIcon(id: string): IconDefinition {
