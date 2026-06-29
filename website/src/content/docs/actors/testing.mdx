@@ -20,202 +20,25 @@ npm test
 
 Rivet includes a test helper called `setupTest` that starts your registry in test mode and returns a client connected to it. This allows for fast, isolated tests without external dependencies.
 
-```ts
-import { test, expect } from "vitest";
-import { setupTest } from "rivetkit/test";
-import { actor, setup } from "rivetkit";
-
-// Define the actor
-const myActor = actor({
-  state: { value: "initial" },
-  actions: {
-    someAction: (c) => {
-      c.state.value = "updated";
-      return c.state.value;
-    },
-    getState: (c) => {
-      return c.state.value;
-    }
-  }
-});
-
-// Create the registry
-const registry = setup({
-  use: { myActor }
-});
-
-// Test the actor
-test("my actor test", async (testCtx) => {
-  const { client } = await setupTest(testCtx, registry);
-
-  // Now you can interact with your actor through the client
-  const myActorHandle = client.myActor.getOrCreate(["test"]);
-
-  // Test your actor's functionality
-  await myActorHandle.someAction();
-
-  // Make assertions
-  const result = await myActorHandle.getState();
-  expect(result).toEqual("updated");
-});
-```
+<CodeSnippet file="examples/docs/actors-testing/basic-setup.ts" />
 
 ## Testing Actor State
 
 State persists within each test, allowing you to verify that your actor correctly maintains state between operations.
 
-```ts
-import { test, expect } from "vitest";
-import { setupTest } from "rivetkit/test";
-import { actor, setup } from "rivetkit";
-
-// Define the counter actor
-const counter = actor({
-  state: { count: 0 },
-  actions: {
-    increment: (c) => {
-      c.state.count += 1;
-      c.broadcast("newCount", c.state.count);
-      return c.state.count;
-    },
-    getCount: (c) => {
-      return c.state.count;
-    }
-  }
-});
-
-// Create the registry
-const registry = setup({
-  use: { counter }
-});
-
-// Test state persistence
-test("actor should persist state", async (testCtx) => {
-  const { client } = await setupTest(testCtx, registry);
-  const counterHandle = client.counter.getOrCreate(["test"]);
-
-  // Initial state
-  expect(await counterHandle.getCount()).toBe(0);
-
-  // Modify state
-  await counterHandle.increment();
-
-  // Verify state was updated
-  expect(await counterHandle.getCount()).toBe(1);
-});
-```
+<CodeSnippet file="examples/docs/actors-testing/testing-state.ts" />
 
 ## Testing Events
 
 For actors that emit events, you can verify events are correctly triggered by subscribing to them:
 
-```ts
-import { test, expect, vi } from "vitest";
-import { setupTest } from "rivetkit/test";
-import { actor, setup } from "rivetkit";
-
-interface ChatMessage {
-  username: string;
-  message: string;
-}
-
-// Define the chat room actor
-const chatRoom = actor({
-  state: {
-    messages: [] as ChatMessage[]
-  },
-  actions: {
-    sendMessage: (c, username: string, message: string) => {
-      c.state.messages.push({ username, message });
-      c.broadcast("newMessage", username, message);
-    },
-    getHistory: (c) => {
-      return c.state.messages;
-    },
-  },
-});
-
-// Create the registry
-const registry = setup({
-  use: { chatRoom }
-});
-
-// Test event emission
-test("actor should emit events", async (testCtx) => {
-  const { client } = await setupTest(testCtx, registry);
-  const chatRoomHandle = client.chatRoom.getOrCreate(["test"]);
-
-  // Set up event handler with a mock function
-  const mockHandler = vi.fn();
-  const conn = chatRoomHandle.connect();
-  conn.on("newMessage", mockHandler);
-
-  // Trigger the event
-  await conn.sendMessage("testUser", "Hello world");
-
-  // Wait for the event to be emitted
-  await vi.waitFor(() => {
-    expect(mockHandler).toHaveBeenCalledWith("testUser", "Hello world");
-  });
-});
-```
+<CodeSnippet file="examples/docs/actors-testing/testing-events.ts" />
 
 ## Testing Schedules
 
 Rivet's schedule functionality can be tested by scheduling work and waiting for it to run:
 
-```ts
-import { test, expect } from "vitest";
-import { setupTest } from "rivetkit/test";
-import { actor, setup } from "rivetkit";
-
-// Helper to wait for a delay
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Define the scheduler actor
-const scheduler = actor({
-  state: {
-    tasks: [] as string[],
-    completedTasks: [] as string[]
-  },
-  actions: {
-    scheduleTask: (c, taskName: string, delayMs: number) => {
-      c.state.tasks.push(taskName);
-      // Schedule "completeTask" to run after the specified delay
-      c.schedule.after(delayMs, "completeTask", taskName);
-      return { success: true };
-    },
-    completeTask: (c, taskName: string) => {
-      // This action will be called by the scheduler when the time comes
-      c.state.completedTasks.push(taskName);
-      return { completed: taskName };
-    },
-    getCompletedTasks: (c) => {
-      return c.state.completedTasks;
-    }
-  }
-});
-
-// Create the registry
-const registry = setup({
-  use: { scheduler }
-});
-
-// Test scheduled tasks
-test("scheduled tasks should execute", async (testCtx) => {
-  const { client } = await setupTest(testCtx, registry);
-  const schedulerHandle = client.scheduler.getOrCreate(["test"]);
-
-  // Set up a scheduled task
-  await schedulerHandle.scheduleTask("reminder", 100); // 100ms in the future
-
-  // Wait for the scheduled task to run
-  await wait(150);
-
-  // Verify the scheduled task executed
-  expect(await schedulerHandle.getCompletedTasks()).toContain("reminder");
-});
-```
+<CodeSnippet file="examples/docs/actors-testing/testing-schedules.ts" />
 
 Use a short real-time delay to wait for scheduled work to run. `setupTest` does not install fake timers, so if you want to use `vi.useFakeTimers()` you must enable it yourself and confirm it works with your selected runtime.
 

@@ -13,76 +13,12 @@ The `onRequest` handler processes HTTP requests sent to your actor. It receives 
 <Tabs>
 <Tab title="Raw HTTP">
 
-```typescript
-import { actor } from "rivetkit";
-
-export const counterActor = actor({
-    state: {
-        count: 0,
-    },
-    // WinterTC compliant - accepts standard Request and returns standard Response
-    onRequest: (c, request) => {
-        const url = new URL(request.url);
-
-        if (request.method === "GET" && url.pathname === "/count") {
-            return Response.json({ count: c.state.count });
-        }
-
-        if (request.method === "POST" && url.pathname === "/increment") {
-            c.state.count++;
-            return Response.json({ count: c.state.count });
-        }
-
-        return new Response("Not Found", { status: 404 });
-    },
-    actions: {}
-});
-```
+<CodeSnippet file="examples/docs/actors-request-handler/raw-http.ts" />
 
 </Tab>
 <Tab title="Hono">
 
-```typescript
-import { actor, ActorContextOf } from "rivetkit";
-import { Hono } from "hono";
-
-// Define the actor first
-const counterActor = actor({
-    state: { count: 0 },
-    actions: {}
-});
-
-// Build router with typed context
-function buildRouter(actorCtx: ActorContextOf<typeof counterActor>) {
-    const app = new Hono();
-
-    app.get("/count", (honoCtx) => {
-        return honoCtx.json({ count: actorCtx.state.count });
-    });
-
-    app.post("/increment", (honoCtx) => {
-        actorCtx.state.count++;
-        return honoCtx.json({ count: actorCtx.state.count });
-    });
-
-    return app;
-}
-
-// Define the full actor with onRequest
-export const counterActorWithRouter = actor({
-    state: { count: 0 },
-    vars: { app: null as Hono | null },
-    createVars: () => ({
-        app: null as Hono | null
-    }),
-    onRequest: async (c, request) => {
-        // Build router lazily
-        const app = buildRouter(c as ActorContextOf<typeof counterActor>);
-        return await app.fetch(request);
-    },
-    actions: {}
-});
-```
+<CodeSnippet file="examples/docs/actors-request-handler/hono.ts" />
 
 </Tab>
 </Tabs>
@@ -95,76 +31,16 @@ See also the [raw fetch handler example](https://github.com/rivet-dev/rivet/tree
 
 Use the `.fetch()` method on an actor handle to send HTTP requests to the actor's `onRequest` handler. This can be executed from either your frontend or backend.
 
-<CodeGroup workspace>
-```typescript index.ts @hide
-import { actor, setup } from "rivetkit";
-
-export const counter = actor({
-    state: { count: 0 },
-    onRequest: (c, request) => {
-        if (request.method === "POST") c.state.count++;
-        return Response.json(c.state);
-    },
-    actions: {}
-});
-
-export const registry = setup({ use: { counter } });
-registry.start();
-```
-
-```typescript client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-
-const actor = client.counter.getOrCreate(["my-counter"]);
-
-// .fetch() is WinterTC compliant, it accepts standard Request and returns standard Response
-const response = await actor.fetch("/");
-const data = await response.json();
-console.log(data); // { count: 0 }
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-request-handler/via-client/client.ts" title="client.ts" />
 </CodeGroup>
 
 ### Via getGatewayUrl
 
 Use `.getGatewayUrl()` to get the raw gateway URL for the actor. This is useful when you need to use the URL with external tools or custom HTTP clients.
 
-<CodeGroup workspace>
-```typescript index.ts @hide
-import { actor, setup } from "rivetkit";
-
-export const counter = actor({
-    state: { count: 0 },
-    onRequest: (c, request) => {
-        if (request.method === "POST") c.state.count++;
-        return Response.json(c.state);
-    },
-    actions: {}
-});
-
-export const registry = setup({ use: { counter } });
-registry.start();
-```
-
-```typescript client.ts
-import { createClient } from "rivetkit/client";
-import type { registry } from "./index";
-
-const client = createClient<typeof registry>("http://localhost:6420");
-
-const actor = client.counter.getOrCreate(["my-counter"]);
-
-// Get the raw gateway URL
-const gatewayUrl = await actor.getGatewayUrl();
-// gatewayUrl = "https://...rivet.dev/..."
-
-// Use with native fetch
-const response = await fetch(`${gatewayUrl}/request/`);
-const data = await response.json();
-console.log(data); // { count: 0 }
-```
+<CodeGroup>
+<CodeSnippet file="examples/docs/actors-request-handler/via-gateway/client.ts" title="client.ts" />
 </CodeGroup>
 
 ### Via HTTP API
@@ -175,23 +51,7 @@ For example, to call `POST /increment` on the counter actor above:
 
 <CodeGroup>
 
-```typescript
-// Replace with your actor ID and token
-const actorId = "your-actor-id";
-const token = "your-token";
-
-const response = await fetch(
-  `https://api.rivet.dev/gateway/${actorId}/request/increment`,
-  {
-    method: "POST",
-    headers: {
-      "x-rivet-token": token,
-    },
-  }
-);
-const data = await response.json();
-console.log(data); // { count: 1 }
-```
+<CodeSnippet file="examples/docs/actors-request-handler/http-api-fetch.ts" region="fetch" />
 
 ```bash
 curl -X POST "https://api.rivet.dev/gateway/{actorId}/request/increment" \
@@ -212,32 +72,7 @@ See the [HTTP API reference](/docs/actors/http-api) for more information on HTTP
 
 You can proxy HTTP requests from your own server to actor handlers using the RivetKit client. This is useful when you need to add custom authentication, rate limiting, or request transformation before forwarding to actors.
 
-```typescript
-import { Hono } from "hono";
-import { createClient } from "rivetkit/client";
-import { serve } from "@hono/node-server";
-
-const client = createClient();
-
-const app = new Hono();
-
-// Proxy requests to actor's onRequest handler
-app.all("/actors/:id/:path{.*}", async (c) => {
-    const actorId = c.req.param("id");
-    const actorPath = (c.req.param("path") || "");
-
-    // Rewrite the incoming request to the actor-relative path, preserving
-    // method, headers, and body
-    const url = new URL(actorPath, "http://actor");
-    const actorRequest = new Request(url, c.req.raw);
-
-    // Forward the rewritten Request to the actor's onRequest handler
-    const actor = client.counter.get(actorId);
-    return await actor.fetch(actorRequest);
-});
-
-serve(app);
-```
+<CodeSnippet file="examples/docs/actors-request-handler/proxy.ts" />
 
 ## Connection & Lifecycle Hooks
 

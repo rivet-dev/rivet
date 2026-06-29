@@ -43,87 +43,12 @@ Actors scale by splitting state into isolated entities. However, it's common to 
 <Tabs>
 <Tab title="Actor">
 
-```ts
-import { actor, setup } from "rivetkit";
-
-// Data actor: handles messages and connections
-const chatRoom = actor({
-  state: { messages: [] as { sender: string; text: string }[] },
-  actions: {
-    sendMessage: (c, sender: string, text: string) => {
-      const message = { sender, text };
-      c.state.messages.push(message);
-      c.broadcast("newMessage", message);
-      return message;
-    },
-    getHistory: (c) => c.state.messages,
-  },
-});
-
-// Coordinator: indexes chat rooms
-const chatRoomList = actor({
-  state: { chatRoomIds: [] as string[] },
-  actions: {
-    createChatRoom: async (c, name: string) => {
-      const client = c.client<typeof registry>();
-      // Create the chat room actor and get its ID
-      const handle = await client.chatRoom.create([name]);
-      const actorId = await handle.resolve();
-      // Track it in the list
-      c.state.chatRoomIds.push(actorId);
-      return actorId;
-    },
-    listChatRooms: (c) => c.state.chatRoomIds,
-  },
-});
-
-const registry = setup({
-  use: { chatRoom, chatRoomList },
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/coordinator-actor.ts" />
 
 </Tab>
 <Tab title="Client">
 
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-
-const chatRoom = actor({
-  state: { messages: [] as { sender: string; text: string }[] },
-  actions: {
-    sendMessage: (c, sender: string, text: string) => {
-      const message = { sender, text };
-      c.state.messages.push(message);
-      return message;
-    },
-    getHistory: (c) => c.state.messages,
-  },
-});
-
-const chatRoomList = actor({
-  state: { chatRoomIds: [] as string[] },
-  actions: {
-    createChatRoom: async (c, name: string) => "room-id",
-    listChatRooms: (c) => c.state.chatRoomIds,
-  },
-});
-
-const registry = setup({ use: { chatRoom, chatRoomList } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-// Create a new chat room via coordinator
-const coordinator = client.chatRoomList.getOrCreate(["main"]);
-const actorId = await coordinator.createChatRoom("general");
-
-// Get list of all chat rooms
-const chatRoomIds = await coordinator.listChatRooms();
-
-// Connect to a chat room using its ID
-const chatRoomHandle = client.chatRoom.getForId(actorId);
-await chatRoomHandle.sendMessage("alice", "Hello!");
-const history = await chatRoomHandle.getHistory();
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/coordinator-client.ts" />
 
 </Tab>
 </Tabs>
@@ -142,58 +67,12 @@ Sharding splits a single actor's workload across multiple actors based on a key.
 <Tabs>
 <Tab title="Actor">
 
-```ts
-import { actor, setup } from "rivetkit";
-
-interface Event {
-  type: string;
-  url: string;
-}
-
-const hourlyAnalytics = actor({
-  state: { events: [] as Event[] },
-  actions: {
-    trackEvent: (c, event: Event) => {
-      c.state.events.push(event);
-    },
-    getEvents: (c) => c.state.events,
-  },
-});
-
-export const registry = setup({
-  use: { hourlyAnalytics },
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/sharding-time-actor.ts" />
 
 </Tab>
 <Tab title="Client">
 
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-
-interface Event {
-  type: string;
-  url: string;
-}
-
-const hourlyAnalytics = actor({
-  state: { events: [] as Event[] },
-  actions: {
-    trackEvent: (c, event: Event) => {
-      c.state.events.push(event);
-    },
-  },
-});
-
-const registry = setup({ use: { hourlyAnalytics } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-// Shard by hour: hourlyAnalytics:2024-01-15T00, hourlyAnalytics:2024-01-15T01
-const shardKey = new Date().toISOString().slice(0, 13); // "2024-01-15T00"
-const analytics = client.hourlyAnalytics.getOrCreate([shardKey]);
-await analytics.trackEvent({ type: "page_view", url: "/home" });
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/sharding-time-client.ts" />
 
 </Tab>
 </Tabs>
@@ -203,53 +82,12 @@ await analytics.trackEvent({ type: "page_view", url: "/home" });
 <Tabs>
 <Tab title="Actor">
 
-```ts
-import { actor, setup } from "rivetkit";
-
-const rateLimiter = actor({
-  state: { requests: {} as Record<string, number> },
-  actions: {
-    checkLimit: (c, userId: string, limit: number) => {
-      const count = c.state.requests[userId] ?? 0;
-      if (count >= limit) return false;
-      c.state.requests[userId] = count + 1;
-      return true;
-    },
-  },
-});
-
-export const registry = setup({
-  use: { rateLimiter },
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/random-sharding-actor.ts" />
 
 </Tab>
 <Tab title="Client">
 
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-
-const rateLimiter = actor({
-  state: { requests: {} as Record<string, number> },
-  actions: {
-    checkLimit: (c, userId: string, limit: number) => {
-      const count = c.state.requests[userId] ?? 0;
-      if (count >= limit) return false;
-      c.state.requests[userId] = count + 1;
-      return true;
-    },
-  },
-});
-
-const registry = setup({ use: { rateLimiter } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-// Shard randomly: rateLimiter:shard-0, rateLimiter:shard-1, rateLimiter:shard-2
-const shardKey = `shard-${Math.floor(Math.random() * 3)}`;
-const limiter = client.rateLimiter.getOrCreate([shardKey]);
-const allowed = await limiter.checkLimit("user-123", 100);
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/random-sharding-client.ts" />
 
 </Tab>
 </Tabs>
@@ -269,102 +107,12 @@ Fan-in and fan-out are patterns for distributing work and aggregating results.
 <Tabs>
 <Tab title="Actor">
 
-```ts
-import { actor, setup } from "rivetkit";
-
-interface Task {
-  id: string;
-  data: string;
-}
-
-interface Result {
-  taskId: string;
-  output: string;
-}
-
-// Coordinator fans out tasks, then fans in results
-const coordinator = actor({
-  state: { results: [] as Result[] },
-  actions: {
-    // Fan-out: distribute work in parallel
-    startJob: async (c, tasks: Task[]) => {
-      const client = c.client<typeof registry>();
-      await Promise.all(
-        tasks.map(task => client.worker.getOrCreate(task.id).process(task))
-      );
-    },
-    // Fan-in: collect results
-    reportResult: (c, result: Result) => {
-      c.state.results.push(result);
-    },
-    getResults: (c) => c.state.results,
-  },
-});
-
-const worker = actor({
-  state: {},
-  actions: {
-    process: async (c, task: Task) => {
-      const result = { taskId: task.id, output: `Processed ${task.data}` };
-      const client = c.client<typeof registry>();
-      await client.coordinator.getOrCreate("main").reportResult(result);
-    },
-  },
-});
-
-export const registry = setup({
-  use: { coordinator, worker },
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/map-reduce-actor.ts" />
 
 </Tab>
 <Tab title="Client">
 
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-
-interface Task {
-  id: string;
-  data: string;
-}
-
-interface Result {
-  taskId: string;
-  output: string;
-}
-
-const coordinator = actor({
-  state: { results: [] as Result[] },
-  actions: {
-    startJob: async (c, tasks: Task[]) => {},
-    reportResult: (c, result: Result) => { c.state.results.push(result); },
-    getResults: (c) => c.state.results,
-  },
-});
-
-const worker = actor({
-  state: {},
-  actions: {
-    process: async (c, task: Task) => {},
-  },
-});
-
-const registry = setup({ use: { coordinator, worker } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-const coordinatorHandle = client.coordinator.getOrCreate(["main"]);
-
-// Start a job with multiple tasks
-await coordinatorHandle.startJob([
-  { id: "task-1", data: "..." },
-  { id: "task-2", data: "..." },
-  { id: "task-3", data: "..." },
-]);
-
-// Results are collected as workers report back
-const results = await coordinatorHandle.getResults();
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/map-reduce-client.ts" />
 
 </Tab>
 </Tabs>
@@ -388,86 +136,12 @@ Use this when:
 <Tabs>
 <Tab title="Actor">
 
-```ts
-import { actor, setup } from "rivetkit";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-}
-
-// Mock database interface for demonstration
-const db = {
-  users: {
-    findById: async (id: string): Promise<User> => ({ id, email: "user@example.com", name: "User" }),
-    update: async (id: string, data: Partial<User>) => {},
-  },
-};
-
-const userSession = actor({
-  state: { requestCount: 0 },
-
-  // createVars runs on every wake (after restarts, crashes, or sleep), so
-  // external data stays fresh.
-  createVars: async (c): Promise<{ user: User }> => {
-    // Load from database on every wake
-    const user = await db.users.findById(c.key.join("-"));
-    return { user };
-  },
-
-  actions: {
-    getProfile: (c) => {
-      c.state.requestCount++;
-      return c.vars.user;
-    },
-    updateEmail: async (c, email: string) => {
-      c.state.requestCount++;
-      await db.users.update(c.key.join("-"), { email });
-      // Refresh cached data
-      c.vars.user = await db.users.findById(c.key.join("-"));
-    },
-  },
-});
-
-const registry = setup({
-  use: { userSession },
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/loading-state-actor.ts" />
 
 </Tab>
 <Tab title="Client">
 
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-}
-
-const userSession = actor({
-  state: { requestCount: 0 },
-  createVars: () => ({ user: null as User | null }),
-  actions: {
-    getProfile: (c) => c.vars.user,
-    updateEmail: async (c, email: string) => {},
-  },
-});
-
-const registry = setup({ use: { userSession } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-const session = client.userSession.getOrCreate(["user-123"]);
-
-// Get profile (loaded from database on actor wake)
-const profile = await session.getProfile();
-
-// Update email (writes to database and refreshes cache)
-await session.updateEmail("alice@example.com");
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/loading-state-client.ts" />
 
 </Tab>
 </Tabs>
@@ -488,90 +162,12 @@ Use this when:
 <Tabs>
 <Tab title="Actor">
 
-```ts
-import { actor, setup } from "rivetkit";
-
-// Mock database interface for demonstration
-const db = {
-  users: {
-    insert: async (data: { id: string; email: string; createdAt: number }) => {},
-    update: async (id: string, data: { email: string; lastActive: number }) => {},
-  },
-};
-
-const userActor = actor({
-  state: {
-    email: "",
-    lastActive: 0,
-  },
-
-  onCreate: async (c, input: { email: string }) => {
-    // Insert into database on actor creation
-    await db.users.insert({
-      id: c.key.join("-"),
-      email: input.email,
-      createdAt: Date.now(),
-    });
-  },
-
-  onStateChange: async (c, newState) => {
-    // Sync any state changes to database
-    await db.users.update(c.key.join("-"), {
-      email: newState.email,
-      lastActive: newState.lastActive,
-    });
-  },
-
-  actions: {
-    updateEmail: (c, email: string) => {
-      c.state.email = email;
-      c.state.lastActive = Date.now();
-    },
-    getUser: (c) => ({
-      email: c.state.email,
-      lastActive: c.state.lastActive,
-    }),
-  },
-});
-
-const registry = setup({
-  use: { userActor },
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/syncing-state-actor.ts" />
 
 </Tab>
 <Tab title="Client">
 
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-
-const userActor = actor({
-  state: { email: "", lastActive: 0 },
-  actions: {
-    updateEmail: (c, email: string) => {
-      c.state.email = email;
-      c.state.lastActive = Date.now();
-    },
-    getUser: (c) => ({
-      email: c.state.email,
-      lastActive: c.state.lastActive,
-    }),
-  },
-});
-
-const registry = setup({ use: { userActor } });
-const client = createClient<typeof registry>("http://localhost:6420");
-
-const user = await client.userActor.create(["user-123"], {
-  input: { email: "alice@example.com" },
-});
-
-// Updates state and triggers onStateChange
-await user.updateEmail("alice2@example.com");
-
-const userData = await user.getUser();
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/syncing-state-client.ts" />
 
 </Tab>
 </Tabs>
@@ -609,31 +205,7 @@ const app = actor({
 Actors are designed to maintain state across multiple requests. Creating a new actor for each request wastes resources and loses the benefits of persistent state.
 
 **Problem:**
-```ts
-import { actor, setup } from "rivetkit";
-import { createClient } from "rivetkit/client";
-import { Hono } from "hono";
-
-const processor = actor({
-  state: {},
-  actions: {
-    process: (c, body: unknown) => ({ processed: true }),
-    destroySelf: (c) => c.destroy(),
-  },
-});
-
-const registry = setup({ use: { processor } });
-const client = createClient<typeof registry>("http://localhost:6420");
-const app = new Hono();
-
-// Bad: creating an actor for each API request
-app.post("/process", async (c) => {
-  const actorHandle = client.processor.getOrCreate([crypto.randomUUID()]);
-  const result = await actorHandle.process(await c.req.json());
-  await actorHandle.destroySelf();
-  return c.json(result);
-});
-```
+<CodeSnippet file="examples/docs/actors-design-patterns/actor-per-request.ts" />
 
 **Solution:** Use actors for entities that persist (users, sessions, documents), not for one-off operations. For stateless request handling, use regular functions.
 

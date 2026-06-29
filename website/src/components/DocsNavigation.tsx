@@ -1,4 +1,4 @@
-import { ActiveLink } from "@/components/ActiveLink";
+import { ActiveLink, SsrPathnameContext } from "@/components/ActiveLink";
 import { CollapsibleSidebarItem } from "@/components/CollapsibleSidebarItem";
 import { NavigationStateProvider } from "@/providers/NavigationStateProvider";
 import routes from "@/generated/routes.json";
@@ -176,7 +176,8 @@ export function NavLink({
 export function DocsNavigation({
 	sidebar,
 	tabKey,
-}: { sidebar: SidebarItem[]; tabKey?: string }) {
+	currentPath = "",
+}: { sidebar: SidebarItem[]; tabKey?: string; currentPath?: string }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const prevTabKey = useRef(tabKey);
 
@@ -193,14 +194,16 @@ export function DocsNavigation({
 	}, [tabKey]);
 
 	return (
-		<NavigationStateProvider>
-			<div
-				ref={scrollRef}
-				className="sticky top-header max-h-content text-ink pl-8 pr-6 py-6 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)]"
-			>
-				<Tree pages={sidebar} />
-			</div>
-		</NavigationStateProvider>
+		<SsrPathnameContext.Provider value={currentPath}>
+			<NavigationStateProvider>
+				<div
+					ref={scrollRef}
+					className="sticky top-header max-h-content text-ink pl-8 pr-6 py-6 overflow-y-auto [mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0,#000_2rem,#000_calc(100%-1.5rem),transparent_100%)]"
+				>
+					<Tree pages={sidebar} />
+				</div>
+			</NavigationStateProvider>
+		</SsrPathnameContext.Provider>
 	);
 }
 

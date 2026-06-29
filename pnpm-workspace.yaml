@@ -19,7 +19,6 @@ packages:
   - scripts/vercel-examples
   - shared/typescript/*
   - website
-  - website/scripts/typecheck-staging
 
 ignoredBuiltDependencies:
   - '@parcel/watcher'

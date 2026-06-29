@@ -13,30 +13,11 @@ There are two types of limits:
 
 Soft limits are configured in two places. Registry-level WebSocket message-size limits are passed to `setup`:
 
-```typescript
-import { setup } from "rivetkit";
-
-const rivet = setup({
-  use: { /* ... */ },
-  maxIncomingMessageSize: 1_048_576,
-  maxOutgoingMessageSize: 10_485_760,
-});
-```
+<CodeSnippet file="examples/docs/actors-limits/registry-message-size.ts" />
 
 Per-actor limits such as queue sizes and lifecycle timeouts are passed to `actor(...)` via `options`:
 
-```typescript
-import { actor } from "rivetkit";
-
-const myActor = actor({
-  options: {
-    maxQueueSize: 1000,
-    actionTimeout: 60_000,
-    stateSaveInterval: 1_000,
-  },
-  // ...
-});
-```
+<CodeSnippet file="examples/docs/actors-limits/actor-options.ts" />
 
 ## Limits
 

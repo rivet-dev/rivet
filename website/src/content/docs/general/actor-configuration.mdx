@@ -10,27 +10,7 @@ import ActorConfigSchema from "@/components/docs/ActorConfigSchemaClient.astro";
 
 ## Basic Example
 
-```typescript
-import { actor, setup } from "rivetkit";
-
-const myActor = actor({
-  state: { count: 0 },
-
-  actions: {
-    increment: (c) => {
-      c.state.count++;
-      return c.state.count;
-    },
-  },
-  options: {
-    actionTimeout: 15_000,
-  }
-});
-
-const registry = setup({
-  use: { myActor },
-});
-```
+<CodeSnippet file="examples/docs/general-actor-configuration/basic-example.ts" />
 
 ## Configuration Reference
 

@@ -54,6 +54,8 @@
 		"overrides": {
 			"react": "19.1.0",
 			"react-dom": "19.1.0",
+			"@rivet-gg/components": "workspace:*",
+			"@rivet-gg/icons": "workspace:*",
 			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911",
 			"rivetkit": "workspace:*",
 			"@rivetkit/engine-api-full": "workspace:*",

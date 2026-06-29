@@ -1,14 +1,13 @@
 import { defineConfig } from 'astro/config';
-import mdx from '@astrojs/mdx';
-import react from '@astrojs/react';
 import tailwind from '@astrojs/tailwind';
 import sitemap from '@astrojs/sitemap';
 import sentry from "@sentry/astro";
 
-import { remarkPlugins } from './src/mdx/remark';
-import { rehypePlugins } from './src/mdx/rehype';
-import { generateRoutes } from './src/integrations/generate-routes';
-import { typecheckCodeBlocks } from './src/integrations/typecheck-code-blocks';
+// Rivet consumes the shared docs framework it was forked from. docsTheme()
+// provides react + mdx + the remark/rehype/Shiki pipeline + route generation +
+// the virtual config — replacing rivet's previously-inlined copies of those.
+import { docsTheme } from '@rivet-dev/docs-theme';
+import { siteConfig } from './docs.config.mjs';
 import { skillVersion } from './src/integrations/skill-version';
 import { redirects } from './redirects.mjs';
 
@@ -39,21 +38,11 @@ export default defineConfig({
 		assets: '_astro',
 		format: 'directory',
 	},
-	markdown: {
-		syntaxHighlight: false,
-		remarkPlugins,
-		rehypePlugins,
-	},
+	// markdown (.md) remark/rehype + syntaxHighlight:false are configured by
+	// docsTheme()'s config integration; .mdx is handled by the theme's mdx().
 	integrations: [
 		skillVersion(),
-		typecheckCodeBlocks(),
-		generateRoutes(),
-		mdx({
-			syntaxHighlight: false,
-			remarkPlugins,
-			rehypePlugins,
-		}),
-		react(),
+		...docsTheme(siteConfig),
 		tailwind({
 			applyBaseStyles: false,
 		}),

@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 
 import * as components from "@/components/mdx";
 import type { ComponentProps } from "react";
-import { remarkPlugins } from "../mdx/remark";
+import { remarkPlugins } from "@rivet-dev/docs-theme/mdx/remark";
 
 type ReactMarkdownProps = ComponentProps<typeof ReactMarkdown>;
 

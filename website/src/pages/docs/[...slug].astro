@@ -92,7 +92,7 @@ const breadcrumbSchema = {
 <DocsLayout title={`${title} - Rivet`} description={description} canonicalUrl={canonicalUrl} sidebar={foundTab?.tab?.sidebar}>
 	<script type="application/ld+json" set:html={JSON.stringify(breadcrumbSchema)} />
 	<aside class="hidden md:block border-r border-ink/10">
-		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} tabKey={foundTab.tab.title} client:load transition:persist="docs-sidebar" />}
+		{foundTab?.tab?.sidebar && <DocsNavigation sidebar={foundTab.tab.sidebar} tabKey={foundTab.tab.title} currentPath={fullPath} client:load transition:persist="docs-sidebar" />}
 	</aside>
 	<div class="flex justify-center w-full min-w-0">
 		<div class="flex gap-8 max-w-6xl w-full min-w-0">
