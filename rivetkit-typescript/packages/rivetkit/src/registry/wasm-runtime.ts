@@ -935,8 +935,7 @@ export async function loadWasmRuntime(config?: WasmRuntimeLoadConfig): Promise<{
 	runtime: WasmCoreRuntime;
 }> {
 	const bindings =
-		config?.bindings ??
-		(await import(["@rivetkit", "rivetkit-wasm"].join("/")));
+		config?.bindings ?? (await import("@rivetkit/rivetkit-wasm"));
 	await bindings.default(config?.initInput);
 	return {
 		bindings,

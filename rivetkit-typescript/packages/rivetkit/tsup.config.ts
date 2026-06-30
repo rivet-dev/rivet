@@ -6,11 +6,11 @@ import defaultConfig from "../../../tsup.base.ts";
 export default defineConfig({
 	...defaultConfig,
 	outDir: "dist/tsup/",
-	// Override shims: false to prevent ESM shims (fileURLToPath, etc.) from being
-	// injected into chunks. The shims import Node.js-only modules which break
-	// browser builds when importing from rivetkit/client.
-	// See: https://github.com/egoist/tsup/issues/958
-	shims: false,
+	// Keep Node shims enabled for the Node package build. The CommonJS output
+	// needs `import.meta.url` rewritten for `require("rivetkit")` consumers.
+	// Browser entrypoints are built separately by tsup.browser.config.ts with
+	// shims disabled.
+	shims: true,
 	esbuildOptions(options) {
 		// Mark @rivetkit workspace packages as external to preserve their dependency chains
 		options.external = [

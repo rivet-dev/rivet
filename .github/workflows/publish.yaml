@@ -518,6 +518,26 @@ jobs:
             fi
           done
 
+      - name: Verify packaged engine binary versions
+        if: needs.context.outputs.trigger == 'release'
+        run: |
+          expected="${{ needs.context.outputs.version }}"
+          failed=0
+          for binary in \
+            rivetkit-typescript/packages/engine-cli/npm/*/rivet-engine \
+            rivetkit-typescript/packages/cli/npm/*/rivet-engine
+          do
+            [ -e "$binary" ] || continue
+            first_line=$("$binary" --version | head -n 1)
+            if [ "$first_line" != "Rivet $expected" ]; then
+              echo "Version mismatch: $binary reported '$first_line', expected 'Rivet $expected'" >&2
+              failed=1
+            else
+              echo "Verified $binary -> $first_line"
+            fi
+          done
+          exit "$failed"
+
       - name: Bump package versions for build
         run: |
           pnpm --filter=publish exec tsx src/ci/bin.ts bump-versions \

@@ -9,6 +9,9 @@ import { logger } from "@/registry/log";
 
 const DEFAULT_CONFIGURE_TIMEOUT_MS = 60_000;
 const CONFIGURE_RETRY_DELAY_MS = 1_000;
+const DEFAULT_REQUEST_LIFESPAN_SECONDS = 60 * 60;
+const DEFAULT_DRAIN_GRACE_PERIOD_SECONDS = 30 * 60;
+const SHORT_REQUEST_DRAIN_GRACE_PERIOD_SECONDS = 30;
 
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
@@ -27,6 +30,21 @@ function configureTimeoutMs() {
 	}
 
 	return parsed;
+}
+
+export function resolveServerlessDrainGracePeriod(
+	requestLifespan: number,
+	drainGracePeriod: number | undefined,
+): number | undefined {
+	if (drainGracePeriod !== undefined) return drainGracePeriod;
+	if (requestLifespan > DEFAULT_DRAIN_GRACE_PERIOD_SECONDS) {
+		return DEFAULT_DRAIN_GRACE_PERIOD_SECONDS;
+	}
+
+	return Math.max(
+		0,
+		Math.min(SHORT_REQUEST_DRAIN_GRACE_PERIOD_SECONDS, requestLifespan - 1),
+	);
 }
 
 export async function configureServerlessPool(
@@ -69,12 +87,17 @@ export async function configureServerlessPool(
 					: {}),
 				...(customConfig.headers ?? {}),
 			};
+			const requestLifespan =
+				customConfig.requestLifespan ?? DEFAULT_REQUEST_LIFESPAN_SECONDS;
 			const serverlessConfig = {
 				serverless: {
 					url: customConfig.url,
 					headers,
-					request_lifespan: customConfig.requestLifespan ?? 60 * 60,
-					drain_grace_period: customConfig.drainGracePeriod,
+					request_lifespan: requestLifespan,
+					drain_grace_period: resolveServerlessDrainGracePeriod(
+						requestLifespan,
+						customConfig.drainGracePeriod,
+					),
 					metadata_poll_interval:
 						customConfig.metadataPollInterval ?? 1000,
 					max_runners: 100_000,

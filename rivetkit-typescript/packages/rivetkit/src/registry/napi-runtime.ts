@@ -828,7 +828,7 @@ export async function loadNapiRuntime(): Promise<{
 	bindings: NapiBindings;
 	runtime: NapiCoreRuntime;
 }> {
-	const bindings = await import(["@rivetkit", "rivetkit-napi"].join("/"));
+	const bindings = await import("@rivetkit/rivetkit-napi");
 	return {
 		bindings,
 		runtime: new NapiCoreRuntime(bindings),
