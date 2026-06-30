@@ -35,6 +35,22 @@ cd my-app
 
 </Step>
 
+<Step title="Configure Next.js">
+
+Create or update `next.config.ts` so Next.js keeps RivetKit's server runtime package external:
+
+```ts next.config.ts
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+	serverExternalPackages: ["rivetkit"],
+};
+
+export default nextConfig;
+```
+
+</Step>
+
 <Step title="Create an Actor">
 
 Create a file at `src/rivet/registry.ts` with a simple counter actor:
@@ -142,5 +158,3 @@ See the [Vercel deployment guide](/docs/deploy/vercel) for detailed instructions
 </Step>
 
 </Steps>
-
-

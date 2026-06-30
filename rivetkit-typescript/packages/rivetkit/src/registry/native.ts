@@ -622,7 +622,7 @@ function decodeNativeKvValue<T extends NativeKvValueType = "text">(
 }
 
 async function loadEngineCli(): Promise<typeof import("@rivetkit/engine-cli")> {
-	return import(["@rivetkit", "engine-cli"].join("/"));
+	return import("@rivetkit/engine-cli");
 }
 
 function decodeValue<T>(value?: RuntimeBytes | null): T {
