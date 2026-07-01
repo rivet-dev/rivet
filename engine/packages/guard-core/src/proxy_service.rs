@@ -8,6 +8,7 @@ use hyper::{
 	header::{HeaderName, HeaderValue},
 };
 use hyper_tungstenite;
+use hyper_tungstenite::tungstenite::protocol::WebSocketConfig;
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use moka::future::Cache;
 use opentelemetry_http::{HeaderExtractor, HeaderInjector};
@@ -42,6 +43,12 @@ pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
 
 const PROXY_STATE_CACHE_TTL: Duration = Duration::from_secs(60 * 60); // 1 hour
 const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(5); // Keep TCP connection open briefly after WebSocket close
+
+fn websocket_config(guard_config: &rivet_config::config::guard::Guard) -> WebSocketConfig {
+	WebSocketConfig::default()
+		.max_message_size(Some(guard_config.websocket_max_message_size()))
+		.max_frame_size(Some(guard_config.websocket_max_frame_size()))
+}
 
 // State shared across all request handlers
 pub struct ProxyState {
@@ -483,7 +490,10 @@ impl ProxyService {
 				// HTTP errors in a meaningful way resulting in unhelpful errors for the user
 				if is_websocket {
 					tracing::debug!("Upgrading client connection to WebSocket for error proxy");
-					match hyper_tungstenite::upgrade(mock_req, None) {
+					match hyper_tungstenite::upgrade(
+						mock_req,
+						Some(websocket_config(self.state.config.guard())),
+					) {
 						Ok((client_response, client_ws)) => {
 							tracing::debug!("Client WebSocket upgrade for error proxy successful");
 
@@ -1032,7 +1042,10 @@ impl ProxyService {
 
 		// Handle WebSocket upgrade properly with hyper_tungstenite
 		tracing::debug!(path=%req_ctx.path, "Upgrading client connection to WebSocket");
-		let (client_response, client_ws) = match hyper_tungstenite::upgrade(req, None) {
+		let (client_response, client_ws) = match hyper_tungstenite::upgrade(
+			req,
+			Some(websocket_config(self.state.config.guard())),
+		) {
 			Ok(x) => {
 				tracing::debug!("Client WebSocket upgrade successful");
 				x
@@ -1180,7 +1193,11 @@ impl ProxyService {
 
 							match tokio::time::timeout(
 								Duration::from_secs(5), // 5 second timeout per connection attempt
-								tokio_tungstenite::connect_async(ws_request),
+								tokio_tungstenite::connect_async_with_config(
+									ws_request,
+									Some(websocket_config(state.config.guard())),
+									false,
+								),
 							)
 							.instrument(tracing::info_span!("connect_upstream_ws"))
 							.await
@@ -1911,5 +1928,38 @@ impl ProxyServiceFactory {
 
 	pub fn remaining_tasks(&self) -> usize {
 		self.state.tasks.remaining_tasks()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn websocket_config_uses_documented_limit() {
+		let guard_config = rivet_config::config::guard::Guard::default();
+		let config = websocket_config(&guard_config);
+
+		assert_eq!(
+			config.max_message_size,
+			Some(rivet_config::config::guard::DEFAULT_WEBSOCKET_MAX_MESSAGE_SIZE)
+		);
+		assert_eq!(
+			config.max_frame_size,
+			Some(rivet_config::config::guard::DEFAULT_WEBSOCKET_MAX_FRAME_SIZE)
+		);
+	}
+
+	#[test]
+	fn websocket_config_uses_guard_overrides() {
+		let guard_config = rivet_config::config::guard::Guard {
+			websocket_max_message_size: Some(8 * 1024 * 1024),
+			websocket_max_frame_size: Some(4 * 1024 * 1024),
+			..Default::default()
+		};
+		let config = websocket_config(&guard_config);
+
+		assert_eq!(config.max_message_size, Some(8 * 1024 * 1024));
+		assert_eq!(config.max_frame_size, Some(4 * 1024 * 1024));
 	}
 }
