@@ -51,5 +51,10 @@
 		"native_url": "http://clickhouse:9301",
 		"username": "system",
 		"password": "default"
+	},
+	"nats": {
+		"addresses": [
+			"nats-dc-c:4222"
+		]
 	}
 }

@@ -36,3 +36,65 @@ impl OwnedVersionedData for CommitRequest {
 		}
 	}
 }
+
+pub enum CommitReply {
+	V1(v1::CommitReply),
+}
+
+impl OwnedVersionedData for CommitReply {
+	type Latest = v1::CommitReply;
+
+	fn wrap_latest(latest: v1::CommitReply) -> Self {
+		CommitReply::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			CommitReply::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(CommitReply::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			CommitReply::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}
+
+pub enum Watermark {
+	V1(v1::Watermark),
+}
+
+impl OwnedVersionedData for Watermark {
+	type Latest = v1::Watermark;
+
+	fn wrap_latest(latest: v1::Watermark) -> Self {
+		Watermark::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Watermark::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Watermark::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, _version: u16) -> Result<Vec<u8>> {
+		match self {
+			Watermark::V1(data) => serde_bare::to_vec(&data).map_err(Into::into),
+		}
+	}
+}

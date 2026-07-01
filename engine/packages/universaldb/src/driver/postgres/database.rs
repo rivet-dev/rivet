@@ -10,7 +10,7 @@ use std::{
 use anyhow::{Context, Result};
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use rivet_postgres_util::build_tls_config;
-use tokio::task::JoinHandle;
+use tokio::{sync::mpsc, task::JoinHandle};
 use tokio_postgres_rustls::MakeRustlsConnect;
 use url::Url;
 use uuid::Uuid;
@@ -24,19 +24,26 @@ use crate::{
 };
 
 use super::{
-	listener::PgListener, resolver, shared::PostgresShared, transaction::PostgresTransactionDriver,
+	nats::{self, NatsConfig, NatsTransport, Subjects},
+	resolver::{self, ResolverInput},
+	shared::PostgresShared,
+	transaction::PostgresTransactionDriver,
+	transport::{COMMIT_QUEUE_BOUND, Transport},
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(30);
-/// Terminal and orphaned commit-request rows older than this are garbage collected. Must be well
-/// beyond the longest a follower could spend awaiting a result, so a result is never deleted before
-/// it is observed.
-const COMMIT_ROW_MAX_AGE_SECS: i64 = 60;
+/// Failover dedup rows older than this are garbage collected. Must be well beyond the longest a
+/// follower could spend resending a commit across a leader failover, so a dedup record is never
+/// deleted while a resend that needs it could still arrive.
+const DEDUP_ROW_MAX_AGE_SECS: i64 = 60;
 
 #[derive(Clone, Debug)]
 pub struct PostgresConfig {
 	pub connection_string: String,
 	pub ssl_config: Option<PostgresSslConfig>,
+	/// When set, UniversalDB runs in multi-node mode and uses NATS for follower-to-leader commit
+	/// transport. When `None`, it runs single-node with an in-process resolver.
+	pub nats: Option<NatsConfig>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,11 +54,12 @@ pub struct PostgresSslConfig {
 }
 
 impl PostgresConfig {
-	/// Create a new PostgreSQL configuration with sane defaults
+	/// Create a new PostgreSQL configuration with sane defaults (single-node).
 	pub fn new(connection_string: String) -> Self {
 		Self {
 			connection_string,
 			ssl_config: None,
+			nats: None,
 		}
 	}
 }
@@ -89,37 +97,50 @@ impl PostgresDatabaseDriver {
 			Self::init_schema(&conn).await?;
 		}
 
-		// Unique per-process node id (no hyphens) used to name this node's NOTIFY channels. Kept
-		// short so `udb_commit_<node_id>` stays within Postgres's 63-byte identifier limit.
+		// Unique per-process node id (no hyphens). Names this node's NATS commit subject and is the
+		// dedup `client_node_id`.
 		let node_id = Uuid::new_v4().simple().to_string();
 
-		let listener = PgListener::new(
-			config.connection_string.clone(),
-			ssl_disabled,
-			config
-				.ssl_config
-				.as_ref()
-				.and_then(|c| c.ssl_root_cert_path.clone()),
-			config
-				.ssl_config
-				.as_ref()
-				.and_then(|c| c.ssl_client_cert_path.clone()),
-			config
-				.ssl_config
-				.as_ref()
-				.and_then(|c| c.ssl_client_key_path.clone()),
-		);
+		let (shared, resolver_input) = match &config.nats {
+			None => {
+				// Single-node: the follower commit path hands jobs straight to the in-process leader
+				// drain loop.
+				let (commit_tx, commit_rx) = mpsc::channel(COMMIT_QUEUE_BOUND);
+				let shared =
+					PostgresShared::new(pool, node_id, Transport::SingleNode { commit_tx });
 
-		let shared = PostgresShared::new(pool, node_id, listener);
+				// Acquire the leader lease behind the correctness gate BEFORE spawning the resolver so
+				// a failure to acquire fails startup loudly.
+				let initial_epoch = resolver::acquire_single_node_gate(&shared).await?;
 
-		// Every node runs the resolver; only the elected leader drains the commit queue.
-		let resolver_handle = resolver::spawn(shared.clone());
+				(
+					shared,
+					ResolverInput::SingleNode {
+						rx: commit_rx,
+						initial_epoch,
+					},
+				)
+			}
+			Some(nats_config) => {
+				// Multi-node: commits travel to the elected leader over NATS request/reply.
+				let client = nats::connect(nats_config).await?;
+				let subjects = Subjects::new(&config.connection_string);
+				let shared = PostgresShared::new(
+					pool,
+					node_id,
+					Transport::MultiNode(NatsTransport { client, subjects }),
+				);
 
+				(shared, ResolverInput::MultiNode)
+			}
+		};
+
+		let resolver_handle = resolver::spawn(shared.clone(), resolver_input);
 		let gc_handle = Self::spawn_gc(shared.clone());
 
 		Ok(PostgresDatabaseDriver {
 			shared,
-			max_retries: AtomicI32::new(100),
+			max_retries: AtomicI32::new(10),
 			resolver_handle,
 			gc_handle,
 		})
@@ -180,19 +201,13 @@ impl PostgresDatabaseDriver {
 			CREATE SEQUENCE IF NOT EXISTS udb_version_seq AS BIGINT
 				START WITH 1 INCREMENT BY 1 MINVALUE 1;
 
-			CREATE TABLE IF NOT EXISTS udb_commit_requests (
-				id             BIGSERIAL PRIMARY KEY,
-				epoch          BIGINT NOT NULL,
-				read_version   BIGINT NOT NULL,
-				payload        BYTEA  NOT NULL,
-				reply_channel  TEXT   NOT NULL,
-				status         TEXT   NOT NULL DEFAULT 'pending',
-				commit_version BIGINT,
-				created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
-			);
-
-			CREATE INDEX IF NOT EXISTS udb_commit_requests_pending
-				ON udb_commit_requests (id) WHERE status = 'pending';",
+			CREATE TABLE IF NOT EXISTS udb_applied (
+				client_node_id BYTEA  NOT NULL,
+				client_seq     BIGINT NOT NULL,
+				commit_version BIGINT NOT NULL,
+				created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+				PRIMARY KEY (client_node_id, client_seq)
+			);",
 		)
 		.await
 		.context("failed to initialize postgres schema")?;
@@ -200,6 +215,9 @@ impl PostgresDatabaseDriver {
 		Ok(())
 	}
 
+	/// Garbage-collect old failover dedup records. A dedup row only needs to outlive the longest a
+	/// follower could spend resending a single commit across a leader failover, so terminal rows past
+	/// [`DEDUP_ROW_MAX_AGE_SECS`] are safe to drop. (Single-node never writes this table.)
 	fn spawn_gc(shared: Arc<PostgresShared>) -> JoinHandle<()> {
 		tokio::spawn(async move {
 			let mut interval = tokio::time::interval(GC_INTERVAL);
@@ -211,20 +229,20 @@ impl PostgresDatabaseDriver {
 				let conn = match shared.pool.get().await {
 					Ok(conn) => conn,
 					Err(err) => {
-						tracing::debug!(?err, "failed to get connection for commit gc");
+						tracing::debug!(?err, "failed to get connection for dedup gc");
 						continue;
 					}
 				};
 
 				if let Err(err) = conn
 					.execute(
-						"DELETE FROM udb_commit_requests
+						"DELETE FROM udb_applied
 						 WHERE created_at < now() - ($1::bigint * interval '1 second')",
-						&[&COMMIT_ROW_MAX_AGE_SECS],
+						&[&DEDUP_ROW_MAX_AGE_SECS],
 					)
 					.await
 				{
-					tracing::error!(?err, "failed postgres commit-queue gc");
+					tracing::error!(?err, "failed postgres dedup gc");
 				}
 			}
 		})

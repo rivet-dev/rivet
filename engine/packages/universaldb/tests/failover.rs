@@ -1,21 +1,45 @@
 use std::{sync::Arc, time::Duration};
 
-use rivet_test_deps_docker::TestDatabase;
+use rivet_test_deps_docker::{TestDatabase, TestPubSub};
 use tokio_postgres::NoTls;
-use universaldb::{Database, utils::IsolationLevel::*};
+use universaldb::{Database, driver::postgres::NatsConfig, utils::IsolationLevel::*};
 use uuid::Uuid;
 
 const ALPHA_KEY: &[u8] = b"failover/alpha";
 const BETA_KEY: &[u8] = b"failover/beta";
 
-/// Build a fresh Postgres-backed `Database`. Each call spins up an independent driver (its own pool,
-/// node id, listener, and resolver), so two of them against one Postgres model two engine nodes.
-async fn make_db(connection_string: &str) -> Database {
-	let driver = universaldb::driver::PostgresDatabaseDriver::new_with_config(
-		universaldb::driver::postgres::PostgresConfig::new(connection_string.to_string()),
-	)
-	.await
-	.unwrap();
+/// Boot a NATS container and return the multi-node UniversalDB NATS config plus the docker handle
+/// (kept alive for the test duration). Leader failover is a multi-node scenario, so the drivers must
+/// share a NATS deployment for follower-to-leader commit transport and watermark/election broadcast.
+async fn setup_nats() -> (NatsConfig, rivet_test_deps_docker::DockerRunConfig) {
+	let (pubsub_config, docker_config) = TestPubSub::Nats.config(Uuid::new_v4(), 1).await.unwrap();
+	let mut docker_config = docker_config.unwrap();
+	docker_config.start().await.unwrap();
+	tokio::time::sleep(Duration::from_secs(1)).await;
+
+	let rivet_config::config::PubSub::Nats(nats) = pubsub_config else {
+		unreachable!();
+	};
+	let config = NatsConfig {
+		addresses: nats.addresses.clone(),
+		username: nats.username.clone(),
+		password: nats.password.as_ref().map(|p| p.read().clone()),
+		client_capacity: nats.client_capacity,
+		subscription_capacity: nats.subscription_capacity,
+	};
+	(config, docker_config)
+}
+
+/// Build a fresh multi-node Postgres-backed `Database`. Each call spins up an independent driver (its
+/// own pool, node id, NATS client, and resolver), so two of them against one Postgres + one NATS model
+/// two engine nodes.
+async fn make_db(connection_string: &str, nats: &NatsConfig) -> Database {
+	let mut config =
+		universaldb::driver::postgres::PostgresConfig::new(connection_string.to_string());
+	config.nats = Some(nats.clone());
+	let driver = universaldb::driver::PostgresDatabaseDriver::new_with_config(config)
+		.await
+		.unwrap();
 	Database::new(Arc::new(driver))
 }
 
@@ -124,16 +148,18 @@ async fn test_postgres_leader_failover() {
 	};
 	let connection_string = postgres_config.url.read().clone();
 
+	let (nats_config, _nats_docker) = setup_nats().await;
+
 	let raw = connect_raw(&connection_string).await;
 
 	// Node 1 comes up first and deterministically wins the first election (epoch 1).
-	let db1 = make_db(&connection_string).await;
+	let db1 = make_db(&connection_string, &nats_config).await;
 	let lease1 = wait_for_lease(&raw, Duration::from_secs(15), |l| l.epoch == 1).await;
 	let leader1_addr = lease1.leader_addr.clone();
 
 	// Node 2 joins while node 1 holds a valid lease, so it loses the election and runs as a
 	// follower.
-	let db2 = make_db(&connection_string).await;
+	let db2 = make_db(&connection_string, &nats_config).await;
 
 	// Leader (node 1) commits data. The version sequence and watermark advance.
 	write_key(&db1, ALPHA_KEY, b"1").await;
@@ -243,13 +269,15 @@ async fn test_postgres_graceful_handoff() {
 	};
 	let connection_string = postgres_config.url.read().clone();
 
+	let (nats_config, _nats_docker) = setup_nats().await;
+
 	let raw = connect_raw(&connection_string).await;
 
 	// Node 1 wins the first election; node 2 joins as a follower.
-	let db1 = make_db(&connection_string).await;
+	let db1 = make_db(&connection_string, &nats_config).await;
 	let lease1 = wait_for_lease(&raw, Duration::from_secs(15), |l| l.epoch == 1).await;
 	let leader1_addr = lease1.leader_addr.clone();
-	let db2 = make_db(&connection_string).await;
+	let db2 = make_db(&connection_string, &nats_config).await;
 
 	write_key(&db1, ALPHA_KEY, b"1").await;
 	let lease_before = read_lease(&raw).await.unwrap();
