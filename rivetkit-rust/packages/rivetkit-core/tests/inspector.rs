@@ -210,6 +210,91 @@ mod moved_tests {
 		);
 	}
 
+	#[tokio::test]
+	async fn reset_drains_queue_and_preserves_next_id() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"inspector-queue-reset",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+		let inspector = Inspector::new();
+		ctx.configure_inspector(Some(inspector.clone()));
+
+		let first = ctx
+			.queue()
+			.send("jobs", b"first")
+			.await
+			.expect("enqueue first");
+		ctx.queue()
+			.send("jobs", b"second")
+			.await
+			.expect("enqueue second");
+		let third = ctx
+			.queue()
+			.send("jobs", b"third")
+			.await
+			.expect("enqueue third");
+		let pre_reset_revision = inspector.snapshot().queue_revision;
+		assert_eq!(inspector.snapshot().queue_size, 3);
+
+		ctx.queue().reset().await.expect("reset should succeed");
+
+		let after_reset = inspector.snapshot();
+		assert_eq!(after_reset.queue_size, 0);
+		// reset bumps the queue revision so inspector subscribers re-render.
+		assert!(after_reset.queue_revision > pre_reset_revision);
+		assert!(
+			ctx.queue()
+				.inspect_messages()
+				.await
+				.expect("inspect after reset")
+				.is_empty()
+		);
+
+		// next_id is preserved across reset so a post-reset message never reuses
+		// an id that a pre-reset completion handle still holds.
+		let again = ctx
+			.queue()
+			.send("jobs", b"again")
+			.await
+			.expect("enqueue again");
+		assert!(again.id > first.id);
+		assert!(again.id > third.id);
+		assert_eq!(inspector.snapshot().queue_size, 1);
+	}
+
+	#[tokio::test]
+	async fn reset_drains_queue_larger_than_delete_chunk() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"inspector-queue-reset-large",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+
+		// Exceed the engine per-call key limit (128) so reset must delete in
+		// more than one chunk.
+		for i in 0..200u32 {
+			ctx.queue()
+				.send("jobs", format!("msg-{i}").as_bytes())
+				.await
+				.expect("enqueue should succeed");
+		}
+
+		ctx.queue().reset().await.expect("reset should succeed");
+
+		assert!(
+			ctx.queue()
+				.inspect_messages()
+				.await
+				.expect("inspect after reset")
+				.is_empty()
+		);
+	}
+
 	#[test]
 	fn inspector_subscriptions_track_connected_clients_and_cleanup() {
 		let inspector = Inspector::new();

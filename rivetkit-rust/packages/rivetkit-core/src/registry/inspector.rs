@@ -173,6 +173,38 @@ impl RegistryDispatcher {
 				};
 				json_http_response(StatusCode::OK, &payload)
 			}
+			(http::Method::DELETE, "/inspector/queue") => {
+				match instance.ctx.queue().reset().await {
+					Ok(()) => json_http_response(StatusCode::OK, &json!({})),
+					Err(error) => Err(error).context("reset inspector queue"),
+				}
+			}
+			(http::Method::POST, "/inspector/queue") => {
+				let body: InspectorEnqueueBody = match parse_json_body(request) {
+					Ok(body) => body,
+					Err(response) => return Ok(Some(response)),
+				};
+				if body.name.is_empty() {
+					return Ok(Some(inspector_error_response(
+						StatusCode::BAD_REQUEST,
+						"actor",
+						"invalid_request",
+						"Queue message name must not be empty",
+					)));
+				}
+				let cbor_body = encode_json_as_cbor(&body.body.unwrap_or(serde_json::Value::Null))?;
+				match instance.ctx.queue().send(&body.name, &cbor_body).await {
+					Ok(message) => json_http_response(
+						StatusCode::OK,
+						&json!({
+							"id": message.id.to_string(),
+							"name": message.name,
+							"createdAtMs": message.created_at,
+						}),
+					),
+					Err(error) => Err(error).context("enqueue inspector queue message"),
+				}
+			}
 			(http::Method::GET, "/inspector/workflow-history") => self
 				.inspector_workflow_history(instance)
 				.await

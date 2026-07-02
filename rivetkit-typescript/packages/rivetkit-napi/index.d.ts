@@ -328,6 +328,7 @@ export declare class Queue {
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
   maxSize(): number
+  reset(): Promise<void>
   inspectMessages(): Promise<Array<JsQueueInspectMessage>>
 }
 export declare class QueueMessage {

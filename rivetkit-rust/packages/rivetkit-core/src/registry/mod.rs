@@ -271,6 +271,13 @@ struct InspectorWorkflowReplayBody {
 	entry_id: Option<String>,
 }
 
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct InspectorEnqueueBody {
+	name: String,
+	body: Option<JsonValue>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct InspectorQueueMessageJson {
