@@ -1022,6 +1022,15 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "gateway_response_chunk_idle_timeout_ms": {
+          "description": "Timeout between streaming HTTP response chunks in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0.0
+        },
         "gateway_response_start_timeout_ms": {
           "description": "Timeout for response to start in milliseconds.",
           "type": [

@@ -57,6 +57,7 @@ pub struct EnvoyContext {
 	pub remote_sqlite_requests: HashMap<u32, RemoteSqliteRequestEntry>,
 	pub next_remote_sqlite_request_id: u32,
 	pub request_to_actor: BufferMap<String>,
+	pub pending_request_chunks: BufferMap<Vec<protocol::ToEnvoyRequestChunk>>,
 	pub buffered_messages: Vec<protocol::ToRivetTunnelMessage>,
 	/// Highest command index processed per `(actor_id, generation)`, used to
 	/// drop replayed commands from `pegboard-envoy` after a reconnect. Persists
@@ -331,6 +332,7 @@ fn start_envoy_sync_inner(config: EnvoyConfig) -> EnvoyHandle {
 		remote_sqlite_requests: HashMap::new(),
 		next_remote_sqlite_request_id: 0,
 		request_to_actor: BufferMap::new(),
+		pending_request_chunks: BufferMap::new(),
 		buffered_messages: Vec::new(),
 		processed_command_idx: HashMap::new(),
 	};

@@ -89,6 +89,22 @@ import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const HTTP_BODY_CHUNK_SIZE = 64 * 1024;
+
+interface NativeHttpResponseBodyStream {
+	write(chunk: Uint8Array): Promise<void>;
+	end(): Promise<void>;
+	error(message: string): Promise<void>;
+}
+
+interface NativeHttpRequestBodyStream {
+	read(): Promise<Uint8Array | null | undefined>;
+	cancel(): Promise<void>;
+}
+
+type NativeReadableStreamReadResult = Awaited<
+	ReturnType<ReadableStreamDefaultReader<Uint8Array>["read"]>
+>;
 
 type ResolvedRuntimeKind = Exclude<RuntimeKind, "auto">;
 type RuntimeHostKind = "node-like" | "edge-like";
@@ -1119,32 +1135,221 @@ function buildRequest(init: {
 	uri: string;
 	headers?: Record<string, string>;
 	body?: RuntimeBytes;
+	bodyStream?: NativeHttpRequestBodyStream;
+	signal?: AbortSignal;
 }): Request {
 	const url = init.uri.startsWith("http")
 		? init.uri
 		: new URL(init.uri, "http://127.0.0.1").toString();
-	const body =
-		init.body && init.body.length > 0
-			? runtimeBytesToArrayBuffer(init.body)
-			: undefined;
+	const method = init.method.toUpperCase();
+	const bodyForbidden = method === "GET" || method === "HEAD";
+	const body = bodyForbidden
+		? undefined
+		: init.bodyStream
+			? new ReadableStream<Uint8Array>({
+					async pull(controller) {
+						try {
+							if (init.body && init.body.length > 0) {
+								controller.enqueue(new Uint8Array(init.body));
+								init.body = undefined;
+								return;
+							}
+							const chunk = await init.bodyStream?.read();
+							if (!chunk) {
+								controller.close();
+							} else {
+								controller.enqueue(new Uint8Array(chunk));
+							}
+						} catch (error) {
+							controller.error(error);
+						}
+					},
+					async cancel() {
+						await init.bodyStream?.cancel();
+					},
+				})
+			: init.body && init.body.length > 0
+				? runtimeBytesToArrayBuffer(init.body)
+				: undefined;
+	const streamInit = init.bodyStream && !bodyForbidden ? { duplex: "half" } : {};
 	return new Request(url, {
-		method: init.method,
+		method,
 		headers: init.headers,
 		body,
-	});
+		signal: init.signal,
+		...streamInit,
+	} as RequestInit);
+}
+
+function concatUint8Arrays(chunks: Uint8Array[]): Uint8Array {
+	const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+	const out = new Uint8Array(totalLength);
+	let offset = 0;
+	for (const chunk of chunks) {
+		out.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return out;
+}
+
+async function writeHttpResponseChunk(
+	stream: NativeHttpResponseBodyStream,
+	chunk: Uint8Array,
+) {
+	for (let offset = 0; offset < chunk.byteLength; offset += HTTP_BODY_CHUNK_SIZE) {
+		await stream.write(chunk.subarray(offset, offset + HTTP_BODY_CHUNK_SIZE));
+	}
+}
+
+async function pumpRuntimeHttpResponseBody(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	stream: NativeHttpResponseBodyStream,
+	initialChunks: Uint8Array[],
+	pendingRead?: Promise<NativeReadableStreamReadResult>,
+) {
+	try {
+		for (const chunk of initialChunks) {
+			await writeHttpResponseChunk(stream, chunk);
+		}
+		for (;;) {
+			const next = pendingRead ? await pendingRead : await reader.read();
+			pendingRead = undefined;
+			if (next.done) {
+				await stream.end();
+				return;
+			}
+			if (next.value?.byteLength) {
+				await writeHttpResponseChunk(stream, next.value);
+			}
+		}
+	} catch (error) {
+		try {
+			await stream.error(stringifyError(error));
+		} catch (streamError) {
+			logger().debug({
+				msg: "failed to report native http response stream error",
+				error: streamError,
+			});
+		}
+		try {
+			await reader.cancel(error);
+		} catch {
+			// Reader may already be closed after a native-side disconnect.
+		}
+	} finally {
+		reader.releaseLock();
+	}
 }
 
 async function toRuntimeHttpResponse(
 	response: Response,
+	responseBodyStream?: NativeHttpResponseBodyStream,
 ): Promise<RuntimeHttpResponse> {
 	const headers = Object.fromEntries(response.headers.entries());
-	const body = new Uint8Array(await response.arrayBuffer());
+	if (!response.body) {
+		return {
+			status: response.status,
+			headers,
+			body: new Uint8Array(),
+		};
+	}
+
+	const reader = response.body.getReader();
+	const first = await reader.read();
+	if (first.done) {
+		reader.releaseLock();
+		return {
+			status: response.status,
+			headers,
+			body: new Uint8Array(),
+		};
+	}
+
+	const firstChunk = first.value ?? new Uint8Array();
+	const secondRead = reader.read();
+	const secondResult = await Promise.race<
+		| { kind: "ready"; value: NativeReadableStreamReadResult }
+		| { kind: "pending" }
+	>([
+		secondRead.then((value) => ({ kind: "ready", value }) as const),
+		Promise.resolve({ kind: "pending" } as const),
+	]);
+	if (secondResult.kind === "pending") {
+		if (!responseBodyStream) {
+			const chunks = [firstChunk];
+			for (;;) {
+				const next = await secondRead;
+				if (next.done) break;
+				if (next.value) chunks.push(next.value);
+				break;
+			}
+			for (;;) {
+				const next = await reader.read();
+				if (next.done) break;
+				if (next.value) chunks.push(next.value);
+			}
+			reader.releaseLock();
+			return {
+				status: response.status,
+				headers,
+				body: concatUint8Arrays(chunks),
+			};
+		}
+
+		void pumpRuntimeHttpResponseBody(
+			reader,
+			responseBodyStream,
+			[firstChunk],
+			secondRead,
+		);
+		return {
+			status: response.status,
+			headers,
+			stream: true,
+		};
+	}
+
+	const second = secondResult.value;
+	if (second.done) {
+		reader.releaseLock();
+		return {
+			status: response.status,
+			headers,
+			body: firstChunk,
+		};
+	}
+
+	const secondChunk = second.value ?? new Uint8Array();
+	if (!responseBodyStream) {
+		const chunks = [firstChunk, secondChunk];
+		for (;;) {
+			const next = await reader.read();
+			if (next.done) break;
+			if (next.value) chunks.push(next.value);
+		}
+		reader.releaseLock();
+		return {
+			status: response.status,
+			headers,
+			body: concatUint8Arrays(chunks),
+		};
+	}
+
+	void pumpRuntimeHttpResponseBody(reader, responseBodyStream, [
+		firstChunk,
+		secondChunk,
+	]);
 	return {
 		status: response.status,
 		headers,
-		body,
+		stream: true,
 	};
 }
+
+export const nativeRegistryTestInternals = {
+	buildRequest,
+	toRuntimeHttpResponse,
+};
 
 function toActorKey(
 	segments: Array<{
@@ -3529,19 +3734,22 @@ export function buildNativeFactory(
 		);
 	const maybeHandleNativeInspectorRequest = async (
 		ctx: ActorContextHandle,
-		_rawRequest: {
+		rawRequest: {
 			method: string;
 			uri: string;
 			headers?: Record<string, string>;
 			body?: RuntimeBytes;
 		},
-		jsRequest: Request,
 	): Promise<Response | undefined> => {
-		const url = new URL(jsRequest.url);
+		const rawUrl = rawRequest.uri.startsWith("http")
+			? rawRequest.uri
+			: new URL(rawRequest.uri, "http://127.0.0.1").toString();
+		const url = new URL(rawUrl);
 		if (!url.pathname.startsWith("/inspector/")) {
 			return undefined;
 		}
 
+		const jsRequest = buildRequest(rawRequest);
 		const jsonResponse = (body: unknown, init?: ResponseInit) =>
 			new Response(JSON.stringify(body), {
 				status: init?.status ?? 200,
@@ -4424,34 +4632,41 @@ export function buildNativeFactory(
 						uri: string;
 						headers?: Record<string, string>;
 						body?: RuntimeBytes;
+						bodyStream?: NativeHttpRequestBodyStream;
 					};
 					cancelToken?: CancellationTokenHandle;
+					responseBodyStream?: NativeHttpResponseBodyStream;
 				},
 			) => {
 				try {
-					const { ctx, request, cancelToken } = unwrapTsfnPayload(
-						error,
-						payload,
-					);
-					const jsRequest = buildRequest(request);
+					const {
+						ctx,
+						request,
+						cancelToken,
+						responseBodyStream,
+					} = unwrapTsfnPayload(error, payload);
 					const inspectorResponse =
 						await maybeHandleNativeInspectorRequest(
 							ctx,
 							request,
-							jsRequest,
 						);
 					if (inspectorResponse) {
-						return await toRuntimeHttpResponse(inspectorResponse);
+						return await toRuntimeHttpResponse(
+							inspectorResponse,
+							responseBodyStream,
+						);
 					}
 
 					if (typeof config.onRequest !== "function") {
 						return await toRuntimeHttpResponse(
 							new Response(null, { status: 404 }),
+							responseBodyStream,
 						);
 					}
 
+					const handlerRequest = buildRequest(request);
 					const rawConnParams =
-						jsRequest.headers.get(HEADER_CONN_PARAMS);
+						handlerRequest.headers.get(HEADER_CONN_PARAMS);
 					let requestCtx:
 						| ReturnType<typeof withConnContext>
 						| undefined;
@@ -4473,19 +4688,22 @@ export function buildNativeFactory(
 						requestCtx = makeConnCtx(
 							ctx,
 							conn,
-							jsRequest,
+							handlerRequest,
 							cancelToken,
 						);
 						const response = await config.onRequest(
 							requestCtx,
-							jsRequest,
+							handlerRequest,
 						);
 						if (!(response instanceof Response)) {
 							throw new Error(
 								"onRequest handler must return a Response",
 							);
 						}
-						return await toRuntimeHttpResponse(response);
+						return await toRuntimeHttpResponse(
+							response,
+							responseBodyStream,
+						);
 					} finally {
 						await requestCtx?.dispose();
 						if (conn) {

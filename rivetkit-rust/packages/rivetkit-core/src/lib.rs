@@ -124,8 +124,8 @@ pub use actor::factory::{ActorEntryFn, ActorFactory};
 pub use actor::kv::Kv;
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use actor::messages::{
-	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, SerializeStateReason,
-	StateDelta,
+	ActorEvent, ActorHttpResponse, QueueSendResult, QueueSendStatus, Request, Response,
+	SerializeStateReason, StateDelta, StreamingResponse,
 };
 pub use actor::queue::{
 	CompletableQueueMessage, EnqueueAndWaitOpts, QueueMessage, QueueNextBatchOpts, QueueNextOpts,
@@ -139,6 +139,7 @@ pub use actor::task::{
 	ActionDispatchResult, ActorTask, DispatchCommand, HttpDispatchResult, LifecycleCommand,
 	LifecycleEvent, LifecycleState,
 };
+pub use rivet_envoy_client::config::{HTTP_BODY_STREAM_CHANNEL_CAPACITY, ResponseChunk};
 pub use actor::task_types::ShutdownKind;
 pub use actor::work_registry::{ActorWorkKind, ActorWorkPolicy};
 pub use error::ActorLifecycle;

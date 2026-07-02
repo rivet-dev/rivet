@@ -17,8 +17,7 @@ export async function sendHttpRequestToGateway(
 	actorRequest: Request,
 	options: HttpGatewayRequestOptions = {},
 ): Promise<Response> {
-	// Handle body properly based on method and presence
-	let bodyToSend: ArrayBuffer | null = null;
+	let bodyToSend: ReadableStream<Uint8Array> | null = null;
 	const guardHeaders = buildGuardHeaders(runConfig, actorRequest, options);
 
 	if (actorRequest.method !== "GET" && actorRequest.method !== "HEAD") {
@@ -26,28 +25,22 @@ export async function sendHttpRequestToGateway(
 			throw new Error("Request body has already been consumed");
 		}
 
-		// TODO: This buffers the entire request in memory every time. We
-		// need to properly implement streaming bodies.
-		const reqBody = await actorRequest.arrayBuffer();
-
-		if (reqBody.byteLength !== 0) {
-			bodyToSend = reqBody;
-
-			// If this is a streaming request, we need to convert the headers
-			// for the basic array buffer.
+		if (actorRequest.body) {
+			bodyToSend = actorRequest.body;
 			guardHeaders.delete("transfer-encoding");
 			guardHeaders.delete("content-length");
 		}
 	}
 
-	const guardRequest = new Request(gatewayUrl, {
-		method: actorRequest.method,
-		headers: guardHeaders,
-		body: bodyToSend,
-		signal: actorRequest.signal,
-	});
-
-	return mutableResponse(await fetch(guardRequest));
+	return mutableResponse(
+		await fetch(gatewayUrl, {
+			method: actorRequest.method,
+			headers: guardHeaders,
+			body: bodyToSend,
+			signal: actorRequest.signal,
+			...(bodyToSend ? { duplex: "half" } : {}),
+		} as RequestInit),
+	);
 }
 
 function mutableResponse(fetchRes: Response): Response {

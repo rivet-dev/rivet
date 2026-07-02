@@ -1,9 +1,12 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use gas::prelude::*;
-use http_body_util::{BodyExt, Full};
-use hyper::{Request, Response, StatusCode, body::Body};
+use http_body_util::{BodyExt, Full, Limited};
+use hyper::{
+	Method, Request, Response, StatusCode,
+	body::{Body, Incoming as BodyIncoming, SizeHint},
+};
 use rivet_envoy_protocol as protocol;
 use rivet_error::*;
 use rivet_guard_core::{
@@ -23,12 +26,13 @@ use std::{
 	sync::{Arc, atomic::AtomicU64},
 	time::{Duration, Instant},
 };
-use tokio::sync::watch;
+use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
 use universaldb::utils::IsolationLevel::*;
 
 use crate::shared_state::{
-	InFlightRequestCtx, RequestProtocol, RequestStopResult, SharedState, display_id,
+	InFlightRequestCtx, InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason,
+	RequestProtocol, RequestStopResult, SharedState, display_id,
 };
 
 mod hibernation_task;
@@ -47,6 +51,61 @@ const PHASE_WAITING_FOR_RESPONSE_START: &str = "waiting_for_response_start";
 const PHASE_PRE_WEBSOCKET_OPEN: &str = "pre_websocket_open";
 const PHASE_WAITING_FOR_WEBSOCKET_OPEN: &str = "waiting_for_websocket_open";
 const SLOW_WEBSOCKET_OPEN_WAIT_THRESHOLD: Duration = Duration::from_secs(1);
+const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
+const HTTP_RESPONSE_BODY_CHANNEL_CAPACITY: usize = 16;
+
+type ResponseBodyError = Box<dyn std::error::Error + Send + Sync>;
+
+fn should_stream_http_request_body(body_len: usize) -> bool {
+	body_len > HTTP_BODY_CHUNK_SIZE
+}
+
+fn should_stream_http_request_body_hint(size_hint: &SizeHint) -> bool {
+	size_hint
+		.upper()
+		.map_or(true, |body_len| should_stream_http_request_body(body_len as usize))
+}
+
+fn advance_http_stream_message_index(
+	expected: protocol::MessageIndex,
+	actual: protocol::MessageIndex,
+) -> std::result::Result<protocol::MessageIndex, ()> {
+	if actual == expected {
+		Ok(expected.wrapping_add(1))
+	} else {
+		Err(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn request_body_streams_only_after_one_chunk() {
+		assert!(!should_stream_http_request_body(0));
+		assert!(!should_stream_http_request_body(HTTP_BODY_CHUNK_SIZE));
+		assert!(should_stream_http_request_body(HTTP_BODY_CHUNK_SIZE + 1));
+	}
+
+	#[test]
+	fn response_stream_message_index_advances_and_wraps() {
+		assert_eq!(advance_http_stream_message_index(7, 7), Ok(8));
+		assert_eq!(
+			advance_http_stream_message_index(
+				protocol::MessageIndex::MAX,
+				protocol::MessageIndex::MAX
+			),
+			Ok(0)
+		);
+	}
+
+	#[test]
+	fn response_stream_message_index_rejects_gaps() {
+		assert_eq!(advance_http_stream_message_index(7, 8), Err(()));
+		assert_eq!(advance_http_stream_message_index(7, 6), Err(()));
+	}
+}
 
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
@@ -68,6 +127,312 @@ enum HibernationLifecycleResult {
 	Continue,
 	Close,
 	Aborted,
+}
+
+fn response_body_error(message: impl Into<String>) -> ResponseBodyError {
+	Box::new(std::io::Error::other(message.into()))
+}
+
+fn http_abort_reason(
+	kind: protocol::HttpStreamAbortReasonKind,
+	detail: impl Into<Option<String>>,
+) -> protocol::HttpStreamAbortReason {
+	protocol::HttpStreamAbortReason {
+		kind,
+		detail: detail.into(),
+	}
+}
+
+fn abort_reason_message(reason: &protocol::HttpStreamAbortReason) -> String {
+	match &reason.detail {
+		Some(detail) => format!("{:?}: {detail}", reason.kind),
+		None => format!("{:?}", reason.kind),
+	}
+}
+
+async fn send_http_body_error(
+	body_tx: &mpsc::Sender<Result<Bytes, ResponseBodyError>>,
+	message: impl Into<String>,
+) {
+	let _ = body_tx.send(Err(response_body_error(message))).await;
+}
+
+async fn send_to_envoy_or_actor_stopped(
+	in_flight_req: &InFlightRequestHandle,
+	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	actor_id: Id,
+	phase: &'static str,
+	message: protocol::ToEnvoyTunnelMessageKind,
+	ephemeral: bool,
+) -> Result<()> {
+	tokio::select! {
+		biased;
+		_ = stopped_sub.next() => {
+			tracing::debug!("actor stopped while sending request");
+			Err(ActorStoppedWhileWaiting {
+				actor_id: actor_id.to_string(),
+				phase: phase.to_owned(),
+			}
+			.build())
+		}
+		res = in_flight_req.send_message(message, ephemeral) => res,
+	}
+}
+
+async fn send_streaming_http_request_body_chunks<B>(
+	in_flight_req: &InFlightRequestHandle,
+	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	actor_id: Id,
+	mut body: B,
+) -> Result<()>
+where
+	B: Body<Data = Bytes> + Unpin,
+	B::Error: std::fmt::Display,
+{
+	while let Some(frame) = body.frame().await {
+		let frame = match frame {
+			Ok(frame) => frame,
+			Err(error) => {
+				send_http_request_abort(
+					in_flight_req,
+					protocol::HttpStreamAbortReasonKind::ClientDisconnect,
+					Some(error.to_string()),
+				)
+				.await;
+				return Err(anyhow!("failed to read streaming request body: {error}"));
+			}
+		};
+		let Ok(data) = frame.into_data() else {
+			continue;
+		};
+
+		for chunk in data.chunks(HTTP_BODY_CHUNK_SIZE) {
+			let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
+				protocol::ToEnvoyRequestChunk {
+					body: chunk.to_vec(),
+					finish: false,
+				},
+			);
+			send_to_envoy_or_actor_stopped(
+				in_flight_req,
+				stopped_sub,
+				actor_id,
+				PHASE_PRE_REQUEST,
+				message,
+				false,
+			)
+			.await?;
+		}
+	}
+
+	let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
+		protocol::ToEnvoyRequestChunk {
+			body: Vec::new(),
+			finish: true,
+		},
+	);
+	send_to_envoy_or_actor_stopped(
+		in_flight_req,
+		stopped_sub,
+		actor_id,
+		PHASE_PRE_REQUEST,
+		message,
+		false,
+	)
+	.await?;
+
+	Ok(())
+}
+
+async fn send_http_request_abort(
+	in_flight_req: &InFlightRequestHandle,
+	kind: protocol::HttpStreamAbortReasonKind,
+	detail: impl Into<Option<String>>,
+) {
+	let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(
+		protocol::ToEnvoyRequestAbort {
+			reason: http_abort_reason(kind, detail),
+		},
+	);
+	if let Err(err) = in_flight_req.send_message(message, true).await {
+		tracing::debug!(?err, "failed sending http request abort to envoy");
+	}
+}
+
+async fn handle_http_stream_abort(
+	in_flight_req: &InFlightRequestHandle,
+	body_tx: &mpsc::Sender<Result<Bytes, ResponseBodyError>>,
+	abort: protocol::ToRivetResponseAbort,
+) {
+	let message = abort_reason_message(&abort.reason);
+	tracing::warn!(
+		reason_kind = ?abort.reason.kind,
+		reason_detail = ?abort.reason.detail,
+		"streaming http response aborted by envoy"
+	);
+	send_http_body_error(body_tx, format!("response stream aborted: {message}")).await;
+	in_flight_req.stop(RequestStopResult::EnvoyError).await;
+}
+
+async fn send_http_response_body_bytes(
+	in_flight_req: &InFlightRequestHandle,
+	body_tx: &mpsc::Sender<Result<Bytes, ResponseBodyError>>,
+	body: Vec<u8>,
+	detail: &'static str,
+) -> bool {
+	if body.len() <= HTTP_BODY_CHUNK_SIZE {
+		if body_tx.send(Ok(Bytes::from(body))).await.is_ok() {
+			return true;
+		}
+	} else {
+		for chunk in body.chunks(HTTP_BODY_CHUNK_SIZE) {
+			if body_tx
+				.send(Ok(Bytes::copy_from_slice(chunk)))
+				.await
+				.is_err()
+			{
+				break;
+			}
+		}
+	}
+
+	tracing::debug!("client dropped streaming http response body");
+	send_http_request_abort(
+		in_flight_req,
+		protocol::HttpStreamAbortReasonKind::ClientDisconnect,
+		Some(detail.to_owned()),
+	)
+	.await;
+	in_flight_req
+		.stop(RequestStopResult::ClientDisconnect)
+		.await;
+	false
+}
+
+async fn drain_http_response_stream(
+	in_flight_req: InFlightRequestHandle,
+	mut msg_rx: mpsc::UnboundedReceiver<InFlightTunnelMessage>,
+	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
+	mut stopped_sub: message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	body_tx: mpsc::Sender<Result<Bytes, ResponseBodyError>>,
+	initial_body: Option<Vec<u8>>,
+	mut expected_message_index: protocol::MessageIndex,
+	actor_id: Id,
+	idle_timeout: Duration,
+) {
+	if let Some(body) = initial_body.filter(|body| !body.is_empty()) {
+		if !send_http_response_body_bytes(
+			&in_flight_req,
+			&body_tx,
+			body,
+			"client dropped response before initial body was sent",
+		)
+		.await
+		{
+			return;
+		}
+	}
+
+	loop {
+		tokio::select! {
+			res = msg_rx.recv() => {
+				let Some(msg) = res else {
+					tracing::warn!("streaming response tunnel channel closed");
+					send_http_body_error(&body_tx, "response stream closed before finish").await;
+					in_flight_req.stop(RequestStopResult::EnvoyError).await;
+					return;
+				};
+
+				match advance_http_stream_message_index(
+					expected_message_index,
+					msg.message_id.message_index,
+				) {
+					Ok(next_message_index) => expected_message_index = next_message_index,
+					Err(()) => {
+						tracing::warn!(
+							expected_message_index,
+							actual_message_index = msg.message_id.message_index,
+							"streaming response message index gap"
+						);
+						send_http_request_abort(
+							&in_flight_req,
+							protocol::HttpStreamAbortReasonKind::InternalError,
+							Some("gateway detected response stream message index gap".to_owned()),
+						)
+						.await;
+						send_http_body_error(&body_tx, "response stream message index gap").await;
+						in_flight_req.stop(RequestStopResult::EnvoyError).await;
+						return;
+					}
+				}
+
+				match msg.message_kind {
+					protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => {
+						if !chunk.body.is_empty() && !send_http_response_body_bytes(
+							&in_flight_req,
+							&body_tx,
+							chunk.body,
+							"client dropped streaming response body",
+						).await {
+							return;
+						}
+
+						if chunk.finish {
+							in_flight_req.stop(RequestStopResult::Success).await;
+							return;
+						}
+					}
+					protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
+						handle_http_stream_abort(&in_flight_req, &body_tx, abort).await;
+						return;
+					}
+					other => {
+						tracing::warn!(
+							message_kind = ?other,
+							"unexpected message while streaming http response"
+						);
+						send_http_request_abort(
+							&in_flight_req,
+							protocol::HttpStreamAbortReasonKind::InternalError,
+							Some("gateway received unexpected response stream message".to_owned()),
+						)
+						.await;
+						send_http_body_error(&body_tx, "unexpected response stream message").await;
+						in_flight_req.stop(RequestStopResult::EnvoyError).await;
+						return;
+					}
+				}
+			}
+			_ = drop_rx.changed() => {
+				let reason = format!("{:?}", drop_rx.borrow().as_ref());
+				tracing::warn!(reason, "streaming response tunnel message timeout");
+				send_http_body_error(&body_tx, format!("response stream garbage collected: {reason}")).await;
+				in_flight_req.stop(RequestStopResult::RequestTimeout).await;
+				return;
+			}
+			_ = stopped_sub.next() => {
+				tracing::debug!(%actor_id, "actor stopped while streaming response");
+				send_http_body_error(&body_tx, "actor stopped while streaming response").await;
+				in_flight_req.stop(RequestStopResult::EnvoyError).await;
+				return;
+			}
+			_ = tokio::time::sleep(idle_timeout) => {
+				tracing::warn!(
+					timeout_ms = idle_timeout.as_millis() as u64,
+					"timed out waiting for streaming response chunk"
+				);
+				send_http_request_abort(
+					&in_flight_req,
+					protocol::HttpStreamAbortReasonKind::IdleTimeout,
+					Some("gateway timed out waiting for response stream chunk".to_owned()),
+				)
+				.await;
+				send_http_body_error(&body_tx, "response stream idle timeout").await;
+				in_flight_req.stop(RequestStopResult::RequestTimeout).await;
+				return;
+			}
+		}
+	}
 }
 
 pub struct PegboardGateway2 {
@@ -110,19 +475,27 @@ impl PegboardGateway2 {
 }
 
 impl PegboardGateway2 {
-	async fn handle_request_inner(
+	async fn handle_request_inner<B>(
 		&self,
 		ctx: &StandaloneCtx,
-		req: Request<Full<Bytes>>,
+		req: Request<B>,
 		req_ctx: &mut RequestContext,
-	) -> Result<Response<ResponseBody>> {
+	) -> Result<Response<ResponseBody>>
+	where
+		B: Body<Data = Bytes> + Unpin,
+		B::Error: std::error::Error + Send + Sync + 'static,
+	{
 		// Use the actor ID from the gateway instance
 		let actor_id = self.actor_id.to_string();
 		let request_id = req_ctx.in_flight_request_id()?;
 
 		// Extract request parts
-		let headers = req
-			.headers()
+		let request_body_size_hint = req.body().size_hint();
+		let request_stream = !matches!(req_ctx.method(), &Method::GET | &Method::HEAD)
+			&& should_stream_http_request_body_hint(&request_body_size_hint);
+		let (req_parts, body) = req.into_parts();
+		let headers = req_parts
+			.headers
 			.iter()
 			.filter_map(|(name, value)| {
 				value
@@ -131,14 +504,18 @@ impl PegboardGateway2 {
 					.map(|value_str| (name.to_string(), value_str.to_string()))
 			})
 			.collect::<HashMap<_, _>>();
-
-		// NOTE: Size constraints have already been applied by guard
-		let body_bytes = req
-			.into_body()
-			.collect()
-			.await
-			.context("failed to read body")?
-			.to_bytes();
+		let (body_bytes, streaming_body) = if request_stream {
+			(Bytes::new(), Some(body))
+		} else {
+			(
+				Limited::new(body, ctx.config().guard().http_max_request_body_size())
+					.collect()
+					.await
+					.map_err(|error| anyhow!("failed to read body: {error}"))?
+					.to_bytes(),
+				None,
+			)
+		};
 
 		let mut stopped_sub = ctx
 			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
@@ -208,27 +585,33 @@ impl PegboardGateway2 {
 					method: req_ctx.method().to_string(),
 					path: self.path.clone(),
 					headers,
-					body: if body_bytes.is_empty() {
+					body: if body_bytes.is_empty() || request_stream {
 						None
 					} else {
 						Some(body_bytes.to_vec())
 					},
-					stream: false,
+					stream: request_stream,
 				},
 			);
 
-			tokio::select! {
-				// Prefer quick stop path
-				biased;
-				_ = stopped_sub.next() => {
-					tracing::debug!("actor stopped while sending request");
-					return Err(ActorStoppedWhileWaiting {
-						actor_id: self.actor_id.to_string(),
-						phase: PHASE_PRE_REQUEST.to_owned(),
-					}
-					.build());
-				}
-				res = in_flight_req.send_message(message, false) => res?,
+			send_to_envoy_or_actor_stopped(
+				&in_flight_req,
+				&mut stopped_sub,
+				self.actor_id,
+				PHASE_PRE_REQUEST,
+				message,
+				false,
+			)
+			.await?;
+
+			if let Some(body) = streaming_body {
+				send_streaming_http_request_body_chunks(
+					&in_flight_req,
+					&mut stopped_sub,
+					self.actor_id,
+					body,
+				)
+				.await?;
 			}
 
 			// Wait for response
@@ -238,14 +621,18 @@ impl PegboardGateway2 {
 					tokio::select! {
 						res = msg_rx.recv() => {
 							if let Some(msg) = res {
-								match msg {
+								match msg.message_kind {
 									protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(
 										response_start,
 									) => {
-										return anyhow::Ok(response_start);
+										return anyhow::Ok((msg.message_id, response_start));
 									}
-									protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => {
-										tracing::warn!("request aborted");
+									protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
+										tracing::warn!(
+											reason_kind = ?abort.reason.kind,
+											reason_detail = ?abort.reason.detail,
+											"request aborted"
+										);
 										return Err(TunnelRequestAborted {
 											phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
 										}
@@ -302,6 +689,7 @@ impl PegboardGateway2 {
 					}
 					.build()
 				})??;
+			let (response_start_message_id, mut response_start) = response_start;
 			tracing::debug!("response handler task ended");
 
 			// Build HTTP response
@@ -313,12 +701,46 @@ impl PegboardGateway2 {
 				response_builder = response_builder.header(key, value);
 			}
 
-			// Add body
-			let body = response_start.body.unwrap_or_default();
-			let response =
-				response_builder.body(ResponseBody::Full(Full::new(Bytes::from(body))))?;
+			let response = if response_start.stream {
+				let (body_tx, body_rx) =
+					mpsc::channel::<Result<Bytes, ResponseBodyError>>(
+						HTTP_RESPONSE_BODY_CHANNEL_CAPACITY,
+					);
+				let idle_timeout_ms = self
+					.ctx
+					.config()
+					.pegboard()
+					.gateway_response_chunk_idle_timeout_ms()
+					.max(1);
+				let idle_timeout = Duration::from_millis(idle_timeout_ms);
+				let expected_message_index =
+					response_start_message_id.message_index.wrapping_add(1);
+				let initial_body = response_start.body.take();
 
-			in_flight_req.stop(RequestStopResult::Success).await;
+				tokio::spawn(
+					drain_http_response_stream(
+						in_flight_req.clone(),
+						msg_rx,
+						drop_rx,
+						stopped_sub,
+						body_tx,
+						initial_body,
+						expected_message_index,
+						self.actor_id,
+						idle_timeout,
+					)
+					.in_current_span(),
+				);
+
+				response_builder.body(ResponseBody::Channel(body_rx))?
+			} else {
+				let body = response_start.body.unwrap_or_default();
+				let response =
+					response_builder.body(ResponseBody::Full(Full::new(Bytes::from(body))))?;
+
+				in_flight_req.stop(RequestStopResult::Success).await;
+				response
+			};
 
 			Ok(response)
 		}
@@ -456,7 +878,7 @@ impl PegboardGateway2 {
 						tokio::select! {
 							res = msg_rx.recv() => {
 								if let Some(msg) = res {
-									match msg {
+									match msg.message_kind {
 										protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(msg) => {
 											tracing::trace!(
 												actor_id = %self.actor_id,
@@ -912,10 +1334,73 @@ impl PegboardGateway2 {
 
 #[async_trait]
 impl CustomServeTrait for PegboardGateway2 {
+	fn streams_request_body(&self) -> bool {
+		true
+	}
+
 	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, actor_key=?self.actor_key, actor_generation=?self.actor_generation, namespace_id=?self.namespace_id, pool_name=%self.pool_name, envoy_key=%self.envoy_key))]
 	async fn handle_request(
 		&self,
 		req: Request<Full<Bytes>>,
+		req_ctx: &mut RequestContext,
+	) -> Result<Response<ResponseBody>> {
+		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
+		let req_body_size_hint = req.body().size_hint();
+
+		let (res, metrics_res) = tokio::join!(
+			self.handle_request_inner(&ctx, req, req_ctx),
+			record_req_metrics(
+				&ctx,
+				self.actor_id,
+				self.namespace_id,
+				Metric::HttpIngress(
+					req_body_size_hint
+						.upper()
+						.unwrap_or(req_body_size_hint.lower()) as usize
+				),
+			),
+		);
+
+		let response_size = match &res {
+			Ok(res) => res.size_hint().upper().unwrap_or(res.size_hint().lower()),
+			Err(_) => 0,
+		};
+
+		if let Err(err) = metrics_res {
+			tracing::error!(?err, "http req ingress metrics failed");
+		} else {
+			let actor_id = self.actor_id;
+			let namespace_id = self.namespace_id;
+			let envoy_key = self.envoy_key.clone();
+			tokio::spawn(
+				async move {
+					if let Err(err) = record_req_metrics(
+						&ctx,
+						actor_id,
+						namespace_id,
+						Metric::HttpEgress(response_size as usize),
+					)
+					.await
+					{
+						tracing::error!(
+							?err,
+							?namespace_id,
+							%envoy_key,
+							"http req egress metrics failed, likely corrupt now",
+						);
+					}
+				}
+				.in_current_span(),
+			);
+		}
+
+		res
+	}
+
+	#[tracing::instrument(skip_all, fields(actor_id=?self.actor_id, actor_key=?self.actor_key, actor_generation=?self.actor_generation, namespace_id=?self.namespace_id, pool_name=%self.pool_name, envoy_key=%self.envoy_key))]
+	async fn handle_streaming_request(
+		&self,
+		req: Request<BodyIncoming>,
 		req_ctx: &mut RequestContext,
 	) -> Result<Response<ResponseBody>> {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;

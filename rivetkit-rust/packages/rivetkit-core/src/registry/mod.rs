@@ -40,7 +40,9 @@ use crate::actor::context::{ActorContext, InspectorAttachGuard};
 use crate::actor::factory::ActorFactory;
 use crate::actor::keys::PERSIST_DATA_KEY;
 use crate::actor::lifecycle_hooks::Reply;
-use crate::actor::messages::{ActorEvent, QueueSendResult, Request, Response, StateDelta};
+use crate::actor::messages::{
+	ActorEvent, ActorHttpResponse, QueueSendResult, Request, StateDelta,
+};
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
 use crate::actor::state::decode_persisted_actor;
 use crate::actor::task::{

@@ -69,7 +69,7 @@ fn to_envoy_tunnel_message_kind_name(kind: &protocol::ToEnvoyTunnelMessageKind) 
 	match kind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_) => "ToEnvoyRequestStart",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(_) => "ToEnvoyRequestChunk",
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => "ToEnvoyRequestAbort",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(_) => "ToEnvoyRequestAbort",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_) => "ToEnvoyWebSocketOpen",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => "ToEnvoyWebSocketMessage",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => "ToEnvoyWebSocketClose",
@@ -80,7 +80,7 @@ fn to_rivet_tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) 
 	match kind {
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
 		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => "ToRivetResponseAbort",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ToRivetWebSocketMessage",
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => {
@@ -545,13 +545,19 @@ impl Deref for SharedState {
 }
 
 pub struct InFlightRequestCtx {
-	pub msg_rx: mpsc::UnboundedReceiver<protocol::ToRivetTunnelMessageKind>,
+	pub msg_rx: mpsc::UnboundedReceiver<InFlightTunnelMessage>,
 	/// Used to check if the request handler has been dropped.
 	///
 	/// This is separate from `msg_rx` there may still be messages that need to be sent to the
 	/// request after `msg_rx` has dropped.
 	pub drop_rx: watch::Receiver<Option<MsgGcReason>>,
 	pub handle: InFlightRequestHandle,
+}
+
+#[derive(Debug)]
+pub struct InFlightTunnelMessage {
+	pub message_id: protocol::MessageId,
+	pub message_kind: protocol::ToRivetTunnelMessageKind,
 }
 
 #[derive(Clone)]
@@ -1221,7 +1227,7 @@ impl InFlightRequest {
 	fn wake(
 		&mut self,
 		receiver_subject: String,
-		msg_tx: mpsc::UnboundedSender<protocol::ToRivetTunnelMessageKind>,
+		msg_tx: mpsc::UnboundedSender<InFlightTunnelMessage>,
 		drop_tx: watch::Sender<Option<MsgGcReason>>,
 	) {
 		self.receiver_subject = receiver_subject;
@@ -1282,7 +1288,7 @@ impl InFlightRequest {
 	/// Transition from pending hibernation to hibernating
 	fn hibernate(
 		&mut self,
-		msg_tx: mpsc::UnboundedSender<protocol::ToRivetTunnelMessageKind>,
+		msg_tx: mpsc::UnboundedSender<InFlightTunnelMessage>,
 		drop_tx: watch::Sender<Option<MsgGcReason>>,
 	) {
 		let mut pending_tunnel_msgs = Vec::new();
@@ -1382,7 +1388,7 @@ impl InFlightRequest {
 enum InFlightRequestState {
 	Active {
 		/// Sender for incoming messages to this request.
-		msg_tx: mpsc::UnboundedSender<protocol::ToRivetTunnelMessageKind>,
+		msg_tx: mpsc::UnboundedSender<InFlightTunnelMessage>,
 		/// Used to check if the request handler has been dropped.
 		drop_tx: watch::Sender<Option<MsgGcReason>>,
 		last_pong: i64,
@@ -1392,7 +1398,7 @@ enum InFlightRequestState {
 	PendingHibernation { hibernation_state: HibernationState },
 	Hibernating {
 		/// Sender for incoming messages to this request.
-		msg_tx: mpsc::UnboundedSender<protocol::ToRivetTunnelMessageKind>,
+		msg_tx: mpsc::UnboundedSender<InFlightTunnelMessage>,
 		/// Used to check if the hibernation handler has been dropped.
 		drop_tx: watch::Sender<Option<MsgGcReason>>,
 		hibernation_state: HibernationState,
@@ -1420,41 +1426,49 @@ fn forward_tunnel_message(
 	receiver_subject: &str,
 	actor_key: Option<&str>,
 	actor_generation: Option<u32>,
-	msg_tx: &mpsc::UnboundedSender<protocol::ToRivetTunnelMessageKind>,
-	mut msg: protocol::ToRivetTunnelMessage,
+	msg_tx: &mpsc::UnboundedSender<InFlightTunnelMessage>,
+	msg: protocol::ToRivetTunnelMessage,
 ) -> Option<protocol::ToRivetTunnelMessage> {
+	let message_id = msg.message_id;
 	// Send message to the request handler to emulate the real network action
 	let inner_size = match &msg.message_kind {
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => ws_msg.data.len(),
 		_ => 0,
 	};
 	tracing::debug!(
-		gateway_id=%display_id(&msg.message_id.gateway_id),
-		request_id=%display_id(&msg.message_id.request_id),
-		message_index=msg.message_id.message_index,
+		gateway_id=%display_id(&message_id.gateway_id),
+		request_id=%display_id(&message_id.request_id),
+		message_index=message_id.message_index,
 		actor_key,
 		actor_generation,
 		inner_size,
 		"forwarding message to request handler"
 	);
 
-	if let Err(send_err) = msg_tx.send(msg.message_kind) {
+	let tunnel_msg = InFlightTunnelMessage {
+		message_id: message_id.clone(),
+		message_kind: msg.message_kind,
+	};
+
+	if let Err(send_err) = msg_tx.send(tunnel_msg) {
 		tracing::debug!(
-			gateway_id=%display_id(&msg.message_id.gateway_id),
-			request_id=%display_id(&msg.message_id.request_id),
+			gateway_id=%display_id(&send_err.0.message_id.gateway_id),
+			request_id=%display_id(&send_err.0.message_id.request_id),
 			receiver_subject=%receiver_subject,
 			actor_key,
 			actor_generation,
 			"message handler channel closed, saving to pending msgs",
 		);
 
-		msg.message_kind = send_err.0;
-		Some(msg)
+		Some(protocol::ToRivetTunnelMessage {
+			message_id: send_err.0.message_id,
+			message_kind: send_err.0.message_kind,
+		})
 	} else {
 		tracing::trace!(
-			gateway_id=%display_id(&msg.message_id.gateway_id),
-			request_id=%display_id(&msg.message_id.request_id),
-			message_index=msg.message_id.message_index,
+			gateway_id=%display_id(&message_id.gateway_id),
+			request_id=%display_id(&message_id.request_id),
+			message_index=message_id.message_index,
 			actor_key,
 			actor_generation,
 			inner_size,
