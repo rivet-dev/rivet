@@ -2,6 +2,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{net::IpAddr, path::PathBuf};
 
+pub const DEFAULT_WEBSOCKET_MAX_MESSAGE_SIZE: usize = 32 * 1024 * 1024;
+pub const DEFAULT_WEBSOCKET_MAX_FRAME_SIZE: usize = 32 * 1024 * 1024;
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Guard {
@@ -45,6 +48,10 @@ pub struct Guard {
 	pub https: Option<Https>,
 	/// Max HTTP request body size in bytes (first line of defense).
 	pub http_max_request_body_size: Option<usize>,
+	/// Max WebSocket message size in bytes.
+	pub websocket_max_message_size: Option<usize>,
+	/// Max WebSocket frame size in bytes.
+	pub websocket_max_frame_size: Option<usize>,
 
 	/// Enables W3C trace context propagation (extract from incoming requests, inject into
 	/// upstream requests/websockets).
@@ -132,6 +139,16 @@ impl Guard {
 
 	pub fn http_max_request_body_size(&self) -> usize {
 		self.http_max_request_body_size.unwrap_or(20 * 1024 * 1024) // 20 MiB
+	}
+
+	pub fn websocket_max_message_size(&self) -> usize {
+		self.websocket_max_message_size
+			.unwrap_or(DEFAULT_WEBSOCKET_MAX_MESSAGE_SIZE)
+	}
+
+	pub fn websocket_max_frame_size(&self) -> usize {
+		self.websocket_max_frame_size
+			.unwrap_or(DEFAULT_WEBSOCKET_MAX_FRAME_SIZE)
 	}
 
 	pub fn trace_propagation(&self) -> bool {

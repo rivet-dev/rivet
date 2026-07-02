@@ -685,6 +685,24 @@
             "boolean",
             "null"
           ]
+        },
+        "websocket_max_frame_size": {
+          "description": "Max WebSocket frame size in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
+        },
+        "websocket_max_message_size": {
+          "description": "Max WebSocket message size in bytes.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0.0
         }
       },
       "additionalProperties": false

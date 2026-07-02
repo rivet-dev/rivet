@@ -27,8 +27,9 @@ These limits affect actions that use `.connect()` and [low-level WebSockets](/do
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Max incoming message size | 64 KiB | 32 MiB | Maximum size of incoming WebSocket messages. Soft limit configurable via `maxIncomingMessageSize`. |
-| Max outgoing message size | 1 MiB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`. |
+| Max incoming message size | 64 KiB | 32 MiB | Maximum size of incoming WebSocket messages. Soft limit configurable via `maxIncomingMessageSize`; hard limit configurable in self-hosted engine config via `guard.websocket_max_message_size`. |
+| Max outgoing message size | 1 MiB | 32 MiB | Maximum size of outgoing WebSocket messages. Soft limit configurable via `maxOutgoingMessageSize`; hard limit configurable in self-hosted engine config via `guard.websocket_max_message_size`. |
+| Max WebSocket frame size | — | 32 MiB | Maximum size of a single WebSocket frame accepted by Rivet's transport edge. Configurable in self-hosted engine config via `guard.websocket_max_frame_size`. This is not configurable by browser clients and is not negotiated during the WebSocket handshake. |
 | WebSocket open timeout | — | 15 seconds | Time allowed for WebSocket connection to be established, including `onBeforeConnect` and `createConnState` hooks. Connection is closed if exceeded. |
 | Message ack timeout | — | 30 seconds | Time allowed for message acknowledgment before connection is closed. Only relevant in the case of a network issue and does not affect your application. |
 
@@ -50,7 +51,7 @@ These limits affect actions that do not use `.connect()` and [low-level HTTP req
 |------|------------|------------|-------------|
 | Max request body size | — | 20 MiB | Maximum size of HTTP request bodies. |
 | Max response body size | — | 20 MiB | Maximum size of HTTP response bodies. |
-| Request timeout | — | 5 minutes | Maximum time for a request to complete. |
+| Request timeout | 60 seconds | — | Maximum time for an `onRequest` handler to complete. Defaults to `actionTimeout`; configure with `actionTimeout`. |
 
 ### Networking
 
@@ -123,12 +124,17 @@ See [Actor Input](/docs/actors/input) for details.
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Action timeout | 60 seconds | — | Timeout for RPC actions. Configurable via `actionTimeout`. |
+| On request timeout | 60 seconds | — | Timeout for raw `onRequest` handlers. Defaults to `actionTimeout`; configure with `actionTimeout`. |
+| On before connect timeout | 5 seconds | — | Timeout for the `onBeforeConnect` hook. Configurable via `onBeforeConnectTimeout`. |
 | Create vars timeout | 5 seconds | — | Timeout for `createVars` hook. Configurable via `createVarsTimeout`. |
 | Create conn state timeout | 5 seconds | — | Timeout for `createConnState` hook. Configurable via `createConnStateTimeout`. |
 | On connect timeout | 5 seconds | — | Timeout for `onConnect` hook. Configurable via `onConnectTimeout`. |
+| On migrate timeout | 30 seconds | — | Timeout for `onMigrate` hook. Configurable via `onMigrateTimeout`. |
 | Sleep grace period | 15 seconds | — | Total graceful shutdown budget for both sleep and destroy. Covers `onSleep`/`onDestroy`, run handler shutdown, `waitUntil`, `keepAwake`, async raw WebSocket handlers, and connection cleanup. Configurable via `sleepGracePeriod`. |
 | Sleep timeout | 30 seconds | — | Time of inactivity before actor hibernates. Configurable via `sleepTimeout`. |
 | State save interval | 1 second | — | Interval between automatic state saves. Configurable via `stateSaveInterval`. |
+| Connection liveness timeout | 2.5 seconds | — | Time a stateful connection can miss liveness checks before RivetKit treats it as unhealthy. Configurable via `connectionLivenessTimeout`. |
+| Connection liveness interval | 5 seconds | — | Interval between stateful connection liveness checks. Configurable via `connectionLivenessInterval`. |
 
 ### Serverless Shutdown
 

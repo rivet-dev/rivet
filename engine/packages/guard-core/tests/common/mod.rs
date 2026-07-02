@@ -467,6 +467,7 @@ pub fn create_test_config(
 		host: None,    // Use default host
 		port: Some(0), // Use 0 to let the OS choose a port
 		https: None,   // No HTTPS by default in tests
+		..Default::default()
 	};
 	mutate(&mut guard);
 	root.guard = Some(guard);
