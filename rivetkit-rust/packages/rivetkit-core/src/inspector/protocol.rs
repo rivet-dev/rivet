@@ -8,8 +8,8 @@ pub(crate) use wire::{
 	ActionResponse, Connection as ConnectionDetails, ConnectionsResponse, ConnectionsUpdated,
 	DatabaseSchemaResponse, DatabaseTableRowsResponse, Error as ErrorMessage, Init as InitMessage,
 	QueueMessageSummary, QueueResponse, QueueStatus, QueueUpdated, RpcsListResponse, StateResponse,
-	StateUpdated, ToClientBody as ServerMessage, ToServerBody as ClientMessage, TraceQueryResponse,
-	WorkflowHistoryResponse, WorkflowHistoryUpdated, WorkflowReplayResponse,
+	StateUpdated, TabConfigEntry, ToClientBody as ServerMessage, ToServerBody as ClientMessage,
+	TraceQueryResponse, WorkflowHistoryResponse, WorkflowHistoryUpdated, WorkflowReplayResponse,
 };
 
 const MAX_QUEUE_STATUS_LIMIT: u32 = 200;

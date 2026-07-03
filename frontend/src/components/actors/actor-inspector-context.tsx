@@ -134,7 +134,6 @@ interface ActorInspectorApi {
 		request: DatabaseExecuteRequest,
 	) => Promise<DatabaseExecuteResult>;
 	getMetadata: () => Promise<{ version: string }>;
-	getTabConfig: () => Promise<{ tabs: InspectorTabConfigEntry[] }>;
 }
 
 type FeatureSupport = {
@@ -153,6 +152,10 @@ const MIN_RIVETKIT_VERSION_TRACES = "2.0.40";
 const MIN_RIVETKIT_VERSION_QUEUE = "2.0.40";
 const MIN_RIVETKIT_VERSION_DATABASE = "2.0.42";
 const MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY = "2.1.6";
+// Inspector protocol v5 delivers the tab config inside the WS `Init` message
+// (there is no `/inspector/tab-config` HTTP route anymore). Only negotiate v5
+// with runtimes new enough to send it.
+const MIN_RIVETKIT_VERSION_TABCONFIG_INIT = "2.3.3";
 const INSPECTOR_ERROR_EVENTS_DROPPED = "inspector.events_dropped";
 
 function parseSemver(version?: string) {
@@ -233,6 +236,9 @@ function getInspectorProtocolVersion(version: string | undefined) {
 		return 2;
 	}
 	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_DATABASE)) {
+		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_TABCONFIG_INIT)) {
+			return 5;
+		}
 		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY)) {
 			return 4;
 		}
@@ -434,11 +440,17 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
+	// Tab config is delivered by the WS `Init` message and written into this
+	// query's cache by the message handler (see `createMessageHandler`). There
+	// is no HTTP fetch. The `queryFn` only supplies the empty default for the
+	// window before `Init` lands. Because `Init` also flips
+	// `actorInspectorInitialized` in the same tick, the tab list and the
+	// capability flags become known together, so tabs never flash.
 	actorTabConfigQueryOptions(actorId: ActorId) {
 		return queryOptions({
 			staleTime: Infinity,
 			queryKey: actorInspectorQueriesKeys.actorTabConfig(actorId),
-			queryFn: () => api.getTabConfig(),
+			queryFn: (): { tabs: InspectorTabConfigEntry[] } => ({ tabs: [] }),
 		});
 	},
 
@@ -1058,47 +1070,6 @@ export const ActorInspectorProvider = ({
 			getMetadata() {
 				return getActorMetadataProxy.current();
 			},
-
-			getTabConfig: async () => {
-				// Unauthenticated route — descriptors are public.
-				let response: Response;
-				try {
-					response = await fetch(
-						`${computeActorUrl({ ...credentials, actorId })}/inspector/tab-config`,
-						{ signal: AbortSignal.timeout(10_000) },
-					);
-				} catch (err) {
-					if (
-						err instanceof DOMException &&
-						err.name === "TimeoutError"
-					) {
-						throw new Error(
-							"Inspector tab-config request timed out after 10s — the actor may be sleeping or unreachable.",
-						);
-					}
-					throw err;
-				}
-				if (!response.ok) {
-					throw new Error(
-						`Inspector tab-config request failed: ${response.status}`,
-					);
-				}
-				const payload = await response.json();
-				return z
-					.object({
-						tabs: z.array(
-							z.object({
-								id: z.string(),
-								label: z.string().optional(),
-								// Server emits null when not set; tolerate both
-								// and coerce to undefined at the consumer.
-								icon: z.string().nullable().optional(),
-								hidden: z.boolean().optional(),
-							}),
-						),
-					})
-					.parse(payload);
-			},
 		} satisfies ActorInspectorApi;
 	}, [
 		sendMessage,
@@ -1199,6 +1170,23 @@ const createMessageHandler =
 						),
 					);
 				}
+
+				// Tab config rides on `Init` (protocol v5+) instead of a
+				// separate HTTP request, so the custom-tab list and the
+				// capability flags land in the same tick. Older runtimes send
+				// an empty list (the v4 -> v5 converter fills it in), which the
+				// consumer reads as "built-in tabs only".
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorTabConfig(actorId),
+					{
+						tabs: (body.val.tabConfig ?? []).map((tab) => ({
+							id: tab.id,
+							label: tab.label ?? undefined,
+							icon: tab.icon,
+							hidden: tab.hidden,
+						})),
+					} satisfies { tabs: InspectorTabConfigEntry[] },
+				);
 
 				// Mark capabilities as known only now — the flags above are
 				// the source of truth for which tabs exist. Tab computation

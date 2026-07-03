@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use serde_bare::Uint;
 use vbare::OwnedVersionedData;
 
-use crate::generated::{v1, v2, v3, v4};
+use crate::generated::{v1, v2, v3, v4, v5};
 
 const WORKFLOW_HISTORY_DROPPED_ERROR: &str = "inspector.workflow_history_dropped";
 const QUEUE_DROPPED_ERROR: &str = "inspector.queue_dropped";
@@ -14,18 +14,19 @@ pub enum ToServer {
 	V2(v2::ToServer),
 	V3(v3::ToServer),
 	V4(v4::ToServer),
+	V5(v5::ToServer),
 }
 
 impl OwnedVersionedData for ToServer {
-	type Latest = v4::ToServer;
+	type Latest = v5::ToServer;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 			_ => bail!("version not latest"),
 		}
 	}
@@ -36,6 +37,7 @@ impl OwnedVersionedData for ToServer {
 			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
 			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid inspector protocol version for ToServer: {version}"),
 		}
 	}
@@ -46,16 +48,27 @@ impl OwnedVersionedData for ToServer {
 			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
 			(_, version) => bail!("unexpected inspector protocol version for ToServer: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
+		vec![
+			Self::v1_to_v2,
+			Self::v2_to_v3,
+			Self::v3_to_v4,
+			Self::v4_to_v5,
+		]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
+		vec![
+			Self::v5_to_v4,
+			Self::v4_to_v3,
+			Self::v3_to_v2,
+			Self::v2_to_v1,
+		]
 	}
 }
 
@@ -121,6 +134,20 @@ impl ToServer {
 		};
 
 		Ok(Self::V4(v4::ToServer { body }))
+	}
+
+	fn v4_to_v5(self) -> Result<Self> {
+		let Self::V4(data) = self else {
+			bail!("expected inspector protocol v4 ToServer")
+		};
+		Ok(Self::V5(data.into()))
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		let Self::V5(data) = self else {
+			bail!("expected inspector protocol v5 ToServer")
+		};
+		Ok(Self::V4(data.into()))
 	}
 
 	fn v4_to_v3(self) -> Result<Self> {
@@ -221,18 +248,19 @@ pub enum ToClient {
 	V2(v2::ToClient),
 	V3(v3::ToClient),
 	V4(v4::ToClient),
+	V5(v5::ToClient),
 }
 
 impl OwnedVersionedData for ToClient {
-	type Latest = v4::ToClient;
+	type Latest = v5::ToClient;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 			_ => bail!("version not latest"),
 		}
 	}
@@ -243,6 +271,7 @@ impl OwnedVersionedData for ToClient {
 			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
 			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid inspector protocol version for ToClient: {version}"),
 		}
 	}
@@ -253,16 +282,27 @@ impl OwnedVersionedData for ToClient {
 			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
 			(_, version) => bail!("unexpected inspector protocol version for ToClient: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
+		vec![
+			Self::v1_to_v2,
+			Self::v2_to_v3,
+			Self::v3_to_v4,
+			Self::v4_to_v5,
+		]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
+		vec![
+			Self::v5_to_v4,
+			Self::v4_to_v3,
+			Self::v3_to_v2,
+			Self::v2_to_v1,
+		]
 	}
 }
 
@@ -346,6 +386,120 @@ impl ToClient {
 				v4::ToClientBody::DatabaseSchemaResponse(resp.into())
 			}
 			v3::ToClientBody::DatabaseTableRowsResponse(resp) => {
+				v4::ToClientBody::DatabaseTableRowsResponse(resp.into())
+			}
+		};
+
+		Ok(Self::V4(v4::ToClient { body }))
+	}
+
+	fn v4_to_v5(self) -> Result<Self> {
+		let Self::V4(data) = self else {
+			bail!("expected inspector protocol v4 ToClient")
+		};
+
+		let body = match data.body {
+			v4::ToClientBody::StateResponse(resp) => v5::ToClientBody::StateResponse(resp.into()),
+			v4::ToClientBody::ConnectionsResponse(resp) => {
+				v5::ToClientBody::ConnectionsResponse(resp.into())
+			}
+			v4::ToClientBody::ActionResponse(resp) => v5::ToClientBody::ActionResponse(resp.into()),
+			v4::ToClientBody::ConnectionsUpdated(update) => {
+				v5::ToClientBody::ConnectionsUpdated(update.into())
+			}
+			v4::ToClientBody::QueueUpdated(update) => v5::ToClientBody::QueueUpdated(update.into()),
+			v4::ToClientBody::StateUpdated(update) => v5::ToClientBody::StateUpdated(update.into()),
+			v4::ToClientBody::WorkflowHistoryUpdated(update) => {
+				v5::ToClientBody::WorkflowHistoryUpdated(update.into())
+			}
+			v4::ToClientBody::RpcsListResponse(resp) => {
+				v5::ToClientBody::RpcsListResponse(resp.into())
+			}
+			v4::ToClientBody::TraceQueryResponse(resp) => {
+				v5::ToClientBody::TraceQueryResponse(resp.into())
+			}
+			v4::ToClientBody::QueueResponse(resp) => v5::ToClientBody::QueueResponse(resp.into()),
+			v4::ToClientBody::WorkflowHistoryResponse(resp) => {
+				v5::ToClientBody::WorkflowHistoryResponse(resp.into())
+			}
+			v4::ToClientBody::WorkflowReplayResponse(resp) => {
+				v5::ToClientBody::WorkflowReplayResponse(resp.into())
+			}
+			v4::ToClientBody::Error(error) => v5::ToClientBody::Error(error.into()),
+			// An older server that only spoke v4 has no tab config to report,
+			// so upgrade to an empty list. Clients treating this as "no custom
+			// tabs" is correct for a pre-tab-config-in-init runtime.
+			v4::ToClientBody::Init(init) => v5::ToClientBody::Init(v5::Init {
+				connections: convert_vec(init.connections),
+				state: init.state,
+				is_state_enabled: init.is_state_enabled,
+				rpcs: init.rpcs,
+				is_database_enabled: init.is_database_enabled,
+				queue_size: init.queue_size,
+				workflow_history: init.workflow_history,
+				is_workflow_enabled: init.is_workflow_enabled,
+				tab_config: Vec::new(),
+			}),
+			v4::ToClientBody::DatabaseSchemaResponse(resp) => {
+				v5::ToClientBody::DatabaseSchemaResponse(resp.into())
+			}
+			v4::ToClientBody::DatabaseTableRowsResponse(resp) => {
+				v5::ToClientBody::DatabaseTableRowsResponse(resp.into())
+			}
+		};
+
+		Ok(Self::V5(v5::ToClient { body }))
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		let Self::V5(data) = self else {
+			bail!("expected inspector protocol v5 ToClient")
+		};
+
+		let body = match data.body {
+			v5::ToClientBody::StateResponse(resp) => v4::ToClientBody::StateResponse(resp.into()),
+			v5::ToClientBody::ConnectionsResponse(resp) => {
+				v4::ToClientBody::ConnectionsResponse(resp.into())
+			}
+			v5::ToClientBody::ActionResponse(resp) => v4::ToClientBody::ActionResponse(resp.into()),
+			v5::ToClientBody::ConnectionsUpdated(update) => {
+				v4::ToClientBody::ConnectionsUpdated(update.into())
+			}
+			v5::ToClientBody::QueueUpdated(update) => v4::ToClientBody::QueueUpdated(update.into()),
+			v5::ToClientBody::StateUpdated(update) => v4::ToClientBody::StateUpdated(update.into()),
+			v5::ToClientBody::WorkflowHistoryUpdated(update) => {
+				v4::ToClientBody::WorkflowHistoryUpdated(update.into())
+			}
+			v5::ToClientBody::RpcsListResponse(resp) => {
+				v4::ToClientBody::RpcsListResponse(resp.into())
+			}
+			v5::ToClientBody::TraceQueryResponse(resp) => {
+				v4::ToClientBody::TraceQueryResponse(resp.into())
+			}
+			v5::ToClientBody::QueueResponse(resp) => v4::ToClientBody::QueueResponse(resp.into()),
+			v5::ToClientBody::WorkflowHistoryResponse(resp) => {
+				v4::ToClientBody::WorkflowHistoryResponse(resp.into())
+			}
+			v5::ToClientBody::WorkflowReplayResponse(resp) => {
+				v4::ToClientBody::WorkflowReplayResponse(resp.into())
+			}
+			v5::ToClientBody::Error(error) => v4::ToClientBody::Error(error.into()),
+			// v4 has no tab-config field; drop it. A v4 client falls back to
+			// the `/inspector/tab-config` HTTP fetch for the same data.
+			v5::ToClientBody::Init(init) => v4::ToClientBody::Init(v4::Init {
+				connections: convert_vec(init.connections),
+				state: init.state,
+				is_state_enabled: init.is_state_enabled,
+				rpcs: init.rpcs,
+				is_database_enabled: init.is_database_enabled,
+				queue_size: init.queue_size,
+				workflow_history: init.workflow_history,
+				is_workflow_enabled: init.is_workflow_enabled,
+			}),
+			v5::ToClientBody::DatabaseSchemaResponse(resp) => {
+				v4::ToClientBody::DatabaseSchemaResponse(resp.into())
+			}
+			v5::ToClientBody::DatabaseTableRowsResponse(resp) => {
 				v4::ToClientBody::DatabaseTableRowsResponse(resp.into())
 			}
 		};
@@ -720,9 +874,121 @@ macro_rules! impl_database_pair {
 impl_common_actor_pair!(v1, v2);
 impl_common_actor_pair!(v2, v3);
 impl_common_actor_pair!(v3, v4);
+impl_common_actor_pair!(v4, v5);
 impl_queue_workflow_pair!(v2, v3);
 impl_queue_workflow_pair!(v3, v4);
 impl_database_pair!(v3, v4);
+impl_database_pair!(v4, v5);
+
+// v4 <-> v5 differ only in `Init` (v5 adds `tab_config`), which is converted
+// inline in the ToClient converters. Every other type is field-identical, so
+// generate the plain field-copy `From` impls here. `Init` is deliberately
+// excluded (no `impl_init_pair!`) because its shapes differ.
+impl_same_fields_pair!(
+	v4,
+	v5,
+	TraceQueryRequest {
+		id,
+		start_ms,
+		end_ms,
+		limit,
+	}
+);
+impl_same_fields_pair!(v4, v5, TraceQueryResponse { rid, payload });
+impl_same_fields_pair!(v4, v5, QueueRequest { id, limit });
+impl_same_fields_pair!(
+	v4,
+	v5,
+	QueueMessageSummary {
+		id,
+		name,
+		created_at_ms,
+	}
+);
+impl_queue_status_pair!(v4, v5);
+impl_queue_response_pair!(v4, v5);
+impl_same_fields_pair!(v4, v5, QueueUpdated { queue_size });
+impl_same_fields_pair!(v4, v5, WorkflowHistoryRequest { id });
+impl_same_fields_pair!(
+	v4,
+	v5,
+	WorkflowHistoryResponse {
+		rid,
+		history,
+		is_workflow_enabled,
+	}
+);
+impl_same_fields_pair!(v4, v5, WorkflowHistoryUpdated { history });
+impl_same_fields_pair!(v4, v5, WorkflowReplayRequest { id, entry_id });
+impl_same_fields_pair!(
+	v4,
+	v5,
+	WorkflowReplayResponse {
+		rid,
+		history,
+		is_workflow_enabled,
+	}
+);
+
+impl From<v4::ToServerBody> for v5::ToServerBody {
+	fn from(value: v4::ToServerBody) -> Self {
+		match value {
+			v4::ToServerBody::PatchStateRequest(req) => Self::PatchStateRequest(req.into()),
+			v4::ToServerBody::StateRequest(req) => Self::StateRequest(req.into()),
+			v4::ToServerBody::ConnectionsRequest(req) => Self::ConnectionsRequest(req.into()),
+			v4::ToServerBody::ActionRequest(req) => Self::ActionRequest(req.into()),
+			v4::ToServerBody::RpcsListRequest(req) => Self::RpcsListRequest(req.into()),
+			v4::ToServerBody::TraceQueryRequest(req) => Self::TraceQueryRequest(req.into()),
+			v4::ToServerBody::QueueRequest(req) => Self::QueueRequest(req.into()),
+			v4::ToServerBody::WorkflowHistoryRequest(req) => {
+				Self::WorkflowHistoryRequest(req.into())
+			}
+			v4::ToServerBody::WorkflowReplayRequest(req) => Self::WorkflowReplayRequest(req.into()),
+			v4::ToServerBody::DatabaseSchemaRequest(req) => Self::DatabaseSchemaRequest(req.into()),
+			v4::ToServerBody::DatabaseTableRowsRequest(req) => {
+				Self::DatabaseTableRowsRequest(req.into())
+			}
+		}
+	}
+}
+
+impl From<v5::ToServerBody> for v4::ToServerBody {
+	fn from(value: v5::ToServerBody) -> Self {
+		match value {
+			v5::ToServerBody::PatchStateRequest(req) => Self::PatchStateRequest(req.into()),
+			v5::ToServerBody::StateRequest(req) => Self::StateRequest(req.into()),
+			v5::ToServerBody::ConnectionsRequest(req) => Self::ConnectionsRequest(req.into()),
+			v5::ToServerBody::ActionRequest(req) => Self::ActionRequest(req.into()),
+			v5::ToServerBody::RpcsListRequest(req) => Self::RpcsListRequest(req.into()),
+			v5::ToServerBody::TraceQueryRequest(req) => Self::TraceQueryRequest(req.into()),
+			v5::ToServerBody::QueueRequest(req) => Self::QueueRequest(req.into()),
+			v5::ToServerBody::WorkflowHistoryRequest(req) => {
+				Self::WorkflowHistoryRequest(req.into())
+			}
+			v5::ToServerBody::WorkflowReplayRequest(req) => Self::WorkflowReplayRequest(req.into()),
+			v5::ToServerBody::DatabaseSchemaRequest(req) => Self::DatabaseSchemaRequest(req.into()),
+			v5::ToServerBody::DatabaseTableRowsRequest(req) => {
+				Self::DatabaseTableRowsRequest(req.into())
+			}
+		}
+	}
+}
+
+impl From<v4::ToServer> for v5::ToServer {
+	fn from(value: v4::ToServer) -> Self {
+		Self {
+			body: value.body.into(),
+		}
+	}
+}
+
+impl From<v5::ToServer> for v4::ToServer {
+	fn from(value: v5::ToServer) -> Self {
+		Self {
+			body: value.body.into(),
+		}
+	}
+}
 
 impl From<v2::ToServerBody> for v3::ToServerBody {
 	fn from(value: v2::ToServerBody) -> Self {
@@ -807,6 +1073,90 @@ mod tests {
 			upgraded.body,
 			v4::ToServerBody::DatabaseSchemaRequest(v4::DatabaseSchemaRequest { id }) if id == Uint(7)
 		));
+	}
+
+	fn v5_init_with_tabs() -> v5::Init {
+		v5::Init {
+			connections: Vec::new(),
+			state: None,
+			is_state_enabled: false,
+			rpcs: Vec::new(),
+			is_database_enabled: false,
+			queue_size: Uint(0),
+			workflow_history: None,
+			is_workflow_enabled: false,
+			tab_config: vec![v5::TabConfigEntry {
+				id: "custom".to_owned(),
+				label: Some("Custom".to_owned()),
+				icon: Some("star".to_owned()),
+				hidden: false,
+			}],
+		}
+	}
+
+	#[test]
+	fn v5_init_tab_config_drops_when_downgrading_to_v4() {
+		let response = ToClient::V5(v5::ToClient {
+			body: v5::ToClientBody::Init(v5_init_with_tabs()),
+		});
+
+		let ToClient::V4(downgraded) = ToClient::v5_to_v4(response).unwrap() else {
+			panic!("expected v4 response")
+		};
+
+		// v4 has no tab_config field, so the tabs are dropped but the rest of
+		// the Init survives the downgrade.
+		assert!(matches!(
+			downgraded.body,
+			v4::ToClientBody::Init(v4::Init {
+				is_workflow_enabled: false,
+				..
+			})
+		));
+	}
+
+	#[test]
+	fn v4_init_upgrades_to_v5_with_empty_tab_config() {
+		let response = ToClient::V4(v4::ToClient {
+			body: v4::ToClientBody::Init(v4::Init {
+				connections: Vec::new(),
+				state: None,
+				is_state_enabled: false,
+				rpcs: Vec::new(),
+				is_database_enabled: false,
+				queue_size: Uint(0),
+				workflow_history: None,
+				is_workflow_enabled: false,
+			}),
+		});
+
+		let ToClient::V5(upgraded) = ToClient::v4_to_v5(response).unwrap() else {
+			panic!("expected v5 response")
+		};
+
+		let v5::ToClientBody::Init(init) = upgraded.body else {
+			panic!("expected Init body")
+		};
+		assert!(init.tab_config.is_empty());
+	}
+
+	#[test]
+	fn v5_init_tab_config_round_trips_at_version_5() {
+		let original = v5_init_with_tabs();
+		let encoded = ToClient::V5(v5::ToClient {
+			body: v5::ToClientBody::Init(original.clone()),
+		})
+		.serialize_with_embedded_version(5)
+		.unwrap();
+
+		// `deserialize_with_embedded_version` upgrades to and returns the latest
+		// wire type (v5::ToClient), not the versioned enum.
+		let decoded =
+			<ToClient as OwnedVersionedData>::deserialize_with_embedded_version(&encoded).unwrap();
+		let v5::ToClientBody::Init(init) = decoded.body else {
+			panic!("expected Init body")
+		};
+		assert_eq!(init.tab_config, original.tab_config);
 	}
 
 	#[test]

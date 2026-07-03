@@ -34,6 +34,7 @@ import { useDataProvider } from "./data-provider";
 import { resolveInspectorTabIcon } from "./inspector-tab-icons";
 import type { InspectorTabDescriptor } from "./inspector-tab-registry";
 import type { ActorId, ActorStatus } from "./queries";
+import { ActorStatusLabel, QueriedActorError } from "./actor-status-label";
 import { useRivetToken } from "./use-rivet-token";
 
 interface ActorDetailsProps {
@@ -125,6 +126,13 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 			credentials: credentials!,
 		}),
 		enabled: !!credentials && !isSuppressed,
+		// The host only reads the version to pick the inspector renderer, which
+		// never changes for a running actor generation. The shared query
+		// options poll every second (the iframe SPA relies on that for its own
+		// liveness), but a second poll from the host is pure duplication. Poll
+		// until the version resolves once, then stop. Actor liveness is tracked
+		// by the status query above, not here.
+		refetchInterval: (query) => (query.state.data ? false : 2_000),
 	});
 
 	const [forceLegacy, setForceLegacy] = useState(false);
@@ -144,9 +152,10 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 		);
 	}
 
-	// While credentials or metadata are loading, show a skeleton. Once
-	// metadata resolves we know which renderer to dispatch.
-	if (!credentials || !metadataQuery.data) {
+	// The inspector token is required by both inspector renderers and by the
+	// cloud tabs' lifecycle actions, so wait for credentials before mounting
+	// anything.
+	if (!credentials) {
 		return (
 			<div className="flex flex-col h-full flex-1 min-h-0">
 				<ActorDetailsSkeleton shimmer />
@@ -154,12 +163,23 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 		);
 	}
 
-	const useIframe =
-		!forceLegacy &&
+	// The actor's `/metadata` inspector endpoint is unreachable while the actor
+	// is still booting, so `metadataQuery.data` can stay pending for a while.
+	// The dashboard-owned cloud tabs (Metadata, Logs) render from engine
+	// control-plane data and must be reachable in exactly that window, so the
+	// tab chrome mounts as soon as credentials exist. Until metadata resolves
+	// we don't know the runtime version, so default to the iframe path (the
+	// case for every runtime >= IFRAME_INSPECTOR_MIN_VERSION). The iframe shows
+	// "Connecting…" for the inspector tabs while the cloud tabs stay usable. If
+	// metadata later reveals an older runtime, `useIframe` flips to the legacy
+	// renderer.
+	const iframeCapable =
+		!metadataQuery.data ||
 		isVersionAtLeast(
 			metadataQuery.data.version,
 			IFRAME_INSPECTOR_MIN_VERSION,
 		);
+	const useIframe = !forceLegacy && iframeCapable;
 
 	if (useIframe) {
 		return (
@@ -169,8 +189,20 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 				onTabChange={onTabChange}
 				inspectorToken={credentials.inspectorToken}
 				rivetToken={credentials.token}
+				status={status}
 				onFallbackToLegacy={() => setForceLegacy(true)}
 			/>
+		);
+	}
+
+	// Reaching here means the runtime is too old for the iframe (or the user
+	// forced legacy). The legacy renderer needs the resolved version, so keep
+	// the skeleton until metadata lands.
+	if (!metadataQuery.data) {
+		return (
+			<div className="flex flex-col h-full flex-1 min-h-0">
+				<ActorDetailsSkeleton shimmer />
+			</div>
 		);
 	}
 
@@ -248,10 +280,12 @@ function ActorDetailsIframePath({
 	onTabChange,
 	inspectorToken,
 	rivetToken,
+	status,
 	onFallbackToLegacy,
 }: ActorDetailsProps & {
 	inspectorToken: string;
 	rivetToken: string;
+	status?: ActorStatus;
 	onFallbackToLegacy: () => void;
 }) {
 	const engineUrl = getConfig().apiUrl;
@@ -489,6 +523,14 @@ function ActorDetailsIframePath({
 			? CLOUD_TABS.find((t) => t.id === activeTabSpec.id)
 			: undefined;
 
+	// A dead actor never becomes reachable, so its inspector WS can't connect
+	// and the iframe would sit on "Connecting…" (or hit the 8s boot timeout)
+	// forever. Detect the terminal states from the engine status query and
+	// reuse the existing status/error UI instead of an indefinite spinner. The
+	// Metadata tab stays available with the full lifecycle and restart actions.
+	const isActorTerminal =
+		status === "stopped" || status === "crashed" || status === "crash-loop";
+
 	const { ref: tabListRef, showLabels } = useShowTabLabels();
 
 	return (
@@ -558,13 +600,34 @@ function ActorDetailsIframePath({
 					className="absolute inset-0 w-full h-full border-0 bg-card"
 					style={{
 						visibility:
-							showIframe && iframeListening
+							showIframe && iframeListening && !isActorTerminal
 								? "visible"
 								: "hidden",
 					}}
 					title={`Inspector for actor ${actorId}`}
 				/>
-				{showIframe && !iframeListening && (
+				{showIframe && isActorTerminal && (
+					<div className="absolute inset-0 flex flex-col items-center justify-center bg-card gap-3 px-6 text-center">
+						<Icon
+							icon={faTriangleExclamation}
+							className="text-lg text-warning"
+						/>
+						<div className="text-sm font-medium">
+							<ActorStatusLabel status={status} />
+						</div>
+						<div className="max-w-sm text-xs text-muted-foreground [&_p]:m-0">
+							<QueriedActorError actorId={actorId} />
+						</div>
+						<Button
+							size="sm"
+							variant="outline"
+							onClick={() => onTabChange?.("metadata")}
+						>
+							View actor details
+						</Button>
+					</div>
+				)}
+				{showIframe && !isActorTerminal && !iframeListening && (
 					<div className="absolute inset-0 flex flex-col items-center justify-center bg-card text-sm text-muted-foreground gap-2 px-4 text-center">
 						{bootTimedOut ? (
 							<div className="flex max-w-sm flex-col items-center gap-3">

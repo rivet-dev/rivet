@@ -10,9 +10,8 @@
 //! path: there is no filesystem-root mode and no CDN fallback, so every runner
 //! (native or wasm) serves the same embedded bytes.
 //!
-//! Per-actor public paths (`/inspector/tab-config`, `/inspector/custom-tabs/*`)
-//! are NOT served here; they depend on the actor's config and live in the
-//! inspector handler itself.
+//! Per-actor public paths (`/inspector/custom-tabs/*`) are NOT served here;
+//! they depend on the actor's config and live in the inspector handler itself.
 
 use std::collections::HashMap;
 
@@ -37,8 +36,9 @@ const TAB_STYLESHEET_FILE: &str = "styles.css";
 
 /// Inline HTML shown inside the custom-tab iframe on wasm runtimes, which
 /// cannot read `inspector.tabs[].source` files from disk. The tab still
-/// appears in the dashboard tab strip because tab-config keeps flowing from
-/// core; only the custom-tab content iframe degrades.
+/// appears in the dashboard tab strip because tab config keeps flowing from
+/// core via the inspector WS `Init` message; only the custom-tab content
+/// iframe degrades.
 const WASM_CUSTOM_TAB_UNAVAILABLE_HTML: &str = include_str!("wasm-custom-tab-unavailable.html");
 
 // =============================================================================

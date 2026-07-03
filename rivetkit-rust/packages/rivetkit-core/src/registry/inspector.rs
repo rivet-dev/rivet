@@ -34,11 +34,13 @@ impl RegistryDispatcher {
 			return Ok(Some(response));
 		}
 
+		// Tab config is delivered in the inspector WS `Init` message (protocol
+		// v5+), not over HTTP, so both the tab list and the capability flags
+		// land atomically. The inspector UI is bundled into the same runtime
+		// that serves it, so its protocol always matches and no HTTP fallback
+		// is needed. Only custom-tab assets are still served over HTTP here.
 		#[cfg(not(target_arch = "wasm32"))]
 		if request.method() == http::Method::GET {
-			if url.path() == "/inspector/tab-config" {
-				return Ok(Some(serve_tab_config(instance.factory.config())));
-			}
 			if let Some(rest) = url.path().strip_prefix("/inspector/custom-tabs/") {
 				return Ok(Some(serve_custom_tab_asset(
 					instance.factory.config(),
@@ -655,6 +657,33 @@ pub(super) fn inspector_wire_connections(
 		.collect()
 }
 
+/// Builds the inspector tab-config descriptors in wire form for the WS `Init`
+/// message (protocol v5+). This is the single source of truth for the tab list.
+pub(super) fn inspector_wire_tab_config(
+	config: &crate::ActorConfig,
+) -> Vec<inspector_protocol::TabConfigEntry> {
+	config
+		.inspector_tabs
+		.iter()
+		.map(|entry| match entry {
+			InspectorTabEntry::Custom {
+				id, label, icon, ..
+			} => inspector_protocol::TabConfigEntry {
+				id: id.clone(),
+				label: Some(label.clone()),
+				icon: icon.clone(),
+				hidden: false,
+			},
+			InspectorTabEntry::HideBuiltin { id } => inspector_protocol::TabConfigEntry {
+				id: id.clone(),
+				label: None,
+				icon: None,
+				hidden: true,
+			},
+		})
+		.collect()
+}
+
 pub(super) fn build_actor_inspector() -> Inspector {
 	Inspector::new()
 }
@@ -880,24 +909,6 @@ fn inspector_ui_response(path: &str, body: Vec<u8>) -> HttpResponse {
 		body: Some(body),
 		body_stream: None,
 	}
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-fn serve_tab_config(config: &crate::ActorConfig) -> HttpResponse {
-	let tabs: Vec<JsonValue> = config
-		.inspector_tabs
-		.iter()
-		.map(|entry| match entry {
-			InspectorTabEntry::Custom {
-				id, label, icon, ..
-			} => json!({ "id": id, "label": label, "icon": icon }),
-			InspectorTabEntry::HideBuiltin { id } => {
-				json!({ "id": id, "hidden": true })
-			}
-		})
-		.collect();
-	json_http_response(StatusCode::OK, &json!({ "tabs": tabs }))
-		.unwrap_or_else(|e| inspector_anyhow_response(e.context("serialize tab-config")))
 }
 
 #[cfg(not(target_arch = "wasm32"))]

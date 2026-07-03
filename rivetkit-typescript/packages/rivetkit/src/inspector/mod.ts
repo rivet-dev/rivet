@@ -1,4 +1,4 @@
-export * from "@/common/bare/generated/inspector/v4";
+export * from "@/common/bare/generated/inspector/v5";
 export type { WorkflowHistory as TransportWorkflowHistory } from "@/common/bare/transport/v1";
 export {
 	decodeWorkflowHistoryTransport,

@@ -280,18 +280,6 @@ export const InspectorQueueResponseSchema = z.object({
 	messages: z.array(InspectorQueueMessageSchema),
 });
 
-/** `GET /inspector/tab-config` response shape. */
-export const InspectorTabConfigResponseSchema = z.object({
-	tabs: z.array(
-		z.object({
-			id: z.string(),
-			label: z.string().optional(),
-			icon: z.string().nullable().optional(),
-			hidden: z.boolean().optional(),
-		}),
-	),
-});
-
 export type InspectorStateResponse = z.infer<
 	typeof InspectorStateResponseSchema
 >;
@@ -309,7 +297,4 @@ export type InspectorConnectionsResponse = z.infer<
 export type InspectorQueueMessage = z.infer<typeof InspectorQueueMessageSchema>;
 export type InspectorQueueResponse = z.infer<
 	typeof InspectorQueueResponseSchema
->;
-export type InspectorTabConfigResponse = z.infer<
-	typeof InspectorTabConfigResponseSchema
 >;

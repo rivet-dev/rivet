@@ -3568,10 +3568,11 @@ export function buildNativeFactory(
 			);
 		};
 
+		// Tab config is delivered over the inspector WS `Init` message, not
+		// HTTP. Only custom-tab assets remain a public per-actor path.
 		const isPublicPerActorPath =
 			jsRequest.method === "GET" &&
-			(url.pathname === "/inspector/tab-config" ||
-				url.pathname.startsWith("/inspector/custom-tabs/"));
+			url.pathname.startsWith("/inspector/custom-tabs/");
 
 		if (!isPublicPerActorPath) {
 			try {

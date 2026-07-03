@@ -463,6 +463,7 @@ impl RegistryDispatcher {
 				queue_size: serde_bare::Uint(queue_size),
 				workflow_history,
 				is_workflow_enabled: workflow_supported,
+				tab_config: inspector_wire_tab_config(instance.factory.config()),
 			},
 		))
 	}

@@ -134,9 +134,9 @@ export function useAvailableInspectorTabs(
 	const isStateEnabled = stateData?.isEnabled ?? false;
 	const isQueueSupported = inspector.features.queue.supported;
 
-	// Tab-config is unauthenticated and one-shot; empty default is fine
-	// before the request resolves — the merged list will be re-emitted
-	// once it arrives.
+	// Tab config arrives with the WS `Init` message (same tick as the
+	// capability flags below), so the empty default only shows before the
+	// socket connects. No separate fetch is made.
 	const { data: tabConfig } = useQuery(
 		inspector.actorTabConfigQueryOptions(actorId),
 	);
