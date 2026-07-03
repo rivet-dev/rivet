@@ -98,7 +98,7 @@ describe("package surface", () => {
 		expect(rawDb).toBeTypeOf("function");
 		expect(drizzleDb).toBeTypeOf("function");
 		expect(defineConfig).toBeTypeOf("function");
-		expect(CURRENT_VERSION).toBe(4);
+		expect(CURRENT_VERSION).toBe(5);
 		expect(TO_CLIENT_VERSIONED).toBeDefined();
 		expect(TO_SERVER_VERSIONED).toBeDefined();
 

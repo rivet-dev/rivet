@@ -92,7 +92,11 @@ export default defineConfig(({ mode }) => {
 			port: 43708,
 		},
 		build: {
-			sourcemap: true,
+			// Sourcemaps: on in dev, and in prod only when a Sentry auth token is
+			// present (so they can be uploaded to Sentry). Otherwise off, since the
+			// engine binary embeds frontend/dist via include_dir! and shipping maps
+			// bakes tens of MB of debug data into the engine-cli binary.
+			sourcemap: mode !== "production" || Boolean(env.SENTRY_AUTH_TOKEN),
 			commonjsOptions: {
 				include: [/@rivet-gg\/components/, /node_modules/],
 			},

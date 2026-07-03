@@ -11,7 +11,7 @@ import {
 import { loadNapiRuntime, type NapiCoreRuntime } from "@/registry/napi-runtime";
 import type { ActorContextHandle } from "@/registry/runtime";
 
-const INSPECTOR_CURRENT_VERSION = 4;
+const INSPECTOR_CURRENT_VERSION = 5;
 let runtime: NapiCoreRuntime;
 let ctx: ActorContextHandle;
 
@@ -52,8 +52,8 @@ function encodeResponse(
 }
 
 describe("inspector versioned protocol", () => {
-	test("tracks v4 as the current inspector wire version", () => {
-		expect(INSPECTOR_CURRENT_VERSION).toBe(4);
+	test("tracks v5 as the current inspector wire version", () => {
+		expect(INSPECTOR_CURRENT_VERSION).toBe(5);
 	});
 
 	test("decodes a shared request shape from versions 1-4 into the current schema", () => {
