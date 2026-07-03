@@ -105,6 +105,7 @@ export interface NapiNativePluginOptions {
   pluginPath: string
   configJson?: string
   sidecarPath?: string
+  inspectorTabs?: Array<JsInspectorTabEntry>
 }
 export interface JsBindParam {
   kind: string

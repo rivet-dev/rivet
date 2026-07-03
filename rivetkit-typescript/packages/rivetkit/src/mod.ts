@@ -26,6 +26,7 @@ export type {
 	ActorFactoryHandle,
 	CoreRuntime,
 	NapiNativePluginOptions,
+	NativeFactoryBuilderOptions,
 } from "@/registry/runtime";
 export { toUint8Array } from "@/utils";
 export type {

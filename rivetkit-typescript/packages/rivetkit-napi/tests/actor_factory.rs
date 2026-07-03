@@ -140,3 +140,54 @@ fn native_plugin_actor_config_uses_long_finite_runtime_timeouts() {
 	assert_eq!(config.create_conn_state_timeout, long);
 	assert_eq!(config.create_vars_timeout, long);
 }
+
+#[test]
+fn native_plugin_actor_config_starts_without_inspector_tabs() {
+	// Baseline: without forwarded tabs a plugin actor exposes none. The
+	// forwarding path is the only thing that should populate this.
+	let config = native_plugin_actor_config();
+	assert!(config.inspector_tabs.is_empty());
+}
+
+#[test]
+fn convert_inspector_tabs_maps_custom_and_hidden_entries() {
+	let tabs = vec![
+		JsInspectorTabEntry {
+			id: "custom-tab".to_string(),
+			label: Some("Custom Tab".to_string()),
+			source: Some("/abs/path/tab".to_string()),
+			icon: Some("beaker".to_string()),
+			hidden: None,
+		},
+		JsInspectorTabEntry {
+			id: "state".to_string(),
+			label: None,
+			source: None,
+			icon: None,
+			hidden: Some(true),
+		},
+	];
+
+	let converted = convert_inspector_tabs(tabs);
+	assert_eq!(converted.len(), 2);
+
+	match &converted[0] {
+		InspectorTabEntry::Custom {
+			id,
+			label,
+			icon,
+			root,
+		} => {
+			assert_eq!(id, "custom-tab");
+			assert_eq!(label, "Custom Tab");
+			assert_eq!(icon.as_deref(), Some("beaker"));
+			assert_eq!(root, std::path::Path::new("/abs/path/tab"));
+		}
+		other => panic!("expected custom tab, got {other:?}"),
+	}
+
+	match &converted[1] {
+		InspectorTabEntry::HideBuiltin { id } => assert_eq!(id, "state"),
+		other => panic!("expected hide-builtin tab, got {other:?}"),
+	}
+}

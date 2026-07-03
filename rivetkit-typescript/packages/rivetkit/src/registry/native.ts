@@ -4855,9 +4855,16 @@ export async function buildRegistryWithRuntime(
 
 	for (const [name, definition] of Object.entries(config.use)) {
 		// Dispatch: foreign-runtime factories bypass `buildNativeFactory` and
-		// own their entry loop directly.
+		// own their entry loop directly. Resolve the actor's inspector tabs here
+		// (the same path the regular factory uses) so native-plugin actors get
+		// their custom tabs forwarded instead of always starting empty.
 		const factory = definition.nativeFactoryBuilder
-			? definition.nativeFactoryBuilder(runtime)
+			? definition.nativeFactoryBuilder(runtime, {
+					inspectorTabs: buildInspectorTabs(
+						(definition.config as Record<string, unknown>).inspector,
+						runtime.kind,
+					),
+				})
 			: buildNativeFactory(runtime, config, definition);
 		runtime.registerActor(registry, name, factory);
 	}

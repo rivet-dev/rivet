@@ -11,6 +11,21 @@ export interface NapiNativePluginOptions {
 	pluginPath: string;
 	configJson?: string;
 	sidecarPath?: string;
+	/**
+	 * Inspector tabs to expose on the native-plugin actor. Resolved on the TS
+	 * side (source paths made absolute, built-in hides normalized) before being
+	 * forwarded into the plugin actor's `ActorConfig`.
+	 */
+	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
+}
+
+/**
+ * Options handed to a foreign-runtime `nativeFactoryBuilder`. The registry-build
+ * ladder resolves these from the actor definition so the builder does not have to
+ * re-implement inspector-tab resolution.
+ */
+export interface NativeFactoryBuilderOptions {
+	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
 }
 
 
