@@ -81,11 +81,13 @@ function InspectorApp({
 	credentials,
 	bridge,
 	activeTab,
+	initialVersion,
 }: {
 	actorId: ActorId;
 	credentials: { url: string; inspectorToken: string; token: string };
 	bridge: BridgeClient;
 	activeTab: string | undefined;
+	initialVersion?: string;
 }) {
 	const queryClient = useMemo(
 		() =>
@@ -115,6 +117,7 @@ function InspectorApp({
 					<ActorInspectorProvider
 						actorId={actorId}
 						credentials={credentials}
+						initialVersion={initialVersion}
 					>
 						<InspectorContent
 							actorId={actorId}
@@ -181,6 +184,10 @@ function BootGate({ bridge }: { bridge: BridgeClient }) {
 			}}
 			bridge={bridge}
 			activeTab={activeTab}
+			// The SPA is served from the same rivetkit build that runs the
+			// actor, so its baked-in version matches the actor runtime. Seed
+			// it so the WebSocket opens without waiting on a `/metadata` fetch.
+			initialVersion={__RIVETKIT_VERSION__}
 		/>
 	);
 }

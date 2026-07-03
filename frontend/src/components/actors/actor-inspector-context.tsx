@@ -48,6 +48,8 @@ export const actorInspectorQueriesKeys = {
 		["actor", actorId, "is-workflow-enabled"] as const,
 	actorTabConfig: (actorId: ActorId) =>
 		["actor", actorId, "tab-config"] as const,
+	actorInspectorInitialized: (actorId: ActorId) =>
+		["actor", actorId, "inspector-initialized"] as const,
 };
 
 type QueueStatusSummary = {
@@ -440,6 +442,19 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
+	// Flipped to `true` by the WS `Init` handler once the real capability
+	// flags (workflow/state/database enabled) have landed. Tab computation
+	// waits on this instead of on metadata success so it never emits a
+	// premature list that omits capability-gated tabs and then re-adds them.
+	actorInspectorInitializedQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			staleTime: Infinity,
+			queryKey:
+				actorInspectorQueriesKeys.actorInspectorInitialized(actorId),
+			queryFn: () => false,
+		});
+	},
+
 	actorWorkflowReplayMutation(actorId: ActorId) {
 		return mutationOptions({
 			mutationKey: ["actor", actorId, "workflow", "replay"],
@@ -660,10 +675,18 @@ export const ActorInspectorProvider = ({
 	children,
 	actorId,
 	credentials,
+	initialVersion,
 }: {
 	children: React.ReactNode;
 	actorId: ActorId;
 	credentials: { url: string; inspectorToken: string; token: string };
+	/**
+	 * RivetKit version the host already resolved via its own `/metadata`
+	 * fetch. When provided it seeds the metadata query so `isInspectorAvailable`
+	 * is true on first render and the WebSocket opens without waiting on a
+	 * duplicate `/metadata` round trip. Liveness polling still runs.
+	 */
+	initialVersion?: string;
 }) => {
 	const protocols = useMemo(
 		() =>
@@ -687,6 +710,15 @@ export const ActorInspectorProvider = ({
 	const { data: actorMetadata, isSuccess: isActorMetadataSuccess } = useQuery(
 		{
 			...actorMetadataQueryOptions({ actorId, credentials }),
+			...(initialVersion
+				? {
+						initialData: { version: initialVersion },
+						// Mark the seed as fresh so it doesn't trigger an
+						// immediate refetch; `refetchInterval` still polls for
+						// liveness a beat later.
+						initialDataUpdatedAt: () => Date.now(),
+					}
+				: {}),
 		},
 	);
 
@@ -1167,6 +1199,16 @@ const createMessageHandler =
 						),
 					);
 				}
+
+				// Mark capabilities as known only now — the flags above are
+				// the source of truth for which tabs exist. Tab computation
+				// gates on this to avoid a skeleton → partial → full flash.
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorInspectorInitialized(
+						actorId,
+					),
+					true,
+				);
 			})
 			.with({ tag: "ConnectionsResponse" }, (body) => {
 				const { rid } = body.val;

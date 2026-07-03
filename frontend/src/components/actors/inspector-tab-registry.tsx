@@ -141,7 +141,13 @@ export function useAvailableInspectorTabs(
 		inspector.actorTabConfigQueryOptions(actorId),
 	);
 
-	const capabilitiesKnown = inspector.isInspectorAvailable;
+	// Wait for the WS `Init` message, not just metadata success. The
+	// capability flags (workflow/state/database enabled) arrive with `Init`;
+	// gating on metadata alone emits a list missing those tabs and then
+	// re-adds them once `Init` lands, which reads as a flash.
+	const { data: capabilitiesKnown = false } = useQuery(
+		inspector.actorInspectorInitializedQueryOptions(actorId),
+	);
 
 	return useMemo(() => {
 		if (!capabilitiesKnown) return null;

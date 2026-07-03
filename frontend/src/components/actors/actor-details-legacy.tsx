@@ -29,6 +29,7 @@ interface Props {
 	tab?: string;
 	onTabChange?: (tab: string) => void;
 	inspectorToken: string;
+	rivetkitVersion: string;
 }
 
 /**
@@ -46,6 +47,7 @@ export function ActorDetailsLegacy({
 	tab,
 	onTabChange,
 	inspectorToken,
+	rivetkitVersion,
 }: Props) {
 	const engineUrl = getConfig().apiUrl;
 	const rivetToken = useRivetToken();
@@ -60,7 +62,11 @@ export function ActorDetailsLegacy({
 	);
 
 	return (
-		<ActorInspectorProvider actorId={actorId} credentials={credentials}>
+		<ActorInspectorProvider
+			actorId={actorId}
+			credentials={credentials}
+			initialVersion={rivetkitVersion}
+		>
 			<LegacyTabShell
 				actorId={actorId}
 				tab={tab}

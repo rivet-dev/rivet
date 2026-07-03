@@ -180,6 +180,7 @@ export const ActorsActorDetails = memo(function ActorsActorDetails({
 			tab={tab}
 			onTabChange={onTabChange}
 			inspectorToken={credentials.inspectorToken}
+			rivetkitVersion={metadataQuery.data.version}
 		/>
 	);
 
@@ -511,10 +512,15 @@ function ActorDetailsIframePath({
 									trigger={
 										<TabsTrigger
 											value={t.id}
-											disabled={inSkeletonMode}
+											disabled={
+												inSkeletonMode &&
+												t.kind === "inspector"
+											}
 											className={cn(
 												"text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]",
-												inSkeletonMode && "opacity-60",
+												inSkeletonMode &&
+													t.kind === "inspector" &&
+													"opacity-60",
 											)}
 										>
 											<Icon
