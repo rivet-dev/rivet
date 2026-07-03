@@ -535,6 +535,46 @@ impl ActorContext {
 		self.config().max_queue_size
 	}
 
+	/// Removes all messages from the queue and resets metadata.
+	pub async fn reset(&self) -> Result<()> {
+		self.ensure_initialized().await?;
+
+		// List and delete all message keys
+		let entries = self.list_message_entries().await?;
+		if !entries.is_empty() {
+			let keys: Vec<Vec<u8>> = entries.iter().map(|(k, _)| k.clone()).collect();
+			let key_refs: Vec<&[u8]> = keys.iter().map(Vec::as_slice).collect();
+			self.0
+				.kv
+				.batch_delete(&key_refs)
+				.await
+				.context("delete all queue messages")?;
+		}
+
+		// Reset metadata
+		let metadata = QueueMetadata {
+			next_id: 0,
+			size: 0,
+		};
+		let encoded_metadata =
+			encode_queue_metadata(&metadata).context("encode reset queue metadata")?;
+		self.0
+			.kv
+			.put(&QUEUE_METADATA_KEY, &encoded_metadata)
+			.await
+			.context("persist reset queue metadata")?;
+		*self.0.queue_metadata.lock().await = metadata;
+
+		// Drop all completion waiters
+		self.0.queue_completion_waiters.clear_async().await;
+
+		// Update metrics and notify inspector
+		self.0.metrics.set_queue_depth(0);
+		self.notify_inspector_update(0);
+
+		Ok(())
+	}
+
 	pub(crate) fn configure_queue(&self, config: ActorConfig) {
 		*self.0.queue_config.lock() = config;
 	}

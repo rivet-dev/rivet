@@ -217,6 +217,11 @@ impl Queue {
 	}
 
 	#[napi]
+	pub async fn reset(&self) -> napi::Result<()> {
+		self.inner.reset().await.map_err(napi_anyhow_error)
+	}
+
+	#[napi]
 	pub async fn inspect_messages(&self) -> napi::Result<Vec<JsQueueInspectMessage>> {
 		self.inner
 			.inspect_messages()

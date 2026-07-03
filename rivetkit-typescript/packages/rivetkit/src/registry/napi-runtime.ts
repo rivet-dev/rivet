@@ -745,6 +745,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return await asNativeActorContext(ctx).queue().inspectMessages();
 	}
 
+	async actorQueueReset(ctx: ActorContextHandle): Promise<void> {
+		await asNativeActorContext(ctx).queue().reset();
+	}
+
 	actorScheduleAfter(
 		ctx: ActorContextHandle,
 		durationMs: number,

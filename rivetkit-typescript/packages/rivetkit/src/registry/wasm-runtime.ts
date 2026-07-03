@@ -840,6 +840,11 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return await callHandleAsync(queue, "inspectMessages");
 	}
 
+	async actorQueueReset(ctx: ActorContextHandle): Promise<void> {
+		const queue = childHandle(asWasmActorContext(ctx), "queue");
+		await callHandleAsync(queue, "reset");
+	}
+
 	actorScheduleAfter(
 		ctx: ActorContextHandle,
 		durationMs: number | bigint,
