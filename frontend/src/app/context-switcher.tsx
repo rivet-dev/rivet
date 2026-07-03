@@ -85,7 +85,15 @@ function ContextSwitcherInner({
 	const match = useContextSwitcherMatch();
 
 	const dataProvider = useDataProviderCheck();
-	if (!dataProvider) {
+	// The org index page carries only an org-level data provider (from the
+	// `/orgs/$organization` loader), which `useDataProviderCheck` does not
+	// match, so let the org-only breadcrumb through without it.
+	const isOrgOnly =
+		!!match &&
+		"organization" in match &&
+		!("project" in match) &&
+		!("namespace" in match);
+	if (!dataProvider && !isOrgOnly) {
 		return null;
 	}
 
@@ -138,6 +146,24 @@ function ContextSwitcherInner({
 					organization={match.organization}
 					currentProject={match.project}
 				/>
+			</div>
+		);
+	}
+
+	// Org-only landing (e.g. /orgs/$org org dashboard). Render just the org
+	// segment so the breadcrumb still shows which organization you are in,
+	// matching every other page.
+	if (
+		inline &&
+		match &&
+		"organization" in match &&
+		!("project" in match) &&
+		!("namespace" in match)
+	) {
+		return (
+			<div className="flex items-center min-w-0">
+				<BreadcrumbSlash />
+				<OrgSegmentPopover organization={match.organization} />
 			</div>
 		);
 	}
@@ -775,6 +801,7 @@ const useContextSwitcherMatch = ():
 			organization: string;
 	  }
 	| { organization: string; project: string }
+	| { organization: string }
 	| { namespace: string }
 	| false => {
 	const match = useMatchRoute();
@@ -804,6 +831,15 @@ const useContextSwitcherMatch = ():
 
 	if (matchEngineNamespace) {
 		return matchEngineNamespace;
+	}
+
+	const matchOrganization = match({
+		to: "/orgs/$organization",
+		fuzzy: true,
+	});
+
+	if (matchOrganization) {
+		return matchOrganization;
 	}
 
 	return false;
