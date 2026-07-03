@@ -37,15 +37,20 @@ import {
 	getRecentTimestamp,
 	RECENT_PROJECTS_KEY,
 } from "@/lib/recently-visited";
+import { VisibilitySensor } from "@/components/visibility-sensor";
 import { queryClient } from "@/queries/global";
 import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
 
 export function OrgLanding({ organization }: { organization: string }) {
 	const navigate = useNavigate();
 	const dataProvider = useCloudDataProvider();
-	const { data: projects = [], isLoading } = useInfiniteQuery(
-		dataProvider.currentOrgProjectsQueryOptions(),
-	);
+	const {
+		data: projects = [],
+		isLoading,
+		hasNextPage,
+		fetchNextPage,
+		isFetchingNextPage,
+	} = useInfiniteQuery(dataProvider.currentOrgProjectsQueryOptions());
 	const { data: org } = authClient.useActiveOrganization();
 	const { data: session } = authClient.useSession();
 
@@ -163,73 +168,81 @@ export function OrgLanding({ organization }: { organization: string }) {
 								</Button>
 							</div>
 						) : (
-							<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-								{sorted.map((project) => (
-									<div
-										key={project.id}
-										className="group relative min-h-[130px]"
-									>
-										<Link
-											to="/orgs/$organization/projects/$project"
-											params={{
-												organization,
-												project: project.name,
-											}}
-											className={cn(
-												"flex h-full flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
-												"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
-												"active:translate-y-0 active:shadow-none",
-												"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-												"cursor-pointer",
-											)}
+							<>
+								<div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+									{sorted.map((project) => (
+										<div
+											key={project.id}
+											className="group relative min-h-[130px]"
 										>
-											<div className="font-medium text-sm leading-tight truncate pr-14 w-full">
-												{project.displayName}
-											</div>
-											<SmallText className="text-muted-foreground text-xs leading-tight font-mono-console truncate w-full">
-												{project.name}
-											</SmallText>
-											{project.createdAt ? (
-												<SmallText className="text-muted-foreground text-[11px] mt-auto pt-1">
-													Created{" "}
-													<RelativeTime
-														time={
-															new Date(
-																project.createdAt,
-															)
-														}
-													/>
+											<Link
+												to="/orgs/$organization/projects/$project"
+												params={{
+													organization,
+													project: project.name,
+												}}
+												className={cn(
+													"flex h-full flex-col items-start gap-2 rounded-lg border border-foreground/10 bg-foreground/[0.02] p-4 text-left transition-all duration-150",
+													"hover:border-foreground/25 hover:bg-foreground/[0.06] hover:shadow-sm hover:-translate-y-0.5",
+													"active:translate-y-0 active:shadow-none",
+													"focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+													"cursor-pointer",
+												)}
+											>
+												<div className="font-medium text-sm leading-tight truncate pr-14 w-full">
+													{project.displayName}
+												</div>
+												<SmallText className="text-muted-foreground text-xs leading-tight font-mono-console truncate w-full">
+													{project.name}
 												</SmallText>
-											) : null}
-										</Link>
-										<button
-											type="button"
-											onClick={(e) => {
-												e.preventDefault();
-												e.stopPropagation();
-												void navigate({
-													to: "/orgs/$organization/projects/$project",
-													params: {
-														organization,
-														project: project.name,
-													},
-													search: {
-														settings: "billing",
-													},
-												});
-											}}
-											title="Manage billing"
-											aria-label="Manage billing"
-											className="absolute top-3 right-3 z-10 rounded-full transition-all duration-150 group-hover:-translate-y-0.5 group-active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-										>
-											<LazyBillingPlanBadge
-												project={project.name}
-												organization={organization}
-											/>
-										</button>
-									</div>
-								))}
-							</div>
+												{project.createdAt ? (
+													<SmallText className="text-muted-foreground text-[11px] mt-auto pt-1">
+														Created{" "}
+														<RelativeTime
+															time={
+																new Date(
+																	project.createdAt,
+																)
+															}
+														/>
+													</SmallText>
+												) : null}
+											</Link>
+											<button
+												type="button"
+												onClick={(e) => {
+													e.preventDefault();
+													e.stopPropagation();
+													void navigate({
+														to: "/orgs/$organization/projects/$project",
+														params: {
+															organization,
+															project:
+																project.name,
+														},
+														search: {
+															settings: "billing",
+														},
+													});
+												}}
+												title="Manage billing"
+												aria-label="Manage billing"
+												className="absolute top-3 right-3 z-10 rounded-full transition-all duration-150 group-hover:-translate-y-0.5 group-active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+											>
+												<LazyBillingPlanBadge
+													project={project.name}
+													organization={organization}
+												/>
+											</button>
+										</div>
+									))}
+								</div>
+								{hasNextPage && !isFetchingNextPage ? (
+									<VisibilitySensor
+										onChange={() => fetchNextPage()}
+									/>
+								) : null}
+							</>
 						)}
 					</section>
 
