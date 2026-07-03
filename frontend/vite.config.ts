@@ -92,7 +92,11 @@ export default defineConfig(({ mode }) => {
 			port: 43708,
 		},
 		build: {
-			sourcemap: true,
+			// Sourcemaps are not shipped in production builds. The engine embeds
+			// frontend/dist into its binary via include_dir!, so emitting maps
+			// bloats the engine binary by tens of MB for no runtime benefit. Set
+			// VITE_SOURCEMAP=true to opt back in for local debugging.
+			sourcemap: process.env.VITE_SOURCEMAP === "true",
 			commonjsOptions: {
 				include: [/@rivet-gg\/components/, /node_modules/],
 			},
