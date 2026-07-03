@@ -12,6 +12,7 @@ import type {
 	RemovedEntry,
 	SleepEntry,
 	StepEntry,
+	VersionCheckEntry,
 	WorkflowHistory,
 } from "./workflow-types";
 import {
@@ -163,6 +164,8 @@ function getEntrySummary(
 		}
 		case "removed":
 			return (data as RemovedEntry).originalType;
+		case "version_check":
+			return `v${(data as VersionCheckEntry).resolved}`;
 		case "input":
 		case "output": {
 			const d = data as { value: unknown };

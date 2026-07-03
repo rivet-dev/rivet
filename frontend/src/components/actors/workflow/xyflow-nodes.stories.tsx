@@ -253,6 +253,18 @@ export const RemovedNode: Story = () => (
 );
 RemovedNode.storyName = "Nodes / Removed";
 
+export const VersionCheckNode: Story = () => (
+	<StoryCanvas
+		nodes={singleNode({
+			label: "gate",
+			summary: "v2",
+			entryType: "version_check",
+			status: "completed",
+		})}
+	/>
+);
+VersionCheckNode.storyName = "Nodes / Version Check";
+
 export const InputNode: Story = () => (
 	<StoryCanvas
 		nodes={singleNode({

@@ -13,6 +13,7 @@ import {
 	faPlay,
 	faRefresh,
 	faSpinnerThird,
+	faTag,
 	faTrash,
 	Icon,
 } from "@rivet-gg/icons";
@@ -141,6 +142,8 @@ export function TypeIcon({
 			);
 		case "removed":
 			return <Icon icon={faTrash} style={{ color, fontSize: size }} />;
+		case "version_check":
+			return <Icon icon={faTag} style={{ color, fontSize: size }} />;
 		case "input":
 			return (
 				<Icon icon={faArrowDown} style={{ color, fontSize: size }} />
