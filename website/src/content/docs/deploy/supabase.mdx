@@ -33,6 +33,8 @@ npx supabase secrets set \
 </Step>
 <Step title="Deploy">
 
+Make sure the function has the `deno.json` import map from the [quickstart](/docs/actors/quickstart/supabase) that points `rivetkit` at `@rivetkit/supabase`. It keeps the deploy to the WebAssembly runtime; without it the deploy pulls Rivet's native engine and fails with a `413` (request too large).
+
 ```sh
 npx supabase functions deploy rivet
 ```

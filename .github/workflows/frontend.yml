@@ -86,6 +86,22 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec turbo run build --filter='./rivetkit-typescript/packages/*'
       - run: pnpm exec turbo run check-types --filter='./rivetkit-typescript/packages/*'
+  rivetkit-edge-budget:
+    name: RivetKit / Edge Bundle Budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run build --filter=@rivetkit/supabase
+      # Blocks the native dependency closure from re-entering the edge adapter.
+      - run: pnpm --filter @rivetkit/supabase check-edge-closure
+      # Budgets the adapter's bundled JS size.
+      - run: pnpm --filter @rivetkit/supabase size
   # website-type-check:
   #   name: Website / Type Check
   #   runs-on: ubuntu-latest

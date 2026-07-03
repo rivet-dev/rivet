@@ -1,0 +1,9 @@
+[
+	{
+		"name": "supabase adapter (bundled, raw)",
+		"path": "dist/mod.mjs",
+		"limit": "1.3 MB",
+		"gzip": false,
+		"brotli": false
+	}
+]

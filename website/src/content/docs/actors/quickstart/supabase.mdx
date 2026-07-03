@@ -60,6 +60,19 @@ export const registry = setup({ use: { counter } });
 await serve(registry);
 ```
 
+Add a `deno.json` next to the function so the deploy bundles only the WebAssembly runtime. It points `rivetkit` at the pre-bundled `@rivetkit/supabase`, keeping the deploy small. Without it, the deploy pulls Rivet's native engine and 413s.
+
+```json supabase/functions/rivet/deno.json
+{
+  "imports": {
+    "rivetkit": "npm:@rivetkit/supabase",
+    "@rivetkit/supabase": "npm:@rivetkit/supabase"
+  }
+}
+```
+
+Your function code keeps importing from `rivetkit` as usual. The import map only changes how Deno resolves it at bundle time.
+
 </Step>
 <Step title="Run Locally">
 

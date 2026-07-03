@@ -34,14 +34,20 @@
 	},
 	"scripts": {
 		"build": "tsup src/mod.ts",
-		"check-types": "tsc --noEmit"
+		"check-types": "tsc --noEmit",
+		"size": "size-limit",
+		"check-edge-closure": "node ../../../scripts/ci/check-edge-native-closure.mjs"
 	},
 	"dependencies": {
 		"@rivetkit/rivetkit-wasm": "workspace:*",
-		"rivetkit": "workspace:^"
+		"cbor-x": "^1.6.0",
+		"pino": "^9.5.0"
 	},
 	"devDependencies": {
+		"@size-limit/file": "^11.1.6",
 		"@types/node": "^22.0.0",
+		"rivetkit": "workspace:^",
+		"size-limit": "^11.1.6",
 		"tsup": "^8.4.0",
 		"typescript": "^5.5.2"
 	},

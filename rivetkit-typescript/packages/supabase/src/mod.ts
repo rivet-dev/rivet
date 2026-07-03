@@ -6,6 +6,15 @@ import {
 	setup as rivetkitSetup,
 } from "rivetkit";
 
+// Re-export the rivetkit authoring API (actor, createClient helpers, types,
+// etc.) so a Supabase Edge Function's import map can point `rivetkit` at this
+// pre-bundled adapter. The user's source still reads `import { actor } from
+// "rivetkit"`; the import map redirects it here, so the deploy never pulls
+// rivetkit's native dependency closure into the Deno eszip. The local `setup`
+// and `serve` below intentionally shadow rivetkit's `setup`, wiring the wasm
+// runtime automatically.
+export * from "rivetkit";
+
 const DEFAULT_MANAGER_PATH = "/api/rivet";
 
 /** Config passed to `setup` / `serve`. The wasm runtime is wired automatically. */
