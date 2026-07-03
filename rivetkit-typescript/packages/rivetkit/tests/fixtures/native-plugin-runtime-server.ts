@@ -6,6 +6,7 @@ import {
 	type ActorFactoryHandle,
 	actor,
 	type CoreRuntime,
+	type NativeFactoryBuilderOptions,
 	setup,
 } from "../../src/mod";
 import { buildNativeRegistry } from "../../src/registry/native";
@@ -34,6 +35,7 @@ const nativePluginActor = actor({
 });
 nativePluginActor.nativeFactoryBuilder = (
 	runtime: CoreRuntime,
+	opts?: NativeFactoryBuilderOptions,
 ): ActorFactoryHandle => {
 	if (!runtime.createNativePluginFactory) {
 		throw new Error("native plugin factories require the NAPI runtime");
@@ -43,6 +45,7 @@ nativePluginActor.nativeFactoryBuilder = (
 		pluginPath,
 		configJson: process.env.RIVETKIT_TEST_NATIVE_PLUGIN_CONFIG_JSON ?? "{}",
 		sidecarPath: process.env.RIVETKIT_TEST_NATIVE_PLUGIN_SIDECAR_PATH ?? "",
+		inspectorTabs: opts?.inspectorTabs,
 	});
 };
 

@@ -299,6 +299,10 @@ pub struct NapiNativePluginOptions {
 	pub plugin_path: String,
 	pub config_json: Option<String>,
 	pub sidecar_path: Option<String>,
+	/// Inspector tabs to expose on the plugin actor. Resolved on the TS side
+	/// (absolute source paths, normalized built-in hides) before crossing the
+	/// NAPI boundary.
+	pub inspector_tabs: Option<Vec<JsInspectorTabEntry>>,
 }
 
 fn native_plugin_actor_config() -> ActorConfig {
@@ -376,11 +380,19 @@ impl NapiActorFactory {
 	#[napi(factory)]
 	pub fn from_native_plugin(options: NapiNativePluginOptions) -> napi::Result<Self> {
 		crate::init_tracing(None);
+		let mut actor_config = native_plugin_actor_config();
+		if let Some(tabs) = options.inspector_tabs {
+			actor_config.inspector_tabs = convert_inspector_tabs(tabs);
+			// Reject malformed tab config (empty ids/labels, duplicate ids,
+			// custom tabs colliding with built-in ids, etc.) before the actor
+			// starts, matching the regular factory path.
+			actor_config.validate().map_err(napi_anyhow_error)?;
+		}
 		let factory = rivetkit_core::build_native_plugin_factory(
 			std::path::Path::new(&options.plugin_path),
 			options.config_json.as_deref().unwrap_or("{}"),
 			options.sidecar_path.as_deref().unwrap_or(""),
-			native_plugin_actor_config(),
+			actor_config,
 		)
 		.map_err(napi_anyhow_error)?;
 		let inner = Arc::new(factory);
@@ -1125,42 +1137,45 @@ impl From<JsActorConfig> for ActorConfigInput {
 					.map(|action| ActionDefinition { name: action.name })
 					.collect()
 			}),
-			inspector_tabs: value.inspector_tabs.map(|tabs| {
-				tabs.into_iter()
-					.map(|tab| {
-						if tab.hidden == Some(true) {
-							InspectorTabEntry::HideBuiltin { id: tab.id }
-						} else {
-							// `label` and `source` are required on the TS
-							// side but typed `Option<String>` on the NAPI
-							// boundary to share one struct with the
-							// HideBuiltin variant. Surface the real cause
-							// instead of silently defaulting to "" and
-							// letting downstream validation report an
-							// empty-label/empty-source error.
-							let id = tab.id.clone();
-							let label = tab.label.unwrap_or_else(|| {
-								panic!(
-									"inspector tab `{id}` is missing `label` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
-								)
-							});
-							let source = tab.source.unwrap_or_else(|| {
-								panic!(
-									"inspector tab `{id}` is missing `source` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
-								)
-							});
-							InspectorTabEntry::Custom {
-								id: tab.id,
-								label,
-								icon: tab.icon,
-								root: std::path::PathBuf::from(source),
-							}
-						}
-					})
-					.collect()
-			}),
+			inspector_tabs: value.inspector_tabs.map(convert_inspector_tabs),
 		}
 	}
+}
+
+/// Converts NAPI-boundary inspector tab entries into core `InspectorTabEntry`
+/// values. Shared by the regular actor factory and the native-plugin factory so
+/// both paths resolve tabs identically.
+fn convert_inspector_tabs(tabs: Vec<JsInspectorTabEntry>) -> Vec<InspectorTabEntry> {
+	tabs.into_iter()
+		.map(|tab| {
+			if tab.hidden == Some(true) {
+				InspectorTabEntry::HideBuiltin { id: tab.id }
+			} else {
+				// `label` and `source` are required on the TS side but typed
+				// `Option<String>` on the NAPI boundary to share one struct
+				// with the HideBuiltin variant. Surface the real cause instead
+				// of silently defaulting to "" and letting downstream
+				// validation report an empty-label/empty-source error.
+				let id = tab.id.clone();
+				let label = tab.label.unwrap_or_else(|| {
+					panic!(
+						"inspector tab `{id}` is missing `label` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
+					)
+				});
+				let source = tab.source.unwrap_or_else(|| {
+					panic!(
+						"inspector tab `{id}` is missing `source` at the NAPI boundary; this indicates a TS-to-NAPI encoding bug"
+					)
+				});
+				InspectorTabEntry::Custom {
+					id: tab.id,
+					label,
+					icon: tab.icon,
+					root: std::path::PathBuf::from(source),
+				}
+			}
+		})
+		.collect()
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.

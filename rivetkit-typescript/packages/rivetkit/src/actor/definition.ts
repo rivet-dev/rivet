@@ -3,6 +3,7 @@ import type { RegistryConfig } from "@/registry/config";
 import type {
 	ActorFactoryHandle,
 	CoreRuntime,
+	NativeFactoryBuilderOptions,
 } from "@/registry/runtime";
 import {
 	type Actions,
@@ -62,7 +63,10 @@ export interface AnyActorDefinition {
 	 * Out-of-tree native-plugin packages set this; `CoreRuntime::registerActor`
 	 * and the engine actor-driver consume it.
 	 */
-	nativeFactoryBuilder?: (runtime: CoreRuntime) => ActorFactoryHandle;
+	nativeFactoryBuilder?: (
+		runtime: CoreRuntime,
+		opts?: NativeFactoryBuilderOptions,
+	) => ActorFactoryHandle;
 }
 
 export type AnyStaticActorDefinition = ActorDefinition<
@@ -104,7 +108,10 @@ export class ActorDefinition<
 	 * Defaults to `undefined`; out-of-tree native-plugin packages set it via
 	 * direct property assignment after construction.
 	 */
-	nativeFactoryBuilder?: (runtime: CoreRuntime) => ActorFactoryHandle;
+	nativeFactoryBuilder?: (
+		runtime: CoreRuntime,
+		opts?: NativeFactoryBuilderOptions,
+	) => ActorFactoryHandle;
 
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>) {
 		this.#config = config;
