@@ -1,33 +1,14 @@
 'use client';
 
-import { Database, GitBranch, Activity, Terminal, Sun, Moon } from 'lucide-react';
+import { Database, GitBranch, Activity, Terminal } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { useState } from 'react';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
 
-const inspectorAspect = 2438 / 1613;
-
-const inspectorImages = {
-  light: {
-    src: 'https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/rivet-actor-inspector-light.png',
-    icon: Sun,
-    label: 'Show inspector in light mode',
-  },
-  dark: {
-    src: 'https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/rivet-actor-inspector-dark.png',
-    icon: Moon,
-    label: 'Show inspector in dark mode',
-  },
-} as const;
-
-type InspectorTheme = keyof typeof inspectorImages;
-const inspectorThemes = Object.keys(inspectorImages) as InspectorTheme[];
+const inspectorSrc =
+  'https://assets.rivet.dev/repo/website/src/components/marketing/images/screenshots/rivet-actor-inspector.png';
+const inspectorAspect = 2688 / 2018;
 
 export const ObservabilitySection = () => {
-  // The light screenshot reads cleanly inside the light frame, so it is the
-  // default; the toggle still offers dark.
-  const [theme, setTheme] = useState<InspectorTheme>('light');
-
   const features = [
     {
       title: 'SQLite Viewer',
@@ -67,48 +48,11 @@ export const ObservabilitySection = () => {
             <div className='relative overflow-hidden rounded-xl border border-ink/10 bg-paper-mid'>
               <div className='relative p-3 md:p-4'>
                 <div className='relative w-full overflow-hidden rounded-md' style={{ aspectRatio: inspectorAspect }}>
-                  {inspectorThemes.map((t) => (
-                    <motion.img
-                      key={t}
-                      src={inspectorImages[t].src}
-                      alt={`Rivet Actor Inspector in ${t} mode`}
-                      className='absolute inset-0 h-full w-full object-cover'
-                      initial={false}
-                      animate={{ opacity: theme === t ? 1 : 0 }}
-                      transition={{ duration: 0.35, ease: 'easeInOut' }}
-                    />
-                  ))}
-                </div>
-
-                {/* Light/dark mode toggle */}
-                <div className='absolute bottom-6 right-6 flex items-center gap-1 rounded-lg border border-white/15 bg-ink/70 p-1 backdrop-blur'>
-                  {inspectorThemes.map((t) => {
-                    const Icon = inspectorImages[t].icon;
-                    const active = theme === t;
-                    return (
-                      <button
-                        key={t}
-                        type='button'
-                        onClick={() => setTheme(t)}
-                        aria-label={inspectorImages[t].label}
-                        aria-pressed={active}
-                        className='relative flex h-7 w-7 items-center justify-center rounded-md'
-                      >
-                        {active && (
-                          <motion.span
-                            layoutId='inspector-theme-active'
-                            className='absolute inset-0 rounded-md bg-white'
-                            transition={{ type: 'spring', stiffness: 500, damping: 35 }}
-                          />
-                        )}
-                        <Icon
-                          className={`relative h-3.5 w-3.5 transition-colors ${
-                            active ? 'text-ink' : 'text-white/50 hover:text-white'
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
+                  <img
+                    src={inspectorSrc}
+                    alt='Rivet Actor Inspector'
+                    className='absolute inset-0 h-full w-full object-cover'
+                  />
                 </div>
               </div>
             </div>
