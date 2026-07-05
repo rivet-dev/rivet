@@ -198,6 +198,13 @@ const otherArticles = allPosts
 		font-weight: 600;
 	}
 
+	/* A bolded Markdown link (`**[text](url)**`) renders as <strong><a>. The
+	   link rule above sets the <a> to 500, overriding the <strong>'s 600, so
+	   without this the bolded link looks lighter than surrounding bold text. */
+	.blog-article .blog-prose strong a:not(.not-prose) {
+		font-weight: 600;
+	}
+
 	.blog-article .blog-prose :not(pre) > code {
 		background: rgb(27 25 22 / 0.05);
 		border: 1px solid rgb(27 25 22 / 0.1);
