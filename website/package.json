@@ -26,7 +26,7 @@
 		"@fortawesome/react-fontawesome": "^3.1.0",
 		"@headlessui/react": "^2.2.9",
 		"@heroicons/react": "^2.2.0",
-		"@rivet-dev/docs-theme": "github:rivet-dev/docs-theme#450c498555135098c6a927adfdf13458be9be22a",
+		"@rivet-dev/docs-theme": "github:rivet-dev/docs-theme#v0.3.1",
 		"@rivet-gg/api": "25.5.3",
 		"@rivet-gg/cloud": "*",
 		"@rivet-gg/components": "workspace:*",

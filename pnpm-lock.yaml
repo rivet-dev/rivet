@@ -3666,8 +3666,8 @@ importers:
         specifier: ^2.2.0
         version: 2.2.0(react@19.1.0)
       '@rivet-dev/docs-theme':
-        specifier: github:rivet-dev/docs-theme#450c498555135098c6a927adfdf13458be9be22a
-        version: docs-theme-workspace@https://codeload.github.com/rivet-dev/docs-theme/tar.gz/450c498555135098c6a927adfdf13458be9be22a
+        specifier: github:rivet-dev/docs-theme#v0.3.1
+        version: https://codeload.github.com/rivet-dev/docs-theme/tar.gz/71c3e482fe43e4cbc4f4327a26c8899b6bd4aaa7(@babel/runtime@7.29.2)(@types/node@25.0.7)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(astro@5.16.9(@types/node@25.0.7)(idb-keyval@6.2.1)(ioredis@5.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(rollup@4.57.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0))(babel-plugin-macros@3.1.0)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(use-sync-external-store@1.6.0(react@19.1.0))(yaml@2.9.0)
       '@rivet-gg/api':
         specifier: 25.5.3
         version: 25.5.3
@@ -5998,6 +5998,10 @@ packages:
     resolution: {integrity: sha512-l/BQM7fYntsCI//du+6sEnHOP6a74UixFyOYUyz2DLMXKx+6DEhfR3F2NYGE45XH1JJuIamacb4IZs9S0ZOWLA==}
     engines: {node: '>=6'}
 
+  '@fortawesome/fontawesome-free@6.7.2':
+    resolution: {integrity: sha512-JUOtgFW6k9u4Y+xeIaEiLr3+cjoUPiAuLXoyKOJSia6Duzb7pq+A76P9ZdPDoAoxHdHzq6gE9/jKBGXlZT8FbA==}
+    engines: {node: '>=6'}
+
   '@fortawesome/fontawesome-svg-core@6.7.2':
     resolution: {integrity: sha512-yxtOBWDrdi5DD5o1pmVdq3WMCvnobT0LU6R8RyyVXPvFRd2o79/0NCuQoCjNTeZz9EzA9xS3JxNWfv54RIHFEA==}
     engines: {node: '>=6'}
@@ -8012,6 +8016,15 @@ packages:
 
   '@rivet-dev/agent-os-tar@0.0.260331072558':
     resolution: {integrity: sha512-LAa8fm4jombNBQRR42O/57WxY6VA13Uea8JFChh6yPN4VtFP84KI5Kg4/Zzne3YDronGZlgJivznNUH3dtTMzA==}
+
+  '@rivet-dev/docs-theme@https://codeload.github.com/rivet-dev/docs-theme/tar.gz/71c3e482fe43e4cbc4f4327a26c8899b6bd4aaa7':
+    resolution: {tarball: https://codeload.github.com/rivet-dev/docs-theme/tar.gz/71c3e482fe43e4cbc4f4327a26c8899b6bd4aaa7}
+    version: 0.3.1
+    hasBin: true
+    peerDependencies:
+      astro: '>=5.0.0'
+      react: 19.1.0
+      react-dom: 19.1.0
 
   '@rivet-gg/api@25.5.3':
     resolution: {integrity: sha512-pj8xYQ+I/aQDbThmicPxvR+TWAzGoLSE53mbJi4QZHF8VH2oMvU7CMWqy7OTFH30DIRyVzsnHHRJZKGwtmQL3g==}
@@ -11442,10 +11455,6 @@ packages:
   dlv@1.1.3:
     resolution: {integrity: sha512-+HlytyjlPKnIG8XuRG8WvmBP8xs8P71y+SKKS6ZXWoEgLuePxtDoUEiH7WkdePWrQ5JBpE6aoVqfZfJUQkjXwA==}
 
-  docs-theme-workspace@https://codeload.github.com/rivet-dev/docs-theme/tar.gz/450c498555135098c6a927adfdf13458be9be22a:
-    resolution: {tarball: https://codeload.github.com/rivet-dev/docs-theme/tar.gz/450c498555135098c6a927adfdf13458be9be22a}
-    version: 0.0.0
-
   dom-helpers@5.2.1:
     resolution: {integrity: sha512-nRCa7CK3VTrM2NmGkIy4cbK7IZlgBE/PYMn55rrXefr5xXDP0LdtfPnblFDoVdcAfslJ7or6iqAUnx0CCGIWQA==}
 
@@ -11927,6 +11936,9 @@ packages:
 
   estree-util-to-js@2.0.0:
     resolution: {integrity: sha512-WDF+xj5rRWmD5tj6bIqRi6CkLIXbbNQUcxQHzGysQzvHmdYG2G7p/Tf0J0gpxGgkeMZNTIjT/AoSvC9Xehcgdg==}
+
+  estree-util-visit@1.2.1:
+    resolution: {integrity: sha512-xbgqcrkIVbIG+lI/gzbvd9SGTJL4zqJKBFttUl5pP27KhAjtMKbX/mQXJ7qgyXpMgVy/zvpm0xoQQaGL8OloOw==}
 
   estree-util-visit@2.0.0:
     resolution: {integrity: sha512-m5KgiH85xAhhW8Wta0vShLcUvOsh3LLPI2YVwcbio1l7E09NTLL1EyMZFM1OyWowoH0skScNbhOPl4kcBgzTww==}
@@ -12653,6 +12665,12 @@ packages:
 
   hast-util-classnames@3.0.0:
     resolution: {integrity: sha512-tI3JjoGDEBVorMAWK4jNRsfLMYmih1BUOG3VV36pH36njs1IEl7xkNrVTD2mD2yYHmQCa5R/fj61a8IAF4bRaQ==}
+
+  hast-util-from-dom@5.0.1:
+    resolution: {integrity: sha512-N+LqofjR2zuzTjCPzyDUdSshy4Ma6li7p/c3pA78uTwzFgENbgbUrm2ugwsOdcjI1muO+o6Dgzp9p8WHtn/39Q==}
+
+  hast-util-from-html-isomorphic@2.0.0:
+    resolution: {integrity: sha512-zJfpXq44yff2hmE0XmwEOzdWin5xwH+QIhMLOScpX91e/NSGPsAzNCvLQDIEPyO2TXi+lBmU6hjLIhV8MwP2kw==}
 
   hast-util-from-html@2.0.3:
     resolution: {integrity: sha512-CUSRHXyKjzHov8yKsQjGOElXy/3EKpyX56ELnkHH34vDVw1N1XSQ1ZcAvTyAPtGqLTuKP/uxM+aLkSPqF/EtMw==}
@@ -13756,6 +13774,9 @@ packages:
   mdn-data@2.12.2:
     resolution: {integrity: sha512-IEn+pegP1aManZuckezWCO+XZQDplx1366JoVhTpMpBB1sPey/SbveZQUosKiKiGYjg1wH4pMlNgXbCiYgihQA==}
 
+  mdx-annotations@0.1.4:
+    resolution: {integrity: sha512-SUYBUXP1qbgr0nRFFnUBg4HxxTbYyl5rE38fLTaIm0naPK+EhmKa0wRlUdgTMlMBj5gdCMwP1n7+L47JIHHWUQ==}
+
   media-typer@0.3.0:
     resolution: {integrity: sha512-dq+qelQ9akHpcOl/gUVRTxVIOkAJ1wR3QAvb4RsVjS8oVoFjDGTc679wJYmUmknUF5HwMLOgb5O+a3KxfWapPQ==}
     engines: {node: '>= 0.6'}
@@ -13780,6 +13801,14 @@ packages:
   merge2@1.4.1:
     resolution: {integrity: sha512-8q7VEgMJW4J8tcfVPy8g09NcQwZdbwFEqhe/WZkoIzjn/3TGDwtOCYtXGxA3O8tPzpczCCDgv+P2P5y00ZJOOg==}
     engines: {node: '>= 8'}
+
+  mermaid-isomorphic@3.1.0:
+    resolution: {integrity: sha512-mzrvfEVjnJIkJlEqxp3eMuR1wS0TeLCH1VK5E/T5yzWaBwI3JqjJuw70yUIThSCDJ5bRs6O3rgfp00oBAbvSeQ==}
+    peerDependencies:
+      playwright: '1'
+    peerDependenciesMeta:
+      playwright:
+        optional: true
 
   mermaid@11.12.2:
     resolution: {integrity: sha512-n34QPDPEKmaeCG4WDMGy0OT6PSyxKCfy2pJgShP+Qow2KLrvWjclwbc3yXfSIf4BanqWEhQEpngWwNp/XhZt6w==}
@@ -15555,6 +15584,14 @@ packages:
   rehype-class-names@2.0.0:
     resolution: {integrity: sha512-jldCIiAEvXKdq8hqr5f5PzNdIDkvHC6zfKhwta9oRoMu7bn0W7qLES/JrrjBvr9rKz3nJ8x4vY1EWI+dhjHVZQ==}
 
+  rehype-mermaid@3.0.0:
+    resolution: {integrity: sha512-fxrD5E4Fa1WXUjmjNDvLOMT4XB1WaxcfycFIWiYU0yEMQhcTDElc9aDFnbDFRLxG1Cfo1I3mfD5kg4sjlWaB+Q==}
+    peerDependencies:
+      playwright: '1'
+    peerDependenciesMeta:
+      playwright:
+        optional: true
+
   rehype-parse@9.0.1:
     resolution: {integrity: sha512-ksCzCD0Fgfh7trPDxr2rSylbwq9iYDkSn8TCDmEJ49ljEUBxDVCzCHv7QNzZOfODanX4+bWQ4WZqLCRWYLfhag==}
 
@@ -16726,8 +16763,14 @@ packages:
   unifont@0.7.1:
     resolution: {integrity: sha512-0lg9M1cMYvXof8//wZBq6EDEfbwv4++t7+dYpXeS2ypaLuZJmUFYEwTm412/1ED/Wfo/wyzSu6kNZEr9hgRNfg==}
 
+  unist-util-filter@5.0.1:
+    resolution: {integrity: sha512-pHx7D4Zt6+TsfwylH9+lYhBhzyhEnCXs/lbq/Hstxno5z4gVdyc2WEW0asfjGKPyG4pEKrnBv5hdkO6+aRnQJw==}
+
   unist-util-find-after@5.0.0:
     resolution: {integrity: sha512-amQa0Ep2m6hE2g72AugUItjbuM8X8cGQnFoHk0pGfrFeT9GZhzN5SW8nRsiGKK7Aif4CrACPENkA6P/Lw6fHGQ==}
+
+  unist-util-is@5.2.1:
+    resolution: {integrity: sha512-u9njyyfEh43npf1M+yGKDGVPbY/JWEemg5nH05ncKPfi+kBbKBJoTdsogMu33uhytuLlv9y0O7GH7fEdwLdLQw==}
 
   unist-util-is@6.0.1:
     resolution: {integrity: sha512-LsiILbtBETkDz8I9p1dQ0uyRUWuaQzd/cuEeS1hoRSyW5E5XGmTzlwY1OrNzzakGowI9Dr/I8HVaw4hTtnxy8g==}
@@ -16750,8 +16793,14 @@ packages:
   unist-util-visit-children@3.0.0:
     resolution: {integrity: sha512-RgmdTfSBOg04sdPcpTSD1jzoNBjt9a80/ZCzp5cI9n1qPzLZWF9YdvWGN2zmTumP1HWhXKdUWexjy/Wy/lJ7tA==}
 
+  unist-util-visit-parents@5.1.3:
+    resolution: {integrity: sha512-x6+y8g7wWMyQhL1iZfhIPhDAs7Xwbn9nRosDXl7qoPTSCy0yNxnKc+hWokFifWQIDGi154rdUqKvbCa4+1kLhg==}
+
   unist-util-visit-parents@6.0.2:
     resolution: {integrity: sha512-goh1s1TBrqSqukSc8wrjwWhL0hiJxgA8m4kFxGlQ+8FYQ3C/m11FcTs4YYem7V664AhHVvgoQLk890Ssdsr2IQ==}
+
+  unist-util-visit@4.1.2:
+    resolution: {integrity: sha512-MSd8OUGISqHdVvfY9TPhyK2VdUrPgxkUtWSuMHF6XAAFuL4LokseigBnZtPnJMu+FbynTkFNnFlyjxpVKujMRg==}
 
   unist-util-visit@5.0.0:
     resolution: {integrity: sha512-MR04uvD+07cwl/yhVuVWAtw+3GOR/knlL55Nd/wAdblk27GCVt3lqpTivy/tkJcZoNPzTwS1Y+KMojlLDhoTzg==}
@@ -20256,6 +20305,8 @@ snapshots:
 
   '@fortawesome/fontawesome-common-types@7.1.0': {}
 
+  '@fortawesome/fontawesome-free@6.7.2': {}
+
   '@fortawesome/fontawesome-svg-core@6.7.2':
     dependencies:
       '@fortawesome/fontawesome-common-types': 6.7.2
@@ -22886,6 +22937,74 @@ snapshots:
   '@rivet-dev/agent-os-sed@0.0.260331072558': {}
 
   '@rivet-dev/agent-os-tar@0.0.260331072558': {}
+
+  '@rivet-dev/docs-theme@https://codeload.github.com/rivet-dev/docs-theme/tar.gz/71c3e482fe43e4cbc4f4327a26c8899b6bd4aaa7(@babel/runtime@7.29.2)(@types/node@25.0.7)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(astro@5.16.9(@types/node@25.0.7)(idb-keyval@6.2.1)(ioredis@5.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(rollup@4.57.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0))(babel-plugin-macros@3.1.0)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(use-sync-external-store@1.6.0(react@19.1.0))(yaml@2.9.0)':
+    dependencies:
+      '@astrojs/mdx': 4.3.13(astro@5.16.9(@types/node@25.0.7)(idb-keyval@6.2.1)(ioredis@5.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(rollup@4.57.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0))
+      '@astrojs/react': 4.4.2(@types/node@25.0.7)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(yaml@2.9.0)
+      '@astrojs/sitemap': 3.6.1
+      '@fortawesome/fontawesome-svg-core': 7.1.0
+      '@fortawesome/free-brands-svg-icons': 7.1.0
+      '@fortawesome/free-solid-svg-icons': 7.1.0
+      '@fortawesome/react-fontawesome': 3.1.0(@fortawesome/fontawesome-svg-core@7.1.0)(react@19.1.0)
+      '@headlessui/react': 2.2.9(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      '@rivet-gg/components': link:frontend/packages/components
+      '@rivet-gg/icons': link:frontend/packages/icons
+      '@shikijs/transformers': 3.15.0
+      '@sindresorhus/slugify': 3.0.0
+      '@tailwindcss/typography': 0.5.19(tailwindcss@3.4.18(tsx@4.21.0)(yaml@2.9.0))
+      acorn: 8.16.0
+      astro: 5.16.9(@types/node@25.0.7)(idb-keyval@6.2.1)(ioredis@5.10.1)(jiti@2.6.1)(less@4.4.1)(lightningcss@1.32.0)(rollup@4.57.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.9.0)
+      clsx: 2.1.1
+      dedent: 1.7.0(babel-plugin-macros@3.1.0)
+      esast-util-from-js: 2.0.1
+      escape-html: 1.0.3
+      estree-util-to-js: 2.0.0
+      fast-glob: 3.3.3
+      framer-motion: 12.25.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
+      fuse.js: 7.1.0
+      lodash: 4.17.23
+      lucide-react: 0.439.0(react@19.1.0)
+      mdast-util-to-string: 4.0.0
+      mdx-annotations: 0.1.4
+      mermaid: 11.12.2
+      playwright: 1.57.0
+      posthog-js: 1.297.0
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+      react-markdown: 10.1.0(@types/react@19.2.13)(react@19.1.0)
+      rehype-mermaid: 3.0.0(playwright@1.57.0)
+      rehype-parse: 9.0.1
+      remark-gfm: 4.0.1
+      shiki: 3.21.0
+      tailwindcss: 3.4.18(tsx@4.21.0)(yaml@2.9.0)
+      tm-themes: 1.10.12
+      typesense: 2.1.0(@babel/runtime@7.29.2)
+      unified: 11.0.5
+      unist-util-filter: 5.0.1
+      unist-util-visit: 5.0.0
+      zustand: 5.0.8(@types/react@19.2.13)(react@19.1.0)(use-sync-external-store@1.6.0(react@19.1.0))
+    transitivePeerDependencies:
+      - '@babel/runtime'
+      - '@emotion/is-prop-valid'
+      - '@types/node'
+      - '@types/react'
+      - '@types/react-dom'
+      - babel-plugin-macros
+      - debug
+      - immer
+      - jiti
+      - less
+      - lightningcss
+      - sass
+      - sass-embedded
+      - stylus
+      - sugarss
+      - supports-color
+      - terser
+      - tsx
+      - use-sync-external-store
+      - yaml
 
   '@rivet-gg/api@25.5.3':
     dependencies:
@@ -27161,8 +27280,6 @@ snapshots:
 
   dlv@1.1.3: {}
 
-  docs-theme-workspace@https://codeload.github.com/rivet-dev/docs-theme/tar.gz/450c498555135098c6a927adfdf13458be9be22a: {}
-
   dom-helpers@5.2.1:
     dependencies:
       '@babel/runtime': 7.29.2
@@ -27639,6 +27756,11 @@ snapshots:
       '@types/estree-jsx': 1.0.5
       astring: 1.9.0
       source-map: 0.7.6
+
+  estree-util-visit@1.2.1:
+    dependencies:
+      '@types/estree-jsx': 1.0.5
+      '@types/unist': 2.0.11
 
   estree-util-visit@2.0.0:
     dependencies:
@@ -28491,6 +28613,19 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.4
       space-separated-tokens: 2.0.2
+
+  hast-util-from-dom@5.0.1:
+    dependencies:
+      '@types/hast': 3.0.4
+      hastscript: 9.0.1
+      web-namespaces: 2.0.1
+
+  hast-util-from-html-isomorphic@2.0.0:
+    dependencies:
+      '@types/hast': 3.0.4
+      hast-util-from-dom: 5.0.1
+      hast-util-from-html: 2.0.3
+      unist-util-remove-position: 5.0.0
 
   hast-util-from-html@2.0.3:
     dependencies:
@@ -29779,6 +29914,12 @@ snapshots:
 
   mdn-data@2.12.2: {}
 
+  mdx-annotations@0.1.4:
+    dependencies:
+      acorn: 8.16.0
+      estree-util-visit: 1.2.1
+      unist-util-visit: 4.1.2
+
   media-typer@0.3.0: {}
 
   media-typer@1.1.0: {}
@@ -29792,6 +29933,14 @@ snapshots:
   merge-stream@2.0.0: {}
 
   merge2@1.4.1: {}
+
+  mermaid-isomorphic@3.1.0(playwright@1.57.0):
+    dependencies:
+      '@fortawesome/fontawesome-free': 6.7.2
+      katex: 0.16.27
+      mermaid: 11.12.2
+    optionalDependencies:
+      playwright: 1.57.0
 
   mermaid@11.12.2:
     dependencies:
@@ -32112,6 +32261,20 @@ snapshots:
       hast-util-select: 6.0.4
       unified: 11.0.5
 
+  rehype-mermaid@3.0.0(playwright@1.57.0):
+    dependencies:
+      '@types/hast': 3.0.4
+      hast-util-from-html-isomorphic: 2.0.0
+      hast-util-to-text: 4.0.2
+      mermaid-isomorphic: 3.1.0(playwright@1.57.0)
+      mini-svg-data-uri: 1.4.4
+      space-separated-tokens: 2.0.2
+      unified: 11.0.5
+      unist-util-visit-parents: 6.0.2
+      vfile: 6.0.3
+    optionalDependencies:
+      playwright: 1.57.0
+
   rehype-parse@9.0.1:
     dependencies:
       '@types/hast': 3.0.4
@@ -33598,10 +33761,20 @@ snapshots:
       ofetch: 1.5.1
       ohash: 2.0.11
 
+  unist-util-filter@5.0.1:
+    dependencies:
+      '@types/unist': 3.0.3
+      unist-util-is: 6.0.1
+      unist-util-visit-parents: 6.0.2
+
   unist-util-find-after@5.0.0:
     dependencies:
       '@types/unist': 3.0.3
       unist-util-is: 6.0.1
+
+  unist-util-is@5.2.1:
+    dependencies:
+      '@types/unist': 2.0.11
 
   unist-util-is@6.0.1:
     dependencies:
@@ -33633,10 +33806,21 @@ snapshots:
     dependencies:
       '@types/unist': 3.0.3
 
+  unist-util-visit-parents@5.1.3:
+    dependencies:
+      '@types/unist': 2.0.11
+      unist-util-is: 5.2.1
+
   unist-util-visit-parents@6.0.2:
     dependencies:
       '@types/unist': 3.0.3
       unist-util-is: 6.0.1
+
+  unist-util-visit@4.1.2:
+    dependencies:
+      '@types/unist': 2.0.11
+      unist-util-is: 5.2.1
+      unist-util-visit-parents: 5.1.3
 
   unist-util-visit@5.0.0:
     dependencies:
