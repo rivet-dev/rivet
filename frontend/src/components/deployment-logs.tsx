@@ -1,7 +1,13 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import { faArrowDown, faTriangleExclamation, Icon } from "@rivet-gg/icons";
 import type { Virtualizer } from "@tanstack/react-virtual";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from "react";
 import { ErrorDetails } from "@/components/actors";
 import { VirtualScrollArea } from "@/components/virtual-scroll-area";
 import { AnsiText } from "./lib/ansi";
@@ -212,31 +218,27 @@ export function DeploymentLogs({
 		}
 	}, [totalCount, displayedLogs.length, follow, isLoading]);
 
-	// After prepending older history, restore scroll position by adjusting for
-	// the pixel height of the newly prepended rows so the viewport stays in place.
-	const wasLoadingMoreRef = useRef(false);
-	const scrollOffsetBeforeLoadRef = useRef(0);
-	const prevTotalSizeRef = useRef(0);
-	useEffect(() => {
+	// After prepending older history, keep the viewport anchored to the same
+	// content by growing scrollTop by the height added above the fold. Measuring
+	// the real scroll element (rather than the virtualizer's estimated total size)
+	// and applying the correction in a layout effect before paint keeps the scroll
+	// position exact with no visible jump.
+	const pendingRestoreRef = useRef(false);
+	const prevScrollHeightRef = useRef(0);
+	const prevScrollTopRef = useRef(0);
+	useLayoutEffect(() => {
 		if (
-			wasLoadingMoreRef.current &&
-			!isLoadingMore &&
-			displayedLogs.length > prevLogCountRef.current
+			!pendingRestoreRef.current ||
+			displayedLogs.length <= prevLogCountRef.current
 		) {
-			const rafId = requestAnimationFrame(() => {
-				const virtualizer = virtualizerRef.current;
-				if (!virtualizer) return;
-				const newTotalSize = virtualizer.getTotalSize();
-				const addedHeight = newTotalSize - prevTotalSizeRef.current;
-				virtualizer.scrollToOffset(
-					scrollOffsetBeforeLoadRef.current + addedHeight,
-					{ align: "start" },
-				);
-			});
-			return () => cancelAnimationFrame(rafId);
+			return;
 		}
-		wasLoadingMoreRef.current = isLoadingMore;
-	}, [isLoadingMore, displayedLogs.length]);
+		pendingRestoreRef.current = false;
+		const viewport = viewportRef.current;
+		if (!viewport) return;
+		const addedHeight = viewport.scrollHeight - prevScrollHeightRef.current;
+		viewport.scrollTop = prevScrollTopRef.current + addedHeight;
+	}, [displayedLogs.length]);
 
 	useEffect(() => {
 		if (logsRef) {
@@ -260,9 +262,10 @@ export function DeploymentLogs({
 					!isLoadingMore
 				) {
 					prevLogCountRef.current = displayedLogs.length;
-					scrollOffsetBeforeLoadRef.current =
-						instance.scrollOffset ?? 0;
-					prevTotalSizeRef.current = instance.getTotalSize();
+					const viewport = viewportRef.current;
+					prevScrollHeightRef.current = viewport?.scrollHeight ?? 0;
+					prevScrollTopRef.current = viewport?.scrollTop ?? 0;
+					pendingRestoreRef.current = true;
 					loadMoreHistory();
 				}
 			}
