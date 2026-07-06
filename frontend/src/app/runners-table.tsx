@@ -1,11 +1,11 @@
 import {
-	faHourglassClock,
-	faHourglassEnd,
+	faCircleUp,
 	faPlus,
 	faSignalAlt,
 	faSignalAlt2,
 	faSignalAlt3,
 	faSignalAlt4,
+	faSignalSlash,
 	Icon,
 } from "@rivet-gg/icons";
 
@@ -281,7 +281,7 @@ function RunnerStatusBadge(
 				trigger={
 					<div className="text-center relative size-8 flex items-center justify-center">
 						<Icon
-							icon={faHourglassClock}
+							icon={faCircleUp}
 							className="text-red-500"
 						/>
 					</div>
@@ -299,7 +299,7 @@ function RunnerStatusBadge(
 				trigger={
 					<div className="text-center relative size-8">
 						<Icon
-							icon={faHourglassEnd}
+							icon={faSignalSlash}
 							className="text-red-500 absolute inset-1/2 -translate-x-1/2 -translate-y-1/2"
 						/>
 					</div>
