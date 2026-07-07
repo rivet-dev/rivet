@@ -23,6 +23,11 @@ export interface SqliteExecuteResult extends SqliteQueryResult {
 	lastInsertRowId?: number | null;
 }
 
+export interface SqliteBatchStatement {
+	sql: string;
+	params?: SqliteBindings;
+}
+
 export interface SqliteNativeMetrics {
 	requestBuildNs: number;
 	serializeNs: number;
@@ -43,6 +48,9 @@ export interface SqliteDatabase {
 		callback?: (row: unknown[], columns: string[]) => void,
 	): Promise<void>;
 	execute(sql: string, params?: SqliteBindings): Promise<SqliteExecuteResult>;
+	executeBatch(
+		statements: SqliteBatchStatement[],
+	): Promise<SqliteExecuteResult[]>;
 	beginTransaction(timeoutMs?: number): Promise<SqliteTransactionDatabase>;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;

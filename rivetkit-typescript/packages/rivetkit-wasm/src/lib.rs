@@ -202,8 +202,6 @@ pub struct WasmActorConfig {
 	pub max_queue_message_size: Option<u32>,
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
-	pub preload_max_workflow_bytes: Option<f64>,
-	pub preload_max_connections_bytes: Option<f64>,
 	pub actions: Option<Vec<WasmActionDefinition>>,
 }
 
@@ -233,8 +231,6 @@ impl From<WasmActorConfig> for ActorConfigInput {
 			max_queue_message_size: config.max_queue_message_size,
 			max_incoming_message_size: config.max_incoming_message_size,
 			max_outgoing_message_size: config.max_outgoing_message_size,
-			preload_max_workflow_bytes: config.preload_max_workflow_bytes,
-			preload_max_connections_bytes: config.preload_max_connections_bytes,
 			actions: config.actions.map(|actions| {
 				actions
 					.into_iter()

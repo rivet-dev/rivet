@@ -40,8 +40,8 @@ pub use queue::{
 	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 pub use sqlite::{
-	BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult, SqliteBackend, SqliteDb,
-	SqliteTransaction,
+	BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult, SqliteBackend,
+	SqliteBatchStatement, SqliteDb, SqliteTransaction,
 };
 pub use state::RequestSaveOpts;
 pub use task::{

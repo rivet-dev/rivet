@@ -1,5 +1,80 @@
 use super::*;
 
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use rivet_envoy_client::config::{
+	BoxFuture as EnvoyBoxFuture, EnvoyCallbacks as TestEnvoyCallbacks, EnvoyConfig as TestEnvoyConfig,
+	HttpRequest as TestHttpRequest, HttpResponse as TestHttpResponse,
+	WebSocketHandler as TestWebSocketHandler, WebSocketSender as TestWebSocketSender,
+};
+use rivet_envoy_client::context::{SharedContext as TestSharedContext, WsTxMessage as TestWsTxMessage};
+use rivet_envoy_client::envoy::ToEnvoyMessage as TestToEnvoyMessage;
+use rivet_envoy_client::handle::EnvoyHandle as TestEnvoyHandle;
+use rivet_envoy_client::protocol;
+use rivet_envoy_client::sqlite::{
+	RemoteSqliteRequest as TestRemoteSqliteRequest,
+	RemoteSqliteResponse as TestRemoteSqliteResponse,
+};
+use rusqlite::types::{Value as TestSqliteValue, ValueRef as TestSqliteValueRef};
+use tokio::sync::mpsc;
+
+use crate::sqlite::ColumnValue;
+
+struct TestIdleEnvoyCallbacks;
+
+impl TestEnvoyCallbacks for TestIdleEnvoyCallbacks {
+	fn on_actor_start(
+		&self,
+		_handle: TestEnvoyHandle,
+		_actor_id: String,
+		_generation: u32,
+		_config: protocol::ActorConfig,
+		_preloaded_kv: Option<protocol::PreloadedKv>,
+	) -> EnvoyBoxFuture<anyhow::Result<()>> {
+		Box::pin(async { Ok(()) })
+	}
+
+	fn on_shutdown(&self) {}
+
+	fn fetch(
+		&self,
+		_handle: TestEnvoyHandle,
+		_actor_id: String,
+		_gateway_id: protocol::GatewayId,
+		_request_id: protocol::RequestId,
+		_request: TestHttpRequest,
+	) -> EnvoyBoxFuture<anyhow::Result<TestHttpResponse>> {
+		Box::pin(async { anyhow::bail!("fetch should not run in context helper") })
+	}
+
+	fn websocket(
+		&self,
+		_handle: TestEnvoyHandle,
+		_actor_id: String,
+		_gateway_id: protocol::GatewayId,
+		_request_id: protocol::RequestId,
+		_request: TestHttpRequest,
+		_path: String,
+		_headers: HashMap<String, String>,
+		_is_hibernatable: bool,
+		_is_restoring_hibernatable: bool,
+		_sender: TestWebSocketSender,
+	) -> EnvoyBoxFuture<anyhow::Result<TestWebSocketHandler>> {
+		Box::pin(async { anyhow::bail!("websocket should not run in context helper") })
+	}
+
+	fn can_hibernate(
+		&self,
+		_actor_id: &str,
+		_gateway_id: &protocol::GatewayId,
+		_request_id: &protocol::RequestId,
+		_request: &TestHttpRequest,
+	) -> EnvoyBoxFuture<anyhow::Result<bool>> {
+		Box::pin(async { Ok(false) })
+	}
+}
+
 pub(crate) fn new_with_kv(
 	actor_id: impl Into<String>,
 	name: impl Into<String>,
@@ -7,17 +82,401 @@ pub(crate) fn new_with_kv(
 	region: impl Into<String>,
 	kv: crate::kv::Kv,
 ) -> ActorContext {
-	ActorContext::build(
-		actor_id.into(),
+	let (sql_handle, sql_rx) = test_envoy_handle();
+	spawn_test_remote_sqlite(sql_rx);
+	build_ctx_with_remote_sqlite(actor_id, name, key, region, kv, sql_handle)
+}
+
+/// Like [`new_with_kv`], but the remote sqlite executor stalls every request
+/// matching the gate until the test releases it. Used to observe in-flight
+/// state writes deterministically.
+pub(crate) fn new_with_kv_and_write_gate(
+	actor_id: impl Into<String>,
+	name: impl Into<String>,
+	key: ActorKey,
+	region: impl Into<String>,
+	kv: crate::kv::Kv,
+	gate: TestSqliteWriteGate,
+) -> ActorContext {
+	let (sql_handle, sql_rx) = test_envoy_handle();
+	spawn_test_remote_sqlite_on(open_test_sqlite_connection_with_schema(), sql_rx, Some(gate));
+	build_ctx_with_remote_sqlite(actor_id, name, key, region, kv, sql_handle)
+}
+
+fn build_ctx_with_remote_sqlite(
+	actor_id: impl Into<String>,
+	name: impl Into<String>,
+	key: ActorKey,
+	region: impl Into<String>,
+	kv: crate::kv::Kv,
+	sql_handle: TestEnvoyHandle,
+) -> ActorContext {
+	let actor_id = actor_id.into();
+	let ctx = ActorContext::build(
+		actor_id.clone(),
 		name.into(),
 		key,
 		region.into(),
-		None,
-		String::new(),
+		Some(1),
+		sql_handle.get_envoy_key().to_owned(),
 		ActorConfig::default(),
 		kv,
-		SqliteDb::default(),
-	)
+		SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true),
+	);
+	ctx.configure_envoy(sql_handle, Some(1));
+	ctx
+}
+
+fn test_envoy_handle() -> (TestEnvoyHandle, mpsc::UnboundedReceiver<TestToEnvoyMessage>) {
+	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel();
+	let shared = Arc::new(TestSharedContext {
+		config: TestEnvoyConfig {
+			version: 1,
+			endpoint: "http://127.0.0.1:1".to_string(),
+			token: None,
+			namespace: "test".to_string(),
+			pool_name: "test".to_string(),
+			prepopulate_actor_names: HashMap::new(),
+			metadata: None,
+			not_global: true,
+			debug_latency_ms: None,
+			callbacks: Arc::new(TestIdleEnvoyCallbacks),
+		},
+		envoy_key: "test-envoy".to_string(),
+		envoy_tx,
+		actors: Default::default(),
+		actors_notify: Arc::new(tokio::sync::Notify::new()),
+		live_tunnel_requests: Default::default(),
+		pending_hibernation_restores: Default::default(),
+		ws_tx: Arc::new(tokio::sync::Mutex::new(
+			None::<mpsc::UnboundedSender<TestWsTxMessage>>,
+		)),
+		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
+		shutting_down: std::sync::atomic::AtomicBool::new(false),
+		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
+		stopped_tx: tokio::sync::watch::channel(true).0,
+	});
+
+	(TestEnvoyHandle::from_shared(shared), envoy_rx)
+}
+
+/// Stalls remote sqlite requests whose SQL starts with `sql_prefix`: each
+/// matching request first reports on `entered_tx`, then waits for one permit
+/// on `release` before executing.
+pub(crate) struct TestSqliteWriteGate {
+	pub(crate) sql_prefix: &'static str,
+	pub(crate) entered_tx: mpsc::UnboundedSender<()>,
+	pub(crate) release: Arc<tokio::sync::Semaphore>,
+}
+
+fn open_test_sqlite_connection_with_schema() -> rusqlite::Connection {
+	let conn = rusqlite::Connection::open_in_memory().expect("test sqlite connection should open");
+	conn.execute_batch(TEST_INTERNAL_SCHEMA_SQL)
+		.expect("test sqlite internal schema should initialize");
+	conn
+}
+
+fn spawn_test_remote_sqlite(rx: mpsc::UnboundedReceiver<TestToEnvoyMessage>) {
+	spawn_test_remote_sqlite_on(open_test_sqlite_connection_with_schema(), rx, None);
+}
+
+fn spawn_test_remote_sqlite_on(
+	conn: rusqlite::Connection,
+	mut rx: mpsc::UnboundedReceiver<TestToEnvoyMessage>,
+	write_gate: Option<TestSqliteWriteGate>,
+) {
+	tokio::spawn(async move {
+		while let Some(message) = rx.recv().await {
+			let TestToEnvoyMessage::RemoteSqliteRequest {
+				request,
+				response_tx,
+			} = message
+			else {
+				continue;
+			};
+			let TestRemoteSqliteRequest::Execute(request) = request else {
+				continue;
+			};
+			if let Some(gate) = write_gate
+				.as_ref()
+				.filter(|gate| request.sql.starts_with(gate.sql_prefix))
+			{
+				let _ = gate.entered_tx.send(());
+				gate.release
+					.acquire()
+					.await
+					.expect("write gate semaphore should stay open")
+					.forget();
+			}
+			let response = execute_test_sqlite(&conn, request);
+			let _ = response_tx.send(Ok(TestRemoteSqliteResponse::Execute(response)));
+		}
+	});
+}
+
+// Hand-maintained copy of the internal schema so synchronous test fixtures can
+// initialize an in-memory database without driving the async migration ladder.
+// `test_internal_schema_sql_matches_real_initializer` guards this copy against
+// drifting from `internal_schema::ensure_internal_schema`.
+pub(crate) const TEST_INTERNAL_SCHEMA_SQL: &str = r#"
+CREATE TABLE IF NOT EXISTS _rivet_meta (
+    key   TEXT PRIMARY KEY,
+    value BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS _rivet_runtime (
+    id                INTEGER PRIMARY KEY CHECK (id = 1),
+    last_pushed_alarm INTEGER,
+    inspector_token   TEXT,
+    queue_next_id     INTEGER NOT NULL DEFAULT 1
+) STRICT;
+CREATE TABLE IF NOT EXISTS _rivet_actor (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),
+    has_initialized INTEGER NOT NULL,
+    input           BLOB
+) STRICT;
+CREATE TABLE IF NOT EXISTS _rivet_actor_state (
+    id    INTEGER PRIMARY KEY CHECK (id = 1),
+    state BLOB NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS _rivet_schedule_events (
+    event_id   TEXT PRIMARY KEY,
+    trigger_at INTEGER NOT NULL,
+    action     TEXT NOT NULL,
+    args       BLOB
+) STRICT, WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS _rivet_schedule_events_trigger_at
+    ON _rivet_schedule_events (trigger_at);
+CREATE TABLE IF NOT EXISTS _rivet_conns (
+    conn_id         TEXT PRIMARY KEY,
+    parameters      BLOB NOT NULL,
+    gateway_id      BLOB NOT NULL,
+    request_id      BLOB NOT NULL,
+    request_path    TEXT NOT NULL,
+    request_headers BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS _rivet_conn_state (
+    conn_id              TEXT PRIMARY KEY,
+    state                BLOB NOT NULL,
+    server_message_index INTEGER NOT NULL,
+    subscriptions        BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS _rivet_queue (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    body       BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+) STRICT;
+CREATE TABLE IF NOT EXISTS _rivet_wf_kv (
+    key   BLOB PRIMARY KEY,
+    value BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS _rivet_user_kv (
+    key   BLOB PRIMARY KEY,
+    value BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+INSERT INTO _rivet_meta (key, value)
+VALUES ('schema_version', x'0600000000000000')
+ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+"#;
+
+/// Strips SQL comments and `IF NOT EXISTS`, then collapses whitespace so DDL
+/// from `sqlite_master` compares structurally instead of textually.
+fn normalize_schema_sql(sql: &str) -> String {
+	sql.lines()
+		.map(|line| match line.find("--") {
+			Some(index) => &line[..index],
+			None => line,
+		})
+		.collect::<Vec<_>>()
+		.join(" ")
+		.replace("IF NOT EXISTS ", "")
+		.split_whitespace()
+		.collect::<Vec<_>>()
+		.join(" ")
+}
+
+fn dump_local_schema(conn: &rusqlite::Connection) -> Vec<(String, String)> {
+	let mut statement = conn
+		.prepare("SELECT name, COALESCE(sql, '') FROM sqlite_master ORDER BY name")
+		.expect("sqlite_master query should prepare");
+	let rows = statement
+		.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+		.expect("sqlite_master query should run")
+		.collect::<Result<Vec<_>, _>>()
+		.expect("sqlite_master rows should decode");
+	rows.into_iter()
+		.map(|(name, sql)| (name, normalize_schema_sql(&sql)))
+		.collect()
+}
+
+// The test schema constant above is a hand-maintained copy, so this guard
+// initializes one database through the real production migration ladder and
+// asserts the resulting schema objects and recorded schema version match the
+// copy exactly.
+#[tokio::test]
+async fn test_internal_schema_sql_matches_real_initializer() {
+	// Initialize an empty database through the production ladder over the
+	// remote sqlite protocol.
+	let (sql_handle, sql_rx) = test_envoy_handle();
+	let real_conn =
+		rusqlite::Connection::open_in_memory().expect("real sqlite connection should open");
+	spawn_test_remote_sqlite_on(real_conn, sql_rx, None);
+	let db = SqliteDb::new_with_remote_sqlite(
+		sql_handle,
+		"schema-drift-real".to_owned(),
+		None,
+		Some(1),
+		false,
+		true,
+	);
+	crate::actor::internal_schema::ensure_internal_schema(&db)
+		.await
+		.expect("real internal schema initializer should succeed");
+
+	let real_schema_result = db
+		.query(
+			"SELECT name, COALESCE(sql, '') FROM sqlite_master ORDER BY name",
+			None,
+		)
+		.await
+		.expect("real sqlite_master query should succeed");
+	let real_schema: Vec<(String, String)> = real_schema_result
+		.rows
+		.iter()
+		.map(|row| {
+			let [ColumnValue::Text(name), ColumnValue::Text(sql)] = row.as_slice() else {
+				panic!("sqlite_master row should be two text columns, got {row:?}");
+			};
+			(name.clone(), normalize_schema_sql(sql))
+		})
+		.collect();
+
+	let real_version_result = db
+		.query(
+			"SELECT value FROM _rivet_meta WHERE key = 'schema_version'",
+			None,
+		)
+		.await
+		.expect("real schema version query should succeed");
+	let [ColumnValue::Blob(real_version)] = real_version_result.rows[0].as_slice() else {
+		panic!(
+			"schema version should be a blob, got {:?}",
+			real_version_result.rows
+		);
+	};
+
+	// Initialize a second database from the hand-maintained test copy.
+	let test_conn = open_test_sqlite_connection_with_schema();
+	let test_schema = dump_local_schema(&test_conn);
+	let test_version: Vec<u8> = test_conn
+		.query_row(
+			"SELECT value FROM _rivet_meta WHERE key = 'schema_version'",
+			[],
+			|row| row.get(0),
+		)
+		.expect("test schema version should load");
+
+	assert_eq!(
+		test_schema, real_schema,
+		"TEST_INTERNAL_SCHEMA_SQL drifted from internal_schema::ensure_internal_schema"
+	);
+	assert_eq!(
+		&test_version, real_version,
+		"TEST_INTERNAL_SCHEMA_SQL schema_version drifted from the real migration ladder"
+	);
+}
+
+fn execute_test_sqlite(
+	conn: &rusqlite::Connection,
+	request: protocol::SqliteExecuteRequest,
+) -> protocol::SqliteExecuteResponse {
+	match execute_test_sqlite_inner(conn, request) {
+		Ok(result) => {
+			protocol::SqliteExecuteResponse::SqliteExecuteOk(protocol::SqliteExecuteOk { result })
+		}
+		Err(error) => {
+			protocol::SqliteExecuteResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
+				group: "sqlite".to_owned(),
+				code: "internal_error".to_owned(),
+				message: error.to_string(),
+			})
+		}
+	}
+}
+
+fn execute_test_sqlite_inner(
+	conn: &rusqlite::Connection,
+	request: protocol::SqliteExecuteRequest,
+) -> rusqlite::Result<protocol::SqliteExecuteResult> {
+	let params = request
+		.params
+		.unwrap_or_default()
+		.into_iter()
+		.map(test_sqlite_param_value)
+		.collect::<Vec<_>>();
+	let mut statement = conn.prepare(&request.sql)?;
+	let columns = statement
+		.column_names()
+		.into_iter()
+		.map(ToOwned::to_owned)
+		.collect::<Vec<_>>();
+	let mut result_rows = Vec::new();
+	if statement.column_count() == 0 {
+		statement.execute(rusqlite::params_from_iter(params.iter()))?;
+	} else {
+		let column_count = statement.column_count();
+		let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
+		while let Some(row) = rows.next()? {
+			let mut values = Vec::with_capacity(column_count);
+			for index in 0..column_count {
+				values.push(test_sqlite_column_value(row.get_ref(index)?));
+			}
+			result_rows.push(values);
+		}
+	}
+
+	Ok(protocol::SqliteExecuteResult {
+		columns,
+		rows: result_rows,
+		changes: conn.changes() as i64,
+		last_insert_row_id: Some(conn.last_insert_rowid()),
+	})
+}
+
+fn test_sqlite_param_value(param: protocol::SqliteBindParam) -> TestSqliteValue {
+	match param {
+		protocol::SqliteBindParam::SqliteValueNull => TestSqliteValue::Null,
+		protocol::SqliteBindParam::SqliteValueInteger(value) => TestSqliteValue::Integer(value.value),
+		protocol::SqliteBindParam::SqliteValueFloat(value) => {
+			TestSqliteValue::Real(f64::from_bits(u64::from_be_bytes(value.value)))
+		}
+		protocol::SqliteBindParam::SqliteValueText(value) => TestSqliteValue::Text(value.value),
+		protocol::SqliteBindParam::SqliteValueBlob(value) => TestSqliteValue::Blob(value.value),
+	}
+}
+
+fn test_sqlite_column_value(value: TestSqliteValueRef<'_>) -> protocol::SqliteColumnValue {
+	match value {
+		TestSqliteValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
+		TestSqliteValueRef::Integer(value) => protocol::SqliteColumnValue::SqliteValueInteger(
+			protocol::SqliteValueInteger { value },
+		),
+		TestSqliteValueRef::Real(value) => protocol::SqliteColumnValue::SqliteValueFloat(
+			protocol::SqliteValueFloat {
+				value: value.to_bits().to_be_bytes(),
+			},
+		),
+		TestSqliteValueRef::Text(value) => protocol::SqliteColumnValue::SqliteValueText(
+			protocol::SqliteValueText {
+				value: String::from_utf8_lossy(value).into_owned(),
+			},
+		),
+		TestSqliteValueRef::Blob(value) => protocol::SqliteColumnValue::SqliteValueBlob(
+			protocol::SqliteValueBlob {
+				value: value.to_vec(),
+			},
+		),
+	}
 }
 
 #[test]

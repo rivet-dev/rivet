@@ -512,6 +512,8 @@ function getOrCreateNativeSqlDatabase(
 	const database = wrapJsNativeDatabase({
 		exec: (sql) => runtime.actorSqlExec(ctx, sql),
 		execute: (sql, params) => runtime.actorSqlExecute(ctx, sql, params),
+		executeBatch: (statements) =>
+			runtime.actorSqlExecuteBatch(ctx, statements),
 		beginTransaction: async (timeoutMs) => {
 			const transaction = await runtime.actorSqlBeginTransaction(
 				ctx,
@@ -3336,14 +3338,13 @@ function buildActorConfig(
 	const config = definition.config as unknown as Record<string, unknown>;
 	const options = (config.options ?? {}) as Record<string, unknown>;
 	const canHibernate = options.canHibernateWebSocket;
+	const usesRemoteSqlite = sqliteBackendForConfig(registryConfig) === "remote";
 
 	return {
 		name: options.name as string | undefined,
 		icon: options.icon as string | undefined,
-		hasDatabase: config.db !== undefined,
-		remoteSqlite:
-			config.db !== undefined &&
-			sqliteBackendForConfig(registryConfig) === "remote",
+		hasDatabase: config.db !== undefined || usesRemoteSqlite,
+		remoteSqlite: usesRemoteSqlite,
 		enableActorRuntimeSocket: options.enableActorRuntimeSocket === true,
 		hasState:
 			config.state !== undefined ||

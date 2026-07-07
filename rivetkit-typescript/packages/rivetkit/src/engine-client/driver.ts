@@ -61,21 +61,6 @@ export interface EngineControlClient {
 	 * Test-only helper that simulates an abrupt actor crash.
 	 */
 	hardCrashActor?(actorId: string): Promise<void>;
-	kvGet(actorId: string, key: Uint8Array): Promise<string | null>;
-	kvBatchGet(
-		actorId: string,
-		keys: Uint8Array[],
-	): Promise<(Uint8Array | null)[]>;
-	kvBatchPut(
-		actorId: string,
-		entries: [Uint8Array, Uint8Array][],
-	): Promise<void>;
-	kvBatchDelete(actorId: string, keys: Uint8Array[]): Promise<void>;
-	kvDeleteRange(
-		actorId: string,
-		start: Uint8Array,
-		end: Uint8Array,
-	): Promise<void>;
 }
 
 export interface RuntimeDisplayInformation {

@@ -12,7 +12,6 @@ mod moved_tests {
 			on_migrate_timeout_ms: Some(30_000),
 			sleep_grace_period_ms: Some(12_000),
 			max_queue_size: Some(42),
-			preload_max_workflow_bytes: Some(1024.0),
 			..ActorConfigInput::default()
 		});
 
@@ -21,7 +20,6 @@ mod moved_tests {
 		assert_eq!(config.sleep_grace_period, Duration::from_secs(12));
 		assert!(config.sleep_grace_period_overridden);
 		assert_eq!(config.max_queue_size, 42);
-		assert_eq!(config.preload_max_workflow_bytes, Some(1024));
 	}
 
 	#[test]
@@ -71,14 +69,6 @@ mod moved_tests {
 		assert_eq!(
 			config.max_outgoing_message_size,
 			default.max_outgoing_message_size,
-		);
-		assert_eq!(
-			config.preload_max_workflow_bytes,
-			default.preload_max_workflow_bytes,
-		);
-		assert_eq!(
-			config.preload_max_connections_bytes,
-			default.preload_max_connections_bytes,
 		);
 		assert!(matches!(
 			config.can_hibernate_websocket,

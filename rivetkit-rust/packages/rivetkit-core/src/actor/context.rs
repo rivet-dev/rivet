@@ -29,6 +29,7 @@ use crate::actor::connection::{
 	hibernatable_id_from_slice,
 };
 use crate::actor::diagnostics::ActorDiagnostics;
+use crate::actor::internal_storage;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, Request, StateDelta};
 use crate::actor::metrics::ActorMetrics;
@@ -43,7 +44,7 @@ use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
 use crate::kv::Kv;
-use crate::sqlite::SqliteDb;
+use crate::sqlite::{SqliteBackend, SqliteDb};
 use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 
 /// Shared actor runtime context.
@@ -56,8 +57,15 @@ use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 #[derive(Clone)]
 pub struct ActorContext(pub(crate) Arc<ActorContextInner>);
 
+#[derive(Clone)]
+pub struct ActorKv {
+	kv: Kv,
+	sql: SqliteDb,
+}
+
 pub(crate) struct ActorContextInner {
 	pub(super) kv: Kv,
+	user_kv: ActorKv,
 	sql: SqliteDb,
 	#[cfg(feature = "sqlite-local")]
 	actor_runtime_socket: ActorRuntimeSocketEndpoint,
@@ -170,6 +178,78 @@ impl ActivityState {
 	}
 }
 
+impl ActorKv {
+	pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+		let mut values = self.batch_get(&[key]).await?;
+		Ok(values.pop().flatten())
+	}
+
+	pub async fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+		self.batch_put(&[(key, value)]).await
+	}
+
+	pub async fn delete(&self, key: &[u8]) -> Result<()> {
+		self.batch_delete(&[key]).await
+	}
+
+	pub async fn batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
+		if self.sql.backend() == SqliteBackend::Unavailable {
+			self.kv.batch_get(keys).await
+		} else {
+			internal_storage::user_kv_batch_get(&self.sql, keys).await
+		}
+	}
+
+	pub async fn batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
+		if self.sql.backend() == SqliteBackend::Unavailable {
+			self.kv.batch_put(entries).await
+		} else {
+			internal_storage::user_kv_batch_put(&self.sql, entries).await
+		}
+	}
+
+	pub async fn batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
+		if self.sql.backend() == SqliteBackend::Unavailable {
+			self.kv.batch_delete(keys).await
+		} else {
+			internal_storage::user_kv_batch_delete(&self.sql, keys).await
+		}
+	}
+
+	pub async fn delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
+		if self.sql.backend() == SqliteBackend::Unavailable {
+			self.kv.delete_range(start, end).await
+		} else {
+			internal_storage::user_kv_delete_range(&self.sql, start, end).await
+		}
+	}
+
+	pub async fn list_prefix(
+		&self,
+		prefix: &[u8],
+		opts: ListOpts,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		if self.sql.backend() == SqliteBackend::Unavailable {
+			self.kv.list_prefix(prefix, opts).await
+		} else {
+			internal_storage::user_kv_list_prefix(&self.sql, prefix, opts).await
+		}
+	}
+
+	pub async fn list_range(
+		&self,
+		start: &[u8],
+		end: &[u8],
+		opts: ListOpts,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		if self.sql.backend() == SqliteBackend::Unavailable {
+			self.kv.list_range(start, end, opts).await
+		} else {
+			internal_storage::user_kv_list_range(&self.sql, start, end, opts).await
+		}
+	}
+}
+
 impl ActorContext {
 	pub fn new(
 		actor_id: impl Into<String>,
@@ -249,8 +329,13 @@ impl ActorContext {
 		let abort_signal = CancellationToken::new();
 		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
+		let user_kv = ActorKv {
+			kv: kv.clone(),
+			sql: sql.clone(),
+		};
 		let ctx = Self(Arc::new(ActorContextInner {
 			kv,
+			user_kv,
 			sql,
 			#[cfg(feature = "sqlite-local")]
 			actor_runtime_socket,
@@ -338,28 +423,28 @@ impl ActorContext {
 		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
 	)]
 	pub async fn kv_batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
-		self.0.kv.batch_get(keys).await
+		self.0.user_kv.batch_get(keys).await
 	}
 
 	#[deprecated(
 		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
 	)]
 	pub async fn kv_batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
-		self.0.kv.batch_put(entries).await
+		self.0.user_kv.batch_put(entries).await
 	}
 
 	#[deprecated(
 		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
 	)]
 	pub async fn kv_batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
-		self.0.kv.batch_delete(keys).await
+		self.0.user_kv.batch_delete(keys).await
 	}
 
 	#[deprecated(
 		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
 	)]
 	pub async fn kv_delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
-		self.0.kv.delete_range(start, end).await
+		self.0.user_kv.delete_range(start, end).await
 	}
 
 	#[deprecated(
@@ -370,7 +455,7 @@ impl ActorContext {
 		prefix: &[u8],
 		opts: ListOpts,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-		self.0.kv.list_prefix(prefix, opts).await
+		self.0.user_kv.list_prefix(prefix, opts).await
 	}
 
 	#[deprecated(
@@ -382,14 +467,14 @@ impl ActorContext {
 		end: &[u8],
 		opts: ListOpts,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-		self.0.kv.list_range(start, end, opts).await
+		self.0.user_kv.list_range(start, end, opts).await
 	}
 
 	#[deprecated(
 		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
 	)]
-	pub fn kv(&self) -> &Kv {
-		&self.0.kv
+	pub fn kv(&self) -> &ActorKv {
+		&self.0.user_kv
 	}
 
 	/// Internal accessor for the actor KV store. Core uses KV as the backing

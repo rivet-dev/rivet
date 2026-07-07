@@ -4,7 +4,8 @@ use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
 use rivetkit_core::sqlite::{
 	BindParam, ColumnValue, ExecuteResult as CoreExecuteResult, QueryResult as CoreQueryResult,
-	SqliteDb as CoreSqliteDb, SqliteTransaction as CoreSqliteTransaction,
+	SqliteBatchStatement as CoreSqliteBatchStatement, SqliteDb as CoreSqliteDb,
+	SqliteTransaction as CoreSqliteTransaction,
 };
 
 use crate::{NapiInvalidArgument, napi_anyhow_error};
@@ -68,6 +69,12 @@ pub struct NativeExecuteResult {
 	pub rows: Vec<Vec<serde_json::Value>>,
 	pub changes: i64,
 	pub last_insert_row_id: Option<i64>,
+}
+
+#[napi(object)]
+pub struct JsSqliteBatchStatement {
+	pub sql: String,
+	pub params: Option<Vec<JsBindParam>>,
 }
 
 #[napi(object)]
@@ -154,6 +161,20 @@ impl JsNativeDatabase {
 			.await
 			.map_err(crate::napi_anyhow_error)?;
 		Ok(core_execute_result_to_js(result))
+	}
+
+	#[napi]
+	pub async fn execute_batch(
+		&self,
+		statements: Vec<JsSqliteBatchStatement>,
+	) -> napi::Result<Vec<NativeExecuteResult>> {
+		let statements = js_batch_statements_to_core(statements)?;
+		let results = self
+			.db
+			.execute_batch(statements)
+			.await
+			.map_err(crate::napi_anyhow_error)?;
+		Ok(results.into_iter().map(core_execute_result_to_js).collect())
 	}
 
 	#[napi]
@@ -266,6 +287,21 @@ fn js_bind_params_to_core(params: Vec<JsBindParam>) -> napi::Result<Vec<BindPara
 				}
 				.build(),
 			)),
+		})
+		.collect()
+}
+
+fn js_batch_statements_to_core(
+	statements: Vec<JsSqliteBatchStatement>,
+) -> napi::Result<Vec<CoreSqliteBatchStatement>> {
+	statements
+		.into_iter()
+		.map(|statement| {
+			let params = statement.params.map(js_bind_params_to_core).transpose()?;
+			Ok(CoreSqliteBatchStatement {
+				sql: statement.sql,
+				params,
+			})
 		})
 		.collect()
 }

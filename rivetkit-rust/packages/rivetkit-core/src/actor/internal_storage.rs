@@ -1,0 +1,894 @@
+use std::collections::HashMap;
+use std::io::Cursor;
+
+use anyhow::{Context, Result, bail};
+
+use crate::actor::connection::{PersistedConnection, PersistedSubscription};
+use crate::actor::queue::{PersistedQueueMessage, QueueMetadata};
+use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
+use crate::error::KvRuntimeError;
+use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
+use crate::types::ListOpts;
+
+const USER_KV_VALUE_LIMIT: usize = 128 * 1024;
+/// Mirrors the engine-side `MAX_KEY_SIZE` in
+/// `engine/packages/pegboard/src/actor_kv/` so the documented 2 KiB key limit
+/// keeps holding for SQLite-backed user KV.
+const USER_KV_KEY_LIMIT: usize = 2048;
+const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
+
+/// Depot rejects SQLite commits that dirty more than `MAX_COMMIT_RAW_DIRTY_BYTES`
+/// (320 pages * 4 KiB = 1.3 MiB) in `engine/packages/depot/src/conveyer/constants.rs`.
+/// Budget row payload well below that because row writes also dirty index and
+/// interior b-tree pages.
+pub(crate) const KV_TX_MAX_PAYLOAD_BYTES: usize = 512 * 1024;
+/// Row cap per transaction paired with the payload budget above.
+pub(crate) const KV_TX_MAX_ROWS: usize = 128;
+
+/// Splits `entries` into contiguous chunks that each stay within the
+/// per-transaction row and payload budgets. A single oversized entry gets its
+/// own chunk; per-entry limits are enforced by the callers.
+pub(crate) fn split_kv_tx_chunks<'a, K, V>(entries: &'a [(K, V)]) -> Vec<&'a [(K, V)]>
+where
+	K: AsRef<[u8]>,
+	V: AsRef<[u8]>,
+{
+	let mut chunks = Vec::new();
+	let mut chunk_start = 0;
+	let mut chunk_bytes = 0;
+	for (index, (key, value)) in entries.iter().enumerate() {
+		let entry_bytes = key.as_ref().len() + value.as_ref().len();
+		let chunk_rows = index - chunk_start;
+		if chunk_rows > 0
+			&& (chunk_rows >= KV_TX_MAX_ROWS || chunk_bytes + entry_bytes > KV_TX_MAX_PAYLOAD_BYTES)
+		{
+			chunks.push(&entries[chunk_start..index]);
+			chunk_start = index;
+			chunk_bytes = 0;
+		}
+		chunk_bytes += entry_bytes;
+	}
+	if chunk_start < entries.len() {
+		chunks.push(&entries[chunk_start..]);
+	}
+	chunks
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct InternalActorSnapshot {
+	pub actor: PersistedActor,
+	pub last_pushed_alarm: Option<i64>,
+}
+
+pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<InternalActorSnapshot>> {
+	let actor_rows = db
+		.query(
+			"SELECT a.has_initialized, a.input, s.state FROM _rivet_actor a JOIN _rivet_actor_state s ON s.id = a.id WHERE a.id = 1",
+			None,
+		)
+		.await
+		.context("load internal actor rows")?;
+
+	let Some(row) = actor_rows.rows.first() else {
+		return Ok(None);
+	};
+	let has_initialized = read_bool(row, 0, "has_initialized")?;
+	let input = read_optional_blob(row, 1, "input")?;
+	let state = read_blob(row, 2, "state")?;
+	let scheduled_events = load_schedule_events(db).await?;
+	let last_pushed_alarm = load_last_pushed_alarm(db).await?;
+
+	Ok(Some(InternalActorSnapshot {
+		actor: PersistedActor {
+			input,
+			has_initialized,
+			state,
+			scheduled_events,
+		},
+		last_pushed_alarm,
+	}))
+}
+
+pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor) -> Result<()> {
+	let mut statements = vec![
+		SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_actor (id, has_initialized, input) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET has_initialized = excluded.has_initialized, input = excluded.input".to_owned(),
+			params: Some(vec![
+				BindParam::Integer(if actor.has_initialized { 1 } else { 0 }),
+				optional_blob_param(actor.input.clone()),
+			]),
+		},
+		SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_actor_state (id, state) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state".to_owned(),
+			params: Some(vec![BindParam::Blob(actor.state.clone())]),
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_schedule_events".to_owned(),
+			params: None,
+		},
+	];
+
+	for event in &actor.scheduled_events {
+		statements.push(SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args) VALUES (?, ?, ?, ?)".to_owned(),
+			params: Some(vec![
+				BindParam::Text(event.event_id.clone()),
+				BindParam::Integer(event.timestamp),
+				BindParam::Text(event.action.clone()),
+				optional_blob_param(event.args.clone()),
+			]),
+		});
+	}
+
+	db.execute_batch(statements)
+		.await
+		.context("persist internal actor snapshot")?;
+	Ok(())
+}
+
+pub(crate) async fn persist_actor_core_and_connections(
+	db: &SqliteDb,
+	actor: Option<&PersistedActor>,
+	connections: &[PersistedConnection],
+	removed_connections: &[String],
+) -> Result<()> {
+	let mut statements = Vec::new();
+
+	if let Some(actor) = actor {
+		statements.push(SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_actor (id, has_initialized, input) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET has_initialized = excluded.has_initialized, input = excluded.input".to_owned(),
+			params: Some(vec![
+				BindParam::Integer(if actor.has_initialized { 1 } else { 0 }),
+				optional_blob_param(actor.input.clone()),
+			]),
+		});
+		statements.push(SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_actor_state (id, state) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state".to_owned(),
+			params: Some(vec![BindParam::Blob(actor.state.clone())]),
+		});
+		// Rewrite schedule events atomically with the state flush. A schedule
+		// mutation whose own tracked persist has not run yet must not be lost
+		// when a crash lands after this flush; the engine alarm may already be
+		// armed for it.
+		statements.push(SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_schedule_events".to_owned(),
+			params: None,
+		});
+		for event in &actor.scheduled_events {
+			statements.push(SqliteBatchStatement {
+				sql: "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args) VALUES (?, ?, ?, ?)".to_owned(),
+				params: Some(vec![
+					BindParam::Text(event.event_id.clone()),
+					BindParam::Integer(event.timestamp),
+					BindParam::Text(event.action.clone()),
+					optional_blob_param(event.args.clone()),
+				]),
+			});
+		}
+	}
+
+	for connection in connections {
+		push_connection_statements(&mut statements, connection)?;
+	}
+
+	for conn_id in removed_connections {
+		push_delete_connection_statements(&mut statements, conn_id);
+	}
+
+	if statements.is_empty() {
+		return Ok(());
+	}
+
+	db.execute_batch(statements)
+		.await
+		.context("persist internal actor state and connection deltas")?;
+	Ok(())
+}
+
+pub(crate) async fn persist_connection_snapshot(
+	db: &SqliteDb,
+	connection: &PersistedConnection,
+) -> Result<()> {
+	let mut statements = Vec::new();
+	push_connection_statements(&mut statements, connection)?;
+	db.execute_batch(statements)
+		.await
+		.context("persist internal connection snapshot")?;
+	Ok(())
+}
+
+pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConnection>> {
+	let result = db
+		.query(
+			"SELECT c.conn_id, c.parameters, s.state, s.subscriptions, c.gateway_id, c.request_id, s.server_message_index, c.request_path, c.request_headers FROM _rivet_conns c JOIN _rivet_conn_state s ON s.conn_id = c.conn_id ORDER BY c.conn_id",
+			None,
+		)
+		.await
+		.context("load internal connection rows")?;
+
+	result
+		.rows
+		.iter()
+		.map(|row| {
+			let subscriptions: Vec<String> =
+				decode_cbor_blob(row, 3, "connection subscriptions")?;
+			let request_headers: HashMap<String, String> =
+				decode_cbor_blob(row, 8, "connection request headers")?;
+			Ok(PersistedConnection {
+				id: read_text(row, 0, "conn_id")?,
+				parameters: read_blob(row, 1, "connection parameters")?,
+				state: read_blob(row, 2, "connection state")?,
+				subscriptions: subscriptions
+					.into_iter()
+					.map(|event_name| PersistedSubscription { event_name })
+					.collect(),
+				gateway_id: read_fixed_4(row, 4, "connection gateway_id")?,
+				request_id: read_fixed_4(row, 5, "connection request_id")?,
+				server_message_index: read_u16(row, 6, "server_message_index")?,
+				client_message_index: 0,
+				request_path: read_text(row, 7, "connection request_path")?,
+				request_headers,
+			})
+		})
+		.collect()
+}
+
+pub(crate) async fn load_queue_metadata(db: &SqliteDb) -> Result<QueueMetadata> {
+	let runtime = db
+		.query(
+			"SELECT queue_next_id FROM _rivet_runtime WHERE id = 1",
+			None,
+		)
+		.await
+		.context("load internal queue next id")?;
+	let stored_next_id = match runtime.rows.first() {
+		Some(row) => u64::try_from(read_i64(row, 0, "queue_next_id")?)
+			.context("invalid internal queue_next_id")?,
+		None => 1,
+	};
+
+	let stats = db
+		.query("SELECT COUNT(*), MAX(id) FROM _rivet_queue", None)
+		.await
+		.context("load internal queue stats")?;
+	let Some(row) = stats.rows.first() else {
+		return Ok(QueueMetadata {
+			next_id: stored_next_id.max(1),
+			size: 0,
+		});
+	};
+	let size = u32::try_from(read_i64(row, 0, "queue size")?)
+		.context("internal queue size exceeds u32 range")?;
+	let max_id = read_optional_i64(row, 1, "queue max id")?
+		.and_then(|value| u64::try_from(value).ok())
+		.unwrap_or(0);
+	Ok(QueueMetadata {
+		next_id: stored_next_id.max(max_id.saturating_add(1)).max(1),
+		size,
+	})
+}
+
+pub(crate) async fn persist_queue_message(
+	db: &SqliteDb,
+	id: u64,
+	next_id: u64,
+	message: &PersistedQueueMessage,
+) -> Result<()> {
+	let id = i64::try_from(id).context("queue message id exceeds sqlite integer range")?;
+	let next_id =
+		i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
+	db.execute_batch(vec![
+		SqliteBatchStatement {
+			sql: "INSERT OR REPLACE INTO _rivet_queue (id, name, body, created_at) VALUES (?, ?, ?, ?)"
+				.to_owned(),
+			params: Some(vec![
+				BindParam::Integer(id),
+				BindParam::Text(message.name.clone()),
+				BindParam::Blob(message.body.clone()),
+				BindParam::Integer(message.created_at),
+			]),
+		},
+		SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_runtime (id, queue_next_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET queue_next_id = excluded.queue_next_id".to_owned(),
+			params: Some(vec![BindParam::Integer(next_id)]),
+		},
+	])
+	.await
+	.context("persist internal queue message")?;
+	Ok(())
+}
+
+pub(crate) async fn persist_queue_next_id(db: &SqliteDb, next_id: u64) -> Result<()> {
+	let next_id =
+		i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
+	db.execute(
+		"INSERT INTO _rivet_runtime (id, queue_next_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET queue_next_id = excluded.queue_next_id",
+		Some(vec![BindParam::Integer(next_id)]),
+	)
+	.await
+	.context("persist internal queue next id")?;
+	Ok(())
+}
+
+pub(crate) async fn load_queue_messages(db: &SqliteDb) -> Result<Vec<QueueMessageRow>> {
+	let result = db
+		.query(
+			"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id",
+			None,
+		)
+		.await
+		.context("load internal queue messages")?;
+
+	result
+		.rows
+		.iter()
+		.map(|row| {
+			Ok(QueueMessageRow {
+				id: u64::try_from(read_i64(row, 0, "queue message id")?)
+					.context("invalid queue message id")?,
+				message: PersistedQueueMessage {
+					name: read_text(row, 1, "queue message name")?,
+					body: read_blob(row, 2, "queue message body")?,
+					created_at: read_i64(row, 3, "queue message created_at")?,
+					failure_count: None,
+					available_at: None,
+					in_flight: None,
+					in_flight_at: None,
+				},
+			})
+		})
+		.collect()
+}
+
+pub(crate) async fn delete_queue_messages(db: &SqliteDb, ids: &[u64]) -> Result<()> {
+	if ids.is_empty() {
+		return Ok(());
+	}
+
+	let mut statements = Vec::with_capacity(ids.len());
+	for id in ids {
+		statements.push(SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_queue WHERE id = ?".to_owned(),
+			params: Some(vec![BindParam::Integer(
+				i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
+			)]),
+		});
+	}
+	db.execute_batch(statements)
+		.await
+		.context("delete internal queue messages")?;
+	Ok(())
+}
+
+pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
+	db.execute("DELETE FROM _rivet_queue", None)
+		.await
+		.context("reset internal queue")?;
+	Ok(())
+}
+
+#[derive(Debug)]
+pub(crate) struct QueueMessageRow {
+	pub id: u64,
+	pub message: PersistedQueueMessage,
+}
+
+pub(crate) async fn user_kv_batch_get(
+	db: &SqliteDb,
+	keys: &[&[u8]],
+) -> Result<Vec<Option<Vec<u8>>>> {
+	let mut values = Vec::with_capacity(keys.len());
+	for key in keys {
+		let result = db
+			.query(
+				"SELECT value FROM _rivet_user_kv WHERE key = ?",
+				Some(vec![BindParam::Blob((*key).to_vec())]),
+			)
+			.await
+			.context("get user kv value from sqlite")?;
+		values.push(match result.rows.first() {
+			Some(row) => Some(read_blob(row, 0, "user kv value")?),
+			None => None,
+		});
+	}
+	Ok(values)
+}
+
+pub(crate) async fn user_kv_batch_put(
+	db: &SqliteDb,
+	entries: &[(&[u8], &[u8])],
+) -> Result<()> {
+	for (key, value) in entries {
+		if key.len() > USER_KV_KEY_LIMIT {
+			return Err(KvRuntimeError::KeyTooLarge {
+				size: key.len(),
+				limit: USER_KV_KEY_LIMIT,
+			}
+			.build());
+		}
+		if value.len() > USER_KV_VALUE_LIMIT {
+			return Err(KvRuntimeError::ValueTooLarge {
+				size: value.len(),
+				limit: USER_KV_VALUE_LIMIT,
+			}
+			.build());
+		}
+	}
+	if entries.is_empty() {
+		return Ok(());
+	}
+	// Batches above the per-transaction budget split across transactions so no
+	// single commit exceeds the depot commit size limit. Oversized batch puts
+	// are therefore not atomic; each chunk rolls forward independently.
+	for chunk in split_kv_tx_chunks(entries) {
+		let statements = chunk
+			.iter()
+			.map(|(key, value)| SqliteBatchStatement {
+				sql: "INSERT INTO _rivet_user_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value".to_owned(),
+				params: Some(vec![
+					BindParam::Blob((*key).to_vec()),
+					BindParam::Blob((*value).to_vec()),
+				]),
+			})
+			.collect::<Vec<_>>();
+		db.execute_batch(statements)
+			.await
+			.context("put user kv values into sqlite")?;
+	}
+	Ok(())
+}
+
+pub(crate) async fn user_kv_batch_delete(db: &SqliteDb, keys: &[&[u8]]) -> Result<()> {
+	let statements = keys
+		.iter()
+		.map(|key| SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_user_kv WHERE key = ?".to_owned(),
+			params: Some(vec![BindParam::Blob((*key).to_vec())]),
+		})
+		.collect::<Vec<_>>();
+	if statements.is_empty() {
+		return Ok(());
+	}
+	db.execute_batch(statements)
+		.await
+		.context("delete user kv values from sqlite")?;
+	Ok(())
+}
+
+pub(crate) async fn user_kv_delete_range(
+	db: &SqliteDb,
+	start: &[u8],
+	end: &[u8],
+) -> Result<()> {
+	db.execute(
+		"DELETE FROM _rivet_user_kv WHERE key >= ? AND key < ?",
+		Some(vec![
+			BindParam::Blob(start.to_vec()),
+			BindParam::Blob(end.to_vec()),
+		]),
+	)
+	.await
+	.context("delete user kv range from sqlite")?;
+	Ok(())
+}
+
+pub(crate) async fn user_kv_list_prefix(
+	db: &SqliteDb,
+	prefix: &[u8],
+	opts: ListOpts,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	match prefix_upper_bound(prefix) {
+		Some(end) => {
+			user_kv_list_where(
+				db,
+				"WHERE key >= ? AND key < ?",
+				vec![BindParam::Blob(prefix.to_vec()), BindParam::Blob(end)],
+				opts,
+			)
+			.await
+		}
+		None if prefix.is_empty() => user_kv_list_where(db, "", Vec::new(), opts).await,
+		None => {
+			user_kv_list_where(
+				db,
+				"WHERE key >= ?",
+				vec![BindParam::Blob(prefix.to_vec())],
+				opts,
+			)
+			.await
+		}
+	}
+}
+
+pub(crate) async fn user_kv_list_range(
+	db: &SqliteDb,
+	start: &[u8],
+	end: &[u8],
+	opts: ListOpts,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	user_kv_list_where(
+		db,
+		"WHERE key >= ? AND key < ?",
+		vec![
+			BindParam::Blob(start.to_vec()),
+			BindParam::Blob(end.to_vec()),
+		],
+		opts,
+	)
+	.await
+}
+
+pub(crate) async fn workflow_kv_batch_put(
+	db: &SqliteDb,
+	entries: &[(&[u8], &[u8])],
+) -> Result<()> {
+	let mut statements = Vec::with_capacity(entries.len());
+	for (key, value) in entries {
+		if value.len() > WORKFLOW_KV_VALUE_LIMIT {
+			bail!(
+				"workflow kv value exceeds sqlite storage limit: {} > {}",
+				value.len(),
+				WORKFLOW_KV_VALUE_LIMIT
+			);
+		}
+		statements.push(SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value".to_owned(),
+			params: Some(vec![
+				BindParam::Blob((*key).to_vec()),
+				BindParam::Blob((*value).to_vec()),
+			]),
+		});
+	}
+	if statements.is_empty() {
+		return Ok(());
+	}
+	db.execute_batch(statements)
+		.await
+		.context("put workflow kv values into sqlite")?;
+	Ok(())
+}
+
+async fn user_kv_list_where(
+	db: &SqliteDb,
+	where_clause: &str,
+	mut params: Vec<BindParam>,
+	opts: ListOpts,
+) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let order = if opts.reverse { "DESC" } else { "ASC" };
+	let limit_clause = if let Some(limit) = opts.limit {
+		params.push(BindParam::Integer(i64::from(limit)));
+		" LIMIT ?"
+	} else {
+		""
+	};
+	let sql = format!(
+		"SELECT key, value FROM _rivet_user_kv {where_clause} ORDER BY key {order}{limit_clause}"
+	);
+	let result = db
+		.query(&sql, (!params.is_empty()).then_some(params))
+		.await
+		.context("list user kv values from sqlite")?;
+	result
+		.rows
+		.iter()
+		.map(|row| {
+			Ok((
+				read_blob(row, 0, "user kv key")?,
+				read_blob(row, 1, "user kv value")?,
+			))
+		})
+		.collect()
+}
+
+fn prefix_upper_bound(prefix: &[u8]) -> Option<Vec<u8>> {
+	let mut end = prefix.to_vec();
+	for index in (0..end.len()).rev() {
+		if end[index] != u8::MAX {
+			end[index] = end[index].saturating_add(1);
+			end.truncate(index + 1);
+			return Some(end);
+		}
+	}
+	None
+}
+
+fn push_connection_statements(
+	statements: &mut Vec<SqliteBatchStatement>,
+	connection: &PersistedConnection,
+) -> Result<()> {
+	let request_headers = encode_cbor_blob(
+		&connection.request_headers,
+		"connection request headers",
+	)?;
+	let subscriptions = encode_cbor_blob(
+		&connection
+			.subscriptions
+			.iter()
+			.map(|subscription| subscription.event_name.clone())
+			.collect::<Vec<_>>(),
+		"connection subscriptions",
+	)?;
+
+	statements.push(SqliteBatchStatement {
+		sql: "INSERT OR IGNORE INTO _rivet_conns (conn_id, parameters, gateway_id, request_id, request_path, request_headers) VALUES (?, ?, ?, ?, ?, ?)".to_owned(),
+		params: Some(vec![
+			BindParam::Text(connection.id.clone()),
+			BindParam::Blob(connection.parameters.clone()),
+			BindParam::Blob(connection.gateway_id.to_vec()),
+			BindParam::Blob(connection.request_id.to_vec()),
+			BindParam::Text(connection.request_path.clone()),
+			BindParam::Blob(request_headers),
+		]),
+	});
+	statements.push(SqliteBatchStatement {
+		sql: "INSERT INTO _rivet_conn_state (conn_id, state, server_message_index, subscriptions) VALUES (?, ?, ?, ?) ON CONFLICT(conn_id) DO UPDATE SET state = excluded.state, server_message_index = excluded.server_message_index, subscriptions = excluded.subscriptions".to_owned(),
+		params: Some(vec![
+			BindParam::Text(connection.id.clone()),
+			BindParam::Blob(connection.state.clone()),
+			BindParam::Integer(i64::from(connection.server_message_index)),
+			BindParam::Blob(subscriptions),
+		]),
+	});
+	Ok(())
+}
+
+fn push_delete_connection_statements(
+	statements: &mut Vec<SqliteBatchStatement>,
+	conn_id: &str,
+) {
+	statements.push(SqliteBatchStatement {
+		sql: "DELETE FROM _rivet_conn_state WHERE conn_id = ?".to_owned(),
+		params: Some(vec![BindParam::Text(conn_id.to_owned())]),
+	});
+	statements.push(SqliteBatchStatement {
+		sql: "DELETE FROM _rivet_conns WHERE conn_id = ?".to_owned(),
+		params: Some(vec![BindParam::Text(conn_id.to_owned())]),
+	});
+}
+
+pub(crate) async fn load_last_pushed_alarm(db: &SqliteDb) -> Result<Option<i64>> {
+	let result = db
+		.query(
+			"SELECT last_pushed_alarm FROM _rivet_runtime WHERE id = 1",
+			None,
+		)
+		.await
+		.context("load internal last pushed alarm")?;
+	let Some(row) = result.rows.first() else {
+		return Ok(None);
+	};
+	read_optional_i64(row, 0, "last_pushed_alarm")
+}
+
+pub(crate) async fn persist_last_pushed_alarm(
+	db: &SqliteDb,
+	alarm_ts: Option<i64>,
+) -> Result<()> {
+	db.execute(
+		"INSERT INTO _rivet_runtime (id, last_pushed_alarm) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET last_pushed_alarm = excluded.last_pushed_alarm",
+		Some(vec![optional_i64_param(alarm_ts)]),
+	)
+	.await
+	.context("persist internal last pushed alarm")?;
+	Ok(())
+}
+
+pub(crate) async fn load_inspector_token(db: &SqliteDb) -> Result<Option<String>> {
+	let result = db
+		.query(
+			"SELECT inspector_token FROM _rivet_runtime WHERE id = 1",
+			None,
+		)
+		.await
+		.context("load internal inspector token")?;
+	let Some(row) = result.rows.first() else {
+		return Ok(None);
+	};
+	read_optional_text(row, 0, "inspector_token")
+}
+
+pub(crate) async fn persist_inspector_token(db: &SqliteDb, token: &str) -> Result<()> {
+	db.execute(
+		"INSERT INTO _rivet_runtime (id, inspector_token) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET inspector_token = excluded.inspector_token",
+		Some(vec![BindParam::Text(token.to_owned())]),
+	)
+	.await
+	.context("persist internal inspector token")?;
+	Ok(())
+}
+
+pub(crate) async fn load_meta_text(db: &SqliteDb, key: &str) -> Result<Option<String>> {
+	let result = db
+		.query(
+			"SELECT value FROM _rivet_meta WHERE key = ?",
+			Some(vec![BindParam::Text(key.to_owned())]),
+		)
+		.await
+		.context("load internal meta text")?;
+	let Some(row) = result.rows.first() else {
+		return Ok(None);
+	};
+	let bytes = read_blob(row, 0, "meta text")?;
+	String::from_utf8(bytes).context("decode internal meta text")
+		.map(Some)
+}
+
+pub(crate) async fn persist_meta_text(db: &SqliteDb, key: &str, value: &str) -> Result<()> {
+	db.execute(
+		"INSERT INTO _rivet_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+		Some(vec![
+			BindParam::Text(key.to_owned()),
+			BindParam::Blob(value.as_bytes().to_vec()),
+		]),
+	)
+	.await
+	.context("persist internal meta text")?;
+	Ok(())
+}
+
+pub(crate) async fn clear_imported_storage(db: &SqliteDb) -> Result<()> {
+	db.execute_batch(vec![
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_conn_state".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_conns".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_schedule_events".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_actor_state".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_actor".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_queue".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_wf_kv".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_user_kv".to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_runtime".to_owned(),
+			params: None,
+		},
+	])
+	.await
+	.context("clear partially imported internal sqlite storage")?;
+	Ok(())
+}
+
+async fn load_schedule_events(db: &SqliteDb) -> Result<Vec<PersistedScheduleEvent>> {
+	let result = db
+		.query(
+			"SELECT event_id, trigger_at, action, args FROM _rivet_schedule_events ORDER BY trigger_at, event_id",
+			None,
+		)
+		.await
+		.context("load internal schedule events")?;
+
+	result
+		.rows
+		.iter()
+		.map(|row| {
+			Ok(PersistedScheduleEvent {
+				event_id: read_text(row, 0, "event_id")?,
+				timestamp: read_i64(row, 1, "trigger_at")?,
+				action: read_text(row, 2, "action")?,
+				args: read_optional_blob(row, 3, "args")?,
+			})
+		})
+		.collect()
+}
+
+fn optional_blob_param(value: Option<Vec<u8>>) -> BindParam {
+	value.map(BindParam::Blob).unwrap_or(BindParam::Null)
+}
+
+fn optional_i64_param(value: Option<i64>) -> BindParam {
+	value.map(BindParam::Integer).unwrap_or(BindParam::Null)
+}
+
+fn read_bool(row: &[ColumnValue], index: usize, label: &str) -> Result<bool> {
+	match row.get(index) {
+		Some(ColumnValue::Integer(0)) => Ok(false),
+		Some(ColumnValue::Integer(1)) => Ok(true),
+		other => bail!("invalid internal {label}: expected bool integer, got {other:?}"),
+	}
+}
+
+fn read_i64(row: &[ColumnValue], index: usize, label: &str) -> Result<i64> {
+	match row.get(index) {
+		Some(ColumnValue::Integer(value)) => Ok(*value),
+		other => bail!("invalid internal {label}: expected integer, got {other:?}"),
+	}
+}
+
+fn read_u16(row: &[ColumnValue], index: usize, label: &str) -> Result<u16> {
+	let value = read_i64(row, index, label)?;
+	u16::try_from(value).with_context(|| {
+		format!("invalid internal {label}: expected u16 integer, got {value}")
+	})
+}
+
+fn read_optional_i64(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<i64>> {
+	match row.get(index) {
+		Some(ColumnValue::Null) | None => Ok(None),
+		Some(ColumnValue::Integer(value)) => Ok(Some(*value)),
+		other => bail!("invalid internal {label}: expected nullable integer, got {other:?}"),
+	}
+}
+
+fn read_text(row: &[ColumnValue], index: usize, label: &str) -> Result<String> {
+	match row.get(index) {
+		Some(ColumnValue::Text(value)) => Ok(value.clone()),
+		other => bail!("invalid internal {label}: expected text, got {other:?}"),
+	}
+}
+
+fn read_optional_text(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<String>> {
+	match row.get(index) {
+		Some(ColumnValue::Null) | None => Ok(None),
+		Some(ColumnValue::Text(value)) => Ok(Some(value.clone())),
+		other => bail!("invalid internal {label}: expected nullable text, got {other:?}"),
+	}
+}
+
+fn read_blob(row: &[ColumnValue], index: usize, label: &str) -> Result<Vec<u8>> {
+	match row.get(index) {
+		Some(ColumnValue::Blob(value)) => Ok(value.clone()),
+		// Depot's remote query path reports zero-length blobs as NULL.
+		Some(ColumnValue::Null) => Ok(Vec::new()),
+		other => bail!("invalid internal {label}: expected blob, got {other:?}"),
+	}
+}
+
+fn read_fixed_4(row: &[ColumnValue], index: usize, label: &str) -> Result<[u8; 4]> {
+	let value = read_blob(row, index, label)?;
+	value
+		.as_slice()
+		.try_into()
+		.with_context(|| format!("invalid internal {label}: expected 4 bytes"))
+}
+
+fn read_optional_blob(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<Vec<u8>>> {
+	match row.get(index) {
+		Some(ColumnValue::Null) | None => Ok(None),
+		Some(ColumnValue::Blob(value)) => Ok(Some(value.clone())),
+		other => bail!("invalid internal {label}: expected nullable blob, got {other:?}"),
+	}
+}
+
+fn encode_cbor_blob(value: &impl serde::Serialize, label: &str) -> Result<Vec<u8>> {
+	let mut encoded = Vec::new();
+	ciborium::into_writer(value, &mut encoded)
+		.with_context(|| format!("encode internal {label} as cbor"))?;
+	Ok(encoded)
+}
+
+fn decode_cbor_blob<T: serde::de::DeserializeOwned>(
+	row: &[ColumnValue],
+	index: usize,
+	label: &str,
+) -> Result<T> {
+	let bytes = read_blob(row, index, label)?;
+	ciborium::from_reader(Cursor::new(bytes))
+		.with_context(|| format!("decode internal {label} from cbor"))
+}
+
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
+#[cfg(test)]
+#[path = "../../tests/internal_storage.rs"]
+pub(crate) mod tests;

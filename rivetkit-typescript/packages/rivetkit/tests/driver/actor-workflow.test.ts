@@ -231,9 +231,10 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 				state = await actor.getState();
 			}
 
-			// Failed workflow steps roll back actor state mutations.
-			expect(state.innerWrites).toBe(0);
-			expect(state.vars.innerWrites).toBe(0);
+			// Workflows are roll-forward only, so mutations made by the failed
+			// attempt remain visible after tryStep catches the failure.
+			expect(state.innerWrites).toBe(1);
+			expect(state.vars.innerWrites).toBe(1);
 			expect(state.vars.recoveryWrites).toBe(1);
 			expect(state.tryStepFailure).toEqual({
 				kind: "exhausted",
@@ -243,10 +244,10 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			expect(state.tryJoinFailure).toBe("join:parallel");
 		});
 
-		test("failed workflow step rolls back state and vars", async (c) => {
+		test("failed workflow step rolls forward state and vars", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const actor = client.workflowStepRollbackActor.getOrCreate([
-				"workflow-step-rollback",
+			const actor = client.workflowStepRollForwardActor.getOrCreate([
+				"workflow-step-roll-forward",
 			]);
 
 			let snapshot = await actor.getSnapshot();
@@ -255,13 +256,15 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 				snapshot = await actor.getSnapshot();
 			}
 
+			// Workflows never roll back state or vars. Mutations made by the
+			// failed step attempt stay visible after try catches the failure.
 			expect(snapshot.state).toMatchObject({
-				failedStateWrites: 0,
+				failedStateWrites: 1,
 				recoveryStateWrites: 1,
 				failureCaught: true,
 			});
 			expect(snapshot.vars).toMatchObject({
-				failedVarsWrites: 0,
+				failedVarsWrites: 1,
 				recoveryVarsWrites: 1,
 			});
 		});

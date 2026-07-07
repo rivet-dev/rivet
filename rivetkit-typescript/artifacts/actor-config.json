@@ -12,7 +12,7 @@
       "description": "Initial connection state value. Cannot be used with createConnState."
     },
     "createConnState": {
-      "description": "Function to create connection state. Receives context and connection params. Cannot be used with connState."
+      "description": "Function to create connection state. Receives context and connection params. The pending connection is not visible in c.conns until this succeeds. Cannot be used with connState."
     },
     "vars": {
       "description": "Initial ephemeral variables value. Cannot be used with createVars."
@@ -45,10 +45,10 @@
       "description": "Called when the actor's state changes. State changes within this hook won't trigger recursion."
     },
     "onBeforeConnect": {
-      "description": "Called before a client connects. Throw an error to reject the connection."
+      "description": "Called before a client connects. Throw an error to reject the connection. The pending connection is not visible in c.conns while this runs."
     },
     "onConnect": {
-      "description": "Called when a client successfully connects."
+      "description": "Called when a client successfully connects. The connection is visible in c.conns before this runs."
     },
     "onDisconnect": {
       "description": "Called when a client disconnects."
@@ -134,11 +134,15 @@
           "type": "number"
         },
         "sleepGracePeriod": {
-          "description": "Max time in ms for the graceful sleep window. Covers lifecycle hooks, waitUntil, async raw WebSocket handlers, disconnect callbacks, and waiting for preventSleep to clear after shutdown starts. Default: 15000.",
+          "description": "Max time in ms for the graceful shutdown window. Covers lifecycle hooks (onSleep, onDestroy), the run handler wait, async raw WebSocket handlers, disconnect callbacks, and final state serialization. Default: 15000.",
           "type": "number"
         },
         "onDestroyTimeout": {
-          "description": "Graceful destroy shutdown window in ms. Default: 15000",
+          "description": "Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
+          "type": "number"
+        },
+        "waitUntilTimeout": {
+          "description": "Deprecated. Folded into sleepGracePeriod, which now bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.",
           "type": "number"
         },
         "stateSaveInterval": {
@@ -147,10 +151,6 @@
         },
         "actionTimeout": {
           "description": "Timeout in ms for action handlers. Default: 60000",
-          "type": "number"
-        },
-        "waitUntilTimeout": {
-          "description": "Deprecated. Legacy timeout in ms for waitUntil when sleepGracePeriod is not set. Default: 15000",
           "type": "number"
         },
         "connectionLivenessTimeout": {
@@ -162,7 +162,7 @@
           "type": "number"
         },
         "noSleep": {
-          "description": "Deprecated. If true, the actor will never sleep. Use c.setPreventSleep(true) for bounded idle sleep delays instead. Default: false",
+          "description": "Deprecated. If true, the actor will never sleep. Use c.keepAwake(promise) to scope keep-awake to a specific operation instead. Default: false",
           "type": "boolean"
         },
         "sleepTimeout": {
@@ -180,14 +180,6 @@
         "canHibernateWebSocket": {
           "description": "Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
           "type": "boolean"
-        },
-        "preloadMaxWorkflowBytes": {
-          "description": "Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading.",
-          "type": "number"
-        },
-        "preloadMaxConnectionsBytes": {
-          "description": "Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading.",
-          "type": "number"
         }
       },
       "additionalProperties": false

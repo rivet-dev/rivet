@@ -17,6 +17,7 @@ use tokio::sync::oneshot;
 
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
+use crate::actor::internal_storage;
 use crate::actor::keys::CONN_PREFIX;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, Request};
@@ -26,6 +27,7 @@ use crate::actor::persist::{
 use crate::actor::preload::PreloadedKv;
 use crate::actor::state::RequestSaveOpts;
 use crate::error::ActorRuntime;
+use crate::sqlite::SqliteBackend;
 use crate::time::timeout;
 use crate::types::ConnId;
 use crate::types::ListOpts;
@@ -727,40 +729,52 @@ impl ActorContext {
 		&self,
 		preloaded_kv: Option<&PreloadedKv>,
 	) -> Result<Vec<ConnHandle>> {
-		let entries =
-			if let Some(entries) = preloaded_kv.and_then(|kv| kv.prefix_entries(&CONN_PREFIX)) {
-				entries
+		let persisted_connections =
+			if self.sql().backend() == SqliteBackend::Unavailable {
+				let entries =
+					if let Some(entries) = preloaded_kv.and_then(|kv| kv.prefix_entries(&CONN_PREFIX))
+					{
+						entries
+					} else {
+						self.0
+							.kv
+							.list_prefix(
+								&CONN_PREFIX,
+								ListOpts {
+									reverse: false,
+									limit: None,
+								},
+							)
+							.await?
+					};
+
+				let mut persisted_connections = Vec::new();
+				for (_key, value) in entries {
+					match decode_persisted_connection(&value) {
+						Ok(persisted) => persisted_connections.push(persisted),
+						Err(error) => {
+							tracing::error!(?error, "failed to decode persisted connection");
+						}
+					}
+				}
+				persisted_connections
 			} else {
-				self.0
-					.kv
-					.list_prefix(
-						&CONN_PREFIX,
-						ListOpts {
-							reverse: false,
-							limit: None,
-						},
-					)
-					.await?
+				internal_storage::load_connections(self.sql())
+					.await
+					.context("load hibernatable connections from sqlite")?
 			};
 		let mut restored = Vec::new();
 
-		for (_key, value) in entries {
-			match decode_persisted_connection(&value) {
-				Ok(persisted) => {
-					let conn = ConnHandle::from_persisted(persisted);
-					self.prepare_managed_conn(&conn);
-					self.insert_existing(conn.clone());
-					tracing::debug!(
-						actor_id = %self.actor_id(),
-						conn_id = conn.id(),
-						"hibernatable connection restored"
-					);
-					restored.push(conn);
-				}
-				Err(error) => {
-					tracing::error!(?error, "failed to decode persisted connection");
-				}
-			}
+		for persisted in persisted_connections {
+			let conn = ConnHandle::from_persisted(persisted);
+			self.prepare_managed_conn(&conn);
+			self.insert_existing(conn.clone());
+			tracing::debug!(
+				actor_id = %self.actor_id(),
+				conn_id = conn.id(),
+				"hibernatable connection restored"
+			);
+			restored.push(conn);
 		}
 
 		Ok(restored)

@@ -63,12 +63,17 @@ mod moved_tests {
 	async fn handles_basic_routes() {
 		let runtime = test_runtime().await;
 
+		// A fresh runtime has no envoy yet, and the health endpoint treats
+		// "no envoy connected" as healthy so container hosts do not recycle a
+		// runtime that has simply not received its first /start request. The
+		// unhealthy 503 path is covered by
+		// `health_reports_engine_ping_stale_when_envoy_ping_missing`.
 		let health = runtime
 			.handle_request(test_request("GET", "/api/rivet/health"))
 			.await;
-		assert_eq!(health.status, 503);
+		assert_eq!(health.status, 200);
 		let health_body = read_body(health).await;
-		assert_eq!(health_body["status"], "engine_ping_stale");
+		assert_eq!(health_body["status"], "ok");
 		assert_eq!(health_body["runtime"], "rivetkit");
 		assert_eq!(health_body["version"], "test-version");
 
@@ -164,6 +169,146 @@ mod moved_tests {
 				.to_string()
 				.contains("engine process spawning requires the `native-runtime` feature")
 		);
+	}
+
+	mod health_envoy {
+		use std::collections::HashMap;
+		use std::sync::atomic::Ordering;
+		use std::sync::{Arc, Mutex as EnvoySharedMutex, atomic::AtomicBool, atomic::AtomicI64};
+
+		use rivet_envoy_client::config::{
+			BoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse, WebSocketHandler,
+			WebSocketSender,
+		};
+		use rivet_envoy_client::context::{SharedContext, WsTxMessage};
+		use rivet_envoy_client::handle::EnvoyHandle;
+		use rivet_envoy_client::protocol;
+		use tokio::sync::mpsc;
+
+		use super::{read_body, test_request, test_runtime};
+
+		struct IdleEnvoyCallbacks;
+
+		impl EnvoyCallbacks for IdleEnvoyCallbacks {
+			fn on_actor_start(
+				&self,
+				_handle: EnvoyHandle,
+				_actor_id: String,
+				_generation: u32,
+				_config: protocol::ActorConfig,
+				_preloaded_kv: Option<protocol::PreloadedKv>,
+			) -> BoxFuture<anyhow::Result<()>> {
+				Box::pin(async { Ok(()) })
+			}
+
+			fn on_shutdown(&self) {}
+
+			fn fetch(
+				&self,
+				_handle: EnvoyHandle,
+				_actor_id: String,
+				_gateway_id: protocol::GatewayId,
+				_request_id: protocol::RequestId,
+				_request: HttpRequest,
+			) -> BoxFuture<anyhow::Result<HttpResponse>> {
+				Box::pin(async { anyhow::bail!("fetch should not run in health tests") })
+			}
+
+			fn websocket(
+				&self,
+				_handle: EnvoyHandle,
+				_actor_id: String,
+				_gateway_id: protocol::GatewayId,
+				_request_id: protocol::RequestId,
+				_request: HttpRequest,
+				_path: String,
+				_headers: HashMap<String, String>,
+				_is_hibernatable: bool,
+				_is_restoring_hibernatable: bool,
+				_sender: WebSocketSender,
+			) -> BoxFuture<anyhow::Result<WebSocketHandler>> {
+				Box::pin(async { anyhow::bail!("websocket should not run in health tests") })
+			}
+
+			fn can_hibernate(
+				&self,
+				_actor_id: &str,
+				_gateway_id: &protocol::GatewayId,
+				_request_id: &protocol::RequestId,
+				_request: &HttpRequest,
+			) -> BoxFuture<anyhow::Result<bool>> {
+				Box::pin(async { Ok(false) })
+			}
+		}
+
+		fn test_envoy_handle() -> (EnvoyHandle, Arc<SharedContext>) {
+			let (envoy_tx, _envoy_rx) = mpsc::unbounded_channel();
+			let shared = Arc::new(SharedContext {
+				config: EnvoyConfig {
+					version: 1,
+					endpoint: "http://127.0.0.1:1".to_string(),
+					token: None,
+					namespace: "test".to_string(),
+					pool_name: "test".to_string(),
+					prepopulate_actor_names: HashMap::new(),
+					metadata: None,
+					not_global: true,
+					debug_latency_ms: None,
+					callbacks: Arc::new(IdleEnvoyCallbacks),
+				},
+				envoy_key: "test-envoy".to_string(),
+				envoy_tx,
+				actors: Arc::new(EnvoySharedMutex::new(HashMap::new())),
+				actors_notify: Arc::new(tokio::sync::Notify::new()),
+				live_tunnel_requests: Arc::new(EnvoySharedMutex::new(HashMap::new())),
+				pending_hibernation_restores: Arc::new(EnvoySharedMutex::new(HashMap::new())),
+				ws_tx: Arc::new(tokio::sync::Mutex::new(
+					None::<mpsc::UnboundedSender<WsTxMessage>>,
+				)),
+				protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
+				shutting_down: AtomicBool::new(false),
+				// Zero means no engine ping has been received yet, which
+				// `is_ping_healthy` treats as unhealthy.
+				last_ping_ts: AtomicI64::new(0),
+				stopped_tx: tokio::sync::watch::channel(true).0,
+			});
+
+			(EnvoyHandle::from_shared(shared.clone()), shared)
+		}
+
+		fn now_epoch_millis() -> i64 {
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.expect("system clock should be after the epoch")
+				.as_millis() as i64
+		}
+
+		#[tokio::test]
+		async fn health_reports_engine_ping_stale_when_envoy_ping_missing() {
+			let runtime = test_runtime().await;
+			let (handle, shared) = test_envoy_handle();
+			*runtime.envoy.lock().await = Some(handle);
+
+			// An envoy exists but the engine has never completed the ping
+			// handshake, so the runtime must report 503 to get recycled.
+			let health = runtime
+				.handle_request(test_request("GET", "/api/rivet/health"))
+				.await;
+			assert_eq!(health.status, 503);
+			let health_body = read_body(health).await;
+			assert_eq!(health_body["status"], "engine_ping_stale");
+			assert_eq!(health_body["runtime"], "rivetkit");
+			assert_eq!(health_body["version"], "test-version");
+
+			// A recent engine ping flips the same runtime back to healthy.
+			shared.last_ping_ts.store(now_epoch_millis(), Ordering::Release);
+			let health = runtime
+				.handle_request(test_request("GET", "/api/rivet/health"))
+				.await;
+			assert_eq!(health.status, 200);
+			let health_body = read_body(health).await;
+			assert_eq!(health_body["status"], "ok");
+		}
 	}
 
 	async fn test_runtime() -> CoreServerlessRuntime {

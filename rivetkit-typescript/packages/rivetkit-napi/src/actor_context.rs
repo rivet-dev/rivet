@@ -248,7 +248,7 @@ impl ActorContext {
 	// TypeScript compatibility while steering new code to SQLite or actor state.
 	#[allow(deprecated)]
 	pub fn kv(&self) -> Kv {
-		Kv::new(self.inner.kv().clone())
+		Kv::new(self.inner.clone())
 	}
 
 	#[napi]

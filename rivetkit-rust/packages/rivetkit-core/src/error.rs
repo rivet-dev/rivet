@@ -25,9 +25,27 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 			| "complete_not_configured"
 			| "timed_out",
 		) => Some(400),
+		("kv", _) => Some(400),
 		("user", _) => Some(400),
 		_ => None,
 	}
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error("kv")]
+pub(crate) enum KvRuntimeError {
+	#[error(
+		"value_too_large",
+		"KV value is too large.",
+		"KV value too large ({size} bytes). Limit is {limit} bytes."
+	)]
+	ValueTooLarge { size: usize, limit: usize },
+	#[error(
+		"key_too_large",
+		"KV key is too large.",
+		"KV key too large ({size} bytes). Limit is {limit} bytes."
+	)]
+	KeyTooLarge { size: usize, limit: usize },
 }
 
 pub(crate) fn is_internal_error(group: &str, code: &str) -> bool {
@@ -202,6 +220,13 @@ pub(crate) enum SqliteRuntimeError {
 		"Invalid SQLite bind parameter {name}: {reason}"
 	)]
 	InvalidBindParameter { name: String, reason: String },
+
+	#[error(
+		"writer_busy",
+		"SQLite writer is busy.",
+		"SQLite writer is busy because a transaction is already open."
+	)]
+	WriterBusy,
 
 	#[error(
 		"remote_unavailable",

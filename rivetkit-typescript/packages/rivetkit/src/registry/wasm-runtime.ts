@@ -39,6 +39,7 @@ import type {
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
 	RuntimeServerlessStreamCallback,
+	RuntimeSqlBatchStatement,
 	RuntimeSqlBindParams,
 	RuntimeSqlDatabase,
 	RuntimeSqlExecResult,
@@ -700,6 +701,34 @@ export class WasmCoreRuntime implements CoreRuntime {
 			this.#actorSql(ctx).execute(sql, params),
 		);
 		return normalizeRuntimeSqlExecuteResult(result);
+	}
+
+	async actorSqlExecuteBatch(
+		ctx: ActorContextHandle,
+		statements: RuntimeSqlBatchStatement[],
+	): Promise<RuntimeSqlExecuteResult[]> {
+		const transaction = await this.actorSqlBeginTransaction(ctx);
+		const results: RuntimeSqlExecuteResult[] = [];
+		try {
+			for (const statement of statements) {
+				results.push(
+					await this.actorSqlTransactionExecute(
+						transaction,
+						statement.sql,
+						statement.params,
+					),
+				);
+			}
+			await this.actorSqlTransactionCommit(transaction);
+			return results;
+		} catch (error) {
+			try {
+				await this.actorSqlTransactionRollback(transaction);
+			} catch {
+				// Preserve the original batch failure if rollback also fails.
+			}
+			throw error;
+		}
 	}
 
 	async actorSqlBeginTransaction(

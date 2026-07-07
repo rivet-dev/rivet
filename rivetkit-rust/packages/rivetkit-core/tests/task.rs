@@ -1,4 +1,4 @@
-mod moved_tests {
+pub(crate) mod moved_tests {
 	use std::collections::{BTreeMap, HashMap};
 	use std::path::PathBuf;
 	use std::process::Command;
@@ -17,6 +17,8 @@ mod moved_tests {
 	use rivet_envoy_client::envoy::ToEnvoyMessage;
 	use rivet_envoy_client::handle::EnvoyHandle;
 	use rivet_envoy_client::protocol;
+	use rivet_envoy_client::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse};
+	use rusqlite::types::{Value, ValueRef};
 	use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 	use tokio::task::yield_now;
 	use tokio::time::{advance, sleep, timeout};
@@ -28,29 +30,25 @@ mod moved_tests {
 	use tracing_subscriber::registry::Registry;
 
 	use crate::actor::connection::{
-		ConnHandle, HibernatableConnectionMetadata, decode_persisted_connection,
+		ConnHandle, HibernatableConnectionMetadata, PersistedConnection,
 	};
-	use crate::actor::context::tests::new_with_kv;
-	use crate::actor::keys::{
-		CONN_PREFIX, INSPECTOR_TOKEN_KEY, LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY,
-		QUEUE_MESSAGES_PREFIX, WORKFLOW_STORAGE_PREFIX, make_connection_key,
-	};
+	use crate::actor::internal_storage;
+		use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 	use crate::actor::messages::{ActorEvent, SerializeStateReason, StateDelta};
-	use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
 	use crate::actor::sleep::CanSleep;
-	use crate::actor::state::{
-		PersistedActor, PersistedScheduleEvent, RequestSaveOpts, decode_last_pushed_alarm,
-		decode_persisted_actor, encode_last_pushed_alarm, encode_persisted_actor,
-	};
+		use crate::actor::state::{
+			PersistedActor, PersistedScheduleEvent, RequestSaveOpts, encode_last_pushed_alarm,
+			encode_persisted_actor,
+		};
 	use crate::actor::task::{
 		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
 		LifecycleEvent, LifecycleState, LiveExit,
 	};
 	use crate::actor::task_types::ShutdownKind;
-	use crate::inspector::auth::test_inspector_env_lock;
 	use crate::kv::tests::new_in_memory;
+	use crate::sqlite::SqliteDb;
+	use crate::types::ActorKey;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
-	use rivet_envoy_client::utils::EnvoyShutdownError;
 
 	fn test_hook_lock() -> &'static AsyncMutex<()> {
 		static LOCK: OnceLock<AsyncMutex<()>> = OnceLock::new();
@@ -83,6 +81,22 @@ mod moved_tests {
 		while let Ok(event) = task.lifecycle_events.try_recv() {
 			task.handle_event(event).await;
 		}
+	}
+
+	async fn load_persisted_actor(ctx: &ActorContext) -> PersistedActor {
+		internal_storage::load_actor_snapshot(ctx.sql())
+			.await
+			.expect("persisted actor lookup should succeed")
+			.expect("persisted actor should exist")
+			.actor
+	}
+
+	async fn load_persisted_conn(ctx: &ActorContext, conn_id: &str) -> Option<PersistedConnection> {
+		internal_storage::load_connections(ctx.sql())
+			.await
+			.expect("persisted connection lookup should succeed")
+			.into_iter()
+			.find(|persisted| persisted.id == conn_id)
 	}
 
 	fn save_tick_factory(save_ticks: Arc<AtomicUsize>) -> Arc<ActorFactory> {
@@ -126,6 +140,32 @@ mod moved_tests {
 
 	fn new_task(ctx: ActorContext) -> ActorTask {
 		new_task_with_factory(ctx, noop_factory())
+	}
+
+	pub(crate) fn new_with_kv(
+		actor_id: impl Into<String>,
+		name: impl Into<String>,
+		key: ActorKey,
+		region: impl Into<String>,
+		kv: crate::kv::Kv,
+		) -> ActorContext {
+			let actor_id = actor_id.into();
+			let sqlite_fixture_key = format!("{}:{}", actor_id, kv.test_identity());
+			let (sql_handle, sql_rx) = test_envoy_handle();
+			spawn_test_remote_sqlite(sqlite_fixture_key, sql_rx);
+			let ctx = ActorContext::build(
+				actor_id.clone(),
+				name.into(),
+			key,
+			region.into(),
+			Some(1),
+			sql_handle.get_envoy_key().to_owned(),
+			ActorConfig::default(),
+			kv,
+			SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true),
+		);
+		ctx.configure_envoy(sql_handle, Some(1));
+		ctx
 	}
 
 	fn new_task_with_senders(
@@ -274,6 +314,144 @@ mod moved_tests {
 		});
 
 		(EnvoyHandle::from_shared(shared), envoy_rx)
+	}
+
+		fn test_sqlite_connection(fixture_key: &str) -> Arc<Mutex<rusqlite::Connection>> {
+			static CONNECTIONS: OnceLock<Mutex<HashMap<String, Arc<Mutex<rusqlite::Connection>>>>> =
+				OnceLock::new();
+			let mut connections = CONNECTIONS
+			.get_or_init(|| Mutex::new(HashMap::new()))
+			.lock()
+				.expect("test sqlite connection map poisoned");
+			connections
+				.entry(fixture_key.to_owned())
+				.or_insert_with(|| {
+					let conn = rusqlite::Connection::open_in_memory()
+						.expect("test sqlite connection should open");
+				conn.execute_batch(crate::actor::context::tests::TEST_INTERNAL_SCHEMA_SQL)
+					.expect("test sqlite internal schema should initialize");
+				Arc::new(Mutex::new(conn))
+			})
+			.clone()
+	}
+
+		fn spawn_test_remote_sqlite(
+			fixture_key: String,
+			mut rx: mpsc::UnboundedReceiver<ToEnvoyMessage>,
+		) {
+			let conn = test_sqlite_connection(&fixture_key);
+		tokio::spawn(async move {
+			while let Some(message) = rx.recv().await {
+				let ToEnvoyMessage::RemoteSqliteRequest {
+					request,
+					response_tx,
+				} = message
+				else {
+					continue;
+				};
+				let RemoteSqliteRequest::Execute(request) = request else {
+					continue;
+				};
+				let response = {
+					let conn = conn.lock().expect("test sqlite connection poisoned");
+					execute_test_sqlite(&conn, request)
+				};
+				let _ = response_tx.send(Ok(RemoteSqliteResponse::Execute(response)));
+			}
+		});
+	}
+
+	fn execute_test_sqlite(
+		conn: &rusqlite::Connection,
+		request: protocol::SqliteExecuteRequest,
+	) -> protocol::SqliteExecuteResponse {
+		match execute_test_sqlite_inner(conn, request) {
+			Ok(result) => protocol::SqliteExecuteResponse::SqliteExecuteOk(
+				protocol::SqliteExecuteOk { result },
+			),
+			Err(error) => protocol::SqliteExecuteResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					group: "sqlite".to_owned(),
+					code: "internal_error".to_owned(),
+					message: error.to_string(),
+				},
+			),
+		}
+	}
+
+	fn execute_test_sqlite_inner(
+		conn: &rusqlite::Connection,
+		request: protocol::SqliteExecuteRequest,
+	) -> rusqlite::Result<protocol::SqliteExecuteResult> {
+		let params = request
+			.params
+			.unwrap_or_default()
+			.into_iter()
+			.map(test_sqlite_param_value)
+			.collect::<Vec<_>>();
+		let mut statement = conn.prepare(&request.sql)?;
+		let columns = statement
+			.column_names()
+			.into_iter()
+			.map(ToOwned::to_owned)
+			.collect::<Vec<_>>();
+		let mut result_rows = Vec::new();
+		if statement.column_count() == 0 {
+			statement.execute(rusqlite::params_from_iter(params.iter()))?;
+		} else {
+			let column_count = statement.column_count();
+			let mut rows = statement.query(rusqlite::params_from_iter(params.iter()))?;
+			while let Some(row) = rows.next()? {
+				let mut values = Vec::with_capacity(column_count);
+				for index in 0..column_count {
+					values.push(test_sqlite_column_value(row.get_ref(index)?));
+				}
+				result_rows.push(values);
+			}
+		}
+
+		Ok(protocol::SqliteExecuteResult {
+			columns,
+			rows: result_rows,
+			changes: conn.changes() as i64,
+			last_insert_row_id: Some(conn.last_insert_rowid()),
+		})
+	}
+
+	fn test_sqlite_param_value(param: protocol::SqliteBindParam) -> Value {
+		match param {
+			protocol::SqliteBindParam::SqliteValueNull => Value::Null,
+			protocol::SqliteBindParam::SqliteValueInteger(value) => Value::Integer(value.value),
+			protocol::SqliteBindParam::SqliteValueFloat(value) => {
+				Value::Real(f64::from_bits(u64::from_be_bytes(value.value)))
+			}
+			protocol::SqliteBindParam::SqliteValueText(value) => Value::Text(value.value),
+			protocol::SqliteBindParam::SqliteValueBlob(value) => Value::Blob(value.value),
+		}
+	}
+
+	fn test_sqlite_column_value(value: ValueRef<'_>) -> protocol::SqliteColumnValue {
+		match value {
+			ValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
+			ValueRef::Integer(value) => protocol::SqliteColumnValue::SqliteValueInteger(
+				protocol::SqliteValueInteger { value },
+			),
+			ValueRef::Real(value) => protocol::SqliteColumnValue::SqliteValueFloat(
+				protocol::SqliteValueFloat {
+					value: value.to_bits().to_be_bytes(),
+				},
+			),
+			ValueRef::Text(value) => protocol::SqliteColumnValue::SqliteValueText(
+				protocol::SqliteValueText {
+					value: String::from_utf8_lossy(value).into_owned(),
+				},
+			),
+			ValueRef::Blob(value) => protocol::SqliteColumnValue::SqliteValueBlob(
+				protocol::SqliteValueBlob {
+					value: value.to_vec(),
+				},
+			),
+		}
 	}
 
 	fn recv_alarm_now(
@@ -477,10 +655,8 @@ mod moved_tests {
 		actor_id: Option<String>,
 		reason: Option<String>,
 		command: Option<String>,
+		kind: Option<String>,
 		event: Option<String>,
-		outcome: Option<String>,
-		old: Option<String>,
-		new: Option<String>,
 	}
 
 	impl Visit for MessageVisitor {
@@ -491,10 +667,8 @@ mod moved_tests {
 				"actor_id" => self.actor_id = Some(value.to_owned()),
 				"reason" => self.reason = Some(value.to_owned()),
 				"command" => self.command = Some(value.to_owned()),
+				"kind" => self.kind = Some(value.to_owned()),
 				"event" => self.event = Some(value.to_owned()),
-				"outcome" => self.outcome = Some(value.to_owned()),
-				"old" => self.old = Some(value.to_owned()),
-				"new" => self.new = Some(value.to_owned()),
 				_ => {}
 			}
 		}
@@ -516,17 +690,11 @@ mod moved_tests {
 				"command" => {
 					self.command = Some(format!("{value:?}").trim_matches('"').to_owned());
 				}
+				"kind" => {
+					self.kind = Some(format!("{value:?}").trim_matches('"').to_owned());
+				}
 				"event" => {
 					self.event = Some(format!("{value:?}").trim_matches('"').to_owned());
-				}
-				"outcome" => {
-					self.outcome = Some(format!("{value:?}").trim_matches('"').to_owned());
-				}
-				"old" => {
-					self.old = Some(format!("{value:?}").trim_matches('"').to_owned());
-				}
-				"new" => {
-					self.new = Some(format!("{value:?}").trim_matches('"').to_owned());
 				}
 				_ => {}
 			}
@@ -540,9 +708,6 @@ mod moved_tests {
 		message: Option<String>,
 		command: Option<String>,
 		event: Option<String>,
-		outcome: Option<String>,
-		old: Option<String>,
-		new: Option<String>,
 	}
 
 	#[derive(Clone, Debug, PartialEq, Eq)]
@@ -559,7 +724,10 @@ mod moved_tests {
 	}
 
 	#[derive(Clone)]
-	struct ShutdownTaskRefusedWarningLayer {
+	// Counts the `spawn_work_inner` refusal warning emitted when a
+	// `wait_until` future is spawned after teardown has started and is
+	// aborted immediately instead of being tracked.
+	struct RefusedWaitUntilWarningLayer {
 		count: Arc<AtomicUsize>,
 	}
 
@@ -608,7 +776,7 @@ mod moved_tests {
 		}
 	}
 
-	impl<S> Layer<S> for ShutdownTaskRefusedWarningLayer
+	impl<S> Layer<S> for RefusedWaitUntilWarningLayer
 	where
 		S: Subscriber,
 	{
@@ -620,7 +788,8 @@ mod moved_tests {
 			let mut visitor = MessageVisitor::default();
 			event.record(&mut visitor);
 			if visitor.message.as_deref()
-				== Some("shutdown task spawned after teardown; aborting immediately")
+				== Some("actor work spawned after teardown; aborting immediately")
+				&& visitor.kind.as_deref() == Some("wait_until")
 			{
 				self.count.fetch_add(1, Ordering::SeqCst);
 			}
@@ -683,9 +852,6 @@ mod moved_tests {
 					message: visitor.message,
 					command: visitor.command,
 					event: visitor.event,
-					outcome: visitor.outcome,
-					old: visitor.old,
-					new: visitor.new,
 				});
 		}
 	}
@@ -996,13 +1162,7 @@ mod moved_tests {
 		assert_eq!(deltas, vec![StateDelta::ActorState(vec![9, 9, 9])]);
 		assert!(ctx.save_requested());
 
-		let persisted_actor = kv
-			.get(PERSIST_DATA_KEY)
-			.await
-			.expect("persisted actor lookup should succeed")
-			.expect("persisted actor should exist");
-		let persisted_actor =
-			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor = load_persisted_actor(&ctx).await;
 		assert_eq!(persisted_actor.state, Vec::<u8>::new());
 		assert_eq!(ctx.state(), Vec::<u8>::new());
 
@@ -1249,22 +1409,12 @@ mod moved_tests {
 			.await
 			.expect("sleep stop should succeed");
 
-		let persisted_actor = kv
-			.get(PERSIST_DATA_KEY)
-			.await
-			.expect("persisted actor lookup should succeed")
-			.expect("persisted actor should exist");
-		let persisted_actor =
-			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor = load_persisted_actor(&ctx).await;
 		assert_eq!(persisted_actor.state, vec![4, 5, 6]);
 
-		let persisted_conn = kv
-			.get(&make_connection_key(hibernating_conn.id()))
+		let persisted_conn = load_persisted_conn(&ctx, hibernating_conn.id())
 			.await
-			.expect("persisted connection lookup should succeed")
 			.expect("persisted connection should exist");
-		let persisted_conn = decode_persisted_connection(&persisted_conn)
-			.expect("persisted connection should decode");
 		assert_eq!(persisted_conn.state, vec![9, 8, 7]);
 		assert_eq!(
 			disconnects
@@ -1423,13 +1573,7 @@ mod moved_tests {
 			.await
 			.expect("sleep stop should succeed");
 
-		let persisted_actor = kv
-			.get(PERSIST_DATA_KEY)
-			.await
-			.expect("persisted actor lookup should succeed")
-			.expect("persisted actor should exist");
-		let persisted_actor =
-			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor = load_persisted_actor(&ctx).await;
 		assert_eq!(persisted_actor.state, vec![8]);
 	}
 
@@ -1519,13 +1663,7 @@ mod moved_tests {
 			.await
 			.expect("destroy stop should succeed");
 
-		let persisted_actor = kv
-			.get(PERSIST_DATA_KEY)
-			.await
-			.expect("persisted actor lookup should succeed")
-			.expect("persisted actor should exist");
-		let persisted_actor =
-			decode_persisted_actor(&persisted_actor).expect("persisted actor should decode");
+		let persisted_actor = load_persisted_actor(&ctx).await;
 		assert_eq!(persisted_actor.state, vec![7, 7, 7]);
 
 		let mut disconnects = disconnects
@@ -1537,12 +1675,7 @@ mod moved_tests {
 			disconnects,
 			vec!["conn-hibernating".to_owned(), "conn-normal".to_owned()]
 		);
-		assert!(
-			kv.get(&make_connection_key(hibernating_conn.id()))
-				.await
-				.expect("persisted connection lookup should succeed")
-				.is_none()
-		);
+		assert!(load_persisted_conn(&ctx, hibernating_conn.id()).await.is_none());
 		assert!(ctx.conns().is_empty());
 	}
 
@@ -2042,32 +2175,21 @@ mod moved_tests {
 		}])
 		.await
 		.expect("seed hibernation should persist");
-		assert_eq!(kv.test_apply_batch_call_count(), 1);
 
 		conn.set_server_message_index(7);
 		ctx.request_hibernation_transport_save(conn.id());
-		assert_eq!(kv.test_apply_batch_call_count(), 1);
-		let persisted_before = kv
-			.get(&make_connection_key(conn.id()))
+		let persisted_before = load_persisted_conn(&ctx, conn.id())
 			.await
-			.expect("persisted connection lookup should succeed")
 			.expect("persisted connection should exist");
-		let persisted_before = decode_persisted_connection(&persisted_before)
-			.expect("persisted connection should decode");
 		assert_eq!(persisted_before.server_message_index, 1);
 
 		task.handle_event(crate::actor::task::LifecycleEvent::SaveRequested { immediate: false })
 			.await;
 		task.on_state_save_tick().await;
 
-		assert_eq!(kv.test_apply_batch_call_count(), 2);
-		let persisted_after = kv
-			.get(&make_connection_key(conn.id()))
+		let persisted_after = load_persisted_conn(&ctx, conn.id())
 			.await
-			.expect("persisted connection lookup should succeed")
 			.expect("persisted connection should exist");
-		let persisted_after = decode_persisted_connection(&persisted_after)
-			.expect("persisted connection should decode");
 		assert_eq!(persisted_after.server_message_index, 7);
 
 		task.handle_stop(ShutdownKind::Destroy)
@@ -2134,48 +2256,10 @@ mod moved_tests {
 			.await
 			.expect("destroy stop should succeed");
 
-		let actor_bytes = kv
-			.get(PERSIST_DATA_KEY)
-			.await
-			.expect("persisted actor lookup should succeed")
-			.expect("scheduled event should be persisted before shutdown returns");
-		let persisted =
-			decode_persisted_actor(&actor_bytes).expect("persisted actor should decode");
+		let persisted = load_persisted_actor(&ctx).await;
 		assert_eq!(persisted.scheduled_events.len(), 1);
 		assert_eq!(persisted.scheduled_events[0].action, "after-destroy");
 		assert_eq!(persisted.scheduled_events[0].args, Some(vec![1, 2, 3]));
-	}
-
-	#[tokio::test]
-	async fn startup_uses_empty_preloaded_persisted_actor_without_startup_bundle_batch_get() {
-		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
-		unsafe {
-			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
-		}
-		let kv = new_in_memory();
-		let ctx = new_with_kv(
-			"actor-preload-empty",
-			"task-preload-empty",
-			Vec::new(),
-			"local",
-			kv.clone(),
-		);
-		let mut task = new_task(ctx.clone())
-			.with_preloaded_persisted_actor(PreloadedPersistedActor::BundleExistsButEmpty);
-		let (start_tx, start_rx) = oneshot::channel();
-
-		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
-			.await;
-		start_rx
-			.await
-			.expect("start reply should send")
-			.expect("start should succeed");
-
-		// Startup still probes the inspector token key, but it should not
-		// batch-get the persisted actor/alarm startup bundle when the registry
-		// already told us the persisted bundle exists and is empty.
-		assert_eq!(kv.test_batch_get_call_count(), 1);
-		assert!(ctx.persisted_actor().has_initialized);
 	}
 
 	#[tokio::test]
@@ -2243,259 +2327,6 @@ mod moved_tests {
 		let run_handle = task.run_handle.take().expect("run handle should exist");
 		run_handle.abort();
 		let _ = run_handle.await;
-	}
-
-	#[tokio::test]
-	async fn startup_uses_preloaded_last_pushed_alarm_without_live_kv() {
-		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
-		unsafe {
-			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
-		}
-
-		let future_ts = 4_102_445_000_000;
-		let persisted = PersistedActor {
-			has_initialized: true,
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-preloaded-alarm".to_owned(),
-				timestamp: future_ts,
-				action: "tick".to_owned(),
-				args: None,
-			}],
-			..PersistedActor::default()
-		};
-		let encoded_alarm =
-			encode_last_pushed_alarm(Some(future_ts)).expect("last pushed alarm should encode");
-		let preloaded_kv = PreloadedKv::new_with_requested_get_keys(
-			vec![
-				(LAST_PUSHED_ALARM_KEY.to_vec(), encoded_alarm),
-				(
-					INSPECTOR_TOKEN_KEY.to_vec(),
-					b"startup-preload-token".to_vec(),
-				),
-			],
-			vec![
-				PERSIST_DATA_KEY.to_vec(),
-				LAST_PUSHED_ALARM_KEY.to_vec(),
-				INSPECTOR_TOKEN_KEY.to_vec(),
-				vec![5, 1, 1],
-			],
-			vec![
-				WORKFLOW_STORAGE_PREFIX.to_vec(),
-				CONN_PREFIX.to_vec(),
-				QUEUE_MESSAGES_PREFIX.to_vec(),
-			],
-		);
-
-		let (handle, mut rx) = test_envoy_handle();
-		tokio::spawn(async move {
-			while let Some(message) = rx.recv().await {
-				if let ToEnvoyMessage::KvRequest { response_tx, .. } = message {
-					let _ = response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
-				}
-			}
-		});
-
-		let ctx = new_with_kv(
-			"actor-preloaded-alarm",
-			"task-preloaded-alarm",
-			Vec::new(),
-			"local",
-			crate::kv::Kv::new(handle.clone(), "actor-preloaded-alarm"),
-		);
-		ctx.configure_envoy(handle, Some(31));
-		let mut task = new_task(ctx.clone())
-			.with_preloaded_persisted_actor(PreloadedPersistedActor::Some(persisted))
-			.with_preloaded_kv(Some(preloaded_kv));
-		let (start_tx, start_rx) = oneshot::channel();
-
-		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
-			.await;
-		start_rx
-			.await
-			.expect("start reply should send")
-			.expect("start should use preloaded alarm without live kv");
-
-		assert_eq!(ctx.last_pushed_alarm(), Some(future_ts));
-	}
-
-	#[tokio::test]
-	async fn startup_decodes_persisted_actor_from_preloaded_kv_without_live_kv() {
-		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
-		unsafe {
-			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
-		}
-
-		let future_ts = 4_102_445_061_000;
-		let persisted = PersistedActor {
-			has_initialized: true,
-			state: b"preloaded-state".to_vec(),
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-preloaded-persisted".to_owned(),
-				timestamp: future_ts,
-				action: "tick".to_owned(),
-				args: None,
-			}],
-			..PersistedActor::default()
-		};
-		let encoded_persisted =
-			encode_persisted_actor(&persisted).expect("persisted actor should encode");
-		let encoded_alarm =
-			encode_last_pushed_alarm(Some(future_ts)).expect("last pushed alarm should encode");
-		let preloaded_kv = PreloadedKv::new_with_requested_get_keys(
-			vec![
-				(PERSIST_DATA_KEY.to_vec(), encoded_persisted),
-				(LAST_PUSHED_ALARM_KEY.to_vec(), encoded_alarm),
-				(
-					INSPECTOR_TOKEN_KEY.to_vec(),
-					b"startup-persisted-preload-token".to_vec(),
-				),
-			],
-			vec![
-				PERSIST_DATA_KEY.to_vec(),
-				LAST_PUSHED_ALARM_KEY.to_vec(),
-				INSPECTOR_TOKEN_KEY.to_vec(),
-				vec![5, 1, 1],
-			],
-			vec![
-				WORKFLOW_STORAGE_PREFIX.to_vec(),
-				CONN_PREFIX.to_vec(),
-				QUEUE_MESSAGES_PREFIX.to_vec(),
-			],
-		);
-
-		let (handle, mut rx) = test_envoy_handle();
-		tokio::spawn(async move {
-			while let Some(message) = rx.recv().await {
-				if let ToEnvoyMessage::KvRequest { response_tx, .. } = message {
-					let _ = response_tx.send(Err(anyhow::anyhow!(EnvoyShutdownError)));
-				}
-			}
-		});
-
-		let ctx = new_with_kv(
-			"actor-preloaded-persisted",
-			"task-preloaded-persisted",
-			Vec::new(),
-			"local",
-			crate::kv::Kv::new(handle.clone(), "actor-preloaded-persisted"),
-		);
-		ctx.configure_envoy(handle, Some(33));
-		let mut task = new_task(ctx.clone()).with_preloaded_kv(Some(preloaded_kv));
-		let (start_tx, start_rx) = oneshot::channel();
-
-		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
-			.await;
-		start_rx
-			.await
-			.expect("start reply should send")
-			.expect("start should decode persisted actor from preloaded kv");
-
-		assert_eq!(ctx.persisted_actor().state, b"preloaded-state");
-		assert_eq!(ctx.last_pushed_alarm(), Some(future_ts));
-	}
-
-	#[tokio::test]
-	async fn startup_uses_preloaded_alarm_with_partial_startup_preload() {
-		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
-		unsafe {
-			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
-		}
-
-		let future_ts = 4_102_445_123_000;
-		let persisted = PersistedActor {
-			has_initialized: true,
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-partial-preload-alarm".to_owned(),
-				timestamp: future_ts,
-				action: "tick".to_owned(),
-				args: None,
-			}],
-			..PersistedActor::default()
-		};
-		let encoded_persisted =
-			encode_persisted_actor(&persisted).expect("persisted actor should encode");
-		let encoded_alarm =
-			encode_last_pushed_alarm(Some(future_ts)).expect("last pushed alarm should encode");
-		let preloaded_kv = PreloadedKv::new_with_requested_get_keys(
-			vec![
-				(LAST_PUSHED_ALARM_KEY.to_vec(), encoded_alarm),
-				(
-					INSPECTOR_TOKEN_KEY.to_vec(),
-					b"startup-partial-preload-token".to_vec(),
-				),
-			],
-			vec![
-				LAST_PUSHED_ALARM_KEY.to_vec(),
-				INSPECTOR_TOKEN_KEY.to_vec(),
-				vec![5, 1, 1],
-			],
-			vec![
-				WORKFLOW_STORAGE_PREFIX.to_vec(),
-				CONN_PREFIX.to_vec(),
-				QUEUE_MESSAGES_PREFIX.to_vec(),
-			],
-		);
-
-		let saw_persist_live_get = Arc::new(AtomicBool::new(false));
-		let saw_persist_live_get_for_task = Arc::clone(&saw_persist_live_get);
-		let (handle, mut rx) = test_envoy_handle();
-		tokio::spawn(async move {
-			while let Some(message) = rx.recv().await {
-				if let ToEnvoyMessage::KvRequest {
-					data, response_tx, ..
-				} = message
-				{
-					match data {
-						protocol::KvRequestData::KvGetRequest(request) => {
-							assert_eq!(
-								request.keys,
-								vec![PERSIST_DATA_KEY.to_vec()],
-								"partial preload should only live-fetch missing persisted actor data"
-							);
-							saw_persist_live_get_for_task.store(true, Ordering::SeqCst);
-							let _ = response_tx.send(Ok(protocol::KvResponseData::KvGetResponse(
-								protocol::KvGetResponse {
-									keys: vec![PERSIST_DATA_KEY.to_vec()],
-									values: vec![encoded_persisted.clone()],
-									metadata: vec![protocol::KvMetadata {
-										version: Vec::new(),
-										update_ts: 0,
-									}],
-								},
-							)));
-						}
-						protocol::KvRequestData::KvPutRequest(_) => {
-							let _ = response_tx.send(Ok(protocol::KvResponseData::KvPutResponse));
-						}
-						other => {
-							let _ = response_tx
-								.send(Err(anyhow::anyhow!("unexpected KV request: {other:?}")));
-						}
-					}
-				}
-			}
-		});
-
-		let ctx = new_with_kv(
-			"actor-partial-preload-alarm",
-			"task-partial-preload-alarm",
-			Vec::new(),
-			"local",
-			crate::kv::Kv::new(handle.clone(), "actor-partial-preload-alarm"),
-		);
-		ctx.configure_envoy(handle, Some(32));
-		let mut task = new_task(ctx.clone()).with_preloaded_kv(Some(preloaded_kv));
-		let (start_tx, start_rx) = oneshot::channel();
-
-		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
-			.await;
-		start_rx
-			.await
-			.expect("start reply should send")
-			.expect("start should use preloaded alarm in partial preload bundle");
-
-		assert!(saw_persist_live_get.load(Ordering::SeqCst));
-		assert_eq!(ctx.last_pushed_alarm(), Some(future_ts));
 	}
 
 	#[tokio::test]
@@ -2599,13 +2430,10 @@ mod moved_tests {
 			Some(future_ts)
 		);
 		ctx.wait_for_pending_alarm_writes().await;
-		let encoded = kv
-			.get(LAST_PUSHED_ALARM_KEY)
-			.await
-			.expect("last pushed alarm lookup should succeed")
-			.expect("last pushed alarm should be persisted");
 		assert_eq!(
-			decode_last_pushed_alarm(&encoded).expect("last pushed alarm should decode"),
+			crate::actor::internal_storage::load_last_pushed_alarm(ctx.sql())
+				.await
+				.expect("last pushed alarm lookup should succeed"),
 			Some(future_ts)
 		);
 	}
@@ -2923,10 +2751,13 @@ mod moved_tests {
 		let (hook_tx, hook_rx) = oneshot::channel();
 		let (drop_tx, mut drop_rx) = oneshot::channel();
 		let warning_count = Arc::new(AtomicUsize::new(0));
-		let subscriber = Registry::default().with(ShutdownTaskRefusedWarningLayer {
+		// The refusal warning is emitted while `task.run()` polls the shutdown
+		// cleanup, so bind the subscriber to the spawned future instead of a
+		// thread-local default.
+		let subscriber = Registry::default().with(RefusedWaitUntilWarningLayer {
 			count: warning_count.clone(),
 		});
-		let _guard = tracing::subscriber::set_default(subscriber);
+		let dispatch = tracing::Dispatch::new(subscriber);
 		let _cleanup_hook = crate::actor::task::install_shutdown_cleanup_hook(Arc::new({
 			let hook_tx = Arc::new(Mutex::new(Some(hook_tx)));
 			let drop_tx = Arc::new(Mutex::new(Some(drop_tx)));
@@ -2958,7 +2789,7 @@ mod moved_tests {
 		}));
 		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig::default());
-		let run = tokio::spawn(task.run());
+		let run = tokio::spawn(task.run().with_subscriber(dispatch));
 
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
@@ -3011,10 +2842,13 @@ mod moved_tests {
 		let (drop_tx, mut drop_rx) = oneshot::channel();
 		let destroy_completed = Arc::new(AtomicUsize::new(0));
 		let warning_count = Arc::new(AtomicUsize::new(0));
-		let subscriber = Registry::default().with(ShutdownTaskRefusedWarningLayer {
+		// The refusal warning is emitted while `task.run()` polls the shutdown
+		// cleanup, so bind the subscriber to the spawned future instead of a
+		// thread-local default.
+		let subscriber = Registry::default().with(RefusedWaitUntilWarningLayer {
 			count: warning_count.clone(),
 		});
-		let _guard = tracing::subscriber::set_default(subscriber);
+		let dispatch = tracing::Dispatch::new(subscriber);
 		let _cleanup_hook = crate::actor::task::install_shutdown_cleanup_hook(Arc::new({
 			let hook_tx = Arc::new(Mutex::new(Some(hook_tx)));
 			let drop_tx = Arc::new(Mutex::new(Some(drop_tx)));
@@ -3052,7 +2886,7 @@ mod moved_tests {
 		}));
 		let (mut task, lifecycle_tx, _dispatch_tx, _events_tx) = new_task_with_senders(ctx.clone());
 		task.factory = shutdown_ack_factory(ActorConfig::default());
-		let run = tokio::spawn(task.run());
+		let run = tokio::spawn(task.run().with_subscriber(dispatch));
 
 		let (start_tx, start_rx) = oneshot::channel();
 		lifecycle_tx
@@ -3237,9 +3071,9 @@ mod moved_tests {
 			.expect("action reply should send")
 			.expect_err("sleep finalize should reject new dispatch");
 		assert!(
-			error.to_string().contains("Actor is stopping"),
-			"expected actor stopping error, got {error:#}"
-		);
+				format!("{error:#}").contains("Actor is stopping"),
+				"expected actor stopping error, got {error:#}"
+			);
 	}
 
 	#[cfg(not(debug_assertions))]
@@ -3956,6 +3790,13 @@ mod moved_tests {
 			records: records.clone(),
 		});
 		let dispatch = tracing::Dispatch::new(subscriber);
+		// `with_subscriber` deterministically captures logs polled inside
+		// `task.run()`. The user actor future and the action reply forwarder
+		// are spawned as separate tasks by the runtime, so the thread-local
+		// default additionally captures them; that is deterministic here
+		// because this test runs on a current_thread runtime and holds
+		// `test_hook_lock()`.
+		let _guard = tracing::dispatcher::set_default(&dispatch);
 		let run = tokio::spawn(task.run().with_subscriber(dispatch));
 
 		let (start_tx, start_rx) = oneshot::channel();
@@ -4014,6 +3855,23 @@ mod moved_tests {
 		);
 		assert!(
 			logs.iter().any(|log| {
+				log.level == tracing::Level::INFO
+					&& log.actor_id.as_deref() == Some("actor-log-flow")
+					&& log.message.as_deref() == Some("actor task: ActorEvent::Action enqueued")
+			}),
+			"expected `actor task: ActorEvent::Action enqueued` log for actor-log-flow; logs={logs:?}"
+		);
+		assert!(
+			logs.iter().any(|log| {
+				log.level == tracing::Level::INFO
+					&& log.actor_id.as_deref() == Some("actor-log-flow")
+					&& log.message.as_deref()
+						== Some("actor task: tracked reply received, forwarding")
+			}),
+			"expected `actor task: tracked reply received, forwarding` log for actor-log-flow; logs={logs:?}"
+		);
+		assert!(
+			logs.iter().any(|log| {
 				log.level == tracing::Level::DEBUG
 					&& log.actor_id.as_deref() == Some("actor-log-flow")
 					&& log.message.as_deref() == Some("actor event enqueued")
@@ -4059,8 +3917,6 @@ mod moved_tests {
 		}])
 		.await
 		.expect("seed hibernation should persist");
-		assert_eq!(kv.test_batch_delete_call_count(), 0);
-
 		conn.disconnect(Some("bye"))
 			.await
 			.expect("disconnect should succeed");
@@ -4070,18 +3926,7 @@ mod moved_tests {
 			.await
 			.expect("flush should persist pending removal");
 
-		assert_eq!(kv.test_batch_delete_call_count(), 0);
-		let last_batch = kv
-			.test_last_apply_batch()
-			.expect("last apply batch should be recorded");
-		assert_eq!(last_batch.puts, vec![]);
-		assert_eq!(last_batch.deletes, vec![make_connection_key(conn.id())]);
-		assert!(
-			kv.get(&make_connection_key(conn.id()))
-				.await
-				.expect("persisted connection lookup should succeed")
-				.is_none()
-		);
+		assert!(load_persisted_conn(&ctx, conn.id()).await.is_none());
 	}
 
 	#[tokio::test]
@@ -4209,16 +4054,7 @@ mod moved_tests {
 			.await;
 		task.on_state_save_tick().await;
 
-		let last_batch = kv
-			.test_last_apply_batch()
-			.expect("last apply batch should be recorded");
-		assert_eq!(last_batch.deletes, vec![make_connection_key("conn-stale")]);
-		assert!(
-			kv.get(&make_connection_key("conn-stale"))
-				.await
-				.expect("persisted connection lookup should succeed")
-				.is_none()
-		);
+		assert!(load_persisted_conn(&ctx, "conn-stale").await.is_none());
 
 		task.handle_stop(ShutdownKind::Sleep)
 			.await
@@ -4338,16 +4174,7 @@ mod moved_tests {
 			.await;
 		task.on_state_save_tick().await;
 
-		let last_batch = kv
-			.test_last_apply_batch()
-			.expect("last apply batch should be recorded");
-		assert_eq!(last_batch.deletes, vec![make_connection_key("conn-dead")]);
-		assert!(
-			kv.get(&make_connection_key("conn-dead"))
-				.await
-				.expect("persisted connection lookup should succeed")
-				.is_none()
-		);
+		assert!(load_persisted_conn(&ctx, "conn-dead").await.is_none());
 
 		task.handle_stop(ShutdownKind::Sleep)
 			.await

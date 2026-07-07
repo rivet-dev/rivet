@@ -80,7 +80,7 @@ function buildVmOptions(userOptions?: AgentOsOptions): AgentOsOptions {
 		return userOptions ?? {};
 	}
 
-	// TODO: Reimplement with persistent backend (actor KV-backed metadata +
+	// TODO: Reimplement with persistent backend (SQLite-backed metadata and
 	// actor storage-backed blocks) so VM filesystem state survives sleep/wake.
 	const memMount: MountConfig = {
 		path: "/home/user",

@@ -181,6 +181,26 @@ async function waitForInspectorMessageWithTag<
 	return message as Extract<InspectorMessage, { body: { tag: T } }>;
 }
 
+async function waitForInspectorStateUpdated(
+	ws: WebSocket,
+	expectedState: unknown,
+	timeoutMs = 10_000,
+) {
+	const message = await waitForInspectorMessage(
+		ws,
+		timeoutMs,
+		(candidate) =>
+			candidate.body.tag === "StateUpdated" &&
+			JSON.stringify(
+				cbor.decode(new Uint8Array(candidate.body.val.state)),
+			) === JSON.stringify(expectedState),
+	);
+	return message as Extract<
+		InspectorMessage,
+		{ body: { tag: "StateUpdated" } }
+	>;
+}
+
 async function waitForInspectorOpen(ws: WebSocket, timeoutMs = 10_000) {
 	await new Promise<void>((resolve, reject) => {
 		const timeout = setTimeout(() => {
@@ -307,10 +327,9 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 					),
 				);
 
-				const stateUpdated = await waitForInspectorMessageWithTag(
-					ws,
-					"StateUpdated",
-				);
+				const stateUpdated = await waitForInspectorStateUpdated(ws, {
+					count: 42,
+				});
 				expect(
 					cbor.decode(new Uint8Array(stateUpdated.body.val.state)),
 				).toEqual({ count: 42 });

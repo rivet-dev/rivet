@@ -1,6 +1,6 @@
 # Actor KV Structure
 
-This document is the canonical reference for the actor KV keyspace in `rivetkit-typescript`.
+This is a legacy reference for the frozen actor KV keyspace used by pre-SQLite RivetKit actors. Current RivetKit runtime persistence lives in internal SQLite tables in `rivetkit-core`; the first wake on the migrated runtime imports these keys into SQLite and leaves the KV bytes untouched for downgrade safety. The only live post-migration write to this keyspace is the inspector token mirror at `[3]`.
 
 ## Master Tree
 

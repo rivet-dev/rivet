@@ -517,7 +517,7 @@ export const workflowTryActor = actor({
 	},
 });
 
-export const workflowStepRollbackActor = actor({
+export const workflowStepRollForwardActor = actor({
 	state: {
 		failedStateWrites: 0,
 		recoveryStateWrites: 0,
@@ -531,10 +531,14 @@ export const workflowStepRollbackActor = actor({
 		const stepResult = await ctx.try(
 			"recover-failed-step",
 			async (tryCtx) => {
-				await tryCtx.step("failing-step", async (c) => {
-					c.state.failedStateWrites += 1;
-					c.vars.failedVarsWrites += 1;
-					throw new Error("step rollback");
+				await tryCtx.step({
+					name: "failing-step",
+					maxRetries: 0,
+					run: async (c) => {
+						c.state.failedStateWrites += 1;
+						c.vars.failedVarsWrites += 1;
+						throw new Error("step roll forward");
+					},
 				});
 			},
 		);

@@ -9,16 +9,27 @@ import {
 import { loggerWithoutContext } from "./log";
 import type { EventSchemaConfig, QueueSchemaConfig } from "./schema";
 
-const warnedDeprecatedTimeoutKeys = new Set<string>();
+const warnedDeprecatedOptionKeys = new Set<string>();
 
-function warnDeprecatedShutdownTimeoutKeys(options: unknown) {
+const DEPRECATED_OPTION_MESSAGES: Record<string, string> = {
+	onDestroyTimeout:
+		"Configure `sleepGracePeriod` instead, which bounds the entire graceful shutdown window for both sleep and destroy.",
+	waitUntilTimeout:
+		"Configure `sleepGracePeriod` instead, which bounds the entire graceful shutdown window for both sleep and destroy.",
+	preloadMaxWorkflowBytes:
+		"Internal storage moved to SQLite and no longer uses KV preloading.",
+	preloadMaxConnectionsBytes:
+		"Internal storage moved to SQLite and no longer uses KV preloading.",
+};
+
+function warnDeprecatedOptionKeys(options: unknown) {
 	if (!options || typeof options !== "object") return;
 	const opts = options as Record<string, unknown>;
-	for (const key of ["onDestroyTimeout", "waitUntilTimeout"]) {
-		if (opts[key] !== undefined && !warnedDeprecatedTimeoutKeys.has(key)) {
-			warnedDeprecatedTimeoutKeys.add(key);
+	for (const [key, detail] of Object.entries(DEPRECATED_OPTION_MESSAGES)) {
+		if (opts[key] !== undefined && !warnedDeprecatedOptionKeys.has(key)) {
+			warnedDeprecatedOptionKeys.add(key);
 			loggerWithoutContext().warn({
-				msg: `actor option \`${key}\` is deprecated and is now ignored. Configure \`sleepGracePeriod\` instead, which bounds the entire graceful shutdown window for both sleep and destroy. Will be removed in 2.2.0.`,
+				msg: `actor option \`${key}\` is deprecated and is now ignored. ${detail} Will be removed in 2.2.0.`,
 			});
 		}
 	}
@@ -181,7 +192,7 @@ export function actor<
 	TQueues,
 	TActions
 > {
-	warnDeprecatedShutdownTimeoutKeys(
+	warnDeprecatedOptionKeys(
 		(input as { options?: unknown } | undefined)?.options,
 	);
 	const config = ActorConfigSchema.parse(input) as ActorConfig<

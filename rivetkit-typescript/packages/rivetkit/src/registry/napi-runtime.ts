@@ -30,6 +30,7 @@ import type {
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
 	RuntimeServerlessStreamCallback,
+	RuntimeSqlBatchStatement,
 	RuntimeSqlBindParam,
 	RuntimeSqlBindParams,
 	RuntimeSqlExecResult,
@@ -46,6 +47,7 @@ import { normalizeRuntimeSqlExecuteResult } from "./runtime";
 type NativeBindings = typeof import("@rivetkit/rivetkit-napi");
 type NapiSqlDatabase = ReturnType<NativeActorContext["sql"]>;
 type NapiSqlBindParams = Parameters<NapiSqlDatabase["execute"]>[1];
+type NapiSqlBatchStatement = Parameters<NapiSqlDatabase["executeBatch"]>[0][number];
 type NapiSqlTransaction = Awaited<
 	ReturnType<NapiSqlDatabase["beginTransaction"]>
 >;
@@ -112,6 +114,15 @@ function toNapiSqlBindParams(params?: RuntimeSqlBindParams): NapiSqlBindParams {
 		return params;
 	}
 	return params.map((param) => toNapiSqlBindParam(param));
+}
+
+function toNapiSqlBatchStatement(
+	statement: RuntimeSqlBatchStatement,
+): NapiSqlBatchStatement {
+	return {
+		sql: statement.sql,
+		params: toNapiSqlBindParams(statement.params) ?? undefined,
+	};
 }
 
 function toNapiBuffer(value: RuntimeBytes): Buffer {
@@ -622,6 +633,16 @@ export class NapiCoreRuntime implements CoreRuntime {
 			toNapiSqlBindParams(params),
 		);
 		return normalizeRuntimeSqlExecuteResult(result);
+	}
+
+	async actorSqlExecuteBatch(
+		ctx: ActorContextHandle,
+		statements: RuntimeSqlBatchStatement[],
+	): Promise<RuntimeSqlExecuteResult[]> {
+		const results = await this.#actorSql(ctx).executeBatch(
+			statements.map(toNapiSqlBatchStatement),
+		);
+		return results.map(normalizeRuntimeSqlExecuteResult);
 	}
 
 	async actorSqlBeginTransaction(

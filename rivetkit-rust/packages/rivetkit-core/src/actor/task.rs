@@ -46,14 +46,13 @@ use crate::actor::action::ActionDispatchError;
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
-use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
 	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
 };
 use crate::actor::metrics::startup_phase::StartupPhase;
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
-use crate::actor::state::{PersistedActor, decode_last_pushed_alarm, decode_persisted_actor};
+use crate::actor::state::PersistedActor;
 use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
@@ -1115,6 +1114,21 @@ impl ActorTask {
 		self.ctx.configure_actor_events(self.actor_event_tx.clone());
 		self.ctx.configure_queue_preload(self.preloaded_kv.clone());
 
+		if self.ctx.sql().backend() == crate::sqlite::SqliteBackend::Unavailable {
+			return Err(crate::error::SqliteRuntimeError::Unavailable.build())
+				.context("internal actor storage requires sqlite");
+		}
+
+		let schema_started_at = Instant::now();
+		crate::actor::internal_schema::ensure_internal_schema(self.ctx.sql())
+			.await
+			.context("initialize internal sqlite schema")?;
+		tracing::debug!(
+			actor_id = %actor_id,
+			duration_ms = duration_ms_f64(schema_started_at.elapsed()),
+			"perf internal: initInternalSqliteSchemaMs"
+		);
+
 		let load_state_started_at = Instant::now();
 		let load_state_result = self.load_persisted_startup().await;
 		let persisted = self.ctx.metrics().observe_startup_phase_result(
@@ -1228,101 +1242,25 @@ impl ActorTask {
 	}
 
 	async fn load_persisted_startup(&mut self) -> Result<PersistedStartup> {
-		match std::mem::take(&mut self.preload_persisted_actor) {
-			PreloadedPersistedActor::Some(preloaded) => {
-				let last_pushed_alarm = self.load_startup_last_pushed_alarm().await?;
-				return Ok(PersistedStartup {
-					actor: preloaded,
-					last_pushed_alarm,
-				});
-			}
-			PreloadedPersistedActor::BundleExistsButEmpty => {
-				return Ok(PersistedStartup {
-					actor: PersistedActor {
-						input: self.start_input.clone(),
-						..PersistedActor::default()
-					},
-					last_pushed_alarm: None,
-				});
-			}
-			PreloadedPersistedActor::NoBundle => {}
-		}
-
-		if self.preloaded_kv.is_some() {
-			let actor = self
-				.decode_persisted_actor_startup(self.load_startup_key(PERSIST_DATA_KEY).await?)?;
-			let last_pushed_alarm = self.load_startup_last_pushed_alarm().await?;
+		crate::actor::migrate_kv_to_sqlite::import_core_state_if_needed(&self.ctx)
+			.await
+			.context("import legacy core actor storage to sqlite")?;
+		if let Some(snapshot) = crate::actor::internal_storage::load_actor_snapshot(self.ctx.sql())
+			.await
+			.context("load persisted actor startup data from sqlite")?
+		{
 			return Ok(PersistedStartup {
-				actor,
-				last_pushed_alarm,
+				actor: snapshot.actor,
+				last_pushed_alarm: snapshot.last_pushed_alarm,
 			});
 		}
-
-		let mut values = self
-			.ctx
-			.kv_internal()
-			.batch_get(&[PERSIST_DATA_KEY, LAST_PUSHED_ALARM_KEY])
-			.await
-			.context("load persisted actor startup data")?
-			.into_iter();
-		let actor = match values.next().flatten() {
-			Some(bytes) => {
-				decode_persisted_actor(&bytes).context("decode persisted actor startup data")
-			}
-			None => Ok(PersistedActor {
-				input: self.start_input.clone(),
-				..PersistedActor::default()
-			}),
-		}?;
-		let last_pushed_alarm = values
-			.next()
-			.flatten()
-			.map(|bytes| decode_last_pushed_alarm(&bytes))
-			.transpose()
-			.context("decode persisted last pushed alarm")?
-			.flatten();
-
 		Ok(PersistedStartup {
-			actor,
-			last_pushed_alarm,
-		})
-	}
-
-	async fn load_startup_key(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-		if let Some(entry) = self
-			.preloaded_kv
-			.as_ref()
-			.and_then(|preloaded| preloaded.key_entry(key))
-		{
-			return Ok(entry);
-		}
-
-		self.ctx
-			.kv_internal()
-			.get(key)
-			.await
-			.context("load persisted actor startup key")
-	}
-
-	async fn load_startup_last_pushed_alarm(&self) -> Result<Option<i64>> {
-		self.load_startup_key(LAST_PUSHED_ALARM_KEY)
-			.await?
-			.map(|bytes| decode_last_pushed_alarm(&bytes))
-			.transpose()
-			.context("decode persisted last pushed alarm")
-			.map(Option::flatten)
-	}
-
-	fn decode_persisted_actor_startup(&self, encoded: Option<Vec<u8>>) -> Result<PersistedActor> {
-		match encoded {
-			Some(bytes) => {
-				decode_persisted_actor(&bytes).context("decode persisted actor startup data")
-			}
-			None => Ok(PersistedActor {
+			actor: PersistedActor {
 				input: self.start_input.clone(),
 				..PersistedActor::default()
-			}),
-		}
+			},
+			last_pushed_alarm: None,
+		})
 	}
 
 	fn ensure_actor_event_channel(&mut self) {

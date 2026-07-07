@@ -1,7 +1,7 @@
 use super::*;
 
 mod moved_tests {
-	use std::sync::{Arc, Condvar, Mutex};
+	use std::sync::{Arc, Mutex};
 	use std::time::Duration;
 
 	use tokio::sync::mpsc;
@@ -12,12 +12,13 @@ mod moved_tests {
 	};
 	use vbare::OwnedVersionedData;
 
+	use tokio::sync::Semaphore;
+
 	use crate::actor::config::ActorConfig;
-	use crate::actor::connection::{
-		ConnHandle, HibernatableConnectionMetadata, decode_persisted_connection,
-	};
-	use crate::actor::context::tests::new_with_kv;
-	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
+	use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
+	use crate::actor::context::tests::{TestSqliteWriteGate, new_with_kv, new_with_kv_and_write_gate};
+	use crate::actor::internal_storage;
+	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 	use crate::actor::messages::StateDelta;
 	use crate::actor::task::LifecycleEvent;
 	use crate::kv::tests::new_in_memory;
@@ -309,30 +310,30 @@ mod moved_tests {
 		.await
 		.expect("delta save should succeed");
 
-		let actor_bytes = kv
-			.get(PERSIST_DATA_KEY)
+		let persisted = internal_storage::load_actor_snapshot(ctx.sql())
 			.await
 			.expect("actor state should load")
-			.expect("actor state should be persisted");
-		let persisted = decode_persisted_actor(&actor_bytes).expect("actor state should decode");
+			.expect("actor state should be persisted")
+			.actor;
 		assert_eq!(persisted.state, vec![1, 2, 3]);
 
-		let conn_bytes = kv
-			.get(&make_connection_key(conn.id()))
+		let persisted = internal_storage::load_connections(ctx.sql())
 			.await
 			.expect("connection hibernation should load")
+			.into_iter()
+			.find(|persisted| persisted.id == conn.id())
 			.expect("connection hibernation should be persisted");
-		let persisted = decode_persisted_connection(&conn_bytes).expect("connection should decode");
 		assert_eq!(persisted.state, vec![9, 8, 7]);
 
 		ctx.save_state(vec![StateDelta::ConnHibernationRemoved(conn.id().into())])
 			.await
 			.expect("hibernation delete should succeed");
-		assert_eq!(
-			kv.get(&make_connection_key(conn.id()))
+		assert!(
+			internal_storage::load_connections(ctx.sql())
 				.await
-				.expect("deleted hibernation should load"),
-			None
+				.expect("deleted hibernation should load")
+				.into_iter()
+				.all(|persisted| persisted.id != conn.id())
 		);
 	}
 
@@ -386,40 +387,49 @@ mod moved_tests {
 		.await
 		.expect("combined delta save should succeed");
 
-		let actor_bytes = kv
-			.get(PERSIST_DATA_KEY)
+		let persisted = internal_storage::load_actor_snapshot(ctx.sql())
 			.await
 			.expect("actor state should load")
-			.expect("actor state should be persisted");
-		let persisted = decode_persisted_actor(&actor_bytes).expect("actor state should decode");
+			.expect("actor state should be persisted")
+			.actor;
 		assert_eq!(persisted.state, vec![7, 8, 9]);
 
-		let added_bytes = kv
-			.get(&make_connection_key(added_conn.id()))
+		let connections = internal_storage::load_connections(ctx.sql())
 			.await
-			.expect("added hibernation should load")
+			.expect("connection hibernation should load");
+		let added = connections
+			.iter()
+			.find(|persisted| persisted.id == added_conn.id())
 			.expect("added hibernation should exist");
-		let added =
-			decode_persisted_connection(&added_bytes).expect("added hibernation should decode");
 		assert_eq!(added.state, vec![1, 2, 3]);
 
-		assert_eq!(
-			kv.get(&make_connection_key(removed_conn.id()))
-				.await
-				.expect("removed hibernation should load"),
-			None
+		assert!(
+			connections
+				.iter()
+				.all(|persisted| persisted.id != removed_conn.id())
 		);
 	}
 
+	// Covers the pending-write waiter contract: `wait_for_pending_state_writes`
+	// must observe a save whose sqlite write is still in flight and only return
+	// once that write completes. The remote sqlite executor gate stalls the
+	// first save's connection insert, so the in-flight window is event-ordered
+	// rather than timing-dependent.
 	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-	async fn concurrent_save_state_calls_overlap_during_kv_write() {
-		let kv = new_in_memory();
-		let ctx = Arc::new(new_with_kv(
+	async fn concurrent_save_state_calls_overlap_during_sqlite_write() {
+		let (entered_tx, mut entered_rx) = mpsc::unbounded_channel();
+		let release = Arc::new(Semaphore::new(0));
+		let ctx = Arc::new(new_with_kv_and_write_gate(
 			"actor-overlap",
 			"state-overlap",
 			Vec::new(),
 			"local",
-			kv.clone(),
+			new_in_memory(),
+			TestSqliteWriteGate {
+				sql_prefix: "INSERT OR IGNORE INTO _rivet_conns",
+				entered_tx,
+				release: release.clone(),
+			},
 		));
 
 		let conn_1 = ConnHandle::new("conn-overlap-1", Vec::new(), vec![1], true);
@@ -444,31 +454,6 @@ mod moved_tests {
 		}));
 		ctx.add_conn(conn_2.clone());
 
-		let apply_entries = Arc::new((Mutex::new(0usize), Condvar::new()));
-		let release_first = Arc::new((Mutex::new(false), Condvar::new()));
-		kv.test_set_apply_batch_before_write_lock_hook({
-			let apply_entries = Arc::clone(&apply_entries);
-			let release_first = Arc::clone(&release_first);
-			move || {
-				let call_index = {
-					let (entries, entries_cv) = &*apply_entries;
-					let mut entries = entries.lock().expect("apply-entry lock poisoned");
-					*entries += 1;
-					let call_index = *entries;
-					entries_cv.notify_all();
-					call_index
-				};
-
-				if call_index == 1 {
-					let (release, release_cv) = &*release_first;
-					let released = release.lock().expect("release lock poisoned");
-					let _released = release_cv
-						.wait_while(released, |released| !*released)
-						.expect("release lock poisoned");
-				}
-			}
-		});
-
 		let first_save = tokio::spawn({
 			let ctx = Arc::clone(&ctx);
 			let conn = conn_1.id().to_owned();
@@ -482,13 +467,10 @@ mod moved_tests {
 			}
 		});
 
-		let (entries_lock, entries_cv) = &*apply_entries;
-		let entries = entries_lock.lock().expect("apply-entry lock poisoned");
-		let (entries, _) = entries_cv
-			.wait_timeout_while(entries, Duration::from_secs(2), |entries| *entries < 1)
-			.expect("apply-entry lock poisoned");
-		assert_eq!(*entries, 1, "first save should enter the KV write");
-		drop(entries);
+		entered_rx
+			.recv()
+			.await
+			.expect("first save should reach the stalled sqlite write");
 
 		let second_save = tokio::spawn({
 			let ctx = Arc::clone(&ctx);
@@ -503,22 +485,15 @@ mod moved_tests {
 			}
 		});
 
-		let entries = entries_lock.lock().expect("apply-entry lock poisoned");
-		let (entries, _) = entries_cv
-			.wait_timeout_while(entries, Duration::from_secs(2), |entries| *entries < 2)
-			.expect("apply-entry lock poisoned");
-		assert_eq!(
-			*entries, 2,
-			"second save should reach KV while the first write is still in flight",
-		);
-		drop(entries);
-
 		let mut wait_task = tokio::spawn({
 			let ctx = Arc::clone(&ctx);
 			async move {
 				ctx.wait_for_pending_state_writes().await;
 			}
 		});
+		// The first save is provably mid-write here (its insert is stalled at
+		// the executor gate), so a waiter that returns within this bound did
+		// not observe the in-flight write.
 		assert!(
 			tokio::time::timeout(Duration::from_millis(50), &mut wait_task)
 				.await
@@ -526,9 +501,8 @@ mod moved_tests {
 			"pending-write waiters must observe the stalled in-flight write",
 		);
 
-		let (release, release_cv) = &*release_first;
-		*release.lock().expect("release lock poisoned") = true;
-		release_cv.notify_all();
+		// One permit per gated connection insert.
+		release.add_permits(2);
 
 		first_save.await.expect("first save task should not panic");
 		second_save
@@ -537,29 +511,29 @@ mod moved_tests {
 		wait_task
 			.await
 			.expect("pending write waiter should not panic");
-
-		let conn_1_bytes = kv
-			.get(&make_connection_key(conn_1.id()))
+		entered_rx
+			.recv()
 			.await
-			.expect("first conn state should load")
+			.expect("second save should also pass the sqlite write gate");
+
+		let connections = internal_storage::load_connections(ctx.sql())
+			.await
+			.expect("connection states should load");
+		let conn_1_persisted = connections
+			.iter()
+			.find(|persisted| persisted.id == conn_1.id())
 			.expect("first conn state should be persisted");
-		let conn_1_persisted =
-			decode_persisted_connection(&conn_1_bytes).expect("first conn should decode");
 		assert_eq!(conn_1_persisted.state, vec![10]);
-
-		let conn_2_bytes = kv
-			.get(&make_connection_key(conn_2.id()))
-			.await
-			.expect("second conn state should load")
+		let conn_2_persisted = connections
+			.iter()
+			.find(|persisted| persisted.id == conn_2.id())
 			.expect("second conn state should be persisted");
-		let conn_2_persisted =
-			decode_persisted_connection(&conn_2_bytes).expect("second conn should decode");
 		assert_eq!(conn_2_persisted.state, vec![20]);
 	}
 
 	#[tokio::test]
 	async fn save_state_resets_pending_request_flags() {
-		let ctx = ActorContext::new_with_kv(
+		let ctx = new_with_kv(
 			"actor-1",
 			"save-state-flags",
 			Vec::new(),
@@ -587,7 +561,7 @@ mod moved_tests {
 	#[tokio::test(start_paused = true)]
 	async fn flush_on_shutdown_tracks_immediate_persist_until_teardown() {
 		let kv = new_in_memory();
-		let state = ActorContext::new_for_state_tests(kv.clone(), ActorConfig::default());
+		let state = new_with_kv("state-test", "state-test", Vec::new(), "local", kv.clone());
 
 		state.set_initial_state(vec![7, 8, 9]);
 		state.flush_on_shutdown();
@@ -597,12 +571,11 @@ mod moved_tests {
 		state.wait_for_pending_writes().await;
 		assert!(!state.tracked_persist_pending());
 
-		let actor_bytes = kv
-			.get(PERSIST_DATA_KEY)
+		let persisted = internal_storage::load_actor_snapshot(state.sql())
 			.await
 			.expect("actor state should load")
-			.expect("actor state should be persisted");
-		let persisted = decode_persisted_actor(&actor_bytes).expect("actor state should decode");
+			.expect("actor state should be persisted")
+			.actor;
 		assert_eq!(persisted.state, vec![7, 8, 9]);
 	}
 }

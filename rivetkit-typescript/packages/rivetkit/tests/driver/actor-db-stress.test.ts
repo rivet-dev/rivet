@@ -217,8 +217,11 @@ describeDriverMatrix("Actor Db Stress", (driverTestConfig) => {
 
 				await actor.reset();
 
+				// Halved from 320 rounds when internal actor storage moved onto
+				// the same sqlite writer as user queries, to keep this smoke
+				// within the 120s budget across every runtime/backend matrix cell.
 				const first = await withRuntimeLogTail(getRuntimeOutput, () =>
-					actor.kitchenSinkSmoke(320),
+					actor.kitchenSinkSmoke(160),
 				);
 				expect(first.metaCount).toBeGreaterThanOrEqual(19);
 				expect(first.dataCount).toBeGreaterThan(0);

@@ -92,6 +92,8 @@ These limits apply to the [SQLite database](/docs/actors/state#sqlite-database) 
 
 SQLite commit deltas are compressed and split into internal chunks before storage, but all chunks for one commit are published atomically. The commit limit is therefore based on raw dirty page bytes before compression, not the compressed delta size.
 
+Avoid `VACUUM` inside actor databases. It rewrites the database in one transaction and can exceed the dirty-page commit limit even when ordinary incremental writes fit.
+
 ### Actor Runtime Socket
 
 The experimental [Actor Runtime Socket](/docs/actors/actor-runtime-socket) negotiates its active frame limit during the handshake.

@@ -4,9 +4,6 @@ use std::time::Duration;
 
 use crate::time::Instant;
 
-#[cfg(test)]
-use std::sync::atomic::{AtomicUsize, Ordering};
-
 use anyhow::Result;
 #[cfg(test)]
 use parking_lot::Mutex;
@@ -43,22 +40,12 @@ struct InMemoryKv {
 }
 
 #[cfg(test)]
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(crate) struct KvApplyBatchSnapshot {
-	pub puts: Vec<(Vec<u8>, Vec<u8>)>,
-	pub deletes: Vec<Vec<u8>>,
-}
-
-#[cfg(test)]
 #[derive(Default)]
 struct InMemoryKvStats {
-	apply_batch_calls: AtomicUsize,
-	batch_get_calls: AtomicUsize,
-	batch_delete_calls: AtomicUsize,
-	// Forced-sync: test instrumentation is synchronous and never awaited under lock.
-	last_apply_batch: Mutex<Option<KvApplyBatchSnapshot>>,
-	apply_batch_before_write_lock: Mutex<Option<Arc<dyn Fn() + Send + Sync + 'static>>>,
 	delete_range_after_write_lock: Mutex<Option<Arc<dyn Fn() + Send + Sync + 'static>>>,
+	// Emulates backend page caps so pagination code paths can be exercised
+	// without an engine.
+	list_limit_cap: Mutex<Option<u32>>,
 }
 
 impl Kv {
@@ -149,6 +136,8 @@ impl Kv {
 					.filter(|(key, _)| key.starts_with(prefix))
 					.map(|(key, value)| (key.clone(), value.clone()))
 					.collect();
+				#[cfg(test)]
+				let opts = entries.capped_list_opts(opts);
 				apply_list_opts(&mut listed, opts);
 				Ok(listed)
 			}
@@ -185,6 +174,8 @@ impl Kv {
 					.range(start.to_vec()..end.to_vec())
 					.map(|(key, value)| (key.clone(), value.clone()))
 					.collect();
+				#[cfg(test)]
+				let opts = entries.capped_list_opts(opts);
 				apply_list_opts(&mut listed, opts);
 				Ok(listed)
 			}
@@ -202,13 +193,11 @@ impl Kv {
 						keys.iter().map(|key| key.to_vec()).collect(),
 					)
 					.await
-			}
-			KvBackend::InMemory(entries) => {
-				#[cfg(test)]
-				entries.stats.batch_get_calls.fetch_add(1, Ordering::SeqCst);
-				let entries = entries.store.read();
-				Ok(keys.iter().map(|key| entries.get(*key).cloned()).collect())
-			}
+				}
+				KvBackend::InMemory(entries) => {
+					let entries = entries.store.read();
+					Ok(keys.iter().map(|key| entries.get(*key).cloned()).collect())
+				}
 			KvBackend::Unconfigured => Err(kv_not_configured_error()),
 		};
 		self.log_call("batch_get", Some(keys.len()), None, started_at, &result);
@@ -263,23 +252,11 @@ impl Kv {
 				}
 
 				Ok(())
-			}
-			KvBackend::InMemory(store) => {
-				#[cfg(test)]
-				{
-					store.stats.apply_batch_calls.fetch_add(1, Ordering::SeqCst);
-					*store.stats.last_apply_batch.lock() = Some(KvApplyBatchSnapshot {
-						puts: puts.to_vec(),
-						deletes: deletes.to_vec(),
-					});
-					let hook = store.stats.apply_batch_before_write_lock.lock().clone();
-					if let Some(hook) = hook {
-						hook();
-					}
 				}
-				let mut store = store.store.write();
-				for key in deletes {
-					store.remove(key);
+				KvBackend::InMemory(store) => {
+					let mut store = store.store.write();
+					for key in deletes {
+						store.remove(key);
 				}
 				for (key, value) in puts {
 					store.insert(key.clone(), value.clone());
@@ -300,16 +277,11 @@ impl Kv {
 						keys.iter().map(|key| key.to_vec()).collect(),
 					)
 					.await
-			}
-			KvBackend::InMemory(entries) => {
-				#[cfg(test)]
-				entries
-					.stats
-					.batch_delete_calls
-					.fetch_add(1, Ordering::SeqCst);
-				let mut entries = entries.store.write();
-				for key in keys {
-					entries.remove(*key);
+				}
+				KvBackend::InMemory(entries) => {
+					let mut entries = entries.store.write();
+					for key in keys {
+						entries.remove(*key);
 				}
 				Ok(())
 			}
@@ -401,31 +373,11 @@ impl Default for Kv {
 
 #[cfg(test)]
 impl Kv {
-	pub(crate) fn test_apply_batch_call_count(&self) -> usize {
+	pub(crate) fn test_identity(&self) -> usize {
 		match &self.backend {
-			KvBackend::InMemory(store) => store.stats.apply_batch_calls.load(Ordering::SeqCst),
-			_ => 0,
-		}
-	}
-
-	pub(crate) fn test_batch_delete_call_count(&self) -> usize {
-		match &self.backend {
-			KvBackend::InMemory(store) => store.stats.batch_delete_calls.load(Ordering::SeqCst),
-			_ => 0,
-		}
-	}
-
-	pub(crate) fn test_batch_get_call_count(&self) -> usize {
-		match &self.backend {
-			KvBackend::InMemory(store) => store.stats.batch_get_calls.load(Ordering::SeqCst),
-			_ => 0,
-		}
-	}
-
-	pub(crate) fn test_last_apply_batch(&self) -> Option<KvApplyBatchSnapshot> {
-		match &self.backend {
-			KvBackend::InMemory(store) => store.stats.last_apply_batch.lock().clone(),
-			_ => None,
+			KvBackend::InMemory(store) => Arc::as_ptr(store) as usize,
+			KvBackend::Envoy(handle) => handle.get_envoy_key().as_ptr() as usize,
+			KvBackend::Unconfigured => 0,
 		}
 	}
 
@@ -438,12 +390,22 @@ impl Kv {
 		}
 	}
 
-	pub(crate) fn test_set_apply_batch_before_write_lock_hook(
-		&self,
-		hook: impl Fn() + Send + Sync + 'static,
-	) {
+	pub(crate) fn test_set_list_limit_cap(&self, cap: u32) {
 		if let KvBackend::InMemory(store) = &self.backend {
-			*store.stats.apply_batch_before_write_lock.lock() = Some(Arc::new(hook));
+			*store.stats.list_limit_cap.lock() = Some(cap);
+		}
+	}
+}
+
+#[cfg(test)]
+impl InMemoryKv {
+	fn capped_list_opts(&self, opts: ListOpts) -> ListOpts {
+		let Some(cap) = *self.stats.list_limit_cap.lock() else {
+			return opts;
+		};
+		ListOpts {
+			reverse: opts.reverse,
+			limit: Some(opts.limit.map_or(cap, |limit| limit.min(cap))),
 		}
 	}
 }

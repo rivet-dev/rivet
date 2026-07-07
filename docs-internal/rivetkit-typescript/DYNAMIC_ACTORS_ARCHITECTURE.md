@@ -28,9 +28,13 @@ execution.
 - Runtime bridge:
   `rivetkit-typescript/packages/rivetkit/src/dynamic/runtime-bridge.ts`
   Shared envelope and callback payload types for host and isolate.
-- Driver integration:
-  `drivers/file-system/global-state.ts` and `drivers/engine/actor-driver.ts`
-  Branch on definition type, construct dynamic runtime, and proxy fetch and websocket traffic.
+- Runtime integration:
+  `rivetkit-typescript/packages/rivetkit/src/registry/napi-runtime.ts` and
+  `rivetkit-typescript/packages/rivetkit/src/registry/native.ts`
+  The standalone TS actor drivers were removed. Actor lifecycle now runs in
+  rivetkit-core via NAPI, and these registry runtime files are the TypeScript
+  integration surface for constructing actor runtimes and proxying fetch and
+  websocket traffic.
 
 ## Lifecycle
 

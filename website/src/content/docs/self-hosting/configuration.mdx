@@ -75,6 +75,6 @@ Use `samples: 1` for a uniform random pick that skips slot reads. Use `samples >
 
 ## Related
 
-- SQLite actor startup picks the storage schema by probing the actor KV subspace for legacy v1 data. Existing v1 data stays on v1, and actors without v1 data start on v2.
+- RivetKit actor runtime persistence lives in SQLite. Existing actor KV data is imported into SQLite the first time an actor wakes on the migrated runtime, then the original KV data is left frozen for downgrade safety.
 - [PostgreSQL](/docs/self-hosting/postgres): Configure the experimental PostgreSQL backend
 - [File System](/docs/self-hosting/filesystem): Configure file system storage for development

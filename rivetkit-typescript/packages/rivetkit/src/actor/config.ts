@@ -1007,9 +1007,9 @@ const InstanceActorOptionsBaseSchema = z
 			.number()
 			.positive()
 			.default(64 * 1024),
-		/** Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading. */
+		/** @deprecated Internal storage moved to SQLite and no longer uses KV preloading, so this option is ignored. Will be removed in 2.2.0. */
 		preloadMaxWorkflowBytes: z.number().nonnegative().optional(),
-		/** Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading. */
+		/** @deprecated Internal storage moved to SQLite and no longer uses KV preloading, so this option is ignored. Will be removed in 2.2.0. */
 		preloadMaxConnectionsBytes: z.number().nonnegative().optional(),
 	})
 	.strict();
@@ -1970,18 +1970,6 @@ export const DocActorOptionsSchema = z
 			.optional()
 			.describe(
 				"Whether WebSockets using onWebSocket can be hibernated. WebSockets using actions/events are hibernatable by default. Default: false",
-			),
-		preloadMaxWorkflowBytes: z
-			.number()
-			.optional()
-			.describe(
-				"Override RivetKit's workflow preload budget for this actor. Set to 0 to disable workflow preloading.",
-			),
-		preloadMaxConnectionsBytes: z
-			.number()
-			.optional()
-			.describe(
-				"Override RivetKit's connections preload budget for this actor. Set to 0 to disable connections preloading.",
 			),
 	})
 	.describe("Actor options for timeouts and behavior configuration.");

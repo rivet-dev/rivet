@@ -169,6 +169,11 @@ export interface RuntimeSqlExecuteResult extends RuntimeSqlQueryResult {
 	lastInsertRowId?: number | null;
 }
 
+export interface RuntimeSqlBatchStatement {
+	sql: string;
+	params?: RuntimeSqlBindParams;
+}
+
 export function normalizeRuntimeSqlExecuteResult(
 	result: RuntimeSqlQueryResult & {
 		changes: number;
@@ -188,6 +193,9 @@ export interface RuntimeSqlDatabase {
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
+	executeBatch(
+		statements: RuntimeSqlBatchStatement[],
+	): Promise<RuntimeSqlExecuteResult[]>;
 	query(
 		sql: string,
 		params?: RuntimeSqlBindParams,
@@ -510,6 +518,10 @@ export interface CoreRuntime {
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlExecuteResult>;
+	actorSqlExecuteBatch(
+		ctx: ActorContextHandle,
+		statements: RuntimeSqlBatchStatement[],
+	): Promise<RuntimeSqlExecuteResult[]>;
 	actorSqlBeginTransaction(
 		ctx: ActorContextHandle,
 		timeoutMs?: number,

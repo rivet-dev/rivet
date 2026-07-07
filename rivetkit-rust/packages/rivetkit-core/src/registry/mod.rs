@@ -38,7 +38,6 @@ use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
 use crate::actor::context::{ActorContext, InspectorAttachGuard};
 use crate::actor::factory::ActorFactory;
-use crate::actor::keys::PERSIST_DATA_KEY;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, QueueSendResult, Request, Response, StateDelta};
 use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
@@ -748,34 +747,6 @@ fn build_actor_metadata_map_from_factories(
 			if let Some(name) = &config.name {
 				metadata.insert("name".to_owned(), json!(name));
 			}
-			metadata.insert(
-				"preload".to_owned(),
-				json!({
-					"keys": [
-						[1],
-						[3],
-						[5, 1, 1],
-						[6],
-					],
-					"prefixes": [
-						{
-							"prefix": [6, 1],
-							"maxBytes": config.preload_max_workflow_bytes.unwrap_or(131_072),
-							"partial": false,
-						},
-						{
-							"prefix": [2],
-							"maxBytes": config.preload_max_connections_bytes.unwrap_or(65_536),
-							"partial": false,
-						},
-						{
-							"prefix": [5, 1, 2],
-							"maxBytes": 65_536,
-							"partial": false,
-						},
-					],
-				}),
-			);
 			(actor_name.clone(), JsonValue::Object(metadata))
 		})
 		.collect()
@@ -1268,3 +1239,8 @@ fn map_envoy_stop_reason(reason: &protocol::StopActorReason) -> ShutdownKind {
 		protocol::StopActorReason::Destroy => ShutdownKind::Destroy,
 	}
 }
+
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
+#[cfg(test)]
+#[path = "../../tests/registry.rs"]
+pub(crate) mod tests;

@@ -8,8 +8,8 @@ mod moved_tests {
 	use tokio::time::advance;
 
 	use crate::actor::messages::{ActorEvent, StateDelta};
-	use crate::actor::preload::PreloadedPersistedActor;
-	use crate::actor::state::PersistedActor;
+	use crate::actor::keys::PERSIST_DATA_KEY;
+	use crate::actor::state::{PersistedActor, encode_persisted_actor};
 	use crate::actor::task::{ActorTask, LifecycleCommand};
 	use crate::actor::task_types::ShutdownKind;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
@@ -49,12 +49,25 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn startup_loads_preloaded_state_and_input_before_run_handler() {
-		let ctx = crate::actor::context::tests::new_with_kv(
+		let kv = crate::kv::tests::new_in_memory();
+		kv.put(
+			PERSIST_DATA_KEY,
+			&encode_persisted_actor(&PersistedActor {
+				input: Some(vec![1, 2, 3]),
+				has_initialized: false,
+				state: vec![9, 8, 7],
+				scheduled_events: Vec::new(),
+			})
+			.expect("persisted actor should encode"),
+		)
+		.await
+		.expect("legacy actor state should seed");
+		let ctx = crate::actor::task::tests::moved_tests::new_with_kv(
 			"actor-preloaded-startup",
 			"task-lifecycle",
 			Vec::new(),
 			"local",
-			crate::kv::tests::new_in_memory(),
+			kv,
 		);
 		let (observed_send, observed_rx) = oneshot::channel();
 		let observed_tx = Arc::new(Mutex::new(Some(observed_send)));
@@ -101,13 +114,7 @@ mod moved_tests {
 			ctx.clone(),
 			Some(vec![7, 7, 7]),
 			None,
-		)
-		.with_preloaded_persisted_actor(PreloadedPersistedActor::Some(PersistedActor {
-			input: Some(vec![1, 2, 3]),
-			has_initialized: false,
-			state: vec![9, 8, 7],
-			scheduled_events: Vec::new(),
-		}));
+		);
 
 		let (start_tx, start_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })

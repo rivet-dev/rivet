@@ -84,8 +84,6 @@ pub struct ActorConfig {
 	pub max_queue_message_size: u32,
 	pub max_incoming_message_size: u32,
 	pub max_outgoing_message_size: u32,
-	pub preload_max_workflow_bytes: Option<u64>,
-	pub preload_max_connections_bytes: Option<u64>,
 	pub overrides: Option<ActorConfigOverrides>,
 	pub actions: Vec<ActionDefinition>,
 	/// Author-declared inspector tab entries (custom tabs + built-in
@@ -119,8 +117,6 @@ pub struct ActorConfigInput {
 	pub max_queue_message_size: Option<u32>,
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
-	pub preload_max_workflow_bytes: Option<f64>,
-	pub preload_max_connections_bytes: Option<f64>,
 	pub actions: Option<Vec<ActionDefinition>>,
 	pub inspector_tabs: Option<Vec<InspectorTabEntry>>,
 }
@@ -189,11 +185,6 @@ impl ActorConfig {
 		if let Some(value) = config.max_outgoing_message_size {
 			actor_config.max_outgoing_message_size = value;
 		}
-		actor_config.preload_max_workflow_bytes =
-			config.preload_max_workflow_bytes.map(|value| value as u64);
-		actor_config.preload_max_connections_bytes = config
-			.preload_max_connections_bytes
-			.map(|value| value as u64);
 		if let Some(actions) = config.actions {
 			actor_config.actions = actions;
 		}
@@ -250,8 +241,6 @@ impl Default for ActorConfig {
 			max_queue_message_size: DEFAULT_MAX_QUEUE_MESSAGE_SIZE,
 			max_incoming_message_size: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
-			preload_max_workflow_bytes: None,
-			preload_max_connections_bytes: None,
 			overrides: None,
 			actions: Vec::new(),
 			inspector_tabs: Vec::new(),

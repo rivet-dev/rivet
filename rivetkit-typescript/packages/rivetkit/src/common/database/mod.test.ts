@@ -43,6 +43,16 @@ class FakeSqliteDatabase implements SqliteDatabase {
 		};
 	}
 
+	async executeBatch(
+		statements: Array<{ sql: string; params?: SqliteBindings }>,
+	): Promise<SqliteExecuteResult[]> {
+		const results: SqliteExecuteResult[] = [];
+		for (const statement of statements) {
+			results.push(await this.execute(statement.sql, statement.params));
+		}
+		return results;
+	}
+
 	async run(sql: string, params?: SqliteBindings): Promise<void> {
 		await this.execute(sql, params);
 	}

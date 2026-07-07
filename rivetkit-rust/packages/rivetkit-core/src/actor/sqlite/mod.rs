@@ -76,6 +76,12 @@ pub struct SqliteRuntimeConfig {
 	pub generation: Option<u64>,
 }
 
+#[derive(Clone, Debug)]
+pub struct SqliteBatchStatement {
+	pub sql: String,
+	pub params: Option<Vec<BindParam>>,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SqliteBackend {
 	LocalNative,
@@ -448,6 +454,54 @@ impl SqliteDb {
 		}
 	}
 
+	pub async fn execute_batch(
+		&self,
+		statements: Vec<SqliteBatchStatement>,
+	) -> Result<Vec<ExecuteResult>> {
+		let statement_count = statements.len();
+		let binding_count = statements
+			.iter()
+			.map(|statement| bind_param_count(&statement.params))
+			.sum();
+		let result = async {
+			let transaction = self.begin_transaction(None).await?;
+			let mut results = Vec::with_capacity(statements.len());
+			for statement in statements {
+				match transaction.execute(statement.sql, statement.params).await {
+					Ok(result) => results.push(result),
+					Err(error) => {
+						return match transaction.rollback().await {
+							Ok(()) => Err(error.context("execute sqlite batch statement")),
+							Err(rollback_error) => Err(error
+								.context("execute sqlite batch statement")
+								.context(rollback_error.context("rollback sqlite batch transaction"))),
+						};
+					}
+			}
+			transaction
+				.commit()
+				.await
+				.context("commit sqlite batch transaction")?;
+			Ok(results)
+		}
+		.await;
+
+		match result {
+			Ok(results) => Ok(results),
+			Err(error) => {
+				let error = self.attach_actor(error);
+				self.log_operation_error_with_count(
+					"execute_batch",
+					"<batch>",
+					binding_count,
+					statement_count,
+					&error,
+				);
+				Err(error)
+			}
+		}
+	}
+
 	pub async fn close(&self) -> Result<()> {
 		let db = self.clone();
 		run_detached_transaction_task(
@@ -597,6 +651,17 @@ impl SqliteDb {
 		binding_count: usize,
 		error: &anyhow::Error,
 	) {
+		self.log_operation_error_with_count(operation, sql, binding_count, 1, error);
+	}
+
+	fn log_operation_error_with_count(
+		&self,
+		operation: &'static str,
+		sql: &str,
+		binding_count: usize,
+		statement_count: usize,
+		error: &anyhow::Error,
+	) {
 		let structured = RivetError::extract(error);
 		let error_chain = error.chain().map(ToString::to_string).collect::<Vec<_>>();
 		tracing::error!(
@@ -606,6 +671,7 @@ impl SqliteDb {
 			operation,
 			sql,
 			binding_count,
+			statement_count,
 			group = structured.group(),
 			code = structured.code(),
 			error_message = %structured.message(),

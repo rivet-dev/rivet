@@ -1,0 +1,5 @@
+{
+  "code": "key_too_large",
+  "group": "kv",
+  "message": "KV key is too large."
+}

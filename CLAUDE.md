@@ -138,7 +138,7 @@ docker-compose up -d
 
 ### RivetKit Test Fixtures
 
-- Core tests that touch the `_RIVET_TEST_INSPECTOR_TOKEN` env override must share a process-wide lock with startup tests that assert inspector-token initialization side effects; otherwise parallel `cargo test` runs can flip `init_inspector_token(...)` between the env-override no-op path and the KV-backed path.
+- Core tests that touch the `_RIVET_TEST_INSPECTOR_TOKEN` env override must share a process-wide lock with startup tests that assert inspector-token initialization side effects; otherwise parallel `cargo test` runs can flip `init_inspector_token(...)` between the env-override no-op path and the stored-token initialization path.
 - For the fast static/http/bare driver verifier, pass only the files listed under `## Fast Tests` in `~/.agents/notes/driver-test-progress.md`; `tests/driver/*.test.ts` also pulls in slow-suite files and gives bogus gate failures.
 - Wasm host smoke tests can drive `buildNativeFactory` through `WasmCoreRuntime` fake bindings to cover actor callbacks, KV, state serialization, remote SQLite routing, and NAPI import boundaries without checked-in wasm-pack output.
 - When moving Rust inline tests out of `src/`, keep a tiny source-owned `#[cfg(test)] #[path = "..."] mod tests;` shim so the moved file still has private module access without widening runtime visibility. Prefer a dedicated moved-test file per source module; reusing stale shared `tests/modules/*.rs` files can silently rot against private APIs and explode once you wire them back in.
@@ -315,10 +315,6 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 - In `rivetkit-typescript/packages/rivetkit/tests/`, put the `vi.waitFor(...)` justification on the immediately preceding `//` line. `pnpm run check:wait-for-comments` enforces the adjacent comment.
 - **Rust tests live under `tests/`, not inline `#[cfg(test)] mod tests` in `src/`.** Move every inline test module in Rust crates to the crate's `tests/` directory. Exceptions must be justified (e.g., testing a private internal that can't be reached from an integration test).
 - For running RivetKit tests, Vitest filter gotchas, the driver-test parity workflow, and Rust test layout rules, see `.claude/reference/testing.md`.
-
-## Traces Package
-
-- Keep `@rivetkit/traces` chunk writes under the 128 KiB actor KV value limit. Use 96 KiB chunks unless a multipart reader/writer replaces the single-value format.
 
 ## Naming + Data Conventions
 

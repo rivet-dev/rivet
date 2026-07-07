@@ -12,23 +12,27 @@ Actor subsystems are composed into `ActorContextInner`, not separate managers.
 - Schedule storage lives on `ActorContextInner`. Behavior sits in `actor/schedule.rs` `impl ActorContext` blocks. Do not reintroduce `Arc<ScheduleInner>` or a public `Schedule` re-export.
 - Event fanout lives directly in `ActorContext::broadcast`. Do not reintroduce a separate `EventBroadcaster` subsystem.
 
-## Persisted KV layout
+## Internal SQLite storage
 
-Values are serialized with a vbare-compatible 2-byte little-endian embedded version prefix before the BARE body, matching the TypeScript `serializeWithEmbeddedVersion(...)` format.
+Runtime actor persistence lives in internal SQLite tables. The `_rivet_` table prefix is reserved for RivetKit runtime data and must not be used by user schemas.
 
-| Key | Contents |
+| Table | Contents |
 |---|---|
-| `[1]` | `PersistedActor` snapshot (matches TypeScript `KEYS.PERSIST_DATA`) |
-| `[2] + conn_id` | Hibernatable websocket connection payload, TypeScript v4 BARE field order |
-| `[5, 1, 1]` | Queue metadata |
-| `[5, 1, 2] + u64be(id)` | Queue messages (FIFO prefix scan) |
-| `[6]` | `LAST_PUSHED_ALARM_KEY` — `Option<i64>` last pushed driver alarm |
+| `_rivet_meta` | Bootstrap and import bookkeeping key-value rows such as `schema_version` and `kv_import_state` |
+| `_rivet_actor` | Cold actor startup fields such as `has_initialized` and input |
+| `_rivet_actor_state` | Hot serialized user state |
+| `_rivet_schedule_events` | Durable scheduled actions |
+| `_rivet_conns` / `_rivet_conn_state` | Hibernatable websocket cold metadata and hot state |
+| `_rivet_runtime` | Runtime singletons: last pushed alarm, inspector token, queue next id |
+| `_rivet_queue` | Queue messages |
+| `_rivet_wf_kv` | TypeScript workflow storage with verbatim packed keys |
+| `_rivet_user_kv` | Deprecated user `c.kv` compatibility storage |
 
-Preload handling is tri-state for each prefix:
+## Legacy KV import
 
-- `[1]`: no bundle falls back to KV, requested-but-absent means fresh actor defaults, present decodes the persisted actor.
-- `[2] + conn_id`: consumed from preload when `PreloadedKv.requested_prefixes` includes `[2]`; fall back to `kv.list_prefix([2])` only when that prefix is absent.
-- `[5, 1, 1]` + `[5, 1, 2]`: consumed from preload when requested; fall back to KV only when absent.
+The first wake on the migrated runtime runs `actor/migrate_kv_to_sqlite/` before actor readiness. The importer live-scans the legacy actor KV keyspace, copies recognized records into SQLite, marks `_rivet_meta.kv_import_state = done`, and leaves legacy KV bytes untouched as a frozen downgrade snapshot.
+
+Legacy traces under `[7, 1, ...]` are intentionally skipped and are not copied to `_rivet_user_kv`. The only runtime KV write after migration is the inspector token mirror at `[3]`, kept until the dashboard stops fetching the token through the public actor-KV endpoint.
 
 ## State persistence flow
 
@@ -36,7 +40,7 @@ Preload handling is tri-state for each prefix:
 - Receive-loop persistence routes deferred saves through `ActorContext::request_save(...)` + `ActorEvent::SerializeState { reason: Save, .. }`.
 - Shutdown adapters persist explicitly with `ActorContext::save_state(Vec<StateDelta>)` because `Sleep`/`Destroy` replies are unit-only. Direct durability must still clear pending save-request flags after a successful write.
 - Actor state is post-boot delta-only. Use `request_save` / `save_state(Vec<StateDelta>)`. Do not reintroduce `set_state` / `mutate_state`.
-- Schedule mutations update `ActorState` through a single helper, then immediately kick `save_state(immediate = true)` and resync the envoy alarm to the earliest event.
+- Schedule mutations write point rows in `_rivet_schedule_events`, then resync the envoy alarm to the earliest event.
 - State mutations from inside `on_state_change` callbacks fail with `actor/state_mutation_reentrant`. Use vars or another non-state side channel for callback-run counters.
 
 ## Inspector wiring
@@ -47,7 +51,7 @@ Preload handling is tri-state for each prefix:
 ## Schedule + alarms
 
 - `Schedule` alarm sync is guarded by `dirty_since_push`. Fresh schedules start dirty, mutations set dirty, and unchanged shutdown syncs must not re-push identical envoy alarms.
-- Persisted driver-alarm dedup stores the last pushed `Option<i64>` at actor KV key `[6]`. Startup loads it with `PERSIST_DATA_KEY` and skips identical future alarm pushes.
+- Persisted driver-alarm dedup stores the last pushed `Option<i64>` in `_rivet_runtime.last_pushed_alarm`. Startup loads it from SQLite and skips identical future alarm pushes.
 
 ## Transport helpers
 
@@ -67,14 +71,15 @@ Preload handling is tri-state for each prefix:
 
 ## Startup sequence
 
-1. Load `PersistedActor` into `ActorContext` before factory creation.
-2. Persist `has_initialized` immediately.
-3. Resync persisted alarms and restore hibernatable connections.
-4. Set `ready` before the driver hook.
-5. Reset the sleep timer.
-6. Spawn `run` in a detached panic-catching task.
-7. Drain overdue scheduled events after `started`.
-8. Set `started` after the driver hook completes.
+1. Ensure the internal SQLite schema and import legacy KV to SQLite if needed.
+2. Load actor startup data from internal SQLite into `ActorContext` before factory creation.
+3. Persist `has_initialized` immediately.
+4. Resync persisted alarms and restore hibernatable connections.
+5. Set `ready` before the driver hook.
+6. Reset the sleep timer.
+7. Spawn `run` in a detached panic-catching task.
+8. Drain overdue scheduled events after `started`.
+9. Set `started` after the driver hook completes.
 
 ## Shutdown sequences
 

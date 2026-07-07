@@ -119,7 +119,9 @@ pub use actor::config::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
 };
 pub use actor::connection::ConnHandle;
-pub use actor::context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
+pub use actor::context::{
+	ActorContext, ActorKv, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion,
+};
 pub use actor::factory::{ActorEntryFn, ActorFactory};
 pub use actor::kv::Kv;
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};

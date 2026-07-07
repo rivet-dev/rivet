@@ -4,7 +4,7 @@ This page is the short version of the actor state contract shared by `rivetkit-c
 
 ## Ownership
 
-- `rivetkit-core` owns persistence, save scheduling, KV writes, save completion tracking, and persisted connection/schedule metadata.
+- `rivetkit-core` owns persistence, save scheduling, SQLite writes, save completion tracking, and persisted connection/schedule metadata.
 - The foreign runtime owns user-level state serialization. For TypeScript actors, JS keeps the live `c.state` object and returns encoded deltas through the NAPI `serializeState` callback.
 - NAPI only translates between JS values and core types. It should not decide whether state is dirty, when a save is durable, or how deltas are applied.
 
@@ -14,7 +14,7 @@ This page is the short version of the actor state contract shared by `rivetkit-c
 - `ActorContext::request_save(RequestSaveOpts { immediate, max_wait_ms })` is a save hint. It marks a save request, emits `LifecycleEvent::SaveRequested`, and lets the runtime serialize state later.
 - `ActorContext::request_save_and_wait(opts)` uses the same request path, then waits until the matching save request revision completes. TypeScript uses this for immediate durable saves.
 - `ActorContext::save_state(Vec<StateDelta>)` applies structured runtime output. Deltas can replace the actor-state blob, persist hibernatable connection bytes, or remove hibernation records.
-- `ActorContext::persist_state(SaveStateOpts)` is internal core persistence for core-owned dirty data, shutdown cleanup, and schedule metadata. It persists the current `PersistedActor` snapshot and should not become a user-facing runtime mutation API.
+- `ActorContext::persist_state(SaveStateOpts)` is internal core persistence for core-owned dirty data, shutdown cleanup, and schedule metadata. It persists structured internal SQLite rows and should not become a user-facing runtime mutation API.
 
 ## Save Flow
 
@@ -22,17 +22,17 @@ This page is the short version of the actor state contract shared by `rivetkit-c
 2. The runtime calls `request_save(...)`, or core calls it after core-owned hibernatable connection state changes.
 3. `ActorTask` receives `LifecycleEvent::SaveRequested` and dispatches `SerializeState { reason: Save }` through the foreign-runtime callback.
 4. The runtime returns `StateDelta` values.
-5. Core applies those deltas with `save_state(...)`, writes the encoded records to KV, updates in-memory snapshots, and marks the save request revision complete.
+5. Core applies those deltas with `save_state(...)`, writes the encoded records to internal SQLite tables, updates in-memory snapshots, and marks the save request revision complete.
 
 Immediate saves are the same flow with a zero debounce and a waiter. They must not bypass `serializeState`.
 
 ## Delta Contract
 
-- `StateDelta::ActorState(bytes)` replaces the persisted actor-state blob under the single-byte KV key `[1]`.
-- `StateDelta::ConnHibernation { conn, bytes }` writes hibernatable connection state under the connection KV prefix.
-- `StateDelta::ConnHibernationRemoved(conn)` removes a persisted hibernatable connection record.
+- `StateDelta::ActorState(bytes)` replaces the hot actor-state row in `_rivet_actor_state`.
+- `StateDelta::ConnHibernation { conn, bytes }` upserts the connection cold row in `_rivet_conns` and hot row in `_rivet_conn_state`.
+- `StateDelta::ConnHibernationRemoved(conn)` removes the persisted hibernatable connection rows.
 
-Core prepares the write batch while holding the save guard, then releases the guard before awaiting KV. Waiters that need durability use save-request revisions or the in-flight write counter rather than holding the save guard across I/O.
+Core prepares the SQL batch while holding the save guard, then releases the guard before awaiting SQLite. Waiters that need durability use save-request revisions or the in-flight write counter rather than holding the save guard across I/O.
 
 ## Do Not Reintroduce
 

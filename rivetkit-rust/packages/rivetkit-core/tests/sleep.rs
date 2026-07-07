@@ -495,20 +495,20 @@ mod moved_tests {
 		assert_eq!(rivet_err.code(), "starting");
 	}
 
+	// Duplicate `ctx.sleep()` calls are deliberately idempotent: `sleep()` returns
+	// `Ok(())` when `sleep_requested` was already set for this generation (commit
+	// ae09be095abf "fix(rivetkit): make duplicate sleep requests idempotent").
+	// Only `destroy()` still errors with `actor.stopping` on a duplicate request;
+	// that path is covered by `double_destroy_errors_with_actor_stopping` below.
 	#[tokio::test(start_paused = true)]
-	async fn double_sleep_errors_with_actor_stopping() {
+	async fn double_sleep_is_idempotent_while_started() {
 		let ctx = ActorContext::new_for_sleep_tests("actor-double-sleep");
 		ctx.set_started(true);
 
 		ctx.sleep()
 			.expect("first sleep call should be accepted after startup");
-
-		let err = ctx
-			.sleep()
-			.expect_err("second sleep call should fail as already requested");
-		let rivet_err = rivet_error::RivetError::extract(&err);
-		assert_eq!(rivet_err.group(), "actor");
-		assert_eq!(rivet_err.code(), "stopping");
+		ctx.sleep()
+			.expect("second sleep call should be accepted as an idempotent request");
 	}
 
 	#[tokio::test(start_paused = true)]

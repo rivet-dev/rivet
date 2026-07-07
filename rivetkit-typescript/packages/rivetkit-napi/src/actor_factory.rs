@@ -109,8 +109,6 @@ pub struct JsActorConfig {
 	pub max_queue_message_size: Option<u32>,
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
-	pub preload_max_workflow_bytes: Option<f64>,
-	pub preload_max_connections_bytes: Option<f64>,
 	pub actions: Option<Vec<JsActionDefinition>>,
 	pub inspector_tabs: Option<Vec<JsInspectorTabEntry>>,
 }
@@ -1041,8 +1039,6 @@ impl From<JsActorConfig> for ActorConfigInput {
 			max_queue_message_size: value.max_queue_message_size,
 			max_incoming_message_size: value.max_incoming_message_size,
 			max_outgoing_message_size: value.max_outgoing_message_size,
-			preload_max_workflow_bytes: value.preload_max_workflow_bytes,
-			preload_max_connections_bytes: value.preload_max_connections_bytes,
 			actions: value.actions.map(|actions| {
 				actions
 					.into_iter()

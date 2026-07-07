@@ -1,6 +1,7 @@
 import { decodeBridgeRivetError } from "@/actor/errors";
 import type {
 	SqliteBindings,
+	SqliteBatchStatement,
 	SqliteDatabase,
 	SqliteExecuteResult,
 	SqliteNativeMetrics,
@@ -66,12 +67,20 @@ interface NativeExecuteResult {
 	lastInsertRowId?: number | null;
 }
 
+interface NativeBatchStatement {
+	sql: string;
+	params?: NativeBindParam[] | null;
+}
+
 export interface JsNativeDatabaseLike {
 	exec(sql: string): Promise<NativeExecResult>;
 	execute(
 		sql: string,
 		params?: NativeBindParam[] | null,
 	): Promise<NativeExecuteResult>;
+	executeBatch?(
+		statements: NativeBatchStatement[],
+	): Promise<NativeExecuteResult[]>;
 	beginTransaction(timeoutMs?: number): Promise<JsNativeTransactionLike>;
 	query(
 		sql: string,
@@ -219,6 +228,15 @@ function toNativeBindings(
 	});
 }
 
+function toNativeBatchStatement(
+	statement: SqliteBatchStatement,
+): NativeBatchStatement {
+	return {
+		sql: statement.sql,
+		params: toNativeBindings(statement.sql, statement.params),
+	};
+}
+
 function normalizeNativeMetrics(
 	metrics: SqliteNativeMetrics | null | undefined,
 ): SqliteNativeMetrics | null {
@@ -354,6 +372,46 @@ export function wrapJsNativeDatabase(
 			params?: SqliteBindings,
 		): Promise<SqliteExecuteResult> {
 			return await executeNative(sql, params);
+		},
+		async executeBatch(
+			statements: SqliteBatchStatement[],
+		): Promise<SqliteExecuteResult[]> {
+			const nativeStatements = statements.map(toNativeBatchStatement);
+			const release = gate.enter();
+			let transaction: JsNativeTransactionLike | undefined;
+			try {
+				const results = database.executeBatch
+					? await database.executeBatch(nativeStatements)
+					: await (async () => {
+						transaction = await database.beginTransaction();
+						const transactionResults: NativeExecuteResult[] = [];
+						for (const statement of nativeStatements) {
+							transactionResults.push(
+								await transaction.execute(statement.sql, statement.params),
+							);
+						}
+						await transaction.commit();
+						transaction = undefined;
+						return transactionResults;
+					})();
+				for (const result of results) {
+					if (result.lastInsertRowId !== undefined) {
+						lastInsertRowId = result.lastInsertRowId;
+					}
+				}
+				return results;
+			} catch (error) {
+				if (transaction) {
+					try {
+						await transaction.rollback();
+					} catch {
+						// The original batch error is more actionable than cleanup failure.
+					}
+				}
+				enrichNativeDatabaseError(database, error);
+			} finally {
+				release();
+			}
 		},
 		async beginTransaction(
 			timeoutMs?: number,

@@ -40,7 +40,6 @@ import {
 	getActor,
 	getActorByKey,
 	getOrCreateActor,
-	kvGet,
 	listActorsByName,
 } from "./api-endpoints";
 import { EngineApiError, getEndpoint } from "./api-utils";
@@ -370,46 +369,6 @@ export class RemoteEngineControlClient implements EngineControlClient {
 		const args = await createWebSocketProxy(c, wsGuardUrl, protocols);
 
 		return await upgradeWebSocket(() => args)(c, noopNext());
-	}
-
-	async kvGet(actorId: string, key: Uint8Array): Promise<string | null> {
-		await this.#metadataPromise;
-
-		logger().debug({ msg: "getting kv value via engine api", key });
-
-		const response = await kvGet(
-			this.#config,
-			actorId,
-			new TextDecoder("utf8").decode(key),
-		);
-
-		return response.value;
-	}
-
-	async kvBatchGet(
-		_actorId: string,
-		_keys: Uint8Array[],
-	): Promise<(Uint8Array | null)[]> {
-		throw new Error("kvBatchGet not supported on remote engine client");
-	}
-
-	async kvBatchPut(
-		_actorId: string,
-		_entries: [Uint8Array, Uint8Array][],
-	): Promise<void> {
-		throw new Error("kvBatchPut not supported on remote engine client");
-	}
-
-	async kvBatchDelete(_actorId: string, _keys: Uint8Array[]): Promise<void> {
-		throw new Error("kvBatchDelete not supported on remote engine client");
-	}
-
-	async kvDeleteRange(
-		_actorId: string,
-		_start: Uint8Array,
-		_end: Uint8Array,
-	): Promise<void> {
-		throw new Error("kvDeleteRange not supported on remote engine client");
 	}
 
 	displayInformation(): RuntimeDisplayInformation {

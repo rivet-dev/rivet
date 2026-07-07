@@ -18,7 +18,7 @@ import type {
 	QueueNextOptions,
 	QueueResultMessageForName,
 } from "@/actor/config";
-import { RAW_STATE_SYMBOL, type RunContext } from "@/actor/config";
+import type { RunContext } from "@/actor/config";
 import type {
 	AnyActorDefinition,
 	BaseActorDefinition,
@@ -469,7 +469,6 @@ export class WorkflowContext<
 		TEvents,
 		TQueues
 	>;
-
 	constructor(
 		inner: WorkflowContextInterface,
 		runCtx: RunContext<
@@ -968,9 +967,9 @@ export class WorkflowContext<
 		return this.#inner.isEvicted();
 	}
 
-	// Runs a user step body inside a fresh step context, snapshotting actor
-	// state/vars so a thrown step rolls back its mutations, and deactivating the
-	// step context once the body settles so it cannot be used after the step.
+	// Runs a user step body inside a fresh step context and deactivates the step
+	// context once the body settles. Workflows are roll-forward only, so state and
+	// vars mutations made before a failure always remain visible.
 	async #runStep<T>(
 		run: WorkflowStepRun<
 			T,
@@ -995,28 +994,8 @@ export class WorkflowContext<
 			TQueues
 		>(this.#runCtx, () => this.#markGuardTriggered());
 
-		let stateSnapshot: { state: TState } | null = null;
-		try {
-			stateSnapshot = { state: this.#runCtx[RAW_STATE_SYMBOL]() };
-		} catch (error) {
-			this.#runCtx.log.debug({
-				msg: "failed to get state, likely due to being stateless workflow",
-				error,
-			});
-		}
-		if (stateSnapshot) {
-			stateSnapshot.state = structuredClone(stateSnapshot.state);
-		}
-		const varsSnapshot = structuredClone(this.#runCtx.vars);
-
 		try {
 			return await run(stepCtx);
-		} catch (error) {
-			if (stateSnapshot) {
-				this.#runCtx.state = stateSnapshot.state;
-			}
-			this.#runCtx.vars = varsSnapshot;
-			throw error;
 		} finally {
 			stepCtx[DEACTIVATE_STEP]();
 		}
@@ -1040,8 +1019,7 @@ export class WorkflowContext<
 		};
 	}
 
-	// Runs a step rollback compensation with an active step context. Rollbacks
-	// intentionally mutate actor state, so their writes are not snapshotted.
+	// Runs a step rollback compensation with an active step context.
 	async #runRollback<T>(
 		rollback: WorkflowStepRollback<
 			T,

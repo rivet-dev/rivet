@@ -4,12 +4,6 @@ import type {
 	AnyActorDefinition,
 	BaseActorDefinition,
 } from "@/actor/definition";
-import {
-	KEYS,
-	queueMessagesPrefix,
-	queueMetadataKey,
-	workflowStoragePrefix,
-} from "@/actor/keys";
 import { buildEngineEndpoint, ENGINE_HOST, ENGINE_PORT } from "@/common/engine";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { VERSION } from "@/utils";
@@ -440,31 +434,6 @@ export function buildActorNames(
 			// Actor options take precedence over run metadata
 			metadata.icon = options.icon ?? runMeta.icon;
 			metadata.name = options.name ?? runMeta.name;
-			metadata.preload = {
-				keys: [
-					Array.from(KEYS.PERSIST_DATA),
-					Array.from(KEYS.INSPECTOR_TOKEN),
-					Array.from(queueMetadataKey()),
-					Array.from(KEYS.LAST_PUSHED_ALARM),
-				],
-				prefixes: [
-					{
-						prefix: Array.from(workflowStoragePrefix()),
-						maxBytes: options.preloadMaxWorkflowBytes ?? 131_072,
-						partial: false,
-					},
-					{
-						prefix: Array.from(KEYS.CONN_PREFIX),
-						maxBytes: options.preloadMaxConnectionsBytes ?? 65_536,
-						partial: false,
-					},
-					{
-						prefix: Array.from(queueMessagesPrefix()),
-						maxBytes: 65_536,
-						partial: false,
-					},
-				],
-			};
 			// Remove undefined values
 			if (!metadata.icon) delete metadata.icon;
 			if (!metadata.name) delete metadata.name;

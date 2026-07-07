@@ -1,4 +1,3 @@
-import type { ActorDriver } from "@/actor/driver";
 import type { Client } from "@/client/client";
 import type { RegistryConfig } from "@/registry/config";
 import type { DynamicActorLoader } from "./internal";
@@ -10,7 +9,6 @@ export interface DynamicActorIsolateRuntimeConfig {
 	input: unknown;
 	region: string;
 	loader: DynamicActorLoader;
-	actorDriver: ActorDriver;
 	inlineClient: Client<any>;
 	test: RegistryConfig["test"];
 }

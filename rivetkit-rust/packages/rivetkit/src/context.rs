@@ -15,7 +15,7 @@ use parking_lot::{
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
 use rivetkit_core::actor::state::OnStateChangeGuard;
 use rivetkit_core::{
-	ActorContext, ActorKey, ConnHandle, ConnId, KeepAwakeRegion, Kv, RequestSaveOpts, SqliteDb,
+	ActorContext, ActorKey, ActorKv, ConnHandle, ConnId, KeepAwakeRegion, RequestSaveOpts, SqliteDb,
 	StateDelta, actor::connection::ConnHandles, error::ActorRuntime,
 };
 use serde::{Serialize, de::DeserializeOwned};
@@ -215,7 +215,7 @@ impl<A: Actor> Ctx<A> {
 		note = "Actor KV is deprecated. Use embedded SQLite (`sql()`) or actor state instead."
 	)]
 	#[allow(deprecated)]
-	pub fn kv(&self) -> &Kv {
+	pub fn kv(&self) -> &ActorKv {
 		self.inner.kv()
 	}
 

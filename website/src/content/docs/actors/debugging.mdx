@@ -131,7 +131,7 @@ curl "$RIVET_API/actors/{actor_id}/kv/keys/{base64_key}" \
   -H "Authorization: Bearer $RIVET_TOKEN"
 ```
 
-Returns the value stored at the given key.
+Returns the value stored at the given key in the actor KV compatibility snapshot. After an actor has migrated to SQLite-backed runtime storage, this endpoint is stale for user KV and internal runtime records; it continues to expose the frozen pre-migration KV data. The inspector token key is the exception and remains mirrored for dashboard compatibility.
 
 See the [OpenAPI spec](https://github.com/rivet-dev/rivet/tree/main/rivetkit-openapi) for the full schema of all management endpoints.
 
@@ -269,7 +269,7 @@ Standard actor endpoints (health, actions, requests) and inspector endpoints hav
 
 #### Inspector Endpoints
 
-Each actor generates a unique inspector token on first start and persists it in its internal KV store at key `0x03` (base64 `Aw==`). Pass it as a bearer token in the `Authorization` header.
+Each actor generates a unique inspector token on first start and persists it in internal SQLite storage. It is also mirrored to legacy KV key `0x03` (base64 `Aw==`) for dashboard compatibility. Pass it as a bearer token in the `Authorization` header.
 
 Inspector endpoints always require the actor's inspector token, including in local development. There is no local-development bypass.
 
@@ -286,7 +286,7 @@ curl "$RIVET_API/gateway/{actor_id}/inspector/summary" \
 
 #### Retrieving the Inspector Token
 
-Each actor generates a unique inspector token on first start and persists it in its internal KV store. The Rivet dashboard retrieves this token automatically, but if you need it for direct API access, fetch it from the management KV endpoint. This applies in every environment, including local development.
+Each actor generates a unique inspector token on first start and persists it in internal SQLite storage. The token is also mirrored to the legacy KV key below so the Rivet dashboard can continue to retrieve it through the management KV endpoint. This applies in every environment, including local development.
 
 The inspector token is stored at internal KV key `0x03` (base64: `Aw==`). The response value is also base64-encoded.
 
