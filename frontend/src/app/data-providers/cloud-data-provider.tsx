@@ -24,6 +24,7 @@ function createClient() {
 		baseUrl: () => cloudEnv().VITE_APP_CLOUD_API_URL,
 		environment: "",
 		token: async () => "",
+		// @ts-expect-error
 		fetcher: async (args) => {
 			Object.keys(args.headers || {}).forEach((key) => {
 				if (key.toLowerCase().startsWith("x-fern-")) {
@@ -31,6 +32,7 @@ function createClient() {
 				}
 			});
 			return await fetcher(
+				// @ts-expect-error
 				{
 					...args,
 					maxRetries: 1,
@@ -85,6 +87,26 @@ export const createGlobalContext = () => {
 				queryKey: [{ organization, project }, "billing-details"],
 				queryFn: async () => {
 					const response = await client.billing.details(project, {
+						org: organization,
+					});
+					return response;
+				},
+			});
+		},
+		// Fully-computed usage breakdown (plan, period, per-metric usage/included/
+		// overage, total). The backend does all the billing math so the dashboard
+		// only renders the result.
+		billingUsageQueryOptions({
+			organization,
+			project,
+		}: {
+			organization: string;
+			project: string;
+		}) {
+			return queryOptions({
+				queryKey: [{ organization, project }, "billing-usage"],
+				queryFn: async () => {
+					const response = await client.billing.usage(project, {
 						org: organization,
 					});
 					return response;
@@ -849,6 +871,12 @@ export const createProjectContext = ({
 		},
 		currentProjectBillingDetailsQueryOptions() {
 			return parent.currentOrganizationBillingDetailsQueryOptions({
+				project,
+			});
+		},
+		currentProjectBillingUsageQueryOptions() {
+			return parent.billingUsageQueryOptions({
+				organization,
 				project,
 			});
 		},

@@ -56,7 +56,7 @@
 			"react-dom": "19.1.0",
 			"@rivet-gg/components": "workspace:*",
 			"@rivet-gg/icons": "workspace:*",
-			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@e5c4911",
+			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@0393f87",
 			"rivetkit": "workspace:*",
 			"@rivetkit/engine-api-full": "workspace:*",
 			"@codemirror/state": "6.5.2",

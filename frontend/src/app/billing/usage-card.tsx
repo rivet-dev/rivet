@@ -19,7 +19,12 @@ import {
 	CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 
-export type MetricType = "hours" | "bytes" | "operations";
+export type MetricType =
+	| "hours"
+	| "bytes"
+	| "operations"
+	| "vcpu-hours"
+	| "gib-hours";
 
 function stripTrailingZeros(value: number, decimals: number): string {
 	return value.toFixed(decimals).replace(/\.?0+$/, "");
@@ -74,6 +79,28 @@ export function formatMetricValue(value: bigint, type: MetricType): string {
 				return `${stripTrailingZeros(units / 1_000, 2)}K ops`;
 			}
 			return `${Math.round(units)} ops`;
+		}
+		case "vcpu-hours": {
+			// Native unit is vCPU-seconds.
+			const hours = num / 3600;
+			if (hours >= 1_000_000) {
+				return `${stripTrailingZeros(hours / 1_000_000, 1)}M vCPU-h`;
+			}
+			if (hours >= 1000) {
+				return `${stripTrailingZeros(hours / 1000, 1)}k vCPU-h`;
+			}
+			return `${stripTrailingZeros(hours, 1)} vCPU-h`;
+		}
+		case "gib-hours": {
+			// Native unit is MiB-seconds.
+			const hours = num / 1024 / 3600;
+			if (hours >= 1_000_000) {
+				return `${stripTrailingZeros(hours / 1_000_000, 1)}M GiB-h`;
+			}
+			if (hours >= 1000) {
+				return `${stripTrailingZeros(hours / 1000, 1)}k GiB-h`;
+			}
+			return `${stripTrailingZeros(hours, 1)} GiB-h`;
 		}
 	}
 }

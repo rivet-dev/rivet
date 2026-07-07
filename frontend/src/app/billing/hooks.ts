@@ -1,49 +1,40 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import { useQuery } from "@tanstack/react-query";
 import { endOfMonth, startOfMonth } from "date-fns";
-import { useCloudProjectDataProvider } from "@/components/actors";
-import { BILLING } from "@/content/billing";
-import { features } from "@/lib/features";
-import { COMPUTE_METRICS } from "@/app/metrics/constants";
 import { sumComputeCost } from "@/app/metrics/compute-cost";
+import { COMPUTE_METRICS } from "@/app/metrics/constants";
+import { useCloudProjectDataProvider } from "@/components/actors";
+import { features } from "@/lib/features";
+
+// Metered usage math lives on the backend: `GET /projects/{id}/billing/usage`
+// returns the fully-computed breakdown (plan, cycle, per-metric usage/included/
+// overage, total, highest percent). The dashboard only renders it. Compute cost
+// is the exception: it comes from the project compute-metrics endpoint and is
+// shown separately via `ComputeUsageCard` (backend `totalCents` already includes
+// it, so the card is a breakdown, not an addend to the displayed total).
+
+export type BillingUsage = Rivet.BillingUsageResponse;
+export type BilledMetricUsage = Rivet.BilledMetricUsage;
 
 // Bucket size (seconds) for the month-to-date compute cost query. Cost is an
 // active-time-weighted sum, so the total is correct at any resolution; this
 // only bounds the number of returned buckets.
 const COMPUTE_COST_RESOLUTION = 800;
 
-const BILLED_METRICS = [
-	"actor_awake",
-	"kv_storage_used",
-	"kv_read",
-	"kv_write",
-	"gateway_egress",
-] satisfies Rivet.MetricName[];
-
-export function useBilledMetrics() {
+/** Fetch the computed billing usage breakdown for the current project. */
+export function useBillingUsage(): BillingUsage | undefined {
 	const dataProvider = useCloudProjectDataProvider();
 	const { data } = useQuery({
-		...dataProvider.currentProjectLatestMetricsQueryOptions({
-			name: BILLED_METRICS,
-			endAt: endOfMonth(new Date()).toISOString(),
-		}),
+		...dataProvider.currentProjectBillingUsageQueryOptions(),
 	});
+	return data;
+}
 
-	const aggregated: Record<(typeof BILLED_METRICS)[number], bigint> = {
-		actor_awake: 0n,
-		kv_storage_used: 0n,
-		kv_read: 0n,
-		kv_write: 0n,
-		gateway_egress: 0n,
-	};
-	if (data) {
-		for (const metric of data) {
-			aggregated[metric.name as (typeof BILLED_METRICS)[number]] =
-				metric.value;
-		}
-	}
-
-	return aggregated;
+/** Per-metric usage keyed by metric name, for direct lookup by the usage cards. */
+export function billedMetricsMap(
+	usage: BillingUsage,
+): Map<string, BilledMetricUsage> {
+	return new Map(usage.metrics.map((m) => [m.metric, m]));
 }
 
 // Aggregate this project's month-to-date compute cost (in dollars) from the
@@ -83,27 +74,7 @@ export function useBilledComputeCost() {
 	};
 }
 
+/** Highest per-metric usage percentage ("how close to the limit/bill"). */
 export function useHighestUsagePercent(): number {
-	const dataProvider = useCloudProjectDataProvider();
-
-	const { data: billingData } = useQuery({
-		...dataProvider.currentProjectBillingDetailsQueryOptions(),
-	});
-
-	const aggregated = useBilledMetrics();
-	const plan = billingData?.billing.activePlan || "free";
-
-	let highestPercent = 0;
-	for (const key of BILLED_METRICS) {
-		const current = aggregated?.[key] || 0n;
-		const included = BILLING.included[plan][key];
-		if (included && included > 0n) {
-			const percent = Number((current * 100n) / included);
-			if (percent > highestPercent) {
-				highestPercent = percent;
-			}
-		}
-	}
-
-	return highestPercent;
+	return useBillingUsage()?.highestPercent ?? 0;
 }

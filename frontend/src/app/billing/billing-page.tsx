@@ -1,114 +1,21 @@
-import {
-	faBarcodeRead,
-	faDatabase,
-	faPencil,
-	faQuestionCircle,
-	faRunning,
-	faSignalStream,
-	Icon,
-	type IconProp,
-} from "@rivet-gg/icons";
+import { faQuestionCircle, Icon } from "@rivet-gg/icons";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { BillingPlans } from "@/app/billing/billing-plans";
 import { BillingStatus } from "@/app/billing/billing-status";
 import { ComputeUsageCard } from "@/app/billing/compute-card";
 import { CurrentBillTotal } from "@/app/billing/current-bill-card";
-import { useBilledComputeCost, useBilledMetrics } from "@/app/billing/hooks";
+import { billedMetricsMap, useBilledComputeCost } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
-import { type MetricType, UsageCard } from "@/app/billing/usage-card";
+import { UsageCard } from "@/app/billing/usage-card";
+import { USAGE_METRICS } from "@/app/billing/usage-metrics";
 import { HelpDropdown } from "@/app/help-dropdown";
 import { Button, H1 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
 import { features } from "@/lib/features";
-import { BILLING } from "@/content/billing";
 import { Content } from "../layout";
 
-type BilledMetric = keyof typeof BILLING.prices;
-
-interface UsageMetricConfig {
-	key: BilledMetric;
-	title: string;
-	description: string;
-	icon: IconProp;
-	metricType: MetricType;
-}
-
-const USAGE_METRICS: UsageMetricConfig[] = [
-	{
-		key: "actor_awake",
-		title: "Awake Actors",
-		description: "Time your actors spend running and processing requests.",
-		icon: faRunning,
-		metricType: "hours",
-	},
-	{
-		key: "kv_storage_used",
-		title: "State Storage",
-		description:
-			"Persistent data stored in actor state across all namespaces.",
-		icon: faDatabase,
-		metricType: "bytes",
-	},
-	{
-		key: "kv_read",
-		title: "Reads",
-		description: "Data read from actor state, measured in 4KiB units.",
-		icon: faBarcodeRead,
-		metricType: "operations",
-	},
-	{
-		key: "kv_write",
-		title: "Writes",
-		description: "Data written to actor state, measured in 4KiB units.",
-		icon: faPencil,
-		metricType: "operations",
-	},
-	{
-		key: "gateway_egress",
-		title: "Egress",
-		description:
-			"Network traffic sent from your actors to external clients.",
-		icon: faSignalStream,
-		metricType: "bytes",
-	},
-];
-
-function calculateOverageCost(
-	usage: bigint,
-	includedInPlan: bigint | undefined,
-	pricePerBillionUnits: bigint,
-): bigint {
-	if (!includedInPlan) return 0n;
-	const overage = usage > includedInPlan ? usage - includedInPlan : 0n;
-	return (overage * pricePerBillionUnits) / 1_000_000_000n;
-}
-
-/**
- * Namespace billing page. Billing is always project-scoped, so this renders the
- * exact same project billing as the project route.
- */
-export function NamespaceBillingPage() {
-	return <BillingPage />;
-}
-
 export function BillingPage() {
-	const dataProvider = useCloudProjectDataProvider();
-	const { data } = useSuspenseQuery({
-		...dataProvider.currentProjectBillingDetailsQueryOptions(),
-	});
-	const metrics = useBilledMetrics();
-	const plan = data?.billing.activePlan || "free";
-
-	const _totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
-		const current = metrics[key] || 0n;
-		const includedInPlan = BILLING.included[plan][key];
-		return (
-			total +
-			calculateOverageCost(current, includedInPlan, BILLING.prices[key])
-		);
-	}, 0n);
-
 	return (
 		<Content>
 			<div className="mb-4 pt-2 max-w-5xl mx-auto">
@@ -142,57 +49,48 @@ export function BillingPage() {
  */
 export function BillingBody() {
 	const dataProvider = useCloudProjectDataProvider();
-	const { data } = useSuspenseQuery({
-		...dataProvider.currentProjectBillingDetailsQueryOptions(),
+	// Single backend call returns the fully-computed breakdown; the page just
+	// renders it (no client-side pricing math).
+	const { data: usage } = useSuspenseQuery({
+		...dataProvider.currentProjectBillingUsageQueryOptions(),
 	});
-	const metrics = useBilledMetrics();
+	const metricsByKey = billedMetricsMap(usage);
+	// Compute cost comes from the project compute-metrics endpoint and is shown
+	// as its own card. It is already part of `usage.totalCents`, so this is a
+	// breakdown, not an addend to the displayed total.
 	const compute = useBilledComputeCost();
-	const plan = data?.billing.activePlan || "free";
-	const planIncluded = BILLING.included[plan] ?? BILLING.included.free;
-
-	const totalOverageCents = USAGE_METRICS.reduce((total, { key }) => {
-		const current = metrics[key] || 0n;
-		const includedInPlan = planIncluded[key];
-		return (
-			total +
-			calculateOverageCost(current, includedInPlan, BILLING.prices[key])
-		);
-	}, 0n);
-
-	const computeDollars = compute.isError ? 0 : compute.monthToDate;
 
 	return (
 		<div className="px-4  max-w-5xl mx-auto @6xl:px-0 space-y-8 pb-8">
 			<CurrentBillTotal
-				total={Number(totalOverageCents) / 100 + computeDollars}
+				total={usage.totalCents / 100}
 				periodStart={
-					data.billing.currentPeriodStart
-						? new Date(data.billing.currentPeriodStart)
+					usage.currentPeriodStart
+						? new Date(usage.currentPeriodStart)
 						: startOfMonth(new Date())
 				}
 				periodEnd={
-					data.billing.currentPeriodEnd
-						? new Date(data.billing.currentPeriodEnd)
+					usage.currentPeriodEnd
+						? new Date(usage.currentPeriodEnd)
 						: endOfMonth(new Date())
 				}
 			/>
 			<BillingPlansSection />
 			{USAGE_METRICS.map(
 				({ key, title, description, icon, metricType }) => {
-					const current = metrics[key] || 0n;
-					const includedInPlan = planIncluded[key];
+					const m = metricsByKey.get(key);
 					return (
 						<UsageCard
 							key={key}
 							title={title}
 							description={description}
-							current={current}
-							monthToDate={calculateOverageCost(
-								current,
-								includedInPlan,
-								BILLING.prices[key],
-							)}
-							includedInPlan={includedInPlan}
+							current={BigInt(m?.usage ?? 0)}
+							monthToDate={BigInt(m?.overageCents ?? 0)}
+							includedInPlan={
+								m && m.included > 0
+									? BigInt(m.included)
+									: undefined
+							}
 							icon={icon}
 							metricType={metricType}
 						/>
