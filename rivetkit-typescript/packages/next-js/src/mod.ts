@@ -33,6 +33,7 @@ export const toNextHandler = (registry: Registry<any>) => {
 		registry.config.configurePool = {
 			url: `${publicUrl}/api/rivet`,
 			requestLifespan: 300,
+			drainGracePeriod: 30,
 			metadata: { provider: "next-js" },
 		};
 
