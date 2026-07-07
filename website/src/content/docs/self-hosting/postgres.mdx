@@ -10,11 +10,12 @@ PostgreSQL is the recommended backend for multi-node self-hosted deployments. It
 
 ## Overview
 
-PostgreSQL is the storage and coordination backend for self-hosted Rivet deployments that run more than one engine node. Multiple engine nodes can share a single PostgreSQL instance with no extra coordination service to deploy. Rivet handles leader election, failover, and version sequencing internally.
+PostgreSQL is the storage and coordination backend for self-hosted Rivet deployments. It can run a single engine node on its own, or back multiple engine nodes when paired with NATS. Rivet handles leader election, failover, and version sequencing internally.
 
 Use PostgreSQL when you need:
 
-- **Multiple engine nodes** behind a load balancer for redundancy and horizontal scaling.
+- **A durable, managed system of record** instead of local RocksDB storage.
+- **Multiple engine nodes** behind a load balancer for redundancy and horizontal scaling (requires NATS).
 - **Multi-region deployments** (deploy one PostgreSQL instance per region, see [Multi-Region](/docs/self-hosting/multi-region)).
 - **High availability** with a managed or self-managed primary/replica failover setup.
 
@@ -26,7 +27,22 @@ Pick your database backend based on how many engine nodes you run:
 - **Multi-node**: Use PostgreSQL as the database and NATS for pub/sub. PostgreSQL can be shared across engine nodes and is production-ready for light-to-moderate workloads, up to roughly 1,000 concurrent actors.
 - **Enterprise scale**: Beyond that, or for high-throughput realtime workloads, PostgreSQL is not the right fit. Contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 
+## Single-Node vs Multi-Node
+
+Whether PostgreSQL runs Rivet single-node or multi-node depends on whether NATS is configured for pub/sub:
+
+- **Single-node (no NATS):** Configure only `postgres`. Pub/sub uses the in-memory driver and UniversalDB runs in single-node mode with an in-process commit resolver. Run exactly one engine node against this deployment.
+- **Multi-node (with NATS):** Configure `postgres` **and** a top-level `nats` block for pub/sub. Pub/sub runs over NATS, and UniversalDB inherits that NATS config to run in multi-node mode, using NATS for follower-to-leader commit transport. Multiple engine nodes can then share the same PostgreSQL instance.
+
+Configure NATS for pub/sub to make PostgreSQL multi-node. PostgreSQL inherits the pub/sub NATS config automatically, so a single top-level `nats` block drives both pub/sub and UniversalDB multi-node coordination. See [Multi-Node Configuration](#multi-node-configuration) below.
+
+<Warning>
+Do not run more than one engine node against a PostgreSQL deployment without NATS configured. Without NATS, UniversalDB runs single-node: the first node takes leadership, and any additional node cannot obtain leadership and will eventually error.
+</Warning>
+
 ## Basic Configuration
+
+A single-node deployment needs only a `postgres` block:
 
 <CodeGroup>
 
@@ -39,18 +55,14 @@ Pick your database backend based on how many engine nodes you run:
 ```
 
 ```bash Environment-variables
-RIVET__postgres__url="postgresql://user:password@host:5432/database"
+RIVET__POSTGRES__URL="postgresql://user:password@host:5432/database"
 ```
 
 </CodeGroup>
 
-The configuration above is a complete single-node deployment and needs no pub/sub configuration, though for most single-node deployments the [file system backend](/docs/self-hosting/filesystem) (RocksDB) is the recommended choice. For multi-node deployments, add NATS as the pub/sub backend so engine nodes can coordinate (see below).
+## Multi-Node Configuration
 
-## Pub/Sub (NATS)
-
-Rivet uses a pub/sub backend for realtime messaging between engine nodes. Single-node deployments do not need any pub/sub configuration.
-
-Multi-node PostgreSQL deployments require NATS as the pub/sub backend so engine nodes can coordinate. Deploy 2+ NATS replicas for high availability.
+To run multiple engine nodes against the same PostgreSQL instance, add a top-level `nats` block to configure NATS for pub/sub. PostgreSQL inherits this config to run multi-node. Point every engine node at the same PostgreSQL instance and the same NATS cluster:
 
 <CodeGroup>
 
@@ -60,14 +72,21 @@ Multi-node PostgreSQL deployments require NATS as the pub/sub backend so engine 
     "url": "postgresql://user:password@host:5432/database"
   },
   "nats": {
-    "addresses": ["nats:4222"]
+    "addresses": ["nats-1:4222", "nats-2:4222"]
   }
 }
 ```
 
+```bash Environment-variables
+RIVET__POSTGRES__URL="postgresql://user:password@host:5432/database"
+RIVET__NATS__ADDRESSES="nats-1:4222,nats-2:4222"
+```
+
 </CodeGroup>
 
-See the [production checklist](/docs/self-hosting/production-checklist#nats) and [Configuration](/docs/self-hosting/configuration) for details.
+The top-level `nats` block configures pub/sub, and UniversalDB inherits it to enable multi-node mode. This is the recommended way to make PostgreSQL multi-node. For NATS high availability, run at least two NATS replicas.
+
+`postgres.nats` is for advanced setups only: set it to point UniversalDB at a different NATS cluster than the one used for pub/sub. Leave it unset and rely on inheritance from the top-level `nats` block unless you specifically need to separate the two.
 
 ## Requirements and Recommendations
 
@@ -124,7 +143,7 @@ Use direct connection (not connection pooler).
 ```
 
 ```bash Environment-variables
-RIVET__postgres__url="postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
+RIVET__POSTGRES__URL="postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
 ```
 
 </CodeGroup>
@@ -148,7 +167,7 @@ Use direct connection on port `5432` (not connection pooler).
 ```
 
 ```bash Environment-variables
-RIVET__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
+RIVET__POSTGRES__URL="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
 ```
 
 </CodeGroup>
@@ -171,8 +190,8 @@ Download the root certificate from your Supabase dashboard and specify its path.
 ```
 
 ```bash Environment-variables
-RIVET__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require"
-RIVET__postgres__ssl__root_cert_path="/path/to/supabase-ca.crt"
+RIVET__POSTGRES__URL="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require"
+RIVET__POSTGRES__SSL__ROOT_CERT_PATH="/path/to/supabase-ca.crt"
 ```
 
 </CodeGroup>
@@ -196,7 +215,7 @@ To enable SSL for Postgres, add `sslmode=require` to your PostgreSQL connection 
 ```
 
 ```bash Environment-variables
-RIVET__postgres__url="postgresql://user:password@host.example.com:5432/database?sslmode=require"
+RIVET__POSTGRES__URL="postgresql://user:password@host.example.com:5432/database?sslmode=require"
 ```
 
 </CodeGroup>
@@ -229,10 +248,10 @@ For databases using custom certificate authorities (e.g., Supabase) or requiring
 ```
 
 ```bash Environment-variables
-RIVET__postgres__url="postgresql://user:password@host:5432/database?sslmode=require"
-RIVET__postgres__ssl__root_cert_path="/path/to/root-ca.crt"
-RIVET__postgres__ssl__client_cert_path="/path/to/client.crt"
-RIVET__postgres__ssl__client_key_path="/path/to/client.key"
+RIVET__POSTGRES__URL="postgresql://user:password@host:5432/database?sslmode=require"
+RIVET__POSTGRES__SSL__ROOT_CERT_PATH="/path/to/root-ca.crt"
+RIVET__POSTGRES__SSL__CLIENT_CERT_PATH="/path/to/client.crt"
+RIVET__POSTGRES__SSL__CLIENT_KEY_PATH="/path/to/client.key"
 ```
 
 </CodeGroup>
