@@ -2619,17 +2619,6 @@ impl Database for DatabaseKv {
 			.context("failed to publish signal")
 			.map_err(WorkflowError::Udb)?;
 
-		if signal_name == "pegboard_actor2_wake" {
-			tracing::info!(
-				?ray_id,
-				?workflow_id,
-				?signal_id,
-				signal_name,
-				elapsed_ms = started_at.elapsed().as_secs_f64() * 1000.0,
-				"published workflow wake signal",
-			);
-		}
-
 		self.bump(BumpSubSubject::SignalPublish {
 			to_workflow_id: workflow_id,
 		});
