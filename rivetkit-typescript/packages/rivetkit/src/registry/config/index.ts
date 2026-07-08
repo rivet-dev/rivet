@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { getRunMetadata } from "@/actor/config";
+import {
+	type ActorErrorContext,
+	type ActorErrorEvent,
+	getRunMetadata,
+} from "@/actor/config";
 import type {
 	AnyActorDefinition,
 	BaseActorDefinition,
@@ -153,6 +157,11 @@ export const RegistryConfigSchema = z
 			})
 			.optional()
 			.default(() => ({})),
+		onError: z
+			.custom<
+				(c: ActorErrorContext, event: ActorErrorEvent) => void
+			>()
+			.optional(),
 
 		// MARK: Routing
 		// // This is a function to allow for lazy configuration of upgradeWebSocket on the
@@ -611,6 +620,12 @@ export const DocRegistryConfigSchema = z
 			})
 			.optional()
 			.describe("Logging configuration."),
+		onError: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when any actor user code, lifecycle hook, runtime internal, or fatal actor execution fails.",
+			),
 		endpoint: z
 			.string()
 			.optional()

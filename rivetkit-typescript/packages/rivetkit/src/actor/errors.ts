@@ -36,7 +36,9 @@ export interface RivetErrorLike {
 	actor?: ActorSpecifier;
 }
 
-export interface BridgeRivetErrorPayload extends RivetErrorLike {}
+export interface BridgeRivetErrorPayload extends RivetErrorLike {
+	rawErrorId?: number;
+}
 
 export interface UserErrorOptions extends ErrorOptions {
 	/**
@@ -224,7 +226,10 @@ export function toRivetError(
 	);
 }
 
-export function encodeBridgeRivetError(error: RivetErrorLike): string {
+export function encodeBridgeRivetError(
+	error: RivetErrorLike,
+	rawErrorId?: number,
+): string {
 	return `${BRIDGE_RIVET_ERROR_PREFIX}${JSON.stringify({
 		group: error.group,
 		code: error.code,
@@ -233,6 +238,7 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
 		public: error.public,
 		statusCode: error.statusCode,
 		actor: error.actor,
+		rawErrorId,
 	})}`;
 }
 

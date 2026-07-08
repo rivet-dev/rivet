@@ -8,8 +8,9 @@ use rivet_error::{
 	MacroMarker, RivetError as RivetTransportError, RivetErrorKind, RivetErrorSchema,
 };
 use rivetkit_core::{
-	ActorContext as CoreActorContext, ActorEvent, ActorEvents, ActorLifecycle, ActorStart,
-	QueueSendResult, QueueSendStatus, Reply, SerializeStateReason, StateDelta,
+	ActorContext as CoreActorContext, ActorErrorEvent, ActorEvent, ActorEvents, ActorLifecycle,
+	ActorStart, FatalPhase, HookName, QueueSendResult, QueueSendStatus, Reply,
+	SerializeStateReason, StateDelta,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::task::JoinHandle;
@@ -26,7 +27,7 @@ use crate::actor_factory::{
 	CreateStatePayload, HttpRequestPayload, LifecyclePayload, MigratePayload, QueueSendPayload,
 	SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload,
 	call_buffer, call_optional_buffer, call_queue_send, call_request, call_state_delta_payload,
-	call_void,
+	call_void, configure_on_error_hook,
 };
 
 // Restart hooks are synchronous callback slots; the guard is only held while
@@ -113,6 +114,7 @@ pub(crate) async fn run_adapter_loop(
 
 	let ctx = ActorContext::new(core_ctx.clone());
 	ctx.reset_runtime_shared_state();
+	configure_on_error_hook(&bindings, &core_ctx);
 	let abort = CancellationToken::new();
 	ctx.attach_napi_abort_token(abort.clone());
 	let (registered_task_tx, mut registered_task_rx) = unbounded_channel();
@@ -147,6 +149,12 @@ pub(crate) async fn run_adapter_loop(
 		Err(error) => {
 			if let Some(reply) = startup_ready {
 				let startup_error = anyhow::Error::new(RivetTransportError::extract(&error));
+				let hook_name = hook_name_from_error(&error);
+				let startup_error = if let Some(hook_name) = hook_name {
+					startup_error.context(HookName(hook_name))
+				} else {
+					startup_error
+				};
 				let _ = reply.send(Err(startup_error));
 			}
 			return Err(error);
@@ -627,54 +635,56 @@ pub(crate) async fn dispatch_event(
 		ActorEvent::SerializeState { reason, reply } => {
 			reply.send(maybe_serialize(bindings.as_ref(), ctx, dirty.as_ref(), reason).await);
 		}
-		ActorEvent::RunGracefulCleanup { reason, reply } => {
-			let callback = match reason {
-				rivetkit_core::actor::ShutdownKind::Sleep => bindings.on_sleep.clone(),
-				rivetkit_core::actor::ShutdownKind::Destroy => bindings.on_destroy.clone(),
-			};
-			let ctx = ctx.clone();
-			let shutdown_deadline = ctx.inner().shutdown_deadline_token();
-			tasks.spawn(async move {
-				let work = async {
-					let result: Result<()> = async {
-						if let Some(callback) = callback {
-							match reason {
-								rivetkit_core::actor::ShutdownKind::Sleep => {
-									call_on_sleep(&callback, &ctx).await
-								}
-								rivetkit_core::actor::ShutdownKind::Destroy => {
-									call_on_destroy(&callback, &ctx).await
-								}
-							}?;
-						}
-						Ok(())
-					}
-					.await;
-					if let Err(error) = result {
-						tracing::error!(
-							actor_id = %ctx.inner().actor_id(),
-							?error,
-							"graceful cleanup callback failed",
-						);
-					}
+			ActorEvent::RunGracefulCleanup { reason, reply } => {
+				let callback = match reason {
+					rivetkit_core::actor::ShutdownKind::Sleep => bindings.on_sleep.clone(),
+					rivetkit_core::actor::ShutdownKind::Destroy => bindings.on_destroy.clone(),
 				};
-				tokio::select! {
-					_ = work => {}
-					_ = shutdown_deadline.cancelled() => {
-						tracing::warn!(
-							actor_id = %ctx.inner().actor_id(),
-							reason = ?reason,
-							"graceful cleanup aborted by shutdown grace deadline",
-						);
-					}
-				}
-				reply.send(Ok(()));
-			});
-		}
-		ActorEvent::DisconnectConn { conn_id, reply } => {
-			let callback = bindings.on_disconnect_final.clone();
-			let ctx = ctx.clone();
-			tasks.spawn(async move {
+				let ctx = ctx.clone();
+				let shutdown_deadline = ctx.inner().shutdown_deadline_token();
+				tasks.spawn(async move {
+					let work = async {
+						let result: Result<()> = async {
+							if let Some(callback) = callback {
+								match reason {
+									rivetkit_core::actor::ShutdownKind::Sleep => {
+										call_on_sleep(&callback, &ctx).await
+									}
+									rivetkit_core::actor::ShutdownKind::Destroy => {
+										call_on_destroy(&callback, &ctx).await
+									}
+								}?;
+							}
+							Ok(())
+						}
+						.await;
+						if let Err(error) = &result {
+							tracing::error!(
+								actor_id = %ctx.inner().actor_id(),
+								?error,
+								"graceful cleanup callback failed",
+							);
+						}
+						result
+					};
+					let result = tokio::select! {
+						result = work => result,
+						_ = shutdown_deadline.cancelled() => {
+							tracing::warn!(
+								actor_id = %ctx.inner().actor_id(),
+								reason = ?reason,
+								"graceful cleanup aborted by shutdown grace deadline",
+							);
+							Err(actor_shutting_down())
+						}
+					};
+					reply.send(result);
+				});
+			}
+			ActorEvent::DisconnectConn { conn_id, reply } => {
+				let callback = bindings.on_disconnect_final.clone();
+				let ctx = ctx.clone();
+				tasks.spawn(async move {
 				let result: Result<()> = async {
 					let conn = { ctx.inner().conns().find(|conn| conn.id() == conn_id) };
 					if let Some(conn) = conn {
@@ -684,18 +694,20 @@ pub(crate) async fn dispatch_event(
 						ctx.inner().disconnect_conn(conn_id).await?;
 					}
 					Ok(())
-				}
-				.await;
-				if let Err(error) = result {
-					tracing::error!(
-						actor_id = %ctx.inner().actor_id(),
-						?error,
-						"disconnect cleanup callback failed",
-					);
-				}
-				reply.send(Ok(()));
-			});
-		}
+					}
+					.await;
+					if let Err(error) = result {
+						tracing::error!(
+							actor_id = %ctx.inner().actor_id(),
+							?error,
+							"disconnect cleanup callback failed",
+						);
+						reply.send(Err(error));
+					} else {
+						reply.send(Ok(()));
+					}
+				});
+			}
 		ActorEvent::WorkflowHistoryRequested { reply } => {
 			let Some(callback) = bindings.get_workflow_history.clone() else {
 				reply.send(Ok(None));
@@ -861,7 +873,7 @@ async fn stop_run_handler(run_handler: &RunHandlerSlot) {
 	}
 }
 
-async fn with_timeout<T, F>(callback_name: &str, duration: Duration, future: F) -> Result<T>
+async fn with_timeout<T, F>(callback_name: &'static str, duration: Duration, future: F) -> Result<T>
 where
 	F: std::future::Future<Output = Result<T>>,
 {
@@ -876,7 +888,37 @@ where
 		duration,
 		future,
 	)
-	.await
+		.await
+		.map_err(|error| error.context(HookName(callback_name)))
+}
+
+fn hook_name_from_error(error: &anyhow::Error) -> Option<&'static str> {
+	error.chain().find_map(|cause| {
+		if let Some(hook) = cause.downcast_ref::<HookName>() {
+			return Some(hook.0);
+		}
+
+		match cause.to_string().as_str() {
+			"createState" => Some("createState"),
+			"onCreate" => Some("onCreate"),
+			"createVars" => Some("createVars"),
+			"onMigrate" => Some("onMigrate"),
+			"onWake" => Some("onWake"),
+			"onBeforeActorStart" => Some("onBeforeActorStart"),
+			"onSleep" => Some("onSleep"),
+			"onDestroy" => Some("onDestroy"),
+			"onBeforeConnect" => Some("onBeforeConnect"),
+			"onConnect" => Some("onConnect"),
+			"onDisconnect" => Some("onDisconnect"),
+			"onBeforeSubscribe" => Some("onBeforeSubscribe"),
+			"onBeforeActionResponse" => Some("onBeforeActionResponse"),
+			"onRequest" => Some("onRequest"),
+			"onQueueSend" => Some("onQueueSend"),
+			"onWebSocket" => Some("onWebSocket"),
+			"run" => Some("run"),
+			_ => None,
+		}
+	})
 }
 
 async fn with_structured_timeout<T, F>(
@@ -963,6 +1005,12 @@ fn spawn_run_handler(
 						"napi run handler aborted for sleep"
 					);
 				} else {
+					ctx.inner().report_error(
+						ActorErrorEvent::Fatal {
+							phase: FatalPhase::Run,
+						},
+						&error,
+					);
 					tracing::error!(
 						actor_id = %ctx.inner().actor_id(),
 						?error,

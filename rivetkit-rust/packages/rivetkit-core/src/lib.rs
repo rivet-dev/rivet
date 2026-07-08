@@ -120,6 +120,10 @@ pub use actor::config::{
 };
 pub use actor::connection::ConnHandle;
 pub use actor::context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
+pub use actor::error_report::{
+	ActorErrorEvent, ErrorReport, FatalPhase, HookName, InternalErrorKind, OnErrorHook,
+	RawErrorRef,
+};
 pub use actor::factory::{ActorEntryFn, ActorFactory};
 pub use actor::kv::Kv;
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};

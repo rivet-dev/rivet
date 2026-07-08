@@ -2,6 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -13,12 +14,14 @@ use rivet_error::{ActorSpecifier, RivetError as RivetTransportError, RivetErrorK
 use rivetkit_core::error::public_error_status_code;
 use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
-	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
-	ActorWorkKind, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry,
-	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
-	QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts,
-	QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
-	ServeConfig, ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
+	ActorConfig, ActorConfigInput, ActorErrorEvent, ActorEvent, ActorFactory as CoreActorFactory,
+	ActorStart, ActorWorkKind, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry,
+	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, FatalPhase, HookName,
+	KeepAwakeRegion,
+	ListOpts, QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus,
+	QueueTryNextBatchOpts, QueueWaitOpts, RawErrorRef, Request, RequestSaveOpts, Response,
+	RuntimeSpawner, SerializeStateReason, ServeConfig, ServerlessRequest, StateDelta, WebSocket,
+	WebSocketCallbackRegion, WsMessage,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -63,6 +66,8 @@ struct BridgeRivetErrorPayload {
 	#[serde(rename = "statusCode")]
 	status_code: Option<u16>,
 	actor: Option<ActorSpecifier>,
+	#[serde(rename = "rawErrorId")]
+	raw_error_id: Option<u64>,
 }
 
 #[derive(Debug)]
@@ -96,6 +101,12 @@ impl WasmFunction {
 	fn call1(&self, payload: &JsValue) -> Result<JsValue> {
 		self.0
 			.call1(&JsValue::UNDEFINED, payload)
+			.map_err(js_value_to_anyhow)
+	}
+
+	fn call2(&self, first: &JsValue, second: &JsValue) -> Result<JsValue> {
+		self.0
+			.call2(&JsValue::UNDEFINED, first, second)
 			.map_err(js_value_to_anyhow)
 	}
 }
@@ -480,7 +491,8 @@ impl WasmActorFactory {
 		config
 			.validate()
 			.map_err(|e| JsValue::from_str(&format!("{e:?}")))?;
-		let callbacks = WasmCallbacks::new(callbacks);
+		let action_timeout = config.action_timeout;
+		let callbacks = WasmCallbacks::new(callbacks, action_timeout);
 		let factory = CoreActorFactory::new_with_manual_startup_ready(config, move |start| {
 			let callbacks = callbacks.clone();
 			Box::pin(async move { run_actor_adapter(callbacks, start).await })
@@ -514,11 +526,13 @@ struct WasmCallbacks {
 	run: Option<Function>,
 	get_workflow_history: Option<Function>,
 	replay_workflow: Option<Function>,
+	on_error: Option<Function>,
 	actions: JsValue,
+	action_timeout: Duration,
 }
 
 impl WasmCallbacks {
-	fn new(callbacks: JsValue) -> Self {
+	fn new(callbacks: JsValue, action_timeout: Duration) -> Self {
 		Self {
 			create_state: function_property(&callbacks, "createState"),
 			on_create: function_property(&callbacks, "onCreate"),
@@ -542,8 +556,10 @@ impl WasmCallbacks {
 			run: function_property(&callbacks, "run"),
 			get_workflow_history: function_property(&callbacks, "getWorkflowHistory"),
 			replay_workflow: function_property(&callbacks, "replayWorkflow"),
+			on_error: function_property(&callbacks, "onError"),
 			actions: Reflect::get(&callbacks, &JsValue::from_str("actions"))
 				.unwrap_or(JsValue::UNDEFINED),
+			action_timeout,
 		}
 	}
 }
@@ -560,13 +576,21 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	} = start;
 
 	let ctx = WasmActorContext::from_core(core_ctx.clone(), callbacks.clone());
+	configure_on_error_hook(&callbacks, &core_ctx);
 	let preamble = run_preamble(&callbacks, &ctx, input, is_new, snapshot).await;
 	if let Some(reply) = startup_ready {
 		let _ = reply.send(
 			preamble
 				.as_ref()
 				.map(|_| ())
-				.map_err(|error| anyhow!(RivetTransportError::extract(error))),
+				.map_err(|error| {
+					let startup_error = anyhow!(RivetTransportError::extract(error));
+					if let Some(hook_name) = hook_name_from_error(error) {
+						startup_error.context(HookName(hook_name))
+					} else {
+						startup_error
+					}
+				}),
 		);
 	}
 	preamble?;
@@ -579,26 +603,212 @@ async fn run_actor_adapter(callbacks: WasmCallbacks, start: ActorStart) -> Resul
 	Ok(())
 }
 
+fn hook_name_from_error(error: &anyhow::Error) -> Option<&'static str> {
+	error.chain().find_map(|cause| {
+		if let Some(hook) = cause.downcast_ref::<HookName>() {
+			return Some(hook.0);
+		}
+
+		match cause.to_string().as_str() {
+			"createState" => Some("createState"),
+			"onCreate" => Some("onCreate"),
+			"createVars" => Some("createVars"),
+			"onMigrate" => Some("onMigrate"),
+			"onWake" => Some("onWake"),
+			"onBeforeActorStart" => Some("onBeforeActorStart"),
+			"onSleep" => Some("onSleep"),
+			"onDestroy" => Some("onDestroy"),
+			"onBeforeConnect" => Some("onBeforeConnect"),
+			"onConnect" => Some("onConnect"),
+			"onDisconnect" => Some("onDisconnect"),
+			"onBeforeSubscribe" => Some("onBeforeSubscribe"),
+			"onBeforeActionResponse" => Some("onBeforeActionResponse"),
+			"onRequest" => Some("onRequest"),
+			"onQueueSend" => Some("onQueueSend"),
+			"onWebSocket" => Some("onWebSocket"),
+			"run" => Some("run"),
+			_ => None,
+		}
+	})
+}
+
+async fn with_action_timeout<T, F>(duration: Duration, future: F) -> Result<T>
+where
+	F: Future<Output = Result<T>>,
+{
+	if duration >= Duration::from_secs(60) {
+		return future.await;
+	}
+
+	tokio::pin!(future);
+	let timeout = js_delay(duration);
+	tokio::pin!(timeout);
+
+	tokio::select! {
+		result = &mut future => result,
+		() = &mut timeout => Err(action_timeout_error()),
+	}
+}
+
+fn action_timeout_error() -> anyhow::Error {
+	anyhow::Error::new(RivetTransportError {
+		kind: RivetErrorKind::Dynamic {
+			group: "actor".to_owned(),
+			code: "action_timed_out".to_owned(),
+			default_message: "Action timed out".to_owned(),
+		},
+		meta: None,
+		message: Some("Action timed out".to_owned()),
+		actor: None,
+	})
+}
+
+async fn js_delay(duration: Duration) {
+	let millis = duration.as_millis().min(u32::MAX as u128) as i32;
+	let promise = Promise::new(&mut |resolve, _reject| {
+		if let Ok(set_timeout) = Reflect::get(&js_sys::global(), &JsValue::from_str("setTimeout"))
+			.and_then(|value| value.dyn_into::<Function>())
+		{
+			let _ = set_timeout.call2(
+				&JsValue::UNDEFINED,
+				resolve.as_ref(),
+				&JsValue::from_f64(millis as f64),
+			);
+		} else {
+			let _ = resolve.call0(&JsValue::UNDEFINED);
+		}
+	});
+	let _ = JsFuture::from(promise).await;
+}
+
+fn configure_on_error_hook(callbacks: &WasmCallbacks, ctx: &rivetkit_core::ActorContext) {
+	let Some(callback) = callbacks.on_error.clone() else {
+		return;
+	};
+	let callback = Arc::new(WasmFunction(callback));
+	let actor_id = ctx.actor_id().to_owned();
+	let name = ctx.name().to_owned();
+	let key = rivetkit_core::types::format_actor_key(ctx.key());
+	ctx.on_error(Arc::new(move |report| {
+		let Ok(payload) = build_on_error_payload(&actor_id, &name, &key, report) else {
+			console_error("failed to build wasm onError payload");
+			return;
+		};
+		if let Err(error) = callback.call2(&JsValue::NULL, &payload.into()) {
+			console_error(&format!("failed to deliver wasm onError report: {error:?}"));
+		}
+	}));
+}
+
+fn build_on_error_payload(
+	actor_id: &str,
+	name: &str,
+	key: &str,
+	report: rivetkit_core::ErrorReport,
+) -> Result<Object> {
+	let root = object();
+	let identity = object();
+	set_anyhow(&identity, "actorId", JsValue::from_str(actor_id))?;
+	set_anyhow(&identity, "name", JsValue::from_str(name))?;
+	set_anyhow(&identity, "key", JsValue::from_str(key))?;
+	set_anyhow(&root, "identity", identity.into())?;
+
+	let report_object = object();
+	set_anyhow(&report_object, "event", build_error_event(report.event)?.into())?;
+	set_anyhow(&report_object, "group", JsValue::from_str(&report.group))?;
+	set_anyhow(&report_object, "code", JsValue::from_str(&report.code))?;
+	set_anyhow(&report_object, "message", JsValue::from_str(&report.message))?;
+	let metadata = match report.metadata {
+		Some(metadata) => serde_wasm_bindgen::to_value(&metadata)
+			.map_err(|error| anyhow!("failed to serialize onError metadata: {error:?}"))?,
+		None => JsValue::NULL,
+	};
+	set_anyhow(&report_object, "metadata", metadata)?;
+	set_anyhow(
+		&report_object,
+		"rawErrorRef",
+		report
+			.raw_error_ref
+			.map(|value| JsValue::from_f64(value as f64))
+			.unwrap_or(JsValue::UNDEFINED),
+	)?;
+	set_anyhow(&root, "report", report_object.into())?;
+	Ok(root)
+}
+
+fn build_error_event(event: ActorErrorEvent) -> Result<Object> {
+	let root = object();
+	match event {
+		ActorErrorEvent::Action { name, scheduled } => {
+			let action = object();
+			set_anyhow(&action, "name", JsValue::from_str(&name))?;
+			set_anyhow(&action, "scheduled", JsValue::from_bool(scheduled))?;
+			set_anyhow(&root, "action", action.into())?;
+		}
+		ActorErrorEvent::Hook { name } => {
+			let hook = object();
+			set_anyhow(&hook, "name", JsValue::from_str(&name))?;
+			set_anyhow(&root, "hook", hook.into())?;
+		}
+		ActorErrorEvent::Queue { name } => {
+			let queue = object();
+			set_anyhow(&queue, "name", JsValue::from_str(&name))?;
+			set_anyhow(&root, "queue", queue.into())?;
+		}
+		ActorErrorEvent::Internal { kind } => {
+			let internal = object();
+			set_anyhow(
+				&internal,
+				"kind",
+				JsValue::from_str(match kind {
+					rivetkit_core::InternalErrorKind::Persist => "persist",
+					rivetkit_core::InternalErrorKind::Alarm => "alarm",
+				}),
+			)?;
+			set_anyhow(&root, "internal", internal.into())?;
+		}
+		ActorErrorEvent::Fatal { phase } => {
+			let fatal = object();
+			set_anyhow(
+				&fatal,
+				"phase",
+				JsValue::from_str(match phase {
+					FatalPhase::Run => "run",
+					FatalPhase::Shutdown => "shutdown",
+				}),
+			)?;
+			set_anyhow(&root, "fatal", fatal.into())?;
+		}
+	}
+	Ok(root)
+}
+
 fn start_run_handler(callbacks: &WasmCallbacks, ctx: &WasmActorContext) {
 	let Some(callback) = callbacks.run.clone() else {
 		return;
 	};
 	let ctx = ctx.clone();
 	ctx.inner.begin_run_handler();
-	spawn_local(async move {
-		let result = async {
-			let payload = object();
-			set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-			call_callback(&callback, &payload.into()).await?;
-			Ok::<_, anyhow::Error>(())
-		}
-		.await;
-		if let Err(error) = &result {
-			console_error(&format!("wasm run callback failed: {error:#}"));
-		}
-		ctx.inner.end_run_handler();
-	});
-}
+		spawn_local(async move {
+			let result = async {
+				let payload = object();
+				set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
+				call_callback(&callback, &payload.into()).await?;
+				Ok::<_, anyhow::Error>(())
+			}
+			.await;
+			if let Err(error) = &result {
+				ctx.inner.report_error(
+					ActorErrorEvent::Fatal {
+						phase: FatalPhase::Run,
+					},
+					error,
+				);
+				console_error(&format!("wasm run callback failed: {error:#}"));
+			}
+			ctx.inner.end_run_handler();
+		});
+	}
 
 async fn run_preamble(
 	callbacks: &WasmCallbacks,
@@ -611,7 +821,9 @@ async fn run_preamble(
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 		set_anyhow(&payload, "isNew", JsValue::from_bool(is_new))?;
-		call_callback(callback, &payload.into()).await?;
+		call_callback(callback, &payload.into())
+			.await
+			.map_err(|error| error.context(HookName("onMigrate")))?;
 	}
 
 	if is_new {
@@ -621,7 +833,9 @@ async fn run_preamble(
 			if let Some(input) = input.as_ref() {
 				set_anyhow(&payload, "input", bytes_to_js(input))?;
 			}
-			let state = call_callback_bytes(callback, &payload.into()).await?;
+			let state = call_callback_bytes(callback, &payload.into())
+				.await
+				.map_err(|error| error.context(HookName("createState")))?;
 			ctx.inner.set_state_initial(state);
 		}
 		if let Some(callback) = &callbacks.on_create {
@@ -630,7 +844,9 @@ async fn run_preamble(
 			if let Some(input) = input.as_ref() {
 				set_anyhow(&payload, "input", bytes_to_js(input))?;
 			}
-			call_callback(callback, &payload.into()).await?;
+			call_callback(callback, &payload.into())
+				.await
+				.map_err(|error| error.context(HookName("onCreate")))?;
 		}
 	} else if let Some(snapshot) = snapshot {
 		ctx.inner.set_state_initial(snapshot);
@@ -640,7 +856,9 @@ async fn run_preamble(
 		if let Some(input) = input.as_ref() {
 			set_anyhow(&payload, "input", bytes_to_js(input))?;
 		}
-		let state = call_callback_bytes(callback, &payload.into()).await?;
+		let state = call_callback_bytes(callback, &payload.into())
+			.await
+			.map_err(|error| error.context(HookName("createState")))?;
 		ctx.inner.set_state_initial(state.clone());
 		ctx.inner
 			.save_state(vec![StateDelta::ActorState(state)])
@@ -650,19 +868,25 @@ async fn run_preamble(
 	if let Some(callback) = &callbacks.create_vars {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-		call_callback(callback, &payload.into()).await?;
+		call_callback(callback, &payload.into())
+			.await
+			.map_err(|error| error.context(HookName("createVars")))?;
 	}
 
 	if let Some(callback) = &callbacks.on_wake {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-		call_callback(callback, &payload.into()).await?;
+		call_callback(callback, &payload.into())
+			.await
+			.map_err(|error| error.context(HookName("onWake")))?;
 	}
 
 	if let Some(callback) = &callbacks.on_before_actor_start {
 		let payload = object();
 		set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
-		call_callback(callback, &payload.into()).await?;
+		call_callback(callback, &payload.into())
+			.await
+			.map_err(|error| error.context(HookName("onBeforeActorStart")))?;
 	}
 
 	Ok(())
@@ -684,8 +908,9 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 
 			let ctx = ctx.clone();
 			let on_before_action_response = callbacks.on_before_action_response.clone();
+			let timeout = callbacks.action_timeout;
 			RuntimeSpawner::spawn(async move {
-				let result = async {
+				let result = with_action_timeout(timeout, async {
 					let payload = object();
 					set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 					set_anyhow(
@@ -710,7 +935,7 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 					}
 
 					Ok(output)
-				}
+				})
 				.await;
 				if let Err(error) = &result {
 					console_error(&format!("wasm action callback `{name}` failed: {error:#}"));
@@ -949,12 +1174,12 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 				}
 				ctx.inner.disconnect_conn(conn_id).await
 			}
-			.await;
-			if let Err(error) = result {
-				console_error(&format!("wasm disconnect callback failed: {error:#}"));
+				.await;
+				if let Err(error) = &result {
+					console_error(&format!("wasm disconnect callback failed: {error:#}"));
+				}
+				reply.send(result);
 			}
-			reply.send(Ok(()));
-		}
 		ActorEvent::ConnectionClosed { conn } => {
 			if let Some(callback) = &callbacks.on_disconnect_final {
 				let result = async {
@@ -1462,6 +1687,16 @@ impl WasmActorContext {
 	#[wasm_bindgen(js_name = restartRunHandler)]
 	pub fn restart_run_handler(&self) {
 		start_run_handler(&self.callbacks, self);
+	}
+
+	#[wasm_bindgen(js_name = reportError)]
+	pub fn report_error(&self, hook_name: String, raw_error_ref: Option<f64>) {
+		let mut error = anyhow!("actor hook `{hook_name}` failed");
+		if let Some(raw_error_ref) = raw_error_ref.and_then(f64_to_u64) {
+			error = error.context(RawErrorRef(raw_error_ref));
+		}
+		self.inner
+			.report_error(ActorErrorEvent::Hook { name: hook_name }, &error);
 	}
 
 	#[wasm_bindgen(js_name = beginKeepAwake)]
@@ -2271,6 +2506,14 @@ fn set_anyhow(object: &Object, key: &str, value: JsValue) -> Result<()> {
 	set(object, key, value).map_err(js_value_to_anyhow)
 }
 
+fn f64_to_u64(value: f64) -> Option<u64> {
+	if value.is_finite() && value >= 0.0 && value <= u64::MAX as f64 {
+		Some(value as u64)
+	} else {
+		None
+	}
+}
+
 fn bytes_to_js(bytes: &[u8]) -> JsValue {
 	Uint8Array::from(bytes).into()
 }
@@ -2751,11 +2994,15 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 		message: Some(message.clone()),
 		actor: payload.actor,
 	});
-	Some(error.context(BridgeRivetErrorContext {
+	let error = error.context(BridgeRivetErrorContext {
 		message: Some(message),
 		public_: payload.public_,
 		status_code: payload.status_code,
-	}))
+	});
+	Some(match payload.raw_error_id {
+		Some(raw_error_id) => error.context(RawErrorRef(raw_error_id)),
+		None => error,
+	})
 }
 
 fn console_error(message: &str) {

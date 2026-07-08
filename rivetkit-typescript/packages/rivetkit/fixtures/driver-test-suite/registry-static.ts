@@ -20,6 +20,18 @@ import {
 	syncActionActor,
 } from "./action-types";
 import { dbActorRaw, dbRemoteLifecycleProbe } from "./actor-db-raw";
+import {
+	actorOnErrorAbortRunActor,
+	actorOnErrorActionActor,
+	actorOnErrorHookActor,
+	actorOnErrorQueueActor,
+	actorOnErrorRejectingHookActor,
+	actorOnErrorRunActor,
+	actorOnErrorStartupActor,
+	actorOnErrorThrowingHookActor,
+	actorOnErrorTimeoutActor,
+	recordActorOnError,
+} from "./actor-onerror";
 import { onStateChangeActor } from "./actor-onstatechange";
 import { connErrorSerializationActor } from "./conn-error-serialization";
 import { counterWithParams } from "./conn-params";
@@ -240,6 +252,16 @@ export const registry = setup({
 		// From error-handling.ts
 		errorHandlingActor,
 		customTimeoutActor,
+		// From actor-onerror.ts
+		actorOnErrorActionActor,
+		actorOnErrorTimeoutActor,
+		actorOnErrorHookActor,
+		actorOnErrorStartupActor,
+		actorOnErrorQueueActor,
+		actorOnErrorRunActor,
+		actorOnErrorThrowingHookActor,
+		actorOnErrorRejectingHookActor,
+		actorOnErrorAbortRunActor,
 		// From kv.ts
 		kvActor,
 		// From queue.ts
@@ -376,5 +398,8 @@ export const registry = setup({
 					agentOsTestActor,
 				}
 			: {}),
+	},
+	onError: (c, event) => {
+		recordActorOnError("registry", c, event);
 	},
 });

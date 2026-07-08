@@ -4,15 +4,17 @@ use std::time::Duration;
 
 use anyhow::Result;
 use napi::bindgen_prelude::{Buffer, Promise};
-use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+use napi::threadsafe_function::{
+	ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction, ThreadsafeFunctionCallMode,
+};
 use napi::{Env, JsFunction, JsObject};
 use napi_derive::napi;
 use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
 use rivetkit_core::inspector::InspectorTabEntry;
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
-	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request, Response,
-	WebSocket as CoreWebSocket,
+	ActorErrorEvent, ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, ErrorReport,
+	FatalPhase, InternalErrorKind, RawErrorRef, Request, Response, WebSocket as CoreWebSocket,
 };
 
 use crate::actor_context::{ActorContext, StateDeltaPayload};
@@ -260,6 +262,7 @@ pub(crate) struct CallbackBindings {
 	pub(crate) get_workflow_history: Option<CallbackTsfn<WorkflowHistoryPayload>>,
 	pub(crate) replay_workflow: Option<CallbackTsfn<WorkflowReplayPayload>>,
 	pub(crate) serialize_state: Option<CallbackTsfn<SerializeStatePayload>>,
+	pub(crate) on_error: Option<CallbackTsfn<OnErrorPayload>>,
 }
 
 #[derive(serde::Deserialize)]
@@ -273,6 +276,20 @@ struct BridgeRivetErrorPayload {
 	#[serde(rename = "statusCode")]
 	status_code: Option<u16>,
 	actor: Option<ActorSpecifier>,
+	#[serde(rename = "rawErrorId")]
+	raw_error_id: Option<u64>,
+}
+
+pub(crate) struct OnErrorPayload {
+	identity: OnErrorIdentity,
+	report: ErrorReport,
+}
+
+#[derive(Clone)]
+pub(crate) struct OnErrorIdentity {
+	actor_id: String,
+	name: String,
+	key: String,
 }
 
 #[derive(Debug)]
@@ -311,9 +328,13 @@ impl NapiActorFactory {
 #[napi]
 impl NapiActorFactory {
 	#[napi(constructor)]
-	pub fn constructor(callbacks: JsObject, config: Option<JsActorConfig>) -> napi::Result<Self> {
+	pub fn constructor(
+		env: Env,
+		callbacks: JsObject,
+		config: Option<JsActorConfig>,
+	) -> napi::Result<Self> {
 		crate::init_tracing(None);
-		let bindings = Arc::new(CallbackBindings::from_js(callbacks)?);
+		let bindings = Arc::new(CallbackBindings::from_js(&env, callbacks)?);
 		let js_config = config.unwrap_or_default();
 		tracing::debug!(
 			class = "NapiActorFactory",
@@ -375,7 +396,7 @@ impl AdapterConfig {
 }
 
 impl CallbackBindings {
-	fn from_js(callbacks: JsObject) -> napi::Result<Self> {
+	fn from_js(env: &Env, callbacks: JsObject) -> napi::Result<Self> {
 		let actions = if let Some(actions) = callbacks.get::<_, JsObject>("actions")? {
 			let mut mapped = HashMap::new();
 			for name in JsObject::keys(&actions)? {
@@ -459,6 +480,7 @@ impl CallbackBindings {
 				"serializeState",
 				build_serialize_state_payload,
 			)?,
+			on_error: optional_unref_tsfn(env, &callbacks, "onError", build_on_error_payload)?,
 		})
 	}
 }
@@ -478,6 +500,24 @@ where
 	create_tsfn(callback, build_args).map(Some)
 }
 
+fn optional_unref_tsfn<T, F>(
+	env: &Env,
+	callbacks: &JsObject,
+	name: &str,
+	build_args: F,
+) -> napi::Result<Option<CallbackTsfn<T>>>
+where
+	T: Send + 'static,
+	F: Fn(&Env, T) -> napi::Result<Vec<napi::JsUnknown>> + Send + Sync + 'static,
+{
+	let Some(callback) = callbacks.get::<_, JsFunction>(name)? else {
+		return Ok(None);
+	};
+	let mut callback = create_tsfn(callback, build_args)?;
+	callback.unref(env)?;
+	Ok(Some(callback))
+}
+
 fn create_tsfn<T, F>(callback: JsFunction, build_args: F) -> napi::Result<CallbackTsfn<T>>
 where
 	T: Send + 'static,
@@ -487,6 +527,28 @@ where
 	callback.create_threadsafe_function(0, move |ctx: ThreadSafeCallContext<T>| {
 		build_args(&ctx.env, ctx.value)
 	})
+}
+
+pub(crate) fn configure_on_error_hook(bindings: &Arc<CallbackBindings>, ctx: &CoreActorContext) {
+	let Some(on_error) = bindings.on_error.clone() else {
+		return;
+	};
+	let identity = OnErrorIdentity {
+		actor_id: ctx.actor_id().to_owned(),
+		name: ctx.name().to_owned(),
+		key: rivetkit_core::types::format_actor_key(ctx.key()),
+	};
+	ctx.on_error(Arc::new(move |report| {
+		let payload = OnErrorPayload {
+			identity: identity.clone(),
+			report,
+		};
+		let status = on_error.call(Ok(payload), ThreadsafeFunctionCallMode::NonBlocking);
+		tracing::debug!(?status, "napi onError TSF callback returned");
+		if status != napi::Status::Ok && status != napi::Status::Closing {
+			tracing::warn!(?status, "failed to deliver actor onError report");
+		}
+	}));
 }
 
 #[allow(dead_code)]
@@ -966,6 +1028,70 @@ fn build_request_object(env: &Env, request: Request) -> napi::Result<JsObject> {
 	Ok(request_object)
 }
 
+fn build_on_error_payload(env: &Env, payload: OnErrorPayload) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut root = env.create_object()?;
+	let mut identity = env.create_object()?;
+	identity.set("actorId", payload.identity.actor_id)?;
+	identity.set("name", payload.identity.name)?;
+	identity.set("key", payload.identity.key)?;
+	root.set("identity", identity)?;
+
+	let mut report = env.create_object()?;
+	report.set("event", build_error_event(env, payload.report.event)?)?;
+	report.set("group", payload.report.group)?;
+	report.set("code", payload.report.code)?;
+	report.set("message", payload.report.message)?;
+	report.set("metadata", payload.report.metadata)?;
+	report.set("rawErrorRef", payload.report.raw_error_ref)?;
+	root.set("report", report)?;
+	Ok(vec![root.into_unknown()])
+}
+
+fn build_error_event(env: &Env, event: ActorErrorEvent) -> napi::Result<JsObject> {
+	let mut root = env.create_object()?;
+	match event {
+		ActorErrorEvent::Action { name, scheduled } => {
+			let mut action = env.create_object()?;
+			action.set("name", name)?;
+			action.set("scheduled", scheduled)?;
+			root.set("action", action)?;
+		}
+		ActorErrorEvent::Hook { name } => {
+			let mut hook = env.create_object()?;
+			hook.set("name", name)?;
+			root.set("hook", hook)?;
+		}
+		ActorErrorEvent::Queue { name } => {
+			let mut queue = env.create_object()?;
+			queue.set("name", name)?;
+			root.set("queue", queue)?;
+		}
+		ActorErrorEvent::Internal { kind } => {
+			let mut internal = env.create_object()?;
+			internal.set(
+				"kind",
+				match kind {
+					InternalErrorKind::Persist => "persist",
+					InternalErrorKind::Alarm => "alarm",
+				},
+			)?;
+			root.set("internal", internal)?;
+		}
+		ActorErrorEvent::Fatal { phase } => {
+			let mut fatal = env.create_object()?;
+			fatal.set(
+				"phase",
+				match phase {
+					FatalPhase::Run => "run",
+					FatalPhase::Shutdown => "shutdown",
+				},
+			)?;
+			root.set("fatal", fatal)?;
+		}
+	}
+	Ok(root)
+}
+
 fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 	let prefix_index = reason.find(BRIDGE_RIVET_ERROR_PREFIX)?;
 	let payload = &reason[prefix_index + BRIDGE_RIVET_ERROR_PREFIX.len()..];
@@ -991,11 +1117,15 @@ fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {
 		message: Some(message.clone()),
 		actor: payload.actor,
 	});
-	Some(error.context(BridgeRivetErrorContext {
+	let error = error.context(BridgeRivetErrorContext {
 		message: Some(message),
 		public_: payload.public_,
 		status_code: payload.status_code,
-	}))
+	});
+	Some(match payload.raw_error_id {
+		Some(raw_error_id) => error.context(RawErrorRef(raw_error_id)),
+		None => error,
+	})
 }
 
 pub(crate) fn callback_error(callback_name: &str, error: napi::Error) -> anyhow::Error {

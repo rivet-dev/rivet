@@ -5,6 +5,8 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 
 use crate::actor::connection::ConnHandle;
+use crate::actor::context::ActorContext;
+use crate::actor::error_report::{ActorErrorEvent, InternalErrorKind};
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::task_types::ShutdownKind;
 use crate::error::ProtocolError;
@@ -341,6 +343,167 @@ pub enum ActorEvent {
 }
 
 impl ActorEvent {
+	pub(crate) fn with_error_reporting(
+		self,
+		ctx: &ActorContext,
+		scheduled_action: bool,
+	) -> Self {
+		match self {
+			Self::Action {
+				name,
+				args,
+				conn,
+				reply,
+			} => {
+				let event = ActorErrorEvent::Action {
+					name: name.clone(),
+					scheduled: scheduled_action,
+				};
+				Self::Action {
+					name,
+					args,
+					conn,
+					reply: reply.with_error_reporter(ctx.clone(), event),
+				}
+			}
+			Self::HttpRequest { request, reply } => Self::HttpRequest {
+				request,
+				reply: reply.with_error_reporter(
+					ctx.clone(),
+					ActorErrorEvent::Hook {
+						name: "onRequest".to_owned(),
+					},
+				),
+			},
+			Self::QueueSend {
+				name,
+				body,
+				conn,
+				request,
+				wait,
+				timeout_ms,
+				reply,
+			} => {
+				let event = ActorErrorEvent::Queue { name: name.clone() };
+				Self::QueueSend {
+					name,
+					body,
+					conn,
+					request,
+					wait,
+					timeout_ms,
+					reply: reply.with_error_reporter(ctx.clone(), event),
+				}
+			}
+			Self::WebSocketOpen {
+				conn,
+				ws,
+				request,
+				reply,
+			} => Self::WebSocketOpen {
+				conn,
+				ws,
+				request,
+				reply: reply.with_error_reporter(
+					ctx.clone(),
+					ActorErrorEvent::Hook {
+						name: "onWebSocket".to_owned(),
+					},
+				),
+			},
+			Self::ConnectionPreflight {
+				conn,
+				params,
+				request,
+				reply,
+			} => Self::ConnectionPreflight {
+				conn,
+				params,
+				request,
+				reply: reply.with_error_reporter(
+					ctx.clone(),
+					ActorErrorEvent::Hook {
+						name: "onBeforeConnect".to_owned(),
+					},
+				),
+			},
+			Self::ConnectionOpen {
+				conn,
+				request,
+				reply,
+			} => Self::ConnectionOpen {
+				conn,
+				request,
+				reply: reply.with_error_reporter(
+					ctx.clone(),
+					ActorErrorEvent::Hook {
+						name: "onConnect".to_owned(),
+					},
+				),
+			},
+			Self::SubscribeRequest {
+				conn,
+				event_name,
+				reply,
+			} => Self::SubscribeRequest {
+				conn,
+				event_name,
+				reply: reply.with_error_reporter(
+					ctx.clone(),
+					ActorErrorEvent::Hook {
+						name: "onBeforeSubscribe".to_owned(),
+					},
+				),
+			},
+			Self::SerializeState { reason, reply } => {
+				let reply = if reason == SerializeStateReason::Save {
+					reply.with_error_reporter(
+						ctx.clone(),
+						ActorErrorEvent::Internal {
+							kind: InternalErrorKind::Persist,
+						},
+					)
+				} else {
+					reply
+				};
+				Self::SerializeState { reason, reply }
+			}
+			Self::RunGracefulCleanup { reason, reply } => {
+				let name = match reason {
+					ShutdownKind::Sleep => "onSleep",
+					ShutdownKind::Destroy => "onDestroy",
+				};
+				Self::RunGracefulCleanup {
+					reason,
+					reply: reply.with_error_reporter(
+						ctx.clone(),
+						ActorErrorEvent::Hook {
+							name: name.to_owned(),
+						},
+					),
+				}
+			}
+			Self::DisconnectConn { conn_id, reply } => Self::DisconnectConn {
+				conn_id,
+				reply: reply.with_error_reporter(
+					ctx.clone(),
+					ActorErrorEvent::Hook {
+						name: "onDisconnect".to_owned(),
+					},
+				),
+			},
+			Self::ConnectionClosed { .. }
+			| Self::WorkflowHistoryRequested { .. }
+			| Self::WorkflowReplayRequested { .. } => self,
+			#[cfg(test)]
+			Self::BeginSleep => self,
+			#[cfg(test)]
+			Self::FinalizeSleep { reply } => Self::FinalizeSleep { reply },
+			#[cfg(test)]
+			Self::Destroy { reply } => Self::Destroy { reply },
+		}
+	}
+
 	pub(crate) fn kind(&self) -> &'static str {
 		match self {
 			Self::Action { .. } => "action",

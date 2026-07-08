@@ -3,17 +3,38 @@ use tokio::sync::{mpsc, oneshot};
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
+use crate::actor::error_report::ActorErrorEvent;
 use crate::actor::messages::ActorEvent;
 
 pub struct Reply<T> {
 	tx: Option<oneshot::Sender<Result<T>>>,
+	error_reporter: Option<ReplyErrorReporter>,
+}
+
+struct ReplyErrorReporter {
+	ctx: ActorContext,
+	event: ActorErrorEvent,
 }
 
 impl<T> Reply<T> {
 	pub fn send(mut self, result: Result<T>) {
 		if let Some(tx) = self.tx.take() {
+			if let Err(error) = &result {
+				if let Some(reporter) = &self.error_reporter {
+					reporter.ctx.report_error(reporter.event.clone(), error);
+				}
+			}
 			let _ = tx.send(result);
 		}
+	}
+
+	pub(crate) fn with_error_reporter(
+		mut self,
+		ctx: ActorContext,
+		event: ActorErrorEvent,
+	) -> Self {
+		self.error_reporter = Some(ReplyErrorReporter { ctx, event });
+		self
 	}
 }
 
@@ -35,7 +56,10 @@ impl<T> std::fmt::Debug for Reply<T> {
 
 impl<T> From<oneshot::Sender<Result<T>>> for Reply<T> {
 	fn from(tx: oneshot::Sender<Result<T>>) -> Self {
-		Self { tx: Some(tx) }
+		Self {
+			tx: Some(tx),
+			error_reporter: None,
+		}
 	}
 }
 

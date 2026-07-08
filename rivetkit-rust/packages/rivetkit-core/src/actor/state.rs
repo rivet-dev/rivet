@@ -16,6 +16,7 @@ use tokio::time::timeout;
 use tracing::Instrument;
 
 use crate::actor::context::ActorContext;
+use crate::actor::error_report::{ActorErrorEvent, InternalErrorKind};
 use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_connection_key};
 use crate::actor::kv::APPLY_BATCH_CHUNK_SIZE;
 use crate::actor::messages::StateDelta;
@@ -631,6 +632,12 @@ impl ActorContext {
 			state.take_pending_save();
 
 			if let Err(error) = state.persist_if_dirty().await {
+				state.report_error(
+					ActorErrorEvent::Internal {
+						kind: InternalErrorKind::Persist,
+					},
+					&error,
+				);
 				tracing::error!(?error, "failed to persist actor state");
 			}
 		}
@@ -671,6 +678,12 @@ impl ActorContext {
 			}
 
 			if let Err(error) = state.persist_state(SaveStateOpts { immediate: true }).await {
+				state.report_error(
+					ActorErrorEvent::Internal {
+						kind: InternalErrorKind::Persist,
+					},
+					&error,
+				);
 				tracing::error!(?error, description, "failed to persist actor state");
 			}
 		}
