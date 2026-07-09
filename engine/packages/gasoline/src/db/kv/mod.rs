@@ -2604,7 +2604,6 @@ impl Database for DatabaseKv {
 		signal_name: &str,
 		body: &serde_json::value::RawValue,
 	) -> WorkflowResult<()> {
-		let started_at = Instant::now();
 		self.pools
 			.udb()
 			.map_err(WorkflowError::PoolsGeneric)?
