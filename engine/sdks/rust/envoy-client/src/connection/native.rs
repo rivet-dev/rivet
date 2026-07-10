@@ -112,12 +112,9 @@ async fn single_connection(
 		.body(())
 		.map_err(|e| anyhow::anyhow!("failed to build ws request: {e}"))?;
 
-	let (ws_stream, _) = tokio_tungstenite::connect_async_with_config(
-		request,
-		Some(websocket_config()),
-		false,
-	)
-	.await?;
+	let (ws_stream, _) =
+		tokio_tungstenite::connect_async_with_config(request, Some(websocket_config()), false)
+			.await?;
 	let (mut write, mut read) = ws_stream.split();
 
 	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel::<WsTxMessage>();

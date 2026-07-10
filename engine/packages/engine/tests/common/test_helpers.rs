@@ -306,9 +306,14 @@ pub async fn upsert_normal_runner_config(
 	datacenters.insert(
 		dc.config.dc_name().unwrap().to_string(),
 		rivet_api_types::namespaces::runner_configs::RunnerConfig {
-			kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {},
+			kind: rivet_api_types::namespaces::runner_configs::RunnerConfigKind::Normal {
+				drain_on_version_upgrade: None,
+				actor_eviction_delay: None,
+				actor_eviction_period: None,
+				actor_eviction_rate: None,
+			},
 			metadata: None,
-			drain_on_version_upgrade: true,
+			drain_on_version_upgrade: Some(true),
 		},
 	);
 
