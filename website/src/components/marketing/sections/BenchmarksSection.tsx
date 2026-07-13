@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { SECTION_H2_CLASS } from '../typography';
 import { BenchCard, BenchInfoTooltip, type BenchRowEntry } from '../bench/BenchCard';
 
 interface BarEntry {
@@ -14,7 +14,6 @@ interface BarEntry {
 
 interface BenchmarkCard {
 	title: string;
-	direction: 'lower is better' | 'higher is better';
 	/** Headline stat. Defaults to the highlighted entry's value when omitted. */
 	hero?: string;
 	/** Comparative shown next to the headline (e.g. "faster"). Only set where the
@@ -28,9 +27,7 @@ interface BenchmarkCard {
 
 const benchmarks: BenchmarkCard[] = [
 	{
-		title: 'Cold Start',
-		direction: 'lower is better',
-		hero: '~300x',
+		title: 'Cold Start',		hero: '~300x',
 		verb: 'faster',
 		bars: [
 			{
@@ -52,9 +49,7 @@ const benchmarks: BenchmarkCard[] = [
 		],
 	},
 	{
-		title: 'Memory Per Instance',
-		direction: 'lower is better',
-		hero: '~80,000x',
+		title: 'Memory Per Instance',		hero: '~80,000x',
 		verb: 'smaller',
 		bars: [
 			{
@@ -76,9 +71,7 @@ const benchmarks: BenchmarkCard[] = [
 		],
 	},
 	{
-		title: 'Read Latency',
-		direction: 'lower is better',
-		bars: [
+		title: 'Read Latency',		bars: [
 			{
 				label: 'Rivet Actor',
 				value: '0ms',
@@ -98,9 +91,7 @@ const benchmarks: BenchmarkCard[] = [
 		],
 	},
 	{
-		title: 'Idle Cost',
-		direction: 'lower is better',
-		note: 'Actors scale to zero with no idle infrastructure.',
+		title: 'Idle Cost',		note: 'Actors scale to zero with no idle infrastructure.',
 		bars: [
 			{
 				label: 'Rivet Actor',
@@ -121,9 +112,7 @@ const benchmarks: BenchmarkCard[] = [
 		],
 	},
 	{
-		title: 'Horizontal Scale',
-		direction: 'higher is better',
-		bars: [
+		title: 'Horizontal Scale',		bars: [
 			{
 				label: 'Rivet Actors',
 				value: 'Infinite',
@@ -139,9 +128,7 @@ const benchmarks: BenchmarkCard[] = [
 		],
 	},
 	{
-		title: 'Multi-Region',
-		direction: 'lower is better',
-		hero: 'Global',
+		title: 'Multi-Region',		hero: 'Global',
 		bars: [
 			{
 				label: 'Rivet',
@@ -169,7 +156,6 @@ export const BenchmarksSection = () => {
 					className='mb-10'
 				>
 					<h2 className={SECTION_H2_CLASS}>How Actors Compare</h2>
-					<p className={SUBTITLE_CLASS}>Rivet Actors vs. traditional infrastructure.</p>
 				</motion.div>
 
 				<div className='grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3'>
@@ -194,7 +180,6 @@ export const BenchmarksSection = () => {
 								title={card.title}
 								statNote={card.hero ?? accent?.value ?? ''}
 								verb={card.verb}
-								direction={card.direction}
 								rows={rows}
 								note={card.note}
 							/>
@@ -202,9 +187,6 @@ export const BenchmarksSection = () => {
 					})}
 				</div>
 
-				<p className='mt-8 font-mono text-xs leading-relaxed text-ink-faint'>
-					Methodology — figures are directional, measured on commodity AWS infrastructure. Hover each entry for the measurement setup.
-				</p>
 			</div>
 		</section>
 	);

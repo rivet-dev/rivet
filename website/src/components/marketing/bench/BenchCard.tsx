@@ -8,7 +8,6 @@
 import { useId, useMemo, useState, useRef, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { ArrowDown, ArrowUp } from 'lucide-react';
 import { InkPanel } from '../editorial/InkPanel';
 
 export function BenchInfoTooltip({ children }: { children: ReactNode }) {
@@ -153,13 +152,12 @@ export function CountUpStat({ text, active }: { text: string; active: boolean })
 	);
 }
 
-// Dark ink data card with a mono title, direction tag, headline stat,
+// Dark ink data card with a mono title, headline stat,
 // and label/value rows pinned to the card's foot.
 export function BenchCard({
 	title,
 	statNote,
 	verb,
-	direction = 'lower is better',
 	toggle,
 	rows,
 	note,
@@ -167,14 +165,12 @@ export function BenchCard({
 	title: string;
 	statNote: string;
 	verb?: string;
-	direction?: 'lower is better' | 'higher is better';
 	toggle?: ReactNode;
 	rows: BenchRowEntry[];
 	note?: string;
 }) {
 	// Trigger the count-up the first time the card scrolls into view, once.
 	const [inView, setInView] = useState(false);
-	const isLower = direction !== 'higher is better';
 
 	return (
 		<InkPanel className='h-full'>
@@ -186,10 +182,6 @@ export function BenchCard({
 				{/* Eyebrow rail */}
 				<div className='flex min-h-[2.5rem] items-start justify-between gap-3'>
 					<span className='font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-sage'>{title}</span>
-					<span className='inline-flex shrink-0 items-center gap-1 whitespace-nowrap font-mono text-[10px] uppercase tracking-[0.12em] text-cream/40'>
-						{isLower ? <ArrowDown className='h-3 w-3 flex-shrink-0' /> : <ArrowUp className='h-3 w-3 flex-shrink-0' />}
-						{direction}
-					</span>
 				</div>
 
 				{/* Verdict: the headline multiplier */}
