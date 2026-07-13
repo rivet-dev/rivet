@@ -48,7 +48,7 @@ export const AgentOSSection = () => (
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
 				>
-					<h2 className={SECTION_H2_CLASS}>Agents are the extreme case.</h2>
+					<h2 className={SECTION_H2_CLASS}>Agents push actors to the extreme.</h2>
 				</motion.div>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}
@@ -57,7 +57,7 @@ export const AgentOSSection = () => (
 					transition={{ duration: 0.5, delay: 0.05 }}
 					className={SUBTITLE_CLASS}
 				>
-					An agent is a process that runs for hours, holds context the whole time, and needs a real computer. Actors give it the lifetime. agentOS gives it the machine.
+					An agent is an actor that runs for hours, holds context the whole time, and needs a real computer. The actor gives the agent its lifetime. agentOS gives it the machine.
 				</motion.p>
 			</div>
 
