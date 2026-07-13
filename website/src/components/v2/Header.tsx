@@ -22,7 +22,7 @@ import { faChevronDown } from "@rivet-gg/icons";
 import { ArrowRight } from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
 import agentosLogoUrl from "@/images/products/agentos-logo.svg";
-import cloudLogoUrl from "@/images/products/compute-white.svg";
+import cloudLogoUrl from "@/images/rivet-logos/icon-cream.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
