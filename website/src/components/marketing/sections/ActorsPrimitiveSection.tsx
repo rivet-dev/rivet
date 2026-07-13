@@ -47,7 +47,7 @@ export const ActorsPrimitiveSection = () => (
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
 				>
-					<h2 className={SECTION_H2_CLASS}>One process per agent, per session, per user.</h2>
+					<h2 className={SECTION_H2_CLASS}>One actor per agent, per session, per user.</h2>
 				</motion.div>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}
