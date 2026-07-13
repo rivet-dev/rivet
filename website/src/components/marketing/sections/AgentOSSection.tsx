@@ -57,7 +57,7 @@ export const AgentOSSection = () => (
 					transition={{ duration: 0.5, delay: 0.05 }}
 					className={SUBTITLE_CLASS}
 				>
-					An agent runs for hours, holds context the whole time, and needs a real computer. Actors give the agent its lifetime. agentOS gives it the machine.
+					Agents run for hours and need a real computer. Actors give them the lifetime. agentOS gives them the machine.
 				</motion.p>
 			</div>
 
@@ -94,7 +94,7 @@ export const AgentOSSection = () => (
 
 				<div className='mt-8 max-w-2xl space-y-3'>
 					<p className='text-sm leading-relaxed text-ink-soft'>
-						Each VM is an Actor. The agent’s computer sleeps, wakes, and keeps its files with the same primitive that holds its memory.
+						Each VM is an Actor, so the agent’s files and memory sleep and wake together.
 					</p>
 					<p className='text-sm leading-relaxed text-ink-soft'>
 						The package registry installs git, ripgrep, and sqlite3 into the VM in 130 µs each.{' '}
