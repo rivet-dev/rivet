@@ -1,7 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
-import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import { SECTION_H2_CLASS } from '../typography';
 import { AnimatedAgentOSLogo } from '../AnimatedAgentOSLogo';
 import { benchColdStart, benchWorkloads } from '@/data/bench-agentos';
 
@@ -41,15 +41,6 @@ export const AgentOSSection = () => (
 				>
 					<h2 className={SECTION_H2_CLASS}>Give your agent an OS without a sandbox.</h2>
 				</motion.div>
-				<motion.p
-					initial={{ opacity: 0, y: 20 }}
-					whileInView={{ opacity: 1, y: 0 }}
-					viewport={{ once: true }}
-					transition={{ duration: 0.5, delay: 0.05 }}
-					className={SUBTITLE_CLASS}
-				>
-					Agents run for hours and need a real computer. agentOS gives them the machine, powered by Rivet Actors.
-				</motion.p>
 			</div>
 
 			<motion.div
@@ -61,7 +52,7 @@ export const AgentOSSection = () => (
 			>
 				<AnimatedAgentOSLogo className='h-10 w-auto md:h-11' drawDurationSec={2} />
 				<p className='mt-6 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
-					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs.
+					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs. Powered by Rivet Actors.
 				</p>
 
 				<div className='mt-8 grid border-y border-ink/10 sm:grid-cols-3 sm:divide-x sm:divide-ink/10'>
