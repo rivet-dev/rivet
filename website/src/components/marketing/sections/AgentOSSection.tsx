@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
-import agentosLogoUrl from '@/images/products/agentos-logo.svg';
+import { AnimatedAgentOSLogo } from '../AnimatedAgentOSLogo';
 import {
 	benchColdStart,
 	benchWorkloads,
@@ -48,7 +48,7 @@ export const AgentOSSection = () => (
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
 				>
-					<h2 className={SECTION_H2_CLASS}>Agents push actors to the extreme.</h2>
+					<h2 className={SECTION_H2_CLASS}>An agent is an actor with a computer.</h2>
 				</motion.div>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}
@@ -57,7 +57,7 @@ export const AgentOSSection = () => (
 					transition={{ duration: 0.5, delay: 0.05 }}
 					className={SUBTITLE_CLASS}
 				>
-					An agent is an actor that runs for hours, holds context the whole time, and needs a real computer. The actor gives the agent its lifetime. agentOS gives it the machine.
+					An agent runs for hours, holds context the whole time, and needs a real computer. Actors give the agent its lifetime. agentOS gives it the machine.
 				</motion.p>
 			</div>
 
@@ -68,10 +68,8 @@ export const AgentOSSection = () => (
 				transition={{ duration: 0.5, delay: 0.1 }}
 				className='border border-ink/10 bg-white/55 p-6 md:p-10'
 			>
-				<div className='flex items-center gap-3'>
-					<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6 invert' />
-					<h3 className='text-xl font-medium text-ink md:text-2xl'>Secure operating system without a sandbox.</h3>
-				</div>
+				<AnimatedAgentOSLogo className='h-10 w-auto md:h-11' drawDurationSec={2} />
+				<h3 className='mt-6 text-xl font-medium text-ink md:text-2xl'>Secure operating system without a sandbox.</h3>
 				<p className='mt-3 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
 					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs.
 				</p>
