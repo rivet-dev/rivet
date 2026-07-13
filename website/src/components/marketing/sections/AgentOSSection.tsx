@@ -55,7 +55,8 @@ export const AgentOSSection = () => (
 					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs. Powered by Rivet Actors.
 				</p>
 
-				<div className='mt-8 grid border-y border-ink/10 sm:grid-cols-3 sm:divide-x sm:divide-ink/10'>
+				<p className='mt-8 text-sm font-medium text-accent'>Compared to running agents in a sandbox microVM:</p>
+				<div className='mt-3 grid border-y border-ink/10 sm:grid-cols-3 sm:divide-x sm:divide-ink/10'>
 					{stats.map((stat) => (
 						<a
 							key={stat.href}
@@ -70,22 +71,6 @@ export const AgentOSSection = () => (
 							<span className='text-sm font-medium text-ink transition-colors group-hover:text-pine'>{stat.label}</span>
 						</a>
 					))}
-				</div>
-				<p className='mt-3 text-xs text-ink-faint'>Compared to running agents in a sandbox microVM.</p>
-
-				<div className='mt-8 max-w-2xl space-y-3'>
-					<p className='text-sm leading-relaxed text-ink-soft'>
-						Each VM is an Actor, so the agent’s files and memory sleep and wake together.
-					</p>
-					<p className='text-sm leading-relaxed text-ink-soft'>
-						The package registry installs git, ripgrep, and sqlite3 into the VM in 130 µs each.{' '}
-						<a
-							href='/changelog/2026-07-06-introducing-the-agentos-package-registry'
-							className='font-medium text-pine underline-offset-4 hover:underline'
-						>
-							How we did it →
-						</a>
-					</p>
 				</div>
 
 				<a
