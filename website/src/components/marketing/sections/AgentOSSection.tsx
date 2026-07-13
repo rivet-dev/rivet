@@ -52,7 +52,9 @@ export const AgentOSSection = () => (
 			>
 				<AnimatedAgentOSLogo className='h-10 w-auto md:h-11' drawDurationSec={2} />
 				<p className='mt-6 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
-					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs. Powered by Rivet Actors.
+					<span className='block'>A lightweight library that gives agents a file system, networking, bash, Python, and Node.</span>
+					<span className='mt-2 block'>No containers, no VMs. Powered by Rivet Actors.</span>
+					<span className='mt-2 block'>Isolated with V8 and WebAssembly. Runs in your own backend.</span>
 				</p>
 
 				<p className='mt-8 text-sm font-medium text-accent'>Compared to running agents in a sandbox microVM:</p>
