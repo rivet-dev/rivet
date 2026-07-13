@@ -3,13 +3,7 @@
 import { motion } from 'framer-motion';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
 import { AnimatedAgentOSLogo } from '../AnimatedAgentOSLogo';
-import {
-	benchColdStart,
-	benchWorkloads,
-	SANDBOX_COLDSTART_PROVIDER,
-	SANDBOX_COST_PROVIDER,
-	SANDBOX_MIN_MEMORY_GIB,
-} from '@/data/bench-agentos';
+import { benchColdStart, benchWorkloads } from '@/data/bench-agentos';
 
 // Multipliers derive from the shared benchmark data in bench-agentos.ts. The
 // selection follows the agent-os hero stat convention (shell workload, p50,
@@ -19,13 +13,11 @@ const stats = [
 	{
 		value: Math.round(benchColdStart[0].sandbox / benchColdStart[0].agentOS),
 		label: 'faster cold starts',
-		detail: `p50, vs ${SANDBOX_COLDSTART_PROVIDER}`,
 		href: 'https://agentos-sdk.dev/#bench-cold-start',
 	},
 	{
 		value: benchWorkloads.shell.memory.multiplier.split('x')[0],
 		label: 'less memory',
-		detail: `vs the ${SANDBOX_MIN_MEMORY_GIB} GiB sandbox minimum`,
 		href: 'https://agentos-sdk.dev/#bench-memory',
 	},
 	{
@@ -33,7 +25,6 @@ const stats = [
 			benchWorkloads.shell.cost.find((tier) => tier.label === 'AWS ARM')?.ratio ??
 			Math.min(...benchWorkloads.shell.cost.map((tier) => tier.ratio)),
 		label: 'cheaper to run',
-		detail: `self-hosted vs ${SANDBOX_COST_PROVIDER}`,
 		href: 'https://agentos-sdk.dev/#bench-cost',
 	},
 ];
@@ -86,10 +77,10 @@ export const AgentOSSection = () => (
 								{stat.value}×
 							</span>
 							<span className='text-sm font-medium text-ink transition-colors group-hover:text-pine'>{stat.label}</span>
-							<span className='text-xs text-ink-faint'>{stat.detail}</span>
 						</a>
 					))}
 				</div>
+				<p className='mt-3 text-xs text-ink-faint'>Compared to running agents in a sandbox microVM.</p>
 
 				<div className='mt-8 max-w-2xl space-y-3'>
 					<p className='text-sm leading-relaxed text-ink-soft'>
