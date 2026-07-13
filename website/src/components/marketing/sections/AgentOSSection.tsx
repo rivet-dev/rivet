@@ -48,7 +48,7 @@ export const AgentOSSection = () => (
 					viewport={{ once: true }}
 					transition={{ duration: 0.5 }}
 				>
-					<h2 className={SECTION_H2_CLASS}>An agent is an actor with a computer.</h2>
+					<h2 className={SECTION_H2_CLASS}>Give your agent an OS without a sandbox.</h2>
 				</motion.div>
 				<motion.p
 					initial={{ opacity: 0, y: 20 }}
@@ -57,7 +57,7 @@ export const AgentOSSection = () => (
 					transition={{ duration: 0.5, delay: 0.05 }}
 					className={SUBTITLE_CLASS}
 				>
-					Agents run for hours and need a real computer. Actors give them the lifetime. agentOS gives them the machine.
+					Agents run for hours and need a real computer. agentOS gives them the machine, powered by Rivet Actors.
 				</motion.p>
 			</div>
 
@@ -69,8 +69,7 @@ export const AgentOSSection = () => (
 				className='border border-ink/10 bg-white/55 p-6 md:p-10'
 			>
 				<AnimatedAgentOSLogo className='h-10 w-auto md:h-11' drawDurationSec={2} />
-				<h3 className='mt-6 text-xl font-medium text-ink md:text-2xl'>Secure operating system without a sandbox.</h3>
-				<p className='mt-3 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
+				<p className='mt-6 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
 					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs.
 				</p>
 
