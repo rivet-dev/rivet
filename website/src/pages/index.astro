@@ -3,7 +3,8 @@ import { getCollection } from 'astro:content';
 import { getImage } from 'astro:assets';
 import MarketingLayout from '@/layouts/MarketingLayout.astro';
 import { RedesignedHero } from '@/components/marketing/sections/RedesignedHero';
-import { ProductSplitSection } from '@/components/marketing/sections/ProductSplitSection';
+import { ActorsPrimitiveSection } from '@/components/marketing/sections/ActorsPrimitiveSection';
+import { AgentOSSection } from '@/components/marketing/sections/AgentOSSection';
 import { ObservabilitySection } from '@/components/marketing/sections/ObservabilitySection';
 import { IntegrationsSection } from '@/components/marketing/sections/IntegrationsSection';
 import { HostingSection } from '@/components/marketing/sections/HostingSection';
@@ -85,15 +86,16 @@ const latestChangelogHref = latest
 
 <MarketingLayout
 	title="Rivet - Infrastructure for the Agentic Era"
-	description="The primitive for AI agents and the systems they operate. Stateful actors, long-running workflows, and an operating system for agents — run on Rivet Cloud or inside your own VPC."
+	description="Rivet is infrastructure for long-lived software. Actors give every agent, session, and user a durable process with its state inside; agentOS gives agents a computer in that same process. Open source under Apache 2.0."
 	canonicalUrl="https://rivet.dev/"
-	keywords={["agentic infrastructure", "AI agents", "actors", "stateful", "workflows", "long-running processes", "on-prem", "air-gapped", "self-hosted", "agentOS", "durable execution", "VPC"]}
+	keywords={["agentic infrastructure", "AI agents", "actors", "stateful", "workflows", "long-lived processes", "on-prem", "air-gapped", "self-hosted", "agentOS", "durable execution", "VPC", "agent sandbox"]}
 >
 	<ScrollObserver client:load>
 		<div class="paper-grain min-h-screen font-sans text-ink-soft">
 			<main>
 				<RedesignedHero latestChangelogTitle={latestChangelogTitle} latestChangelogHref={latestChangelogHref} thinkingImages={thinkingImages} client:load />
-				<ProductSplitSection client:visible />
+				<ActorsPrimitiveSection client:visible />
+				<AgentOSSection client:visible />
 				<ObservabilitySection client:visible />
 				<IntegrationsSection client:visible />
 				<HostingSection client:visible />

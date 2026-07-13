@@ -22,6 +22,7 @@ import { faChevronDown } from "@rivet-gg/icons";
 import { ArrowRight } from "lucide-react";
 import actorsLogoUrl from "@/images/products/actors-logo.svg";
 import agentosLogoUrl from "@/images/products/agentos-logo.svg";
+import cloudLogoUrl from "@/images/products/compute-white.svg";
 import sandboxAgentLogoUrl from "@/images/products/sandbox-agent-logo.svg";
 import { GitHubDropdown } from "./GitHubDropdown";
 import { HeaderSearch } from "./HeaderSearch";
@@ -77,14 +78,20 @@ function ProductsDropdown({
 			label: "Actors",
 			href: "/actors",
 			logo: actorsLogoUrl,
-			description: "Build stateful backends",
+			description: "Where agents live: state, identity, durability",
 		},
 		{
 			label: "agentOS",
 			href: "https://agentos-sdk.dev",
 			logo: agentosLogoUrl,
-			description: "Everything agents need to run and operate",
+			description: "How agents act: file system, shell, tools",
 			external: true,
+		},
+		{
+			label: "Rivet Cloud",
+			href: "/cloud",
+			logo: cloudLogoUrl,
+			description: "Where they run: managed compute",
 		},
 	];
 
@@ -635,6 +642,7 @@ function DocsMobileNavigation({
 			logo: agentosLogoUrl,
 			external: true,
 		},
+		{ label: "Rivet Cloud", href: "/cloud", logo: cloudLogoUrl },
 		{
 			label: "Sandbox Agent SDK",
 			href: "https://sandboxagent.dev/",

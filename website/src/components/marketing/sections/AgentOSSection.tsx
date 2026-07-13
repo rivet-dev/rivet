@@ -1,0 +1,126 @@
+'use client';
+
+import { motion } from 'framer-motion';
+import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
+import agentosLogoUrl from '@/images/products/agentos-logo.svg';
+import {
+	benchColdStart,
+	benchWorkloads,
+	SANDBOX_COLDSTART_PROVIDER,
+	SANDBOX_COST_PROVIDER,
+	SANDBOX_MIN_MEMORY_GIB,
+} from '@/data/bench-agentos';
+
+// Multipliers derive from the shared benchmark data in bench-agentos.ts. The
+// selection follows the agent-os hero stat convention (shell workload, p50,
+// AWS ARM) so the two sites cite identical numbers once both consume the same
+// data. Each stat links to the benchmark it claims.
+const stats = [
+	{
+		value: Math.round(benchColdStart[0].sandbox / benchColdStart[0].agentOS),
+		label: 'faster cold starts',
+		detail: `p50, vs ${SANDBOX_COLDSTART_PROVIDER}`,
+		href: 'https://agentos-sdk.dev/#bench-cold-start',
+	},
+	{
+		value: benchWorkloads.shell.memory.multiplier.split('x')[0],
+		label: 'less memory',
+		detail: `vs the ${SANDBOX_MIN_MEMORY_GIB} GiB sandbox minimum`,
+		href: 'https://agentos-sdk.dev/#bench-memory',
+	},
+	{
+		value:
+			benchWorkloads.shell.cost.find((tier) => tier.label === 'AWS ARM')?.ratio ??
+			Math.min(...benchWorkloads.shell.cost.map((tier) => tier.ratio)),
+		label: 'cheaper to run',
+		detail: `self-hosted vs ${SANDBOX_COST_PROVIDER}`,
+		href: 'https://agentos-sdk.dev/#bench-cost',
+	},
+];
+
+export const AgentOSSection = () => (
+	<section className='relative border-t border-ink/10 px-6 py-16 lg:py-24'>
+		<div className='mx-auto w-full max-w-7xl'>
+			<div className='mb-12 max-w-3xl'>
+				<motion.div
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5 }}
+				>
+					<h2 className={SECTION_H2_CLASS}>Agents are the extreme case.</h2>
+				</motion.div>
+				<motion.p
+					initial={{ opacity: 0, y: 20 }}
+					whileInView={{ opacity: 1, y: 0 }}
+					viewport={{ once: true }}
+					transition={{ duration: 0.5, delay: 0.05 }}
+					className={SUBTITLE_CLASS}
+				>
+					An agent is a process that runs for hours, holds context the whole time, and needs a real computer. Actors give it the lifetime. agentOS gives it the machine.
+				</motion.p>
+			</div>
+
+			<motion.div
+				initial={{ opacity: 0, y: 20 }}
+				whileInView={{ opacity: 1, y: 0 }}
+				viewport={{ once: true }}
+				transition={{ duration: 0.5, delay: 0.1 }}
+				className='border border-ink/10 bg-white/55 p-6 md:p-10'
+			>
+				<div className='flex items-center gap-3'>
+					<img src={agentosLogoUrl.src} alt='agentOS' className='h-6 w-6 invert' />
+					<h3 className='text-xl font-medium text-ink md:text-2xl'>Secure operating system without a sandbox.</h3>
+				</div>
+				<p className='mt-3 max-w-2xl text-sm leading-relaxed text-ink-soft md:text-base'>
+					A lightweight library that gives agents a file system, networking, bash, Python, and Node. No containers, no VMs.
+				</p>
+
+				<div className='mt-8 grid border-y border-ink/10 sm:grid-cols-3 sm:divide-x sm:divide-ink/10'>
+					{stats.map((stat) => (
+						<a
+							key={stat.href}
+							href={stat.href}
+							target='_blank'
+							rel='noopener noreferrer'
+							className='group flex flex-col gap-1 border-t border-ink/10 py-5 first:border-t-0 sm:border-t-0 sm:px-8 sm:first:pl-0 sm:last:pr-0'
+						>
+							<span className='text-3xl font-medium tabular-nums text-ink transition-colors group-hover:text-pine'>
+								{stat.value}×
+							</span>
+							<span className='text-sm font-medium text-ink transition-colors group-hover:text-pine'>{stat.label}</span>
+							<span className='text-xs text-ink-faint'>{stat.detail}</span>
+						</a>
+					))}
+				</div>
+
+				<div className='mt-8 max-w-2xl space-y-3'>
+					<p className='text-sm leading-relaxed text-ink-soft'>
+						Each VM is an Actor. The agent’s computer sleeps, wakes, and keeps its files with the same primitive that holds its memory.
+					</p>
+					<p className='text-sm leading-relaxed text-ink-soft'>
+						The package registry installs git, ripgrep, and sqlite3 into the VM in 130 µs each.{' '}
+						<a
+							href='/changelog/2026-07-06-introducing-the-agentos-package-registry'
+							className='font-medium text-pine underline-offset-4 hover:underline'
+						>
+							How we did it →
+						</a>
+					</p>
+				</div>
+
+				<a
+					href='https://agentos-sdk.dev'
+					target='_blank'
+					rel='noopener noreferrer'
+					className='group mt-8 inline-flex items-center gap-1.5 text-sm font-medium text-pine'
+				>
+					Explore agentOS
+					<span aria-hidden='true' className='transition-transform duration-200 group-hover:translate-x-0.5'>
+						→
+					</span>
+				</a>
+			</motion.div>
+		</div>
+	</section>
+);
