@@ -50,16 +50,73 @@ async function ensureVm<TConnParams>(
 	// `config.options` is either a static AgentOsOptions object OR a
 	// `(c) => AgentOsOptions` factory resolved per actor instance with the
 	// live context so callers can derive mount config from the actor identity.
-	const resolvedUserOptions =
-		typeof config.options === "function"
-			? await config.options(c)
-			: config.options;
+	let options: AgentOsOptions;
+	let agentOs: AgentOs;
+	try {
+		const resolvedUserOptions =
+			typeof config.options === "function"
+				? await config.options(c)
+				: config.options;
 
-	// Build options with in-memory VFS as default working directory mount.
-	const options = buildVmOptions(resolvedUserOptions);
+		// Build options with in-memory VFS as default working directory mount.
+		options = buildVmOptions(resolvedUserOptions);
 
-	const agentOs = await AgentOs.create(options);
+		agentOs = await AgentOs.create(options);
+	} catch (err) {
+		// Surface the REAL boot failure. The actor runtime otherwise wraps any
+		// throw from the options factory or `AgentOs.create` as an opaque
+		// `internal_error` ("An internal error occurred"), masking the cause —
+		// which makes a failing VM boot near-impossible to diagnose from logs.
+		c.log.error({
+			msg: "agent-os: VM boot failed",
+			err: err instanceof Error ? err.message : String(err),
+			stack: err instanceof Error ? err.stack : undefined,
+		});
+		throw err;
+	}
 	c.vars.agentOs = agentOs;
+
+	// agent-os 0.1.2 auto-created each mount's mount-point path in the base VFS
+	// when applying mounts; 0.2.4 does not. A nested, writable mount (e.g. the S3
+	// workspace at `/root/workspaces/<id>`) is then left without a navigable
+	// mount-point directory — the base path to it never materializes — so the
+	// in-VM agent's first write fails with "failed to redirect …" and the action
+	// throws `internal_error` in a tight retry loop (a brand-new workspace can
+	// never create its first file). Only an in-VM `mkdir -p` recreates BOTH the
+	// base-fs path AND the mount-point entry: host-side `agentOs.mkdir(path)`
+	// resolves into the mount's own VFS (a no-op for the flat S3 driver), a
+	// parent-only mkdir isn't enough, and raw S3 seeding doesn't help — the gap is
+	// the base-fs path, not the prefix. Restore the old behaviour explicitly by
+	// `mkdir -p`-ing every writable mount point once, right after boot. Read-only
+	// mounts (the hoisted runtime, dev fixtures) are left to their own materialize;
+	// any failure here is logged, never fatal.
+	const mountPointsToMaterialize = (options.mounts ?? [])
+		.filter((m: MountConfig) => {
+			const readOnly = "readOnly" in m ? m.readOnly === true : false;
+			return !!m?.path && m.path !== "/" && !readOnly;
+		})
+		.map((m: MountConfig) => m.path);
+	if (mountPointsToMaterialize.length > 0) {
+		try {
+			const quoted = mountPointsToMaterialize
+				.map((p) => `'${p.replace(/'/g, "'\\''")}'`)
+				.join(" ");
+			const res = await agentOs.exec(`mkdir -p ${quoted}`);
+			if (res?.exitCode !== 0) {
+				c.log.warn({
+					msg: "agent-os: mount-point materialization exited non-zero",
+					exitCode: res?.exitCode,
+					stderr: res?.stderr,
+				});
+			}
+		} catch (err) {
+			c.log.warn({
+				msg: "agent-os: failed to materialize mount points",
+				paths: mountPointsToMaterialize,
+				err: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
 
 	// Wire cron events to actor events.
 	agentOs.onCronEvent((cronEvent) => {
