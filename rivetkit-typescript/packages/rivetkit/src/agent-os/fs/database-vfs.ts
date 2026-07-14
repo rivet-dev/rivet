@@ -124,6 +124,11 @@ function rowToStat(row: FsRow): VirtualStat {
 		nlink: row.nlink,
 		uid: row.uid,
 		gid: row.gid,
+		// agent-os 0.2.x VirtualStat additions; synthetic for this storage
+		// model, mirroring the 0-valued ino above.
+		blocks: 0,
+		dev: 0,
+		rdev: 0,
 	};
 }
 
