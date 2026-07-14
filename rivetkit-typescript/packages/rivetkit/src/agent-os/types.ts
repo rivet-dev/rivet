@@ -18,6 +18,19 @@ export type AgentOsActorState = {};
 
 export interface AgentOsActorVars {
 	agentOs: AgentOs | null;
+	/**
+	 * In-flight VM boot (single-flight). Set while `AgentOs.create` is
+	 * pending so concurrent first actions share one boot instead of
+	 * double-creating VMs; cleared when the boot settles — a REJECTED boot
+	 * is never cached, so the next action retries fresh.
+	 */
+	agentOsBoot: Promise<AgentOs> | null;
+	/**
+	 * Module-level sidecar epoch at the time `agentOs` was created. Used by
+	 * sidecar-death recovery to dispose the shared sidecar pool exactly once
+	 * per crash — see `recycleSharedSidecar` in actor/index.ts.
+	 */
+	agentOsEpoch: number;
 	activeSessionIds: Set<string>;
 	activeProcesses: Set<number>;
 	activeHooks: Set<Promise<void>>;

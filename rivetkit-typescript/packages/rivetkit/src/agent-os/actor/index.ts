@@ -35,6 +35,208 @@ import {
 } from "./session";
 import { buildShellActions } from "./shell";
 
+// --- Sidecar-death recovery ---
+//
+// The shared agent-os sidecar is a single native OS process serving every VM
+// on this host process (agentos-core caches the handle in a module-level
+// map). When that process dies — observed live 2026-07-02: one VM's mount
+// shadow-sync timeout was treated as process-fatal, exit code 1 — agentos-core
+// never invalidates the cached handle: every later `AgentOs.create` and every
+// call on an existing instance rejects with `SidecarProcessExited` until the
+// HOST process restarts. The sanctioned repair is
+// `AgentOs.getSharedSidecar().dispose()`, which evicts the poisoned handle so
+// the next create spawns a fresh sidecar; nothing upstream calls it.
+//
+// The epoch counter makes that dispose once-per-crash: every actor on this
+// host shares the sidecar, so a crash surfaces as concurrent failures from
+// many actors — only the first (whose observed epoch still matches) recycles;
+// the rest see a bumped epoch and skip, so the freshly-respawned replacement
+// can never be disposed by a stale error handler.
+
+let sidecarEpoch = 0;
+
+/**
+ * True when `err` indicates the shared sidecar OS process is dead (spawn
+ * failure or process exit) — NOT a routine per-instance dispose. Matched by
+ * the @secure-exec/core error class names (not re-exported from
+ * agentos-core's root, so name/message matching is the stable surface).
+ * Deliberately narrow: a broader match (e.g. "disposed" errors from an
+ * action racing onSleep) would recycle — and kill — a healthy sidecar.
+ */
+function isSidecarProcessDeath(err: unknown): boolean {
+	if (!err || typeof err !== "object") return false;
+	const name = (err as { name?: unknown }).name;
+	if (name === "SidecarProcessExited" || name === "SidecarProcessError") {
+		return true;
+	}
+	const message = err instanceof Error ? err.message : "";
+	// Covers all three exit shapes: "with code N", "with signal SIGKILL"
+	// (OOM kills), and "with disconnect".
+	return /sidecar process exited with |sidecar process error:/i.test(message);
+}
+
+/**
+ * Cap logged error text. `SidecarProcessExited.message` embeds the sidecar's
+ * whole-lifetime accumulated stderr (unbounded upstream), so logging it raw
+ * floods the log sink with megabytes per failed action.
+ */
+function truncateForLog(
+	text: string | undefined,
+	max = 4096,
+): string | undefined {
+	if (text === undefined || text.length <= max) return text;
+	return `${text.slice(0, max)} … [truncated ${text.length - max} chars]`;
+}
+
+async function recycleSharedSidecar<TConnParams>(
+	c: AgentOsActionContext<TConnParams>,
+	observedEpoch: number,
+): Promise<void> {
+	if (observedEpoch !== sidecarEpoch) {
+		// Another actor already recycled the pool since this handle/error was
+		// minted — do NOT dispose again or we'd kill the fresh replacement.
+		return;
+	}
+	sidecarEpoch += 1;
+	try {
+		const shared = await AgentOs.getSharedSidecar();
+		await shared.dispose();
+		c.log.warn({
+			msg: "agent-os: shared sidecar recycled after process death",
+			epoch: sidecarEpoch,
+		});
+	} catch (err) {
+		// Disposing an already-dead handle can throw; the eviction from the
+		// shared pool still happened, which is what un-wedges the next boot.
+		c.log.warn({
+			msg: "agent-os: shared sidecar recycle threw (pool entry still evicted)",
+			err: truncateForLog(
+				err instanceof Error ? err.message : String(err),
+			),
+		});
+	}
+}
+
+/**
+ * Reset this actor's VM bookkeeping after the shared sidecar process died:
+ * the cached AgentOs handle is permanently poisoned, and the dead sidecar
+ * will never deliver the process-exit / shell-close events that normally
+ * clear the activity sets — leaving the keepAwake barrier pinning a dead VM
+ * awake forever. Clears both, recycles the shared pool (epoch-guarded), and
+ * lets the next action boot a fresh VM.
+ */
+async function recoverFromSidecarDeath<TConnParams>(
+	c: AgentOsActionContext<TConnParams>,
+	actionName: string,
+	err: unknown,
+	instAtDispatch: AgentOs | null,
+	epochAtDispatch: number,
+): Promise<void> {
+	// Staleness gate: a death error can be delivered LATE — the action
+	// captured its instance, awaited unrelated work, then failed after other
+	// actions already recovered and re-booted this actor. If the live
+	// instance is no longer the one this action dispatched against, the
+	// crash was already handled; wiping now would destroy a healthy VM.
+	if (
+		instAtDispatch !== null &&
+		c.vars.agentOs !== null &&
+		c.vars.agentOs !== instAtDispatch
+	) {
+		c.log.warn({
+			msg: "agent-os: stale sidecar-death error ignored (VM already re-booted)",
+			action: actionName,
+		});
+		return;
+	}
+	c.log.warn({
+		msg: "agent-os: sidecar process died — resetting VM for re-boot",
+		action: actionName,
+		err: truncateForLog(err instanceof Error ? err.message : String(err)),
+	});
+	// Min of dispatch-time and current epoch: a stale error must never pass
+	// the recycle guard against a fresh pool (bootVm re-stamps the vars
+	// epoch on every successful boot). Under-recycling is safe — the next
+	// failure dispatched against the dead boot carries the current epoch.
+	const observedEpoch = Math.min(epochAtDispatch, c.vars.agentOsEpoch);
+	const dead = c.vars.agentOs;
+	// The wipe below is deliberately await-free: an await before it (e.g.
+	// the dead-instance dispose, which can stall ~5s on a dead sidecar's
+	// shell-exit timeouts) would let a concurrent re-boot interleave and
+	// then get its fresh bookkeeping clobbered.
+	c.vars.agentOs = null;
+	c.vars.agentOsBoot = null;
+	c.vars.activeSessionIds.clear();
+	c.vars.activeProcesses.clear();
+	c.vars.activeShells.clear();
+	c.vars.sessions.clear();
+	syncPreventSleep(c);
+	await recycleSharedSidecar(c, observedEpoch);
+	c.broadcast("vmShutdown", { reason: "error" });
+	if (dead) {
+		// Fire-and-forget: lease release against a dead process is expected
+		// to throw (or stall); the pool recycle disposes the lease anyway.
+		void dead.dispose().catch((disposeErr: unknown) => {
+			c.log.debug({
+				msg: "agent-os: dead VM dispose threw during recovery (expected for a dead process)",
+				err: truncateForLog(
+					disposeErr instanceof Error
+						? disposeErr.message
+						: String(disposeErr),
+				),
+			});
+		});
+	}
+}
+
+/**
+ * Wrap every action so a sidecar-death error triggers recovery before the
+ * error propagates. The caller still sees the failure (rethrown — rivetkit
+ * reports it as usual); the NEXT action boots a fresh sidecar instead of
+ * hitting the permanently-dead cached handle.
+ */
+function withSidecarRecovery<T extends Record<string, unknown>>(actions: T): T {
+	const wrapped: Record<string, unknown> = {};
+	for (const [name, fn] of Object.entries(actions)) {
+		if (typeof fn !== "function") {
+			wrapped[name] = fn;
+			continue;
+		}
+		wrapped[name] = async (...args: unknown[]) => {
+			const c = args[0] as AgentOsActionContext<never> | undefined;
+			// Snapshot at dispatch: recovery decisions are bound to the
+			// instance/epoch this action actually ran against, not whatever
+			// is live by the time a (possibly late) error surfaces.
+			const instAtDispatch = c?.vars?.agentOs ?? null;
+			const epochAtDispatch = c?.vars?.agentOsEpoch ?? 0;
+			try {
+				return await (fn as (...a: unknown[]) => unknown)(...args);
+			} catch (err) {
+				if (isSidecarProcessDeath(err) && c?.vars) {
+					await recoverFromSidecarDeath(
+						c,
+						name,
+						err,
+						instAtDispatch,
+						epochAtDispatch,
+					).catch((recoveryErr) => {
+						c.log.error({
+							msg: "agent-os: sidecar recovery failed",
+							action: name,
+							err: truncateForLog(
+								recoveryErr instanceof Error
+									? recoveryErr.message
+									: String(recoveryErr),
+							),
+						});
+					});
+				}
+				throw err;
+			}
+		};
+	}
+	return wrapped as T;
+}
+
 // --- VM lifecycle helpers ---
 
 async function ensureVm<TConnParams>(
@@ -45,7 +247,47 @@ async function ensureVm<TConnParams>(
 		return c.vars.agentOs;
 	}
 
+	// Single-flight: concurrent first actions share one boot. Two racing
+	// `AgentOs.create` calls would double-boot the VM and leak the loser's
+	// sidecar lease. The in-flight promise is cleared on settle (finally), so
+	// a REJECTED boot is never cached — the next action retries fresh. The
+	// identity guards (`=== box.boot`) matter: recovery can null the slot
+	// while this boot is pending, and a NEWER boot may have registered since
+	// — an unconditional clear would clobber the newer boot's registration
+	// and an unconditional install would overwrite its instance.
+	if (c.vars.agentOsBoot) {
+		return c.vars.agentOsBoot;
+	}
+	const box: BootBox = { boot: null };
+	const boot = bootVm(c, config, box);
+	box.boot = boot;
+	c.vars.agentOsBoot = boot;
+	try {
+		return await boot;
+	} finally {
+		if (c.vars.agentOsBoot === boot) {
+			c.vars.agentOsBoot = null;
+		}
+	}
+}
+
+/**
+ * Identity token shared between ensureVm and its bootVm call so the boot can
+ * detect being superseded (recovery cleared the single-flight slot and a
+ * newer boot may own it now). `boot` is assigned synchronously right after
+ * `bootVm()` returns its promise — before bootVm's first await resumes.
+ */
+interface BootBox {
+	boot: Promise<AgentOs> | null;
+}
+
+async function bootVm<TConnParams>(
+	c: AgentOsActionContext<TConnParams>,
+	config: AgentOsActorConfig<TConnParams>,
+	box: BootBox,
+): Promise<AgentOs> {
 	const start = Date.now();
+	const bootEpoch = sidecarEpoch;
 
 	// `config.options` is either a static AgentOsOptions object OR a
 	// `(c) => AgentOsOptions` factory resolved per actor instance with the
@@ -69,12 +311,32 @@ async function ensureVm<TConnParams>(
 		// which makes a failing VM boot near-impossible to diagnose from logs.
 		c.log.error({
 			msg: "agent-os: VM boot failed",
-			err: err instanceof Error ? err.message : String(err),
-			stack: err instanceof Error ? err.stack : undefined,
+			err: truncateForLog(
+				err instanceof Error ? err.message : String(err),
+			),
+			stack: truncateForLog(err instanceof Error ? err.stack : undefined),
 		});
+		if (isSidecarProcessDeath(err)) {
+			await recycleSharedSidecar(c, bootEpoch);
+		}
 		throw err;
 	}
+	// Install-or-dispose: if recovery cleared our single-flight registration
+	// while `create` was in flight, a newer boot may own the slot — installing
+	// would overwrite its (healthy) instance and leak ours. Dispose and bail;
+	// awaiters see a retryable failure.
+	if (c.vars.agentOsBoot !== box.boot) {
+		c.log.warn({
+			msg: "agent-os: VM boot superseded during recovery — disposing orphan instance",
+		});
+		await agentOs.dispose().catch(() => {});
+		throw new Error("agent-os: VM boot superseded during recovery — retry");
+	}
 	c.vars.agentOs = agentOs;
+	// Epoch at success time: if a recycle happened while `create` was in
+	// flight, this instance is attached to the replacement sidecar and must
+	// carry the replacement's epoch, or its own death could never recycle.
+	c.vars.agentOsEpoch = sidecarEpoch;
 
 	// agent-os 0.1.2 auto-created each mount's mount-point path in the base VFS
 	// when applying mounts; 0.2.4 does not. A nested, writable mount (e.g. the S3
@@ -265,7 +527,9 @@ export function agentOs<TConnParams = undefined>(
 	const parsedConfig = agentOsActorConfigSchema.parse(
 		config,
 	) as AgentOsActorConfig<TConnParams>;
-	const actions = {
+	// Every action (built-in AND user-supplied) is wrapped so a sidecar
+	// process death self-heals instead of bricking the actor until restart.
+	const actions = withSidecarRecovery({
 		...buildSessionActions(parsedConfig),
 		...buildPromptActions(parsedConfig),
 		...buildConfigActions(parsedConfig),
@@ -280,7 +544,7 @@ export function agentOs<TConnParams = undefined>(
 		// override) the built-in set. Schema-validated as Record<string,
 		// Function>; the actor({}) call below enforces full signature shape.
 		...(parsedConfig.actions ?? {}),
-	};
+	});
 
 	return actor<
 		AgentOsActorState,
@@ -315,6 +579,8 @@ export function agentOs<TConnParams = undefined>(
 		createState: async () => ({}),
 		createVars: () => ({
 			agentOs: null,
+			agentOsBoot: null,
+			agentOsEpoch: 0,
 			activeSessionIds: new Set<string>(),
 			activeProcesses: new Set<number>(),
 			activeHooks: new Set<Promise<void>>(),
@@ -368,7 +634,16 @@ export function agentOs<TConnParams = undefined>(
 			}
 
 			if (c.vars.agentOs) {
-				await c.vars.agentOs.dispose();
+				// Dispose throws if the sidecar process already died out from
+				// under us — never let that block the sleep transition.
+				await c.vars.agentOs.dispose().catch((err: unknown) => {
+					c.log.warn({
+						msg: "agent-os: dispose on sleep failed",
+						err: truncateForLog(
+							err instanceof Error ? err.message : String(err),
+						),
+					});
+				});
 				c.vars.agentOs = null;
 			}
 
@@ -388,7 +663,16 @@ export function agentOs<TConnParams = undefined>(
 			}
 
 			if (c.vars.agentOs) {
-				await c.vars.agentOs.dispose();
+				// Dispose throws if the sidecar process already died out from
+				// under us — never let that block the destroy transition.
+				await c.vars.agentOs.dispose().catch((err: unknown) => {
+					c.log.warn({
+						msg: "agent-os: dispose on destroy failed",
+						err: truncateForLog(
+							err instanceof Error ? err.message : String(err),
+						),
+					});
+				});
 				c.vars.agentOs = null;
 			}
 
@@ -409,4 +693,10 @@ const processExitToken = event<ProcessExitPayload>();
 const shellDataToken = event<ShellDataPayload>();
 const cronEventToken = event<CronEventPayload>();
 
-export { ensureVm, syncPreventSleep, runHook };
+export {
+	ensureVm,
+	syncPreventSleep,
+	runHook,
+	isSidecarProcessDeath,
+	withSidecarRecovery,
+};
