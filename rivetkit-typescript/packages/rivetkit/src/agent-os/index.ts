@@ -6,7 +6,14 @@ export { migrateAgentOsTables } from "./actor/db";
 // Filesystem actions
 export { buildFilesystemActions } from "./actor/filesystem";
 // Actor factory and VM lifecycle helpers
-export { agentOs, ensureVm, runHook, syncPreventSleep } from "./actor/index";
+export {
+	agentOs,
+	ensureVm,
+	isSidecarProcessDeath,
+	runHook,
+	syncPreventSleep,
+	withSidecarRecovery,
+} from "./actor/index";
 // Network actions
 export {
 	buildNetworkActions,
