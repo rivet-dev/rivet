@@ -2,11 +2,9 @@ import type {
 	AgentOs,
 	AgentType,
 	CreateSessionOptions,
-	GetEventsOptions,
 	JsonRpcNotification,
 	JsonRpcResponse,
 	PermissionReply,
-	SequencedEvent,
 	SessionConfigOption,
 	SessionInfo,
 	SessionModeState,
@@ -20,6 +18,22 @@ import type {
 	SessionRecord,
 } from "../types";
 import { ensureVm, runHook, syncPreventSleep } from "./index";
+
+// agent-os 0.2.x removed the pull-based `AgentOs.getSessionEvents` API (the
+// only event surface is now the `onSessionEvent` subscription). The actor
+// keeps its pull contract — `getEvents` / `getSequencedEvents` actions — by
+// serving reads from the persisted event ledger this file already maintains
+// via its own `onSessionEvent` subscription. These two types preserve the
+// removed core types' wire shape, which remote pollers depend on.
+interface GetEventsOptions {
+	/** Only return events with `sequenceNumber >= since`. */
+	since?: number;
+}
+
+interface SequencedEvent {
+	sequenceNumber: number;
+	notification: JsonRpcNotification;
+}
 
 // Strip non-serializable values (functions) from agent-os-core responses so
 // CBOR/BARE encoding doesn't fail. The JsonRpcResponse objects from
@@ -108,6 +122,26 @@ async function persistSessionEvent<TConnParams>(
 		JSON.stringify(event),
 		now,
 	);
+}
+
+// Read persisted events for a session with seq >= since, oldest first.
+async function readPersistedEventsSince<TConnParams>(
+	c: AgentOsActionContext<TConnParams>,
+	sessionId: string,
+	since: number,
+): Promise<SequencedEvent[]> {
+	const rows: { seq: number; event: string }[] = await c.db.execute(
+		`SELECT seq, event
+		 FROM agent_os_session_events
+		 WHERE session_id = ? AND seq >= ?
+		 ORDER BY seq ASC`,
+		sessionId,
+		since,
+	);
+	return rows.map((row) => ({
+		sequenceNumber: row.seq,
+		notification: JSON.parse(row.event) as JsonRpcNotification,
+	}));
 }
 
 // Remove a session and its events from SQLite.
@@ -262,7 +296,19 @@ export function buildSessionActions<TConnParams>(
 			sessionId: string,
 		): Promise<{ sessionId: string }> => {
 			const agentOs = await ensureVm(c, config);
-			return agentOs.resumeSession(sessionId);
+			// agent-os 0.2.x requires the agent type to resume; recover it
+			// from the persisted session row (written on createSession).
+			const rows: { agent_type: string }[] = await c.db.execute(
+				`SELECT agent_type FROM agent_os_sessions WHERE session_id = ?`,
+				sessionId,
+			);
+			const agentType: AgentType | undefined = rows[0]?.agent_type;
+			if (!agentType) {
+				throw new Error(
+					`cannot resume session ${sessionId}: no recorded agent type`,
+				);
+			}
+			return agentOs.resumeSession(sessionId, agentType);
 		},
 
 		closeSession: async (
@@ -439,13 +485,12 @@ export function buildConfigActions<TConnParams>(
 			options?: GetEventsOptions,
 		): Promise<JsonRpcNotification[]> => {
 			assertSessionExists(c, sessionId);
-			const agentOs = c.vars.agentOs;
-			if (!agentOs) {
-				throw new Error("VM not initialized");
-			}
-			return agentOs
-				.getSessionEvents(sessionId, options)
-				.map((e) => e.notification);
+			const events = await readPersistedEventsSince(
+				c,
+				sessionId,
+				options?.since ?? 0,
+			);
+			return events.map((e) => e.notification);
 		},
 
 		getSequencedEvents: async (
@@ -454,11 +499,7 @@ export function buildConfigActions<TConnParams>(
 			options?: GetEventsOptions,
 		): Promise<SequencedEvent[]> => {
 			assertSessionExists(c, sessionId);
-			const agentOs = c.vars.agentOs;
-			if (!agentOs) {
-				throw new Error("VM not initialized");
-			}
-			return agentOs.getSessionEvents(sessionId, options);
+			return readPersistedEventsSince(c, sessionId, options?.since ?? 0);
 		},
 
 		rawSend: async (
