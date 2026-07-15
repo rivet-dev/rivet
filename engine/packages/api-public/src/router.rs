@@ -4,7 +4,7 @@ use axum::{
 	response::{IntoResponse, Redirect, Response},
 };
 use reqwest::header::{AUTHORIZATION, HeaderMap};
-use rivet_api_builder::{create_router, extract::FailedExtraction};
+use rivet_api_builder::{ApiError, ApiMethodNotAllowed, create_router, extract::FailedExtraction};
 use tower_http::cors::CorsLayer;
 use utoipa::OpenApi;
 
@@ -131,8 +131,20 @@ pub async fn router(
 					.allow_credentials(true),
 			)
 			.layer(middleware::from_fn(auth_middleware))
+			// Handle requests to a known path with an unsupported method. Axum's method router
+			// would otherwise return a bare 405 without dispatching to any handler, which trips
+			// the auth-handled guard in auth_middleware. This fallback is registered after
+			// auth_middleware, so it runs outside that layer: the guard never fires for it and we
+			// simply return a structured 405 instead of a bogus 500.
+			.method_not_allowed_fallback(method_not_allowed_handler)
 	})
 	.await
+}
+
+/// 405 handler for requests to a known path with an unsupported method
+#[tracing::instrument(skip_all)]
+async fn method_not_allowed_handler() -> Response {
+	ApiError::from(ApiMethodNotAllowed.build()).into_response()
 }
 
 /// Middleware to wrap ApiCtx with auth handling capabilities and to throw an error if auth was not explicitly

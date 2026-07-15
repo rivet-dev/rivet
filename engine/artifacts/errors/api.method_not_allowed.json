@@ -1,0 +1,5 @@
+{
+  "code": "method_not_allowed",
+  "group": "api",
+  "message": "The requested method is not allowed for this resource"
+}

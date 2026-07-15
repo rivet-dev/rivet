@@ -6,6 +6,14 @@ use serde::Serialize;
 pub struct ApiNotFound;
 
 #[derive(RivetError)]
+#[error(
+	"api",
+	"method_not_allowed",
+	"The requested method is not allowed for this resource"
+)]
+pub struct ApiMethodNotAllowed;
+
+#[derive(RivetError)]
 #[error("api", "unauthorized", "Authentication required")]
 pub struct ApiUnauthorized;
 
