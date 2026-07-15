@@ -128,7 +128,10 @@ pub use actor::messages::{
 	StateDelta,
 };
 #[cfg(feature = "native-runtime")]
-pub use actor::native_plugin::build_native_plugin_factory;
+pub use actor::native_plugin::{
+	NativePluginEventHandler, NativePluginOverlay, NativePluginOverlayFuture,
+	build_native_plugin_factory, build_native_plugin_factory_with_overlay,
+};
 #[cfg(feature = "native-runtime")]
 pub use actor::portable_native::{NativeBackend, build_portable_native_actor_factory};
 pub use actor::queue::{

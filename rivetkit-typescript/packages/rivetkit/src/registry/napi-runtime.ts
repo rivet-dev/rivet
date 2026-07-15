@@ -195,8 +195,14 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	createNativePluginFactory(
 		options: NapiNativePluginOptions,
+		callbacks?: object,
+		config?: RuntimeActorConfig | undefined | null,
 	): ActorFactoryHandle {
-		const factory = this.#bindings.NapiActorFactory.fromNativePlugin(options);
+		const factory = this.#bindings.NapiActorFactory.fromNativePlugin(
+			options,
+			callbacks,
+			config,
+		);
 		return asActorFactoryHandle(factory);
 	}
 

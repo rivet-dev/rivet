@@ -55,12 +55,16 @@ impl PortableActorBackend for NativeBackend {
 
 				match event {
 					ActorEvent::Action {
-						name, args, reply, ..
+						name,
+						args,
+						conn,
+						reply,
 					} => {
 						let token = self.slab.insert(PendingReply::Bytes(reply));
 						return Ok(Some(Event::Action {
 							name,
 							args,
+							conn: conn.as_ref().map(conn_info),
 							reply: token,
 						}));
 					}
@@ -119,20 +123,26 @@ impl PortableActorBackend for NativeBackend {
 					ActorEvent::ConnectionPreflight {
 						conn,
 						params,
+						request,
 						reply,
-						..
 					} => {
 						let token = self.slab.insert(PendingReply::Unit(reply));
 						return Ok(Some(Event::ConnPreflight {
 							conn: conn_info(&conn),
 							params,
+							request: request.as_ref().map(encode_http_request),
 							reply: token,
 						}));
 					}
-					ActorEvent::ConnectionOpen { conn, reply, .. } => {
+					ActorEvent::ConnectionOpen {
+						conn,
+						request,
+						reply,
+					} => {
 						let token = self.slab.insert(PendingReply::Unit(reply));
 						return Ok(Some(Event::ConnOpen {
 							conn: conn_info(&conn),
+							request: request.as_ref().map(encode_http_request),
 							reply: token,
 						}));
 					}
@@ -268,6 +278,24 @@ impl PortableActorBackend for NativeBackend {
 			self.ctx.actor_abort_signal().cancelled().await;
 			Ok(())
 		})
+	}
+
+	fn host_call(&self, name: String, _payload: Vec<u8>) -> PortableBoxFuture<'_, Result<Vec<u8>>> {
+		Box::pin(async move {
+			Err(anyhow!(
+				"native in-process actor host call `{name}` is not registered"
+			))
+		})
+	}
+
+	fn log(&self, level: i32, message: String) {
+		match level {
+			0 => tracing::trace!(target: "native_actor", "{message}"),
+			1 => tracing::debug!(target: "native_actor", "{message}"),
+			2 => tracing::info!(target: "native_actor", "{message}"),
+			3 => tracing::warn!(target: "native_actor", "{message}"),
+			_ => tracing::error!(target: "native_actor", "{message}"),
+		}
 	}
 
 	fn keep_awake_enter(&self) -> Result<KeepAwakeToken> {

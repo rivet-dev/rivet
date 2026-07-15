@@ -1,11 +1,12 @@
 //! Generic loader for native actor plugins (`dlopen` of a `cdylib`), per the
 //! dylib-actor-plugin spec §6.1. RivetKit knows only this generic ABI, not any
-//! product-specific symbols. The plugin is resolved by path, its ABI magic/version is
-//! verified (refuse-on-mismatch, no fallback), and it is adapted into the
-//! existing [`ActorFactory`] boxed-closure entry point.
+//! product-specific symbols. The plugin is resolved by path, its single API
+//! descriptor is verified (refuse-on-mismatch, no fallback), and it is adapted
+//! into the existing [`ActorFactory`] boxed-closure entry point.
 //!
-//! This module is the load/ABI/symbol layer. The host vtable construction and
-//! the event adapter (reply slab, grace bridge) build on top of it.
+//! This module is the load/ABI layer plus the host-driven event adapter. The
+//! original core reply moves directly into one event task and is completed by
+//! that event's callback; there is no host reply-token slab.
 //!
 //! ## Event adapter mapping
 //!
@@ -26,20 +27,23 @@
 //! | `RunGracefulCleanup`    | split → `Sleep`/`Destroy` by reason (reply)    |
 //! | `FinalizeSleep`/`Destroy` | lifecycle reply, drives VM teardown          |
 //! | `DisconnectConn`        | consumed internally (host calls disconnect)    |
-//! | `ConnectionPreflight`   | consumed internally                            |
+//! | `ConnectionPreflight`   | `ConnPreflight` (reply: accept)                |
 //! | `WorkflowHistory/Replay`| not applicable to native plugins (reply empty) |
 //!
-//! Reply-bearing events allocate a `reply_token` into a slab that OWNS the
-//! `Reply<T>`; draining the slab on exit/cancel drops each `Reply`, firing
-//! `Err(DroppedReply)` so callers never hang (spec §6.3).
+//! The host admits events in mailbox order and allows a bounded number of
+//! direct plugin callbacks in flight. Shutdown closes admission, waits for the
+//! plugin barrier, and then drains every admitted completion before freeing the
+//! instance.
 
 // FFI glue: `unsafe fn`s here are unsafe in their entirety by design.
 #![allow(unsafe_op_in_unsafe_fn)]
 
 use std::collections::HashMap;
 use std::ffi::c_void;
+use std::future::Future;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -49,6 +53,7 @@ use libloading::{Library, Symbol};
 use parking_lot::Mutex;
 use rivet_actor_plugin_abi as abi;
 use tokio::runtime::Handle;
+use tokio::sync::Semaphore;
 
 use crate::ActorConfig;
 use crate::actor::connection::ConnHandle;
@@ -61,24 +66,6 @@ use crate::actor::state::RequestSaveOpts;
 use crate::actor::task_types::ShutdownKind;
 use crate::types::{ListOpts, format_actor_key};
 
-// --- Plugin export signatures (must match `abi::symbols` / spec §4.5) ---
-
-type AbiU64Fn = unsafe extern "C" fn() -> u64;
-type PluginInitFn = unsafe extern "C" fn(out_err: *mut abi::OwnedBuf) -> *mut c_void;
-type FactoryNewFn = unsafe extern "C" fn(
-	plugin: *mut c_void,
-	config_json: abi::BorrowedBuf,
-	sidecar_path: abi::BorrowedBuf,
-	out_err: *mut abi::OwnedBuf,
-) -> *mut c_void;
-type RunFn = unsafe extern "C" fn(
-	factory: *mut c_void,
-	host: *const abi::HostVtable,
-	done: abi::CompletionFn,
-	user_data: *mut c_void,
-) -> *mut c_void;
-type HandleFn = unsafe extern "C" fn(handle: *mut c_void);
-
 /// Opaque plugin-owned handle (plugin/factory/instance). Send+Sync because the
 /// plugin owns the pointed-to state and the host only passes it back opaquely.
 #[derive(Clone, Copy)]
@@ -89,20 +76,14 @@ unsafe impl Sync for OpaqueHandle {}
 /// A `dlopen`ed, ABI-verified, initialized plugin. Kept alive for the process
 /// lifetime (never unloaded — unloading a dylib with live runtime/threads is
 /// unsound). One per unique dylib path.
-// `grace_deadline`/`factory_free`/`plugin_shutdown` are retained for lifecycle
-// paths not yet wired (host grace-deadline trigger, explicit teardown).
+// `factory_free`/`plugin_shutdown` are retained for explicit teardown paths not
+// yet wired. Loaded libraries remain cached for the process lifetime.
 #[allow(dead_code)]
 pub(crate) struct LoadedPlugin {
-	// Field order matters for drop: handle/symbols before `_lib`. We never drop
+	// Field order matters for drop: handle/table before `_lib`. We never drop
 	// these in practice (cached for process lifetime), but keep `_lib` last.
 	plugin: OpaqueHandle,
-	factory_new: FactoryNewFn,
-	run: RunFn,
-	cancel: HandleFn,
-	grace_deadline: HandleFn,
-	instance_free: HandleFn,
-	factory_free: HandleFn,
-	plugin_shutdown: HandleFn,
+	api: abi::PluginApi,
 	_lib: Library,
 }
 
@@ -111,27 +92,65 @@ unsafe impl Sync for LoadedPlugin {}
 
 #[allow(dead_code)]
 impl LoadedPlugin {
-	pub(crate) fn factory_new(&self) -> FactoryNewFn {
-		self.factory_new
+	pub(crate) fn factory_new(&self) -> abi::FactoryNewFn {
+		self.api.factory_new
 	}
-	pub(crate) fn run(&self) -> RunFn {
-		self.run
+	pub(crate) fn instance_new(&self) -> abi::InstanceNewFn {
+		self.api.instance_new
 	}
-	pub(crate) fn cancel(&self) -> HandleFn {
-		self.cancel
+	pub(crate) fn handle_event(&self) -> abi::HandleEventFn {
+		self.api.handle_event
 	}
-	pub(crate) fn grace_deadline(&self) -> HandleFn {
-		self.grace_deadline
+	pub(crate) fn cancel_event(&self) -> abi::CancelEventFn {
+		self.api.cancel_event
 	}
-	pub(crate) fn instance_free(&self) -> HandleFn {
-		self.instance_free
+	pub(crate) fn shutdown(&self) -> abi::ShutdownFn {
+		self.api.shutdown
 	}
-	pub(crate) fn factory_free(&self) -> HandleFn {
-		self.factory_free
+	pub(crate) fn instance_free(&self) -> abi::HandleFn {
+		self.api.instance_free
 	}
-	pub(crate) fn plugin_shutdown(&self) -> HandleFn {
-		self.plugin_shutdown
+	pub(crate) fn factory_free(&self) -> abi::HandleFn {
+		self.api.factory_free
 	}
+	pub(crate) fn plugin_shutdown(&self) -> abi::HandleFn {
+		self.api.plugin_shutdown
+	}
+}
+
+/// Initial fields shared by every descriptor version. Read this prefix before
+/// copying the full table so an undersized descriptor is rejected cleanly.
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct PluginApiHeader {
+	abi_magic: u64,
+	abi_version: u64,
+	struct_size: usize,
+}
+
+fn validate_plugin_api_header(header: PluginApiHeader) -> Result<()> {
+	if header.abi_magic != abi::RIVET_ACTOR_ABI_MAGIC {
+		bail!(
+			"not a rivet actor plugin (magic {:#x} != {:#x})",
+			header.abi_magic,
+			abi::RIVET_ACTOR_ABI_MAGIC
+		);
+	}
+	if header.abi_version != abi::RIVET_ACTOR_ABI_VERSION {
+		bail!(
+			"actor plugin ABI v{}, host expects v{} (same-version lockstep; no fallback)",
+			header.abi_version,
+			abi::RIVET_ACTOR_ABI_VERSION
+		);
+	}
+	let expected_size = std::mem::size_of::<abi::PluginApi>();
+	if header.struct_size != expected_size {
+		bail!(
+			"actor plugin API descriptor is {} bytes, host expects {expected_size} bytes",
+			header.struct_size
+		);
+	}
+	Ok(())
 }
 
 fn cache() -> &'static Mutex<HashMap<PathBuf, Arc<LoadedPlugin>>> {
@@ -181,35 +200,19 @@ where
 unsafe fn load_uncached(path: &Path) -> Result<LoadedPlugin> {
 	let lib = Library::new(path).context("dlopen")?;
 
-	// ABI magic + version are checked FIRST, before any other call.
-	let abi_magic: AbiU64Fn = sym(&lib, abi::symbols::ABI_MAGIC)?;
-	let abi_version: AbiU64Fn = sym(&lib, abi::symbols::ABI_VERSION)?;
-	let magic = abi_magic();
-	if magic != abi::RIVET_ACTOR_ABI_MAGIC {
-		bail!(
-			"not a rivet actor plugin (magic {magic:#x} != {:#x})",
-			abi::RIVET_ACTOR_ABI_MAGIC
-		);
+	// Resolve only the descriptor getter. The getter performs no allocation or
+	// initialization; validate its fixed header before any plugin function.
+	let plugin_api: abi::PluginApiFn = sym(&lib, abi::symbols::PLUGIN_API)?;
+	let api_ptr = plugin_api();
+	if api_ptr.is_null() {
+		bail!("rivet actor plugin returned a null API descriptor");
 	}
-	let version = abi_version();
-	if version != abi::RIVET_ACTOR_ABI_VERSION {
-		bail!(
-			"actor plugin ABI v{version}, host expects v{} (same-version lockstep; no fallback)",
-			abi::RIVET_ACTOR_ABI_VERSION
-		);
-	}
-
-	let plugin_init: PluginInitFn = sym(&lib, abi::symbols::PLUGIN_INIT)?;
-	let factory_new: FactoryNewFn = sym(&lib, abi::symbols::FACTORY_NEW)?;
-	let run: RunFn = sym(&lib, abi::symbols::RUN)?;
-	let cancel: HandleFn = sym(&lib, abi::symbols::CANCEL)?;
-	let grace_deadline: HandleFn = sym(&lib, abi::symbols::GRACE_DEADLINE)?;
-	let instance_free: HandleFn = sym(&lib, abi::symbols::INSTANCE_FREE)?;
-	let factory_free: HandleFn = sym(&lib, abi::symbols::FACTORY_FREE)?;
-	let plugin_shutdown: HandleFn = sym(&lib, abi::symbols::PLUGIN_SHUTDOWN)?;
+	let header = (api_ptr as *const PluginApiHeader).read();
+	validate_plugin_api_header(header)?;
+	let api = api_ptr.read();
 
 	let mut out_err = abi::OwnedBuf::empty();
-	let plugin = plugin_init(&mut out_err as *mut _);
+	let plugin = (api.plugin_init)(&mut out_err as *mut _);
 	if plugin.is_null() {
 		let msg = take_out_err(out_err);
 		bail!("rivet_actor_plugin_init failed: {msg}");
@@ -217,13 +220,7 @@ unsafe fn load_uncached(path: &Path) -> Result<LoadedPlugin> {
 
 	Ok(LoadedPlugin {
 		plugin: OpaqueHandle(plugin),
-		factory_new,
-		run,
-		cancel,
-		grace_deadline,
-		instance_free,
-		factory_free,
-		plugin_shutdown,
+		api,
 		_lib: lib,
 	})
 }
@@ -232,14 +229,40 @@ unsafe fn load_uncached(path: &Path) -> Result<LoadedPlugin> {
 /// with the opaque config envelope + sidecar path, and adapt the result into a
 /// RivetKit [`ActorFactory`].
 ///
-/// NOTE: the entry closure (host vtable + event adapter) is implemented in a
-/// follow-up step; this establishes the verified load + factory-construction
-/// path and the factory handle the entry will `run`.
 pub fn build_native_plugin_factory(
 	plugin_path: &Path,
 	config_json: &str,
 	sidecar_path: &str,
 	config: ActorConfig,
+) -> Result<ActorFactory> {
+	build_native_plugin_factory_inner(plugin_path, config_json, sidecar_path, config, None)
+}
+
+/// Build a native-plugin actor with a generic host callback overlay. The
+/// overlay and native backend share one core actor instance, mailbox, database,
+/// connection set, and shutdown barrier.
+pub fn build_native_plugin_factory_with_overlay(
+	plugin_path: &Path,
+	config_json: &str,
+	sidecar_path: &str,
+	config: ActorConfig,
+	overlay: Arc<dyn NativePluginOverlay>,
+) -> Result<ActorFactory> {
+	build_native_plugin_factory_inner(
+		plugin_path,
+		config_json,
+		sidecar_path,
+		config,
+		Some(overlay),
+	)
+}
+
+fn build_native_plugin_factory_inner(
+	plugin_path: &Path,
+	config_json: &str,
+	sidecar_path: &str,
+	config: ActorConfig,
+	overlay: Option<Arc<dyn NativePluginOverlay>>,
 ) -> Result<ActorFactory> {
 	let plugin = load_plugin(plugin_path)?;
 
@@ -265,82 +288,234 @@ pub fn build_native_plugin_factory(
 	let plugin_for_entry = plugin.clone();
 	let entry = move |start: crate::actor::lifecycle_hooks::ActorStart| {
 		let plugin = plugin_for_entry.clone();
-		Box::pin(run_native_actor(plugin, factory, start))
+		let overlay = overlay.clone();
+		Box::pin(run_native_actor(plugin, factory, start, overlay))
 			as crate::runtime::RuntimeBoxFuture<Result<()>>
 	};
 
 	Ok(ActorFactory::new_with_manual_startup_ready(config, entry))
 }
 
-/// Completion callback the plugin invokes when the actor loop exits. Reclaims
-/// the boxed oneshot sender, frees the result payload, and signals the host.
-struct RunDone {
+pub type NativePluginOverlayFuture<T> = Pin<Box<dyn Future<Output = Result<T>> + Send + 'static>>;
+
+/// Runtime-neutral callback layer around a native plugin backend. NAPI uses
+/// this trait for TypeScript hooks; other hosts may provide their own overlay.
+pub trait NativePluginOverlay: Send + Sync + 'static {
+	fn resolve_instance_options(
+		&self,
+		_ctx: ActorContext,
+		_input: Option<Vec<u8>>,
+		_is_new: bool,
+	) -> NativePluginOverlayFuture<Option<Vec<u8>>> {
+		Box::pin(async { Ok(None) })
+	}
+
+	fn host_call(
+		&self,
+		_ctx: ActorContext,
+		name: String,
+		_payload: Vec<u8>,
+	) -> NativePluginOverlayFuture<Vec<u8>> {
+		Box::pin(async move {
+			Err(anyhow!(
+				"native plugin host call `{name}` is not registered"
+			))
+		})
+	}
+
+	fn handle_event(
+		&self,
+		ctx: ActorContext,
+		event: ActorEvent,
+		native: NativePluginEventHandler,
+	) -> NativePluginOverlayFuture<()>;
+}
+
+/// Per-instance native fallback supplied to a host overlay. Each call pushes
+/// exactly one event to the already-running plugin instance.
+#[derive(Clone)]
+pub struct NativePluginEventHandler {
+	plugin: Arc<LoadedPlugin>,
+	instance: OpaqueHandle,
+	next_event_id: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl NativePluginEventHandler {
+	pub async fn handle_event(&self, event: ActorEvent) -> Result<()> {
+		let Some(event) = forward_actor_event(event) else {
+			return Ok(());
+		};
+		let event_id = self
+			.next_event_id
+			.fetch_update(
+				std::sync::atomic::Ordering::Relaxed,
+				std::sync::atomic::Ordering::Relaxed,
+				|current| Some(current.wrapping_add(1).max(1)),
+			)
+			.expect("native plugin event id update is infallible");
+		dispatch_plugin_event(self.plugin.clone(), self.instance, event_id, event).await
+	}
+}
+
+/// Completion callback used by terminal, event, and shutdown operations.
+/// Reclaims the boxed oneshot sender and the producer-owned payload.
+struct PluginDone {
 	status: abi::AbiStatus,
 	payload: Vec<u8>,
 }
 
-extern "C" fn run_done(user_data: *mut c_void, result: abi::AbiResult) {
+extern "C" fn plugin_done(user_data: *mut c_void, result: abi::AbiResult) {
 	let _ = std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
-		let tx = Box::from_raw(user_data as *mut tokio::sync::oneshot::Sender<RunDone>);
+		let tx = Box::from_raw(user_data as *mut tokio::sync::oneshot::Sender<PluginDone>);
 		let status = result.status;
 		let payload = result.payload.into_vec();
-		let _ = tx.send(RunDone { status, payload });
+		let _ = tx.send(PluginDone { status, payload });
 	}));
 }
 
-/// Tells the plugin to cancel (close its event stream) if the host drops the
-/// actor future before it completes. `instance` is taken on the happy path so
-/// the guard becomes a no-op once the instance is freed.
-struct CancelGuard {
-	plugin: Arc<LoadedPlugin>,
-	instance: Option<*mut c_void>,
-}
-unsafe impl Send for CancelGuard {}
-impl Drop for CancelGuard {
-	fn drop(&mut self) {
-		if let Some(instance) = self.instance.take() {
-			// Host aborted the actor future (e.g. the sleep/destroy grace
-			// deadline elapsed): force VM teardown, then close the event stream.
-			// Both are idempotent and the instance is not yet freed.
-			unsafe {
-				(self.plugin.grace_deadline())(instance);
-				(self.plugin.cancel())(instance);
+fn plugin_done_result(done: PluginDone, operation: &str) -> Result<Vec<u8>> {
+	match done.status {
+		abi::AbiStatus::Ok => Ok(done.payload),
+		status => {
+			let message = String::from_utf8_lossy(&done.payload);
+			if message.is_empty() {
+				Err(anyhow!(
+					"native plugin {operation} completed with {status:?}"
+				))
+			} else {
+				Err(anyhow!(
+					"native plugin {operation} completed with {status:?}: {message}"
+				))
 			}
 		}
 	}
 }
 
-/// Drive one native-plugin actor instance: build the host vtable over the
-/// actor context, spawn the event adapter, `run` the plugin, await completion.
+struct ForcedShutdown {
+	plugin: Arc<LoadedPlugin>,
+	instance: OpaqueHandle,
+}
+
+extern "C" fn forced_shutdown_done(user_data: *mut c_void, result: abi::AbiResult) {
+	let _ = std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
+		result.payload.free_self();
+		let shutdown = Box::from_raw(user_data as *mut ForcedShutdown);
+		(shutdown.plugin.instance_free())(shutdown.instance.0);
+	}));
+}
+
+/// Guarantees forced shutdown and eventual instance reclamation if the host
+/// actor future is cancelled before the normal shutdown barrier completes.
+struct InstanceGuard {
+	plugin: Arc<LoadedPlugin>,
+	instance: Option<OpaqueHandle>,
+}
+
+unsafe impl Send for InstanceGuard {}
+
+impl InstanceGuard {
+	fn handle(&self) -> OpaqueHandle {
+		self.instance.expect("native plugin instance is live")
+	}
+
+	unsafe fn free(mut self) {
+		let instance = self
+			.instance
+			.take()
+			.expect("native plugin instance is live");
+		(self.plugin.instance_free())(instance.0);
+	}
+}
+
+impl Drop for InstanceGuard {
+	fn drop(&mut self) {
+		if let Some(instance) = self.instance.take() {
+			let shutdown = Box::new(ForcedShutdown {
+				plugin: self.plugin.clone(),
+				instance,
+			});
+			unsafe {
+				(self.plugin.shutdown())(
+					instance.0,
+					1,
+					forced_shutdown_done,
+					Box::into_raw(shutdown) as *mut c_void,
+				);
+			}
+		}
+	}
+}
+
+struct HostCtxGuard(Option<*const c_void>);
+unsafe impl Send for HostCtxGuard {}
+
+impl Drop for HostCtxGuard {
+	fn drop(&mut self) {
+		if let Some(ctx) = self.0.take() {
+			host_ctx_release(ctx);
+		}
+	}
+}
+
+const MAX_IN_FLIGHT_PLUGIN_EVENTS: usize = 64;
+const MAX_IN_FLIGHT_HOST_CALLS: usize = 32;
+const HOST_CALL_WARN_AT: usize = 25;
+const MAX_HOST_CALL_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_HOST_CALL_RESPONSE_BYTES: usize = 1024 * 1024;
+const HOST_CALL_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Drive one native-plugin actor instance. RivetKit owns mailbox admission and
+/// pushes each event directly into the plugin with an exactly-once completion.
 async fn run_native_actor(
 	plugin: Arc<LoadedPlugin>,
 	factory: OpaqueHandle,
 	start: crate::actor::lifecycle_hooks::ActorStart,
+	overlay: Option<Arc<dyn NativePluginOverlay>>,
 ) -> Result<()> {
 	let runtime = Handle::current();
-	let (event_tx, event_rx) = tokio::sync::mpsc::unbounded_channel::<ForwardedEvent>();
 	let state = Arc::new(HostCtxState {
 		ctx: start.ctx.clone(),
-		runtime: runtime.clone(),
-		slab: ReplySlab::new(),
-		events: tokio::sync::Mutex::new(event_rx),
+		runtime,
+		overlay: overlay.clone(),
+		host_call_slots: Arc::new(Semaphore::new(MAX_IN_FLIGHT_HOST_CALLS)),
 		startup: Mutex::new(start.startup_ready),
 		keep_awake: KeepAwakeStore::new(),
 	});
+	let instance_options = match &overlay {
+		Some(overlay) => {
+			overlay
+				.resolve_instance_options(start.ctx.clone(), start.input.clone(), start.is_new)
+				.await
+		}
+		None => Ok(None),
+	};
+	let instance_options = match instance_options {
+		Ok(options) => options,
+		Err(error) => {
+			if let Some(startup) = state.startup.lock().take() {
+				let _ = startup.send(Err(anyhow!("{error:#}")));
+			}
+			return Err(error).context("resolve native plugin instance options");
+		}
+	};
+	let instance_start = abi::InstanceStart {
+		is_new: start.is_new,
+		input: start.input.clone(),
+		instance_options,
+	};
+	let instance_start = encode_cbor(&instance_start).context("encode native plugin start data")?;
 
-	// Event adapter: drains core ActorEvents -> forwarded stream / inline replies.
-	let loop_handle = runtime.spawn(adapter_loop(start.events, event_tx, state.clone()));
-
-	// Host vtable, wrapped `Send` so it can live across the completion await.
-	// The plugin copies it synchronously in `run`. `ctx` holds ONE owned Arc ref.
+	let host_ctx = state.clone().into_ctx_ptr();
+	let host_ctx_guard = HostCtxGuard(Some(host_ctx));
 	let vtable = SendVtable(abi::HostVtable {
 		abi_version: abi::RIVET_ACTOR_ABI_VERSION,
-		ctx: state.clone().into_ctx_ptr(),
+		ctx: host_ctx,
 		ctx_clone: host_ctx_clone,
 		ctx_release: host_ctx_release,
 		db_exec: host_db_exec,
 		db_query: host_db_query,
 		db_run: host_db_run,
+		host_call,
 		sql_is_enabled: host_sql_is_enabled,
 		state_get: host_state_get,
 		state_set: host_state_set,
@@ -371,65 +546,187 @@ async fn run_native_actor(
 		conn_disconnect: host_conn_disconnect,
 		hibernatable_ws_ack: host_hibernatable_ws_ack,
 		conn_send: host_conn_send,
-		next_event: host_next_event,
-		reply_ok: host_reply_ok,
-		reply_err: host_reply_err,
 		startup_ready: host_startup_ready,
 		broadcast: host_broadcast,
 		log: host_log,
 	});
 
-	// Completion bridge: plugin -> host on actor exit.
-	let (done_tx, done_rx) = tokio::sync::oneshot::channel::<RunDone>();
-	let user_data = Box::into_raw(Box::new(done_tx)) as *mut c_void;
-
-	// Submit. The plugin copies the vtable synchronously in `run`.
-	let instance = unsafe {
-		(plugin.run())(
-			factory.0,
-			&vtable.0 as *const abi::HostVtable,
-			run_done,
-			user_data,
-		)
+	let (terminal_tx, mut terminal_rx) = tokio::sync::oneshot::channel::<PluginDone>();
+	let instance = {
+		let terminal_user_data = Box::into_raw(Box::new(terminal_tx)) as *mut c_void;
+		let mut out_err = abi::OwnedBuf::empty();
+		let instance = unsafe {
+			(plugin.instance_new())(
+				factory.0,
+				&vtable.0 as *const abi::HostVtable,
+				abi::BorrowedBuf::from_slice(&instance_start),
+				&mut out_err as *mut _,
+				plugin_done,
+				terminal_user_data,
+			)
+		};
+		if instance.is_null() {
+			let message = unsafe { take_out_err(out_err) };
+			unsafe {
+				drop(Box::from_raw(
+					terminal_user_data as *mut tokio::sync::oneshot::Sender<PluginDone>,
+				))
+			};
+			return Err(anyhow!("native plugin instance_new failed: {message}"));
+		}
+		OpaqueHandle(instance)
 	};
-	let mut cancel = CancelGuard {
+	let guard = InstanceGuard {
 		plugin: plugin.clone(),
 		instance: Some(instance),
 	};
 
-	// Await actor exit.
-	let status = done_rx.await;
-
-	// Cleanup: stop the adapter loop, drain outstanding replies (DroppedReply),
-	// release the original ctx ref, free the instance (taken so the guard is a
-	// no-op on the freed handle).
-	let instance = cancel.instance.take().expect("instance present after run");
-	loop_handle.abort();
-	state.slab.drain();
-	// SAFETY: balanced with `into_ctx_ptr`; in-flight callbacks hold their own
-	// ctx clones, so the underlying ActorContext stays alive until they drop.
-	unsafe {
-		host_ctx_release(vtable.0.ctx);
-		(plugin.instance_free())(instance);
-	}
-
-	match status {
-		Ok(RunDone {
-			status: abi::AbiStatus::Ok,
-			..
-		}) => Ok(()),
-		Ok(done) => {
-			let message = String::from_utf8_lossy(&done.payload);
-			if message.is_empty() {
-				Err(anyhow!("native actor exited with status {:?}", done.status))
-			} else {
-				Err(anyhow!(
-					"native actor exited with status {:?}: {message}",
-					done.status
-				))
+	let (admission_result, early_terminal) = {
+		let dispatch =
+			dispatch_plugin_events(start.events, start.ctx, plugin.clone(), instance, overlay);
+		tokio::pin!(dispatch);
+		tokio::select! {
+			result = &mut dispatch => (result, None),
+			terminal = &mut terminal_rx => {
+				let result = terminal
+					.map_err(|_| anyhow!("native plugin terminal completion channel dropped"))
+					.and_then(|done| plugin_done_result(done, "actor loop"))
+					.map(|_| ());
+				let result = match result {
+					Ok(()) => Err(anyhow!("native plugin actor loop exited before host admission closed")),
+					Err(error) => Err(error),
+				};
+				(result, Some(()))
 			}
 		}
-		Err(_) => Err(anyhow!("native actor completion channel dropped")),
+	};
+
+	let force = admission_result.is_err() || early_terminal.is_some();
+	let shutdown_result = shutdown_plugin_instance(&plugin, guard.handle(), force).await;
+	let dispatch_result = match admission_result {
+		Ok(tasks) => drain_plugin_events(tasks).await,
+		Err(error) => Err(error),
+	};
+	let terminal_result = if early_terminal.is_some() {
+		Ok(())
+	} else {
+		terminal_rx
+			.await
+			.map_err(|_| anyhow!("native plugin terminal completion channel dropped"))
+			.and_then(|done| plugin_done_result(done, "actor loop"))
+			.map(|_| ())
+	};
+
+	if shutdown_result.is_ok() {
+		unsafe { guard.free() };
+	} else {
+		// The ordinary shutdown barrier did not prove the instance safe to free.
+		// Keep the guard armed so its forced-shutdown callback owns reclamation.
+		drop(guard);
+	}
+	drop(host_ctx_guard);
+
+	dispatch_result?;
+	shutdown_result?;
+	terminal_result
+}
+
+async fn shutdown_plugin_instance(
+	plugin: &Arc<LoadedPlugin>,
+	instance: OpaqueHandle,
+	force: bool,
+) -> Result<()> {
+	let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PluginDone>();
+	unsafe {
+		(plugin.shutdown())(
+			instance.0,
+			u8::from(force),
+			plugin_done,
+			Box::into_raw(Box::new(done_tx)) as *mut c_void,
+		);
+	}
+	let done = done_rx
+		.await
+		.map_err(|_| anyhow!("native plugin shutdown completion channel dropped"))?;
+	plugin_done_result(done, "shutdown").map(|_| ())
+}
+
+async fn dispatch_plugin_events(
+	mut events: ActorEvents,
+	ctx: ActorContext,
+	plugin: Arc<LoadedPlugin>,
+	instance: OpaqueHandle,
+	overlay: Option<Arc<dyn NativePluginOverlay>>,
+) -> Result<tokio::task::JoinSet<Result<()>>> {
+	let mut tasks = tokio::task::JoinSet::new();
+	let native = NativePluginEventHandler {
+		plugin,
+		instance,
+		next_event_id: Arc::new(std::sync::atomic::AtomicU64::new(1)),
+	};
+
+	while let Some(event) = events.recv().await {
+		while tasks.len() >= MAX_IN_FLIGHT_PLUGIN_EVENTS {
+			join_plugin_event(&mut tasks).await?;
+		}
+		let native = native.clone();
+		if let Some(overlay) = overlay.clone() {
+			let ctx = ctx.clone();
+			tasks.spawn(async move { overlay.handle_event(ctx, event, native).await });
+		} else {
+			tasks.spawn(async move { native.handle_event(event).await });
+		}
+		while let Some(result) = tasks.try_join_next() {
+			result.context("native plugin event task panicked")??;
+		}
+	}
+
+	Ok(tasks)
+}
+
+async fn drain_plugin_events(mut tasks: tokio::task::JoinSet<Result<()>>) -> Result<()> {
+	while !tasks.is_empty() {
+		join_plugin_event(&mut tasks).await?;
+	}
+	Ok(())
+}
+
+async fn join_plugin_event(tasks: &mut tokio::task::JoinSet<Result<()>>) -> Result<()> {
+	tasks
+		.join_next()
+		.await
+		.context("native plugin event task missing")?
+		.context("native plugin event task panicked")?
+}
+
+async fn dispatch_plugin_event(
+	plugin: Arc<LoadedPlugin>,
+	instance: OpaqueHandle,
+	event_id: u64,
+	event: ForwardedEvent,
+) -> Result<()> {
+	let (done_tx, done_rx) = tokio::sync::oneshot::channel::<PluginDone>();
+	unsafe {
+		(plugin.handle_event())(
+			instance.0,
+			event_id,
+			abi::AbiEvent {
+				tag: event.tag,
+				payload: abi::OwnedBuf::from_vec(event.payload),
+			},
+			plugin_done,
+			Box::into_raw(Box::new(done_tx)) as *mut c_void,
+		);
+	}
+	let result = done_rx
+		.await
+		.map_err(|_| anyhow!("native plugin event {event_id} completion channel dropped"));
+	match result {
+		Ok(done) => event.reply.fulfill(done),
+		Err(error) => {
+			event.reply.fulfill_err(format!("{error:#}"));
+			Err(error)
+		}
 	}
 }
 
@@ -449,19 +746,13 @@ unsafe impl Send for SendVtable {}
 // HOST runtime `Handle` (ambient spawn would hit the plugin's tokio).
 // ---------------------------------------------------------------------------
 
-/// One forwarded lifecycle event: `(tag, reply_token, event_bytes)`.
-pub(crate) type ForwardedEvent = (u32, u64, Vec<u8>);
-
 /// State behind the opaque `HostVtable.ctx` pointer. Shared by every vtable fn
-/// and the adapter loop; refcounted so it outlives in-flight callbacks.
+/// and refcounted so it outlives in-flight callbacks.
 pub(crate) struct HostCtxState {
 	ctx: ActorContext,
 	runtime: Handle,
-	/// Outstanding replies awaiting plugin answers (spec §6.3).
-	slab: ReplySlab,
-	/// Receiver side of the adapter loop's forwarded-event stream. The plugin
-	/// pulls via `next_event`; `None` (closed) => `ChannelClosed`.
-	events: tokio::sync::Mutex<tokio::sync::mpsc::UnboundedReceiver<ForwardedEvent>>,
+	overlay: Option<Arc<dyn NativePluginOverlay>>,
+	host_call_slots: Arc<Semaphore>,
 	/// Manual startup-ready signal (the entry uses `new_with_manual_startup_ready`).
 	startup: Mutex<Option<tokio::sync::oneshot::Sender<anyhow::Result<()>>>>,
 	/// User keep-awake regions held by a plugin actor.
@@ -473,61 +764,6 @@ impl HostCtxState {
 		Arc::into_raw(self) as *const c_void
 	}
 }
-
-extern "C" fn host_next_event(ctx: *const c_void, done: abi::CompletionFn, user_data: *mut c_void) {
-	let _ = std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
-		let state = ctx_arc(ctx);
-		let ud = SendUserData(user_data);
-		let handle = state.runtime.clone();
-		handle.spawn(async move {
-			let ud = ud;
-			let mut rx = state.events.lock().await;
-			let result = match rx.recv().await {
-				Some((tag, token, payload)) => abi::AbiResult::ok(abi::OwnedBuf::from_vec(
-					abi::encode_event_frame(tag, abi::ReplyToken(token), &payload),
-				)),
-				None => abi::AbiResult::channel_closed(),
-			};
-			drop(rx);
-			done(ud.0, result);
-		});
-	}));
-}
-
-extern "C" fn host_reply_ok(
-	ctx: *const c_void,
-	reply_token: u64,
-	payload: abi::OwnedBuf,
-) -> abi::AbiStatus {
-	std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
-		let state = ctx_arc(ctx);
-		let bytes = payload.into_vec();
-		if state.slab.fulfill_ok(reply_token, bytes) {
-			abi::AbiStatus::Ok
-		} else {
-			abi::AbiStatus::Err
-		}
-	}))
-	.unwrap_or(abi::AbiStatus::Panic)
-}
-
-extern "C" fn host_reply_err(
-	ctx: *const c_void,
-	reply_token: u64,
-	err: abi::OwnedBuf,
-) -> abi::AbiStatus {
-	std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
-		let state = ctx_arc(ctx);
-		let msg = String::from_utf8_lossy(&err.into_vec()).into_owned();
-		if state.slab.fulfill_err(reply_token, msg) {
-			abi::AbiStatus::Ok
-		} else {
-			abi::AbiStatus::Err
-		}
-	}))
-	.unwrap_or(abi::AbiStatus::Panic)
-}
-
 extern "C" fn host_startup_ready(ctx: *const c_void, ok: u8, err_msg: abi::BorrowedBuf) {
 	let _ = std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
 		let state = ctx_arc(ctx);
@@ -651,6 +887,76 @@ fn spawn_completion<F>(
 		};
 		guard.fire(result);
 	});
+}
+
+extern "C" fn host_call(
+	ctx: *const c_void,
+	name: abi::OwnedBuf,
+	payload: abi::OwnedBuf,
+	done: abi::CompletionFn,
+	user_data: *mut c_void,
+) {
+	let _ = std::panic::catch_unwind(AssertUnwindSafe(|| unsafe {
+		let state = ctx_arc(ctx);
+		let name = name.into_vec();
+		let payload = payload.into_vec();
+		let st = state.clone();
+		spawn_completion(state, done, user_data, async move {
+			let result = async {
+				let name = String::from_utf8(name).context("native plugin host-call name utf8")?;
+				if payload.len() > MAX_HOST_CALL_REQUEST_BYTES {
+					bail!(
+						"native plugin host-call request limit {} bytes exceeded by `{name}` ({} bytes); raise MAX_HOST_CALL_REQUEST_BYTES in the host build",
+						MAX_HOST_CALL_REQUEST_BYTES,
+						payload.len()
+					);
+				}
+				let Some(overlay) = st.overlay.clone() else {
+					bail!("native plugin host call `{name}` is not registered");
+				};
+				let in_flight = MAX_IN_FLIGHT_HOST_CALLS - st.host_call_slots.available_permits();
+				if in_flight >= HOST_CALL_WARN_AT {
+					tracing::warn!(
+						in_flight,
+						limit = MAX_IN_FLIGHT_HOST_CALLS,
+						callback = %name,
+						"native plugin host-call concurrency is near its limit"
+					);
+				}
+				let _permit = st.host_call_slots.clone().try_acquire_owned().map_err(|_| {
+					anyhow!(
+						"native plugin host-call concurrency limit {MAX_IN_FLIGHT_HOST_CALLS} exceeded by `{name}`; raise MAX_IN_FLIGHT_HOST_CALLS in the host build"
+					)
+				})?;
+				let abort = st.ctx.actor_abort_signal();
+				let response = tokio::select! {
+					biased;
+					_ = abort.cancelled() => bail!("native plugin host call `{name}` cancelled during actor shutdown"),
+					result = tokio::time::timeout(
+						HOST_CALL_TIMEOUT,
+						overlay.host_call(st.ctx.clone(), name.clone(), payload),
+					) => result
+						.map_err(|_| anyhow!(
+							"native plugin host-call timeout of {} ms exceeded by `{name}`; raise HOST_CALL_TIMEOUT in the host build",
+							HOST_CALL_TIMEOUT.as_millis()
+						))??,
+				};
+				if response.len() > MAX_HOST_CALL_RESPONSE_BYTES {
+					bail!(
+						"native plugin host-call response limit {} bytes exceeded by `{name}` ({} bytes); raise MAX_HOST_CALL_RESPONSE_BYTES in the host build",
+						MAX_HOST_CALL_RESPONSE_BYTES,
+						response.len()
+					);
+				}
+				Ok(response)
+			}
+			.await;
+			match result {
+				Ok(bytes) => ok_bytes(bytes),
+				Err(error) => abi::AbiResult::err(encode_db_error(&error)),
+			}
+		});
+	}));
 }
 
 extern "C" fn host_db_exec(
@@ -1390,215 +1696,209 @@ fn conn_info(conn: &ConnHandle) -> abi::ConnInfo {
 	}
 }
 
-/// The event adapter (spec §6.3): drains the core `ActorEvents`, forwards
-/// reply-bearing actor events to the plugin (storing their `Reply` in the slab),
-/// and answers reject/skip/internal events inline. On stream end (actor exit)
-/// it drains the slab so no awaiting caller hangs.
-async fn adapter_loop(
-	mut events: ActorEvents,
-	tx: tokio::sync::mpsc::UnboundedSender<ForwardedEvent>,
-	state: Arc<HostCtxState>,
-) {
-	use abi::AbiEventTag as Tag;
-	while let Some(ev) = events.recv().await {
-		match ev {
-			// --- forwarded (reply stored in slab) ---
-			ActorEvent::Action {
-				name, args, reply, ..
-			} => {
-				let token = state.slab.insert(PendingReply::Bytes(reply));
-				if tx
-					.send((
-						Tag::Action as u32,
-						token,
-						abi::encode_action_payload(&name, &args),
-					))
-					.is_err()
-				{
-					break;
-				}
-			}
-			ActorEvent::ConnectionPreflight {
-				conn,
-				params,
-				reply,
-				..
-			} => {
-				let token = state.slab.insert(PendingReply::Unit(reply));
-				let payload = match abi::encode_conn_preflight_payload(&conn_info(&conn), &params) {
-					Ok(payload) => payload,
-					Err(error) => {
-						tracing::error!(?error, "failed to encode connection preflight event");
-						state.slab.fulfill_err(token, format!("{error:#}"));
-						continue;
-					}
-				};
-				if tx
-					.send((Tag::ConnPreflight as u32, token, payload))
-					.is_err()
-				{
-					break;
-				}
-			}
-			ActorEvent::ConnectionOpen { conn, reply, .. } => {
-				let token = state.slab.insert(PendingReply::Unit(reply));
-				let payload = match abi::encode_conn_open_payload(&conn_info(&conn)) {
-					Ok(payload) => payload,
-					Err(error) => {
-						tracing::error!(?error, "failed to encode connection open event");
-						state.slab.fulfill_err(token, format!("{error:#}"));
-						continue;
-					}
-				};
-				if tx.send((Tag::ConnOpen as u32, token, payload)).is_err() {
-					break;
-				}
-			}
-			ActorEvent::SubscribeRequest {
-				conn,
-				reply,
-				event_name,
-			} => {
-				let token = state.slab.insert(PendingReply::Unit(reply));
-				let payload = match abi::encode_subscribe_payload(&conn_info(&conn), &event_name) {
-					Ok(payload) => payload,
-					Err(error) => {
-						tracing::error!(?error, "failed to encode subscribe event");
-						state.slab.fulfill_err(token, format!("{error:#}"));
-						continue;
-					}
-				};
-				if tx.send((Tag::Subscribe as u32, token, payload)).is_err() {
-					break;
-				}
-			}
-			ActorEvent::QueueSend {
-				name,
-				body,
-				conn,
-				request,
-				wait,
-				timeout_ms,
-				reply,
-			} => {
-				let token = state.slab.insert(PendingReply::Queue(reply));
-				let payload = match abi::encode_queue_send_payload(
-					&name,
-					&body,
-					&conn_info(&conn),
-					&encode_http_request(&request),
-					wait,
-					timeout_ms,
-				) {
-					Ok(payload) => payload,
-					Err(error) => {
-						tracing::error!(?error, "failed to encode queue send event");
-						state.slab.fulfill_err(token, format!("{error:#}"));
-						continue;
-					}
-				};
-				if tx.send((Tag::QueueSend as u32, token, payload)).is_err() {
-					break;
-				}
-			}
-			ActorEvent::WebSocketOpen {
-				conn,
-				request,
-				reply,
-				..
-			} => {
-				let token = state.slab.insert(PendingReply::Unit(reply));
-				let request = request.as_ref().map(encode_http_request);
-				let payload =
-					match abi::encode_ws_open_payload(&conn_info(&conn), request.as_deref()) {
-						Ok(payload) => payload,
-						Err(error) => {
-							tracing::error!(?error, "failed to encode websocket open event");
-							state.slab.fulfill_err(token, format!("{error:#}"));
-							continue;
-						}
-					};
-				if tx.send((Tag::WsOpen as u32, token, payload)).is_err() {
-					break;
-				}
-			}
-			ActorEvent::RunGracefulCleanup { reason, reply } => {
-				let tag = match reason {
-					ShutdownKind::Sleep => Tag::Sleep,
-					ShutdownKind::Destroy => Tag::Destroy,
-				};
-				let token = state.slab.insert(PendingReply::Unit(reply));
-				if tx.send((tag as u32, token, Vec::new())).is_err() {
-					break;
-				}
-			}
-			ActorEvent::ConnectionClosed { conn } => {
-				// No reply; reply_token 0.
-				let payload = match abi::encode_conn_closed_payload(&conn_info(&conn)) {
-					Ok(payload) => payload,
-					Err(error) => {
-						tracing::error!(?error, "failed to encode connection closed event");
-						continue;
-					}
-				};
-				if tx.send((Tag::ConnClosed as u32, 0, payload)).is_err() {
-					break;
-				}
-			}
-
-			ActorEvent::HttpRequest { request, reply } => {
-				let token = state.slab.insert(PendingReply::Http(reply));
-				if tx
-					.send((Tag::Http as u32, token, encode_http_request(&request)))
-					.is_err()
-				{
-					break;
-				}
-			}
-			ActorEvent::SerializeState { reply, .. } => {
-				let token = state.slab.insert(PendingReply::State(reply));
-				if tx
-					.send((Tag::SerializeState as u32, token, Vec::new()))
-					.is_err()
-				{
-					break;
-				}
-			}
-
-			// --- answered inline (not forwarded) ---
-			ActorEvent::DisconnectConn { reply, .. } => reply.send(Ok(())),
-			ActorEvent::WorkflowHistoryRequested { reply } => reply.send(Ok(None)),
-			ActorEvent::WorkflowReplayRequested { reply, .. } => reply.send(Ok(None)),
-
-			#[cfg(test)]
-			ActorEvent::BeginSleep => {}
-			#[cfg(test)]
-			ActorEvent::FinalizeSleep { reply } => reply.send(Ok(())),
-			#[cfg(test)]
-			ActorEvent::Destroy { reply } => reply.send(Ok(())),
-		}
-	}
-	// Actor exiting: fail any outstanding replies (DroppedReply) so no caller hangs.
-	state.slab.drain();
+struct ForwardedEvent {
+	tag: u32,
+	payload: Vec<u8>,
+	reply: PendingReply,
 }
 
-// ---------------------------------------------------------------------------
-// Reply slab (spec §6.3) — the safety-critical reply lifecycle.
-//
-// Forwarded reply-bearing events hand their `Reply<T>` to this slab keyed by a
-// `reply_token`. The plugin answers via `reply_ok`/`reply_err(token, ..)`. On
-// actor exit/cancel the slab is DRAINED, dropping every outstanding `Reply<T>`
-// — whose `Drop` sends `Err(DroppedReply)` so callers never hang.
-// ---------------------------------------------------------------------------
+/// Convert one core event into the generic pushed-event ABI. Events owned by
+/// RivetKit itself are answered inline and never enter the plugin.
+fn forward_actor_event(event: ActorEvent) -> Option<ForwardedEvent> {
+	use abi::AbiEventTag as Tag;
+	match event {
+		ActorEvent::Action {
+			name,
+			args,
+			conn,
+			reply,
+		} => match abi::encode_action_payload_with_conn(
+			&name,
+			&args,
+			conn.as_ref().map(conn_info).as_ref(),
+		) {
+			Ok(payload) => Some(ForwardedEvent {
+				tag: Tag::Action as u32,
+				payload,
+				reply: PendingReply::Bytes(reply),
+			}),
+			Err(error) => {
+				reply.send(Err(error));
+				None
+			}
+		},
+		ActorEvent::ConnectionPreflight {
+			conn,
+			params,
+			request,
+			reply,
+		} => match abi::encode_conn_preflight_payload_with_request(
+			&conn_info(&conn),
+			&params,
+			request.as_ref().map(encode_http_request).as_deref(),
+		) {
+			Ok(payload) => Some(ForwardedEvent {
+				tag: Tag::ConnPreflight as u32,
+				payload,
+				reply: PendingReply::Unit(reply),
+			}),
+			Err(error) => {
+				reply.send(Err(error));
+				None
+			}
+		},
+		ActorEvent::ConnectionOpen {
+			conn,
+			request,
+			reply,
+		} => {
+			match abi::encode_conn_open_payload_with_request(
+				&conn_info(&conn),
+				request.as_ref().map(encode_http_request).as_deref(),
+			) {
+				Ok(payload) => Some(ForwardedEvent {
+					tag: Tag::ConnOpen as u32,
+					payload,
+					reply: PendingReply::Unit(reply),
+				}),
+				Err(error) => {
+					reply.send(Err(error));
+					None
+				}
+			}
+		}
+		ActorEvent::SubscribeRequest {
+			conn,
+			reply,
+			event_name,
+		} => match abi::encode_subscribe_payload(&conn_info(&conn), &event_name) {
+			Ok(payload) => Some(ForwardedEvent {
+				tag: Tag::Subscribe as u32,
+				payload,
+				reply: PendingReply::Unit(reply),
+			}),
+			Err(error) => {
+				reply.send(Err(error));
+				None
+			}
+		},
+		ActorEvent::QueueSend {
+			name,
+			body,
+			conn,
+			request,
+			wait,
+			timeout_ms,
+			reply,
+		} => {
+			match abi::encode_queue_send_payload(
+				&name,
+				&body,
+				&conn_info(&conn),
+				&encode_http_request(&request),
+				wait,
+				timeout_ms,
+			) {
+				Ok(payload) => Some(ForwardedEvent {
+					tag: Tag::QueueSend as u32,
+					payload,
+					reply: PendingReply::Queue(reply),
+				}),
+				Err(error) => {
+					reply.send(Err(error));
+					None
+				}
+			}
+		}
+		ActorEvent::WebSocketOpen {
+			conn,
+			request,
+			reply,
+			..
+		} => {
+			let request = request.as_ref().map(encode_http_request);
+			match abi::encode_ws_open_payload(&conn_info(&conn), request.as_deref()) {
+				Ok(payload) => Some(ForwardedEvent {
+					tag: Tag::WsOpen as u32,
+					payload,
+					reply: PendingReply::Unit(reply),
+				}),
+				Err(error) => {
+					reply.send(Err(error));
+					None
+				}
+			}
+		}
+		ActorEvent::RunGracefulCleanup { reason, reply } => {
+			let tag = match reason {
+				ShutdownKind::Sleep => Tag::Sleep,
+				ShutdownKind::Destroy => Tag::Destroy,
+			};
+			Some(ForwardedEvent {
+				tag: tag as u32,
+				payload: Vec::new(),
+				reply: PendingReply::Unit(reply),
+			})
+		}
+		ActorEvent::ConnectionClosed { conn } => {
+			match abi::encode_conn_closed_payload(&conn_info(&conn)) {
+				Ok(payload) => Some(ForwardedEvent {
+					tag: Tag::ConnClosed as u32,
+					payload,
+					reply: PendingReply::None,
+				}),
+				Err(error) => {
+					tracing::error!(?error, "failed to encode connection closed event");
+					None
+				}
+			}
+		}
+
+		ActorEvent::HttpRequest { request, reply } => Some(ForwardedEvent {
+			tag: Tag::Http as u32,
+			payload: encode_http_request(&request),
+			reply: PendingReply::Http(reply),
+		}),
+		ActorEvent::SerializeState { reply, .. } => Some(ForwardedEvent {
+			tag: Tag::SerializeState as u32,
+			payload: Vec::new(),
+			reply: PendingReply::State(reply),
+		}),
+
+		ActorEvent::DisconnectConn { reply, .. } => {
+			reply.send(Ok(()));
+			None
+		}
+		ActorEvent::WorkflowHistoryRequested { reply } => {
+			reply.send(Ok(None));
+			None
+		}
+		ActorEvent::WorkflowReplayRequested { reply, .. } => {
+			reply.send(Ok(None));
+			None
+		}
+
+		#[cfg(test)]
+		ActorEvent::BeginSleep => None,
+		#[cfg(test)]
+		ActorEvent::FinalizeSleep { reply } => {
+			reply.send(Ok(()));
+			None
+		}
+		#[cfg(test)]
+		ActorEvent::Destroy { reply } => {
+			reply.send(Ok(()));
+			None
+		}
+	}
+}
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::actor::lifecycle_hooks::Reply;
 
-/// A reply handle awaiting the plugin's answer. Only the variants the adapter
-/// forwards are represented (Action → bytes; lifecycle/conn/subscribe → unit);
-/// other events are answered inline by the adapter and never reach the slab.
-pub(crate) enum PendingReply {
+enum PendingReply {
+	None,
 	Bytes(Reply<Vec<u8>>),
 	Unit(Reply<()>),
 	State(Reply<Vec<StateDelta>>),
@@ -1607,8 +1907,30 @@ pub(crate) enum PendingReply {
 }
 
 impl PendingReply {
+	fn fulfill(self, done: PluginDone) -> Result<()> {
+		if done.status == abi::AbiStatus::Ok {
+			self.fulfill_ok(done.payload);
+			return Ok(());
+		}
+		let message = if done.payload.is_empty() && done.status == abi::AbiStatus::ChannelClosed {
+			"native plugin event dropped without a response".to_owned()
+		} else if done.payload.is_empty() {
+			format!("native plugin event completed with {:?}", done.status)
+		} else {
+			String::from_utf8_lossy(&done.payload).into_owned()
+		};
+		let no_reply = matches!(self, PendingReply::None);
+		self.fulfill_err(message.clone());
+		if no_reply {
+			Err(anyhow!("{message}"))
+		} else {
+			Ok(())
+		}
+	}
+
 	fn fulfill_ok(self, payload: Vec<u8>) {
 		match self {
+			PendingReply::None => {}
 			PendingReply::Bytes(r) => r.send(Ok(payload)),
 			PendingReply::Unit(r) => r.send(Ok(())),
 			PendingReply::State(r) => {
@@ -1626,6 +1948,7 @@ impl PendingReply {
 
 	fn fulfill_err(self, msg: String) {
 		match self {
+			PendingReply::None => {}
 			PendingReply::Bytes(r) => r.send(Err(anyhow!("{msg}"))),
 			PendingReply::Unit(r) => r.send(Err(anyhow!("{msg}"))),
 			PendingReply::State(r) => r.send(Err(anyhow!("{msg}"))),
@@ -1647,55 +1970,6 @@ fn decode_queue_send_response(bytes: &[u8]) -> Result<QueueSendResult> {
 		status,
 		response: wire.response,
 	})
-}
-
-/// Token-keyed store of outstanding replies. Draining drops every `Reply<T>`,
-/// firing `Err(DroppedReply)` to unblock any awaiting caller.
-pub(crate) struct ReplySlab {
-	next: AtomicU64,
-	map: Mutex<HashMap<u64, PendingReply>>,
-}
-
-impl ReplySlab {
-	pub(crate) fn new() -> Self {
-		Self {
-			next: AtomicU64::new(1),
-			map: Mutex::new(HashMap::new()),
-		}
-	}
-
-	/// Store a reply, returning its non-zero token.
-	pub(crate) fn insert(&self, reply: PendingReply) -> u64 {
-		let token = self.next.fetch_add(1, Ordering::Relaxed);
-		self.map.lock().insert(token, reply);
-		token
-	}
-
-	/// Fulfill a pending reply with the plugin's payload. Returns false if the
-	/// token is unknown, already taken, or drained.
-	pub(crate) fn fulfill_ok(&self, token: u64, payload: Vec<u8>) -> bool {
-		if let Some(reply) = self.map.lock().remove(&token) {
-			reply.fulfill_ok(payload);
-			true
-		} else {
-			false
-		}
-	}
-
-	pub(crate) fn fulfill_err(&self, token: u64, msg: String) -> bool {
-		if let Some(reply) = self.map.lock().remove(&token) {
-			reply.fulfill_err(msg);
-			true
-		} else {
-			false
-		}
-	}
-
-	/// Drop every outstanding reply (on actor exit/cancel). Each `Reply::drop`
-	/// sends `Err(DroppedReply)`.
-	pub(crate) fn drain(&self) {
-		self.map.lock().clear();
-	}
 }
 
 pub(crate) struct KeepAwakeStore {
@@ -1727,32 +2001,59 @@ impl KeepAwakeStore {
 }
 
 #[cfg(test)]
-mod slab_tests {
+mod native_plugin_tests {
 	use super::*;
 
-	#[test]
-	fn drain_drops_replies_with_error() {
-		let slab = ReplySlab::new();
-		let (tx, mut rx) = tokio::sync::oneshot::channel::<anyhow::Result<()>>();
-		let token = slab.insert(PendingReply::Unit(Reply::from(tx)));
-		assert_eq!(token, 1);
-		slab.drain();
-		// The dropped Reply must have sent an error (DroppedReply), not hang.
-		match rx.try_recv() {
-			Ok(result) => assert!(result.is_err(), "drained reply should be Err"),
-			other => panic!("expected a sent error, got {other:?}"),
+	fn current_plugin_api_header() -> PluginApiHeader {
+		PluginApiHeader {
+			abi_magic: abi::RIVET_ACTOR_ABI_MAGIC,
+			abi_version: abi::RIVET_ACTOR_ABI_VERSION,
+			struct_size: std::mem::size_of::<abi::PluginApi>(),
 		}
 	}
 
 	#[test]
-	fn fulfill_ok_delivers_payload() {
-		let slab = ReplySlab::new();
+	fn plugin_api_header_requires_exact_magic_version_and_size() {
+		validate_plugin_api_header(current_plugin_api_header()).expect("current header");
+
+		let mut header = current_plugin_api_header();
+		header.abi_magic ^= 1;
+		assert!(
+			validate_plugin_api_header(header)
+				.unwrap_err()
+				.to_string()
+				.contains("not a rivet actor plugin")
+		);
+
+		let mut header = current_plugin_api_header();
+		header.abi_version -= 1;
+		assert!(
+			validate_plugin_api_header(header)
+				.unwrap_err()
+				.to_string()
+				.contains("same-version lockstep")
+		);
+
+		let mut header = current_plugin_api_header();
+		header.struct_size -= 1;
+		assert!(
+			validate_plugin_api_header(header)
+				.unwrap_err()
+				.to_string()
+				.contains("descriptor")
+		);
+	}
+
+	#[test]
+	fn direct_completion_delivers_payload_without_a_host_reply_slab() {
 		let (tx, mut rx) = tokio::sync::oneshot::channel::<anyhow::Result<Vec<u8>>>();
-		let token = slab.insert(PendingReply::Bytes(Reply::from(tx)));
-		assert!(slab.fulfill_ok(token, vec![1, 2, 3]));
+		PendingReply::Bytes(Reply::from(tx))
+			.fulfill(PluginDone {
+				status: abi::AbiStatus::Ok,
+				payload: vec![1, 2, 3],
+			})
+			.expect("direct completion");
 		let got = rx.try_recv().expect("sent").expect("ok");
 		assert_eq!(got, vec![1, 2, 3]);
-		// Token is consumed; a second fulfill is rejected.
-		assert!(!slab.fulfill_ok(token, vec![9]));
 	}
 }

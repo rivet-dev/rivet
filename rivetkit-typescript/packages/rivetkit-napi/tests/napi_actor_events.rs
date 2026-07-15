@@ -34,6 +34,7 @@ mod moved_tests {
 
 	fn empty_bindings() -> CallbackBindings {
 		CallbackBindings {
+			create_native_options: None,
 			create_state: None,
 			on_create: None,
 			create_conn_state: None,
@@ -47,6 +48,8 @@ mod moved_tests {
 			on_connect: None,
 			on_disconnect_final: None,
 			on_before_subscribe: None,
+			on_before_action: None,
+			native_host_calls: HashMap::new(),
 			actions: HashMap::new(),
 			on_before_action_response: None,
 			on_queue_send: None,

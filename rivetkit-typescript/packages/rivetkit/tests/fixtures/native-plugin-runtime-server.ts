@@ -31,22 +31,30 @@ function resolveEngineBinaryPath(): string {
 }
 
 const nativePluginActor = actor({
-	actions: {},
+	actions: {
+		host_echo: (_ctx, value: string) => ({ source: "host", value }),
+	},
 });
 nativePluginActor.nativeFactoryBuilder = (
 	runtime: CoreRuntime,
-	opts?: NativeFactoryBuilderOptions,
+	opts: NativeFactoryBuilderOptions,
 ): ActorFactoryHandle => {
 	if (!runtime.createNativePluginFactory) {
 		throw new Error("native plugin factories require the NAPI runtime");
 	}
 
-	return runtime.createNativePluginFactory({
-		pluginPath,
-		configJson: process.env.RIVETKIT_TEST_NATIVE_PLUGIN_CONFIG_JSON ?? "{}",
-		sidecarPath: process.env.RIVETKIT_TEST_NATIVE_PLUGIN_SIDECAR_PATH ?? "",
-		inspectorTabs: opts?.inspectorTabs,
-	});
+	return runtime.createNativePluginFactory(
+		{
+			pluginPath,
+			configJson:
+				process.env.RIVETKIT_TEST_NATIVE_PLUGIN_CONFIG_JSON ?? "{}",
+			sidecarPath:
+				process.env.RIVETKIT_TEST_NATIVE_PLUGIN_SIDECAR_PATH ?? "",
+			inspectorTabs: opts.inspectorTabs,
+		},
+		opts.callbacks,
+		opts.config,
+	);
 };
 
 const registry = setup({

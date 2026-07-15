@@ -7,6 +7,7 @@
 use std::collections::HashMap;
 use std::ffi::c_void;
 use std::io::Cursor;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -35,7 +36,22 @@ async fn counter_actor_with_factory(
 	let save_wait_status = Arc::new(Mutex::new(None::<JsonValue>));
 	while let Some(event) = ctx.next_event().await? {
 		match event {
-			Event::Action { name, reply, .. } => match name.as_str() {
+			Event::Action {
+				name,
+				args,
+				conn,
+				reply,
+			} => match name.as_str() {
+				"host_call" => {
+					let response = ctx.host_call("echo", args).await?;
+					ctx.reply_ok(reply, response)?;
+				}
+				"action_conn_report" => {
+					ctx.reply_ok(
+						reply,
+						encode_json(&json!(conn.as_ref().map(conn_info_json))),
+					)?;
+				}
 				"increment" => {
 					count += 1;
 					ctx.request_save(RequestSaveOpts::default())?;
@@ -171,6 +187,9 @@ async fn counter_actor_with_factory(
 						encode_json(&json!({
 							"configJson": info.map(|info| info.config_json.as_str()).unwrap_or(""),
 							"sidecarPath": info.map(|info| info.sidecar_path.as_str()).unwrap_or(""),
+							"isNew": info.and_then(|info| info.instance_start.as_ref()).is_some_and(|start| start.is_new),
+							"input": info.and_then(|info| info.instance_start.as_ref()).and_then(|start| start.input.as_ref()),
+							"instanceOptions": info.and_then(|info| info.instance_start.as_ref()).and_then(|start| start.instance_options.as_ref()),
 						})),
 					)?;
 				}
@@ -274,16 +293,29 @@ async fn counter_actor_with_factory(
 			Event::ConnPreflight {
 				conn,
 				params,
+				request,
 				reply,
 			} => {
 				conn_stats.preflight_count += 1;
 				conn_stats.last_preflight = Some(conn);
 				conn_stats.last_preflight_params = Some(params);
+				conn_stats.last_preflight_request = request
+					.as_deref()
+					.and_then(|request| decode_http_request(request).ok())
+					.map(|request| http_request_json(&request));
 				ctx.reply_ok(reply, Vec::new())?;
 			}
-			Event::ConnOpen { conn, reply } => {
+			Event::ConnOpen {
+				conn,
+				request,
+				reply,
+			} => {
 				conn_stats.open_count += 1;
 				conn_stats.last_open = Some(conn);
+				conn_stats.last_open_request = request
+					.as_deref()
+					.and_then(|request| decode_http_request(request).ok())
+					.map(|request| http_request_json(&request));
 				ctx.reply_ok(reply, Vec::new())?;
 			}
 			Event::QueueSend {
@@ -365,6 +397,7 @@ async fn counter_actor_with_factory(
 struct FactoryInfo {
 	config_json: String,
 	sidecar_path: String,
+	instance_start: Option<abi::InstanceStart>,
 }
 
 #[derive(Default)]
@@ -376,7 +409,9 @@ struct ConnStats {
 	ws_open_count: u64,
 	last_preflight: Option<ConnInfo>,
 	last_preflight_params: Option<Vec<u8>>,
+	last_preflight_request: Option<JsonValue>,
 	last_open: Option<ConnInfo>,
+	last_open_request: Option<JsonValue>,
 	last_closed: Option<ConnInfo>,
 	last_subscribe: Option<ConnInfo>,
 	last_subscribe_event_name: Option<String>,
@@ -394,7 +429,9 @@ impl ConnStats {
 			"wsOpenCount": self.ws_open_count,
 			"lastPreflight": self.last_preflight.as_ref().map(conn_info_json),
 			"lastPreflightParams": self.last_preflight_params.as_ref().map(|params| decode_json(params)),
+			"lastPreflightRequest": self.last_preflight_request.as_ref(),
 			"lastOpen": self.last_open.as_ref().map(conn_info_json),
+			"lastOpenRequest": self.last_open_request.as_ref(),
 			"lastClosed": self.last_closed.as_ref().map(conn_info_json),
 			"lastSubscribe": self.last_subscribe.as_ref().map(conn_info_json),
 			"lastSubscribeEventName": self.last_subscribe_event_name.as_deref(),
@@ -608,31 +645,52 @@ fn now_ms() -> i64 {
 	i64::try_from(millis).unwrap_or(i64::MAX)
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_abi_magic() -> u64 {
-	abi::RIVET_ACTOR_ABI_MAGIC
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_abi_version() -> u64 {
-	abi::RIVET_ACTOR_ABI_VERSION
-}
-
 struct Plugin;
 struct Factory {
 	info: FactoryInfo,
 }
 struct Instance {
-	join: Option<thread::JoinHandle<()>>,
+	inner: Arc<InstanceInner>,
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_plugin_init(_out_err: *mut abi::OwnedBuf) -> *mut c_void {
+struct InstanceInner {
+	bridge: abi::DylibEventBridge,
+	join: Mutex<Option<thread::JoinHandle<()>>>,
+	shutdown: Mutex<ShutdownState>,
+}
+
+#[derive(Default)]
+struct ShutdownState {
+	started: bool,
+	outcome: Option<Result<(), String>>,
+	waiters: Vec<CompletionTarget>,
+}
+
+struct CompletionTarget {
+	done: abi::CompletionFn,
+	user_data: SendPtr,
+}
+
+impl CompletionTarget {
+	fn finish(self, result: abi::AbiResult) {
+		self.user_data.complete(self.done, result);
+	}
+
+	fn finish_outcome(self, outcome: &Result<(), String>) {
+		match outcome {
+			Ok(()) => self.finish(abi::AbiResult::ok(abi::OwnedBuf::empty())),
+			Err(message) => self.finish(abi::AbiResult::err(abi::OwnedBuf::from_vec(
+				message.clone().into_bytes(),
+			))),
+		}
+	}
+}
+
+extern "C" fn plugin_init(_out_err: *mut abi::OwnedBuf) -> *mut c_void {
 	Box::into_raw(Box::new(Plugin)) as *mut c_void
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_factory_new(
+extern "C" fn factory_new(
 	_plugin: *mut c_void,
 	config_json: abi::BorrowedBuf,
 	sidecar_path: abi::BorrowedBuf,
@@ -641,12 +699,10 @@ pub extern "C" fn rivet_actor_factory_new(
 	let info = FactoryInfo {
 		config_json: String::from_utf8_lossy(unsafe { config_json.as_slice() }).into_owned(),
 		sidecar_path: String::from_utf8_lossy(unsafe { sidecar_path.as_slice() }).into_owned(),
+		instance_start: None,
 	};
 	Box::into_raw(Box::new(Factory { info })) as *mut c_void
 }
-
-struct SendVtable(abi::HostVtable);
-unsafe impl Send for SendVtable {}
 
 struct SendPtr(*mut c_void);
 unsafe impl Send for SendPtr {}
@@ -657,58 +713,158 @@ impl SendPtr {
 	}
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_run(
+extern "C" fn instance_new(
 	factory: *mut c_void,
 	host: *const abi::HostVtable,
-	done: abi::CompletionFn,
+	start: abi::BorrowedBuf,
+	out_err: *mut abi::OwnedBuf,
+	terminal_done: abi::CompletionFn,
 	user_data: *mut c_void,
 ) -> *mut c_void {
-	let host = SendVtable(unsafe { *host });
-	let user_data = SendPtr(user_data);
-	let factory_info = unsafe { (*(factory as *const Factory)).info.clone() };
-	let join = thread::spawn(move || {
-		let ctx = unsafe { PortableActorCtx::new_dylib(DylibBackend::from_host_vtable(&host.0)) };
-		let result =
-			futures::executor::block_on(counter_actor_with_factory(ctx, Some(factory_info)));
-		let abi_result = match result {
-			Ok(()) => abi::AbiResult::ok(abi::OwnedBuf::empty()),
-			Err(err) => {
-				abi::AbiResult::err(abi::OwnedBuf::from_vec(format!("{err:#}").into_bytes()))
+	let instance_start: abi::InstanceStart =
+		match ciborium::from_reader(Cursor::new(unsafe { start.as_slice() })) {
+			Ok(start) => start,
+			Err(error) => {
+				let message = format!("decode instance start: {error}");
+				if !out_err.is_null() {
+					unsafe { out_err.write(abi::OwnedBuf::from_vec(message.into_bytes())) };
+				}
+				return std::ptr::null_mut();
 			}
 		};
-		user_data.complete(done, abi_result);
+	let (backend, bridge) = unsafe { DylibBackend::from_host_vtable(&*host) };
+	let terminal = CompletionTarget {
+		done: terminal_done,
+		user_data: SendPtr(user_data),
+	};
+	let mut factory_info = unsafe { (*(factory as *const Factory)).info.clone() };
+	factory_info.instance_start = Some(instance_start);
+	let join = thread::spawn(move || {
+		let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+			let ctx = PortableActorCtx::new_dylib(backend);
+			futures::executor::block_on(counter_actor_with_factory(ctx, Some(factory_info)))
+		}));
+		let result = match result {
+			Ok(Ok(())) => abi::AbiResult::ok(abi::OwnedBuf::empty()),
+			Ok(Err(error)) => {
+				abi::AbiResult::err(abi::OwnedBuf::from_vec(format!("{error:#}").into_bytes()))
+			}
+			Err(_) => abi::AbiResult::status_only(abi::AbiStatus::Panic),
+		};
+		terminal.finish(result);
 	});
 
-	Box::into_raw(Box::new(Instance { join: Some(join) })) as *mut c_void
+	Box::into_raw(Box::new(Instance {
+		inner: Arc::new(InstanceInner {
+			bridge,
+			join: Mutex::new(Some(join)),
+			shutdown: Mutex::new(ShutdownState::default()),
+		}),
+	})) as *mut c_void
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_cancel(_instance: *mut c_void) {}
+extern "C" fn handle_event(
+	instance: *mut c_void,
+	event_id: u64,
+	event: abi::AbiEvent,
+	done: abi::CompletionFn,
+	user_data: *mut c_void,
+) {
+	let instance = unsafe { &*(instance as *const Instance) };
+	instance
+		.inner
+		.bridge
+		.handle_event(event_id, event, done, user_data);
+}
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_grace_deadline(_instance: *mut c_void) {}
+extern "C" fn cancel_event(instance: *mut c_void, event_id: u64) {
+	let instance = unsafe { &*(instance as *const Instance) };
+	instance.inner.bridge.cancel_event(event_id);
+}
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_instance_free(instance: *mut c_void) {
-	if !instance.is_null() {
-		let mut instance = unsafe { Box::from_raw(instance as *mut Instance) };
-		if let Some(join) = instance.join.take() {
-			let _ = join.join();
+extern "C" fn shutdown(
+	instance: *mut c_void,
+	force: u8,
+	done: abi::CompletionFn,
+	user_data: *mut c_void,
+) {
+	let instance = unsafe { &*(instance as *const Instance) };
+	let inner = instance.inner.clone();
+	let completion = CompletionTarget {
+		done,
+		user_data: SendPtr(user_data),
+	};
+	inner.bridge.close(force != 0);
+
+	let mut shutdown = inner.shutdown.lock().expect("shutdown lock");
+	if let Some(outcome) = &shutdown.outcome {
+		completion.finish_outcome(outcome);
+		return;
+	}
+	shutdown.waiters.push(completion);
+	if shutdown.started {
+		return;
+	}
+	shutdown.started = true;
+	drop(shutdown);
+
+	thread::spawn(move || {
+		let outcome = inner
+			.join
+			.lock()
+			.expect("instance join lock")
+			.take()
+			.map(|join| {
+				join.join()
+					.map_err(|_| "plugin actor thread panicked".to_owned())
+			})
+			.transpose()
+			.map(|_| ());
+		inner.bridge.finish_shutdown();
+		let waiters = {
+			let mut shutdown = inner.shutdown.lock().expect("shutdown lock");
+			shutdown.outcome = Some(outcome.clone());
+			std::mem::take(&mut shutdown.waiters)
+		};
+		for waiter in waiters {
+			waiter.finish_outcome(&outcome);
 		}
+	});
+}
+
+extern "C" fn instance_free(instance: *mut c_void) {
+	if !instance.is_null() {
+		unsafe { drop(Box::from_raw(instance as *mut Instance)) };
 	}
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_factory_free(factory: *mut c_void) {
+extern "C" fn factory_free(factory: *mut c_void) {
 	if !factory.is_null() {
 		unsafe { drop(Box::from_raw(factory as *mut Factory)) };
 	}
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn rivet_actor_plugin_shutdown(plugin: *mut c_void) {
+extern "C" fn plugin_shutdown(plugin: *mut c_void) {
 	if !plugin.is_null() {
 		unsafe { drop(Box::from_raw(plugin as *mut Plugin)) };
 	}
+}
+
+static PLUGIN_API: abi::PluginApi = abi::PluginApi::new(
+	plugin_init,
+	factory_new,
+	factory_free,
+	instance_new,
+	handle_event,
+	cancel_event,
+	shutdown,
+	instance_free,
+	plugin_shutdown,
+);
+
+/// The fixture intentionally exports one symbol. All callable entry points are
+/// discovered through this process-lifetime descriptor.
+#[unsafe(no_mangle)]
+pub extern "C" fn rivet_actor_plugin_api() -> *const abi::PluginApi {
+	&PLUGIN_API
 }

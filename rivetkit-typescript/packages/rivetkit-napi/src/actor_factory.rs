@@ -18,7 +18,7 @@ use rivetkit_core::{
 use crate::actor_context::{ActorContext, StateDeltaPayload};
 use crate::cancellation_token::CancellationToken;
 use crate::connection::ConnHandle;
-use crate::napi_actor_events::run_adapter_loop;
+use crate::napi_actor_events::{NapiNativePluginOverlay, run_adapter_loop};
 use crate::websocket::WebSocket;
 use crate::{BRIDGE_RIVET_ERROR_PREFIX, NapiInvalidArgument, napi_anyhow_error};
 
@@ -126,6 +126,13 @@ pub(crate) struct CreateStatePayload {
 }
 
 #[derive(Clone)]
+pub(crate) struct NativeOptionsPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) input: Option<Vec<u8>>,
+	pub(crate) is_new: bool,
+}
+
+#[derive(Clone)]
 pub(crate) struct CreateConnStatePayload {
 	pub(crate) ctx: CoreActorContext,
 	pub(crate) conn: CoreConnHandle,
@@ -197,6 +204,21 @@ pub(crate) struct ActionPayload {
 }
 
 #[derive(Clone)]
+pub(crate) struct BeforeActionPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) conn: Option<CoreConnHandle>,
+	pub(crate) name: String,
+	pub(crate) args: Vec<u8>,
+}
+
+#[derive(Clone)]
+pub(crate) struct NativeHostCallPayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) name: String,
+	pub(crate) payload: Vec<u8>,
+}
+
+#[derive(Clone)]
 pub(crate) struct BeforeActionResponsePayload {
 	pub(crate) ctx: CoreActorContext,
 	pub(crate) name: String,
@@ -238,6 +260,7 @@ pub(crate) struct AdapterConfig {
 
 #[allow(dead_code)]
 pub(crate) struct CallbackBindings {
+	pub(crate) create_native_options: Option<CallbackTsfn<NativeOptionsPayload>>,
 	pub(crate) create_state: Option<CallbackTsfn<CreateStatePayload>>,
 	pub(crate) on_create: Option<CallbackTsfn<CreateStatePayload>>,
 	pub(crate) create_conn_state: Option<CallbackTsfn<CreateConnStatePayload>>,
@@ -251,6 +274,8 @@ pub(crate) struct CallbackBindings {
 	pub(crate) on_connect: Option<CallbackTsfn<ConnectionPayload>>,
 	pub(crate) on_disconnect_final: Option<CallbackTsfn<ConnectionPayload>>,
 	pub(crate) on_before_subscribe: Option<CallbackTsfn<BeforeSubscribePayload>>,
+	pub(crate) on_before_action: Option<CallbackTsfn<BeforeActionPayload>>,
+	pub(crate) native_host_calls: HashMap<String, CallbackTsfn<NativeHostCallPayload>>,
 	pub(crate) actions: HashMap<String, CallbackTsfn<ActionPayload>>,
 	pub(crate) on_before_action_response: Option<CallbackTsfn<BeforeActionResponsePayload>>,
 	pub(crate) on_request: Option<CallbackTsfn<HttpRequestPayload>>,
@@ -305,21 +330,35 @@ pub struct NapiNativePluginOptions {
 	pub inspector_tabs: Option<Vec<JsInspectorTabEntry>>,
 }
 
-fn native_plugin_actor_config() -> ActorConfig {
-	let mut config = ActorConfig::default();
+fn native_plugin_actor_config(js_config: &JsActorConfig) -> ActorConfig {
+	let mut config = ActorConfig::from_input(ActorConfigInput::from(js_config.clone()));
 	config.has_database = true;
 	// Native-plugin (agent-os) actors run multi-second VM boots, long agent
 	// turns, and keep live event streams open. The stock defaults (2.5s
 	// connection liveness, 30s sleep, 60s action, 5s connect) drop connections
 	// mid-session and race live `sessionEvent` subscriptions.
 	let long = Duration::from_secs(3600);
-	config.connection_liveness_timeout = long;
-	config.sleep_timeout = long;
-	config.action_timeout = long;
-	config.on_connect_timeout = long;
-	config.on_before_connect_timeout = long;
-	config.create_conn_state_timeout = long;
-	config.create_vars_timeout = long;
+	if js_config.connection_liveness_timeout_ms.is_none() {
+		config.connection_liveness_timeout = long;
+	}
+	if js_config.sleep_timeout_ms.is_none() {
+		config.sleep_timeout = long;
+	}
+	if js_config.action_timeout_ms.is_none() {
+		config.action_timeout = long;
+	}
+	if js_config.on_connect_timeout_ms.is_none() {
+		config.on_connect_timeout = long;
+	}
+	if js_config.on_before_connect_timeout_ms.is_none() {
+		config.on_before_connect_timeout = long;
+	}
+	if js_config.create_conn_state_timeout_ms.is_none() {
+		config.create_conn_state_timeout = long;
+	}
+	if js_config.create_vars_timeout_ms.is_none() {
+		config.create_vars_timeout = long;
+	}
 	config
 }
 
@@ -378,26 +417,50 @@ impl NapiActorFactory {
 	/// plugin-specific knowledge: `config_json` is an opaque envelope the plugin
 	/// parses itself, and `sidecar_path` is forwarded verbatim.
 	#[napi(factory)]
-	pub fn from_native_plugin(options: NapiNativePluginOptions) -> napi::Result<Self> {
+	pub fn from_native_plugin(
+		options: NapiNativePluginOptions,
+		callbacks: Option<JsObject>,
+		config: Option<JsActorConfig>,
+	) -> napi::Result<Self> {
 		crate::init_tracing(None);
-		let mut actor_config = native_plugin_actor_config();
+		let js_config = config.unwrap_or_default();
+		let adapter_config = Arc::new(AdapterConfig::from_js_config(&js_config));
+		let mut actor_config = native_plugin_actor_config(&js_config);
 		if let Some(tabs) = options.inspector_tabs {
 			actor_config.inspector_tabs = convert_inspector_tabs(tabs);
-			// Reject malformed tab config (empty ids/labels, duplicate ids,
-			// custom tabs colliding with built-in ids, etc.) before the actor
-			// starts, matching the regular factory path.
-			actor_config.validate().map_err(napi_anyhow_error)?;
 		}
-		let factory = rivetkit_core::build_native_plugin_factory(
-			std::path::Path::new(&options.plugin_path),
-			options.config_json.as_deref().unwrap_or("{}"),
-			options.sidecar_path.as_deref().unwrap_or(""),
-			actor_config,
-		)
+		actor_config.validate().map_err(napi_anyhow_error)?;
+		let has_callbacks = callbacks.is_some();
+		let bindings = Arc::new(match callbacks {
+			Some(callbacks) => CallbackBindings::from_js(callbacks)?,
+			None => CallbackBindings::empty(),
+		});
+		let factory = if has_callbacks {
+			let overlay = Arc::new(NapiNativePluginOverlay::new(
+				Arc::clone(&bindings),
+				adapter_config,
+			));
+			rivetkit_core::build_native_plugin_factory_with_overlay(
+				std::path::Path::new(&options.plugin_path),
+				options.config_json.as_deref().unwrap_or("{}"),
+				options.sidecar_path.as_deref().unwrap_or(""),
+				actor_config,
+				overlay,
+			)
+		} else {
+			rivetkit_core::build_native_plugin_factory(
+				std::path::Path::new(&options.plugin_path),
+				options.config_json.as_deref().unwrap_or("{}"),
+				options.sidecar_path.as_deref().unwrap_or(""),
+				actor_config,
+			)
+		}
 		.map_err(napi_anyhow_error)?;
 		let inner = Arc::new(factory);
-		let bindings = Arc::new(CallbackBindings::empty());
-		tracing::debug!(class = "NapiActorFactory", "constructed via from_native_plugin");
+		tracing::debug!(
+			class = "NapiActorFactory",
+			"constructed via from_native_plugin"
+		);
 		Ok(Self {
 			_bindings: bindings,
 			inner,
@@ -440,6 +503,7 @@ impl CallbackBindings {
 	/// Used by native-plugin factories whose actor event loop lives outside JS.
 	pub(crate) fn empty() -> Self {
 		Self {
+			create_native_options: None,
 			create_state: None,
 			on_create: None,
 			create_conn_state: None,
@@ -453,6 +517,8 @@ impl CallbackBindings {
 			on_connect: None,
 			on_disconnect_final: None,
 			on_before_subscribe: None,
+			on_before_action: None,
+			native_host_calls: HashMap::new(),
 			actions: HashMap::new(),
 			on_before_action_response: None,
 			on_request: None,
@@ -484,8 +550,32 @@ impl CallbackBindings {
 		} else {
 			HashMap::new()
 		};
+		let native_host_calls =
+			if let Some(host_calls) = callbacks.get::<_, JsObject>("nativeHostCalls")? {
+				let mut mapped = HashMap::new();
+				for name in JsObject::keys(&host_calls)? {
+					let callback = host_calls.get::<_, JsFunction>(&name)?.ok_or_else(|| {
+						napi_anyhow_error(
+							NapiInvalidArgument {
+								argument: format!("nativeHostCalls.{name}"),
+								reason: "must be a function".to_owned(),
+							}
+							.build(),
+						)
+					})?;
+					mapped.insert(name, create_tsfn(callback, build_native_host_call_payload)?);
+				}
+				mapped
+			} else {
+				HashMap::new()
+			};
 
 		Ok(Self {
+			create_native_options: optional_tsfn(
+				&callbacks,
+				"createNativeOptions",
+				build_native_options_payload,
+			)?,
 			create_state: optional_tsfn(&callbacks, "createState", build_create_state_payload)?,
 			on_create: optional_tsfn(&callbacks, "onCreate", build_create_state_payload)?,
 			create_conn_state: optional_tsfn(
@@ -524,6 +614,12 @@ impl CallbackBindings {
 				"onBeforeSubscribe",
 				build_before_subscribe_payload,
 			)?,
+			on_before_action: optional_tsfn(
+				&callbacks,
+				"onBeforeAction",
+				build_before_action_payload,
+			)?,
+			native_host_calls,
 			actions,
 			on_before_action_response: optional_tsfn(
 				&callbacks,
@@ -722,6 +818,17 @@ impl TsfnPayloadSummary for CreateStatePayload {
 	}
 }
 
+impl TsfnPayloadSummary for NativeOptionsPayload {
+	fn payload_summary(&self) -> String {
+		format!(
+			"actor_id={} input_bytes={} is_new={}",
+			self.ctx.actor_id(),
+			self.input.as_ref().map_or(0, Vec::len),
+			self.is_new
+		)
+	}
+}
+
 impl TsfnPayloadSummary for CreateConnStatePayload {
 	fn payload_summary(&self) -> String {
 		format!(
@@ -822,6 +929,29 @@ impl TsfnPayloadSummary for ActionPayload {
 	}
 }
 
+impl TsfnPayloadSummary for BeforeActionPayload {
+	fn payload_summary(&self) -> String {
+		format!(
+			"actor_id={} action={} args_bytes={} conn_id={}",
+			self.ctx.actor_id(),
+			self.name,
+			self.args.len(),
+			self.conn.as_ref().map_or("none", |conn| conn.id())
+		)
+	}
+}
+
+impl TsfnPayloadSummary for NativeHostCallPayload {
+	fn payload_summary(&self) -> String {
+		format!(
+			"actor_id={} callback={} payload_bytes={}",
+			self.ctx.actor_id(),
+			self.name,
+			self.payload.len()
+		)
+	}
+}
+
 impl TsfnPayloadSummary for BeforeActionResponsePayload {
 	fn payload_summary(&self) -> String {
 		format!(
@@ -882,6 +1012,17 @@ fn build_create_state_payload(
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("input", payload.input.map(Buffer::from))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_native_options_payload(
+	env: &Env,
+	payload: NativeOptionsPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("input", payload.input.map(Buffer::from))?;
+	object.set("isNew", payload.is_new)?;
 	Ok(vec![object.into_unknown()])
 }
 
@@ -1002,6 +1143,29 @@ fn build_action_payload(env: &Env, payload: ActionPayload) -> napi::Result<Vec<n
 		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
 		None => object.set("cancelToken", env.get_undefined()?)?,
 	}
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_before_action_payload(
+	env: &Env,
+	payload: BeforeActionPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("conn", payload.conn.map(ConnHandle::new))?;
+	object.set("name", payload.name)?;
+	object.set("args", Buffer::from(payload.args))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn build_native_host_call_payload(
+	env: &Env,
+	payload: NativeHostCallPayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("name", payload.name)?;
+	object.set("payload", Buffer::from(payload.payload))?;
 	Ok(vec![object.into_unknown()])
 }
 

@@ -1,5 +1,5 @@
-import { stringifyError } from "@/common/utils";
 import type { SqliteNativeMetrics } from "@/common/database/config";
+import { stringifyError } from "@/common/utils";
 import type { RegistryConfig } from "./config";
 import { logger } from "./log";
 
@@ -20,14 +20,38 @@ export interface NapiNativePluginOptions {
 }
 
 /**
- * Options handed to a foreign-runtime `nativeFactoryBuilder`. The registry-build
- * ladder resolves these from the actor definition so the builder does not have to
- * re-implement inspector-tab resolution.
+ * The normal TypeScript actor adapter is built before this is handed to a
+ * foreign-runtime `nativeFactoryBuilder`. The builder composes those callbacks
+ * and their core config with its backend instead of replacing the actor.
  */
 export interface NativeFactoryBuilderOptions {
 	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
+	callbacks: object;
+	config: RuntimeActorConfig;
+	/**
+	 * Adapt a backend-specific per-instance option resolver to the native NAPI
+	 * callback contract. RivetKit supplies the normal high-level actor context,
+	 * decodes actor input, encodes the result, and disposes the callback context.
+	 */
+	createNativeOptionsCallback<TInput, TOptions>(
+		handler: (
+			ctx: any,
+			input: TInput | undefined,
+			isNew: boolean,
+		) => TOptions | Promise<TOptions>,
+	): (...args: any[]) => Promise<RuntimeBytes>;
+	/**
+	 * Adapt a named native-backend host call to the normal high-level actor
+	 * context and CBOR value encoding used by TypeScript actors.
+	 */
+	createNativeHostCallCallback<TPayload, TResult>(
+		handler: (
+			ctx: any,
+			name: string,
+			payload: TPayload,
+		) => TResult | Promise<TResult>,
+	): (...args: any[]) => Promise<RuntimeBytes>;
 }
-
 
 declare const handleBrand: unique symbol;
 
@@ -363,6 +387,8 @@ export interface CoreRuntime {
 	 */
 	createNativePluginFactory?(
 		options: NapiNativePluginOptions,
+		callbacks?: object,
+		config?: RuntimeActorConfig | undefined | null,
 	): ActorFactoryHandle;
 	serveRegistry(
 		registry: RegistryHandle,

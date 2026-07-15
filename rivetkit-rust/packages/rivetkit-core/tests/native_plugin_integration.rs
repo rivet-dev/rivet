@@ -1,9 +1,9 @@
 //! End-to-end integration test for the native-actor-plugin host loader.
 //!
 //! Builds the `rivet-actor-test-plugin` cdylib FIXTURE, loads it through the
-//! real `build_native_plugin_factory` (dlopen + ABI magic/version check +
-//! symbol cache), drives a full actor lifecycle (startup-ready signal → Action
-//! dispatch → reply slab → reply), and asserts the portable counter actor
+//! real `build_native_plugin_factory` (dlopen + API descriptor validation +
+//! plugin cache), drives a full actor lifecycle (startup-ready signal → pushed
+//! Action → direct completion), and asserts the portable counter actor
 //! replies correctly. Exercises the generic ABI + host adapter path with no
 //! product-specific plugin package and no sidecar.
 #![cfg(feature = "native-runtime")]
@@ -11,14 +11,18 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
 use rivet_actor_test_plugin::counter_actor;
 use rivetkit_core::{
 	ActorConfig, ActorContext, ActorEvent, ActorFactory, ActorStart, ConnHandle, CoreRegistry,
-	QueueSendStatus, Reply, Request, SerializeStateReason, ShutdownKind, StateDelta, WebSocket,
-	build_native_plugin_factory, build_portable_native_actor_factory,
+	NativePluginEventHandler, NativePluginOverlay, NativePluginOverlayFuture, QueueSendStatus,
+	Reply, Request, SerializeStateReason, ShutdownKind, StateDelta, WebSocket,
+	build_native_plugin_factory, build_native_plugin_factory_with_overlay,
+	build_portable_native_actor_factory,
 };
 use serde_json::{Value as JsonValue, json};
 use tokio::sync::{mpsc, oneshot};
@@ -27,30 +31,35 @@ use crate::common::ctx::IntegrationCtx;
 
 /// Build the fixture cdylib and return the path to the built `.so`.
 fn build_fixture() -> PathBuf {
-	let status = Command::new(env!("CARGO"))
-		.args(["build", "-p", "rivet-actor-test-plugin"])
-		.status()
-		.expect("spawn cargo build for fixture plugin");
-	assert!(status.success(), "fixture plugin build failed");
+	static FIXTURE: OnceLock<PathBuf> = OnceLock::new();
+	FIXTURE
+		.get_or_init(|| {
+			let status = Command::new(env!("CARGO"))
+				.args(["build", "-p", "rivet-actor-test-plugin"])
+				.status()
+				.expect("spawn cargo build for fixture plugin");
+			assert!(status.success(), "fixture plugin build failed");
 
-	let target = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| {
-		// <manifest>/../../../target  (manifest = .../packages/rivetkit-core)
-		format!("{}/../../../target", env!("CARGO_MANIFEST_DIR"))
-	});
-	let lib = if cfg!(target_os = "macos") {
-		"librivet_actor_test_plugin.dylib"
-	} else if cfg!(target_os = "windows") {
-		"rivet_actor_test_plugin.dll"
-	} else {
-		"librivet_actor_test_plugin.so"
-	};
-	let path = PathBuf::from(format!("{target}/debug/{lib}"));
-	assert!(
-		path.exists(),
-		"built fixture not found at {}",
-		path.display()
-	);
-	path
+			let target = std::env::var("CARGO_TARGET_DIR").unwrap_or_else(|_| {
+				// <manifest>/../../../target  (manifest = .../packages/rivetkit-core)
+				format!("{}/../../../target", env!("CARGO_MANIFEST_DIR"))
+			});
+			let lib = if cfg!(target_os = "macos") {
+				"librivet_actor_test_plugin.dylib"
+			} else if cfg!(target_os = "windows") {
+				"rivet_actor_test_plugin.dll"
+			} else {
+				"librivet_actor_test_plugin.so"
+			};
+			let path = PathBuf::from(format!("{target}/debug/{lib}"));
+			assert!(
+				path.exists(),
+				"built fixture not found at {}",
+				path.display()
+			);
+			path
+		})
+		.clone()
 }
 
 #[tokio::test]
@@ -192,7 +201,7 @@ async fn native_plugin_forwards_opaque_factory_config() {
 	let start = ActorStart {
 		ctx: ActorContext::new("native-plugin-config-e2e", "test", Vec::new(), "local"),
 		is_new: true,
-		input: None,
+		input: Some(vec![1, 2, 3]),
 		snapshot: None,
 		hibernated: Vec::new(),
 		events: event_rx.into(),
@@ -217,8 +226,151 @@ async fn native_plugin_forwards_opaque_factory_config() {
 		json!({
 			"configJson": config_json,
 			"sidecarPath": sidecar_path,
+			"isNew": true,
+			"input": [1, 2, 3],
+			"instanceOptions": null,
 		})
 	);
+
+	drop(event_tx);
+	tokio::time::timeout(Duration::from_secs(10), join)
+		.await
+		.expect("actor task joins within 10s")
+		.expect("actor task not panicked")
+		.expect("actor run ok");
+}
+
+#[derive(Default)]
+struct TestOverlay {
+	host_actions: AtomicUsize,
+	native_fallbacks: AtomicUsize,
+	host_calls: AtomicUsize,
+}
+
+impl NativePluginOverlay for TestOverlay {
+	fn resolve_instance_options(
+		&self,
+		_ctx: ActorContext,
+		_input: Option<Vec<u8>>,
+		_is_new: bool,
+	) -> NativePluginOverlayFuture<Option<Vec<u8>>> {
+		Box::pin(async { Ok(Some(vec![9, 8, 7])) })
+	}
+
+	fn handle_event(
+		&self,
+		_ctx: ActorContext,
+		event: ActorEvent,
+		native: NativePluginEventHandler,
+	) -> NativePluginOverlayFuture<()> {
+		match event {
+			ActorEvent::Action { name, reply, .. } if name == "host" => {
+				self.host_actions.fetch_add(1, Ordering::Relaxed);
+				reply.send(Ok(encode_cbor_json(&json!({ "source": "host" }))));
+				Box::pin(async { Ok(()) })
+			}
+			other => {
+				self.native_fallbacks.fetch_add(1, Ordering::Relaxed);
+				Box::pin(async move { native.handle_event(other).await })
+			}
+		}
+	}
+
+	fn host_call(
+		&self,
+		_ctx: ActorContext,
+		name: String,
+		payload: Vec<u8>,
+	) -> NativePluginOverlayFuture<Vec<u8>> {
+		if name == "echo" {
+			self.host_calls.fetch_add(1, Ordering::Relaxed);
+			Box::pin(async move { Ok(payload) })
+		} else {
+			Box::pin(async move { Err(anyhow::anyhow!("unknown test host call `{name}`")) })
+		}
+	}
+}
+
+#[tokio::test]
+async fn native_plugin_composes_host_actions_with_native_fallback() {
+	let so = build_fixture();
+	let overlay = Arc::new(TestOverlay::default());
+	let mut config = ActorConfig::default();
+	config.has_database = false;
+	let factory = build_native_plugin_factory_with_overlay(&so, "{}", "", config, overlay.clone())
+		.expect("load native plugin with host overlay");
+
+	let (event_tx, event_rx) = mpsc::unbounded_channel::<ActorEvent>();
+	let (report_tx, report_rx) = oneshot::channel();
+	event_tx
+		.send(ActorEvent::Action {
+			name: "factory_config_report".to_owned(),
+			args: Vec::new(),
+			conn: None,
+			reply: Reply::from(report_tx),
+		})
+		.expect("queue native fallback action");
+	let (host_tx, host_rx) = oneshot::channel();
+	event_tx
+		.send(ActorEvent::Action {
+			name: "host".to_owned(),
+			args: Vec::new(),
+			conn: None,
+			reply: Reply::from(host_tx),
+		})
+		.expect("queue host action");
+	let (host_call_tx, host_call_rx) = oneshot::channel();
+	let host_call_payload = encode_cbor_json(&json!({ "roundTrip": true }));
+	event_tx
+		.send(ActorEvent::Action {
+			name: "host_call".to_owned(),
+			args: host_call_payload.clone(),
+			conn: None,
+			reply: Reply::from(host_call_tx),
+		})
+		.expect("queue native host-call action");
+
+	let (startup_tx, startup_rx) = oneshot::channel();
+	let start = ActorStart {
+		ctx: ActorContext::new("native-plugin-overlay-e2e", "test", Vec::new(), "local"),
+		is_new: true,
+		input: Some(vec![1, 2, 3]),
+		snapshot: None,
+		hibernated: Vec::new(),
+		events: event_rx.into(),
+		startup_ready: Some(startup_tx),
+	};
+	let join = tokio::spawn(async move { factory.start(start).await });
+
+	tokio::time::timeout(Duration::from_secs(10), startup_rx)
+		.await
+		.expect("startup signal within 10s")
+		.expect("startup channel open")
+		.expect("startup ok");
+	let report = tokio::time::timeout(Duration::from_secs(10), report_rx)
+		.await
+		.expect("native reply within 10s")
+		.expect("native reply channel open")
+		.expect("native reply ok");
+	assert_eq!(
+		decode_cbor_json(&report)["instanceOptions"],
+		json!([9, 8, 7])
+	);
+	let host = tokio::time::timeout(Duration::from_secs(10), host_rx)
+		.await
+		.expect("host reply within 10s")
+		.expect("host reply channel open")
+		.expect("host reply ok");
+	assert_eq!(decode_cbor_json(&host), json!({ "source": "host" }));
+	let host_call = tokio::time::timeout(Duration::from_secs(10), host_call_rx)
+		.await
+		.expect("host-call reply within 10s")
+		.expect("host-call reply channel open")
+		.expect("host-call reply ok");
+	assert_eq!(host_call, host_call_payload);
+	assert_eq!(overlay.host_actions.load(Ordering::Relaxed), 1);
+	assert_eq!(overlay.host_calls.load(Ordering::Relaxed), 1);
+	assert_eq!(overlay.native_fallbacks.load(Ordering::Relaxed), 2);
 
 	drop(event_tx);
 	tokio::time::timeout(Duration::from_secs(10), join)
@@ -660,6 +812,7 @@ async fn assert_conn_queue_ws(factory: ActorFactory, backend: PortableBackend) -
 	let (open_reply_tx, open_reply_rx) = oneshot::channel();
 	let (queue_reply_tx, queue_reply_rx) = oneshot::channel();
 	let (ws_reply_tx, ws_reply_rx) = oneshot::channel();
+	let (action_conn_reply_tx, action_conn_reply_rx) = oneshot::channel();
 	let (report_reply_tx, report_reply_rx) = oneshot::channel();
 	let (event_tx, event_rx) = mpsc::unbounded_channel::<ActorEvent>();
 
@@ -738,6 +891,14 @@ async fn assert_conn_queue_ws(factory: ActorFactory, backend: PortableBackend) -
 		.expect("queue connection closed");
 	event_tx
 		.send(ActorEvent::Action {
+			name: "action_conn_report".to_owned(),
+			args: Vec::new(),
+			conn: Some(conn.clone()),
+			reply: Reply::from(action_conn_reply_tx),
+		})
+		.expect("queue action connection report");
+	event_tx
+		.send(ActorEvent::Action {
 			name: "conn_report".to_owned(),
 			args: Vec::new(),
 			conn: None,
@@ -810,6 +971,13 @@ async fn assert_conn_queue_ws(factory: ActorFactory, backend: PortableBackend) -
 		.context("websocket reply channel open")?
 		.context("websocket reply ok")?;
 
+	let action_conn = tokio::time::timeout(Duration::from_secs(10), action_conn_reply_rx)
+		.await
+		.with_context(|| format!("action connection reply within 10s for {backend:?}"))?
+		.context("action connection reply channel open")?
+		.context("action connection reply ok")?;
+	assert_eq!(decode_cbor_json(&action_conn)["id"], json!(conn.id()));
+
 	let report = tokio::time::timeout(Duration::from_secs(10), report_reply_rx)
 		.await
 		.with_context(|| format!("connection report within 10s for {backend:?}"))?
@@ -831,7 +999,12 @@ async fn assert_conn_queue_ws(factory: ActorFactory, backend: PortableBackend) -
 		report["lastPreflightParams"]["backend"],
 		json!(format!("{backend:?}"))
 	);
+	assert_eq!(
+		report["lastPreflightRequest"]["uri"],
+		json!("/portable-preflight")
+	);
 	assert_eq!(report["lastOpen"]["id"], json!(conn.id()));
+	assert_eq!(report["lastOpenRequest"]["uri"], json!("/portable-open"));
 	assert_eq!(report["lastClosed"]["id"], json!(conn.id()));
 	assert_eq!(report["wsOpenCount"], json!(1));
 	assert_eq!(report["lastWsOpen"]["id"], json!(conn.id()));

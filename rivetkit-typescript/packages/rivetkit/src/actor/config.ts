@@ -403,6 +403,39 @@ export type BeforeActionResponseContext<
 	TQueues
 >;
 
+/** Context for action authorization. Scheduled actions have no invoking
+ * connection, so `conn` is intentionally optional. */
+export type BeforeActionContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase extends AnyDatabaseProvider,
+	TEvents extends EventSchemaConfig = Record<never, never>,
+	TQueues extends QueueSchemaConfig = Record<never, never>,
+> = ActorContext<
+	TState,
+	TConnParams,
+	TConnState,
+	TVars,
+	TInput,
+	TDatabase,
+	TEvents,
+	TQueues
+> & {
+	conn?: Conn<
+		TState,
+		TConnParams,
+		TConnState,
+		TVars,
+		TInput,
+		TDatabase,
+		TEvents,
+		TQueues
+	>;
+};
+
 export type BeforeConnectContext<
 	TState,
 	TVars,
@@ -1039,6 +1072,7 @@ export const ActorConfigSchema = z
 		onBeforeConnect: zFunction().optional(),
 		onConnect: zFunction().optional(),
 		onDisconnect: zFunction().optional(),
+		onBeforeAction: zFunction().optional(),
 		onBeforeActionResponse: zFunction().optional(),
 		onRequest: zFunction().optional(),
 		onWebSocket: zFunction().optional(),
@@ -1490,6 +1524,26 @@ interface BaseActorConfig<
 	) => void | Promise<void>;
 
 	/**
+	 * Called before every action, including native-backend and scheduled
+	 * actions. Throw to reject the action. Scheduled actions receive a context
+	 * whose `conn` is `undefined`.
+	 */
+	onBeforeAction?: (
+		c: BeforeActionContext<
+			TState,
+			TConnParams,
+			TConnState,
+			TVars,
+			TInput,
+			TDatabase,
+			TEvents,
+			TQueues
+		>,
+		name: string,
+		args: unknown[],
+	) => void | Promise<void>;
+
+	/**
 	 * Called before sending an action response to the client.
 	 *
 	 * Use this hook to modify or transform the output of an action before it's sent
@@ -1644,6 +1698,7 @@ export type ActorConfig<
 	| "onBeforeConnect"
 	| "onConnect"
 	| "onDisconnect"
+	| "onBeforeAction"
 	| "onBeforeActionResponse"
 	| "onRequest"
 	| "onWebSocket"
@@ -1742,6 +1797,7 @@ export type ActorConfigInput<
 	| "onBeforeConnect"
 	| "onConnect"
 	| "onDisconnect"
+	| "onBeforeAction"
 	| "onBeforeActionResponse"
 	| "onRequest"
 	| "onWebSocket"
@@ -2074,6 +2130,12 @@ export const DocActorConfigSchema = z
 			.unknown()
 			.optional()
 			.describe("Called when a client disconnects."),
+		onBeforeAction: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called before every action. Throw to reject the action; scheduled actions have no connection.",
+			),
 		onBeforeActionResponse: z
 			.unknown()
 			.optional()

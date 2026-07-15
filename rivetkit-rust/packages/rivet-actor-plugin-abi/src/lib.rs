@@ -5,9 +5,9 @@
 //! It contains **no** product-specific or business logic — only:
 //!
 //! 1. the ABI version + magic constants (§4.1 of the dylib-actor-plugin spec),
-//! 2. the `#[repr(C)]` boundary types (buffers, results, events, the host
-//!    vtable),
-//! 3. the exported plugin symbol names the host resolves after `dlopen`,
+//! 2. the `#[repr(C)]` boundary types (buffers, results, events, the host and
+//!    plugin vtables),
+//! 3. the single exported plugin API symbol the host resolves after `dlopen`,
 //! 4. (added in a follow-up module) the generic actor wire codec.
 //!
 //! ## Memory & safety model (normative)
@@ -37,51 +37,33 @@ use std::ffi::c_void;
 
 pub use portable::{
 	ActorIdentity, Backend, ConnDisconnectRequest, ConnInfo, ConnListResponse, ConnSendRequest,
-	DylibBackend, Event, KeepAwakeToken, KvEntriesRequest, KvEntry, KvGetResponse, KvKeyRequest,
-	KvKeysRequest, KvListOpts, KvListPrefixRequest, KvListRangeRequest, KvListResponse,
-	KvRangeRequest, KvValuesResponse, PortableActorBackend, PortableActorCtx, PortableBoxFuture,
-	QueueSendResponse, ReplyToken, RequestSaveOpts, ScheduleActionRequest, ScheduleAlarmRequest,
-	ScheduledEvent, ScheduledEventsResponse, WsOpenPayload, decode_action_payload,
-	decode_event_frame, encode_action_payload, encode_conn_closed_payload,
-	encode_conn_open_payload, encode_conn_preflight_payload, encode_event_frame,
-	encode_queue_send_payload, encode_queue_send_response, encode_subscribe_payload,
-	encode_ws_open_payload,
+	DylibBackend, DylibEventBridge, Event, KeepAwakeToken, KvEntriesRequest, KvEntry,
+	KvGetResponse, KvKeyRequest, KvKeysRequest, KvListOpts, KvListPrefixRequest,
+	KvListRangeRequest, KvListResponse, KvRangeRequest, KvValuesResponse, PortableActorBackend,
+	PortableActorCtx, PortableBoxFuture, QueueSendResponse, ReplyToken, RequestSaveOpts,
+	ScheduleActionRequest, ScheduleAlarmRequest, ScheduledEvent, ScheduledEventsResponse,
+	WsOpenPayload, decode_action_payload, decode_event_frame, encode_action_payload,
+	encode_action_payload_with_conn, encode_conn_closed_payload, encode_conn_open_payload,
+	encode_conn_open_payload_with_request, encode_conn_preflight_payload,
+	encode_conn_preflight_payload_with_request, encode_event_frame, encode_queue_send_payload,
+	encode_queue_send_response, encode_subscribe_payload, encode_ws_open_payload,
 };
 
 /// Bumped on ANY change to the structs, symbol signatures, the wire codec, or
 /// the event-tag enum in this crate. The host refuses to load a plugin whose
 /// reported version != this. No negotiation, no fallback (same-version
 /// lockstep, matching the project's wire-protocol rule).
-pub const RIVET_ACTOR_ABI_VERSION: u64 = 13;
+pub const RIVET_ACTOR_ABI_VERSION: u64 = 16;
 
-/// Magic returned by [`SYM_ABI_MAGIC`] to detect "this `.so` is not a rivet
-/// actor plugin at all" before any other symbol is called. ASCII "RVTABI\0\1".
+/// Magic stored in [`PluginApi::abi_magic`] to detect "this `.so` is not a
+/// Rivet actor plugin at all" before any plugin function is called. ASCII
+/// "RVTABI\0\1".
 pub const RIVET_ACTOR_ABI_MAGIC: u64 = 0x52_56_54_41_42_49_00_01;
 
-/// Exported plugin symbol names the host resolves with `dlsym` after `dlopen`.
-/// Kept as constants so host and plugin can never disagree on spelling.
+/// The one exported plugin symbol the host resolves with `dlsym` after
+/// `dlopen`. It returns the process-lifetime [`PluginApi`] descriptor.
 pub mod symbols {
-	/// `extern "C" fn() -> u64` — cheap, no allocation, no fallible work.
-	/// Host calls this FIRST and aborts the load if it != [`super::RIVET_ACTOR_ABI_MAGIC`].
-	pub const ABI_MAGIC: &[u8] = b"rivet_actor_abi_magic\0";
-	/// `extern "C" fn() -> u64` — must equal [`super::RIVET_ACTOR_ABI_VERSION`].
-	pub const ABI_VERSION: &[u8] = b"rivet_actor_abi_version\0";
-	/// `extern "C" fn(out_err: *mut OwnedBuf) -> *mut c_void` — once per load.
-	pub const PLUGIN_INIT: &[u8] = b"rivet_actor_plugin_init\0";
-	/// `extern "C" fn(plugin, config_json: BorrowedBuf, sidecar_path: BorrowedBuf, out_err: *mut OwnedBuf) -> *mut c_void`.
-	pub const FACTORY_NEW: &[u8] = b"rivet_actor_factory_new\0";
-	/// `extern "C" fn(factory, host: *const HostVtable, done: CompletionFn, user_data: *mut c_void) -> *mut c_void`.
-	pub const RUN: &[u8] = b"rivet_actor_run\0";
-	/// `extern "C" fn(instance: *mut c_void)` — closes the event stream.
-	pub const CANCEL: &[u8] = b"rivet_actor_cancel\0";
-	/// `extern "C" fn(instance: *mut c_void)` — force VM teardown on grace deadline.
-	pub const GRACE_DEADLINE: &[u8] = b"rivet_actor_grace_deadline\0";
-	/// `extern "C" fn(instance: *mut c_void)` — only after `run`'s completion fired.
-	pub const INSTANCE_FREE: &[u8] = b"rivet_actor_instance_free\0";
-	/// `extern "C" fn(factory: *mut c_void)`.
-	pub const FACTORY_FREE: &[u8] = b"rivet_actor_factory_free\0";
-	/// `extern "C" fn(plugin: *mut c_void)` — drains the plugin runtime.
-	pub const PLUGIN_SHUTDOWN: &[u8] = b"rivet_actor_plugin_shutdown\0";
+	pub const PLUGIN_API: &[u8] = b"rivet_actor_plugin_api\0";
 }
 
 /// Borrowed, immutable bytes. Valid ONLY for the duration of a **synchronous**
@@ -225,7 +207,7 @@ pub enum AbiStatus {
 	Panic = 2,
 	/// The operation was cancelled.
 	Cancelled = 3,
-	/// The event stream is closed (terminal for `next_event`).
+	/// The instance or operation stream closed before producing a response.
 	ChannelClosed = 4,
 }
 
@@ -266,14 +248,69 @@ impl AbiResult {
 /// wrapped in `catch_unwind` by the implementer.
 pub type CompletionFn = extern "C" fn(user_data: *mut c_void, result: AbiResult);
 
-/// A lifecycle event delivered to the plugin via `next_event`. Encoded into a
-/// [`CompletionFn`] `AbiResult` payload as `(tag, reply_token, event_bytes)`.
-/// `reply_token == 0` means the event needs no reply.
+// --- Plugin API fn-pointer aliases (host -> plugin) ---
+
+/// Returns the process-lifetime plugin API descriptor.
+pub type PluginApiFn = unsafe extern "C" fn() -> *const PluginApi;
+/// Initializes one process-global plugin handle.
+pub type PluginInitFn = unsafe extern "C" fn(out_err: *mut OwnedBuf) -> *mut c_void;
+/// Creates one actor-type factory from opaque plugin configuration.
+pub type FactoryNewFn = unsafe extern "C" fn(
+	plugin: *mut c_void,
+	config_json: BorrowedBuf,
+	sidecar_path: BorrowedBuf,
+	out_err: *mut OwnedBuf,
+) -> *mut c_void;
+/// Creates one actor instance. `start` is CBOR-encoded [`InstanceStart`]. The
+/// terminal completion fires exactly once when the plugin actor loop exits.
+pub type InstanceNewFn = unsafe extern "C" fn(
+	factory: *mut c_void,
+	host: *const HostVtable,
+	start: BorrowedBuf,
+	out_err: *mut OwnedBuf,
+	terminal_done: CompletionFn,
+	user_data: *mut c_void,
+) -> *mut c_void;
+/// Pushes one actor event into an instance. The completion answers this exact
+/// event directly; no reply token crosses the ABI.
+pub type HandleEventFn = unsafe extern "C" fn(
+	instance: *mut c_void,
+	event_id: u64,
+	event: AbiEvent,
+	done: CompletionFn,
+	user_data: *mut c_void,
+);
+/// Cancels an admitted event. The event completion must still fire exactly
+/// once with [`AbiStatus::Cancelled`] (or a result that already won the race).
+pub type CancelEventFn = unsafe extern "C" fn(instance: *mut c_void, event_id: u64);
+/// Stops admission and drains or cancels the instance. `force != 0` applies the
+/// plugin's grace-deadline behavior. Completion means [`InstanceFreeFn`] is safe.
+pub type ShutdownFn = unsafe extern "C" fn(
+	instance: *mut c_void,
+	force: u8,
+	done: CompletionFn,
+	user_data: *mut c_void,
+);
+/// Operates on one opaque plugin, factory, or instance handle.
+pub type HandleFn = unsafe extern "C" fn(handle: *mut c_void);
+pub type InstanceFreeFn = HandleFn;
+
+/// One lifecycle event pushed into the plugin. The plugin takes ownership of
+/// `payload` and answers the event through the paired [`CompletionFn`].
 #[repr(C)]
 pub struct AbiEvent {
 	pub tag: u32,
-	pub reply_token: u64,
 	pub payload: OwnedBuf,
+}
+
+/// Per-instance startup data. Actor input stays separate from host-resolved
+/// instance options so plugins can distinguish the public create payload from
+/// a validated overlay result.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct InstanceStart {
+	pub is_new: bool,
+	pub input: Option<Vec<u8>>,
+	pub instance_options: Option<Vec<u8>>,
 }
 
 /// Generic actor lifecycle event tags, generated to match RivetKit's
@@ -313,7 +350,7 @@ impl AbiEventTag {
 		})
 	}
 
-	/// Whether the host expects a `reply_ok`/`reply_err` for this event.
+	/// Whether the direct event completion carries an actor reply payload.
 	pub fn needs_reply(self) -> bool {
 		!matches!(self, Self::ConnClosed)
 	}
@@ -330,6 +367,15 @@ pub type DbSqlFn = extern "C" fn(
 	ctx: *const c_void,
 	sql: OwnedBuf,
 	params: OwnedBuf,
+	done: CompletionFn,
+	user_data: *mut c_void,
+);
+/// Bounded named plugin-to-host callback. Ownership of `name` and `payload`
+/// transfers to the host; `done` completes exactly once.
+pub type HostCallFn = extern "C" fn(
+	ctx: *const c_void,
+	name: OwnedBuf,
+	payload: OwnedBuf,
 	done: CompletionFn,
 	user_data: *mut c_void,
 );
@@ -403,13 +449,6 @@ pub type HibernatableAckFn = extern "C" fn(
 pub type ConnSendFn = extern "C" fn(ctx: *const c_void, request: OwnedBuf) -> AbiResult;
 /// `(ctx) -> 0|1`.
 pub type SqlEnabledFn = extern "C" fn(ctx: *const c_void) -> u8;
-/// Async pull of the next event: `(ctx, done, user_data)`. Completes with an
-/// `AbiResult` whose payload encodes an [`AbiEvent`], or `ChannelClosed`.
-pub type NextEventFn =
-	extern "C" fn(ctx: *const c_void, done: CompletionFn, user_data: *mut c_void);
-/// Sync event reply: `(ctx, reply_token, payload) -> AbiStatus`.
-pub type ReplyFn =
-	extern "C" fn(ctx: *const c_void, reply_token: u64, payload: OwnedBuf) -> AbiStatus;
 /// Sync, runtime-free broadcast: `(ctx, name, payload) -> AbiStatus`.
 pub type BroadcastFn =
 	extern "C" fn(ctx: *const c_void, name: OwnedBuf, payload: OwnedBuf) -> AbiStatus;
@@ -438,6 +477,7 @@ pub struct HostVtable {
 	pub db_exec: DbExecFn,
 	pub db_query: DbSqlFn,
 	pub db_run: DbSqlFn,
+	pub host_call: HostCallFn,
 	pub sql_is_enabled: SqlEnabledFn,
 
 	pub state_get: StateGetFn,
@@ -473,9 +513,6 @@ pub struct HostVtable {
 	pub hibernatable_ws_ack: HibernatableAckFn,
 	pub conn_send: ConnSendFn,
 
-	pub next_event: NextEventFn,
-	pub reply_ok: ReplyFn,
-	pub reply_err: ReplyFn,
 	pub startup_ready: StartupReadyFn,
 
 	pub broadcast: BroadcastFn,
@@ -484,6 +521,57 @@ pub struct HostVtable {
 
 unsafe impl Send for HostVtable {}
 unsafe impl Sync for HostVtable {}
+
+/// Versioned function table returned by the plugin's single exported
+/// `rivet_actor_plugin_api` function. The host validates the header before
+/// calling any function pointer and copies the table while keeping the dylib
+/// loaded for the rest of the process.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PluginApi {
+	pub abi_magic: u64,
+	pub abi_version: u64,
+	pub struct_size: usize,
+	pub plugin_init: PluginInitFn,
+	pub factory_new: FactoryNewFn,
+	pub factory_free: HandleFn,
+	pub instance_new: InstanceNewFn,
+	pub handle_event: HandleEventFn,
+	pub cancel_event: CancelEventFn,
+	pub shutdown: ShutdownFn,
+	pub instance_free: InstanceFreeFn,
+	pub plugin_shutdown: HandleFn,
+}
+
+impl PluginApi {
+	/// Build a descriptor for the current exact-lockstep ABI.
+	pub const fn new(
+		plugin_init: PluginInitFn,
+		factory_new: FactoryNewFn,
+		factory_free: HandleFn,
+		instance_new: InstanceNewFn,
+		handle_event: HandleEventFn,
+		cancel_event: CancelEventFn,
+		shutdown: ShutdownFn,
+		instance_free: InstanceFreeFn,
+		plugin_shutdown: HandleFn,
+	) -> Self {
+		Self {
+			abi_magic: RIVET_ACTOR_ABI_MAGIC,
+			abi_version: RIVET_ACTOR_ABI_VERSION,
+			struct_size: std::mem::size_of::<Self>(),
+			plugin_init,
+			factory_new,
+			factory_free,
+			instance_new,
+			handle_event,
+			cancel_event,
+			shutdown,
+			instance_free,
+			plugin_shutdown,
+		}
+	}
+}
 
 /// Host-side actor knobs that the plugin's factory reports back so the host can
 /// apply them (these live host-side today in `build_core_factory`). Carried in
@@ -521,5 +609,18 @@ mod tests {
 		assert!(AbiEventTag::from_u32(11).is_none());
 		assert!(!AbiEventTag::ConnClosed.needs_reply());
 		assert!(AbiEventTag::Action.needs_reply());
+	}
+
+	#[test]
+	fn plugin_api_header_matches_current_abi() {
+		assert_eq!(std::mem::offset_of!(PluginApi, abi_magic), 0);
+		assert_eq!(
+			std::mem::offset_of!(PluginApi, abi_version),
+			std::mem::size_of::<u64>()
+		);
+		assert_eq!(
+			std::mem::offset_of!(PluginApi, struct_size),
+			std::mem::size_of::<u64>() * 2
+		);
 	}
 }

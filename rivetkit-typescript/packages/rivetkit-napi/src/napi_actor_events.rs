@@ -2,16 +2,18 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use rivet_error::{
 	MacroMarker, RivetError as RivetTransportError, RivetErrorKind, RivetErrorSchema,
 };
 use rivetkit_core::{
 	ActorContext as CoreActorContext, ActorEvent, ActorEvents, ActorLifecycle, ActorStart,
-	QueueSendResult, QueueSendStatus, Reply, SerializeStateReason, StateDelta,
+	NativePluginEventHandler, NativePluginOverlay, NativePluginOverlayFuture, QueueSendResult,
+	QueueSendStatus, Reply, SerializeStateReason, StateDelta,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
+use tokio::sync::oneshot;
 use tokio::task::JoinHandle;
 use tokio::task::JoinSet;
 use tokio_util::sync::CancellationToken;
@@ -21,13 +23,346 @@ use crate::NapiInvalidState;
 use crate::actor_context::EndReason;
 use crate::actor_context::{ActorContext, RegisteredTask, state_deltas_from_payload};
 use crate::actor_factory::{
-	ActionPayload, AdapterConfig, BeforeActionResponsePayload, BeforeConnectPayload,
-	BeforeSubscribePayload, CallbackBindings, ConnectionPayload, CreateConnStatePayload,
-	CreateStatePayload, HttpRequestPayload, LifecyclePayload, MigratePayload, QueueSendPayload,
+	ActionPayload, AdapterConfig, BeforeActionPayload, BeforeActionResponsePayload,
+	BeforeConnectPayload, BeforeSubscribePayload, CallbackBindings, ConnectionPayload,
+	CreateConnStatePayload, CreateStatePayload, HttpRequestPayload, LifecyclePayload,
+	MigratePayload, NativeHostCallPayload, NativeOptionsPayload, QueueSendPayload,
 	SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload,
 	call_buffer, call_optional_buffer, call_queue_send, call_request, call_state_delta_payload,
 	call_void,
 };
+
+/// NAPI implementation of the generic native-plugin overlay. It owns only
+/// JavaScript callback bindings; the native backend remains the one actor and
+/// receives every event the overlay does not explicitly handle.
+pub(crate) struct NapiNativePluginOverlay {
+	bindings: Arc<CallbackBindings>,
+	config: Arc<AdapterConfig>,
+}
+
+impl NapiNativePluginOverlay {
+	pub(crate) fn new(bindings: Arc<CallbackBindings>, config: Arc<AdapterConfig>) -> Self {
+		Self { bindings, config }
+	}
+}
+
+impl NativePluginOverlay for NapiNativePluginOverlay {
+	fn resolve_instance_options(
+		&self,
+		ctx: CoreActorContext,
+		input: Option<Vec<u8>>,
+		is_new: bool,
+	) -> NativePluginOverlayFuture<Option<Vec<u8>>> {
+		let callback = self.bindings.create_native_options.clone();
+		let timeout = self.config.create_vars_timeout;
+		Box::pin(async move {
+			// A native-backed actor still uses the same per-instance JavaScript
+			// runtime-state bag as a normal NAPI actor. Clear the prior wake's bag
+			// before any option or lifecycle callback can observe it.
+			ActorContext::new(ctx.clone()).reset_runtime_shared_state();
+			let Some(callback) = callback else {
+				return Ok(None);
+			};
+			let options = with_timeout(
+				"createNativeOptions",
+				timeout,
+				call_buffer(
+					"createNativeOptions",
+					&callback,
+					NativeOptionsPayload { ctx, input, is_new },
+				),
+			)
+			.await?;
+			Ok(Some(options))
+		})
+	}
+
+	fn host_call(
+		&self,
+		ctx: CoreActorContext,
+		name: String,
+		payload: Vec<u8>,
+	) -> NativePluginOverlayFuture<Vec<u8>> {
+		let callback = self.bindings.native_host_calls.get(&name).cloned();
+		let timeout = self.config.on_request_timeout;
+		Box::pin(async move {
+			let Some(callback) = callback else {
+				anyhow::bail!("native plugin host call `{name}` is not registered");
+			};
+			let callback_name = format!("nativeHostCalls.{name}");
+			with_timeout(
+				&callback_name,
+				timeout,
+				call_buffer(
+					&callback_name,
+					&callback,
+					NativeHostCallPayload { ctx, name, payload },
+				),
+			)
+			.await
+		})
+	}
+
+	fn handle_event(
+		&self,
+		ctx: CoreActorContext,
+		event: ActorEvent,
+		native: NativePluginEventHandler,
+	) -> NativePluginOverlayFuture<()> {
+		let bindings = Arc::clone(&self.bindings);
+		let config = Arc::clone(&self.config);
+		Box::pin(
+			async move { handle_native_overlay_event(bindings, config, ctx, event, native).await },
+		)
+	}
+}
+
+async fn native_reply<T, F>(native: NativePluginEventHandler, build: F) -> Result<T>
+where
+	T: Send + 'static,
+	F: FnOnce(Reply<T>) -> ActorEvent,
+{
+	let (reply_tx, reply_rx) = oneshot::channel();
+	native.handle_event(build(Reply::from(reply_tx))).await?;
+	reply_rx
+		.await
+		.context("native plugin fallback dropped its actor reply")?
+}
+
+async fn handle_native_overlay_event(
+	bindings: Arc<CallbackBindings>,
+	config: Arc<AdapterConfig>,
+	core_ctx: CoreActorContext,
+	event: ActorEvent,
+	native: NativePluginEventHandler,
+) -> Result<()> {
+	let ctx = ActorContext::new(core_ctx);
+	match event {
+		ActorEvent::Action {
+			name,
+			args,
+			conn,
+			reply,
+		} => {
+			let authorization = match bindings.on_before_action.as_ref() {
+				Some(callback) => {
+					with_structured_timeout(
+						"actor",
+						"action_timed_out",
+						"Action timed out",
+						None,
+						config.action_timeout,
+						call_on_before_action(
+							callback,
+							&ctx,
+							conn.clone(),
+							name.clone(),
+							args.clone(),
+						),
+					)
+					.await
+				}
+				None => Ok(()),
+			};
+			let handled_by_host = bindings.actions.contains_key(&name);
+			let result = if let Err(error) = authorization {
+				Err(error)
+			} else if let Some(callback) = bindings.actions.get(&name) {
+				with_dispatch_cancel_token(|cancel_token| {
+					with_structured_timeout(
+						"actor",
+						"action_timed_out",
+						"Action timed out",
+						None,
+						config.action_timeout,
+						call_action(
+							callback,
+							&ctx,
+							conn.clone(),
+							name.clone(),
+							args.clone(),
+							Some(cancel_token),
+						),
+					)
+				})
+				.await
+			} else {
+				native_reply(native, |reply| ActorEvent::Action {
+					name: name.clone(),
+					args: args.clone(),
+					conn: conn.clone(),
+					reply,
+				})
+				.await
+			};
+			let result = match (
+				result,
+				bindings.on_before_action_response.as_ref(),
+				handled_by_host,
+			) {
+				(Ok(output), Some(callback), false) => {
+					with_structured_timeout(
+						"actor",
+						"action_timed_out",
+						"Action timed out",
+						None,
+						config.action_timeout,
+						call_on_before_action_response(callback, &ctx, name, args, output),
+					)
+					.await
+				}
+				(other, _, _) => other,
+			};
+			reply.send(result);
+			Ok(())
+		}
+		ActorEvent::ConnectionPreflight {
+			conn,
+			params,
+			request,
+			reply,
+		} => {
+			let result: Result<()> = async {
+				if let Some(callback) = &bindings.on_before_connect {
+					with_timeout(
+						"onBeforeConnect",
+						config.on_before_connect_timeout,
+						call_on_before_connect(callback, &ctx, params.clone(), request.clone()),
+					)
+					.await?;
+				}
+				if let Some(callback) = &bindings.create_conn_state {
+					let state = with_timeout(
+						"createConnState",
+						config.create_conn_state_timeout,
+						call_create_conn_state(
+							callback,
+							&ctx,
+							conn.clone(),
+							params.clone(),
+							request.clone(),
+						),
+					)
+					.await?;
+					ctx.set_conn_state_initial(&conn, state)?;
+				}
+				native_reply(native, |native_reply| ActorEvent::ConnectionPreflight {
+					conn,
+					params,
+					request,
+					reply: native_reply,
+				})
+				.await
+			}
+			.await;
+			reply.send(result);
+			Ok(())
+		}
+		ActorEvent::ConnectionOpen {
+			conn,
+			request,
+			reply,
+		} => {
+			let result: Result<()> = async {
+				native_reply(native, |native_reply| ActorEvent::ConnectionOpen {
+					conn: conn.clone(),
+					request: request.clone(),
+					reply: native_reply,
+				})
+				.await?;
+				if let Some(callback) = &bindings.on_connect {
+					with_timeout(
+						"onConnect",
+						config.on_connect_timeout,
+						call_on_connect(callback, &ctx, conn, request),
+					)
+					.await?;
+				}
+				Ok(())
+			}
+			.await;
+			reply.send(result);
+			Ok(())
+		}
+		ActorEvent::ConnectionClosed { conn } => {
+			let native_result = native
+				.handle_event(ActorEvent::ConnectionClosed { conn: conn.clone() })
+				.await;
+			let host_result = match &bindings.on_disconnect_final {
+				Some(callback) => {
+					with_timeout(
+						"onDisconnect",
+						config.on_connect_timeout,
+						call_on_disconnect_final(callback, &ctx, conn),
+					)
+					.await
+				}
+				None => Ok(()),
+			};
+			if let Err(error) = native_result {
+				tracing::error!(?error, "native connection cleanup failed");
+			}
+			if let Err(error) = host_result {
+				tracing::error!(?error, "host connection cleanup failed");
+			}
+			Ok(())
+		}
+		ActorEvent::SubscribeRequest {
+			conn,
+			event_name,
+			reply,
+		} => {
+			let result: Result<()> = async {
+				if let Some(callback) = &bindings.on_before_subscribe {
+					with_timeout(
+						"onBeforeSubscribe",
+						config.on_before_connect_timeout,
+						call_on_before_subscribe(callback, &ctx, conn.clone(), event_name.clone()),
+					)
+					.await?;
+				}
+				native_reply(native, |native_reply| ActorEvent::SubscribeRequest {
+					conn,
+					event_name,
+					reply: native_reply,
+				})
+				.await
+			}
+			.await;
+			reply.send(result);
+			Ok(())
+		}
+		ActorEvent::RunGracefulCleanup { reason, reply } => {
+			let native_result =
+				native_reply(native, |native_reply| ActorEvent::RunGracefulCleanup {
+					reason,
+					reply: native_reply,
+				})
+				.await;
+			let host_result = match reason {
+				rivetkit_core::actor::ShutdownKind::Sleep => match &bindings.on_sleep {
+					Some(callback) => call_on_sleep(callback, &ctx).await,
+					None => Ok(()),
+				},
+				rivetkit_core::actor::ShutdownKind::Destroy => match &bindings.on_destroy {
+					Some(callback) => call_on_destroy(callback, &ctx).await,
+					None => Ok(()),
+				},
+			};
+			let result = match (native_result, host_result) {
+				(Err(native_error), Err(host_error)) => {
+					tracing::error!(?host_error, "host graceful cleanup also failed");
+					Err(native_error)
+				}
+				(Err(error), _) | (_, Err(error)) => Err(error),
+				(Ok(()), Ok(())) => Ok(()),
+			};
+			reply.send(result);
+			Ok(())
+		}
+		other => native.handle_event(other).await,
+	}
+}
 
 // Restart hooks are synchronous callback slots; the guard is only held while
 // swapping task handles, never while awaiting a task shutdown.
@@ -383,10 +718,28 @@ pub(crate) async fn dispatch_event(
 				return;
 			};
 			let on_before_action_response = bindings.on_before_action_response.clone();
+			let on_before_action = bindings.on_before_action.clone();
 			let timeout = config.action_timeout;
 			let ctx = ctx.clone();
 
 			spawn_reply(tasks, abort.clone(), reply, async move {
+				if let Some(callback) = on_before_action {
+					with_structured_timeout(
+						"actor",
+						"action_timed_out",
+						"Action timed out",
+						None,
+						timeout,
+						call_on_before_action(
+							&callback,
+							&ctx,
+							conn.clone(),
+							name.clone(),
+							args.clone(),
+						),
+					)
+					.await?;
+				}
 				tracing::info!(action_name = %name, "napi: invoking action JS callback");
 				let output = with_dispatch_cancel_token(|cancel_token| {
 					with_structured_timeout(
@@ -1124,6 +1477,26 @@ async fn call_action(
 			name,
 			args,
 			cancel_token,
+		},
+	)
+	.await
+}
+
+async fn call_on_before_action(
+	callback: &crate::actor_factory::CallbackTsfn<BeforeActionPayload>,
+	ctx: &ActorContext,
+	conn: Option<rivetkit_core::ConnHandle>,
+	name: String,
+	args: Vec<u8>,
+) -> Result<()> {
+	call_void(
+		"onBeforeAction",
+		callback,
+		BeforeActionPayload {
+			ctx: ctx.inner().clone(),
+			conn,
+			name,
+			args,
 		},
 	)
 	.await

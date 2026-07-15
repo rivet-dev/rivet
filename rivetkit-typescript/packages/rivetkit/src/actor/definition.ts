@@ -55,17 +55,16 @@ export interface BaseActorDefinition<
 export interface AnyActorDefinition {
 	readonly config: any;
 	/**
-	 * Marker for foreign-runtime factories. When set,
-	 * the registry-build ladder calls this closure with the active
-	 * `CoreRuntime` to obtain an `ActorFactoryHandle` directly, bypassing
-	 * the normal JS-callbacks factory built from `actor(...)`.
+	 * Marker for foreign-runtime backends. The registry-build ladder first
+	 * builds the normal actor callbacks, then hands them to this closure for
+	 * composition with the backend in one `ActorFactoryHandle`.
 	 *
 	 * Out-of-tree native-plugin packages set this; `CoreRuntime::registerActor`
 	 * and the engine actor-driver consume it.
 	 */
 	nativeFactoryBuilder?: (
 		runtime: CoreRuntime,
-		opts?: NativeFactoryBuilderOptions,
+		opts: NativeFactoryBuilderOptions,
 	) => ActorFactoryHandle;
 }
 
@@ -104,13 +103,13 @@ export class ActorDefinition<
 {
 	#config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>;
 	/**
-	 * Foreign-runtime factory marker. See [`AnyActorDefinition.nativeFactoryBuilder`].
+	 * Foreign-runtime backend marker. See [`AnyActorDefinition.nativeFactoryBuilder`].
 	 * Defaults to `undefined`; out-of-tree native-plugin packages set it via
 	 * direct property assignment after construction.
 	 */
 	nativeFactoryBuilder?: (
 		runtime: CoreRuntime,
-		opts?: NativeFactoryBuilderOptions,
+		opts: NativeFactoryBuilderOptions,
 	) => ActorFactoryHandle;
 
 	constructor(config: ActorConfig<S, CP, CS, V, I, DB, E, Q, R>) {

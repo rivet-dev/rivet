@@ -74,6 +74,7 @@ import type {
 	CancellationTokenHandle,
 	ConnHandle,
 	CoreRuntime,
+	NativeFactoryBuilderOptions,
 	RegistryHandle,
 	RuntimeActorConfig,
 	RuntimeBytes,
@@ -3527,6 +3528,57 @@ export function buildNativeFactory(
 			onStateChange,
 			cancelToken,
 		);
+	const createNativeOptionsCallback: NativeFactoryBuilderOptions["createNativeOptionsCallback"] =
+		(handler) =>
+			wrapNativeCallback(
+				async (
+					error: unknown,
+					payload: {
+						ctx: ActorContextHandle;
+						input?: RuntimeBytes;
+						isNew: boolean;
+					},
+				): Promise<RuntimeBytes> => {
+					const { ctx, input, isNew } = unwrapTsfnPayload(
+						error,
+						payload,
+					);
+					const actorCtx = makeActorCtx(ctx);
+					try {
+						return encodeValue(
+							await handler(actorCtx, decodeValue(input), isNew),
+						);
+					} finally {
+						await actorCtx.dispose();
+					}
+				},
+			);
+	const createNativeHostCallCallback: NativeFactoryBuilderOptions["createNativeHostCallCallback"] =
+		(handler) =>
+			wrapNativeCallback(
+				async (
+					error: unknown,
+					payload: {
+						ctx: ActorContextHandle;
+						name: string;
+						payload: RuntimeBytes;
+					},
+				): Promise<RuntimeBytes> => {
+					const {
+						ctx,
+						name,
+						payload: encoded,
+					} = unwrapTsfnPayload(error, payload);
+					const actorCtx = makeActorCtx(ctx);
+					try {
+						return encodeValue(
+							await handler(actorCtx, name, decodeValue(encoded)),
+						);
+					} finally {
+						await actorCtx.dispose();
+					}
+				},
+			);
 	const maybeHandleNativeInspectorRequest = async (
 		ctx: ActorContextHandle,
 		_rawRequest: {
@@ -4384,6 +4436,38 @@ export function buildNativeFactory(
 						},
 					)
 				: undefined,
+		onBeforeAction:
+			typeof config.onBeforeAction === "function"
+				? wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: ActorContextHandle;
+								conn: ConnHandle | null;
+								name: string;
+								args: RuntimeBytes;
+							},
+						) => {
+							const { ctx, conn, name, args } = unwrapTsfnPayload(
+								error,
+								payload,
+							);
+							const actorCtx =
+								conn != null
+									? makeConnCtx(ctx, conn)
+									: makeActorCtx(ctx);
+							try {
+								await config.onBeforeAction(
+									actorCtx,
+									name,
+									decodeArgs(args),
+								);
+							} finally {
+								await actorCtx.dispose();
+							}
+						},
+					)
+				: undefined,
 		onBeforeActionResponse:
 			typeof config.onBeforeActionResponse === "function"
 				? wrapNativeCallback(
@@ -4769,10 +4853,21 @@ export function buildNativeFactory(
 		),
 	};
 
-	return runtime.createActorFactory(
-		callbacks,
-		buildActorConfig(definition, registryConfig, runtime.kind),
+	const actorConfig = buildActorConfig(
+		definition,
+		registryConfig,
+		runtime.kind,
 	);
+	if (definition.nativeFactoryBuilder) {
+		return definition.nativeFactoryBuilder(runtime, {
+			callbacks,
+			config: actorConfig,
+			inspectorTabs: actorConfig.inspectorTabs,
+			createNativeOptionsCallback,
+			createNativeHostCallCallback,
+		});
+	}
+	return runtime.createActorFactory(callbacks, actorConfig);
 }
 
 export async function buildServeConfig(
@@ -4854,18 +4949,7 @@ export async function buildRegistryWithRuntime(
 	const registry = runtime.createRegistry();
 
 	for (const [name, definition] of Object.entries(config.use)) {
-		// Dispatch: foreign-runtime factories bypass `buildNativeFactory` and
-		// own their entry loop directly. Resolve the actor's inspector tabs here
-		// (the same path the regular factory uses) so native-plugin actors get
-		// their custom tabs forwarded instead of always starting empty.
-		const factory = definition.nativeFactoryBuilder
-			? definition.nativeFactoryBuilder(runtime, {
-					inspectorTabs: buildInspectorTabs(
-						(definition.config as Record<string, unknown>).inspector,
-						runtime.kind,
-					),
-				})
-			: buildNativeFactory(runtime, config, definition);
+		const factory = buildNativeFactory(runtime, config, definition);
 		runtime.registerActor(registry, name, factory);
 	}
 

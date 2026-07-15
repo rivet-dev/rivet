@@ -105,6 +105,11 @@ export interface NapiNativePluginOptions {
   pluginPath: string
   configJson?: string
   sidecarPath?: string
+  /**
+   * Inspector tabs to expose on the plugin actor. Resolved on the TS side
+   * (absolute source paths, normalized built-in hides) before crossing the
+   * NAPI boundary.
+   */
   inspectorTabs?: Array<JsInspectorTabEntry>
 }
 export interface JsBindParam {
@@ -295,7 +300,7 @@ export declare class NapiActorFactory {
    * plugin-specific knowledge: `config_json` is an opaque envelope the plugin
    * parses itself, and `sidecar_path` is forwarded verbatim.
    */
-  static fromNativePlugin(options: NapiNativePluginOptions): NapiActorFactory
+  static fromNativePlugin(options: NapiNativePluginOptions, callbacks?: object | undefined | null, config?: JsActorConfig | undefined | null): NapiActorFactory
 }
 export declare class CancellationToken {
   constructor()

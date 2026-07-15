@@ -35,6 +35,15 @@ type NativeCallbacks = {
 			input?: Uint8Array;
 		},
 	) => Promise<Uint8Array>;
+	onBeforeAction?: (
+		error: unknown,
+		payload: {
+			ctx: ActorContextHandle;
+			conn: null;
+			name: string;
+			args: Uint8Array;
+		},
+	) => Promise<void>;
 	actions: Record<
 		string,
 		(
@@ -413,6 +422,43 @@ async function invokePromotedStatus(
 }
 
 describe("CoreRuntime NAPI and wasm parity", () => {
+	test("native backend builders receive the normal callback overlay", () => {
+		const { runtime } = createRuntimeCase("napi");
+		const definition = actor({
+			onBeforeAction: async () => {},
+			actions: {
+				hostAction: async () => "host",
+			},
+		});
+		const sentinelFactory = {} as never;
+		let received: Parameters<
+			NonNullable<typeof definition.nativeFactoryBuilder>
+		>[1];
+		definition.nativeFactoryBuilder = (_runtime, options) => {
+			received = options;
+			return sentinelFactory;
+		};
+
+		const factory = buildNativeFactory(
+			runtime,
+			registryConfig(definition),
+			definition,
+		);
+
+		expect(factory).toBe(sentinelFactory);
+		expect(received?.callbacks).toMatchObject({
+			onBeforeAction: expect.any(Function),
+			actions: { hostAction: expect.any(Function) },
+		});
+		expect(received?.config.actions).toEqual([{ name: "hostAction" }]);
+		expect(received?.createNativeOptionsCallback).toEqual(
+			expect.any(Function),
+		);
+		expect(received?.createNativeHostCallCallback).toEqual(
+			expect.any(Function),
+		);
+	});
+
 	test.each([
 		"napi",
 		"wasm",

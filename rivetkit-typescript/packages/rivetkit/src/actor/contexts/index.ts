@@ -1,5 +1,6 @@
 import type {
 	ActionContext,
+	BeforeActionContext,
 	BeforeActionResponseContext,
 	BeforeConnectContext,
 	ConnectContext,
@@ -39,6 +40,21 @@ export type ActionContextOf<AD extends AnyActorDefinition> =
 		any
 	>
 		? ActionContext<S, CP, CS, V, I, DB, E, Q>
+		: never;
+
+export type BeforeActionContextOf<AD extends AnyActorDefinition> =
+	AD extends BaseActorDefinition<
+		infer S,
+		infer CP,
+		infer CS,
+		infer V,
+		infer I,
+		infer DB extends AnyDatabaseProvider,
+		infer E extends EventSchemaConfig,
+		infer Q extends QueueSchemaConfig,
+		any
+	>
+		? BeforeActionContext<S, CP, CS, V, I, DB, E, Q>
 		: never;
 
 export type BeforeActionResponseContextOf<AD extends AnyActorDefinition> =

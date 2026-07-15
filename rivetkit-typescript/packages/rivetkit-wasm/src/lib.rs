@@ -506,6 +506,7 @@ struct WasmCallbacks {
 	on_connect: Option<Function>,
 	on_disconnect_final: Option<Function>,
 	on_before_subscribe: Option<Function>,
+	on_before_action: Option<Function>,
 	on_before_action_response: Option<Function>,
 	on_request: Option<Function>,
 	on_queue_send: Option<Function>,
@@ -534,6 +535,7 @@ impl WasmCallbacks {
 			on_disconnect_final: function_property(&callbacks, "onDisconnectFinal")
 				.or_else(|| function_property(&callbacks, "onDisconnect")),
 			on_before_subscribe: function_property(&callbacks, "onBeforeSubscribe"),
+			on_before_action: function_property(&callbacks, "onBeforeAction"),
 			on_before_action_response: function_property(&callbacks, "onBeforeActionResponse"),
 			on_request: function_property(&callbacks, "onRequest"),
 			on_queue_send: function_property(&callbacks, "onQueueSend"),
@@ -683,9 +685,25 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			};
 
 			let ctx = ctx.clone();
+			let on_before_action = callbacks.on_before_action.clone();
 			let on_before_action_response = callbacks.on_before_action_response.clone();
 			RuntimeSpawner::spawn(async move {
 				let result = async {
+					if let Some(callback) = &on_before_action {
+						let payload = object();
+						set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
+						set_anyhow(
+							&payload,
+							"conn",
+							conn.clone()
+								.map(WasmConnHandle::from_core)
+								.map(JsValue::from)
+								.unwrap_or(JsValue::NULL),
+						)?;
+						set_anyhow(&payload, "name", JsValue::from_str(&name))?;
+						set_anyhow(&payload, "args", bytes_to_js(&args))?;
+						call_callback(callback, &payload.into()).await?;
+					}
 					let payload = object();
 					set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 					set_anyhow(

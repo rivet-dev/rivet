@@ -1,13 +1,15 @@
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::mpsc;
 
 use anyhow::{Result, anyhow, bail};
 use serde::de::DeserializeOwned;
 
-use crate::{AbiResult, AbiStatus, BorrowedBuf, HostVtable, OwnedBuf};
+use crate::{AbiEvent, AbiEventTag, AbiResult, AbiStatus, BorrowedBuf, HostVtable, OwnedBuf};
 
 pub type PortableBoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 
@@ -151,11 +153,20 @@ pub struct ScheduledEventsResponse {
 struct ConnPreflightWire {
 	conn: ConnInfo,
 	params: Vec<u8>,
+	request: Option<Vec<u8>>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 struct ConnOpenWire {
 	conn: ConnInfo,
+	request: Option<Vec<u8>>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+struct ActionWire {
+	name: String,
+	args: Vec<u8>,
+	conn: Option<ConnInfo>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -196,6 +207,7 @@ pub enum Event {
 	Action {
 		name: String,
 		args: Vec<u8>,
+		conn: Option<ConnInfo>,
 		reply: ReplyToken,
 	},
 	Http {
@@ -224,10 +236,12 @@ pub enum Event {
 	ConnPreflight {
 		conn: ConnInfo,
 		params: Vec<u8>,
+		request: Option<Vec<u8>>,
 		reply: ReplyToken,
 	},
 	ConnOpen {
 		conn: ConnInfo,
+		request: Option<Vec<u8>>,
 		reply: ReplyToken,
 	},
 	ConnClosed {
@@ -268,6 +282,8 @@ pub trait PortableActorBackend: Send + Sync {
 	fn reply_err(&self, token: ReplyToken, message: String) -> Result<()>;
 	fn startup_ready(&self, result: Result<()>) -> Result<()>;
 	fn broadcast(&self, name: String, payload: Vec<u8>) -> Result<()>;
+	fn log(&self, level: i32, message: String);
+	fn host_call(&self, name: String, payload: Vec<u8>) -> PortableBoxFuture<'_, Result<Vec<u8>>>;
 	fn actor_id(&self) -> Result<String>;
 	fn name(&self) -> Result<String>;
 	fn key(&self) -> Result<String>;
@@ -417,6 +433,15 @@ impl PortableActorCtx {
 
 	pub fn broadcast(&self, name: impl Into<String>, payload: Vec<u8>) -> Result<()> {
 		self.backend().broadcast(name.into(), payload)
+	}
+
+	pub fn log(&self, level: i32, message: impl Into<String>) {
+		self.backend().log(level, message.into());
+	}
+
+	/// Invoke a named callback registered by the actor host.
+	pub async fn host_call(&self, name: impl Into<String>, payload: Vec<u8>) -> Result<Vec<u8>> {
+		self.backend().host_call(name.into(), payload).await
 	}
 
 	pub fn actor_id(&self) -> Result<String> {
@@ -703,31 +728,222 @@ struct SendVtable(HostVtable);
 unsafe impl Send for SendVtable {}
 unsafe impl Sync for SendVtable {}
 
-impl SendVtable {
-	fn next_event(&self, done: crate::CompletionFn, user_data: *mut c_void) {
-		(self.0.next_event)(self.0.ctx, done, user_data);
+struct DylibCompletion {
+	done: crate::CompletionFn,
+	user_data: SendUserData,
+}
+
+impl DylibCompletion {
+	fn finish(self, result: AbiResult) {
+		(self.done)(self.user_data.0, result);
+	}
+}
+
+enum DylibPendingCompletion {
+	Active(DylibCompletion),
+	Cancelled,
+}
+
+struct DylibEventState {
+	sender: Mutex<Option<mpsc::Sender<Vec<u8>>>>,
+	receiver: Mutex<mpsc::Receiver<Vec<u8>>>,
+	pending: Mutex<HashMap<u64, DylibPendingCompletion>>,
+}
+
+/// Plugin-side adapter for the host-driven ABI. The host pushes each event
+/// through [`DylibEventBridge::handle_event`]; an existing portable actor may
+/// continue consuming `PortableActorCtx::next_event` internally. Reply tokens
+/// are local implementation details and never cross the dylib boundary.
+#[derive(Clone)]
+pub struct DylibEventBridge {
+	state: Arc<DylibEventState>,
+}
+
+impl DylibEventBridge {
+	pub fn handle_event(
+		&self,
+		event_id: u64,
+		event: AbiEvent,
+		done: crate::CompletionFn,
+		user_data: *mut c_void,
+	) {
+		let completion = DylibCompletion {
+			done,
+			user_data: SendUserData(user_data),
+		};
+		let Some(tag) = AbiEventTag::from_u32(event.tag) else {
+			unsafe { event.payload.free_self() };
+			completion.finish(AbiResult::err(OwnedBuf::from_vec(
+				format!("unknown actor event tag {}", event.tag).into_bytes(),
+			)));
+			return;
+		};
+		let payload = unsafe { event.payload.into_vec() };
+		let frame = encode_event_frame(event.tag, ReplyToken(event_id), &payload);
+		let sender = self
+			.state
+			.sender
+			.lock()
+			.expect("dylib event sender lock")
+			.clone();
+
+		if tag.needs_reply() {
+			if event_id == 0 {
+				completion.finish(AbiResult::err(OwnedBuf::from_vec(
+					b"reply-bearing actor event has zero event id".to_vec(),
+				)));
+				return;
+			}
+			let mut pending = self.state.pending.lock().expect("dylib pending lock");
+			if pending.contains_key(&event_id) {
+				drop(pending);
+				completion.finish(AbiResult::err(OwnedBuf::from_vec(
+					format!("duplicate actor event id {event_id}").into_bytes(),
+				)));
+				return;
+			}
+			pending.insert(event_id, DylibPendingCompletion::Active(completion));
+			drop(pending);
+
+			if !sender.is_some_and(|sender| sender.send(frame).is_ok()) {
+				if let Some(DylibPendingCompletion::Active(completion)) = self
+					.state
+					.pending
+					.lock()
+					.expect("dylib pending lock")
+					.remove(&event_id)
+				{
+					completion.finish(AbiResult::channel_closed());
+				}
+			}
+		} else if sender.is_some_and(|sender| sender.send(frame).is_ok()) {
+			completion.finish(AbiResult::ok(OwnedBuf::empty()));
+		} else {
+			completion.finish(AbiResult::channel_closed());
+		}
+	}
+
+	pub fn cancel_event(&self, event_id: u64) {
+		let completion = {
+			let mut pending = self.state.pending.lock().expect("dylib pending lock");
+			match pending.get_mut(&event_id) {
+				Some(slot @ DylibPendingCompletion::Active(_)) => {
+					match std::mem::replace(slot, DylibPendingCompletion::Cancelled) {
+						DylibPendingCompletion::Active(completion) => Some(completion),
+						DylibPendingCompletion::Cancelled => unreachable!(),
+					}
+				}
+				Some(DylibPendingCompletion::Cancelled) | None => None,
+			}
+		};
+		if let Some(completion) = completion {
+			completion.finish(AbiResult::status_only(AbiStatus::Cancelled));
+		}
+	}
+
+	/// Close the internal event stream. Forced shutdown immediately cancels all
+	/// outstanding direct completions; graceful shutdown lets queued work drain.
+	pub fn close(&self, force: bool) {
+		self.state
+			.sender
+			.lock()
+			.expect("dylib event sender lock")
+			.take();
+		if force {
+			let completions = {
+				let mut pending = self.state.pending.lock().expect("dylib pending lock");
+				pending
+					.values_mut()
+					.filter_map(|pending| {
+						match std::mem::replace(pending, DylibPendingCompletion::Cancelled) {
+							DylibPendingCompletion::Active(completion) => Some(completion),
+							DylibPendingCompletion::Cancelled => None,
+						}
+					})
+					.collect::<Vec<_>>()
+			};
+			for completion in completions {
+				completion.finish(AbiResult::status_only(AbiStatus::Cancelled));
+			}
+		}
+	}
+
+	/// Finish every direct event completion still outstanding after the actor
+	/// loop has exited. Plugin shutdown must call this before reporting that the
+	/// instance is safe to free.
+	pub fn finish_shutdown(&self) {
+		let completions = {
+			let mut pending = self.state.pending.lock().expect("dylib pending lock");
+			pending
+				.drain()
+				.filter_map(|(_, pending)| match pending {
+					DylibPendingCompletion::Active(completion) => Some(completion),
+					DylibPendingCompletion::Cancelled => None,
+				})
+				.collect::<Vec<_>>()
+		};
+		for completion in completions {
+			completion.finish(AbiResult::channel_closed());
+		}
+	}
+
+	fn complete_event(&self, event_id: u64, result: AbiResult) -> Result<()> {
+		match self
+			.state
+			.pending
+			.lock()
+			.expect("dylib pending lock")
+			.remove(&event_id)
+		{
+			Some(DylibPendingCompletion::Active(completion)) => {
+				completion.finish(result);
+				Ok(())
+			}
+			Some(DylibPendingCompletion::Cancelled) => {
+				unsafe { result.payload.free_self() };
+				Ok(())
+			}
+			None => {
+				unsafe { result.payload.free_self() };
+				bail!("actor event {event_id} was already answered")
+			}
+		}
 	}
 }
 
 pub struct DylibBackend {
 	host: HostVtable,
+	events: Arc<DylibEventState>,
 }
 
 unsafe impl Send for DylibBackend {}
 unsafe impl Sync for DylibBackend {}
 
 impl DylibBackend {
-	/// Build a dylib backend from the host vtable received by `rivet_actor_run`.
+	/// Build a dylib backend and host-driven event bridge from the vtable
+	/// received by the plugin's `instance_new` entry point.
 	///
 	/// The backend clones the opaque host context and releases it on drop, so it
-	/// may outlive the synchronous `run` call that provided the vtable.
+	/// may outlive the synchronous `instance_new` call that provided the vtable.
 	///
 	/// # Safety
 	/// `host` must point to a valid same-version [`HostVtable`].
-	pub unsafe fn from_host_vtable(host: &HostVtable) -> Self {
+	pub unsafe fn from_host_vtable(host: &HostVtable) -> (Self, DylibEventBridge) {
 		let host = *host;
 		(host.ctx_clone)(host.ctx);
-		Self { host }
+		let (sender, receiver) = mpsc::channel();
+		let events = Arc::new(DylibEventState {
+			sender: Mutex::new(Some(sender)),
+			receiver: Mutex::new(receiver),
+			pending: Mutex::new(HashMap::new()),
+		});
+		(
+			Self {
+				host,
+				events: events.clone(),
+			},
+			DylibEventBridge { state: events },
+		)
 	}
 
 	fn complete_bytes<F>(&self, submit: F) -> PortableBoxFuture<'static, Result<Vec<u8>>>
@@ -750,7 +966,10 @@ impl DylibBackend {
 impl Clone for DylibBackend {
 	fn clone(&self) -> Self {
 		(self.host.ctx_clone)(self.host.ctx);
-		Self { host: self.host }
+		Self {
+			host: self.host,
+			events: self.events.clone(),
+		}
 	}
 }
 
@@ -762,34 +981,35 @@ impl Drop for DylibBackend {
 
 impl PortableActorBackend for DylibBackend {
 	fn next_event(&self) -> PortableBoxFuture<'_, Result<Option<Event>>> {
-		let host = SendVtable(self.host);
+		let events = self.events.clone();
 		Box::pin(async move {
-			let result =
-				call_async(move |done, user_data| host.next_event(done, user_data)).await?;
-			if result.status == AbiStatus::ChannelClosed {
-				unsafe { result.payload.free_self() };
-				return Ok(None);
+			match events
+				.receiver
+				.lock()
+				.expect("dylib event receiver lock")
+				.recv()
+			{
+				Ok(frame) => decode_event_frame(&frame).map(Some),
+				Err(_) => Ok(None),
 			}
-			decode_event_frame(&abi_result_to_bytes(result)?).map(Some)
 		})
 	}
 
 	fn reply_ok(&self, token: ReplyToken, payload: Vec<u8>) -> Result<()> {
-		match (self.host.reply_ok)(self.host.ctx, token.0, OwnedBuf::from_vec(payload)) {
-			AbiStatus::Ok => Ok(()),
-			other => Err(anyhow!("reply_ok failed with {other:?}")),
+		DylibEventBridge {
+			state: self.events.clone(),
 		}
+		.complete_event(token.0, AbiResult::ok(OwnedBuf::from_vec(payload)))
 	}
 
 	fn reply_err(&self, token: ReplyToken, message: String) -> Result<()> {
-		match (self.host.reply_err)(
-			self.host.ctx,
-			token.0,
-			OwnedBuf::from_vec(message.into_bytes()),
-		) {
-			AbiStatus::Ok => Ok(()),
-			other => Err(anyhow!("reply_err failed with {other:?}")),
+		DylibEventBridge {
+			state: self.events.clone(),
 		}
+		.complete_event(
+			token.0,
+			AbiResult::err(OwnedBuf::from_vec(message.into_bytes())),
+		)
 	}
 
 	fn startup_ready(&self, result: Result<()>) -> Result<()> {
@@ -816,6 +1036,26 @@ impl PortableActorBackend for DylibBackend {
 			AbiStatus::Ok => Ok(()),
 			other => Err(anyhow!("broadcast failed with {other:?}")),
 		}
+	}
+
+	fn host_call(&self, name: String, payload: Vec<u8>) -> PortableBoxFuture<'_, Result<Vec<u8>>> {
+		self.complete_bytes(move |host, done, user_data| {
+			(host.host_call)(
+				host.ctx,
+				OwnedBuf::from_vec(name.into_bytes()),
+				OwnedBuf::from_vec(payload),
+				done,
+				user_data,
+			);
+		})
+	}
+
+	fn log(&self, level: i32, message: String) {
+		(self.host.log)(
+			self.host.ctx,
+			level,
+			BorrowedBuf::from_slice(message.as_bytes()),
+		);
 	}
 
 	fn actor_id(&self) -> Result<String> {
@@ -1369,32 +1609,25 @@ impl PortableActorBackend for DylibBackend {
 }
 
 pub fn encode_action_payload(name: &str, args: &[u8]) -> Vec<u8> {
-	let mut out = Vec::with_capacity(4 + name.len() + args.len());
-	out.extend_from_slice(&(name.len() as u32).to_le_bytes());
-	out.extend_from_slice(name.as_bytes());
-	out.extend_from_slice(args);
-	out
+	encode_action_payload_with_conn(name, args, None)
+		.expect("serializing an action payload cannot fail")
+}
+
+pub fn encode_action_payload_with_conn(
+	name: &str,
+	args: &[u8],
+	conn: Option<&ConnInfo>,
+) -> Result<Vec<u8>> {
+	encode_cbor(&ActionWire {
+		name: name.to_owned(),
+		args: args.to_vec(),
+		conn: conn.cloned(),
+	})
 }
 
 pub fn decode_action_payload(payload: &[u8]) -> Result<(String, Vec<u8>)> {
-	let name_len = payload
-		.get(0..4)
-		.ok_or_else(|| anyhow!("action payload missing name length"))
-		.and_then(|b| {
-			b.try_into()
-				.map(u32::from_le_bytes)
-				.map_err(|_| anyhow!("invalid action name length"))
-		})? as usize;
-	let rest = payload
-		.get(4..)
-		.ok_or_else(|| anyhow!("action payload missing body"))?;
-	let name = rest
-		.get(..name_len)
-		.ok_or_else(|| anyhow!("action payload name out of bounds"))?;
-	let args = rest
-		.get(name_len..)
-		.ok_or_else(|| anyhow!("action payload args out of bounds"))?;
-	Ok((String::from_utf8(name.to_vec())?, args.to_vec()))
+	let wire: ActionWire = decode_cbor(payload)?;
+	Ok((wire.name, wire.args))
 }
 
 pub fn encode_event_frame(tag: u32, token: ReplyToken, payload: &[u8]) -> Vec<u8> {
@@ -1406,9 +1639,18 @@ pub fn encode_event_frame(tag: u32, token: ReplyToken, payload: &[u8]) -> Vec<u8
 }
 
 pub fn encode_conn_preflight_payload(conn: &ConnInfo, params: &[u8]) -> Result<Vec<u8>> {
+	encode_conn_preflight_payload_with_request(conn, params, None)
+}
+
+pub fn encode_conn_preflight_payload_with_request(
+	conn: &ConnInfo,
+	params: &[u8],
+	request: Option<&[u8]>,
+) -> Result<Vec<u8>> {
 	let wire = ConnPreflightWire {
 		conn: conn.clone(),
 		params: params.to_vec(),
+		request: request.map(<[u8]>::to_vec),
 	};
 	let mut out = Vec::new();
 	ciborium::into_writer(&wire, &mut out)?;
@@ -1416,7 +1658,17 @@ pub fn encode_conn_preflight_payload(conn: &ConnInfo, params: &[u8]) -> Result<V
 }
 
 pub fn encode_conn_open_payload(conn: &ConnInfo) -> Result<Vec<u8>> {
-	let wire = ConnOpenWire { conn: conn.clone() };
+	encode_conn_open_payload_with_request(conn, None)
+}
+
+pub fn encode_conn_open_payload_with_request(
+	conn: &ConnInfo,
+	request: Option<&[u8]>,
+) -> Result<Vec<u8>> {
+	let wire = ConnOpenWire {
+		conn: conn.clone(),
+		request: request.map(<[u8]>::to_vec),
+	};
 	let mut out = Vec::new();
 	ciborium::into_writer(&wire, &mut out)?;
 	Ok(out)
@@ -1488,10 +1740,11 @@ pub fn decode_event_frame(bytes: &[u8]) -> Result<Event> {
 		crate::AbiEventTag::from_u32(tag).ok_or_else(|| anyhow!("unknown event tag {tag}"))?;
 	Ok(match tag {
 		crate::AbiEventTag::Action => {
-			let (name, args) = decode_action_payload(&payload)?;
+			let wire: ActionWire = decode_cbor(&payload)?;
 			Event::Action {
-				name,
-				args,
+				name: wire.name,
+				args: wire.args,
+				conn: wire.conn,
 				reply: token,
 			}
 		}
@@ -1531,6 +1784,7 @@ pub fn decode_event_frame(bytes: &[u8]) -> Result<Event> {
 			let wire: ConnOpenWire = ciborium::from_reader(std::io::Cursor::new(payload))?;
 			Event::ConnOpen {
 				conn: wire.conn,
+				request: wire.request,
 				reply: token,
 			}
 		}
@@ -1539,6 +1793,7 @@ pub fn decode_event_frame(bytes: &[u8]) -> Result<Event> {
 			Event::ConnPreflight {
 				conn: wire.conn,
 				params: wire.params,
+				request: wire.request,
 				reply: token,
 			}
 		}
@@ -1550,4 +1805,83 @@ pub fn decode_event_frame(bytes: &[u8]) -> Result<Event> {
 		crate::AbiEventTag::Sleep => Event::Sleep { reply: token },
 		crate::AbiEventTag::Destroy => Event::Destroy { reply: token },
 	})
+}
+
+#[cfg(test)]
+mod host_driven_tests {
+	use super::*;
+
+	fn bridge() -> DylibEventBridge {
+		let (sender, receiver) = mpsc::channel();
+		DylibEventBridge {
+			state: Arc::new(DylibEventState {
+				sender: Mutex::new(Some(sender)),
+				receiver: Mutex::new(receiver),
+				pending: Mutex::new(HashMap::new()),
+			}),
+		}
+	}
+
+	fn completion() -> (mpsc::Receiver<SendResult>, *mut c_void) {
+		let (tx, rx) = mpsc::channel();
+		(rx, Box::into_raw(Box::new(tx)) as *mut c_void)
+	}
+
+	fn action_event() -> AbiEvent {
+		AbiEvent {
+			tag: AbiEventTag::Action as u32,
+			payload: OwnedBuf::from_vec(encode_action_payload("test", &[])),
+		}
+	}
+
+	#[test]
+	fn pushed_event_completes_directly_once() {
+		let bridge = bridge();
+		let (rx, user_data) = completion();
+		bridge.handle_event(7, action_event(), complete_to_channel, user_data);
+		assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+
+		bridge
+			.complete_event(7, AbiResult::ok(OwnedBuf::from_vec(vec![1, 2, 3])))
+			.expect("first completion");
+		let done = rx.recv().expect("direct completion").0;
+		assert_eq!(done.status, AbiStatus::Ok);
+		assert_eq!(unsafe { done.payload.into_vec() }, vec![1, 2, 3]);
+		assert!(
+			bridge
+				.complete_event(7, AbiResult::ok(OwnedBuf::empty()))
+				.is_err()
+		);
+	}
+
+	#[test]
+	fn cancelled_event_still_completes_exactly_once() {
+		let bridge = bridge();
+		let (rx, user_data) = completion();
+		bridge.handle_event(9, action_event(), complete_to_channel, user_data);
+		bridge.cancel_event(9);
+
+		let done = rx.recv().expect("cancel completion").0;
+		assert_eq!(done.status, AbiStatus::Cancelled);
+		unsafe { done.payload.free_self() };
+		bridge
+			.complete_event(9, AbiResult::ok(OwnedBuf::empty()))
+			.expect("late plugin reply is ignored after cancellation");
+		assert!(
+			rx.try_recv().is_err(),
+			"cancellation must not complete twice"
+		);
+	}
+
+	#[test]
+	fn shutdown_finishes_unanswered_event() {
+		let bridge = bridge();
+		let (rx, user_data) = completion();
+		bridge.handle_event(11, action_event(), complete_to_channel, user_data);
+		bridge.finish_shutdown();
+
+		let done = rx.recv().expect("shutdown completion").0;
+		assert_eq!(done.status, AbiStatus::ChannelClosed);
+		unsafe { done.payload.free_self() };
+	}
 }

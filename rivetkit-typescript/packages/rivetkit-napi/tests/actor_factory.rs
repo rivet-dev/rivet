@@ -128,7 +128,7 @@ mod moved_tests {
 
 #[test]
 fn native_plugin_actor_config_uses_long_finite_runtime_timeouts() {
-	let config = native_plugin_actor_config();
+	let config = native_plugin_actor_config(&JsActorConfig::default());
 	let long = Duration::from_secs(3600);
 
 	assert!(config.has_database);
@@ -145,7 +145,7 @@ fn native_plugin_actor_config_uses_long_finite_runtime_timeouts() {
 fn native_plugin_actor_config_starts_without_inspector_tabs() {
 	// Baseline: without forwarded tabs a plugin actor exposes none. The
 	// forwarding path is the only thing that should populate this.
-	let config = native_plugin_actor_config();
+	let config = native_plugin_actor_config(&JsActorConfig::default());
 	assert!(config.inspector_tabs.is_empty());
 }
 

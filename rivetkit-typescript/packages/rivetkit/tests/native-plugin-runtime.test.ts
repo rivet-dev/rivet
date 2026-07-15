@@ -310,6 +310,13 @@ describe.sequential("native plugin runtime integration", () => {
 		).toEqual({
 			configJson,
 			sidecarPath,
+			isNew: true,
+			input: null,
+			instanceOptions: null,
+		});
+		expect(await handle.host_echo("composed")).toEqual({
+			source: "host",
+			value: "composed",
 		});
 		expect(await waitForActorReady(() => handle.increment(), 30_000)).toBe(
 			1,
