@@ -25,6 +25,9 @@ use crate::actor::connection::{
 	hibernatable_id_from_slice,
 };
 use crate::actor::diagnostics::ActorDiagnostics;
+use crate::actor::error_report::{
+	ActorErrorEvent, ErrorReport, HookName, InternalErrorKind, OnErrorHook, RawErrorRef,
+};
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, Request, StateDelta};
 use crate::actor::metrics::ActorMetrics;
@@ -81,6 +84,8 @@ pub(crate) struct ActorContextInner {
 	// Forced-sync: hooks are registered and cloned from synchronous runtime
 	// wiring slots before use.
 	pub(super) request_save_hooks: RwLock<Vec<Arc<dyn Fn(RequestSaveOpts) + Send + Sync>>>,
+	pub(super) on_error_hook: RwLock<Option<OnErrorHook>>,
+	pub(super) error_report_in_flight: AtomicBool,
 	// Forced-sync: schedule runtime handles and callbacks are synchronous
 	// wiring slots cloned before actor/envoy I/O.
 	pub(super) schedule_generation: Mutex<Option<u32>>,
@@ -264,6 +269,8 @@ impl ActorContext {
 			on_state_change_in_flight: AtomicUsize::new(0),
 			on_state_change_idle: Notify::new(),
 			request_save_hooks: RwLock::new(Vec::new()),
+			on_error_hook: RwLock::new(None),
+			error_report_in_flight: AtomicBool::new(false),
 			schedule_generation: Mutex::new(None),
 			schedule_envoy_handle: Mutex::new(None),
 			client_endpoint: OnceLock::new(),
@@ -696,6 +703,45 @@ impl ActorContext {
 		}
 	}
 
+	pub fn on_error(&self, hook: OnErrorHook) {
+		*self.0.on_error_hook.write() = Some(hook);
+	}
+
+	pub fn report_error(&self, event: ActorErrorEvent, error: &anyhow::Error) {
+		let Some(hook) = self.0.on_error_hook.read().clone() else {
+			return;
+		};
+		if is_suppressed_error(error) {
+			return;
+		}
+		if self
+			.0
+			.error_report_in_flight
+			.compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+			.is_err()
+		{
+			return;
+		}
+
+		let event = event.override_with_hook_marker(error);
+		let extracted = rivet_error::RivetError::extract(error);
+		let raw_error_ref = error
+			.chain()
+			.find_map(|cause| cause.downcast_ref::<RawErrorRef>())
+			.map(|raw| raw.0);
+		hook(ErrorReport {
+			event,
+			group: extracted.group().to_owned(),
+			code: extracted.code().to_owned(),
+			message: extracted.message().to_owned(),
+			metadata: extracted.metadata(),
+			raw_error_ref,
+		});
+		self.0
+			.error_report_in_flight
+			.store(false, Ordering::Release);
+	}
+
 	pub fn region(&self) -> &str {
 		&self.0.region
 	}
@@ -883,6 +929,7 @@ impl ActorContext {
 		event: ActorEvent,
 		operation: &'static str,
 	) -> Result<()> {
+		let event = event.with_error_reporting(self, operation == "scheduled_action");
 		let sender = self.0.actor_events.read().clone().ok_or_else(|| {
 			ActorRuntime::NotConfigured {
 				component: "actor event inbox".to_owned(),
@@ -1551,6 +1598,13 @@ impl ActorContext {
 						);
 					}
 					Err(error) => {
+						let report_error = anyhow::anyhow!("scheduled event reply dropped: {error}");
+						ctx.report_error(
+							ActorErrorEvent::Internal {
+								kind: InternalErrorKind::Alarm,
+							},
+							&report_error,
+						);
 						tracing::error!(
 							?error,
 							event_id,
@@ -1560,6 +1614,12 @@ impl ActorContext {
 					}
 				},
 				Err(error) => {
+					ctx.report_error(
+						ActorErrorEvent::Internal {
+							kind: InternalErrorKind::Alarm,
+						},
+						&error,
+					);
 					tracing::error!(
 						?error,
 						event_id,
@@ -1751,6 +1811,38 @@ impl std::fmt::Debug for ActorContext {
 			.field("region", &self.0.region)
 			.finish()
 	}
+}
+
+impl ActorErrorEvent {
+	fn override_with_hook_marker(self, error: &anyhow::Error) -> Self {
+		let Some(hook_name) = error
+			.chain()
+			.find_map(|cause| cause.downcast_ref::<HookName>())
+			.map(|hook| hook.0)
+		else {
+			return self;
+		};
+
+		match self {
+			Self::Action { .. } | Self::Queue { .. } | Self::Internal { .. } => self,
+			Self::Hook { .. } | Self::Fatal { .. } => Self::Hook {
+				name: hook_name.to_owned(),
+			},
+		}
+	}
+}
+
+fn is_suppressed_error(error: &anyhow::Error) -> bool {
+	let extracted = rivet_error::RivetError::extract(error);
+	matches!(
+		(extracted.group(), extracted.code()),
+		("actor", "aborted")
+			| ("actor", "starting")
+			| ("actor", "not_ready")
+			| ("actor", "stopping")
+			| ("actor", "destroying")
+			| ("actor", "action_not_found")
+	)
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.

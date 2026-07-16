@@ -267,6 +267,7 @@ export declare class ActorContext {
   keepAwake(promise: Promise<any>): void
   beginWebsocketCallback(): number
   endWebsocketCallback(regionId: number): void
+  reportError(hookName: string, rawErrorRef?: number | undefined | null): void
   abortSignal(): AbortSignal
   conns(): Array<ConnHandle>
   connectConn(params: Buffer, request?: JsHttpRequest | undefined | null): Promise<ConnHandle>

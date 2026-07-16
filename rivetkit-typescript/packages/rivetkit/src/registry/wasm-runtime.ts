@@ -580,6 +580,14 @@ export class WasmCoreRuntime implements CoreRuntime {
 		callHandle(asWasmActorContext(ctx), "restartRunHandler");
 	}
 
+	actorReportError(
+		ctx: ActorContextHandle,
+		hookName: string,
+		rawErrorRef?: number,
+	): void {
+		callHandle(asWasmActorContext(ctx), "reportError", hookName, rawErrorRef);
+	}
+
 	actorBeginWebsocketCallback(ctx: ActorContextHandle): number {
 		return callHandle(asWasmActorContext(ctx), "beginWebsocketCallback");
 	}

@@ -112,6 +112,37 @@ The client receives only a generic "Internal error" message for security, but yo
 
 **Always check your server logs to see the actual error details when debugging internal errors.**
 
+### Reporting Errors to Sentry
+
+Use registry-level `onError` to forward actor errors to Sentry or another error tracker. It fires for action errors, lifecycle hook errors, request and WebSocket handler errors, queue errors, and internal runtime failures.
+
+```ts
+import * as Sentry from "@sentry/node";
+import { setup, UserError } from "rivetkit";
+import { counter } from "./counter";
+
+Sentry.init({ dsn: process.env.SENTRY_DSN });
+
+export const registry = setup({
+	use: { counter },
+	onError: (c, event) => {
+		const [[source, data]] = Object.entries(event);
+		if (data.error instanceof UserError) return;
+
+		Sentry.captureException(data.error, {
+			tags: {
+				actor: c.name,
+				actorId: c.actorId,
+				source,
+			},
+			extra: data,
+		});
+	},
+});
+```
+
+`onError` is observational: the original error still propagates to the caller, and throwing or rejecting inside `onError` is logged and ignored. Define actor-level `onError` when one actor needs custom reporting; actor-level hooks run before the registry-level hook.
+
 ### Exposing Errors to Clients (Development Only)
 
 **Warning:** Only enable error exposure in development environments. In production, this will leak sensitive internal details to clients.
@@ -126,4 +157,3 @@ With error exposure enabled, clients will see the full error message instead of 
 
 - [`UserError`](/typedoc/classes/rivetkit.actor_errors.UserError.html) - User-facing error class
 - [`ActorError`](/typedoc/classes/rivetkit.client_mod.ActorError.html) - Errors received by the client
-

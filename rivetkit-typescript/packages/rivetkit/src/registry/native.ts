@@ -2,6 +2,8 @@ import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	CONN_STATE_MANAGER_SYMBOL,
+	type ActorErrorContext,
+	type ActorErrorEvent,
 	disposeRunInspector,
 	getRunFunction,
 	getRunInspectorConfig,
@@ -89,6 +91,9 @@ import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const MAX_RAW_ERROR_STASH_SIZE = 1024;
+const rawErrorStash = new Map<number, unknown>();
+let nextRawErrorId = 1;
 
 type ResolvedRuntimeKind = Exclude<RuntimeKind, "auto">;
 type RuntimeHostKind = "node-like" | "edge-like";
@@ -105,6 +110,33 @@ type NativeOnStateChangeHandler = (
 	ctx: ActorContextHandleAdapter,
 	state: unknown,
 ) => void | Promise<void>;
+type NativeOnErrorPayload = {
+	identity: {
+		actorId: string;
+		name: string;
+		key?: string;
+	};
+	report: {
+		event: OmitError<ActorErrorEvent>;
+		group: string;
+		code: string;
+		message: string;
+		metadata?: unknown;
+		rawErrorRef?: number;
+	};
+};
+type OmitError<T> =
+	T extends { action: infer E }
+		? { action: Omit<E, "error"> }
+		: T extends { hook: infer E }
+			? { hook: Omit<E, "error"> }
+			: T extends { queue: infer E }
+				? { queue: Omit<E, "error"> }
+				: T extends { internal: infer E }
+					? { internal: Omit<E, "error"> }
+					: T extends { fatal: infer E }
+						? { fatal: Omit<E, "error"> }
+						: never;
 type NativePersistConnState = {
 	state: unknown;
 };
@@ -701,12 +733,62 @@ function isStructuredBridgeError(
 	);
 }
 
-function encodeNativeCallbackError(error: unknown): Error {
+function stashRawError(error: unknown): number {
+	const id = nextRawErrorId++;
+	rawErrorStash.set(id, error);
+	while (rawErrorStash.size > MAX_RAW_ERROR_STASH_SIZE) {
+		const oldest = rawErrorStash.keys().next().value;
+		if (oldest === undefined) break;
+		rawErrorStash.delete(oldest);
+	}
+	return id;
+}
+
+function takeRawError(id?: number): unknown | undefined {
+	if (id === undefined || id === null) return undefined;
+	const error = rawErrorStash.get(id);
+	rawErrorStash.delete(id);
+	return error;
+}
+
+function reportToRivetError(report: NativeOnErrorPayload["report"]): RivetError {
+	return new RivetError(report.group, report.code, report.message, {
+		metadata: report.metadata,
+	});
+}
+
+function makeErrorEvent(
+	report: NativeOnErrorPayload["report"],
+): ActorErrorEvent {
+	const raw = takeRawError(report.rawErrorRef) ?? reportToRivetError(report);
+	const entries = Object.entries(report.event) as Array<
+		[string, Record<string, unknown>]
+	>;
+	const [tag, data] = entries[0] ?? ["fatal", { phase: "run" }];
+	return { [tag]: { ...data, error: raw } } as ActorErrorEvent;
+}
+
+function makeErrorContext(
+	identity: NativeOnErrorPayload["identity"],
+): ActorErrorContext {
+	return {
+		actorId: identity.actorId,
+		name: identity.name,
+		key: identity.key,
+		log: logger(),
+	};
+}
+
+function logOnErrorHookFailure(scope: string, error: unknown): void {
+	logger().error({ msg: `error in ${scope} \`onError\` hook`, error });
+}
+
+function encodeNativeCallbackError(error: unknown, rawErrorId?: number): Error {
 	const structuredError = isStructuredBridgeError(error)
 		? error
 		: deconstructError(error, true);
 
-	const bridgeError = new Error(encodeBridgeRivetError(structuredError), {
+	const bridgeError = new Error(encodeBridgeRivetError(structuredError, rawErrorId), {
 		cause: error instanceof Error ? error : undefined,
 	});
 	return Object.assign(bridgeError, {
@@ -1123,7 +1205,7 @@ function wrapNativeCallback<Args extends Array<unknown>, Result>(
 		try {
 			return await callback(...args);
 		} catch (error) {
-			throw encodeNativeCallbackError(error);
+			throw encodeNativeCallbackError(error, stashRawError(error));
 		}
 	};
 }
@@ -3055,24 +3137,45 @@ export class ActorContextHandleAdapter {
 				this,
 				actorState.state,
 			) as unknown;
-			if (isPromiseLike(result)) {
-				shouldFinish = false;
-				void Promise.resolve(result)
-					.catch((error) => {
-						logger().error({
-							msg: "error in `onStateChange`",
-							error,
-						});
+				if (isPromiseLike(result)) {
+					shouldFinish = false;
+					void Promise.resolve(result)
+						.catch((error) => {
+							const rawErrorRef = stashRawError(error);
+							callNativeSync(() =>
+								this.#runtime.actorReportError(
+									this.#ctx,
+									"onStateChange",
+									rawErrorRef,
+								),
+							);
+							logger().error({
+								msg: "error in `onStateChange`",
+								error,
+							});
 					})
 					.finally(() => {
 						actorState.isInOnStateChange = false;
 						callNativeSync(() =>
 							this.#runtime.actorEndOnStateChange(this.#ctx),
 						);
-					});
-			}
-		} finally {
-			if (shouldFinish) {
+						});
+				}
+			} catch (error) {
+				const rawErrorRef = stashRawError(error);
+				callNativeSync(() =>
+					this.#runtime.actorReportError(
+						this.#ctx,
+						"onStateChange",
+						rawErrorRef,
+					),
+				);
+				logger().error({
+					msg: "error in `onStateChange`",
+					error,
+				});
+			} finally {
+				if (shouldFinish) {
 				actorState.isInOnStateChange = false;
 				callNativeSync(() =>
 					this.#runtime.actorEndOnStateChange(this.#ctx),
@@ -4835,6 +4938,31 @@ export function buildNativeFactory(
 				}
 			},
 		),
+		onError:
+			typeof config.onError === "function" ||
+			typeof registryConfig.onError === "function"
+				? (
+						error: unknown,
+						payload: NativeOnErrorPayload,
+					): void => {
+						const { identity, report } = unwrapTsfnPayload(
+							error,
+							payload,
+						);
+						const c = makeErrorContext(identity);
+						const event = makeErrorEvent(report);
+						Promise.resolve()
+							.then(() => config.onError?.(c, event))
+							.catch((error) => {
+								logOnErrorHookFailure("actor", error);
+							});
+						Promise.resolve()
+							.then(() => registryConfig.onError?.(c, event))
+							.catch((error) => {
+								logOnErrorHookFailure("registry", error);
+							});
+					}
+				: undefined,
 	};
 
 	return runtime.createActorFactory(
@@ -4866,26 +4994,23 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	// Always best-effort resolve the npm-installed engine binary and hand its
-	// path to the core. The core alone decides whether to actually spawn a local
-	// engine (its `should_manage_engine`, based on the endpoint + spawn mode), so
-	// JS must not duplicate that decision here. Only JS knows the npm
-	// `node_modules` layout, so it resolves the path; if no binary is available
-	// (remote-only install, unsupported platform, optional deps skipped), leave
-	// it unset and let the core report `engine.binary_unavailable` if it actually
-	// needs one.
-	try {
-		const { getEnginePath } = await loadEngineCli();
-		serveConfig.engineBinaryPath = getEnginePath();
-	} catch (error) {
-		// The npm-installed engine binary could not be resolved. The core still
-		// decides whether it needs to spawn a local engine; if it does, it will
-		// fail with engine.binary_unavailable (auto-download is off in the napi
-		// runtime). Warn so the cause is actionable.
-		logger().warn({
-			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
-			error: stringifyError(error),
-		});
+	if (config.runtime !== "wasm") {
+		// Always best-effort resolve the npm-installed engine binary and hand its
+		// path to native core. Wasm runtimes cannot spawn native engine binaries,
+		// so the field must stay unset there.
+		try {
+			const { getEnginePath } = await loadEngineCli();
+			serveConfig.engineBinaryPath = getEnginePath();
+		} catch (error) {
+			// The npm-installed engine binary could not be resolved. The core still
+			// decides whether it needs to spawn a local engine; if it does, it will
+			// fail with engine.binary_unavailable (auto-download is off in the napi
+			// runtime). Warn so the cause is actionable.
+			logger().warn({
+				msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+				error: stringifyError(error),
+			});
+		}
 	}
 	serveConfig.engineHost = config.engineHost;
 	serveConfig.enginePort = config.enginePort;

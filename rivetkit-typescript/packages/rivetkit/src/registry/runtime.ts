@@ -440,6 +440,11 @@ export interface CoreRuntime {
 	actorRuntimeState(ctx: ActorContextHandle): object;
 	actorClearRuntimeState(ctx: ActorContextHandle): void;
 	actorRestartRunHandler(ctx: ActorContextHandle): void;
+	actorReportError(
+		ctx: ActorContextHandle,
+		hookName: string,
+		rawErrorRef?: number,
+	): void;
 	actorBeginWebsocketCallback(ctx: ActorContextHandle): number;
 	actorEndWebsocketCallback(ctx: ActorContextHandle, regionId: number): void;
 
@@ -613,22 +618,21 @@ export async function buildServeConfig(
 		serverlessMaxStartPayloadBytes: config.serverless.maxStartPayloadBytes,
 	};
 
-	// Always best-effort resolve the engine binary path and hand it to the core.
-	// The core alone decides whether to actually spawn a local engine, so JS must
-	// not duplicate that decision here. `loadEnginePath` throws when no binary is
-	// available (remote-only install, unsupported platform, optional deps
-	// skipped); in that case leave it unset and let the core report
-	// `engine.binary_unavailable` only if it actually needs one.
-	try {
-		serveConfig.engineBinaryPath = await loadEnginePath();
-	} catch (error) {
-		// The engine binary could not be resolved. The core still decides whether
-		// it needs to spawn a local engine; if it does, it will fail with
-		// engine.binary_unavailable (auto-download is off in the napi runtime).
-		logger().warn({
-			msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
-			error: stringifyError(error),
-		});
+	if (config.runtime !== "wasm") {
+		// Always best-effort resolve the engine binary path and hand it to native
+		// core. Wasm runtimes cannot spawn native engine binaries, so the field
+		// must stay unset there.
+		try {
+			serveConfig.engineBinaryPath = await loadEnginePath();
+		} catch (error) {
+			// The engine binary could not be resolved. The core still decides whether
+			// it needs to spawn a local engine; if it does, it will fail with
+			// engine.binary_unavailable (auto-download is off in the napi runtime).
+			logger().warn({
+				msg: "could not resolve a local engine binary; if a local engine must be spawned it will fail with engine.binary_unavailable — set RIVET_ENGINE_BINARY_PATH or install the @rivetkit/engine-cli platform package",
+				error: stringifyError(error),
+			});
+		}
 	}
 	serveConfig.engineHost = config.engineHost;
 	serveConfig.enginePort = config.enginePort;

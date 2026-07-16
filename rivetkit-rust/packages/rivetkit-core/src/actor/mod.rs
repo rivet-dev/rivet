@@ -3,6 +3,7 @@ pub mod config;
 pub mod connection;
 pub mod context;
 pub(crate) mod diagnostics;
+pub mod error_report;
 pub mod factory;
 pub(crate) mod keys;
 pub mod kv;
@@ -24,6 +25,10 @@ pub use action::ActionDispatchError;
 pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
 pub use connection::ConnHandle;
 pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
+pub use error_report::{
+	ActorErrorEvent, ErrorReport, FatalPhase, HookName, InternalErrorKind, OnErrorHook,
+	RawErrorRef,
+};
 pub use factory::{ActorEntryFn, ActorFactory};
 pub use kv::Kv;
 pub use lifecycle_hooks::{ActorEvents, ActorStart, Reply};

@@ -505,6 +505,14 @@ export class NapiCoreRuntime implements CoreRuntime {
 		asNativeActorContext(ctx).restartRunHandler();
 	}
 
+	actorReportError(
+		ctx: ActorContextHandle,
+		hookName: string,
+		rawErrorRef?: number,
+	): void {
+		asNativeActorContext(ctx).reportError(hookName, rawErrorRef);
+	}
+
 	actorBeginWebsocketCallback(ctx: ActorContextHandle): number {
 		return asNativeActorContext(ctx).beginWebsocketCallback();
 	}

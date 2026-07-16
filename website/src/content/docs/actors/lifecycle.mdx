@@ -71,6 +71,11 @@ Loading ──Start──▶ Ready ──spawn driver──▶ Started
 1. `queues.<name>.canPublish` (if defined)
 2. Queue message is enqueued
 
+**On Error** (diagnostic only)
+
+1. Actor-level `onError` (if defined)
+2. Registry-level `onError` (if defined)
+
 **On Event Subscription Request** (per subscribe request)
 
 1. `events.<name>.canSubscribe` (if defined)
@@ -159,6 +164,14 @@ This hook may not always be called in situations like crashes or forced terminat
 Not supported on Cloudflare Workers.
 
 <CodeSnippet file="examples/docs/actors-lifecycle/on-sleep.ts" />
+
+### `onError`
+
+[API Reference](/typedoc/interfaces/rivetkit.mod.ActorDefinition.html)
+
+The `onError` hook is called when actor user code or runtime machinery reports an error. It receives an error context with actor identity and a tagged event such as `action`, `hook`, `queue`, `internal`, or `fatal`.
+
+This hook is observational only. It cannot suppress the original error, and errors thrown from `onError` are logged and ignored. Use it for diagnostics such as sending actor failures to an error tracker.
 
 ### `run`
 

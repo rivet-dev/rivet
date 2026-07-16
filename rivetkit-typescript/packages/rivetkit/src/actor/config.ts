@@ -37,6 +37,64 @@ export interface ActorLogger {
 	[key: string]: any;
 }
 
+export interface ActorErrorContext {
+	actorId: string;
+	name: string;
+	key?: string;
+	log: ActorLogger;
+}
+
+export type LifecycleHookName =
+	| "createState"
+	| "createVars"
+	| "createConnState"
+	| "onCreate"
+	| "onMigrate"
+	| "onWake"
+	| "onSleep"
+	| "onDestroy"
+	| "onStateChange"
+	| "onBeforeConnect"
+	| "onConnect"
+	| "onDisconnect"
+	| "onBeforeSubscribe"
+	| "onBeforeActionResponse"
+	| "onRequest"
+	| "onWebSocket";
+
+export interface ActorActionErrorEvent {
+	name: string;
+	scheduled: boolean;
+	error: unknown;
+}
+
+export interface ActorHookErrorEvent {
+	name: LifecycleHookName;
+	error: unknown;
+}
+
+export interface ActorQueueErrorEvent {
+	name: string;
+	error: unknown;
+}
+
+export interface ActorInternalErrorEvent {
+	kind: "persist" | "alarm";
+	error: unknown;
+}
+
+export interface ActorFatalErrorEvent {
+	phase: "run" | "shutdown";
+	error: unknown;
+}
+
+export type ActorErrorEvent =
+	| { action: ActorActionErrorEvent }
+	| { hook: ActorHookErrorEvent }
+	| { queue: ActorQueueErrorEvent }
+	| { internal: ActorInternalErrorEvent }
+	| { fatal: ActorFatalErrorEvent };
+
 type ActorKvValueType = "text" | "arrayBuffer" | "binary";
 type ActorKvKeyType = "text" | "binary";
 type ActorKvValueTypeMap = {
@@ -1036,6 +1094,7 @@ export const ActorConfigSchema = z
 		onSleep: zFunction().optional(),
 		run: zRunHandler,
 		onStateChange: zFunction().optional(),
+		onError: zFunction().optional(),
 		onBeforeConnect: zFunction().optional(),
 		onConnect: zFunction().optional(),
 		onDisconnect: zFunction().optional(),
@@ -1402,6 +1461,13 @@ interface BaseActorConfig<
 	) => void;
 
 	/**
+	 * Called when actor user code, lifecycle hooks, runtime internals, or fatal
+	 * actor execution fails. Observational only; throwing here does not suppress
+	 * the original error.
+	 */
+	onError?: (c: ActorErrorContext, event: ActorErrorEvent) => void;
+
+	/**
 	 * Called before a client connects to the actor.
 	 *
 	 * Use this hook to determine if a connection should be accepted
@@ -1641,6 +1707,7 @@ export type ActorConfig<
 	| "onSleep"
 	| "run"
 	| "onStateChange"
+	| "onError"
 	| "onBeforeConnect"
 	| "onConnect"
 	| "onDisconnect"
@@ -1739,6 +1806,7 @@ export type ActorConfigInput<
 	| "onSleep"
 	| "run"
 	| "onStateChange"
+	| "onError"
 	| "onBeforeConnect"
 	| "onConnect"
 	| "onDisconnect"
@@ -2057,6 +2125,12 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Called when the actor's state changes. State changes within this hook won't trigger recursion.",
+			),
+		onError: z
+			.unknown()
+			.optional()
+			.describe(
+				"Called when actor user code, lifecycle hooks, runtime internals, or fatal actor execution fails. Observational only.",
 			),
 		onBeforeConnect: z
 			.unknown()

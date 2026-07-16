@@ -18,8 +18,9 @@ use napi_derive::napi;
 use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
 use rivetkit_core::{
-	ActorContext as CoreActorContext, ActorWorkKind, ConnHandle as CoreConnHandle, KeepAwakeRegion,
-	Request as CoreRequest, RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
+	ActorContext as CoreActorContext, ActorErrorEvent, ActorWorkKind,
+	ConnHandle as CoreConnHandle, KeepAwakeRegion, RawErrorRef, Request as CoreRequest,
+	RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::UnboundedSender;
@@ -497,6 +498,16 @@ impl ActorContext {
 	#[napi]
 	pub fn end_websocket_callback(&self, region_id: u32) {
 		self.shared.end_websocket_callback(region_id);
+	}
+
+	#[napi]
+	pub fn report_error(&self, hook_name: String, raw_error_ref: Option<i64>) {
+		let mut error = anyhow::anyhow!("actor hook `{hook_name}` failed");
+		if let Some(raw_error_ref) = raw_error_ref.and_then(|value| u64::try_from(value).ok()) {
+			error = error.context(RawErrorRef(raw_error_ref));
+		}
+		self.inner
+			.report_error(ActorErrorEvent::Hook { name: hook_name }, &error);
 	}
 
 	#[napi(ts_return_type = "AbortSignal")]

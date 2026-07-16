@@ -45,6 +45,7 @@ use tracing::{Instrument, instrument::WithSubscriber};
 use crate::actor::action::ActionDispatchError;
 use crate::actor::connection::ConnHandle;
 use crate::actor::context::ActorContext;
+use crate::actor::error_report::{ActorErrorEvent, FatalPhase, HookName, InternalErrorKind};
 use crate::actor::factory::ActorFactory;
 use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
@@ -459,6 +460,14 @@ impl ActorTask {
 			Ok(result) => result,
 			Err(_) => Err(anyhow!("shutdown panicked during {reason:?}")),
 		};
+		if let Err(error) = &result {
+			self.ctx.report_error(
+				ActorErrorEvent::Fatal {
+					phase: FatalPhase::Shutdown,
+				},
+				error,
+			);
+		}
 		self.deliver_shutdown_reply(reason, &result);
 		self.transition_to(LifecycleState::Terminated);
 		self.record_inbox_depths();
@@ -1036,6 +1045,7 @@ impl ActorTask {
 	}
 
 	fn send_actor_event(&self, operation: &'static str, event: ActorEvent) -> Result<()> {
+		let event = event.with_error_reporting(&self.ctx, operation == "scheduled_action");
 		let sender = self
 			.actor_event_tx
 			.as_ref()
@@ -1383,10 +1393,23 @@ impl ActorTask {
 			.with_subscriber(run_dispatch),
 		));
 		if let Some(startup_ready_rx) = startup_ready_rx {
-			startup_ready_rx
+			if let Err(error) = startup_ready_rx
 				.await
 				.context("receive runtime startup ready reply")?
-				.context("runtime startup preamble")?;
+			{
+				let event = hook_name_from_error(&error)
+					.map(|hook| ActorErrorEvent::Hook {
+						name: hook.to_owned(),
+					})
+					.unwrap_or(ActorErrorEvent::Fatal {
+						phase: FatalPhase::Run,
+					});
+				self.ctx.report_error(event, &error);
+				if let Some(mut run_handle) = self.run_handle.take() {
+					let _ = (&mut run_handle).await;
+				}
+				return Err(error).context("runtime startup preamble");
+			}
 		}
 		Ok(())
 	}
@@ -1458,10 +1481,25 @@ impl ActorTask {
 		let (clean_exit, crash_message) = match outcome {
 			Ok(Ok(())) => (true, None),
 			Ok(Err(error)) => {
+				let event = hook_name_from_error(&error)
+					.map(|hook| ActorErrorEvent::Hook {
+						name: hook.to_owned(),
+					})
+					.unwrap_or(ActorErrorEvent::Fatal {
+						phase: FatalPhase::Run,
+					});
+				self.ctx.report_error(event, &error);
 				log_actor_error(&error, "actor run handler failed");
 				(false, Some(format!("{error:#}")))
 			}
 			Err(error) => {
+				let report_error = anyhow!("actor run handler join failed: {error}");
+				self.ctx.report_error(
+					ActorErrorEvent::Fatal {
+						phase: FatalPhase::Run,
+					},
+					&report_error,
+				);
 				tracing::error!(?error, "actor run handler join failed");
 				// Deliberate cancellations are not crashes and must not be
 				// reported to the engine as one.
@@ -1624,10 +1662,23 @@ impl ActorTask {
 		match (&mut run_handle).await {
 			Ok(Ok(())) => {}
 			Ok(Err(error)) => {
+				self.ctx.report_error(
+					ActorErrorEvent::Fatal {
+						phase: FatalPhase::Run,
+					},
+					&error,
+				);
 				log_actor_error(&error, "actor run handler failed during shutdown");
 			}
 			Err(error) => {
 				if !error.is_cancelled() {
+					let report_error = anyhow!("actor run handler join failed during shutdown: {error}");
+					self.ctx.report_error(
+						ActorErrorEvent::Fatal {
+							phase: FatalPhase::Run,
+						},
+						&report_error,
+					);
 					tracing::error!(?error, "actor run handler join failed during shutdown");
 				}
 			}
@@ -2005,6 +2056,12 @@ impl ActorTask {
 					.save_state_with_revision(deltas, save_request_revision)
 					.await
 				{
+					self.ctx.report_error(
+						ActorErrorEvent::Internal {
+							kind: InternalErrorKind::Persist,
+						},
+						&error,
+					);
 					tracing::error!(?error, "failed to persist actor save tick");
 					self.schedule_state_save(true);
 					self.sync_inspector_serialize_deadline();
@@ -2218,6 +2275,35 @@ impl ActorTask {
 			LifecycleState::Started | LifecycleState::SleepGrace
 		));
 	}
+}
+
+fn hook_name_from_error(error: &anyhow::Error) -> Option<&'static str> {
+	error.chain().find_map(|cause| {
+		if let Some(hook) = cause.downcast_ref::<HookName>() {
+			return Some(hook.0);
+		}
+
+		match cause.to_string().as_str() {
+			"createState" => Some("createState"),
+			"onCreate" => Some("onCreate"),
+			"createVars" => Some("createVars"),
+			"onMigrate" => Some("onMigrate"),
+			"onWake" => Some("onWake"),
+			"onBeforeActorStart" => Some("onBeforeActorStart"),
+			"onSleep" => Some("onSleep"),
+			"onDestroy" => Some("onDestroy"),
+			"onBeforeConnect" => Some("onBeforeConnect"),
+			"onConnect" => Some("onConnect"),
+			"onDisconnect" => Some("onDisconnect"),
+			"onBeforeSubscribe" => Some("onBeforeSubscribe"),
+			"onBeforeActionResponse" => Some("onBeforeActionResponse"),
+			"onRequest" => Some("onRequest"),
+			"onQueueSend" => Some("onQueueSend"),
+			"onWebSocket" => Some("onWebSocket"),
+			"run" => Some("run"),
+			_ => None,
+		}
+	})
 }
 
 fn shutdown_reason_label(reason: ShutdownKind) -> &'static str {
