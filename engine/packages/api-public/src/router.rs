@@ -167,6 +167,7 @@ async fn auth_middleware(
 	// Verify auth was handled
 	if res.extensions().get::<FailedExtraction>().is_none()
 		&& method != reqwest::Method::OPTIONS
+		&& res.status() != reqwest::StatusCode::METHOD_NOT_ALLOWED
 		&& path != "/"
 		&& path != "/ui"
 		&& !path.starts_with("/ui/")

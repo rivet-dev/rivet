@@ -41,3 +41,6 @@ utoipa.workspace = true
 [build-dependencies]
 anyhow.workspace = true
 fs_extra.workspace = true
+
+[dev-dependencies]
+axum-test.workspace = true
