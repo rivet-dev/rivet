@@ -9,7 +9,7 @@ use crate::actor::connection::{
 use crate::actor::keys::make_workflow_key;
 use crate::actor::messages::WorkflowKvWrite;
 use crate::actor::queue::{PersistedQueueMessage, QueueMetadata};
-use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
+use crate::actor::state::PersistedActor;
 use crate::error::KvRuntimeError;
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
 use crate::types::ListOpts;
@@ -82,7 +82,6 @@ pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<Internal
 	let has_initialized = read_bool(row, 0, "has_initialized")?;
 	let input = read_optional_blob(row, 1, "input")?;
 	let state = read_blob(row, 2, "state")?;
-	let scheduled_events = load_schedule_events(db).await?;
 	let last_pushed_alarm = load_last_pushed_alarm(db).await?;
 
 	Ok(Some(InternalActorSnapshot {
@@ -90,13 +89,41 @@ pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<Internal
 			input,
 			has_initialized,
 			state,
-			scheduled_events,
+			scheduled_events: Vec::new(),
 		},
 		last_pushed_alarm,
 	}))
 }
 
 pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor) -> Result<()> {
+	let statements = vec![
+		SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_actor (id, has_initialized, input) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET has_initialized = excluded.has_initialized, input = excluded.input".to_owned(),
+			params: Some(vec![
+				BindParam::Integer(if actor.has_initialized { 1 } else { 0 }),
+				optional_blob_param(actor.input.clone()),
+			]),
+		},
+		SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_actor_state (id, state) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state".to_owned(),
+			params: Some(vec![BindParam::Blob(actor.state.clone())]),
+		},
+	];
+
+	db.execute_batch(statements)
+		.await
+		.context("persist internal actor snapshot")?;
+	Ok(())
+}
+
+/// Imports the schedule vector from the legacy versioned actor snapshot exactly
+/// once. Runtime state flushes must use [`persist_actor_snapshot`] so SQLite
+/// schedule rows remain authoritative and are never rewritten from the legacy
+/// field.
+pub(crate) async fn import_legacy_actor_snapshot(
+	db: &SqliteDb,
+	actor: &PersistedActor,
+) -> Result<()> {
 	let mut statements = vec![
 		SqliteBatchStatement {
 			sql: "INSERT INTO _rivet_actor (id, has_initialized, input) VALUES (1, ?, ?) ON CONFLICT(id) DO UPDATE SET has_initialized = excluded.has_initialized, input = excluded.input".to_owned(),
@@ -114,7 +141,6 @@ pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor
 			params: None,
 		},
 	];
-
 	for event in &actor.scheduled_events {
 		statements.push(SqliteBatchStatement {
 			sql: "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args) VALUES (?, ?, ?, ?)".to_owned(),
@@ -126,10 +152,9 @@ pub(crate) async fn persist_actor_snapshot(db: &SqliteDb, actor: &PersistedActor
 			]),
 		});
 	}
-
 	db.execute_batch(statements)
 		.await
-		.context("persist internal actor snapshot")?;
+		.context("import legacy actor snapshot")?;
 	Ok(())
 }
 
@@ -193,25 +218,6 @@ fn build_actor_core_and_connection_statements(
 			sql: "INSERT INTO _rivet_actor_state (id, state) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET state = excluded.state".to_owned(),
 			params: Some(vec![BindParam::Blob(actor.state.clone())]),
 		});
-		// Rewrite schedule events atomically with the state flush. A schedule
-		// mutation whose own tracked persist has not run yet must not be lost
-		// when a crash lands after this flush; the engine alarm may already be
-		// armed for it.
-		statements.push(SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_schedule_events".to_owned(),
-			params: None,
-		});
-		for event in &actor.scheduled_events {
-			statements.push(SqliteBatchStatement {
-				sql: "INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args) VALUES (?, ?, ?, ?)".to_owned(),
-				params: Some(vec![
-					BindParam::Text(event.event_id.clone()),
-					BindParam::Integer(event.timestamp),
-					BindParam::Text(event.action.clone()),
-					optional_blob_param(event.args.clone()),
-				]),
-			});
-		}
 	}
 
 	for connection in connections {
@@ -1032,29 +1038,6 @@ async fn clear_table_bounded(
 			);
 		}
 	}
-}
-
-async fn load_schedule_events(db: &SqliteDb) -> Result<Vec<PersistedScheduleEvent>> {
-	let result = db
-		.query(
-			"SELECT event_id, trigger_at, action, args FROM _rivet_schedule_events ORDER BY trigger_at, event_id",
-			None,
-		)
-		.await
-		.context("load internal schedule events")?;
-
-	result
-		.rows
-		.iter()
-		.map(|row| {
-			Ok(PersistedScheduleEvent {
-				event_id: read_text(row, 0, "event_id")?,
-				timestamp: read_i64(row, 1, "trigger_at")?,
-				action: read_text(row, 2, "action")?,
-				args: read_optional_blob(row, 3, "args")?,
-			})
-		})
-		.collect()
 }
 
 fn optional_blob_param(value: Option<Vec<u8>>) -> BindParam {

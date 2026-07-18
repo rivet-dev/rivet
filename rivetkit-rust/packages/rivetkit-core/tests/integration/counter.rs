@@ -62,6 +62,7 @@ fn counter_factory() -> ActorFactory {
 						args: _,
 						conn: _,
 						reply,
+						..
 					} => match name.as_str() {
 						"increment" => {
 							count += 1;

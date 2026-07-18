@@ -293,6 +293,7 @@ async fn handle_actor_event<A: Actor>(
 			args,
 			conn,
 			reply,
+			..
 		} => {
 			let handler_ctx = ctx.with_conn(conn.map(ConnCtx::from));
 			match <A::Actions as ActionSet<A>>::dispatch(
@@ -2024,6 +2025,7 @@ mod tests {
 			name: name.to_owned(),
 			args: args.to_vec(),
 			conn,
+			scheduled_fire: None,
 			reply: reply_tx.into(),
 		})
 		.expect("send action event");

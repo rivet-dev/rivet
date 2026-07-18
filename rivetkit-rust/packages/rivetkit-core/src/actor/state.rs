@@ -618,23 +618,6 @@ impl ActorContext {
 		self.schedule_save(None);
 	}
 
-	pub(crate) fn update_scheduled_events<R>(
-		&self,
-		update: impl FnOnce(&mut Vec<PersistedScheduleEvent>) -> R,
-	) -> R {
-		let result = {
-			let mut persisted = self.0.persisted.write();
-			update(&mut persisted.scheduled_events)
-		};
-
-		self.0
-			.metrics
-			.inc_state_mutation(StateMutationReason::ScheduledEventsUpdate);
-		self.mark_dirty();
-		self.schedule_save(None);
-		result
-	}
-
 	pub fn set_input(&self, input: Option<Vec<u8>>) {
 		self.0.persisted.write().input = input;
 		self.0

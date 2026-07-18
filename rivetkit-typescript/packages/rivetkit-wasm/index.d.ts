@@ -140,8 +140,30 @@ export class QueueMessage {
 export class Schedule {
 	private constructor();
 	free(): void;
-	at(timestamp_ms: number, action_name: string, args: Uint8Array): void;
-	after(duration_ms: number, action_name: string, args: Uint8Array): void;
+	after(duration_ms: number, action_name: string, args: Uint8Array): Promise<string>;
+	at(timestamp_ms: number, action_name: string, args: Uint8Array): Promise<string>;
+	cancel(id: string): Promise<boolean>;
+	get(id: string): Promise<any>;
+	list(): Promise<any>;
+	cronSet(
+		name: string,
+		expression: string,
+		timezone: string | null | undefined,
+		action_name: string,
+		args: Uint8Array,
+		max_history?: number | null,
+	): Promise<void>;
+	cronEvery(
+		name: string,
+		interval_ms: number,
+		action_name: string,
+		args: Uint8Array,
+		max_history?: number | null,
+	): Promise<void>;
+	cronGet(name: string): Promise<any>;
+	cronList(): Promise<any>;
+	cronDelete(name: string): Promise<boolean>;
+	cronHistory(name: string, limit?: number | null): Promise<any>;
 }
 
 export class SqliteDb {

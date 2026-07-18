@@ -107,9 +107,86 @@ export interface ActorKv {
 }
 
 export interface ActorSchedule {
-	after(duration: number, action: string, ...args: unknown[]): Promise<void>;
-	at(timestamp: number, action: string, ...args: unknown[]): Promise<void>;
+	after(
+		duration: number,
+		action: string,
+		...args: unknown[]
+	): Promise<string>;
+	at(timestamp: number, action: string, ...args: unknown[]): Promise<string>;
+	cancel(id: string): Promise<boolean>;
+	get(id: string): Promise<ScheduledEventInfo | undefined>;
+	list(): Promise<ScheduledEventInfo[]>;
 	[key: string]: any;
+}
+
+export interface ActorCronSetOptions {
+	name: string;
+	expression: string;
+	action: string;
+	args?: unknown[];
+	timezone?: string;
+	/** Defaults to 100. Set to 0 to disable and clear history. Maximum 1,000. */
+	maxHistory?: number;
+}
+
+export interface ActorCronEveryOptions {
+	name: string;
+	/** Fixed interval in milliseconds. Minimum 5,000. */
+	intervalMs: number;
+	action: string;
+	args?: unknown[];
+	/** Defaults to 100. Set to 0 to disable and clear history. Maximum 1,000. */
+	maxHistory?: number;
+}
+
+export interface ActorCron {
+	set(options: ActorCronSetOptions): Promise<void>;
+	every(options: ActorCronEveryOptions): Promise<void>;
+	get(name: string): Promise<CronJobInfo | undefined>;
+	list(): Promise<CronJobInfo[]>;
+	delete(name: string): Promise<boolean>;
+	history(name: string, options?: { limit?: number }): Promise<CronFire[]>;
+	[key: string]: any;
+}
+
+export interface ScheduledEventInfo {
+	id: string;
+	action: string;
+	args: unknown[];
+	runAt: number;
+}
+
+export type CronJobInfo = {
+	name: string;
+	action: string;
+	args: unknown[];
+	nextRunAt: number;
+	lastRunAt?: number;
+	maxHistory: number;
+} & (
+	| { kind: "cron"; expression: string; timezone: string }
+	| { kind: "every"; intervalMs: number }
+);
+
+export interface ScheduledFireInfo {
+	kind: "at" | "cron" | "every";
+	id: string;
+	name?: string;
+	scheduledAt: number;
+	firedAt: number;
+}
+
+export interface CronFire {
+	action: string;
+	scheduledAt: number;
+	firedAt: number;
+	finishedAt?: number;
+	result: "running" | "ok" | "error" | "skipped";
+	error?: {
+		group: string;
+		code: string;
+		message: string;
+	};
 }
 
 export type QueueMessageOf<Name extends string, Body> = {
@@ -316,6 +393,7 @@ export interface ActorContext<
 	readonly kv: ActorKv;
 	readonly db: InferDatabaseClient<TDatabase>;
 	readonly schedule: ActorSchedule;
+	readonly cron: ActorCron;
 	readonly queue: ActorQueue<TQueues>;
 	readonly actorId: string;
 	readonly name: string;

@@ -279,6 +279,12 @@ members = [
     version = "0.4.38"
     features = [ "now" ]
 
+    [workspace.dependencies.chrono-tz]
+    version = "0.10.4"
+
+    [workspace.dependencies.croner]
+    version = "2.2.0"
+
     [workspace.dependencies.clap]
     version = "4.3"
     features = [ "derive", "cargo" ]

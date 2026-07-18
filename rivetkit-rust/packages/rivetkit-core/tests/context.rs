@@ -278,13 +278,38 @@ CREATE TABLE IF NOT EXISTS _rivet_actor_state (
     state BLOB NOT NULL
 ) STRICT;
 CREATE TABLE IF NOT EXISTS _rivet_schedule_events (
-    event_id   TEXT PRIMARY KEY,
+    event_id TEXT PRIMARY KEY,
     trigger_at INTEGER NOT NULL,
-    action     TEXT NOT NULL,
-    args       BLOB
+    action TEXT NOT NULL,
+    args BLOB,
+    kind TEXT NOT NULL DEFAULT 'at',
+    cron_expression TEXT,
+    timezone TEXT,
+    interval_ms INTEGER,
+    last_started_at INTEGER,
+    max_history INTEGER NOT NULL DEFAULT 0,
+    CHECK (kind IN ('at', 'cron', 'every')),
+    CHECK (max_history BETWEEN 0 AND 1000),
+    CHECK (
+        (kind = 'at' AND cron_expression IS NULL AND timezone IS NULL AND interval_ms IS NULL AND max_history = 0)
+        OR (kind = 'cron' AND cron_expression IS NOT NULL AND timezone IS NOT NULL AND interval_ms IS NULL)
+        OR (kind = 'every' AND cron_expression IS NULL AND timezone IS NULL AND interval_ms >= 5000)
+    )
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS _rivet_schedule_events_trigger_at
     ON _rivet_schedule_events (trigger_at);
+CREATE TABLE IF NOT EXISTS _rivet_schedule_history (
+    id INTEGER PRIMARY KEY,
+    schedule_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    fired_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    result TEXT NOT NULL CHECK (result IN ('running', 'ok', 'error', 'skipped')),
+    error BLOB
+) STRICT;
+CREATE INDEX IF NOT EXISTS _rivet_schedule_history_schedule
+    ON _rivet_schedule_history (schedule_id, fired_at DESC);
 CREATE TABLE IF NOT EXISTS _rivet_conns (
     conn_id         TEXT PRIMARY KEY,
     parameters      BLOB NOT NULL,
@@ -316,7 +341,7 @@ CREATE TABLE IF NOT EXISTS _rivet_user_kv (
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
 INSERT INTO _rivet_meta (key, value)
-VALUES ('schema_version', x'0700000000000000')
+VALUES ('schema_version', x'0800000000000000')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 "#;
 
@@ -431,7 +456,7 @@ async fn test_internal_schema_sql_matches_real_initializer() {
 }
 
 #[tokio::test]
-async fn internal_schema_v7_preserves_existing_connection_state() {
+async fn internal_schema_v8_preserves_existing_runtime_rows() {
 	let conn = rusqlite::Connection::open_in_memory().expect("sqlite connection should open");
 	conn.execute_batch(
 		r#"
@@ -445,10 +470,20 @@ CREATE TABLE _rivet_conn_state (
     server_message_index INTEGER NOT NULL,
     subscriptions        BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
+CREATE TABLE _rivet_schedule_events (
+    event_id   TEXT PRIMARY KEY,
+    trigger_at INTEGER NOT NULL,
+    action     TEXT NOT NULL,
+    args       BLOB
+) STRICT, WITHOUT ROWID;
+CREATE INDEX _rivet_schedule_events_trigger_at
+    ON _rivet_schedule_events (trigger_at);
 INSERT INTO _rivet_meta (key, value)
 VALUES ('schema_version', x'0600000000000000');
 INSERT INTO _rivet_conn_state (conn_id, state, server_message_index, subscriptions)
 VALUES ('conn-1', x'010203', 9, x'80');
+INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args)
+VALUES ('event-1', 1234, 'tick', x'0405');
 "#,
 	)
 	.expect("v6 schema should seed");
@@ -480,6 +515,24 @@ VALUES ('conn-1', x'010203', 9, x'80');
 		vec![vec![
 			ColumnValue::Blob(vec![1, 2, 3]),
 			ColumnValue::Integer(9),
+			ColumnValue::Integer(0),
+		]],
+	);
+	let rows = db
+		.query(
+			"SELECT event_id, trigger_at, action, args, kind, max_history FROM _rivet_schedule_events",
+			None,
+		)
+		.await
+		.expect("upgraded schedule should load");
+	assert_eq!(
+		rows.rows,
+		vec![vec![
+			ColumnValue::Text("event-1".to_owned()),
+			ColumnValue::Integer(1234),
+			ColumnValue::Text("tick".to_owned()),
+			ColumnValue::Blob(vec![4, 5]),
+			ColumnValue::Text("at".to_owned()),
 			ColumnValue::Integer(0),
 		]],
 	);
@@ -780,7 +833,6 @@ mod moved_tests {
 	use super::ActorContext;
 	use crate::actor::connection::ConnHandle;
 	use crate::actor::messages::ActorEvent;
-	use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
 	use crate::types::ListOpts;
 	use crate::{ActorConfig, SqliteDb};
 
@@ -1265,17 +1317,11 @@ mod moved_tests {
 				})
 			}
 		})));
-		ctx.load_persisted_actor(PersistedActor {
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-future".to_owned(),
-				timestamp: now_timestamp_ms() + 20,
-				action: "tick".to_owned(),
-				args: Some(vec![1]),
-			}],
-			..PersistedActor::default()
-		});
-
-		ctx.init_alarms();
+		ctx.at(now_timestamp_ms() + 20, "tick", &[1])
+			.await
+			.expect("persist future schedule");
+		ctx.cancel_local_alarm_timeouts();
+		ctx.init_alarms().await;
 
 		for _ in 0..50 {
 			if fired.load(Ordering::SeqCst) > 0 {
@@ -1298,15 +1344,9 @@ mod moved_tests {
 		);
 		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		ctx.configure_actor_events(Some(events_tx));
-		ctx.load_persisted_actor(PersistedActor {
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-overdue".to_owned(),
-				timestamp: now_timestamp_ms() - 1_000,
-				action: "tick".to_owned(),
-				args: Some(vec![1, 2, 3]),
-			}],
-			..PersistedActor::default()
-		});
+		ctx.at(now_timestamp_ms() - 1_000, "tick", &[1, 2, 3])
+			.await
+			.expect("persist overdue schedule");
 
 		let recv = tokio::spawn(async move {
 			match events_rx
@@ -1318,11 +1358,15 @@ mod moved_tests {
 					name,
 					args,
 					conn,
+					scheduled_fire,
 					reply,
 				} => {
 					assert_eq!(name, "tick");
 					assert_eq!(args, vec![1, 2, 3]);
 					assert!(conn.is_none());
+					let fire = scheduled_fire.expect("scheduled fire metadata");
+					assert_eq!(fire.kind, crate::actor::schedule::ScheduleKind::At);
+					assert!(fire.name.is_none());
 					reply.send(Ok(Vec::new()));
 				}
 				event => panic!("unexpected event: {event:?}"),
@@ -1334,7 +1378,7 @@ mod moved_tests {
 			.expect("draining overdue scheduled events should succeed");
 		recv.await.expect("scheduled action receiver should join");
 
-		assert!(ctx.next_event().is_none());
+		assert!(ctx.list_scheduled_events().await.unwrap().is_empty());
 	}
 
 	#[tokio::test]

@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
 
-pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 7;
+pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 8;
 
 const SCHEMA_VERSION_KEY: &str = "schema_version";
 
@@ -117,6 +117,74 @@ CREATE TABLE _rivet_user_kv (
 		r#"
 ALTER TABLE _rivet_conn_state
     ADD COLUMN client_message_index INTEGER NOT NULL DEFAULT 0
+"#,
+	],
+	&[
+		// W[once during migration | table rebuild | existing rows preserved as one-shots]
+		r#"
+ALTER TABLE _rivet_schedule_events RENAME TO _rivet_schedule_events_v7
+"#,
+		r#"
+CREATE TABLE _rivet_schedule_events (
+    event_id         TEXT PRIMARY KEY,
+    trigger_at       INTEGER NOT NULL,
+    action           TEXT NOT NULL,
+    args             BLOB,
+    kind             TEXT NOT NULL DEFAULT 'at',
+    cron_expression  TEXT,
+    timezone         TEXT,
+    interval_ms      INTEGER,
+    last_started_at  INTEGER,
+    max_history      INTEGER NOT NULL DEFAULT 0,
+    CHECK (kind IN ('at', 'cron', 'every')),
+    CHECK (max_history BETWEEN 0 AND 1000),
+    CHECK (
+        (kind = 'at'
+            AND cron_expression IS NULL
+            AND timezone IS NULL
+            AND interval_ms IS NULL
+            AND max_history = 0)
+        OR
+        (kind = 'cron'
+            AND cron_expression IS NOT NULL
+            AND timezone IS NOT NULL
+            AND interval_ms IS NULL)
+        OR
+        (kind = 'every'
+            AND cron_expression IS NULL
+            AND timezone IS NULL
+            AND interval_ms >= 5000)
+    )
+) STRICT, WITHOUT ROWID
+"#,
+		r#"
+INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args)
+SELECT event_id, trigger_at, action, args
+FROM _rivet_schedule_events_v7
+"#,
+		r#"
+DROP TABLE _rivet_schedule_events_v7
+"#,
+		r#"
+CREATE INDEX _rivet_schedule_events_trigger_at
+    ON _rivet_schedule_events (trigger_at)
+"#,
+		// W[per recurring fire | point insert/update/prune | bounded rows]
+		r#"
+CREATE TABLE _rivet_schedule_history (
+    id           INTEGER PRIMARY KEY,
+    schedule_id  TEXT NOT NULL,
+    action       TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    fired_at     INTEGER NOT NULL,
+    finished_at  INTEGER,
+    result       TEXT NOT NULL CHECK (result IN ('running', 'ok', 'error', 'skipped')),
+    error        BLOB
+) STRICT
+"#,
+		r#"
+CREATE INDEX _rivet_schedule_history_schedule
+    ON _rivet_schedule_history (schedule_id, fired_at DESC)
 "#,
 	],
 ];

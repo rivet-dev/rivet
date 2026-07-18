@@ -364,6 +364,7 @@ pub(crate) async fn dispatch_event(
 			name,
 			args,
 			conn,
+			scheduled_fire,
 			reply,
 		} => {
 			tracing::info!(
@@ -401,6 +402,7 @@ pub(crate) async fn dispatch_event(
 							conn,
 							name.clone(),
 							args.clone(),
+							scheduled_fire.clone(),
 							Some(cancel_token),
 						),
 					)
@@ -1112,6 +1114,7 @@ async fn call_action(
 	conn: Option<rivetkit_core::ConnHandle>,
 	name: String,
 	args: Vec<u8>,
+	scheduled_fire: Option<rivetkit_core::actor::schedule::ScheduledFireInfo>,
 	cancel_token: Option<CancellationToken>,
 ) -> Result<Vec<u8>> {
 	let callback_name = format!("actions.{name}");
@@ -1123,6 +1126,7 @@ async fn call_action(
 			conn,
 			name,
 			args,
+			scheduled_fire,
 			cancel_token,
 		},
 	)

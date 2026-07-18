@@ -331,10 +331,35 @@ CREATE TABLE _rivet_schedule_events (
     event_id TEXT PRIMARY KEY,
     trigger_at INTEGER NOT NULL,
     action TEXT NOT NULL,
-    args BLOB
+    args BLOB,
+    kind TEXT NOT NULL DEFAULT 'at',
+    cron_expression TEXT,
+    timezone TEXT,
+    interval_ms INTEGER,
+    last_started_at INTEGER,
+    max_history INTEGER NOT NULL DEFAULT 0,
+    CHECK (kind IN ('at', 'cron', 'every')),
+    CHECK (max_history BETWEEN 0 AND 1000),
+    CHECK (
+        (kind = 'at' AND cron_expression IS NULL AND timezone IS NULL AND interval_ms IS NULL AND max_history = 0)
+        OR (kind = 'cron' AND cron_expression IS NOT NULL AND timezone IS NOT NULL AND interval_ms IS NULL)
+        OR (kind = 'every' AND cron_expression IS NULL AND timezone IS NULL AND interval_ms >= 5000)
+    )
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX _rivet_schedule_events_trigger_at
     ON _rivet_schedule_events (trigger_at);
+CREATE TABLE _rivet_schedule_history (
+    id INTEGER PRIMARY KEY,
+    schedule_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    fired_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    result TEXT NOT NULL CHECK (result IN ('running', 'ok', 'error', 'skipped')),
+    error BLOB
+) STRICT;
+CREATE INDEX _rivet_schedule_history_schedule
+    ON _rivet_schedule_history (schedule_id, fired_at DESC);
 CREATE TABLE _rivet_conns (
     conn_id TEXT PRIMARY KEY,
     parameters BLOB NOT NULL,
@@ -365,5 +390,5 @@ CREATE TABLE _rivet_user_kv (
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
 INSERT INTO _rivet_meta (key, value)
-VALUES ('schema_version', x'0700000000000000');
+VALUES ('schema_version', x'0800000000000000');
 "#;

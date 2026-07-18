@@ -546,6 +546,7 @@ fn sqlite_fuzz_factory() -> ActorFactory {
 						args: _,
 						conn: _,
 						reply,
+						..
 					} => match name.as_str() {
 						"step" => {
 							step += 1;

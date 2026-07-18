@@ -44,6 +44,13 @@ type NativeCallbacks = {
 				conn: null;
 				name: string;
 				args: Uint8Array;
+				scheduledFire?: {
+					kind: "at" | "cron" | "every";
+					id: string;
+					name?: string;
+					scheduledAt: number;
+					firedAt: number;
+				};
 				cancelToken: FakeCancellationToken;
 			},
 		) => Promise<Uint8Array>
@@ -413,6 +420,43 @@ async function invokePromotedStatus(
 }
 
 describe("CoreRuntime NAPI and wasm parity", () => {
+	test("scheduled fire metadata is appended after validated action args", async () => {
+		const runtimeCase = createRuntimeCase("napi");
+		let received: unknown[] = [];
+		const definition = actor({
+			state: {},
+			actions: {
+				report: async (_c, team: string, fire?: unknown) => {
+					received = [team, fire];
+				},
+			},
+		});
+		const factory = buildNativeFactory(
+			runtimeCase.runtime,
+			registryConfig(definition),
+			definition,
+		) as unknown as FakeActorFactory;
+		const ctx = new FakeActorContext(runtimeCase.scenario);
+		const fire = {
+			kind: "cron" as const,
+			id: "daily-report",
+			name: "daily-report",
+			scheduledAt: 100,
+			firedAt: 125,
+		};
+
+		await factory.callbacks.actions.report(null, {
+			ctx,
+			conn: null,
+			name: "report",
+			args: encodeValue(["operations"]),
+			scheduledFire: fire,
+			cancelToken: new FakeCancellationToken(),
+		});
+
+		expect(received).toEqual(["operations", fire]);
+	});
+
 	test.each([
 		"napi",
 		"wasm",

@@ -192,6 +192,7 @@ pub(crate) struct ActionPayload {
 	pub(crate) conn: Option<CoreConnHandle>,
 	pub(crate) name: String,
 	pub(crate) args: Vec<u8>,
+	pub(crate) scheduled_fire: Option<rivetkit_core::actor::schedule::ScheduledFireInfo>,
 	pub(crate) cancel_token: Option<tokio_util::sync::CancellationToken>,
 }
 
@@ -907,6 +908,20 @@ fn build_action_payload(env: &Env, payload: ActionPayload) -> napi::Result<Vec<n
 		None => object.set("conn", env.get_null()?)?,
 	}
 	object.set("args", Buffer::from(payload.args))?;
+	if let Some(fire) = payload.scheduled_fire {
+		let mut fire_object = env.create_object()?;
+		fire_object.set("kind", fire.kind.as_str())?;
+		fire_object.set("id", fire.id)?;
+		match fire.name {
+			Some(name) => fire_object.set("name", name)?,
+			None => fire_object.set("name", env.get_undefined()?)?,
+		}
+		fire_object.set("scheduledAt", fire.scheduled_at)?;
+		fire_object.set("firedAt", fire.fired_at)?;
+		object.set("scheduledFire", fire_object)?;
+	} else {
+		object.set("scheduledFire", env.get_undefined()?)?;
+	}
 	match payload.cancel_token {
 		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
 		None => object.set("cancelToken", env.get_undefined()?)?,

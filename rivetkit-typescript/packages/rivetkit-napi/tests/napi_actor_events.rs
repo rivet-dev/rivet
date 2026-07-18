@@ -167,6 +167,7 @@ mod moved_tests {
 				name: "missing".to_owned(),
 				args: vec![1, 2, 3],
 				conn: None,
+				scheduled_fire: None,
 				reply: tx.into(),
 			},
 			&bindings,
@@ -433,6 +434,7 @@ mod moved_tests {
 				name: "missing-first".to_owned(),
 				args: Vec::new(),
 				conn: None,
+				scheduled_fire: None,
 				reply: first_tx.into(),
 			})
 			.expect("first action event should send");
@@ -441,6 +443,7 @@ mod moved_tests {
 				name: "missing-second".to_owned(),
 				args: Vec::new(),
 				conn: None,
+				scheduled_fire: None,
 				reply: second_tx.into(),
 			})
 			.expect("second action event should send");

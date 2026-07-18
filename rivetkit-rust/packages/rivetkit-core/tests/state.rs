@@ -93,22 +93,6 @@ mod moved_tests {
 	}
 
 	#[test]
-	fn scheduled_empty_args_encode_as_typescript_none() {
-		let actor = ActorContext::new_for_schedule_tests("actor-empty-schedule-args");
-		actor.after(Duration::from_secs(1), "ping", b"");
-
-		let encoded =
-			encode_persisted_actor(&actor.persisted_actor()).expect("actor should encode");
-		let bare =
-			<persist_versioned::Actor as OwnedVersionedData>::deserialize_with_embedded_version(
-				&encoded,
-			)
-			.expect("actor should decode as protocol");
-
-		assert_eq!(bare.scheduled_events[0].args, None);
-	}
-
-	#[test]
 	fn persisted_actor_decodes_old_typescript_v1_layout() {
 		let payload = persist_versioned::Actor::V1(persist_v1::PersistedActor {
 			input: Some(vec![1, 2]),

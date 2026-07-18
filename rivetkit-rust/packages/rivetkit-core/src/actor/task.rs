@@ -907,6 +907,7 @@ impl ActorTask {
 						name,
 						args,
 						conn: Some(conn),
+						scheduled_fire: None,
 						reply: Reply::from(tracked_reply_tx),
 					},
 				) {
@@ -1203,7 +1204,7 @@ impl ActorTask {
 			Self::settle_hibernated_connections(self.ctx.clone())
 				.await
 				.context("settle hibernated connections")?;
-			self.ctx.init_alarms();
+			self.ctx.init_alarms().await;
 			Ok(())
 		}
 		.await;
@@ -1793,7 +1794,7 @@ impl ActorTask {
 			step = "wait_for_pending_state_writes",
 			"actor shutdown cleanup step completed"
 		);
-		ctx.sync_alarm_logged();
+		ctx.sync_alarm_logged().await;
 		tracing::debug!(
 			actor_id = %actor_id,
 			reason = reason_label,
