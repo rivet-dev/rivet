@@ -50,6 +50,7 @@ const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivet-error",
 	"rivet-metrics",
 	"rivet-util-serde",
+	"rivet-actor-runtime-socket-protocol",
 	"depot-client-types",
 	"depot-client",
 	"rivet-envoy-protocol",
