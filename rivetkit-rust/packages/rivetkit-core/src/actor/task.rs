@@ -256,7 +256,9 @@ pub(crate) fn try_send_dispatch_command(
 
 #[derive(Debug)]
 pub enum LifecycleEvent {
-	SaveRequested { immediate: bool },
+	SaveRequested {
+		immediate: bool,
+	},
 	WorkflowFlushRequested {
 		writes: Vec<WorkflowKvWrite>,
 		reply: Reply<()>,
@@ -280,15 +282,22 @@ impl LifecycleEvent {
 
 impl PartialEq for LifecycleEvent {
 	fn eq(&self, other: &Self) -> bool {
-		match (self, other) {
-			(
-				Self::SaveRequested { immediate: left },
-				Self::SaveRequested { immediate: right },
-			) => left == right,
-			(Self::InspectorSerializeRequested, Self::InspectorSerializeRequested)
-			| (Self::InspectorAttachmentsChanged, Self::InspectorAttachmentsChanged)
-			| (Self::SleepTick, Self::SleepTick) => true,
-			_ => false,
+		match self {
+			Self::SaveRequested { immediate: left } => {
+				if let Self::SaveRequested { immediate: right } = other {
+					left == right
+				} else {
+					false
+				}
+			}
+			Self::WorkflowFlushRequested { .. } => false,
+			Self::InspectorSerializeRequested => {
+				matches!(other, Self::InspectorSerializeRequested)
+			}
+			Self::InspectorAttachmentsChanged => {
+				matches!(other, Self::InspectorAttachmentsChanged)
+			}
+			Self::SleepTick => matches!(other, Self::SleepTick),
 		}
 	}
 }
@@ -859,11 +868,7 @@ impl ActorTask {
 			.await
 			.context("receive workflow flush serialize-state reply")??;
 		self.ctx
-			.save_state_and_workflow_batch_with_revision(
-				deltas,
-				writes,
-				save_request_revision,
-			)
+			.save_state_and_workflow_batch_with_revision(deltas, writes, save_request_revision)
 			.await
 	}
 
@@ -1184,8 +1189,8 @@ impl ActorTask {
 			}
 			let init_inspector_token_started_at = Instant::now();
 			crate::inspector::auth::init_inspector_token(&self.ctx)
-			.await
-			.context("initialize inspector token")?;
+				.await
+				.context("initialize inspector token")?;
 			tracing::debug!(
 				actor_id = %actor_id,
 				duration_ms = duration_ms_f64(init_inspector_token_started_at.elapsed()),
@@ -1805,7 +1810,7 @@ impl ActorTask {
 		#[cfg(feature = "sqlite-local")]
 		ctx.shutdown_actor_runtime_socket().await;
 		ctx.sql()
-			.cleanup()
+			.cleanup_for_shutdown(reason == ShutdownKind::Sleep)
 			.await
 			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))?;
 		trim_native_allocator_after_shutdown(&actor_id, reason_label);

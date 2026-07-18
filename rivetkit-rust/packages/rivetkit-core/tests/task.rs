@@ -17,7 +17,9 @@ pub(crate) mod moved_tests {
 	use rivet_envoy_client::envoy::ToEnvoyMessage;
 	use rivet_envoy_client::handle::EnvoyHandle;
 	use rivet_envoy_client::protocol;
-	use rivet_envoy_client::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse};
+	use rivet_envoy_client::sqlite::{
+		RemoteSqliteRequest, RemoteSqliteResponse, RemoteSqliteResponseEnvelope,
+	};
 	use rusqlite::types::{Value, ValueRef};
 	use tokio::sync::{Mutex as AsyncMutex, mpsc, oneshot};
 	use tokio::task::yield_now;
@@ -34,14 +36,12 @@ pub(crate) mod moved_tests {
 	};
 	use crate::actor::internal_storage;
 	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_workflow_key};
-	use crate::actor::messages::{
-		ActorEvent, SerializeStateReason, StateDelta, WorkflowKvWrite,
-	};
+	use crate::actor::messages::{ActorEvent, SerializeStateReason, StateDelta, WorkflowKvWrite};
 	use crate::actor::sleep::CanSleep;
-		use crate::actor::state::{
-			PersistedActor, PersistedScheduleEvent, RequestSaveOpts, encode_last_pushed_alarm,
-			encode_persisted_actor,
-		};
+	use crate::actor::state::{
+		PersistedActor, PersistedScheduleEvent, RequestSaveOpts, encode_last_pushed_alarm,
+		encode_persisted_actor,
+	};
 	use crate::actor::task::{
 		ActorTask, DispatchCommand, LONG_SHUTDOWN_DRAIN_WARNING_THRESHOLD, LifecycleCommand,
 		LifecycleEvent, LifecycleState, LiveExit,
@@ -86,7 +86,8 @@ pub(crate) mod moved_tests {
 	}
 
 	async fn load_persisted_actor(ctx: &ActorContext) -> PersistedActor {
-		internal_storage::load_actor_snapshot(ctx.sql())
+		let sql = ctx.sql().fresh_remote_for_test();
+		internal_storage::load_actor_snapshot(&sql)
 			.await
 			.expect("persisted actor lookup should succeed")
 			.expect("persisted actor should exist")
@@ -94,7 +95,8 @@ pub(crate) mod moved_tests {
 	}
 
 	async fn load_persisted_conn(ctx: &ActorContext, conn_id: &str) -> Option<PersistedConnection> {
-		internal_storage::load_connections(ctx.sql())
+		let sql = ctx.sql().fresh_remote_for_test();
+		internal_storage::load_connections(&sql)
 			.await
 			.expect("persisted connection lookup should succeed")
 			.into_iter()
@@ -150,22 +152,29 @@ pub(crate) mod moved_tests {
 		key: ActorKey,
 		region: impl Into<String>,
 		kv: crate::kv::Kv,
-		) -> ActorContext {
-			let actor_id = actor_id.into();
-			let sqlite_fixture_key = format!("{}:{}", actor_id, kv.test_identity());
-			let (sql_handle, sql_rx) = test_envoy_handle();
-			spawn_test_remote_sqlite(sqlite_fixture_key, sql_rx);
-			let ctx = ActorContext::build(
-				actor_id.clone(),
-				name.into(),
+	) -> ActorContext {
+		let actor_id = actor_id.into();
+		let sqlite_fixture_key = format!("{}:{}", actor_id, kv.test_identity());
+		let (sql_handle, sql_rx) = test_envoy_handle();
+		spawn_test_remote_sqlite(sqlite_fixture_key, sql_rx);
+		let ctx = ActorContext::build(
+			actor_id.clone(),
+			name.into(),
 			key,
 			region.into(),
 			Some(1),
 			sql_handle.get_envoy_key().to_owned(),
 			ActorConfig::default(),
 			kv,
-			SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true)
-				.expect("test remote sqlite should be configured"),
+			SqliteDb::new_with_remote_sqlite(
+				sql_handle.clone(),
+				actor_id,
+				None,
+				Some(1),
+				false,
+				true,
+			)
+			.expect("test remote sqlite should be configured"),
 		);
 		ctx.configure_envoy(sql_handle, Some(1));
 		ctx
@@ -276,7 +285,10 @@ pub(crate) mod moved_tests {
 			.await
 			.expect("workflow flush event should arrive")
 			.expect("workflow lifecycle event channel should stay open");
-		assert!(matches!(event, LifecycleEvent::WorkflowFlushRequested { .. }));
+		assert!(matches!(
+			event,
+			LifecycleEvent::WorkflowFlushRequested { .. }
+		));
 		task.handle_event(event).await;
 		flush
 			.await
@@ -287,10 +299,7 @@ pub(crate) mod moved_tests {
 		assert_eq!(load_persisted_actor(&ctx).await.state, b"lifecycle-state");
 		let workflow = ctx
 			.sql()
-			.query(
-				"SELECT key, value FROM _rivet_wf_kv",
-				None,
-			)
+			.query("SELECT key, value FROM _rivet_wf_kv", None)
 			.await
 			.expect("workflow row should load");
 		assert_eq!(
@@ -392,9 +401,9 @@ pub(crate) mod moved_tests {
 			ws_tx: Arc::new(tokio::sync::Mutex::new(
 				None::<mpsc::UnboundedSender<WsTxMessage>>,
 			)),
-			connection_session: std::sync::atomic::AtomicU64::new(0),
-			next_connection_session: std::sync::atomic::AtomicU64::new(0),
-			connection_session_tx: tokio::sync::watch::channel(0).0,
+			connection_session: std::sync::atomic::AtomicU64::new(1),
+			next_connection_session: std::sync::atomic::AtomicU64::new(1),
+			connection_session_tx: tokio::sync::watch::channel(1).0,
 			protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 			shutting_down: AtomicBool::new(false),
 			last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
@@ -404,18 +413,18 @@ pub(crate) mod moved_tests {
 		(EnvoyHandle::from_shared(shared), envoy_rx)
 	}
 
-		fn test_sqlite_connection(fixture_key: &str) -> Arc<Mutex<rusqlite::Connection>> {
-			static CONNECTIONS: OnceLock<Mutex<HashMap<String, Arc<Mutex<rusqlite::Connection>>>>> =
-				OnceLock::new();
-			let mut connections = CONNECTIONS
+	fn test_sqlite_connection(fixture_key: &str) -> Arc<Mutex<rusqlite::Connection>> {
+		static CONNECTIONS: OnceLock<Mutex<HashMap<String, Arc<Mutex<rusqlite::Connection>>>>> =
+			OnceLock::new();
+		let mut connections = CONNECTIONS
 			.get_or_init(|| Mutex::new(HashMap::new()))
 			.lock()
-				.expect("test sqlite connection map poisoned");
-			connections
-				.entry(fixture_key.to_owned())
-				.or_insert_with(|| {
-					let conn = rusqlite::Connection::open_in_memory()
-						.expect("test sqlite connection should open");
+			.expect("test sqlite connection map poisoned");
+		connections
+			.entry(fixture_key.to_owned())
+			.or_insert_with(|| {
+				let conn = rusqlite::Connection::open_in_memory()
+					.expect("test sqlite connection should open");
 				conn.execute_batch(crate::actor::context::tests::TEST_INTERNAL_SCHEMA_SQL)
 					.expect("test sqlite internal schema should initialize");
 				Arc::new(Mutex::new(conn))
@@ -423,15 +432,16 @@ pub(crate) mod moved_tests {
 			.clone()
 	}
 
-		fn spawn_test_remote_sqlite(
-			fixture_key: String,
-			mut rx: mpsc::UnboundedReceiver<ToEnvoyMessage>,
-		) {
-			let conn = test_sqlite_connection(&fixture_key);
+	fn spawn_test_remote_sqlite(
+		fixture_key: String,
+		mut rx: mpsc::UnboundedReceiver<ToEnvoyMessage>,
+	) {
+		let conn = test_sqlite_connection(&fixture_key);
 		tokio::spawn(async move {
 			while let Some(message) = rx.recv().await {
 				let ToEnvoyMessage::RemoteSqliteRequest {
 					request,
+					expected_session: _,
 					response_tx,
 				} = message
 				else {
@@ -444,7 +454,10 @@ pub(crate) mod moved_tests {
 					let conn = conn.lock().expect("test sqlite connection poisoned");
 					execute_test_sqlite(&conn, request)
 				};
-				let _ = response_tx.send(Ok(RemoteSqliteResponse::Execute(response)));
+				let _ = response_tx.send(Ok(RemoteSqliteResponseEnvelope {
+					response: RemoteSqliteResponse::Execute(response),
+					session: 1,
+				}));
 			}
 		});
 	}
@@ -454,9 +467,11 @@ pub(crate) mod moved_tests {
 		request: protocol::SqliteExecuteRequest,
 	) -> protocol::SqliteExecuteResponse {
 		match execute_test_sqlite_inner(conn, request) {
-			Ok(result) => protocol::SqliteExecuteResponse::SqliteExecuteOk(
-				protocol::SqliteExecuteOk { result },
-			),
+			Ok(result) => {
+				protocol::SqliteExecuteResponse::SqliteExecuteOk(protocol::SqliteExecuteOk {
+					result,
+				})
+			}
 			Err(error) => protocol::SqliteExecuteResponse::SqliteErrorResponse(
 				protocol::SqliteErrorResponse {
 					group: "sqlite".to_owned(),
@@ -521,24 +536,26 @@ pub(crate) mod moved_tests {
 	fn test_sqlite_column_value(value: ValueRef<'_>) -> protocol::SqliteColumnValue {
 		match value {
 			ValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
-			ValueRef::Integer(value) => protocol::SqliteColumnValue::SqliteValueInteger(
-				protocol::SqliteValueInteger { value },
-			),
-			ValueRef::Real(value) => protocol::SqliteColumnValue::SqliteValueFloat(
-				protocol::SqliteValueFloat {
+			ValueRef::Integer(value) => {
+				protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger {
+					value,
+				})
+			}
+			ValueRef::Real(value) => {
+				protocol::SqliteColumnValue::SqliteValueFloat(protocol::SqliteValueFloat {
 					value: value.to_bits().to_be_bytes(),
-				},
-			),
-			ValueRef::Text(value) => protocol::SqliteColumnValue::SqliteValueText(
-				protocol::SqliteValueText {
+				})
+			}
+			ValueRef::Text(value) => {
+				protocol::SqliteColumnValue::SqliteValueText(protocol::SqliteValueText {
 					value: String::from_utf8_lossy(value).into_owned(),
-				},
-			),
-			ValueRef::Blob(value) => protocol::SqliteColumnValue::SqliteValueBlob(
-				protocol::SqliteValueBlob {
+				})
+			}
+			ValueRef::Blob(value) => {
+				protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob {
 					value: value.to_vec(),
-				},
-			),
+				})
+			}
 		}
 	}
 
@@ -1754,7 +1771,11 @@ pub(crate) mod moved_tests {
 			disconnects,
 			vec!["conn-hibernating".to_owned(), "conn-normal".to_owned()]
 		);
-		assert!(load_persisted_conn(&ctx, hibernating_conn.id()).await.is_none());
+		assert!(
+			load_persisted_conn(&ctx, hibernating_conn.id())
+				.await
+				.is_none()
+		);
 		assert!(ctx.conns().is_empty());
 	}
 
@@ -3145,9 +3166,9 @@ pub(crate) mod moved_tests {
 			.expect("action reply should send")
 			.expect_err("sleep finalize should reject new dispatch");
 		assert!(
-				format!("{error:#}").contains("Actor is stopping"),
-				"expected actor stopping error, got {error:#}"
-			);
+			format!("{error:#}").contains("Actor is stopping"),
+			"expected actor stopping error, got {error:#}"
+		);
 	}
 
 	#[cfg(not(debug_assertions))]

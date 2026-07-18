@@ -4,6 +4,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::Instant;
 
 use anyhow::Result;
+use parking_lot::Mutex;
 use rivet_envoy_client::config::{
 	BoxFuture as EnvoyBoxFuture, EnvoyCallbacks, EnvoyConfig, HttpRequest, HttpResponse,
 	WebSocketHandler, WebSocketSender,
@@ -12,10 +13,11 @@ use rivet_envoy_client::context::{SharedContext, WsTxMessage};
 use rivet_envoy_client::envoy::ToEnvoyMessage;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
-use rivet_envoy_client::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse};
+use rivet_envoy_client::sqlite::{
+	RemoteSqliteRequest, RemoteSqliteResponse, RemoteSqliteResponseEnvelope,
+};
 use rusqlite::types::{Value, ValueRef};
 use rusqlite::{Connection, params_from_iter};
-use parking_lot::Mutex;
 use tokio::sync::{Mutex as AsyncMutex, mpsc};
 
 use crate::actor::connection::{PersistedConnection, encode_persisted_connection};
@@ -27,8 +29,8 @@ use crate::actor::keys::{
 	make_connection_key, make_prefixed_key, make_queue_message_key, make_traces_key,
 	make_workflow_key,
 };
-use crate::actor::messages::{StateDelta, WorkflowKvWrite};
 use crate::actor::kv::Kv;
+use crate::actor::messages::{StateDelta, WorkflowKvWrite};
 use crate::actor::queue::{
 	PersistedQueueMessage, QueueMetadata, encode_queue_message, encode_queue_metadata,
 };
@@ -116,6 +118,9 @@ fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>)
 		live_tunnel_requests: Default::default(),
 		pending_hibernation_restores: Default::default(),
 		ws_tx: Arc::new(AsyncMutex::new(None::<mpsc::UnboundedSender<WsTxMessage>>)),
+		connection_session: std::sync::atomic::AtomicU64::new(1),
+		next_connection_session: std::sync::atomic::AtomicU64::new(1),
+		connection_session_tx: tokio::sync::watch::channel(1).0,
 		protocol_metadata: Arc::new(AsyncMutex::new(None)),
 		shutting_down: AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
@@ -203,6 +208,7 @@ async fn run_remote_sqlite(
 	while let Some(message) = envoy_rx.recv().await {
 		let ToEnvoyMessage::RemoteSqliteRequest {
 			request,
+			expected_session: _,
 			response_tx,
 		} = message
 		else {
@@ -213,13 +219,17 @@ async fn run_remote_sqlite(
 		};
 		harness.request_count.fetch_add(1, Ordering::Relaxed);
 		let fail_commit_after_apply = request.sql == "COMMIT"
-			&& harness.fail_commit_after_apply.swap(false, Ordering::SeqCst);
-		if request.sql == "BEGIN IMMEDIATE" {
+			&& harness
+				.fail_commit_after_apply
+				.swap(false, Ordering::SeqCst);
+		if request.sql == "BEGIN" || request.sql == "BEGIN IMMEDIATE" {
 			harness.transaction_count.fetch_add(1, Ordering::Relaxed);
 			transaction_statements = Some(0);
 		} else if request.sql == "COMMIT" || request.sql == "ROLLBACK" {
 			if let Some(statement_count) = transaction_statements.take() {
-				harness.max_transaction_statements.fetch_max(statement_count, Ordering::SeqCst);
+				harness
+					.max_transaction_statements
+					.fetch_max(statement_count, Ordering::SeqCst);
 			}
 		} else if let Some(statement_count) = transaction_statements.as_mut() {
 			*statement_count += 1;
@@ -240,20 +250,23 @@ async fn run_remote_sqlite(
 		if should_fail {
 			harness.fault.lock().take();
 			response_tx
-				.send(Ok(RemoteSqliteResponse::Execute(
-					protocol::SqliteExecuteResponse::SqliteErrorResponse(
-						protocol::SqliteErrorResponse {
-							group: "test".to_owned(),
-							code: "injected_failure".to_owned(),
-							message: "injected migration fault".to_owned(),
-						},
+				.send(Ok(RemoteSqliteResponseEnvelope {
+					response: RemoteSqliteResponse::Execute(
+						protocol::SqliteExecuteResponse::SqliteErrorResponse(
+							protocol::SqliteErrorResponse {
+								group: "test".to_owned(),
+								code: "injected_failure".to_owned(),
+								message: "injected migration fault".to_owned(),
+							},
+						),
 					),
-				)))
+					session: 1,
+				}))
 				.expect("remote sqlite response receiver should still be alive");
 			continue;
 		}
-		let response = execute_remote_sql(&conn, &request.sql, request.params)
-			.unwrap_or_else(|error| {
+		let response =
+			execute_remote_sql(&conn, &request.sql, request.params).unwrap_or_else(|error| {
 				protocol::SqliteExecuteResponse::SqliteErrorResponse(
 					protocol::SqliteErrorResponse {
 						group: "core".to_owned(),
@@ -262,7 +275,10 @@ async fn run_remote_sqlite(
 					},
 				)
 			});
-		if matches!(response, protocol::SqliteExecuteResponse::SqliteExecuteOk(_)) {
+		if matches!(
+			response,
+			protocol::SqliteExecuteResponse::SqliteExecuteOk(_)
+		) {
 			let should_arm_indeterminate_commit = transaction_statements.is_some()
 				&& harness
 					.indeterminate_commit_after_sql
@@ -270,27 +286,37 @@ async fn run_remote_sqlite(
 					.is_some_and(|sql| request.sql.contains(sql));
 			if should_arm_indeterminate_commit {
 				harness.indeterminate_commit_after_sql.lock().take();
-				harness.fail_commit_after_apply.store(true, Ordering::SeqCst);
+				harness
+					.fail_commit_after_apply
+					.store(true, Ordering::SeqCst);
 			}
 		}
 		if fail_commit_after_apply
-			&& matches!(response, protocol::SqliteExecuteResponse::SqliteExecuteOk(_))
-		{
+			&& matches!(
+				response,
+				protocol::SqliteExecuteResponse::SqliteExecuteOk(_)
+			) {
 			response_tx
-				.send(Ok(RemoteSqliteResponse::Execute(
-					protocol::SqliteExecuteResponse::SqliteErrorResponse(
-						protocol::SqliteErrorResponse {
-							group: "test".to_owned(),
-							code: "indeterminate_result".to_owned(),
-							message: "injected lost commit response".to_owned(),
-						},
+				.send(Ok(RemoteSqliteResponseEnvelope {
+					response: RemoteSqliteResponse::Execute(
+						protocol::SqliteExecuteResponse::SqliteErrorResponse(
+							protocol::SqliteErrorResponse {
+								group: "test".to_owned(),
+								code: "indeterminate_result".to_owned(),
+								message: "injected lost commit response".to_owned(),
+							},
+						),
 					),
-				)))
+					session: 1,
+				}))
 				.expect("remote sqlite response receiver should still be alive");
 			continue;
 		}
 		response_tx
-			.send(Ok(RemoteSqliteResponse::Execute(response)))
+			.send(Ok(RemoteSqliteResponseEnvelope {
+				response: RemoteSqliteResponse::Execute(response),
+				session: 1,
+			}))
 			.expect("remote sqlite response receiver should still be alive");
 	}
 }
@@ -355,9 +381,7 @@ fn sqlite_column_value_from_ref(value: ValueRef<'_>) -> protocol::SqliteColumnVa
 	match value {
 		ValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
 		ValueRef::Integer(value) => {
-			protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger {
-				value,
-			})
+			protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger { value })
 		}
 		ValueRef::Real(value) => {
 			protocol::SqliteColumnValue::SqliteValueFloat(protocol::SqliteValueFloat {
@@ -397,7 +421,10 @@ async fn marks_empty_legacy_import_done_without_runtime_rows() -> Result<()> {
 		internal_storage::load_meta_text(ctx.sql(), "kv_import_state").await?,
 		Some("done".to_owned())
 	);
-	assert_eq!(internal_storage::load_actor_snapshot(ctx.sql()).await?, None);
+	assert_eq!(
+		internal_storage::load_actor_snapshot(ctx.sql()).await?,
+		None
+	);
 	assert_eq!(
 		internal_storage::load_queue_metadata(ctx.sql()).await?,
 		QueueMetadata {
@@ -418,7 +445,10 @@ async fn marks_empty_legacy_import_done_without_runtime_rows() -> Result<()> {
 		.sql()
 		.query("SELECT key, value FROM _rivet_user_kv", None)
 		.await?;
-	assert!(user_rows.rows.is_empty(), "trace records must not import as user KV");
+	assert!(
+		user_rows.rows.is_empty(),
+		"trace records must not import as user KV"
+	);
 
 	drop(ctx);
 	sqlite_task.abort();
@@ -426,6 +456,56 @@ async fn marks_empty_legacy_import_done_without_runtime_rows() -> Result<()> {
 }
 
 #[tokio::test]
+async fn user_kv_batch_get_chunks_queries_and_preserves_input_order() -> Result<()> {
+	let (ctx, sqlite_task, harness) = sqlite_ctx_with_harness(Kv::new_in_memory());
+	internal_schema::ensure_internal_schema(ctx.sql()).await?;
+
+	let entries = (0..=internal_storage::USER_KV_BATCH_GET_MAX_KEYS)
+		.map(|index| {
+			(
+				format!("key-{index:04}").into_bytes(),
+				format!("value-{index:04}").into_bytes(),
+			)
+		})
+		.collect::<Vec<_>>();
+	let entry_refs = entries
+		.iter()
+		.map(|(key, value)| (key.as_slice(), value.as_slice()))
+		.collect::<Vec<_>>();
+	internal_storage::user_kv_batch_put(ctx.sql(), &entry_refs).await?;
+
+	let mut keys = entries
+		.iter()
+		.rev()
+		.map(|(key, _)| key.as_slice())
+		.collect::<Vec<_>>();
+	keys.push(b"missing");
+	keys.push(entries[0].0.as_slice());
+	let request_count_before = harness.request_count.load(Ordering::SeqCst);
+	let values = internal_storage::user_kv_batch_get(ctx.sql(), &keys).await?;
+	let request_count = harness.request_count.load(Ordering::SeqCst) - request_count_before;
+
+	let expected = entries
+		.iter()
+		.rev()
+		.map(|(_, value)| Some(value.clone()))
+		.chain([None, Some(entries[0].1.clone())])
+		.collect::<Vec<_>>();
+	assert_eq!(values, expected);
+	assert_eq!(
+		request_count,
+		keys.len()
+			.div_ceil(internal_storage::USER_KV_BATCH_GET_MAX_KEYS),
+		"batch get should issue one remote query per bounded key chunk",
+	);
+
+	drop(ctx);
+	sqlite_task.abort();
+	Ok(())
+}
+
+#[tokio::test]
+#[allow(deprecated)]
 async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 	let kv = Kv::new_in_memory();
 	let actor = PersistedActor {
@@ -464,10 +544,7 @@ async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 	let user_key = make_prefixed_key(b"user-key");
 	let trace_key = make_traces_key(b"trace-key");
 	let legacy_entries = vec![
-		(
-			PERSIST_DATA_KEY.to_vec(),
-			encode_persisted_actor(&actor)?,
-		),
+		(PERSIST_DATA_KEY.to_vec(), encode_persisted_actor(&actor)?),
 		(
 			LAST_PUSHED_ALARM_KEY.to_vec(),
 			encode_last_pushed_alarm(Some(5678))?,
@@ -561,9 +638,10 @@ async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 	);
 	let trace_rows = ctx
 		.sql()
-		.query("SELECT key, value FROM _rivet_user_kv WHERE key = ?", Some(vec![
-			crate::sqlite::BindParam::Blob(trace_key.clone()),
-		]))
+		.query(
+			"SELECT key, value FROM _rivet_user_kv WHERE key = ?",
+			Some(vec![crate::sqlite::BindParam::Blob(trace_key.clone())]),
+		)
 		.await?;
 	assert!(trace_rows.rows.is_empty(), "legacy traces must not import");
 
@@ -580,10 +658,13 @@ async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 	sorted_legacy_entries.sort_by(|left, right| left.0.cmp(&right.0));
 	assert_eq!(legacy_after_import, sorted_legacy_entries);
 
-	kv.put(PERSIST_DATA_KEY, &encode_persisted_actor(&PersistedActor {
-		state: b"mutated-after-import".to_vec(),
-		..actor
-	})?)
+	kv.put(
+		PERSIST_DATA_KEY,
+		&encode_persisted_actor(&PersistedActor {
+			state: b"mutated-after-import".to_vec(),
+			..actor
+		})?,
+	)
 	.await?;
 	import_core_state_if_needed(&ctx).await?;
 	assert_eq!(
@@ -682,7 +763,9 @@ async fn imports_subspaces_larger_than_the_backend_page_cap() -> Result<()> {
 		"every queue message must import even when listings are capped below the total",
 	);
 	assert_eq!(
-		internal_storage::load_queue_metadata(ctx.sql()).await?.next_id,
+		internal_storage::load_queue_metadata(ctx.sql())
+			.await?
+			.next_id,
 		entry_count as u64 + 1,
 	);
 
@@ -771,8 +854,11 @@ async fn interrupted_import_clears_partial_rows_and_reimports() -> Result<()> {
 	// Simulate a crash mid-import: the importing marker is set and a stale
 	// partial row exists that a fresh import would not produce.
 	internal_storage::persist_meta_text(ctx.sql(), "kv_import_state", "importing").await?;
-	internal_storage::user_kv_batch_put(ctx.sql(), &[(b"stale-partial-key".as_slice(), b"stale".as_slice())])
-		.await?;
+	internal_storage::user_kv_batch_put(
+		ctx.sql(),
+		&[(b"stale-partial-key".as_slice(), b"stale".as_slice())],
+	)
+	.await?;
 	internal_storage::persist_actor_snapshot(
 		ctx.sql(),
 		&PersistedActor {
@@ -837,7 +923,8 @@ async fn non_empty_first_import_uses_legacy_kv_as_the_only_source_of_truth() -> 
 		state: b"legacy".to_vec(),
 		scheduled_events: Vec::new(),
 	};
-	kv.put(PERSIST_DATA_KEY, &encode_persisted_actor(&legacy_actor)?).await?;
+	kv.put(PERSIST_DATA_KEY, &encode_persisted_actor(&legacy_actor)?)
+		.await?;
 	kv.put(&INSPECTOR_TOKEN_KEY, b"legacy-token").await?;
 	let (ctx, sqlite_task) = sqlite_ctx(kv);
 	internal_schema::ensure_internal_schema(ctx.sql()).await?;
@@ -900,7 +987,11 @@ async fn rejects_legacy_queue_delivery_state_instead_of_dropping_it() -> Result<
 #[tokio::test]
 async fn corrupt_legacy_records_fail_the_import_without_marking_done() -> Result<()> {
 	let cases = [
-		(PERSIST_DATA_KEY.to_vec(), b"bad actor".to_vec(), "persisted actor"),
+		(
+			PERSIST_DATA_KEY.to_vec(),
+			b"bad actor".to_vec(),
+			"persisted actor",
+		),
 		(
 			LAST_PUSHED_ALARM_KEY.to_vec(),
 			b"bad alarm".to_vec(),
@@ -912,7 +1003,11 @@ async fn corrupt_legacy_records_fail_the_import_without_marking_done() -> Result
 			b"bad metadata".to_vec(),
 			"queue metadata",
 		),
-		(make_connection_key("bad"), b"bad connection".to_vec(), "connection"),
+		(
+			make_connection_key("bad"),
+			b"bad connection".to_vec(),
+			"connection",
+		),
 		(
 			vec![5, 1, 2, 0],
 			encode_queue_message(&PersistedQueueMessage {
@@ -926,7 +1021,11 @@ async fn corrupt_legacy_records_fail_the_import_without_marking_done() -> Result
 			})?,
 			"queue message key",
 		),
-		(make_queue_message_key(1), b"bad message".to_vec(), "queue message 1"),
+		(
+			make_queue_message_key(1),
+			b"bad message".to_vec(),
+			"queue message 1",
+		),
 	];
 
 	for (key, value, expected) in cases {
@@ -1066,10 +1165,22 @@ async fn retries_after_faults_in_every_import_phase() -> Result<()> {
 			internal_storage::load_meta_text(ctx.sql(), "kv_import_state").await?,
 			Some("done".to_owned())
 		);
-		assert_eq!(internal_storage::load_connections(ctx.sql()).await?.len(), 1);
-		assert_eq!(internal_storage::load_queue_messages(ctx.sql()).await?.len(), 1);
 		assert_eq!(
-			internal_storage::user_kv_batch_get(ctx.sql(), &[make_prefixed_key(b"user").as_slice()]).await?,
+			internal_storage::load_connections(ctx.sql()).await?.len(),
+			1
+		);
+		assert_eq!(
+			internal_storage::load_queue_messages(ctx.sql())
+				.await?
+				.len(),
+			1
+		);
+		assert_eq!(
+			internal_storage::user_kv_batch_get(
+				ctx.sql(),
+				&[make_prefixed_key(b"user").as_slice()]
+			)
+			.await?,
 			vec![Some(b"user-value".to_vec())]
 		);
 		drop(ctx);
@@ -1089,7 +1200,10 @@ async fn retries_after_commit_applies_but_response_is_lost() -> Result<()> {
 	let error = import_core_state_if_needed(&ctx)
 		.await
 		.expect_err("lost commit response should make the first attempt indeterminate");
-	assert!(format!("{error:#}").contains("injected lost commit response"), "{error:#}");
+	assert!(
+		format!("{error:#}").contains("injected lost commit response"),
+		"{error:#}"
+	);
 	assert_eq!(
 		internal_storage::load_meta_text(ctx.sql(), "kv_import_state").await?,
 		Some("importing".to_owned())
@@ -1100,10 +1214,19 @@ async fn retries_after_commit_applies_but_response_is_lost() -> Result<()> {
 		internal_storage::load_meta_text(ctx.sql(), "kv_import_state").await?,
 		Some("done".to_owned())
 	);
-	assert_eq!(internal_storage::load_connections(ctx.sql()).await?.len(), 1);
-	assert_eq!(internal_storage::load_queue_messages(ctx.sql()).await?.len(), 1);
 	assert_eq!(
-		internal_storage::user_kv_batch_get(ctx.sql(), &[make_prefixed_key(b"user").as_slice()]).await?,
+		internal_storage::load_connections(ctx.sql()).await?.len(),
+		1
+	);
+	assert_eq!(
+		internal_storage::load_queue_messages(ctx.sql())
+			.await?
+			.len(),
+		1
+	);
+	assert_eq!(
+		internal_storage::user_kv_batch_get(ctx.sql(), &[make_prefixed_key(b"user").as_slice()])
+			.await?,
 		vec![Some(b"user-value".to_vec())]
 	);
 	drop(ctx);
@@ -1133,7 +1256,9 @@ async fn large_interrupted_import_cleanup_is_chunked_and_retryable() -> Result<(
 		.collect::<Vec<_>>();
 	internal_storage::user_kv_batch_put(ctx.sql(), &stale_refs).await?;
 	internal_storage::persist_meta_text(ctx.sql(), "kv_import_state", "importing").await?;
-	harness.max_transaction_statements.store(0, Ordering::SeqCst);
+	harness
+		.max_transaction_statements
+		.store(0, Ordering::SeqCst);
 
 	import_core_state_if_needed(&ctx).await?;
 	assert!(
@@ -1176,10 +1301,17 @@ async fn queue_import_batches_row_boundaries_and_writes_next_id_once() -> Result
 		}
 		let (ctx, sqlite_task, harness) = sqlite_ctx_with_harness(kv);
 		internal_schema::ensure_internal_schema(ctx.sql()).await?;
-		harness.max_transaction_statements.store(0, Ordering::SeqCst);
+		harness
+			.max_transaction_statements
+			.store(0, Ordering::SeqCst);
 		harness.queue_next_id_writes.store(0, Ordering::SeqCst);
 		import_core_state_if_needed(&ctx).await?;
-		assert_eq!(internal_storage::load_queue_messages(ctx.sql()).await?.len(), row_count);
+		assert_eq!(
+			internal_storage::load_queue_messages(ctx.sql())
+				.await?
+				.len(),
+			row_count
+		);
 		assert_eq!(harness.queue_next_id_writes.load(Ordering::SeqCst), 1);
 		assert!(
 			harness.max_transaction_statements.load(Ordering::SeqCst)
@@ -1210,9 +1342,14 @@ async fn connection_import_bounds_expanded_statements_per_transaction() -> Resul
 
 		let (ctx, sqlite_task, harness) = sqlite_ctx_with_harness(kv);
 		internal_schema::ensure_internal_schema(ctx.sql()).await?;
-		harness.max_transaction_statements.store(0, Ordering::SeqCst);
+		harness
+			.max_transaction_statements
+			.store(0, Ordering::SeqCst);
 		import_core_state_if_needed(&ctx).await?;
-		assert_eq!(internal_storage::load_connections(ctx.sql()).await?.len(), row_count);
+		assert_eq!(
+			internal_storage::load_connections(ctx.sql()).await?.len(),
+			row_count
+		);
 		assert!(
 			harness.max_transaction_statements.load(Ordering::SeqCst)
 				<= internal_storage::KV_TX_MAX_ROWS,
@@ -1230,7 +1367,10 @@ async fn import_preserves_user_tables_when_actor_has_no_declared_database() -> R
 	let key = make_prefixed_key(b"user-key");
 	kv.put(&key, b"legacy-value").await?;
 	let (ctx, sqlite_task, _) = sqlite_ctx_with_harness_enabled(kv, false);
-	assert!(!ctx.sql().is_enabled(), "fixture must model an actor without db()");
+	assert!(
+		!ctx.sql().is_enabled(),
+		"fixture must model an actor without db()"
+	);
 	ctx.sql()
 		.execute(
 			"CREATE TABLE user_owned (id INTEGER PRIMARY KEY, value TEXT NOT NULL)",
@@ -1238,7 +1378,10 @@ async fn import_preserves_user_tables_when_actor_has_no_declared_database() -> R
 		)
 		.await?;
 	ctx.sql()
-		.execute("INSERT INTO user_owned (id, value) VALUES (1, 'keep')", None)
+		.execute(
+			"INSERT INTO user_owned (id, value) VALUES (1, 'keep')",
+			None,
+		)
 		.await?;
 	internal_schema::ensure_internal_schema(ctx.sql()).await?;
 	import_core_state_if_needed(&ctx).await?;
@@ -1249,7 +1392,10 @@ async fn import_preserves_user_tables_when_actor_has_no_declared_database() -> R
 		.await?;
 	assert_eq!(
 		user_rows.rows,
-		vec![vec![ColumnValue::Integer(1), ColumnValue::Text("keep".to_owned())]]
+		vec![vec![
+			ColumnValue::Integer(1),
+			ColumnValue::Text("keep".to_owned())
+		]]
 	);
 	assert_eq!(
 		internal_storage::user_kv_batch_get(ctx.sql(), &[key.as_slice()]).await?,
@@ -1314,7 +1460,10 @@ async fn atomic_workflow_flush_rolls_back_both_sides_and_replays_idempotently() 
 			.state,
 		b"old-state"
 	);
-	assert_eq!(load_workflow_value(&ctx, b"step").await?, Some(b"old-workflow".to_vec()));
+	assert_eq!(
+		load_workflow_value(&ctx, b"step").await?,
+		Some(b"old-workflow".to_vec())
+	);
 
 	let replay_writes = vec![WorkflowKvWrite {
 		key: b"step".to_vec(),
@@ -1331,7 +1480,10 @@ async fn atomic_workflow_flush_rolls_back_both_sides_and_replays_idempotently() 
 	)
 	.await?;
 	assert_eq!(ctx.state(), b"new-state");
-	assert_eq!(load_workflow_value(&ctx, b"step").await?, Some(b"new-workflow".to_vec()));
+	assert_eq!(
+		load_workflow_value(&ctx, b"step").await?,
+		Some(b"new-workflow".to_vec())
+	);
 	let count = ctx
 		.sql()
 		.query("SELECT COUNT(*) FROM _rivet_wf_kv", None)
@@ -1369,7 +1521,11 @@ async fn atomic_workflow_flush_replays_after_commit_response_is_lost() -> Result
 		.await
 		.is_err()
 	);
-	assert_eq!(ctx.state(), b"old-state", "memory must not claim an unacknowledged commit");
+	assert_eq!(
+		ctx.state(),
+		b"old-state",
+		"memory must not claim an unacknowledged commit"
+	);
 	assert_eq!(
 		internal_storage::load_actor_snapshot(ctx.sql())
 			.await?
@@ -1389,7 +1545,10 @@ async fn atomic_workflow_flush_replays_after_commit_response_is_lost() -> Result
 	)
 	.await?;
 	assert_eq!(ctx.state(), b"committed-state");
-	assert_eq!(load_workflow_value(&ctx, b"step").await?, Some(b"committed-workflow".to_vec()));
+	assert_eq!(
+		load_workflow_value(&ctx, b"step").await?,
+		Some(b"committed-workflow".to_vec())
+	);
 	drop(ctx);
 	sqlite_task.abort();
 	Ok(())
@@ -1414,9 +1573,16 @@ async fn atomic_workflow_flush_rejects_whole_units_over_transaction_budget() -> 
 		.await
 		.expect_err("the atomic unit must not be chunked");
 	assert!(format!("{error:#}").contains("exceeds sqlite transaction budget"));
-	assert!(internal_storage::load_actor_snapshot(ctx.sql()).await?.is_none());
+	assert!(
+		internal_storage::load_actor_snapshot(ctx.sql())
+			.await?
+			.is_none()
+	);
 	assert_eq!(
-		ctx.sql().query("SELECT COUNT(*) FROM _rivet_wf_kv", None).await?.rows,
+		ctx.sql()
+			.query("SELECT COUNT(*) FROM _rivet_wf_kv", None)
+			.await?
+			.rows,
 		vec![vec![ColumnValue::Integer(0)]]
 	);
 	drop(ctx);
@@ -1438,7 +1604,11 @@ async fn atomic_workflow_only_flush_prefixes_raw_keys_once() -> Result<()> {
 	)
 	.await?;
 
-	assert!(internal_storage::load_actor_snapshot(ctx.sql()).await?.is_none());
+	assert!(
+		internal_storage::load_actor_snapshot(ctx.sql())
+			.await?
+			.is_none()
+	);
 	let rows = ctx
 		.sql()
 		.query("SELECT key, value FROM _rivet_wf_kv", None)
@@ -1471,9 +1641,16 @@ async fn atomic_workflow_flush_rejects_oversized_values_without_partial_state() 
 		.await
 		.expect_err("oversized workflow values must fail before sqlite execution");
 	assert!(format!("{error:#}").contains("workflow kv value exceeds sqlite storage limit"));
-	assert!(internal_storage::load_actor_snapshot(ctx.sql()).await?.is_none());
+	assert!(
+		internal_storage::load_actor_snapshot(ctx.sql())
+			.await?
+			.is_none()
+	);
 	assert_eq!(
-		ctx.sql().query("SELECT COUNT(*) FROM _rivet_wf_kv", None).await?.rows,
+		ctx.sql()
+			.query("SELECT COUNT(*) FROM _rivet_wf_kv", None)
+			.await?
+			.rows,
 		vec![vec![ColumnValue::Integer(0)]]
 	);
 	drop(ctx);
@@ -1493,8 +1670,8 @@ struct MigrationBenchCase {
 #[tokio::test]
 #[ignore = "manual large migration benchmark"]
 async fn benchmark_large_full_migrations() -> Result<()> {
-	let profile = std::env::var("RIVETKIT_MIGRATION_BENCH_PROFILE")
-		.unwrap_or_else(|_| "quick".to_owned());
+	let profile =
+		std::env::var("RIVETKIT_MIGRATION_BENCH_PROFILE").unwrap_or_else(|_| "quick".to_owned());
 	let cases = if profile == "full" {
 		vec![
 			MigrationBenchCase {
@@ -1639,7 +1816,9 @@ async fn run_migration_bench_case(case: MigrationBenchCase) -> Result<()> {
 	internal_schema::ensure_internal_schema(ctx.sql()).await?;
 	harness.request_count.store(0, Ordering::Relaxed);
 	harness.transaction_count.store(0, Ordering::Relaxed);
-	harness.max_transaction_statements.store(0, Ordering::Relaxed);
+	harness
+		.max_transaction_statements
+		.store(0, Ordering::Relaxed);
 
 	let started_at = Instant::now();
 	import_core_state_if_needed(&ctx).await?;

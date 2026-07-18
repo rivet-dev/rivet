@@ -19,6 +19,7 @@ const USER_KV_VALUE_LIMIT: usize = 128 * 1024;
 /// `engine/packages/pegboard/src/actor_kv/` so the documented 2 KiB key limit
 /// keeps holding for SQLite-backed user KV.
 const USER_KV_KEY_LIMIT: usize = 2048;
+pub(crate) const USER_KV_BATCH_GET_MAX_KEYS: usize = 128;
 const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 
 /// Depot rejects SQLite commits that dirty more than `MAX_COMMIT_RAW_DIRTY_BYTES`
@@ -138,11 +139,8 @@ pub(crate) async fn persist_actor_core_and_connections(
 	connections: &[PersistedConnection],
 	removed_connections: &[String],
 ) -> Result<()> {
-	let statements = build_actor_core_and_connection_statements(
-		actor,
-		connections,
-		removed_connections,
-	)?;
+	let statements =
+		build_actor_core_and_connection_statements(actor, connections, removed_connections)?;
 
 	if statements.is_empty() {
 		return Ok(());
@@ -161,11 +159,8 @@ pub(crate) async fn persist_actor_core_connections_and_workflow(
 	removed_connections: &[String],
 	workflow_writes: &[WorkflowKvWrite],
 ) -> Result<()> {
-	let mut statements = build_actor_core_and_connection_statements(
-		actor,
-		connections,
-		removed_connections,
-	)?;
+	let mut statements =
+		build_actor_core_and_connection_statements(actor, connections, removed_connections)?;
 	statements.extend(build_workflow_kv_statements(workflow_writes)?);
 	validate_atomic_workflow_flush(&statements)?;
 
@@ -306,8 +301,7 @@ pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConne
 		.rows
 		.iter()
 		.map(|row| {
-			let subscriptions: Vec<String> =
-				decode_cbor_blob(row, 3, "connection subscriptions")?;
+			let subscriptions: Vec<String> = decode_cbor_blob(row, 3, "connection subscriptions")?;
 			let request_headers: HashMap<String, String> =
 				decode_cbor_blob(row, 9, "connection request headers")?;
 			Ok(PersistedConnection {
@@ -371,8 +365,7 @@ pub(crate) async fn persist_queue_message(
 	message: &PersistedQueueMessage,
 ) -> Result<()> {
 	let id = i64::try_from(id).context("queue message id exceeds sqlite integer range")?;
-	let next_id =
-		i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
+	let next_id = i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
 	db.execute_batch(vec![
 		SqliteBatchStatement {
 			sql: "INSERT OR REPLACE INTO _rivet_queue (id, name, body, created_at) VALUES (?, ?, ?, ?)"
@@ -450,8 +443,7 @@ fn split_queue_tx_chunks(
 }
 
 pub(crate) async fn persist_queue_next_id(db: &SqliteDb, next_id: u64) -> Result<()> {
-	let next_id =
-		i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
+	let next_id = i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
 	db.execute(
 		"INSERT INTO _rivet_runtime (id, queue_next_id) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET queue_next_id = excluded.queue_next_id",
 		Some(vec![BindParam::Integer(next_id)]),
@@ -528,27 +520,37 @@ pub(crate) async fn user_kv_batch_get(
 	db: &SqliteDb,
 	keys: &[&[u8]],
 ) -> Result<Vec<Option<Vec<u8>>>> {
-	let mut values = Vec::with_capacity(keys.len());
-	for key in keys {
+	let mut values_by_key = HashMap::with_capacity(keys.len());
+	for keys in keys.chunks(USER_KV_BATCH_GET_MAX_KEYS) {
+		let placeholders = std::iter::repeat_n("?", keys.len())
+			.collect::<Vec<_>>()
+			.join(", ");
 		let result = db
 			.query(
-				"SELECT value FROM _rivet_user_kv WHERE key = ?",
-				Some(vec![BindParam::Blob((*key).to_vec())]),
+				format!("SELECT key, value FROM _rivet_user_kv WHERE key IN ({placeholders})"),
+				Some(
+					keys.iter()
+						.map(|key| BindParam::Blob((*key).to_vec()))
+						.collect(),
+				),
 			)
 			.await
-			.context("get user kv value from sqlite")?;
-		values.push(match result.rows.first() {
-			Some(row) => Some(read_blob(row, 0, "user kv value")?),
-			None => None,
-		});
+			.context("batch get user kv values from sqlite")?;
+		for row in &result.rows {
+			values_by_key.insert(
+				read_blob(row, 0, "user kv key")?,
+				read_blob(row, 1, "user kv value")?,
+			);
+		}
 	}
-	Ok(values)
+
+	Ok(keys
+		.iter()
+		.map(|key| values_by_key.get(*key).cloned())
+		.collect())
 }
 
-pub(crate) async fn user_kv_batch_put(
-	db: &SqliteDb,
-	entries: &[(&[u8], &[u8])],
-) -> Result<()> {
+pub(crate) async fn user_kv_batch_put(db: &SqliteDb, entries: &[(&[u8], &[u8])]) -> Result<()> {
 	for (key, value) in entries {
 		if key.len() > USER_KV_KEY_LIMIT {
 			return Err(KvRuntimeError::KeyTooLarge {
@@ -606,11 +608,7 @@ pub(crate) async fn user_kv_batch_delete(db: &SqliteDb, keys: &[&[u8]]) -> Resul
 	Ok(())
 }
 
-pub(crate) async fn user_kv_delete_range(
-	db: &SqliteDb,
-	start: &[u8],
-	end: &[u8],
-) -> Result<()> {
+pub(crate) async fn user_kv_delete_range(db: &SqliteDb, start: &[u8], end: &[u8]) -> Result<()> {
 	db.execute(
 		"DELETE FROM _rivet_user_kv WHERE key >= ? AND key < ?",
 		Some(vec![
@@ -669,10 +667,7 @@ pub(crate) async fn user_kv_list_range(
 	.await
 }
 
-pub(crate) async fn workflow_kv_batch_put(
-	db: &SqliteDb,
-	entries: &[(&[u8], &[u8])],
-) -> Result<()> {
+pub(crate) async fn workflow_kv_batch_put(db: &SqliteDb, entries: &[(&[u8], &[u8])]) -> Result<()> {
 	let mut statements = Vec::with_capacity(entries.len());
 	for (key, value) in entries {
 		if value.len() > WORKFLOW_KV_VALUE_LIMIT {
@@ -699,9 +694,7 @@ pub(crate) async fn workflow_kv_batch_put(
 	Ok(())
 }
 
-fn build_workflow_kv_statements(
-	writes: &[WorkflowKvWrite],
-) -> Result<Vec<SqliteBatchStatement>> {
+fn build_workflow_kv_statements(writes: &[WorkflowKvWrite]) -> Result<Vec<SqliteBatchStatement>> {
 	writes
 		.iter()
 		.map(|write| {
@@ -797,10 +790,8 @@ fn push_connection_statements(
 	statements: &mut Vec<SqliteBatchStatement>,
 	connection: &PersistedConnection,
 ) -> Result<()> {
-	let request_headers = encode_cbor_blob(
-		&connection.request_headers,
-		"connection request headers",
-	)?;
+	let request_headers =
+		encode_cbor_blob(&connection.request_headers, "connection request headers")?;
 	let subscriptions = encode_cbor_blob(
 		&connection
 			.subscriptions
@@ -834,10 +825,7 @@ fn push_connection_statements(
 	Ok(())
 }
 
-fn push_delete_connection_statements(
-	statements: &mut Vec<SqliteBatchStatement>,
-	conn_id: &str,
-) {
+fn push_delete_connection_statements(statements: &mut Vec<SqliteBatchStatement>, conn_id: &str) {
 	statements.push(SqliteBatchStatement {
 		sql: "DELETE FROM _rivet_conn_state WHERE conn_id = ?".to_owned(),
 		params: Some(vec![BindParam::Text(conn_id.to_owned())]),
@@ -862,10 +850,7 @@ pub(crate) async fn load_last_pushed_alarm(db: &SqliteDb) -> Result<Option<i64>>
 	read_optional_i64(row, 0, "last_pushed_alarm")
 }
 
-pub(crate) async fn persist_last_pushed_alarm(
-	db: &SqliteDb,
-	alarm_ts: Option<i64>,
-) -> Result<()> {
+pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i64>) -> Result<()> {
 	db.execute(
 		"INSERT INTO _rivet_runtime (id, last_pushed_alarm) VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET last_pushed_alarm = excluded.last_pushed_alarm",
 		Some(vec![optional_i64_param(alarm_ts)]),
@@ -913,7 +898,8 @@ pub(crate) async fn load_meta_text(db: &SqliteDb, key: &str) -> Result<Option<St
 		return Ok(None);
 	};
 	let bytes = read_blob(row, 0, "meta text")?;
-	String::from_utf8(bytes).context("decode internal meta text")
+	String::from_utf8(bytes)
+		.context("decode internal meta text")
 		.map(Some)
 }
 
@@ -937,9 +923,21 @@ pub(crate) async fn clear_imported_storage(db: &SqliteDb, actor_id: &str) -> Res
 	// over a large interrupted import can itself exceed depot's dirty-page
 	// limit, permanently preventing the importer from recovering.
 	for (table, key_column, size_expression) in [
-		("_rivet_conn_state", "conn_id", "length(conn_id) + length(state) + length(subscriptions) + 16"),
-		("_rivet_conns", "conn_id", "length(conn_id) + length(parameters) + length(request_path) + length(request_headers) + 16"),
-		("_rivet_schedule_events", "event_id", "length(event_id) + length(action) + coalesce(length(args), 0) + 16"),
+		(
+			"_rivet_conn_state",
+			"conn_id",
+			"length(conn_id) + length(state) + length(subscriptions) + 16",
+		),
+		(
+			"_rivet_conns",
+			"conn_id",
+			"length(conn_id) + length(parameters) + length(request_path) + length(request_headers) + 16",
+		),
+		(
+			"_rivet_schedule_events",
+			"event_id",
+			"length(event_id) + length(action) + coalesce(length(args), 0) + 16",
+		),
 		("_rivet_actor_state", "id", "length(state) + 8"),
 		("_rivet_actor", "id", "coalesce(length(input), 0) + 16"),
 		("_rivet_queue", "id", "length(name) + length(body) + 16"),
@@ -1084,9 +1082,8 @@ fn read_i64(row: &[ColumnValue], index: usize, label: &str) -> Result<i64> {
 
 fn read_u16(row: &[ColumnValue], index: usize, label: &str) -> Result<u16> {
 	let value = read_i64(row, index, label)?;
-	u16::try_from(value).with_context(|| {
-		format!("invalid internal {label}: expected u16 integer, got {value}")
-	})
+	u16::try_from(value)
+		.with_context(|| format!("invalid internal {label}: expected u16 integer, got {value}"))
 }
 
 fn read_optional_i64(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<i64>> {

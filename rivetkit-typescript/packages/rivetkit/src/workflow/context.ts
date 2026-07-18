@@ -17,8 +17,8 @@ import type {
 	QueueNextBatchOptions,
 	QueueNextOptions,
 	QueueResultMessageForName,
+	RunContext,
 } from "@/actor/config";
-import type { RunContext } from "@/actor/config";
 import type {
 	AnyActorDefinition,
 	BaseActorDefinition,

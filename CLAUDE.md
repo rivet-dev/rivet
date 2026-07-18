@@ -316,6 +316,10 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 - **Rust tests live under `tests/`, not inline `#[cfg(test)] mod tests` in `src/`.** Move every inline test module in Rust crates to the crate's `tests/` directory. Exceptions must be justified (e.g., testing a private internal that can't be reached from an integration test).
 - For running RivetKit tests, Vitest filter gotchas, the driver-test parity workflow, and Rust test layout rules, see `.claude/reference/testing.md`.
 
+## Traces Package
+
+- Keep `@rivetkit/traces` chunk writes under the 128 KiB actor KV value limit. Use 96 KiB chunks unless a multipart reader/writer replaces the single-value format.
+
 ## Naming + Data Conventions
 
 - Data structures often include:

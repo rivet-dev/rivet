@@ -265,6 +265,9 @@ mod moved_tests {
 				ws_tx: Arc::new(tokio::sync::Mutex::new(
 					None::<mpsc::UnboundedSender<WsTxMessage>>,
 				)),
+				connection_session: std::sync::atomic::AtomicU64::new(1),
+				next_connection_session: std::sync::atomic::AtomicU64::new(1),
+				connection_session_tx: tokio::sync::watch::channel(1).0,
 				protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 				shutting_down: AtomicBool::new(false),
 				// Zero means no engine ping has been received yet, which
@@ -301,7 +304,9 @@ mod moved_tests {
 			assert_eq!(health_body["version"], "test-version");
 
 			// A recent engine ping flips the same runtime back to healthy.
-			shared.last_ping_ts.store(now_epoch_millis(), Ordering::Release);
+			shared
+				.last_ping_ts
+				.store(now_epoch_millis(), Ordering::Release);
 			let health = runtime
 				.handle_request(test_request("GET", "/api/rivet/health"))
 				.await;

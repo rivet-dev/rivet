@@ -753,13 +753,6 @@ function callNativeSync<T>(invoke: () => T): T {
 	}
 }
 
-function actorAbortedError(): Error & { group: string; code: string } {
-	return Object.assign(new Error("Actor aborted"), {
-		group: "actor",
-		code: "aborted",
-	});
-}
-
 type NativeWorkflowInspectorConfig = WorkflowInspectorConfig<ArrayBuffer> & {
 	getState?: () => Promise<unknown> | unknown;
 };
@@ -2827,10 +2820,7 @@ export class ActorContextHandleAdapter {
 		writes: Array<{ key: Uint8Array; value: Uint8Array }>,
 	): Promise<void> {
 		await callNative(() =>
-			this.#runtime.actorSaveStateAndWorkflowBatch(
-				this.#ctx,
-				writes,
-			),
+			this.#runtime.actorSaveStateAndWorkflowBatch(this.#ctx, writes),
 		);
 	}
 
@@ -3355,7 +3345,8 @@ function buildActorConfig(
 	const config = definition.config as unknown as Record<string, unknown>;
 	const options = (config.options ?? {}) as Record<string, unknown>;
 	const canHibernate = options.canHibernateWebSocket;
-	const usesRemoteSqlite = sqliteBackendForConfig(registryConfig) === "remote";
+	const usesRemoteSqlite =
+		sqliteBackendForConfig(registryConfig) === "remote";
 
 	return {
 		name: options.name as string | undefined,

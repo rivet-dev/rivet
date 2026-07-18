@@ -17,7 +17,9 @@ use rivet_envoy_client::context::{SharedContext, WsTxMessage};
 use rivet_envoy_client::envoy::ToEnvoyMessage;
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::protocol;
-use rivet_envoy_client::sqlite::{RemoteSqliteRequest, RemoteSqliteResponse};
+use rivet_envoy_client::sqlite::{
+	RemoteSqliteRequest, RemoteSqliteResponse, RemoteSqliteResponseEnvelope,
+};
 use rusqlite::types::{Value, ValueRef};
 use tokio::sync::mpsc;
 
@@ -169,6 +171,9 @@ fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>)
 		ws_tx: Arc::new(tokio::sync::Mutex::new(
 			None::<mpsc::UnboundedSender<WsTxMessage>>,
 		)),
+		connection_session: std::sync::atomic::AtomicU64::new(1),
+		next_connection_session: std::sync::atomic::AtomicU64::new(1),
+		connection_session_tx: tokio::sync::watch::channel(1).0,
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
@@ -179,8 +184,8 @@ fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>)
 
 fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 	std::thread::spawn(move || {
-		let conn = rusqlite::Connection::open_in_memory()
-			.expect("test sqlite connection should open");
+		let conn =
+			rusqlite::Connection::open_in_memory().expect("test sqlite connection should open");
 		conn.execute_batch(TEST_INTERNAL_SCHEMA_SQL)
 			.expect("test sqlite schema should initialize");
 		let runtime = tokio::runtime::Builder::new_current_thread()
@@ -191,6 +196,7 @@ fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 			while let Some(message) = receiver.recv().await {
 				let ToEnvoyMessage::RemoteSqliteRequest {
 					request,
+					expected_session: _,
 					response_tx,
 				} = message
 				else {
@@ -200,7 +206,10 @@ fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 					continue;
 				};
 				let response = execute_sqlite(&conn, request);
-				let _ = response_tx.send(Ok(RemoteSqliteResponse::Execute(response)));
+				let _ = response_tx.send(Ok(RemoteSqliteResponseEnvelope {
+					response: RemoteSqliteResponse::Execute(response),
+					session: 1,
+				}));
 			}
 		});
 	});
@@ -211,9 +220,9 @@ fn execute_sqlite(
 	request: protocol::SqliteExecuteRequest,
 ) -> protocol::SqliteExecuteResponse {
 	match execute_sqlite_inner(conn, request) {
-		Ok(result) => protocol::SqliteExecuteResponse::SqliteExecuteOk(
-			protocol::SqliteExecuteOk { result },
-		),
+		Ok(result) => {
+			protocol::SqliteExecuteResponse::SqliteExecuteOk(protocol::SqliteExecuteOk { result })
+		}
 		Err(error) => {
 			protocol::SqliteExecuteResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
 				group: "sqlite".to_owned(),
@@ -277,24 +286,24 @@ fn sqlite_param_value(param: protocol::SqliteBindParam) -> Value {
 fn sqlite_column_value(value: ValueRef<'_>) -> protocol::SqliteColumnValue {
 	match value {
 		ValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
-		ValueRef::Integer(value) => protocol::SqliteColumnValue::SqliteValueInteger(
-			protocol::SqliteValueInteger { value },
-		),
-		ValueRef::Real(value) => protocol::SqliteColumnValue::SqliteValueFloat(
-			protocol::SqliteValueFloat {
+		ValueRef::Integer(value) => {
+			protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger { value })
+		}
+		ValueRef::Real(value) => {
+			protocol::SqliteColumnValue::SqliteValueFloat(protocol::SqliteValueFloat {
 				value: value.to_bits().to_be_bytes(),
-			},
-		),
-		ValueRef::Text(value) => protocol::SqliteColumnValue::SqliteValueText(
-			protocol::SqliteValueText {
+			})
+		}
+		ValueRef::Text(value) => {
+			protocol::SqliteColumnValue::SqliteValueText(protocol::SqliteValueText {
 				value: String::from_utf8_lossy(value).into_owned(),
-			},
-		),
-		ValueRef::Blob(value) => protocol::SqliteColumnValue::SqliteValueBlob(
-			protocol::SqliteValueBlob {
+			})
+		}
+		ValueRef::Blob(value) => {
+			protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob {
 				value: value.to_vec(),
-			},
-		),
+			})
+		}
 	}
 }
 

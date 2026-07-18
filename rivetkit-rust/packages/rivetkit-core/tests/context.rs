@@ -4,17 +4,21 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use rivet_envoy_client::config::{
-	BoxFuture as EnvoyBoxFuture, EnvoyCallbacks as TestEnvoyCallbacks, EnvoyConfig as TestEnvoyConfig,
-	HttpRequest as TestHttpRequest, HttpResponse as TestHttpResponse,
-	WebSocketHandler as TestWebSocketHandler, WebSocketSender as TestWebSocketSender,
+	BoxFuture as EnvoyBoxFuture, EnvoyCallbacks as TestEnvoyCallbacks,
+	EnvoyConfig as TestEnvoyConfig, HttpRequest as TestHttpRequest,
+	HttpResponse as TestHttpResponse, WebSocketHandler as TestWebSocketHandler,
+	WebSocketSender as TestWebSocketSender,
 };
-use rivet_envoy_client::context::{SharedContext as TestSharedContext, WsTxMessage as TestWsTxMessage};
+use rivet_envoy_client::context::{
+	SharedContext as TestSharedContext, WsTxMessage as TestWsTxMessage,
+};
 use rivet_envoy_client::envoy::ToEnvoyMessage as TestToEnvoyMessage;
 use rivet_envoy_client::handle::EnvoyHandle as TestEnvoyHandle;
 use rivet_envoy_client::protocol;
 use rivet_envoy_client::sqlite::{
 	RemoteSqliteRequest as TestRemoteSqliteRequest,
 	RemoteSqliteResponse as TestRemoteSqliteResponse,
+	RemoteSqliteResponseEnvelope as TestRemoteSqliteResponseEnvelope,
 };
 use rusqlite::types::{Value as TestSqliteValue, ValueRef as TestSqliteValueRef};
 use tokio::sync::mpsc;
@@ -107,7 +111,11 @@ pub(crate) fn new_with_kv_and_write_gate(
 	gate: TestSqliteWriteGate,
 ) -> ActorContext {
 	let (sql_handle, sql_rx) = test_envoy_handle();
-	spawn_test_remote_sqlite_on(open_test_sqlite_connection_with_schema(), sql_rx, Some(gate));
+	spawn_test_remote_sqlite_on(
+		open_test_sqlite_connection_with_schema(),
+		sql_rx,
+		Some(gate),
+	);
 	build_ctx_with_remote_sqlite(
 		actor_id,
 		name,
@@ -169,6 +177,9 @@ fn test_envoy_handle() -> (TestEnvoyHandle, mpsc::UnboundedReceiver<TestToEnvoyM
 		ws_tx: Arc::new(tokio::sync::Mutex::new(
 			None::<mpsc::UnboundedSender<TestWsTxMessage>>,
 		)),
+		connection_session: std::sync::atomic::AtomicU64::new(1),
+		next_connection_session: std::sync::atomic::AtomicU64::new(1),
+		connection_session_tx: tokio::sync::watch::channel(1).0,
 		protocol_metadata: Arc::new(tokio::sync::Mutex::new(None)),
 		shutting_down: std::sync::atomic::AtomicBool::new(false),
 		last_ping_ts: std::sync::atomic::AtomicI64::new(i64::MAX),
@@ -209,31 +220,35 @@ fn spawn_test_remote_sqlite_on(
 			.build()
 			.expect("test sqlite runtime should build");
 		runtime.block_on(async move {
-		while let Some(message) = rx.recv().await {
-			let TestToEnvoyMessage::RemoteSqliteRequest {
-				request,
-				response_tx,
-			} = message
-			else {
-				continue;
-			};
-			let TestRemoteSqliteRequest::Execute(request) = request else {
-				continue;
-			};
-			if let Some(gate) = write_gate
-				.as_ref()
-				.filter(|gate| request.sql.starts_with(gate.sql_prefix))
-			{
-				let _ = gate.entered_tx.send(());
-				gate.release
-					.acquire()
-					.await
-					.expect("write gate semaphore should stay open")
-					.forget();
+			while let Some(message) = rx.recv().await {
+				let TestToEnvoyMessage::RemoteSqliteRequest {
+					request,
+					expected_session: _,
+					response_tx,
+				} = message
+				else {
+					continue;
+				};
+				let TestRemoteSqliteRequest::Execute(request) = request else {
+					continue;
+				};
+				if let Some(gate) = write_gate
+					.as_ref()
+					.filter(|gate| request.sql.starts_with(gate.sql_prefix))
+				{
+					let _ = gate.entered_tx.send(());
+					gate.release
+						.acquire()
+						.await
+						.expect("write gate semaphore should stay open")
+						.forget();
+				}
+				let response = execute_test_sqlite(&conn, request);
+				let _ = response_tx.send(Ok(TestRemoteSqliteResponseEnvelope {
+					response: TestRemoteSqliteResponse::Execute(response),
+					session: 1,
+				}));
 			}
-			let response = execute_test_sqlite(&conn, request);
-			let _ = response_tx.send(Ok(TestRemoteSqliteResponse::Execute(response)));
-		}
 		});
 	});
 }
@@ -326,7 +341,9 @@ fn dump_local_schema(conn: &rusqlite::Connection) -> Vec<(String, String)> {
 		.prepare("SELECT name, COALESCE(sql, '') FROM sqlite_master ORDER BY name")
 		.expect("sqlite_master query should prepare");
 	let rows = statement
-		.query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))
+		.query_map([], |row| {
+			Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+		})
 		.expect("sqlite_master query should run")
 		.collect::<Result<Vec<_>, _>>()
 		.expect("sqlite_master rows should decode");
@@ -528,7 +545,9 @@ fn execute_test_sqlite_inner(
 fn test_sqlite_param_value(param: protocol::SqliteBindParam) -> TestSqliteValue {
 	match param {
 		protocol::SqliteBindParam::SqliteValueNull => TestSqliteValue::Null,
-		protocol::SqliteBindParam::SqliteValueInteger(value) => TestSqliteValue::Integer(value.value),
+		protocol::SqliteBindParam::SqliteValueInteger(value) => {
+			TestSqliteValue::Integer(value.value)
+		}
 		protocol::SqliteBindParam::SqliteValueFloat(value) => {
 			TestSqliteValue::Real(f64::from_bits(u64::from_be_bytes(value.value)))
 		}
@@ -540,24 +559,24 @@ fn test_sqlite_param_value(param: protocol::SqliteBindParam) -> TestSqliteValue 
 fn test_sqlite_column_value(value: TestSqliteValueRef<'_>) -> protocol::SqliteColumnValue {
 	match value {
 		TestSqliteValueRef::Null => protocol::SqliteColumnValue::SqliteValueNull,
-		TestSqliteValueRef::Integer(value) => protocol::SqliteColumnValue::SqliteValueInteger(
-			protocol::SqliteValueInteger { value },
-		),
-		TestSqliteValueRef::Real(value) => protocol::SqliteColumnValue::SqliteValueFloat(
-			protocol::SqliteValueFloat {
+		TestSqliteValueRef::Integer(value) => {
+			protocol::SqliteColumnValue::SqliteValueInteger(protocol::SqliteValueInteger { value })
+		}
+		TestSqliteValueRef::Real(value) => {
+			protocol::SqliteColumnValue::SqliteValueFloat(protocol::SqliteValueFloat {
 				value: value.to_bits().to_be_bytes(),
-			},
-		),
-		TestSqliteValueRef::Text(value) => protocol::SqliteColumnValue::SqliteValueText(
-			protocol::SqliteValueText {
+			})
+		}
+		TestSqliteValueRef::Text(value) => {
+			protocol::SqliteColumnValue::SqliteValueText(protocol::SqliteValueText {
 				value: String::from_utf8_lossy(value).into_owned(),
-			},
-		),
-		TestSqliteValueRef::Blob(value) => protocol::SqliteColumnValue::SqliteValueBlob(
-			protocol::SqliteValueBlob {
+			})
+		}
+		TestSqliteValueRef::Blob(value) => {
+			protocol::SqliteColumnValue::SqliteValueBlob(protocol::SqliteValueBlob {
 				value: value.to_vec(),
-			},
-		),
+			})
+		}
 	}
 }
 
@@ -762,8 +781,8 @@ mod moved_tests {
 	use crate::actor::connection::ConnHandle;
 	use crate::actor::messages::ActorEvent;
 	use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
-	use crate::{ActorConfig, SqliteDb};
 	use crate::types::ListOpts;
+	use crate::{ActorConfig, SqliteDb};
 
 	fn now_timestamp_ms() -> i64 {
 		let duration = SystemTime::now()
@@ -929,6 +948,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	#[allow(deprecated)]
 	async fn kv_helpers_delegate_to_kv_wrapper() {
 		let ctx = super::new_with_kv(
 			"actor-1",

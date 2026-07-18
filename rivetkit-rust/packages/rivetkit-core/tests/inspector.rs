@@ -3,9 +3,7 @@ use super::*;
 mod moved_tests {
 	use super::{Inspector, InspectorSignal, InspectorSnapshot};
 	use crate::QueueNextOpts;
-	use crate::actor::connection::{
-		ConnHandle, PersistedConnection, PersistedSubscription,
-	};
+	use crate::actor::connection::{ConnHandle, PersistedConnection, PersistedSubscription};
 	use crate::actor::context::tests::new_with_kv;
 	use crate::actor::internal_storage;
 	use crate::actor::keys::INSPECTOR_TOKEN_KEY;
@@ -90,9 +88,9 @@ mod moved_tests {
 			request_path: "/socket".into(),
 			request_headers: Default::default(),
 		};
-			internal_storage::persist_connection_snapshot(ctx.sql(), &restored)
-				.await
-				.expect("persist restored connection");
+		internal_storage::persist_connection_snapshot(ctx.sql(), &restored)
+			.await
+			.expect("persist restored connection");
 
 		let restored_connections = ctx
 			.restore_hibernatable_connections()
@@ -365,7 +363,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-		async fn inspector_auth_uses_sqlite_token_before_kv_mirror() {
+	async fn inspector_auth_uses_sqlite_token_before_kv_mirror() {
 		let _env_guard = test_inspector_env_lock().lock().expect("env lock poisoned");
 		unsafe {
 			std::env::remove_var("_RIVET_TEST_INSPECTOR_TOKEN");
@@ -379,28 +377,28 @@ mod moved_tests {
 			"local",
 			kv.clone(),
 		);
-			internal_storage::persist_inspector_token(ctx.sql(), "sqlite-token")
-				.await
-				.expect("sqlite token should persist");
-			kv.put(&INSPECTOR_TOKEN_KEY, b"kv-token")
-				.await
-				.expect("kv mirror token should persist");
+		internal_storage::persist_inspector_token(ctx.sql(), "sqlite-token")
+			.await
+			.expect("sqlite token should persist");
+		kv.put(&INSPECTOR_TOKEN_KEY, b"kv-token")
+			.await
+			.expect("kv mirror token should persist");
 
-			InspectorAuth::new()
-				.verify(&ctx, Some("sqlite-token"))
-				.await
-				.expect("sqlite token should authorize");
+		InspectorAuth::new()
+			.verify(&ctx, Some("sqlite-token"))
+			.await
+			.expect("sqlite token should authorize");
 
-			let error = InspectorAuth::new()
-				.verify(&ctx, Some("kv-token"))
-				.await
-				.expect_err("kv mirror token should not bypass sqlite token");
-			let error = RivetError::extract(&error);
-			assert_eq!(error.group(), "inspector");
-			assert_eq!(error.code(), "unauthorized");
+		let error = InspectorAuth::new()
+			.verify(&ctx, Some("kv-token"))
+			.await
+			.expect_err("kv mirror token should not bypass sqlite token");
+		let error = RivetError::extract(&error);
+		assert_eq!(error.group(), "inspector");
+		assert_eq!(error.code(), "unauthorized");
 
-			let error = InspectorAuth::new()
-				.verify(&ctx, Some("nope"))
+		let error = InspectorAuth::new()
+			.verify(&ctx, Some("nope"))
 			.await
 			.expect_err("wrong token should fail");
 		let error = RivetError::extract(&error);

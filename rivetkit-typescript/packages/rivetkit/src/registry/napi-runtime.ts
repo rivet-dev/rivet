@@ -37,10 +37,10 @@ import type {
 	RuntimeSqlExecuteResult,
 	RuntimeSqlQueryResult,
 	RuntimeSqlRunResult,
-	SqliteTransactionHandle,
 	RuntimeStateDeltaPayload,
-	RuntimeWorkflowKvWrite,
 	RuntimeWebSocketEvent,
+	RuntimeWorkflowKvWrite,
+	SqliteTransactionHandle,
 	WebSocketHandle,
 } from "./runtime";
 import { normalizeRuntimeSqlExecuteResult } from "./runtime";
@@ -48,7 +48,9 @@ import { normalizeRuntimeSqlExecuteResult } from "./runtime";
 type NativeBindings = typeof import("@rivetkit/rivetkit-napi");
 type NapiSqlDatabase = ReturnType<NativeActorContext["sql"]>;
 type NapiSqlBindParams = Parameters<NapiSqlDatabase["execute"]>[1];
-type NapiSqlBatchStatement = Parameters<NapiSqlDatabase["executeBatch"]>[0][number];
+type NapiSqlBatchStatement = Parameters<
+	NapiSqlDatabase["executeBatch"]
+>[0][number];
 type NapiSqlTransaction = Awaited<
 	ReturnType<NapiSqlDatabase["beginTransaction"]>
 >;

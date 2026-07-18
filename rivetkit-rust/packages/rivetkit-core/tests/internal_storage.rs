@@ -9,7 +9,10 @@ fn kv_transaction_chunks_enforce_exact_row_boundaries() {
 		let chunks = split_kv_tx_chunks(&entries);
 		assert_eq!(chunks.len(), expected_chunks);
 		assert!(chunks.iter().all(|chunk| chunk.len() <= KV_TX_MAX_ROWS));
-		assert_eq!(chunks.iter().map(|chunk| chunk.len()).sum::<usize>(), row_count);
+		assert_eq!(
+			chunks.iter().map(|chunk| chunk.len()).sum::<usize>(),
+			row_count
+		);
 	}
 }
 

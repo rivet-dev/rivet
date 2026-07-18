@@ -458,13 +458,15 @@ impl SqliteDb {
 					Err(error) => {
 						return match transaction.rollback().await {
 							Ok(()) => Err(error.context("execute sqlite batch statement")),
-							Err(rollback_error) => Err(error
-								.context("execute sqlite batch statement")
-								.context(rollback_error.context("rollback sqlite batch transaction"))),
+							Err(rollback_error) => {
+								Err(error.context("execute sqlite batch statement").context(
+									rollback_error.context("rollback sqlite batch transaction"),
+								))
+							}
 						};
 					}
-					}
 				}
+			}
 			transaction
 				.commit()
 				.await
@@ -522,8 +524,30 @@ impl SqliteDb {
 		}
 	}
 
-	pub(crate) async fn cleanup(&self) -> Result<()> {
+	pub(crate) async fn cleanup_for_shutdown(&self, reusable: bool) -> Result<()> {
+		// A remote database has no actor-local resources to release. Keep its
+		// coordinator usable across a sleep/wake cycle on the same ActorTask.
+		if reusable && self.backend == SqliteBackend::RemoteEnvoy {
+			return Ok(());
+		}
 		self.close().await
+	}
+
+	#[cfg(test)]
+	pub(crate) fn fresh_remote_for_test(&self) -> Self {
+		Self::new_with_remote_sqlite(
+			self.handle
+				.clone()
+				.expect("remote sqlite test database should have an envoy handle"),
+			self.actor_id
+				.clone()
+				.expect("remote sqlite test database should have an actor id"),
+			self.actor_key.clone(),
+			self.generation,
+			self.enabled,
+			true,
+		)
+		.expect("remote sqlite test database should be configured")
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {

@@ -276,7 +276,8 @@ fn remote_backend_selection_is_independent_of_user_database_flag() {
 	#[cfg(feature = "sqlite-local")]
 	{
 		assert_eq!(
-			select_sqlite_backend(false).expect("local sqlite feature should select native backend"),
+			select_sqlite_backend(false)
+				.expect("local sqlite feature should select native backend"),
 			SqliteBackend::LocalNative
 		);
 	}
@@ -454,6 +455,74 @@ async fn remote_execute_logs_operation_context_at_source() {
 				&& log.error_message.as_deref() == Some("An internal error occurred")
 		}),
 		"expected source sqlite operation log with actor id and generation; logs={logs:?}"
+	);
+}
+
+#[tokio::test]
+async fn remote_execute_batch_uses_one_coordinated_transaction() {
+	let (handle, mut envoy_rx) = test_envoy_handle();
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
+
+	let batch = tokio::spawn({
+		let db = db.clone();
+		async move {
+			db.execute_batch(vec![
+				SqliteBatchStatement {
+					sql: "insert-one".to_owned(),
+					params: None,
+				},
+				SqliteBatchStatement {
+					sql: "insert-two".to_owned(),
+					params: Some(vec![BindParam::Integer(2)]),
+				},
+			])
+			.await
+		}
+	});
+
+	respond_to_execute(&mut envoy_rx, "BEGIN").await;
+	respond_to_execute(&mut envoy_rx, "insert-one").await;
+	respond_to_execute(&mut envoy_rx, "insert-two").await;
+	respond_to_execute(&mut envoy_rx, "COMMIT").await;
+
+	let results = batch.await.unwrap().unwrap();
+	assert_eq!(results.len(), 2);
+	assert!(
+		envoy_rx.try_recv().is_err(),
+		"batch emitted an extra request"
+	);
+}
+
+#[tokio::test]
+async fn remote_execute_batch_rolls_back_after_statement_failure() {
+	let (handle, mut envoy_rx) = test_envoy_handle();
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
+
+	let batch = tokio::spawn({
+		let db = db.clone();
+		async move {
+			db.execute_batch(vec![SqliteBatchStatement {
+				sql: "fails".to_owned(),
+				params: None,
+			}])
+			.await
+		}
+	});
+
+	respond_to_execute(&mut envoy_rx, "BEGIN").await;
+	let failure = receive_execute(&mut envoy_rx, "fails").await;
+	failure
+		.send(Err(anyhow::anyhow!("injected statement failure")))
+		.expect("remote sqlite requester dropped response");
+	respond_to_execute(&mut envoy_rx, "ROLLBACK").await;
+
+	let error = batch.await.unwrap().expect_err("batch should fail");
+	assert!(format!("{error:#}").contains("injected statement failure"));
+	assert!(
+		envoy_rx.try_recv().is_err(),
+		"batch emitted an extra request"
 	);
 }
 

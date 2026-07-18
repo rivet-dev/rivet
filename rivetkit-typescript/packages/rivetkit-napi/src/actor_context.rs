@@ -19,8 +19,7 @@ use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
 use rivetkit_core::{
 	ActorContext as CoreActorContext, ActorWorkKind, ConnHandle as CoreConnHandle, KeepAwakeRegion,
-	Request as CoreRequest, RequestSaveOpts, StateDelta, WebSocketCallbackRegion,
-	WorkflowKvWrite,
+	Request as CoreRequest, RequestSaveOpts, StateDelta, WebSocketCallbackRegion, WorkflowKvWrite,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::UnboundedSender;

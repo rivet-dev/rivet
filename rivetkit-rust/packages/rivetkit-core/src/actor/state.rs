@@ -15,8 +15,8 @@ use tokio::task::JoinHandle;
 use tokio::time::timeout;
 use tracing::Instrument;
 
-use crate::actor::context::ActorContext;
 use crate::actor::connection::{PersistedConnection, decode_persisted_connection};
+use crate::actor::context::ActorContext;
 use crate::actor::internal_storage;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{StateDelta, WorkflowKvWrite};
@@ -343,12 +343,8 @@ impl ActorContext {
 		workflow_writes: Vec<WorkflowKvWrite>,
 		save_request_revision: u64,
 	) -> Result<()> {
-		self.apply_state_deltas_inner(
-			deltas,
-			Some(workflow_writes),
-			save_request_revision,
-		)
-		.await
+		self.apply_state_deltas_inner(deltas, Some(workflow_writes), save_request_revision)
+			.await
 	}
 
 	async fn apply_state_deltas_inner(
@@ -450,8 +446,8 @@ impl ActorContext {
 				&connections_to_persist,
 				&connections_to_delete,
 			)
-				.await
-				.context("persist actor state and connection deltas to sqlite")?;
+			.await
+			.context("persist actor state and connection deltas to sqlite")?;
 		}
 
 		if let Some(state) = next_state {

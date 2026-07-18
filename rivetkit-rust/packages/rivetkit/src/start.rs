@@ -818,12 +818,7 @@ mod tests {
 		let (tx, rx) = unbounded_channel();
 		drop(tx);
 		let start = wrap_start::<ConnActor>(ActorStart {
-			ctx: rivetkit_core::testing::actor_context(
-				"actor-id",
-				"test",
-				Vec::new(),
-				"local",
-			),
+			ctx: rivetkit_core::testing::actor_context("actor-id", "test", Vec::new(), "local"),
 			input: None,
 			is_new: true,
 			snapshot: None,

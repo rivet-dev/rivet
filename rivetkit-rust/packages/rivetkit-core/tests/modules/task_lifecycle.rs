@@ -5,10 +5,10 @@ mod moved_tests {
 
 	use tokio::sync::{mpsc, oneshot};
 	use tokio::task::yield_now;
-	use tokio::time::advance;
+	use tokio::time::{advance, pause, resume};
 
-	use crate::actor::messages::{ActorEvent, StateDelta};
 	use crate::actor::keys::PERSIST_DATA_KEY;
+	use crate::actor::messages::{ActorEvent, StateDelta};
 	use crate::actor::state::{PersistedActor, encode_persisted_actor};
 	use crate::actor::task::{ActorTask, LifecycleCommand};
 	use crate::actor::task_types::ShutdownKind;
@@ -135,7 +135,7 @@ mod moved_tests {
 		let _ = run_handle.await;
 	}
 
-	#[tokio::test(start_paused = true)]
+	#[tokio::test]
 	async fn sleep_shutdown_aborts_stuck_run_handler_at_grace_deadline() {
 		let ctx = crate::actor::context::tests::new_with_kv(
 			"actor-stuck-run-grace",
@@ -182,6 +182,7 @@ mod moved_tests {
 			.expect("start should succeed");
 		yield_now().await;
 		assert_eq!(dropped_count.load(Ordering::SeqCst), 1);
+		pause();
 
 		let stop = tokio::spawn(async move { task.handle_stop(ShutdownKind::Sleep).await });
 		yield_now().await;
@@ -198,6 +199,7 @@ mod moved_tests {
 		);
 
 		advance(Duration::from_millis(1)).await;
+		resume();
 		stop.await
 			.expect("sleep stop join should succeed")
 			.expect("sleep stop should succeed after grace timeout");

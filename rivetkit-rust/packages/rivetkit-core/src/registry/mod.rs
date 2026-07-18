@@ -38,6 +38,7 @@ use crate::actor::config::CanHibernateWebSocket;
 use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
 use crate::actor::context::{ActorContext, InspectorAttachGuard};
 use crate::actor::factory::ActorFactory;
+use crate::actor::kv::LegacyActorKv;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, QueueSendResult, Request, Response, StateDelta};
 use crate::actor::task::{
@@ -52,7 +53,6 @@ use crate::inspector::protocol::{
 	self as inspector_protocol, ServerMessage as InspectorServerMessage,
 };
 use crate::inspector::{Inspector, InspectorAuth, InspectorSignal, InspectorSubscription};
-use crate::actor::kv::LegacyActorKv;
 use crate::runtime::RuntimeSpawner;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ActorKeySegment, WsMessage, format_actor_key};

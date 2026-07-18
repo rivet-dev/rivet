@@ -30,7 +30,9 @@ function toBuffer(value: ArrayBuffer | Uint8Array): Buffer {
 
 function decodeRequest(bytes: Uint8Array, version: number): v5.ToServer {
 	return v5.decodeToServer(
-		new Uint8Array(runtime.decodeInspectorRequest(toBuffer(bytes), version)),
+		new Uint8Array(
+			runtime.decodeInspectorRequest(toBuffer(bytes), version),
+		),
 	);
 }
 

@@ -482,12 +482,7 @@ mod moved_tests {
 		let config = test_adapter_config();
 		let bindings = empty_bindings();
 
-		let first_core_ctx = harness.context(
-			"actor-preamble",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let first_core_ctx = harness.context("actor-preamble", "actor", Vec::new(), "local");
 		let first_ctx = ActorContext::new(first_core_ctx.clone());
 		first_ctx
 			.set_state_initial(vec![9, 9, 9])
@@ -513,12 +508,7 @@ mod moved_tests {
 			]],
 		);
 
-		let second_core_ctx = harness.context(
-			"actor-preamble",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let second_core_ctx = harness.context("actor-preamble", "actor", Vec::new(), "local");
 		second_core_ctx.set_state_initial(vec![9, 9, 9]);
 		let second_ctx = ActorContext::new(second_core_ctx);
 
@@ -555,12 +545,7 @@ mod moved_tests {
 	#[tokio::test]
 	async fn maybe_serialize_inspector_does_not_consume_pending_save() {
 		let bindings = empty_bindings();
-		let core_ctx = actor_context(
-			"actor-serialize-inspector",
-			"actor",
-			Vec::new(),
-			"local",
-		);
+		let core_ctx = actor_context("actor-serialize-inspector", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let dirty = AtomicBool::new(true);
 		let calls = Arc::new(Mutex::new(Vec::new()));

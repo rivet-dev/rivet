@@ -16,7 +16,9 @@ mod moved_tests {
 
 	use crate::actor::config::ActorConfig;
 	use crate::actor::connection::{ConnHandle, HibernatableConnectionMetadata};
-	use crate::actor::context::tests::{TestSqliteWriteGate, new_with_kv, new_with_kv_and_write_gate};
+	use crate::actor::context::tests::{
+		TestSqliteWriteGate, new_with_kv, new_with_kv_and_write_gate,
+	};
 	use crate::actor::internal_storage;
 	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
 	use crate::actor::messages::StateDelta;
@@ -558,7 +560,7 @@ mod moved_tests {
 		assert!(!ctx.save_requested_immediate());
 	}
 
-	#[tokio::test(start_paused = true)]
+	#[tokio::test]
 	async fn flush_on_shutdown_tracks_immediate_persist_until_teardown() {
 		let kv = new_in_memory();
 		let state = new_with_kv("state-test", "state-test", Vec::new(), "local", kv.clone());

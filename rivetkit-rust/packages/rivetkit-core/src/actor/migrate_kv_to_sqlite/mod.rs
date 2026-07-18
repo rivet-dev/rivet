@@ -72,9 +72,13 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 	let legacy_core_values = load_legacy_core_values(ctx).await?;
 	if legacy_core_values.iter().all(Option::is_none) && legacy_prefixes_empty(ctx).await? {
 		tracing::debug!(actor_id = %ctx.actor_id(), result = "empty", "legacy kv import probe completed");
-		internal_storage::persist_meta_text(ctx.sql(), KV_IMPORT_STATE_META_KEY, KV_IMPORT_STATE_DONE)
-			.await
-			.context("mark empty legacy core actor kv import complete")?;
+		internal_storage::persist_meta_text(
+			ctx.sql(),
+			KV_IMPORT_STATE_META_KEY,
+			KV_IMPORT_STATE_DONE,
+		)
+		.await
+		.context("mark empty legacy core actor kv import complete")?;
 		return Ok(());
 	}
 	tracing::info!(actor_id = %ctx.actor_id(), result = "import_needed", "legacy kv import probe completed");
@@ -103,11 +107,7 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 		"cleared legacy kv import destination"
 	);
 
-	let core_bytes: usize = legacy_core_values
-		.iter()
-		.flatten()
-		.map(Vec::len)
-		.sum();
+	let core_bytes: usize = legacy_core_values.iter().flatten().map(Vec::len).sum();
 	let mut values = legacy_core_values.into_iter();
 
 	let actor = values
@@ -183,12 +183,7 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 			.await
 			.context("import legacy hibernatable connection chunk into sqlite")?;
 		connection_count += connections.len();
-		connection_progress.log_if_due(
-			ctx,
-			"connections",
-			connection_count,
-			connection_bytes,
-		);
+		connection_progress.log_if_due(ctx, "connections", connection_count, connection_bytes);
 	}
 	tracing::info!(actor_id = %ctx.actor_id(), record_count = connection_count, byte_count = connection_bytes, "legacy connection subspace import completed");
 
@@ -211,8 +206,9 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 			queue_bytes = queue_bytes.saturating_add(value.len());
 			let id = decode_queue_message_key(&key)
 				.context("decode legacy queue message key during sqlite import")?;
-			let message = decode_queue_message(&value)
-				.with_context(|| format!("decode legacy queue message {id} during sqlite import"))?;
+			let message = decode_queue_message(&value).with_context(|| {
+				format!("decode legacy queue message {id} during sqlite import")
+			})?;
 			if message.failure_count.is_some()
 				|| message.available_at.is_some()
 				|| message.in_flight.is_some()
@@ -246,7 +242,11 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 		.context("list legacy workflow kv records for sqlite import")?
 	{
 		workflow_count += page.len();
-		workflow_bytes = workflow_bytes.saturating_add(page.iter().map(|(key, value)| key.len() + value.len()).sum());
+		workflow_bytes = workflow_bytes.saturating_add(
+			page.iter()
+				.map(|(key, value)| key.len() + value.len())
+				.sum(),
+		);
 		// Chunk page writes so no import transaction exceeds the depot commit
 		// size limit.
 		for chunk in internal_storage::split_kv_tx_chunks(&page) {
@@ -288,7 +288,12 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 			.collect::<Vec<_>>();
 		user_skipped_count += page_count.saturating_sub(entries.len());
 		user_count += entries.len();
-		user_bytes = user_bytes.saturating_add(entries.iter().map(|(key, value)| key.len() + value.len()).sum());
+		user_bytes = user_bytes.saturating_add(
+			entries
+				.iter()
+				.map(|(key, value)| key.len() + value.len())
+				.sum(),
+		);
 		for chunk in internal_storage::split_kv_tx_chunks(&entries) {
 			let chunk_refs = chunk
 				.iter()

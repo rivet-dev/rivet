@@ -4,7 +4,9 @@ mod moved_tests {
 	use super::{QueueNextOpts, QueueWaitOpts};
 
 	use crate::actor::context::ActorContext;
-	use crate::actor::keys::{QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key};
+	use crate::actor::keys::{
+		QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
+	};
 	use crate::kv::Kv;
 	use std::time::Duration;
 	use tokio::task::yield_now;

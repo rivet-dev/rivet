@@ -7,8 +7,8 @@ import type {
 } from "@rivetkit/workflow-engine";
 import type { RunContext } from "@/actor/config";
 import type { AnyStaticActorInstance } from "@/actor/definition";
-import type { SqliteDatabase } from "@/common/database/config";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/keys";
+import type { SqliteDatabase } from "@/common/database/config";
 
 const WORKFLOW_STORAGE_PREFIX = workflowStoragePrefix();
 // Keep workflow flushes below depot's 320-dirty-page commit ceiling. The
@@ -53,11 +53,7 @@ function normalizeSqlBlob(value: unknown): Uint8Array {
 		return new Uint8Array(value);
 	}
 	if (ArrayBuffer.isView(value)) {
-		return new Uint8Array(
-			value.buffer,
-			value.byteOffset,
-			value.byteLength,
-		);
+		return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
 	}
 	if (Array.isArray(value)) {
 		const bytes = new Uint8Array(value.length);
@@ -184,11 +180,11 @@ class WorkflowStorage {
 	async listRaw(prefix: Uint8Array): Promise<KVEntryTuple[]> {
 		const end = computeUpperBound(prefix);
 		const result = end
-			? await this.#sql!.query(
+			? await this.#sql.query(
 					"SELECT key, value FROM _rivet_wf_kv WHERE key >= ? AND key < ? ORDER BY key ASC",
 					[prefix, end],
 				)
-			: await this.#sql!.query(
+			: await this.#sql.query(
 					"SELECT key, value FROM _rivet_wf_kv WHERE key >= ? ORDER BY key ASC",
 					[prefix],
 				);
@@ -199,12 +195,18 @@ class WorkflowStorage {
 	}
 
 	async deleteRawKeys(keys: Uint8Array[]): Promise<void> {
-		for (let start = 0; start < keys.length; start += WORKFLOW_SQLITE_MAX_BATCH_ROWS) {
-			await this.#sql!.executeBatch(
-				keys.slice(start, start + WORKFLOW_SQLITE_MAX_BATCH_ROWS).map((key) => ({
-					sql: "DELETE FROM _rivet_wf_kv WHERE key = ?",
-					params: [key],
-				})),
+		for (
+			let start = 0;
+			start < keys.length;
+			start += WORKFLOW_SQLITE_MAX_BATCH_ROWS
+		) {
+			await this.#sql.executeBatch(
+				keys
+					.slice(start, start + WORKFLOW_SQLITE_MAX_BATCH_ROWS)
+					.map((key) => ({
+						sql: "DELETE FROM _rivet_wf_kv WHERE key = ?",
+						params: [key],
+					})),
 			);
 		}
 	}
@@ -215,7 +217,10 @@ export function chunkWorkflowWrites(writes: KVWrite[]): KVWrite[][] {
 	let chunk: KVWrite[] = [];
 	let chunkBytes = 0;
 	for (const write of writes) {
-		const writeBytes = WORKFLOW_STORAGE_PREFIX.length + write.key.length + write.value.length;
+		const writeBytes =
+			WORKFLOW_STORAGE_PREFIX.length +
+			write.key.length +
+			write.value.length;
 		if (
 			chunk.length > 0 &&
 			(chunk.length >= WORKFLOW_SQLITE_MAX_BATCH_ROWS ||

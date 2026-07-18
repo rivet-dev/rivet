@@ -18,8 +18,8 @@ use rivetkit_core::{
 	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
 	QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts,
 	QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
-	ServeConfig, ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion,
-	WorkflowKvWrite, WsMessage,
+	ServeConfig, ServerlessRequest, SqliteBatchStatement, StateDelta, WebSocket,
+	WebSocketCallbackRegion, WorkflowKvWrite, WsMessage,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -1277,10 +1277,7 @@ impl WasmActorContext {
 	}
 
 	#[wasm_bindgen(js_name = saveStateAndWorkflowBatch)]
-	pub async fn save_state_and_workflow_batch(
-		&self,
-		writes: JsValue,
-	) -> Result<(), JsValue> {
+	pub async fn save_state_and_workflow_batch(&self, writes: JsValue) -> Result<(), JsValue> {
 		let writes: Vec<WasmWorkflowKvWrite> = serde_wasm_bindgen::from_value(writes)?;
 		self.inner
 			.save_state_and_workflow_batch(
@@ -1681,6 +1678,7 @@ pub struct WasmKv {
 }
 
 #[wasm_bindgen(js_class = Kv)]
+#[allow(deprecated)]
 impl WasmKv {
 	#[wasm_bindgen]
 	pub async fn get(&self, key: Vec<u8>) -> Result<JsValue, JsValue> {
@@ -1992,6 +1990,38 @@ impl WasmSqliteDb {
 			.map_err(anyhow_to_js_error)
 	}
 
+	#[wasm_bindgen(js_name = executeBatch)]
+	pub async fn execute_batch(&self, statements: JsValue) -> Result<JsValue, JsValue> {
+		let statements: Vec<WasmSqliteBatchStatement> = serde_wasm_bindgen::from_value(statements)?;
+		let statements = statements
+			.into_iter()
+			.map(|statement| {
+				Ok(SqliteBatchStatement {
+					sql: statement.sql,
+					params: statement
+						.params
+						.map(|params| {
+							params
+								.into_iter()
+								.map(bind_param_from_wasm)
+								.collect::<Result<Vec<_>, _>>()
+						})
+						.transpose()?,
+				})
+			})
+			.collect::<Result<Vec<_>, JsValue>>()?;
+		let results = self
+			.inner
+			.execute_batch(statements)
+			.await
+			.map_err(anyhow_to_js_error)?;
+		let values = Array::new();
+		for result in results {
+			values.push(&execute_result_to_js(result));
+		}
+		Ok(values.into())
+	}
+
 	#[wasm_bindgen]
 	pub async fn query(&self, sql: String, params: JsValue) -> Result<JsValue, JsValue> {
 		self.inner
@@ -2173,6 +2203,13 @@ struct WasmBindParam {
 	float_value: Option<f64>,
 	text_value: Option<String>,
 	blob_value: Option<Vec<u8>>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmSqliteBatchStatement {
+	sql: String,
+	params: Option<Vec<WasmBindParam>>,
 }
 
 fn optional_timeout_ms(timeout_ms: Option<f64>) -> Option<Duration> {
@@ -2702,18 +2739,22 @@ fn bind_params_from_js(value: JsValue) -> Result<Option<Vec<BindParam>>, JsValue
 	let params: Vec<WasmBindParam> = serde_wasm_bindgen::from_value(value)?;
 	params
 		.into_iter()
-		.map(|param| match param.kind.as_str() {
-			"null" => Ok(BindParam::Null),
-			"int" => Ok(BindParam::Integer(param.int_value.unwrap_or(0.0) as i64)),
-			"float" => Ok(BindParam::Float(param.float_value.unwrap_or(0.0))),
-			"text" => Ok(BindParam::Text(param.text_value.unwrap_or_default())),
-			"blob" => Ok(BindParam::Blob(param.blob_value.unwrap_or_default())),
-			kind => Err(js_error(&format!(
-				"unsupported bind parameter kind: {kind}"
-			))),
-		})
+		.map(bind_param_from_wasm)
 		.collect::<Result<Vec<_>, _>>()
 		.map(Some)
+}
+
+fn bind_param_from_wasm(param: WasmBindParam) -> Result<BindParam, JsValue> {
+	match param.kind.as_str() {
+		"null" => Ok(BindParam::Null),
+		"int" => Ok(BindParam::Integer(param.int_value.unwrap_or(0.0) as i64)),
+		"float" => Ok(BindParam::Float(param.float_value.unwrap_or(0.0))),
+		"text" => Ok(BindParam::Text(param.text_value.unwrap_or_default())),
+		"blob" => Ok(BindParam::Blob(param.blob_value.unwrap_or_default())),
+		kind => Err(js_error(&format!(
+			"unsupported bind parameter kind: {kind}"
+		))),
+	}
 }
 
 fn query_result_to_js(result: rivetkit_core::QueryResult) -> JsValue {

@@ -1,5 +1,5 @@
-import { stringifyError } from "@/common/utils";
 import type { SqliteNativeMetrics } from "@/common/database/config";
+import { stringifyError } from "@/common/utils";
 import type { RegistryConfig } from "./config";
 import { logger } from "./log";
 

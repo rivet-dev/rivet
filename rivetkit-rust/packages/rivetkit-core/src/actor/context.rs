@@ -30,6 +30,7 @@ use crate::actor::connection::{
 };
 use crate::actor::diagnostics::ActorDiagnostics;
 use crate::actor::internal_storage;
+use crate::actor::kv::LegacyActorKv;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, Request, StateDelta, WorkflowKvWrite};
 use crate::actor::metrics::ActorMetrics;
@@ -42,7 +43,6 @@ use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
-use crate::actor::kv::LegacyActorKv;
 use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 

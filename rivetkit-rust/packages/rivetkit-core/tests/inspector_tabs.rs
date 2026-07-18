@@ -1,5 +1,3 @@
-use super::*;
-
 mod moved_tests {
 	use std::path::PathBuf;
 

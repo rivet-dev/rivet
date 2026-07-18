@@ -46,7 +46,11 @@ async fn counter_actor_handles_actions_through_engine() -> Result<()> {
 }
 
 fn counter_factory() -> ActorFactory {
-	ActorFactory::new(ActorConfig::default(), |start| {
+	let config = ActorConfig {
+		remote_sqlite: true,
+		..ActorConfig::default()
+	};
+	ActorFactory::new(config, |start| {
 		Box::pin(async move {
 			let ctx = start.ctx;
 			let mut count = read_count(&ctx.state());

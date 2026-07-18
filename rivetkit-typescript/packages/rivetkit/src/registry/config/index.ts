@@ -1,9 +1,6 @@
 import { z } from "zod";
 import { getRunMetadata } from "@/actor/config";
-import type {
-	AnyActorDefinition,
-	BaseActorDefinition,
-} from "@/actor/definition";
+import type { AnyActorDefinition } from "@/actor/definition";
 import { buildEngineEndpoint, ENGINE_HOST, ENGINE_PORT } from "@/common/engine";
 import { type Logger, LogLevelSchema } from "@/common/log";
 import { VERSION } from "@/utils";

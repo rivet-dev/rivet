@@ -1,7 +1,7 @@
 import { decodeBridgeRivetError } from "@/actor/errors";
 import type {
-	SqliteBindings,
 	SqliteBatchStatement,
+	SqliteBindings,
 	SqliteDatabase,
 	SqliteExecuteResult,
 	SqliteNativeMetrics,
@@ -383,17 +383,21 @@ export function wrapJsNativeDatabase(
 				const results = database.executeBatch
 					? await database.executeBatch(nativeStatements)
 					: await (async () => {
-						transaction = await database.beginTransaction();
-						const transactionResults: NativeExecuteResult[] = [];
-						for (const statement of nativeStatements) {
-							transactionResults.push(
-								await transaction.execute(statement.sql, statement.params),
-							);
-						}
-						await transaction.commit();
-						transaction = undefined;
-						return transactionResults;
-					})();
+							transaction = await database.beginTransaction();
+							const transactionResults: NativeExecuteResult[] =
+								[];
+							for (const statement of nativeStatements) {
+								transactionResults.push(
+									await transaction.execute(
+										statement.sql,
+										statement.params,
+									),
+								);
+							}
+							await transaction.commit();
+							transaction = undefined;
+							return transactionResults;
+						})();
 				for (const result of results) {
 					if (result.lastInsertRowId !== undefined) {
 						lastInsertRowId = result.lastInsertRowId;

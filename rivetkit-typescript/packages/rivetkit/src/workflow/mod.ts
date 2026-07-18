@@ -6,8 +6,8 @@ import {
 	RaceError,
 	RollbackCheckpointError,
 	RollbackError,
-	replayWorkflowFromStep,
 	type RunWorkflowOptions,
+	replayWorkflowFromStep,
 	runWorkflow,
 	StepExhaustedError,
 	type WorkflowErrorEvent,
@@ -212,7 +212,7 @@ export function workflow<
 				throw workflowReplayInFlightError();
 			}
 
-			let snapshot;
+			let snapshot: Awaited<ReturnType<typeof replayWorkflowFromStep>>;
 			try {
 				snapshot = await replayWorkflowFromStep(
 					actor.id,

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest";
 import type {
 	DatabaseProviderContext,
+	SqliteBatchStatement,
 	SqliteBindings,
 	SqliteDatabase,
 	SqliteExecuteResult,
@@ -20,6 +21,25 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	): Promise<SqliteExecuteResult> {
 		this.executeCalls.push({ sql, params });
 		return emptyResult();
+	}
+
+	async executeBatch(
+		statements: SqliteBatchStatement[],
+	): Promise<SqliteExecuteResult[]> {
+		const transaction = await this.beginTransaction();
+		try {
+			const results: SqliteExecuteResult[] = [];
+			for (const statement of statements) {
+				results.push(
+					await transaction.execute(statement.sql, statement.params),
+				);
+			}
+			await transaction.commit();
+			return results;
+		} catch (error) {
+			await transaction.rollback();
+			throw error;
+		}
 	}
 
 	async beginTransaction(

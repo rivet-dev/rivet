@@ -15,8 +15,8 @@ use parking_lot::{
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
 use rivetkit_core::actor::state::OnStateChangeGuard;
 use rivetkit_core::{
-	ActorContext, ActorKey, ActorKv, ConnHandle, ConnId, KeepAwakeRegion, RequestSaveOpts, SqliteDb,
-	StateDelta, actor::connection::ConnHandles, error::ActorRuntime,
+	ActorContext, ActorKey, ActorKv, ConnHandle, ConnId, KeepAwakeRegion, RequestSaveOpts,
+	SqliteDb, StateDelta, actor::connection::ConnHandles, error::ActorRuntime,
 };
 use serde::{Serialize, de::DeserializeOwned};
 use tokio_util::sync::CancellationToken;

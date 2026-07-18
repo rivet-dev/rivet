@@ -10,8 +10,14 @@ mod moved_tests {
 		let ctx = actor_context("actor-id", "test", Vec::new(), "local");
 		let queue = ctx.queue();
 
-		queue.send("alpha", br#"{"value":1}"#).await.expect("send alpha");
-		queue.send("beta", br#"{"value":2}"#).await.expect("send beta");
+		queue
+			.send("alpha", br#"{"value":1}"#)
+			.await
+			.expect("send alpha");
+		queue
+			.send("beta", br#"{"value":2}"#)
+			.await
+			.expect("send beta");
 
 		let names = queue
 			.stream(QueueStreamOpts::default())

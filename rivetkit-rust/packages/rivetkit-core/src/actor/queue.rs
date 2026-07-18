@@ -630,17 +630,17 @@ impl ActorContext {
 
 	async fn list_messages(&self) -> Result<Vec<QueueMessage>> {
 		let messages: Vec<QueueMessage> = internal_storage::load_queue_messages(self.sql())
-				.await
-				.context("list sqlite queue messages")?
-				.into_iter()
-				.map(|row| QueueMessage {
-					id: row.id,
-					name: row.message.name,
-					body: row.message.body,
-					created_at: row.message.created_at,
-					completion: None,
-				})
-				.collect();
+			.await
+			.context("list sqlite queue messages")?
+			.into_iter()
+			.map(|row| QueueMessage {
+				id: row.id,
+				name: row.message.name,
+				body: row.message.body,
+				created_at: row.message.created_at,
+				completion: None,
+			})
+			.collect();
 
 		let actual_size = messages.len().try_into().unwrap_or(u32::MAX);
 		let mut metadata = self.0.queue_metadata.lock().await;

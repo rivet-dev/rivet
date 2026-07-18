@@ -1,9 +1,7 @@
 use std::io::Cursor;
 
 use anyhow::Result;
-use rivetkit_core::{
-	ActorEvent, ActorStart, SerializeStateReason, ShutdownKind, StateDelta,
-};
+use rivetkit_core::{ActorEvent, ActorStart, SerializeStateReason, ShutdownKind, StateDelta};
 use serde::Deserialize;
 use tokio::sync::{mpsc, oneshot};
 
@@ -56,12 +54,7 @@ async fn run(start: Start<CounterActor>) -> Result<()> {
 async fn canned_actor_start_drives_typed_counter_actor() {
 	let (event_tx, event_rx) = mpsc::unbounded_channel();
 	let start = wrap_start::<CounterActor>(ActorStart {
-		ctx: rivetkit_core::testing::actor_context(
-			"actor-id",
-			"counter",
-			Vec::new(),
-			"local",
-		),
+		ctx: rivetkit_core::testing::actor_context("actor-id", "counter", Vec::new(), "local"),
 		input: None,
 		is_new: true,
 		snapshot: None,

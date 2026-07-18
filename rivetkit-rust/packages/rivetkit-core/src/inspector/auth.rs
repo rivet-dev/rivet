@@ -72,7 +72,7 @@ impl InspectorAuth {
 
 /// Ensures the actor has an inspector token persisted in SQLite and, for now,
 /// mirrored in KV so the engine-facing KV API can serve it to the dashboard.
-/// Skips writes when the token already exists in legacy-KV mode. No-ops when the
+/// Skips writes when the token already exists. No-ops when the
 /// `_RIVET_TEST_INSPECTOR_TOKEN` env override is set, since that takes
 /// precedence over any stored token and we do not want to pin a per-actor token
 /// that will never be consulted.
@@ -85,13 +85,9 @@ pub async fn init_inspector_token(ctx: &ActorContext) -> Result<()> {
 		.await
 		.context("load inspector token from sqlite")?
 		.map(String::into_bytes);
-	if let Some(existing) = existing {
-		// TODO: Remove this mirror once the dashboard no longer fetches inspector
-		// tokens through the engine's actor-KV endpoint.
-		ctx.legacy_kv()
-			.put(&INSPECTOR_TOKEN_KEY, &existing)
-			.await
-			.context("persist inspector token mirror to kv")?;
+	if existing.is_some() {
+		// Token creation and legacy import both leave the compatibility mirror in
+		// KV, so an existing SQLite token does not need another startup write.
 		return Ok(());
 	}
 

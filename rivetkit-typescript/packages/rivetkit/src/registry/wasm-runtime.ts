@@ -46,10 +46,10 @@ import type {
 	RuntimeSqlExecuteResult,
 	RuntimeSqlQueryResult,
 	RuntimeSqlRunResult,
-	SqliteTransactionHandle,
 	RuntimeStateDeltaPayload,
-	RuntimeWorkflowKvWrite,
 	RuntimeWebSocketEvent,
+	RuntimeWorkflowKvWrite,
+	SqliteTransactionHandle,
 	WebSocketHandle,
 } from "./runtime";
 import { normalizeRuntimeSqlExecuteResult } from "./runtime";
@@ -719,28 +719,10 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		statements: RuntimeSqlBatchStatement[],
 	): Promise<RuntimeSqlExecuteResult[]> {
-		const transaction = await this.actorSqlBeginTransaction(ctx);
-		const results: RuntimeSqlExecuteResult[] = [];
-		try {
-			for (const statement of statements) {
-				results.push(
-					await this.actorSqlTransactionExecute(
-						transaction,
-						statement.sql,
-						statement.params,
-					),
-				);
-			}
-			await this.actorSqlTransactionCommit(transaction);
-			return results;
-		} catch (error) {
-			try {
-				await this.actorSqlTransactionRollback(transaction);
-			} catch {
-				// Preserve the original batch failure if rollback also fails.
-			}
-			throw error;
-		}
+		const results = await callWasm(() =>
+			this.#actorSql(ctx).executeBatch(statements),
+		);
+		return results.map(normalizeRuntimeSqlExecuteResult);
 	}
 
 	async actorSqlBeginTransaction(
