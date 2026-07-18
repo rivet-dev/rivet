@@ -32,6 +32,7 @@ const migrationDir = resolve(scriptDir, "..");
 const workspaceRoot = resolve(scriptDir, "../../../../../../..");
 const args = parseArgs(process.argv.slice(2));
 const rivetkitVersion = args.rivetkitVersion ?? "2.2.1";
+const fixturePath = resolve(args.fixture ?? resolve(scriptDir, "baseline.ts"));
 const outputDir = resolve(args.output ?? resolve(migrationDir, "snapshot"));
 const engineBinary = resolve(
 	args.engineBinary ?? resolve(workspaceRoot, "target/debug/rivet-engine"),
@@ -69,7 +70,7 @@ try {
 		),
 	);
 	cpSync(
-		resolve(scriptDir, "baseline.ts"),
+		fixturePath,
 		resolve(projectDir, "main.ts"),
 	);
 
@@ -117,15 +118,15 @@ try {
 		resolve(outputDir, "metadata.json"),
 		`${JSON.stringify(
 			{
-				commit: git(["rev-parse", "--short", "HEAD"]),
-				branch: git(["rev-parse", "--abbrev-ref", "HEAD"]),
+				commit: revision(),
+				branch: branch(),
 				generated_at: String(Math.floor(Date.now() / 1000)),
 				method: "published-rivetkit-npm",
 				rivetkit_version: rivetkitVersion,
 				engine_binary: engineBinary,
 				engine_version: engineVersion,
 				engine_label: args.engineLabel ?? "current-worktree",
-				fixture: "tests/migration/v2_2_1/scripts/baseline.ts",
+				fixture: fixturePath,
 			},
 			null,
 			"\t",
@@ -156,6 +157,8 @@ function parseArgs(argv) {
 			out.engineBinary = argv[++i];
 		} else if (arg === "--engine-label") {
 			out.engineLabel = argv[++i];
+		} else if (arg === "--fixture") {
+			out.fixture = argv[++i];
 		} else if (arg === "--output") {
 			out.output = argv[++i];
 		} else {
@@ -190,6 +193,32 @@ function spawnSyncLogged(command, args, options) {
 
 function git(args) {
 	return run("git", args, { cwd: workspaceRoot });
+}
+
+function revision() {
+	const result = spawnSyncLogged("git", ["rev-parse", "--short", "HEAD"], {
+		cwd: workspaceRoot,
+	});
+	if (result.status === 0) return result.stdout.trim();
+	return run(
+		"jj",
+		["log", "-r", "@", "--no-graph", "-T", "commit_id.short()"],
+		{ cwd: workspaceRoot },
+	);
+}
+
+function branch() {
+	const result = spawnSyncLogged(
+		"git",
+		["rev-parse", "--abbrev-ref", "HEAD"],
+		{ cwd: workspaceRoot },
+	);
+	if (result.status === 0) return result.stdout.trim();
+	return run(
+		"jj",
+		["bookmark", "list", "-r", "@", "-T", 'name ++ "\\n"'],
+		{ cwd: workspaceRoot },
+	);
 }
 
 function collectLogs(child) {

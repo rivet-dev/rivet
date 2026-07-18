@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::Instant;
 
 use anyhow::Result;
 use rivet_envoy_client::config::{
@@ -142,6 +143,8 @@ struct SqliteHarness {
 	fail_commit_after_apply: AtomicBool,
 	max_transaction_statements: AtomicUsize,
 	queue_next_id_writes: AtomicUsize,
+	request_count: AtomicUsize,
+	transaction_count: AtomicUsize,
 }
 
 fn sqlite_ctx_with_harness(
@@ -208,9 +211,11 @@ async fn run_remote_sqlite(
 		let RemoteSqliteRequest::Execute(request) = request else {
 			panic!("migration test only expects remote execute requests");
 		};
+		harness.request_count.fetch_add(1, Ordering::Relaxed);
 		let fail_commit_after_apply = request.sql == "COMMIT"
 			&& harness.fail_commit_after_apply.swap(false, Ordering::SeqCst);
 		if request.sql == "BEGIN IMMEDIATE" {
+			harness.transaction_count.fetch_add(1, Ordering::Relaxed);
 			transaction_statements = Some(0);
 		} else if request.sql == "COMMIT" || request.sql == "ROLLBACK" {
 			if let Some(statement_count) = transaction_statements.take() {
@@ -1438,6 +1443,207 @@ async fn atomic_workflow_flush_rejects_oversized_values_without_partial_state() 
 		ctx.sql().query("SELECT COUNT(*) FROM _rivet_wf_kv", None).await?.rows,
 		vec![vec![ColumnValue::Integer(0)]]
 	);
+	drop(ctx);
+	sqlite_task.abort();
+	Ok(())
+}
+
+struct MigrationBenchCase {
+	name: &'static str,
+	user_rows: usize,
+	workflow_rows: usize,
+	queue_rows: usize,
+	connection_rows: usize,
+	value_bytes: usize,
+}
+
+#[tokio::test]
+#[ignore = "manual large migration benchmark"]
+async fn benchmark_large_full_migrations() -> Result<()> {
+	let profile = std::env::var("RIVETKIT_MIGRATION_BENCH_PROFILE")
+		.unwrap_or_else(|_| "quick".to_owned());
+	let cases = if profile == "full" {
+		vec![
+			MigrationBenchCase {
+				name: "user-tiny-1k",
+				user_rows: 1_000,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 32,
+			},
+			MigrationBenchCase {
+				name: "user-tiny-10k",
+				user_rows: 10_000,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 32,
+			},
+			MigrationBenchCase {
+				name: "user-tiny-100k",
+				user_rows: 100_000,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 32,
+			},
+			MigrationBenchCase {
+				name: "user-bytes-4mib",
+				user_rows: 1_024,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 4 * 1024,
+			},
+			MigrationBenchCase {
+				name: "user-bytes-40mib",
+				user_rows: 10_240,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 4 * 1024,
+			},
+			MigrationBenchCase {
+				name: "user-bytes-100mib",
+				user_rows: 25_600,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 4 * 1024,
+			},
+			MigrationBenchCase {
+				name: "mixed-40k",
+				user_rows: 10_000,
+				workflow_rows: 10_000,
+				queue_rows: 10_000,
+				connection_rows: 10_000,
+				value_bytes: 256,
+			},
+		]
+	} else {
+		vec![
+			MigrationBenchCase {
+				name: "user-tiny-1k",
+				user_rows: 1_000,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 32,
+			},
+			MigrationBenchCase {
+				name: "user-tiny-10k",
+				user_rows: 10_000,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 32,
+			},
+			MigrationBenchCase {
+				name: "user-bytes-4mib",
+				user_rows: 1_024,
+				workflow_rows: 0,
+				queue_rows: 0,
+				connection_rows: 0,
+				value_bytes: 4 * 1024,
+			},
+		]
+	};
+
+	for case in cases {
+		run_migration_bench_case(case).await?;
+	}
+	Ok(())
+}
+
+async fn run_migration_bench_case(case: MigrationBenchCase) -> Result<()> {
+	let kv = Kv::new_in_memory();
+	let value = vec![0x5a; case.value_bytes];
+	let mut input_bytes = 0usize;
+
+	for index in 0..case.user_rows {
+		let key = make_prefixed_key(format!("bench-user-{index:08}").as_bytes());
+		input_bytes = input_bytes.saturating_add(key.len() + value.len());
+		kv.put(&key, &value).await?;
+	}
+	for index in 0..case.workflow_rows {
+		let key = make_workflow_key(format!("bench-workflow-{index:08}").as_bytes());
+		input_bytes = input_bytes.saturating_add(key.len() + value.len());
+		kv.put(&key, &value).await?;
+	}
+	for index in 0..case.queue_rows {
+		let key = make_queue_message_key(index as u64 + 1);
+		let encoded = encode_queue_message(&PersistedQueueMessage {
+			name: format!("bench-queue-{index:08}"),
+			body: value.clone(),
+			created_at: index as i64,
+			failure_count: None,
+			available_at: None,
+			in_flight: None,
+			in_flight_at: None,
+		})?;
+		input_bytes = input_bytes.saturating_add(key.len() + encoded.len());
+		kv.put(&key, &encoded).await?;
+	}
+	for index in 0..case.connection_rows {
+		let connection = PersistedConnection {
+			id: format!("bench-connection-{index:08}"),
+			state: value.clone(),
+			..PersistedConnection::default()
+		};
+		let key = make_connection_key(&connection.id);
+		let encoded = encode_persisted_connection(&connection)?;
+		input_bytes = input_bytes.saturating_add(key.len() + encoded.len());
+		kv.put(&key, &encoded).await?;
+	}
+
+	let row_count = case
+		.user_rows
+		.saturating_add(case.workflow_rows)
+		.saturating_add(case.queue_rows)
+		.saturating_add(case.connection_rows);
+	let (ctx, sqlite_task, harness) = sqlite_ctx_with_harness(kv);
+	internal_schema::ensure_internal_schema(ctx.sql()).await?;
+	harness.request_count.store(0, Ordering::Relaxed);
+	harness.transaction_count.store(0, Ordering::Relaxed);
+	harness.max_transaction_statements.store(0, Ordering::Relaxed);
+
+	let started_at = Instant::now();
+	import_core_state_if_needed(&ctx).await?;
+	let elapsed = started_at.elapsed();
+	let requests = harness.request_count.load(Ordering::Relaxed);
+	let transactions = harness.transaction_count.load(Ordering::Relaxed);
+	for (table, expected_rows) in [
+		("_rivet_user_kv", case.user_rows),
+		("_rivet_wf_kv", case.workflow_rows),
+		("_rivet_queue", case.queue_rows),
+		("_rivet_conns", case.connection_rows),
+		("_rivet_conn_state", case.connection_rows),
+	] {
+		let result = ctx
+			.sql()
+			.query(&format!("SELECT COUNT(*) FROM {table}"), None)
+			.await?;
+		assert_eq!(
+			result.rows,
+			vec![vec![ColumnValue::Integer(expected_rows as i64)]],
+			"benchmark case {} did not fully migrate {table}",
+			case.name
+		);
+	}
+	println!(
+		"migration_bench name={} rows={} input_bytes={} elapsed_ms={:.3} rows_per_second={:.1} mib_per_second={:.2} remote_requests={} transactions={} max_transaction_statements={}",
+		case.name,
+		row_count,
+		input_bytes,
+		elapsed.as_secs_f64() * 1_000.0,
+		row_count as f64 / elapsed.as_secs_f64(),
+		input_bytes as f64 / (1024.0 * 1024.0) / elapsed.as_secs_f64(),
+		requests,
+		transactions,
+		harness.max_transaction_statements.load(Ordering::Relaxed),
+	);
+
 	drop(ctx);
 	sqlite_task.abort();
 	Ok(())

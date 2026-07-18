@@ -10,6 +10,7 @@ use tokio::process::Command;
 use crate::common::ctx::IntegrationCtx;
 
 const ACTOR_NAME: &str = "actor-v2-2-1-baseline";
+const BENCH_ACTOR_NAME: &str = "actor-v2-2-1-migration-bench";
 
 #[tokio::test(flavor = "multi_thread")]
 async fn actor_v2_2_1_snapshot_starts_in_current_rivetkit_core() -> Result<()> {
@@ -61,6 +62,68 @@ async fn run_current_rivetkit_verifier(ctx: &IntegrationCtx) -> Result<()> {
 	}
 
 	Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "manual large migration benchmark"]
+async fn benchmark_large_v2_2_1_snapshot_migration() -> Result<()> {
+	let snapshot = std::env::var("RIVETKIT_MIGRATION_BENCH_SNAPSHOT")
+		.context("RIVETKIT_MIGRATION_BENCH_SNAPSHOT is required")?;
+	let rows = std::env::var("RIVETKIT_MIGRATION_BENCH_ROWS")
+		.context("RIVETKIT_MIGRATION_BENCH_ROWS is required")?;
+	let value_bytes = std::env::var("RIVETKIT_MIGRATION_BENCH_VALUE_BYTES")
+		.context("RIVETKIT_MIGRATION_BENCH_VALUE_BYTES is required")?;
+
+	let ctx = IntegrationCtx::builder()
+		.import_snapshot(snapshot)
+		.actor_start_threshold_ms(15 * 60 * 1_000)
+		.start()
+		.await?;
+	ctx.actor_by_name(BENCH_ACTOR_NAME).await?;
+	let first_start = run_migration_benchmark(&ctx, &rows, &value_bytes).await?;
+	println!("migration_bench_engine phase=first_start {first_start}");
+	ctx.shutdown().await?;
+
+	Ok(())
+}
+
+async fn run_migration_benchmark(
+	ctx: &IntegrationCtx,
+	rows: &str,
+	value_bytes: &str,
+) -> Result<String> {
+	let script_path = module_dir().join("scripts/bench-current.ts");
+	let output = tokio::time::timeout(
+		Duration::from_secs(15 * 60),
+		Command::new("pnpm")
+			.arg("exec")
+			.arg("tsx")
+			.arg(&script_path)
+			.current_dir(workspace_root().join("rivetkit-typescript/packages/rivetkit"))
+			.env("RIVET_ENDPOINT", ctx.endpoint())
+			.env("RIVET_TOKEN", "dev")
+			.env("RIVET_NAMESPACE", "default")
+			.env("RIVETKIT_MIGRATION_BENCH_ROWS", rows)
+			.env("RIVETKIT_MIGRATION_BENCH_VALUE_BYTES", value_bytes)
+			.stdin(Stdio::null())
+			.output(),
+	)
+	.await
+	.context("timed out running large migration benchmark")?
+	.context("run large migration benchmark")?;
+
+	if !output.status.success() {
+		bail!(
+			"large migration benchmark failed with {}\n\nbenchmark stdout:\n{}\n\nbenchmark stderr:\n{}\n\nengine stdout:\n{}\n\nengine stderr:\n{}",
+			output.status,
+			String::from_utf8_lossy(&output.stdout),
+			String::from_utf8_lossy(&output.stderr),
+			ctx.engine_stdout_tail(),
+			ctx.engine_stderr_tail()
+		);
+	}
+
+	Ok(String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
 fn module_dir() -> PathBuf {

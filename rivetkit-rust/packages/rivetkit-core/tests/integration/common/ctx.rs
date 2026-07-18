@@ -30,10 +30,12 @@ pub struct IntegrationCtx {
 	metrics_port: u16,
 	stdout_path: PathBuf,
 	stderr_path: PathBuf,
+	actor_start_threshold_ms: Option<u64>,
 }
 
 pub struct IntegrationCtxBuilder {
 	snapshot_dir: Option<PathBuf>,
+	actor_start_threshold_ms: Option<u64>,
 }
 
 pub struct RegistryTask {
@@ -83,7 +85,10 @@ pub struct ApiActor {
 
 impl IntegrationCtx {
 	pub fn builder() -> IntegrationCtxBuilder {
-		IntegrationCtxBuilder { snapshot_dir: None }
+		IntegrationCtxBuilder {
+			snapshot_dir: None,
+			actor_start_threshold_ms: None,
+		}
 	}
 
 	pub fn serve_registry(&self, registry: CoreRegistry) -> RegistryTask {
@@ -402,6 +407,7 @@ impl IntegrationCtx {
 			self.metrics_port,
 			&self.stdout_path,
 			&self.stderr_path,
+			self.actor_start_threshold_ms,
 		)
 		.await?;
 		wait_for_engine_health(
@@ -423,6 +429,11 @@ impl IntegrationCtx {
 impl IntegrationCtxBuilder {
 	pub fn import_snapshot(mut self, snapshot_dir: impl Into<PathBuf>) -> Self {
 		self.snapshot_dir = Some(snapshot_dir.into());
+		self
+	}
+
+	pub fn actor_start_threshold_ms(mut self, value: u64) -> Self {
+		self.actor_start_threshold_ms = Some(value);
 		self
 	}
 
@@ -465,6 +476,7 @@ impl IntegrationCtxBuilder {
 			metrics_port,
 			&stdout_path,
 			&stderr_path,
+			self.actor_start_threshold_ms,
 		)
 		.await?;
 
@@ -484,6 +496,7 @@ impl IntegrationCtxBuilder {
 			metrics_port,
 			stdout_path,
 			stderr_path,
+			actor_start_threshold_ms: self.actor_start_threshold_ms,
 		})
 	}
 }
@@ -573,6 +586,7 @@ async fn spawn_engine_child(
 	metrics_port: u16,
 	stdout_path: &Path,
 	stderr_path: &Path,
+	actor_start_threshold_ms: Option<u64>,
 ) -> Result<Child> {
 	let stdout = File::options()
 		.create(true)
@@ -598,6 +612,17 @@ async fn spawn_engine_child(
 		.stdin(Stdio::null())
 		.stdout(Stdio::from(stdout))
 		.stderr(Stdio::from(stderr));
+	if let Some(actor_start_threshold_ms) = actor_start_threshold_ms {
+		command
+			.env(
+				"RIVET__PEGBOARD__ACTOR_START_THRESHOLD",
+				actor_start_threshold_ms.to_string(),
+			)
+			.env(
+				"RIVET__GUARD__ACTOR_READY_TIMEOUT_MS",
+				actor_start_threshold_ms.to_string(),
+			);
+	}
 
 	match database {
 		EngineDatabase::FileSystem => {
