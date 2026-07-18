@@ -419,6 +419,29 @@ mod moved_tests {
 			.await;
 	}
 
+	#[tokio::test]
+	async fn schedule_lifecycle_increments_inspector_revision() {
+		let ctx = context("actor-inspector-schedules");
+		let inspector = crate::inspector::Inspector::new();
+		ctx.configure_inspector(Some(inspector.clone()));
+
+		ctx.cron_every("tick", 5_000, "tick", &[], Some(10))
+			.await
+			.unwrap();
+		assert_eq!(inspector.snapshot().schedule_revision, 1);
+
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		let dispatch = ctx.take_due_schedule_dispatches().await.unwrap().remove(0);
+		assert_eq!(inspector.snapshot().schedule_revision, 2);
+
+		ctx.finish_schedule_dispatch(&dispatch.event_id, dispatch.history_id, None)
+			.await;
+		assert_eq!(inspector.snapshot().schedule_revision, 3);
+
+		assert!(ctx.cron_delete("tick").await.unwrap());
+		assert_eq!(inspector.snapshot().schedule_revision, 4);
+	}
+
 	#[tokio::test(start_paused = true)]
 	async fn local_alarm_uses_tokio_virtual_time() {
 		let ctx = context("actor-local-timer");

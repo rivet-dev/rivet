@@ -1539,6 +1539,12 @@ impl ActorContext {
 		}
 	}
 
+	pub(crate) fn record_schedules_updated(&self) {
+		if let Some(inspector) = self.inspector() {
+			inspector.record_schedules_updated();
+		}
+	}
+
 	pub(crate) async fn save_state_with_revision(
 		&self,
 		deltas: Vec<StateDelta>,

@@ -184,6 +184,7 @@ impl ActorContext {
 			.await
 			.context("insert one-shot schedule")?;
 		self.mark_schedule_dirty();
+		self.record_schedules_updated();
 		self.sync_alarm().await?;
 		Ok(event_id)
 	}
@@ -201,6 +202,7 @@ impl ActorContext {
 		let removed = result.changes > 0;
 		if removed {
 			self.mark_schedule_dirty();
+			self.record_schedules_updated();
 			self.sync_alarm().await?;
 		}
 		Ok(removed)
@@ -296,6 +298,7 @@ impl ActorContext {
 		.await?;
 		self.prune_schedule_history(&event_id, max_history).await?;
 		self.mark_schedule_dirty();
+		self.record_schedules_updated();
 		self.sync_alarm().await
 	}
 
@@ -342,6 +345,7 @@ impl ActorContext {
 		.await?;
 		self.prune_schedule_history(&event_id, max_history).await?;
 		self.mark_schedule_dirty();
+		self.record_schedules_updated();
 		self.sync_alarm().await
 	}
 
@@ -392,6 +396,7 @@ impl ActorContext {
 		let removed = result.changes > 0;
 		if removed {
 			self.mark_schedule_dirty();
+			self.record_schedules_updated();
 			self.sync_alarm().await?;
 		}
 		Ok(removed)
@@ -569,6 +574,9 @@ impl ActorContext {
 			});
 		}
 		self.mark_schedule_dirty();
+		if !result.rows.is_empty() {
+			self.record_schedules_updated();
+		}
 		self.sync_alarm().await?;
 		Ok(dispatches)
 	}
@@ -588,7 +596,7 @@ impl ActorContext {
 			Some(error) => ("error", encode_schedule_error(&sanitize_error(error)).ok()),
 			None => ("ok", None),
 		};
-		if let Err(error) = self
+		match self
 			.sql()
 			.execute(
 				"UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error = ? WHERE id = ? AND result = 'running'",
@@ -601,7 +609,10 @@ impl ActorContext {
 			)
 			.await
 		{
-			tracing::error!(?error, history_id, "failed to finish schedule history row");
+			Ok(_) => self.record_schedules_updated(),
+			Err(error) => {
+				tracing::error!(?error, history_id, "failed to finish schedule history row");
+			}
 		}
 	}
 
@@ -621,6 +632,7 @@ impl ActorContext {
 			)
 			.await
 			.context("recover interrupted schedule history")?;
+		self.record_schedules_updated();
 		Ok(())
 	}
 

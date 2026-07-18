@@ -69,6 +69,7 @@ export type BuiltinInspectorTabId =
 	| "database"
 	| "state"
 	| "queue"
+	| "schedules"
 	| "connections"
 	| "console";
 

@@ -23,6 +23,11 @@ const ActorStateTab = lazy(() =>
 const ActorQueueTab = lazy(() =>
 	import("./actor-queue-tab").then((m) => ({ default: m.ActorQueueTab })),
 );
+const ActorSchedulesTab = lazy(() =>
+	import("./actor-schedules-tab").then((m) => ({
+		default: m.ActorSchedulesTab,
+	})),
+);
 const ActorConnectionsTab = lazy(() =>
 	import("./actor-connections-tab").then((m) => ({
 		default: m.ActorConnectionsTab,
@@ -61,6 +66,7 @@ type ActorCapabilities = {
 	isDatabaseEnabled: boolean;
 	isStateEnabled: boolean;
 	isQueueSupported: boolean;
+	isSchedulesSupported: boolean;
 };
 
 interface TabRegistration {
@@ -92,6 +98,15 @@ export const INSPECTOR_TAB_REGISTRATIONS: readonly TabRegistration[] = [
 		descriptor: { id: "queue", label: "Queue", icon: "queue" },
 		available: (caps) => caps.isQueueSupported,
 		render: (actorId) => <ActorQueueTab actorId={actorId} />,
+	},
+	{
+		descriptor: {
+			id: "schedules",
+			label: "Schedules",
+			icon: "calendar",
+		},
+		available: (caps) => caps.isSchedulesSupported,
+		render: (actorId) => <ActorSchedulesTab actorId={actorId} />,
 	},
 	{
 		descriptor: { id: "connections", label: "Connections", icon: "plug" },
@@ -133,6 +148,7 @@ export function useAvailableInspectorTabs(
 	);
 	const isStateEnabled = stateData?.isEnabled ?? false;
 	const isQueueSupported = inspector.features.queue.supported;
+	const isSchedulesSupported = inspector.features.schedules.supported;
 
 	// Tab config arrives with the WS `Init` message (same tick as the
 	// capability flags below), so the empty default only shows before the
@@ -156,6 +172,7 @@ export function useAvailableInspectorTabs(
 			isDatabaseEnabled,
 			isStateEnabled,
 			isQueueSupported,
+			isSchedulesSupported,
 		};
 		const hideSet = new Set(
 			(tabConfig?.tabs ?? [])
@@ -189,6 +206,7 @@ export function useAvailableInspectorTabs(
 		isDatabaseEnabled,
 		isStateEnabled,
 		isQueueSupported,
+		isSchedulesSupported,
 		tabConfig,
 	]);
 }

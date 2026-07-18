@@ -833,6 +833,7 @@ export const BUILTIN_INSPECTOR_TAB_IDS = [
 	"database",
 	"state",
 	"queue",
+	"schedules",
 	"connections",
 	"console",
 ] as const;

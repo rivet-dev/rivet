@@ -33,6 +33,7 @@ pub const BUILTIN_TAB_IDS: &[&str] = &[
 	"database",
 	"state",
 	"queue",
+	"schedules",
 	"connections",
 	"console",
 ];

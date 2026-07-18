@@ -442,6 +442,45 @@ impl RegistryDispatcher {
 					},
 				)))
 			}
+			inspector_protocol::ClientMessage::SchedulesRequest(request) => {
+				Ok(Some(InspectorServerMessage::SchedulesResponse(
+					inspector_protocol::SchedulesResponse {
+						rid: request.id,
+						schedules: self.inspector_schedules(instance).await?,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::ScheduleHistoryRequest(request) => {
+				let limit = request.limit.0.clamp(1, 1_000) as i64;
+				let history = instance
+					.ctx
+					.cron_history(&request.schedule_id, Some(limit))
+					.await?
+					.into_iter()
+					.map(inspector_wire_schedule_fire)
+					.collect();
+				Ok(Some(InspectorServerMessage::ScheduleHistoryResponse(
+					inspector_protocol::ScheduleHistoryResponse {
+						rid: request.id,
+						schedule_id: request.schedule_id,
+						history,
+					},
+				)))
+			}
+			inspector_protocol::ClientMessage::ScheduleDeleteRequest(request) => {
+				let deleted = match request.kind.as_str() {
+					"at" => instance.ctx.cancel_schedule(&request.schedule_id).await?,
+					"cron" | "every" => instance.ctx.cron_delete(&request.schedule_id).await?,
+					kind => anyhow::bail!("invalid inspector schedule kind {kind:?}"),
+				};
+				Ok(Some(InspectorServerMessage::ScheduleDeleteResponse(
+					inspector_protocol::ScheduleDeleteResponse {
+						rid: request.id,
+						schedule_id: request.schedule_id,
+						deleted,
+					},
+				)))
+			}
 		}
 	}
 
@@ -452,6 +491,7 @@ impl RegistryDispatcher {
 		let (workflow_supported, workflow_history) =
 			self.inspector_workflow_history_bytes(instance).await?;
 		let queue_size = self.inspector_current_queue_size(instance).await?;
+		let schedules = self.inspector_schedules(instance).await?;
 		let is_state_enabled = instance.ctx.has_state();
 		Ok(InspectorServerMessage::Init(
 			inspector_protocol::InitMessage {
@@ -464,6 +504,7 @@ impl RegistryDispatcher {
 				workflow_history,
 				is_workflow_enabled: workflow_supported,
 				tab_config: inspector_wire_tab_config(instance.factory.config()),
+				schedules,
 			},
 		))
 	}
@@ -526,6 +567,57 @@ impl RegistryDispatcher {
 			.unwrap_or(u64::MAX))
 	}
 
+	async fn inspector_schedules(
+		&self,
+		instance: &ActorTaskHandle,
+	) -> Result<Vec<inspector_protocol::Schedule>> {
+		let mut schedules = instance
+			.ctx
+			.list_scheduled_events()
+			.await?
+			.into_iter()
+			.map(|schedule| inspector_protocol::Schedule {
+				id: schedule.id,
+				name: None,
+				kind: "at".to_owned(),
+				action: schedule.action,
+				args: schedule.args,
+				next_run_at: timestamp_to_uint(schedule.run_at),
+				last_run_at: None,
+				expression: None,
+				timezone: None,
+				interval_ms: None,
+				max_history: None,
+			})
+			.collect::<Vec<_>>();
+		schedules.extend(
+			instance
+				.ctx
+				.cron_list()
+				.await?
+				.into_iter()
+				.map(|schedule| inspector_protocol::Schedule {
+					id: schedule.name.clone(),
+					name: Some(schedule.name),
+					kind: schedule.kind.as_str().to_owned(),
+					action: schedule.action,
+					args: schedule.args,
+					next_run_at: timestamp_to_uint(schedule.next_run_at),
+					last_run_at: schedule.last_run_at.map(timestamp_to_uint),
+					expression: schedule.expression,
+					timezone: schedule.timezone,
+					interval_ms: schedule.interval_ms.map(timestamp_to_uint),
+					max_history: Some(timestamp_to_uint(schedule.max_history)),
+				}),
+		);
+		schedules.sort_by(|left, right| {
+			left.next_run_at
+				.cmp(&right.next_run_at)
+				.then_with(|| left.id.cmp(&right.id))
+		});
+		Ok(schedules)
+	}
+
 	async fn inspector_push_message_for_signal(
 		&self,
 		instance: &ActorTaskHandle,
@@ -559,6 +651,11 @@ impl RegistryDispatcher {
 					)
 				}))
 			}
+			InspectorSignal::SchedulesUpdated => Ok(Some(
+				InspectorServerMessage::SchedulesUpdated(inspector_protocol::SchedulesUpdated {
+					schedules: self.inspector_schedules(instance).await?,
+				}),
+			)),
 		}
 	}
 }
@@ -589,6 +686,9 @@ fn client_message_kind(message: &inspector_protocol::ClientMessage) -> &'static 
 		C::WorkflowReplayRequest(_) => "WorkflowReplayRequest",
 		C::DatabaseSchemaRequest(_) => "DatabaseSchemaRequest",
 		C::DatabaseTableRowsRequest(_) => "DatabaseTableRowsRequest",
+		C::SchedulesRequest(_) => "SchedulesRequest",
+		C::ScheduleHistoryRequest(_) => "ScheduleHistoryRequest",
+		C::ScheduleDeleteRequest(_) => "ScheduleDeleteRequest",
 	}
 }
 
@@ -609,6 +709,31 @@ fn server_message_kind(message: &InspectorServerMessage) -> &'static str {
 		InspectorServerMessage::WorkflowReplayResponse(_) => "WorkflowReplayResponse",
 		InspectorServerMessage::DatabaseSchemaResponse(_) => "DatabaseSchemaResponse",
 		InspectorServerMessage::DatabaseTableRowsResponse(_) => "DatabaseTableRowsResponse",
+		InspectorServerMessage::SchedulesResponse(_) => "SchedulesResponse",
+		InspectorServerMessage::SchedulesUpdated(_) => "SchedulesUpdated",
+		InspectorServerMessage::ScheduleHistoryResponse(_) => "ScheduleHistoryResponse",
+		InspectorServerMessage::ScheduleDeleteResponse(_) => "ScheduleDeleteResponse",
 		InspectorServerMessage::Error(_) => "Error",
+	}
+}
+
+fn timestamp_to_uint(value: i64) -> serde_bare::Uint {
+	serde_bare::Uint(value.max(0) as u64)
+}
+
+fn inspector_wire_schedule_fire(
+	fire: crate::actor::schedule::CronFire,
+) -> inspector_protocol::ScheduleFire {
+	inspector_protocol::ScheduleFire {
+		action: fire.action,
+		scheduled_at: timestamp_to_uint(fire.scheduled_at),
+		fired_at: timestamp_to_uint(fire.fired_at),
+		finished_at: fire.finished_at.map(timestamp_to_uint),
+		result: fire.result,
+		error: fire.error.map(|error| inspector_protocol::ScheduleError {
+			group: error.group,
+			code: error.code,
+			message: error.message,
+		}),
 	}
 }

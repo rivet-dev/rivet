@@ -20,6 +20,7 @@ struct InspectorInner {
 	state_revision: AtomicU64,
 	connections_revision: AtomicU64,
 	queue_revision: AtomicU64,
+	schedule_revision: AtomicU64,
 	active_connections: AtomicU32,
 	queue_size: AtomicU32,
 	connected_clients: AtomicUsize,
@@ -36,6 +37,7 @@ pub(crate) enum InspectorSignal {
 	ConnectionsUpdated,
 	QueueUpdated,
 	WorkflowHistoryUpdated,
+	SchedulesUpdated,
 }
 
 pub(crate) struct InspectorSubscription {
@@ -59,6 +61,10 @@ impl std::fmt::Debug for InspectorInner {
 				&self.queue_revision.load(Ordering::SeqCst),
 			)
 			.field(
+				"schedule_revision",
+				&self.schedule_revision.load(Ordering::SeqCst),
+			)
+			.field(
 				"active_connections",
 				&self.active_connections.load(Ordering::SeqCst),
 			)
@@ -77,6 +83,7 @@ impl Default for InspectorInner {
 			state_revision: AtomicU64::new(0),
 			connections_revision: AtomicU64::new(0),
 			queue_revision: AtomicU64::new(0),
+			schedule_revision: AtomicU64::new(0),
 			active_connections: AtomicU32::new(0),
 			queue_size: AtomicU32::new(0),
 			connected_clients: AtomicUsize::new(0),
@@ -107,6 +114,7 @@ pub struct InspectorSnapshot {
 	pub state_revision: u64,
 	pub connections_revision: u64,
 	pub queue_revision: u64,
+	pub schedule_revision: u64,
 	pub active_connections: u32,
 	pub queue_size: u32,
 	pub connected_clients: usize,
@@ -122,6 +130,7 @@ impl Inspector {
 			state_revision: self.0.state_revision.load(Ordering::SeqCst),
 			connections_revision: self.0.connections_revision.load(Ordering::SeqCst),
 			queue_revision: self.0.queue_revision.load(Ordering::SeqCst),
+			schedule_revision: self.0.schedule_revision.load(Ordering::SeqCst),
 			active_connections: self.0.active_connections.load(Ordering::SeqCst),
 			queue_size: self.0.queue_size.load(Ordering::SeqCst),
 			connected_clients: self.0.connected_clients.load(Ordering::SeqCst),
@@ -164,6 +173,11 @@ impl Inspector {
 
 	pub(crate) fn record_workflow_history_updated(&self) {
 		self.notify(InspectorSignal::WorkflowHistoryUpdated);
+	}
+
+	pub(crate) fn record_schedules_updated(&self) {
+		self.0.schedule_revision.fetch_add(1, Ordering::SeqCst);
+		self.notify(InspectorSignal::SchedulesUpdated);
 	}
 
 	pub(crate) fn set_connected_clients(&self, connected_clients: usize) {
