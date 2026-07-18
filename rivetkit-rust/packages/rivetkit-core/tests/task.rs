@@ -33,8 +33,10 @@ pub(crate) mod moved_tests {
 		ConnHandle, HibernatableConnectionMetadata, PersistedConnection,
 	};
 	use crate::actor::internal_storage;
-		use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY};
-	use crate::actor::messages::{ActorEvent, SerializeStateReason, StateDelta};
+	use crate::actor::keys::{LAST_PUSHED_ALARM_KEY, PERSIST_DATA_KEY, make_workflow_key};
+	use crate::actor::messages::{
+		ActorEvent, SerializeStateReason, StateDelta, WorkflowKvWrite,
+	};
 	use crate::actor::sleep::CanSleep;
 		use crate::actor::state::{
 			PersistedActor, PersistedScheduleEvent, RequestSaveOpts, encode_last_pushed_alarm,
@@ -46,7 +48,7 @@ pub(crate) mod moved_tests {
 	};
 	use crate::actor::task_types::ShutdownKind;
 	use crate::kv::tests::new_in_memory;
-	use crate::sqlite::SqliteDb;
+	use crate::sqlite::{ColumnValue, SqliteDb};
 	use crate::types::ActorKey;
 	use crate::{ActorConfig, ActorContext, ActorFactory};
 
@@ -162,7 +164,8 @@ pub(crate) mod moved_tests {
 			sql_handle.get_envoy_key().to_owned(),
 			ActorConfig::default(),
 			kv,
-			SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true),
+			SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true)
+				.expect("test remote sqlite should be configured"),
 		);
 		ctx.configure_envoy(sql_handle, Some(1));
 		ctx
@@ -189,7 +192,6 @@ pub(crate) mod moved_tests {
 				noop_factory(),
 				ctx,
 				None,
-				None,
 			),
 			lifecycle_tx,
 			dispatch_tx,
@@ -210,8 +212,94 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx,
 			None,
-			None,
 		)
+	}
+
+	#[tokio::test]
+	async fn workflow_flush_uses_lifecycle_serialized_state() {
+		let ctx = new_with_kv(
+			"actor-workflow-flush",
+			"task-workflow-flush",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let (_lifecycle_tx, lifecycle_rx) = mpsc::unbounded_channel();
+		let (_dispatch_tx, dispatch_rx) = mpsc::unbounded_channel();
+		let (events_tx, events_rx) = mpsc::unbounded_channel();
+		ctx.configure_lifecycle_events(Some(events_tx));
+		let factory = Arc::new(ActorFactory::new(Default::default(), |start| {
+			Box::pin(async move {
+				let mut events = start.events;
+				while let Some(event) = events.recv().await {
+					if let ActorEvent::SerializeState {
+						reason: SerializeStateReason::Save,
+						reply,
+					} = event
+					{
+						reply.send(Ok(vec![StateDelta::ActorState(
+							b"lifecycle-state".to_vec(),
+						)]));
+					}
+				}
+				Ok(())
+			})
+		}));
+		let mut task = ActorTask::new(
+			"actor-workflow-flush".into(),
+			0,
+			lifecycle_rx,
+			dispatch_rx,
+			events_rx,
+			factory,
+			ctx.clone(),
+			None,
+		);
+		let (start_tx, start_rx) = oneshot::channel();
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect("start should succeed");
+
+		let flush_ctx = ctx.clone();
+		let flush = tokio::spawn(async move {
+			flush_ctx
+				.save_state_and_workflow_batch(vec![WorkflowKvWrite {
+					key: b"history-entry".to_vec(),
+					value: b"workflow-value".to_vec(),
+				}])
+				.await
+		});
+		let event = timeout(Duration::from_secs(1), task.lifecycle_events.recv())
+			.await
+			.expect("workflow flush event should arrive")
+			.expect("workflow lifecycle event channel should stay open");
+		assert!(matches!(event, LifecycleEvent::WorkflowFlushRequested { .. }));
+		task.handle_event(event).await;
+		flush
+			.await
+			.expect("workflow flush task should join")
+			.expect("workflow flush should succeed");
+
+		assert_eq!(ctx.state(), b"lifecycle-state");
+		assert_eq!(load_persisted_actor(&ctx).await.state, b"lifecycle-state");
+		let workflow = ctx
+			.sql()
+			.query(
+				"SELECT key, value FROM _rivet_wf_kv",
+				None,
+			)
+			.await
+			.expect("workflow row should load");
+		assert_eq!(
+			workflow.rows,
+			vec![vec![
+				ColumnValue::Blob(make_workflow_key(b"history-entry")),
+				ColumnValue::Blob(b"workflow-value".to_vec()),
+			]]
+		);
 	}
 
 	#[test]
@@ -981,7 +1069,6 @@ pub(crate) mod moved_tests {
 			save_tick_factory(save_ticks.clone()),
 			ctx.clone(),
 			None,
-			None,
 		);
 
 		let (start_tx, start_rx) = oneshot::channel();
@@ -1049,7 +1136,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			save_tick_factory(save_ticks),
 			ctx.clone(),
-			None,
 			None,
 		);
 
@@ -1130,7 +1216,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx.clone(),
 			None,
-			None,
 		);
 
 		let mut inspector_rx = ctx
@@ -1194,7 +1279,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			save_tick_factory(save_ticks),
 			ctx.clone(),
-			None,
 			None,
 		);
 
@@ -1286,7 +1370,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx.clone(),
-			None,
 			None,
 		);
 
@@ -1395,7 +1478,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx.clone(),
 			None,
-			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
@@ -1470,7 +1552,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx.clone(),
-			None,
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
@@ -1550,7 +1631,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx.clone(),
-			None,
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
@@ -1649,7 +1729,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx.clone(),
 			None,
-			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
@@ -1730,7 +1809,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx,
-			None,
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
@@ -1963,7 +2041,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx.clone(),
 			None,
-			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
@@ -2054,7 +2131,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx.clone(),
-			None,
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
@@ -2148,7 +2224,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx.clone(),
 			None,
-			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
@@ -2241,7 +2316,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx.clone(),
-			None,
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
@@ -3783,7 +3857,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx,
 			None,
-			None,
 		);
 		let records = Arc::new(Mutex::new(Vec::new()));
 		let subscriber = Registry::default().with(ActorTaskLogLayer {
@@ -4037,7 +4110,6 @@ pub(crate) mod moved_tests {
 			factory,
 			ctx.clone(),
 			None,
-			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();
 		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
@@ -4153,7 +4225,6 @@ pub(crate) mod moved_tests {
 			events_rx,
 			factory,
 			ctx.clone(),
-			None,
 			None,
 		);
 		let (start_tx, start_rx) = oneshot::channel();

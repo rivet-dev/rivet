@@ -3,21 +3,19 @@ import * as v1 from "@/common/bare/generated/inspector/v1";
 import * as v2 from "@/common/bare/generated/inspector/v2";
 import * as v3 from "@/common/bare/generated/inspector/v3";
 import * as v4 from "@/common/bare/generated/inspector/v4";
+import * as v5 from "@/common/bare/generated/inspector/v5";
 import type { WorkflowHistory } from "@/common/bare/transport/v1";
 import {
 	decodeWorkflowHistoryTransport,
 	encodeWorkflowHistoryTransport,
 } from "@/common/inspector-transport";
 import { loadNapiRuntime, type NapiCoreRuntime } from "@/registry/napi-runtime";
-import type { ActorContextHandle } from "@/registry/runtime";
 
 const INSPECTOR_CURRENT_VERSION = 5;
 let runtime: NapiCoreRuntime;
-let ctx: ActorContextHandle;
 
 beforeAll(async () => {
 	({ runtime } = await loadNapiRuntime());
-	ctx = runtime.createTestActorContext("actor-1", "inspector", "local");
 });
 
 function buffer(text: string): ArrayBuffer {
@@ -30,22 +28,19 @@ function toBuffer(value: ArrayBuffer | Uint8Array): Buffer {
 	);
 }
 
-function decodeRequest(bytes: Uint8Array, version: number): v4.ToServer {
-	return v4.decodeToServer(
-		new Uint8Array(
-			runtime.actorDecodeInspectorRequest(ctx, toBuffer(bytes), version),
-		),
+function decodeRequest(bytes: Uint8Array, version: number): v5.ToServer {
+	return v5.decodeToServer(
+		new Uint8Array(runtime.decodeInspectorRequest(toBuffer(bytes), version)),
 	);
 }
 
 function encodeResponse(
-	message: v4.ToClient,
+	message: v5.ToClient,
 	version: 1 | 2 | 3 | 4,
 ): Uint8Array {
 	return new Uint8Array(
-		runtime.actorEncodeInspectorResponse(
-			ctx,
-			toBuffer(v4.encodeToClient(message)),
+		runtime.encodeInspectorResponse(
+			toBuffer(v5.encodeToClient(message)),
 			version,
 		),
 	);
@@ -98,6 +93,7 @@ describe("inspector versioned protocol", () => {
 					queueSize: 5n,
 					workflowHistory: buffer("workflow"),
 					isWorkflowEnabled: true,
+					tabConfig: [],
 				},
 			},
 		};

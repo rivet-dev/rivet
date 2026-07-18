@@ -1493,7 +1493,12 @@ mod tests {
 
 			let mut events = runtime.block_on(async move {
 				let start = wrap_start::<EmptyActor>(rivetkit_core::ActorStart {
-					ctx: rivetkit_core::ActorContext::new("actor-id", "test", Vec::new(), "local"),
+					ctx: rivetkit_core::testing::actor_context(
+						"actor-id",
+						"test",
+						Vec::new(),
+						"local",
+					),
 					input: None,
 					is_new: true,
 					snapshot: None,

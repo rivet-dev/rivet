@@ -16,6 +16,8 @@ Actor subsystems are composed into `ActorContextInner`, not separate managers.
 
 Runtime actor persistence lives in internal SQLite tables. The `_rivet_` table prefix is reserved for RivetKit runtime data and must not be used by user schemas.
 
+`_rivet_meta` is a tiny bootstrap root, not a general-purpose runtime KV store. It is created before the numbered migration ladder, so `schema_version` cannot live in a table created by that ladder. Its other key, `kv_import_state`, deliberately survives `clear_imported_storage` so startup can detect an interrupted legacy import, clear partial destination rows, and retry safely. Generic text accessors for this table are limited to that migration bookkeeping.
+
 | Table | Contents |
 |---|---|
 | `_rivet_meta` | Bootstrap and import bookkeeping key-value rows such as `schema_version` and `kv_import_state` |

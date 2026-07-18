@@ -47,6 +47,11 @@ export interface RuntimeStateDeltaPayload {
 	connHibernationRemoved: string[];
 }
 
+export interface RuntimeWorkflowKvWrite {
+	key: RuntimeBytes;
+	value: RuntimeBytes;
+}
+
 export interface RuntimeRequestSaveOpts {
 	immediate?: boolean;
 	maxWaitMs?: number;
@@ -436,6 +441,10 @@ export interface CoreRuntime {
 	actorSaveState(
 		ctx: ActorContextHandle,
 		payload: RuntimeStateDeltaPayload,
+	): Promise<void>;
+	actorSaveStateAndWorkflowBatch(
+		ctx: ActorContextHandle,
+		writes: RuntimeWorkflowKvWrite[],
 	): Promise<void>;
 	actorId(ctx: ActorContextHandle): string;
 	actorName(ctx: ActorContextHandle): string;

@@ -84,7 +84,15 @@ pub(crate) fn new_with_kv(
 ) -> ActorContext {
 	let (sql_handle, sql_rx) = test_envoy_handle();
 	spawn_test_remote_sqlite(sql_rx);
-	build_ctx_with_remote_sqlite(actor_id, name, key, region, kv, sql_handle)
+	build_ctx_with_remote_sqlite(
+		actor_id,
+		name,
+		key,
+		region,
+		kv,
+		sql_handle,
+		ActorConfig::default(),
+	)
 }
 
 /// Like [`new_with_kv`], but the remote sqlite executor stalls every request
@@ -100,7 +108,15 @@ pub(crate) fn new_with_kv_and_write_gate(
 ) -> ActorContext {
 	let (sql_handle, sql_rx) = test_envoy_handle();
 	spawn_test_remote_sqlite_on(open_test_sqlite_connection_with_schema(), sql_rx, Some(gate));
-	build_ctx_with_remote_sqlite(actor_id, name, key, region, kv, sql_handle)
+	build_ctx_with_remote_sqlite(
+		actor_id,
+		name,
+		key,
+		region,
+		kv,
+		sql_handle,
+		ActorConfig::default(),
+	)
 }
 
 fn build_ctx_with_remote_sqlite(
@@ -110,6 +126,7 @@ fn build_ctx_with_remote_sqlite(
 	region: impl Into<String>,
 	kv: crate::kv::Kv,
 	sql_handle: TestEnvoyHandle,
+	config: ActorConfig,
 ) -> ActorContext {
 	let actor_id = actor_id.into();
 	let ctx = ActorContext::build(
@@ -119,9 +136,10 @@ fn build_ctx_with_remote_sqlite(
 		region.into(),
 		Some(1),
 		sql_handle.get_envoy_key().to_owned(),
-		ActorConfig::default(),
+		config,
 		kv,
-		SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true),
+		SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true)
+			.expect("test remote sqlite should be configured"),
 	);
 	ctx.configure_envoy(sql_handle, Some(1));
 	ctx
@@ -185,7 +203,12 @@ fn spawn_test_remote_sqlite_on(
 	mut rx: mpsc::UnboundedReceiver<TestToEnvoyMessage>,
 	write_gate: Option<TestSqliteWriteGate>,
 ) {
-	tokio::spawn(async move {
+	std::thread::spawn(move || {
+		let runtime = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.expect("test sqlite runtime should build");
+		runtime.block_on(async move {
 		while let Some(message) = rx.recv().await {
 			let TestToEnvoyMessage::RemoteSqliteRequest {
 				request,
@@ -211,6 +234,7 @@ fn spawn_test_remote_sqlite_on(
 			let response = execute_test_sqlite(&conn, request);
 			let _ = response_tx.send(Ok(TestRemoteSqliteResponse::Execute(response)));
 		}
+		});
 	});
 }
 
@@ -260,6 +284,8 @@ CREATE TABLE IF NOT EXISTS _rivet_conn_state (
     server_message_index INTEGER NOT NULL,
     subscriptions        BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
+ALTER TABLE _rivet_conn_state
+    ADD COLUMN client_message_index INTEGER NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS _rivet_queue (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
@@ -275,7 +301,7 @@ CREATE TABLE IF NOT EXISTS _rivet_user_kv (
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
 INSERT INTO _rivet_meta (key, value)
-VALUES ('schema_version', x'0600000000000000')
+VALUES ('schema_version', x'0700000000000000')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 "#;
 
@@ -328,7 +354,8 @@ async fn test_internal_schema_sql_matches_real_initializer() {
 		Some(1),
 		false,
 		true,
-	);
+	)
+	.expect("test remote sqlite should be configured");
 	crate::actor::internal_schema::ensure_internal_schema(&db)
 		.await
 		.expect("real internal schema initializer should succeed");
@@ -383,6 +410,61 @@ async fn test_internal_schema_sql_matches_real_initializer() {
 	assert_eq!(
 		&test_version, real_version,
 		"TEST_INTERNAL_SCHEMA_SQL schema_version drifted from the real migration ladder"
+	);
+}
+
+#[tokio::test]
+async fn internal_schema_v7_preserves_existing_connection_state() {
+	let conn = rusqlite::Connection::open_in_memory().expect("sqlite connection should open");
+	conn.execute_batch(
+		r#"
+CREATE TABLE _rivet_meta (
+    key TEXT PRIMARY KEY,
+    value BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+CREATE TABLE _rivet_conn_state (
+    conn_id              TEXT PRIMARY KEY,
+    state                BLOB NOT NULL,
+    server_message_index INTEGER NOT NULL,
+    subscriptions        BLOB NOT NULL
+) STRICT, WITHOUT ROWID;
+INSERT INTO _rivet_meta (key, value)
+VALUES ('schema_version', x'0600000000000000');
+INSERT INTO _rivet_conn_state (conn_id, state, server_message_index, subscriptions)
+VALUES ('conn-1', x'010203', 9, x'80');
+"#,
+	)
+	.expect("v6 schema should seed");
+
+	let (sql_handle, sql_rx) = test_envoy_handle();
+	spawn_test_remote_sqlite_on(conn, sql_rx, None);
+	let db = SqliteDb::new_with_remote_sqlite(
+		sql_handle,
+		"schema-v6-upgrade".to_owned(),
+		None,
+		Some(1),
+		false,
+		true,
+	)
+	.expect("test remote sqlite should be configured");
+	crate::actor::internal_schema::ensure_internal_schema(&db)
+		.await
+		.expect("v6 schema should upgrade");
+
+	let rows = db
+		.query(
+			"SELECT state, server_message_index, client_message_index FROM _rivet_conn_state WHERE conn_id = 'conn-1'",
+			None,
+		)
+		.await
+		.expect("upgraded connection state should load");
+	assert_eq!(
+		rows.rows,
+		vec![vec![
+			ColumnValue::Blob(vec![1, 2, 3]),
+			ColumnValue::Integer(9),
+			ColumnValue::Integer(0),
+		]],
 	);
 }
 
@@ -489,16 +571,16 @@ fn build_applies_actor_config_to_owned_subsystems() {
 	config.sleep_timeout = std::time::Duration::from_millis(789);
 	config.no_sleep = true;
 
-	let ctx = ActorContext::build(
+	let (sql_handle, sql_rx) = test_envoy_handle();
+	spawn_test_remote_sqlite(sql_rx);
+	let ctx = build_ctx_with_remote_sqlite(
 		"configured-actor".to_owned(),
 		"configured".to_owned(),
 		Vec::new(),
 		"local".to_owned(),
-		None,
-		String::new(),
+		crate::kv::tests::new_in_memory(),
+		sql_handle,
 		config.clone(),
-		Kv::default(),
-		SqliteDb::default(),
 	);
 
 	let queue_config = ctx.queue_config_for_tests();
@@ -680,6 +762,7 @@ mod moved_tests {
 	use crate::actor::connection::ConnHandle;
 	use crate::actor::messages::ActorEvent;
 	use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
+	use crate::{ActorConfig, SqliteDb};
 	use crate::types::ListOpts;
 
 	fn now_timestamp_ms() -> i64 {
@@ -881,26 +964,29 @@ mod moved_tests {
 		assert_eq!(values, vec![None]);
 	}
 
-	#[tokio::test]
-	async fn foreign_runtime_only_helpers_fail_explicitly_when_unconfigured() {
-		let ctx = ActorContext::new("unconfigured-actor", "actor", Vec::new(), "local");
-
-		assert!(ctx.db_exec("select 1").await.is_err());
-		assert!(ctx.db_query("select 1", None).await.is_err());
-		assert!(ctx.db_run("select 1", None).await.is_err());
-		assert_eq!(ctx.client_endpoint(), None);
-		assert_eq!(ctx.client_token(), None);
-		assert!(ctx.set_alarm(Some(1)).is_err());
-		assert!(
-			ctx.ack_hibernatable_websocket_message(b"gateway", b"request", 1)
-				.is_err()
-		);
-	}
-
 	#[test]
 	fn client_accessors_read_config_from_wired_envoy_handle() {
-		let ctx = ActorContext::new("client-actor", "actor", Vec::new(), "local");
-		ctx.configure_envoy(build_client_envoy_handle(), Some(1));
+		let handle = build_client_envoy_handle();
+		let ctx = ActorContext::build(
+			"client-actor".to_owned(),
+			"actor".to_owned(),
+			Vec::new(),
+			"local".to_owned(),
+			Some(1),
+			handle.get_envoy_key().to_owned(),
+			ActorConfig::default(),
+			crate::kv::Kv::new(handle.clone(), "client-actor"),
+			SqliteDb::new_with_remote_sqlite(
+				handle.clone(),
+				"client-actor",
+				None,
+				Some(1),
+				false,
+				true,
+			)
+			.expect("test remote sqlite should be configured"),
+		);
+		ctx.configure_envoy(handle, Some(1));
 
 		assert_eq!(ctx.client_endpoint(), Some("http://127.0.0.1:7777"));
 		assert_eq!(ctx.client_token(), Some("secret"));

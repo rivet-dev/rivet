@@ -27,6 +27,7 @@ wasm-runtime = ["rivet-envoy-client/wasm-transport"]
 sqlite = ["sqlite-local"]
 sqlite-local = ["native-runtime", "dep:depot-client", "dep:rivet-actor-runtime-socket-protocol"]
 sqlite-remote = []
+test-support = ["dep:rusqlite"]
 
 [build-dependencies]
 anyhow.workspace = true
@@ -47,6 +48,7 @@ nix = { workspace = true, optional = true }
 parking_lot.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, optional = true }
+rusqlite = { workspace = true, optional = true }
 rivet-error.workspace = true
 rivet-actor-runtime-socket-protocol = { workspace = true, optional = true }
 rivet-envoy-client = { workspace = true, default-features = false }

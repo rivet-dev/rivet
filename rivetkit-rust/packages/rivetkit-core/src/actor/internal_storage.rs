@@ -3,7 +3,11 @@ use std::io::Cursor;
 
 use anyhow::{Context, Result, bail};
 
-use crate::actor::connection::{PersistedConnection, PersistedSubscription};
+use crate::actor::connection::{
+	PersistedConnection, PersistedSubscription, encode_persisted_connection,
+};
+use crate::actor::keys::make_workflow_key;
+use crate::actor::messages::WorkflowKvWrite;
 use crate::actor::queue::{PersistedQueueMessage, QueueMetadata};
 use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
 use crate::error::KvRuntimeError;
@@ -35,18 +39,19 @@ where
 {
 	let mut chunks = Vec::new();
 	let mut chunk_start = 0;
-	let mut chunk_bytes = 0;
+	let mut chunk_bytes: usize = 0;
 	for (index, (key, value)) in entries.iter().enumerate() {
 		let entry_bytes = key.as_ref().len() + value.as_ref().len();
 		let chunk_rows = index - chunk_start;
 		if chunk_rows > 0
-			&& (chunk_rows >= KV_TX_MAX_ROWS || chunk_bytes + entry_bytes > KV_TX_MAX_PAYLOAD_BYTES)
+			&& (chunk_rows >= KV_TX_MAX_ROWS
+				|| chunk_bytes.saturating_add(entry_bytes) > KV_TX_MAX_PAYLOAD_BYTES)
 		{
 			chunks.push(&entries[chunk_start..index]);
 			chunk_start = index;
 			chunk_bytes = 0;
 		}
-		chunk_bytes += entry_bytes;
+		chunk_bytes = chunk_bytes.saturating_add(entry_bytes);
 	}
 	if chunk_start < entries.len() {
 		chunks.push(&entries[chunk_start..]);
@@ -132,6 +137,52 @@ pub(crate) async fn persist_actor_core_and_connections(
 	connections: &[PersistedConnection],
 	removed_connections: &[String],
 ) -> Result<()> {
+	let statements = build_actor_core_and_connection_statements(
+		actor,
+		connections,
+		removed_connections,
+	)?;
+
+	if statements.is_empty() {
+		return Ok(());
+	}
+
+	db.execute_batch(statements)
+		.await
+		.context("persist internal actor state and connection deltas")?;
+	Ok(())
+}
+
+pub(crate) async fn persist_actor_core_connections_and_workflow(
+	db: &SqliteDb,
+	actor: Option<&PersistedActor>,
+	connections: &[PersistedConnection],
+	removed_connections: &[String],
+	workflow_writes: &[WorkflowKvWrite],
+) -> Result<()> {
+	let mut statements = build_actor_core_and_connection_statements(
+		actor,
+		connections,
+		removed_connections,
+	)?;
+	statements.extend(build_workflow_kv_statements(workflow_writes)?);
+	validate_atomic_workflow_flush(&statements)?;
+
+	if statements.is_empty() {
+		return Ok(());
+	}
+
+	db.execute_batch(statements)
+		.await
+		.context("atomically persist actor state and workflow kv values")?;
+	Ok(())
+}
+
+fn build_actor_core_and_connection_statements(
+	actor: Option<&PersistedActor>,
+	connections: &[PersistedConnection],
+	removed_connections: &[String],
+) -> Result<Vec<SqliteBatchStatement>> {
 	let mut statements = Vec::new();
 
 	if let Some(actor) = actor {
@@ -175,32 +226,74 @@ pub(crate) async fn persist_actor_core_and_connections(
 		push_delete_connection_statements(&mut statements, conn_id);
 	}
 
-	if statements.is_empty() {
-		return Ok(());
-	}
-
-	db.execute_batch(statements)
-		.await
-		.context("persist internal actor state and connection deltas")?;
-	Ok(())
+	Ok(statements)
 }
 
+#[cfg(test)]
 pub(crate) async fn persist_connection_snapshot(
 	db: &SqliteDb,
 	connection: &PersistedConnection,
 ) -> Result<()> {
-	let mut statements = Vec::new();
-	push_connection_statements(&mut statements, connection)?;
+	persist_connection_snapshots(db, std::slice::from_ref(connection)).await
+}
+
+/// Persists imported connection snapshots in bounded transactions. A legacy
+/// connection is at most one actor-KV value, but a migration page can contain
+/// hundreds of them; sending the whole page in one SQLite commit can exceed
+/// depot's dirty-page limit.
+pub(crate) async fn persist_connection_snapshots(
+	db: &SqliteDb,
+	connections: &[PersistedConnection],
+) -> Result<()> {
+	let mut chunk_start = 0;
+	let mut chunk_bytes: usize = 0;
+	for (index, connection) in connections.iter().enumerate() {
+		// The legacy encoding includes every nested header and subscription plus
+		// its serialization overhead. Add the second SQLite primary key and a
+		// fixed allowance for scalar columns instead of approximating nested
+		// decoded fields and risking an under-budgeted transaction.
+		let entry_bytes = encode_persisted_connection(connection)?
+			.len()
+			.saturating_add(connection.id.len())
+			.saturating_add(32);
+		let chunk_rows = index - chunk_start;
+		if chunk_rows > 0
+			&& (chunk_rows >= KV_TX_MAX_ROWS
+				|| chunk_bytes.saturating_add(entry_bytes) > KV_TX_MAX_PAYLOAD_BYTES)
+		{
+			persist_connection_snapshot_chunk(db, &connections[chunk_start..index]).await?;
+			chunk_start = index;
+			chunk_bytes = 0;
+		}
+		chunk_bytes = chunk_bytes.saturating_add(entry_bytes);
+	}
+	if chunk_start < connections.len() {
+		persist_connection_snapshot_chunk(db, &connections[chunk_start..]).await?;
+	}
+	Ok(())
+}
+
+async fn persist_connection_snapshot_chunk(
+	db: &SqliteDb,
+	connections: &[PersistedConnection],
+) -> Result<()> {
+	let mut statements = Vec::with_capacity(connections.len().saturating_mul(2));
+	for connection in connections {
+		push_connection_statements(&mut statements, connection)?;
+	}
+	if statements.is_empty() {
+		return Ok(());
+	}
 	db.execute_batch(statements)
 		.await
-		.context("persist internal connection snapshot")?;
+		.context("persist internal connection snapshot chunk")?;
 	Ok(())
 }
 
 pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConnection>> {
 	let result = db
 		.query(
-			"SELECT c.conn_id, c.parameters, s.state, s.subscriptions, c.gateway_id, c.request_id, s.server_message_index, c.request_path, c.request_headers FROM _rivet_conns c JOIN _rivet_conn_state s ON s.conn_id = c.conn_id ORDER BY c.conn_id",
+			"SELECT c.conn_id, c.parameters, s.state, s.subscriptions, c.gateway_id, c.request_id, s.server_message_index, s.client_message_index, c.request_path, c.request_headers FROM _rivet_conns c JOIN _rivet_conn_state s ON s.conn_id = c.conn_id ORDER BY c.conn_id",
 			None,
 		)
 		.await
@@ -213,7 +306,7 @@ pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConne
 			let subscriptions: Vec<String> =
 				decode_cbor_blob(row, 3, "connection subscriptions")?;
 			let request_headers: HashMap<String, String> =
-				decode_cbor_blob(row, 8, "connection request headers")?;
+				decode_cbor_blob(row, 9, "connection request headers")?;
 			Ok(PersistedConnection {
 				id: read_text(row, 0, "conn_id")?,
 				parameters: read_blob(row, 1, "connection parameters")?,
@@ -225,8 +318,8 @@ pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConne
 				gateway_id: read_fixed_4(row, 4, "connection gateway_id")?,
 				request_id: read_fixed_4(row, 5, "connection request_id")?,
 				server_message_index: read_u16(row, 6, "server_message_index")?,
-				client_message_index: 0,
-				request_path: read_text(row, 7, "connection request_path")?,
+				client_message_index: read_u16(row, 7, "client_message_index")?,
+				request_path: read_text(row, 8, "connection request_path")?,
 				request_headers,
 			})
 		})
@@ -296,6 +389,61 @@ pub(crate) async fn persist_queue_message(
 	.await
 	.context("persist internal queue message")?;
 	Ok(())
+}
+
+/// Persists imported queue rows without rewriting `queue_next_id` for every
+/// message. The importer writes that singleton once after every row is copied.
+pub(crate) async fn persist_queue_messages(
+	db: &SqliteDb,
+	messages: &[(u64, PersistedQueueMessage)],
+) -> Result<()> {
+	for chunk in split_queue_tx_chunks(messages) {
+		let mut statements = Vec::with_capacity(chunk.len());
+		for (id, message) in chunk {
+			statements.push(SqliteBatchStatement {
+				sql: "INSERT OR REPLACE INTO _rivet_queue (id, name, body, created_at) VALUES (?, ?, ?, ?)"
+					.to_owned(),
+				params: Some(vec![
+					BindParam::Integer(
+						i64::try_from(*id)
+							.context("queue message id exceeds sqlite integer range")?,
+					),
+					BindParam::Text(message.name.clone()),
+					BindParam::Blob(message.body.clone()),
+					BindParam::Integer(message.created_at),
+				]),
+			});
+		}
+		db.execute_batch(statements)
+			.await
+			.context("persist internal queue message chunk")?;
+	}
+	Ok(())
+}
+
+fn split_queue_tx_chunks(
+	messages: &[(u64, PersistedQueueMessage)],
+) -> Vec<&[(u64, PersistedQueueMessage)]> {
+	let mut chunks = Vec::new();
+	let mut chunk_start = 0;
+	let mut chunk_bytes: usize = 0;
+	for (index, (_, message)) in messages.iter().enumerate() {
+		let entry_bytes = message.name.len() + message.body.len() + 16;
+		let chunk_rows = index - chunk_start;
+		if chunk_rows > 0
+			&& (chunk_rows >= KV_TX_MAX_ROWS
+				|| chunk_bytes.saturating_add(entry_bytes) > KV_TX_MAX_PAYLOAD_BYTES)
+		{
+			chunks.push(&messages[chunk_start..index]);
+			chunk_start = index;
+			chunk_bytes = 0;
+		}
+		chunk_bytes = chunk_bytes.saturating_add(entry_bytes);
+	}
+	if chunk_start < messages.len() {
+		chunks.push(&messages[chunk_start..]);
+	}
+	chunks
 }
 
 pub(crate) async fn persist_queue_next_id(db: &SqliteDb, next_id: u64) -> Result<()> {
@@ -548,6 +696,56 @@ pub(crate) async fn workflow_kv_batch_put(
 	Ok(())
 }
 
+fn build_workflow_kv_statements(
+	writes: &[WorkflowKvWrite],
+) -> Result<Vec<SqliteBatchStatement>> {
+	writes
+		.iter()
+		.map(|write| {
+			if write.value.len() > WORKFLOW_KV_VALUE_LIMIT {
+				bail!(
+					"workflow kv value exceeds sqlite storage limit: {} > {}",
+					write.value.len(),
+					WORKFLOW_KV_VALUE_LIMIT
+				);
+			}
+			Ok(SqliteBatchStatement {
+				sql: "INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value".to_owned(),
+				params: Some(vec![
+					BindParam::Blob(make_workflow_key(&write.key)),
+					BindParam::Blob(write.value.clone()),
+				]),
+			})
+		})
+		.collect()
+}
+
+fn validate_atomic_workflow_flush(statements: &[SqliteBatchStatement]) -> Result<()> {
+	let row_count = statements.len();
+	let payload_bytes = statements
+		.iter()
+		.flat_map(|statement| statement.params.iter().flatten())
+		.map(bind_param_payload_len)
+		.fold(0usize, usize::saturating_add);
+	if row_count > KV_TX_MAX_ROWS || payload_bytes > KV_TX_MAX_PAYLOAD_BYTES {
+		bail!(
+			"atomic actor state and workflow flush exceeds sqlite transaction budget: {row_count} rows and {payload_bytes} bytes (limits: {} rows and {} bytes)",
+			KV_TX_MAX_ROWS,
+			KV_TX_MAX_PAYLOAD_BYTES
+		);
+	}
+	Ok(())
+}
+
+fn bind_param_payload_len(param: &BindParam) -> usize {
+	match param {
+		BindParam::Null => 0,
+		BindParam::Integer(_) | BindParam::Float(_) => 8,
+		BindParam::Text(value) => value.len(),
+		BindParam::Blob(value) => value.len(),
+	}
+}
+
 async fn user_kv_list_where(
 	db: &SqliteDb,
 	where_clause: &str,
@@ -621,11 +819,12 @@ fn push_connection_statements(
 		]),
 	});
 	statements.push(SqliteBatchStatement {
-		sql: "INSERT INTO _rivet_conn_state (conn_id, state, server_message_index, subscriptions) VALUES (?, ?, ?, ?) ON CONFLICT(conn_id) DO UPDATE SET state = excluded.state, server_message_index = excluded.server_message_index, subscriptions = excluded.subscriptions".to_owned(),
+		sql: "INSERT INTO _rivet_conn_state (conn_id, state, server_message_index, client_message_index, subscriptions) VALUES (?, ?, ?, ?, ?) ON CONFLICT(conn_id) DO UPDATE SET state = excluded.state, server_message_index = excluded.server_message_index, client_message_index = excluded.client_message_index, subscriptions = excluded.subscriptions".to_owned(),
 		params: Some(vec![
 			BindParam::Text(connection.id.clone()),
 			BindParam::Blob(connection.state.clone()),
 			BindParam::Integer(i64::from(connection.server_message_index)),
+			BindParam::Integer(i64::from(connection.client_message_index)),
 			BindParam::Blob(subscriptions),
 		]),
 	});
@@ -697,6 +896,8 @@ pub(crate) async fn persist_inspector_token(db: &SqliteDb, token: &str) -> Resul
 	Ok(())
 }
 
+/// Reads migration bookkeeping from the bootstrap `_rivet_meta` root. This is
+/// not a general-purpose runtime KV accessor.
 pub(crate) async fn load_meta_text(db: &SqliteDb, key: &str) -> Result<Option<String>> {
 	let result = db
 		.query(
@@ -713,6 +914,8 @@ pub(crate) async fn load_meta_text(db: &SqliteDb, key: &str) -> Result<Option<St
 		.map(Some)
 }
 
+/// Writes migration bookkeeping to the bootstrap `_rivet_meta` root. This is
+/// not a general-purpose runtime KV accessor.
 pub(crate) async fn persist_meta_text(db: &SqliteDb, key: &str, value: &str) -> Result<()> {
 	db.execute(
 		"INSERT INTO _rivet_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -726,48 +929,108 @@ pub(crate) async fn persist_meta_text(db: &SqliteDb, key: &str, value: &str) -> 
 	Ok(())
 }
 
-pub(crate) async fn clear_imported_storage(db: &SqliteDb) -> Result<()> {
-	db.execute_batch(vec![
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_conn_state".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_conns".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_schedule_events".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_actor_state".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_actor".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_queue".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_wf_kv".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_user_kv".to_owned(),
-			params: None,
-		},
-		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_runtime".to_owned(),
-			params: None,
-		},
-	])
-	.await
-	.context("clear partially imported internal sqlite storage")?;
+pub(crate) async fn clear_imported_storage(db: &SqliteDb, actor_id: &str) -> Result<()> {
+	// Delete bounded sets of rows in separate commits. A single `DELETE FROM`
+	// over a large interrupted import can itself exceed depot's dirty-page
+	// limit, permanently preventing the importer from recovering.
+	for (table, key_column, size_expression) in [
+		("_rivet_conn_state", "conn_id", "length(conn_id) + length(state) + length(subscriptions) + 16"),
+		("_rivet_conns", "conn_id", "length(conn_id) + length(parameters) + length(request_path) + length(request_headers) + 16"),
+		("_rivet_schedule_events", "event_id", "length(event_id) + length(action) + coalesce(length(args), 0) + 16"),
+		("_rivet_actor_state", "id", "length(state) + 8"),
+		("_rivet_actor", "id", "coalesce(length(input), 0) + 16"),
+		("_rivet_queue", "id", "length(name) + length(body) + 16"),
+		("_rivet_wf_kv", "key", "length(key) + length(value)"),
+		("_rivet_user_kv", "key", "length(key) + length(value)"),
+		("_rivet_runtime", "id", "64"),
+	] {
+		clear_table_bounded(db, actor_id, table, key_column, size_expression)
+			.await
+			.with_context(|| format!("clear partially imported {table} rows"))?;
+	}
 	Ok(())
+}
+
+async fn clear_table_bounded(
+	db: &SqliteDb,
+	actor_id: &str,
+	table: &str,
+	key_column: &str,
+	size_expression: &str,
+) -> Result<()> {
+	let mut cleared_rows = 0usize;
+	let mut cleared_bytes = 0usize;
+	let mut last_logged_rows = 0usize;
+	let mut last_logged_bytes = 0usize;
+	loop {
+		let rows = db
+			.query(
+				format!(
+					"SELECT {key_column}, {size_expression} FROM {table} ORDER BY {key_column} LIMIT {}",
+					KV_TX_MAX_ROWS
+				),
+				None,
+			)
+			.await?;
+		if rows.rows.is_empty() {
+			if cleared_rows > 0 {
+				tracing::info!(
+					actor_id,
+					phase = "cleanup",
+					table,
+					record_count = cleared_rows,
+					byte_count = cleared_bytes,
+					"legacy kv import cleanup table completed"
+				);
+			}
+			return Ok(());
+		}
+
+		let mut statements = Vec::new();
+		let mut payload_bytes = 0usize;
+		for row in rows.rows {
+			let key = match row.first() {
+				Some(ColumnValue::Integer(value)) => BindParam::Integer(*value),
+				Some(ColumnValue::Text(value)) => BindParam::Text(value.clone()),
+				Some(ColumnValue::Blob(value)) => BindParam::Blob(value.clone()),
+				other => bail!("invalid cleanup key for {table}: {other:?}"),
+			};
+			let row_bytes = match row.get(1) {
+				Some(ColumnValue::Integer(value)) => usize::try_from(*value).unwrap_or(usize::MAX),
+				other => bail!("invalid cleanup size for {table}: {other:?}"),
+			};
+			if !statements.is_empty()
+				&& payload_bytes.saturating_add(row_bytes) > KV_TX_MAX_PAYLOAD_BYTES
+			{
+				break;
+			}
+			payload_bytes = payload_bytes.saturating_add(row_bytes);
+			statements.push(SqliteBatchStatement {
+				sql: format!("DELETE FROM {table} WHERE {key_column} = ?"),
+				params: Some(vec![key]),
+			});
+		}
+
+		cleared_rows = cleared_rows.saturating_add(statements.len());
+		cleared_bytes = cleared_bytes.saturating_add(payload_bytes);
+		db.execute_batch(statements)
+			.await
+			.with_context(|| format!("delete bounded {table} row chunk"))?;
+		if cleared_rows.saturating_sub(last_logged_rows) >= 1_024
+			|| cleared_bytes.saturating_sub(last_logged_bytes) >= 16 * 1024 * 1024
+		{
+			last_logged_rows = cleared_rows;
+			last_logged_bytes = cleared_bytes;
+			tracing::info!(
+				actor_id,
+				phase = "cleanup",
+				table,
+				record_count = cleared_rows,
+				byte_count = cleared_bytes,
+				"legacy kv import cleanup progress"
+			);
+		}
+	}
 }
 
 async fn load_schedule_events(db: &SqliteDb) -> Result<Vec<PersistedScheduleEvent>> {

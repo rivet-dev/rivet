@@ -1,16 +1,10 @@
 use super::*;
 
 mod moved_tests {
-	use super::{
-		PersistedQueueMessage, QueueMetadata, QueueNextOpts, QueueWaitOpts, encode_queue_message,
-		encode_queue_metadata,
-	};
+	use super::{QueueNextOpts, QueueWaitOpts};
 
 	use crate::actor::context::ActorContext;
-	use crate::actor::keys::{
-		QUEUE_MESSAGES_PREFIX, QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
-	};
-	use crate::actor::preload::PreloadedKv;
+	use crate::actor::keys::{QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key};
 	use crate::kv::Kv;
 	use std::time::Duration;
 	use tokio::task::yield_now;
@@ -42,55 +36,6 @@ mod moved_tests {
 		assert_eq!(first, vec![5, 1, 2, 0, 0, 0, 0, 0, 0, 0, 1]);
 		assert_eq!(decode_queue_message_key(&first).expect("decode first"), 1);
 		assert_eq!(decode_queue_message_key(&second).expect("decode second"), 2);
-	}
-
-	#[tokio::test]
-	async fn inspect_messages_uses_preloaded_queue_entries_when_present() {
-		let queue = ActorContext::new_with_kv(
-			"actor-queue",
-			"queue-preload",
-			Vec::new(),
-			"local",
-			Kv::default(),
-		);
-		let metadata = QueueMetadata {
-			next_id: 8,
-			size: 1,
-		};
-		let persisted = PersistedQueueMessage {
-			name: "preloaded".to_owned(),
-			body: b"body".to_vec(),
-			created_at: 42,
-			failure_count: None,
-			available_at: None,
-			in_flight: None,
-			in_flight_at: None,
-		};
-		queue.configure_preload(Some(PreloadedKv::new_with_requested_get_keys(
-			[
-				(
-					QUEUE_METADATA_KEY.to_vec(),
-					encode_queue_metadata(&metadata).expect("metadata should encode"),
-				),
-				(
-					make_queue_message_key(7),
-					encode_queue_message(&persisted).expect("message should encode"),
-				),
-			],
-			vec![QUEUE_METADATA_KEY.to_vec()],
-			vec![QUEUE_MESSAGES_PREFIX.to_vec()],
-		)));
-
-		let messages = queue
-			.inspect_messages()
-			.await
-			.expect("queue should initialize from preload without touching kv");
-
-		assert_eq!(messages.len(), 1);
-		assert_eq!(messages[0].id, 7);
-		assert_eq!(messages[0].name, "preloaded");
-		assert_eq!(messages[0].body, b"body");
-		assert_eq!(*queue.0.queue_metadata.lock().await, metadata);
 	}
 
 	#[tokio::test]

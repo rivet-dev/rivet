@@ -15,11 +15,14 @@ const ACTOR_NAME: &str = "actor-v2-2-1-baseline";
 async fn actor_v2_2_1_snapshot_starts_in_current_rivetkit_core() -> Result<()> {
 	// This Rust test is the engine and snapshot harness. The current RivetKit actor
 	// implementation lives in this module's scripts/current-verify.ts fixture.
-	let ctx = IntegrationCtx::builder()
+	let mut ctx = IntegrationCtx::builder()
 		.import_snapshot(module_dir().join("snapshot"))
 		.start()
 		.await?;
 
+	ctx.actor_by_name(ACTOR_NAME).await?;
+	run_current_rivetkit_verifier(&ctx).await?;
+	ctx.restart_engine().await?;
 	ctx.actor_by_name(ACTOR_NAME).await?;
 	run_current_rivetkit_verifier(&ctx).await?;
 	ctx.shutdown().await?;

@@ -532,7 +532,7 @@ mod tests {
 	use std::sync::OnceLock;
 
 	use async_trait::async_trait;
-	use rivetkit_core::{ConnHandle, Kv, QueueNextOpts, StateDelta, WebSocket};
+	use rivetkit_core::{ConnHandle, QueueNextOpts, StateDelta, WebSocket};
 	use serde::{Deserialize, Serialize};
 	use tokio::sync::mpsc::unbounded_channel;
 	use tokio::sync::{Barrier, oneshot};
@@ -818,7 +818,12 @@ mod tests {
 		let (tx, rx) = unbounded_channel();
 		drop(tx);
 		let start = wrap_start::<ConnActor>(ActorStart {
-			ctx: rivetkit_core::ActorContext::new("actor-id", "test", Vec::new(), "local"),
+			ctx: rivetkit_core::testing::actor_context(
+				"actor-id",
+				"test",
+				Vec::new(),
+				"local",
+			),
 			input: None,
 			is_new: true,
 			snapshot: None,
@@ -854,7 +859,7 @@ mod tests {
 		.expect("queue event");
 
 		let mut events = Events::<EmptyActor> {
-			ctx: Ctx::new(rivetkit_core::ActorContext::new(
+			ctx: Ctx::new(rivetkit_core::testing::actor_context(
 				"actor-id",
 				"test",
 				Vec::new(),
@@ -1807,7 +1812,7 @@ mod tests {
 	}
 
 	fn unit_start_with_ctx<A: Actor>(rx: ActorEvents) -> (Start<A>, Ctx<A>) {
-		let ctx = Ctx::new(rivetkit_core::ActorContext::new(
+		let ctx = Ctx::new(rivetkit_core::testing::actor_context(
 			"actor-id",
 			"test",
 			Vec::new(),
@@ -1856,7 +1861,7 @@ mod tests {
 		snapshot: Option<Vec<u8>>,
 		rx: ActorEvents,
 	) -> (Start<LifecycleActor>, Ctx<LifecycleActor>) {
-		let ctx = Ctx::new(rivetkit_core::ActorContext::new(
+		let ctx = Ctx::new(rivetkit_core::testing::actor_context(
 			"actor-id",
 			"test",
 			Vec::new(),
@@ -1892,7 +1897,7 @@ mod tests {
 		snapshot: Option<Vec<u8>>,
 		rx: ActorEvents,
 	) -> Start<UnitCreationActor> {
-		let ctx = Ctx::new(rivetkit_core::ActorContext::new(
+		let ctx = Ctx::new(rivetkit_core::testing::actor_context(
 			"actor-id",
 			"unit-creation",
 			Vec::new(),
@@ -1922,7 +1927,7 @@ mod tests {
 	}
 
 	fn action_start(rx: ActorEvents) -> Start<ActionActor> {
-		let ctx = Ctx::new(rivetkit_core::ActorContext::new(
+		let ctx = Ctx::new(rivetkit_core::testing::actor_context(
 			"actor-id",
 			"action-test",
 			Vec::new(),
@@ -1951,12 +1956,11 @@ mod tests {
 	}
 
 	fn queue_pull_start(rx: ActorEvents) -> Start<QueuePullActor> {
-		let ctx = Ctx::new(rivetkit_core::ActorContext::new_with_kv(
+		let ctx = Ctx::new(rivetkit_core::testing::actor_context(
 			"actor-id",
 			"queue-pull-test",
 			Vec::new(),
 			"local",
-			Kv::new_in_memory(),
 		));
 
 		Start {

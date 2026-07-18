@@ -39,6 +39,7 @@ import type {
 	RuntimeSqlRunResult,
 	SqliteTransactionHandle,
 	RuntimeStateDeltaPayload,
+	RuntimeWorkflowKvWrite,
 	RuntimeWebSocketEvent,
 	WebSocketHandle,
 } from "./runtime";
@@ -309,16 +310,24 @@ export class NapiCoreRuntime implements CoreRuntime {
 		return new this.#bindings.CancellationToken() as unknown as CancellationTokenHandle;
 	}
 
-	createTestActorContext(
-		actorId: string,
-		name: string,
-		region: string,
-	): ActorContextHandle {
-		return new this.#bindings.ActorContext(
-			actorId,
-			name,
-			region,
-		) as unknown as ActorContextHandle;
+	decodeInspectorRequest(
+		bytes: RuntimeBytes,
+		advertisedVersion: number,
+	): RuntimeBytes {
+		return this.#bindings.decodeInspectorRequest(
+			toNapiBuffer(bytes),
+			advertisedVersion,
+		);
+	}
+
+	encodeInspectorResponse(
+		bytes: RuntimeBytes,
+		targetVersion: number,
+	): RuntimeBytes {
+		return this.#bindings.encodeInspectorResponse(
+			toNapiBuffer(bytes),
+			targetVersion,
+		);
 	}
 
 	cancellationTokenAborted(token: CancellationTokenHandle): boolean {
@@ -425,6 +434,18 @@ export class NapiCoreRuntime implements CoreRuntime {
 	): Promise<void> {
 		await asNativeActorContext(ctx).saveState(
 			toNapiStateDeltaPayload(payload),
+		);
+	}
+
+	async actorSaveStateAndWorkflowBatch(
+		ctx: ActorContextHandle,
+		writes: RuntimeWorkflowKvWrite[],
+	): Promise<void> {
+		await asNativeActorContext(ctx).saveStateAndWorkflowBatch(
+			writes.map((write) => ({
+				key: toNapiBuffer(write.key),
+				value: toNapiBuffer(write.value),
+			})),
 		);
 	}
 

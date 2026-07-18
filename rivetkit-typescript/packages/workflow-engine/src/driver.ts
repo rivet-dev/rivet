@@ -30,6 +30,12 @@ export interface KVWrite {
  * See architecture.md "Isolation Model" for details.
  */
 export interface EngineDriver {
+	/**
+	 * Requires each logical storage flush to reach `batch` as one indivisible
+	 * unit. The driver must reject an oversized unit instead of splitting it.
+	 */
+	readonly atomicBatch?: boolean;
+
 	// === KV Operations ===
 
 	/**

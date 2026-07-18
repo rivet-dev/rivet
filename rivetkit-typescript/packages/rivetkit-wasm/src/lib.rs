@@ -18,7 +18,8 @@ use rivetkit_core::{
 	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
 	QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts,
 	QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
-	ServeConfig, ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion, WsMessage,
+	ServeConfig, ServerlessRequest, StateDelta, WebSocket, WebSocketCallbackRegion,
+	WorkflowKvWrite, WsMessage,
 };
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
@@ -1275,6 +1276,26 @@ impl WasmActorContext {
 			.map_err(anyhow_to_js_error)
 	}
 
+	#[wasm_bindgen(js_name = saveStateAndWorkflowBatch)]
+	pub async fn save_state_and_workflow_batch(
+		&self,
+		writes: JsValue,
+	) -> Result<(), JsValue> {
+		let writes: Vec<WasmWorkflowKvWrite> = serde_wasm_bindgen::from_value(writes)?;
+		self.inner
+			.save_state_and_workflow_batch(
+				writes
+					.into_iter()
+					.map(|write| WorkflowKvWrite {
+						key: write.key,
+						value: write.value,
+					})
+					.collect(),
+			)
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
 	#[wasm_bindgen(js_name = verifyInspectorAuth)]
 	pub async fn verify_inspector_auth(&self, bearer_token: Option<String>) -> Result<(), JsValue> {
 		InspectorAuth::new()
@@ -2128,6 +2149,13 @@ struct WasmStateDeltaPayload {
 	state: Option<Vec<u8>>,
 	conn_hibernation: Vec<WasmConnHibernationEntry>,
 	conn_hibernation_removed: Vec<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmWorkflowKvWrite {
+	key: Vec<u8>,
+	value: Vec<u8>,
 }
 
 #[derive(serde::Deserialize)]

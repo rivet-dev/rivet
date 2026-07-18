@@ -32,7 +32,7 @@ pub use rivetkit_core::serverless::{
 pub use rivetkit_core::serverless_http;
 pub use rivetkit_core::{
 	ActorConfig, ActorKey, ActorKeySegment, ActorKv, CanHibernateWebSocket, CompletableQueueMessage,
-	ConnHandle, ConnId, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, Kv, ListOpts,
+	ConnHandle, ConnId, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
 	QueueMessage as CoreQueueMessage, QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts,
 	QueueTryNextOpts, QueueWaitOpts, Request, RequestSaveOpts, Response, SaveStateOpts,
 	SerializeStateReason, ServeConfig, SqliteDb, StateDelta, WebSocket, WsMessage,

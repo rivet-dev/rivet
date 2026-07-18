@@ -1,425 +1,247 @@
+#[cfg(test)]
 use std::collections::BTreeMap;
+#[cfg(test)]
 use std::sync::Arc;
-use std::time::Duration;
-
-use crate::time::Instant;
 
 use anyhow::Result;
 #[cfg(test)]
-use parking_lot::Mutex;
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 
-use crate::error::ActorRuntime;
 use crate::types::ListOpts;
 
-/// Maximum keys per `apply_batch` put or delete list. Mirrors the engine-side
-/// `MAX_KEYS` limit in `engine/packages/pegboard/src/actor_kv/mod.rs`; the
-/// envoy backend rejects requests above this.
-pub(crate) const APPLY_BATCH_CHUNK_SIZE: usize = 128;
-
+/// Narrow access to the actor's pre-SQLite KV namespace.
+///
+/// Production code may use this only for the one-time SQLite importer and the
+/// temporary inspector-token mirror. It intentionally has no default or
+/// unconfigured state. The in-memory backend exists only in unit tests.
 #[derive(Clone)]
-pub struct Kv {
-	backend: KvBackend,
-	actor_id: String,
+pub(crate) struct LegacyActorKv {
+	backend: LegacyActorKvBackend,
 }
 
 #[derive(Clone)]
-enum KvBackend {
-	Unconfigured,
-	Envoy(EnvoyHandle),
-	InMemory(Arc<InMemoryKv>),
-}
-
-struct InMemoryKv {
-	// Forced-sync: the in-memory backend never holds this guard across `.await`,
-	// and test hook setters are synchronous.
-	store: RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
+enum LegacyActorKvBackend {
+	Envoy { handle: EnvoyHandle, actor_id: String },
 	#[cfg(test)]
-	stats: InMemoryKvStats,
+	InMemory(Arc<TestLegacyActorKv>),
 }
 
 #[cfg(test)]
-#[derive(Default)]
-struct InMemoryKvStats {
+struct TestLegacyActorKv {
+	store: RwLock<BTreeMap<Vec<u8>, Vec<u8>>>,
 	delete_range_after_write_lock: Mutex<Option<Arc<dyn Fn() + Send + Sync + 'static>>>,
-	// Emulates backend page caps so pagination code paths can be exercised
-	// without an engine.
 	list_limit_cap: Mutex<Option<u32>>,
+	range_start_inclusive: Mutex<bool>,
 }
 
-impl Kv {
-	/// `actor_id` stays on `Kv` because envoy-client KV calls require it on every request.
-	pub fn new(handle: EnvoyHandle, actor_id: impl Into<String>) -> Self {
+impl LegacyActorKv {
+	pub(crate) fn new(handle: EnvoyHandle, actor_id: impl Into<String>) -> Self {
 		Self {
-			backend: KvBackend::Envoy(handle),
-			actor_id: actor_id.into(),
+			backend: LegacyActorKvBackend::Envoy {
+				handle,
+				actor_id: actor_id.into(),
+			},
 		}
 	}
 
-	pub fn new_in_memory() -> Self {
+	#[cfg(test)]
+	pub(crate) fn new_in_memory() -> Self {
 		Self {
-			backend: KvBackend::InMemory(Arc::new(InMemoryKv {
+			backend: LegacyActorKvBackend::InMemory(Arc::new(TestLegacyActorKv {
 				store: RwLock::new(BTreeMap::new()),
-				#[cfg(test)]
-				stats: InMemoryKvStats::default(),
+				delete_range_after_write_lock: Mutex::new(None),
+				list_limit_cap: Mutex::new(None),
+				range_start_inclusive: Mutex::new(true),
 			})),
-			actor_id: String::new(),
 		}
 	}
 
-	pub async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
-		let mut values = self.batch_get(&[key]).await?;
-		Ok(values.pop().flatten())
+	#[cfg(test)]
+	pub(crate) async fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>> {
+		Ok(self.batch_get(&[key]).await?.pop().flatten())
 	}
 
-	pub async fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
+	pub(crate) async fn put(&self, key: &[u8], value: &[u8]) -> Result<()> {
 		self.batch_put(&[(key, value)]).await
 	}
 
-	pub async fn delete(&self, key: &[u8]) -> Result<()> {
-		self.batch_delete(&[key]).await
-	}
-
-	pub async fn delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
-		let started_at = Instant::now();
-		let result = match &self.backend {
-			KvBackend::Envoy(handle) => {
-				handle
-					.kv_delete_range(self.actor_id.clone(), start.to_vec(), end.to_vec())
-					.await
-			}
-			KvBackend::InMemory(store) => {
-				let start = start.to_vec();
-				let end = end.to_vec();
-				let mut entries = store.store.write();
-
-				#[cfg(test)]
-				{
-					let hook = store.stats.delete_range_after_write_lock.lock().clone();
-					if let Some(hook) = hook {
-						hook();
-					}
-				}
-
-				entries.retain(|key, _| key < &start || key >= &end);
-				Ok(())
-			}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
-		};
-		self.log_call("delete_range", None, None, started_at, &result);
-		result
-	}
-
-	pub async fn list_prefix(
-		&self,
-		prefix: &[u8],
-		opts: ListOpts,
-	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-		let started_at = Instant::now();
-		let result = match &self.backend {
-			KvBackend::Envoy(handle) => {
-				handle
-					.kv_list_prefix(
-						self.actor_id.clone(),
-						prefix.to_vec(),
-						Some(opts.reverse),
-						opts.limit.map(u64::from),
-					)
-					.await
-			}
-			KvBackend::InMemory(entries) => {
-				let mut listed: Vec<_> = entries
-					.store
-					.read()
-					.iter()
-					.filter(|(key, _)| key.starts_with(prefix))
-					.map(|(key, value)| (key.clone(), value.clone()))
-					.collect();
-				#[cfg(test)]
-				let opts = entries.capped_list_opts(opts);
-				apply_list_opts(&mut listed, opts);
-				Ok(listed)
-			}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
-		};
-		let result_count = result.as_ref().ok().map(Vec::len);
-		self.log_call("list_prefix", None, result_count, started_at, &result);
-		result
-	}
-
-	pub async fn list_range(
-		&self,
-		start: &[u8],
-		end: &[u8],
-		opts: ListOpts,
-	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	pub(crate) async fn batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
 		match &self.backend {
-			KvBackend::Envoy(handle) => {
-				handle
-					.kv_list_range(
-						self.actor_id.clone(),
-						start.to_vec(),
-						end.to_vec(),
-						true,
-						Some(opts.reverse),
-						opts.limit.map(u64::from),
-					)
-					.await
+			LegacyActorKvBackend::Envoy { handle, actor_id } => handle
+				.kv_get(
+					actor_id.clone(),
+					keys.iter().map(|key| key.to_vec()).collect(),
+				)
+				.await,
+			#[cfg(test)]
+			LegacyActorKvBackend::InMemory(store) => {
+				let store = store.store.read();
+				Ok(keys.iter().map(|key| store.get(*key).cloned()).collect())
 			}
-			KvBackend::InMemory(entries) => {
-				let mut listed: Vec<_> = entries
-					.store
-					.read()
-					.range(start.to_vec()..end.to_vec())
-					.map(|(key, value)| (key.clone(), value.clone()))
-					.collect();
-				#[cfg(test)]
-				let opts = entries.capped_list_opts(opts);
-				apply_list_opts(&mut listed, opts);
-				Ok(listed)
-			}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
 		}
 	}
 
-	pub async fn batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
-		let started_at = Instant::now();
-		let result = match &self.backend {
-			KvBackend::Envoy(handle) => {
-				handle
-					.kv_get(
-						self.actor_id.clone(),
-						keys.iter().map(|key| key.to_vec()).collect(),
-					)
-					.await
-				}
-				KvBackend::InMemory(entries) => {
-					let entries = entries.store.read();
-					Ok(keys.iter().map(|key| entries.get(*key).cloned()).collect())
-				}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
-		};
-		self.log_call("batch_get", Some(keys.len()), None, started_at, &result);
-		result
-	}
-
-	pub async fn batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
-		let started_at = Instant::now();
-		let result = match &self.backend {
-			KvBackend::Envoy(handle) => {
-				handle
-					.kv_put(
-						self.actor_id.clone(),
-						entries
-							.iter()
-							.map(|(key, value)| (key.to_vec(), value.to_vec()))
-							.collect(),
-					)
-					.await
-			}
-			KvBackend::InMemory(store) => {
+	pub(crate) async fn batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
+		match &self.backend {
+			LegacyActorKvBackend::Envoy { handle, actor_id } => handle
+				.kv_put(
+					actor_id.clone(),
+					entries
+						.iter()
+						.map(|(key, value)| (key.to_vec(), value.to_vec()))
+						.collect(),
+				)
+				.await,
+			#[cfg(test)]
+			LegacyActorKvBackend::InMemory(store) => {
 				let mut store = store.store.write();
 				for (key, value) in entries {
 					store.insert(key.to_vec(), value.to_vec());
 				}
 				Ok(())
 			}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
-		};
-		self.log_call("batch_put", Some(entries.len()), None, started_at, &result);
-		result
+		}
 	}
 
-	pub async fn apply_batch(
+	pub(crate) async fn list_prefix(
 		&self,
-		puts: &[(Vec<u8>, Vec<u8>)],
-		deletes: &[Vec<u8>],
-	) -> Result<()> {
+		prefix: &[u8],
+		opts: ListOpts,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
 		match &self.backend {
-			KvBackend::Envoy(_) => {
-				if !puts.is_empty() {
-					let put_refs: Vec<(&[u8], &[u8])> = puts
-						.iter()
-						.map(|(key, value)| (key.as_slice(), value.as_slice()))
-						.collect();
-					self.batch_put(&put_refs).await?;
-				}
-
-				if !deletes.is_empty() {
-					let delete_refs: Vec<&[u8]> = deletes.iter().map(Vec::as_slice).collect();
-					self.batch_delete(&delete_refs).await?;
-				}
-
-				Ok(())
-				}
-				KvBackend::InMemory(store) => {
-					let mut store = store.store.write();
-					for key in deletes {
-						store.remove(key);
-				}
-				for (key, value) in puts {
-					store.insert(key.clone(), value.clone());
-				}
-				Ok(())
+			LegacyActorKvBackend::Envoy { handle, actor_id } => handle
+				.kv_list_prefix(
+					actor_id.clone(),
+					prefix.to_vec(),
+					Some(opts.reverse),
+					opts.limit.map(u64::from),
+				)
+				.await,
+			#[cfg(test)]
+			LegacyActorKvBackend::InMemory(store) => {
+				let mut entries: Vec<_> = store
+					.store
+					.read()
+					.iter()
+					.filter(|(key, _)| key.starts_with(prefix))
+					.map(|(key, value)| (key.clone(), value.clone()))
+					.collect();
+				apply_list_opts(&mut entries, store.capped_opts(opts));
+				Ok(entries)
 			}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
 		}
 	}
 
-	pub async fn batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
-		let started_at = Instant::now();
-		let result = match &self.backend {
-			KvBackend::Envoy(handle) => {
-				handle
-					.kv_delete(
-						self.actor_id.clone(),
-						keys.iter().map(|key| key.to_vec()).collect(),
-					)
-					.await
-				}
-				KvBackend::InMemory(entries) => {
-					let mut entries = entries.store.write();
-					for key in keys {
-						entries.remove(*key);
-				}
-				Ok(())
-			}
-			KvBackend::Unconfigured => Err(kv_not_configured_error()),
-		};
-		self.log_call("delete", Some(keys.len()), None, started_at, &result);
-		result
-	}
-
-	fn backend_label(&self) -> &'static str {
-		match &self.backend {
-			KvBackend::Unconfigured => "unconfigured",
-			KvBackend::Envoy(_) => "envoy",
-			KvBackend::InMemory(_) => "in_memory",
-		}
-	}
-
-	fn log_call<T>(
+	pub(crate) async fn list_range(
 		&self,
-		operation: &'static str,
-		key_count: Option<usize>,
-		result_count: Option<usize>,
-		started_at: Instant,
-		result: &Result<T>,
-	) {
-		let elapsed_us = duration_micros(started_at.elapsed());
-		match result {
-			Ok(_) => {
-				tracing::debug!(
-					actor_id = %self.actor_id,
-					backend = self.backend_label(),
-					operation,
-					key_count = ?key_count,
-					result_count = ?result_count,
-					elapsed_us,
-					outcome = "ok",
-					"kv call completed"
-				);
-			}
-			Err(error) => {
-				tracing::debug!(
-					actor_id = %self.actor_id,
-					backend = self.backend_label(),
-					operation,
-					key_count = ?key_count,
-					result_count = ?result_count,
-					elapsed_us,
-					outcome = "error",
-					error = %error,
-					"kv call completed"
-				);
+		start: &[u8],
+		end: &[u8],
+		opts: ListOpts,
+	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+		match &self.backend {
+			LegacyActorKvBackend::Envoy { handle, actor_id } => handle
+				.kv_list_range(
+					actor_id.clone(),
+					start.to_vec(),
+					end.to_vec(),
+					true,
+					Some(opts.reverse),
+					opts.limit.map(u64::from),
+				)
+				.await,
+			#[cfg(test)]
+			LegacyActorKvBackend::InMemory(store) => {
+				let entries_guard = store.store.read();
+				let mut entries: Vec<_> = entries_guard
+					.range(start.to_vec()..end.to_vec())
+					.filter(|(key, _)| {
+						*store.range_start_inclusive.lock() || key.as_slice() > start
+					})
+					.map(|(key, value)| (key.clone(), value.clone()))
+					.collect();
+				apply_list_opts(&mut entries, store.capped_opts(opts));
+				Ok(entries)
 			}
 		}
 	}
-}
 
-fn kv_not_configured_error() -> anyhow::Error {
-	ActorRuntime::NotConfigured {
-		component: "kv handle".to_owned(),
-	}
-	.build()
-}
-
-fn duration_micros(duration: Duration) -> u64 {
-	duration.as_micros().try_into().unwrap_or(u64::MAX)
-}
-
-impl std::fmt::Debug for Kv {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Kv")
-			.field(
-				"configured",
-				&!matches!(self.backend, KvBackend::Unconfigured),
-			)
-			.field("in_memory", &matches!(self.backend, KvBackend::InMemory(_)))
-			.field("actor_id", &self.actor_id)
-			.finish()
-	}
-}
-
-impl Default for Kv {
-	fn default() -> Self {
-		Self {
-			backend: KvBackend::Unconfigured,
-			actor_id: String::new(),
+	#[cfg(test)]
+	pub(crate) async fn batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
+		match &self.backend {
+			LegacyActorKvBackend::Envoy { handle, actor_id } => handle
+				.kv_delete(actor_id.clone(), keys.iter().map(|key| key.to_vec()).collect())
+				.await,
+			LegacyActorKvBackend::InMemory(store) => {
+				let mut store = store.store.write();
+				for key in keys { store.remove(*key); }
+				Ok(())
+			}
 		}
 	}
-}
 
-#[cfg(test)]
-impl Kv {
+	#[cfg(test)]
+	pub(crate) async fn delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
+		match &self.backend {
+			LegacyActorKvBackend::Envoy { handle, actor_id } => handle
+				.kv_delete_range(actor_id.clone(), start.to_vec(), end.to_vec())
+				.await,
+			LegacyActorKvBackend::InMemory(store) => {
+				let mut entries = store.store.write();
+				if let Some(hook) = store.delete_range_after_write_lock.lock().clone() { hook(); }
+				entries.retain(|key, _| key.as_slice() < start || key.as_slice() >= end);
+				Ok(())
+			}
+		}
+	}
+
+	#[cfg(test)]
 	pub(crate) fn test_identity(&self) -> usize {
 		match &self.backend {
-			KvBackend::InMemory(store) => Arc::as_ptr(store) as usize,
-			KvBackend::Envoy(handle) => handle.get_envoy_key().as_ptr() as usize,
-			KvBackend::Unconfigured => 0,
+			LegacyActorKvBackend::Envoy { handle, .. } => handle.get_envoy_key().as_ptr() as usize,
+			LegacyActorKvBackend::InMemory(store) => Arc::as_ptr(store) as usize,
 		}
 	}
 
-	pub(crate) fn test_set_delete_range_after_write_lock_hook(
-		&self,
-		hook: impl Fn() + Send + Sync + 'static,
-	) {
-		if let KvBackend::InMemory(store) = &self.backend {
-			*store.stats.delete_range_after_write_lock.lock() = Some(Arc::new(hook));
+	#[cfg(test)]
+	pub(crate) fn test_set_delete_range_after_write_lock_hook(&self, hook: impl Fn() + Send + Sync + 'static) {
+		if let LegacyActorKvBackend::InMemory(store) = &self.backend {
+			*store.delete_range_after_write_lock.lock() = Some(Arc::new(hook));
 		}
 	}
 
+	#[cfg(test)]
 	pub(crate) fn test_set_list_limit_cap(&self, cap: u32) {
-		if let KvBackend::InMemory(store) = &self.backend {
-			*store.stats.list_limit_cap.lock() = Some(cap);
+		if let LegacyActorKvBackend::InMemory(store) = &self.backend {
+			*store.list_limit_cap.lock() = Some(cap);
+		}
+	}
+
+	#[cfg(test)]
+	pub(crate) fn test_set_range_start_inclusive(&self, inclusive: bool) {
+		if let LegacyActorKvBackend::InMemory(store) = &self.backend {
+			*store.range_start_inclusive.lock() = inclusive;
 		}
 	}
 }
 
 #[cfg(test)]
-impl InMemoryKv {
-	fn capped_list_opts(&self, opts: ListOpts) -> ListOpts {
-		let Some(cap) = *self.stats.list_limit_cap.lock() else {
-			return opts;
-		};
-		ListOpts {
-			reverse: opts.reverse,
-			limit: Some(opts.limit.map_or(cap, |limit| limit.min(cap))),
-		}
+impl TestLegacyActorKv {
+	fn capped_opts(&self, opts: ListOpts) -> ListOpts {
+		let Some(cap) = *self.list_limit_cap.lock() else { return opts; };
+		ListOpts { reverse: opts.reverse, limit: Some(opts.limit.map_or(cap, |limit| limit.min(cap))) }
 	}
 }
 
+#[cfg(test)]
 fn apply_list_opts(entries: &mut Vec<(Vec<u8>, Vec<u8>)>, opts: ListOpts) {
-	if opts.reverse {
-		entries.reverse();
-	}
-	if let Some(limit) = opts.limit {
-		entries.truncate(limit as usize);
-	}
+	if opts.reverse { entries.reverse(); }
+	if let Some(limit) = opts.limit { entries.truncate(limit as usize); }
 }
 
-// Test shim keeps moved tests in crate-root tests/ with private-module access.
+#[cfg(test)]
+pub(crate) type Kv = LegacyActorKv;
+
 #[cfg(test)]
 #[path = "../../tests/kv.rs"]
 pub(crate) mod tests;

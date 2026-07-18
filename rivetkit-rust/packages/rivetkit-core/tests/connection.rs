@@ -17,7 +17,6 @@ mod moved_tests {
 	use crate::actor::context::ActorContext;
 	use crate::actor::keys::make_connection_key;
 	use crate::actor::messages::ActorEvent;
-	use crate::actor::preload::PreloadedKv;
 	use crate::actor::task::LifecycleEvent;
 	use crate::kv::Kv;
 
@@ -30,45 +29,6 @@ mod moved_tests {
 	#[test]
 	fn make_connection_key_matches_typescript_layout() {
 		assert_eq!(make_connection_key("conn-1"), b"\x02conn-1".to_vec());
-	}
-
-	#[tokio::test]
-	async fn restore_persisted_uses_preloaded_connection_prefix_when_present() {
-		let ctx = ActorContext::new_with_kv(
-			"actor-preload",
-			"actor",
-			Vec::new(),
-			"local",
-			Kv::new_in_memory(),
-		);
-		let persisted = PersistedConnection {
-			id: "conn-preloaded".to_owned(),
-			parameters: vec![1],
-			state: vec![2],
-			gateway_id: [1, 2, 3, 4],
-			request_id: [5, 6, 7, 8],
-			request_path: "/socket".to_owned(),
-			..PersistedConnection::default()
-		};
-		let preloaded = PreloadedKv::new_with_requested_get_keys(
-			[(
-				make_connection_key(&persisted.id),
-				encode_persisted_connection(&persisted)
-					.expect("persisted connection should encode"),
-			)],
-			Vec::new(),
-			vec![vec![2]],
-		);
-
-		let restored = ctx
-			.restore_persisted(Some(&preloaded))
-			.await
-			.expect("restore should use preloaded entries instead of unconfigured kv");
-
-		assert_eq!(restored.len(), 1);
-		assert_eq!(restored[0].id(), "conn-preloaded");
-		assert_eq!(restored[0].state(), vec![2]);
-		assert!(ctx.connection("conn-preloaded").is_some());
 	}
 
 	#[tokio::test]

@@ -49,9 +49,9 @@ use crate::actor::factory::ActorFactory;
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
 	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
+	WorkflowKvWrite,
 };
 use crate::actor::metrics::startup_phase::StartupPhase;
-use crate::actor::preload::{PreloadedKv, PreloadedPersistedActor};
 use crate::actor::state::PersistedActor;
 use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
@@ -254,9 +254,13 @@ pub(crate) fn try_send_dispatch_command(
 		.map_err(|_| ActorLifecycleError::NotReady.build())
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum LifecycleEvent {
 	SaveRequested { immediate: bool },
+	WorkflowFlushRequested {
+		writes: Vec<WorkflowKvWrite>,
+		reply: Reply<()>,
+	},
 	InspectorSerializeRequested,
 	InspectorAttachmentsChanged,
 	SleepTick,
@@ -266,12 +270,30 @@ impl LifecycleEvent {
 	fn kind(&self) -> &'static str {
 		match self {
 			Self::SaveRequested { .. } => "save_requested",
+			Self::WorkflowFlushRequested { .. } => "workflow_flush_requested",
 			Self::InspectorSerializeRequested => "inspector_serialize_requested",
 			Self::InspectorAttachmentsChanged => "inspector_attachments_changed",
 			Self::SleepTick => "sleep_tick",
 		}
 	}
 }
+
+impl PartialEq for LifecycleEvent {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(
+				Self::SaveRequested { immediate: left },
+				Self::SaveRequested { immediate: right },
+			) => left == right,
+			(Self::InspectorSerializeRequested, Self::InspectorSerializeRequested)
+			| (Self::InspectorAttachmentsChanged, Self::InspectorAttachmentsChanged)
+			| (Self::SleepTick, Self::SleepTick) => true,
+			_ => false,
+		}
+	}
+}
+
+impl Eq for LifecycleEvent {}
 
 enum LiveExit {
 	Shutdown { reason: ShutdownKind },
@@ -319,15 +341,6 @@ pub struct ActorTask {
 
 	// === STARTUP ===
 	pub start_input: Option<Vec<u8>>,
-	/// Optional persisted snapshot supplied by the registry to skip the
-	/// initial KV fetch. Tri-state: `NoBundle` falls back to KV,
-	/// `BundleExistsButEmpty` means fresh actor defaults, `Some` decodes
-	/// the persisted actor.
-	preload_persisted_actor: PreloadedPersistedActor,
-	/// Optional preloaded KV entries (e.g. `[1]`, `[2] + conn_id`,
-	/// `[5, 1, *]`) supplied alongside `preload_persisted_actor` so startup
-	/// avoids extra round trips.
-	preloaded_kv: Option<PreloadedKv>,
 
 	// === USER RUNTIME BRIDGE ===
 	/// Sends `ActorEvent`s from core subsystems and `ActorTask` to the
@@ -379,7 +392,6 @@ impl ActorTask {
 		factory: Arc<ActorFactory>,
 		ctx: ActorContext,
 		start_input: Option<Vec<u8>>,
-		preload_persisted_actor: Option<PersistedActor>,
 	) -> Self {
 		let (actor_event_tx, actor_event_rx) = mpsc::unbounded_channel();
 		let (inspector_overlay_tx, _) = broadcast::channel(INSPECTOR_OVERLAY_CHANNEL_CAPACITY);
@@ -407,8 +419,6 @@ impl ActorTask {
 			factory,
 			ctx,
 			start_input,
-			preload_persisted_actor: preload_persisted_actor.into(),
-			preloaded_kv: None,
 			actor_event_tx: Some(actor_event_tx),
 			actor_event_rx: Some(actor_event_rx),
 			run_handle: None,
@@ -420,19 +430,6 @@ impl ActorTask {
 			shutdown_reply: None,
 			sleep_grace: None,
 		}
-	}
-
-	pub(crate) fn with_preloaded_kv(mut self, preloaded_kv: Option<PreloadedKv>) -> Self {
-		self.preloaded_kv = preloaded_kv;
-		self
-	}
-
-	pub(crate) fn with_preloaded_persisted_actor(
-		mut self,
-		preload_persisted_actor: PreloadedPersistedActor,
-	) -> Self {
-		self.preload_persisted_actor = preload_persisted_actor;
-		self
 	}
 
 	#[tracing::instrument(
@@ -829,6 +826,9 @@ impl ActorTask {
 				self.schedule_state_save(immediate);
 				self.sync_inspector_serialize_deadline();
 			}
+			LifecycleEvent::WorkflowFlushRequested { writes, reply } => {
+				reply.send(self.flush_workflow_state(writes).await);
+			}
 			LifecycleEvent::InspectorSerializeRequested
 			| LifecycleEvent::InspectorAttachmentsChanged => {
 				self.sync_inspector_serialize_deadline();
@@ -837,6 +837,34 @@ impl ActorTask {
 				self.on_sleep_tick().await;
 			}
 		}
+	}
+
+	async fn flush_workflow_state(&mut self, writes: Vec<WorkflowKvWrite>) -> Result<()> {
+		if !matches!(
+			self.lifecycle,
+			LifecycleState::Started | LifecycleState::SleepGrace
+		) {
+			return Err(ActorLifecycleError::NotReady.build());
+		}
+		let save_request_revision = self.ctx.save_request_revision();
+		let (reply_tx, reply_rx) = oneshot::channel();
+		self.send_actor_event(
+			"workflow_flush_serialize_state",
+			ActorEvent::SerializeState {
+				reason: SerializeStateReason::Save,
+				reply: Reply::from(reply_tx),
+			},
+		)?;
+		let deltas = reply_rx
+			.await
+			.context("receive workflow flush serialize-state reply")??;
+		self.ctx
+			.save_state_and_workflow_batch_with_revision(
+				deltas,
+				writes,
+				save_request_revision,
+			)
+			.await
 	}
 
 	async fn handle_dispatch(&mut self, command: DispatchCommand) {
@@ -1112,12 +1140,6 @@ impl ActorTask {
 		}
 		self.ensure_actor_event_channel();
 		self.ctx.configure_actor_events(self.actor_event_tx.clone());
-		self.ctx.configure_queue_preload(self.preloaded_kv.clone());
-
-		if self.ctx.sql().backend() == crate::sqlite::SqliteBackend::Unavailable {
-			return Err(crate::error::SqliteRuntimeError::Unavailable.build())
-				.context("internal actor storage requires sqlite");
-		}
 
 		let schema_started_at = Instant::now();
 		crate::actor::internal_schema::ensure_internal_schema(self.ctx.sql())
@@ -1161,10 +1183,7 @@ impl ActorTask {
 					.context("persist actor initialization")?;
 			}
 			let init_inspector_token_started_at = Instant::now();
-			crate::inspector::auth::init_inspector_token_with_preload(
-				&self.ctx,
-				self.preloaded_kv.as_ref(),
-			)
+			crate::inspector::auth::init_inspector_token(&self.ctx)
 			.await
 			.context("initialize inspector token")?;
 			tracing::debug!(
@@ -1173,7 +1192,7 @@ impl ActorTask {
 				"perf internal: initInspectorTokenMs"
 			);
 			self.ctx
-				.restore_hibernatable_connections_with_preload(self.preloaded_kv.as_ref())
+				.restore_hibernatable_connections()
 				.await
 				.context("restore hibernatable connections")?;
 			Self::settle_hibernated_connections(self.ctx.clone())

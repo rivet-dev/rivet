@@ -23,10 +23,16 @@ export interface StateDeltaPayload {
   connHibernation: Array<StateDeltaConnHibernationEntry>
   connHibernationRemoved: Array<string>
 }
+export interface WorkflowKvWritePayload {
+  key: Buffer
+  value: Buffer
+}
 export interface JsRequestSaveOpts {
   immediate?: boolean
   maxWaitMs?: number
 }
+export declare function decodeInspectorRequest(bytes: Buffer, advertisedVersion: number): Buffer
+export declare function encodeInspectorResponse(bytes: Buffer, targetVersion: number): Buffer
 export interface JsInspectorSnapshot {
   stateRevision: number
   connectionsRevision: number
@@ -235,7 +241,6 @@ export interface JsKvEntry {
 }
 /** N-API wrapper around `rivetkit-core::ActorContext`. */
 export declare class ActorContext {
-  constructor(actorId: string, name: string, region: string)
   state(): Buffer
   beginOnStateChange(): void
   endOnStateChange(): void
@@ -256,6 +261,7 @@ export declare class ActorContext {
   takePendingHibernationChanges(): Array<string>
   dirtyHibernatableConns(): Array<ConnHandle>
   saveState(payload: StateDeltaPayload): Promise<void>
+  saveStateAndWorkflowBatch(writes: Array<WorkflowKvWritePayload>): Promise<void>
   actorId(): string
   name(): string
   key(): Array<JsActorKeySegment>

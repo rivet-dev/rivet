@@ -318,8 +318,12 @@ export async function flush(
 	}
 
 	if (writes.length > 0) {
-		for (const chunk of splitBatchWrites(writes)) {
-			await driver.batch(chunk);
+		if (driver.atomicBatch) {
+			await driver.batch(writes);
+		} else {
+			for (const chunk of splitBatchWrites(writes)) {
+				await driver.batch(chunk);
+			}
 		}
 	}
 

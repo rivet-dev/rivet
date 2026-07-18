@@ -6216,7 +6216,6 @@ dependencies = [
  "parking_lot",
  "rivet-depot-client",
  "rivet-error",
- "rivetkit-actor-persist",
  "rivetkit-core",
  "scc",
  "serde",
@@ -6227,7 +6226,6 @@ dependencies = [
  "tracing-logfmt",
  "tracing-stackdriver",
  "tracing-subscriber",
- "vbare",
 ]
 
 [[package]]

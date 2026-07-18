@@ -35,6 +35,10 @@ class RecordingDriver extends InMemoryDriver {
 	}
 }
 
+class AtomicRecordingDriver extends RecordingDriver {
+	readonly atomicBatch = true;
+}
+
 function batchPayloadBytes(writes: KVWrite[]): number {
 	return writes.reduce(
 		(total, write) => total + write.key.byteLength + write.value.byteLength,
@@ -101,6 +105,22 @@ for (const mode of modes) {
 }
 
 describe("Workflow Engine Storage flush", () => {
+	it("does not split a driver-declared atomic flush", async () => {
+		const driver = new AtomicRecordingDriver();
+		driver.latency = 0;
+		const storage = createStorage();
+		storage.flushedState = storage.state;
+		storage.nameRegistry = Array.from(
+			{ length: MAX_KV_BATCH_ENTRIES + 1 },
+			(_, i) => `step-${i}`,
+		);
+
+		await flush(storage, driver);
+
+		expect(driver.batches).toHaveLength(1);
+		expect(driver.batches[0]).toHaveLength(MAX_KV_BATCH_ENTRIES + 1);
+	});
+
 	it("splits writes into KV-sized batches", async () => {
 		const driver = new RecordingDriver();
 		driver.latency = 0;

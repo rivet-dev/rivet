@@ -36,7 +36,6 @@ use rivetkit::{
 	client::{Client, ClientConfig},
 };
 use rivetkit_client_protocol as wire;
-use rivetkit_core::ActorContext;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value as JsonValue, json};
 use tokio::time::timeout;
@@ -88,7 +87,12 @@ async fn actor_ctx_client_calls_sibling_action() {
 		axum::serve(listener, app).await.unwrap();
 	});
 
-	let core_ctx = ActorContext::new("caller-1", "caller", Vec::new(), "local");
+	let core_ctx = rivetkit_core::testing::actor_context(
+		"caller-1",
+		"caller",
+		Vec::new(),
+		"local",
+	);
 	core_ctx.configure_envoy(test_envoy_handle(endpoint(addr)), Some(1));
 	let ctx = Ctx::<CallerActor>::new(core_ctx);
 

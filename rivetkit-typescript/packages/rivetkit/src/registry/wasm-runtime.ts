@@ -48,6 +48,7 @@ import type {
 	RuntimeSqlRunResult,
 	SqliteTransactionHandle,
 	RuntimeStateDeltaPayload,
+	RuntimeWorkflowKvWrite,
 	RuntimeWebSocketEvent,
 	WebSocketHandle,
 } from "./runtime";
@@ -464,6 +465,17 @@ export class WasmCoreRuntime implements CoreRuntime {
 		payload: RuntimeStateDeltaPayload,
 	): Promise<void> {
 		await callHandleAsync(asWasmActorContext(ctx), "saveState", payload);
+	}
+
+	async actorSaveStateAndWorkflowBatch(
+		ctx: ActorContextHandle,
+		writes: RuntimeWorkflowKvWrite[],
+	): Promise<void> {
+		await callHandleAsync(
+			asWasmActorContext(ctx),
+			"saveStateAndWorkflowBatch",
+			writes,
+		);
 	}
 
 	actorId(ctx: ActorContextHandle): string {

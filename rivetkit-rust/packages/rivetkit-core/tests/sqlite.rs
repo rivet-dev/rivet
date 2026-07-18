@@ -263,34 +263,31 @@ fn send_execute_ok(response_tx: oneshot::Sender<anyhow::Result<RemoteSqliteRespo
 }
 
 #[test]
-fn remote_backend_requires_declared_database_and_capability() {
+fn remote_backend_selection_is_independent_of_user_database_flag() {
 	assert_eq!(
-		select_sqlite_backend(true, true),
+		select_sqlite_backend(true).expect("remote sqlite should always be available"),
+		SqliteBackend::RemoteEnvoy
+	);
+	assert_eq!(
+		select_sqlite_backend(true).expect("remote sqlite should ignore public database opt-in"),
 		SqliteBackend::RemoteEnvoy
 	);
 
 	#[cfg(feature = "sqlite-local")]
 	{
 		assert_eq!(
-			select_sqlite_backend(true, false),
-			SqliteBackend::LocalNative
-		);
-		assert_eq!(
-			select_sqlite_backend(false, true),
+			select_sqlite_backend(false).expect("local sqlite feature should select native backend"),
 			SqliteBackend::LocalNative
 		);
 	}
 
 	#[cfg(not(feature = "sqlite-local"))]
 	{
-		assert_eq!(
-			select_sqlite_backend(true, false),
-			SqliteBackend::Unavailable
-		);
-		assert_eq!(
-			select_sqlite_backend(false, true),
-			SqliteBackend::Unavailable
-		);
+		let error = select_sqlite_backend(false)
+			.expect_err("construction without a sqlite backend must fail");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "sqlite");
+		assert_eq!(error.code(), "unavailable");
 	}
 }
 
@@ -354,7 +351,8 @@ fn protocol_conversion_preserves_bind_and_result_values() {
 #[tokio::test]
 async fn transaction_arguments_are_structured_errors() {
 	let (handle, _) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	for error in [
 		db.begin_transaction_with_key("", None)
 			.await
@@ -411,7 +409,8 @@ async fn remote_execute_logs_operation_context_at_source() {
 		Some(7),
 		true,
 		true,
-	);
+	)
+	.expect("test remote sqlite should be configured");
 	let records = Arc::new(StdMutex::new(Vec::new()));
 	let subscriber = Registry::default().with(SqliteOperationLogLayer {
 		records: records.clone(),
@@ -461,7 +460,8 @@ async fn remote_execute_logs_operation_context_at_source() {
 #[tokio::test]
 async fn remote_transactions_park_ordinary_work_and_unpark_in_order() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -498,7 +498,8 @@ async fn remote_transactions_park_ordinary_work_and_unpark_in_order() {
 #[tokio::test]
 async fn transaction_gate_serves_registered_waiters_in_fifo_order() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let active_gate = Arc::clone(&db.transaction_coordinator.gate)
 		.write_owned()
 		.await;
@@ -543,7 +544,8 @@ async fn transaction_gate_serves_registered_waiters_in_fifo_order() {
 #[tokio::test]
 async fn committed_and_rolled_back_transaction_handles_are_terminal() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -592,7 +594,8 @@ async fn committed_and_rolled_back_transaction_handles_are_terminal() {
 #[tokio::test]
 async fn ordinary_remote_work_can_pipeline_without_a_transaction() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let first = tokio::spawn({
 		let db = db.clone();
@@ -614,7 +617,8 @@ async fn ordinary_remote_work_can_pipeline_without_a_transaction() {
 #[tokio::test]
 async fn expired_remote_transaction_rolls_back_and_rejects_parked_work() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -663,7 +667,8 @@ async fn expired_remote_transaction_rolls_back_and_rejects_parked_work() {
 #[tokio::test]
 async fn deadline_waits_for_in_flight_transaction_work_before_rollback() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -728,7 +733,8 @@ async fn deadline_waits_for_in_flight_transaction_work_before_rollback() {
 #[tokio::test]
 async fn commit_that_owns_operation_lock_beats_deadline_without_poisoning_parked_work() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -767,7 +773,8 @@ async fn commit_that_owns_operation_lock_beats_deadline_without_poisoning_parked
 #[tokio::test]
 async fn cancelled_begin_still_installs_and_expires_the_transaction() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -796,7 +803,8 @@ async fn cancelled_begin_still_installs_and_expires_the_transaction() {
 #[tokio::test]
 async fn cancelled_commit_still_releases_the_transaction() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -825,7 +833,8 @@ async fn cancelled_commit_still_releases_the_transaction() {
 #[tokio::test]
 async fn cancelled_transaction_operation_settles_before_expiry_rollback() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -868,7 +877,8 @@ async fn cancelled_transaction_operation_settles_before_expiry_rollback() {
 #[tokio::test]
 async fn shutdown_during_begin_rolls_back_without_orphaning_the_gate() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -909,7 +919,8 @@ async fn shutdown_during_begin_rolls_back_without_orphaning_the_gate() {
 #[tokio::test]
 async fn shutdown_rechecks_owner_after_concurrent_commit() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -939,7 +950,8 @@ async fn shutdown_rechecks_owner_after_concurrent_commit() {
 #[tokio::test]
 async fn failed_begin_releases_owner_and_allows_key_retry() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let failed_begin = tokio::spawn({
 		let db = db.clone();
@@ -965,7 +977,8 @@ async fn failed_begin_releases_owner_and_allows_key_retry() {
 #[tokio::test]
 async fn disconnect_during_begin_never_publishes_a_transaction_handle() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let begin = tokio::spawn({
 		let db = db.clone();
 		async move { db.begin_transaction(None).await }
@@ -998,7 +1011,8 @@ async fn disconnect_during_begin_never_publishes_a_transaction_handle() {
 #[tokio::test]
 async fn disconnect_during_statement_terminalizes_the_transaction() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let begin = tokio::spawn({
 		let db = db.clone();
 		async move { db.begin_transaction(None).await }
@@ -1037,7 +1051,8 @@ async fn disconnect_during_statement_terminalizes_the_transaction() {
 #[tokio::test]
 async fn disconnect_during_commit_stays_indeterminate_and_releases_waiters() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let begin = tokio::spawn({
 		let db = db.clone();
 		async move { db.begin_transaction(None).await }
@@ -1068,7 +1083,8 @@ async fn disconnect_during_commit_stays_indeterminate_and_releases_waiters() {
 #[tokio::test]
 async fn failed_commit_rolls_back_and_releases_the_transaction() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -1096,7 +1112,8 @@ async fn failed_commit_rolls_back_and_releases_the_transaction() {
 #[tokio::test]
 async fn failed_commit_accepts_sqlite_auto_rollback_as_cleanup_success() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -1133,7 +1150,8 @@ async fn failed_commit_accepts_sqlite_auto_rollback_as_cleanup_success() {
 #[tokio::test]
 async fn failed_rollback_closes_the_coordinator() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -1164,7 +1182,8 @@ async fn failed_rollback_closes_the_coordinator() {
 #[tokio::test]
 async fn close_rolls_back_active_transaction_and_rejects_later_work() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let begin = tokio::spawn({
 		let db = db.clone();
@@ -1191,7 +1210,8 @@ async fn close_rolls_back_active_transaction_and_rejects_later_work() {
 #[tokio::test]
 async fn cancelled_close_still_finishes_rollback_and_release() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let begin = tokio::spawn({
 		let db = db.clone();
 		async move { db.begin_transaction(None).await }
@@ -1281,7 +1301,8 @@ fn terminal_transaction_state_is_bounded() {
 async fn admission_reports_queue_full_and_closed_distinctly() {
 	let (handle, envoy_rx) = test_envoy_handle();
 	drop(envoy_rx);
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let permits = (0..TRANSACTION_COORDINATOR_QUEUE_CAPACITY)
 		.map(|_| db.try_transaction_admission().unwrap())
 		.collect::<Vec<_>>();
@@ -1300,7 +1321,8 @@ async fn admission_reports_queue_full_and_closed_distinctly() {
 #[tokio::test]
 async fn mismatched_release_does_not_drop_the_active_transaction() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let begin = tokio::spawn({
 		let db = db.clone();
 		async move { db.begin_transaction_with_key("owner", None).await }
@@ -1324,7 +1346,8 @@ async fn mismatched_release_does_not_drop_the_active_transaction() {
 #[tokio::test]
 async fn remote_disconnect_terminalizes_transaction_and_unparks_new_work() {
 	let (handle, mut envoy_rx, shared) = test_envoy_handle_with_shared();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 	let begin = tokio::spawn({
 		let db = db.clone();
 		async move { db.begin_transaction_with_key("session-owned", None).await }
@@ -1372,7 +1395,8 @@ async fn remote_disconnect_terminalizes_transaction_and_unparks_new_work() {
 #[test]
 fn remote_head_fence_mismatch_stops_actor_once() {
 	let (handle, mut envoy_rx) = test_envoy_handle();
-	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true);
+	let db = SqliteDb::new_with_remote_sqlite(handle, "actor-a", None, Some(7), true, true)
+		.expect("test remote sqlite should be configured");
 
 	let mapped = db.remote_sqlite_error_response(protocol::SqliteErrorResponse {
 		group: HEAD_FENCE_MISMATCH_GROUP.to_string(),

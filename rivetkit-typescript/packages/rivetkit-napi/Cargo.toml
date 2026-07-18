@@ -35,5 +35,4 @@ rivetkit-core = { workspace = true, features = ["sqlite"] }
 napi-build = "2"
 
 [dev-dependencies]
-rivetkit-actor-persist.workspace = true
-vbare.workspace = true
+rivetkit-core = { workspace = true, features = ["test-support"] }

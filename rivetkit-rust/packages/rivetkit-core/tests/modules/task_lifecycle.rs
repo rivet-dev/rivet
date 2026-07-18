@@ -27,7 +27,6 @@ mod moved_tests {
 			factory,
 			ctx,
 			None,
-			None,
 		)
 	}
 
@@ -48,7 +47,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn startup_loads_preloaded_state_and_input_before_run_handler() {
+	async fn startup_imports_legacy_state_and_uses_start_input_before_run_handler() {
 		let kv = crate::kv::tests::new_in_memory();
 		kv.put(
 			PERSIST_DATA_KEY,
@@ -113,7 +112,6 @@ mod moved_tests {
 			factory,
 			ctx.clone(),
 			Some(vec![7, 7, 7]),
-			None,
 		);
 
 		let (start_tx, start_rx) = oneshot::channel();

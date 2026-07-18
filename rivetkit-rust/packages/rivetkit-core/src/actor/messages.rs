@@ -218,6 +218,14 @@ pub enum StateDelta {
 	ConnHibernationRemoved(ConnId),
 }
 
+/// One workflow-engine KV write that must commit atomically with its actor
+/// state snapshot.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkflowKvWrite {
+	pub key: Vec<u8>,
+	pub value: Vec<u8>,
+}
+
 impl StateDelta {
 	pub(crate) fn payload_len(&self) -> usize {
 		match self {

@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use super::*;
 use crate::action;
 use crate::event::Event;
-use rivetkit_core::{ActorContext, ActorWorkKind};
+use rivetkit_core::ActorWorkKind;
+use rivetkit_core::testing::actor_context;
 
 struct EmptyActor;
 
@@ -49,7 +50,7 @@ struct TestConnState {
 
 #[test]
 fn typed_ctx_broadcast_accepts_cbor_payloads() {
-	let ctx = Ctx::<EmptyActor>::new(ActorContext::new("actor-id", "test", Vec::new(), "local"));
+	let ctx = Ctx::<EmptyActor>::new(actor_context("actor-id", "test", Vec::new(), "local"));
 
 	assert!(ctx.broadcast("x", &42u32).is_ok());
 }
@@ -65,7 +66,7 @@ fn typed_ctx_emit_accepts_named_events() {
 		const NAME: &'static str = "countChanged";
 	}
 
-	let ctx = Ctx::<EmptyActor>::new(ActorContext::new("actor-id", "test", Vec::new(), "local"));
+	let ctx = Ctx::<EmptyActor>::new(actor_context("actor-id", "test", Vec::new(), "local"));
 
 	assert!(ctx.emit(CountChanged { count: 3 }).is_ok());
 }
@@ -73,7 +74,7 @@ fn typed_ctx_emit_accepts_named_events() {
 #[test]
 fn state_cell_reads_writes_and_tracks_dirty() {
 	let ctx = Ctx::<StatefulActor>::with_state(
-		ActorContext::new("actor-id", "test", Vec::new(), "local"),
+		actor_context("actor-id", "test", Vec::new(), "local"),
 		TestState {
 			count: 1,
 			label: "initial".into(),
@@ -113,7 +114,7 @@ fn state_cell_reads_writes_and_tracks_dirty() {
 #[test]
 fn state_snapshot_round_trips_and_seeds_cell() {
 	let ctx = Ctx::<StatefulActor>::with_state(
-		ActorContext::new("actor-id", "test", Vec::new(), "local"),
+		actor_context("actor-id", "test", Vec::new(), "local"),
 		TestState {
 			count: 5,
 			label: "snapshot".into(),
@@ -188,7 +189,7 @@ fn conn_ctx_round_trips_typed_params_and_state() {
 
 #[test]
 fn sleep_lifecycle_methods_accessible_via_inner() {
-	let inner_ctx = ActorContext::new("actor-id", "test", Vec::new(), "local");
+	let inner_ctx = actor_context("actor-id", "test", Vec::new(), "local");
 	let ctx = Ctx::<EmptyActor>::new(inner_ctx);
 
 	// All these methods should be accessible on ctx.inner()
@@ -244,7 +245,7 @@ fn sleep_types_accessible_from_rivetkit_core() {
 	let _ = ActorWorkKind::WaitUntil;
 
 	// These can be used as arguments to methods like spawn_work, track_work
-	let inner_ctx = ActorContext::new("test", "test", vec![], "local");
+	let inner_ctx = actor_context("test", "test", vec![], "local");
 	let _fut_kind = ActorWorkKind::KeepAwake;
 	let _ = _fut_kind;
 	let _ = inner_ctx;

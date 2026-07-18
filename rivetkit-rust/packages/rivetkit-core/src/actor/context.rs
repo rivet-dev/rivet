@@ -31,9 +31,8 @@ use crate::actor::connection::{
 use crate::actor::diagnostics::ActorDiagnostics;
 use crate::actor::internal_storage;
 use crate::actor::lifecycle_hooks::Reply;
-use crate::actor::messages::{ActorEvent, Request, StateDelta};
+use crate::actor::messages::{ActorEvent, Request, StateDelta, WorkflowKvWrite};
 use crate::actor::metrics::ActorMetrics;
-use crate::actor::preload::PreloadedKv;
 use crate::actor::queue::{QueueInspectorUpdateCallback, QueueMetadata, QueueWaitActivityCallback};
 use crate::actor::schedule::{InternalKeepAwakeCallback, LocalAlarmCallback};
 use crate::actor::sleep::{CanSleep, SleepState};
@@ -43,8 +42,8 @@ use crate::actor::task_types::UserTaskKind;
 use crate::actor::work_registry::{ActorWorkKind, CountGuard, RegionGuard};
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::inspector::{Inspector, InspectorSnapshot};
-use crate::kv::Kv;
-use crate::sqlite::{SqliteBackend, SqliteDb};
+use crate::actor::kv::LegacyActorKv;
+use crate::sqlite::SqliteDb;
 use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 
 /// Shared actor runtime context.
@@ -52,19 +51,18 @@ use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 /// This public surface is the foreign-runtime contract for `rivetkit-core`.
 /// Native Rust, NAPI-backed TypeScript, and future V8 runtimes should be able
 /// to drive actor behavior through `ActorFactory` plus the methods exposed here
-/// and on the returned runtime objects like `Kv`, `SqliteDb`, schedule APIs,
+/// and on the returned runtime objects like `SqliteDb`, schedule APIs,
 /// queue APIs, `ConnHandle`, and `WebSocket`.
 #[derive(Clone)]
 pub struct ActorContext(pub(crate) Arc<ActorContextInner>);
 
 #[derive(Clone)]
 pub struct ActorKv {
-	kv: Kv,
 	sql: SqliteDb,
 }
 
 pub(crate) struct ActorContextInner {
-	pub(super) kv: Kv,
+	pub(super) legacy_kv: LegacyActorKv,
 	user_kv: ActorKv,
 	sql: SqliteDb,
 	#[cfg(feature = "sqlite-local")]
@@ -120,9 +118,6 @@ pub(crate) struct ActorContextInner {
 	pub(super) queue_config: Mutex<ActorConfig>,
 	pub(super) queue_abort_signal: Mutex<CancellationToken>,
 	pub(super) queue_initialize: OnceCell<()>,
-	// Forced-sync: startup installs preload before any queue method awaits init.
-	pub(super) queue_preloaded_kv: Mutex<Option<PreloadedKv>>,
-	pub(super) queue_preloaded_message_entries: Mutex<Option<Vec<(Vec<u8>, Vec<u8>)>>>,
 	pub(super) queue_metadata: AsyncMutex<QueueMetadata>,
 	pub(super) queue_receive_lock: AsyncMutex<()>,
 	pub(super) queue_completion_waiters: SccHashMap<u64, oneshot::Sender<Option<Vec<u8>>>>,
@@ -193,35 +188,19 @@ impl ActorKv {
 	}
 
 	pub async fn batch_get(&self, keys: &[&[u8]]) -> Result<Vec<Option<Vec<u8>>>> {
-		if self.sql.backend() == SqliteBackend::Unavailable {
-			self.kv.batch_get(keys).await
-		} else {
-			internal_storage::user_kv_batch_get(&self.sql, keys).await
-		}
+		internal_storage::user_kv_batch_get(&self.sql, keys).await
 	}
 
 	pub async fn batch_put(&self, entries: &[(&[u8], &[u8])]) -> Result<()> {
-		if self.sql.backend() == SqliteBackend::Unavailable {
-			self.kv.batch_put(entries).await
-		} else {
-			internal_storage::user_kv_batch_put(&self.sql, entries).await
-		}
+		internal_storage::user_kv_batch_put(&self.sql, entries).await
 	}
 
 	pub async fn batch_delete(&self, keys: &[&[u8]]) -> Result<()> {
-		if self.sql.backend() == SqliteBackend::Unavailable {
-			self.kv.batch_delete(keys).await
-		} else {
-			internal_storage::user_kv_batch_delete(&self.sql, keys).await
-		}
+		internal_storage::user_kv_batch_delete(&self.sql, keys).await
 	}
 
 	pub async fn delete_range(&self, start: &[u8], end: &[u8]) -> Result<()> {
-		if self.sql.backend() == SqliteBackend::Unavailable {
-			self.kv.delete_range(start, end).await
-		} else {
-			internal_storage::user_kv_delete_range(&self.sql, start, end).await
-		}
+		internal_storage::user_kv_delete_range(&self.sql, start, end).await
 	}
 
 	pub async fn list_prefix(
@@ -229,11 +208,7 @@ impl ActorKv {
 		prefix: &[u8],
 		opts: ListOpts,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-		if self.sql.backend() == SqliteBackend::Unavailable {
-			self.kv.list_prefix(prefix, opts).await
-		} else {
-			internal_storage::user_kv_list_prefix(&self.sql, prefix, opts).await
-		}
+		internal_storage::user_kv_list_prefix(&self.sql, prefix, opts).await
 	}
 
 	pub async fn list_range(
@@ -242,67 +217,38 @@ impl ActorKv {
 		end: &[u8],
 		opts: ListOpts,
 	) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-		if self.sql.backend() == SqliteBackend::Unavailable {
-			self.kv.list_range(start, end, opts).await
-		} else {
-			internal_storage::user_kv_list_range(&self.sql, start, end, opts).await
-		}
+		internal_storage::user_kv_list_range(&self.sql, start, end, opts).await
 	}
 }
 
 impl ActorContext {
-	pub fn new(
+	#[cfg(test)]
+	pub(crate) fn new(
 		actor_id: impl Into<String>,
 		name: impl Into<String>,
 		key: ActorKey,
 		region: impl Into<String>,
 	) -> Self {
-		Self::build(
-			actor_id.into(),
-			name.into(),
-			key,
-			region.into(),
-			None,
-			String::new(),
-			ActorConfig::default(),
-			Kv::default(),
-			SqliteDb::default(),
-		)
-	}
-
-	pub fn new_with_kv(
-		actor_id: impl Into<String>,
-		name: impl Into<String>,
-		key: ActorKey,
-		region: impl Into<String>,
-		kv: Kv,
-	) -> Self {
-		Self::build(
-			actor_id.into(),
-			name.into(),
-			key,
-			region.into(),
-			None,
-			String::new(),
-			ActorConfig::default(),
-			kv,
-			SqliteDb::default(),
-		)
+		tests::new_with_kv(actor_id, name, key, region, LegacyActorKv::new_in_memory())
 	}
 
 	#[cfg(test)]
-	pub(crate) fn new_for_state_tests(kv: Kv, config: ActorConfig) -> Self {
-		Self::build(
-			"state-test".to_owned(),
-			"state-test".to_owned(),
-			Vec::new(),
-			"local".to_owned(),
-			None,
-			String::new(),
-			config,
-			kv,
-			SqliteDb::default(),
-		)
+	pub(crate) fn new_with_kv(
+		actor_id: impl Into<String>,
+		name: impl Into<String>,
+		key: ActorKey,
+		region: impl Into<String>,
+		legacy_kv: LegacyActorKv,
+	) -> Self {
+		tests::new_with_kv(actor_id, name, key, region, legacy_kv)
+	}
+
+	#[cfg(test)]
+	pub(crate) fn new_for_state_tests(legacy_kv: LegacyActorKv, config: ActorConfig) -> Self {
+		let ctx = tests::new_with_kv("state-test", "state-test", Vec::new(), "local", legacy_kv);
+		ctx.configure_connection_runtime(config.clone());
+		ctx.configure_queue(config);
+		ctx
 	}
 
 	pub(crate) fn build(
@@ -313,7 +259,7 @@ impl ActorContext {
 		_generation: Option<u32>,
 		_envoy_key: String,
 		config: ActorConfig,
-		kv: Kv,
+		legacy_kv: LegacyActorKv,
 		sql: SqliteDb,
 	) -> Self {
 		let metrics = ActorMetrics::new(name.clone());
@@ -329,12 +275,9 @@ impl ActorContext {
 		let abort_signal = CancellationToken::new();
 		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
-		let user_kv = ActorKv {
-			kv: kv.clone(),
-			sql: sql.clone(),
-		};
+		let user_kv = ActorKv { sql: sql.clone() };
 		let ctx = Self(Arc::new(ActorContextInner {
-			kv,
+			legacy_kv,
 			user_kv,
 			sql,
 			#[cfg(feature = "sqlite-local")]
@@ -380,8 +323,6 @@ impl ActorContext {
 			queue_config: Mutex::new(config.clone()),
 			queue_abort_signal: Mutex::new(abort_signal.clone()),
 			queue_initialize: OnceCell::new(),
-			queue_preloaded_kv: Mutex::new(None),
-			queue_preloaded_message_entries: Mutex::new(None),
 			queue_metadata: AsyncMutex::new(QueueMetadata::default()),
 			queue_receive_lock: AsyncMutex::new(()),
 			queue_completion_waiters: SccHashMap::new(),
@@ -477,12 +418,10 @@ impl ActorContext {
 		&self.0.user_kv
 	}
 
-	/// Internal accessor for the actor KV store. Core uses KV as the backing
-	/// store for the inspector token and actor startup persistence. Unlike the
-	/// public `kv()` accessor, this is not deprecated because the storage
-	/// machinery itself is not going away, only the public actor-facing API.
-	pub(crate) fn kv_internal(&self) -> &Kv {
-		&self.0.kv
+	/// Legacy actor KV access used only by the one-time KV-to-SQLite importer and
+	/// the temporary inspector-token mirror consumed by the dashboard.
+	pub(crate) fn legacy_kv(&self) -> &LegacyActorKv {
+		&self.0.legacy_kv
 	}
 
 	pub fn sql(&self) -> &SqliteDb {
@@ -976,10 +915,6 @@ impl ActorContext {
 		self.configure_connection_storage(config);
 	}
 
-	pub(crate) fn configure_queue_preload(&self, preloaded_kv: Option<PreloadedKv>) {
-		self.configure_preload(preloaded_kv);
-	}
-
 	pub(crate) fn configure_actor_events(&self, sender: Option<mpsc::UnboundedSender<ActorEvent>>) {
 		*self.0.actor_events.write() = sender;
 	}
@@ -1192,9 +1127,6 @@ impl ActorContext {
 		for delta in deltas {
 			match delta {
 				StateDelta::ConnHibernation { conn, bytes } => {
-					if let Some(handle) = self.connection(&conn) {
-						handle.set_state_initial(bytes.clone());
-					}
 					explicit_updates.insert(conn, bytes);
 				}
 				StateDelta::ConnHibernationRemoved(conn) => {
@@ -1204,12 +1136,14 @@ impl ActorContext {
 			}
 		}
 
-		let pending = self.take_pending_hibernation_changes_inner();
+		let mut pending = self.take_pending_hibernation_changes_inner();
 		let mut removal_ids = pending.removed.clone();
 		removal_ids.extend(explicit_removals.iter().cloned());
 
 		let explicit_update_ids: std::collections::BTreeSet<_> =
 			explicit_updates.keys().cloned().collect();
+		pending.updated.extend(explicit_update_ids.iter().cloned());
+		pending.removed.extend(explicit_removals.iter().cloned());
 
 		for (conn, bytes) in explicit_updates {
 			if removal_ids.contains(&conn) {
@@ -1259,17 +1193,8 @@ impl ActorContext {
 		Ok((next_deltas, pending))
 	}
 
-	#[cfg(test)]
 	pub(crate) async fn restore_hibernatable_connections(&self) -> Result<Vec<ConnHandle>> {
-		self.restore_hibernatable_connections_with_preload(None)
-			.await
-	}
-
-	pub(crate) async fn restore_hibernatable_connections_with_preload(
-		&self,
-		preloaded_kv: Option<&PreloadedKv>,
-	) -> Result<Vec<ConnHandle>> {
-		let restored = self.restore_persisted(preloaded_kv).await?;
+		let restored = self.restore_persisted().await?;
 		if !restored.is_empty() {
 			if let Some(envoy_handle) = self.sleep_envoy_handle() {
 				let meta_entries: Vec<_> = restored
@@ -1617,6 +1542,27 @@ impl ActorContext {
 			Err(error) => return Err(error),
 		};
 		if let Err(error) = self.apply_state_deltas(deltas, save_request_revision).await {
+			self.restore_pending_hibernation_changes(pending_hibernation_changes);
+			return Err(error);
+		}
+		self.record_state_updated();
+		Ok(())
+	}
+
+	pub(crate) async fn save_state_and_workflow_batch_with_revision(
+		&self,
+		deltas: Vec<StateDelta>,
+		workflow_writes: Vec<WorkflowKvWrite>,
+		save_request_revision: u64,
+	) -> Result<()> {
+		let (deltas, pending_hibernation_changes) = match self.prepare_state_deltas(deltas) {
+			Ok(prepared) => prepared,
+			Err(error) => return Err(error),
+		};
+		if let Err(error) = self
+			.apply_state_deltas_and_workflow(deltas, workflow_writes, save_request_revision)
+			.await
+		{
 			self.restore_pending_hibernation_changes(pending_hibernation_changes);
 			return Err(error);
 		}

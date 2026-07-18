@@ -1,7 +1,6 @@
 use tracing::Instrument;
 
 use super::*;
-use crate::actor::keys::PERSIST_DATA_KEY;
 use crate::error::ActorRuntime;
 use crate::runtime::RuntimeSpawner;
 
@@ -12,13 +11,11 @@ impl EnvoyCallbacks for RegistryCallbacks {
 		actor_id: String,
 		generation: u32,
 		config: protocol::ActorConfig,
-		preloaded_kv: Option<protocol::PreloadedKv>,
+		_preloaded_kv: Option<protocol::PreloadedKv>,
 	) -> EnvoyBoxFuture<anyhow::Result<()>> {
 		let dispatcher = self.dispatcher.clone();
 		let actor_name = config.name.clone();
 		let key = actor_key_from_protocol(config.key.clone());
-		let preload_persisted_actor = decode_preloaded_persisted_actor(preloaded_kv.as_ref());
-		let preloaded_kv = preloaded_kv.map(preloaded_kv_from_protocol);
 		let input = config.input.clone();
 		let factory = dispatcher.factories.get(&actor_name).cloned();
 
@@ -36,7 +33,7 @@ impl EnvoyCallbacks for RegistryCallbacks {
 				&actor_name,
 				key,
 				factory.as_ref(),
-			);
+			)?;
 
 			dispatcher
 				.start_actor(StartActorRequest {
@@ -44,8 +41,6 @@ impl EnvoyCallbacks for RegistryCallbacks {
 					generation,
 					actor_name,
 					input,
-					preload_persisted_actor: preload_persisted_actor?,
-					preloaded_kv,
 					ctx,
 				})
 				.await?;
@@ -279,48 +274,3 @@ fn deserialize_actor_key_from_protocol(key: &str) -> ActorKey {
 
 	parts.into_iter().map(ActorKeySegment::String).collect()
 }
-
-fn decode_preloaded_persisted_actor(
-	preloaded_kv: Option<&protocol::PreloadedKv>,
-) -> Result<PreloadedPersistedActor> {
-	let Some(preloaded_kv) = preloaded_kv else {
-		return Ok(PreloadedPersistedActor::NoBundle);
-	};
-	let Some(entry) = preloaded_kv
-		.entries
-		.iter()
-		.find(|entry| entry.key == PERSIST_DATA_KEY)
-	else {
-		return Ok(
-			if preloaded_kv
-				.requested_get_keys
-				.iter()
-				.any(|key| key == PERSIST_DATA_KEY)
-			{
-				PreloadedPersistedActor::BundleExistsButEmpty
-			} else {
-				PreloadedPersistedActor::NoBundle
-			},
-		);
-	};
-
-	decode_persisted_actor(&entry.value)
-		.map(PreloadedPersistedActor::Some)
-		.context("decode preloaded persisted actor")
-}
-
-fn preloaded_kv_from_protocol(preloaded_kv: protocol::PreloadedKv) -> PreloadedKv {
-	PreloadedKv::new_with_requested_get_keys(
-		preloaded_kv
-			.entries
-			.into_iter()
-			.map(|entry| (entry.key, entry.value)),
-		preloaded_kv.requested_get_keys,
-		preloaded_kv.requested_prefixes,
-	)
-}
-
-// Test shim keeps moved tests in crate-root tests/ with private-module access.
-#[cfg(test)]
-#[path = "../../tests/envoy_callbacks.rs"]
-mod tests;

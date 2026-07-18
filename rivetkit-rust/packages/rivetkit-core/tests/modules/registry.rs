@@ -27,7 +27,6 @@ impl RegistryDispatcher {
 			generation,
 			actor_name: actor_name.to_owned(),
 			input,
-			preload_persisted_actor: None,
 			ctx,
 		})
 		.await

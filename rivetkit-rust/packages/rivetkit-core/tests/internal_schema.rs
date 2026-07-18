@@ -12,17 +12,12 @@ fn ladder_version_matches_migration_count() {
 }
 
 #[test]
-fn every_create_table_has_write_pattern_comment() {
+fn schema_sql_does_not_embed_workload_annotations() {
 	for sql in MIGRATIONS
 		.iter()
 		.flat_map(|migration| migration.iter().copied())
 		.chain([CREATE_META_TABLE])
 	{
-		if sql.contains("CREATE TABLE") {
-			assert!(
-				sql.trim_start().starts_with("-- W["),
-				"missing write-pattern comment: {sql}",
-			);
-		}
+		assert!(!sql.contains("-- W["), "workload annotation leaked into SQL: {sql}");
 	}
 }

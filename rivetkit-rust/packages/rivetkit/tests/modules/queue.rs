@@ -3,17 +3,11 @@ mod moved_tests {
 	use tokio_util::sync::CancellationToken;
 
 	use crate::queue::{QueueStreamExt, QueueStreamOpts};
-	use rivetkit_core::{ActorContext, Kv};
+	use rivetkit_core::testing::actor_context;
 
 	#[tokio::test]
 	async fn queue_stream_yields_messages_through_stream_ext_combinators() {
-		let ctx = ActorContext::new_with_kv(
-			"actor-id",
-			"test",
-			Vec::new(),
-			"local",
-			Kv::new_in_memory(),
-		);
+		let ctx = actor_context("actor-id", "test", Vec::new(), "local");
 		let queue = ctx.queue();
 
 		queue.send("alpha", br#"{"value":1}"#).await.expect("send alpha");
@@ -31,13 +25,7 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn queue_stream_honors_name_filters() {
-		let ctx = ActorContext::new_with_kv(
-			"actor-id",
-			"test",
-			Vec::new(),
-			"local",
-			Kv::new_in_memory(),
-		);
+		let ctx = actor_context("actor-id", "test", Vec::new(), "local");
 		let queue = ctx.queue();
 
 		queue.send("skip", b"1").await.expect("send skip");
@@ -58,13 +46,7 @@ mod moved_tests {
 
 	#[tokio::test]
 	async fn queue_stream_ends_when_cancellation_signal_is_already_fired() {
-		let ctx = ActorContext::new_with_kv(
-			"actor-id",
-			"test",
-			Vec::new(),
-			"local",
-			Kv::new_in_memory(),
-		);
+		let ctx = actor_context("actor-id", "test", Vec::new(), "local");
 		let queue = ctx.queue();
 		let signal = CancellationToken::new();
 		signal.cancel();

@@ -6,14 +6,11 @@ mod moved_tests {
 	use std::time::Duration;
 
 	use rivet_error::{RivetError as RivetTransportError, RivetErrorSchema};
-	use rivetkit_actor_persist::versioned as persist_versioned;
-	use rivetkit_core::Kv;
+	use rivetkit_core::sqlite::ColumnValue;
+	use rivetkit_core::testing::{ActorContextHarness, actor_context};
 	use tokio::sync::oneshot;
-	use vbare::OwnedVersionedData;
 
 	use super::*;
-
-	const PERSIST_DATA_KEY: &[u8] = &[1];
 
 	fn test_adapter_config() -> AdapterConfig {
 		let timeout = Duration::from_secs(1);
@@ -157,8 +154,7 @@ mod moved_tests {
 	async fn action_dispatch_missing_action_returns_not_found() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx =
-			rivetkit_core::ActorContext::new("actor-missing-action", "actor", Vec::new(), "local");
+		let core_ctx = actor_context("actor-missing-action", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
@@ -208,8 +204,7 @@ mod moved_tests {
 	async fn subscribe_request_without_guard_is_allowed() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx =
-			rivetkit_core::ActorContext::new("actor-subscribe", "actor", Vec::new(), "local");
+		let core_ctx = actor_context("actor-subscribe", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
@@ -245,8 +240,7 @@ mod moved_tests {
 	async fn connection_open_without_callbacks_is_allowed() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx =
-			rivetkit_core::ActorContext::new("actor-connection-open", "actor", Vec::new(), "local");
+		let core_ctx = actor_context("actor-connection-open", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
@@ -284,8 +278,7 @@ mod moved_tests {
 	async fn workflow_requests_without_callbacks_return_none() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
-		let core_ctx =
-			rivetkit_core::ActorContext::new("actor-workflow", "actor", Vec::new(), "local");
+		let core_ctx = actor_context("actor-workflow", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let abort = CancellationToken::new();
 		let dirty = Arc::new(AtomicBool::new(false));
@@ -426,8 +419,7 @@ mod moved_tests {
 	async fn run_adapter_loop_resets_stale_shared_end_reason_before_wake() {
 		let bindings = Arc::new(empty_bindings());
 		let config = Arc::new(test_adapter_config());
-		let core_ctx =
-			rivetkit_core::ActorContext::new("actor-wake-reset", "actor", Vec::new(), "local");
+		let core_ctx = actor_context("actor-wake-reset", "actor", Vec::new(), "local");
 		core_ctx.set_started(true);
 		let stale_ctx = ActorContext::new(core_ctx.clone());
 		stale_ctx.set_end_reason(EndReason::Sleep);
@@ -485,17 +477,16 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn preamble_marks_initialized_and_reloads_as_wake() {
-		let kv = Kv::new_in_memory();
+	async fn preamble_marks_initialized_and_reloads_as_wake_from_sqlite() {
+		let harness = ActorContextHarness::new();
 		let config = test_adapter_config();
 		let bindings = empty_bindings();
 
-		let first_core_ctx = rivetkit_core::ActorContext::new_with_kv(
-			"actor-preamble-first",
+		let first_core_ctx = harness.context(
+			"actor-preamble",
 			"actor",
 			Vec::new(),
 			"local",
-			kv.clone(),
 		);
 		let first_ctx = ActorContext::new(first_core_ctx.clone());
 		first_ctx
@@ -506,30 +497,30 @@ mod moved_tests {
 			.await
 			.expect("first-create preamble should succeed");
 
-		let persisted_bytes = kv
-			.get(PERSIST_DATA_KEY)
-			.await
-			.expect("persisted actor read should succeed")
-			.expect("persisted actor bytes should exist");
-		let embedded_version = u16::from_le_bytes([persisted_bytes[0], persisted_bytes[1]]);
-		assert!(matches!(embedded_version, 3 | 4));
-		let persisted =
-			<persist_versioned::Actor as OwnedVersionedData>::deserialize_with_embedded_version(
-				&persisted_bytes,
+		let persisted = first_core_ctx
+			.sql()
+			.query(
+				"SELECT a.has_initialized, s.state FROM _rivet_actor AS a JOIN _rivet_actor_state AS s ON s.id = a.id WHERE a.id = 1",
+				None,
 			)
-			.expect("persisted actor should decode");
-		assert!(persisted.has_initialized);
+			.await
+			.expect("persisted actor should load from sqlite");
+		assert_eq!(
+			persisted.rows,
+			vec![vec![
+				ColumnValue::Integer(1),
+				ColumnValue::Blob(vec![9, 9, 9]),
+			]],
+		);
 
-		let second_core_ctx = rivetkit_core::ActorContext::new_with_kv(
-			"actor-preamble-second",
+		let second_core_ctx = harness.context(
+			"actor-preamble",
 			"actor",
 			Vec::new(),
 			"local",
-			kv.clone(),
 		);
+		second_core_ctx.set_state_initial(vec![9, 9, 9]);
 		let second_ctx = ActorContext::new(second_core_ctx);
-		let snapshot = persisted.has_initialized.then_some(persisted.state.clone());
-		assert!(snapshot.is_some());
 
 		run_preamble(
 			&bindings,
@@ -537,7 +528,7 @@ mod moved_tests {
 			&second_ctx,
 			None,
 			false,
-			snapshot,
+			Some(vec![9, 9, 9]),
 			Vec::new(),
 		)
 		.await
@@ -549,8 +540,7 @@ mod moved_tests {
 	#[tokio::test]
 	async fn maybe_serialize_skips_save_when_adapter_is_clean() {
 		let bindings = empty_bindings();
-		let core_ctx =
-			rivetkit_core::ActorContext::new("actor-serialize-clean", "actor", Vec::new(), "local");
+		let core_ctx = actor_context("actor-serialize-clean", "actor", Vec::new(), "local");
 		let ctx = ActorContext::new(core_ctx);
 		let dirty = AtomicBool::new(false);
 
@@ -565,7 +555,7 @@ mod moved_tests {
 	#[tokio::test]
 	async fn maybe_serialize_inspector_does_not_consume_pending_save() {
 		let bindings = empty_bindings();
-		let core_ctx = rivetkit_core::ActorContext::new(
+		let core_ctx = actor_context(
 			"actor-serialize-inspector",
 			"actor",
 			Vec::new(),

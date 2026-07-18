@@ -2823,6 +2823,17 @@ export class ActorContextHandleAdapter {
 		);
 	}
 
+	async saveStateAndWorkflowBatch(
+		writes: Array<{ key: Uint8Array; value: Uint8Array }>,
+	): Promise<void> {
+		await callNative(() =>
+			this.#runtime.actorSaveStateAndWorkflowBatch(
+				this.#ctx,
+				writes,
+			),
+		);
+	}
+
 	serializeForTick(reason: SerializeStateReason): RuntimeStateDeltaPayload {
 		void reason;
 		const actorState = getNativePersistState(this.#runtime, this.#ctx);
@@ -3177,6 +3188,9 @@ class NativeWorkflowRuntimeAdapter {
 			immediate?: boolean;
 			maxWait?: number;
 		}) => Promise<void>;
+		saveStateAndWorkflowBatch: (
+			writes: Array<{ key: Uint8Array; value: Uint8Array }>,
+		) => Promise<void>;
 	};
 
 	constructor(ctx: ActorContextHandleAdapter) {
@@ -3251,6 +3265,9 @@ class NativeWorkflowRuntimeAdapter {
 		this.stateManager = {
 			saveState: async (opts) => {
 				await this.#ctx.saveState(opts);
+			},
+			saveStateAndWorkflowBatch: async (writes) => {
+				await this.#ctx.saveStateAndWorkflowBatch(writes);
 			},
 		};
 	}

@@ -34,6 +34,7 @@ tracing.workspace = true
 axum = { workspace = true, features = ["ws"] }
 bytes.workspace = true
 rivet-envoy-client = { workspace = true, features = ["native-transport"] }
+rivetkit-core = { workspace = true, features = ["test-support"] }
 rivetkit-client-protocol.workspace = true
 serde_json.workspace = true
 tracing-subscriber.workspace = true

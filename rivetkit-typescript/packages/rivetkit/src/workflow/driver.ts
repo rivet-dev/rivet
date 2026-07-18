@@ -11,6 +11,11 @@ import type { SqliteDatabase } from "@/common/database/config";
 import { makeWorkflowKey, workflowStoragePrefix } from "@/actor/keys";
 
 const WORKFLOW_STORAGE_PREFIX = workflowStoragePrefix();
+// Keep workflow flushes below depot's 320-dirty-page commit ceiling. The
+// former actor-KV transport allowed 976 KiB batches; SQLite also dirties table
+// and index pages, so it needs the same conservative budget as core imports.
+const WORKFLOW_SQLITE_MAX_BATCH_ROWS = 128;
+const WORKFLOW_SQLITE_MAX_BATCH_BYTES = 512 * 1024;
 
 // Mirrors the element shape returned by `queueManager.receive`. The actor
 // instance is reached through a loose type here, so the call's result is
@@ -166,12 +171,14 @@ class WorkflowStorage {
 
 	async batch(writes: KVWrite[]): Promise<void> {
 		if (writes.length === 0) return;
-		await this.#sql.executeBatch(
-			writes.map(({ key, value }) => ({
-				sql: "INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-				params: [makeWorkflowKey(key), value],
-			})),
-		);
+		for (const chunk of chunkWorkflowWrites(writes)) {
+			await this.#sql.executeBatch(
+				chunk.map(({ key, value }) => ({
+					sql: "INSERT INTO _rivet_wf_kv (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+					params: [makeWorkflowKey(key), value],
+				})),
+			);
+		}
 	}
 
 	async listRaw(prefix: Uint8Array): Promise<KVEntryTuple[]> {
@@ -192,13 +199,37 @@ class WorkflowStorage {
 	}
 
 	async deleteRawKeys(keys: Uint8Array[]): Promise<void> {
-		await this.#sql!.executeBatch(
-			keys.map((key) => ({
-				sql: "DELETE FROM _rivet_wf_kv WHERE key = ?",
-				params: [key],
-			})),
-		);
+		for (let start = 0; start < keys.length; start += WORKFLOW_SQLITE_MAX_BATCH_ROWS) {
+			await this.#sql!.executeBatch(
+				keys.slice(start, start + WORKFLOW_SQLITE_MAX_BATCH_ROWS).map((key) => ({
+					sql: "DELETE FROM _rivet_wf_kv WHERE key = ?",
+					params: [key],
+				})),
+			);
+		}
 	}
+}
+
+export function chunkWorkflowWrites(writes: KVWrite[]): KVWrite[][] {
+	const chunks: KVWrite[][] = [];
+	let chunk: KVWrite[] = [];
+	let chunkBytes = 0;
+	for (const write of writes) {
+		const writeBytes = WORKFLOW_STORAGE_PREFIX.length + write.key.length + write.value.length;
+		if (
+			chunk.length > 0 &&
+			(chunk.length >= WORKFLOW_SQLITE_MAX_BATCH_ROWS ||
+				chunkBytes + writeBytes > WORKFLOW_SQLITE_MAX_BATCH_BYTES)
+		) {
+			chunks.push(chunk);
+			chunk = [];
+			chunkBytes = 0;
+		}
+		chunk.push(write);
+		chunkBytes += writeBytes;
+	}
+	if (chunk.length > 0) chunks.push(chunk);
+	return chunks;
 }
 
 function keyStartsWith(key: Uint8Array, prefix: Uint8Array): boolean {
@@ -281,6 +312,7 @@ class ActorWorkflowMessageDriver implements WorkflowMessageDriver {
 }
 
 export class ActorWorkflowDriver implements EngineDriver {
+	readonly atomicBatch = true;
 	readonly workerPollInterval = 100;
 	readonly messageDriver: WorkflowMessageDriver;
 	#actor: AnyStaticActorInstance;
@@ -328,15 +360,8 @@ export class ActorWorkflowDriver implements EngineDriver {
 	async batch(writes: KVWrite[]): Promise<void> {
 		if (writes.length === 0) return;
 
-		// Flush actor state together with workflow state to ensure atomicity.
-		// If the server crashes after workflow flush, actor state must also be persisted.
 		await this.#runCtx.internalKeepAwake(
-			Promise.all([
-				this.#storage.batch(writes),
-				this.#actor.stateManager.saveState({
-					immediate: true,
-				}),
-			]),
+			this.#actor.stateManager.saveStateAndWorkflowBatch(writes),
 		);
 	}
 

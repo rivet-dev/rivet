@@ -277,7 +277,12 @@ mod tests {
 
 		let result = factory
 			.start(ActorStart {
-				ctx: rivetkit_core::ActorContext::new("actor-id", "empty", Vec::new(), "local"),
+				ctx: rivetkit_core::testing::actor_context(
+					"actor-id",
+					"empty",
+					Vec::new(),
+					"local",
+				),
 				input: None,
 				is_new: true,
 				snapshot: None,

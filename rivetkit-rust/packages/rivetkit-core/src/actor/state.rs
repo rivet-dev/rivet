@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
 #[cfg(not(feature = "wasm-runtime"))]
 use tokio::runtime::Handle;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 #[cfg(test)]
 use tokio::time::timeout;
@@ -18,7 +18,8 @@ use tracing::Instrument;
 use crate::actor::context::ActorContext;
 use crate::actor::connection::{PersistedConnection, decode_persisted_connection};
 use crate::actor::internal_storage;
-use crate::actor::messages::StateDelta;
+use crate::actor::lifecycle_hooks::Reply;
+use crate::actor::messages::{StateDelta, WorkflowKvWrite};
 use crate::actor::persist::decode_latest_with_embedded_version;
 #[cfg(test)]
 use crate::actor::persist::encode_latest_with_embedded_version;
@@ -196,6 +197,52 @@ impl ActorContext {
 			.await
 	}
 
+	/// Requests one logical workflow-engine flush. The actor lifecycle owns
+	/// serializing actor state and committing both sides in one SQLite transaction.
+	pub async fn save_state_and_workflow_batch(
+		&self,
+		workflow_writes: Vec<WorkflowKvWrite>,
+	) -> Result<()> {
+		let Some(sender) = self.lifecycle_event_sender() else {
+			return Err(ActorRuntime::NotConfigured {
+				component: "lifecycle events".to_owned(),
+			}
+			.build());
+		};
+		let (reply_tx, reply_rx) = oneshot::channel();
+		sender
+			.send(LifecycleEvent::WorkflowFlushRequested {
+				writes: workflow_writes,
+				reply: Reply::from(reply_tx),
+			})
+			.map_err(|_| {
+				ActorRuntime::NotConfigured {
+					component: "lifecycle events".to_owned(),
+				}
+				.build()
+			})?;
+		reply_rx
+			.await
+			.context("receive workflow flush lifecycle reply")?
+	}
+
+	/// Commits an already serialized snapshot and workflow flush atomically for
+	/// storage-level fault tests. Runtime bridges must use the lifecycle-owned API.
+	#[cfg(test)]
+	pub(crate) async fn commit_serialized_state_and_workflow_batch(
+		&self,
+		deltas: Vec<StateDelta>,
+		workflow_writes: Vec<WorkflowKvWrite>,
+	) -> Result<()> {
+		let save_request_revision = self.save_request_revision();
+		self.save_state_and_workflow_batch_with_revision(
+			deltas,
+			workflow_writes,
+			save_request_revision,
+		)
+		.await
+	}
+
 	pub(crate) fn request_save_with_revision(&self, opts: RequestSaveOpts) -> Result<u64> {
 		let immediate = opts.immediate;
 		let save_request_revision = self.0.save_request_revision.fetch_add(1, Ordering::SeqCst) + 1;
@@ -286,8 +333,33 @@ impl ActorContext {
 		deltas: Vec<StateDelta>,
 		save_request_revision: u64,
 	) -> Result<()> {
+		self.apply_state_deltas_inner(deltas, None, save_request_revision)
+			.await
+	}
+
+	pub(crate) async fn apply_state_deltas_and_workflow(
+		&self,
+		deltas: Vec<StateDelta>,
+		workflow_writes: Vec<WorkflowKvWrite>,
+		save_request_revision: u64,
+	) -> Result<()> {
+		self.apply_state_deltas_inner(
+			deltas,
+			Some(workflow_writes),
+			save_request_revision,
+		)
+		.await
+	}
+
+	async fn apply_state_deltas_inner(
+		&self,
+		deltas: Vec<StateDelta>,
+		workflow_writes: Option<Vec<WorkflowKvWrite>>,
+		save_request_revision: u64,
+	) -> Result<()> {
 		let delta_count = deltas.len();
 		let delta_bytes: usize = deltas.iter().map(StateDelta::payload_len).sum();
+		let workflow_write_count = workflow_writes.as_ref().map_or(0, Vec::len);
 		let current_revision = self.0.state_revision.load(Ordering::SeqCst);
 		tracing::debug!(
 			delta_count,
@@ -298,7 +370,7 @@ impl ActorContext {
 		);
 		self.clear_pending_save();
 
-		if deltas.is_empty() {
+		if deltas.is_empty() && workflow_write_count == 0 {
 			self.mark_save_request_completed(save_request_revision);
 			self.finish_save_request(save_request_revision);
 			tracing::debug!(
@@ -346,7 +418,6 @@ impl ActorContext {
 
 			if next_state.is_some() {
 				actor_to_persist = Some(persisted.clone());
-				*self.0.persisted.write() = persisted;
 			}
 
 			(
@@ -359,7 +430,17 @@ impl ActorContext {
 			)
 		};
 
-		if actor_to_persist.is_some()
+		if let Some(workflow_writes) = workflow_writes.as_deref() {
+			internal_storage::persist_actor_core_connections_and_workflow(
+				self.sql(),
+				actor_to_persist.as_ref(),
+				&connections_to_persist,
+				&connections_to_delete,
+				workflow_writes,
+			)
+			.await
+			.context("atomically persist actor state, connection deltas, and workflow kv")?;
+		} else if actor_to_persist.is_some()
 			|| !connections_to_persist.is_empty()
 			|| !connections_to_delete.is_empty()
 		{
@@ -374,7 +455,13 @@ impl ActorContext {
 		}
 
 		if let Some(state) = next_state {
+			self.0.persisted.write().state = state.clone();
 			*self.0.current_state.write() = state;
+		}
+		for connection in &connections_to_persist {
+			if let Some(handle) = self.connection(&connection.id) {
+				handle.set_state_initial(connection.state.clone());
+			}
 		}
 
 		*self.0.last_save_at.lock() = Some(StdInstant::now());
@@ -388,6 +475,7 @@ impl ActorContext {
 		tracing::debug!(
 			delta_count,
 			delta_bytes,
+			workflow_write_count,
 			state_revision = self.0.state_revision.load(Ordering::SeqCst),
 			save_request_revision,
 			"actor state deltas applied"

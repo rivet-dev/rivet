@@ -2,12 +2,17 @@ use anyhow::{Context, Result, bail};
 
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
 
-pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 6;
+pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 7;
 
 const SCHEMA_VERSION_KEY: &str = "schema_version";
 
+// `_rivet_meta` is the bootstrap root created before the numbered migrations.
+// `schema_version` cannot live in a table created by those migrations, and
+// `kv_import_state` must survive clearing partially imported runtime tables so
+// interrupted imports can be detected and retried. This is not a general-
+// purpose runtime KV store; its text accessors are migration bookkeeping only.
+// W[bootstrap + import bookkeeping only | point upsert | <100 B | 1-page map]
 const CREATE_META_TABLE: &str = r#"
--- W[bootstrap + import bookkeeping only | point upsert | <100 B | 1-page map]
 CREATE TABLE IF NOT EXISTS _rivet_meta (
     key   TEXT PRIMARY KEY,
     value BLOB NOT NULL
@@ -16,8 +21,8 @@ CREATE TABLE IF NOT EXISTS _rivet_meta (
 
 const MIGRATIONS: &[&[&str]] = &[
 	&[
+		// W[queue_next_id per enqueue; alarm per head-change; token once | point UPDATE of one column | <100 B | single-row: all runtime singletons on one leaf]
 		r#"
--- W[queue_next_id per enqueue; alarm per head-change; token once | point UPDATE of one column | <100 B | single-row: all runtime singletons on one leaf]
 CREATE TABLE _rivet_runtime (
     id                INTEGER PRIMARY KEY CHECK (id = 1),
     last_pushed_alarm INTEGER,
@@ -25,16 +30,16 @@ CREATE TABLE _rivet_runtime (
     queue_next_id     INTEGER NOT NULL DEFAULT 1
 ) STRICT
 "#,
+		// W[once at init | single INSERT | input <=256 KiB | COLD: never rewritten; overflow chain isolated from hot state]
 		r#"
--- W[once at init | single INSERT | input <=256 KiB | COLD: never rewritten; overflow chain isolated from hot state]
 CREATE TABLE _rivet_actor (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
     has_initialized INTEGER NOT NULL,
     input           BLOB
 ) STRICT
 "#,
+		// W[debounced save ~1/s + immediate at shutdown | UPDATE state | <=256 KiB | HOT: sole column, so saves dirty only state pages]
 		r#"
--- W[debounced save ~1/s + immediate at shutdown | UPDATE state | <=256 KiB | HOT: sole column, so saves dirty only state pages]
 CREATE TABLE _rivet_actor_state (
     id    INTEGER PRIMARY KEY CHECK (id = 1),
     state BLOB NOT NULL
@@ -42,8 +47,8 @@ CREATE TABLE _rivet_actor_state (
 "#,
 	],
 	&[
+		// W[per schedule/cancel/fire, immediate | point insert/delete | <200 B | replaces full actor blob rewrite with one row]
 		r#"
--- W[per schedule/cancel/fire, immediate | point insert/delete | <200 B | replaces full actor blob rewrite with one row]
 CREATE TABLE _rivet_schedule_events (
     event_id   TEXT PRIMARY KEY,
     trigger_at INTEGER NOT NULL,
@@ -57,8 +62,8 @@ CREATE INDEX _rivet_schedule_events_trigger_at
 "#,
 	],
 	&[
+		// W[once per connect, DELETE on disconnect | whole row | up to 256 KiB | COLD: immutable per conn, separate from hot message index]
 		r#"
--- W[once per connect, DELETE on disconnect | whole row | up to 256 KiB | COLD: immutable per conn, separate from hot message index]
 CREATE TABLE _rivet_conns (
     conn_id         TEXT PRIMARY KEY,
     parameters      BLOB NOT NULL,
@@ -68,8 +73,8 @@ CREATE TABLE _rivet_conns (
     request_headers BLOB NOT NULL
 ) STRICT, WITHOUT ROWID
 "#,
+		// W[dirty per WS message, written debounced ~1/s; rewritten at sleep | point UPDATE | ~100-300 B | HOT: compact conn state rows]
 		r#"
--- W[dirty per WS message, written debounced ~1/s; rewritten at sleep | point UPDATE | ~100-300 B | HOT: compact conn state rows]
 CREATE TABLE _rivet_conn_state (
     conn_id              TEXT PRIMARY KEY,
     state                BLOB NOT NULL,
@@ -79,8 +84,8 @@ CREATE TABLE _rivet_conn_state (
 "#,
 	],
 	&[
+		// W[per enqueue plus queue_next_id; batch DELETE on receive/ack | append/delete, never rewritten | body <=256 KiB | INTEGER PK avoids hidden index]
 		r#"
--- W[per enqueue plus queue_next_id; batch DELETE on receive/ack | append/delete, never rewritten | body <=256 KiB | INTEGER PK avoids hidden index]
 CREATE TABLE _rivet_queue (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
@@ -90,8 +95,8 @@ CREATE TABLE _rivet_queue (
 "#,
 	],
 	&[
+		// W[per workflow step flush | keyed upsert + range delete | values <=256 KiB | verbatim fdb-tuple keys in one clustered tree]
 		r#"
--- W[per workflow step flush | keyed upsert + range delete | values <=256 KiB | verbatim fdb-tuple keys in one clustered tree]
 CREATE TABLE _rivet_wf_kv (
     key   BLOB PRIMARY KEY,
     value BLOB NOT NULL
@@ -99,12 +104,19 @@ CREATE TABLE _rivet_wf_kv (
 "#,
 	],
 	&[
+		// W[per c.kv op (deprecated) | keyed upsert/delete/range | values <=128 KiB | verbatim raw KV key bytes]
 		r#"
--- W[per c.kv op (deprecated) | keyed upsert/delete/range | values <=128 KiB | verbatim raw KV key bytes]
 CREATE TABLE _rivet_user_kv (
     key   BLOB PRIMARY KEY,
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID
+"#,
+	],
+	&[
+		// W[dirty per client WS message, written with other conn state | point UPDATE | 2 B logical value | preserves the client ack cursor across hibernation]
+		r#"
+ALTER TABLE _rivet_conn_state
+    ADD COLUMN client_message_index INTEGER NOT NULL DEFAULT 0
 "#,
 	],
 ];

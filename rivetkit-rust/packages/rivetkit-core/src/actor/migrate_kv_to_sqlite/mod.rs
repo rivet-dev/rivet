@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 
 use crate::ActorContext;
 use crate::actor::connection::decode_persisted_connection;
@@ -21,65 +21,93 @@ const KV_IMPORT_STATE_DONE: &str = "done";
 /// actors and freeze a partial import as the source of truth. Scans hold their
 /// cursor in memory per the migration spec.
 const LEGACY_SCAN_PAGE_LIMIT: u32 = 256;
+const IMPORT_PROGRESS_RECORD_INTERVAL: usize = 1_024;
+const IMPORT_PROGRESS_BYTE_INTERVAL: usize = 16 * 1024 * 1024;
 /// Upper bound for cursor continuation scans. Every legacy key starts with a
 /// reserved low prefix byte (1 through 7), so a single 0xff byte sorts after
 /// all of them.
 const LEGACY_SCAN_END: &[u8] = &[0xff];
 
 pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()> {
-	match internal_storage::load_meta_text(ctx.sql(), KV_IMPORT_STATE_META_KEY)
+	let result = import_core_state_if_needed_inner(ctx).await;
+	if let Err(error) = &result {
+		tracing::error!(
+			actor_id = %ctx.actor_id(),
+			phase = "legacy_kv_import",
+			%error,
+			"legacy kv to sqlite import failed"
+		);
+	}
+	result
+}
+
+async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
+	let import_state = internal_storage::load_meta_text(ctx.sql(), KV_IMPORT_STATE_META_KEY)
 		.await
-		.context("probe internal sqlite kv import state")?
-		.as_deref()
-	{
-		Some(KV_IMPORT_STATE_DONE) => return Ok(()),
+		.context("probe internal sqlite kv import state")?;
+	tracing::debug!(
+		actor_id = %ctx.actor_id(),
+		state = import_state.as_deref().unwrap_or("absent"),
+		"legacy kv import state probed"
+	);
+	let is_retry = match import_state.as_deref() {
+		Some(KV_IMPORT_STATE_DONE) => {
+			tracing::debug!(actor_id = %ctx.actor_id(), result = "already_done", "legacy kv import probe completed");
+			return Ok(());
+		}
 		Some(KV_IMPORT_STATE_IMPORTING) => {
 			tracing::warn!(
 				actor_id = %ctx.actor_id(),
+				state = KV_IMPORT_STATE_IMPORTING,
 				"retrying interrupted legacy kv to sqlite import"
 			);
-			internal_storage::clear_imported_storage(ctx.sql())
-				.await
-				.context("clear interrupted legacy kv to sqlite import")?;
+			true
 		}
 		Some(state) => {
-			tracing::warn!(
-				actor_id = %ctx.actor_id(),
-				state,
-				"retrying legacy kv to sqlite import from unknown state"
-			);
-			internal_storage::clear_imported_storage(ctx.sql())
-				.await
-				.context("clear unknown legacy kv to sqlite import state")?;
+			bail!("unknown legacy kv import state '{state}'")
 		}
-		None => {}
-	}
+		None => false,
+	};
 
 	let legacy_core_values = load_legacy_core_values(ctx).await?;
 	if legacy_core_values.iter().all(Option::is_none) && legacy_prefixes_empty(ctx).await? {
+		tracing::debug!(actor_id = %ctx.actor_id(), result = "empty", "legacy kv import probe completed");
 		internal_storage::persist_meta_text(ctx.sql(), KV_IMPORT_STATE_META_KEY, KV_IMPORT_STATE_DONE)
 			.await
 			.context("mark empty legacy core actor kv import complete")?;
 		return Ok(());
 	}
+	tracing::info!(actor_id = %ctx.actor_id(), result = "import_needed", "legacy kv import probe completed");
 
-	internal_storage::persist_meta_text(
-		ctx.sql(),
-		KV_IMPORT_STATE_META_KEY,
-		KV_IMPORT_STATE_IMPORTING,
-	)
-	.await
-	.context("mark legacy kv to sqlite import started")?;
-
-	let has_actor_snapshot = internal_storage::load_actor_snapshot(ctx.sql())
+	if !is_retry {
+		internal_storage::persist_meta_text(
+			ctx.sql(),
+			KV_IMPORT_STATE_META_KEY,
+			KV_IMPORT_STATE_IMPORTING,
+		)
 		.await
-		.context("probe internal actor sqlite snapshot before kv import")?
-		.is_some();
-	let has_inspector_token = internal_storage::load_inspector_token(ctx.sql())
-		.await
-		.context("probe internal sqlite inspector token before kv import")?
-		.is_some();
+		.context("mark legacy kv to sqlite import started")?;
+	}
+	tracing::info!(actor_id = %ctx.actor_id(), "legacy kv to sqlite import started");
 
+	// The marker is committed before cleanup, so a crash during any bounded
+	// delete or import phase deterministically retries from the frozen legacy
+	// snapshot. This intentionally makes legacy KV the sole source of truth for
+	// every non-empty first import as well as every retry.
+	internal_storage::clear_imported_storage(ctx.sql(), ctx.actor_id())
+		.await
+		.context("clear destination before legacy kv to sqlite import")?;
+	tracing::info!(
+		actor_id = %ctx.actor_id(),
+		reason = if is_retry { "interrupted" } else { "initial" },
+		"cleared legacy kv import destination"
+	);
+
+	let core_bytes: usize = legacy_core_values
+		.iter()
+		.flatten()
+		.map(Vec::len)
+		.sum();
 	let mut values = legacy_core_values.into_iter();
 
 	let actor = values
@@ -91,92 +119,78 @@ pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()
 	let last_pushed_alarm = values
 		.next()
 		.flatten()
-		.and_then(|bytes| match decode_last_pushed_alarm(&bytes) {
-			Ok(value) => value,
-			Err(error) => {
-				tracing::warn!(
-					actor_id = %ctx.actor_id(),
-					?error,
-					"skipping corrupt legacy last pushed alarm during sqlite import"
-				);
-				None
-			}
-		});
-	let inspector_token = values.next().flatten().and_then(|bytes| {
-		String::from_utf8(bytes)
-			.map_err(|error| {
-				tracing::warn!(
-					actor_id = %ctx.actor_id(),
-					?error,
-					"skipping non-utf8 legacy inspector token during sqlite import"
-				);
-			})
-			.ok()
-	});
+		.map(|bytes| decode_last_pushed_alarm(&bytes))
+		.transpose()
+		.context("decode legacy last pushed alarm during sqlite import")?
+		.flatten();
+	let inspector_token = values
+		.next()
+		.flatten()
+		.map(String::from_utf8)
+		.transpose()
+		.context("decode legacy inspector token as utf-8 during sqlite import")?;
 	let queue_metadata = values
 		.next()
 		.flatten()
 		.map(|bytes| decode_queue_metadata(&bytes))
 		.transpose()
-		.map_err(|error| {
-			tracing::warn!(
-				actor_id = %ctx.actor_id(),
-				?error,
-				"skipping corrupt legacy queue metadata during sqlite import"
-			);
-			error
-		})
-		.ok()
-		.flatten();
+		.context("decode legacy queue metadata during sqlite import")?;
+	let core_record_count = usize::from(actor.is_some())
+		+ usize::from(last_pushed_alarm.is_some())
+		+ usize::from(inspector_token.is_some())
+		+ usize::from(queue_metadata.is_some());
 
-	if !has_actor_snapshot {
-		if let Some(actor) = actor {
-			internal_storage::persist_actor_snapshot(ctx.sql(), &actor)
-				.await
-				.context("import legacy actor snapshot into sqlite")?;
-		}
+	if let Some(actor) = actor {
+		internal_storage::persist_actor_snapshot(ctx.sql(), &actor)
+			.await
+			.context("import legacy actor snapshot into sqlite")?;
 	}
 	if last_pushed_alarm.is_some() {
 		internal_storage::persist_last_pushed_alarm(ctx.sql(), last_pushed_alarm)
 			.await
 			.context("import legacy last pushed alarm into sqlite")?;
 	}
-	if !has_inspector_token {
-		if let Some(token) = inspector_token {
-			internal_storage::persist_inspector_token(ctx.sql(), &token)
-				.await
-				.context("import legacy inspector token into sqlite")?;
-		}
+	if let Some(token) = inspector_token {
+		internal_storage::persist_inspector_token(ctx.sql(), &token)
+			.await
+			.context("import legacy inspector token into sqlite")?;
 	}
+	tracing::info!(
+		actor_id = %ctx.actor_id(),
+		record_count = core_record_count,
+		byte_count = core_bytes,
+		"legacy actor snapshot subspace import completed"
+	);
 
+	let mut connection_count = 0usize;
+	let mut connection_bytes = 0usize;
+	let mut connection_progress = ImportProgress::default();
 	let mut conn_scan = LegacyPrefixScan::new(ctx, &CONN_PREFIX);
 	while let Some(page) = conn_scan
 		.next_page()
 		.await
 		.context("list legacy connection kv records for sqlite import")?
 	{
+		let mut connections = Vec::with_capacity(page.len());
 		for (_key, value) in page {
-			match decode_persisted_connection(&value) {
-				Ok(connection) => {
-					internal_storage::persist_connection_snapshot(ctx.sql(), &connection)
-						.await
-						.with_context(|| {
-							format!(
-								"import legacy hibernatable connection '{}' into sqlite",
-								connection.id
-							)
-						})?;
-				}
-				Err(error) => {
-					tracing::warn!(
-						actor_id = %ctx.actor_id(),
-						?error,
-						"skipping corrupt legacy hibernatable connection during sqlite import"
-					);
-				}
-			}
+			connection_bytes = connection_bytes.saturating_add(value.len());
+			connections.push(
+				decode_persisted_connection(&value)
+					.context("decode legacy hibernatable connection during sqlite import")?,
+			);
 		}
+		internal_storage::persist_connection_snapshots(ctx.sql(), &connections)
+			.await
+			.context("import legacy hibernatable connection chunk into sqlite")?;
+		connection_count += connections.len();
+		connection_progress.log_if_due(
+			ctx,
+			"connections",
+			connection_count,
+			connection_bytes,
+		);
 	}
+	tracing::info!(actor_id = %ctx.actor_id(), record_count = connection_count, byte_count = connection_bytes, "legacy connection subspace import completed");
 
 	let mut queue_next_id = queue_metadata
 		.as_ref()
@@ -184,68 +198,55 @@ pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()
 		.unwrap_or(1)
 		.max(1);
 	let mut queue_scan = LegacyPrefixScan::new(ctx, &QUEUE_MESSAGES_PREFIX);
+	let mut queue_count = 0usize;
+	let mut queue_bytes = 0usize;
+	let mut queue_progress = ImportProgress::default();
 	while let Some(page) = queue_scan
 		.next_page()
 		.await
 		.context("list legacy queue kv records for sqlite import")?
 	{
+		let mut messages = Vec::with_capacity(page.len());
 		for (key, value) in page {
-			let id = match decode_queue_message_key(&key) {
-				Ok(id) => id,
-				Err(error) => {
-					tracing::warn!(
-						actor_id = %ctx.actor_id(),
-						?error,
-						"skipping legacy queue message with invalid key during sqlite import"
-					);
-					continue;
-				}
-			};
-			match decode_queue_message(&value) {
-				Ok(message) => {
-					if message.failure_count.is_some()
-						|| message.available_at.is_some()
-						|| message.in_flight.is_some()
-						|| message.in_flight_at.is_some()
-					{
-						// The retry fields have no SQLite representation; the
-						// message imports as immediately deliverable. The
-						// original record stays readable in the frozen legacy
-						// KV, so no extra backup copy is written.
-						tracing::warn!(
-							actor_id = %ctx.actor_id(),
-							message_id = id,
-							"importing legacy queue message with dropped retry fields"
-						);
-					}
-					queue_next_id = queue_next_id.max(id.saturating_add(1));
-					internal_storage::persist_queue_message(ctx.sql(), id, queue_next_id, &message)
-						.await
-						.with_context(|| {
-							format!("import legacy queue message {id} into sqlite")
-						})?;
-				}
-				Err(error) => {
-					tracing::warn!(
-						actor_id = %ctx.actor_id(),
-						message_id = id,
-						?error,
-						"skipping corrupt legacy queue message during sqlite import"
-					);
-				}
+			queue_bytes = queue_bytes.saturating_add(value.len());
+			let id = decode_queue_message_key(&key)
+				.context("decode legacy queue message key during sqlite import")?;
+			let message = decode_queue_message(&value)
+				.with_context(|| format!("decode legacy queue message {id} during sqlite import"))?;
+			if message.failure_count.is_some()
+				|| message.available_at.is_some()
+				|| message.in_flight.is_some()
+				|| message.in_flight_at.is_some()
+			{
+				bail!(
+					"legacy queue message {id} contains retry, delay, or in-flight state that SQLite queue storage cannot preserve"
+				);
 			}
+			queue_next_id = queue_next_id.max(id.saturating_add(1));
+			messages.push((id, message));
 		}
+		internal_storage::persist_queue_messages(ctx.sql(), &messages)
+			.await
+			.context("import legacy queue message chunk into sqlite")?;
+		queue_count += messages.len();
+		queue_progress.log_if_due(ctx, "queue", queue_count, queue_bytes);
 	}
 	internal_storage::persist_queue_next_id(ctx.sql(), queue_next_id)
 		.await
 		.context("import legacy queue next id into sqlite")?;
+	tracing::info!(actor_id = %ctx.actor_id(), record_count = queue_count, byte_count = queue_bytes, "legacy queue subspace import completed");
 
+	let mut workflow_count = 0usize;
+	let mut workflow_bytes = 0usize;
+	let mut workflow_progress = ImportProgress::default();
 	let mut workflow_scan = LegacyPrefixScan::new(ctx, &WORKFLOW_STORAGE_PREFIX);
 	while let Some(page) = workflow_scan
 		.next_page()
 		.await
 		.context("list legacy workflow kv records for sqlite import")?
 	{
+		workflow_count += page.len();
+		workflow_bytes = workflow_bytes.saturating_add(page.iter().map(|(key, value)| key.len() + value.len()).sum());
 		// Chunk page writes so no import transaction exceeds the depot commit
 		// size limit.
 		for chunk in internal_storage::split_kv_tx_chunks(&page) {
@@ -262,22 +263,32 @@ pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()
 					)
 				})?;
 		}
+		workflow_progress.log_if_due(ctx, "workflow", workflow_count, workflow_bytes);
 	}
+	tracing::info!(actor_id = %ctx.actor_id(), record_count = workflow_count, byte_count = workflow_bytes, "legacy workflow kv subspace import completed");
 
 	// Legacy user KV keys are stored verbatim. The TypeScript runtime reads and
 	// writes `[4]`-prefixed keys and the Rust runtime uses raw keys; both pass
 	// keys through unchanged, so stripping the prefix here would make every
 	// migrated TypeScript `c.kv` entry unreachable.
 	let mut user_scan = LegacyPrefixScan::new(ctx, &KV_PREFIX);
+	let mut user_count = 0usize;
+	let mut user_bytes = 0usize;
+	let mut user_skipped_count = 0usize;
+	let mut user_progress = ImportProgress::default();
 	while let Some(page) = user_scan
 		.next_page()
 		.await
 		.context("list legacy actor kv records for user-kv sqlite import")?
 	{
+		let page_count = page.len();
 		let entries = page
 			.into_iter()
 			.filter(|(key, _)| !should_skip_user_kv_import_key(key))
 			.collect::<Vec<_>>();
+		user_skipped_count += page_count.saturating_sub(entries.len());
+		user_count += entries.len();
+		user_bytes = user_bytes.saturating_add(entries.iter().map(|(key, value)| key.len() + value.len()).sum());
 		for chunk in internal_storage::split_kv_tx_chunks(&entries) {
 			let chunk_refs = chunk
 				.iter()
@@ -292,11 +303,14 @@ pub(crate) async fn import_core_state_if_needed(ctx: &ActorContext) -> Result<()
 					)
 				})?;
 		}
+		user_progress.log_if_due(ctx, "user_kv", user_count, user_bytes);
 	}
+	tracing::info!(actor_id = %ctx.actor_id(), record_count = user_count, byte_count = user_bytes, skipped_count = user_skipped_count, "legacy user kv subspace import completed");
 
 	internal_storage::persist_meta_text(ctx.sql(), KV_IMPORT_STATE_META_KEY, KV_IMPORT_STATE_DONE)
 		.await
 		.context("mark legacy core actor kv import complete")?;
+	tracing::info!(actor_id = %ctx.actor_id(), "legacy kv to sqlite import completed");
 
 	Ok(())
 }
@@ -309,7 +323,7 @@ async fn load_legacy_core_values(ctx: &ActorContext) -> Result<Vec<Option<Vec<u8
 		QUEUE_METADATA_KEY.as_slice(),
 	];
 
-	ctx.kv_internal()
+	ctx.legacy_kv()
 		.batch_get(&keys)
 		.await
 		.context("load legacy core actor kv records for sqlite import")
@@ -338,7 +352,7 @@ async fn list_legacy_prefix_with_limit(
 	prefix: &[u8],
 	limit: Option<u32>,
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-	ctx.kv_internal()
+	ctx.legacy_kv()
 		.list_prefix(
 			prefix,
 			ListOpts {
@@ -386,7 +400,7 @@ impl<'a> LegacyPrefixScan<'a> {
 				}
 				Some(cursor) => {
 					self.ctx
-						.kv_internal()
+						.legacy_kv()
 						.list_range(
 							cursor,
 							LEGACY_SCAN_END,
@@ -451,6 +465,37 @@ fn should_skip_user_kv_import_key(key: &[u8]) -> bool {
 		|| key.starts_with(&QUEUE_STORAGE_PREFIX)
 		|| key.starts_with(&WORKFLOW_STORAGE_PREFIX)
 		|| key.starts_with(&TRACES_STORAGE_PREFIX)
+}
+
+#[derive(Default)]
+struct ImportProgress {
+	last_record_count: usize,
+	last_byte_count: usize,
+}
+
+impl ImportProgress {
+	fn log_if_due(
+		&mut self,
+		ctx: &ActorContext,
+		phase: &'static str,
+		record_count: usize,
+		byte_count: usize,
+	) {
+		if record_count.saturating_sub(self.last_record_count) < IMPORT_PROGRESS_RECORD_INTERVAL
+			&& byte_count.saturating_sub(self.last_byte_count) < IMPORT_PROGRESS_BYTE_INTERVAL
+		{
+			return;
+		}
+		self.last_record_count = record_count;
+		self.last_byte_count = byte_count;
+		tracing::info!(
+			actor_id = %ctx.actor_id(),
+			phase,
+			record_count,
+			byte_count,
+			"legacy kv to sqlite import progress"
+		);
+	}
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.

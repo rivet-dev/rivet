@@ -8,6 +8,9 @@ export class ActorContext {
 	free(): void;
 	keepAwake(promise: Promise<any>): void;
 	saveState(payload: any): Promise<void>;
+	saveStateAndWorkflowBatch(
+		writes: Array<{ key: Uint8Array; value: Uint8Array }>,
+	): Promise<void>;
 	waitUntil(promise: Promise<any>): void;
 	abortSignal(): any;
 	connectConn(params: Uint8Array, request: any): Promise<ConnHandle>;
