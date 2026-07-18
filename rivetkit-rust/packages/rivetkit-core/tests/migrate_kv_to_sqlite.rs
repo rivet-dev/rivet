@@ -1192,6 +1192,39 @@ async fn queue_import_batches_row_boundaries_and_writes_next_id_once() -> Result
 }
 
 #[tokio::test]
+async fn connection_import_bounds_expanded_statements_per_transaction() -> Result<()> {
+	for row_count in [63usize, 64, 65, 128, 129] {
+		let kv = Kv::new_in_memory();
+		for index in 0..row_count {
+			let connection = PersistedConnection {
+				id: format!("connection-{index:04}"),
+				state: vec![index as u8; 32],
+				..PersistedConnection::default()
+			};
+			kv.put(
+				&make_connection_key(&connection.id),
+				&encode_persisted_connection(&connection)?,
+			)
+			.await?;
+		}
+
+		let (ctx, sqlite_task, harness) = sqlite_ctx_with_harness(kv);
+		internal_schema::ensure_internal_schema(ctx.sql()).await?;
+		harness.max_transaction_statements.store(0, Ordering::SeqCst);
+		import_core_state_if_needed(&ctx).await?;
+		assert_eq!(internal_storage::load_connections(ctx.sql()).await?.len(), row_count);
+		assert!(
+			harness.max_transaction_statements.load(Ordering::SeqCst)
+				<= internal_storage::KV_TX_MAX_ROWS,
+			"{row_count} connection records exceeded the statement budget"
+		);
+		drop(ctx);
+		sqlite_task.abort();
+	}
+	Ok(())
+}
+
+#[tokio::test]
 async fn import_preserves_user_tables_when_actor_has_no_declared_database() -> Result<()> {
 	let kv = Kv::new_in_memory();
 	let key = make_prefixed_key(b"user-key");

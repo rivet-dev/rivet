@@ -28,6 +28,7 @@ const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 pub(crate) const KV_TX_MAX_PAYLOAD_BYTES: usize = 512 * 1024;
 /// Row cap per transaction paired with the payload budget above.
 pub(crate) const KV_TX_MAX_ROWS: usize = 128;
+const CONNECTION_DESTINATION_ROWS_PER_RECORD: usize = 2;
 
 /// Splits `entries` into contiguous chunks that each stay within the
 /// per-transaction row and payload budgets. A single oversized entry gets its
@@ -239,12 +240,14 @@ pub(crate) async fn persist_connection_snapshot(
 
 /// Persists imported connection snapshots in bounded transactions. A legacy
 /// connection is at most one actor-KV value, but a migration page can contain
-/// hundreds of them; sending the whole page in one SQLite commit can exceed
-/// depot's dirty-page limit.
+/// hundreds of them and each connection expands to rows in two destination
+/// tables; sending the whole page in one SQLite commit can exceed depot's
+/// dirty-page limit.
 pub(crate) async fn persist_connection_snapshots(
 	db: &SqliteDb,
 	connections: &[PersistedConnection],
 ) -> Result<()> {
+	let max_connection_rows = KV_TX_MAX_ROWS / CONNECTION_DESTINATION_ROWS_PER_RECORD;
 	let mut chunk_start = 0;
 	let mut chunk_bytes: usize = 0;
 	for (index, connection) in connections.iter().enumerate() {
@@ -258,7 +261,7 @@ pub(crate) async fn persist_connection_snapshots(
 			.saturating_add(32);
 		let chunk_rows = index - chunk_start;
 		if chunk_rows > 0
-			&& (chunk_rows >= KV_TX_MAX_ROWS
+			&& (chunk_rows >= max_connection_rows
 				|| chunk_bytes.saturating_add(entry_bytes) > KV_TX_MAX_PAYLOAD_BYTES)
 		{
 			persist_connection_snapshot_chunk(db, &connections[chunk_start..index]).await?;
