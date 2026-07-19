@@ -41,6 +41,13 @@ const footer = {
 		{ name: "Open-Source Friends", href: "/oss-friends" },
 		{ name: "Press Kit", href: "https://releases.rivet.dev/press-kit.zip" },
 	],
+	compare: [
+		{
+			name: "Cloudflare Durable Objects",
+			href: "/compare/rivet-vs-cloudflare-durable-objects",
+		},
+		{ name: "Temporal", href: "/compare/rivet-vs-temporal" },
+	],
 	legal: [
 		{ name: "Terms", href: "/terms" },
 		{ name: "Privacy Policy", href: "/privacy" },
@@ -133,7 +140,7 @@ export function PageNextPrevious({ navigation }) {
 function SmallPrint() {
 	return (
 		<div className="mx-auto max-w-7xl w-full py-16">
-			<div className="grid grid-cols-1 min-[440px]:grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-5">
+			<div className="grid grid-cols-1 min-[440px]:grid-cols-2 gap-8 md:grid-cols-4 lg:grid-cols-6">
 				{/* Brand column */}
 				<div className="col-span-1 min-[440px]:col-span-2 md:col-span-4 lg:col-span-1 space-y-6">
 					<img className="h-8 w-8" src={imgLogo.src} alt="Rivet" />
@@ -199,6 +206,23 @@ function SmallPrint() {
 								<a
 									href={item.href}
 									target={item.newTab ? "_blank" : null}
+									className="text-sm text-ink-soft hover:text-ink transition-colors"
+								>
+									{item.name}
+								</a>
+							</li>
+						))}
+					</ul>
+				</div>
+
+				{/* Compare */}
+				<div>
+					<h3 className="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint mb-4">Compare</h3>
+					<ul className="space-y-3">
+						{footer.compare.map((item) => (
+							<li key={item.name}>
+								<a
+									href={item.href}
 									className="text-sm text-ink-soft hover:text-ink transition-colors"
 								>
 									{item.name}
