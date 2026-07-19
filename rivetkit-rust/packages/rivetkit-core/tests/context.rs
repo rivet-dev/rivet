@@ -305,7 +305,9 @@ CREATE TABLE IF NOT EXISTS _rivet_schedule_history (
     error_metadata BLOB
 ) STRICT;
 CREATE INDEX IF NOT EXISTS _rivet_schedule_history_schedule
-    ON _rivet_schedule_history (schedule_id, fired_at DESC);
+    ON _rivet_schedule_history (schedule_id, fired_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS _rivet_schedule_history_fired_at
+    ON _rivet_schedule_history (fired_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS _rivet_conns (
     conn_id         TEXT PRIMARY KEY,
     parameters      BLOB NOT NULL,

@@ -92,7 +92,11 @@ CREATE TABLE _rivet_schedule_history (
 "#,
 		r#"
 CREATE INDEX _rivet_schedule_history_schedule
-    ON _rivet_schedule_history (schedule_id, fired_at DESC)
+    ON _rivet_schedule_history (schedule_id, fired_at DESC, id DESC)
+"#,
+		r#"
+CREATE INDEX _rivet_schedule_history_fired_at
+    ON _rivet_schedule_history (fired_at DESC, id DESC)
 "#,
 	],
 	&[

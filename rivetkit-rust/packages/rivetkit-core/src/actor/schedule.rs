@@ -414,18 +414,32 @@ impl ActorContext {
 	pub async fn cron_delete(&self, name: &str) -> Result<bool> {
 		validate_name(name)?;
 		let _mutation = self.0.schedule_mutation_lock.lock().await;
-		let result = self
+		let event_id = cron_event_id(name);
+		let results = self
 			.sql()
-			.execute(
-				"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind != ?",
-				Some(vec![
-					BindParam::Text(cron_event_id(name)),
-					BindParam::Integer(ScheduleKind::At.as_i64()),
-				]),
-			)
+			.execute_batch(vec![
+				SqliteBatchStatement {
+					sql: "DELETE FROM _rivet_schedule_history WHERE schedule_id = ? AND EXISTS (SELECT 1 FROM _rivet_schedule_events WHERE event_id = ? AND kind != ?)".to_owned(),
+					params: Some(vec![
+						BindParam::Text(event_id.clone()),
+						BindParam::Text(event_id.clone()),
+						BindParam::Integer(ScheduleKind::At.as_i64()),
+					]),
+				},
+				SqliteBatchStatement {
+					sql: "DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind != ?"
+						.to_owned(),
+					params: Some(vec![
+						BindParam::Text(event_id),
+						BindParam::Integer(ScheduleKind::At.as_i64()),
+					]),
+				},
+			])
 			.await
-			.context("delete recurring schedule")?;
-		let removed = result.changes > 0;
+			.context("delete recurring schedule and history")?;
+		let removed = results
+			.get(1)
+			.is_some_and(|event_result| event_result.changes > 0);
 		if removed {
 			self.mark_schedule_dirty();
 			self.record_schedules_updated();
@@ -1141,7 +1155,7 @@ fn history_prune_statements(event_id: &str, max_history: i64) -> Vec<SqliteBatch
 			]),
 		},
 		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_schedule_history WHERE id NOT IN (SELECT id FROM _rivet_schedule_history ORDER BY fired_at DESC, id DESC LIMIT ?)".to_owned(),
+			sql: "DELETE FROM _rivet_schedule_history WHERE id IN (SELECT id FROM _rivet_schedule_history ORDER BY fired_at ASC, id ASC LIMIT MAX((SELECT COUNT(*) FROM _rivet_schedule_history) - ?, 0))".to_owned(),
 			params: Some(vec![BindParam::Integer(MAX_ACTOR_HISTORY)]),
 		},
 	]

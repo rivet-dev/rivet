@@ -377,6 +377,27 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	async fn deleting_recurring_schedule_removes_history_before_name_reuse() {
+		let ctx = context("actor-delete-history");
+		ctx.cron_every("job", 5_000, "originalAction", &[], Some(10))
+			.await
+			.unwrap();
+		ctx.set_schedule_time_for_tests(BASE_TIME + 5_000);
+		let dispatch = ctx.take_due_schedule_dispatches().await.unwrap().remove(0);
+		ctx.finish_schedule_dispatch(&dispatch.event_id, dispatch.history_id, None)
+			.await;
+		assert_eq!(ctx.cron_history("job", None).await.unwrap().len(), 1);
+
+		assert!(ctx.cron_delete("job").await.unwrap());
+		assert!(ctx.cron_history("job", None).await.unwrap().is_empty());
+
+		ctx.cron_every("job", 5_000, "replacementAction", &[], Some(10))
+			.await
+			.unwrap();
+		assert!(ctx.cron_history("job", None).await.unwrap().is_empty());
+	}
+
+	#[tokio::test]
 	async fn pending_schedule_cap_allows_replacement_and_freed_capacity() {
 		let harness = ActorContextHarness::new();
 		let ctx = harness.context_with_config(
@@ -578,6 +599,21 @@ mod moved_tests {
 		assert_eq!(
 			count.rows,
 			vec![vec![crate::sqlite::ColumnValue::Integer(10_000)]]
+		);
+		let range = ctx
+			.sql()
+			.query(
+				"SELECT MIN(fired_at), MAX(fired_at) FROM _rivet_schedule_history",
+				None,
+			)
+			.await
+			.unwrap();
+		assert_eq!(
+			range.rows,
+			vec![vec![
+				crate::sqlite::ColumnValue::Integer(3),
+				crate::sqlite::ColumnValue::Integer(BASE_TIME + 5_000),
+			]]
 		);
 	}
 
