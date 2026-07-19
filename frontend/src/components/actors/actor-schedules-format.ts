@@ -1,11 +1,28 @@
+import cronstrue from "cronstrue";
 import type { InspectorSchedule } from "./actor-inspector-context";
 
 export function formatSchedule(schedule: InspectorSchedule): string {
-	if (schedule.kind === "at") return "One time";
+	if (schedule.kind === "at") {
+		return new Intl.DateTimeFormat(undefined, {
+			dateStyle: "medium",
+			timeStyle: "short",
+		}).format(schedule.nextRunAt);
+	}
 	if (schedule.kind === "every") {
 		return `Every ${formatDuration(schedule.intervalMs ?? 0)}`;
 	}
-	return `${schedule.expression ?? "Cron"} · ${schedule.timezone ?? "UTC"}`;
+	return schedule.expression ?? "Cron";
+}
+
+export function describeCronExpression(expression: string): string {
+	try {
+		return cronstrue.toString(expression, {
+			verbose: true,
+			trimHoursLeadingZero: true,
+		});
+	} catch {
+		return "Unable to describe this cron expression";
+	}
 }
 
 export function formatDuration(durationMs: number): string {

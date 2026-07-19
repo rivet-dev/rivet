@@ -1,23 +1,9 @@
-import {
-	faCalendar,
-	faClock,
-	faSpinnerThird,
-	faTrash,
-	Icon,
-} from "@rivet-gg/icons";
+import { faCalendar, faSpinnerThird, faTrash, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, type ReactNode, useEffect, useState } from "react";
 import { toast } from "sonner";
-import { Badge } from "@/components/ui/badge";
+import { WithTooltip } from "@/components";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-	Sheet,
-	SheetContent,
-	SheetDescription,
-	SheetHeader,
-	SheetTitle,
-} from "@/components/ui/sheet";
 import {
 	Table,
 	TableBody,
@@ -32,15 +18,15 @@ import {
 	type InspectorScheduleFire,
 	useActorInspector,
 } from "./actor-inspector-context";
-import { formatDuration, formatSchedule } from "./actor-schedules-format";
+import {
+	describeCronExpression,
+	formatDuration,
+	formatSchedule,
+} from "./actor-schedules-format";
 import type { ActorId } from "./queries";
-
-type ScheduleFilter = "all" | "one-time" | "recurring";
 
 export function ActorSchedulesTab({ actorId }: { actorId: ActorId }) {
 	const inspector = useActorInspector();
-	const [search, setSearch] = useState("");
-	const [filter, setFilter] = useState<ScheduleFilter>("all");
 	const [selectedId, setSelectedId] = useState<string>();
 	const [now, setNow] = useState(() => Date.now());
 
@@ -53,26 +39,6 @@ export function ActorSchedulesTab({ actorId }: { actorId: ActorId }) {
 		return () => window.clearInterval(timer);
 	}, []);
 
-	const filtered = useMemo(() => {
-		const query = search.trim().toLowerCase();
-		return schedules.filter((schedule) => {
-			if (filter === "one-time" && schedule.kind !== "at") return false;
-			if (filter === "recurring" && schedule.kind === "at") return false;
-			if (!query) return true;
-			return [
-				schedule.name,
-				schedule.id,
-				schedule.action,
-				schedule.expression,
-				schedule.timezone,
-			]
-				.filter(Boolean)
-				.some((value) => value?.toLowerCase().includes(query));
-		});
-	}, [filter, schedules, search]);
-
-	const selected = schedules.find((schedule) => schedule.id === selectedId);
-
 	if (!inspector.features.schedules.supported) {
 		return (
 			<div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
@@ -83,37 +49,6 @@ export function ActorSchedulesTab({ actorId }: { actorId: ActorId }) {
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col" data-testid="schedules-tab">
-			<div className="flex flex-wrap items-center gap-2 border-b px-4 py-3">
-				<div className="mr-auto flex items-center gap-2">
-					<h2 className="font-semibold">Schedules</h2>
-					<Badge variant="secondary">
-						{schedules.length} active
-					</Badge>
-				</div>
-				<div className="flex rounded-md border bg-muted/30 p-0.5">
-					{(["all", "one-time", "recurring"] as const).map((value) => (
-						<Button
-							key={value}
-							variant="ghost"
-							size="sm"
-							className={cn(
-								"h-7 px-2.5 text-xs capitalize",
-								filter === value && "bg-background shadow-sm",
-							)}
-							onClick={() => setFilter(value)}
-						>
-							{value}
-						</Button>
-					))}
-				</div>
-				<Input
-					value={search}
-					onChange={(event) => setSearch(event.target.value)}
-					placeholder="Search schedules…"
-					className="h-8 w-48"
-				/>
-			</div>
-
 			{isLoading ? (
 				<div className="flex flex-1 items-center justify-center text-muted-foreground">
 					<Icon icon={faSpinnerThird} className="mr-2 animate-spin" />
@@ -121,69 +56,77 @@ export function ActorSchedulesTab({ actorId }: { actorId: ActorId }) {
 				</div>
 			) : schedules.length === 0 ? (
 				<EmptySchedules />
-			) : filtered.length === 0 ? (
-				<div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
-					No schedules match this filter.
-				</div>
 			) : (
-				<Table containerClassName="flex-1 min-h-0">
-					<TableHeader className="sticky top-0 z-10 bg-background">
+				<Table containerClassName="flex-1 min-h-0 bg-card">
+					<TableHeader className="sticky top-0 z-10 bg-card">
 						<TableRow>
-							<TableHead>Type</TableHead>
 							<TableHead>Name / ID</TableHead>
 							<TableHead>Action</TableHead>
 							<TableHead>Schedule</TableHead>
 							<TableHead>Next run</TableHead>
-							<TableHead>Last start</TableHead>
+							<TableHead>Last run</TableHead>
 						</TableRow>
 					</TableHeader>
 					<TableBody>
-						{filtered.map((schedule) => (
-							<TableRow
-								key={`${schedule.kind}:${schedule.id}`}
-								isClickable
-								onClick={() => setSelectedId(schedule.id)}
-								data-testid={`schedule-row-${schedule.id}`}
-							>
-								<TableCell>
-									<KindBadge kind={schedule.kind} />
-								</TableCell>
-								<TableCell className="max-w-56">
-									<div className="truncate font-medium">
-										{schedule.name ?? schedule.id}
-									</div>
-									{schedule.name && (
-										<div className="truncate font-mono text-[11px] text-muted-foreground">
-											{schedule.id}
-										</div>
+						{schedules.map((schedule) => {
+							const isSelected = schedule.id === selectedId;
+							const toggle = () =>
+								setSelectedId(isSelected ? undefined : schedule.id);
+
+							return (
+								<Fragment key={`${schedule.kind}:${schedule.id}`}>
+									<TableRow
+										isClickable
+										data-state={isSelected ? "selected" : undefined}
+										aria-expanded={isSelected}
+										tabIndex={0}
+										onClick={toggle}
+										onKeyDown={(event) => {
+											if (event.key === "Enter" || event.key === " ") {
+												event.preventDefault();
+												toggle();
+											}
+										}}
+										data-testid={`schedule-row-${schedule.id}`}
+									>
+										<TableCell className="max-w-56">
+											<ScheduleName schedule={schedule} />
+										</TableCell>
+										<TableCell className="font-mono text-xs">
+											{schedule.action}
+										</TableCell>
+										<TableCell>
+											<ScheduleValue schedule={schedule} />
+										</TableCell>
+										<TableCell>
+											<RelativeTime timestamp={schedule.nextRunAt} now={now} />
+										</TableCell>
+										<TableCell className="text-muted-foreground">
+											{schedule.lastRunAt ? (
+												<RelativeTime timestamp={schedule.lastRunAt} now={now} />
+											) : (
+												"—"
+											)}
+										</TableCell>
+									</TableRow>
+									{isSelected && (
+										<TableRow className="bg-muted/20 hover:bg-muted/20">
+											<TableCell colSpan={5} className="p-0">
+												<ScheduleDetails
+													actorId={actorId}
+													schedule={schedule}
+													now={now}
+													onClose={() => setSelectedId(undefined)}
+												/>
+											</TableCell>
+										</TableRow>
 									)}
-								</TableCell>
-								<TableCell className="font-mono text-xs">
-									{schedule.action}
-								</TableCell>
-								<TableCell>{formatSchedule(schedule)}</TableCell>
-								<TableCell>
-									<RelativeTime timestamp={schedule.nextRunAt} now={now} />
-								</TableCell>
-								<TableCell className="text-muted-foreground">
-									{schedule.lastRunAt ? (
-										<RelativeTime timestamp={schedule.lastRunAt} now={now} />
-									) : (
-										"—"
-									)}
-								</TableCell>
-							</TableRow>
-						))}
+								</Fragment>
+							);
+						})}
 					</TableBody>
 				</Table>
 			)}
-
-			<ScheduleDetails
-				actorId={actorId}
-				schedule={selected}
-				now={now}
-				onClose={() => setSelectedId(undefined)}
-			/>
 		</div>
 	);
 }
@@ -196,10 +139,58 @@ function EmptySchedules() {
 			</div>
 			<h3 className="font-medium">No schedules yet</h3>
 			<p className="mt-1 max-w-sm text-sm text-muted-foreground">
-				One-time and recurring schedules created by this actor will appear
-				here.
+				Pending one-time and recurring schedules will appear here.
 			</p>
 		</div>
+	);
+}
+
+function ScheduleName({ schedule }: { schedule: InspectorSchedule }) {
+	if (schedule.name) {
+		return <div className="truncate font-medium">{schedule.name}</div>;
+	}
+
+	const shortId =
+		schedule.id.length > 16
+			? `${schedule.id.slice(0, 8)}…${schedule.id.slice(-4)}`
+			: schedule.id;
+	return (
+		<WithTooltip
+			content={schedule.id}
+			trigger={
+				<code className="cursor-help text-xs" tabIndex={0}>
+					{shortId}
+				</code>
+			}
+		/>
+	);
+}
+
+function ScheduleValue({ schedule }: { schedule: InspectorSchedule }) {
+	if (schedule.kind !== "cron") {
+		return <span>{formatSchedule(schedule)}</span>;
+	}
+
+	const expression = schedule.expression ?? "";
+	return (
+		<WithTooltip
+			content={
+				<div className="space-y-1">
+					<div>{describeCronExpression(expression)}</div>
+					<div className="text-xs text-muted-foreground">
+						Timezone: {schedule.timezone ?? "UTC"}
+					</div>
+				</div>
+			}
+			trigger={
+				<code
+					className="cursor-help border-b border-dotted border-muted-foreground/60 text-xs"
+					tabIndex={0}
+				>
+					{expression}
+				</code>
+			}
+		/>
 	);
 }
 
@@ -210,19 +201,16 @@ function ScheduleDetails({
 	onClose,
 }: {
 	actorId: ActorId;
-	schedule: InspectorSchedule | undefined;
+	schedule: InspectorSchedule;
 	now: number;
 	onClose: () => void;
 }) {
 	const inspector = useActorInspector();
 	const [confirming, setConfirming] = useState(false);
-	const isRecurring = schedule?.kind !== "at";
+	const isRecurring = schedule.kind !== "at";
 	const { data: history = [], isLoading } = useQuery({
-		...inspector.actorScheduleHistoryQueryOptions(
-			actorId,
-			schedule?.id ?? "",
-		),
-		enabled: Boolean(schedule && isRecurring),
+		...inspector.actorScheduleHistoryQueryOptions(actorId, schedule.id),
+		enabled: isRecurring,
 	});
 	const deletion = useMutation({
 		...inspector.actorScheduleDeleteMutation(actorId),
@@ -233,123 +221,101 @@ function ScheduleDetails({
 		onError: (error) => toast.error(error.message),
 	});
 
-	useEffect(() => setConfirming(false), [schedule?.id]);
+	useEffect(() => setConfirming(false), [schedule.id]);
 
 	return (
-		<Sheet open={Boolean(schedule)} onOpenChange={(open) => !open && onClose()}>
-			<SheetContent className="flex w-full flex-col sm:max-w-lg">
-				{schedule && (
-					<>
-						<SheetHeader className="border-b pb-4 pr-6">
-							<div className="flex items-center gap-2">
-								<SheetTitle className="truncate">
-									{schedule.name ?? "One-time schedule"}
-								</SheetTitle>
-								<KindBadge kind={schedule.kind} />
-							</div>
-							<SheetDescription className="truncate font-mono text-xs">
-								{schedule.id}
-							</SheetDescription>
-						</SheetHeader>
-
-						<div className="flex-1 space-y-6 overflow-y-auto py-4">
-							<dl className="grid grid-cols-[7rem_1fr] gap-x-4 gap-y-3 text-sm">
-								<Detail label="Action">
-									<code>{schedule.action}</code>
-								</Detail>
-								<Detail label="Schedule">{formatSchedule(schedule)}</Detail>
-								<Detail label="Next run">
-									<div>{formatTimestamp(schedule.nextRunAt)}</div>
-									<div className="text-xs text-muted-foreground">
-										<RelativeTime timestamp={schedule.nextRunAt} now={now} />
-									</div>
-								</Detail>
-								{schedule.lastRunAt && (
-									<Detail label="Last start">
-										{formatTimestamp(schedule.lastRunAt)}
-									</Detail>
-								)}
-								{schedule.maxHistory != null && (
-									<Detail label="History">
-										{schedule.maxHistory === 0
-											? "Disabled"
-											: `Keep ${schedule.maxHistory} entries`}
-									</Detail>
-								)}
-							</dl>
-
-							<section>
-								<h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-									Arguments
-								</h3>
-								<pre className="max-h-48 overflow-auto rounded-md border bg-muted/30 p-3 text-xs">
-									{JSON.stringify(schedule.args, null, 2)}
-								</pre>
-							</section>
-
-							{isRecurring && (
-								<section>
-									<h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-										Recent runs
-									</h3>
-									{isLoading ? (
-										<div className="py-6 text-center text-sm text-muted-foreground">
-											<Icon
-												icon={faSpinnerThird}
-												className="mr-2 animate-spin"
-											/>
-											Loading history…
-										</div>
-									) : history.length ? (
-										<HistoryList history={history} now={now} />
-									) : (
-										<div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
-											No runs recorded yet.
-										</div>
-									)}
-								</section>
-							)}
+		<div className="grid gap-5 border-t p-4 md:grid-cols-2">
+			<div className={cn("space-y-5", !isRecurring && "md:col-span-2")}>
+				<dl className="grid grid-cols-[6rem_1fr] gap-x-4 gap-y-2 text-sm">
+					<Detail label="ID">
+						<code className="break-all text-xs">{schedule.id}</code>
+					</Detail>
+					<Detail label="Next run">
+						<div>{formatTimestamp(schedule.nextRunAt)}</div>
+						<div className="text-xs text-muted-foreground">
+							<RelativeTime timestamp={schedule.nextRunAt} now={now} />
 						</div>
+					</Detail>
+					{schedule.lastRunAt && (
+						<Detail label="Last run">
+							{formatTimestamp(schedule.lastRunAt)}
+						</Detail>
+					)}
+					{schedule.maxHistory != null && (
+						<Detail label="History">
+							{schedule.maxHistory === 0
+								? "Disabled"
+								: `Keep ${schedule.maxHistory} entries`}
+						</Detail>
+					)}
+				</dl>
 
-						<div className="border-t pt-4">
-							<Button
-								variant={confirming ? "destructive" : "outline"}
-								className="w-full"
-								disabled={deletion.isPending}
-								onClick={() => {
-									if (!confirming) {
-										setConfirming(true);
-										return;
-									}
-									deletion.mutate({
-										scheduleId: schedule.id,
-										kind: schedule.kind,
-									});
-								}}
-								startIcon={
-									<Icon
-										icon={deletion.isPending ? faSpinnerThird : faTrash}
-										className={cn(deletion.isPending && "animate-spin")}
-									/>
-								}
-							>
-								{confirming
-									? schedule.kind === "at"
-										? "Confirm cancellation"
-										: "Confirm deletion"
-									: schedule.kind === "at"
-										? "Cancel schedule"
-										: "Delete schedule"}
-							</Button>
+				<section>
+					<h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+						Arguments
+					</h3>
+					<pre className="max-h-40 overflow-auto rounded-md border bg-card p-3 text-xs">
+						{JSON.stringify(schedule.args, null, 2)}
+					</pre>
+				</section>
+			</div>
+
+			{isRecurring && (
+				<section>
+					<h3 className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+						Recent runs
+					</h3>
+					{isLoading ? (
+						<div className="py-6 text-center text-sm text-muted-foreground">
+							<Icon icon={faSpinnerThird} className="mr-2 animate-spin" />
+							Loading history…
 						</div>
-					</>
-				)}
-			</SheetContent>
-		</Sheet>
+					) : history.length ? (
+						<HistoryList history={history} now={now} />
+					) : (
+						<div className="rounded-md border border-dashed p-5 text-center text-sm text-muted-foreground">
+							No runs recorded yet.
+						</div>
+					)}
+				</section>
+			)}
+
+			<div className="flex justify-end border-t pt-3 md:col-span-2">
+				<Button
+					variant={confirming ? "destructive" : "outline"}
+					size="sm"
+					disabled={deletion.isPending}
+					onClick={() => {
+						if (!confirming) {
+							setConfirming(true);
+							return;
+						}
+						deletion.mutate({
+							scheduleId: schedule.id,
+							kind: schedule.kind,
+						});
+					}}
+					startIcon={
+						<Icon
+							icon={deletion.isPending ? faSpinnerThird : faTrash}
+							className={cn(deletion.isPending && "animate-spin")}
+						/>
+					}
+				>
+					{confirming
+						? schedule.kind === "at"
+							? "Confirm cancellation"
+							: "Confirm deletion"
+						: schedule.kind === "at"
+							? "Cancel schedule"
+							: "Delete schedule"}
+				</Button>
+			</div>
+		</div>
 	);
 }
 
-function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+function Detail({ label, children }: { label: string; children: ReactNode }) {
 	return (
 		<>
 			<dt className="text-muted-foreground">{label}</dt>
@@ -366,7 +332,7 @@ function HistoryList({
 	now: number;
 }) {
 	return (
-		<div className="divide-y rounded-md border">
+		<div className="max-h-56 divide-y overflow-y-auto rounded-md border bg-card">
 			{history.map((fire, index) => (
 				<div
 					key={`${fire.firedAt}:${index}`}
@@ -387,14 +353,6 @@ function HistoryList({
 				</div>
 			))}
 		</div>
-	);
-}
-
-function KindBadge({ kind }: { kind: InspectorSchedule["kind"] }) {
-	return (
-		<Badge variant="outline" className="capitalize">
-			{kind === "at" ? "One-time" : kind}
-		</Badge>
 	);
 }
 
