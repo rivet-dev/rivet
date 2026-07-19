@@ -5,6 +5,11 @@ use super::*;
 use std::future::Future;
 use tracing::Instrument;
 
+/// Inspector WebSockets originally did not require `protocol_version` on the
+/// connection URL. Those clients embed a version header in every message, and
+/// v5 was current when connection-level negotiation was introduced. Keep a
+/// missing query parameter on that v5 framing so older deployed clients remain
+/// compatible; current clients must send `protocol_version` once on the URL.
 const LEGACY_INSPECTOR_VERSION: u16 = 5;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

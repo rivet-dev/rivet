@@ -196,6 +196,10 @@ const MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY = "2.1.6";
 // with runtimes new enough to send it.
 const MIN_RIVETKIT_VERSION_TABCONFIG_INIT = "2.3.3";
 const MIN_RIVETKIT_VERSION_SCHEDULES = "2.3.4";
+// Before 2.3.4, inspector WebSockets did not require a protocol version on the
+// URL and instead embedded one in every message. Only use connection-level
+// negotiation with runtimes that implement it; older runtimes need the legacy
+// URL and embedded framing.
 const MIN_RIVETKIT_VERSION_INSPECTOR_NEGOTIATION = "2.3.4";
 const INSPECTOR_ERROR_EVENTS_DROPPED = "inspector.events_dropped";
 

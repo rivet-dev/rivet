@@ -99,7 +99,11 @@ function buildInspectorUrl(
 }
 
 function buildInspectorWebSocketUrl(gatewayUrl: string): string {
-	const url = new URL(buildInspectorUrl(gatewayUrl, "/inspector/connect"));
+	const url = new URL(
+		buildInspectorUrl(gatewayUrl, "/inspector/connect", {
+			protocol_version: String(INSPECTOR_PROTOCOL_VERSION),
+		}),
+	);
 	url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
 	return url.toString();
 }
@@ -117,9 +121,7 @@ async function toBinaryPayload(data: Blob | ArrayBuffer | Buffer | string) {
 	return new Uint8Array(data);
 }
 
-type InspectorMessage = ReturnType<
-	typeof TO_CLIENT_VERSIONED.deserializeWithEmbeddedVersion
->;
+type InspectorMessage = ReturnType<typeof TO_CLIENT_VERSIONED.deserialize>;
 
 async function waitForInspectorMessage(
 	ws: WebSocket,
@@ -148,8 +150,10 @@ async function waitForInspectorMessage(
 				const payload = await toBinaryPayload(
 					event.data as Blob | ArrayBuffer | Buffer | string,
 				);
-				const decoded =
-					TO_CLIENT_VERSIONED.deserializeWithEmbeddedVersion(payload);
+				const decoded = TO_CLIENT_VERSIONED.deserialize(
+					payload,
+					INSPECTOR_PROTOCOL_VERSION,
+				);
 				if (predicate && !predicate(decoded)) {
 					return;
 				}
@@ -312,7 +316,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 				await waitForInspectorMessageWithTag(ws, "Init");
 
 				ws.send(
-					TO_SERVER_VERSIONED.serializeWithEmbeddedVersion(
+					TO_SERVER_VERSIONED.serialize(
 						{
 							body: {
 								tag: "PatchStateRequest",
@@ -335,7 +339,7 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 				).toEqual({ count: 42 });
 
 				ws.send(
-					TO_SERVER_VERSIONED.serializeWithEmbeddedVersion(
+					TO_SERVER_VERSIONED.serialize(
 						{
 							body: {
 								tag: "StateRequest",
