@@ -179,7 +179,6 @@ const reports = actor({
 ## Execution behavior
 
 - **Durability**: [Actors sleep when not in use](/docs/actors/lifecycle#sleeping), but schedules are durable, wake the actor on demand, and survive crashes.
-- **Overdue one-shots**: Overdue one-shot schedules run when the actor resumes.
 - **Failures**: Failed runs are not retried immediately. A failed recurring run continues at the next normal cadence; a failed one-shot is complete after its attempted invocation. Cron failures are available in [run history](#view-run-history), so you can build a custom retry mechanism.
 - **Idempotency**: Scheduled actions should be idempotent so manually retrying a failed or interrupted run is safe.
 - **Overlaps**: Overlapping recurring runs are skipped.
