@@ -119,9 +119,9 @@ interface SettingsDrawerProps {
 	onOpenChange: (open: boolean) => void;
 }
 
-// TopBar is `h-11` with `mt-2` (8 + 44 = 52px). Add another 8px gap to match the
-// content view's `my-2` so the drawer's top edge aligns with the card below.
-const TOP_BAR_OUTER_HEIGHT = "60px";
+// TopBar is a flush `h-12` bar (48px, border included). Add the content view's
+// `my-2` gap (8px) so the drawer's outline aligns with the card below.
+const TOP_BAR_OUTER_HEIGHT = "56px";
 
 export function SettingsDrawer({
 	open,

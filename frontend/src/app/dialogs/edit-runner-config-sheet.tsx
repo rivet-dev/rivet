@@ -10,9 +10,9 @@ const EditRunnerConfigFrameContent = lazy(
 	() => import("@/app/dialogs/edit-runner-config"),
 );
 
-// Match the settings drawer's `top: 60px` so both panels visually align with
+// Match the settings drawer's `top: 56px` so both panels visually align with
 // the top bar / chrome below it.
-const TOP_BAR_OUTER_HEIGHT = "60px";
+const TOP_BAR_OUTER_HEIGHT = "56px";
 
 interface EditRunnerConfigSheetProps {
 	open: boolean;

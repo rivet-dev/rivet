@@ -6,9 +6,9 @@ import { ErrorBoundary } from "react-error-boundary";
 import { cn, Frame, Skeleton, VisuallyHidden } from "@/components";
 import dialogStyles from "@/components/ui/dialog.module.css";
 
-// Match the settings drawer's `top: 60px` so all panels visually align with the
+// Match the settings drawer's `top: 56px` so all panels visually align with the
 // top bar / chrome below it.
-const TOP_BAR_OUTER_HEIGHT = "60px";
+const TOP_BAR_OUTER_HEIGHT = "56px";
 
 type FrameLoader = () => Promise<{
 	default: ComponentType<{ onClose?: () => void }>;
