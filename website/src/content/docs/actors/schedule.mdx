@@ -4,7 +4,7 @@ description: "Run durable one-shot and recurring actor actions on a schedule."
 skill: true
 ---
 
-Rivet Actor schedules invoke actions on the same actor and survive sleep, restarts, upgrades, and crashes. Use `schedule.after` or `schedule.at` for one-time work, `cron.set` for calendar-based jobs, and `cron.every` for frequent fixed-interval jobs.
+Rivet Actor schedules invoke actions on the same actor and survive sleep, restarts, upgrades, and crashes. Use one-shot schedules for delayed work, cron jobs for calendar-based work, and fixed intervals for frequent jobs.
 
 ## Quick start
 
@@ -68,7 +68,7 @@ const cache = actor({
 
 ### Run after a delay
 
-`schedule.after(duration, action, ...args)` runs once after `duration` milliseconds and returns its generated schedule ID.
+Runs once after the given delay in milliseconds and returns the generated schedule ID.
 
 ```ts
 const id = await c.schedule.after(5_000, "sendReminder", reminderId);
@@ -76,7 +76,7 @@ const id = await c.schedule.after(5_000, "sendReminder", reminderId);
 
 ### Run at a specific time
 
-`schedule.at(timestamp, action, ...args)` runs once at a Unix timestamp in milliseconds.
+Runs once at a Unix timestamp in milliseconds.
 
 ```ts
 const id = await c.schedule.at(Date.parse("2026-08-01T09:00:00Z"), "openSale", saleId);
@@ -94,7 +94,7 @@ const cancelled = await c.schedule.cancel(id);
 
 ### Run on a cron schedule
 
-`cron.set` uses standard five-field cron expressions. Names are unique per actor, and reusing a name updates the existing job. The timezone defaults to `UTC`.
+Cron jobs use standard five-field expressions. Names are unique per actor, and reusing a name updates the existing job. The timezone defaults to UTC.
 
 ```ts
 await c.cron.set({
@@ -109,7 +109,7 @@ await c.cron.set({
 
 ### Run at a fixed interval
 
-`cron.every` keeps its cadence anchored to scheduled deadlines, so action runtime does not introduce drift. Names are unique per actor, and reusing a name updates the existing job. The minimum interval is 5 seconds.
+Fixed-interval jobs keep their cadence anchored to scheduled deadlines, so action runtime does not introduce drift. Names are unique per actor, and reusing a name updates the existing job. The minimum interval is 5 seconds.
 
 ```ts
 await c.cron.every({
@@ -123,7 +123,7 @@ await c.cron.every({
 
 ### Update and delete jobs
 
-Calling `set` or `every` with an existing name updates that job; changing its cadence calculates a new next run, while changing only its action, arguments, or history settings preserves the existing cadence.
+Submitting a recurring job with an existing name updates it. Changing its cadence calculates a new next run, while changing only its action, arguments, or history settings preserves the existing cadence.
 
 ```ts
 const job = await c.cron.get("daily-report");
@@ -139,11 +139,11 @@ const recent = await c.cron.history("daily-report", {
 });
 ```
 
-Each entry reports `running`, `ok`, `error`, or `skipped`. Jobs retain 100 entries by default. Set `maxHistory: 0` to disable and clear history, or choose up to 1,000 entries. An actor retains at most 10,000 history entries across all jobs.
+Each entry reports whether the run is running, succeeded, failed, or was skipped. Jobs retain 100 entries by default. Set maximum history to zero to disable and clear history, or choose up to 1,000 entries. An actor retains at most 10,000 history entries across all jobs.
 
 ## Run information
 
-When a schedule invokes an action, it appends `ScheduledFireInfo` after the configured `args`.
+When a schedule invokes an action, it appends a ScheduledFireInfo object after the configured action arguments.
 
 ```ts
 import type { ScheduledFireInfo } from "rivetkit";
