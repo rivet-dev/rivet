@@ -94,6 +94,14 @@ pub(crate) mod moved_tests {
 			.actor
 	}
 
+	async fn maybe_load_persisted_actor(ctx: &ActorContext) -> Option<PersistedActor> {
+		let sql = ctx.sql().fresh_remote_for_test();
+		internal_storage::load_actor_snapshot(&sql)
+			.await
+			.expect("persisted actor lookup should succeed")
+			.map(|snapshot| snapshot.actor)
+	}
+
 	async fn load_persisted_conn(ctx: &ActorContext, conn_id: &str) -> Option<PersistedConnection> {
 		let sql = ctx.sql().fresh_remote_for_test();
 		internal_storage::load_connections(&sql)
@@ -2420,6 +2428,108 @@ pub(crate) mod moved_tests {
 		assert_eq!(ctx.state(), vec![4, 5, 6]);
 
 		let run_handle = task.run_handle.take().expect("run handle should exist");
+		run_handle.abort();
+		let _ = run_handle.await;
+	}
+
+	#[tokio::test]
+	async fn failed_manual_startup_does_not_durably_mark_initialized() {
+		let kv = new_in_memory();
+		let ctx = new_with_kv(
+			"actor-manual-startup-fail",
+			"task-manual-startup-fail",
+			Vec::new(),
+			"local",
+			kv.clone(),
+		);
+		let factory = Arc::new(ActorFactory::new_with_manual_startup_ready(
+			Default::default(),
+			move |mut start| {
+				Box::pin(async move {
+					start.ctx.set_state_initial(vec![1, 2, 3]);
+					start
+						.startup_ready
+						.take()
+						.expect("manual runtime should receive startup ready sender")
+						.send(Err(anyhow::anyhow!("onCreate failed")))
+						.expect("startup ready receiver should exist");
+					Err(anyhow::anyhow!("onCreate failed"))
+				})
+			},
+		));
+		let mut task = new_task_with_factory(ctx.clone(), factory);
+		let (start_tx, start_rx) = oneshot::channel();
+
+		task.handle_lifecycle(LifecycleCommand::Start { reply: start_tx })
+			.await;
+		start_rx
+			.await
+			.expect("start reply should send")
+			.expect_err("start should fail");
+		assert!(maybe_load_persisted_actor(&ctx).await.is_none());
+
+		let retry_ctx = new_with_kv(
+			"actor-manual-startup-fail",
+			"task-manual-startup-fail",
+			Vec::new(),
+			"local",
+			kv,
+		);
+		let (observed_tx, observed_rx) = oneshot::channel();
+		let observed_tx = Arc::new(Mutex::new(Some(observed_tx)));
+		let retry_factory = Arc::new(ActorFactory::new_with_manual_startup_ready(
+			Default::default(),
+			move |mut start| {
+				let observed_tx = observed_tx.clone();
+				Box::pin(async move {
+					observed_tx
+						.lock()
+						.expect("observed lock poisoned")
+						.take()
+						.expect("observed sender should exist")
+						.send(start.ctx.persisted_actor().has_initialized)
+						.expect("observed sender should send");
+					start.ctx.set_state_initial(vec![4, 5, 6]);
+					start.ctx.set_has_initialized(true);
+					start
+						.startup_ready
+						.take()
+						.expect("manual runtime should receive startup ready sender")
+						.send(Ok(()))
+						.expect("startup ready receiver should exist");
+
+					while let Some(event) = start.events.recv().await {
+						match event {
+							ActorEvent::SerializeState { reply, .. } => {
+								reply.send(Ok(vec![StateDelta::ActorState(start.ctx.state())]));
+							}
+							ActorEvent::RunGracefulCleanup { reply, .. } => {
+								reply.send(Ok(()));
+							}
+							_ => {}
+						}
+					}
+					Ok(())
+				})
+			},
+		));
+		let mut retry_task = new_task_with_factory(retry_ctx.clone(), retry_factory);
+		let (retry_start_tx, retry_start_rx) = oneshot::channel();
+
+		retry_task
+			.handle_lifecycle(LifecycleCommand::Start {
+				reply: retry_start_tx,
+			})
+			.await;
+		retry_start_rx
+			.await
+			.expect("retry start reply should send")
+			.expect("retry start should succeed");
+
+		assert!(!observed_rx.await.expect("runtime should observe startup"));
+		assert!(load_persisted_actor(&retry_ctx).await.has_initialized);
+
+		let run_handle = retry_task.run_handle.take().expect("run handle should exist");
 		run_handle.abort();
 		let _ = run_handle.await;
 	}
