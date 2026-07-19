@@ -5,6 +5,8 @@ use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
 pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 6;
 
 const SCHEMA_VERSION_KEY: &str = "schema_version";
+pub(crate) const READ_SCHEMA_VERSION_SQL: &str =
+	"SELECT value FROM _rivet_meta WHERE key = ?";
 
 // `_rivet_meta` is the bootstrap root created before the numbered migrations.
 // `schema_version` cannot live in a table created by those migrations, and
@@ -12,7 +14,7 @@ const SCHEMA_VERSION_KEY: &str = "schema_version";
 // interrupted imports can be detected and retried. This is not a general-
 // purpose runtime KV store; its text accessors are migration bookkeeping only.
 // W[bootstrap + import bookkeeping only | point upsert | <100 B | 1-page map]
-const CREATE_META_TABLE: &str = r#"
+pub(crate) const CREATE_META_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS _rivet_meta (
     key   TEXT PRIMARY KEY,
     value BLOB NOT NULL
@@ -25,7 +27,7 @@ CREATE TABLE IF NOT EXISTS _rivet_meta (
 // across runtime releases. Rewriting these entries in place is safe only while
 // no internal schema version has shipped; after release, all changes must be
 // appended as new migrations and INTERNAL_SCHEMA_VERSION must advance.
-const MIGRATIONS: &[&[&str]] = &[
+pub(crate) const MIGRATIONS: &[&[&str]] = &[
 	&[
 		// W[queue_next_id per enqueue; alarm per head-change; token once | point UPDATE of one column | <100 B | single-row: all runtime singletons on one leaf]
 		r#"
@@ -97,6 +99,10 @@ CREATE INDEX _rivet_schedule_history_schedule
 		r#"
 CREATE INDEX _rivet_schedule_history_fired_at
     ON _rivet_schedule_history (fired_at DESC, id DESC)
+"#,
+		r#"
+CREATE INDEX _rivet_schedule_history_result
+    ON _rivet_schedule_history (result)
 "#,
 	],
 	&[
@@ -214,7 +220,7 @@ fn migration_statements(from_version: i64, to_version: i64) -> Result<Vec<Sqlite
 async fn read_schema_version(db: &SqliteDb) -> Result<i64> {
 	let result = db
 		.query(
-			"SELECT value FROM _rivet_meta WHERE key = ?",
+			READ_SCHEMA_VERSION_SQL,
 			Some(vec![BindParam::Text(SCHEMA_VERSION_KEY.to_owned())]),
 		)
 		.await

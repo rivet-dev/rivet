@@ -376,6 +376,8 @@ CREATE INDEX _rivet_schedule_history_schedule
     ON _rivet_schedule_history (schedule_id, fired_at DESC, id DESC);
 CREATE INDEX _rivet_schedule_history_fired_at
     ON _rivet_schedule_history (fired_at DESC, id DESC);
+CREATE INDEX _rivet_schedule_history_result
+    ON _rivet_schedule_history (result);
 CREATE TABLE _rivet_conns (
     conn_id TEXT PRIMARY KEY,
     parameters BLOB NOT NULL,

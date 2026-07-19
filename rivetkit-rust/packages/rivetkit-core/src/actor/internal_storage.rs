@@ -20,6 +20,7 @@ const USER_KV_VALUE_LIMIT: usize = 128 * 1024;
 /// keeps holding for SQLite-backed user KV.
 const USER_KV_KEY_LIMIT: usize = 2048;
 pub(crate) const USER_KV_BATCH_GET_MAX_KEYS: usize = 128;
+pub(crate) const USER_KV_LIST_PAGE_SIZE: i64 = 128;
 const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 
 /// Depot rejects SQLite commits that dirty more than `MAX_COMMIT_RAW_DIRTY_BYTES`
@@ -30,6 +31,78 @@ pub(crate) const KV_TX_MAX_PAYLOAD_BYTES: usize = 512 * 1024;
 /// Row cap per transaction paired with the payload budget above.
 pub(crate) const KV_TX_MAX_ROWS: usize = 128;
 const CONNECTION_DESTINATION_ROWS_PER_RECORD: usize = 2;
+
+pub(crate) const LOAD_ACTOR_SNAPSHOT_SQL: &str = "SELECT a.has_initialized, a.input, s.state FROM _rivet_actor a JOIN _rivet_actor_state s ON s.id = a.id WHERE a.id = 1";
+pub(crate) const LOAD_CONNECTIONS_SQL: &str = "SELECT c.conn_id, c.parameters, s.state, s.subscriptions, c.gateway_id, c.request_id, s.server_message_index, s.client_message_index, c.request_path, c.request_headers FROM _rivet_conns c JOIN _rivet_conn_state s ON s.conn_id = c.conn_id ORDER BY c.conn_id";
+pub(crate) const RESET_SCHEDULES_FOR_LEGACY_IMPORT_SQL: &str =
+	"DELETE FROM _rivet_schedule_events";
+pub(crate) const LOAD_QUEUE_NEXT_ID_SQL: &str =
+	"SELECT queue_next_id FROM _rivet_runtime WHERE id = 1";
+pub(crate) const LOAD_QUEUE_STATS_SQL: &str = "SELECT COUNT(*), MAX(id) FROM _rivet_queue";
+pub(crate) const LOAD_QUEUE_MESSAGES_SQL: &str =
+	"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id";
+pub(crate) const DELETE_QUEUE_MESSAGE_SQL: &str = "DELETE FROM _rivet_queue WHERE id = ?";
+pub(crate) const RESET_QUEUE_SQL: &str = "DELETE FROM _rivet_queue";
+pub(crate) const DELETE_USER_KV_SQL: &str = "DELETE FROM _rivet_user_kv WHERE key = ?";
+pub(crate) const DELETE_USER_KV_RANGE_SQL: &str =
+	"DELETE FROM _rivet_user_kv WHERE key >= ? AND key < ?";
+pub(crate) const DELETE_CONN_STATE_SQL: &str =
+	"DELETE FROM _rivet_conn_state WHERE conn_id = ?";
+pub(crate) const DELETE_CONN_SQL: &str = "DELETE FROM _rivet_conns WHERE conn_id = ?";
+pub(crate) const LOAD_LAST_PUSHED_ALARM_SQL: &str =
+	"SELECT last_pushed_alarm FROM _rivet_runtime WHERE id = 1";
+pub(crate) const LOAD_INSPECTOR_TOKEN_SQL: &str =
+	"SELECT inspector_token FROM _rivet_runtime WHERE id = 1";
+pub(crate) const LOAD_META_TEXT_SQL: &str = "SELECT value FROM _rivet_meta WHERE key = ?";
+
+pub(crate) fn user_kv_batch_get_sql(key_count: usize) -> String {
+	let placeholders = std::iter::repeat_n("?", key_count)
+		.collect::<Vec<_>>()
+		.join(", ");
+	format!("SELECT key, value FROM _rivet_user_kv WHERE key IN ({placeholders})")
+}
+
+pub(crate) fn user_kv_list_sql(where_clause: &str, reverse: bool, limited: bool) -> String {
+	let order = if reverse { "DESC" } else { "ASC" };
+	let limit_clause = if limited { " LIMIT ?" } else { "" };
+	format!(
+		"SELECT key, value FROM _rivet_user_kv {where_clause} ORDER BY key {order}{limit_clause}"
+	)
+}
+
+pub(crate) fn user_kv_list_page_sql(
+	where_clause: &str,
+	reverse: bool,
+	has_cursor: bool,
+) -> String {
+	let order = if reverse { "DESC" } else { "ASC" };
+	let cursor_operator = if reverse { "<" } else { ">" };
+	let cursor_clause = if has_cursor {
+		if where_clause.is_empty() {
+			format!("WHERE key {cursor_operator} ?")
+		} else {
+			format!("{where_clause} AND key {cursor_operator} ?")
+		}
+	} else {
+		where_clause.to_owned()
+	};
+	format!("SELECT key, value FROM _rivet_user_kv {cursor_clause} ORDER BY key {order} LIMIT ?")
+}
+
+pub(crate) fn clear_table_select_sql(
+	table: &str,
+	key_column: &str,
+	size_expression: &str,
+) -> String {
+	format!(
+		"SELECT {key_column}, {size_expression} FROM {table} ORDER BY {key_column} LIMIT {}",
+		KV_TX_MAX_ROWS
+	)
+}
+
+pub(crate) fn clear_table_delete_sql(table: &str, key_column: &str) -> String {
+	format!("DELETE FROM {table} WHERE {key_column} = ?")
+}
 
 /// Splits `entries` into contiguous chunks that each stay within the
 /// per-transaction row and payload budgets. A single oversized entry gets its
@@ -69,10 +142,7 @@ pub(crate) struct InternalActorSnapshot {
 
 pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<InternalActorSnapshot>> {
 	let actor_rows = db
-		.query(
-			"SELECT a.has_initialized, a.input, s.state FROM _rivet_actor a JOIN _rivet_actor_state s ON s.id = a.id WHERE a.id = 1",
-			None,
-		)
+		.query(LOAD_ACTOR_SNAPSHOT_SQL, None)
 		.await
 		.context("load internal actor rows")?;
 
@@ -137,7 +207,7 @@ pub(crate) async fn import_legacy_actor_snapshot(
 			params: Some(vec![BindParam::Blob(actor.state.clone())]),
 		},
 		SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_schedule_events".to_owned(),
+			sql: RESET_SCHEDULES_FOR_LEGACY_IMPORT_SQL.to_owned(),
 			params: None,
 		},
 	];
@@ -302,10 +372,7 @@ async fn persist_connection_snapshot_chunk(
 
 pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConnection>> {
 	let result = db
-		.query(
-			"SELECT c.conn_id, c.parameters, s.state, s.subscriptions, c.gateway_id, c.request_id, s.server_message_index, s.client_message_index, c.request_path, c.request_headers FROM _rivet_conns c JOIN _rivet_conn_state s ON s.conn_id = c.conn_id ORDER BY c.conn_id",
-			None,
-		)
+		.query(LOAD_CONNECTIONS_SQL, None)
 		.await
 		.context("load internal connection rows")?;
 
@@ -337,10 +404,7 @@ pub(crate) async fn load_connections(db: &SqliteDb) -> Result<Vec<PersistedConne
 
 pub(crate) async fn load_queue_metadata(db: &SqliteDb) -> Result<QueueMetadata> {
 	let runtime = db
-		.query(
-			"SELECT queue_next_id FROM _rivet_runtime WHERE id = 1",
-			None,
-		)
+		.query(LOAD_QUEUE_NEXT_ID_SQL, None)
 		.await
 		.context("load internal queue next id")?;
 	let stored_next_id = match runtime.rows.first() {
@@ -350,7 +414,7 @@ pub(crate) async fn load_queue_metadata(db: &SqliteDb) -> Result<QueueMetadata> 
 	};
 
 	let stats = db
-		.query("SELECT COUNT(*), MAX(id) FROM _rivet_queue", None)
+		.query(LOAD_QUEUE_STATS_SQL, None)
 		.await
 		.context("load internal queue stats")?;
 	let Some(row) = stats.rows.first() else {
@@ -475,10 +539,7 @@ pub(crate) async fn persist_queue_next_id(db: &SqliteDb, next_id: u64) -> Result
 
 pub(crate) async fn load_queue_messages(db: &SqliteDb) -> Result<Vec<QueueMessageRow>> {
 	let result = db
-		.query(
-			"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id",
-			None,
-		)
+		.query(LOAD_QUEUE_MESSAGES_SQL, None)
 		.await
 		.context("load internal queue messages")?;
 
@@ -511,7 +572,7 @@ pub(crate) async fn delete_queue_messages(db: &SqliteDb, ids: &[u64]) -> Result<
 	let mut statements = Vec::with_capacity(ids.len());
 	for id in ids {
 		statements.push(SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_queue WHERE id = ?".to_owned(),
+			sql: DELETE_QUEUE_MESSAGE_SQL.to_owned(),
 			params: Some(vec![BindParam::Integer(
 				i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
 			)]),
@@ -524,7 +585,7 @@ pub(crate) async fn delete_queue_messages(db: &SqliteDb, ids: &[u64]) -> Result<
 }
 
 pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
-	db.execute("DELETE FROM _rivet_queue", None)
+	db.execute(RESET_QUEUE_SQL, None)
 		.await
 		.context("reset internal queue")?;
 	Ok(())
@@ -542,12 +603,9 @@ pub(crate) async fn user_kv_batch_get(
 ) -> Result<Vec<Option<Vec<u8>>>> {
 	let mut values_by_key = HashMap::with_capacity(keys.len());
 	for keys in keys.chunks(USER_KV_BATCH_GET_MAX_KEYS) {
-		let placeholders = std::iter::repeat_n("?", keys.len())
-			.collect::<Vec<_>>()
-			.join(", ");
 		let result = db
 			.query(
-				format!("SELECT key, value FROM _rivet_user_kv WHERE key IN ({placeholders})"),
+				user_kv_batch_get_sql(keys.len()),
 				Some(
 					keys.iter()
 						.map(|key| BindParam::Blob((*key).to_vec()))
@@ -615,7 +673,7 @@ pub(crate) async fn user_kv_batch_delete(db: &SqliteDb, keys: &[&[u8]]) -> Resul
 	let statements = keys
 		.iter()
 		.map(|key| SqliteBatchStatement {
-			sql: "DELETE FROM _rivet_user_kv WHERE key = ?".to_owned(),
+			sql: DELETE_USER_KV_SQL.to_owned(),
 			params: Some(vec![BindParam::Blob((*key).to_vec())]),
 		})
 		.collect::<Vec<_>>();
@@ -630,7 +688,7 @@ pub(crate) async fn user_kv_batch_delete(db: &SqliteDb, keys: &[&[u8]]) -> Resul
 
 pub(crate) async fn user_kv_delete_range(db: &SqliteDb, start: &[u8], end: &[u8]) -> Result<()> {
 	db.execute(
-		"DELETE FROM _rivet_user_kv WHERE key >= ? AND key < ?",
+		DELETE_USER_KV_RANGE_SQL,
 		Some(vec![
 			BindParam::Blob(start.to_vec()),
 			BindParam::Blob(end.to_vec()),
@@ -765,26 +823,45 @@ fn bind_param_payload_len(param: &BindParam) -> usize {
 async fn user_kv_list_where(
 	db: &SqliteDb,
 	where_clause: &str,
-	mut params: Vec<BindParam>,
+	params: Vec<BindParam>,
 	opts: ListOpts,
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
-	let order = if opts.reverse { "DESC" } else { "ASC" };
-	let limit_clause = if let Some(limit) = opts.limit {
-		params.push(BindParam::Integer(i64::from(limit)));
-		" LIMIT ?"
-	} else {
-		""
-	};
-	let sql = format!(
-		"SELECT key, value FROM _rivet_user_kv {where_clause} ORDER BY key {order}{limit_clause}"
-	);
-	let result = db
-		.query(&sql, (!params.is_empty()).then_some(params))
-		.await
-		.context("list user kv values from sqlite")?;
-	result
-		.rows
-		.iter()
+	if let Some(limit) = opts.limit {
+		let mut limited_params = params;
+		limited_params.push(BindParam::Integer(i64::from(limit)));
+		let sql = user_kv_list_sql(where_clause, opts.reverse, true);
+		let result = db
+			.query(&sql, Some(limited_params))
+			.await
+			.context("list user kv values from sqlite")?;
+		return decode_user_kv_rows(&result.rows);
+	}
+
+	let mut output = Vec::new();
+	let mut cursor: Option<Vec<u8>> = None;
+	loop {
+		let mut page_params = params.clone();
+		if let Some(cursor) = &cursor {
+			page_params.push(BindParam::Blob(cursor.clone()));
+		}
+		page_params.push(BindParam::Integer(USER_KV_LIST_PAGE_SIZE));
+		let sql = user_kv_list_page_sql(where_clause, opts.reverse, cursor.is_some());
+		let result = db
+			.query(&sql, Some(page_params))
+			.await
+			.context("list user kv value page from sqlite")?;
+		let page = decode_user_kv_rows(&result.rows)?;
+		let page_len = page.len();
+		cursor = page.last().map(|(key, _)| key.clone());
+		output.extend(page);
+		if page_len < USER_KV_LIST_PAGE_SIZE as usize {
+			return Ok(output);
+		}
+	}
+}
+
+fn decode_user_kv_rows(rows: &[Vec<ColumnValue>]) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	rows.iter()
 		.map(|row| {
 			Ok((
 				read_blob(row, 0, "user kv key")?,
@@ -847,21 +924,18 @@ fn push_connection_statements(
 
 fn push_delete_connection_statements(statements: &mut Vec<SqliteBatchStatement>, conn_id: &str) {
 	statements.push(SqliteBatchStatement {
-		sql: "DELETE FROM _rivet_conn_state WHERE conn_id = ?".to_owned(),
+		sql: DELETE_CONN_STATE_SQL.to_owned(),
 		params: Some(vec![BindParam::Text(conn_id.to_owned())]),
 	});
 	statements.push(SqliteBatchStatement {
-		sql: "DELETE FROM _rivet_conns WHERE conn_id = ?".to_owned(),
+		sql: DELETE_CONN_SQL.to_owned(),
 		params: Some(vec![BindParam::Text(conn_id.to_owned())]),
 	});
 }
 
 pub(crate) async fn load_last_pushed_alarm(db: &SqliteDb) -> Result<Option<i64>> {
 	let result = db
-		.query(
-			"SELECT last_pushed_alarm FROM _rivet_runtime WHERE id = 1",
-			None,
-		)
+		.query(LOAD_LAST_PUSHED_ALARM_SQL, None)
 		.await
 		.context("load internal last pushed alarm")?;
 	let Some(row) = result.rows.first() else {
@@ -886,10 +960,7 @@ pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i6
 
 pub(crate) async fn load_inspector_token(db: &SqliteDb) -> Result<Option<String>> {
 	let result = db
-		.query(
-			"SELECT inspector_token FROM _rivet_runtime WHERE id = 1",
-			None,
-		)
+		.query(LOAD_INSPECTOR_TOKEN_SQL, None)
 		.await
 		.context("load internal inspector token")?;
 	let Some(row) = result.rows.first() else {
@@ -917,7 +988,7 @@ pub(crate) async fn persist_inspector_token(db: &SqliteDb, token: &str) -> Resul
 pub(crate) async fn load_meta_text(db: &SqliteDb, key: &str) -> Result<Option<String>> {
 	let result = db
 		.query(
-			"SELECT value FROM _rivet_meta WHERE key = ?",
+			LOAD_META_TEXT_SQL,
 			Some(vec![BindParam::Text(key.to_owned())]),
 		)
 		.await
@@ -994,10 +1065,7 @@ async fn clear_table_bounded(
 	loop {
 		let rows = db
 			.query(
-				format!(
-					"SELECT {key_column}, {size_expression} FROM {table} ORDER BY {key_column} LIMIT {}",
-					KV_TX_MAX_ROWS
-				),
+				clear_table_select_sql(table, key_column, size_expression),
 				None,
 			)
 			.await?;
@@ -1035,7 +1103,7 @@ async fn clear_table_bounded(
 			}
 			payload_bytes = payload_bytes.saturating_add(row_bytes);
 			statements.push(SqliteBatchStatement {
-				sql: format!("DELETE FROM {table} WHERE {key_column} = ?"),
+				sql: clear_table_delete_sql(table, key_column),
 				params: Some(vec![key]),
 			});
 		}
