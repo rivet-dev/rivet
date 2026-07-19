@@ -4,6 +4,7 @@ import * as v2 from "@/common/bare/generated/inspector/v2";
 import * as v3 from "@/common/bare/generated/inspector/v3";
 import * as v4 from "@/common/bare/generated/inspector/v4";
 import * as v5 from "@/common/bare/generated/inspector/v5";
+import * as v6 from "@/common/bare/generated/inspector/v6";
 import type { WorkflowHistory } from "@/common/bare/transport/v1";
 import {
 	decodeWorkflowHistoryTransport,
@@ -11,7 +12,7 @@ import {
 } from "@/common/inspector-transport";
 import { loadNapiRuntime, type NapiCoreRuntime } from "@/registry/napi-runtime";
 
-const INSPECTOR_CURRENT_VERSION = 5;
+const INSPECTOR_CURRENT_VERSION = 6;
 let runtime: NapiCoreRuntime;
 
 beforeAll(async () => {
@@ -28,8 +29,8 @@ function toBuffer(value: ArrayBuffer | Uint8Array): Buffer {
 	);
 }
 
-function decodeRequest(bytes: Uint8Array, version: number): v5.ToServer {
-	return v5.decodeToServer(
+function decodeRequest(bytes: Uint8Array, version: number): v6.ToServer {
+	return v6.decodeToServer(
 		new Uint8Array(
 			runtime.decodeInspectorRequest(toBuffer(bytes), version),
 		),
@@ -37,23 +38,23 @@ function decodeRequest(bytes: Uint8Array, version: number): v5.ToServer {
 }
 
 function encodeResponse(
-	message: v5.ToClient,
-	version: 1 | 2 | 3 | 4,
+	message: v6.ToClient,
+	version: 1 | 2 | 3 | 4 | 5,
 ): Uint8Array {
 	return new Uint8Array(
 		runtime.encodeInspectorResponse(
-			toBuffer(v5.encodeToClient(message)),
+			toBuffer(v6.encodeToClient(message)),
 			version,
 		),
 	);
 }
 
 describe("inspector versioned protocol", () => {
-	test("tracks v5 as the current inspector wire version", () => {
-		expect(INSPECTOR_CURRENT_VERSION).toBe(5);
+	test("tracks v6 as the current inspector wire version", () => {
+		expect(INSPECTOR_CURRENT_VERSION).toBe(6);
 	});
 
-	test("decodes a shared request shape from versions 1-4 into the current schema", () => {
+	test("decodes a shared request shape from versions 1-5 into the current schema", () => {
 		const request = {
 			body: {
 				tag: "ActionRequest" as const,
@@ -65,7 +66,7 @@ describe("inspector versioned protocol", () => {
 			},
 		};
 
-		for (const version of [1, 2, 3, 4]) {
+		for (const version of [1, 2, 3, 4, 5]) {
 			const bytes =
 				version === 1
 					? v1.encodeToServer(request as unknown as v1.ToServer)
@@ -75,7 +76,9 @@ describe("inspector versioned protocol", () => {
 							? v3.encodeToServer(
 									request as unknown as v3.ToServer,
 								)
-							: v4.encodeToServer(request);
+							: version === 4
+								? v4.encodeToServer(request)
+								: v5.encodeToServer(request);
 			const decoded = decodeRequest(bytes, version);
 
 			expect(decoded).toEqual(request);
@@ -96,6 +99,7 @@ describe("inspector versioned protocol", () => {
 					workflowHistory: buffer("workflow"),
 					isWorkflowEnabled: true,
 					tabConfig: [],
+					schedules: [],
 				},
 			},
 		};
@@ -113,6 +117,26 @@ describe("inspector versioned protocol", () => {
 					rpcs: ["increment", "getCount"],
 					isDatabaseEnabled: true,
 				},
+			},
+		});
+	});
+
+	test("downgrades schedule updates into explicit errors before v6", () => {
+		const decoded = v5.decodeToClient(
+			encodeResponse(
+				{
+					body: {
+						tag: "SchedulesUpdated",
+						val: { schedules: [] },
+					},
+				},
+				5,
+			),
+		);
+		expect(decoded).toEqual({
+			body: {
+				tag: "Error",
+				val: { message: "inspector.schedules_dropped" },
 			},
 		});
 	});

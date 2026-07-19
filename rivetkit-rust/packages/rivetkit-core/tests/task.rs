@@ -1865,17 +1865,10 @@ pub(crate) mod moved_tests {
 			b"client-action".to_vec(),
 		);
 
-		let mut persisted = task.ctx.persisted_actor();
-		persisted.scheduled_events.push(PersistedScheduleEvent {
-			event_id: "event-1".to_owned(),
-			timestamp: 0,
-			action: "alarm-action".to_owned(),
-			args: None,
-		});
-		task.ctx.load_persisted_actor(PersistedActor {
-			scheduled_events: persisted.scheduled_events,
-			..persisted
-		});
+		task.ctx
+			.at(0, "alarm-action", &[])
+			.await
+			.expect("persist overdue alarm action");
 		task.ctx
 			.drain_overdue_scheduled_events()
 			.await
@@ -2325,7 +2318,8 @@ pub(crate) mod moved_tests {
 					match event {
 						ActorEvent::RunGracefulCleanup { reason, reply } => {
 							if reason == ShutdownKind::Destroy {
-								ctx.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3]);
+								ctx.after(Duration::from_secs(60), "after-destroy", &[1, 2, 3])
+									.await?;
 							}
 							reply.send(Ok(()));
 							break;
@@ -2360,9 +2354,23 @@ pub(crate) mod moved_tests {
 			.expect("destroy stop should succeed");
 
 		let persisted = load_persisted_actor(&ctx).await;
-		assert_eq!(persisted.scheduled_events.len(), 1);
-		assert_eq!(persisted.scheduled_events[0].action, "after-destroy");
-		assert_eq!(persisted.scheduled_events[0].args, Some(vec![1, 2, 3]));
+		assert!(persisted.scheduled_events.is_empty());
+		let schedules = ctx
+			.sql()
+			.fresh_remote_for_test()
+			.query(
+				"SELECT action, args FROM _rivet_schedule_events WHERE kind = 0",
+				None,
+			)
+			.await
+			.unwrap();
+		assert_eq!(
+			schedules.rows,
+			vec![vec![
+				ColumnValue::Text("after-destroy".to_owned()),
+				ColumnValue::Blob(vec![1, 2, 3]),
+			]],
+		);
 	}
 
 	#[tokio::test]
@@ -2654,15 +2662,9 @@ pub(crate) mod moved_tests {
 		);
 		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		ctx.configure_actor_events(Some(events_tx));
-		ctx.load_persisted_actor(PersistedActor {
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-overdue".to_owned(),
-				timestamp: 0,
-				action: "tick".to_owned(),
-				args: Some(vec![1, 2, 3]),
-			}],
-			..PersistedActor::default()
-		});
+		ctx.at(0, "tick", &[1, 2, 3])
+			.await
+			.expect("persist overdue schedule");
 
 		let mut task = new_task(ctx.clone());
 		task.lifecycle = LifecycleState::SleepGrace;
@@ -2679,10 +2681,7 @@ pub(crate) mod moved_tests {
 			ActorEvent::Action { reply, .. } => reply.send(Ok(Vec::new())),
 			other => panic!("expected scheduled action dispatch, got {}", other.kind()),
 		}
-		assert!(
-			ctx.next_event().is_none(),
-			"overdue alarm should be consumed after dispatch"
-		);
+		assert!(ctx.list_scheduled_events().await.unwrap().is_empty());
 	}
 
 	#[tokio::test(start_paused = true)]
@@ -2711,7 +2710,9 @@ pub(crate) mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.after(Duration::from_secs(60), "wake", &[]);
+		ctx.after(Duration::from_secs(60), "wake", &[])
+			.await
+			.expect("schedule wake");
 
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx
@@ -2757,7 +2758,9 @@ pub(crate) mod moved_tests {
 			.expect("start reply should send")
 			.expect("start should succeed");
 
-		ctx.after(Duration::from_secs(60), "wake", &[]);
+		ctx.after(Duration::from_secs(60), "wake", &[])
+			.await
+			.expect("schedule wake");
 
 		let (stop_tx, stop_rx) = oneshot::channel();
 		lifecycle_tx

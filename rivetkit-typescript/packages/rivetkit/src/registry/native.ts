@@ -6,6 +6,13 @@ import {
 	getRunFunction,
 	getRunInspectorConfig,
 	RAW_STATE_SYMBOL,
+	type ActorCron,
+	type ActorCronEveryOptions,
+	type ActorCronSetOptions,
+	type ActorSchedule,
+	type CronFire,
+	type CronJobInfo,
+	type ScheduledEventInfo,
 	type WorkflowInspectorConfig,
 } from "@/actor/config";
 import type { AnyActorDefinition } from "@/actor/definition";
@@ -79,7 +86,11 @@ import type {
 	RuntimeBytes,
 	RuntimeHttpResponse,
 	RuntimeInspectorTabEntry,
+	RuntimeCronFire,
+	RuntimeCronJobInfo,
 	RuntimeQueueMessage,
+	RuntimeScheduledEventInfo,
+	RuntimeScheduledFireInfo,
 	RuntimeServeConfig,
 	RuntimeStateDeltaPayload,
 	WebSocketHandle,
@@ -1333,7 +1344,7 @@ class NativeConnAdapter {
 	}
 }
 
-class NativeScheduleAdapter {
+class NativeScheduleAdapter implements ActorSchedule {
 	#runtime: CoreRuntime;
 	#ctx: ActorContextHandle;
 
@@ -1346,14 +1357,12 @@ class NativeScheduleAdapter {
 		duration: number,
 		action: string,
 		...args: unknown[]
-	): Promise<void> {
-		callNativeSync(() =>
-			this.#runtime.actorScheduleAfter(
-				this.#ctx,
-				duration,
-				action,
-				encodeValue(args),
-			),
+	): Promise<string> {
+		return await this.#runtime.actorScheduleAfter(
+			this.#ctx,
+			duration,
+			action,
+			encodeValue(args),
 		);
 	}
 
@@ -1361,16 +1370,129 @@ class NativeScheduleAdapter {
 		timestamp: number,
 		action: string,
 		...args: unknown[]
-	): Promise<void> {
-		callNativeSync(() =>
-			this.#runtime.actorScheduleAt(
-				this.#ctx,
-				timestamp,
-				action,
-				encodeValue(args),
-			),
+	): Promise<string> {
+		return await this.#runtime.actorScheduleAt(
+			this.#ctx,
+			timestamp,
+			action,
+			encodeValue(args),
 		);
 	}
+
+	async cancel(id: string): Promise<boolean> {
+		return await this.#runtime.actorScheduleCancel(this.#ctx, id);
+	}
+
+	async get(id: string): Promise<ScheduledEventInfo | undefined> {
+		const event = await this.#runtime.actorScheduleGet(this.#ctx, id);
+		return event ? decodeScheduledEventInfo(event) : undefined;
+	}
+
+	async list(): Promise<ScheduledEventInfo[]> {
+		return (await this.#runtime.actorScheduleList(this.#ctx)).map(
+			decodeScheduledEventInfo,
+		);
+	}
+}
+
+class NativeCronAdapter implements ActorCron {
+	#runtime: CoreRuntime;
+	#ctx: ActorContextHandle;
+
+	constructor(runtime: CoreRuntime, ctx: ActorContextHandle) {
+		this.#runtime = runtime;
+		this.#ctx = ctx;
+	}
+
+	async set(options: ActorCronSetOptions): Promise<void> {
+		await this.#runtime.actorCronSet(
+			this.#ctx,
+			options.name,
+			options.expression,
+			options.timezone,
+			options.action,
+			encodeValue(options.args ?? []),
+			options.maxHistory,
+		);
+	}
+
+	async every(options: ActorCronEveryOptions): Promise<void> {
+		await this.#runtime.actorCronEvery(
+			this.#ctx,
+			options.name,
+			options.intervalMs,
+			options.action,
+			encodeValue(options.args ?? []),
+			options.maxHistory,
+		);
+	}
+
+	async get(name: string): Promise<CronJobInfo | undefined> {
+		const job = await this.#runtime.actorCronGet(this.#ctx, name);
+		return job ? decodeCronJobInfo(job) : undefined;
+	}
+
+	async list(): Promise<CronJobInfo[]> {
+		return (await this.#runtime.actorCronList(this.#ctx)).map(
+			decodeCronJobInfo,
+		);
+	}
+
+	async delete(name: string): Promise<boolean> {
+		return await this.#runtime.actorCronDelete(this.#ctx, name);
+	}
+
+	async history(
+		name: string,
+		options?: { limit?: number },
+	): Promise<CronFire[]> {
+		return (
+			await this.#runtime.actorCronHistory(
+				this.#ctx,
+				name,
+				options?.limit,
+			)
+		).map(decodeCronFire);
+	}
+}
+
+function decodeScheduledEventInfo(
+	event: RuntimeScheduledEventInfo,
+): ScheduledEventInfo {
+	return {
+		id: event.id,
+		action: event.action,
+		args: decodeArgs(event.args),
+		runAt: event.runAt,
+	};
+}
+
+function decodeCronJobInfo(job: RuntimeCronJobInfo): CronJobInfo {
+	const base = {
+		name: job.name,
+		action: job.action,
+		args: decodeArgs(job.args),
+		nextRunAt: job.nextRunAt,
+		lastRunAt: job.lastRunAt,
+		maxHistory: job.maxHistory,
+	};
+	if (job.kind === "cron") {
+		return {
+			...base,
+			kind: "cron",
+			expression: job.expression as string,
+			timezone: job.timezone as string,
+		};
+	}
+	return {
+		...base,
+		kind: "every",
+		intervalMs: job.intervalMs as number,
+	};
+}
+
+function decodeCronFire(fire: RuntimeCronFire): CronFire {
+	return { ...fire };
 }
 
 class NativeKvAdapter {
@@ -2428,6 +2550,7 @@ export class ActorContextHandleAdapter {
 	#client?: AnyClient;
 	#clientFactory?: () => AnyClient;
 	#connMap?: NativeConnectionMap;
+	#cron?: NativeCronAdapter;
 	#databaseProvider?: Exclude<AnyDatabaseProvider, undefined>;
 	#db?: unknown;
 	#dispatchCancelToken?: CancellationTokenHandle;
@@ -2600,6 +2723,13 @@ export class ActorContextHandleAdapter {
 			);
 		}
 		return this.#schedule;
+	}
+
+	get cron(): NativeCronAdapter {
+		if (!this.#cron) {
+			this.#cron = new NativeCronAdapter(this.#runtime, this.#ctx);
+		}
+		return this.#cron;
 	}
 
 	get actorId(): string {
@@ -3380,6 +3510,7 @@ function buildActorConfig(
 			| number
 			| undefined,
 		maxQueueSize: options.maxQueueSize as number | undefined,
+		maxSchedules: options.maxSchedules as number | undefined,
 		maxQueueMessageSize: options.maxQueueMessageSize as number | undefined,
 		maxIncomingMessageSize: registryConfig.maxIncomingMessageSize as
 			| number
@@ -4728,10 +4859,11 @@ export function buildNativeFactory(
 							conn: ConnHandle | null;
 							name: string;
 							args: RuntimeBytes;
+							scheduledFire?: RuntimeScheduledFireInfo;
 							cancelToken?: CancellationTokenHandle;
 						},
 					) => {
-						const { ctx, conn, args, cancelToken } =
+						const { ctx, conn, args, scheduledFire, cancelToken } =
 							unwrapTsfnPayload(error, payload);
 						const actorCtx =
 							conn != null
@@ -4746,6 +4878,7 @@ export function buildNativeFactory(
 										name,
 										decodeArgs(args),
 									),
+									...(scheduledFire ? [scheduledFire] : []),
 								),
 							);
 						} finally {

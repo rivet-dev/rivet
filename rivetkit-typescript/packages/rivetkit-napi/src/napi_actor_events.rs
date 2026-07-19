@@ -88,14 +88,6 @@ static CALLBACK_TIMED_OUT_SCHEMA: RivetErrorSchema = RivetErrorSchema {
 	_macro_marker: MacroMarker { _private: () },
 };
 
-static ACTION_NOT_FOUND_SCHEMA: RivetErrorSchema = RivetErrorSchema {
-	group: "actor",
-	code: "action_not_found",
-	default_message: "Action not found",
-	meta_type: None,
-	_macro_marker: MacroMarker { _private: () },
-};
-
 pub(crate) async fn run_adapter_loop(
 	bindings: Arc<CallbackBindings>,
 	config: Arc<AdapterConfig>,
@@ -364,6 +356,7 @@ pub(crate) async fn dispatch_event(
 			name,
 			args,
 			conn,
+			scheduled_fire,
 			reply,
 		} => {
 			tracing::info!(
@@ -401,6 +394,7 @@ pub(crate) async fn dispatch_event(
 							conn,
 							name.clone(),
 							args.clone(),
+							scheduled_fire.clone(),
 							Some(cancel_token),
 						),
 					)
@@ -1112,6 +1106,7 @@ async fn call_action(
 	conn: Option<rivetkit_core::ConnHandle>,
 	name: String,
 	args: Vec<u8>,
+	scheduled_fire: Option<rivetkit_core::actor::schedule::ScheduledFireInfo>,
 	cancel_token: Option<CancellationToken>,
 ) -> Result<Vec<u8>> {
 	let callback_name = format!("actions.{name}");
@@ -1123,6 +1118,7 @@ async fn call_action(
 			conn,
 			name,
 			args,
+			scheduled_fire,
 			cancel_token,
 		},
 	)
@@ -1322,12 +1318,7 @@ async fn call_on_disconnect_final(
 }
 
 fn action_not_found(name: String) -> anyhow::Error {
-	anyhow::Error::new(RivetTransportError {
-		kind: RivetErrorKind::Static(&ACTION_NOT_FOUND_SCHEMA),
-		meta: None,
-		message: Some(format!("Action `{name}` was not found.")),
-		actor: None,
-	})
+	rivetkit_core::error::action_not_found(name)
 }
 
 fn actor_shutting_down() -> anyhow::Error {

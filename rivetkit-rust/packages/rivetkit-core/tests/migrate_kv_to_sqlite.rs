@@ -586,9 +586,29 @@ async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 	assert_eq!(
 		internal_storage::load_actor_snapshot(ctx.sql()).await?,
 		Some(InternalActorSnapshot {
-			actor: actor.clone(),
+			actor: PersistedActor {
+				scheduled_events: Vec::new(),
+				..actor.clone()
+			},
 			last_pushed_alarm: Some(5678),
 		})
+	);
+	let schedule_rows = ctx
+		.sql()
+		.query(
+			"SELECT event_id, trigger_at, action, args, kind FROM _rivet_schedule_events",
+			None,
+		)
+		.await?;
+	assert_eq!(
+		schedule_rows.rows,
+		vec![vec![
+			ColumnValue::Text("event-1".to_owned()),
+			ColumnValue::Integer(1234),
+			ColumnValue::Text("tick".to_owned()),
+			ColumnValue::Blob(b"args".to_vec()),
+			ColumnValue::Integer(0),
+		]],
 	);
 	assert_eq!(
 		internal_storage::load_inspector_token(ctx.sql()).await?,
@@ -1559,7 +1579,7 @@ async fn atomic_workflow_flush_rejects_whole_units_over_transaction_budget() -> 
 	let kv = Kv::new_in_memory();
 	let (ctx, sqlite_task) = sqlite_ctx(kv);
 	internal_schema::ensure_internal_schema(ctx.sql()).await?;
-	let writes = (0..126)
+	let writes = (0..127)
 		.map(|index| WorkflowKvWrite {
 			key: format!("key-{index}").into_bytes(),
 			value: vec![index as u8],

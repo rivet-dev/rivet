@@ -2,6 +2,7 @@ import { actor, event, setup } from "rivetkit";
 
 interface Reminder {
 	id: string;
+	scheduleId: string;
 	message: string;
 	scheduledAt: number;
 	completedAt?: number;
@@ -23,29 +24,41 @@ const reminderActor = actor({
 
 	actions: {
 		// Schedule a reminder with a delay in milliseconds
-		scheduleReminder: (c, message: string, delayMs: number) => {
+		scheduleReminder: async (c, message: string, delayMs: number) => {
+			const id = `reminder-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+			const scheduleId = await c.schedule.after(
+				delayMs,
+				"triggerReminder",
+				id,
+			);
 			const reminder: Reminder = {
-				id: `reminder-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+				id,
+				scheduleId,
 				message,
 				scheduledAt: Date.now() + delayMs,
 			};
 
 			c.state.reminders.push(reminder);
-			c.schedule.after(delayMs, "triggerReminder", reminder.id);
 
 			return reminder;
 		},
 
 		// Schedule a reminder at a specific timestamp
-		scheduleReminderAt: (c, message: string, timestamp: number) => {
+		scheduleReminderAt: async (c, message: string, timestamp: number) => {
+			const id = `reminder-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+			const scheduleId = await c.schedule.at(
+				timestamp,
+				"triggerReminder",
+				id,
+			);
 			const reminder: Reminder = {
-				id: `reminder-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+				id,
+				scheduleId,
 				message,
 				scheduledAt: timestamp,
 			};
 
 			c.state.reminders.push(reminder);
-			c.schedule.at(timestamp, "triggerReminder", reminder.id);
 
 			return reminder;
 		},
@@ -73,20 +86,19 @@ const reminderActor = actor({
 			return c.state.reminders;
 		},
 
-		// Cancel a scheduled reminder
-		// Note: Rivet doesn't currently support canceling scheduled actions
-		// This will only remove the reminder from state
-		cancelReminder: (c, reminderId: string) => {
-			// Remove from state
-			c.state.reminders = c.state.reminders.filter(
-				(r) => r.id !== reminderId,
-			);
+		// Cancel a pending scheduled reminder.
+		cancelReminder: async (c, reminderId: string) => {
+			const reminder = c.state.reminders.find((r) => r.id === reminderId);
+			if (!reminder) return { success: false };
 
-			return {
-				success: true,
-				message:
-					"reminder removed from state (note: scheduled action may still fire)",
-			};
+			const cancelled = await c.schedule.cancel(reminder.scheduleId);
+			if (cancelled) {
+				c.state.reminders = c.state.reminders.filter(
+					(r) => r.id !== reminderId,
+				);
+			}
+
+			return { success: cancelled };
 		},
 
 		// Get statistics about reminders

@@ -2,53 +2,836 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use crate::time::{SystemTime, UNIX_EPOCH, sleep};
-
-use anyhow::Result;
+use anyhow::{Context, Result};
+use chrono::{DateTime, Utc};
+use chrono_tz::Tz;
+use croner::Cron;
 use futures::future::BoxFuture;
 use rivet_envoy_client::handle::EnvoyHandle;
+use rivet_error::RivetError;
+use serde::{Deserialize, Serialize};
 use tokio::runtime::Handle;
 use tokio::sync::oneshot;
 use tracing::Instrument;
 use uuid::Uuid;
 
 use crate::actor::context::ActorContext;
-use crate::actor::state::PersistedScheduleEvent;
-use crate::error::ActorRuntime;
+use crate::error::{ScheduleRuntimeError, client_error_message, client_error_metadata};
 #[cfg(feature = "wasm-runtime")]
 use crate::runtime::RuntimeSpawner;
+use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement};
+use crate::time::{SystemTime, UNIX_EPOCH, sleep};
+
+const CRON_ID_PREFIX: &str = "cron:";
+const HISTORY_RUNNING: i64 = 0;
+const HISTORY_OK: i64 = 1;
+const HISTORY_ERROR: i64 = 2;
+const HISTORY_SKIPPED: i64 = 3;
+pub const DEFAULT_MAX_HISTORY: i64 = 100;
+pub const MAX_HISTORY: i64 = 1_000;
+pub const MAX_ACTOR_HISTORY: i64 = 10_000;
+pub const MIN_INTERVAL_MS: i64 = 5_000;
+const DEFAULT_HISTORY_LIMIT: i64 = 20;
 
 pub(super) type InternalKeepAwakeCallback =
 	Arc<dyn Fn(BoxFuture<'static, Result<()>>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
 pub(super) type LocalAlarmCallback = Arc<dyn Fn() -> BoxFuture<'static, ()> + Send + Sync>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ScheduleKind {
+	At,
+	Cron,
+	Every,
+}
+
+impl ScheduleKind {
+	pub fn as_str(self) -> &'static str {
+		match self {
+			Self::At => "at",
+			Self::Cron => "cron",
+			Self::Every => "every",
+		}
+	}
+
+	fn as_i64(self) -> i64 {
+		match self {
+			Self::At => 0,
+			Self::Cron => 1,
+			Self::Every => 2,
+		}
+	}
+
+	fn parse(value: i64, schedule_id: &str) -> Result<Self> {
+		match value {
+			0 => Ok(Self::At),
+			1 => Ok(Self::Cron),
+			2 => Ok(Self::Every),
+			other => Err(ScheduleRuntimeError::InvalidScheduleRow {
+				schedule_id: schedule_id.to_owned(),
+				reason: format!("unknown kind {other}"),
+			}
+			.build()),
+		}
+	}
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledEventInfo {
+	pub id: String,
+	pub action: String,
+	pub args: Vec<u8>,
+	pub run_at: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CronJobInfo {
+	pub name: String,
+	pub kind: ScheduleKind,
+	pub action: String,
+	pub args: Vec<u8>,
+	pub next_run_at: i64,
+	pub last_run_at: Option<i64>,
+	pub expression: Option<String>,
+	pub timezone: Option<String>,
+	pub interval_ms: Option<i64>,
+	pub max_history: i64,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScheduledFireInfo {
+	pub kind: ScheduleKind,
+	pub id: String,
+	pub name: Option<String>,
+	pub scheduled_at: i64,
+	pub fired_at: i64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ScheduleErrorInfo {
+	pub group: String,
+	pub code: String,
+	pub message: String,
+	pub metadata: Option<serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CronFire {
+	pub action: String,
+	pub scheduled_at: i64,
+	pub fired_at: i64,
+	pub finished_at: Option<i64>,
+	pub result: String,
+	pub error: Option<ScheduleErrorInfo>,
+}
+
+pub(crate) struct DueScheduleDispatch {
+	pub event_id: String,
+	pub action: String,
+	pub args: Vec<u8>,
+	pub fire: ScheduledFireInfo,
+	pub history_id: Option<i64>,
+}
+
+#[derive(Clone, Debug)]
+struct StoredSchedule {
+	event_id: String,
+	trigger_at: i64,
+	action: String,
+	args: Vec<u8>,
+	kind: ScheduleKind,
+	cron_expression: Option<String>,
+	timezone: Option<String>,
+	interval_ms: Option<i64>,
+	last_started_at: Option<i64>,
+	max_history: i64,
+}
+
 impl ActorContext {
-	#[cfg(test)]
-	pub(crate) fn new_for_schedule_tests(actor_id: impl Into<String>) -> Self {
-		Self::new(actor_id, "schedule-test", Vec::new(), "local")
+	#[cfg(any(test, feature = "test-support"))]
+	pub fn set_schedule_time_for_tests(&self, timestamp_ms: i64) {
+		self.0
+			.schedule_now_override
+			.store(timestamp_ms, Ordering::SeqCst);
 	}
 
-	pub fn after(&self, duration: Duration, action_name: &str, args: &[u8]) {
+	pub(crate) fn schedule_now_timestamp_ms(&self) -> i64 {
+		#[cfg(any(test, feature = "test-support"))]
+		{
+			let timestamp_ms = self.0.schedule_now_override.load(Ordering::SeqCst);
+			if timestamp_ms != i64::MIN {
+				return timestamp_ms;
+			}
+		}
+		system_now_timestamp_ms()
+	}
+
+	pub async fn after(
+		&self,
+		duration: Duration,
+		action_name: &str,
+		args: &[u8],
+	) -> Result<String> {
 		let duration_ms = i64::try_from(duration.as_millis()).unwrap_or(i64::MAX);
-		let timestamp_ms = now_timestamp_ms().saturating_add(duration_ms);
-		self.at(timestamp_ms, action_name, args);
+		let timestamp_ms = self.schedule_now_timestamp_ms().saturating_add(duration_ms);
+		self.at(timestamp_ms, action_name, args).await
 	}
 
-	pub fn at(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) {
-		if let Err(error) = self.schedule_event(timestamp_ms, action_name, args) {
-			tracing::error!(
-				actor_id = %self.actor_id(),
-				?error,
-				action_name,
-				timestamp_ms,
-				"failed to schedule actor event"
+	pub async fn at(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) -> Result<String> {
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		self.ensure_schedule_capacity(false).await?;
+		let event_id = Uuid::new_v4().to_string();
+		self.sql()
+			.execute(
+				"INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+				Some(vec![
+					BindParam::Text(event_id.clone()),
+					BindParam::Integer(timestamp_ms),
+					BindParam::Text(action_name.to_owned()),
+					args_param(args),
+					BindParam::Integer(ScheduleKind::At.as_i64()),
+					BindParam::Null,
+					BindParam::Null,
+					BindParam::Null,
+					BindParam::Null,
+					BindParam::Integer(0),
+				]),
+			)
+			.await
+			.context("insert one-shot schedule")?;
+		self.mark_schedule_dirty();
+		self.record_schedules_updated();
+		self.sync_alarm().await?;
+		Ok(event_id)
+	}
+
+	pub async fn cancel_schedule(&self, event_id: &str) -> Result<bool> {
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		let result = self
+			.sql()
+			.execute(
+				"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind = ?",
+				Some(vec![
+					BindParam::Text(event_id.to_owned()),
+					BindParam::Integer(ScheduleKind::At.as_i64()),
+				]),
+			)
+			.await
+			.context("cancel one-shot schedule")?;
+		let removed = result.changes > 0;
+		if removed {
+			self.mark_schedule_dirty();
+			self.record_schedules_updated();
+			self.sync_alarm().await?;
+		}
+		Ok(removed)
+	}
+
+	pub async fn get_scheduled_event(&self, event_id: &str) -> Result<Option<ScheduledEventInfo>> {
+		let result = self
+			.sql()
+			.query(
+				"SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE event_id = ? AND kind = ?",
+				Some(vec![
+					BindParam::Text(event_id.to_owned()),
+					BindParam::Integer(ScheduleKind::At.as_i64()),
+				]),
+			)
+			.await
+			.context("get one-shot schedule")?;
+		result
+			.rows
+			.first()
+			.map(|row| read_stored_schedule(row))
+			.transpose()
+			.map(|row| {
+				row.map(|event| ScheduledEventInfo {
+					id: event.event_id,
+					action: event.action,
+					args: event.args,
+					run_at: event.trigger_at,
+				})
+			})
+	}
+
+	pub async fn list_scheduled_events(&self) -> Result<Vec<ScheduledEventInfo>> {
+		let result = self
+			.sql()
+			.query(
+				"SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE kind = ? ORDER BY trigger_at, event_id",
+				Some(vec![BindParam::Integer(ScheduleKind::At.as_i64())]),
+			)
+			.await
+			.context("list one-shot schedules")?;
+		result
+			.rows
+			.iter()
+			.map(|row| read_stored_schedule(row))
+			.map(|event| {
+				event.map(|event| ScheduledEventInfo {
+					id: event.event_id,
+					action: event.action,
+					args: event.args,
+					run_at: event.trigger_at,
+				})
+			})
+			.collect()
+	}
+
+	pub async fn cron_set(
+		&self,
+		name: &str,
+		expression: &str,
+		timezone: Option<&str>,
+		action_name: &str,
+		args: &[u8],
+		max_history: Option<i64>,
+	) -> Result<()> {
+		validate_name(name)?;
+		let timezone = timezone.unwrap_or("UTC");
+		let timezone_parsed = parse_timezone(timezone)?;
+		let cron = parse_cron(expression)?;
+		let max_history = validate_max_history(max_history)?;
+		let now_ms = self.schedule_now_timestamp_ms();
+		let event_id = cron_event_id(name);
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		let existing = self.load_schedule(&event_id).await?;
+		self.ensure_schedule_capacity(existing.is_some()).await?;
+		let cadence_unchanged = existing.as_ref().is_some_and(|existing| {
+			existing.kind == ScheduleKind::Cron
+				&& existing.cron_expression.as_deref() == Some(expression)
+				&& existing.timezone.as_deref() == Some(timezone)
+		});
+		let trigger_at = if cadence_unchanged {
+			existing.as_ref().expect("checked above").trigger_at
+		} else {
+			next_cron_timestamp_ms(&cron, timezone_parsed, now_ms)?
+		};
+		self.upsert_recurring(
+			&event_id,
+			trigger_at,
+			action_name,
+			args,
+			ScheduleKind::Cron,
+			Some(expression),
+			Some(timezone),
+			None,
+			max_history,
+		)
+		.await?;
+		self.prune_schedule_history(&event_id, max_history).await?;
+		self.mark_schedule_dirty();
+		self.record_schedules_updated();
+		self.sync_alarm().await
+	}
+
+	pub async fn cron_every(
+		&self,
+		name: &str,
+		interval_ms: i64,
+		action_name: &str,
+		args: &[u8],
+		max_history: Option<i64>,
+	) -> Result<()> {
+		validate_name(name)?;
+		if interval_ms < MIN_INTERVAL_MS {
+			return Err(ScheduleRuntimeError::InvalidInterval {
+				interval_ms,
+				minimum_ms: MIN_INTERVAL_MS,
+			}
+			.build());
+		}
+		let max_history = validate_max_history(max_history)?;
+		let event_id = cron_event_id(name);
+		let now_ms = self.schedule_now_timestamp_ms();
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		let existing = self.load_schedule(&event_id).await?;
+		self.ensure_schedule_capacity(existing.is_some()).await?;
+		let cadence_unchanged = existing.as_ref().is_some_and(|existing| {
+			existing.kind == ScheduleKind::Every && existing.interval_ms == Some(interval_ms)
+		});
+		let trigger_at = if cadence_unchanged {
+			existing.as_ref().expect("checked above").trigger_at
+		} else {
+			now_ms.saturating_add(interval_ms)
+		};
+		self.upsert_recurring(
+			&event_id,
+			trigger_at,
+			action_name,
+			args,
+			ScheduleKind::Every,
+			None,
+			None,
+			Some(interval_ms),
+			max_history,
+		)
+		.await?;
+		self.prune_schedule_history(&event_id, max_history).await?;
+		self.mark_schedule_dirty();
+		self.record_schedules_updated();
+		self.sync_alarm().await
+	}
+
+	#[allow(clippy::too_many_arguments)]
+	async fn upsert_recurring(
+		&self,
+		event_id: &str,
+		trigger_at: i64,
+		action_name: &str,
+		args: &[u8],
+		kind: ScheduleKind,
+		cron_expression: Option<&str>,
+		timezone: Option<&str>,
+		interval_ms: Option<i64>,
+		max_history: i64,
+	) -> Result<()> {
+		self.sql()
+			.execute(
+				"INSERT INTO _rivet_schedule_events (event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id) DO UPDATE SET trigger_at = excluded.trigger_at, action = excluded.action, args = excluded.args, kind = excluded.kind, cron_expression = excluded.cron_expression, timezone = excluded.timezone, interval_ms = excluded.interval_ms, max_history = excluded.max_history",
+				Some(vec![
+					BindParam::Text(event_id.to_owned()),
+					BindParam::Integer(trigger_at),
+					BindParam::Text(action_name.to_owned()),
+					args_param(args),
+					BindParam::Integer(kind.as_i64()),
+					optional_text_param(cron_expression),
+					optional_text_param(timezone),
+					optional_i64_param(interval_ms),
+					BindParam::Null,
+					BindParam::Integer(max_history),
+				]),
+			)
+			.await
+			.context("upsert recurring schedule")?;
+		Ok(())
+	}
+
+	pub async fn cron_delete(&self, name: &str) -> Result<bool> {
+		validate_name(name)?;
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		let result = self
+			.sql()
+			.execute(
+				"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind != ?",
+				Some(vec![
+					BindParam::Text(cron_event_id(name)),
+					BindParam::Integer(ScheduleKind::At.as_i64()),
+				]),
+			)
+			.await
+			.context("delete recurring schedule")?;
+		let removed = result.changes > 0;
+		if removed {
+			self.mark_schedule_dirty();
+			self.record_schedules_updated();
+			self.sync_alarm().await?;
+		}
+		Ok(removed)
+	}
+
+	pub(crate) async fn cron_delete_if_action(&self, name: &str, action: &str) -> Result<bool> {
+		validate_name(name)?;
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		let result = self
+			.sql()
+			.execute(
+				"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind != ? AND action = ?",
+				Some(vec![
+					BindParam::Text(cron_event_id(name)),
+					BindParam::Integer(ScheduleKind::At.as_i64()),
+					BindParam::Text(action.to_owned()),
+				]),
+			)
+			.await
+			.context("delete recurring schedule with matching action")?;
+		let removed = result.changes > 0;
+		if removed {
+			self.mark_schedule_dirty();
+			self.record_schedules_updated();
+			self.sync_alarm().await?;
+		}
+		Ok(removed)
+	}
+
+	pub async fn cron_get(&self, name: &str) -> Result<Option<CronJobInfo>> {
+		validate_name(name)?;
+		self.load_schedule(&cron_event_id(name))
+			.await?
+			.map(stored_to_cron_info)
+			.transpose()
+	}
+
+	pub async fn cron_list(&self) -> Result<Vec<CronJobInfo>> {
+		let result = self
+			.sql()
+			.query(
+				"SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE kind != ? ORDER BY trigger_at, event_id",
+				Some(vec![BindParam::Integer(ScheduleKind::At.as_i64())]),
+			)
+			.await
+			.context("list recurring schedules")?;
+		result
+			.rows
+			.iter()
+			.map(|row| read_stored_schedule(row))
+			.map(|row| row.and_then(stored_to_cron_info))
+			.collect()
+	}
+
+	pub async fn cron_history(&self, name: &str, limit: Option<i64>) -> Result<Vec<CronFire>> {
+		validate_name(name)?;
+		let limit = limit.unwrap_or(DEFAULT_HISTORY_LIMIT);
+		if !(1..=MAX_HISTORY).contains(&limit) {
+			return Err(ScheduleRuntimeError::InvalidMaxHistory {
+				max_history: limit,
+				maximum: MAX_HISTORY,
+			}
+			.build());
+		}
+		let result = self
+			.sql()
+			.query(
+				"SELECT action, scheduled_at, fired_at, finished_at, result, error_group, error_code, error_message, error_metadata FROM _rivet_schedule_history WHERE schedule_id = ? ORDER BY fired_at DESC, id DESC LIMIT ?",
+				Some(vec![
+					BindParam::Text(cron_event_id(name)),
+					BindParam::Integer(limit),
+				]),
+			)
+			.await
+			.context("read recurring schedule history")?;
+		result.rows.iter().map(|row| read_cron_fire(row)).collect()
+	}
+
+	async fn load_schedule(&self, event_id: &str) -> Result<Option<StoredSchedule>> {
+		let result = self
+			.sql()
+			.query(
+				"SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE event_id = ?",
+				Some(vec![BindParam::Text(event_id.to_owned())]),
+			)
+			.await
+			.context("load schedule")?;
+		result
+			.rows
+			.first()
+			.map(|row| read_stored_schedule(row))
+			.transpose()
+	}
+
+	async fn ensure_schedule_capacity(&self, replacing_existing: bool) -> Result<()> {
+		if replacing_existing {
+			return Ok(());
+		}
+		let result = self
+			.sql()
+			.query("SELECT COUNT(*) FROM _rivet_schedule_events", None)
+			.await
+			.context("count pending schedules")?;
+		let count = result
+			.rows
+			.first()
+			.map(|row| read_i64(row, 0, "schedule count"))
+			.transpose()?
+			.unwrap_or_default();
+		if count >= i64::from(self.0.max_schedules) {
+			return Err(ScheduleRuntimeError::MaxSchedulesExceeded {
+				maximum: self.0.max_schedules,
+			}
+			.build());
+		}
+		Ok(())
+	}
+
+	pub(crate) async fn take_due_schedule_dispatches(&self) -> Result<Vec<DueScheduleDispatch>> {
+		if !self
+			.0
+			.schedule_alarm_dispatch_enabled
+			.load(Ordering::SeqCst)
+		{
+			return Ok(Vec::new());
+		}
+		let now_ms = self.schedule_now_timestamp_ms();
+		let _mutation = self.0.schedule_mutation_lock.lock().await;
+		let result = self
+			.sql()
+			.query(
+				"SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE trigger_at <= ? ORDER BY trigger_at, event_id",
+				Some(vec![BindParam::Integer(now_ms)]),
+			)
+			.await
+			.context("load due schedules")?;
+		let mut dispatches = Vec::new();
+		for row in &result.rows {
+			let event = read_stored_schedule(row)?;
+			if event.kind == ScheduleKind::At {
+				self.sql()
+					.execute(
+						"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND trigger_at = ?",
+						Some(vec![
+							BindParam::Text(event.event_id.clone()),
+							BindParam::Integer(event.trigger_at),
+						]),
+					)
+					.await
+					.context("claim due one-shot schedule")?;
+				dispatches.push(DueScheduleDispatch {
+					event_id: event.event_id.clone(),
+					action: event.action,
+					args: event.args,
+					fire: ScheduledFireInfo {
+						kind: ScheduleKind::At,
+						id: event.event_id,
+						name: None,
+						scheduled_at: event.trigger_at,
+						fired_at: now_ms,
+					},
+					history_id: None,
+				});
+				continue;
+			}
+
+			let next_trigger_at = next_recurring_trigger(&event, now_ms)?;
+			let is_running = self
+				.0
+				.schedule_running
+				.insert_sync(event.event_id.clone())
+				.is_err();
+			let mut statements = vec![SqliteBatchStatement {
+				sql: if is_running {
+					"UPDATE _rivet_schedule_events SET trigger_at = ? WHERE event_id = ?".to_owned()
+				} else {
+					"UPDATE _rivet_schedule_events SET trigger_at = ?, last_started_at = ? WHERE event_id = ?".to_owned()
+				},
+				params: Some(if is_running {
+					vec![
+						BindParam::Integer(next_trigger_at),
+						BindParam::Text(event.event_id.clone()),
+					]
+				} else {
+					vec![
+						BindParam::Integer(next_trigger_at),
+						BindParam::Integer(now_ms),
+						BindParam::Text(event.event_id.clone()),
+					]
+				}),
+			}];
+			let history_result = if is_running {
+				HISTORY_SKIPPED
+			} else {
+				HISTORY_RUNNING
+			};
+			let history_index =
+				append_history_statements(&mut statements, &event, now_ms, history_result)?;
+			let results = match self.sql().execute_batch(statements).await {
+				Ok(results) => results,
+				Err(error) => {
+					if !is_running {
+						self.0.schedule_running.remove_sync(&event.event_id);
+					}
+					return Err(error).context("advance due recurring schedule");
+				}
+			};
+			if is_running {
+				continue;
+			}
+			let history_id = history_index
+				.and_then(|index| results.get(index))
+				.and_then(|result| result.last_insert_row_id);
+			let name = cron_name(&event.event_id)?.to_owned();
+			dispatches.push(DueScheduleDispatch {
+				event_id: event.event_id.clone(),
+				action: event.action,
+				args: event.args,
+				fire: ScheduledFireInfo {
+					kind: event.kind,
+					id: name.clone(),
+					name: Some(name),
+					scheduled_at: event.trigger_at,
+					fired_at: now_ms,
+				},
+				history_id,
+			});
+		}
+		self.mark_schedule_dirty();
+		if !result.rows.is_empty() {
+			self.record_schedules_updated();
+		}
+		// The due rows are already claimed/advanced at this point. Alarm resync is
+		// best effort so a transient sync failure cannot discard valid dispatches.
+		self.sync_alarm_logged().await;
+		Ok(dispatches)
+	}
+
+	pub(crate) async fn finish_schedule_dispatch(
+		&self,
+		event_id: &str,
+		history_id: Option<i64>,
+		error: Option<&anyhow::Error>,
+	) {
+		self.0.schedule_running.remove_sync(event_id);
+		let Some(history_id) = history_id else {
+			return;
+		};
+		let finished_at = self.schedule_now_timestamp_ms();
+		let (result, error) = match error {
+			Some(error) => (HISTORY_ERROR, Some(sanitize_error(error))),
+			None => (HISTORY_OK, None),
+		};
+		let error_metadata = error
+			.as_ref()
+			.and_then(|error| error.metadata.as_ref())
+			.and_then(|metadata| encode_error_metadata(metadata).ok());
+		match self
+			.sql()
+			.execute(
+				"UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE id = ? AND result = ?",
+				Some(vec![
+					BindParam::Integer(finished_at),
+					BindParam::Integer(result),
+					optional_owned_text_param(error.as_ref().map(|error| error.group.clone())),
+					optional_owned_text_param(error.as_ref().map(|error| error.code.clone())),
+					optional_owned_text_param(error.as_ref().map(|error| error.message.clone())),
+					error_metadata.map(BindParam::Blob).unwrap_or(BindParam::Null),
+					BindParam::Integer(history_id),
+					BindParam::Integer(HISTORY_RUNNING),
+				]),
+			)
+			.await
+		{
+			Ok(_) => self.record_schedules_updated(),
+			Err(error) => {
+				tracing::error!(?error, history_id, "failed to finish schedule history row");
+			}
+		}
+	}
+
+	pub(crate) async fn recover_interrupted_schedule_history(&self) -> Result<()> {
+		let error = ScheduleErrorInfo {
+			group: "schedule".to_owned(),
+			code: "interrupted".to_owned(),
+			message: "Scheduled action was interrupted before completion.".to_owned(),
+			metadata: None,
+		};
+		self.sql()
+			.execute(
+				"UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE result = ?",
+				Some(vec![
+					BindParam::Integer(self.schedule_now_timestamp_ms()),
+					BindParam::Integer(HISTORY_ERROR),
+					BindParam::Text(error.group),
+					BindParam::Text(error.code),
+					BindParam::Text(error.message),
+					BindParam::Null,
+					BindParam::Integer(HISTORY_RUNNING),
+				]),
+			)
+			.await
+			.context("recover interrupted schedule history")?;
+		self.record_schedules_updated();
+		Ok(())
+	}
+
+	async fn prune_schedule_history(&self, event_id: &str, max_history: i64) -> Result<()> {
+		self.sql()
+			.execute_batch(history_prune_statements(event_id, max_history))
+			.await
+			.context("prune schedule history")?;
+		Ok(())
+	}
+
+	fn mark_schedule_dirty(&self) {
+		self.0
+			.schedule_dirty_since_push
+			.store(true, Ordering::SeqCst);
+	}
+
+	async fn next_schedule_timestamp(&self, future_only: bool) -> Result<Option<i64>> {
+		let (sql, params) = if future_only {
+			(
+				"SELECT MIN(trigger_at) FROM _rivet_schedule_events WHERE trigger_at > ?",
+				Some(vec![BindParam::Integer(self.schedule_now_timestamp_ms())]),
+			)
+		} else {
+			("SELECT MIN(trigger_at) FROM _rivet_schedule_events", None)
+		};
+		let result = self.sql().query(sql, params).await?;
+		match result.rows.first().and_then(|row| row.first()) {
+			None | Some(ColumnValue::Null) => Ok(None),
+			Some(ColumnValue::Integer(timestamp)) => Ok(Some(*timestamp)),
+			Some(_) => Err(ScheduleRuntimeError::InvalidScheduleRow {
+				schedule_id: "<minimum>".to_owned(),
+				reason: "MIN(trigger_at) was not an integer".to_owned(),
+			}
+			.build()),
+		}
+	}
+
+	async fn sync_alarm(&self) -> Result<()> {
+		#[cfg(test)]
+		if self
+			.0
+			.schedule_sync_alarm_failures
+			.fetch_update(Ordering::SeqCst, Ordering::SeqCst, |remaining| {
+				remaining.checked_sub(1)
+			})
+			.is_ok()
+		{
+			anyhow::bail!("injected schedule alarm sync failure");
+		}
+		let next_alarm = self.next_schedule_timestamp(false).await?;
+		self.sync_alarm_timestamp(next_alarm)
+	}
+
+	async fn sync_future_alarm(&self) -> Result<()> {
+		let next_alarm = self.next_schedule_timestamp(true).await?;
+		self.sync_alarm_timestamp(next_alarm)
+	}
+
+	fn sync_alarm_timestamp(&self, next_alarm: Option<i64>) -> Result<()> {
+		let should_push = self
+			.0
+			.schedule_dirty_since_push
+			.swap(false, Ordering::SeqCst);
+		self.arm_local_alarm(next_alarm);
+		if !should_push {
+			return Ok(());
+		}
+		if next_alarm.is_some() && self.last_pushed_alarm() == next_alarm {
+			return Ok(());
+		}
+		let Some(envoy_handle) = self.0.schedule_envoy_handle.lock().clone() else {
+			self.mark_schedule_dirty();
+			tracing::warn!(
+				actor_id = self.actor_id(),
+				"schedule alarm sync skipped because envoy handle is not configured"
 			);
+			return Ok(());
+		};
+		let generation = *self.0.schedule_generation.lock();
+		self.set_alarm_tracked(envoy_handle, next_alarm, generation);
+		Ok(())
+	}
+
+	pub(crate) async fn sync_alarm_logged(&self) {
+		if let Err(error) = self.sync_alarm().await {
+			tracing::error!(actor_id = %self.actor_id(), ?error, "failed to sync scheduled actor alarm");
+		}
+	}
+
+	pub(crate) async fn sync_future_alarm_logged(&self) {
+		if let Err(error) = self.sync_future_alarm().await {
+			tracing::error!(actor_id = %self.actor_id(), ?error, "failed to sync future scheduled actor alarm");
 		}
 	}
 
 	pub(crate) fn set_schedule_alarm(&self, timestamp_ms: Option<i64>) -> Result<()> {
 		let envoy_handle = self.0.schedule_envoy_handle.lock().clone().ok_or_else(|| {
-			ActorRuntime::NotConfigured {
+			crate::error::ActorRuntime::NotConfigured {
 				component: "schedule alarm handle".to_owned(),
 			}
 			.build()
@@ -75,35 +858,6 @@ impl ActorContext {
 		*self.0.schedule_local_alarm_callback.lock() = callback;
 	}
 
-	pub(crate) fn cancel_scheduled_event(&self, event_id: &str) -> bool {
-		let removed = self.update_scheduled_events(|events| {
-			let before = events.len();
-			events.retain(|event| event.event_id != event_id);
-			before != events.len()
-		});
-
-		if removed {
-			tracing::debug!(
-				actor_id = %self.actor_id(),
-				event_id,
-				"scheduled actor event cancelled"
-			);
-			self.mark_dirty_since_push();
-			self.persist_scheduled_events("schedule_cancel");
-			self.sync_alarm_logged();
-		}
-
-		removed
-	}
-
-	pub(crate) fn next_event(&self) -> Option<PersistedScheduleEvent> {
-		self.scheduled_events().into_iter().next()
-	}
-
-	pub(crate) fn all_events(&self) -> Vec<PersistedScheduleEvent> {
-		self.scheduled_events()
-	}
-
 	pub(crate) fn cancel_local_alarm_timeouts(&self) {
 		self.0
 			.schedule_local_alarm_epoch
@@ -119,12 +873,9 @@ impl ActorContext {
 		self.0
 			.schedule_driver_alarm_cancel_count
 			.fetch_add(1, Ordering::SeqCst);
-
-		let envoy_handle = self.0.schedule_envoy_handle.lock().clone();
-		let Some(envoy_handle) = envoy_handle else {
+		let Some(envoy_handle) = self.0.schedule_envoy_handle.lock().clone() else {
 			return;
 		};
-
 		let generation = *self.0.schedule_generation.lock();
 		self.set_alarm_tracked(envoy_handle, None, generation);
 	}
@@ -136,156 +887,21 @@ impl ActorContext {
 			.load(Ordering::SeqCst)
 	}
 
+	#[cfg(test)]
+	pub(crate) fn fail_next_schedule_alarm_sync_for_tests(&self) {
+		self.0
+			.schedule_sync_alarm_failures
+			.fetch_add(1, Ordering::SeqCst);
+	}
+
 	pub(crate) async fn wait_for_pending_alarm_writes(&self) {
 		let pending = {
 			let mut guard = self.0.schedule_pending_alarm_writes.lock();
 			std::mem::take(&mut *guard)
 		};
-		tracing::debug!(
-			actor_id = %self.actor_id(),
-			pending_alarm_writes = pending.len(),
-			"waiting for pending actor alarm writes"
-		);
-
 		for ack_rx in pending {
 			let _ = ack_rx.await;
 		}
-		tracing::debug!(
-			actor_id = %self.actor_id(),
-			"pending actor alarm writes drained"
-		);
-	}
-
-	pub(crate) fn due_scheduled_events(&self, now_ms: i64) -> Vec<PersistedScheduleEvent> {
-		if !self
-			.0
-			.schedule_alarm_dispatch_enabled
-			.load(Ordering::SeqCst)
-		{
-			return Vec::new();
-		}
-
-		self.all_events()
-			.into_iter()
-			.filter(|event| event.timestamp <= now_ms)
-			.collect()
-	}
-
-	fn schedule_event(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) -> Result<()> {
-		let event = PersistedScheduleEvent {
-			event_id: Uuid::new_v4().to_string(),
-			timestamp: timestamp_ms,
-			action: action_name.to_owned(),
-			args: (!args.is_empty()).then(|| args.to_vec()),
-		};
-		let event_id = event.event_id.clone();
-		let args_len = event.args.as_ref().map_or(0, Vec::len);
-
-		self.insert_event_sorted(event);
-		tracing::debug!(
-			actor_id = %self.actor_id(),
-			event_id,
-			action_name,
-			timestamp_ms,
-			args_len,
-			"scheduled actor event added"
-		);
-		self.mark_dirty_since_push();
-		self.persist_scheduled_events("schedule_insert");
-		self.sync_alarm()
-	}
-
-	fn insert_event_sorted(&self, event: PersistedScheduleEvent) {
-		self.update_scheduled_events(|events| {
-			let position = events
-				.binary_search_by(|existing| {
-					existing
-						.timestamp
-						.cmp(&event.timestamp)
-						.then_with(|| existing.event_id.cmp(&event.event_id))
-				})
-				.unwrap_or_else(|index| index);
-			events.insert(position, event);
-		});
-	}
-
-	fn persist_scheduled_events(&self, description: &'static str) {
-		self.persist_now_tracked(description);
-	}
-
-	fn mark_dirty_since_push(&self) {
-		self.0
-			.schedule_dirty_since_push
-			.store(true, Ordering::SeqCst);
-	}
-
-	fn sync_alarm(&self) -> Result<()> {
-		let should_push = self
-			.0
-			.schedule_dirty_since_push
-			.swap(false, Ordering::SeqCst);
-		let next_alarm = self.next_event().map(|event| event.timestamp);
-		self.arm_local_alarm(next_alarm);
-		if !should_push {
-			return Ok(());
-		}
-		// Only dedup concrete future alarms; a dirty `None` still needs to clear
-		// the driver alarm on fresh/no-event schedules.
-		if next_alarm.is_some() && self.last_pushed_alarm() == next_alarm {
-			return Ok(());
-		}
-
-		let envoy_handle = self.0.schedule_envoy_handle.lock().clone();
-
-		let Some(envoy_handle) = envoy_handle else {
-			self.mark_dirty_since_push();
-			tracing::warn!(
-				actor_id = self.actor_id(),
-				sleep_timeout_ms = self.sleep_state_config().sleep_timeout.as_millis() as u64,
-				"schedule alarm sync skipped because envoy handle is not configured"
-			);
-			return Ok(());
-		};
-
-		let generation = *self.0.schedule_generation.lock();
-		self.set_alarm_tracked(envoy_handle, next_alarm, generation);
-		Ok(())
-	}
-
-	fn sync_future_alarm(&self) -> Result<()> {
-		let should_push = self
-			.0
-			.schedule_dirty_since_push
-			.swap(false, Ordering::SeqCst);
-		let now_ms = now_timestamp_ms();
-		let next_alarm = self
-			.next_event()
-			.and_then(|event| (event.timestamp > now_ms).then_some(event.timestamp));
-		self.arm_local_alarm(next_alarm);
-		if !should_push {
-			return Ok(());
-		}
-		// Only dedup concrete future alarms; a dirty `None` still needs to clear
-		// the driver alarm on fresh/no-event schedules.
-		if next_alarm.is_some() && self.last_pushed_alarm() == next_alarm {
-			return Ok(());
-		}
-
-		let envoy_handle = self.0.schedule_envoy_handle.lock().clone();
-
-		let Some(envoy_handle) = envoy_handle else {
-			self.mark_dirty_since_push();
-			tracing::warn!(
-				actor_id = self.actor_id(),
-				sleep_timeout_ms = self.sleep_state_config().sleep_timeout.as_millis() as u64,
-				"future schedule alarm sync skipped because envoy handle is not configured"
-			);
-			return Ok(());
-		};
-
-		let generation = *self.0.schedule_generation.lock();
-		self.set_alarm_tracked(envoy_handle, next_alarm, generation);
-		Ok(())
 	}
 
 	fn set_alarm_tracked(
@@ -294,14 +910,6 @@ impl ActorContext {
 		timestamp_ms: Option<i64>,
 		generation: Option<u32>,
 	) {
-		let previous_alarm = self.last_pushed_alarm();
-		tracing::debug!(
-			actor_id = %self.actor_id(),
-			generation,
-			old_timestamp_ms = previous_alarm,
-			new_timestamp_ms = timestamp_ms,
-			"pushing actor alarm to envoy"
-		);
 		let (ack_tx, ack_rx) = oneshot::channel();
 		envoy_handle.set_alarm_with_ack(
 			self.actor_id().to_owned(),
@@ -333,84 +941,43 @@ impl ActorContext {
 				.push(persist_done_rx);
 			return;
 		}
-
 		self.0.schedule_pending_alarm_writes.lock().push(ack_rx);
 	}
 
 	fn arm_local_alarm(&self, next_alarm: Option<i64>) {
 		self.cancel_local_alarm_timeouts();
-
 		let Some(next_alarm) = next_alarm else {
 			return;
 		};
-
-		let has_callback = self.0.schedule_local_alarm_callback.lock().is_some();
-		if !has_callback {
+		if self.0.schedule_local_alarm_callback.lock().is_none() {
 			return;
 		}
-
 		#[cfg(not(feature = "wasm-runtime"))]
 		let tokio_handle = match Handle::try_current() {
 			Ok(handle) => handle,
 			Err(_) => return,
 		};
-
-		let delay_ms = next_alarm.saturating_sub(now_timestamp_ms()).max(0) as u64;
+		let delay_ms = next_alarm
+			.saturating_sub(self.schedule_now_timestamp_ms())
+			.max(0) as u64;
 		let local_alarm_epoch = self.0.schedule_local_alarm_epoch.load(Ordering::SeqCst);
 		let schedule = self.clone();
-		tracing::debug!(
-			actor_id = %self.actor_id(),
-			timestamp_ms = next_alarm,
-			delay_ms,
-			local_alarm_epoch,
-			"local actor alarm armed"
-		);
-		// Intentionally detached but abortable: the handle is stored in
-		// `local_alarm_task` and cancelled when alarms are resynced or stopped.
 		let task = async move {
 			sleep(Duration::from_millis(delay_ms)).await;
 			if schedule.0.schedule_local_alarm_epoch.load(Ordering::SeqCst) != local_alarm_epoch {
 				return;
 			}
-			tracing::debug!(
-				timestamp_ms = next_alarm,
-				local_alarm_epoch,
-				"local actor alarm fired"
-			);
 			let Some(callback) = schedule.0.schedule_local_alarm_callback.lock().clone() else {
 				return;
 			};
 			callback().await;
 		}
 		.in_current_span();
-
 		#[cfg(not(feature = "wasm-runtime"))]
 		let handle = tokio_handle.spawn(task);
-
 		#[cfg(feature = "wasm-runtime")]
 		let handle = RuntimeSpawner::spawn(task);
-
 		*self.0.schedule_local_alarm_task.lock() = Some(handle);
-	}
-
-	pub(crate) fn sync_alarm_logged(&self) {
-		if let Err(error) = self.sync_alarm() {
-			tracing::error!(
-				actor_id = %self.actor_id(),
-				?error,
-				"failed to sync scheduled actor alarm"
-			);
-		}
-	}
-
-	pub(crate) fn sync_future_alarm_logged(&self) {
-		if let Err(error) = self.sync_future_alarm() {
-			tracing::error!(
-				actor_id = %self.actor_id(),
-				?error,
-				"failed to sync future scheduled actor alarm"
-			);
-		}
 	}
 
 	pub(crate) fn suspend_alarm_dispatch(&self) {
@@ -420,14 +987,382 @@ impl ActorContext {
 	}
 }
 
-fn now_timestamp_ms() -> i64 {
+fn validate_name(name: &str) -> Result<()> {
+	let reason = if name.is_empty() {
+		Some("must not be empty")
+	} else if name.len() > 128 {
+		Some("must be at most 128 UTF-8 bytes")
+	} else {
+		None
+	};
+	match reason {
+		Some(reason) => Err(ScheduleRuntimeError::InvalidName {
+			reason: reason.to_owned(),
+		}
+		.build()),
+		None => Ok(()),
+	}
+}
+
+fn validate_max_history(max_history: Option<i64>) -> Result<i64> {
+	let max_history = max_history.unwrap_or(DEFAULT_MAX_HISTORY);
+	if !(0..=MAX_HISTORY).contains(&max_history) {
+		return Err(ScheduleRuntimeError::InvalidMaxHistory {
+			max_history,
+			maximum: MAX_HISTORY,
+		}
+		.build());
+	}
+	Ok(max_history)
+}
+
+fn parse_timezone(timezone: &str) -> Result<Tz> {
+	timezone.parse().map_err(|_| {
+		ScheduleRuntimeError::InvalidTimezone {
+			timezone: timezone.to_owned(),
+		}
+		.build()
+	})
+}
+
+fn parse_cron(expression: &str) -> Result<Cron> {
+	if expression.split_whitespace().count() != 5 {
+		return Err(ScheduleRuntimeError::InvalidCronExpression {
+			reason: "expected exactly five fields".to_owned(),
+		}
+		.build());
+	}
+	Cron::new(expression).parse().map_err(|error| {
+		ScheduleRuntimeError::InvalidCronExpression {
+			reason: error.to_string(),
+		}
+		.build()
+	})
+}
+
+fn next_cron_timestamp_ms(cron: &Cron, timezone: Tz, after_ms: i64) -> Result<i64> {
+	let after_utc = DateTime::<Utc>::from_timestamp_millis(after_ms).ok_or_else(|| {
+		ScheduleRuntimeError::InvalidCronExpression {
+			reason: "start time is outside the supported range".to_owned(),
+		}
+		.build()
+	})?;
+	let mut cursor = after_utc.with_timezone(&timezone);
+	loop {
+		let next = cron.find_next_occurrence(&cursor, false).map_err(|error| {
+			ScheduleRuntimeError::InvalidCronExpression {
+				reason: error.to_string(),
+			}
+			.build()
+		})?;
+		if cron.is_time_matching(&next).unwrap_or(false) {
+			return Ok(next.timestamp_millis());
+		}
+		// Croner advances nonexistent DST wall times to the end of the gap. V1
+		// semantics skip that occurrence, so search again from the adjusted time.
+		cursor = next;
+	}
+}
+
+fn next_recurring_trigger(event: &StoredSchedule, now_ms: i64) -> Result<i64> {
+	match event.kind {
+		ScheduleKind::Cron => {
+			let expression = event
+				.cron_expression
+				.as_deref()
+				.ok_or_else(|| invalid_row(&event.event_id, "cron expression is missing"))?;
+			let timezone = event
+				.timezone
+				.as_deref()
+				.ok_or_else(|| invalid_row(&event.event_id, "timezone is missing"))?;
+			next_cron_timestamp_ms(&parse_cron(expression)?, parse_timezone(timezone)?, now_ms)
+		}
+		ScheduleKind::Every => {
+			let interval_ms = event
+				.interval_ms
+				.ok_or_else(|| invalid_row(&event.event_id, "interval is missing"))?;
+			if interval_ms < MIN_INTERVAL_MS {
+				return Err(invalid_row(&event.event_id, "interval is below minimum"));
+			}
+			let elapsed = now_ms.saturating_sub(event.trigger_at).max(0);
+			let steps = elapsed / interval_ms + 1;
+			Ok(event
+				.trigger_at
+				.saturating_add(interval_ms.saturating_mul(steps)))
+		}
+		ScheduleKind::At => Err(invalid_row(
+			&event.event_id,
+			"one-shot passed to recurring calculation",
+		)),
+	}
+}
+
+fn append_history_statements(
+	statements: &mut Vec<SqliteBatchStatement>,
+	event: &StoredSchedule,
+	now_ms: i64,
+	result: i64,
+) -> Result<Option<usize>> {
+	if event.max_history == 0 {
+		return Ok(None);
+	}
+	let index = statements.len();
+	statements.push(SqliteBatchStatement {
+		sql: "INSERT INTO _rivet_schedule_history (schedule_id, action, scheduled_at, fired_at, finished_at, result, error_group, error_code, error_message, error_metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)".to_owned(),
+		params: Some(vec![
+			BindParam::Text(event.event_id.clone()),
+			BindParam::Text(event.action.clone()),
+			BindParam::Integer(event.trigger_at),
+			BindParam::Integer(now_ms),
+			if result == HISTORY_SKIPPED {
+				BindParam::Integer(now_ms)
+			} else {
+				BindParam::Null
+			},
+			BindParam::Integer(result),
+			BindParam::Null,
+			BindParam::Null,
+			BindParam::Null,
+			BindParam::Null,
+		]),
+	});
+	statements.extend(history_prune_statements(&event.event_id, event.max_history));
+	Ok(Some(index))
+}
+
+fn history_prune_statements(event_id: &str, max_history: i64) -> Vec<SqliteBatchStatement> {
+	vec![
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_schedule_history WHERE schedule_id = ? AND id NOT IN (SELECT id FROM _rivet_schedule_history WHERE schedule_id = ? ORDER BY fired_at DESC, id DESC LIMIT ?)".to_owned(),
+			params: Some(vec![
+				BindParam::Text(event_id.to_owned()),
+				BindParam::Text(event_id.to_owned()),
+				BindParam::Integer(max_history),
+			]),
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_schedule_history WHERE id NOT IN (SELECT id FROM _rivet_schedule_history ORDER BY fired_at DESC, id DESC LIMIT ?)".to_owned(),
+			params: Some(vec![BindParam::Integer(MAX_ACTOR_HISTORY)]),
+		},
+	]
+}
+
+fn stored_to_cron_info(event: StoredSchedule) -> Result<CronJobInfo> {
+	if event.kind == ScheduleKind::At {
+		return Err(invalid_row(&event.event_id, "expected recurring schedule"));
+	}
+	Ok(CronJobInfo {
+		name: cron_name(&event.event_id)?.to_owned(),
+		kind: event.kind,
+		action: event.action,
+		args: event.args,
+		next_run_at: event.trigger_at,
+		last_run_at: event.last_started_at,
+		expression: event.cron_expression,
+		timezone: event.timezone,
+		interval_ms: event.interval_ms,
+		max_history: event.max_history,
+	})
+}
+
+fn read_stored_schedule(row: &[ColumnValue]) -> Result<StoredSchedule> {
+	let event_id = read_text(row, 0, "event_id")?;
+	let kind = ScheduleKind::parse(read_i64(row, 4, "kind")?, &event_id)?;
+	let event = StoredSchedule {
+		event_id: event_id.clone(),
+		trigger_at: read_i64(row, 1, "trigger_at")?,
+		action: read_text(row, 2, "action")?,
+		args: read_optional_blob(row, 3, "args")?.unwrap_or_default(),
+		kind,
+		cron_expression: read_optional_text(row, 5, "cron_expression")?,
+		timezone: read_optional_text(row, 6, "timezone")?,
+		interval_ms: read_optional_i64(row, 7, "interval_ms")?,
+		last_started_at: read_optional_i64(row, 8, "last_started_at")?,
+		max_history: read_i64(row, 9, "max_history")?,
+	};
+	match event.kind {
+		ScheduleKind::At
+			if event.cron_expression.is_some()
+				|| event.timezone.is_some()
+				|| event.interval_ms.is_some()
+				|| event.max_history != 0 =>
+		{
+			Err(invalid_row(&event_id, "invalid one-shot columns"))
+		}
+		ScheduleKind::Cron
+			if event.cron_expression.is_none()
+				|| event.timezone.is_none()
+				|| event.interval_ms.is_some() =>
+		{
+			Err(invalid_row(&event_id, "invalid cron columns"))
+		}
+		ScheduleKind::Every
+			if event.cron_expression.is_some()
+				|| event.timezone.is_some()
+				|| event
+					.interval_ms
+					.is_none_or(|value| value < MIN_INTERVAL_MS) =>
+		{
+			Err(invalid_row(&event_id, "invalid interval columns"))
+		}
+		_ if !(0..=MAX_HISTORY).contains(&event.max_history) => {
+			Err(invalid_row(&event_id, "max_history is out of range"))
+		}
+		_ => Ok(event),
+	}
+}
+
+fn read_cron_fire(row: &[ColumnValue]) -> Result<CronFire> {
+	let error_group = read_optional_text(row, 5, "error_group")?;
+	let error_code = read_optional_text(row, 6, "error_code")?;
+	let error_message = read_optional_text(row, 7, "error_message")?;
+	let error_metadata = read_optional_blob(row, 8, "error_metadata")?
+		.map(|value| decode_error_metadata(&value))
+		.transpose()?;
+	let error = match (error_group, error_code, error_message) {
+		(None, None, None) => None,
+		(Some(group), Some(code), Some(message)) => Some(ScheduleErrorInfo {
+			group,
+			code,
+			message,
+			metadata: error_metadata,
+		}),
+		_ => return Err(invalid_row("<history>", "error columns are incomplete")),
+	};
+	Ok(CronFire {
+		action: read_text(row, 0, "action")?,
+		scheduled_at: read_i64(row, 1, "scheduled_at")?,
+		fired_at: read_i64(row, 2, "fired_at")?,
+		finished_at: read_optional_i64(row, 3, "finished_at")?,
+		result: history_result_name(read_i64(row, 4, "result")?)?.to_owned(),
+		error,
+	})
+}
+
+fn sanitize_error(error: &anyhow::Error) -> ScheduleErrorInfo {
+	let extracted = RivetError::extract(error);
+	let metadata = extracted.metadata();
+	ScheduleErrorInfo {
+		group: extracted.group().to_owned(),
+		code: extracted.code().to_owned(),
+		message: client_error_message(extracted.group(), extracted.code(), extracted.message())
+			.to_owned(),
+		metadata: client_error_metadata(extracted.group(), extracted.code(), metadata.as_ref())
+			.cloned(),
+	}
+}
+
+fn encode_error_metadata(metadata: &serde_json::Value) -> Result<Vec<u8>> {
+	let mut output = Vec::new();
+	ciborium::into_writer(metadata, &mut output).context("encode schedule history error metadata")?;
+	Ok(output)
+}
+
+fn decode_error_metadata(value: &[u8]) -> Result<serde_json::Value> {
+	ciborium::from_reader(value).context("decode schedule history error metadata")
+}
+
+fn history_result_name(value: i64) -> Result<&'static str> {
+	match value {
+		HISTORY_RUNNING => Ok("running"),
+		HISTORY_OK => Ok("ok"),
+		HISTORY_ERROR => Ok("error"),
+		HISTORY_SKIPPED => Ok("skipped"),
+		_ => Err(invalid_row("<history>", "unknown result")),
+	}
+}
+
+fn cron_event_id(name: &str) -> String {
+	format!("{CRON_ID_PREFIX}{name}")
+}
+
+fn cron_name(event_id: &str) -> Result<&str> {
+	event_id
+		.strip_prefix(CRON_ID_PREFIX)
+		.ok_or_else(|| invalid_row(event_id, "recurring id is missing cron prefix"))
+}
+
+fn invalid_row(schedule_id: &str, reason: &str) -> anyhow::Error {
+	ScheduleRuntimeError::InvalidScheduleRow {
+		schedule_id: schedule_id.to_owned(),
+		reason: reason.to_owned(),
+	}
+	.build()
+}
+
+fn args_param(args: &[u8]) -> BindParam {
+	if args.is_empty() {
+		BindParam::Null
+	} else {
+		BindParam::Blob(args.to_vec())
+	}
+}
+
+fn optional_text_param(value: Option<&str>) -> BindParam {
+	value
+		.map(|value| BindParam::Text(value.to_owned()))
+		.unwrap_or(BindParam::Null)
+}
+
+fn optional_owned_text_param(value: Option<String>) -> BindParam {
+	value.map(BindParam::Text).unwrap_or(BindParam::Null)
+}
+
+fn optional_i64_param(value: Option<i64>) -> BindParam {
+	value.map(BindParam::Integer).unwrap_or(BindParam::Null)
+}
+
+fn read_text(row: &[ColumnValue], index: usize, label: &str) -> Result<String> {
+	match row.get(index) {
+		Some(ColumnValue::Text(value)) => Ok(value.clone()),
+		_ => Err(invalid_row("<decode>", &format!("{label} is not text"))),
+	}
+}
+
+fn read_optional_text(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<String>> {
+	match row.get(index) {
+		Some(ColumnValue::Null) | None => Ok(None),
+		Some(ColumnValue::Text(value)) => Ok(Some(value.clone())),
+		_ => Err(invalid_row("<decode>", &format!("{label} is not text"))),
+	}
+}
+
+fn read_i64(row: &[ColumnValue], index: usize, label: &str) -> Result<i64> {
+	match row.get(index) {
+		Some(ColumnValue::Integer(value)) => Ok(*value),
+		_ => Err(invalid_row(
+			"<decode>",
+			&format!("{label} is not an integer"),
+		)),
+	}
+}
+
+fn read_optional_i64(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<i64>> {
+	match row.get(index) {
+		Some(ColumnValue::Null) | None => Ok(None),
+		Some(ColumnValue::Integer(value)) => Ok(Some(*value)),
+		_ => Err(invalid_row(
+			"<decode>",
+			&format!("{label} is not an integer"),
+		)),
+	}
+}
+
+fn read_optional_blob(row: &[ColumnValue], index: usize, label: &str) -> Result<Option<Vec<u8>>> {
+	match row.get(index) {
+		Some(ColumnValue::Null) | None => Ok(None),
+		Some(ColumnValue::Blob(value)) => Ok(Some(value.clone())),
+		_ => Err(invalid_row("<decode>", &format!("{label} is not a blob"))),
+	}
+}
+
+fn system_now_timestamp_ms() -> i64 {
 	let duration = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.unwrap_or_default();
 	i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
-// Test shim keeps moved tests in crate-root tests/ with private-module access.
 #[cfg(test)]
 #[path = "../../tests/schedule.rs"]
 mod tests;

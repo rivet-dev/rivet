@@ -1,10 +1,13 @@
+use std::time::Duration;
+
 use serde::{Deserialize, Serialize};
 
 use super::*;
 use crate::action;
 use crate::event::Event;
-use rivetkit_core::ActorWorkKind;
-use rivetkit_core::testing::actor_context;
+use rivetkit_core::actor::schedule::ScheduleKind;
+use rivetkit_core::testing::{ActorContextHarness, actor_context};
+use rivetkit_core::{ActorConfig, ActorWorkKind};
 
 struct EmptyActor;
 
@@ -185,6 +188,110 @@ fn conn_ctx_round_trips_typed_params_and_state() {
 		conn_ctx.state().expect("decode updated state"),
 		TestConnState { value: 8 }
 	);
+}
+
+#[tokio::test]
+async fn scheduling_surface_matches_typescript_api() {
+	const BASE_TIME: i64 = 1_700_000_000_000;
+	let inner = ActorContextHarness::new().context_with_config(
+		"typed-scheduling-api",
+		"test",
+		Vec::new(),
+		"local",
+		ActorConfig {
+			max_schedules: 3,
+			..Default::default()
+		},
+	);
+	inner.set_schedule_time_for_tests(BASE_TIME);
+	let ctx = Ctx::<EmptyActor>::new(inner);
+	let args = action::encode_positional(&("payload", 7u32)).expect("encode action args");
+
+	let after_id = ctx
+		.schedule()
+		.after(Duration::from_secs(5), "afterAction", &args)
+		.await
+		.expect("schedule after");
+	let at_id = ctx
+		.schedule()
+		.at(BASE_TIME + 10_000, "atAction", &args)
+		.await
+		.expect("schedule at");
+
+	let after = ctx
+		.schedule()
+		.get(&after_id)
+		.await
+		.expect("get one-shot")
+		.expect("one-shot exists");
+	assert_eq!(after.action, "afterAction");
+	assert_eq!(after.args, args);
+	assert_eq!(after.run_at, BASE_TIME + 5_000);
+	assert_eq!(ctx.schedule().list().await.expect("list one-shots").len(), 2);
+	assert!(ctx.schedule().cancel(&at_id).await.expect("cancel one-shot"));
+	assert!(ctx
+		.schedule()
+		.get(&at_id)
+		.await
+		.expect("get cancelled one-shot")
+		.is_none());
+
+	ctx.cron()
+		.set(CronSetOptions {
+			name: "daily",
+			expression: "0 9 * * *",
+			timezone: Some("America/Los_Angeles"),
+			action: "dailyAction",
+			args: &args,
+			max_history: Some(25),
+		})
+		.await
+		.expect("set cron job");
+	ctx.cron()
+		.every(CronEveryOptions {
+			name: "frequent",
+			interval: Duration::from_secs(5),
+			action: "frequentAction",
+			args: &args,
+			max_history: None,
+		})
+		.await
+		.expect("set interval job");
+
+	let daily = ctx
+		.cron()
+		.get("daily")
+		.await
+		.expect("get cron job")
+		.expect("cron job exists");
+	assert_eq!(daily.kind, ScheduleKind::Cron);
+	assert_eq!(daily.expression.as_deref(), Some("0 9 * * *"));
+	assert_eq!(daily.timezone.as_deref(), Some("America/Los_Angeles"));
+	assert_eq!(daily.max_history, 25);
+
+	let frequent = ctx
+		.cron()
+		.get("frequent")
+		.await
+		.expect("get interval job")
+		.expect("interval job exists");
+	assert_eq!(frequent.kind, ScheduleKind::Every);
+	assert_eq!(frequent.interval_ms, Some(5_000));
+	assert_eq!(frequent.max_history, 100);
+	assert_eq!(ctx.cron().list().await.expect("list recurring jobs").len(), 2);
+	assert!(ctx
+		.schedule()
+		.after(Duration::from_secs(20), "overLimit", &[])
+		.await
+		.is_err());
+	assert!(ctx
+		.cron()
+		.history("daily", Some(10))
+		.await
+		.expect("read cron history")
+		.is_empty());
+	assert!(ctx.cron().delete("daily").await.expect("delete cron job"));
+	assert!(ctx.cron().delete("frequent").await.expect("delete interval job"));
 }
 
 #[test]

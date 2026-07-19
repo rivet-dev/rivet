@@ -44,7 +44,12 @@ impl Default for ActorContextHarness {
 
 impl ActorContextHarness {
 	pub fn new() -> Self {
-		let (handle, receiver) = test_envoy_handle();
+		Self::with_client_endpoint("http://127.0.0.1:1")
+	}
+
+	/// Constructs a harness whose actor clients use the provided engine endpoint.
+	pub fn with_client_endpoint(endpoint: impl Into<String>) -> Self {
+		let (handle, receiver) = test_envoy_handle(endpoint.into());
 		spawn_remote_sqlite(receiver);
 		Self { handle }
 	}
@@ -55,6 +60,17 @@ impl ActorContextHarness {
 		name: impl Into<String>,
 		key: ActorKey,
 		region: impl Into<String>,
+	) -> ActorContext {
+		self.context_with_config(actor_id, name, key, region, ActorConfig::default())
+	}
+
+	pub fn context_with_config(
+		&self,
+		actor_id: impl Into<String>,
+		name: impl Into<String>,
+		key: ActorKey,
+		region: impl Into<String>,
+		config: ActorConfig,
 	) -> ActorContext {
 		let actor_id = actor_id.into();
 		let generation = Some(1);
@@ -74,7 +90,7 @@ impl ActorContextHarness {
 			region.into(),
 			generation,
 			self.handle.get_envoy_key().to_owned(),
-			ActorConfig::default(),
+			config,
 			LegacyActorKv::new(self.handle.clone(), actor_id),
 			sql,
 		);
@@ -147,12 +163,14 @@ impl EnvoyCallbacks for IdleEnvoyCallbacks {
 	}
 }
 
-fn test_envoy_handle() -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
+fn test_envoy_handle(
+	endpoint: String,
+) -> (EnvoyHandle, mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 	let (envoy_tx, envoy_rx) = mpsc::unbounded_channel();
 	let shared = Arc::new(SharedContext {
 		config: EnvoyConfig {
 			version: 1,
-			endpoint: "http://127.0.0.1:1".to_owned(),
+			endpoint,
 			token: None,
 			namespace: "test".to_owned(),
 			pool_name: "test".to_owned(),
@@ -316,7 +334,7 @@ CREATE TABLE _rivet_runtime (
     id INTEGER PRIMARY KEY CHECK (id = 1),
     last_pushed_alarm INTEGER,
     inspector_token TEXT,
-    queue_next_id INTEGER NOT NULL DEFAULT 1
+    queue_next_id INTEGER NOT NULL
 ) STRICT;
 CREATE TABLE _rivet_actor (
     id INTEGER PRIMARY KEY CHECK (id = 1),
@@ -331,10 +349,31 @@ CREATE TABLE _rivet_schedule_events (
     event_id TEXT PRIMARY KEY,
     trigger_at INTEGER NOT NULL,
     action TEXT NOT NULL,
-    args BLOB
+    args BLOB,
+    kind INTEGER NOT NULL,
+    cron_expression TEXT,
+    timezone TEXT,
+    interval_ms INTEGER,
+    last_started_at INTEGER,
+    max_history INTEGER NOT NULL
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX _rivet_schedule_events_trigger_at
     ON _rivet_schedule_events (trigger_at);
+CREATE TABLE _rivet_schedule_history (
+    id INTEGER PRIMARY KEY,
+    schedule_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    fired_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    result INTEGER NOT NULL,
+    error_group TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    error_metadata BLOB
+) STRICT;
+CREATE INDEX _rivet_schedule_history_schedule
+    ON _rivet_schedule_history (schedule_id, fired_at DESC);
 CREATE TABLE _rivet_conns (
     conn_id TEXT PRIMARY KEY,
     parameters BLOB NOT NULL,
@@ -347,8 +386,8 @@ CREATE TABLE _rivet_conn_state (
     conn_id TEXT PRIMARY KEY,
     state BLOB NOT NULL,
     server_message_index INTEGER NOT NULL,
-    subscriptions BLOB NOT NULL,
-    client_message_index INTEGER NOT NULL DEFAULT 0
+    client_message_index INTEGER NOT NULL,
+    subscriptions BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
 CREATE TABLE _rivet_queue (
     id INTEGER PRIMARY KEY,
@@ -365,5 +404,5 @@ CREATE TABLE _rivet_user_kv (
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
 INSERT INTO _rivet_meta (key, value)
-VALUES ('schema_version', x'0700000000000000');
+VALUES ('schema_version', x'0600000000000000');
 "#;

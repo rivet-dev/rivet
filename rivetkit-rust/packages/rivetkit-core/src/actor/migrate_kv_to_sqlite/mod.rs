@@ -141,7 +141,7 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 		+ usize::from(queue_metadata.is_some());
 
 	if let Some(actor) = actor {
-		internal_storage::persist_actor_snapshot(ctx.sql(), &actor)
+		internal_storage::import_legacy_actor_snapshot(ctx.sql(), &actor)
 			.await
 			.context("import legacy actor snapshot into sqlite")?;
 	}

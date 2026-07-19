@@ -1,50 +1,29 @@
-import { test, expect } from "vitest";
-import { setupTest } from "rivetkit/test";
+import { expect, test } from "vitest";
 import { actor, setup } from "rivetkit";
+import { setupTest } from "rivetkit/test";
 
-// Helper to wait for a delay
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// Define the scheduler actor
 const scheduler = actor({
-  state: {
-    tasks: [] as string[],
-    completedTasks: [] as string[]
-  },
+  state: { completedTasks: [] as string[] },
   actions: {
-    scheduleTask: (c, taskName: string, delayMs: number) => {
-      c.state.tasks.push(taskName);
-      // Schedule "completeTask" to run after the specified delay
-      c.schedule.after(delayMs, "completeTask", taskName);
-      return { success: true };
+    scheduleTask: async (c, taskName: string) => {
+      await c.schedule.after(50, "completeTask", taskName);
     },
     completeTask: (c, taskName: string) => {
-      // This action will be called by the scheduler when the time comes
       c.state.completedTasks.push(taskName);
-      return { completed: taskName };
     },
-    getCompletedTasks: (c) => {
-      return c.state.completedTasks;
-    }
-  }
+    getCompletedTasks: (c) => c.state.completedTasks,
+  },
 });
 
-// Create the registry
-const registry = setup({
-  use: { scheduler }
-});
+const registry = setup({ use: { scheduler } });
 
-// Test scheduled tasks
-test("scheduled tasks should execute", async (testCtx) => {
+test("scheduled work updates observable state", async (testCtx) => {
   const { client } = await setupTest(testCtx, registry);
-  const schedulerHandle = client.scheduler.getOrCreate(["test"]);
+  const handle = client.scheduler.getOrCreate(["test"]);
 
-  // Set up a scheduled task
-  await schedulerHandle.scheduleTask("reminder", 100); // 100ms in the future
+  await handle.scheduleTask("reminder");
 
-  // Wait for the scheduled task to run
-  await wait(150);
-
-  // Verify the scheduled task executed
-  expect(await schedulerHandle.getCompletedTasks()).toContain("reminder");
+  await expect
+    .poll(() => handle.getCompletedTasks(), { timeout: 2_000, interval: 25 })
+    .toContain("reminder");
 });

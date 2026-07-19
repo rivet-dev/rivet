@@ -4,22 +4,24 @@ import * as v2 from "@/common/bare/generated/inspector/v2";
 import * as v3 from "@/common/bare/generated/inspector/v3";
 import * as v4 from "@/common/bare/generated/inspector/v4";
 import * as v5 from "@/common/bare/generated/inspector/v5";
+import * as v6 from "@/common/bare/generated/inspector/v6";
 import {
 	decodeWorkflowHistoryTransport,
 	encodeWorkflowHistoryTransport,
 } from "@/common/inspector-transport";
 
-export * from "@/common/bare/generated/inspector/v5";
+export * from "@/common/bare/generated/inspector/v6";
 export { decodeWorkflowHistoryTransport, encodeWorkflowHistoryTransport };
 export type { WorkflowHistory as TransportWorkflowHistory } from "@/common/bare/transport/v1";
 
-export const CURRENT_VERSION = 5;
+export const CURRENT_VERSION = 6;
 
 const EVENTS_DROPPED_ERROR = "inspector.events_dropped";
 const WORKFLOW_HISTORY_DROPPED_ERROR = "inspector.workflow_history_dropped";
 const QUEUE_DROPPED_ERROR = "inspector.queue_dropped";
 const TRACE_DROPPED_ERROR = "inspector.trace_dropped";
 const DATABASE_DROPPED_ERROR = "inspector.database_dropped";
+const SCHEDULES_DROPPED_ERROR = "inspector.schedules_dropped";
 
 const v1ToClientToV2 = (v1Data: v1.ToClient): v2.ToClient => {
 	if (v1Data.body.tag === "Init") {
@@ -187,11 +189,58 @@ const v5ToClientToV4 = (v5Data: v5.ToClient): v4.ToClient => {
 	return v5Data as unknown as v4.ToClient;
 };
 
+const v5ToClientToV6 = (v5Data: v5.ToClient): v6.ToClient => {
+	if (v5Data.body.tag === "Init") {
+		return {
+			body: {
+				tag: "Init",
+				val: { ...v5Data.body.val, schedules: [] },
+			},
+		};
+	}
+	return v5Data as unknown as v6.ToClient;
+};
+
+const v6ToClientToV5 = (v6Data: v6.ToClient): v5.ToClient => {
+	if (v6Data.body.tag === "Init") {
+		const { schedules: _schedules, ...rest } = v6Data.body.val;
+		return { body: { tag: "Init", val: rest } };
+	}
+	if (
+		v6Data.body.tag === "SchedulesUpdated" ||
+		v6Data.body.tag === "SchedulesResponse" ||
+		v6Data.body.tag === "ScheduleHistoryResponse" ||
+		v6Data.body.tag === "ScheduleDeleteResponse"
+	) {
+		return {
+			body: {
+				tag: "Error",
+				val: { message: SCHEDULES_DROPPED_ERROR },
+			},
+		};
+	}
+	return v6Data as unknown as v5.ToClient;
+};
+
 const v4ToServerToV5 = (v4Data: v4.ToServer): v5.ToServer =>
 	v4Data as unknown as v5.ToServer;
 
 const v5ToServerToV4 = (v5Data: v5.ToServer): v4.ToServer =>
 	v5Data as unknown as v4.ToServer;
+
+const v5ToServerToV6 = (v5Data: v5.ToServer): v6.ToServer =>
+	v5Data as unknown as v6.ToServer;
+
+const v6ToServerToV5 = (v6Data: v6.ToServer): v5.ToServer => {
+	if (
+		v6Data.body.tag === "SchedulesRequest" ||
+		v6Data.body.tag === "ScheduleHistoryRequest" ||
+		v6Data.body.tag === "ScheduleDeleteRequest"
+	) {
+		throw new Error("Cannot convert v6-only schedule requests to v5");
+	}
+	return v6Data as unknown as v5.ToServer;
+};
 
 const v1ToServerToV2 = (v1Data: v1.ToServer): v2.ToServer => {
 	if (
@@ -243,7 +292,7 @@ const v4ToServerToV3 = (v4Data: v4.ToServer): v3.ToServer => {
 	return v4Data as unknown as v3.ToServer;
 };
 
-export const TO_SERVER_VERSIONED = createVersionedDataHandler<v5.ToServer>({
+export const TO_SERVER_VERSIONED = createVersionedDataHandler<v6.ToServer>({
 	serializeVersion: (data, version) => {
 		switch (version) {
 			case 1:
@@ -255,7 +304,9 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v5.ToServer>({
 			case 4:
 				return v4.encodeToServer(data as unknown as v4.ToServer);
 			case 5:
-				return v5.encodeToServer(data);
+				return v5.encodeToServer(data as unknown as v5.ToServer);
+			case 6:
+				return v6.encodeToServer(data);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -271,7 +322,9 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v5.ToServer>({
 			case 4:
 				return v4.decodeToServer(bytes) as unknown as v5.ToServer;
 			case 5:
-				return v5.decodeToServer(bytes);
+				return v5.decodeToServer(bytes) as unknown as v6.ToServer;
+			case 6:
+				return v6.decodeToServer(bytes);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -281,8 +334,10 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v5.ToServer>({
 		v2ToServerToV3,
 		v3ToServerToV4,
 		v4ToServerToV5,
+		v5ToServerToV6,
 	],
 	serializeConverters: () => [
+		v6ToServerToV5,
 		v5ToServerToV4,
 		v4ToServerToV3,
 		v3ToServerToV2,
@@ -290,7 +345,7 @@ export const TO_SERVER_VERSIONED = createVersionedDataHandler<v5.ToServer>({
 	],
 });
 
-export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v5.ToClient>({
+export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v6.ToClient>({
 	serializeVersion: (data, version) => {
 		switch (version) {
 			case 1:
@@ -302,7 +357,9 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v5.ToClient>({
 			case 4:
 				return v4.encodeToClient(data as unknown as v4.ToClient);
 			case 5:
-				return v5.encodeToClient(data);
+				return v5.encodeToClient(data as unknown as v5.ToClient);
+			case 6:
+				return v6.encodeToClient(data);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -318,7 +375,9 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v5.ToClient>({
 			case 4:
 				return v4.decodeToClient(bytes) as unknown as v5.ToClient;
 			case 5:
-				return v5.decodeToClient(bytes);
+				return v5.decodeToClient(bytes) as unknown as v6.ToClient;
+			case 6:
+				return v6.decodeToClient(bytes);
 			default:
 				throw new Error(`Unknown version ${version}`);
 		}
@@ -328,8 +387,10 @@ export const TO_CLIENT_VERSIONED = createVersionedDataHandler<v5.ToClient>({
 		v2ToClientToV3,
 		v3ToClientToV4,
 		v4ToClientToV5,
+		v5ToClientToV6,
 	],
 	serializeConverters: () => [
+		v6ToClientToV5,
 		v5ToClientToV4,
 		v4ToClientToV3,
 		v3ToClientToV2,

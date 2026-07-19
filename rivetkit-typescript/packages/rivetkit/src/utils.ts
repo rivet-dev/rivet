@@ -10,6 +10,9 @@ export { stringifyError };
 /** @experimental */
 export { assertUnreachable };
 
+/** @experimental */
+export { jsonParseCompat, jsonStringifyCompat } from "./common/encoding";
+
 /**
  * Joins multiple abort signals into one.
  *

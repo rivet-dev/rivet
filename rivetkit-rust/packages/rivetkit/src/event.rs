@@ -3,6 +3,7 @@ use std::{fmt, io::Cursor, marker::PhantomData};
 use anyhow::{Context, Result as AnyhowResult};
 use ciborium::Value;
 use rivetkit_core::actor::ShutdownKind;
+use rivetkit_core::actor::schedule::ScheduledFireInfo;
 use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{
 	ActorEvent, QueueSendResult, QueueSendStatus, Reply, Request, Response, SerializeStateReason,
@@ -93,11 +94,13 @@ impl<A: Actor> RuntimeEvent<A> {
 				name,
 				args,
 				conn,
+				scheduled_fire,
 				reply,
 			} => Self::Action(ActionCall {
 				name,
 				args,
 				conn: conn.map(ConnCtx::from),
+				scheduled_fire,
 				reply: Some(reply),
 			}),
 			ActorEvent::HttpRequest { request, reply } => Self::Http(HttpCall {
@@ -193,6 +196,7 @@ pub struct ActionCall<A: Actor> {
 	pub(crate) name: String,
 	pub(crate) args: Vec<u8>,
 	pub(crate) conn: Option<ConnCtx<A>>,
+	pub(crate) scheduled_fire: Option<ScheduledFireInfo>,
 	pub(crate) reply: Option<Reply<Vec<u8>>>,
 }
 
@@ -211,6 +215,10 @@ impl<A: Actor> ActionCall<A> {
 
 	pub fn conn(&self) -> Option<&ConnCtx<A>> {
 		self.conn.as_ref()
+	}
+
+	pub fn scheduled_fire(&self) -> Option<&ScheduledFireInfo> {
+		self.scheduled_fire.as_ref()
 	}
 
 	pub fn raw_args(&self) -> &[u8] {
@@ -1486,6 +1494,7 @@ mod tests {
 					name: "ping".into(),
 					args: Vec::new(),
 					conn: None,
+					scheduled_fire: None,
 					reply: reply_tx.into(),
 				})
 				.expect("queue action event");
@@ -2048,8 +2057,29 @@ mod tests {
 			name: name.into(),
 			args,
 			conn: None,
+			scheduled_fire: None,
 			reply: None,
 		}
+	}
+
+	#[test]
+	fn action_call_exposes_scheduled_fire_metadata() {
+		let fire = ScheduledFireInfo {
+			kind: rivetkit_core::actor::schedule::ScheduleKind::Every,
+			id: "heartbeat".into(),
+			name: Some("heartbeat".into()),
+			scheduled_at: 100,
+			fired_at: 125,
+		};
+		let action = ActionCall::<TestActor> {
+			name: "tick".into(),
+			args: Vec::new(),
+			conn: None,
+			scheduled_fire: Some(fire.clone()),
+			reply: None,
+		};
+
+		assert_eq!(action.scheduled_fire(), Some(&fire));
 	}
 
 	fn encode_test_cbor<T: Serialize>(value: &T) -> Vec<u8> {

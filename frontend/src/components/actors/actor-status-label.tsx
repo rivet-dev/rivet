@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { formatISO } from "date-fns";
 import { isObject } from "lodash";
+import { formatValue } from "@/lib/format-value";
 import { match, P } from "ts-pattern";
 import type { RivetActorError } from "@/queries/types";
 import { CodePreview } from "../code-preview/code-preview";
@@ -283,7 +284,7 @@ export function ErrorDetailsContent({ error }: { error: unknown }) {
 				<CodePreview
 					language="json"
 					className="text-left"
-					code={json ? JSON.stringify(json, null, 2) : String(error)}
+					code={json ? formatValue(json, true) : String(error)}
 				/>
 			</ScrollArea>
 		</div>

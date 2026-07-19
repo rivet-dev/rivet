@@ -118,6 +118,7 @@ async fn send_action(event_tx: &mpsc::UnboundedSender<ActorEvent>, name: &str) -
 			name: name.to_owned(),
 			args: Vec::new(),
 			conn: None,
+			scheduled_fire: None,
 			reply: reply_tx.into(),
 		})
 		.expect("send action event");

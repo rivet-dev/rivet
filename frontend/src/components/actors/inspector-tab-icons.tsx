@@ -1,5 +1,6 @@
 import {
 	faBoxArchive,
+	faCalendar,
 	faComments,
 	faCubesStacked,
 	faDatabase,
@@ -31,6 +32,7 @@ const ICON_REGISTRY: Record<string, IconDefinition> = {
 	database: faDatabase,
 	state: faCubesStacked,
 	queue: faInbox,
+	calendar: faCalendar,
 	plug: faPlug,
 	terminal: faTerminal,
 	tag: faTag,

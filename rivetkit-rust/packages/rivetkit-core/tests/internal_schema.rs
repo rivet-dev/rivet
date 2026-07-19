@@ -27,3 +27,28 @@ fn schema_sql_does_not_embed_workload_annotations() {
 		);
 	}
 }
+
+#[test]
+fn unpublished_schema_has_explicit_values_and_minimal_constraints() {
+	let sql = MIGRATIONS
+		.iter()
+		.flat_map(|migration| migration.iter().copied())
+		.collect::<Vec<_>>()
+		.join("\n")
+		.to_ascii_lowercase();
+	assert!(!sql.contains(" default "), "internal columns must not use defaults");
+	assert!(
+		!sql.replace("check (id = 1)", "").contains("check"),
+		"only the singleton id constraint is allowed"
+	);
+	assert!(sql.contains("kind             integer not null"));
+	assert!(sql.contains("result         integer not null"));
+
+	for statement in MIGRATIONS
+		.iter()
+		.flat_map(|migration| migration.iter().copied())
+		.filter(|statement| statement.trim_start().starts_with("CREATE TABLE"))
+	{
+		assert!(statement.contains("STRICT"), "table is not STRICT: {statement}");
+	}
+}

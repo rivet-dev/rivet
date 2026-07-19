@@ -40,13 +40,13 @@ Rivet's schedule functionality can be tested by scheduling work and waiting for 
 
 <CodeSnippet file="examples/docs/actors-testing/testing-schedules.ts" />
 
-Use a short real-time delay to wait for scheduled work to run. `setupTest` does not install fake timers, so if you want to use `vi.useFakeTimers()` you must enable it yourself and confirm it works with your selected runtime.
+Use a short schedule and `expect.poll` the action's observable result. Vitest's fake date and fake JavaScript timers do not advance RivetKit's scheduler, which runs outside the test's JavaScript timer queue.
 
 ## Best Practices
 
 1. **Isolate tests**: Each test should run independently, avoiding shared state.
 2. **Test edge cases**: Verify how your actor handles invalid inputs, concurrent operations, and error conditions.
-3. **Test scheduled operations**: Use short real-time delays to wait for scheduled work to run.
+3. **Test scheduled operations**: Poll observable state or output with a bounded timeout instead of sleeping for an exact duration.
 4. **Use realistic data**: Test with data that resembles production scenarios.
 
 `setupTest` starts the registry and disposes the returned client when the test finishes, so you can focus on writing effective tests for your business logic.

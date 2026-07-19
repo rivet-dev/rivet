@@ -1,0 +1,5 @@
+{
+  "code": "invalid_cron_expression",
+  "group": "schedule",
+  "message": "Cron expression is invalid."
+}

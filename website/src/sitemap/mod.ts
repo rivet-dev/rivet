@@ -173,7 +173,7 @@ export const sitemap = [
 						icon: faMailbox,
 					},
 					{
-						title: "Schedule",
+						title: "Schedule & Cron",
 						href: "/docs/actors/schedule",
 						icon: faClock,
 					},
@@ -181,11 +181,6 @@ export const sitemap = [
 						title: "SQLite",
 						href: "/docs/actors/sqlite",
 						icon: faSqlite,
-					},
-					{
-						title: "Actor Runtime Socket",
-						href: "/docs/actors/actor-runtime-socket",
-						badge: "Experimental",
 					},
 					// {
 					// 	title: "Persistence",
@@ -346,6 +341,11 @@ export const sitemap = [
 							{
 								title: "Custom Inspector Tabs",
 								href: "/docs/actors/inspector-tabs",
+							},
+							{
+								title: "Actor Runtime Socket",
+								href: "/docs/actors/actor-runtime-socket",
+								badge: "Beta",
 							},
 							{
 								title: "Limits",

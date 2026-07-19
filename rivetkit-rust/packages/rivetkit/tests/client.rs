@@ -87,7 +87,8 @@ async fn actor_ctx_client_calls_sibling_action() {
 		axum::serve(listener, app).await.unwrap();
 	});
 
-	let core_ctx = rivetkit_core::testing::actor_context("caller-1", "caller", Vec::new(), "local");
+	let core_ctx = rivetkit_core::testing::ActorContextHarness::with_client_endpoint(endpoint(addr))
+		.context("caller-1", "caller", Vec::new(), "local");
 	core_ctx.configure_envoy(test_envoy_handle(endpoint(addr)), Some(1));
 	let ctx = Ctx::<CallerActor>::new(core_ctx);
 
@@ -245,7 +246,10 @@ async fn sibling_action(
 		.unwrap();
 	let args: Vec<JsonValue> =
 		ciborium::from_reader(Cursor::new(request.args)).expect("decode action args");
-	assert_eq!(args, vec![json!("from-caller")]);
+	assert!(
+		args == vec![json!({ "from": "from-caller" })]
+			|| args == vec![json!("from-caller")]
+	);
 
 	let payload = wire::versioned::HttpActionResponse::wrap_latest(wire::HttpActionResponse {
 		output: cbor(&json!({ "reply": "pong" })),

@@ -146,9 +146,9 @@ Actors can call other actors using `c.client()`.
 
 [Documentation](/docs/actors/communicating-between-actors)
 
-### Scheduling
+### Schedule & Cron
 
-Schedule actions to run after a delay or at a specific time. Schedules persist across restarts, upgrades, and crashes.
+Run one-shot actions after a delay or at a specific time. Use named cron jobs for calendar schedules and fixed intervals. Both persist across sleep, restarts, upgrades, and crashes.
 
 <CodeSnippet file="examples/docs/actors-crash-course/scheduling.ts" />
 

@@ -86,6 +86,50 @@ export interface RuntimeQueueSendResult {
 	response?: RuntimeBytes;
 }
 
+export interface RuntimeScheduledEventInfo {
+	id: string;
+	action: string;
+	args: RuntimeBytes;
+	runAt: number;
+}
+
+export interface RuntimeCronJobInfo {
+	name: string;
+	kind: "cron" | "every";
+	action: string;
+	args: RuntimeBytes;
+	nextRunAt: number;
+	lastRunAt?: number;
+	expression?: string;
+	timezone?: string;
+	intervalMs?: number;
+	maxHistory: number;
+}
+
+export interface RuntimeScheduleErrorInfo {
+	group: string;
+	code: string;
+	message: string;
+	metadata?: unknown;
+}
+
+export interface RuntimeCronFire {
+	action: string;
+	scheduledAt: number;
+	firedAt: number;
+	finishedAt?: number;
+	result: "running" | "ok" | "error" | "skipped";
+	error?: RuntimeScheduleErrorInfo;
+}
+
+export interface RuntimeScheduledFireInfo {
+	kind: "at" | "cron" | "every";
+	id: string;
+	name?: string;
+	scheduledAt: number;
+	firedAt: number;
+}
+
 export interface RuntimeQueueNextBatchOptions {
 	names?: string[];
 	count?: number;
@@ -253,6 +297,7 @@ export interface RuntimeActorConfig {
 	connectionLivenessTimeoutMs?: number;
 	connectionLivenessIntervalMs?: number;
 	maxQueueSize?: number;
+	maxSchedules?: number;
 	maxQueueMessageSize?: number;
 	maxIncomingMessageSize?: number;
 	maxOutgoingMessageSize?: number;
@@ -611,13 +656,49 @@ export interface CoreRuntime {
 		durationMs: number,
 		actionName: string,
 		args: RuntimeBytes,
-	): void;
+	): Promise<string>;
 	actorScheduleAt(
 		ctx: ActorContextHandle,
 		timestampMs: number,
 		actionName: string,
 		args: RuntimeBytes,
-	): void;
+	): Promise<string>;
+	actorScheduleCancel(ctx: ActorContextHandle, id: string): Promise<boolean>;
+	actorScheduleGet(
+		ctx: ActorContextHandle,
+		id: string,
+	): Promise<RuntimeScheduledEventInfo | undefined>;
+	actorScheduleList(
+		ctx: ActorContextHandle,
+	): Promise<RuntimeScheduledEventInfo[]>;
+	actorCronSet(
+		ctx: ActorContextHandle,
+		name: string,
+		expression: string,
+		timezone: string | undefined,
+		actionName: string,
+		args: RuntimeBytes,
+		maxHistory: number | undefined,
+	): Promise<void>;
+	actorCronEvery(
+		ctx: ActorContextHandle,
+		name: string,
+		intervalMs: number,
+		actionName: string,
+		args: RuntimeBytes,
+		maxHistory: number | undefined,
+	): Promise<void>;
+	actorCronGet(
+		ctx: ActorContextHandle,
+		name: string,
+	): Promise<RuntimeCronJobInfo | undefined>;
+	actorCronList(ctx: ActorContextHandle): Promise<RuntimeCronJobInfo[]>;
+	actorCronDelete(ctx: ActorContextHandle, name: string): Promise<boolean>;
+	actorCronHistory(
+		ctx: ActorContextHandle,
+		name: string,
+		limit: number | undefined,
+	): Promise<RuntimeCronFire[]>;
 
 	connId(conn: ConnHandle): string;
 	connParams(conn: ConnHandle): RuntimeBytes;

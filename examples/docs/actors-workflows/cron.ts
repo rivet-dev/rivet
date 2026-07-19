@@ -1,10 +1,5 @@
-import { actor, queue, setup } from "rivetkit";
+import { actor, queue, setup, type ScheduledFireInfo } from "rivetkit";
 import { type WorkflowStepContextOf, workflow } from "rivetkit/workflow";
-
-function nextMinute(timestamp: number): number {
-  const minuteMs = 60_000;
-  return Math.floor(timestamp / minuteMs) * minuteMs + minuteMs;
-}
 
 export const cronActor = actor({
   state: {
@@ -15,15 +10,17 @@ export const cronActor = actor({
     "cron-tick": queue<{ scheduledAt: number }>(),
   },
   onCreate: async (c) => {
-    const firstTickAt = nextMinute(Date.now());
-    await c.schedule.at(firstTickAt, "enqueueCronTick", firstTickAt);
+    await c.cron.every({
+      name: "workflow-tick",
+      intervalMs: 60_000,
+      action: "enqueueCronTick",
+      args: [],
+      maxHistory: 100,
+    });
   },
   actions: {
-    enqueueCronTick: async (c, scheduledAt: number) => {
-      await c.queue.send("cron-tick", { scheduledAt });
-
-      const nextTickAt = nextMinute(scheduledAt + 1);
-      await c.schedule.at(nextTickAt, "enqueueCronTick", nextTickAt);
+    enqueueCronTick: async (c, fire: ScheduledFireInfo) => {
+      await c.queue.send("cron-tick", { scheduledAt: fire.scheduledAt });
     },
     getState: (c) => c.state,
   },

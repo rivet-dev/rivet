@@ -15,6 +15,8 @@ import type {
 	RegistryHandle,
 	RuntimeActorConfig,
 	RuntimeBytes,
+	RuntimeCronFire,
+	RuntimeCronJobInfo,
 	RuntimeHttpRequest,
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
@@ -27,6 +29,7 @@ import type {
 	RuntimeRegistryRouteResponse,
 	RuntimeRequestSaveOpts,
 	RuntimeServeConfig,
+	RuntimeScheduledEventInfo,
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
 	RuntimeServerlessStreamCallback,
@@ -847,26 +850,113 @@ export class NapiCoreRuntime implements CoreRuntime {
 		await asNativeActorContext(ctx).queue().reset();
 	}
 
-	actorScheduleAfter(
+	async actorScheduleAfter(
 		ctx: ActorContextHandle,
 		durationMs: number,
 		actionName: string,
 		args: RuntimeBytes,
-	): void {
-		asNativeActorContext(ctx)
+	): Promise<string> {
+		return await asNativeActorContext(ctx)
 			.schedule()
 			.after(durationMs, actionName, toNapiBuffer(args));
 	}
 
-	actorScheduleAt(
+	async actorScheduleAt(
 		ctx: ActorContextHandle,
 		timestampMs: number,
 		actionName: string,
 		args: RuntimeBytes,
-	): void {
-		asNativeActorContext(ctx)
+	): Promise<string> {
+		return await asNativeActorContext(ctx)
 			.schedule()
 			.at(timestampMs, actionName, toNapiBuffer(args));
+	}
+
+	async actorScheduleCancel(ctx: ActorContextHandle, id: string) {
+		return await asNativeActorContext(ctx).schedule().cancel(id);
+	}
+
+	async actorScheduleGet(
+		ctx: ActorContextHandle,
+		id: string,
+	): Promise<RuntimeScheduledEventInfo | undefined> {
+		return (
+			(await asNativeActorContext(ctx).schedule().get(id)) ?? undefined
+		);
+	}
+
+	async actorScheduleList(ctx: ActorContextHandle) {
+		return await asNativeActorContext(ctx).schedule().list();
+	}
+
+	async actorCronSet(
+		ctx: ActorContextHandle,
+		name: string,
+		expression: string,
+		timezone: string | undefined,
+		actionName: string,
+		args: RuntimeBytes,
+		maxHistory: number | undefined,
+	) {
+		await asNativeActorContext(ctx)
+			.schedule()
+			.cronSet(
+				name,
+				expression,
+				timezone,
+				actionName,
+				toNapiBuffer(args),
+				maxHistory,
+			);
+	}
+
+	async actorCronEvery(
+		ctx: ActorContextHandle,
+		name: string,
+		intervalMs: number,
+		actionName: string,
+		args: RuntimeBytes,
+		maxHistory: number | undefined,
+	) {
+		await asNativeActorContext(ctx)
+			.schedule()
+			.cronEvery(
+				name,
+				intervalMs,
+				actionName,
+				toNapiBuffer(args),
+				maxHistory,
+			);
+	}
+
+	async actorCronGet(
+		ctx: ActorContextHandle,
+		name: string,
+	): Promise<RuntimeCronJobInfo | undefined> {
+		return ((await asNativeActorContext(ctx).schedule().cronGet(name)) ??
+			undefined) as RuntimeCronJobInfo | undefined;
+	}
+
+	async actorCronList(
+		ctx: ActorContextHandle,
+	): Promise<RuntimeCronJobInfo[]> {
+		return (await asNativeActorContext(ctx)
+			.schedule()
+			.cronList()) as RuntimeCronJobInfo[];
+	}
+
+	async actorCronDelete(ctx: ActorContextHandle, name: string) {
+		return await asNativeActorContext(ctx).schedule().cronDelete(name);
+	}
+
+	async actorCronHistory(
+		ctx: ActorContextHandle,
+		name: string,
+		limit: number | undefined,
+	): Promise<RuntimeCronFire[]> {
+		return (await asNativeActorContext(ctx)
+			.schedule()
+			.cronHistory(name, limit)) as RuntimeCronFire[];
 	}
 
 	connId(conn: ConnHandle): string {

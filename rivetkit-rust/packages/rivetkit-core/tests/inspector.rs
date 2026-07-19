@@ -296,8 +296,10 @@ mod moved_tests {
 		let inspector = Inspector::new();
 		let state_updates = Arc::new(AtomicUsize::new(0));
 		let queue_updates = Arc::new(AtomicUsize::new(0));
+		let schedule_updates = Arc::new(AtomicUsize::new(0));
 		let state_updates_clone = state_updates.clone();
 		let queue_updates_clone = queue_updates.clone();
+		let schedule_updates_clone = schedule_updates.clone();
 
 		let subscription = inspector.subscribe(Arc::new(move |signal| match signal {
 			InspectorSignal::StateUpdated => {
@@ -306,16 +308,22 @@ mod moved_tests {
 			InspectorSignal::QueueUpdated => {
 				queue_updates_clone.fetch_add(1, Ordering::SeqCst);
 			}
-			InspectorSignal::ConnectionsUpdated | InspectorSignal::WorkflowHistoryUpdated => {}
+			InspectorSignal::SchedulesUpdated => {
+				schedule_updates_clone.fetch_add(1, Ordering::SeqCst);
+			}
+			InspectorSignal::ConnectionsUpdated
+			| InspectorSignal::WorkflowHistoryUpdated => {}
 		}));
 
 		assert_eq!(inspector.snapshot().connected_clients, 1);
 
 		inspector.record_state_updated();
 		inspector.record_queue_updated(3);
+		inspector.record_schedules_updated();
 
 		assert_eq!(state_updates.load(Ordering::SeqCst), 1);
 		assert_eq!(queue_updates.load(Ordering::SeqCst), 1);
+		assert_eq!(schedule_updates.load(Ordering::SeqCst), 1);
 
 		drop(subscription);
 

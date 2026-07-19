@@ -1,51 +1,63 @@
 ---
 title: "Actor Runtime Socket"
-description: "Connect trusted local tools to a running Rivet Actor over an experimental actor-local protocol."
+description: "Access an actor's SQLite database from another local process."
 skill: true
 ---
 
-> **Experimental:** The Actor Runtime Socket protocol and API may change between releases. It is available only in the Unix native runtime and must be enabled per actor.
+The Actor Runtime Socket is an advanced Beta API for integrating Rivet Actors with external software without sacrificing performance. It currently exposes SQLite over Unix domain sockets in the native runtime.
 
-The **Actor Runtime Socket** is a generic, actor-local protocol for trusted tools running in the same application environment as a Rivet Actor. SQLite is its first capability; Unix domain sockets are its current transport.
+For example, an agentOS agent can use the socket to work with its actor's SQLite database. Software orchestrated by an actor, such as another process or container, can use it to access the actor's runtime resources. Like the Chrome DevTools Protocol exposes a browser to external tools, the Actor Runtime Socket exposes selected actor capabilities to colocated software.
 
-Each running actor generation lazily creates its own socket. The socket is removed when that generation sleeps, stops, or is destroyed, so clients must request the current path again after the actor wakes or restarts.
+## Quickstart
 
-## Enable the socket
+Enable the socket, call `c.actorRuntimeSocket()` to get its path, and pass that path to your process:
 
-Enable the feature under the actor's `options`, then provision it from the actor context:
+<CodeGroup>
 
-```ts @nocheck
+```ts actor.ts
+import { spawn } from "node:child_process";
 import { actor } from "rivetkit";
 import { db } from "rivetkit/db";
 
 export const example = actor({
-	options: {
-		enableActorRuntimeSocket: true,
-	},
-	db: db({
-		onMigrate: async (db) => {
-			await db.execute("CREATE TABLE IF NOT EXISTS items (value TEXT)");
-		},
-	}),
-	run: async (c) => {
-		const { path } = await c.actorRuntimeSocket();
-		// Give `path` only to trusted, application-local tooling.
-	},
+  options: { enableActorRuntimeSocket: true },
+  db: db({
+    onMigrate: (db) =>
+      db.execute("CREATE TABLE IF NOT EXISTS items (value TEXT)"),
+  }),
+  actions: {
+    startWorker: async (c) => {
+      // Get the Unix socket path external processes use
+      // to communicate with the actor.
+      // (Example: /tmp/rivet-actor-runtime.abc/def.sock)
+      const { path } = await c.actorRuntimeSocket();
+
+      // Spawn a process that can access the actor's
+      // SQLite database over the socket.
+      spawn(process.execPath, ["worker.js"], {
+        env: { ...process.env, ACTOR_RUNTIME_SOCKET_PATH: path },
+      });
+    },
+  },
 });
 ```
 
-Provisioning fails unless the actor has an enabled LocalNative SQLite database. The per-process socket directory uses mode `0700`, and each actor socket uses mode `0600`.
+```ts worker.ts
+import { connectRuntimeSocket } from "./generated/runtime-socket-client";
+
+const db = await connectRuntimeSocket(process.env.ACTOR_RUNTIME_SOCKET_PATH!);
+const rows = await db.query("SELECT value FROM items", []);
+console.log(rows);
+```
+
+</CodeGroup>
+
+The path is valid only for the current actor generation, so get it again after the actor restarts or wakes. Only share it with trusted local processes.
 
 ## Protocol
 
-Unix `SOCK_STREAM` provides a reliable local byte stream but does not preserve message boundaries. Every frame is therefore a four-byte big-endian payload length followed by a versioned BARE (`vbare`) payload. The embedded protocol version is a two-byte little-endian prefix. Clients begin with `ClientHello`; the server returns `HelloOk` with the maximum frame size or rejects an unsupported version.
+The [protocol schema](https://github.com/rivet-dev/rivet/blob/main/engine/sdks/schemas/actor-runtime-socket-protocol/v1.bare) defines the handshake, SQLite requests, values, responses, and errors. Generate codecs using vbare's [TypeScript](https://github.com/rivet-dev/vbare/tree/main/typescript) or [Rust](https://github.com/rivet-dev/vbare/tree/main/rust) tooling, then add a small Unix socket wrapper for its length-prefixed frames. `connectRuntimeSocket` above represents that application-specific wrapper.
 
-The current protocol supports:
+## SQLite transaction interleaving
 
-- multi-statement SQLite scripts with `SqliteExec`;
-- single-statement parameterized queries with `SqliteQuery`;
-- transactions spanning requests with `SqliteBegin`, `SqliteCommit`, and `SqliteRollback`.
-
-A transaction is identified by a client-chosen `leaseKey` scoped to one connection. Other actor SQL and other socket transactions wait in FIFO order while it runs. Transactions default to a 60-second safety timeout; `SqliteBegin.timeoutMs` may override it. If the deadline fires, RivetKit rolls the transaction back and later requests for that key receive `LeaseExpired`.
-
-The socket is an application-local integration boundary, not a network authentication boundary. It intentionally has no bearer token. Clients must still honor framing and response limits, and should reconnect using a newly provisioned path after actor generation changes.
+Separate socket requests can interleave with SQLite work from the main actor. For multi-request atomic work, begin a transaction with a client-generated `leaseKey`, include that key with each query, and commit or roll back with the same key. Other actor and socket SQL waits until that transaction finishes.

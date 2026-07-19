@@ -139,6 +139,7 @@ export const SKELETON_INSPECTOR_TABS: readonly InspectorTabDescriptor[] = [
 	{ id: "database", label: "Database", icon: "database" },
 	{ id: "state", label: "State", icon: "state" },
 	{ id: "queue", label: "Queue", icon: "queue" },
+	{ id: "schedules", label: "Schedules", icon: "calendar" },
 	{ id: "connections", label: "Connections", icon: "plug" },
 	{ id: "console", label: "Console", icon: "terminal" },
 ];

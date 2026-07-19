@@ -1,11 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::sync::Weak;
+#[cfg(any(test, feature = "test-support"))]
+use std::sync::atomic::AtomicI64;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
-use crate::time::{Instant, SystemTime, UNIX_EPOCH};
+use crate::time::Instant;
 
 use anyhow::{Context as AnyhowContext, Result};
 use futures::future::BoxFuture;
@@ -14,6 +16,7 @@ use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
 use rivet_error::ActorSpecifier;
 use scc::HashMap as SccHashMap;
+use scc::HashSet as SccHashSet;
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex as AsyncMutex, Notify, OnceCell, broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
@@ -111,8 +114,15 @@ pub(crate) struct ActorContextInner {
 	pub(super) schedule_local_alarm_epoch: AtomicU64,
 	pub(super) schedule_alarm_dispatch_enabled: AtomicBool,
 	pub(super) schedule_dirty_since_push: AtomicBool,
+	pub(super) schedule_mutation_lock: AsyncMutex<()>,
+	pub(super) schedule_running: SccHashSet<String>,
+	pub(super) max_schedules: u32,
+	#[cfg(any(test, feature = "test-support"))]
+	pub(super) schedule_now_override: AtomicI64,
 	#[cfg(test)]
 	pub(super) schedule_driver_alarm_cancel_count: AtomicUsize,
+	#[cfg(test)]
+	pub(super) schedule_sync_alarm_failures: AtomicUsize,
 	// Forced-sync: queue config is read from sync public methods before blocking
 	// on async queue work.
 	pub(super) queue_config: Mutex<ActorConfig>,
@@ -272,6 +282,7 @@ impl ActorContext {
 		let actor_runtime_socket =
 			ActorRuntimeSocketEndpoint::new(config.enable_actor_runtime_socket, sql.clone());
 		let state_save_interval = config.state_save_interval;
+		let max_schedules = config.max_schedules;
 		let abort_signal = CancellationToken::new();
 		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
@@ -318,8 +329,15 @@ impl ActorContext {
 			// A fresh actor context has no in-process record of a successful
 			// envoy alarm push yet, so the first sync must always push.
 			schedule_dirty_since_push: AtomicBool::new(true),
+			schedule_mutation_lock: AsyncMutex::new(()),
+			schedule_running: SccHashSet::new(),
+			max_schedules,
+			#[cfg(any(test, feature = "test-support"))]
+			schedule_now_override: AtomicI64::new(i64::MIN),
 			#[cfg(test)]
 			schedule_driver_alarm_cancel_count: AtomicUsize::new(0),
+			#[cfg(test)]
+			schedule_sync_alarm_failures: AtomicUsize::new(0),
 			queue_config: Mutex::new(config.clone()),
 			queue_abort_signal: Mutex::new(abort_signal.clone()),
 			queue_initialize: OnceCell::new(),
@@ -464,8 +482,11 @@ impl ActorContext {
 	/// Foreign-runtime adapters should call this during startup after loading
 	/// any persisted schedule state and before accepting user callbacks that rely
 	/// on future alarms being armed.
-	pub fn init_alarms(&self) {
-		self.sync_future_alarm_logged();
+	pub async fn init_alarms(&self) {
+		if let Err(error) = self.recover_interrupted_schedule_history().await {
+			tracing::error!(?error, "failed to recover interrupted schedule history");
+		}
+		self.sync_future_alarm_logged().await;
 	}
 
 	pub fn queue(&self) -> &Self {
@@ -823,16 +844,9 @@ impl ActorContext {
 	/// Foreign-runtime adapters should call this after startup callbacks complete
 	/// so overdue scheduled work enters the normal actor event loop.
 	pub async fn drain_overdue_scheduled_events(&self) -> Result<()> {
-		for event in self.due_scheduled_events(now_timestamp_ms()) {
-			self.dispatch_scheduled_action(
-				&event.event_id,
-				event.action,
-				event.args.unwrap_or_default(),
-			)
-			.await;
+		for dispatch in self.take_due_schedule_dispatches().await? {
+			self.dispatch_scheduled_action(dispatch).await;
 		}
-
-		self.sync_alarm_logged();
 		Ok(())
 	}
 
@@ -1532,6 +1546,12 @@ impl ActorContext {
 		}
 	}
 
+	pub(crate) fn record_schedules_updated(&self) {
+		if let Some(inspector) = self.inspector() {
+			inspector.record_schedules_updated();
+		}
+	}
+
 	pub(crate) async fn save_state_with_revision(
 		&self,
 		deltas: Vec<StateDelta>,
@@ -1570,10 +1590,17 @@ impl ActorContext {
 		Ok(())
 	}
 
-	async fn dispatch_scheduled_action(&self, event_id: &str, action: String, args: Vec<u8>) {
-		self.cancel_scheduled_event(event_id);
+	async fn dispatch_scheduled_action(
+		&self,
+		dispatch: crate::actor::schedule::DueScheduleDispatch,
+	) {
 		let ctx = self.clone();
-		let event_id = event_id.to_owned();
+		let event_id = dispatch.event_id;
+		let action = dispatch.action;
+		let args = dispatch.args;
+		let scheduled_fire = dispatch.fire;
+		let recurring_name = scheduled_fire.name.clone();
+		let history_id = dispatch.history_id;
 		let internal_keep_awake_region = self.begin_work_region(ActorWorkKind::InternalKeepAwake);
 
 		self.track_shutdown_task(async move {
@@ -1583,11 +1610,13 @@ impl ActorContext {
 			let action_name = action.clone();
 			let (reply_tx, reply_rx) = oneshot::channel();
 
+			let mut dispatch_error = None;
 			match ctx.try_send_actor_event(
 				ActorEvent::Action {
 					name: action.clone(),
 					args,
 					conn: None,
+					scheduled_fire: Some(scheduled_fire),
 					reply: Reply::from(reply_tx),
 				},
 				"scheduled_action",
@@ -1595,16 +1624,18 @@ impl ActorContext {
 				Ok(()) => match reply_rx.await {
 					Ok(Ok(_)) => {}
 					Ok(Err(error)) => {
+						dispatch_error = Some(error);
 						tracing::error!(
-							?error,
+							error = ?dispatch_error.as_ref().expect("just assigned"),
 							event_id,
 							action_name,
 							"scheduled event execution failed"
 						);
 					}
 					Err(error) => {
+						dispatch_error = Some(error.into());
 						tracing::error!(
-							?error,
+							error = ?dispatch_error.as_ref().expect("just assigned"),
 							event_id,
 							action_name,
 							"scheduled event reply dropped"
@@ -1612,12 +1643,28 @@ impl ActorContext {
 					}
 				},
 				Err(error) => {
+					dispatch_error = Some(error);
 					tracing::error!(
-						?error,
+						error = ?dispatch_error.as_ref().expect("just assigned"),
 						event_id,
 						action_name,
 						"failed to enqueue scheduled event"
 					);
+				}
+			}
+
+			ctx.finish_schedule_dispatch(&event_id, history_id, dispatch_error.as_ref())
+				.await;
+			if let (Some(name), Some(error)) = (recurring_name, dispatch_error.as_ref()) {
+				let structured = rivet_error::RivetError::extract(error);
+				if structured.group() == "actor" && structured.code() == "action_not_found" {
+					if let Err(delete_error) = ctx.cron_delete_if_action(&name, &action_name).await {
+						tracing::error!(
+							?delete_error,
+							%name,
+							"failed to delete recurring schedule for missing action"
+						);
+					}
 				}
 			}
 
@@ -1656,13 +1703,6 @@ fn truncate_stop_error_message(mut message: String) -> String {
 	message.truncate(end);
 	message.push_str("... (truncated)");
 	message
-}
-
-fn now_timestamp_ms() -> i64 {
-	let duration = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap_or_default();
-	i64::try_from(duration.as_millis()).unwrap_or(i64::MAX)
 }
 
 struct ActorWorkGuard {

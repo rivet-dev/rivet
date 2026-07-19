@@ -473,27 +473,34 @@ function base64DecodeToArrayBuffer(base64: string): ArrayBuffer {
 }
 
 /** Stringifies with compat for values that BARE & CBOR supports. */
-export function jsonStringifyCompat(input: any): string {
-	return JSON.stringify(input, (_key, value) => {
-		if (typeof value === "bigint") {
-			return [JSON_COMPAT_BIGINT, value.toString()];
-		}
-		if (value instanceof ArrayBuffer) {
-			return [JSON_COMPAT_ARRAY_BUFFER, base64EncodeArrayBuffer(value)];
-		}
-		if (value instanceof Uint8Array) {
-			return [JSON_COMPAT_UINT8_ARRAY, base64EncodeUint8Array(value)];
-		}
-		if (
-			Array.isArray(value) &&
-			value.length === 2 &&
-			typeof value[0] === "string" &&
-			value[0].startsWith("$")
-		) {
-			return [`$${value[0]}`, value[1]];
-		}
-		return value;
-	});
+export function jsonStringifyCompat(
+	input: any,
+	space?: string | number,
+): string {
+	return JSON.stringify(
+		input,
+		(_key, value) => {
+			if (typeof value === "bigint") {
+				return [JSON_COMPAT_BIGINT, value.toString()];
+			}
+			if (value instanceof ArrayBuffer) {
+				return [JSON_COMPAT_ARRAY_BUFFER, base64EncodeArrayBuffer(value)];
+			}
+			if (value instanceof Uint8Array) {
+				return [JSON_COMPAT_UINT8_ARRAY, base64EncodeUint8Array(value)];
+			}
+			if (
+				Array.isArray(value) &&
+				value.length === 2 &&
+				typeof value[0] === "string" &&
+				value[0].startsWith("$")
+			) {
+				return [`$${value[0]}`, value[1]];
+			}
+			return value;
+		},
+		space,
+	);
 }
 
 /** Parses JSON with compat for values that BARE & CBOR supports. */

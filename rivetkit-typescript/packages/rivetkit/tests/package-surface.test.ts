@@ -35,6 +35,7 @@ import {
 	type TransportWorkflowHistory,
 } from "rivetkit/inspector/client";
 import { setupTest } from "rivetkit/test";
+import { jsonParseCompat, jsonStringifyCompat } from "rivetkit/utils";
 import { describe, expect, test } from "vitest";
 import packageJson from "../package.json" with { type: "json" };
 
@@ -98,9 +99,10 @@ describe("package surface", () => {
 		expect(rawDb).toBeTypeOf("function");
 		expect(drizzleDb).toBeTypeOf("function");
 		expect(defineConfig).toBeTypeOf("function");
-		expect(CURRENT_VERSION).toBe(5);
+		expect(CURRENT_VERSION).toBe(6);
 		expect(TO_CLIENT_VERSIONED).toBeDefined();
 		expect(TO_SERVER_VERSIONED).toBeDefined();
+		expect(jsonParseCompat(jsonStringifyCompat(1n))).toBe(1n);
 
 		const history: TransportWorkflowHistory | null = null;
 		expect(history).toBeNull();

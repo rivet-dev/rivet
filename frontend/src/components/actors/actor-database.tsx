@@ -9,6 +9,7 @@ import {
 	Icon,
 } from "@rivet-gg/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import _ from "lodash";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
 	Badge,
@@ -20,6 +21,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { ShimmerLine } from "../shimmer-line";
+import { formatValue } from "@/lib/format-value";
 import {
 	Select,
 	SelectContent,
@@ -787,7 +789,7 @@ function ActorDatabaseSqlShell({ actorId }: ActorDatabaseProps) {
 						/>
 					) : (
 						<pre className="overflow-auto px-3 py-4 text-xs">
-							{JSON.stringify(result.rows, null, 2)}
+							{formatValue(result.rows, true)}
 						</pre>
 					)}
 				</ScrollArea>
@@ -880,7 +882,7 @@ function createRowKey(
 	if (values.some((value) => value === undefined)) {
 		return null;
 	}
-	return JSON.stringify(values);
+	return formatValue(values);
 }
 
 function createStagedEditId(rowKey: string, columnName: string): string {
@@ -937,7 +939,7 @@ function areDatabaseValuesEqual(a: unknown, b: unknown): boolean {
 	if (Object.is(a, b)) {
 		return true;
 	}
-	return JSON.stringify(a) === JSON.stringify(b);
+	return _.isEqual(a, b);
 }
 
 function quoteSqlIdentifier(value: string): string {

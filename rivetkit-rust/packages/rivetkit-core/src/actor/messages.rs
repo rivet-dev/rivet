@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::actor::connection::ConnHandle;
 use crate::actor::lifecycle_hooks::Reply;
+use crate::actor::schedule::ScheduledFireInfo;
 use crate::actor::task_types::ShutdownKind;
 use crate::error::ProtocolError;
 use crate::types::ConnId;
@@ -277,6 +278,7 @@ pub enum ActorEvent {
 		name: String,
 		args: Vec<u8>,
 		conn: Option<ConnHandle>,
+		scheduled_fire: Option<ScheduledFireInfo>,
 		reply: Reply<Vec<u8>>,
 	},
 	HttpRequest {

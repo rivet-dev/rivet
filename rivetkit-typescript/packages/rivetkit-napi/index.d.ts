@@ -102,6 +102,7 @@ export interface JsActorConfig {
   connectionLivenessTimeoutMs?: number
   connectionLivenessIntervalMs?: number
   maxQueueSize?: number
+  maxSchedules?: number
   maxQueueMessageSize?: number
   maxIncomingMessageSize?: number
   maxOutgoingMessageSize?: number
@@ -228,6 +229,38 @@ export interface JsServerlessStreamError {
   group: string
   code: string
   message: string
+}
+export interface JsScheduledEventInfo {
+  id: string
+  action: string
+  args: Buffer
+  runAt: number
+}
+export interface JsCronJobInfo {
+  name: string
+  kind: string
+  action: string
+  args: Buffer
+  nextRunAt: number
+  lastRunAt?: number
+  expression?: string
+  timezone?: string
+  intervalMs?: number
+  maxHistory: number
+}
+export interface JsScheduleErrorInfo {
+  group: string
+  code: string
+  message: string
+  metadata?: any
+}
+export interface JsCronFire {
+  action: string
+  scheduledAt: number
+  firedAt: number
+  finishedAt?: number
+  result: string
+  error?: JsScheduleErrorInfo
 }
 /** Options for KV list operations. */
 export interface JsKvListOptions {
@@ -380,8 +413,17 @@ export declare class CoreRegistry {
   handleServerlessRequest(req: JsServerlessRequest, onStreamEvent: (...args: any[]) => any, cancelToken: CancellationToken, config: JsServeConfig): Promise<JsServerlessResponseHead>
 }
 export declare class Schedule {
-  after(durationMs: number, actionName: string, args: Buffer): void
-  at(timestampMs: number, actionName: string, args: Buffer): void
+  after(durationMs: number, actionName: string, args: Buffer): Promise<string>
+  at(timestampMs: number, actionName: string, args: Buffer): Promise<string>
+  cancel(id: string): Promise<boolean>
+  get(id: string): Promise<JsScheduledEventInfo | null>
+  list(): Promise<Array<JsScheduledEventInfo>>
+  cronSet(name: string, expression: string, timezone: string | undefined | null, actionName: string, args: Buffer, maxHistory?: number | undefined | null): Promise<void>
+  cronEvery(name: string, intervalMs: number, actionName: string, args: Buffer, maxHistory?: number | undefined | null): Promise<void>
+  cronGet(name: string): Promise<JsCronJobInfo | null>
+  cronList(): Promise<Array<JsCronJobInfo>>
+  cronDelete(name: string): Promise<boolean>
+  cronHistory(name: string, limit?: number | undefined | null): Promise<Array<JsCronFire>>
 }
 export declare class WebSocket {
   send(data: Buffer, binary: boolean): void

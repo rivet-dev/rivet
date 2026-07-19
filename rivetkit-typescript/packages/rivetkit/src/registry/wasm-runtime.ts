@@ -33,9 +33,12 @@ import type {
 	RuntimeQueueNextBatchOptions,
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
+	RuntimeCronFire,
+	RuntimeCronJobInfo,
 	RuntimeRegistryRouteResponse,
 	RuntimeRequestSaveOpts,
 	RuntimeServeConfig,
+	RuntimeScheduledEventInfo,
 	RuntimeServerlessRequest,
 	RuntimeServerlessResponseHead,
 	RuntimeServerlessStreamCallback,
@@ -941,24 +944,136 @@ export class WasmCoreRuntime implements CoreRuntime {
 		await callHandleAsync(queue, "reset");
 	}
 
-	actorScheduleAfter(
+	async actorScheduleAfter(
 		ctx: ActorContextHandle,
 		durationMs: number | bigint,
 		actionName: string,
 		args: RuntimeBytes,
-	): void {
+	): Promise<string> {
 		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
-		callHandle(schedule, "after", wasmNumber(durationMs), actionName, args);
+		return await callHandleAsync<string>(
+			schedule,
+			"after",
+			wasmNumber(durationMs),
+			actionName,
+			args,
+		);
 	}
 
-	actorScheduleAt(
+	async actorScheduleAt(
 		ctx: ActorContextHandle,
 		timestampMs: number | bigint,
 		actionName: string,
 		args: RuntimeBytes,
-	): void {
+	): Promise<string> {
 		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
-		callHandle(schedule, "at", wasmNumber(timestampMs), actionName, args);
+		return await callHandleAsync<string>(
+			schedule,
+			"at",
+			wasmNumber(timestampMs),
+			actionName,
+			args,
+		);
+	}
+
+	async actorScheduleCancel(ctx: ActorContextHandle, id: string) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<boolean>(schedule, "cancel", id);
+	}
+
+	async actorScheduleGet(ctx: ActorContextHandle, id: string) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<RuntimeScheduledEventInfo | undefined>(
+			schedule,
+			"get",
+			id,
+		);
+	}
+
+	async actorScheduleList(ctx: ActorContextHandle) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<RuntimeScheduledEventInfo[]>(
+			schedule,
+			"list",
+		);
+	}
+
+	async actorCronSet(
+		ctx: ActorContextHandle,
+		name: string,
+		expression: string,
+		timezone: string | undefined,
+		actionName: string,
+		args: RuntimeBytes,
+		maxHistory: number | undefined,
+	) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		await callHandleAsync(
+			schedule,
+			"cronSet",
+			name,
+			expression,
+			timezone,
+			actionName,
+			args,
+			maxHistory,
+		);
+	}
+
+	async actorCronEvery(
+		ctx: ActorContextHandle,
+		name: string,
+		intervalMs: number,
+		actionName: string,
+		args: RuntimeBytes,
+		maxHistory: number | undefined,
+	) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		await callHandleAsync(
+			schedule,
+			"cronEvery",
+			name,
+			intervalMs,
+			actionName,
+			args,
+			maxHistory,
+		);
+	}
+
+	async actorCronGet(ctx: ActorContextHandle, name: string) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<RuntimeCronJobInfo | undefined>(
+			schedule,
+			"cronGet",
+			name,
+		);
+	}
+
+	async actorCronList(ctx: ActorContextHandle) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<RuntimeCronJobInfo[]>(
+			schedule,
+			"cronList",
+		);
+	}
+
+	async actorCronDelete(ctx: ActorContextHandle, name: string) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<boolean>(schedule, "cronDelete", name);
+	}
+
+	async actorCronHistory(
+		ctx: ActorContextHandle,
+		name: string,
+		limit: number | undefined,
+	) {
+		const schedule = childHandle(asWasmActorContext(ctx), "schedule");
+		return await callHandleAsync<RuntimeCronFire[]>(
+			schedule,
+			"cronHistory",
+			name,
+			limit,
+		);
 	}
 
 	connId(conn: ConnHandle): string {

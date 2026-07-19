@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { formatValue } from "@/lib/format-value";
 import type { ReplCommand } from "../worker/actor-worker-container";
 import { ActorConsoleLogFormatted } from "./actor-console-log-formatted";
 import { ActorConsoleMessage } from "./actor-console-message";
@@ -36,7 +37,7 @@ export const ActorConsoleLog = memo((props: ActorConsoleLogProps) => {
 					typeof props.error === "object" &&
 					"toString" in props.error
 						? props.error.toString()
-						: JSON.stringify(props.error)}
+						: formatValue(props.error)}
 				</ActorConsoleMessage>
 			) : null}
 			{props.logs?.map((log, index) => (

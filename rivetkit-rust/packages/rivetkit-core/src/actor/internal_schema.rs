@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 
 use crate::sqlite::{BindParam, ColumnValue, SqliteBatchStatement, SqliteDb};
 
-pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 7;
+pub(crate) const INTERNAL_SCHEMA_VERSION: i64 = 6;
 
 const SCHEMA_VERSION_KEY: &str = "schema_version";
 
@@ -19,6 +19,12 @@ CREATE TABLE IF NOT EXISTS _rivet_meta (
 ) STRICT, WITHOUT ROWID
 "#;
 
+// The position and count of entries in this array are the persisted internal
+// schema-version history. Once a version ships, changing or reordering an
+// existing entry would make the same stored version describe different schemas
+// across runtime releases. Rewriting these entries in place is safe only while
+// no internal schema version has shipped; after release, all changes must be
+// appended as new migrations and INTERNAL_SCHEMA_VERSION must advance.
 const MIGRATIONS: &[&[&str]] = &[
 	&[
 		// W[queue_next_id per enqueue; alarm per head-change; token once | point UPDATE of one column | <100 B | single-row: all runtime singletons on one leaf]
@@ -27,7 +33,7 @@ CREATE TABLE _rivet_runtime (
     id                INTEGER PRIMARY KEY CHECK (id = 1),
     last_pushed_alarm INTEGER,
     inspector_token   TEXT,
-    queue_next_id     INTEGER NOT NULL DEFAULT 1
+    queue_next_id     INTEGER NOT NULL
 ) STRICT
 "#,
 		// W[once at init | single INSERT | input <=256 KiB | COLD: never rewritten; overflow chain isolated from hot state]
@@ -50,15 +56,43 @@ CREATE TABLE _rivet_actor_state (
 		// W[per schedule/cancel/fire, immediate | point insert/delete | <200 B | replaces full actor blob rewrite with one row]
 		r#"
 CREATE TABLE _rivet_schedule_events (
-    event_id   TEXT PRIMARY KEY,
-    trigger_at INTEGER NOT NULL,
-    action     TEXT NOT NULL,
-    args       BLOB
+    event_id         TEXT PRIMARY KEY,
+    trigger_at       INTEGER NOT NULL,
+    action           TEXT NOT NULL,
+    args             BLOB,
+    kind             INTEGER NOT NULL,
+    cron_expression  TEXT,
+    timezone         TEXT,
+    interval_ms      INTEGER,
+    last_started_at  INTEGER,
+    max_history      INTEGER NOT NULL
 ) STRICT, WITHOUT ROWID
 "#,
 		r#"
 CREATE INDEX _rivet_schedule_events_trigger_at
     ON _rivet_schedule_events (trigger_at)
+"#,
+		// W[per recurring fire | point insert/update/prune | bounded rows]
+		r#"
+CREATE TABLE _rivet_schedule_history (
+    id           INTEGER PRIMARY KEY,
+    schedule_id  TEXT NOT NULL,
+    action       TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    fired_at     INTEGER NOT NULL,
+    finished_at  INTEGER,
+    result         INTEGER NOT NULL,
+    -- Mirrors the schedule-history subset of the canonical client-visible
+    -- RivetError payload. Keep these columns synchronized with ScheduleErrorInfo.
+    error_group    TEXT,
+    error_code     TEXT,
+    error_message  TEXT,
+    error_metadata BLOB
+) STRICT
+"#,
+		r#"
+CREATE INDEX _rivet_schedule_history_schedule
+    ON _rivet_schedule_history (schedule_id, fired_at DESC)
 "#,
 	],
 	&[
@@ -79,6 +113,7 @@ CREATE TABLE _rivet_conn_state (
     conn_id              TEXT PRIMARY KEY,
     state                BLOB NOT NULL,
     server_message_index INTEGER NOT NULL,
+    client_message_index INTEGER NOT NULL,
     subscriptions        BLOB NOT NULL
 ) STRICT, WITHOUT ROWID
 "#,
@@ -110,13 +145,6 @@ CREATE TABLE _rivet_user_kv (
     key   BLOB PRIMARY KEY,
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID
-"#,
-	],
-	&[
-		// W[dirty per client WS message, written with other conn state | point UPDATE | 2 B logical value | preserves the client ack cursor across hibernation]
-		r#"
-ALTER TABLE _rivet_conn_state
-    ADD COLUMN client_message_index INTEGER NOT NULL DEFAULT 0
 "#,
 	],
 ];

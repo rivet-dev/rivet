@@ -2,15 +2,6 @@ use super::inspector::{decode_cbor_json, encode_json_as_cbor};
 use super::*;
 use crate::error::ProtocolError;
 
-pub(super) fn send_inspector_message(
-	sender: &WebSocketSender,
-	message: &InspectorServerMessage,
-) -> Result<()> {
-	let payload = inspector_protocol::encode_server_message(message)?;
-	sender.send(payload, true);
-	Ok(())
-}
-
 pub(super) fn send_actor_connect_message(
 	sender: &WebSocketSender,
 	encoding: ActorConnectEncoding,

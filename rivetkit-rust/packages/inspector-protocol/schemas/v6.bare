@@ -1,0 +1,286 @@
+# Actor Inspector BARE Schema v6
+
+type State data
+type WorkflowHistory data
+
+type PatchStateRequest struct {
+	state: data
+}
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: data
+}
+
+type StateRequest struct {
+	id: uint
+}
+
+type ConnectionsRequest struct {
+	id: uint
+}
+
+type RpcsListRequest struct {
+	id: uint
+}
+
+type TraceQueryRequest struct {
+	id: uint
+	startMs: uint
+	endMs: uint
+	limit: uint
+}
+
+type QueueRequest struct {
+	id: uint
+	limit: uint
+}
+
+type WorkflowHistoryRequest struct {
+	id: uint
+}
+
+type WorkflowReplayRequest struct {
+	id: uint
+	entryId: optional<str>
+}
+
+type DatabaseSchemaRequest struct {
+	id: uint
+}
+
+type DatabaseTableRowsRequest struct {
+	id: uint
+	table: str
+	limit: uint
+	offset: uint
+}
+
+type SchedulesRequest struct {
+	id: uint
+}
+
+type ScheduleHistoryRequest struct {
+	id: uint
+	scheduleId: str
+	limit: uint
+}
+
+type ScheduleDeleteRequest struct {
+	id: uint
+	scheduleId: str
+	kind: str
+}
+
+type ToServerBody union {
+	PatchStateRequest |
+	StateRequest |
+	ConnectionsRequest |
+	ActionRequest |
+	RpcsListRequest |
+	TraceQueryRequest |
+	QueueRequest |
+	WorkflowHistoryRequest |
+	WorkflowReplayRequest |
+	DatabaseSchemaRequest |
+	DatabaseTableRowsRequest |
+	SchedulesRequest |
+	ScheduleHistoryRequest |
+	ScheduleDeleteRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+type Connection struct {
+	id: str
+	details: data
+}
+
+# Inspector tab descriptor. `label`/`icon` are set for author-declared custom
+# tabs; a hidden built-in only carries `id` with `hidden` set.
+type TabConfigEntry struct {
+	id: str
+	label: optional<str>
+	icon: optional<str>
+	hidden: bool
+}
+
+type Schedule struct {
+	id: str
+	name: optional<str>
+	kind: str
+	action: str
+	args: data
+	nextRunAt: uint
+	lastRunAt: optional<uint>
+	expression: optional<str>
+	timezone: optional<str>
+	intervalMs: optional<uint>
+	maxHistory: optional<uint>
+}
+
+type ScheduleError struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<data>
+}
+
+type ScheduleFire struct {
+	action: str
+	scheduledAt: uint
+	firedAt: uint
+	finishedAt: optional<uint>
+	result: str
+	error: optional<ScheduleError>
+}
+
+type Init struct {
+	connections: list<Connection>
+	state: optional<State>
+	isStateEnabled: bool
+	rpcs: list<str>
+	isDatabaseEnabled: bool
+	queueSize: uint
+	workflowHistory: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
+	tabConfig: list<TabConfigEntry>
+	schedules: list<Schedule>
+}
+
+type ConnectionsResponse struct {
+	rid: uint
+	connections: list<Connection>
+}
+
+type StateResponse struct {
+	rid: uint
+	state: optional<State>
+	isStateEnabled: bool
+}
+
+type ActionResponse struct {
+	rid: uint
+	output: data
+}
+
+type TraceQueryResponse struct {
+	rid: uint
+	payload: data
+}
+
+type QueueMessageSummary struct {
+	id: uint
+	name: str
+	createdAtMs: uint
+}
+
+type QueueStatus struct {
+	size: uint
+	maxSize: uint
+	messages: list<QueueMessageSummary>
+	truncated: bool
+}
+
+type QueueResponse struct {
+	rid: uint
+	status: QueueStatus
+}
+
+type WorkflowHistoryResponse struct {
+	rid: uint
+	history: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
+}
+
+type WorkflowReplayResponse struct {
+	rid: uint
+	history: optional<WorkflowHistory>
+	isWorkflowEnabled: bool
+}
+
+type DatabaseSchemaResponse struct {
+	rid: uint
+	schema: data
+}
+
+type DatabaseTableRowsResponse struct {
+	rid: uint
+	result: data
+}
+
+type SchedulesResponse struct {
+	rid: uint
+	schedules: list<Schedule>
+}
+
+type ScheduleHistoryResponse struct {
+	rid: uint
+	scheduleId: str
+	history: list<ScheduleFire>
+}
+
+type ScheduleDeleteResponse struct {
+	rid: uint
+	scheduleId: str
+	deleted: bool
+}
+
+type StateUpdated struct {
+	state: State
+}
+
+type QueueUpdated struct {
+	queueSize: uint
+}
+
+type WorkflowHistoryUpdated struct {
+	history: WorkflowHistory
+}
+
+type SchedulesUpdated struct {
+	schedules: list<Schedule>
+}
+
+type RpcsListResponse struct {
+	rid: uint
+	rpcs: list<str>
+}
+
+type ConnectionsUpdated struct {
+	connections: list<Connection>
+}
+
+type Error struct {
+	message: str
+}
+
+type ToClientBody union {
+	StateResponse |
+	ConnectionsResponse |
+	ActionResponse |
+	ConnectionsUpdated |
+	QueueUpdated |
+	StateUpdated |
+	WorkflowHistoryUpdated |
+	SchedulesUpdated |
+	RpcsListResponse |
+	TraceQueryResponse |
+	QueueResponse |
+	WorkflowHistoryResponse |
+	WorkflowReplayResponse |
+	SchedulesResponse |
+	ScheduleHistoryResponse |
+	ScheduleDeleteResponse |
+	Error |
+	Init |
+	DatabaseSchemaResponse |
+	DatabaseTableRowsResponse
+}
+
+type ToClient struct {
+	body: ToClientBody
+}

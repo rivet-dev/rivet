@@ -12,6 +12,7 @@ mod moved_tests {
 			on_migrate_timeout_ms: Some(30_000),
 			sleep_grace_period_ms: Some(12_000),
 			max_queue_size: Some(42),
+			max_schedules: Some(84),
 			..ActorConfigInput::default()
 		});
 
@@ -20,6 +21,7 @@ mod moved_tests {
 		assert_eq!(config.sleep_grace_period, Duration::from_secs(12));
 		assert!(config.sleep_grace_period_overridden);
 		assert_eq!(config.max_queue_size, 42);
+		assert_eq!(config.max_schedules, 84);
 	}
 
 	#[test]
@@ -58,6 +60,7 @@ mod moved_tests {
 			default.connection_liveness_interval,
 		);
 		assert_eq!(config.max_queue_size, default.max_queue_size);
+		assert_eq!(config.max_schedules, default.max_schedules);
 		assert_eq!(
 			config.max_queue_message_size,
 			default.max_queue_message_size,

@@ -18,6 +18,7 @@ const DEFAULT_SLEEP_GRACE_PERIOD: Duration = Duration::from_secs(15);
 const DEFAULT_CONNECTION_LIVENESS_TIMEOUT: Duration = Duration::from_millis(2500);
 const DEFAULT_CONNECTION_LIVENESS_INTERVAL: Duration = Duration::from_secs(5);
 const DEFAULT_MAX_QUEUE_SIZE: u32 = 1000;
+pub const DEFAULT_MAX_SCHEDULES: u32 = 1_000;
 const DEFAULT_MAX_QUEUE_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_INCOMING_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_OUTGOING_MESSAGE_SIZE: u32 = 1_048_576;
@@ -81,6 +82,7 @@ pub struct ActorConfig {
 	pub connection_liveness_timeout: Duration,
 	pub connection_liveness_interval: Duration,
 	pub max_queue_size: u32,
+	pub max_schedules: u32,
 	pub max_queue_message_size: u32,
 	pub max_incoming_message_size: u32,
 	pub max_outgoing_message_size: u32,
@@ -114,6 +116,7 @@ pub struct ActorConfigInput {
 	pub connection_liveness_timeout_ms: Option<u32>,
 	pub connection_liveness_interval_ms: Option<u32>,
 	pub max_queue_size: Option<u32>,
+	pub max_schedules: Option<u32>,
 	pub max_queue_message_size: Option<u32>,
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
@@ -175,6 +178,9 @@ impl ActorConfig {
 		}
 		if let Some(value) = config.max_queue_size {
 			actor_config.max_queue_size = value;
+		}
+		if let Some(value) = config.max_schedules {
+			actor_config.max_schedules = value;
 		}
 		if let Some(value) = config.max_queue_message_size {
 			actor_config.max_queue_message_size = value;
@@ -238,6 +244,7 @@ impl Default for ActorConfig {
 			connection_liveness_timeout: DEFAULT_CONNECTION_LIVENESS_TIMEOUT,
 			connection_liveness_interval: DEFAULT_CONNECTION_LIVENESS_INTERVAL,
 			max_queue_size: DEFAULT_MAX_QUEUE_SIZE,
+			max_schedules: DEFAULT_MAX_SCHEDULES,
 			max_queue_message_size: DEFAULT_MAX_QUEUE_MESSAGE_SIZE,
 			max_incoming_message_size: DEFAULT_MAX_INCOMING_MESSAGE_SIZE,
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,

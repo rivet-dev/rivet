@@ -13,8 +13,11 @@ import { createContext, useContext, useMemo, useRef } from "react";
 import type ReconnectingWebSocket from "reconnectingwebsocket";
 import {
 	type Connection,
+	CURRENT_VERSION as INSPECTOR_PROTOCOL_CURRENT_VERSION,
 	decodeWorkflowHistoryTransport,
 	type QueueStatus,
+	type Schedule,
+	type ScheduleFire,
 	type ToServer,
 	TO_CLIENT_VERSIONED as toClient,
 	TO_SERVER_VERSIONED as toServer,
@@ -50,6 +53,10 @@ export const actorInspectorQueriesKeys = {
 		["actor", actorId, "tab-config"] as const,
 	actorInspectorInitialized: (actorId: ActorId) =>
 		["actor", actorId, "inspector-initialized"] as const,
+	actorSchedules: (actorId: ActorId) =>
+		["actor", actorId, "schedules"] as const,
+	actorScheduleHistory: (actorId: ActorId, scheduleId: string) =>
+		["actor", actorId, "schedules", scheduleId, "history"] as const,
 };
 
 type QueueStatusSummary = {
@@ -107,6 +114,29 @@ export type InspectorTabConfigEntry = {
 	hidden?: boolean;
 };
 
+export type InspectorSchedule = {
+	id: string;
+	name?: string;
+	kind: "at" | "cron" | "every";
+	action: string;
+	args: unknown[];
+	nextRunAt: number;
+	lastRunAt?: number;
+	expression?: string;
+	timezone?: string;
+	intervalMs?: number;
+	maxHistory?: number;
+};
+
+export type InspectorScheduleFire = {
+	action: string;
+	scheduledAt: number;
+	firedAt: number;
+	finishedAt?: number;
+	result: "running" | "ok" | "error" | "skipped";
+	error?: { group: string; code: string; message: string; metadata?: unknown };
+};
+
 interface ActorInspectorApi {
 	ping: () => Promise<void>;
 	executeAction: (name: string, args: unknown[]) => Promise<unknown>;
@@ -134,6 +164,15 @@ interface ActorInspectorApi {
 		request: DatabaseExecuteRequest,
 	) => Promise<DatabaseExecuteResult>;
 	getMetadata: () => Promise<{ version: string }>;
+	getSchedules: () => Promise<InspectorSchedule[]>;
+	getScheduleHistory: (
+		scheduleId: string,
+		limit: number,
+	) => Promise<InspectorScheduleFire[]>;
+	deleteSchedule: (
+		scheduleId: string,
+		kind: InspectorSchedule["kind"],
+	) => Promise<boolean>;
 }
 
 type FeatureSupport = {
@@ -156,6 +195,8 @@ const MIN_RIVETKIT_VERSION_WORKFLOW_REPLAY = "2.1.6";
 // (there is no `/inspector/tab-config` HTTP route anymore). Only negotiate v5
 // with runtimes new enough to send it.
 const MIN_RIVETKIT_VERSION_TABCONFIG_INIT = "2.3.3";
+const MIN_RIVETKIT_VERSION_SCHEDULES = "2.3.4";
+const MIN_RIVETKIT_VERSION_INSPECTOR_NEGOTIATION = "2.3.4";
 const INSPECTOR_ERROR_EVENTS_DROPPED = "inspector.events_dropped";
 
 function parseSemver(version?: string) {
@@ -230,12 +271,15 @@ function buildFeatureSupport(
 	};
 }
 
-function getInspectorProtocolVersion(version: string | undefined) {
+export function getInspectorProtocolVersion(version: string | undefined) {
 	const parsed = parseSemver(version);
 	if (!parsed) {
 		return 2;
 	}
 	if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_DATABASE)) {
+		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_SCHEDULES)) {
+			return 6;
+		}
 		if (isVersionAtLeast(version, MIN_RIVETKIT_VERSION_TABCONFIG_INIT)) {
 			return 5;
 		}
@@ -248,6 +292,68 @@ function getInspectorProtocolVersion(version: string | undefined) {
 		return 2;
 	}
 	return 1;
+}
+
+export function usesNegotiatedInspectorProtocol(
+	version: string | undefined,
+): boolean {
+	return isVersionAtLeast(
+		version,
+		MIN_RIVETKIT_VERSION_INSPECTOR_NEGOTIATION,
+	);
+}
+
+export function buildInspectorWebSocketUrl(
+	baseUrl: string,
+	version: number,
+	negotiated: boolean,
+): string {
+	return `${baseUrl}/inspector/connect${
+		negotiated ? `?protocol_version=${version}` : ""
+	}`;
+}
+
+function normalizeSchedules(schedules: readonly Schedule[]): InspectorSchedule[] {
+	return schedules.map((schedule) => ({
+		id: schedule.id,
+		name: schedule.name ?? undefined,
+		kind: schedule.kind as InspectorSchedule["kind"],
+		action: schedule.action,
+		args: cbor.decode(new Uint8Array(schedule.args)) as unknown[],
+		nextRunAt: Number(schedule.nextRunAt),
+		lastRunAt:
+			schedule.lastRunAt == null ? undefined : Number(schedule.lastRunAt),
+		expression: schedule.expression ?? undefined,
+		timezone: schedule.timezone ?? undefined,
+		intervalMs:
+			schedule.intervalMs == null ? undefined : Number(schedule.intervalMs),
+		maxHistory:
+			schedule.maxHistory == null ? undefined : Number(schedule.maxHistory),
+	}));
+}
+
+function normalizeScheduleHistory(
+	history: readonly ScheduleFire[],
+): InspectorScheduleFire[] {
+	return history.map((fire) => ({
+		action: fire.action,
+		scheduledAt: Number(fire.scheduledAt),
+		firedAt: Number(fire.firedAt),
+		finishedAt:
+			fire.finishedAt == null ? undefined : Number(fire.finishedAt),
+		result: fire.result as InspectorScheduleFire["result"],
+		error: fire.error
+			? {
+					group: fire.error.group,
+					code: fire.error.code,
+					message: fire.error.message,
+					metadata:
+						fire.error.metadata == null
+							? undefined
+							: cbor.decode(new Uint8Array(fire.error.metadata)),
+				}
+			: undefined,
+	}));
 }
 
 function normalizeQueueStatus(status: QueueStatus): QueueStatusSummary {
@@ -467,6 +573,42 @@ export const createDefaultActorInspectorContext = ({
 		});
 	},
 
+	actorSchedulesQueryOptions(actorId: ActorId) {
+		return queryOptions({
+			staleTime: Infinity,
+			queryKey: actorInspectorQueriesKeys.actorSchedules(actorId),
+			queryFn: () => api.getSchedules(),
+		});
+	},
+
+	actorScheduleHistoryQueryOptions(
+		actorId: ActorId,
+		scheduleId: string,
+		limit = 25,
+	) {
+		return queryOptions({
+			staleTime: Infinity,
+			queryKey: actorInspectorQueriesKeys.actorScheduleHistory(
+				actorId,
+				scheduleId,
+			),
+			queryFn: () => api.getScheduleHistory(scheduleId, limit),
+		});
+	},
+
+	actorScheduleDeleteMutation(actorId: ActorId) {
+		return mutationOptions({
+			mutationKey: ["actor", actorId, "schedules", "delete"],
+			mutationFn: ({
+				scheduleId,
+				kind,
+			}: {
+				scheduleId: string;
+				kind: InspectorSchedule["kind"];
+			}) => api.deleteSchedule(scheduleId, kind),
+		});
+	},
+
 	actorWorkflowReplayMutation(actorId: ActorId) {
 		return mutationOptions({
 			mutationKey: ["actor", actorId, "workflow", "replay"],
@@ -659,6 +801,7 @@ export type ActorInspectorContext = ReturnType<
 	features: {
 		traces: FeatureSupport;
 		queue: FeatureSupport;
+		schedules: FeatureSupport;
 	};
 };
 
@@ -725,9 +868,14 @@ export const ActorInspectorProvider = ({
 	const isInspectorAvailable = isActorMetadataSuccess;
 	const rivetkitVersion = actorMetadata?.version;
 	const inspectorProtocolVersion = useMemo(
-		() => getInspectorProtocolVersion(rivetkitVersion),
+		() =>
+			Math.min(
+				getInspectorProtocolVersion(rivetkitVersion),
+				INSPECTOR_PROTOCOL_CURRENT_VERSION,
+			),
 		[rivetkitVersion],
 	);
+	const negotiatedInspectorProtocol = usesNegotiatedInspectorProtocol(rivetkitVersion);
 	const features = useMemo(
 		() => ({
 			traces: buildFeatureSupport(
@@ -740,16 +888,38 @@ export const ActorInspectorProvider = ({
 				MIN_RIVETKIT_VERSION_QUEUE,
 				"Queue",
 			),
+			schedules: buildFeatureSupport(
+				rivetkitVersion,
+				MIN_RIVETKIT_VERSION_SCHEDULES,
+				"Schedules",
+			),
 		}),
 		[rivetkitVersion],
 	);
 
 	const onMessage = useMemo(() => {
-		return createMessageHandler({ queryClient, actorId, actionsManager });
-	}, [queryClient, actorId]);
+		return createMessageHandler({
+			queryClient,
+			actorId,
+			actionsManager,
+			version: inspectorProtocolVersion,
+			negotiated: negotiatedInspectorProtocol,
+		});
+	}, [
+		queryClient,
+		actorId,
+		inspectorProtocolVersion,
+		negotiatedInspectorProtocol,
+	]);
+
+	const inspectorUrl = buildInspectorWebSocketUrl(
+		computeActorUrl({ ...credentials, actorId }),
+		inspectorProtocolVersion,
+		negotiatedInspectorProtocol,
+	);
 
 	const { sendMessage, reconnect, status } = useWebSocket(
-		`${computeActorUrl({ ...credentials, actorId })}/inspector/connect`,
+		inspectorUrl,
 		protocols,
 		{ onMessage, enabled: isInspectorAvailable },
 	);
@@ -783,6 +953,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -802,6 +973,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 			},
@@ -820,6 +992,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -841,6 +1014,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -861,6 +1035,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -887,6 +1062,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -912,6 +1088,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -936,6 +1113,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -970,6 +1148,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -998,6 +1177,7 @@ export const ActorInspectorProvider = ({
 							},
 						},
 						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
 					),
 				);
 
@@ -1050,6 +1230,69 @@ export const ActorInspectorProvider = ({
 					.parse(payload);
 			},
 
+			getSchedules: async () => {
+				const { id, promise } = actionsManager.current.createResolver<
+					InspectorSchedule[]
+				>({ name: "getSchedules", timeoutMs: 10_000 });
+				sendMessage(
+					serverMessage(
+						{
+							body: {
+								tag: "SchedulesRequest",
+								val: { id: BigInt(id) },
+							},
+						},
+						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
+					),
+				);
+				return promise;
+			},
+
+			getScheduleHistory: async (scheduleId, limit) => {
+				const { id, promise } = actionsManager.current.createResolver<
+					InspectorScheduleFire[]
+				>({ name: "getScheduleHistory", timeoutMs: 10_000 });
+				sendMessage(
+					serverMessage(
+						{
+							body: {
+								tag: "ScheduleHistoryRequest",
+								val: {
+									id: BigInt(id),
+									scheduleId,
+									limit: BigInt(Math.max(1, Math.floor(limit))),
+								},
+							},
+						},
+						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
+					),
+				);
+				return promise;
+			},
+
+			deleteSchedule: async (scheduleId, kind) => {
+				const { id, promise } =
+					actionsManager.current.createResolver<boolean>({
+						name: "deleteSchedule",
+						timeoutMs: 10_000,
+					});
+				sendMessage(
+					serverMessage(
+						{
+							body: {
+								tag: "ScheduleDeleteRequest",
+								val: { id: BigInt(id), scheduleId, kind },
+							},
+						},
+						inspectorProtocolVersion,
+						negotiatedInspectorProtocol,
+					),
+				);
+				return promise;
+			},
+
 			getMetadata() {
 				return getActorMetadataProxy.current();
 			},
@@ -1058,6 +1301,7 @@ export const ActorInspectorProvider = ({
 		sendMessage,
 		reconnect,
 		inspectorProtocolVersion,
+		negotiatedInspectorProtocol,
 		actorId,
 		credentials,
 	]);
@@ -1094,17 +1338,22 @@ const createMessageHandler =
 		queryClient,
 		actorId,
 		actionsManager,
+		version,
+		negotiated,
 	}: {
 		queryClient: QueryClient;
 		actorId: ActorId;
 		actionsManager: React.RefObject<ActionsManager>;
+		version: number;
+		negotiated: boolean;
 	}) =>
 	async (e: ReconnectingWebSocket.MessageEvent) => {
-		let message: ReturnType<typeof toClient.deserializeWithEmbeddedVersion>;
+		let message: ReturnType<typeof toClient.deserialize>;
 		try {
-			message = toClient.deserializeWithEmbeddedVersion(
-				new Uint8Array(await e.data.arrayBuffer()),
-			);
+			const bytes = new Uint8Array(await e.data.arrayBuffer());
+			message = negotiated
+				? toClient.deserialize(bytes, version)
+				: toClient.deserializeWithEmbeddedVersion(bytes);
 		} catch (error) {
 			console.warn("Failed to decode inspector message", error);
 			return;
@@ -1112,6 +1361,10 @@ const createMessageHandler =
 
 		match(message.body)
 			.with({ tag: "Init" }, (body) => {
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorSchedules(actorId),
+					normalizeSchedules(body.val.schedules ?? []),
+				);
 				queryClient.setQueryData(
 					actorInspectorQueriesKeys.actorState(actorId),
 					!body.val.isStateEnabled || body.val.state == null
@@ -1296,6 +1549,34 @@ const createMessageHandler =
 					cbor.decode(new Uint8Array(body.val.result)),
 				);
 			})
+			.with({ tag: "SchedulesResponse" }, (body) => {
+				actionsManager.current.resolve(
+					Number(body.val.rid),
+					normalizeSchedules(body.val.schedules),
+				);
+			})
+			.with({ tag: "SchedulesUpdated" }, (body) => {
+				queryClient.setQueryData(
+					actorInspectorQueriesKeys.actorSchedules(actorId),
+					normalizeSchedules(body.val.schedules),
+				);
+				queryClient.invalidateQueries({
+					queryKey: actorInspectorQueriesKeys.actorSchedules(actorId),
+					predicate: (query) => query.queryKey.includes("history"),
+				});
+			})
+			.with({ tag: "ScheduleHistoryResponse" }, (body) => {
+				actionsManager.current.resolve(
+					Number(body.val.rid),
+					normalizeScheduleHistory(body.val.history),
+				);
+			})
+			.with({ tag: "ScheduleDeleteResponse" }, (body) => {
+				actionsManager.current.resolve(
+					Number(body.val.rid),
+					body.val.deleted,
+				);
+			})
 			.with({ tag: "Error" }, (body) => {
 				if (body.val.message === INSPECTOR_ERROR_EVENTS_DROPPED) {
 					return;
@@ -1332,8 +1613,14 @@ function transformWorkflowHistoryFromInspector(raw: ArrayBuffer): {
 	}
 }
 
-function serverMessage(data: ToServer, version: number) {
-	return toServer.serializeWithEmbeddedVersion(data, version);
+export function serverMessage(
+	data: ToServer,
+	version: number,
+	negotiated: boolean,
+) {
+	return negotiated
+		? toServer.serialize(data, version)
+		: toServer.serializeWithEmbeddedVersion(data, version);
 }
 
 class ActionsManager {

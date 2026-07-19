@@ -2,6 +2,24 @@ use rivet_error::*;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+static ACTION_NOT_FOUND_SCHEMA: RivetErrorSchema = RivetErrorSchema {
+	group: "actor",
+	code: "action_not_found",
+	default_message: "Action not found",
+	meta_type: None,
+	_macro_marker: MacroMarker { _private: () },
+};
+
+pub fn action_not_found(name: impl Into<String>) -> anyhow::Error {
+	let name = name.into();
+	anyhow::Error::new(RivetError {
+		kind: RivetErrorKind::Static(&ACTION_NOT_FOUND_SCHEMA),
+		meta: None,
+		message: Some(format!("Action `{name}` was not found.")),
+		actor: None,
+	})
+}
+
 pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 	match (group, code) {
 		("auth", "forbidden") => Some(403),
@@ -13,6 +31,7 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 			"unsupported" | "not_enabled" | "closed" | "database_unavailable",
 		) => Some(400),
 		("message", "incoming_too_long" | "outgoing_too_long") => Some(400),
+		("schedule", _) => Some(400),
 		(
 			"queue",
 			"full"
@@ -29,6 +48,66 @@ pub fn public_error_status_code(group: &str, code: &str) -> Option<u16> {
 		("user", _) => Some(400),
 		_ => None,
 	}
+}
+
+#[derive(RivetError, Debug, Clone, Deserialize, Serialize)]
+#[error("schedule")]
+pub enum ScheduleRuntimeError {
+	#[error(
+		"invalid_name",
+		"Schedule name is invalid.",
+		"Schedule name is invalid: {reason}"
+	)]
+	InvalidName { reason: String },
+
+	#[error(
+		"invalid_cron_expression",
+		"Cron expression is invalid.",
+		"Cron expression is invalid: {reason}"
+	)]
+	InvalidCronExpression { reason: String },
+
+	#[error(
+		"invalid_timezone",
+		"Schedule timezone is invalid.",
+		"Schedule timezone '{timezone}' is invalid."
+	)]
+	InvalidTimezone { timezone: String },
+
+	#[error(
+		"invalid_interval",
+		"Schedule interval is invalid.",
+		"Schedule interval must be at least {minimum_ms} ms; received {interval_ms} ms."
+	)]
+	InvalidInterval { interval_ms: i64, minimum_ms: i64 },
+
+	#[error(
+		"invalid_max_history",
+		"Schedule history limit is invalid.",
+		"Schedule maxHistory must be between 0 and {maximum}; received {max_history}."
+	)]
+	InvalidMaxHistory { max_history: i64, maximum: i64 },
+
+	#[error(
+		"max_schedules_exceeded",
+		"Actor schedule limit reached.",
+		"Actor has reached its limit of {maximum} pending schedules."
+	)]
+	MaxSchedulesExceeded { maximum: u32 },
+
+	#[error(
+		"invalid_schedule_row",
+		"Stored schedule data is invalid.",
+		"Stored schedule '{schedule_id}' is invalid: {reason}"
+	)]
+	InvalidScheduleRow { schedule_id: String, reason: String },
+
+	#[error(
+		"interrupted",
+		"Scheduled action was interrupted.",
+		"Scheduled action was interrupted before completion."
+	)]
+	Interrupted,
 }
 
 #[derive(RivetError, Debug, Clone, Deserialize, Serialize)]

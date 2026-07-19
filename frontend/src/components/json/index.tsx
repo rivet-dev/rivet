@@ -21,6 +21,7 @@ import {
 	useState,
 } from "react";
 import { CopyTrigger } from "../copy-area";
+import { formatValue } from "@/lib/format-value";
 import { cn } from "../lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { WithTooltip } from "../ui/tooltip";
@@ -114,6 +115,9 @@ function Value({
 	if (value === undefined) {
 		return <UndefinedValue path={path} editable={editable} {...props} />;
 	}
+	if (value instanceof ArrayBuffer || ArrayBuffer.isView(value)) {
+		return <span {...props}>{formatValue(value)}</span>;
+	}
 	if (isObject(value)) {
 		const Comp = object ?? ObjectValue;
 		return <Comp path={path} value={value} level={level} {...props} />;
@@ -122,6 +126,7 @@ function Value({
 		const Comp = array ?? ObjectValue;
 		return <Comp path={path} value={value} level={level} {...props} />;
 	}
+	return <span {...props}>{formatValue(value)}</span>;
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {

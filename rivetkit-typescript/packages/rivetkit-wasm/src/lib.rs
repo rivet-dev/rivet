@@ -9,7 +9,10 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use js_sys::{Array, Function, Object, Promise, Reflect, Uint8Array};
-use rivet_error::{ActorSpecifier, RivetError as RivetTransportError, RivetErrorKind};
+use rivet_error::{
+	ActorSpecifier, MacroMarker, RivetError as RivetTransportError, RivetErrorKind,
+	RivetErrorSchema,
+};
 use rivetkit_core::error::public_error_status_code;
 use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
@@ -200,6 +203,7 @@ pub struct WasmActorConfig {
 	pub connection_liveness_timeout_ms: Option<u32>,
 	pub connection_liveness_interval_ms: Option<u32>,
 	pub max_queue_size: Option<u32>,
+	pub max_schedules: Option<u32>,
 	pub max_queue_message_size: Option<u32>,
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
@@ -229,6 +233,7 @@ impl From<WasmActorConfig> for ActorConfigInput {
 			connection_liveness_timeout_ms: config.connection_liveness_timeout_ms,
 			connection_liveness_interval_ms: config.connection_liveness_interval_ms,
 			max_queue_size: config.max_queue_size,
+			max_schedules: config.max_schedules,
 			max_queue_message_size: config.max_queue_message_size,
 			max_incoming_message_size: config.max_incoming_message_size,
 			max_outgoing_message_size: config.max_outgoing_message_size,
@@ -673,11 +678,12 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			name,
 			args,
 			conn,
+			scheduled_fire,
 			reply,
 		} => {
 			let Some(callback) = action_callback(&callbacks.actions, &name) else {
 				console_error(&format!("wasm action callback `{name}` was not found"));
-				reply.send(Err(anyhow!("action `{name}` was not found")));
+				reply.send(Err(rivetkit_core::error::action_not_found(name)));
 				return;
 			};
 
@@ -697,6 +703,13 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 					)?;
 					set_anyhow(&payload, "name", JsValue::from_str(&name))?;
 					set_anyhow(&payload, "args", bytes_to_js(&args))?;
+					if let Some(scheduled_fire) = &scheduled_fire {
+						let scheduled_fire =
+							serde_wasm_bindgen::to_value(scheduled_fire).map_err(|error| {
+								anyhow!("serialize scheduled fire metadata: {error:?}")
+							})?;
+						set_anyhow(&payload, "scheduledFire", scheduled_fire)?;
+					}
 					let mut output = call_callback_bytes(&callback, &payload.into()).await?;
 
 					if let Some(callback) = &on_before_action_response {
@@ -1657,18 +1670,140 @@ pub struct WasmSchedule {
 #[wasm_bindgen(js_class = Schedule)]
 impl WasmSchedule {
 	#[wasm_bindgen]
-	pub fn after(&self, duration_ms: f64, action_name: String, args: Vec<u8>) {
+	pub async fn after(
+		&self,
+		duration_ms: f64,
+		action_name: String,
+		args: Vec<u8>,
+	) -> Result<String, JsValue> {
 		let duration = if duration_ms.is_finite() && duration_ms > 0.0 {
 			Duration::from_millis(duration_ms as u64)
 		} else {
 			Duration::from_millis(0)
 		};
-		self.inner.after(duration, &action_name, &args);
+		self.inner
+			.after(duration, &action_name, &args)
+			.await
+			.map_err(anyhow_to_js_error)
 	}
 
 	#[wasm_bindgen]
-	pub fn at(&self, timestamp_ms: f64, action_name: String, args: Vec<u8>) {
-		self.inner.at(timestamp_ms as i64, &action_name, &args);
+	pub async fn at(
+		&self,
+		timestamp_ms: f64,
+		action_name: String,
+		args: Vec<u8>,
+	) -> Result<String, JsValue> {
+		self.inner
+			.at(timestamp_ms as i64, &action_name, &args)
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
+	#[wasm_bindgen]
+	pub async fn cancel(&self, id: String) -> Result<bool, JsValue> {
+		self.inner
+			.cancel_schedule(&id)
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
+	#[wasm_bindgen]
+	pub async fn get(&self, id: String) -> Result<JsValue, JsValue> {
+		let event = self
+			.inner
+			.get_scheduled_event(&id)
+			.await
+			.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&event).map_err(Into::into)
+	}
+
+	#[wasm_bindgen]
+	pub async fn list(&self) -> Result<JsValue, JsValue> {
+		let events = self
+			.inner
+			.list_scheduled_events()
+			.await
+			.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&events).map_err(Into::into)
+	}
+
+	#[wasm_bindgen(js_name = cronSet)]
+	pub async fn cron_set(
+		&self,
+		name: String,
+		expression: String,
+		timezone: Option<String>,
+		action_name: String,
+		args: Vec<u8>,
+		max_history: Option<f64>,
+	) -> Result<(), JsValue> {
+		self.inner
+			.cron_set(
+				&name,
+				&expression,
+				timezone.as_deref(),
+				&action_name,
+				&args,
+				max_history.map(|value| value as i64),
+			)
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
+	#[wasm_bindgen(js_name = cronEvery)]
+	pub async fn cron_every(
+		&self,
+		name: String,
+		interval_ms: f64,
+		action_name: String,
+		args: Vec<u8>,
+		max_history: Option<f64>,
+	) -> Result<(), JsValue> {
+		self.inner
+			.cron_every(
+				&name,
+				interval_ms as i64,
+				&action_name,
+				&args,
+				max_history.map(|value| value as i64),
+			)
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
+	#[wasm_bindgen(js_name = cronGet)]
+	pub async fn cron_get(&self, name: String) -> Result<JsValue, JsValue> {
+		let job = self
+			.inner
+			.cron_get(&name)
+			.await
+			.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&job).map_err(Into::into)
+	}
+
+	#[wasm_bindgen(js_name = cronList)]
+	pub async fn cron_list(&self) -> Result<JsValue, JsValue> {
+		let jobs = self.inner.cron_list().await.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&jobs).map_err(Into::into)
+	}
+
+	#[wasm_bindgen(js_name = cronDelete)]
+	pub async fn cron_delete(&self, name: String) -> Result<bool, JsValue> {
+		self.inner
+			.cron_delete(&name)
+			.await
+			.map_err(anyhow_to_js_error)
+	}
+
+	#[wasm_bindgen(js_name = cronHistory)]
+	pub async fn cron_history(&self, name: String, limit: Option<f64>) -> Result<JsValue, JsValue> {
+		let history = self
+			.inner
+			.cron_history(&name, limit.map(|value| value as i64))
+			.await
+			.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&history).map_err(Into::into)
 	}
 }
 

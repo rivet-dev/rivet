@@ -48,7 +48,7 @@ export const idleWorld = actor({
 		initialized: false as boolean,
 	} satisfies State,
 	actions: {
-		initialize: (c, input: { playerName: string; playerId?: string }) => {
+		initialize: async (c, input: { playerName: string; playerId?: string }) => {
 			if (c.state.initialized) {
 				broadcastState(c);
 				return;
@@ -70,11 +70,11 @@ export const idleWorld = actor({
 				lastCollectedAt: Date.now(),
 			};
 			c.state.buildings.push(building);
-			scheduleCollection(c, building.id, farmType.productionIntervalMs);
+			await scheduleCollection(c, building.id, farmType.productionIntervalMs);
 			updateLeaderboard(c);
 			broadcastState(c);
 		},
-		build: (c, input: { buildingTypeId: string }) => {
+		build: async (c, input: { buildingTypeId: string }) => {
 			const buildingType = BUILDINGS.find(
 				(b: BuildingType) => b.id === input.buildingTypeId,
 			);
@@ -93,7 +93,7 @@ export const idleWorld = actor({
 				lastCollectedAt: Date.now(),
 			};
 			c.state.buildings.push(building);
-			scheduleCollection(
+			await scheduleCollection(
 				c,
 				building.id,
 				buildingType.productionIntervalMs,
@@ -117,8 +117,6 @@ export const idleWorld = actor({
 				elapsed / buildingType.productionIntervalMs,
 			);
 			if (intervals <= 0) {
-				const remaining = buildingType.productionIntervalMs - elapsed;
-				scheduleCollection(c, building.id, remaining);
 				return;
 			}
 
@@ -126,12 +124,6 @@ export const idleWorld = actor({
 			c.state.resources += produced;
 			c.state.totalProduced += produced;
 			building.lastCollectedAt = now;
-
-			scheduleCollection(
-				c,
-				building.id,
-				buildingType.productionIntervalMs,
-			);
 
 			updateLeaderboard(c);
 			broadcastState(c);
@@ -146,12 +138,18 @@ export const idleWorld = actor({
 	},
 });
 
-function scheduleCollection(
+async function scheduleCollection(
 	c: ActorContextOf<typeof idleWorld>,
 	buildingId: string,
-	delayMs: number,
-) {
-	c.schedule.after(delayMs, "collectProduction", { buildingId });
+	intervalMs: number,
+): Promise<void> {
+	await c.cron.every({
+		name: `collect-production:${buildingId}`,
+		intervalMs,
+		action: "collectProduction",
+		args: [{ buildingId }],
+		maxHistory: 0,
+	});
 }
 
 function updateLeaderboard(c: ActorContextOf<typeof idleWorld>) {

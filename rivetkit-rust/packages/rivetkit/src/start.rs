@@ -8,7 +8,7 @@ use std::time::Duration;
 use anyhow::{Context, Result};
 use futures::FutureExt;
 use rivetkit_core::actor::ShutdownKind;
-use rivetkit_core::error::{ActorLifecycle, ActorRuntime};
+use rivetkit_core::error::{ActorLifecycle, ActorRuntime, action_not_found};
 use rivetkit_core::{ActorEvent, ActorEvents, ActorStart, QueueSendResult, QueueSendStatus, Reply};
 use serde::de::DeserializeOwned;
 use tokio::task::JoinHandle;
@@ -293,6 +293,7 @@ async fn handle_actor_event<A: Actor>(
 			args,
 			conn,
 			reply,
+			..
 		} => {
 			let handler_ctx = ctx.with_conn(conn.map(ConnCtx::from));
 			match <A::Actions as ActionSet<A>>::dispatch(
@@ -305,11 +306,7 @@ async fn handle_actor_event<A: Actor>(
 					spawn_action_reply(handler_ctx, reply, future);
 				}
 				None => {
-					reply.send(Err(ActorRuntime::NotFound {
-						resource: "action".to_owned(),
-						id: name,
-					}
-					.build()));
+					reply.send(Err(action_not_found(name)));
 				}
 			}
 		}
@@ -1313,7 +1310,7 @@ mod tests {
 			.expect_err("missing action should error");
 		let error = rivet_error::RivetError::extract(&error);
 		assert_eq!(error.group(), "actor");
-		assert_eq!(error.code(), "not_found");
+		assert_eq!(error.code(), "action_not_found");
 
 		request_sleep(&tx).await;
 		actor.await.expect("join run_actor").expect("run actor");
@@ -2024,6 +2021,7 @@ mod tests {
 			name: name.to_owned(),
 			args: args.to_vec(),
 			conn,
+			scheduled_fire: None,
 			reply: reply_tx.into(),
 		})
 		.expect("send action event");

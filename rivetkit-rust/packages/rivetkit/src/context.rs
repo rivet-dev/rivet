@@ -13,6 +13,7 @@ use parking_lot::{
 	MappedRwLockReadGuard, MappedRwLockWriteGuard, RwLock, RwLockReadGuard, RwLockWriteGuard,
 };
 use rivetkit_client::{Client, ClientConfig, EncodingKind, TransportKind};
+use rivetkit_core::actor::schedule::{CronFire, CronJobInfo, ScheduledEventInfo};
 use rivetkit_core::actor::state::OnStateChangeGuard;
 use rivetkit_core::{
 	ActorContext, ActorKey, ActorKv, ConnHandle, ConnId, KeepAwakeRegion, RequestSaveOpts,
@@ -99,6 +100,27 @@ impl<S> DerefMut for StateMut<'_, S> {
 
 pub struct Schedule<'a> {
 	inner: &'a ActorContext,
+}
+
+pub struct Cron<'a> {
+	inner: &'a ActorContext,
+}
+
+pub struct CronSetOptions<'a> {
+	pub name: &'a str,
+	pub expression: &'a str,
+	pub timezone: Option<&'a str>,
+	pub action: &'a str,
+	pub args: &'a [u8],
+	pub max_history: Option<i64>,
+}
+
+pub struct CronEveryOptions<'a> {
+	pub name: &'a str,
+	pub interval: std::time::Duration,
+	pub action: &'a str,
+	pub args: &'a [u8],
+	pub max_history: Option<i64>,
 }
 
 impl<A: Actor> Clone for Ctx<A> {
@@ -229,6 +251,10 @@ impl<A: Actor> Ctx<A> {
 
 	pub fn schedule(&self) -> Schedule<'_> {
 		Schedule { inner: &self.inner }
+	}
+
+	pub fn cron(&self) -> Cron<'_> {
+		Cron { inner: &self.inner }
 	}
 
 	/// Holds the actor awake for the duration of `future` and returns its
@@ -450,12 +476,78 @@ impl<A: Actor> Ctx<A> {
 }
 
 impl Schedule<'_> {
-	pub fn after(&self, duration: std::time::Duration, action_name: &str, args: &[u8]) {
-		self.inner.after(duration, action_name, args);
+	pub async fn after(
+		&self,
+		duration: std::time::Duration,
+		action_name: &str,
+		args: &[u8],
+	) -> anyhow::Result<String> {
+		self.inner.after(duration, action_name, args).await
 	}
 
-	pub fn at(&self, timestamp_ms: i64, action_name: &str, args: &[u8]) {
-		self.inner.at(timestamp_ms, action_name, args);
+	pub async fn at(
+		&self,
+		timestamp_ms: i64,
+		action_name: &str,
+		args: &[u8],
+	) -> anyhow::Result<String> {
+		self.inner.at(timestamp_ms, action_name, args).await
+	}
+
+	pub async fn cancel(&self, event_id: &str) -> anyhow::Result<bool> {
+		self.inner.cancel_schedule(event_id).await
+	}
+
+	pub async fn get(&self, event_id: &str) -> anyhow::Result<Option<ScheduledEventInfo>> {
+		self.inner.get_scheduled_event(event_id).await
+	}
+
+	pub async fn list(&self) -> anyhow::Result<Vec<ScheduledEventInfo>> {
+		self.inner.list_scheduled_events().await
+	}
+}
+
+impl Cron<'_> {
+	pub async fn set(&self, options: CronSetOptions<'_>) -> anyhow::Result<()> {
+		self.inner
+			.cron_set(
+				options.name,
+				options.expression,
+				options.timezone,
+				options.action,
+				options.args,
+				options.max_history,
+			)
+			.await
+	}
+
+	pub async fn every(&self, options: CronEveryOptions<'_>) -> anyhow::Result<()> {
+		let interval_ms = i64::try_from(options.interval.as_millis()).unwrap_or(i64::MAX);
+		self.inner
+			.cron_every(
+				options.name,
+				interval_ms,
+				options.action,
+				options.args,
+				options.max_history,
+			)
+			.await
+	}
+
+	pub async fn get(&self, name: &str) -> anyhow::Result<Option<CronJobInfo>> {
+		self.inner.cron_get(name).await
+	}
+
+	pub async fn list(&self) -> anyhow::Result<Vec<CronJobInfo>> {
+		self.inner.cron_list().await
+	}
+
+	pub async fn delete(&self, name: &str) -> anyhow::Result<bool> {
+		self.inner.cron_delete(name).await
+	}
+
+	pub async fn history(&self, name: &str, limit: Option<i64>) -> anyhow::Result<Vec<CronFire>> {
+		self.inner.cron_history(name, limit).await
 	}
 }
 

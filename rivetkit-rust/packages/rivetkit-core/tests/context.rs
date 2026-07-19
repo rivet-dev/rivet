@@ -266,7 +266,7 @@ CREATE TABLE IF NOT EXISTS _rivet_runtime (
     id                INTEGER PRIMARY KEY CHECK (id = 1),
     last_pushed_alarm INTEGER,
     inspector_token   TEXT,
-    queue_next_id     INTEGER NOT NULL DEFAULT 1
+    queue_next_id     INTEGER NOT NULL
 ) STRICT;
 CREATE TABLE IF NOT EXISTS _rivet_actor (
     id              INTEGER PRIMARY KEY CHECK (id = 1),
@@ -278,13 +278,34 @@ CREATE TABLE IF NOT EXISTS _rivet_actor_state (
     state BLOB NOT NULL
 ) STRICT;
 CREATE TABLE IF NOT EXISTS _rivet_schedule_events (
-    event_id   TEXT PRIMARY KEY,
+    event_id TEXT PRIMARY KEY,
     trigger_at INTEGER NOT NULL,
-    action     TEXT NOT NULL,
-    args       BLOB
+    action TEXT NOT NULL,
+    args BLOB,
+    kind INTEGER NOT NULL,
+    cron_expression TEXT,
+    timezone TEXT,
+    interval_ms INTEGER,
+    last_started_at INTEGER,
+    max_history INTEGER NOT NULL
 ) STRICT, WITHOUT ROWID;
 CREATE INDEX IF NOT EXISTS _rivet_schedule_events_trigger_at
     ON _rivet_schedule_events (trigger_at);
+CREATE TABLE IF NOT EXISTS _rivet_schedule_history (
+    id INTEGER PRIMARY KEY,
+    schedule_id TEXT NOT NULL,
+    action TEXT NOT NULL,
+    scheduled_at INTEGER NOT NULL,
+    fired_at INTEGER NOT NULL,
+    finished_at INTEGER,
+    result INTEGER NOT NULL,
+    error_group TEXT,
+    error_code TEXT,
+    error_message TEXT,
+    error_metadata BLOB
+) STRICT;
+CREATE INDEX IF NOT EXISTS _rivet_schedule_history_schedule
+    ON _rivet_schedule_history (schedule_id, fired_at DESC);
 CREATE TABLE IF NOT EXISTS _rivet_conns (
     conn_id         TEXT PRIMARY KEY,
     parameters      BLOB NOT NULL,
@@ -297,10 +318,9 @@ CREATE TABLE IF NOT EXISTS _rivet_conn_state (
     conn_id              TEXT PRIMARY KEY,
     state                BLOB NOT NULL,
     server_message_index INTEGER NOT NULL,
+    client_message_index INTEGER NOT NULL,
     subscriptions        BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
-ALTER TABLE _rivet_conn_state
-    ADD COLUMN client_message_index INTEGER NOT NULL DEFAULT 0;
 CREATE TABLE IF NOT EXISTS _rivet_queue (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
@@ -316,7 +336,7 @@ CREATE TABLE IF NOT EXISTS _rivet_user_kv (
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID;
 INSERT INTO _rivet_meta (key, value)
-VALUES ('schema_version', x'0700000000000000')
+VALUES ('schema_version', x'0600000000000000')
 ON CONFLICT(key) DO UPDATE SET value = excluded.value;
 "#;
 
@@ -427,61 +447,6 @@ async fn test_internal_schema_sql_matches_real_initializer() {
 	assert_eq!(
 		&test_version, real_version,
 		"TEST_INTERNAL_SCHEMA_SQL schema_version drifted from the real migration ladder"
-	);
-}
-
-#[tokio::test]
-async fn internal_schema_v7_preserves_existing_connection_state() {
-	let conn = rusqlite::Connection::open_in_memory().expect("sqlite connection should open");
-	conn.execute_batch(
-		r#"
-CREATE TABLE _rivet_meta (
-    key TEXT PRIMARY KEY,
-    value BLOB NOT NULL
-) STRICT, WITHOUT ROWID;
-CREATE TABLE _rivet_conn_state (
-    conn_id              TEXT PRIMARY KEY,
-    state                BLOB NOT NULL,
-    server_message_index INTEGER NOT NULL,
-    subscriptions        BLOB NOT NULL
-) STRICT, WITHOUT ROWID;
-INSERT INTO _rivet_meta (key, value)
-VALUES ('schema_version', x'0600000000000000');
-INSERT INTO _rivet_conn_state (conn_id, state, server_message_index, subscriptions)
-VALUES ('conn-1', x'010203', 9, x'80');
-"#,
-	)
-	.expect("v6 schema should seed");
-
-	let (sql_handle, sql_rx) = test_envoy_handle();
-	spawn_test_remote_sqlite_on(conn, sql_rx, None);
-	let db = SqliteDb::new_with_remote_sqlite(
-		sql_handle,
-		"schema-v6-upgrade".to_owned(),
-		None,
-		Some(1),
-		false,
-		true,
-	)
-	.expect("test remote sqlite should be configured");
-	crate::actor::internal_schema::ensure_internal_schema(&db)
-		.await
-		.expect("v6 schema should upgrade");
-
-	let rows = db
-		.query(
-			"SELECT state, server_message_index, client_message_index FROM _rivet_conn_state WHERE conn_id = 'conn-1'",
-			None,
-		)
-		.await
-		.expect("upgraded connection state should load");
-	assert_eq!(
-		rows.rows,
-		vec![vec![
-			ColumnValue::Blob(vec![1, 2, 3]),
-			ColumnValue::Integer(9),
-			ColumnValue::Integer(0),
-		]],
 	);
 }
 
@@ -780,7 +745,6 @@ mod moved_tests {
 	use super::ActorContext;
 	use crate::actor::connection::ConnHandle;
 	use crate::actor::messages::ActorEvent;
-	use crate::actor::state::{PersistedActor, PersistedScheduleEvent};
 	use crate::types::ListOpts;
 	use crate::{ActorConfig, SqliteDb};
 
@@ -1265,17 +1229,11 @@ mod moved_tests {
 				})
 			}
 		})));
-		ctx.load_persisted_actor(PersistedActor {
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-future".to_owned(),
-				timestamp: now_timestamp_ms() + 20,
-				action: "tick".to_owned(),
-				args: Some(vec![1]),
-			}],
-			..PersistedActor::default()
-		});
-
-		ctx.init_alarms();
+		ctx.at(now_timestamp_ms() + 20, "tick", &[1])
+			.await
+			.expect("persist future schedule");
+		ctx.cancel_local_alarm_timeouts();
+		ctx.init_alarms().await;
 
 		for _ in 0..50 {
 			if fired.load(Ordering::SeqCst) > 0 {
@@ -1298,15 +1256,9 @@ mod moved_tests {
 		);
 		let (events_tx, mut events_rx) = mpsc::unbounded_channel();
 		ctx.configure_actor_events(Some(events_tx));
-		ctx.load_persisted_actor(PersistedActor {
-			scheduled_events: vec![PersistedScheduleEvent {
-				event_id: "evt-overdue".to_owned(),
-				timestamp: now_timestamp_ms() - 1_000,
-				action: "tick".to_owned(),
-				args: Some(vec![1, 2, 3]),
-			}],
-			..PersistedActor::default()
-		});
+		ctx.at(now_timestamp_ms() - 1_000, "tick", &[1, 2, 3])
+			.await
+			.expect("persist overdue schedule");
 
 		let recv = tokio::spawn(async move {
 			match events_rx
@@ -1318,11 +1270,15 @@ mod moved_tests {
 					name,
 					args,
 					conn,
+					scheduled_fire,
 					reply,
 				} => {
 					assert_eq!(name, "tick");
 					assert_eq!(args, vec![1, 2, 3]);
 					assert!(conn.is_none());
+					let fire = scheduled_fire.expect("scheduled fire metadata");
+					assert_eq!(fire.kind, crate::actor::schedule::ScheduleKind::At);
+					assert!(fire.name.is_none());
 					reply.send(Ok(Vec::new()));
 				}
 				event => panic!("unexpected event: {event:?}"),
@@ -1334,7 +1290,7 @@ mod moved_tests {
 			.expect("draining overdue scheduled events should succeed");
 		recv.await.expect("scheduled action receiver should join");
 
-		assert!(ctx.next_event().is_none());
+		assert!(ctx.list_scheduled_events().await.unwrap().is_empty());
 	}
 
 	#[tokio::test]
