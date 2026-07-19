@@ -1,6 +1,6 @@
 use anyhow::Result;
 use rivet_envoy_protocol::{
-	generated::{v4, v5},
+	generated::{v4, v6},
 	versioned::{
 		ProtocolCompatibilityDirection, ProtocolCompatibilityError, ProtocolCompatibilityFeature,
 		ToEnvoy, ToRivet,
@@ -8,10 +8,10 @@ use rivet_envoy_protocol::{
 };
 use vbare::OwnedVersionedData;
 
-fn remote_sql_request_exec() -> v5::ToRivet {
-	v5::ToRivet::ToRivetSqliteExecRequest(v5::ToRivetSqliteExecRequest {
+fn remote_sql_request_exec() -> v6::ToRivet {
+	v6::ToRivet::ToRivetSqliteExecRequest(v6::ToRivetSqliteExecRequest {
 		request_id: 1,
-		data: v5::SqliteExecRequest {
+		data: v6::SqliteExecRequest {
 			namespace_id: "namespace".into(),
 			actor_id: "actor".into(),
 			generation: 7,
@@ -20,25 +20,25 @@ fn remote_sql_request_exec() -> v5::ToRivet {
 	})
 }
 
-fn remote_sql_request_execute() -> v5::ToRivet {
-	v5::ToRivet::ToRivetSqliteExecuteRequest(v5::ToRivetSqliteExecuteRequest {
+fn remote_sql_request_execute() -> v6::ToRivet {
+	v6::ToRivet::ToRivetSqliteExecuteRequest(v6::ToRivetSqliteExecuteRequest {
 		request_id: 2,
-		data: v5::SqliteExecuteRequest {
+		data: v6::SqliteExecuteRequest {
 			namespace_id: "namespace".into(),
 			actor_id: "actor".into(),
 			generation: 7,
 			sql: "select ?".into(),
-			params: Some(vec![v5::SqliteBindParam::SqliteValueInteger(
-				v5::SqliteValueInteger { value: 1 },
+			params: Some(vec![v6::SqliteBindParam::SqliteValueInteger(
+				v6::SqliteValueInteger { value: 1 },
 			)]),
 		},
 	})
 }
 
-fn remote_sql_response_exec() -> v5::ToEnvoy {
-	v5::ToEnvoy::ToEnvoySqliteExecResponse(v5::ToEnvoySqliteExecResponse {
+fn remote_sql_response_exec() -> v6::ToEnvoy {
+	v6::ToEnvoy::ToEnvoySqliteExecResponse(v6::ToEnvoySqliteExecResponse {
 		request_id: 1,
-		data: v5::SqliteExecResponse::SqliteErrorResponse(v5::SqliteErrorResponse {
+		data: v6::SqliteExecResponse::SqliteErrorResponse(v6::SqliteErrorResponse {
 			group: "sqlite".into(),
 			code: "remote_unavailable".into(),
 			message: "remote sql execution is unavailable".into(),
@@ -46,13 +46,39 @@ fn remote_sql_response_exec() -> v5::ToEnvoy {
 	})
 }
 
-fn remote_sql_response_execute() -> v5::ToEnvoy {
-	v5::ToEnvoy::ToEnvoySqliteExecuteResponse(v5::ToEnvoySqliteExecuteResponse {
+fn remote_sql_response_execute() -> v6::ToEnvoy {
+	v6::ToEnvoy::ToEnvoySqliteExecuteResponse(v6::ToEnvoySqliteExecuteResponse {
 		request_id: 2,
-		data: v5::SqliteExecuteResponse::SqliteErrorResponse(v5::SqliteErrorResponse {
+		data: v6::SqliteExecuteResponse::SqliteErrorResponse(v6::SqliteErrorResponse {
 			group: "sqlite".into(),
 			code: "remote_unavailable".into(),
 			message: "remote sql execution is unavailable".into(),
+		}),
+	})
+}
+
+fn remote_sql_request_execute_batch() -> v6::ToRivet {
+	v6::ToRivet::ToRivetSqliteExecuteBatchRequest(v6::ToRivetSqliteExecuteBatchRequest {
+		request_id: 3,
+		data: v6::SqliteExecuteBatchRequest {
+			namespace_id: "namespace".into(),
+			actor_id: "actor".into(),
+			generation: 7,
+			statements: vec![v6::SqliteBatchStatement {
+				sql: "insert into t values (?)".into(),
+				params: Some(vec![v6::SqliteBindParam::SqliteValueInteger(
+					v6::SqliteValueInteger { value: 1 },
+				)]),
+			}],
+		},
+	})
+}
+
+fn remote_sql_response_execute_batch() -> v6::ToEnvoy {
+	v6::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(v6::ToEnvoySqliteExecuteBatchResponse {
+		request_id: 3,
+		data: v6::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(v6::SqliteExecuteBatchOk {
+			results: Vec::new(),
 		}),
 	})
 }
@@ -113,11 +139,11 @@ fn new_core_new_pegboard_envoy_allows_remote_sql_both_directions() -> Result<()>
 
 	assert!(matches!(
 		ToRivet::deserialize(&request, 4)?,
-		v5::ToRivet::ToRivetSqliteExecRequest(_)
+		v6::ToRivet::ToRivetSqliteExecRequest(_)
 	));
 	assert!(matches!(
 		ToEnvoy::deserialize(&response, 4)?,
-		v5::ToEnvoy::ToEnvoySqliteExecResponse(_)
+		v6::ToEnvoy::ToEnvoySqliteExecResponse(_)
 	));
 
 	Ok(())
@@ -178,4 +204,42 @@ fn all_remote_sql_response_variants_require_v4() {
 			assert_compatibility_error(err, ProtocolCompatibilityDirection::ToEnvoy, 3);
 		}
 	}
+}
+
+#[test]
+fn remote_sql_batch_requires_v6() -> Result<()> {
+	let request_error = ToRivet::wrap_latest(remote_sql_request_execute_batch())
+		.serialize(5)
+		.expect_err("remote SQL batch requests must not serialize below v6");
+	let response_error = ToEnvoy::wrap_latest(remote_sql_response_execute_batch())
+		.serialize(5)
+		.expect_err("remote SQL batch responses must not serialize below v6");
+
+	for (error, direction) in [
+		(request_error, ProtocolCompatibilityDirection::ToRivet),
+		(response_error, ProtocolCompatibilityDirection::ToEnvoy),
+	] {
+		let error = error
+			.downcast_ref::<ProtocolCompatibilityError>()
+			.expect("expected structured protocol compatibility error");
+		assert_eq!(
+			error.feature,
+			ProtocolCompatibilityFeature::RemoteSqliteBatchExecution
+		);
+		assert_eq!(error.direction, direction);
+		assert_eq!(error.required_version, 6);
+		assert_eq!(error.target_version, 5);
+	}
+
+	let request = ToRivet::wrap_latest(remote_sql_request_execute_batch()).serialize(6)?;
+	let response = ToEnvoy::wrap_latest(remote_sql_response_execute_batch()).serialize(6)?;
+	assert!(matches!(
+		ToRivet::deserialize(&request, 6)?,
+		v6::ToRivet::ToRivetSqliteExecuteBatchRequest(_)
+	));
+	assert!(matches!(
+		ToEnvoy::deserialize(&response, 6)?,
+		v6::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(_)
+	));
+	Ok(())
 }

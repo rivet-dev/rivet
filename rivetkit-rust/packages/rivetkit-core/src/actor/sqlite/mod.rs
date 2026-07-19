@@ -449,31 +449,38 @@ impl SqliteDb {
 			.iter()
 			.map(|statement| bind_param_count(&statement.params))
 			.sum();
-		let result = async {
-			let transaction = self.begin_transaction(None).await?;
-			let mut results = Vec::with_capacity(statements.len());
-			for statement in statements {
-				match transaction.execute(statement.sql, statement.params).await {
-					Ok(result) => results.push(result),
-					Err(error) => {
-						return match transaction.rollback().await {
-							Ok(()) => Err(error.context("execute sqlite batch statement")),
-							Err(rollback_error) => {
-								Err(error.context("execute sqlite batch statement").context(
-									rollback_error.context("rollback sqlite batch transaction"),
-								))
-							}
-						};
+		let result = if self.backend == SqliteBackend::RemoteEnvoy {
+			match self.begin_regular_operation().await {
+				Ok(_guard) => self.remote_execute_batch(statements).await,
+				Err(error) => Err(error),
+			}
+		} else {
+			async {
+				let transaction = self.begin_transaction(None).await?;
+				let mut results = Vec::with_capacity(statements.len());
+				for statement in statements {
+					match transaction.execute(statement.sql, statement.params).await {
+						Ok(result) => results.push(result),
+						Err(error) => {
+							return match transaction.rollback().await {
+								Ok(()) => Err(error.context("execute sqlite batch statement")),
+								Err(rollback_error) => Err(error
+									.context("execute sqlite batch statement")
+									.context(
+										rollback_error.context("rollback sqlite batch transaction"),
+									)),
+							};
+						}
 					}
 				}
+				transaction
+					.commit()
+					.await
+					.context("commit sqlite batch transaction")?;
+				Ok(results)
 			}
-			transaction
-				.commit()
-				.await
-				.context("commit sqlite batch transaction")?;
-			Ok(results)
-		}
-		.await;
+			.await
+		};
 
 		match result {
 			Ok(results) => Ok(results),
@@ -795,6 +802,40 @@ impl SqliteDb {
 				Ok(execute_result_from_protocol(ok.result))
 			}
 			protocol::SqliteExecuteResponse::SqliteErrorResponse(error) => {
+				Err(self.remote_sqlite_error_response(error))
+			}
+		}
+	}
+
+	async fn remote_execute_batch(
+		&self,
+		statements: Vec<SqliteBatchStatement>,
+	) -> Result<Vec<ExecuteResult>> {
+		let config = self.remote_config()?;
+		let response = config
+			.handle
+			.remote_sqlite_execute_batch(protocol::SqliteExecuteBatchRequest {
+				namespace_id: config.namespace_id,
+				actor_id: config.actor_id,
+				generation: config.generation,
+				statements: statements
+					.into_iter()
+					.map(|statement| protocol::SqliteBatchStatement {
+						sql: statement.sql,
+						params: statement.params.map(protocol_bind_params),
+					})
+					.collect(),
+			})
+			.await
+			.map_err(remote_request_error)?;
+
+		match response {
+			protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(ok) => Ok(ok
+				.results
+				.into_iter()
+				.map(execute_result_from_protocol)
+				.collect()),
+			protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(error) => {
 				Err(self.remote_sqlite_error_response(error))
 			}
 		}

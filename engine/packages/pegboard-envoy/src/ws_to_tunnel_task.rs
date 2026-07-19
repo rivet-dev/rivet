@@ -44,6 +44,7 @@ use crate::{
 };
 
 const MAX_REMOTE_SQL_BIND_BYTES: usize = 128 * 1024;
+const MAX_REMOTE_SQL_BATCH_STATEMENTS: usize = 256;
 
 /// Wall-clock threshold above which a single handle_message invocation is logged as a head-of-line
 /// blocking risk. The ws_to_tunnel_task loop is strictly serial per envoy, so any handler that
@@ -609,6 +610,7 @@ fn message_kind_label(msg: &protocol::ToRivet) -> &'static str {
 		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit",
 		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec",
 		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute",
+		protocol::ToRivet::ToRivetSqliteExecuteBatchRequest(_) => "sqlite_execute_batch",
 		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
 		protocol::ToRivet::ToRivetMetadata(_) => "metadata",
 		protocol::ToRivet::ToRivetEvents(_) => "events",
@@ -719,6 +721,14 @@ async fn dispatch_message(
 				actor_remote_sqlite_task::Key::new(req.data.actor_id.clone(), req.data.generation);
 			task_manager
 				.enqueue_remote_sqlite(key, actor_remote_sqlite_task::Message::Execute(req))?;
+		}
+		protocol::ToRivet::ToRivetSqliteExecuteBatchRequest(req) => {
+			let key =
+				actor_remote_sqlite_task::Key::new(req.data.actor_id.clone(), req.data.generation);
+			task_manager.enqueue_remote_sqlite(
+				key,
+				actor_remote_sqlite_task::Message::ExecuteBatch(req),
+			)?;
 		}
 		protocol::ToRivet::ToRivetTunnelMessage(tunnel_msg) => {
 			let inner_data_len = tunnel_message_inner_data_len(&tunnel_msg.message_kind);
@@ -1140,6 +1150,47 @@ pub(super) async fn handle_remote_sqlite_execute_response(
 	response
 }
 
+pub(super) async fn handle_remote_sqlite_execute_batch_response(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecuteBatchRequest,
+) -> protocol::SqliteExecuteBatchResponse {
+	let start = Instant::now();
+	let actor_id = request.actor_id.clone();
+	let request_bytes = request
+		.statements
+		.iter()
+		.map(|statement| statement.sql.len() + bind_params_bytes(statement.params.as_ref()))
+		.sum();
+	let response = match handle_remote_sqlite_execute_batch(ctx, conn, request).await {
+		Ok(results) => protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(
+			protocol::SqliteExecuteBatchOk {
+				results: results.into_iter().map(protocol_execute_result).collect(),
+			},
+		),
+		Err(err) => {
+			tracing::error!(actor_id = %actor_id, ?err, "remote sqlite execute batch request failed");
+			protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(sqlite_error_response(&err))
+		}
+	};
+	record_sqlite_request_metrics(
+		conn,
+		"execute_batch",
+		sqlite_execute_batch_response_kind(&response),
+		start,
+	);
+	record_sqlite_payload_bytes(conn, "execute_batch", "request", request_bytes);
+	if let protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(ok) = &response {
+		record_sqlite_payload_bytes(
+			conn,
+			"execute_batch",
+			"response",
+			ok.results.iter().map(execute_result_bytes).sum(),
+		);
+	}
+	response
+}
+
 pub(super) async fn ack_commands(
 	ctx: &StandaloneCtx,
 	namespace_id: Id,
@@ -1552,6 +1603,15 @@ fn sqlite_execute_response_kind(response: &protocol::SqliteExecuteResponse) -> &
 	}
 }
 
+fn sqlite_execute_batch_response_kind(
+	response: &protocol::SqliteExecuteBatchResponse,
+) -> &'static str {
+	match response {
+		protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(_) => "ok",
+		protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(_) => "error",
+	}
+}
+
 fn record_sqlite_request_metrics(
 	conn: &Conn,
 	request_type: &'static str,
@@ -1656,6 +1716,73 @@ async fn handle_remote_sqlite_execute(
 	)
 	.await?;
 	database.execute(request.sql, params).await
+}
+
+async fn handle_remote_sqlite_execute_batch(
+	ctx: &StandaloneCtx,
+	conn: &Conn,
+	request: protocol::SqliteExecuteBatchRequest,
+) -> Result<Vec<ExecuteResult>> {
+	validate_remote_sqlite_actor(
+		ctx,
+		conn,
+		&request.namespace_id,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	if request.statements.len() > MAX_REMOTE_SQL_BATCH_STATEMENTS {
+		bail!(
+			"remote sqlite batch had {} statements, exceeding limit {MAX_REMOTE_SQL_BATCH_STATEMENTS}",
+			request.statements.len()
+		);
+	}
+	let bind_bytes = request
+		.statements
+		.iter()
+		.map(|statement| bind_params_bytes(statement.params.as_ref()))
+		.sum::<usize>();
+	if bind_bytes > MAX_REMOTE_SQL_BIND_BYTES {
+		bail!(
+			"remote sqlite batch bind params had {bind_bytes} bytes, exceeding limit {MAX_REMOTE_SQL_BIND_BYTES}"
+		);
+	}
+
+	let actor_db = actor_db(ctx, conn, request.actor_id.clone()).await?;
+	let database = remote_sqlite_executor_from_parts(
+		&conn.remote_sqlite_executors,
+		actor_db,
+		&request.actor_id,
+		request.generation,
+	)
+	.await?;
+	database.exec("BEGIN".to_owned()).await?;
+	let mut results = Vec::with_capacity(request.statements.len());
+	for statement in request.statements {
+		let params = statement
+			.params
+			.map(|params| params.into_iter().map(bind_param_from_protocol).collect());
+		match database.execute(statement.sql, params).await {
+			Ok(result) => results.push(result),
+			Err(error) => {
+				return match database.exec("ROLLBACK".to_owned()).await {
+					Ok(_) => Err(error.context("execute remote sqlite batch statement")),
+					Err(rollback_error) => Err(error
+						.context("execute remote sqlite batch statement")
+						.context(rollback_error.context("rollback remote sqlite batch"))),
+				};
+			}
+		}
+	}
+	if let Err(error) = database.exec("COMMIT".to_owned()).await {
+		return match database.exec("ROLLBACK".to_owned()).await {
+			Ok(_) => Err(error.context("commit remote sqlite batch")),
+			Err(rollback_error) => Err(error
+				.context("commit remote sqlite batch")
+				.context(rollback_error.context("rollback remote sqlite batch after failed commit"))),
+		};
+	}
+	Ok(results)
 }
 
 async fn validate_remote_sqlite_actor(
@@ -2172,6 +2299,21 @@ pub(super) async fn send_sqlite_execute_response(
 			data,
 		}),
 		"sqlite execute response",
+	)
+	.await
+}
+
+pub(super) async fn send_sqlite_execute_batch_response(
+	conn: &Conn,
+	request_id: u32,
+	data: protocol::SqliteExecuteBatchResponse,
+) -> Result<()> {
+	send_to_envoy(
+		conn,
+		protocol::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(
+			protocol::ToEnvoySqliteExecuteBatchResponse { request_id, data },
+		),
+		"sqlite execute batch response",
 	)
 	.await
 }

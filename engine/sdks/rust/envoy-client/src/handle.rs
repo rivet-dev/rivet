@@ -535,6 +535,20 @@ impl EnvoyHandle {
 		}
 	}
 
+	pub async fn remote_sqlite_execute_batch(
+		&self,
+		request: protocol::SqliteExecuteBatchRequest,
+	) -> anyhow::Result<protocol::SqliteExecuteBatchResponse> {
+		match self
+			.send_remote_sqlite_request(RemoteSqliteRequest::ExecuteBatch(request), None)
+			.await?
+			.response
+		{
+			RemoteSqliteResponse::ExecuteBatch(response) => Ok(response),
+			_ => anyhow::bail!("unexpected remote sqlite execute batch response type"),
+		}
+	}
+
 	/// Executes remote SQLite on one exact WebSocket session and returns the
 	/// session that carried the response. Passing `None` allows an unsent request
 	/// to wait for the next connection; passing `Some` fails before sending if

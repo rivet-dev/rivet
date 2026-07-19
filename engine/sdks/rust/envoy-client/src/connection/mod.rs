@@ -212,6 +212,7 @@ fn to_rivet_kind(message: &protocol::ToRivet) -> &'static str {
 		protocol::ToRivet::ToRivetSqliteCommitRequest(_) => "sqlite_commit",
 		protocol::ToRivet::ToRivetSqliteExecRequest(_) => "sqlite_exec",
 		protocol::ToRivet::ToRivetSqliteExecuteRequest(_) => "sqlite_execute",
+		protocol::ToRivet::ToRivetSqliteExecuteBatchRequest(_) => "sqlite_execute_batch",
 		protocol::ToRivet::ToRivetTunnelMessage(_) => "tunnel_message",
 	}
 }

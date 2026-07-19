@@ -220,17 +220,65 @@ fn spawn_remote_sqlite(mut receiver: mpsc::UnboundedReceiver<ToEnvoyMessage>) {
 				else {
 					continue;
 				};
-				let RemoteSqliteRequest::Execute(request) = request else {
-					continue;
+				let response = match request {
+					RemoteSqliteRequest::Execute(request) => {
+						RemoteSqliteResponse::Execute(execute_sqlite(&conn, request))
+					}
+					RemoteSqliteRequest::ExecuteBatch(request) => {
+						RemoteSqliteResponse::ExecuteBatch(execute_sqlite_batch(&conn, request))
+					}
+					RemoteSqliteRequest::Exec(_) => continue,
 				};
-				let response = execute_sqlite(&conn, request);
 				let _ = response_tx.send(Ok(RemoteSqliteResponseEnvelope {
-					response: RemoteSqliteResponse::Execute(response),
+					response,
 					session: 1,
 				}));
 			}
 		});
 	});
+}
+
+fn execute_sqlite_batch(
+	conn: &rusqlite::Connection,
+	request: protocol::SqliteExecuteBatchRequest,
+) -> protocol::SqliteExecuteBatchResponse {
+	let result = (|| {
+		conn.execute_batch("BEGIN")?;
+		let mut results = Vec::with_capacity(request.statements.len());
+		for statement in request.statements {
+			let result = execute_sqlite_inner(
+				conn,
+				protocol::SqliteExecuteRequest {
+					namespace_id: request.namespace_id.clone(),
+					actor_id: request.actor_id.clone(),
+					generation: request.generation,
+					sql: statement.sql,
+					params: statement.params,
+				},
+			);
+			match result {
+				Ok(result) => results.push(result),
+				Err(error) => {
+					let _ = conn.execute_batch("ROLLBACK");
+					return Err(error);
+				}
+			}
+		}
+		conn.execute_batch("COMMIT")?;
+		Ok(results)
+	})();
+	match result {
+		Ok(results) => protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(
+			protocol::SqliteExecuteBatchOk { results },
+		),
+		Err(error) => protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(
+			protocol::SqliteErrorResponse {
+				group: "sqlite".to_owned(),
+				code: "internal_error".to_owned(),
+				message: error.to_string(),
+			},
+		),
+	}
 }
 
 fn execute_sqlite(
@@ -376,8 +424,9 @@ CREATE INDEX _rivet_schedule_history_schedule
     ON _rivet_schedule_history (schedule_id, fired_at DESC, id DESC);
 CREATE INDEX _rivet_schedule_history_fired_at
     ON _rivet_schedule_history (fired_at DESC, id DESC);
-CREATE INDEX _rivet_schedule_history_result
-    ON _rivet_schedule_history (result);
+CREATE INDEX _rivet_schedule_history_running
+    ON _rivet_schedule_history (result)
+    WHERE result = 0;
 CREATE TABLE _rivet_conns (
     conn_id TEXT PRIMARY KEY,
     parameters BLOB NOT NULL,

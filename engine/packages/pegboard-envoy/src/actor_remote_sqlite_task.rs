@@ -28,6 +28,7 @@ impl Key {
 pub(super) enum Message {
 	Exec(protocol::ToRivetSqliteExecRequest),
 	Execute(protocol::ToRivetSqliteExecuteRequest),
+	ExecuteBatch(protocol::ToRivetSqliteExecuteBatchRequest),
 }
 
 pub(super) async fn task(
@@ -51,6 +52,18 @@ pub(super) async fn task(
 						.await;
 				ws_to_tunnel_task::send_sqlite_execute_response(&conn, req.request_id, response)
 					.await?;
+			}
+			Ok(Some(Message::ExecuteBatch(req))) => {
+				let response = ws_to_tunnel_task::handle_remote_sqlite_execute_batch_response(
+					&ctx, &conn, req.data,
+				)
+				.await;
+				ws_to_tunnel_task::send_sqlite_execute_batch_response(
+					&conn,
+					req.request_id,
+					response,
+				)
+				.await?;
 			}
 			Ok(None) | Err(_) => return Ok(TaskExit::RemoteSqlite(key)),
 		}

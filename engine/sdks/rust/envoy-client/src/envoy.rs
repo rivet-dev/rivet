@@ -30,7 +30,8 @@ use crate::sqlite::{
 	SqliteRequestEntry, SqliteResponse, cleanup_old_remote_sqlite_requests,
 	cleanup_old_sqlite_requests, fail_remote_sqlite_requests_with_shutdown,
 	fail_sent_remote_sqlite_requests_with_indeterminate_result, fail_sqlite_requests_with_shutdown,
-	handle_remote_sqlite_exec_response, handle_remote_sqlite_execute_response,
+	handle_remote_sqlite_exec_response, handle_remote_sqlite_execute_batch_response,
+	handle_remote_sqlite_execute_response,
 	handle_remote_sqlite_request, handle_sqlite_commit_response, handle_sqlite_get_pages_response,
 	handle_sqlite_request, process_unsent_remote_sqlite_requests, process_unsent_sqlite_requests,
 };
@@ -599,6 +600,9 @@ async fn handle_conn_message(
 		}
 		protocol::ToEnvoy::ToEnvoySqliteExecuteResponse(response) => {
 			handle_remote_sqlite_execute_response(ctx, response).await;
+		}
+		protocol::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(response) => {
+			handle_remote_sqlite_execute_batch_response(ctx, response).await;
 		}
 		protocol::ToEnvoy::ToEnvoyTunnelMessage(tunnel_msg) => {
 			handle_tunnel_message(ctx, tunnel_msg).await;

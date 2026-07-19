@@ -34,12 +34,14 @@ pub enum SqliteResponse {
 pub enum RemoteSqliteRequest {
 	Exec(protocol::SqliteExecRequest),
 	Execute(protocol::SqliteExecuteRequest),
+	ExecuteBatch(protocol::SqliteExecuteBatchRequest),
 }
 
 #[derive(Debug)]
 pub enum RemoteSqliteResponse {
 	Exec(protocol::SqliteExecResponse),
 	Execute(protocol::SqliteExecuteResponse),
+	ExecuteBatch(protocol::SqliteExecuteBatchResponse),
 }
 
 #[derive(Debug)]
@@ -53,6 +55,7 @@ impl RemoteSqliteRequest {
 		match self {
 			RemoteSqliteRequest::Exec(_) => "exec",
 			RemoteSqliteRequest::Execute(_) => "execute",
+			RemoteSqliteRequest::ExecuteBatch(_) => "execute_batch",
 		}
 	}
 
@@ -60,6 +63,7 @@ impl RemoteSqliteRequest {
 		match self {
 			RemoteSqliteRequest::Exec(_) => "remote_exec",
 			RemoteSqliteRequest::Execute(_) => "remote_execute",
+			RemoteSqliteRequest::ExecuteBatch(_) => "remote_execute_batch",
 		}
 	}
 }
@@ -177,6 +181,18 @@ pub async fn handle_remote_sqlite_execute_response(
 		response.request_id,
 		RemoteSqliteResponse::Execute(response.data),
 		"remote_sqlite_execute",
+	);
+}
+
+pub async fn handle_remote_sqlite_execute_batch_response(
+	ctx: &mut EnvoyContext,
+	response: protocol::ToEnvoySqliteExecuteBatchResponse,
+) {
+	handle_remote_sqlite_response(
+		ctx,
+		response.request_id,
+		RemoteSqliteResponse::ExecuteBatch(response.data),
+		"remote_sqlite_execute_batch",
 	);
 }
 
@@ -314,6 +330,11 @@ pub fn remote_sqlite_request_to_message(
 				request_id,
 				data,
 			})
+		}
+		RemoteSqliteRequest::ExecuteBatch(data) => {
+			protocol::ToRivet::ToRivetSqliteExecuteBatchRequest(
+				protocol::ToRivetSqliteExecuteBatchRequest { request_id, data },
+			)
 		}
 	}
 }
@@ -611,6 +632,28 @@ mod tests {
 		}
 	}
 
+	fn execute_batch_request() -> protocol::SqliteExecuteBatchRequest {
+		protocol::SqliteExecuteBatchRequest {
+			namespace_id: "ns".to_string(),
+			actor_id: "actor".to_string(),
+			generation: 1,
+			statements: vec![
+				protocol::SqliteBatchStatement {
+					sql: "insert into t values (?)".to_string(),
+					params: Some(vec![protocol::SqliteBindParam::SqliteValueInteger(
+						protocol::SqliteValueInteger { value: 1 },
+					)]),
+				},
+				protocol::SqliteBatchStatement {
+					sql: "insert into t values (?)".to_string(),
+					params: Some(vec![protocol::SqliteBindParam::SqliteValueInteger(
+						protocol::SqliteValueInteger { value: 2 },
+					)]),
+				},
+			],
+		}
+	}
+
 	#[tokio::test]
 	async fn remote_sqlite_exec_response_matches_pending_request() {
 		let mut ctx = new_envoy_context();
@@ -657,6 +700,29 @@ mod tests {
 			_ => panic!("unexpected response"),
 		}
 		assert!(ctx.remote_sqlite_requests.is_empty());
+	}
+
+	#[tokio::test]
+	async fn remote_sqlite_batch_uses_one_websocket_request() {
+		let mut ctx = new_envoy_context();
+		let (ws_tx, mut ws_rx) = tokio::sync::mpsc::unbounded_channel();
+		crate::connection::install_connection(&ctx.shared, ws_tx).await;
+		let (tx, _rx) = oneshot::channel();
+
+		handle_remote_sqlite_request(
+			&mut ctx,
+			RemoteSqliteRequest::ExecuteBatch(execute_batch_request()),
+			None,
+			tx,
+		)
+		.await;
+
+		assert!(matches!(ws_rx.recv().await, Some(WsTxMessage::Send(_))));
+		assert!(
+			ws_rx.try_recv().is_err(),
+			"a batch must serialize as one WebSocket message"
+		);
+		assert_eq!(ctx.remote_sqlite_requests.len(), 1);
 	}
 
 	#[test]

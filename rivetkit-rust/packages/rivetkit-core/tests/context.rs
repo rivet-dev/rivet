@@ -229,23 +229,41 @@ fn spawn_test_remote_sqlite_on(
 				else {
 					continue;
 				};
-				let TestRemoteSqliteRequest::Execute(request) = request else {
-					continue;
+				let response = match request {
+					TestRemoteSqliteRequest::Execute(request) => {
+						if let Some(gate) = write_gate
+							.as_ref()
+							.filter(|gate| request.sql.starts_with(gate.sql_prefix))
+						{
+							let _ = gate.entered_tx.send(());
+							gate.release
+								.acquire()
+								.await
+								.expect("write gate semaphore should stay open")
+								.forget();
+						}
+						TestRemoteSqliteResponse::Execute(execute_test_sqlite(&conn, request))
+					}
+					TestRemoteSqliteRequest::ExecuteBatch(request) => {
+						if let Some(gate) = write_gate.as_ref().filter(|gate| {
+							request
+								.statements
+								.iter()
+								.any(|statement| statement.sql.starts_with(gate.sql_prefix))
+						}) {
+							let _ = gate.entered_tx.send(());
+							gate.release
+								.acquire()
+								.await
+								.expect("write gate semaphore should stay open")
+								.forget();
+						}
+						TestRemoteSqliteResponse::ExecuteBatch(execute_test_sqlite_batch(&conn, request))
+					}
+					TestRemoteSqliteRequest::Exec(_) => continue,
 				};
-				if let Some(gate) = write_gate
-					.as_ref()
-					.filter(|gate| request.sql.starts_with(gate.sql_prefix))
-				{
-					let _ = gate.entered_tx.send(());
-					gate.release
-						.acquire()
-						.await
-						.expect("write gate semaphore should stay open")
-						.forget();
-				}
-				let response = execute_test_sqlite(&conn, request);
 				let _ = response_tx.send(Ok(TestRemoteSqliteResponseEnvelope {
-					response: TestRemoteSqliteResponse::Execute(response),
+					response,
 					session: 1,
 				}));
 			}
@@ -308,8 +326,9 @@ CREATE INDEX IF NOT EXISTS _rivet_schedule_history_schedule
     ON _rivet_schedule_history (schedule_id, fired_at DESC, id DESC);
 CREATE INDEX IF NOT EXISTS _rivet_schedule_history_fired_at
     ON _rivet_schedule_history (fired_at DESC, id DESC);
-CREATE INDEX IF NOT EXISTS _rivet_schedule_history_result
-    ON _rivet_schedule_history (result);
+CREATE INDEX IF NOT EXISTS _rivet_schedule_history_running
+    ON _rivet_schedule_history (result)
+    WHERE result = 0;
 CREATE TABLE IF NOT EXISTS _rivet_conns (
     conn_id         TEXT PRIMARY KEY,
     parameters      BLOB NOT NULL,
@@ -469,6 +488,49 @@ fn execute_test_sqlite(
 				message: error.to_string(),
 			})
 		}
+	}
+}
+
+fn execute_test_sqlite_batch(
+	conn: &rusqlite::Connection,
+	request: protocol::SqliteExecuteBatchRequest,
+) -> protocol::SqliteExecuteBatchResponse {
+	let result = (|| {
+		conn.execute_batch("BEGIN")?;
+		let mut results = Vec::with_capacity(request.statements.len());
+		for statement in request.statements {
+			let result = execute_test_sqlite_inner(
+				conn,
+				protocol::SqliteExecuteRequest {
+					namespace_id: request.namespace_id.clone(),
+					actor_id: request.actor_id.clone(),
+					generation: request.generation,
+					sql: statement.sql,
+					params: statement.params,
+				},
+			);
+			match result {
+				Ok(result) => results.push(result),
+				Err(error) => {
+					let _ = conn.execute_batch("ROLLBACK");
+					return Err(error);
+				}
+			}
+		}
+		conn.execute_batch("COMMIT")?;
+		Ok(results)
+	})();
+	match result {
+		Ok(results) => protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(
+			protocol::SqliteExecuteBatchOk { results },
+		),
+		Err(error) => protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(
+			protocol::SqliteErrorResponse {
+				group: "sqlite".to_owned(),
+				code: "internal_error".to_owned(),
+				message: error.to_string(),
+			},
+		),
 	}
 }
 
@@ -1214,7 +1276,7 @@ mod moved_tests {
 		assert!(ctx.conns().any(|conn| conn.id() == "conn-c"));
 	}
 
-	#[tokio::test]
+	#[tokio::test(start_paused = true)]
 	async fn init_alarms_arms_local_alarm_for_persisted_schedule_state() {
 		let ctx = super::new_with_kv(
 			"actor-init-alarms",
@@ -1223,6 +1285,8 @@ mod moved_tests {
 			"local",
 			crate::kv::Kv::new_in_memory(),
 		);
+		let now_ms = 1_700_000_000_000;
+		ctx.set_schedule_time_for_tests(now_ms);
 		let fired = Arc::new(AtomicUsize::new(0));
 		ctx.set_local_alarm_callback(Some(Arc::new({
 			let fired = fired.clone();
@@ -1233,18 +1297,15 @@ mod moved_tests {
 				})
 			}
 		})));
-		ctx.at(now_timestamp_ms() + 20, "tick", &[1])
+		ctx.at(now_ms + 20, "tick", &[1])
 			.await
 			.expect("persist future schedule");
 		ctx.cancel_local_alarm_timeouts();
 		ctx.init_alarms().await;
 
-		for _ in 0..50 {
-			if fired.load(Ordering::SeqCst) > 0 {
-				break;
-			}
-			sleep(Duration::from_millis(10)).await;
-		}
+		tokio::task::yield_now().await;
+		tokio::time::advance(Duration::from_millis(20)).await;
+		tokio::task::yield_now().await;
 
 		assert_eq!(fired.load(Ordering::SeqCst), 1);
 	}

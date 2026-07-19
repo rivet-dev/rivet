@@ -101,8 +101,9 @@ CREATE INDEX _rivet_schedule_history_fired_at
     ON _rivet_schedule_history (fired_at DESC, id DESC)
 "#,
 		r#"
-CREATE INDEX _rivet_schedule_history_result
+CREATE INDEX _rivet_schedule_history_running
     ON _rivet_schedule_history (result)
+    WHERE result = 0
 "#,
 	],
 	&[

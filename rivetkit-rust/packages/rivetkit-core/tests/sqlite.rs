@@ -262,6 +262,51 @@ fn send_execute_ok(response_tx: oneshot::Sender<anyhow::Result<RemoteSqliteRespo
 		.expect("remote sqlite requester dropped response");
 }
 
+async fn receive_execute_batch(
+	envoy_rx: &mut mpsc::UnboundedReceiver<ToEnvoyMessage>,
+) -> (
+	protocol::SqliteExecuteBatchRequest,
+	oneshot::Sender<anyhow::Result<RemoteSqliteResponseEnvelope>>,
+) {
+	let message = tokio::time::timeout(std::time::Duration::from_secs(2), envoy_rx.recv())
+		.await
+		.expect("timed out waiting for remote sqlite batch request")
+		.expect("envoy request channel closed");
+	let ToEnvoyMessage::RemoteSqliteRequest {
+		request: RemoteSqliteRequest::ExecuteBatch(request),
+		expected_session: _,
+		response_tx,
+	} = message
+	else {
+		panic!("expected remote sqlite execute batch request");
+	};
+	(request, response_tx)
+}
+
+fn send_execute_batch_ok(
+	response_tx: oneshot::Sender<anyhow::Result<RemoteSqliteResponseEnvelope>>,
+	result_count: usize,
+) {
+	let result = protocol::SqliteExecuteResult {
+		columns: Vec::new(),
+		rows: Vec::new(),
+		changes: 0,
+		last_insert_row_id: None,
+	};
+	response_tx
+		.send(Ok(RemoteSqliteResponseEnvelope {
+			response: RemoteSqliteResponse::ExecuteBatch(
+				protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(
+					protocol::SqliteExecuteBatchOk {
+						results: vec![result; result_count],
+					},
+				),
+			),
+			session: 1,
+		}))
+		.expect("remote sqlite requester dropped response");
+}
+
 #[test]
 fn remote_backend_selection_is_independent_of_user_database_flag() {
 	assert_eq!(
@@ -481,10 +526,11 @@ async fn remote_execute_batch_uses_one_coordinated_transaction() {
 		}
 	});
 
-	respond_to_execute(&mut envoy_rx, "BEGIN").await;
-	respond_to_execute(&mut envoy_rx, "insert-one").await;
-	respond_to_execute(&mut envoy_rx, "insert-two").await;
-	respond_to_execute(&mut envoy_rx, "COMMIT").await;
+	let (request, response_tx) = receive_execute_batch(&mut envoy_rx).await;
+	assert_eq!(request.statements.len(), 2);
+	assert_eq!(request.statements[0].sql, "insert-one");
+	assert_eq!(request.statements[1].sql, "insert-two");
+	send_execute_batch_ok(response_tx, 2);
 
 	let results = batch.await.unwrap().unwrap();
 	assert_eq!(results.len(), 2);
@@ -511,12 +557,23 @@ async fn remote_execute_batch_rolls_back_after_statement_failure() {
 		}
 	});
 
-	respond_to_execute(&mut envoy_rx, "BEGIN").await;
-	let failure = receive_execute(&mut envoy_rx, "fails").await;
+	let (request, failure) = receive_execute_batch(&mut envoy_rx).await;
+	assert_eq!(request.statements.len(), 1);
+	assert_eq!(request.statements[0].sql, "fails");
 	failure
-		.send(Err(anyhow::anyhow!("injected statement failure")))
+		.send(Ok(RemoteSqliteResponseEnvelope {
+			response: RemoteSqliteResponse::ExecuteBatch(
+				protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(
+					protocol::SqliteErrorResponse {
+						group: "sqlite".to_owned(),
+						code: "internal_error".to_owned(),
+						message: "injected statement failure".to_owned(),
+					},
+				),
+			),
+			session: 1,
+		}))
 		.expect("remote sqlite requester dropped response");
-	respond_to_execute(&mut envoy_rx, "ROLLBACK").await;
 
 	let error = batch.await.unwrap().expect_err("batch should fail");
 	assert!(format!("{error:#}").contains("injected statement failure"));

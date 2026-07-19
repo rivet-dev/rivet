@@ -455,15 +455,20 @@ pub(crate) mod moved_tests {
 				else {
 					continue;
 				};
-				let RemoteSqliteRequest::Execute(request) = request else {
-					continue;
-				};
 				let response = {
 					let conn = conn.lock().expect("test sqlite connection poisoned");
-					execute_test_sqlite(&conn, request)
+					match request {
+						RemoteSqliteRequest::Execute(request) => {
+							RemoteSqliteResponse::Execute(execute_test_sqlite(&conn, request))
+						}
+						RemoteSqliteRequest::ExecuteBatch(request) => {
+							RemoteSqliteResponse::ExecuteBatch(execute_test_sqlite_batch(&conn, request))
+						}
+						RemoteSqliteRequest::Exec(_) => continue,
+					}
 				};
 				let _ = response_tx.send(Ok(RemoteSqliteResponseEnvelope {
-					response: RemoteSqliteResponse::Execute(response),
+					response,
 					session: 1,
 				}));
 			}
@@ -481,6 +486,49 @@ pub(crate) mod moved_tests {
 				})
 			}
 			Err(error) => protocol::SqliteExecuteResponse::SqliteErrorResponse(
+				protocol::SqliteErrorResponse {
+					group: "sqlite".to_owned(),
+					code: "internal_error".to_owned(),
+					message: error.to_string(),
+				},
+			),
+		}
+	}
+
+	fn execute_test_sqlite_batch(
+		conn: &rusqlite::Connection,
+		request: protocol::SqliteExecuteBatchRequest,
+	) -> protocol::SqliteExecuteBatchResponse {
+		let result = (|| {
+			conn.execute_batch("BEGIN")?;
+			let mut results = Vec::with_capacity(request.statements.len());
+			for statement in request.statements {
+				let result = execute_test_sqlite_inner(
+					conn,
+					protocol::SqliteExecuteRequest {
+						namespace_id: request.namespace_id.clone(),
+						actor_id: request.actor_id.clone(),
+						generation: request.generation,
+						sql: statement.sql,
+						params: statement.params,
+					},
+				);
+				match result {
+					Ok(result) => results.push(result),
+					Err(error) => {
+						let _ = conn.execute_batch("ROLLBACK");
+						return Err(error);
+					}
+				}
+			}
+			conn.execute_batch("COMMIT")?;
+			Ok(results)
+		})();
+		match result {
+			Ok(results) => protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(
+				protocol::SqliteExecuteBatchOk { results },
+			),
+			Err(error) => protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(
 				protocol::SqliteErrorResponse {
 					group: "sqlite".to_owned(),
 					code: "internal_error".to_owned(),

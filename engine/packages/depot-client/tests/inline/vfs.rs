@@ -58,7 +58,6 @@ fn vfs_config_wires_optimization_flags() {
 		vfs_page_cache_capacity_pages: DEFAULT_VFS_PAGE_CACHE_CAPACITY_PAGES / 2,
 		vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2,
 		vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS / 2,
-		vfs_retain_read_cache: true,
 		pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
 	};
 
@@ -5679,6 +5678,7 @@ fn warm_pidx_stale_read_then_rmw_commit_via_natural_reopen() {
 					request.now_ms,
 					CommitOptions {
 						expected_head_txid: request.expected_head_txid,
+						disable_size_cap: false,
 					},
 				)
 				.await
@@ -6173,6 +6173,77 @@ fn vfs_records_commit_phase_durations() {
 	assert!(metrics.state_update_ns > 0);
 	assert!(metrics.total_ns >= metrics.request_build_ns);
 	assert!(metrics.request_build_ns + metrics.transport_ns + metrics.state_update_ns > 0);
+}
+
+#[test]
+fn partial_status_index_reduces_storage_and_cold_page_fetches() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let relaxed = std::sync::atomic::Ordering::Relaxed;
+
+	let measure = |actor_id: &str, index_sql: &str| {
+		let db = harness.open_db_on_engine(
+			&runtime,
+			engine.clone(),
+			actor_id,
+			VfsConfig::default(),
+		);
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE history (id INTEGER PRIMARY KEY, result INTEGER NOT NULL, payload BLOB NOT NULL);",
+		)
+		.expect("create history table");
+		sqlite_exec(db.as_ptr(), index_sql).expect("create history index");
+		sqlite_exec(
+			db.as_ptr(),
+			"WITH RECURSIVE seq(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM seq WHERE id < 4000) INSERT INTO history (id, result, payload) SELECT id, CASE WHEN id = 1 THEN 0 ELSE 1 END, randomblob(256) FROM seq;",
+		)
+		.expect("populate history table");
+		let page_count = sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;")
+			.expect("read database page count");
+		drop(db);
+
+		let reopened = harness.open_db_on_engine(
+			&runtime,
+			engine.clone(),
+			actor_id,
+			VfsConfig::default(),
+		);
+		let ctx = direct_vfs_ctx(&reopened);
+		ctx.resolve_pages_fetches.store(0, relaxed);
+		ctx.pages_fetched_total.store(0, relaxed);
+		sqlite_exec(
+			reopened.as_ptr(),
+			"UPDATE history SET payload = randomblob(256) WHERE result = 0;",
+		)
+		.expect("update running history row");
+		(
+			page_count,
+			ctx.resolve_pages_fetches.load(relaxed),
+			ctx.pages_fetched_total.load(relaxed),
+		)
+	};
+
+	let full = measure(
+		&next_test_name("sqlite-full-status-index"),
+		"CREATE INDEX history_result ON history (result);",
+	);
+	let partial = measure(
+		&next_test_name("sqlite-partial-status-index"),
+		"CREATE INDEX history_running ON history (result) WHERE result = 0;",
+	);
+
+	assert!(partial.0 < full.0, "partial index should persist fewer pages");
+	assert!(partial.1 > 0, "cold update should fetch pages from storage");
+	assert!(
+		partial.1 <= full.1,
+		"partial index should not add cold storage round trips: partial={partial:?}, full={full:?}"
+	);
+	assert!(
+		partial.2 <= full.2,
+		"partial index should not fetch more cold pages: partial={partial:?}, full={full:?}"
+	);
 }
 
 #[test]

@@ -295,6 +295,19 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
+	async fn due_one_shots_are_claimed_across_batch_boundaries() {
+		let ctx = context("actor-one-shot-claim-batches");
+		for index in 0..129 {
+			ctx.at(BASE_TIME, "tick", &[index]).await.unwrap();
+		}
+
+		let dispatches = ctx.take_due_schedule_dispatches().await.unwrap();
+		assert_eq!(dispatches.len(), 129);
+		assert!(ctx.list_scheduled_events().await.unwrap().is_empty());
+		assert!(ctx.take_due_schedule_dispatches().await.unwrap().is_empty());
+	}
+
+	#[tokio::test]
 	async fn different_recurring_names_can_run_concurrently() {
 		let ctx = context("actor-concurrent-names");
 		ctx.cron_every("first", 5_000, "tick", &[], None)

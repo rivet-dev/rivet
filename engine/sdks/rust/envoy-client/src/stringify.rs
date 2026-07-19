@@ -287,6 +287,15 @@ pub fn stringify_to_rivet(message: &protocol::ToRivet) -> String {
 				val.request_id, val.data.actor_id, val.data.generation
 			)
 		}
+		protocol::ToRivet::ToRivetSqliteExecuteBatchRequest(val) => {
+			format!(
+				"ToRivetSqliteExecuteBatchRequest{{requestId: {}, actorId: \"{}\", generation: {}, statements: {}}}",
+				val.request_id,
+				val.data.actor_id,
+				val.data.generation,
+				val.data.statements.len()
+			)
+		}
 		protocol::ToRivet::ToRivetTunnelMessage(val) => {
 			format!(
 				"ToRivetTunnelMessage{{messageId: {}, messageKind: {}}}",
@@ -345,6 +354,12 @@ pub fn stringify_to_envoy(message: &protocol::ToEnvoy) -> String {
 		protocol::ToEnvoy::ToEnvoySqliteExecuteResponse(val) => {
 			format!(
 				"ToEnvoySqliteExecuteResponse{{requestId: {}}}",
+				val.request_id
+			)
+		}
+		protocol::ToEnvoy::ToEnvoySqliteExecuteBatchResponse(val) => {
+			format!(
+				"ToEnvoySqliteExecuteBatchResponse{{requestId: {}}}",
 				val.request_id
 			)
 		}

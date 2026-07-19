@@ -214,8 +214,21 @@ async fn run_remote_sqlite(
 		else {
 			continue;
 		};
-		let RemoteSqliteRequest::Execute(request) = request else {
-			panic!("migration test only expects remote execute requests");
+		let request = match request {
+			RemoteSqliteRequest::Execute(request) => request,
+			RemoteSqliteRequest::ExecuteBatch(request) => {
+				let response = execute_remote_batch(&conn, &harness, request);
+				response_tx
+					.send(Ok(RemoteSqliteResponseEnvelope {
+						response: RemoteSqliteResponse::ExecuteBatch(response),
+						session: 1,
+					}))
+					.expect("remote sqlite response receiver should still be alive");
+				continue;
+			}
+			RemoteSqliteRequest::Exec(_) => {
+				panic!("migration test only expects remote execute requests")
+			}
 		};
 		harness.request_count.fetch_add(1, Ordering::Relaxed);
 		let fail_commit_after_apply = request.sql == "COMMIT"
@@ -319,6 +332,96 @@ async fn run_remote_sqlite(
 			}))
 			.expect("remote sqlite response receiver should still be alive");
 	}
+}
+
+fn execute_remote_batch(
+	conn: &Connection,
+	harness: &SqliteHarness,
+	request: protocol::SqliteExecuteBatchRequest,
+) -> protocol::SqliteExecuteBatchResponse {
+	harness.request_count.fetch_add(1, Ordering::Relaxed);
+	harness.transaction_count.fetch_add(1, Ordering::Relaxed);
+	harness
+		.max_transaction_statements
+		.fetch_max(request.statements.len(), Ordering::SeqCst);
+	for statement in &request.statements {
+		if statement.sql.contains("queue_next_id") {
+			harness.queue_next_id_writes.fetch_add(1, Ordering::SeqCst);
+		}
+	}
+
+	let fail_after_apply = harness
+		.fail_commit_after_apply
+		.swap(false, Ordering::SeqCst)
+		|| harness
+			.indeterminate_commit_after_sql
+			.lock()
+			.as_ref()
+			.is_some_and(|sql| {
+				request
+					.statements
+					.iter()
+					.any(|statement| statement.sql.contains(sql))
+			});
+	if fail_after_apply {
+		harness.indeterminate_commit_after_sql.lock().take();
+	}
+
+	if let Err(error) = conn.execute_batch("BEGIN") {
+		return batch_sqlite_error("core", "internal_error", error.to_string());
+	}
+	let mut results = Vec::with_capacity(request.statements.len());
+	for statement in request.statements {
+		let should_fail = harness.fault.lock().as_ref().is_some_and(|fault| {
+			statement.sql.contains(fault.sql_contains)
+				&& fault.blob_param.is_none_or(|expected| {
+					statement.params.as_ref().is_some_and(|params| {
+						params.iter().any(|param| {
+							matches!(param, protocol::SqliteBindParam::SqliteValueBlob(value) if value.value == expected)
+						})
+					})
+				})
+		});
+		if should_fail {
+			harness.fault.lock().take();
+			let _ = conn.execute_batch("ROLLBACK");
+			return batch_sqlite_error("test", "injected_failure", "injected migration fault");
+		}
+
+		match execute_remote_sql(conn, &statement.sql, statement.params) {
+			Ok(protocol::SqliteExecuteResponse::SqliteExecuteOk(ok)) => results.push(ok.result),
+			Ok(protocol::SqliteExecuteResponse::SqliteErrorResponse(error)) => {
+				let _ = conn.execute_batch("ROLLBACK");
+				return protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(error);
+			}
+			Err(error) => {
+				let _ = conn.execute_batch("ROLLBACK");
+				return batch_sqlite_error("core", "internal_error", error.to_string());
+			}
+		}
+	}
+	if let Err(error) = conn.execute_batch("COMMIT") {
+		let _ = conn.execute_batch("ROLLBACK");
+		return batch_sqlite_error("core", "internal_error", error.to_string());
+	}
+	if fail_after_apply {
+		return batch_sqlite_error("test", "indeterminate_result", "injected lost commit response");
+	}
+	protocol::SqliteExecuteBatchResponse::SqliteExecuteBatchOk(protocol::SqliteExecuteBatchOk {
+		results,
+	})
+}
+
+fn batch_sqlite_error(
+	group: &str,
+	code: &str,
+	message: impl Into<String>,
+) -> protocol::SqliteExecuteBatchResponse {
+	protocol::SqliteExecuteBatchResponse::SqliteErrorResponse(protocol::SqliteErrorResponse {
+		group: group.to_owned(),
+		code: code.to_owned(),
+		message: message.into(),
+	})
 }
 
 fn execute_remote_sql(

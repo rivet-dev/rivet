@@ -310,8 +310,7 @@ fn query_catalog() -> Vec<QueryCase> {
 		QueryCase { id: "user_kv.list_range", sql: internal_storage::user_kv_list_sql("WHERE key >= ? AND key < ?", false, true), params: vec![Value::Blob(b"00000010".to_vec()), Value::Blob(b"00000100".to_vec()), 20_i64.into()], expectation: indexed(None, all_user_kv) },
 		QueryCase { id: "user_kv.list_prefix_open", sql: internal_storage::user_kv_list_sql("WHERE key >= ?", true, true), params: vec![Value::Blob(b"00009900".to_vec()), 20_i64.into()], expectation: indexed(None, all_user_kv) },
 		QueryCase { id: "user_kv.list_prefix", sql: internal_storage::user_kv_list_sql("WHERE key >= ? AND key < ?", false, false), params: vec![Value::Blob(b"000000".to_vec()), Value::Blob(b"000001".to_vec())], expectation: indexed(None, all_user_kv) },
-		QueryCase { id: "user_kv.list_all_first_page", sql: internal_storage::user_kv_list_page_sql("", false, false), params: vec![internal_storage::USER_KV_LIST_PAGE_SIZE.into()], expectation: bounded_scan(&[AllowedScan { table: "_rivet_user_kv", reason: "the first page starts at the beginning of the primary-key tree", bound: "each statement is limited to USER_KV_LIST_PAGE_SIZE (128) rows" }]) },
-		QueryCase { id: "user_kv.list_all_next_page", sql: internal_storage::user_kv_list_page_sql("", false, true), params: vec![Value::Blob(b"00000127".to_vec()), internal_storage::USER_KV_LIST_PAGE_SIZE.into()], expectation: indexed(None, all_user_kv) },
+		QueryCase { id: "user_kv.list_all", sql: internal_storage::user_kv_list_sql("", false, false), params: vec![], expectation: bounded_scan(&[AllowedScan { table: "_rivet_user_kv", reason: "the explicit list-all API returns the complete actor KV namespace in primary-key order", bound: "callers can set ListOpts.limit when they do not want to materialize the complete namespace" }]) },
 		QueryCase { id: "connection.delete_state", sql: internal_storage::DELETE_CONN_STATE_SQL.into(), params: vec![text("00000001")], expectation: indexed(None, &["_rivet_conn_state"]) },
 		QueryCase { id: "connection.delete", sql: internal_storage::DELETE_CONN_SQL.into(), params: vec![text("00000001")], expectation: indexed(None, &["_rivet_conns"]) },
 		QueryCase { id: "runtime.last_alarm", sql: internal_storage::LOAD_LAST_PUSHED_ALARM_SQL.into(), params: vec![], expectation: indexed(None, &["_rivet_runtime"]) },
@@ -329,15 +328,15 @@ fn query_catalog() -> Vec<QueryCase> {
 		QueryCase { id: "schedule.get", sql: schedule::LOAD_SCHEDULE_SQL.into(), params: vec![text("cron:00000001")], expectation: indexed(None, all_schedules) },
 		QueryCase { id: "schedule.count", sql: schedule::COUNT_SCHEDULES_SQL.into(), params: vec![], expectation: bounded_scan(&[AllowedScan { table: "_rivet_schedule_events", reason: "SQLite represents its optimized COUNT(*) opcode as a covering-index scan in the query plan", bound: "runtime VM-step scaling verifies row-count-independent work; ActorConfig.max_schedules also caps rows" }]) },
 		QueryCase { id: "schedule.due", sql: schedule::TAKE_DUE_SCHEDULES_SQL.into(), params: vec![5_i64.into()], expectation: indexed(Some("_rivet_schedule_events_trigger_at"), all_schedules) },
-		QueryCase { id: "schedule.claim_one_shot", sql: schedule::CLAIM_ONE_SHOT_SQL.into(), params: vec![text("at:00000000"), 0_i64.into()], expectation: indexed(None, all_schedules) },
+		QueryCase { id: "schedule.claim_one_shots", sql: schedule::claim_one_shots_sql(3), params: vec![0_i64.into(), text("at:00000000"), 0_i64.into(), text("at:00000003"), 3_i64.into(), text("at:00000006"), 6_i64.into()], expectation: indexed(None, all_schedules) },
 		QueryCase { id: "schedule.advance_skipped", sql: schedule::ADVANCE_SKIPPED_SCHEDULE_SQL.into(), params: vec![20_000_i64.into(), text("cron:00000001")], expectation: indexed(None, all_schedules) },
 		QueryCase { id: "schedule.advance", sql: schedule::ADVANCE_SCHEDULE_SQL.into(), params: vec![20_000_i64.into(), 10_000_i64.into(), text("cron:00000002")], expectation: indexed(None, all_schedules) },
 		QueryCase { id: "schedule.finish_history", sql: schedule::FINISH_HISTORY_SQL.into(), params: vec![20_000_i64.into(), 1_i64.into(), Value::Null, Value::Null, Value::Null, Value::Null, 1_i64.into(), 0_i64.into()], expectation: indexed(None, all_history) },
-		QueryCase { id: "schedule.recover_history", sql: schedule::RECOVER_HISTORY_SQL.into(), params: vec![20_000_i64.into(), 2_i64.into(), text("schedule"), text("interrupted"), text("interrupted"), Value::Null, 0_i64.into()], expectation: indexed(Some("_rivet_schedule_history_result"), all_history) },
+		QueryCase { id: "schedule.recover_history", sql: schedule::RECOVER_HISTORY_SQL.into(), params: vec![20_000_i64.into(), 2_i64.into(), text("schedule"), text("interrupted"), text("interrupted"), Value::Null], expectation: indexed(Some("_rivet_schedule_history_running"), all_history) },
 		QueryCase { id: "schedule.next_future", sql: schedule::NEXT_FUTURE_SCHEDULE_SQL.into(), params: vec![5_000_i64.into()], expectation: indexed(Some("_rivet_schedule_events_trigger_at"), all_schedules) },
 		QueryCase { id: "schedule.next", sql: schedule::NEXT_SCHEDULE_SQL.into(), params: vec![], expectation: indexed(Some("_rivet_schedule_events_trigger_at"), all_schedules) },
 		QueryCase { id: "schedule.prune", sql: schedule::PRUNE_SCHEDULE_HISTORY_SQL.into(), params: vec![text("cron:0001"), text("cron:0001"), 20_i64.into()], expectation: indexed(Some("_rivet_schedule_history_schedule"), all_history) },
-		QueryCase { id: "schedule.prune_global", sql: schedule::PRUNE_GLOBAL_HISTORY_SQL.into(), params: vec![10_000_i64.into()], expectation: QueryPlanExpectation { forbid_full_scan_of: all_history, forbid_temp_sort: true, forbid_auto_index: true, expected_index: Some("_rivet_schedule_history_fired_at"), allowed_scans: &[AllowedScan { table: "_rivet_schedule_history", reason: "SQLite uses an optimized COUNT(*) plus an ordered index walk limited to overflow rows", bound: "MAX_ACTOR_HISTORY caps retained rows and steady-state pruning visits at most the newly created overflow" }] } },
+		QueryCase { id: "schedule.prune_global", sql: schedule::PRUNE_GLOBAL_HISTORY_SQL.into(), params: vec![10_000_i64.into()], expectation: QueryPlanExpectation { forbid_full_scan_of: all_history, forbid_temp_sort: true, forbid_auto_index: true, expected_index: Some("_rivet_schedule_history_fired_at"), allowed_scans: &[AllowedScan { table: "_rivet_schedule_history", reason: "global pruning walks the history ordering index to skip retained rows and delete only the overflow", bound: "MAX_ACTOR_HISTORY fixes the offset at 10,000 retained rows" }] } },
 		QueryCase { id: "cleanup.select_chunk", sql: internal_storage::clear_table_select_sql("_rivet_user_kv", "key", "length(key) + length(value)"), params: vec![], expectation: bounded_scan(&[AllowedScan { table: "_rivet_user_kv", reason: "interrupted legacy import cleanup walks one primary-key chunk", bound: "each statement is limited to KV_TX_MAX_ROWS (128)" }]) },
 		QueryCase { id: "cleanup.delete_row", sql: internal_storage::clear_table_delete_sql("_rivet_user_kv", "key"), params: vec![Value::Blob(b"00000001".to_vec())], expectation: indexed(None, all_user_kv) },
 	]
@@ -440,11 +439,6 @@ fn sql_efficiency_hot_paths_do_not_scale_with_unrelated_rows() {
 			schedule::TAKE_DUE_SCHEDULES_SQL.to_owned(),
 			vec![Value::Integer(5)],
 		),
-		(
-			"schedule.prune_global_under_cap",
-			schedule::PRUNE_GLOBAL_HISTORY_SQL.to_owned(),
-			vec![Value::Integer(20_000)],
-		),
 	];
 	for (id, sql, params) in cases {
 		let small = measured_vm_steps(100, &sql, &params);
@@ -474,11 +468,11 @@ fn sql_efficiency_negative_control_detects_unindexed_access() {
 }
 
 #[tokio::test]
-async fn sql_efficiency_unlimited_kv_listing_pages_without_gaps() {
+async fn sql_efficiency_unlimited_kv_listing_uses_one_ordered_query() {
 	let ctx = crate::testing::actor_context("sql-efficiency-list", "actor", Vec::new(), "local");
 	crate::actor::internal_schema::ensure_internal_schema(ctx.sql())
 		.await
-		.expect("initialize paginated KV fixture");
+		.expect("initialize KV listing fixture");
 	let entries = (0..300)
 		.map(|index| {
 			(
@@ -493,7 +487,7 @@ async fn sql_efficiency_unlimited_kv_listing_pages_without_gaps() {
 		.collect::<Vec<_>>();
 	internal_storage::user_kv_batch_put(ctx.sql(), &refs)
 		.await
-		.expect("seed paginated KV fixture");
+		.expect("seed KV listing fixture");
 
 	let forward = internal_storage::user_kv_list_prefix(
 		ctx.sql(),
@@ -501,7 +495,7 @@ async fn sql_efficiency_unlimited_kv_listing_pages_without_gaps() {
 		ListOpts::default(),
 	)
 	.await
-	.expect("list all KV pages forward");
+	.expect("list all KV values forward");
 	assert_eq!(forward, entries);
 
 	let reverse = internal_storage::user_kv_list_prefix(
@@ -513,6 +507,6 @@ async fn sql_efficiency_unlimited_kv_listing_pages_without_gaps() {
 		},
 	)
 	.await
-	.expect("list all KV pages in reverse");
+	.expect("list all KV values in reverse");
 	assert_eq!(reverse, entries.into_iter().rev().collect::<Vec<_>>());
 }

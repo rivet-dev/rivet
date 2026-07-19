@@ -32,6 +32,7 @@ pub const MAX_HISTORY: i64 = 1_000;
 pub const MAX_ACTOR_HISTORY: i64 = 10_000;
 pub const MIN_INTERVAL_MS: i64 = 5_000;
 const DEFAULT_HISTORY_LIMIT: i64 = 20;
+const CLAIM_ONE_SHOT_BATCH_SIZE: usize = 128;
 
 pub(crate) const CANCEL_SCHEDULE_SQL: &str =
 	"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND kind = ?";
@@ -47,20 +48,26 @@ pub(crate) const CRON_HISTORY_SQL: &str = "SELECT action, scheduled_at, fired_at
 pub(crate) const LOAD_SCHEDULE_SQL: &str = "SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE event_id = ?";
 pub(crate) const COUNT_SCHEDULES_SQL: &str = "SELECT COUNT(*) FROM _rivet_schedule_events";
 pub(crate) const TAKE_DUE_SCHEDULES_SQL: &str = "SELECT event_id, trigger_at, action, args, kind, cron_expression, timezone, interval_ms, last_started_at, max_history FROM _rivet_schedule_events WHERE trigger_at <= ? ORDER BY trigger_at, event_id";
-pub(crate) const CLAIM_ONE_SHOT_SQL: &str =
-	"DELETE FROM _rivet_schedule_events WHERE event_id = ? AND trigger_at = ?";
+pub(crate) fn claim_one_shots_sql(event_count: usize) -> String {
+	let placeholders = std::iter::repeat_n("(?, ?)", event_count)
+		.collect::<Vec<_>>()
+		.join(", ");
+	format!(
+		"DELETE FROM _rivet_schedule_events WHERE kind = ? AND (event_id, trigger_at) IN ({placeholders})"
+	)
+}
 pub(crate) const ADVANCE_SKIPPED_SCHEDULE_SQL: &str =
 	"UPDATE _rivet_schedule_events SET trigger_at = ? WHERE event_id = ?";
 pub(crate) const ADVANCE_SCHEDULE_SQL: &str =
 	"UPDATE _rivet_schedule_events SET trigger_at = ?, last_started_at = ? WHERE event_id = ?";
 pub(crate) const FINISH_HISTORY_SQL: &str = "UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE id = ? AND result = ?";
-pub(crate) const RECOVER_HISTORY_SQL: &str = "UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE result = ?";
+pub(crate) const RECOVER_HISTORY_SQL: &str = "UPDATE _rivet_schedule_history SET finished_at = ?, result = ?, error_group = ?, error_code = ?, error_message = ?, error_metadata = ? WHERE result = 0";
 pub(crate) const NEXT_FUTURE_SCHEDULE_SQL: &str =
 	"SELECT MIN(trigger_at) FROM _rivet_schedule_events WHERE trigger_at > ?";
 pub(crate) const NEXT_SCHEDULE_SQL: &str =
 	"SELECT MIN(trigger_at) FROM _rivet_schedule_events";
 pub(crate) const PRUNE_SCHEDULE_HISTORY_SQL: &str = "DELETE FROM _rivet_schedule_history WHERE schedule_id = ? AND id NOT IN (SELECT id FROM _rivet_schedule_history WHERE schedule_id = ? ORDER BY fired_at DESC, id DESC LIMIT ?)";
-pub(crate) const PRUNE_GLOBAL_HISTORY_SQL: &str = "DELETE FROM _rivet_schedule_history WHERE id IN (SELECT id FROM _rivet_schedule_history ORDER BY fired_at ASC, id ASC LIMIT MAX((SELECT COUNT(*) FROM _rivet_schedule_history) - ?, 0))";
+pub(crate) const PRUNE_GLOBAL_HISTORY_SQL: &str = "DELETE FROM _rivet_schedule_history WHERE id IN (SELECT id FROM _rivet_schedule_history ORDER BY fired_at DESC, id DESC LIMIT -1 OFFSET ?)";
 
 pub(super) type InternalKeepAwakeCallback =
 	Arc<dyn Fn(BoxFuture<'static, Result<()>>) -> BoxFuture<'static, Result<()>> + Send + Sync>;
@@ -607,20 +614,38 @@ impl ActorContext {
 			)
 			.await
 			.context("load due schedules")?;
+		let due_schedules = result
+			.rows
+			.iter()
+			.map(|row| read_stored_schedule(row))
+			.collect::<Result<Vec<_>>>()?;
+		let claim_statements = due_schedules
+			.iter()
+			.filter(|event| event.kind == ScheduleKind::At)
+			.collect::<Vec<_>>()
+			.chunks(CLAIM_ONE_SHOT_BATCH_SIZE)
+			.map(|events| {
+				let mut params = Vec::with_capacity(events.len() * 2 + 1);
+				params.push(BindParam::Integer(ScheduleKind::At.as_i64()));
+				for event in events {
+					params.push(BindParam::Text(event.event_id.clone()));
+					params.push(BindParam::Integer(event.trigger_at));
+				}
+				SqliteBatchStatement {
+					sql: claim_one_shots_sql(events.len()),
+					params: Some(params),
+				}
+			})
+			.collect::<Vec<_>>();
+		if !claim_statements.is_empty() {
+			self.sql()
+				.execute_batch(claim_statements)
+				.await
+				.context("claim due one-shot schedules")?;
+		}
 		let mut dispatches = Vec::new();
-		for row in &result.rows {
-			let event = read_stored_schedule(row)?;
+		for event in due_schedules {
 			if event.kind == ScheduleKind::At {
-				self.sql()
-					.execute(
-						CLAIM_ONE_SHOT_SQL,
-						Some(vec![
-							BindParam::Text(event.event_id.clone()),
-							BindParam::Integer(event.trigger_at),
-						]),
-					)
-					.await
-					.context("claim due one-shot schedule")?;
 				dispatches.push(DueScheduleDispatch {
 					event_id: event.event_id.clone(),
 					action: event.action,
@@ -769,7 +794,6 @@ impl ActorContext {
 					BindParam::Text(error.code),
 					BindParam::Text(error.message),
 					BindParam::Null,
-					BindParam::Integer(HISTORY_RUNNING),
 				]),
 			)
 			.await

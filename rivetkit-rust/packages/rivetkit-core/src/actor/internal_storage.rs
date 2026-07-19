@@ -20,7 +20,6 @@ const USER_KV_VALUE_LIMIT: usize = 128 * 1024;
 /// keeps holding for SQLite-backed user KV.
 const USER_KV_KEY_LIMIT: usize = 2048;
 pub(crate) const USER_KV_BATCH_GET_MAX_KEYS: usize = 128;
-pub(crate) const USER_KV_LIST_PAGE_SIZE: i64 = 128;
 const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 
 /// Depot rejects SQLite commits that dirty more than `MAX_COMMIT_RAW_DIRTY_BYTES`
@@ -68,25 +67,6 @@ pub(crate) fn user_kv_list_sql(where_clause: &str, reverse: bool, limited: bool)
 	format!(
 		"SELECT key, value FROM _rivet_user_kv {where_clause} ORDER BY key {order}{limit_clause}"
 	)
-}
-
-pub(crate) fn user_kv_list_page_sql(
-	where_clause: &str,
-	reverse: bool,
-	has_cursor: bool,
-) -> String {
-	let order = if reverse { "DESC" } else { "ASC" };
-	let cursor_operator = if reverse { "<" } else { ">" };
-	let cursor_clause = if has_cursor {
-		if where_clause.is_empty() {
-			format!("WHERE key {cursor_operator} ?")
-		} else {
-			format!("{where_clause} AND key {cursor_operator} ?")
-		}
-	} else {
-		where_clause.to_owned()
-	};
-	format!("SELECT key, value FROM _rivet_user_kv {cursor_clause} ORDER BY key {order} LIMIT ?")
 }
 
 pub(crate) fn clear_table_select_sql(
@@ -826,38 +806,16 @@ async fn user_kv_list_where(
 	params: Vec<BindParam>,
 	opts: ListOpts,
 ) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
+	let mut params = params;
 	if let Some(limit) = opts.limit {
-		let mut limited_params = params;
-		limited_params.push(BindParam::Integer(i64::from(limit)));
-		let sql = user_kv_list_sql(where_clause, opts.reverse, true);
-		let result = db
-			.query(&sql, Some(limited_params))
-			.await
-			.context("list user kv values from sqlite")?;
-		return decode_user_kv_rows(&result.rows);
+		params.push(BindParam::Integer(i64::from(limit)));
 	}
-
-	let mut output = Vec::new();
-	let mut cursor: Option<Vec<u8>> = None;
-	loop {
-		let mut page_params = params.clone();
-		if let Some(cursor) = &cursor {
-			page_params.push(BindParam::Blob(cursor.clone()));
-		}
-		page_params.push(BindParam::Integer(USER_KV_LIST_PAGE_SIZE));
-		let sql = user_kv_list_page_sql(where_clause, opts.reverse, cursor.is_some());
-		let result = db
-			.query(&sql, Some(page_params))
-			.await
-			.context("list user kv value page from sqlite")?;
-		let page = decode_user_kv_rows(&result.rows)?;
-		let page_len = page.len();
-		cursor = page.last().map(|(key, _)| key.clone());
-		output.extend(page);
-		if page_len < USER_KV_LIST_PAGE_SIZE as usize {
-			return Ok(output);
-		}
-	}
+	let sql = user_kv_list_sql(where_clause, opts.reverse, opts.limit.is_some());
+	let result = db
+		.query(&sql, Some(params))
+		.await
+		.context("list user kv values from sqlite")?;
+	decode_user_kv_rows(&result.rows)
 }
 
 fn decode_user_kv_rows(rows: &[Vec<ColumnValue>]) -> Result<Vec<(Vec<u8>, Vec<u8>)>> {
