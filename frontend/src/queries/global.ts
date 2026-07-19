@@ -105,6 +105,12 @@ const mutationCache = new MutationCache({
 	},
 });
 
+// changelog.json media URLs are absolute assets.rivet.dev URLs on current
+// entries but were site-relative paths historically. Resolve both shapes to
+// absolute URLs here so consumers can pass them straight to src attributes.
+const resolveChangelogMediaUrl = (url: string) =>
+	new URL(url, "https://www.rivet.dev/").toString();
+
 export const changelogQueryOptions = () => {
 	return queryOptions({
 		queryKey: ["changelog", __APP_BUILD_ID__],
@@ -115,7 +121,20 @@ export const changelogQueryOptions = () => {
 				throw new Error("Failed to fetch changelog");
 			}
 			const result = Changelog.parse(await response.json());
-			return result;
+			return result.map((entry) => ({
+				...entry,
+				images: entry.images.map((image) => ({
+					...image,
+					url: resolveChangelogMediaUrl(image.url),
+				})),
+				authors: entry.authors.map((author) => ({
+					...author,
+					avatar: {
+						...author.avatar,
+						url: resolveChangelogMediaUrl(author.avatar.url),
+					},
+				})),
+			}));
 		},
 	});
 };

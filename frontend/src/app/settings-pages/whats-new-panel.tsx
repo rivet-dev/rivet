@@ -86,7 +86,7 @@ function Entry({
 					</PictureFallback>
 					<PictureImage
 						className="size-full object-cover animate-in fade-in-0 duration-300 fill-mode-forwards"
-						src={`https://www.rivet.dev/${image.url}`}
+						src={image.url}
 						width={image.width}
 						height={image.height}
 						alt={title}
@@ -117,7 +117,7 @@ function Entry({
 									{author.name[0]}
 								</AvatarFallback>
 								<AvatarImage
-									src={`https://www.rivet.dev/${author.avatar.url}`}
+									src={author.avatar.url}
 									alt={author.name}
 								/>
 							</Avatar>
