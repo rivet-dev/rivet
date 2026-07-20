@@ -64,6 +64,12 @@ const cache = actor({
 
 </CodeGroup>
 
+## Sleep Between Runs
+
+[Actors do not need to stay awake](/docs/actors/lifecycle#sleeping) while waiting for a scheduled action. Once an actor becomes idle, it can sleep normally. Sleeping does not pause or remove its schedules. Rivet wakes the actor when the next action is due, whether that is seconds or arbitrarily far in the future.
+
+Recurring Cron and fixed-interval schedules continue until they are updated or deleted. One-shot schedules remain pending until their target time.
+
 ## One-shot schedules
 
 ### Run after a delay
@@ -178,7 +184,7 @@ const reports = actor({
 
 ## Execution behavior
 
-- **Durability**: [Actors sleep when not in use](/docs/actors/lifecycle#sleeping), but schedules are durable, wake the actor on demand, and survive crashes.
+- **Durability**: Schedules survive actor sleep, restarts, upgrades, and crashes. See [Sleep Between Runs](#sleep-between-runs).
 - **Failures**: Failed runs are not retried immediately. A failed recurring run continues at the next normal cadence; a failed one-shot is complete after its attempted invocation. Cron failures are available in [run history](#view-run-history), so you can build a custom retry mechanism.
 - **Idempotency**: Scheduled actions should be idempotent so manually retrying a failed or interrupted run is safe.
 - **Overlaps**: Overlapping recurring runs are skipped.
