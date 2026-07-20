@@ -1,0 +1,4 @@
+interface:
+  display_name: "Create Launch Post"
+  short_description: "Create and publish a concise Rivet launch post"
+  default_prompt: "Use $create-launch-post to prepare a concise Rivet launch post and draft PR."

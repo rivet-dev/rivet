@@ -1,0 +1,41 @@
+---
+author: nathan-flurry
+published: "2026-07-20"
+category: changelog
+keywords:
+    ["cron", "scheduled jobs", "actors", "durable", "timezone", "typescript"]
+title: "Introducing Cron Jobs for Rivet Actors"
+description: "Durable, timezone-aware Cron jobs that wake actors on schedule and survive sleep, restarts, deploys, and crashes."
+---
+
+Cron jobs are now built into Rivet Actors. Schedules wake actors on demand and survive sleep, restarts, deploys, and crashes. Use standard five-field expressions with an optional timezone, and inspect recent runs from the Rivet Inspector.
+
+## Show Me The Code
+
+```ts
+import { actor, setup } from "rivetkit";
+
+const reports = actor({
+	onCreate: async (c) => {
+		await c.cron.set({
+			name: "daily-report",
+			expression: "0 9 * * *",
+			timezone: "America/Los_Angeles",
+			action: "runReport",
+		});
+	},
+	actions: {
+		runReport: () => {
+			console.log("Running daily report");
+		},
+	},
+});
+
+export const registry = setup({ use: { reports } });
+```
+
+## More Links
+
+- [Schedule & Cron documentation](/docs/actors/schedule)
+- [GitHub](https://github.com/rivet-dev/rivet)
+- [Discord](https://rivet.dev/discord)
