@@ -48,9 +48,9 @@ use crate::actor::context::ActorContext;
 use crate::actor::factory::ActorFactory;
 use crate::actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 use crate::actor::messages::{
-	ActorEvent, QueueSendResult, Request, Response, SerializeStateReason, StateDelta,
-	WorkflowKvWrite,
+	ActorEvent, Request, Response, SerializeStateReason, StateDelta, WorkflowKvWrite,
 };
+use crate::actor::queue::QueueSendReceipt;
 use crate::actor::metrics::startup_phase::StartupPhase;
 use crate::actor::state::PersistedActor;
 use crate::actor::task_types::ShutdownKind;
@@ -209,9 +209,9 @@ pub enum DispatchCommand {
 		body: Vec<u8>,
 		conn: ConnHandle,
 		request: Request,
-		wait: bool,
-		timeout_ms: Option<u64>,
-		reply: oneshot::Sender<Result<QueueSendResult>>,
+		dedupe_key: Option<String>,
+		delay_ms: Option<u64>,
+		reply: oneshot::Sender<Result<QueueSendReceipt>>,
 	},
 	Http {
 		request: Request,
@@ -317,6 +317,7 @@ struct SleepGraceState {
 struct PersistedStartup {
 	actor: PersistedActor,
 	last_pushed_alarm: Option<i64>,
+	runtime_alarm: Option<i64>,
 }
 
 struct PendingLifecycleReply {
@@ -964,8 +965,8 @@ impl ActorTask {
 				body,
 				conn,
 				request,
-				wait,
-				timeout_ms,
+				dedupe_key,
+				delay_ms,
 				reply,
 			} => match self.send_actor_event(
 				"dispatch_queue_send",
@@ -974,8 +975,8 @@ impl ActorTask {
 					body,
 					conn,
 					request,
-					wait,
-					timeout_ms,
+					dedupe_key,
+					delay_ms,
 					reply: Reply::from(reply),
 				},
 			) {
@@ -1178,6 +1179,11 @@ impl ActorTask {
 		let core_init_result: Result<()> = async {
 			self.ctx.load_persisted_actor(persisted.actor);
 			self.ctx.load_last_pushed_alarm(persisted.last_pushed_alarm);
+			self.ctx.load_runtime_alarm(persisted.runtime_alarm);
+			// Reconcile the in-memory admission counter on every generation. A
+			// previous generation can be cancelled after a durable queue mutation
+			// commits but before its in-memory counter update runs.
+			self.ctx.refresh_queue_metadata().await?;
 			// New manual-startup runtimes must not persist initialization until the
 			// runtime startup_ready handshake completes. The runtime preamble owns
 			// initial state creation.
@@ -1227,6 +1233,7 @@ impl ActorTask {
 			runtime_preamble_started_at,
 			runtime_preamble_result,
 		)?;
+		self.ctx.start_queue_on_message_loop(self.generation);
 
 		self.ctx
 			.metrics()
@@ -1277,6 +1284,7 @@ impl ActorTask {
 			return Ok(PersistedStartup {
 				actor: snapshot.actor,
 				last_pushed_alarm: snapshot.last_pushed_alarm,
+				runtime_alarm: snapshot.runtime_alarm,
 			});
 		}
 		Ok(PersistedStartup {
@@ -1285,6 +1293,7 @@ impl ActorTask {
 				..PersistedActor::default()
 			},
 			last_pushed_alarm: None,
+			runtime_alarm: None,
 		})
 	}
 

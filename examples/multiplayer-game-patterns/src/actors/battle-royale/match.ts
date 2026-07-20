@@ -113,7 +113,7 @@ export const battleRoyaleMatch = actor({
 		const client = c.client<typeof registry>();
 		await client.battleRoyaleMatchmaker
 			.getOrCreate(["main"])
-			.send("closeMatch", { matchId: c.state.matchId });
+			.closeMatch({ matchId: c.state.matchId });
 	},
 	run: async (c) => {
 		const tick = interval(TICK_MS);
@@ -357,7 +357,7 @@ async function updateMatchmaker(c: ActorContextOf<typeof battleRoyaleMatch>) {
 	const client = c.client<typeof registry>();
 	await client.battleRoyaleMatchmaker
 		.getOrCreate(["main"])
-		.send("updateMatch", {
+		.updateMatch({
 			matchId: c.state.matchId,
 			connectedPlayerCount: Object.keys(c.state.players).length,
 			isStarted: c.state.phase !== "lobby",
@@ -371,18 +371,11 @@ async function claimPendingPlayer(
 	const client = c.client<typeof registry>();
 	const result = await client.battleRoyaleMatchmaker
 		.getOrCreate(["main"])
-		.send(
-			"pendingPlayerConnected",
-			{
-				matchId: c.state.matchId,
-				playerId,
-			},
-			{ wait: true, timeout: 3_000 },
-		);
-	if (result.status !== "completed") {
-		return false;
-	}
-	return result.response?.accepted === true;
+		.pendingPlayerConnected({
+			matchId: c.state.matchId,
+			playerId,
+		});
+	return result.accepted;
 }
 
 function countAlivePlayers(state: State): number {

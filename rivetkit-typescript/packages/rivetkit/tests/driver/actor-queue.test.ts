@@ -6,7 +6,9 @@ import { MANY_QUEUE_NAMES } from "../../fixtures/driver-test-suite/queue";
 import { describeDriverMatrix } from "./shared-matrix";
 import { setupDriverTest, waitFor } from "./shared-utils";
 
-const MANY_QUEUE_CHILD_READY_TIMEOUT_MS = 20_000;
+const QUEUE_STRESS_TEST_TIMEOUT_MS = 120_000;
+const QUEUE_STATUS_POLL_ATTEMPTS = 300;
+const QUEUE_SEND_BATCH_SIZE = 16;
 
 describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 	describe("Actor Queue Tests", () => {
@@ -27,19 +29,35 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 					}),
 				);
 
-				await Promise.all(
-					Array.from({ length: messageCount }, (_, index) =>
-						child.send(
-							MANY_QUEUE_NAMES[index % MANY_QUEUE_NAMES.length],
-							{ index },
+				for (
+					let offset = 0;
+					offset < messageCount;
+					offset += QUEUE_SEND_BATCH_SIZE
+				) {
+					await Promise.all(
+						Array.from(
+							{
+								length: Math.min(
+									QUEUE_SEND_BATCH_SIZE,
+									messageCount - offset,
+								),
+							},
+							(_, batchIndex) => {
+								const index = offset + batchIndex;
+								return child.send(
+									MANY_QUEUE_NAMES[index % MANY_QUEUE_NAMES.length],
+									{ index },
+								);
+							},
 						),
-					),
-				);
+					);
+				}
 
 				let snapshot = await child.getSnapshot();
 				for (
 					let i = 0;
-					i < 60 && snapshot.processed.length < messageCount;
+					i < QUEUE_STATUS_POLL_ATTEMPTS &&
+					snapshot.processed.length < messageCount;
 					i++
 				) {
 					await waitFor(driverTestConfig, 100);
@@ -52,16 +70,19 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 					new Set(MANY_QUEUE_NAMES),
 				);
 
-				expect(
-					await child.send(
-						MANY_QUEUE_NAMES[0],
-						{ index: messageCount },
-						{ wait: true, timeout: 1_000 },
-					),
-				).toEqual({
-					status: "completed",
-					response: { ok: true, index: messageCount },
+				const receipt = await child.send(MANY_QUEUE_NAMES[0], {
+					index: messageCount,
 				});
+				let status = await receipt.status();
+				for (
+					let i = 0;
+					i < QUEUE_STATUS_POLL_ATTEMPTS && status.state !== "succeeded";
+					i++
+				) {
+					await waitFor(driverTestConfig, 100);
+					status = await receipt.status();
+				}
+				expect(status).toMatchObject({ state: "succeeded", attempts: 1 });
 			} finally {
 				await conn.dispose().catch(() => undefined);
 			}
@@ -90,7 +111,7 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 			expect(message).toEqual({ name: "self", body: { value: 42 } });
 		});
 
-		test("nextBatch supports name arrays and counts", async (c) => {
+		test("nextBatch supports name arrays and counts", { timeout: QUEUE_STRESS_TEST_TIMEOUT_MS }, async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["receive-array"]);
 
@@ -105,7 +126,7 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 			]);
 		});
 
-		test("nextBatch supports request objects", async (c) => {
+		test("nextBatch supports request objects", { timeout: QUEUE_STRESS_TEST_TIMEOUT_MS }, async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.queueActor.getOrCreate(["receive-request"]);
 
@@ -240,44 +261,50 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 			}
 		});
 
-		test("wait send returns completion response", async (c) => {
+		test("send returns a receipt whose handler status becomes succeeded", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate(["wait-complete"]);
-			const waitTimeout = driverTestConfig.useRealTimers ? 5_000 : 1_000;
+			const handle = client.queueActor.getOrCreate(["handler-receipt"]);
+			const receipt = await handle.send("handled", { value: 123 });
+			expect(receipt.id).toEqual(expect.any(String));
+			expect(receipt.deduplicated).toBe(false);
 
-			const actionPromise = handle.receiveAndComplete("tasks");
-			const result = await handle.send(
-				"tasks",
-				{ value: 123 },
-				{ wait: true, timeout: waitTimeout },
-			);
-
-			await actionPromise;
-			expect(result).toEqual({
-				status: "completed",
-				response: { echo: { value: 123 } },
+			let status = await receipt.status();
+			for (
+				let i = 0;
+				i < QUEUE_STATUS_POLL_ATTEMPTS && status.state !== "succeeded";
+				i++
+			) {
+				await waitFor(driverTestConfig, 100);
+				status = await handle.receipt(receipt.id).status();
+			}
+			expect(status).toMatchObject({ state: "succeeded", attempts: 1 });
+			expect(await handle.getQueueState()).toMatchObject({ handled: 123 });
+			await expect(handle.receiveOne("handled", { timeout: 0 })).rejects.toMatchObject({
+				group: "queue",
+				code: "automatic_consumer",
 			});
 		});
 
-		test("wait send times out", async (c) => {
+		test("dedupeKey returns the original receipt", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate(["wait-timeout"]);
-
-			const resultPromise = handle.send(
-				"timeout",
-				{ value: 456 },
-				{ wait: true, timeout: 50 },
+			const handle = client.queueActor.getOrCreate(["dedupe"]);
+			const first = await handle.send(
+				"handled",
+				{ value: 1 },
+				{ dedupeKey: "same" },
 			);
-
-			await waitFor(driverTestConfig, 60);
-			const result = await resultPromise;
-
-			expect(result.status).toBe("timedOut");
+			const second = await handle.send(
+				"handled",
+				{ value: 999 },
+				{ dedupeKey: "same" },
+			);
+			expect(second.id).toBe(first.id);
+			expect(second.deduplicated).toBe(true);
 		});
 
 		test(
 			"drains many-queue child actors created from actions while connected",
-			{ timeout: MANY_QUEUE_CHILD_READY_TIMEOUT_MS },
+			{ timeout: QUEUE_STRESS_TEST_TIMEOUT_MS },
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const parent = client.manyQueueActionParentActor.getOrCreate([
@@ -297,7 +324,7 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 
 		test(
 			"drains many-queue child actors created from run handlers while connected",
-			{ timeout: MANY_QUEUE_CHILD_READY_TIMEOUT_MS },
+			{ timeout: QUEUE_STRESS_TEST_TIMEOUT_MS },
 			async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 				const parent = client.manyQueueRunParentActor.getOrCreate([
@@ -308,7 +335,17 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 					queued: true,
 				});
 
-				expect(await parent.getSpawned()).toContain("many-run-child");
+				let spawned = await parent.getSpawned();
+				for (
+					let i = 0;
+					i < QUEUE_STATUS_POLL_ATTEMPTS &&
+					!spawned.includes("many-run-child");
+					i++
+				) {
+					await waitFor(driverTestConfig, 100);
+					spawned = await parent.getSpawned();
+				}
+				expect(spawned).toContain("many-run-child");
 
 				await expectManyQueueChildToDrain(
 					client.manyQueueChildActor,
@@ -317,90 +354,68 @@ describeDriverMatrix("Actor Queue", (driverTestConfig) => {
 			},
 		);
 
-		test("manual receive retries message when not completed", async (c) => {
+		test("raw receive is consumed before it is returned", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate([
-				"manual-retry-uncompleted",
-			]);
-
-			await handle.send("tasks", { value: 789 });
-			const first = await handle.receiveWithoutComplete("tasks");
-			expect(first).toEqual({ name: "tasks", body: { value: 789 } });
-
-			const retried = await handle.receiveOne("tasks", {
-				timeout: 1_000,
+			const handle = client.queueActor.getOrCreate(["raw-consumed"]);
+			const receipt = await handle.send("tasks", { value: 789 });
+			expect(await handle.receiveOne("tasks")).toEqual({
+				name: "tasks",
+				body: { value: 789 },
 			});
-			expect(retried).toEqual({ name: "tasks", body: { value: 789 } });
+			expect(await receipt.status()).toMatchObject({ state: "consumed" });
+			expect(await handle.receiveOne("tasks", { timeout: 10 })).toBeNull();
 		});
 
-		test("next throws when previous manual message is not completed", async (c) => {
+		test("handler throws are retried until success", { timeout: QUEUE_STRESS_TEST_TIMEOUT_MS }, async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate([
-				"manual-next-requires-complete",
-			]);
-
-			await handle.send("tasks", { value: 111 });
-			const result =
-				await handle.receiveManualThenNextWithoutComplete("tasks");
-			expect(result).toEqual({
-				group: "queue",
-				code: "previous_message_not_completed",
-			});
+			const handle = client.queueActor.getOrCreate(["handler-retry"]);
+			const receipt = await handle.send("retrying", { value: 1 });
+			let status = await receipt.status();
+			for (
+				let i = 0;
+				i < QUEUE_STATUS_POLL_ATTEMPTS && status.state !== "succeeded";
+				i++
+			) {
+				await waitFor(driverTestConfig, 100);
+				status = await receipt.status();
+			}
+			expect(status).toMatchObject({ state: "succeeded", attempts: 3 });
 		});
 
-		test("manual receive includes complete even without completion schema", async (c) => {
+		test("handler timeout aborts without waiting for the promise to settle", { timeout: QUEUE_STRESS_TEST_TIMEOUT_MS }, async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate([
-				"complete-not-allowed",
-			]);
-
-			await handle.send("nowait", { value: "test" });
-			const result = await handle.receiveWithoutCompleteMethod("nowait");
-
-			expect(result).toEqual({
-				hasComplete: true,
-			});
-		});
-
-		test("manual receive retries queues without completion schema until completed", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate([
-				"complete-not-allowed-consume",
-			]);
-
-			await handle.send("nowait", { value: "test" });
-			const result = await handle.receiveWithoutCompleteMethod("nowait");
-			expect(result).toEqual({ hasComplete: true });
-
-			const next = await handle.receiveOne("nowait", { timeout: 1_000 });
-			expect(next).toEqual({ name: "nowait", body: { value: "test" } });
-		});
-
-		test("complete throws when called twice", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate(["complete-twice"]);
-
-			await handle.send("twice", { value: "test" });
-			const result = await handle.receiveAndCompleteTwice("twice");
-
-			expect(result).toEqual({
-				group: "queue",
-				code: "already_completed",
+			const handle = client.queueActor.getOrCreate(["handler-timeout"]);
+			const receipt = await handle.send("timedHandler", { value: 1 });
+			let status = await receipt.status();
+			for (
+				let i = 0;
+				i < QUEUE_STATUS_POLL_ATTEMPTS && status.state !== "succeeded";
+				i++
+			) {
+				await waitFor(driverTestConfig, 100);
+				status = await receipt.status();
+			}
+			expect(status).toMatchObject({ state: "succeeded", attempts: 2 });
+			expect(await handle.getQueueState()).toMatchObject({
+				timeoutAttempts: 2,
+				timeoutAborted: true,
 			});
 		});
 
-		test("wait send no longer requires queue completion schema", async (c) => {
+		test("exhausted handler attempts become dead-lettered", { timeout: QUEUE_STRESS_TEST_TIMEOUT_MS }, async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
-			const handle = client.queueActor.getOrCreate([
-				"missing-completion-schema",
-			]);
-
-			const result = await handle.send(
-				"nowait",
-				{ value: "test" },
-				{ wait: true, timeout: 50 },
-			);
-			expect(result).toEqual({ status: "timedOut" });
+			const handle = client.queueActor.getOrCreate(["handler-dead"]);
+			const receipt = await handle.send("dead", { value: 1 });
+			let status = await receipt.status();
+			for (
+				let i = 0;
+				i < QUEUE_STATUS_POLL_ATTEMPTS && status.state !== "deadLettered";
+				i++
+			) {
+				await waitFor(driverTestConfig, 100);
+				status = await receipt.status();
+			}
+			expect(status).toMatchObject({ state: "deadLettered", attempts: 2 });
 		});
 
 		test("iter can consume queued messages", async (c) => {

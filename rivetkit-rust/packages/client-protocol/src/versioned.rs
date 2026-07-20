@@ -1,25 +1,26 @@
 use anyhow::{Result, bail};
 use vbare::OwnedVersionedData;
 
-use crate::generated::{v1, v2, v3, v4};
+use crate::generated::{v1, v2, v3, v4, v5};
 
 pub enum ToClient {
 	V1(v1::ToClient),
 	V2(v2::ToClient),
 	V3(v3::ToClient),
 	V4(v4::ToClient),
+	V5(v5::ToClient),
 }
 
 impl OwnedVersionedData for ToClient {
-	type Latest = v4::ToClient;
+	type Latest = v5::ToClient;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 			_ => bail!("version not latest"),
 		}
 	}
@@ -30,6 +31,7 @@ impl OwnedVersionedData for ToClient {
 			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
 			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid client protocol version: {version}"),
 		}
 	}
@@ -40,20 +42,67 @@ impl OwnedVersionedData for ToClient {
 			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
 			(_, version) => bail!("unexpected client protocol version: {version}"),
 		}
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
+		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4, Self::v4_to_v5]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
+		vec![Self::v5_to_v4, Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
 	}
 }
 
 impl ToClient {
+	fn v4_to_v5(self) -> Result<Self> {
+		let Self::V4(data) = self else {
+			bail!("expected client protocol v4 ToClient")
+		};
+		let body = match data.body {
+			v4::ToClientBody::Init(value) => v5::ToClientBody::Init(v5::Init {
+				actor_id: value.actor_id,
+				connection_id: value.connection_id,
+			}),
+			v4::ToClientBody::Error(value) => v5::ToClientBody::Error(v5::Error {
+				group: value.group,
+				code: value.code,
+				message: value.message,
+				metadata: value.metadata,
+				action_id: value.action_id,
+				actor: value.actor.map(|actor| v5::ActorSpecifier {
+					actor_id: actor.actor_id,
+					generation: actor.generation,
+					key: actor.key,
+				}),
+			}),
+			v4::ToClientBody::ActionResponse(value) => v5::ToClientBody::ActionResponse(v5::ActionResponse { id: value.id, output: value.output }),
+			v4::ToClientBody::Event(value) => v5::ToClientBody::Event(v5::Event { name: value.name, args: value.args }),
+		};
+		Ok(Self::V5(v5::ToClient { body }))
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		let Self::V5(data) = self else {
+			bail!("expected client protocol v5 ToClient")
+		};
+		let body = match data.body {
+			v5::ToClientBody::Init(value) => v4::ToClientBody::Init(v4::Init { actor_id: value.actor_id, connection_id: value.connection_id }),
+			v5::ToClientBody::Error(value) => v4::ToClientBody::Error(v4::Error {
+				group: value.group,
+				code: value.code,
+				message: value.message,
+				metadata: value.metadata,
+				action_id: value.action_id,
+				actor: value.actor.map(|actor| v4::ActorSpecifier { actor_id: actor.actor_id, generation: actor.generation, key: actor.key }),
+			}),
+			v5::ToClientBody::ActionResponse(value) => v4::ToClientBody::ActionResponse(v4::ActionResponse { id: value.id, output: value.output }),
+			v5::ToClientBody::Event(value) => v4::ToClientBody::Event(v4::Event { name: value.name, args: value.args }),
+		};
+		Ok(Self::V4(v4::ToClient { body }))
+	}
 	fn v1_to_v2(self) -> Result<Self> {
 		let Self::V1(data) = self else {
 			bail!("expected client protocol v1 ToClient")
@@ -354,6 +403,7 @@ macro_rules! impl_to_client_v2_v3_pair {
 impl_common_pair!(v1, v2);
 impl_common_pair!(v2, v3);
 impl_common_pair!(v3, v4);
+impl_common_pair!(v4, v5);
 impl_to_client_v2_v3_pair!();
 impl_same_fields_pair!(
 	v1,
@@ -388,24 +438,25 @@ impl_same_fields_pair!(
 impl_same_fields_pair!(v3, v4, HttpQueueSendResponse { status, response });
 
 macro_rules! impl_versioned_manual {
-	($name:ident, $latest_ty:path, $v1_ty:path, $v2_ty:path, $v3_ty:path, $v4_ty:path) => {
+	($name:ident, $latest_ty:path, $v1_ty:path, $v2_ty:path, $v3_ty:path, $v4_ty:path, $v5_ty:path) => {
 		pub enum $name {
 			V1($v1_ty),
 			V2($v2_ty),
 			V3($v3_ty),
 			V4($v4_ty),
+			V5($v5_ty),
 		}
 
 		impl OwnedVersionedData for $name {
 			type Latest = $latest_ty;
 
 			fn wrap_latest(latest: Self::Latest) -> Self {
-				Self::V4(latest)
+				Self::V5(latest)
 			}
 
 			fn unwrap_latest(self) -> Result<Self::Latest> {
 				match self {
-					Self::V4(data) => Ok(data),
+					Self::V5(data) => Ok(data),
 					_ => bail!("version not latest"),
 				}
 			}
@@ -416,6 +467,7 @@ macro_rules! impl_versioned_manual {
 					2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
 					3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
 					4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+					5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
 					_ => bail!(
 						"invalid client protocol version for {}: {version}",
 						stringify!($name)
@@ -429,6 +481,7 @@ macro_rules! impl_versioned_manual {
 					(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
 					(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
 					(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+					(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
 					(_, version) => bail!(
 						"unexpected client protocol version for {}: {version}",
 						stringify!($name)
@@ -437,11 +490,11 @@ macro_rules! impl_versioned_manual {
 			}
 
 			fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
+				vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4, Self::v4_to_v5]
 			}
 
 			fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
+				vec![Self::v5_to_v4, Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
 			}
 		}
 
@@ -474,6 +527,20 @@ macro_rules! impl_versioned_manual {
 				Ok(Self::V3(data.into()))
 			}
 
+			fn v4_to_v5(self) -> Result<Self> {
+				let Self::V4(data) = self else {
+					bail!("expected client protocol v4 {}", stringify!($name))
+				};
+				Ok(Self::V5(data.into()))
+			}
+
+			fn v5_to_v4(self) -> Result<Self> {
+				let Self::V5(data) = self else {
+					bail!("expected client protocol v5 {}", stringify!($name))
+				};
+				Ok(Self::V4(data.into()))
+			}
+
 			fn v3_to_v2(self) -> Result<Self> {
 				let Self::V3(data) = self else {
 					bail!("expected client protocol v3 {}", stringify!($name))
@@ -491,128 +558,265 @@ macro_rules! impl_versioned_manual {
 	};
 }
 
-macro_rules! impl_versioned_v3_only {
-	($name:ident, $latest_ty:path) => {
-		pub enum $name {
-			V3(v3::$name),
-			V4($latest_ty),
-		}
+impl_versioned_manual!(
+	ToServer,
+	v5::ToServer,
+	v1::ToServer,
+	v2::ToServer,
+	v3::ToServer,
+	v4::ToServer,
+	v5::ToServer
+);
+impl_versioned_manual!(
+	HttpActionRequest,
+	v5::HttpActionRequest,
+	v1::HttpActionRequest,
+	v2::HttpActionRequest,
+	v3::HttpActionRequest,
+	v4::HttpActionRequest,
+	v5::HttpActionRequest
+);
+impl_versioned_manual!(
+	HttpActionResponse,
+	v5::HttpActionResponse,
+	v1::HttpActionResponse,
+	v2::HttpActionResponse,
+	v3::HttpActionResponse,
+	v4::HttpActionResponse,
+	v5::HttpActionResponse
+);
+impl_versioned_manual!(
+	HttpResolveResponse,
+	v5::HttpResolveResponse,
+	v1::HttpResolveResponse,
+	v2::HttpResolveResponse,
+	v3::HttpResolveResponse,
+	v4::HttpResolveResponse,
+	v5::HttpResolveResponse
+);
+pub enum HttpQueueSendRequest {
+	V3(v3::HttpQueueSendRequest),
+	V4(v4::HttpQueueSendRequest),
+	V5(v5::HttpQueueSendRequest),
+}
 
+impl OwnedVersionedData for HttpQueueSendRequest {
+	type Latest = v5::HttpQueueSendRequest;
+	fn wrap_latest(latest: Self::Latest) -> Self { Self::V5(latest) }
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self { Self::V5(data) => Ok(data), _ => bail!("version not latest") }
+	}
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
+			_ => bail!("HttpQueueSendRequest only exists in client protocol v3+, got {version}"),
+		}
+	}
+	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+		match (self, version) {
+			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
+			(_, version) => bail!("unexpected HttpQueueSendRequest version {version}"),
+		}
+	}
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Ok, Ok, Self::v3_to_v4, Self::v4_to_v5]
+	}
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Self::v5_to_v4, Self::v4_to_v3, Ok, Ok]
+	}
+}
+
+impl HttpQueueSendRequest {
+	fn v3_to_v4(self) -> Result<Self> {
+		let Self::V3(data) = self else { bail!("expected v3 queue send request") };
+		Ok(Self::V4(data.into()))
+	}
+	fn v4_to_v5(self) -> Result<Self> {
+		let Self::V4(data) = self else { bail!("expected v4 queue send request") };
+		if data.wait.unwrap_or(false) {
+			bail!("queue.wait_unsupported");
+		}
+		Ok(Self::V5(v5::HttpQueueSendRequest {
+			body: data.body,
+			name: data.name,
+			dedupe_key: None,
+			delay: None,
+		}))
+	}
+	fn v5_to_v4(self) -> Result<Self> {
+		let Self::V5(data) = self else { bail!("expected v5 queue send request") };
+		if data.dedupe_key.is_some() || data.delay.is_some() {
+			bail!("queue send dedupeKey/delay require protocol v5");
+		}
+		Ok(Self::V4(v4::HttpQueueSendRequest {
+			body: data.body,
+			name: data.name,
+			wait: Some(false),
+			timeout: None,
+		}))
+	}
+	fn v4_to_v3(self) -> Result<Self> {
+		let Self::V4(data) = self else { bail!("expected v4 queue send request") };
+		Ok(Self::V3(data.into()))
+	}
+}
+
+pub enum HttpQueueSendResponse {
+	V3(v3::HttpQueueSendResponse),
+	V4(v4::HttpQueueSendResponse),
+	V5(v5::HttpQueueSendResponse),
+}
+
+impl OwnedVersionedData for HttpQueueSendResponse {
+	type Latest = v5::HttpQueueSendResponse;
+	fn wrap_latest(latest: Self::Latest) -> Self { Self::V5(latest) }
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self { Self::V5(data) => Ok(data), _ => bail!("version not latest") }
+	}
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
+			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
+			_ => bail!("HttpQueueSendResponse only exists in client protocol v3+, got {version}"),
+		}
+	}
+	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+		match (self, version) {
+			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
+			(_, version) => bail!("unexpected HttpQueueSendResponse version {version}"),
+		}
+	}
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Ok, Ok, Self::v3_to_v4, Self::v4_to_v5]
+	}
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		vec![Self::v5_to_v4, Self::v4_to_v3, Ok, Ok]
+	}
+}
+
+impl HttpQueueSendResponse {
+	fn v3_to_v4(self) -> Result<Self> {
+		let Self::V3(data) = self else { bail!("expected v3 queue send response") };
+		Ok(Self::V4(data.into()))
+	}
+	fn v4_to_v5(self) -> Result<Self> {
+		let Self::V4(_data) = self else { bail!("expected v4 queue send response") };
+		Ok(Self::V5(v5::HttpQueueSendResponse { receipt_id: String::new(), deduplicated: false }))
+	}
+	fn v5_to_v4(self) -> Result<Self> {
+		let Self::V5(_data) = self else { bail!("expected v5 queue send response") };
+		Ok(Self::V4(v4::HttpQueueSendResponse { status: "completed".to_owned(), response: None }))
+	}
+	fn v4_to_v3(self) -> Result<Self> {
+		let Self::V4(data) = self else { bail!("expected v4 queue send response") };
+		Ok(Self::V3(data.into()))
+	}
+}
+
+macro_rules! impl_versioned_v5_only {
+	($name:ident) => {
+		pub enum $name { V5(v5::$name) }
 		impl OwnedVersionedData for $name {
-			type Latest = $latest_ty;
-
-			fn wrap_latest(latest: Self::Latest) -> Self {
-				Self::V4(latest)
-			}
-
-			fn unwrap_latest(self) -> Result<Self::Latest> {
-				match self {
-					Self::V4(data) => Ok(data),
-					_ => bail!("version not latest"),
-				}
-			}
-
+			type Latest = v5::$name;
+			fn wrap_latest(latest: Self::Latest) -> Self { Self::V5(latest) }
+			fn unwrap_latest(self) -> Result<Self::Latest> { let Self::V5(data) = self; Ok(data) }
 			fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
-				match version {
-					3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
-					4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
-					_ => bail!(
-						"{} only exists in client protocol v3, got {version}",
-						stringify!($name)
-					),
-				}
+				if version != 5 { bail!("{} only exists in client protocol v5, got {version}", stringify!($name)); }
+				Ok(Self::V5(serde_bare::from_slice(payload)?))
 			}
-
 			fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
-				match (self, version) {
-					(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
-					(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
-					(_, version) => bail!(
-						"{} only exists in client protocol v3, got {version}",
-						stringify!($name)
-					),
-				}
+				if version != 5 { bail!("{} only exists in client protocol v5, got {version}", stringify!($name)); }
+				let Self::V5(data) = self;
+				serde_bare::to_vec(&data).map_err(Into::into)
 			}
-
-			fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Ok, Ok, Self::v3_to_v4]
-			}
-
-			fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-				vec![Self::v4_to_v3, Ok, Ok]
-			}
-		}
-
-		impl $name {
-			fn v3_to_v4(self) -> Result<Self> {
-				let Self::V3(data) = self else {
-					bail!("expected client protocol v3 {}", stringify!($name))
-				};
-				Ok(Self::V4(data.into()))
-			}
-
-			fn v4_to_v3(self) -> Result<Self> {
-				let Self::V4(data) = self else {
-					bail!("expected client protocol v4 {}", stringify!($name))
-				};
-				Ok(Self::V3(data.into()))
-			}
+			fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> { vec![Ok, Ok, Ok, Ok] }
+			fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> { vec![Ok, Ok, Ok, Ok] }
 		}
 	};
 }
 
-impl_versioned_manual!(
-	ToServer,
-	v4::ToServer,
-	v1::ToServer,
-	v2::ToServer,
-	v3::ToServer,
-	v4::ToServer
-);
-impl_versioned_manual!(
-	HttpActionRequest,
-	v4::HttpActionRequest,
-	v1::HttpActionRequest,
-	v2::HttpActionRequest,
-	v3::HttpActionRequest,
-	v4::HttpActionRequest
-);
-impl_versioned_manual!(
-	HttpActionResponse,
-	v4::HttpActionResponse,
-	v1::HttpActionResponse,
-	v2::HttpActionResponse,
-	v3::HttpActionResponse,
-	v4::HttpActionResponse
-);
-impl_versioned_manual!(
-	HttpResolveResponse,
-	v4::HttpResolveResponse,
-	v1::HttpResolveResponse,
-	v2::HttpResolveResponse,
-	v3::HttpResolveResponse,
-	v4::HttpResolveResponse
-);
-impl_versioned_v3_only!(HttpQueueSendRequest, v4::HttpQueueSendRequest);
-impl_versioned_v3_only!(HttpQueueSendResponse, v4::HttpQueueSendResponse);
+impl_versioned_v5_only!(HttpQueueStatusRequest);
+impl_versioned_v5_only!(HttpQueueStatusResponse);
+
+#[cfg(test)]
+mod queue_tests {
+	use super::*;
+
+	#[test]
+	fn v4_waiting_queue_send_is_rejected() {
+		let result = HttpQueueSendRequest::V4(v4::HttpQueueSendRequest {
+			body: vec![1, 2, 3],
+			name: Some("jobs".to_owned()),
+			wait: Some(true),
+			timeout: Some(1_000),
+		})
+		.v4_to_v5();
+		let Err(error) = result else {
+			panic!("wait=true must not silently become fire-and-forget");
+		};
+		assert!(format!("{error:#}").contains("queue.wait_unsupported"));
+	}
+
+	#[test]
+	fn v4_non_waiting_queue_send_upgrades_without_completion_fields() {
+		let upgraded = HttpQueueSendRequest::V4(v4::HttpQueueSendRequest {
+			body: vec![1, 2, 3],
+			name: Some("jobs".to_owned()),
+			wait: Some(false),
+			timeout: Some(1_000),
+		})
+		.v4_to_v5()
+		.expect("wait=false remains compatible");
+		let HttpQueueSendRequest::V5(upgraded) = upgraded else {
+			panic!("expected v5 request");
+		};
+		assert_eq!(upgraded.name.as_deref(), Some("jobs"));
+		assert_eq!(upgraded.body, vec![1, 2, 3]);
+		assert_eq!(upgraded.dedupe_key, None);
+		assert_eq!(upgraded.delay, None);
+	}
+
+	#[test]
+	fn v5_queue_receipt_downgrades_to_accepted_legacy_response() {
+		let downgraded = HttpQueueSendResponse::V5(v5::HttpQueueSendResponse {
+			receipt_id: "opaque".to_owned(),
+			deduplicated: true,
+		})
+		.v5_to_v4()
+		.expect("legacy clients receive their historical accepted response");
+		let HttpQueueSendResponse::V4(downgraded) = downgraded else {
+			panic!("expected v4 response");
+		};
+		assert_eq!(downgraded.status, "completed");
+		assert_eq!(downgraded.response, None);
+	}
+}
 
 pub enum HttpResponseError {
 	V1(v1::HttpResponseError),
 	V2(v2::HttpResponseError),
 	V3(v3::HttpResponseError),
 	V4(v4::HttpResponseError),
+	V5(v5::HttpResponseError),
 }
 
 impl OwnedVersionedData for HttpResponseError {
-	type Latest = v4::HttpResponseError;
+	type Latest = v5::HttpResponseError;
 
 	fn wrap_latest(latest: Self::Latest) -> Self {
-		Self::V4(latest)
+		Self::V5(latest)
 	}
 
 	fn unwrap_latest(self) -> Result<Self::Latest> {
 		match self {
-			Self::V4(data) => Ok(data),
+			Self::V5(data) => Ok(data),
 			_ => bail!("version not latest"),
 		}
 	}
@@ -623,6 +827,7 @@ impl OwnedVersionedData for HttpResponseError {
 			2 => Ok(Self::V2(serde_bare::from_slice(payload)?)),
 			3 => Ok(Self::V3(serde_bare::from_slice(payload)?)),
 			4 => Ok(Self::V4(serde_bare::from_slice(payload)?)),
+			5 => Ok(Self::V5(serde_bare::from_slice(payload)?)),
 			_ => bail!("invalid client protocol version for HttpResponseError: {version}"),
 		}
 	}
@@ -633,6 +838,7 @@ impl OwnedVersionedData for HttpResponseError {
 			(Self::V2(data), 2) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V3(data), 3) => serde_bare::to_vec(&data).map_err(Into::into),
 			(Self::V4(data), 4) => serde_bare::to_vec(&data).map_err(Into::into),
+			(Self::V5(data), 5) => serde_bare::to_vec(&data).map_err(Into::into),
 			(_, version) => {
 				bail!("unexpected client protocol version for HttpResponseError: {version}")
 			}
@@ -640,15 +846,36 @@ impl OwnedVersionedData for HttpResponseError {
 	}
 
 	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4]
+		vec![Self::v1_to_v2, Self::v2_to_v3, Self::v3_to_v4, Self::v4_to_v5]
 	}
 
 	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
-		vec![Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
+		vec![Self::v5_to_v4, Self::v4_to_v3, Self::v3_to_v2, Self::v2_to_v1]
 	}
 }
 
 impl HttpResponseError {
+	fn v4_to_v5(self) -> Result<Self> {
+		let Self::V4(data) = self else { bail!("expected client protocol v4 HttpResponseError") };
+		Ok(Self::V5(v5::HttpResponseError {
+			group: data.group,
+			code: data.code,
+			message: data.message,
+			metadata: data.metadata,
+			actor: data.actor.map(|actor| v5::ActorSpecifier { actor_id: actor.actor_id, generation: actor.generation, key: actor.key }),
+		}))
+	}
+
+	fn v5_to_v4(self) -> Result<Self> {
+		let Self::V5(data) = self else { bail!("expected client protocol v5 HttpResponseError") };
+		Ok(Self::V4(v4::HttpResponseError {
+			group: data.group,
+			code: data.code,
+			message: data.message,
+			metadata: data.metadata,
+			actor: data.actor.map(|actor| v4::ActorSpecifier { actor_id: actor.actor_id, generation: actor.generation, key: actor.key }),
+		}))
+	}
 	fn v1_to_v2(self) -> Result<Self> {
 		let Self::V1(data) = self else {
 			bail!("expected client protocol v1 HttpResponseError")

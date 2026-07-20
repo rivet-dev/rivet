@@ -6,6 +6,7 @@ mod moved_tests {
 
 	use super::{
 		HttpResponseEncoding, authorization_bearer_token, authorization_bearer_token_map,
+		decode_http_queue_request,
 		framework_action_error_response, framework_anyhow_error_response_with_actor,
 		is_actor_request_path, message_boundary_error_response,
 		message_boundary_error_response_with_actor, normalize_actor_request_path, request_encoding,
@@ -232,6 +233,21 @@ mod moved_tests {
 		headers.insert("x-rivet-encoding", "cbor".parse().unwrap());
 
 		assert_eq!(request_encoding(&headers), HttpResponseEncoding::Cbor);
+	}
+
+	#[test]
+	fn queue_request_rejects_delay_above_javascript_safe_integer() {
+		let body = serde_json::to_vec(&json!({
+			"body": null,
+			"delay": 9_007_199_254_740_992_u64,
+		}))
+		.expect("encode request");
+
+		let error = match decode_http_queue_request(HttpResponseEncoding::Json, &body) {
+			Ok(_) => panic!("unsafe delay should be rejected"),
+			Err(error) => error,
+		};
+		assert!(error.to_string().contains("safe integer"));
 	}
 
 	#[test]

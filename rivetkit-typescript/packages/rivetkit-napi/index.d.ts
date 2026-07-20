@@ -50,11 +50,22 @@ export interface JsHttpResponse {
   body?: Buffer
 }
 export interface JsQueueSendResult {
-  status: string
-  response?: Buffer
+  id: string
+  deduplicated: boolean
 }
 export interface JsActionDefinition {
   name: string
+}
+export interface JsQueueDefinition {
+  name: string
+  onMessage: boolean
+  onDeadLetter: boolean
+  timeoutMs?: number
+  maxAttempts?: number
+  backoffInitialMs?: number
+  backoffFactor?: number
+  backoffMaxMs?: number
+  backoffJitter?: boolean
 }
 /**
  * One entry in the actor's `inspector.tabs[]` declaration. Either a
@@ -107,6 +118,7 @@ export interface JsActorConfig {
   maxIncomingMessageSize?: number
   maxOutgoingMessageSize?: number
   actions?: Array<JsActionDefinition>
+  queues?: Array<JsQueueDefinition>
   inspectorTabs?: Array<JsInspectorTabEntry>
 }
 export interface JsBindParam {
@@ -149,29 +161,39 @@ export interface JsSqliteVfsMetrics {
 export interface JsQueueNextOptions {
   names?: Array<string>
   timeoutMs?: number
-  completable?: boolean
 }
 export interface JsQueueNextBatchOptions {
   names?: Array<string>
   count?: number
   timeoutMs?: number
-  completable?: boolean
 }
 export interface JsQueueWaitOptions {
   timeoutMs?: number
-  completable?: boolean
 }
-export interface JsQueueEnqueueAndWaitOptions {
-  timeoutMs?: number
+export interface JsQueueSendOptions {
+  dedupeKey?: string
+  delayMs?: number
 }
 export interface JsQueueTryNextOptions {
   names?: Array<string>
-  completable?: boolean
 }
 export interface JsQueueTryNextBatchOptions {
   names?: Array<string>
   count?: number
-  completable?: boolean
+}
+export interface JsQueueSendReceipt {
+  id: string
+  deduplicated: boolean
+}
+export interface JsQueueStatus {
+  state: string
+  attempts?: number
+  createdAtMs?: number
+  availableAtMs?: number
+  startedAtMs?: number
+  completedAtMs?: number
+  failedAtMs?: number
+  consumedAtMs?: number
 }
 export interface JsQueueInspectMessage {
   /**
@@ -373,12 +395,12 @@ export declare class Kv {
   batchDelete(keys: Array<Buffer>): Promise<void>
 }
 export declare class Queue {
-  send(name: string, body: Buffer): Promise<QueueMessage>
+  send(name: string, body: Buffer, options?: JsQueueSendOptions | undefined | null): Promise<JsQueueSendReceipt>
+  status(receiptId: string): Promise<JsQueueStatus>
   next(options?: JsQueueNextOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage | null>
   nextBatch(options?: JsQueueNextBatchOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Array<QueueMessage>>
-  waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<QueueMessage>
+  waitForNames(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<void>
   waitForNamesAvailable(names: Array<string>, options?: JsQueueWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<void>
-  enqueueAndWait(name: string, body: Buffer, options?: JsQueueEnqueueAndWaitOptions | undefined | null, signal?: CancellationToken | undefined | null): Promise<Buffer | null>
   tryNext(options?: JsQueueTryNextOptions | undefined | null): QueueMessage | null
   tryNextBatch(options?: JsQueueTryNextBatchOptions | undefined | null): Array<QueueMessage>
   maxSize(): number
@@ -386,12 +408,12 @@ export declare class Queue {
   inspectMessages(): Promise<Array<JsQueueInspectMessage>>
 }
 export declare class QueueMessage {
-  id(): bigint
+  id(): string
   name(): string
   body(): Buffer
   createdAt(): number
-  isCompletable(): boolean
-  complete(response?: Buffer | undefined | null): Promise<void>
+  attempts(): number
+  firstFailedAt(): number | null
 }
 export declare class CoreRegistry {
   constructor()

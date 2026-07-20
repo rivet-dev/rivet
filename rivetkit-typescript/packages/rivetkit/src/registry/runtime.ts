@@ -67,23 +67,39 @@ export interface RuntimeInspectorSnapshot {
 }
 
 export interface RuntimeQueueMessage {
-	id(): bigint;
+	id(): string;
 	name(): string;
 	body(): RuntimeBytes;
 	createdAt(): number;
-	isCompletable(): boolean;
-	complete(response?: RuntimeBytes | undefined | null): Promise<void>;
+	attempts(): number;
+	firstFailedAt(): number | null;
+}
+
+export interface RuntimeQueueSendOptions {
+	dedupeKey?: string;
+	delayMs?: number;
+}
+
+export interface RuntimeQueueSendReceipt {
+	id: string;
+	deduplicated: boolean;
+}
+
+export interface RuntimeQueueStatus {
+	state: string;
+	attempts?: number;
+	createdAtMs?: number;
+	availableAtMs?: number;
+	startedAtMs?: number;
+	completedAtMs?: number;
+	failedAtMs?: number;
+	consumedAtMs?: number;
 }
 
 export interface RuntimeQueueInspectMessage {
 	id: number;
 	name: string;
 	createdAtMs: number;
-}
-
-export interface RuntimeQueueSendResult {
-	status: string;
-	response?: RuntimeBytes;
 }
 
 export interface RuntimeScheduledEventInfo {
@@ -129,27 +145,19 @@ export interface RuntimeScheduledFireInfo {
 	scheduledAt: number;
 	firedAt: number;
 }
-
 export interface RuntimeQueueNextBatchOptions {
 	names?: string[];
 	count?: number;
 	timeoutMs?: number;
-	completable?: boolean;
 }
 
 export interface RuntimeQueueWaitOptions {
-	timeoutMs?: number;
-	completable?: boolean;
-}
-
-export interface RuntimeQueueEnqueueAndWaitOptions {
 	timeoutMs?: number;
 }
 
 export interface RuntimeQueueTryNextBatchOptions {
 	names?: string[];
 	count?: number;
-	completable?: boolean;
 }
 
 export interface RuntimeKvListOptions {
@@ -304,6 +312,17 @@ export interface RuntimeActorConfig {
 	preloadMaxWorkflowBytes?: number;
 	preloadMaxConnectionsBytes?: number;
 	actions?: Array<{ name: string }>;
+	queues?: Array<{
+		name: string;
+		onMessage: boolean;
+		onDeadLetter: boolean;
+		timeoutMs?: number;
+		maxAttempts?: number;
+		backoffInitialMs?: number;
+		backoffFactor?: number;
+		backoffMaxMs?: number;
+		backoffJitter?: boolean;
+	}>;
 	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
 }
 
@@ -616,7 +635,12 @@ export interface CoreRuntime {
 		ctx: ActorContextHandle,
 		name: string,
 		body: RuntimeBytes,
-	): Promise<RuntimeQueueMessage>;
+		options?: RuntimeQueueSendOptions | undefined | null,
+	): Promise<RuntimeQueueSendReceipt>;
+	actorQueueStatus(
+		ctx: ActorContextHandle,
+		receiptId: string,
+	): Promise<RuntimeQueueStatus>;
 	actorQueueNextBatch(
 		ctx: ActorContextHandle,
 		options?: RuntimeQueueNextBatchOptions | undefined | null,
@@ -627,20 +651,13 @@ export interface CoreRuntime {
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
-	): Promise<RuntimeQueueMessage>;
+	): Promise<void>;
 	actorQueueWaitForNamesAvailable(
 		ctx: ActorContextHandle,
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<void>;
-	actorQueueEnqueueAndWait(
-		ctx: ActorContextHandle,
-		name: string,
-		body: RuntimeBytes,
-		options?: RuntimeQueueEnqueueAndWaitOptions | undefined | null,
-		signal?: CancellationTokenHandle | undefined | null,
-	): Promise<RuntimeBytes | null>;
 	actorQueueTryNextBatch(
 		ctx: ActorContextHandle,
 		options?: RuntimeQueueTryNextBatchOptions | undefined | null,

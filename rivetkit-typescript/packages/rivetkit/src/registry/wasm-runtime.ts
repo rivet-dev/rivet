@@ -27,10 +27,12 @@ import type {
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
 	RuntimeListenerConfig,
-	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueInspectMessage,
 	RuntimeQueueMessage,
 	RuntimeQueueNextBatchOptions,
+	RuntimeQueueSendOptions,
+	RuntimeQueueSendReceipt,
+	RuntimeQueueStatus,
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
 	RuntimeCronFire,
@@ -137,10 +139,8 @@ function normalizeQueueMessage(
 		name: () => message.name(),
 		body: () => toBytes(message.body()),
 		createdAt: () => message.createdAt(),
-		isCompletable: () => message.isCompletable(),
-		complete: async (response?: RuntimeBytes | undefined | null) => {
-			await callWasm(() => message.complete(response));
-		},
+		attempts: () => message.attempts(),
+		firstFailedAt: () => message.firstFailedAt(),
 	};
 }
 
@@ -839,11 +839,18 @@ export class WasmCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		name: string,
 		body: RuntimeBytes,
-	): Promise<RuntimeQueueMessage> {
+		options?: RuntimeQueueSendOptions | undefined | null,
+	): Promise<RuntimeQueueSendReceipt> {
 		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		return normalizeQueueMessage(
-			await callHandleAsync(queue, "send", name, body),
-		);
+		return await callHandleAsync(queue, "send", name, body, options);
+	}
+
+	async actorQueueStatus(
+		ctx: ActorContextHandle,
+		receiptId: string,
+	): Promise<RuntimeQueueStatus> {
+		const queue = childHandle(asWasmActorContext(ctx), "queue");
+		return await callHandleAsync(queue, "status", receiptId);
 	}
 
 	async actorQueueNextBatch(
@@ -856,7 +863,7 @@ export class WasmCoreRuntime implements CoreRuntime {
 			queue,
 			"nextBatch",
 			options,
-			signal ? asWasmCancellationToken(signal) : signal,
+			signal ? asWasmCancellationToken(signal).cloneToken() : signal,
 		);
 		return messages.map(normalizeQueueMessage);
 	}
@@ -866,16 +873,14 @@ export class WasmCoreRuntime implements CoreRuntime {
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
-	): Promise<RuntimeQueueMessage> {
+	): Promise<void> {
 		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		return normalizeQueueMessage(
-			await callHandleAsync(
-				queue,
-				"waitForNames",
-				names,
-				options,
-				signal ? asWasmCancellationToken(signal) : signal,
-			),
+		await callHandleAsync(
+			queue,
+			"waitForNames",
+			names,
+			options,
+			signal ? asWasmCancellationToken(signal).cloneToken() : signal,
 		);
 	}
 
@@ -891,27 +896,7 @@ export class WasmCoreRuntime implements CoreRuntime {
 			"waitForNamesAvailable",
 			names,
 			options,
-			signal,
-		);
-	}
-
-	async actorQueueEnqueueAndWait(
-		ctx: ActorContextHandle,
-		name: string,
-		body: RuntimeBytes,
-		options?: RuntimeQueueEnqueueAndWaitOptions | undefined | null,
-		signal?: CancellationTokenHandle | undefined | null,
-	): Promise<RuntimeBytes | null> {
-		const queue = childHandle(asWasmActorContext(ctx), "queue");
-		return optionalBytes(
-			await callHandleAsync(
-				queue,
-				"enqueueAndWait",
-				name,
-				body,
-				options,
-				signal ? asWasmCancellationToken(signal) : signal,
-			),
+			signal ? asWasmCancellationToken(signal).cloneToken() : signal,
 		);
 	}
 

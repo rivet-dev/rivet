@@ -1,1 +1,1 @@
-export * from "./bare/generated/client-protocol/v4";
+export * from "./bare/generated/client-protocol/v5";

@@ -196,12 +196,11 @@ impl RegistryDispatcher {
 				}
 				let cbor_body = encode_json_as_cbor(&body.body.unwrap_or(serde_json::Value::Null))?;
 				match instance.ctx.queue().send(&body.name, &cbor_body).await {
-					Ok(message) => json_http_response(
+					Ok(receipt) => json_http_response(
 						StatusCode::OK,
 						&json!({
-							"id": message.id.to_string(),
-							"name": message.name,
-							"createdAtMs": message.created_at,
+							"id": receipt.id,
+							"deduplicated": receipt.deduplicated,
 						}),
 					),
 					Err(error) => Err(error).context("enqueue inspector queue message"),

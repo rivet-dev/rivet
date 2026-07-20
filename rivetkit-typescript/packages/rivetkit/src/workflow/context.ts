@@ -14,9 +14,9 @@ import type {
 } from "@rivetkit/workflow-engine";
 import type {
 	QueueFilterName,
+	QueueMessageForName,
 	QueueNextBatchOptions,
 	QueueNextOptions,
-	QueueResultMessageForName,
 	RunContext,
 } from "@/actor/config";
 import type {
@@ -37,23 +37,25 @@ import type {
 import type { Registry } from "@/registry";
 import { WORKFLOW_GUARD_KV_KEY } from "./constants";
 
-type WorkflowActorQueueNextOptions<
-	TName extends string,
-	TCompletable extends boolean,
-> = Omit<QueueNextOptions<TName, TCompletable>, "signal">;
-
-type WorkflowActorQueueNextOptionsFallback<TCompletable extends boolean> = Omit<
-	QueueNextOptions<string, TCompletable>,
+type WorkflowActorQueueNextOptions<TName extends string> = Omit<
+	QueueNextOptions<TName>,
 	"signal"
 >;
 
-type WorkflowActorQueueNextBatchOptions<
-	TName extends string,
-	TCompletable extends boolean,
-> = Omit<QueueNextBatchOptions<TName, TCompletable>, "signal">;
+type WorkflowActorQueueNextOptionsFallback = Omit<
+	QueueNextOptions<string>,
+	"signal"
+>;
 
-type WorkflowActorQueueNextBatchOptionsFallback<TCompletable extends boolean> =
-	Omit<QueueNextBatchOptions<string, TCompletable>, "signal">;
+type WorkflowActorQueueNextBatchOptions<TName extends string> = Omit<
+	QueueNextBatchOptions<TName>,
+	"signal"
+>;
+
+type WorkflowActorQueueNextBatchOptionsFallback = Omit<
+	QueueNextBatchOptions<string>,
+	"signal"
+>;
 
 // Step run callbacks receive a WorkflowStepContext, which is the only place
 // actor data (state/db/vars/client) may be touched.
@@ -512,23 +514,14 @@ export class WorkflowContext<
 
 	get queue() {
 		const self = this;
-		function next<
-			const TName extends QueueFilterName<TQueues>,
-			const TCompletable extends boolean = false,
-		>(
+		function next<const TName extends QueueFilterName<TQueues>>(
 			name: string,
-			opts?: WorkflowActorQueueNextOptions<TName, TCompletable>,
-		): Promise<QueueResultMessageForName<TQueues, TName, TCompletable>>;
-		function next<const TCompletable extends boolean = false>(
+			opts?: WorkflowActorQueueNextOptions<TName>,
+		): Promise<QueueMessageForName<TQueues, TName>>;
+		function next(
 			name: string,
-			opts?: WorkflowActorQueueNextOptionsFallback<TCompletable>,
-		): Promise<
-			QueueResultMessageForName<
-				TQueues,
-				QueueFilterName<TQueues>,
-				TCompletable
-			>
-		>;
+			opts?: WorkflowActorQueueNextOptionsFallback,
+		): Promise<QueueMessageForName<TQueues, QueueFilterName<TQueues>>>;
 		// The implementation signature stays broad so the schema-typed public
 		// overloads above remain compatible with it.
 		async function next(name: string, opts?: any): Promise<any> {
@@ -536,27 +529,14 @@ export class WorkflowContext<
 			return self.#toActorQueueMessage(message);
 		}
 
-		function nextBatch<
-			const TName extends QueueFilterName<TQueues>,
-			const TCompletable extends boolean = false,
-		>(
+		function nextBatch<const TName extends QueueFilterName<TQueues>>(
 			name: string,
-			opts?: WorkflowActorQueueNextBatchOptions<TName, TCompletable>,
-		): Promise<
-			Array<QueueResultMessageForName<TQueues, TName, TCompletable>>
-		>;
-		function nextBatch<const TCompletable extends boolean = false>(
+			opts?: WorkflowActorQueueNextBatchOptions<TName>,
+		): Promise<Array<QueueMessageForName<TQueues, TName>>>;
+		function nextBatch(
 			name: string,
-			opts?: WorkflowActorQueueNextBatchOptionsFallback<TCompletable>,
-		): Promise<
-			Array<
-				QueueResultMessageForName<
-					TQueues,
-					QueueFilterName<TQueues>,
-					TCompletable
-				>
-			>
-		>;
+			opts?: WorkflowActorQueueNextBatchOptionsFallback,
+		): Promise<Array<QueueMessageForName<TQueues, QueueFilterName<TQueues>>>>;
 		async function nextBatch(name: string, opts?: any): Promise<any> {
 			const messages = await self.#inner.queue.nextBatch(name, opts);
 			return messages.map((message) =>
@@ -1001,21 +981,14 @@ export class WorkflowContext<
 		}
 	}
 
-	#toActorQueueMessage<T>(
-		message: WorkflowQueueMessage<T>,
-	): WorkflowQueueMessage<T> & { id: bigint } {
-		let id: bigint;
-		try {
-			id = BigInt(message.id);
-		} catch {
-			throw new Error(`Invalid queue message id "${message.id}"`);
-		}
+	#toActorQueueMessage<T>(message: WorkflowQueueMessage<T>) {
 		return {
-			id,
+			id: message.id,
 			name: message.name,
 			body: message.body,
-			createdAt: message.createdAt,
-			...(message.complete ? { complete: message.complete } : {}),
+			createdAt: new Date(message.createdAt),
+			attempts: 0,
+			firstFailedAt: undefined,
 		};
 	}
 

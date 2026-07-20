@@ -73,7 +73,6 @@ import {
 	validateConnParams,
 	validateEventArgs,
 	validateQueueBody,
-	validateQueueComplete,
 } from "./native-validation";
 import type {
 	ActorContextHandle,
@@ -89,6 +88,7 @@ import type {
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
 	RuntimeQueueMessage,
+	RuntimeQueueStatus,
 	RuntimeScheduledEventInfo,
 	RuntimeScheduledFireInfo,
 	RuntimeServeConfig,
@@ -754,6 +754,36 @@ async function callNative<T>(invoke: () => Promise<T>): Promise<T> {
 	} catch (error) {
 		throw normalizeNativeBridgeError(error);
 	}
+}
+
+async function callNativeAbortable<T>(
+	invoke: () => Promise<T>,
+	signal?: AbortSignal,
+): Promise<T> {
+	if (!signal) return await callNative(invoke);
+	if (signal.aborted) {
+		throw signal.reason ?? new DOMException("The operation was aborted", "AbortError");
+	}
+
+	return await new Promise<T>((resolve, reject) => {
+		const abort = () => {
+			reject(
+				signal.reason ??
+					new DOMException("The operation was aborted", "AbortError"),
+			);
+		};
+		signal.addEventListener("abort", abort, { once: true });
+		void callNative(invoke).then(
+			(value) => {
+				signal.removeEventListener("abort", abort);
+				resolve(value);
+			},
+			(error) => {
+				signal.removeEventListener("abort", abort);
+				reject(error);
+			},
+		);
+	});
 }
 
 function callNativeSync<T>(invoke: () => T): T {
@@ -1684,38 +1714,51 @@ function wrapQueueMessage(
 ) {
 	const name = callNativeSync(() => message.name());
 	return {
-		id: Number(callNativeSync(() => message.id())),
+		id: callNativeSync(() => message.id()),
 		name,
 		body: validateQueueBody(
 			schemas,
 			name,
 			decodeValue(callNativeSync(() => message.body())),
 		),
-		createdAt: callNativeSync(() => message.createdAt()),
-		complete: callNativeSync(() => message.isCompletable())
-			? async (response?: unknown) =>
-					await callNative(() =>
-						message.complete(
-							response === undefined
-								? undefined
-								: encodeValue(
-										validateQueueComplete(
-											schemas,
-											name,
-											response,
-										),
-									),
-						),
-					)
-			: undefined,
+		createdAt: new Date(callNativeSync(() => message.createdAt())),
+		attempts: callNativeSync(() => message.attempts()),
+		firstFailedAt: (() => {
+			const timestamp = callNativeSync(() => message.firstFailedAt());
+			return timestamp == null ? undefined : new Date(timestamp);
+		})(),
 	};
+}
+
+function queueStatusFromRuntime(status: RuntimeQueueStatus) {
+	const createdAt =
+		status.createdAtMs === undefined
+			? undefined
+			: new Date(status.createdAtMs);
+	switch (status.state) {
+		case "queued":
+			return { state: "queued" as const, attempts: status.attempts ?? 0, createdAt: createdAt! };
+		case "delayed":
+			return { state: "delayed" as const, attempts: status.attempts ?? 0, createdAt: createdAt!, availableAt: new Date(status.availableAtMs ?? 0) };
+		case "processing":
+			return { state: "processing" as const, attempts: status.attempts ?? 0, createdAt: createdAt!, startedAt: new Date(status.startedAtMs ?? 0) };
+		case "retrying":
+			return { state: "retrying" as const, attempts: status.attempts ?? 0, createdAt: createdAt!, availableAt: new Date(status.availableAtMs ?? 0) };
+		case "succeeded":
+			return { state: "succeeded" as const, attempts: status.attempts ?? 0, createdAt: createdAt!, completedAt: new Date(status.completedAtMs ?? 0) };
+		case "deadLettered":
+			return { state: "deadLettered" as const, attempts: status.attempts ?? 0, createdAt: createdAt!, failedAt: new Date(status.failedAtMs ?? 0) };
+		case "consumed":
+			return { state: "consumed" as const, createdAt: createdAt!, consumedAt: new Date(status.consumedAtMs ?? 0) };
+		default:
+			return { state: "unknown" as const };
+	}
 }
 
 class NativeQueueAdapter {
 	#runtime: CoreRuntime;
 	#ctx: ActorContextHandle;
 	#schemas: NativeValidationConfig["queues"];
-	#pendingCompletableMessageIds = new Set<string>();
 
 	constructor(
 		runtime: CoreRuntime,
@@ -1727,32 +1770,58 @@ class NativeQueueAdapter {
 		this.#schemas = schemas;
 	}
 
-	async send(name: string, body: unknown) {
+	async send(
+		name: string,
+		body: unknown,
+		options?: { dedupeKey?: string; delay?: number; signal?: AbortSignal },
+	) {
+		if (
+			options?.delay !== undefined &&
+			(!Number.isSafeInteger(options.delay) || options.delay < 0)
+		) {
+			throw new RangeError("Queue delay must be a non-negative safe integer");
+		}
 		const validatedBody = validateQueueBody(this.#schemas, name, body);
-		return wrapQueueMessage(
-			await callNative(() =>
-				this.#runtime.actorQueueSend(
-					this.#ctx,
-					name,
-					encodeValue(validatedBody),
-				),
+		const receipt = await callNativeAbortable(() =>
+			this.#runtime.actorQueueSend(
+				this.#ctx,
+				name,
+				encodeValue(validatedBody),
+				{ dedupeKey: options?.dedupeKey, delayMs: options?.delay },
 			),
-			this.#schemas,
+			options?.signal,
 		);
+		return this.#receipt(receipt.id, receipt.deduplicated);
+	}
+
+	receipt(id: string) {
+		return this.#receipt(id);
+	}
+
+	#receipt(id: string, deduplicated?: boolean) {
+		return {
+			id,
+			...(deduplicated === undefined ? {} : { deduplicated }),
+			status: async (options?: { signal?: AbortSignal }) =>
+				queueStatusFromRuntime(
+					await callNativeAbortable(
+						() => this.#runtime.actorQueueStatus(this.#ctx, id),
+						options?.signal,
+					),
+				),
+		};
 	}
 
 	async next(options?: {
 		names?: readonly string[];
 		timeout?: number;
 		signal?: AbortSignal;
-		completable?: boolean;
 	}) {
 		const messages = await this.nextBatch({
 			names: options?.names,
 			count: 1,
 			timeout: options?.timeout,
 			signal: options?.signal,
-			completable: options?.completable,
 		});
 		return messages[0];
 	}
@@ -1762,21 +1831,7 @@ class NativeQueueAdapter {
 		count?: number;
 		timeout?: number;
 		signal?: AbortSignal;
-		completable?: boolean;
 	}) {
-		const completable = options?.completable === true;
-		if (this.#pendingCompletableMessageIds.size > 0) {
-			throw new RivetError(
-				"queue",
-				"previous_message_not_completed",
-				"Previous completable queue message is not completed. Call `message.complete(...)` before receiving the next message.",
-				{
-					public: true,
-					statusCode: 400,
-				},
-			);
-		}
-
 		const { token, cleanup } = await createCancellationTokenHandle(
 			this.#runtime,
 			options?.signal,
@@ -1790,7 +1845,6 @@ class NativeQueueAdapter {
 						names: this.#normalizeNames(options?.names),
 						count: options?.count,
 						timeoutMs: options?.timeout,
-						completable,
 					},
 					token,
 				),
@@ -1798,11 +1852,7 @@ class NativeQueueAdapter {
 			const wrapped = messages.map((message) =>
 				wrapQueueMessage(message, this.#schemas),
 			);
-			return completable
-				? wrapped.map((message) =>
-						this.#makeCompletableMessage(message),
-					)
-				: wrapped;
+			return wrapped;
 		} finally {
 			cleanup?.();
 		}
@@ -1813,7 +1863,6 @@ class NativeQueueAdapter {
 		options?: {
 			timeout?: number;
 			signal?: AbortSignal;
-			completable?: boolean;
 		},
 	) {
 		const { token, cleanup } = await createCancellationTokenHandle(
@@ -1822,19 +1871,15 @@ class NativeQueueAdapter {
 		);
 
 		try {
-			return wrapQueueMessage(
-				await callNative(() =>
-					this.#runtime.actorQueueWaitForNames(
+			await callNative(() =>
+				this.#runtime.actorQueueWaitForNames(
 						this.#ctx,
 						[...names],
 						{
 							timeoutMs: options?.timeout,
-							completable: options?.completable,
 						},
 						token,
 					),
-				),
-				this.#schemas,
 			);
 		} finally {
 			cleanup?.();
@@ -1869,52 +1914,10 @@ class NativeQueueAdapter {
 		}
 	}
 
-	async enqueueAndWait(
-		name: string,
-		body: unknown,
-		options?: {
-			timeout?: number;
-			signal?: AbortSignal;
-		},
-	) {
-		const validatedBody = validateQueueBody(this.#schemas, name, body);
-		const { token, cleanup } = await createCancellationTokenHandle(
-			this.#runtime,
-			options?.signal,
-		);
-
-		try {
-			const response = await callNative(() =>
-				this.#runtime.actorQueueEnqueueAndWait(
-					this.#ctx,
-					name,
-					encodeValue(validatedBody),
-					{
-						timeoutMs: options?.timeout,
-					},
-					token,
-				),
-			);
-			return response === undefined || response === null
-				? undefined
-				: validateQueueComplete(
-						this.#schemas,
-						name,
-						decodeValue(response),
-					);
-		} finally {
-			cleanup?.();
-		}
-	}
-
-	async tryNext(options?: {
-		names?: readonly string[];
-		completable?: boolean;
-	}) {
+	async tryNext(options?: { names?: readonly string[] }) {
 		const messages = await this.tryNextBatch({
 			names: options?.names,
 			count: 1,
-			completable: options?.completable,
 		});
 		return messages[0];
 	}
@@ -1922,23 +1925,12 @@ class NativeQueueAdapter {
 	async tryNextBatch(options?: {
 		names?: readonly string[];
 		count?: number;
-		completable?: boolean;
 	}) {
-		if (options?.completable) {
-			return await this.nextBatch({
-				names: options.names,
-				count: options.count,
-				timeout: 0,
-				completable: true,
-			});
-		}
-
 		try {
 			return await this.nextBatch({
 				names: options?.names,
 				count: options?.count,
 				timeout: 0,
-				completable: false,
 			});
 		} catch (error) {
 			if (
@@ -1956,7 +1948,6 @@ class NativeQueueAdapter {
 	async *iter(options?: {
 		names?: readonly string[];
 		signal?: AbortSignal;
-		completable?: boolean;
 	}): AsyncIterableIterator<
 		NonNullable<Awaited<ReturnType<NativeQueueAdapter["next"]>>>
 	> {
@@ -1985,46 +1976,6 @@ class NativeQueueAdapter {
 		return [...new Set(names)];
 	}
 
-	#makeCompletableMessage(
-		message: Awaited<ReturnType<typeof wrapQueueMessage>>,
-	) {
-		const messageId = message.id.toString();
-		this.#pendingCompletableMessageIds.add(messageId);
-		let completed = false;
-
-		return {
-			...message,
-			complete: async (response?: unknown) => {
-				if (typeof message.complete !== "function") {
-					throw new RivetError(
-						"queue",
-						"complete_not_configured",
-						`Queue '${message.name}' does not support completion responses.`,
-						{
-							public: true,
-							statusCode: 400,
-							metadata: { name: message.name },
-						},
-					);
-				}
-				if (completed) {
-					throw new RivetError(
-						"queue",
-						"already_completed",
-						"Queue message was already completed.",
-						{
-							public: true,
-							statusCode: 400,
-						},
-					);
-				}
-
-				await message.complete(response);
-				completed = true;
-				this.#pendingCompletableMessageIds.delete(messageId);
-			},
-		};
-	}
 }
 
 class NativeWebSocketAdapter {
@@ -3246,7 +3197,6 @@ type NativeWorkflowQueueMessage = Awaited<
 
 class NativeWorkflowRuntimeAdapter {
 	#ctx: ActorContextHandleAdapter;
-	#completions = new Map<string, (response?: unknown) => Promise<void>>();
 
 	readonly id: string;
 	readonly driver: {
@@ -3268,7 +3218,7 @@ class NativeWorkflowRuntimeAdapter {
 			actorId: string,
 			prefix: Uint8Array,
 		) => Promise<Array<[Uint8Array, Uint8Array]>>;
-		setAlarm: (_actor: unknown, wakeAt: number) => Promise<void>;
+		setAlarm: (_actor: unknown, wakeAt?: number) => Promise<void>;
 	};
 	readonly queueManager: {
 		enqueue: (name: string, body: unknown) => Promise<unknown>;
@@ -3343,39 +3293,26 @@ class NativeWorkflowRuntimeAdapter {
 		};
 		this.queueManager = {
 			enqueue: async (name, body) => {
-				return this.#wrapQueueMessage(
-					await this.#ctx.queue.send(name, body),
-				);
+				return await this.#ctx.queue.send(name, body);
 			},
 			receive: async (
 				names,
 				count,
 				timeout,
 				_abortSignal,
-				completable,
+				_completable,
 			) => {
 				const messages = await this.#ctx.queue.nextBatch({
 					names,
 					count,
 					timeout: timeout ?? 0,
-					completable,
 				});
 				return messages.map((message) =>
 					this.#wrapQueueMessage(message),
 				);
 			},
-			completeMessage: async (message, response) => {
-				await message.complete?.(response);
-				this.#completions.delete(message.id.toString());
-			},
-			completeMessageById: async (messageId, response) => {
-				const complete = this.#completions.get(messageId.toString());
-				if (!complete) {
-					return;
-				}
-				await complete(response);
-				this.#completions.delete(messageId.toString());
-			},
+			completeMessage: async () => {},
+			completeMessageById: async () => {},
 			waitForNames: async (names, abortSignal) => {
 				await this.#ctx.queue.waitForNamesAvailable(names ?? [], {
 					signal: abortSignal,
@@ -3413,23 +3350,22 @@ class NativeWorkflowRuntimeAdapter {
 			throw new Error("native workflow queue message missing");
 		}
 
-		const id = BigInt(message.id);
-		let complete: ((response?: unknown) => Promise<void>) | undefined;
-		if (message.complete) {
-			complete = async (response?: unknown) => {
-				await message.complete?.(response);
-			};
-			this.#completions.set(id.toString(), complete);
-		}
-
 		return {
-			id,
+			id: stableQueueMessageId(message.id),
 			name: message.name,
 			body: message.body,
-			createdAt: message.createdAt,
-			complete,
+			createdAt: message.createdAt.getTime(),
 		};
 	}
+}
+
+function stableQueueMessageId(id: string): bigint {
+	let hash = 0xcbf29ce484222325n;
+	for (const byte of new TextEncoder().encode(id)) {
+		hash ^= BigInt(byte);
+		hash = BigInt.asUintN(64, hash * 0x100000001b3n);
+	}
+	return hash;
 }
 
 function withConnContext(
@@ -3527,8 +3463,128 @@ function buildActorConfig(
 		actions: Object.keys((config.actions ?? {}) as Record<string, unknown>)
 			.sort()
 			.map((name) => ({ name })),
+		queues: Object.entries(
+			(config.queues ?? {}) as Record<string, unknown>,
+		).map(([name, raw]) => {
+			const queue =
+				raw && typeof raw === "object"
+					? (raw as Record<string, any>)
+					: {};
+			const onMessage = typeof queue.onMessage === "function";
+			const onDeadLetter = typeof queue.onDeadLetter === "function";
+			if (onDeadLetter && !onMessage) {
+				throw new Error(
+					`Queue '${name}' cannot define onDeadLetter without onMessage`,
+				);
+			}
+			return {
+				name,
+				onMessage,
+				onDeadLetter,
+				timeoutMs: parseQueueDuration(queue.timeout),
+				maxAttempts: parseQueuePositiveInteger(
+					queue.retry?.maxAttempts,
+					"retry.maxAttempts",
+				),
+				backoffInitialMs: parseQueueNonNegativeInteger(
+					queue.retry?.backoff?.initialMs,
+					"retry.backoff.initialMs",
+				),
+				backoffFactor: parseQueuePositiveNumber(
+					queue.retry?.backoff?.factor,
+					"retry.backoff.factor",
+				),
+				backoffMaxMs: parseQueueNonNegativeInteger(
+					queue.retry?.backoff?.maxMs,
+					"retry.backoff.maxMs",
+				),
+				backoffJitter: parseQueueBoolean(
+					queue.retry?.backoff?.jitter,
+					"retry.backoff.jitter",
+				),
+			};
+		}),
 		inspectorTabs: buildInspectorTabs(config.inspector, runtimeKind),
 	};
+}
+
+function parseQueueDuration(value: unknown): number | undefined {
+	if (value === undefined) return undefined;
+	let milliseconds: number;
+	if (typeof value === "number") {
+		milliseconds = value;
+	} else if (typeof value === "string") {
+		const match = /^(\d+(?:\.\d+)?)(ms|s|m)$/.exec(value.trim());
+		if (!match) {
+			throw new Error(`Invalid queue timeout: ${value}`);
+		}
+		const factor = match[2] === "ms" ? 1 : match[2] === "s" ? 1_000 : 60_000;
+		milliseconds = Number(match[1]) * factor;
+	} else {
+		throw new Error("Queue timeout must be milliseconds or a duration string");
+	}
+	if (
+		!Number.isSafeInteger(milliseconds) ||
+		milliseconds < 0 ||
+		milliseconds > 0xffff_ffff
+	) {
+		throw new Error("Queue timeout must be a whole number of milliseconds within the u32 range");
+	}
+	return milliseconds;
+}
+
+function parseQueuePositiveInteger(
+	value: unknown,
+	name: string,
+): number | undefined {
+	if (value === undefined) return undefined;
+	if (
+		typeof value !== "number" ||
+		!Number.isSafeInteger(value) ||
+		value < 1 ||
+		value > 0xffff_ffff
+	) {
+		throw new Error(`Queue ${name} must be a positive integer within the u32 range`);
+	}
+	return value;
+}
+
+function parseQueueNonNegativeInteger(
+	value: unknown,
+	name: string,
+): number | undefined {
+	if (
+		typeof value !== "undefined" &&
+		(typeof value !== "number" ||
+			!Number.isSafeInteger(value) ||
+			value < 0 ||
+			value > 0xffff_ffff)
+	) {
+		throw new Error(
+			`Queue ${name} must be a non-negative integer within the u32 range`,
+		);
+	}
+	return value as number | undefined;
+}
+
+function parseQueuePositiveNumber(
+	value: unknown,
+	name: string,
+): number | undefined {
+	if (
+		typeof value !== "undefined" &&
+		(typeof value !== "number" || !Number.isFinite(value) || value <= 0)
+	) {
+		throw new Error(`Queue ${name} must be a finite positive number`);
+	}
+	return value as number | undefined;
+}
+
+function parseQueueBoolean(value: unknown, name: string): boolean | undefined {
+	if (value !== undefined && typeof value !== "boolean") {
+		throw new Error(`Queue ${name} must be a boolean`);
+	}
+	return value as boolean | undefined;
 }
 
 function buildInspectorTabs(
@@ -3895,11 +3951,10 @@ export function buildNativeFactory(
 				const cbor = encodeCborCompat(
 					(body.body ?? null) as JsonCompatValue,
 				);
-				const message = await runtime.actorQueueSend(ctx, name, cbor);
+				const receipt = await runtime.actorQueueSend(ctx, name, cbor);
 				return jsonResponse({
-					id: message.id().toString(),
-					name: message.name(),
-					createdAtMs: message.createdAt(),
+					id: receipt.id,
+					deduplicated: receipt.deduplicated,
 				});
 			}
 			if (
@@ -4173,6 +4228,82 @@ export function buildNativeFactory(
 			await actorCtx.dispose();
 		}
 	};
+	const queueCallbacks = (property: "onMessage" | "onDeadLetter") =>
+		Object.fromEntries(
+			Object.entries((config.queues ?? {}) as Record<string, any>)
+				.filter(([, queue]) => typeof queue?.[property] === "function")
+				.map(([name, queue]) => [
+					name,
+					wrapNativeCallback(
+						async (
+							error: unknown,
+							payload: {
+								ctx: ActorContextHandle;
+								id: string;
+								name: string;
+								body: RuntimeBytes;
+								createdAtMs: number;
+								attempts: number;
+								firstFailedAtMs?: number;
+								cancelToken: CancellationTokenHandle;
+							},
+						) => {
+							const data = unwrapTsfnPayload(error, payload);
+							const actorCtx = makeActorCtx(
+								data.ctx,
+								undefined,
+								data.cancelToken,
+							);
+							const signal = actorCtx.abortSignal;
+							let removeAbortListener: (() => void) | undefined;
+							try {
+								const callback = Promise.resolve(
+									queue[property](
+									actorCtx,
+									{
+										id: data.id,
+										name: data.name,
+										body: validateQueueBody(
+											schemaConfig.queues,
+											data.name,
+											decodeValue(data.body),
+										),
+										createdAt: new Date(data.createdAtMs),
+										attempts: data.attempts,
+										firstFailedAt:
+											data.firstFailedAtMs === undefined
+												? undefined
+												: new Date(data.firstFailedAtMs),
+									},
+									{ signal },
+									),
+								);
+								const aborted = new Promise<never>((_resolve, reject) => {
+									const abort = () =>
+										reject(
+											signal.reason ??
+												new DOMException(
+													"The queue handler was aborted",
+													"AbortError",
+												),
+										);
+									if (signal.aborted) {
+										abort();
+										return;
+									}
+									signal.addEventListener("abort", abort, { once: true });
+									removeAbortListener = () =>
+										signal.removeEventListener("abort", abort);
+								});
+								await Promise.race([callback, aborted]);
+							} finally {
+								removeAbortListener?.();
+								await actorCtx.dispose();
+							}
+						},
+					),
+				]),
+		);
 	const callbacks = {
 		createState:
 			hasStaticState || typeof config.createState === "function"
@@ -4888,6 +5019,8 @@ export function buildNativeFactory(
 				),
 			]),
 		),
+		queueOnMessage: queueCallbacks("onMessage"),
+		queueOnDeadLetter: queueCallbacks("onDeadLetter"),
 		onQueueSend: wrapNativeCallback(
 			async (
 				error: unknown,
@@ -4902,8 +5035,8 @@ export function buildNativeFactory(
 					};
 					name: string;
 					body: RuntimeBytes;
-					wait: boolean;
-					timeoutMs?: bigint | number;
+					dedupeKey?: string | null;
+					delayMs?: bigint | number;
 					cancelToken?: CancellationTokenHandle;
 				},
 			) => {
@@ -4913,8 +5046,8 @@ export function buildNativeFactory(
 					request,
 					name,
 					body,
-					wait,
-					timeoutMs,
+					dedupeKey,
+					delayMs,
 					cancelToken,
 				} = unwrapTsfnPayload(error, payload);
 				const jsRequest = buildRequest(request);
@@ -4935,7 +5068,12 @@ export function buildNativeFactory(
 						!schemaConfig.queues ||
 						!hasSchemaConfigKey(schemaConfig.queues, name)
 					) {
-						return { status: "completed" };
+						throw new RivetError(
+							"queue",
+							"not_found",
+							`Queue '${name}' is not defined.`,
+							{ public: true, statusCode: 404 },
+						);
 					}
 
 					const canPublish = getQueueCanPublish(
@@ -4947,42 +5085,21 @@ export function buildNativeFactory(
 					}
 
 					const decodedBody = decodeValue(body);
-					if (wait) {
-						try {
-							const response =
-								await actorCtx.queue.enqueueAndWait(
-									name,
-									decodedBody,
-									{
-										timeout:
-											timeoutMs === undefined ||
-											timeoutMs === null
-												? undefined
-												: Number(timeoutMs),
-									},
-								);
-							return {
-								status: "completed",
-								response:
-									response === undefined
-										? undefined
-										: encodeValue(response),
-							};
-						} catch (error) {
-							if (
-								(error as { group?: string; code?: string })
-									.group === "queue" &&
-								(error as { group?: string; code?: string })
-									.code === "timed_out"
-							) {
-								return { status: "timedOut" };
-							}
-							throw error;
-						}
-					}
-
-					await actorCtx.queue.send(name, decodedBody);
-					return { status: "completed" };
+					const receipt = await actorCtx.queue.send(name, decodedBody, {
+						dedupeKey: dedupeKey ?? undefined,
+						delay:
+							delayMs === undefined || delayMs === null
+								? undefined
+								: Number(delayMs),
+					});
+					return { id: receipt.id, deduplicated: receipt.deduplicated };
+				} catch (error) {
+					logger().error({
+						msg: "Error handling queue send",
+						queueName: name,
+						error,
+					});
+					throw error;
 				} finally {
 					await actorCtx.dispose();
 				}

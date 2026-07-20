@@ -17,16 +17,11 @@ export class PartyBot {
 			const mm = this.client.partyMatchmaker
 				.getOrCreate(["main"])
 				.connect();
-			const result = await mm.send(
-				"joinParty",
-				{
+			const response = await mm.joinParty({
 					partyCode: this.partyCode,
 					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
-				{ wait: true, timeout: 10_000 },
-			);
+				});
 			mm.dispose();
-			const response = result.response;
 			if (!response || this.destroyed) return;
 
 			this.conn = this.client.partyMatch

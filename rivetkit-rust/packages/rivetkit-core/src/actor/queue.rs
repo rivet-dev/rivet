@@ -1,5 +1,4 @@
 use std::collections::BTreeSet;
-use std::fmt;
 use std::future::pending;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -19,10 +18,12 @@ use tokio_util::sync::CancellationToken;
 use crate::actor::config::ActorConfig;
 use crate::actor::context::ActorContext;
 use crate::actor::internal_storage;
+use crate::actor::messages::ActorEvent;
 use crate::actor::persist::{
 	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
 };
 use crate::actor::task_types::UserTaskKind;
+use crate::actor::work_registry::ActorWorkKind;
 #[cfg(target_arch = "wasm32")]
 use crate::error::ActorRuntime;
 
@@ -31,18 +32,10 @@ pub struct QueueNextOpts {
 	pub names: Option<Vec<String>>,
 	pub timeout: Option<Duration>,
 	pub signal: Option<CancellationToken>,
-	pub completable: bool,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct QueueWaitOpts {
-	pub timeout: Option<Duration>,
-	pub signal: Option<CancellationToken>,
-	pub completable: bool,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct EnqueueAndWaitOpts {
 	pub timeout: Option<Duration>,
 	pub signal: Option<CancellationToken>,
 }
@@ -53,7 +46,6 @@ pub struct QueueNextBatchOpts {
 	pub count: u32,
 	pub timeout: Option<Duration>,
 	pub signal: Option<CancellationToken>,
-	pub completable: bool,
 }
 
 impl Default for QueueNextBatchOpts {
@@ -63,7 +55,6 @@ impl Default for QueueNextBatchOpts {
 			count: 1,
 			timeout: None,
 			signal: None,
-			completable: false,
 		}
 	}
 }
@@ -71,22 +62,19 @@ impl Default for QueueNextBatchOpts {
 #[derive(Clone, Debug, Default)]
 pub struct QueueTryNextOpts {
 	pub names: Option<Vec<String>>,
-	pub completable: bool,
 }
 
 #[derive(Clone, Debug)]
 pub struct QueueTryNextBatchOpts {
 	pub names: Option<Vec<String>>,
 	pub count: u32,
-	pub completable: bool,
 }
 
 impl Default for QueueTryNextBatchOpts {
 	fn default() -> Self {
 		Self {
-			names: None,
+			 names: None,
 			count: 1,
-			completable: false,
 		}
 	}
 }
@@ -97,28 +85,62 @@ pub(super) type QueueInspectorUpdateCallback = Arc<dyn Fn(u32) + Send + Sync>;
 #[derive(Clone, Debug)]
 pub struct QueueMessage {
 	pub id: u64,
+	pub receipt_id: String,
 	pub name: String,
 	pub body: Vec<u8>,
 	pub created_at: i64,
-	completion: Option<CompletionHandle>,
+	pub attempts: u32,
+	pub first_failed_at: Option<i64>,
 }
 
-#[derive(Clone, Debug)]
-pub struct CompletableQueueMessage {
-	pub id: u64,
-	pub name: String,
-	pub body: Vec<u8>,
-	pub created_at: i64,
-	completion: CompletionHandle,
+#[derive(Clone, Debug, Default)]
+pub struct QueueSendOpts {
+	pub dedupe_key: Option<String>,
+	pub delay: Option<Duration>,
 }
 
-#[derive(Clone)]
-struct CompletionHandle(Arc<CompletionHandleInner>);
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueSendReceipt {
+	pub id: String,
+	pub deduplicated: bool,
+}
 
-struct CompletionHandleInner {
-	ctx: ActorContext,
-	message_id: u64,
-	completed: std::sync::atomic::AtomicBool,
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum QueueMessageStatus {
+	Queued {
+		attempts: u32,
+		created_at: i64,
+	},
+	Delayed {
+		attempts: u32,
+		created_at: i64,
+		available_at: i64,
+	},
+	Processing {
+		attempts: u32,
+		created_at: i64,
+		started_at: i64,
+	},
+	Retrying {
+		attempts: u32,
+		created_at: i64,
+		available_at: i64,
+	},
+	Succeeded {
+		attempts: u32,
+		created_at: i64,
+		completed_at: i64,
+	},
+	DeadLettered {
+		attempts: u32,
+		created_at: i64,
+		failed_at: i64,
+	},
+	Consumed {
+		created_at: i64,
+		consumed_at: i64,
+	},
+	Unknown,
 }
 
 pub(crate) type QueueMetadata = persist_v4::QueueMetadata;
@@ -181,21 +203,6 @@ struct QueueMessageTooLarge {
 }
 
 #[derive(RivetError)]
-#[error("queue", "already_completed", "Queue message was already completed")]
-struct QueueAlreadyCompleted;
-
-#[derive(RivetError, Serialize, Deserialize)]
-#[error(
-	"queue",
-	"complete_not_configured",
-	"Queue message does not support completion",
-	"Queue '{name}' does not support completion responses."
-)]
-struct QueueCompleteNotConfigured {
-	name: String,
-}
-
-#[derive(RivetError)]
 #[error("actor", "aborted", "Actor aborted")]
 struct QueueActorAborted;
 
@@ -213,51 +220,394 @@ struct QueueWaitTimedOut {
 #[derive(RivetError, Serialize, Deserialize)]
 #[error(
 	"queue",
-	"completion_waiter_conflict",
-	"Queue completion waiter conflict",
-	"Queue completion waiter is already registered for message {message_id}."
+	"automatic_consumer",
+	"Queue is consumed by onMessage",
+	"Queue '{name}' is consumed automatically by onMessage and cannot be read with the raw next API."
 )]
-struct QueueCompletionWaiterConflict {
-	message_id: u64,
+struct QueueAutomaticConsumer {
+	name: String,
 }
 
-#[derive(RivetError)]
-#[error(
-	"queue",
-	"completion_waiter_dropped",
-	"Queue completion waiter dropped before response"
-)]
-struct QueueCompletionWaiterDropped;
-
 impl ActorContext {
-	pub async fn send(&self, name: &str, body: &[u8]) -> Result<QueueMessage> {
-		self.enqueue_message(name, body, None).await
+	pub(crate) fn start_queue_on_message_loop(&self, generation: u32) {
+		let definitions = self
+			.config()
+			.queues
+			.into_iter()
+			.filter(|definition| definition.on_message)
+			.collect::<Vec<_>>();
+		if definitions.is_empty() {
+			return;
+		}
+		let ctx = self.clone();
+		self.spawn_work(ActorWorkKind::RegisteredTask, async move {
+			let abort = ctx.0.queue_abort_signal.lock().clone();
+			loop {
+				match ctx
+					.run_queue_on_message_loop(definitions.clone(), generation)
+					.await
+				{
+					Ok(()) => return,
+					Err(error) => {
+						tracing::error!(?error, "queue onMessage loop failed; retrying");
+					}
+				}
+				tokio::select! {
+					_ = sleep(Duration::from_millis(100)) => {},
+					_ = abort.cancelled() => return,
+				}
+			}
+		});
 	}
 
-	pub async fn enqueue_and_wait(
+	async fn run_queue_on_message_loop(
+		&self,
+		definitions: Vec<crate::actor::config::QueueDefinition>,
+		generation: u32,
+	) -> Result<()> {
+		self.ensure_initialized().await?;
+		internal_storage::recover_queue_leases(self.sql(), current_timestamp_ms()?).await?;
+		self.sync_queue_alarm_state().await?;
+		let abort = self.0.queue_abort_signal.lock().clone();
+		let names = definitions
+			.iter()
+			.map(|definition| definition.name.clone())
+			.collect::<Vec<_>>();
+		let dead_letter_names = definitions
+			.iter()
+			.filter(|definition| definition.on_dead_letter)
+			.map(|definition| definition.name.clone())
+			.collect::<Vec<_>>();
+		let mut next_message_index = 0;
+		let mut next_dead_letter_index = 0;
+		loop {
+			let notified = self.0.queue_notify.notified();
+			let mut processed = false;
+			for offset in 0..definitions.len() {
+				let index = (next_dead_letter_index + offset) % definitions.len();
+				let definition = &definitions[index];
+				if !definition.on_dead_letter {
+					continue;
+				}
+				let row = internal_storage::claim_dead_letter_notification(
+					self.sql(),
+					&definition.name,
+					current_timestamp_ms()?,
+					generation,
+				)
+				.await?;
+				let Some(row) = row else {
+					continue;
+				};
+				processed = true;
+				next_dead_letter_index = (index + 1) % definitions.len();
+				self.dispatch_queue_dead_letter(row, definition, generation)
+					.await?;
+				break;
+			}
+			if !processed {
+				for offset in 0..definitions.len() {
+					let index = (next_message_index + offset) % definitions.len();
+					let definition = &definitions[index];
+					let now = current_timestamp_ms()?;
+					let row = {
+						let _receive_guard = self.0.queue_receive_lock.lock().await;
+						let transition = internal_storage::dead_letter_exhausted_queue_message(
+							self.sql(),
+							&definition.name,
+							definition.max_attempts,
+							now,
+						)
+						.await?;
+						self.record_dead_letter_purge(transition.purged);
+						if transition.updated {
+							self.decrement_queue_size(1).await;
+							self.0.queue_notify.notify_waiters();
+							processed = true;
+							next_message_index = (index + 1) % definitions.len();
+							None
+						} else {
+							internal_storage::claim_queue_message(
+								self.sql(),
+								&definition.name,
+								now,
+								generation,
+							)
+							.await?
+						}
+					};
+					let Some(row) = row else {
+						if processed {
+							self.sync_queue_alarm_state().await?;
+							break;
+						}
+						continue;
+					};
+					processed = true;
+					next_message_index = (index + 1) % definitions.len();
+					self.dispatch_queue_message(row, definition, generation).await?;
+					break;
+				}
+			}
+			if processed {
+				continue;
+			}
+
+			let next_due = internal_storage::next_queue_due(
+				self.sql(),
+				&names,
+				&dead_letter_names,
+			)
+			.await?;
+			let due_sleep = async {
+				if let Some(next_due) = next_due {
+					let now = current_timestamp_ms().unwrap_or(next_due);
+					let delay_ms = u64::try_from(next_due.saturating_sub(now)).unwrap_or(0);
+					sleep(Duration::from_millis(delay_ms)).await;
+				} else {
+					pending::<()>().await;
+				}
+			};
+			tokio::select! {
+				_ = notified => {},
+				_ = due_sleep => {},
+				_ = abort.cancelled() => return Ok(()),
+			}
+		}
+	}
+
+	async fn dispatch_queue_message(
+		&self,
+		row: internal_storage::QueueMessageRow,
+		definition: &crate::actor::config::QueueDefinition,
+		generation: u32,
+	) -> Result<()> {
+		let message = QueueMessage {
+			id: row.id,
+			receipt_id: row.receipt_id.clone(),
+			name: row.message.name.clone(),
+			body: row.message.body.clone(),
+			created_at: row.message.created_at,
+			attempts: row.attempt_count,
+			first_failed_at: row.first_failed_at,
+		};
+		self.sync_queue_alarm_state().await?;
+		let signal = CancellationToken::new();
+		let actor_abort = self.0.queue_abort_signal.lock().clone();
+		let (reply_tx, reply_rx) = oneshot::channel();
+		let dispatch_result = self.try_send_actor_event(
+			ActorEvent::QueueMessage {
+				message: message.clone(),
+				signal: signal.clone(),
+				reply: reply_tx.into(),
+			},
+			"queue_on_message",
+		);
+		let result = match dispatch_result {
+			Ok(()) => {
+				self.track_work(ActorWorkKind::InternalKeepAwake, async {
+					tokio::select! {
+						result = reply_rx => match result {
+							Ok(result) => result,
+							Err(error) => Err(anyhow::Error::new(error).context("queue onMessage reply dropped")),
+						},
+						_ = sleep(definition.timeout) => {
+							signal.cancel();
+							Err(anyhow::anyhow!("queue onMessage timed out"))
+						},
+						_ = actor_abort.cancelled() => {
+							signal.cancel();
+							Err(QueueActorAborted.build())
+						},
+					}
+				})
+				.await
+			}
+			Err(error) => {
+				signal.cancel();
+				Err(error.context("dispatch queue onMessage"))
+			}
+		};
+
+		let now = current_timestamp_ms()?;
+		if result.is_ok() {
+			if internal_storage::ack_queue_message(self.sql(), &row, generation, now).await? {
+				self.decrement_queue_size(1).await;
+			}
+			self.sync_queue_alarm_state().await?;
+			return Ok(());
+		}
+
+		let dead_letter = row.attempt_count >= definition.max_attempts;
+		let available_at = (!dead_letter).then(|| {
+			now.saturating_add(
+				i64::try_from(queue_backoff(definition, row.attempt_count).as_millis())
+					.unwrap_or(i64::MAX),
+			)
+		});
+		let transition = internal_storage::nack_queue_message(
+			self.sql(),
+			&row,
+			generation,
+			now,
+			available_at,
+			dead_letter,
+		)
+		.await?;
+		self.record_dead_letter_purge(transition.purged);
+		if transition.updated {
+			if dead_letter {
+				self.decrement_queue_size(1).await;
+			}
+			self.0.queue_notify.notify_waiters();
+		}
+		self.sync_queue_alarm_state().await?;
+		Ok(())
+	}
+
+	async fn dispatch_queue_dead_letter(
+		&self,
+		row: internal_storage::QueueMessageRow,
+		definition: &crate::actor::config::QueueDefinition,
+		generation: u32,
+	) -> Result<()> {
+		let message = QueueMessage {
+			id: row.id,
+			receipt_id: row.receipt_id.clone(),
+			name: row.message.name.clone(),
+			body: row.message.body.clone(),
+			created_at: row.message.created_at,
+			attempts: row.attempt_count,
+			first_failed_at: row.first_failed_at,
+		};
+		let signal = CancellationToken::new();
+		let actor_abort = self.0.queue_abort_signal.lock().clone();
+		let (reply_tx, reply_rx) = oneshot::channel();
+		if let Err(error) = self.try_send_actor_event(
+			ActorEvent::QueueDeadLetter {
+				message,
+				signal: signal.clone(),
+				reply: reply_tx.into(),
+			},
+			"queue_on_dead_letter",
+		) {
+			tracing::error!(?error, "failed to dispatch queue onDeadLetter callback");
+		}
+		let succeeded = tokio::select! {
+			result = reply_rx => matches!(result, Ok(Ok(()))),
+			_ = sleep(definition.timeout) => {
+				signal.cancel();
+				tracing::error!("queue onDeadLetter callback timed out");
+				false
+			},
+			_ = actor_abort.cancelled() => {
+				signal.cancel();
+				false
+			},
+		};
+		let now = current_timestamp_ms()?;
+		let available_at = (!succeeded).then(|| {
+			now.saturating_add(
+				i64::try_from(
+					queue_backoff(definition, row.dlq_notify_attempt_count).as_millis(),
+				)
+				.unwrap_or(i64::MAX),
+			)
+		});
+		if internal_storage::finish_dead_letter_notification(
+			self.sql(),
+			row.id,
+			generation,
+			now,
+			succeeded,
+			available_at,
+		)
+		.await?
+		{
+			self.0.queue_notify.notify_waiters();
+		}
+		self.sync_queue_alarm_state().await?;
+		Ok(())
+	}
+	pub async fn send(&self, name: &str, body: &[u8]) -> Result<QueueSendReceipt> {
+		self.send_with_opts(name, body, QueueSendOpts::default()).await
+	}
+
+	pub async fn send_with_opts(
 		&self,
 		name: &str,
 		body: &[u8],
-		opts: EnqueueAndWaitOpts,
-	) -> Result<Option<Vec<u8>>> {
-		let (sender, receiver) = oneshot::channel();
-		let message = self.enqueue_message(name, body, Some(sender)).await?;
-		let result = self
-			.wait_for_completion_response(message.id, receiver, opts.timeout, opts.signal.as_ref())
-			.await;
-		self.remove_completion_waiter(message.id).await;
-		result
+		opts: QueueSendOpts,
+	) -> Result<QueueSendReceipt> {
+		self.enqueue_message(name, body, opts).await
+	}
+
+	pub async fn queue_status(&self, receipt_id: &str) -> Result<QueueMessageStatus> {
+		self.ensure_initialized().await?;
+		let now = current_timestamp_ms()?;
+		internal_storage::purge_queue_receipts(
+			self.sql(),
+			now.saturating_sub(24 * 60 * 60 * 1000),
+		)
+		.await?;
+		let Some(row) = internal_storage::load_queue_status(self.sql(), receipt_id, now).await? else {
+			return Ok(QueueMessageStatus::Unknown);
+		};
+		Ok(match row.state.as_str() {
+			"queued" => QueueMessageStatus::Queued {
+				attempts: row.attempt_count,
+				created_at: row.created_at,
+			},
+			"delayed" => QueueMessageStatus::Delayed {
+				attempts: row.attempt_count,
+				created_at: row.created_at,
+				available_at: row.available_at.unwrap_or(now),
+			},
+			"processing" => QueueMessageStatus::Processing {
+				attempts: row.attempt_count,
+				created_at: row.created_at,
+				started_at: row.in_flight_at.unwrap_or(now),
+			},
+			"retrying" => QueueMessageStatus::Retrying {
+				attempts: row.attempt_count,
+				created_at: row.created_at,
+				available_at: row.available_at.unwrap_or(now),
+			},
+			"succeeded" => QueueMessageStatus::Succeeded {
+				attempts: row.attempt_count,
+				created_at: row.created_at,
+				completed_at: row.terminal_at.unwrap_or(now),
+			},
+			"deadLettered" => QueueMessageStatus::DeadLettered {
+				attempts: row.attempt_count,
+				created_at: row.created_at,
+				failed_at: row.dead_at.unwrap_or(now),
+			},
+			"consumed" => QueueMessageStatus::Consumed {
+				created_at: row.created_at,
+				consumed_at: row.terminal_at.unwrap_or(now),
+			},
+			_ => QueueMessageStatus::Unknown,
+		})
 	}
 
 	async fn enqueue_message(
 		&self,
 		name: &str,
 		body: &[u8],
-		completion_waiter: Option<oneshot::Sender<Option<Vec<u8>>>>,
-	) -> Result<QueueMessage> {
+		opts: QueueSendOpts,
+	) -> Result<QueueSendReceipt> {
 		self.ensure_initialized().await?;
 
 		let created_at = current_timestamp_ms()?;
+		let available_at = opts
+			.delay
+			.map(|delay| {
+				i64::try_from(delay.as_millis())
+					.context("queue delay exceeds supported range")
+					.map(|delay_ms| created_at.saturating_add(delay_ms))
+			})
+			.transpose()?;
 		let persisted = PersistedQueueMessage {
 			name: name.to_owned(),
 			body: body.to_vec(),
@@ -279,6 +629,22 @@ impl ActorContext {
 		}
 
 		let mut metadata = self.0.queue_metadata.lock().await;
+		if let Some(dedupe_key) = opts.dedupe_key.as_deref() {
+			let oldest_accepted_at = created_at.saturating_sub(5 * 60 * 1000);
+			if let Some(receipt_id) = internal_storage::find_queue_dedupe(
+				self.sql(),
+				name,
+				dedupe_key,
+				oldest_accepted_at,
+			)
+			.await?
+			{
+				return Ok(QueueSendReceipt {
+					id: receipt_id,
+					deduplicated: true,
+				});
+			}
+		}
 		if metadata.size >= config.max_queue_size {
 			return Err(QueueFull {
 				limit: config.max_queue_size,
@@ -293,33 +659,22 @@ impl ActorContext {
 		};
 		metadata.next_id = id.saturating_add(1);
 		metadata.size = metadata.size.saturating_add(1);
-		let registered_completion_waiter = if let Some(waiter) = completion_waiter {
-			if self
-				.0
-				.queue_completion_waiters
-				.insert_async(id, waiter)
-				.await
-				.is_err()
-			{
-				metadata.next_id = id;
-				metadata.size = metadata.size.saturating_sub(1);
-				return Err(QueueCompletionWaiterConflict { message_id: id }.build());
-			}
-			true
-		} else {
-			false
-		};
-
-		let persist_result =
-			internal_storage::persist_queue_message(self.sql(), id, metadata.next_id, &persisted)
-				.await;
+		let receipt_id = uuid::Uuid::new_v4().to_string();
+		let persist_result = internal_storage::persist_queue_message(
+			self.sql(),
+			id,
+			metadata.next_id,
+			&receipt_id,
+			opts.dedupe_key.as_deref(),
+			created_at,
+			available_at,
+			&persisted,
+		)
+		.await;
 
 		if let Err(error) = persist_result {
 			metadata.next_id = id;
 			metadata.size = metadata.size.saturating_sub(1);
-			if registered_completion_waiter {
-				self.remove_completion_waiter(id).await;
-			}
 			return Err(error).context("persist queue message");
 		}
 
@@ -331,13 +686,11 @@ impl ActorContext {
 			.set_queue_depth(self.0.queue_metadata.lock().await.size);
 		self.notify_inspector_update(queue_size);
 		self.0.queue_notify.notify_waiters();
+		self.sync_queue_alarm_state().await?;
 
-		Ok(QueueMessage {
-			id,
-			name: name.to_owned(),
-			body: body.to_vec(),
-			created_at,
-			completion: None,
+		Ok(QueueSendReceipt {
+			id: receipt_id,
+			deduplicated: false,
 		})
 	}
 
@@ -348,7 +701,6 @@ impl ActorContext {
 				count: 1,
 				timeout: opts.timeout,
 				signal: opts.signal,
-				completable: opts.completable,
 			})
 			.await?;
 		Ok(messages.pop())
@@ -359,12 +711,10 @@ impl ActorContext {
 
 		let count = opts.count.max(1);
 		let deadline = opts.timeout.map(|timeout| Instant::now() + timeout);
-		let names = normalize_names(opts.names);
+		let names = self.raw_queue_names(opts.names)?;
 
 		loop {
-			let messages = self
-				.try_receive_batch(names.as_ref(), count, opts.completable)
-				.await?;
+			let messages = self.try_receive_batch(names.as_ref(), count).await?;
 			if !messages.is_empty() {
 				return Ok(messages);
 			}
@@ -397,11 +747,11 @@ impl ActorContext {
 		self.ensure_initialized().await?;
 
 		let deadline = opts.timeout.map(|timeout| Instant::now() + timeout);
-		let names = normalize_names(Some(names));
+		let names = self.raw_queue_names(Some(names))?;
 
 		loop {
 			if let Some(message) = self
-				.try_receive_batch(names.as_ref(), 1, opts.completable)
+				.try_receive_batch(names.as_ref(), 1)
 				.await?
 				.into_iter()
 				.next()
@@ -447,12 +797,17 @@ impl ActorContext {
 		self.ensure_initialized().await?;
 
 		let deadline = opts.timeout.map(|timeout| Instant::now() + timeout);
-		let names = normalize_names(Some(names));
+		let names = self.raw_queue_names(Some(names))?;
 
 		loop {
-			if internal_storage::has_queue_messages(self.sql(), names.as_ref())
-				.await
-				.context("check for matching sqlite queue messages")?
+			if !internal_storage::load_available_queue_messages(
+				self.sql(),
+				names.as_ref(),
+				1,
+				current_timestamp_ms()?,
+			)
+			.await?
+			.is_empty()
 			{
 				return Ok(());
 			}
@@ -491,7 +846,6 @@ impl ActorContext {
 		let mut messages = self.try_next_batch(QueueTryNextBatchOpts {
 			names: opts.names,
 			count: 1,
-			completable: opts.completable,
 		})?;
 		Ok(messages.pop())
 	}
@@ -499,13 +853,37 @@ impl ActorContext {
 	pub fn try_next_batch(&self, opts: QueueTryNextBatchOpts) -> Result<Vec<QueueMessage>> {
 		self.block_on(async {
 			self.ensure_initialized().await?;
-			self.try_receive_batch(
-				normalize_names(opts.names).as_ref(),
-				opts.count.max(1),
-				opts.completable,
-			)
-			.await
+			let names = self.raw_queue_names(opts.names)?;
+			self.try_receive_batch(names.as_ref(), opts.count.max(1))
+				.await
 		})
+	}
+
+	fn raw_queue_names(&self, names: Option<Vec<String>>) -> Result<Option<BTreeSet<String>>> {
+		let definitions = self.config().queues;
+		if definitions.is_empty() {
+			return Ok(normalize_names(names));
+		}
+
+		let automatic = definitions
+			.iter()
+			.filter(|definition| definition.on_message)
+			.map(|definition| definition.name.as_str())
+			.collect::<BTreeSet<_>>();
+		if let Some(requested) = normalize_names(names) {
+			if let Some(name) = requested.iter().find(|name| automatic.contains(name.as_str())) {
+				return Err(QueueAutomaticConsumer { name: name.clone() }.build());
+			}
+			return Ok(Some(requested));
+		}
+
+		Ok(Some(
+			definitions
+				.into_iter()
+				.filter(|definition| !definition.on_message)
+				.map(|definition| definition.name)
+				.collect(),
+		))
 	}
 
 	pub async fn inspect_messages(&self) -> Result<Vec<QueueMessage>> {
@@ -515,6 +893,29 @@ impl ActorContext {
 
 	pub fn max_size(&self) -> u32 {
 		self.config().max_queue_size
+	}
+
+	async fn sync_queue_alarm_state(&self) -> Result<()> {
+		let definitions = self.config().queues;
+		let names = definitions
+			.iter()
+			.map(|definition| definition.name.clone())
+			.collect::<Vec<_>>();
+		let dead_letter_names = definitions
+			.iter()
+			.filter(|definition| definition.on_dead_letter)
+			.map(|definition| definition.name.clone())
+			.collect::<Vec<_>>();
+		let now = current_timestamp_ms()?;
+		let next_due = internal_storage::next_queue_due(
+			self.sql(),
+			&names,
+			&dead_letter_names,
+		)
+		.await?
+		.filter(|timestamp| *timestamp > now);
+		self.update_queue_alarm(next_due).await;
+		Ok(())
 	}
 
 	/// Removes all messages from the queue and resets the size counter.
@@ -533,13 +934,12 @@ impl ActorContext {
 
 		metadata.size = 0;
 
-		self.0.queue_completion_waiters.clear_async().await;
-
 		drop(metadata);
 
 		self.0.metrics.set_queue_depth(0);
 		self.notify_inspector_update(0);
 		self.0.queue_notify.notify_waiters();
+		self.sync_queue_alarm_state().await?;
 
 		Ok(())
 	}
@@ -575,34 +975,66 @@ impl ActorContext {
 			.map(|_| ())
 	}
 
+	pub(crate) async fn refresh_queue_metadata(&self) -> Result<()> {
+		let metadata = internal_storage::load_queue_metadata(self.sql())
+			.await
+			.context("refresh queue metadata from sqlite")?;
+		let queue_size = metadata.size;
+		*self.0.queue_metadata.lock().await = metadata;
+		self.0.metrics.set_queue_depth(queue_size);
+		self.0.queue_initialize.get_or_init(|| async {}).await;
+		Ok(())
+	}
+
 	async fn try_receive_batch(
 		&self,
 		names: Option<&BTreeSet<String>>,
 		count: u32,
-		completable: bool,
 	) -> Result<Vec<QueueMessage>> {
 		let _receive_guard = self.0.queue_receive_lock.lock().await;
 
-		let selected = self.list_messages_matching(names, count).await?;
+		let selected = internal_storage::load_available_queue_messages(
+			self.sql(),
+			names,
+			count,
+			current_timestamp_ms()?,
+		)
+		.await?
+		.into_iter()
+		.map(|row| QueueMessage {
+			id: row.id,
+			receipt_id: row.receipt_id,
+			name: row.message.name,
+			body: row.message.body,
+			created_at: row.message.created_at,
+			attempts: row.attempt_count,
+			first_failed_at: row.first_failed_at,
+		})
+		.collect::<Vec<_>>();
 
 		if selected.is_empty() {
 			return Ok(Vec::new());
 		}
 
-		if completable {
-			let queue_size = self.0.queue_metadata.lock().await.size;
-			self.0
-				.metrics
-				.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
-			self.notify_inspector_update(queue_size);
-			return Ok(selected
-				.into_iter()
-				.map(|message| self.attach_completion(message))
-				.collect());
-		}
-
-		self.remove_messages(selected.iter().map(|message| message.id).collect())
-			.await?;
+		internal_storage::persist_consumed_queue_messages(
+			self.sql(),
+			&selected
+				.iter()
+				.map(|message| {
+					(
+						message.id,
+						message.receipt_id.clone(),
+						message.name.clone(),
+						message.created_at,
+						message.attempts,
+					)
+				})
+				.collect::<Vec<_>>(),
+			current_timestamp_ms()?,
+		)
+		.await?;
+		self.decrement_queue_size(selected.len()).await;
+		self.sync_queue_alarm_state().await?;
 		self.0
 			.metrics
 			.add_queue_messages_received(selected.len().try_into().unwrap_or(u64::MAX));
@@ -611,18 +1043,28 @@ impl ActorContext {
 	}
 
 	async fn list_messages(&self) -> Result<Vec<QueueMessage>> {
+		let now = current_timestamp_ms()?;
 		let messages: Vec<QueueMessage> = internal_storage::load_queue_messages(self.sql())
 			.await
 			.context("list sqlite queue messages")?
 			.into_iter()
-			.map(queue_message_from_row)
+			.filter(|row| {
+				row.dead_at.is_none()
+					&& row.in_flight_at.is_none()
+					&& row.available_at.is_none_or(|available_at| available_at <= now)
+			})
+			.map(|row| QueueMessage {
+				id: row.id,
+				receipt_id: row.receipt_id,
+				name: row.message.name,
+				body: row.message.body,
+				created_at: row.message.created_at,
+				attempts: row.attempt_count,
+				first_failed_at: row.first_failed_at,
+			})
 			.collect();
 
-		let actual_size = messages.len().try_into().unwrap_or(u32::MAX);
 		let mut metadata = self.0.queue_metadata.lock().await;
-		if metadata.size != actual_size {
-			metadata.size = actual_size;
-		}
 		if metadata.next_id == 0 {
 			metadata.next_id = messages
 				.last()
@@ -633,65 +1075,14 @@ impl ActorContext {
 		Ok(messages)
 	}
 
-	async fn list_messages_matching(
-		&self,
-		names: Option<&BTreeSet<String>>,
-		limit: u32,
-	) -> Result<Vec<QueueMessage>> {
-		internal_storage::load_queue_messages_matching(self.sql(), names, limit)
-			.await
-			.context("list matching sqlite queue messages")
-			.map(|rows| rows.into_iter().map(queue_message_from_row).collect())
-	}
-
-	fn attach_completion(&self, mut message: QueueMessage) -> QueueMessage {
-		message.completion = Some(CompletionHandle::new(self.clone(), message.id));
-		message
-	}
-
-	async fn remove_messages(&self, message_ids: Vec<u64>) -> Result<()> {
-		if message_ids.is_empty() {
-			return Ok(());
-		}
-
-		let deleted_count = message_ids.len();
-		internal_storage::delete_queue_messages(self.sql(), &message_ids)
-			.await
-			.context("delete sqlite queue messages")?;
-
+	async fn decrement_queue_size(&self, count: usize) {
 		let queue_size = {
 			let mut metadata = self.0.queue_metadata.lock().await;
-			metadata.size = metadata.size.saturating_sub(deleted_count as u32);
+			metadata.size = metadata.size.saturating_sub(count as u32);
 			metadata.size
 		};
-		self.0
-			.metrics
-			.set_queue_depth(self.0.queue_metadata.lock().await.size);
+		self.0.metrics.set_queue_depth(queue_size);
 		self.notify_inspector_update(queue_size);
-		Ok(())
-	}
-
-	async fn complete_message_by_id(
-		&self,
-		message_id: u64,
-		response: Option<Vec<u8>>,
-	) -> Result<()> {
-		self.remove_messages(vec![message_id]).await?;
-		if let Some(waiter) = self.remove_completion_waiter(message_id).await {
-			let _ = waiter.send(response);
-		}
-		Ok(())
-	}
-
-	async fn remove_completion_waiter(
-		&self,
-		message_id: u64,
-	) -> Option<oneshot::Sender<Option<Vec<u8>>>> {
-		self.0
-			.queue_completion_waiters
-			.remove_async(&message_id)
-			.await
-			.map(|(_, waiter)| waiter)
 	}
 
 	async fn wait_for_message(
@@ -735,56 +1126,6 @@ impl ActorContext {
 					_ = external_aborted => WaitOutcome::Aborted,
 				}
 			}
-		}
-	}
-
-	/// TS parity: queue-manager.ts keeps `enqueueAndWait` completion waits
-	/// alive across actor aborts; the surrounding tracked user task owns
-	/// shutdown cancellation.
-	async fn wait_for_completion_response(
-		&self,
-		message_id: u64,
-		mut receiver: oneshot::Receiver<Option<Vec<u8>>>,
-		timeout: Option<Duration>,
-		signal: Option<&CancellationToken>,
-	) -> Result<Option<Vec<u8>>> {
-		if signal.is_some_and(CancellationToken::is_cancelled) {
-			return Err(QueueActorAborted.build());
-		}
-
-		let external_aborted = async {
-			if let Some(signal) = signal {
-				signal.cancelled().await;
-			} else {
-				pending::<()>().await;
-			}
-		};
-
-		let wait_result = match timeout {
-			Some(timeout) => {
-				tokio::select! {
-					response = &mut receiver => CompletionWaitOutcome::Response(response),
-					_ = external_aborted => CompletionWaitOutcome::Aborted,
-					_ = sleep(timeout) => CompletionWaitOutcome::TimedOut,
-				}
-			}
-			None => {
-				tokio::select! {
-					response = &mut receiver => CompletionWaitOutcome::Response(response),
-					_ = external_aborted => CompletionWaitOutcome::Aborted,
-				}
-			}
-		};
-
-		match wait_result {
-			CompletionWaitOutcome::Response(Ok(response)) => Ok(response),
-			CompletionWaitOutcome::Response(Err(_)) => Err(QueueCompletionWaiterDropped.build())
-				.context(format!("wait for queue completion on message {message_id}")),
-			CompletionWaitOutcome::TimedOut => Err(QueueWaitTimedOut {
-				timeout_ms: timeout.map(duration_ms).unwrap_or(0),
-			}
-			.build()),
-			CompletionWaitOutcome::Aborted => Err(QueueActorAborted.build()),
 		}
 	}
 
@@ -833,86 +1174,23 @@ impl ActorContext {
 			callback(queue_size);
 		}
 	}
-}
 
-impl QueueMessage {
-	pub async fn complete(self, response: Option<Vec<u8>>) -> Result<()> {
-		let completable = self.into_completable()?;
-		completable.complete(response).await
-	}
-
-	pub fn into_completable(self) -> Result<CompletableQueueMessage> {
-		let completion = self.completion.clone().ok_or_else(|| {
-			QueueCompleteNotConfigured {
-				name: self.name.clone(),
+	fn record_dead_letter_purge(&self, purge: internal_storage::DeadLetterPurge) {
+		for (reason, count) in [
+			("retention", purge.retention),
+			("capacity", purge.capacity),
+		] {
+			if count == 0 {
+				continue;
 			}
-			.build()
-		})?;
-
-		Ok(CompletableQueueMessage {
-			id: self.id,
-			name: self.name,
-			body: self.body,
-			created_at: self.created_at,
-			completion,
-		})
-	}
-
-	pub fn is_completable(&self) -> bool {
-		self.completion.is_some()
-	}
-}
-
-impl CompletableQueueMessage {
-	pub async fn complete(self, response: Option<Vec<u8>>) -> Result<()> {
-		self.completion.complete(response).await
-	}
-
-	pub fn into_message(self) -> QueueMessage {
-		QueueMessage {
-			id: self.id,
-			name: self.name,
-			body: self.body,
-			created_at: self.created_at,
-			completion: Some(self.completion),
+			tracing::warn!(
+				actor_id = %self.actor_id(),
+				reason,
+				count,
+				"evicted durable queue dead-letter entries"
+			);
+			self.0.metrics.add_queue_dead_letters_evicted(reason, count);
 		}
-	}
-}
-
-impl CompletionHandle {
-	fn new(ctx: ActorContext, message_id: u64) -> Self {
-		Self(Arc::new(CompletionHandleInner {
-			ctx,
-			message_id,
-			completed: std::sync::atomic::AtomicBool::new(false),
-		}))
-	}
-
-	async fn complete(&self, response: Option<Vec<u8>>) -> Result<()> {
-		if self.0.completed.swap(true, Ordering::SeqCst) {
-			return Err(QueueAlreadyCompleted.build());
-		}
-
-		if let Err(error) = self
-			.0
-			.ctx
-			.complete_message_by_id(self.0.message_id, response)
-			.await
-		{
-			self.0.completed.store(false, Ordering::SeqCst);
-			return Err(error);
-		}
-
-		Ok(())
-	}
-}
-
-impl fmt::Debug for CompletionHandle {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("CompletionHandle")
-			.field("message_id", &self.0.message_id)
-			.field("completed", &self.0.completed.load(Ordering::SeqCst))
-			.finish()
 	}
 }
 
@@ -960,12 +1238,6 @@ enum WaitOutcome {
 	Aborted,
 }
 
-enum CompletionWaitOutcome {
-	Response(Result<Option<Vec<u8>>, oneshot::error::RecvError>),
-	TimedOut,
-	Aborted,
-}
-
 fn normalize_names(names: Option<Vec<String>>) -> Option<BTreeSet<String>> {
 	names.and_then(|names| {
 		let normalized = names.into_iter().collect::<BTreeSet<_>>();
@@ -977,16 +1249,6 @@ fn normalize_names(names: Option<Vec<String>>) -> Option<BTreeSet<String>> {
 	})
 }
 
-fn queue_message_from_row(row: internal_storage::QueueMessageRow) -> QueueMessage {
-	QueueMessage {
-		id: row.id,
-		name: row.message.name,
-		body: row.message.body,
-		created_at: row.message.created_at,
-		completion: None,
-	}
-}
-
 fn current_timestamp_ms() -> Result<i64> {
 	let now = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
@@ -996,6 +1258,32 @@ fn current_timestamp_ms() -> Result<i64> {
 
 fn duration_ms(duration: Duration) -> u64 {
 	duration.as_millis().try_into().unwrap_or(u64::MAX)
+}
+
+fn queue_backoff(
+	definition: &crate::actor::config::QueueDefinition,
+	attempt: u32,
+) -> Duration {
+	let jitter_multiplier = if definition.backoff_jitter {
+		0.5 + rand::random::<f64>()
+	} else {
+		1.0
+	};
+	queue_backoff_with_jitter(definition, attempt, jitter_multiplier)
+}
+
+fn queue_backoff_with_jitter(
+	definition: &crate::actor::config::QueueDefinition,
+	attempt: u32,
+	jitter_multiplier: f64,
+) -> Duration {
+	let exponent = i32::try_from(attempt.saturating_sub(1)).unwrap_or(i32::MAX);
+	let base_ms = definition.backoff_initial.as_secs_f64() * 1000.0;
+	let max_ms = definition.backoff_max.as_secs_f64() * 1000.0;
+	let delay_ms = ((base_ms * definition.backoff_factor.powi(exponent)).min(max_ms)
+		* jitter_multiplier)
+		.min(max_ms);
+	Duration::from_secs_f64((delay_ms.max(0.0)) / 1000.0)
 }
 
 // Test shim keeps moved tests in crate-root tests/ with private-module access.

@@ -21,9 +21,11 @@ import type {
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
 	RuntimeListenerConfig,
-	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueMessage,
 	RuntimeQueueNextBatchOptions,
+	RuntimeQueueSendOptions,
+	RuntimeQueueSendReceipt,
+	RuntimeQueueStatus,
 	RuntimeQueueTryNextBatchOptions,
 	RuntimeQueueWaitOptions,
 	RuntimeRegistryRouteResponse,
@@ -176,14 +178,8 @@ function toNapiQueueMessage(message: RuntimeQueueMessage): RuntimeQueueMessage {
 		name: () => message.name(),
 		body: () => message.body(),
 		createdAt: () => message.createdAt(),
-		isCompletable: () => message.isCompletable(),
-		complete: async (response?: RuntimeBytes | undefined | null) => {
-			await message.complete(
-				response === null || response === undefined
-					? response
-					: toNapiBuffer(response),
-			);
-		},
+		attempts: () => message.attempts(),
+		firstFailedAt: () => message.firstFailedAt(),
 	};
 }
 
@@ -757,12 +753,35 @@ export class NapiCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		name: string,
 		body: RuntimeBytes,
-	): Promise<RuntimeQueueMessage> {
-		return toNapiQueueMessage(
-			await asNativeActorContext(ctx)
-				.queue()
-				.send(name, toNapiBuffer(body)),
-		);
+		options?: RuntimeQueueSendOptions | undefined | null,
+	): Promise<RuntimeQueueSendReceipt> {
+		const nativeOptions =
+			options?.dedupeKey !== undefined || options?.delayMs !== undefined
+				? {
+						...(options.dedupeKey === undefined
+							? {}
+							: { dedupeKey: options.dedupeKey }),
+						...(options.delayMs === undefined
+							? {}
+							: { delayMs: options.delayMs }),
+					}
+				: undefined;
+		return (await asNativeActorContext(ctx)
+			.queue()
+			.send(
+				name,
+				toNapiBuffer(body),
+				nativeOptions,
+			)) as RuntimeQueueSendReceipt;
+	}
+
+	async actorQueueStatus(
+		ctx: ActorContextHandle,
+		receiptId: string,
+	): Promise<RuntimeQueueStatus> {
+		return (await asNativeActorContext(ctx)
+			.queue()
+			.status(receiptId)) as RuntimeQueueStatus;
 	}
 
 	async actorQueueNextBatch(
@@ -784,16 +803,14 @@ export class NapiCoreRuntime implements CoreRuntime {
 		names: string[],
 		options?: RuntimeQueueWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
-	): Promise<RuntimeQueueMessage> {
-		return toNapiQueueMessage(
-			await asNativeActorContext(ctx)
+	): Promise<void> {
+		await asNativeActorContext(ctx)
 				.queue()
 				.waitForNames(
 					names,
 					options,
 					signal ? asNativeCancellationToken(signal) : signal,
-				),
-		);
+				);
 	}
 
 	async actorQueueWaitForNamesAvailable(
@@ -806,23 +823,6 @@ export class NapiCoreRuntime implements CoreRuntime {
 			.queue()
 			.waitForNamesAvailable(
 				names,
-				options,
-				signal ? asNativeCancellationToken(signal) : signal,
-			);
-	}
-
-	async actorQueueEnqueueAndWait(
-		ctx: ActorContextHandle,
-		name: string,
-		body: RuntimeBytes,
-		options?: RuntimeQueueEnqueueAndWaitOptions | undefined | null,
-		signal?: CancellationTokenHandle | undefined | null,
-	): Promise<RuntimeBytes | null> {
-		return await asNativeActorContext(ctx)
-			.queue()
-			.enqueueAndWait(
-				name,
-				toNapiBuffer(body),
 				options,
 				signal ? asNativeCancellationToken(signal) : signal,
 			);

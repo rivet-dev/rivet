@@ -1,0 +1,119 @@
+# MARK: Core
+
+type Cbor data
+
+type ActorSpecifier struct {
+	actorId: str
+	generation: uint
+	key: optional<str>
+}
+
+# MARK: WebSocket Server -> Client
+
+type Init struct {
+	actorId: str
+	connectionId: str
+}
+
+type Error struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<Cbor>
+	actionId: optional<uint>
+	actor: optional<ActorSpecifier>
+}
+
+type ActionResponse struct {
+	id: uint
+	output: Cbor
+}
+
+type Event struct {
+	name: str
+	args: Cbor
+}
+
+type ToClientBody union {
+	Init |
+	Error |
+	ActionResponse |
+	Event
+}
+
+type ToClient struct {
+	body: ToClientBody
+}
+
+# MARK: WebSocket Client -> Server
+
+type ActionRequest struct {
+	id: uint
+	name: str
+	args: Cbor
+}
+
+type SubscriptionRequest struct {
+	eventName: str
+	subscribe: bool
+}
+
+type ToServerBody union {
+	ActionRequest |
+	SubscriptionRequest
+}
+
+type ToServer struct {
+	body: ToServerBody
+}
+
+# MARK: HTTP
+
+type HttpActionRequest struct {
+	args: Cbor
+}
+
+type HttpActionResponse struct {
+	output: Cbor
+}
+
+type HttpQueueSendRequest struct {
+	body: Cbor
+	name: optional<str>
+	dedupeKey: optional<str>
+	delay: optional<u64>
+}
+
+type HttpQueueSendResponse struct {
+	receiptId: str
+	deduplicated: bool
+}
+
+type HttpQueueStatusRequest struct {
+	receiptId: str
+}
+
+type HttpQueueStatusResponse struct {
+	state: str
+	attempts: optional<u64>
+	createdAt: optional<u64>
+	availableAt: optional<u64>
+	startedAt: optional<u64>
+	completedAt: optional<u64>
+	failedAt: optional<u64>
+	consumedAt: optional<u64>
+}
+
+type HttpResponseError struct {
+	group: str
+	code: str
+	message: str
+	metadata: optional<Cbor>
+	actor: optional<ActorSpecifier>
+}
+
+type HttpResolveRequest void
+
+type HttpResolveResponse struct {
+	actorId: str
+}

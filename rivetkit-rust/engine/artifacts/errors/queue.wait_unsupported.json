@@ -1,0 +1,5 @@
+{
+  "code": "wait_unsupported",
+  "group": "queue",
+  "message": "Waiting for queue completion is no longer supported"
+}

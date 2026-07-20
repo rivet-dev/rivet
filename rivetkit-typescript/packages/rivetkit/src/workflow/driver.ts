@@ -377,8 +377,9 @@ export class ActorWorkflowDriver implements EngineDriver {
 	}
 
 	async clearAlarm(_workflowId: string): Promise<void> {
-		// No dedicated clear alarm support in actor drivers.
-		return;
+		await this.#runCtx.internalKeepAwake(
+			this.#actor.driver.setAlarm(this.#actor, undefined),
+		);
 	}
 
 	waitForMessages(
@@ -465,7 +466,7 @@ export class ActorWorkflowControlDriver implements EngineDriver {
 	}
 
 	async clearAlarm(_workflowId: string): Promise<void> {
-		return;
+		await this.#actor.driver.setAlarm(this.#actor, undefined);
 	}
 
 	waitForMessages(

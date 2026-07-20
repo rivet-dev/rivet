@@ -6,11 +6,11 @@ import { joinSignals } from "rivetkit/utils";
 export const agent = actor({
   state: { running: false, messages: [] as string[] },
   queues: {
-    prompt: queue<{ prompt: string }, undefined>(),
+    prompt: queue<{ prompt: string }>(),
     stop: queue<{ reason?: string }>(),
   },
   run: async (c) => {
-    for await (const promptMessage of c.queue.iter({ names: ["prompt"], completable: true })) {
+    for await (const promptMessage of c.queue.iter({ names: ["prompt"] })) {
       // Create a stop controller for this prompt run.
       const stopController = new AbortController();
       const runSignal = joinSignals(c.abortSignal, stopController.signal);
@@ -34,9 +34,8 @@ export const agent = actor({
         c.state.running = false;
       });
 
-      // Append each model response to actor state and acknowledge the prompt.
+      // Append each model response to actor state. Raw pulls consume before return.
       c.state.messages.push(text);
-      await promptMessage.complete();
     }
   },
 });

@@ -24,13 +24,8 @@ export function BattleRoyaleMenu({
 			const mm = client.battleRoyaleMatchmaker
 				.getOrCreate(["main"])
 				.connect();
-			const result = await mm.send(
-				"findMatch",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
+			const response = await mm.findMatch();
 			mm.dispose();
-			const response = result.response;
 			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid match");
 			}

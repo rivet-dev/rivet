@@ -27,13 +27,8 @@ export function PartyMenu({
 		setError("");
 		try {
 			const mm = client.partyMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send(
-				"createParty",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
+			const response = await mm.createParty({});
 			mm.dispose();
-			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to create party");
 			onReady(response);
 		} catch (err) {
@@ -48,13 +43,10 @@ export function PartyMenu({
 		setError("");
 		try {
 			const mm = client.partyMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send(
-				"joinParty",
-				{ partyCode: joinCode.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
+			const response = await mm.joinParty({
+				partyCode: joinCode.trim(),
+			});
 			mm.dispose();
-			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to join party");
 			onReady({ ...response, partyCode: joinCode.trim().toUpperCase() });
 		} catch (err) {

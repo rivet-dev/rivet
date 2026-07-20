@@ -11,12 +11,45 @@ export interface EventTypeToken<T, TContext = any> {
 	readonly schema?: PrimitiveSchema;
 }
 
-export interface QueueTypeToken<TMessage, TComplete = never, TContext = any> {
+export interface QueueDeliveredMessage<TMessage> {
+	readonly id: string;
+	readonly name: string;
+	readonly body: TMessage;
+	readonly createdAt: Date;
+	readonly attempts: number;
+	readonly firstFailedAt?: Date;
+}
+
+export interface QueueRetryOptions {
+	maxAttempts?: number;
+	backoff?: {
+		initialMs?: number;
+		factor?: number;
+		maxMs?: number;
+		jitter?: boolean;
+	};
+}
+
+export interface QueueHandlerOptions {
+	readonly signal: AbortSignal;
+}
+
+export interface QueueTypeToken<TMessage, TContext = any> {
 	readonly _queueMessage?: TMessage;
-	readonly _queueComplete?: TComplete;
 	readonly canPublish?: SchemaHook<TContext>;
 	readonly message?: PrimitiveSchema;
-	readonly complete?: PrimitiveSchema;
+	readonly timeout?: number | string;
+	readonly retry?: QueueRetryOptions;
+	readonly onMessage?: (
+		ctx: TContext,
+		message: QueueDeliveredMessage<TMessage>,
+		options: QueueHandlerOptions,
+	) => void | Promise<void>;
+	readonly onDeadLetter?: (
+		ctx: TContext,
+		message: QueueDeliveredMessage<TMessage>,
+		options: QueueHandlerOptions,
+	) => void | Promise<void>;
 }
 
 /** @deprecated Use `event<T>()`. */
@@ -27,10 +60,13 @@ interface EventOptions<TContext = any> {
 	schema?: PrimitiveSchema;
 }
 
-interface QueueOptions<TContext = any> {
+interface QueueOptions<TMessage, TContext = any> {
 	canPublish?: SchemaHook<TContext>;
 	message?: PrimitiveSchema;
-	complete?: PrimitiveSchema;
+	timeout?: number | string;
+	retry?: QueueRetryOptions;
+	onMessage?: QueueTypeToken<TMessage, TContext>["onMessage"];
+	onDeadLetter?: QueueTypeToken<TMessage, TContext>["onDeadLetter"];
 }
 
 export function event<T, TContext = any>(
@@ -39,10 +75,13 @@ export function event<T, TContext = any>(
 	return (options ?? {}) as EventTypeToken<T, TContext>;
 }
 
-export function queue<TMessage, TComplete = never, TContext = any>(
-	options?: QueueOptions<TContext>,
-): QueueTypeToken<TMessage, TComplete, TContext> {
-	return (options ?? {}) as QueueTypeToken<TMessage, TComplete, TContext>;
+export function queue<TMessage, TContext = any>(
+	options?: QueueOptions<TMessage, TContext>,
+): QueueTypeToken<TMessage, TContext> {
+	if (options?.onDeadLetter && !options.onMessage) {
+		throw new Error("Queue onDeadLetter requires onMessage");
+	}
+	return (options ?? {}) as QueueTypeToken<TMessage, TContext>;
 }
 
 export type PrimitiveSchema = StandardSchemaV1 | EventTypeToken<unknown, any>;
@@ -54,8 +93,11 @@ export interface EventSchemaDefinition<TContext = any> {
 
 export interface QueueSchemaDefinition<TContext = any> {
 	message: PrimitiveSchema;
-	complete?: PrimitiveSchema;
 	canPublish?: SchemaHook<TContext>;
+	timeout?: number | string;
+	retry?: QueueRetryOptions;
+	onMessage?: QueueTypeToken<any, TContext>["onMessage"];
+	onDeadLetter?: QueueTypeToken<any, TContext>["onDeadLetter"];
 }
 
 export type EventSchema<TContext = any> =
@@ -64,7 +106,7 @@ export type EventSchema<TContext = any> =
 export type QueueSchema =
 	| PrimitiveSchema
 	| QueueSchemaDefinition<any>
-	| QueueTypeToken<unknown, unknown, any>;
+	| QueueTypeToken<any, any>;
 export type EventSchemaConfig<TContext = any> = Record<
 	string,
 	EventSchema<TContext>
@@ -80,7 +122,7 @@ export type SchemaConfig = QueueSchemaConfig;
 export type InferSchema<T> =
 	T extends QueueSchemaDefinition<any>
 		? InferSchema<T["message"]>
-		: T extends QueueTypeToken<infer M, unknown, any>
+		: T extends QueueTypeToken<infer M, any>
 			? M
 			: T extends EventSchemaDefinition<any>
 				? InferSchema<T["schema"]>
@@ -94,20 +136,6 @@ export type InferSchemaMap<T extends Record<string, unknown>> = {
 	[K in keyof T]: InferSchema<T[K]>;
 };
 
-export type InferQueueComplete<T> =
-	T extends QueueTypeToken<unknown, infer C, any>
-		? [C] extends [never]
-			? never
-			: C
-		: T extends QueueSchemaDefinition<any>
-			? T["complete"] extends PrimitiveSchema
-				? InferSchema<T["complete"]>
-				: never
-			: never;
-
-export type InferQueueCompleteMap<T extends QueueSchemaConfig> = {
-	[K in keyof T]: InferQueueComplete<T[K]>;
-};
 
 export type InferEventArgs<T> = T extends readonly unknown[]
 	? number extends T["length"]

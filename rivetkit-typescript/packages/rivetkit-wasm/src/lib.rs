@@ -2,6 +2,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -18,9 +19,9 @@ use rivetkit_core::inspector::InspectorAuth;
 use rivetkit_core::{
 	ActorConfig, ActorConfigInput, ActorEvent, ActorFactory as CoreActorFactory, ActorStart,
 	ActorWorkKind, BindParam, ColumnValue, CoreRegistry as NativeCoreRegistry,
-	CoreServerlessRuntime, EngineSpawnMode, EnqueueAndWaitOpts, KeepAwakeRegion, ListOpts,
-	QueueMessage, QueueNextBatchOpts, QueueSendResult, QueueSendStatus, QueueTryNextBatchOpts,
-	QueueWaitOpts, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
+	CoreServerlessRuntime, EngineSpawnMode, KeepAwakeRegion, ListOpts, QueueMessage,
+	QueueMessageStatus, QueueNextBatchOpts, QueueSendOpts, QueueSendReceipt, QueueTryNextBatchOpts,
+	QueueWaitOpts, Reply, Request, RequestSaveOpts, Response, RuntimeSpawner, SerializeStateReason,
 	ServeConfig, ServerlessRequest, SqliteBatchStatement, StateDelta, WebSocket,
 	WebSocketCallbackRegion, WorkflowKvWrite, WsMessage,
 };
@@ -177,6 +178,20 @@ pub struct WasmActionDefinition {
 
 #[derive(Clone, Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
+pub struct WasmQueueDefinition {
+	pub name: String,
+	pub on_message: bool,
+	pub on_dead_letter: bool,
+	pub timeout_ms: Option<u32>,
+	pub max_attempts: Option<u32>,
+	pub backoff_initial_ms: Option<u32>,
+	pub backoff_factor: Option<f64>,
+	pub backoff_max_ms: Option<u32>,
+	pub backoff_jitter: Option<bool>,
+}
+
+#[derive(Clone, Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
 pub struct WasmActorConfig {
 	pub name: Option<String>,
 	pub icon: Option<String>,
@@ -208,6 +223,7 @@ pub struct WasmActorConfig {
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
 	pub actions: Option<Vec<WasmActionDefinition>>,
+	pub queues: Option<Vec<WasmQueueDefinition>>,
 }
 
 impl From<WasmActorConfig> for ActorConfigInput {
@@ -241,6 +257,22 @@ impl From<WasmActorConfig> for ActorConfigInput {
 				actions
 					.into_iter()
 					.map(|action| rivetkit_core::ActionDefinition { name: action.name })
+					.collect()
+			}),
+			queues: config.queues.map(|queues| {
+				queues
+					.into_iter()
+					.map(|queue| rivetkit_core::QueueDefinitionInput {
+						name: queue.name,
+						on_message: queue.on_message,
+						on_dead_letter: queue.on_dead_letter,
+						timeout_ms: queue.timeout_ms,
+						max_attempts: queue.max_attempts,
+						backoff_initial_ms: queue.backoff_initial_ms,
+						backoff_factor: queue.backoff_factor,
+						backoff_max_ms: queue.backoff_max_ms,
+						backoff_jitter: queue.backoff_jitter,
+					})
 					.collect()
 			}),
 			// Custom inspector tabs serve assets from a filesystem `root`, which is a
@@ -513,6 +545,8 @@ struct WasmCallbacks {
 	on_before_action_response: Option<Function>,
 	on_request: Option<Function>,
 	on_queue_send: Option<Function>,
+	queue_on_message: JsValue,
+	queue_on_dead_letter: JsValue,
 	on_websocket: Option<Function>,
 	serialize_state: Option<Function>,
 	run: Option<Function>,
@@ -541,6 +575,13 @@ impl WasmCallbacks {
 			on_before_action_response: function_property(&callbacks, "onBeforeActionResponse"),
 			on_request: function_property(&callbacks, "onRequest"),
 			on_queue_send: function_property(&callbacks, "onQueueSend"),
+			queue_on_message: Reflect::get(&callbacks, &JsValue::from_str("queueOnMessage"))
+				.unwrap_or(JsValue::UNDEFINED),
+			queue_on_dead_letter: Reflect::get(
+				&callbacks,
+				&JsValue::from_str("queueOnDeadLetter"),
+			)
+			.unwrap_or(JsValue::UNDEFINED),
 			on_websocket: function_property(&callbacks, "onWebSocket"),
 			serialize_state: function_property(&callbacks, "serializeState"),
 			run: function_property(&callbacks, "run"),
@@ -601,6 +642,20 @@ fn start_run_handler(callbacks: &WasmCallbacks, ctx: &WasmActorContext) {
 			console_error(&format!("wasm run callback failed: {error:#}"));
 		}
 		ctx.inner.end_run_handler();
+	});
+}
+
+fn spawn_queue_reply<T, F>(reply: Reply<T>, work: F)
+where
+	T: 'static,
+	F: Future<Output = Result<T>> + 'static,
+{
+	spawn_local(async move {
+		let mut reply = reply;
+		tokio::select! {
+			_ = reply.receiver_closed() => {}
+			result = work => reply.send(result),
+		}
 	});
 }
 
@@ -824,8 +879,8 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			body,
 			conn,
 			request,
-			wait,
-			timeout_ms,
+			dedupe_key,
+			delay_ms,
 			reply,
 		} => {
 			let callback = callbacks.on_queue_send.clone();
@@ -845,22 +900,138 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 					set_anyhow(&payload, "request", request_to_js(request)?)?;
 					set_anyhow(&payload, "name", JsValue::from_str(&name))?;
 					set_anyhow(&payload, "body", bytes_to_js(&body))?;
-					set_anyhow(&payload, "wait", JsValue::from_bool(wait))?;
 					set_anyhow(
 						&payload,
-						"timeoutMs",
-						timeout_ms
+						"dedupeKey",
+						dedupe_key
+							.map(|value| JsValue::from_str(&value))
+							.unwrap_or(JsValue::UNDEFINED),
+					)?;
+					set_anyhow(
+						&payload,
+						"delayMs",
+						delay_ms
 							.map(|value| JsValue::from_f64(value as f64))
 							.unwrap_or(JsValue::UNDEFINED),
 					)?;
 					let value = call_callback(callback, &payload.into()).await?;
-					queue_send_result_from_js(value)
+					queue_send_receipt_from_js(value)
 				}
 				.await;
 				if let Err(error) = &result {
 					console_error(&format!("wasm onQueueSend callback failed: {error:#}"));
 				}
 				reply.send(result);
+			});
+		}
+		ActorEvent::QueueMessage {
+			message,
+			signal,
+			reply,
+		} => {
+			let callback = action_callback(&callbacks.queue_on_message, &message.name);
+			let ctx = ctx.clone();
+			spawn_queue_reply(reply, async move {
+				let result = async {
+					let callback = callback.ok_or_else(|| {
+						anyhow!("wasm queue callback `{}` is not implemented", message.name)
+					})?;
+					let payload = object();
+					set_anyhow(&payload, "ctx", JsValue::from(ctx))?;
+					set_anyhow(&payload, "id", JsValue::from_str(&message.receipt_id))?;
+					set_anyhow(&payload, "name", JsValue::from_str(&message.name))?;
+					set_anyhow(
+						&payload,
+						"body",
+						bytes_to_js(&message.body),
+					)?;
+					set_anyhow(
+						&payload,
+						"createdAtMs",
+						JsValue::from_f64(message.created_at as f64),
+					)?;
+					set_anyhow(
+						&payload,
+						"attempts",
+						JsValue::from_f64(message.attempts as f64),
+					)?;
+					set_anyhow(
+						&payload,
+						"firstFailedAtMs",
+						message
+							.first_failed_at
+							.map(|value| JsValue::from_f64(value as f64))
+							.unwrap_or(JsValue::UNDEFINED),
+					)?;
+					set_anyhow(
+						&payload,
+						"cancelToken",
+						JsValue::from(WasmCancellationToken { inner: signal }),
+					)?;
+					call_callback(&callback, &payload.into()).await?;
+					Ok(())
+				}
+				.await;
+				if let Err(error) = &result {
+					console_error(&format!("wasm queue onMessage callback failed: {error:#}"));
+				}
+				result
+			});
+		}
+		ActorEvent::QueueDeadLetter {
+			message,
+			signal,
+			reply,
+		} => {
+			let callback = action_callback(&callbacks.queue_on_dead_letter, &message.name);
+			let ctx = ctx.clone();
+			spawn_queue_reply(reply, async move {
+				let result = async {
+					let callback = callback.ok_or_else(|| {
+						anyhow!("wasm queue callback `{}` is not implemented", message.name)
+					})?;
+					let payload = object();
+					set_anyhow(&payload, "ctx", JsValue::from(ctx))?;
+					set_anyhow(&payload, "id", JsValue::from_str(&message.receipt_id))?;
+					set_anyhow(&payload, "name", JsValue::from_str(&message.name))?;
+					set_anyhow(
+						&payload,
+						"body",
+						bytes_to_js(&message.body),
+					)?;
+					set_anyhow(
+						&payload,
+						"createdAtMs",
+						JsValue::from_f64(message.created_at as f64),
+					)?;
+					set_anyhow(
+						&payload,
+						"attempts",
+						JsValue::from_f64(message.attempts as f64),
+					)?;
+					set_anyhow(
+						&payload,
+						"firstFailedAtMs",
+						message
+							.first_failed_at
+							.map(|value| JsValue::from_f64(value as f64))
+							.unwrap_or(JsValue::UNDEFINED),
+					)?;
+					set_anyhow(
+						&payload,
+						"cancelToken",
+						JsValue::from(WasmCancellationToken { inner: signal }),
+					)?;
+					call_callback(&callback, &payload.into()).await?;
+					Ok(())
+				}
+				.await;
+				if let Err(error) = &result {
+					console_error(&format!(
+						"wasm queue onDeadLetter callback failed: {error:#}"
+					));
+				}
+				result
 			});
 		}
 		ActorEvent::WebSocketOpen {
@@ -1092,6 +1263,11 @@ impl WasmCancellationToken {
 	#[wasm_bindgen]
 	pub fn cancel(&self) {
 		self.inner.cancel();
+	}
+
+	#[wasm_bindgen(js_name = cloneToken)]
+	pub fn clone_token(&self) -> Self {
+		self.clone()
 	}
 
 	#[wasm_bindgen(js_name = onCancelled)]
@@ -1927,12 +2103,30 @@ pub struct WasmQueue {
 #[wasm_bindgen(js_class = Queue)]
 impl WasmQueue {
 	#[wasm_bindgen]
-	pub async fn send(&self, name: String, body: Vec<u8>) -> Result<WasmQueueMessage, JsValue> {
-		self.inner
-			.send(&name, &body)
+	pub async fn send(
+		&self,
+		name: String,
+		body: Vec<u8>,
+		options: JsValue,
+	) -> Result<JsValue, JsValue> {
+		let options = queue_send_options(options)?;
+		let receipt = self
+			.inner
+			.send_with_opts(&name, &body, options)
 			.await
-			.map(WasmQueueMessage::from_core)
-			.map_err(anyhow_to_js_error)
+			.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&WasmQueueSendReceipt::from(receipt))
+			.map_err(Into::into)
+	}
+
+	#[wasm_bindgen]
+	pub async fn status(&self, receipt_id: String) -> Result<JsValue, JsValue> {
+		let status = self
+			.inner
+			.queue_status(&receipt_id)
+			.await
+			.map_err(anyhow_to_js_error)?;
+		serde_wasm_bindgen::to_value(&WasmQueueStatus::from(status)).map_err(Into::into)
 	}
 
 	#[wasm_bindgen(js_name = nextBatch)]
@@ -1957,15 +2151,15 @@ impl WasmQueue {
 		names: JsValue,
 		options: JsValue,
 		signal: Option<WasmCancellationToken>,
-	) -> Result<WasmQueueMessage, JsValue> {
+	) -> Result<(), JsValue> {
 		let names: Vec<String> = serde_wasm_bindgen::from_value(names)?;
 		let mut options = queue_wait_options(options)?;
 		options.signal = signal.map(|signal| signal.inner);
 		self.inner
-			.wait_for_names(names, options)
+			.wait_for_names_available(names, options)
 			.await
-			.map(WasmQueueMessage::from_core)
-			.map_err(anyhow_to_js_error)
+			.map_err(anyhow_to_js_error)?;
+		Ok(())
 	}
 
 	#[wasm_bindgen(js_name = waitForNamesAvailable)]
@@ -1973,29 +2167,16 @@ impl WasmQueue {
 		&self,
 		names: JsValue,
 		options: JsValue,
+		signal: Option<WasmCancellationToken>,
 	) -> Result<(), JsValue> {
 		let names: Vec<String> = serde_wasm_bindgen::from_value(names)?;
+		let mut options = queue_wait_options(options)?;
+		options.signal = signal.map(|signal| signal.inner);
 		self.inner
-			.wait_for_names_available(names, queue_wait_options(options)?)
+			.wait_for_names_available(names, options)
 			.await
 			.map_err(anyhow_to_js_error)?;
 		Ok(())
-	}
-
-	#[wasm_bindgen(js_name = enqueueAndWait)]
-	pub async fn enqueue_and_wait(
-		&self,
-		name: String,
-		body: Vec<u8>,
-		options: JsValue,
-		signal: Option<WasmCancellationToken>,
-	) -> Result<Option<Vec<u8>>, JsValue> {
-		let mut options = enqueue_and_wait_options(options)?;
-		options.signal = signal.map(|signal| signal.inner);
-		self.inner
-			.enqueue_and_wait(&name, &body, options)
-			.await
-			.map_err(anyhow_to_js_error)
 	}
 
 	#[wasm_bindgen(js_name = tryNextBatch)]
@@ -2054,15 +2235,15 @@ impl WasmQueueMessage {
 	fn inner(&self) -> &QueueMessage {
 		self.inner
 			.as_ref()
-			.expect_throw("queue message already completed")
+			.expect_throw("queue message missing")
 	}
 }
 
 #[wasm_bindgen(js_class = QueueMessage)]
 impl WasmQueueMessage {
 	#[wasm_bindgen]
-	pub fn id(&self) -> u64 {
-		self.inner().id
+	pub fn id(&self) -> String {
+		self.inner().receipt_id.clone()
 	}
 
 	#[wasm_bindgen]
@@ -2080,23 +2261,14 @@ impl WasmQueueMessage {
 		self.inner().created_at as f64
 	}
 
-	#[wasm_bindgen(js_name = isCompletable)]
-	pub fn is_completable(&self) -> bool {
-		self.inner().clone().into_completable().is_ok()
+	#[wasm_bindgen]
+	pub fn attempts(&self) -> u32 {
+		self.inner().attempts
 	}
 
-	#[wasm_bindgen]
-	pub async fn complete(&mut self, response: JsValue) -> Result<(), JsValue> {
-		let message = self
-			.inner
-			.take()
-			.ok_or_else(|| js_error("queue message already completed"))?;
-		let response = if response.is_null() || response.is_undefined() {
-			None
-		} else {
-			Some(js_to_bytes(response))
-		};
-		message.complete(response).await.map_err(anyhow_to_js_error)
+	#[wasm_bindgen(js_name = firstFailedAt)]
+	pub fn first_failed_at(&self) -> Option<f64> {
+		self.inner().first_failed_at.map(|value| value as f64)
 	}
 }
 
@@ -2159,11 +2331,12 @@ impl WasmSqliteDb {
 
 	#[wasm_bindgen]
 	pub async fn query(&self, sql: String, params: JsValue) -> Result<JsValue, JsValue> {
-		self.inner
+		let result = self
+			.inner
 			.query(sql, bind_params_from_js(params)?)
 			.await
-			.map(query_result_to_js)
-			.map_err(anyhow_to_js_error)
+			.map_err(anyhow_to_js_error)?;
+		Ok(query_result_to_js(result))
 	}
 
 	#[wasm_bindgen]
@@ -2276,20 +2449,19 @@ struct WasmQueueNextBatchOptions {
 	names: Option<Vec<String>>,
 	count: Option<u32>,
 	timeout_ms: Option<f64>,
-	completable: Option<bool>,
 }
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
 struct WasmQueueWaitOptions {
 	timeout_ms: Option<f64>,
-	completable: Option<bool>,
 }
 
 #[derive(Default, serde::Deserialize)]
 #[serde(default, rename_all = "camelCase")]
-struct WasmQueueEnqueueAndWaitOptions {
-	timeout_ms: Option<f64>,
+struct WasmQueueSendOptions {
+	dedupe_key: Option<String>,
+	delay_ms: Option<f64>,
 }
 
 #[derive(Default, serde::Deserialize)]
@@ -2297,7 +2469,6 @@ struct WasmQueueEnqueueAndWaitOptions {
 struct WasmQueueTryNextBatchOptions {
 	names: Option<Vec<String>>,
 	count: Option<u32>,
-	completable: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -2366,7 +2537,6 @@ fn queue_next_batch_options(value: JsValue) -> Result<QueueNextBatchOpts, JsValu
 		count: options.count.unwrap_or(1),
 		timeout: optional_timeout_ms(options.timeout_ms),
 		signal: None,
-		completable: options.completable.unwrap_or(false),
 	})
 }
 
@@ -2379,19 +2549,18 @@ fn queue_wait_options(value: JsValue) -> Result<QueueWaitOpts, JsValue> {
 	Ok(QueueWaitOpts {
 		timeout: optional_timeout_ms(options.timeout_ms),
 		signal: None,
-		completable: options.completable.unwrap_or(false),
 	})
 }
 
-fn enqueue_and_wait_options(value: JsValue) -> Result<EnqueueAndWaitOpts, JsValue> {
-	let options: WasmQueueEnqueueAndWaitOptions = if value.is_null() || value.is_undefined() {
-		WasmQueueEnqueueAndWaitOptions::default()
+fn queue_send_options(value: JsValue) -> Result<QueueSendOpts, JsValue> {
+	let options: WasmQueueSendOptions = if value.is_null() || value.is_undefined() {
+		WasmQueueSendOptions::default()
 	} else {
 		serde_wasm_bindgen::from_value(value)?
 	};
-	Ok(EnqueueAndWaitOpts {
-		timeout: optional_timeout_ms(options.timeout_ms),
-		signal: None,
+	Ok(QueueSendOpts {
+		dedupe_key: options.dedupe_key,
+		delay: optional_timeout_ms(options.delay_ms),
 	})
 }
 
@@ -2404,7 +2573,6 @@ fn queue_try_next_batch_options(value: JsValue) -> Result<QueueTryNextBatchOpts,
 	Ok(QueueTryNextBatchOpts {
 		names: options.names,
 		count: options.count.unwrap_or(1),
-		completable: options.completable.unwrap_or(false),
 	})
 }
 
@@ -2416,11 +2584,92 @@ fn queue_messages_to_js(messages: Vec<QueueMessage>) -> Result<Array, JsValue> {
 	Ok(array)
 }
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
-struct WasmQueueSendResult {
-	status: String,
-	response: Option<Vec<u8>>,
+struct WasmQueueSendReceipt {
+	id: String,
+	deduplicated: bool,
+}
+
+impl From<QueueSendReceipt> for WasmQueueSendReceipt {
+	fn from(receipt: QueueSendReceipt) -> Self {
+		Self {
+			id: receipt.id,
+			deduplicated: receipt.deduplicated,
+		}
+	}
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct WasmQueueStatus {
+	state: &'static str,
+	attempts: Option<u32>,
+	created_at_ms: Option<i64>,
+	available_at_ms: Option<i64>,
+	started_at_ms: Option<i64>,
+	completed_at_ms: Option<i64>,
+	failed_at_ms: Option<i64>,
+	consumed_at_ms: Option<i64>,
+}
+
+impl From<QueueMessageStatus> for WasmQueueStatus {
+	fn from(status: QueueMessageStatus) -> Self {
+		let mut output = Self {
+			state: "unknown",
+			attempts: None,
+			created_at_ms: None,
+			available_at_ms: None,
+			started_at_ms: None,
+			completed_at_ms: None,
+			failed_at_ms: None,
+			consumed_at_ms: None,
+		};
+		match status {
+			QueueMessageStatus::Queued { attempts, created_at } => {
+				output.state = "queued";
+				output.attempts = Some(attempts);
+				output.created_at_ms = Some(created_at);
+			}
+			QueueMessageStatus::Delayed { attempts, created_at, available_at } => {
+				output.state = "delayed";
+				output.attempts = Some(attempts);
+				output.created_at_ms = Some(created_at);
+				output.available_at_ms = Some(available_at);
+			}
+			QueueMessageStatus::Processing { attempts, created_at, started_at } => {
+				output.state = "processing";
+				output.attempts = Some(attempts);
+				output.created_at_ms = Some(created_at);
+				output.started_at_ms = Some(started_at);
+			}
+			QueueMessageStatus::Retrying { attempts, created_at, available_at } => {
+				output.state = "retrying";
+				output.attempts = Some(attempts);
+				output.created_at_ms = Some(created_at);
+				output.available_at_ms = Some(available_at);
+			}
+			QueueMessageStatus::Succeeded { attempts, created_at, completed_at } => {
+				output.state = "succeeded";
+				output.attempts = Some(attempts);
+				output.created_at_ms = Some(created_at);
+				output.completed_at_ms = Some(completed_at);
+			}
+			QueueMessageStatus::DeadLettered { attempts, created_at, failed_at } => {
+				output.state = "deadLettered";
+				output.attempts = Some(attempts);
+				output.created_at_ms = Some(created_at);
+				output.failed_at_ms = Some(failed_at);
+			}
+			QueueMessageStatus::Consumed { created_at, consumed_at } => {
+				output.state = "consumed";
+				output.created_at_ms = Some(created_at);
+				output.consumed_at_ms = Some(consumed_at);
+			}
+			QueueMessageStatus::Unknown => {}
+		}
+		output
+	}
 }
 
 fn request_to_js(request: Request) -> Result<JsValue> {
@@ -2459,17 +2708,12 @@ fn response_from_js(value: JsValue) -> Result<Response> {
 	)
 }
 
-fn queue_send_result_from_js(value: JsValue) -> Result<QueueSendResult> {
-	let result: WasmQueueSendResult = serde_wasm_bindgen::from_value(value)
-		.map_err(|error| anyhow!("decode queue send result: {error}"))?;
-	let status = match result.status.as_str() {
-		"completed" => QueueSendStatus::Completed,
-		"timedOut" => QueueSendStatus::TimedOut,
-		other => return Err(anyhow!("invalid queue send status `{other}`")),
-	};
-	Ok(QueueSendResult {
-		status,
-		response: result.response,
+fn queue_send_receipt_from_js(value: JsValue) -> Result<QueueSendReceipt> {
+	let result: WasmQueueSendReceipt = serde_wasm_bindgen::from_value(value)
+		.map_err(|error| anyhow!("decode queue send receipt: {error}"))?;
+	Ok(QueueSendReceipt {
+		id: result.id,
+		deduplicated: result.deduplicated,
 	})
 }
 

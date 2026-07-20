@@ -1,0 +1,5 @@
+{
+  "code": "automatic_consumer",
+  "group": "queue",
+  "message": "Queue is consumed by onMessage"
+}

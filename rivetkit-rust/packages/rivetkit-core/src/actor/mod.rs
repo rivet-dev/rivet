@@ -32,17 +32,18 @@ pub(crate) mod work_registry;
 pub use action::ActionDispatchError;
 #[cfg(feature = "sqlite-local")]
 pub use actor_runtime_socket::ActorRuntimeSocketEndpointInfo;
-pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
+pub use config::{
+	ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket, QueueDefinition,
+	QueueDefinitionInput,
+};
 pub use connection::ConnHandle;
 pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};
 pub use lifecycle_hooks::{ActorEvents, ActorStart, Reply};
-pub use messages::{
-	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, StateDelta, WorkflowKvWrite,
-};
+pub use messages::{ActorEvent, Request, Response, StateDelta, WorkflowKvWrite};
 pub use queue::{
-	CompletableQueueMessage, EnqueueAndWaitOpts, QueueMessage, QueueNextBatchOpts, QueueNextOpts,
-	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	QueueMessage, QueueMessageStatus, QueueNextBatchOpts, QueueNextOpts, QueueSendOpts,
+	QueueSendReceipt, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 pub use sqlite::{
 	BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult, SqliteBackend,

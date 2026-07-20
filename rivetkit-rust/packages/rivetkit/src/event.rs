@@ -1,13 +1,13 @@
-use std::{fmt, io::Cursor, marker::PhantomData};
+use std::{fmt, future::Future, io::Cursor, marker::PhantomData};
 
 use anyhow::{Context, Result as AnyhowResult};
 use ciborium::Value;
 use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::actor::schedule::ScheduledFireInfo;
-use rivetkit_core::error::ActorRuntime;
+use rivetkit_core::error::{ActorLifecycle, ActorRuntime};
 use rivetkit_core::{
-	ActorEvent, QueueSendResult, QueueSendStatus, Reply, Request, Response, SerializeStateReason,
-	StateDelta, WebSocket,
+	ActorEvent, QueueMessage as CoreQueueMessage, QueueSendReceipt, Reply, Request, Response,
+	SerializeStateReason, StateDelta, WebSocket,
 };
 use serde::{
 	Serialize,
@@ -16,6 +16,7 @@ use serde::{
 		value::BorrowedStrDeserializer,
 	},
 };
+use tokio_util::sync::CancellationToken;
 
 use crate::{action, actor::Actor, context::ConnCtx, persist};
 
@@ -78,6 +79,8 @@ pub enum RuntimeEvent<A: Actor> {
 	Action(ActionCall<A>),
 	Http(HttpCall),
 	QueueSend(QueueSend<A>),
+	QueueMessage(QueueDelivery),
+	QueueDeadLetter(QueueDelivery),
 	WebSocketOpen(WsOpen<A>),
 	ConnOpen(ConnOpen<A>),
 	ConnClosed(ConnClosed<A>),
@@ -112,18 +115,40 @@ impl<A: Actor> RuntimeEvent<A> {
 				body,
 				conn,
 				request,
-				wait,
-				timeout_ms,
+				dedupe_key,
+				delay_ms,
 				reply,
 			} => Self::QueueSend(QueueSend {
 				name,
 				body,
 				conn: ConnCtx::from(conn),
 				request,
-				wait,
-				timeout_ms,
+				dedupe_key,
+				delay_ms,
 				reply: Some(reply),
 			}),
+			ActorEvent::QueueMessage {
+				message,
+				signal,
+				reply,
+			} => {
+				Self::QueueMessage(QueueDelivery {
+					message,
+					signal,
+					reply: Some(reply),
+				})
+			}
+			ActorEvent::QueueDeadLetter {
+				message,
+				signal,
+				reply,
+			} => {
+				Self::QueueDeadLetter(QueueDelivery {
+					message,
+					signal,
+					reply: Some(reply),
+				})
+			}
 			ActorEvent::WebSocketOpen {
 				conn: _conn,
 				ws,
@@ -1068,9 +1093,9 @@ pub struct QueueSend<A: Actor> {
 	pub(crate) body: Vec<u8>,
 	pub(crate) conn: ConnCtx<A>,
 	pub(crate) request: Request,
-	pub(crate) wait: bool,
-	pub(crate) timeout_ms: Option<u64>,
-	pub(crate) reply: Option<Reply<QueueSendResult>>,
+	pub(crate) dedupe_key: Option<String>,
+	pub(crate) delay_ms: Option<u64>,
+	pub(crate) reply: Option<Reply<QueueSendReceipt>>,
 }
 
 impl<A: Actor> Drop for QueueSend<A> {
@@ -1098,35 +1123,64 @@ impl<A: Actor> QueueSend<A> {
 		&self.request
 	}
 
-	pub fn should_wait(&self) -> bool {
-		self.wait
+	pub fn dedupe_key(&self) -> Option<&str> {
+		self.dedupe_key.as_deref()
 	}
 
-	pub fn timeout_ms(&self) -> Option<u64> {
-		self.timeout_ms
+	pub fn delay_ms(&self) -> Option<u64> {
+		self.delay_ms
 	}
 
-	pub fn complete(mut self, response: Option<Vec<u8>>) {
+	pub fn reply(mut self, receipt: QueueSendReceipt) {
 		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(QueueSendResult {
-				status: QueueSendStatus::Completed,
-				response,
-			}));
-		}
-	}
-
-	pub fn timed_out(mut self) {
-		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(QueueSendResult {
-				status: QueueSendStatus::TimedOut,
-				response: None,
-			}));
+			reply.send(Ok(receipt));
 		}
 	}
 
 	pub fn err(mut self, err: anyhow::Error) {
 		if let Some(reply) = self.reply.take() {
 			reply.send(Err(err));
+		}
+	}
+}
+
+#[derive(Debug)]
+#[must_use = "handle the queue delivery"]
+pub struct QueueDelivery {
+	message: CoreQueueMessage,
+	signal: CancellationToken,
+	reply: Option<Reply<()>>,
+}
+
+impl QueueDelivery {
+	pub fn message(&self) -> &CoreQueueMessage {
+		&self.message
+	}
+
+	pub fn signal(&self) -> &CancellationToken {
+		&self.signal
+	}
+
+	/// Runs a low-level runtime-event handler. Returning `Ok(())` acknowledges
+	/// the delivery; returning an error negatively acknowledges it.
+	pub async fn handle<F>(mut self, handler: F)
+	where
+		F: Future<Output = anyhow::Result<()>>,
+	{
+		let result = tokio::select! {
+			_ = self.signal.cancelled() => Err(ActorLifecycle::Stopping.build()),
+			result = handler => result,
+		};
+		if let Some(reply) = self.reply.take() {
+			reply.send(result);
+		}
+	}
+}
+
+impl Drop for QueueDelivery {
+	fn drop(&mut self) {
+		if let Some(reply) = self.reply.take() {
+			reply.send(Err(anyhow::anyhow!("queue delivery dropped without handling")));
 		}
 	}
 }

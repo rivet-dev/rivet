@@ -5,46 +5,13 @@ import { CHUNK_SIZE, WORLD_ID } from "../src/actors/open-world/config.ts";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-type QueueResult<T> = {
-	status: "completed" | "timedOut";
-	response?: T;
-};
-
-type RawQueueConnection = {
-	send<TResponse>(
-		name: string,
-		body: unknown,
-		options: { wait: true; timeout?: number },
-	): Promise<QueueResult<TResponse>>;
-};
-
 describe("matchmaking and session patterns", () => {
 	test("io-style open lobby + 10 tps match with movement", async (ctx) => {
 		const { client } = await setupTest(ctx, registry);
 
 		const mm = client.ioStyleMatchmaker.getOrCreate(["main"]).connect();
-		const firstQueueResult = await mm.send(
-			"findLobby",
-			{},
-			{ wait: true, timeout: 1_000 },
-		);
-		const secondQueueResult = await mm.send(
-			"findLobby",
-			{},
-			{ wait: true, timeout: 1_000 },
-		);
-		expect(firstQueueResult?.status).toBe("completed");
-		expect(secondQueueResult?.status).toBe("completed");
-		const firstResponse = (
-			firstQueueResult as {
-				response?: { matchId?: string; playerId?: string };
-			}
-		)?.response;
-		const secondResponse = (
-			secondQueueResult as {
-				response?: { matchId?: string; playerId?: string };
-			}
-		)?.response;
+		const firstResponse = await mm.findLobby();
+		const secondResponse = await mm.findLobby();
 		expect(firstResponse?.playerId).toBeTypeOf("string");
 		expect(secondResponse?.playerId).toBeTypeOf("string");
 		expect(secondResponse?.matchId).toBe(firstResponse?.matchId);
@@ -185,22 +152,7 @@ describe("matchmaking and session patterns", () => {
 		const { client } = await setupTest(ctx, registry);
 
 		const mm = client.partyMatchmaker.getOrCreate(["main"]).connect();
-		const createResult = await mm.send(
-			"createParty",
-			{ hostName: "Host" },
-			{ wait: true, timeout: 5_000 },
-		);
-		const createResponse = (
-			createResult as {
-				response?: {
-					matchId: string;
-					playerId: string;
-					partyCode: string;
-					joinToken: string;
-					playerName: string;
-				};
-			}
-		)?.response;
+		const createResponse = await mm.createParty({ hostName: "Host" });
 		expect(createResponse?.matchId).toBeTypeOf("string");
 		expect(createResponse?.partyCode).toHaveLength(6);
 		if (!createResponse)
@@ -223,17 +175,10 @@ describe("matchmaking and session patterns", () => {
 		const hostMember = snap1.members[createResponse.playerId];
 		expect(hostMember.isHost).toBe(true);
 
-		const joinResult = await (mm as RawQueueConnection).send<{
-			matchId: string;
-			playerId: string;
-			joinToken: string;
-			playerName: string;
-		}>(
-			"joinParty",
-			{ partyCode: createResponse.partyCode, playerName: "Player2" },
-			{ wait: true, timeout: 5_000 },
-		);
-		const joinResponse = joinResult.response;
+		const joinResponse = await mm.joinParty({
+			partyCode: createResponse.partyCode,
+			playerName: "Player2",
+		});
 		expect(joinResponse?.matchId).toBe(createResponse?.matchId);
 		if (!joinResponse) throw new Error("expected party join response");
 
@@ -278,33 +223,15 @@ describe("matchmaking and session patterns", () => {
 
 		const mm = client.turnBasedMatchmaker.getOrCreate(["main"]).connect();
 
-		const createResult = await mm.send(
-			"createGame",
-			{ playerName: "PlayerX" },
-			{ wait: true, timeout: 5_000 },
-		);
-		const createResponse = (
-			createResult as {
-				response?: {
-					matchId: string;
-					playerId: string;
-					inviteCode: string;
-				};
-			}
-		)?.response;
+		const createResponse = await mm.createGame({ playerName: "PlayerX" });
 		expect(createResponse?.matchId).toBeTypeOf("string");
 		expect(createResponse?.inviteCode).toHaveLength(6);
 		if (!createResponse) throw new Error("expected game creation response");
 
-		const joinResult = await (mm as RawQueueConnection).send<{
-			matchId: string;
-			playerId: string;
-		}>(
-			"joinByCode",
-			{ inviteCode: createResponse.inviteCode, playerName: "PlayerO" },
-			{ wait: true, timeout: 5_000 },
-		);
-		const joinResponse = joinResult.response;
+		const joinResponse = await mm.joinByCode({
+			inviteCode: createResponse.inviteCode,
+			playerName: "PlayerO",
+		});
 		expect(joinResponse?.matchId).toBe(createResponse?.matchId);
 		if (!joinResponse) throw new Error("expected game join response");
 
@@ -506,32 +433,8 @@ describe("matchmaking and session patterns", () => {
 		const mm = client.battleRoyaleMatchmaker
 			.getOrCreate(["main"])
 			.connect();
-		const result1 = await mm.send(
-			"findMatch",
-			{},
-			{ wait: true, timeout: 5_000 },
-		);
-		const result2 = await mm.send(
-			"findMatch",
-			{},
-			{ wait: true, timeout: 5_000 },
-		);
-		const r1 = (
-			result1 as {
-				response?: {
-					matchId: string;
-					playerId: string;
-				};
-			}
-		)?.response;
-		const r2 = (
-			result2 as {
-				response?: {
-					matchId: string;
-					playerId: string;
-				};
-			}
-		)?.response;
+		const r1 = await mm.findMatch();
+		const r2 = await mm.findMatch();
 		expect(r1?.matchId).toBeTypeOf("string");
 		expect(r2?.matchId).toBe(r1?.matchId);
 		if (!r1 || !r2) {

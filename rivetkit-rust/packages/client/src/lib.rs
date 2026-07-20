@@ -19,4 +19,4 @@ pub use client::{
 };
 pub use common::{EncodingKind, RawWebSocket, TransportKind};
 pub use connection::{ConnectionStatus, Event, SubscriptionHandle};
-pub use handle::{QueueSendOptions, QueueSendResult, QueueSendStatus, SendAndWaitOpts, SendOpts};
+pub use handle::{QueueMessageStatus, QueueSendOptions, QueueSendReceipt};

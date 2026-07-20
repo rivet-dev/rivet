@@ -33,26 +33,100 @@ export const turnBasedMatchmaker = actor({
 		onMigrate: migrateTables,
 	}),
 	queues: {
-		createGame: queue<
-			{ playerName: string },
-			{ matchId: string; playerId: string; inviteCode: string }
-		>(),
-		joinByCode: queue<
-			{ inviteCode: string; playerName: string },
-			{ matchId: string; playerId: string }
-		>(),
 		queueForMatch: queue<{
 			playerId: string;
 			playerName: string;
 			connId: string;
-		}>(),
-		unqueueForMatch: queue<{ connId: string }>(),
-		closeMatch: queue<{ matchId: string }>(),
+		}>({
+			onMessage: async (c, message) => {
+				await processQueueEntry(c, message.body);
+			},
+		}),
+		unqueueForMatch: queue<{ connId: string }>({
+			onMessage: async (c, message) => {
+				await c.db.execute(
+					`DELETE FROM player_pool WHERE conn_id = ?`,
+					message.body.connId,
+				);
+			},
+		}),
 	},
 	events: {
 		assignmentReady: event<TurnBasedAssignment>(),
 	},
 	actions: {
+		createGame: async (c, input: { playerName: string }) => {
+			const matchId = crypto.randomUUID();
+			const inviteCode = generateInviteCode();
+			const playerId = crypto.randomUUID();
+
+			const client = c.client<typeof registry>();
+			await client.turnBasedMatch.create([matchId], {
+				input: { matchId },
+			});
+
+			await client.turnBasedMatch.get([matchId]).createPlayer({
+				playerId,
+				playerName: input.playerName,
+				symbol: "X" as const,
+			});
+
+			await c.db.execute(
+				`INSERT INTO matches (match_id, invite_code, player_count, is_open_pool, created_at) VALUES (?, ?, ?, ?, ?)`,
+				matchId,
+				inviteCode,
+				1,
+				0,
+				Date.now(),
+			);
+
+			return { matchId, playerId, inviteCode };
+		},
+		joinByCode: async (
+			c,
+			input: { inviteCode: string; playerName: string },
+		) => {
+			const code = input.inviteCode.toUpperCase().trim();
+			const rows = await c.db.execute<{
+				match_id: string;
+				player_count: number;
+			}>(
+				`SELECT match_id, player_count FROM matches WHERE invite_code = ?`,
+				code,
+			);
+			const row = rows[0];
+			if (!row)
+				throw new UserError("Game not found", {
+					code: "game_not_found",
+				});
+			if (row.player_count >= 2)
+				throw new UserError("Game is full", { code: "game_full" });
+
+			const playerId = crypto.randomUUID();
+			const client = c.client<typeof registry>();
+			await client.turnBasedMatch.get([row.match_id]).createPlayer({
+				playerId,
+				playerName: input.playerName,
+				symbol: "O" as const,
+			});
+
+			await c.db.execute(
+				`UPDATE matches SET player_count = 2 WHERE match_id = ?`,
+				row.match_id,
+			);
+
+			return { matchId: row.match_id, playerId };
+		},
+		closeMatch: async (c, input: { matchId: string }) => {
+			await c.db.execute(
+				`DELETE FROM assignments WHERE match_id = ?`,
+				input.matchId,
+			);
+			await c.db.execute(
+				`DELETE FROM matches WHERE match_id = ?`,
+				input.matchId,
+			);
+		},
 		queueForMatch: async (c, { playerName }: { playerName: string }) => {
 			const playerId = crypto.randomUUID();
 			await c.queue.send("queueForMatch", {
@@ -85,87 +159,6 @@ export const turnBasedMatchmaker = actor({
 	},
 	onDisconnect: async (c, conn) => {
 		await c.queue.send("unqueueForMatch", { connId: conn.id });
-	},
-	run: async (c) => {
-		for await (const message of c.queue.iter({ completable: true })) {
-			if (message.name === "createGame") {
-				const matchId = crypto.randomUUID();
-				const inviteCode = generateInviteCode();
-				const playerId = crypto.randomUUID();
-
-				const client = c.client<typeof registry>();
-				await client.turnBasedMatch.create([matchId], {
-					input: { matchId },
-				});
-
-				await client.turnBasedMatch.get([matchId]).createPlayer({
-					playerId,
-					playerName: message.body.playerName,
-					symbol: "X" as const,
-				});
-
-				await c.db.execute(
-					`INSERT INTO matches (match_id, invite_code, player_count, is_open_pool, created_at) VALUES (?, ?, ?, ?, ?)`,
-					matchId,
-					inviteCode,
-					1,
-					0,
-					Date.now(),
-				);
-
-				await message.complete({ matchId, playerId, inviteCode });
-			} else if (message.name === "joinByCode") {
-				const code = message.body.inviteCode.toUpperCase().trim();
-				const rows = await c.db.execute<{
-					match_id: string;
-					player_count: number;
-				}>(
-					`SELECT match_id, player_count FROM matches WHERE invite_code = ?`,
-					code,
-				);
-				const row = rows[0];
-				if (!row)
-					throw new UserError("Game not found", {
-						code: "game_not_found",
-					});
-				if (row.player_count >= 2)
-					throw new UserError("Game is full", { code: "game_full" });
-
-				const playerId = crypto.randomUUID();
-				const client = c.client<typeof registry>();
-				await client.turnBasedMatch.get([row.match_id]).createPlayer({
-					playerId,
-					playerName: message.body.playerName,
-					symbol: "O" as const,
-				});
-
-				await c.db.execute(
-					`UPDATE matches SET player_count = 2 WHERE match_id = ?`,
-					row.match_id,
-				);
-
-				await message.complete({ matchId: row.match_id, playerId });
-			} else if (message.name === "queueForMatch") {
-				await processQueueEntry(c, message.body);
-				await message.complete();
-			} else if (message.name === "unqueueForMatch") {
-				await c.db.execute(
-					`DELETE FROM player_pool WHERE conn_id = ?`,
-					message.body.connId,
-				);
-				await message.complete();
-			} else if (message.name === "closeMatch") {
-				await c.db.execute(
-					`DELETE FROM assignments WHERE match_id = ?`,
-					message.body.matchId,
-				);
-				await c.db.execute(
-					`DELETE FROM matches WHERE match_id = ?`,
-					message.body.matchId,
-				);
-				await message.complete();
-			}
-		}
 	},
 });
 

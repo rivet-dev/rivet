@@ -8,6 +8,14 @@ const HEADER_RIVET_ACTOR: &str = "x-rivet-actor";
 const HEADER_RIVET_ACTOR_GENERATION: &str = "x-rivet-actor-generation";
 const HEADER_RIVET_ACTOR_KEY: &str = "x-rivet-actor-key";
 
+#[derive(RivetError)]
+#[error(
+	"queue",
+	"wait_unsupported",
+	"Waiting for queue completion is no longer supported"
+)]
+struct QueueWaitUnsupported;
+
 impl RegistryDispatcher {
 	pub(super) async fn handle_fetch(
 		&self,
@@ -117,6 +125,10 @@ impl RegistryDispatcher {
 			}
 			FrameworkHttpRoute::Queue(name) => {
 				self.handle_queue_fetch(instance, request, name).await
+			}
+			FrameworkHttpRoute::QueueReceipt(receipt_id) => {
+				self.handle_queue_receipt_fetch(instance, request, receipt_id)
+					.await
 			}
 			FrameworkHttpRoute::Metadata => handle_metadata_fetch(&request, Some(&actor)),
 			FrameworkHttpRoute::Health => handle_health_fetch(&request, Some(&actor)),
@@ -280,10 +292,15 @@ impl RegistryDispatcher {
 		let queue_request = match decode_http_queue_request(encoding, request.body()) {
 			Ok(queue_request) => queue_request,
 			Err(error) => {
+				let error = if format!("{error:#}").contains("queue.wait_unsupported") {
+					QueueWaitUnsupported.build()
+				} else {
+					error.context("decode HTTP queue request")
+				};
 				return message_boundary_error_response_with_actor(
 					encoding,
 					StatusCode::BAD_REQUEST,
-					error.context("decode HTTP queue request"),
+					error,
 					Some(&actor),
 				);
 			}
@@ -325,8 +342,8 @@ impl RegistryDispatcher {
 				body: queue_request.body,
 				conn: conn.clone(),
 				request,
-				wait: queue_request.wait,
-				timeout_ms: queue_request.timeout,
+				dedupe_key: queue_request.dedupe_key,
+				delay_ms: queue_request.delay,
 				reply: reply_tx,
 			},
 		);
@@ -385,6 +402,29 @@ impl RegistryDispatcher {
 			}
 		}
 	}
+
+	async fn handle_queue_receipt_fetch(
+		&self,
+		instance: &ActorTaskHandle,
+		request: Request,
+		receipt_id: String,
+	) -> Result<HttpResponse> {
+		let encoding = request_encoding(request.headers());
+		let actor = actor_specifier_for_instance(instance);
+		if request.method() != http::Method::GET {
+			return method_not_allowed_response(&request, Some(&actor));
+		}
+
+		match instance.ctx.queue_status(&receipt_id).await {
+			Ok(status) => encode_http_queue_status_response(encoding, status),
+			Err(error) => message_boundary_error_response_with_actor(
+				encoding,
+				framework_anyhow_status(&error),
+				error.context("load queue receipt status"),
+				Some(&actor),
+			),
+		}
+	}
 }
 
 enum RegistryHttpRoute {
@@ -413,6 +453,11 @@ impl RegistryHttpRoute {
 				percent_decode_path_segment(segment)?,
 			)));
 		}
+		if let Some(segment) = single_path_segment(normalized_path, "/queue/receipts/") {
+			return Ok(Self::Framework(FrameworkHttpRoute::QueueReceipt(
+				percent_decode_path_segment(segment)?,
+			)));
+		}
 		if let Some(segment) = single_path_segment(normalized_path, "/queue/") {
 			return Ok(Self::Framework(FrameworkHttpRoute::Queue(
 				percent_decode_path_segment(segment)?,
@@ -432,6 +477,7 @@ impl RegistryHttpRoute {
 pub(super) enum FrameworkHttpRoute {
 	Action(String),
 	Queue(String),
+	QueueReceipt(String),
 	Metadata,
 	Health,
 	Metrics,
@@ -441,8 +487,8 @@ pub(super) enum FrameworkHttpRoute {
 
 pub(super) struct DecodedHttpQueueRequest {
 	body: Vec<u8>,
-	wait: bool,
-	timeout: Option<u64>,
+	dedupe_key: Option<String>,
+	delay: Option<u64>,
 }
 
 fn handle_metadata_fetch(
@@ -864,36 +910,41 @@ pub(super) fn decode_http_queue_request(
 	encoding: HttpResponseEncoding,
 	body: &[u8],
 ) -> Result<DecodedHttpQueueRequest> {
-	match encoding {
+	let request = match encoding {
 		HttpResponseEncoding::Json => {
 			let request: HttpQueueSendRequestJson =
 				serde_json::from_slice(body).context("decode json HTTP queue request")?;
-			Ok(DecodedHttpQueueRequest {
+			DecodedHttpQueueRequest {
 				body: encode_json_as_cbor(&request.body)?,
-				wait: request.wait.unwrap_or(false),
-				timeout: request.timeout,
-			})
+				dedupe_key: request.dedupe_key,
+				delay: request.delay,
+			}
 		}
 		HttpResponseEncoding::Cbor => {
 			let request: HttpQueueSendRequestJson = ciborium::from_reader(Cursor::new(body))
 				.context("decode cbor HTTP queue request")?;
-			Ok(DecodedHttpQueueRequest {
+			DecodedHttpQueueRequest {
 				body: encode_json_as_cbor(&request.body)?,
-				wait: request.wait.unwrap_or(false),
-				timeout: request.timeout,
-			})
+				dedupe_key: request.dedupe_key,
+				delay: request.delay,
+			}
 		}
 		HttpResponseEncoding::Bare => {
 			let request =
 				<client_protocol::versioned::HttpQueueSendRequest as OwnedVersionedData>::deserialize_with_embedded_version(body)
 					.context("decode bare HTTP queue request")?;
-			Ok(DecodedHttpQueueRequest {
+			DecodedHttpQueueRequest {
 				body: request.body,
-				wait: request.wait.unwrap_or(false),
-				timeout: request.timeout,
-			})
+				dedupe_key: request.dedupe_key,
+				delay: request.delay,
+			}
 		}
+	};
+	const MAX_SAFE_INTEGER: u64 = 9_007_199_254_740_991;
+	if request.delay.is_some_and(|delay| delay > MAX_SAFE_INTEGER) {
+		anyhow::bail!("queue delay exceeds the JavaScript safe integer range");
 	}
+	Ok(request)
 }
 
 pub(super) fn encode_http_action_response(
@@ -932,35 +983,178 @@ pub(super) fn encode_http_action_response(
 
 pub(super) fn encode_http_queue_response(
 	encoding: HttpResponseEncoding,
-	result: QueueSendResult,
+	result: crate::actor::queue::QueueSendReceipt,
 ) -> Result<HttpResponse> {
 	let body = match encoding {
-		HttpResponseEncoding::Json => {
-			let mut value = serde_json::Map::new();
-			value.insert("status".to_owned(), json!(result.status.as_str()));
-			if let Some(response) = result.response {
-				value.insert("response".to_owned(), decode_cbor_json_or_null(&response));
-			}
-			serde_json::to_vec(&JsonValue::Object(value))?
-		}
+		HttpResponseEncoding::Json => serde_json::to_vec(&json!({
+			"receiptId": result.id,
+			"deduplicated": result.deduplicated,
+		}))?,
 		HttpResponseEncoding::Cbor => {
-			let mut value = serde_json::Map::new();
-			value.insert("status".to_owned(), json!(result.status.as_str()));
-			if let Some(response) = result.response {
-				value.insert("response".to_owned(), decode_cbor_json_or_null(&response));
-			}
 			let mut out = Vec::new();
-			ciborium::into_writer(&JsonValue::Object(value), &mut out)?;
+			ciborium::into_writer(&json!({
+				"receiptId": result.id,
+				"deduplicated": result.deduplicated,
+			}), &mut out)?;
 			out
 		}
 		HttpResponseEncoding::Bare => {
 			client_protocol::versioned::HttpQueueSendResponse::wrap_latest(
 				client_protocol::HttpQueueSendResponse {
-					status: result.status.as_str().to_owned(),
-					response: result.response,
+					receipt_id: result.id,
+					deduplicated: result.deduplicated,
 				},
 			)
 			.serialize_with_embedded_version(client_protocol::PROTOCOL_VERSION)?
+		}
+	};
+	Ok(HttpResponse {
+		status: StatusCode::OK.as_u16(),
+		headers: HashMap::from([(
+			http::header::CONTENT_TYPE.to_string(),
+			content_type_for_encoding(encoding).to_owned(),
+		)]),
+		body: Some(body),
+		body_stream: None,
+	})
+}
+
+pub(super) fn encode_http_queue_status_response(
+	encoding: HttpResponseEncoding,
+	status: crate::actor::queue::QueueMessageStatus,
+) -> Result<HttpResponse> {
+	use crate::actor::queue::QueueMessageStatus;
+
+	let (state, attempts, created_at, available_at, started_at, completed_at, failed_at, consumed_at) =
+		match status {
+			QueueMessageStatus::Queued {
+				attempts,
+				created_at,
+			} => ("queued", Some(attempts), Some(created_at), None, None, None, None, None),
+			QueueMessageStatus::Delayed {
+				attempts,
+				created_at,
+				available_at,
+			} => (
+				"delayed",
+				Some(attempts),
+				Some(created_at),
+				Some(available_at),
+				None,
+				None,
+				None,
+				None,
+			),
+			QueueMessageStatus::Processing {
+				attempts,
+				created_at,
+				started_at,
+			} => (
+				"processing",
+				Some(attempts),
+				Some(created_at),
+				None,
+				Some(started_at),
+				None,
+				None,
+				None,
+			),
+			QueueMessageStatus::Retrying {
+				attempts,
+				created_at,
+				available_at,
+			} => (
+				"retrying",
+				Some(attempts),
+				Some(created_at),
+				Some(available_at),
+				None,
+				None,
+				None,
+				None,
+			),
+			QueueMessageStatus::Succeeded {
+				attempts,
+				created_at,
+				completed_at,
+			} => (
+				"succeeded",
+				Some(attempts),
+				Some(created_at),
+				None,
+				None,
+				Some(completed_at),
+				None,
+				None,
+			),
+			QueueMessageStatus::DeadLettered {
+				attempts,
+				created_at,
+				failed_at,
+			} => (
+				"deadLettered",
+				Some(attempts),
+				Some(created_at),
+				None,
+				None,
+				None,
+				Some(failed_at),
+				None,
+			),
+			QueueMessageStatus::Consumed {
+				created_at,
+				consumed_at,
+			} => (
+				"consumed",
+				None,
+				Some(created_at),
+				None,
+				None,
+				None,
+				None,
+				Some(consumed_at),
+			),
+			QueueMessageStatus::Unknown => ("unknown", None, None, None, None, None, None, None),
+		};
+	let timestamp = |value: Option<i64>| value.and_then(|value| u64::try_from(value).ok());
+	let payload = client_protocol::HttpQueueStatusResponse {
+		state: state.to_owned(),
+		attempts: attempts.map(u64::from),
+		created_at: timestamp(created_at),
+		available_at: timestamp(available_at),
+		started_at: timestamp(started_at),
+		completed_at: timestamp(completed_at),
+		failed_at: timestamp(failed_at),
+		consumed_at: timestamp(consumed_at),
+	};
+	let body = match encoding {
+		HttpResponseEncoding::Json => serde_json::to_vec(&json!({
+			"state": payload.state,
+			"attempts": payload.attempts,
+			"createdAt": payload.created_at,
+			"availableAt": payload.available_at,
+			"startedAt": payload.started_at,
+			"completedAt": payload.completed_at,
+			"failedAt": payload.failed_at,
+			"consumedAt": payload.consumed_at,
+		}))?,
+		HttpResponseEncoding::Cbor => {
+			let mut out = Vec::new();
+			ciborium::into_writer(&json!({
+				"state": payload.state,
+				"attempts": payload.attempts,
+				"createdAt": payload.created_at,
+				"availableAt": payload.available_at,
+				"startedAt": payload.started_at,
+				"completedAt": payload.completed_at,
+				"failedAt": payload.failed_at,
+				"consumedAt": payload.consumed_at,
+			}), &mut out)?;
+			out
+		}
+		HttpResponseEncoding::Bare => {
+			client_protocol::versioned::HttpQueueStatusResponse::wrap_latest(payload)
+				.serialize_with_embedded_version(client_protocol::PROTOCOL_VERSION)?
 		}
 	};
 	Ok(HttpResponse {

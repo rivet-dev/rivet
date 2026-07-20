@@ -13,6 +13,7 @@ use crate::actor::task_types::{ShutdownKind, StateMutationReason, UserTaskKind};
 use crate::time::Instant;
 
 const ACTOR_LABELS: &[&str] = &["actor_name"];
+const QUEUE_DEAD_LETTER_EVICTION_LABELS: &[&str] = &["actor_name", "reason"];
 const INBOX_LABELS: &[&str] = &["actor_name", "inbox"];
 const USER_TASK_LABELS: &[&str] = &["actor_name", "kind"];
 const WORK_LABELS: &[&str] = &["actor_name", "kind"];
@@ -165,6 +166,7 @@ struct ActorMetricCollectors {
 	queue_depth: IntGaugeVec,
 	queue_messages_sent_total: IntCounterVec,
 	queue_messages_received_total: IntCounterVec,
+	queue_dead_letters_evicted_total: IntCounterVec,
 	active_connections: IntGaugeVec,
 	connections_total: IntCounterVec,
 	inbox_depth: IntGaugeVec,
@@ -303,6 +305,14 @@ impl ActorMetricCollectors {
 			ACTOR_LABELS,
 		)
 		.expect("create actor_queue_messages_received_total counter");
+		let queue_dead_letters_evicted_total = IntCounterVec::new(
+			Opts::new(
+				"rivetkit_actor_queue_dead_letters_evicted_total",
+				"total durable queue dead-letter entries evicted by retention or capacity",
+			),
+			QUEUE_DEAD_LETTER_EVICTION_LABELS,
+		)
+		.expect("create actor_queue_dead_letters_evicted_total counter");
 		let active_connections = IntGaugeVec::new(
 			Opts::new(
 				"rivetkit_actor_connections_active",
@@ -651,6 +661,10 @@ impl ActorMetricCollectors {
 			&rivet_metrics::REGISTRY,
 			queue_messages_received_total.clone(),
 		);
+		register_metric(
+			&rivet_metrics::REGISTRY,
+			queue_dead_letters_evicted_total.clone(),
+		);
 		register_metric(&rivet_metrics::REGISTRY, active_connections.clone());
 		register_metric(&rivet_metrics::REGISTRY, connections_total.clone());
 		register_metric(&rivet_metrics::REGISTRY, inbox_depth.clone());
@@ -765,6 +779,7 @@ impl ActorMetricCollectors {
 			queue_depth,
 			queue_messages_sent_total,
 			queue_messages_received_total,
+			queue_dead_letters_evicted_total,
 			active_connections,
 			connections_total,
 			inbox_depth,
@@ -1014,6 +1029,13 @@ impl ActorMetrics {
 		METRICS
 			.queue_messages_received_total
 			.with_label_values(&self.actor_labels())
+			.inc_by(count);
+	}
+
+	pub(crate) fn add_queue_dead_letters_evicted(&self, reason: &'static str, count: u64) {
+		METRICS
+			.queue_dead_letters_evicted_total
+			.with_label_values(&[&self.inner.labels.actor_name, reason])
 			.inc_by(count);
 	}
 

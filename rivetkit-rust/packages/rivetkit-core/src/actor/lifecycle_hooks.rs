@@ -15,6 +15,12 @@ impl<T> Reply<T> {
 			let _ = tx.send(result);
 		}
 	}
+
+	pub async fn receiver_closed(&mut self) {
+		if let Some(tx) = &mut self.tx {
+			tx.closed().await;
+		}
+	}
 }
 
 impl<T> Drop for Reply<T> {

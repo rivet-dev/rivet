@@ -87,7 +87,7 @@ export async function setupDriverTest(
 			await cleanup();
 			timing("cleanup.driver", cleanupStartedAt, testName);
 		}
-	});
+	}, 120_000);
 
 	return {
 		client,

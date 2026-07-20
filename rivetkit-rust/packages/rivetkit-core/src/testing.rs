@@ -54,6 +54,11 @@ impl ActorContextHarness {
 		Self { handle }
 	}
 
+	/// Constructs a harness backed by a caller-provided envoy handle.
+	pub fn from_envoy_handle(handle: EnvoyHandle) -> Self {
+		Self { handle }
+	}
+
 	pub fn context(
 		&self,
 		actor_id: impl Into<String>,

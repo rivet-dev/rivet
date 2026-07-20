@@ -55,15 +55,6 @@ Use this for fire-and-forget commands where the client does not need a reply.
 
 Use the `Loops` example above as the baseline pattern.
 
-### Request/response (using queue)
-
-Use this when the caller needs a response from queued processing.
-
-<CodeGroup>
-<CodeSnippet file="examples/docs/actors-workflows/request-response/index.ts" title="index.ts" />
-<CodeSnippet file="examples/docs/actors-workflows/request-response/client.ts" title="client.ts" />
-</CodeGroup>
-
 ### Timers
 
 Use queue messages as the trigger source, then sleep durably inside the workflow.
@@ -208,15 +199,6 @@ Use this when throughput matters and handling one message at a time is too expen
 Use this when one actor orchestrates work by calling actions on other actors.
 
 <CodeSnippet file="examples/docs/actors-workflows/coordinator-worker.ts" />
-
-### Request/response over queue (async RPC)
-
-Use this when you want decoupled actor-to-actor communication with durable waits and explicit completion.
-
-<CodeGroup>
-<CodeSnippet file="examples/docs/actors-workflows/request-response-queue/index.ts" title="index.ts" />
-<CodeSnippet file="examples/docs/actors-workflows/request-response-queue/client.ts" title="client.ts" />
-</CodeGroup>
 
 ### Scatter-gather across actors
 

@@ -5,11 +5,10 @@ export const worker = actor({
   state: {},
   queues: {
     // Use generic queue typing when you want compile-time typing only.
-    foo: queue<{ id: string }, { ok: true }>(),
-    // Use schema objects when you want runtime validation for message and completion payloads.
+    foo: queue<{ id: string }>(),
+    // Use schema objects when you want runtime validation for messages.
     bar: {
       message: z.object({ id: z.string() }),
-      complete: z.object({ ok: z.boolean() }),
     },
   },
 });

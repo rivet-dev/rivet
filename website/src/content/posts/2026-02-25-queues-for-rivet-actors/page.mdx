@@ -12,7 +12,7 @@ Today we're releasing **[Queues for Rivet Actors](/docs/actors/queues)**: per-ac
 
 - **Durable and ordered**: messages persist through sleep, crashes, and deploys, processed one at a time
 - **Handles traffic spikes**: absorbs bursts of messages without dropping any
-- **Request/response**: callers can await a typed response from queued work
+- **Observable delivery**: every accepted send returns a receipt whose status can be checked later
 - **Programmable run handler**: `run` is a long-lived async function you control, not a callback. Selectively consume named queues, race messages against each other, cancel work mid-flight.
 - **Pairs with workflows**: use queues as input to durable, replayable workflows
 - **Built into the actor**: queues, state, SQLite, events, and workflows, all in one place. No external broker to provision.
@@ -24,7 +24,7 @@ Define typed queues, process them in a `run` handler, and send messages from a c
 <CodeGroup>
   <CodeSnippet file="examples/docs/blog-2026-02-25-queues-for-rivet-actors/basic.ts" title="Basic" />
   <CodeSnippet file="examples/docs/blog-2026-02-25-queues-for-rivet-actors/request-response.ts" title="Request/Response" />
-  <CodeSnippet file="examples/docs/blog-2026-02-25-queues-for-rivet-actors/completable.ts" title="Completable" />
+  <CodeSnippet file="examples/docs/blog-2026-02-25-queues-for-rivet-actors/completable.ts" title="Handler + Receipt" />
 </CodeGroup>
 
 Sending messages from a client:
@@ -36,21 +36,10 @@ import type { registry } from "./actors";
 const client = createClient<typeof registry>();
 const handle = client.counter.getOrCreate(["main"]);
 
-// Fire-and-forget
-await handle.send("increment", { amount: 1 });
+const receipt = await handle.send("increment", { amount: 1 });
+const status = await receipt.status();
 
-// Wait for a typed response
-const result = await handle.send(
-  "increment",
-  { amount: 5 },
-  { wait: true, timeout: 5_000 },
-);
-
-if (result.status === "completed") {
-  console.log(result.response); // { value: 6 }
-} else if (result.status === "timedOut") {
-  console.log("timed out");
-}
+console.log(status.status); // "queued", "processing", "succeeded", etc.
 ```
 
 ## The Run Handler
@@ -158,14 +147,11 @@ const agent = actor({
   }),
   queues: {
     // Separate queues for prompts and stop signals
-    prompt: queue<{ content: string }, undefined>(),
+    prompt: queue<{ content: string }>(),
     stop: queue<{ reason?: string }>(),
   },
   run: async (c) => {
-    for await (const message of c.queue.iter({
-      names: ["prompt"],
-      completable: true,
-    })) {
+    for await (const message of c.queue.iter({ names: ["prompt"] })) {
       const stopController = new AbortController();
       const runSignal = joinSignals(c.abortSignal, stopController.signal);
 
@@ -215,9 +201,7 @@ const agent = actor({
         "assistant",
         result.text,
       );
-
-      await message.complete();
-    }
+		}
   },
 });
 
@@ -227,11 +211,11 @@ export const registry = setup({ use: { agent } });
 
 ## Request/Response
 
-Three delivery modes depending on what the caller needs:
+Choose the API based on what the caller needs:
 
-- **Fire-and-forget**: send and move on
-- **Completable**: send and wait for acknowledgment
-- **Request/response**: send and await a typed reply
+- **Queue + receipt**: enqueue durable work and inspect its delivery status later
+- **Action**: make a synchronous request and await a typed reply
+- **Workflow**: coordinate a durable, multi-step request
 
 ## Pairs with Workflows
 

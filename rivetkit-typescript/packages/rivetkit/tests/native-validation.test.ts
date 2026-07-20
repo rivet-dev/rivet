@@ -88,6 +88,14 @@ describe("native validation helpers", () => {
 			),
 		);
 	});
+
+	test("queue rejects onDeadLetter without an automatic consumer", () => {
+		expect(() =>
+			queue({
+				onDeadLetter: async () => {},
+			}),
+		).toThrow("Queue onDeadLetter requires onMessage");
+	});
 });
 
 function expectValidationError(run: () => unknown) {
