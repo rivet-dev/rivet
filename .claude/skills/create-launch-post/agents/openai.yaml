@@ -1,4 +1,4 @@
 interface:
   display_name: "Create Launch Post"
-  short_description: "Create and publish a concise Rivet launch post"
-  default_prompt: "Use $create-launch-post to prepare a concise Rivet launch post and draft PR."
+  short_description: "Prepare and verify complete Rivet launches"
+  default_prompt: "Use $create-launch-post to prepare a concise Rivet launch, iterate with me on the blog and technical image, update a draft PR for my manual merge, and schedule the approved Buffer thread."

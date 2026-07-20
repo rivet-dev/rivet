@@ -12,7 +12,7 @@
 		"format": "prettier --write .",
 		"astro": "astro",
 		"new-post": "tsx ./scripts/new-post.ts",
-		"render-launch-images": "tsx ./scripts/render-launch-images.ts",
+		"render-launch-images": "tsx ../.claude/skills/create-launch-post/scripts/render-launch-images.ts",
 		"gen:markdown": "tsx ./scripts/generateMarkdownAndLlms.ts"
 	},
 	"browserslist": "defaults, not ie <= 11",
