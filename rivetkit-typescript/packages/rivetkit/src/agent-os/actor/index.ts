@@ -332,12 +332,6 @@ async function bootVm<TConnParams>(
 		await agentOs.dispose().catch(() => {});
 		throw new Error("agent-os: VM boot superseded during recovery — retry");
 	}
-	c.vars.agentOs = agentOs;
-	// Epoch at success time: if a recycle happened while `create` was in
-	// flight, this instance is attached to the replacement sidecar and must
-	// carry the replacement's epoch, or its own death could never recycle.
-	c.vars.agentOsEpoch = sidecarEpoch;
-
 	// agent-os 0.1.2 auto-created each mount's mount-point path in the base VFS
 	// when applying mounts; 0.2.4 does not. A nested, writable mount (e.g. the S3
 	// workspace at `/root/workspaces/<id>`) is then left without a navigable
@@ -364,6 +358,13 @@ async function bootVm<TConnParams>(
 				.map((p) => `'${p.replace(/'/g, "'\\''")}'`)
 				.join(" ");
 			const res = await agentOs.exec(`mkdir -p ${quoted}`);
+			if (c.abortSignal.aborted) {
+				await agentOs.dispose().catch(() => {});
+				throw new DOMException(
+					"Actor stopped during VM boot",
+					"AbortError",
+				);
+			}
 			if (res?.exitCode !== 0) {
 				c.log.warn({
 					msg: "agent-os: mount-point materialization exited non-zero",
@@ -372,6 +373,10 @@ async function bootVm<TConnParams>(
 				});
 			}
 		} catch (err) {
+			if (c.abortSignal.aborted) {
+				await agentOs.dispose().catch(() => {});
+				throw err;
+			}
 			c.log.warn({
 				msg: "agent-os: failed to materialize mount points",
 				paths: mountPointsToMaterialize,
@@ -379,6 +384,18 @@ async function bootVm<TConnParams>(
 			});
 		}
 	}
+	// Publish only after mount materialization settles. onSleep disposes the
+	// published instance; exposing it earlier lets teardown close the VM while
+	// the boot's `mkdir -p` is still running, producing the misleading I/O error.
+	if (c.abortSignal.aborted || c.vars.agentOsBoot !== box.boot) {
+		await agentOs.dispose().catch(() => {});
+		throw new DOMException("Actor stopped during VM boot", "AbortError");
+	}
+	c.vars.agentOs = agentOs;
+	// Epoch at success time: if a recycle happened while `create` was in
+	// flight, this instance is attached to the replacement sidecar and must
+	// carry the replacement's epoch, or its own death could never recycle.
+	c.vars.agentOsEpoch = sidecarEpoch;
 
 	// Wire cron events to actor events.
 	agentOs.onCronEvent((cronEvent) => {
