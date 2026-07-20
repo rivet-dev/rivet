@@ -60,7 +60,15 @@ cd "$WORKSPACE_PATH"
 3. Run `jj status` and keep the launch revision isolated from unrelated work. Put generated and downloaded files outside the repository workspace.
 4. Read the source PR, changed docs, examples, tests, and public API. Treat implemented code and merged docs as authoritative; do not infer syntax from the PR title.
 5. Read at least three recent concise posts in `website/src/content/posts/`, preferring `category: changelog` posts for similar features.
-6. Resolve the canonical post URL, public docs route, GitHub repository, and Discord URL before drafting. Changelog posts use `https://rivet.dev/changelog/<slug>/`; other posts use `https://rivet.dev/blog/<slug>/`.
+6. Resolve the canonical post URL, public docs route, GitHub repository, and Discord URL before drafting. The route preserves the complete dated post folder name. If the file is `website/src/content/posts/YYYY-MM-DD-<slug>/page.mdx`, its post ID is `YYYY-MM-DD-<slug>` and its URL is:
+
+```text
+category: changelog → https://rivet.dev/changelog/YYYY-MM-DD-<slug>/
+all other categories → https://rivet.dev/blog/YYYY-MM-DD-<slug>/
+```
+
+Do not remove the date prefix. The Astro routes derive the slug with `entry.id.replace(/\/page$/, "")`, which removes only `/page` and preserves the full folder name.
+
 7. Propose the target launch date and get explicit user confirmation. Use that date consistently for the folder name, `published` frontmatter, asset key, canonical URL, and Buffer schedule.
 
 ## 2. Render the launch images
@@ -98,17 +106,17 @@ Do not add `image: true` to the post until the uploaded asset resolves successfu
 
 ## 3. Upload the hero
 
-Use the post folder name as `<slug>` and upload the blog hero:
+Use the complete dated post folder name as `<post-id>` and upload the blog hero:
 
 ```bash
 AWS_ACCESS_KEY_ID='op://Engineering/rivet-assets R2 Upload/username' \
 AWS_SECRET_ACCESS_KEY='op://Engineering/rivet-assets R2 Upload/password' \
 op run -- aws s3 cp "$IMAGE_PATH" \
-  "s3://rivet-assets/website/blog/<slug>/image.png" \
+  "s3://rivet-assets/website/blog/<post-id>/image.png" \
   --endpoint-url https://2a94c6a0ced8d35ea63cddc86c2681e7.r2.cloudflarestorage.com
 ```
 
-Verify `https://assets.rivet.dev/website/blog/<slug>/image.png`, then add `image: true` to frontmatter. Never commit the exported hero to Git and never print resolved credentials.
+Verify `https://assets.rivet.dev/website/blog/<post-id>/image.png`, then add `image: true` to frontmatter. Never commit the exported hero to Git and never print resolved credentials.
 
 Return `social.png`, optional `technical.png`, and any approved UI screenshot to the user as local launch-distribution assets. Never upload or commit distribution images, their HTML source, the technical-snippet JSON, the UI screenshot, or the painting source.
 
@@ -146,6 +154,21 @@ Aim for under 200 prose words excluding code. Include all TypeScript imports and
 3. Run the narrowest available website formatting/type checks, then `pnpm --dir website build` when dependencies and checkout scope allow it.
 4. Review `jj diff` and `jj status`; keep unrelated changes out of the revision.
 5. Confirm the blog image URL returns successfully before leaving `image: true` enabled.
+6. Derive the canonical URL from the post file instead of rewriting the slug by hand:
+
+```bash
+POST_FILE="website/src/content/posts/YYYY-MM-DD-<slug>/page.mdx"
+POST_ID="$(basename "$(dirname "$POST_FILE")")"
+POST_CATEGORY="$(awk '/^category:/ { print $2; exit }' "$POST_FILE")"
+POST_SECTION="blog"
+if [ "$POST_CATEGORY" = "changelog" ]; then
+  POST_SECTION="changelog"
+fi
+CANONICAL_URL="https://rivet.dev/$POST_SECTION/$POST_ID/"
+printf '%s\n' "$CANONICAL_URL"
+```
+
+Cross-check the result against `website/src/pages/changelog/[...slug].astro` or `website/src/pages/blog/[...slug].astro`, and use the exact same URL in the Buffer reply. If the post is deployed, require the exact URL including its trailing slash to return HTTP 200. Also probe any shorter hand-written alternative; a 404 is evidence that it must not be used. For an unmerged future post, verify the source-derived route before scheduling and repeat the HTTP check after deployment but before publication.
 
 ## 7. Open a draft PR and continue the review loop
 
@@ -191,10 +214,10 @@ After approval, prefer the Executor `buffer_mcp` integration and fall back to th
 1. Load the Executor `execute` guidance, search the `buffer_mcp` catalog, and use the exact connected tool paths returned by search. Do not guess paths or call Buffer's raw API.
 2. Call `get_account` first. If it returns multiple organizations, list them and get the user's choice; otherwise use the sole organization. Call `list_channels`, select the exact `rivet_dev` Twitter channel, then call `get_channel` and verify it is connected, unlocked, and configured for `America/Los_Angeles`.
 3. Call `list_posts` for that channel and launch date with `scheduled` and `sending` statuses. Stop if the same launch is already present instead of creating a duplicate.
-4. Call `create_post` with `schedulingType: "automatic"`, `mode: "customScheduled"`, and an ISO-8601 `dueAt` carrying the Pacific UTC offset. Put the approved main copy in both the outer `text` field and the first `metadata.twitter.thread` item; include all replies in that thread array. Put the approved `social.png` asset on the first post, with no link in its text. Do not use `technical.png` instead or attach an optional dashboard screenshot unless the user explicitly approves that media and placement.
+4. Call `create_post` with `schedulingType: "automatic"`, `mode: "customScheduled"`, and an ISO-8601 `dueAt` carrying the Pacific UTC offset. Put the approved main copy in both the outer `text` field and the first `metadata.twitter.thread` item; include all replies in that thread array. Put the approved `social.png` asset in both the outer `assets` array and the first `metadata.twitter.thread[0].assets` array, with no link in its text. Buffer may drop threaded media if it is supplied in only one location. Do not use `technical.png` instead or attach an optional dashboard screenshot unless the user explicitly approves that media and placement.
 5. Add the approved Read more, GitHub, Documentation, and Discord replies in that order. Do not collapse them into the main post.
 6. Call `get_post` and verify the post ID, `status: scheduled`, exact `rivet_dev` channel ID, complete text and reply order, due time, image source, dimensions and alt text, and `error: null`. Confirm the returned UTC time converts to the approved Pacific time.
-7. When changing a scheduled post, call `get_post` first and require `updatePost` in `allowedActions`. Buffer's `edit_post` is a whole-post replacement, not a patch: carry forward the scheduling mode, due time, all replies, metadata, and approved assets, then change only what the user requested. Run the character sanity check again and call `get_post` after editing.
+7. When changing a scheduled post, call `get_post` first and require `updatePost` in `allowedActions`. Buffer's `edit_post` is a whole-post replacement, not a patch: carry forward the scheduling mode, due time, all replies, metadata, and approved assets, then change only what the user requested. For a Twitter thread, include the existing image in both outer `assets` and `metadata.twitter.thread[0].assets`; immediately call `get_post` and repair the post before continuing if its returned `assets` array is empty. Run the character sanity check again and call `get_post` after editing.
 8. Return the Buffer post ID or URL and the verified schedule. Treat schedule-and-verify as the required Buffer publication gate.
 
 Prefer a direct media upload when the Buffer integration provides one. If the Executor Buffer MCP only accepts an image URL and has no upload tool, use this temporary single-file handoff instead of uploading the distribution image to Git or Rivet assets:
