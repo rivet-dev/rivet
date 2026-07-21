@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+node_version=22.17.1
+
+if ! command -v node >/dev/null || ! node -e 'process.exit(Number(process.versions.node.split(".")[0]) >= 22 ? 0 : 1)'; then
+	echo "Installing Node.js v${node_version}..."
+	archive="node-v${node_version}-linux-x64.tar.xz"
+	install_dir="$HOME/.local/node-v${node_version}"
+	mkdir -p "$install_dir" "$HOME/.local/bin"
+	curl --fail --location --silent --show-error \
+		"https://nodejs.org/dist/v${node_version}/${archive}" \
+		--output "/tmp/${archive}"
+	tar -xJf "/tmp/${archive}" --strip-components=1 --directory "$install_dir"
+	ln -sf "$install_dir/bin/node" "$HOME/.local/bin/node"
+	ln -sf "$install_dir/bin/corepack" "$HOME/.local/bin/corepack"
+	ln -sf "$install_dir/bin/npm" "$HOME/.local/bin/npm"
+	ln -sf "$install_dir/bin/npx" "$HOME/.local/bin/npx"
+	rm -f "/tmp/${archive}"
+fi
+
+export PATH="$HOME/.local/bin:$PATH"
+
+echo "Enabling the repository's pinned pnpm version..."
+corepack enable --install-directory "$HOME/.local/bin"
+corepack install --global pnpm@10.13.1
+
+echo "Installing workspace dependencies..."
+pnpm install --frozen-lockfile
+
+echo "Building frontend workspace dependencies..."
+SKIP_NAPI_BUILD=1 SKIP_WASM_BUILD=1 pnpm exec turbo run build --filter='@rivetkit/engine-frontend^...'
+
+echo "Preparing agent directories and Git hooks..."
+scripts/setup/agents-dir.sh
+pnpm exec lefthook install
+
+echo "Starting declared orb services..."
+amp orb services ensure

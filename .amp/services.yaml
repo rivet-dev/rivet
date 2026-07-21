@@ -1,0 +1,12 @@
+services:
+  frontend:
+    command: >-
+      PATH="$HOME/.local/bin:$PATH"
+      VITE_APP_API_URL=https://api.staging.rivet.dev/
+      VITE_APP_CLOUD_API_URL=https://cloud-api.staging.rivet.dev/
+      VITE_DEPLOYMENT_TYPE=staging
+      pnpm --dir frontend dev --host 0.0.0.0 --port "$PORT" --strictPort
+    port: 43708
+    portal:
+      title: Frontend
+      description: Rivet dashboard Vite development server.
