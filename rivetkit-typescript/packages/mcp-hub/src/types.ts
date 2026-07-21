@@ -51,8 +51,6 @@ export type SectionRecord = {
 
 export type Metadata = DocsMetadata;
 
-export type SearchMode = "keyword" | "semantic" | "hybrid";
-
 export type SearchFilters = {
 	product_area?: string;
 	version?: string;
