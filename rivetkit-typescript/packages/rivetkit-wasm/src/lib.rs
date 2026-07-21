@@ -756,10 +756,12 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			}
 		}
 		ActorEvent::WorkflowHistoryRequested { reply } => {
-			let result = async {
 				let Some(callback) = callbacks.get_workflow_history.as_ref() else {
-					return Ok(None);
+					// Dropped means unsupported; `Ok(None)` means supported without history.
+					drop(reply);
+					return;
 				};
+			let result = async {
 				let payload = object();
 				set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 				let value = call_callback(callback, &payload.into()).await?;

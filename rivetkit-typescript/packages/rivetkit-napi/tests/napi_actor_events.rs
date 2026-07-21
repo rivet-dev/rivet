@@ -276,7 +276,7 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn workflow_requests_without_callbacks_return_none() {
+	async fn workflow_history_without_callback_drops_reply_and_replay_returns_none() {
 		let bindings = Arc::new(empty_bindings());
 		let config = test_adapter_config();
 		let core_ctx = actor_context("actor-workflow", "actor", Vec::new(), "local");
@@ -318,13 +318,13 @@ mod moved_tests {
 
 		drain_tasks(&mut tasks, &mut registered_task_rx).await;
 
-		assert_eq!(
-			history_rx
-				.await
-				.expect("workflow history reply should resolve")
-				.expect("workflow history should succeed"),
-			None
-		);
+		let history_error = history_rx
+			.await
+			.expect("workflow history reply should resolve")
+			.expect_err("workflow history without a callback should drop its reply");
+		let history_error = RivetTransportError::extract(&history_error);
+		assert_eq!(history_error.group(), "actor");
+		assert_eq!(history_error.code(), "dropped_reply");
 		assert_eq!(
 			replay_rx
 				.await
