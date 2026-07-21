@@ -693,7 +693,7 @@ pub(crate) async fn dispatch_event(
 		ActorEvent::WorkflowHistoryRequested { reply } => {
 			let Some(callback) = bindings.get_workflow_history.clone() else {
 				// Dropped means unsupported; `Ok(None)` means supported without history.
-					drop(reply);
+				drop(reply);
 				return;
 			};
 			let ctx = ctx.clone();
