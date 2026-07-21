@@ -313,6 +313,25 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 				await waitForInspectorOpen(ws);
 				const init = await waitForInspectorMessageWithTag(ws, "Init");
 				expect(init.body.val.isWorkflowEnabled).toBe(false);
+
+				const replayResponse = waitForInspectorMessageWithTag(
+					ws,
+					"WorkflowReplayResponse",
+				);
+				ws.send(
+					TO_SERVER_VERSIONED.serialize(
+						{
+							body: {
+								tag: "WorkflowReplayRequest",
+								val: { id: 1n, entryId: null },
+							},
+						},
+						INSPECTOR_PROTOCOL_VERSION,
+					),
+				);
+				expect((await replayResponse).body.val.isWorkflowEnabled).toBe(
+					false,
+				);
 			} finally {
 				ws.close();
 			}

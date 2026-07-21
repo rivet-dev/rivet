@@ -778,10 +778,11 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			reply.send(result);
 		}
 		ActorEvent::WorkflowReplayRequested { entry_id, reply } => {
+			let Some(callback) = callbacks.replay_workflow.as_ref() else {
+				drop(reply);
+				return;
+			};
 			let result = async {
-				let Some(callback) = callbacks.replay_workflow.as_ref() else {
-					return Ok(None);
-				};
 				let payload = object();
 				set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 				if let Some(entry_id) = entry_id {

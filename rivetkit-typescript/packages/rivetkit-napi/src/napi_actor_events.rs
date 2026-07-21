@@ -703,7 +703,7 @@ pub(crate) async fn dispatch_event(
 		}
 		ActorEvent::WorkflowReplayRequested { entry_id, reply } => {
 			let Some(callback) = bindings.replay_workflow.clone() else {
-				reply.send(Ok(None));
+				drop(reply);
 				return;
 			};
 			let ctx = ctx.clone();
