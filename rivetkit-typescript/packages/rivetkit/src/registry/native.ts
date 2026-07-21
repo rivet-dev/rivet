@@ -1,17 +1,17 @@
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
-	CONN_STATE_MANAGER_SYMBOL,
-	disposeRunInspector,
-	getRunFunction,
-	getRunInspectorConfig,
-	RAW_STATE_SYMBOL,
 	type ActorCron,
 	type ActorCronEveryOptions,
 	type ActorCronSetOptions,
 	type ActorSchedule,
+	CONN_STATE_MANAGER_SYMBOL,
 	type CronFire,
 	type CronJobInfo,
+	disposeRunInspector,
+	getRunFunction,
+	getRunInspectorConfig,
+	RAW_STATE_SYMBOL,
 	type ScheduledEventInfo,
 	type WorkflowInspectorConfig,
 } from "@/actor/config";
@@ -84,10 +84,10 @@ import type {
 	RegistryHandle,
 	RuntimeActorConfig,
 	RuntimeBytes,
-	RuntimeHttpResponse,
-	RuntimeInspectorTabEntry,
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
+	RuntimeHttpResponse,
+	RuntimeInspectorTabEntry,
 	RuntimeQueueMessage,
 	RuntimeScheduledEventInfo,
 	RuntimeScheduledFireInfo,
@@ -745,6 +745,7 @@ function encodeNativeCallbackError(error: unknown): Error {
 		group: structuredError.group,
 		code: structuredError.code,
 		metadata: structuredError.metadata,
+		rayId: structuredError.rayId,
 	});
 }
 
