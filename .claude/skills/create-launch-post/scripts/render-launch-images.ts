@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import sharp from "sharp";
 import { getSingletonHighlighter, type BundledLanguage } from "shiki";
@@ -21,6 +21,14 @@ interface Options {
 	focalX: number;
 	focalY: number;
 	technicalSnippets?: string;
+}
+
+export type TechnicalLayout = "grid" | "vertical";
+
+export interface TechnicalHtmlOptions {
+	title: string;
+	technicalSnippets?: string;
+	technicalLayout?: TechnicalLayout;
 }
 
 interface CodeSection {
@@ -251,8 +259,8 @@ async function readCodeSections(inputPath: string): Promise<CodeSection[]> {
 	});
 }
 
-async function buildTechnicalHtml(
-	options: Options,
+export async function buildTechnicalHtml(
+	options: TechnicalHtmlOptions,
 ): Promise<string | undefined> {
 	if (!options.technicalSnippets) return undefined;
 
@@ -369,7 +377,11 @@ async function buildTechnicalHtml(
 			}
 			.sections {
 				display: grid;
-				grid-template-columns: repeat(2, minmax(0, 1fr));
+				grid-template-columns: ${
+					options.technicalLayout === "vertical"
+						? "minmax(0, 1fr)"
+						: "repeat(2, minmax(0, 1fr))"
+				};
 				gap: 34px 36px;
 				margin-top: 64px;
 			}
@@ -437,7 +449,7 @@ async function buildTechnicalHtml(
 </html>`;
 }
 
-async function captureHtml(
+export async function captureHtml(
 	browser: Awaited<ReturnType<typeof chromium.launch>>,
 	html: string,
 	outputPath: string,
@@ -527,7 +539,12 @@ async function main(): Promise<void> {
 	);
 }
 
-main().catch((error: unknown) => {
-	console.error(error);
-	process.exitCode = 1;
-});
+if (
+	process.argv[1] &&
+	import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+	main().catch((error: unknown) => {
+		console.error(error);
+		process.exitCode = 1;
+	});
+}

@@ -98,7 +98,16 @@ When short code demonstrations would help launch distribution, create a temporar
 ]
 ```
 
-Pass it as `--technical-snippets "$TECHNICAL_SNIPPETS_PATH"`. Normally create the first technical draft immediately after opening the initial blog PR, once the code example is stable enough to summarize. The renderer writes `technical.html` and `technical.png` at a fixed `2048px` width with content-driven height, so short examples produce a shorter image. The white technical image places the Perfectly Nineties launch title at top left and the Rivet logo at top right, with matching 132px side and bottom gutters. Section headings use Manrope; code uses four-space tabs plus the website's JetBrains Mono font, Shiki configuration, customized Ayu Dark theme, and code-block geometry. With three sections, the first section fills the left column while the other two stack on the right. Every dark code panel stretches to the full available section height so column bottoms align. Keep snippets brief enough to fit, show it to the user, and rerender until approved.
+Render the technical image directly without generating painting, hero, or social assets:
+
+```bash
+pnpm --dir website render-technical-image -- \
+  --title "Cron Jobs" \
+  --technical-snippets "$TECHNICAL_SNIPPETS_PATH" \
+  --output "$OUTPUT_DIR/technical.png"
+```
+
+Use `--layout vertical` to stack every snippet at full width; the default `grid` layout uses the launch-image column rules. Pass `--browser /path/to/chromium` only when neither bundled nor common system Chromium installations are available automatically. Normally create the first technical draft immediately after opening the initial blog PR, once the code example is stable enough to summarize. The renderer writes the PNG and adjacent HTML at a fixed `2048px` width with content-driven height, so short examples produce a shorter image. The white technical image places the Perfectly Nineties launch title at top left and the Rivet logo at top right, with matching 132px side and bottom gutters. Section headings use Manrope; code uses four-space tabs plus the website's JetBrains Mono font, Shiki configuration, customized Ayu Dark theme, and code-block geometry. With three grid sections, the first section fills the left column while the other two stack on the right. Every dark code panel stretches to the full available section height so column bottoms align. Keep snippets brief enough to fit, show it to the user, and rerender until approved.
 
 When the feature has useful Dashboard, Inspector, or other visible product UI, proactively recommend a supporting screenshot. Ask the user to provide the screenshot or approve the exact authenticated view and state to capture. Use a clean launch-ready environment, crop away irrelevant browser chrome, and inspect the result for credentials, private names, IDs, tokens, customer data, or other sensitive information. Keep the screenshot local and show it to the user for approval. Confirm whether it should be attached to the first Buffer post or used in a dedicated reply; do not add it automatically.
 
