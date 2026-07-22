@@ -13,8 +13,8 @@ import { createContext, useContext, useMemo, useRef } from "react";
 import type ReconnectingWebSocket from "reconnectingwebsocket";
 import {
 	type Connection,
-	CURRENT_VERSION as INSPECTOR_PROTOCOL_CURRENT_VERSION,
 	decodeWorkflowHistoryTransport,
+	CURRENT_VERSION as INSPECTOR_PROTOCOL_CURRENT_VERSION,
 	type QueueStatus,
 	type Schedule,
 	type ScheduleFire,
@@ -134,7 +134,12 @@ export type InspectorScheduleFire = {
 	firedAt: number;
 	finishedAt?: number;
 	result: "running" | "ok" | "error" | "skipped";
-	error?: { group: string; code: string; message: string; metadata?: unknown };
+	error?: {
+		group: string;
+		code: string;
+		message: string;
+		metadata?: unknown;
+	};
 };
 
 interface ActorInspectorApi {
@@ -317,7 +322,9 @@ export function buildInspectorWebSocketUrl(
 	}`;
 }
 
-function normalizeSchedules(schedules: readonly Schedule[]): InspectorSchedule[] {
+function normalizeSchedules(
+	schedules: readonly Schedule[],
+): InspectorSchedule[] {
 	return schedules.map((schedule) => ({
 		id: schedule.id,
 		name: schedule.name ?? undefined,
@@ -330,9 +337,13 @@ function normalizeSchedules(schedules: readonly Schedule[]): InspectorSchedule[]
 		expression: schedule.expression ?? undefined,
 		timezone: schedule.timezone ?? undefined,
 		intervalMs:
-			schedule.intervalMs == null ? undefined : Number(schedule.intervalMs),
+			schedule.intervalMs == null
+				? undefined
+				: Number(schedule.intervalMs),
 		maxHistory:
-			schedule.maxHistory == null ? undefined : Number(schedule.maxHistory),
+			schedule.maxHistory == null
+				? undefined
+				: Number(schedule.maxHistory),
 	}));
 }
 
@@ -879,7 +890,8 @@ export const ActorInspectorProvider = ({
 			),
 		[rivetkitVersion],
 	);
-	const negotiatedInspectorProtocol = usesNegotiatedInspectorProtocol(rivetkitVersion);
+	const negotiatedInspectorProtocol =
+		usesNegotiatedInspectorProtocol(rivetkitVersion);
 	const features = useMemo(
 		() => ({
 			traces: buildFeatureSupport(
@@ -1265,7 +1277,9 @@ export const ActorInspectorProvider = ({
 								val: {
 									id: BigInt(id),
 									scheduleId,
-									limit: BigInt(Math.max(1, Math.floor(limit))),
+									limit: BigInt(
+										Math.max(1, Math.floor(limit)),
+									),
 								},
 							},
 						},

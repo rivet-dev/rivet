@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { actor } from "@/actor/mod";
-import { type RegistryDeps, Registry } from "@/registry";
+import { Registry, type RegistryDeps } from "@/registry";
 import type {
 	CoreRuntime,
 	RegistryHandle,
@@ -126,7 +126,10 @@ describe("Registry.startAndWait", () => {
 		const registry = new Registry(
 			{ use: { test: testActor }, startEngine: false, noWelcome: true },
 			{
-				buildConfiguredRegistry: (() => new Promise(() => {})) as RegistryDeps["buildConfiguredRegistry"],
+				buildConfiguredRegistry: (() =>
+					new Promise(
+						() => {},
+					)) as RegistryDeps["buildConfiguredRegistry"],
 			},
 		);
 

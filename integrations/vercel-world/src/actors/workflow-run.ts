@@ -124,6 +124,7 @@ type WorkflowVars = DispatchContext["vars"] & {
 	recoveryDeletePromise: Promise<void> | null;
 	recoveryWriters: number;
 	pendingDraining: boolean;
+	pendingGeneration: number;
 };
 
 type WorkflowContext = Omit<DispatchContext, "vars"> & {
@@ -201,6 +202,7 @@ const createWorkflowVars = (): WorkflowVars => ({
 	recoveryDeletePromise: null,
 	recoveryWriters: 0,
 	pendingDraining: false,
+	pendingGeneration: 0,
 });
 
 function asWorkflowContext(c: unknown) {
@@ -515,12 +517,21 @@ async function drainPendingOps(c: WorkflowContext) {
 }
 
 function startPendingDrain(c: WorkflowContext) {
+	c.vars.pendingGeneration++;
 	if (c.vars.pendingDraining) return;
-	c.vars.pendingDraining = true;
-	const drain = drainPendingOps(c).finally(() => {
-		c.vars.pendingDraining = false;
-	});
-	void c.keepAwake(drain).catch(() => {});
+	const launch = () => {
+		const generation = c.vars.pendingGeneration;
+		c.vars.pendingDraining = true;
+		void c
+			.keepAwake(
+				drainPendingOps(c).finally(() => {
+					c.vars.pendingDraining = false;
+					if (c.vars.pendingGeneration !== generation) launch();
+				}),
+			)
+			.catch(() => {});
+	};
+	launch();
 }
 
 export const workflowRun = actor({

@@ -70,8 +70,12 @@ export async function POST(
 
 <Tab title="Hono">
 
-Hono has no build system of its own, so this server mounts the generated flow and
-step handlers itself. See [HTTP routes](#http-routes).
+Hono has no build system of its own, so use Nitro to compile the workflow and
+serve its handler in the same process.
+
+Create `nitro.config.ts`:
+
+<CodeSnippet file="examples/vercel-workflow/nitro.config.ts" title="nitro.config.ts" />
 
 Create `src/server.ts`:
 
@@ -134,9 +138,9 @@ endpoint, namespace, and pool.
 
 ## HTTP routes
 
-`workflow build` generates the flow and step handlers under
-`.well-known/workflow/v1`. `WORKFLOW_RUNTIME_URL` must resolve to the service
-hosting those routes. Do not point it at the Rivet Engine. If
+Your framework integration serves the combined workflow handler at
+`.well-known/workflow/v1/flow`. `WORKFLOW_RUNTIME_URL` must resolve to the
+service hosting that route. Do not point it at the Rivet Engine. If
 `RIVET_WORKFLOW_SECRET` is set, delivery carries that value as a bearer token and
 rejects requests without it.
 

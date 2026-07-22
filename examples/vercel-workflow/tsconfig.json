@@ -10,5 +10,10 @@
 		"skipLibCheck": true,
 		"types": ["node"]
 	},
-	"include": ["src/**/*.ts", "workflows/**/*.ts", "vitest.integration.config.ts"]
+	"include": [
+		"src/**/*.ts",
+		"workflows/**/*.ts",
+		"nitro.config.ts",
+		"vitest.integration.config.ts"
+	]
 }

@@ -35,7 +35,7 @@ an owned Rivet engine.
 
 - [Workflow](https://github.com/rivet-dev/rivet/blob/main/examples/vercel-workflow/workflows/order.ts)
 - [Integration test](https://github.com/rivet-dev/rivet/blob/main/examples/vercel-workflow/workflows/order.integration.test.ts)
-- [HTTP server and Rivet registry](https://github.com/rivet-dev/rivet/blob/main/examples/vercel-workflow/src/server.ts)
+- [HTTP server](https://github.com/rivet-dev/rivet/blob/main/examples/vercel-workflow/src/server.ts)
 
 ## Resources
 

@@ -499,15 +499,14 @@ export class Registry<A extends RegistryActors> {
 					await runtime.serveRegistry(registry, serveConfig);
 				},
 			);
-			this.#runtimeServePromise = this.#runtimeServeLifecyclePromise.catch(
-				(error) => {
+			this.#runtimeServePromise =
+				this.#runtimeServeLifecyclePromise.catch((error) => {
 					// Always-attached catch so the stored promise never leaves a
 					// rejection unhandled. Downstream awaits (e.g. #runShutdown's
 					// Promise.race) attach their own catches and still observe
 					// resolution via the race.
 					logger().warn({ error }, "runtime registry serve errored");
-				},
-			);
+				});
 			// Install signal handlers once an envoy lifecycle has begun. Only
 			// Mode A ever reaches here. Mode B (handler(request)) intentionally
 			// does not install handlers because it runs on Workers/Vercel/Deno
@@ -712,7 +711,9 @@ export class Registry<A extends RegistryActors> {
 	public startAndWait(): Promise<void> {
 		if (this.#shutdownInFlight !== null) {
 			return Promise.reject(
-				new Error("registry.startAndWait() cannot run after shutdown has begun"),
+				new Error(
+					"registry.startAndWait() cannot run after shutdown has begun",
+				),
 			);
 		}
 		if (this.#runtimeReadyPromise) return this.#runtimeReadyPromise;
@@ -755,7 +756,9 @@ export class Registry<A extends RegistryActors> {
 		const readinessPromise = (async () => {
 			const { runtime, registry } = await configuredRegistryPromise;
 			const stoppedBeforeReady = serveLifecyclePromise.then(() => {
-				throw new Error("RivetKit registry stopped before becoming ready");
+				throw new Error(
+					"RivetKit registry stopped before becoming ready",
+				);
 			});
 			await Promise.race([
 				runtime.waitRegistryReady(registry),

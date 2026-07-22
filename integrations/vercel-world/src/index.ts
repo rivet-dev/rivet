@@ -73,6 +73,22 @@ function required(value: string | undefined, name: string) {
 	return value;
 }
 
+async function resolveDerivedRunId(
+	lookup: () => Promise<string | null>,
+): Promise<string | null> {
+	// Canonical state commits before its coordinator index. Briefly tolerate that
+	// propagation window so create-then-get stays consistent without making writes
+	// depend on the coordinator.
+	for (const delayMs of [0, 10, 25, 50, 100]) {
+		if (delayMs > 0) {
+			await new Promise((resolve) => setTimeout(resolve, delayMs));
+		}
+		const runId = await lookup();
+		if (runId) return runId;
+	}
+	return null;
+}
+
 function jsonReplacer(_key: string, value: unknown) {
 	if (value instanceof Uint8Array) {
 		return {
@@ -302,9 +318,11 @@ export class RivetClientWorld {
 		) => {
 			const effectiveRunId =
 				runId ??
-				(await this.#client.coordinator
-					.getOrCreate(["coordinator"])
-					.getRunIdByCorrelation(stepId));
+				(await resolveDerivedRunId(() =>
+					this.#client.coordinator
+						.getOrCreate(["coordinator"])
+						.getRunIdByCorrelation(stepId),
+				));
 			if (!effectiveRunId) {
 				throw new WorkflowWorldError(`Step not found: ${stepId}`);
 			}
@@ -477,9 +495,11 @@ export class RivetClientWorld {
 
 	hooks = {
 		get: async (hookId: string, params?: GetHookParams) => {
-			const runId = await this.#client.coordinator
-				.getOrCreate(["coordinator"])
-				.getRunIdByHook(hookId);
+			const runId = await resolveDerivedRunId(() =>
+				this.#client.coordinator
+					.getOrCreate(["coordinator"])
+					.getRunIdByHook(hookId),
+			);
 			if (!runId) throw new HookNotFoundError(hookId);
 			return runActor(this.#client, runId).getHook(hookId, params);
 		},

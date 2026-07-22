@@ -4,21 +4,21 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "workflow build",
+		"build": "nitro build",
 		"check-types": "tsc --noEmit",
-		"dev": "node --env-file-if-exists=.env --import tsx src/server.ts",
+		"dev": "nitro dev",
 		"test": "RIVET_RUN_ENGINE_PORT=16420 RIVETKIT_STORAGE_PATH=$PWD/.workflow-data vitest --config vitest.integration.config.ts run"
 	},
 	"dependencies": {
-		"@hono/node-server": "^1.19.9",
 		"@rivet-dev/vercel-world": "workspace:*",
 		"hono": "^4.12.25",
+		"nitro": "3.0.260610-beta",
+		"rollup": "^4.62.2",
 		"workflow": "5.0.0-beta.35"
 	},
 	"devDependencies": {
 		"@types/node": "^24.0.0",
 		"@workflow/vitest": "5.0.0-beta.35",
-		"tsx": "^4.20.0",
 		"typescript": "^5.9.3",
 		"vite": "^7.0.0",
 		"vitest": "^4.1.9"
