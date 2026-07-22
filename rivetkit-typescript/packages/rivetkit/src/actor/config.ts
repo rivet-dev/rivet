@@ -6,6 +6,7 @@ import type {
 } from "@/common/database/config";
 import type { UniversalWebSocket } from "@/common/websocket-interface";
 import type { Registry } from "@/registry";
+import { flattenActionHandlers } from "./actions";
 import type { BaseActorDefinition } from "./definition";
 import type {
 	EventSchemaConfig,
@@ -792,6 +793,32 @@ const zFunction = <
 	T extends (...args: any[]) => any = (...args: unknown[]) => unknown,
 >() => z.custom<T>((val) => typeof val === "function");
 
+const zActionTree = z
+	.custom<Record<string, unknown>>((value) => {
+		if (
+			typeof value !== "object" ||
+			value === null ||
+			Array.isArray(value)
+		) {
+			return false;
+		}
+		const prototype = Object.getPrototypeOf(value);
+		return prototype === Object.prototype || prototype === null;
+	})
+	.superRefine((actions, ctx) => {
+		try {
+			flattenActionHandlers(actions);
+		} catch (error) {
+			ctx.addIssue({
+				code: "custom",
+				message:
+					error instanceof Error
+						? error.message
+						: "Invalid action definition",
+			});
+		}
+	});
+
 export type InspectorUnsubscribe = () => void;
 
 export interface WorkflowInspectorConfig<THistory = unknown> {
@@ -1128,7 +1155,7 @@ export const ActorConfigSchema = z
 		onBeforeActionResponse: zFunction().optional(),
 		onRequest: zFunction().optional(),
 		onWebSocket: zFunction().optional(),
-		actions: z.record(z.string(), zFunction()).default(() => ({})),
+		actions: zActionTree.default(() => ({})),
 		actionInputSchemas: z.record(z.string(), z.any()).optional(),
 		connParamsSchema: z.any().optional(),
 		events: z.record(z.string(), z.any()).optional(),
@@ -1275,19 +1302,34 @@ export interface Actions<
 	TEvents extends EventSchemaConfig = Record<never, never>,
 	TQueues extends QueueSchemaConfig = Record<never, never>,
 > {
-	[Action: string]: (
-		c: ActionContext<
-			TState,
-			TConnParams,
-			TConnState,
-			TVars,
-			TInput,
-			TDatabase,
-			TEvents,
-			TQueues
-		>,
-		...args: any[]
-	) => any;
+	[Action: string]:
+		| ((
+				c: ActionContext<
+					TState,
+					TConnParams,
+					TConnState,
+					TVars,
+					TInput,
+					TDatabase,
+					TEvents,
+					TQueues
+				>,
+				...args: any[]
+		  ) => any)
+		| Actions<
+				TState,
+				TConnParams,
+				TConnState,
+				TVars,
+				TInput,
+				TDatabase,
+				TEvents,
+				TQueues
+		  >;
+}
+
+export interface ActionInputSchemas {
+	[Action: string]: PrimitiveSchema | ActionInputSchemas;
 }
 
 //export type ActorConfig<TState, TConnParams, TConnState, TVars, TInput, TAuthData> = BaseActorConfig<TState, TConnParams, TConnState, TVars, TInput, TAuthData> &
@@ -1655,9 +1697,10 @@ interface BaseActorConfig<
 	actions?: TActions;
 
 	/**
-	 * Optional schema map for validating action argument tuples in native runtimes.
+	 * Optional schemas for validating action argument tuples in native runtimes.
+	 * May mirror nested action groups or use dot-separated low-level action names.
 	 */
-	actionInputSchemas?: Record<string, PrimitiveSchema>;
+	actionInputSchemas?: ActionInputSchemas;
 
 	/**
 	 * Optional schema for validating connection params in native runtimes.
@@ -2184,13 +2227,13 @@ export const DocActorConfigSchema = z
 			.record(z.string(), z.unknown())
 			.optional()
 			.describe(
-				"Map of action name to handler function. Defaults to an empty object.",
+				"Tree of action names or nested groups to handler functions. Nested paths use dot-separated low-level action names. Defaults to an empty object.",
 			),
 		actionInputSchemas: z
 			.record(z.string(), z.unknown())
 			.optional()
 			.describe(
-				"Optional schema map for validating action argument tuples in native runtimes.",
+				"Optional schemas for validating action argument tuples in native runtimes. May mirror nested action groups or use dot-separated low-level action names.",
 			),
 		connParamsSchema: z
 			.unknown()

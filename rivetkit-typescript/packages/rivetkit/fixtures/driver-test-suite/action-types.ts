@@ -1,4 +1,5 @@
 import { actor, UserError } from "rivetkit";
+import { z } from "zod/v4";
 
 const sleep = (ms: number) =>
 	new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -68,6 +69,24 @@ export const concurrentActionActor = actor({
 			return label;
 		},
 		getEvents: (c) => [...c.state.events],
+	},
+});
+
+export const nestedActionActor = actor({
+	state: { total: 0 },
+	actions: {
+		calculator: {
+			add: (c, amount: number) => {
+				c.state.total += amount;
+				return c.state.total;
+			},
+			read: (c) => c.state.total,
+		},
+	},
+	actionInputSchemas: {
+		calculator: {
+			add: z.tuple([z.number()]),
+		},
 	},
 });
 
