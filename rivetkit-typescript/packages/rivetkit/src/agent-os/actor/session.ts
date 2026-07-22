@@ -17,7 +17,7 @@ import type {
 	PromptResult,
 	SessionRecord,
 } from "../types";
-import { ensureVm, runHook, syncPreventSleep } from "./index";
+import { ensureVm, runHook, syncPreventSleep, truncateForLog } from "./index";
 
 // agent-os 0.2.x removed the pull-based `AgentOs.getSessionEvents` API (the
 // only event surface is now the `onSessionEvent` subscription). The actor
@@ -68,12 +68,21 @@ function toSessionRecord(
 	sessionId: string,
 	agentType: string,
 ): SessionRecord {
-	return {
-		sessionId,
-		agentType,
-		capabilities: agentOs.getSessionCapabilities(sessionId) ?? {},
-		agentInfo: agentOs.getSessionAgentInfo(sessionId),
-	};
+	// Snapshot capabilities/agentInfo into plain JSON objects INSIDE the
+	// action body. The core returns live (proxy/NAPI-backed) objects whose
+	// late property reads during response encoding can fail against a
+	// wedged sidecar, surfacing as an opaque `internal_error` on an action
+	// whose body fully succeeded (live signature 2026-07: createSession
+	// works via raw probes while the wrapper action fails). Same class of
+	// hazard `stripFunctions` guards for JsonRpcResponse.
+	return JSON.parse(
+		JSON.stringify({
+			sessionId,
+			agentType,
+			capabilities: agentOs.getSessionCapabilities(sessionId) ?? {},
+			agentInfo: agentOs.getSessionAgentInfo(sessionId),
+		}),
+	) as SessionRecord;
 }
 
 // --- Session persistence helpers ---
@@ -236,21 +245,57 @@ export function buildSessionActions<TConnParams>(
 			options?: CreateSessionOptions,
 		): Promise<SessionRecord> => {
 			const agentOs = await ensureVm(c, config);
-			const { sessionId } = await agentOs.createSession(
-				agentType,
-				options,
-			);
-			subscribeToSession(c, agentOs, sessionId, config);
+			let sessionId: string;
+			try {
+				({ sessionId } = await agentOs.createSession(
+					agentType,
+					options,
+				));
+			} catch (err) {
+				// Surface the REAL failure (bootVm precedent): the actor
+				// runtime wraps this throw as an opaque `internal_error`,
+				// which made live createSession failures undiagnosable.
+				c.log.error({
+					msg: "agent-os: createSession failed",
+					agentType,
+					err: truncateForLog(
+						err instanceof Error ? err.message : String(err),
+					),
+					stack: truncateForLog(
+						err instanceof Error ? err.stack : undefined,
+					),
+				});
+				throw err;
+			}
+			try {
+				subscribeToSession(c, agentOs, sessionId, config);
 
-			// Persist session metadata to SQLite for sleep/wake recovery.
-			await persistSession(c, agentOs, sessionId, agentType);
+				// Persist session metadata to SQLite for sleep/wake recovery.
+				await persistSession(c, agentOs, sessionId, agentType);
 
-			c.log.info({
-				msg: "agent-os session created",
-				sessionId,
-				agentType,
-			});
-			return toSessionRecord(agentOs, sessionId, agentType);
+				c.log.info({
+					msg: "agent-os session created",
+					sessionId,
+					agentType,
+				});
+				return toSessionRecord(agentOs, sessionId, agentType);
+			} catch (err) {
+				// Same visibility for post-create failures (subscribe/persist/
+				// record build) — otherwise they surface as opaque internal_error
+				// while the created session silently leaks.
+				c.log.error({
+					msg: "agent-os: createSession post-create failed",
+					sessionId,
+					agentType,
+					err: truncateForLog(
+						err instanceof Error ? err.message : String(err),
+					),
+					stack: truncateForLog(
+						err instanceof Error ? err.stack : undefined,
+					),
+				});
+				throw err;
+			}
 		},
 
 		listSessions: async (
