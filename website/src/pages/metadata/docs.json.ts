@@ -4,7 +4,12 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
-import { DOCS_BASE_URL, PROJECT_ROOT, normalizeSlug } from "../../metadata/shared";
+import {
+	getDocsPath,
+	normalizeSlug,
+	PROJECT_ROOT,
+	SITE_BASE_URL,
+} from "../../metadata/shared";
 
 const CURATED_LIMIT = 50;
 
@@ -37,8 +42,8 @@ async function buildMetadata(): Promise<MetadataPayload> {
 		const slug = normalizeSlug(entry.id);
 		const slugId = slug || "index";
 		const resourceUri = `docs://page/${slugId}`;
-		const canonicalPath = slug ? `/docs/${slug}` : "/docs";
-		const canonicalUrl = `${DOCS_BASE_URL}${slug ? `/${slug}` : ""}`;
+		const canonicalPath = getDocsPath(slug);
+		const canonicalUrl = `${SITE_BASE_URL}${canonicalPath}`;
 		const tags = slug.split("/").filter(Boolean);
 		const productArea = tags[0] ?? null;
 		const body = entry.body ?? "";

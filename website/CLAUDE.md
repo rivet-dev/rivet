@@ -39,6 +39,7 @@ Import from `@rivet-gg/icons`. The full Font Awesome Pro library is available. C
 
 ## Code Blocks
 
+- Always store docs code examples under `examples/docs/` and render them with `<CodeSnippet>`. Do not add inline fenced code blocks to docs MDX files.
 - Type-check all TypeScript code blocks in `website/src/content/docs/**/*.mdx` before release, because any failing snippet fails the website build.
 - Document `onStateChange` as read-only against `c.state`; use `vars` for callback counters or derived runtime-only values.
 - Connect page cards and sidebar entries come from `frontend/packages/shared-data/src/deploy.ts`.
@@ -55,10 +56,9 @@ Import from `@rivet-gg/icons`. The full Font Awesome Pro library is available. C
 - Use `<CodeGroup workspace>` for any example that spans multiple files (for example `registry.ts` + `client.ts`).
 - Follow these rules for workspace code groups.
 
-- Every file in a workspace group must include a simple inline code fence title, for example `ts registry.ts` after the opening triple backticks.
+- Store every file under `examples/docs/` and render each one with `<CodeSnippet file="..." title="..." />` inside the group.
 - Treat files as real modules in the same directory and use relative imports (for example `import type { registry } from "./registry"`).
-- Mark setup-only files with `@hide` when you want them type-checked but not prominently shown.
-- Do not split related multi-file examples into separate non-workspace code blocks.
+- Do not split related multi-file examples into separate non-workspace snippets.
 
 - If any code block fails type checking, the build fails.
 

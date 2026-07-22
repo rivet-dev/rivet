@@ -353,9 +353,7 @@ export const RegistryConfigSchema = z
 		const endpoint = config.startEngine
 			? localEngineEndpoint
 			: (parsedEndpoint?.endpoint ??
-				(isDevEnv
-					? buildEngineEndpoint(ENGINE_HOST, ENGINE_PORT)
-					: undefined));
+				(isDevEnv ? localEngineEndpoint : undefined));
 		const validateServerlessEndpoint = Boolean(
 			config.startEngine || parsedEndpoint,
 		);
@@ -388,7 +386,7 @@ export const RegistryConfigSchema = z
 		// In dev mode, clients connect directly to the local Rivet Engine.
 		const publicEndpoint =
 			parsedPublicEndpoint?.endpoint ??
-			(isDevEnv && config.startEngine ? endpoint : undefined);
+			(isDevEnv && !parsedEndpoint ? endpoint : undefined);
 		// We extract publicNamespace to validate that it matches the backend
 		// namespace (see validation above), not for functional use.
 		const publicNamespace = parsedPublicEndpoint?.namespace;

@@ -18,6 +18,7 @@ impl Sqlite {
 	}
 
 	pub fn unstable_disable_compaction(&self) -> bool {
-		self.unstable_disable_compaction.unwrap_or_default()
+		// TODO: Re-enable compaction by default after thorough testing is complete.
+		self.unstable_disable_compaction.unwrap_or(true)
 	}
 }

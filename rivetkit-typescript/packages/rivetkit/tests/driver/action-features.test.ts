@@ -61,6 +61,28 @@ describeDriverMatrix("Action Features", (driverTestConfig) => {
 		});
 
 		describe("Action Sync & Async", () => {
+			test("supports nested actions with dotted low-level names", async (c) => {
+				const { client } = await setupDriverTest(c, driverTestConfig);
+				const instance = client.nestedActionActor.getOrCreate([
+					`nested-actions-${crypto.randomUUID()}`,
+				]);
+
+				await expect(instance.calculator.add(2)).resolves.toBe(2);
+				await expect(
+					instance.action({ name: "calculator.add", args: [3] }),
+				).resolves.toBe(5);
+				await expect(instance.calculator.read()).resolves.toBe(5);
+				await expect(
+					instance.action({
+						name: "calculator.add",
+						args: ["invalid"],
+					}),
+				).rejects.toMatchObject({
+					group: "actor",
+					code: "validation_error",
+				});
+			});
+
 			test("should support synchronous actions", async (c) => {
 				const { client } = await setupDriverTest(c, driverTestConfig);
 

@@ -1,29 +1,11 @@
-import pRetry from "p-retry";
 import type { TestContext } from "vitest";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { type Client, createClient } from "@/client/mod";
-import { getMetadata } from "@/engine-client/api-endpoints";
 import type { Registry } from "@/registry";
+import { waitForRegistryReady } from "./ready";
 
 export interface SetupTestResult<A extends Registry<any>> {
 	client: Client<A>;
-}
-
-async function waitForRegistryReady(registry: Registry<any>): Promise<void> {
-	const clientConfig = convertRegistryConfigToClientConfig(
-		registry.parseConfig(),
-	);
-
-	await pRetry(
-		async () => {
-			await getMetadata(clientConfig);
-		},
-		{
-			retries: 20,
-			minTimeout: 50,
-			maxTimeout: 250,
-		},
-	);
 }
 
 export async function setupTest<A extends Registry<any>>(

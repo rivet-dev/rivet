@@ -16,6 +16,7 @@ import {
 import {
 	asyncActionActor,
 	concurrentActionActor,
+	nestedActionActor,
 	promiseActor,
 	syncActionActor,
 } from "./action-types";
@@ -269,6 +270,7 @@ export const registry = setup({
 		syncActionActor,
 		asyncActionActor,
 		concurrentActionActor,
+		nestedActionActor,
 		promiseActor,
 		// From conn-params.ts
 		counterWithParams,

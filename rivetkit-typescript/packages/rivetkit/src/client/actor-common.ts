@@ -43,7 +43,9 @@ type ActorActionMap<R> = {
 		...args: infer Args
 	) => infer Return
 		? ActorActionFunction<Args, Awaited<Return>>
-		: never;
+		: NonNullable<R>[K] extends Record<string, unknown>
+			? ActorActionMap<NonNullable<R>[K]>
+			: never;
 };
 
 type ActionsOf<AD extends AnyActorDefinition> =

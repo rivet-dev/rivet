@@ -295,6 +295,48 @@ describeDriverMatrix("Actor Inspector", (driverTestConfig) => {
 			expect(count).toBe(42);
 		});
 
+		test("inspector websocket Init disables workflows for non-workflow actors", async (c) => {
+			const { client } = await setupDriverTest(c, driverTestConfig);
+			const handle = client.counter.getOrCreate([
+				"inspector-init-workflow-disabled",
+			]);
+
+			await handle.increment(0);
+			const gatewayUrl = await handle.getGatewayUrl();
+			const ws = new WebSocket(buildInspectorWebSocketUrl(gatewayUrl), [
+				"rivet",
+				"rivet_inspector_token.token",
+			]);
+			ws.binaryType = "arraybuffer";
+
+			try {
+				await waitForInspectorOpen(ws);
+				const init = await waitForInspectorMessageWithTag(ws, "Init");
+				expect(init.body.val.isWorkflowEnabled).toBe(false);
+
+				const replayResponse = waitForInspectorMessageWithTag(
+					ws,
+					"WorkflowReplayResponse",
+				);
+				ws.send(
+					TO_SERVER_VERSIONED.serialize(
+						{
+							body: {
+								tag: "WorkflowReplayRequest",
+								val: { id: 1n, entryId: null },
+							},
+						},
+						INSPECTOR_PROTOCOL_VERSION,
+					),
+				);
+				expect((await replayResponse).body.val.isWorkflowEnabled).toBe(
+					false,
+				);
+			} finally {
+				ws.close();
+			}
+		});
+
 		test("PATCH /inspector/state pushes StateUpdated over inspector websocket", async (c) => {
 			const { client } = await setupDriverTest(c, driverTestConfig);
 			const handle = client.counter.getOrCreate([

@@ -18,6 +18,14 @@ Actions are defined in the `actions` object when creating an actor:
 
 Each action receives a context object (commonly named `c`) as its first parameter, which provides access to state, connections, and other utilities. Additional parameters follow after that.
 
+### Nested Actions
+
+Nest actions to group related behavior:
+
+<CodeSnippet file="examples/docs/actors-actions/nested-actions.ts" />
+
+Clients use the same path, such as `handle.users.add("Ada")`. Low-level APIs and the Inspector use the dot-separated action name `users.add`.
+
 ## Calling Actions
 
 Actions can be called in different ways depending on your use case:

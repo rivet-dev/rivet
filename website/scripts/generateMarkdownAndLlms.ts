@@ -2,6 +2,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import Typesense from "typesense";
 
+import { getDocsPath } from "../src/metadata/shared";
+
 interface DocsPage {
 	title: string;
 	content: string;
@@ -247,7 +249,7 @@ async function indexDocumentsToTypesense(
 		id: `doc_${index}`,
 		title: page.title,
 		content: page.content,
-		url: `${siteUrl}/docs/${page.cleanPath}`,
+		url: `${siteUrl}${getDocsPath(page.cleanPath)}`,
 		hierarchy: {
 			lvl0: "Documentation",
 			lvl1: page.title,
@@ -310,7 +312,7 @@ async function generateMarkdownAndLlms() {
 
 	const siteUrl = "https://rivet.dev";
 	const docsUrls = pages
-		.map((page) => `${siteUrl}/docs/${page.cleanPath}`)
+		.map((page) => `${siteUrl}${getDocsPath(page.cleanPath)}`)
 		.filter((url) => !url.includes("/docs/cloud"));
 	const blogUrls = blogPosts.map((post) => `${siteUrl}/blog/${post}`);
 	const changelogUrls = blogPosts.map(

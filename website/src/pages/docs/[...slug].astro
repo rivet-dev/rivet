@@ -14,7 +14,9 @@ import { getContentParamSlug, getContentSlugPath } from '@/lib/content-path';
 import * as mdxComponents from '@/components/mdx';
 
 export async function getStaticPaths() {
-	const docs = await getCollection('docs');
+	const docs = (await getCollection('docs')).filter(
+		(entry) => entry.id !== 'integrations' && !entry.id.startsWith('integrations/'),
+	);
 	return docs.map((entry) => {
 		const slug = getContentParamSlug(entry.id);
 		return {
@@ -24,7 +26,12 @@ export async function getStaticPaths() {
 	});
 }
 
-const { entry } = Astro.props;
+const {
+	entry,
+	routePrefix = '/docs',
+	entryIdPrefix = '',
+	breadcrumbName = 'Docs',
+} = Astro.props;
 const { Content, headings, remarkPluginFrontmatter } = await render(entry);
 
 // Format last modified date
@@ -50,25 +57,31 @@ const tableOfContents = headings
 	}, [] as Array<{ title: string; id: string; children: Array<{ title: string; id: string; children: never[] }> }>);
 
 const { title, description } = entry.data as { title: string; description: string };
-const slugPath = getContentSlugPath(entry.id);
+const entrySlugPath = getContentSlugPath(entry.id);
+const routeEntryId = entryIdPrefix && entry.id.startsWith(entryIdPrefix)
+	? entry.id.slice(entryIdPrefix.length)
+	: entry.id;
+const slugPath = getContentSlugPath(routeEntryId);
 // Section overviews (actors, deploy) render as a custom icon-grid landing
 // instead of the standard prose article. The markdown chrome (edit button,
 // breadcrumb, TOC, page dropdown) is suppressed for these.
-const landing = docsLandings[slugPath ?? ''];
+const landing = docsLandings[entrySlugPath ?? ''];
 const isLanding = Boolean(landing);
-const fullPath = slugPath ? `/docs/${slugPath}/` : '/docs/';
+const fullPath = slugPath ? `${routePrefix}/${slugPath}/` : `${routePrefix}/`;
 const foundTab = findActiveTab(fullPath, sitemap);
 const parentPage = foundTab?.page?.parent;
 const canonicalUrl = `https://rivet.dev${fullPath}`;
 
 // Create markdown path for the dropdown
-const markdownPath = slugPath ? `docs/${slugPath}` : 'docs';
-const componentSourcePath = `docs/${entry.id}.mdx`;
+const markdownPath = entrySlugPath ? `docs/${entrySlugPath}` : 'docs';
+const componentSourcePath = entry.filePath
+	? entry.filePath.replace(/^.*?src\/content\//, '')
+	: `docs/${entry.id}.mdx`;
 
 // Build BreadcrumbList schema
 const breadcrumbItems = [
 	{ name: "Home", url: "https://rivet.dev/" },
-	{ name: "Docs", url: "https://rivet.dev/docs/" },
+	{ name: breadcrumbName, url: `https://rivet.dev${routePrefix}/` },
 ];
 if (parentPage) {
 	breadcrumbItems.push({ name: parentPage.title, url: `https://rivet.dev${parentPage.href || '/docs/'}` });

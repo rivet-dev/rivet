@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-import { DOCS_BASE_URL, normalizeSlug } from "./shared";
+import { getDocsPath, normalizeSlug, SITE_BASE_URL } from "./shared";
 import skillBaseRivetkit from "./skill-base-rivetkit.md?raw";
 import skillBaseRivetkitCookbook from "./skill-base-rivetkit-cookbook.md?raw";
 import skillBaseClientJavascript from "./skill-base-rivetkit-client-javascript.md?raw";
@@ -341,8 +341,8 @@ export async function skillSupportsOpenApi(skillId: SkillId) {
 
 function buildReference(entry: Awaited<ReturnType<typeof getCollection>>[number]): SkillReference {
 	const slug = normalizeSlug(entry.id);
-	const docPath = slug ? `/docs/${slug}` : "/docs";
-	const canonicalUrl = `${DOCS_BASE_URL}${slug ? `/${slug}` : ""}`;
+	const docPath = getDocsPath(slug);
+	const canonicalUrl = `${SITE_BASE_URL}${docPath}`;
 	const fileId = createFileId(slug);
 	const body = entry.body ?? "";
 

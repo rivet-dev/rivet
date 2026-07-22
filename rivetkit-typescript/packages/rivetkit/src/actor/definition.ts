@@ -1,5 +1,6 @@
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import type { RegistryConfig } from "@/registry/config";
+import { flattenActionHandlers, flattenActionInputSchemas } from "./actions";
 import {
 	type Actions,
 	type ActorConfig,
@@ -206,6 +207,8 @@ export function actor<
 		TQueues,
 		TActions
 	>;
+	flattenActionHandlers(config.actions);
+	flattenActionInputSchemas(config.actions, config.actionInputSchemas);
 	return new ActorDefinition(config);
 }
 

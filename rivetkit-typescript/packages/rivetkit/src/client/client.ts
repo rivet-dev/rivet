@@ -515,11 +515,30 @@ export function createClientWithDriver<A extends Registry<any>>(
 /**
  * Creates a proxy for a actor that enables calling actions without explicitly using `.action`.
  **/
-function createActorProxy<AD extends AnyActorDefinition>(
+export function createActorProxy<AD extends AnyActorDefinition>(
 	handle: ActorHandleRaw | ActorConnRaw,
 ): ActorHandle<AD> | ActorConn<AD> {
-	// Stores returned action functions for faster calls
+	// Stores returned action path proxies for faster calls.
 	const methodCache = new Map<string, ActorActionFunction>();
+	const actionPath = (name: string): ActorActionFunction => {
+		let method = methodCache.get(name);
+		if (method) return method;
+
+		method = new Proxy(
+			(...args: unknown[]) => handle.action({ name, args }),
+			{
+				get(target, prop: string | symbol) {
+					if (typeof prop === "symbol")
+						return Reflect.get(target, prop);
+					if (prop === "then") return undefined;
+					return actionPath(`${name}.${prop}`);
+				},
+			},
+		) as ActorActionFunction;
+		methodCache.set(name, method);
+		return method;
+	};
+
 	return new Proxy(handle, {
 		get(target: ActorHandleRaw, prop: string | symbol, receiver: unknown) {
 			// Handle built-in Symbol properties
@@ -542,13 +561,7 @@ function createActorProxy<AD extends AnyActorDefinition>(
 				// If JS is attempting to calling this as a promise, ignore it
 				if (prop === "then") return undefined;
 
-				let method = methodCache.get(prop);
-				if (!method) {
-					method = (...args: unknown[]) =>
-						target.action({ name: prop, args });
-					methodCache.set(prop, method);
-				}
-				return method;
+				return actionPath(prop);
 			}
 		},
 
@@ -575,6 +588,7 @@ function createActorProxy<AD extends AnyActorDefinition>(
 			target: ActorHandleRaw,
 			prop: string | symbol,
 		) {
+			if (prop === "then") return undefined;
 			const targetDescriptor = Reflect.getOwnPropertyDescriptor(
 				target,
 				prop,
@@ -588,8 +602,7 @@ function createActorProxy<AD extends AnyActorDefinition>(
 					configurable: true,
 					enumerable: false,
 					writable: false,
-					value: (...args: unknown[]) =>
-						target.action({ name: prop, args }),
+					value: actionPath(prop),
 				};
 			}
 			return undefined;

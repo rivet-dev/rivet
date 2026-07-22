@@ -1,5 +1,9 @@
 import { VirtualWebSocket } from "@rivetkit/virtual-websocket";
 import {
+	flattenActionHandlers,
+	flattenActionInputSchemas,
+} from "@/actor/actions";
+import {
 	ACTOR_CONTEXT_INTERNAL_SYMBOL,
 	type ActorCron,
 	type ActorCronEveryOptions,
@@ -3525,7 +3529,7 @@ function buildActorConfig(
 		preloadMaxConnectionsBytes: options.preloadMaxConnectionsBytes as
 			| number
 			| undefined,
-		actions: Object.keys((config.actions ?? {}) as Record<string, unknown>)
+		actions: Object.keys(flattenActionHandlers(config.actions))
 			.sort()
 			.map((name) => ({ name })),
 		inspectorTabs: buildInspectorTabs(config.inspector, runtimeKind),
@@ -3629,19 +3633,16 @@ export function buildNativeFactory(
 ): ActorFactoryHandle {
 	const config = definition.config as Record<string, any>;
 	const databaseProvider = config.db as AnyDatabaseProvider;
+	const actionHandlers = flattenActionHandlers(config.actions);
 	const schemaConfig: NativeValidationConfig = {
-		actionInputSchemas: config.actionInputSchemas,
+		actionInputSchemas: flattenActionInputSchemas(
+			config.actions,
+			config.actionInputSchemas,
+		),
 		connParamsSchema: config.connParamsSchema,
 		events: config.events,
 		queues: config.queues,
 	};
-	const actionHandlers = Object.fromEntries(
-		(
-			Object.entries(config.actions ?? {}) as Array<
-				[string, (...args: Array<any>) => any]
-			>
-		).map(([name, handler]) => [name, handler]),
-	);
 	const createClient = () =>
 		createClientWithDriver(
 			new RemoteEngineControlClient(

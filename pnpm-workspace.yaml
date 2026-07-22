@@ -12,6 +12,7 @@ packages:
   - frontend/packages/components/
   - frontend/packages/icons/
   - frontend/packages/shared-data/
+  - integrations/*
   - rivetkit-typescript/packages/*
   - rivetkit-swift/examples/*/server
   - scripts/publish

@@ -39,7 +39,11 @@ export function Card({
 						)}
 					>
 						<div className="flex items-center gap-3">
-							{icon && <Icon icon={icon} />}
+							{icon && "prefix" in icon ? (
+								<Icon icon={icon} />
+							) : icon ? (
+								<img {...icon} className="h-4 w-auto max-w-10 shrink-0" alt="" />
+							) : null}
 							{title && <h3 className="font-medium">{title}</h3>}
 							{badge && (
 								<span className="text-xs font-medium px-2 py-0.5 rounded-full bg-ink/[0.06] text-ink-soft">

@@ -756,10 +756,12 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			}
 		}
 		ActorEvent::WorkflowHistoryRequested { reply } => {
+			let Some(callback) = callbacks.get_workflow_history.as_ref() else {
+				// Dropped means unsupported; `Ok(None)` means supported without history.
+				drop(reply);
+				return;
+			};
 			let result = async {
-				let Some(callback) = callbacks.get_workflow_history.as_ref() else {
-					return Ok(None);
-				};
 				let payload = object();
 				set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 				let value = call_callback(callback, &payload.into()).await?;
@@ -776,10 +778,11 @@ async fn dispatch_event(callbacks: &WasmCallbacks, ctx: &WasmActorContext, event
 			reply.send(result);
 		}
 		ActorEvent::WorkflowReplayRequested { entry_id, reply } => {
+			let Some(callback) = callbacks.replay_workflow.as_ref() else {
+				drop(reply);
+				return;
+			};
 			let result = async {
-				let Some(callback) = callbacks.replay_workflow.as_ref() else {
-					return Ok(None);
-				};
 				let payload = object();
 				set_anyhow(&payload, "ctx", JsValue::from(ctx.clone()))?;
 				if let Some(entry_id) = entry_id {

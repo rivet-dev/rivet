@@ -1,6 +1,8 @@
 import type { APIRoute } from 'astro';
 import { getCollection, render } from 'astro:content';
 
+import { getDocsPath } from '../metadata/shared';
+
 export const prerender = true;
 
 export const GET: APIRoute = async ({ site }) => {
@@ -18,7 +20,7 @@ export const GET: APIRoute = async ({ site }) => {
 		.filter(doc => !doc.id.startsWith('cloud'))
 		.map(doc => {
 			const cleanPath = doc.id.replace(/\/index$/, '').replace(/^index$/, '');
-			return cleanPath ? `${siteUrl}/docs/${cleanPath}/` : `${siteUrl}/docs/`;
+			return `${siteUrl}${getDocsPath(cleanPath)}/`;
 		})
 		.sort();
 

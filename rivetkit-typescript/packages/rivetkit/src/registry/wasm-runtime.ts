@@ -274,6 +274,12 @@ export class WasmCoreRuntime implements CoreRuntime {
 		await callWasm(() => asWasmRegistry(registry).serve(config));
 	}
 
+	async waitRegistryReady(): Promise<void> {
+		throw new Error(
+			"registry.startAndWait() is not supported by the WASM runtime",
+		);
+	}
+
 	async shutdownRegistry(registry: RegistryHandle): Promise<void> {
 		await callWasm(() => asWasmRegistry(registry).shutdown());
 	}

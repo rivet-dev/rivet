@@ -1,8 +1,17 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-export const DOCS_BASE_URL = "https://rivet.dev/docs";
+export const SITE_BASE_URL = "https://rivet.dev";
+export const DOCS_BASE_URL = `${SITE_BASE_URL}/docs`;
 export const PROJECT_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+
+export function getDocsPath(slug: string) {
+	if (slug === "integrations" || slug.startsWith("integrations/")) {
+		return `/${slug}`;
+	}
+
+	return slug ? `/docs/${slug}` : "/docs";
+}
 
 export function normalizeSlug(rawSlug: string) {
 	let slug = rawSlug.replace(/\\/g, "/");

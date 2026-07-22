@@ -160,7 +160,11 @@ export function discoverPackages(
 	}> = JSON.parse(pnpmList);
 	for (const p of workspacePkgs) {
 		if (!p.name) continue;
-		if (!p.name.startsWith("@rivetkit/") && p.name !== "rivetkit") continue;
+		if (
+			!p.name.startsWith("@rivetkit/") &&
+			p.name !== "rivetkit" &&
+			p.name !== "@rivet-dev/vercel-world"
+		) continue;
 		add(p.path);
 	}
 

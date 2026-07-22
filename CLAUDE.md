@@ -4,6 +4,8 @@ Design constraints, invariants, and reference commands for the Rivet monorepo. F
 
 ## Terminology
 
+**Always spell the product name `agentOS`, never `AgentOS`; do not alter type identifiers such as `AgentOSActorConfig`.**
+
 **ALWAYS use `rivet.dev` - NEVER use `rivet.gg`**
 
 - API endpoint: `https://api.rivet.dev`
@@ -122,6 +124,8 @@ docker-compose up -d
 - Every route that owns a data provider sets it up in `context()` (sync) or `beforeLoad` (async) AND re-exports it from `loader` as `{ dataProvider: context.dataProvider }`. All consumer hooks in `src/components/actors/data-provider.tsx` read via `useLoaderData`. Do not read data providers via `useRouteContext` — `match.context` is a snapshot taken at match creation time and does not include `beforeLoad` results.
 
 ## Dependency Management
+
+- Integrations must default to RivetKit's standard behavior and configuration resolution. Do not duplicate Rivet endpoint, namespace, token, pool, local Engine, runtime, or readiness defaults inside an integration; pass configuration through to RivetKit and add integration-specific behavior only when the external protocol requires it.
 
 - Prefer the Tokio-shaped APIs from `antiox` (`antiox/sync/mpsc`, `antiox/task`, etc.) over ad hoc Promise queues, custom channel wrappers, or event-emitter coordination.
 - `rivet-envoy-client` transport features are mutually exclusive; native builds use the default `native-transport`, while wasm builds must set `default-features = false` and enable `wasm-transport`.
