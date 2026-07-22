@@ -82,7 +82,11 @@ export function buildOnRequestHandler<TConnParams>(
 		);
 
 		if (rows.length === 0) {
-			c.log.warn({ msg: "agent-os preview auth failed", token });
+			// Never log the bearer — capability URL secret.
+			c.log.warn({
+				msg: "agent-os preview auth failed",
+				tokenPrefix: token.slice(0, 8),
+			});
 			return addCorsHeaders(new Response("Forbidden", { status: 403 }));
 		}
 
@@ -94,16 +98,24 @@ export function buildOnRequestHandler<TConnParams>(
 			config,
 		);
 
-		// Build the request to proxy through the VM's virtual network.
-		const vmUrl = `http://localhost:${port}${remainingPath}${url.search}`;
-		const vmRequest = new Request(vmUrl, {
-			method: request.method,
-			headers: request.headers,
-			body: request.body,
-			duplex: "half",
-		} as RequestInit);
+		// 0.2.8: fetch(port, Request) → httpRequest({ port, path, ... }).
+		// Rebuild a Fetch Response so addCorsHeaders keeps working.
+		const headers: Record<string, string> = {};
+		request.headers.forEach((value, key) => {
+			headers[key] = value;
+		});
+		const bodyBytes =
+			request.method === "GET" || request.method === "HEAD"
+				? undefined
+				: new Uint8Array(await request.arrayBuffer());
 
-		const vmResponse = await agentOs.fetch(port, vmRequest);
+		const vmResponse = await agentOs.httpRequest({
+			port,
+			path: `${remainingPath}${url.search}`,
+			method: request.method,
+			headers,
+			body: bodyBytes,
+		});
 
 		c.log.info({
 			msg: "agent-os preview request proxied",
@@ -113,7 +125,13 @@ export function buildOnRequestHandler<TConnParams>(
 			status: vmResponse.status,
 		});
 
-		return addCorsHeaders(vmResponse);
+		return addCorsHeaders(
+			new Response(vmResponse.body, {
+				status: vmResponse.status,
+				statusText: vmResponse.statusText,
+				headers: vmResponse.headers,
+			}),
+		);
 	};
 }
 

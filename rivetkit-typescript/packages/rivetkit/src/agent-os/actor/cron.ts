@@ -1,4 +1,12 @@
-import type { CronAction, CronJobInfo } from "@rivet-dev/agent-os-core";
+/**
+ * Overview: Cron scheduling actions for the agent-os HOC. Serializes
+ * 0.2.8 `CronActionInfo` (callback closures stripped) for the actor wire.
+ */
+import type {
+	CronAction,
+	CronActionInfo,
+	CronJobInfo,
+} from "@rivet-dev/agent-os-core";
 import type { AgentOsActorConfig } from "../config";
 import type {
 	AgentOsActionContext,
@@ -8,7 +16,8 @@ import type {
 } from "../types";
 import { ensureVm } from "./index";
 
-function serializeCronAction(action: CronAction): SerializableCronAction {
+// listCronJobs returns CronActionInfo (callback is kind-only, no fn).
+function serializeCronAction(action: CronActionInfo): SerializableCronAction {
 	switch (action.type) {
 		case "session":
 			return {
@@ -29,13 +38,14 @@ function serializeCronAction(action: CronAction): SerializableCronAction {
 }
 
 function serializeCronJob(job: CronJobInfo): SerializableCronJobInfo {
+	// 0.2.8 already exposes lastRun/nextRun as ISO strings.
 	return {
 		id: job.id,
 		schedule: job.schedule,
 		action: serializeCronAction(job.action),
 		overlap: job.overlap,
-		lastRun: job.lastRun?.toISOString(),
-		nextRun: job.nextRun?.toISOString(),
+		lastRun: job.lastRun,
+		nextRun: job.nextRun,
 		runCount: job.runCount,
 		running: job.running,
 	};

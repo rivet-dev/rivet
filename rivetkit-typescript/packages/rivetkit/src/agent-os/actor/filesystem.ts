@@ -14,8 +14,10 @@ import { ensureVm } from "./index";
 type VirtualStat = Awaited<
 	ReturnType<import("@rivet-dev/agent-os-core").AgentOs["stat"]>
 >;
+// 0.2.8 renamed AgentOs.delete → remove; keep the HOC action name
+// `deleteFile` so callers stay stable.
 type DeleteOptions = Parameters<
-	import("@rivet-dev/agent-os-core").AgentOs["delete"]
+	import("@rivet-dev/agent-os-core").AgentOs["remove"]
 >[1];
 
 // Build filesystem and agent registry actions for the actor factory.
@@ -113,7 +115,7 @@ export function buildFilesystemActions<TConnParams>(
 			options?: DeleteOptions,
 		): Promise<void> => {
 			const agentOs = await ensureVm(c, config);
-			await agentOs.delete(path, options);
+			await agentOs.remove(path, options);
 		},
 
 		// TODO: mountFs and unmountFs are not exposed as actor actions because

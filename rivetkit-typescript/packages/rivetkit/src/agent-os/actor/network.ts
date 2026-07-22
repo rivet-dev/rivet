@@ -1,3 +1,7 @@
+/**
+ * Overview: Network actions for the agent-os HOC — proxies HTTP into the
+ * VM via agent-os 0.2.8 `httpRequest` (replaces the removed `fetch(port, Request)`).
+ */
 import type { AgentOsActorConfig } from "../config";
 import type { AgentOsActionContext } from "../types";
 import { ensureVm } from "./index";
@@ -17,6 +21,16 @@ export interface VmFetchResult {
 	body: Uint8Array;
 }
 
+/** Extract path + query from a URL string for HttpRequest.path. */
+function requestPath(url: string): string {
+	try {
+		const parsed = new URL(url, "http://localhost");
+		return `${parsed.pathname}${parsed.search}`;
+	} catch {
+		return url.startsWith("/") ? url : `/${url}`;
+	}
+}
+
 // Build network actions for the actor factory.
 export function buildNetworkActions<TConnParams>(
 	config: AgentOsActorConfig<TConnParams>,
@@ -30,28 +44,20 @@ export function buildNetworkActions<TConnParams>(
 		): Promise<VmFetchResult> => {
 			const agentOs = await ensureVm(c, config);
 
-			const headers = new Headers(options?.headers);
-			const request = new Request(url, {
+			// 0.2.8: fetch(port, Request) → httpRequest({ port, path, ... }).
+			const response = await agentOs.httpRequest({
+				port,
+				path: requestPath(url),
 				method: options?.method ?? "GET",
-				headers,
-				body: options?.body ?? null,
+				headers: options?.headers,
+				body: options?.body,
 			});
-
-			const response = await agentOs.fetch(port, request);
-
-			// Serialize response headers to a plain object.
-			const responseHeaders: Record<string, string> = {};
-			response.headers.forEach((value, key) => {
-				responseHeaders[key] = value;
-			});
-
-			const body = new Uint8Array(await response.arrayBuffer());
 
 			return {
 				status: response.status,
 				statusText: response.statusText,
-				headers: responseHeaders,
-				body,
+				headers: response.headers,
+				body: response.body,
 			};
 		},
 	};

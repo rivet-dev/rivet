@@ -1,7 +1,7 @@
 import type {
 	AgentOsOptions,
-	JsonRpcNotification,
-	PermissionRequest,
+	PendingPermissionRequest,
+	SessionStreamEntry,
 } from "@rivet-dev/agent-os-core";
 import { z } from "zod/v4";
 import type { ActorContext, BeforeConnectContext } from "@/actor/config";
@@ -81,15 +81,23 @@ interface AgentOsActorConfigCallbacks<TConnParams> {
 		>,
 		params: TConnParams,
 	) => void | Promise<void>;
+	/**
+	 * Live stream delivers `SessionStreamEntry`. The HOC may also synthesize
+	 * legacy `{ method: "session/completed"|"session/aborted", params }`
+	 * terminals when `sendPrompt`/`cancelPrompt` resolve — product actors
+	 * still key burst drain / watchdog off those method tails.
+	 */
 	onSessionEvent?: (
 		c: AgentOsActorContext<TConnParams>,
 		sessionId: string,
-		event: JsonRpcNotification,
+		entry:
+			| SessionStreamEntry
+			| { method: string; params?: Record<string, unknown> },
 	) => void | Promise<void>;
 	onPermissionRequest?: (
 		c: AgentOsActorContext<TConnParams>,
 		sessionId: string,
-		request: PermissionRequest,
+		request: PendingPermissionRequest,
 	) => void | Promise<void>;
 }
 

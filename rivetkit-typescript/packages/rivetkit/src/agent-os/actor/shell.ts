@@ -1,4 +1,8 @@
-import type { OpenShellOptions } from "@rivet-dev/agent-os-core";
+/**
+ * Overview: Interactive shell actions for the agent-os HOC. Bridges
+ * 0.2.8 `ShellData` events onto the actor `shellData` broadcast.
+ */
+import type { OpenShellOptions, ShellData } from "@rivet-dev/agent-os-core";
 import type { AgentOsActorConfig } from "../config";
 import type { AgentOsActionContext } from "../types";
 import { ensureVm, syncPreventSleep } from "./index";
@@ -15,9 +19,12 @@ export function buildShellActions<TConnParams>(
 			const agentOs = await ensureVm(c, config);
 			const { shellId } = agentOs.openShell(options);
 
-			// Wire shell data to actor events.
-			agentOs.onShellData(shellId, (data: Uint8Array) => {
-				c.broadcast("shellData", { shellId, data });
+			// 0.2.8 delivers { shellId, data } instead of bare Uint8Array.
+			agentOs.onShellData(shellId, (event: ShellData) => {
+				c.broadcast("shellData", {
+					shellId: event.shellId,
+					data: event.data,
+				});
 			});
 
 			c.vars.activeShells.add(shellId);
