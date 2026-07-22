@@ -716,4 +716,5 @@ export {
 	runHook,
 	isSidecarProcessDeath,
 	withSidecarRecovery,
+	truncateForLog,
 };
