@@ -1,5 +1,8 @@
 import type { AgentOsOptions, MountConfig } from "@rivet-dev/agent-os-core";
-import { AgentOs, createInMemoryFileSystem } from "@rivet-dev/agent-os-core";
+import { AgentOs } from "@rivet-dev/agent-os-core";
+// 0.2.8 moved the in-memory JS VFS driver off the main entry; the actor
+// still uses it as the default `/home/user` working-directory mount.
+import { createInMemoryFileSystem } from "@rivet-dev/agent-os-core/test/runtime";
 import { type ActorDefinition, actor, event } from "@/actor/mod";
 import type { DatabaseProvider, RawAccess } from "@/common/database/config";
 import { db } from "@/common/database/mod";
@@ -281,6 +284,13 @@ interface BootBox {
 	boot: Promise<AgentOs> | null;
 }
 
+// agent-os 0.2.8 requires one SQLite descriptor per VM for durable sessions
+// (and for the native chunked root FS). Matches upstream `@rivet-dev/agentos`
+// actor boot: Actor Runtime Socket UDS + chunked_actor_sqlite root.
+const ACTOR_SQLITE_CHUNK_SIZE = 512 * 1024;
+const ACTOR_SQLITE_INLINE_THRESHOLD = 64 * 1024;
+const ROOT_NAMESPACE = "agentos-root";
+
 async function bootVm<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 	config: AgentOsActorConfig<TConnParams>,
@@ -300,10 +310,54 @@ async function bootVm<TConnParams>(
 				? await config.options(c)
 				: config.options;
 
+		// HOC owns database + rootFilesystem. Callers configure mounts/software
+		// only — passing either of these would fight the actor-UDS wiring.
+		if (resolvedUserOptions?.database) {
+			throw new Error(
+				"agentOs() owns database and injects the actor SQLite UDS descriptor; standalone AgentOs clients may choose a SQLite file",
+			);
+		}
+		if (resolvedUserOptions?.rootFilesystem) {
+			throw new Error(
+				"agentOs() owns rootFilesystem so it can persist directly through the actor SQLite UDS; use mounts for additional filesystems",
+			);
+		}
+
 		// Build options with in-memory VFS as default working directory mount.
 		options = buildVmOptions(resolvedUserOptions);
 
-		agentOs = await AgentOs.create(options);
+		// Provision the Actor Runtime Socket for this generation, then hand the
+		// UDS path to AgentOs as the sole VM SQLite descriptor. Without this,
+		// createSession fails closed with session_storage_unavailable.
+		const actorRuntimeSocket = (
+			c as AgentOsActionContext<TConnParams> & {
+				actorRuntimeSocket?: () => Promise<{ path: string }>;
+			}
+		).actorRuntimeSocket;
+		if (typeof actorRuntimeSocket !== "function") {
+			throw new Error(
+				"AgentOS actors require a RivetKit runtime with Actor Runtime Socket support",
+			);
+		}
+		const { path: actorSqliteUdsPath } = await actorRuntimeSocket.call(c);
+
+		agentOs = await AgentOs.create({
+			...options,
+			database: { type: "actor_uds", path: actorSqliteUdsPath },
+			rootFilesystem: {
+				type: "native",
+				plugin: {
+					id: "chunked_actor_sqlite",
+					config: {
+						namespace: ROOT_NAMESPACE,
+						chunkSize: ACTOR_SQLITE_CHUNK_SIZE,
+						inlineThreshold: ACTOR_SQLITE_INLINE_THRESHOLD,
+						uid: options?.user?.euid ?? options?.user?.uid ?? 1000,
+						gid: options?.user?.egid ?? options?.user?.gid ?? 1000,
+					},
+				},
+			},
+		});
 	} catch (err) {
 		// Surface the REAL boot failure. The actor runtime otherwise wraps any
 		// throw from the options factory or `AgentOs.create` as an opaque
@@ -586,6 +640,9 @@ export function agentOs<TConnParams = undefined>(
 		options: {
 			sleepGracePeriod: parsedConfig.sleepGracePeriod ?? 900_000,
 			actionTimeout: parsedConfig.actionTimeout ?? 900_000,
+			// Required so bootVm can provision an Actor Runtime Socket UDS for
+			// agent-os 0.2.8 session/VFS SQLite (database: { type: "actor_uds" }).
+			enableActorRuntimeSocket: true,
 			...(parsedConfig.noSleep !== undefined
 				? { noSleep: parsedConfig.noSleep }
 				: {}),
@@ -603,6 +660,9 @@ export function agentOs<TConnParams = undefined>(
 			activeHooks: new Set<Promise<void>>(),
 			activeShells: new Set<string>(),
 			sessions: new Set(),
+			// Highest durable stream sequence seen per session — used by
+			// subscribeToSession to drop 0.2.8 live re-deliveries.
+			sessionEventSequences: new Map<string, number>(),
 			keepAwakeResolver: null,
 		}),
 		db: db({

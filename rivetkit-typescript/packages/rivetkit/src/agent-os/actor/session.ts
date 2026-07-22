@@ -1,17 +1,17 @@
+import crypto from "node:crypto";
 import type {
 	AgentOs,
 	AgentType,
-	CreateSessionOptions,
-	JsonRpcNotification,
-	JsonRpcResponse,
-	PermissionReply,
-	SessionConfigOption,
+	PendingPermissionRequest,
+	PermissionResponseResult,
+	SessionConfig,
 	SessionInfo,
-	SessionModeState,
+	SessionStreamEntry,
 } from "@rivet-dev/agent-os-core";
 import type { AgentOsActorConfig } from "../config";
 import type {
 	AgentOsActionContext,
+	CreateSessionOptions,
 	PersistedSessionEvent,
 	PersistedSessionRecord,
 	PromptResult,
@@ -19,12 +19,10 @@ import type {
 } from "../types";
 import { ensureVm, runHook, syncPreventSleep, truncateForLog } from "./index";
 
-// agent-os 0.2.x removed the pull-based `AgentOs.getSessionEvents` API (the
-// only event surface is now the `onSessionEvent` subscription). The actor
-// keeps its pull contract — `getEvents` / `getSequencedEvents` actions — by
-// serving reads from the persisted event ledger this file already maintains
-// via its own `onSessionEvent` subscription. These two types preserve the
-// removed core types' wire shape, which remote pollers depend on.
+// The actor keeps a pull contract — `getEvents` / `getSequencedEvents`
+// actions — by serving reads from the persisted event ledger this file
+// maintains via its own `onSessionEvent` subscription (agent-os has no
+// pull API; remote pollers need one that survives reconnects and sleep).
 interface GetEventsOptions {
 	/** Only return events with `sequenceNumber >= since`. */
 	since?: number;
@@ -32,24 +30,28 @@ interface GetEventsOptions {
 
 interface SequencedEvent {
 	sequenceNumber: number;
-	notification: JsonRpcNotification;
+	entry: SessionStreamEntry;
 }
 
-// Strip non-serializable values (functions) from agent-os-core responses so
-// CBOR/BARE encoding doesn't fail. The JsonRpcResponse objects from
-// secure-exec can contain function properties.
-function stripFunctions(value: unknown): unknown {
-	if (value === null || value === undefined) return value;
-	if (typeof value === "function") return undefined;
-	if (typeof value !== "object") return value;
-	if (Array.isArray(value)) return value.map(stripFunctions);
-	const out: Record<string, unknown> = {};
-	for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-		if (typeof v !== "function") {
-			out[k] = stripFunctions(v);
-		}
+/**
+ * Pick the adapter-supplied ACP permission option matching a decision kind.
+ * 0.2.8's `respondPermission` requires an EXACT `optionId` from the
+ * request's own options — hooks decide with a kind
+ * (`allow_once`/`allow_always`/`reject_once`/`reject_always`) and this
+ * resolves it, falling back to the canonical id when the adapter's options
+ * are unavailable (e.g. responding after an actor wake).
+ */
+export function pickPermissionOptionId(
+	options: PendingPermissionRequest["options"] | undefined,
+	kind: "allow_once" | "allow_always" | "reject_once" | "reject_always",
+): string {
+	const matched = options?.find(
+		(option) => option.kind === kind || option.optionId === kind,
+	);
+	if (matched && typeof matched.optionId === "string") {
+		return matched.optionId;
 	}
-	return out;
+	return kind;
 }
 
 // Helper to verify a session exists in the VM. Throws via AgentOs if not found.
@@ -62,25 +64,41 @@ function assertSessionExists<TConnParams>(
 	}
 }
 
-// Build a SessionRecord from AgentOs flat API.
-function toSessionRecord(
+/** Concatenated text blocks of the final agent message. */
+function promptMessageText(
+	message: { content?: Array<Record<string, unknown>> } | null,
+): string {
+	if (!message?.content) return "";
+	let text = "";
+	for (const block of message.content) {
+		if (block.type === "text" && typeof block.text === "string") {
+			text += block.text;
+		}
+	}
+	return text;
+}
+
+// Build a SessionRecord from the AgentOs durable-session API.
+async function toSessionRecord(
 	agentOs: AgentOs,
 	sessionId: string,
 	agentType: string,
-): SessionRecord {
+): Promise<SessionRecord> {
 	// Snapshot capabilities/agentInfo into plain JSON objects INSIDE the
 	// action body. The core returns live (proxy/NAPI-backed) objects whose
 	// late property reads during response encoding can fail against a
 	// wedged sidecar, surfacing as an opaque `internal_error` on an action
 	// whose body fully succeeded (live signature 2026-07: createSession
-	// works via raw probes while the wrapper action fails). Same class of
-	// hazard `stripFunctions` guards for JsonRpcResponse.
+	// works via raw probes while the wrapper action fails).
+	const capabilities =
+		(await agentOs.getSessionCapabilities({ sessionId })) ?? {};
+	const agentInfo = await agentOs.getSessionAgentInfo({ sessionId });
 	return JSON.parse(
 		JSON.stringify({
 			sessionId,
 			agentType,
-			capabilities: agentOs.getSessionCapabilities(sessionId) ?? {},
-			agentInfo: agentOs.getSessionAgentInfo(sessionId),
+			capabilities,
+			agentInfo,
 		}),
 	) as SessionRecord;
 }
@@ -95,8 +113,9 @@ async function persistSession<TConnParams>(
 	agentType: string,
 ): Promise<void> {
 	const now = Date.now();
-	const capabilities = agentOs.getSessionCapabilities(sessionId) ?? {};
-	const agentInfo = agentOs.getSessionAgentInfo(sessionId);
+	const capabilities =
+		(await agentOs.getSessionCapabilities({ sessionId })) ?? {};
+	const agentInfo = await agentOs.getSessionAgentInfo({ sessionId });
 	await c.db.execute(
 		`INSERT OR REPLACE INTO agent_os_sessions (session_id, agent_type, capabilities, agent_info, created_at)
 		 VALUES (?, ?, ?, ?, ?)`,
@@ -108,11 +127,13 @@ async function persistSession<TConnParams>(
 	);
 }
 
-// Persist a session event to SQLite with an auto-incrementing sequence number.
+// Persist a session stream entry to SQLite with an auto-incrementing
+// sequence number (the actor's own ledger seq, independent of the core's
+// durable `sequence` — ephemeral chunk entries have none).
 async function persistSessionEvent<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 	sessionId: string,
-	event: JsonRpcNotification,
+	entry: SessionStreamEntry,
 ): Promise<void> {
 	const now = Date.now();
 
@@ -128,7 +149,7 @@ async function persistSessionEvent<TConnParams>(
 		 VALUES (?, ?, ?, ?)`,
 		sessionId,
 		nextSeq,
-		JSON.stringify(event),
+		JSON.stringify(entry),
 		now,
 	);
 }
@@ -149,7 +170,7 @@ async function readPersistedEventsSince<TConnParams>(
 	);
 	return rows.map((row) => ({
 		sequenceNumber: row.seq,
-		notification: JSON.parse(row.event) as JsonRpcNotification,
+		entry: JSON.parse(row.event) as SessionStreamEntry,
 	}));
 }
 
@@ -168,42 +189,124 @@ async function deletePersistedSession<TConnParams>(
 	);
 }
 
-// Subscribe to a session's event and permission streams via the flat AgentOs API,
-// broadcasting events and running user-provided hooks.
+/**
+ * Rebuild the durable-stream high-water mark from the SQLite ledger.
+ * `sessionEventSequences` lives in ephemeral vars and is empty after sleep;
+ * without this, 0.2.8 live redelivery re-persists and re-fires hooks.
+ */
+async function hydrateDurableSequenceHighWater<TConnParams>(
+	c: AgentOsActionContext<TConnParams>,
+	sessionId: string,
+): Promise<void> {
+	const events = await readPersistedEventsSince(c, sessionId, 0);
+	let max: number | undefined;
+	for (const { entry } of events) {
+		if (
+			entry?.durability === "durable" &&
+			typeof entry.sequence === "number"
+		) {
+			if (max === undefined || entry.sequence > max) max = entry.sequence;
+		}
+	}
+	if (max !== undefined) {
+		c.vars.sessionEventSequences.set(sessionId, max);
+	}
+}
+
+/** Best-effort delete when createSession fails after openSession. */
+async function bestEffortDeleteSession(
+	agentOs: AgentOs,
+	sessionId: string,
+	log: { warn: (fields: Record<string, unknown>) => void },
+): Promise<void> {
+	try {
+		await agentOs.deleteSession({ sessionId });
+	} catch (cleanupErr) {
+		log.warn({
+			msg: "agent-os: failed to delete orphaned session after create failure",
+			sessionId,
+			err: truncateForLog(
+				cleanupErr instanceof Error
+					? cleanupErr.message
+					: String(cleanupErr),
+			),
+		});
+	}
+}
+
+// Subscribe to a session's stream via the per-session AgentOs overload,
+// broadcasting entries and running user-provided hooks.
 export function subscribeToSession<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 	agentOs: AgentOs,
 	sessionId: string,
 	parsedConfig: AgentOsActorConfig<TConnParams>,
 ): void {
-	agentOs.onSessionEvent(sessionId, (event) => {
+	// Idempotent per session: `resumeSession` re-opens an existing durable
+	// session on the same VM — a second handler would double-broadcast and
+	// double-persist every event.
+	if (c.vars.sessions.has(sessionId)) {
+		return;
+	}
+
+	agentOs.onSessionEvent(sessionId, (entry: SessionStreamEntry) => {
 		// Always fan the event out, regardless of `c.abortSignal.aborted`.
 		// `c` here is captured from the `createSession` action's context.
-		// In rivetkit 2.3.0, action-context abortSignals can fire
-		// *call-scoped* (after the action returns / when the initiating
-		// WS connection drops) while the ACTOR is still very much alive
-		// and the agent-os Pi session is still streaming thoughts. An
-		// early return here silently dropped every subsequent
-		// `agent_thought_chunk` and (worse) the user's `onSessionEvent`
-		// hook — meaning the DAG kept growing (tool calls succeeded via
-		// direct actor RPCs) but the live thinking transcript never
-		// reached the UI.
+		// Action-context abortSignals can fire *call-scoped* (after the
+		// action returns / when the initiating WS connection drops) while
+		// the ACTOR is still very much alive and the agent session is still
+		// streaming thoughts. An early return here silently dropped every
+		// subsequent `agent_thought_chunk` and (worse) the user's
+		// `onSessionEvent` hook — meaning the DAG kept growing (tool calls
+		// succeeded via direct actor RPCs) but the live thinking transcript
+		// never reached the UI.
 		//
 		// Both downstream paths handle shutdown-time races themselves:
-		// `c.broadcast` is best-effort (subscribers that already dropped
-		// just don't receive it; no error surfaces), and
-		// `persistSessionEvent`'s `.catch` below detects
-		// `isShutdownDbError` and demotes it to debug. So we don't need
-		// a blanket guard here — and adding one violates the
-		// fail-by-default-runtime rule (silent no-op on required
-		// behavior).
+		// `c.broadcast` is best-effort, and `persistSessionEvent`'s
+		// `.catch` below demotes shutdown-time DB errors to a log line.
+
+		// Durable entries carry the core's sequence; 0.2.8 documents that
+		// duplicates can occur on live delivery — drop exact re-deliveries
+		// so broadcasts and the ledger stay append-once.
+		if (entry.durability === "durable") {
+			const lastSeq = c.vars.sessionEventSequences.get(sessionId);
+			if (lastSeq !== undefined && entry.sequence <= lastSeq) {
+				return;
+			}
+			c.vars.sessionEventSequences.set(sessionId, entry.sequence);
+		}
+
+		// Permission traffic rides the same stream; surface requests on the
+		// dedicated permission channel (broadcast + hook) so actors can
+		// answer them via `respondPermission`.
+		if (entry.type === "permission_request") {
+			const request: PendingPermissionRequest = {
+				requestId: entry.requestId,
+				options: entry.options,
+				toolCall: entry.toolCall,
+				...(entry._meta !== undefined ? { _meta: entry._meta } : {}),
+			};
+
+			c.broadcast(
+				"permissionRequest",
+				JSON.parse(JSON.stringify({ sessionId, request })),
+			);
+
+			if (parsedConfig.onPermissionRequest) {
+				runHook(c, "onPermissionRequest", () =>
+					parsedConfig.onPermissionRequest?.(c, sessionId, request),
+				);
+			}
+			return;
+		}
+
 		c.broadcast(
 			"sessionEvent",
-			JSON.parse(JSON.stringify({ sessionId, event })),
+			JSON.parse(JSON.stringify({ sessionId, entry })),
 		);
 
-		// Persist event to SQLite for sleep/wake recovery.
-		persistSessionEvent(c, sessionId, event).catch((error) =>
+		// Persist to the ledger for reconnect replay (`getSequencedEvents`).
+		persistSessionEvent(c, sessionId, entry).catch((error) =>
 			c.log.error({
 				msg: "agent-os failed to persist session event",
 				sessionId,
@@ -213,20 +316,7 @@ export function subscribeToSession<TConnParams>(
 
 		if (parsedConfig.onSessionEvent) {
 			runHook(c, "onSessionEvent", () =>
-				parsedConfig.onSessionEvent?.(c, sessionId, event),
-			);
-		}
-	});
-
-	agentOs.onPermissionRequest(sessionId, (request) => {
-		c.broadcast(
-			"permissionRequest",
-			JSON.parse(JSON.stringify({ sessionId, request })),
-		);
-
-		if (parsedConfig.onPermissionRequest) {
-			runHook(c, "onPermissionRequest", () =>
-				parsedConfig.onPermissionRequest?.(c, sessionId, request),
+				parsedConfig.onSessionEvent?.(c, sessionId, entry),
 			);
 		}
 	});
@@ -245,12 +335,22 @@ export function buildSessionActions<TConnParams>(
 			options?: CreateSessionOptions,
 		): Promise<SessionRecord> => {
 			const agentOs = await ensureVm(c, config);
-			let sessionId: string;
+			// `openSession` returns void — the actor owns the id.
+			const sessionId = crypto.randomUUID();
 			try {
-				({ sessionId } = await agentOs.createSession(
-					agentType,
-					options,
-				));
+				await agentOs.openSession({
+					...options,
+					sessionId,
+					agent: agentType,
+					// 0.2.8 defaults to `allow_all`, which auto-answers
+					// adapter permission requests WITHOUT surfacing them —
+					// bypassing the actors' permission hooks. When a hook is
+					// configured, FORCE ask and ignore any caller override
+					// (browser-reachable vmV2 can otherwise pass allow_all).
+					permissionPolicy: config.onPermissionRequest
+						? "ask"
+						: (options?.permissionPolicy ?? "allow_all"),
+				});
 			} catch (err) {
 				// Surface the REAL failure (bootVm precedent): the actor
 				// runtime wraps this throw as an opaque `internal_error`,
@@ -268,6 +368,7 @@ export function buildSessionActions<TConnParams>(
 				throw err;
 			}
 			try {
+				await hydrateDurableSequenceHighWater(c, sessionId);
 				subscribeToSession(c, agentOs, sessionId, config);
 
 				// Persist session metadata to SQLite for sleep/wake recovery.
@@ -278,7 +379,7 @@ export function buildSessionActions<TConnParams>(
 					sessionId,
 					agentType,
 				});
-				return toSessionRecord(agentOs, sessionId, agentType);
+				return await toSessionRecord(agentOs, sessionId, agentType);
 			} catch (err) {
 				// Same visibility for post-create failures (subscribe/persist/
 				// record build) — otherwise they surface as opaque internal_error
@@ -294,6 +395,10 @@ export function buildSessionActions<TConnParams>(
 						err instanceof Error ? err.stack : undefined,
 					),
 				});
+				await bestEffortDeleteSession(agentOs, sessionId, c.log);
+				c.vars.sessions.delete(sessionId);
+				c.vars.activeSessionIds.delete(sessionId);
+				c.vars.sessionEventSequences.delete(sessionId);
 				throw err;
 			}
 		},
@@ -302,7 +407,17 @@ export function buildSessionActions<TConnParams>(
 			c: AgentOsActionContext<TConnParams>,
 		): Promise<SessionInfo[]> => {
 			const agentOs = await ensureVm(c, config);
-			return agentOs.listSessions();
+			// Drain all pages.
+			const sessions: SessionInfo[] = [];
+			let cursor: string | undefined;
+			do {
+				const page = await agentOs.listSessions(
+					cursor ? { cursor } : undefined,
+				);
+				sessions.push(...page.sessions);
+				cursor = page.nextCursor ?? undefined;
+			} while (cursor);
+			return JSON.parse(JSON.stringify(sessions)) as SessionInfo[];
 		},
 
 		getSession: async (
@@ -311,13 +426,14 @@ export function buildSessionActions<TConnParams>(
 		): Promise<SessionRecord> => {
 			assertSessionExists(c, sessionId);
 			const agentOs = await ensureVm(c, config);
-			const info = agentOs
-				.listSessions()
-				.find((s) => s.sessionId === sessionId);
-			if (!info) {
+			let agentType: string;
+			try {
+				const info = await agentOs.getSession({ sessionId });
+				agentType = info.agent;
+			} catch {
 				throw new Error(`session not found: ${sessionId}`);
 			}
-			return toSessionRecord(agentOs, sessionId, info.agentType);
+			return toSessionRecord(agentOs, sessionId, agentType);
 		},
 
 		destroySession: async (
@@ -325,9 +441,10 @@ export function buildSessionActions<TConnParams>(
 			sessionId: string,
 		): Promise<void> => {
 			const agentOs = await ensureVm(c, config);
-			await agentOs.destroySession(sessionId);
+			await agentOs.deleteSession({ sessionId });
 			c.vars.sessions.delete(sessionId);
 			c.vars.activeSessionIds.delete(sessionId);
+			c.vars.sessionEventSequences.delete(sessionId);
 			syncPreventSleep(c);
 
 			// Clean up persisted session and events from SQLite.
@@ -341,8 +458,9 @@ export function buildSessionActions<TConnParams>(
 			sessionId: string,
 		): Promise<{ sessionId: string }> => {
 			const agentOs = await ensureVm(c, config);
-			// agent-os 0.2.x requires the agent type to resume; recover it
-			// from the persisted session row (written on createSession).
+			// Recover the agent type from the persisted session row (written
+			// on createSession) — `openSession` needs it, and re-opening an
+			// existing durable id restores its adapter.
 			const rows: { agent_type: string }[] = await c.db.execute(
 				`SELECT agent_type FROM agent_os_sessions WHERE session_id = ?`,
 				sessionId,
@@ -353,7 +471,16 @@ export function buildSessionActions<TConnParams>(
 					`cannot resume session ${sessionId}: no recorded agent type`,
 				);
 			}
-			return agentOs.resumeSession(sessionId, agentType);
+			await agentOs.openSession({
+				sessionId,
+				agent: agentType,
+				permissionPolicy: config.onPermissionRequest
+					? "ask"
+					: "allow_all",
+			});
+			await hydrateDurableSequenceHighWater(c, sessionId);
+			subscribeToSession(c, agentOs, sessionId, config);
+			return { sessionId };
 		},
 
 		closeSession: async (
@@ -361,9 +488,10 @@ export function buildSessionActions<TConnParams>(
 			sessionId: string,
 		): Promise<void> => {
 			const agentOs = await ensureVm(c, config);
-			agentOs.closeSession(sessionId);
+			await agentOs.unloadSession({ sessionId });
 			c.vars.sessions.delete(sessionId);
 			c.vars.activeSessionIds.delete(sessionId);
+			c.vars.sessionEventSequences.delete(sessionId);
 			syncPreventSleep(c);
 
 			// Clean up persisted session and events from SQLite.
@@ -376,8 +504,27 @@ export function buildSessionActions<TConnParams>(
 
 // Build prompt, cancel, and permission actions for the actor factory.
 export function buildPromptActions<TConnParams>(
-	_config: AgentOsActorConfig<TConnParams>,
+	config: AgentOsActorConfig<TConnParams>,
 ) {
+	/**
+	 * 0.2.8 streams only flattened SessionStreamEntry (no method tails).
+	 * Product actors still key burst drain / watchdog / turnCount off
+	 * legacy `session/completed|aborted` method events — synthesize those
+	 * when the blocking prompt API resolves so turn-end side effects run.
+	 */
+	const emitPromptTerminal = (
+		c: AgentOsActionContext<TConnParams>,
+		sessionId: string,
+		method: "session/completed" | "session/aborted",
+		params?: Record<string, unknown>,
+	) => {
+		if (!config.onSessionEvent) return;
+		const terminalEvent = { method, params: params ?? {} };
+		runHook(c, "onSessionEvent", () =>
+			config.onSessionEvent?.(c, sessionId, terminalEvent),
+		);
+	};
+
 	return {
 		sendPrompt: async (
 			c: AgentOsActionContext<TConnParams>,
@@ -401,12 +548,25 @@ export function buildPromptActions<TConnParams>(
 			c.log.info({ msg: "agent-os prompt turn started", sessionId });
 
 			const start = Date.now();
+			let promptResult: PromptResult | undefined;
+			let promptFailed = false;
 			try {
-				const result = await agentOs.prompt(sessionId, text);
-				return {
-					response: JSON.parse(JSON.stringify(result.response)),
-					text: result.text,
-				};
+				const result = await agentOs.prompt({
+					sessionId,
+					content: [{ type: "text", text }],
+				});
+				promptResult = JSON.parse(
+					JSON.stringify({
+						sessionId: result.sessionId,
+						stopReason: result.stopReason,
+						message: result.message,
+						text: promptMessageText(result.message),
+					}),
+				) as PromptResult;
+				return promptResult;
+			} catch (err) {
+				promptFailed = true;
+				throw err;
 			} finally {
 				c.vars.activeSessionIds.delete(sessionId);
 				syncPreventSleep(c);
@@ -415,37 +575,57 @@ export function buildPromptActions<TConnParams>(
 					sessionId,
 					durationMs: Date.now() - start,
 				});
+				// Emit after activeSessionIds clear so sleep can proceed;
+				// hooks are fire-and-forget via runHook.
+				if (promptFailed) {
+					emitPromptTerminal(c, sessionId, "session/aborted", {
+						reason: "error",
+					});
+				} else if (promptResult) {
+					emitPromptTerminal(c, sessionId, "session/completed", {
+						stopReason: promptResult.stopReason,
+					});
+				}
 			}
 		},
 
 		cancelPrompt: async (
 			c: AgentOsActionContext<TConnParams>,
 			sessionId: string,
-		): Promise<JsonRpcResponse> => {
+		): Promise<{ status: "cancelled" | "no_active_prompt" }> => {
 			assertSessionExists(c, sessionId);
 			const agentOs = c.vars.agentOs;
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(
-				agentOs.cancelSession(sessionId),
-			) as JsonRpcResponse;
+			const result = await agentOs.cancelPrompt({ sessionId });
+			if (result.status === "cancelled") {
+				emitPromptTerminal(c, sessionId, "session/aborted", {
+					reason: "cancelled",
+				});
+			}
+			return result;
 		},
 
 		respondPermission: async (
 			c: AgentOsActionContext<TConnParams>,
 			sessionId: string,
-			permissionId: string,
-			reply: PermissionReply,
-		): Promise<JsonRpcResponse> => {
+			requestId: string,
+			optionId: string,
+		): Promise<PermissionResponseResult> => {
 			assertSessionExists(c, sessionId);
 			const agentOs = c.vars.agentOs;
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(
-				agentOs.respondPermission(sessionId, permissionId, reply),
-			) as JsonRpcResponse;
+			const result = await agentOs.respondPermission({
+				sessionId,
+				requestId,
+				optionId,
+			});
+			return JSON.parse(
+				JSON.stringify(result),
+			) as PermissionResponseResult;
 		},
 	};
 }
@@ -455,87 +635,50 @@ export function buildConfigActions<TConnParams>(
 	_config: AgentOsActorConfig<TConnParams>,
 ) {
 	return {
-		setMode: async (
+		getSessionConfig: async (
 			c: AgentOsActionContext<TConnParams>,
 			sessionId: string,
-			modeId: string,
-		): Promise<JsonRpcResponse> => {
+		): Promise<SessionConfig> => {
 			assertSessionExists(c, sessionId);
 			const agentOs = c.vars.agentOs;
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return stripFunctions(
-				agentOs.setSessionMode(sessionId, modeId),
-			) as JsonRpcResponse;
+			const sessionConfig = await agentOs.getSessionConfig({ sessionId });
+			return JSON.parse(JSON.stringify(sessionConfig)) as SessionConfig;
 		},
 
-		getModes: async (
+		setSessionConfigOption: async (
 			c: AgentOsActionContext<TConnParams>,
 			sessionId: string,
-		): Promise<SessionModeState | null> => {
+			configId: string,
+			value: string | boolean,
+		): Promise<SessionConfig> => {
 			assertSessionExists(c, sessionId);
 			const agentOs = c.vars.agentOs;
 			if (!agentOs) {
 				throw new Error("VM not initialized");
 			}
-			return agentOs.getSessionModes(sessionId);
-		},
-
-		setModel: async (
-			c: AgentOsActionContext<TConnParams>,
-			sessionId: string,
-			model: string,
-		): Promise<JsonRpcResponse> => {
-			assertSessionExists(c, sessionId);
-			const agentOs = c.vars.agentOs;
-			if (!agentOs) {
-				throw new Error("VM not initialized");
-			}
-			return stripFunctions(
-				agentOs.setSessionModel(sessionId, model),
-			) as JsonRpcResponse;
-		},
-
-		setThoughtLevel: async (
-			c: AgentOsActionContext<TConnParams>,
-			sessionId: string,
-			level: string,
-		): Promise<JsonRpcResponse> => {
-			assertSessionExists(c, sessionId);
-			const agentOs = c.vars.agentOs;
-			if (!agentOs) {
-				throw new Error("VM not initialized");
-			}
-			return stripFunctions(
-				agentOs.setSessionThoughtLevel(sessionId, level),
-			) as JsonRpcResponse;
-		},
-
-		getConfigOptions: async (
-			c: AgentOsActionContext<TConnParams>,
-			sessionId: string,
-		): Promise<SessionConfigOption[]> => {
-			assertSessionExists(c, sessionId);
-			const agentOs = c.vars.agentOs;
-			if (!agentOs) {
-				throw new Error("VM not initialized");
-			}
-			return agentOs.getSessionConfigOptions(sessionId);
+			const updated = await agentOs.setSessionConfigOption({
+				sessionId,
+				configId,
+				value,
+			});
+			return JSON.parse(JSON.stringify(updated)) as SessionConfig;
 		},
 
 		getEvents: async (
 			c: AgentOsActionContext<TConnParams>,
 			sessionId: string,
 			options?: GetEventsOptions,
-		): Promise<JsonRpcNotification[]> => {
+		): Promise<SessionStreamEntry[]> => {
 			assertSessionExists(c, sessionId);
 			const events = await readPersistedEventsSince(
 				c,
 				sessionId,
 				options?.since ?? 0,
 			);
-			return events.map((e) => e.notification);
+			return events.map((e) => e.entry);
 		},
 
 		getSequencedEvents: async (
@@ -545,22 +688,6 @@ export function buildConfigActions<TConnParams>(
 		): Promise<SequencedEvent[]> => {
 			assertSessionExists(c, sessionId);
 			return readPersistedEventsSince(c, sessionId, options?.since ?? 0);
-		},
-
-		rawSend: async (
-			c: AgentOsActionContext<TConnParams>,
-			sessionId: string,
-			method: string,
-			params?: Record<string, unknown>,
-		): Promise<JsonRpcResponse> => {
-			assertSessionExists(c, sessionId);
-			const agentOs = c.vars.agentOs;
-			if (!agentOs) {
-				throw new Error("VM not initialized");
-			}
-			return stripFunctions(
-				agentOs.rawSessionSend(sessionId, method, params),
-			) as JsonRpcResponse;
 		},
 	};
 }
@@ -616,7 +743,7 @@ export function buildSessionPersistenceActions<TConnParams>(
 			return rows.map((row) => ({
 				sessionId: row.session_id,
 				seq: row.seq,
-				event: JSON.parse(row.event),
+				entry: JSON.parse(row.event),
 				createdAt: row.created_at,
 			}));
 		},
