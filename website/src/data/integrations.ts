@@ -1,8 +1,17 @@
 import eve from "@/images/vendors/eve.svg";
+import flue from "@/images/vendors/flue.svg";
 import workflow from "@/images/vendors/workflow.svg";
 import type { SidebarItem } from "@/lib/sitemap";
 
 export const integrations = [
+	{
+		title: "Flue",
+		description: "Run Flue agents on Rivet with agentOS sandboxes.",
+		href: "/integrations/flue",
+		category: "Agents",
+		icon: { src: flue.src },
+		badge: "Beta",
+	},
 	{
 		title: "Vercel Eve",
 		description: "Use Rivet as the durable World for Vercel Eve.",

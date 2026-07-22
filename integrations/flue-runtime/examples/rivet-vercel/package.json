@@ -1,0 +1,29 @@
+{
+	"name": "flue-rivet-vercel-example",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"flue:build": "flue build",
+		"dev": "pnpm run flue:build && next dev --webpack",
+		"build": "pnpm run flue:build && next build --webpack",
+		"test:e2e": "pnpm --filter @rivetkit/rivetkit-napi run build && pnpm --dir ../../../../rivetkit-typescript/packages/next-js exec tsup src/mod.ts --format esm,cjs --no-config && pnpm --dir ../.. exec tsx --test --test-name-pattern \"^examples/rivet-vercel\" test/rivet-examples.test.ts"
+	},
+	"dependencies": {
+		"@flue/cli": "git+https://github.com/NathanFlurry/flue.git#3c0e75b763031ce27bd55fd3ce062f8e215944ea&path:/packages/cli",
+		"@flue/runtime": "git+https://github.com/NathanFlurry/flue.git#acffb0ea59513d0f469f8de0fd5de649b2b826d9&path:/packages/runtime",
+		"@mongodb-js/zstd": "link:./stubs/mongodb-js-zstd",
+		"@rivet-dev/flue": "workspace:*",
+		"@rivetkit/next-js": "workspace:*",
+		"@rivetkit/rivetkit-napi": "workspace:*",
+		"@rivetkit/rivetkit-napi-linux-x64-gnu": "2.3.5",
+		"next": "16.1.4",
+		"node-liblzma": "link:./stubs/node-liblzma",
+		"react": "19.1.0",
+		"react-dom": "19.1.0",
+		"rivetkit": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/react": "19.2.17",
+		"typescript": "^6.0.3"
+	}
+}

@@ -1,0 +1,16 @@
+{
+	"name": "flue-rivet-example",
+	"type": "module",
+	"private": true,
+	"scripts": {
+		"build": "flue build",
+		"dev": "flue dev",
+		"test:e2e": "pnpm --dir ../.. exec tsx --test --test-name-pattern \"^examples/rivet builds\" test/rivet-examples.test.ts"
+	},
+	"dependencies": {
+		"@flue/cli": "git+https://github.com/NathanFlurry/flue.git#3c0e75b763031ce27bd55fd3ce062f8e215944ea&path:/packages/cli",
+		"@flue/runtime": "git+https://github.com/NathanFlurry/flue.git#acffb0ea59513d0f469f8de0fd5de649b2b826d9&path:/packages/runtime",
+		"@rivet-dev/flue": "workspace:*",
+		"rivetkit": "workspace:*"
+	}
+}
