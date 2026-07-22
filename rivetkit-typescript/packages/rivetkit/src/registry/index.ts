@@ -19,6 +19,8 @@ import type { RuntimeServerlessResponseHead } from "./runtime";
 
 type ShutdownSignal = "SIGINT" | "SIGTERM";
 
+const REGISTRY_READY_TIMEOUT_MS = 30_000;
+
 function signalExitCode(signal: ShutdownSignal): number {
 	switch (signal) {
 		case "SIGINT":
@@ -73,6 +75,8 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	#runtimeServePromise?: Promise<void>;
+	#runtimeServeLifecyclePromise?: Promise<void>;
+	#runtimeReadyPromise?: Promise<void>;
 	#runtimeServeConfiguredPromise?: ReturnType<typeof buildConfiguredRegistry>;
 	#runtimeServerlessPromise?: ReturnType<typeof buildConfiguredRegistry>;
 	#configureServerlessPoolPromise?: Promise<void>;
@@ -490,17 +494,20 @@ export class Registry<A extends RegistryActors> {
 			const configuredRegistryPromise =
 				this.#buildConfiguredRegistry(config);
 			this.#runtimeServeConfiguredPromise = configuredRegistryPromise;
-			this.#runtimeServePromise = configuredRegistryPromise
-				.then(async ({ runtime, registry, serveConfig }) => {
+			this.#runtimeServeLifecyclePromise = configuredRegistryPromise.then(
+				async ({ runtime, registry, serveConfig }) => {
 					await runtime.serveRegistry(registry, serveConfig);
-				})
-				.catch((error) => {
+				},
+			);
+			this.#runtimeServePromise = this.#runtimeServeLifecyclePromise.catch(
+				(error) => {
 					// Always-attached catch so the stored promise never leaves a
 					// rejection unhandled. Downstream awaits (e.g. #runShutdown's
 					// Promise.race) attach their own catches and still observe
 					// resolution via the race.
 					logger().warn({ error }, "runtime registry serve errored");
-				});
+				},
+			);
 			// Install signal handlers once an envoy lifecycle has begun. Only
 			// Mode A ever reaches here. Mode B (handler(request)) intentionally
 			// does not install handlers because it runs on Workers/Vercel/Deno
@@ -692,6 +699,80 @@ export class Registry<A extends RegistryActors> {
 
 	public startEnvoy() {
 		this.#startEnvoy(this.parseConfig(), true);
+	}
+
+	/**
+	 * Starts the serverful registry if needed and waits until its envoy has
+	 * registered with the Engine. Repeated and concurrent calls share one
+	 * startup lifecycle and readiness promise.
+	 *
+	 * Unlike {@link start}, this reports startup failures and does not resolve
+	 * merely because an HTTP health endpoint is listening.
+	 */
+	public startAndWait(): Promise<void> {
+		if (this.#shutdownInFlight !== null) {
+			return Promise.reject(
+				new Error("registry.startAndWait() cannot run after shutdown has begun"),
+			);
+		}
+		if (this.#runtimeReadyPromise) return this.#runtimeReadyPromise;
+		if (getRivetkitRuntimeMode() === "serverless") {
+			return Promise.reject(
+				new Error(
+					"registry.startAndWait() requires envoy runtime mode; serverless registries become ready per request",
+				),
+			);
+		}
+
+		const config = this.parseConfig();
+		if (config.runtime === "wasm") {
+			return Promise.reject(
+				new Error(
+					"registry.startAndWait() requires the native runtime; WebAssembly registries do not host an envoy",
+				),
+			);
+		}
+		this.#startEnvoy(config, true);
+		const configuredRegistryPromise = this.#runtimeServeConfiguredPromise;
+		const serveLifecyclePromise = this.#runtimeServeLifecyclePromise;
+		if (!configuredRegistryPromise || !serveLifecyclePromise) {
+			throw new Error("registry envoy startup did not initialize");
+		}
+
+		let timeout: ReturnType<typeof setTimeout> | undefined;
+		const timeoutPromise = new Promise<never>((_resolve, reject) => {
+			timeout = setTimeout(
+				() =>
+					reject(
+						new Error(
+							`RivetKit registry did not register with the Engine within ${REGISTRY_READY_TIMEOUT_MS}ms`,
+						),
+					),
+				REGISTRY_READY_TIMEOUT_MS,
+			);
+			timeout.unref?.();
+		});
+		const readinessPromise = (async () => {
+			const { runtime, registry } = await configuredRegistryPromise;
+			const stoppedBeforeReady = serveLifecyclePromise.then(() => {
+				throw new Error("RivetKit registry stopped before becoming ready");
+			});
+			await Promise.race([
+				runtime.waitRegistryReady(registry),
+				stoppedBeforeReady,
+			]);
+		})();
+		this.#runtimeReadyPromise = Promise.race([
+			readinessPromise,
+			timeoutPromise,
+		]).finally(() => {
+			if (timeout !== undefined) clearTimeout(timeout);
+		});
+		// The native registry is consumed once serve begins. Retrying the same
+		// instance after failure could duplicate partially-created resources, so
+		// retain the rejected promise and return the same failure to later calls.
+		this.#runtimeReadyPromise.catch(() => {});
+		return this.#runtimeReadyPromise;
 	}
 
 	/**

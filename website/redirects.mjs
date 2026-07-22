@@ -15,6 +15,11 @@
 // `scripts/generate-caddy-redirects.mjs`.
 export const redirects = {
 	'/docs': '/docs/actors/',
+	// Integrations moved out of the documentation URL hierarchy.
+	'/docs/integrations': '/integrations/',
+	'/docs/integrations/vercel-eve': '/integrations/vercel-eve/',
+	'/docs/integrations/vercel-workflow': '/integrations/vercel-workflows/',
+	'/integrations/vercel-workflow': '/integrations/vercel-workflows/',
 	// Documentation restructure
 	'/docs/setup': '/docs/actors/quickstart/',
 	'/docs/deploy/cli': '/docs/cli/',

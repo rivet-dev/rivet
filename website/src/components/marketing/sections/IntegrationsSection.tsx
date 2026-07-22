@@ -1,7 +1,8 @@
 'use client';
 
-import { LayoutGrid, Terminal, Wrench } from 'lucide-react';
+import { Blocks, LayoutGrid, Terminal, Wrench } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { integrations } from '@/data/integrations';
 import { SECTION_H2_CLASS, SUBTITLE_CLASS } from '../typography';
 import { GLOW_PILL_CLASS, handleGlowPillMouseMove } from '../glowPill';
 
@@ -111,6 +112,25 @@ export const IntegrationsSection = () => (
               </a>
             ))}
           </div>
+        </div>
+      </div>
+
+      <div className='mt-8 border-t border-ink/10 pt-6'>
+        <div className='mb-4 flex items-center gap-3'>
+          <Blocks className='h-4 w-4 text-olive' />
+          <h4 className='font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-ink-faint'>Integrations</h4>
+        </div>
+        <div className='flex flex-wrap gap-2'>
+          {integrations.map(integration => (
+            <a
+              key={integration.title}
+              href={integration.href}
+              onMouseMove={handleGlowPillMouseMove}
+              className={STACK_LINK_CLASS}
+            >
+              {integration.title}
+            </a>
+          ))}
         </div>
       </div>
     </div>

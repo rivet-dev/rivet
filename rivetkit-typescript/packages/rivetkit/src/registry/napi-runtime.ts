@@ -226,6 +226,10 @@ export class NapiCoreRuntime implements CoreRuntime {
 		await asNativeRegistry(registry).serve(config);
 	}
 
+	async waitRegistryReady(registry: RegistryHandle): Promise<void> {
+		await asNativeRegistry(registry).waitReady();
+	}
+
 	async shutdownRegistry(registry: RegistryHandle): Promise<void> {
 		await asNativeRegistry(registry).shutdown();
 	}

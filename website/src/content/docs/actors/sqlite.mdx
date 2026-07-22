@@ -129,6 +129,7 @@ It's recommended to use queues for mutations and actions for read-only queries. 
 
 ## Read more
 
+- For raw SQL schemas, use `migrations` from `rivetkit/unstable/migrations` to apply numbered migrations and track them in a dedicated schema-version table. See [upgrading actor state](/docs/actors/versions#sqlite-recommended-for-complex-schemas).
 - [SQLite + Drizzle in Rivet Actors](/docs/actors/sqlite-drizzle)
 - [SQLite docs](https://sqlite.org/docs.html)
 - [SQLite SQL language reference](https://sqlite.org/lang.html)

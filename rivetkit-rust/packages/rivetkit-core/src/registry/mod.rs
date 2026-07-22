@@ -99,6 +99,11 @@ impl CoreEnvoyHandle {
 		}
 	}
 
+	/// Resolves after the Engine sends the envoy initialization message.
+	pub async fn started(&self) -> anyhow::Result<()> {
+		self.handle.started().await
+	}
+
 	/// Engine-reported drain threshold in milliseconds. `None` until the
 	/// envoy has completed its first protocol-metadata exchange with the
 	/// engine.

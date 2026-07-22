@@ -554,6 +554,7 @@ jobs:
         run: |
           pnpm build -F rivetkit
           pnpm build -F rivetkit -F '@rivetkit/*' -F '!@rivetkit/shared-data' -F '!@rivetkit/engine-frontend' -F '!@rivetkit/mcp-hub' -F '!@rivetkit/rivetkit-napi' -F '!@rivetkit/rivetkit-wasm'
+          pnpm build -F '@rivet-dev/vercel-world'
 
       # ---- shared publish (runs for all triggers) ----
       - name: Finalize package versions for publish

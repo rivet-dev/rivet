@@ -114,6 +114,7 @@ enum RegistryState {
 pub struct CoreRegistry {
 	state: Arc<TokioMutex<RegistryState>>,
 	serving_envoy: Arc<ParkingMutex<Option<CoreEnvoyHandle>>>,
+	serving_envoy_ready: Arc<Notify>,
 	route_metadata: Arc<ParkingMutex<Option<JsRegistryRouteResponse>>>,
 	route_package_version: Arc<ParkingMutex<Option<String>>>,
 	shutdown_token: CoreCancellationToken,
@@ -136,6 +137,7 @@ impl CoreRegistry {
 				NativeCoreRegistry::new(),
 			))),
 			serving_envoy: Arc::new(ParkingMutex::new(None)),
+			serving_envoy_ready: Arc::new(Notify::new()),
 			route_metadata: Arc::new(ParkingMutex::new(None)),
 			route_package_version: Arc::new(ParkingMutex::new(None)),
 			shutdown_token: CoreCancellationToken::new(),
@@ -197,17 +199,64 @@ impl CoreRegistry {
 
 		*self.serving_envoy.lock() = None;
 		let serving_envoy = self.serving_envoy.clone();
+		let serving_envoy_ready = self.serving_envoy_ready.clone();
 		let result = registry
 			.serve_with_config_and_handle_observer(
 				serve_config,
 				self.shutdown_token.clone(),
 				move |handle| {
 					*serving_envoy.lock() = Some(handle);
+					serving_envoy_ready.notify_waiters();
 				},
 			)
 			.await;
 		*self.serving_envoy.lock() = None;
+		{
+			let mut guard = self.state.lock().await;
+			if matches!(*guard, RegistryState::Serving) {
+				*guard = RegistryState::ShutDown;
+			}
+		}
+		self.serving_envoy_ready.notify_waiters();
 		result.map_err(napi_anyhow_error)
+	}
+
+	/// Wait until the serverful envoy has completed its Engine registration.
+	///
+	/// Readiness is the envoy client's `ToEnvoyInit` signal, not HTTP health or
+	/// merely constructing the envoy handle.
+	#[napi(js_name = "waitReady")]
+	pub async fn wait_ready(&self) -> napi::Result<()> {
+		loop {
+			let notified = self.serving_envoy_ready.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+
+			let active_envoy = self.serving_envoy.lock().clone();
+			if let Some(envoy) = active_envoy {
+				return envoy.started().await.map_err(napi_anyhow_error);
+			}
+
+			{
+				let guard = self.state.lock().await;
+				match &*guard {
+					// `waitReady()` can be polled before the adjacent async `serve()`
+					// N-API call reaches its state transition. The already-armed Notify
+					// closes that race without polling.
+					RegistryState::Registering(_) => {}
+					RegistryState::BuildingServerless => {
+						return Err(registry_wrong_mode_error());
+					}
+					RegistryState::Serverless(_) => return Err(registry_wrong_mode_error()),
+					RegistryState::ShuttingDown | RegistryState::ShutDown => {
+						return Err(registry_shut_down_error());
+					}
+					RegistryState::Serving => {}
+				}
+			}
+
+			notified.await;
+		}
 	}
 
 	/// Trip the shutdown token and tear down any live serverless runtime.
@@ -236,6 +285,7 @@ impl CoreRegistry {
 				RegistryState::ShuttingDown | RegistryState::ShutDown => {
 					// Already in progress / done.
 					*guard = RegistryState::ShutDown;
+					self.serving_envoy_ready.notify_waiters();
 					return Ok(());
 				}
 			}
@@ -255,6 +305,9 @@ impl CoreRegistry {
 		// itself is not a waiter, but future callers that arrive while the
 		// builder is draining need to see `ShuttingDown` and error promptly.
 		self.build_complete.notify_waiters();
+		// `wait_ready()` may have armed its waiter while `serve()` was still
+		// registering. Wake it after the state transition so it observes shutdown.
+		self.serving_envoy_ready.notify_waiters();
 		Ok(())
 	}
 

@@ -94,6 +94,20 @@ describe("Registry constructor", () => {
 		expect(serveConfig.enginePort).toBe(7654);
 	});
 
+	test("uses the configured local engine port without an explicit spawn flag", () => {
+		const config = RegistryConfigSchema.parse({
+			use: {
+				test: testActor,
+			},
+			startEngine: false,
+			engineHost: "127.0.0.1",
+			enginePort: 7655,
+		});
+
+		expect(config.endpoint).toBe("http://127.0.0.1:7655");
+		expect(config.publicEndpoint).toBe("http://127.0.0.1:7655");
+	});
+
 	test("keeps endpoint separate from spawned local engine config", () => {
 		const result = RegistryConfigSchema.safeParse({
 			use: {

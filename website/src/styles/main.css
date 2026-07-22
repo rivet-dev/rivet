@@ -77,6 +77,19 @@
   color: inherit;
 }
 
+/* Code blocks need a light selection against their dark surface. */
+.docs-article pre::selection,
+.docs-article pre ::selection {
+  background-color: #f4f1e7;
+  color: #1b1916;
+}
+
+.docs-article pre::-moz-selection,
+.docs-article pre ::-moz-selection {
+  background-color: #f4f1e7;
+  color: #1b1916;
+}
+
 .shiki .line {
   @apply break-all;
 }

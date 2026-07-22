@@ -609,12 +609,13 @@ function DocsMobileNavigation({
 	isLightTheme?: boolean;
 }) {
 	const pathname = usePathname() || "";
-	const isDocsPage = pathname.startsWith("/docs");
+	const isDocsPage =
+		pathname.startsWith("/docs") || pathname.startsWith("/integrations");
 
 	// Determine current section based on pathname
 	const getCurrentSection = () => {
 		if (pathname.startsWith("/docs/actors")) return "actors";
-		if (pathname.startsWith("/docs/integrations")) return "integrations";
+		if (pathname.startsWith("/integrations")) return "integrations";
 		if (pathname.startsWith("/docs/api")) return "api";
 		if (pathname.startsWith("/docs/quickstart")) return "quickstart";
 		return "overview";
@@ -624,7 +625,7 @@ function DocsMobileNavigation({
 		{ id: "overview", label: "Overview", href: "/docs" },
 		{ id: "quickstart", label: "Quickstart", href: "/docs/quickstart" },
 		{ id: "actors", label: "Actors", href: "/docs/actors" },
-		{ id: "integrations", label: "Integrations", href: "/docs/integrations" },
+		{ id: "integrations", label: "Integrations", href: "/integrations" },
 		{ id: "api", label: "API Reference", href: "/docs/api" },
 	];
 

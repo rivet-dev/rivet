@@ -19,10 +19,10 @@ describeDriverMatrix("Actor Db Pragma Migration", (driverTestConfig) => {
 				const getActor = () =>
 					client.dbPragmaMigrationActor.getOrCreate([key]);
 
-				// user_version should be set to 2 after migrations
+				// The schema table should be set to 2 after migrations.
 				const actor = getActor();
 				await actor.ready;
-				const version = await actor.getUserVersion();
+				const version = await actor.getSchemaVersion();
 				expect(version).toBe(2);
 
 				// The status column from migration v2 should exist
@@ -102,7 +102,7 @@ describeDriverMatrix("Actor Db Pragma Migration", (driverTestConfig) => {
 				// After wake, onMigrate runs again but should not fail
 				const versionActor = getActor();
 				await versionActor.ready;
-				const version = await versionActor.getUserVersion();
+				const version = await versionActor.getSchemaVersion();
 				expect(version).toBe(2);
 
 				// Data should survive

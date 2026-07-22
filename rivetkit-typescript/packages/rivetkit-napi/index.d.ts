@@ -398,6 +398,13 @@ export declare class CoreRegistry {
   register(name: string, factory: NapiActorFactory): void
   serve(config: JsServeConfig): Promise<void>
   /**
+   * Wait until the serverful envoy has completed its Engine registration.
+   *
+   * Readiness is the envoy client's `ToEnvoyInit` signal, not HTTP health or
+   * merely constructing the envoy handle.
+   */
+  waitReady(): Promise<void>
+  /**
    * Trip the shutdown token and tear down any live serverless runtime.
    *
    * Idempotent. Safe to call when neither mode has been activated.

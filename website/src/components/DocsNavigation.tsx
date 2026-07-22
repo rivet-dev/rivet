@@ -79,8 +79,8 @@ function TreeItem({ index, item, level = 0, parentPath = "" }: TreeItemProps) {
 				) : item.icon ? (
 					<img
 						{...(item.icon as Record<string, string>)}
-						className="size-3.5 flex-shrink-0"
-						alt={item.title}
+						className="h-3.5 w-auto max-w-8 flex-shrink-0"
+						alt=""
 					/>
 				) : null}
 				<span className="truncate">

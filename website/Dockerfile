@@ -36,6 +36,7 @@ COPY frontend/packages/components/ frontend/packages/components/
 COPY frontend/packages/icons/ frontend/packages/icons/
 COPY frontend/packages/shared-data/ frontend/packages/shared-data/
 COPY examples/ examples/
+COPY integrations/ integrations/
 COPY engine/artifacts/ engine/artifacts/
 COPY engine/sdks/typescript/ engine/sdks/typescript/
 COPY rivetkit-typescript/artifacts/ rivetkit-typescript/artifacts/

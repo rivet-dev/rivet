@@ -1,7 +1,6 @@
 import apiData from "@/generated/apiPages.json" assert { type: "json" };
 
 import {
-	faActorsBorderless,
 	faArrowRightArrowLeft,
 	faArrowsTurnRight,
 	faArrowsTurnToDots,
@@ -62,7 +61,6 @@ import {
 	faTowerBroadcast,
 	faSwift,
 	faUpload,
-	faVercel,
 	faVialCircleCheck,
 	faSquareList,
 	faGrid,
@@ -73,6 +71,7 @@ import {
 	faSupabase,
 } from "@rivet-gg/icons";
 import { deployOptions, type DeployOption } from "@rivetkit/shared-data";
+import { integrationSidebarSections } from "@/data/integrations";
 import nextjs from "@/images/vendors/next-js.svg";
 import type { SidebarItem, Sitemap } from "@/lib/sitemap";
 
@@ -512,7 +511,7 @@ export const sitemap = [
 	},
 	// {
 	// 	title: "Integrations",
-	// 	href: "/docs/integrations",
+	// 	href: "/integrations",
 	// 	// IMPORTANT: Also update integrations/index.mdx
 	// 	sidebar: [
 	// 		{
@@ -520,7 +519,7 @@ export const sitemap = [
 	// 			pages: [
 	// 				{
 	// 					title: "Overview",
-	// 					href: "/docs/integrations",
+	// 					href: "/integrations",
 	// 					icon: faSquareInfo,
 	// 				},
 	// 			]
@@ -655,6 +654,23 @@ export const sitemap = [
 			//		// TODO: Networking (exposed ports, how data gets routed to actors, etc)
 			//	],
 			//},
+		],
+	},
+	{
+		title: "Integrations",
+		href: "/integrations",
+		sidebar: [
+			{
+				title: "General",
+				pages: [
+					{
+						title: "Overview",
+						href: "/integrations",
+						icon: faSquareInfo,
+					},
+				],
+			},
+			...integrationSidebarSections,
 		],
 	},
 

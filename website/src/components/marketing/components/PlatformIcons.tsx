@@ -93,31 +93,31 @@ export function PlatformIcons() {
       tooltip: 'Svelte (Frontend)'
     },
     // {
-    // 	href: "/docs/integrations/hono",
+    // 	href: "/integrations/hono",
     // 	src: honoLogo,
     // 	alt: "Hono",
     // 	tooltip: "Hono",
     // },
     // {
-    // 	href: "/docs/integrations/express",
+    // 	href: "/integrations/express",
     // 	src: expressLogo,
     // 	alt: "Express",
     // 	tooltip: "Express",
     // },
     //{
-    //  href: "/docs/integrations/elysia",
+    //  href: "/integrations/elysia",
     //  src: elysiaLogo,
     //  alt: "Elysia",
     //  tooltip: "Elysia"
     //},
     // {
-    // 	href: "/docs/integrations/trpc",
+    // 	href: "/integrations/trpc",
     // 	src: trpcLogo,
     // 	alt: "tRPC",
     // 	tooltip: "tRPC",
     // },
     // {
-    // 	href: "/docs/integrations/better-auth",
+    // 	href: "/integrations/better-auth",
     // 	src: betterAuthLogo,
     // 	alt: "Better Auth",
     // 	tooltip: "Better Auth",
