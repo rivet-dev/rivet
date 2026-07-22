@@ -219,12 +219,21 @@ describe("workflowRun event dedup + materialization", () => {
 				.filter((event) => event.correlationId === stepId)
 				.map((event) => event.eventType),
 		).toEqual(["step_created", "step_started"]);
+		const replay = await runActor(client, runId).appendEvent(runId, {
+				eventType: "step_started",
+				specVersion: SPEC_VERSION_CURRENT,
+				correlationId: stepId,
+				eventData: { stepName: "lazy", input: { value: 1 } },
+			});
+		expect(replay.step?.status).toBe("running");
+		expect(replay.step?.attempt).toBe(1);
+
 		await expect(
 			runActor(client, runId).appendEvent(runId, {
 				eventType: "step_started",
 				specVersion: SPEC_VERSION_CURRENT,
 				correlationId: stepId,
-				eventData: { stepName: "lazy", input: { value: 1 } },
+				eventData: { stepName: "lazy", input: { value: 2 } },
 			}),
 		).rejects.toThrow();
 	});

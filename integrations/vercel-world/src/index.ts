@@ -287,17 +287,6 @@ export class RivetClientWorld {
 		);
 	}
 
-	async #waitWakeConfig(runId: string) {
-		const run = (await runActor(this.#client, runId).getRun(runId, {
-			resolveData: "none",
-		})) as WorkflowRun;
-		return {
-			runtimeUrl: resolveRuntimeUrl(this.#runtimeUrl),
-			queueName: this.#workflowQueueName(run.workflowName),
-			headers: queueHeaders(),
-		};
-	}
-
 	runs = {
 		get: async (id: string, params?: GetWorkflowRunParams) =>
 			runActor(this.#client, id).getRun(id, params),
@@ -381,21 +370,18 @@ export class RivetClientWorld {
 				throw new Error("runId is required");
 			}
 			const actorRunId = effectiveRunId;
-			let waitWake:
+			let initialDispatch:
 				| {
 						runtimeUrl: string;
 						queueName: string;
 						headers: Record<string, string>;
-						initial?: {
+						initial: {
 							messageId: string;
 							body: string;
 							idempotencyKey: string;
 						};
 				  }
-				| undefined =
-				dataToStore.eventType === "wait_created"
-					? await this.#waitWakeConfig(actorRunId)
-					: undefined;
+				| undefined;
 			if (dataToStore.eventType === "run_created") {
 				const queueName = this.#workflowQueueName(dataToStore.eventData.workflowName);
 				const executionContext = dataToStore.eventData.executionContext;
@@ -417,7 +403,7 @@ export class RivetClientWorld {
 							: { allowReservedAttributes: true as const }),
 					},
 				};
-				waitWake = {
+				initialDispatch = {
 					runtimeUrl: resolveRuntimeUrl(this.#runtimeUrl),
 					queueName,
 					headers: queueHeaders(),
@@ -434,7 +420,7 @@ export class RivetClientWorld {
 					actorRunId,
 					dataToStore,
 					params,
-					waitWake,
+					initialDispatch,
 					{
 						...(reservationToConfirm == null
 							? {}

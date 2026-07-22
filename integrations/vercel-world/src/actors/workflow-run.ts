@@ -28,6 +28,7 @@ import {
 	type WorkflowRun,
 } from "@workflow/world";
 import { actor } from "rivetkit";
+import { isDeepStrictEqual } from "node:util";
 import { monotonicFactory } from "ulid";
 import { decodeValue, encodeValue } from "../codec.js";
 import type { CoordinatorIndexUpdate } from "./coordinator.js";
@@ -75,11 +76,11 @@ const creationEvents = new Set([
 	"hook_created",
 	"wait_created",
 ]);
-type WaitWakeConfig = {
+type InitialDispatchConfig = {
 	runtimeUrl: string;
 	queueName: string;
 	headers: Record<string, string>;
-	initial?: {
+	initial: {
 		messageId: string;
 		body: string;
 		idempotencyKey: string;
@@ -351,70 +352,6 @@ async function releaseRunHooks(c: Ctx, runId: string) {
 	await c.db.execute("DELETE FROM workflow_waits WHERE run_id = ?", runId);
 }
 
-async function enqueueDueWaitResumes(c: WorkflowContext) {
-	const now = Date.now();
-	const rows = await c.db.execute(
-		`
-		SELECT
-			w.wait_id,
-			w.run_id,
-			w.runtime_url,
-			w.queue_name,
-			w.headers
-		FROM workflow_waits w
-		JOIN workflow_runs r ON r.run_id = w.run_id
-		WHERE w.status = 'waiting'
-			AND w.resume_enqueued_at IS NULL
-			AND w.resume_at IS NOT NULL
-			AND w.resume_at <= ?
-			AND w.runtime_url IS NOT NULL
-			AND w.queue_name IS NOT NULL
-			AND r.status IN ('pending', 'running')
-		ORDER BY w.resume_at ASC
-		LIMIT 32
-		`,
-		now,
-	);
-	// Common case: no due waits on wake — avoid creating a client handle for
-	// nothing (cheaper, and avoids churning client connections on every start).
-	if (rows.length === 0) return;
-	for (const row of rows) {
-		const waitId = String(row.wait_id);
-		const runId = String(row.run_id);
-		const headers =
-			row.headers == null
-				? {}
-				: (JSON.parse(String(row.headers)) as Record<string, string>);
-		await enqueueDispatch(
-			c,
-			runId,
-			MessageId.parse(`msg_${ulid()}`),
-			String(row.queue_name),
-			String(row.runtime_url),
-			JSON.stringify({ runId }),
-			headers,
-			0,
-			`wait:${waitId}`,
-		);
-		// Keep the public Wait state as "waiting" until wait_completed, while
-		// recording that its durable, idempotency-keyed resume is in the dispatcher.
-		// If we crash before this update, the next wake safely re-enqueues the same
-		// `wait:<id>` key and then closes the loop without hot-scheduling forever.
-		await c.db.execute(
-			`UPDATE workflow_waits
-			 SET resume_enqueued_at = ?, updated_at = ?
-			 WHERE wait_id = ? AND status = 'waiting'`,
-			now,
-			now,
-			waitId,
-		);
-	}
-}
-
-async function processWaitWake(c: WorkflowContext) {
-	await enqueueDueWaitResumes(c);
-}
-
 const OUTBOX_CLAIM_MS = 60_000;
 const OUTBOX_BATCH = 32;
 const OUTBOX_DRAIN_BUDGET_MS = 5_000;
@@ -439,10 +376,7 @@ async function withinDeadline<T>(promise: Promise<T>, deadline: number): Promise
 }
 
 async function armNextWake(c: WorkflowContext) {
-	const [wait, dispatchReady, dispatchInflight, pending, streamExpiry] = await Promise.all([
-		one(c, `SELECT MIN(resume_at) AS due FROM workflow_waits
-			WHERE status = 'waiting' AND resume_enqueued_at IS NULL
-			AND resume_at IS NOT NULL AND runtime_url IS NOT NULL AND queue_name IS NOT NULL`),
+	const [dispatchReady, dispatchInflight, pending, streamExpiry] = await Promise.all([
 		one(c, "SELECT MIN(next_at) AS due FROM dispatcher_queue WHERE status = 'ready'"),
 		nextInflightRecoveryAt(c, c.vars.activeMessageIds).then((due) =>
 			due == null ? undefined : { due },
@@ -454,7 +388,6 @@ async function armNextWake(c: WorkflowContext) {
 				WHERE eof = 1`, STREAM_TTL_MS),
 	]);
 	const due = [
-		wait?.due,
 		dispatchReady?.due,
 		dispatchInflight?.due,
 		pending?.due,
@@ -599,7 +532,6 @@ export const workflowRun = actor({
 		await withSerializedAction(ctx, async () => {
 			await prearmRecovery(ctx);
 			ctx.vars.wakeArmedAt = null;
-			await processWaitWake(ctx);
 			await cleanupExpiredStreams(ctx);
 			await drainPendingOps(ctx);
 			startDispatchLoop(ctx, ctx.key[0] ?? "__health");
@@ -612,7 +544,7 @@ export const workflowRun = actor({
 			runIdOrNull: string | null,
 			data: StorableEventRequest,
 			params?: CreateEventParams,
-			waitWake?: WaitWakeConfig,
+			initialDispatch?: InitialDispatchConfig,
 			hookSideEffects?: HookSideEffects,
 		): Promise<EventResult> => {
 			const wfc = asWorkflowContext(c);
@@ -620,10 +552,6 @@ export const workflowRun = actor({
 			const actorRunId = wfc.key[0];
 			if (!actorRunId) throw new Error("workflowRun actor key is missing");
 			if (runIdOrNull != null) assertRunKey(wfc, runIdOrNull);
-			// Arm the wait wake AFTER the transaction commits (item 4): the
-			// workflow_waits row must be durably committed before c.schedule fires,
-			// else a fired wake could find no backing row.
-			let armWaitAt: number | null = null;
 			const result = await withActorTransaction(wfc, async (c): Promise<EventResult> => {
 			const runId =
 				data.eventType === "run_created" && !runIdOrNull
@@ -678,16 +606,16 @@ export const workflowRun = actor({
 					now,
 				);
 				run = await requireRun(c, runId);
-				if (waitWake?.initial) {
+				if (initialDispatch) {
 					await insertDispatch(
 						c,
-						waitWake.initial.messageId,
-						waitWake.queueName,
-						waitWake.runtimeUrl,
-						waitWake.initial.body,
-						waitWake.headers,
+						initialDispatch.initial.messageId,
+						initialDispatch.queueName,
+						initialDispatch.runtimeUrl,
+						initialDispatch.initial.body,
+						initialDispatch.headers,
 						0,
-						waitWake.initial.idempotencyKey,
+						initialDispatch.initial.idempotencyKey,
 					);
 				}
 			}
@@ -829,7 +757,7 @@ export const workflowRun = actor({
 			if (data.eventType === "step_started") {
 				let existing = await one(
 					c,
-					"SELECT status, retry_after FROM workflow_steps WHERE step_id = ?",
+					"SELECT * FROM workflow_steps WHERE step_id = ?",
 					data.correlationId,
 				);
 				const lazyData =
@@ -883,55 +811,64 @@ export const workflowRun = actor({
 					);
 					existing = await one(
 						c,
-						"SELECT status, retry_after FROM workflow_steps WHERE step_id = ?",
+						"SELECT * FROM workflow_steps WHERE step_id = ?",
 						data.correlationId,
 					);
 				} else if (existing && lazyData) {
-					throw new EntityConflictError(
-						`Step "${data.correlationId}" already exists`,
-					);
+					if (
+						String(existing.step_name) !== lazyData.stepName ||
+						!isDeepStrictEqual(decodeValue(existing.input), lazyData.input)
+					) {
+						throw new EntityConflictError(
+							`Step "${data.correlationId}" already exists with different data`,
+						);
+					}
 				}
 				if (!existing)
 					throw new WorkflowWorldError(`Step "${data.correlationId}" not found`);
-				if (terminalSteps.has(String(existing.status))) {
-					throw new EntityConflictError(
-						`Cannot modify step in terminal state "${existing.status}"`,
-					);
-				}
 				if (
-					existing.retry_after != null &&
-					Number(existing.retry_after) > Date.now()
+					String(existing.status) === "running" ||
+					terminalSteps.has(String(existing.status))
 				) {
-					throw new TooEarlyError(
-						`Cannot start step "${data.correlationId}": retryAfter timestamp has not been reached yet`,
-						{
-							retryAfter: Math.ceil(
-								(Number(existing.retry_after) - Date.now()) / 1000,
-							),
-						},
+					// Vercel may redeliver an accepted step start. Returning the existing
+					// step keeps delivery idempotent without incrementing its attempt.
+					step = rowToStep(existing);
+				} else {
+					if (
+						existing.retry_after != null &&
+						Number(existing.retry_after) > Date.now()
+					) {
+						throw new TooEarlyError(
+							`Cannot start step "${data.correlationId}": retryAfter timestamp has not been reached yet`,
+							{
+								retryAfter: Math.ceil(
+									(Number(existing.retry_after) - Date.now()) / 1000,
+								),
+							},
+						);
+					}
+					await c.db.execute(
+						`
+						UPDATE workflow_steps
+						SET status = 'running',
+							attempt = attempt + 1,
+							started_at = COALESCE(started_at, ?),
+							retry_after = NULL,
+							updated_at = ?
+						WHERE step_id = ? AND status NOT IN ('running', 'completed', 'failed', 'cancelled')
+						`,
+						now,
+						now,
+						data.correlationId,
+					);
+					step = rowToStep(
+						await one(
+							c,
+							"SELECT * FROM workflow_steps WHERE step_id = ?",
+							data.correlationId,
+						),
 					);
 				}
-				await c.db.execute(
-					`
-					UPDATE workflow_steps
-					SET status = 'running',
-						attempt = attempt + 1,
-						started_at = COALESCE(started_at, ?),
-						retry_after = NULL,
-						updated_at = ?
-					WHERE step_id = ? AND status NOT IN ('completed', 'failed', 'cancelled')
-					`,
-					now,
-					now,
-					data.correlationId,
-				);
-				step = rowToStep(
-					await one(
-						c,
-						"SELECT * FROM workflow_steps WHERE step_id = ?",
-						data.correlationId,
-					),
-				);
 			}
 
 			if (data.eventType === "step_completed") {
@@ -1098,28 +1035,21 @@ export const workflowRun = actor({
 			if (data.eventType === "wait_created") {
 				const waitId = `${runId}-${data.correlationId}`;
 				const resumeAt = toMs(data.eventData.resumeAt);
-				const insertedWait = await c.db.execute(
+				await c.db.execute(
 					`
 					INSERT OR IGNORE INTO workflow_waits (
-						wait_id, run_id, status, resume_at, runtime_url, queue_name,
-						headers, created_at, updated_at, spec_version
+						wait_id, run_id, status, resume_at, created_at, updated_at, spec_version
 					)
-					VALUES (?, ?, 'waiting', ?, ?, ?, ?, ?, ?, ?)
+					VALUES (?, ?, 'waiting', ?, ?, ?, ?)
 					RETURNING wait_id
 					`,
 					waitId,
 					runId,
 					resumeAt,
-					waitWake?.runtimeUrl ?? null,
-					waitWake?.queueName ?? null,
-					waitWake == null ? null : JSON.stringify(waitWake.headers),
 					now,
 					now,
 					specVersion,
 				);
-				if (insertedWait.length > 0 && waitWake && resumeAt != null) {
-					armWaitAt = resumeAt;
-				}
 				wait = rowToWait(
 					await one(c, "SELECT * FROM workflow_waits WHERE wait_id = ?", waitId),
 				);
@@ -1267,10 +1197,7 @@ export const workflowRun = actor({
 				hasMore,
 			} as EventResult;
 			});
-			if (armWaitAt != null) {
-				await wfc.schedule.at(armWaitAt, "wake");
-			}
-			if (data.eventType === "run_created" && waitWake?.initial) {
+			if (data.eventType === "run_created" && initialDispatch) {
 				startDispatchLoop(wfc, actorRunId);
 			}
 			await wfc.schedule.after(0, "wake");
@@ -1456,7 +1383,6 @@ export const workflowRun = actor({
 			await withSerializedAction(ctx, async () => {
 				await prearmRecovery(ctx);
 				ctx.vars.wakeArmedAt = null;
-				await processWaitWake(ctx);
 				await cleanupExpiredStreams(ctx);
 				await drainPendingOps(ctx);
 				startDispatchLoop(ctx, ctx.key[0] ?? "__health");
