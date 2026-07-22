@@ -1,13 +1,13 @@
 import { describe, expect, test } from "vitest";
-import { z } from "zod/v4";
 import {
 	decodeBridgeRivetError,
 	encodeBridgeRivetError,
 	RivetError,
 	toRivetError,
 } from "../src/actor/errors";
-import { sendHttpRequest } from "../src/client/utils";
+import { createClientWithDriver } from "../src/client/client";
 import { deconstructError } from "../src/common/utils";
+import type { EngineControlClient } from "../src/engine-client/driver";
 
 describe("RivetError bridge helpers", () => {
 	test("round trips structured bridge payloads", () => {
@@ -124,44 +124,32 @@ describe("RivetError bridge helpers", () => {
 });
 
 describe("RivetError HTTP diagnostics", () => {
-	test("attaches response ray ID to structured errors", async () => {
+	test("exposes response ray ID from an actor action to the user", async () => {
 		const metadata = { source: "engine" };
+		const driver = {
+			sendRequest: async () =>
+				new Response(
+					JSON.stringify({
+						group: "core",
+						code: "internal_error",
+						message: "An internal error occurred",
+						metadata,
+					}),
+					{
+						status: 500,
+						headers: {
+							"content-type": "application/json",
+							"x-rivet-ray-id": "ray-http-123",
+						},
+					},
+				),
+		} as EngineControlClient;
+		const client = createClientWithDriver(driver, { encoding: "json" });
+		const handle = client.getForId("test-actor", "actor-123");
 		let thrown: unknown;
 
 		try {
-			await sendHttpRequest({
-				url: "http://actor/action/fail",
-				method: "POST",
-				headers: {},
-				body: null,
-				encoding: "json",
-				customFetch: async () =>
-					new Response(
-						JSON.stringify({
-							group: "core",
-							code: "internal_error",
-							message: "An internal error occurred",
-							metadata,
-						}),
-						{
-							status: 500,
-							headers: {
-								"content-type": "application/json",
-								"x-rivet-ray-id": "ray-http-123",
-							},
-						},
-					),
-				requestVersionedDataHandler: undefined,
-				requestVersion: undefined,
-				responseVersionedDataHandler: undefined,
-				responseVersion: undefined,
-				requestZodSchema: z.unknown(),
-				responseZodSchema: z.unknown(),
-				requestToJson: (value) => value,
-				requestToBare: (value) => value,
-				responseFromJson: (value) => value,
-				responseFromBare: (value) => value,
-			});
+			await handle.action({ name: "fail", args: [] });
 		} catch (error) {
 			thrown = error;
 		}
