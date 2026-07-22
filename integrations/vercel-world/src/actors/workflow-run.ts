@@ -120,6 +120,8 @@ type StorableEventRequest =
 
 type WorkflowVars = DispatchContext["vars"] & {
 	recoveryPrearmPromise: Promise<void> | null;
+	recoveryDeletePromise: Promise<void> | null;
+	recoveryWriters: number;
 	pendingDraining: boolean;
 };
 
@@ -146,6 +148,9 @@ const RECOVERY_INTERVAL_MS = 5_000;
 async function prearmRecovery(c: WorkflowContext) {
 	// Recurring schedules advance before dispatch. If a fire is consumed while
 	// this action is committing, the next recovery fire remains durable.
+	if (c.vars.recoveryDeletePromise) {
+		await c.vars.recoveryDeletePromise;
+	}
 	if (!c.vars.recoveryPrearmPromise) {
 		const arm = c.cron.every({
 			name: RECOVERY_CRON,
@@ -170,21 +175,30 @@ async function finishRecoveryArm(c: WorkflowContext) {
 	// action, so keep the recurring backstop until a later wake drains that work.
 	// A wake safely beyond the next backstop interval cannot be claimed during
 	// this action; the exact durable alarm is sufficient until then.
-	if (nextWakeAt == null || nextWakeAt > Date.now() + RECOVERY_INTERVAL_MS) {
-		try {
-			await c.cron.delete(RECOVERY_CRON);
-		} finally {
-			// A failed delete is ambiguous: it may have committed before its reply was
-			// lost. Invalidate the cache so the next serialized action idempotently
-			// re-arms the named cron instead of assuming it still exists.
+	if (
+		c.vars.recoveryWriters === 0 &&
+		!c.vars.recoveryDeletePromise &&
+		(nextWakeAt == null || nextWakeAt > Date.now() + RECOVERY_INTERVAL_MS)
+	) {
+		const deletion = c.cron.delete(RECOVERY_CRON).then(() => undefined);
+		const tracked = deletion.finally(() => {
+			// A failed delete is ambiguous: force the next writer to re-arm after the
+			// delete settles instead of assuming the named cron still exists.
 			c.vars.recoveryPrearmPromise = null;
-		}
+			if (c.vars.recoveryDeletePromise === tracked) {
+				c.vars.recoveryDeletePromise = null;
+			}
+		});
+		c.vars.recoveryDeletePromise = tracked;
+		await tracked;
 	}
 }
 
 const createWorkflowVars = (): WorkflowVars => ({
 	...createDispatcherVars(),
 	recoveryPrearmPromise: null,
+	recoveryDeletePromise: null,
+	recoveryWriters: 0,
 	pendingDraining: false,
 });
 
@@ -211,6 +225,25 @@ async function withSerializedAction<T>(
 		return await fn();
 	} finally {
 		release();
+	}
+}
+
+async function withRecoveryWriter<T>(
+	c: WorkflowContext,
+	fn: () => Promise<T>,
+): Promise<T> {
+	c.vars.recoveryWriters++;
+	try {
+		await prearmRecovery(c);
+		return await fn();
+	} finally {
+		try {
+			await armNextWake(c);
+		} catch {
+			// The recurring recovery cron remains the durable fallback.
+		} finally {
+			c.vars.recoveryWriters--;
+		}
 	}
 }
 
@@ -583,14 +616,10 @@ export const workflowRun = actor({
 			hookSideEffects?: HookSideEffects,
 		): Promise<EventResult> => {
 			const wfc = asWorkflowContext(c);
-			return withSerializedAction(wfc, async () => {
+			return withRecoveryWriter(wfc, async () => {
 			const actorRunId = wfc.key[0];
 			if (!actorRunId) throw new Error("workflowRun actor key is missing");
 			if (runIdOrNull != null) assertRunKey(wfc, runIdOrNull);
-			// Every append creates derived outbox work. A recurring backstop remains
-			// durable even if one fire is consumed while this transaction commits.
-			await prearmRecovery(wfc);
-			try {
 			// Arm the wait wake AFTER the transaction commits (item 4): the
 			// workflow_waits row must be durably committed before c.schedule fires,
 			// else a fired wake could find no backing row.
@@ -1247,13 +1276,6 @@ export const workflowRun = actor({
 			await wfc.schedule.after(0, "wake");
 			startPendingDrain(wfc);
 			return result;
-			} finally {
-				// If no durable work committed, this removes the harmless backstop. If
-				// exact alarm registration fails, leave the recurring recovery in place.
-				try {
-					await armNextWake(wfc);
-				} catch {}
-			}
 			});
 		},
 		getRun: async (c, runId: string, params?: GetWorkflowRunParams) => {
@@ -1453,26 +1475,19 @@ export const workflowRun = actor({
 			idempotencyKey?: string,
 		) => {
 			const ctx = asWorkflowContext(c);
-			return withSerializedAction(ctx, async () => {
-				await prearmRecovery(ctx);
-				try {
-					return await enqueueDispatch(
-						ctx,
-						partition,
-						messageId,
-						queueName,
-						runtimeUrl,
-						body,
-						headers,
-						delaySeconds,
-						idempotencyKey,
-					);
-				} finally {
-					try {
-						await armNextWake(ctx);
-					} catch {}
-				}
-			});
+			return withRecoveryWriter(ctx, () =>
+				enqueueDispatch(
+					ctx,
+					partition,
+					messageId,
+					queueName,
+					runtimeUrl,
+					body,
+					headers,
+					delaySeconds,
+					idempotencyKey,
+				),
+			);
 		},
 		inspectQueue: (c) => inspectQueue(c),
 		forceStaleInflightForTesting: (
@@ -1495,19 +1510,12 @@ export const workflowRun = actor({
 			eof: boolean,
 		) => {
 			const ctx = asWorkflowContext(c);
-			return withSerializedAction(ctx, async () => {
-				await prearmRecovery(ctx);
-				try {
-					const result = await writeStream(ctx, streamId, runId, chunk, eof);
-					if (eof && STREAM_TTL_MS > 0) {
-						await ctx.schedule.at(Date.now() + STREAM_TTL_MS, "wake");
-					}
-					return result;
-				} finally {
-					try {
-						await armNextWake(ctx);
-					} catch {}
+			return withRecoveryWriter(ctx, async () => {
+				const result = await writeStream(ctx, streamId, runId, chunk, eof);
+				if (eof && STREAM_TTL_MS > 0) {
+					await ctx.schedule.at(Date.now() + STREAM_TTL_MS, "wake");
 				}
+				return result;
 			});
 		},
 		getStreamChunks: (
