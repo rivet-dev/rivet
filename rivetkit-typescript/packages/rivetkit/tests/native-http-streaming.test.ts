@@ -2,6 +2,26 @@ import { describe, expect, test } from "vitest";
 import { nativeHttpTestInternals } from "../src/registry/native-http";
 
 describe("native http response streaming", () => {
+	test("restores the original URL forwarded through actor fetch", () => {
+		const request = nativeHttpTestInternals.buildRequest({
+			method: "POST",
+			uri: "/agents/assistant/local",
+			headers: {
+				"x-rivet-internal-original-request-url":
+					"http://localhost:3583/agents/assistant/local",
+				"x-user": "present",
+			},
+		});
+
+		expect(request.url).toBe(
+			"http://localhost:3583/agents/assistant/local",
+		);
+		expect(request.headers.get("x-user")).toBe("present");
+		expect(
+			request.headers.get("x-rivet-internal-original-request-url"),
+		).toBeNull();
+	});
+
 	test("constructs requests with streaming bodies and abort signals", async () => {
 		const chunks = [new Uint8Array([1]), new Uint8Array([2])];
 		const controller = new AbortController();

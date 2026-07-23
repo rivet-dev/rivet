@@ -13,14 +13,12 @@ import { createClient } from 'rivetkit/client';
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoots = [];
 const require = createRequire(import.meta.url);
-const flueCliRoot = path.resolve(
-	path.dirname(fileURLToPath(import.meta.resolve('@flue/cli'))),
-	'..',
-);
-const flueRuntimeRoot = path.resolve(
-	path.dirname(fileURLToPath(import.meta.resolve('@flue/runtime'))),
-	'..',
-);
+const flueCliRoot = process.env.FLUE_TEST_CLI_ROOT
+	? path.resolve(process.env.FLUE_TEST_CLI_ROOT)
+	: path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@flue/cli'))), '..');
+const flueRuntimeRoot = process.env.FLUE_TEST_RUNTIME_ROOT
+	? path.resolve(process.env.FLUE_TEST_RUNTIME_ROOT)
+	: path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@flue/runtime'))), '..');
 const cli = pathToFileURL(path.join(flueCliRoot, 'bin', 'flue.mjs'));
 const { getEnginePath } = require('@rivetkit/engine-cli');
 
@@ -58,6 +56,26 @@ test('builds and serves an agent through target: rivet', async () => {
 	try {
 		await waitForMetadata(enginePort, engine.logs);
 		await configureNormalRunnerConfig(poolName, enginePort);
+		const oneShot = await runCli(
+			root,
+			[
+				'run',
+				'route-free',
+				'--id',
+				'local-run',
+				'--input',
+				'{"message":"Hello route-free"}',
+			],
+			{
+				RIVET_RUN_ENGINE: '0',
+				RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
+				RIVET_POOL: poolName,
+				FLUE_RIVET_REGISTRY_KEY: registryKey,
+			},
+		);
+		assert.equal(oneShot.code, 0, oneShot.stderr);
+		assert.match(`${oneShot.stderr}\n${oneShot.stdout}`, /Hello from route-free target rivet\./);
+
 		dev = startDev(root, port, {
 			RIVET_RUN_ENGINE: '0',
 			RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
@@ -236,6 +254,10 @@ function writeProject(root) {
 		path.join(root, 'agents', 'assistant.ts'),
 		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nexport const route = async (_c, next) => next();\nconst provider = registerFauxProvider({ provider: 'rivet-target-' + crypto.randomUUID() });\nprovider.setResponses([\n  fauxAssistantMessage('Hello from target rivet.'),\n  fauxAssistantMessage('Hello over SSE from target rivet.'),\n  fauxAssistantMessage('Dispatched from workflow.'),\n]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
 	);
+	fs.writeFileSync(
+		path.join(root, 'agents', 'route-free.ts'),
+		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nconst provider = registerFauxProvider({ provider: 'rivet-route-free-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from route-free target rivet.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
+	);
 	fs.mkdirSync(path.join(root, 'workflows'), { recursive: true });
 	fs.writeFileSync(
 		path.join(root, 'workflows', 'job.ts'),
@@ -243,9 +265,10 @@ function writeProject(root) {
 	);
 }
 
-async function runCli(cwd, args) {
+async function runCli(cwd, args, env = {}) {
 	const child = spawn(process.execPath, [cli.pathname, ...args], {
 		cwd,
+		env: { ...process.env, ...env },
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let stdout = '';

@@ -75,44 +75,37 @@ Register the VM, point Flue's Rivet target at it, and attach it as the agent's s
 
 <CodeGroup workspace>
 ```ts actors.ts
-// Register the agentOS VM into a RivetKit registry.
 import { agentOS, setup } from "@rivet-dev/agentos";
 
-export const vm = agentOS({
-	/* Software, permissions, limits, mounts, and bindings go here. */
-});
+const vm = agentOS();
 
 export const registry = setup({ use: { vm } });
 ```
 
 ```ts flue.config.ts
-// Point Flue's Rivet build target at the registry.
 import { defineConfig } from "@flue/cli/config";
 import { rivet } from "@rivet-dev/flue";
 
-export default defineConfig({ target: rivet({ actors: "./actors.ts" }) });
+export default defineConfig({ target: rivet() });
 ```
 
 ```ts agents/assistant.ts
-// Attach the agentOS sandbox to a Flue agent.
 import { createAgent } from "@flue/runtime";
 import { agentOSSandbox } from "@rivet-dev/agentos-flue";
 import { registry } from "../actors";
 
-const sandbox = agentOSSandbox({ actor: "vm", registry });
-
 export default createAgent(() => ({
 	model: "anthropic/claude-sonnet-5",
-	instructions: "Help the user work in the sandboxed repository.",
-	sandbox,
+	sandbox: agentOSSandbox({ actor: "vm", registry }),
 }));
 ```
 </CodeGroup>
 
-Then connect to it:
+Then run it using Flue's standard one-shot command:
 
 ```sh
-npx flue connect assistant local
+npx flue run assistant --id local \
+  --input '{"message":"Write hello from Flue to /workspace/hello.txt, run wc -c /workspace/hello.txt, then read the file back."}'
 ```
 
 Each agent instance and each workflow run gets its own durable Rivet Actor and SQLite database, so accepted work recovers after an interruption.

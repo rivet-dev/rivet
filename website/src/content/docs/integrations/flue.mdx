@@ -7,10 +7,15 @@ skill: false
 import { Hosting } from "@/components/docs/Hosting";
 
 {/*
-  Keep this guide synchronized with
-  rivet-dev/agentos/website/src/content/docs/docs/frameworks/flue.mdx.
-  This intentionally hardcodes the agentOS example instead of using CodeSnippet:
-  importing snippets across repositories would add an agentOS dependency to Rivet.
+  Sync policy: rivet-dev/agentos/examples/{flue,vercel-eve} are the source of
+  truth. Before changing either integration, manually read both agentOS examples
+  and guides and compare every hardcoded snippet in both Rivet guides:
+  website/src/content/docs/integrations/{flue,vercel-eve}.mdx.
+  Do not use CodeSnippet here: the source files live in another repository and
+  importing them would couple Rivet's docs build to agentOS. Copy Flue code from
+  rivet-dev/agentos/examples/flue and Eve code from
+  rivet-dev/agentos/examples/vercel-eve. Update both repositories whenever
+  either example changes.
 */}
 
 <Info>
@@ -18,13 +23,6 @@ This integration is in beta. APIs may change between releases.
 </Info>
 
 Flue owns the agent runtime and session lifecycle. Rivet maps each agent instance and workflow run to a durable Rivet Actor, while agentOS gives each Flue context an isolated VM with a persistent `/workspace` filesystem.
-
-<Info>
-This integration currently uses [Rivet's Flue fork](https://github.com/rivet-dev/flue).
-We're working to merge its generic target-authoring and runtime extension APIs
-[upstream](https://github.com/withastro/flue/discussions/516), allowing Flue to
-support actor-model runtimes without taking a Rivet dependency.
-</Info>
 
 [View the complete example →](https://github.com/rivet-dev/agentos/tree/main/examples/flue)
 
@@ -36,23 +34,23 @@ support actor-model runtimes without taking a Rivet dependency.
 
 ```sh
 mkdir my-agent && cd my-agent
-npm add "@flue/runtime@npm:@rivet-dev/labs-flue-runtime"
-npm add --save-dev "@flue/cli@npm:@rivet-dev/labs-flue-cli"
+
+# Install the Flue packages
+npm add "@flue/runtime@npm:@rivet-dev/labs-flue-runtime@1.0.0-beta.9-rivet.2"
+npm add --save-dev "@flue/cli@npm:@rivet-dev/labs-flue-cli@1.0.0-beta.9-rivet.2"
+
+# Install the Rivet packages
+npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue rivetkit
+
+# Initialize the project
 npx flue init --target node
 ```
 
-</Step>
-
-<Step title="Install the integrations">
-
-```sh
-npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue rivetkit
-```
-
-- `@rivet-dev/labs-flue-*`: Rivet-maintained preview builds of Flue's proposed extension APIs.
+- `@flue/cli` and `@flue/runtime`: Build and run the Flue project using Rivet's preview Flue packages.
 - `@rivet-dev/flue`: Runs Flue agents and workflows as Rivet Actors.
-- `@rivet-dev/agentos`: Provides the isolated VM actor.
-- `@rivet-dev/agentos-flue`: Connects Flue's sandbox API to agentOS.
+- `@rivet-dev/agentos` and `@rivet-dev/agentos-flue`: Provide the agentOS VM and connect Flue's sandbox API to it.
+
+*This uses [Rivet's Flue fork](https://github.com/rivet-dev/flue). We're working to merge its extension APIs upstream so Flue can support actor-model runtimes without a Rivet dependency.*
 
 </Step>
 
@@ -67,9 +65,7 @@ const vm = agentOS({
 	// Configure software, permissions, mounts, and resource limits here.
 });
 
-export const registry = setup({
-	use: { vm },
-});
+export const registry = setup({ use: { vm } });
 ```
 
 Update `flue.config.ts`:
@@ -79,13 +75,9 @@ import { defineConfig } from "@flue/cli/config";
 import { rivet } from "@rivet-dev/flue";
 
 export default defineConfig({
-	target: rivet({ actors: "./actors.ts" }),
+	target: rivet(),
 });
 ```
-
-The generated Flue server adds its agent and workflow actors to this registry.
-It keeps Flue's native router as the public HTTP service; the Rivet target only
-selects and hosts the durable actors behind those routes.
 
 </Step>
 
@@ -94,43 +86,34 @@ selects and hosts the durable actors behind those routes.
 Create `agents/assistant.ts`:
 
 ```ts title="agents/assistant.ts"
-import { type AgentRouteHandler, createAgent } from "@flue/runtime";
+import { createAgent } from "@flue/runtime";
 import { agentOSSandbox } from "@rivet-dev/agentos-flue";
 import { registry } from "../actors.js";
 
-export const route: AgentRouteHandler = async (_context, next) => next();
-
 export default createAgent(() => ({
 	model: "anthropic/claude-sonnet-5",
-	instructions:
-		"Help the user work in /workspace. Use filesystem and shell tools when asked.",
 	sandbox: agentOSSandbox({ actor: "vm", registry }),
 }));
 ```
-
-Set the provider key required by your model, such as `ANTHROPIC_API_KEY`, in `.env`.
 
 </Step>
 
 <Step title="Run Flue">
 
+Set the provider key required by your model, such as `ANTHROPIC_API_KEY`, in `.env`.
+
+Run the agent:
+
 ```sh
-npx flue connect assistant local
+npx flue run assistant --id local \
+  --input '{"message":"Write hello from Flue to /workspace/hello.txt, run wc -c /workspace/hello.txt, then read the file back."}'
 ```
-
-Flue builds the Rivet target, starts the local Rivet engine, and connects to the `assistant/local` actor.
-
-Ask it to use both filesystem and shell operations:
-
-> Write `hello from Flue` to `/workspace/hello.txt`, run `wc -c
-> /workspace/hello.txt`, then read the file back.
-
-Reconnect to `assistant/local` and ask it to read the file again. The same Flue
-context reconnects to the same agentOS actor and persistent filesystem.
 
 </Step>
 
 <Step title="Deploy">
+
+Deploy to one of the supported platforms:
 
 <Hosting />
 

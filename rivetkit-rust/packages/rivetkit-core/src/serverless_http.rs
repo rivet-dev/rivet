@@ -8,6 +8,8 @@ use anyhow::{Context, Result};
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::{Request, State};
+use axum::http::header::HOST;
+use axum::http::uri::Authority;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::any;
@@ -277,7 +279,39 @@ fn application_request_from_parts(
 		.path_and_query()
 		.map(|pq| pq.as_str())
 		.unwrap_or("/");
-	let url = format!("http://internal{path_and_query}");
+	let forwarded_proto = parts
+		.headers
+		.get("x-forwarded-proto")
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.split(',').next())
+		.map(str::trim)
+		.filter(|value| matches!(*value, "http" | "https"));
+	let forwarded_authority = parts
+		.headers
+		.get("x-forwarded-host")
+		.and_then(|value| value.to_str().ok())
+		.and_then(|value| value.split(',').next())
+		.map(str::trim)
+		.and_then(|value| value.parse::<Authority>().ok());
+	let authority = parts
+		.uri
+		.authority()
+		.cloned()
+		.or(forwarded_authority)
+		.or_else(|| {
+			parts
+				.headers
+				.get(HOST)
+				.and_then(|value| value.to_str().ok())
+				.and_then(|value| value.parse::<Authority>().ok())
+		});
+	let scheme = forwarded_proto
+		.or_else(|| parts.uri.scheme_str())
+		.unwrap_or("http");
+	let url = authority.map_or_else(
+		|| format!("http://internal{path_and_query}"),
+		|authority| format!("{scheme}://{authority}{path_and_query}"),
+	);
 
 	// Repeated header names get comma-joined per RFC 9110 §5.3.
 	let mut headers: HashMap<String, String> = HashMap::new();

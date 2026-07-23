@@ -1,4 +1,5 @@
 import type { ResponseLike } from "@/common/fetch-like";
+import { HEADER_ORIGINAL_REQUEST_URL } from "@/common/actor-router-consts";
 import { stringifyError } from "@/common/utils";
 import { logger } from "./log";
 import type { RuntimeBytes, RuntimeHttpResponse } from "./runtime";
@@ -42,9 +43,14 @@ function runtimeBytesToArrayBuffer(value: RuntimeBytes): ArrayBuffer {
 }
 
 export function buildNativeHttpRequest(init: NativeHttpRequestInit): Request {
-	const url = init.uri.startsWith("http")
-		? init.uri
-		: new URL(init.uri, "http://127.0.0.1").toString();
+	const headers = new Headers(init.headers);
+	const originalUrl = headers.get(HEADER_ORIGINAL_REQUEST_URL);
+	headers.delete(HEADER_ORIGINAL_REQUEST_URL);
+	const url =
+		originalUrl ??
+		(init.uri.startsWith("http")
+			? init.uri
+			: new URL(init.uri, "http://127.0.0.1").toString());
 	const method = init.method.toUpperCase();
 	const bodyForbidden = method === "GET" || method === "HEAD";
 	const body = bodyForbidden
@@ -80,7 +86,7 @@ export function buildNativeHttpRequest(init: NativeHttpRequestInit): Request {
 		init.bodyStream && !bodyForbidden ? { duplex: "half" } : {};
 	return new Request(url, {
 		method,
-		headers: init.headers,
+		headers,
 		body,
 		signal: init.abortController?.signal ?? init.signal,
 		...streamInit,

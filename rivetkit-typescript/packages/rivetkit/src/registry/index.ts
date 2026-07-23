@@ -468,6 +468,7 @@ export class Registry<A extends RegistryActors> {
 				opts.application,
 				runtime,
 			);
+			await readyPromise;
 			const listenerPromise = runtime.serveApplicationListener(
 				registry,
 				{
@@ -486,7 +487,6 @@ export class Registry<A extends RegistryActors> {
 				);
 			}
 			await Promise.all([
-				readyPromise,
 				listenerPromise,
 				serveLifecyclePromise,
 			]);
