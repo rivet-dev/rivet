@@ -58,7 +58,7 @@ pub struct HttpResponseBodyStream {
 }
 
 impl HttpResponseBodyStream {
-	fn new(tx: mpsc::Sender<ResponseChunk>) -> Self {
+	pub(crate) fn new(tx: mpsc::Sender<ResponseChunk>) -> Self {
 		Self {
 			tx: Arc::new(Mutex::new(Some(tx.clone()))),
 			closed_tx: tx,

@@ -17,8 +17,8 @@ import {
 import { logger } from "./log";
 import {
 	buildConfiguredRegistry,
-	convertRuntimeHttpResponse,
 } from "./native";
+import { convertNativeHttpResponse } from "./native-http";
 import type {
 	CoreRuntime,
 	RuntimeApplicationFetch,
@@ -83,7 +83,7 @@ function createApplicationFetch(
 				"registry.listen() application fetch must return a Response",
 			);
 		}
-		const conversion = await convertRuntimeHttpResponse(
+		const conversion = await convertNativeHttpResponse(
 			response,
 			responseBodyStream,
 		);

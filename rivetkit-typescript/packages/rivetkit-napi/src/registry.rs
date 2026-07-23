@@ -20,8 +20,9 @@ use rivetkit_core::{
 use tokio::sync::{Mutex as TokioMutex, Notify, mpsc};
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
 
-use crate::actor_factory::{HttpResponseBodyStream, NapiActorFactory};
+use crate::actor_factory::NapiActorFactory;
 use crate::cancellation_token::CancellationToken;
+use crate::http::HttpResponseBodyStream;
 use crate::{NapiInvalidState, napi_anyhow_error};
 
 #[napi(object)]
