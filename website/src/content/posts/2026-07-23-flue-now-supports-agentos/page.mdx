@@ -177,6 +177,12 @@ Rivet is the self-hostable path: run it on Rivet Cloud, on your own infrastructu
 
 You keep the isolate economics you came to Flue for, without being locked to a single platform to get them.
 
+## Working upstream with Flue
+
+This integration currently runs on [Rivet's Flue fork](https://github.com/rivet-dev/flue). We're working to merge the fork's generic target-authoring and runtime extension APIs [upstream](https://github.com/withastro/flue/discussions/516).
+
+Those extension points let Flue support actor-model runtimes—where every agent and workflow owns durable identity, state, and lifecycle—without adding a Rivet dependency to Flue itself. The Rivet-specific target, actor implementation, and storage adapter will remain in Rivet packages.
+
 ## Get started
 
 - [Flue and agentOS integration guide](https://rivet.dev/docs/integrations/flue)

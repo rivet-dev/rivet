@@ -17,6 +17,13 @@ This integration is in beta. APIs may change between releases.
 
 Flue owns the agent runtime and session lifecycle. Rivet maps each agent instance and workflow run to a durable Rivet Actor, while agentOS gives each Flue context an isolated VM with a persistent `/workspace` filesystem.
 
+<Info>
+This integration currently uses [Rivet's Flue fork](https://github.com/rivet-dev/flue).
+We're working to merge its generic target-authoring and runtime extension APIs
+[upstream](https://github.com/withastro/flue/discussions/516), allowing Flue to
+support actor-model runtimes without taking a Rivet dependency.
+</Info>
+
 [View the complete example →](https://github.com/rivet-dev/agentos/tree/main/examples/flue)
 
 ## Quickstart
