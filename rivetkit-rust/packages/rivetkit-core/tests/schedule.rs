@@ -768,4 +768,40 @@ mod moved_tests {
 		advance_schedule_time(&ctx, BASE_TIME + 5_000, Duration::from_millis(1)).await;
 		assert_eq!(fired.load(Ordering::SeqCst), 1);
 	}
+
+	#[tokio::test]
+	async fn queue_alarm_updates_preserve_runtime_alarm() {
+		let ctx = context("actor-composed-alarm");
+		ctx.load_runtime_alarm(Some(BASE_TIME + 200));
+
+		ctx.sync_alarm_logged().await;
+		assert_eq!(ctx.last_pushed_alarm(), Some(BASE_TIME + 200));
+
+		ctx.update_queue_alarm(Some(BASE_TIME + 100)).await;
+		assert_eq!(ctx.last_pushed_alarm(), Some(BASE_TIME + 100));
+
+		ctx.update_queue_alarm(None).await;
+		assert_eq!(ctx.last_pushed_alarm(), Some(BASE_TIME + 200));
+	}
+
+	#[tokio::test]
+	async fn runtime_alarm_does_not_arm_the_in_process_schedule_timer() {
+		let ctx = context("actor-runtime-alarm");
+		let local_fires = Arc::new(AtomicUsize::new(0));
+		ctx.set_local_alarm_callback(Some(Arc::new({
+			let local_fires = Arc::clone(&local_fires);
+			move || {
+				let local_fires = Arc::clone(&local_fires);
+				Box::pin(async move {
+					local_fires.fetch_add(1, Ordering::SeqCst);
+				})
+			}
+		})));
+		ctx.load_runtime_alarm(Some(BASE_TIME));
+
+		ctx.sync_alarm_logged().await;
+		tokio::time::sleep(Duration::from_millis(10)).await;
+		assert_eq!(ctx.last_pushed_alarm(), Some(BASE_TIME));
+		assert_eq!(local_fires.load(Ordering::SeqCst), 0);
+	}
 }

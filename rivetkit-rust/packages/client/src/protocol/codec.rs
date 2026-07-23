@@ -76,23 +76,24 @@ pub fn encode_http_queue_request<T: Serialize>(
 	encoding: EncodingKind,
 	name: &str,
 	body: &T,
-	wait: bool,
-	timeout: Option<u64>,
+	dedupe_key: Option<&str>,
+	delay: Option<u64>,
 ) -> Result<Vec<u8>> {
 	#[derive(Serialize)]
 	struct JsonQueueRequest<'a, T: Serialize + ?Sized> {
 		name: &'a str,
 		body: &'a T,
-		wait: bool,
+		#[serde(rename = "dedupeKey", skip_serializing_if = "Option::is_none")]
+		dedupe_key: Option<&'a str>,
 		#[serde(skip_serializing_if = "Option::is_none")]
-		timeout: Option<u64>,
+		delay: Option<u64>,
 	}
 
 	let request = JsonQueueRequest {
 		name,
 		body,
-		wait,
-		timeout,
+		dedupe_key,
+		delay,
 	};
 
 	match encoding {
@@ -102,8 +103,8 @@ pub fn encode_http_queue_request<T: Serialize>(
 			wire::versioned::HttpQueueSendRequest::wrap_latest(wire::HttpQueueSendRequest {
 				body: serde_cbor::to_vec(body)?,
 				name: Some(name.to_owned()),
-				wait: Some(wait),
-				timeout,
+				dedupe_key: dedupe_key.map(str::to_owned),
+				delay,
 			})
 			.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
 		}
@@ -111,42 +112,41 @@ pub fn encode_http_queue_request<T: Serialize>(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum QueueSendStatus {
-	Completed,
-	TimedOut,
-	Other(String),
-}
-
-#[derive(Debug, Clone)]
-pub struct QueueSendResult {
-	pub status: QueueSendStatus,
-	pub response: Option<JsonValue>,
+pub struct QueueSendReceipt {
+	pub id: String,
+	pub deduplicated: bool,
 }
 
 pub fn decode_http_queue_response(
 	encoding: EncodingKind,
 	payload: &[u8],
-) -> Result<QueueSendResult> {
-	let (status, response) = match encoding {
+) -> Result<QueueSendReceipt> {
+	let (id, deduplicated) = match encoding {
 		EncodingKind::Json => {
 			let value: JsonValue = serde_json::from_slice(payload)?;
-			let status = value
-				.get("status")
+			let id = value
+				.get("receiptId")
 				.and_then(JsonValue::as_str)
-				.ok_or_else(|| anyhow!("queue response missing status"))?
+				.ok_or_else(|| anyhow!("queue response missing receiptId"))?
 				.to_owned();
-			let response = value.get("response").cloned();
-			(status, response)
+			let deduplicated = value
+				.get("deduplicated")
+				.and_then(JsonValue::as_bool)
+				.ok_or_else(|| anyhow!("queue response missing deduplicated"))?;
+			(id, deduplicated)
 		}
 		EncodingKind::Cbor => {
 			let value: JsonValue = serde_cbor::from_slice(payload)?;
-			let status = value
-				.get("status")
+			let id = value
+				.get("receiptId")
 				.and_then(JsonValue::as_str)
-				.ok_or_else(|| anyhow!("queue response missing status"))?
+				.ok_or_else(|| anyhow!("queue response missing receiptId"))?
 				.to_owned();
-			let response = value.get("response").cloned();
-			(status, response)
+			let deduplicated = value
+				.get("deduplicated")
+				.and_then(JsonValue::as_bool)
+				.ok_or_else(|| anyhow!("queue response missing deduplicated"))?;
+			(id, deduplicated)
 		}
 		EncodingKind::Bare => {
 			let response =
@@ -154,37 +154,147 @@ pub fn decode_http_queue_response(
                     payload,
                 )
                 .context("decode bare queue response")?;
-			let body = response
-				.response
-				.map(|payload| serde_cbor::from_slice(&payload))
-				.transpose()?;
-			(response.status, body)
+			(response.receipt_id, response.deduplicated)
 		}
 	};
+	Ok(QueueSendReceipt { id, deduplicated })
+}
 
-	let status = match status.as_str() {
-		"completed" => QueueSendStatus::Completed,
-		"timedOut" => QueueSendStatus::TimedOut,
-		_ => QueueSendStatus::Other(status),
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum QueueMessageStatus {
+	Queued {
+		attempts: u64,
+		created_at: u64,
+	},
+	Delayed {
+		attempts: u64,
+		created_at: u64,
+		available_at: u64,
+	},
+	Processing {
+		attempts: u64,
+		created_at: u64,
+		started_at: u64,
+	},
+	Retrying {
+		attempts: u64,
+		created_at: u64,
+		available_at: u64,
+	},
+	Succeeded {
+		attempts: u64,
+		created_at: u64,
+		completed_at: u64,
+	},
+	DeadLettered {
+		attempts: u64,
+		created_at: u64,
+		failed_at: u64,
+	},
+	Consumed {
+		created_at: u64,
+		consumed_at: u64,
+	},
+	Unknown,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RawQueueMessageStatus {
+	state: String,
+	attempts: Option<u64>,
+	created_at: Option<u64>,
+	available_at: Option<u64>,
+	started_at: Option<u64>,
+	completed_at: Option<u64>,
+	failed_at: Option<u64>,
+	consumed_at: Option<u64>,
+}
+
+pub fn decode_http_queue_status(
+	encoding: EncodingKind,
+	payload: &[u8],
+) -> Result<QueueMessageStatus> {
+	let status = match encoding {
+		EncodingKind::Json => serde_json::from_slice(payload)?,
+		EncodingKind::Cbor => serde_cbor::from_slice(payload)?,
+		EncodingKind::Bare => {
+			let response = <wire::versioned::HttpQueueStatusResponse as OwnedVersionedData>::deserialize_with_embedded_version(payload)
+				.context("decode bare queue status response")?;
+			RawQueueMessageStatus {
+				state: response.state,
+				attempts: response.attempts,
+				created_at: response.created_at,
+				available_at: response.available_at,
+				started_at: response.started_at,
+				completed_at: response.completed_at,
+				failed_at: response.failed_at,
+				consumed_at: response.consumed_at,
+			}
+		}
 	};
+	queue_message_status_from_raw(status)
+}
 
-	Ok(QueueSendResult { status, response })
+fn queue_message_status_from_raw(status: RawQueueMessageStatus) -> Result<QueueMessageStatus> {
+	let required = |value: Option<u64>, field: &str| {
+		value.ok_or_else(|| anyhow!("queue status `{}` missing {field}", status.state))
+	};
+	let attempts = || required(status.attempts, "attempts");
+	let created_at = || required(status.created_at, "createdAt");
+	match status.state.as_str() {
+		"queued" => Ok(QueueMessageStatus::Queued {
+			attempts: attempts()?,
+			created_at: created_at()?,
+		}),
+		"delayed" => Ok(QueueMessageStatus::Delayed {
+			attempts: attempts()?,
+			created_at: created_at()?,
+			available_at: required(status.available_at, "availableAt")?,
+		}),
+		"processing" => Ok(QueueMessageStatus::Processing {
+			attempts: attempts()?,
+			created_at: created_at()?,
+			started_at: required(status.started_at, "startedAt")?,
+		}),
+		"retrying" => Ok(QueueMessageStatus::Retrying {
+			attempts: attempts()?,
+			created_at: created_at()?,
+			available_at: required(status.available_at, "availableAt")?,
+		}),
+		"succeeded" => Ok(QueueMessageStatus::Succeeded {
+			attempts: attempts()?,
+			created_at: created_at()?,
+			completed_at: required(status.completed_at, "completedAt")?,
+		}),
+		"deadLettered" => Ok(QueueMessageStatus::DeadLettered {
+			attempts: attempts()?,
+			created_at: created_at()?,
+			failed_at: required(status.failed_at, "failedAt")?,
+		}),
+		"consumed" => Ok(QueueMessageStatus::Consumed {
+			created_at: created_at()?,
+			consumed_at: required(status.consumed_at, "consumedAt")?,
+		}),
+		"unknown" => Ok(QueueMessageStatus::Unknown),
+		state => Err(anyhow!("unknown queue status state `{state}`")),
+	}
 }
 
 pub fn decode_http_error(
 	encoding: EncodingKind,
 	payload: &[u8],
 ) -> Result<(String, String, String, Option<JsonValue>)> {
-	match encoding {
-		EncodingKind::Json => {
+	let decoded = match encoding {
+		EncodingKind::Json => (|| {
 			let value: JsonValue = serde_json::from_slice(payload)?;
 			error_from_json_value(&value)
-		}
-		EncodingKind::Cbor => {
+		})(),
+		EncodingKind::Cbor => (|| {
 			let value: JsonValue = serde_cbor::from_slice(payload)?;
 			error_from_json_value(&value)
-		}
-		EncodingKind::Bare => {
+		})(),
+		EncodingKind::Bare => (|| {
 			let error =
                 <wire::versioned::HttpResponseError as OwnedVersionedData>::deserialize_with_embedded_version(
                     payload,
@@ -195,8 +305,18 @@ pub fn decode_http_error(
 				.map(|payload| serde_cbor::from_slice(&payload))
 				.transpose()?;
 			Ok((error.group, error.code, error.message, metadata))
-		}
+		})(),
+	};
+
+	if decoded.is_ok() || encoding == EncodingKind::Json {
+		return decoded;
 	}
+
+	// Engine-edge failures (for example actor wake or routing failures) are
+	// JSON because they are produced before the request reaches an actor that
+	// can honor its requested encoding.
+	let value: JsonValue = serde_json::from_slice(payload)?;
+	error_from_json_value(&value)
 }
 
 fn to_server_json_value(value: &to_server::ToServer) -> Result<JsonValue> {
@@ -398,13 +518,53 @@ mod tests {
 			EncodingKind::Bare,
 			"jobs",
 			&json!({ "id": 1 }),
-			true,
+			Some("request-1"),
 			Some(50),
 		)
 		.unwrap();
 		assert_eq!(
 			u16::from_le_bytes([payload[0], payload[1]]),
 			wire::PROTOCOL_VERSION
+		);
+	}
+
+	#[test]
+	fn bare_request_accepts_json_engine_error() {
+		let payload = serde_json::to_vec(&json!({
+			"group": "guard",
+			"code": "actor_wake_retries_exceeded",
+			"message": "actor stopped before becoming ready",
+			"metadata": { "wake_retries": 8 },
+		}))
+		.unwrap();
+
+		let error = decode_http_error(EncodingKind::Bare, &payload).unwrap();
+		assert_eq!(error.0, "guard");
+		assert_eq!(error.1, "actor_wake_retries_exceeded");
+		assert_eq!(error.2, "actor stopped before becoming ready");
+		assert_eq!(error.3, Some(json!({ "wake_retries": 8 })));
+	}
+
+	#[test]
+	fn queue_status_rejects_missing_state_fields() {
+		let payload = serde_json::to_vec(&json!({
+			"state": "succeeded",
+			"attempts": 1,
+			"createdAt": 10,
+		}))
+		.unwrap();
+
+		let error = decode_http_queue_status(EncodingKind::Json, &payload).unwrap_err();
+		assert!(error.to_string().contains("missing completedAt"));
+	}
+
+	#[test]
+	fn queue_status_accepts_unknown_without_metadata() {
+		let payload = serde_json::to_vec(&json!({ "state": "unknown" })).unwrap();
+
+		assert_eq!(
+			decode_http_queue_status(EncodingKind::Json, &payload).unwrap(),
+			QueueMessageStatus::Unknown,
 		);
 	}
 }

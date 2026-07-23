@@ -22,13 +22,8 @@ export function IoStyleMenu({
 		setStatus("matching");
 		try {
 			const mm = client.ioStyleMatchmaker.getOrCreate(["main"]).connect();
-			const result = await mm.send(
-				"findLobby",
-				{},
-				{ wait: true, timeout: 10_000 },
-			);
+			const response = await mm.findLobby();
 			mm.dispose();
-			const response = result.response;
 			if (!response?.matchId || !response?.playerId) {
 				throw new Error("Matchmaker did not return a valid lobby");
 			}

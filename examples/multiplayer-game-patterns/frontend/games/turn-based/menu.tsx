@@ -93,13 +93,10 @@ export function TurnBasedMenu({
 			const mm = client.turnBasedMatchmaker
 				.getOrCreate(["main"])
 				.connect();
-			const result = await mm.send(
-				"createGame",
-				{ playerName: name.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
+			const response = await mm.createGame({
+				playerName: name.trim(),
+			});
 			mm.dispose();
-			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to create game");
 			onReady(response);
 		} catch (err) {
@@ -116,13 +113,11 @@ export function TurnBasedMenu({
 			const mm = client.turnBasedMatchmaker
 				.getOrCreate(["main"])
 				.connect();
-			const result = await mm.send(
-				"joinByCode",
-				{ inviteCode: joinCode.trim(), playerName: name.trim() },
-				{ wait: true, timeout: 10_000 },
-			);
+			const response = await mm.joinByCode({
+				inviteCode: joinCode.trim(),
+				playerName: name.trim(),
+			});
 			mm.dispose();
-			const response = result.response;
 			if (!response?.matchId) throw new Error("Failed to join game");
 			onReady(response);
 		} catch (err) {

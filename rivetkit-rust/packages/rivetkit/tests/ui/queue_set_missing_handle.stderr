@@ -1,7 +1,7 @@
 error[E0277]: the trait bound `TestActor: HandlesQueue<MissingMessage>` is not satisfied
-  --> tests/ui/queue_set_missing_handle.rs:27:11
+  --> tests/ui/queue_set_missing_handle.rs:25:11
    |
-27 |     let _ = <(MissingMessage,) as QueueSet<TestActor>>::entries();
+25 |     let _ = <(MissingMessage,) as QueueSet<TestActor>>::entries();
    |              ^^^^^^^^^^^^^^^^^ unsatisfied trait bound
    |
 help: the trait `HandlesQueue<MissingMessage>` is not implemented for `TestActor`

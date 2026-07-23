@@ -1,6 +1,6 @@
 ---
-title: "Queues & Run Loops"
-description: "Use actor-local durable queues for serial run loops and request/response workflows."
+title: "Queues"
+description: "Use actor-local durable queues with automatic handlers or raw pull consumers."
 skill: true
 ---
 
@@ -8,7 +8,7 @@ skill: true
 
 - **Realtime**: messages are delivered to a live actor as soon as possible.
 - **Durable**: messages are persisted and survive actor sleep/restart.
-- **Request/response**: clients can wait for a queue completion response.
+- **Observable**: every accepted send returns a receipt whose status can be checked later.
 - **Scalable**: queues absorb large bursts and handle heavy backpressure safely.
 - **Local per actor**: each actor instance has its own queue storage (scoped by actor key/id).
 
@@ -17,39 +17,49 @@ Queues are commonly referred to as "mailboxes" in other actor frameworks.
 ## What are queues good for?
 
 - Great for any task that changes actor state.
-- Helps avoid race conditions by handling work in order.
+- Separates asynchronous work from request lifetimes while keeping each delivery attempt durable.
 - Makes complex behavior easier to organize.
 
 ## Basic queue
 
-This is the default pattern. Define queue names in `queues`, process them in `run`, and publish from the client with `handle.send(...)`.
+Define an `onMessage` callback to have the runtime deliver each message automatically. Returning from the callback acknowledges the message. Throwing, rejecting, or exceeding `timeout` negatively acknowledges it and schedules a retry.
 
 <CodeGroup>
 <CodeSnippet file="examples/docs/actors-queues/basic/index.ts" title="index.ts" />
 <CodeSnippet file="examples/docs/actors-queues/basic/client.ts" title="client.ts" />
 </CodeGroup>
 
-## Completable messages
+## Delivery, retries, and dead letters
 
-Use this when you want explicit completion/ack semantics but do not need to return data.
+Automatic handlers use at-least-once delivery. Configure the total number of attempts and exponential backoff on the queue definition:
 
-- `message.complete()` resolves a sender waiting on `wait: true` (or `enqueueAndWait`). It does not change durability: messages are removed from queue storage when they are received, not when they are completed.
-- If processing fails before `message.complete()`, the message is not redelivered, and any waiting sender times out instead of receiving a completion.
-- `status: "timedOut"` means sender timeout elapsed before `message.complete(...)`.
+- A successful return from `onMessage` is an internal ack and produces `succeeded` status.
+- A thrown error, rejected promise, or handler timeout is an internal nack. The message is retried until `maxAttempts` is reached, then becomes `deadLettered`.
+- `onDeadLetter` is available only alongside `onMessage`. It is a durable notification callback; if it throws, it is retried independently and does not make the message live again.
+- Both callbacks receive `{ signal }`. Timeout and actor shutdown abort this signal and the runtime stops waiting immediately. A late return or throw is ignored by the fenced delivery lease.
+- Delivery is at least once, so make external side effects idempotent. A handler can finish an external write and stop before Rivet commits its ack.
+
+There is no public `ack()`, `nack()`, or `complete()` method on a delivered message.
+
+| Consumer API | Ack behavior | If user code throws | Timeout or crash |
+| --- | --- | --- | --- |
+| Queue `onMessage` | Returning successfully performs a fenced internal ack | Implicit nack, then backoff/retry or dead-lettering | Timeout aborts `signal` and immediately nacks without awaiting settlement; crash recovery retries an abandoned lease unless its final attempt was already used |
+| `next()` / `nextBatch()` / `tryNext()` / `iter()` | Rivet atomically consumes before returning | Already consumed; it is not redelivered | Already consumed; it is not redelivered |
+
+Catching an error inside `onMessage` and returning normally counts as success and therefore acknowledges the message. `waitForNames()` only waits for availability and does not consume or acknowledge anything.
+
+## Receipts and status
+
+`send()` returns as soon as the message is durably accepted. It never waits for the handler and handlers do not return values to senders. Save the opaque receipt ID when you need to inspect progress later.
 
 <CodeGroup>
-<CodeSnippet file="examples/docs/actors-queues/completable/index.ts" title="index.ts" />
-<CodeSnippet file="examples/docs/actors-queues/completable/client.ts" title="client.ts" />
+<CodeSnippet file="examples/docs/actors-queues/receipts/index.ts" title="index.ts" />
+<CodeSnippet file="examples/docs/actors-queues/receipts/client.ts" title="client.ts" />
 </CodeGroup>
 
-## Request/reply pattern
+`receipt.status()` is one nonblocking lookup. It can return `queued`, `delayed`, `processing`, `retrying`, `succeeded`, `deadLettered`, `consumed`, or `unknown`. Reconstruct a saved receipt with `handle.receipt(id)` on a client handle or `c.queue.receipt(id)` inside an actor. Terminal `succeeded` and `consumed` statuses are retained for 24 hours, subject to a per-actor cap; expired and unknown IDs return `unknown`.
 
-Use this when the sender needs data back from queued work.
-
-<CodeGroup>
-<CodeSnippet file="examples/docs/actors-queues/request-reply/index.ts" title="index.ts" />
-<CodeSnippet file="examples/docs/actors-queues/request-reply/client.ts" title="client.ts" />
-</CodeGroup>
+Use `dedupeKey` to make repeated sends within the five-minute deduplication window resolve to the original receipt. Deduplication is scoped by the `(queue name, dedupeKey)` tuple.
 
 ## Queue messages from within an actor
 
@@ -66,7 +76,7 @@ Queueing is useful from inside actor logic too, not just from clients.
 
 ## Defining queue schemas
 
-You can define queue types with `queue<TMessage, TComplete>()` or with schema objects. Schema objects support [Standard Schema](https://standardschema.dev/) validators, including [Zod](https://zod.dev/).
+You can define queue types with `queue<TMessage>()` or with schema objects. Schema objects support [Standard Schema](https://standardschema.dev/) validators, including [Zod](https://zod.dev/).
 
 <CodeSnippet file="examples/docs/actors-queues/schemas.ts" title="index.ts" />
 
@@ -77,6 +87,8 @@ Use `nextBatch` when you want to wait for multiple queue messages.
 
 - Waits until messages are available unless timeout is hit.
 - Omit `timeout` to wait indefinitely.
+- These raw pull APIs are only for queues without `onMessage`.
+- Pulling is destructive and at-most-once: Rivet records `consumed` before returning the message. There is no ack or nack. If your code throws after `next()`, the message is not requeued.
 
 <CodeSnippet file="examples/docs/actors-queues/next-batch.ts" title="index.ts" />
 
@@ -119,7 +131,8 @@ This means you can run normal code in `run` without worrying about sleep interru
 
 - `GET /inspector/queue?limit=50` returns queue size and pending message metadata.
 - `GET /inspector/summary` includes `queueSize` for quick queue health checks.
-- `POST /queue/:name` with `wait: true` is useful to verify completable/request-response behavior.
+- `POST /queue/:name` returns a receipt ID after durable acceptance.
+- `GET /queue/receipts/:receiptId` returns the current receipt status.
 - In non-dev mode, inspector endpoints require authorization.
 
 ## Recommendations
@@ -129,16 +142,7 @@ This means you can run normal code in `run` without worrying about sleep interru
 - Route most state changes through one queue loop so ordering stays predictable.
 - If you need more complex multi-step run loops, consider using workflows.
 - Use `c.aborted` and `c.abortSignal` for actor shutdown. Use your own `AbortController` for earlier loop cancellation.
-- Add `timeout` when callers need bounded wait behavior.
-- Use `wait: true` only when the caller actually needs a response.
-
-## Pitfalls
-
-### Avoid `wait: true` between actors
-
-`wait: true` blocks the sender's run loop until the receiver finishes. Between actors, this adds unnecessary overhead and risks deadlocks, especially if the target actor needs to communicate back. If an actor sends a `wait: true` message to *itself*, it is a guaranteed deadlock because the run loop is already busy processing the current message.
-
-Reserve `wait: true` for external callers (HTTP handlers, CLI tools, client apps). For actor-to-actor communication, send a queue message to the other actor without `wait: true`, then have that actor send a queue message back when the work is done.
+- Use a workflow or an action when the caller needs a durable result or synchronous response. Queue receipts expose status, not handler return values.
 
 ## Tips
 
@@ -150,8 +154,8 @@ Every queue message includes a `createdAt` timestamp. Use this to skip or discar
 
 ### Delayed delivery
 
-Use [`c.schedule`](/docs/actors/schedule) to enqueue messages at a future time instead of processing them immediately:
+Pass `delay` to make a message eligible for delivery later. The message is durably accepted immediately, and its receipt reports `delayed` until it becomes eligible:
 
 <CodeSnippet file="examples/docs/actors-queues/delayed-delivery.ts" title="index.ts" />
 
-See [Schedule](/docs/actors/schedule) for the full scheduling API.
+Use [`c.schedule`](/docs/actors/schedule) instead when you need to invoke an action at a specific time rather than enqueue a queue message.

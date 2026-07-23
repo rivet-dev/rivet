@@ -15,7 +15,6 @@ use parking_lot::{Mutex, RwLock};
 use rivet_envoy_client::handle::EnvoyHandle;
 use rivet_envoy_client::tunnel::HibernatingWebSocketMetadata;
 use rivet_error::ActorSpecifier;
-use scc::HashMap as SccHashMap;
 use scc::HashSet as SccHashSet;
 use tokio::runtime::Handle;
 use tokio::sync::{Mutex as AsyncMutex, Notify, OnceCell, broadcast, mpsc, oneshot};
@@ -120,6 +119,9 @@ pub(crate) struct ActorContextInner {
 	pub(super) max_schedules: u32,
 	#[cfg(any(test, feature = "test-support"))]
 	pub(super) schedule_now_override: AtomicI64,
+	// Forced-sync: foreign runtimes set alarms through synchronous bridge APIs.
+	pub(super) runtime_next_alarm: Mutex<Option<i64>>,
+	pub(super) runtime_alarm_persist_lock: AsyncMutex<()>,
 	#[cfg(test)]
 	pub(super) schedule_driver_alarm_cancel_count: AtomicUsize,
 	#[cfg(test)]
@@ -131,8 +133,8 @@ pub(crate) struct ActorContextInner {
 	pub(super) queue_initialize: OnceCell<()>,
 	pub(super) queue_metadata: AsyncMutex<QueueMetadata>,
 	pub(super) queue_receive_lock: AsyncMutex<()>,
-	pub(super) queue_completion_waiters: SccHashMap<u64, oneshot::Sender<Option<Vec<u8>>>>,
 	pub(super) queue_notify: Notify,
+	pub(super) queue_next_alarm: Mutex<Option<i64>>,
 	pub(super) active_queue_wait_count: AtomicU32,
 	// Forced-sync: callbacks are registered and cloned from synchronous hooks.
 	pub(super) queue_wait_activity_callback: Mutex<Option<QueueWaitActivityCallback>>,
@@ -336,6 +338,8 @@ impl ActorContext {
 			max_schedules,
 			#[cfg(any(test, feature = "test-support"))]
 			schedule_now_override: AtomicI64::new(i64::MIN),
+			runtime_next_alarm: Mutex::new(None),
+			runtime_alarm_persist_lock: AsyncMutex::new(()),
 			#[cfg(test)]
 			schedule_driver_alarm_cancel_count: AtomicUsize::new(0),
 			#[cfg(test)]
@@ -345,8 +349,8 @@ impl ActorContext {
 			queue_initialize: OnceCell::new(),
 			queue_metadata: AsyncMutex::new(QueueMetadata::default()),
 			queue_receive_lock: AsyncMutex::new(()),
-			queue_completion_waiters: SccHashMap::new(),
 			queue_notify: Notify::new(),
+			queue_next_alarm: Mutex::new(None),
 			active_queue_wait_count: AtomicU32::new(0),
 			queue_wait_activity_callback: Mutex::new(None),
 			queue_inspector_update_callback: Mutex::new(None),

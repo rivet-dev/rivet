@@ -172,34 +172,21 @@ mod moved_tests {
 			},
 		);
 
-		let completable = ctx
+		let consumed = ctx
 			.queue()
 			.next(QueueNextOpts {
 				names: None,
 				timeout: None,
 				signal: None,
-				completable: true,
 			})
 			.await
-			.expect("completable receive should succeed")
-			.expect("completable message should exist");
+			.expect("raw receive should succeed")
+			.expect("raw message should exist");
+		assert_eq!(consumed.name, "jobs");
 		assert_eq!(
 			inspector.snapshot(),
 			InspectorSnapshot {
 				queue_revision: 4,
-				queue_size: 1,
-				..InspectorSnapshot::default()
-			},
-		);
-
-		completable
-			.complete(Some(vec![7]))
-			.await
-			.expect("queue ack should succeed");
-		assert_eq!(
-			inspector.snapshot(),
-			InspectorSnapshot {
-				queue_revision: 5,
 				queue_size: 0,
 				..InspectorSnapshot::default()
 			},
@@ -218,7 +205,7 @@ mod moved_tests {
 		let inspector = Inspector::new();
 		ctx.configure_inspector(Some(inspector.clone()));
 
-		let first = ctx
+		ctx
 			.queue()
 			.send("jobs", b"first")
 			.await
@@ -227,11 +214,18 @@ mod moved_tests {
 			.send("jobs", b"second")
 			.await
 			.expect("enqueue second");
-		let third = ctx
+		ctx
 			.queue()
 			.send("jobs", b"third")
 			.await
 			.expect("enqueue third");
+		let pre_reset_messages = ctx
+			.queue()
+			.inspect_messages()
+			.await
+			.expect("inspect before reset");
+		let first_id = pre_reset_messages.first().expect("first message").id;
+		let third_id = pre_reset_messages.last().expect("third message").id;
 		let pre_reset_revision = inspector.snapshot().queue_revision;
 		assert_eq!(inspector.snapshot().queue_size, 3);
 
@@ -250,14 +244,22 @@ mod moved_tests {
 		);
 
 		// next_id is preserved across reset so a post-reset message never reuses
-		// an id that a pre-reset completion handle still holds.
-		let again = ctx
+		// an internal sequence id from a pre-reset message.
+		ctx
 			.queue()
 			.send("jobs", b"again")
 			.await
 			.expect("enqueue again");
-		assert!(again.id > first.id);
-		assert!(again.id > third.id);
+		let again_id = ctx
+			.queue()
+			.inspect_messages()
+			.await
+			.expect("inspect after enqueue")
+			.first()
+			.expect("post-reset message")
+			.id;
+		assert!(again_id > first_id);
+		assert!(again_id > third_id);
 		assert_eq!(inspector.snapshot().queue_size, 1);
 	}
 

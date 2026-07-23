@@ -22,6 +22,7 @@ pub const DEFAULT_MAX_SCHEDULES: u32 = 1_000;
 const DEFAULT_MAX_QUEUE_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_INCOMING_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_OUTGOING_MESSAGE_SIZE: u32 = 1_048_576;
+const DEFAULT_QUEUE_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub enum CanHibernateWebSocket {
@@ -52,6 +53,54 @@ pub struct ActorConfigOverrides {
 #[derive(Clone, Debug)]
 pub struct ActionDefinition {
 	pub name: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct QueueDefinition {
+	pub name: String,
+	pub on_message: bool,
+	pub on_dead_letter: bool,
+	pub timeout: Duration,
+	pub max_attempts: u32,
+	pub backoff_initial: Duration,
+	pub backoff_factor: f64,
+	pub backoff_max: Duration,
+	pub backoff_jitter: bool,
+}
+
+impl QueueDefinition {
+	pub fn from_input(input: QueueDefinitionInput) -> Self {
+		Self {
+			name: input.name,
+			on_message: input.on_message,
+			on_dead_letter: input.on_dead_letter,
+			timeout: input.timeout_ms.map(duration_ms).unwrap_or(DEFAULT_QUEUE_TIMEOUT),
+			max_attempts: input.max_attempts.unwrap_or(3).max(1),
+			backoff_initial: input
+				.backoff_initial_ms
+				.map(duration_ms)
+				.unwrap_or(Duration::from_secs(1)),
+			backoff_factor: input.backoff_factor.unwrap_or(2.0),
+			backoff_max: input
+				.backoff_max_ms
+				.map(duration_ms)
+				.unwrap_or(Duration::from_secs(30)),
+			backoff_jitter: input.backoff_jitter.unwrap_or(true),
+		}
+	}
+}
+
+#[derive(Clone, Debug)]
+pub struct QueueDefinitionInput {
+	pub name: String,
+	pub on_message: bool,
+	pub on_dead_letter: bool,
+	pub timeout_ms: Option<u32>,
+	pub max_attempts: Option<u32>,
+	pub backoff_initial_ms: Option<u32>,
+	pub backoff_factor: Option<f64>,
+	pub backoff_max_ms: Option<u32>,
+	pub backoff_jitter: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -88,6 +137,7 @@ pub struct ActorConfig {
 	pub max_outgoing_message_size: u32,
 	pub overrides: Option<ActorConfigOverrides>,
 	pub actions: Vec<ActionDefinition>,
+	pub queues: Vec<QueueDefinition>,
 	/// Author-declared inspector tab entries (custom tabs + built-in
 	/// hides). Validated upstream (Zod / builder).
 	pub inspector_tabs: Vec<InspectorTabEntry>,
@@ -121,6 +171,7 @@ pub struct ActorConfigInput {
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
 	pub actions: Option<Vec<ActionDefinition>>,
+	pub queues: Option<Vec<QueueDefinitionInput>>,
 	pub inspector_tabs: Option<Vec<InspectorTabEntry>>,
 }
 
@@ -194,6 +245,12 @@ impl ActorConfig {
 		if let Some(actions) = config.actions {
 			actor_config.actions = actions;
 		}
+		if let Some(queues) = config.queues {
+			actor_config.queues = queues
+				.into_iter()
+				.map(QueueDefinition::from_input)
+				.collect();
+		}
 		if let Some(tabs) = config.inspector_tabs {
 			actor_config.inspector_tabs = tabs;
 		}
@@ -216,6 +273,14 @@ impl ActorConfig {
 	/// config so the actor never starts with garbage state.
 	pub fn validate(&self) -> anyhow::Result<()> {
 		crate::inspector::validate_inspector_tabs(&self.inspector_tabs)?;
+		for queue in &self.queues {
+			if queue.name.is_empty() {
+				anyhow::bail!("queue name must not be empty");
+			}
+			if !queue.backoff_factor.is_finite() || queue.backoff_factor < 1.0 {
+				anyhow::bail!("queue backoff factor must be finite and at least 1");
+			}
+		}
 		Ok(())
 	}
 }
@@ -250,6 +315,7 @@ impl Default for ActorConfig {
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
 			overrides: None,
 			actions: Vec::new(),
+			queues: Vec::new(),
 			inspector_tabs: Vec::new(),
 		}
 	}

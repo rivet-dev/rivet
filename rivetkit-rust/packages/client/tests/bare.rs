@@ -26,7 +26,7 @@ use reqwest::{
 };
 use rivetkit_client::{
 	Client, ClientConfig, ConnectionStatus, EncodingKind, GetOptions, GetOrCreateOptions,
-	QueueSendStatus, SendAndWaitOpts, SendOpts,
+	QueueSendOptions,
 };
 use rivetkit_client_protocol as wire;
 use serde::{Deserialize, Serialize};
@@ -161,23 +161,26 @@ async fn default_bare_queue_send_round_trips_against_test_actor() {
 		)
 		.unwrap();
 
-	counter
-		.send("jobs", json!({ "id": 1 }), SendOpts::default())
+	let first = counter
+		.send("jobs", json!({ "id": 1 }), QueueSendOptions::default())
 		.await
 		.unwrap();
-	let output = counter
-		.send_and_wait(
+	let second = counter
+		.send(
 			"jobs",
 			json!({ "id": 2 }),
-			SendAndWaitOpts {
-				timeout: Some(Duration::from_millis(50)),
+			QueueSendOptions {
+				dedupe_key: Some("request-2".to_owned()),
+				delay: Some(Duration::from_millis(50)),
 			},
 		)
 		.await
 		.unwrap();
 
-	assert_eq!(output.status, QueueSendStatus::Completed);
-	assert_eq!(output.response, Some(json!({ "accepted": "jobs" })));
+	assert_eq!(first.id, "receipt-1");
+	assert!(!first.deduplicated);
+	assert_eq!(second.id, "receipt-2");
+	assert!(second.deduplicated);
 	assert!(state.saw_bare_queue.load(Ordering::SeqCst));
 
 	server.abort();
@@ -944,20 +947,21 @@ async fn queue_send(
 	let payload: JsonValue = serde_cbor::from_slice(&request.body).unwrap();
 	assert!(payload == json!({ "id": 1 }) || payload == json!({ "id": 2 }));
 	if payload == json!({ "id": 1 }) {
-		assert_eq!(request.wait, Some(false));
-		assert_eq!(request.timeout, None);
+		assert_eq!(request.dedupe_key, None);
+		assert_eq!(request.delay, None);
 	} else {
-		assert_eq!(request.wait, Some(true));
-		assert_eq!(request.timeout, Some(50));
+		assert_eq!(request.dedupe_key.as_deref(), Some("request-2"));
+		assert_eq!(request.delay, Some(50));
 	}
 
 	let payload =
 		wire::versioned::HttpQueueSendResponse::wrap_latest(wire::HttpQueueSendResponse {
-			status: "completed".to_owned(),
-			response: request
-				.wait
-				.unwrap_or_default()
-				.then(|| serde_cbor::to_vec(&json!({ "accepted": "jobs" })).unwrap()),
+			receipt_id: if payload == json!({ "id": 1 }) {
+				"receipt-1".to_owned()
+			} else {
+				"receipt-2".to_owned()
+			},
+			deduplicated: payload == json!({ "id": 2 }),
 		})
 		.serialize_with_embedded_version(wire::PROTOCOL_VERSION)
 		.unwrap();

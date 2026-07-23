@@ -42,7 +42,10 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 		});
 
 		test("consumes queue messages via workflow queue.next", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
+			const { client, getRuntimeOutput } = await setupDriverTest(
+				c,
+				driverTestConfig,
+			);
 			const actor = client.workflowQueueActor.getOrCreate([
 				"workflow-queue",
 			]);
@@ -51,22 +54,19 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 				hello: "world",
 			});
 
-			await waitFor(driverTestConfig, 200);
-			const messages = await actor.getMessages();
-			expect(messages).toEqual([{ hello: "world" }]);
-		});
-
-		test("workflow queue.next supports completing wait sends", async (c) => {
-			const { client } = await setupDriverTest(c, driverTestConfig);
-			const actor = client.workflowQueueActor.getOrCreate([
-				"workflow-queue-wait",
-			]);
-
-			const result = await actor.sendAndWait({ value: 123 });
-			expect(result).toEqual({
-				status: "completed",
-				response: { echo: { value: 123 } },
-			});
+			try {
+				await vi.waitFor(
+					async () => {
+						const messages = await actor.getMessages();
+						expect(messages).toEqual([{ hello: "world" }]);
+					},
+					{ timeout: 10_000, interval: 100 },
+				);
+			} catch (error) {
+				throw new Error(`Workflow queue did not drain:\n${getRuntimeOutput()}`, {
+					cause: error,
+				});
+			}
 		});
 
 		for (const testCase of [
@@ -113,39 +113,19 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 					.getActor(client)
 					.getOrCreate([`workflow-nested-${testCase.key}`]);
 
-				const first = await actor.send(
+				await actor.send(
 					WORKFLOW_NESTED_QUEUE_NAME,
 					{
 						items: testCase.firstItems,
 					},
-					{
-						wait: true,
-						timeout: 1_000,
-					},
 				);
-				expect(first).toEqual({
-					status: "completed",
-					response: {
-						processed: testCase.firstItems.length,
-					},
-				});
 
-				const second = await actor.send(
+				await actor.send(
 					WORKFLOW_NESTED_QUEUE_NAME,
 					{
 						items: testCase.secondItems,
 					},
-					{
-						wait: true,
-						timeout: 1_000,
-					},
 				);
-				expect(second).toEqual({
-					status: "completed",
-					response: {
-						processed: testCase.secondItems.length,
-					},
-				});
 
 				// Poll until the workflow finishes mutating actor state because workflow steps run asynchronously.
 				await vi.waitFor(async () => {
@@ -174,10 +154,7 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			expect(parentState.results).toEqual([
 				{
 					key: "child-1",
-					result: {
-						status: "completed",
-						response: { ok: true },
-					},
+					result: expect.any(String),
 					error: null,
 				},
 			]);
@@ -185,7 +162,15 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			const child = client.workflowSpawnChildActor.getOrCreate([
 				"child-1",
 			]);
-			const childState = await child.getState();
+			let childState = await child.getState();
+			for (
+				let i = 0;
+				i < 30 && childState.processed.length === 0;
+				i++
+			) {
+				await waitFor(driverTestConfig, 100);
+				childState = await child.getState();
+			}
 			expect(childState).toEqual({
 				label: "child-1",
 				started: true,
@@ -200,7 +185,14 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			]);
 
 			let state = await actor.getState();
-			for (let i = 0; i < 20 && state.insideDbCount === 0; i++) {
+			for (
+				let i = 0;
+				i < 20 &&
+				(state.insideDbCount === 0 ||
+					state.outsideDbError === null ||
+					state.outsideClientError === null);
+				i++
+			) {
 				await waitFor(driverTestConfig, 50);
 				state = await actor.getState();
 			}
@@ -479,7 +471,12 @@ describeDriverMatrix("Actor Workflow", (driverTestConfig) => {
 			]);
 
 			let state = await actor.getState();
-			for (let i = 0; i < 10 && state.sleepCount === 0; i++) {
+			for (
+				let i = 0;
+				i < 10 &&
+				(state.sleepCount === 0 || state.startCount <= 1);
+				i++
+			) {
 				await waitFor(driverTestConfig, 100);
 				state = await actor.getState();
 			}

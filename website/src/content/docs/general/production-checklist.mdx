@@ -61,7 +61,7 @@ We recommend passing this page to your coding agent to verify your configuration
 ### Queues
 
 - **Review queue limits.** The default `maxQueueSize` is 1,000 messages and `maxQueueMessageSize` is 64 KiB. Increase if you expect burst traffic or large queue payloads. See [Actor Configuration](/docs/general/actor-configuration).
-- **Ensure queue handlers are idempotent.** If processing fails before `message.complete()`, the message will be retried. See [Queues](/docs/actors/queues).
+- **Ensure queue handlers are idempotent.** `onMessage` uses at-least-once delivery, so a handler may run again after a timeout or interrupted ack. See [Queues](/docs/actors/queues).
 
 ### Workflows
 

@@ -698,6 +698,7 @@ async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 				..actor.clone()
 			},
 			last_pushed_alarm: Some(5678),
+			runtime_alarm: Some(5678),
 		})
 	);
 	let schedule_rows = ctx
@@ -735,7 +736,14 @@ async fn imports_legacy_kv_snapshot_to_sqlite_once() -> Result<()> {
 	let queue_rows = internal_storage::load_queue_messages(ctx.sql()).await?;
 	assert_eq!(queue_rows.len(), 1);
 	assert_eq!(queue_rows[0].id, 40);
-	assert_eq!(queue_rows[0].message, queue_message);
+	assert_eq!(
+		queue_rows[0].message,
+		PersistedQueueMessage {
+			failure_count: Some(0),
+			in_flight: Some(false),
+			..queue_message
+		}
+	);
 
 	let workflow_rows = ctx
 		.sql()
@@ -1083,7 +1091,7 @@ async fn non_empty_first_import_uses_legacy_kv_as_the_only_source_of_truth() -> 
 }
 
 #[tokio::test]
-async fn rejects_legacy_queue_delivery_state_instead_of_dropping_it() -> Result<()> {
+async fn preserves_legacy_queue_delivery_state_and_counts_in_flight_attempt() -> Result<()> {
 	let kv = Kv::new_in_memory();
 	let key = make_queue_message_key(7);
 	let value = encode_queue_message(&PersistedQueueMessage {
@@ -1098,14 +1106,23 @@ async fn rejects_legacy_queue_delivery_state_instead_of_dropping_it() -> Result<
 	kv.put(&key, &value).await?;
 	let (ctx, sqlite_task) = sqlite_ctx(kv);
 	internal_schema::ensure_internal_schema(ctx.sql()).await?;
-	let error = import_core_state_if_needed(&ctx)
-		.await
-		.expect_err("unsupported delivery state must not be silently discarded");
-	assert!(error.to_string().contains("cannot preserve"));
+	import_core_state_if_needed(&ctx).await?;
 	assert_eq!(
 		internal_storage::load_meta_text(ctx.sql(), "kv_import_state").await?,
-		Some("importing".to_owned())
+		Some("done".to_owned())
 	);
+	let rows = internal_storage::load_queue_messages(ctx.sql()).await?;
+	assert_eq!(rows.len(), 1);
+	assert_eq!(rows[0].attempt_count, 2);
+	assert_eq!(rows[0].available_at, Some(200));
+	assert_eq!(rows[0].in_flight_at, Some(150));
+
+	internal_storage::recover_queue_leases(ctx.sql(), 300).await?;
+	let recovered = internal_storage::load_queue_messages(ctx.sql()).await?;
+	assert_eq!(recovered[0].attempt_count, 2);
+	assert_eq!(recovered[0].available_at, Some(300));
+	assert_eq!(recovered[0].in_flight_at, None);
+	assert_eq!(recovered[0].first_failed_at, Some(150));
 	drop(ctx);
 	sqlite_task.abort();
 	Ok(())
@@ -1259,7 +1276,7 @@ async fn retries_after_faults_in_every_import_phase() -> Result<()> {
 			blob_param: None,
 		},
 		SqliteFault {
-			sql_contains: "INSERT OR REPLACE INTO _rivet_queue",
+			sql_contains: "INSERT INTO _rivet_queue",
 			blob_param: None,
 		},
 		SqliteFault {

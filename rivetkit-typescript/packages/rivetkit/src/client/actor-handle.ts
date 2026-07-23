@@ -54,10 +54,9 @@ import { retryOnLifecycleBoundary } from "./lifecycle-errors";
 import { logger } from "./log";
 import {
 	createQueueSender,
-	type QueueSendNoWaitOptions,
+	type QueueReceipt,
 	type QueueSendOptions,
-	type QueueSendResult,
-	type QueueSendWaitOptions,
+	type QueueSendReceipt,
 } from "./queue";
 import { rawHttpFetch, rawWebSocket } from "./raw-utils";
 import { resolveGatewayTarget } from "./resolve-gateway-target";
@@ -117,26 +116,43 @@ export class ActorHandleRaw {
 	send(
 		name: string,
 		body: unknown,
-		options: QueueSendWaitOptions,
-	): Promise<QueueSendResult>;
-	send(
-		name: string,
-		body: unknown,
-		options?: QueueSendNoWaitOptions,
-	): Promise<void>;
-	send(
-		name: string,
-		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | void> {
+	): Promise<QueueSendReceipt> {
 		return this.#sendQueueMessage(name, body, options as any);
+	}
+
+	receipt(id: string): QueueReceipt {
+		return {
+			id,
+			status: async (options) => {
+				const gatewayOptions = resolveActorGatewayOptions(
+					this.#gatewayOptions,
+				);
+				const target = await this.#resolveGatewayRequestTarget(
+					false,
+					gatewayOptions,
+				);
+				return await createQueueSender({
+					encoding: this.#encoding,
+					params: this.#params,
+					customFetch: async (request: Request) =>
+						await this.#driver.sendRequest(
+							target,
+							request,
+							gatewayOptions,
+						),
+				})
+					.receipt(id)
+					.status(options);
+			},
+		};
 	}
 
 	async #sendQueueMessage(
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | void> {
+	): Promise<QueueSendReceipt> {
 		return await this.#queueSendMutex.run(async () => {
 			const maxAttempts = this.#getDynamicQueryMaxAttempts();
 			let useQueryTarget = false;

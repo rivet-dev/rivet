@@ -55,20 +55,15 @@ export const workflowQueueActor = actor({
 		received: [] as unknown[],
 	},
 	queues: {
-		[WORKFLOW_QUEUE_NAME]: queue<unknown, { echo: unknown }>(),
+		[WORKFLOW_QUEUE_NAME]: queue<unknown>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue", async (loopCtx) => {
 			const message = await loopCtx.queue.next("queue-wait", {
 				names: [WORKFLOW_QUEUE_NAME],
-				completable: true,
 			});
-			if (!message.complete) {
-				return Loop.continue(undefined);
-			}
-			const complete = message.complete;
 			await loopCtx.step("store-message", async (c) => {
-				await storeWorkflowQueueMessage(c, message.body, complete);
+				c.state.received.push(message.body);
 			});
 			return Loop.continue(undefined);
 		});
@@ -163,15 +158,6 @@ function incrementWorkflowCounter(
 ): void {
 	ctx.state.runCount += 1;
 	ctx.state.history.push(ctx.state.runCount);
-}
-
-async function storeWorkflowQueueMessage(
-	ctx: WorkflowStepContextOf<typeof workflowQueueActor>,
-	body: unknown,
-	complete: (response: { echo: unknown }) => Promise<void>,
-): Promise<void> {
-	ctx.state.received.push(body);
-	await complete({ echo: body });
 }
 
 function incrementWorkflowSleepTick(

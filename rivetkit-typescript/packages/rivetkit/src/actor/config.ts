@@ -10,7 +10,6 @@ import { flattenActionHandlers } from "./actions";
 import type { BaseActorDefinition } from "./definition";
 import type {
 	EventSchemaConfig,
-	InferQueueCompleteMap,
 	InferSchemaMap,
 	PrimitiveSchema,
 	QueueSchemaConfig,
@@ -192,10 +191,12 @@ export interface CronFire {
 }
 
 export type QueueMessageOf<Name extends string, Body> = {
-	id: number | bigint;
+	id: string;
 	name: Name;
 	body: Body;
-	createdAt: number;
+	createdAt: Date;
+	attempts: number;
+	firstFailedAt?: Date;
 	[key: string]: unknown;
 };
 
@@ -204,7 +205,7 @@ export type QueueName<TQueues extends QueueSchemaConfig> = keyof TQueues &
 export type QueueFilterName<TQueues extends QueueSchemaConfig> =
 	keyof TQueues extends never ? string : QueueName<TQueues>;
 
-type QueueMessageForName<
+export type QueueMessageForName<
 	TQueues extends QueueSchemaConfig,
 	TName extends QueueFilterName<TQueues>,
 > = keyof TQueues extends never
@@ -213,101 +214,61 @@ type QueueMessageForName<
 		? QueueMessageOf<TName, InferSchemaMap<TQueues>[TName]>
 		: never;
 
-type QueueCompleteArgs<T> = undefined extends T
-	? [response?: T]
-	: [response: T];
-
-type QueueCompleteArgsForName<
-	TQueues extends QueueSchemaConfig,
-	TName extends QueueFilterName<TQueues>,
-> = keyof TQueues extends never
-	? [response?: unknown]
-	: TName extends QueueName<TQueues>
-		? [InferQueueCompleteMap<TQueues>[TName]] extends [never]
-			? [response?: unknown]
-			: QueueCompleteArgs<InferQueueCompleteMap<TQueues>[TName]>
-		: [response?: unknown];
-
-type QueueCompletableMessageForName<
-	TQueues extends QueueSchemaConfig,
-	TName extends QueueFilterName<TQueues>,
-> = QueueMessageForName<TQueues, TName> & {
-	complete(...args: QueueCompleteArgsForName<TQueues, TName>): Promise<void>;
-};
-
-type QueueCompletionResultForName<
-	TQueues extends QueueSchemaConfig,
-	TName extends QueueFilterName<TQueues>,
-> = keyof TQueues extends never
-	? unknown | undefined
-	: TName extends QueueName<TQueues>
-		? InferQueueCompleteMap<TQueues>[TName] | undefined
-		: unknown | undefined;
-
-export type QueueResultMessageForName<
-	TQueues extends QueueSchemaConfig,
-	TName extends QueueFilterName<TQueues>,
-	TCompletable extends boolean,
-> = TCompletable extends true
-	? QueueCompletableMessageForName<TQueues, TName>
-	: QueueMessageForName<TQueues, TName>;
-
-export interface QueueNextOptions<
-	TName extends string = string,
-	TCompletable extends boolean = boolean,
-> {
+export interface QueueNextOptions<TName extends string = string> {
 	names?: readonly TName[];
 	timeout?: number;
 	signal?: AbortSignal;
-	completable?: TCompletable;
 }
 
-export interface QueueNextBatchOptions<
-	TName extends string = string,
-	TCompletable extends boolean = boolean,
-> {
+export interface QueueNextBatchOptions<TName extends string = string> {
 	names?: readonly TName[];
 	count?: number;
 	timeout?: number;
 	signal?: AbortSignal;
-	completable?: TCompletable;
 }
 
-export interface QueueWaitOptions<TCompletable extends boolean = boolean> {
-	timeout?: number;
-	signal?: AbortSignal;
-	completable?: TCompletable;
-}
-
-export interface QueueEnqueueAndWaitOptions {
+export interface QueueWaitOptions {
 	timeout?: number;
 	signal?: AbortSignal;
 }
 
-export interface QueueTryNextOptions<
-	TName extends string = string,
-	TCompletable extends boolean = boolean,
-> {
+export interface QueueSendOptions {
+	dedupeKey?: string;
+	delay?: number;
+	signal?: AbortSignal;
+}
+
+export interface QueueTryNextOptions<TName extends string = string> {
 	names?: readonly TName[];
-	completable?: TCompletable;
 }
 
-export interface QueueTryNextBatchOptions<
-	TName extends string = string,
-	TCompletable extends boolean = boolean,
-> {
+export interface QueueTryNextBatchOptions<TName extends string = string> {
 	names?: readonly TName[];
 	count?: number;
-	completable?: TCompletable;
 }
 
-export interface QueueIterOptions<
-	TName extends string = string,
-	TCompletable extends boolean = boolean,
-> {
+export interface QueueIterOptions<TName extends string = string> {
 	names?: readonly TName[];
 	signal?: AbortSignal;
-	completable?: TCompletable;
+}
+
+export type QueueMessageStatus =
+	| { state: "queued"; attempts: number; createdAt: Date }
+	| { state: "delayed"; attempts: number; createdAt: Date; availableAt: Date }
+	| { state: "processing"; attempts: number; createdAt: Date; startedAt: Date }
+	| { state: "retrying"; attempts: number; createdAt: Date; availableAt: Date }
+	| { state: "succeeded"; attempts: number; createdAt: Date; completedAt: Date }
+	| { state: "deadLettered"; attempts: number; createdAt: Date; failedAt: Date }
+	| { state: "consumed"; createdAt: Date; consumedAt: Date }
+	| { state: "unknown" };
+
+export interface QueueReceipt {
+	readonly id: string;
+	status(options?: { signal?: AbortSignal }): Promise<QueueMessageStatus>;
+}
+
+export interface QueueSendReceipt extends QueueReceipt {
+	readonly deduplicated: boolean;
 }
 
 export interface ActorQueue<
@@ -316,39 +277,28 @@ export interface ActorQueue<
 	send<TName extends QueueFilterName<TQueues>>(
 		name: TName,
 		body: QueueMessageForName<TQueues, TName>["body"],
-	): Promise<any>;
-	next<
-		const TName extends QueueFilterName<TQueues>,
-		const TCompletable extends boolean = false,
-	>(opts?: QueueNextOptions<TName, TCompletable>): Promise<any>;
-	nextBatch<
-		const TName extends QueueFilterName<TQueues>,
-		const TCompletable extends boolean = false,
-	>(opts?: QueueNextBatchOptions<TName, TCompletable>): Promise<any[]>;
-	waitForNames<
-		const TName extends QueueFilterName<TQueues>,
-		const TCompletable extends boolean = false,
-	>(
+		opts?: QueueSendOptions,
+	): Promise<QueueSendReceipt>;
+	receipt(id: string): QueueReceipt;
+	next<const TName extends QueueFilterName<TQueues>>(
+		opts?: QueueNextOptions<TName>,
+	): Promise<QueueMessageForName<TQueues, TName> | undefined>;
+	nextBatch<const TName extends QueueFilterName<TQueues>>(
+		opts?: QueueNextBatchOptions<TName>,
+	): Promise<QueueMessageForName<TQueues, TName>[]>;
+	waitForNames<const TName extends QueueFilterName<TQueues>>(
 		names: readonly TName[],
-		opts?: QueueWaitOptions<TCompletable>,
-	): Promise<any>;
-	enqueueAndWait<const TName extends QueueFilterName<TQueues>>(
-		name: TName,
-		body: QueueMessageForName<TQueues, TName>["body"],
-		opts?: QueueEnqueueAndWaitOptions,
-	): Promise<QueueCompletionResultForName<TQueues, TName>>;
-	tryNext<
-		const TName extends QueueFilterName<TQueues>,
-		const TCompletable extends boolean = false,
-	>(opts?: QueueTryNextOptions<TName, TCompletable>): Promise<any>;
-	tryNextBatch<
-		const TName extends QueueFilterName<TQueues>,
-		const TCompletable extends boolean = false,
-	>(opts?: QueueTryNextBatchOptions<TName, TCompletable>): Promise<any[]>;
-	iter<
-		const TName extends QueueFilterName<TQueues>,
-		const TCompletable extends boolean = false,
-	>(opts?: QueueIterOptions<TName, TCompletable>): AsyncIterable<any>;
+		opts?: QueueWaitOptions,
+	): Promise<void>;
+	tryNext<const TName extends QueueFilterName<TQueues>>(
+		opts?: QueueTryNextOptions<TName>,
+	): Promise<QueueMessageForName<TQueues, TName> | undefined>;
+	tryNextBatch<const TName extends QueueFilterName<TQueues>>(
+		opts?: QueueTryNextBatchOptions<TName>,
+	): Promise<QueueMessageForName<TQueues, TName>[]>;
+	iter<const TName extends QueueFilterName<TQueues>>(
+		opts?: QueueIterOptions<TName>,
+	): AsyncIterable<QueueMessageForName<TQueues, TName>>;
 	[key: string]: any;
 }
 

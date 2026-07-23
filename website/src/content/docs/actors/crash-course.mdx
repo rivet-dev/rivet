@@ -126,7 +126,7 @@ Access the current connection via `c.conn` or all connected clients via `c.conns
 
 ### Queues
 
-Use queues to process durable messages in order inside a `run` loop.
+Use queues to process durable messages with an `onMessage` callback. A successful return acknowledges the message; throwing retries it according to the queue's retry policy.
 
 <CodeSnippet file="examples/docs/actors-crash-course/queues.ts" />
 
@@ -254,7 +254,7 @@ Create one actor per user, document, or room. Use compound keys to scope entitie
 
 ### Run Loop
 
-Use a `run` loop for continuous background work inside an actor. Process queue messages in order, run logic on intervals, stream AI responses, or coordinate long-running tasks.
+Use a `run` loop for advanced continuous background work inside an actor, such as custom raw queue consumption, streaming AI responses, or coordinating long-running tasks.
 
 <CodeSnippet file="examples/docs/actors-crash-course/run-loop.ts" />
 
@@ -269,7 +269,7 @@ Use this pattern for long-lived, durable workflows that initialize resources, pr
 ### Actions vs Queues
 
 - **Actions** are not durable. Use them for realtime reads, ephemeral data, and low-latency communication like player input.
-- **Queues** are durable. Use them to serialize mutations through the run loop, avoiding race conditions with SQLite and other local state. Callers can still wait for a response from queued work.
+- **Queues** are durable and use at-least-once delivery with `onMessage`. Sends return receipts for status checks, never handler results; use an action or workflow when the caller needs a response.
 
 ### Authentication, Security, & CORS
 

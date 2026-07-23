@@ -6,7 +6,8 @@ use rivetkit_core::metrics_endpoint::{RenderedMetrics, render_prometheus_metrics
 use rivetkit_core::registry::CoreEnvoyHandle;
 use rivetkit_core::serverless::CoreServerlessRuntime;
 use rivetkit_core::{
-	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, ServeConfig,
+	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, QueueDefinition,
+	QueueDefinitionInput, ServeConfig,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -213,8 +214,29 @@ where
 
 fn actor_config<A: Actor>(mut config: ActorConfig) -> ActorConfig {
 	config.has_database |= A::HAS_DATABASE;
-	if A::HAS_DATABASE && !cfg!(feature = "sqlite-local") {
+	if !cfg!(feature = "sqlite-local") {
 		config.remote_sqlite = true;
+	}
+	for entry in <A::Queue as crate::queue::QueueSet<A>>::entries() {
+		if let Some(definition) = config
+			.queues
+			.iter_mut()
+			.find(|definition| definition.name == entry.name)
+		{
+			definition.on_message = true;
+		} else {
+			config.queues.push(QueueDefinition::from_input(QueueDefinitionInput {
+				name: entry.name.to_owned(),
+				on_message: true,
+				on_dead_letter: false,
+				timeout_ms: None,
+				max_attempts: None,
+				backoff_initial_ms: None,
+				backoff_factor: None,
+				backoff_max_ms: None,
+				backoff_jitter: None,
+			}));
+		}
 	}
 	config
 }
@@ -303,6 +325,6 @@ mod tests {
 
 		let config = actor_config::<EmptyActor>(ActorConfig::default());
 		assert!(!config.has_database);
-		assert!(!config.remote_sqlite);
+		assert!(config.remote_sqlite);
 	}
 }

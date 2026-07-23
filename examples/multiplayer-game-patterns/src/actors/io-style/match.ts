@@ -72,7 +72,7 @@ export const ioStyleMatch = actor({
 		const client = c.client<typeof registry>();
 		await client.ioStyleMatchmaker
 			.getOrCreate(["main"])
-			.send("closeMatch", {
+			.closeMatch({
 				matchId: c.state.matchId,
 			});
 	},
@@ -143,10 +143,12 @@ function broadcastSnapshot(c: ActorContextOf<typeof ioStyleMatch>) {
 
 async function updateMatchmaker(c: ActorContextOf<typeof ioStyleMatch>) {
 	const client = c.client<typeof registry>();
-	await client.ioStyleMatchmaker.getOrCreate(["main"]).send("updateMatch", {
-		matchId: c.state.matchId,
-		connectedPlayerCount: occupiedPlayerCount(c.state),
-	});
+	await client.ioStyleMatchmaker
+		.getOrCreate(["main"])
+		.updateMatch({
+			matchId: c.state.matchId,
+			connectedPlayerCount: occupiedPlayerCount(c.state),
+		});
 }
 
 async function claimPendingPlayer(
@@ -154,18 +156,13 @@ async function claimPendingPlayer(
 	playerId: string,
 ): Promise<boolean> {
 	const client = c.client<typeof registry>();
-	const result = await client.ioStyleMatchmaker.getOrCreate(["main"]).send(
-		"pendingPlayerConnected",
-		{
+	const result = await client.ioStyleMatchmaker
+		.getOrCreate(["main"])
+		.pendingPlayerConnected({
 			matchId: c.state.matchId,
 			playerId,
-		},
-		{ wait: true, timeout: 3_000 },
-	);
-	if (result.status !== "completed") {
-		return false;
-	}
-	return result.response?.accepted === true;
+		});
+	return result.accepted;
 }
 
 interface Snapshot {

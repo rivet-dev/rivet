@@ -840,21 +840,34 @@ impl ActorContext {
 		{
 			anyhow::bail!("injected schedule alarm sync failure");
 		}
-		let next_alarm = self.next_schedule_timestamp(false).await?;
-		self.sync_alarm_timestamp(next_alarm)
+		let schedule_alarm = self.next_schedule_timestamp(false).await?;
+		let local_alarm = min_optional_timestamp(schedule_alarm, *self.0.queue_next_alarm.lock());
+		let next_alarm = min_optional_timestamp(local_alarm, *self.0.runtime_next_alarm.lock());
+		self.sync_alarm_timestamp(local_alarm, next_alarm)
 	}
 
 	async fn sync_future_alarm(&self) -> Result<()> {
-		let next_alarm = self.next_schedule_timestamp(true).await?;
-		self.sync_alarm_timestamp(next_alarm)
+		let now_ms = self.schedule_now_timestamp_ms();
+		let schedule_alarm = self.next_schedule_timestamp(true).await?;
+		let queue_alarm = (*self.0.queue_next_alarm.lock())
+			.and_then(|timestamp| (timestamp > now_ms).then_some(timestamp));
+		let runtime_alarm = (*self.0.runtime_next_alarm.lock())
+			.and_then(|timestamp| (timestamp > now_ms).then_some(timestamp));
+		let local_alarm = min_optional_timestamp(schedule_alarm, queue_alarm);
+		let next_alarm = min_optional_timestamp(local_alarm, runtime_alarm);
+		self.sync_alarm_timestamp(local_alarm, next_alarm)
 	}
 
-	fn sync_alarm_timestamp(&self, next_alarm: Option<i64>) -> Result<()> {
+	fn sync_alarm_timestamp(
+		&self,
+		local_alarm: Option<i64>,
+		next_alarm: Option<i64>,
+	) -> Result<()> {
 		let should_push = self
 			.0
 			.schedule_dirty_since_push
 			.swap(false, Ordering::SeqCst);
-		self.arm_local_alarm(next_alarm);
+		self.arm_local_alarm(local_alarm);
 		if !should_push {
 			return Ok(());
 		}
@@ -887,14 +900,16 @@ impl ActorContext {
 	}
 
 	pub(crate) fn set_schedule_alarm(&self, timestamp_ms: Option<i64>) -> Result<()> {
-		let envoy_handle = self.0.schedule_envoy_handle.lock().clone().ok_or_else(|| {
+		self.0.schedule_envoy_handle.lock().clone().ok_or_else(|| {
 			crate::error::ActorRuntime::NotConfigured {
 				component: "schedule alarm handle".to_owned(),
 			}
 			.build()
 		})?;
-		let generation = *self.0.schedule_generation.lock();
-		self.set_alarm_tracked(envoy_handle, timestamp_ms, generation);
+		*self.0.runtime_next_alarm.lock() = timestamp_ms;
+		self.persist_runtime_alarm_tracked();
+		self.mark_schedule_dirty();
+		self.spawn_alarm_sync();
 		Ok(())
 	}
 
@@ -1001,6 +1016,73 @@ impl ActorContext {
 		self.0.schedule_pending_alarm_writes.lock().push(ack_rx);
 	}
 
+	fn persist_runtime_alarm_tracked(&self) {
+		let state_ctx = self.clone();
+		let (persist_done_tx, persist_done_rx) = oneshot::channel();
+		let task = async move {
+			let _guard = state_ctx.0.runtime_alarm_persist_lock.lock().await;
+			let timestamp_ms = *state_ctx.0.runtime_next_alarm.lock();
+			if let Err(error) = state_ctx.persist_runtime_alarm(timestamp_ms).await {
+				tracing::error!(
+					?error,
+					?timestamp_ms,
+					"failed to persist runtime actor alarm"
+				);
+			}
+			let _ = persist_done_tx.send(());
+		}
+		.in_current_span();
+
+		#[cfg(not(feature = "wasm-runtime"))]
+		let spawned = Handle::try_current().map(|handle| handle.spawn(task)).is_ok();
+
+		#[cfg(feature = "wasm-runtime")]
+		let spawned = {
+			RuntimeSpawner::spawn(task);
+			true
+		};
+
+		if spawned {
+			self.0
+				.schedule_pending_alarm_writes
+				.lock()
+				.push(persist_done_rx);
+		}
+	}
+
+	fn spawn_alarm_sync(&self) {
+		let schedule = self.clone();
+		let task = async move {
+			schedule.sync_alarm_logged().await;
+		}
+		.in_current_span();
+
+		#[cfg(not(feature = "wasm-runtime"))]
+		if let Ok(handle) = Handle::try_current() {
+			handle.spawn(task);
+		}
+
+		#[cfg(feature = "wasm-runtime")]
+		RuntimeSpawner::spawn(task);
+	}
+
+	pub(crate) async fn update_queue_alarm(&self, timestamp: Option<i64>) {
+		let changed = {
+			let mut current = self.0.queue_next_alarm.lock();
+			if *current == timestamp {
+				false
+			} else {
+				*current = timestamp;
+				true
+			}
+		};
+		if !changed {
+			return;
+		}
+		self.mark_schedule_dirty();
+		self.sync_alarm_logged().await;
+	}
+
 	fn arm_local_alarm(&self, next_alarm: Option<i64>) {
 		self.cancel_local_alarm_timeouts();
 		let Some(next_alarm) = next_alarm else {
@@ -1041,6 +1123,14 @@ impl ActorContext {
 		self.0
 			.schedule_alarm_dispatch_enabled
 			.store(false, Ordering::SeqCst);
+	}
+}
+
+fn min_optional_timestamp(left: Option<i64>, right: Option<i64>) -> Option<i64> {
+	match (left, right) {
+		(Some(left), Some(right)) => Some(left.min(right)),
+		(Some(timestamp), None) | (None, Some(timestamp)) => Some(timestamp),
+		(None, None) => None,
 	}
 }
 

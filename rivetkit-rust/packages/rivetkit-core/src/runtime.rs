@@ -76,7 +76,20 @@ impl RuntimeSpawner {
 		F: RuntimeFuture,
 		F::Output: RuntimeFutureOutput,
 	{
-		tokio::task::spawn_local(future)
+		#[cfg(target_arch = "wasm32")]
+		{
+			let local = tokio::task::LocalSet::new();
+			let handle = local.spawn_local(future);
+			wasm_bindgen_futures::spawn_local(async move {
+				local.await;
+			});
+			handle
+		}
+
+		#[cfg(not(target_arch = "wasm32"))]
+		{
+			tokio::task::spawn_local(future)
+		}
 	}
 }
 

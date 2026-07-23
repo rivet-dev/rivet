@@ -57,6 +57,7 @@ export class CancellationToken {
 	onCancelled(callback: Function): void;
 	constructor();
 	cancel(): void;
+	cloneToken(): CancellationToken;
 	aborted(): boolean;
 }
 
@@ -112,16 +113,11 @@ export class Queue {
 		names: any,
 		options: any,
 		signal?: CancellationToken | null,
-	): Promise<QueueMessage>;
-	enqueueAndWait(
-		name: string,
-		body: Uint8Array,
-		options: any,
-		signal?: CancellationToken | null,
-	): Promise<Uint8Array | undefined>;
+	): Promise<void>;
 	inspectMessages(): Promise<Array<any>>;
-	waitForNamesAvailable(names: any, options: any): Promise<void>;
-	send(name: string, body: Uint8Array): Promise<QueueMessage>;
+	waitForNamesAvailable(names: any, options: any, signal?: CancellationToken | null): Promise<void>;
+	send(name: string, body: Uint8Array, options: any): Promise<any>;
+	status(receipt_id: string): Promise<any>;
 	maxSize(): number;
 	reset(): Promise<void>;
 }
@@ -130,11 +126,11 @@ export class QueueMessage {
 	private constructor();
 	free(): void;
 	createdAt(): number;
-	isCompletable(): boolean;
-	id(): bigint;
+	firstFailedAt(): number | undefined;
+	id(): string;
 	body(): Uint8Array;
 	name(): string;
-	complete(response: any): Promise<void>;
+	attempts(): number;
 }
 
 export class Schedule {

@@ -598,6 +598,17 @@ impl ActorContext {
 		Ok(())
 	}
 
+	pub(crate) fn load_runtime_alarm(&self, alarm_ts: Option<i64>) {
+		*self.0.runtime_next_alarm.lock() = alarm_ts;
+	}
+
+	pub(crate) async fn persist_runtime_alarm(&self, alarm_ts: Option<i64>) -> Result<()> {
+		internal_storage::persist_runtime_alarm(self.sql(), alarm_ts)
+			.await
+			.context("persist runtime alarm to sqlite")?;
+		Ok(())
+	}
+
 	pub(crate) fn set_initial_state(&self, state: Vec<u8>) {
 		*self.0.current_state.write() = state.clone();
 		self.0.persisted.write().state = state;

@@ -40,7 +40,7 @@ use crate::actor::context::{ActorContext, InspectorAttachGuard};
 use crate::actor::factory::ActorFactory;
 use crate::actor::kv::LegacyActorKv;
 use crate::actor::lifecycle_hooks::Reply;
-use crate::actor::messages::{ActorEvent, QueueSendResult, Request, Response, StateDelta};
+use crate::actor::messages::{ActorEvent, Request, Response, StateDelta};
 use crate::actor::task::{
 	ActorTask, DispatchCommand, LifecycleCommand, try_send_dispatch_command,
 	try_send_lifecycle_command,
@@ -368,16 +368,16 @@ mod engine_spawn_tests {
 #[serde(default, rename_all = "camelCase")]
 struct HttpQueueSendRequestJson {
 	body: JsonValue,
-	wait: Option<bool>,
-	timeout: Option<u64>,
+	dedupe_key: Option<String>,
+	delay: Option<u64>,
 }
 
 impl Default for HttpQueueSendRequestJson {
 	fn default() -> Self {
 		Self {
 			body: JsonValue::Null,
-			wait: None,
-			timeout: None,
+			dedupe_key: None,
+			delay: None,
 		}
 	}
 }

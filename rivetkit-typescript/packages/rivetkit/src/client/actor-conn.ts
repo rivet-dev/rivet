@@ -52,10 +52,9 @@ import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
 import { logger } from "./log";
 import {
 	createQueueSender,
-	type QueueSendNoWaitOptions,
+	type QueueReceipt,
 	type QueueSendOptions,
-	type QueueSendResult,
-	type QueueSendWaitOptions,
+	type QueueSendReceipt,
 } from "./queue";
 import {
 	type WebSocketMessage as ConnMessage,
@@ -278,26 +277,20 @@ export class ActorConnRaw {
 	send(
 		name: string,
 		body: unknown,
-		options: QueueSendWaitOptions,
-	): Promise<QueueSendResult>;
-	send(
-		name: string,
-		body: unknown,
-		options?: QueueSendNoWaitOptions,
-	): Promise<void>;
-	send(
-		name: string,
-		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | void> {
+	): Promise<QueueSendReceipt> {
 		return this.#sendQueueMessage(name, body, options as any);
+	}
+
+	receipt(id: string): QueueReceipt {
+		return this.#queueSender.receipt(id);
 	}
 
 	async #sendQueueMessage(
 		name: string,
 		body: unknown,
 		options?: QueueSendOptions,
-	): Promise<QueueSendResult | void> {
+	): Promise<QueueSendReceipt> {
 		return await this.#queueSender.send(name, body, options as any);
 	}
 

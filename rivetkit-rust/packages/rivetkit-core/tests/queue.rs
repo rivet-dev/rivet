@@ -1,7 +1,10 @@
 use super::*;
 
 mod moved_tests {
-	use super::{QueueNextBatchOpts, QueueNextOpts, QueueWaitOpts};
+	use super::{
+		QueueMessageStatus, QueueNextBatchOpts, QueueNextOpts, QueueSendOpts, QueueWaitOpts,
+		queue_backoff_with_jitter,
+	};
 
 	use crate::actor::context::ActorContext;
 	use crate::actor::keys::{
@@ -49,7 +52,6 @@ mod moved_tests {
 				count: 2,
 				timeout: None,
 				signal: None,
-				completable: false,
 			})
 			.await
 			.expect("receive filtered queue batch");
@@ -92,7 +94,6 @@ mod moved_tests {
 				count: 1,
 				timeout: None,
 				signal: None,
-				completable: false,
 			})
 			.await
 			.expect("receive from large name filter");
@@ -191,5 +192,116 @@ mod moved_tests {
 			.expect_err("cancelled actor waits should abort");
 
 		assert_actor_aborted(error);
+	}
+
+	#[tokio::test]
+	async fn dedupe_key_returns_the_original_receipt() {
+		let queue = test_queue();
+		let options = QueueSendOpts {
+			dedupe_key: Some("order-1".to_owned()),
+			delay: None,
+		};
+		let first = queue
+			.send_with_opts("jobs", b"first", options.clone())
+			.await
+			.expect("first send");
+		let duplicate = queue
+			.send_with_opts("jobs", b"duplicate", options)
+			.await
+			.expect("duplicate send");
+
+		assert!(!first.deduplicated);
+		assert!(duplicate.deduplicated);
+		assert_eq!(first.id, duplicate.id);
+		assert!(matches!(
+			queue.queue_status(&first.id).await.expect("queue status"),
+			QueueMessageStatus::Queued { attempts: 0, .. }
+		));
+	}
+
+	#[tokio::test]
+	async fn raw_receive_records_consumed_status() {
+		let queue = test_queue();
+		let receipt = queue.send("jobs", b"payload").await.expect("send");
+		let message = queue
+			.next(QueueNextOpts::default())
+			.await
+			.expect("receive")
+			.expect("queued message");
+
+		assert_eq!(message.receipt_id, receipt.id);
+		assert!(matches!(
+			queue
+				.queue_status(&receipt.id)
+				.await
+				.expect("consumed status"),
+			QueueMessageStatus::Consumed { .. }
+		));
+	}
+
+	#[tokio::test]
+	async fn zero_delay_is_immediately_queued_not_delayed() {
+		let queue = test_queue();
+		let receipt = queue
+			.send_with_opts(
+				"jobs",
+				b"payload",
+				QueueSendOpts {
+					dedupe_key: None,
+					delay: Some(Duration::ZERO),
+				},
+			)
+			.await
+			.expect("send");
+
+		assert!(matches!(
+			queue.queue_status(&receipt.id).await.expect("queue status"),
+			QueueMessageStatus::Queued { attempts: 0, .. }
+		));
+	}
+
+	#[tokio::test]
+	async fn refresh_queue_metadata_repairs_a_stale_admission_counter() {
+		let queue = test_queue();
+		let mut config = crate::actor::config::ActorConfig::default();
+		config.max_queue_size = 1;
+		queue.configure_queue(config);
+		queue.send("jobs", b"first").await.expect("first send");
+
+		// Simulate cancellation after a durable mutation but before the matching
+		// in-memory update in a prior actor generation.
+		queue.decrement_queue_size(1).await;
+		queue
+			.refresh_queue_metadata()
+			.await
+			.expect("refresh queue metadata");
+
+		let error = queue
+			.send("jobs", b"second")
+			.await
+			.expect_err("persisted queue depth should still enforce admission");
+		let error = rivet_error::RivetError::extract(&error);
+		assert_eq!(error.group(), "queue");
+		assert_eq!(error.code(), "full");
+	}
+
+	#[test]
+	fn retry_jitter_never_exceeds_configured_maximum() {
+		let definition = crate::actor::config::QueueDefinition {
+			name: "jobs".to_owned(),
+			on_message: true,
+			on_dead_letter: false,
+			timeout: Duration::from_secs(30),
+			max_attempts: 3,
+			backoff_initial: Duration::from_secs(30),
+			backoff_factor: 2.0,
+			backoff_max: Duration::from_secs(30),
+			backoff_jitter: true,
+		};
+
+		assert_eq!(
+			queue_backoff_with_jitter(&definition, 3, 1.5),
+			Duration::from_secs(30)
+		);
 	}
 }

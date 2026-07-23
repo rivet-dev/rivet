@@ -26,14 +26,16 @@ CREATE TABLE IF NOT EXISTS _rivet_meta (
 // across runtime releases. Rewriting these entries in place is safe only while
 // no internal schema version has shipped; after release, all changes must be
 // appended as new migrations and INTERNAL_SCHEMA_VERSION must advance.
-pub(crate) const MIGRATIONS: &[&[&str]] = &[&[
+pub(crate) const MIGRATIONS: &[&[&str]] = &[
+	&[
 	// W[queue_next_id per enqueue; alarm per head-change; token once | point UPDATE of one column | <100 B | single-row: all runtime singletons on one leaf]
 	r#"
 CREATE TABLE _rivet_runtime (
     id                INTEGER PRIMARY KEY CHECK (id = 1),
     last_pushed_alarm INTEGER,
     inspector_token   TEXT,
-    queue_next_id     INTEGER NOT NULL
+    queue_next_id     INTEGER NOT NULL,
+    runtime_alarm     INTEGER
 ) STRICT
 "#,
 	// W[once at init | single INSERT | input <=256 KiB | COLD: never rewritten; overflow chain isolated from hot state]
@@ -122,18 +124,78 @@ CREATE TABLE _rivet_conn_state (
     subscriptions        BLOB NOT NULL
 ) STRICT, WITHOUT ROWID
 "#,
-	// W[per enqueue plus queue_next_id; batch DELETE on receive/ack | append/delete + named FIFO lookup | body <=256 KiB | INTEGER PK plus compact (name, id) index keeps bodies out of name scans]
+	// W[per enqueue plus queue_next_id; point claim/ack/nack | append/update/delete + named FIFO lookup | body <=256 KiB | durable delivery state is kept with the message]
 	r#"
 CREATE TABLE _rivet_queue (
-    id         INTEGER PRIMARY KEY,
-    name       TEXT NOT NULL,
-    body       BLOB NOT NULL,
-    created_at INTEGER NOT NULL
+    id                             INTEGER PRIMARY KEY,
+    receipt_id                     TEXT NOT NULL,
+    seq                            INTEGER NOT NULL,
+    name                           TEXT NOT NULL,
+    body                           BLOB NOT NULL,
+    created_at                     INTEGER NOT NULL,
+    attempt_count                  INTEGER NOT NULL,
+    available_at                   INTEGER,
+    in_flight_at                   INTEGER,
+    lease_generation               INTEGER,
+    dead_at                        INTEGER,
+    first_failed_at                INTEGER,
+    last_error                     BLOB,
+    dlq_notify_attempt_count       INTEGER NOT NULL,
+    dlq_notify_available_at        INTEGER,
+    dlq_notify_lease_generation    INTEGER,
+    dlq_notify_in_flight_at        INTEGER,
+    dlq_notified_at                INTEGER,
+    dlq_notify_error               BLOB
 ) STRICT
 "#,
+	r#"CREATE UNIQUE INDEX _rivet_queue_receipt_id ON _rivet_queue (receipt_id)"#,
+	r#"CREATE INDEX _rivet_queue_seq ON _rivet_queue (seq)"#,
 	r#"
-CREATE INDEX _rivet_queue_name_id
-    ON _rivet_queue (name, id)
+CREATE INDEX _rivet_queue_ready
+    ON _rivet_queue (seq)
+    WHERE dead_at IS NULL AND in_flight_at IS NULL
+"#,
+	r#"
+CREATE INDEX _rivet_queue_ready_by_name
+    ON _rivet_queue (name, seq)
+    WHERE dead_at IS NULL AND in_flight_at IS NULL
+"#,
+	r#"
+CREATE INDEX _rivet_queue_due
+    ON _rivet_queue (available_at)
+    WHERE dead_at IS NULL AND in_flight_at IS NULL AND available_at IS NOT NULL
+"#,
+	r#"
+CREATE INDEX _rivet_queue_dead
+    ON _rivet_queue (dead_at)
+    WHERE dead_at IS NOT NULL
+"#,
+	r#"
+CREATE TABLE _rivet_queue_dedupe (
+    name        TEXT NOT NULL,
+    dedupe_key  TEXT NOT NULL,
+    receipt_id  TEXT NOT NULL,
+    accepted_at INTEGER NOT NULL,
+    PRIMARY KEY (name, dedupe_key)
+) STRICT, WITHOUT ROWID
+"#,
+	r#"
+CREATE INDEX _rivet_queue_dedupe_accepted_at
+    ON _rivet_queue_dedupe (accepted_at)
+"#,
+	r#"
+CREATE TABLE _rivet_queue_receipts (
+    receipt_id    TEXT PRIMARY KEY,
+    name          TEXT NOT NULL,
+    state         TEXT NOT NULL,
+    created_at    INTEGER NOT NULL,
+    terminal_at   INTEGER NOT NULL,
+    attempt_count INTEGER NOT NULL
+) STRICT, WITHOUT ROWID
+"#,
+	r#"
+CREATE INDEX _rivet_queue_receipts_terminal_at
+    ON _rivet_queue_receipts (terminal_at)
 "#,
 	// W[per workflow step flush | keyed upsert + range delete | values <=256 KiB | verbatim fdb-tuple keys in one clustered tree]
 	r#"
@@ -149,7 +211,8 @@ CREATE TABLE _rivet_user_kv (
     value BLOB NOT NULL
 ) STRICT, WITHOUT ROWID
 "#,
-]];
+	],
+];
 
 pub(crate) async fn ensure_internal_schema(db: &SqliteDb) -> Result<()> {
 	db.execute(CREATE_META_TABLE, None)

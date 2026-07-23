@@ -7,14 +7,13 @@ const agent = actor({
   state: { running: false, messages: [] as string[] },
   queues: {
     // Separate queues for different message types
-    prompt: queue<{ prompt: string }, undefined>(),
+    prompt: queue<{ prompt: string }>(),
     stop: queue<{ reason?: string }>(),
   },
   run: async (c) => {
     // Only consume from the prompt queue
     for await (const promptMessage of c.queue.iter({
       names: ["prompt"],
-      completable: true,
     })) {
       const stopController = new AbortController();
       const runSignal = joinSignals(c.abortSignal, stopController.signal);
@@ -39,7 +38,6 @@ const agent = actor({
       });
 
       c.state.messages.push(text);
-      await promptMessage.complete();
     }
   },
 });

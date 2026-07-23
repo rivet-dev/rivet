@@ -30,16 +30,11 @@ export class TurnBasedBot {
 			const mm = this.client.turnBasedMatchmaker
 				.getOrCreate(["main"])
 				.connect();
-			const result = await mm.send(
-				"joinByCode",
-				{
+			const response = await mm.joinByCode({
 					inviteCode,
 					playerName: `Bot-${Math.random().toString(36).slice(2, 6)}`,
-				},
-				{ wait: true, timeout: 10_000 },
-			);
+				});
 			mm.dispose();
-			const response = result.response;
 			if (!response || this.destroyed) return;
 
 			this.playerId = response.playerId;

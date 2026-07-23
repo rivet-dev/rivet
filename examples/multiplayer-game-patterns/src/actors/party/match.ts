@@ -53,29 +53,13 @@ export const partyMatch = actor({
 		}
 
 		const client = c.client<typeof registry>();
-		const result = await client.partyMatchmaker.getOrCreate(["main"]).send(
-			"verifyJoin",
-			{
+		const response = await client.partyMatchmaker
+			.getOrCreate(["main"])
+			.verifyJoin({
 				matchId,
 				playerId,
 				joinToken,
-			},
-			{ wait: true, timeout: 3_000 },
-		);
-		if (result.status !== "completed") {
-			throw new UserError("join verification timed out", {
-				code: "join_verification_timed_out",
 			});
-		}
-		const response = (
-			result as {
-				response?: {
-					allowed?: boolean;
-					playerName?: string;
-					isHost?: boolean;
-				};
-			}
-		).response;
 		if (!response?.allowed || !response.playerName) {
 			throw new UserError("invalid join ticket", {
 				code: "invalid_join_ticket",
@@ -143,7 +127,7 @@ export const partyMatch = actor({
 		const client = c.client<typeof registry>();
 		await client.partyMatchmaker
 			.getOrCreate(["main"])
-			.send("closeParty", { matchId: c.state.matchId });
+			.closeParty({ matchId: c.state.matchId });
 	},
 	actions: {
 		setName: (c, input: { name: string }) => {
@@ -251,10 +235,12 @@ function broadcastSnapshot(c: ActorContextOf<typeof partyMatch>) {
 
 async function updatePartySize(c: ActorContextOf<typeof partyMatch>) {
 	const client = c.client<typeof registry>();
-	await client.partyMatchmaker.getOrCreate(["main"]).send("updatePartySize", {
-		matchId: c.state.matchId,
-		playerCount: Object.keys(c.state.members).length,
-	});
+	await client.partyMatchmaker
+		.getOrCreate(["main"])
+		.updatePartySize({
+			matchId: c.state.matchId,
+			playerCount: Object.keys(c.state.members).length,
+		});
 }
 
 function promoteNextHost(state: State) {

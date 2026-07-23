@@ -9,7 +9,7 @@ use rivet_error::{
 };
 use rivetkit_core::{
 	ActorContext as CoreActorContext, ActorEvent, ActorEvents, ActorLifecycle, ActorStart,
-	QueueSendResult, QueueSendStatus, Reply, SerializeStateReason, StateDelta,
+	QueueSendReceipt, Reply, SerializeStateReason, StateDelta,
 };
 use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 use tokio::task::JoinHandle;
@@ -24,7 +24,7 @@ use crate::actor_factory::{
 	ActionPayload, AdapterConfig, BeforeActionResponsePayload, BeforeConnectPayload,
 	BeforeSubscribePayload, CallbackBindings, ConnectionPayload, CreateConnStatePayload,
 	CreateStatePayload, HttpRequestPayload, LifecyclePayload, MigratePayload, QueueSendPayload,
-	SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload,
+	QueueMessagePayload, SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload,
 	call_buffer, call_optional_buffer, call_queue_send, call_request, call_state_delta_payload,
 	call_void,
 };
@@ -449,8 +449,8 @@ pub(crate) async fn dispatch_event(
 			body,
 			conn,
 			request,
-			wait,
-			timeout_ms,
+			dedupe_key,
+			delay_ms,
 			reply,
 		} => {
 			let Some(callback) = bindings.on_queue_send.clone() else {
@@ -477,30 +477,65 @@ pub(crate) async fn dispatch_event(
 									request,
 									name,
 									body,
-									wait,
-									timeout_ms,
+									dedupe_key,
+									delay_ms,
 									cancel_token: Some(cancel_token),
 								},
 							)
 							.await?;
-							let status = match result.status.as_str() {
-								"completed" => QueueSendStatus::Completed,
-								"timedOut" => QueueSendStatus::TimedOut,
-								other => {
-									return Err(NapiInvalidState {
-										state: "queue send status".to_owned(),
-										reason: format!("invalid status `{other}`"),
-									}
-									.build());
-								}
-							};
-							Ok(QueueSendResult {
-								status,
-								response: result.response.map(|buffer| buffer.to_vec()),
+							Ok(QueueSendReceipt {
+								id: result.id,
+								deduplicated: result.deduplicated,
 							})
 						},
 					)
 				})
+				.await
+			});
+		}
+		ActorEvent::QueueMessage {
+			message,
+			signal,
+			reply,
+		} => {
+			let Some(callback) = bindings.queue_on_message.get(&message.name).cloned() else {
+				reply.send(Err(missing_callback("queueOnMessage")));
+				return;
+			};
+			let ctx = ctx.clone();
+			spawn_reply(tasks, abort.clone(), reply, async move {
+				call_void(
+					"queueOnMessage",
+					&callback,
+					QueueMessagePayload {
+						ctx: ctx.inner().clone(),
+						message,
+						cancel_token: signal,
+					},
+				)
+				.await
+			});
+		}
+		ActorEvent::QueueDeadLetter {
+			message,
+			signal,
+			reply,
+		} => {
+			let Some(callback) = bindings.queue_on_dead_letter.get(&message.name).cloned() else {
+				reply.send(Err(missing_callback("queueOnDeadLetter")));
+				return;
+			};
+			let ctx = ctx.clone();
+			spawn_reply(tasks, abort.clone(), reply, async move {
+				call_void(
+					"queueOnDeadLetter",
+					&callback,
+					QueueMessagePayload {
+						ctx: ctx.inner().clone(),
+						message,
+						cancel_token: signal,
+					},
+				)
 				.await
 			});
 		}
@@ -789,10 +824,12 @@ pub(crate) fn spawn_reply<T, F>(
 	F: std::future::Future<Output = Result<T>> + Send + 'static,
 {
 	tasks.spawn(async move {
+		let mut reply = reply;
 		tokio::select! {
 			_ = abort.cancelled() => {
 				reply.send(Err(actor_shutting_down()));
 			}
+			_ = reply.receiver_closed() => {}
 			result = work => {
 				reply.send(result);
 			}

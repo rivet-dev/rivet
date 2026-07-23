@@ -12,16 +12,70 @@ const queueSchemas = {
 	two: queue<string>(),
 	missing: queue<unknown>(),
 	abort: queue<unknown>(),
-	tasks: queue<{ value: number }, { echo: { value: number } }>(),
-	timeout: queue<{ value: number }, { ok: true }>(),
+	tasks: queue<{ value: number }>(),
+	timeout: queue<{ value: number }>(),
 	nowait: queue<{ value: string }>(),
-	twice: queue<{ value: string }, { ok: true }>(),
+	twice: queue<{ value: string }>(),
+	handled: queue<{ value: number }>({
+		onMessage: async (c, message) => {
+			c.state.handled = (c.state.handled ?? 0) + message.body.value;
+		},
+	}),
+	retrying: queue<{ value: number }>({
+		retry: {
+			maxAttempts: 3,
+			backoff: { initialMs: 1, factor: 1, maxMs: 1, jitter: false },
+		},
+		onMessage: async (c) => {
+			c.state.retryAttempts = (c.state.retryAttempts ?? 0) + 1;
+			if (c.state.retryAttempts < 3) throw new Error("retry me");
+		},
+	}),
+	timedHandler: queue<{ value: number }>({
+		timeout: 25,
+		retry: {
+			maxAttempts: 2,
+			backoff: { initialMs: 1, factor: 1, maxMs: 1, jitter: false },
+		},
+		onMessage: async (c, _message, { signal }) => {
+			c.state.timeoutAttempts = (c.state.timeoutAttempts ?? 0) + 1;
+			if (c.state.timeoutAttempts === 1) {
+				await new Promise<void>(() => {
+					signal.addEventListener(
+						"abort",
+						() => {
+							c.state.timeoutAborted = true;
+						},
+						{ once: true },
+					);
+				});
+			}
+		},
+	}),
+	dead: queue<{ value: number }>({
+		retry: {
+			maxAttempts: 2,
+			backoff: { initialMs: 1, factor: 1, maxMs: 1, jitter: false },
+		},
+		onMessage: async () => {
+			throw new Error("always fails");
+		},
+		onDeadLetter: async (c, message) => {
+			c.state.deadLettered = message.id;
+		},
+	}),
 } as const;
 
 type QueueName = keyof typeof queueSchemas;
 
 export const queueActor = actor({
-	state: {},
+	state: {
+		handled: 0,
+		retryAttempts: 0,
+		timeoutAttempts: 0,
+		timeoutAborted: false,
+		deadLettered: undefined as string | undefined,
+	},
 	queues: queueSchemas,
 	actions: {
 		receiveOne: async (c, name: QueueName, opts?: { timeout?: number }) => {
@@ -155,74 +209,7 @@ export const queueActor = actor({
 				throw error;
 			}
 		},
-		receiveAndComplete: async (c, name: "tasks") => {
-			const message = await c.queue.next({
-				names: [name],
-				completable: true,
-			});
-			if (!message) {
-				return null;
-			}
-			await message.complete({ echo: message.body });
-			return { name: message.name, body: message.body };
-		},
-		receiveWithoutComplete: async (c, name: "tasks") => {
-			const message = await c.queue.next({
-				names: [name],
-				completable: true,
-			});
-			if (!message) {
-				return null;
-			}
-			return { name: message.name, body: message.body };
-		},
-		receiveManualThenNextWithoutComplete: async (c, name: "tasks") => {
-			const message = await c.queue.next({
-				names: [name],
-				completable: true,
-			});
-			if (!message) {
-				return { ok: false, reason: "no_message" };
-			}
-
-			try {
-				await c.queue.next({ names: [name], timeout: 0 });
-				c.destroy();
-				return { ok: false, reason: "next_succeeded" };
-			} catch (error) {
-				c.destroy();
-				const actorError = error as { group?: string; code?: string };
-				return { group: actorError.group, code: actorError.code };
-			}
-		},
-		receiveAndCompleteTwice: async (c, name: "twice") => {
-			const message = await c.queue.next({
-				names: [name],
-				completable: true,
-			});
-			if (!message) {
-				return null;
-			}
-			await message.complete({ ok: true });
-			try {
-				await message.complete({ ok: true });
-				return { ok: false };
-			} catch (error) {
-				const actorError = error as { group?: string; code?: string };
-				return { group: actorError.group, code: actorError.code };
-			}
-		},
-		receiveWithoutCompleteMethod: async (c, name: "nowait") => {
-			const message = await c.queue.next({
-				names: [name],
-				completable: true,
-			});
-			return {
-				hasComplete:
-					message !== undefined &&
-					typeof message.complete === "function",
-			};
-		},
+		getQueueState: (c) => c.state,
 	},
 });
 
@@ -247,7 +234,12 @@ export const MANY_QUEUE_NAMES = Array.from(
 const manyQueueSchemas = Object.fromEntries(
 	MANY_QUEUE_NAMES.map((name) => [
 		name,
-		queue<{ index: number }, { ok: true; index: number }>(),
+		queue<{ index: number }>({
+			onMessage: async (c, message) => {
+				c.state.started = true;
+				c.state.processed.push(message.name);
+			},
+		}),
 	]),
 );
 
@@ -262,19 +254,6 @@ export const manyQueueChildActor = actor({
 		started: false,
 		processed: [] as string[],
 	}),
-	run: async (c) => {
-		c.state.started = true;
-		for await (const msg of c.queue.iter({
-			names: [...MANY_QUEUE_NAMES],
-			completable: true,
-		})) {
-			c.state.processed.push(msg.name);
-			await msg.complete({
-				ok: true,
-				index: msg.body.index,
-			});
-		}
-	},
 });
 
 export const manyQueueActionParentActor = actor({
@@ -299,26 +278,21 @@ export const manyQueueRunParentActor = actor({
 		spawned: [] as string[],
 	},
 	queues: {
-		spawn: queue<{ key: string }>(),
+		spawn: queue<{ key: string }>({
+			onMessage: async (c, msg) => {
+				const client = c.client<typeof registry>();
+				await client.manyQueueChildActor.getOrCreate([msg.body.key], {
+					createWithInput: msg.body.key,
+				});
+				c.state.spawned.push(msg.body.key);
+			},
+		}),
 	},
 	actions: {
 		queueSpawn: async (c, key: string) => {
-			await c.queue.enqueueAndWait("spawn", { key }, { timeout: 10_000 });
+			await c.queue.send("spawn", { key });
 			return { queued: true };
 		},
 		getSpawned: (c) => c.state.spawned,
-	},
-	run: async (c) => {
-		for await (const msg of c.queue.iter({
-			names: ["spawn"],
-			completable: true,
-		})) {
-			const client = c.client<typeof registry>();
-			await client.manyQueueChildActor.getOrCreate([msg.body.key], {
-				createWithInput: msg.body.key,
-			});
-			c.state.spawned.push(msg.body.key);
-			await msg.complete({ ok: true });
-		}
 	},
 });

@@ -11,6 +11,7 @@ use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
 use rivetkit_core::inspector::InspectorTabEntry;
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
+	QueueDefinitionInput, QueueMessage as CoreQueueMessage,
 	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request, Response,
 	WebSocket as CoreWebSocket,
 };
@@ -49,14 +50,28 @@ pub struct JsHttpResponse {
 
 #[napi(object)]
 pub struct JsQueueSendResult {
-	pub status: String,
-	pub response: Option<Buffer>,
+	pub id: String,
+	pub deduplicated: bool,
 }
 
 #[napi(object)]
 #[derive(Clone, Default)]
 pub struct JsActionDefinition {
 	pub name: String,
+}
+
+#[napi(object)]
+#[derive(Clone)]
+pub struct JsQueueDefinition {
+	pub name: String,
+	pub on_message: bool,
+	pub on_dead_letter: bool,
+	pub timeout_ms: Option<u32>,
+	pub max_attempts: Option<u32>,
+	pub backoff_initial_ms: Option<u32>,
+	pub backoff_factor: Option<f64>,
+	pub backoff_max_ms: Option<u32>,
+	pub backoff_jitter: Option<bool>,
 }
 
 /// One entry in the actor's `inspector.tabs[]` declaration. Either a
@@ -111,6 +126,7 @@ pub struct JsActorConfig {
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
 	pub actions: Option<Vec<JsActionDefinition>>,
+	pub queues: Option<Vec<JsQueueDefinition>>,
 	pub inspector_tabs: Option<Vec<JsInspectorTabEntry>>,
 }
 
@@ -153,9 +169,16 @@ pub(crate) struct QueueSendPayload {
 	pub(crate) request: Request,
 	pub(crate) name: String,
 	pub(crate) body: Vec<u8>,
-	pub(crate) wait: bool,
-	pub(crate) timeout_ms: Option<u64>,
+	pub(crate) dedupe_key: Option<String>,
+	pub(crate) delay_ms: Option<u64>,
 	pub(crate) cancel_token: Option<tokio_util::sync::CancellationToken>,
+}
+
+#[derive(Clone)]
+pub(crate) struct QueueMessagePayload {
+	pub(crate) ctx: CoreActorContext,
+	pub(crate) message: CoreQueueMessage,
+	pub(crate) cancel_token: tokio_util::sync::CancellationToken,
 }
 
 #[derive(Clone)]
@@ -253,6 +276,8 @@ pub(crate) struct CallbackBindings {
 	pub(crate) on_disconnect_final: Option<CallbackTsfn<ConnectionPayload>>,
 	pub(crate) on_before_subscribe: Option<CallbackTsfn<BeforeSubscribePayload>>,
 	pub(crate) actions: HashMap<String, CallbackTsfn<ActionPayload>>,
+	pub(crate) queue_on_message: HashMap<String, CallbackTsfn<QueueMessagePayload>>,
+	pub(crate) queue_on_dead_letter: HashMap<String, CallbackTsfn<QueueMessagePayload>>,
 	pub(crate) on_before_action_response: Option<CallbackTsfn<BeforeActionResponsePayload>>,
 	pub(crate) on_request: Option<CallbackTsfn<HttpRequestPayload>>,
 	pub(crate) on_queue_send: Option<CallbackTsfn<QueueSendPayload>>,
@@ -395,6 +420,8 @@ impl CallbackBindings {
 		} else {
 			HashMap::new()
 		};
+		let queue_on_message = queue_callback_map(&callbacks, "queueOnMessage")?;
+		let queue_on_dead_letter = queue_callback_map(&callbacks, "queueOnDeadLetter")?;
 
 		Ok(Self {
 			create_state: optional_tsfn(&callbacks, "createState", build_create_state_payload)?,
@@ -436,6 +463,8 @@ impl CallbackBindings {
 				build_before_subscribe_payload,
 			)?,
 			actions,
+			queue_on_message,
+			queue_on_dead_letter,
 			on_before_action_response: optional_tsfn(
 				&callbacks,
 				"onBeforeActionResponse",
@@ -662,16 +691,28 @@ impl TsfnPayloadSummary for HttpRequestPayload {
 	}
 }
 
+impl TsfnPayloadSummary for QueueMessagePayload {
+	fn payload_summary(&self) -> String {
+		format!(
+			"actor_id={} queue={} receipt_id={} attempt={}",
+			self.ctx.actor_id(),
+			self.message.name,
+			self.message.receipt_id,
+			self.message.attempts,
+		)
+	}
+}
+
 impl TsfnPayloadSummary for QueueSendPayload {
 	fn payload_summary(&self) -> String {
 		format!(
-			"actor_id={} conn_id={} queue={} body_bytes={} wait={} timeout_ms={:?} has_cancel_token={}",
+			"actor_id={} conn_id={} queue={} body_bytes={} has_dedupe_key={} delay_ms={:?} has_cancel_token={}",
 			self.ctx.actor_id(),
 			self.conn.id(),
 			self.name,
 			self.body.len(),
-			self.wait,
-			self.timeout_ms,
+			self.dedupe_key.is_some(),
+			self.delay_ms,
 			self.cancel_token.is_some()
 		)
 	}
@@ -841,13 +882,52 @@ fn build_queue_send_payload(
 	object.set("request", build_request_object(env, payload.request)?)?;
 	object.set("name", payload.name)?;
 	object.set("body", Buffer::from(payload.body))?;
-	object.set("wait", payload.wait)?;
-	object.set("timeoutMs", payload.timeout_ms)?;
+	object.set("dedupeKey", payload.dedupe_key)?;
+	object.set("delayMs", payload.delay_ms)?;
 	match payload.cancel_token {
 		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
 		None => object.set("cancelToken", env.get_undefined()?)?,
 	}
 	Ok(vec![object.into_unknown()])
+}
+
+fn build_queue_message_payload(
+	env: &Env,
+	payload: QueueMessagePayload,
+) -> napi::Result<Vec<napi::JsUnknown>> {
+	let mut object = env.create_object()?;
+	object.set("ctx", ActorContext::new(payload.ctx))?;
+	object.set("id", payload.message.receipt_id)?;
+	object.set("name", payload.message.name)?;
+	object.set("body", Buffer::from(payload.message.body))?;
+	object.set("createdAtMs", payload.message.created_at)?;
+	object.set("attempts", payload.message.attempts)?;
+	object.set("firstFailedAtMs", payload.message.first_failed_at)?;
+	object.set("cancelToken", CancellationToken::new(payload.cancel_token))?;
+	Ok(vec![object.into_unknown()])
+}
+
+fn queue_callback_map(
+	callbacks: &JsObject,
+	property: &str,
+) -> napi::Result<HashMap<String, CallbackTsfn<QueueMessagePayload>>> {
+	let Some(callbacks) = callbacks.get::<_, JsObject>(property)? else {
+		return Ok(HashMap::new());
+	};
+	let mut mapped = HashMap::new();
+	for name in JsObject::keys(&callbacks)? {
+		let callback = callbacks.get::<_, JsFunction>(&name)?.ok_or_else(|| {
+			napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: format!("{property}.{name}"),
+					reason: "must be a function".to_owned(),
+				}
+				.build(),
+			)
+		})?;
+		mapped.insert(name, create_tsfn(callback, build_queue_message_payload)?);
+	}
+	Ok(mapped)
 }
 
 fn build_websocket_payload(
@@ -1060,6 +1140,22 @@ impl From<JsActorConfig> for ActorConfigInput {
 				actions
 					.into_iter()
 					.map(|action| ActionDefinition { name: action.name })
+					.collect()
+			}),
+			queues: value.queues.map(|queues| {
+				queues
+					.into_iter()
+					.map(|queue| QueueDefinitionInput {
+						name: queue.name,
+						on_message: queue.on_message,
+						on_dead_letter: queue.on_dead_letter,
+						timeout_ms: queue.timeout_ms,
+						max_attempts: queue.max_attempts,
+						backoff_initial_ms: queue.backoff_initial_ms,
+						backoff_factor: queue.backoff_factor,
+						backoff_max_ms: queue.backoff_max_ms,
+						backoff_jitter: queue.backoff_jitter,
+					})
 					.collect()
 			}),
 			inspector_tabs: value.inspector_tabs.map(|tabs| {

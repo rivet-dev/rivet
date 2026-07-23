@@ -1,4 +1,4 @@
-use std::collections::{BTreeSet, HashMap};
+use std::collections::HashMap;
 use std::io::Cursor;
 
 use anyhow::{Context, Result, bail};
@@ -37,6 +37,10 @@ pub(crate) const KV_TX_MAX_PAYLOAD_BYTES: usize = 512 * 1024;
 /// Row cap per transaction paired with the payload budget above.
 pub(crate) const KV_TX_MAX_ROWS: usize = 128;
 const CONNECTION_DESTINATION_ROWS_PER_RECORD: usize = 2;
+const QUEUE_RECEIPT_RETENTION_MS: i64 = 24 * 60 * 60 * 1000;
+const QUEUE_RECEIPT_CAP: i64 = 10_000;
+const QUEUE_DEAD_LETTER_RETENTION_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+const QUEUE_DEAD_LETTER_CAP: i64 = 1_000;
 
 /// Splits `entries` into contiguous chunks that each stay within the
 /// per-transaction row and payload budgets. A single oversized entry gets its
@@ -72,6 +76,7 @@ where
 pub(crate) struct InternalActorSnapshot {
 	pub actor: PersistedActor,
 	pub last_pushed_alarm: Option<i64>,
+	pub runtime_alarm: Option<i64>,
 }
 
 pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<InternalActorSnapshot>> {
@@ -87,6 +92,7 @@ pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<Internal
 	let input = read_optional_blob(row, 1, "input")?;
 	let state = read_blob(row, 2, "state")?;
 	let last_pushed_alarm = load_last_pushed_alarm(db).await?;
+	let runtime_alarm = load_runtime_alarm(db).await?;
 
 	Ok(Some(InternalActorSnapshot {
 		actor: PersistedActor {
@@ -96,6 +102,7 @@ pub(crate) async fn load_actor_snapshot(db: &SqliteDb) -> Result<Option<Internal
 			scheduled_events: Vec::new(),
 		},
 		last_pushed_alarm,
+		runtime_alarm,
 	}))
 }
 
@@ -372,18 +379,28 @@ pub(crate) async fn persist_queue_message(
 	db: &SqliteDb,
 	id: u64,
 	next_id: u64,
+	receipt_id: &str,
+	dedupe_key: Option<&str>,
+	accepted_at: i64,
+	available_at: Option<i64>,
 	message: &PersistedQueueMessage,
 ) -> Result<()> {
 	let id = i64::try_from(id).context("queue message id exceeds sqlite integer range")?;
 	let next_id = i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
-	db.execute_batch(vec![
+	let mut statements = vec![
 		SqliteBatchStatement {
-			sql: INSERT_QUEUE_MESSAGE_SQL.to_owned(),
+			sql: "INSERT INTO _rivet_queue (id, receipt_id, seq, name, body, created_at, attempt_count, available_at, dlq_notify_attempt_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+				.to_owned(),
 			params: Some(vec![
+				BindParam::Integer(id),
+				BindParam::Text(receipt_id.to_owned()),
 				BindParam::Integer(id),
 				BindParam::Text(message.name.clone()),
 				BindParam::Blob(message.body.clone()),
 				BindParam::Integer(message.created_at),
+				BindParam::Integer(0),
+				available_at.map_or(BindParam::Null, BindParam::Integer),
+				BindParam::Integer(0),
 			]),
 		},
 		SqliteBatchStatement {
@@ -394,7 +411,19 @@ pub(crate) async fn persist_queue_message(
 				BindParam::Integer(next_id),
 			]),
 		},
-	])
+	];
+	if let Some(dedupe_key) = dedupe_key {
+		statements.push(SqliteBatchStatement {
+			sql: "INSERT INTO _rivet_queue_dedupe (name, dedupe_key, receipt_id, accepted_at) VALUES (?, ?, ?, ?) ON CONFLICT(name, dedupe_key) DO UPDATE SET receipt_id = excluded.receipt_id, accepted_at = excluded.accepted_at".to_owned(),
+			params: Some(vec![
+				BindParam::Text(message.name.clone()),
+				BindParam::Text(dedupe_key.to_owned()),
+				BindParam::Text(receipt_id.to_owned()),
+				BindParam::Integer(accepted_at),
+			]),
+		});
+	}
+	db.execute_batch(statements)
 	.await
 	.context("persist internal queue message")?;
 	Ok(())
@@ -409,16 +438,41 @@ pub(crate) async fn persist_queue_messages(
 	for chunk in split_queue_tx_chunks(messages) {
 		let mut statements = Vec::with_capacity(chunk.len());
 		for (id, message) in chunk {
+			// Legacy `failure_count` counted settled failures, while the durable
+			// queue's `attempt_count` counts claims. Preserve a currently in-flight
+			// legacy delivery as one additional attempt so recovery cannot grant it
+			// an uncounted retry. Treat an orphaned timestamp as authoritative and
+			// synthesize a timestamp for the converse inconsistent legacy shape.
+			let in_flight = message.in_flight.unwrap_or(false) || message.in_flight_at.is_some();
+			let attempt_count = message
+				.failure_count
+				.unwrap_or(0)
+				.saturating_add(u32::from(in_flight));
+			let in_flight_at = in_flight.then_some(
+				message
+					.in_flight_at
+					.unwrap_or(message.created_at),
+			);
 			statements.push(SqliteBatchStatement {
-				sql: INSERT_QUEUE_MESSAGE_SQL.to_owned(),
+				sql: "INSERT INTO _rivet_queue (id, receipt_id, seq, name, body, created_at, attempt_count, available_at, in_flight_at, dlq_notify_attempt_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+					.to_owned(),
 				params: Some(vec![
 					BindParam::Integer(
 						i64::try_from(*id)
 							.context("queue message id exceeds sqlite integer range")?,
 					),
+					BindParam::Text(format!("legacy-{id:016x}")),
+					BindParam::Integer(
+						i64::try_from(*id)
+							.context("queue sequence exceeds sqlite integer range")?,
+					),
 					BindParam::Text(message.name.clone()),
 					BindParam::Blob(message.body.clone()),
 					BindParam::Integer(message.created_at),
+					BindParam::Integer(i64::from(attempt_count)),
+					message.available_at.map_or(BindParam::Null, BindParam::Integer),
+					in_flight_at.map_or(BindParam::Null, BindParam::Integer),
+					BindParam::Integer(0),
 				]),
 			});
 		}
@@ -474,26 +528,24 @@ pub(crate) async fn load_queue_messages(db: &SqliteDb) -> Result<Vec<QueueMessag
 		.query(LOAD_QUEUE_MESSAGES_SQL, None)
 		.await
 		.context("load internal queue messages")?;
-	decode_queue_message_rows(&result.rows)
+	result.rows.iter().map(|row| parse_queue_message_row(row)).collect()
 }
 
-pub(crate) async fn load_queue_messages_matching(
+pub(crate) async fn load_available_queue_messages(
 	db: &SqliteDb,
-	names: Option<&BTreeSet<String>>,
-	limit: u32,
+	names: Option<&std::collections::BTreeSet<String>>,
+	count: u32,
+	now: i64,
 ) -> Result<Vec<QueueMessageRow>> {
-	if limit == 0 {
-		return Ok(Vec::new());
-	}
-
+	let limit = count.max(1);
 	let Some(names) = names else {
 		let result = db
 			.query(
 				LOAD_QUEUE_MESSAGES_LIMITED_SQL,
-				Some(vec![BindParam::Integer(i64::from(limit))]),
+				Some(vec![BindParam::Integer(now), BindParam::Integer(i64::from(limit))]),
 			)
 			.await
-			.context("load internal queue messages in enqueue order")?;
+			.context("load available queue messages")?;
 		return decode_queue_message_rows(&result.rows);
 	};
 
@@ -503,74 +555,48 @@ pub(crate) async fn load_queue_messages_matching(
 				LOAD_QUEUE_MESSAGES_FOR_NAME_SQL,
 				Some(vec![
 					BindParam::Text(names.first().expect("one queue name").clone()),
+					BindParam::Integer(now),
 					BindParam::Integer(i64::from(limit)),
 				]),
 			)
 			.await
-			.context("load internal queue messages for name")?;
+			.context("load available queue messages for name")?;
 		return decode_queue_message_rows(&result.rows);
 	}
 
-	let ids = load_queue_message_ids_for_names(db, names, limit).await?;
+	let ids = load_available_queue_message_ids_for_names(db, names, limit, now).await?;
 	load_queue_messages_by_ids(db, &ids).await
 }
 
-pub(crate) async fn has_queue_messages(
+async fn load_available_queue_message_ids_for_names(
 	db: &SqliteDb,
-	names: Option<&BTreeSet<String>>,
-) -> Result<bool> {
-	let Some(names) = names else {
-		return db
-			.query(HAS_QUEUE_MESSAGES_SQL, None)
-			.await
-			.context("check for internal queue messages")
-			.map(|result| !result.rows.is_empty());
-	};
-
-	if names.len() == 1 {
-		return db
-			.query(
-				HAS_QUEUE_MESSAGES_FOR_NAME_SQL,
-				Some(vec![BindParam::Text(
-					names.first().expect("one queue name").clone(),
-				)]),
-			)
-			.await
-			.context("check for named internal queue messages")
-			.map(|result| !result.rows.is_empty());
-	}
-
-	load_queue_message_ids_for_names(db, names, 1)
-		.await
-		.map(|ids| !ids.is_empty())
-}
-
-async fn load_queue_message_ids_for_names(
-	db: &SqliteDb,
-	names: &BTreeSet<String>,
+	names: &std::collections::BTreeSet<String>,
 	limit: u32,
+	now: i64,
 ) -> Result<Vec<u64>> {
 	let mut ids = Vec::new();
-	let mut after_id = -1_i64;
+	let mut after_seq = -1_i64;
 	loop {
 		let result = db
 			.query(
 				LOAD_QUEUE_MESSAGE_METADATA_PAGE_SQL,
 				Some(vec![
-					BindParam::Integer(after_id),
+					BindParam::Integer(after_seq),
+					BindParam::Integer(now),
 					BindParam::Integer(QUEUE_METADATA_PAGE_ROWS as i64),
 				]),
 			)
 			.await
-			.context("load internal queue message metadata page")?;
+			.context("load available queue message metadata page")?;
 		if result.rows.is_empty() {
 			break;
 		}
 		for row in &result.rows {
-			after_id = read_i64(row, 0, "queue message id")?;
-			let name = read_text(row, 1, "queue message name")?;
+			let id = read_i64(row, 0, "queue message id")?;
+			after_seq = read_i64(row, 1, "queue message sequence")?;
+			let name = read_text(row, 2, "queue message name")?;
 			if names.contains(&name) {
-				ids.push(u64::try_from(after_id).context("invalid queue message id")?);
+				ids.push(u64::try_from(id).context("invalid queue message id")?);
 				if ids.len() >= limit as usize {
 					return Ok(ids);
 				}
@@ -597,50 +623,48 @@ async fn load_queue_messages_by_ids(db: &SqliteDb, ids: &[u64]) -> Result<Vec<Qu
 		let result = db
 			.query(load_queue_messages_by_ids_sql(ids.len()), Some(params))
 			.await
-			.context("load internal queue messages by id")?;
-		messages.extend(decode_queue_message_rows(&result.rows)?);
+			.context("load queue messages by id")?;
+		let mut rows_by_id = decode_queue_message_rows(&result.rows)?
+			.into_iter()
+			.map(|row| (row.id, row))
+			.collect::<HashMap<_, _>>();
+		for id in ids {
+			if let Some(row) = rows_by_id.remove(id) {
+				messages.push(row);
+			}
+		}
 	}
 	Ok(messages)
 }
 
 fn decode_queue_message_rows(rows: &[Vec<ColumnValue>]) -> Result<Vec<QueueMessageRow>> {
-	rows.iter()
-		.map(|row| {
-			Ok(QueueMessageRow {
-				id: u64::try_from(read_i64(row, 0, "queue message id")?)
-					.context("invalid queue message id")?,
-				message: PersistedQueueMessage {
-					name: read_text(row, 1, "queue message name")?,
-					body: read_blob(row, 2, "queue message body")?,
-					created_at: read_i64(row, 3, "queue message created_at")?,
-					failure_count: None,
-					available_at: None,
-					in_flight: None,
-					in_flight_at: None,
-				},
-			})
-		})
-		.collect()
+	rows.iter().map(|row| parse_queue_message_row(row)).collect()
 }
 
-pub(crate) async fn delete_queue_messages(db: &SqliteDb, ids: &[u64]) -> Result<()> {
-	if ids.is_empty() {
-		return Ok(());
-	}
-
-	let mut statements = Vec::with_capacity(ids.len());
-	for id in ids {
-		statements.push(SqliteBatchStatement {
-			sql: DELETE_QUEUE_MESSAGE_SQL.to_owned(),
-			params: Some(vec![BindParam::Integer(
-				i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
-			)]),
-		});
-	}
-	db.execute_batch(statements)
-		.await
-		.context("delete internal queue messages")?;
-	Ok(())
+fn parse_queue_message_row(row: &[ColumnValue]) -> Result<QueueMessageRow> {
+	let attempt_count = u32::try_from(read_i64(row, 5, "queue message attempt_count")?)
+		.context("invalid queue attempt count")?;
+	let in_flight_at = read_optional_i64(row, 7, "queue message in_flight_at")?;
+	Ok(QueueMessageRow {
+		id: u64::try_from(read_i64(row, 0, "queue message id")?)
+			.context("invalid queue message id")?,
+		receipt_id: read_text(row, 1, "queue message receipt_id")?,
+		attempt_count,
+		available_at: read_optional_i64(row, 6, "queue message available_at")?,
+		in_flight_at,
+		dead_at: read_optional_i64(row, 9, "queue message dead_at")?,
+		first_failed_at: read_optional_i64(row, 10, "queue message first_failed_at")?,
+		dlq_notify_attempt_count: 0,
+		message: PersistedQueueMessage {
+			name: read_text(row, 2, "queue message name")?,
+			body: read_blob(row, 3, "queue message body")?,
+			created_at: read_i64(row, 4, "queue message created_at")?,
+			failure_count: Some(attempt_count),
+			available_at: read_optional_i64(row, 6, "queue message available_at")?,
+			in_flight: Some(in_flight_at.is_some()),
+			in_flight_at,
+		},
+	})
 }
 
 pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
@@ -653,7 +677,554 @@ pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
 #[derive(Debug)]
 pub(crate) struct QueueMessageRow {
 	pub id: u64,
+	pub receipt_id: String,
+	pub attempt_count: u32,
+	pub available_at: Option<i64>,
+	pub in_flight_at: Option<i64>,
+	pub dead_at: Option<i64>,
+	pub first_failed_at: Option<i64>,
+	pub dlq_notify_attempt_count: u32,
 	pub message: PersistedQueueMessage,
+}
+
+#[derive(Debug)]
+pub(crate) struct QueueStatusRow {
+	pub state: String,
+	pub attempt_count: u32,
+	pub created_at: i64,
+	pub available_at: Option<i64>,
+	pub in_flight_at: Option<i64>,
+	pub dead_at: Option<i64>,
+	pub terminal_at: Option<i64>,
+}
+
+pub(crate) async fn load_queue_status(
+	db: &SqliteDb,
+	receipt_id: &str,
+	now: i64,
+) -> Result<Option<QueueStatusRow>> {
+	let terminal = db
+		.query(
+			"SELECT state, attempt_count, created_at, terminal_at FROM _rivet_queue_receipts WHERE receipt_id = ?",
+			Some(vec![BindParam::Text(receipt_id.to_owned())]),
+		)
+		.await
+		.context("load terminal queue receipt")?;
+	if let Some(row) = terminal.rows.first() {
+		return Ok(Some(QueueStatusRow {
+			state: read_text(row, 0, "queue receipt state")?,
+			attempt_count: u32::try_from(read_i64(row, 1, "queue receipt attempt_count")?)
+				.context("invalid queue receipt attempt count")?,
+			created_at: read_i64(row, 2, "queue receipt created_at")?,
+			available_at: None,
+			in_flight_at: None,
+			dead_at: None,
+			terminal_at: Some(read_i64(row, 3, "queue receipt terminal_at")?),
+		}));
+	}
+
+	let live = db
+		.query(
+			"SELECT attempt_count, created_at, available_at, in_flight_at, dead_at FROM _rivet_queue WHERE receipt_id = ?",
+			Some(vec![BindParam::Text(receipt_id.to_owned())]),
+		)
+		.await
+		.context("load live queue receipt")?;
+	let Some(row) = live.rows.first() else {
+		return Ok(None);
+	};
+	let available_at = read_optional_i64(row, 2, "queue status available_at")?;
+	let in_flight_at = read_optional_i64(row, 3, "queue status in_flight_at")?;
+	let dead_at = read_optional_i64(row, 4, "queue status dead_at")?;
+	let state = if dead_at.is_some() {
+		"deadLettered"
+	} else if in_flight_at.is_some() {
+		"processing"
+	} else if available_at.is_some_and(|available_at| available_at > now) {
+		if read_i64(row, 0, "queue status attempt_count")? == 0 {
+			"delayed"
+		} else {
+			"retrying"
+		}
+	} else {
+		"queued"
+	};
+	Ok(Some(QueueStatusRow {
+		state: state.to_owned(),
+		attempt_count: u32::try_from(read_i64(row, 0, "queue status attempt_count")?)
+			.context("invalid queue status attempt count")?,
+		created_at: read_i64(row, 1, "queue status created_at")?,
+		available_at,
+		in_flight_at,
+		dead_at,
+		terminal_at: None,
+	}))
+}
+
+pub(crate) async fn purge_queue_receipts(db: &SqliteDb, oldest_terminal_at: i64) -> Result<()> {
+	db.execute_batch(vec![
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_queue_receipts WHERE terminal_at < ?".to_owned(),
+			params: Some(vec![BindParam::Integer(oldest_terminal_at)]),
+		},
+		SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_queue_receipts WHERE receipt_id IN (SELECT receipt_id FROM _rivet_queue_receipts ORDER BY terminal_at DESC LIMIT -1 OFFSET 10000)".to_owned(),
+			params: None,
+		},
+	])
+	.await
+	.context("purge expired or excess queue receipts")?;
+	Ok(())
+}
+
+/// Dead-letters a recovered delivery that had already consumed its final
+/// attempt before the actor stopped. This prevents a crash during the last
+/// attempt from creating an unconfigured extra delivery after restart.
+pub(crate) async fn dead_letter_exhausted_queue_message(
+	db: &SqliteDb,
+	name: &str,
+	max_attempts: u32,
+	now: i64,
+) -> Result<DeadLetterTransition> {
+	let tx = db.begin_transaction(None).await?;
+	let result = tx
+		.execute(
+			"UPDATE _rivet_queue SET dead_at = ?, first_failed_at = COALESCE(first_failed_at, ?), available_at = NULL WHERE id = (SELECT id FROM _rivet_queue WHERE name = ? AND dead_at IS NULL AND in_flight_at IS NULL AND attempt_count >= ? ORDER BY seq LIMIT 1) RETURNING id",
+			Some(vec![
+				BindParam::Integer(now),
+				BindParam::Integer(now),
+				BindParam::Text(name.to_owned()),
+				BindParam::Integer(i64::from(max_attempts)),
+			]),
+		)
+		.await?
+		.into_query_result();
+	let updated = !result.rows.is_empty();
+	let purged = if updated {
+		purge_dead_letters_in_transaction(&tx, now).await?
+	} else {
+		DeadLetterPurge::default()
+	};
+	tx.commit().await?;
+	Ok(DeadLetterTransition { updated, purged })
+}
+
+pub(crate) async fn claim_queue_message(
+	db: &SqliteDb,
+	name: &str,
+	now: i64,
+	generation: u32,
+) -> Result<Option<QueueMessageRow>> {
+	let tx = db.begin_transaction(None).await?;
+	let result = tx
+		.execute(
+			"SELECT id, receipt_id, name, body, created_at, attempt_count, available_at, in_flight_at, lease_generation, dead_at, first_failed_at FROM _rivet_queue WHERE name = ? AND dead_at IS NULL AND in_flight_at IS NULL AND (available_at IS NULL OR available_at <= ?) ORDER BY seq LIMIT 1",
+			Some(vec![BindParam::Text(name.to_owned()), BindParam::Integer(now)]),
+		)
+		.await?
+		.into_query_result();
+	let Some(row) = result.rows.first() else {
+		tx.commit().await?;
+		return Ok(None);
+	};
+	let id = read_i64(row, 0, "queue claim id")?;
+	let previous_attempts = read_i64(row, 5, "queue claim attempt_count")?;
+	let attempts = previous_attempts.saturating_add(1);
+	let claimed = tx.execute(
+		"UPDATE _rivet_queue SET attempt_count = ?, in_flight_at = ?, lease_generation = ?, available_at = NULL WHERE id = ? AND attempt_count = ? AND in_flight_at IS NULL RETURNING id",
+		Some(vec![
+			BindParam::Integer(attempts),
+			BindParam::Integer(now),
+			BindParam::Integer(i64::from(generation)),
+			BindParam::Integer(id),
+			BindParam::Integer(previous_attempts),
+		]),
+	)
+	.await?
+	.into_query_result();
+	if claimed.rows.is_empty() {
+		tx.commit().await?;
+		return Ok(None);
+	}
+	tx.commit().await?;
+	Ok(Some(QueueMessageRow {
+		id: u64::try_from(id).context("invalid claimed queue id")?,
+		receipt_id: read_text(row, 1, "queue claim receipt_id")?,
+		attempt_count: u32::try_from(attempts).context("invalid claimed attempt count")?,
+		available_at: None,
+		in_flight_at: Some(now),
+		dead_at: None,
+		first_failed_at: read_optional_i64(row, 10, "queue claim first_failed_at")?,
+		dlq_notify_attempt_count: 0,
+		message: PersistedQueueMessage {
+			name: read_text(row, 2, "queue claim name")?,
+			body: read_blob(row, 3, "queue claim body")?,
+			created_at: read_i64(row, 4, "queue claim created_at")?,
+			failure_count: Some(
+				u32::try_from(attempts).context("invalid claimed failure count")?,
+			),
+			available_at: None,
+			in_flight: Some(true),
+			in_flight_at: Some(now),
+		},
+	}))
+}
+
+pub(crate) async fn recover_queue_leases(db: &SqliteDb, now: i64) -> Result<()> {
+	db.execute_batch(vec![
+		SqliteBatchStatement {
+			sql: "UPDATE _rivet_queue SET seq = seq + (SELECT COALESCE(MAX(seq), 0) FROM _rivet_queue), available_at = ?, first_failed_at = COALESCE(first_failed_at, in_flight_at, ?), in_flight_at = NULL, lease_generation = NULL WHERE dead_at IS NULL AND in_flight_at IS NOT NULL".to_owned(),
+			params: Some(vec![BindParam::Integer(now), BindParam::Integer(now)]),
+		},
+		SqliteBatchStatement {
+			sql: "UPDATE _rivet_queue SET dlq_notify_available_at = ?, dlq_notify_in_flight_at = NULL, dlq_notify_lease_generation = NULL WHERE dead_at IS NOT NULL AND dlq_notified_at IS NULL AND dlq_notify_in_flight_at IS NOT NULL".to_owned(),
+			params: Some(vec![BindParam::Integer(now)]),
+		},
+	])
+	.await
+	.context("recover interrupted queue leases")?;
+	Ok(())
+}
+
+pub(crate) async fn ack_queue_message(
+	db: &SqliteDb,
+	message: &QueueMessageRow,
+	generation: u32,
+	completed_at: i64,
+) -> Result<bool> {
+	let tx = db.begin_transaction(None).await?;
+	let result = tx
+		.execute(
+			"DELETE FROM _rivet_queue WHERE id = ? AND attempt_count = ? AND lease_generation = ? RETURNING id",
+			Some(vec![
+				BindParam::Integer(i64::try_from(message.id)?),
+				BindParam::Integer(i64::from(message.attempt_count)),
+				BindParam::Integer(i64::from(generation)),
+			]),
+		)
+		.await?
+		.into_query_result();
+	let deleted = !result.rows.is_empty();
+	if deleted {
+		tx.execute(
+			"INSERT OR REPLACE INTO _rivet_queue_receipts (receipt_id, name, state, created_at, terminal_at, attempt_count) VALUES (?, ?, 'succeeded', ?, ?, ?)",
+			Some(vec![
+				BindParam::Text(message.receipt_id.clone()),
+				BindParam::Text(message.message.name.clone()),
+				BindParam::Integer(message.message.created_at),
+				BindParam::Integer(completed_at),
+				BindParam::Integer(i64::from(message.attempt_count)),
+			]),
+		)
+		.await?;
+		purge_queue_receipts_in_transaction(&tx, completed_at).await?;
+	}
+	tx.commit().await?;
+	Ok(deleted)
+}
+
+pub(crate) async fn nack_queue_message(
+	db: &SqliteDb,
+	message: &QueueMessageRow,
+	generation: u32,
+	now: i64,
+	available_at: Option<i64>,
+	dead_letter: bool,
+) -> Result<DeadLetterTransition> {
+	let tx = db.begin_transaction(None).await?;
+	let (sql, mut params) = if dead_letter {
+		(
+			"UPDATE _rivet_queue SET dead_at = ?, first_failed_at = COALESCE(first_failed_at, in_flight_at, ?), in_flight_at = NULL, lease_generation = NULL WHERE id = ? AND attempt_count = ? AND lease_generation = ? RETURNING id",
+			vec![BindParam::Integer(now), BindParam::Integer(now)],
+		)
+	} else {
+		(
+			"UPDATE _rivet_queue SET seq = (SELECT COALESCE(MAX(seq), 0) + 1 FROM _rivet_queue), available_at = ?, first_failed_at = COALESCE(first_failed_at, in_flight_at, ?), in_flight_at = NULL, lease_generation = NULL WHERE id = ? AND attempt_count = ? AND lease_generation = ? RETURNING id",
+			vec![available_at.map_or(BindParam::Null, BindParam::Integer), BindParam::Integer(now)],
+		)
+	};
+	params.extend([
+		BindParam::Integer(i64::try_from(message.id)?),
+		BindParam::Integer(i64::from(message.attempt_count)),
+		BindParam::Integer(i64::from(generation)),
+	]);
+	let result = tx
+		.execute(sql, Some(params))
+		.await?
+		.into_query_result();
+	let updated = !result.rows.is_empty();
+	let purged = if updated && dead_letter {
+		purge_dead_letters_in_transaction(&tx, now).await?
+	} else {
+		DeadLetterPurge::default()
+	};
+	tx.commit().await?;
+	Ok(DeadLetterTransition { updated, purged })
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct DeadLetterPurge {
+	pub retention: u64,
+	pub capacity: u64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) struct DeadLetterTransition {
+	pub updated: bool,
+	pub purged: DeadLetterPurge,
+}
+
+async fn purge_dead_letters_in_transaction(
+	tx: &crate::sqlite::SqliteTransaction,
+	now: i64,
+) -> Result<DeadLetterPurge> {
+	let retention = tx
+		.execute(
+		"DELETE FROM _rivet_queue WHERE dead_at IS NOT NULL AND dead_at < ?",
+		Some(vec![BindParam::Integer(
+			now.saturating_sub(QUEUE_DEAD_LETTER_RETENTION_MS),
+		)]),
+	)
+		.await?
+		.changes;
+	let capacity = tx
+		.execute(
+		"DELETE FROM _rivet_queue WHERE id IN (SELECT id FROM _rivet_queue WHERE dead_at IS NOT NULL ORDER BY dead_at DESC, id DESC LIMIT -1 OFFSET ?)",
+		Some(vec![BindParam::Integer(QUEUE_DEAD_LETTER_CAP)]),
+	)
+		.await?
+		.changes;
+	Ok(DeadLetterPurge {
+		retention: u64::try_from(retention).unwrap_or(0),
+		capacity: u64::try_from(capacity).unwrap_or(0),
+	})
+}
+
+async fn purge_queue_receipts_in_transaction(
+	tx: &crate::sqlite::SqliteTransaction,
+	now: i64,
+) -> Result<()> {
+	tx.execute(
+		"DELETE FROM _rivet_queue_receipts WHERE terminal_at < ?",
+		Some(vec![BindParam::Integer(
+			now.saturating_sub(QUEUE_RECEIPT_RETENTION_MS),
+		)]),
+	)
+	.await?;
+	tx.execute(
+		"DELETE FROM _rivet_queue_receipts WHERE receipt_id IN (SELECT receipt_id FROM _rivet_queue_receipts ORDER BY terminal_at DESC LIMIT -1 OFFSET ?)",
+		Some(vec![BindParam::Integer(QUEUE_RECEIPT_CAP)]),
+	)
+	.await?;
+	Ok(())
+}
+
+pub(crate) async fn claim_dead_letter_notification(
+	db: &SqliteDb,
+	name: &str,
+	now: i64,
+	generation: u32,
+) -> Result<Option<QueueMessageRow>> {
+	let tx = db.begin_transaction(None).await?;
+	let result = tx
+		.execute(
+			"SELECT id, receipt_id, name, body, created_at, attempt_count, available_at, in_flight_at, lease_generation, dead_at, first_failed_at, dlq_notify_attempt_count FROM _rivet_queue WHERE name = ? AND dead_at IS NOT NULL AND dlq_notified_at IS NULL AND dlq_notify_attempt_count < 3 AND dlq_notify_in_flight_at IS NULL AND (dlq_notify_available_at IS NULL OR dlq_notify_available_at <= ?) ORDER BY dead_at, seq LIMIT 1",
+			Some(vec![BindParam::Text(name.to_owned()), BindParam::Integer(now)]),
+		)
+		.await?
+		.into_query_result();
+	let Some(row) = result.rows.first() else {
+		tx.commit().await?;
+		return Ok(None);
+	};
+	let id = read_i64(row, 0, "dead letter notification id")?;
+	let previous_attempts = read_i64(row, 11, "dead letter notification attempt count")?;
+	let claimed = tx.execute(
+		"UPDATE _rivet_queue SET dlq_notify_attempt_count = ?, dlq_notify_in_flight_at = ?, dlq_notify_lease_generation = ?, dlq_notify_available_at = NULL WHERE id = ? AND dlq_notify_attempt_count = ? AND dlq_notify_in_flight_at IS NULL RETURNING id",
+		Some(vec![
+			BindParam::Integer(previous_attempts.saturating_add(1)),
+			BindParam::Integer(now),
+			BindParam::Integer(i64::from(generation)),
+			BindParam::Integer(id),
+			BindParam::Integer(previous_attempts),
+		]),
+	)
+	.await?
+	.into_query_result();
+	if claimed.rows.is_empty() {
+		tx.commit().await?;
+		return Ok(None);
+	}
+	tx.commit().await?;
+	Ok(Some(QueueMessageRow {
+		id: u64::try_from(id).context("invalid dead letter queue id")?,
+		receipt_id: read_text(row, 1, "dead letter receipt_id")?,
+		attempt_count: u32::try_from(read_i64(row, 5, "dead letter attempt_count")?)
+			.context("invalid dead letter attempt count")?,
+		available_at: read_optional_i64(row, 6, "dead letter available_at")?,
+		in_flight_at: read_optional_i64(row, 7, "dead letter in_flight_at")?,
+		dead_at: read_optional_i64(row, 9, "dead letter dead_at")?,
+		first_failed_at: read_optional_i64(row, 10, "dead letter first_failed_at")?,
+		dlq_notify_attempt_count: u32::try_from(previous_attempts.saturating_add(1))
+			.context("invalid dead letter notification attempt count")?,
+		message: PersistedQueueMessage {
+			name: read_text(row, 2, "dead letter name")?,
+			body: read_blob(row, 3, "dead letter body")?,
+			created_at: read_i64(row, 4, "dead letter created_at")?,
+			failure_count: Some(
+				u32::try_from(read_i64(row, 5, "dead letter failure_count")?)
+					.context("invalid dead letter failure count")?,
+			),
+			available_at: None,
+			in_flight: None,
+			in_flight_at: None,
+		},
+	}))
+}
+
+pub(crate) async fn finish_dead_letter_notification(
+	db: &SqliteDb,
+	message_id: u64,
+	generation: u32,
+	now: i64,
+	succeeded: bool,
+	available_at: Option<i64>,
+) -> Result<bool> {
+	let (sql, params) = if succeeded {
+		(
+			"UPDATE _rivet_queue SET dlq_notified_at = ?, dlq_notify_in_flight_at = NULL, dlq_notify_lease_generation = NULL, dlq_notify_error = NULL WHERE id = ? AND dlq_notify_lease_generation = ? RETURNING id",
+			vec![
+				BindParam::Integer(now),
+				BindParam::Integer(i64::try_from(message_id)?),
+				BindParam::Integer(i64::from(generation)),
+			],
+		)
+	} else {
+		(
+			"UPDATE _rivet_queue SET dlq_notify_available_at = ?, dlq_notify_in_flight_at = NULL, dlq_notify_lease_generation = NULL WHERE id = ? AND dlq_notify_lease_generation = ? RETURNING id",
+			vec![
+				available_at.map_or(BindParam::Null, BindParam::Integer),
+				BindParam::Integer(i64::try_from(message_id)?),
+				BindParam::Integer(i64::from(generation)),
+			],
+		)
+	};
+	let result = db.execute(sql, Some(params)).await?.into_query_result();
+	Ok(!result.rows.is_empty())
+}
+
+pub(crate) async fn next_queue_due(
+	db: &SqliteDb,
+	names: &[String],
+	dead_letter_names: &[String],
+) -> Result<Option<i64>> {
+	if names.is_empty() {
+		return Ok(None);
+	}
+	let placeholders = std::iter::repeat_n("?", names.len())
+		.collect::<Vec<_>>()
+		.join(", ");
+	let dead_letter_clause = if dead_letter_names.is_empty() {
+		String::new()
+	} else {
+		let dead_letter_placeholders = std::iter::repeat_n("?", dead_letter_names.len())
+			.collect::<Vec<_>>()
+			.join(", ");
+		format!(
+			" UNION ALL SELECT COALESCE(dlq_notify_available_at, 0) AS due_at FROM _rivet_queue WHERE name IN ({dead_letter_placeholders}) AND dead_at IS NOT NULL AND dlq_notified_at IS NULL AND dlq_notify_attempt_count < 3 AND dlq_notify_in_flight_at IS NULL"
+		)
+	};
+	let params = names
+		.iter()
+		.chain(dead_letter_names.iter())
+		.cloned()
+		.map(BindParam::Text)
+		.collect();
+	let result = db
+		.query(
+			format!(
+				"SELECT MIN(due_at) FROM (SELECT COALESCE(available_at, 0) AS due_at FROM _rivet_queue WHERE name IN ({placeholders}) AND dead_at IS NULL AND in_flight_at IS NULL{dead_letter_clause})"
+			),
+			Some(params),
+		)
+		.await
+		.context("load next queue due time")?;
+	result
+		.rows
+		.first()
+		.map(|row| read_optional_i64(row, 0, "next queue due time"))
+		.transpose()
+		.map(Option::flatten)
+}
+
+pub(crate) async fn find_queue_dedupe(
+	db: &SqliteDb,
+	name: &str,
+	dedupe_key: &str,
+	oldest_accepted_at: i64,
+) -> Result<Option<String>> {
+	db.execute(
+		"DELETE FROM _rivet_queue_dedupe WHERE accepted_at < ?",
+		Some(vec![BindParam::Integer(oldest_accepted_at)]),
+	)
+	.await
+	.context("purge expired queue dedupe keys")?;
+	let result = db
+		.query(
+			"SELECT receipt_id FROM _rivet_queue_dedupe WHERE name = ? AND dedupe_key = ? AND accepted_at >= ?",
+			Some(vec![
+				BindParam::Text(name.to_owned()),
+				BindParam::Text(dedupe_key.to_owned()),
+				BindParam::Integer(oldest_accepted_at),
+			]),
+		)
+		.await
+		.context("find queue dedupe key")?;
+	result
+		.rows
+		.first()
+		.map(|row| read_text(row, 0, "queue dedupe receipt_id"))
+		.transpose()
+}
+
+pub(crate) async fn persist_consumed_queue_messages(
+	db: &SqliteDb,
+	messages: &[(u64, String, String, i64, u32)],
+	consumed_at: i64,
+) -> Result<()> {
+	let mut statements = Vec::with_capacity(messages.len() * 2);
+	for (id, receipt_id, name, created_at, attempt_count) in messages {
+		statements.push(SqliteBatchStatement {
+			sql: "INSERT OR REPLACE INTO _rivet_queue_receipts (receipt_id, name, state, created_at, terminal_at, attempt_count) VALUES (?, ?, 'consumed', ?, ?, ?)".to_owned(),
+			params: Some(vec![
+				BindParam::Text(receipt_id.clone()),
+				BindParam::Text(name.clone()),
+				BindParam::Integer(*created_at),
+				BindParam::Integer(consumed_at),
+				BindParam::Integer(i64::from(*attempt_count)),
+			]),
+		});
+		statements.push(SqliteBatchStatement {
+			sql: "DELETE FROM _rivet_queue WHERE id = ?".to_owned(),
+			params: Some(vec![BindParam::Integer(
+				i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
+			)]),
+		});
+	}
+	statements.push(SqliteBatchStatement {
+		sql: "DELETE FROM _rivet_queue_receipts WHERE terminal_at < ?".to_owned(),
+		params: Some(vec![BindParam::Integer(
+			consumed_at.saturating_sub(QUEUE_RECEIPT_RETENTION_MS),
+		)]),
+	});
+	statements.push(SqliteBatchStatement {
+		sql: "DELETE FROM _rivet_queue_receipts WHERE receipt_id IN (SELECT receipt_id FROM _rivet_queue_receipts ORDER BY terminal_at DESC LIMIT -1 OFFSET ?)".to_owned(),
+		params: Some(vec![BindParam::Integer(QUEUE_RECEIPT_CAP)]),
+	});
+	db.execute_batch(statements)
+		.await
+		.context("consume internal queue messages")?;
+	Ok(())
 }
 
 pub(crate) async fn user_kv_batch_get(
@@ -992,6 +1563,30 @@ pub(crate) async fn persist_last_pushed_alarm(db: &SqliteDb, alarm_ts: Option<i6
 	)
 	.await
 	.context("persist internal last pushed alarm")?;
+	Ok(())
+}
+
+pub(crate) async fn load_runtime_alarm(db: &SqliteDb) -> Result<Option<i64>> {
+	let result = db
+		.query(
+			"SELECT runtime_alarm FROM _rivet_runtime WHERE id = 1",
+			None,
+		)
+		.await
+		.context("load internal runtime alarm")?;
+	let Some(row) = result.rows.first() else {
+		return Ok(None);
+	};
+	read_optional_i64(row, 0, "runtime_alarm")
+}
+
+pub(crate) async fn persist_runtime_alarm(db: &SqliteDb, alarm_ts: Option<i64>) -> Result<()> {
+	db.execute(
+		"INSERT INTO _rivet_runtime (id, last_pushed_alarm, inspector_token, queue_next_id, runtime_alarm) VALUES (1, NULL, NULL, 1, ?) ON CONFLICT(id) DO UPDATE SET runtime_alarm = excluded.runtime_alarm",
+		Some(vec![optional_i64_param(alarm_ts)]),
+	)
+	.await
+	.context("persist internal runtime alarm")?;
 	Ok(())
 }
 

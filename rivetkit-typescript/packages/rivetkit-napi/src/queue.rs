@@ -2,20 +2,19 @@ use std::time::Duration;
 
 use napi::bindgen_prelude::Buffer;
 use napi_derive::napi;
-use parking_lot::Mutex;
 use rivetkit_core::{
-	ActorContext as CoreActorContext, EnqueueAndWaitOpts, QueueMessage as CoreQueueMessage,
-	QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	ActorContext as CoreActorContext, QueueMessage as CoreQueueMessage, QueueMessageStatus,
+	QueueNextBatchOpts, QueueNextOpts, QueueSendOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	QueueWaitOpts,
 };
 
 use crate::cancellation_token::CancellationToken;
-use crate::{NapiInvalidArgument, NapiInvalidState, napi_anyhow_error};
+use crate::{NapiInvalidArgument, napi_anyhow_error};
 
 #[napi(object)]
 pub struct JsQueueNextOptions {
 	pub names: Option<Vec<String>>,
 	pub timeout_ms: Option<i64>,
-	pub completable: Option<bool>,
 }
 
 #[napi(object)]
@@ -23,31 +22,46 @@ pub struct JsQueueNextBatchOptions {
 	pub names: Option<Vec<String>>,
 	pub count: Option<u32>,
 	pub timeout_ms: Option<i64>,
-	pub completable: Option<bool>,
 }
 
 #[napi(object)]
 pub struct JsQueueWaitOptions {
 	pub timeout_ms: Option<i64>,
-	pub completable: Option<bool>,
 }
 
 #[napi(object)]
-pub struct JsQueueEnqueueAndWaitOptions {
-	pub timeout_ms: Option<i64>,
+pub struct JsQueueSendOptions {
+	pub dedupe_key: Option<String>,
+	pub delay_ms: Option<i64>,
 }
 
 #[napi(object)]
 pub struct JsQueueTryNextOptions {
 	pub names: Option<Vec<String>>,
-	pub completable: Option<bool>,
 }
 
 #[napi(object)]
 pub struct JsQueueTryNextBatchOptions {
 	pub names: Option<Vec<String>>,
 	pub count: Option<u32>,
-	pub completable: Option<bool>,
+}
+
+#[napi(object)]
+pub struct JsQueueSendReceipt {
+	pub id: String,
+	pub deduplicated: bool,
+}
+
+#[napi(object)]
+pub struct JsQueueStatus {
+	pub state: String,
+	pub attempts: Option<u32>,
+	pub created_at_ms: Option<i64>,
+	pub available_at_ms: Option<i64>,
+	pub started_at_ms: Option<i64>,
+	pub completed_at_ms: Option<i64>,
+	pub failed_at_ms: Option<i64>,
+	pub consumed_at_ms: Option<i64>,
 }
 
 #[napi]
@@ -57,14 +71,12 @@ pub struct Queue {
 
 #[napi]
 pub struct QueueMessage {
-	// Completes are exposed through sync N-API object state; hold only for
-	// take/restore, never across the queue completion await.
-	inner: Mutex<Option<CoreQueueMessage>>,
-	id: u64,
+	id: String,
 	name: String,
 	body: Vec<u8>,
 	created_at: i64,
-	is_completable: bool,
+	attempts: u32,
+	first_failed_at: Option<i64>,
 }
 
 impl Queue {
@@ -77,19 +89,18 @@ impl QueueMessage {
 	fn from_core(message: CoreQueueMessage) -> Self {
 		tracing::debug!(
 			class = "QueueMessage",
-			message_id = message.id,
+			message_id = %message.receipt_id,
 			name = %message.name,
 			body_bytes = message.body.len(),
-			completable = message.is_completable(),
 			"constructed napi class"
 		);
 		Self {
-			id: message.id,
+			id: message.receipt_id,
 			name: message.name.clone(),
 			body: message.body.clone(),
 			created_at: message.created_at,
-			is_completable: message.is_completable(),
-			inner: Mutex::new(Some(message)),
+			attempts: message.attempts,
+			first_failed_at: message.first_failed_at,
 		}
 	}
 }
@@ -98,9 +109,8 @@ impl Drop for QueueMessage {
 	fn drop(&mut self) {
 		tracing::debug!(
 			class = "QueueMessage",
-			message_id = self.id,
+			message_id = %self.id,
 			name = %self.name,
-			completable = self.is_completable,
 			"dropped napi class"
 		);
 	}
@@ -109,11 +119,39 @@ impl Drop for QueueMessage {
 #[napi]
 impl Queue {
 	#[napi]
-	pub async fn send(&self, name: String, body: Buffer) -> napi::Result<QueueMessage> {
+	pub async fn send(
+		&self,
+		name: String,
+		body: Buffer,
+		options: Option<JsQueueSendOptions>,
+	) -> napi::Result<JsQueueSendReceipt> {
+		let options = options.unwrap_or(JsQueueSendOptions {
+			dedupe_key: None,
+			delay_ms: None,
+		});
 		self.inner
-			.send(&name, body.as_ref())
+			.send_with_opts(
+				&name,
+				body.as_ref(),
+				QueueSendOpts {
+					dedupe_key: options.dedupe_key,
+					delay: timeout_duration(options.delay_ms)?,
+				},
+			)
 			.await
-			.map(QueueMessage::from_core)
+			.map(|receipt| JsQueueSendReceipt {
+				id: receipt.id,
+				deduplicated: receipt.deduplicated,
+			})
+			.map_err(napi_anyhow_error)
+	}
+
+	#[napi]
+	pub async fn status(&self, receipt_id: String) -> napi::Result<JsQueueStatus> {
+		self.inner
+			.queue_status(&receipt_id)
+			.await
+			.map(queue_status_to_js)
 			.map_err(napi_anyhow_error)
 	}
 
@@ -149,11 +187,10 @@ impl Queue {
 		names: Vec<String>,
 		options: Option<JsQueueWaitOptions>,
 		signal: Option<&CancellationToken>,
-	) -> napi::Result<QueueMessage> {
+	) -> napi::Result<()> {
 		self.inner
-			.wait_for_names(names, queue_wait_opts(options, signal)?)
+			.wait_for_names_available(names, queue_wait_opts(options, signal)?)
 			.await
-			.map(QueueMessage::from_core)
 			.map_err(napi_anyhow_error)
 	}
 
@@ -167,25 +204,6 @@ impl Queue {
 		self.inner
 			.wait_for_names_available(names, queue_wait_opts(options, signal)?)
 			.await
-			.map_err(napi_anyhow_error)
-	}
-
-	#[napi]
-	pub async fn enqueue_and_wait(
-		&self,
-		name: String,
-		body: Buffer,
-		options: Option<JsQueueEnqueueAndWaitOptions>,
-		signal: Option<&CancellationToken>,
-	) -> napi::Result<Option<Buffer>> {
-		self.inner
-			.enqueue_and_wait(
-				&name,
-				body.as_ref(),
-				enqueue_and_wait_opts(options, signal)?,
-			)
-			.await
-			.map(|response| response.map(Buffer::from))
 			.map_err(napi_anyhow_error)
 	}
 
@@ -256,8 +274,8 @@ fn u64_to_i64(value: u64) -> i64 {
 #[napi]
 impl QueueMessage {
 	#[napi]
-	pub fn id(&self) -> u64 {
-		self.id
+	pub fn id(&self) -> String {
+		self.id.clone()
 	}
 
 	#[napi]
@@ -276,43 +294,13 @@ impl QueueMessage {
 	}
 
 	#[napi]
-	pub fn is_completable(&self) -> bool {
-		self.is_completable
+	pub fn attempts(&self) -> u32 {
+		self.attempts
 	}
 
 	#[napi]
-	pub async fn complete(&self, response: Option<Buffer>) -> napi::Result<()> {
-		tracing::debug!(
-			class = "QueueMessage",
-			message_id = self.id,
-			name = %self.name,
-			response_bytes = response.as_ref().map(|response| response.len()).unwrap_or(0),
-			"completing queue message"
-		);
-		let message = {
-			let mut guard = self.inner.lock();
-			guard.take().ok_or_else(|| {
-				napi_anyhow_error(
-					NapiInvalidState {
-						state: "queue message".to_owned(),
-						reason: "already completed".to_owned(),
-					}
-					.build(),
-				)
-			})?
-		};
-
-		if let Err(error) = message
-			.clone()
-			.complete(response.map(|response| response.to_vec()))
-			.await
-		{
-			let mut guard = self.inner.lock();
-			*guard = Some(message);
-			return Err(napi_anyhow_error(error));
-		}
-
-		Ok(())
+	pub fn first_failed_at(&self) -> Option<i64> {
+		self.first_failed_at
 	}
 }
 
@@ -323,14 +311,12 @@ fn queue_next_opts(
 	let options = options.unwrap_or(JsQueueNextOptions {
 		names: None,
 		timeout_ms: None,
-		completable: None,
 	});
 
 	Ok(QueueNextOpts {
 		names: options.names,
 		timeout: timeout_duration(options.timeout_ms)?,
 		signal: signal.map(|signal| signal.inner().clone()),
-		completable: options.completable.unwrap_or(false),
 	})
 }
 
@@ -342,7 +328,6 @@ fn queue_next_batch_opts(
 		names: None,
 		count: None,
 		timeout_ms: None,
-		completable: None,
 	});
 
 	Ok(QueueNextBatchOpts {
@@ -350,7 +335,6 @@ fn queue_next_batch_opts(
 		count: options.count.unwrap_or(1),
 		timeout: timeout_duration(options.timeout_ms)?,
 		signal: signal.map(|signal| signal.inner().clone()),
-		completable: options.completable.unwrap_or(false),
 	})
 }
 
@@ -360,23 +344,9 @@ fn queue_wait_opts(
 ) -> napi::Result<QueueWaitOpts> {
 	let options = options.unwrap_or(JsQueueWaitOptions {
 		timeout_ms: None,
-		completable: None,
 	});
 
 	Ok(QueueWaitOpts {
-		timeout: timeout_duration(options.timeout_ms)?,
-		signal: signal.map(|signal| signal.inner().clone()),
-		completable: options.completable.unwrap_or(false),
-	})
-}
-
-fn enqueue_and_wait_opts(
-	options: Option<JsQueueEnqueueAndWaitOptions>,
-	signal: Option<&CancellationToken>,
-) -> napi::Result<EnqueueAndWaitOpts> {
-	let options = options.unwrap_or(JsQueueEnqueueAndWaitOptions { timeout_ms: None });
-
-	Ok(EnqueueAndWaitOpts {
 		timeout: timeout_duration(options.timeout_ms)?,
 		signal: signal.map(|signal| signal.inner().clone()),
 	})
@@ -385,12 +355,10 @@ fn enqueue_and_wait_opts(
 fn queue_try_next_opts(options: Option<JsQueueTryNextOptions>) -> QueueTryNextOpts {
 	let options = options.unwrap_or(JsQueueTryNextOptions {
 		names: None,
-		completable: None,
 	});
 
 	QueueTryNextOpts {
 		names: options.names,
-		completable: options.completable.unwrap_or(false),
 	}
 }
 
@@ -398,14 +366,69 @@ fn queue_try_next_batch_opts(options: Option<JsQueueTryNextBatchOptions>) -> Que
 	let options = options.unwrap_or(JsQueueTryNextBatchOptions {
 		names: None,
 		count: None,
-		completable: None,
 	});
 
 	QueueTryNextBatchOpts {
 		names: options.names,
 		count: options.count.unwrap_or(1),
-		completable: options.completable.unwrap_or(false),
 	}
+}
+
+fn queue_status_to_js(status: QueueMessageStatus) -> JsQueueStatus {
+	let mut output = JsQueueStatus {
+		state: "unknown".to_owned(),
+		attempts: None,
+		created_at_ms: None,
+		available_at_ms: None,
+		started_at_ms: None,
+		completed_at_ms: None,
+		failed_at_ms: None,
+		consumed_at_ms: None,
+	};
+	match status {
+		QueueMessageStatus::Queued { attempts, created_at } => {
+			output.state = "queued".to_owned();
+			output.attempts = Some(attempts);
+			output.created_at_ms = Some(created_at);
+		}
+		QueueMessageStatus::Delayed { attempts, created_at, available_at } => {
+			output.state = "delayed".to_owned();
+			output.attempts = Some(attempts);
+			output.created_at_ms = Some(created_at);
+			output.available_at_ms = Some(available_at);
+		}
+		QueueMessageStatus::Processing { attempts, created_at, started_at } => {
+			output.state = "processing".to_owned();
+			output.attempts = Some(attempts);
+			output.created_at_ms = Some(created_at);
+			output.started_at_ms = Some(started_at);
+		}
+		QueueMessageStatus::Retrying { attempts, created_at, available_at } => {
+			output.state = "retrying".to_owned();
+			output.attempts = Some(attempts);
+			output.created_at_ms = Some(created_at);
+			output.available_at_ms = Some(available_at);
+		}
+		QueueMessageStatus::Succeeded { attempts, created_at, completed_at } => {
+			output.state = "succeeded".to_owned();
+			output.attempts = Some(attempts);
+			output.created_at_ms = Some(created_at);
+			output.completed_at_ms = Some(completed_at);
+		}
+		QueueMessageStatus::DeadLettered { attempts, created_at, failed_at } => {
+			output.state = "deadLettered".to_owned();
+			output.attempts = Some(attempts);
+			output.created_at_ms = Some(created_at);
+			output.failed_at_ms = Some(failed_at);
+		}
+		QueueMessageStatus::Consumed { created_at, consumed_at } => {
+			output.state = "consumed".to_owned();
+			output.created_at_ms = Some(created_at);
+			output.consumed_at_ms = Some(consumed_at);
+		}
+		QueueMessageStatus::Unknown => {}
+	}
+	output
 }
 
 fn timeout_duration(timeout_ms: Option<i64>) -> napi::Result<Option<Duration>> {

@@ -18,8 +18,6 @@ impl Actor for TestActor {
 struct MissingMessage;
 
 impl QueueMessage for MissingMessage {
-	type Reply = ();
-
 	const NAME: &'static str = "missing";
 }
 

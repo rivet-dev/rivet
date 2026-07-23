@@ -228,16 +228,22 @@ async function stopProcess(
 	child.kill(signal);
 
 	await new Promise<void>((resolve) => {
+		let settled = false;
+		const finish = () => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timeout);
+			resolve();
+		};
 		const timeout = setTimeout(() => {
 			if (child.exitCode === null) {
 				child.kill("SIGKILL");
 			}
+			setTimeout(finish, 1_000);
 		}, timeoutMs);
 
-		child.once("exit", () => {
-			clearTimeout(timeout);
-			resolve();
-		});
+		child.once("exit", finish);
+		if (child.exitCode !== null) finish();
 	});
 }
 

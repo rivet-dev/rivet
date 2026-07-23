@@ -6,7 +6,7 @@ use std::{
 	pin::Pin,
 	sync::{
 		Arc, Mutex,
-		atomic::{AtomicBool, Ordering},
+		atomic::{AtomicBool, AtomicUsize, Ordering},
 	},
 	time::Duration,
 };
@@ -70,12 +70,14 @@ impl Handles<SiblingPing> for CallerActor {
 #[derive(Clone)]
 struct TestState {
 	saw_sibling_action: Arc<AtomicBool>,
+	sibling_action_count: Arc<AtomicUsize>,
 }
 
 #[tokio::test]
 async fn actor_ctx_client_calls_sibling_action() {
 	let state = TestState {
 		saw_sibling_action: Arc::new(AtomicBool::new(false)),
+		sibling_action_count: Arc::new(AtomicUsize::new(0)),
 	};
 	let app = Router::new()
 		.route("/actors", put(get_or_create_actor))
@@ -87,11 +89,10 @@ async fn actor_ctx_client_calls_sibling_action() {
 		axum::serve(listener, app).await.unwrap();
 	});
 
-	let core_ctx = rivetkit_core::testing::ActorContextHarness::with_client_endpoint(endpoint(
-		addr,
-	))
+	let core_ctx = rivetkit_core::testing::ActorContextHarness::from_envoy_handle(
+		test_envoy_handle(endpoint(addr)),
+	)
 	.context("caller-1", "caller", Vec::new(), "local");
-	core_ctx.configure_envoy(test_envoy_handle(endpoint(addr)), Some(1));
 	let ctx = Ctx::<CallerActor>::new(core_ctx);
 
 	let output = call_sibling(ctx).await.unwrap();
@@ -111,6 +112,7 @@ async fn actor_ctx_client_calls_sibling_action() {
 		)
 	);
 	assert!(state.saw_sibling_action.load(Ordering::SeqCst));
+	assert_eq!(state.sibling_action_count.load(Ordering::SeqCst), 3);
 
 	server.abort();
 }
@@ -248,7 +250,12 @@ async fn sibling_action(
 		.unwrap();
 	let args: Vec<JsonValue> =
 		ciborium::from_reader(Cursor::new(request.args)).expect("decode action args");
-	assert!(args == vec![json!({ "from": "from-caller" })] || args == vec![json!("from-caller")]);
+	let request_index = state.sibling_action_count.fetch_add(1, Ordering::SeqCst);
+	if request_index < 2 {
+		assert_eq!(args, vec![json!({ "from": "from-caller" })]);
+	} else {
+		assert_eq!(args, vec![json!("from-caller")]);
+	}
 
 	let payload = wire::versioned::HttpActionResponse::wrap_latest(wire::HttpActionResponse {
 		output: cbor(&json!({ "reply": "pong" })),

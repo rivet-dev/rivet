@@ -39,14 +39,7 @@ describeDriverMatrix("Access Control", (driverTestConfig) => {
 			});
 			await expect(
 				handle.send("missingQueue", { value: "three" }),
-			).resolves.toBeUndefined();
-			await expect(
-				handle.send(
-					"missingQueue",
-					{ value: "four" },
-					{ wait: true, timeout: 50 },
-				),
-			).resolves.toMatchObject({ status: "completed" });
+			).rejects.toMatchObject({ code: "not_found" });
 
 			const allowedMessage = await handle.allowedReceiveQueue();
 			expect(allowedMessage).toEqual({ value: "one" });
@@ -63,14 +56,7 @@ describeDriverMatrix("Access Control", (driverTestConfig) => {
 
 			await expect(
 				handle.send("anyQueue", { value: "ignored" }),
-			).resolves.toBeUndefined();
-			await expect(
-				handle.send(
-					"anyQueue",
-					{ value: "ignored-wait" },
-					{ wait: true, timeout: 50 },
-				),
-			).resolves.toMatchObject({ status: "completed" });
+			).rejects.toMatchObject({ code: "not_found" });
 			expect(await handle.readAnyQueue()).toBeNull();
 		});
 

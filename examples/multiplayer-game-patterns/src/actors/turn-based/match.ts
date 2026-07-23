@@ -96,7 +96,7 @@ export const turnBasedMatch = actor({
 		const client = c.client<typeof registry>();
 		await client.turnBasedMatchmaker
 			.getOrCreate(["main"])
-			.send("closeMatch", { matchId: c.state.matchId });
+			.closeMatch({ matchId: c.state.matchId });
 	},
 	actions: {
 		createPlayer: (

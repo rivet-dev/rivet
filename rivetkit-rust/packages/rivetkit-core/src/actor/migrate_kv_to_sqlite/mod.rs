@@ -149,6 +149,9 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 		internal_storage::persist_last_pushed_alarm(ctx.sql(), last_pushed_alarm)
 			.await
 			.context("import legacy last pushed alarm into sqlite")?;
+		internal_storage::persist_runtime_alarm(ctx.sql(), last_pushed_alarm)
+			.await
+			.context("import legacy runtime alarm into sqlite")?;
 	}
 	if let Some(token) = inspector_token {
 		internal_storage::persist_inspector_token(ctx.sql(), &token)
@@ -209,15 +212,6 @@ async fn import_core_state_if_needed_inner(ctx: &ActorContext) -> Result<()> {
 			let message = decode_queue_message(&value).with_context(|| {
 				format!("decode legacy queue message {id} during sqlite import")
 			})?;
-			if message.failure_count.is_some()
-				|| message.available_at.is_some()
-				|| message.in_flight.is_some()
-				|| message.in_flight_at.is_some()
-			{
-				bail!(
-					"legacy queue message {id} contains retry, delay, or in-flight state that SQLite queue storage cannot preserve"
-				);
-			}
 			queue_next_id = queue_next_id.max(id.saturating_add(1));
 			messages.push((id, message));
 		}

@@ -119,6 +119,7 @@ pub use actor::{kv, sqlite};
 pub use actor::action::ActionDispatchError;
 pub use actor::config::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
+	QueueDefinition, QueueDefinitionInput,
 };
 pub use actor::connection::ConnHandle;
 pub use actor::context::{
@@ -127,12 +128,11 @@ pub use actor::context::{
 pub use actor::factory::{ActorEntryFn, ActorFactory};
 pub use actor::lifecycle_hooks::{ActorEvents, ActorStart, Reply};
 pub use actor::messages::{
-	ActorEvent, QueueSendResult, QueueSendStatus, Request, Response, SerializeStateReason,
-	StateDelta, WorkflowKvWrite,
+	ActorEvent, Request, Response, SerializeStateReason, StateDelta, WorkflowKvWrite,
 };
 pub use actor::queue::{
-	CompletableQueueMessage, EnqueueAndWaitOpts, QueueMessage, QueueNextBatchOpts, QueueNextOpts,
-	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
+	QueueMessage, QueueMessageStatus, QueueNextBatchOpts, QueueNextOpts, QueueSendOpts,
+	QueueSendReceipt, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
 };
 pub use actor::sqlite::{
 	BindParam, ColumnValue, ExecResult, ExecuteResult, QueryResult, SqliteBackend,

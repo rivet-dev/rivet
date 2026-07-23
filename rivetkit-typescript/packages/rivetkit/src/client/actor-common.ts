@@ -5,15 +5,10 @@ import type {
 import type {
 	EventSchemaConfig,
 	InferEventArgs,
-	InferQueueCompleteMap,
 	InferSchemaMap,
 	QueueSchemaConfig,
 } from "@/actor/schema";
-import type {
-	QueueSendNoWaitOptions,
-	QueueSendResult,
-	QueueSendWaitOptions,
-} from "./queue";
+import type { QueueReceipt, QueueSendOptions, QueueSendReceipt } from "./queue";
 
 /**
  * Action function returned by Actor connections and handles.
@@ -104,24 +99,19 @@ type ActorQueueSend<TQueues extends QueueSchemaConfig> = {
 	<K extends keyof TQueues & string>(
 		name: K,
 		body: InferSchemaMap<TQueues>[K],
-		options: QueueSendWaitOptions,
-	): Promise<QueueSendResult<InferQueueCompleteMap<TQueues>[K]>>;
-	<K extends keyof TQueues & string>(
-		name: K,
-		body: InferSchemaMap<TQueues>[K],
-		options?: QueueSendNoWaitOptions,
-	): Promise<void>;
+		options?: QueueSendOptions,
+	): Promise<QueueSendReceipt>;
 	(
 		name: keyof TQueues extends never ? string : never,
 		body: unknown,
-		options: QueueSendWaitOptions,
-	): Promise<QueueSendResult>;
-	(
-		name: keyof TQueues extends never ? string : never,
-		body: unknown,
-		options?: QueueSendNoWaitOptions,
-	): Promise<void>;
+		options?: QueueSendOptions,
+	): Promise<QueueSendReceipt>;
 };
+
+interface ActorQueueMethods<TQueues extends QueueSchemaConfig> {
+	send: ActorQueueSend<TQueues>;
+	receipt(id: string): QueueReceipt;
+}
 
 type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
 	<K extends keyof TEvents & string>(
@@ -137,10 +127,10 @@ type ActorEventSubscribe<TEvents extends EventSchemaConfig> = {
 export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 	// biome-ignore lint/suspicious/noExplicitAny: safe to use any here
 	IsAny<AD> extends true
-		? { send: ActorQueueSend<Record<string, any>> }
+		? ActorQueueMethods<Record<string, any>>
 		: AD extends { config: { queues?: infer Q } }
 			? Q extends QueueSchemaConfig
-				? { send: ActorQueueSend<Q> }
+				? ActorQueueMethods<Q>
 				: {}
 			: AD extends BaseActorDefinition<
 						any,
@@ -152,9 +142,9 @@ export type ActorDefinitionQueueSend<AD extends AnyActorDefinition> =
 						any,
 						infer Q,
 						any
-					>
+				>
 				? Q extends QueueSchemaConfig
-					? { send: ActorQueueSend<Q> }
+					? ActorQueueMethods<Q>
 					: {}
 				: {};
 

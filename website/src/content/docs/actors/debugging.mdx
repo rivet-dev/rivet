@@ -326,28 +326,26 @@ curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
   -H 'Content-Type: application/json' \
   -d '{"body":{"id":"job-1"}}'
 
-# Send queue message and wait for completion (optional timeout in ms)
-curl -X POST $RIVET_API/gateway/{actor_id}/queue/jobs \
-  -H 'Content-Type: application/json' \
-  -d '{"body":{"id":"job-1"},"wait":true,"timeout":5000}'
+# Check the returned receipt later
+curl $RIVET_API/gateway/{actor_id}/queue/receipts/{receipt_id}
 
 # Forward an HTTP request to the actor's onRequest handler
 curl $RIVET_API/gateway/{actor_id}/request/my/custom/path
 ```
 
-Queue send responses always include a `status` field:
+Queue sends return a durable opaque receipt ID after acceptance:
 
 ```json
-{ "status": "completed" }
+{ "receiptId": "...", "deduplicated": false }
 ```
 
-The `response` field is only present when the queue handler returns a value:
+Receipt lookups are nonblocking status snapshots:
 
 ```json
-{ "status": "completed", "response": { "result": "ok" } }
+{ "state": "processing", "attempts": 1, "createdAt": 1784582400000, "startedAt": 1784582400100 }
 ```
 
-If `wait: true` and the timeout is reached, `status` is `"timedOut"`.
+Queue handlers do not return values to senders. Use an action or workflow when a caller needs a result.
 
 ### Inspector Endpoints
 

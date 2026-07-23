@@ -94,11 +94,15 @@ fn counter_factory() -> ActorFactory {
 						body: _,
 						conn: _,
 						request: _,
-						wait: _,
-						timeout_ms: _,
+						dedupe_key: _,
+						delay_ms: _,
 						reply,
 					} => {
 						reply.send(Err(anyhow::anyhow!("queue sends are not handled")));
+					}
+					ActorEvent::QueueMessage { reply, .. }
+					| ActorEvent::QueueDeadLetter { reply, .. } => {
+						reply.send(Err(anyhow::anyhow!("queue handlers are not configured")));
 					}
 					ActorEvent::WebSocketOpen {
 						ws: _,

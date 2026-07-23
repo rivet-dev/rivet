@@ -77,34 +77,21 @@ export const workflowQueueActor = actor({
 		received: [] as unknown[],
 	},
 	queues: {
-		[WORKFLOW_QUEUE_NAME]: queue<unknown, { echo: unknown }>(),
+		[WORKFLOW_QUEUE_NAME]: queue<unknown>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("queue", async (loopCtx) => {
 			const message = await loopCtx.queue.next("queue-wait", {
 				names: [WORKFLOW_QUEUE_NAME],
-				completable: true,
 			});
-			if (!message.complete) {
-				return Loop.continue(undefined);
-			}
-			const complete = message.complete;
 			await loopCtx.step("store-message", async (c) => {
-				await storeWorkflowQueueMessage(c, message.body, complete);
+				c.state.received.push(message.body);
 			});
 			return Loop.continue(undefined);
 		});
 	}),
 	actions: {
 		getMessages: (c) => c.state.received,
-		sendAndWait: async (c, payload: unknown) => {
-			const client = c.client<typeof registry>();
-			const handle = client.workflowQueueActor.getForId(c.actorId);
-			return await handle.send(WORKFLOW_QUEUE_NAME, payload, {
-				wait: true,
-				timeout: 1_000,
-			});
-		},
 	},
 });
 
@@ -113,10 +100,7 @@ export const workflowNestedLoopActor = actor({
 		processed: [] as string[],
 	},
 	queues: {
-		[WORKFLOW_NESTED_QUEUE_NAME]: queue<
-			{ items: string[] },
-			{ processed: number }
-		>(),
+		[WORKFLOW_NESTED_QUEUE_NAME]: queue<{ items: string[] }>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("command-loop", async (loopCtx) => {
@@ -124,7 +108,6 @@ export const workflowNestedLoopActor = actor({
 				items: string[];
 			}>("wait", {
 				names: [WORKFLOW_NESTED_QUEUE_NAME],
-				completable: true,
 			});
 			let itemIndex = 0;
 			await loopCtx.loop("process-items", async (subLoopCtx) => {
@@ -143,7 +126,6 @@ export const workflowNestedLoopActor = actor({
 				return Loop.continue(undefined);
 			});
 
-			await message.complete?.({ processed: message.body.items.length });
 			return Loop.continue(undefined);
 		});
 	}),
@@ -160,10 +142,7 @@ export const workflowNestedJoinActor = actor({
 		processed: [] as string[],
 	},
 	queues: {
-		[WORKFLOW_NESTED_QUEUE_NAME]: queue<
-			{ items: string[] },
-			{ processed: number }
-		>(),
+		[WORKFLOW_NESTED_QUEUE_NAME]: queue<{ items: string[] }>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("command-loop", async (loopCtx) => {
@@ -171,7 +150,6 @@ export const workflowNestedJoinActor = actor({
 				items: string[];
 			}>("wait", {
 				names: [WORKFLOW_NESTED_QUEUE_NAME],
-				completable: true,
 			});
 
 			await loopCtx.join(
@@ -193,7 +171,6 @@ export const workflowNestedJoinActor = actor({
 				),
 			);
 
-			await message.complete?.({ processed: message.body.items.length });
 			return Loop.continue(undefined);
 		});
 	}),
@@ -210,10 +187,7 @@ export const workflowNestedRaceActor = actor({
 		processed: [] as string[],
 	},
 	queues: {
-		[WORKFLOW_NESTED_QUEUE_NAME]: queue<
-			{ items: string[] },
-			{ processed: number }
-		>(),
+		[WORKFLOW_NESTED_QUEUE_NAME]: queue<{ items: string[] }>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.loop("command-loop", async (loopCtx) => {
@@ -221,7 +195,6 @@ export const workflowNestedRaceActor = actor({
 				items: string[];
 			}>("wait", {
 				names: [WORKFLOW_NESTED_QUEUE_NAME],
-				completable: true,
 			});
 			const item = message.body.items[0];
 
@@ -255,7 +228,6 @@ export const workflowNestedRaceActor = actor({
 				]);
 			}
 
-			await message.complete?.({ processed: message.body.items.length });
 			return Loop.continue(undefined);
 		});
 	}),
@@ -274,7 +246,7 @@ export const workflowSpawnChildActor = actor({
 		processed: [] as string[],
 	}),
 	queues: {
-		work: queue<{ task: string }, { ok: true }>(),
+		work: queue<{ task: string }>(),
 	},
 	run: workflow(async (ctx) => {
 		await ctx.step("mark-started", async (c) => {
@@ -286,13 +258,11 @@ export const workflowSpawnChildActor = actor({
 				"wait-cmd",
 				{
 					names: ["work"],
-					completable: true,
 				},
 			);
 			await loopCtx.step("process-cmd", async (c) => {
 				c.state.processed.push(message.body.task);
 			});
-			await message.complete?.({ ok: true });
 			return Loop.continue(undefined);
 		});
 	}),
@@ -321,7 +291,6 @@ export const workflowSpawnParentActor = actor({
 				"wait-parent",
 				{
 					names: ["spawn"],
-					completable: true,
 				},
 			);
 
@@ -334,17 +303,10 @@ export const workflowSpawnParentActor = actor({
 							createWithInput: message.body.key,
 						},
 					);
-					const result = await handle.send(
-						"work",
-						{ task: "hello" },
-						{
-							wait: true,
-							timeout: 500,
-						},
-					);
+					const result = await handle.send("work", { task: "hello" });
 					c.state.results.push({
 						key: message.body.key,
-						result,
+						result: result.id,
 						error: null,
 					});
 				} catch (error) {
@@ -359,7 +321,6 @@ export const workflowSpawnParentActor = actor({
 				}
 			});
 
-			await message.complete?.({ ok: true });
 			return Loop.continue(undefined);
 		});
 	}),
@@ -861,15 +822,6 @@ function incrementWorkflowCounter(
 ): void {
 	ctx.state.runCount += 1;
 	ctx.state.history.push(ctx.state.runCount);
-}
-
-async function storeWorkflowQueueMessage(
-	ctx: WorkflowStepContextOf<typeof workflowQueueActor>,
-	body: unknown,
-	complete: (response: { echo: unknown }) => Promise<void>,
-): Promise<void> {
-	ctx.state.received.push(body);
-	await complete({ echo: body });
 }
 
 async function updateWorkflowAccessInsideState(

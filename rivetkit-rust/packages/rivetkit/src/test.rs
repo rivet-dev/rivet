@@ -21,8 +21,7 @@ use crate::{
 	registry::Registry, typed_client::encode_action_args,
 };
 
-const ENDPOINT: &str = "http://127.0.0.1:6420";
-const ENGINE_PORT: u16 = 6420;
+const DEFAULT_ENDPOINT: &str = "http://127.0.0.1:6420";
 const TOKEN: &str = "dev";
 const NAMESPACE: &str = "default";
 const READY_TIMEOUT: Duration = Duration::from_secs(30);
@@ -39,11 +38,28 @@ static POOL_SEQ: AtomicU64 = AtomicU64::new(0);
 /// explicit path, `RIVET_ENGINE_BINARY_PATH`, existing healthy engine, local
 /// workspace build, cached binary, then opt-in verified download.
 pub async fn setup(registry: Registry) -> Result<TestHandle> {
+	let endpoint = std::env::var("RIVETKIT_TEST_ENDPOINT")
+		.unwrap_or_else(|_| DEFAULT_ENDPOINT.to_owned());
+	let endpoint_uri = endpoint
+		.parse::<http::Uri>()
+		.context("parse RivetKit test endpoint")?;
+	let endpoint_authority = endpoint_uri
+		.authority()
+		.context("RivetKit test endpoint is missing an authority")?;
+	let endpoint_host = endpoint_authority.host().to_owned();
+	let endpoint_port = endpoint_authority.port_u16().unwrap_or_else(|| {
+		if endpoint_uri.scheme_str() == Some("https") {
+			443
+		} else {
+			80
+		}
+	});
+
 	// A unique pool name keeps concurrently-tested registries on the shared
 	// engine from cross-routing each other's actors.
 	let pool_name = format!("rivetkit-test-{}", POOL_SEQ.fetch_add(1, Ordering::Relaxed));
 	let config = ServeConfig {
-		endpoint: ENDPOINT.to_owned(),
+		endpoint: endpoint.clone(),
 		token: Some(TOKEN.to_owned()),
 		namespace: NAMESPACE.to_owned(),
 		pool_name: pool_name.clone(),
@@ -66,13 +82,13 @@ pub async fn setup(registry: Registry) -> Result<TestHandle> {
 					.await
 			}
 		});
-		wait_for_port().await;
+		wait_for_port(&endpoint_host, endpoint_port).await;
 		ready_rx.await.context("wait for registry envoy startup")?;
 		serve
 	};
 
 	let client = Client::new(
-		ClientConfig::new(ENDPOINT)
+		ClientConfig::new(endpoint)
 			.token(TOKEN)
 			.namespace(NAMESPACE)
 			.pool_name(pool_name),
@@ -192,10 +208,10 @@ fn is_transient(error: &anyhow::Error) -> bool {
 		|| message.contains("Service Unavailable")
 }
 
-async fn wait_for_port() {
+async fn wait_for_port(host: &str, port: u16) {
 	let deadline = Instant::now() + Duration::from_secs(60);
 	while Instant::now() < deadline {
-		if TcpStream::connect(("127.0.0.1", ENGINE_PORT)).await.is_ok() {
+		if TcpStream::connect((host, port)).await.is_ok() {
 			return;
 		}
 		tokio::time::sleep(Duration::from_millis(100)).await;

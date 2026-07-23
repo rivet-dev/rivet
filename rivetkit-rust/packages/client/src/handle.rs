@@ -18,17 +18,13 @@ use std::{
 	time::Duration,
 };
 
-pub use crate::protocol::codec::{QueueSendResult, QueueSendStatus};
+pub use crate::protocol::codec::{QueueMessageStatus, QueueSendReceipt};
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SendOpts {}
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SendAndWaitOpts {
-	pub timeout: Option<Duration>,
+#[derive(Debug, Clone, Default)]
+pub struct QueueSendOptions {
+	pub dedupe_key: Option<String>,
+	pub delay: Option<Duration>,
 }
-
-pub type QueueSendOptions = SendAndWaitOpts;
 
 pub struct ActorHandleStateless {
 	remote_manager: RemoteManager,
@@ -95,33 +91,43 @@ impl ActorHandleStateless {
 		codec::decode_http_action_response(self.encoding_kind, &output)
 	}
 
-	pub async fn send(&self, name: &str, body: impl Serialize, _opts: SendOpts) -> Result<()> {
-		self.send_queue(name, &body, false, None).await.map(|_| ())
-	}
-
-	pub async fn send_and_wait(
+	pub async fn send(
 		&self,
 		name: &str,
 		body: impl Serialize,
-		opts: SendAndWaitOpts,
-	) -> Result<QueueSendResult> {
-		let result = self.send_queue(name, &body, true, opts.timeout).await?;
-		result.ok_or_else(|| anyhow!("queue wait response missing"))
+		opts: QueueSendOptions,
+	) -> Result<QueueSendReceipt> {
+		self.send_queue(name, &body, opts).await
 	}
 
 	async fn send_queue<T: Serialize>(
 		&self,
 		name: &str,
 		body: &T,
-		wait: bool,
-		timeout: Option<Duration>,
-	) -> Result<Option<QueueSendResult>> {
+		opts: QueueSendOptions,
+	) -> Result<QueueSendReceipt> {
 		let query = self.query.lock().expect("query lock poisoned").clone();
 		let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
-		let timeout_ms =
-			timeout.map(|duration| u64::try_from(duration.as_millis()).unwrap_or(u64::MAX));
-		let request_body =
-			codec::encode_http_queue_request(self.encoding_kind, name, body, wait, timeout_ms)?;
+		let delay_ms = opts
+			.delay
+			.map(|duration| {
+				let delay_ms = u64::try_from(duration.as_millis())
+					.map_err(|_| anyhow!("queue delay exceeds the supported range"))?;
+				if delay_ms > 9_007_199_254_740_991 {
+					return Err(anyhow!(
+						"queue delay must not exceed JavaScript's maximum safe integer"
+					));
+				}
+				Ok(delay_ms)
+			})
+			.transpose()?;
+		let request_body = codec::encode_http_queue_request(
+			self.encoding_kind,
+			name,
+			body,
+			opts.dedupe_key.as_deref(),
+			delay_ms,
+		)?;
 
 		let headers = self.protocol_headers()?;
 
@@ -151,8 +157,36 @@ impl ActorHandleStateless {
 		}
 
 		let body = res.bytes().await?;
-		let result = codec::decode_http_queue_response(self.encoding_kind, &body)?;
-		Ok(wait.then_some(result))
+		codec::decode_http_queue_response(self.encoding_kind, &body)
+	}
+
+	pub async fn queue_status(&self, receipt_id: &str) -> Result<QueueMessageStatus> {
+		let query = self.query.lock().expect("query lock poisoned").clone();
+		let actor_id = self.remote_manager.resolve_actor_id(&query).await?;
+		let path = format!("/queue/receipts/{}", urlencoding::encode(receipt_id));
+		let res = self
+			.remote_manager
+			.send_request(
+				&actor_id,
+				&path,
+				Method::GET,
+				self.protocol_headers()?,
+				None,
+			)
+			.await?;
+		if !res.status().is_success() {
+			let status = res.status();
+			let body = res.bytes().await?;
+			if let Ok((group, code, message, metadata)) =
+				codec::decode_http_error(self.encoding_kind, &body)
+			{
+				return Err(anyhow!(
+					"queue status failed ({group}/{code}): {message}, metadata={metadata:?}"
+				));
+			}
+			return Err(anyhow!("queue status failed: {status}"));
+		}
+		codec::decode_http_queue_status(self.encoding_kind, &res.bytes().await?)
 	}
 
 	pub async fn fetch(

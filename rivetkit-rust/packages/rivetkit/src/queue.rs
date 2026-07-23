@@ -6,24 +6,43 @@ use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use rivetkit_core::{
-	ActorContext, EnqueueAndWaitOpts, QueueMessage as CoreQueueMessage, QueueNextBatchOpts,
-	QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts,
+	ActorContext, QueueMessage as CoreQueueMessage, QueueMessageStatus, QueueNextBatchOpts,
+	QueueNextOpts, QueueSendOpts, QueueSendReceipt, QueueTryNextBatchOpts, QueueTryNextOpts,
 };
 use serde::{Serialize, de::DeserializeOwned};
+use tokio_util::sync::CancellationToken;
 
 use crate::{actor::Actor, context::Ctx};
-pub(crate) type BoxQueueFuture = Pin<Box<dyn Future<Output = Result<Option<Vec<u8>>>> + Send>>;
+pub(crate) type BoxQueueFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 
 pub trait QueueMessage: Serialize + DeserializeOwned + Send + Sync + 'static {
-	type Reply: Serialize + DeserializeOwned + Send + 'static;
-
 	const NAME: &'static str;
 }
 
 pub trait HandlesQueue<M: QueueMessage>: Actor + Sized {
-	type Future: Future<Output = Result<M::Reply>> + Send + 'static;
+	type Future: Future<Output = Result<()>> + Send + 'static;
 
-	fn handle_queue(self: Arc<Self>, ctx: Ctx<Self>, message: M) -> Self::Future;
+	fn on_message(
+		self: Arc<Self>,
+		ctx: Ctx<Self>,
+		message: M,
+		options: QueueHandlerOptions,
+	) -> Self::Future;
+}
+
+#[derive(Clone, Debug)]
+pub struct QueueHandlerOptions {
+	signal: CancellationToken,
+}
+
+impl QueueHandlerOptions {
+	pub(crate) fn new(signal: CancellationToken) -> Self {
+		Self { signal }
+	}
+
+	pub fn signal(&self) -> &CancellationToken {
+		&self.signal
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,7 +62,13 @@ impl<A: Actor> QueueEntry<A> {
 
 pub trait QueueSet<A: Actor>: Send + Sync + 'static {
 	fn entries() -> Vec<QueueEntry<A>>;
-	fn dispatch(actor: Arc<A>, ctx: Ctx<A>, name: &str, body: &[u8]) -> Option<BoxQueueFuture>;
+	fn dispatch(
+		actor: Arc<A>,
+		ctx: Ctx<A>,
+		name: &str,
+		body: &[u8],
+		options: QueueHandlerOptions,
+	) -> Option<BoxQueueFuture>;
 }
 
 impl<A: Actor> QueueSet<A> for () {
@@ -51,7 +76,13 @@ impl<A: Actor> QueueSet<A> for () {
 		Vec::new()
 	}
 
-	fn dispatch(_actor: Arc<A>, _ctx: Ctx<A>, _name: &str, _body: &[u8]) -> Option<BoxQueueFuture> {
+	fn dispatch(
+		_actor: Arc<A>,
+		_ctx: Ctx<A>,
+		_name: &str,
+		_body: &[u8],
+		_options: QueueHandlerOptions,
+	) -> Option<BoxQueueFuture> {
 		None
 	}
 }
@@ -72,15 +103,16 @@ macro_rules! impl_queue_set {
 				ctx: Ctx<Act>,
 				name: &str,
 				body: &[u8],
+				options: QueueHandlerOptions,
 			) -> Option<BoxQueueFuture> {
 				$(
 					if name == <$message as QueueMessage>::NAME {
 						let body = body.to_vec();
+						let options = options.clone();
 						return Some(Box::pin(async move {
 							let message = decode_cbor::<$message>(&body, "queue message body")
 								.with_context(|| format!("decode queue message '{}'", <$message as QueueMessage>::NAME))?;
-							let reply = <Act as HandlesQueue<$message>>::handle_queue(actor, ctx, message).await?;
-							Ok(Some(encode_cbor(&reply, "queue message reply")?))
+							<Act as HandlesQueue<$message>>::on_message(actor, ctx, message, options).await
 						}));
 					}
 				)+
@@ -130,8 +162,8 @@ pub struct TypedQueueMessage<M: QueueMessage> {
 }
 
 impl<M: QueueMessage> TypedQueueMessage<M> {
-	pub fn id(&self) -> u64 {
-		self.inner.id
+	pub fn id(&self) -> &str {
+		&self.inner.receipt_id
 	}
 
 	pub fn name(&self) -> &str {
@@ -146,8 +178,12 @@ impl<M: QueueMessage> TypedQueueMessage<M> {
 		self.inner.created_at
 	}
 
-	pub fn is_completable(&self) -> bool {
-		self.inner.is_completable()
+	pub fn attempts(&self) -> u32 {
+		self.inner.attempts
+	}
+
+	pub fn first_failed_at(&self) -> Option<i64> {
+		self.inner.first_failed_at
 	}
 
 	pub fn into_body(self) -> M {
@@ -162,14 +198,6 @@ impl<M: QueueMessage> TypedQueueMessage<M> {
 		self.inner
 	}
 
-	pub async fn complete(self, reply: M::Reply) -> Result<()> {
-		self.complete_raw(Some(encode_cbor(&reply, "queue message reply")?))
-			.await
-	}
-
-	pub async fn complete_raw(self, response: Option<Vec<u8>>) -> Result<()> {
-		self.inner.complete(response).await
-	}
 }
 
 impl<'a, A: Actor> Queue<'a, A> {
@@ -181,36 +209,23 @@ impl<'a, A: Actor> Queue<'a, A> {
 	}
 
 	/// Enqueues a message with a CBOR-encoded body.
-	pub async fn send<T: Serialize>(&self, name: &str, body: &T) -> Result<CoreQueueMessage> {
-		self.send_raw(name, &encode_cbor(body, "queue message body")?)
+	pub async fn send<T: Serialize>(&self, name: &str, body: &T) -> Result<QueueSendReceipt> {
+		self.send_raw(name, &encode_cbor(body, "queue message body")?, QueueSendOpts::default())
 			.await
 	}
 
 	/// Enqueues a message with a raw byte body.
-	pub async fn send_raw(&self, name: &str, body: &[u8]) -> Result<CoreQueueMessage> {
-		self.inner.send(name, body).await
-	}
-
-	/// Enqueues a message with a CBOR-encoded body and waits for the consumer to
-	/// complete it, returning the raw completion response if any.
-	pub async fn enqueue_and_wait<T: Serialize>(
-		&self,
-		name: &str,
-		body: &T,
-		opts: EnqueueAndWaitOpts,
-	) -> Result<Option<Vec<u8>>> {
-		self.enqueue_and_wait_raw(name, &encode_cbor(body, "queue message body")?, opts)
-			.await
-	}
-
-	/// Enqueues a raw-body message and waits for its completion response.
-	pub async fn enqueue_and_wait_raw(
+	pub async fn send_raw(
 		&self,
 		name: &str,
 		body: &[u8],
-		opts: EnqueueAndWaitOpts,
-	) -> Result<Option<Vec<u8>>> {
-		self.inner.enqueue_and_wait(name, body, opts).await
+		opts: QueueSendOpts,
+	) -> Result<QueueSendReceipt> {
+		self.inner.send_with_opts(name, body, opts).await
+	}
+
+	pub async fn status(&self, receipt_id: &str) -> Result<QueueMessageStatus> {
+		self.inner.queue_status(receipt_id).await
 	}
 
 	/// Awaits the next queued message, optionally bounded by the opts timeout.
@@ -312,10 +327,9 @@ fn decode_core_message<M: QueueMessage>(message: CoreQueueMessage) -> Result<Typ
 
 fn typed_next_opts<M: QueueMessage>(opts: QueueNextOpts) -> QueueNextOpts {
 	QueueNextOpts {
-		names: Some(vec![M::NAME.to_owned()]),
+		 names: Some(vec![M::NAME.to_owned()]),
 		timeout: opts.timeout,
 		signal: opts.signal,
-		completable: opts.completable,
 	}
 }
 
@@ -325,14 +339,12 @@ fn typed_next_batch_opts<M: QueueMessage>(opts: QueueNextBatchOpts) -> QueueNext
 		count: opts.count,
 		timeout: opts.timeout,
 		signal: opts.signal,
-		completable: opts.completable,
 	}
 }
 
-fn typed_try_next_opts<M: QueueMessage>(opts: QueueTryNextOpts) -> QueueTryNextOpts {
+fn typed_try_next_opts<M: QueueMessage>(_opts: QueueTryNextOpts) -> QueueTryNextOpts {
 	QueueTryNextOpts {
 		names: Some(vec![M::NAME.to_owned()]),
-		completable: opts.completable,
 	}
 }
 
@@ -342,7 +354,6 @@ fn typed_try_next_batch_opts<M: QueueMessage>(
 	QueueTryNextBatchOpts {
 		names: Some(vec![M::NAME.to_owned()]),
 		count: opts.count,
-		completable: opts.completable,
 	}
 }
 
@@ -365,7 +376,7 @@ mod tests {
 	use anyhow::Result;
 	use serde::{Deserialize, Serialize};
 
-	use super::{HandlesQueue, QueueMessage, QueueSet};
+	use super::{HandlesQueue, QueueHandlerOptions, QueueMessage, QueueSet};
 	use crate::{action, actor::Actor, context::Ctx};
 
 	struct TestActor;
@@ -385,8 +396,6 @@ mod tests {
 	struct FirstMessage;
 
 	impl QueueMessage for FirstMessage {
-		type Reply = ();
-
 		const NAME: &'static str = "first";
 	}
 
@@ -394,15 +403,18 @@ mod tests {
 	struct SecondMessage;
 
 	impl QueueMessage for SecondMessage {
-		type Reply = ();
-
 		const NAME: &'static str = "second";
 	}
 
 	impl HandlesQueue<FirstMessage> for TestActor {
 		type Future = Ready<Result<()>>;
 
-		fn handle_queue(self: Arc<Self>, _ctx: Ctx<Self>, _message: FirstMessage) -> Self::Future {
+		fn on_message(
+			self: Arc<Self>,
+			_ctx: Ctx<Self>,
+			_message: FirstMessage,
+			_options: QueueHandlerOptions,
+		) -> Self::Future {
 			ready(Ok(()))
 		}
 	}
@@ -410,7 +422,12 @@ mod tests {
 	impl HandlesQueue<SecondMessage> for TestActor {
 		type Future = Ready<Result<()>>;
 
-		fn handle_queue(self: Arc<Self>, _ctx: Ctx<Self>, _message: SecondMessage) -> Self::Future {
+		fn on_message(
+			self: Arc<Self>,
+			_ctx: Ctx<Self>,
+			_message: SecondMessage,
+			_options: QueueHandlerOptions,
+		) -> Self::Future {
 			ready(Ok(()))
 		}
 	}

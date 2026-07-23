@@ -27,14 +27,15 @@ pub(crate) fn end_sleep_test_wait(queue: &Queue) {
 
 mod moved_tests {
 	use super::{
-		CompletableQueueMessage, QueueMessage, QueueMetadata, decode_queue_metadata,
-		encode_queue_metadata,
+		QueueMetadata, decode_queue_metadata, encode_queue_metadata,
 	};
 	use crate::actor::context::tests::new_with_kv;
 	use crate::actor::keys::{
 		QUEUE_METADATA_KEY, decode_queue_message_key, make_queue_message_key,
 	};
-	use crate::actor::queue::{EnqueueAndWaitOpts, QueueNextOpts, QueueWaitOpts};
+	use crate::actor::queue::{
+		QueueMessageStatus, QueueNextOpts, QueueSendOpts, QueueWaitOpts,
+	};
 	use tokio::time::{Duration, sleep};
 	use tokio_util::sync::CancellationToken;
 
@@ -71,38 +72,6 @@ mod moved_tests {
 		let decoded = decode_queue_metadata(&encoded).expect("decode metadata");
 
 		assert_eq!(decoded, metadata);
-	}
-
-	#[test]
-	fn queue_message_into_completable_requires_completion_handle() {
-		let message = QueueMessage {
-			id: 1,
-			name: "tasks".into(),
-			body: vec![1, 2, 3],
-			created_at: 5,
-			completion: None,
-		};
-
-		let error = message
-			.into_completable()
-			.expect_err("message should not be completable");
-
-		assert!(error.to_string().contains("does not support completion"));
-	}
-
-	#[test]
-	fn completable_message_round_trips_back_to_queue_message() {
-		let completion = super::CompletionHandle::new(super::Queue::default(), 9);
-		let message = CompletableQueueMessage {
-			id: 9,
-			name: "jobs".into(),
-			body: vec![9],
-			created_at: 11,
-			completion,
-		};
-
-		let queue_message = message.into_message();
-		assert!(queue_message.is_completable());
 	}
 
 	#[test]
@@ -215,7 +184,6 @@ mod moved_tests {
 				QueueWaitOpts {
 					timeout: Some(Duration::from_millis(0)),
 					signal: None,
-					completable: false,
 				},
 			)
 			.await
@@ -245,7 +213,6 @@ mod moved_tests {
 					QueueWaitOpts {
 						timeout: Some(Duration::from_secs(5)),
 						signal: Some(signal_for_task),
-						completable: false,
 					},
 				)
 				.await
@@ -272,103 +239,141 @@ mod moved_tests {
 	}
 
 	#[tokio::test]
-	async fn enqueue_and_wait_returns_completion_response() {
+	async fn send_returns_stable_deduplicated_receipt() {
 		let ctx = new_with_kv(
 			"actor-1",
-			"queue-enqueue-and-wait",
+			"queue-deduplicated-receipt",
 			Vec::new(),
 			"local",
 			crate::kv::tests::new_in_memory(),
 		);
 
-		let consumer_queue = ctx.queue().clone();
-		let consumer = tokio::spawn(async move {
-			let message = consumer_queue
-				.next(QueueNextOpts {
-					names: Some(vec!["jobs".into()]),
-					timeout: Some(Duration::from_secs(1)),
-					signal: None,
-					completable: true,
-				})
-				.await
-				.expect("receive completable queue message")
-				.expect("queue message should exist");
-			message
-				.complete(Some(b"done".to_vec()))
-				.await
-				.expect("complete message");
-		});
-
-		let response = ctx
+		let first = ctx
 			.queue()
-			.enqueue_and_wait(
+			.send_with_opts(
 				"jobs",
 				b"payload",
-				EnqueueAndWaitOpts {
-					timeout: Some(Duration::from_secs(1)),
-					signal: None,
+				QueueSendOpts {
+					dedupe_key: Some("order-1".into()),
+					delay: None,
 				},
 			)
 			.await
-			.expect("enqueue_and_wait should succeed");
+			.expect("first send");
+		let second = ctx
+			.queue()
+			.send_with_opts(
+				"jobs",
+				b"different payload is ignored during dedupe window",
+				QueueSendOpts {
+					dedupe_key: Some("order-1".into()),
+					delay: None,
+				},
+			)
+			.await
+			.expect("deduplicated send");
 
-		consumer.await.expect("consumer join");
-		assert_eq!(response, Some(b"done".to_vec()));
+		assert!(!first.deduplicated);
+		assert!(second.deduplicated);
+		assert_eq!(first.id, second.id);
+		assert!(matches!(
+			ctx.queue().queue_status(&first.id).await.expect("status"),
+			QueueMessageStatus::Queued { attempts: 0, .. }
+		));
 	}
 
 	#[tokio::test]
-	async fn enqueue_and_wait_returns_timeout_error() {
+	async fn raw_receive_consumes_message_and_records_terminal_receipt() {
 		let ctx = new_with_kv(
 			"actor-1",
-			"queue-enqueue-and-wait-timeout",
+			"queue-raw-consumed-receipt",
 			Vec::new(),
 			"local",
 			crate::kv::tests::new_in_memory(),
 		);
-
-		let error = ctx
+		let receipt = ctx
 			.queue()
-			.enqueue_and_wait(
-				"jobs",
-				b"payload",
-				EnqueueAndWaitOpts {
-					timeout: Some(Duration::from_millis(0)),
+			.send("jobs", b"payload")
+			.await
+			.expect("send");
+		let message = ctx
+			.queue()
+			.next(QueueNextOpts::default())
+			.await
+			.expect("receive")
+			.expect("message");
+		assert_eq!(message.receipt_id, receipt.id);
+		assert!(matches!(
+			ctx.queue().queue_status(&receipt.id).await.expect("status"),
+			QueueMessageStatus::Consumed { .. }
+		));
+	}
+
+	#[tokio::test]
+	async fn wait_for_names_available_does_not_consume_the_message() {
+		let ctx = new_with_kv(
+			"actor-1",
+			"queue-wait-available",
+			Vec::new(),
+			"local",
+			crate::kv::tests::new_in_memory(),
+		);
+		ctx.queue().send("target", b"payload").await.expect("send");
+
+		ctx.queue()
+			.wait_for_names_available(
+				vec!["target".into()],
+				QueueWaitOpts {
+					timeout: Some(Duration::ZERO),
 					signal: None,
 				},
 			)
 			.await
-			.expect_err("enqueue_and_wait should time out");
-		let error = rivet_error::RivetError::extract(&error);
-		assert_eq!(error.group(), "queue");
-		assert_eq!(error.code(), "timed_out");
+			.expect("message should be available");
+
+		let message = ctx
+			.queue()
+			.next(QueueNextOpts::default())
+			.await
+			.expect("receive")
+			.expect("wait must not consume");
+		assert_eq!(message.body, b"payload");
 	}
 
 	#[tokio::test]
-	async fn enqueue_and_wait_returns_abort_error_when_signal_is_cancelled() {
+	async fn raw_receive_skips_delayed_messages() {
 		let ctx = new_with_kv(
 			"actor-1",
-			"queue-enqueue-and-wait-abort",
+			"queue-delayed-raw",
 			Vec::new(),
 			"local",
 			crate::kv::tests::new_in_memory(),
 		);
-		let signal = CancellationToken::new();
-		signal.cancel();
-
-		let error = ctx
+		let receipt = ctx
 			.queue()
-			.enqueue_and_wait(
+			.send_with_opts(
 				"jobs",
-				b"payload",
-				EnqueueAndWaitOpts {
-					timeout: Some(Duration::from_secs(1)),
-					signal: Some(signal),
+				b"later",
+				QueueSendOpts {
+					dedupe_key: None,
+					delay: Some(Duration::from_secs(60)),
 				},
 			)
 			.await
-			.expect_err("enqueue_and_wait should abort");
-		let error = rivet_error::RivetError::extract(&error);
-		assert_eq!(error.group(), "actor");
-		assert_eq!(error.code(), "aborted");
+			.expect("send delayed");
+
+		let message = ctx
+			.queue()
+			.next(QueueNextOpts {
+				timeout: Some(Duration::ZERO),
+				..QueueNextOpts::default()
+			})
+			.await
+			.expect("receive");
+		assert!(message.is_none());
+		assert!(matches!(
+			ctx.queue().queue_status(&receipt.id).await.expect("status"),
+			QueueMessageStatus::Delayed { attempts: 0, .. }
+		));
 	}
 }

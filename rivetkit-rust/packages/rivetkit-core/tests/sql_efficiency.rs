@@ -110,7 +110,7 @@ fn fixture(row_count: usize) -> Connection {
 		.expect("prepare connection state seed");
 	let mut queue_insert = tx
 		.prepare(
-			"INSERT INTO _rivet_queue (id, name, body, created_at) VALUES (?, 'message', x'01', ?)",
+			"INSERT INTO _rivet_queue (id, receipt_id, seq, name, body, created_at, attempt_count, dlq_notify_attempt_count) VALUES (?1, printf('receipt-%016x', ?1), ?1, 'message', x'01', ?2, 0, 0)",
 		)
 		.expect("prepare queue seed");
 	let mut user_kv_insert = tx
@@ -330,7 +330,7 @@ fn query_catalog() -> Vec<QueryCase> {
 		QueryCase {
 			id: "queue.receive",
 			sql: internal_storage::LOAD_QUEUE_MESSAGES_LIMITED_SQL.into(),
-			params: vec![5_i64.into()],
+			params: vec![i64::MAX.into(), 5_i64.into()],
 			expectation: bounded_scan(&[AllowedScan {
 				table: "_rivet_queue",
 				reason: "unfiltered queue receive walks global enqueue order",
@@ -340,20 +340,20 @@ fn query_catalog() -> Vec<QueryCase> {
 		QueryCase {
 			id: "queue.receive_name",
 			sql: internal_storage::LOAD_QUEUE_MESSAGES_FOR_NAME_SQL.into(),
-			params: vec![text("message"), 5_i64.into()],
-			expectation: indexed(Some("_rivet_queue_name_id"), &["_rivet_queue"]),
+			params: vec![text("message"), i64::MAX.into(), 5_i64.into()],
+			expectation: indexed(Some("_rivet_queue_ready_by_name"), &["_rivet_queue"]),
 		},
 		QueryCase {
 			id: "queue.available_name",
 			sql: internal_storage::HAS_QUEUE_MESSAGES_FOR_NAME_SQL.into(),
 			params: vec![text("message")],
-			expectation: indexed(Some("_rivet_queue_name_id"), &["_rivet_queue"]),
+			expectation: indexed(Some("_rivet_queue_ready_by_name"), &["_rivet_queue"]),
 		},
 		QueryCase {
 			id: "queue.filter_metadata_page",
 			sql: internal_storage::LOAD_QUEUE_MESSAGE_METADATA_PAGE_SQL.into(),
-			params: vec![0_i64.into(), 128_i64.into()],
-			expectation: indexed(None, &["_rivet_queue"]),
+			params: vec![0_i64.into(), i64::MAX.into(), 128_i64.into()],
+			expectation: indexed(Some("_rivet_queue_ready"), &["_rivet_queue"]),
 		},
 		QueryCase {
 			id: "queue.load_ids",

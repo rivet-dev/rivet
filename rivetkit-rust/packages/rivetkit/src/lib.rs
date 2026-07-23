@@ -21,7 +21,10 @@ pub use crate::{
 		ActionCall, ConnClosed, ConnOpen, Destroy, Event, EventEntry, EventSet, HttpCall,
 		HttpReply, RuntimeEvent, SerializeState, Sleep, Subscribe, WsOpen,
 	},
-	queue::{HandlesQueue, Queue, QueueEntry, QueueMessage, QueueSet, TypedQueueMessage},
+	queue::{
+		HandlesQueue, Queue, QueueEntry, QueueHandlerOptions, QueueMessage, QueueSet,
+		TypedQueueMessage,
+	},
 	registry::Registry,
 	start::{Events, Hibernated, Input, Snapshot, Start, run_actor},
 	typed_client::{IntoActorKey, TypedActorConnection, TypedActorHandle, TypedClientExt},
@@ -38,9 +41,10 @@ pub use rivetkit_core::serverless::{
 pub use rivetkit_core::serverless_http;
 pub use rivetkit_core::{
 	ActorConfig, ActorKey, ActorKeySegment, ActorKv, CanHibernateWebSocket,
-	CompletableQueueMessage, ConnHandle, ConnId, EngineSpawnMode, EnqueueAndWaitOpts,
-	KeepAwakeRegion, ListOpts, QueueMessage as CoreQueueMessage, QueueNextBatchOpts, QueueNextOpts,
-	QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts, Request, RequestSaveOpts, Response,
-	SaveStateOpts, SerializeStateReason, ServeConfig, SqliteDb, StateDelta, WebSocket, WsMessage,
+	ConnHandle, ConnId, EngineSpawnMode, KeepAwakeRegion, ListOpts,
+	QueueMessage as CoreQueueMessage, QueueMessageStatus, QueueNextBatchOpts, QueueNextOpts,
+	QueueSendOpts, QueueSendReceipt, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts, Request,
+	RequestSaveOpts, Response, SaveStateOpts, SerializeStateReason, ServeConfig, SqliteDb, StateDelta,
+	WebSocket, WsMessage,
 	sqlite::{BindParam, ColumnValue, ExecResult, QueryResult},
 };

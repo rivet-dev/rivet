@@ -251,27 +251,6 @@ impl SerializeStateReason {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum QueueSendStatus {
-	Completed,
-	TimedOut,
-}
-
-impl QueueSendStatus {
-	pub(crate) fn as_str(&self) -> &'static str {
-		match self {
-			Self::Completed => "completed",
-			Self::TimedOut => "timedOut",
-		}
-	}
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct QueueSendResult {
-	pub status: QueueSendStatus,
-	pub response: Option<Vec<u8>>,
-}
-
 #[derive(Debug)]
 pub enum ActorEvent {
 	Action {
@@ -290,9 +269,19 @@ pub enum ActorEvent {
 		body: Vec<u8>,
 		conn: ConnHandle,
 		request: Request,
-		wait: bool,
-		timeout_ms: Option<u64>,
-		reply: Reply<QueueSendResult>,
+		dedupe_key: Option<String>,
+		delay_ms: Option<u64>,
+		reply: Reply<crate::actor::queue::QueueSendReceipt>,
+	},
+	QueueMessage {
+		message: crate::actor::queue::QueueMessage,
+		signal: tokio_util::sync::CancellationToken,
+		reply: Reply<()>,
+	},
+	QueueDeadLetter {
+		message: crate::actor::queue::QueueMessage,
+		signal: tokio_util::sync::CancellationToken,
+		reply: Reply<()>,
 	},
 	WebSocketOpen {
 		conn: ConnHandle,
@@ -356,6 +345,8 @@ impl ActorEvent {
 			Self::Action { .. } => "action",
 			Self::HttpRequest { .. } => "http_request",
 			Self::QueueSend { .. } => "queue_send",
+			Self::QueueMessage { .. } => "queue_message",
+			Self::QueueDeadLetter { .. } => "queue_dead_letter",
 			Self::WebSocketOpen { .. } => "websocket_open",
 			Self::ConnectionPreflight { .. } => "connection_preflight",
 			Self::ConnectionOpen { .. } => "connection_open",

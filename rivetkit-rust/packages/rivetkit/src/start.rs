@@ -9,7 +9,7 @@ use anyhow::{Context, Result};
 use futures::FutureExt;
 use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::error::{ActorLifecycle, ActorRuntime, action_not_found};
-use rivetkit_core::{ActorEvent, ActorEvents, ActorStart, QueueSendResult, QueueSendStatus, Reply};
+use rivetkit_core::{ActorEvent, ActorEvents, ActorStart, QueueSendOpts, Reply};
 use serde::de::DeserializeOwned;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -19,7 +19,7 @@ use crate::{
 	actor::Actor,
 	context::{ConnCtx, Ctx},
 	event::RuntimeEvent,
-	queue::QueueSet,
+	queue::{QueueHandlerOptions, QueueSet},
 };
 
 #[derive(Debug)]
@@ -317,28 +317,58 @@ async fn handle_actor_event<A: Actor>(
 			name,
 			body,
 			conn,
+			dedupe_key,
+			delay_ms,
 			reply,
 			..
 		} => {
-			let handler_ctx = ctx.with_conn(Some(ConnCtx::from(conn)));
-			match <A::Queue as QueueSet<A>>::dispatch(
-				actor,
-				handler_ctx.clone(),
-				name.as_str(),
-				body.as_slice(),
-			) {
-				Some(future) => {
-					spawn_queue_reply(handler_ctx, reply, future);
+			let _conn = ConnCtx::<A>::from(conn);
+			if !<A::Queue as QueueSet<A>>::entries()
+				.iter()
+				.any(|entry| entry.name == name)
+			{
+				reply.send(Err(ActorRuntime::NotFound {
+					resource: "queue".to_owned(),
+					id: name,
 				}
-				None => {
-					reply.send(Err(ActorRuntime::NotFound {
-						resource: "queue handler".to_owned(),
-						id: name,
-					}
-					.build()));
-				}
+				.build()));
+			} else {
+				reply.send(
+					ctx.queue()
+						.send_raw(
+							&name,
+							&body,
+							QueueSendOpts {
+								dedupe_key,
+								delay: delay_ms.map(std::time::Duration::from_millis),
+							},
+						)
+						.await,
+				);
 			}
 		}
+		ActorEvent::QueueMessage {
+			message,
+			signal,
+			reply,
+		} => {
+			let attempt_signal = signal.clone();
+			match <A::Queue as QueueSet<A>>::dispatch(
+				actor,
+				ctx.clone(),
+				&message.name,
+				&message.body,
+				QueueHandlerOptions::new(signal),
+			) {
+				Some(future) => spawn_queue_reply(ctx, reply, attempt_signal, future),
+				None => reply.send(Err(ActorRuntime::NotFound {
+					resource: "queue handler".to_owned(),
+					id: message.name,
+				}
+				.build())),
+			}
+		}
+		ActorEvent::QueueDeadLetter { reply, .. } => reply.send(Ok(())),
 		ActorEvent::WebSocketOpen {
 			ws, request, reply, ..
 		} => {
@@ -439,17 +469,16 @@ fn spawn_action_reply<A: Actor>(
 
 fn spawn_queue_reply<A: Actor>(
 	ctx: Ctx<A>,
-	reply: Reply<QueueSendResult>,
+	reply: Reply<()>,
+	attempt_signal: CancellationToken,
 	future: crate::queue::BoxQueueFuture,
 ) {
 	tokio::spawn(async move {
 		let abort = ctx.abort_signal();
 		let result = tokio::select! {
 			_ = abort.cancelled() => Err(ActorLifecycle::Stopping.build()),
-			result = future => result.map(|response| QueueSendResult {
-				status: QueueSendStatus::Completed,
-				response,
-			}),
+			_ = attempt_signal.cancelled() => Err(ActorLifecycle::Stopping.build()),
+			result = future => result,
 		};
 		reply.send(result);
 	});
@@ -1360,15 +1389,8 @@ mod tests {
 		)
 		.await
 		.expect("queue result");
-		assert_eq!(result.status, QueueSendStatus::Completed);
-		assert_eq!(
-			decode_cbor::<u32>(
-				result.response.as_deref().expect("queue response"),
-				"queue response",
-			)
-			.expect("decode queue response"),
-			42
-		);
+		assert!(!result.id.is_empty());
+		assert!(!result.deduplicated);
 
 		let error = request_queue_send(&tx, "missing", &[], conn)
 			.await
@@ -1659,16 +1681,19 @@ mod tests {
 	}
 
 	impl QueueMessage for QueueDouble {
-		type Reply = u32;
-
 		const NAME: &'static str = "double";
 	}
 
 	impl HandlesQueue<QueueDouble> for ActionActor {
-		type Future = BoxTestFuture<u32>;
+		type Future = BoxTestFuture<()>;
 
-		fn handle_queue(self: Arc<Self>, _ctx: Ctx<Self>, message: QueueDouble) -> Self::Future {
-			Box::pin(async move { Ok(message.value * 2) })
+		fn on_message(
+			self: Arc<Self>,
+			_ctx: Ctx<Self>,
+			_message: QueueDouble,
+			_options: QueueHandlerOptions,
+		) -> Self::Future {
+			Box::pin(async move { Ok(()) })
 		}
 	}
 
@@ -1699,14 +1724,10 @@ mod tests {
 			for _ in 0..2 {
 				let message = ctx
 					.queue()
-					.next_typed::<QueueDouble>(QueueNextOpts {
-						completable: true,
-						..Default::default()
-					})
+					.next_typed::<QueueDouble>(QueueNextOpts::default())
 					.await?
 					.context("expected queued message")?;
 				let value = message.body().value;
-				message.complete(value * 2).await?;
 				values.push(value);
 			}
 
@@ -2033,15 +2054,15 @@ mod tests {
 		name: &str,
 		body: &[u8],
 		conn: ConnHandle,
-	) -> Result<QueueSendResult> {
+	) -> Result<rivetkit_core::QueueSendReceipt> {
 		let (reply_tx, reply_rx) = oneshot::channel();
 		tx.send(ActorEvent::QueueSend {
 			name: name.to_owned(),
 			body: body.to_vec(),
 			conn,
 			request: rivetkit_core::Request::default(),
-			wait: true,
-			timeout_ms: None,
+			dedupe_key: None,
+			delay_ms: None,
 			reply: reply_tx.into(),
 		})
 		.expect("send queue event");

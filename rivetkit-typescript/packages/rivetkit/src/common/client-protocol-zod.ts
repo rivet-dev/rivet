@@ -3,6 +3,20 @@ import { z } from "zod/v4";
 // Helper schemas
 const UintSchema = z.bigint();
 const OptionalUintSchema = UintSchema.nullable();
+const normalizeSafeUint = (value: unknown) => {
+	if (
+		typeof value === "bigint" &&
+		value >= 0n &&
+		value <= BigInt(Number.MAX_SAFE_INTEGER)
+	) {
+		return Number(value);
+	}
+	return value;
+};
+const SafeUintSchema = z.preprocess(
+	normalizeSafeUint,
+	z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+);
 const ActorSpecifierSchema = z.object({
 	actorId: z.string(),
 	generation: z.union([z.number(), z.bigint()]),
@@ -94,16 +108,58 @@ export type HttpActionResponse = z.infer<typeof HttpActionResponseSchema>;
 export const HttpQueueSendRequestSchema = z.object({
 	body: z.unknown(),
 	name: z.string().optional(),
-	wait: z.boolean().optional(),
-	timeout: z.number().optional(),
+	dedupeKey: z.string().optional(),
+	delay: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
 });
 export type HttpQueueSendRequest = z.infer<typeof HttpQueueSendRequestSchema>;
 
 export const HttpQueueSendResponseSchema = z.object({
-	status: z.enum(["completed", "timedOut"]),
-	response: z.unknown().optional(),
+	receiptId: z.string(),
+	deduplicated: z.boolean(),
 });
 export type HttpQueueSendResponse = z.infer<typeof HttpQueueSendResponseSchema>;
+
+const queueStatusWithAttempts = {
+	attempts: SafeUintSchema,
+	createdAt: SafeUintSchema,
+};
+export const HttpQueueStatusResponseSchema = z.discriminatedUnion("state", [
+	z.object({ state: z.literal("queued"), ...queueStatusWithAttempts }),
+	z.object({
+		state: z.literal("delayed"),
+		...queueStatusWithAttempts,
+		availableAt: SafeUintSchema,
+	}),
+	z.object({
+		state: z.literal("processing"),
+		...queueStatusWithAttempts,
+		startedAt: SafeUintSchema,
+	}),
+	z.object({
+		state: z.literal("retrying"),
+		...queueStatusWithAttempts,
+		availableAt: SafeUintSchema,
+	}),
+	z.object({
+		state: z.literal("succeeded"),
+		...queueStatusWithAttempts,
+		completedAt: SafeUintSchema,
+	}),
+	z.object({
+		state: z.literal("deadLettered"),
+		...queueStatusWithAttempts,
+		failedAt: SafeUintSchema,
+	}),
+	z.object({
+		state: z.literal("consumed"),
+		createdAt: SafeUintSchema,
+		consumedAt: SafeUintSchema,
+	}),
+	z.object({ state: z.literal("unknown") }),
+]);
+export type HttpQueueStatusResponse = z.infer<
+	typeof HttpQueueStatusResponseSchema
+>;
 
 // MARK: HTTP Error
 export const HttpResponseErrorSchema = z.object({

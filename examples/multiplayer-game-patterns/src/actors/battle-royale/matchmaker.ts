@@ -6,7 +6,7 @@ This matchmaker uses a two phase join flow.
 4. Pending players expire after JOIN_RESERVATION_TTL_MS, which removes never connected players.
 5. updateMatch reports occupied player count and started state, while player_count stays pending + occupied.
 */
-import { type ActorContextOf, actor, queue } from "rivetkit";
+import { type ActorContextOf, actor } from "rivetkit";
 import { db, type RawAccess } from "rivetkit/db";
 
 import type { registry } from "../index.ts";
@@ -19,59 +19,48 @@ export const battleRoyaleMatchmaker = actor({
 	db: db({
 		onMigrate: migrateTables,
 	}),
-	queues: {
-		findMatch: queue<
-			Record<string, never>,
-			{ matchId: string; playerId: string }
-		>(),
-		pendingPlayerConnected: queue<
-			{ matchId: string; playerId: string },
-			{ accepted: boolean }
-		>(),
-		updateMatch: queue<{
-			matchId: string;
-			connectedPlayerCount: number;
-			isStarted: boolean;
-		}>(),
-		closeMatch: queue<{ matchId: string }>(),
-	},
-	run: async (c) => {
-		for await (const message of c.queue.iter({ completable: true })) {
+	actions: {
+		findMatch: async (c) => {
 			const now = Date.now();
 			await expirePendingPlayers(c, now);
-
-			if (message.name === "findMatch") {
-				const result = await processFindMatch(c, now);
-				await message.complete(result);
-			} else if (message.name === "pendingPlayerConnected") {
-				const result = await processPendingPlayerConnected(
-					c,
-					message.body,
-					now,
-				);
-				await message.complete(result);
-			} else if (message.name === "updateMatch") {
-				await c.db.execute(
-					`UPDATE matches SET connected_player_count = ?, is_started = ?, updated_at = ? WHERE match_id = ?`,
-					message.body.connectedPlayerCount,
-					message.body.isStarted ? 1 : 0,
-					now,
-					message.body.matchId,
-				);
-				await syncClaimedPlayerCount(c, message.body.matchId, now);
-				await message.complete();
-			} else if (message.name === "closeMatch") {
-				await c.db.execute(
-					`DELETE FROM pending_players WHERE match_id = ?`,
-					message.body.matchId,
-				);
-				await c.db.execute(
-					`DELETE FROM matches WHERE match_id = ?`,
-					message.body.matchId,
-				);
-				await message.complete();
-			}
-		}
+			return processFindMatch(c, now);
+		},
+		pendingPlayerConnected: async (
+			c,
+			input: { matchId: string; playerId: string },
+		) => {
+			const now = Date.now();
+			await expirePendingPlayers(c, now);
+			return processPendingPlayerConnected(c, input, now);
+		},
+		updateMatch: async (
+			c,
+			input: {
+				matchId: string;
+				connectedPlayerCount: number;
+				isStarted: boolean;
+			},
+		) => {
+			const now = Date.now();
+			await c.db.execute(
+				`UPDATE matches SET connected_player_count = ?, is_started = ?, updated_at = ? WHERE match_id = ?`,
+				input.connectedPlayerCount,
+				input.isStarted ? 1 : 0,
+				now,
+				input.matchId,
+			);
+			await syncClaimedPlayerCount(c, input.matchId, now);
+		},
+		closeMatch: async (c, input: { matchId: string }) => {
+			await c.db.execute(
+				`DELETE FROM pending_players WHERE match_id = ?`,
+				input.matchId,
+			);
+			await c.db.execute(
+				`DELETE FROM matches WHERE match_id = ?`,
+				input.matchId,
+			);
+		},
 	},
 });
 
