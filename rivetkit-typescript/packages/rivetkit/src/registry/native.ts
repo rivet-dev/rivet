@@ -552,7 +552,16 @@ function getOrCreateNativeSqlDatabase(
 		run: (sql, params) => runtime.actorSqlRun(ctx, sql, params),
 		metrics: () => runtime.actorSqlMetrics(ctx),
 		takeLastKvError: () => runtime.actorSqlTakeLastKvError(ctx),
-		close: () => runtime.actorSqlClose(ctx),
+		// layerr: do not close the native sqlite handle from JS. The Rust
+		// shutdown sequence owns the handle lifetime: sync_alarm (step 3 of
+		// finish_shutdown_cleanup_with_ctx) queries _rivet_schedule_events
+		// during sleep/destroy cleanup, and cleanup_for_shutdown (step 5)
+		// closes the DB itself (and intentionally keeps it for remote-backend
+		// sleep). Closing here races ahead of step 3 and fails it with
+		// sqlite/transaction_closed. JS-side gates (NativeCloseGate, drizzle
+		// `closed`) still flip on close(), so post-shutdown queries fail fast
+		// in JS exactly as before.
+		close: () => Promise.resolve(),
 	});
 	runtimeState.sql = database;
 	return database;
