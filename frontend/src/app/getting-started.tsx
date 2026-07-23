@@ -21,7 +21,7 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
-import * as ConnectServerfullForm from "@/app/forms/connect-manual-serverfull-form";
+import * as ConnectServerfulForm from "@/app/forms/connect-manual-serverful-form";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
 	CodeFrame,
@@ -52,7 +52,7 @@ import {
 } from "../components/ui/dropdown-menu";
 import { TEST_IDS } from "../utils/test-ids";
 import { DeploymentCheck } from "./deployment-check";
-import { useEndpoint } from "./dialogs/connect-manual-serverfull-frame";
+import { useEndpoint } from "./dialogs/connect-manual-serverful-frame";
 import {
 	buildServerlessConfig,
 	Configuration,
@@ -136,9 +136,9 @@ const stepper = defineStepper(
 			if (provider === "rivet") {
 				return z.object({ success: z.literal(true) });
 			}
-			if ((values.mode as string) === "serverfull") {
+			if ((values.mode as string) === "serverful") {
 				return z.object({
-					mode: z.literal("serverfull"),
+					mode: z.literal("serverful"),
 					runnerName: z.string().min(1, "Runner name is required"),
 					datacenter: z.string().min(1, "Please select a region"),
 					customName: z
@@ -151,7 +151,7 @@ const stepper = defineStepper(
 			}
 			return z.object({
 				mode: z
-					.union([z.literal("serverless"), z.literal("serverfull")])
+					.union([z.literal("serverless"), z.literal("serverful")])
 					.optional(),
 				...ConnectServerlessForm.configurationSchema.shape,
 				...ConnectServerlessForm.deploymentSchema.shape,
@@ -229,7 +229,7 @@ export function GettingStarted({
 		provider: defaultProvider,
 		datacenters: {},
 		datacenter: "",
-		mode: "serverless" as "serverless" | "serverfull",
+		mode: "serverless" as "serverless" | "serverful",
 		template: "actor" as "actor" | "agent-os",
 		agent: DEFAULT_AGENT,
 		packages: DEFAULT_PACKAGES,
@@ -246,12 +246,12 @@ export function GettingStarted({
 		const v = values as unknown as {
 			runnerName: string;
 			provider: string;
-			mode?: "serverless" | "serverfull";
+			mode?: "serverless" | "serverful";
 			datacenter?: string;
 			customName?: string;
 			customIcon?: string;
 		};
-		if (v.mode === "serverfull") {
+		if (v.mode === "serverful") {
 			const existingConfig = await queryClient.fetchQuery(
 				dataProvider.runnerConfigQueryOptions({
 					name: v.runnerName,
@@ -1242,7 +1242,7 @@ function BackendSetup() {
 	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
 	const mode = useWatch({ name: "mode" }) as
 		| "serverless"
-		| "serverfull"
+		| "serverful"
 		| undefined;
 	const { setValue } = useFormContext();
 
@@ -1267,13 +1267,13 @@ function BackendSetup() {
 					}
 				/>
 				<p className="text-xs text-muted-foreground text-center -mt-2">
-					{(mode ?? "serverless") === "serverfull"
+					{(mode ?? "serverless") === "serverful"
 						? "Runner: a long-lived process you keep running that connects to Rivet."
 						: "Serverless: Rivet invokes your deployment on demand and scales to zero."}
 				</p>
 			</div>
-			{mode === "serverfull" ? (
-				<BackendSetupServerfull provider={provider} />
+			{mode === "serverful" ? (
+				<BackendSetupServerful provider={provider} />
 			) : (
 				<BackendSetupServerless provider={provider} />
 			)}
@@ -1346,9 +1346,9 @@ function BackendSetupServerless({ provider }: { provider: Provider }) {
 	);
 }
 
-function BackendSetupServerfull({ provider }: { provider: Provider }) {
+function BackendSetupServerful({ provider }: { provider: Provider }) {
 	const isCustom = provider === "custom" || provider === "custom-platform";
-	const endpoint = useServerfullEndpoint();
+	const endpoint = useServerfulEndpoint();
 	const runnerName = useWatch({ name: "runnerName" });
 
 	return (
@@ -1358,11 +1358,11 @@ function BackendSetupServerfull({ provider }: { provider: Provider }) {
 				<div className="flex-1 min-w-0">
 					<p className="font-medium mb-4">Configure your runner</p>
 					<div className="space-y-3">
-						<ConnectServerfullForm.RunnerName />
+						<ConnectServerfulForm.RunnerName />
 						{isCustom ? (
 							<ConnectServerlessForm.CustomBranding />
 						) : null}
-						<ConnectServerfullForm.Datacenter />
+						<ConnectServerfulForm.Datacenter />
 					</div>
 				</div>
 			</div>
@@ -1389,7 +1389,7 @@ function BackendSetupServerfull({ provider }: { provider: Provider }) {
 	);
 }
 
-function useServerfullEndpoint() {
+function useServerfulEndpoint() {
 	const datacenter = useWatch({ name: "datacenter" });
 	const dataProvider = useEngineCompatDataProvider();
 	const { data } = useQuery(

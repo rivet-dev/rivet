@@ -9,7 +9,7 @@ import {
 import { useMemo, useRef } from "react";
 import { useWatch } from "react-hook-form";
 import z from "zod";
-import * as ConnectServerfullForm from "@/app/forms/connect-manual-serverfull-form";
+import * as ConnectServerfulForm from "@/app/forms/connect-manual-serverful-form";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import type { DialogContentProps } from "@/components";
 import { ActorRegion, useEngineCompatDataProvider } from "@/components/actors";
@@ -101,16 +101,16 @@ function useStepperConfig() {
 	}, []);
 }
 
-interface ConnectManualServerlfullFrameContentProps extends DialogContentProps {
+interface ConnectManualServerfulFrameContentProps extends DialogContentProps {
 	provider: Provider;
 	footer?: React.ReactNode;
 }
 
-export default function ConnectManualServerlfullFrameContent({
+export default function ConnectManualServerfulFrameContent({
 	onClose,
 	provider,
 	footer,
-}: ConnectManualServerlfullFrameContentProps) {
+}: ConnectManualServerfulFrameContentProps) {
 	usePrefetchInfiniteQuery({
 		...useEngineCompatDataProvider().datacentersQueryOptions(),
 		pages: Infinity,
@@ -221,9 +221,9 @@ function Step1({ provider }: { provider: Provider }) {
 				We're going to help you deploy a RivetKit project to your cloud
 				provider of choice.
 			</div>
-			<ConnectServerfullForm.RunnerName />
+			<ConnectServerfulForm.RunnerName />
 			{isCustom ? <ConnectServerlessForm.CustomBranding /> : null}
-			<ConnectServerfullForm.Datacenter />
+			<ConnectServerfulForm.Datacenter />
 		</>
 	);
 }

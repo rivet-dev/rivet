@@ -38,7 +38,7 @@ export function RunnerConfigToggleGroup({
 					Serverless
 				</ToggleGroupItem>
 				<ToggleGroupItem
-					value="serverfull"
+					value="serverful"
 					className="border-l rounded-none w-full"
 				>
 					Runner
