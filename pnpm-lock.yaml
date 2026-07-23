@@ -3061,11 +3061,11 @@ importers:
   integrations/flue-runtime:
     dependencies:
       '@flue/cli':
-        specifier: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
-        version: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        specifier: git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
+        version: git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@flue/runtime':
-        specifier: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
-        version: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        specifier: git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
+        version: git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@rivetkit/engine-cli':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/engine-cli
@@ -3086,11 +3086,11 @@ importers:
   integrations/flue-runtime/examples/rivet:
     dependencies:
       '@flue/cli':
-        specifier: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
-        version: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
+        specifier: git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
+        version: git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@flue/runtime':
-        specifier: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
-        version: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
+        specifier: git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
+        version: git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@rivet-dev/flue':
         specifier: workspace:*
         version: link:../..
@@ -6449,8 +6449,8 @@ packages:
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
 
-  '@flue/cli@git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli':
-    resolution: {commit: 620ef9e672450c9ca6406f045cbfbbdbab9da899, path: /packages/cli, repo: https://github.com/NathanFlurry/flue.git, type: git}
+  '@flue/cli@git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli':
+    resolution: {commit: 620ef9e672450c9ca6406f045cbfbbdbab9da899, path: /packages/cli, repo: https://github.com/rivet-dev/flue.git, type: git}
     version: 1.0.0-beta.9
     engines: {node: '>=22.19.0'}
     hasBin: true
@@ -6459,8 +6459,8 @@ packages:
     resolution: {integrity: sha512-ksh0ZkTVyqQnGvU3OnbVX6luAJwe6tt8q7O0vn99b7Cx6XcPTXzY/YEkXrOtCHzV6ZwfSdO9ZfaWbhTD1tdQuQ==}
     engines: {node: '>=22.19.0'}
 
-  '@flue/runtime@git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime':
-    resolution: {commit: e79d5712820af588094a4e67a3ceafc816770396, path: /packages/runtime, repo: https://github.com/NathanFlurry/flue.git, type: git}
+  '@flue/runtime@git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime':
+    resolution: {commit: e79d5712820af588094a4e67a3ceafc816770396, path: /packages/runtime, repo: https://github.com/rivet-dev/flue.git, type: git}
     version: 1.0.0-beta.9
     engines: {node: '>=22.19.0'}
     peerDependencies:
@@ -23191,7 +23191,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.10': {}
 
-  '@flue/cli@git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
+  '@flue/cli@git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
     dependencies:
       '@cloudflare/vite-plugin': 1.39.2(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))(workerd@1.20260611.1)(wrangler@4.100.0)
       '@flue/runtime': 1.0.0-beta.9(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
@@ -23237,7 +23237,7 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/cli@git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
+  '@flue/cli@git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
     dependencies:
       '@cloudflare/vite-plugin': 1.39.2(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))(workerd@1.20260611.1)(wrangler@4.100.0)
       '@flue/runtime': 1.0.0-beta.9(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
@@ -23353,7 +23353,7 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/runtime@git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
+  '@flue/runtime@git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
@@ -23390,7 +23390,7 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/runtime@git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
+  '@flue/runtime@git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
     dependencies:
       '@cfworker/json-schema': 4.1.1
       '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
