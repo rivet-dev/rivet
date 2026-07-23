@@ -751,6 +751,9 @@ impl ProxyService {
 		let in_flight_request_id = req_ctx.in_flight_request_id;
 		let state = self.state.clone();
 		let runtime = tokio::runtime::Handle::current();
+		// HTTP capacity remains held until the response reaches EOF, errors, or is dropped.
+		// WebSocket upgrades retain the existing immediate release behavior. Capturing the
+		// runtime handle lets the response body's synchronous Drop path schedule async cleanup.
 		let release_in_flight = move || {
 			runtime.spawn(
 				async move {

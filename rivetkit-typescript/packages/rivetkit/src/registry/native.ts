@@ -47,7 +47,7 @@ import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
-import { isResponseLike, type ResponseLike } from "@/common/fetch-like";
+import { isResponseLike } from "@/common/fetch-like";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { deconstructError, stringifyError } from "@/common/utils";
 import type {
@@ -73,6 +73,12 @@ import {
 import { logger } from "./log";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
+	buildNativeHttpRequest,
+	convertNativeHttpResponse,
+	type NativeHttpRequestBodyStream,
+	type NativeHttpResponseBodyStream,
+} from "./native-http";
+import {
 	type NativeValidationConfig,
 	validateActionArgs,
 	validateConnParams,
@@ -91,7 +97,6 @@ import type {
 	RuntimeBytes,
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
-	RuntimeHttpResponse,
 	RuntimeInspectorTabEntry,
 	RuntimeQueueMessage,
 	RuntimeScheduledEventInfo,
@@ -105,19 +110,6 @@ import { createWriteThroughProxy } from "./write-through-proxy";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
-const HTTP_BODY_CHUNK_SIZE = 64 * 1024;
-
-interface NativeHttpResponseBodyStream {
-	cancelled(): Promise<void>;
-	write(chunk: Uint8Array): Promise<void>;
-	end(): Promise<void>;
-	error(message: string): Promise<void>;
-}
-
-interface NativeHttpRequestBodyStream {
-	read(): Promise<Uint8Array | null | undefined>;
-	cancel(): Promise<void>;
-}
 
 type ResolvedRuntimeKind = Exclude<RuntimeKind, "auto">;
 type RuntimeHostKind = "node-like" | "edge-like";
@@ -1175,172 +1167,6 @@ function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 	const decoded = decodeValue<unknown>(value);
 	return normalizeArgs(decoded);
 }
-
-function buildRequest(init: {
-	method: string;
-	uri: string;
-	headers?: Record<string, string>;
-	body?: RuntimeBytes;
-	bodyStream?: NativeHttpRequestBodyStream;
-	signal?: AbortSignal;
-	abortController?: AbortController;
-}): Request {
-	const url = init.uri.startsWith("http")
-		? init.uri
-		: new URL(init.uri, "http://127.0.0.1").toString();
-	const method = init.method.toUpperCase();
-	const bodyForbidden = method === "GET" || method === "HEAD";
-	const body = bodyForbidden
-		? undefined
-		: init.bodyStream
-			? new ReadableStream<Uint8Array>({
-					async pull(controller) {
-						try {
-							if (init.body && init.body.length > 0) {
-								controller.enqueue(new Uint8Array(init.body));
-								init.body = undefined;
-								return;
-							}
-							const chunk = await init.bodyStream?.read();
-							if (!chunk) {
-								controller.close();
-							} else {
-								controller.enqueue(new Uint8Array(chunk));
-							}
-						} catch (error) {
-							init.abortController?.abort(error);
-							controller.error(error);
-						}
-					},
-					async cancel() {
-						await init.bodyStream?.cancel();
-					},
-				})
-			: init.body && init.body.length > 0
-				? runtimeBytesToArrayBuffer(init.body)
-				: undefined;
-	const streamInit =
-		init.bodyStream && !bodyForbidden ? { duplex: "half" } : {};
-	return new Request(url, {
-		method,
-		headers: init.headers,
-		body,
-		signal: init.abortController?.signal ?? init.signal,
-		...streamInit,
-	} as RequestInit);
-}
-
-async function writeHttpResponseChunk(
-	stream: NativeHttpResponseBodyStream,
-	chunk: Uint8Array,
-) {
-	for (
-		let offset = 0;
-		offset < chunk.byteLength;
-		offset += HTTP_BODY_CHUNK_SIZE
-	) {
-		await stream.write(
-			chunk.subarray(offset, offset + HTTP_BODY_CHUNK_SIZE),
-		);
-	}
-}
-
-async function pumpRuntimeHttpResponseBody(
-	reader: ReadableStreamDefaultReader<Uint8Array>,
-	stream: NativeHttpResponseBodyStream,
-) {
-	const cancelled = stream
-		.cancelled()
-		.then(() => ({ cancelled: true }) as const);
-	try {
-		for (;;) {
-			const read = reader
-				.read()
-				.then((next) => ({ cancelled: false, next }) as const);
-			const result = await Promise.race([read, cancelled]);
-			if (result.cancelled) {
-				await reader.cancel(
-					new Error("native http response stream receiver dropped"),
-				);
-				return;
-			}
-			const { next } = result;
-			if (next.done) {
-				await stream.end();
-				return;
-			}
-			if (next.value?.byteLength) {
-				await writeHttpResponseChunk(stream, next.value);
-			}
-		}
-	} catch (error) {
-		try {
-			await stream.error(stringifyError(error));
-		} catch (streamError) {
-			logger().debug({
-				msg: "failed to report native http response stream error",
-				error: streamError,
-			});
-		}
-		try {
-			await reader.cancel(error);
-		} catch {
-			// Reader may already be closed after a native-side disconnect.
-		}
-	} finally {
-		reader.releaseLock();
-	}
-}
-
-interface RuntimeHttpResponseConversion {
-	response: RuntimeHttpResponse;
-	bodyCompletion?: Promise<void>;
-}
-
-async function convertRuntimeHttpResponse(
-	response: ResponseLike,
-	responseBodyStream?: NativeHttpResponseBodyStream,
-): Promise<RuntimeHttpResponseConversion> {
-	const headers = Object.fromEntries(response.headers.entries());
-	if (!response.body) {
-		return {
-			response: {
-				status: response.status,
-				headers,
-				body: new Uint8Array(),
-			},
-		};
-	}
-
-	if (responseBodyStream) {
-		const reader = response.body.getReader();
-		const bodyCompletion = pumpRuntimeHttpResponseBody(
-			reader,
-			responseBodyStream,
-		);
-		return {
-			response: {
-				status: response.status,
-				headers,
-				stream: true,
-			},
-			bodyCompletion,
-		};
-	}
-
-	return {
-		response: {
-			status: response.status,
-			headers,
-			body: new Uint8Array(await response.arrayBuffer()),
-		},
-	};
-}
-
-export const nativeRegistryTestInternals = {
-	buildRequest,
-	convertRuntimeHttpResponse,
-};
 
 function toActorKey(
 	segments: Array<{
@@ -3878,7 +3704,7 @@ export function buildNativeFactory(
 			return undefined;
 		}
 
-		const jsRequest = buildRequest(rawRequest);
+		const jsRequest = buildNativeHttpRequest(rawRequest);
 		const jsonResponse = (body: unknown, init?: ResponseInit) =>
 			new Response(JSON.stringify(body), {
 				status: init?.status ?? 200,
@@ -4570,7 +4396,9 @@ export function buildNativeFactory(
 							);
 							const actorCtx = makeActorCtx(
 								ctx,
-								request ? buildRequest(request) : undefined,
+								request
+									? buildNativeHttpRequest(request)
+									: undefined,
 							);
 							try {
 								await config.onBeforeConnect(
@@ -4607,7 +4435,9 @@ export function buildNativeFactory(
 								unwrapTsfnPayload(error, payload);
 							const actorCtx = makeActorCtx(
 								ctx,
-								request ? buildRequest(request) : undefined,
+								request
+									? buildNativeHttpRequest(request)
+									: undefined,
 							);
 							const connAdapter = new NativeConnAdapter(
 								runtime,
@@ -4662,7 +4492,9 @@ export function buildNativeFactory(
 							);
 							const actorCtx = makeActorCtx(
 								ctx,
-								request ? buildRequest(request) : undefined,
+								request
+									? buildNativeHttpRequest(request)
+									: undefined,
 							);
 							const connAdapter = new NativeConnAdapter(
 								runtime,
@@ -4825,7 +4657,7 @@ export function buildNativeFactory(
 						await maybeHandleNativeInspectorRequest(ctx, request);
 					if (inspectorResponse) {
 						return (
-							await convertRuntimeHttpResponse(
+							await convertNativeHttpResponse(
 								inspectorResponse,
 								responseBodyStream,
 							)
@@ -4834,7 +4666,7 @@ export function buildNativeFactory(
 
 					if (typeof config.onRequest !== "function") {
 						return (
-							await convertRuntimeHttpResponse(
+							await convertNativeHttpResponse(
 								new Response(null, { status: 404 }),
 								responseBodyStream,
 							)
@@ -4842,7 +4674,7 @@ export function buildNativeFactory(
 					}
 
 					const requestAbortController = new AbortController();
-					const handlerRequest = buildRequest({
+					const handlerRequest = buildNativeHttpRequest({
 						...request,
 						abortController: requestAbortController,
 					});
@@ -4913,7 +4745,7 @@ export function buildNativeFactory(
 								"onRequest handler must return a Response",
 							);
 						}
-						const conversion = await convertRuntimeHttpResponse(
+						const conversion = await convertNativeHttpResponse(
 							response,
 							responseBodyStream,
 						);
@@ -4963,7 +4795,7 @@ export function buildNativeFactory(
 							const { ctx, conn, ws, request } =
 								unwrapTsfnPayload(error, payload);
 							const jsRequest = request
-								? buildRequest(request)
+								? buildNativeHttpRequest(request)
 								: undefined;
 							const actorCtx = makeConnCtx(ctx, conn, jsRequest);
 							try {
@@ -5123,7 +4955,7 @@ export function buildNativeFactory(
 					timeoutMs,
 					cancelToken,
 				} = unwrapTsfnPayload(error, payload);
-				const jsRequest = buildRequest(request);
+				const jsRequest = buildNativeHttpRequest(request);
 				const actorCtx = withConnContext(
 					runtime,
 					ctx,

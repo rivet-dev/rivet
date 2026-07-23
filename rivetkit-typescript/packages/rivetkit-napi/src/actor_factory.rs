@@ -11,15 +11,14 @@ use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
 use rivetkit_core::inspector::InspectorTabEntry;
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
-	ActorFactory as CoreActorFactory, ActorHttpResponse, ConnHandle as CoreConnHandle,
-	HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequestBodyStream as CoreHttpRequestBodyStream, Request,
-	Response, ResponseChunk, StreamingResponse, WebSocket as CoreWebSocket,
+	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request,
+	WebSocket as CoreWebSocket,
 };
-use tokio::sync::{Mutex as TokioMutex, mpsc};
 
 use crate::actor_context::{ActorContext, StateDeltaPayload};
 use crate::cancellation_token::CancellationToken;
 use crate::connection::ConnHandle;
+use crate::http::{HttpRequestPayload, build_http_request_payload, build_request_object};
 use crate::napi_actor_events::run_adapter_loop;
 use crate::websocket::WebSocket;
 use crate::{BRIDGE_RIVET_ERROR_PREFIX, NapiInvalidArgument, napi_anyhow_error};
@@ -40,138 +39,6 @@ pub(crate) trait TsfnPayloadSummary {
 struct JsCallbackUnavailable {
 	callback: String,
 	reason: String,
-}
-
-#[napi(object)]
-pub struct JsHttpResponse {
-	pub status: Option<u16>,
-	pub headers: Option<HashMap<String, String>>,
-	pub body: Option<Buffer>,
-	pub stream: Option<bool>,
-}
-
-#[napi]
-#[derive(Clone)]
-pub struct HttpResponseBodyStream {
-	tx: Arc<TokioMutex<Option<mpsc::Sender<ResponseChunk>>>>,
-	closed_tx: mpsc::Sender<ResponseChunk>,
-}
-
-impl HttpResponseBodyStream {
-	fn new(tx: mpsc::Sender<ResponseChunk>) -> Self {
-		Self {
-			tx: Arc::new(TokioMutex::new(Some(tx.clone()))),
-			closed_tx: tx,
-		}
-	}
-
-	async fn take_sender(&self) -> napi::Result<mpsc::Sender<ResponseChunk>> {
-		self.tx
-			.lock()
-			.await
-			.take()
-			.ok_or_else(|| napi::Error::from_reason("http response body stream is already closed"))
-	}
-}
-
-#[napi]
-impl HttpResponseBodyStream {
-	#[napi]
-	pub async fn cancelled(&self) {
-		self.closed_tx.closed().await;
-	}
-
-	#[napi]
-	pub async fn write(&self, chunk: Buffer) -> napi::Result<()> {
-		let tx = self.tx.lock().await.clone().ok_or_else(|| {
-			napi::Error::from_reason("http response body stream is already closed")
-		})?;
-		tx.send(ResponseChunk::Data {
-			data: chunk.to_vec(),
-			finish: false,
-		})
-		.await
-		.map_err(|_| napi::Error::from_reason("http response body stream receiver dropped"))
-	}
-
-	#[napi]
-	pub async fn end(&self) -> napi::Result<()> {
-		let tx = self.take_sender().await?;
-		tx.send(ResponseChunk::Data {
-			data: Vec::new(),
-			finish: true,
-		})
-		.await
-		.map_err(|_| napi::Error::from_reason("http response body stream receiver dropped"))
-	}
-
-	#[napi]
-	pub async fn error(&self, message: String) -> napi::Result<()> {
-		let tx = self.take_sender().await?;
-		tx.send(ResponseChunk::Error(message))
-			.await
-			.map_err(|_| napi::Error::from_reason("http response body stream receiver dropped"))
-	}
-}
-
-#[napi]
-pub struct HttpRequestBodyStream {
-	initial_body: Arc<TokioMutex<Option<Vec<u8>>>>,
-	rx: Arc<TokioMutex<Option<CoreHttpRequestBodyStream>>>,
-	cancel: tokio_util::sync::CancellationToken,
-}
-
-impl HttpRequestBodyStream {
-	fn new(initial_body: Vec<u8>, rx: CoreHttpRequestBodyStream) -> Self {
-		Self {
-			initial_body: Arc::new(TokioMutex::new(Some(initial_body))),
-			rx: Arc::new(TokioMutex::new(Some(rx))),
-			cancel: tokio_util::sync::CancellationToken::new(),
-		}
-	}
-}
-
-#[napi]
-impl HttpRequestBodyStream {
-	#[napi]
-	pub async fn read(&self) -> napi::Result<Option<Buffer>> {
-		if self.cancel.is_cancelled() {
-			return Ok(None);
-		}
-
-		if let Some(initial_body) = self.initial_body.lock().await.take() {
-			if self.cancel.is_cancelled() {
-				return Ok(None);
-			}
-			if !initial_body.is_empty() {
-				return Ok(Some(Buffer::from(initial_body)));
-			}
-		}
-
-		let mut rx = self.rx.lock().await;
-		let Some(rx) = rx.as_mut() else {
-			return Ok(None);
-		};
-		tokio::select! {
-			biased;
-			_ = self.cancel.cancelled() => Ok(None),
-			chunk = rx.recv() => match chunk {
-				Ok(Some(chunk)) => Ok(Some(Buffer::from(chunk))),
-				Ok(None) => Ok(None),
-				Err(error) => Err(napi::Error::from_reason(format!(
-					"streaming request body aborted: {error}"
-				))),
-			},
-		}
-	}
-
-	#[napi]
-	pub async fn cancel(&self) -> napi::Result<()> {
-		self.cancel.cancel();
-		self.initial_body.lock().await.take();
-		self.rx.lock().await.take();
-		Ok(())
-	}
 }
 
 #[napi(object)]
@@ -264,14 +131,6 @@ pub(crate) struct CreateConnStatePayload {
 pub(crate) struct MigratePayload {
 	pub(crate) ctx: CoreActorContext,
 	pub(crate) is_new: bool,
-}
-
-#[derive(Clone)]
-pub(crate) struct HttpRequestPayload {
-	pub(crate) ctx: CoreActorContext,
-	pub(crate) request: Request,
-	pub(crate) cancel_token: Option<tokio_util::sync::CancellationToken>,
-	pub(crate) response_stream: Option<HttpResponseBodyStream>,
 }
 
 #[derive(Clone)]
@@ -678,40 +537,6 @@ where
 }
 
 #[allow(dead_code)]
-pub(crate) async fn call_request(
-	callback_name: &str,
-	callback: &CallbackTsfn<HttpRequestPayload>,
-	mut payload: HttpRequestPayload,
-) -> Result<ActorHttpResponse> {
-	let (body_tx, body_rx) = mpsc::channel(HTTP_BODY_STREAM_CHANNEL_CAPACITY);
-	payload.response_stream = Some(HttpResponseBodyStream::new(body_tx));
-
-	log_tsfn_invocation(callback_name, &payload);
-	let promise = callback
-		.call_async::<Promise<JsHttpResponse>>(Ok(payload))
-		.await
-		.map_err(|error| callback_error(callback_name, error))?;
-	let response = promise
-		.await
-		.map_err(|error| callback_error(callback_name, error))?;
-	let status = response.status.unwrap_or(200);
-	let headers = response.headers.unwrap_or_default();
-	if response.stream.unwrap_or(false) {
-		StreamingResponse::from_parts(status, headers, body_rx).map(ActorHttpResponse::Stream)
-	} else {
-		Response::from_parts(
-			status,
-			headers,
-			response
-				.body
-				.unwrap_or_else(|| Buffer::from(Vec::new()))
-				.to_vec(),
-		)
-		.map(ActorHttpResponse::Buffered)
-	}
-}
-
-#[allow(dead_code)]
 pub(crate) async fn call_queue_send(
 	callback_name: &str,
 	callback: &CallbackTsfn<QueueSendPayload>,
@@ -743,7 +568,7 @@ pub(crate) async fn call_state_delta_payload(
 		.map_err(|error| callback_error(callback_name, error))
 }
 
-fn log_tsfn_invocation<T>(kind: &str, payload: &T)
+pub(crate) fn log_tsfn_invocation<T>(kind: &str, payload: &T)
 where
 	T: TsfnPayloadSummary,
 {
@@ -786,17 +611,6 @@ impl TsfnPayloadSummary for CreateConnStatePayload {
 impl TsfnPayloadSummary for MigratePayload {
 	fn payload_summary(&self) -> String {
 		format!("actor_id={} is_new={}", self.ctx.actor_id(), self.is_new)
-	}
-}
-
-impl TsfnPayloadSummary for HttpRequestPayload {
-	fn payload_summary(&self) -> String {
-		format!(
-			"actor_id={} {} has_cancel_token={}",
-			self.ctx.actor_id(),
-			request_summary(&self.request),
-			self.cancel_token.is_some()
-		)
 	}
 }
 
@@ -905,16 +719,6 @@ impl TsfnPayloadSummary for SerializeStatePayload {
 	}
 }
 
-fn request_summary(request: &Request) -> String {
-	format!(
-		"method={} uri={} headers={} body_bytes={}",
-		request.method(),
-		request.uri(),
-		request.headers().len(),
-		request.body().len()
-	)
-}
-
 fn build_lifecycle_payload(
 	env: &Env,
 	payload: LifecyclePayload,
@@ -952,24 +756,6 @@ fn build_migrate_payload(env: &Env, payload: MigratePayload) -> napi::Result<Vec
 	let mut object = env.create_object()?;
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("isNew", payload.is_new)?;
-	Ok(vec![object.into_unknown()])
-}
-
-fn build_http_request_payload(
-	env: &Env,
-	payload: HttpRequestPayload,
-) -> napi::Result<Vec<napi::JsUnknown>> {
-	let mut object = env.create_object()?;
-	object.set("ctx", ActorContext::new(payload.ctx))?;
-	object.set("request", build_request_object(env, payload.request)?)?;
-	match payload.response_stream {
-		Some(response_stream) => object.set("responseBodyStream", response_stream)?,
-		None => object.set("responseBodyStream", env.get_undefined()?)?,
-	}
-	match payload.cancel_token {
-		Some(cancel_token) => object.set("cancelToken", CancellationToken::new(cancel_token))?,
-		None => object.set("cancelToken", env.get_undefined()?)?,
-	}
 	Ok(vec![object.into_unknown()])
 }
 
@@ -1111,23 +897,6 @@ fn build_serialize_state_payload(
 	object.set("ctx", ActorContext::new(payload.ctx))?;
 	object.set("reason", env.create_string_from_std(payload.reason)?)?;
 	Ok(vec![object.into_unknown()])
-}
-
-fn build_request_object(env: &Env, request: Request) -> napi::Result<JsObject> {
-	let (method, uri, headers, body) = request.to_parts();
-	let body_stream = request.take_body_stream();
-	let mut request_object = env.create_object()?;
-	request_object.set("method", method)?;
-	request_object.set("uri", uri)?;
-	request_object.set("headers", headers)?;
-	if let Some(body_stream) = body_stream {
-		request_object.set("body", env.get_undefined()?)?;
-		request_object.set("bodyStream", HttpRequestBodyStream::new(body, body_stream))?;
-	} else {
-		request_object.set("body", Buffer::from(body))?;
-		request_object.set("bodyStream", env.get_undefined()?)?;
-	}
-	Ok(request_object)
 }
 
 fn parse_bridge_rivet_error(reason: &str) -> Option<anyhow::Error> {

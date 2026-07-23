@@ -113,7 +113,6 @@ fn handle_request_chunk(
 			vec![chunk],
 		);
 	}
-
 }
 
 fn handle_request_abort(

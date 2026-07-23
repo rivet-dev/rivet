@@ -8,7 +8,7 @@ use crate::shared_state::{
 	InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason, RequestStopResult,
 };
 
-use super::{ResponseBodyError, send_http_body_error, send_http_request_abort};
+use super::{ResponseBodyError, send_http_request_abort};
 
 const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
 
@@ -89,7 +89,7 @@ async fn send_http_response_body_bytes(
 	true
 }
 
-pub(crate) async fn drain_http_response_stream(
+pub(super) async fn drain_http_response_stream(
 	in_flight_req: InFlightRequestHandle,
 	mut msg_rx: mpsc::UnboundedReceiver<InFlightTunnelMessage>,
 	mut drop_rx: watch::Receiver<Option<MsgGcReason>>,
@@ -261,6 +261,13 @@ pub(crate) async fn drain_http_response_stream(
 			}
 		}
 	}
+}
+
+fn send_http_body_error(
+	body_tx: &mpsc::Sender<Result<Bytes, ResponseBodyError>>,
+	message: impl Into<String>,
+) {
+	let _ = body_tx.try_send(Err(Box::new(std::io::Error::other(message.into()))));
 }
 
 #[cfg(test)]

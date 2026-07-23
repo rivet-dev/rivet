@@ -8,9 +8,8 @@ mod moved_tests {
 		HttpResponseEncoding, authorization_bearer_token, authorization_bearer_token_map,
 		build_envoy_response, framework_action_error_response,
 		framework_anyhow_error_response_with_actor, is_actor_request_path,
-		message_boundary_error_response,
-		message_boundary_error_response_with_actor, normalize_actor_request_path, request_encoding,
-		prepare_user_request, workflow_dispatch_result,
+		message_boundary_error_response, message_boundary_error_response_with_actor,
+		normalize_actor_request_path, request_encoding, workflow_dispatch_result,
 	};
 	use crate::actor::action::ActionDispatchError;
 	use crate::actor::messages::{ActorHttpResponse, Request, Response, StreamingResponse};
@@ -124,9 +123,7 @@ mod moved_tests {
 		)
 		.expect("build streaming request");
 
-		let request = prepare_user_request(request, false)
-			.await
-			.expect("buffer request");
+		let request = request.into_buffered().await.expect("buffer request");
 
 		assert!(!request.has_body_stream());
 		assert_eq!(request.into_body(), b"prefix-stream");

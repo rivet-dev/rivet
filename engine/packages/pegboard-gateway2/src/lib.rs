@@ -1,20 +1,16 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use bytes::Bytes;
 use gas::prelude::*;
-use http_body_util::{BodyExt, Full, Limited};
-use hyper::{
-	Method, Request, Response, StatusCode,
-	body::{Body, Incoming as BodyIncoming},
-};
+use http_body_util::Full;
+use hyper::{Request, Response, body::Incoming as BodyIncoming};
 use rivet_envoy_protocol as protocol;
 use rivet_error::*;
 use rivet_guard_core::{
 	ResponseBody, WebSocketHandle,
 	custom_serve::{CustomServeTrait, HibernationResult},
 	errors::{
-		ActorStoppedWhileWaiting, ActorStoppedWhileWaitingForWebSocketOpen,
-		InvalidRequestBody, WebSocketClosedBeforeOpen, WebSocketOpenDropped,
+		ActorStoppedWhileWaitingForWebSocketOpen, WebSocketClosedBeforeOpen, WebSocketOpenDropped,
 		WebSocketOpenResponseClosed, WebSocketOpenTimeout,
 	},
 	request_context::RequestContext,
@@ -25,9 +21,8 @@ use std::{
 	sync::{Arc, atomic::AtomicU64},
 	time::{Duration, Instant},
 };
-use tokio::sync::{mpsc, watch};
+use tokio::sync::watch;
 use tokio_tungstenite::tungstenite::protocol::frame::{CloseFrame, coding::CloseCode};
-use universaldb::utils::IsolationLevel::*;
 
 use crate::shared_state::{
 	InFlightRequestCtx, RequestProtocol, RequestStopResult, SharedState, display_id,
@@ -39,20 +34,14 @@ mod keepalive_task;
 pub mod metrics;
 mod metrics_task;
 mod ping_task;
+mod request_metrics;
 pub mod shared_state;
 mod tunnel_to_ws_task;
 mod ws_to_tunnel_task;
 
-use http_stream::{
-	HttpClientDisconnectGuard, HTTP_RESPONSE_BODY_CHANNEL_CAPACITY, ResponseBodyError,
-	drain_http_response_stream, send_http_request_abort, send_to_envoy_or_actor_stopped,
-	should_stream_http_request_body_hint, stream_http_request_and_wait_for_response,
-	wait_for_http_response_start,
-};
+use request_metrics::{RequestKind, RequestMetrics};
 
-const RECORD_REQ_METRICS_TIMEOUT: Duration = Duration::from_secs(15);
 const UPDATE_METRICS_INTERVAL: Duration = Duration::from_secs(15);
-const PHASE_PRE_REQUEST: &str = "pre_request";
 const PHASE_PRE_WEBSOCKET_OPEN: &str = "pre_websocket_open";
 const PHASE_WAITING_FOR_WEBSOCKET_OPEN: &str = "waiting_for_websocket_open";
 const SLOW_WEBSOCKET_OPEN_WAIT_THRESHOLD: Duration = Duration::from_secs(1);
@@ -119,316 +108,6 @@ impl PegboardGateway2 {
 }
 
 impl PegboardGateway2 {
-	async fn handle_http_request<B>(
-		&self,
-		req: Request<B>,
-		req_ctx: &mut RequestContext,
-	) -> Result<Response<ResponseBody>>
-	where
-		B: Body<Data = Bytes> + Unpin,
-		B::Error: std::error::Error + Send + Sync + 'static,
-	{
-		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
-		let req_body_size_hint = req.body().size_hint();
-		let ingress_size = req_body_size_hint
-			.upper()
-			.unwrap_or(req_body_size_hint.lower()) as usize;
-
-		let (res, metrics_res) = tokio::join!(
-			self.handle_request_inner(&ctx, req, req_ctx),
-			record_req_metrics(
-				&ctx,
-				self.actor_id,
-				self.namespace_id,
-				Metric::HttpIngress(ingress_size),
-			),
-		);
-
-		if let Err(err) = metrics_res {
-			tracing::error!(?err, "http request ingress metrics failed");
-			return res;
-		}
-
-		let egress_size = res
-			.as_ref()
-			.map(|res| res.size_hint().upper().unwrap_or(res.size_hint().lower()) as usize)
-			.unwrap_or_default();
-		let actor_id = self.actor_id;
-		let namespace_id = self.namespace_id;
-		let envoy_key = self.envoy_key.clone();
-		tokio::spawn(
-			async move {
-				if let Err(err) = record_req_metrics(
-					&ctx,
-					actor_id,
-					namespace_id,
-					Metric::HttpEgress(egress_size),
-				)
-				.await
-				{
-					tracing::error!(
-						?err,
-						?namespace_id,
-						%envoy_key,
-						"http request egress metrics failed, likely corrupt now",
-					);
-				}
-			}
-			.in_current_span(),
-		);
-
-		res
-	}
-
-	async fn handle_request_inner<B>(
-		&self,
-		ctx: &StandaloneCtx,
-		req: Request<B>,
-		req_ctx: &mut RequestContext,
-	) -> Result<Response<ResponseBody>>
-	where
-		B: Body<Data = Bytes> + Unpin,
-		B::Error: std::error::Error + Send + Sync + 'static,
-	{
-		// Use the actor ID from the gateway instance
-		let actor_id = self.actor_id.to_string();
-		let request_id = req_ctx.in_flight_request_id()?;
-
-		// Extract request parts
-		let request_body_size_hint = req.body().size_hint();
-		let max_request_body_size = ctx.config().guard().http_max_request_body_size();
-		if request_body_size_hint
-			.upper()
-			.is_some_and(|body_size| body_size > max_request_body_size as u64)
-		{
-			return Err(InvalidRequestBody {
-				reason: format!(
-					"request body exceeded the {max_request_body_size}-byte limit"
-				),
-			}
-			.build());
-		}
-		let request_stream = !matches!(req_ctx.method(), &Method::GET | &Method::HEAD)
-			&& should_stream_http_request_body_hint(&request_body_size_hint);
-		let (req_parts, body) = req.into_parts();
-		let headers = req_parts
-			.headers
-			.iter()
-			.filter_map(|(name, value)| {
-				value
-					.to_str()
-					.ok()
-					.map(|value_str| (name.to_string(), value_str.to_string()))
-			})
-			.collect::<HashMap<_, _>>();
-		let (body_bytes, streaming_body) = if request_stream {
-			(Bytes::new(), Some(body))
-		} else {
-			(
-				Limited::new(body, max_request_body_size)
-					.collect()
-					.await
-					.map_err(|error| anyhow!("failed to read body: {error}"))?
-					.to_bytes(),
-				None,
-			)
-		};
-
-		let mut stopped_sub = ctx
-			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
-			.await?;
-
-		// Verify envoy key is still the same after stopped sub is open to prevent race conditions with
-		// actor reallocation
-		let res = ctx
-			.op(pegboard::ops::actor::get_for_gateway::Input {
-				actor_id: self.actor_id,
-			})
-			.await?;
-		let Some(envoy_key) = res.and_then(|x| x.envoy_key) else {
-			// No envoy key
-			return Err(ActorStoppedWhileWaiting {
-				actor_id: self.actor_id.to_string(),
-				phase: PHASE_PRE_REQUEST.to_owned(),
-			}
-			.build());
-		};
-
-		// Actor reallocated to a different envoy
-		if self.envoy_key != envoy_key {
-			tracing::debug!(
-				gateway_envoy_key=%self.envoy_key,
-				new_envoy_key=%envoy_key,
-				"actor changed envoy while waiting for websocket open",
-			);
-			return Err(ActorStoppedWhileWaiting {
-				actor_id: self.actor_id.to_string(),
-				phase: PHASE_PRE_REQUEST.to_owned(),
-			}
-			.build());
-		}
-
-		// Build subject to publish to
-		let tunnel_subject = pegboard::pubsub_subjects::EnvoyReceiverSubject::new(
-			self.namespace_id,
-			self.envoy_key.clone(),
-		)
-		.to_string();
-
-		// Start listening for request responses
-		let InFlightRequestCtx {
-			mut msg_rx,
-			mut drop_rx,
-			handle: in_flight_req,
-		} = self
-			.shared_state
-			.create_or_wake_in_flight_request(
-				self.namespace_id,
-				self.pool_name.as_str(),
-				self.actor_key.clone(),
-				self.actor_generation,
-				RequestProtocol::Http,
-				tunnel_subject,
-				request_id,
-				false,
-			)
-			.await?;
-		let mut client_disconnect_guard =
-			HttpClientDisconnectGuard::new(in_flight_req.clone());
-
-		let res = async {
-			// Start request
-			let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(
-				protocol::ToEnvoyRequestStart {
-					actor_id: actor_id.clone(),
-					method: req_ctx.method().to_string(),
-					path: self.path.clone(),
-					headers,
-					body: if body_bytes.is_empty() || request_stream {
-						None
-					} else {
-						Some(body_bytes.to_vec())
-					},
-					stream: request_stream,
-				},
-			);
-
-			send_to_envoy_or_actor_stopped(
-				&in_flight_req,
-				&mut stopped_sub,
-				self.actor_id,
-				PHASE_PRE_REQUEST,
-				message,
-				false,
-			)
-			.await?;
-
-			tracing::debug!("gateway waiting for response from tunnel");
-			let response_start_timeout = Duration::from_millis(
-				self.ctx
-					.config()
-					.pegboard()
-					.gateway_response_start_timeout_ms(),
-			);
-			let response_start_deadline = tokio::time::Instant::now() + response_start_timeout;
-			let response_start = if let Some(body) = streaming_body {
-				stream_http_request_and_wait_for_response(
-					&in_flight_req,
-					&mut msg_rx,
-					&mut drop_rx,
-					&mut stopped_sub,
-					self.actor_id,
-					request_id,
-					body,
-					max_request_body_size,
-					response_start_deadline,
-					response_start_timeout,
-				)
-				.instrument(tracing::info_span!("stream_request_and_wait_for_response"))
-				.await?
-			} else {
-				wait_for_http_response_start(
-					&mut msg_rx,
-					&mut drop_rx,
-					&mut stopped_sub,
-					self.actor_id,
-					request_id,
-					response_start_deadline,
-					response_start_timeout,
-				)
-				.instrument(tracing::info_span!("wait_for_tunnel_response"))
-				.await?
-			};
-			let (response_start_message_id, mut response_start) = response_start;
-			tracing::debug!("response handler task ended");
-
-			// Build HTTP response
-			let mut response_builder =
-				Response::builder().status(StatusCode::from_u16(response_start.status)?);
-
-			// Add headers from actor
-			for (key, value) in response_start.headers {
-				response_builder = response_builder.header(key, value);
-			}
-
-			let response = if response_start.stream {
-				let (body_tx, body_rx) =
-					mpsc::channel::<Result<Bytes, ResponseBodyError>>(
-						HTTP_RESPONSE_BODY_CHANNEL_CAPACITY,
-					);
-				let idle_timeout = self
-					.ctx
-					.config()
-					.pegboard()
-					.gateway_response_chunk_idle_timeout_ms()
-					.map(|timeout_ms| Duration::from_millis(timeout_ms.max(1)));
-				let expected_message_index =
-					response_start_message_id.message_index.wrapping_add(1);
-				let initial_body = response_start.body.take();
-
-				tokio::spawn(
-					drain_http_response_stream(
-						in_flight_req.clone(),
-						msg_rx,
-						drop_rx,
-						stopped_sub,
-						body_tx,
-						initial_body,
-						expected_message_index,
-						self.actor_id,
-						idle_timeout,
-					)
-					.in_current_span(),
-				);
-
-				response_builder.body(ResponseBody::Channel(body_rx))?
-			} else {
-				let body = response_start.body.unwrap_or_default();
-				let response =
-					response_builder.body(ResponseBody::Full(Full::new(Bytes::from(body))))?;
-
-				in_flight_req.stop(RequestStopResult::Success).await;
-				response
-			};
-
-			Ok(response)
-		}
-		.await;
-
-		if res.is_err() {
-			send_http_request_abort(
-				&in_flight_req,
-				protocol::HttpStreamAbortReasonKind::InternalError,
-				Some("gateway stopped the HTTP request before completion".to_owned()),
-			)
-			.await;
-			in_flight_req.stop(RequestStopResult::EnvoyError).await;
-		}
-		client_disconnect_guard.disarm();
-
-		res
-	}
-
 	async fn handle_websocket_inner(
 		&self,
 		ctx: &StandaloneCtx,
@@ -791,9 +470,13 @@ impl PegboardGateway2 {
 			);
 			let metrics = tokio::spawn(
 				metrics_task::task(
-					ctx.clone(),
-					self.actor_id,
-					self.namespace_id,
+					RequestMetrics::new(
+						ctx.clone(),
+						self.actor_id,
+						self.namespace_id,
+						self.envoy_key.clone(),
+						RequestKind::Websocket,
+					),
 					ingress_bytes,
 					egress_bytes,
 					metrics_abort_rx,
@@ -1040,39 +723,18 @@ impl CustomServeTrait for PegboardGateway2 {
 		after_hibernation: bool,
 	) -> Result<Option<CloseFrame>> {
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
-		let (res, metrics_res) = tokio::join!(
-			self.handle_websocket_inner(&ctx, req_ctx, client_ws, after_hibernation),
-			record_req_metrics(
-				&ctx,
-				self.actor_id,
-				self.namespace_id,
-				Metric::WebsocketOpen
-			),
+		let request_metrics = RequestMetrics::new(
+			ctx.clone(),
+			self.actor_id,
+			self.namespace_id,
+			self.envoy_key.clone(),
+			RequestKind::Websocket,
 		);
-
-		if let Err(err) = metrics_res {
-			tracing::error!(?err, "ws open metrics failed");
-		} else {
-			let actor_id = self.actor_id;
-			let namespace_id = self.namespace_id;
-			let envoy_key = self.envoy_key.clone();
-			tokio::spawn(
-				async move {
-					if let Err(err) =
-						record_req_metrics(&ctx, actor_id, namespace_id, Metric::WebsocketClose)
-							.await
-					{
-						tracing::error!(
-							?err,
-							?namespace_id,
-							%envoy_key,
-							"ws close metrics failed, likely corrupt now",
-						);
-					}
-				}
-				.in_current_span(),
-			);
-		}
+		let (res, active_metrics) = tokio::join!(
+			self.handle_websocket_inner(&ctx, req_ctx, client_ws, after_hibernation),
+			request_metrics.begin(0),
+		);
+		active_metrics.finish_in_background(0);
 
 		res
 	}
@@ -1110,6 +772,13 @@ impl CustomServeTrait for PegboardGateway2 {
 		// Unused during hibernation
 		let ingress_bytes = Arc::new(AtomicU64::new(0));
 		let egress_bytes = Arc::new(AtomicU64::new(0));
+		let request_metrics = RequestMetrics::new(
+			ctx.clone(),
+			self.actor_id,
+			self.namespace_id,
+			self.envoy_key.clone(),
+			RequestKind::HibernatingWebsocket,
+		);
 
 		let (hibernation_abort_tx, hibernation_abort_rx) = watch::channel(());
 		let (keepalive_abort_tx, keepalive_abort_rx) = watch::channel(());
@@ -1130,9 +799,7 @@ impl CustomServeTrait for PegboardGateway2 {
 		);
 		let metrics = tokio::spawn(
 			metrics_task::task(
-				ctx.clone(),
-				self.actor_id,
-				self.namespace_id,
+				request_metrics.clone(),
 				ingress_bytes,
 				egress_bytes,
 				metrics_abort_rx,
@@ -1152,13 +819,8 @@ impl CustomServeTrait for PegboardGateway2 {
 		);
 
 		// Wait for all tasks to complete or ws msg from client
-		let (record_start_res, hibernation_res, metrics_res, keepalive_res) = tokio::join!(
-			record_req_metrics(
-				&ctx,
-				self.actor_id,
-				self.namespace_id,
-				Metric::WebsocketHibernate
-			),
+		let (active_metrics, hibernation_res, metrics_res, keepalive_res) = tokio::join!(
+			request_metrics.begin(0),
 			async {
 				let res = hibernation.await?;
 
@@ -1245,188 +907,11 @@ impl CustomServeTrait for PegboardGateway2 {
 
 				anyhow::Ok(())
 			},
-			async {
-				if let Err(err) = record_start_res {
-					tracing::error!(?err, "ws start hibernate metrics failed");
-				} else {
-					if let Err(err) = record_req_metrics(
-						&ctx,
-						self.actor_id,
-						self.namespace_id,
-						Metric::WebsocketStopHibernate,
-					)
-					.await
-					{
-						tracing::error!(
-							?err,
-							namespace_id=?self.namespace_id,
-							envoy_key=%self.envoy_key,
-							"ws stop hibernate metrics failed, likely corrupt now"
-						);
-					}
-				}
-			},
+			active_metrics.finish(0),
 		);
 
 		delete_res?;
 
 		res
-	}
-}
-
-#[derive(Debug)]
-enum Metric {
-	HttpIngress(usize),
-	HttpEgress(usize),
-	WebsocketOpen,
-	// Ingress, Egress
-	WebsocketTransfer(usize, usize),
-	WebsocketClose,
-	WebsocketHibernate,
-	WebsocketStopHibernate,
-}
-
-#[tracing::instrument(skip_all, fields(?actor_id, ?metric))]
-async fn record_req_metrics(
-	ctx: &StandaloneCtx,
-	actor_id: Id,
-	namespace_id: Id,
-	metric: Metric,
-) -> Result<()> {
-	let metric = &metric;
-	tokio::time::timeout(
-		RECORD_REQ_METRICS_TIMEOUT,
-		ctx.udb()?
-			.txn("gateway_record_req_metrics", |tx| async move {
-				let tx = tx.with_subspace(pegboard::keys::subspace());
-
-				let actor_name = tx
-					.read(&pegboard::keys::actor::NameKey::new(actor_id), Serializable)
-					.await?;
-
-				metric_inc(&tx, namespace_id, &actor_name, metric);
-
-				Ok(())
-			})
-			.instrument(tracing::info_span!("record_req_metrics_tx")),
-	)
-	.await
-	.context("timed out recording req metrics")??;
-
-	Ok(())
-}
-
-fn metric_inc(tx: &universaldb::Transaction, namespace_id: Id, name: &str, metric: &Metric) {
-	match metric {
-		Metric::HttpIngress(size) => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::GatewayIngress(
-					name.to_string(),
-					"http".to_string(),
-				),
-				(*size).try_into().unwrap_or_default(),
-			);
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::Requests(name.to_string(), "http".to_string()),
-				1,
-			);
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::ActiveRequests(
-					name.to_string(),
-					"http".to_string(),
-				),
-				1,
-			);
-		}
-		Metric::HttpEgress(size) => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::GatewayEgress(
-					name.to_string(),
-					"http".to_string(),
-				),
-				(*size).try_into().unwrap_or_default(),
-			);
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::ActiveRequests(
-					name.to_string(),
-					"http".to_string(),
-				),
-				-1,
-			);
-		}
-		Metric::WebsocketOpen => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::Requests(name.to_string(), "ws".to_string()),
-				1,
-			);
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::ActiveRequests(name.to_string(), "ws".to_string()),
-				1,
-			);
-		}
-		Metric::WebsocketTransfer(ingress_size, egress_size) => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::GatewayIngress(name.to_string(), "ws".to_string()),
-				(*ingress_size).try_into().unwrap_or_default(),
-			);
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::GatewayEgress(name.to_string(), "ws".to_string()),
-				(*egress_size).try_into().unwrap_or_default(),
-			);
-		}
-		Metric::WebsocketClose => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::ActiveRequests(name.to_string(), "ws".to_string()),
-				-1,
-			);
-		}
-		Metric::WebsocketHibernate => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::Requests(name.to_string(), "hws".to_string()),
-				1,
-			);
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::ActiveRequests(
-					name.to_string(),
-					"hws".to_string(),
-				),
-				1,
-			);
-		}
-		Metric::WebsocketStopHibernate => {
-			namespace::keys::metric::inc(
-				&tx.with_subspace(namespace::keys::subspace()),
-				namespace_id,
-				namespace::keys::metric::Metric::ActiveRequests(
-					name.to_string(),
-					"hws".to_string(),
-				),
-				-1,
-			);
-		}
 	}
 }

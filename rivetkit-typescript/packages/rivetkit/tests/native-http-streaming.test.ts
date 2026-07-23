@@ -1,11 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { nativeRegistryTestInternals } from "../src/registry/native";
+import { nativeHttpTestInternals } from "../src/registry/native-http";
 
 describe("native http response streaming", () => {
 	test("constructs requests with streaming bodies and abort signals", async () => {
 		const chunks = [new Uint8Array([1]), new Uint8Array([2])];
 		const controller = new AbortController();
-		const request = nativeRegistryTestInternals.buildRequest({
+		const request = nativeHttpTestInternals.buildRequest({
 			method: "POST",
 			uri: "/upload",
 			body: chunks.shift(),
@@ -33,7 +33,7 @@ describe("native http response streaming", () => {
 			chunk.fill(index + 1);
 			return chunk;
 		});
-		const request = nativeRegistryTestInternals.buildRequest({
+		const request = nativeHttpTestInternals.buildRequest({
 			method: "POST",
 			uri: "/upload",
 			bodyStream: {
@@ -63,7 +63,7 @@ describe("native http response streaming", () => {
 
 	test("rejects and aborts the Request when the native body stream aborts", async () => {
 		const abortController = new AbortController();
-		const request = nativeRegistryTestInternals.buildRequest({
+		const request = nativeHttpTestInternals.buildRequest({
 			method: "POST",
 			uri: "/upload",
 			bodyStream: {
@@ -121,7 +121,7 @@ describe("native http response streaming", () => {
 		);
 
 		const { response: runtimeResponse } =
-			await nativeRegistryTestInternals.convertRuntimeHttpResponse(
+			await nativeHttpTestInternals.convertRuntimeHttpResponse(
 				response,
 				responseBodyStream,
 			);
@@ -176,7 +176,7 @@ describe("native http response streaming", () => {
 			},
 		);
 
-		const runtimeResponsePromise = nativeRegistryTestInternals
+		const runtimeResponsePromise = nativeHttpTestInternals
 			.convertRuntimeHttpResponse(response, responseBodyStream)
 			.then(({ response }) => response);
 		const headersReturnedBeforeBody = await Promise.race([
@@ -222,7 +222,7 @@ describe("native http response streaming", () => {
 		);
 
 		const conversion =
-			await nativeRegistryTestInternals.convertRuntimeHttpResponse(
+			await nativeHttpTestInternals.convertRuntimeHttpResponse(
 				response,
 				responseBodyStream,
 			);
@@ -268,7 +268,7 @@ describe("native http response streaming", () => {
 		);
 
 		const conversion =
-			await nativeRegistryTestInternals.convertRuntimeHttpResponse(
+			await nativeHttpTestInternals.convertRuntimeHttpResponse(
 				response,
 				responseBodyStream,
 			);

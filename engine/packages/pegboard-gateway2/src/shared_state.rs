@@ -9,7 +9,7 @@ use std::{
 	ops::Deref,
 	sync::{
 		Arc,
-		atomic::{AtomicU64, AtomicUsize, Ordering},
+		atomic::{AtomicU64, Ordering},
 	},
 	time::{Duration, Instant},
 };
@@ -17,10 +17,11 @@ use tokio::sync::{mpsc, watch};
 use universalpubsub::{NextOutput, PubSub, PublishOpts};
 use vbare::OwnedVersionedData;
 
-use crate::{WebsocketPendingLimitReached, metrics};
-
-const HTTP_RESPONSE_QUEUE_MAX_MESSAGES: usize = 384;
-const STREAMING_HTTP_RESPONSE_QUEUE_MAX_BYTES: usize = 20 * 1024 * 1024;
+use crate::{
+	WebsocketPendingLimitReached,
+	http_stream::{HttpResponseQueueBudget, HttpResponseQueueOverloaded, HttpResponseQueuePermit},
+	metrics,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub enum RequestProtocol {
@@ -382,12 +383,13 @@ impl SharedState {
 	) -> Result<InFlightRequestCtx> {
 		let (msg_tx, msg_rx) = mpsc::unbounded_channel();
 		let (drop_tx, drop_rx) = watch::channel(None);
-		let http_response_queue_budget = matches!(protocol, RequestProtocol::Http)
-			.then(|| {
-				Arc::new(HttpResponseQueueBudget::new(
-					self.buffered_http_response_max_bytes,
-				))
-			});
+		let http_response_queue_budget = if matches!(protocol, RequestProtocol::Http) {
+			Some(Arc::new(HttpResponseQueueBudget::new(
+				self.buffered_http_response_max_bytes,
+			)))
+		} else {
+			None
+		};
 
 		let new = match self
 			.in_flight_requests
@@ -578,69 +580,6 @@ pub struct InFlightTunnelMessage {
 	pub message_id: protocol::MessageId,
 	pub message_kind: protocol::ToRivetTunnelMessageKind,
 	_http_response_queue_permit: Option<HttpResponseQueuePermit>,
-}
-
-#[derive(Debug)]
-struct HttpResponseQueueBudget {
-	messages: AtomicUsize,
-	bytes: AtomicUsize,
-	buffered_response_max_bytes: usize,
-}
-
-impl HttpResponseQueueBudget {
-	fn new(buffered_response_max_bytes: usize) -> Self {
-		Self {
-			messages: AtomicUsize::new(0),
-			bytes: AtomicUsize::new(0),
-			buffered_response_max_bytes,
-		}
-	}
-
-	fn try_reserve(
-		self: &Arc<Self>,
-		bytes: usize,
-		streaming: bool,
-	) -> Option<HttpResponseQueuePermit> {
-		let max_bytes = if streaming {
-			STREAMING_HTTP_RESPONSE_QUEUE_MAX_BYTES
-		} else {
-			self.buffered_response_max_bytes
-		};
-		if bytes > max_bytes {
-			return None;
-		}
-
-		let previous_messages = self.messages.fetch_add(1, Ordering::AcqRel);
-		if previous_messages >= HTTP_RESPONSE_QUEUE_MAX_MESSAGES {
-			self.messages.fetch_sub(1, Ordering::AcqRel);
-			return None;
-		}
-
-		let previous_bytes = self.bytes.fetch_add(bytes, Ordering::AcqRel);
-		if previous_bytes.saturating_add(bytes) > max_bytes {
-			self.bytes.fetch_sub(bytes, Ordering::AcqRel);
-			self.messages.fetch_sub(1, Ordering::AcqRel);
-			return None;
-		}
-
-		Some(HttpResponseQueuePermit {
-			budget: self.clone(),
-			bytes,
-		})
-	}
-}
-
-#[derive(Debug)]
-struct HttpResponseQueuePermit {
-	budget: Arc<HttpResponseQueueBudget>,
-	bytes: usize,
-}
-
-impl Drop for HttpResponseQueuePermit {
-	fn drop(&mut self) {
-		self.budget.bytes.fetch_sub(self.bytes, Ordering::AcqRel);
-		self.budget.messages.fetch_sub(1, Ordering::AcqRel);
-	}
 }
 
 #[derive(Clone)]
@@ -1551,31 +1490,23 @@ fn forward_tunnel_message(
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketMessage(ws_msg) => ws_msg.data.len(),
 		_ => 0,
 	};
-	let http_response_bytes = match &msg.message_kind {
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(response) => {
-			response.body.as_ref().map_or(0, Vec::len)
+	let http_response_queue_permit = match http_response_queue_budget
+		.map(|budget| budget.try_reserve_message(&msg.message_kind))
+		.transpose()
+	{
+		Ok(permit) => permit,
+		Err(HttpResponseQueueOverloaded { bytes }) => {
+			tracing::warn!(
+				gateway_id=%display_id(&message_id.gateway_id),
+				request_id=%display_id(&message_id.request_id),
+				message_index=message_id.message_index,
+				http_response_bytes = bytes,
+				"HTTP response queue exceeded its in-flight limit"
+			);
+			drop_tx.send_replace(Some(MsgGcReason::HttpResponseQueueOverloaded));
+			return None;
 		}
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => chunk.body.len(),
-		_ => 0,
 	};
-	let streaming_http_response = !matches!(
-		&msg.message_kind,
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(response) if !response.stream
-	);
-	let http_response_queue_permit = http_response_queue_budget.and_then(|budget| {
-		budget.try_reserve(http_response_bytes, streaming_http_response)
-	});
-	if http_response_queue_budget.is_some() && http_response_queue_permit.is_none() {
-		tracing::warn!(
-			gateway_id=%display_id(&message_id.gateway_id),
-			request_id=%display_id(&message_id.request_id),
-			message_index=message_id.message_index,
-			http_response_bytes,
-			"streaming http response queue exceeded its in-flight limit"
-		);
-		drop_tx.send_replace(Some(MsgGcReason::HttpResponseQueueOverloaded));
-		return None;
-	}
 	tracing::debug!(
 		gateway_id=%display_id(&message_id.gateway_id),
 		request_id=%display_id(&message_id.request_id),
@@ -1617,39 +1548,6 @@ fn forward_tunnel_message(
 			"delivered message to request handler channel"
 		);
 		None
-	}
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn http_response_queue_budget_bounds_messages_and_releases_capacity() {
-		let budget = Arc::new(HttpResponseQueueBudget::new(20 * 1024 * 1024));
-		let permits = (0..HTTP_RESPONSE_QUEUE_MAX_MESSAGES)
-			.map(|_| budget.try_reserve(0, true).expect("message should fit"))
-			.collect::<Vec<_>>();
-
-		assert!(budget.try_reserve(0, true).is_none());
-		drop(permits);
-		assert!(budget.try_reserve(0, true).is_some());
-	}
-
-	#[test]
-	fn http_response_queue_budget_bounds_bytes_without_limiting_total_stream_size() {
-		let budget = Arc::new(HttpResponseQueueBudget::new(20 * 1024 * 1024));
-		let permit = budget
-			.try_reserve(STREAMING_HTTP_RESPONSE_QUEUE_MAX_BYTES, true)
-			.expect("queue-sized chunk should fit");
-
-		assert!(budget.try_reserve(1, true).is_none());
-		drop(permit);
-		assert!(
-			budget
-				.try_reserve(STREAMING_HTTP_RESPONSE_QUEUE_MAX_BYTES, true)
-				.is_some()
-		);
 	}
 }
 

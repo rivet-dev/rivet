@@ -30,14 +30,6 @@ impl Drop for RequestCancellationGuard {
 	}
 }
 
-async fn prepare_user_request(request: Request, streams_request_body: bool) -> Result<Request> {
-	if streams_request_body {
-		Ok(request)
-	} else {
-		request.into_buffered().await
-	}
-}
-
 impl RegistryDispatcher {
 	pub(super) async fn handle_fetch(
 		&self,
@@ -51,14 +43,14 @@ impl RegistryDispatcher {
 			request.uri().path(),
 			self.handle_inspector_http_in_runtime,
 		)?;
-		let built_in_inspector_route =
-			request.uri().path().starts_with("/inspector/") && !self.handle_inspector_http_in_runtime;
-		let request = if matches!(route, RegistryHttpRoute::Framework(_)) || built_in_inspector_route
-		{
-			request.into_buffered().await?
-		} else {
-			request
-		};
+		let built_in_inspector_route = request.uri().path().starts_with("/inspector/")
+			&& !self.handle_inspector_http_in_runtime;
+		let request =
+			if matches!(route, RegistryHttpRoute::Framework(_)) || built_in_inspector_route {
+				request.into_buffered().await?
+			} else {
+				request
+			};
 		if matches!(
 			route,
 			RegistryHttpRoute::Framework(FrameworkHttpRoute::Metrics)
@@ -84,8 +76,9 @@ impl RegistryDispatcher {
 			return Ok(response);
 		}
 		let request = if matches!(route, RegistryHttpRoute::UserRawRequest)
+			&& !instance.factory.streams_request_body()
 		{
-			prepare_user_request(request, instance.factory.streams_request_body()).await?
+			request.into_buffered().await?
 		} else {
 			request
 		};
@@ -115,8 +108,7 @@ impl RegistryDispatcher {
 	) -> Result<HttpResponse> {
 		let encoding = request_encoding(request.headers());
 		let request_method = request.method().clone();
-		let mut cancellation_guard =
-			RequestCancellationGuard::new(request.cancellation_token());
+		let mut cancellation_guard = RequestCancellationGuard::new(request.cancellation_token());
 		let (reply_tx, reply_rx) = oneshot::channel();
 		try_send_dispatch_command(
 			&instance.dispatch,
@@ -690,7 +682,7 @@ pub(super) fn build_http_request(request: HttpRequest) -> Result<Request> {
 		body,
 		request.body_stream,
 	)
-		.with_context(|| format!("build actor request for `{}`", request.path))
+	.with_context(|| format!("build actor request for `{}`", request.path))
 }
 
 pub(super) fn normalize_actor_request_path(path: &str) -> String {

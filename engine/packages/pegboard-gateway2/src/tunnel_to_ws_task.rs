@@ -16,9 +16,7 @@ use tokio::sync::{mpsc, watch};
 use tokio_tungstenite::tungstenite::Message;
 
 use super::LifecycleResult;
-use crate::shared_state::{
-	InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason, display_id,
-};
+use crate::shared_state::{InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason, display_id};
 
 #[tracing::instrument(name = "tunnel_to_ws_task", skip_all)]
 pub async fn task(

@@ -3,9 +3,10 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 
 use anyhow::Result;
+use parking_lot::Mutex;
 use rivet_envoy_client::config::{HttpRequestBodyStream, ResponseChunk};
 use serde::{Deserialize, Serialize};
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
 
 use crate::actor::connection::ConnHandle;
@@ -94,14 +95,15 @@ impl Request {
 	}
 
 	pub fn has_body_stream(&self) -> bool {
-		self.body_stream.is_some()
+		self.body_stream
+			.as_ref()
+			.is_some_and(|body_stream| body_stream.lock().is_some())
 	}
 
 	pub fn take_body_stream(&self) -> Option<HttpRequestBodyStream> {
 		self.body_stream
 			.as_ref()
-			.and_then(|body_stream| body_stream.try_lock().ok())
-			.and_then(|mut body_stream| body_stream.take())
+			.and_then(|body_stream| body_stream.lock().take())
 	}
 
 	pub fn cancellation_token(&self) -> CancellationToken {
@@ -110,7 +112,7 @@ impl Request {
 
 	pub async fn into_buffered(mut self) -> Result<Self> {
 		if let Some(body_stream) = &self.body_stream {
-			let mut body_stream = body_stream.lock().await.take();
+			let mut body_stream = body_stream.lock().take();
 			if let Some(mut body_stream) = body_stream.take() {
 				while let Some(chunk) = body_stream.recv().await? {
 					self.inner.body_mut().extend_from_slice(&chunk);

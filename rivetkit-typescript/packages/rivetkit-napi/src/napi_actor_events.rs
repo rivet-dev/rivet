@@ -23,11 +23,11 @@ use crate::actor_context::{ActorContext, RegisteredTask, state_deltas_from_paylo
 use crate::actor_factory::{
 	ActionPayload, AdapterConfig, BeforeActionResponsePayload, BeforeConnectPayload,
 	BeforeSubscribePayload, CallbackBindings, ConnectionPayload, CreateConnStatePayload,
-	CreateStatePayload, HttpRequestPayload, LifecyclePayload, MigratePayload, QueueSendPayload,
-	SerializeStatePayload, WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload,
-	call_buffer, call_optional_buffer, call_queue_send, call_request, call_state_delta_payload,
-	call_void,
+	CreateStatePayload, LifecyclePayload, MigratePayload, QueueSendPayload, SerializeStatePayload,
+	WebSocketPayload, WorkflowHistoryPayload, WorkflowReplayPayload, call_buffer,
+	call_optional_buffer, call_queue_send, call_state_delta_payload, call_void,
 };
+use crate::http::{HttpRequestPayload, call_request};
 
 // Restart hooks are synchronous callback slots; the guard is only held while
 // swapping task handles, never while awaiting a task shutdown.

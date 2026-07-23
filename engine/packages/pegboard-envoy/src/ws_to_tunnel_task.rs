@@ -2174,7 +2174,9 @@ fn sqlite_protocol_error_response(message: &str) -> protocol::SqliteErrorRespons
 	}
 }
 
-/// Returns the length of the inner data payload for a tunnel message kind.
+/// Returns variable-length application payload bytes for per-message limits and tracing.
+///
+/// This excludes protocol framing and fixed fields, and does not represent a whole HTTP stream.
 fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> usize {
 	use protocol::ToRivetTunnelMessageKind;
 	match kind {
@@ -2183,54 +2185,16 @@ fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> u
 		}
 		ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => chunk.body.len(),
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessage(msg) => msg.data.len(),
-		ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
-			abort.reason.detail.as_ref().map_or(0, |detail| detail.len())
-		}
+		ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => abort
+			.reason
+			.detail
+			.as_ref()
+			.map_or(0, |detail| detail.len()),
 		ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => 0,
 	}
 }
-
-#[cfg(test)]
-mod payload_accounting_tests {
-	use rivet_envoy_protocol as protocol;
-
-	use super::tunnel_message_inner_data_len;
-
-	#[test]
-	fn response_abort_counts_detail_utf8_bytes() {
-		let detail = "actor failed: café".to_owned();
-		let message = protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
-			protocol::ToRivetResponseAbort {
-				reason: protocol::HttpStreamAbortReason {
-					kind: protocol::HttpStreamAbortReasonKind::HandlerError,
-					detail: Some(detail.clone()),
-				},
-			},
-		);
-
-		assert_eq!(tunnel_message_inner_data_len(&message), detail.len());
-	}
-
-	#[test]
-	fn response_abort_without_detail_has_no_inner_payload() {
-		let message = protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
-			protocol::ToRivetResponseAbort {
-				reason: protocol::HttpStreamAbortReason {
-					kind: protocol::HttpStreamAbortReasonKind::HandlerError,
-					detail: None,
-				},
-			},
-		);
-
-		assert_eq!(tunnel_message_inner_data_len(&message), 0);
-	}
-}
-
-#[cfg(test)]
-#[path = "../tests/support/ws_to_tunnel_task.rs"]
-mod tests;
 
 async fn send_actor_kv_error(conn: &Conn, request_id: u32, message: &str) -> Result<()> {
 	send_actor_kv_response(
@@ -2375,3 +2339,11 @@ impl Drop for WsResponseInFlightGuard {
 		metrics::WS_RESPONSES_IN_FLIGHT.dec();
 	}
 }
+
+#[cfg(test)]
+#[path = "../tests/support/ws_to_tunnel_payload_accounting.rs"]
+mod payload_accounting_tests;
+
+#[cfg(test)]
+#[path = "../tests/support/ws_to_tunnel_task.rs"]
+mod tests;
