@@ -12,6 +12,26 @@ import {
 } from '../src/index.ts';
 
 describe('RivetWorkflowCoordinator', () => {
+	it('admits a non-HTTP workflow without synthesizing a Request', async () => {
+		let contextRequest = 'not-called';
+		const host = await createHost({
+			handler: async () => ({ ok: true }),
+			onContextRequest: (request) => {
+				contextRequest = request;
+			},
+		});
+
+		const receipt = await host.runtime.admitWorkflow(host.actor, {
+			runId: 'run-1',
+			input: undefined,
+		});
+
+		assert.deepEqual(receipt, { runId: 'run-1' });
+		assert.equal(contextRequest, undefined);
+		await host.actor.waitForKeepAwake();
+		assert.equal((await host.stores.runStore.getRun('run-1')).status, 'completed');
+	});
+
 	it('returns an admission receipt while the workflow continues under keepAwake', async () => {
 		const started = deferred();
 		const finish = deferred();
@@ -104,7 +124,7 @@ describe('RivetWorkflowCoordinator', () => {
 	});
 });
 
-async function createHost({ db = new TestSqliteDb(), registry, handler }) {
+async function createHost({ db = new TestSqliteDb(), registry, handler, onContextRequest }) {
 	await ensureAsyncSqlSchema(db);
 	const actor = new FakeActor(db);
 	const provider = registerFauxProvider({ provider: `workflow-test-${crypto.randomUUID()}` });
@@ -116,6 +136,7 @@ async function createHost({ db = new TestSqliteDb(), registry, handler }) {
 		createEventStreamStore: (actorContext) => createAsyncEventStreamStore(actorContext.db),
 		createRegistryRunStore: () => registry?.runStore,
 		createContext: ({ actor, request, runId, initialEventIndex }) => {
+			onContextRequest?.(request);
 			return createFlueContext({
 				id: runId,
 				runId,

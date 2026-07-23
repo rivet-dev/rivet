@@ -2,7 +2,7 @@
 author: nathan-flurry
 published: "2026-07-23"
 category: changelog
-image: true
+image: { file: "image.png?v=1" }
 keywords: ["agentos", "flue", "agents", "cloudflare workers", "v8 isolates", "webassembly", "sandboxes"]
 title: "Flue now supports agentOS"
 description: "The isolate model for sandboxes. Every Flue agent gets an isolated VM with a persistent filesystem, running in the backend you already operate. No sandbox machine to boot."
@@ -20,7 +20,15 @@ agentOS applies the Workers idea to the sandbox. Against a best-in-class sandbox
 - [**47× smaller in memory**](https://agentos-sdk.dev/#bench-memory): about 22 MB vs. a 1 GiB sandbox
 - [**254× cheaper to run**](https://agentos-sdk.dev/#bench-cost): self-hosted AWS ARM vs. per-second sandbox billing
 
-![The isolate model for sandboxes: a full VM per agent vs. agentOS isolates sharing one runtime](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/isolate-vs-vm.png?v=1)
+<video
+	src="https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/performance.mp4?v=1"
+	autoPlay
+	loop
+	muted
+	playsInline
+/>
+
+![The isolate model for sandboxes: a full VM per agent vs. agentOS isolates sharing one runtime](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/isolate-vs-vm.png?v=2)
 
 ## Why agentOS: the isolate model for sandboxes
 
@@ -35,6 +43,8 @@ Instead, that isolation comes from **WebAssembly and V8**, the exact sandboxing 
 Inside it, agents get a **real scripting layer** instead of a chain of tool calls. JavaScript, Python, and Bash run in a secure, Linux-compatible runtime.
 
 Because agent work is I/O-bound and memory-light, the isolate carries the common path. You pay for a full VM only for the **small slice of work** that genuinely needs one, the same way a Worker reaches for a container only when it has to.
+
+![agentOS pillars: Execution and Filesystem](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/pillars.png?v=2)
 
 The agent becomes part of your application, not another service:
 

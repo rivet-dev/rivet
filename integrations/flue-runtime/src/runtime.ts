@@ -1,6 +1,5 @@
 export {
 	createRivetAgentRuntime,
-	RIVET_AGENT_INTERNAL_DISPATCH_PATH,
 	type RivetAgentActorContext,
 	type RivetAgentRuntime,
 	type RivetAgentRuntimeOptions,

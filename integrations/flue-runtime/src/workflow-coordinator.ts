@@ -5,6 +5,7 @@ import type {
 } from '@flue/runtime/adapter-kit';
 import type { WorkflowDefinition } from '@flue/runtime';
 import {
+	admitDetachedWorkflow,
 	failRecoveredRun,
 	handleRunRouteRequest,
 	handleStreamHead,
@@ -35,7 +36,7 @@ export interface RivetWorkflowRuntimeOptions {
 	readonly workflows: ReadonlyArray<{ name: string; definition: WorkflowDefinition }>;
 	readonly createContext: (options: {
 		readonly actor: RivetWorkflowActorContext;
-		readonly request: Request;
+		readonly request?: Request;
 		readonly runId: string;
 		readonly initialEventIndex?: number;
 		readonly dispatchId?: string;
@@ -59,6 +60,10 @@ export interface RivetWorkflowRuntime {
 		actor: RivetWorkflowActorContext,
 		inherited?: () => Promise<unknown> | unknown,
 	): Promise<void>;
+	admitWorkflow(
+		actor: RivetWorkflowActorContext,
+		input: { readonly runId: string; readonly input: unknown },
+	): Promise<{ runId: string }>;
 	onRequest(actor: RivetWorkflowActorContext, request: Request): Promise<Response | null>;
 }
 
@@ -96,6 +101,9 @@ export function createRivetWorkflowRuntime(options: RivetWorkflowRuntimeOptions)
 		onWake(actor, inherited = () => undefined) {
 			return getCoordinator(actor).onWake(inherited);
 		},
+		admitWorkflow(actor, input) {
+			return getCoordinator(actor).admitWorkflow(input);
+		},
 		onRequest(actor, request) {
 			return getCoordinator(actor).onRequest(request);
 		},
@@ -127,9 +135,6 @@ export class RivetWorkflowCoordinator {
 		await failRecoveredRun({
 			workflowName: this.workflowName,
 			runId: this.runId,
-			request: new Request(`https://flue.invalid/workflows/${encodeURIComponent(this.workflowName)}`, {
-				method: 'POST',
-			}),
 			error: new Error(
 				'Flue workflow execution was interrupted. Start a new workflow run explicitly if retry is appropriate.',
 			),
@@ -174,6 +179,32 @@ export class RivetWorkflowCoordinator {
 		});
 	}
 
+	async admitWorkflow(options: {
+		readonly runId: string;
+		readonly input: unknown;
+	}): Promise<{ runId: string }> {
+		const workflow = this.options.workflows.find(
+			(record) => record.name === this.workflowName,
+		)?.definition;
+		if (!workflow) {
+			throw new Error(`[flue] Workflow target "${this.workflowName}" is unavailable.`);
+		}
+		return admitDetachedWorkflow({
+			workflowName: this.workflowName,
+			runId: options.runId,
+			workflow,
+			input: options.input,
+			runStore: this.prepared.runStore,
+			eventStreamStore: this.eventStreamStore,
+			createContext: ({ runId, request, initialEventIndex }) =>
+				this.createContext(request, runId, initialEventIndex),
+			startWorkflowAdmission: (_runId, run) => {
+				const completion = this.actor.keepAwake(Promise.resolve().then(run));
+				return { admitted: Promise.resolve(), completion };
+			},
+		});
+	}
+
 	private get workflowName(): string {
 		return this.prepared.workflowName;
 	}
@@ -183,7 +214,7 @@ export class RivetWorkflowCoordinator {
 	}
 
 	private createContext(
-		request: Request,
+		request: Request | undefined,
 		runId: string,
 		initialEventIndex?: number,
 	): FlueContextInternal {

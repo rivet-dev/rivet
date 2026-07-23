@@ -7,10 +7,7 @@ import {
 	fauxAssistantMessage,
 	registerFauxProvider,
 } from '@flue/runtime/adapter-kit';
-import {
-	createRivetAgentRuntime,
-	RIVET_AGENT_INTERNAL_DISPATCH_PATH,
-} from '../src/index.ts';
+import { createRivetAgentRuntime } from '../src/index.ts';
 
 const providers = [];
 afterEach(() => {
@@ -91,15 +88,30 @@ describe('RivetAgentCoordinator', () => {
 		assert.equal(submission.error, undefined);
 	});
 
-	it('rejects conflicting internal dispatch replays', async () => {
+	it('admits dispatches through the typed actor action boundary', async () => {
+		const provider = createProvider();
+		provider.setResponses([fauxAssistantMessage('Dispatched reply.')]);
+		const host = await createHost(provider);
+		const input = dispatchInput('dispatch-action', 'Hello');
+
+		const receipt = await host.runtime.admitDispatch(host.actor, input);
+
+		assert.deepEqual(receipt, {
+			dispatchId: input.dispatchId,
+			acceptedAt: input.acceptedAt,
+		});
+		await host.actor.waitForKeepAwake();
+		assert.equal(await host.prepared.executionStore.submissions.hasUnsettledSubmissions(), false);
+	});
+
+	it('rejects conflicting dispatch replays', async () => {
 		const host = await createHost(createProvider());
 		const original = dispatchInput('dispatch-replay', 'Hello');
 		await host.prepared.executionStore.submissions.admitDispatch(original);
-		const response = await host.runtime.onRequest(
+		await assert.rejects(host.runtime.admitDispatch(
 			host.actor,
-			dispatchRequest({ ...original, message: { kind: 'user', body: 'Different' } }),
-		);
-		assert.equal(response.status, 409);
+			{ ...original, message: { kind: 'user', body: 'Different' } },
+		), /Conflicting dispatch replay/);
 	});
 });
 
@@ -207,12 +219,4 @@ function dispatchInput(dispatchId, body) {
 		message: { kind: 'user', body },
 		acceptedAt: new Date().toISOString(),
 	};
-}
-
-function dispatchRequest(body) {
-	return new Request(`http://flue.local${RIVET_AGENT_INTERNAL_DISPATCH_PATH}`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(body),
-	});
 }

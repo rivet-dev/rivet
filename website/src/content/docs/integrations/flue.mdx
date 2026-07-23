@@ -64,7 +64,7 @@ Create `actors.ts`:
 import { agentOS, setup } from "@rivet-dev/agentos";
 
 const vm = agentOS({
-	// Configuration will go here.
+	// Configure software, permissions, mounts, and resource limits here.
 });
 
 export const registry = setup({
@@ -84,6 +84,8 @@ export default defineConfig({
 ```
 
 The generated Flue server adds its agent and workflow actors to this registry.
+It keeps Flue's native router as the public HTTP service; the Rivet target only
+selects and hosts the durable actors behind those routes.
 
 </Step>
 
@@ -92,19 +94,17 @@ The generated Flue server adds its agent and workflow actors to this registry.
 Create `agents/assistant.ts`:
 
 ```ts title="agents/assistant.ts"
-import { createAgent } from "@flue/runtime";
+import { type AgentRouteHandler, createAgent } from "@flue/runtime";
 import { agentOSSandbox } from "@rivet-dev/agentos-flue";
-import { registry } from "../actors";
+import { registry } from "../actors.js";
 
-const sandbox = agentOSSandbox({
-	actor: "vm",
-	registry,
-});
+export const route: AgentRouteHandler = async (_context, next) => next();
 
 export default createAgent(() => ({
 	model: "anthropic/claude-sonnet-5",
-	instructions: "Help the user work in the sandboxed repository.",
-	sandbox,
+	instructions:
+		"Help the user work in /workspace. Use filesystem and shell tools when asked.",
+	sandbox: agentOSSandbox({ actor: "vm", registry }),
 }));
 ```
 
@@ -119,6 +119,14 @@ npx flue connect assistant local
 ```
 
 Flue builds the Rivet target, starts the local Rivet engine, and connects to the `assistant/local` actor.
+
+Ask it to use both filesystem and shell operations:
+
+> Write `hello from Flue` to `/workspace/hello.txt`, run `wc -c
+> /workspace/hello.txt`, then read the file back.
+
+Reconnect to `assistant/local` and ask it to read the file again. The same Flue
+context reconnects to the same agentOS actor and persistent filesystem.
 
 </Step>
 

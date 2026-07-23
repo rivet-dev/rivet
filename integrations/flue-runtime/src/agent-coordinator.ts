@@ -6,9 +6,11 @@ import type {
 	AttachmentStore,
 	ConversationStreamStore,
 	DeliveredMessage,
+	DispatchInput,
 	FlueContextInternal,
 	FlueTraceCarrier,
 } from '@flue/runtime/adapter-kit';
+import type { DispatchReceipt } from '@flue/runtime';
 import {
 	ConversationRecordWriter,
 	SubmissionAbortedError,
@@ -33,7 +35,6 @@ import {
 	type AsyncSqlDb,
 } from './stores/index.js';
 
-export const RIVET_AGENT_INTERNAL_DISPATCH_PATH = '/__flue/internal/dispatch';
 const WAKE_ACTION = '__flueWakeAgentSubmissions';
 const WAKE_SECONDS = 30;
 const SUBMISSION_HARNESS_NAME = 'default';
@@ -77,6 +78,7 @@ export interface RivetAgentRuntime {
 	attach(actor: RivetAgentActorContext, prepared: PreparedCoordinator): RivetAgentCoordinator;
 	onWake(actor: RivetAgentActorContext, inherited?: () => Promise<unknown> | unknown): Promise<void>;
 	wakeSubmissions(actor: RivetAgentActorContext): Promise<void>;
+	admitDispatch(actor: RivetAgentActorContext, input: DispatchInput): Promise<DispatchReceipt>;
 	onRequest(actor: RivetAgentActorContext, request: Request): Promise<Response | null>;
 }
 
@@ -106,6 +108,7 @@ export function createRivetAgentRuntime(options: RivetAgentRuntimeOptions): Rive
 		},
 		onWake: (actor, inherited = () => undefined) => get(actor).onWake(inherited),
 		wakeSubmissions: (actor) => get(actor).wakeSubmissions(),
+		admitDispatch: (actor, input) => get(actor).admitDispatch(input),
 		onRequest: (actor, request) => get(actor).onRequest(request),
 	};
 }
@@ -140,7 +143,6 @@ export class RivetAgentCoordinator {
 	}
 
 	private async routeRequest(request: Request): Promise<Response | null> {
-		if (isInternalDispatchRequest(request)) return this.admitDispatch(request);
 		if (isAbortRequest(request, this.agentName, this.instanceId)) {
 			return Response.json({ aborted: await this.abortInstance() });
 		}
@@ -368,19 +370,20 @@ export class RivetAgentCoordinator {
 		return { submissionId: input.submissionId, offset };
 	}
 
-	private async admitDispatch(request: Request): Promise<Response> {
-		const input: unknown = await request.json();
+	async admitDispatch(input: DispatchInput): Promise<DispatchReceipt> {
 		assertAgentDispatchAdmissionInput(input);
 		if (input.agent !== this.agentName || input.id !== this.instanceId) {
-			return new Response('Invalid internal dispatch target.', { status: 400 });
+			throw new Error('[flue] Invalid dispatch target.');
 		}
 		const agent = this.resolveAgent(this.agentName);
 		const admission = await this.submissions.admitDispatch(input);
-		if (admission.kind === 'retained_receipt') return Response.json({
+		if (admission.kind === 'retained_receipt') return {
 			dispatchId: admission.receipt.submissionId,
 			acceptedAt: new Date(admission.receipt.acceptedAt).toISOString(),
-		});
-		if (admission.kind === 'conflict') return new Response('Conflicting internal dispatch replay.', { status: 409 });
+		};
+		if (admission.kind === 'conflict') {
+			throw new Error('[flue] Conflicting dispatch replay.');
+		}
 		if (admission.submission.canonicalReadyAt === null) {
 			await this.materializeSubmissionConversation(createDispatchAgentSubmissionInput(input), agent);
 			if (!(await this.submissions.markSubmissionCanonicalReady(input.dispatchId))) {
@@ -389,7 +392,7 @@ export class RivetAgentCoordinator {
 		}
 		await this.armSubmissionWake();
 		this.startSubmissionReconciliation();
-		return Response.json({ dispatchId: admission.submission.submissionId, acceptedAt: input.acceptedAt });
+		return { dispatchId: admission.submission.submissionId, acceptedAt: input.acceptedAt };
 	}
 
 	private async abortInstance(): Promise<boolean> {
@@ -419,10 +422,6 @@ export class RivetAgentCoordinator {
 			operation,
 		}, error);
 	}
-}
-
-function isInternalDispatchRequest(request: Request): boolean {
-	return request.method === 'POST' && new URL(request.url).pathname === RIVET_AGENT_INTERNAL_DISPATCH_PATH;
 }
 
 function isAbortRequest(request: Request, agentName: string, instanceId: string): boolean {
