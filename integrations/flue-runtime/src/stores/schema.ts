@@ -1,6 +1,10 @@
 import { FLUE_SCHEMA_VERSION, DURABILITY_DEFAULT_MAX_ATTEMPTS } from './constants.js';
 import type { AsyncSqlDb, AsyncSqlRunner } from './async-db.js';
 
+// Last synchronized with Flue commit e79d5712820af588094a4e67a3ceafc816770396:
+// https://github.com/NathanFlurry/flue/tree/e79d5712820af588094a4e67a3ceafc816770396/packages/runtime/src
+// DDL sources: sql-agent-execution-store.ts, sql-run-store.ts, sql-attachment-store.ts,
+// runtime/event-stream-store.ts, and runtime/conversation-stream-store.ts.
 export async function ensureAsyncSqlSchema(db: AsyncSqlDb): Promise<void> {
 	await db.transaction(async (tx) => {
 		await tx.query(`
