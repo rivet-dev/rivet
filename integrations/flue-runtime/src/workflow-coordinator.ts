@@ -172,7 +172,9 @@ export class RivetWorkflowCoordinator {
 				createContext: ({ runId, request, initialEventIndex }) =>
 					this.createContext(request, runId, initialEventIndex),
 				startWorkflowAdmission: (_runId, run) => {
-					const completion = this.actor.keepAwake(this.runWithActorContext(run));
+					const completion = this.actor.keepAwake(
+						Promise.resolve().then(() => this.runWithActorContext(run)),
+					);
 					return { admitted: Promise.resolve(), completion };
 				},
 			}),

@@ -12,6 +12,39 @@ import {
 } from '../src/index.ts';
 
 describe('RivetWorkflowCoordinator', () => {
+	it('returns an admission receipt while the workflow continues under keepAwake', async () => {
+		const started = deferred();
+		const finish = deferred();
+		const host = await createHost({
+			handler: async () => {
+				started.resolve();
+				await finish.promise;
+				return { ok: true };
+			},
+		});
+
+		let responseSettled = false;
+		const responsePromise = host.runtime.onRequest(
+			host.actor,
+			new Request('http://flue.local/workflows/job', { method: 'POST' }),
+		).then((response) => {
+			responseSettled = true;
+			return response;
+		});
+		await started.promise;
+		await new Promise((resolve) => setImmediate(resolve));
+		const returnedBeforeCompletion = responseSettled;
+		const keptAwakeBeforeCompletion = host.actor.keepAwakePromises.size > 0;
+		finish.resolve();
+		const response = await responsePromise;
+		await host.actor.waitForKeepAwake();
+
+		assert.equal(returnedBeforeCompletion, true);
+		assert.equal(keptAwakeBeforeCompletion, true);
+		assert.equal(response.status, 202);
+		assert.equal((await host.stores.runStore.getRun('run-1')).status, 'completed');
+	});
+
 	it('runs a workflow and mirrors the run into the registry when requested', async () => {
 		const registryDb = new TestSqliteDb();
 		const registry = await createAsyncRegistryOps(registryDb);
@@ -116,6 +149,7 @@ class FakeActor {
 	region = 'local';
 	env = {};
 	abortController = new AbortController();
+	keepAwakePromises = new Set();
 
 	constructor(db) {
 		this.db = db;
@@ -126,7 +160,18 @@ class FakeActor {
 	}
 
 	async keepAwake(promise) {
-		return promise;
+		this.keepAwakePromises.add(promise);
+		try {
+			return await promise;
+		} finally {
+			this.keepAwakePromises.delete(promise);
+		}
+	}
+
+	async waitForKeepAwake() {
+		while (this.keepAwakePromises.size > 0) {
+			await Promise.allSettled([...this.keepAwakePromises]);
+		}
 	}
 }
 
@@ -181,6 +226,14 @@ function createNoopSessionEnv() {
 		mkdir: async () => {},
 		rm: async () => {},
 	};
+}
+
+function deferred() {
+	let resolve;
+	const promise = new Promise((resolvePromise) => {
+		resolve = resolvePromise;
+	});
+	return { promise, resolve };
 }
 
 function normalizePath(path) {

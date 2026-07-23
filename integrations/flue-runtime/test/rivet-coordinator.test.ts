@@ -18,6 +18,26 @@ afterEach(() => {
 });
 
 describe('RivetAgentCoordinator', () => {
+	it('returns an admission receipt while the agent turn remains alive in the background', async () => {
+		const provider = createProvider({ tokensPerSecond: 20 });
+		provider.setResponses([fauxAssistantMessage('A deliberately delayed Rivet reply.')]);
+		const host = await createHost(provider);
+
+		const response = await host.runtime.onRequest(
+			host.actor,
+			new Request('http://flue.local/agents/assistant/instance-1', {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify({ kind: 'user', body: 'Hello' }),
+			}),
+		);
+
+		assert.equal(response.status, 202);
+		assert.ok(host.actor.keepAwakePromises.size > 0);
+		await host.actor.waitForKeepAwake();
+		assert.equal(await host.prepared.executionStore.submissions.hasUnsettledSubmissions(), false);
+	});
+
 	it('durably admits a prompt and serves canonical conversation history', async () => {
 		const provider = createProvider();
 		provider.setResponses([fauxAssistantMessage('Rivet reply.')]);
@@ -106,8 +126,11 @@ async function createHost(provider, db = new TestSqliteDb()) {
 	return { db, actor, runtime, prepared };
 }
 
-function createProvider() {
-	const provider = registerFauxProvider({ provider: `rivet-test-${crypto.randomUUID()}` });
+function createProvider(options = {}) {
+	const provider = registerFauxProvider({
+		provider: `rivet-test-${crypto.randomUUID()}`,
+		...options,
+	});
 	providers.push(provider);
 	return provider;
 }

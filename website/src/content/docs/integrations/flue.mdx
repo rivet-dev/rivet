@@ -118,6 +118,8 @@ Flue builds the Rivet target, starts the local Rivet engine, and connects to the
 
 Each Flue agent instance and workflow run has its own Rivet Actor and SQLite database. Direct prompts and `dispatch()` inputs use the same durable admission path, so accepted work can recover after interruption.
 
+Normal agent and workflow requests return their `202` receipt after persisting the admission, its canonical input event, and a recovery alarm. Rivet then owns the turn as background work through `c.keepAwake(...)`; the caller does not remain attached while the model or workflow runs. Workflow requests with `?wait=result` are the explicit exception and stay open until the result is available.
+
 The agentOS adapter derives a stable VM actor key from the Flue context ID. Reusing a context reconnects to the same durable `/workspace` filesystem.
 
 ## Configuration

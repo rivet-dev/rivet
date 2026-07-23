@@ -10,8 +10,10 @@ pnpm install
 pnpm dev             # runs `flue build` (-> dist/server.mjs, the Rivet actor app) then `next dev`
 ```
 
-The routes export `maxDuration = 300`; longer turns can be killed by the serverless runtime and rely on
-Rivet `onWake` recovery to resume.
+The routes export `maxDuration = 300` for Rivet's long-lived serverless runner request. Normal agent
+and workflow admissions return `202` without waiting for execution; Rivet owns that background work
+through `c.keepAwake(...)`. Attached requests such as `?wait=result` and abrupt runner restarts are
+still bounded by the serverless runtime, with Rivet `onWake` recovery handling interrupted work.
 
 ## Environment
 

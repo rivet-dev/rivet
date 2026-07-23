@@ -309,10 +309,10 @@ export class RivetAgentCoordinator {
 		const controller = new AbortController();
 		this.activeControllers.set(submission.submissionId, controller);
 		const attempt = { submissionId: submission.submissionId, attemptId: submission.attemptId };
-		const running = this.runWithActorContext(async () => {
-			await this.submissions.insertAttemptMarker(attempt);
-			await this.processSubmissionEntry(submission, controller.signal);
-		});
+		const running = Promise.resolve().then(() => this.runWithActorContext(async () => {
+				await this.submissions.insertAttemptMarker(attempt);
+				await this.processSubmissionEntry(submission, controller.signal);
+			}));
 		void this.actor.keepAwake(running).catch((error) => this.logFailure(submission, 'process_submission', error))
 			.finally(() => {
 				this.activeAttempts.delete(key);
@@ -331,7 +331,19 @@ export class RivetAgentCoordinator {
 				this.createDurableContext(submissionSyntheticRequest(submission.input), dispatchId),
 			conversationWriter: writer,
 			signal,
-			onSettled: () => { void this.reconcileSubmissions().catch(console.error); },
+			onSettled: () => { this.startSubmissionReconciliation(); },
+		});
+	}
+
+	private startSubmissionReconciliation(): void {
+		const running = Promise.resolve().then(() => this.runWithActorContext(
+			() => this.reconcileSubmissions({ driverAlreadyArmed: true }),
+		));
+		void this.actor.keepAwake(running).catch((error) => {
+			console.error('[flue:submission-reconciliation]', {
+				agentName: this.agentName,
+				instanceId: this.instanceId,
+			}, error);
 		});
 	}
 
@@ -362,7 +374,7 @@ export class RivetAgentCoordinator {
 		}
 		const offset = (await this.ensureConversationWriter()).offset;
 		await this.armSubmissionWake();
-		await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		this.startSubmissionReconciliation();
 		return { submissionId: input.submissionId, offset };
 	}
 
@@ -386,7 +398,7 @@ export class RivetAgentCoordinator {
 			}
 		}
 		await this.armSubmissionWake();
-		await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		this.startSubmissionReconciliation();
 		return Response.json({ dispatchId: admission.submission.submissionId, acceptedAt: input.acceptedAt });
 	}
 
@@ -400,7 +412,7 @@ export class RivetAgentCoordinator {
 		for (const id of affected) this.activeControllers.get(id)?.abort(new SubmissionAbortedError());
 		if (affected.length > 0) {
 			await this.armSubmissionWake();
-			await this.reconcileSubmissions({ driverAlreadyArmed: true });
+			this.startSubmissionReconciliation();
 		}
 		return affected.length > 0;
 	}
