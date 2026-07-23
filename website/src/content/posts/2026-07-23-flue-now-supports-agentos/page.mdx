@@ -10,24 +10,24 @@ description: "A lightweight alternative to sandbox VMs for your Flue agents, run
 
 import imgContainerVsIsolate from "./container-vs-isolate.svg";
 
-Today, [Flue](https://github.com/rivet-dev/flue) officially supports [agentOS](https://agentos-sdk.dev).
+Today, [Rivet's Flue fork](https://github.com/rivet-dev/flue) supports [agentOS](https://agentos-sdk.dev).
 
-Cloudflare Workers innovated by **running your code in a V8 isolate instead of a Docker container**. Most backends sit **idle waiting on a database**, an API, or the network, so booting a VM per request like AWS Lambda means paying for a lot of idle time.
+Cloudflare Workers popularized **running backend code in V8 isolates instead of dedicated containers**. Most backends sit **idle waiting on a database**, an API, or the network, so lightweight execution environments can start quickly and return shared capacity to the pool while they wait.
 
 Running backends this way unlocked two things:
 
-- **Startup got cheap**: There's no container to boot per request the way Lambda does, so a Worker starts in milliseconds.
+- **Startup got cheap**: There's no dedicated container to provision on a cold start, so a Worker starts in milliseconds.
 - **Idle got free**: The shared runtime can pause your code while it waits on an external request and bill you nothing for the wait.
 
 It turns out, **agentic workloads look a lot like the backend workloads** that Cloudflare optimized with V8 isolates.
 
-<img src={imgContainerVsIsolate.src} alt="A container held per request stays reserved through every idle stretch, while isolates in one process pack the same busy work with nothing reserved in between." />
+<img src={imgContainerVsIsolate.src} alt="Container-backed execution environments retain assigned capacity through idle stretches, while isolates share a process and return capacity to the pool between work." />
 
 ## Why agentOS: the isolate model for sandboxes
 
 An agent **spends almost all of its time sitting idle** waiting on inference, tool calls, and the user to respond. But the sandbox an agent works in is a full VM, **booted and billed for the whole session** even while it sits idle.
 
-So we applied the same model to the sandbox with agentOS by using **a WebAssembly and V8 isolate instead of a VM** for isolation. Against a best-in-class sandbox provider, agentOS is:
+agentOS applies the same model to sandboxes. It exposes a **Linux-compatible VM abstraction implemented with WebAssembly and V8 isolation**, rather than provisioning a separate hypervisor VM for every agent session. Against a best-in-class sandbox provider, the linked shell benchmark measures agentOS as:
 
 - [**92× faster to cold start**](https://agentos-sdk.dev/#bench-cold-start): 4.8 ms p50 vs. 440 ms
 - [**47× smaller in memory**](https://agentos-sdk.dev/#bench-memory): about 22 MB vs. a 1 GiB sandbox
@@ -45,7 +45,7 @@ So we applied the same model to the sandbox with agentOS by using **a WebAssembl
 
 But a WebAssembly and V8 isolate is just a place to run code, and an agent needs a shell, a filesystem, and languages like Python.
 
-agentOS runs a **full Linux-compatible environment inside that WebAssembly isolate**. The agent gets a real shell, a filesystem, and languages like Bash, Node.js, and Python. That's a **real scripting layer**, not a chain of tool calls.
+agentOS runs a **full Linux-compatible guest environment inside that WebAssembly isolate**. The agent gets a real shell, a filesystem, and languages like Bash, Node.js, and Python. That's a **real scripting layer**, not a chain of tool calls.
 
 ![agentOS pillars: Execution and Filesystem](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/pillars.png?v=2)
 
@@ -145,7 +145,7 @@ export const registry = setup({ use: { vm } });
 
 The **vast majority of agent work never needs more than the VM**. Desktop automation, heavy compilation, and full browsers do.
 
-Instead of provisioning a heavy sandbox for every agent on the chance that one task needs it, agentOS **starts one on demand** and tears it down when the task finishes. The common path stays a 22 MB WebAssembly isolate, and you pay sandbox cost and sandbox cold starts only for the **small slice of work that actually requires one**.
+Instead of provisioning a heavy sandbox for every agent on the chance that one task needs it, agentOS **starts one on demand** and tears it down when the task finishes. The common path stays in the lightweight WebAssembly isolate, and you pay sandbox cost and sandbox cold starts only for the **small slice of work that actually requires one**.
 
 It's the **same execution ladder Workers developers already reach for**. Escalate to a container only when you're limited by the WebAssembly isolate itself, or call out to an external service such as image resizing or a browser for work that doesn't fit in a WebAssembly isolate.
 
@@ -188,7 +188,7 @@ Most sandboxes are **extra infrastructure**: a service the provider hosts for yo
 
 **agentOS is just a library.** The same code that manages your agent runs inside the backend you already operate, and that backend runs both your agent and its sandbox. There's **no hypervisor, no nested virtualization, and no provider sandbox API** to code against.
 
-So it **runs anywhere JavaScript does**, whether Node.js, Bun, or Deno, on platforms such as Rivet, Railway, Kubernetes, or Vercel. *(agentOS doesn't run on Cloudflare Workers yet, since it relies on OS-level APIs, but the same WebAssembly target we use to run agentOS in the browser experimentally makes it possible.)*
+It **works with Node.js, Bun, or Deno** on platforms such as Rivet, Railway, Kubernetes, or Vercel. *(agentOS doesn't run on Cloudflare Workers yet, since it relies on OS-level APIs, but the same WebAssembly target we use to run agentOS in the browser experimentally makes future support possible.)*
 
 ## Working upstream with Flue
 
