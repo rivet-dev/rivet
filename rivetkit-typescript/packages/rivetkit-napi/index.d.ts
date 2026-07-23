@@ -224,7 +224,8 @@ export interface JsServerlessResponseHead {
 export interface JsApplicationResponse {
   status: number
   headers: Record<string, string>
-  body: Buffer
+  body?: Buffer
+  stream?: boolean
 }
 export interface JsRegistryRouteResponse {
   status: number
