@@ -136,7 +136,9 @@ The agentOS adapter derives a stable VM actor key from the Flue context ID. Reus
 | `cwd` | No | Sandbox working directory. Defaults to `/workspace`. |
 | `client` | No | Existing client configured for the same registry. |
 
-agentOS is not supported on Cloudflare Workers because it requires a Node.js or
-container host. It supports platforms such as Railway, Kubernetes, and Vercel.
+<Note>
+agentOS does not support Cloudflare Workers yet. Today, run it on a Node.js or
+container host such as Railway, Kubernetes, or Vercel.
+</Note>
 
 [Read the agentOS + Flue documentation →](https://agentos-sdk.dev/docs/frameworks/flue)

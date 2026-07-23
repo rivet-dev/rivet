@@ -169,6 +169,11 @@ Most sandbox runtimes are tied to the provider that hosts them. **agentOS is a l
 
 Already on Vercel? Keep your deployment and add agentOS to it.
 
+<Note>
+agentOS does not support Cloudflare Workers yet. Today, run it on a Node.js or
+container host such as Rivet, Railway, Kubernetes, or Vercel.
+</Note>
+
 Rivet is the self-hostable path: run it on Rivet Cloud, on your own infrastructure, or locally as a library. The same agent also picks up durable storage, multi-region deployment, fault-tolerant workflows, durable queues and streams, and the rich observability.
 
 The **Rivet World for Vercel** is an adapter that runs Vercel's open source libraries (including [Vercel Workflows](https://useworkflow.dev)) on [Rivet Actors](/docs/actors):
