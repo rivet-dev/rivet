@@ -5,14 +5,14 @@ category: changelog
 image: { file: "image.png?v=1" }
 keywords: ["agentos", "flue", "agents", "cloudflare workers", "v8 isolates", "webassembly", "sandboxes"]
 title: "Flue now supports agentOS"
-description: "Give your Flue agents a lightweight alternative to sandboxes, powered by V8 isolates and WebAssembly."
+description: "A lightweight alternative to sandbox VMs for your Flue agents, running on V8 isolates and WebAssembly."
 ---
 
 Today, [Flue](https://github.com/rivet-dev/flue) officially supports [agentOS](https://agentos-sdk.dev).
 
-Cloudflare Workers proved you don't need a container to run untrusted code. By running JavaScript in a V8 isolate instead of a virtual machine, a Worker uses a fraction of the memory of a traditional container and costs almost nothing while it waits on an external resource like a database. That works because a web request is mostly **I/O**: time spent waiting, not burning CPU.
+Cloudflare Workers proved you don't need a container to run untrusted code. By running your backend in a **V8 isolate instead of a virtual machine**, a Worker **starts in milliseconds** and **costs almost nothing while it waits** on a database or an API.
 
-agentOS applies that same idea to the sandbox. An agent has the same shape as a backend. It spends almost all of its time waiting on inference or a tool call. But the sandbox it reaches into for that work is still a full virtual machine. A kernel, a guest OS, and virtual hardware all boot before it runs a single line, so you pay for an expensive sandbox that mostly sits idle.
+agentOS brings that to the sandbox. An agent **spends almost all of its time waiting on inference** or a tool call, yet the sandbox behind it is a full virtual machine sitting mostly idle and costing you money.
 
 Against a best-in-class sandbox provider, agentOS is:
 
@@ -28,21 +28,13 @@ Against a best-in-class sandbox provider, agentOS is:
 	playsInline
 />
 
-![The isolate model for sandboxes: a full VM per agent vs. agentOS isolates sharing one runtime](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/isolate-vs-vm.png?v=2)
-
 ## Why agentOS: the isolate model for sandboxes
 
-Cloudflare Workers replaced Docker with a V8 isolate. agentOS replaces the **sandbox** micro-VM with the same technology.
+A sandbox isolates the agent by **booting a virtual machine**, and that boot is the whole cost: a kernel, a hypervisor, and hundreds of milliseconds before the first command runs.
 
-A sandbox gets its isolation by **booting a virtual machine**. The kernel, guest OS, and virtual hardware all have to come up before the agent runs a single command, and that's where the 440 ms and the gigabyte of memory go, even while your agent sits idle. It's the same overhead Workers left behind, still sitting in front of every agent.
+agentOS gets the same isolation **without a virtual machine**. It comes from **WebAssembly and V8**, the same sandboxing that isolates every Chrome tab and every Cloudflare Worker. It's small, and its security has been hardened for years.
 
-agentOS gets the same isolation **without a virtual machine**. There's no kernel, no hypervisor, and nothing to provision.
-
-A Worker only runs JavaScript, but an agent needs a shell, a filesystem, and languages like Python. So agentOS goes one step further than a bare isolate: it's a lightweight, **Linux-compatible VM running on WebAssembly**.
-
-That isolation comes from **WebAssembly and V8**, the exact sandboxing that contains untrusted code in every Chrome tab and every Cloudflare Worker. It's small, and its security has been hardened over years and years. Inside it, agents get a **real scripting layer** instead of a chain of tool calls. JavaScript, Python, and Bash run in a secure, Linux-compatible runtime.
-
-Because agents spend most of their time waiting on inference and tool calls, the isolate carries the common path. You pay for a full VM only for the **small slice of work** that genuinely needs one, the same way a Worker reaches for a container only when it has to.
+A Worker only runs JavaScript, but an agent needs a shell, a filesystem, and languages like Python. agentOS goes one step further than a bare isolate: it's a lightweight, **Linux-compatible VM running on WebAssembly**. JavaScript, Python, and Bash run in a secure runtime, so the agent gets a **real scripting layer** instead of a chain of tool calls.
 
 ![agentOS pillars: Execution and Filesystem](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/pillars.png?v=2)
 
@@ -52,7 +44,7 @@ The agent becomes part of your application, not another service:
 - **Direct function calls, not extra APIs**: connect agents to your application with ordinary JavaScript instead of another network service.
 - **Scoped access, not exposed credentials**: bind trusted host functions without ever giving the agent your raw secrets.
 
-You get Flue's developer experience on an OS built for agents.
+You get Flue's developer experience on an **OS built for agents**.
 
 ## Building a Flue agent with agentOS
 
@@ -61,17 +53,16 @@ Install Rivet's Flue preview builds and the three integration packages:
 ```sh
 npm add "@flue/runtime@npm:@rivet-dev/labs-flue-runtime"
 npm add --save-dev "@flue/cli@npm:@rivet-dev/labs-flue-cli"
-npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue
+npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue rivetkit
 ```
 
 - `@rivet-dev/labs-flue-*` provides preview builds of Flue's proposed extension APIs.
 - `@rivet-dev/flue` runs Flue agents and workflows as durable Rivet Actors.
 - `@rivet-dev/agentos` and `@rivet-dev/agentos-flue` provide the isolated VM actor and connect Flue's sandbox API to it.
 
-<Steps>
+Register the VM, point Flue's Rivet target at it, and attach it as the agent's sandbox:
 
-<Step title="Register the agentOS VM">
-
+<CodeGroup workspace>
 ```ts actors.ts
 // Register the agentOS VM into a RivetKit registry.
 import { agentOS, setup } from "@rivet-dev/agentos";
@@ -83,11 +74,6 @@ export const vm = agentOS({
 export const registry = setup({ use: { vm } });
 ```
 
-</Step>
-
-<Step title="Point Flue's target at it and attach the sandbox">
-
-<CodeGroup workspace>
 ```ts flue.config.ts
 // Point Flue's Rivet build target at the registry.
 import { defineConfig } from "@flue/cli/config";
@@ -112,17 +98,11 @@ export default createAgent(() => ({
 ```
 </CodeGroup>
 
-</Step>
-
-<Step title="Connect">
+Then connect to it:
 
 ```sh
 npx flue connect assistant local
 ```
-
-</Step>
-
-</Steps>
 
 Each agent instance and each workflow run gets its own durable Rivet Actor and SQLite database, so accepted work recovers after an interruption.
 
@@ -156,7 +136,7 @@ The **vast majority of agent work never needs more than the VM**. Desktop automa
 
 Instead of provisioning a heavy sandbox for every agent on the chance that one task needs it, agentOS **starts one on demand** and tears it down when the task finishes. The common path stays a 22 MB isolate, and you pay sandbox cost and sandbox cold starts only for the **small slice of work that actually requires one**.
 
-It's the same execution ladder Workers developers already reach for. Escalate to a container only when you're limited by the isolate itself, or call out to an external service such as image resizing or a browser for work that doesn't fit in a lightweight isolate.
+It's the **same execution ladder Workers developers already reach for**. Escalate to a container only when you're limited by the isolate itself, or call out to an external service such as image resizing or a browser for work that doesn't fit in a lightweight isolate.
 
 Mounting a full sandbox takes two extra packages:
 
@@ -193,11 +173,11 @@ export const registry = setup({ use: { vm } });
 
 ## Deploy anywhere your backend runs
 
-Most sandboxes are extra infrastructure: a service the provider hosts for you, reached over an API, with its own latency and its own bill.
+Most sandboxes are **extra infrastructure**: a service the provider hosts for you, reached over an API, with its own latency and its own bill.
 
-agentOS is just a library. The same code that manages your agent runs inside the backend you already operate, and that backend runs both your agent and its sandbox. There's no hypervisor, no nested virtualization, and no provider sandbox API to code against.
+**agentOS is just a library.** The same code that manages your agent runs inside the backend you already operate, and that backend runs both your agent and its sandbox. There's **no hypervisor, no nested virtualization, and no provider sandbox API** to code against.
 
-So it runs anywhere JavaScript does, whether Node.js, Bun, or Deno, on platforms such as Rivet, Railway, Kubernetes, or Vercel. (agentOS doesn't run on Cloudflare Workers yet, since the isolate relies on OS-level APIs, but the same WebAssembly target we use to run agentOS in the browser makes it possible.)
+So it **runs anywhere JavaScript does**, whether Node.js, Bun, or Deno, on platforms such as Rivet, Railway, Kubernetes, or Vercel. (agentOS doesn't run on Cloudflare Workers yet, since the isolate relies on OS-level APIs, but the same WebAssembly target we use to run agentOS in the browser makes it possible.)
 
 ## Working upstream with Flue
 

@@ -38,7 +38,7 @@
 	"main": "./dist/index.js",
 	"types": "./dist/index.d.ts",
 	"scripts": {
-		"build": "tsc -p tsconfig.build.json",
+		"build": "rm -rf dist && tsc -p tsconfig.build.json",
 		"check-types": "tsc --noEmit",
 		"check:types": "tsc --noEmit",
 		"test": "pnpm run test:node && pnpm run test:contracts",
