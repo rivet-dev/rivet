@@ -86,11 +86,9 @@ import {
   RIVET_AGENT_INTERNAL_DISPATCH_PATH,
   createAsyncEventStreamStore,
   createAsyncRegistryOps,
-  createRegistryRunStoreFromHandle,
   createRivetAsyncSqlDb,
   createRivetAgentRuntime,
   createRivetWorkflowRuntime,
-  retryTransientRivetStart,
 } from '@rivet-dev/flue/runtime';
 import {
   Bash,
@@ -311,9 +309,9 @@ async function fetchFlueActorStreamPage(handle, request, url, signal) {
 }
 
 const registryRunIndex = {
-  lookupRun: (runId) => retryTransientRivetStart(() => getRegistryHandle().lookupRun(runId)),
-  getRun: (runId) => retryTransientRivetStart(() => getRegistryHandle().getRun(runId)),
-  listRuns: (opts) => retryTransientRivetStart(() => getRegistryHandle().listRuns(opts)),
+  lookupRun: (runId) => getRegistryHandle().lookupRun(runId),
+  getRun: (runId) => getRegistryHandle().getRun(runId),
+  listRuns: (opts) => getRegistryHandle().listRuns(opts),
 };
 
 async function createDefaultEnv() {
@@ -390,7 +388,7 @@ const agentRuntime = createRivetAgentRuntime({
 const workflowRuntime = createRivetWorkflowRuntime({
   workflows,
   createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db),
-  createRegistryRunStore: () => createRegistryRunStoreFromHandle(getRegistryHandle()),
+  createRegistryRunStore: () => getRegistryHandle(),
   createContext: createContextForWorkflow,
 });
 const preparedAgents = new WeakMap();

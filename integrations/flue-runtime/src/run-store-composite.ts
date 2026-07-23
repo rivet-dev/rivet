@@ -46,10 +46,10 @@ class RivetRunStore implements RunStore {
 	private async mirrorWrite(write: () => Promise<unknown> | undefined): Promise<void> {
 		// The registry index is a best-effort mirror of the authoritative per-actor
 		// run record: an index fault must NOT fail run admission or finalization.
-		// This mirrors the Cloudflare adapter's `safeIndexWrite` contract
-		// (`@flue/runtime` `src/cloudflare/run-store.ts`). The registry handle
-		// (`createRegistryRunStoreFromHandle`) already retries transient actor-start
-		// errors, so here we only swallow + log — no extra retry layer.
+			// This mirrors the Cloudflare adapter's `safeIndexWrite` contract
+			// (`@flue/runtime` `src/cloudflare/run-store.ts`). RivetKit owns actor
+			// readiness; an unavailable registry actor is logged as an index fault
+			// rather than hidden behind an adapter-specific retry policy.
 		try {
 			await write();
 		} catch (error) {

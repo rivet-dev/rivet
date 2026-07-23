@@ -31,11 +31,6 @@ export {
 } from './extension.js';
 export { createRivetAsyncSqlDb, type RivetRawDb } from './rivet-db.js';
 export {
-	createRegistryRunStoreFromHandle,
-	isTransientRivetStartError,
-	retryTransientRivetStart,
-} from './target-helpers.js';
-export {
 	createAsyncAttachmentStore,
 	createAsyncConversationStreamStore,
 	createAsyncEventStreamStore,

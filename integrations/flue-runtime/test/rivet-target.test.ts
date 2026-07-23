@@ -9,7 +9,6 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createClient } from 'rivetkit/client';
-import { retryTransientRivetStart } from '../src/target-helpers.ts';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoots = [];
@@ -66,12 +65,10 @@ test('builds and serves an agent through target: rivet', async () => {
 			FLUE_RIVET_REGISTRY_KEY: registryKey,
 		});
 		await waitForServer(port, dev.logs);
-		const client = createClient<any>({ endpoint: `http://127.0.0.1:${enginePort}`, poolName });
-		try {
-			await retryTransientRivetStart(() =>
-				client.health.getOrCreate(['test']).ping('ready'),
-			);
-		} catch (error) {
+			const client = createClient<any>({ endpoint: `http://127.0.0.1:${enginePort}`, poolName });
+			try {
+				await client.health.getOrCreate(['test']).ping('ready');
+			} catch (error) {
 			assert.fail(`${String(error)}\n\n${dev.logs()}`);
 		}
 		await client.dispose();
