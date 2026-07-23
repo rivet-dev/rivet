@@ -49,10 +49,10 @@ You get Flue's developer experience on an OS built for agents.
 Install the three packages that make up the integration:
 
 ```sh
-npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue
+npm add @rivet-dev/flue-target @rivet-dev/agentos @rivet-dev/agentos-flue
 ```
 
-- `@rivet-dev/flue` runs Flue agents and workflows as durable Rivet Actors.
+- `@rivet-dev/flue-target` runs Flue agents and workflows as durable Rivet Actors.
 - `@rivet-dev/agentos` provides the isolated VM actor.
 - `@rivet-dev/agentos-flue` connects Flue's sandbox API to agentOS.
 
@@ -73,7 +73,7 @@ export const registry = setup({ use: { vm } });
 ```ts flue.config.ts
 // Point Flue's Rivet build target at the registry.
 import { defineConfig } from "@flue/cli/config";
-import { rivet } from "@rivet-dev/flue";
+import { rivet } from "@rivet-dev/flue-target";
 
 export default defineConfig({ target: rivet({ actors: "./actors.ts" }) });
 ```

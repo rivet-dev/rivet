@@ -1,15 +1,11 @@
 # @rivet-dev/flue
 
-A [Flue](https://github.com/withastro/flue) build target that compiles a
-Flue project (agents + workflows) into a [Rivet](https://rivet.dev) Actor
-application. Export a RivetKit registry from `actors.ts`, set `target: rivet` in
-`flue.config.ts`, and `flue build` emits a
-server entrypoint that maps each agent and each workflow to a Rivet Actor, with
-durable sessions, submission recovery, and inter-actor `dispatch()` backed by
-each actor's native SQLite database (`c.db`).
+The Rivet Actor runtime implementation used by `@rivet-dev/flue-target`. It
+provides durable sessions, submission recovery, inter-actor `dispatch()`, and
+Flue storage backed by each actor's native SQLite database (`c.db`).
+
+Application code should install and configure `@rivet-dev/flue-target` instead
+of importing this package directly.
 
 Full documentation, setup, and configuration:
 **https://rivet.dev/docs/integrations/flue**
-
-Runnable example: [`examples/rivet`](./examples/rivet), a plain Node application
-with one agent and one dispatch workflow.

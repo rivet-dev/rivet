@@ -1,7 +1,7 @@
 {
-	"name": "@rivet-dev/flue",
+	"name": "@rivet-dev/flue-target",
 	"version": "2.3.7",
-	"description": "Rivet Actor runtime implementation for the @rivet-dev/flue-target package.",
+	"description": "Flue target that compiles agents and workflows into a Rivet Actor application.",
 	"license": "Apache-2.0",
 	"publishConfig": {
 		"access": "public"
@@ -11,6 +11,7 @@
 		"rivetkit",
 		"rivet",
 		"flue",
+		"target",
 		"agents",
 		"workflows",
 		"actor",
@@ -29,10 +30,6 @@
 		"./runtime": {
 			"types": "./dist/runtime.d.ts",
 			"default": "./dist/runtime.js"
-		},
-		"./internal": {
-			"types": "./dist/internal.d.ts",
-			"default": "./dist/internal.js"
 		}
 	},
 	"main": "./dist/index.js",
@@ -41,18 +38,20 @@
 		"build": "tsc -p tsconfig.build.json",
 		"check-types": "tsc --noEmit",
 		"check:types": "tsc --noEmit",
-		"test": "pnpm run test:node && pnpm run test:contracts",
-		"test:node": "bash -c 'for file in test/*.test.ts; do case \"$file\" in *contract*) continue ;; esac; tsx --test \"$file\" || exit $?; done'",
-		"test:contracts": "vitest run test/rivet-store-contracts.test.ts"
+		"test": "pnpm run test:node && pnpm run test:examples",
+		"test:node": "tsx --test test/rivet-entrypoints.test.ts test/rivet-target.test.ts",
+		"test:examples": "pnpm --dir examples/rivet run test:e2e"
 	},
 	"dependencies": {
+		"@flue/cli": "git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli",
 		"@flue/runtime": "git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime",
+		"@rivet-dev/flue": "workspace:*",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
+		"@rivetkit/engine-cli": "workspace:*",
 		"tsx": "^4.22.4",
-		"typescript": "6.0.3",
-		"vitest": "^4.0.15"
+		"typescript": "6.0.3"
 	},
 	"engines": {
 		"node": ">=22.19.0"
