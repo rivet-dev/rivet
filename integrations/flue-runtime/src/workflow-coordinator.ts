@@ -11,7 +11,6 @@ import {
 	handleStreamRead,
 	handleWorkflowRequest,
 } from '@flue/runtime/adapter-kit';
-import { runWithRivetContext, type RivetActorIdentity, type RivetContext } from './context.js';
 import { createRivetRunStore } from './run-store-composite.js';
 import { createAsyncRunStore, ensureAsyncSqlSchema, type AsyncSqlDb } from './stores/index.js';
 
@@ -122,25 +121,23 @@ export class RivetWorkflowCoordinator {
 	}
 
 	async onWake(inherited: () => Promise<unknown> | unknown): Promise<void> {
-		await this.runWithActorContext(() => inherited());
+		await inherited();
 		const run = await this.prepared.runStore.getRun(this.runId);
 		if (run?.status !== 'active') return;
-		await this.runWithActorContext(() =>
-			failRecoveredRun({
-				workflowName: this.workflowName,
-				runId: this.runId,
-				request: new Request(`https://flue.invalid/workflows/${encodeURIComponent(this.workflowName)}`, {
-					method: 'POST',
-				}),
-				error: new Error(
-					'Flue workflow execution was interrupted. Start a new workflow run explicitly if retry is appropriate.',
-				),
-				runStore: this.prepared.runStore,
-				eventStreamStore: this.eventStreamStore,
-				createContext: ({ runId, request, initialEventIndex }) =>
-					this.createContext(request, runId, initialEventIndex),
+		await failRecoveredRun({
+			workflowName: this.workflowName,
+			runId: this.runId,
+			request: new Request(`https://flue.invalid/workflows/${encodeURIComponent(this.workflowName)}`, {
+				method: 'POST',
 			}),
-		);
+			error: new Error(
+				'Flue workflow execution was interrupted. Start a new workflow run explicitly if retry is appropriate.',
+			),
+			runStore: this.prepared.runStore,
+			eventStreamStore: this.eventStreamStore,
+			createContext: ({ runId, request, initialEventIndex }) =>
+				this.createContext(request, runId, initialEventIndex),
+		});
 	}
 
 	async onRequest(request: Request): Promise<Response | null> {
@@ -161,24 +158,20 @@ export class RivetWorkflowCoordinator {
 		if (!parseWorkflowStart(request, this.workflowName)) return null;
 		const workflow = this.options.workflows.find((record) => record.name === this.workflowName)?.definition;
 		if (!workflow) return null;
-		return this.runWithActorContext(() =>
-			handleWorkflowRequest({
-				request,
-				workflowName: this.workflowName,
-				runId: this.runId,
-				workflow,
-				runStore: this.prepared.runStore,
-				eventStreamStore: this.eventStreamStore,
-				createContext: ({ runId, request, initialEventIndex }) =>
-					this.createContext(request, runId, initialEventIndex),
-				startWorkflowAdmission: (_runId, run) => {
-					const completion = this.actor.keepAwake(
-						Promise.resolve().then(() => this.runWithActorContext(run)),
-					);
-					return { admitted: Promise.resolve(), completion };
-				},
-			}),
-		);
+		return handleWorkflowRequest({
+			request,
+			workflowName: this.workflowName,
+			runId: this.runId,
+			workflow,
+			runStore: this.prepared.runStore,
+			eventStreamStore: this.eventStreamStore,
+			createContext: ({ runId, request, initialEventIndex }) =>
+				this.createContext(request, runId, initialEventIndex),
+			startWorkflowAdmission: (_runId, run) => {
+				const completion = this.actor.keepAwake(Promise.resolve().then(run));
+				return { admitted: Promise.resolve(), completion };
+			},
+		});
 	}
 
 	private get workflowName(): string {
@@ -202,22 +195,6 @@ export class RivetWorkflowCoordinator {
 		});
 	}
 
-	private runWithActorContext<T>(callback: () => T): T {
-		const context: RivetContext = {
-			identity: createIdentity(this.actor),
-			env: this.actor.env ?? {},
-		};
-		return runWithRivetContext(context, callback);
-	}
-}
-
-function createIdentity(actor: RivetWorkflowActorContext): RivetActorIdentity {
-	return {
-		actorId: actor.actorId,
-		key: actor.key,
-		name: actor.name,
-		region: actor.region,
-	};
 }
 
 function parseWorkflowStart(request: Request, workflowName: string): boolean {

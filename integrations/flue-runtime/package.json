@@ -26,10 +26,6 @@
 			"types": "./dist/index.d.ts",
 			"default": "./dist/index.js"
 		},
-		"./extension": {
-			"types": "./dist/extension.d.ts",
-			"default": "./dist/extension.js"
-		},
 		"./runtime": {
 			"types": "./dist/runtime.d.ts",
 			"default": "./dist/runtime.js"

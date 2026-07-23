@@ -27,7 +27,6 @@ import {
 	reconcileInterruptedSubmission,
 	submissionSyntheticRequest,
 } from '@flue/runtime/adapter-kit';
-import { runWithRivetContext, type RivetActorIdentity, type RivetContext } from './context.js';
 import {
 	createAsyncSqlStores,
 	ensureAsyncSqlSchema,
@@ -125,23 +124,19 @@ export class RivetAgentCoordinator {
 	) {}
 
 	async onWake(inherited: () => Promise<unknown> | unknown): Promise<void> {
-		await this.runWithActorContext(async () => {
-			await this.restoreSubmissionWake();
-			await inherited();
-			await this.reconcileSubmissions({ driverAlreadyArmed: true });
-		});
+		await this.restoreSubmissionWake();
+		await inherited();
+		await this.reconcileSubmissions({ driverAlreadyArmed: true });
 	}
 
 	async wakeSubmissions(): Promise<void> {
-		await this.runWithActorContext(async () => {
-			if (!(await this.submissions.hasUnsettledSubmissions())) return;
-			await this.armSubmissionWake();
-			await this.reconcileSubmissions({ driverAlreadyArmed: true });
-		});
+		if (!(await this.submissions.hasUnsettledSubmissions())) return;
+		await this.armSubmissionWake();
+		await this.reconcileSubmissions({ driverAlreadyArmed: true });
 	}
 
 	onRequest(request: Request): Promise<Response | null> {
-		return this.runWithActorContext(() => this.routeRequest(request));
+		return this.routeRequest(request);
 	}
 
 	private async routeRequest(request: Request): Promise<Response | null> {
@@ -186,11 +181,6 @@ export class RivetAgentCoordinator {
 	private get submissions(): AgentSubmissionStore { return this.executionStore.submissions; }
 	private get instanceId() {
 		return this.options.resolveInstanceId?.(this.actor) ?? this.actor.key[0] ?? this.actor.actorId;
-	}
-
-	private runWithActorContext<T>(callback: () => T): T {
-		const context: RivetContext = { identity: createIdentity(this.actor), env: this.actor.env ?? {} };
-		return runWithRivetContext(context, callback);
 	}
 
 	private async ensureConversationWriter(): Promise<ConversationRecordWriter> {
@@ -309,10 +299,10 @@ export class RivetAgentCoordinator {
 		const controller = new AbortController();
 		this.activeControllers.set(submission.submissionId, controller);
 		const attempt = { submissionId: submission.submissionId, attemptId: submission.attemptId };
-		const running = Promise.resolve().then(() => this.runWithActorContext(async () => {
-				await this.submissions.insertAttemptMarker(attempt);
-				await this.processSubmissionEntry(submission, controller.signal);
-			}));
+		const running = Promise.resolve().then(async () => {
+			await this.submissions.insertAttemptMarker(attempt);
+			await this.processSubmissionEntry(submission, controller.signal);
+		});
 		void this.actor.keepAwake(running).catch((error) => this.logFailure(submission, 'process_submission', error))
 			.finally(() => {
 				this.activeAttempts.delete(key);
@@ -336,9 +326,9 @@ export class RivetAgentCoordinator {
 	}
 
 	private startSubmissionReconciliation(): void {
-		const running = Promise.resolve().then(() => this.runWithActorContext(
+		const running = Promise.resolve().then(
 			() => this.reconcileSubmissions({ driverAlreadyArmed: true }),
-		));
+		);
 		void this.actor.keepAwake(running).catch((error) => {
 			console.error('[flue:submission-reconciliation]', {
 				agentName: this.agentName,
@@ -429,10 +419,6 @@ export class RivetAgentCoordinator {
 			operation,
 		}, error);
 	}
-}
-
-function createIdentity(actor: RivetAgentActorContext): RivetActorIdentity {
-	return { actorId: actor.actorId, key: actor.key, name: actor.name, region: actor.region };
 }
 
 function isInternalDispatchRequest(request: Request): boolean {

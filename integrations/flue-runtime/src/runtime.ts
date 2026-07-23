@@ -13,22 +13,6 @@ export {
 	type RivetWorkflowRuntime,
 	type RivetWorkflowRuntimeOptions,
 } from './workflow-coordinator.js';
-export {
-	getRivetActorIdentity,
-	getRivetContext,
-	runWithRivetContext,
-	type RivetActorIdentity,
-	type RivetContext,
-} from './context.js';
-export {
-	assertFlueRivetActorDefinition,
-	extend,
-	markFlueRivetActorDefinition,
-	resolveRivetExtension,
-	type FlueRivetActorConfig,
-	type FlueRivetActorDefinition,
-	type RivetExtension,
-} from './extension.js';
 export { createRivetAsyncSqlDb, type RivetRawDb } from './rivet-db.js';
 export {
 	createAsyncAttachmentStore,
