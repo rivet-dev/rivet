@@ -38,45 +38,37 @@ test('examples/rivet builds and serves agent and workflow requests end to end', 
 		peerPort: enginePeerPort,
 		metricsPort: engineMetricsPort,
 	});
-	const dev = startDev(rivetExampleRoot, port, {
-		RIVET_RUN_ENGINE: '0',
-		RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
-		RIVET_POOL: poolName,
-		FLUE_RIVET_REGISTRY_KEY: registryKey,
-	});
+	let dev;
 	try {
 		await waitForMetadata(enginePort, engine.logs);
-		await waitForServer(port, dev.logs);
 		await configureNormalRunnerConfig(poolName, enginePort);
+		dev = startDev(rivetExampleRoot, port, {
+			RIVET_RUN_ENGINE: '0',
+			RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
+			RIVET_POOL: poolName,
+			FLUE_RIVET_REGISTRY_KEY: registryKey,
+		});
+		await waitForServer(port, dev.logs);
 
-		const prompt = await fetchWithDiagnostics(
-			`http://127.0.0.1:${port}/agents/assistant/${instanceId}?wait=result`,
-			{
-				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ message: 'Hello example' }),
-			},
-			30_000,
+		const admitted = await postAgentPromptWithRetry(
+			(attempt) => `http://127.0.0.1:${port}/agents/assistant/${instanceId}-${attempt}`,
+			'Hello example',
 			() => `${dev.logs()}\n\n${engine.logs()}`,
 		);
-		const promptText = await prompt.text();
-		assert.equal(prompt.status, 200, `${promptText}\n\n${dev.logs()}`);
-		assert.equal(JSON.parse(promptText).result.text, 'Hello from Rivet.');
-
-		const agentStream = await fetchWithTimeout(
-			`http://127.0.0.1:${port}/agents/assistant/${instanceId}`,
-			undefined,
-			30_000,
+		const promptInstanceId = `${instanceId}-${admitted.attempt}`;
+		assert.equal(typeof admitted.receipt.submissionId, 'string');
+		const conversation = await waitForConversationText(
+			`http://127.0.0.1:${port}/agents/assistant/${promptInstanceId}?view=history`,
+			'Hello from Rivet.',
+			dev.logs,
 		);
-		assert.equal(agentStream.status, 200);
-		assert.match(await agentStream.text(), /agent_start|agent_end/);
 
 		// Regression coverage for the streaming forwarding rework (#1): an SSE read must
 		// stream `text/event-stream` immediately. Under the old serialize-to-JSON shim
 		// the actor buffered the never-ending stream until the action timeout, so this
 		// fetch would hang instead of resolving with headers.
 		const sse = await fetchWithTimeout(
-			`http://127.0.0.1:${port}/agents/assistant/${instanceId}?live=sse&offset=now`,
+			`http://127.0.0.1:${port}/agents/assistant/${promptInstanceId}?view=updates&live=sse&offset=${encodeURIComponent(conversation.offset)}`,
 			undefined,
 			30_000,
 		);
@@ -99,8 +91,8 @@ test('examples/rivet builds and serves agent and workflow requests end to end', 
 		const workflowText = await workflow.text();
 		assert.equal(workflow.status, 200, `${workflowText}\n\n${dev.logs()}`);
 		const workflowBody = JSON.parse(workflowText);
-		assert.equal(workflowBody.result.payload.source, 'examples/rivet');
-		assert.equal(workflowBody.result.payload.dispatchedInstanceId, `dispatched-${instanceId}`);
+		assert.equal(workflowBody.result.input.source, 'examples/rivet');
+		assert.equal(workflowBody.result.input.dispatchedInstanceId, `dispatched-${instanceId}`);
 		assert.equal(typeof workflowBody.result.dispatchId, 'string');
 
 		// Prove the dispatch was actually DELIVERED, not just enqueued: the workflow
@@ -148,7 +140,7 @@ test('examples/rivet builds and serves agent and workflow requests end to end', 
 		);
 		assert.equal(runLongPoll.status, 204, dev.logs());
 	} finally {
-		await dev.stop();
+		await dev?.stop();
 		await engine.stop();
 		killEngineOnPort(enginePort);
 	}
@@ -214,8 +206,17 @@ test('examples/rivet-vercel builds and exposes Next route handlers end to end', 
 		await waitForHttpOk(`${origin}/api/rivet/metadata`, dev.logs, 60_000);
 
 		const instanceId = `vercel-example-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-		const responseText = await postVercelPromptWithRetry(origin, instanceId);
-		assert.equal(JSON.parse(responseText).result.text, 'Hello from the Vercel route.');
+		const admitted = await postAgentPromptWithRetry(
+			(attempt) => `${origin}/api/flue/agents/assistant/${instanceId}-${attempt}`,
+			'Hello from example route',
+			dev.logs,
+		);
+		assert.equal(typeof admitted.receipt.submissionId, 'string');
+		await waitForConversationText(
+			`${origin}/api/flue/agents/assistant/${instanceId}-${admitted.attempt}?view=history`,
+			'Hello from the Vercel route.',
+			dev.logs,
+		);
 		await waitForLog(dev.logs, /POST \/api\/rivet\/start/, 10_000);
 
 		const gateway = await fetchWithTimeout(`${origin}/api/rivet/metadata`, undefined, 30_000);
@@ -230,20 +231,19 @@ test('examples/rivet-vercel builds and exposes Next route handlers end to end', 
 	}
 });
 
-async function postVercelPromptWithRetry(origin, instanceId) {
+async function postAgentPromptWithRetry(urlForAttempt, body, logs = () => '') {
 	let lastText = '';
 	for (let attempt = 0; attempt < 6; attempt++) {
-		const attemptInstanceId = `${instanceId}-${attempt}`;
 		try {
-			const response = await fetchWithTimeout(`${origin}/api/flue/agents/assistant/${attemptInstanceId}?wait=result`, {
+			const response = await fetchWithTimeout(urlForAttempt(attempt), {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ message: 'Hello from example route' }),
+				body: JSON.stringify({ kind: 'user', body }),
 			}, 30_000);
 			lastText = await response.text();
-			if (response.status === 200) return lastText;
+			if (response.status === 202) return { attempt, receipt: JSON.parse(lastText) };
 			if (response.status < 500 && !/actor|envoy|ready|wake|timeout|aborted/i.test(lastText)) {
-				assert.equal(response.status, 200, lastText);
+				assert.equal(response.status, 202, `${lastText}\n\n${logs()}`);
 			}
 		} catch (error) {
 			lastText = error instanceof Error ? error.stack || error.message : String(error);
@@ -251,7 +251,23 @@ async function postVercelPromptWithRetry(origin, instanceId) {
 		}
 		await delay(2_000 * (attempt + 1));
 	}
-	assert.fail(lastText);
+	assert.fail(`${lastText}\n\n${logs()}`);
+}
+
+async function waitForConversationText(url, expectedText, logs = () => '') {
+	let lastText = '';
+	for (let attempt = 0; attempt < 20; attempt++) {
+		if (attempt > 0) await delay(250);
+		const response = await fetchWithTimeout(url, undefined, 30_000);
+		lastText = await response.text();
+		if (!response.ok) continue;
+		const snapshot = JSON.parse(lastText);
+		if (snapshot.messages?.some((message) =>
+			message.role === 'assistant' &&
+			message.parts?.some((part) => part.type === 'text' && part.text === expectedText),
+		)) return snapshot;
+	}
+	assert.fail(`Expected conversation to contain ${JSON.stringify(expectedText)}\n\n${lastText}\n\n${logs()}`);
 }
 
 async function waitForAgentStreamText(url, expectedText, logs = () => '') {
@@ -468,8 +484,8 @@ async function waitForServer(port, logs = () => '') {
 	await waitFor(
 		async () => {
 			try {
-				const response = await fetch(`http://127.0.0.1:${port}/openapi.json`);
-				return response.ok;
+				const response = await fetch(`http://127.0.0.1:${port}/`);
+				return response.status < 500;
 			} catch {
 				return false;
 			}
@@ -533,14 +549,6 @@ async function fetchWithTimeout(url, init, timeout) {
 		return await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
 	} catch (error) {
 		throw new Error(`Request failed for ${url}`, { cause: error });
-	}
-}
-
-async function fetchWithDiagnostics(url, init, timeout, logs) {
-	try {
-		return await fetchWithTimeout(url, init, timeout);
-	} catch (error) {
-		throw new Error(`Request failed for ${url}\n\n${logs()}`, { cause: error });
 	}
 }
 

@@ -79,22 +79,41 @@ test('serves a generated Flue app through the Next route handler adapter', async
 		server = await import(pathToFileURL(path.join(root, 'dist', 'server.mjs')).href);
 		server.registry.config.test = { ...server.registry.config.test, enabled: true };
 		server.registry.config.noWelcome = true;
-		server.registry.start();
 		await configureNormalRunnerConfig(poolName, enginePort);
+		await server.registry.startAndWait();
 
 		const flueHandlers = toFlueNextHandler(server.flueApp);
 		const response = await flueHandlers.POST(
-			new Request(`http://next.local/api/flue/agents/assistant/${instanceId}?wait=result`, {
+			new Request(`http://next.local/api/flue/agents/assistant/${instanceId}`, {
 				method: 'POST',
 				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ message: 'Hello from Next' }),
+				body: JSON.stringify({ kind: 'user', body: 'Hello from Next' }),
 			}),
 			{ params: Promise.resolve({ all: ['agents', 'assistant', instanceId] }) },
 		);
 
 		const responseText = await response.text();
-		assert.equal(response.status, 200, responseText);
-		assert.equal(JSON.parse(responseText).result.text, 'Hello from Next route.');
+		assert.equal(response.status, 202, responseText);
+		assert.equal(typeof JSON.parse(responseText).submissionId, 'string');
+		let snapshot;
+		for (let attempt = 0; attempt < 20; attempt++) {
+			const history = await flueHandlers.GET(
+				new Request(`http://next.local/api/flue/agents/assistant/${instanceId}?view=history`),
+				{ params: Promise.resolve({ all: ['agents', 'assistant', instanceId] }) },
+			);
+			if (history.ok) {
+				snapshot = await history.json();
+				if (snapshot.messages?.some((message) =>
+					message.role === 'assistant' &&
+					message.parts?.some((part) => part.type === 'text' && part.state === 'done'),
+				)) break;
+			}
+			await delay(250);
+		}
+		assert.ok(snapshot.messages.some((message) =>
+			message.role === 'assistant' &&
+			message.parts.some((part) => part.type === 'text' && part.text === 'Hello from Next route.'),
+		));
 		assert.equal(typeof server.registry.handler, 'function');
 		assert.equal(Object.keys(server.registry.config.use).includes('flue-agent-assistant'), true);
 		passed = true;
@@ -147,7 +166,7 @@ function writeProject(root) {
 	fs.mkdirSync(path.join(root, 'agents'), { recursive: true });
 	fs.writeFileSync(
 		path.join(root, 'agents', 'assistant.ts'),
-		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nconst provider = registerFauxProvider({ provider: 'rivet-next-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from Next route.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
+		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nexport const route = async (_c, next) => next();\nconst provider = registerFauxProvider({ provider: 'rivet-next-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from Next route.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
 	);
 }
 

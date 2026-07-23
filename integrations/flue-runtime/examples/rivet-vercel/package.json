@@ -9,8 +9,8 @@
 		"test:e2e": "pnpm --filter @rivetkit/rivetkit-napi run build && pnpm --dir ../../../../rivetkit-typescript/packages/next-js exec tsup src/mod.ts --format esm,cjs --no-config && pnpm --dir ../.. exec tsx --test --test-name-pattern \"^examples/rivet-vercel\" test/rivet-examples.test.ts"
 	},
 	"dependencies": {
-		"@flue/cli": "git+https://github.com/NathanFlurry/flue.git#3c0e75b763031ce27bd55fd3ce062f8e215944ea&path:/packages/cli",
-		"@flue/runtime": "git+https://github.com/NathanFlurry/flue.git#acffb0ea59513d0f469f8de0fd5de649b2b826d9&path:/packages/runtime",
+		"@flue/cli": "git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli",
+		"@flue/runtime": "git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime",
 		"@mongodb-js/zstd": "link:./stubs/mongodb-js-zstd",
 		"@rivet-dev/flue": "workspace:*",
 		"@rivetkit/next-js": "workspace:*",

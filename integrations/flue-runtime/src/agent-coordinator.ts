@@ -1,33 +1,44 @@
 import type {
+	AgentDefinition,
 	AgentExecutionStore,
 	AgentSubmission,
-	AgentSubmissionObserverRegistry,
 	AgentSubmissionStore,
-	EventStreamStore,
+	AttachmentStore,
+	ConversationStreamStore,
+	DeliveredMessage,
 	FlueContextInternal,
+	FlueTraceCarrier,
 } from '@flue/runtime/adapter-kit';
-import type { AttachedAgentEvent, CreatedAgent, PromptImage } from '@flue/runtime';
 import {
+	ConversationRecordWriter,
+	SubmissionAbortedError,
 	agentStreamPath,
+	agentSubmissionDispatchId,
 	assertAgentDispatchAdmissionInput,
-	createAgentSubmissionObserverRegistry,
 	createDirectAgentSubmissionInput,
-	deleteSessionTree,
+	createDispatchAgentSubmissionInput,
+	createSessionStorageKey,
+	handleAgentAttachmentRead,
+	handleAgentConversationHead,
+	handleAgentConversationRead,
 	handleAgentRequest,
-	handleStreamHead,
-	handleStreamRead,
-	isStreamExcludedEvent,
+	materializeAgentSubmissionSession,
 	processSubmission,
 	reconcileInterruptedSubmission,
 	submissionSyntheticRequest,
 } from '@flue/runtime/adapter-kit';
 import { runWithRivetContext, type RivetActorIdentity, type RivetContext } from './context.js';
-import { createAsyncSqlStores, ensureAsyncSqlSchema, type AsyncSqlDb } from './stores/index.js';
+import {
+	createAsyncSqlStores,
+	ensureAsyncSqlSchema,
+	type AsyncSqlDb,
+} from './stores/index.js';
 
 export const RIVET_AGENT_INTERNAL_DISPATCH_PATH = '/__flue/internal/dispatch';
-
-const FLUE_AGENT_SUBMISSION_WAKE_ACTION = '__flueWakeAgentSubmissions';
-const FLUE_AGENT_SUBMISSION_WAKE_SECONDS = 30;
+const WAKE_ACTION = '__flueWakeAgentSubmissions';
+const WAKE_SECONDS = 30;
+const SUBMISSION_HARNESS_NAME = 'default';
+const SUBMISSION_SESSION_NAME = 'default';
 
 export interface RivetAgentActorContext {
 	readonly actorId: string;
@@ -38,251 +49,192 @@ export interface RivetAgentActorContext {
 	readonly request?: Request;
 	readonly abortSignal: AbortSignal;
 	readonly db: AsyncSqlDb;
-	readonly schedule?: {
-		after(duration: number, action: string, ...args: unknown[]): Promise<void>;
-	};
+	readonly schedule?: { after(duration: number, action: string, ...args: unknown[]): Promise<void> };
 	keepAwake<T>(promise: Promise<T>): Promise<T>;
 }
 
-interface RivetAgentPreparedCoordinator {
+interface PreparedCoordinator {
 	readonly agentName: string;
 	readonly executionStore: AgentExecutionStore;
+	readonly conversationStreamStore: ConversationStreamStore;
+	readonly attachmentStore: AttachmentStore;
 }
 
 export interface RivetAgentRuntimeOptions {
-	readonly createdAgents: Record<string, CreatedAgent>;
+	readonly agents: ReadonlyArray<{ name: string; definition: AgentDefinition }>;
 	readonly createContext: (options: {
 		readonly executionStore: AgentExecutionStore;
 		readonly actor: RivetAgentActorContext;
-		readonly payload: unknown;
+		readonly agentName: string;
 		readonly request: Request;
 		readonly initialEventIndex?: number;
 		readonly dispatchId?: string;
 	}) => FlueContextInternal;
-	readonly createEventStreamStore: (actor: RivetAgentActorContext) => EventStreamStore;
 	readonly resolveInstanceId?: (actor: RivetAgentActorContext) => string;
 }
 
 export interface RivetAgentRuntime {
-	prepare(options: {
-		readonly db: AsyncSqlDb;
-		readonly agentName: string;
-	}): Promise<RivetAgentPreparedCoordinator>;
-	attach(
-		actor: RivetAgentActorContext,
-		prepared: RivetAgentPreparedCoordinator,
-	): RivetAgentCoordinator;
+	prepare(options: { db: AsyncSqlDb; agentName: string }): Promise<PreparedCoordinator>;
+	attach(actor: RivetAgentActorContext, prepared: PreparedCoordinator): RivetAgentCoordinator;
 	onWake(actor: RivetAgentActorContext, inherited?: () => Promise<unknown> | unknown): Promise<void>;
 	wakeSubmissions(actor: RivetAgentActorContext): Promise<void>;
 	onRequest(actor: RivetAgentActorContext, request: Request): Promise<Response | null>;
 }
 
-type DirectAgentPayload = {
-	message: string;
-	images?: PromptImage[];
-};
-
 export function createRivetAgentRuntime(options: RivetAgentRuntimeOptions): RivetAgentRuntime {
 	const coordinators = new WeakMap<RivetAgentActorContext, RivetAgentCoordinator>();
-	const observers = createAgentSubmissionObserverRegistry();
 	const activeAttempts = new Set<string>();
-
-	const getCoordinator = (actor: RivetAgentActorContext): RivetAgentCoordinator => {
+	const get = (actor: RivetAgentActorContext) => {
 		const coordinator = coordinators.get(actor);
-		if (!coordinator) {
-			throw new Error('[flue] Generated Rivet agent coordinator was not initialized.');
-		}
+		if (!coordinator) throw new Error('[flue] Rivet agent coordinator was not initialized.');
 		return coordinator;
 	};
-
 	return {
 		async prepare({ db, agentName }) {
 			await ensureAsyncSqlSchema(db);
+			const stores = createAsyncSqlStores(db);
 			return {
 				agentName,
-				executionStore: createAsyncSqlStores(db).executionStore,
+				executionStore: stores.executionStore,
+				conversationStreamStore: stores.conversationStreamStore,
+				attachmentStore: stores.attachmentStore,
 			};
 		},
 		attach(actor, prepared) {
-			const coordinator = new RivetAgentCoordinator(
-				actor,
-				prepared,
-				options,
-				options.createEventStreamStore(actor),
-				observers,
-				activeAttempts,
-			);
+			const coordinator = new RivetAgentCoordinator(actor, prepared, options, activeAttempts);
 			coordinators.set(actor, coordinator);
 			return coordinator;
 		},
-		onWake(actor, inherited = () => undefined) {
-			return getCoordinator(actor).onWake(inherited);
-		},
-		wakeSubmissions(actor) {
-			return getCoordinator(actor).wakeSubmissions();
-		},
-		onRequest(actor, request) {
-			return getCoordinator(actor).onRequest(request);
-		},
+		onWake: (actor, inherited = () => undefined) => get(actor).onWake(inherited),
+		wakeSubmissions: (actor) => get(actor).wakeSubmissions(),
+		onRequest: (actor, request) => get(actor).onRequest(request),
 	};
 }
 
 export class RivetAgentCoordinator {
-	private readonly actor: RivetAgentActorContext;
-	private readonly prepared: RivetAgentPreparedCoordinator;
-	private readonly options: RivetAgentRuntimeOptions;
-	private readonly eventStreamStore: EventStreamStore;
-	private readonly observers: AgentSubmissionObserverRegistry;
-	private readonly activeAttempts: Set<string>;
-	private readonly pendingEventWrites = new Set<Promise<void>>();
+	private conversationWriter: ConversationRecordWriter | undefined;
+	private conversationWriterCreation: Promise<ConversationRecordWriter> | undefined;
+	private conversationMaterialization: Promise<void> = Promise.resolve();
+	private activeControllers = new Map<string, AbortController>();
 
 	constructor(
-		actor: RivetAgentActorContext,
-		prepared: RivetAgentPreparedCoordinator,
-		options: RivetAgentRuntimeOptions,
-		eventStreamStore: EventStreamStore,
-		observers: AgentSubmissionObserverRegistry,
-		activeAttempts: Set<string>,
-	) {
-		this.actor = actor;
-		this.prepared = prepared;
-		this.options = options;
-		this.eventStreamStore = eventStreamStore;
-		this.observers = observers;
-		this.activeAttempts = activeAttempts;
-	}
+		private readonly actor: RivetAgentActorContext,
+		private readonly prepared: PreparedCoordinator,
+		private readonly options: RivetAgentRuntimeOptions,
+		private readonly activeAttempts: Set<string>,
+	) {}
 
 	async onWake(inherited: () => Promise<unknown> | unknown): Promise<void> {
-		await this.restoreSubmissionWake();
-		await this.runWithActorContext(() => inherited());
-		await this.resumePendingSessionDeletions();
-		await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		await this.runWithActorContext(async () => {
+			await this.restoreSubmissionWake();
+			await inherited();
+			await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		});
 	}
 
 	async wakeSubmissions(): Promise<void> {
-		if (!(await this.submissions.hasUnsettledSubmissions())) return;
-		await this.armSubmissionWake();
-		await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		await this.runWithActorContext(async () => {
+			if (!(await this.submissions.hasUnsettledSubmissions())) return;
+			await this.armSubmissionWake();
+			await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		});
 	}
 
-	async onRequest(request: Request): Promise<Response | null> {
+	onRequest(request: Request): Promise<Response | null> {
+		return this.runWithActorContext(() => this.routeRequest(request));
+	}
+
+	private async routeRequest(request: Request): Promise<Response | null> {
 		if (isInternalDispatchRequest(request)) return this.admitDispatch(request);
-
-		if (request.method === 'GET' || request.method === 'HEAD') {
-			const streamPath = agentStreamPath(this.agentName, this.instanceId);
-			if (request.method === 'HEAD') return handleStreamHead(this.eventStreamStore, streamPath);
-			return handleStreamRead({ store: this.eventStreamStore, path: streamPath, request });
+		if (isAbortRequest(request, this.agentName, this.instanceId)) {
+			return Response.json({ aborted: await this.abortInstance() });
 		}
-
-		return this.runWithActorContext(() =>
-			handleAgentRequest({
+		if (request.method === 'GET' || request.method === 'HEAD') {
+			const path = agentStreamPath(this.agentName, this.instanceId);
+			const segments = new URL(request.url).pathname.split('/');
+			const attachmentId = request.method === 'GET' &&
+				segments.at(-2) === 'attachments' &&
+				decodeURIComponent(segments.at(-3) ?? '') === this.instanceId &&
+				decodeURIComponent(segments.at(-4) ?? '') === this.agentName
+				? decodeURIComponent(segments.at(-1) ?? '') : undefined;
+			if (attachmentId) return handleAgentAttachmentRead({
+				conversationStore: this.prepared.conversationStreamStore,
+				attachmentStore: this.prepared.attachmentStore,
+				path,
+				attachmentId,
+			});
+			if (request.method === 'HEAD') {
+				return handleAgentConversationHead(this.prepared.conversationStreamStore, path);
+			}
+			return handleAgentConversationRead({
+				store: this.prepared.conversationStreamStore,
+				path,
 				request,
-				id: this.instanceId,
-				agentName: this.agentName,
-				eventStreamStore: this.eventStreamStore,
-				admitAttachedSubmission: (payload, onEvent, waitForResult) =>
-					this.admitAttachedSubmission(payload, onEvent, waitForResult),
-			}),
-		);
+			});
+		}
+		return handleAgentRequest({
+			request,
+			id: this.instanceId,
+			agentName: this.agentName,
+			admitAttachedSubmission: (message, traceCarrier) =>
+				this.admitAttachedSubmission(message, traceCarrier),
+		});
 	}
 
-	private get agentName(): string {
-		return this.prepared.agentName;
-	}
-
-	private get executionStore(): AgentExecutionStore {
-		return this.prepared.executionStore;
-	}
-
-	private get submissions(): AgentSubmissionStore {
-		return this.executionStore.submissions;
-	}
-
-	private get instanceId(): string {
+	private get agentName() { return this.prepared.agentName; }
+	private get executionStore() { return this.prepared.executionStore; }
+	private get submissions(): AgentSubmissionStore { return this.executionStore.submissions; }
+	private get instanceId() {
 		return this.options.resolveInstanceId?.(this.actor) ?? this.actor.key[0] ?? this.actor.actorId;
 	}
 
 	private runWithActorContext<T>(callback: () => T): T {
-		const context: RivetContext = {
-			identity: createIdentity(this.actor),
-			env: this.actor.env ?? {},
-		};
+		const context: RivetContext = { identity: createIdentity(this.actor), env: this.actor.env ?? {} };
 		return runWithRivetContext(context, callback);
 	}
 
-	private createContext(
-		payload: unknown,
-		request: Request,
-		initialEventIndex?: number,
-		dispatchId?: string,
-	): FlueContextInternal {
+	private async ensureConversationWriter(): Promise<ConversationRecordWriter> {
+		if (this.conversationWriter && !this.conversationWriter.failed) return this.conversationWriter;
+		if (!this.conversationWriterCreation) {
+			const creation = ConversationRecordWriter.create({
+				store: this.prepared.conversationStreamStore,
+				path: agentStreamPath(this.agentName, this.instanceId),
+				identity: { agentName: this.agentName, instanceId: this.instanceId },
+				producerId: this.actor.actorId,
+				onFailed: (writer) => {
+					if (this.conversationWriter === writer) this.conversationWriter = undefined;
+				},
+			});
+			this.conversationWriterCreation = creation;
+			void creation.then((writer) => {
+				if (!writer.failed) this.conversationWriter = writer;
+				if (this.conversationWriterCreation === creation) this.conversationWriterCreation = undefined;
+			}, () => {
+				if (this.conversationWriterCreation === creation) this.conversationWriterCreation = undefined;
+			});
+		}
+		return this.conversationWriterCreation;
+	}
+
+	private createContext(request: Request, dispatchId?: string): FlueContextInternal {
 		return this.options.createContext({
 			executionStore: this.executionStore,
 			actor: this.actor,
-			payload,
+			agentName: this.agentName,
 			request,
-			initialEventIndex,
 			dispatchId,
 		});
 	}
 
-	private createDurableContext(
-		payload: unknown,
-		request: Request,
-		dispatchId?: string,
-	): FlueContextInternal {
-		const ctx = this.createContext(payload, request, undefined, dispatchId);
-		const streamPath = agentStreamPath(this.agentName, this.instanceId);
-		ctx.subscribeEvent((event) => {
-			if (isStreamExcludedEvent(event)) return;
-			let write!: Promise<void>;
-			write = this.eventStreamStore
-				.appendEvent(streamPath, event)
-				.then(
-					() => {},
-					(error) => {
-						console.error('[flue:event-stream] appendEvent failed:', error);
-					},
-				)
-				.finally(() => this.pendingEventWrites.delete(write));
-			this.pendingEventWrites.add(write);
-		});
+	private createDurableContext(request: Request, dispatchId?: string): FlueContextInternal {
+		const ctx = this.createContext(request, dispatchId);
+		ctx.setConversationWriter?.(this.conversationWriter);
+		ctx.setAttachmentStore?.(this.prepared.attachmentStore);
 		return ctx;
 	}
 
-	private async flushEventWrites(): Promise<void> {
-		while (this.pendingEventWrites.size > 0) {
-			await Promise.all([...this.pendingEventWrites]);
-		}
-	}
-
-	private async resumePendingSessionDeletions(): Promise<void> {
-		for (const sessionKey of await this.submissions.listPendingSessionDeletions()) {
-			try {
-				await this.submissions.deleteSession(sessionKey, () =>
-					deleteSessionTree(this.executionStore.sessions, sessionKey),
-				);
-			} catch (error) {
-				console.error(
-					'[flue:session-deletion]',
-					{
-						agentName: this.agentName,
-						instanceId: this.instanceId,
-						sessionKey,
-						operation: 'resume_session_deletion',
-						outcome: 'failed',
-					},
-					error,
-				);
-			}
-		}
-	}
-
-	private async armSubmissionWake(): Promise<void> {
-		await this.actor.schedule?.after(
-			FLUE_AGENT_SUBMISSION_WAKE_SECONDS,
-			FLUE_AGENT_SUBMISSION_WAKE_ACTION,
-		);
+	private armSubmissionWake(): Promise<void> {
+		return this.actor.schedule?.after(WAKE_SECONDS, WAKE_ACTION) ?? Promise.resolve();
 	}
 
 	private async restoreSubmissionWake(): Promise<boolean> {
@@ -291,34 +243,32 @@ export class RivetAgentCoordinator {
 		return true;
 	}
 
-	private async reconcileSubmissions(
-		options: { driverAlreadyArmed?: boolean } = {},
-	): Promise<boolean> {
+	private async reconcileSubmissions(options: { driverAlreadyArmed?: boolean } = {}): Promise<boolean> {
 		if (!(await this.submissions.hasUnsettledSubmissions())) return false;
 		if (!options.driverAlreadyArmed) await this.restoreSubmissionWake();
-		// Unlike the Cloudflare adapter, we intentionally do NOT consult persisted
-		// attempt markers here, only the in-process `activeAttempts` set. Those
-		// markers exist on Cloudflare to coordinate with its durable resumable
-		// fibers (`runFiber`/`onFiberRecovered`): after a DO eviction the SDK
-		// auto-resumes an in-flight attempt, and a still-fresh marker tells reconcile
-		// "the fiber is being resumed — don't terminalize it as interrupted." Rivet
-		// has no fiber resume — an actor restart permanently drops the in-flight
-		// `keepAwake` work — so every `running` submission found after a restart IS
-		// genuinely interrupted and must be reconciled. `activeAttempts` (shared
-		// across this process, added synchronously before the turn starts) suppresses
-		// reconcile for attempts still live in THIS process; the `claimSubmission`
-		// CAS + the attempt-id ownership re-check in `processSubmission` guard against
-		// double-processing regardless. Wiring markers in here would wrongly suppress
-		// legitimate post-restart recovery. The store still implements the marker
-		// methods for `AgentSubmissionStore` contract compliance; this coordinator
-		// just never needs them.
-		for (const submission of await this.submissions.listRunningSubmissions()) {
-			if (this.activeAttempts.has(this.submissionAttemptLocalKey(submission))) continue;
+		for (const submission of await this.submissions.listUnreadySubmissions()) {
+			const agent = this.resolveAgent(submission.input.agent);
 			try {
-				await this.reconcileInterruptedSubmission(submission);
-			} catch (error) {
-				this.logSubmissionReconciliationFailure(submission, 'reconcile_submission', error);
+				await this.materializeSubmissionConversation(submission.input, agent);
+				await this.submissions.markSubmissionCanonicalReady(submission.submissionId);
+			} catch (error) { this.logFailure(submission, 'materialize_submission', error); }
+		}
+		for (const settlement of await this.submissions.listPendingSubmissionSettlements()) {
+			const submission = await this.submissions.getSubmission(settlement.submissionId);
+			if (!submission || this.activeAttempts.has(this.attemptKey(submission))) continue;
+			const writer = await this.ensureConversationWriter();
+			const attempt = { submissionId: settlement.submissionId, attemptId: settlement.attemptId };
+			const canonical = await writer.getRecord(settlement.recordId);
+			if (!canonical) await writer.append([settlement.record], { submission: attempt });
+			else if (JSON.stringify(canonical) !== JSON.stringify(settlement.record)) {
+				throw new Error('[flue] Pending settlement conflicts with its canonical record.');
 			}
+			await this.submissions.finalizeSubmissionSettlement(attempt, settlement.recordId);
+		}
+		for (const submission of await this.submissions.listRunningSubmissions()) {
+			if (this.activeAttempts.has(this.attemptKey(submission))) continue;
+			try { await this.reconcileInterrupted(submission); }
+			catch (error) { this.logFailure(submission, 'reconcile_submission', error); }
 		}
 		for (const submission of await this.submissions.listRunnableSubmissions()) {
 			const claimed = await this.submissions.claimSubmission({
@@ -327,151 +277,93 @@ export class RivetAgentCoordinator {
 				ownerId: this.actor.actorId,
 				leaseExpiresAt: 0,
 			});
-			if (!claimed) continue;
-			try {
-				await this.startSubmissionAttempt(claimed);
-			} catch (error) {
-				this.logSubmissionReconciliationFailure(claimed, 'start_submission', error);
-			}
+			if (claimed) this.startSubmissionAttempt(claimed);
 		}
-		return await this.submissions.hasUnsettledSubmissions();
+		return this.submissions.hasUnsettledSubmissions();
 	}
 
-	private logSubmissionReconciliationFailure(
-		submission: AgentSubmission,
-		operation: 'reconcile_submission' | 'start_submission',
-		error: unknown,
-	): void {
-		console.error(
-			'[flue:submission-reconciliation]',
-			{
-				agentName: this.agentName,
-				instanceId: this.instanceId,
-				submissionId: submission.submissionId,
-				sessionKey: submission.sessionKey,
-				attemptId: submission.attemptId,
-				operation,
-				outcome: 'deferred_to_wake',
-			},
-			error,
-		);
+	private resolveAgent(name: string): AgentDefinition {
+		const agent = this.options.agents.find((record) => record.name === name)?.definition;
+		if (!agent) throw new Error(`[flue] Agent target "${name}" is unavailable.`);
+		return agent;
 	}
 
-	private async reconcileInterruptedSubmission(submission: AgentSubmission): Promise<void> {
-		const agent = this.options.createdAgents[this.agentName];
-		if (!agent) throw new Error('[flue] Agent target unavailable during durable reconciliation.');
-		await this.eventStreamStore.createStream(agentStreamPath(this.agentName, this.instanceId)).catch(
-			(error) => {
-				console.error('[flue:event-stream] createStream failed:', error);
-			},
+	private async reconcileInterrupted(submission: AgentSubmission): Promise<void> {
+		const writer = await this.ensureConversationWriter();
+		const replacement = await reconcileInterruptedSubmission(
+			this.submissions,
+			submission,
+			this.resolveAgent(this.agentName),
+			(dispatchId) => this.createDurableContext(submissionSyntheticRequest(submission.input), dispatchId),
+			{ ownerId: this.actor.actorId, leaseExpiresAt: 0 },
+			writer,
 		);
-		const reconciled = await this.runWithActorContext(() =>
-			reconcileInterruptedSubmission(
-				this.submissions,
-				submission,
-				agent,
-				(payload, dispatchId) =>
-					this.createDurableContext(
-						payload,
-						submissionSyntheticRequest(submission.input),
-						dispatchId,
-					),
-				{ ownerId: this.actor.actorId, leaseExpiresAt: 0 },
-			),
-		);
-		await this.flushEventWrites();
-		if (reconciled.disposition === 'replacement') {
-			await this.startSubmissionAttempt(reconciled.submission);
-		} else if (submission.kind === 'direct') {
-			if (reconciled.disposition === 'completed') {
-				this.observers.complete(submission.submissionId, reconciled.result);
-			} else if (reconciled.disposition === 'failed') {
-				this.observers.fail(submission.submissionId, reconciled.error);
-			}
-		}
+		if (replacement) this.startSubmissionAttempt(replacement);
 	}
 
-	private async startSubmissionAttempt(submission: AgentSubmission): Promise<void> {
+	private startSubmissionAttempt(submission: AgentSubmission): void {
 		if (submission.status !== 'running' || !submission.attemptId) return;
-		const attemptKey = this.submissionAttemptLocalKey(submission);
-		if (this.activeAttempts.has(attemptKey)) return;
-		this.activeAttempts.add(attemptKey);
-		const running = this.actor.keepAwake(
-			this.processSubmissionEntry(submission).finally(() => {
-				this.activeAttempts.delete(attemptKey);
-			}),
-		);
-		try {
-			await running;
-		} catch (error) {
-			console.error(
-				'[flue:submission-processing]',
-				{
-					agentName: this.agentName,
-					instanceId: this.instanceId,
-					submissionId: submission.submissionId,
-					operation: 'process',
-					outcome: 'failed',
-				},
-				error,
-			);
-			throw error;
-		}
+		const key = this.attemptKey(submission);
+		if (this.activeAttempts.has(key)) return;
+		this.activeAttempts.add(key);
+		const controller = new AbortController();
+		this.activeControllers.set(submission.submissionId, controller);
+		const attempt = { submissionId: submission.submissionId, attemptId: submission.attemptId };
+		const running = this.runWithActorContext(async () => {
+			await this.submissions.insertAttemptMarker(attempt);
+			await this.processSubmissionEntry(submission, controller.signal);
+		});
+		void this.actor.keepAwake(running).catch((error) => this.logFailure(submission, 'process_submission', error))
+			.finally(() => {
+				this.activeAttempts.delete(key);
+				this.activeControllers.delete(submission.submissionId);
+				void this.submissions.deleteAttemptMarker(attempt).catch(() => {});
+			});
 	}
 
-	private async processSubmissionEntry(submission: AgentSubmission): Promise<void> {
-		await this.eventStreamStore.createStream(agentStreamPath(this.agentName, this.instanceId));
+	private async processSubmissionEntry(submission: AgentSubmission, signal: AbortSignal): Promise<void> {
+		const writer = await this.ensureConversationWriter();
 		await processSubmission({
 			submissions: this.submissions,
 			submission,
-			resolveAgent: (name) => {
-				const agent = this.options.createdAgents[name];
-				if (!agent) throw new Error('[flue] Agent target unavailable during durable processing.');
-				return agent;
-			},
-			createContext: (payload, dispatchId) =>
-				this.createDurableContext(
-					payload,
-					submissionSyntheticRequest(submission.input),
-					dispatchId,
-				),
-			observers: this.observers,
-			// Deliberately do NOT pass `this.actor.abortSignal` here. It is tied to
-			// one dispatch request, while an admitted Flue submission is durable work
-			// that must settle or remain `running` for onWake recovery. The enclosing
-			// actor action awaits this turn so its action-scoped database stays open.
-			wrapExecution: (fn) => this.runWithActorContext(fn),
+			resolveAgent: (name) => this.resolveAgent(name),
+			createContext: (dispatchId) =>
+				this.createDurableContext(submissionSyntheticRequest(submission.input), dispatchId),
+			conversationWriter: writer,
+			signal,
+			onSettled: () => { void this.reconcileSubmissions().catch(console.error); },
 		});
-		await this.flushEventWrites();
 	}
 
-	private submissionAttemptLocalKey(submission: AgentSubmission): string {
-		return `${this.actor.actorId}:${submission.attemptId}`;
+	private materializeSubmissionConversation(
+		input: AgentSubmission['input'],
+		agent: AgentDefinition,
+	): Promise<void> {
+		const operation = this.conversationMaterialization.then(async () => {
+			await this.ensureConversationWriter();
+			const ctx = this.createDurableContext(submissionSyntheticRequest(input), agentSubmissionDispatchId(input));
+			await materializeAgentSubmissionSession(ctx, agent, input, this.prepared.attachmentStore);
+		});
+		this.conversationMaterialization = operation.catch(() => {});
+		return operation;
 	}
 
-	private async admitAttachedSubmission(
-		payload: DirectAgentPayload,
-		onEvent?: (event: AttachedAgentEvent) => Promise<void> | void,
-		waitForResult = true,
-	) {
+	private async admitAttachedSubmission(message: DeliveredMessage, traceCarrier?: FlueTraceCarrier) {
 		const input = createDirectAgentSubmissionInput({
 			agent: this.agentName,
 			id: this.instanceId,
-			payload,
+			message,
+			traceCarrier,
 		});
-		const attachment = this.observers.attach(input.submissionId, { onEvent });
-		try {
-			await this.armSubmissionWake();
-			await this.submissions.admitDirect(input);
-			await this.reconcileSubmissions({ driverAlreadyArmed: true });
-			if (!waitForResult) return { submissionId: input.submissionId };
-			return { submissionId: input.submissionId, result: await attachment.completion };
-		} catch (error) {
-			this.observers.fail(input.submissionId, error);
-			throw error;
-		} finally {
-			attachment.detach();
+		const admitted = await this.submissions.admitDirect(input);
+		if (admitted.canonicalReadyAt === null) {
+			await this.materializeSubmissionConversation(input, this.resolveAgent(this.agentName));
+			await this.submissions.markSubmissionCanonicalReady(input.submissionId);
 		}
+		const offset = (await this.ensureConversationWriter()).offset;
+		await this.armSubmissionWake();
+		await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		return { submissionId: input.submissionId, offset };
 	}
 
 	private async admitDispatch(request: Request): Promise<Response> {
@@ -480,39 +372,65 @@ export class RivetAgentCoordinator {
 		if (input.agent !== this.agentName || input.id !== this.instanceId) {
 			return new Response('Invalid internal dispatch target.', { status: 400 });
 		}
-		if (!this.options.createdAgents[this.agentName]) {
-			return new Response('Dispatch target unavailable.', { status: 404 });
+		const agent = this.resolveAgent(this.agentName);
+		const admission = await this.submissions.admitDispatch(input);
+		if (admission.kind === 'retained_receipt') return Response.json({
+			dispatchId: admission.receipt.submissionId,
+			acceptedAt: new Date(admission.receipt.acceptedAt).toISOString(),
+		});
+		if (admission.kind === 'conflict') return new Response('Conflicting internal dispatch replay.', { status: 409 });
+		if (admission.submission.canonicalReadyAt === null) {
+			await this.materializeSubmissionConversation(createDispatchAgentSubmissionInput(input), agent);
+			if (!(await this.submissions.markSubmissionCanonicalReady(input.dispatchId))) {
+				throw new Error('[flue] Dispatch disappeared before canonical readiness.');
+			}
 		}
 		await this.armSubmissionWake();
-		const admission = await this.submissions.admitDispatch(input);
-		if (admission.kind === 'retained_receipt') {
-			return Response.json({
-				dispatchId: admission.receipt.submissionId,
-				acceptedAt: new Date(admission.receipt.acceptedAt).toISOString(),
-			});
-		}
-		if (admission.kind === 'conflict') {
-			return new Response('Conflicting internal dispatch replay.', { status: 409 });
-		}
 		await this.reconcileSubmissions({ driverAlreadyArmed: true });
-		return Response.json({
-			dispatchId: admission.submission.submissionId,
-			acceptedAt: input.acceptedAt,
-		});
+		return Response.json({ dispatchId: admission.submission.submissionId, acceptedAt: input.acceptedAt });
+	}
+
+	private async abortInstance(): Promise<boolean> {
+		const sessionKey = createSessionStorageKey(
+			this.instanceId,
+			SUBMISSION_HARNESS_NAME,
+			SUBMISSION_SESSION_NAME,
+		);
+		const affected = await this.submissions.requestSessionAbort(sessionKey);
+		for (const id of affected) this.activeControllers.get(id)?.abort(new SubmissionAbortedError());
+		if (affected.length > 0) {
+			await this.armSubmissionWake();
+			await this.reconcileSubmissions({ driverAlreadyArmed: true });
+		}
+		return affected.length > 0;
+	}
+
+	private attemptKey(submission: AgentSubmission): string {
+		return `${this.actor.actorId}:${submission.attemptId}`;
+	}
+
+	private logFailure(submission: AgentSubmission, operation: string, error: unknown): void {
+		console.error('[flue:submission]', {
+			agentName: this.agentName,
+			instanceId: this.instanceId,
+			submissionId: submission.submissionId,
+			operation,
+		}, error);
 	}
 }
 
 function createIdentity(actor: RivetAgentActorContext): RivetActorIdentity {
-	return {
-		actorId: actor.actorId,
-		key: actor.key,
-		name: actor.name,
-		region: actor.region,
-	};
+	return { actorId: actor.actorId, key: actor.key, name: actor.name, region: actor.region };
 }
 
 function isInternalDispatchRequest(request: Request): boolean {
-	return (
-		request.method === 'POST' && new URL(request.url).pathname === RIVET_AGENT_INTERNAL_DISPATCH_PATH
-	);
+	return request.method === 'POST' && new URL(request.url).pathname === RIVET_AGENT_INTERNAL_DISPATCH_PATH;
+}
+
+function isAbortRequest(request: Request, agentName: string, instanceId: string): boolean {
+	if (request.method !== 'POST') return false;
+	const segments = new URL(request.url).pathname.split('/');
+	return segments.at(-1) === 'abort' &&
+		decodeURIComponent(segments.at(-2) ?? '') === instanceId &&
+		decodeURIComponent(segments.at(-3) ?? '') === agentName;
 }

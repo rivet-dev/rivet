@@ -42,9 +42,10 @@ export {
 	retryTransientRivetStart,
 } from './target-helpers.js';
 export {
+	createAsyncAttachmentStore,
+	createAsyncConversationStreamStore,
 	createAsyncEventStreamStore,
 	createAsyncRunStore,
-	createAsyncSessionStore,
 	createAsyncSqlStores,
 	createAsyncSubmissionStore,
 	ensureAsyncSqlSchema,

@@ -9,6 +9,7 @@ import * as path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createClient } from 'rivetkit/client';
+import { retryTransientRivetStart } from '../src/target-helpers.ts';
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoots = [];
@@ -53,45 +54,48 @@ test('builds and serves an agent through target: rivet', async () => {
 		peerPort: enginePeerPort,
 		metricsPort: engineMetricsPort,
 	});
-	const dev = startDev(root, port, {
-		RIVET_RUN_ENGINE: '0',
-		RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
-		RIVET_POOL: poolName,
-		FLUE_RIVET_REGISTRY_KEY: registryKey,
-	});
+	let dev: ReturnType<typeof startDev> | undefined;
 	let passed = false;
 	try {
 		await waitForMetadata(enginePort, engine.logs);
-		await waitForServer(port, dev.logs);
 		await configureNormalRunnerConfig(poolName, enginePort);
+		dev = startDev(root, port, {
+			RIVET_RUN_ENGINE: '0',
+			RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
+			RIVET_POOL: poolName,
+			FLUE_RIVET_REGISTRY_KEY: registryKey,
+		});
+		await waitForServer(port, dev.logs);
 		const client = createClient<any>({ endpoint: `http://127.0.0.1:${enginePort}`, poolName });
-		await assert.doesNotReject(() => client.health.getOrCreate(['test']).ping('ready'));
+		await assert.doesNotReject(() =>
+			retryTransientRivetStart(() => client.health.getOrCreate(['test']).ping('ready')),
+		);
 		await client.dispose();
 		const directInstanceId = (attempt) => `instance-${runKey}-${attempt}`;
 		const prompt = await postJsonWithRetry(
-			(attempt) => `http://127.0.0.1:${port}/agents/assistant/${directInstanceId(attempt)}?wait=result`,
-			() => ({ message: 'Hello Rivet' }),
+			(attempt) => `http://127.0.0.1:${port}/agents/assistant/${directInstanceId(attempt)}`,
+			() => ({ kind: 'user', body: 'Hello Rivet' }),
 			dev.logs,
+			202,
 		);
-		const body = prompt.json;
-		assert.equal(body.result.text, 'Hello from target rivet.');
+		assert.equal(typeof prompt.json.submissionId, 'string');
 
-		const stream = await fetchOkTextWithRetry(
-			`http://127.0.0.1:${port}/agents/assistant/${directInstanceId(prompt.attempt)}`,
+		const stream = await fetchConversationWithRetry(
+			`http://127.0.0.1:${port}/agents/assistant/${directInstanceId(prompt.attempt)}?view=history`,
 			dev.logs,
 		);
-		assert.match(stream.text, /agent_start|agent_end/);
+		assert.ok(stream.messages.some((message) =>
+			message.role === 'assistant' &&
+			message.parts.some((part) => part.type === 'text' && part.text === 'Hello from target rivet.'),
+		), JSON.stringify(stream));
 
 		const workflow = await postJsonWithRetry(
 			() => `http://127.0.0.1:${port}/workflows/job?wait=result`,
-			(attempt) => ({ value: 7, dispatchedInstanceId: `dispatched-${runKey}-${attempt}` }),
+			() => undefined,
 			dev.logs,
 		);
 		const workflowBody = workflow.json;
-		assert.equal(workflowBody.result.payload.value, 7);
-		assert.match(workflowBody.result.payload.dispatchedInstanceId, /^dispatched-/);
 		assert.equal(typeof workflowBody.result.dispatchId, 'string');
-
 		const runMeta = await fetchOkTextWithRetry(
 			`http://127.0.0.1:${port}/runs/${workflowBody.runId}?meta`,
 			dev.logs,
@@ -106,7 +110,7 @@ test('builds and serves an agent through target: rivet', async () => {
 		passed = true;
 
 	} finally {
-		await dev.stop();
+		await dev?.stop();
 		await engine.stop();
 		killEngineOnPort(enginePort);
 		if (passed) setTimeout(() => process.exit(0), 100);
@@ -157,12 +161,12 @@ function writeProject(root) {
 	fs.mkdirSync(path.join(root, 'agents'), { recursive: true });
 	fs.writeFileSync(
 		path.join(root, 'agents', 'assistant.ts'),
-		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nconst provider = registerFauxProvider({ provider: 'rivet-target-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from target rivet.'), fauxAssistantMessage('Dispatched from workflow.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
+		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nexport const route = async (_c, next) => next();\nconst provider = registerFauxProvider({ provider: 'rivet-target-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from target rivet.'), fauxAssistantMessage('Dispatched from workflow.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
 	);
 	fs.mkdirSync(path.join(root, 'workflows'), { recursive: true });
 	fs.writeFileSync(
 		path.join(root, 'workflows', 'job.ts'),
-		`import { dispatch } from '@flue/runtime';\nexport async function run(ctx) {\n  const receipt = await dispatch({ agent: 'assistant', id: ctx.payload.dispatchedInstanceId, input: { message: 'Dispatch from workflow' } });\n  return { payload: ctx.payload, dispatchId: receipt.dispatchId };\n}\n`,
+		`import { defineWorkflow, dispatch } from '@flue/runtime';\nimport agent from '../agents/assistant.ts';\nexport const route = async (_c, next) => next();\nexport const runs = async (_c, next) => next();\nexport default defineWorkflow({ agent, async run() {\n  const receipt = await dispatch({ agent: 'assistant', id: 'workflow-dispatched', message: { kind: 'user', body: 'Dispatch from workflow' } });\n  return { dispatchId: receipt.dispatchId };\n} });\n`,
 	);
 }
 
@@ -287,8 +291,8 @@ async function waitForServer(port, logs = () => '') {
 	await waitFor(
 		async () => {
 			try {
-				const response = await fetch(`http://127.0.0.1:${port}/openapi.json`);
-				return response.ok;
+				const response = await fetch(`http://127.0.0.1:${port}/`);
+				return response.status < 500;
 			} catch {
 				return false;
 			}
@@ -343,7 +347,7 @@ async function waitFor(predicate, message, timeout = 20_000) {
 	throw new Error(typeof message === 'function' ? message() : message);
 }
 
-async function postJsonWithRetry(urlForAttempt, bodyForAttempt, logs = () => '') {
+async function postJsonWithRetry(urlForAttempt, bodyForAttempt, logs = () => '', expectedStatus = 200) {
 	const result = await fetchOkTextWithRetry(
 		urlForAttempt,
 		logs,
@@ -352,11 +356,17 @@ async function postJsonWithRetry(urlForAttempt, bodyForAttempt, logs = () => '')
 			headers: { 'content-type': 'application/json' },
 			body: JSON.stringify(bodyForAttempt(attempt)),
 		}),
+		expectedStatus,
 	);
 	return { json: JSON.parse(result.text), attempt: result.attempt };
 }
 
-async function fetchOkTextWithRetry(urlOrFactory, logs = () => '', initForAttempt = () => undefined) {
+async function fetchOkTextWithRetry(
+	urlOrFactory,
+	logs = () => '',
+	initForAttempt = () => undefined,
+	expectedStatus = 200,
+) {
 	let lastText = '';
 	for (let attempt = 0; attempt < 5; attempt++) {
 		const url = typeof urlOrFactory === 'function' ? urlOrFactory(attempt) : urlOrFactory;
@@ -367,12 +377,29 @@ async function fetchOkTextWithRetry(urlOrFactory, logs = () => '', initForAttemp
 		} catch (error) {
 			lastText = error instanceof Error ? error.stack || error.message : String(error);
 		}
-		if (response?.status === 200) return { text: lastText, attempt };
+		if (response?.status === expectedStatus) return { text: lastText, attempt };
 		const diagnostics = `${lastText}\n\n${logs()}`;
 		if (response && response.status < 500 && !/actor|envoy|ready|wake|fetch failed|aborted|timeout/i.test(diagnostics)) {
-			assert.equal(response.status, 200, diagnostics);
+			assert.equal(response.status, expectedStatus, diagnostics);
 		}
 		await new Promise((resolve) => setTimeout(resolve, 2_000 * (attempt + 1)));
+	}
+	assert.fail(`${lastText}\n\n${logs()}`);
+}
+
+async function fetchConversationWithRetry(url, logs = () => '') {
+	let lastText = '';
+	for (let attempt = 0; attempt < 20; attempt++) {
+		const response = await fetchWithTimeout(url, undefined, 30_000);
+		lastText = await response.text();
+		if (response.ok) {
+			const snapshot = JSON.parse(lastText);
+			if (snapshot.messages?.some((message) =>
+				message.role === 'assistant' &&
+				message.parts?.some((part) => part.type === 'text' && part.state === 'done'),
+			)) return snapshot;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 500));
 	}
 	assert.fail(`${lastText}\n\n${logs()}`);
 }

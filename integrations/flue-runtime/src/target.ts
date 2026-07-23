@@ -1,5 +1,5 @@
 import { defineTarget, type BuildContext, type BuildPlugin } from '@flue/cli';
-import type { FlueForwardRouter } from '@flue/runtime';
+import type { FlueForwardRouter } from '@flue/runtime/adapter-kit';
 import * as path from 'node:path';
 
 export interface RivetTargetOptions {
@@ -51,7 +51,6 @@ const rivetTarget = rivet();
 export default rivetTarget;
 
 function generateEntryPoint(ctx: BuildContext, options: RivetTargetOptions): string {
-	const runtimeVersion = JSON.stringify(ctx.runtimeVersion);
 	const agentImports = ctx.agents
 		.map(
 			(agent, index) =>
@@ -89,7 +88,6 @@ import {
   RIVET_AGENT_INTERNAL_DISPATCH_PATH,
   createAsyncEventStreamStore,
   createAsyncRegistryOps,
-  createAsyncSqlStores,
   createRegistryRunStoreFromHandle,
   createRivetAsyncSqlDb,
   createRivetAgentRuntime,
@@ -104,6 +102,7 @@ import {
   configureFlueRuntime,
   createDefaultFlueApp,
   createFlueContext,
+  generateWorkflowRunId,
   resolveModel,
 } from '@flue/runtime/adapter-kit';
 ${agentImports}
@@ -134,17 +133,29 @@ const workflowModules = {
 ${workflowEntries}
 };
 
-const createdAgents = Object.fromEntries(
-  Object.entries(agentModules).filter(([, mod]) => mod.default).map(([name, mod]) => [name, mod.default])
-);
-const workflowHandlers = Object.fromEntries(
-  Object.entries(workflowModules).filter(([, mod]) => typeof mod.run === 'function').map(([name, mod]) => [name, mod.run])
-);
-const manifest = {
-  agents: Object.keys(createdAgents).map((name) => ({ name, transports: { http: true } })),
-  workflows: Object.keys(workflowHandlers).map((name) => ({ name, transports: { http: true } })),
-};
-const packagedSkills = {};
+const agents = Object.entries(agentModules).map(([name, mod]) => {
+  if (!mod.default || mod.default.__flueAgentDefinition !== true) {
+    throw new Error('[flue] Agent "' + name + '" must default-export defineAgent(...).');
+  }
+  return {
+    name,
+    definition: mod.default,
+    ...(mod.description !== undefined ? { description: mod.description } : {}),
+    ...(typeof mod.route === 'function' ? { route: mod.route } : {}),
+    ...(typeof mod.attachments === 'function' ? { attachments: mod.attachments } : {}),
+  };
+});
+const workflows = Object.entries(workflowModules).map(([name, mod]) => {
+  if (!mod.default || mod.default.__flueWorkflowDefinition !== true) {
+    throw new Error('[flue] Workflow "' + name + '" must default-export defineWorkflow(...).');
+  }
+  return {
+    name,
+    definition: mod.default,
+    ...(typeof mod.route === 'function' ? { route: mod.route } : {}),
+    ...(typeof mod.runs === 'function' ? { runs: mod.runs } : {}),
+  };
+});
 const FLUE_REGISTRY_ACTOR = 'flue-run-registry';
 const FLUE_REGISTRY_KEY = process.env.FLUE_RIVET_REGISTRY_KEY || 'default';
 const FLUE_AGENT_SUBMISSION_WAKE_ACTION = '__flueWakeAgentSubmissions';
@@ -313,35 +324,29 @@ async function createDefaultEnv() {
   }));
 }
 
-function createContextForActor({ executionStore, actor, payload, request, initialEventIndex, dispatchId }) {
+function createContextForActor({ executionStore, actor, agentName, request, initialEventIndex, dispatchId }) {
   return createFlueContext({
     id: actor.key[0],
-    runId: undefined,
+    agentName,
     dispatchId,
-    payload,
     initialEventIndex,
     env: process.env,
     req: request,
-    agentConfig: { packagedSkills, subagents: {}, resolveModel },
+    agentConfig: { resolveModel },
     createDefaultEnv,
-    defaultStore: executionStore.sessions,
     submissionStore: executionStore.submissions,
   });
 }
 
-function createContextForWorkflow({ actor, payload, request, runId, initialEventIndex, dispatchId }) {
-  const stores = createAsyncSqlStores(actor.db);
+function createContextForWorkflow({ actor, request, runId, initialEventIndex }) {
   return createFlueContext({
-    id: actor.key[0],
+    id: runId,
     runId,
-    dispatchId,
-    payload,
     initialEventIndex,
     env: process.env,
     req: request,
-    agentConfig: { packagedSkills, subagents: {}, resolveModel },
+    agentConfig: { resolveModel },
     createDefaultEnv,
-    defaultStore: stores.executionStore.sessions,
   });
 }
 
@@ -379,12 +384,11 @@ function adaptRivetActorContext(c) {
 }
 
 const agentRuntime = createRivetAgentRuntime({
-  createdAgents,
-  createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db),
+  agents,
   createContext: createContextForActor,
 });
 const workflowRuntime = createRivetWorkflowRuntime({
-  workflowHandlers,
+  workflows,
   createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db),
   createRegistryRunStore: () => createRegistryRunStoreFromHandle(getRegistryHandle()),
   createContext: createContextForWorkflow,
@@ -500,8 +504,8 @@ if (!userRivetActors || typeof userRivetActors !== 'object' || Array.isArray(use
 }
 const internalRivetActors = {
   [FLUE_REGISTRY_ACTOR]: flueRegistryActor,
-  ...Object.fromEntries(Object.keys(createdAgents).map((name) => [agentActorName(name), defineFlueAgentActor(name)])),
-  ...Object.fromEntries(Object.keys(workflowHandlers).map((name) => [workflowActorName(name), defineFlueWorkflowActor(name)])),
+  ...Object.fromEntries(agents.map(({ name }) => [agentActorName(name), defineFlueAgentActor(name)])),
+  ...Object.fromEntries(workflows.map(({ name }) => [workflowActorName(name), defineFlueWorkflowActor(name)])),
 };
 const actorNameCollisions = Object.keys(userRivetActors).filter((name) => name in internalRivetActors);
 if (actorNameCollisions.length > 0) {
@@ -525,12 +529,12 @@ function workflowActorName(workflowName) {
 }
 
 function getAgentHandle(agentName, instanceId) {
-  if (!createdAgents[agentName]) return null;
+  if (!agents.some((record) => record.name === agentName)) return null;
   return getFlueClient().getOrCreate(agentActorName(agentName), [instanceId]);
 }
 
 function getWorkflowHandle(workflowName, runId) {
-  if (!workflowHandlers[workflowName]) return null;
+  if (!workflows.some((record) => record.name === workflowName)) return null;
   return getFlueClient().getOrCreate(workflowActorName(workflowName), [runId]);
 }
 
@@ -569,17 +573,25 @@ const dispatchQueue = {
 configureFlueRuntime({
   target: rivetTarget,
   devMode: process.env.FLUE_MODE === 'local',
-  runtimeVersion: ${runtimeVersion},
-  manifest,
-  createAdmission: {},
+  agents,
+  workflows,
   dispatchQueue,
-  resolveDispatchAgentName: (agent) => Object.entries(createdAgents).find(([, value]) => value === agent)?.[0],
-  workflowHandlers,
-  agentRouteMiddleware: {},
-  workflowRouteMiddleware: {},
   channelHandlers: {},
-  createContext: () => {
-    throw new Error('[flue] Rivet runtime contexts are actor-scoped.');
+  async admitWorkflow({ workflowName, input }) {
+    const runId = generateWorkflowRunId();
+    const response = await rivetTarget.routing.forward(
+      new Request('https://flue.invalid/workflows/' + encodeURIComponent(workflowName), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+      { kind: 'workflow', workflowName, instanceId: runId },
+    );
+    if (!response?.ok) {
+      throw new Error('[flue] Workflow admission failed with status ' + (response?.status ?? 404) + '.');
+    }
+    const receipt = await response.json();
+    return { runId: receipt.runId ?? runId };
   },
 });
 
@@ -593,7 +605,7 @@ export function fetch(request, env) {
 }
 
 if (isMainModule()) {
-  registry.start();
+	await registry.startAndWait();
   const port = parseInt(process.env.PORT || '3000', 10);
   const server = serve({
     fetch: (request, env) => flueApp.fetch(request, env),

@@ -2,8 +2,8 @@ import type {
 	EventStreamStore,
 	FlueContextInternal,
 	RunStore,
-	WorkflowHandler,
 } from '@flue/runtime/adapter-kit';
+import type { WorkflowDefinition } from '@flue/runtime';
 import {
 	failRecoveredRun,
 	handleRunRouteRequest,
@@ -33,10 +33,9 @@ interface RivetWorkflowPreparedCoordinator {
 }
 
 export interface RivetWorkflowRuntimeOptions {
-	readonly workflowHandlers: Record<string, WorkflowHandler>;
+	readonly workflows: ReadonlyArray<{ name: string; definition: WorkflowDefinition }>;
 	readonly createContext: (options: {
 		readonly actor: RivetWorkflowActorContext;
-		readonly payload: unknown;
 		readonly request: Request;
 		readonly runId: string;
 		readonly initialEventIndex?: number;
@@ -129,7 +128,6 @@ export class RivetWorkflowCoordinator {
 		await this.runWithActorContext(() =>
 			failRecoveredRun({
 				workflowName: this.workflowName,
-				id: this.runId,
 				runId: this.runId,
 				request: new Request(`https://flue.invalid/workflows/${encodeURIComponent(this.workflowName)}`, {
 					method: 'POST',
@@ -139,8 +137,8 @@ export class RivetWorkflowCoordinator {
 				),
 				runStore: this.prepared.runStore,
 				eventStreamStore: this.eventStreamStore,
-				createContext: (id, runId, payload, request, initialEventIndex, dispatchId) =>
-					this.createContext(payload, request, runId ?? id, initialEventIndex, dispatchId),
+				createContext: ({ runId, request, initialEventIndex }) =>
+					this.createContext(request, runId, initialEventIndex),
 			}),
 		);
 	}
@@ -155,25 +153,28 @@ export class RivetWorkflowCoordinator {
 			}
 			return handleRunRouteRequest({
 				workflowName: this.workflowName,
-				runId: this.runId,
+				runId: runRoute.runId,
 				runStore: this.prepared.runStore,
 			});
 		}
 
 		if (!parseWorkflowStart(request, this.workflowName)) return null;
-		const handler = this.options.workflowHandlers[this.workflowName];
-		if (!handler) return null;
+		const workflow = this.options.workflows.find((record) => record.name === this.workflowName)?.definition;
+		if (!workflow) return null;
 		return this.runWithActorContext(() =>
 			handleWorkflowRequest({
 				request,
 				workflowName: this.workflowName,
 				runId: this.runId,
-				handler,
+				workflow,
 				runStore: this.prepared.runStore,
 				eventStreamStore: this.eventStreamStore,
-				createContext: (id, runId, payload, req, initialEventIndex, dispatchId) =>
-					this.createContext(payload, req, runId ?? id, initialEventIndex, dispatchId),
-				startWorkflowAdmission: (_runId, run) => this.actor.keepAwake(this.runWithActorContext(run)),
+				createContext: ({ runId, request, initialEventIndex }) =>
+					this.createContext(request, runId, initialEventIndex),
+				startWorkflowAdmission: (_runId, run) => {
+					const completion = this.actor.keepAwake(this.runWithActorContext(run));
+					return { admitted: Promise.resolve(), completion };
+				},
 			}),
 		);
 	}
@@ -187,19 +188,15 @@ export class RivetWorkflowCoordinator {
 	}
 
 	private createContext(
-		payload: unknown,
 		request: Request,
 		runId: string,
 		initialEventIndex?: number,
-		dispatchId?: string,
 	): FlueContextInternal {
 		return this.options.createContext({
 			actor: this.actor,
-			payload,
 			request,
 			runId,
 			initialEventIndex,
-			dispatchId,
 		});
 	}
 

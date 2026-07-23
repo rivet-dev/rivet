@@ -251,7 +251,7 @@ importers:
         version: 0.0.260331072558
       '@rivet-dev/agent-os-pi':
         specifier: ^0.1.1
-        version: 0.1.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+        version: 0.1.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
       rivetkit:
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/rivetkit
@@ -3061,11 +3061,11 @@ importers:
   integrations/flue-runtime:
     dependencies:
       '@flue/cli':
-        specifier: git+https://github.com/NathanFlurry/flue.git#3c0e75b763031ce27bd55fd3ce062f8e215944ea&path:/packages/cli
-        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea#path:/packages/cli(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
+        specifier: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
+        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899#path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@flue/runtime':
-        specifier: git+https://github.com/NathanFlurry/flue.git#acffb0ea59513d0f469f8de0fd5de649b2b826d9&path:/packages/runtime
-        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
+        specifier: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
+        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@rivetkit/engine-cli':
         specifier: workspace:*
         version: link:../../rivetkit-typescript/packages/engine-cli
@@ -3086,26 +3086,29 @@ importers:
   integrations/flue-runtime/examples/rivet:
     dependencies:
       '@flue/cli':
-        specifier: git+https://github.com/NathanFlurry/flue.git#3c0e75b763031ce27bd55fd3ce062f8e215944ea&path:/packages/cli
-        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea#path:/packages/cli(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        specifier: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
+        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899#path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@flue/runtime':
-        specifier: git+https://github.com/NathanFlurry/flue.git#acffb0ea59513d0f469f8de0fd5de649b2b826d9&path:/packages/runtime
-        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        specifier: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
+        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@rivet-dev/flue':
         specifier: workspace:*
         version: link:../..
       rivetkit:
         specifier: workspace:*
         version: link:../../../../rivetkit-typescript/packages/rivetkit
+      valibot:
+        specifier: ^1.2.0
+        version: 1.4.2(typescript@6.0.3)
 
   integrations/flue-runtime/examples/rivet-vercel:
     dependencies:
       '@flue/cli':
-        specifier: git+https://github.com/NathanFlurry/flue.git#3c0e75b763031ce27bd55fd3ce062f8e215944ea&path:/packages/cli
-        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea#path:/packages/cli(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        specifier: git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli
+        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899#path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@flue/runtime':
-        specifier: git+https://github.com/NathanFlurry/flue.git#acffb0ea59513d0f469f8de0fd5de649b2b826d9&path:/packages/runtime
-        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+        specifier: git+https://github.com/NathanFlurry/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime
+        version: https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@mongodb-js/zstd':
         specifier: link:./stubs/mongodb-js-zstd
         version: link:stubs/mongodb-js-zstd
@@ -3401,7 +3404,7 @@ importers:
     dependencies:
       '@modelcontextprotocol/sdk':
         specifier: ^1.25.3
-        version: 1.25.3(hono@4.12.25)(zod@3.25.76)
+        version: 1.25.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)
       rivet-website:
         specifier: workspace:*
         version: link:../../../website
@@ -3411,7 +3414,7 @@ importers:
     devDependencies:
       '@modelcontextprotocol/inspector':
         specifier: ^0.14.0
-        version: 0.14.3(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@22.19.10)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)(typescript@5.9.3)
+        version: 0.14.3(@cfworker/json-schema@4.1.1)(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@22.19.10)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)(typescript@5.9.3)
       '@types/node':
         specifier: ^22.13.1
         version: 22.19.10
@@ -3573,7 +3576,7 @@ importers:
         version: 0.0.260331072558
       '@rivet-dev/agent-os-pi':
         specifier: ^0.1.1
-        version: 0.1.1(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(pyodide@0.28.3)(ws@8.19.0)(zod@4.1.13)
+        version: 0.1.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(pyodide@0.28.3)(ws@8.19.0)(zod@4.1.13)
       '@standard-schema/spec':
         specifier: ^1.0.0
         version: 1.0.0
@@ -5140,6 +5143,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@cfworker/json-schema@4.1.1':
+    resolution: {integrity: sha512-gAmrUZSGtKc3AiBL71iNWxDsyUC5uMaKKGdvzYsBoTW/xi42JQHl7eKV2OYzCUqvc+D2RCcf7EXY2iCyFIk6og==}
+
   '@chevrotain/cst-dts-gen@11.0.3':
     resolution: {integrity: sha512-BvIKpRLeS/8UbfxXxgC33xOumsacaeCKAjAeLyOn7Pcp95HiRbrpl14S+9vaZLolnbssPIUuiUd8IvgkRyt6NQ==}
 
@@ -5329,18 +5335,9 @@ packages:
     resolution: {tarball: https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/writer@0323b8bcf1c9b38f1014629e1a8b6c74cc662100}
     version: 0.0.0
 
-  '@earendil-works/pi-agent-core@0.79.10':
-    resolution: {integrity: sha512-XKxgdjhcPuyjrthCOFSgfzT3xZ1uBrJ1IMVDxci1to6hIN6BIg9J5iY8q0pGXK1DLgATLP23da+1UyZLwA360Q==}
-    engines: {node: '>=22.19.0'}
-
   '@earendil-works/pi-agent-core@0.80.10':
     resolution: {integrity: sha512-nwnOR3SuLYGRFfyQm8ri4Nj5VGVAvAM9GuqQd3u7BUQj0d6hmD2F8w7OHAAjThE3CuySIdM+v8E22QJG6/RfCg==}
     engines: {node: '>=22.19.0'}
-
-  '@earendil-works/pi-ai@0.79.10':
-    resolution: {integrity: sha512-9jR23tOl0BIUdQMn70Gr72xYBpM7Xgl9Lyv7gAnU1USfkNRuYG/f/edLl+n/Dp/RafDW3JI4DF7y/GhgkORuew==}
-    engines: {node: '>=22.19.0'}
-    hasBin: true
 
   '@earendil-works/pi-ai@0.80.10':
     resolution: {integrity: sha512-Moe/H8c87yacDGK9dPbWphZNjVsrb3nTrIHycOQJAkFEnY9PYxOOd74+ny44kATfPU9Dm7aTHefar3pZF+UKUA==}
@@ -6498,9 +6495,9 @@ packages:
   '@floating-ui/utils@0.2.10':
     resolution: {integrity: sha512-aGTxbpbg8/b5JfU1HXSrbH3wXZuLPJcNEcZQFMxLs3oSzgtVu6nFPkbbGGUvBcUjKV2YyB9Wxxabo+HEH9tcRQ==}
 
-  '@flue/cli@https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea#path:/packages/cli':
-    resolution: {path: /packages/cli, tarball: https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea}
-    version: 1.0.0-beta.1
+  '@flue/cli@https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899#path:/packages/cli':
+    resolution: {path: /packages/cli, tarball: https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899}
+    version: 1.0.0-beta.9
     engines: {node: '>=22.19.0'}
     hasBin: true
 
@@ -6508,10 +6505,15 @@ packages:
     resolution: {integrity: sha512-ksh0ZkTVyqQnGvU3OnbVX6luAJwe6tt8q7O0vn99b7Cx6XcPTXzY/YEkXrOtCHzV6ZwfSdO9ZfaWbhTD1tdQuQ==}
     engines: {node: '>=22.19.0'}
 
-  '@flue/runtime@https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9#path:/packages/runtime':
-    resolution: {path: /packages/runtime, tarball: https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9}
-    version: 1.0.0-beta.1
+  '@flue/runtime@https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396#path:/packages/runtime':
+    resolution: {path: /packages/runtime, tarball: https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396}
+    version: 1.0.0-beta.9
     engines: {node: '>=22.19.0'}
+    peerDependencies:
+      vitest: '>=4.0.0'
+    peerDependenciesMeta:
+      vitest:
+        optional: true
 
   '@flue/sdk@1.0.0-beta.9':
     resolution: {integrity: sha512-EkGWF1Yw6baM4ekmp+3xFkc+LmDKcIAA0KQSZSpaSqQRYyixXB+IwEbhePS83HCgrR0/jup9l8rgld4Q2IGNOw==}
@@ -21973,6 +21975,8 @@ snapshots:
   '@cbor-extract/cbor-extract-win32-x64@2.2.2':
     optional: true
 
+  '@cfworker/json-schema@4.1.1': {}
+
   '@chevrotain/cst-dts-gen@11.0.3':
     dependencies:
       '@chevrotain/gast': 11.0.3
@@ -22179,9 +22183,9 @@ snapshots:
       '@durable-streams/client': https://pkg.pr.new/rivet-dev/durable-streams/@durable-streams/client@0323b8bcf1c9b38f1014629e1a8b6c74cc662100
       fastq: 1.20.1
 
-  '@earendil-works/pi-agent-core@0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
+  '@earendil-works/pi-agent-core@0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
     dependencies:
-      '@earendil-works/pi-ai': 0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
       ignore: 7.0.5
       typebox: 1.1.38
       yaml: 2.9.0
@@ -22193,9 +22197,9 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-agent-core@0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)':
+  '@earendil-works/pi-agent-core@0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)':
     dependencies:
-      '@earendil-works/pi-ai': 0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
+      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
       ignore: 7.0.5
       typebox: 1.1.38
       yaml: 2.9.0
@@ -22207,39 +22211,11 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-agent-core@0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
-    dependencies:
-      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
-      ignore: 7.0.5
-      typebox: 1.1.38
-      yaml: 2.9.0
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@earendil-works/pi-agent-core@0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)':
-    dependencies:
-      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
-      ignore: 7.0.5
-      typebox: 1.1.38
-      yaml: 2.9.0
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@earendil-works/pi-ai@0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
+  '@earendil-works/pi-ai@0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.91.1(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))
       '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
       '@opentelemetry/api': 1.9.0
       '@smithy/node-http-handler': 4.7.3
@@ -22256,53 +22232,11 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-ai@0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)':
+  '@earendil-works/pi-ai@0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)':
     dependencies:
       '@anthropic-ai/sdk': 0.91.1(zod@4.3.6)
       '@aws-sdk/client-bedrock-runtime': 3.1048.0
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))
-      '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
-      '@opentelemetry/api': 1.9.0
-      '@smithy/node-http-handler': 4.7.3
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
-      openai: 6.26.0(ws@8.20.1)(zod@4.3.6)
-      partial-json: 0.1.7
-      typebox: 1.1.38
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@earendil-works/pi-ai@0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.91.1(zod@3.25.76)
-      '@aws-sdk/client-bedrock-runtime': 3.1048.0
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
-      '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
-      '@opentelemetry/api': 1.9.0
-      '@smithy/node-http-handler': 4.7.3
-      http-proxy-agent: 7.0.2
-      https-proxy-agent: 7.0.6
-      openai: 6.26.0(ws@8.20.1)(zod@3.25.76)
-      partial-json: 0.1.7
-      typebox: 1.1.38
-    transitivePeerDependencies:
-      - '@modelcontextprotocol/sdk'
-      - bufferutil
-      - supports-color
-      - utf-8-validate
-      - ws
-      - zod
-
-  '@earendil-works/pi-ai@0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)':
-    dependencies:
-      '@anthropic-ai/sdk': 0.91.1(zod@4.3.6)
-      '@aws-sdk/client-bedrock-runtime': 3.1048.0
-      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))
+      '@google/genai': 1.52.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))
       '@mistralai/mistralai': 2.2.6(@opentelemetry/api@1.9.0)
       '@opentelemetry/api': 1.9.0
       '@smithy/node-http-handler': 4.7.3
@@ -22886,7 +22820,7 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
-  '@expo/cli@54.0.13(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(expo@54.0.18)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))':
+  '@expo/cli@54.0.13(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(expo@54.0.18)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))':
     dependencies:
       '@0no-co/graphql.web': 1.2.0(graphql@16.14.0)
       '@expo/code-signing-certificates': 0.0.5
@@ -22896,7 +22830,7 @@ snapshots:
       '@expo/env': 2.0.11
       '@expo/image-utils': 0.8.12
       '@expo/json-file': 10.0.12
-      '@expo/mcp-tunnel': 0.0.8(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
+      '@expo/mcp-tunnel': 0.0.8(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))
       '@expo/metro': 54.1.0
       '@expo/metro-config': 54.0.7(expo@54.0.18)
       '@expo/osascript': 2.4.2
@@ -22921,7 +22855,7 @@ snapshots:
       connect: 3.7.0
       debug: 4.4.3(supports-color@8.1.1)
       env-editor: 0.4.2
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       expo-server: 1.0.5
       freeport-async: 2.0.0
       getenv: 2.0.0
@@ -23122,13 +23056,13 @@ snapshots:
       '@babel/code-frame': 7.10.4
       json5: 2.2.3
 
-  '@expo/mcp-tunnel@0.0.8(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))':
+  '@expo/mcp-tunnel@0.0.8(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))':
     dependencies:
       ws: 8.20.1
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
@@ -23157,7 +23091,7 @@ snapshots:
       postcss: 8.4.49
       resolve-from: 5.0.0
     optionalDependencies:
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -23220,7 +23154,7 @@ snapshots:
       '@expo/json-file': 10.0.12
       '@react-native/normalize-colors': 0.81.5
       debug: 4.4.3(supports-color@8.1.1)
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       resolve-from: 5.0.0
       semver: 7.8.5
       xml2js: 0.6.0
@@ -23303,14 +23237,18 @@ snapshots:
 
   '@floating-ui/utils@0.2.10': {}
 
-  '@flue/cli@https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea#path:/packages/cli(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
+  '@flue/cli@https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899#path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
     dependencies:
       '@cloudflare/vite-plugin': 1.39.2(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))(workerd@1.20260611.1)(wrangler@4.100.0)
-      '@flue/runtime': 1.0.0-beta.9(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
+      '@flue/runtime': 1.0.0-beta.9(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@flue/sdk': 1.0.0-beta.9
+      '@hono/node-server': 2.0.11(hono@4.12.25)
       '@vercel/detect-agent': 1.2.3
+      debug: 4.4.3(supports-color@8.1.1)
       minisearch: 7.2.0
       package-up: 5.0.0
+      picocolors: 1.1.1
+      ulidx: 2.4.1
       valibot: 1.4.2(typescript@6.0.3)
       vite: 8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
@@ -23323,6 +23261,7 @@ snapshots:
       - bufferutil
       - effect
       - esbuild
+      - hono
       - jiti
       - less
       - sass
@@ -23344,14 +23283,18 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/cli@https://codeload.github.com/NathanFlurry/flue/tar.gz/3c0e75b763031ce27bd55fd3ce062f8e215944ea#path:/packages/cli(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
+  '@flue/cli@https://codeload.github.com/NathanFlurry/flue/tar.gz/620ef9e672450c9ca6406f045cbfbbdbab9da899#path:/packages/cli(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@types/node@25.0.7)(esbuild@0.28.1)(hono@4.12.25)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(typebox@1.1.38)(typescript@6.0.3)(workerd@1.20260611.1)(wrangler@4.100.0)(ws@8.20.1)(yaml@2.9.0)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
     dependencies:
       '@cloudflare/vite-plugin': 1.39.2(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))(workerd@1.20260611.1)(wrangler@4.100.0)
-      '@flue/runtime': 1.0.0-beta.9(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
+      '@flue/runtime': 1.0.0-beta.9(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@flue/sdk': 1.0.0-beta.9
+      '@hono/node-server': 2.0.11(hono@4.12.25)
       '@vercel/detect-agent': 1.2.3
+      debug: 4.4.3(supports-color@8.1.1)
       minisearch: 7.2.0
       package-up: 5.0.0
+      picocolors: 1.1.1
+      ulidx: 2.4.1
       valibot: 1.4.2(typescript@6.0.3)
       vite: 8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)
     transitivePeerDependencies:
@@ -23364,6 +23307,7 @@ snapshots:
       - bufferutil
       - effect
       - esbuild
+      - hono
       - jiti
       - less
       - sass
@@ -23385,13 +23329,13 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/runtime@1.0.0-beta.9(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
+  '@flue/runtime@1.0.0-beta.9(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
-      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
       '@hono/node-server': 2.0.11(hono@4.12.25)
       '@hono/standard-validator': 0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.25)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@standard-community/standard-openapi': 0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod@3.25.76)
       '@valibot/to-json-schema': 1.7.1(valibot@1.4.2(typescript@6.0.3))
@@ -23420,13 +23364,13 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/runtime@1.0.0-beta.9(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
+  '@flue/runtime@1.0.0-beta.9(@cfworker/json-schema@4.1.1)(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
-      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
+      '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
+      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
       '@hono/node-server': 2.0.11(hono@4.12.25)
       '@hono/standard-validator': 0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.25)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
       '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@standard-community/standard-openapi': 0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod@4.3.6)
       '@valibot/to-json-schema': 1.7.1(valibot@1.4.2(typescript@6.0.3))
@@ -23455,13 +23399,14 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/runtime@https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
+  '@flue/runtime@https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
-      '@earendil-works/pi-ai': 0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@cfworker/json-schema': 4.1.1
+      '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
       '@hono/node-server': 2.0.11(hono@4.12.25)
       '@hono/standard-validator': 0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.25)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)
       '@standard-community/standard-openapi': 0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod@3.25.76)
       '@valibot/to-json-schema': 1.7.1(valibot@1.4.2(typescript@6.0.3))
@@ -23473,8 +23418,9 @@ snapshots:
       quansync: 0.2.11
       ulidx: 2.4.1
       valibot: 1.4.2(typescript@6.0.3)
+    optionalDependencies:
+      vitest: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
       - '@standard-schema/spec'
       - '@types/json-schema'
       - arktype
@@ -23490,13 +23436,14 @@ snapshots:
       - zod-openapi
       - zod-to-json-schema
 
-  '@flue/runtime@https://codeload.github.com/NathanFlurry/flue/tar.gz/acffb0ea59513d0f469f8de0fd5de649b2b826d9#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
+  '@flue/runtime@https://codeload.github.com/NathanFlurry/flue/tar.gz/e79d5712820af588094a4e67a3ceafc816770396#path:/packages/runtime(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(typebox@1.1.38)(typescript@6.0.3)(vitest@4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0)))(ws@8.20.1)(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)':
     dependencies:
-      '@earendil-works/pi-agent-core': 0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
-      '@earendil-works/pi-ai': 0.79.10(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
+      '@cfworker/json-schema': 4.1.1
+      '@earendil-works/pi-agent-core': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
+      '@earendil-works/pi-ai': 0.80.10(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))(ws@8.20.1)(zod@4.3.6)
       '@hono/node-server': 2.0.11(hono@4.12.25)
       '@hono/standard-validator': 0.2.3(@standard-schema/spec@1.1.0)(hono@4.12.25)
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
       '@standard-community/standard-json': 0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6)
       '@standard-community/standard-openapi': 0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(@valibot/to-json-schema@1.7.1(valibot@1.4.2(typescript@6.0.3)))(quansync@0.2.11)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod-to-json-schema@3.25.1(zod@4.3.6))(zod@4.3.6))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(typebox@1.1.38)(valibot@1.4.2(typescript@6.0.3))(zod@4.3.6)
       '@valibot/to-json-schema': 1.7.1(valibot@1.4.2(typescript@6.0.3))
@@ -23508,8 +23455,9 @@ snapshots:
       quansync: 0.2.11
       ulidx: 2.4.1
       valibot: 1.4.2(typescript@6.0.3)
+    optionalDependencies:
+      vitest: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@25.0.7)(msw@2.14.4(@types/node@25.0.7)(typescript@6.0.3))(vite@8.0.14(@types/node@25.0.7)(esbuild@0.28.1)(jiti@2.7.0)(less@4.4.1)(sass@1.93.2)(stylus@0.62.0)(terser@5.46.0)(tsx@4.23.1)(yaml@2.9.0))
     transitivePeerDependencies:
-      - '@cfworker/json-schema'
       - '@standard-schema/spec'
       - '@types/json-schema'
       - arktype
@@ -23570,53 +23518,53 @@ snapshots:
       '@fortawesome/fontawesome-svg-core': 7.1.0
       react: 19.1.0
 
-  '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))':
+  '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
       ws: 8.19.0
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
       - utf-8-validate
 
-  '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))':
+  '@google/genai@1.48.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
       ws: 8.19.0
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.1.13)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
       - utf-8-validate
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))':
+  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
       ws: 8.20.1
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
       - utf-8-validate
 
-  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(zod@4.3.6))':
+  '@google/genai@1.52.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6))':
     dependencies:
       google-auth-library: 10.6.2
       p-retry: 4.6.2
       protobufjs: 7.5.4
       ws: 8.20.1
     optionalDependencies:
-      '@modelcontextprotocol/sdk': 1.29.0(zod@4.3.6)
+      '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)
     transitivePeerDependencies:
       - bufferutil
       - supports-color
@@ -24364,9 +24312,9 @@ snapshots:
       std-env: 3.10.0
       yoctocolors: 2.1.2
 
-  '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
+  '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
     dependencies:
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -24376,9 +24324,9 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
+  '@mariozechner/pi-agent-core@0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
     dependencies:
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -24388,11 +24336,11 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
+  '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@3.25.76)
       '@aws-sdk/client-bedrock-runtime': 3.1024.0
-      '@google/genai': 1.48.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))
+      '@google/genai': 1.48.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))
       '@mistralai/mistralai': 1.14.1
       '@sinclair/typebox': 0.34.41
       ajv: 8.17.1
@@ -24412,11 +24360,11 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
+  '@mariozechner/pi-ai@0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@4.1.13)
       '@aws-sdk/client-bedrock-runtime': 3.1024.0
-      '@google/genai': 1.48.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))
+      '@google/genai': 1.48.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))
       '@mistralai/mistralai': 1.14.1
       '@sinclair/typebox': 0.34.41
       ajv: 8.17.1
@@ -24436,11 +24384,11 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
+  '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
     dependencies:
       '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
       '@mariozechner/pi-tui': 0.60.0
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
@@ -24468,11 +24416,11 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
+  '@mariozechner/pi-coding-agent@0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)':
     dependencies:
       '@mariozechner/jiti': 2.6.5
-      '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+      '@mariozechner/pi-agent-core': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
       '@mariozechner/pi-tui': 0.60.0
       '@silvia-odwyer/photon-node': 0.3.4
       chalk: 5.6.2
@@ -24738,9 +24686,9 @@ snapshots:
 
   '@mixmark-io/domino@2.2.0': {}
 
-  '@modelcontextprotocol/inspector-cli@0.14.3(hono@4.12.25)(zod@3.25.76)':
+  '@modelcontextprotocol/inspector-cli@0.14.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.25)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.25.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)
       commander: 13.1.0
       spawn-rx: 5.1.2
     transitivePeerDependencies:
@@ -24749,9 +24697,9 @@ snapshots:
       - supports-color
       - zod
 
-  '@modelcontextprotocol/inspector-client@0.14.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)':
+  '@modelcontextprotocol/inspector-client@0.14.3(@cfworker/json-schema@4.1.1)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.25)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.25.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)
       '@radix-ui/react-checkbox': 1.3.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@radix-ui/react-dialog': 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@radix-ui/react-icons': 1.3.2(react@19.1.0)
@@ -24784,9 +24732,9 @@ snapshots:
       - supports-color
       - tailwindcss
 
-  '@modelcontextprotocol/inspector-server@0.14.3(hono@4.12.25)':
+  '@modelcontextprotocol/inspector-server@0.14.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)':
     dependencies:
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.25)(zod@3.25.76)
+      '@modelcontextprotocol/sdk': 1.25.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)
       cors: 2.8.5
       express: 5.2.1
       ws: 8.19.0
@@ -24798,12 +24746,12 @@ snapshots:
       - supports-color
       - utf-8-validate
 
-  '@modelcontextprotocol/inspector@0.14.3(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@22.19.10)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)(typescript@5.9.3)':
+  '@modelcontextprotocol/inspector@0.14.3(@cfworker/json-schema@4.1.1)(@swc/core@1.15.11(@swc/helpers@0.5.17))(@types/node@22.19.10)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)(typescript@5.9.3)':
     dependencies:
-      '@modelcontextprotocol/inspector-cli': 0.14.3(hono@4.12.25)(zod@3.25.76)
-      '@modelcontextprotocol/inspector-client': 0.14.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)
-      '@modelcontextprotocol/inspector-server': 0.14.3(hono@4.12.25)
-      '@modelcontextprotocol/sdk': 1.25.3(hono@4.12.25)(zod@3.25.76)
+      '@modelcontextprotocol/inspector-cli': 0.14.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)
+      '@modelcontextprotocol/inspector-client': 0.14.3(@cfworker/json-schema@4.1.1)(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(hono@4.12.25)
+      '@modelcontextprotocol/inspector-server': 0.14.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)
+      '@modelcontextprotocol/sdk': 1.25.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)
       concurrently: 9.2.1
       open: 10.2.0
       shell-quote: 1.8.3
@@ -24824,7 +24772,7 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@modelcontextprotocol/sdk@1.25.3(hono@4.12.25)(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.25.3(@cfworker/json-schema@4.1.1)(hono@4.12.25)(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 1.19.13(hono@4.12.25)
       ajv: 8.17.1
@@ -24842,11 +24790,13 @@ snapshots:
       raw-body: 3.0.2
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - hono
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@3.25.76)':
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)':
     dependencies:
       '@hono/node-server': 1.19.13(hono@4.12.25)
       ajv: 8.17.1
@@ -24865,10 +24815,12 @@ snapshots:
       raw-body: 3.0.2
       zod: 3.25.76
       zod-to-json-schema: 3.25.1(zod@3.25.76)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.1.13)':
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13)':
     dependencies:
       '@hono/node-server': 1.19.13(hono@4.12.25)
       ajv: 8.17.1
@@ -24887,11 +24839,13 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.1.13
       zod-to-json-schema: 3.25.1(zod@4.1.13)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
     optional: true
 
-  '@modelcontextprotocol/sdk@1.29.0(zod@4.3.6)':
+  '@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.3.6)':
     dependencies:
       '@hono/node-server': 1.19.13(hono@4.12.25)
       ajv: 8.17.1
@@ -24910,6 +24864,8 @@ snapshots:
       raw-body: 3.0.2
       zod: 4.3.6
       zod-to-json-schema: 3.25.1(zod@4.3.6)
+    optionalDependencies:
+      '@cfworker/json-schema': 4.1.1
     transitivePeerDependencies:
       - supports-color
 
@@ -26501,11 +26457,11 @@ snapshots:
 
   '@rivet-dev/agent-os-gzip@0.0.260331072558': {}
 
-  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
+  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)':
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@3.25.76)
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
-      '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
+      '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(ws@8.20.1)(zod@3.25.76)
       '@rivet-dev/agent-os-core': 0.1.1(pyodide@0.28.3)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -26517,11 +26473,11 @@ snapshots:
       - ws
       - zod
 
-  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(pyodide@0.28.3)(ws@8.19.0)(zod@4.1.13)':
+  '@rivet-dev/agent-os-pi@0.1.1(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(pyodide@0.28.3)(ws@8.19.0)(zod@4.1.13)':
     dependencies:
       '@agentclientprotocol/sdk': 0.16.1(zod@4.1.13)
-      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
-      '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.29.0(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+      '@mariozechner/pi-ai': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
+      '@mariozechner/pi-coding-agent': 0.60.0(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@4.1.13))(ws@8.19.0)(zod@4.1.13)
       '@rivet-dev/agent-os-core': 0.1.1(pyodide@0.28.3)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
@@ -30573,7 +30529,7 @@ snapshots:
       resolve-from: 5.0.0
     optionalDependencies:
       '@babel/runtime': 7.29.2
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
     transitivePeerDependencies:
       - '@babel/core'
       - supports-color
@@ -32510,7 +32466,7 @@ snapshots:
   expo-asset@12.0.12(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0):
     dependencies:
       '@expo/image-utils': 0.8.12
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       expo-constants: 18.0.13(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))
       react: 19.1.0
       react-native: 0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
@@ -32521,7 +32477,7 @@ snapshots:
     dependencies:
       '@expo/config': 10.0.11
       '@expo/env': 0.4.2
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       react-native: 0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
     transitivePeerDependencies:
       - supports-color
@@ -32530,26 +32486,26 @@ snapshots:
     dependencies:
       '@expo/config': 12.0.13
       '@expo/env': 2.0.11
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       react-native: 0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
     transitivePeerDependencies:
       - supports-color
 
   expo-file-system@19.0.21(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)):
     dependencies:
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       react-native: 0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
 
   expo-font@14.0.11(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0):
     dependencies:
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       fontfaceobserver: 2.3.0
       react: 19.1.0
       react-native: 0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)
 
   expo-keep-awake@15.0.8(expo@54.0.18)(react@19.1.0):
     dependencies:
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       react: 19.1.0
 
   expo-linking@7.0.5(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0):
@@ -32586,7 +32542,7 @@ snapshots:
       '@react-navigation/native': 7.1.18(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       '@react-navigation/native-stack': 7.3.28(@react-navigation/native@7.1.18(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native-safe-area-context@5.6.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native-screens@4.17.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0))(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       client-only: 0.0.1
-      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
+      expo: 54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       expo-constants: 18.0.13(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))
       expo-linking: 7.0.5(expo@54.0.18)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
       react-helmet-async: 1.3.0(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
@@ -32606,10 +32562,10 @@ snapshots:
 
   expo-server@1.0.5: {}
 
-  expo@54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0):
+  expo@54.0.18(@babel/core@7.29.0)(@expo/metro-runtime@4.0.1(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0)))(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0):
     dependencies:
       '@babel/runtime': 7.29.2
-      '@expo/cli': 54.0.13(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(expo-router@4.0.21)(expo@54.0.18)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))
+      '@expo/cli': 54.0.13(@modelcontextprotocol/sdk@1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76))(expo-router@4.0.21)(expo@54.0.18)(graphql@16.14.0)(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))
       '@expo/config': 12.0.13
       '@expo/config-plugins': 54.0.4
       '@expo/devtools': 0.1.7(react-native@0.82.1(@babel/core@7.29.0)(@types/react@19.2.13)(react@19.1.0))(react@19.1.0)
@@ -36758,7 +36714,7 @@ snapshots:
 
   postcss@8.4.49:
     dependencies:
-      nanoid: 3.3.11
+      nanoid: 3.3.16
       picocolors: 1.1.1
       source-map-js: 1.2.1
 

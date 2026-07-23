@@ -7,6 +7,7 @@ import type {
 	RunRecord,
 	RunStatus,
 	RunStore,
+	WorkflowRunPointer,
 } from '@flue/runtime/adapter-kit';
 import type { AsyncSqlDb, AsyncSqlRow } from './async-db.js';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from './constants.js';
@@ -26,9 +27,11 @@ class AsyncRunStore implements RunStore {
 	async createRun(input: CreateRunInput): Promise<void> {
 		await this.db.query(
 			`INSERT OR IGNORE INTO flue_runs
-			 (run_id, workflow_name, status, started_at, payload, ended_at, is_error, duration_ms, result, error)
-			 VALUES (?, ?, 'active', ?, ?, NULL, NULL, NULL, NULL, NULL)`,
-			[input.runId, input.workflowName, input.startedAt, serializeJson(input.payload)],
+			 (run_id, workflow_name, status, started_at, payload, traceparent, tracestate,
+			  ended_at, is_error, duration_ms, result, error)
+			 VALUES (?, ?, 'active', ?, ?, ?, ?, NULL, NULL, NULL, NULL, NULL)`,
+			[input.runId, input.workflowName, input.startedAt, serializeJson(input.input),
+				input.traceCarrier?.traceparent ?? null, input.traceCarrier?.tracestate ?? null],
 		);
 	}
 
@@ -55,14 +58,14 @@ class AsyncRunStore implements RunStore {
 		return row ? rowToRunRecord(row) : null;
 	}
 
-	async lookupRun(runId: string): Promise<RunPointer | null> {
+	async lookupRun(runId: string): Promise<WorkflowRunPointer | null> {
 		const rows = await this.db.query(
-			`SELECT run_id, workflow_name, status, started_at, ended_at, duration_ms, is_error
+			`SELECT run_id, workflow_name
 			 FROM flue_runs WHERE run_id = ? LIMIT 1`,
 			[runId],
 		);
 		const row = rows[0];
-		return row ? rowToRunPointer(row) : null;
+		return row ? { runId: String(row.run_id), workflowName: String(row.workflow_name) } : null;
 	}
 
 	async listRuns(opts: ListRunsOpts = {}): Promise<ListRunsResponse> {
@@ -107,7 +110,11 @@ function rowToRunRecord(row: AsyncSqlRow): RunRecord {
 		workflowName: String(row.workflow_name),
 		status: String(row.status) as RunStatus,
 		startedAt: String(row.started_at),
-		...(typeof row.payload === 'string' ? { payload: JSON.parse(row.payload) as unknown } : {}),
+		...(typeof row.payload === 'string' ? { input: JSON.parse(row.payload) as unknown } : {}),
+		...(typeof row.traceparent === 'string' ? { traceCarrier: {
+			traceparent: row.traceparent,
+			...(typeof row.tracestate === 'string' ? { tracestate: row.tracestate } : {}),
+		} } : {}),
 		...(typeof row.ended_at === 'string' ? { endedAt: row.ended_at } : {}),
 		...(row.is_error === null || row.is_error === undefined ? {} : { isError: Boolean(row.is_error) }),
 		...(row.duration_ms != null ? { durationMs: Number(row.duration_ms) } : {}),

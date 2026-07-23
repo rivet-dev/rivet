@@ -16,13 +16,15 @@ requests).
 
 ## What it exercises
 
-- `POST /agents/assistant/<id>?wait=result` — synchronous prompt; the faux provider replies
+- `POST /agents/assistant/<id>` — durably admits a prompt and returns `202` with a `submissionId`.
+- `GET /agents/assistant/<id>?view=history` — reads the canonical conversation; the faux provider replies
   `"Hello from Rivet."`.
-- `POST /workflows/dispatch?wait=result` — returns a `dispatchId` and dispatches `{ message }` to agent
+- `POST /workflows/dispatch?wait=result` — waits for the workflow result and dispatches a user message to agent
   `assistant` instance `dispatched-<id>`, whose turn replies `"Hello from workflow dispatch."`.
 - `GET /agents/assistant/dispatched-<id>` — the dispatched turn's output lands in that instance's event
   stream (dispatch is asynchronous, so poll it).
-- `GET /runs/<runId>` and `GET /admin/runs` — workflow run inspection.
+- `GET /runs/<runId>` and `GET /admin/runs` — workflow run inspection. The workflow opts into public
+  run reads with its exported `runs` middleware.
 
 The end-to-end version of this flow is asserted in `../../test/rivet-examples.test.ts`
 (`pnpm test:e2e`).

@@ -9,6 +9,8 @@ provider.setResponses([
 const model = provider.getModel();
 registerProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });
 
+export const route = async (_c, next) => next();
+
 export default createAgent(() => ({
 	model: `${model.provider}/${model.id}`,
 }));

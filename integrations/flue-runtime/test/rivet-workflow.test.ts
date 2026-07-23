@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import { describe, it } from 'node:test';
-import { createFlueContext } from '@flue/runtime/adapter-kit';
+import { defineAgent, defineWorkflow } from '@flue/runtime';
+import { createFlueContext, registerFauxProvider } from '@flue/runtime/adapter-kit';
 import {
 	createAsyncEventStreamStore,
 	createAsyncRegistryOps,
 	createAsyncRunStore,
-	createAsyncSqlStores,
 	createRivetWorkflowRuntime,
 	ensureAsyncSqlSchema,
 } from '../src/index.ts';
@@ -17,25 +17,23 @@ describe('RivetWorkflowCoordinator', () => {
 		const registry = await createAsyncRegistryOps(registryDb);
 		const host = await createHost({
 			registry,
-			handler: async (ctx) => ({ ok: true, payload: ctx.payload }),
+			handler: async () => ({ ok: true }),
 		});
 
 		const response = await host.runtime.onRequest(
 			host.actor,
 			new Request('http://flue.local/workflows/job?wait=result', {
 				method: 'POST',
-				headers: { 'content-type': 'application/json' },
-				body: JSON.stringify({ value: 1 }),
 			}),
 		);
 
 		assert.equal(response.status, 200);
 		const body = await response.json();
 		assert.equal(body.runId, 'run-1');
-		assert.deepEqual(body.result, { ok: true, payload: { value: 1 } });
+		assert.deepEqual(body.result, { ok: true });
 		const pointer = await registry.lookupRun('run-1');
 		assert.equal(pointer.workflowName, 'job');
-		assert.equal(pointer.status, 'completed');
+		assert.equal((await registry.getRun('run-1')).status, 'completed');
 		assert.equal((await registry.listRuns()).runs[0].runId, 'run-1');
 
 		const meta = await host.runtime.onRequest(
@@ -58,7 +56,7 @@ describe('RivetWorkflowCoordinator', () => {
 			runId: 'run-1',
 			workflowName: 'job',
 			startedAt: new Date().toISOString(),
-			payload: { value: 1 },
+			input: { value: 1 },
 		});
 
 		const host = await createHost({ db, handler: async () => 'unused' });
@@ -76,28 +74,25 @@ describe('RivetWorkflowCoordinator', () => {
 async function createHost({ db = new TestSqliteDb(), registry, handler }) {
 	await ensureAsyncSqlSchema(db);
 	const actor = new FakeActor(db);
+	const provider = registerFauxProvider({ provider: `workflow-test-${crypto.randomUUID()}` });
+	const model = provider.getModel();
+	const workflowAgent = defineAgent(() => ({ model: `${model.provider}/${model.id}` }));
+	const workflow = defineWorkflow({ agent: workflowAgent, run: handler });
 	const runtime = createRivetWorkflowRuntime({
-		workflowHandlers: { job: handler },
+		workflows: [{ name: 'job', definition: workflow }],
 		createEventStreamStore: (actorContext) => createAsyncEventStreamStore(actorContext.db),
 		createRegistryRunStore: () => registry?.runStore,
-		createContext: ({ actor, payload, request, runId, initialEventIndex, dispatchId }) => {
-			const stores = createAsyncSqlStores(actor.db);
+		createContext: ({ actor, request, runId, initialEventIndex }) => {
 			return createFlueContext({
-				id: actor.key[0],
+				id: runId,
 				runId,
-				dispatchId,
-				payload,
 				env: actor.env ?? {},
 				req: request,
 				initialEventIndex,
 				agentConfig: {
-					subagents: {},
-					resolveModel: () => {
-						throw new Error('No model should be resolved in this test.');
-					},
+					resolveModel: () => model,
 				},
 				createDefaultEnv: async () => createNoopSessionEnv(),
-				defaultStore: stores.executionStore.sessions,
 			});
 		},
 	});

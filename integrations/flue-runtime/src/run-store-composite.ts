@@ -6,6 +6,7 @@ import type {
 	RunPointer,
 	RunRecord,
 	RunStore,
+	WorkflowRunPointer,
 } from '@flue/runtime/adapter-kit';
 export function createRivetRunStore(primary: RunStore, mirror?: RunStore): RunStore {
 	return new RivetRunStore(primary, mirror);
@@ -34,7 +35,7 @@ class RivetRunStore implements RunStore {
 		return this.primary.getRun(runId);
 	}
 
-	lookupRun(runId: string): Promise<RunPointer | null> {
+	lookupRun(runId: string): Promise<WorkflowRunPointer | null> {
 		return this.primary.lookupRun(runId);
 	}
 

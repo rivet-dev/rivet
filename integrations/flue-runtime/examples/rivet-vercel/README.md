@@ -26,9 +26,12 @@ app's own origin.
 Prompts go through the Flue route prefix:
 
 ```sh
-curl -X POST "$ORIGIN/api/flue/agents/assistant/inst-1?wait=result" \
-  -H 'content-type: application/json' -d '{"message":"Hello"}'
-# -> { "result": { "text": "Hello from the Vercel route." }, ... }
+curl -X POST "$ORIGIN/api/flue/agents/assistant/inst-1" \
+  -H 'content-type: application/json' -d '{"kind":"user","body":"Hello"}'
+# -> HTTP 202 with { "submissionId": "...", ... }
+
+curl "$ORIGIN/api/flue/agents/assistant/inst-1?view=history"
+# -> canonical conversation history, including "Hello from the Vercel route."
 ```
 
 The build-and-serve flow is asserted end to end in `../../test/rivet-examples.test.ts`

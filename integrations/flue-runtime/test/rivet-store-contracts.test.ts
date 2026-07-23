@@ -5,8 +5,12 @@ import {
 	defineRunStoreContractTests,
 	defineStoreContractTests,
 } from '@flue/runtime/test-utils';
+import { defineConversationStreamStoreContractTests } from '@flue/runtime/test-utils/conversation-stream';
+import { defineAttachmentStoreContractTests } from '@flue/runtime/test-utils/attachment-store';
 import {
 	createAsyncEventStreamStore,
+	createAsyncAttachmentStore,
+	createAsyncConversationStreamStore,
 	createAsyncRunStore,
 	createAsyncSqlStores,
 	createRivetAsyncSqlDb,
@@ -32,6 +36,23 @@ defineEventStreamStoreContractTests('Rivet async SQL EventStreamStore', {
 	async create() {
 		const db = await createTestDb();
 		return createAsyncEventStreamStore(db);
+	},
+});
+
+defineConversationStreamStoreContractTests('Rivet async SQL ConversationStreamStore', {
+	async create() {
+		const db = await createTestDb();
+		return {
+			stream: createAsyncConversationStreamStore(db),
+			executionStore: createAsyncSqlStores(db).executionStore,
+		};
+	},
+});
+
+defineAttachmentStoreContractTests('Rivet async SQL AttachmentStore', {
+	async create() {
+		const db = await createTestDb();
+		return createAsyncAttachmentStore(db);
 	},
 });
 

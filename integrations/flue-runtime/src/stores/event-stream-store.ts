@@ -81,6 +81,44 @@ class AsyncEventStreamStore implements EventStreamStore {
 		}
 	}
 
+	async appendEventOnce(path: string, key: string, event: unknown): Promise<string> {
+		const data = JSON.stringify(event);
+		const result = await this.db.transaction(async (tx) => {
+			const existing = await tx.query(
+				`SELECT seq, data FROM flue_event_stream_keys WHERE path = ? AND key = ? LIMIT 1`,
+				[path, key],
+			);
+			if (existing[0]) {
+				if (existing[0].data !== data) {
+					throw new Error(`[flue] Event key "${key}" already has a conflicting payload.`);
+				}
+				return { offset: Number(existing[0].seq), appended: false };
+			}
+			const updated = await tx.query(
+				`UPDATE flue_event_streams SET next_offset = next_offset + 1
+				 WHERE path = ? AND closed = 0 RETURNING next_offset`,
+				[path],
+			);
+			if (!updated[0]) {
+				const meta = await getStreamMetaFromRunner(tx, path);
+				if (!meta) throw new Error(`[flue] Event stream "${path}" does not exist.`);
+				throw new Error(`[flue] Event stream "${path}" is closed.`);
+			}
+			const offset = Number(updated[0].next_offset) - 1;
+			await tx.query(
+				`INSERT INTO flue_event_stream_entries (path, seq, data) VALUES (?, ?, ?)`,
+				[path, offset, data],
+			);
+			await tx.query(
+				`INSERT INTO flue_event_stream_keys (path, key, seq, data) VALUES (?, ?, ?, ?)`,
+				[path, key, offset, data],
+			);
+			return { offset, appended: true };
+		});
+		if (result.appended) this.notifyListeners(path);
+		return formatOffset(result.offset);
+	}
+
 	async readEvents(
 		path: string,
 		opts?: { offset?: string; limit?: number },

@@ -69,9 +69,11 @@ async function ensureTables(tx: AsyncSqlRunner): Promise<void> {
 			payload TEXT NOT NULL,
 			status TEXT NOT NULL,
 			accepted_at INTEGER NOT NULL,
+			canonical_ready_at INTEGER,
 			attempt_id TEXT,
 			input_applied_at INTEGER,
 			recovery_requested_at INTEGER,
+			abort_requested_at INTEGER,
 			started_at INTEGER,
 			settled_at INTEGER,
 			error TEXT,
@@ -79,7 +81,9 @@ async function ensureTables(tx: AsyncSqlRunner): Promise<void> {
 			max_retry INTEGER NOT NULL DEFAULT ${DURABILITY_DEFAULT_MAX_ATTEMPTS},
 			timeout_at INTEGER NOT NULL DEFAULT 0,
 			owner_id TEXT,
-			lease_expires_at INTEGER NOT NULL DEFAULT 0
+			lease_expires_at INTEGER NOT NULL DEFAULT 0,
+			settlement_record_id TEXT,
+			settlement_record TEXT
 		)
 	`);
 	await tx.query(`
@@ -151,6 +155,8 @@ async function ensureTables(tx: AsyncSqlRunner): Promise<void> {
 			status TEXT NOT NULL,
 			started_at TEXT NOT NULL,
 			payload TEXT,
+			traceparent TEXT,
+			tracestate TEXT,
 			ended_at TEXT,
 			is_error INTEGER,
 			duration_ms INTEGER,
@@ -181,6 +187,55 @@ async function ensureTables(tx: AsyncSqlRunner): Promise<void> {
 			seq INTEGER NOT NULL,
 			data TEXT NOT NULL,
 			PRIMARY KEY (path, seq)
+		)
+	`);
+	await tx.query(`
+		CREATE TABLE IF NOT EXISTS flue_event_stream_keys (
+			path TEXT NOT NULL,
+			key TEXT NOT NULL,
+			seq INTEGER NOT NULL,
+			data TEXT NOT NULL,
+			PRIMARY KEY (path, key)
+		)
+	`);
+
+	await tx.query(`
+		CREATE TABLE IF NOT EXISTS flue_conversation_streams (
+			path TEXT PRIMARY KEY,
+			identity_json TEXT NOT NULL,
+			producer_id TEXT,
+			producer_epoch INTEGER NOT NULL DEFAULT 0,
+			next_producer_sequence INTEGER NOT NULL DEFAULT 0,
+			next_offset INTEGER NOT NULL DEFAULT 0,
+			incarnation TEXT NOT NULL
+		)
+	`);
+	await tx.query(`
+		CREATE TABLE IF NOT EXISTS flue_conversation_stream_batches (
+			path TEXT NOT NULL,
+			seq INTEGER NOT NULL,
+			producer_id TEXT NOT NULL,
+			producer_epoch INTEGER NOT NULL,
+			producer_sequence INTEGER NOT NULL,
+			data TEXT NOT NULL,
+			submission_id TEXT,
+			attempt_id TEXT,
+			PRIMARY KEY (path, seq),
+			UNIQUE (path, producer_id, producer_epoch, producer_sequence)
+		)
+	`);
+
+	await tx.query(`
+		CREATE TABLE IF NOT EXISTS flue_attachments (
+			stream_path TEXT NOT NULL,
+			attachment_id TEXT NOT NULL,
+			conversation_id TEXT NOT NULL,
+			mime_type TEXT NOT NULL,
+			filename TEXT,
+			size INTEGER NOT NULL,
+			digest TEXT NOT NULL,
+			data TEXT NOT NULL,
+			PRIMARY KEY (stream_path, attachment_id)
 		)
 	`);
 }
