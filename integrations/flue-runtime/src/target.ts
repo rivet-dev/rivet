@@ -214,7 +214,7 @@ const agentRuntime = createRivetAgentRuntime({
 });
 const workflowRuntime = createRivetWorkflowRuntime({
   workflows,
-  createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db),
+  createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db, ctx.actorId),
   createRegistryRunStore: () => getRegistryHandle(),
   createContext: createContextForWorkflow,
 });
@@ -225,7 +225,11 @@ async function prepareAgent(c, agentName) {
   const actorContext = adaptRivetActorContext(c);
   let prepared = preparedAgents.get(actorContext);
   if (!prepared) {
-    prepared = await agentRuntime.prepare({ db: actorContext.db, agentName });
+    prepared = await agentRuntime.prepare({
+      db: actorContext.db,
+      agentName,
+      notificationScope: actorContext.actorId,
+    });
     agentRuntime.attach(actorContext, prepared);
     preparedAgents.set(actorContext, prepared);
   }

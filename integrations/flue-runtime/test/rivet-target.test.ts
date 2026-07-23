@@ -69,9 +69,9 @@ test('builds and serves an agent through target: rivet', async () => {
 			try {
 				await client.health.getOrCreate(['test']).ping('ready');
 			} catch (error) {
-			assert.fail(`${String(error)}\n\n${dev.logs()}`);
-		}
-		await client.dispose();
+				assert.fail(`${String(error)}\n\n${dev.logs()}\n\n${engine.logs()}`);
+			}
+			await client.dispose();
 		const directInstanceId = (attempt) => `instance-${runKey}-${attempt}`;
 		const prompt = await postJsonWithRetry(
 			(attempt) => `http://127.0.0.1:${port}/agents/assistant/${directInstanceId(attempt)}`,

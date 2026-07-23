@@ -93,6 +93,23 @@ describe('Rivet async SQL stream notifications', () => {
 			unsubscribe();
 		}
 	});
+
+	it('does not notify subscribers in another actor scope', async () => {
+		const db = await createTestDb();
+		const reader = createAsyncEventStreamStore(db, 'actor-a');
+		const writer = createAsyncEventStreamStore(db, 'actor-b');
+		await writer.createStream('/runs/test');
+		let notified = false;
+		const unsubscribe = reader.subscribe('/runs/test', () => {
+			notified = true;
+		});
+		try {
+			await writer.appendEvent('/runs/test', { type: 'ready' });
+			expect(notified).toBe(false);
+		} finally {
+			unsubscribe();
+		}
+	});
 });
 
 describe('createRivetAsyncSqlDb()', () => {

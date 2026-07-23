@@ -12,8 +12,11 @@ const COMPONENT_PAD = 16;
 const ZERO_COMPONENT = '0'.repeat(COMPONENT_PAD);
 const listeners = new ListenerRegistry();
 
-export function createAsyncEventStreamStore(db: AsyncSqlDb): EventStreamStore {
-	return new AsyncEventStreamStore(db);
+export function createAsyncEventStreamStore(
+	db: AsyncSqlDb,
+	notificationScope = 'default',
+): EventStreamStore {
+	return new AsyncEventStreamStore(db, notificationScope);
 }
 
 export function formatOffset(seq: number): string {
@@ -32,9 +35,11 @@ export function parseOffset(offset: string): number {
 class AsyncEventStreamStore implements EventStreamStore {
 	private pendingAppends = new Map<string, Promise<void>>();
 	private db: AsyncSqlDb;
+	private notificationScope: string;
 
-	constructor(db: AsyncSqlDb) {
+	constructor(db: AsyncSqlDb, notificationScope: string) {
 		this.db = db;
+		this.notificationScope = notificationScope;
 	}
 
 	async createStream(path: string): Promise<void> {
@@ -169,11 +174,15 @@ class AsyncEventStreamStore implements EventStreamStore {
 	}
 
 	subscribe(path: string, listener: () => void): () => void {
-		return listeners.subscribe(path, listener);
+		return listeners.subscribe(this.notificationPath(path), listener);
 	}
 
 	private notifyListeners(path: string): void {
-		listeners.notify(path);
+		listeners.notify(this.notificationPath(path));
+	}
+
+	private notificationPath(path: string): string {
+		return `${this.notificationScope}\0${path}`;
 	}
 }
 
