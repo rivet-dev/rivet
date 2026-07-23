@@ -1,6 +1,10 @@
 use bytes::Bytes;
 use gas::prelude::*;
 use rivet_envoy_protocol as protocol;
+use std::sync::{
+	Arc,
+	atomic::{AtomicU64, Ordering},
+};
 use std::time::Duration;
 use tokio::sync::{mpsc, watch};
 
@@ -31,10 +35,12 @@ async fn send_http_response_body_bytes(
 	actor_id: Id,
 	body: Vec<u8>,
 	detail: &'static str,
+	egress_bytes: &AtomicU64,
 ) -> bool {
 	let body = Bytes::from(body);
 	for offset in (0..body.len()).step_by(HTTP_BODY_CHUNK_SIZE) {
 		let chunk = body.slice(offset..(offset + HTTP_BODY_CHUNK_SIZE).min(body.len()));
+		let chunk_len = chunk.len();
 		let delivery = tokio::select! {
 			biased;
 			_ = body_tx.closed() => Err((RequestStopResult::ClientDisconnect, detail.to_owned())),
@@ -84,6 +90,7 @@ async fn send_http_response_body_bytes(
 			in_flight_req.stop(stop_result).await;
 			return false;
 		}
+		egress_bytes.fetch_add(chunk_len as u64, Ordering::AcqRel);
 	}
 
 	true
@@ -99,6 +106,7 @@ pub(super) async fn drain_http_response_stream(
 	mut expected_message_index: protocol::MessageIndex,
 	actor_id: Id,
 	idle_timeout: Option<Duration>,
+	egress_bytes: Arc<AtomicU64>,
 ) {
 	if let Some(body) = initial_body.filter(|body| !body.is_empty()) {
 		if !send_http_response_body_bytes(
@@ -109,6 +117,7 @@ pub(super) async fn drain_http_response_stream(
 			actor_id,
 			body,
 			"client dropped response before initial body was sent",
+			&egress_bytes,
 		)
 		.await
 		{
@@ -159,6 +168,7 @@ pub(super) async fn drain_http_response_stream(
 							actor_id,
 							chunk.body,
 							"client dropped streaming response body",
+							&egress_bytes,
 						).await {
 							return;
 						}

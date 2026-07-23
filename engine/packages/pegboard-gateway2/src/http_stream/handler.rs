@@ -1,4 +1,11 @@
-use std::{collections::HashMap, time::Duration};
+use std::{
+	collections::HashMap,
+	sync::{
+		Arc,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Duration,
+};
 
 use anyhow::{Result, anyhow};
 use bytes::Bytes;
@@ -11,7 +18,7 @@ use rivet_guard_core::{
 	errors::{ActorStoppedWhileWaiting, InvalidRequestBody},
 	request_context::RequestContext,
 };
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, watch};
 use tracing::Instrument;
 
 use super::{
@@ -24,7 +31,7 @@ use super::{
 	send_http_request_abort,
 };
 use crate::{
-	PegboardGateway2,
+	PegboardGateway2, metrics_task,
 	request_metrics::{RequestKind, RequestMetrics},
 	shared_state::{InFlightRequestCtx, RequestProtocol, RequestStopResult},
 };
@@ -42,10 +49,8 @@ impl PegboardGateway2 {
 		B::Error: std::error::Error + Send + Sync + 'static,
 	{
 		let ctx = self.ctx.with_ray(req_ctx.ray_id(), req_ctx.req_id())?;
-		let req_body_size_hint = req.body().size_hint();
-		let ingress_size_hint = req_body_size_hint
-			.upper()
-			.unwrap_or(req_body_size_hint.lower()) as usize;
+		let ingress_bytes = Arc::new(AtomicU64::new(0));
+		let egress_bytes = Arc::new(AtomicU64::new(0));
 		let request_metrics = RequestMetrics::new(
 			ctx.clone(),
 			self.actor_id,
@@ -53,19 +58,54 @@ impl PegboardGateway2 {
 			self.envoy_key.clone(),
 			RequestKind::Http,
 		);
-
-		let (res, active_metrics) = tokio::join!(
-			self.handle_request_inner(&ctx, req, req_ctx),
-			request_metrics.begin(ingress_size_hint),
+		let (metrics_abort_tx, metrics_abort_rx) = watch::channel(());
+		let transfer_metrics = request_metrics.clone();
+		let transfer_ingress_bytes = ingress_bytes.clone();
+		let transfer_egress_bytes = egress_bytes.clone();
+		tokio::spawn(
+			async move {
+				if let Err(error) = metrics_task::task(
+					transfer_metrics,
+					transfer_ingress_bytes,
+					transfer_egress_bytes,
+					metrics_abort_rx,
+				)
+				.await
+				{
+					tracing::error!(?error, "HTTP transfer metrics task failed");
+				}
+			}
+			.in_current_span(),
 		);
 
-		let egress_size_hint = res
-			.as_ref()
-			.map(|res| res.size_hint().upper().unwrap_or(res.size_hint().lower()) as usize)
-			.unwrap_or_default();
-		active_metrics.finish_in_background(egress_size_hint);
+		let (res, active_metrics) = tokio::join!(
+			self.handle_request_inner(
+				&ctx,
+				req,
+				req_ctx,
+				ingress_bytes.clone(),
+				egress_bytes.clone(),
+			),
+			request_metrics.begin(0),
+		);
 
-		res
+		match res {
+			Ok(response) => {
+				let (parts, body) = response.into_parts();
+				Ok(Response::from_parts(
+					parts,
+					body.with_completion(move || {
+						let _ = metrics_abort_tx.send(());
+						active_metrics.finish_in_background(0);
+					}),
+				))
+			}
+			Err(error) => {
+				let _ = metrics_abort_tx.send(());
+				active_metrics.finish_in_background(0);
+				Err(error)
+			}
+		}
 	}
 
 	async fn handle_request_inner<B>(
@@ -73,6 +113,8 @@ impl PegboardGateway2 {
 		ctx: &StandaloneCtx,
 		req: Request<B>,
 		req_ctx: &mut RequestContext,
+		ingress_bytes: Arc<AtomicU64>,
+		egress_bytes: Arc<AtomicU64>,
 	) -> Result<Response<ResponseBody>>
 	where
 		B: Body<Data = Bytes> + Unpin,
@@ -119,6 +161,7 @@ impl PegboardGateway2 {
 				None,
 			)
 		};
+		ingress_bytes.fetch_add(body_bytes.len() as u64, Ordering::AcqRel);
 
 		let mut stopped_sub = ctx
 			.subscribe::<pegboard::workflows::actor2::Stopped>(("actor_id", self.actor_id))
@@ -192,6 +235,7 @@ impl PegboardGateway2 {
 						Some(body_bytes.to_vec())
 					},
 					stream: request_stream,
+					max_body_size: max_request_body_size as u64,
 				},
 			);
 
@@ -222,6 +266,7 @@ impl PegboardGateway2 {
 					request_id,
 					body,
 					max_request_body_size,
+					ingress_bytes,
 					response_start_deadline,
 					response_start_timeout,
 				)
@@ -273,6 +318,7 @@ impl PegboardGateway2 {
 						expected_message_index,
 						self.actor_id,
 						idle_timeout,
+						egress_bytes,
 					)
 					.in_current_span(),
 				);
@@ -280,6 +326,7 @@ impl PegboardGateway2 {
 				response_builder.body(ResponseBody::Channel(body_rx))?
 			} else {
 				let body = response_start.body.unwrap_or_default();
+				egress_bytes.fetch_add(body.len() as u64, Ordering::AcqRel);
 				let response =
 					response_builder.body(ResponseBody::Full(Full::new(Bytes::from(body))))?;
 

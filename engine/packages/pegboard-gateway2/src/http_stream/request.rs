@@ -8,7 +8,13 @@ use rivet_guard_core::errors::{
 	ActorStoppedWhileWaiting, GatewayResponseStartTimeout, InvalidRequestBody,
 	TunnelMessageTimeout, TunnelRequestAborted, TunnelResponseClosed,
 };
-use std::time::Duration;
+use std::{
+	sync::{
+		Arc,
+		atomic::{AtomicU64, Ordering},
+	},
+	time::Duration,
+};
 use tokio::sync::{mpsc, watch};
 
 use crate::shared_state::{InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason};
@@ -64,6 +70,7 @@ async fn send_streaming_http_request_body_chunks<B>(
 	in_flight_req: &InFlightRequestHandle,
 	mut body: B,
 	max_body_size: usize,
+	ingress_bytes: Arc<AtomicU64>,
 ) -> Result<()>
 where
 	B: Body<Data = Bytes> + Unpin,
@@ -85,7 +92,13 @@ where
 				frame = body.frame() => frame,
 				_ = tokio::time::sleep_until(deadline) => {
 					if let Some(chunk) = chunker.flush() {
-						send_http_request_body_chunk(in_flight_req, chunk, false).await?;
+						send_http_request_body_chunk(
+							in_flight_req,
+							chunk,
+							false,
+							max_body_size,
+						)
+						.await?;
 					}
 					flush_deadline = None;
 					continue;
@@ -112,6 +125,7 @@ where
 		let Ok(data) = frame.into_data() else {
 			continue;
 		};
+		ingress_bytes.fetch_add(data.len() as u64, Ordering::AcqRel);
 		let Some(next_body_size) = next_request_body_size(body_size, data.len(), max_body_size)
 		else {
 			super::send_http_request_abort(
@@ -131,7 +145,7 @@ where
 
 		let was_empty = chunker.is_empty();
 		for chunk in chunker.push(&data) {
-			send_http_request_body_chunk(in_flight_req, chunk, false).await?;
+			send_http_request_body_chunk(in_flight_req, chunk, false, max_body_size).await?;
 		}
 		if chunker.is_empty() {
 			flush_deadline = None;
@@ -143,20 +157,22 @@ where
 	// Normal EOF flushes any partial protocol chunk, then sends exactly one final
 	// marker so actor-side upload state and request routing can be released.
 	if let Some(chunk) = chunker.flush() {
-		send_http_request_body_chunk(in_flight_req, chunk, false).await?;
+		send_http_request_body_chunk(in_flight_req, chunk, false, max_body_size).await?;
 	}
-	send_http_request_body_chunk(in_flight_req, Vec::new(), true).await
+	send_http_request_body_chunk(in_flight_req, Vec::new(), true, max_body_size).await
 }
 
 async fn send_http_request_body_chunk(
 	in_flight_req: &InFlightRequestHandle,
 	body: Vec<u8>,
 	finish: bool,
+	max_body_size: usize,
 ) -> Result<()> {
 	let message =
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(protocol::ToEnvoyRequestChunk {
 			body,
 			finish,
+			max_body_size: max_body_size as u64,
 		});
 	in_flight_req.send_message(message, false).await
 }
@@ -240,6 +256,7 @@ pub(super) async fn stream_http_request_and_wait_for_response<B>(
 	request_id: protocol::RequestId,
 	body: B,
 	max_body_size: usize,
+	ingress_bytes: Arc<AtomicU64>,
 	response_start_deadline: tokio::time::Instant,
 	response_start_timeout: Duration,
 ) -> Result<(protocol::MessageId, protocol::ToRivetResponseStart)>
@@ -250,7 +267,8 @@ where
 	// Upload ingress, cumulative byte accounting, and bounded-latency
 	// coalescing run in one future. Response start/abort is observed
 	// concurrently so a slow or rejected upload cannot retain the request.
-	let upload = send_streaming_http_request_body_chunks(in_flight_req, body, max_body_size);
+	let upload =
+		send_streaming_http_request_body_chunks(in_flight_req, body, max_body_size, ingress_bytes);
 	tokio::pin!(upload);
 	tokio::select! {
 		upload_result = &mut upload => {
@@ -281,7 +299,7 @@ where
 			// An early successful response makes the unread client body
 			// irrelevant. Drop the upload future and send a clean final marker
 			// so actor request routing can be released.
-			send_http_request_body_chunk(in_flight_req, Vec::new(), true).await?;
+			send_http_request_body_chunk(in_flight_req, Vec::new(), true, max_body_size).await?;
 			Ok(response_start)
 		}
 	}

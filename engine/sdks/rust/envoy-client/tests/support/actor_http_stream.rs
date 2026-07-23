@@ -18,11 +18,11 @@ use crate::{
 	async_counter::AsyncCounter,
 	context::SharedActorEntry,
 	handle::EnvoyHandle,
-	http::{HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, ResponseChunk},
+	http::{HTTP_BODY_MAX_CHUNK_SIZE, ResponseChunk},
 };
 
 #[tokio::test]
-async fn streamed_request_backpressure_does_not_block_actor_control_loop() {
+async fn delayed_request_body_consumption_accepts_the_configured_limit() {
 	let (fetch_started_tx, fetch_started_rx) = oneshot::channel();
 	let (fetch_dropped_tx, fetch_dropped_rx) = oneshot::channel();
 	let callbacks = Arc::new(TestCallbacks::hanging(fetch_started_tx, fetch_dropped_tx));
@@ -40,6 +40,10 @@ async fn streamed_request_backpressure_does_not_block_actor_control_loop() {
 	let mut request = request_start();
 	request.method = "POST".to_owned();
 	request.stream = true;
+	const MAX_BODY_SIZE: usize = 17 * HTTP_BODY_MAX_CHUNK_SIZE;
+	const SMALL_CHUNK_COUNT: usize = 321;
+	request.max_body_size = MAX_BODY_SIZE as u64;
+	let max_body_size = request.max_body_size;
 
 	actor_tx
 		.send(ToActor::ReqStart {
@@ -51,42 +55,150 @@ async fn streamed_request_backpressure_does_not_block_actor_control_loop() {
 		.await
 		.expect("fetch start sender dropped before request began");
 
-	for index in 0..=HTTP_BODY_STREAM_CHANNEL_CAPACITY {
+	let mut message_index = 1;
+	for _ in 0..SMALL_CHUNK_COUNT {
 		let mut chunk_message_id = message_id();
-		chunk_message_id.message_index = index as u16 + 1;
+		chunk_message_id.message_index = message_index;
+		message_index += 1;
 		actor_tx
 			.send(ToActor::ReqChunk {
 				message_id: chunk_message_id,
 				chunk: protocol::ToEnvoyRequestChunk {
-					body: vec![index as u8],
+					body: vec![1],
 					finish: false,
+					max_body_size,
+				},
+			})
+			.expect("failed to send streamed request chunk");
+	}
+	let remaining_body_size = MAX_BODY_SIZE - SMALL_CHUNK_COUNT;
+	for chunk_size in std::iter::repeat_n(
+		HTTP_BODY_MAX_CHUNK_SIZE,
+		remaining_body_size / HTTP_BODY_MAX_CHUNK_SIZE,
+	)
+	.chain(std::iter::once(
+		remaining_body_size % HTTP_BODY_MAX_CHUNK_SIZE,
+	))
+	.filter(|chunk_size| *chunk_size != 0)
+	{
+		let mut chunk_message_id = message_id();
+		chunk_message_id.message_index = message_index;
+		message_index += 1;
+		actor_tx
+			.send(ToActor::ReqChunk {
+				message_id: chunk_message_id,
+				chunk: protocol::ToEnvoyRequestChunk {
+					body: vec![2; chunk_size],
+					finish: false,
+					max_body_size,
 				},
 			})
 			.expect("failed to send streamed request chunk");
 	}
 
-	tokio::time::timeout(Duration::from_secs(2), fetch_dropped_rx)
-		.await
-		.expect("overloaded request did not cancel its handler")
-		.expect("fetch drop sender dropped");
-	let abort = recv_ws_tunnel_msg(&mut ws_rx).await;
-	assert!(matches!(
-		abort.message_kind,
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(protocol::ToRivetResponseAbort {
-			reason: protocol::HttpStreamAbortReason {
-				kind: protocol::HttpStreamAbortReasonKind::Overloaded,
-				..
-			}
-		})
-	));
+	yield_now().await;
+	assert!(
+		ws_rx.try_recv().is_err(),
+		"a valid delayed upload should not be rejected"
+	);
 
 	actor_tx
 		.send(ToActor::Stop {
 			command_idx: 1,
 			reason: protocol::StopActorReason::StopIntent,
 		})
-		.expect("failed to send stop after request overload");
+		.expect("failed to send stop during delayed upload");
 	wait_for_stopped_event(&mut envoy_rx).await;
+	tokio::time::timeout(Duration::from_secs(2), fetch_dropped_rx)
+		.await
+		.expect("actor stop did not cancel the delayed request")
+		.expect("fetch drop sender dropped");
+}
+
+#[tokio::test]
+async fn early_request_chunks_are_bounded_before_request_start() {
+	let (shared, _envoy_rx) = build_shared_context(Arc::new(TestCallbacks::idle()));
+	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
+	*shared.ws_tx.lock().await = Some(ws_tx);
+	let (actor_tx, _) = create_actor(
+		shared,
+		"actor-early-request-body".to_string(),
+		1,
+		actor_config(),
+		Vec::new(),
+		None,
+	);
+	let max_body_size = 1;
+
+	actor_tx
+		.send(ToActor::ReqChunk {
+			message_id: message_id(),
+			chunk: protocol::ToEnvoyRequestChunk {
+				body: vec![1, 2],
+				finish: false,
+				max_body_size,
+			},
+		})
+		.expect("failed to send early request chunk");
+
+	let mut request = request_start();
+	request.method = "POST".to_owned();
+	request.stream = true;
+	request.max_body_size = max_body_size;
+	actor_tx
+		.send(ToActor::ReqStart {
+			message_id: message_id(),
+			req: request,
+		})
+		.expect("failed to send request start");
+
+	let abort = recv_ws_tunnel_msg(&mut ws_rx).await;
+	assert!(matches!(
+		abort.message_kind,
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(protocol::ToRivetResponseAbort {
+			reason: protocol::HttpStreamAbortReason {
+				kind: protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+				..
+			}
+		})
+	));
+}
+
+#[tokio::test]
+async fn initial_request_body_is_checked_against_the_declared_limit() {
+	let (shared, _envoy_rx) = build_shared_context(Arc::new(TestCallbacks::idle()));
+	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
+	*shared.ws_tx.lock().await = Some(ws_tx);
+	let (actor_tx, _) = create_actor(
+		shared,
+		"actor-oversized-initial-request-body".to_string(),
+		1,
+		actor_config(),
+		Vec::new(),
+		None,
+	);
+	let mut request = request_start();
+	request.method = "POST".to_owned();
+	request.body = Some(vec![1, 2]);
+	request.max_body_size = 1;
+
+	actor_tx
+		.send(ToActor::ReqStart {
+			message_id: message_id(),
+			req: request,
+		})
+		.expect("failed to send oversized request start");
+
+	let abort = recv_ws_tunnel_msg(&mut ws_rx).await;
+	assert!(matches!(
+		abort.message_kind,
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(protocol::ToRivetResponseAbort {
+			reason: protocol::HttpStreamAbortReason {
+				kind: protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+				..
+			}
+		})
+	));
 }
 
 #[tokio::test]
@@ -122,6 +234,7 @@ async fn streamed_request_remains_cancellable_after_upload_finishes() {
 			chunk: protocol::ToEnvoyRequestChunk {
 				body: Vec::new(),
 				finish: true,
+				max_body_size: 20 * 1024 * 1024,
 			},
 		})
 		.expect("failed to finish upload");

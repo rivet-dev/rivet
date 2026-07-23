@@ -81,6 +81,27 @@ describe("native http response streaming", () => {
 		expect(request.signal.aborted).toBe(true);
 	});
 
+	test("explicitly cancels an unread native upload after an early response", async () => {
+		let cancelCount = 0;
+		const bodyStream = {
+			async read() {
+				return new Promise<Uint8Array | null>(() => {});
+			},
+			async cancel() {
+				cancelCount++;
+			},
+		};
+		const request = nativeHttpTestInternals.buildRequest({
+			method: "POST",
+			uri: "/upload",
+			bodyStream,
+		});
+
+		expect(request.bodyUsed).toBe(false);
+		await nativeHttpTestInternals.cancelRequestBody(bodyStream);
+		expect(cancelCount).toBe(1);
+	});
+
 	test("streams multi-chunk responses through the native body stream", async () => {
 		const writes: Uint8Array[] = [];
 		let finish!: () => void;
@@ -142,6 +163,41 @@ describe("native http response streaming", () => {
 		expect(writes[0]).toEqual(new Uint8Array([1]));
 		expect(writes[1][0]).toBe(7);
 		expect(writes[2][0]).toBe(7);
+	});
+
+	test("does not impose a cumulative 20 MiB response limit", async () => {
+		const responseSize = 20 * 1024 * 1024 + 1;
+		let writtenBytes = 0;
+		const responseBodyStream = {
+			async cancelled() {
+				return new Promise<void>(() => {});
+			},
+			async write(chunk: Uint8Array) {
+				writtenBytes += chunk.byteLength;
+			},
+			async end() {},
+			async error(message: string) {
+				throw new Error(message);
+			},
+		};
+		const response = new Response(
+			new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(new Uint8Array(responseSize));
+					controller.close();
+				},
+			}),
+		);
+
+		const conversion =
+			await nativeHttpTestInternals.convertRuntimeHttpResponse(
+				response,
+				responseBodyStream,
+			);
+		await conversion.bodyCompletion;
+
+		expect(conversion.response.stream).toBe(true);
+		expect(writtenBytes).toBe(responseSize);
 	});
 
 	test("returns streamed response headers before the first body chunk", async () => {

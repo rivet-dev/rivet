@@ -13,15 +13,15 @@ use crate::{
 	connection::ws_send,
 	handle::EnvoyHandle,
 	http::{
-		HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, HttpRequest,
-		HttpRequestBodyError, HttpRequestBodyStream, HttpResponse, ResponseChunk,
+		HTTP_BODY_MAX_CHUNK_SIZE, HttpRequest, HttpRequestBodyError, HttpRequestBodyStream,
+		HttpResponse, ResponseChunk,
 	},
 	utils::{BufferMap, spawn_detached},
 };
 
 pub(super) struct HttpRequests {
 	pending: BufferMap<PendingHttpRequest>,
-	early_chunks: BufferMap<Vec<protocol::ToEnvoyRequestChunk>>,
+	early_chunks: BufferMap<EarlyRequestChunks>,
 }
 
 impl HttpRequests {
@@ -38,8 +38,52 @@ struct PendingHttpRequest {
 	body_abort_tx: Option<watch::Sender<Option<HttpRequestBodyError>>>,
 	task_abort_handle: Option<AbortHandle>,
 	body_rejected: bool,
+	max_body_size: usize,
+	received_body_size: usize,
 	upload_complete: bool,
 	response_complete: bool,
+}
+
+struct EarlyRequestChunks {
+	chunks: Vec<protocol::ToEnvoyRequestChunk>,
+	body_size: usize,
+	max_body_size: usize,
+	finished: bool,
+	rejected: bool,
+}
+
+impl EarlyRequestChunks {
+	fn new(max_body_size: usize) -> Self {
+		Self {
+			chunks: Vec::new(),
+			body_size: 0,
+			max_body_size,
+			finished: false,
+			rejected: false,
+		}
+	}
+
+	fn push(&mut self, chunk: protocol::ToEnvoyRequestChunk) -> bool {
+		if chunk.body.is_empty() && !chunk.finish {
+			return true;
+		}
+		let chunk_max_body_size = max_body_size(chunk.max_body_size);
+		let next_body_size = self.body_size.checked_add(chunk.body.len());
+		if self.rejected
+			|| self.finished
+			|| chunk_max_body_size != self.max_body_size
+			|| next_body_size.is_none_or(|size| size > self.max_body_size)
+		{
+			self.chunks.clear();
+			self.rejected = true;
+			return false;
+		}
+
+		self.body_size = next_body_size.expect("checked above");
+		self.finished = chunk.finish;
+		self.chunks.push(chunk);
+		true
+	}
 }
 
 enum RequestPhase {
@@ -79,21 +123,42 @@ pub(super) fn handle_req_start(
 	message_id: protocol::MessageId,
 	req: protocol::ToEnvoyRequestStart,
 ) {
+	let max_body_size = max_body_size(req.max_body_size);
+	let initial_body_size = req.body.as_ref().map_or(0, Vec::len);
 	let pending = PendingHttpRequest {
 		body_tx: None,
 		body_abort_tx: None,
 		task_abort_handle: None,
 		body_rejected: false,
+		max_body_size,
+		received_body_size: initial_body_size,
 		upload_complete: !req.stream,
 		response_complete: false,
 	};
 	ctx.http_requests
 		.pending
 		.insert(&[&message_id.gateway_id, &message_id.request_id], pending);
+	if initial_body_size > max_body_size {
+		reject_request_body(
+			ctx,
+			message_id,
+			protocol::HttpStreamAbortReason {
+				kind: protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+				detail: Some("initial request body exceeded its configured limit".to_owned()),
+			},
+		);
+		return;
+	}
 
 	let headers: HashMap<String, String> = req.headers.into_iter().collect();
 	let body_stream = if req.stream {
-		let (body_tx, body_rx) = mpsc::channel(HTTP_BODY_STREAM_CHANNEL_CAPACITY);
+		// Reserve one logical slot per possible non-empty byte. The queue
+		// allocates storage lazily, and this guarantees that any upload within
+		// the byte limit fits even when timeout flushing produces small chunks.
+		let body_channel_capacity = max_body_size
+			.max(1)
+			.min(tokio::sync::Semaphore::MAX_PERMITS);
+		let (body_tx, body_rx) = mpsc::channel(body_channel_capacity);
 		let (body_abort_tx, body_abort_rx) = watch::channel(None);
 		if let Some(pending) = ctx
 			.http_requests
@@ -157,13 +222,24 @@ pub(super) fn handle_req_start(
 		pending.task_abort_handle = Some(task_abort_handle);
 	}
 
-	if let Some(chunks) = ctx
+	if let Some(early) = ctx
 		.http_requests
 		.early_chunks
 		.remove(&[&message_id.gateway_id, &message_id.request_id])
 	{
-		for chunk in chunks {
-			handle_req_chunk(ctx, message_id.clone(), chunk);
+		if early.rejected || early.max_body_size != max_body_size {
+			reject_request_body(
+				ctx,
+				message_id,
+				protocol::HttpStreamAbortReason {
+					kind: protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+					detail: Some("early request body exceeded its configured limit".to_owned()),
+				},
+			);
+		} else {
+			for chunk in early.chunks {
+				handle_req_chunk(ctx, message_id.clone(), chunk);
+			}
 		}
 	}
 }
@@ -209,7 +285,29 @@ pub(super) fn handle_req_chunk(
 	match ctx.http_requests.pending.get_mut(&key) {
 		Some(pending) if pending.body_rejected => {}
 		Some(pending) => {
-			if !chunk.body.is_empty() {
+			let chunk_max_body_size = max_body_size(chunk.max_body_size);
+			let next_body_size = pending.received_body_size.checked_add(chunk.body.len());
+			if chunk_max_body_size != pending.max_body_size
+				|| next_body_size.is_none_or(|size| size > pending.max_body_size)
+			{
+				let reason = protocol::HttpStreamAbortReason {
+					kind: protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+					detail: Some("request body exceeded its configured limit".to_owned()),
+				};
+				reject_pending_request(pending, &reason);
+				response_aborted = true;
+
+				let shared = ctx.shared.clone();
+				let gateway_id = message_id.gateway_id;
+				let request_id = message_id.request_id;
+				spawn_detached(async move {
+					send_response_abort(&shared, gateway_id, request_id, 0, reason).await;
+				});
+			} else {
+				pending.received_body_size = next_body_size.expect("checked above");
+			}
+
+			if !pending.body_rejected && !chunk.body.is_empty() {
 				if let Some(body_tx) = pending.body_tx.clone() {
 					match body_tx.try_send(chunk.body) {
 						Ok(()) => {}
@@ -226,16 +324,7 @@ pub(super) fn handle_req_chunk(
 								),
 							};
 							tracing::warn!("streamed request body channel overloaded");
-							if let Some(body_abort_tx) = pending.body_abort_tx.take() {
-								body_abort_tx.send_replace(Some(HttpRequestBodyError {
-									reason: reason.clone(),
-								}));
-							}
-							if let Some(task_abort_handle) = pending.task_abort_handle.take() {
-								task_abort_handle.abort();
-							}
-							pending.body_tx = None;
-							pending.body_rejected = true;
+							reject_pending_request(pending, &reason);
 							response_aborted = true;
 
 							let shared = ctx.shared.clone();
@@ -259,10 +348,15 @@ pub(super) fn handle_req_chunk(
 			// Reconnect replay can enqueue a previously buffered chunk before its
 			// request-start message has installed local state. Retain those chunks
 			// only until `handle_req_start` drains them into the bounded body channel.
+			let max_body_size = max_body_size(chunk.max_body_size);
 			if let Some(chunks) = ctx.http_requests.early_chunks.get_mut(&key) {
-				chunks.push(chunk);
+				if !chunks.push(chunk) {
+					tracing::warn!("early request body exceeded its configured limit");
+				}
 			} else {
-				ctx.http_requests.early_chunks.insert(&key, vec![chunk]);
+				let mut chunks = EarlyRequestChunks::new(max_body_size);
+				chunks.push(chunk);
+				ctx.http_requests.early_chunks.insert(&key, chunks);
 			}
 			return;
 		}
@@ -274,6 +368,48 @@ pub(super) fn handle_req_chunk(
 	if response_aborted {
 		complete_phase(ctx, message_id, RequestPhase::Response);
 	}
+}
+
+fn max_body_size(max_body_size: u64) -> usize {
+	usize::try_from(max_body_size).unwrap_or(usize::MAX)
+}
+
+fn reject_pending_request(
+	pending: &mut PendingHttpRequest,
+	reason: &protocol::HttpStreamAbortReason,
+) {
+	if let Some(body_abort_tx) = pending.body_abort_tx.take() {
+		body_abort_tx.send_replace(Some(HttpRequestBodyError {
+			reason: reason.clone(),
+		}));
+	}
+	if let Some(task_abort_handle) = pending.task_abort_handle.take() {
+		task_abort_handle.abort();
+	}
+	pending.body_tx = None;
+	pending.body_rejected = true;
+}
+
+fn reject_request_body(
+	ctx: &mut ActorContext,
+	message_id: protocol::MessageId,
+	reason: protocol::HttpStreamAbortReason,
+) {
+	if let Some(pending) = ctx
+		.http_requests
+		.pending
+		.get_mut(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		reject_pending_request(pending, &reason);
+	}
+	let shared = ctx.shared.clone();
+	let gateway_id = message_id.gateway_id;
+	let request_id = message_id.request_id;
+	spawn_detached(async move {
+		send_response_abort(&shared, gateway_id, request_id, 0, reason).await;
+	});
+	complete_phase(ctx, message_id.clone(), RequestPhase::Upload);
+	complete_phase(ctx, message_id, RequestPhase::Response);
 }
 
 pub(super) fn handle_req_complete(ctx: &mut ActorContext, message_id: protocol::MessageId) {

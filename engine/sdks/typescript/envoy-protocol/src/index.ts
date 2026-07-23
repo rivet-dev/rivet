@@ -2104,6 +2104,7 @@ export type ToEnvoyRequestStart = {
     readonly headers: ReadonlyMap<string, string>
     readonly body: ArrayBuffer | null
     readonly stream: boolean
+    readonly maxBodySize: u64
 }
 
 export function readToEnvoyRequestStart(bc: bare.ByteCursor): ToEnvoyRequestStart {
@@ -2114,6 +2115,7 @@ export function readToEnvoyRequestStart(bc: bare.ByteCursor): ToEnvoyRequestStar
         headers: read22(bc),
         body: read18(bc),
         stream: bare.readBool(bc),
+        maxBodySize: bare.readU64(bc),
     }
 }
 
@@ -2124,23 +2126,27 @@ export function writeToEnvoyRequestStart(bc: bare.ByteCursor, x: ToEnvoyRequestS
     write22(bc, x.headers)
     write18(bc, x.body)
     bare.writeBool(bc, x.stream)
+    bare.writeU64(bc, x.maxBodySize)
 }
 
 export type ToEnvoyRequestChunk = {
     readonly body: ArrayBuffer
     readonly finish: boolean
+    readonly maxBodySize: u64
 }
 
 export function readToEnvoyRequestChunk(bc: bare.ByteCursor): ToEnvoyRequestChunk {
     return {
         body: bare.readData(bc),
         finish: bare.readBool(bc),
+        maxBodySize: bare.readU64(bc),
     }
 }
 
 export function writeToEnvoyRequestChunk(bc: bare.ByteCursor, x: ToEnvoyRequestChunk): void {
     bare.writeData(bc, x.body)
     bare.writeBool(bc, x.finish)
+    bare.writeU64(bc, x.maxBodySize)
 }
 
 export enum HttpStreamAbortReasonKind {
@@ -3570,4 +3576,4 @@ function assert(condition: boolean, message?: string): asserts condition {
     if (!condition) throw new Error(message ?? "Assertion failed")
 }
 
-export const VERSION = 7;
+export const VERSION = 8;

@@ -87,6 +87,12 @@ export function buildNativeHttpRequest(init: NativeHttpRequestInit): Request {
 	} as RequestInit);
 }
 
+export async function cancelNativeHttpRequestBody(
+	bodyStream?: NativeHttpRequestBodyStream,
+) {
+	await bodyStream?.cancel();
+}
+
 async function writeResponseChunk(
 	stream: NativeHttpResponseBodyStream,
 	chunk: Uint8Array,
@@ -191,5 +197,6 @@ export async function convertNativeHttpResponse(
 
 export const nativeHttpTestInternals = {
 	buildRequest: buildNativeHttpRequest,
+	cancelRequestBody: cancelNativeHttpRequestBody,
 	convertRuntimeHttpResponse: convertNativeHttpResponse,
 };
