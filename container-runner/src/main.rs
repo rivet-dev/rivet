@@ -339,6 +339,7 @@ async fn async_main() -> Result<()> {
 			host: Some("::".to_string()),
 			port,
 			public_dir: None,
+			application: None,
 		},
 		serve_shutdown.clone(),
 	));
