@@ -27,7 +27,7 @@ export function rivet(options: RivetTargetOptions = {}) {
 		name: 'rivet',
 		bundle: 'vite',
 		external: [
-			'@rivet-dev/flue',
+			'@rivet-dev/flue-target',
 			'rivetkit',
 			'rivetkit/client',
 			'rivetkit/db',
@@ -89,7 +89,7 @@ import {
   createRivetAsyncSqlDb,
   createRivetAgentRuntime,
   createRivetWorkflowRuntime,
-} from '@rivet-dev/flue/runtime';
+} from '@rivet-dev/flue-target/runtime';
 import {
   Bash,
   InMemoryFs,

@@ -10,7 +10,7 @@
 	"dependencies": {
 		"@flue/cli": "git+https://github.com/rivet-dev/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli",
 		"@flue/runtime": "git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime",
-		"@rivet-dev/flue": "workspace:*",
+		"@rivet-dev/flue-target": "workspace:*",
 		"rivetkit": "workspace:*",
 		"valibot": "^1.2.0"
 	}

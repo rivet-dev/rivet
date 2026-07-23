@@ -172,13 +172,19 @@ export const registry = setup({ use: { vm } });
 Most sandbox runtimes are tied to the provider that hosts them. **agentOS is a library**, so the same agent code runs anywhere your backend does. There's no hypervisor, no nested virtualization, and no per-provider sandbox API to code against.
 
 <Note>
-agentOS does not support Cloudflare Workers yet. Today, run it on a Node.js or
-container host such as Rivet, Railway, Kubernetes, or Vercel.
+agentOS does not support Cloudflare Workers yet. It works with Node.js, Bun, or
+Deno on platforms such as Rivet, Railway, Kubernetes, or Vercel.
 </Note>
 
 Rivet is the self-hostable path: run it on Rivet Cloud, on your own infrastructure, or locally as a library. The same agent also picks up durable storage, multi-region deployment, fault-tolerant workflows, durable queues and streams, and rich observability.
 
 You keep the isolate economics you came to Flue for, without being locked to a single platform to get them.
+
+## Working upstream with Flue
+
+This integration currently runs on [Rivet's Flue fork](https://github.com/rivet-dev/flue). We're working to merge the fork's generic target-authoring and runtime extension APIs [upstream](https://github.com/withastro/flue/discussions/516).
+
+Those extension points let Flue support actor-model runtimes—where every agent and workflow owns durable identity, state, and lifecycle—without adding a Rivet dependency to Flue itself. The Rivet-specific target, actor implementation, and storage adapter will remain in Rivet packages.
 
 ## Get started
 

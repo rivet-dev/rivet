@@ -1,7 +1,8 @@
-# @rivet-dev/flue
+# @rivet-dev/flue runtime
 
-The Rivet target adapter for Flue. It plugs Rivet Actors into Flue's runtime as a build target,
-exposing agents and workflows as deployable Rivet actors.
+The Rivet runtime adapter used by `@rivet-dev/flue-target`. It plugs Rivet
+Actors into Flue's runtime, exposing agents and workflows as deployable Rivet
+actors.
 
 ## Reference adapter: Cloudflare Durable Objects
 

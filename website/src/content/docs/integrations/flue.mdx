@@ -4,6 +4,8 @@ description: "Run Flue agents on Rivet with agentOS sandboxes."
 skill: false
 ---
 
+import { Hosting } from "@/components/docs/Hosting";
+
 {/*
   Keep this guide synchronized with
   rivet-dev/agentos/website/src/content/docs/docs/frameworks/flue.mdx.
@@ -16,6 +18,13 @@ This integration is in beta. APIs may change between releases.
 </Info>
 
 Flue owns the agent runtime and session lifecycle. Rivet maps each agent instance and workflow run to a durable Rivet Actor, while agentOS gives each Flue context an isolated VM with a persistent `/workspace` filesystem.
+
+<Info>
+This integration currently uses [Rivet's Flue fork](https://github.com/rivet-dev/flue).
+We're working to merge its generic target-authoring and runtime extension APIs
+[upstream](https://github.com/withastro/flue/discussions/516), allowing Flue to
+support actor-model runtimes without taking a Rivet dependency.
+</Info>
 
 [View the complete example →](https://github.com/rivet-dev/agentos/tree/main/examples/flue)
 
@@ -113,6 +122,12 @@ Flue builds the Rivet target, starts the local Rivet engine, and connects to the
 
 </Step>
 
+<Step title="Deploy">
+
+<Hosting />
+
+</Step>
+
 </Steps>
 
 ## Runtime model
@@ -122,6 +137,11 @@ Each Flue agent instance and workflow run has its own Rivet Actor and SQLite dat
 Normal agent and workflow requests return their `202` receipt after persisting the admission, its canonical input event, and a recovery alarm. Rivet then owns the turn as background work through `c.keepAwake(...)`; the caller does not remain attached while the model or workflow runs. Workflow requests with `?wait=result` are the explicit exception and stay open until the result is available.
 
 The agentOS adapter derives a stable VM actor key from the Flue context ID. Reusing a context reconnects to the same durable `/workspace` filesystem.
+
+<Note>
+agentOS does not support Cloudflare Workers yet. It works with Node.js, Bun, or
+Deno on platforms such as Railway, Kubernetes, or Vercel.
+</Note>
 
 ## Configuration
 
@@ -136,10 +156,5 @@ The agentOS adapter derives a stable VM actor key from the Flue context ID. Reus
 | `params` | No | Parameters passed when connecting to a new agentOS actor. |
 | `cwd` | No | Sandbox working directory. Defaults to `/workspace`. |
 | `client` | No | Existing client configured for the same registry. |
-
-<Note>
-agentOS does not support Cloudflare Workers yet. Today, run it on a Node.js or
-container host such as Railway, Kubernetes, or Vercel.
-</Note>
 
 [Read the agentOS + Flue documentation →](https://agentos-sdk.dev/docs/frameworks/flue)
