@@ -32,22 +32,13 @@ export async function sendHttpRequestToGateway(
 		}
 	}
 
-	return mutableResponse(
-		await fetch(gatewayUrl, {
-			method: actorRequest.method,
-			headers: guardHeaders,
-			body: bodyToSend,
-			signal: actorRequest.signal,
-			...(bodyToSend ? { duplex: "half" } : {}),
-		} as RequestInit),
-	);
-}
-
-function mutableResponse(fetchRes: Response): Response {
-	// We cannot return the raw response from `fetch` since the response type is not mutable.
-	//
-	// In order for middleware to be able to mutate the response, we need to build a new Response object that is mutable.
-	return new Response(fetchRes.body, fetchRes);
+	return fetch(gatewayUrl, {
+		method: actorRequest.method,
+		headers: guardHeaders,
+		body: bodyToSend,
+		signal: actorRequest.signal,
+		...(bodyToSend ? { duplex: "half" } : {}),
+	} as RequestInit);
 }
 
 function buildGuardHeaders(
