@@ -6,8 +6,8 @@ use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::actor::schedule::ScheduledFireInfo;
 use rivetkit_core::error::ActorRuntime;
 use rivetkit_core::{
-	ActorEvent, QueueSendResult, QueueSendStatus, Reply, Request, Response, SerializeStateReason,
-	StateDelta, WebSocket,
+	ActorEvent, ActorHttpResponse, QueueSendResult, QueueSendStatus, Reply, Request, Response,
+	SerializeStateReason, StateDelta, WebSocket,
 };
 use serde::{
 	Serialize,
@@ -964,7 +964,7 @@ impl de::Expected for Expected {
 #[must_use = "reply to the HTTP call or dropping it sends actor/dropped_reply"]
 pub struct HttpCall {
 	pub(crate) request: Option<Request>,
-	pub(crate) reply: Option<Reply<Response>>,
+	pub(crate) reply: Option<Reply<ActorHttpResponse>>,
 }
 
 impl Drop for HttpCall {
@@ -983,7 +983,7 @@ impl Drop for HttpCall {
 #[derive(Debug)]
 #[must_use = "reply to the deferred HTTP call or dropping it sends actor/dropped_reply"]
 pub struct HttpReply {
-	reply: Option<Reply<Response>>,
+	reply: Option<Reply<ActorHttpResponse>>,
 }
 
 impl Drop for HttpReply {
@@ -997,7 +997,7 @@ impl Drop for HttpReply {
 impl HttpReply {
 	pub fn reply(mut self, response: Response) {
 		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(response));
+			reply.send(Ok(ActorHttpResponse::Buffered(response)));
 		}
 	}
 
@@ -1042,7 +1042,7 @@ impl HttpCall {
 
 	pub fn reply(mut self, response: Response) {
 		if let Some(reply) = self.reply.take() {
-			reply.send(Ok(response));
+			reply.send(Ok(ActorHttpResponse::Buffered(response)));
 		}
 	}
 
@@ -1908,6 +1908,9 @@ mod tests {
 			.block_on(reply_rx)
 			.expect("receive http reply")
 			.expect("http reply_status should succeed");
+		let ActorHttpResponse::Buffered(response) = response else {
+			panic!("http reply_status should return buffered response");
+		};
 		assert_eq!(response.status().as_u16(), 404);
 		assert!(response.body().is_empty());
 	}

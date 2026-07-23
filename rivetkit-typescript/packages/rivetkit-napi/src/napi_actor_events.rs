@@ -1151,7 +1151,23 @@ async fn call_http_request(
 	ctx: &ActorContext,
 	request: rivetkit_core::Request,
 	cancel_token: Option<CancellationToken>,
-) -> Result<rivetkit_core::Response> {
+) -> Result<rivetkit_core::ActorHttpResponse> {
+	let request_cancel_token = request.cancellation_token();
+	let cancel_token = match cancel_token {
+		Some(dispatch_cancel_token) => {
+			let combined_cancel_token = CancellationToken::new();
+			let combined_cancel_token_task = combined_cancel_token.clone();
+			tokio::spawn(async move {
+				tokio::select! {
+					_ = request_cancel_token.cancelled() => {}
+					_ = dispatch_cancel_token.cancelled() => {}
+				}
+				combined_cancel_token_task.cancel();
+			});
+			Some(combined_cancel_token)
+		}
+		None => Some(request_cancel_token),
+	};
 	call_request(
 		"onRequest",
 		callback,
@@ -1159,6 +1175,7 @@ async fn call_http_request(
 			ctx: ctx.inner().clone(),
 			request,
 			cancel_token,
+			response_stream: None,
 		},
 	)
 	.await

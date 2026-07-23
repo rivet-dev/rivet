@@ -1448,7 +1448,7 @@ fn tunnel_message_kind_name(kind: &protocol::ToRivetTunnelMessageKind) -> &'stat
 	match kind {
 		ToRivetTunnelMessageKind::ToRivetResponseStart(_) => "ToRivetResponseStart",
 		ToRivetTunnelMessageKind::ToRivetResponseChunk(_) => "ToRivetResponseChunk",
-		ToRivetTunnelMessageKind::ToRivetResponseAbort => "ToRivetResponseAbort",
+		ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => "ToRivetResponseAbort",
 		ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_) => "ToRivetWebSocketOpen",
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessage(_) => "ToRivetWebSocketMessage",
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_) => "ToRivetWebSocketMessageAck",
@@ -2183,10 +2183,48 @@ fn tunnel_message_inner_data_len(kind: &protocol::ToRivetTunnelMessageKind) -> u
 		}
 		ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => chunk.body.len(),
 		ToRivetTunnelMessageKind::ToRivetWebSocketMessage(msg) => msg.data.len(),
-		ToRivetTunnelMessageKind::ToRivetResponseAbort
-		| ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
+		ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
+			abort.reason.detail.as_ref().map_or(0, |detail| detail.len())
+		}
+		ToRivetTunnelMessageKind::ToRivetWebSocketOpen(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketMessageAck(_)
 		| ToRivetTunnelMessageKind::ToRivetWebSocketClose(_) => 0,
+	}
+}
+
+#[cfg(test)]
+mod payload_accounting_tests {
+	use rivet_envoy_protocol as protocol;
+
+	use super::tunnel_message_inner_data_len;
+
+	#[test]
+	fn response_abort_counts_detail_utf8_bytes() {
+		let detail = "actor failed: café".to_owned();
+		let message = protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
+			protocol::ToRivetResponseAbort {
+				reason: protocol::HttpStreamAbortReason {
+					kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+					detail: Some(detail.clone()),
+				},
+			},
+		);
+
+		assert_eq!(tunnel_message_inner_data_len(&message), detail.len());
+	}
+
+	#[test]
+	fn response_abort_without_detail_has_no_inner_payload() {
+		let message = protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(
+			protocol::ToRivetResponseAbort {
+				reason: protocol::HttpStreamAbortReason {
+					kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+					detail: None,
+				},
+			},
+		);
+
+		assert_eq!(tunnel_message_inner_data_len(&message), 0);
 	}
 }
 

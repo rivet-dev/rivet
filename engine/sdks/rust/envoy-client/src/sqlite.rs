@@ -606,6 +606,7 @@ mod tests {
 			remote_sqlite_requests: HashMap::new(),
 			next_remote_sqlite_request_id: 0,
 			request_to_actor: BufferMap::new(),
+			pending_request_chunks: BufferMap::new(),
 			buffered_messages: Vec::new(),
 			processed_command_idx: HashMap::new(),
 		}

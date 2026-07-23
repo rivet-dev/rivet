@@ -29,8 +29,8 @@ pub async fn handle_tunnel_message(ctx: &mut EnvoyContext, msg: protocol::ToEnvo
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(chunk) => {
 			handle_request_chunk(ctx, message_id, chunk);
 		}
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => {
-			handle_request_abort(ctx, message_id);
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(abort) => {
+			handle_request_abort(ctx, message_id, abort.reason);
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(open) => {
 			handle_ws_open(ctx, message_id, open).await;
@@ -64,9 +64,23 @@ async fn handle_request_start(
 	);
 
 	let actor = ctx.get_actor(&actor_id, None).unwrap();
-	let _ = actor
-		.handle
-		.send(crate::actor::ToActor::ReqStart { message_id, req });
+	let actor_handle = actor.handle.clone();
+	let _ = actor_handle.send(crate::actor::ToActor::ReqStart {
+		message_id: message_id.clone(),
+		req,
+	});
+
+	if let Some(chunks) = ctx
+		.pending_request_chunks
+		.remove(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		for chunk in chunks {
+			let _ = actor_handle.send(crate::actor::ToActor::ReqChunk {
+				message_id: message_id.clone(),
+				chunk,
+			});
+		}
+	}
 }
 
 fn handle_request_chunk(
@@ -79,24 +93,34 @@ fn handle_request_chunk(
 		.get(&[&message_id.gateway_id, &message_id.request_id])
 		.cloned();
 
-	let finish = chunk.finish;
-
 	if let Some(actor_id) = &actor_id {
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
 			let _ = actor.handle.send(crate::actor::ToActor::ReqChunk {
 				message_id: message_id.clone(),
 				chunk,
 			});
+		} else {
+			tracing::warn!(actor_id = %actor_id, "received request chunk for unknown actor");
 		}
+	} else if let Some(chunks) = ctx
+		.pending_request_chunks
+		.get_mut(&[&message_id.gateway_id, &message_id.request_id])
+	{
+		chunks.push(chunk);
+	} else {
+		ctx.pending_request_chunks.insert(
+			&[&message_id.gateway_id, &message_id.request_id],
+			vec![chunk],
+		);
 	}
 
-	if finish {
-		ctx.request_to_actor
-			.remove(&[&message_id.gateway_id, &message_id.request_id]);
-	}
 }
 
-fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId) {
+fn handle_request_abort(
+	ctx: &mut EnvoyContext,
+	message_id: protocol::MessageId,
+	reason: protocol::HttpStreamAbortReason,
+) {
 	let actor_id = ctx
 		.request_to_actor
 		.get(&[&message_id.gateway_id, &message_id.request_id])
@@ -105,11 +129,14 @@ fn handle_request_abort(ctx: &mut EnvoyContext, message_id: protocol::MessageId)
 		if let Some(actor) = ctx.get_actor(actor_id, None) {
 			let _ = actor.handle.send(crate::actor::ToActor::ReqAbort {
 				message_id: message_id.clone(),
+				reason,
 			});
 		}
 	}
 
 	ctx.request_to_actor
+		.remove(&[&message_id.gateway_id, &message_id.request_id]);
+	ctx.pending_request_chunks
 		.remove(&[&message_id.gateway_id, &message_id.request_id]);
 }
 

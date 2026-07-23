@@ -1,0 +1,316 @@
+use anyhow::{Result, anyhow};
+use bytes::Bytes;
+use gas::prelude::*;
+use http_body_util::BodyExt;
+use hyper::body::{Body, SizeHint};
+use rivet_envoy_protocol as protocol;
+use rivet_guard_core::errors::{
+	ActorStoppedWhileWaiting, GatewayResponseStartTimeout, InvalidRequestBody,
+	TunnelMessageTimeout, TunnelRequestAborted, TunnelResponseClosed,
+};
+use std::time::Duration;
+use tokio::sync::{mpsc, watch};
+
+use crate::shared_state::{
+	InFlightRequestHandle, InFlightTunnelMessage, MsgGcReason,
+};
+
+const PHASE_WAITING_FOR_RESPONSE_START: &str = "waiting_for_response_start";
+const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
+const HTTP_BODY_CHUNK_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
+
+pub(crate) fn should_stream_http_request_body_hint(size_hint: &SizeHint) -> bool {
+	size_hint
+		.upper()
+		.map_or(true, |body_len| body_len as usize > HTTP_BODY_CHUNK_SIZE)
+}
+
+fn next_request_body_size(current: usize, chunk: usize, limit: usize) -> Option<usize> {
+	current.checked_add(chunk).filter(|size| *size <= limit)
+}
+
+#[derive(Default)]
+struct HttpRequestBodyChunker {
+	pending: Vec<u8>,
+}
+
+impl HttpRequestBodyChunker {
+	fn is_empty(&self) -> bool {
+		self.pending.is_empty()
+	}
+
+	fn push(&mut self, mut data: &[u8]) -> Vec<Vec<u8>> {
+		let mut chunks = Vec::new();
+		while !data.is_empty() {
+			let remaining = HTTP_BODY_CHUNK_SIZE - self.pending.len();
+			let take = remaining.min(data.len());
+			self.pending.extend_from_slice(&data[..take]);
+			data = &data[take..];
+			if self.pending.len() == HTTP_BODY_CHUNK_SIZE {
+				chunks.push(std::mem::take(&mut self.pending));
+			}
+		}
+		chunks
+	}
+
+	fn flush(&mut self) -> Option<Vec<u8>> {
+		(!self.pending.is_empty()).then(|| std::mem::take(&mut self.pending))
+	}
+}
+
+pub(crate) async fn send_to_envoy_or_actor_stopped(
+	in_flight_req: &InFlightRequestHandle,
+	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	actor_id: Id,
+	phase: &'static str,
+	message: protocol::ToEnvoyTunnelMessageKind,
+	ephemeral: bool,
+) -> Result<()> {
+	tokio::select! {
+		biased;
+		_ = stopped_sub.next() => {
+			tracing::debug!("actor stopped while sending request");
+			Err(ActorStoppedWhileWaiting {
+				actor_id: actor_id.to_string(),
+				phase: phase.to_owned(),
+			}
+			.build())
+		}
+		res = in_flight_req.send_message(message, ephemeral) => res,
+	}
+}
+
+async fn send_streaming_http_request_body_chunks<B>(
+	in_flight_req: &InFlightRequestHandle,
+	mut body: B,
+	max_body_size: usize,
+) -> Result<()>
+where
+	B: Body<Data = Bytes> + Unpin,
+	B::Error: std::fmt::Display,
+{
+	// Ingress accounting is based on bytes read from the client, before
+	// coalescing, so transport framing cannot bypass the cumulative body limit.
+	let mut body_size = 0usize;
+	let mut chunker = HttpRequestBodyChunker::default();
+	let mut flush_deadline = None;
+
+	// The caller polls this upload future alongside response-start/abort
+	// observation. Dropping it on an early actor result immediately stops reading
+	// the client. While it is active, small DATA frames are coalesced to avoid
+	// protocol-message amplification, with a deadline from the first buffered
+	// byte so low-volume streams still make bounded progress.
+	loop {
+		let frame = if let Some(deadline) = flush_deadline {
+			tokio::select! {
+				frame = body.frame() => frame,
+				_ = tokio::time::sleep_until(deadline) => {
+					if let Some(chunk) = chunker.flush() {
+						send_http_request_body_chunk(in_flight_req, chunk, false).await?;
+					}
+					flush_deadline = None;
+					continue;
+				}
+			}
+		} else {
+			body.frame().await
+		};
+		let Some(frame) = frame else {
+			break;
+		};
+		let frame = match frame {
+			Ok(frame) => frame,
+			Err(error) => {
+				super::send_http_request_abort(
+					in_flight_req,
+					protocol::HttpStreamAbortReasonKind::ClientDisconnect,
+					Some(error.to_string()),
+				)
+				.await;
+				return Err(anyhow!("failed to read streaming request body: {error}"));
+			}
+		};
+		let Ok(data) = frame.into_data() else {
+			continue;
+		};
+		let Some(next_body_size) =
+			next_request_body_size(body_size, data.len(), max_body_size)
+		else {
+			super::send_http_request_abort(
+				in_flight_req,
+				protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+				Some(format!(
+					"request body exceeded the {max_body_size}-byte limit"
+				)),
+			)
+			.await;
+			return Err(InvalidRequestBody {
+				reason: format!("request body exceeded the {max_body_size}-byte limit"),
+			}
+			.build());
+		};
+		body_size = next_body_size;
+
+		let was_empty = chunker.is_empty();
+		for chunk in chunker.push(&data) {
+			send_http_request_body_chunk(in_flight_req, chunk, false).await?;
+		}
+		if chunker.is_empty() {
+			flush_deadline = None;
+		} else if was_empty {
+			flush_deadline = Some(tokio::time::Instant::now() + HTTP_BODY_CHUNK_FLUSH_INTERVAL);
+		}
+	}
+
+	// Normal EOF flushes any partial protocol chunk, then sends exactly one final
+	// marker so actor-side upload state and request routing can be released.
+	if let Some(chunk) = chunker.flush() {
+		send_http_request_body_chunk(in_flight_req, chunk, false).await?;
+	}
+	send_http_request_body_chunk(in_flight_req, Vec::new(), true).await
+}
+
+async fn send_http_request_body_chunk(
+	in_flight_req: &InFlightRequestHandle,
+	body: Vec<u8>,
+	finish: bool,
+) -> Result<()> {
+	let message = protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(
+		protocol::ToEnvoyRequestChunk { body, finish },
+	);
+	in_flight_req.send_message(message, false).await
+}
+
+pub(crate) async fn wait_for_http_response_start(
+	msg_rx: &mut mpsc::UnboundedReceiver<InFlightTunnelMessage>,
+	drop_rx: &mut watch::Receiver<Option<MsgGcReason>>,
+	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	actor_id: Id,
+	request_id: protocol::RequestId,
+	deadline: tokio::time::Instant,
+	timeout: Duration,
+) -> Result<(protocol::MessageId, protocol::ToRivetResponseStart)> {
+	loop {
+		tokio::select! {
+			res = msg_rx.recv() => {
+				let Some(msg) = res else {
+					tracing::warn!(
+						request_id=%protocol::util::id_to_string(&request_id),
+						"received empty message response during request init",
+					);
+					return Err(TunnelResponseClosed {
+						phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+					}
+					.build());
+				};
+
+				match msg.message_kind {
+					protocol::ToRivetTunnelMessageKind::ToRivetResponseStart(response_start) => {
+						return Ok((msg.message_id, response_start));
+					}
+					protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(abort) => {
+						tracing::warn!(
+							reason_kind = ?abort.reason.kind,
+							reason_detail = ?abort.reason.detail,
+							"request aborted"
+						);
+						return Err(TunnelRequestAborted {
+							phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+						}
+						.build());
+					}
+					_ => {
+						tracing::warn!("received non-response message from pubsub");
+					}
+				}
+			}
+			_ = drop_rx.changed() => {
+				tracing::warn!(reason=?drop_rx.borrow(), "tunnel message timeout");
+				return Err(TunnelMessageTimeout {
+					phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+					reason: format!("{:?}", drop_rx.borrow().as_ref()),
+				}
+				.build());
+			}
+			_ = stopped_sub.next() => {
+				tracing::debug!("actor stopped while waiting for request response");
+				return Err(ActorStoppedWhileWaiting {
+					actor_id: actor_id.to_string(),
+					phase: PHASE_WAITING_FOR_RESPONSE_START.to_owned(),
+				}.build());
+			}
+			_ = tokio::time::sleep_until(deadline) => {
+				tracing::warn!("timed out waiting for response start from envoy");
+				return Err(GatewayResponseStartTimeout {
+					phase: "response_start".to_owned(),
+					timeout_ms: timeout.as_millis() as u64,
+				}
+				.build());
+			}
+		}
+	}
+}
+
+pub(crate) async fn stream_http_request_and_wait_for_response<B>(
+	in_flight_req: &InFlightRequestHandle,
+	msg_rx: &mut mpsc::UnboundedReceiver<InFlightTunnelMessage>,
+	drop_rx: &mut watch::Receiver<Option<MsgGcReason>>,
+	stopped_sub: &mut message::SubscriptionHandle<pegboard::workflows::actor2::Stopped>,
+	actor_id: Id,
+	request_id: protocol::RequestId,
+	body: B,
+	max_body_size: usize,
+	response_start_deadline: tokio::time::Instant,
+	response_start_timeout: Duration,
+) -> Result<(protocol::MessageId, protocol::ToRivetResponseStart)>
+where
+	B: Body<Data = Bytes> + Unpin,
+	B::Error: std::fmt::Display,
+{
+	// Upload ingress, cumulative byte accounting, and bounded-latency
+	// coalescing run in one future. Response start/abort is observed
+	// concurrently so a slow or rejected upload cannot retain the request.
+	let upload = send_streaming_http_request_body_chunks(
+		in_flight_req,
+		body,
+		max_body_size,
+	);
+	tokio::pin!(upload);
+	tokio::select! {
+		upload_result = &mut upload => {
+			// Normal completion already sent the final upload marker. Continue
+			// waiting under the original response-start deadline.
+			upload_result?;
+			wait_for_http_response_start(
+				msg_rx,
+				drop_rx,
+				stopped_sub,
+				actor_id,
+				request_id,
+				response_start_deadline,
+				response_start_timeout,
+			)
+			.await
+		}
+		response_start = wait_for_http_response_start(
+			msg_rx,
+			drop_rx,
+			stopped_sub,
+			actor_id,
+			request_id,
+			response_start_deadline,
+			response_start_timeout,
+		) => {
+			let response_start = response_start?;
+			// An early successful response makes the unread client body
+			// irrelevant. Drop the upload future and send a clean final marker
+			// so actor request routing can be released.
+			send_http_request_body_chunk(in_flight_req, Vec::new(), true).await?;
+			Ok(response_start)
+		}
+	}
+}
+
+#[cfg(test)]
+#[path = "../../tests/support/http_stream_request.rs"]
+mod tests;

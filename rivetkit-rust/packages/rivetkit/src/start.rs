@@ -311,7 +311,12 @@ async fn handle_actor_event<A: Actor>(
 			}
 		}
 		ActorEvent::HttpRequest { request, reply } => {
-			reply.send(actor.on_fetch(ctx, request).await);
+			reply.send(
+				actor
+					.on_fetch(ctx, request)
+					.await
+					.map(rivetkit_core::ActorHttpResponse::Buffered),
+			);
 		}
 		ActorEvent::QueueSend {
 			name,
@@ -927,6 +932,9 @@ mod tests {
 		.expect("send http event");
 
 		let response = reply_rx.await.expect("http reply").expect("http response");
+		let rivetkit_core::ActorHttpResponse::Buffered(response) = response else {
+			panic!("default fetch should return buffered response");
+		};
 		assert_eq!(response.status().as_u16(), 404);
 
 		request_sleep(&tx).await;

@@ -50,7 +50,7 @@ These limits affect actions that do not use `.connect()` and [low-level HTTP req
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
 | Max request body size | — | 20 MiB | Maximum size of HTTP request bodies. |
-| Max response body size | — | 20 MiB | Maximum size of HTTP response bodies. |
+| Max buffered response body size | — | 20 MiB | Maximum size of non-streaming HTTP response bodies. Streaming responses, including SSE, do not have a total-size limit. Per-request gateway buffering is capped at 20 MiB, but slow downstream consumers can still create pressure in shared actor transport queues. |
 | Request timeout | 60 seconds | — | Maximum time for an `onRequest` handler to complete. Defaults to `actionTimeout`; configure with `actionTimeout`. |
 
 ### Networking

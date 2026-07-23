@@ -36,6 +36,7 @@ export interface RuntimeHttpResponse {
 	status?: number;
 	headers?: Record<string, string>;
 	body?: RuntimeBytes;
+	stream?: boolean;
 }
 
 export interface RuntimeStateDeltaPayload {
