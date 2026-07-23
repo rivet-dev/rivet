@@ -27,8 +27,8 @@ Flue owns the agent runtime and session lifecycle. Rivet maps each agent instanc
 
 ```sh
 mkdir my-agent && cd my-agent
-npm add @flue/runtime
-npm add --save-dev @flue/cli
+npm add "@flue/runtime@npm:@rivet-dev/labs-flue-runtime"
+npm add --save-dev "@flue/cli@npm:@rivet-dev/labs-flue-cli"
 npx flue init --target node
 ```
 
@@ -40,6 +40,7 @@ npx flue init --target node
 npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue
 ```
 
+- `@rivet-dev/labs-flue-*`: Rivet-maintained preview builds of Flue's proposed extension APIs.
 - `@rivet-dev/flue`: Runs Flue agents and workflows as Rivet Actors.
 - `@rivet-dev/agentos`: Provides the isolated VM actor.
 - `@rivet-dev/agentos-flue`: Connects Flue's sandbox API to agentOS.

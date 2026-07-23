@@ -46,12 +46,15 @@ You get Flue's developer experience on an OS built for agents.
 
 ## Building a Flue agent with agentOS
 
-Install the three packages that make up the integration:
+Install Rivet's Flue preview builds and the three integration packages:
 
 ```sh
+npm add "@flue/runtime@npm:@rivet-dev/labs-flue-runtime"
+npm add --save-dev "@flue/cli@npm:@rivet-dev/labs-flue-cli"
 npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue
 ```
 
+- `@rivet-dev/labs-flue-*` provides preview builds of Flue's proposed extension APIs.
 - `@rivet-dev/flue` runs Flue agents and workflows as durable Rivet Actors.
 - `@rivet-dev/agentos` provides the isolated VM actor.
 - `@rivet-dev/agentos-flue` connects Flue's sandbox API to agentOS.
