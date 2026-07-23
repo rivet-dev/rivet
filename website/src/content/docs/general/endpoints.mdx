@@ -44,7 +44,7 @@ The public endpoint tells clients where to connect to reach your actors.
 
 This endpoint and token will be exposed to the internet. Use a public token (`pk_`), not your secret token (`sk_`).
 
-The public endpoint is only required if using the [serverless runtime mode](/docs/general/runtime-modes#runners) and if you have a frontend using RivetKit.
+The public endpoint is only required if using the [serverless runtime mode](/docs/general/runtime-modes#serverless) and if you have a frontend using RivetKit.
 
 <Tabs>
 
@@ -88,7 +88,7 @@ In serverless mode, the private endpoint is used to validate that requests to `G
 
 ### How Clients Connect
 
-This flow applies to [serverless runtime mode](/docs/general/runtime-modes#serverless). For [runner runtime mode](/docs/general/runtime-modes#runners) or [clients configured to connect directly to Rivet](/docs/clients/javascript), clients connect directly to Rivet and this metadata flow is not needed.
+This flow applies to [serverless runtime mode](/docs/general/runtime-modes#serverless). For [runner runtime mode](/docs/general/runtime-modes#runner) or [clients configured to connect directly to Rivet](/docs/clients/javascript), clients connect directly to Rivet and this metadata flow is not needed.
 
 When a client connects to your serverless application, it follows this flow:
 

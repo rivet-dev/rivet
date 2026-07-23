@@ -68,19 +68,9 @@ sudo systemctl enable --now rivetkit-app.service
 </Step>
 <Step title="Connect to Rivet">
 
-1. Ensure your server is accessible via a public URL (e.g. `https://my-app.example.com`)
-2. On the Rivet dashboard, paste your URL with the `/api/rivet` path into the connect form (e.g. `https://my-app.example.com/api/rivet`)
-3. Click "Done"
+There is nothing to register in the dashboard. As a Runner, your app opens a connection out to Rivet on startup, so the host does not need a public URL or a URL pasted into a connect form. It only needs outbound network access to your Rivet endpoint.
 
-<Warning>
-If you front your app with a reverse proxy or load balancer (NGINX, HAProxy, Caddy, AWS ALB/NLB, etc.), raise its idle / read timeout to at least 1 hour (`3600` seconds). Rivet envoys connect to your app over long-lived WebSockets, and clients (browsers, SDKs) do the same. Default proxy timeouts (typically 30 to 60 seconds) drop these connections and cause reconnect storms.
-
-Examples:
-
-- **NGINX**: `proxy_read_timeout 3600s;` and `proxy_send_timeout 3600s;` in the relevant `location` block.
-- **HAProxy**: `timeout client 1h` and `timeout server 1h` in the matching frontend / backend.
-- **AWS ALB / NLB**: set the load balancer attribute `idle_timeout.timeout_seconds = 3600`.
-</Warning>
+Once the service is running, open the Rivet dashboard and confirm your app appears under **Runners**. It reconnects automatically if the connection drops.
 
 </Step>
 </Steps>

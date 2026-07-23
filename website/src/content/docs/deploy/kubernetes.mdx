@@ -101,19 +101,7 @@ kubectl apply -f deployment.yaml
 </Step>
 <Step title="Connect to Rivet">
 
-1. Add a `Service` and Ingress to expose your app externally (e.g. `my-app.example.com`)
-2. On the Rivet dashboard, paste your domain with the `/api/rivet` path into the connect form (e.g. `https://my-app.example.com/api/rivet`)
-3. Click "Done"
-
-<Warning>
-Rivet envoys connect to your app over long-lived WebSockets, and your app's clients (browsers, SDKs) do the same. Default Ingress and cloud load balancer idle timeouts (typically 30 to 60 seconds) drop these connections and cause reconnect storms.
-
-Raise the idle / read / send timeout on every Ingress and load balancer in front of your app to at least 1 hour (`3600` seconds). Examples:
-
-- **NGINX Ingress**: `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"` and `nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"`
-- **AWS Load Balancer Controller (ALB)**: `alb.ingress.kubernetes.io/load-balancer-attributes: idle_timeout.timeout_seconds=3600`
-- **GCE Ingress (GKE)**: set `timeoutSec: 3600` on the `BackendConfig` referenced by the Service.
-</Warning>
+There is nothing to register in the dashboard. As a Runner, your pod opens a connection out to Rivet on startup, so you do not need a `Service`, Ingress, or public URL to run actors. The pod only needs outbound network access to your Rivet endpoint.
 
 </Step>
 <Step title="Verify">

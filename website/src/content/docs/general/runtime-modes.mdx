@@ -7,12 +7,49 @@ skill: true
 export const imgServerless = { src: "https://assets.rivet.dev/website/docs/general/runtime-modes/serverless.png", width: 2533, height: 744, format: "png" };
 export const imgRunners = { src: "https://assets.rivet.dev/website/docs/general/runtime-modes/runners.png", width: 2568, height: 1553, format: "png" };
 
-- **Serverless**: Default mode. Responds to HTTP requests and scales automatically.
-- **Runners**: Background processes without HTTP endpoints. Only needed for advanced scenarios.
+- **Runner**: Default mode. Runs your actors as a long-lived process that connects out to Rivet. Used for local development and most deployments.
+- **Serverless**: Responds to HTTP requests from Rivet and scales automatically. Used for serverless platforms (Vercel, Cloudflare Workers, etc.) and set automatically by Rivet Compute.
+
+## Runner
+
+Runner is the default mode. Your app runs as a long-running process that opens a persistent connection out to the Rivet Engine, ready to run actors. The mode is named `envoy` internally, and it is active whenever `RIVETKIT_RUNTIME_MODE` is unset, so no configuration is needed for local development or standard deployments.
+
+### When to Use Runner
+
+- **Local development**: The default when `RIVETKIT_RUNTIME_MODE` is unset.
+- **Containers, VMs, and bare metal**: Long-running hosts such as Railway, Hetzner, Kubernetes, and AWS ECS.
+- **No public endpoint**: Your app connects out to Rivet, so it does not need to be publicly reachable or registered in the dashboard.
+- **Custom scaling**: You control how runner processes are pooled and scaled.
+
+### Example
+
+<CodeSnippet file="examples/docs/general-runtime-modes/runner.ts" title="runner.ts" />
+
+The runner runs in the background, ready to run actors.
+
+### Architecture
+
+On startup, your backend calls `registry.startEnvoy()` (or `registry.start()`, which selects Runner mode by default) to open a persistent connection to the Rivet Engine. When a client creates an actor, the engine sends a command through this connection to start the actor on your backend.
+
+<img src={imgRunners.src} alt="Runner architecture diagram" />
+
+### Configuration
+
+#### Runner Pool
+
+Use `RIVET_POOL` to assign runners to a pool. This lets you control which runners handle specific actors.
+
+```bash
+RIVET_POOL=gpu-workers
+```
+
+<CodeSnippet file="examples/docs/general-runtime-modes/runner-pool.ts" />
+
+See [Pool Configuration](/docs/general/pool-configuration) for how pools are scaled, drained on version upgrades, and rate-limited during actor eviction.
 
 ## Serverless
 
-Serverless is the default and recommended mode. Rivet sends HTTP requests to your backend to run actor logic, allowing your infrastructure to scale automatically.
+Serverless runs actor logic in response to HTTP requests from Rivet, allowing your infrastructure to scale automatically. It is used on serverless platforms and is set automatically by Rivet Compute, which sets `RIVETKIT_RUNTIME_MODE=serverless` on deploy.
 
 ### Benefits
 
@@ -65,47 +102,11 @@ When the request nears its lifespan, the engine reserves a grace period (`server
 
 See [Limits](/docs/actors/limits#serverless-shutdown) for configuration details.
 
-## Runners
-
-Runners run actors as long-running background processes without exposing an HTTP endpoint.
-
-### When to Use Runners
-
-- **No HTTP server**: Your app does not or cannot expose an HTTP server
-- **No load balancer**: You don't have a load balancer to distribute HTTP requests across your servers
-- **Custom scaling**: You have custom scaling requirements
-
-### Example
-
-<CodeSnippet file="examples/docs/general-runtime-modes/runner.ts" title="runner.ts" />
-
-The runner runs in the background, ready to run actors.
-
-### Architecture
-
-On startup, your backend calls `registry.startEnvoy()` which opens a persistent connection to the Rivet Engine. When a client creates an actor, the engine sends a command through this connection to start the actor on your backend.
-
-<img src={imgRunners.src} alt="Runners architecture diagram" />
-
-### Configuration
-
-#### Runner Pool
-
-Use `RIVET_RUNNER` to assign runners to a pool. This lets you control which runners handle specific actors.
-
-```bash
-RIVET_RUNNER=gpu-workers
-```
-
-<CodeSnippet file="examples/docs/general-runtime-modes/runner-pool.ts" />
-
-See [Pool Configuration](/docs/general/pool-configuration) for how pools are scaled, drained on version upgrades, and rate-limited during actor eviction.
-
 ## Comparison
 
 | Mode | Method | Use Case |
 |------|--------|----------|
-| Auto | `registry.start()` | Simplest setup. Starts server, serves static files, and runs actors. |
-| Serverless | `registry.serve()` | Fetch handler for serverless platforms |
-| Serverless | `registry.handler()` | Integrating with existing routers (Hono, Elysia, etc.) |
-| Runner | `registry.startEnvoy()` | Long-running processes without HTTP endpoints |
+| Runner | `registry.startEnvoy()` | Default. Long-running process that connects out to Rivet; no HTTP endpoint. |
+| Auto | `registry.start()` | Selects Runner by default; binds an HTTP listener and serves static files when `RIVETKIT_RUNTIME_MODE=serverless`. |
+| Serverless | `registry.serve()` | Fetch handler for serverless platforms. |
+| Serverless | `registry.handler()` | Integrating with existing routers (Hono, Elysia, etc.). |
