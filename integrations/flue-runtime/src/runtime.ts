@@ -32,11 +32,6 @@ export {
 export { toFlueNextHandler, type FetchApp, type NextRouteContext } from './next.js';
 export { createRivetAsyncSqlDb, type RivetRawDb } from './rivet-db.js';
 export {
-	flueRegistry,
-	installFlueRegistry,
-	type FlueRivetRegistry,
-} from './registry.js';
-export {
 	createRegistryRunStoreFromHandle,
 	isTransientRivetStartError,
 	retryTransientRivetStart,

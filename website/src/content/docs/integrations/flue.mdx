@@ -48,16 +48,18 @@ npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue
 
 <Step title="Register agentOS with the Rivet target">
 
-Create `registry.ts`:
+Create `actors.ts`:
 
-```ts title="registry.ts"
-import { agentOS } from "@rivet-dev/agentos";
+```ts title="actors.ts"
+import { agentOS, setup } from "@rivet-dev/agentos";
 
-export const actors = {
-	vm: agentOS({
+const vm = agentOS({
 		// Configuration will go here.
-	}),
-};
+});
+
+export const registry = setup({
+	use: { vm },
+});
 ```
 
 Update `flue.config.ts`:
@@ -67,11 +69,11 @@ import { defineConfig } from "@flue/cli/config";
 import { rivet } from "@rivet-dev/flue";
 
 export default defineConfig({
-	target: rivet({ actors: "./registry.ts" }),
+	target: rivet({ actors: "./actors.ts" }),
 });
 ```
 
-The generated Flue server merges these actors into the same registry as the Flue agent and workflow actors.
+The generated Flue server adds its agent and workflow actors to this registry.
 
 </Step>
 
@@ -82,11 +84,11 @@ Create `agents/assistant.ts`:
 ```ts title="agents/assistant.ts"
 import { createAgent } from "@flue/runtime";
 import { agentOSSandbox } from "@rivet-dev/agentos-flue";
-import { flueRegistry } from "@rivet-dev/flue/runtime";
+import { registry } from "../actors";
 
 const sandbox = agentOSSandbox({
 	actor: "vm",
-	registry: flueRegistry,
+	registry,
 });
 
 export default createAgent(() => ({
@@ -120,14 +122,14 @@ The agentOS adapter derives a stable VM actor key from the Flue context ID. Reus
 
 ## Configuration
 
-`rivet()` accepts an optional `actors` module path. That module must export an `actors` object or a default actor map; the target merges it into the generated registry.
+`rivet()` accepts an optional `actors` module path, defaulting to `./actors.ts`. That module must export a `registry` created with `setup()`; the target adds its generated actors to that registry.
 
 `agentOSSandbox()` accepts:
 
 | Option | Required | Description |
 | --- | --- | --- |
-| `actor` | Yes | agentOS actor name from the exported actor map, such as `vm`. |
-| `registry` | Yes | Use `flueRegistry` so the adapter shares the generated target registry. |
+| `actor` | Yes | agentOS actor name from the registry, such as `vm`. |
+| `registry` | Yes | The same application registry exported from `actors.ts`. |
 | `cwd` | No | Sandbox working directory. Defaults to `/workspace`. |
 | `client` | No | Existing client configured for the same registry. |
 

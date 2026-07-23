@@ -163,6 +163,10 @@ function writeProject(root) {
 		path.join(root, 'flue.config.ts'),
 		`import { defineConfig } from '@flue/cli/config';\nimport rivet from '@rivet-dev/flue';\nexport default defineConfig({ target: rivet });\n`,
 	);
+	fs.writeFileSync(
+		path.join(root, 'actors.ts'),
+		`import { setup } from 'rivetkit';\nexport const registry = setup({ use: {} });\n`,
+	);
 	fs.mkdirSync(path.join(root, 'agents'), { recursive: true });
 	fs.writeFileSync(
 		path.join(root, 'agents', 'assistant.ts'),

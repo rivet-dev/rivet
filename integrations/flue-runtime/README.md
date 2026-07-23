@@ -2,7 +2,8 @@
 
 A [Flue](https://github.com/withastro/flue) build target that compiles a
 Flue project (agents + workflows) into a [Rivet](https://rivet.dev) Actor
-application. Set `target: rivet` in `flue.config.ts` and `flue build` emits a
+application. Export a RivetKit registry from `actors.ts`, set `target: rivet` in
+`flue.config.ts`, and `flue build` emits a
 server entrypoint that maps each agent and each workflow to a Rivet Actor, with
 durable sessions, submission recovery, and inter-actor `dispatch()` backed by
 each actor's native SQLite database (`c.db`).

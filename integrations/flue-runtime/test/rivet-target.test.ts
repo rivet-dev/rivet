@@ -67,9 +67,13 @@ test('builds and serves an agent through target: rivet', async () => {
 		});
 		await waitForServer(port, dev.logs);
 		const client = createClient<any>({ endpoint: `http://127.0.0.1:${enginePort}`, poolName });
-		await assert.doesNotReject(() =>
-			retryTransientRivetStart(() => client.health.getOrCreate(['test']).ping('ready')),
-		);
+		try {
+			await retryTransientRivetStart(() =>
+				client.health.getOrCreate(['test']).ping('ready'),
+			);
+		} catch (error) {
+			assert.fail(`${String(error)}\n\n${dev.logs()}`);
+		}
 		await client.dispose();
 		const directInstanceId = (attempt) => `instance-${runKey}-${attempt}`;
 		const prompt = await postJsonWithRetry(
@@ -152,11 +156,11 @@ function writeProject(root) {
 	);
 	fs.writeFileSync(
 		path.join(root, 'flue.config.ts'),
-		`import { defineConfig } from '@flue/cli/config';\nimport { rivet } from '@rivet-dev/flue';\nexport default defineConfig({ target: rivet({ actors: './registry.ts' }) });\n`,
+		`import { defineConfig } from '@flue/cli/config';\nimport { rivet } from '@rivet-dev/flue';\nexport default defineConfig({ target: rivet({ actors: './actors.ts' }) });\n`,
 	);
 	fs.writeFileSync(
-		path.join(root, 'registry.ts'),
-		`import { actor } from 'rivetkit';\nexport const actors = { health: actor({ actions: { ping: (_c, value) => value } }) };\n`,
+		path.join(root, 'actors.ts'),
+		`import { actor, setup } from 'rivetkit';\nconst health = actor({ actions: { ping: (_c, value) => value } });\nexport const registry = setup({ use: { health } });\n`,
 	);
 	fs.mkdirSync(path.join(root, 'agents'), { recursive: true });
 	fs.writeFileSync(

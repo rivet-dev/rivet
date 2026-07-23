@@ -11,6 +11,7 @@ describe('@rivet-dev/flue entrypoints', () => {
 
 		assert.equal(root.default.name, 'rivet');
 		assert.equal(typeof runtime.createRivetAgentRuntime, 'function');
+		assert.equal('flueRegistry' in runtime, false);
 		assert.equal(typeof internal.actor, 'function');
 		assert.equal(typeof next.toFlueNextHandler, 'function');
 		assert.equal(typeof extension.extend, 'function');
