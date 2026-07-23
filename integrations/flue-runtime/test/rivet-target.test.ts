@@ -35,7 +35,7 @@ test('builds and serves an agent through target: rivet', async () => {
 	const enginePeerPort = await getAvailablePort();
 	const engineMetricsPort = await getAvailablePort();
 	const runKey = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-	const poolName = `flue-target-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+	const poolName = `flue-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 	const registryKey = `registry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 	writeProject(root);
 
@@ -133,7 +133,7 @@ function createFixtureRoot() {
 		'dir',
 	);
 	fs.mkdirSync(path.join(root, 'node_modules', '@rivet-dev'), { recursive: true });
-	fs.symlinkSync(packageRoot, path.join(root, 'node_modules', '@rivet-dev', 'flue-target'), 'dir');
+	fs.symlinkSync(packageRoot, path.join(root, 'node_modules', '@rivet-dev', 'flue'), 'dir');
 	fs.symlinkSync(path.join(packageRoot, 'node_modules', 'rivetkit'), path.join(root, 'node_modules', 'rivetkit'), 'dir');
 	return root;
 }
@@ -146,14 +146,14 @@ function writeProject(root) {
 			dependencies: {
 				'@flue/cli': `link:${flueCliRoot}`,
 				'@flue/runtime': `link:${flueRuntimeRoot}`,
-				'@rivet-dev/flue-target': `link:${packageRoot}`,
+				'@rivet-dev/flue': `link:${packageRoot}`,
 				rivetkit: `link:${path.join(packageRoot, 'node_modules', 'rivetkit')}`,
 			},
 		}),
 	);
 	fs.writeFileSync(
 		path.join(root, 'flue.config.ts'),
-		`import { defineConfig } from '@flue/cli/config';\nimport { rivet } from '@rivet-dev/flue-target';\nexport default defineConfig({ target: rivet({ actors: './actors.ts' }) });\n`,
+		`import { defineConfig } from '@flue/cli/config';\nimport { rivet } from '@rivet-dev/flue';\nexport default defineConfig({ target: rivet({ actors: './actors.ts' }) });\n`,
 	);
 	fs.writeFileSync(
 		path.join(root, 'actors.ts'),

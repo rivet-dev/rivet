@@ -1,5 +1,4 @@
 import { defineTarget, type BuildContext, type BuildPlugin } from '@flue/cli';
-import type { FlueForwardRouter } from '@flue/runtime/adapter-kit';
 import * as path from 'node:path';
 
 export interface RivetTargetOptions {
@@ -7,27 +6,12 @@ export interface RivetTargetOptions {
 	actors?: string;
 }
 
-// The live forwarding + run-index implementation is emitted into the generated
-// entry (see generateEntryPoint). Rivet only ever runs through that entry — dev
-// mode is `node-like`, i.e. the entry is built and run as a subprocess — so this
-// source-level routing is never invoked at runtime. It exists only to satisfy the
-// build-time target shape and the CLI's `typeof routing.forward === 'function'`
-// validation.
-const routing: FlueForwardRouter = {
-	forward: () => Promise.resolve(null),
-	runIndex: {
-		lookupRun: () => Promise.resolve(null),
-		getRun: () => Promise.resolve(null),
-		listRuns: () => Promise.resolve({ runs: [] }),
-	},
-};
-
 export function rivet(options: RivetTargetOptions = {}) {
 	const build: BuildPlugin = {
 		name: 'rivet',
 		bundle: 'vite',
 		external: [
-			'@rivet-dev/flue-target',
+				'@rivet-dev/flue',
 			'rivetkit',
 			'rivetkit/client',
 			'rivetkit/db',
@@ -42,7 +26,6 @@ export function rivet(options: RivetTargetOptions = {}) {
 	return defineTarget({
 		name: 'rivet',
 		build,
-		routing,
 	});
 }
 
@@ -89,7 +72,7 @@ import {
   createRivetAsyncSqlDb,
   createRivetAgentRuntime,
   createRivetWorkflowRuntime,
-} from '@rivet-dev/flue-target/runtime';
+} from '@rivet-dev/flue/runtime';
 import {
   Bash,
   InMemoryFs,

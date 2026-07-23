@@ -1,7 +1,7 @@
 {
 	"name": "@rivet-dev/flue",
 	"version": "2.3.7",
-	"description": "Rivet Actor runtime implementation for the @rivet-dev/flue-target package.",
+	"description": "Run Flue agents and workflows as durable Rivet Actors.",
 	"license": "Apache-2.0",
 	"publishConfig": {
 		"access": "public"
@@ -46,10 +46,12 @@
 		"test:contracts": "vitest run test/rivet-store-contracts.test.ts"
 	},
 	"dependencies": {
-		"@flue/runtime": "git+https://github.com/rivet-dev/flue.git#e79d5712820af588094a4e67a3ceafc816770396&path:/packages/runtime",
+		"@flue/cli": "npm:@rivet-dev/labs-flue-cli@1.0.0-beta.9-rivet.1",
+		"@flue/runtime": "npm:@rivet-dev/labs-flue-runtime@1.0.0-beta.9-rivet.1",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {
+		"@rivetkit/engine-cli": "workspace:*",
 		"tsx": "^4.22.4",
 		"typescript": "6.0.3",
 		"vitest": "^4.0.15"
