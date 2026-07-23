@@ -1,0 +1,77 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 880" font-family="Manrope, 'Helvetica Neue', Arial, sans-serif">
+	<defs>
+		<marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+			<path d="M1 1 L9 5 L1 9 z" fill="#D63E00"/>
+		</marker>
+	</defs>
+
+	<!-- panel -->
+	<rect x="0" y="0" width="1600" height="880" rx="24" fill="#1B1714"/>
+
+	<!-- title -->
+	<text x="80" y="78" font-size="36" font-weight="700" fill="#F0EDE8">An agent's turn is mostly spent waiting</text>
+	<text x="80" y="116" font-size="21" fill="#9A9188">The cost is what you pay while it waits on the model.</text>
+
+	<!-- ============ ROW 1: Traditional sandbox ============ -->
+	<text x="80" y="196" font-size="25" font-weight="700" fill="#F0EDE8">Traditional sandbox</text>
+	<text x="80" y="226" font-size="17" font-family="'JetBrains Mono', ui-monospace, monospace" fill="#FF6A38">~1 GiB VM · billed the entire turn</text>
+
+	<!-- billed envelope -->
+	<rect x="128" y="256" width="1344" height="134" rx="20" fill="none" stroke="#D63E00" stroke-width="3"/>
+	<path d="M1472 390 L1472 448" stroke="#D63E00" stroke-width="3" fill="none" marker-end="url(#arrow)"/>
+
+	<!-- blocks (y 268 h 110) -->
+	<g>
+		<rect x="140" y="268" width="150" height="110" rx="14" fill="#2A2521" stroke="#423B34" stroke-width="1.5"/>
+		<text x="215" y="328" font-size="20" fill="#F0EDE8" text-anchor="middle">Compute</text>
+
+		<rect x="300" y="268" width="430" height="110" rx="14" fill="#2B160E" stroke="#D63E00" stroke-width="1.5"/>
+		<text x="515" y="322" font-size="20" fill="#FF7A4D" text-anchor="middle">Waiting on inference</text>
+		<text x="515" y="348" font-size="14" font-family="'JetBrains Mono', ui-monospace, monospace" fill="#C9502E" text-anchor="middle">paying for idle</text>
+
+		<rect x="740" y="268" width="150" height="110" rx="14" fill="#2A2521" stroke="#423B34" stroke-width="1.5"/>
+		<text x="815" y="328" font-size="20" fill="#F0EDE8" text-anchor="middle">Compute</text>
+
+		<rect x="900" y="268" width="400" height="110" rx="14" fill="#2B160E" stroke="#D63E00" stroke-width="1.5"/>
+		<text x="1100" y="322" font-size="20" fill="#FF7A4D" text-anchor="middle">Waiting on tool call</text>
+		<text x="1100" y="348" font-size="14" font-family="'JetBrains Mono', ui-monospace, monospace" fill="#C9502E" text-anchor="middle">paying for idle</text>
+
+		<rect x="1310" y="268" width="150" height="110" rx="14" fill="#2A2521" stroke="#423B34" stroke-width="1.5"/>
+		<text x="1385" y="328" font-size="20" fill="#F0EDE8" text-anchor="middle">Compute</text>
+	</g>
+
+	<!-- baseline -->
+	<line x1="140" y1="452" x2="1460" y2="452" stroke="#4A423B" stroke-width="2" stroke-dasharray="7 8"/>
+	<rect x="650" y="434" width="300" height="36" rx="18" fill="#241F1B" stroke="#4A423B" stroke-width="1.5"/>
+	<text x="800" y="457" font-size="17" fill="#B8AFA5" text-anchor="middle">Full VM held the whole turn</text>
+
+	<!-- ============ ROW 2: agentOS ============ -->
+	<text x="80" y="576" font-size="25" font-weight="700" fill="#F0EDE8">agentOS</text>
+	<text x="80" y="606" font-size="17" font-family="'JetBrains Mono', ui-monospace, monospace" fill="#A9B89C">~22 MB isolate · idle costs almost nothing</text>
+
+	<!-- blocks (y 648 h 110) -->
+	<g>
+		<rect x="140" y="648" width="150" height="110" rx="14" fill="#242E20" stroke="#93A286" stroke-width="1.5"/>
+		<text x="215" y="708" font-size="20" fill="#CBD6BF" text-anchor="middle">Compute</text>
+
+		<rect x="300" y="648" width="430" height="110" rx="14" fill="none" stroke="#5C6553" stroke-width="1.5" stroke-dasharray="6 7"/>
+		<text x="515" y="702" font-size="20" fill="#8B978030" text-anchor="middle" opacity="0"> </text>
+		<text x="515" y="702" font-size="20" fill="#8C9580" text-anchor="middle">Waiting on inference</text>
+		<text x="515" y="728" font-size="14" font-family="'JetBrains Mono', ui-monospace, monospace" fill="#6E7A62" text-anchor="middle">~free</text>
+
+		<rect x="740" y="648" width="150" height="110" rx="14" fill="#242E20" stroke="#93A286" stroke-width="1.5"/>
+		<text x="815" y="708" font-size="20" fill="#CBD6BF" text-anchor="middle">Compute</text>
+
+		<rect x="900" y="648" width="400" height="110" rx="14" fill="none" stroke="#5C6553" stroke-width="1.5" stroke-dasharray="6 7"/>
+		<text x="1100" y="702" font-size="20" fill="#8C9580" text-anchor="middle">Waiting on tool call</text>
+		<text x="1100" y="728" font-size="14" font-family="'JetBrains Mono', ui-monospace, monospace" fill="#6E7A62" text-anchor="middle">~free</text>
+
+		<rect x="1310" y="648" width="150" height="110" rx="14" fill="#242E20" stroke="#93A286" stroke-width="1.5"/>
+		<text x="1385" y="708" font-size="20" fill="#CBD6BF" text-anchor="middle">Compute</text>
+	</g>
+
+	<!-- baseline -->
+	<line x1="140" y1="832" x2="1460" y2="832" stroke="#4A423B" stroke-width="2" stroke-dasharray="7 8"/>
+	<rect x="628" y="814" width="344" height="36" rx="18" fill="#232A1F" stroke="#485141" stroke-width="1.5"/>
+	<text x="800" y="837" font-size="17" fill="#B7C4AB" text-anchor="middle">Billed only while computing</text>
+</svg>

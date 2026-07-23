@@ -10,11 +10,16 @@ description: "A lightweight alternative to sandbox VMs for your Flue agents, run
 
 Today, [Flue](https://github.com/rivet-dev/flue) officially supports [agentOS](https://agentos-sdk.dev).
 
-Cloudflare Workers proved you don't need a container to run untrusted code. By running your backend in a **V8 isolate instead of a virtual machine**, a Worker **starts in milliseconds** and **costs almost nothing while it waits** on a database or an API.
+Cloudflare Workers innovated by **running your code in a V8 isolate instead of a Docker container**. Most backends sit **idle waiting on a database**, an API, or the network, so booting a VM per request like AWS Lambda means paying for a lot of idle time.
 
-agentOS brings that to the sandbox. An agent **spends almost all of its time waiting on inference** or a tool call, yet the sandbox behind it is a full virtual machine sitting mostly idle and costing you money.
+Running backends with the isolate-based architecture unlocked two things:
 
-Against a best-in-class sandbox provider, agentOS is:
+- **Startup got cheap**: There's no container to boot per request the way Lambda does, so a Worker starts in milliseconds.
+- **Idle got free**: The shared runtime can pause your code while it waits on an external request and bill you nothing for the wait.
+
+It turns out, **agentic workloads look a lot like the backend workloads** that Cloudflare optimized with isolates. An agent **spends almost all of its time sitting idle** waiting on inference, tool calls, and the user to respond. But the sandbox an agent works in is a full VM, **booted and billed for the whole session** even while it sits idle.
+
+So we applied the same model to the sandbox with agentOS by using **WebAssembly / V8 isolate instead of a VM** for isolation. Against a best-in-class sandbox provider, agentOS is:
 
 - [**92× faster to cold start**](https://agentos-sdk.dev/#bench-cold-start): 4.8 ms p50 vs. 440 ms
 - [**47× smaller in memory**](https://agentos-sdk.dev/#bench-memory): about 22 MB vs. a 1 GiB sandbox
@@ -27,6 +32,8 @@ Against a best-in-class sandbox provider, agentOS is:
 	muted
 	playsInline
 />
+
+![An agent's turn is mostly spent waiting: a traditional sandbox bills a full VM the entire turn, while agentOS bills only while computing](/images/blog/2026-07-23-flue-now-supports-agentos/sandbox-vs-isolate.svg)
 
 ## Why agentOS: the isolate model for sandboxes
 
