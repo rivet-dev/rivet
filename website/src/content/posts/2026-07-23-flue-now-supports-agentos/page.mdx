@@ -8,6 +8,8 @@ title: "Flue now supports agentOS"
 description: "A lightweight alternative to sandbox VMs for your Flue agents, running on WebAssembly and V8 isolates."
 ---
 
+import imgContainerVsIsolate from "./container-vs-isolate.svg";
+
 Today, [Flue](https://github.com/rivet-dev/flue) officially supports [agentOS](https://agentos-sdk.dev).
 
 Cloudflare Workers innovated by **running your code in a V8 isolate instead of a Docker container**. Most backends sit **idle waiting on a database**, an API, or the network, so booting a VM per request like AWS Lambda means paying for a lot of idle time.
@@ -18,6 +20,8 @@ Running backends this way unlocked two things:
 - **Idle got free**: The shared runtime can pause your code while it waits on an external request and bill you nothing for the wait.
 
 It turns out, **agentic workloads look a lot like the backend workloads** that Cloudflare optimized with V8 isolates.
+
+<img src={imgContainerVsIsolate.src} alt="A container held per request stays reserved through every idle stretch, while isolates in one process pack the same busy work with nothing reserved in between." />
 
 ## Why agentOS: the isolate model for sandboxes
 
