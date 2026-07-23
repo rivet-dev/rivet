@@ -11,7 +11,6 @@ import { test } from 'node:test';
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
 const rivetExampleRoot = path.join(packageRoot, 'examples', 'rivet');
-const vercelExampleRoot = path.join(packageRoot, 'examples', 'rivet-vercel');
 const require = createRequire(import.meta.url);
 const { getEnginePath } = require('@rivetkit/engine-cli');
 
@@ -146,91 +145,6 @@ test('examples/rivet builds and serves agent and workflow requests end to end', 
 	}
 });
 
-test('examples/rivet-vercel builds and exposes Next route handlers end to end', { timeout: 180_000 }, async () => {
-	const build = await runCommand('pnpm', ['run', 'flue:build'], vercelExampleRoot);
-	assert.equal(build.code, 0, build.stderr);
-	assert.equal(fs.existsSync(path.join(vercelExampleRoot, 'dist', 'server.mjs')), true);
-
-	const previousEnv = {
-		RIVET_RUN_ENGINE: process.env.RIVET_RUN_ENGINE,
-		RIVET_RUN_ENGINE_HOST: process.env.RIVET_RUN_ENGINE_HOST,
-		RIVET_RUN_ENGINE_PORT: process.env.RIVET_RUN_ENGINE_PORT,
-		RIVET_ENDPOINT: process.env.RIVET_ENDPOINT,
-		FLUE_RIVET_ENDPOINT: process.env.FLUE_RIVET_ENDPOINT,
-		NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
-		RIVET_POOL: process.env.RIVET_POOL,
-		FLUE_RIVET_REGISTRY_KEY: process.env.FLUE_RIVET_REGISTRY_KEY,
-		RIVETKIT_RUNTIME_MODE: process.env.RIVETKIT_RUNTIME_MODE,
-		RIVET_PUBLIC_ENDPOINT: process.env.RIVET_PUBLIC_ENDPOINT,
-		RIVET_PUBLIC_TOKEN: process.env.RIVET_PUBLIC_TOKEN,
-	};
-	const poolName = `flue-vercel-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-	const registryKey = `registry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-	const enginePort = await getAvailablePort();
-	const enginePeerPort = await getAvailablePort();
-	const engineMetricsPort = await getAvailablePort();
-	process.env.RIVET_RUN_ENGINE = '1';
-	process.env.RIVET_RUN_ENGINE_HOST = '127.0.0.1';
-	process.env.RIVET_RUN_ENGINE_PORT = String(enginePort);
-	process.env.RIVET_POOL = poolName;
-	process.env.FLUE_RIVET_REGISTRY_KEY = registryKey;
-	delete process.env.RIVET_ENDPOINT;
-	delete process.env.FLUE_RIVET_ENDPOINT;
-	delete process.env.NEXT_PUBLIC_SITE_URL;
-	delete process.env.RIVETKIT_RUNTIME_MODE;
-	delete process.env.RIVET_PUBLIC_ENDPOINT;
-	delete process.env.RIVET_PUBLIC_TOKEN;
-
-	const port = await getAvailablePort();
-	const origin = `http://127.0.0.1:${port}`;
-	let engine;
-	let dev;
-	let passed = false;
-	try {
-		engine = startEngine({
-			guardPort: enginePort,
-			peerPort: enginePeerPort,
-			metricsPort: engineMetricsPort,
-		});
-		await waitForMetadata(enginePort, engine.logs);
-
-		dev = startNextDev(vercelExampleRoot, port, {
-			RIVET_RUN_ENGINE: '1',
-			RIVET_RUN_ENGINE_HOST: '127.0.0.1',
-			RIVET_RUN_ENGINE_PORT: String(enginePort),
-			RIVET_POOL: poolName,
-			FLUE_RIVET_REGISTRY_KEY: registryKey,
-			FLUE_RIVET_ENDPOINT: `${origin}/api/rivet`,
-			NEXT_PUBLIC_SITE_URL: origin,
-		});
-		await waitForHttpOk(`${origin}/api/rivet/metadata`, dev.logs, 60_000);
-
-		const instanceId = `vercel-example-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-		const admitted = await postAgentPromptWithRetry(
-			(attempt) => `${origin}/api/flue/agents/assistant/${instanceId}-${attempt}`,
-			'Hello from example route',
-			dev.logs,
-		);
-		assert.equal(typeof admitted.receipt.submissionId, 'string');
-		await waitForConversationText(
-			`${origin}/api/flue/agents/assistant/${instanceId}-${admitted.attempt}?view=history`,
-			'Hello from the Vercel route.',
-			dev.logs,
-		);
-		await waitForLog(dev.logs, /POST \/api\/rivet\/start/, 10_000);
-
-		const gateway = await fetchWithTimeout(`${origin}/api/rivet/metadata`, undefined, 30_000);
-		assert.equal(gateway.status, 200, await gateway.text());
-		passed = true;
-	} finally {
-		await delay(250);
-		await dev?.stop();
-		await engine?.stop();
-		restoreEnv(previousEnv);
-		setTimeout(() => process.exit(passed ? 0 : 1), 100);
-	}
-});
-
 async function postAgentPromptWithRetry(urlForAttempt, body, logs = () => '') {
 	let lastText = '';
 	for (let attempt = 0; attempt < 6; attempt++) {
@@ -353,46 +267,6 @@ function startDev(cwd, port, env = {}) {
 	};
 }
 
-function startNextDev(cwd, port, env) {
-	const childEnv = {
-		...process.env,
-		...env,
-		RIVET_RUN_ENGINE_HOST: env.RIVET_RUN_ENGINE_HOST || '127.0.0.1',
-		RIVET_RUN_ENGINE_PORT: env.RIVET_RUN_ENGINE_PORT,
-	};
-	delete childEnv.RIVET_ENDPOINT;
-	delete childEnv.RIVETKIT_RUNTIME_MODE;
-	delete childEnv.RIVET_PUBLIC_ENDPOINT;
-	delete childEnv.RIVET_PUBLIC_TOKEN;
-	const child = spawn('pnpm', ['exec', 'next', 'dev', '--webpack', '--port', String(port)], {
-		cwd,
-		env: childEnv,
-		stdio: ['ignore', 'pipe', 'pipe'],
-	});
-	let output = '';
-	for (const stream of [child.stdout, child.stderr]) {
-		stream.setEncoding('utf8');
-		stream.on('data', (chunk) => {
-			output += chunk;
-		});
-	}
-	return {
-		logs() {
-			return output;
-		},
-		async stop() {
-			if (child.exitCode !== null || child.signalCode !== null) return;
-			child.kill('SIGINT');
-			await Promise.race([
-				once(child, 'exit'),
-				new Promise((_, reject) =>
-					setTimeout(() => reject(new Error(`Timed out stopping next dev\n\n${output}`)), 5_000),
-				),
-			]);
-		},
-	};
-}
-
 function startEngine({ guardPort, peerPort, metricsPort }) {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), 'flue-rivet-engine-'));
 	const configPath = path.join(root, 'config.json');
@@ -455,29 +329,6 @@ async function getAvailablePort() {
 	server.close();
 	await once(server, 'close');
 	return address.port;
-}
-
-async function waitForHttpOk(url, logs = () => '', timeout = 20_000) {
-	await waitFor(
-		async () => {
-			try {
-				const response = await fetch(url);
-				return response.ok;
-			} catch {
-				return false;
-			}
-		},
-		() => `Timed out waiting for ${url}\n\n${logs()}`,
-		timeout,
-	);
-}
-
-async function waitForLog(logs, pattern, timeout = 20_000) {
-	await waitFor(
-		() => pattern.test(logs()),
-		() => `Timed out waiting for log pattern ${pattern}\n\n${logs()}`,
-		timeout,
-	);
 }
 
 async function waitForServer(port, logs = () => '') {
@@ -549,16 +400,6 @@ async function fetchWithTimeout(url, init, timeout) {
 		return await fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
 	} catch (error) {
 		throw new Error(`Request failed for ${url}`, { cause: error });
-	}
-}
-
-function restoreEnv(previousEnv) {
-	for (const [key, value] of Object.entries(previousEnv)) {
-		if (value === undefined) {
-			delete process.env[key];
-		} else {
-			process.env[key] = value;
-		}
 	}
 }
 

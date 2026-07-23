@@ -11,7 +11,5 @@ each actor's native SQLite database (`c.db`).
 Full documentation, setup, and configuration:
 **https://rivet.dev/docs/integrations/flue**
 
-Runnable examples: [`examples/rivet`](./examples/rivet) (a plain `target: rivet`
-app with one agent and one dispatch workflow) and
-[`examples/rivet-vercel`](./examples/rivet-vercel) (the same app fronted by
-Next.js route handlers).
+Runnable example: [`examples/rivet`](./examples/rivet), a plain Node application
+with one agent and one dispatch workflow.

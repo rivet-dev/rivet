@@ -30,10 +30,6 @@
 			"types": "./dist/extension.d.ts",
 			"default": "./dist/extension.js"
 		},
-		"./next": {
-			"types": "./dist/next.d.ts",
-			"default": "./dist/next.js"
-		},
 		"./runtime": {
 			"types": "./dist/runtime.d.ts",
 			"default": "./dist/runtime.js"
@@ -52,7 +48,7 @@
 		"test": "pnpm run test:node && pnpm run test:contracts && pnpm run test:examples",
 		"test:node": "bash -c 'for file in test/*.test.ts; do case \"$file\" in *contract*|*examples*) continue ;; esac; tsx --test \"$file\" || exit $?; done'",
 		"test:contracts": "vitest run test/rivet-store-contracts.test.ts",
-		"test:examples": "pnpm --dir examples/rivet run test:e2e && pnpm --dir examples/rivet-vercel run test:e2e"
+		"test:examples": "pnpm --dir examples/rivet run test:e2e"
 	},
 	"dependencies": {
 		"@flue/cli": "git+https://github.com/NathanFlurry/flue.git#620ef9e672450c9ca6406f045cbfbbdbab9da899&path:/packages/cli",

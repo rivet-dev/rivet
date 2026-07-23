@@ -29,7 +29,6 @@ export {
 	type FlueRivetActorDefinition,
 	type RivetExtension,
 } from './extension.js';
-export { toFlueNextHandler, type FetchApp, type NextRouteContext } from './next.js';
 export { createRivetAsyncSqlDb, type RivetRawDb } from './rivet-db.js';
 export {
 	createRegistryRunStoreFromHandle,
