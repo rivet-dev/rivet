@@ -45,7 +45,8 @@ pub enum ResponseBody {
 }
 
 impl ResponseBody {
-	pub(crate) fn with_completion(self, callback: impl FnOnce() + Send + 'static) -> Self {
+	#[doc(hidden)]
+	pub fn with_completion(self, callback: impl FnOnce() + Send + 'static) -> Self {
 		Self::WithCompletion {
 			body: Box::new(self),
 			completion: CompletionGuard(Some(Box::new(callback))),
