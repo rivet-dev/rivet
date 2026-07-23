@@ -1,0 +1,181 @@
+---
+author: nathan-flurry
+published: "2026-07-23"
+category: changelog
+image: true
+keywords: ["agentos", "flue", "agents", "cloudflare workers", "v8 isolates", "webassembly", "sandboxes"]
+title: "Flue now supports agentOS"
+description: "The isolate model for sandboxes. Every Flue agent gets an isolated VM with a persistent filesystem, running in the backend you already operate. No sandbox machine to boot."
+---
+
+Today, [Flue](https://github.com/rivet-dev/flue) officially supports [agentOS](https://agentos-sdk.dev).
+
+If you build on Flue, you already trust the isolate model. A Cloudflare Worker isn't a virtual machine, it's a V8 isolate sharing one runtime, so it starts in milliseconds and costs almost nothing to keep around. That works because a web request is mostly **I/O**: waiting on a database or an API, not burning CPU.
+
+An agent has the same shape. It spends almost all of its time waiting on the model, reading a file, or running a short command. But the sandbox it reaches into for that work is still a **full virtual machine**: a kernel, a guest OS, and virtual hardware that all have to boot before it runs a single line.
+
+agentOS applies the Workers idea to the sandbox. Against a best-in-class sandbox provider, it's:
+
+- [**92× faster to cold start**](https://agentos-sdk.dev/#bench-cold-start): 4.8 ms p50 vs. 440 ms
+- [**47× smaller in memory**](https://agentos-sdk.dev/#bench-memory): about 22 MB vs. a 1 GiB sandbox
+- [**254× cheaper to run**](https://agentos-sdk.dev/#bench-cost): self-hosted AWS ARM vs. per-second sandbox billing
+
+![The isolate model for sandboxes: a full VM per agent vs. agentOS isolates sharing one runtime](https://assets.rivet.dev/website/blog/2026-07-23-flue-now-supports-agentos/isolate-vs-vm.png?v=1)
+
+## Why agentOS: the isolate model for sandboxes
+
+Cloudflare Workers replaced the VM with a V8 isolate. agentOS replaces the **sandbox** VM with the same thing.
+
+A sandbox gets its isolation by **booting a virtual machine**. The kernel, guest OS, and virtual hardware all have to come up before the agent runs a single command, and that's where the 440 ms and the gigabyte of memory go. It's the same overhead Workers left behind, still sitting in front of every agent.
+
+agentOS gets the same isolation **without a virtual machine**. There's no kernel, no hypervisor, and nothing to provision.
+
+Instead, that isolation comes from **WebAssembly and V8**, the exact sandboxing that contains untrusted code in every Chrome tab and every Cloudflare Worker. It's small, and its security has been hardened over years and years.
+
+Inside it, agents get a **real scripting layer** instead of a chain of tool calls. JavaScript, Python, and Bash run in a secure, Linux-compatible runtime.
+
+Because agent work is I/O-bound and memory-light, the isolate carries the common path. You pay for a full VM only for the **small slice of work** that genuinely needs one, the same way a Worker reaches for a container only when it has to.
+
+The agent becomes part of your application, not another service:
+
+- **Library, not extra infrastructure**: install from npm and run it in the backend process you already operate.
+- **Direct function calls, not extra APIs**: connect agents to your application with ordinary JavaScript instead of another network service.
+- **Scoped access, not exposed credentials**: bind trusted host functions without ever giving the agent your raw secrets.
+
+You get Flue's developer experience on an OS built for agents.
+
+## Building a Flue agent with agentOS
+
+Install the three packages that make up the integration:
+
+```sh
+npm add @rivet-dev/flue @rivet-dev/agentos @rivet-dev/agentos-flue
+```
+
+- `@rivet-dev/flue` runs Flue agents and workflows as durable Rivet Actors.
+- `@rivet-dev/agentos` provides the isolated VM actor.
+- `@rivet-dev/agentos-flue` connects Flue's sandbox API to agentOS.
+
+Register the VM, point Flue's Rivet target at it, and attach it as the agent's sandbox:
+
+<CodeGroup workspace>
+```ts actors.ts
+// Register the agentOS VM into a RivetKit registry.
+import { agentOS, setup } from "@rivet-dev/agentos";
+
+export const vm = agentOS({
+	/* Software, permissions, limits, mounts, and bindings go here. */
+});
+
+export const registry = setup({ use: { vm } });
+```
+
+```ts flue.config.ts
+// Point Flue's Rivet build target at the registry.
+import { defineConfig } from "@flue/cli/config";
+import { rivet } from "@rivet-dev/flue";
+
+export default defineConfig({ target: rivet({ actors: "./actors.ts" }) });
+```
+
+```ts agents/assistant.ts
+// Attach the agentOS sandbox to a Flue agent.
+import { createAgent } from "@flue/runtime";
+import { agentOSSandbox } from "@rivet-dev/agentos-flue";
+import { registry } from "../actors";
+
+const sandbox = agentOSSandbox({ actor: "vm", registry });
+
+export default createAgent(() => ({
+	model: "anthropic/claude-sonnet-5",
+	instructions: "Help the user work in the sandboxed repository.",
+	sandbox,
+}));
+```
+</CodeGroup>
+
+Then connect to it:
+
+```sh
+npx flue connect assistant local
+```
+
+Flue builds the Rivet target, starts the local Rivet engine, and connects to the `assistant/local` actor. Each agent instance and each workflow run gets its own durable Rivet Actor and SQLite database, so accepted work recovers after an interruption.
+
+## Giving it a filesystem
+
+Most of what an agent does is read and write files, so the filesystem is where a sandbox earns its keep.
+
+Every Flue context gets a **persistent `/workspace` filesystem** that survives sleep and wake with no setup, backed by Rivet Actors' storage. The adapter derives a stable VM key from the Flue context ID, so reusing a context reconnects to the same files. Anything else you want the agent to see gets **mounted at a path**, the same way you'd mount a disk:
+
+```ts actors.ts
+import { agentOS, setup } from "@rivet-dev/agentos";
+
+export const vm = agentOS({
+	mounts: [
+		{
+			path: "/mnt/data",
+			plugin: {
+				id: "s3",
+				config: { bucket: "my-bucket", prefix: "agent-data/", region: "us-east-1" },
+			},
+		},
+	],
+});
+
+export const registry = setup({ use: { vm } });
+```
+
+## Escalating only when you have to
+
+The **vast majority of agent work never needs more than the VM**. Desktop automation, heavy compilation, and full browsers do.
+
+Instead of provisioning a heavy sandbox for every agent on the chance that one task needs it, agentOS **starts one on demand** and tears it down when the task finishes. The common path stays a 22 MB isolate, and you pay sandbox cost and sandbox cold starts only for the **small slice of work that actually requires one**. It's the same execution ladder Workers developers already reach for: stay light by default, escalate to a container only for the task in front of you.
+
+Mounting a full sandbox takes two extra packages:
+
+```sh
+npm add @rivet-dev/agentos-sandbox @vercel/sandbox
+```
+
+```ts actors.ts
+import { agentOS, setup } from "@rivet-dev/agentos";
+import { vercel } from "@rivet-dev/agentos-sandbox/vercel";
+
+export const vm = agentOS({
+	sandbox: {
+		provider: vercel(),
+	},
+});
+
+export const registry = setup({ use: { vm } });
+```
+
+Browsers arrive the same way, as a software package such as [Browserbase](https://www.browserbase.com/):
+
+```ts actors.ts
+import browserbase from "@agentos-software/browserbase";
+import { agentOS, setup } from "@rivet-dev/agentos";
+
+export const vm = agentOS({
+	software: [browserbase],
+});
+
+export const registry = setup({ use: { vm } });
+```
+
+## Deploy anywhere your backend runs
+
+Most sandbox runtimes are tied to the provider that hosts them. **agentOS is a library**, so the same agent code runs anywhere your backend does. There's no hypervisor, no nested virtualization, and no per-provider sandbox API to code against.
+
+Rivet is the self-hostable path: run it on Rivet Cloud, on your own infrastructure, or locally as a library. The same agent also picks up durable storage, multi-region deployment, fault-tolerant workflows, durable queues and streams, and rich observability.
+
+You keep the isolate economics you came to Flue for, without being locked to a single platform to get them.
+
+## Get started
+
+- [Flue and agentOS integration guide](https://rivet.dev/docs/integrations/flue)
+- [Complete Flue + agentOS example](https://github.com/rivet-dev/agentos/tree/main/examples/flue)
+- [agentOS on GitHub](https://github.com/rivet-dev/agentos)
+- [agentOS documentation](https://agentos-sdk.dev/docs)
+- [Discord](https://rivet.dev/discord)
