@@ -47,6 +47,7 @@ import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
+import { isResponseLike, type ResponseLike } from "@/common/fetch-like";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { deconstructError, stringifyError } from "@/common/utils";
 import type {
@@ -1183,7 +1184,7 @@ function buildRequest(init: {
 }
 
 async function toRuntimeHttpResponse(
-	response: Response,
+	response: ResponseLike,
 ): Promise<RuntimeHttpResponse> {
 	const headers = Object.fromEntries(response.headers.entries());
 	const body = new Uint8Array(await response.arrayBuffer());
@@ -4717,7 +4718,7 @@ export function buildNativeFactory(
 							requestCtx,
 							jsRequest,
 						);
-						if (!(response instanceof Response)) {
+						if (!isResponseLike(response)) {
 							throw new Error(
 								"onRequest handler must return a Response",
 							);
