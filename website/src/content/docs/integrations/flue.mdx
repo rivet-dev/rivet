@@ -54,7 +54,7 @@ Create `actors.ts`:
 import { agentOS, setup } from "@rivet-dev/agentos";
 
 const vm = agentOS({
-		// Configuration will go here.
+	// Configuration will go here.
 });
 
 export const registry = setup({
@@ -92,7 +92,7 @@ const sandbox = agentOSSandbox({
 });
 
 export default createAgent(() => ({
-	model: "anthropic/claude-sonnet-4-6",
+	model: "anthropic/claude-sonnet-5",
 	instructions: "Help the user work in the sandboxed repository.",
 	sandbox,
 }));
