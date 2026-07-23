@@ -10,7 +10,7 @@ interface CreateProjectFrameContentProps extends DialogContentProps {}
 export default function CreateProjectFrameContent({
 	onClose,
 }: CreateProjectFrameContentProps) {
-	const [mode, setMode] = useState("serverless");
+	const [mode, setMode] = useState("serverful");
 
 	return (
 		<>

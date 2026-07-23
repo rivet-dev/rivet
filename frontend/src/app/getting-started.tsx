@@ -68,7 +68,6 @@ import {
 	DEFAULT_PACKAGES,
 	DEFAULT_SANDBOX_PROVIDER,
 } from "@/components/onboarding/agent-os/catalog";
-import { RunnerConfigToggleGroup } from "./runner-config-toggle-group";
 import {
 	getAgentInstructionsPrompt,
 	getComputeAddendum,
@@ -79,6 +78,26 @@ function platformTitle(provider: unknown): string {
 		deployOptions.find((o) => o.name === provider)?.displayName ??
 		"Rivet Compute"
 	);
+}
+
+// Providers that can only run serverless (function) deployments. Every other
+// platform defaults to a long-lived runner (serverful) but can still toggle to
+// serverless.
+const SERVERLESS_ONLY_PROVIDERS = new Set<Provider>([
+	"vercel",
+	"cloudflare-workers",
+	"supabase-functions",
+	"gcp-cloud-run",
+]);
+
+function isServerlessOnlyProvider(provider: unknown): boolean {
+	return SERVERLESS_ONLY_PROVIDERS.has(provider as Provider);
+}
+
+function defaultRuntimeModeForProvider(
+	provider: unknown,
+): "serverless" | "serverful" {
+	return isServerlessOnlyProvider(provider) ? "serverless" : "serverful";
 }
 
 const stepper = defineStepper(
@@ -229,7 +248,14 @@ export function GettingStarted({
 		provider: defaultProvider,
 		datacenters: {},
 		datacenter: "",
-		mode: "serverless" as "serverless" | "serverful",
+		// Default the runner mode from the selected provider (serverful for most
+		// platforms, serverless for function-only ones). Keep serverless when an
+		// existing serverless config was found so its prefill still applies.
+		mode: (initialRunnerConfig
+			? "serverless"
+			: defaultRuntimeModeForProvider(defaultProvider)) as
+			| "serverless"
+			| "serverful",
 		template: "actor" as "actor" | "agent-os",
 		agent: DEFAULT_AGENT,
 		packages: DEFAULT_PACKAGES,
@@ -478,13 +504,25 @@ function SwitchPlatform() {
 					<DropdownMenuItem
 						key={option.name}
 						className="items-start gap-3 py-2"
-						onClick={() =>
+						onClick={() => {
 							setValue("provider", option.name, {
 								shouldDirty: true,
 								shouldTouch: true,
 								shouldValidate: true,
-							})
-						}
+							});
+							// Reset the runner mode to the new provider's default
+							// so switching to a container platform lands on the
+							// runner and a function platform lands on serverless.
+							setValue(
+								"mode",
+								defaultRuntimeModeForProvider(option.name),
+								{
+									shouldDirty: true,
+									shouldTouch: true,
+									shouldValidate: true,
+								},
+							);
+						}}
 					>
 						<Icon
 							icon={option.icon}
@@ -969,16 +1007,27 @@ function useAgentInstructionsCode({
 	provider,
 	runnerName = "default",
 	endpoint,
+	mode,
 }: {
 	provider?: Provider;
 	runnerName?: string;
 	endpoint?: string;
+	mode?: "serverless" | "serverful";
 } = {}) {
 	const providerDetails = provider
 		? deployOptions.find((p) => p.name === provider)
 		: undefined;
 	const providerStr =
 		providerDetails?.displayName ?? provider ?? "your chosen provider";
+	const providerDocUrl = providerDetails?.href
+		? `https://rivet.dev${providerDetails.href}`
+		: undefined;
+	// Follow the user's runner/serverless selection. Rivet Compute always
+	// deploys serverless (it sets the mode on deploy); every other provider uses
+	// the chosen mode, falling back to the provider's default.
+	const serverless =
+		provider === "rivet" ||
+		(mode ?? defaultRuntimeModeForProvider(provider)) === "serverless";
 	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
 	const secretToken = useRivetDsn({ kind: "secret", endpoint });
 
@@ -987,6 +1036,8 @@ function useAgentInstructionsCode({
 		publishableToken,
 		secretToken,
 		runnerName,
+		serverless,
+		providerDocUrl,
 	});
 }
 
@@ -1078,7 +1129,16 @@ function GenericCopyAgentInstructionsButton({
 }) {
 	const endpoint = useEndpoint();
 	const runnerName = useWatch({ name: "runnerName" }) as string;
-	const code = useAgentInstructionsCode({ provider, runnerName, endpoint });
+	const mode = useWatch({ name: "mode" }) as
+		| "serverless"
+		| "serverful"
+		| undefined;
+	const code = useAgentInstructionsCode({
+		provider,
+		runnerName,
+		endpoint,
+		mode,
+	});
 	return (
 		<AgentPromptBanner
 			code={code}
@@ -1240,11 +1300,13 @@ function BackendSetupRivet() {
 function BackendSetup() {
 	const provider = useWatch({ name: "provider" });
 	const isAgentOs = useWatch({ name: "template" }) === "agent-os";
-	const mode = useWatch({ name: "mode" }) as
+	const rawMode = useWatch({ name: "mode" }) as
 		| "serverless"
 		| "serverful"
 		| undefined;
-	const { setValue } = useFormContext();
+	// The runner mode is fixed per provider (no user toggle); render the mode
+	// that provider deploys with.
+	const mode = rawMode ?? defaultRuntimeModeForProvider(provider);
 
 	if (provider === "rivet" && features.compute) {
 		return <BackendSetupRivet />;
@@ -1255,23 +1317,6 @@ function BackendSetup() {
 			{isAgentOs ? <AgentOsKeyNotice /> : null}
 			<CopyAgentInstructionsButton provider={provider} />
 			<OrDivider label="or set it up manually" />
-			<div>
-				<RunnerConfigToggleGroup
-					mode={mode ?? "serverless"}
-					onChange={(value) =>
-						setValue("mode", value, {
-							shouldDirty: true,
-							shouldTouch: true,
-							shouldValidate: true,
-						})
-					}
-				/>
-				<p className="text-xs text-muted-foreground text-center -mt-2">
-					{(mode ?? "serverless") === "serverful"
-						? "Runner: a long-lived process you keep running that connects to Rivet."
-						: "Serverless: Rivet invokes your deployment on demand and scales to zero."}
-				</p>
-			</div>
 			{mode === "serverful" ? (
 				<BackendSetupServerful provider={provider} />
 			) : (

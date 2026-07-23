@@ -139,6 +139,7 @@ function AgentInstructions() {
 		publishableToken,
 		secretToken,
 		runnerName: "default",
+		serverless: true,
 	});
 
 	return (
