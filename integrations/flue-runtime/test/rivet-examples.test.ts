@@ -62,10 +62,9 @@ test('examples/rivet builds and serves agent and workflow requests end to end', 
 			dev.logs,
 		);
 
-		// Regression coverage for the streaming forwarding rework (#1): an SSE read must
-		// stream `text/event-stream` immediately. Under the old serialize-to-JSON shim
-		// the actor buffered the never-ending stream until the action timeout, so this
-		// fetch would hang instead of resolving with headers.
+			// The public endpoint preserves Flue's SSE protocol while the adapter uses
+			// finite actor long-polls internally. Headers must arrive immediately rather
+			// than waiting for the actor's buffered onRequest body to finish.
 		const sse = await fetchWithTimeout(
 			`http://127.0.0.1:${port}/agents/assistant/${promptInstanceId}?view=updates&live=sse&offset=${encodeURIComponent(conversation.offset)}`,
 			undefined,

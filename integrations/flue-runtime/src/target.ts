@@ -188,12 +188,9 @@ function getRegistryHandle() {
 }
 
 async function forwardToFlueActor(handle, request) {
-  // Stream the raw HTTP request/response through the actor's onRequest handler.
-  // Pass an explicit path string + init (not the Request object) because
-  // rivetkit's instanceof Request check fails across the dual-package boundary;
-  // a string path is realm-independent. handle.fetch carries the body both ways as
-  // a stream (so SSE/long-poll work) and passes null-body statuses (204/304)
-  // through untouched, and has its own cold-start retry, so no shim is needed.
+  // Pass an explicit path string + init rather than relying on Request identity
+  // across package/realm boundaries. Rivet forwards finite response bodies and
+  // null-body statuses (204/304) without an adapter serialization layer.
   const url = new URL(request.url);
   if (request.method === 'GET' && url.searchParams.get('live') === 'sse') {
     return createFlueActorSseRelay(handle, request, url);
@@ -208,6 +205,10 @@ async function forwardToFlueActor(handle, request) {
 }
 
 async function createFlueActorSseRelay(handle, request, url) {
+  // Rivet's current native actor boundary buffers onRequest response bodies, so
+  // an infinite SSE body cannot cross that boundary yet. Preserve Flue's public
+  // SSE protocol while using finite Durable Streams long-polls internally. This
+  // blocks in the actor until data arrives instead of polling SQLite on a timer.
   const relayUrl = new URL(url);
   relayUrl.searchParams.delete('live');
   const initial = await fetchFlueActorStreamPage(handle, request, relayUrl);
@@ -263,7 +264,7 @@ async function relayFlueActorSse(options) {
     if (page.closed) {
       control.streamClosed = true;
     } else {
-      control.streamCursor = String(Math.floor(Date.now() / 20000));
+      control.streamCursor = page.cursor || String(Math.floor(Date.now() / 20000));
       if (page.upToDate) control.upToDate = true;
     }
     options.controller.enqueue(
@@ -274,16 +275,17 @@ async function relayFlueActorSse(options) {
       return;
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 250));
     if (options.isCancelled()) return;
     options.relayUrl.searchParams.set('offset', page.nextOffset);
+    options.relayUrl.searchParams.set('live', 'long-poll');
+    if (page.cursor) options.relayUrl.searchParams.set('cursor', page.cursor);
     page = await fetchFlueActorStreamPage(
       options.handle,
       options.request,
       options.relayUrl,
       options.abortController.signal,
     );
-    if (page.response.status !== 200) {
+    if (!page.response.ok) {
       throw new Error('[flue] Rivet SSE relay catch-up failed with HTTP ' + page.response.status + '.');
     }
   }
@@ -302,6 +304,7 @@ async function fetchFlueActorStreamPage(handle, request, url, signal) {
     response,
     events: Array.isArray(events) ? events : [],
     nextOffset: response.headers.get('stream-next-offset') || '-1',
+    cursor: response.headers.get('stream-cursor'),
     upToDate: response.headers.get('stream-up-to-date') === 'true',
     closed: response.headers.get('stream-closed') === 'true',
   };
