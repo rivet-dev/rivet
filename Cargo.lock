@@ -6211,6 +6211,7 @@ name = "rivetkit-engine-process"
 version = "2.3.7"
 dependencies = [
  "anyhow",
+ "libc",
  "reqwest 0.12.22",
  "rivet-error",
  "serde",
