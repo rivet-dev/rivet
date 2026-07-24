@@ -77,10 +77,10 @@ Verify the container starts and is connectable (e.g. \`curl http://localhost:300
 
 ## Step 4: Deploy with the Rivet CLI
 
-Deploy the project with a single command. \`@rivetkit/cli\` builds the \`Dockerfile\`, pushes the image to Rivet's registry, and creates/updates the \`default\` managed pool. The project, organization, and namespace are auto-detected from the token, so you do not need to pass them:
+Deploy the project with a single command. \`@rivetkit/cli\` builds the \`Dockerfile\`, pushes the image to Rivet's registry, and creates/updates the \`default\` managed pool. Always pass \`--namespace ${namespace}\` so the deploy targets this namespace and not the default \`production\` namespace. The project and organization are auto-detected from the token:
 
 \`\`\`bash
-npx @rivetkit/cli deploy --token "${cloudToken}" --env PORT=3000
+npx @rivetkit/cli deploy --token "${cloudToken}" --namespace ${namespace} --env PORT=3000
 \`\`\`
 
 Notes:
@@ -150,6 +150,8 @@ export function getAgentInstructionsPrompt({
 	runnerName,
 	serverless,
 	providerDocUrl,
+	namespace,
+	cliDeploy,
 }: {
 	providerStr: string;
 	publishableToken: string;
@@ -157,9 +159,20 @@ export function getAgentInstructionsPrompt({
 	runnerName: string;
 	serverless: boolean;
 	providerDocUrl?: string;
+	namespace?: string;
+	// Whether this deploy uses `@rivetkit/cli deploy` (Rivet Compute only). Only
+	// then does the `--namespace` flag apply; other providers deploy differently.
+	cliDeploy?: boolean;
 }) {
 	const poolLine =
 		runnerName !== "default" ? `\n  RIVET_POOL=${runnerName}` : "";
+	const namespaceNote = namespace
+		? `> **Important:** Run every step below against the \`${namespace}\` namespace only${
+				cliDeploy
+					? `, and pass \`--namespace ${namespace}\` with the deploy command`
+					: ""
+			}. Do not deploy to or modify any other namespace (for example the default \`production\` namespace).\n\n`
+		: "";
 	const docLine = providerDocUrl
 		? `Review the deploy guide for ${providerStr}: ${providerDocUrl}`
 		: `Review the deploy guide for ${providerStr} at https://rivet.dev/docs/deploy/`;
@@ -188,7 +201,7 @@ ${deployEnv}
 
 	return `# RivetKit Setup & Deploy
 
-Read https://rivet.dev/llms.txt to understand how RivetKit works (actors, state, events, actions, connections, clients).
+${namespaceNote}Read https://rivet.dev/llms.txt to understand how RivetKit works (actors, state, events, actions, connections, clients).
 
 Add a note to the project's \`CLAUDE.md\` / \`AGENTS.md\` (create one if missing) linking to https://rivet.dev/llms.txt as the reference for future RivetKit work.
 

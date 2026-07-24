@@ -3,7 +3,6 @@ import {
 	faArrowRight,
 	faCheck,
 	faChevronDown,
-	faCopy,
 	faKey,
 	Icon,
 } from "@rivet-gg/icons";
@@ -18,7 +17,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
 import { type ReactNode, Suspense, useContext, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
-import { toast } from "sonner";
 import { match } from "ts-pattern";
 import z from "zod";
 import * as ConnectServerfulForm from "@/app/forms/connect-manual-serverful-form";
@@ -37,9 +35,8 @@ import {
 } from "@/components/actors";
 import { defineStepper } from "@/components/ui/stepper";
 import { deriveProviderFromMetadata } from "@/lib/data";
-import { cloudEnv, engineEnv, getRivetRunUrl } from "@/lib/env";
+import { engineEnv } from "@/lib/env";
 import { features } from "@/lib/features";
-import { usePublishableToken } from "@/queries/accessors";
 import { queryClient } from "@/queries/global";
 import { cn } from "../components/lib/utils";
 import { Badge } from "../components/ui/badge";
@@ -58,7 +55,7 @@ import {
 	Configuration,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import { EnvVariables, useRivetDsn } from "./env-variables";
+import { EnvVariables } from "./env-variables";
 import { StepperForm, StepVisibilityContext } from "./forms/stepper-form";
 import { Content } from "./layout";
 import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
@@ -69,35 +66,18 @@ import {
 	DEFAULT_SANDBOX_PROVIDER,
 } from "@/components/onboarding/agent-os/catalog";
 import {
-	getAgentInstructionsPrompt,
-	getComputeAddendum,
-} from "@/content/agent-prompts";
+	AgentPromptBanner,
+	CommandBox,
+	defaultRuntimeModeForProvider,
+	useAgentInstructionsCode,
+	useComputeInstructionsCode,
+} from "./compute-deploy";
 
 function platformTitle(provider: unknown): string {
 	return (
 		deployOptions.find((o) => o.name === provider)?.displayName ??
 		"Rivet Compute"
 	);
-}
-
-// Providers that can only run serverless (function) deployments. Every other
-// platform defaults to a long-lived runner (serverful) but can still toggle to
-// serverless.
-const SERVERLESS_ONLY_PROVIDERS = new Set<Provider>([
-	"vercel",
-	"cloudflare-workers",
-	"supabase-functions",
-	"gcp-cloud-run",
-]);
-
-function isServerlessOnlyProvider(provider: unknown): boolean {
-	return SERVERLESS_ONLY_PROVIDERS.has(provider as Provider);
-}
-
-function defaultRuntimeModeForProvider(
-	provider: unknown,
-): "serverless" | "serverful" {
-	return isServerlessOnlyProvider(provider) ? "serverless" : "serverful";
 }
 
 const stepper = defineStepper(
@@ -686,19 +666,6 @@ function OrDivider({ label }: { label: string }) {
 	);
 }
 
-function CommandBox({ command }: { command: string }) {
-	return (
-		<CodeFrame
-			language="bash"
-			code={() => command}
-			hideFooter
-			className="group my-0"
-		>
-			<CodePreview code={command} language="bash" className="text-left" />
-		</CodeFrame>
-	);
-}
-
 function AgentOsKeyNotice() {
 	return (
 		<div className="flex gap-3 rounded-md border border-border bg-muted/30 p-3 text-sm">
@@ -973,7 +940,7 @@ function AgentOsHandoff() {
 // compute deployment addendum alongside the onboarding instructions. Copying it
 // gives the agent everything it needs to scaffold, run, and deploy in one paste.
 function RunLocallyComputeBanner() {
-	const code = useComputeInstructionsCode();
+	const { code } = useComputeInstructionsCode();
 	return (
 		<AgentPromptBanner
 			code={code}
@@ -1003,65 +970,6 @@ function StepNumber({ n }: { n: number }) {
 	);
 }
 
-function useAgentInstructionsCode({
-	provider,
-	runnerName = "default",
-	endpoint,
-	mode,
-}: {
-	provider?: Provider;
-	runnerName?: string;
-	endpoint?: string;
-	mode?: "serverless" | "serverful";
-} = {}) {
-	const providerDetails = provider
-		? deployOptions.find((p) => p.name === provider)
-		: undefined;
-	const providerStr =
-		providerDetails?.displayName ?? provider ?? "your chosen provider";
-	const providerDocUrl = providerDetails?.href
-		? `https://rivet.dev${providerDetails.href}`
-		: undefined;
-	// Follow the user's runner/serverless selection. Rivet Compute always
-	// deploys serverless (it sets the mode on deploy); every other provider uses
-	// the chosen mode, falling back to the provider's default.
-	const serverless =
-		provider === "rivet" ||
-		(mode ?? defaultRuntimeModeForProvider(provider)) === "serverless";
-	const publishableToken = useRivetDsn({ kind: "publishable", endpoint });
-	const secretToken = useRivetDsn({ kind: "secret", endpoint });
-
-	return getAgentInstructionsPrompt({
-		providerStr,
-		publishableToken,
-		secretToken,
-		runnerName,
-		serverless,
-		providerDocUrl,
-	});
-}
-
-function useComputeInstructionsCode() {
-	const agentInstructions = useAgentInstructionsCode({ provider: "rivet" });
-	const dataProvider = useCloudNamespaceDataProvider();
-	const { data: cloudToken } = useSuspenseQuery(
-		dataProvider.createApiTokenQueryOptions({ name: "Onboarding" }),
-	);
-	const publishableRawToken = usePublishableToken();
-	const namespace = dataProvider.engineNamespace;
-
-	const computeAddendum = getComputeAddendum({
-		cloudToken,
-		publishableToken: publishableRawToken ?? "<PUBLISHABLE_TOKEN>",
-		namespace,
-		apiUrl: cloudEnv().VITE_APP_API_URL,
-		cloudApiUrl: cloudEnv().VITE_APP_CLOUD_API_URL,
-		rivetRunUrl: getRivetRunUrl(namespace),
-	});
-
-	return `${agentInstructions}\n\n---\n\n${computeAddendum}`;
-}
-
 function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 	// The compute prompt reads cloud-namespace data; only available with compute.
 	if (provider === "rivet" && features.compute) {
@@ -1070,55 +978,8 @@ function CopyAgentInstructionsButton({ provider }: { provider?: Provider }) {
 	return <GenericCopyAgentInstructionsButton provider={provider} />;
 }
 
-function AgentPromptBanner({
-	code,
-	containsSecret = false,
-	title = "Use your coding agent",
-	description = "Have your coding agent complete these steps to deploy to Rivet Compute.",
-}: {
-	code: string;
-	containsSecret?: boolean;
-	title?: string;
-	description?: string;
-}) {
-	return (
-		<button
-			type="button"
-			onClick={() => {
-				navigator.clipboard.writeText(code);
-				toast.success(
-					containsSecret
-						? "Copied to clipboard — includes a secret deploy token, paste only into your agent"
-						: "Copied to clipboard",
-				);
-			}}
-			className="relative w-full flex items-center justify-between gap-4 rounded-lg px-4 py-4 border border-primary group cursor-pointer text-left"
-		>
-			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
-				Recommended
-			</Badge>
-			<div className="min-w-0">
-				<p className="font-medium mb-1">{title}</p>
-				<p className="text-sm text-muted-foreground">{description}</p>
-				{containsSecret ? (
-					<p className="mt-1 text-xs text-muted-foreground">
-						Includes a secret deploy token. Paste only into your
-						coding agent.
-					</p>
-				) : null}
-			</div>
-			<Button asChild variant="outline" className="shrink-0">
-				<div>
-					<Icon icon={faCopy} className="me-2 text-primary" />
-					Copy prompt
-				</div>
-			</Button>
-		</button>
-	);
-}
-
 function ComputeCopyAgentInstructionsButton() {
-	const code = useComputeInstructionsCode();
+	const { code } = useComputeInstructionsCode();
 	return <AgentPromptBanner code={code} containsSecret />;
 }
 
