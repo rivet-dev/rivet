@@ -76,11 +76,27 @@ Your function code keeps importing from `rivetkit` as usual. The import map only
 </Step>
 <Step title="Run Locally">
 
+Start the local Supabase stack. `supabase functions serve` fails without it:
+
+```sh
+npx supabase start
+```
+
 Start Rivet. The CLI runs the local engine, spawns `supabase functions serve` for you, and populates the connection values:
 
 ```sh
 npx @rivetkit/cli dev --provider supabase
 ```
+
+The edge runtime runs in a container, so the CLI points the function at the engine on the host with `RIVET_ENDPOINT=http://host.docker.internal:6420`. Override it by passing your own `--env-file` to `supabase functions serve`:
+
+```sh
+npx @rivetkit/cli dev --provider supabase -- --env-file ./supabase/functions/.env.local
+```
+
+<Note>
+The engine keeps running after the CLI exits so a later `rivet dev` can reattach. Changing `RIVET_ENDPOINT` therefore has no effect until the engine restarts. Use `rivet engine` to manage it.
+</Note>
 
 Visit [http://localhost:6420](http://localhost:6420) in your browser (or point your AI agent at it) to open the Rivet developer tools and inspect your actors live.
 

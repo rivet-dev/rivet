@@ -14,6 +14,11 @@ pub(crate) const DEFAULT_NAMESPACE: &str = "production";
 pub(crate) const LOCAL_NAMESPACE: &str = "default";
 pub(crate) const POOL_NAME: &str = "default";
 pub(crate) const SUPABASE_FN_DEFAULT: &str = "rivet";
+/// Supabase runs the edge runtime in a container, so the handler reaches the
+/// engine on the host through Docker's host alias instead of loopback.
+/// `supabase functions serve` supplies the `host-gateway` mapping on Linux;
+/// Docker Desktop provides the alias on macOS and Windows.
+pub(crate) const SUPABASE_ENGINE_ENDPOINT: &str = "http://host.docker.internal:6420";
 
 #[derive(Parser)]
 #[command(name = "rivet", version, about = "Rivet CLI")]
