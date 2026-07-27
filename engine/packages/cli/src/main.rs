@@ -39,6 +39,8 @@ enum Commands {
 	Logs(commands::logs::Opts),
 	/// Install the GitHub Actions workflow that deploys to Rivet Cloud.
 	SetupCi(commands::setup_ci::Opts),
+	/// Mint a namespace-scoped token.
+	Token(commands::token::Opts),
 }
 
 #[tokio::main]
@@ -52,6 +54,7 @@ async fn main() -> Result<()> {
 		Commands::Deploy(opts) => opts.execute().await,
 		Commands::Logs(opts) => opts.execute().await,
 		Commands::SetupCi(opts) => opts.execute().await,
+		Commands::Token(opts) => opts.execute().await,
 	}
 }
 

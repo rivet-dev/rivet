@@ -21,6 +21,11 @@ pub struct NamespaceResponse {
 }
 
 #[derive(Deserialize)]
+struct TokenResponse {
+	token: String,
+}
+
+#[derive(Deserialize)]
 struct NamespacesResponse {
 	namespaces: Vec<Namespace>,
 	pagination: Option<Pagination>,
@@ -329,6 +334,30 @@ pub async fn wait_for_pool(
 		}
 	}
 	bail!("timed out waiting for managed pool to become ready")
+}
+
+/// Mints a namespace-scoped token via `POST .../tokens/{kind}`, where `kind` is
+/// the Cloud API path segment (`secret`, `publishable`, or `connection`). These
+/// endpoints are get-or-create: repeated calls return the same token.
+pub async fn create_token(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+	namespace: &str,
+	kind: &str,
+) -> Result<String> {
+	let path = format!(
+		"/projects/{}/namespaces/{}/tokens/{}?org={}",
+		encode(project),
+		encode(namespace),
+		kind,
+		encode(org)
+	);
+	let response: TokenResponse = cloud
+		.request_ok(Method::POST, &path, None)
+		.await?
+		.context("token create returned no body")?;
+	Ok(response.token)
 }
 
 pub fn registry_endpoint(cloud_api: &str) -> Result<String> {

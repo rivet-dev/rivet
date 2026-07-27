@@ -23,6 +23,7 @@ npx @rivetkit/cli <command>
 | `rivet deploy` | Build and deploy the project to Rivet Cloud. |
 | `rivet engine` | Run the bundled `rivet-engine` binary directly. |
 | `rivet setup-ci` | Install the GitHub Actions deploy workflow. |
+| `rivet token` | Mint a namespace-scoped token. |
 
 ## `rivet dev`
 
@@ -88,6 +89,30 @@ Installs `.github/workflows/rivet-deploy.yml`, which deploys to Rivet Cloud on p
 ```bash
 gh secret set RIVET_CLOUD_TOKEN
 ```
+
+## `rivet token`
+
+Mints a namespace-scoped token for connecting to Rivet. Only the token is printed to stdout, so it can be captured directly by scripts (e.g. `TOKEN=$(rivet token create --kind secret)`).
+
+```bash
+rivet token create --kind secret
+```
+
+| `--kind` | Prefix | Use |
+| --- | --- | --- |
+| `secret` | `sk_` | Server-side runner/runtime token. |
+| `public` | `pk_` | Client token: resolve and manage actors. |
+| `connection` | `ck_` | Client token limited to resolving actors and opening connections. |
+
+By default the namespace must already exist. Pass `--create-namespace` to create it first (useful for per-branch CI namespaces).
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--kind` | _(required)_ | Token kind: `secret`, `public`, or `connection`. |
+| `--namespace` | `production` | Cloud namespace. |
+| `--create-namespace` | — | Create the namespace if it does not exist. |
+| `--token` | env / credentials | Rivet Cloud API token. |
+| `--project` / `--org` | from token | Override project/org. |
 
 ## Engine binary resolution
 
