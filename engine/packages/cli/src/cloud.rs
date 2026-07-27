@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{collections::BTreeMap, time::Duration};
 
 use anyhow::{Context, Result, bail};
 use reqwest::{Method, StatusCode};
@@ -83,6 +83,43 @@ struct ManagedPoolsListResponse {
 pub struct PoolSummary {
 	pub name: String,
 	pub status: Option<String>,
+	#[serde(default)]
+	pub config: Option<PoolConfig>,
+	#[serde(default)]
+	pub error: Option<PoolError>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolConfig {
+	pub display_name: Option<String>,
+	#[serde(default)]
+	pub image: Option<ImageRef>,
+	#[serde(default)]
+	pub resources: Option<PoolResources>,
+	#[serde(default)]
+	pub environment: BTreeMap<String, String>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ImageRef {
+	pub repository: String,
+	pub tag: String,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolResources {
+	pub cpu: Option<f64>,
+	pub memory: Option<String>,
+	pub min_scale: Option<u32>,
+	pub max_scale: Option<u32>,
+	pub instance_request_concurrency: Option<u32>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct PoolError {
+	pub message: String,
 }
 
 pub struct CloudClient {

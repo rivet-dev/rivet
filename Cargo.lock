@@ -5263,6 +5263,7 @@ dependencies = [
 name = "rivet-cli"
 version = "2.3.7"
 dependencies = [
+ "anstyle",
  "anyhow",
  "clap",
  "dirs",
