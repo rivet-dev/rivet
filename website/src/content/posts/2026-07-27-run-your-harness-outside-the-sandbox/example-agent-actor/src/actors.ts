@@ -26,18 +26,6 @@ export const codingAgent = actor({
 	// sandbox across sleeps and restarts
 	state: { sandboxId: null as string | null },
 
-	// Session history lives in the actor's own SQLite database
-	db: db({
-		onMigrate: async (db) => {
-			await db.execute(`
-				CREATE TABLE IF NOT EXISTS messages (
-					id INTEGER PRIMARY KEY AUTOINCREMENT,
-					message TEXT NOT NULL
-				);
-			`);
-		},
-	}),
-
 	// Attach the sandbox when the actor wakes. Vars hold non-serializable
 	// handles like the sandbox connection.
 	createVars: async (c): Promise<Vars> => {
@@ -57,6 +45,18 @@ export const codingAgent = actor({
 		// Booting the sandbox takes longer than the default
 		createVarsTimeout: 60_000,
 	},
+
+	// Session history lives in the actor's own SQLite database
+	db: db({
+		onMigrate: async (db) => {
+			await db.execute(`
+				CREATE TABLE IF NOT EXISTS messages (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					message TEXT NOT NULL
+				);
+			`);
+		},
+	}),
 
 	// Tasks arrive on a durable queue instead of an action
 	queues: {

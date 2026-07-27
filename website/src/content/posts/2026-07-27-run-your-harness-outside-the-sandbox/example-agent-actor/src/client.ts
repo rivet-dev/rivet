@@ -2,11 +2,9 @@ import * as readline from "node:readline/promises";
 import { createClient } from "rivetkit/client";
 import type { registry } from "./actors.ts";
 
-const client = createClient<typeof registry>({
-	endpoint: process.env.RIVET_ENDPOINT ?? "http://localhost:6420",
-});
+const client = createClient<typeof registry>();
 
-// Each key is an independent session with its own sandbox and history
+// Each key is an independent agent with its own actor, sandbox, and history
 const agent = client.codingAgent.getOrCreate(["demo"]);
 
 // Read tasks from the terminal and run the agent on each one
