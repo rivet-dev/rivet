@@ -11,6 +11,7 @@ name = "rivet"
 path = "src/main.rs"
 
 [dependencies]
+anstyle.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 dirs.workspace = true

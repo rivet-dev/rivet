@@ -92,6 +92,7 @@ members = [
   repository = "https://github.com/rivet-dev/rivet"
 
   [workspace.dependencies]
+  anstyle = "1"
   anyhow = "1.0.82"
   pyroscope = "2.0"
   scopeguard = "1.2"
