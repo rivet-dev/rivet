@@ -21,6 +21,7 @@ npx @rivetkit/cli <command>
 | --- | --- |
 | `rivet dev` | Run a local engine and your handler's dev server. |
 | `rivet deploy` | Build and deploy the project to Rivet Cloud. |
+| `rivet pool` | List the compute pools in a namespace. |
 | `rivet engine` | Run the bundled `rivet-engine` binary directly. |
 | `rivet setup-ci` | Install the GitHub Actions deploy workflow. |
 
@@ -53,7 +54,7 @@ For `cloudflare`, the CLI also passes the engine endpoint as `--var RIVET_ENDPOI
 
 ## `rivet deploy`
 
-Builds and pushes your project's Docker image and upserts the managed pool, printing the dashboard URL. See [Deploying to Rivet Compute](/docs/deploy/rivet-compute).
+Builds and pushes your project's Docker image and upserts the managed pool, printing the dashboard URL. Deploys target the `default` pool unless you pass `--pool`; a new pool name is created on first deploy. See [Deploying to Rivet Compute](/docs/deploy/rivet-compute).
 
 ```bash
 rivet deploy --token cloud_api_xxxxx
@@ -65,12 +66,30 @@ The token is saved to `~/.rivet/credentials` (also read from `RIVET_CLOUD_TOKEN`
 | --- | --- | --- |
 | `--token` | env / credentials | Rivet Cloud API token. |
 | `--namespace` | `production` | Cloud namespace. |
+| `--pool` | `default` | Compute pool to deploy to. |
 | `--project` / `--org` | from token | Override project/org. |
 | `--dockerfile` | `Dockerfile` | Dockerfile to build. |
 | `--build-context` | `.` | Docker build context. |
 | `--env KEY=VAL` | — | Environment override, repeatable. |
 | `--image` | project slug | Image repository name. |
 | `--tag` | git short SHA | Image tag. |
+
+## `rivet pool`
+
+Lists the compute pools in a namespace. A namespace can hold multiple pools; `default` is the one used when a `deploy` or `logs` command omits `--pool`.
+
+```bash
+rivet pool list
+```
+
+Each line is printed as `<name>\t<status>`. Pass `--json` for machine-readable output.
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--token` | env / credentials | Rivet Cloud API token. |
+| `--namespace` | `production` | Cloud namespace. |
+| `--project` / `--org` | from token | Override project/org. |
+| `--json` | — | Emit raw JSON instead of formatted output. |
 
 ## `rivet engine`
 

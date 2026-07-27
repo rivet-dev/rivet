@@ -102,7 +102,7 @@ curl -s "$CLOUD_API_URL/projects/$PROJECT/namespaces/$CLOUD_NAMESPACE/managed-po
 
 ## Checking Logs
 
-Use the CLI to read your deployment's logs. By default `rivet logs` prints the last 100 lines from the `production` namespace, oldest to newest, then exits.
+Use the CLI to read your deployment's logs. By default `rivet logs` prints the last 100 lines from the `default` pool in the `production` namespace, oldest to newest, then exits. Pass `--pool` to read a different compute pool.
 
 ```bash
 npx @rivetkit/cli logs
@@ -130,6 +130,9 @@ A few examples:
 ```bash
 # Last 200 lines from a specific namespace
 npx @rivetkit/cli logs --namespace production -n 200
+
+# Logs from a specific compute pool
+npx @rivetkit/cli logs --pool my-pool
 
 # Live tail, only lines containing "error"
 npx @rivetkit/cli logs --follow --contains error

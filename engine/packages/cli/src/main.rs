@@ -37,6 +37,8 @@ enum Commands {
 	Deploy(commands::deploy::Opts),
 	/// View logs for your Rivet Compute instances.
 	Logs(commands::logs::Opts),
+	/// Manage compute pools.
+	Pool(commands::pool::Opts),
 	/// Install the GitHub Actions workflow that deploys to Rivet Cloud.
 	SetupCi(commands::setup_ci::Opts),
 	/// Mint a namespace-scoped token.
@@ -53,6 +55,7 @@ async fn main() -> Result<()> {
 		Commands::Engine(opts) => opts.execute().await,
 		Commands::Deploy(opts) => opts.execute().await,
 		Commands::Logs(opts) => opts.execute().await,
+		Commands::Pool(opts) => opts.execute().await,
 		Commands::SetupCi(opts) => opts.execute().await,
 		Commands::Token(opts) => opts.execute().await,
 	}

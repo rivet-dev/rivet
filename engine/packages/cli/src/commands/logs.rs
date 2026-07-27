@@ -7,7 +7,7 @@ use reqwest::Method;
 use reqwest_eventsource::{Event, EventSource};
 
 use crate::{
-	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE, POOL_NAME,
+	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE,
 	cloud::{CloudClient, LogEntry, TokenInspectResponse, get_namespace},
 	credentials::resolve_token,
 	util::encode,
@@ -21,6 +21,9 @@ pub struct Opts {
 	/// Cloud namespace to read logs from.
 	#[arg(long, default_value = DEFAULT_NAMESPACE)]
 	namespace: String,
+	/// Cloud compute pool to read logs from.
+	#[arg(long, default_value = crate::POOL_NAME)]
+	pool: String,
 	/// Override project from /tokens/api/inspect.
 	#[arg(long)]
 	project: Option<String>,
@@ -64,9 +67,11 @@ impl Opts {
 		let namespace = get_namespace(&cloud, &project, &org, &self.namespace).await?;
 
 		if self.follow {
-			self.tail(&cloud, &project, &org, &namespace.name).await
+			self.tail(&cloud, &project, &org, &namespace.name, &self.pool)
+				.await
 		} else {
-			self.history(&cloud, &project, &org, &namespace.name).await
+			self.history(&cloud, &project, &org, &namespace.name, &self.pool)
+				.await
 		}
 	}
 
@@ -76,12 +81,13 @@ impl Opts {
 		project: &str,
 		org: &str,
 		namespace: &str,
+		pool: &str,
 	) -> Result<()> {
 		let mut path = format!(
 			"/projects/{}/namespaces/{}/managed-pools/{}/logs/history?org={}&limit={}",
 			encode(project),
 			encode(namespace),
-			POOL_NAME,
+			encode(pool),
 			encode(org),
 			self.limit,
 		);
@@ -113,12 +119,13 @@ impl Opts {
 		project: &str,
 		org: &str,
 		namespace: &str,
+		pool: &str,
 	) -> Result<()> {
 		let mut path = format!(
 			"/projects/{}/namespaces/{}/managed-pools/{}/logs?org={}",
 			encode(project),
 			encode(namespace),
-			POOL_NAME,
+			encode(pool),
 			encode(org),
 		);
 		if let Some(region) = &self.region {

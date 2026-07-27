@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use tokio::time::sleep;
 use url::Url;
 
-use crate::{POOL_NAME, util::encode};
+use crate::util::encode;
 
 #[derive(Deserialize)]
 pub struct TokenInspectResponse {
@@ -69,6 +69,20 @@ struct ManagedPool {
 #[derive(Deserialize)]
 struct ManagedPoolError {
 	message: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ManagedPoolsListResponse {
+	managed_pools: Vec<PoolSummary>,
+	pagination: Option<Pagination>,
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PoolSummary {
+	pub name: String,
+	pub status: Option<String>,
 }
 
 pub struct CloudClient {
@@ -272,13 +286,14 @@ pub async fn create_or_update_pool(
 	project: &str,
 	org: &str,
 	namespace: &str,
+	pool: &str,
 	body: Value,
 ) -> Result<()> {
 	let path = format!(
 		"/projects/{}/namespaces/{}/managed-pools/{}?org={}",
 		encode(project),
 		encode(namespace),
-		POOL_NAME,
+		encode(pool),
 		encode(org)
 	);
 	let _: Option<Value> = cloud.request_ok(Method::PUT, &path, Some(body)).await?;
@@ -293,8 +308,11 @@ pub async fn pool_exists(
 	project: &str,
 	org: &str,
 	namespace: &str,
+	pool: &str,
 ) -> Result<bool> {
-	Ok(get_pool(cloud, project, org, namespace).await?.is_some())
+	Ok(get_pool(cloud, project, org, namespace, pool)
+		.await?
+		.is_some())
 }
 
 async fn get_pool(
@@ -302,12 +320,13 @@ async fn get_pool(
 	project: &str,
 	org: &str,
 	namespace: &str,
+	pool: &str,
 ) -> Result<Option<ManagedPool>> {
 	let path = format!(
 		"/projects/{}/namespaces/{}/managed-pools/{}?org={}",
 		encode(project),
 		encode(namespace),
-		POOL_NAME,
+		encode(pool),
 		encode(org)
 	);
 	Ok(cloud
@@ -321,14 +340,18 @@ pub async fn wait_for_pool(
 	project: &str,
 	org: &str,
 	namespace: &str,
+	pool: &str,
 	throw_on_error: bool,
 ) -> Result<()> {
+	// Include the pool name in status logs only when it is not the default, so
+	// the common single-pool case stays uncluttered. A `None` field is omitted.
+	let pool_field = (pool != crate::POOL_NAME).then_some(pool);
 	for _ in 0..180 {
-		let pool = get_pool(cloud, project, org, namespace)
+		let pool = get_pool(cloud, project, org, namespace, pool)
 			.await?
 			.context("managed pool disappeared while polling")?;
 		let status = pool.status.unwrap_or_else(|| "unknown".to_string());
-		tracing::info!(%status, "pool status");
+		tracing::info!(pool = pool_field, %status, "pool status");
 		match status.as_str() {
 			"ready" => return Ok(()),
 			"error" if throw_on_error => {
@@ -344,6 +367,39 @@ pub async fn wait_for_pool(
 		}
 	}
 	bail!("timed out waiting for managed pool to become ready")
+}
+
+pub async fn list_pools(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+	namespace: &str,
+) -> Result<Vec<PoolSummary>> {
+	let mut pools = Vec::new();
+	let mut cursor: Option<String> = None;
+	loop {
+		let mut path = format!(
+			"/projects/{}/namespaces/{}/managed-pools?org={}&limit=100",
+			encode(project),
+			encode(namespace),
+			encode(org)
+		);
+		if let Some(cursor) = &cursor {
+			path.push_str(&format!("&cursor={}", encode(cursor)));
+		}
+		let Some(response) = cloud
+			.request::<ManagedPoolsListResponse>(Method::GET, &path, None)
+			.await?
+		else {
+			break;
+		};
+		pools.extend(response.managed_pools);
+		match response.pagination.and_then(|p| p.cursor) {
+			Some(next) => cursor = Some(next),
+			None => break,
+		}
+	}
+	Ok(pools)
 }
 
 /// Mints a namespace-scoped token via `POST .../tokens/{kind}`, where `kind` is
