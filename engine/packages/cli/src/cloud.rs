@@ -93,13 +93,18 @@ impl CloudClient {
 		body: Option<Value>,
 	) -> Result<Option<T>> {
 		let url = self.base.join(path.trim_start_matches('/'))?;
+		let needs_content_length = !matches!(method, Method::GET | Method::HEAD);
 		let mut request = self
 			.http
 			.request(method, url)
 			.bearer_auth(&self.token)
 			.header("Content-Type", "application/json");
-		if let Some(body) = body {
-			request = request.json(&body);
+		match body {
+			Some(body) => request = request.json(&body),
+			None if needs_content_length => {
+				request = request.header(reqwest::header::CONTENT_LENGTH, "0")
+			}
+			None => {}
 		}
 		let response = request.send().await.context("Cloud API request failed")?;
 		if response.status() == StatusCode::NOT_FOUND {
@@ -133,13 +138,18 @@ impl CloudClient {
 		body: Option<Value>,
 	) -> Result<Option<T>> {
 		let url = self.base.join(path.trim_start_matches('/'))?;
+		let needs_content_length = !matches!(method, Method::GET | Method::HEAD);
 		let mut request = self
 			.http
 			.request(method, url)
 			.bearer_auth(&self.token)
 			.header("Content-Type", "application/json");
-		if let Some(body) = body {
-			request = request.json(&body);
+		match body {
+			Some(body) => request = request.json(&body),
+			None if needs_content_length => {
+				request = request.header(reqwest::header::CONTENT_LENGTH, "0")
+			}
+			None => {}
 		}
 		let response = request.send().await.context("Cloud API request failed")?;
 		let status = response.status();
