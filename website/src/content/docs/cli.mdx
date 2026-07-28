@@ -21,7 +21,7 @@ npx @rivetkit/cli <command>
 | --- | --- |
 | `rivet dev` | Run a local engine and your handler's dev server. |
 | `rivet deploy` | Build and deploy the project to Rivet Cloud. |
-| `rivet pool` | List the compute pools in a namespace. |
+| `rivet pool` | List or delete compute pools in a namespace. |
 | `rivet engine` | Run the bundled `rivet-engine` binary directly. |
 | `rivet setup-ci` | Install the GitHub Actions deploy workflow. |
 | `rivet token` | Mint a namespace-scoped token. |
@@ -77,7 +77,9 @@ The token is saved to `~/.rivet/credentials` (also read from `RIVET_CLOUD_TOKEN`
 
 ## `rivet pool`
 
-Lists the compute pools in a namespace. A namespace can hold multiple pools; `default` is the one used when a `deploy` or `logs` command omits `--pool`.
+Manages the compute pools in a namespace. A namespace can hold multiple pools; `default` is the one used when a `deploy` or `logs` command omits `--pool`.
+
+### `rivet pool list`
 
 ```bash
 rivet pool list
@@ -91,6 +93,21 @@ Each pool is printed as a status line (colorized by status) followed by its conf
 | `--namespace` | `production` | Cloud namespace. |
 | `--project` / `--org` | from token | Override project/org. |
 | `--json` | — | Emit raw JSON instead of formatted output. |
+
+### `rivet pool delete`
+
+Tears down a compute pool, then waits until it is fully removed, printing status changes as it goes. Prompts for confirmation unless `--yes` is passed, and refuses to run without confirmation when stdin is not a terminal.
+
+```bash
+rivet pool delete <name> --yes
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--namespace` | `production` | Cloud namespace the pool belongs to. |
+| `--yes` | — | Skip the confirmation prompt. |
+| `--token` | env / credentials | Rivet Cloud API token. |
+| `--project` / `--org` | from token | Override project/org. |
 
 ## `rivet engine`
 

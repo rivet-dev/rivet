@@ -446,6 +446,38 @@ pub async fn list_pools(
 	Ok(pools)
 }
 
+/// Deletes a managed pool. The Cloud API is fire-and-forget: it starts the
+/// teardown and returns without waiting for it to finish.
+pub async fn delete_pool(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+	namespace: &str,
+	pool: &str,
+) -> Result<()> {
+	let path = format!(
+		"/projects/{}/namespaces/{}/managed-pools/{}?org={}",
+		encode(project),
+		encode(namespace),
+		encode(pool),
+		encode(org)
+	);
+	let response = cloud
+		.build_request(Method::DELETE, &path, None)?
+		.send()
+		.await
+		.context("Cloud API request failed")?;
+	let status = response.status();
+	if status == StatusCode::NOT_FOUND {
+		bail!("pool not found: {pool}");
+	}
+	if !status.is_success() {
+		let text = response.text().await.unwrap_or_default();
+		bail!("Cloud API error {status}: {text}");
+	}
+	Ok(())
+}
+
 /// Mints a namespace-scoped token via `POST .../tokens/{kind}`, where `kind` is
 /// the Cloud API path segment (`secret`, `publishable`, or `connection`). These
 /// endpoints are get-or-create: repeated calls return the same token.
