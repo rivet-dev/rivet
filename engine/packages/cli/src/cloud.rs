@@ -97,7 +97,7 @@ pub struct PoolConfig {
 	pub image: Option<ImageRef>,
 	#[serde(default)]
 	pub resources: Option<PoolResources>,
-	#[serde(default)]
+	#[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
 	pub environment: BTreeMap<String, String>,
 }
 
