@@ -18,7 +18,7 @@ Rivet supports JSON, JSON5, JSONC, YAML, YML, and environment variable configura
 
 **Environment Variables**
 
-Use the `RIVET__` prefix with `__` as separator to configure properties in the config. For example: set the `RIVET__database__postgres__url` environment variable for `database.postgres.url`.
+Use the `RIVET__` prefix with `__` as separator to configure properties in the config. For example: set the `RIVET__postgres__url` environment variable for `postgres.url`.
 
 **Configuration Paths**
 
@@ -76,5 +76,5 @@ Use `samples: 1` for a uniform random pick that skips slot reads. Use `samples >
 ## Related
 
 - RivetKit actor runtime persistence lives in SQLite. Existing actor KV data is imported into SQLite the first time an actor wakes on the migrated runtime, then the original KV data is left frozen for downgrade safety.
-- [PostgreSQL](/docs/self-hosting/postgres): Configure the experimental PostgreSQL backend
+- [PostgreSQL](/docs/self-hosting/postgres): Configure the PostgreSQL backend for multi-node deployments
 - [File System](/docs/self-hosting/filesystem): Configure file system storage for development

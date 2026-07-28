@@ -96,6 +96,10 @@ curl -X PUT "http://localhost:6420/runner-configs/default?namespace=default" \
 
 </Tabs>
 
+<Note>
+If you set an admin token (`RIVET__AUTH__ADMIN_TOKEN`), the engine's API requires authentication. Use that token in `RIVET_ENDPOINT` (`http://default:<token>@host:6420`) and add `-H "Authorization: Bearer <token>"` to the registration request. Without an admin token configured, the API is unauthenticated and the token in these examples is ignored.
+</Note>
+
 </Step>
 
 </Steps>
@@ -142,7 +146,7 @@ Create `rivet-config.json` in your working directory. See the [Configuration](/d
 ### Postgres Setup
 
 <Warning>
-PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
+PostgreSQL is the recommended backend for multi-node self-hosted deployments. It is production-ready for light-to-moderate workloads, up to roughly 1,000 concurrent actors, but is not built for enterprise scale beyond that. For a single-node deployment, use the file system backend (RocksDB-based). Teams running larger or high-throughput realtime workloads should contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 </Warning>
 
 ```bash

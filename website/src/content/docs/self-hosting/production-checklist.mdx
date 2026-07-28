@@ -9,7 +9,7 @@ We recommend passing this page to your coding agent to verify your configuration
 </Tip>
 
 <Warning>
-PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
+PostgreSQL is the recommended backend for multi-node self-hosted deployments. It is production-ready for light-to-moderate workloads, up to roughly 1,000 concurrent actors, but is not built for enterprise scale beyond that. For a single-node deployment, use the file system backend (RocksDB-based). Teams running larger or high-throughput realtime workloads should contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 </Warning>
 
 Also review the [general production checklist](/docs/general/production-checklist).
@@ -29,19 +29,19 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 - **Configure autoscaling for the Rivet Engine.** Set target CPU utilization to 70% and memory to 80% to ensure headroom for traffic spikes. In Kubernetes, this is configured via a Horizontal Pod Autoscaler (HPA).
 - **Use 2+ engine nodes for redundancy.** Running a single engine node is a single point of failure. Deploy at least two engine instances behind a load balancer.
-- **RocksDB only supports a single node.** Do not run multiple RocksDB nodes. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). For multi-node deployments, PostgreSQL is the recommended backend today, though it remains experimental as we evaluate the best fit for scalability and performance.
+- **RocksDB only supports a single node.** Do not run multiple RocksDB nodes. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). For multi-node deployments, PostgreSQL is the recommended backend, production-ready for light-to-moderate workloads (up to roughly 1,000 concurrent actors).
 - **Validate the rate limit on your serverless actor host.** Actor start requests are sent from your engine instances, so they all originate from a small set of IPs. Per-IP rate limits on the actor host will throttle the engine before they would throttle end-user traffic. Size the limit to your peak actor create and wake rate, and configure platform max concurrency (e.g. on GCP Cloud Run) to match your expected concurrent actor count.
 
 ## PostgreSQL
 
-- **PostgreSQL is recommended for multi-node deployments, but remains experimental.** Validate the deployment carefully before rollout.
+- **PostgreSQL is recommended for multi-node deployments.** It is production-ready for light-to-moderate workloads (up to roughly 1,000 concurrent actors) but is not built for enterprise scale. Validate the deployment carefully before rollout.
 - **Configure automated backups.** Set up regular backups for your PostgreSQL database to prevent data loss.
 - **Configure failover.** Set up a standby replica with automatic failover to ensure high availability.
 - **Use FoundationDB for the most scalable production-ready deployments.** FoundationDB provides the best performance, scalability, and uptime for Rivet. Contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
 
 ## NATS
 
-- **Use NATS for pub/sub (recommended).** By default, Rivet uses PostgreSQL `LISTEN`/`NOTIFY` for pub/sub which has limited throughput. NATS significantly improves performance for high-traffic deployments. This is not needed if using RocksDB. See [Configuration](/docs/self-hosting/configuration).
+- **Use NATS for pub/sub in multi-node deployments.** NATS is the pub/sub backend that coordinates realtime messaging between engine nodes. Single-node deployments do not need any pub/sub configuration. See [Configuration](/docs/self-hosting/configuration).
 - **Deploy 2+ NATS replicas.** Run at least two NATS replicas for high availability.
 
 ## Monitoring

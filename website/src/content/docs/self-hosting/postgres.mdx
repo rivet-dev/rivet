@@ -5,8 +5,16 @@ skill: true
 ---
 
 <Warning>
-PostgreSQL is the recommended backend for multi-node self-hosted deployments today, but it remains experimental. For a production-ready single-node Rivet deployment, use the file system backend (RocksDB-based). Enterprise teams can contact [enterprise support](https://rivet.dev/sales) about FoundationDB for the most scalable production-ready deployment.
+PostgreSQL is the recommended backend for multi-node self-hosted deployments. It is production-ready for light-to-moderate workloads, up to roughly 1,000 concurrent actors, but is not built for enterprise scale beyond that. For a single-node deployment, use the file system backend (RocksDB-based). Teams running larger or high-throughput realtime workloads should contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 </Warning>
+
+## Choosing a Backend
+
+Pick your database backend based on how many engine nodes you run:
+
+- **Single-node**: Use the [file system backend](/docs/self-hosting/filesystem) (RocksDB). It is the recommended production-ready backend for single-node deployments. RocksDB is local to one node and cannot be shared across engine instances, and no pub/sub is needed.
+- **Multi-node**: Use PostgreSQL as the database and NATS for pub/sub. PostgreSQL can be shared across engine nodes and is production-ready for light-to-moderate workloads, up to roughly 1,000 concurrent actors.
+- **Enterprise scale**: Beyond that, or for high-throughput realtime workloads, PostgreSQL is not the right fit. Contact [enterprise support](https://rivet.dev/sales) about FoundationDB.
 
 ## Basic Configuration
 
@@ -14,19 +22,42 @@ PostgreSQL is the recommended backend for multi-node self-hosted deployments tod
 
 ```json Configuration-file
 {
-  "database": {
-    "postgres": {
-      "url": "postgresql://user:password@host:5432/database"
-    }
+  "postgres": {
+    "url": "postgresql://user:password@host:5432/database"
   }
 }
 ```
 
 ```bash Environment-variables
-RIVET__database__postgres__url="postgresql://user:password@host:5432/database"
+RIVET__postgres__url="postgresql://user:password@host:5432/database"
 ```
 
 </CodeGroup>
+
+The configuration above is a complete single-node deployment and needs no pub/sub configuration, though for most single-node deployments the [file system backend](/docs/self-hosting/filesystem) (RocksDB) is the recommended choice. For multi-node deployments, add NATS as the pub/sub backend so engine nodes can coordinate (see below).
+
+## Pub/Sub (NATS)
+
+Rivet uses a pub/sub backend for realtime messaging between engine nodes. Single-node deployments do not need any pub/sub configuration.
+
+Multi-node PostgreSQL deployments require NATS as the pub/sub backend so engine nodes can coordinate. Deploy 2+ NATS replicas for high availability.
+
+<CodeGroup>
+
+```json Configuration-file
+{
+  "postgres": {
+    "url": "postgresql://user:password@host:5432/database"
+  },
+  "nats": {
+    "addresses": ["nats:4222"]
+  }
+}
+```
+
+</CodeGroup>
+
+See the [production checklist](/docs/self-hosting/production-checklist#nats) and [Configuration](/docs/self-hosting/configuration) for details.
 
 ## Managed Postgres Compatibility
 
@@ -41,18 +72,14 @@ Use direct connection (not connection pooler).
 
 ```json Configuration-file
 {
-  "database": {
-    "postgres": {
-      "url": "postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require",
-      "unstable_disable_lock_customization": true
-    }
+  "postgres": {
+    "url": "postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
   }
 }
 ```
 
 ```bash Environment-variables
-RIVET__database__postgres__url="postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
-RIVET__database__postgres__unstable_disable_lock_customization=true
+RIVET__postgres__url="postgresql://pscale_api_<username>.<unique-id>:<password>@<region>.pg.psdb.cloud:5432/postgres?sslmode=require"
 ```
 
 </CodeGroup>
@@ -69,18 +96,14 @@ Use direct connection on port `5432` (not connection pooler).
 
 ```json Configuration-file
 {
-  "database": {
-    "postgres": {
-      "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable",
-      "unstable_disable_lock_customization": true
-    }
+  "postgres": {
+    "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
   }
 }
 ```
 
 ```bash Environment-variables
-RIVET__database__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
-RIVET__database__postgres__unstable_disable_lock_customization=true
+RIVET__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=disable"
 ```
 
 </CodeGroup>
@@ -93,22 +116,18 @@ Download the root certificate from your Supabase dashboard and specify its path.
 
 ```json Configuration-file
 {
-  "database": {
-    "postgres": {
-      "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require",
-      "unstable_disable_lock_customization": true,
-      "ssl": {
-        "root_cert_path": "/path/to/supabase-ca.crt"
-      }
+  "postgres": {
+    "url": "postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require",
+    "ssl": {
+      "root_cert_path": "/path/to/supabase-ca.crt"
     }
   }
 }
 ```
 
 ```bash Environment-variables
-RIVET__database__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require"
-RIVET__database__postgres__unstable_disable_lock_customization=true
-RIVET__database__postgres__ssl__root_cert_path="/path/to/supabase-ca.crt"
+RIVET__postgres__url="postgresql://postgres:<password>@db.<project-ref>.supabase.co:5432/postgres?sslmode=require"
+RIVET__postgres__ssl__root_cert_path="/path/to/supabase-ca.crt"
 ```
 
 </CodeGroup>
@@ -125,16 +144,14 @@ To enable SSL for Postgres, add `sslmode=require` to your PostgreSQL connection 
 
 ```json Configuration-file
 {
-  "database": {
-    "postgres": {
-      "url": "postgresql://user:password@host.example.com:5432/database?sslmode=require"
-    }
+  "postgres": {
+    "url": "postgresql://user:password@host.example.com:5432/database?sslmode=require"
   }
 }
 ```
 
 ```bash Environment-variables
-RIVET__database__postgres__url="postgresql://user:password@host.example.com:5432/database?sslmode=require"
+RIVET__postgres__url="postgresql://user:password@host.example.com:5432/database?sslmode=require"
 ```
 
 </CodeGroup>
@@ -155,24 +172,22 @@ For databases using custom certificate authorities (e.g., Supabase) or requiring
 
 ```json Configuration-file
 {
-  "database": {
-    "postgres": {
-      "url": "postgresql://user:password@host:5432/database?sslmode=require",
-      "ssl": {
-        "root_cert_path": "/path/to/root-ca.crt",
-        "client_cert_path": "/path/to/client.crt",
-        "client_key_path": "/path/to/client.key"
-      }
+  "postgres": {
+    "url": "postgresql://user:password@host:5432/database?sslmode=require",
+    "ssl": {
+      "root_cert_path": "/path/to/root-ca.crt",
+      "client_cert_path": "/path/to/client.crt",
+      "client_key_path": "/path/to/client.key"
     }
   }
 }
 ```
 
 ```bash Environment-variables
-RIVET__database__postgres__url="postgresql://user:password@host:5432/database?sslmode=require"
-RIVET__database__postgres__ssl__root_cert_path="/path/to/root-ca.crt"
-RIVET__database__postgres__ssl__client_cert_path="/path/to/client.crt"
-RIVET__database__postgres__ssl__client_key_path="/path/to/client.key"
+RIVET__postgres__url="postgresql://user:password@host:5432/database?sslmode=require"
+RIVET__postgres__ssl__root_cert_path="/path/to/root-ca.crt"
+RIVET__postgres__ssl__client_cert_path="/path/to/client.crt"
+RIVET__postgres__ssl__client_key_path="/path/to/client.key"
 ```
 
 </CodeGroup>
@@ -194,30 +209,3 @@ Do not use:
 - PgBouncer
 - Supavisor
 - AWS RDS Proxy
-
-
-## Troubleshooting
-
-### Permission Denied Errors
-
-If you see errors like:
-
-```
-ERROR: permission denied to set parameter "deadlock_timeout"
-ERROR: current transaction is aborted, commands ignored until end of transaction block
-```
-
-Add `unstable_disable_lock_customization: true` to your configuration:
-
-```json
-{
-  "database": {
-    "postgres": {
-      "url": "postgresql://...",
-      "unstable_disable_lock_customization": true
-    }
-  }
-}
-```
-
-This disables Rivet's attempt to set `lock_timeout = 0` and `deadlock_timeout = 10ms`. Since `lock_timeout` defaults to `0` in PostgreSQL, skipping these settings is safe. Deadlock detection will use the default `1s` timeout instead of `10ms`.
