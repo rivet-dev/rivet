@@ -50,6 +50,10 @@ pub struct ListOpts {
 	/// Emit raw JSON instead of formatted output.
 	#[arg(long)]
 	json: bool,
+	/// Include environment variable values in the output. Env var values are
+	/// secret and are omitted unless this flag is passed.
+	#[arg(long)]
+	with_env_vars: bool,
 	/// Cloud API endpoint.
 	#[arg(long, default_value = DEFAULT_CLOUD_API)]
 	cloud_api: String,
@@ -101,9 +105,16 @@ impl ListOpts {
 		let org = self.org.clone().unwrap_or(inspect.organization);
 		let namespace = get_namespace(&cloud, &project, &org, &self.namespace).await?;
 
-		let pools = list_pools(&cloud, &project, &org, &namespace.name).await?;
+		let mut pools = list_pools(&cloud, &project, &org, &namespace.name).await?;
 
 		if self.json {
+			if !self.with_env_vars {
+				for pool in &mut pools {
+					if let Some(config) = &mut pool.config {
+						config.environment.clear();
+					}
+				}
+			}
 			println!("{}", serde_json::to_string(&pools)?);
 			return Ok(());
 		}
@@ -115,7 +126,7 @@ impl ListOpts {
 
 		let color = color_enabled();
 		for pool in &pools {
-			print_pool(pool, color);
+			print_pool(pool, color, self.with_env_vars);
 		}
 		Ok(())
 	}
@@ -195,7 +206,7 @@ fn confirm(pool: &str, namespace: &str) -> Result<bool> {
 
 /// Prints a pool as a header line with its colored status followed by indented
 /// config detail and, if present, its error in red.
-fn print_pool(pool: &PoolSummary, color: bool) {
+fn print_pool(pool: &PoolSummary, color: bool, with_env_vars: bool) {
 	let status = pool.status.as_deref().unwrap_or("unknown");
 	println!(
 		"{}  {}",
@@ -204,7 +215,7 @@ fn print_pool(pool: &PoolSummary, color: bool) {
 	);
 
 	if let Some(config) = &pool.config {
-		print_config(config);
+		print_config(config, with_env_vars);
 	}
 
 	if let Some(error) = &pool.error {
@@ -213,7 +224,7 @@ fn print_pool(pool: &PoolSummary, color: bool) {
 	}
 }
 
-fn print_config(config: &PoolConfig) {
+fn print_config(config: &PoolConfig, with_env_vars: bool) {
 	if let Some(display_name) = &config.display_name {
 		println!("  {:<10} {display_name}", "display");
 	}
@@ -239,7 +250,14 @@ fn print_config(config: &PoolConfig) {
 
 	let env_count = config.environment.len();
 	if env_count > 0 {
-		println!("  {:<10} {env_count}", "env vars");
+		if with_env_vars {
+			println!("  {:<10} {env_count}", "env vars");
+			for (key, value) in &config.environment {
+				println!("  {:<10} {key}={value}", "");
+			}
+		} else {
+			println!("  {:<10} {env_count} (use --with-env-vars to show)", "env vars");
+		}
 	}
 }
 
