@@ -1,13 +1,19 @@
+use std::{
+	io::{IsTerminal, Write},
+	time::Duration,
+};
+
 use anstyle::{AnsiColor, Style};
-use anyhow::{Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use reqwest::Method;
+use tokio::time::sleep;
 
 use crate::{
 	DEFAULT_CLOUD_API, DEFAULT_NAMESPACE,
 	cloud::{
-		CloudClient, PoolConfig, PoolResources, PoolSummary, TokenInspectResponse, get_namespace,
-		list_pools,
+		CloudClient, PoolConfig, PoolResources, PoolSummary, TokenInspectResponse, delete_pool,
+		get_namespace, list_pools,
 	},
 	credentials::resolve_token,
 	util::color_enabled,
@@ -23,6 +29,8 @@ pub struct Opts {
 enum Commands {
 	/// List the compute pools in a namespace.
 	List(ListOpts),
+	/// Delete a compute pool from a namespace.
+	Delete(DeleteOpts),
 }
 
 #[derive(Parser)]
@@ -47,10 +55,35 @@ pub struct ListOpts {
 	cloud_api: String,
 }
 
+#[derive(Parser)]
+pub struct DeleteOpts {
+	/// Name of the compute pool to delete.
+	name: String,
+	/// Rivet Cloud API token.
+	#[arg(long)]
+	token: Option<String>,
+	/// Cloud namespace the pool belongs to.
+	#[arg(long, default_value = DEFAULT_NAMESPACE)]
+	namespace: String,
+	/// Override project from /tokens/api/inspect.
+	#[arg(long)]
+	project: Option<String>,
+	/// Override organization from /tokens/api/inspect.
+	#[arg(long)]
+	org: Option<String>,
+	/// Skip the confirmation prompt.
+	#[arg(long)]
+	yes: bool,
+	/// Cloud API endpoint.
+	#[arg(long, default_value = DEFAULT_CLOUD_API)]
+	cloud_api: String,
+}
+
 impl Opts {
 	pub async fn execute(self) -> Result<()> {
 		match self.command {
 			Commands::List(opts) => opts.execute().await,
+			Commands::Delete(opts) => opts.execute().await,
 		}
 	}
 }
@@ -86,6 +119,78 @@ impl ListOpts {
 		}
 		Ok(())
 	}
+}
+
+impl DeleteOpts {
+	pub async fn execute(self) -> Result<()> {
+		let token = resolve_token(self.token.as_deref())?;
+		let cloud = CloudClient::new(&self.cloud_api, token)?;
+
+		let inspect: TokenInspectResponse = cloud
+			.request(Method::GET, "/tokens/api/inspect", None)
+			.await?
+			.context("token inspect returned no body")?;
+		let project = self.project.clone().unwrap_or(inspect.project);
+		let org = self.org.clone().unwrap_or(inspect.organization);
+		let namespace = get_namespace(&cloud, &project, &org, &self.namespace).await?;
+
+		if !self.yes && !confirm(&self.name, &namespace.name)? {
+			eprintln!("aborted");
+			return Ok(());
+		}
+
+		delete_pool(&cloud, &project, &org, &namespace.name, &self.name).await?;
+		eprintln!(
+			"deleting pool '{}' in namespace '{}'",
+			self.name, namespace.name
+		);
+
+		wait_for_deletion(&cloud, &project, &org, &namespace.name, &self.name).await
+	}
+}
+
+/// Polls the pool list until the named pool disappears. The coordinator drops a
+/// pool from the list once its teardown completes, so its absence is the
+/// completion signal. Status changes are printed as they happen, and the poll is
+/// bounded so the command never hangs if teardown stalls.
+async fn wait_for_deletion(
+	cloud: &CloudClient,
+	project: &str,
+	org: &str,
+	namespace: &str,
+	name: &str,
+) -> Result<()> {
+	let mut last_status: Option<String> = None;
+	for _ in 0..180 {
+		let pools = list_pools(cloud, project, org, namespace).await?;
+		let Some(pool) = pools.iter().find(|pool| pool.name == name) else {
+			eprintln!("pool '{name}' deleted");
+			return Ok(());
+		};
+
+		let status = pool.status.as_deref().unwrap_or("unknown");
+		if last_status.as_deref() != Some(status) {
+			eprintln!("pool '{name}' status: {status}");
+			last_status = Some(status.to_string());
+		}
+		sleep(Duration::from_secs(2)).await;
+	}
+
+	bail!("timed out waiting for pool '{name}' to delete; check `rivet pool list`")
+}
+
+/// Prompts for confirmation on a destructive delete. Fails closed when stdin is
+/// not a terminal so scripts must pass `--yes` explicitly rather than hang.
+fn confirm(pool: &str, namespace: &str) -> Result<bool> {
+	if !std::io::stdin().is_terminal() {
+		bail!("refusing to delete without confirmation; pass --yes to delete non-interactively");
+	}
+	eprint!("delete pool '{pool}' in namespace '{namespace}'? [y/N] ");
+	std::io::stderr().flush()?;
+	let mut input = String::new();
+	std::io::stdin().read_line(&mut input)?;
+	let answer = input.trim().to_ascii_lowercase();
+	Ok(answer == "y" || answer == "yes")
 }
 
 /// Prints a pool as a header line with its colored status followed by indented
