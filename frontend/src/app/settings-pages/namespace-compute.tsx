@@ -1,9 +1,11 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import { faCircleExclamation, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useSearch } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 import { useFormState } from "react-hook-form";
 import z from "zod";
+import { resolvePoolName } from "@/app/pool-switcher";
 import {
 	Alert,
 	AlertDescription,
@@ -206,13 +208,19 @@ export function NamespaceComputeContent() {
 function NamespaceComputeContentInner() {
 	const dataProvider = useCloudNamespaceDataProvider();
 
+	const { pool: poolParam } = useSearch({ strict: false });
+	const { data: pools = [] } = useQuery(
+		dataProvider.currentNamespaceManagedPoolsQueryOptions(),
+	);
+	const selectedPool = resolvePoolName(pools, poolParam);
+
 	const {
 		data: pool,
 		isPending,
 		isError,
 	} = useQuery({
 		...dataProvider.currentNamespaceManagedPoolQueryOptions({
-			pool: "default",
+			pool: selectedPool,
 		}),
 		// Poll while a deploy is in flight so the footer button tracks the
 		// pool status; back off entirely once the pool settles.
@@ -246,7 +254,11 @@ function NamespaceComputeContentInner() {
 	}
 
 	return (
+		// Remount on pool switch; RHF only reads defaultValues at mount, so
+		// without this the form keeps the previous pool's values.
 		<ComputeForm
+			key={selectedPool}
+			pool={selectedPool}
 			config={pool.config}
 			status={pool.status}
 			error={pool.error}
@@ -286,10 +298,12 @@ function PoolErrorAlert({
 }
 
 function ComputeForm({
+	pool,
 	config,
 	status,
 	error,
 }: {
+	pool: string;
 	config: Rivet.ManagedPoolsGetResponse.ManagedPool.Config;
 	status: Rivet.ManagedPoolsGetResponse.ManagedPool.Status;
 	error: Rivet.ManagedPoolsGetResponse.ManagedPool.Error_ | undefined;
@@ -358,7 +372,7 @@ function ComputeForm({
 					overrides.args = args.length === 0 ? null : args;
 				}
 				await mutateAsync({
-					pool: "default",
+					pool,
 					displayName: config.displayName || "Default",
 					runnerConfig: {
 						maxConcurrentActors: values.maxConcurrentActors,
@@ -380,7 +394,7 @@ function ComputeForm({
 				});
 				await queryClient.invalidateQueries(
 					dataProvider.currentNamespaceManagedPoolQueryOptions({
-						pool: "default",
+						pool,
 					}),
 				);
 				form.reset(values);
