@@ -122,7 +122,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-`get_typed_default` / `get_or_create_typed_default` use default options. The non-default variants (`get_typed` / `get_or_create_typed`) take `GetOptions` / `GetOrCreateOptions` for connection parameters, input, and region.
+`get_typed_default` / `get_or_create_typed_default` use default options. The non-default variants (`get_typed` / `get_or_create_typed`) take `GetOptions` / `GetOrCreateOptions` for connection parameters, input, and region. Set `pool_name` on `GetOrCreateOptions` or `CreateOptions` to override the client's configured pool for a single actor.
 
 ## Connection Parameters
 
