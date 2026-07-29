@@ -97,6 +97,79 @@ export const InspectorTabDescriptorSchema = z.object({
 });
 
 /**
+ * Names of the theme tokens the dashboard resolves and sends on `init`.
+ *
+ * Each name maps to a `--rivet-<kebab-case>` CSS variable in the shared
+ * stylesheet (`/inspector/tab.css`), so a tab can push the whole payload
+ * into inline custom properties without a name table of its own.
+ */
+export const INSPECTOR_TAB_TOKEN_NAMES = [
+	"background",
+	"foreground",
+	"card",
+	"cardForeground",
+	"popover",
+	"popoverForeground",
+	"primary",
+	"primaryForeground",
+	"secondary",
+	"secondaryForeground",
+	"muted",
+	"mutedForeground",
+	"accent",
+	"accentForeground",
+	"destructive",
+	"destructiveForeground",
+	"border",
+	"input",
+	"ring",
+] as const;
+
+export type InspectorTabTokenName = (typeof INSPECTOR_TAB_TOKEN_NAMES)[number];
+
+/**
+ * Resolved theme colors, as CSS color strings usable directly in a
+ * declaration (`background: tokens.card`). The dashboard reads them from
+ * its own live computed styles, so they track the dashboard's tokens
+ * without the tab hardcoding values.
+ *
+ * Unknown extra keys are preserved rather than rejected, so a dashboard
+ * that adds a token doesn't break tabs pinned to an older rivetkit.
+ */
+export const InspectorTabTokensSchema = z
+	.object({
+		background: z.string(),
+		foreground: z.string(),
+		card: z.string(),
+		cardForeground: z.string(),
+		popover: z.string(),
+		popoverForeground: z.string(),
+		primary: z.string(),
+		primaryForeground: z.string(),
+		secondary: z.string(),
+		secondaryForeground: z.string(),
+		muted: z.string(),
+		mutedForeground: z.string(),
+		accent: z.string(),
+		accentForeground: z.string(),
+		destructive: z.string(),
+		destructiveForeground: z.string(),
+		border: z.string(),
+		input: z.string(),
+		ring: z.string(),
+	})
+	.catchall(z.string());
+
+export type InspectorTabTokens = z.infer<typeof InspectorTabTokensSchema>;
+
+/**
+ * Token name of the surface the tab iframe is mounted on, when the
+ * dashboard doesn't say. Also the fallback used by
+ * `resolveInspectorTabSurface`.
+ */
+export const DEFAULT_INSPECTOR_TAB_SURFACE = "card";
+
+/**
  * Initial handshake from the dashboard. Sent on first mount and again on
  * every token refresh. Tabs MUST accept late `init` messages and replace
  * the cached token.
@@ -129,6 +202,23 @@ export const V1InitSchema = z.object({
 	 * mode before this field was added).
 	 */
 	theme: z.enum(["light", "dark"]).optional(),
+	/**
+	 * Theme colors resolved from the dashboard's live styles for the
+	 * active theme. Re-sent on every theme change, so a tab that applies
+	 * them repaints without a reload. Optional for backwards
+	 * compatibility — tabs that only read `theme` and use the shared
+	 * stylesheet still resolve the same values from CSS.
+	 */
+	tokens: InspectorTabTokensSchema.optional(),
+	/**
+	 * Key in `tokens` naming the surface the iframe is mounted on. A tab
+	 * that paints its body with this color sits flush in the panel that
+	 * hosts it. Left as a plain string (not an enum) so a dashboard that
+	 * moves the tab to a different surface doesn't fail the parse on
+	 * tabs pinned to an older rivetkit; resolve it through
+	 * `resolveInspectorTabSurface`, which falls back to `card`.
+	 */
+	surface: z.string().optional(),
 });
 
 /**
@@ -202,6 +292,65 @@ export const POSTMESSAGE_PROTOCOL_VERSION = 1;
 /** URL query parameters the dashboard sets on the tab iframe `src`. */
 export const SHELL_ORIGIN_PARAM = "shellOrigin";
 export const ACTOR_ID_PARAM = "actorId";
+
+// ============================================================================
+// Theme application helpers.
+//
+// Tabs bundled with a build step can import these; a plain `index.html`
+// tab can inline the same three lines by hand (see the docs page).
+// ============================================================================
+
+/** CSS custom property a token name maps to in the shared stylesheet. */
+export function inspectorTabTokenVar(name: string): string {
+	return `--rivet-${name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+}
+
+/**
+ * Color of the surface the tab is mounted on, or `undefined` when the
+ * dashboard sent no tokens (older shell). Paint the tab's body with this
+ * to sit flush in the hosting panel.
+ */
+export function resolveInspectorTabSurface(
+	init: Pick<V1Init, "tokens" | "surface">,
+): string | undefined {
+	const tokens = init.tokens;
+	if (!tokens) return undefined;
+	return (
+		tokens[init.surface ?? DEFAULT_INSPECTOR_TAB_SURFACE] ??
+		tokens[DEFAULT_INSPECTOR_TAB_SURFACE]
+	);
+}
+
+/**
+ * Structural subset of `HTMLElement` the theme helper touches. Declared
+ * structurally because this package builds without the DOM lib.
+ */
+export interface InspectorTabThemeTarget {
+	classList: { toggle(token: string, force?: boolean): boolean };
+	style: { setProperty(property: string, value: string): void };
+}
+
+/**
+ * Mirrors the dashboard's theme onto a tab document: toggles the `dark`
+ * class the shared stylesheet keys off, then pins every token the
+ * dashboard resolved as an inline custom property so the tab renders the
+ * dashboard's exact colors even if its vendored stylesheet is older.
+ *
+ * Pass `document.documentElement`. Safe to call on every `init`, which is
+ * how live theme changes arrive.
+ */
+export function applyInspectorTabTheme(
+	init: Pick<V1Init, "theme" | "tokens" | "surface">,
+	target: InspectorTabThemeTarget,
+): void {
+	target.classList.toggle("dark", (init.theme ?? "dark") === "dark");
+	if (!init.tokens) return;
+	for (const [name, value] of Object.entries(init.tokens)) {
+		target.style.setProperty(inspectorTabTokenVar(name), value);
+	}
+	const surface = resolveInspectorTabSurface(init);
+	if (surface) target.style.setProperty("--rivet-surface", surface);
+}
 
 // ============================================================================
 // Inspector HTTP endpoint response schemas (source of truth).

@@ -21,7 +21,8 @@ Structure:
      3b. STATE      — token + actor id (populated by `v1Init`)
      3c. FETCH      — small JSON helper with auth + 401 handling
      3d. RENDER     — pull state + rpcs in parallel, render each panel
-     3e. HANDSHAKE  — `v1Init` receiver + `ready` signal (REQUIRED)
+     3e. THEME      — mirror the dashboard's theme + tokens
+     3f. HANDSHAKE  — `v1Init` receiver + `ready` signal (REQUIRED)
 -->
 <html lang="en">
 	<head>
@@ -35,6 +36,13 @@ Structure:
 		<link rel="stylesheet" href="../../tab.css" />
 
 		<style>
+			html,
+			body {
+				/* The dashboard mounts the tab on its `card` panel. Stated
+				   explicitly so the tab matches its host even against an
+				   older stylesheet that defaults to `--rivet-background`. */
+				background: var(--rivet-surface, var(--rivet-card));
+			}
 			body {
 				display: flex;
 				flex-direction: column;
@@ -223,7 +231,32 @@ Structure:
 			}
 
 			// =================================================================
-			// 3e. HANDSHAKE — REQUIRED postMessage contract
+			// 3e. THEME — mirror the dashboard's theme + tokens
+			// =================================================================
+			//
+			// `init` carries `theme` (the class the shared stylesheet keys
+			// its token blocks off) plus `tokens` and `surface` (the
+			// dashboard's resolved colors, and which of them paints the
+			// panel this iframe sits on). Both are re-sent on every theme
+			// toggle. See `../counter/index.html` for the longer walkthrough.
+
+			function applyTheme(msg) {
+				const root = document.documentElement;
+				root.classList.toggle("dark", (msg.theme ?? "dark") === "dark");
+				if (!msg.tokens) return;
+				for (const [name, value] of Object.entries(msg.tokens)) {
+					const varName = name.replace(
+						/[A-Z]/g,
+						(c) => `-${c.toLowerCase()}`,
+					);
+					root.style.setProperty(`--rivet-${varName}`, value);
+				}
+				const surface = msg.tokens[msg.surface ?? "card"];
+				if (surface) root.style.setProperty("--rivet-surface", surface);
+			}
+
+			// =================================================================
+			// 3f. HANDSHAKE — REQUIRED postMessage contract
 			// =================================================================
 
 			window.addEventListener("message", (event) => {
@@ -233,12 +266,7 @@ Structure:
 				if (msg.type === "init" && msg.v === 1) {
 					actorId = msg.actorId;
 					authToken = msg.authToken;
-					// Match the dashboard's active theme — the shared
-					// stylesheet drives tokens off the `dark` class.
-					document.documentElement.classList.toggle(
-						"dark",
-						(msg.theme ?? "dark") === "dark",
-					);
+					applyTheme(msg);
 					document.getElementById("actor-id").textContent = actorId;
 					document.getElementById("engine-origin").textContent =
 						window.location.origin;

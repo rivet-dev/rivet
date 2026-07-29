@@ -20,8 +20,9 @@ File layout:
      3c. HELPERS        — DOM helpers (errors, busy state)
      3d. INSPECTOR HTTP — fetchState / invokeAction wrappers
      3e. RENDERING      — translate actor state into DOM
-     3f. HANDSHAKE      — postMessage receiver + `ready` signal (REQUIRED)
-     3g. WIRING         — connect buttons to actions (UI-specific)
+     3f. THEME          — mirror the dashboard's theme + tokens
+     3g. HANDSHAKE      — postMessage receiver + `ready` signal (REQUIRED)
+     3h. WIRING         — connect buttons to actions (UI-specific)
 
 REQUIRED markers below highlight the contract between every tab and the
 dashboard. Everything else is demo-specific.
@@ -44,9 +45,9 @@ dashboard. Everything else is demo-specific.
 		     The stylesheet exposes the dashboard's design tokens as
 		     `--rivet-*` CSS variables, mirrors the dashboard's light +
 		     dark token blocks, and ships sensible body/button/input
-		     defaults. The tab applies the dashboard's active theme by
-		     toggling the `dark` class on `<html>` from the `v1Init`
-		     handler below.
+		     defaults, including painting `body` with `--rivet-surface`
+		     (the panel the tab is mounted on). The tab applies the
+		     dashboard's active theme in section 3f below.
 
 		     You can omit this link and bring your own CSS — the inspector
 		     tab API doesn't require it. -->
@@ -54,6 +55,13 @@ dashboard. Everything else is demo-specific.
 
 		<style>
 			/* Demo-specific layout on top of the shared sheet. */
+			html,
+			body {
+				/* The dashboard mounts the tab on its `card` panel. Stated
+				   explicitly so the tab matches its host even against an
+				   older stylesheet that defaults to `--rivet-background`. */
+				background: var(--rivet-surface, var(--rivet-card));
+			}
 			body {
 				display: flex;
 				flex-direction: column;
@@ -305,14 +313,48 @@ dashboard. Everything else is demo-specific.
 			}
 
 			// =================================================================
-			// 3f. HANDSHAKE — REQUIRED postMessage contract
+			// 3f. THEME — mirror the dashboard's colors
+			// =================================================================
+			//
+			// Two signals arrive on every `init`, and `init` is re-sent when
+			// the user toggles the dashboard theme, so applying them here is
+			// all a tab needs to follow a live theme change:
+			//
+			//   • `theme` — "light" | "dark". The shared stylesheet keys its
+			//     token blocks off the `dark` class on <html>.
+			//   • `tokens` + `surface` — the dashboard's resolved colors as
+			//     ready-to-use CSS values, with `surface` naming the token of
+			//     the panel this iframe is mounted on. Pinning them as inline
+			//     `--rivet-*` properties makes the tab match the dashboard
+			//     exactly, even if the stylesheet ships different values.
+			//
+			// Both are optional: an older dashboard sends only `theme`, and
+			// the stylesheet alone still resolves the right colors.
+
+			function applyTheme(msg) {
+				const root = document.documentElement;
+				root.classList.toggle("dark", (msg.theme ?? "dark") === "dark");
+				if (!msg.tokens) return;
+				for (const [name, value] of Object.entries(msg.tokens)) {
+					const varName = name.replace(
+						/[A-Z]/g,
+						(c) => `-${c.toLowerCase()}`,
+					);
+					root.style.setProperty(`--rivet-${varName}`, value);
+				}
+				const surface = msg.tokens[msg.surface ?? "card"];
+				if (surface) root.style.setProperty("--rivet-surface", surface);
+			}
+
+			// =================================================================
+			// 3g. HANDSHAKE — REQUIRED postMessage contract
 			// =================================================================
 			//
 			// The dashboard ↔ tab handshake follows a tiny envelope:
 			//
 			//   Dashboard → tab (`v1Init`):
 			//     { type: "init", v: 1, actorId, authToken, rivetToken?,
-			//       activeTab? }
+			//       activeTab?, theme?, tokens?, surface? }
 			//
 			//   Tab → dashboard (`v1Ready`):
 			//     { type: "ready", v: 1 }
@@ -346,14 +388,7 @@ dashboard. Everything else is demo-specific.
 				if (msg.type === "init" && msg.v === 1) {
 					actorId = msg.actorId;
 					authToken = msg.authToken;
-					// Mirror the dashboard's active theme by toggling
-					// the `dark` class on <html>. The shared stylesheet
-					// drives `--rivet-*` tokens off that class. If the
-					// dashboard omits `theme`, default to dark.
-					document.documentElement.classList.toggle(
-						"dark",
-						(msg.theme ?? "dark") === "dark",
-					);
+					applyTheme(msg);
 					if (pollTimer) clearInterval(pollTimer);
 					fetchState();
 					// Poll every second. For higher-frequency UIs prefer a
@@ -364,7 +399,7 @@ dashboard. Everything else is demo-specific.
 			});
 
 			// =================================================================
-			// 3g. WIRING — connect UI events to actions (demo-specific)
+			// 3h. WIRING — connect UI events to actions (demo-specific)
 			// =================================================================
 
 			document

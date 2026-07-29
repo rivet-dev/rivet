@@ -60,6 +60,15 @@
 	--rivet-input: hsl(var(--input));
 	--rivet-ring: hsl(var(--ring));
 
+	/* The surface the tab iframe is mounted on. The dashboard hosts custom
+	 * tabs on a `--card` panel, so a tab painting itself with this token
+	 * composites flush against its host instead of showing a seam. The
+	 * dashboard also sends the resolved value as `init.tokens[init.surface]`;
+	 * applying that overrides this default if the host ever moves the tab
+	 * onto a different surface. */
+	--rivet-surface: var(--rivet-card);
+	--rivet-surface-foreground: var(--rivet-card-foreground);
+
 	--rivet-radius: var(--radius);
 	--rivet-radius-sm: calc(var(--rivet-radius) - 4px);
 	--rivet-radius-md: calc(var(--rivet-radius) - 2px);
@@ -95,8 +104,8 @@
 html, body {
 	margin: 0;
 	padding: 0;
-	background: var(--rivet-background);
-	color: var(--rivet-foreground);
+	background: var(--rivet-surface);
+	color: var(--rivet-surface-foreground);
 	font-family: var(--rivet-font-sans);
 	font-size: 14px;
 	line-height: 1.5;
