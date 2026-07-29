@@ -167,12 +167,12 @@ pub fn effective_stop_grace() -> Duration {
 	}
 }
 
-/// End the process. Called when the LAST actor on this instance is gone (or a
-/// failed start poisoned an otherwise idle instance): the instance drains
-/// instead of lingering for the next placement. The runner is PID 1 in the
+/// End the process. Only the platform shutdown signal drives this now: actors
+/// stopping or failing to start no longer exit the instance, so it stays warm
+/// and reusable and its logs have time to drain. The runner is PID 1 in the
 /// image, so exiting stops the container and the platform reaps the instance.
 pub fn request_exit(actor_id: &str, reason: &str) {
-	tracing::info!(actor_id = %actor_id, reason, "actor finished, exiting container");
+	tracing::info!(actor_id = %actor_id, reason, "shutting down container");
 	EXIT.cancel();
 }
 
