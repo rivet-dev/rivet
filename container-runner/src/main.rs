@@ -244,7 +244,7 @@ struct Args {
 	base_path: String,
 
 	/// SIGTERM→SIGKILL grace period (seconds) when stopping the child.
-	#[arg(long, env = "RIVET_STOP_GRACE_SECS", default_value_t = 25)]
+	#[arg(long, env = "RIVET_STOP_GRACE_SECS", default_value_t = 10)]
 	stop_grace_secs: u64,
 
 	/// How long (seconds) to wait for the child's port to open before failing start.
