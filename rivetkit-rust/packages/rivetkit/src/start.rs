@@ -7,6 +7,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use futures::FutureExt;
+use rivet_error::RivetError;
 use rivetkit_core::actor::ShutdownKind;
 use rivetkit_core::error::{ActorLifecycle, ActorRuntime, action_not_found};
 use rivetkit_core::{ActorEvent, ActorEvents, ActorStart, QueueSendResult, QueueSendStatus, Reply};
@@ -201,23 +202,45 @@ pub async fn run_actor<A: Actor>(start: Start<A>) -> Result<()> {
 		startup_ready,
 	} = start;
 
-	let state = match snapshot.decode()? {
-		Some(state) => state,
-		// Absent input falls back to the input type's default, matching
-		// rivetkit-typescript where createState receives undefined input.
-		None => A::create_state(&ctx, input.decode_or_default()?).await?,
-	};
-	ctx.set_state(state);
-	ctx.clear_state_dirty();
+	// Run the whole startup phase (input decode, state creation, create,
+	// on_create, on_start) as one fallible unit so a failure logs the real
+	// cause and is forwarded to the runtime handshake. Without this, an input
+	// decode error would drop `startup_ready` (surfacing only a generic
+	// closed-channel error) and never be logged until teardown.
+	let startup = async {
+		let state = match snapshot.decode()? {
+			Some(state) => state,
+			// Absent input falls back to the input type's default, matching
+			// rivetkit-typescript where createState receives undefined input.
+			None => A::create_state(&ctx, input.decode_or_default()?).await?,
+		};
+		ctx.set_state(state);
+		ctx.clear_state_dirty();
 
-	let actor = Arc::new(A::create(&ctx).await?);
-	if is_new {
-		actor.clone().on_create(ctx.clone()).await?;
+		let actor = Arc::new(A::create(&ctx).await?);
+		if is_new {
+			actor.clone().on_create(ctx.clone()).await?;
+		}
+		actor.clone().on_start(ctx.clone()).await?;
+		Ok::<_, anyhow::Error>(actor)
 	}
-	actor.clone().on_start(ctx.clone()).await?;
-	if let Some(reply) = startup_ready {
-		let _ = reply.send(Ok(()));
-	}
+	.await;
+
+	let actor = match startup {
+		Ok(actor) => {
+			if let Some(reply) = startup_ready {
+				let _ = reply.send(Ok(()));
+			}
+			actor
+		}
+		Err(error) => {
+			tracing::error!(actor_id = %ctx.actor_id(), ?error, "actor failed to start");
+			if let Some(reply) = startup_ready {
+				let _ = reply.send(Err(anyhow::Error::new(RivetError::extract(&error))));
+			}
+			return Err(error);
+		}
+	};
 
 	let run_cancel = CancellationToken::new();
 	let run_task = spawn_run_task(actor.clone(), ctx.clone(), run_cancel.clone());
@@ -984,17 +1007,66 @@ mod tests {
 	#[tokio::test]
 	async fn run_actor_invalid_input_fails_to_start() {
 		// Non-empty bytes that are not valid CBOR for the input type must fail
-		// the actor start rather than silently defaulting.
-		let (_tx, rx) = unbounded_channel();
-		let start = lifecycle_start(Some(vec![0xff, 0xff, 0xff]), None, rx.into());
+		// the actor start rather than silently defaulting. The failure is logged
+		// at startup and forwarded to the startup handshake instead of dropped.
+		struct BufMakeWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+		struct BufWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+		impl std::io::Write for BufWriter {
+			fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+				self.0
+					.lock()
+					.expect("log buffer poisoned")
+					.extend_from_slice(data);
+				Ok(data.len())
+			}
+			fn flush(&mut self) -> std::io::Result<()> {
+				Ok(())
+			}
+		}
+		impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for BufMakeWriter {
+			type Writer = BufWriter;
+			fn make_writer(&'a self) -> Self::Writer {
+				BufWriter(self.0.clone())
+			}
+		}
 
-		let error = run_actor::<LifecycleActor>(start)
-			.await
-			.expect_err("invalid input should fail actor start");
+		let (_tx, rx) = unbounded_channel();
+		let (mut start, _ctx) =
+			lifecycle_start_with_ctx(Some(vec![0xff, 0xff, 0xff]), None, rx.into());
+		let (ready_tx, ready_rx) = oneshot::channel();
+		start.startup_ready = Some(ready_tx);
+
+		let buffer = std::sync::Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+		let subscriber = tracing_subscriber::fmt()
+			.with_writer(BufMakeWriter(buffer.clone()))
+			.with_ansi(false)
+			.finish();
+		let error = {
+			let _guard = tracing::subscriber::set_default(subscriber);
+			run_actor::<LifecycleActor>(start)
+				.await
+				.expect_err("invalid input should fail actor start")
+		};
+
 		assert!(
 			format!("{error:#}").contains("decode actor input from cbor"),
 			"unexpected error: {error:#}"
 		);
+
+		// The failure is logged at startup, not deferred to teardown.
+		let logs = String::from_utf8(buffer.lock().expect("log buffer poisoned").clone())
+			.expect("logs should be utf8");
+		assert!(
+			logs.contains("actor failed to start")
+				&& logs.contains("decode actor input from cbor"),
+			"startup failure not logged, got:\n{logs}"
+		);
+
+		// The startup handshake is signaled with an error rather than dropped.
+		ready_rx
+			.await
+			.expect("startup_ready should be signaled")
+			.expect_err("startup should report failure");
 	}
 
 	#[tokio::test]
