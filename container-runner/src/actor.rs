@@ -16,7 +16,7 @@ use tokio::sync::Mutex as TokioMutex;
 use crate::child::{ChildProcess, SpawnSpec, log_prefix};
 use crate::input::ActorInput;
 use crate::{
-	children, effective_stop_grace, release_child_port, request_exit, reserve_child_port,
+	children, effective_stop_grace, release_child_port, reserve_child_port,
 	runner_config,
 };
 
@@ -40,11 +40,12 @@ impl GameServer {
 			release_child_port(child.child_port).await;
 		}
 
-		// Once the last actor is gone the instance drains rather than
-		// lingering for the next placement.
-		if children().is_empty() {
-			request_exit(actor_id, reason);
-		}
+		// The instance stays alive and warm after its last actor stops, ready to
+		// host the next placement. It is reaped by the platform's own shutdown
+		// signal, not by self-exit. This keeps the serverless container long
+		// lived enough for the log agent to drain its stderr, which a fast
+		// self-exit could otherwise lose.
+		tracing::info!(actor_id = %actor_id, reason, "actor stopped, keeping instance warm");
 	}
 }
 
@@ -129,12 +130,10 @@ impl Actor for GameServer {
 			Ok(child) => Arc::new(child),
 			Err(err) => {
 				release_child_port(child_port).await;
-				// A failed start on an otherwise idle instance poisons it;
-				// don't let it serve the next placement. With other actors
-				// running, the failure is this actor's alone.
-				if children().is_empty() {
-					request_exit(&actor_id, "child failed to start");
-				}
+				// A failed start is this actor's alone and does not take the
+				// instance down. The container stays warm and ready for the next
+				// placement, and stays alive long enough for the log agent to
+				// drain the failure logs before the platform reaps it.
 				return Err(err);
 			}
 		};
