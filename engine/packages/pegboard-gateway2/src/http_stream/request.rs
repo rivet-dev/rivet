@@ -24,13 +24,23 @@ const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
 const HTTP_BODY_CHUNK_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 
 pub(super) fn should_stream_http_request_body_hint(size_hint: &SizeHint) -> bool {
-	size_hint
-		.upper()
-		.map_or(true, |body_len| body_len as usize > HTTP_BODY_CHUNK_SIZE)
+	match size_hint.upper() {
+		Some(body_len) => body_len as usize > HTTP_BODY_CHUNK_SIZE,
+		None => true,
+	}
 }
 
-fn next_request_body_size(current: usize, chunk: usize, limit: usize) -> Option<usize> {
-	current.checked_add(chunk).filter(|size| *size <= limit)
+#[derive(Debug, PartialEq)]
+enum RequestBodySize {
+	WithinLimit(usize),
+	ExceedsLimit,
+}
+
+fn next_request_body_size(current: usize, chunk: usize, limit: usize) -> RequestBodySize {
+	match current.checked_add(chunk) {
+		Some(size) if size <= limit => RequestBodySize::WithinLimit(size),
+		Some(_) | None => RequestBodySize::ExceedsLimit,
+	}
 }
 
 #[derive(Default)]
@@ -106,12 +116,17 @@ where
 		} else {
 			body.frame().await
 		};
-		let Some(frame) = frame else {
-			break;
-		};
-		let frame = match frame {
-			Ok(frame) => frame,
-			Err(error) => {
+		let data = match frame {
+			// The client request body reached normal EOF.
+			None => break,
+			Some(Ok(frame)) => {
+				let Ok(data) = frame.into_data() else {
+					continue;
+				};
+				data
+			}
+			Some(Err(error)) => {
+				tracing::warn!(%error, "failed to read streaming request body from client");
 				super::send_http_request_abort(
 					in_flight_req,
 					protocol::HttpStreamAbortReasonKind::ClientDisconnect,
@@ -121,26 +136,20 @@ where
 				return Err(anyhow!("failed to read streaming request body: {error}"));
 			}
 		};
-		let Ok(data) = frame.into_data() else {
-			continue;
-		};
 		ingress_bytes.fetch_add(data.len() as u64, Ordering::AcqRel);
-		let Some(next_body_size) = next_request_body_size(body_size, data.len(), max_body_size)
-		else {
-			super::send_http_request_abort(
-				in_flight_req,
-				protocol::HttpStreamAbortReasonKind::BodyTooLarge,
-				Some(format!(
-					"request body exceeded the {max_body_size}-byte limit"
-				)),
-			)
-			.await;
-			return Err(InvalidRequestBody {
-				reason: format!("request body exceeded the {max_body_size}-byte limit"),
+		body_size = match next_request_body_size(body_size, data.len(), max_body_size) {
+			RequestBodySize::WithinLimit(next_body_size) => next_body_size,
+			RequestBodySize::ExceedsLimit => {
+				let reason = format!("request body exceeded the {max_body_size}-byte limit");
+				super::send_http_request_abort(
+					in_flight_req,
+					protocol::HttpStreamAbortReasonKind::BodyTooLarge,
+					Some(reason.clone()),
+				)
+				.await;
+				return Err(InvalidRequestBody { reason }.build());
 			}
-			.build());
 		};
-		body_size = next_body_size;
 
 		let was_empty = chunker.is_empty();
 		for chunk in chunker.push(&data) {
@@ -153,12 +162,10 @@ where
 		}
 	}
 
-	// Normal EOF flushes any partial protocol chunk, then sends exactly one final
-	// marker so actor-side upload state and request routing can be released.
-	if let Some(chunk) = chunker.flush() {
-		send_http_request_body_chunk(in_flight_req, chunk, false).await?;
-	}
-	send_http_request_body_chunk(in_flight_req, Vec::new(), true).await
+	// Normal EOF sends exactly one final protocol chunk so actor-side upload
+	// state and request routing can be released.
+	let final_chunk = chunker.flush().unwrap_or_default();
+	send_http_request_body_chunk(in_flight_req, final_chunk, true).await
 }
 
 async fn send_http_request_body_chunk(
@@ -267,35 +274,28 @@ where
 	let upload =
 		send_streaming_http_request_body_chunks(in_flight_req, body, max_body_size, ingress_bytes);
 	tokio::pin!(upload);
+	let response_start = wait_for_http_response_start(
+		msg_rx,
+		drop_rx,
+		stopped_sub,
+		actor_id,
+		request_id,
+		response_start_deadline,
+		response_start_timeout,
+	);
+	tokio::pin!(response_start);
 	tokio::select! {
 		upload_result = &mut upload => {
 			// Normal completion already sent the final upload marker. Continue
-			// waiting under the original response-start deadline.
+			// polling the same response future under the original deadline.
 			upload_result?;
-			wait_for_http_response_start(
-				msg_rx,
-				drop_rx,
-				stopped_sub,
-				actor_id,
-				request_id,
-				response_start_deadline,
-				response_start_timeout,
-			)
-			.await
+			response_start.await
 		}
-		response_start = wait_for_http_response_start(
-			msg_rx,
-			drop_rx,
-			stopped_sub,
-			actor_id,
-			request_id,
-			response_start_deadline,
-			response_start_timeout,
-		) => {
+		response_start = &mut response_start => {
 			let response_start = response_start?;
-			// An early successful response makes the unread client body
-			// irrelevant. Drop the upload future and send a clean final marker
-			// so actor request routing can be released.
+			// HTTP handlers may intentionally respond before consuming the full
+			// upload. Stop reading the client and send a clean final marker so
+			// actor request routing can be released.
 			send_http_request_body_chunk(in_flight_req, Vec::new(), true).await?;
 			Ok(response_start)
 		}

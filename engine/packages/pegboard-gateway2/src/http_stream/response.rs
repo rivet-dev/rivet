@@ -15,7 +15,10 @@ use crate::shared_state::{
 use super::{ResponseBodyError, send_http_request_abort};
 
 const HTTP_BODY_CHUNK_SIZE: usize = 64 * 1024;
+const HTTP_RESPONSE_QUEUE_OVERLOADED_DETAIL: &str =
+	"actor response producer outpaced downstream delivery and filled the gateway buffer";
 
+/// Advances the expected tunnel sequence while rejecting missing or reordered response frames.
 fn advance_http_stream_message_index(
 	expected: protocol::MessageIndex,
 	actual: protocol::MessageIndex,
@@ -54,7 +57,7 @@ async fn send_http_response_body_bytes(
 					send_http_request_abort(
 						in_flight_req,
 						protocol::HttpStreamAbortReasonKind::Overloaded,
-						Some("gateway streaming response queue overloaded".to_owned()),
+						Some(HTTP_RESPONSE_QUEUE_OVERLOADED_DETAIL.to_owned()),
 					)
 					.await;
 				}
@@ -160,17 +163,21 @@ pub(super) async fn drain_http_response_stream(
 
 				match msg.message_kind {
 					protocol::ToRivetTunnelMessageKind::ToRivetResponseChunk(chunk) => {
-						if !chunk.body.is_empty() && !send_http_response_body_bytes(
-							&in_flight_req,
-							&body_tx,
-							&mut drop_rx,
-							&mut stopped_sub,
-							actor_id,
-							chunk.body,
-							"client dropped streaming response body",
-							&egress_bytes,
-						).await {
-							return;
+						if !chunk.body.is_empty() {
+							let delivered = send_http_response_body_bytes(
+								&in_flight_req,
+								&body_tx,
+								&mut drop_rx,
+								&mut stopped_sub,
+								actor_id,
+								chunk.body,
+								"client dropped streaming response body",
+								&egress_bytes,
+							)
+							.await;
+							if !delivered {
+								return;
+							}
 						}
 
 						if chunk.finish {
@@ -223,7 +230,7 @@ pub(super) async fn drain_http_response_stream(
 					send_http_request_abort(
 						&in_flight_req,
 						protocol::HttpStreamAbortReasonKind::Overloaded,
-						Some("gateway streaming response queue overloaded".to_owned()),
+						Some(HTTP_RESPONSE_QUEUE_OVERLOADED_DETAIL.to_owned()),
 					)
 					.await;
 				}
@@ -277,7 +284,16 @@ fn send_http_body_error(
 	body_tx: &mpsc::Sender<Result<Bytes, ResponseBodyError>>,
 	message: impl Into<String>,
 ) {
-	let _ = body_tx.try_send(Err(Box::new(std::io::Error::other(message.into()))));
+	let error: Result<Bytes, ResponseBodyError> =
+		Err(Box::new(std::io::Error::other(message.into())));
+	match body_tx.try_send(error) {
+		Ok(()) | Err(mpsc::error::TrySendError::Closed(_)) => {}
+		Err(mpsc::error::TrySendError::Full(_)) => {
+			tracing::warn!(
+				"could not deliver streaming response error because the downstream buffer is full"
+			);
+		}
+	}
 }
 
 #[cfg(test)]

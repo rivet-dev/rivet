@@ -22,7 +22,7 @@ use tokio::sync::{mpsc, watch};
 use tracing::Instrument;
 
 use super::{
-	HTTP_RESPONSE_BODY_CHANNEL_CAPACITY, ResponseBodyError,
+	ResponseBodyError,
 	request::{
 		should_stream_http_request_body_hint, stream_http_request_and_wait_for_response,
 		wait_for_http_response_start,
@@ -293,9 +293,13 @@ impl PegboardGateway2 {
 			}
 
 			let response = if response_start.stream {
-				let (body_tx, body_rx) = mpsc::channel::<Result<Bytes, ResponseBodyError>>(
-					HTTP_RESPONSE_BODY_CHANNEL_CAPACITY,
-				);
+				let body_channel_capacity = self
+					.ctx
+					.config()
+					.pegboard()
+					.gateway_http_response_body_channel_capacity();
+				let (body_tx, body_rx) =
+					mpsc::channel::<Result<Bytes, ResponseBodyError>>(body_channel_capacity);
 				let idle_timeout = self
 					.ctx
 					.config()

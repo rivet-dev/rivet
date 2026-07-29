@@ -160,6 +160,8 @@ pub struct SharedStateInner {
 	hws_message_ack_timeout: Duration,
 	hws_max_pending_size: u64,
 	buffered_http_response_max_bytes: usize,
+	http_response_queue_max_messages: usize,
+	streaming_http_response_queue_max_bytes: usize,
 }
 
 #[derive(Clone)]
@@ -188,6 +190,10 @@ impl SharedState {
 			),
 			hws_max_pending_size: pegboard_config.gateway_hws_max_pending_size(),
 			buffered_http_response_max_bytes: pegboard_config.envoy_max_response_payload_size(),
+			http_response_queue_max_messages: pegboard_config
+				.gateway_http_response_queue_max_messages(),
+			streaming_http_response_queue_max_bytes: pegboard_config
+				.gateway_streaming_http_response_queue_max_bytes(),
 		}))
 	}
 
@@ -386,6 +392,8 @@ impl SharedState {
 		let http_response_queue_budget = if matches!(protocol, RequestProtocol::Http) {
 			Some(Arc::new(HttpResponseQueueBudget::new(
 				self.buffered_http_response_max_bytes,
+				self.http_response_queue_max_messages,
+				self.streaming_http_response_queue_max_bytes,
 			)))
 		} else {
 			None
@@ -1501,7 +1509,7 @@ fn forward_tunnel_message(
 				request_id=%display_id(&message_id.request_id),
 				message_index=message_id.message_index,
 				http_response_bytes = bytes,
-				"HTTP response queue exceeded its in-flight limit"
+				"actor response producer outpaced downstream delivery and filled the HTTP response queue"
 			);
 			drop_tx.send_replace(Some(MsgGcReason::HttpResponseQueueOverloaded));
 			return None;
