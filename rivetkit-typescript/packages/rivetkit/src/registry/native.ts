@@ -74,7 +74,6 @@ import { logger } from "./log";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
 	buildNativeHttpRequest,
-	cancelNativeHttpRequestBody,
 	convertNativeHttpResponse,
 	type NativeHttpRequestBodyStream,
 	type NativeHttpResponseBodyStream,
@@ -4657,7 +4656,6 @@ export function buildNativeFactory(
 					const inspectorResponse =
 						await maybeHandleNativeInspectorRequest(ctx, request);
 					if (inspectorResponse) {
-						await cancelNativeHttpRequestBody(request.bodyStream);
 						return (
 							await convertNativeHttpResponse(
 								inspectorResponse,
@@ -4667,7 +4665,6 @@ export function buildNativeFactory(
 					}
 
 					if (typeof config.onRequest !== "function") {
-						await cancelNativeHttpRequestBody(request.bodyStream);
 						return (
 							await convertNativeHttpResponse(
 								new Response(null, { status: 404 }),
@@ -4765,16 +4762,8 @@ export function buildNativeFactory(
 						}
 						return conversion.response;
 					} finally {
-						try {
-							// Handler completion ends upload ownership even when
-							// the Web Request body is locked or partly consumed.
-							await cancelNativeHttpRequestBody(
-								request.bodyStream,
-							);
-						} finally {
-							if (!cleanupDeferredToBody) {
-								await cleanupRequest();
-							}
+						if (!cleanupDeferredToBody) {
+							await cleanupRequest();
 						}
 					}
 				} catch (error) {

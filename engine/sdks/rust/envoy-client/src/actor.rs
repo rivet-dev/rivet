@@ -1531,7 +1531,6 @@ mod tests {
 			headers: HashMap::new(),
 			body: None,
 			stream: false,
-			max_body_size: 20 * 1024 * 1024,
 		}
 	}
 
