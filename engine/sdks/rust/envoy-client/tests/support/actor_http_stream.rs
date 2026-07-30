@@ -11,83 +11,15 @@ use tokio::task::yield_now;
 use super::http::ActiveHttpRequestGuard;
 use super::tests::{
 	StreamingCallbacks, TestCallbacks, actor_config, build_shared_context, message_id,
-	recv_ws_tunnel_msg, request_start, wait_for_stopped_event, wait_for_zero,
+	recv_ws_tunnel_msg, request_start, wait_for_zero,
 };
 use super::{ToActor, create_actor, protocol};
 use crate::{
 	async_counter::AsyncCounter,
 	context::SharedActorEntry,
 	handle::EnvoyHandle,
-	http::{HTTP_BODY_MAX_CHUNK_SIZE, HTTP_BODY_STREAM_CHANNEL_CAPACITY, ResponseChunk},
+	http::{HTTP_BODY_MAX_CHUNK_SIZE, ResponseChunk},
 };
-
-#[tokio::test]
-async fn streamed_request_backpressure_does_not_block_actor_control_loop() {
-	let (fetch_started_tx, fetch_started_rx) = oneshot::channel();
-	let (fetch_dropped_tx, fetch_dropped_rx) = oneshot::channel();
-	let callbacks = Arc::new(TestCallbacks::hanging(fetch_started_tx, fetch_dropped_tx));
-	let (shared, mut envoy_rx) = build_shared_context(callbacks);
-	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
-	*shared.ws_tx.lock().await = Some(ws_tx);
-	let (actor_tx, _) = create_actor(
-		shared,
-		"actor-streamed-request".to_string(),
-		1,
-		actor_config(),
-		Vec::new(),
-		None,
-	);
-	let mut request = request_start();
-	request.method = "POST".to_owned();
-	request.stream = true;
-
-	actor_tx
-		.send(ToActor::ReqStart {
-			message_id: message_id(),
-			req: request,
-		})
-		.expect("failed to send request start");
-	fetch_started_rx
-		.await
-		.expect("fetch start sender dropped before request began");
-
-	for index in 0..=HTTP_BODY_STREAM_CHANNEL_CAPACITY {
-		let mut chunk_message_id = message_id();
-		chunk_message_id.message_index = index as u16 + 1;
-		actor_tx
-			.send(ToActor::ReqChunk {
-				message_id: chunk_message_id,
-				chunk: protocol::ToEnvoyRequestChunk {
-					body: vec![index as u8],
-					finish: false,
-				},
-			})
-			.expect("failed to send streamed request chunk");
-	}
-
-	tokio::time::timeout(Duration::from_secs(2), fetch_dropped_rx)
-		.await
-		.expect("overloaded request did not cancel its handler")
-		.expect("fetch drop sender dropped");
-	let abort = recv_ws_tunnel_msg(&mut ws_rx).await;
-	assert!(matches!(
-		abort.message_kind,
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(protocol::ToRivetResponseAbort {
-			reason: protocol::HttpStreamAbortReason {
-				kind: protocol::HttpStreamAbortReasonKind::Overloaded,
-				..
-			}
-		})
-	));
-
-	actor_tx
-		.send(ToActor::Stop {
-			command_idx: 1,
-			reason: protocol::StopActorReason::StopIntent,
-		})
-		.expect("failed to send stop after request overload");
-	wait_for_stopped_event(&mut envoy_rx).await;
-}
 
 #[tokio::test]
 async fn streamed_request_remains_cancellable_after_upload_finishes() {

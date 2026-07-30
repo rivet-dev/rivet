@@ -429,18 +429,14 @@ pub(crate) async fn dispatch_event(
 			let ctx = ctx.clone();
 			let timeout = config.on_request_timeout;
 			spawn_reply(tasks, abort.clone(), reply, async move {
-				with_dispatch_cancel_token(|cancel_token| {
-					with_structured_timeout(
-						"actor",
-						"action_timed_out",
-						"Action timed out",
-						None,
-						timeout,
-						async move {
-							call_http_request(&callback, &ctx, request, Some(cancel_token)).await
-						},
-					)
-				})
+				with_structured_timeout(
+					"actor",
+					"action_timed_out",
+					"Action timed out",
+					None,
+					timeout,
+					call_http_request(&callback, &ctx, request),
+				)
 				.await
 			});
 		}
@@ -1150,31 +1146,15 @@ async fn call_http_request(
 	callback: &crate::actor_factory::CallbackTsfn<HttpRequestPayload>,
 	ctx: &ActorContext,
 	request: rivetkit_core::Request,
-	cancel_token: Option<CancellationToken>,
 ) -> Result<rivetkit_core::ActorHttpResponse> {
 	let request_cancel_token = request.cancellation_token();
-	let cancel_token = match cancel_token {
-		Some(dispatch_cancel_token) => {
-			let combined_cancel_token = CancellationToken::new();
-			let combined_cancel_token_task = combined_cancel_token.clone();
-			tokio::spawn(async move {
-				tokio::select! {
-					_ = request_cancel_token.cancelled() => {}
-					_ = dispatch_cancel_token.cancelled() => {}
-				}
-				combined_cancel_token_task.cancel();
-			});
-			Some(combined_cancel_token)
-		}
-		None => Some(request_cancel_token),
-	};
 	call_request(
 		"onRequest",
 		callback,
 		HttpRequestPayload {
 			ctx: ctx.inner().clone(),
 			request,
-			cancel_token,
+			cancel_token: Some(request_cancel_token),
 			response_stream: None,
 		},
 	)

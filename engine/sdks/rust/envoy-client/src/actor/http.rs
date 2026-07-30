@@ -215,16 +215,7 @@ pub(super) fn handle_req_chunk(
 								),
 							};
 							tracing::warn!("streamed request body channel overloaded");
-							if let Some(body_abort_tx) = pending.body_abort_tx.take() {
-								body_abort_tx.send_replace(Some(HttpRequestBodyError {
-									reason: reason.clone(),
-								}));
-							}
-							if let Some(task_abort_handle) = pending.task_abort_handle.take() {
-								task_abort_handle.abort();
-							}
-							pending.body_tx = None;
-							pending.body_rejected = true;
+							reject_pending_request(pending, &reason);
 							response_aborted = true;
 
 							let shared = ctx.shared.clone();
@@ -256,6 +247,22 @@ pub(super) fn handle_req_chunk(
 	if response_aborted {
 		complete_phase(ctx, message_id, RequestPhase::Response);
 	}
+}
+
+fn reject_pending_request(
+	pending: &mut PendingHttpRequest,
+	reason: &protocol::HttpStreamAbortReason,
+) {
+	if let Some(body_abort_tx) = pending.body_abort_tx.take() {
+		body_abort_tx.send_replace(Some(HttpRequestBodyError {
+			reason: reason.clone(),
+		}));
+	}
+	if let Some(task_abort_handle) = pending.task_abort_handle.take() {
+		task_abort_handle.abort();
+	}
+	pending.body_tx = None;
+	pending.body_rejected = true;
 }
 
 pub(super) fn handle_req_complete(ctx: &mut ActorContext, message_id: protocol::MessageId) {

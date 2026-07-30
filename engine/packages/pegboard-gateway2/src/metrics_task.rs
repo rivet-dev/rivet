@@ -21,7 +21,7 @@ pub async fn task(
 			_ = tokio::time::sleep(UPDATE_METRICS_INTERVAL) => {}
 			_ = metrics_abort_rx.changed() => {
 				// Record final values before abort
-				record_ws_transfer(
+				record_transfer(
 					&metrics,
 					&ingress_bytes,
 					&egress_bytes,
@@ -33,7 +33,7 @@ pub async fn task(
 			}
 		}
 
-		record_ws_transfer(
+		record_transfer(
 			&metrics,
 			&ingress_bytes,
 			&egress_bytes,
@@ -44,7 +44,7 @@ pub async fn task(
 	}
 }
 
-async fn record_ws_transfer(
+async fn record_transfer(
 	metrics: &RequestMetrics,
 	ingress_bytes: &AtomicU64,
 	egress_bytes: &AtomicU64,
