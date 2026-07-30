@@ -119,6 +119,7 @@ pub struct WasmServeConfig {
 	pub namespace: String,
 	pub pool_name: String,
 	pub engine_binary_path: Option<String>,
+	pub reject_existing_envoy: bool,
 	pub handle_inspector_http_in_runtime: Option<bool>,
 	pub inspector_test_token: Option<String>,
 	pub serverless_base_path: Option<String>,
@@ -154,6 +155,7 @@ impl From<WasmServeConfig> for ServeConfig {
 			engine_port: None,
 			engine_spawn: EngineSpawnMode::Never,
 			engine_auto_download: false,
+			reject_existing_envoy: config.reject_existing_envoy,
 			handle_inspector_http_in_runtime: config
 				.handle_inspector_http_in_runtime
 				.unwrap_or(false),
@@ -3119,6 +3121,7 @@ mod tests {
 			namespace: "default".to_owned(),
 			pool_name: "default".to_owned(),
 			engine_binary_path,
+			reject_existing_envoy: false,
 			handle_inspector_http_in_runtime: None,
 			inspector_test_token: None,
 			serverless_base_path: None,

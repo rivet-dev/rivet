@@ -233,6 +233,7 @@ pub struct ServeConfig {
 	pub engine_port: Option<u16>,
 	pub engine_spawn: EngineSpawnMode,
 	pub engine_auto_download: bool,
+	pub reject_existing_envoy: bool,
 	pub handle_inspector_http_in_runtime: bool,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -608,6 +609,8 @@ impl CoreRegistry {
 
 		#[cfg(feature = "native-runtime")]
 		runner_config::ensure_local_normal_runner_config(&config).await?;
+		#[cfg(feature = "native-runtime")]
+		runner_config::ensure_development_envoy_available(&config).await?;
 		let callbacks = Arc::new(RegistryCallbacks {
 			dispatcher: dispatcher.clone(),
 		});

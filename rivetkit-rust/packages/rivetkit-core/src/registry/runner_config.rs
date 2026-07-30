@@ -12,6 +12,8 @@ use super::ServeConfig;
 
 const RUNNER_CONFIG_MAX_ATTEMPTS: usize = 60;
 const RUNNER_CONFIG_RETRY_DELAY: Duration = Duration::from_millis(500);
+const DEVELOPMENT_ENVOY_CHECK_MAX_ATTEMPTS: usize = 5;
+const DEVELOPMENT_ENVOY_CHECK_RETRY_DELAY: Duration = Duration::from_millis(100);
 
 #[derive(Debug, Deserialize)]
 struct DatacentersResponse {
@@ -21,6 +23,11 @@ struct DatacentersResponse {
 #[derive(Debug, Deserialize)]
 struct Datacenter {
 	name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct EnvoysResponse {
+	envoys: Vec<serde_json::Value>,
 }
 
 pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> Result<()> {
@@ -38,6 +45,71 @@ pub(super) async fn ensure_local_normal_runner_config(config: &ServeConfig) -> R
 		RUNNER_CONFIG_RETRY_DELAY,
 	)
 	.await
+}
+
+pub(super) async fn ensure_development_envoy_available(config: &ServeConfig) -> Result<()> {
+	if !config.reject_existing_envoy {
+		return Ok(());
+	}
+
+	let client = Client::builder()
+		.build()
+		.context("build reqwest client for development Envoy check")?;
+	ensure_development_envoy_available_with_retry(
+		&client,
+		config,
+		DEVELOPMENT_ENVOY_CHECK_MAX_ATTEMPTS,
+		DEVELOPMENT_ENVOY_CHECK_RETRY_DELAY,
+	)
+	.await
+}
+
+async fn ensure_development_envoy_available_with_retry(
+	client: &Client,
+	config: &ServeConfig,
+	max_attempts: usize,
+	retry_delay: Duration,
+) -> Result<()> {
+	let max_attempts = max_attempts.max(1);
+	for attempt in 1..=max_attempts {
+		if !envoy_is_connected(client, config).await? {
+			return Ok(());
+		}
+		if attempt < max_attempts {
+			sleep(retry_delay).await;
+		}
+	}
+
+	anyhow::bail!(
+		"another Envoy is already connected to namespace `{}` and pool `{}` at {}. Stop the other project, set RIVET_NAMESPACE to a different namespace, or set RIVET_RUN_ENGINE_PORT to a different Engine port. See https://rivet.dev/docs/general/environment-variables/",
+		config.namespace,
+		config.pool_name,
+		config.endpoint,
+	)
+}
+
+async fn envoy_is_connected(client: &Client, config: &ServeConfig) -> Result<bool> {
+	let mut url = engine_api_url(&config.endpoint, &["envoys"], &config.namespace)?;
+	url.query_pairs_mut()
+		.append_pair("name", &config.pool_name)
+		.append_pair("limit", "1");
+	let response = apply_auth(client.get(url), config)
+		.send()
+		.await
+		.context("list local Envoys")?;
+	let status = response.status();
+	if !status.is_success() {
+		let body = response
+			.text()
+			.await
+			.context("read failed local Envoy list response")?;
+		anyhow::bail!("failed to list local Envoys: {status} {body}");
+	}
+	let response = response
+		.json::<EnvoysResponse>()
+		.await
+		.context("decode local Envoy list response")?;
+	Ok(!response.envoys.is_empty())
 }
 
 async fn ensure_local_normal_runner_config_with_retry(
