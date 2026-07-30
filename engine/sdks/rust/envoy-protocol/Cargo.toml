@@ -15,6 +15,7 @@ rand.workspace = true
 rivet-util-serde.workspace = true
 serde_bare.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 utoipa.workspace = true
 vbare.workspace = true
 

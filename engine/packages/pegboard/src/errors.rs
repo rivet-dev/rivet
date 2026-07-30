@@ -14,6 +14,13 @@ pub enum Actor {
 	NamespaceNotFound,
 
 	#[error(
+		"not_registered",
+		"Actor factory is not registered.",
+		"Actor factory '{actor_name}' is not registered."
+	)]
+	NotRegistered { actor_name: String },
+
+	#[error(
 		"input_too_large",
 		"Actor input too large.",
 		"Input too large (max {max_size})."

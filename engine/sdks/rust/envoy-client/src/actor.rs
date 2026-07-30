@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use crate::async_counter::AsyncCounter;
 use rivet_envoy_protocol as protocol;
+use rivet_error::RivetError;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -204,7 +205,7 @@ async fn actor_inner(
 			protocol::Event::EventActorStateUpdate(protocol::EventActorStateUpdate {
 				state: protocol::ActorState::ActorStateStopped(protocol::ActorStateStopped {
 					code: protocol::StopCode::Error,
-					message: Some(format!("{error:#}")),
+					message: Some(actor_start_error_message(&error)),
 				}),
 			}),
 		);
@@ -374,6 +375,22 @@ async fn actor_inner(
 
 	abort_and_join_http_request_tasks(&mut ctx, &mut http_request_tasks).await;
 	tracing::debug!("envoy actor stopped");
+}
+
+fn actor_start_error_message(error: &anyhow::Error) -> String {
+	let Some(error) = error
+		.chain()
+		.find_map(|cause| cause.downcast_ref::<RivetError>())
+	else {
+		return format!("{error:#}");
+	};
+	let envelope = protocol::util::ActorErrorEnvelope {
+		group: error.group().to_owned(),
+		code: error.code().to_owned(),
+		message: error.message().to_owned(),
+		metadata: error.metadata(),
+	};
+	protocol::util::encode_actor_error(&envelope).unwrap_or_else(|_| error.to_string())
 }
 
 fn send_event(ctx: &mut ActorContext, inner: protocol::Event) {

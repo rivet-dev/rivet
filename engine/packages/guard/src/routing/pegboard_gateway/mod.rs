@@ -514,6 +514,11 @@ async fn handle_actor_v2(
 				res = stopped_sub.next() => {
 					res?;
 
+					if let Some(actor_name) = actor_not_registered_name(ctx, actor_id).await? {
+						record_ready_wait("failed", wake_retries);
+						return Err(pegboard::errors::Actor::NotRegistered { actor_name }.build());
+					}
+
 					if wake_retries < 8 {
 						tracing::debug!(
 							?actor_id,
@@ -630,6 +635,44 @@ async fn handle_actor_v2(
 		stripped_path.to_string(),
 	);
 	Ok(RoutingOutput::CustomServe(std::sync::Arc::new(gateway)))
+}
+
+async fn actor_not_registered_name(ctx: &StandaloneCtx, actor_id: Id) -> Result<Option<String>> {
+	let actor = ctx
+		.op(pegboard::ops::actor::get::Input {
+			actor_ids: vec![actor_id],
+			fetch_error: true,
+		})
+		.await?
+		.actors
+		.into_iter()
+		.next();
+
+	Ok(actor
+		.as_ref()
+		.and_then(|actor| not_registered_name_from_actor_error(actor.error.as_ref())))
+}
+
+fn not_registered_name_from_actor_error(
+	error: Option<&rivet_types::actor::ActorError>,
+) -> Option<String> {
+	let Some(rivet_types::actor::ActorError::Crashed {
+		message: Some(message),
+	}) = error
+	else {
+		return None;
+	};
+	let error = rivet_envoy_protocol::util::decode_actor_error(message)?;
+	if error.group != "actor" || error.code != "not_registered" {
+		return None;
+	}
+
+	error
+		.metadata
+		.as_ref()?
+		.get("actor_name")?
+		.as_str()
+		.map(ToOwned::to_owned)
 }
 
 async fn handle_actor_v1(
@@ -920,5 +963,41 @@ async fn check_runner_pool_error_loop(
 
 		// Wait before next check
 		tokio::time::sleep(RUNNER_POOL_ERROR_CHECK_INTERVAL).await;
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn extracts_not_registered_actor_name_from_envoy_start_error() {
+		let message =
+			rivet_envoy_protocol::util::encode_actor_error(
+				&rivet_envoy_protocol::util::ActorErrorEnvelope {
+					group: "actor".to_owned(),
+					code: "not_registered".to_owned(),
+					message: "Actor factory 'removed' is not registered.".to_owned(),
+					metadata: Some(serde_json::json!({ "actor_name": "removed" })),
+				},
+			)
+			.expect("encode actor error");
+		let error = rivet_types::actor::ActorError::Crashed {
+			message: Some(message),
+		};
+
+		assert_eq!(
+			not_registered_name_from_actor_error(Some(&error)).as_deref(),
+			Some("removed")
+		);
+	}
+
+	#[test]
+	fn ignores_unstructured_actor_crashes() {
+		let error = rivet_types::actor::ActorError::Crashed {
+			message: Some("boom".to_owned()),
+		};
+
+		assert_eq!(not_registered_name_from_actor_error(Some(&error)), None);
 	}
 }

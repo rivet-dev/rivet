@@ -43,6 +43,7 @@ rivet-api-public.workspace = true
 rivet-cache.workspace = true
 rivet-config.workspace = true
 rivet-data.workspace = true
+rivet-envoy-protocol.workspace = true
 rivet-error.workspace = true
 rivet-types.workspace = true
 rivet-guard-core.workspace = true
