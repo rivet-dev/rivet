@@ -1,10 +1,23 @@
 import { FLUE_SCHEMA_VERSION, DURABILITY_DEFAULT_MAX_ATTEMPTS } from './constants.js';
 import type { AsyncSqlDb, AsyncSqlRunner } from './async-db.js';
 
-// Last synchronized with Flue commit e79d5712820af588094a4e67a3ceafc816770396:
-// https://github.com/rivet-dev/flue/tree/e79d5712820af588094a4e67a3ceafc816770396/packages/runtime/src
-// DDL sources: sql-agent-execution-store.ts, sql-run-store.ts, sql-attachment-store.ts,
-// runtime/event-stream-store.ts, and runtime/conversation-stream-store.ts.
+/*
+@upstream-schema-provenance
+{
+	"repository": "https://github.com/rivet-dev/flue",
+	"commit": "e79d5712820af588094a4e67a3ceafc816770396",
+	"sources": [
+		"packages/runtime/src/sql-agent-execution-store.ts",
+		"packages/runtime/src/sql-run-store.ts",
+		"packages/runtime/src/sql-attachment-store.ts",
+		"packages/runtime/src/sql-persisted-chunk-store.ts",
+		"packages/runtime/src/runtime/event-stream-store.ts",
+		"packages/runtime/src/runtime/conversation-stream-store.ts"
+	]
+}
+*/
+// Rivet-local tables not copied from those sources: flue_meta, flue_sessions,
+// and flue_session_entries.
 export async function ensureAsyncSqlSchema(db: AsyncSqlDb): Promise<void> {
 	await db.transaction(async (tx) => {
 		await tx.query(`

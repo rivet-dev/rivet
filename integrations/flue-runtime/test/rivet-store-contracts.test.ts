@@ -56,6 +56,62 @@ defineAttachmentStoreContractTests('Rivet async SQL AttachmentStore', {
 	},
 });
 
+describe('Rivet async SQL stream notifications', () => {
+	it('notifies event-stream subscribers across store facades', async () => {
+		const db = await createTestDb();
+		const reader = createAsyncEventStreamStore(db);
+		const writer = createAsyncEventStreamStore(db);
+		await writer.createStream('/runs/test');
+		let notified = false;
+		const unsubscribe = reader.subscribe('/runs/test', () => {
+			notified = true;
+		});
+		try {
+			await writer.appendEvent('/runs/test', { type: 'ready' });
+			expect(notified).toBe(true);
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it('notifies conversation subscribers across store facades', async () => {
+		const db = await createTestDb();
+		const reader = createAsyncConversationStreamStore(db);
+		const writer = createAsyncConversationStreamStore(db);
+		await writer.createStream('/agents/test/instance', {
+			agentName: 'test',
+			instanceId: 'instance',
+		});
+		let notified = false;
+		const unsubscribe = reader.subscribe('/agents/test/instance', () => {
+			notified = true;
+		});
+		try {
+			await writer.delete('/agents/test/instance');
+			expect(notified).toBe(true);
+		} finally {
+			unsubscribe();
+		}
+	});
+
+	it('does not notify subscribers in another actor scope', async () => {
+		const db = await createTestDb();
+		const reader = createAsyncEventStreamStore(db, 'actor-a');
+		const writer = createAsyncEventStreamStore(db, 'actor-b');
+		await writer.createStream('/runs/test');
+		let notified = false;
+		const unsubscribe = reader.subscribe('/runs/test', () => {
+			notified = true;
+		});
+		try {
+			await writer.appendEvent('/runs/test', { type: 'ready' });
+			expect(notified).toBe(false);
+		} finally {
+			unsubscribe();
+		}
+	});
+});
+
 describe('createRivetAsyncSqlDb()', () => {
 	it('rolls back every statement in a transaction when the callback throws', async () => {
 		const db = await createTestDb();

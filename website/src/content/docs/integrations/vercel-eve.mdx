@@ -7,11 +7,15 @@ skill: false
 import { Hosting } from "@/components/docs/Hosting";
 
 {/*
-  Keep this guide synchronized with
-  rivet-dev/agentos/website/src/content/docs/docs/frameworks/vercel-eve.mdx.
-  This intentionally hardcodes the agentOS example instead of using CodeSnippet:
-  importing snippets across repositories would add an agentOS dependency to Rivet.
-  The default walkthrough demonstrates agentOS and Rivet World together.
+  Sync policy: rivet-dev/agentos/examples/{flue,vercel-eve} are the source of
+  truth. Before changing either integration, manually read both agentOS examples
+  and guides and compare every hardcoded snippet in both Rivet guides:
+  website/src/content/docs/integrations/{flue,vercel-eve}.mdx.
+  Do not use CodeSnippet here: the source files live in another repository and
+  importing them would couple Rivet's docs build to agentOS. Copy Flue code from
+  rivet-dev/agentos/examples/flue and Eve code from
+  rivet-dev/agentos/examples/vercel-eve. Update both repositories whenever
+  either example changes.
 */}
 
 <Info>
@@ -41,8 +45,7 @@ cd my-agent
 npm add @rivet-dev/agentos @rivet-dev/agentos-eve @rivet-dev/vercel-world
 ```
 
-- `@rivet-dev/agentos`: Provides the agentOS VM.
-- `@rivet-dev/agentos-eve`: Connects Eve's sandbox API to agentOS.
+- `@rivet-dev/agentos` and `@rivet-dev/agentos-eve`: Provide the agentOS VM and connect Eve's sandbox API to it.
 - `@rivet-dev/vercel-world`: Runs Eve workflows on [Rivet World](https://workflow-sdk.dev/worlds).
 
 </Step>
@@ -111,15 +114,10 @@ Create `actors.ts`:
 import { agentOS, setup } from "@rivet-dev/agentos";
 import { vercelWorldActors } from "@rivet-dev/vercel-world/registry";
 
-const vm = agentOS({
-	// Configuration will go here.
-});
+const vm = agentOS();
 
 export const registry = setup({
-	use: {
-		...vercelWorldActors,
-		vm,
-	},
+	use: { ...vercelWorldActors, vm },
 });
 ```
 

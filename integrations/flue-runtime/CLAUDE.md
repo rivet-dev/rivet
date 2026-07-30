@@ -3,6 +3,158 @@
 The Flue deployment target and Rivet runtime adapter. It plugs Rivet Actors
 into Flue's runtime, exposing agents and workflows as deployable Rivet actors.
 
+## Flue fork and Labs packages
+
+This package depends on one compatibility set from the Rivet-maintained Flue
+fork:
+
+- Fork: `https://github.com/rivet-dev/flue`
+- Upstream: `https://github.com/withastro/flue`
+- npm packages:
+  - `@rivet-dev/labs-flue-cli`
+  - `@rivet-dev/labs-flue-runtime`
+  - `@rivet-dev/labs-flue-sdk`
+
+The fork contains the generic target-authoring and runtime adapter APIs proposed
+upstream. `@rivet-dev/flue` remains in this repository and contains only the
+Rivet-specific target, actors, and storage implementation.
+
+### Package aliases are part of the contract
+
+Flue source continues to import `@flue/cli`, `@flue/runtime`, and `@flue/sdk`.
+Published packages preserve those names with npm aliases:
+
+```json
+{
+  "@flue/cli": "npm:@rivet-dev/labs-flue-cli@<version>",
+  "@flue/runtime": "npm:@rivet-dev/labs-flue-runtime@<version>",
+  "@flue/sdk": "npm:@rivet-dev/labs-flue-sdk@<version>"
+}
+```
+
+Inside the Flue workspace, renamed internal dependencies must use
+`workspace:@rivet-dev/labs-flue-<package>@*`. pnpm rewrites that form to the
+correct `npm:` alias while packing. A plain `workspace:*` can silently resolve
+the upstream package instead.
+
+CLI, runtime, and SDK are one compatibility set. Give all three the exact same
+version, publish all three together, and never update Rivet or agentOS until all
+three registry manifests have been inspected.
+
+### Updating the fork and publishing a Labs set
+
+Use a dedicated jj workspace for `rivet-dev/flue`. The remotes are:
+
+- `github`: `withastro/flue`
+- `fork`: `rivet-dev/flue`
+
+Before changing the extension API:
+
+```sh
+jj git fetch --remote github
+jj git fetch --remote fork
+jj log -r 'main@github | main@fork'
+```
+
+Keep the fork based on current upstream `main` and preserve Flue's native router.
+Use a version derived from upstream plus a Rivet revision, such as
+`1.0.0-beta.9-rivet.2`.
+
+1. Set the same version in:
+   - `packages/sdk/package.json`
+   - `packages/runtime/package.json`
+   - `packages/cli/package.json`
+2. Confirm every renamed workspace dependency uses
+   `workspace:@rivet-dev/labs-flue-<package>@*`.
+3. Confirm `scripts/prepare-publish.mjs` includes all three Labs packages.
+4. Install and run focused gates:
+
+   ```sh
+   pnpm install
+   pnpm --filter @rivet-dev/labs-flue-sdk build
+   pnpm --filter @rivet-dev/labs-flue-sdk test
+   pnpm --filter @rivet-dev/labs-flue-runtime build
+   pnpm --filter @rivet-dev/labs-flue-runtime test
+   pnpm --filter @rivet-dev/labs-flue-cli build
+   pnpm --filter @rivet-dev/labs-flue-cli test
+   node scripts/prepare-publish.mjs
+   ```
+
+5. Pack all three into a temporary directory and inspect each published
+   `package.json`:
+
+   ```sh
+   pack_dir="$(mktemp -d)"
+   pnpm --filter @rivet-dev/labs-flue-sdk pack --pack-destination "$pack_dir"
+   pnpm --filter @rivet-dev/labs-flue-runtime pack --pack-destination "$pack_dir"
+   pnpm --filter @rivet-dev/labs-flue-cli pack --pack-destination "$pack_dir"
+   for archive in "$pack_dir"/*.tgz; do
+     tar -xOf "$archive" package/package.json
+   done
+   ```
+
+   The CLI manifest must alias both Labs SDK and Labs runtime at the same exact
+   version.
+6. Land the tested fork change. A push does not publish npm packages.
+7. Publish SDK, runtime, then CLI:
+
+   ```sh
+   pnpm --filter @rivet-dev/labs-flue-sdk publish --access public --tag preview --no-git-checks
+   pnpm --filter @rivet-dev/labs-flue-runtime publish --access public --tag preview --no-git-checks
+   pnpm --filter @rivet-dev/labs-flue-cli publish --access public --tag preview --no-git-checks
+   ```
+
+8. Verify registry manifests before updating either consumer repository:
+
+   ```sh
+   npm view @rivet-dev/labs-flue-sdk@<version> version dependencies
+   npm view @rivet-dev/labs-flue-runtime@<version> version dependencies
+   npm view @rivet-dev/labs-flue-cli@<version> version dependencies
+   ```
+
+Never republish a version. If any manifest is wrong, increment the
+`-rivet.N` suffix for the entire set.
+
+### Updating every consumer to a new Labs version
+
+Treat this as one cross-repository change. Search both repositories for the old
+exact version and update every result that is source-controlled:
+
+```sh
+rg '<old-version>' \
+  /path/to/rivet \
+  /path/to/agentos \
+  --glob '!**/node_modules/**' \
+  --glob '!**/dist/**'
+```
+
+The required locations are:
+
+- Rivet:
+  - `integrations/flue-runtime/package.json`
+  - `pnpm-lock.yaml`
+  - `website/src/content/docs/integrations/flue.mdx`
+- agentOS:
+  - `examples/flue/package.json`
+  - `packages/flue/package.json`
+  - `pnpm-lock.yaml`
+  - `website/src/content/docs/docs/frameworks/flue.mdx`
+
+Generated `website/public/` or `website/dist/` copies are outputs, not sources;
+regenerate them through the normal website build instead of editing them.
+
+After updating aliases:
+
+1. Run `pnpm install` in each repository.
+2. Confirm the resolved CLI depends on the same Labs SDK and runtime version.
+3. Build and test `@rivet-dev/flue`.
+4. Typecheck/build the agentOS example and run the combined Flue E2E.
+5. Pack `@rivet-dev/flue`, install all public artifacts in a fresh directory,
+   and run the exact `npx flue run` command from the integration guide.
+
+`@rivet-dev/flue` is published by Rivet's normal release process, not from the
+Flue fork.
+
 ## Reference adapter: Cloudflare Durable Objects
 
 This adapter is a **1:1 port of the Cloudflare Durable Object adapter** in the Flue runtime
