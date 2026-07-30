@@ -357,6 +357,11 @@ export function useDeploymentLogsStream({
 			if (controller.signal.aborted) return;
 			setIsLoading(false);
 
+			// A fixed `before` seed means a historical view (a destroyed actor),
+			// whose live tail can never produce new matching lines. Skip the stream
+			// and its retry/backoff loop rather than holding an idle connection.
+			if (initialBefore) return;
+
 			const result = await streamWithRetry(
 				project,
 				namespace,
