@@ -1,6 +1,5 @@
 pub mod actor;
 pub mod async_counter;
-pub mod callbacks;
 pub mod commands;
 pub mod config;
 pub mod connection;
@@ -8,7 +7,6 @@ pub mod context;
 pub mod envoy;
 pub mod events;
 pub mod handle;
-pub mod http;
 pub mod kv;
 pub mod latency_channel;
 pub mod metrics;
@@ -37,6 +35,5 @@ pub(crate) mod time {
 }
 pub mod tunnel;
 pub mod utils;
-pub mod websocket;
 
 pub use rivet_envoy_protocol as protocol;

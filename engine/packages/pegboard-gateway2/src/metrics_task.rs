@@ -1,14 +1,16 @@
 use std::sync::{Arc, atomic::AtomicU64};
 
 use anyhow::Result;
+use gas::prelude::*;
 use tokio::sync::watch;
 
-use super::{LifecycleResult, UPDATE_METRICS_INTERVAL};
-use crate::request_metrics::RequestMetrics;
+use super::{LifecycleResult, Metric, UPDATE_METRICS_INTERVAL, record_req_metrics};
 
 #[tracing::instrument(name = "metrics_task", skip_all)]
 pub async fn task(
-	metrics: RequestMetrics,
+	ctx: StandaloneCtx,
+	actor_id: Id,
+	namespace_id: Id,
 	ingress_bytes: Arc<AtomicU64>,
 	egress_bytes: Arc<AtomicU64>,
 	mut metrics_abort_rx: watch::Receiver<()>,
@@ -22,7 +24,9 @@ pub async fn task(
 			_ = metrics_abort_rx.changed() => {
 				// Record final values before abort
 				record_ws_transfer(
-					&metrics,
+					&ctx,
+					actor_id,
+					namespace_id,
 					&ingress_bytes,
 					&egress_bytes,
 					&mut last_ingress_bytes,
@@ -34,7 +38,9 @@ pub async fn task(
 		}
 
 		record_ws_transfer(
-			&metrics,
+			&ctx,
+			actor_id,
+			namespace_id,
 			&ingress_bytes,
 			&egress_bytes,
 			&mut last_ingress_bytes,
@@ -44,8 +50,10 @@ pub async fn task(
 	}
 }
 
-async fn record_ws_transfer(
-	metrics: &RequestMetrics,
+pub async fn record_ws_transfer(
+	ctx: &StandaloneCtx,
+	actor_id: Id,
+	namespace_id: Id,
 	ingress_bytes: &AtomicU64,
 	egress_bytes: &AtomicU64,
 	last_ingress_bytes: &mut u64,
@@ -57,9 +65,13 @@ async fn record_ws_transfer(
 	let egress_diff = new_egress_bytes - *last_egress_bytes;
 
 	if ingress_diff > 0 || egress_diff > 0 {
-		metrics
-			.record_transfer(ingress_diff as usize, egress_diff as usize)
-			.await?;
+		record_req_metrics(
+			ctx,
+			actor_id,
+			namespace_id,
+			Metric::WebsocketTransfer(ingress_diff as usize, egress_diff as usize),
+		)
+		.await?;
 	}
 
 	*last_ingress_bytes = new_ingress_bytes;

@@ -74,11 +74,7 @@ export interface RivetAgentRuntimeOptions {
 }
 
 export interface RivetAgentRuntime {
-	prepare(options: {
-		db: AsyncSqlDb;
-		agentName: string;
-		notificationScope?: string;
-	}): Promise<PreparedCoordinator>;
+	prepare(options: { db: AsyncSqlDb; agentName: string }): Promise<PreparedCoordinator>;
 	attach(actor: RivetAgentActorContext, prepared: PreparedCoordinator): RivetAgentCoordinator;
 	onWake(actor: RivetAgentActorContext, inherited?: () => Promise<unknown> | unknown): Promise<void>;
 	wakeSubmissions(actor: RivetAgentActorContext): Promise<void>;
@@ -95,9 +91,9 @@ export function createRivetAgentRuntime(options: RivetAgentRuntimeOptions): Rive
 		return coordinator;
 	};
 	return {
-		async prepare({ db, agentName, notificationScope }) {
+		async prepare({ db, agentName }) {
 			await ensureAsyncSqlSchema(db);
-			const stores = createAsyncSqlStores(db, notificationScope);
+			const stores = createAsyncSqlStores(db);
 			return {
 				agentName,
 				executionStore: stores.executionStore,

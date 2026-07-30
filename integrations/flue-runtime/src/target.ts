@@ -11,7 +11,7 @@ export function rivet(options: RivetTargetOptions = {}) {
 		name: 'rivet',
 		bundle: 'vite',
 		external: [
-			'@rivet-dev/flue',
+				'@rivet-dev/flue',
 			'rivetkit',
 			'rivetkit/client',
 			'rivetkit/db',
@@ -214,7 +214,7 @@ const agentRuntime = createRivetAgentRuntime({
 });
 const workflowRuntime = createRivetWorkflowRuntime({
   workflows,
-  createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db, ctx.actorId),
+  createEventStreamStore: (ctx) => createAsyncEventStreamStore(ctx.db),
   createRegistryRunStore: () => getRegistryHandle(),
   createContext: createContextForWorkflow,
 });
@@ -225,11 +225,7 @@ async function prepareAgent(c, agentName) {
   const actorContext = adaptRivetActorContext(c);
   let prepared = preparedAgents.get(actorContext);
   if (!prepared) {
-    prepared = await agentRuntime.prepare({
-      db: actorContext.db,
-      agentName,
-      notificationScope: actorContext.actorId,
-    });
+    prepared = await agentRuntime.prepare({ db: actorContext.db, agentName });
     agentRuntime.attach(actorContext, prepared);
     preparedAgents.set(actorContext, prepared);
   }
@@ -391,7 +387,6 @@ const dispatchQueue = {
 configureFlueRuntime({
   target: rivetTarget,
   devMode: process.env.FLUE_MODE === 'local',
-  temporaryLocalExposure: ${JSON.stringify(ctx.temporaryLocalExposure)},
   agents,
   workflows,
   dispatchQueue,
@@ -419,13 +414,6 @@ export function fetch(request, env) {
 
 console.log('[flue] Agents: ' + ${agentNames});
 console.log('[flue] Workflows: ' + ${workflowNames});
-if (
-  process.env.FLUE_MODE === 'local' &&
-  !registry.config.endpoint &&
-  !process.env.RIVET_ENDPOINT
-) {
-  registry.config.startEngine = true;
-}
 await registry.listen({
   port: parseInt(process.env.PORT || '3000', 10),
   application: {
