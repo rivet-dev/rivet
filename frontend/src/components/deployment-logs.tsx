@@ -29,48 +29,9 @@ import { ScrollArea } from "./ui/scroll-area";
 import { Skeleton } from "./ui/skeleton";
 import { useDeploymentLogsStream } from "./use-deployment-logs-stream";
 
-const SKELETON_KEYS = [
-	"a",
-	"b",
-	"c",
-	"d",
-	"e",
-	"f",
-	"g",
-	"h",
-	"i",
-	"j",
-	"k",
-	"l",
-	"m",
-	"n",
-	"o",
-	"p",
-	"q",
-	"r",
-	"s",
-	"t",
-	"u",
-	"v",
-	"w",
-	"x",
-	"y",
-	"z",
-	"aa",
-	"ab",
-	"ac",
-	"ad",
-	"ae",
-	"af",
-	"ag",
-	"ah",
-	"ai",
-	"aj",
-	"ak",
-	"al",
-	"am",
-	"an",
-];
+const SKELETON_KEYS = Array(40)
+	.fill("")
+	.map((_, i) => i.toString(36));
 
 interface DeploymentLogsProps {
 	project?: string;
@@ -90,6 +51,7 @@ interface LogRowData {
 	entry?: Rivet.LogStreamEvent.Log;
 	isSentinel?: boolean;
 	isLoadingMore?: boolean;
+	onLoadMore?: () => void;
 	regionColumnWidth?: string;
 }
 
@@ -97,22 +59,27 @@ function LogRow({
 	entry,
 	isSentinel,
 	isLoadingMore,
+	onLoadMore,
 	regionColumnWidth,
 	...props
 }: LogRowData) {
 	if (isSentinel) {
+		// A clickable row rather than a passive hint: scrolling up auto-triggers
+		// a load, but when the list is short or a page returned no matching rows
+		// there is nothing to scroll, so the button is the reliable trigger.
 		return (
-			<div
+			<button
+				type="button"
 				{...props}
+				onClick={onLoadMore}
+				disabled={isLoadingMore}
 				className={cn(
-					"px-4 py-1 border-b text-muted-foreground/50 italic",
+					"w-full text-left px-4 py-1 border-b italic text-muted-foreground/60 hover:text-muted-foreground disabled:hover:text-muted-foreground/60 disabled:cursor-default",
 					props.className,
 				)}
 			>
-				{isLoadingMore
-					? "Loading older logs…"
-					: "Scroll to top to load older logs"}
-			</div>
+				{isLoadingMore ? "Loading older logs…" : "Load older logs"}
+			</button>
 		);
 	}
 
@@ -243,6 +210,7 @@ export function DeploymentLogs({
 		regionLabelLength && regionLabelLength > 0
 			? `${regionLabelLength + 4}ch`
 			: "18ch";
+
 	const {
 		logs,
 		isLoading,
@@ -335,6 +303,20 @@ export function DeploymentLogs({
 		}
 	}, [logs, logsRef]);
 
+	// Stop following newest and capture the scroll geometry so the layout effect
+	// can anchor the viewport after older history is prepended. Shared by the
+	// scroll-to-top auto-trigger and the sentinel button click.
+	const triggerLoadMore = useCallback(() => {
+		if (!hasMore || isLoadingMore) return;
+		setFollow(false);
+		prevLogCountRef.current = displayedLogs.length;
+		const viewport = viewportRef.current;
+		prevScrollHeightRef.current = viewport?.scrollHeight ?? 0;
+		prevScrollTopRef.current = viewport?.scrollTop ?? 0;
+		pendingRestoreRef.current = true;
+		loadMoreHistory();
+	}, [hasMore, isLoadingMore, displayedLogs.length, loadMoreHistory]);
+
 	const handleScrollChange = useCallback(
 		(instance: Virtualizer<HTMLDivElement, Element>) => {
 			const isAtBottom =
@@ -345,27 +327,12 @@ export function DeploymentLogs({
 			if (instance.scrollDirection === "backward") {
 				setFollow(false);
 				// Load more when the sentinel row comes into view.
-				if (
-					(instance.range?.startIndex ?? 1) === 0 &&
-					hasMore &&
-					!isLoadingMore
-				) {
-					prevLogCountRef.current = displayedLogs.length;
-					const viewport = viewportRef.current;
-					prevScrollHeightRef.current = viewport?.scrollHeight ?? 0;
-					prevScrollTopRef.current = viewport?.scrollTop ?? 0;
-					pendingRestoreRef.current = true;
-					loadMoreHistory();
+				if ((instance.range?.startIndex ?? 1) === 0) {
+					triggerLoadMore();
 				}
 			}
 		},
-		[
-			totalCount,
-			displayedLogs.length,
-			hasMore,
-			isLoadingMore,
-			loadMoreHistory,
-		],
+		[totalCount, triggerLoadMore],
 	);
 
 	if (isLoading) {
@@ -465,7 +432,11 @@ export function DeploymentLogs({
 					viewportProps={{}}
 					getRowData={(index) => {
 						if (hasMore && index === 0) {
-							return { isSentinel: true, isLoadingMore };
+							return {
+								isSentinel: true,
+								isLoadingMore,
+								onLoadMore: triggerLoadMore,
+							};
 						}
 						return {
 							entry: displayedLogs[index - sentinelOffset],
