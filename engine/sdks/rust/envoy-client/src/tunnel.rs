@@ -27,7 +27,7 @@ pub async fn handle_tunnel_message(ctx: &mut EnvoyContext, msg: protocol::ToEnvo
 			handle_request_start(ctx, message_id, req).await;
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(chunk) => {
-			handle_request_chunk(ctx, message_id, chunk);
+			handle_request_chunk(ctx, message_id, chunk).await;
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(abort) => {
 			handle_request_abort(ctx, message_id, abort.reason);
@@ -54,7 +54,14 @@ async fn handle_request_start(
 
 	if !has_actor {
 		tracing::warn!(actor_id = %actor_id, "received request for unknown actor");
-		send_error_response(ctx, message_id.gateway_id, message_id.request_id).await;
+		send_error_response(
+			ctx,
+			message_id.gateway_id,
+			message_id.request_id,
+			"envoy.actor_not_found",
+			"Actor not found",
+		)
+		.await;
 		return;
 	}
 
@@ -71,7 +78,7 @@ async fn handle_request_start(
 	});
 }
 
-fn handle_request_chunk(
+async fn handle_request_chunk(
 	ctx: &mut EnvoyContext,
 	message_id: protocol::MessageId,
 	chunk: protocol::ToEnvoyRequestChunk,
@@ -97,6 +104,14 @@ fn handle_request_chunk(
 			message_index = message_id.message_index,
 			"received request chunk without request start"
 		);
+		send_error_response(
+			ctx,
+			message_id.gateway_id,
+			message_id.request_id,
+			"envoy.request_not_found",
+			"Request start was not delivered",
+		)
+		.await;
 	}
 }
 
@@ -277,13 +292,12 @@ async fn send_error_response(
 	ctx: &EnvoyContext,
 	gateway_id: protocol::GatewayId,
 	request_id: protocol::RequestId,
+	error_code: &str,
+	message: &str,
 ) {
-	let body = b"Actor not found".to_vec();
+	let body = message.as_bytes().to_vec();
 	let mut headers = HashMap::new();
-	headers.insert(
-		"x-rivet-error".to_string(),
-		"envoy.actor_not_found".to_string(),
-	);
+	headers.insert("x-rivet-error".to_string(), error_code.to_owned());
 	headers.insert("content-length".to_string(), body.len().to_string());
 
 	ws_send(
