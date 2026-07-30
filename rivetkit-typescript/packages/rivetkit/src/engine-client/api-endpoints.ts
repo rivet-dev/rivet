@@ -146,7 +146,7 @@ export async function getRunnerConfig(
 	return apiCall<never, RunnerConfigsResponse>(
 		config,
 		"GET",
-		`/runner-configs?runner_name=${name}`,
+		`/runner-configs?runner_name=${encodeURIComponent(name)}`,
 	);
 }
 
