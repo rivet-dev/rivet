@@ -250,8 +250,8 @@ export function useDeploymentLogsStream({
 }: UseDeploymentLogsStreamOptions) {
 	const [logs, setLogs] = useState<Rivet.LogStreamEvent.Log[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
+	const [error, setError] = useState<string | null>(null);
 	const [hasMore, setHasMore] = useState(true);
 	// Oldest raw timestamp scanned so far (the boundary the next page fetches
 	// before). Surfaced for the empty state so the user can see how far back the
@@ -270,6 +270,11 @@ export function useDeploymentLogsStream({
 	// oldest raw timestamp it scanned, so paging back works even across windows that
 	// contain no entries matching the current filter.
 	const nextCursorRef = useRef<string | undefined>(undefined);
+	// The current generation's abort controller, owned by the seeding effect and
+	// aborted when the filter/region/pool/before changes or the hook unmounts.
+	// `loadMoreHistory` reads it so an in-flight older-page fetch is cancelled and
+	// its result dropped instead of writing into the reset store.
+	const requestAbortRef = useRef<AbortController | null>(null);
 
 	useEffect(() => {
 		pausedRef.current = paused;
@@ -280,12 +285,14 @@ export function useDeploymentLogsStream({
 		setIsLoading(true);
 		setError(null);
 		setHasMore(true);
+		setIsLoadingMore(false);
 		nextCursorRef.current = undefined;
 		setOldestScannedTs(undefined);
 		pendingRef.current = [];
 		seenInsertIdsRef.current = new Set();
 
 		const controller = new AbortController();
+		requestAbortRef.current = controller;
 
 		function onEntry(entry: Rivet.LogStreamEvent.Log) {
 			setIsLoading(false);
@@ -398,6 +405,9 @@ export function useDeploymentLogsStream({
 		// fetch failed. `hasMore` stays true until a successful page says otherwise,
 		// so a retry still issues a request instead of silently disabling paging.
 		const before = nextCursorRef.current ?? new Date().toISOString();
+		// Share the seeding effect's controller so a filter/region/pool/before
+		// change cancels this fetch and its result is discarded.
+		const signal = requestAbortRef.current?.signal;
 		setIsLoadingMore(true);
 		try {
 			const page = await fetchLogsHistory(
@@ -410,8 +420,12 @@ export function useDeploymentLogsStream({
 					limit: HISTORY_PAGE_SIZE,
 					region: region || undefined,
 					contains: filter || undefined,
+					signal,
 				},
 			);
+			// The fetch may have resolved just before the filter changed and aborted.
+			// Bail before touching the store, which now belongs to a new generation.
+			if (signal?.aborted) return;
 			nextCursorRef.current = page.nextCursor;
 			setOldestScannedTs(page.nextCursor);
 			setHasMore(page.hasMore);
@@ -431,6 +445,8 @@ export function useDeploymentLogsStream({
 				});
 			}
 		} catch (err) {
+			// Cancelled by a filter change or unmount; not worth surfacing.
+			if ((err as Error).name === "AbortError") return;
 			console.error("Failed to load historical logs:", err);
 		} finally {
 			setIsLoadingMore(false);
