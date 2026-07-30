@@ -11,7 +11,6 @@ pub(crate) use response_queue::{
 	HttpResponseQueueBudget, HttpResponseQueueOverloaded, HttpResponseQueuePermit,
 };
 
-pub(super) const HTTP_RESPONSE_BODY_CHANNEL_CAPACITY: usize = 16;
 pub(super) type ResponseBodyError = Box<dyn std::error::Error + Send + Sync>;
 
 pub(super) async fn send_http_request_abort(

@@ -5,9 +5,6 @@ use std::sync::{
 
 use rivet_envoy_protocol::ToRivetTunnelMessageKind;
 
-const HTTP_RESPONSE_QUEUE_MAX_MESSAGES: usize = 384;
-const STREAMING_HTTP_RESPONSE_QUEUE_MAX_BYTES: usize = 20 * 1024 * 1024;
-
 /// Bounds response data waiting between pubsub delivery and the downstream HTTP client.
 ///
 /// Permits are attached to queued messages and release their capacity on delivery or drop. The
@@ -17,14 +14,22 @@ pub(crate) struct HttpResponseQueueBudget {
 	messages: AtomicUsize,
 	bytes: AtomicUsize,
 	buffered_response_max_bytes: usize,
+	max_messages: usize,
+	streaming_response_max_bytes: usize,
 }
 
 impl HttpResponseQueueBudget {
-	pub(crate) fn new(buffered_response_max_bytes: usize) -> Self {
+	pub(crate) fn new(
+		buffered_response_max_bytes: usize,
+		max_messages: usize,
+		streaming_response_max_bytes: usize,
+	) -> Self {
 		Self {
 			messages: AtomicUsize::new(0),
 			bytes: AtomicUsize::new(0),
 			buffered_response_max_bytes,
+			max_messages,
+			streaming_response_max_bytes,
 		}
 	}
 
@@ -34,7 +39,7 @@ impl HttpResponseQueueBudget {
 		streaming: bool,
 	) -> Option<HttpResponseQueuePermit> {
 		let max_bytes = if streaming {
-			STREAMING_HTTP_RESPONSE_QUEUE_MAX_BYTES
+			self.streaming_response_max_bytes
 		} else {
 			self.buffered_response_max_bytes
 		};
@@ -43,7 +48,7 @@ impl HttpResponseQueueBudget {
 		}
 
 		let previous_messages = self.messages.fetch_add(1, Ordering::AcqRel);
-		if previous_messages >= HTTP_RESPONSE_QUEUE_MAX_MESSAGES {
+		if previous_messages >= self.max_messages {
 			self.messages.fetch_sub(1, Ordering::AcqRel);
 			return None;
 		}

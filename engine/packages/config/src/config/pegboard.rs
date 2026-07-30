@@ -121,6 +121,12 @@ pub struct Pegboard {
 	pub gateway_hws_max_pending_size: Option<u64>,
 	/// Max HTTP request body size in bytes for requests to actors.
 	pub gateway_http_max_request_body_size: Option<usize>,
+	/// Number of body chunks buffered between a streaming response handler and its HTTP client.
+	pub gateway_http_response_body_channel_capacity: Option<usize>,
+	/// Maximum number of envoy response messages buffered per HTTP request.
+	pub gateway_http_response_queue_max_messages: Option<usize>,
+	/// Maximum streaming response bytes buffered per HTTP request.
+	pub gateway_streaming_http_response_queue_max_bytes: Option<usize>,
 
 	// === Envoy Settings ===
 	/// How long to wait before considering an envoy lost and evicting all of its actors.
@@ -307,6 +313,23 @@ impl Pegboard {
 	pub fn gateway_hws_max_pending_size(&self) -> u64 {
 		self.gateway_hws_max_pending_size
 			.unwrap_or(128 * 1024 * 1024) // 128 MiB
+	}
+
+	pub fn gateway_http_response_body_channel_capacity(&self) -> usize {
+		self.gateway_http_response_body_channel_capacity
+			.unwrap_or(16)
+			.max(1)
+	}
+
+	pub fn gateway_http_response_queue_max_messages(&self) -> usize {
+		// A 20 MiB response occupies 320 64 KiB chunks. Leave room for
+		// control frames and smaller chunks while still bounding amplification.
+		self.gateway_http_response_queue_max_messages.unwrap_or(384)
+	}
+
+	pub fn gateway_streaming_http_response_queue_max_bytes(&self) -> usize {
+		self.gateway_streaming_http_response_queue_max_bytes
+			.unwrap_or(20 * 1024 * 1024) // 20 MiB
 	}
 
 	pub fn runner_max_response_payload_body_size(&self) -> usize {

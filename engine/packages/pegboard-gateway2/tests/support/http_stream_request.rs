@@ -14,9 +14,18 @@ fn request_body_streams_only_after_one_chunk() {
 
 #[test]
 fn streaming_request_body_size_is_cumulative_and_overflow_safe() {
-	assert_eq!(next_request_body_size(6, 4, 10), Some(10));
-	assert_eq!(next_request_body_size(7, 4, 10), None);
-	assert_eq!(next_request_body_size(usize::MAX, 1, usize::MAX), None);
+	assert_eq!(
+		next_request_body_size(6, 4, 10),
+		RequestBodySize::WithinLimit(10)
+	);
+	assert_eq!(
+		next_request_body_size(7, 4, 10),
+		RequestBodySize::ExceedsLimit
+	);
+	assert_eq!(
+		next_request_body_size(usize::MAX, 1, usize::MAX),
+		RequestBodySize::ExceedsLimit
+	);
 }
 
 #[test]

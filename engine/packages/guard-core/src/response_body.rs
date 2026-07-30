@@ -46,6 +46,7 @@ pub enum ResponseBody {
 
 impl ResponseBody {
 	#[doc(hidden)]
+	/// Runs `callback` exactly once when the body reaches EOF, errors, or is dropped.
 	pub fn with_completion(self, callback: impl FnOnce() + Send + 'static) -> Self {
 		Self::WithCompletion {
 			body: Box::new(self),
