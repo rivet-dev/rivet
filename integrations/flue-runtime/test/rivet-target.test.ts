@@ -13,14 +13,12 @@ import { createClient } from 'rivetkit/client';
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureRoots = [];
 const require = createRequire(import.meta.url);
-const flueCliRoot = path.resolve(
-	path.dirname(fileURLToPath(import.meta.resolve('@flue/cli'))),
-	'..',
-);
-const flueRuntimeRoot = path.resolve(
-	path.dirname(fileURLToPath(import.meta.resolve('@flue/runtime'))),
-	'..',
-);
+const flueCliRoot = process.env.FLUE_TEST_CLI_ROOT
+	? path.resolve(process.env.FLUE_TEST_CLI_ROOT)
+	: path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@flue/cli'))), '..');
+const flueRuntimeRoot = process.env.FLUE_TEST_RUNTIME_ROOT
+	? path.resolve(process.env.FLUE_TEST_RUNTIME_ROOT)
+	: path.resolve(path.dirname(fileURLToPath(import.meta.resolve('@flue/runtime'))), '..');
 const cli = pathToFileURL(path.join(flueCliRoot, 'bin', 'flue.mjs'));
 const { getEnginePath } = require('@rivetkit/engine-cli');
 
@@ -58,6 +56,26 @@ test('builds and serves an agent through target: rivet', async () => {
 	try {
 		await waitForMetadata(enginePort, engine.logs);
 		await configureNormalRunnerConfig(poolName, enginePort);
+		const oneShot = await runCli(
+			root,
+			[
+				'run',
+				'route-free',
+				'--id',
+				'local-run',
+				'--input',
+				'{"message":"Hello route-free"}',
+			],
+			{
+				RIVET_RUN_ENGINE: '0',
+				RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
+				RIVET_POOL: poolName,
+				FLUE_RIVET_REGISTRY_KEY: registryKey,
+			},
+		);
+		assert.equal(oneShot.code, 0, oneShot.stderr);
+		assert.match(`${oneShot.stderr}\n${oneShot.stdout}`, /Hello from route-free target rivet\./);
+
 		dev = startDev(root, port, {
 			RIVET_RUN_ENGINE: '0',
 			RIVET_ENDPOINT: `http://127.0.0.1:${enginePort}`,
@@ -69,9 +87,9 @@ test('builds and serves an agent through target: rivet', async () => {
 			try {
 				await client.health.getOrCreate(['test']).ping('ready');
 			} catch (error) {
-			assert.fail(`${String(error)}\n\n${dev.logs()}`);
-		}
-		await client.dispose();
+				assert.fail(`${String(error)}\n\n${dev.logs()}\n\n${engine.logs()}`);
+			}
+			await client.dispose();
 		const directInstanceId = (attempt) => `instance-${runKey}-${attempt}`;
 		const prompt = await postJsonWithRetry(
 			(attempt) => `http://127.0.0.1:${port}/agents/assistant/${directInstanceId(attempt)}`,
@@ -89,6 +107,78 @@ test('builds and serves an agent through target: rivet', async () => {
 			message.role === 'assistant' &&
 			message.parts.some((part) => part.type === 'text' && part.text === 'Hello from target rivet.'),
 		), JSON.stringify(stream));
+
+		const directSseController = new AbortController();
+		const directClient = createClient<any>({
+			endpoint: `http://127.0.0.1:${enginePort}`,
+			poolName,
+		});
+		const directSse = await openConversationSseResponse(
+			await directClient
+				.getOrCreate('flue-agent-assistant', [directInstanceId(prompt.attempt)])
+				.fetch(
+					`/agents/assistant/${directInstanceId(prompt.attempt)}?view=updates&offset=${encodeURIComponent(stream.offset)}&live=sse`,
+					{ signal: directSseController.signal },
+				),
+			directSseController.signal,
+			() => `${dev?.logs() ?? ""}\n\n${engine.logs()}`,
+		);
+		try {
+			const directControl = await readSseEvent(
+				directSse.reader,
+				directSse.state,
+				() => `${dev?.logs() ?? ""}\n\n${engine.logs()}`,
+			);
+			assert.equal(directControl.event, 'control');
+			assert.equal(directControl.data.upToDate, true);
+		} finally {
+			directSseController.abort();
+			await directSse.reader.cancel().catch(() => {});
+			await directClient.dispose();
+		}
+
+		const sseController = new AbortController();
+		const runtimeLogs = () => `${dev?.logs() ?? ""}\n\n${engine.logs()}`;
+		const sse = await openConversationSse(
+			`http://127.0.0.1:${port}/agents/assistant/${directInstanceId(prompt.attempt)}?view=updates&offset=${encodeURIComponent(stream.offset)}&live=sse`,
+			sseController.signal,
+			runtimeLogs,
+		);
+		try {
+			const initialControl = await readSseEvent(
+				sse.reader,
+				sse.state,
+				runtimeLogs,
+			);
+			assert.equal(initialControl.event, 'control');
+			assert.equal(initialControl.data.upToDate, true);
+
+			await postJsonWithRetry(
+				() => `http://127.0.0.1:${port}/agents/assistant/${directInstanceId(prompt.attempt)}`,
+				() => ({ kind: 'user', body: 'Hello over SSE' }),
+				dev.logs,
+				202,
+			);
+
+			const liveItems = [];
+			const streamedText = () => liveItems
+				.filter((item) => item.type === 'message-delta' && item.kind === 'text')
+				.map((item) => item.delta)
+				.join('');
+			while (!streamedText().includes('Hello over SSE from target rivet.')) {
+				const event = await readSseEvent(
+					sse.reader,
+					sse.state,
+					runtimeLogs,
+				);
+				if (event.event === 'data') liveItems.push(...event.data);
+			}
+			assert.match(JSON.stringify(liveItems), /Hello over SSE/);
+			assert.match(streamedText(), /Hello over SSE from target rivet\./);
+		} finally {
+			sseController.abort();
+			await sse.reader.cancel().catch(() => {});
+		}
 
 		const workflow = await postJsonWithRetry(
 			() => `http://127.0.0.1:${port}/workflows/job?wait=result`,
@@ -162,7 +252,11 @@ function writeProject(root) {
 	fs.mkdirSync(path.join(root, 'agents'), { recursive: true });
 	fs.writeFileSync(
 		path.join(root, 'agents', 'assistant.ts'),
-		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nexport const route = async (_c, next) => next();\nconst provider = registerFauxProvider({ provider: 'rivet-target-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from target rivet.'), fauxAssistantMessage('Dispatched from workflow.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
+		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nexport const route = async (_c, next) => next();\nconst provider = registerFauxProvider({ provider: 'rivet-target-' + crypto.randomUUID() });\nprovider.setResponses([\n  fauxAssistantMessage('Hello from target rivet.'),\n  fauxAssistantMessage('Hello over SSE from target rivet.'),\n  fauxAssistantMessage('Dispatched from workflow.'),\n]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
+	);
+	fs.writeFileSync(
+		path.join(root, 'agents', 'route-free.ts'),
+		`import { createAgent, registerProvider } from '@flue/runtime';\nimport { fauxAssistantMessage, registerFauxProvider } from '@flue/runtime/adapter-kit';\nconst provider = registerFauxProvider({ provider: 'rivet-route-free-' + crypto.randomUUID() });\nprovider.setResponses([fauxAssistantMessage('Hello from route-free target rivet.')]);\nconst model = provider.getModel();\nregisterProvider(model.provider, { api: provider.api, baseUrl: model.baseUrl });\nexport default createAgent(() => ({ model: model.provider + '/' + model.id }));\n`,
 	);
 	fs.mkdirSync(path.join(root, 'workflows'), { recursive: true });
 	fs.writeFileSync(
@@ -171,9 +265,10 @@ function writeProject(root) {
 	);
 }
 
-async function runCli(cwd, args) {
+async function runCli(cwd, args, env = {}) {
 	const child = spawn(process.execPath, [cli.pathname, ...args], {
 		cwd,
+		env: { ...process.env, ...env },
 		stdio: ['ignore', 'pipe', 'pipe'],
 	});
 	let stdout = '';
@@ -407,6 +502,74 @@ async function fetchConversationWithRetry(url, logs = () => '') {
 
 function fetchWithTimeout(url, init, timeout) {
 	return fetch(url, { ...init, signal: AbortSignal.timeout(timeout) });
+}
+
+async function openConversationSse(url, signal, logs = () => '') {
+	const headerController = new AbortController();
+	const headerTimeout = setTimeout(() => headerController.abort(), 10_000);
+	let response;
+	try {
+		response = await fetch(url, {
+			signal: AbortSignal.any([signal, headerController.signal]),
+		});
+	} catch (error) {
+		throw new Error(`Failed to open Flue SSE stream: ${String(error)}\n\n${logs()}`, {
+			cause: error,
+		});
+	} finally {
+		clearTimeout(headerTimeout);
+	}
+	return openConversationSseResponse(response, signal, logs);
+}
+
+async function openConversationSseResponse(response, _signal, logs = () => '') {
+	const responseText = response.ok ? '' : await response.text();
+	assert.equal(response.status, 200, `${responseText}\n\n${logs()}`);
+	assert.match(response.headers.get('content-type') ?? '', /^text\/event-stream\b/);
+	assert(response.body);
+	return {
+		reader: response.body.getReader(),
+		state: { buffer: '' },
+	};
+}
+
+async function readSseEvent(reader, state, logs = () => '') {
+	const decoder = new TextDecoder();
+	const deadline = Date.now() + 20_000;
+	while (Date.now() < deadline) {
+		const boundary = state.buffer.indexOf('\n\n');
+		if (boundary !== -1) {
+			const raw = state.buffer.slice(0, boundary);
+			state.buffer = state.buffer.slice(boundary + 2);
+			if (raw.startsWith(':')) continue;
+			const event = raw.match(/^event:\s*(.+)$/m)?.[1];
+			const data = raw.match(/^data:\s*(.*)$/m)?.[1];
+			if (event && data) return { event, data: JSON.parse(data) };
+			continue;
+		}
+		const remaining = deadline - Date.now();
+		const result = await readWithTimeout(reader, remaining, logs);
+		if (result.done) throw new Error(`Flue SSE stream ended before the expected event\n\n${logs()}`);
+		state.buffer += decoder.decode(result.value, { stream: true }).replaceAll('\r\n', '\n');
+	}
+	throw new Error(`Timed out reading Flue SSE event\n\n${logs()}`);
+}
+
+async function readWithTimeout(reader, timeout, logs) {
+	let timeoutId;
+	try {
+		return await Promise.race([
+			reader.read(),
+			new Promise((_, reject) => {
+				timeoutId = setTimeout(
+					() => reject(new Error(`Timed out reading Flue SSE event\n\n${logs()}`)),
+					timeout,
+				);
+			}),
+		]);
+	} finally {
+		clearTimeout(timeoutId);
+	}
 }
 
 function killEngineOnPort(port) {

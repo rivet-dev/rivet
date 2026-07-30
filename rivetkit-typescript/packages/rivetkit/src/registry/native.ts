@@ -47,7 +47,7 @@ import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
 import type { AnyDatabaseProvider } from "@/common/database/config";
 import { wrapJsNativeDatabase } from "@/common/database/native-database";
 import { assertJsonCompatValue, type JsonCompatValue } from "@/common/encoding";
-import { isResponseLike, type ResponseLike } from "@/common/fetch-like";
+import { isResponseLike } from "@/common/fetch-like";
 import { decodeWorkflowHistoryTransport } from "@/common/inspector-transport";
 import { deconstructError, stringifyError } from "@/common/utils";
 import type {
@@ -73,6 +73,12 @@ import {
 import { logger } from "./log";
 import { loadNapiRuntime } from "./napi-runtime";
 import {
+	buildNativeHttpRequest,
+	convertNativeHttpResponse,
+	type NativeHttpRequestBodyStream,
+	type NativeHttpResponseBodyStream,
+} from "./native-http";
+import {
 	type NativeValidationConfig,
 	validateActionArgs,
 	validateConnParams,
@@ -91,7 +97,6 @@ import type {
 	RuntimeBytes,
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
-	RuntimeHttpResponse,
 	RuntimeInspectorTabEntry,
 	RuntimeQueueMessage,
 	RuntimeScheduledEventInfo,
@@ -1161,38 +1166,6 @@ function wrapNativeCallback<Args extends Array<unknown>, Result>(
 function decodeArgs(value?: RuntimeBytes | null): unknown[] {
 	const decoded = decodeValue<unknown>(value);
 	return normalizeArgs(decoded);
-}
-
-function buildRequest(init: {
-	method: string;
-	uri: string;
-	headers?: Record<string, string>;
-	body?: RuntimeBytes;
-}): Request {
-	const url = init.uri.startsWith("http")
-		? init.uri
-		: new URL(init.uri, "http://127.0.0.1").toString();
-	const body =
-		init.body && init.body.length > 0
-			? runtimeBytesToArrayBuffer(init.body)
-			: undefined;
-	return new Request(url, {
-		method: init.method,
-		headers: init.headers,
-		body,
-	});
-}
-
-async function toRuntimeHttpResponse(
-	response: ResponseLike,
-): Promise<RuntimeHttpResponse> {
-	const headers = Object.fromEntries(response.headers.entries());
-	const body = new Uint8Array(await response.arrayBuffer());
-	return {
-		status: response.status,
-		headers,
-		body,
-	};
 }
 
 function toActorKey(
@@ -3716,19 +3689,22 @@ export function buildNativeFactory(
 		);
 	const maybeHandleNativeInspectorRequest = async (
 		ctx: ActorContextHandle,
-		_rawRequest: {
+		rawRequest: {
 			method: string;
 			uri: string;
 			headers?: Record<string, string>;
 			body?: RuntimeBytes;
 		},
-		jsRequest: Request,
 	): Promise<Response | undefined> => {
-		const url = new URL(jsRequest.url);
+		const rawUrl = rawRequest.uri.startsWith("http")
+			? rawRequest.uri
+			: new URL(rawRequest.uri, "http://127.0.0.1").toString();
+		const url = new URL(rawUrl);
 		if (!url.pathname.startsWith("/inspector/")) {
 			return undefined;
 		}
 
+		const jsRequest = buildNativeHttpRequest(rawRequest);
 		const jsonResponse = (body: unknown, init?: ResponseInit) =>
 			new Response(JSON.stringify(body), {
 				status: init?.status ?? 200,
@@ -4420,7 +4396,9 @@ export function buildNativeFactory(
 							);
 							const actorCtx = makeActorCtx(
 								ctx,
-								request ? buildRequest(request) : undefined,
+								request
+									? buildNativeHttpRequest(request)
+									: undefined,
 							);
 							try {
 								await config.onBeforeConnect(
@@ -4457,7 +4435,9 @@ export function buildNativeFactory(
 								unwrapTsfnPayload(error, payload);
 							const actorCtx = makeActorCtx(
 								ctx,
-								request ? buildRequest(request) : undefined,
+								request
+									? buildNativeHttpRequest(request)
+									: undefined,
 							);
 							const connAdapter = new NativeConnAdapter(
 								runtime,
@@ -4512,7 +4492,9 @@ export function buildNativeFactory(
 							);
 							const actorCtx = makeActorCtx(
 								ctx,
-								request ? buildRequest(request) : undefined,
+								request
+									? buildNativeHttpRequest(request)
+									: undefined,
 							);
 							const connAdapter = new NativeConnAdapter(
 								runtime,
@@ -4662,38 +4644,61 @@ export function buildNativeFactory(
 						uri: string;
 						headers?: Record<string, string>;
 						body?: RuntimeBytes;
+						bodyStream?: NativeHttpRequestBodyStream;
 					};
 					cancelToken?: CancellationTokenHandle;
+					responseBodyStream?: NativeHttpResponseBodyStream;
 				},
 			) => {
 				try {
-					const { ctx, request, cancelToken } = unwrapTsfnPayload(
-						error,
-						payload,
-					);
-					const jsRequest = buildRequest(request);
+					const { ctx, request, cancelToken, responseBodyStream } =
+						unwrapTsfnPayload(error, payload);
 					const inspectorResponse =
-						await maybeHandleNativeInspectorRequest(
-							ctx,
-							request,
-							jsRequest,
-						);
+						await maybeHandleNativeInspectorRequest(ctx, request);
 					if (inspectorResponse) {
-						return await toRuntimeHttpResponse(inspectorResponse);
+						return (
+							await convertNativeHttpResponse(
+								inspectorResponse,
+								responseBodyStream,
+							)
+						).response;
 					}
 
 					if (typeof config.onRequest !== "function") {
-						return await toRuntimeHttpResponse(
-							new Response(null, { status: 404 }),
-						);
+						return (
+							await convertNativeHttpResponse(
+								new Response(null, { status: 404 }),
+								responseBodyStream,
+							)
+						).response;
 					}
 
+					const requestAbortController = new AbortController();
+					const handlerRequest = buildNativeHttpRequest({
+						...request,
+						abortController: requestAbortController,
+					});
 					const rawConnParams =
-						jsRequest.headers.get(HEADER_CONN_PARAMS);
+						handlerRequest.headers.get(HEADER_CONN_PARAMS);
 					let requestCtx:
 						| ReturnType<typeof withConnContext>
 						| undefined;
 					let conn: ConnHandle | undefined;
+					let removeRequestAbortListener: (() => void) | undefined;
+					let cleanupDeferredToBody = false;
+					let cleanedUp = false;
+					const cleanupRequest = async () => {
+						if (cleanedUp) return;
+						cleanedUp = true;
+						removeRequestAbortListener?.();
+						try {
+							await requestCtx?.dispose();
+						} finally {
+							if (conn) {
+								await runtime.connDisconnect(conn);
+							}
+						}
+					};
 					try {
 						const connParams = validateConnParams(
 							schemaConfig.connParamsSchema,
@@ -4711,23 +4716,54 @@ export function buildNativeFactory(
 						requestCtx = makeConnCtx(
 							ctx,
 							conn,
-							jsRequest,
+							handlerRequest,
 							cancelToken,
 						);
+						const ctxAbortSignal = requestCtx.abortSignal;
+						const abortRequest = () =>
+							requestAbortController.abort(ctxAbortSignal.reason);
+						if (ctxAbortSignal.aborted) {
+							abortRequest();
+						} else {
+							ctxAbortSignal.addEventListener(
+								"abort",
+								abortRequest,
+								{ once: true },
+							);
+							removeRequestAbortListener = () =>
+								ctxAbortSignal.removeEventListener(
+									"abort",
+									abortRequest,
+								);
+						}
 						const response = await config.onRequest(
 							requestCtx,
-							jsRequest,
+							handlerRequest,
 						);
 						if (!isResponseLike(response)) {
 							throw new Error(
 								"onRequest handler must return a Response",
 							);
 						}
-						return await toRuntimeHttpResponse(response);
+						const conversion = await convertNativeHttpResponse(
+							response,
+							responseBodyStream,
+						);
+						if (conversion.bodyCompletion) {
+							cleanupDeferredToBody = true;
+							void conversion.bodyCompletion
+								.then(cleanupRequest)
+								.catch((cleanupError) => {
+									logger().error({
+										msg: "failed to clean up native streaming http request",
+										error: cleanupError,
+									});
+								});
+						}
+						return conversion.response;
 					} finally {
-						await requestCtx?.dispose();
-						if (conn) {
-							await runtime.connDisconnect(conn);
+						if (!cleanupDeferredToBody) {
+							await cleanupRequest();
 						}
 					}
 				} catch (error) {
@@ -4759,7 +4795,7 @@ export function buildNativeFactory(
 							const { ctx, conn, ws, request } =
 								unwrapTsfnPayload(error, payload);
 							const jsRequest = request
-								? buildRequest(request)
+								? buildNativeHttpRequest(request)
 								: undefined;
 							const actorCtx = makeConnCtx(ctx, conn, jsRequest);
 							try {
@@ -4919,7 +4955,7 @@ export function buildNativeFactory(
 					timeoutMs,
 					cancelToken,
 				} = unwrapTsfnPayload(error, payload);
-				const jsRequest = buildRequest(request);
+				const jsRequest = buildNativeHttpRequest(request);
 				const actorCtx = withConnContext(
 					runtime,
 					ctx,

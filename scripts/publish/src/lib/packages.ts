@@ -163,7 +163,8 @@ export function discoverPackages(
 		if (
 			!p.name.startsWith("@rivetkit/") &&
 			p.name !== "rivetkit" &&
-			p.name !== "@rivet-dev/vercel-world"
+			p.name !== "@rivet-dev/vercel-world" &&
+			p.name !== "@rivet-dev/flue"
 		) continue;
 		add(p.path);
 	}
@@ -218,6 +219,7 @@ export function assertDiscoverySanity(packages: Package[]): void {
 		"@rivetkit/rivetkit-napi",
 		"@rivetkit/engine-cli",
 		"@rivetkit/cli",
+		"@rivet-dev/flue",
 	];
 	const missing = required.filter((r) => !byName.has(r));
 	if (missing.length > 0) {

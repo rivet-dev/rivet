@@ -14,14 +14,20 @@ export { createAsyncEventStreamStore } from './event-stream-store.js';
 export { createAsyncRunStore } from './run-store.js';
 export { createAsyncSubmissionStore } from './submission-store.js';
 
-export function createAsyncSqlStores(db: AsyncSqlDb): PersistenceStores {
+export function createAsyncSqlStores(
+	db: AsyncSqlDb,
+	notificationScope = 'default',
+): PersistenceStores {
 	return {
 		executionStore: {
 			submissions: createAsyncSubmissionStore(db),
 		},
 		runStore: createAsyncRunStore(db),
-		eventStreamStore: createAsyncEventStreamStore(db),
-		conversationStreamStore: createAsyncConversationStreamStore(db),
+		eventStreamStore: createAsyncEventStreamStore(db, notificationScope),
+		conversationStreamStore: createAsyncConversationStreamStore(
+			db,
+			notificationScope,
+		),
 		attachmentStore: createAsyncAttachmentStore(db),
 	};
 }

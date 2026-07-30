@@ -46,8 +46,8 @@
 		"test:contracts": "vitest run test/rivet-store-contracts.test.ts"
 	},
 	"dependencies": {
-		"@flue/cli": "npm:@rivet-dev/labs-flue-cli@1.0.0-beta.9-rivet.1",
-		"@flue/runtime": "npm:@rivet-dev/labs-flue-runtime@1.0.0-beta.9-rivet.1",
+		"@flue/cli": "npm:@rivet-dev/labs-flue-cli@1.0.0-beta.9-rivet.2",
+		"@flue/runtime": "npm:@rivet-dev/labs-flue-runtime@1.0.0-beta.9-rivet.2",
 		"rivetkit": "workspace:*"
 	},
 	"devDependencies": {

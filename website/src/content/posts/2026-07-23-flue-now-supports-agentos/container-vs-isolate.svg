@@ -1,0 +1,88 @@
+<svg width="100%" viewBox="0 0 680 452" role="img" xmlns="http://www.w3.org/2000/svg" font-family="Manrope, 'Segoe UI', system-ui, sans-serif">
+	<title>A container held per request stays reserved through every idle stretch; isolates in one process pack the same busy work with nothing reserved between</title>
+	<desc>Top: three containers, each an outlined box spanning its request's full lifetime, filled with solid pine busy segments and hatched idle-but-reserved segments. Bottom: a single process packs the same pine busy segments, numbered by request, tightly with nothing reserved in the gaps.</desc>
+
+	<defs>
+		<pattern id="reserved" width="6" height="6" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+			<line x1="0" y1="0" x2="0" y2="6" stroke="#1B1916" stroke-width="1" stroke-opacity="0.13"/>
+		</pattern>
+		<style>
+			.busy { animation: pop 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; transform-box: fill-box; transform-origin: center; }
+			@keyframes pop { from { opacity: 0; transform: scale(0.62); } to { opacity: 1; transform: scale(1); } }
+			@media (prefers-reduced-motion: reduce) { .busy { animation: none; } }
+		</style>
+	</defs>
+
+	<!-- card -->
+	<rect x="0.5" y="0.5" width="679" height="451" rx="16" fill="#FFFFFF" fill-opacity="0.55" stroke="#1B1916" stroke-opacity="0.1"/>
+
+	<!-- ===== section: container per request ===== -->
+	<text x="40" y="42" font-size="14" font-weight="500" fill="#1B1916">Container per request</text>
+	<text x="40" y="60" font-size="12" fill="#8A8478">each container is held from first byte to last</text>
+
+	<!-- container 1 -->
+	<text x="40" y="102" font-size="12" fill="#8A8478" dominant-baseline="central">container 1</text>
+	<rect x="130" y="82" width="400" height="40" rx="8" fill="none" stroke="#1B1916" stroke-opacity="0.13"/>
+	<rect x="135" y="88" width="30" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.00s"/>
+	<rect x="170" y="88" width="110" height="28" rx="6" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<rect x="285" y="88" width="26" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.05s"/>
+	<rect x="316" y="88" width="152" height="28" rx="6" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<rect x="473" y="88" width="52" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.1s"/>
+
+	<!-- container 2 -->
+	<text x="40" y="154" font-size="12" fill="#8A8478" dominant-baseline="central">container 2</text>
+	<rect x="180" y="134" width="400" height="40" rx="8" fill="none" stroke="#1B1916" stroke-opacity="0.13"/>
+	<rect x="185" y="140" width="28" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.15s"/>
+	<rect x="218" y="140" width="120" height="28" rx="6" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<rect x="343" y="140" width="24" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.2s"/>
+	<rect x="372" y="140" width="160" height="28" rx="6" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<rect x="537" y="140" width="38" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.25s"/>
+
+	<!-- container 3 -->
+	<text x="40" y="206" font-size="12" fill="#8A8478" dominant-baseline="central">container 3</text>
+	<rect x="230" y="186" width="400" height="40" rx="8" fill="none" stroke="#1B1916" stroke-opacity="0.13"/>
+	<rect x="235" y="192" width="30" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.3s"/>
+	<rect x="270" y="192" width="118" height="28" rx="6" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<rect x="393" y="192" width="26" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.35s"/>
+	<rect x="424" y="192" width="156" height="28" rx="6" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<rect x="585" y="192" width="40" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.4s"/>
+
+	<text x="40" y="252" font-size="12" font-family="'JetBrains Mono', SFMono-Regular, monospace" fill="#8A8478">3 GiB reserved · about 8% of it busy</text>
+
+	<line x1="40" y1="278" x2="640" y2="278" stroke="#1B1916" stroke-opacity="0.12" stroke-width="0.5"/>
+
+	<!-- ===== section: isolates in one process ===== -->
+	<text x="40" y="306" font-size="14" font-weight="500" fill="#1B1916">Isolates in one process</text>
+	<text x="40" y="324" font-size="12" fill="#8A8478">the same busy segments, packed with nothing in between</text>
+
+	<text x="40" y="356" font-size="12" fill="#8A8478" dominant-baseline="central">1 process</text>
+	<rect x="130" y="336" width="352" height="40" rx="8" fill="none" stroke="#1B1916" stroke-opacity="0.13"/>
+	<rect x="135" y="342" width="30" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.45s"/>
+	<text x="150" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">1</text>
+	<rect x="171" y="342" width="28" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.49s"/>
+	<text x="185" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">2</text>
+	<rect x="205" y="342" width="30" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.53s"/>
+	<text x="220" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">3</text>
+	<rect x="241" y="342" width="26" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.57s"/>
+	<text x="254" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">1</text>
+	<rect x="273" y="342" width="24" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.61s"/>
+	<text x="285" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">2</text>
+	<rect x="303" y="342" width="26" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.65s"/>
+	<text x="316" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">3</text>
+	<rect x="335" y="342" width="52" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.69s"/>
+	<text x="361" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">1</text>
+	<rect x="393" y="342" width="38" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.73s"/>
+	<text x="412" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">2</text>
+	<rect x="437" y="342" width="40" height="28" rx="6" fill="#2E4034" class="busy" style="animation-delay:0.77s"/>
+	<text x="457" y="356" text-anchor="middle" dominant-baseline="central" font-size="12" fill="#F4F1E7">3</text>
+
+	<text x="40" y="400" font-size="12" font-family="'JetBrains Mono', SFMono-Regular, monospace" fill="#8A8478">66 MB reserved · idle costs nothing</text>
+
+	<!-- legend -->
+	<rect x="130" y="420" width="16" height="14" rx="4" fill="#2E4034"/>
+	<text x="152" y="427" font-size="12" fill="#8A8478" dominant-baseline="central">busy</text>
+	<rect x="212" y="420" width="16" height="14" rx="4" fill="url(#reserved)" stroke="#1B1916" stroke-opacity="0.16" stroke-dasharray="3 3"/>
+	<text x="234" y="427" font-size="12" fill="#8A8478" dominant-baseline="central">idle, still reserved</text>
+	<rect x="392" y="420" width="16" height="14" rx="4" fill="none" stroke="#1B1916" stroke-opacity="0.11" stroke-dasharray="1 2.5"/>
+	<text x="414" y="427" font-size="12" fill="#8A8478" dominant-baseline="central">empty, nothing reserved</text>
+</svg>

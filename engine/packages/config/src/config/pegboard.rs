@@ -105,6 +105,10 @@ pub struct Pegboard {
 	pub gateway_websocket_open_timeout_ms: Option<u64>,
 	/// Timeout for response to start in milliseconds.
 	pub gateway_response_start_timeout_ms: Option<u64>,
+	/// Timeout between streaming HTTP response chunks in milliseconds.
+	///
+	/// Disabled when unset so long-lived streams such as SSE may remain idle.
+	pub gateway_response_chunk_idle_timeout_ms: Option<u64>,
 	/// Ping interval for gateway updates in milliseconds.
 	pub gateway_update_ping_interval_ms: Option<u64>,
 	/// GC interval for in-flight requests in milliseconds.
@@ -278,6 +282,10 @@ impl Pegboard {
 	pub fn gateway_response_start_timeout_ms(&self) -> u64 {
 		self.gateway_response_start_timeout_ms
 			.unwrap_or(5 * 60 * 1000)
+	}
+
+	pub fn gateway_response_chunk_idle_timeout_ms(&self) -> Option<u64> {
+		self.gateway_response_chunk_idle_timeout_ms
 	}
 
 	pub fn gateway_update_ping_interval_ms(&self) -> u64 {

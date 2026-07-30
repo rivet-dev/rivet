@@ -6,12 +6,17 @@ import type {
 import type { AsyncSqlDb, AsyncSqlRunner } from './async-db.js';
 import { DEFAULT_READ_LIMIT, MAX_READ_LIMIT } from './constants.js';
 import { clampLimit } from './helpers.js';
+import { ListenerRegistry } from './listener-registry.js';
 
 const COMPONENT_PAD = 16;
 const ZERO_COMPONENT = '0'.repeat(COMPONENT_PAD);
+const listeners = new ListenerRegistry();
 
-export function createAsyncEventStreamStore(db: AsyncSqlDb): EventStreamStore {
-	return new AsyncEventStreamStore(db);
+export function createAsyncEventStreamStore(
+	db: AsyncSqlDb,
+	notificationScope = 'default',
+): EventStreamStore {
+	return new AsyncEventStreamStore(db, notificationScope);
 }
 
 export function formatOffset(seq: number): string {
@@ -28,12 +33,13 @@ export function parseOffset(offset: string): number {
 }
 
 class AsyncEventStreamStore implements EventStreamStore {
-	private listeners = new Map<string, Set<() => void>>();
 	private pendingAppends = new Map<string, Promise<void>>();
 	private db: AsyncSqlDb;
+	private notificationScope: string;
 
-	constructor(db: AsyncSqlDb) {
+	constructor(db: AsyncSqlDb, notificationScope: string) {
 		this.db = db;
+		this.notificationScope = notificationScope;
 	}
 
 	async createStream(path: string): Promise<void> {
@@ -168,29 +174,15 @@ class AsyncEventStreamStore implements EventStreamStore {
 	}
 
 	subscribe(path: string, listener: () => void): () => void {
-		let bucket = this.listeners.get(path);
-		if (!bucket) {
-			bucket = new Set();
-			this.listeners.set(path, bucket);
-		}
-		bucket.add(listener);
-		const listeners = bucket;
-		return () => {
-			listeners.delete(listener);
-			if (listeners.size === 0) this.listeners.delete(path);
-		};
+		return listeners.subscribe(this.notificationPath(path), listener);
 	}
 
 	private notifyListeners(path: string): void {
-		const bucket = this.listeners.get(path);
-		if (!bucket) return;
-		for (const listener of [...bucket]) {
-			try {
-				listener();
-			} catch {
-				// Listener failures are intentionally isolated from writes.
-			}
-		}
+		listeners.notify(this.notificationPath(path));
+	}
+
+	private notificationPath(path: string): string {
+		return `${this.notificationScope}\0${path}`;
 	}
 }
 
