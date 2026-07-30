@@ -417,7 +417,7 @@ export class Registry<A extends RegistryActors> {
 				);
 			}
 			this.#installSignalHandlers(config);
-			this.#printWelcome(config, "serverful", {
+			this.#printWelcome(config, "envoy", {
 				port,
 				host: opts.host,
 				publicDir,
@@ -614,7 +614,7 @@ export class Registry<A extends RegistryActors> {
 			this.#installSignalHandlers(config);
 		}
 		if (printWelcome) {
-			this.#printWelcome(config, "serverful");
+			this.#printWelcome(config, "envoy");
 		}
 	}
 
@@ -803,7 +803,7 @@ export class Registry<A extends RegistryActors> {
 	}
 
 	/**
-	 * Starts the serverful registry if needed and waits until its envoy has
+	 * Starts the envoy registry if needed and waits until its envoy has
 	 * registered with the Engine. Repeated and concurrent calls share one
 	 * startup lifecycle and readiness promise.
 	 *
@@ -915,7 +915,7 @@ export class Registry<A extends RegistryActors> {
 
 	#printWelcome(
 		config: RegistryConfig,
-		kind: "serverless" | "serverful",
+		kind: "envoy" | "serverless",
 		listener?: { port: number; host?: string; publicDir?: string },
 	): void {
 		if (config.noWelcome || this.#welcomePrinted) return;
@@ -927,9 +927,8 @@ export class Registry<A extends RegistryActors> {
 		};
 
 		console.log();
-		console.log(
-			`  RivetKit ${VERSION} (Engine - ${kind === "serverless" ? "Serverless" : "Serverful"})`,
-		);
+		console.log(`  RivetKit ${VERSION}`);
+		logLine("Mode", kind);
 
 		if (config.namespace !== "default") {
 			logLine("Namespace", config.namespace);
