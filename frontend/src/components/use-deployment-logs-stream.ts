@@ -236,6 +236,7 @@ interface UseDeploymentLogsStreamOptions {
 	filter?: string;
 	region?: string;
 	paused?: boolean;
+	initialBefore?: string;
 }
 
 export function useDeploymentLogsStream({
@@ -245,6 +246,7 @@ export function useDeploymentLogsStream({
 	filter,
 	region,
 	paused = false,
+	initialBefore,
 }: UseDeploymentLogsStreamOptions) {
 	const [logs, setLogs] = useState<Rivet.LogStreamEvent.Log[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -309,6 +311,7 @@ export function useDeploymentLogsStream({
 					namespace,
 					pool,
 					{
+						before: initialBefore,
 						limit: INITIAL_HISTORY_SIZE,
 						region: region || undefined,
 						contains: filter || undefined,
@@ -377,7 +380,7 @@ export function useDeploymentLogsStream({
 		});
 
 		return () => controller.abort();
-	}, [project, namespace, pool, filter, region]);
+	}, [project, namespace, pool, filter, region, initialBefore]);
 
 	useEffect(() => {
 		if (!paused && pendingRef.current.length > 0) {

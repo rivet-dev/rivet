@@ -79,6 +79,8 @@ interface DeploymentLogsProps {
 	filter?: string;
 	region?: string;
 	paused?: boolean;
+	/** ISO timestamp to seed the initial history fetch from, instead of now. */
+	before?: string;
 	logsRef?: React.MutableRefObject<Rivet.LogStreamEvent.Log[]>;
 	regionLabelLength?: number;
 }
@@ -230,6 +232,7 @@ export function DeploymentLogs({
 	filter,
 	region,
 	paused,
+	before,
 	logsRef,
 	regionLabelLength,
 }: DeploymentLogsProps) {
@@ -256,6 +259,7 @@ export function DeploymentLogs({
 		filter,
 		region,
 		paused,
+		initialBefore: before,
 	});
 
 	const viewportRef = useRef<HTMLDivElement>(null);
