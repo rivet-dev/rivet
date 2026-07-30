@@ -22,6 +22,42 @@ use crate::{
 };
 
 #[tokio::test]
+async fn request_chunk_without_start_is_rejected_instead_of_buffered() {
+	let (shared, _envoy_rx) = build_shared_context(Arc::new(TestCallbacks::idle()));
+	let (ws_tx, mut ws_rx) = mpsc::unbounded_channel();
+	*shared.ws_tx.lock().await = Some(ws_tx);
+	let (actor_tx, _) = create_actor(
+		shared,
+		"actor-missing-request-start".to_string(),
+		1,
+		actor_config(),
+		Vec::new(),
+		None,
+	);
+
+	actor_tx
+		.send(ToActor::ReqChunk {
+			message_id: message_id(),
+			chunk: protocol::ToEnvoyRequestChunk {
+				body: vec![1, 2, 3],
+				finish: false,
+			},
+		})
+		.expect("failed to send request chunk");
+
+	let abort = recv_ws_tunnel_msg(&mut ws_rx).await;
+	assert!(matches!(
+		abort.message_kind,
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(protocol::ToRivetResponseAbort {
+			reason: protocol::HttpStreamAbortReason {
+				kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+				..
+			}
+		})
+	));
+}
+
+#[tokio::test]
 async fn streamed_request_remains_cancellable_after_upload_finishes() {
 	let (fetch_started_tx, fetch_started_rx) = oneshot::channel();
 	let (fetch_dropped_tx, fetch_dropped_rx) = oneshot::channel();

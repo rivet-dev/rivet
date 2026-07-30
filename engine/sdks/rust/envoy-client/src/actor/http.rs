@@ -154,7 +154,6 @@ pub(super) fn handle_req_start(
 	{
 		pending.task_abort_handle = Some(task_abort_handle);
 	}
-
 }
 
 pub(super) fn handle_task_result(result: Result<(), JoinError>) {
@@ -236,7 +235,28 @@ pub(super) fn handle_req_chunk(
 			}
 		}
 		None => {
-			tracing::warn!("received request chunk without an active request");
+			tracing::warn!(
+				gateway_id = ?message_id.gateway_id,
+				request_id = ?message_id.request_id,
+				message_index = message_id.message_index,
+				"received request chunk without an active request"
+			);
+			let shared = ctx.shared.clone();
+			let gateway_id = message_id.gateway_id;
+			let request_id = message_id.request_id;
+			spawn_detached(async move {
+				send_response_abort(
+					&shared,
+					gateway_id,
+					request_id,
+					0,
+					protocol::HttpStreamAbortReason {
+						kind: protocol::HttpStreamAbortReasonKind::HandlerError,
+						detail: Some("request start was not delivered".to_owned()),
+					},
+				)
+				.await;
+			});
 			return;
 		}
 	}
