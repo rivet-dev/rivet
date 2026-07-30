@@ -247,6 +247,7 @@ export function DeploymentLogs({
 		streamError,
 		isLoadingMore,
 		hasMore,
+		oldestScannedTs,
 		loadMoreHistory,
 	} = useDeploymentLogsStream({
 		project: project ?? "",
@@ -399,11 +400,38 @@ export function DeploymentLogs({
 			);
 		}
 		return (
-			<div className="h-full flex flex-1 flex-col items-center justify-center">
-				<p>No logs available.</p>
-				<p className="text-muted-foreground text-xs mt-1">
-					Logs will appear here as they stream in.
-				</p>
+			<div className="h-full flex flex-1 flex-col items-center justify-center gap-3">
+				<div className="text-center">
+					<p>
+						{hasMore
+							? "No logs available."
+							: "No logs found."}
+					</p>
+					<p className="text-muted-foreground text-xs mt-1">
+						{hasMore
+							? "Nothing matches this view in recent history. Older logs may exist."
+							: "Logs will appear here as they stream in."}
+					</p>
+					{hasMore && oldestScannedTs ? (
+						<p className="text-muted-foreground text-xs mt-1 font-mono">
+							Searched back to {oldestScannedTs}
+						</p>
+					) : null}
+				</div>
+				{hasMore ? (
+					// The viewport is empty and cannot be scrolled, so scroll-to-top
+					// can't trigger a load. Offer an explicit way to page backward
+					// through older raw history.
+					<Button
+						variant="outline"
+						size="sm"
+						startIcon={<Icon icon={faArrowDown} className="rotate-180" />}
+						isLoading={isLoadingMore}
+						onClick={() => loadMoreHistory()}
+					>
+						Load older logs
+					</Button>
+				) : null}
 			</div>
 		);
 	}

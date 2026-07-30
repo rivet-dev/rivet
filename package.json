@@ -56,7 +56,7 @@
 			"react-dom": "19.1.0",
 			"@rivet-gg/components": "workspace:*",
 			"@rivet-gg/icons": "workspace:*",
-			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@ca7018c",
+			"@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@cdc6d4e",
 			"rivetkit": "workspace:*",
 			"@rivetkit/engine-api-full": "workspace:*",
 			"@flue/sdk": "1.0.0-beta.9",

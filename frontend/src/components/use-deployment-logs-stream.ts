@@ -109,8 +109,8 @@ async function sleep(ms: number, signal: AbortSignal) {
 	});
 }
 
-const HISTORY_PAGE_SIZE = 100;
-const INITIAL_HISTORY_SIZE = 50;
+const HISTORY_PAGE_SIZE = 300;
+const INITIAL_HISTORY_SIZE = 100;
 
 async function fetchLogsHistory(
 	baseUrl: string,
@@ -122,8 +122,9 @@ async function fetchLogsHistory(
 		limit?: number;
 		region?: string;
 		contains?: string;
+		signal?: AbortSignal;
 	},
-): Promise<Rivet.LogHistoryResponseItem[]> {
+): Promise<Rivet.LogHistoryResponse> {
 	const qs = new URLSearchParams();
 	if (params.before) qs.set("before", params.before);
 	if (params.limit) qs.set("limit", String(params.limit));
@@ -136,6 +137,7 @@ async function fetchLogsHistory(
 		method: "GET",
 		headers: { Accept: "application/json" },
 		credentials: "include",
+		signal: params.signal,
 	});
 
 	if (!response.ok) {
@@ -172,7 +174,7 @@ function rewriteLogEntry<T extends { message: string; stream?: string }>(
 }
 
 function historyToLogEvent(
-	item: Rivet.LogHistoryResponseItem,
+	item: Rivet.LogHistoryResponse.Entries.Item,
 ): Rivet.LogStreamEvent.Log {
 	return { event: "log", data: rewriteLogEntry(item) };
 }
@@ -249,15 +251,23 @@ export function useDeploymentLogsStream({
 	const [error, setError] = useState<string | null>(null);
 	const [isLoadingMore, setIsLoadingMore] = useState(false);
 	const [hasMore, setHasMore] = useState(true);
+	// Oldest raw timestamp scanned so far (the boundary the next page fetches
+	// before). Surfaced for the empty state so the user can see how far back the
+	// search has reached when nothing matches the filter yet.
+	const [oldestScannedTs, setOldestScannedTs] = useState<string | undefined>(
+		undefined,
+	);
 	const pendingRef = useRef<Rivet.LogStreamEvent.Log[]>([]);
 	const pausedRef = useRef(paused);
-	const logsRef = useRef(logs);
-	logsRef.current = logs;
 	// Dedupes entries that appear in both the initial history fetch and
 	// the live stream (and across "load more" page boundaries that share
 	// a timestamp). `insertId` is the only unique identifier the API
 	// exposes per log entry.
 	const seenInsertIdsRef = useRef<Set<string>>(new Set());
+	// Cursor for the next older history page. The API returns this per page as the
+	// oldest raw timestamp it scanned, so paging back works even across windows that
+	// contain no entries matching the current filter.
+	const nextCursorRef = useRef<string | undefined>(undefined);
 
 	useEffect(() => {
 		pausedRef.current = paused;
@@ -267,6 +277,9 @@ export function useDeploymentLogsStream({
 		setLogs([]);
 		setIsLoading(true);
 		setError(null);
+		setHasMore(true);
+		nextCursorRef.current = undefined;
+		setOldestScannedTs(undefined);
 		pendingRef.current = [];
 		seenInsertIdsRef.current = new Set();
 
@@ -299,22 +312,28 @@ export function useDeploymentLogsStream({
 						limit: INITIAL_HISTORY_SIZE,
 						region: region || undefined,
 						contains: filter || undefined,
+						signal: controller.signal,
 					},
 				);
 				if (controller.signal.aborted) return;
-				if (initial.length < INITIAL_HISTORY_SIZE) {
-					setHasMore(false);
-				}
-				if (initial.length > 0) {
-					for (const item of initial) {
+
+				nextCursorRef.current = initial.nextCursor;
+				setOldestScannedTs(initial.nextCursor);
+				setHasMore(initial.hasMore);
+				if (initial.entries.length > 0) {
+					const converted: Rivet.LogStreamEvent.Log[] = [];
+					for (const item of initial.entries) {
 						seenInsertIdsRef.current.add(item.insertId);
+						converted.push(historyToLogEvent(item));
 					}
-					const converted = initial.map(historyToLogEvent);
 					startTransition(() => {
 						setLogs(converted);
 					});
 				}
 			} catch (err) {
+				// The fetch was cancelled by the effect cleanup (e.g. filter
+				// change or unmount). Not an error worth surfacing.
+				if ((err as Error).name === "AbortError") return;
 				// Non-fatal. The stream will still start.
 				console.warn("Failed to fetch initial log history:", err);
 				Sentry.captureException(err, {
@@ -370,25 +389,15 @@ export function useDeploymentLogsStream({
 		}
 	}, [paused]);
 
-	// Reset hasMore when filters change.
-	useEffect(() => {
-		setHasMore(true);
-	}, []);
-
 	const loadMoreHistory = useCallback(async () => {
 		if (isLoadingMore || !hasMore) return;
+		// Fall back to now when we have no cursor yet, e.g. the initial history
+		// fetch failed. `hasMore` stays true until a successful page says otherwise,
+		// so a retry still issues a request instead of silently disabling paging.
+		const before = nextCursorRef.current ?? new Date().toISOString();
 		setIsLoadingMore(true);
 		try {
-			const currentLogs = logsRef.current;
-			// The history API only accepts a timestamp cursor. Multiple
-			// entries can share a timestamp, so `seenInsertIdsRef` below
-			// filters out any overlap at the page boundary.
-			const before =
-				currentLogs.length > 0
-					? currentLogs[0].data.timestamp
-					: new Date().toISOString();
-
-			const items = await fetchLogsHistory(
+			const page = await fetchLogsHistory(
 				cloudEnv().VITE_APP_CLOUD_API_URL,
 				project,
 				namespace,
@@ -400,18 +409,18 @@ export function useDeploymentLogsStream({
 					contains: filter || undefined,
 				},
 			);
+			nextCursorRef.current = page.nextCursor;
+			setOldestScannedTs(page.nextCursor);
+			setHasMore(page.hasMore);
 
-			if (items.length < HISTORY_PAGE_SIZE) {
-				setHasMore(false);
-			}
-
-			const fresh = items.filter(
+			// Multiple entries can share a timestamp, so `seenInsertIdsRef` filters
+			// out any overlap at the page boundary.
+			const fresh = page.entries.filter(
 				(item) => !seenInsertIdsRef.current.has(item.insertId),
 			);
 			for (const item of fresh) {
 				seenInsertIdsRef.current.add(item.insertId);
 			}
-
 			if (fresh.length > 0) {
 				const converted = fresh.map(historyToLogEvent);
 				startTransition(() => {
@@ -432,6 +441,7 @@ export function useDeploymentLogsStream({
 		streamError: null,
 		isLoadingMore,
 		hasMore,
+		oldestScannedTs,
 		loadMoreHistory,
 	};
 }
