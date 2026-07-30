@@ -276,20 +276,44 @@ export function useDeploymentLogsStream({
 	// its result dropped instead of writing into the reset store.
 	const requestAbortRef = useRef<AbortController | null>(null);
 
-	useEffect(() => {
-		pausedRef.current = paused;
-	}, [paused]);
+	// Advance the history cursor. The ref is read synchronously by load-more; the
+	// state mirror drives the empty-state "searched back to" display. Writing both
+	// here keeps them from drifting.
+	const setCursor = useCallback((next: string | undefined) => {
+		nextCursorRef.current = next;
+		setOldestScannedTs(next);
+	}, []);
 
-	useEffect(() => {
+	// Move buffered live entries into the visible list. Shared by the stream
+	// callback and the unpause effect.
+	const flushPending = useCallback(() => {
+		if (pendingRef.current.length === 0) return;
+		const toFlush = pendingRef.current;
+		pendingRef.current = [];
+		startTransition(() => {
+			setLogs((prev) => [...prev, ...toFlush]);
+		});
+	}, []);
+
+	// Clear all per-session state before a fresh seed (filter/region/pool/before
+	// change or first mount).
+	const resetSession = useCallback(() => {
 		setLogs([]);
 		setIsLoading(true);
 		setError(null);
 		setHasMore(true);
 		setIsLoadingMore(false);
-		nextCursorRef.current = undefined;
-		setOldestScannedTs(undefined);
+		setCursor(undefined);
 		pendingRef.current = [];
 		seenInsertIdsRef.current = new Set();
+	}, [setCursor]);
+
+	useEffect(() => {
+		pausedRef.current = paused;
+	}, [paused]);
+
+	useEffect(() => {
+		resetSession();
 
 		const controller = new AbortController();
 		requestAbortRef.current = controller;
@@ -300,13 +324,7 @@ export function useDeploymentLogsStream({
 			if (seenInsertIdsRef.current.has(insertId)) return;
 			seenInsertIdsRef.current.add(insertId);
 			pendingRef.current.push(entry);
-			if (!pausedRef.current) {
-				const toFlush = pendingRef.current;
-				pendingRef.current = [];
-				startTransition(() => {
-					setLogs((prev) => [...prev, ...toFlush]);
-				});
-			}
+			if (!pausedRef.current) flushPending();
 		}
 
 		async function start() {
@@ -327,8 +345,7 @@ export function useDeploymentLogsStream({
 				);
 				if (controller.signal.aborted) return;
 
-				nextCursorRef.current = initial.nextCursor;
-				setOldestScannedTs(initial.nextCursor);
+				setCursor(initial.nextCursor);
 				setHasMore(initial.hasMore);
 				if (initial.entries.length > 0) {
 					const converted: Rivet.LogStreamEvent.Log[] = [];
@@ -392,17 +409,21 @@ export function useDeploymentLogsStream({
 		});
 
 		return () => controller.abort();
-	}, [project, namespace, pool, filter, region, initialBefore]);
+	}, [
+		project,
+		namespace,
+		pool,
+		filter,
+		region,
+		initialBefore,
+		resetSession,
+		flushPending,
+		setCursor,
+	]);
 
 	useEffect(() => {
-		if (!paused && pendingRef.current.length > 0) {
-			const toFlush = pendingRef.current;
-			pendingRef.current = [];
-			startTransition(() => {
-				setLogs((prev) => [...prev, ...toFlush]);
-			});
-		}
-	}, [paused]);
+		if (!paused) flushPending();
+	}, [paused, flushPending]);
 
 	const loadMoreHistory = useCallback(async () => {
 		if (isLoadingMore || !hasMore) return;
@@ -431,8 +452,7 @@ export function useDeploymentLogsStream({
 			// The fetch may have resolved just before the filter changed and aborted.
 			// Bail before touching the store, which now belongs to a new generation.
 			if (signal?.aborted) return;
-			nextCursorRef.current = page.nextCursor;
-			setOldestScannedTs(page.nextCursor);
+			setCursor(page.nextCursor);
 			setHasMore(page.hasMore);
 
 			// Multiple entries can share a timestamp, so `seenInsertIdsRef` filters
@@ -456,7 +476,16 @@ export function useDeploymentLogsStream({
 		} finally {
 			setIsLoadingMore(false);
 		}
-	}, [isLoadingMore, hasMore, project, namespace, pool, filter, region]);
+	}, [
+		isLoadingMore,
+		hasMore,
+		project,
+		namespace,
+		pool,
+		filter,
+		region,
+		setCursor,
+	]);
 
 	return {
 		logs,
