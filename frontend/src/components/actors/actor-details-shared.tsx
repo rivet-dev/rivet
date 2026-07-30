@@ -66,9 +66,12 @@ function DeploymentLogsTab({ actorId }: { actorId: ActorId }) {
 	const { data: actor } = useQuery(
 		provider.actorGeneralQueryOptions(actorId),
 	);
-	const inactiveSince = actor?.destroyTs ?? actor?.sleepTs;
-	const before = inactiveSince
-		? new Date(inactiveSince.getTime() + 5_000).toISOString()
+	// Seed from just after the actor was destroyed so a dead actor's logs (far
+	// behind the live tail) load on open. Sleeping actors are not seeded this way:
+	// opening the tab wakes the actor, so it is active again and the live tail
+	// applies.
+	const before = actor?.destroyTs
+		? new Date(actor.destroyTs.getTime() + 5_000).toISOString()
 		: undefined;
 	return (
 		<div className="flex flex-col h-full">
