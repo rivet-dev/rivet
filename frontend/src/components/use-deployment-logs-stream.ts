@@ -124,14 +124,14 @@ async function fetchLogsHistory(
 		contains?: string;
 		signal?: AbortSignal;
 	},
-): Promise<Rivet.LogHistoryResponse> {
+): Promise<Rivet.LogHistoryPaginatedResponse> {
 	const qs = new URLSearchParams();
 	if (params.before) qs.set("before", params.before);
 	if (params.limit) qs.set("limit", String(params.limit));
 	if (params.region) qs.set("region", params.region);
 	if (params.contains) qs.set("contains", params.contains);
 	const query = qs.toString();
-	const url = `${baseUrl}/projects/${encodeURIComponent(project)}/namespaces/${encodeURIComponent(namespace)}/managed-pools/${encodeURIComponent(pool)}/logs/history${query ? `?${query}` : ""}`;
+	const url = `${baseUrl}/projects/${encodeURIComponent(project)}/namespaces/${encodeURIComponent(namespace)}/managed-pools/${encodeURIComponent(pool)}/logs/history-paginated${query ? `?${query}` : ""}`;
 
 	const response = await fetch(url, {
 		method: "GET",
@@ -174,7 +174,7 @@ function rewriteLogEntry<T extends { message: string; stream?: string }>(
 }
 
 function historyToLogEvent(
-	item: Rivet.LogHistoryResponse.Entries.Item,
+	item: Rivet.LogHistoryPaginatedResponse.Entries.Item,
 ): Rivet.LogStreamEvent.Log {
 	return { event: "log", data: rewriteLogEntry(item) };
 }
