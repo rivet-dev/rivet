@@ -46,7 +46,7 @@ pub fn stringify_to_rivet_tunnel_message_kind(kind: &protocol::ToRivetTunnelMess
 				val.finish
 			)
 		}
-		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort(_) => {
+		protocol::ToRivetTunnelMessageKind::ToRivetResponseAbort => {
 			"ToRivetResponseAbort".to_string()
 		}
 		protocol::ToRivetTunnelMessageKind::ToRivetWebSocketOpen(val) => {
@@ -106,7 +106,7 @@ pub fn stringify_to_envoy_tunnel_message_kind(kind: &protocol::ToEnvoyTunnelMess
 				val.finish
 			)
 		}
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(_) => {
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => {
 			"ToEnvoyRequestAbort".to_string()
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(val) => {

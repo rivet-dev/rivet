@@ -8,8 +8,6 @@ use anyhow::{Context, Result};
 use axum::Router;
 use axum::body::{Body, Bytes};
 use axum::extract::{Request, State};
-use axum::http::header::HOST;
-use axum::http::uri::Authority;
 use axum::http::{HeaderMap, HeaderName, HeaderValue, StatusCode};
 use axum::response::IntoResponse;
 use axum::routing::any;
@@ -22,7 +20,6 @@ use tokio_util::sync::CancellationToken;
 use tower_http::services::ServeDir;
 
 use crate::serverless::{CoreServerlessRuntime, ServerlessRequest, ServerlessResponse};
-use crate::ResponseChunk;
 
 #[derive(Clone)]
 pub struct ListenerConfig {
@@ -40,20 +37,13 @@ pub struct ApplicationRequest {
 	pub url: String,
 	pub headers: HashMap<String, String>,
 	pub body: Vec<u8>,
-	pub cancel_token: CancellationToken,
 }
 
 #[derive(Debug)]
 pub struct ApplicationResponse {
 	pub status: u16,
 	pub headers: HashMap<String, String>,
-	pub body: ApplicationResponseBody,
-}
-
-#[derive(Debug)]
-pub enum ApplicationResponseBody {
-	Buffered(Vec<u8>),
-	Stream(tokio::sync::mpsc::Receiver<ResponseChunk>),
+	pub body: Vec<u8>,
 }
 
 pub type ApplicationFetch = Arc<
@@ -70,7 +60,6 @@ struct AppState {
 #[derive(Clone)]
 struct ApplicationState {
 	application: ApplicationFetch,
-	shutdown_token: CancellationToken,
 }
 
 /// Bind a TCP listener and serve `runtime` over HTTP until `shutdown` fires.
@@ -133,13 +122,7 @@ pub async fn serve_application(
 	let host = listener.host.as_deref().unwrap_or("0.0.0.0");
 	let port = listener.port;
 	let forward_service = any(forward_application_request)
-		.with_state((
-			ApplicationState {
-				application,
-				shutdown_token: shutdown.clone(),
-			},
-			max_body_bytes,
-		));
+		.with_state((ApplicationState { application }, max_body_bytes));
 	let router = match listener.public_dir.as_ref() {
 		Some(dir) => Router::new().fallback_service(
 			ServeDir::new(dir)
@@ -168,7 +151,6 @@ async fn forward_application_request(
 	request: Request,
 ) -> axum::response::Response {
 	let (parts, body) = request.into_parts();
-	let request_token = state.shutdown_token.child_token();
 	let body = match axum::body::to_bytes(body, max_body_bytes).await {
 		Ok(body) => body,
 		Err(error) if is_length_limit_error(&error) => {
@@ -190,9 +172,9 @@ async fn forward_application_request(
 				.into_response();
 		}
 	};
-	let request = application_request_from_parts(parts, body, request_token.clone());
+	let request = application_request_from_parts(parts, body);
 	match (state.application)(request).await {
-		Ok(response) => into_application_response(response, request_token),
+		Ok(response) => into_application_response(response),
 		Err(error) => {
 			tracing::error!(?error, "application request handler failed");
 			(
@@ -229,8 +211,7 @@ async fn forward_request(
 		}
 	};
 
-	let application_request =
-		application_request_from_parts(parts, body_bytes, request_token.clone());
+	let application_request = application_request_from_parts(parts, body_bytes);
 	let req = ServerlessRequest {
 		method: application_request.method,
 		url: application_request.url,
@@ -252,11 +233,10 @@ async fn forward_request(
 		url: req.url,
 		headers: req.headers,
 		body: req.body,
-		cancel_token: request_token.clone(),
 	})
 	.await
 	{
-		Ok(response) => into_application_response(response, request_token),
+		Ok(response) => into_application_response(response),
 		Err(error) => {
 			tracing::error!(?error, "application request handler failed");
 			(
@@ -272,46 +252,13 @@ async fn forward_request(
 fn application_request_from_parts(
 	parts: axum::http::request::Parts,
 	body: Bytes,
-	cancel_token: CancellationToken,
 ) -> ApplicationRequest {
 	let path_and_query = parts
 		.uri
 		.path_and_query()
 		.map(|pq| pq.as_str())
 		.unwrap_or("/");
-	let forwarded_proto = parts
-		.headers
-		.get("x-forwarded-proto")
-		.and_then(|value| value.to_str().ok())
-		.and_then(|value| value.split(',').next())
-		.map(str::trim)
-		.filter(|value| matches!(*value, "http" | "https"));
-	let forwarded_authority = parts
-		.headers
-		.get("x-forwarded-host")
-		.and_then(|value| value.to_str().ok())
-		.and_then(|value| value.split(',').next())
-		.map(str::trim)
-		.and_then(|value| value.parse::<Authority>().ok());
-	let authority = parts
-		.uri
-		.authority()
-		.cloned()
-		.or(forwarded_authority)
-		.or_else(|| {
-			parts
-				.headers
-				.get(HOST)
-				.and_then(|value| value.to_str().ok())
-				.and_then(|value| value.parse::<Authority>().ok())
-		});
-	let scheme = forwarded_proto
-		.or_else(|| parts.uri.scheme_str())
-		.unwrap_or("http");
-	let url = authority.map_or_else(
-		|| format!("http://internal{path_and_query}"),
-		|authority| format!("{scheme}://{authority}{path_and_query}"),
-	);
+	let url = format!("http://internal{path_and_query}");
 
 	// Repeated header names get comma-joined per RFC 9110 §5.3.
 	let mut headers: HashMap<String, String> = HashMap::new();
@@ -334,14 +281,10 @@ fn application_request_from_parts(
 		url,
 		headers,
 		body: body.to_vec(),
-		cancel_token,
 	}
 }
 
-fn into_application_response(
-	response: ApplicationResponse,
-	request_token: CancellationToken,
-) -> axum::response::Response {
+fn into_application_response(response: ApplicationResponse) -> axum::response::Response {
 	let status = StatusCode::from_u16(response.status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR);
 	let mut header_map = HeaderMap::with_capacity(response.headers.len());
 	for (name, value) in response.headers {
@@ -352,51 +295,7 @@ fn into_application_response(
 			header_map.append(name, value);
 		}
 	}
-	let body = match response.body {
-		ApplicationResponseBody::Buffered(body) => Body::from(body),
-		ApplicationResponseBody::Stream(receiver) => {
-			let stream_token = request_token.clone();
-			let stream = futures::stream::unfold(
-				(receiver, false),
-				move |(mut receiver, finished)| {
-					let stream_token = stream_token.clone();
-					async move {
-					if finished {
-						return None;
-					}
-					let next = tokio::select! {
-						_ = stream_token.cancelled() => return None,
-						next = receiver.recv() => next,
-					};
-					match next {
-						Some(ResponseChunk::Data { data, finish }) => {
-							if finish && data.is_empty() {
-								None
-							} else {
-								Some((
-									Ok::<Bytes, std::io::Error>(Bytes::from(data)),
-									(receiver, finish),
-								))
-							}
-						}
-						Some(ResponseChunk::Error(message)) => Some((
-							Err(std::io::Error::other(message)),
-							(receiver, true),
-						)),
-						None => None,
-					}
-				}},
-			);
-			Body::from_stream(stream)
-		}
-	};
-	let guarded = CancelOnDropStream {
-		inner: body.into_data_stream(),
-		_guard: CancelOnDrop {
-			token: request_token,
-		},
-	};
-	(status, header_map, Body::from_stream(guarded)).into_response()
+	(status, header_map, response.body).into_response()
 }
 
 fn into_axum_response(

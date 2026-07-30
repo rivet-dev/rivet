@@ -727,8 +727,7 @@ impl ProxyService {
 		metrics::PROXY_REQUEST_PENDING.inc();
 		metrics::PROXY_REQUEST_TOTAL.inc();
 
-		let is_websocket = hyper_tungstenite::is_upgrade_request(&req);
-		let res = if is_websocket {
+		let res = if hyper_tungstenite::is_upgrade_request(&req) {
 			self.handle_websocket_upgrade(req, req_ctx, target).await
 		} else {
 			self.handle_http_request(req, req_ctx, target).await
@@ -747,42 +746,20 @@ impl ProxyService {
 
 		metrics::PROXY_REQUEST_PENDING.dec();
 
+		// Release in-flight counter and request ID when done
+		let state_clone = self.state.clone();
 		let client_ip = req_ctx.client_ip;
 		let in_flight_request_id = req_ctx.in_flight_request_id;
-		let state = self.state.clone();
-		let runtime = tokio::runtime::Handle::current();
-		// HTTP capacity remains held until the response reaches EOF, errors, or is dropped.
-		// WebSocket upgrades retain the existing immediate release behavior. Capturing the
-		// runtime handle lets the response body's synchronous Drop path schedule async cleanup.
-		let release_in_flight = move || {
-			runtime.spawn(
-				async move {
-					state
-						.release_in_flight(client_ip, in_flight_request_id)
-						.await;
-				}
-				.instrument(tracing::info_span!("release_in_flight_task")),
-			);
-		};
-
-		if is_websocket {
-			release_in_flight();
-			res
-		} else {
-			match res {
-				Ok(response) => {
-					let (parts, body) = response.into_parts();
-					Ok(Response::from_parts(
-						parts,
-						body.with_completion(release_in_flight),
-					))
-				}
-				Err(err) => {
-					release_in_flight();
-					Err(err)
-				}
+		tokio::spawn(
+			async move {
+				state_clone
+					.release_in_flight(client_ip, in_flight_request_id)
+					.await;
 			}
-		}
+			.instrument(tracing::info_span!("release_in_flight_task")),
+		);
+
+		res
 	}
 
 	#[tracing::instrument(skip_all)]
@@ -959,10 +936,6 @@ impl ProxyService {
 				.build());
 			}
 			ResolveRouteOutput::CustomServe(mut handler) => {
-				if handler.streams_request_body() {
-					return handler.handle_streaming_request(req, req_ctx).await;
-				}
-
 				// Collect request body
 				let (req_parts, body) = req.into_parts();
 				let req_body =
@@ -1029,10 +1002,18 @@ impl ProxyService {
 						continue;
 					}
 
+					// Release in-flight counter and request ID before returning
+					self.state
+						.release_in_flight(req_ctx.client_ip, req_ctx.in_flight_request_id)
+						.await;
 					return res;
 				}
 
 				// If we get here, all attempts failed
+				// Release in-flight counter and request ID before returning error
+				self.state
+					.release_in_flight(req_ctx.client_ip, req_ctx.in_flight_request_id)
+					.await;
 				return Err(errors::RetryAttemptsExceeded {
 					attempts: req_ctx.retry.max_attempts,
 					last_error_code,

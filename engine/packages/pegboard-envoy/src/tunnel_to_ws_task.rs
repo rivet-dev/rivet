@@ -258,7 +258,7 @@ fn to_envoy_tunnel_message_kind_name(kind: &protocol::ToEnvoyTunnelMessageKind) 
 	match kind {
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestStart(_) => "ToEnvoyRequestStart",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(_) => "ToEnvoyRequestChunk",
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(_) => "ToEnvoyRequestAbort",
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort => "ToEnvoyRequestAbort",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_) => "ToEnvoyWebSocketOpen",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(_) => "ToEnvoyWebSocketMessage",
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => "ToEnvoyWebSocketClose",
@@ -272,14 +272,8 @@ fn to_envoy_tunnel_message_inner_data_len(kind: &protocol::ToEnvoyTunnelMessageK
 		}
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestChunk(msg) => msg.body.len(),
 		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketMessage(msg) => msg.data.len(),
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort(abort) => {
-			abort.reason.detail.as_ref().map_or(0, String::len)
-		}
-		protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_)
+		protocol::ToEnvoyTunnelMessageKind::ToEnvoyRequestAbort
+		| protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketOpen(_)
 		| protocol::ToEnvoyTunnelMessageKind::ToEnvoyWebSocketClose(_) => 0,
 	}
 }
-
-#[cfg(test)]
-#[path = "../tests/support/tunnel_to_ws_payload_accounting.rs"]
-mod payload_accounting_tests;

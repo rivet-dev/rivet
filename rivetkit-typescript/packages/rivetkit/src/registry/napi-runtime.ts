@@ -4,7 +4,6 @@ import type {
 	CancellationToken as NativeCancellationToken,
 	ConnHandle as NativeConnHandle,
 	CoreRegistry as NativeCoreRegistry,
-	HttpResponseBodyStream as NativeHttpResponseBodyStream,
 	WebSocket as NativeWebSocket,
 } from "@rivetkit/rivetkit-napi";
 import type {
@@ -21,7 +20,6 @@ import type {
 	RuntimeCronFire,
 	RuntimeCronJobInfo,
 	RuntimeHttpRequest,
-	RuntimeHttpResponseBodyStream,
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
 	RuntimeListenerConfig,
@@ -147,45 +145,20 @@ function toNapiApplication(application: RuntimeApplicationFetch) {
 			url: string;
 			headers: Record<string, string>;
 			body: Buffer;
-			cancelToken?: NativeCancellationToken;
-			responseBodyStream?: RuntimeHttpResponseBodyStream;
 		},
 	) => {
 		if (error) throw error;
 		if (!request) {
 			throw new Error("application fetch callback received no request");
 		}
-		const response = await application(
-			{
-				...request,
-				body: new Uint8Array(request.body),
-				cancelToken:
-					request.cancelToken as unknown as CancellationTokenHandle,
-			},
-			request.responseBodyStream
-				? fromNapiHttpResponseBodyStream(
-						request.responseBodyStream as unknown as NativeHttpResponseBodyStream,
-					)
-				: undefined,
-		);
+		const response = await application({
+			...request,
+			body: new Uint8Array(request.body),
+		});
 		return {
 			...response,
-			body:
-				response.body === undefined
-					? undefined
-					: toNapiBuffer(response.body),
+			body: toNapiBuffer(response.body),
 		};
-	};
-}
-
-function fromNapiHttpResponseBodyStream(
-	stream: NativeHttpResponseBodyStream,
-): RuntimeHttpResponseBodyStream {
-	return {
-		cancelled: () => stream.cancelled(),
-		write: (chunk) => stream.write(Buffer.from(chunk)),
-		end: () => stream.end(),
-		error: (message) => stream.error(message),
 	};
 }
 
