@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::io::Cursor;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
@@ -342,6 +342,8 @@ fn is_loopback_endpoint(endpoint: &str) -> Result<bool> {
 #[cfg(test)]
 mod engine_spawn_tests {
 	use super::{EngineSpawnMode, should_manage_engine};
+	#[cfg(feature = "native-runtime")]
+	use super::managed_engine_instance_path;
 
 	#[test]
 	fn auto_manages_loopback_endpoints() {
@@ -361,6 +363,15 @@ mod engine_spawn_tests {
 	fn explicit_spawn_mode_overrides_endpoint_shape() {
 		assert!(should_manage_engine("https://api.rivet.dev", EngineSpawnMode::Always).unwrap());
 		assert!(!should_manage_engine("http://127.0.0.1:6420", EngineSpawnMode::Never).unwrap());
+	}
+
+	#[cfg(feature = "native-runtime")]
+	#[test]
+	fn non_default_ports_get_isolated_managed_instance_paths() {
+		assert_eq!(
+			managed_engine_instance_path(std::path::Path::new("/tmp/rivetkit/var/engine"), 6421),
+			std::path::Path::new("/tmp/rivetkit/var/engine/instances").join("6421")
+		);
 	}
 }
 
@@ -586,16 +597,7 @@ impl CoreRegistry {
 		let dispatcher = self.into_dispatcher(&config);
 		#[cfg(feature = "native-runtime")]
 		let _engine_process = if should_manage_engine(&config.endpoint, config.engine_spawn)? {
-			Some(
-				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
-					&config.endpoint,
-					config.engine_binary_path.clone(),
-					config.engine_host.clone(),
-					config.engine_port,
-					config.engine_auto_download,
-				))
-				.await?,
-			)
+			Some(EngineProcessManager::start_or_reuse(engine_resolver_config(&config)?).await?)
 		} else {
 			None
 		};
@@ -679,6 +681,38 @@ impl CoreRegistry {
 	) -> Result<crate::serverless::CoreServerlessRuntime> {
 		crate::serverless::CoreServerlessRuntime::new(self.factories, config).await
 	}
+}
+
+#[cfg(feature = "native-runtime")]
+pub(crate) fn engine_resolver_config(config: &ServeConfig) -> Result<EngineResolverConfig> {
+	let mut resolver = EngineResolverConfig::from_parts(
+		&config.endpoint,
+		config.engine_binary_path.clone(),
+		config.engine_host.clone(),
+		config.engine_port,
+		config.engine_auto_download,
+	);
+	let port = match config.engine_port {
+		Some(port) => port,
+		None => Url::parse(&config.endpoint)
+			.with_context(|| format!("parse engine endpoint `{}`", config.endpoint))?
+			.port_or_known_default()
+			.context("engine endpoint is missing a port")?,
+	};
+	if port != 6420 {
+		resolver.instance_path = Some(managed_engine_instance_path(
+			&crate::engine_process::default_engine_instance_path()?,
+			port,
+		));
+	}
+	Ok(resolver)
+}
+
+#[cfg(feature = "native-runtime")]
+fn managed_engine_instance_path(default_instance_path: &Path, port: u16) -> PathBuf {
+	default_instance_path
+		.join("instances")
+		.join(port.to_string())
 }
 
 impl RegistryDispatcher {

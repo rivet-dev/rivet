@@ -20,7 +20,9 @@ use url::Url;
 
 use crate::actor::factory::ActorFactory;
 #[cfg(feature = "native-runtime")]
-use crate::engine_process::{EngineProcessManager, EngineResolverConfig};
+use crate::engine_process::EngineProcessManager;
+#[cfg(feature = "native-runtime")]
+use crate::registry::engine_resolver_config;
 use crate::registry::{
 	CoreEnvoyHandle, CoreEnvoyStatus, RegistryCallbacks, RegistryDispatcher, ServeConfig,
 	should_manage_engine,
@@ -158,16 +160,7 @@ impl CoreServerlessRuntime {
 	) -> Result<Self> {
 		#[cfg(feature = "native-runtime")]
 		let engine_process = if should_manage_engine(&config.endpoint, config.engine_spawn)? {
-			Some(
-				EngineProcessManager::start_or_reuse(EngineResolverConfig::from_parts(
-					&config.endpoint,
-					config.engine_binary_path.clone(),
-					config.engine_host.clone(),
-					config.engine_port,
-					config.engine_auto_download,
-				))
-				.await?,
-			)
+			Some(EngineProcessManager::start_or_reuse(engine_resolver_config(&config)?).await?)
 		} else {
 			None
 		};
