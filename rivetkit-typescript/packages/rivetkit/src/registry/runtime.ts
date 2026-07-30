@@ -1,5 +1,6 @@
 import type { SqliteNativeMetrics } from "@/common/database/config";
 import { stringifyError } from "@/common/utils";
+import { isDev } from "@/utils/env-vars";
 import type { RegistryConfig } from "./config";
 import { logger } from "./log";
 
@@ -331,6 +332,7 @@ export interface RuntimeServeConfig {
 	engineBinaryPath?: string;
 	engineHost?: string;
 	enginePort?: number;
+	rejectExistingEnvoy: boolean;
 	handleInspectorHttpInRuntime?: boolean;
 	inspectorTestToken?: string;
 	serverlessBasePath?: string;
@@ -768,6 +770,7 @@ export async function buildServeConfig(
 		token: config.token,
 		namespace: config.namespace,
 		poolName: config.envoy.poolName,
+		rejectExistingEnvoy: isDev(),
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
 		serverlessPackageVersion: version,

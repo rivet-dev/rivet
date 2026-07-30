@@ -350,6 +350,7 @@ mod moved_tests {
 			engine_port: None,
 			engine_spawn: EngineSpawnMode::Never,
 			engine_auto_download: false,
+			reject_existing_envoy: false,
 			handle_inspector_http_in_runtime: true,
 			serverless_base_path: Some("/api/rivet".to_owned()),
 			serverless_package_version: "test-version".to_owned(),

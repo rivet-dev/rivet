@@ -65,6 +65,7 @@ import type {
 } from "@/registry/config";
 import { decodeCborCompat, encodeCborCompat } from "@/serde";
 import { getEnvUniversal, VERSION } from "@/utils";
+import { isDev } from "@/utils/env-vars";
 import {
 	getNodeFsSync,
 	getNodePath,
@@ -5028,6 +5029,7 @@ export async function buildServeConfig(
 		token: config.token,
 		namespace: config.namespace,
 		poolName: config.envoy.poolName,
+		rejectExistingEnvoy: isDev(),
 		handleInspectorHttpInRuntime: true,
 		serverlessBasePath: config.serverless.basePath,
 		serverlessPackageVersion: VERSION,

@@ -33,6 +33,7 @@ pub struct JsServeConfig {
 	pub engine_binary_path: Option<String>,
 	pub engine_host: Option<String>,
 	pub engine_port: Option<u16>,
+	pub reject_existing_envoy: bool,
 	pub handle_inspector_http_in_runtime: Option<bool>,
 	pub serverless_base_path: Option<String>,
 	pub serverless_package_version: String,
@@ -816,6 +817,7 @@ fn serve_config_from_js(
 		engine_port: config.engine_port,
 		engine_spawn: EngineSpawnMode::Auto,
 		engine_auto_download: false,
+		reject_existing_envoy: config.reject_existing_envoy,
 		handle_inspector_http_in_runtime: config
 			.handle_inspector_http_in_runtime
 			.unwrap_or(default_handle_inspector_http_in_runtime),
