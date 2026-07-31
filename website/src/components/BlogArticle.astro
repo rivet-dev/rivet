@@ -7,6 +7,8 @@ import { formatTimestamp } from '@/lib/formatDate';
 import { CATEGORIES } from '@/lib/article';
 import { Icon, faArrowLeft, faArrowRight } from '@rivet-gg/icons';
 import * as mdxComponents from '@/components/mdx';
+import { BlogTableOfContents } from '@/components/BlogTableOfContents';
+import { SyscallDiagram } from '@/components/SyscallDiagram';
 
 interface Props {
 	// biome-ignore lint/suspicious/noExplicitAny: content collection entry
@@ -16,9 +18,32 @@ interface Props {
 }
 
 const { entry, image, section } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
 
 const { title, description } = entry.data as unknown as { title: string; description: string };
+
+// In-depth post types get a wider column and a table of contents; short-form
+// types (changelog, monthly-update, launch-week, frogs) keep the narrow reading
+// column. Driven by category so the post type decides its own layout.
+const WIDE_CATEGORIES = ['technical', 'guide'];
+const isWide = WIDE_CATEGORIES.includes(entry.data.category);
+
+// Scrollytelling posts get a wide two-pane build section and a left-rail table of
+// contents (so the rail never competes with the pinned diagram on the right).
+const isScrolly = isWide && entry.data.scrolly === true;
+
+// Build a nested table of contents from h2 (section) and h3 (sub-section)
+// headings. Astro generates the heading ids the anchors point at.
+type TocNode = { id: string; title: string; children: TocNode[] };
+const toc: TocNode[] = [];
+for (const h of headings as { depth: number; slug: string; text: string }[]) {
+	if (h.depth === 2) {
+		toc.push({ id: h.slug, title: h.text, children: [] });
+	} else if (h.depth === 3 && toc.length > 0) {
+		toc[toc.length - 1].children.push({ id: h.slug, title: h.text, children: [] });
+	}
+}
+const showToc = isWide && toc.length > 1;
 
 // "Read next" pulls from the same section the reader is currently in.
 const readNextBase = section === 'changelog' ? '/changelog/' : '/blog/';
@@ -44,57 +69,149 @@ const otherArticles = allPosts
 	});
 ---
 
-<div class="blog-article paper-grain relative w-full" style="--header-height: 5rem;">
-	<div class="mx-auto w-full max-w-[62rem] px-6 pb-24 pt-32 md:pt-40">
-		<article class="mx-auto w-full max-w-[44rem]">
-			<!-- Back link -->
-			<a
-				href="/blog/"
-				class="group flex items-center gap-2 text-sm text-ink-faint transition-colors hover:text-ink"
-			>
-				<Icon icon={faArrowLeft} className="h-3 w-auto transition-transform group-hover:-translate-x-0.5" />
-				Blog
-			</a>
+<div class="blog-article paper-grain relative w-full" style="--header-height: 5rem;" data-scrolly={isScrolly ? '' : undefined}>
+	<div
+		class:list={[
+			'mx-auto w-full px-6 pb-20 pt-32 md:pt-40',
+			isScrolly
+				? 'max-w-[80rem]'
+				: showToc
+					? 'grid max-w-[80rem] grid-cols-1 gap-x-12 lg:grid-cols-[minmax(0,1fr)_15rem]'
+					: 'max-w-[62rem]',
+		]}
+	>
+		{isScrolly ? (
+			<div class="xl:grid xl:grid-cols-[minmax(0,44rem)_minmax(0,1fr)] xl:gap-x-10">
+				{/* Grid wraps only the header, diagram, and body so the diagram's sticky
+					containing block ends at the body, releasing at the bottom of the content.
+					"Read next" lives outside this grid. Header: column 1, row 1. */}
+				<div class="mx-auto w-full max-w-[44rem] xl:col-start-1 xl:row-start-1 xl:mx-0 xl:max-w-none">
+					<a
+						href="/blog/"
+						class="group flex items-center gap-2 text-sm text-ink-faint transition-colors hover:text-ink"
+					>
+						<Icon icon={faArrowLeft} className="h-3 w-auto transition-transform group-hover:-translate-x-0.5" />
+						Blog
+					</a>
+					<header class="mt-8">
+						<time datetime={entry.data.published.toISOString()} class="font-mono text-xs text-ink-faint">
+							{formatTimestamp(entry.data.published)}
+						</time>
+						<h1 class="mt-2 text-3xl font-medium leading-[1.06] tracking-[-0.015em] text-ink [text-wrap:balance] md:text-4xl">
+							{title}
+						</h1>
+						{description && (
+							<p class="mt-5 text-base leading-7 text-ink-soft [text-wrap:pretty] md:text-lg">
+								{description}
+							</p>
+						)}
+					</header>
+				</div>
 
-			<!-- Header -->
-			<header class="mb-12 mt-8">
-				<time datetime={entry.data.published.toISOString()} class="font-mono text-xs text-ink-faint">
-					{formatTimestamp(entry.data.published)}
-				</time>
-				<h1 class="mt-2 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink [text-wrap:balance] md:text-[3.25rem]">
-					{title}
-				</h1>
-				{description && (
-					<p class="mt-5 text-lg leading-7 text-ink-soft [text-wrap:pretty] md:text-xl">
-						{description}
-					</p>
-				)}
-			</header>
+				{/* Diagram: column 2, body row. It starts aligned with the top of the body
+					content (not the title) with breathing room above, then pins below the
+					site header as the body scrolls. self-start keeps it content-height so
+					sticky has room to travel the body. On mobile it sits below the title and
+					pins as the body scrolls beneath it. */}
+				<div class="sticky top-header mx-auto mt-8 mb-10 w-full max-w-[44rem] self-start xl:col-start-2 xl:row-start-2 xl:mx-0 xl:mb-0 xl:mt-10 xl:max-w-none">
+					<SyscallDiagram client:load />
+				</div>
 
-			{image && (
-				<img
-					src={image.src}
-					alt={title}
-					width={image.width}
-					height={image.height}
-					class="mb-12 aspect-[2/1] w-full rounded-2xl border border-ink/10 object-cover"
-					loading="eager"
-					decoding="async"
-				/>
-			)}
-
-			<Prose as="div" className="blog-prose w-full max-w-none">
-				<Content components={mdxComponents} />
-			</Prose>
-
-			<div class="mt-16 border-t border-ink/10 pt-8">
-				<ArticleSocials title={title} client:load />
+				{/* Body: column 1, body row, aligned with the diagram's top. */}
+				<div class="mx-auto w-full max-w-[44rem] xl:col-start-1 xl:row-start-2 xl:mx-0 xl:mt-10 xl:max-w-none">
+					<Prose as="div" className="blog-prose w-full max-w-none">
+						<Content components={mdxComponents} />
+					</Prose>
+					<div class="mt-16 border-t border-ink/10 pt-8">
+						<ArticleSocials title={title} client:load />
+					</div>
+				</div>
 			</div>
-		</article>
+		) : (
+			<Fragment>
+				<article
+					class:list={[
+						'w-full',
+						showToc
+							? 'mx-auto max-w-prose-docs lg:mx-0 lg:justify-self-center'
+							: isWide
+								? 'mx-auto max-w-prose-docs'
+								: 'mx-auto max-w-[44rem]',
+					]}
+				>
+					<!-- Back link -->
+					<a
+						href="/blog/"
+						class="group flex items-center gap-2 text-sm text-ink-faint transition-colors hover:text-ink"
+					>
+						<Icon icon={faArrowLeft} className="h-3 w-auto transition-transform group-hover:-translate-x-0.5" />
+						Blog
+					</a>
+
+					<!-- Header -->
+					<header class="mb-12 mt-8">
+						<time datetime={entry.data.published.toISOString()} class="font-mono text-xs text-ink-faint">
+							{formatTimestamp(entry.data.published)}
+						</time>
+						<h1 class="mt-2 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink [text-wrap:balance] md:text-[3.25rem]">
+							{title}
+						</h1>
+						{description && (
+							<p class="mt-5 text-lg leading-7 text-ink-soft [text-wrap:pretty] md:text-xl">
+								{description}
+							</p>
+						)}
+					</header>
+
+					{image && (
+						<img
+							src={image.src}
+							alt={title}
+							width={image.width}
+							height={image.height}
+							class="mb-12 aspect-[2/1] w-full rounded-2xl border border-ink/10 object-cover"
+							loading="eager"
+							decoding="async"
+						/>
+					)}
+
+					<Prose as="div" className="blog-prose w-full max-w-none">
+						<Content components={mdxComponents} />
+					</Prose>
+
+					<div class="mt-16 border-t border-ink/10 pt-8">
+						<ArticleSocials title={title} client:load />
+					</div>
+				</article>
+
+				{showToc && (
+					<aside class="hidden lg:block">
+						{/*
+							Offset so "On this page" lines up with the post date and the list
+							starts at the title. The article above is: back link (1.25rem line)
+							then header (mt-8 = 2rem), so the date sits 3.25rem down. Use margin
+							(not padding) so the offset collapses when the rail pins under the
+							header on scroll. The rail never scrolls on its own; it only pins.
+						*/}
+						<div class="lg:sticky lg:top-header lg:mt-[3.25rem] lg:self-start">
+							<p class="mb-3 font-mono text-[11px] font-medium uppercase leading-none tracking-[0.16em] text-pine">
+								On this page
+							</p>
+							<BlogTableOfContents tableOfContents={toc} client:load />
+						</div>
+					</aside>
+				)}
+			</Fragment>
+		)}
 
 		<!-- Read next -->
 		{otherArticles.length > 0 && (
-			<div class="mx-auto mt-24 w-full max-w-[62rem] border-t border-ink/10 pt-10">
+			<div
+				class:list={[
+					'mx-auto mt-24 w-full max-w-[62rem] border-t border-ink/10 pt-10',
+					isScrolly ? '' : 'lg:col-span-2',
+				]}
+			>
 				<h2 class="font-mono text-[11px] font-medium uppercase tracking-[0.16em] text-pine">Read next</h2>
 				<div class="mt-6 grid grid-cols-1 gap-6 md:grid-cols-3">
 					{otherArticles.map((article) => (
@@ -148,6 +265,11 @@ const otherArticles = allPosts
 
 	.blog-article .blog-prose > :first-child {
 		margin-top: 0;
+	}
+
+	/* Offset anchor jumps and scroll-spy below the fixed header. */
+	.blog-article .blog-prose :is(h2, h3, h4) {
+		scroll-margin-top: calc(var(--header-height, 5rem) + 1.5rem);
 	}
 
 	.blog-article .blog-prose h2 {

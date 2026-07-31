@@ -57,6 +57,10 @@ const posts = defineCollection({
 			z.object({ format: z.string().optional(), file: z.string().optional() }),
 		]).optional(),
 		unpublished: z.boolean().optional(),
+		// Opt an in-depth post into the scrollytelling layout: a wide two-pane build
+		// section (prose left, a pinned diagram right) with the table of contents on
+		// a left rail. Only meaningful for `wide` categories (technical, guide).
+		scrolly: z.boolean().optional(),
 	}),
 });
 
