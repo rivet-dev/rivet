@@ -237,6 +237,8 @@ export function AgentChat() {
 
 ## FAQ
 
+*WebSocket hibernation is in beta and disabled by default.*
+
 - **Do Rivet Actors scale to zero?** Yes. Actors run as a Vercel Function invocation. When no actors are active, no Vercel Functions will be running.
 - **Do Rivet Actors have coldstarts?** They have near-zero cold starts. Vercel's platform and Rivet's hibernation model keep wake-up latency very low.
 - **Do I pay for Vercel Function invocation time for the entire lifespan of my Rivet Actor?** No. Rivet Actors go to sleep when not in use and wake up immediately when activated again.

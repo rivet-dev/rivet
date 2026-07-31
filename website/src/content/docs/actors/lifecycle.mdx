@@ -375,7 +375,9 @@ Rivet enforces a hard limit of **30 minutes** for the entire stop process. These
 
 ### WebSocket Hibernation
 
-WebSocket connections are preserved across sleep cycles by default and transparently migrated to the new actor instance. Client stays connected and sees no interruption. Actor migration is very fast, realtime workloads are not interrupted.
+*WebSocket hibernation is in beta and disabled by default.*
+
+When WebSocket hibernation is enabled, connections are preserved across sleep cycles and transparently migrated to the new actor instance. Client stays connected and sees no interruption. Actor migration is very fast, realtime workloads are not interrupted.
 
 ### Shutdown Sequence
 

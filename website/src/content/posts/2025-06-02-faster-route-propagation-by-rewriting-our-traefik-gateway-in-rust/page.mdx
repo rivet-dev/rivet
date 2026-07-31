@@ -386,6 +386,8 @@ There are many features that we're looking forward to being able to support havi
 
 These are features that we hope to implement in the future that influenced our design:
 
+*WebSocket hibernation is in beta and disabled by default.*
+
 - **Rivet Container & Rivet Actor wake on network request**: We can dynamically wake containers when a network request comes to them to make workloads cheaper
 - **WebSocket & SSE hibernation for Rivet Actors & Rivet Containers**: A neat feature that Cloudflare has on Durable Objects, having a fully custom gateway allows us to maintain WebSocket connections open on the gateway while letting our actors sleep and re-wake on a WebSocket message
 - **Request-based autoscaling for Rivet Containers & Rivet Functions** CPU/memory metric based autoscaling (think HPA/VPA) is notoriously slow to respond to requests and can lead to outages if traffic spikes too fast or minimums are not set correctly. You can autoscale much more efficiently and avoid dropping requests with request-based autoscaling that factors the load balancer into the equation. This allows for fewer wasted resources and no outages on spiky traffic.
@@ -414,4 +416,3 @@ Sometimes you just have to build the exact tool you need.
 ## Edits
 
 **Edit (June 4, 2025):** Fix typo of calling Go not "memory safety" and replace with "correctness guarantees"
-

@@ -188,6 +188,8 @@ The `onWebSocket` handler uses standard WebSocket APIs and will work with existi
 
 ## WebSocket Hibernation
 
+*WebSocket hibernation is in beta and disabled by default.*
+
 WebSocket hibernation allows actors to go to sleep while keeping WebSocket connections alive. Actors automatically wake up when a message is received or the connection closes.
 
 Enable hibernation by setting `canHibernateWebSocket: true`. You can also pass a function `(request) => boolean` for conditional control.

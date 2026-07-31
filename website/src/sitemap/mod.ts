@@ -473,11 +473,6 @@ export const sitemap = [
 							},
 						],
 					},
-					// {
-					// 	title: "Architecture",
-					// 	href: "/docs/general/architecture",
-					// 	// icon: faSquareBinary,
-					// },
 					{
 						title: "AI Integration",
 						collapsible: true,
