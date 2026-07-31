@@ -237,31 +237,38 @@ async function buildHtml(
 </html>`;
 }
 
-const options = parseArgs(process.argv.slice(2));
-await mkdir(options.outputDir, { recursive: true });
+async function main(): Promise<void> {
+	const options = parseArgs(process.argv.slice(2));
+	await mkdir(options.outputDir, { recursive: true });
 
-const browser = await chromium.launch();
-try {
-	const targets = [
-		{ name: "image", width: BLOG_WIDTH, height: BLOG_HEIGHT },
-		{ name: "social", width: SOCIAL_WIDTH, height: SOCIAL_HEIGHT },
-	];
-	for (const target of targets) {
-		const html = await buildHtml(options, target.height);
-		await writeFile(path.join(options.outputDir, `${target.name}.html`), html);
-		const page = await browser.newPage({
-			viewport: { width: target.width, height: target.height },
-			deviceScaleFactor: 1,
-		});
-		await page.setContent(html, { waitUntil: "load" });
-		await page.evaluate(() => document.fonts.ready);
-		await page.screenshot({
-			path: path.join(options.outputDir, `${target.name}.png`),
-			fullPage: false,
-		});
-		await page.close();
-		console.log(`wrote ${path.join(options.outputDir, `${target.name}.png`)}`);
+	const browser = await chromium.launch();
+	try {
+		const targets = [
+			{ name: "image", width: BLOG_WIDTH, height: BLOG_HEIGHT },
+			{ name: "social", width: SOCIAL_WIDTH, height: SOCIAL_HEIGHT },
+		];
+		for (const target of targets) {
+			const html = await buildHtml(options, target.height);
+			await writeFile(path.join(options.outputDir, `${target.name}.html`), html);
+			const page = await browser.newPage({
+				viewport: { width: target.width, height: target.height },
+				deviceScaleFactor: 1,
+			});
+			await page.setContent(html, { waitUntil: "load" });
+			await page.evaluate(() => document.fonts.ready);
+			await page.screenshot({
+				path: path.join(options.outputDir, `${target.name}.png`),
+				fullPage: false,
+			});
+			await page.close();
+			console.log(`wrote ${path.join(options.outputDir, `${target.name}.png`)}`);
+		}
+	} finally {
+		await browser.close();
 	}
-} finally {
-	await browser.close();
 }
+
+main().catch((error) => {
+	console.error(error);
+	process.exitCode = 1;
+});
