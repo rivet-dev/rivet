@@ -413,7 +413,9 @@ fn spawn_signal_handler() {
 		let mut sigterm = signal(SignalKind::terminate()).expect("install SIGTERM handler");
 		let mut sigint = signal(SignalKind::interrupt()).expect("install SIGINT handler");
 		tokio::select! {
-			_ = sigterm.recv() => tracing::info!("received SIGTERM"),
+			_ = sigterm.recv() => tracing::error!(
+				"unexpected loadbalancer-sourced SIGTERM received, likely hitting OOM or running longer than 60 minutes"
+			),
 			_ = sigint.recv() => tracing::info!("received SIGINT"),
 		}
 		SIGNAL_SHUTDOWN.store(true, Ordering::Release);
