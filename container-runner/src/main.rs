@@ -75,6 +75,11 @@ static EXIT: LazyLock<CancellationToken> = LazyLock::new(CancellationToken::new)
 /// grace period instead).
 static SIGNAL_SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
+/// Set when shutdown was triggered by a platform SIGTERM (an instance reclaim),
+/// as opposed to a local SIGINT (developer Ctrl-C). Distinguishes a reclaim
+/// from a manual stop for downstream shutdown handling.
+static PLATFORM_RECLAIM: AtomicBool = AtomicBool::new(false);
+
 /// How long the platform gives this container between SIGTERM and SIGKILL.
 /// Cloud Run defaults to 10 seconds (configurable up to 60 on the service);
 /// keep this in sync with the platform setting via RIVET_SIGTERM_BUDGET_SECS.
@@ -417,7 +422,12 @@ fn spawn_signal_handler() {
 		let mut sigterm = signal(SignalKind::terminate()).expect("install SIGTERM handler");
 		let mut sigint = signal(SignalKind::interrupt()).expect("install SIGINT handler");
 		tokio::select! {
-			_ = sigterm.recv() => tracing::info!("received SIGTERM"),
+			_ = sigterm.recv() => {
+				PLATFORM_RECLAIM.store(true, Ordering::Release);
+				tracing::warn!(
+					"unexpected platform SIGTERM received, likely hitting OOM or running longer than 60 minutes"
+				);
+			}
 			_ = sigint.recv() => tracing::info!("received SIGINT"),
 		}
 		SIGNAL_SHUTDOWN.store(true, Ordering::Release);
