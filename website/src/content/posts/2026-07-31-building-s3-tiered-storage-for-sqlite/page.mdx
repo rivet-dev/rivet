@@ -1,0 +1,244 @@
+---
+image: true
+author: nathan-flurry
+published: "2026-07-31"
+category: technical
+keywords: ["sqlite", "s3", "tiered storage", "actors", "storage engine", "vfs", "object storage", "multi-tenancy", "agents"]
+title: "Building S3 Tiered Storage for SQLite"
+description: "How Rivet keeps SQLite writes fast and durable while cold data offloads to S3."
+---
+
+Every Rivet Actor gets its own isolated SQLite database. One database per user, per agent session, per document. At that granularity you are not managing thousands of databases, you are managing billions.
+
+This post is about the storage engine underneath: how writes stay fast and durable, how a sleeping database costs nothing, and why we built **tiered storage to S3** instead of running SQLite directly on object storage.
+
+## SQLite in Rivet Actors
+
+Rivet is built on standards. Actors persist to plain SQLite with plain SQL, not a proprietary storage API, so everything that already speaks SQLite works, including [Drizzle ORM](/docs/actors/sqlite-drizzle).
+
+SQLite fits actors unusually well because an actor is a **single writer**. With one owner per database there is no lock contention and no connection pool, which is [where SQLite is fastest](/blog/2025-02-16-sqlite-on-the-server-is-misunderstood/). It handles the data shapes these workloads actually produce: mutating rows in place, plain JSON documents, and key-value access.
+
+A database per actor changes what you can build:
+
+- **Agent sessions**: one session's transcript, tool calls, and memory in one database.
+- **Agent memory**: durable long-term state an agent can query with SQL.
+- **A database per tenant**: full isolation without running a Postgres server per customer.
+- **Local-first sync and CRDT multiplayer**: each document or lobby keeps its own op log to sync against.
+- **Audit logs, telemetry, and history**: append-heavy tables that grow forever and are rarely re-read.
+
+## Six design constraints
+
+Billions of small databases put six constraints on the storage engine at once.
+
+**Scale:**
+
+1. **Fast, durable writes.** A commit blocks a user-facing request, so it must return in low milliseconds. Once it returns, it must survive process loss, power loss, and losing the machine.
+2. **Bottomless storage.** No per-database ceiling. Transcripts and logs grow forever.
+3. **Billions of databases per cluster.** Per-database overhead must be near zero.
+
+**Lifecycle:**
+
+4. **No CPU or memory when sleeping.** An idle database costs storage and nothing else.
+5. **Fast failover.** When a machine dies, its actors come back somewhere else immediately. No restore step, no volume copy.
+
+**Deployment:**
+
+6. **Self-hostable.** No hard dependency on a single proprietary cloud service.
+
+Constraints 1 and 2 pull against each other. The only storage that is bottomless and archive-priced is object storage, and object storage is the one storage that cannot return a commit in milliseconds.
+
+## How this usually goes wrong
+
+There are three common ways databases cheat on that tension.
+
+**Commit straight to object storage.** Every commit becomes a PUT, and S3 answers small requests in roughly 30 to 45 ms at the median, worse at the tail. Some systems accept this honestly and say so: turbopuffer documents ~285 ms p50 writes and WarpStream ~400 ms p99 produce latency, which is fine for search indexing and streaming where latency amortizes. A SQLite commit sits inside a user-facing request. It does not amortize.
+
+- The escape hatch is S3 Express One Zone at single-digit milliseconds, but it costs $0.11/GB-month (more than the block storage you were trying to avoid), lives in a single availability zone, and is AWS-proprietary. That fails cost, redundancy, and self-hosting in one move.
+
+**Write to a local SSD and call it durable.** The fsync is fast, but if the data is not replicated before the commit returns, losing the machine loses every commit since the last backup.
+
+**Keep a process resident per database.** A dedicated server, pod, or connection pool per tenant burns CPU and memory while idle. That works at hundreds of databases and fails at billions.
+
+And even if you accept object-storage latency, request pricing punishes small writes: uploading data as 4 KiB database pages costs **$1.31 per GiB in PUT requests alone**, dwarfing the $0.023 that GiB costs to store for a month. Hold that thought.
+
+## A virtual filesystem instead of a network filesystem
+
+Start with how a database is stored while it is hot.
+
+Most cloud databases sit on a network-attached block device like EBS. The database believes it has a local disk, every read and write is secretly a network hop, and the volume is pinned to one machine in one zone. That is workable for one big database. For billions of small ones it is a dead end, because every database drags a volume, a filesystem, and an attachment along with it.
+
+Rivet does not use a disk abstraction at all. SQLite has a pluggable filesystem interface called the [VFS](https://www.sqlite.org/vfs.html), and every actor's database runs on a custom Rivet VFS that talks directly to a storage layer:
+
+<svg viewBox="0 0 660 224" role="img" aria-label="The actor reads and writes SQLite. SQLite talks through the Rivet VFS to a pluggable storage layer, which can be FoundationDB, Postgres, or RocksDB." style="width:100%;max-width:660px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+  <defs>
+    <marker id="ts-a-ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1b1916"/>
+    </marker>
+  </defs>
+  <g fill="#ffffff" stroke="#1b1916" stroke-width="1.4">
+    <rect x="30" y="90" width="100" height="44" rx="7"/>
+    <rect x="162" y="90" width="100" height="44" rx="7"/>
+  </g>
+  <rect x="294" y="90" width="110" height="44" rx="7" fill="#e7ece7" stroke="#2E4034" stroke-width="1.4"/>
+  <g font-size="12.5" fill="#1b1916" text-anchor="middle">
+    <text x="80" y="117">Actor</text>
+    <text x="212" y="117">SQLite</text>
+    <text x="349" y="117" fill="#2E4034" font-weight="600">Rivet VFS</text>
+  </g>
+  <g font-size="9.5" fill="#8a8578" text-anchor="middle">
+    <text x="80" y="152">your code</text>
+    <text x="212" y="152">plain SQL</text>
+    <text x="349" y="152">page reads, batched commits</text>
+  </g>
+  <g stroke="#1b1916" stroke-width="1.4">
+    <line x1="130" y1="112" x2="162" y2="112" marker-end="url(#ts-a-ar)" marker-start="url(#ts-a-ar)"/>
+    <line x1="262" y1="112" x2="294" y2="112" marker-end="url(#ts-a-ar)" marker-start="url(#ts-a-ar)"/>
+    <line x1="404" y1="112" x2="446" y2="112" marker-end="url(#ts-a-ar)" marker-start="url(#ts-a-ar)"/>
+  </g>
+  <rect x="446" y="26" width="184" height="172" rx="10" fill="#faf8f3" stroke="#2E4034" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <text x="462" y="50" font-size="10" font-weight="600" fill="#2E4034" font-family="ui-monospace,monospace" letter-spacing="0.12em">STORAGE LAYER</text>
+  <g fill="#ffffff" stroke="#1b1916" stroke-width="1.3">
+    <rect x="462" y="64" width="152" height="36" rx="7"/>
+    <rect x="462" y="110" width="152" height="36" rx="7"/>
+    <rect x="462" y="156" width="152" height="36" rx="7"/>
+  </g>
+  <g font-size="11.5" fill="#1b1916" text-anchor="middle">
+    <text x="538" y="86">FoundationDB</text>
+    <text x="538" y="132">Postgres</text>
+    <text x="538" y="178">RocksDB</text>
+  </g>
+</svg>
+
+- **Reads are explicit page fetches.** SQLite asks for the exact pages it needs, and the VFS pulls them from the storage layer and caches them in memory. Repeated reads hit SQLite's page cache at memory speed.
+- **Commits are batched writes.** A transaction's dirty pages go to the storage layer as one replicated write, and the commit returns once it is durable. That is low milliseconds, not an S3 round trip.
+- **The storage layer is pluggable.** FoundationDB on Rivet Cloud, Postgres or RocksDB when self-hosting. On Rivet Cloud the storage tier runs on locally-attached NVMe, the same approach as PlanetScale Metal, so page reads are backed by microsecond-class flash rather than a network block device.
+
+Because there is no volume, compute becomes elastic:
+
+- An actor can wake on **any machine** in the cluster with no volume attach and no data copy. It lazily pulls only the pages it touches.
+- Failover is the same operation as waking up. A machine dies, the actor starts elsewhere and reads its pages. No restore step.
+- A sleeping actor is nothing but rows in the storage layer. No process, no CPU, no memory.
+
+That satisfies five of the six constraints. Fast durable writes, billions of databases, nothing when idle, fast failover, and self-hostable backends. The one left is bottomless.
+
+## The hot tier is the expensive part
+
+The hot tier is built for write latency, and you pay for that per byte. Using EBS gp3 as the reference price for fast, durable block storage (Hyperdisk Balanced on Google Cloud is about the same):
+
+| Storage | $/GB-month | 5 TB per month |
+|---|---|---|
+| Block storage (EBS gp3) | $0.08 | $410 |
+| Block storage, replicated 3x | $0.24 | $1,230 |
+| S3 Standard, replication included | $0.023 | $118 |
+
+Durable means replicated, so the honest block-storage number is the 3x row: roughly **10x the price of S3** for the same bytes.
+
+Agent workloads generate exactly the data that makes this hurt. Transcripts, tool-call logs, memory, telemetry. Most of it is written once, read for a few days, and then almost never touched again. Keeping all of it on the fast tier forever means paying the write-latency premium on data that no longer needs it.
+
+## Tiering to S3
+
+So the storage engine tiers: this is **tiered storage, not S3-backed storage**, and the difference is which tier accepts the write. Writes always land in the hot tier. S3 is never on the commit path.
+
+- Data is tracked in **chunks** (a chunk is a group of database pages, 256 KiB).
+- When a chunk goes untouched for **7 days** (configurable), a background compactor coalesces it into an object, uploads it to object storage, and evicts the hot copy.
+- Tiering is **sub-database**. The same database can hold this week's rows in the hot tier and last year's rows in S3 at the same time.
+- Reading a cold chunk fetches it from object storage once (tens of milliseconds) and rehydrates it into the hot tier, where it is fast again.
+
+<svg viewBox="0 0 660 330" role="img" aria-label="Writes flow from the actor through SQLite and the Rivet VFS into the hot tier storage layer, where commits become durable in low milliseconds. A compactor offloads chunks idle for seven days into an S3-compatible cold tier, and cold chunks are rehydrated back into the hot tier when read." style="width:100%;max-width:660px;height:auto;display:block;margin:2.5rem auto;font-family:system-ui,sans-serif">
+  <defs>
+    <marker id="ts-b-ar" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#1b1916"/>
+    </marker>
+    <marker id="ts-b-ar-pine" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#2E4034"/>
+    </marker>
+  </defs>
+  <g fill="#ffffff" stroke="#1b1916" stroke-width="1.4">
+    <rect x="30" y="64" width="92" height="44" rx="7"/>
+    <rect x="152" y="64" width="92" height="44" rx="7"/>
+  </g>
+  <rect x="274" y="64" width="104" height="44" rx="7" fill="#e7ece7" stroke="#2E4034" stroke-width="1.4"/>
+  <g font-size="12.5" fill="#1b1916" text-anchor="middle">
+    <text x="76" y="91">Actor</text>
+    <text x="198" y="91">SQLite</text>
+    <text x="326" y="91" fill="#2E4034" font-weight="600">Rivet VFS</text>
+  </g>
+  <g stroke="#1b1916" stroke-width="1.4">
+    <line x1="122" y1="86" x2="152" y2="86" marker-end="url(#ts-b-ar)" marker-start="url(#ts-b-ar)"/>
+    <line x1="244" y1="86" x2="274" y2="86" marker-end="url(#ts-b-ar)" marker-start="url(#ts-b-ar)"/>
+    <line x1="378" y1="86" x2="420" y2="86" marker-end="url(#ts-b-ar)" marker-start="url(#ts-b-ar)"/>
+  </g>
+  <rect x="420" y="30" width="210" height="112" rx="10" fill="#faf8f3" stroke="#2E4034" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <text x="436" y="54" font-size="10" font-weight="600" fill="#2E4034" font-family="ui-monospace,monospace" letter-spacing="0.12em">HOT TIER</text>
+  <rect x="436" y="66" width="178" height="40" rx="7" fill="#ffffff" stroke="#1b1916" stroke-width="1.3"/>
+  <text x="525" y="86" font-size="10.5" fill="#1b1916" text-anchor="middle">FoundationDB / Postgres /</text>
+  <text x="525" y="99" font-size="10.5" fill="#1b1916" text-anchor="middle">RocksDB</text>
+  <text x="436" y="128" font-size="9.5" fill="#8a8578">commits durable in low ms</text>
+  <rect x="420" y="212" width="210" height="92" rx="10" fill="#faf8f3" stroke="#2E4034" stroke-width="1.3" stroke-dasharray="5 4"/>
+  <text x="436" y="236" font-size="10" font-weight="600" fill="#2E4034" font-family="ui-monospace,monospace" letter-spacing="0.12em">COLD TIER</text>
+  <rect x="436" y="248" width="178" height="40" rx="7" fill="#ffffff" stroke="#1b1916" stroke-width="1.3"/>
+  <text x="525" y="268" font-size="10.5" fill="#1b1916" text-anchor="middle">S3-compatible</text>
+  <text x="525" y="281" font-size="10.5" fill="#1b1916" text-anchor="middle">object storage</text>
+  <line x1="472" y1="142" x2="472" y2="212" stroke="#1b1916" stroke-width="1.4" marker-end="url(#ts-b-ar)"/>
+  <g font-size="9.5" fill="#56524a" text-anchor="end">
+    <text x="462" y="172">compactor offloads</text>
+    <text x="462" y="185">chunks idle 7+ days</text>
+  </g>
+  <line x1="578" y1="212" x2="578" y2="142" stroke="#2E4034" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#ts-b-ar-pine)"/>
+  <g font-size="9.5" fill="#2E4034">
+    <text x="588" y="172">rehydrate</text>
+    <text x="588" y="185">on read</text>
+  </g>
+</svg>
+
+Coalescing into chunks is also what makes the economics work:
+
+- Uploading 256 KiB chunks costs about **$0.02 per GiB in PUT requests**, 64x cheaper than uploading page by page at $1.31 per GiB. Reading a GiB back costs about $0.002.
+- Chunks clear S3's 128 KB minimum billable object size, so no byte is billed twice.
+- The 7-day window means a frequently rewritten chunk is uploaded zero times instead of on every commit. Only data that has proven it is cold pays the upload toll, roughly once.
+
+Two consequences fall out:
+
+- **No hard database ceiling.** Databases are unbounded (the limit is configurable), unlike the 10 GB cap on Cloudflare Durable Objects. The hot tier holds the working set and object storage holds everything else.
+- **S3-compatible, not S3-only.** Self-hosted clusters can point the cold tier at anything with an S3 API: MinIO, Cloudflare R2, Google Cloud Storage, and so on.
+
+## What tiering is for
+
+The workloads that fit actors are write-heavy and read-recent, which is the exact shape tiering rewards:
+
+- **Agent transcripts**: append on every message, read the recent tail for context.
+- **Audit logs and telemetry**: written constantly, read during an incident.
+- **Document history and CRDT logs**: old operations are rarely replayed.
+- **Ledgers**: the current balance is hot, 2019's entries are not.
+
+The working set stays at memory and NVMe speed while the archive is priced like an archive, and data moves between the two automatically.
+
+## Backups and point-in-time recovery, for free
+
+Once chunks live in object storage as immutable objects, backups stop being a separate system:
+
+- Every database gets **point-in-time recovery** with 5-minute granularity and 7-day retention by default (both configurable).
+- Restoring to a point in time and forking a database are the same primitive: pick a timestamp, assemble that chunk set, start reading.
+- Fork a production agent's database to replay a session, or restore one tenant without touching the rest.
+
+## Six constraints, satisfied
+
+1. **Fast, durable writes**: commits go to the replicated hot tier and return in low milliseconds. S3 never sits on the write path.
+2. **Bottomless storage**: cold chunks offload to object storage with no hard database ceiling.
+3. **Billions of databases per cluster**: a database is rows in a shared storage layer, not a volume plus a filesystem plus a process.
+4. **No CPU or memory when sleeping**: a sleeping database **costs nothing when idle**. No process, no CPU, no memory, just storage, and the cold majority of it at archive prices.
+5. **Fast failover**: any machine can serve any actor by fetching pages. No volume attach, no restore.
+6. **Self-hostable**: a pluggable hot tier (FoundationDB, Postgres, RocksDB) and an S3-compatible cold tier.
+
+## Get started
+
+SQLite tiered storage is available on [Rivet Cloud](https://dashboard.rivet.dev) and in Rivet Enterprise Edition for self-hosting.
+
+```bash
+npm install rivetkit
+```
+
+- [SQLite documentation](/docs/actors/sqlite)
+- [SQLite + Drizzle documentation](/docs/actors/sqlite-drizzle)
+- [GitHub](https://github.com/rivet-dev/rivet)
+- [Discord](https://rivet.dev/discord)
