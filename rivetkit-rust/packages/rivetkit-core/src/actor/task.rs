@@ -1534,12 +1534,22 @@ impl ActorTask {
 		}
 	}
 
+	/// Escalate a sleep grace to a destroy so `ctx.destroy()` called during the
+	/// sleep handler is honored instead of finalizing as a sleep.
+	fn finalize_shutdown_reason(&self, grace_reason: ShutdownKind) -> ShutdownKind {
+		if grace_reason == ShutdownKind::Sleep && self.ctx.destroy_requested() {
+			ShutdownKind::Destroy
+		} else {
+			grace_reason
+		}
+	}
+
 	fn try_finish_grace(&mut self) -> Option<LiveExit> {
 		let Some(grace) = self.sleep_grace.as_ref() else {
 			return None;
 		};
 		if self.ctx.can_finalize_shutdown(grace.reason) {
-			let reason = grace.reason;
+			let reason = self.finalize_shutdown_reason(grace.reason);
 			self.sleep_grace = None;
 			return Some(LiveExit::Shutdown { reason });
 		}
@@ -1576,7 +1586,7 @@ impl ActorTask {
 			"actor shutdown reached the grace deadline"
 		);
 		Some(LiveExit::Shutdown {
-			reason: grace.reason,
+			reason: self.finalize_shutdown_reason(grace.reason),
 		})
 	}
 
