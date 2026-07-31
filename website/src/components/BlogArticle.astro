@@ -16,9 +16,15 @@ interface Props {
 }
 
 const { entry, image, section } = Astro.props;
-const { Content } = await render(entry);
+const { Content, headings } = await render(entry);
 
 const { title, description } = entry.data as unknown as { title: string; description: string };
+
+// Technical deep-dives get a slightly wider column and a table of contents.
+// Other categories (changelog, guides, etc.) keep the standard layout.
+const isTechnical = entry.data.category === 'technical';
+const tocHeadings = isTechnical ? headings.filter((h) => h.depth === 2 || h.depth === 3) : [];
+const showToc = tocHeadings.length >= 2;
 
 // "Read next" pulls from the same section the reader is currently in.
 const readNextBase = section === 'changelog' ? '/changelog/' : '/blog/';
@@ -45,52 +51,83 @@ const otherArticles = allPosts
 ---
 
 <div class="blog-article paper-grain relative w-full" style="--header-height: 5rem;">
-	<div class="mx-auto w-full max-w-[62rem] px-6 pb-24 pt-32 md:pt-40">
-		<article class="mx-auto w-full max-w-[44rem]">
-			<!-- Back link -->
-			<a
-				href="/blog/"
-				class="group flex items-center gap-2 text-sm text-ink-faint transition-colors hover:text-ink"
-			>
-				<Icon icon={faArrowLeft} className="h-3 w-auto transition-transform group-hover:-translate-x-0.5" />
-				Blog
-			</a>
+	<div class:list={['mx-auto w-full px-6 pb-24 pt-32 md:pt-40', showToc ? 'max-w-[62rem] xl:max-w-[88rem]' : 'max-w-[62rem]']}>
+		<div class:list={[showToc && 'xl:grid xl:grid-cols-[minmax(0,1fr)_minmax(0,50rem)_minmax(0,1fr)] xl:gap-10']}>
+			{showToc && <div class="hidden xl:block" aria-hidden="true" />}
+			<article class:list={['mx-auto w-full', isTechnical ? 'max-w-[50rem]' : 'max-w-[44rem]']}>
+				<!-- Back link -->
+				<a
+					href="/blog/"
+					class="group flex items-center gap-2 text-sm text-ink-faint transition-colors hover:text-ink"
+				>
+					<Icon icon={faArrowLeft} className="h-3 w-auto transition-transform group-hover:-translate-x-0.5" />
+					Blog
+				</a>
 
-			<!-- Header -->
-			<header class="mb-12 mt-8">
-				<time datetime={entry.data.published.toISOString()} class="font-mono text-xs text-ink-faint">
-					{formatTimestamp(entry.data.published)}
-				</time>
-				<h1 class="mt-2 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink [text-wrap:balance] md:text-[3.25rem]">
-					{title}
-				</h1>
-				{description && (
-					<p class="mt-5 text-lg leading-7 text-ink-soft [text-wrap:pretty] md:text-xl">
-						{description}
-					</p>
+				<!-- Header -->
+				<header class="mb-12 mt-8">
+					<time datetime={entry.data.published.toISOString()} class="font-mono text-xs text-ink-faint">
+						{formatTimestamp(entry.data.published)}
+					</time>
+					<h1 class="mt-2 text-4xl font-medium leading-[1.06] tracking-[-0.015em] text-ink [text-wrap:balance] md:text-[3.25rem]">
+						{title}
+					</h1>
+					{description && (
+						<p class="mt-5 text-lg leading-7 text-ink-soft [text-wrap:pretty] md:text-xl">
+							{description}
+						</p>
+					)}
+				</header>
+
+				{image && (
+					<img
+						src={image.src}
+						alt={title}
+						width={image.width}
+						height={image.height}
+						class="mb-12 aspect-[2/1] w-full rounded-2xl border border-ink/10 object-cover"
+						loading="eager"
+						decoding="async"
+					/>
 				)}
-			</header>
 
-			{image && (
-				<img
-					src={image.src}
-					alt={title}
-					width={image.width}
-					height={image.height}
-					class="mb-12 aspect-[2/1] w-full rounded-2xl border border-ink/10 object-cover"
-					loading="eager"
-					decoding="async"
-				/>
+				<Prose as="div" className="blog-prose w-full max-w-none">
+					<Content components={mdxComponents} />
+				</Prose>
+
+				<div class="mt-16 border-t border-ink/10 pt-8">
+					<ArticleSocials title={title} client:load />
+				</div>
+			</article>
+
+			{showToc && (
+				<aside class="hidden xl:block">
+					<nav
+						data-blog-toc
+						aria-label="Table of contents"
+						class="sticky top-32 max-h-[calc(100vh-10rem)] overflow-y-auto"
+					>
+						<h2 class="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-pine">In this post</h2>
+						<ul class="mt-4 border-l border-ink/10 text-[13px] leading-snug">
+							{tocHeadings.map((heading) => (
+								<li>
+									<a
+										href={`#${heading.slug}`}
+										data-toc-link
+										class:list={[
+											'-ml-px block border-l border-transparent py-1 text-ink-faint transition-colors hover:text-ink',
+											heading.depth === 3 ? 'pl-7' : 'pl-4',
+										]}
+									>
+										{heading.text}
+									</a>
+								</li>
+							))}
+						</ul>
+					</nav>
+				</aside>
 			)}
-
-			<Prose as="div" className="blog-prose w-full max-w-none">
-				<Content components={mdxComponents} />
-			</Prose>
-
-			<div class="mt-16 border-t border-ink/10 pt-8">
-				<ArticleSocials title={title} client:load />
-			</div>
-		</article>
+		</div>
 
 		<!-- Read next -->
 		{otherArticles.length > 0 && (
@@ -295,4 +332,51 @@ const otherArticles = allPosts
 		font-weight: 600;
 		background-color: rgb(27 25 22 / 0.03);
 	}
+
+	/* Active TOC entry, driven by the IntersectionObserver script below. */
+	.blog-article [data-toc-link][data-active='true'] {
+		border-color: #2e4034;
+		color: #2e4034;
+		font-weight: 500;
+	}
 </style>
+
+<script>
+	// Highlight the TOC entry for the section currently in view. Only technical
+	// posts render [data-blog-toc], so this is a no-op on other categories.
+	const toc = document.querySelector('[data-blog-toc]');
+	if (toc) {
+		const links = Array.from(toc.querySelectorAll<HTMLAnchorElement>('a[data-toc-link]'));
+		const headings = links
+			.map((link) => document.getElementById(decodeURIComponent(link.hash.slice(1))))
+			.filter((el): el is HTMLElement => el !== null);
+
+		const setActive = (id: string) => {
+			for (const link of links) {
+				link.dataset.active = String(decodeURIComponent(link.hash.slice(1)) === id);
+			}
+		};
+
+		// The observed band stretches from far above the viewport down to 40% of
+		// its height, so a heading "intersects" once it rises above the reading
+		// line. The active section is the last such heading in document order.
+		// Crossing the line in either direction fires the observer, including on
+		// instant jumps from anchor links.
+		const above = new Set<string>();
+		const observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (entry.isIntersecting) above.add(entry.target.id);
+					else above.delete(entry.target.id);
+				}
+				let current = '';
+				for (const heading of headings) {
+					if (above.has(heading.id)) current = heading.id;
+				}
+				setActive(current);
+			},
+			{ rootMargin: '100000px 0px -60% 0px' },
+		);
+		for (const heading of headings) observer.observe(heading);
+	}
+</script>
