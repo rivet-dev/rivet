@@ -91,6 +91,28 @@ const otherArticles = allPosts
 					/>
 				)}
 
+				<!-- Inline TOC for viewports below xl, where the sidebar is hidden. -->
+				{showToc && (
+					<nav aria-label="Table of contents" class="mb-12 xl:hidden">
+						<h2 class="font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-pine">In this post</h2>
+						<ul class="mt-4 border-l border-ink/10 text-[13px] leading-snug">
+							{tocHeadings.map((heading) => (
+								<li>
+									<a
+										href={`#${heading.slug}`}
+										class:list={[
+											'block py-1 text-ink-faint transition-colors hover:text-ink',
+											heading.depth === 3 ? 'pl-7' : 'pl-4',
+										]}
+									>
+										{heading.text}
+									</a>
+								</li>
+							))}
+						</ul>
+					</nav>
+				)}
+
 				<Prose as="div" className="blog-prose w-full max-w-none">
 					<Content components={mdxComponents} />
 				</Prose>
