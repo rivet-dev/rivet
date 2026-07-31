@@ -220,12 +220,24 @@ impl Actor for GameServer {
 		crate::proxy::ws_proxy(child_port, path, ws).await
 	}
 
-	/// Engine-initiated sleep. `no_sleep` suppresses idle sleep, but the
-	/// engine can still sleep an actor (dashboard, crash policy, eviction
-	/// ahead of instance retirement); leaving the child running would orphan
-	/// it on an instance the engine considers vacated.
+	/// Engine-initiated sleep, which also covers GoingAway (eviction or
+	/// reallocation) since core maps that stop reason to a sleep. `no_sleep`
+	/// suppresses idle sleep, but the engine can still sleep an actor
+	/// (dashboard, crash policy, eviction ahead of instance retirement).
+	///
+	/// A game server's live match state lives in the child process and cannot
+	/// survive it, so a woken actor would come back as an empty shell. Stop the
+	/// child and escalate the sleep into a full destroy so the engine tears the
+	/// actor down completely instead of parking it as sleeping.
 	async fn on_sleep(self: Arc<Self>, ctx: Ctx<Self>) -> Result<()> {
-		self.stop_child(ctx.actor_id(), "actor sleeping").await;
+		let actor_id = ctx.actor_id().to_string();
+		self.stop_child(&actor_id, "actor sleeping").await;
+		tracing::info!(actor_id = %actor_id, "received sleep, destroying actor");
+		if let Err(err) = ctx.destroy() {
+			// The engine may already be destroying this generation; escalating a
+			// sleep that has already become a destroy is a harmless race.
+			tracing::debug!(error = ?err, actor_id = %actor_id, "destroy on sleep failed");
+		}
 		Ok(())
 	}
 
