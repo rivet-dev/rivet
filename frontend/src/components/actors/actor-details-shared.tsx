@@ -63,16 +63,6 @@ export function useHasManagedPool(): boolean {
 function DeploymentLogsTab({ actorId }: { actorId: ActorId }) {
 	const provider = useCloudNamespaceDataProvider();
 	const logsRef = useRef<Rivet.LogStreamEvent.Log[]>([]);
-	const { data: actor } = useQuery(
-		provider.actorGeneralQueryOptions(actorId),
-	);
-	// Seed from just after the actor was destroyed so a dead actor's logs (far
-	// behind the live tail) load on open. Sleeping actors are not seeded this way:
-	// opening the tab wakes the actor, so it is active again and the live tail
-	// applies.
-	const before = actor?.destroyTs
-		? new Date(actor.destroyTs.getTime() + 5_000).toISOString()
-		: undefined;
 	return (
 		<div className="flex flex-col h-full">
 			<div className="flex items-center justify-end border-b shrink-0 px-2 py-1">
@@ -88,7 +78,6 @@ function DeploymentLogsTab({ actorId }: { actorId: ActorId }) {
 					namespace={provider.cloudNamespace}
 					pool="default"
 					filter={`actor_id=${actorId}`}
-					before={before}
 					logsRef={logsRef}
 				/>
 			</div>

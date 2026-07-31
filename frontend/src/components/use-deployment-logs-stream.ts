@@ -23,7 +23,6 @@ interface UseDeploymentLogsStreamOptions {
 	filter?: string;
 	region?: string;
 	paused?: boolean;
-	initialBefore?: string;
 }
 
 export function useDeploymentLogsStream({
@@ -33,7 +32,6 @@ export function useDeploymentLogsStream({
 	filter,
 	region,
 	paused = false,
-	initialBefore,
 }: UseDeploymentLogsStreamOptions) {
 	const [logs, setLogs] = useState<Rivet.LogStreamEvent.Log[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -123,7 +121,6 @@ export function useDeploymentLogsStream({
 					namespace,
 					pool,
 					{
-						before: initialBefore,
 						limit: INITIAL_HISTORY_SIZE,
 						region: region || undefined,
 						contains: filter || undefined,
@@ -161,11 +158,6 @@ export function useDeploymentLogsStream({
 			if (controller.signal.aborted) return;
 			setIsLoading(false);
 
-			// A fixed `before` seed means a historical view (a destroyed actor),
-			// whose live tail can never produce new matching lines. Skip the stream
-			// and its retry/backoff loop rather than holding an idle connection.
-			if (initialBefore) return;
-
 			const result = await streamWithRetry(
 				project,
 				namespace,
@@ -202,7 +194,6 @@ export function useDeploymentLogsStream({
 		pool,
 		filter,
 		region,
-		initialBefore,
 		resetSession,
 		flushPending,
 		setCursor,
