@@ -1,8 +1,8 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import { rewriteLogEntry } from "./deployment-logs-transport";
 
-export const HISTORY_PAGE_SIZE = 300;
-export const INITIAL_HISTORY_SIZE = 100;
+export const HISTORY_PAGE_SIZE = 100;
+export const INITIAL_HISTORY_SIZE = 50;
 
 export async function fetchLogsHistory(
 	baseUrl: string,
