@@ -47,7 +47,7 @@ SQLite already has a rich ecosystem of replication and hosting options, but each
 |---|---|---|---|
 | Single-primary replication | [Litestream](https://litestream.io), [LiteFS](https://fly.io/docs/litefs/) | One machine owns the writable database and streams changes out, to object storage (Litestream) or to read replicas (LiteFS) | Commits are durable on only one machine before async replication, so a lost machine loses recent writes. Read replicas can fetch pages from S3 on demand, but the writable primary must hold the full database on its local disk and fully restore it before taking writes (violates 1, 2, 3, 6) |
 | Full-copy clusters | [rqlite](https://rqlite.io), [dqlite](https://dqlite.io), [cr-sqlite](https://github.com/vlcn-io/cr-sqlite), [Marmot](https://github.com/maxpert/marmot) | Every node holds the full database, kept consistent with Raft (rqlite, dqlite) or merged eventually with CRDTs (cr-sqlite) or gossip replication (Marmot) | Resident processes and a full copy per node cap the database at machine size and make billions of idle databases impossible (violates 2, 3, 6, 7, 8). The eventual-consistency options can also lose acknowledged writes on merge or node loss (violates 1) |
-| Hosted server-side SQLite | [Turso](https://turso.tech) (libSQL) | A hosted SQLite server that your app queries over the network. Its "diskless" architecture describes the server fleet: stateless SQLite servers caching over object storage | Queries run against a remote server instead of in your process. Getting SQLite back in-process requires embedded replicas, which hold the full database on local disk and forward writes to the server (violates 2, 3, 6). When Rivet says zero-disk, it means the opposite: SQLite runs in-process and the database file never exists on the machine's disk. Turso is an exciting project, but still early for us to bet all of the Rivet developers on it for now |
+| Partial database sync | [Turso Partial Sync](https://docs.turso.tech/sync/partial) | Runs an embedded Turso database and fetches missing pages from Turso Cloud on demand | Fetched pages and writes are stored in a local database file, so it does not provide zero-disk compute (violates 3) |
 | Object-storage LSM | [SlateDB](https://slatedb.io) | LSM tree that writes directly to object storage. Not SQLite itself, but it could sit under a SQLite VFS | Durable commits wait on an object-storage PUT, putting writes in the 50 to 100 ms range on S3 Standard (violates 1). A single writer owns each database, and per-database manifest and compaction overhead makes billions of small databases impractical (violates 7). It's also a pre-1.0, nonstandard database teams aren't used to running (violates 5) |
 | Distributed storage engine | [mvSQLite](https://github.com/losfair/mvsqlite) | Swap SQLite's storage layer for a distributed database, keep SQLite itself unmodified | This is the closest category to Rivet. mvSQLite is pre-1.0, requires operating FoundationDB plus its mvstore service (violates 5), and has no S3 tiering |
 
@@ -613,7 +613,7 @@ Durable Objects also pair each object with its own SQLite database, and their du
 
 **Doesn't Turso already have a diskless S3 architecture?**
 
-Yes, but it means something very different from what we mean. When we say zero-disk, we mean you don't need the SQLite file on the same machine as the one running it, while still getting native SQLite performance. Turso has two modes of operation: you can submit queries to their servers, which incurs a network hop for every query, or you can run an embedded replica, which requires syncing the full database locally before you can use it.
+Yes. Turso Partial Sync opens an embedded database without downloading the full file and fetches missing pages from Turso Cloud as queries need them. The difference is that it stores fetched pages and writes in a local database file. Rivet Actor compute never uses local disk.
 
 **You can run SQLite on Postgres?**
 
@@ -641,3 +641,5 @@ npm install rivetkit
 - [SQLite documentation](/docs/actors/sqlite)
 - [GitHub](https://github.com/rivet-dev/rivet)
 - [Discord](https://rivet.dev/discord)
+
+**Correction (July 31, 2026):** We updated this comparison to clarify that it refers to Turso Partial Sync, which fetches pages lazily from Turso Cloud while maintaining a local database.
