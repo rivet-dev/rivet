@@ -359,6 +359,15 @@ async fn async_main() -> Result<()> {
 	// unbounded so the /start SSE flushes its stopping frame cleanly.
 	EXIT.cancelled().await;
 	if SIGNAL_SHUTDOWN.load(Ordering::Acquire) {
+		// The platform is reclaiming this instance. Report every actor as crashed
+		// before draining so an unexpected SIGTERM (OOM or the ~60 minute request
+		// cap) surfaces as a crash on the engine instead of a silent reallocation.
+		// This runs while the envoy is still connected so the crash reaches the
+		// engine.
+		crate::actor::crash_all_actors(
+			"runner received unexpected platform SIGTERM, likely OOM or running longer than 60 minutes",
+		)
+		.await;
 		if tokio::time::timeout(signal_drain_timeout(), runtime.shutdown())
 			.await
 			.is_err()

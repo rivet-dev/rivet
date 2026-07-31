@@ -6,7 +6,7 @@
 //! `on_fetch`/`on_websocket` proxy tunneled traffic to the child's port, and
 //! `on_destroy` stops the child, exiting the process once no actors remain.
 
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -19,6 +19,12 @@ use crate::{
 	children, effective_stop_grace, release_child_port, reserve_child_port,
 	runner_config,
 };
+
+/// Live actor contexts on this instance, keyed by actor id. Lets the process
+/// shutdown path report actors as crashed when the platform reclaims the
+/// container out from under them.
+static ACTOR_CTXS: LazyLock<scc::HashMap<String, Ctx<GameServer>>> =
+	LazyLock::new(scc::HashMap::new);
 
 pub struct GameServer {
 	child: TokioMutex<Option<Arc<ChildProcess>>>,
@@ -34,6 +40,7 @@ impl GameServer {
 		// deliberate, then stop. `stop` is idempotent if the process shutdown
 		// sweep already stopped this child.
 		children().remove_async(actor_id).await;
+		ACTOR_CTXS.remove_async(actor_id).await;
 		let child = self.child.lock().await.take();
 		if let Some(child) = child {
 			child.stop(effective_stop_grace()).await;
@@ -76,6 +83,13 @@ impl Actor for GameServer {
 		let cfg = runner_config();
 		let actor_id = ctx.actor_id().to_string();
 		let key = actor_key_string(&ctx);
+
+		// Register the context so a platform shutdown can report this actor as
+		// crashed. Overwrite any stale entry from a prior generation.
+		ACTOR_CTXS.remove_async(&actor_id).await;
+		let _ = ACTOR_CTXS
+			.insert_async(actor_id.clone(), ctx.clone())
+			.await;
 
 		// An engine retry for an actor that is already running here must be an
 		// idempotent no-op: rejecting it would make the engine tear down a
@@ -232,6 +246,29 @@ impl Actor for GameServer {
 	async fn on_destroy(self: Arc<Self>, ctx: Ctx<Self>) -> Result<()> {
 		self.stop_child(ctx.actor_id(), "actor stopped").await;
 		Ok(())
+	}
+}
+
+/// Report every live actor on this instance as crashed. Called when the
+/// platform reclaims the container (an unexpected SIGTERM) so the reclaim
+/// surfaces as a crash on the engine instead of a silent reallocation. Runs
+/// while the envoy is still connected so the crash reaches the engine.
+pub async fn crash_all_actors(message: &str) {
+	let mut ctxs = Vec::new();
+	ACTOR_CTXS
+		.retain_async(|_, ctx| {
+			ctxs.push(ctx.clone());
+			false
+		})
+		.await;
+	for ctx in ctxs {
+		if let Err(err) = ctx.stop_with_error(message) {
+			tracing::debug!(
+				actor_id = %ctx.actor_id(),
+				error = ?err,
+				"crash-on-shutdown stop_with_error failed"
+			);
+		}
 	}
 }
 
