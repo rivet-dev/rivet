@@ -18,6 +18,7 @@ async-trait.workspace = true
 clap = { workspace = true, features = ["env"] }
 futures-util.workspace = true
 nix = { workspace = true, features = ["process"] }
+rand.workspace = true
 reqwest = { workspace = true, features = ["stream"] }
 rivetkit.workspace = true
 scc.workspace = true

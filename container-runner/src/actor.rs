@@ -7,19 +7,40 @@
 //! `on_destroy` stops the child while the instance stays warm for the next
 //! placement.
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use rivetkit::{Actor, ActorKeySegment, Ctx, Request, Response, WebSocket, action};
+use rivetkit::{Action, Actor, ActorKeySegment, Ctx, Handles, Request, Response, WebSocket, action};
+use serde::{Deserialize, Serialize};
 use tokio::sync::Mutex as TokioMutex;
 
 use crate::child::{ChildProcess, SpawnSpec, log_prefix};
-use crate::input::ActorInput;
+use crate::input::{ActorInput, ActorState};
 use crate::{
 	children, effective_stop_grace, release_child_port, reserve_child_port,
 	runner_config,
 };
+
+/// Upper bound, in milliseconds, of the random delay before a stopped container
+/// is woken to destroy itself. Spreading the wakes keeps a wave of containers
+/// that stopped together from waking the engine in a single burst.
+const REAP_MAX_JITTER_MS: f64 = 8_000.0;
+
+/// Action scheduled on stop purely to wake the actor so it can self-destroy.
+/// Carries no data; the real work happens in `on_start`, which sees `did_start`
+/// and destroys before this would run.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Reap;
+
+impl Action for Reap {
+	type Output = ();
+
+	const NAME: &'static str = "reap";
+}
 
 /// Live actor contexts on this instance, keyed by actor id. Lets the process
 /// shutdown path report actors as crashed when the platform reclaims the
@@ -59,11 +80,11 @@ impl GameServer {
 
 #[async_trait]
 impl Actor for GameServer {
-	// The launch spec is the persisted state: a woken actor restores the same
-	// spec without the engine re-sending input.
-	type State = ActorInput;
+	// State wraps the launch spec plus the one-shot `did_start` flag. A woken
+	// actor restores the same spec without the engine re-sending input.
+	type State = ActorState;
 	type Input = ActorInput;
-	type Actions = ();
+	type Actions = (Reap,);
 	type Events = ();
 	type Queue = ();
 	type ConnParams = ();
@@ -71,7 +92,10 @@ impl Actor for GameServer {
 	type Action = action::Raw;
 
 	async fn create_state(_ctx: &Ctx<Self>, input: Self::Input) -> Result<Self::State> {
-		Ok(input)
+		Ok(ActorState {
+			input,
+			did_start: false,
+		})
 	}
 
 	async fn create(_ctx: &Ctx<Self>) -> Result<Self> {
@@ -85,9 +109,11 @@ impl Actor for GameServer {
 		let actor_id = ctx.actor_id().to_string();
 		let key = actor_key_string(&ctx);
 
+
 		// An engine retry for an actor that is already running here must be an
 		// idempotent no-op: rejecting it would make the engine tear down a
-		// healthy actor.
+		// healthy actor. This is the same generation still hosting its child, not
+		// a restart, so it must be handled before the one-shot guard below.
 		if let Some(existing) = children().read_async(&actor_id, |_, c| c.clone()).await {
 			if !existing.has_exited() {
 				println!(
@@ -100,9 +126,28 @@ impl Actor for GameServer {
 			}
 		}
 
+		// A container hosts exactly one child lifetime. `did_start` is persisted the
+		// first time the container starts, so seeing it already set means this is a
+		// restart after the container stopped (slept or crashed). Destroy instead of
+		// respawning the child. This runs after the framework marks the lifecycle
+		// started, so `destroy` is valid here; `run` exits cleanly once the destroy
+		// is in flight. Writing the flag on start (not in `on_sleep`) is what makes
+		// it durable: state written during startup is captured by the normal and
+		// final save cycles, whereas an `on_sleep` write races the shutdown
+		// serialization.
+		if ctx.state().did_start {
+			tracing::info!(
+				actor_id = %actor_id,
+				"container restarted after stopping, destroying instead of respawning child"
+			);
+			return ctx.destroy();
+		}
+		ctx.state_mut().did_start = true;
+		ctx.request_save();
+
 		// Copy the launch spec out of the state guard before any await.
 		let (input_port, mut parts, env) = {
-			let input = ctx.state();
+			let input = &ctx.state().input;
 			// input.command overrides the CLI template; input.args are appended.
 			let mut parts = input
 				.command
@@ -175,6 +220,13 @@ impl Actor for GameServer {
 	/// the framework reports an errored stop and the engine records the crash.
 	async fn run(self: Arc<Self>, ctx: Ctx<Self>) -> Result<()> {
 		let Some(child) = self.child.lock().await.clone() else {
+			// A restart guarded by `did_start` requests destroy in `on_start`
+			// without spawning a child. Exit cleanly rather than reporting a
+			// spurious crash; only a missing child with no destroy in flight is a
+			// real bug.
+			if ctx.inner().is_destroy_requested() {
+				return Ok(());
+			}
 			anyhow::bail!("run: child process was never spawned");
 		};
 
@@ -238,6 +290,21 @@ impl Actor for GameServer {
 	/// ahead of instance retirement); leaving the child running would orphan
 	/// it on an instance the engine considers vacated.
 	async fn on_sleep(self: Arc<Self>, ctx: Ctx<Self>) -> Result<()> {
+		// Arm a wake so the stopped container is reaped proactively instead of
+		// lingering asleep until its next request. On that wake `on_start` sees
+		// `did_start` and destroys. This runs on every stop, including a
+		// crash-induced sleep (an errored `run` makes the engine sleep the actor,
+		// which runs this hook). A scheduled event is used rather than the raw
+		// `set_alarm`, because core's shutdown alarm sync recomputes the engine
+		// alarm from the schedule store and would wipe a raw alarm.
+		let jitter = Duration::from_millis((rand::random::<f64>() * REAP_MAX_JITTER_MS) as u64);
+		if let Err(err) = ctx.schedule().after(jitter, Reap::NAME, &[]).await {
+			tracing::warn!(
+				actor_id = %ctx.actor_id(),
+				error = ?err,
+				"failed to schedule reap wake for stopped container"
+			);
+		}
 		self.stop_child(ctx.actor_id(), "actor sleeping").await;
 		Ok(())
 	}
@@ -245,6 +312,22 @@ impl Actor for GameServer {
 	async fn on_destroy(self: Arc<Self>, ctx: Ctx<Self>) -> Result<()> {
 		self.stop_child(ctx.actor_id(), "actor stopped").await;
 		Ok(())
+	}
+}
+
+impl Handles<Reap> for GameServer {
+	type Future = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
+
+	fn handle(self: Arc<Self>, ctx: Ctx<Self>, _action: Reap) -> Self::Future {
+		Box::pin(async move {
+			// Reached only if the reap wake fires before `on_start` destroyed the
+			// actor (which it should have). Request destroy defensively so a stopped
+			// container never keeps running.
+			if let Err(err) = ctx.destroy() {
+				tracing::debug!(actor_id = %ctx.actor_id(), error = ?err, "reap destroy failed");
+			}
+			Ok(())
+		})
 	}
 }
 
