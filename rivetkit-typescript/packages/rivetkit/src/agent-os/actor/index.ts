@@ -58,6 +58,9 @@ import { buildShellActions } from "./shell";
 
 let sidecarEpoch = 0;
 
+const MAX_AGENT_OS_DISPOSE_WAIT_MS = 30_000;
+const AGENT_OS_FINALIZATION_MARGIN_MS = 15_000;
+
 /**
  * True when `err` indicates the shared sidecar OS process is dead (spawn
  * failure or process exit) — NOT a routine per-instance dispose. Matched by
@@ -173,6 +176,7 @@ async function recoverFromSidecarDeath<TConnParams>(
 	c.vars.activeShells.clear();
 	c.vars.sessions.clear();
 	syncPreventSleep(c);
+	if (c.vars.shuttingDown || c.abortSignal.aborted) return;
 	await recycleSharedSidecar(c, observedEpoch);
 	c.broadcast("vmShutdown", { reason: "error" });
 	if (dead) {
@@ -214,7 +218,12 @@ function withSidecarRecovery<T extends Record<string, unknown>>(actions: T): T {
 			try {
 				return await (fn as (...a: unknown[]) => unknown)(...args);
 			} catch (err) {
-				if (isSidecarProcessDeath(err) && c?.vars) {
+				if (
+					isSidecarProcessDeath(err) &&
+					c?.vars &&
+					!c.vars.shuttingDown &&
+					!c.abortSignal.aborted
+				) {
 					await recoverFromSidecarDeath(
 						c,
 						name,
@@ -246,6 +255,9 @@ async function ensureVm<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 	config: AgentOsActorConfig<TConnParams>,
 ): Promise<AgentOs> {
+	if (c.vars.shuttingDown || c.abortSignal.aborted) {
+		throw new DOMException("Actor is shutting down", "AbortError");
+	}
 	if (c.vars.agentOs) {
 		return c.vars.agentOs;
 	}
@@ -259,19 +271,52 @@ async function ensureVm<TConnParams>(
 	// — an unconditional clear would clobber the newer boot's registration
 	// and an unconditional install would overwrite its instance.
 	if (c.vars.agentOsBoot) {
-		return c.vars.agentOsBoot;
+		return waitForVmBootOrAbort(c, c.vars.agentOsBoot);
 	}
 	const box: BootBox = { boot: null };
 	const boot = bootVm(c, config, box);
 	box.boot = boot;
 	c.vars.agentOsBoot = boot;
 	try {
-		return await boot;
+		return await waitForVmBootOrAbort(c, boot);
 	} finally {
 		if (c.vars.agentOsBoot === boot) {
 			c.vars.agentOsBoot = null;
 		}
 	}
+}
+
+function waitForVmBootOrAbort<TConnParams>(
+	c: Pick<AgentOsActionContext<TConnParams>, "abortSignal">,
+	boot: Promise<AgentOs>,
+): Promise<AgentOs> {
+	if (c.abortSignal.aborted) {
+		return Promise.reject(
+			new DOMException("Actor stopped during VM boot", "AbortError"),
+		);
+	}
+
+	return new Promise<AgentOs>((resolve, reject) => {
+		const onAbort = () => {
+			cleanup();
+			reject(
+				new DOMException("Actor stopped during VM boot", "AbortError"),
+			);
+		};
+		const cleanup = () =>
+			c.abortSignal.removeEventListener("abort", onAbort);
+		c.abortSignal.addEventListener("abort", onAbort, { once: true });
+		boot.then(
+			(agentOs) => {
+				cleanup();
+				resolve(agentOs);
+			},
+			(error: unknown) => {
+				cleanup();
+				reject(error);
+			},
+		);
+	});
 }
 
 /**
@@ -524,6 +569,13 @@ function buildVmOptions(userOptions?: AgentOsOptions): AgentOsOptions {
 function syncPreventSleep<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 ): void {
+	if (c.vars.shuttingDown || c.abortSignal.aborted) {
+		if (c.vars.keepAwakeResolver) {
+			c.vars.keepAwakeResolver();
+			c.vars.keepAwakeResolver = null;
+		}
+		return;
+	}
 	const isActive =
 		c.vars.activeSessionIds.size > 0 ||
 		c.vars.activeProcesses.size > 0 ||
@@ -557,18 +609,99 @@ function runHook<TConnParams>(
 	c: AgentOsActionContext<TConnParams>,
 	name: string,
 	callback: () => void | Promise<void>,
+	options: { allowDuringShutdown?: boolean } = {},
 ): void {
-	const promise = Promise.resolve(callback())
+	const shuttingDown = c.vars.shuttingDown || c.abortSignal.aborted;
+	if (shuttingDown && !options.allowDuringShutdown) return;
+
+	const vars = c.vars;
+	const promise = Promise.resolve()
+		.then(callback)
 		.catch((error) =>
 			c.log.error({ msg: "agent-os hook failed", hookName: name, error }),
 		)
 		.finally(() => {
-			c.vars.activeHooks.delete(promise);
-			syncPreventSleep(c);
+			vars.activeHooks.delete(promise);
+			if (!vars.shuttingDown && !c.abortSignal.aborted) {
+				syncPreventSleep(c);
+			}
 		});
-	c.vars.activeHooks.add(promise);
-	syncPreventSleep(c);
+	vars.activeHooks.add(promise);
+	if (!shuttingDown) syncPreventSleep(c);
 	c.waitUntil(promise);
+}
+
+function agentOsDisposeTimeoutMs(sleepGracePeriod: number): number {
+	return Math.max(
+		0,
+		Math.min(
+			MAX_AGENT_OS_DISPOSE_WAIT_MS,
+			sleepGracePeriod - AGENT_OS_FINALIZATION_MARGIN_MS,
+		),
+	);
+}
+
+async function shutdownAgentOs<TConnParams>(
+	c: Pick<AgentOsActionContext<TConnParams>, "vars" | "log" | "broadcast">,
+	reason: "sleep" | "destroy",
+	disposeTimeoutMs: number,
+): Promise<void> {
+	const vars = c.vars;
+	vars.shuttingDown = true;
+
+	if (vars.keepAwakeResolver) {
+		vars.keepAwakeResolver();
+		vars.keepAwakeResolver = null;
+	}
+
+	const agentOs = vars.agentOs;
+	vars.agentOs = null;
+	// Supersede an in-flight boot. bootVm's identity check disposes an instance
+	// that finishes after this point instead of publishing it into teardown.
+	vars.agentOsBoot = null;
+
+	if (agentOs) {
+		const disposeResult = Promise.resolve()
+			.then(() => agentOs.dispose())
+			.then(
+				() => ({ status: "disposed" as const }),
+				(error: unknown) => ({ status: "failed" as const, error }),
+			);
+
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const result =
+			disposeTimeoutMs <= 0
+				? { status: "timed_out" as const }
+				: await Promise.race([
+						disposeResult,
+						new Promise<{ status: "timed_out" }>((resolve) => {
+							timer = setTimeout(
+								() => resolve({ status: "timed_out" }),
+								disposeTimeoutMs,
+							);
+							timer.unref?.();
+						}),
+					]);
+		if (timer) clearTimeout(timer);
+
+		if (result.status === "failed") {
+			c.log.warn({
+				msg: `agent-os: dispose on ${reason} failed`,
+				err: truncateForLog(
+					result.error instanceof Error
+						? result.error.message
+						: String(result.error),
+				),
+			});
+		} else if (result.status === "timed_out") {
+			c.log.warn({
+				msg: `agent-os: dispose on ${reason} exceeded shutdown budget`,
+				disposeTimeoutMs,
+			});
+		}
+	}
+
+	c.broadcast("vmShutdown", { reason });
 }
 
 // --- Public API ---
@@ -598,6 +731,8 @@ export function agentOs<TConnParams = undefined>(
 	const parsedConfig = agentOsActorConfigSchema.parse(
 		config,
 	) as AgentOsActorConfig<TConnParams>;
+	const sleepGracePeriod = parsedConfig.sleepGracePeriod ?? 900_000;
+	const disposeTimeoutMs = agentOsDisposeTimeoutMs(sleepGracePeriod);
 	// Every action (built-in AND user-supplied) is wrapped so a sidecar
 	// process death self-heals instead of bricking the actor until restart.
 	const actions = withSidecarRecovery({
@@ -638,7 +773,7 @@ export function agentOs<TConnParams = undefined>(
 		typeof actions
 	>({
 		options: {
-			sleepGracePeriod: parsedConfig.sleepGracePeriod ?? 900_000,
+			sleepGracePeriod,
 			actionTimeout: parsedConfig.actionTimeout ?? 900_000,
 			// Required so bootVm can provision an Actor Runtime Socket UDS for
 			// agent-os 0.2.8 session/VFS SQLite (database: { type: "actor_uds" }).
@@ -653,6 +788,7 @@ export function agentOs<TConnParams = undefined>(
 		createState: async () => ({}),
 		createVars: () => ({
 			agentOs: null,
+			shuttingDown: false,
 			agentOsBoot: null,
 			agentOsEpoch: 0,
 			activeSessionIds: new Set<string>(),
@@ -696,64 +832,22 @@ export function agentOs<TConnParams = undefined>(
 		onSleep: async (c) => {
 			c.log.info({
 				msg: "agent-os vm shutdown for sleep",
-				activeSessions: c.vars.sessions.size,
+				activeSessions: c.vars.activeSessionIds.size,
 				activeProcesses: c.vars.activeProcesses.size,
+				activeHooks: c.vars.activeHooks.size,
 				activeShells: c.vars.activeShells.size,
 			});
-
-			// Defensively close any open keep-awake barrier. If activity
-			// is still > 0 here it means a session/process didn't clean
-			// up via the normal path; resolving keeps the runtime counter
-			// from leaking across sleep/wake cycles.
-			if (c.vars.keepAwakeResolver) {
-				c.vars.keepAwakeResolver();
-				c.vars.keepAwakeResolver = null;
-			}
-
-			if (c.vars.agentOs) {
-				// Dispose throws if the sidecar process already died out from
-				// under us — never let that block the sleep transition.
-				await c.vars.agentOs.dispose().catch((err: unknown) => {
-					c.log.warn({
-						msg: "agent-os: dispose on sleep failed",
-						err: truncateForLog(
-							err instanceof Error ? err.message : String(err),
-						),
-					});
-				});
-				c.vars.agentOs = null;
-			}
-
-			c.broadcast("vmShutdown", { reason: "sleep" as const });
+			await shutdownAgentOs(c, "sleep", disposeTimeoutMs);
 		},
 		onDestroy: async (c) => {
 			c.log.info({
 				msg: "agent-os vm shutdown for destroy",
-				activeSessions: c.vars.sessions.size,
+				activeSessions: c.vars.activeSessionIds.size,
 				activeProcesses: c.vars.activeProcesses.size,
+				activeHooks: c.vars.activeHooks.size,
 				activeShells: c.vars.activeShells.size,
 			});
-
-			if (c.vars.keepAwakeResolver) {
-				c.vars.keepAwakeResolver();
-				c.vars.keepAwakeResolver = null;
-			}
-
-			if (c.vars.agentOs) {
-				// Dispose throws if the sidecar process already died out from
-				// under us — never let that block the destroy transition.
-				await c.vars.agentOs.dispose().catch((err: unknown) => {
-					c.log.warn({
-						msg: "agent-os: dispose on destroy failed",
-						err: truncateForLog(
-							err instanceof Error ? err.message : String(err),
-						),
-					});
-				});
-				c.vars.agentOs = null;
-			}
-
-			c.broadcast("vmShutdown", { reason: "destroy" as const });
+			await shutdownAgentOs(c, "destroy", disposeTimeoutMs);
 		},
 		actions,
 	});
@@ -774,6 +868,9 @@ export {
 	ensureVm,
 	syncPreventSleep,
 	runHook,
+	shutdownAgentOs,
+	agentOsDisposeTimeoutMs,
+	waitForVmBootOrAbort,
 	isSidecarProcessDeath,
 	withSidecarRecovery,
 	truncateForLog,

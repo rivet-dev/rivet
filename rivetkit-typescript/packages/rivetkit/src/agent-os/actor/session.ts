@@ -305,14 +305,18 @@ export function subscribeToSession<TConnParams>(
 			JSON.parse(JSON.stringify({ sessionId, entry })),
 		);
 
-		// Persist to the ledger for reconnect replay (`getSequencedEvents`).
-		persistSessionEvent(c, sessionId, entry).catch((error) =>
-			c.log.error({
-				msg: "agent-os failed to persist session event",
-				sessionId,
-				error,
-			}),
-		);
+		// Persist to the optional HOC replay ledger. Actors that own durability
+		// elsewhere can disable this token-rate mirror without affecting the live
+		// broadcast/hook or AgentOS core's own durable session history.
+		if (parsedConfig.persistSessionEvents) {
+			persistSessionEvent(c, sessionId, entry).catch((error) =>
+				c.log.error({
+					msg: "agent-os failed to persist session event",
+					sessionId,
+					error,
+				}),
+			);
+		}
 
 		if (parsedConfig.onSessionEvent) {
 			runHook(c, "onSessionEvent", () =>
@@ -517,11 +521,15 @@ export function buildPromptActions<TConnParams>(
 		sessionId: string,
 		method: "session/completed" | "session/aborted",
 		params?: Record<string, unknown>,
+		allowDuringShutdown = false,
 	) => {
 		if (!config.onSessionEvent) return;
 		const terminalEvent = { method, params: params ?? {} };
-		runHook(c, "onSessionEvent", () =>
-			config.onSessionEvent?.(c, sessionId, terminalEvent),
+		runHook(
+			c,
+			"onSessionEvent",
+			() => config.onSessionEvent?.(c, sessionId, terminalEvent),
+			{ allowDuringShutdown },
 		);
 	};
 
@@ -531,7 +539,7 @@ export function buildPromptActions<TConnParams>(
 			sessionId: string,
 			text: string,
 		): Promise<PromptResult> => {
-			if (c.aborted) {
+			if (c.aborted || c.vars.shuttingDown || c.abortSignal.aborted) {
 				throw new Error(
 					"actor is shutting down, cannot start new prompt",
 				);
@@ -543,9 +551,34 @@ export function buildPromptActions<TConnParams>(
 				throw new Error("VM not initialized");
 			}
 
-			c.vars.activeSessionIds.add(sessionId);
+			const vars = c.vars;
+			vars.activeSessionIds.add(sessionId);
 			syncPreventSleep(c);
 			c.log.info({ msg: "agent-os prompt turn started", sessionId });
+
+			let shutdownCancelStarted = false;
+			const cancelForShutdown = () => {
+				if (shutdownCancelStarted) return;
+				shutdownCancelStarted = true;
+				c.log.info({
+					msg: "agent-os prompt cancellation requested by actor shutdown",
+					sessionId,
+				});
+				void agentOs.cancelPrompt({ sessionId }).then(
+					() => undefined,
+					(error: unknown) => {
+						c.log.warn({
+							msg: "agent-os prompt cancellation during shutdown failed",
+							sessionId,
+							error,
+						});
+					},
+				);
+			};
+			c.abortSignal.addEventListener("abort", cancelForShutdown, {
+				once: true,
+			});
+			if (c.abortSignal.aborted) cancelForShutdown();
 
 			const start = Date.now();
 			let promptResult: PromptResult | undefined;
@@ -568,7 +601,8 @@ export function buildPromptActions<TConnParams>(
 				promptFailed = true;
 				throw err;
 			} finally {
-				c.vars.activeSessionIds.delete(sessionId);
+				c.abortSignal.removeEventListener("abort", cancelForShutdown);
+				vars.activeSessionIds.delete(sessionId);
 				syncPreventSleep(c);
 				c.log.info({
 					msg: "agent-os prompt turn ended",
@@ -577,7 +611,17 @@ export function buildPromptActions<TConnParams>(
 				});
 				// Emit after activeSessionIds clear so sleep can proceed;
 				// hooks are fire-and-forget via runHook.
-				if (promptFailed) {
+				if (c.abortSignal.aborted || vars.shuttingDown) {
+					// Cancellation now starts at grace entry, so the terminal hook has
+					// the full grace window to flush product state via waitUntil.
+					emitPromptTerminal(
+						c,
+						sessionId,
+						"session/aborted",
+						{ reason: "actor_shutdown" },
+						true,
+					);
+				} else if (promptFailed) {
 					emitPromptTerminal(c, sessionId, "session/aborted", {
 						reason: "error",
 					});

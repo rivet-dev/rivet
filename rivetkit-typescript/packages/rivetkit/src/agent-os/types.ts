@@ -32,6 +32,12 @@ export type AgentOsActorState = {};
 export interface AgentOsActorVars {
 	agentOs: AgentOs | null;
 	/**
+	 * Set as soon as Rivet begins sleep/destroy cleanup. Teardown is one-way for
+	 * an actor generation: no new VM boots, hooks, waitUntil work, or keep-awake
+	 * barriers may be registered after this flips true.
+	 */
+	shuttingDown?: boolean;
+	/**
 	 * In-flight VM boot (single-flight). Set while `AgentOs.create` is
 	 * pending so concurrent first actions share one boot instead of
 	 * double-creating VMs; cleared when the boot settles — a REJECTED boot

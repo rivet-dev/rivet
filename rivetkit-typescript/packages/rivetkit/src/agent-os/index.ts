@@ -8,10 +8,13 @@ export { buildFilesystemActions } from "./actor/filesystem";
 // Actor factory and VM lifecycle helpers
 export {
 	agentOs,
+	agentOsDisposeTimeoutMs,
 	ensureVm,
 	isSidecarProcessDeath,
 	runHook,
+	shutdownAgentOs,
 	syncPreventSleep,
+	waitForVmBootOrAbort,
 	withSidecarRecovery,
 } from "./actor/index";
 // Network actions

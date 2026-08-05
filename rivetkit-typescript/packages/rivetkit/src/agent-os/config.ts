@@ -41,6 +41,8 @@ export const agentOsActorConfigSchema = z
 		// `options` block in ./actor/index.ts). v2.3.0's `sleepGracePeriod`
 		// now bounds the entire graceful shutdown window for sleep AND destroy,
 		// subsuming the old layerr `runStopTimeout` drain-budget patch (dropped).
+		// AgentOS disposal is bounded below this value so Rivet retains time for
+		// final state/database persistence after the VM has stopped.
 		sleepGracePeriod: z.number().nonnegative().optional(),
 		actionTimeout: z.number().nonnegative().optional(),
 		// Layerr (re-port of 96fab650e): the agent-os actor forwards noSleep +
@@ -55,6 +57,9 @@ export const agentOsActorConfigSchema = z
 		// forking agentOs().
 		actions: z.record(z.string(), zFunction()).optional(),
 		onBeforeConnect: zFunction().optional(),
+		// Layerr: the HOC replay mirror is optional per actor. AgentOS core history,
+		// live broadcasts, permissions, and onSessionEvent remain independent.
+		persistSessionEvents: z.boolean().default(true),
 		onSessionEvent: zFunction().optional(),
 		onPermissionRequest: zFunction().optional(),
 	})
