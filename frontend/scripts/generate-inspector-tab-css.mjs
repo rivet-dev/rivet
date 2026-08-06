@@ -49,11 +49,20 @@ const HEADER = `/*!
  *
  *   <link rel="stylesheet" href="../../tab.css">
  *
- * Theme switching: tokens follow the dashboard's mechanism — \`:root\`
+ * Theme switching: tokens follow the dashboard's mechanism. \`:root\`
  * carries the light defaults and \`:root[class~="dark"]\` overrides with
  * dark values. The dashboard passes the active theme via the \`v1Init\`
  * postMessage (\`theme: "light" | "dark"\`); apply it by toggling the
- * \`dark\` class on \`<html>\` inside the tab.
+ * \`dark\` class on \`<html>\` inside the tab. \`v1Init\` also carries
+ * \`tokens\` (resolved CSS colors) and \`surface\` (which token names the
+ * panel the tab is mounted on); pinning those as inline
+ * \`--rivet-*\` properties makes the tab track the dashboard exactly even
+ * if this stylesheet is older than the shell.
+ *
+ * Surface: the tab is mounted on the dashboard's \`--card\` panel, so
+ * \`--rivet-surface\` (defaulting to \`--rivet-card\`) is what \`html\` and
+ * \`body\` paint. Do not use \`--rivet-background\` for the tab's own
+ * backdrop; it is the color of the dashboard shell around the panel.
  */`;
 
 function main() {

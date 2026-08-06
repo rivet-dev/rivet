@@ -39,6 +39,10 @@ import {
 import { useFiltersValue } from "./actor-filters-context";
 import { useDataProvider } from "./data-provider";
 import { resolveInspectorTabIcon } from "./inspector-tab-icons";
+import {
+	INSPECTOR_TAB_SURFACE,
+	readInspectorTabTokens,
+} from "./inspector-tab-tokens";
 import type { InspectorTabDescriptor } from "./inspector-tab-registry";
 import type { ActorId, ActorStatus } from "./queries";
 import { ActorStatusLabel, QueriedActorError } from "./actor-status-label";
@@ -463,6 +467,10 @@ function ActorDetailsIframePath({
 	const themeRef = useRef(theme);
 	themeRef.current = theme;
 
+	// `useTheme` derives the theme from the class on `<html>`, so by the time
+	// this re-renders the new theme's tokens are already the computed values.
+	const tokens = useMemo(() => readInspectorTabTokens(), [theme]);
+
 	const actorSegment = useMemo(
 		() =>
 			rivetToken
@@ -527,6 +535,8 @@ function ActorDetailsIframePath({
 				rivetToken: rivetToken || undefined,
 				activeTab: activeInspectorTabId,
 				theme,
+				tokens: tokens ?? undefined,
+				surface: INSPECTOR_TAB_SURFACE,
 			},
 			expectedOrigin,
 		);
@@ -538,6 +548,7 @@ function ActorDetailsIframePath({
 		expectedOrigin,
 		activeInspectorTabId,
 		theme,
+		tokens,
 	]);
 
 	const postSetActiveTab = useCallback(

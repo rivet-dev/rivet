@@ -33,6 +33,13 @@ Drop an `index.html` in the `source` directory:
 <html lang="en">
   <head>
     <link rel="stylesheet" href="../../tab.css" />
+    <style>
+      /* The tab is mounted on the dashboard's `card` panel. */
+      html,
+      body {
+        background: var(--rivet-surface, var(--rivet-card));
+      }
+    </style>
   </head>
   <body>
     <h1>Counter: <span id="value">…</span></h1>
@@ -58,11 +65,22 @@ Drop an `index.html` in the `source` directory:
         });
         const { state } = await r.json();
         document.getElementById("value").textContent = state.value;
-        document.documentElement.classList.toggle(
-          "dark",
-          (e.data.theme ?? "dark") === "dark",
-        );
+        applyTheme(e.data);
       });
+
+      // Mirror the dashboard's theme. Re-run on every `init` — the
+      // dashboard re-sends it when the user toggles the theme.
+      function applyTheme(msg) {
+        const root = document.documentElement;
+        root.classList.toggle("dark", (msg.theme ?? "dark") === "dark");
+        if (!msg.tokens) return;
+        for (const [name, value] of Object.entries(msg.tokens)) {
+          const varName = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+          root.style.setProperty(`--rivet-${varName}`, value);
+        }
+        const surface = msg.tokens[msg.surface ?? "card"];
+        if (surface) root.style.setProperty("--rivet-surface", surface);
+      }
 
       window.parent.postMessage({ type: "ready", v: 1 }, SHELL_ORIGIN);
     </script>
@@ -135,6 +153,8 @@ arrives.
   actorId: string,
   authToken: string,         // Per-actor inspector bearer token
   theme?: "light" | "dark",
+  tokens?: Record<string, string>,  // Resolved CSS colors — see Styling
+  surface?: string,          // Key in `tokens` for the host panel's color
   activeTab?: string,        // For multi-view tabs
 }
 ```
@@ -143,6 +163,11 @@ Multi-view tabs can read the optional `activeTab` field on `init` to
 seed their initial sub-view. The dashboard does not send a separate
 message when the user switches custom tabs — it navigates the iframe
 `src` instead, so the tab reloads and receives a fresh `init`.
+
+`init` is also the theme channel. The dashboard re-sends it whenever the
+user toggles the theme, so a tab that applies `theme` / `tokens` on every
+`init` follows theme changes without reloading. See
+[Styling](#styling).
 
 ### From the tab
 
@@ -219,17 +244,93 @@ custom CSS:
 }
 ```
 
-Toggle dark mode by adding the `dark` class to `<html>` — the dashboard
-sends the active theme in the `init` message.
+### Which surface the tab is on
 
-Color tokens come in both pre-wrapped (`--rivet-card`) and raw HSL
-(`--rivet-card-raw`) forms, so you can compose with alpha:
+The tab iframe is mounted on the dashboard's **`card`** panel, not on the
+page background. Use `--rivet-surface` (an alias of `--rivet-card`) for
+the tab's own backdrop so it composites seamlessly with the panel around
+it. The stylesheet already paints `html` and `body` with it, so a tab that
+doesn't override the body background needs no extra work.
+
+Do **not** paint the tab with `--rivet-background`. That is the color of
+the dashboard shell *around* the panel, and using it leaves a visible
+seam.
+
+If your tab sets its own body background, state the surface explicitly.
+The fallback keeps it correct against an older stylesheet that predates
+`--rivet-surface`:
+
+```css
+html, body { background: var(--rivet-surface, var(--rivet-card)); }
+```
+
+### Token names
+
+Every dashboard token is exposed under a `--rivet-` prefix, and the same
+names arrive as `init.tokens` keys in camelCase (`--rivet-muted-foreground`
+↔ `tokens.mutedForeground`). These names are stable:
+
+`background`, `foreground`, `card`, `cardForeground`, `popover`,
+`popoverForeground`, `primary`, `primaryForeground`, `secondary`,
+`secondaryForeground`, `muted`, `mutedForeground`, `accent`,
+`accentForeground`, `destructive`, `destructiveForeground`, `border`,
+`input`, `ring`.
+
+Plus `surface` / `--rivet-surface` for the mounted surface described
+above. New tokens may be added; existing names won't change meaning.
+`init.tokens` may carry keys your version of the stylesheet doesn't know,
+so iterate it rather than reading a fixed list.
+
+Color tokens also come in raw HSL form (`--rivet-card-raw`) so you can
+compose with alpha:
 
 ```css
 .overlay { background: hsl(var(--rivet-background-raw) / 0.6); }
 ```
 
-You're free to skip the stylesheet entirely and bring your own.
+### Reacting to theme changes
+
+The dashboard signals the theme two ways on `init`, and re-sends `init`
+every time the user toggles the theme — so a tab that applies both on
+every `init` updates live, with no reload:
+
+- **`theme`** (`"light" | "dark"`) — toggle the `dark` class on `<html>`.
+  The stylesheet's token blocks key off it. Default to `"dark"` if absent.
+- **`tokens`** and **`surface`** — the dashboard's resolved colors, as CSS
+  color values ready to use in a declaration. Pinning them as inline
+  `--rivet-*` custom properties makes the tab render the dashboard's exact
+  colors even if the stylesheet it vendored is older than the dashboard.
+
+```js
+function applyTheme(msg) {
+  const root = document.documentElement;
+  root.classList.toggle("dark", (msg.theme ?? "dark") === "dark");
+  if (!msg.tokens) return;
+  for (const [name, value] of Object.entries(msg.tokens)) {
+    const varName = name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+    root.style.setProperty(`--rivet-${varName}`, value);
+  }
+  const surface = msg.tokens[msg.surface ?? "card"];
+  if (surface) root.style.setProperty("--rivet-surface", surface);
+}
+```
+
+Tabs built with a bundler can import that logic instead of copying it:
+
+```ts @nocheck
+import { applyInspectorTabTheme } from "rivetkit/inspector-tab";
+
+applyInspectorTabTheme(init, document.documentElement);
+```
+
+`tokens` and `surface` are both optional. An older dashboard sends only
+`theme`, and the stylesheet resolves the right colors on its own — never
+hardcode hex values as a fallback, or the tab drifts the next time the
+dashboard's tokens change.
+
+You're free to skip the stylesheet entirely and bring your own. If you do,
+`init.tokens` is the whole palette, and `init.tokens[init.surface]` is the
+color your body must be for the tab to sit flush in its panel.
 
 ## Security
 
