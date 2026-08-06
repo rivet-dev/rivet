@@ -5949,7 +5949,7 @@ dependencies = [
 
 [[package]]
 name = "rivet-universaldb-commit"
-version = "2.3.2"
+version = "2.3.7"
 dependencies = [
  "anyhow",
  "rivet-vbare-compiler",

@@ -20,12 +20,16 @@ const TXN_CONFLICT_TTL: Duration = Duration::from_secs(10);
 struct PreviousTransaction {
 	insert_instant: Instant,
 	start_version: u64,
-	conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
+	/// Only the write ranges are retained. Conflicts are directional: a transaction aborts when
+	/// something it read was written under it, so a retained transaction's reads can never abort
+	/// anyone.
+	write_ranges: Vec<(Vec<u8>, Vec<u8>)>,
 }
 
 /// In-process FoundationDB-style resolver. Holds the last `TXN_CONFLICT_TTL` of committed
 /// transactions and rejects a committing transaction if any retained transaction has both an
-/// overlapping version window and an overlapping conflict range of a differing type.
+/// overlapping version window and a write range overlapping one of the committing transaction's
+/// read ranges.
 ///
 /// Used by the rocksdb driver (single process) and by the postgres leader-resolver. The two
 /// differ only in where the commit version comes from: rocksdb generates it from the in-process
@@ -60,6 +64,10 @@ impl TransactionConflictTracker {
 	/// Returns `true` on conflicts. The caller
 	/// supplies `commit_version` (e.g. `nextval('udb_version_seq')` on the postgres leader, or
 	/// `next_global_version()` on rocksdb) so version assignment stays the caller's responsibility.
+	///
+	/// Conflicts are directional, matching FoundationDB: only this transaction's reads are checked,
+	/// and only against writes retained from transactions that committed inside its version window.
+	/// Blind write-vs-write does not conflict because neither transaction read what the other wrote.
 	pub async fn check_and_insert(
 		&self,
 		txn1_start_version: u64,
@@ -86,16 +94,21 @@ impl TransactionConflictTracker {
 			// Check txn versions overlap (intersection or encapsulation)
 			if txn2.start_version < txn1_commit_version {
 				for (cr1_start, cr1_end, cr1_type) in &txn1_conflict_ranges {
-					for (cr2_start, cr2_end, cr2_type) in &txn2.conflict_ranges {
+					// Reads are never the aggressor, so this transaction's own writes are checked
+					// against nothing.
+					match cr1_type {
+						ConflictRangeType::Read => {}
+						ConflictRangeType::Write => continue,
+					}
+
+					for (cr2_start, cr2_end) in &txn2.write_ranges {
 						// Check conflict ranges overlap
-						if cr1_start < cr2_end && cr2_start < cr1_end && cr1_type != cr2_type {
+						if cr1_start < cr2_end && cr2_start < cr1_end {
 							tracing::debug!(
-								cr1_start=%hex::encode(cr1_start),
-								cr1_end=%hex::encode(cr1_end),
-								?cr1_type,
-								cr2_start=%hex::encode(cr2_start),
-								cr2_end=%hex::encode(cr2_end),
-								?cr2_type,
+								read_start=%hex::encode(cr1_start),
+								read_end=%hex::encode(cr1_end),
+								write_start=%hex::encode(cr2_start),
+								write_end=%hex::encode(cr2_end),
 								txn1_start_version,
 								txn1_commit_version,
 								txn2_start_version = txn2.start_version,
@@ -109,15 +122,26 @@ impl TransactionConflictTracker {
 			}
 		}
 
-		// If no conflicts were detected, save txn data
-		txns.insert(
-			txn1_commit_version,
-			PreviousTransaction {
-				insert_instant: Instant::now(),
-				start_version: txn1_start_version,
-				conflict_ranges: txn1_conflict_ranges,
-			},
-		);
+		// Only writes can abort a later transaction, so a transaction that wrote nothing leaves no
+		// trace here.
+		let write_ranges = txn1_conflict_ranges
+			.into_iter()
+			.filter_map(|(begin, end, conflict_type)| match conflict_type {
+				ConflictRangeType::Write => Some((begin, end)),
+				ConflictRangeType::Read => None,
+			})
+			.collect::<Vec<_>>();
+
+		if !write_ranges.is_empty() {
+			txns.insert(
+				txn1_commit_version,
+				PreviousTransaction {
+					insert_instant: Instant::now(),
+					start_version: txn1_start_version,
+					write_ranges,
+				},
+			);
+		}
 
 		false
 	}
