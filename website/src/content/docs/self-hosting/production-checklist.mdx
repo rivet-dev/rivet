@@ -34,10 +34,14 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 ## PostgreSQL
 
-- **PostgreSQL is recommended for multi-node deployments.** It is production-ready for light-to-moderate workloads (up to roughly 1,000 concurrent actors) but is not built for enterprise scale. Validate the deployment carefully before rollout.
-- **Configure automated backups.** Set up regular backups for your PostgreSQL database to prevent data loss.
-- **Configure failover.** Set up a standby replica with automatic failover to ensure high availability.
-- **Use FoundationDB for the most scalable production-ready deployments.** FoundationDB provides the best performance, scalability, and uptime for Rivet. Contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
+- **Use PostgreSQL for multi-node and multi-region deployments.** Multiple engine nodes can share one PostgreSQL instance; no extra coordination service is required. PostgreSQL is production-ready for light-to-moderate workloads (up to roughly 1,000 concurrent actors) but is not built for enterprise scale. See [PostgreSQL](/docs/self-hosting/postgres).
+- **Raise `max_connections`.** Each engine node opens well over a hundred connections under load. Size `max_connections` to at least `(number of engine nodes × 150)` plus headroom. PostgreSQL's default of `100` is too low. See [Connection Limits](/docs/self-hosting/postgres#connection-limits).
+- **Do not use a connection pooler.** Rivet requires direct connections. Do not put PgBouncer, Supavisor, or RDS Proxy in front of PostgreSQL.
+- **Give PostgreSQL dedicated resources.** Provision dedicated CPU, memory, and fast disk, and keep autovacuum healthy. PostgreSQL is the system of record for the whole deployment.
+- **Configure automated backups.** Set up regular backups and point-in-time recovery, and test restoring from them.
+- **Configure failover.** Set up a standby replica with automatic failover to ensure high availability. A single instance is a single point of failure.
+- **Use one PostgreSQL instance per region.** For multi-region deployments, deploy a separate PostgreSQL instance in each region.
+- **Use FoundationDB for the largest deployments.** Enterprise teams running at very large scale can contact [enterprise support](https://rivet.dev/sales) for FoundationDB guidance.
 
 ## NATS
 
