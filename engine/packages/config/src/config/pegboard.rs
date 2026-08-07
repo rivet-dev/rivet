@@ -117,6 +117,12 @@ pub struct Pegboard {
 	pub gateway_hws_max_pending_size: Option<u64>,
 	/// Max HTTP request body size in bytes for requests to actors.
 	pub gateway_http_max_request_body_size: Option<usize>,
+	/// Max burst of inbound WebSocket messages on a single connection before throttling.
+	pub gateway_websocket_rate_limit_requests: Option<u64>,
+	/// Time to regain one inbound WebSocket message token on a single connection.
+	///
+	/// Unit is in milliseconds.
+	pub gateway_websocket_rate_limit_drip_rate_ms: Option<u64>,
 
 	// === Envoy Settings ===
 	/// How long to wait before considering an envoy lost and evicting all of its actors.
@@ -162,6 +168,14 @@ pub struct Pegboard {
 	///
 	/// Unit is in bytes. Default: 1,048,576 (1 MiB).
 	pub preload_max_total_bytes: Option<u64>,
+
+	// === Rate Limiting ===
+	/// Max burst of actor creations per namespace before throttling.
+	pub actor_create_rate_limit_requests: Option<u64>,
+	/// Time to regain one actor creation token per namespace.
+	///
+	/// Unit is in milliseconds.
+	pub actor_create_rate_limit_drip_rate_ms: Option<u64>,
 }
 
 impl Pegboard {
@@ -367,6 +381,22 @@ impl Pegboard {
 
 	pub fn serverless_drain_grace_period(&self) -> u64 {
 		self.serverless_drain_grace_period.unwrap_or(10_000)
+	}
+
+	pub fn gateway_websocket_rate_limit_requests(&self) -> u64 {
+		self.gateway_websocket_rate_limit_requests.unwrap_or(2_000)
+	}
+
+	pub fn gateway_websocket_rate_limit_drip_rate_ms(&self) -> u64 {
+		self.gateway_websocket_rate_limit_drip_rate_ms.unwrap_or(10)
+	}
+
+	pub fn actor_create_rate_limit_requests(&self) -> u64 {
+		self.actor_create_rate_limit_requests.unwrap_or(500)
+	}
+
+	pub fn actor_create_rate_limit_drip_rate_ms(&self) -> u64 {
+		self.actor_create_rate_limit_drip_rate_ms.unwrap_or(10)
 	}
 
 	pub fn preload_max_total_bytes(&self) -> u64 {

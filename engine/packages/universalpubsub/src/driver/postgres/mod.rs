@@ -5,7 +5,7 @@ use base64::engine::general_purpose::STANDARD_NO_PAD as BASE64;
 use deadpool_postgres::{Config, ManagerConfig, Pool, PoolConfig, RecyclingMethod, Runtime};
 use futures_util::future::poll_fn;
 use rivet_postgres_util::build_tls_config;
-use rivet_util::backoff::Backoff;
+use rivet_util::throttle::Backoff;
 use scc::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::PathBuf;
