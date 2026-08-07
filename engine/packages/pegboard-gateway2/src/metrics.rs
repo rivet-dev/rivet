@@ -53,12 +53,6 @@ lazy_static::lazy_static! {
 		&["namespace_id", "pool_name", "protocol", "reason"],
 		*REGISTRY
 	).unwrap();
-	pub static ref SHUTDOWN_IN_FLIGHT_ABORTED_TOTAL: IntCounter =
-		register_int_counter_with_registry!(
-			"gateway2_shutdown_in_flight_aborted_total",
-			"In-flight gateway requests abandoned on pod shutdown without sending close.",
-			*REGISTRY
-		).unwrap();
 	pub static ref MSG_SENT_TOTAL: IntCounterVec = register_int_counter_vec_with_registry!(
 		"gateway2_msg_sent_total",
 		"Count of total of tunnel messages sent.",
