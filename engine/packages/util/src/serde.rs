@@ -73,7 +73,7 @@ macro_rules! json_from_slice {
 		$crate::metrics::DESERIALIZE_SIZE
 			.with_label_values(&["json", $crate::location!().to_string().as_str()])
 			.observe(__bind.len() as f64);
-		$crate::observe!(serde_json::from_slice($value))
+		$crate::observe!(serde_json::from_slice(__bind))
 	}};
 }
 pub use json_from_slice;
@@ -101,7 +101,7 @@ macro_rules! bare_from_slice {
 		$crate::metrics::DESERIALIZE_SIZE
 			.with_label_values(&["bare", $crate::location!().to_string().as_str()])
 			.observe(__bind.len() as f64);
-		$crate::observe!(serde_bare::from_slice($value))
+		$crate::observe!(serde_bare::from_slice(__bind))
 	}};
 }
 pub use bare_from_slice;

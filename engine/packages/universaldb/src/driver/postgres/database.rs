@@ -35,7 +35,7 @@ const GC_INTERVAL: Duration = Duration::from_secs(30);
 /// Failover dedup rows older than this are garbage collected. Must be well beyond the longest a
 /// follower could spend resending a commit across a leader failover, so a dedup record is never
 /// deleted while a resend that needs it could still arrive.
-const DEDUP_ROW_MAX_AGE_SECS: i64 = 60;
+const DEDUP_ROW_MAX_AGE_SECS: i64 = 120;
 
 #[derive(Clone, Debug)]
 pub struct PostgresConfig {
