@@ -7,10 +7,13 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use tokio::sync::broadcast;
 
 use crate::{conflict_tracker::TransactionConflictTracker, transaction::TXN_TIMEOUT};
 
-use super::shared::{LEASE_ID, LeaseInfo, PostgresShared, WATERMARK_CHANNEL, commit_channel};
+use super::shared::{
+	ELECTION_CHANNEL, LEASE_ID, LeaseInfo, PostgresShared, WATERMARK_CHANNEL, commit_channel,
+};
 
 /// Max commits resolved+applied per batch (group commit). Amortizes the resolver, Postgres
 /// round-trips, and fsync across the batch.
@@ -40,6 +43,10 @@ pub fn spawn(shared: Arc<PostgresShared>) -> tokio::task::JoinHandle<()> {
 }
 
 async fn run(shared: Arc<PostgresShared>) {
+	// A departing leader NOTIFYs this channel after releasing its lease so we elect immediately
+	// rather than waiting out the full `ELECTION_RETRY` tick.
+	let mut election_rx = shared.listener.listen(ELECTION_CHANNEL).await;
+
 	loop {
 		match lease::try_acquire(&shared.pool, &shared.node_id).await {
 			Ok(Some(acquired)) => {
@@ -50,13 +57,65 @@ async fn run(shared: Arc<PostgresShared>) {
 				tracing::info!(epoch = acquired.epoch, "stepped down from udb leader");
 			}
 			Ok(None) => {
-				tokio::time::sleep(ELECTION_RETRY).await;
+				wait_for_election_retry(&shared, &mut election_rx).await;
 			}
 			Err(err) => {
 				tracing::warn!(?err, "failed udb lease acquire attempt");
-				tokio::time::sleep(ELECTION_RETRY).await;
+				wait_for_election_retry(&shared, &mut election_rx).await;
 			}
 		}
+	}
+}
+
+/// Wait before retrying the election: either the `ELECTION_RETRY` backstop elapses, or a departing
+/// leader wakes us via `ELECTION_CHANNEL` so handoff is near-instant.
+async fn wait_for_election_retry(
+	shared: &Arc<PostgresShared>,
+	election_rx: &mut broadcast::Receiver<String>,
+) {
+	tokio::select! {
+		_ = tokio::time::sleep(ELECTION_RETRY) => {}
+		res = election_rx.recv() => {
+			if matches!(res, Err(broadcast::error::RecvError::Closed)) {
+				// The listener recreates the channel on reconnect; re-subscribe.
+				*election_rx = shared.listener.listen(ELECTION_CHANNEL).await;
+			}
+		}
+	}
+}
+
+/// Best-effort graceful leadership handoff invoked on shutdown. If this node currently holds the
+/// lease, expire it and wake a standby so it takes over immediately instead of waiting out the TTL.
+/// Safe to call on a follower: the fenced release matches no row and nothing is notified. The
+/// caller must already have stopped lease renewal before calling this.
+pub async fn handoff(shared: &Arc<PostgresShared>) {
+	match lease::release(&shared.pool, &shared.node_id).await {
+		Ok(true) => {
+			tracing::info!(node_id = %shared.node_id, "released udb leader lease for graceful handoff");
+			notify_election(shared).await;
+		}
+		Ok(false) => {}
+		Err(err) => {
+			tracing::warn!(?err, "failed to release udb lease on shutdown");
+		}
+	}
+}
+
+/// Wake standby candidates so the next election fires immediately after a graceful release.
+async fn notify_election(shared: &Arc<PostgresShared>) {
+	let conn = match shared.pool.get().await {
+		Ok(conn) => conn,
+		Err(err) => {
+			tracing::debug!(?err, "failed to get connection for election notify");
+			return;
+		}
+	};
+
+	if let Err(err) = conn
+		.execute("SELECT pg_notify($1, '')", &[&ELECTION_CHANNEL])
+		.await
+	{
+		tracing::debug!(?err, "failed to notify election channel");
 	}
 }
 

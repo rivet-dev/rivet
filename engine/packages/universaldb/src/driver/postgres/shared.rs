@@ -32,6 +32,10 @@ pub fn reply_channel(node_id: &str) -> String {
 /// Channel the leader NOTIFYs on every watermark advance; all nodes LISTEN.
 pub const WATERMARK_CHANNEL: &str = "udb_watermark";
 
+/// Channel a departing leader NOTIFYs after releasing its lease so a standby candidate elects
+/// immediately instead of waiting out `ELECTION_RETRY`. All non-leader candidates LISTEN.
+pub const ELECTION_CHANNEL: &str = "udb_election";
+
 /// Cached view of the current leader lease, as seen by a follower.
 #[derive(Clone, Debug)]
 pub struct LeaseInfo {

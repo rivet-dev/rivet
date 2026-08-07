@@ -290,6 +290,17 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 		self.max_retries.store(limit, Ordering::SeqCst);
 		Ok(())
 	}
+
+	fn shutdown<'a>(&'a self) -> BoxFut<'a, ()> {
+		Box::pin(async move {
+			// Stop renewing the lease before releasing it so a racing renew cannot re-extend it.
+			self.resolver_handle.abort();
+			self.gc_handle.abort();
+
+			// Hand off leadership immediately if we hold it, instead of waiting out the lease TTL.
+			resolver::handoff(&self.shared).await;
+		})
+	}
 }
 
 impl Drop for PostgresDatabaseDriver {
