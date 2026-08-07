@@ -171,7 +171,7 @@ export function generateDockerCompose(context: TemplateContext) {
 		);
 		services[postgresServiceName] = {
 			restart: "unless-stopped",
-			image: "postgres:17-alpine",
+			image: "postgres:18-alpine",
 			environment: [
 				"POSTGRES_USER=postgres",
 				"POSTGRES_PASSWORD=postgres",
