@@ -149,6 +149,14 @@ pub struct Pegboard {
 	pub envoy_expire_scheduler_max_concurrent_expires: Option<usize>,
 	/// Maximum pending envoys tracked by the read-path envoy expire scheduler.
 	pub envoy_expire_scheduler_max_pending: Option<usize>,
+	/// Max burst of inbound WebSocket messages on a single envoy connection before throttling.
+	pub envoy_websocket_rate_limit_requests: Option<u64>,
+	/// Time to regain one inbound WebSocket message token on a single envoy connection.
+	///
+	/// Unit is in microseconds. The envoy connection multiplexes every actor on a runner, so the
+	/// sustained ceiling is far higher than the per-client gateway limit and needs sub-millisecond
+	/// granularity to express.
+	pub envoy_websocket_rate_limit_drip_rate_us: Option<u64>,
 
 	// === Serverless Settings ===
 	/// **Deprecated** Configure the drain period in the runner config.
@@ -389,6 +397,14 @@ impl Pegboard {
 
 	pub fn gateway_websocket_rate_limit_drip_rate_ms(&self) -> u64 {
 		self.gateway_websocket_rate_limit_drip_rate_ms.unwrap_or(10)
+	}
+
+	pub fn envoy_websocket_rate_limit_requests(&self) -> u64 {
+		self.envoy_websocket_rate_limit_requests.unwrap_or(16_384)
+	}
+
+	pub fn envoy_websocket_rate_limit_drip_rate_us(&self) -> u64 {
+		self.envoy_websocket_rate_limit_drip_rate_us.unwrap_or(200)
 	}
 
 	pub fn actor_create_rate_limit_requests(&self) -> u64 {
