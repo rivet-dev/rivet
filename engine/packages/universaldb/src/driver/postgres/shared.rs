@@ -97,6 +97,21 @@ impl PostgresShared {
 
 	/// Publish a freshly observed/elected lease into the cache.
 	pub fn set_lease(&self, lease: LeaseInfo) {
+		let changed = self
+			.lease_rx
+			.borrow()
+			.as_ref()
+			.map(|prev| prev.epoch != lease.epoch || prev.leader_addr != lease.leader_addr)
+			.unwrap_or(true);
+		if changed {
+			tracing::info!(
+				epoch = lease.epoch,
+				leader_addr = %lease.leader_addr,
+				self_node = %self.node_id,
+				is_self = (lease.leader_addr == self.node_id),
+				"udb follower observed leader lease change"
+			);
+		}
 		let _ = self.lease_tx.send(Some(lease));
 	}
 
