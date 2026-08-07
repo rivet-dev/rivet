@@ -34,7 +34,7 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 ## PostgreSQL
 
-- **Use PostgreSQL for multi-node and multi-region deployments.** Multiple engine nodes can share one PostgreSQL instance; no extra coordination service is required. PostgreSQL is production-ready for light-to-moderate workloads (up to roughly 1,000 concurrent actors) but is not built for enterprise scale. See [PostgreSQL](/docs/self-hosting/postgres).
+- **Use PostgreSQL for multi-node and multi-region deployments.** Multiple engine nodes can share one PostgreSQL instance. Multi-node also requires NATS (see below). PostgreSQL is production-ready for light-to-moderate workloads (up to roughly 1,000 concurrent actors) but is not built for enterprise scale. See [PostgreSQL](/docs/self-hosting/postgres).
 - **Raise `max_connections`.** Each engine node opens well over a hundred connections under load. Size `max_connections` to at least `(number of engine nodes × 150)` plus headroom. PostgreSQL's default of `100` is too low. See [Connection Limits](/docs/self-hosting/postgres#connection-limits).
 - **Do not use a connection pooler.** Rivet requires direct connections. Do not put PgBouncer, Supavisor, or RDS Proxy in front of PostgreSQL.
 - **Give PostgreSQL dedicated resources.** Provision dedicated CPU, memory, and fast disk, and keep autovacuum healthy. PostgreSQL is the system of record for the whole deployment.
@@ -45,8 +45,8 @@ Also review the [general production checklist](/docs/general/production-checklis
 
 ## NATS
 
-- **Use NATS for pub/sub in multi-node deployments.** NATS is the pub/sub backend that coordinates realtime messaging between engine nodes. Single-node deployments do not need any pub/sub configuration. See [Configuration](/docs/self-hosting/configuration).
-- **Deploy 2+ NATS replicas.** Run at least two NATS replicas for high availability.
+- **NATS is required for multi-node PostgreSQL deployments.** Multiple engine nodes on PostgreSQL coordinate through NATS for pub/sub and UniversalDB commit transport. Single-node deployments (one engine node, or the RocksDB file system backend) do not need NATS. See [Single-Node vs Multi-Node](/docs/self-hosting/postgres#single-node-vs-multi-node).
+- **Deploy 2+ NATS replicas.** For multi-node deployments, run at least two NATS replicas for high availability.
 
 ## Monitoring
 
