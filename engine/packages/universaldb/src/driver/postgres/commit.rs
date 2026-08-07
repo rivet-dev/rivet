@@ -6,7 +6,11 @@ use std::{
 use anyhow::{Context, Result};
 use tokio::sync::oneshot;
 
-use crate::{error::DatabaseError, options::ConflictRangeType, tx_ops::Operation};
+use crate::{
+	error::DatabaseError,
+	options::ConflictRangeType,
+	tx_ops::{self, Operation},
+};
 
 use super::{
 	codec,
@@ -29,21 +33,16 @@ const RESEND_BACKOFF: Duration = Duration::from_millis(100);
 
 /// Submit a follower transaction's commit to the leader and await the result.
 ///
-/// `read_version` is the watermark captured when this transaction opened its read snapshot. A pure
-/// snapshot read-only transaction (no operations and no read conflict ranges) submits nothing.
+/// `read_version` is the watermark captured when this transaction opened its read snapshot. A
+/// read-only transaction submits nothing: its reads already came from one pinned snapshot, so there
+/// is nothing to order or validate and nothing for a later transaction to conflict against.
 pub async fn submit(
 	shared: &Arc<PostgresShared>,
 	read_version: i64,
 	operations: Vec<Operation>,
 	conflict_ranges: Vec<(Vec<u8>, Vec<u8>, ConflictRangeType)>,
 ) -> Result<()> {
-	// A transaction with no writes and no serializable read ranges has nothing to order or validate;
-	// it never needs the leader.
-	if operations.is_empty()
-		&& conflict_ranges
-			.iter()
-			.all(|(_, _, kind)| matches!(kind, ConflictRangeType::Write))
-	{
+	if tx_ops::is_read_only(&operations, &conflict_ranges) {
 		return Ok(());
 	}
 
