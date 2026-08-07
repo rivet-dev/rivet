@@ -308,7 +308,6 @@ export function generateDockerCompose(context: TemplateContext) {
 					"RUST_LOG_ANSI_COLOR=1",
 					"RUST_LOG=universaldb::driver::postgres=debug",
 					"RIVET_OTEL_ENABLED=1",
-					"RIVET_OTEL_SAMPLER_RATIO=1",
 					`RIVET_OTEL_GRPC_ENDPOINT=http://${context.getServiceHost("otel-collector", datacenter.name)}:4317`,
 					// "RUST_LOG=debug,hyper=info",
 				],
