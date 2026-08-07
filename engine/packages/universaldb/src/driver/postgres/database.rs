@@ -207,7 +207,10 @@ impl PostgresDatabaseDriver {
 				commit_version BIGINT NOT NULL,
 				created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
 				PRIMARY KEY (client_node_id, client_seq)
-			);",
+			);
+
+			CREATE INDEX IF NOT EXISTS udb_applied_created_at_idx
+				ON udb_applied (created_at);",
 		)
 		.await
 		.context("failed to initialize postgres schema")?;
