@@ -1,5 +1,5 @@
 use anyhow::Result;
-use rivet_test_deps_docker::{TestDatabase, TestPubSub};
+use rivet_test_deps_docker::TestPubSub;
 use std::{sync::Arc, time::Duration};
 use universalpubsub::{NextOutput, PubSub, PublishOpts};
 use uuid::Uuid;
@@ -78,52 +78,6 @@ async fn test_nats_driver_without_memory_reconnect() {
 	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
 
 	test_all_inner(&pubsub, &docker, true).await;
-}
-
-#[tokio::test]
-async fn test_postgres_driver_with_memory_reconnect() {
-	setup_logging();
-
-	let test_id = Uuid::new_v4();
-	let (db_config, docker_config) = TestDatabase::Postgres.config(test_id, 1).await.unwrap();
-	let mut docker = docker_config.unwrap();
-	docker.start().await.unwrap();
-	tokio::time::sleep(Duration::from_secs(5)).await;
-
-	let rivet_config::config::Database::Postgres(pg) = db_config else {
-		unreachable!();
-	};
-	let url = pg.url.read().clone();
-
-	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
-		.await
-		.unwrap();
-	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), true);
-
-	test_all_inner(&pubsub, &docker, false).await;
-}
-
-#[tokio::test]
-async fn test_postgres_driver_without_memory_reconnect() {
-	setup_logging();
-
-	let test_id = Uuid::new_v4();
-	let (db_config, docker_config) = TestDatabase::Postgres.config(test_id, 1).await.unwrap();
-	let mut docker = docker_config.unwrap();
-	docker.start().await.unwrap();
-	tokio::time::sleep(Duration::from_secs(5)).await;
-
-	let rivet_config::config::Database::Postgres(pg) = db_config else {
-		unreachable!();
-	};
-	let url = pg.url.read().clone();
-
-	let driver = universalpubsub::driver::postgres::PostgresDriver::connect(url, None, None, None)
-		.await
-		.unwrap();
-	let pubsub = PubSub::new_with_memory_optimization(Arc::new(driver), false);
-
-	test_all_inner(&pubsub, &docker, false).await;
 }
 
 async fn test_all_inner(

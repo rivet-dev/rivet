@@ -7,171 +7,292 @@ use std::{
 	time::{Duration, Instant},
 };
 
-use anyhow::{Context, Result};
-use tokio::sync::broadcast;
+use anyhow::{Context, Result, bail};
+use futures_util::StreamExt;
+use tokio::sync::mpsc;
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::{conflict_tracker::TransactionConflictTracker, transaction::TXN_TIMEOUT};
 
 use lease::LEASE_TTL_SECS;
 
-use super::shared::{
-	ELECTION_CHANNEL, LEASE_ID, LeaseInfo, PostgresShared, WATERMARK_CHANNEL, commit_channel,
+use super::{
+	shared::{LEASE_ID, LeaseInfo, PostgresShared},
+	transport::{CommitJob, CommitOutcome, Transport},
 };
 
 /// Max commits resolved+applied per batch (group commit). Amortizes the resolver, Postgres
 /// round-trips, and fsync across the batch.
-const DRAIN_BATCH_SIZE: i64 = 256;
+const DRAIN_BATCH_SIZE: usize = 256;
 
 /// How often a leader renews its lease. Must be comfortably under `LEASE_TTL_SECS`.
 const RENEW_INTERVAL: Duration = Duration::from_secs(3);
 
-/// Backstop poll cadence so a missed `udb_commit` NOTIFY cannot stall the drain indefinitely.
-const POLL_BACKSTOP: Duration = Duration::from_millis(50);
-
 /// How long a candidate waits before retrying election when another node holds the lease.
 const ELECTION_RETRY: Duration = Duration::from_secs(2);
 
-/// Spawn the per-process resolver task. Every node runs this; only the elected leader drains the
-/// commit queue. The returned handle is aborted when the owning driver drops, which stops lease
-/// renewal so the lease expires and another node can take over (node-death / failover path).
-pub fn spawn(shared: Arc<PostgresShared>) -> tokio::task::JoinHandle<()> {
-	tokio::spawn(run(shared))
+/// Single-node leader-acquire gate: total time to keep retrying before giving up and failing
+/// startup. Must exceed the lease TTL so a crashed predecessor's lease has time to expire.
+const GATE_TOTAL: Duration = Duration::from_secs((LEASE_TTL_SECS as u64) * 2 + 5);
+/// Backoff between single-node gate attempts.
+const GATE_RETRY: Duration = Duration::from_secs(1);
+
+/// What feeds the leader drain loop. Single-node owns the process-wide commit receiver and an
+/// already-acquired lease epoch (the startup gate ran before this task spawned). Multi-node creates a
+/// fresh NATS-fed receiver each time it wins an election.
+pub enum ResolverInput {
+	SingleNode {
+		rx: mpsc::Receiver<CommitJob>,
+		initial_epoch: i64,
+	},
+	MultiNode,
 }
 
-async fn run(shared: Arc<PostgresShared>) {
-	// A departing leader NOTIFYs this channel after releasing its lease so we elect immediately
-	// rather than waiting out the full `ELECTION_RETRY` tick.
-	let mut election_rx = shared.listener.listen(ELECTION_CHANNEL).await;
+/// Single-node startup gate: acquire the leader lease, retrying with backoff. Fails if it cannot be
+/// acquired within [`GATE_TOTAL`], which means either another engine instance is running against this
+/// Postgres (a real misconfiguration in single-node mode) or a previous instance crashed without
+/// releasing its lease and it has not yet expired. Each failed attempt warns.
+pub async fn acquire_single_node_gate(shared: &Arc<PostgresShared>) -> Result<i64> {
+	let deadline = Instant::now() + GATE_TOTAL;
+	let mut attempt = 0u32;
+	loop {
+		attempt += 1;
+		match lease::try_acquire(&shared.pool, &shared.node_id).await {
+			Ok(Some(acquired)) => {
+				tracing::debug!(
+					epoch = acquired.epoch,
+					attempt,
+					node_id = %shared.node_id,
+					"acquired udb postgres single-node leader lease"
+				);
+				return Ok(acquired.epoch);
+			}
+			Ok(None) => {
+				tracing::warn!(
+					attempt,
+					"udb postgres single-node could not acquire leader lease. another instance may hold it \
+					or a previous instance did not release it; backing off"
+				);
+			}
+			Err(err) => {
+				tracing::warn!(
+					?err,
+					attempt,
+					"udb postgres single-node lease acquire errored, retrying"
+				);
+			}
+		}
 
+		if Instant::now() >= deadline {
+			bail!(
+				"udb postgres single-node failed to acquire leader lease after {attempt} attempts; refusing \
+				to start. another engine instance may be running against this postgres, or a \
+				previous instance crashed without releasing its lease (wait for it to expire). if you intend \
+				to run a multi-node setup you must configure NATS."
+			);
+		}
+
+		tokio::time::sleep(GATE_RETRY).await;
+	}
+}
+
+/// Spawn the per-process resolver task. The returned handle is aborted when the owning driver drops,
+/// which stops lease renewal so the lease expires and another node can take over.
+pub fn spawn(shared: Arc<PostgresShared>, input: ResolverInput) -> tokio::task::JoinHandle<()> {
+	tokio::spawn(run(shared, input))
+}
+
+async fn run(shared: Arc<PostgresShared>, input: ResolverInput) {
+	match input {
+		ResolverInput::SingleNode { rx, initial_epoch } => {
+			run_single_node(shared, rx, initial_epoch).await
+		}
+		ResolverInput::MultiNode => run_multi_node(shared).await,
+	}
+}
+
+/// Single-node: this node is the only node and is always the leader. The startup gate already
+/// acquired the lease, so lead immediately. If the lease is ever lost (another node appeared, a real
+/// misconfiguration), log loudly and re-acquire through the gate.
+async fn run_single_node(
+	shared: Arc<PostgresShared>,
+	mut rx: mpsc::Receiver<CommitJob>,
+	initial_epoch: i64,
+) {
+	let mut epoch = initial_epoch;
+	loop {
+		if let Err(err) = lead(&shared, epoch, &mut rx).await {
+			tracing::error!(?err, "udb postgres single-node leader loop errored");
+		}
+		tracing::error!(
+			epoch,
+			"udb postgres single-node lost the leader lease; re-acquiring (another engine instance may be \
+			running against this postgres)"
+		);
+		epoch = loop {
+			match acquire_single_node_gate(&shared).await {
+				Ok(epoch) => break epoch,
+				Err(err) => {
+					tracing::error!(?err, "udb postgres single-node re-acquire failed; retrying");
+				}
+			}
+		};
+	}
+}
+
+/// Multi-node: race the lease against other nodes; whoever wins leads until it loses the lease.
+async fn run_multi_node(shared: Arc<PostgresShared>) {
 	loop {
 		match lease::try_acquire(&shared.pool, &shared.node_id).await {
 			Ok(Some(acquired)) => {
-				tracing::info!(epoch = acquired.epoch, node_id = %shared.node_id, "acquired udb leader lease");
-				if let Err(err) = lead(&shared, acquired.epoch).await {
+				tracing::info!(epoch = acquired.epoch, node_id = %shared.node_id, "acquired udb postgres leader lease");
+
+				// Each leadership term gets its own NATS-fed commit queue. The subscriber forwards
+				// decoded commit requests into `rx`; aborting it on step-down stops accepting commits.
+				let (tx, mut rx) = mpsc::channel(super::transport::COMMIT_QUEUE_BOUND);
+				let subscriber = spawn_commit_subscriber(&shared, tx);
+
+				if let Err(err) = lead(&shared, acquired.epoch, &mut rx).await {
 					tracing::error!(?err, "udb leader loop errored, stepping down");
 				}
-				tracing::info!(epoch = acquired.epoch, "stepped down from udb leader");
+				if let Some(handle) = subscriber {
+					handle.abort();
+				}
+				tracing::info!(
+					epoch = acquired.epoch,
+					"stepped down from udb postgres leader"
+				);
 			}
-			Ok(None) => {
-				wait_for_election_retry(&shared, &mut election_rx).await;
-			}
+			Ok(None) => wait_for_election_retry(&shared).await,
 			Err(err) => {
 				tracing::warn!(?err, "failed udb lease acquire attempt");
-				wait_for_election_retry(&shared, &mut election_rx).await;
+				wait_for_election_retry(&shared).await;
 			}
 		}
 	}
+}
+
+/// Spawn the leader's NATS commit subscriber for multi-node. Returns `None` in single-node (no NATS).
+fn spawn_commit_subscriber(
+	shared: &Arc<PostgresShared>,
+	tx: mpsc::Sender<CommitJob>,
+) -> Option<AbortOnDropHandle<()>> {
+	let Transport::MultiNode(nats) = &shared.transport else {
+		return None;
+	};
+	let client = nats.client.clone();
+	let subject = nats.subjects.commit(&shared.node_id);
+	Some(AbortOnDropHandle::new(tokio::spawn(async move {
+		if let Err(err) = super::nats::run_commit_subscriber(client, subject, tx).await {
+			tracing::warn!(?err, "udb commit subscriber ended");
+		}
+	})))
 }
 
 /// Wait before retrying the election: either the `ELECTION_RETRY` backstop elapses, or a departing
-/// leader wakes us via `ELECTION_CHANNEL` so handoff is near-instant.
-async fn wait_for_election_retry(
-	shared: &Arc<PostgresShared>,
-	election_rx: &mut broadcast::Receiver<String>,
-) {
-	tokio::select! {
-		_ = tokio::time::sleep(ELECTION_RETRY) => {}
-		res = election_rx.recv() => {
-			if matches!(res, Err(broadcast::error::RecvError::Closed)) {
-				// The listener recreates the channel on reconnect; re-subscribe.
-				*election_rx = shared.listener.listen(ELECTION_CHANNEL).await;
+/// leader wakes us via the election broadcast so handoff is near-instant.
+async fn wait_for_election_retry(shared: &Arc<PostgresShared>) {
+	let Transport::MultiNode(nats) = &shared.transport else {
+		tokio::time::sleep(ELECTION_RETRY).await;
+		return;
+	};
+
+	let election = nats.client.subscribe(nats.subjects.election()).await;
+	match election {
+		Ok(mut sub) => {
+			tokio::select! {
+				_ = tokio::time::sleep(ELECTION_RETRY) => {}
+				_ = sub.next() => {}
 			}
 		}
+		Err(_) => tokio::time::sleep(ELECTION_RETRY).await,
 	}
 }
 
-/// Best-effort graceful leadership handoff invoked on shutdown. If this node currently holds the
-/// lease, expire it and wake a standby so it takes over immediately instead of waiting out the TTL.
-/// Safe to call on a follower: the fenced release matches no row and nothing is notified. The
-/// caller must already have stopped lease renewal before calling this.
+/// Best-effort graceful leadership handoff invoked on shutdown. If this node holds the lease, expire
+/// it and wake standbys so they take over immediately instead of waiting out the TTL. Safe to call on
+/// a follower. The caller must already have stopped lease renewal before calling this.
 pub async fn handoff(shared: &Arc<PostgresShared>) {
 	match lease::release(&shared.pool, &shared.node_id).await {
 		Ok(true) => {
-			tracing::info!(node_id = %shared.node_id, "released udb leader lease for graceful handoff");
-			notify_election(shared).await;
+			tracing::info!(node_id = %shared.node_id, "released udb postgres leader lease for graceful handoff");
+			if let Transport::MultiNode(nats) = &shared.transport {
+				if let Err(err) = nats
+					.client
+					.publish(nats.subjects.election(), Vec::new().into())
+					.await
+				{
+					tracing::debug!(?err, "failed to publish udb election wake");
+				}
+			}
 		}
 		Ok(false) => {}
-		Err(err) => {
-			tracing::warn!(?err, "failed to release udb lease on shutdown");
-		}
-	}
-}
-
-/// Wake standby candidates so the next election fires immediately after a graceful release.
-async fn notify_election(shared: &Arc<PostgresShared>) {
-	let conn = match shared.pool.get().await {
-		Ok(conn) => conn,
-		Err(err) => {
-			tracing::debug!(?err, "failed to get connection for election notify");
-			return;
-		}
-	};
-
-	if let Err(err) = conn
-		.execute("SELECT pg_notify($1, '')", &[&ELECTION_CHANNEL])
-		.await
-	{
-		tracing::debug!(?err, "failed to notify election channel");
+		Err(err) => tracing::warn!(?err, "failed to release udb lease on shutdown"),
 	}
 }
 
 /// Leader entry point: publish our lease, compute the cold-window floor, then run renewal and
-/// draining as two sibling tasks. They coordinate purely by completion: when either returns (lease
-/// lost or error), the other is aborted and the leader steps down. Both operations are safe to
-/// hard-abort, so no explicit cancellation signalling is needed. A renew is a single fenced
-/// `UPDATE`; a drain batch runs in one Postgres transaction that rolls back cleanly when dropped,
-/// leaving its claimed requests `pending` for the next leader.
-async fn lead(shared: &Arc<PostgresShared>, epoch: i64) -> Result<()> {
+/// draining. Renewal runs on its own task so a long drain cannot starve it past the lease TTL; the
+/// drain loop runs inline so it can borrow the commit receiver. Returns when the lease is lost (renew
+/// reports it gone, or an apply is epoch-fenced).
+async fn lead(
+	shared: &Arc<PostgresShared>,
+	epoch: i64,
+	rx: &mut mpsc::Receiver<CommitJob>,
+) -> Result<()> {
 	// Publish our own lease into the cache immediately so our local commits route to us.
 	shared.set_lease(LeaseInfo {
 		epoch,
 		leader_addr: shared.node_id.clone(),
 	});
 
-	// The recovery floor: a freshly elected leader has a cold conflict window, so reject commits
-	// whose read_version predates the floor until the window warms (one TXN_TIMEOUT), forcing
-	// those followers to take a fresh read_version.
+	// The recovery floor: a freshly elected leader has a cold conflict window, so reject commits whose
+	// read_version predates the floor until the window warms (one TXN_TIMEOUT), forcing those
+	// followers to take a fresh read_version.
 	let recovery_version = recovery_floor(shared).await?;
 	let recovery_deadline = Instant::now() + TXN_TIMEOUT;
 
-	tracing::info!(
+	// Seed our read-version cache to the durable floor so our own follower reads are not cold-window
+	// rejected (a read at `read_version < recovery_version` is rejected during the cold window, and the
+	// cache otherwise starts at 0). Followers learn the floor from the watermark broadcast / lease poll.
+	shared.advance_durable_version(recovery_version as i64);
+
+	tracing::debug!(
 		epoch,
 		recovery_version,
 		cold_window_ms = TXN_TIMEOUT.as_millis() as u64,
+		multi_node = shared.is_multi_node(),
 		"udb leader entering lead loop"
 	);
 
-	// Renewal runs in its own task so the drain loop can never starve it: if renewal shared the
-	// drain loop, a single long drain under sustained load would block renewal past the lease TTL
-	// and the lease would be lost mid-drain, thrashing leadership. Both are held in abort-on-drop
-	// handles so a hard abort of this `run` task (driver drop / node death) tears them down. A leaked
-	// renew task would keep this dead leader's lease alive and block failover.
+	let tracker = TransactionConflictTracker::new();
 	let mut renew = AbortOnDropHandle::new(tokio::spawn(renew_loop(shared.clone(), epoch)));
-	let mut drain = AbortOnDropHandle::new(tokio::spawn(drain_loop(
-		shared.clone(),
+
+	let drain = drain_loop(
+		shared,
 		epoch,
+		&tracker,
 		recovery_version,
 		recovery_deadline,
-	)));
+		rx,
+	);
+	tokio::pin!(drain);
 
-	// Whichever task returns first (lease lost or error), step down; the other is aborted when its
-	// handle drops at the end of this scope. A clean exit yields its inner result; a panic surfaces
-	// through `?` as a join error.
+	// Whichever finishes first (lease lost via renew, or epoch fenced during a drain apply) ends the
+	// leadership term. The renew handle yields a join result; the inline drain yields directly.
 	tokio::select! {
 		res = &mut renew => res?,
-		res = &mut drain => res?,
+		res = &mut drain => res,
 	}
 }
 
 /// Lease-renewal loop. Runs on its own task and pool connection so it cannot be starved by drain
-/// work. Returns when the lease is definitively gone (epoch bumped by another node, or renewal
-/// failing for the whole lease TTL), which causes [`lead`] to abort the drain task and step down.
+/// work. Returns when the lease is definitively gone.
 async fn renew_loop(shared: Arc<PostgresShared>, epoch: i64) -> Result<()> {
 	let mut interval = tokio::time::interval(RENEW_INTERVAL);
 	interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-	// The lease was just acquired/renewed (expires_at = now + TTL), so consume the immediate first
-	// tick and renew after one interval.
+	// The lease was just acquired (expires_at = now + TTL), so consume the immediate first tick and
+	// renew after one interval.
 	interval.tick().await;
 
 	let mut last_renew = Instant::now();
@@ -179,42 +300,16 @@ async fn renew_loop(shared: Arc<PostgresShared>, epoch: i64) -> Result<()> {
 	loop {
 		interval.tick().await;
 
-		let gap_ms = last_renew.elapsed().as_millis() as u64;
-		let renew_start = Instant::now();
 		match lease::renew(&shared.pool, &shared.node_id, epoch).await {
-			Ok(true) => {
-				last_renew = Instant::now();
-				let renew_query_ms = renew_start.elapsed().as_millis() as u64;
-				// With renewal on its own task this gap should track RENEW_INTERVAL closely; a large
-				// gap now points at pool or Postgres contention.
-				if gap_ms > RENEW_INTERVAL.as_millis() as u64 * 2 {
-					tracing::warn!(
-						epoch,
-						gap_since_last_renew_ms = gap_ms,
-						renew_query_ms,
-						"udb leader renew was delayed (pool or postgres contention)"
-					);
-				} else {
-					tracing::debug!(
-						epoch,
-						gap_since_last_renew_ms = gap_ms,
-						renew_query_ms,
-						"udb leader renewed lease"
-					);
-				}
-			}
+			Ok(true) => last_renew = Instant::now(),
 			Ok(false) => {
 				tracing::warn!(
 					epoch,
-					gap_since_last_renew_ms = gap_ms,
-					"udb leader lost lease on renew (epoch bumped by another node); stepping down"
+					"udb leader lost lease on renew (epoch bumped); stepping down"
 				);
 				return Ok(());
 			}
 			Err(err) => {
-				// A transient renew error is tolerable within the TTL; keep retrying. Only give up
-				// if we have been unable to renew for the whole lease TTL, at which point we can no
-				// longer assume we hold the lease.
 				if last_renew.elapsed() >= Duration::from_secs(LEASE_TTL_SECS as u64) {
 					tracing::warn!(
 						?err,
@@ -229,108 +324,63 @@ async fn renew_loop(shared: Arc<PostgresShared>, epoch: i64) -> Result<()> {
 	}
 }
 
-/// Drain loop. Processes one batch per iteration. Draining until the queue emptied in a single call
-/// could run for many seconds under sustained load; processing one batch at a time keeps the loop
-/// at a clean await point between batches. A non-empty queue still drains back-to-back with no idle
-/// wait, so throughput is unchanged. It blocks on `select!` (wake NOTIFY or poll backstop) only
-/// when the queue is empty. Returns when this leader's epoch is fenced out; otherwise [`lead`]
-/// aborts it when renewal reports the lease is lost.
+/// Drain loop. Collects one batch of commit jobs from the queue and processes it per iteration.
+/// Returns when this leader's epoch is fenced out during an apply, or the queue closes.
 async fn drain_loop(
-	shared: Arc<PostgresShared>,
+	shared: &Arc<PostgresShared>,
 	epoch: i64,
+	tracker: &TransactionConflictTracker,
 	recovery_version: u64,
 	recovery_deadline: Instant,
+	rx: &mut mpsc::Receiver<CommitJob>,
 ) -> Result<()> {
-	let tracker = TransactionConflictTracker::new();
-
-	let mut wake_rx = shared
-		.listener
-		.listen(&commit_channel(&shared.node_id))
-		.await;
-
-	let mut poll_interval = tokio::time::interval(POLL_BACKSTOP);
-	poll_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
-
 	loop {
+		let batch = collect_batch(rx).await;
+		if batch.is_empty() {
+			// The queue closed (all senders dropped). Step down.
+			return Ok(());
+		}
+
 		match drain_batch(
-			&shared,
+			shared,
 			epoch,
-			&tracker,
+			tracker,
 			recovery_version,
 			recovery_deadline,
+			batch,
 		)
 		.await?
 		{
 			BatchOutcome::LostLease => {
-				tracing::warn!(
-					epoch,
-					"udb leader stepping down: lost lease during drain (epoch fenced on watermark)"
-				);
+				tracing::warn!(epoch, "udb leader stepping down: epoch fenced during apply");
 				return Ok(());
 			}
-			// More work may be pending; loop immediately to keep throughput up.
 			BatchOutcome::Processed => continue,
-			BatchOutcome::Empty => {
-				tokio::select! {
-					res = wake_rx.recv() => {
-						match res {
-							Ok(_) | Err(broadcast::error::RecvError::Lagged(_)) => {}
-							Err(broadcast::error::RecvError::Closed) => {
-								wake_rx = shared
-									.listener
-									.listen(&commit_channel(&shared.node_id))
-									.await;
-							}
-						}
-					}
-					_ = poll_interval.tick() => {}
-				}
-			}
 		}
 	}
 }
 
-/// The cold-window rejection floor for a freshly elected leader: the durable watermark
-/// (`udb_lease.durable_version`) at election time.
-///
-/// Reasoning (do NOT change this back to `max(durable, seq_high)`):
-///
-/// A new leader starts with an empty conflict tracker, so it cannot detect a read-write conflict
-/// against any committed write it does not already know about. The writes it is missing are exactly
-/// the previous leader's winners, and every winner's write is applied to `kv` AND its
-/// `commit_version` folded into `durable_version` in the SAME apply transaction. So every missing
-/// write has `commit_version <= durable_version`. A committing transaction `T` is therefore safe
-/// iff `T.read_version >= durable_version`: every write above its read_version was committed by THIS
-/// leader and is in the tracker. Only `T.read_version < durable_version` can race a missing winner,
-/// so that is the exact set the cold window must reject.
-///
-/// `udb_version_seq.last_value` (the sequence high-water) is NOT a valid floor. Every drained
-/// request consumes a `nextval` BEFORE the conflict check, including conflicts and cold rejects, so
-/// the sequence races far ahead of `durable_version` with versions that never produced any write.
-/// Using `max(durable, seq_high)` rejects essentially every commit for the whole cold window
-/// (followers read at `durable_version`, which is always `< seq_high`), turning each failover into
-/// a 5s mass-reject storm. The gap `(durable_version, seq_high]` holds only thrown-away loser
-/// versions, so nothing in it is a missing write to guard against.
-///
-/// Version ASSIGNMENT is unaffected: commit versions still come from `nextval('udb_version_seq')`
-/// in `drain_batch`, which is always above the sequence high-water, so uniqueness and monotonicity
-/// across failover are preserved independently of this floor.
+/// Collect up to [`DRAIN_BATCH_SIZE`] jobs from the queue, blocking for the first one and then
+/// draining any immediately-available followers without waiting. Returns an empty batch only when the
+/// queue is closed and drained.
+async fn collect_batch(rx: &mut mpsc::Receiver<CommitJob>) -> Vec<CommitJob> {
+	let mut batch = Vec::with_capacity(DRAIN_BATCH_SIZE);
+	rx.recv_many(&mut batch, DRAIN_BATCH_SIZE).await;
+	batch
+}
+
+/// The cold-window rejection floor for a freshly elected leader: the durable watermark at election
+/// time. A new leader's tracker is empty, so it cannot detect a conflict against a previous leader's
+/// winner; every such winner has `commit_version <= durable_version` (applied and folded into
+/// `durable_version` in one txn), so a commit is safe if `read_version >= durable_version`.
 async fn recovery_floor(shared: &Arc<PostgresShared>) -> Result<u64> {
 	let durable = lease::current_durable_version(&shared.pool).await?;
 	Ok(durable.max(0) as u64)
 }
 
 enum BatchOutcome {
-	Empty,
 	Processed,
 	LostLease,
-}
-
-struct Reply {
-	channel: String,
-	/// The follower's reply payload, encoding the outcome so the waiter resolves without a status
-	/// SELECT: `"<id>:committed:<commit_version>"` or `"<id>:conflict"`.
-	payload: String,
 }
 
 async fn drain_batch(
@@ -339,7 +389,11 @@ async fn drain_batch(
 	tracker: &TransactionConflictTracker,
 	recovery_version: u64,
 	recovery_deadline: Instant,
+	mut jobs: Vec<CommitJob>,
 ) -> Result<BatchOutcome> {
+	let batch_start = Instant::now();
+	let batch_len = jobs.len();
+
 	let mut conn = shared
 		.pool
 		.get()
@@ -351,128 +405,132 @@ async fn drain_batch(
 		.await
 		.context("failed to start drain batch txn")?;
 
-	// Claim a batch in id order and allocate every commit version in the SAME round-trip via an
-	// inline `nextval`, instead of a separate version-allocation query. FOR UPDATE SKIP LOCKED holds
-	// the rows for this txn so they are stamped terminal on COMMIT with no intermediate 'claimed'
-	// state to clean up.
-	//
-	// Postgres does NOT guarantee `nextval` is evaluated in output (id) order, so the per-row `cv`
-	// here may not be monotonic in id. The versions are collected, sorted, and re-assigned to rows in
-	// id order below, exactly as the separate-query path did, because versionstamp monotonicity with
-	// commit order is load-bearing (epoxy changelog catch-up + depot PITR).
-	let rows = txn
-		.query(
-			"SELECT id, read_version, payload, reply_channel,
-			        nextval('udb_version_seq') AS cv
-			 FROM udb_commit_requests
-			 WHERE status = 'pending' AND epoch = $1
-			 ORDER BY id
-			 LIMIT $2
-			 FOR UPDATE SKIP LOCKED",
-			&[&epoch, &DRAIN_BATCH_SIZE],
-		)
-		.await
-		.context("failed to claim commit batch")?;
-
-	if rows.is_empty() {
-		txn.rollback().await.ok();
-		return Ok(BatchOutcome::Empty);
+	// Build the failover dedup keys: a job whose (client_node_id, client_seq) is already recorded in
+	// udb_applied was committed by a prior leader; respond with the recorded version and do not
+	// re-apply. Single-node jobs carry no dedup key and never hit this path.
+	let mut dedup_nids: Vec<Vec<u8>> = Vec::new();
+	let mut dedup_seqs: Vec<i64> = Vec::new();
+	for job in &jobs {
+		if let Some(key) = &job.dedup_key {
+			dedup_nids.push(key.client_node_id.clone());
+			dedup_seqs.push(key.client_seq);
+		}
 	}
 
-	let batch_start = Instant::now();
+	// Pipeline the dedup pre-check and commit-version allocation on the same connection. Versions are
+	// allocated for every job rather than only to-resolve jobs, so the version count no longer depends
+	// on the dedup result and the two queries have no data dependency; tokio-postgres pipelines them
+	// into a single round-trip. A dedup hit wastes its allocated version, but sequence gaps are already
+	// expected (conflict losers and rolled-back batches burn versions too) and do not affect
+	// versionstamp monotonicity.
+	let job_count = jobs.len() as i64;
+	let dedup_fut = async {
+		if dedup_nids.is_empty() {
+			return anyhow::Ok(HashMap::<(Vec<u8>, i64), i64>::new());
+		}
+		let applied = txn
+			.query(
+				"SELECT a.client_node_id, a.client_seq, a.commit_version
+				 FROM udb_applied a
+				 JOIN unnest($1::bytea[], $2::bigint[]) AS q(nid, seq)
+				   ON a.client_node_id = q.nid AND a.client_seq = q.seq",
+				&[&dedup_nids, &dedup_seqs],
+			)
+			.await
+			.context("failed dedup pre-check")?
+			.into_iter()
+			.map(|row| {
+				(
+					(row.get::<_, Vec<u8>>(0), row.get::<_, i64>(1)),
+					row.get::<_, i64>(2),
+				)
+			})
+			.collect();
+		anyhow::Ok(applied)
+	};
+	let versions_fut = async {
+		let versions = txn
+			.query(
+				"SELECT nextval('udb_version_seq') FROM generate_series(1, $1::bigint)",
+				&[&job_count],
+			)
+			.await
+			.context("failed to allocate commit versions")?
+			.into_iter()
+			.map(|row| row.get::<_, i64>(0))
+			.collect::<Vec<i64>>();
+		anyhow::Ok(versions)
+	};
+	let (applied, mut versions) = tokio::try_join!(dedup_fut, versions_fut)?;
+
+	// Postgres does not guarantee nextval is evaluated in row order, so the versions are sorted and
+	// assigned to to-resolve jobs in arrival order to keep versionstamps monotonic with commit order
+	// (load-bearing for epoxy changelog catch-up + depot PITR).
+	versions.sort_unstable();
+
+	// Classify each job: a dedup hit resolves immediately; everything else needs version assignment
+	// and conflict resolution.
+	let mut outcomes: Vec<Option<CommitOutcome>> = vec![None; jobs.len()];
+	let mut resolve_indices: Vec<usize> = Vec::with_capacity(jobs.len());
+	for (i, job) in jobs.iter().enumerate() {
+		if let Some(key) = &job.dedup_key {
+			if let Some(&cv) = applied.get(&(key.client_node_id.clone(), key.client_seq)) {
+				outcomes[i] = Some(CommitOutcome::Committed { commit_version: cv });
+				continue;
+			}
+		}
+		resolve_indices.push(i);
+	}
+
 	let cold_window = Instant::now() < recovery_deadline;
-	let batch_len = rows.len();
+	let mut winners: Vec<apply::Winner> = Vec::new();
+	let mut winner_dedup_nids: Vec<Vec<u8>> = Vec::new();
+	let mut winner_dedup_seqs: Vec<i64> = Vec::new();
+	let mut winner_dedup_cvs: Vec<i64> = Vec::new();
 	let mut max_winner_cv: i64 = 0;
-	let mut replies = Vec::with_capacity(batch_len);
 	let mut committed_count = 0u32;
 	let mut conflict_count = 0u32;
 	let mut cold_reject_count = 0u32;
 
-	// Re-assign the inline-allocated versions to rows in id order (winners and losers alike; losers'
-	// versions are harmlessly skipped) so versionstamps stay monotonic with commit order. The sort
-	// keeps assignment monotonic regardless of how Postgres ordered the per-row `nextval` evaluation.
-	let mut versions: Vec<i64> = rows.iter().map(|row| row.get::<_, i64>(4)).collect();
-	versions.sort_unstable();
+	for (slot, &i) in resolve_indices.iter().enumerate() {
+		let commit_version = versions[slot];
+		let job = &mut jobs[i];
+		let start_version = job.read_version;
+		let conflict_ranges = std::mem::take(&mut job.conflict_ranges);
 
-	// Resolve every request in memory in id order. Winners are collected with their version and
-	// operations for the fold; the bulk status stamp is built for all rows at once.
-	let mut winners: Vec<apply::Winner> = Vec::new();
-	let mut stamp_ids: Vec<i64> = Vec::with_capacity(batch_len);
-	let mut stamp_statuses: Vec<&str> = Vec::with_capacity(batch_len);
-	let mut stamp_versions: Vec<Option<i64>> = Vec::with_capacity(batch_len);
-
-	// Sub-phase timers to decompose batch_ms and confirm whether the service time is constant (pure
-	// M/M/1 queueing) or itself inflates under load.
-	let mut decode_dur = Duration::ZERO;
-	let mut conflict_dur = Duration::ZERO;
-
-	for (i, row) in rows.iter().enumerate() {
-		let id: i64 = row.get(0);
-		let read_version: i64 = row.get(1);
-		let payload: Vec<u8> = row.get(2);
-		let reply_channel: String = row.get(3);
-		let commit_version = versions[i];
-
-		let decode_start = Instant::now();
-		let decoded = super::codec::decode_commit_request(&payload)
-			.context("failed to decode commit payload")?;
-		decode_dur += decode_start.elapsed();
-
-		let start_version = read_version.max(0) as u64;
-
-		// Cold-window guard: a commit whose read_version predates the recovery floor cannot be
-		// safely resolved against this leader's empty window. Reject it as retryable.
 		let cold_rejected = cold_window && start_version < recovery_version;
 		let conflicted = if cold_rejected {
 			cold_reject_count += 1;
 			true
 		} else {
-			let conflict_start = Instant::now();
-			let res = tracker
-				.check_and_insert(
-					start_version,
-					commit_version.max(0) as u64,
-					decoded.conflict_ranges,
-				)
-				.await;
-			conflict_dur += conflict_start.elapsed();
-			res
+			tracker
+				.check_and_insert(start_version, commit_version.max(0) as u64, conflict_ranges)
+				.await
 		};
 
-		stamp_ids.push(id);
 		if conflicted {
 			if !cold_rejected {
 				conflict_count += 1;
 			}
-			stamp_statuses.push("conflict");
-			stamp_versions.push(None);
+			outcomes[i] = Some(CommitOutcome::Conflict);
 		} else {
 			committed_count += 1;
-			stamp_statuses.push("committed");
-			stamp_versions.push(Some(commit_version));
+			outcomes[i] = Some(CommitOutcome::Committed { commit_version });
 			max_winner_cv = max_winner_cv.max(commit_version);
+			if let Some(key) = &job.dedup_key {
+				winner_dedup_nids.push(key.client_node_id.clone());
+				winner_dedup_seqs.push(key.client_seq);
+				winner_dedup_cvs.push(commit_version);
+			}
 			winners.push(apply::Winner {
 				commit_version: commit_version.max(0) as u64,
-				operations: decoded.operations,
+				operations: std::mem::take(&mut job.operations),
 			});
 		}
-
-		let reply_payload = if conflicted {
-			format!("{id}:conflict")
-		} else {
-			format!("{id}:committed:{commit_version}")
-		};
-		replies.push(Reply {
-			channel: reply_channel,
-			payload: reply_payload,
-		});
 	}
 
-	let t_resolved = Instant::now();
-
-	// Bulk-read the pre-batch value of every key a winner's atomic op reads in one query, then fold
-	// all winners into a single materialized write-set in memory. This collapses the per-row apply
-	// round-trips to a fixed count independent of batch size.
+	// Bulk-read the pre-batch value of every key a winner's atomic op reads, then fold all winners
+	// into one materialized write-set in memory.
 	let atomic_keys = apply::atomic_read_keys(&winners);
 	let base = if atomic_keys.is_empty() {
 		HashMap::new()
@@ -488,26 +546,19 @@ async fn drain_batch(
 		.collect()
 	};
 
-	let t_read = Instant::now();
-
 	let apply::WriteSet {
 		upserts,
 		point_deletes,
 		range_deletes,
 	} = apply::fold_winners(winners, &base).context("failed to fold batch winners")?;
 
-	let t_fold = Instant::now();
-
 	let (upsert_keys, upsert_values): (Vec<Vec<u8>>, Vec<Vec<u8>>) = upserts.into_iter().unzip();
 	let (range_begins, range_ends): (Vec<Vec<u8>>, Vec<Vec<u8>>) =
 		range_deletes.into_iter().unzip();
 
-	// Range deletes run in their OWN statement BEFORE the apply CTE. Postgres data-modifying CTE
-	// sub-statements all observe the same snapshot and never see each other's effects, so a range
-	// delete and an in-range upsert in one CTE would have unspecified results. `range_deletes` are
-	// ranges (not materialized per-key) and can overlap an upsert key (a key inside a cleared range
-	// that is also re-set), so the range clear must commit its effect first; the upsert then
-	// re-inserts the key. Collapsed from a per-range loop into one statement over a pair of arrays.
+	// Range deletes run in their own statement before the apply CTE: a range delete and an in-range
+	// upsert in one CTE would have unspecified ordering, so the clear must commit its effect first and
+	// the upsert then re-inserts the key.
 	if !range_begins.is_empty() {
 		txn.execute(
 			"DELETE FROM kv USING unnest($1::bytea[], $2::bytea[]) AS r(b, e)
@@ -518,12 +569,9 @@ async fn drain_batch(
 		.context("failed to clear ranges")?;
 	}
 
-	// Apply the rest of the batch in one CTE: point deletes, the kv upsert, the terminal status
-	// stamp, and the epoch-fenced watermark advance. This is safe to fold because the write sets are
-	// disjoint: `apply::WriteSet` guarantees each key appears at most once across `upserts` and
-	// `point_deletes` (see apply.rs), and the three tables (`kv`, `udb_commit_requests`, `udb_lease`)
-	// are independent. The watermark UPDATE is fenced on our epoch: a zombie old leader whose epoch
-	// was bumped sees zero rows returned and must step down before any of its writes become visible.
+	// Apply the rest of the batch in one CTE: point deletes, the kv upsert, the dedup records for
+	// multi-node winners, and the epoch-fenced watermark advance. A zombie old leader whose epoch was
+	// bumped sees zero rows from the lease UPDATE and steps down before any write becomes visible.
 	let new_durable: i64 = match txn
 		.query_opt(
 			"WITH pdel AS (
@@ -532,11 +580,10 @@ async fn drain_batch(
 				INSERT INTO kv (key, value)
 				SELECT * FROM unnest($2::bytea[], $3::bytea[])
 				ON CONFLICT (key) DO UPDATE SET value = excluded.value
-			), stamp AS (
-				UPDATE udb_commit_requests AS r
-				   SET status = b.status, commit_version = b.cv
-				 FROM unnest($4::bigint[], $5::text[], $6::bigint[]) AS b(id, status, cv)
-				 WHERE r.id = b.id
+			), applied AS (
+				INSERT INTO udb_applied (client_node_id, client_seq, commit_version)
+				SELECT * FROM unnest($4::bytea[], $5::bigint[], $6::bigint[])
+				ON CONFLICT (client_node_id, client_seq) DO NOTHING
 			)
 			UPDATE udb_lease
 			   SET durable_version = GREATEST(durable_version, $7)
@@ -546,9 +593,9 @@ async fn drain_batch(
 				&point_deletes,
 				&upsert_keys,
 				&upsert_values,
-				&stamp_ids,
-				&stamp_statuses,
-				&stamp_versions,
+				&winner_dedup_nids,
+				&winner_dedup_seqs,
+				&winner_dedup_cvs,
 				&max_winner_cv,
 				&LEASE_ID,
 				&epoch,
@@ -564,23 +611,39 @@ async fn drain_batch(
 		}
 	};
 
-	let t_applied = Instant::now();
-
 	txn.commit().await.context("failed to commit drain batch")?;
 
-	let t_committed = Instant::now();
-
-	// Watermark advances strictly after the apply txn is durably committed and visible, so a
+	// The watermark advances strictly after the apply txn is durably committed and visible, so a
 	// reader handed this read_version can never miss a write with commit_version <= read_version.
 	shared.advance_durable_version(new_durable);
 
-	notify_after_commit(&conn, new_durable, &replies).await;
+	if let Transport::MultiNode(nats) = &shared.transport {
+		match super::codec::encode_watermark(new_durable) {
+			Ok(payload) => {
+				if let Err(err) = nats
+					.client
+					.publish(nats.subjects.watermark(), payload.into())
+					.await
+				{
+					tracing::debug!(?err, "failed to publish udb watermark");
+				}
+			}
+			Err(err) => tracing::error!(?err, "failed to encode udb watermark"),
+		}
+	}
 
-	let t_notified = Instant::now();
+	// Respond to every job (dedup hits, winners, losers). Responses are independent per job, so fan the
+	// replies out concurrently instead of awaiting each publish in series.
+	futures_util::stream::iter(jobs.into_iter().enumerate())
+		.for_each_concurrent(None, |(i, job)| {
+			let outcome = outcomes[i].expect("every job must be resolved");
+			async move {
+				job.responder.respond(outcome).await;
+			}
+		})
+		.await;
 
-	let tracker_len = tracker.len().await;
-
-	tracing::info!(
+	tracing::debug!(
 		epoch,
 		batch_len,
 		committed = committed_count,
@@ -589,49 +652,8 @@ async fn drain_batch(
 		cold_window,
 		new_durable,
 		batch_ms = batch_start.elapsed().as_millis() as u64,
-		// Sub-phase decomposition of batch_ms (micros) to separate constant service time from
-		// load-dependent service inflation.
-		tracker_len,
-		decode_us = decode_dur.as_micros() as u64,
-		conflict_us = conflict_dur.as_micros() as u64,
-		resolve_us = (t_resolved - batch_start).as_micros() as u64,
-		read_us = (t_read - t_resolved).as_micros() as u64,
-		fold_us = (t_fold - t_read).as_micros() as u64,
-		apply_us = (t_applied - t_fold).as_micros() as u64,
-		commit_us = (t_committed - t_applied).as_micros() as u64,
-		notify_us = (t_notified - t_committed).as_micros() as u64,
 		"udb leader processed commit batch"
 	);
 
 	Ok(BatchOutcome::Processed)
-}
-
-/// Wake watermark listeners and the followers waiting on each processed request. Best-effort: a
-/// missed NOTIFY is covered by the follower's polling backstop and the watermark refresh timer.
-async fn notify_after_commit(
-	conn: &deadpool_postgres::Client,
-	new_durable: i64,
-	replies: &[Reply],
-) {
-	if let Err(err) = conn
-		.execute(
-			"SELECT pg_notify($1, $2)",
-			&[&WATERMARK_CHANNEL, &new_durable.to_string()],
-		)
-		.await
-	{
-		tracing::debug!(?err, "failed to notify watermark");
-	}
-
-	let channels: Vec<&str> = replies.iter().map(|r| r.channel.as_str()).collect();
-	let payloads: Vec<&str> = replies.iter().map(|r| r.payload.as_str()).collect();
-	if let Err(err) = conn
-		.execute(
-			"SELECT pg_notify(c, p) FROM unnest($1::text[], $2::text[]) AS t(c, p)",
-			&[&channels, &payloads],
-		)
-		.await
-	{
-		tracing::debug!(?err, "failed to notify commit replies");
-	}
 }

@@ -37,7 +37,7 @@ export function generateDatacenterRivetEngine(
 
 		// Config structure matching Rust schema in engine/packages/config/src/config/mod.rs.
 		// Values that match the engine's defaults are omitted.
-		const config = {
+		const config: Record<string, any> = {
 			auth: {
 				admin_token: "dev",
 			},
@@ -55,6 +55,16 @@ export function generateDatacenterRivetEngine(
 				password: "default",
 			},
 		};
+
+		// A multi-engine datacenter coordinates through NATS: UPS uses it for cross-node pubsub, and
+		// UniversalDB inherits this config (see Root::validate_and_set_defaults) to run multi-node,
+		// routing follower commits to the elected leader over NATS. A single-engine datacenter omits
+		// this and falls back to in-process Memory pubsub + single-node UniversalDB.
+		if (datacenter.engines > 1) {
+			config.nats = {
+				addresses: [`${context.getServiceHost("nats", datacenter.name)}:4222`],
+			};
+		}
 
 		context.writeDatacenterServiceFile(
 			"rivet-engine",
