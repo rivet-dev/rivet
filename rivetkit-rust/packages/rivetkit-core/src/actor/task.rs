@@ -51,7 +51,7 @@ use crate::actor::messages::{
 	ActorEvent, ActorHttpResponse, QueueSendResult, Request, SerializeStateReason, StateDelta,
 	WorkflowKvWrite,
 };
-use crate::actor::metrics::startup_phase::StartupPhase;
+use crate::actor::metrics::{InvocationStatus, InvocationType, startup_phase::StartupPhase};
 use crate::actor::state::{PersistedActor, RequestSaveOpts};
 use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
@@ -909,6 +909,7 @@ impl ActorTask {
 			} => {
 				let invocation =
 					crate::telemetry::ActionInvocationSpan::start(&self.ctx, &name, incoming);
+				let invocation_started_at = Instant::now();
 				let invocation_telemetry = invocation.telemetry();
 				tracing::info!(
 					actor_id = %self.ctx.actor_id(),
@@ -940,18 +941,21 @@ impl ActorTask {
 						let actor_id = self.ctx.actor_id().to_owned();
 						let ctx = self.ctx.clone();
 						self.ctx.spawn_work(ActorWorkKind::Action, async move {
-							match tracked_reply_rx.await {
+							let (result, status) = match tracked_reply_rx.await {
 								Ok(result) => {
 									let result =
 										result.map_err(|error| ctx.attach_actor_to_error(error));
-									invocation.finish(result.as_ref().err());
+									let status = match result.as_ref() {
+										Ok(_) => InvocationStatus::Ok,
+										Err(error) => InvocationStatus::from_error(error),
+									};
 									tracing::info!(
 										actor_id = %actor_id,
 										action_name = %action_name_for_log,
 										ok = result.is_ok(),
 										"actor task: tracked reply received, forwarding"
 									);
-									let _ = reply.send(result);
+									(result, status)
 								}
 								Err(_) => {
 									tracing::warn!(
@@ -962,10 +966,17 @@ impl ActorTask {
 									let error = ctx.attach_actor_to_error(
 										ActorLifecycleError::DroppedReply.build(),
 									);
-									invocation.finish(Some(&error));
-									let _ = reply.send(Err(error));
+									(Err(error), InvocationStatus::Dropped)
 								}
-							}
+							};
+							ctx.metrics().record_invocation(
+								&action_name_for_log,
+								InvocationType::Action,
+								status,
+								invocation_started_at.elapsed(),
+							);
+							invocation.finish(result.as_ref().err());
+							let _ = reply.send(result);
 						});
 					}
 					Err(error) => {

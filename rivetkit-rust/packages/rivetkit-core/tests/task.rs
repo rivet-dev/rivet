@@ -1,4 +1,5 @@
 pub(crate) mod moved_tests {
+	use anyhow::anyhow;
 	use std::collections::{BTreeMap, HashMap};
 	use std::path::PathBuf;
 	use std::process::Command;

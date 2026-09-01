@@ -41,7 +41,7 @@ use crate::actor::internal_storage;
 use crate::actor::kv::LegacyActorKv;
 use crate::actor::lifecycle_hooks::Reply;
 use crate::actor::messages::{ActorEvent, Request, StateDelta, WorkflowKvWrite};
-use crate::actor::metrics::ActorMetrics;
+use crate::actor::metrics::{ActorMetrics, InvocationStatus, InvocationType};
 use crate::actor::queue::{QueueInspectorUpdateCallback, QueueMetadata, QueueWaitActivityCallback};
 use crate::actor::schedule::{InternalKeepAwakeCallback, LocalAlarmCallback};
 use crate::actor::sleep::{CanSleep, SleepState};
@@ -323,8 +323,11 @@ impl ActorContext {
 		let mut sql = sql;
 		#[cfg(feature = "sqlite-local")]
 		sql.set_profiling_config(config.sqlite_profiling.clone());
-		let metrics =
-			ActorMetrics::new_with_sqlite_profiling(name.clone(), config.sqlite_profiling.clone());
+		let metrics = ActorMetrics::new_for_actor(
+			name.clone(),
+			config.actions.iter().map(|action| action.name.clone()),
+			config.sqlite_profiling.clone(),
+		);
 		#[cfg(feature = "sqlite-local")]
 		sql.set_vfs_metrics(Arc::new(metrics.clone()));
 		let diagnostics = ActorDiagnostics::new(actor_id.clone());
@@ -1814,6 +1817,8 @@ impl ActorContext {
 			let (reply_tx, reply_rx) = oneshot::channel();
 
 			let mut dispatch_error = None;
+			let mut invocation_status = InvocationStatus::Ok;
+			let mut action_ran = true;
 			match ctx.try_send_actor_event(
 				ActorEvent::Action {
 					name: action.clone(),
@@ -1828,6 +1833,7 @@ impl ActorContext {
 				Ok(()) => match reply_rx.await {
 					Ok(Ok(_)) => {}
 					Ok(Err(error)) => {
+						invocation_status = InvocationStatus::from_error(&error);
 						dispatch_error = Some(error);
 						tracing::error!(
 							error = ?dispatch_error.as_ref().expect("just assigned"),
@@ -1837,6 +1843,7 @@ impl ActorContext {
 						);
 					}
 					Err(error) => {
+						invocation_status = InvocationStatus::Dropped;
 						dispatch_error = Some(error.into());
 						tracing::error!(
 							error = ?dispatch_error.as_ref().expect("just assigned"),
@@ -1847,6 +1854,7 @@ impl ActorContext {
 					}
 				},
 				Err(error) => {
+					action_ran = false;
 					dispatch_error = Some(error);
 					tracing::error!(
 						error = ?dispatch_error.as_ref().expect("just assigned"),
@@ -1855,6 +1863,14 @@ impl ActorContext {
 						"failed to enqueue scheduled event"
 					);
 				}
+			}
+			if action_ran {
+				ctx.metrics().record_invocation(
+					&action_name,
+					InvocationType::Scheduled,
+					invocation_status,
+					started_at.elapsed(),
+				);
 			}
 
 			ctx.finish_schedule_dispatch(&event_id, history_id, dispatch_error.as_ref())
