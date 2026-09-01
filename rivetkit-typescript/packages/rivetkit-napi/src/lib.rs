@@ -125,6 +125,10 @@ pub(crate) fn init_tracing(log_level: Option<&str>) {
 
 		tracing_subscriber::registry()
 			.with(otel_layer)
+			.with(
+				telemetry::sdk_log_bridge::SdkLogLayer
+					.with_filter(tracing_subscriber::EnvFilter::new("opentelemetry_sdk=warn")),
+			)
 			.with(match log_format {
 				LogFormat::Logfmt => Some(
 					tracing_logfmt::builder()
@@ -150,7 +154,10 @@ pub(crate) fn init_tracing(log_level: Option<&str>) {
 			.init();
 
 		if let Some(error) = otel_error {
-			tracing::warn!(?error, "OpenTelemetry trace export could not be initialized");
+			tracing::warn!(
+				?error,
+				"OpenTelemetry trace export could not be initialized"
+			);
 		}
 	});
 }

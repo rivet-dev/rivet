@@ -7,10 +7,11 @@
 /// This layer hands those events to a JS callback instead, so an operator sees
 /// them alongside everything else the actor logs.
 pub(crate) mod sdk_log_bridge {
-	use std::sync::OnceLock;
-
 	use napi::bindgen_prelude::*;
 	use napi::threadsafe_function::{ErrorStrategy, ThreadSafeCallContext, ThreadsafeFunction};
+	// Forced-sync: read from inside a tracing layer callback, which is a sync
+	// context and never spans an await.
+	use parking_lot::RwLock;
 	use tracing::field::{Field, Visit};
 	use tracing_subscriber::Layer;
 	use tracing_subscriber::layer::Context;
@@ -21,10 +22,14 @@ pub(crate) mod sdk_log_bridge {
 		pub(crate) message: String,
 	}
 
-	static SINK: OnceLock<ThreadsafeFunction<SdkLogEvent, ErrorStrategy::Fatal>> = OnceLock::new();
+	/// The most recently installed sink. It is replaceable rather than set
+	/// once, because a Node worker thread that installed it can exit, after
+	/// which its callback silently drops every event. The next registry to
+	/// start, on whichever thread, takes over.
+	static SINK: RwLock<Option<ThreadsafeFunction<SdkLogEvent, ErrorStrategy::Fatal>>> =
+		RwLock::new(None);
 
-	/// Installs the JavaScript sink. Only the first call takes effect, matching
-	/// the one-shot initialization of the tracing subscriber itself.
+	/// Installs the JavaScript sink, replacing any earlier one.
 	///
 	/// The threadsafe function is unreferenced. A referenced one counts as live
 	/// work on the Node event loop, so a process that had registered the sink
@@ -39,7 +44,7 @@ pub(crate) mod sdk_log_bridge {
 				Ok(vec![object.into_unknown()])
 			})?;
 		tsfn.unref(&env)?;
-		let _ = SINK.set(tsfn);
+		*SINK.write() = Some(tsfn);
 		Ok(())
 	}
 
@@ -72,7 +77,8 @@ pub(crate) mod sdk_log_bridge {
 
 	impl<S: tracing::Subscriber> Layer<S> for SdkLogLayer {
 		fn on_event(&self, event: &tracing::Event<'_>, _ctx: Context<'_, S>) {
-			let Some(sink) = SINK.get() else {
+			let sink = SINK.read();
+			let Some(sink) = sink.as_ref() else {
 				return;
 			};
 			let mut fields = FieldCollector::default();

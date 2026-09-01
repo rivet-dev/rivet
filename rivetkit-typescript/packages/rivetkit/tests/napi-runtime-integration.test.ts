@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import getPort from "get-port";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { createClient } from "../src/client/mod";
 import {
 	type OtlpCollector,
@@ -1020,6 +1020,8 @@ describe.sequential("native NAPI runtime integration", () => {
 			{
 				OTEL_BSP_MAX_QUEUE_SIZE: "8",
 				OTEL_BSP_MAX_EXPORT_BATCH_SIZE: "4",
+				// Disable Rust SDK logs so only the JS bridge can satisfy the log assertion.
+				RUST_LOG: "warn,opentelemetry_sdk=off",
 			},
 		);
 		runtime = child;
@@ -1050,6 +1052,17 @@ describe.sequential("native NAPI runtime integration", () => {
 
 		// Actions must finish before the stalled collector responds.
 		expect(elapsed).toBeLessThan(60_000);
+
+		// The processor reports dropped spans on its own export cycle, which
+		// runs after the actions return, so there is nothing to await.
+		await vi.waitFor(
+			() => {
+				expect(runtimeOutput()).toContain(
+					"BatchSpanProcessor.SpanDroppingStarted",
+				);
+			},
+			{ timeout: 15_000, interval: 250 },
+		);
 
 		expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(
 			12,

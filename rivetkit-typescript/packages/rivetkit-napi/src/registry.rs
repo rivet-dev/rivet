@@ -140,6 +140,14 @@ pub struct CoreRegistry {
 	build_complete: Arc<Notify>,
 }
 
+/// Routes the OpenTelemetry SDK's own warnings, such as dropped spans, to the
+/// JavaScript logger. Each call replaces the previous sink, so a registry
+/// started on a fresh Node worker thread takes over from one that has exited.
+#[napi]
+pub fn set_telemetry_log_sink(env: Env, callback: napi::JsFunction) -> napi::Result<()> {
+	crate::telemetry::sdk_log_bridge::install(env, callback)
+}
+
 #[napi]
 impl CoreRegistry {
 	#[napi(constructor)]

@@ -274,6 +274,12 @@ export interface JsServerlessStreamError {
   code: string
   message: string
 }
+/**
+ * Routes the OpenTelemetry SDK's own warnings, such as dropped spans, to the
+ * JavaScript logger. Call before constructing a registry; later calls are
+ * ignored because the tracing subscriber initializes once.
+ */
+export declare function setTelemetryLogSink(callback: (...args: any[]) => any): void
 export interface JsScheduledEventInfo {
   id: string
   action: string
