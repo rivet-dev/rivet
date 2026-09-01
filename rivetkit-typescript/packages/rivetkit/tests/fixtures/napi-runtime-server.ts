@@ -60,6 +60,13 @@ const integrationActor = actor({
 		getCount: async (c) => {
 			return c.state.count;
 		},
+		logContext: async (c, correlationToken: string) => {
+			c.log.warn(
+				{ correlation_token: correlationToken },
+				"native actor log context",
+			);
+			return correlationToken;
+		},
 		validatedAction: async (_c, payload: { amount: number }) => {
 			return payload.amount;
 		},
