@@ -8,6 +8,19 @@ export interface JsActorKeySegment {
   stringValue?: string
   numberValue?: number
 }
+/** Active actor invocation correlation exposed to the TypeScript runtime adapter. */
+export interface JsActorInvocationTraceContext {
+  rayId?: string
+  span?: JsActorInvocationSpanContext
+}
+/** W3C span context of the current invocation span, present only when tracing is active. */
+export interface JsActorInvocationSpanContext {
+  traceId: string
+  spanId: string
+  traceFlags: number
+  traceparent: string
+  tracestate?: string
+}
 export interface JsHttpRequest {
   method: string
   uri: string
@@ -307,6 +320,7 @@ export declare class ActorContext {
   kv(): Kv
   sql(): JsNativeDatabase
   sameActorInstance(other: ActorContext): boolean
+  invocationTraceContext(): JsActorInvocationTraceContext | null
   provisionActorRuntimeSocket(): Promise<JsActorRuntimeSocketEndpointInfo>
   schedule(): Schedule
   queue(): Queue

@@ -1,4 +1,5 @@
 import { decodeBridgeRivetError, RivetError } from "@/actor/errors";
+import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
 import type {
 	WasmRuntimeBindings,
 	WasmRuntimeConfig,
@@ -541,6 +542,12 @@ export class WasmCoreRuntime implements CoreRuntime {
 	): T {
 		// Wasm does not yet carry invocation telemetry across its runtime boundary.
 		return run();
+	}
+
+	actorInvocationTraceContext(
+		_ctx: ActorContextHandle,
+	): ActorInvocationTraceContext | undefined {
+		return undefined;
 	}
 
 	actorName(ctx: ActorContextHandle): string {

@@ -255,20 +255,7 @@ impl RegistryDispatcher {
 				conn.clone(),
 				action_name.clone(),
 				args,
-				crate::telemetry::IncomingInvocationContext::from_headers(
-					request
-						.headers()
-						.get("x-rivetkit-ray-id")
-						.and_then(|value| value.to_str().ok().map(str::to_owned)),
-					request
-						.headers()
-						.get("traceparent")
-						.and_then(|value| value.to_str().ok()),
-					request
-						.headers()
-						.get("tracestate")
-						.and_then(|value| value.to_str().ok()),
-				),
+				crate::telemetry::IncomingInvocationContext::from_http_headers(request.headers()),
 			),
 		)
 		.await;

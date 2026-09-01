@@ -263,6 +263,12 @@ impl ActorContext {
 		self.0.sql.clone().with_invocation_telemetry(self.1.clone())
 	}
 
+	/// Returns correlation for the invocation this handle serves, absent when
+	/// the handle is not bound to one or tracing is disabled.
+	pub fn invocation_trace_context(&self) -> Option<crate::ActorInvocationTraceContext> {
+		self.1.as_ref()?.trace_context()
+	}
+
 	pub(crate) fn invocation_telemetry(&self) -> Option<&crate::ActorInvocationTelemetry> {
 		self.1.as_ref()
 	}
@@ -751,9 +757,17 @@ impl ActorContext {
 		false
 	}
 
+	/// Runs `future` to completion after the current reply, without blocking
+	/// it. Work started from an invocation keeps that invocation's span open
+	/// until it settles, so its SQLite operations and logs stay attributed to
+	/// the request that started them.
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_work(ActorWorkKind::WaitUntil, future);
+		let invocation = self.1.as_ref().map(crate::ActorInvocationTelemetry::hold_open);
+		self.spawn_work(ActorWorkKind::WaitUntil, async move {
+			future.await;
+			drop(invocation);
+		});
 	}
 
 	#[cfg(not(feature = "wasm-runtime"))]
@@ -763,7 +777,11 @@ impl ActorContext {
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
-		self.spawn_work(ActorWorkKind::WaitUntil, future);
+		let invocation = self.1.as_ref().map(crate::ActorInvocationTelemetry::hold_open);
+		self.spawn_work(ActorWorkKind::WaitUntil, async move {
+			future.await;
+			drop(invocation);
+		});
 	}
 
 	#[cfg(feature = "wasm-runtime")]

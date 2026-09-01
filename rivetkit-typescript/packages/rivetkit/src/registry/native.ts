@@ -3995,12 +3995,18 @@ export function buildNativeFactory(
 		events: config.events,
 		queues: config.queues,
 	};
-	const createClient = () =>
+	const createClient = (ctx: ActorContextHandle) =>
 		createClientWithDriver(
 			new RemoteEngineControlClient(
 				convertRegistryConfigToClientConfig(registryConfig),
 			),
-			{ encoding: "bare" },
+			{
+				encoding: "bare",
+				currentActorInvocation: () =>
+					callNativeSync(() =>
+						runtime.actorInvocationTraceContext(ctx),
+					),
+			},
 		);
 	const run = getRunFunction(config.run);
 	const runHandlerCoordinator =
@@ -4044,7 +4050,7 @@ export function buildNativeFactory(
 		new ActorContextHandleAdapter(
 			runtime,
 			ctx,
-			createClient,
+			() => createClient(ctx),
 			schemaConfig,
 			databaseProvider,
 			request,
@@ -4063,7 +4069,7 @@ export function buildNativeFactory(
 			runtime,
 			ctx,
 			conn,
-			createClient,
+			() => createClient(ctx),
 			schemaConfig,
 			databaseProvider,
 			request,
@@ -5373,7 +5379,7 @@ export function buildNativeFactory(
 					runtime,
 					ctx,
 					conn,
-					createClient,
+					() => createClient(ctx),
 					schemaConfig,
 					databaseProvider,
 					jsRequest,

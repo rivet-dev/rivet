@@ -19,7 +19,9 @@ pub mod serverless;
 pub mod telemetry;
 // Internal bridge types consumed by the NAPI and Wasm runtime adapters.
 #[doc(hidden)]
-pub use telemetry::ActorInvocationTelemetry;
+pub use telemetry::{
+	ActorInvocationSpanContext, ActorInvocationTelemetry, ActorInvocationTraceContext,
+};
 #[cfg(feature = "native-runtime")]
 pub mod serverless_http;
 #[cfg(feature = "native-runtime")]
