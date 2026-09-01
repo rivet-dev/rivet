@@ -113,6 +113,9 @@ const integrationActor = actor({
 				count: c.state.count,
 			};
 		},
+		sqliteFailure: async (c) => {
+			await c.db.execute("SELECT value FROM missing_trace_test_table");
+		},
 		stateSnapshot: async (c) => {
 			const kvValue = await c.kv.get("count");
 			return {

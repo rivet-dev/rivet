@@ -95,6 +95,9 @@ impl<A: Actor> RuntimeEvent<A> {
 				args,
 				conn,
 				scheduled_fire,
+				// The typed runtime hands actions the actor-wide `Ctx` built
+				// at start, so it has no per-invocation handle to bind this to.
+				invocation_telemetry: _,
 				reply,
 			} => Self::Action(ActionCall {
 				name,
@@ -1500,6 +1503,7 @@ mod tests {
 					args: Vec::new(),
 					conn: None,
 					scheduled_fire: None,
+					invocation_telemetry: None,
 					reply: reply_tx.into(),
 				})
 				.expect("queue action event");

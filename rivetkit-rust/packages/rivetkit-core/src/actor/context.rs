@@ -62,7 +62,12 @@ use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 /// and on the returned runtime objects like `SqliteDb`, schedule APIs,
 /// queue APIs, `ConnHandle`, and `WebSocket`.
 #[derive(Clone)]
-pub struct ActorContext(pub(crate) Arc<ActorContextInner>);
+pub struct ActorContext(
+	pub(crate) Arc<ActorContextInner>,
+	// Telemetry of the invocation this handle serves. `None` on the actor-owned
+	// handle and on any handle created outside an invocation.
+	pub(crate) Option<crate::ActorInvocationTelemetry>,
+);
 
 #[derive(Clone)]
 pub struct ActorKv {
@@ -172,6 +177,7 @@ pub(crate) struct ActorContextInner {
 	hibernated_connection_liveness_override: RwLock<Option<BTreeSet<(Vec<u8>, Vec<u8>)>>>,
 	pub(super) metrics: ActorMetrics,
 	diagnostics: ActorDiagnostics,
+	telemetry_identity: Arc<crate::telemetry::ActorTelemetryIdentity>,
 	actor_id: String,
 	name: String,
 	key: ActorKey,
@@ -242,6 +248,31 @@ impl ActorKv {
 }
 
 impl ActorContext {
+	/// Returns a handle bound to `telemetry`, so schedules and SQLite work done
+	/// through it are attributed to that invocation.
+	pub fn with_invocation_telemetry(
+		mut self,
+		telemetry: Option<crate::ActorInvocationTelemetry>,
+	) -> Self {
+		self.1 = telemetry;
+		self
+	}
+
+	/// Returns the SQLite handle bound to this handle's invocation.
+	pub fn invocation_sql(&self) -> crate::actor::sqlite::SqliteDb {
+		self.0.sql.clone().with_invocation_telemetry(self.1.clone())
+	}
+
+	pub(crate) fn invocation_telemetry(&self) -> Option<&crate::ActorInvocationTelemetry> {
+		self.1.as_ref()
+	}
+
+	/// Returns whether two handles belong to the same running actor generation.
+	#[doc(hidden)]
+	pub fn is_same_instance(&self, other: &Self) -> bool {
+		Arc::ptr_eq(&self.0, &other.0)
+	}
+
 	#[cfg(test)]
 	pub(crate) fn new(
 		actor_id: impl Into<String>,
@@ -300,7 +331,7 @@ impl ActorContext {
 		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
 		let user_kv = ActorKv { sql: sql.clone() };
-		let ctx = Self(Arc::new(ActorContextInner {
+		let inner = Arc::new(ActorContextInner {
 			legacy_kv,
 			user_kv,
 			sql,
@@ -387,11 +418,17 @@ impl ActorContext {
 			hibernated_connection_liveness_override: RwLock::new(None),
 			metrics,
 			diagnostics,
+			telemetry_identity: Arc::new(crate::telemetry::ActorTelemetryIdentity {
+				actor_id: actor_id.clone(),
+				actor_name: name.clone(),
+				actor_key: crate::types::format_actor_key(&key),
+			}),
 			actor_id,
 			name,
 			key,
 			region,
-		}));
+		});
+		let ctx = Self(inner, None);
 		ctx.configure_sleep_hooks();
 		ctx
 	}
@@ -911,6 +948,12 @@ impl ActorContext {
 		&self.0.metrics
 	}
 
+	/// Identity fields shared by every invocation on this actor. Built once so a
+	/// span does not re-allocate them per action.
+	pub(crate) fn telemetry_identity(&self) -> Arc<crate::telemetry::ActorTelemetryIdentity> {
+		self.0.telemetry_identity.clone()
+	}
+
 	pub(crate) fn record_user_task_started(&self, kind: UserTaskKind) {
 		self.0.metrics.begin_user_task(kind);
 	}
@@ -1337,7 +1380,7 @@ impl ActorContext {
 	}
 
 	pub(crate) fn from_weak(weak: &Weak<ActorContextInner>) -> Option<Self> {
-		weak.upgrade().map(Self)
+		weak.upgrade().map(|inner| Self(inner, None))
 	}
 
 	#[doc(hidden)]
@@ -1759,6 +1802,7 @@ impl ActorContext {
 					args,
 					conn: None,
 					scheduled_fire: Some(scheduled_fire),
+					invocation_telemetry: None,
 					reply: Reply::from(reply_tx),
 				},
 				"scheduled_action",

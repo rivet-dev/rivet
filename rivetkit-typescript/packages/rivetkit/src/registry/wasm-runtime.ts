@@ -535,6 +535,14 @@ export class WasmCoreRuntime implements CoreRuntime {
 		return callHandle(asWasmActorContext(ctx), "actorId");
 	}
 
+	runWithActorInvocationContext<T>(
+		_ctx: ActorContextHandle,
+		run: () => T,
+	): T {
+		// Wasm does not yet carry invocation telemetry across its runtime boundary.
+		return run();
+	}
+
 	actorName(ctx: ActorContextHandle): string {
 		return callHandle(asWasmActorContext(ctx), "name");
 	}

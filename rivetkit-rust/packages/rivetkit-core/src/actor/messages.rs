@@ -392,6 +392,10 @@ pub enum ActorEvent {
 		args: Vec<u8>,
 		conn: Option<ConnHandle>,
 		scheduled_fire: Option<ScheduledFireInfo>,
+		/// Telemetry of the invocation this action runs as, for the host
+		/// runtime to bind onto the context it hands the action. Absent when
+		/// the dispatch opened no invocation.
+		invocation_telemetry: Option<crate::ActorInvocationTelemetry>,
 		reply: Reply<Vec<u8>>,
 	},
 	HttpRequest {
