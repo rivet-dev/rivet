@@ -1828,7 +1828,11 @@ impl ActorContext {
 			ctx.record_user_task_started(UserTaskKind::ScheduledAction);
 			let user_task_started_at = Instant::now();
 			let action_name = action.clone();
-			let invocation = crate::telemetry::ActorInvocation::start_scheduled(&ctx, &action_name);
+			let invocation = crate::telemetry::ActorInvocation::start_scheduled(
+				&ctx,
+				&action_name,
+				dispatch.origin,
+			);
 			let invocation_telemetry = invocation.telemetry();
 			let (reply_tx, reply_rx) = oneshot::channel();
 

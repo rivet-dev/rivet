@@ -11,6 +11,7 @@ use opentelemetry::trace::{
 	SpanContext, SpanId, TraceContextExt as _, TraceFlags, TraceId, TraceState,
 };
 use parking_lot::Mutex;
+use rivetkit_client_protocol::telemetry_headers::format_traceparent;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::ActorContext;
@@ -116,6 +117,24 @@ const OPERATION_ABANDONED_ERROR_TYPE: &str = "actor.operation_abandoned";
 /// been recorded, so work that settles before the reply changes nothing.
 pub(crate) struct InvocationWorkGuard(ActorInvocationTelemetry);
 
+/// Where later work came from: the ray ID of the invocation that caused it and
+/// the span that was active there. Persisted beside schedules and queue
+/// messages so the work they cause can link back to its origin.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct TraceOrigin {
+	pub(crate) ray_id: Option<String>,
+	pub(crate) traceparent: Option<String>,
+	pub(crate) tracestate: Option<String>,
+}
+
+impl TraceOrigin {
+	/// True when there is nothing to persist: the work was caused outside any
+	/// traced invocation.
+	pub fn is_empty(&self) -> bool {
+		self.ray_id.is_none() && self.traceparent.is_none() && self.tracestate.is_none()
+	}
+}
+
 /// Active actor invocation fields exposed to foreign-runtime adapters.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
@@ -204,16 +223,24 @@ impl ActorInvocation {
 			InvocationType::Action,
 			incoming.ray_id,
 			incoming.remote_parent,
+			None,
 		)
 	}
 
-	pub(crate) fn start_scheduled(ctx: &ActorContext, action_name: &str) -> Self {
+	pub(crate) fn start_scheduled(
+		ctx: &ActorContext,
+		action_name: &str,
+		origin: TraceOrigin,
+	) -> Self {
+		let origin_parent =
+			parse_remote_parent(origin.traceparent.as_deref(), origin.tracestate.as_deref());
 		Self::start(
 			ctx,
 			action_name,
 			InvocationType::Scheduled,
+			origin.ray_id,
 			None,
-			None,
+			origin_parent,
 		)
 	}
 
@@ -223,6 +250,7 @@ impl ActorInvocation {
 		invocation_type: InvocationType,
 		ray_id: Option<String>,
 		parent: Option<SpanContext>,
+		link: Option<SpanContext>,
 	) -> Self {
 		let identity = ctx.telemetry_identity();
 		// Use bounded names for both spans and metrics.
@@ -246,6 +274,9 @@ impl ActorInvocation {
 				span.record("rivet.ray.id", ray_id.as_deref());
 				if let Some(parent) = parent {
 					span.set_parent(opentelemetry::Context::new().with_remote_span_context(parent));
+				}
+				if let Some(link) = link {
+					span.add_link(link);
 				}
 				Some(span)
 		} else {
@@ -362,33 +393,38 @@ impl ActorInvocationTelemetry {
 		let span = active.span.lock().clone().and_then(|span| {
 			let context = span.context();
 			let context_span = context.span();
-			let span_context = context_span.span_context();
-			if !span_context.is_valid() {
-				return None;
-			}
-			let tracestate = span_context.trace_state().header();
-			Some(ActorInvocationSpanContext {
-				trace_id: span_context.trace_id().to_string(),
-				span_id: span_context.span_id().to_string(),
-				trace_flags: span_context.trace_flags().to_u8(),
-				traceparent: format!(
-					"00-{}-{}-{:02x}",
-					span_context.trace_id(),
-					span_context.span_id(),
-					span_context.trace_flags().to_u8(),
-				),
-				tracestate: if tracestate.is_empty() {
-					None
-				} else {
-					Some(tracestate)
-				},
-			})
+			w3c_span_context(context_span.span_context())
 		});
 
 		Some(ActorInvocationTraceContext {
 			ray_id: active.ray_id.clone(),
 			span,
 		})
+	}
+
+	/// Trace origin work caused by this invocation records: the invocation's
+	/// ray ID, and the application span active in the host runtime at that
+	/// moment, or the invocation span when there was none. Work that links
+	/// back to it then points at the code that caused it rather than at the
+	/// whole invocation around that code.
+	pub(crate) fn trace_origin(&self) -> TraceOrigin {
+		let Some(context) = self.trace_context() else {
+			return TraceOrigin::default();
+		};
+		let span = self
+			.1
+			.as_ref()
+			.and_then(w3c_span_context)
+			.or(context.span);
+		let (traceparent, tracestate) = match span {
+			Some(span) => (Some(span.traceparent), span.tracestate),
+			None => (None, None),
+		};
+		TraceOrigin {
+			ray_id: context.ray_id,
+			traceparent,
+			tracestate,
+		}
 	}
 
 	pub(crate) fn start_sqlite(&self, operation: SqliteOperation) -> Option<SqliteOperationSpan> {
@@ -487,6 +523,26 @@ impl Drop for SqliteOperationSpan {
 		span.record("otel.status_code", "ERROR");
 		span.record("error.type", OPERATION_ABANDONED_ERROR_TYPE);
 	}
+}
+
+/// W3C fields of a span context, or nothing when it is not valid and so
+/// carries nothing worth propagating.
+fn w3c_span_context(span_context: &SpanContext) -> Option<ActorInvocationSpanContext> {
+	if !span_context.is_valid() {
+		return None;
+	}
+	let tracestate = span_context.trace_state().header();
+	Some(ActorInvocationSpanContext {
+		trace_id: span_context.trace_id().to_string(),
+		span_id: span_context.span_id().to_string(),
+		trace_flags: span_context.trace_flags().to_u8(),
+		traceparent: format_traceparent(
+			span_context.trace_id(),
+			span_context.span_id(),
+			span_context.trace_flags().to_u8(),
+		),
+		tracestate: (!tracestate.is_empty()).then_some(tracestate),
+	})
 }
 
 /// Records the terminal status and error identity of a finished span.
