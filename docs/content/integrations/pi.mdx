@@ -1,0 +1,85 @@
+---
+title: "Pi (Beta)"
+description: "Run Pi directly as a durable Rivet Actor."
+skill: false
+---
+
+<Info>
+This integration is in beta. APIs may change between releases.
+</Info>
+
+`@rivet-dev/pi` runs the [Pi coding agent](https://github.com/earendil-works/pi) directly inside a Rivet Actor. Each actor key owns one Pi session. The integration checkpoints Pi's JSONL transcript to actor SQLite, restores it after a wake, and exposes Pi's common session methods as actor actions.
+
+This is separate from agentOS's Pi support. The agentOS integration launches Pi as a guest process. `@rivet-dev/pi` embeds Pi in the actor process and can optionally mount a separate agentOS actor as its sandbox.
+
+## Quickstart
+
+<Steps>
+
+<Step title="Install the integrations">
+
+```sh
+npm install @rivet-dev/pi @rivet-dev/sandbox-adapter @rivet-dev/agentos rivetkit
+```
+
+</Step>
+
+<Step title="Define the agent and sandbox actors">
+
+<CodeSnippet file="examples/docs/integrations-pi/server.ts" title="server.ts" />
+
+The `ping` action is a normal custom Rivet Actor action. State, events, queues, hooks, and actor options can be added to `pi()` in the same way.
+
+</Step>
+
+<Step title="Prompt one durable session">
+
+Create or connect to `myAgent` with the actor key that should own the conversation, then call its Pi actions:
+
+<CodeSnippet file="examples/docs/integrations-pi/client.ts" title="client.ts" />
+
+Configure Pi's model and credentials through the same `model`, `modelRuntime`, `agentDir`, and provider environment variables supported by the Pi SDK. By default, mutable Pi settings are isolated per actor and persisted in actor SQLite. Pass a custom `settingsManager` only when you intentionally want another settings backend.
+
+</Step>
+
+</Steps>
+
+## Session actions
+
+The actor actions keep Pi's method names and argument order when those arguments can cross an actor RPC boundary. `prompt` omits Pi's internal callback, `executeBash` omits the streaming callback (events still stream through `event`), and `reload` omits its in-process callback.
+
+| Area | Actions |
+| --- | --- |
+| Prompting | `prompt`, `steer`, `followUp`, `sendUserMessage`, `sendCustomMessage`, `clearQueue` |
+| Lifecycle | `abort`, `waitForIdle`, `reload` |
+| Models | `setModel`, `cycleModel`, `setScopedModels`, `setThinkingLevel`, `cycleThinkingLevel`, `getAvailableThinkingLevels`, `supportsThinking` |
+| Tools | `getActiveToolNames`, `getAllTools`, `setActiveToolsByName`, `executeBash`, `recordBashResult`, `abortBash` |
+| Compaction and retry | `compact`, `abortCompaction`, `abortBranchSummary`, `setAutoCompactionEnabled`, `abortRetry`, `setAutoRetryEnabled` |
+| Session tree | `setSessionName`, `navigateTree`, `getUserMessagesForForking`, `getSessionTree` |
+| Inspection | `getSession`, `getMessages`, `getSteeringMessages`, `getFollowUpMessages`, `getSessionStats`, `getContextUsage`, `getLastAssistantText` |
+
+Pi events are broadcast through the actor's `event` event. Server code can also use `onSessionEvent` for trusted event handling.
+
+## Persistence and sleep
+
+The actor stores the exact Pi transcript, actor-scoped Pi settings, and the sandbox provider's opaque binding in its SQLite database. It checkpoints completed messages while Pi streams and again when a mutating action settles. In-flight actions and trusted event hooks hold the actor awake. On idle sleep, extensions receive `session_shutdown`, the final transcript is saved, and the sandbox adapter can suspend provider resources; the next action restores both.
+
+Destroying the Pi actor also asks the adapter to destroy its sandbox. The agentOS adapter derives a stable separate actor key from the Pi actor ID, so reconnects do not create a new VM.
+
+## Running without a sandbox
+
+The sandbox is optional:
+
+<CodeSnippet file="examples/docs/integrations-pi/no-sandbox.ts" title="actors.ts" />
+
+<Warning>
+Pi does not provide a permission boundary. Without a sandbox, its built-in read, write, edit, search, and shell tools operate with the actor process's filesystem and operating-system permissions.
+</Warning>
+
+When a sandbox is configured, all seven portable built-in coding tools (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`) are replaced with bounded sandbox-backed implementations. Pi's host-only `powershell` tool is disabled. The provider sandbox is the security boundary: file-tool paths are checked lexically against the working directory, but shell commands can access anything the provider exposes. Custom tools remain server-defined, so they must use the sandbox explicitly if they access files or launch commands.
+
+Pi's default project resource discovery is disabled in sandbox mode because Pi's resource loader runs in the actor process, not in the remote filesystem. Pass an explicit `resourceLoader` if the actor should load trusted prompts, skills, context files, or extensions. This does not affect files inspected through the sandbox-backed tools.
+
+## Other sandbox providers
+
+`@rivet-dev/sandbox-adapter` is provider-neutral. An adapter implements idempotent `connect`, optional `suspend` and `destroy` lifecycle methods, and returns command, process, and filesystem operations plus an opaque durable binding. E2B, Daytona, and other providers can implement that interface without changing the Pi actor or its SQLite schema.

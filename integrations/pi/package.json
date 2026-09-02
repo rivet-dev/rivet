@@ -1,0 +1,40 @@
+{
+	"name": "@rivet-dev/pi",
+	"version": "2.3.11",
+	"description": "Run Pi directly as a durable Rivet Actor",
+	"license": "Apache-2.0",
+	"publishConfig": {
+		"access": "public"
+	},
+	"type": "module",
+	"files": [
+		"dist",
+		"package.json"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"check-types": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"dependencies": {
+		"@earendil-works/pi-coding-agent": "0.84.4",
+		"@rivet-dev/sandbox-adapter": "workspace:*",
+		"rivetkit": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.19.15",
+		"typescript": "^5.9.2",
+		"vitest": "^4.0.15"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}

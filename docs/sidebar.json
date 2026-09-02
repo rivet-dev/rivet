@@ -424,6 +424,10 @@
 			"title": "Integrations",
 			"pages": [
 				{
+					"title": "Pi (Beta)",
+					"href": "/actors/integrations/pi"
+				},
+				{
 					"title": "Flue",
 					"href": "/actors/integrations/flue"
 				},

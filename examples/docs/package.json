@@ -7,6 +7,9 @@
 		"check-types": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@rivet-dev/agentos": "^0.2.18",
+		"@rivet-dev/pi": "workspace:*",
+		"@rivet-dev/sandbox-adapter": "workspace:*",
 		"rivetkit": "workspace:*",
 		"@rivetkit/react": "workspace:*",
 		"@rivetkit/engine-api-full": "workspace:*",

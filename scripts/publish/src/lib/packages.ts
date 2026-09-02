@@ -171,7 +171,8 @@ export function discoverPackages(
 		if (
 			!p.name.startsWith("@rivetkit/") &&
 			p.name !== "rivetkit" &&
-			p.name !== "@rivet-dev/workflow-world"
+			p.name !== "@rivet-dev/workflow-world" &&
+			p.name !== "@rivet-dev/pi"
 		) continue;
 		add(p.path);
 	}
