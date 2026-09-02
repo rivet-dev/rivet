@@ -596,6 +596,33 @@ describe.sequential("native NAPI runtime integration", () => {
 			code: "internal_error",
 			message: "An internal error occurred",
 		});
+
+		// A scheduled fire keeps the defining invocation's ray and starts a
+		// fresh trace linked to the defining span.
+		traceExports.length = 0;
+		const scheduleToken = crypto.randomUUID();
+		expect(await handle.scheduleTrace(scheduleToken)).toBe(scheduleToken);
+		const scheduleSpans = await waitForInvocationSpans(
+			traceExports,
+			["scheduleTrace", "scheduledTrace"],
+			15_000,
+		);
+		const definer = findInvocation(scheduleSpans, "scheduleTrace");
+		const scheduled = findInvocation(scheduleSpans, "scheduledTrace");
+		expect(definer).toBeDefined();
+		expect(scheduled?.attributes["rivet.invocation.type"]).toBe(
+			"scheduled",
+		);
+		expect(scheduled?.attributes["rivet.ray.id"]).toBe(
+			definer?.attributes["rivet.ray.id"],
+		);
+		// Without this the assertions below hold for a scheduled fire that threw,
+		// so a broken action body would still pass.
+		expect(scheduled?.attributes["error.type"]).toBeUndefined();
+		expect(scheduled?.traceId).not.toBe(definer?.traceId);
+		expect(scheduled?.links).toEqual([
+			{ traceId: definer?.traceId, spanId: definer?.spanId },
+		]);
 		await client.dispose();
 
 		const processId = servicesPid();

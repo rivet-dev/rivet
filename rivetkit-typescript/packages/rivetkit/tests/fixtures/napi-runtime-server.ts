@@ -120,6 +120,13 @@ const integrationActor = actor({
 				count: c.state.count,
 			};
 		},
+		scheduleTrace: async (c, correlationToken: string) => {
+			await c.schedule.after(50, "scheduledTrace", correlationToken);
+			return correlationToken;
+		},
+		scheduledTrace: async (c, correlationToken: string) => {
+			await c.db.execute("SELECT ? AS trace", correlationToken);
+		},
 		sqliteFailure: async (c) => {
 			await c.db.execute("SELECT value FROM missing_trace_test_table");
 		},
