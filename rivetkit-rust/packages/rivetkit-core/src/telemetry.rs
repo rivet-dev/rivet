@@ -14,6 +14,8 @@ use parking_lot::Mutex;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::ActorContext;
+use crate::actor::metrics::{ActorMetrics, InvocationStatus, InvocationType};
+use crate::time::Instant;
 
 /// Correlation fields accepted at an invocation boundary.
 #[derive(Debug, Default)]
@@ -60,10 +62,14 @@ fn invocation_ray_id(headers: &http::HeaderMap) -> Option<String> {
 	rivetkit_client_protocol::telemetry_headers::bounded_ray_id(value).map(str::to_owned)
 }
 
-/// The single root span for one client action invocation.
+/// Owns the complete lifecycle of one actor invocation.
 #[derive(Debug)]
-pub(crate) struct ActionInvocationSpan {
+pub(crate) struct ActorInvocation {
 	telemetry: ActorInvocationTelemetry,
+	metrics: ActorMetrics,
+	action_name: String,
+	invocation_type: InvocationType,
+	started_at: Instant,
 }
 
 /// Opaque invocation context carried across foreign-runtime adapters.
@@ -186,21 +192,49 @@ pub(crate) struct SqliteOperationSpan {
 	span: Option<tracing::Span>,
 }
 
-impl ActionInvocationSpan {
-	pub(crate) fn start(
+impl ActorInvocation {
+	pub(crate) fn start_action(
 		ctx: &ActorContext,
 		action_name: &str,
 		incoming: IncomingInvocationContext,
 	) -> Self {
+		Self::start(
+			ctx,
+			action_name,
+			InvocationType::Action,
+			incoming.ray_id,
+			incoming.remote_parent,
+		)
+	}
+
+	pub(crate) fn start_scheduled(ctx: &ActorContext, action_name: &str) -> Self {
+		Self::start(
+			ctx,
+			action_name,
+			InvocationType::Scheduled,
+			None,
+			None,
+		)
+	}
+
+	fn start(
+		ctx: &ActorContext,
+		action_name: &str,
+		invocation_type: InvocationType,
+		ray_id: Option<String>,
+		parent: Option<SpanContext>,
+	) -> Self {
 		let identity = ctx.telemetry_identity();
-		let ray_id = incoming.ray_id;
+		// Use bounded names for both spans and metrics.
+		let action_name = ctx.metrics().label_action_name(action_name).to_owned();
 		let span = if tracing::enabled!(target: "rivetkit::telemetry", tracing::Level::INFO) {
 				let span = tracing::info_span!(
 					target: "rivetkit::telemetry",
 					parent: None,
 					"rivet.actor.invoke",
-					otel.kind = "server",
-					rivet.invocation.type = "action",
+					otel.name = %format!("{}/{}", identity.actor_name, action_name),
+					otel.kind = invocation_type.otel_kind(),
+					rivet.invocation.type = invocation_type.as_label(),
 					rivet.actor.id = %identity.actor_id,
 					rivet.actor.name = %identity.actor_name,
 					rivet.actor.key = %identity.actor_key,
@@ -210,7 +244,7 @@ impl ActionInvocationSpan {
 					error.type = tracing::field::Empty,
 				);
 				span.record("rivet.ray.id", ray_id.as_deref());
-				if let Some(parent) = incoming.remote_parent {
+				if let Some(parent) = parent {
 					span.set_parent(opentelemetry::Context::new().with_remote_span_context(parent));
 				}
 				Some(span)
@@ -220,6 +254,10 @@ impl ActionInvocationSpan {
 
 		Self {
 			telemetry: ActorInvocationTelemetry::new(ray_id, span, identity),
+			metrics: ctx.metrics().clone(),
+			action_name,
+			invocation_type,
+			started_at: Instant::now(),
 		}
 	}
 
@@ -227,14 +265,54 @@ impl ActionInvocationSpan {
 		self.telemetry.clone()
 	}
 
-	pub(crate) fn finish(self, error: Option<&anyhow::Error>) {
-		self.telemetry.finish(error);
+	pub(crate) fn finish(mut self, error: Option<&anyhow::Error>) {
+		self.finish_with_status(
+			error.map_or(InvocationStatus::Ok, InvocationStatus::from_error),
+			error,
+		);
+	}
+
+	fn finish_with_status(&mut self, status: InvocationStatus, error: Option<&anyhow::Error>) {
+		let Some(span) = self.telemetry.claim_terminal() else {
+			return;
+		};
+		self.record_finished(span, status, error);
+	}
+
+	/// Records the terminal metric and span status of an invocation whose
+	/// completion the caller has already claimed through `claim_terminal`.
+	/// The metric measures what the caller waited for, so it is recorded here
+	/// even when `wait_until` work keeps the span open past this point.
+	fn record_finished(
+		&self,
+		span: Option<tracing::Span>,
+		status: InvocationStatus,
+		error: Option<&anyhow::Error>,
+	) {
+		self.metrics.record_invocation(
+			&self.action_name,
+			self.invocation_type,
+			status,
+			self.started_at.elapsed(),
+		);
+		if let Some(span) = span {
+			record_outcome(&span, error);
+			self.telemetry.mark_reply_sent(&span);
+		}
+		self.telemetry.release_span_if_settled();
 	}
 }
 
-impl Drop for ActionInvocationSpan {
+impl Drop for ActorInvocation {
 	fn drop(&mut self) {
-		self.telemetry.finish_dropped();
+		// `finish` consumes the invocation, so this runs on the completed path
+		// too. Claim the terminal record first, so the dropped-reply error is
+		// only built for an invocation that really was dropped.
+		let Some(span) = self.telemetry.claim_terminal() else {
+			return;
+		};
+		let error = crate::error::ActorLifecycle::DroppedReply.build();
+		self.record_finished(span, InvocationStatus::Dropped, Some(&error));
 	}
 }
 
@@ -338,25 +416,6 @@ impl ActorInvocationTelemetry {
 		Some(SqliteOperationSpan { span: Some(span) })
 	}
 
-	fn finish(&self, error: Option<&anyhow::Error>) {
-		let Some(span) = self.claim_terminal() else {
-			return;
-		};
-		record_outcome(&span, error);
-		self.mark_reply_sent(&span);
-		self.release_span_if_settled();
-	}
-
-	fn finish_dropped(&self) {
-		let Some(span) = self.claim_terminal() else {
-			return;
-		};
-		span.record("otel.status_code", "ERROR");
-		span.record("error.type", "actor.dropped_reply");
-		self.mark_reply_sent(&span);
-		self.release_span_if_settled();
-	}
-
 	/// Borrows the invocation while it is still open: before its status is
 	/// recorded, or after it while `wait_until` work from it still runs. A
 	/// settled invocation yields nothing, so late SQLite work and retained
@@ -370,11 +429,11 @@ impl ActorInvocationTelemetry {
 	/// Claims the terminal record, so the finish and drop paths cannot both
 	/// record a status for the same invocation. The span stays in its slot
 	/// until `release_span_if_settled` empties it.
-	fn claim_terminal(&self) -> Option<tracing::Span> {
+	fn claim_terminal(&self) -> Option<Option<tracing::Span>> {
 		if self.0.finished.swap(true, Ordering::SeqCst) {
 			return None;
 		}
-		self.0.span.lock().clone()
+		Some(self.0.span.lock().clone())
 	}
 
 	/// Marks the moment the caller got its answer when the span will outlive

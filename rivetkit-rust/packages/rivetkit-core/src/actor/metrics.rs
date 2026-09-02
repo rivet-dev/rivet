@@ -137,10 +137,19 @@ pub(crate) enum InvocationType {
 }
 
 impl InvocationType {
-	fn as_label(self) -> &'static str {
+	pub(crate) fn as_label(self) -> &'static str {
 		match self {
 			Self::Action => "action",
 			Self::Scheduled => "scheduled",
+		}
+	}
+
+	/// OpenTelemetry span kind for this invocation. An action is entered from
+	/// outside the actor, while a scheduled fire originates inside it.
+	pub(crate) fn otel_kind(self) -> &'static str {
+		match self {
+			Self::Action => "server",
+			Self::Scheduled => "internal",
 		}
 	}
 }
@@ -1950,6 +1959,20 @@ impl ActorMetrics {
 			.observe(duration.as_secs_f64());
 	}
 
+	/// Folds an undeclared action name down to a bounded placeholder.
+	///
+	/// Action names arrive from callers, so using one verbatim would mint a new
+	/// series per value wherever the name becomes a dimension. `_OTHER` is the
+	/// fallback OpenTelemetry defines for exactly this, and it cannot collide
+	/// with a declared action name.
+	pub(crate) fn label_action_name<'a>(&'a self, action_name: &'a str) -> &'a str {
+		if self.inner.action_names.contains(action_name) {
+			action_name
+		} else {
+			"_OTHER"
+		}
+	}
+
 	pub(crate) fn record_invocation(
 		&self,
 		action_name: &str,
@@ -1958,14 +1981,7 @@ impl ActorMetrics {
 		duration: Duration,
 	) {
 		let actor_labels = self.actor_labels();
-		// Action names arrive from callers, so an undeclared one would mint a new
-		// label series per value. `_OTHER` is the fallback OpenTelemetry defines
-		// for exactly this, and it cannot collide with a declared action name.
-		let action_name = if self.inner.action_names.contains(action_name) {
-			action_name
-		} else {
-			"_OTHER"
-		};
+		let action_name = self.label_action_name(action_name);
 		let labels = [
 			actor_labels[0],
 			action_name,
