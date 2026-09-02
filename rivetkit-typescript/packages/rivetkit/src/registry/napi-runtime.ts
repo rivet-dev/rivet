@@ -9,7 +9,10 @@ import type {
 	WebSocket as NativeWebSocket,
 } from "@rivetkit/rivetkit-napi";
 import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
-import { runWithActorInvocationSpan } from "@/common/otel-context";
+import {
+	readActiveTraceHeaders,
+	runWithActorInvocationSpan,
+} from "@/common/otel-context";
 import type {
 	ActorContextHandle,
 	ActorFactoryHandle,
@@ -259,6 +262,9 @@ export class NapiCoreRuntime implements CoreRuntime {
 	#bindings: NativeBindings;
 	#sql = new WeakMap<NativeActorContext, NapiSqlDatabase>();
 	#invocationContext: AsyncLocalStorage<NativeActorContext>;
+	// `traceparent` of each invocation's own Core span, so an operation can
+	// tell that span apart from an application span without a native call.
+	#invocationTraceparent = new WeakMap<NativeActorContext, string>();
 
 	constructor(
 		bindings: NativeBindings,
@@ -268,13 +274,26 @@ export class NapiCoreRuntime implements CoreRuntime {
 		this.#invocationContext = invocationContext;
 	}
 
+	// Core cannot read the active JS span; bind it to the operation handle here.
 	#actorContextForOperation(owner: ActorContextHandle): NativeActorContext {
 		const ownerCtx = asNativeActorContext(owner);
 		const active = this.#invocationContext.getStore();
-		if (active?.sameActorInstance(ownerCtx)) {
+		if (!active?.sameActorInstance(ownerCtx)) {
+			return ownerCtx;
+		}
+		const applicationSpan = readActiveTraceHeaders();
+		// Avoid a native call when Core already has the active parent.
+		if (
+			!applicationSpan ||
+			applicationSpan.traceparent ===
+				this.#invocationTraceparent.get(active)
+		) {
 			return active;
 		}
-		return ownerCtx;
+		return active.withApplicationSpan(
+			applicationSpan.traceparent,
+			applicationSpan.tracestate ?? null,
+		);
 	}
 
 	// Cache only the actor-owned handle, which is closed on sleep.
@@ -577,22 +596,22 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	runWithActorInvocationContext<T>(ctx: ActorContextHandle, run: () => T): T {
 		const nativeCtx = asNativeActorContext(ctx);
-		const traceContext = this.#actorInvocationTraceContext(nativeCtx);
+		const span = nativeCtx.invocationTraceContext()?.span;
+		if (span) {
+			this.#invocationTraceparent.set(nativeCtx, span.traceparent);
+		}
 		return this.#invocationContext.run(nativeCtx, () =>
-			runWithActorInvocationSpan(traceContext?.span, run),
+			runWithActorInvocationSpan(span, run),
 		);
 	}
 
 	actorInvocationTraceContext(
 		ctx: ActorContextHandle,
 	): ActorInvocationTraceContext | undefined {
-		return this.#actorInvocationTraceContext(asNativeActorContext(ctx));
-	}
-
-	#actorInvocationTraceContext(
-		ctx: NativeActorContext,
-	): ActorInvocationTraceContext | undefined {
-		return ctx.invocationTraceContext() ?? undefined;
+		return (
+			this.#actorContextForOperation(ctx).invocationTraceContext() ??
+			undefined
+		);
 	}
 
 	actorName(ctx: ActorContextHandle): string {
@@ -643,7 +662,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 	}
 
 	actorWaitUntil(ctx: ActorContextHandle, promise: Promise<unknown>): void {
-		asNativeActorContext(ctx).waitUntil(promise);
+		this.#actorContextForOperation(ctx).waitUntil(promise);
 	}
 
 	async actorWaitForTrackedShutdownWork(
@@ -1041,7 +1060,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		actionName: string,
 		args: RuntimeBytes,
 	): Promise<string> {
-		return await asNativeActorContext(ctx)
+		return await this.#actorContextForOperation(ctx)
 			.schedule()
 			.after(durationMs, actionName, toNapiBuffer(args));
 	}
@@ -1052,13 +1071,13 @@ export class NapiCoreRuntime implements CoreRuntime {
 		actionName: string,
 		args: RuntimeBytes,
 	): Promise<string> {
-		return await asNativeActorContext(ctx)
+		return await this.#actorContextForOperation(ctx)
 			.schedule()
 			.at(timestampMs, actionName, toNapiBuffer(args));
 	}
 
 	async actorScheduleCancel(ctx: ActorContextHandle, id: string) {
-		return await asNativeActorContext(ctx).schedule().cancel(id);
+		return await this.#actorContextForOperation(ctx).schedule().cancel(id);
 	}
 
 	async actorScheduleGet(
@@ -1066,12 +1085,13 @@ export class NapiCoreRuntime implements CoreRuntime {
 		id: string,
 	): Promise<RuntimeScheduledEventInfo | undefined> {
 		return (
-			(await asNativeActorContext(ctx).schedule().get(id)) ?? undefined
+			(await this.#actorContextForOperation(ctx).schedule().get(id)) ??
+			undefined
 		);
 	}
 
 	async actorScheduleList(ctx: ActorContextHandle) {
-		return await asNativeActorContext(ctx).schedule().list();
+		return await this.#actorContextForOperation(ctx).schedule().list();
 	}
 
 	async actorCronSet(
@@ -1083,7 +1103,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		args: RuntimeBytes,
 		maxHistory: number | undefined,
 	) {
-		await asNativeActorContext(ctx)
+		await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronSet(
 				name,
@@ -1103,7 +1123,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		args: RuntimeBytes,
 		maxHistory: number | undefined,
 	) {
-		await asNativeActorContext(ctx)
+		await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronEvery(
 				name,
@@ -1118,20 +1138,23 @@ export class NapiCoreRuntime implements CoreRuntime {
 		ctx: ActorContextHandle,
 		name: string,
 	): Promise<RuntimeCronJobInfo | undefined> {
-		return ((await asNativeActorContext(ctx).schedule().cronGet(name)) ??
-			undefined) as RuntimeCronJobInfo | undefined;
+		return ((await this.#actorContextForOperation(ctx)
+			.schedule()
+			.cronGet(name)) ?? undefined) as RuntimeCronJobInfo | undefined;
 	}
 
 	async actorCronList(
 		ctx: ActorContextHandle,
 	): Promise<RuntimeCronJobInfo[]> {
-		return (await asNativeActorContext(ctx)
+		return (await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronList()) as RuntimeCronJobInfo[];
 	}
 
 	async actorCronDelete(ctx: ActorContextHandle, name: string) {
-		return await asNativeActorContext(ctx).schedule().cronDelete(name);
+		return await this.#actorContextForOperation(ctx)
+			.schedule()
+			.cronDelete(name);
 	}
 
 	async actorCronHistory(
@@ -1139,7 +1162,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		name: string,
 		limit: number | undefined,
 	): Promise<RuntimeCronFire[]> {
-		return (await asNativeActorContext(ctx)
+		return (await this.#actorContextForOperation(ctx)
 			.schedule()
 			.cronHistory(name, limit)) as RuntimeCronFire[];
 	}

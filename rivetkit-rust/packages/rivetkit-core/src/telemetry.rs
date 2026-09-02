@@ -67,9 +67,14 @@ pub(crate) struct ActionInvocationSpan {
 }
 
 /// Opaque invocation context carried across foreign-runtime adapters.
+///
+/// The second field is the application span the host runtime had active when
+/// it resolved this handle. Core cannot see the host's span stack, so a span
+/// Core opens through this handle parents there when it is set and to the
+/// invocation span otherwise. Every clone of a handle shares one invocation.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
-pub struct ActorInvocationTelemetry(Arc<InvocationInner>);
+pub struct ActorInvocationTelemetry(Arc<InvocationInner>, Option<SpanContext>);
 
 /// Identity fields that do not change while an actor is alive. Built once per
 /// actor and shared by every invocation, so starting one does not re-allocate
@@ -239,13 +244,30 @@ impl ActorInvocationTelemetry {
 		span: Option<tracing::Span>,
 		identity: Arc<ActorTelemetryIdentity>,
 	) -> Self {
-		Self(Arc::new(InvocationInner {
-			ray_id,
-			span: Mutex::new(span),
-			finished: AtomicBool::new(false),
-			pending_work: AtomicUsize::new(0),
-			identity,
-		}))
+		Self(
+			Arc::new(InvocationInner {
+				ray_id,
+				span: Mutex::new(span),
+				finished: AtomicBool::new(false),
+				pending_work: AtomicUsize::new(0),
+				identity,
+			}),
+			None,
+		)
+	}
+
+	/// Returns a handle for the same invocation whose spans parent to the
+	/// application span identified by `traceparent` and `tracestate`. Invalid
+	/// or absent context yields a handle that parents to the invocation span.
+	pub(crate) fn with_application_span(
+		&self,
+		traceparent: Option<&str>,
+		tracestate: Option<&str>,
+	) -> Self {
+		Self(
+			self.0.clone(),
+			parse_remote_parent(traceparent, tracestate),
+		)
 	}
 
 	/// Registers work that outlives the reply, so the invocation span stays
@@ -308,6 +330,11 @@ impl ActorInvocationTelemetry {
 			otel.status_code = tracing::field::Empty,
 			error.type = tracing::field::Empty,
 		);
+		if let Some(application_span) = &self.1 {
+			span.set_parent(
+				opentelemetry::Context::new().with_remote_span_context(application_span.clone()),
+			);
+		}
 		Some(SqliteOperationSpan { span: Some(span) })
 	}
 

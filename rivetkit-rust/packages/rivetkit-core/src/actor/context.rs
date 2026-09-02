@@ -258,6 +258,20 @@ impl ActorContext {
 		self
 	}
 
+	/// Returns a handle for the same invocation whose spans parent to the
+	/// application span the host runtime has active, given as W3C
+	/// `traceparent` and `tracestate`. A handle that serves no invocation is
+	/// returned unchanged, because it opens no spans.
+	#[doc(hidden)]
+	pub fn with_application_span(&self, traceparent: Option<&str>, tracestate: Option<&str>) -> Self {
+		Self(
+			self.0.clone(),
+			self.1
+				.as_ref()
+				.map(|telemetry| telemetry.with_application_span(traceparent, tracestate)),
+		)
+	}
+
 	/// Returns the SQLite handle bound to this handle's invocation.
 	pub fn invocation_sql(&self) -> crate::actor::sqlite::SqliteDb {
 		self.0.sql.clone().with_invocation_telemetry(self.1.clone())
