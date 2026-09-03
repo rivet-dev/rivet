@@ -6,6 +6,10 @@ import { fileURLToPath } from "node:url";
 import getPort from "get-port";
 import { afterEach, describe, expect, test } from "vitest";
 import { createClient } from "../src/client/mod";
+import {
+	type OtlpCollector,
+	startOtlpCollector,
+} from "./fixtures/otlp-collector";
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_PATH = join(TEST_DIR, "fixtures", "napi-runtime-server.ts");
@@ -19,9 +23,13 @@ let runtimeLogs = {
 let engineEndpoint: string | undefined;
 let storagePath: string | undefined;
 
+function runtimeOutput(): string {
+	return [runtimeLogs.stdout, runtimeLogs.stderr].filter(Boolean).join("\n");
+}
+
 function childOutput(child: ChildProcess): string {
 	void child;
-	return [runtimeLogs.stdout, runtimeLogs.stderr].filter(Boolean).join("\n");
+	return runtimeOutput();
 }
 
 async function engineOutput(): Promise<string> {
@@ -434,13 +442,180 @@ async function stopTestEngine(): Promise<void> {
 	}
 }
 
+interface ExportedSpan {
+	name: string;
+	traceId: string;
+	spanId: string;
+	parentSpanId?: string;
+	attributes: Record<string, string | undefined>;
+	links: Array<{ traceId: string; spanId: string }>;
+}
+
+/** Flattens OTLP/JSON export bodies into the spans they carry. */
+function exportedSpans(exports: Buffer[]): ExportedSpan[] {
+	type OtlpAttribute = { key: string; value: { stringValue?: string } };
+	type OtlpSpan = Omit<ExportedSpan, "attributes"> & {
+		attributes?: OtlpAttribute[];
+		links?: Array<{ traceId: string; spanId: string }>;
+	};
+	type OtlpPayload = {
+		resourceSpans?: Array<{ scopeSpans?: Array<{ spans?: OtlpSpan[] }> }>;
+	};
+	return exports.flatMap((body) => {
+		const payload = JSON.parse(body.toString("utf8")) as OtlpPayload;
+		return (payload.resourceSpans ?? []).flatMap((resource) =>
+			(resource.scopeSpans ?? []).flatMap((scope) =>
+				(scope.spans ?? []).map((span) => ({
+					name: span.name,
+					traceId: span.traceId,
+					spanId: span.spanId,
+					parentSpanId: span.parentSpanId || undefined,
+					attributes: Object.fromEntries(
+						(span.attributes ?? []).map((attribute) => [
+							attribute.key,
+							attribute.value.stringValue,
+						]),
+					),
+					links: (span.links ?? []).map((link) => ({
+						traceId: link.traceId,
+						spanId: link.spanId,
+					})),
+				})),
+			),
+		);
+	});
+}
+
+/**
+ * Polls until the exported spans satisfy `ready`, then returns them. Parent
+ * and child spans can land in different export batches, so callers that
+ * assert parentage must wait for both.
+ */
+async function waitForSpans(
+	exports: Buffer[],
+	description: string,
+	ready: (spans: ExportedSpan[]) => boolean,
+	timeoutMs: number,
+): Promise<ExportedSpan[]> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const spans = exportedSpans(exports);
+		if (ready(spans)) {
+			return spans;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+	throw new Error(`timed out waiting for ${description}`);
+}
+
+function isSqliteSpan(span: ExportedSpan): boolean {
+	return span.name === "rivet.sqlite.execute";
+}
+
+function isFailedSqliteSpan(span: ExportedSpan): boolean {
+	return isSqliteSpan(span) && span.attributes["error.type"] !== undefined;
+}
+
+function findInvocation(
+	spans: ExportedSpan[],
+	actionName: string,
+): ExportedSpan | undefined {
+	return spans.find(
+		(span) =>
+			span.attributes["rivet.invocation.type"] !== undefined &&
+			span.attributes["rivet.action.name"] === actionName,
+	);
+}
+
+/** Polls until an invocation span has been exported for every named action. */
+async function waitForInvocationSpans(
+	exports: Buffer[],
+	actionNames: string[],
+	timeoutMs: number,
+): Promise<ExportedSpan[]> {
+	return waitForSpans(
+		exports,
+		`invocation spans: ${actionNames.join(", ")}`,
+		(spans) => actionNames.every((name) => findInvocation(spans, name)),
+		timeoutMs,
+	);
+}
+
+async function waitForRuntimeLog(
+	correlationToken: string,
+	timeoutMs: number,
+): Promise<string> {
+	const deadline = Date.now() + timeoutMs;
+	const marker = `correlation_token=${correlationToken}`;
+	while (Date.now() < deadline) {
+		const line = runtimeOutput()
+			.split("\n")
+			.find((candidate) => candidate.includes(marker));
+		if (line) {
+			return line;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+	throw new Error(`timed out waiting for runtime log ${correlationToken}`);
+}
+
+/**
+ * Starts an engine and a native runtime pointed at one OTLP endpoint, and
+ * returns the pieces every telemetry test needs.
+ */
+async function startTracedRuntime(
+	tracesEndpoint: string,
+	extraEnv: Record<string, string> = {},
+): Promise<{ endpoint: string; poolName: string; child: ChildProcess }> {
+	const poolName = "default";
+	const port = await getPort({ host: "127.0.0.1" });
+	const endpoint = `http://127.0.0.1:${port}`;
+	engineEndpoint = endpoint;
+	storagePath = await mkdtemp(join(tmpdir(), "rivetkit-services-"));
+	runtimeLogs = { stdout: "", stderr: "" };
+	const child = spawn(process.execPath, ["--import", "tsx", FIXTURE_PATH], {
+		cwd: dirname(TEST_DIR),
+		env: {
+			...process.env,
+			RIVET_TOKEN: TOKEN,
+			RIVET_NAMESPACE: NAMESPACE,
+			RIVET_RUN_ENGINE_HOST: "127.0.0.1",
+			RIVET_RUN_ENGINE_PORT: String(port),
+			RIVETKIT_TEST_ENDPOINT: endpoint,
+			RIVETKIT_TEST_POOL_NAME: poolName,
+			RIVETKIT_STORAGE_PATH: storagePath,
+			OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: tracesEndpoint,
+			OTEL_EXPORTER_OTLP_TRACES_PROTOCOL: "http/json",
+			OTEL_TRACES_SAMPLER: "always_on",
+			OTEL_BSP_SCHEDULE_DELAY: "10",
+			...extraEnv,
+		},
+		stdio: ["ignore", "pipe", "pipe"],
+	});
+	child.stdout?.on("data", (chunk) => {
+		runtimeLogs.stdout += chunk.toString();
+	});
+	child.stderr?.on("data", (chunk) => {
+		runtimeLogs.stderr += chunk.toString();
+	});
+	await waitForHealth(child, endpoint, 90_000);
+	await upsertNormalRunnerConfig(child, endpoint, poolName);
+	await waitForEnvoy(child, endpoint, poolName, 30_000);
+	return { endpoint, poolName, child };
+}
+
 describe.sequential("native NAPI runtime integration", () => {
 	let runtime: ChildProcess | undefined;
+	let collector: OtlpCollector | undefined;
 
 	afterEach(async () => {
 		if (runtime) {
 			await stopRuntime(runtime);
 			runtime = undefined;
+		}
+		if (collector) {
+			await collector.close();
+			collector = undefined;
 		}
 		await stopTestEngine();
 		if (storagePath) {
@@ -451,36 +626,14 @@ describe.sequential("native NAPI runtime integration", () => {
 	}, 30_000);
 
 	test("runs a TS actor through registry, NAPI, core, envoy, and engine", async () => {
-		const poolName = "default";
-		const port = await getPort({ host: "127.0.0.1" });
-		const endpoint = `http://127.0.0.1:${port}`;
-		engineEndpoint = endpoint;
-		storagePath = await mkdtemp(join(tmpdir(), "rivetkit-services-"));
-		runtimeLogs = { stdout: "", stderr: "" };
-		runtime = spawn(process.execPath, ["--import", "tsx", FIXTURE_PATH], {
-			cwd: dirname(TEST_DIR),
-			env: {
-				...process.env,
-				RIVET_TOKEN: TOKEN,
-				RIVET_NAMESPACE: NAMESPACE,
-				RIVET_RUN_ENGINE_HOST: "127.0.0.1",
-				RIVET_RUN_ENGINE_PORT: String(port),
-				RIVETKIT_TEST_ENDPOINT: endpoint,
-				RIVETKIT_TEST_POOL_NAME: poolName,
-				RIVETKIT_STORAGE_PATH: storagePath,
-			},
-			stdio: ["ignore", "pipe", "pipe"],
-		});
-		runtime.stdout?.on("data", (chunk) => {
-			runtimeLogs.stdout += chunk.toString();
-		});
-		runtime.stderr?.on("data", (chunk) => {
-			runtimeLogs.stderr += chunk.toString();
-		});
-
-		await waitForHealth(runtime, endpoint, 90_000);
-		await upsertNormalRunnerConfig(runtime, endpoint, poolName);
-		await waitForEnvoy(runtime, endpoint, poolName, 30_000);
+		collector = await startOtlpCollector(
+			await getPort({ host: "127.0.0.1" }),
+		);
+		const traceExports = collector.spans();
+		const { endpoint, poolName, child } = await startTracedRuntime(
+			collector.endpoint,
+		);
+		runtime = child;
 		await waitForEnvoy(runtime, endpoint, SERVICES_POOL_NAME, 30_000);
 		await expectNormalRunnerConfig(endpoint, SERVICES_POOL_NAME);
 		const servicesActorId = await createServicesActor(endpoint);
@@ -494,21 +647,42 @@ describe.sequential("native NAPI runtime integration", () => {
 			disableMetadataLookup: true,
 		}) as any;
 
+		const actorKey = `napi-runtime-${crypto.randomUUID()}`;
 		const handle = await waitForActorReady(
 			() =>
-				client.integrationActor.create(
-					[`napi-runtime-${crypto.randomUUID()}`],
-					{
-						params: { userId: "integration-test" },
-					},
-				),
+				client.integrationActor.create([actorKey], {
+					params: { userId: "integration-test" },
+				}),
 			30_000,
 		);
 		const actorId = await handle.resolve();
 
+		const correlationToken = crypto.randomUUID();
+		expect(await handle.logContext(correlationToken)).toBe(
+			correlationToken,
+		);
+		const actorLog = await waitForRuntimeLog(correlationToken, 10_000);
+		expect(actorLog).toContain(`actorId=${actorId}`);
+		expect(actorLog).toContain("actorName=integrationActor");
+		expect(actorLog).toContain(actorKey);
+		expect(actorLog).toMatch(/ rayId=[0-9a-f-]{36}( |$)/);
+		expect(actorLog).toMatch(/ trace_id=[0-9a-f]{32}( |$)/);
+		expect(actorLog).toMatch(/ span_id=[0-9a-f]{16}( |$)/);
+
 		expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(
 			0,
 		);
+		const getCountSpans = await waitForInvocationSpans(
+			traceExports,
+			["getCount"],
+			10_000,
+		);
+		expect(
+			findInvocation(getCountSpans, "getCount")?.attributes,
+		).toMatchObject({
+			"rivet.invocation.type": "action",
+			"rivet.actor.name": "integrationActor",
+		});
 		expect(
 			await waitForActorReady(
 				() => handle.validatedAction({ amount: 4 }),
@@ -561,6 +735,42 @@ describe.sequential("native NAPI runtime integration", () => {
 			count: 2,
 			sqliteValues: [2],
 		});
+		// SQLite spans are children of the action that issued them.
+		const incrementSpans = await waitForSpans(
+			traceExports,
+			"increment invocation and sqlite spans",
+			(spans) =>
+				spans.some(isSqliteSpan) &&
+				findInvocation(spans, "increment") !== undefined,
+			10_000,
+		);
+		const incrementSqlite = incrementSpans.find(isSqliteSpan);
+		expect(incrementSqlite?.attributes).toMatchObject({
+			"rivet.operation.system": "sqlite",
+			"rivet.operation.name": "execute",
+		});
+		expect(incrementSqlite?.parentSpanId).toBe(
+			findInvocation(incrementSpans, "increment")?.spanId,
+		);
+		traceExports.length = 0;
+		await expect(handle.sqliteFailure()).rejects.toMatchObject({
+			code: expect.any(String),
+		});
+		const failureSpans = await waitForSpans(
+			traceExports,
+			"sqliteFailure invocation and failed sqlite spans",
+			(spans) =>
+				spans.some(isFailedSqliteSpan) &&
+				findInvocation(spans, "sqliteFailure") !== undefined,
+			10_000,
+		);
+		const failedSqlite = failureSpans.find(isFailedSqliteSpan);
+		expect(failedSqlite?.attributes["error.type"]).toMatch(
+			/^[a-z_]+\.[a-z_]+$/,
+		);
+		expect(failedSqlite?.parentSpanId).toBe(
+			findInvocation(failureSpans, "sqliteFailure")?.spanId,
+		);
 		expect(await handle.snapshot()).toEqual({
 			count: 2,
 			kvCount: 2,
@@ -578,7 +788,22 @@ describe.sequential("native NAPI runtime integration", () => {
 		).toEqual({
 			count: 5,
 		});
+		// An actor-owned client carries the calling invocation's trace and ray
+		// across the real Engine boundary, so the callee is its child.
+		traceExports.length = 0;
 		expect(await handle.getCountViaClient()).toBe(5);
+		const clientSpans = await waitForInvocationSpans(
+			traceExports,
+			["getCountViaClient", "getCount"],
+			10_000,
+		);
+		const caller = findInvocation(clientSpans, "getCountViaClient");
+		const callee = findInvocation(clientSpans, "getCount");
+		expect(callee?.traceId).toBe(caller?.traceId);
+		expect(callee?.parentSpanId).toBe(caller?.spanId);
+		expect(callee?.attributes["rivet.ray.id"]).toBe(
+			caller?.attributes["rivet.ray.id"],
+		);
 		expect(await handle.stateSnapshot()).toEqual({
 			count: 5,
 			kvCount: 5,
@@ -597,8 +822,7 @@ describe.sequential("native NAPI runtime integration", () => {
 			message: "An internal error occurred",
 		});
 
-		// A scheduled fire keeps the defining invocation's ray and starts a
-		// fresh trace linked to the defining span.
+		// Scheduled work starts a new trace linked to its origin.
 		traceExports.length = 0;
 		const scheduleToken = crypto.randomUUID();
 		expect(await handle.scheduleTrace(scheduleToken)).toBe(scheduleToken);
@@ -616,8 +840,7 @@ describe.sequential("native NAPI runtime integration", () => {
 		expect(scheduled?.attributes["rivet.ray.id"]).toBe(
 			definer?.attributes["rivet.ray.id"],
 		);
-		// Without this the assertions below hold for a scheduled fire that threw,
-		// so a broken action body would still pass.
+		// Ensure the scheduled action succeeded before checking its trace.
 		expect(scheduled?.attributes["error.type"]).toBeUndefined();
 		expect(scheduled?.traceId).not.toBe(definer?.traceId);
 		expect(scheduled?.links).toEqual([
@@ -630,4 +853,208 @@ describe.sequential("native NAPI runtime integration", () => {
 		runtime = undefined;
 		await waitForProcessExit(processId, 5_000);
 	}, 120_000);
+
+	test("keeps overlapping invocations of one actor telemetrically isolated", async () => {
+		collector = await startOtlpCollector(
+			await getPort({ host: "127.0.0.1" }),
+		);
+		const traceExports = collector.spans();
+		const { endpoint, poolName, child } = await startTracedRuntime(
+			collector.endpoint,
+		);
+		runtime = child;
+
+		const client = createClient<any>({
+			endpoint,
+			token: TOKEN,
+			namespace: NAMESPACE,
+			poolName,
+			disableMetadataLookup: true,
+		}) as any;
+		const handle = await waitForActorReady(
+			() =>
+				client.integrationActor.create(
+					[`napi-isolation-${crypto.randomUUID()}`],
+					{ params: { userId: "integration-test" } },
+				),
+			30_000,
+		);
+		await waitForActorReady(() => handle.getCount(), 30_000);
+
+		// Use the same actor to exercise isolation between concurrent invocations.
+		const okToken = crypto.randomUUID();
+		const failToken = crypto.randomUUID();
+		const [ok, failed] = await Promise.allSettled([
+			handle.isolationProbe(okToken, false),
+			handle.isolationProbe(failToken, true),
+		]);
+		expect(ok.status).toBe("fulfilled");
+		expect(failed.status).toBe("rejected");
+
+		const spans = await waitForSpans(
+			traceExports,
+			"both isolation probe invocations and the calls each one made",
+			(exported) => {
+				const probes = exported.filter(
+					(span) =>
+						span.attributes["rivet.action.name"] ===
+						"isolationProbe",
+				);
+				return (
+					probes.length >= 2 &&
+					probes.every((probe) =>
+						exported.some(
+							(span) =>
+								span.attributes["rivet.action.name"] ===
+									"getCount" &&
+								span.traceId === probe.traceId,
+						),
+					)
+				);
+			},
+			20_000,
+		);
+
+		const probes = spans.filter(
+			(span) => span.attributes["rivet.action.name"] === "isolationProbe",
+		);
+		expect(probes).toHaveLength(2);
+
+		const rays = probes.map((probe) => probe.attributes["rivet.ray.id"]);
+		expect(new Set(rays).size).toBe(2);
+		expect(new Set(probes.map((probe) => probe.traceId)).size).toBe(2);
+		const failedProbes = probes.filter(
+			(probe) => probe.attributes["error.type"] !== undefined,
+		);
+		expect(failedProbes).toHaveLength(1);
+		expect(failedProbes[0]?.attributes["error.type"]).toBe(
+			"user.isolation_probe_failed",
+		);
+
+		for (const probe of probes) {
+			const owned = spans.filter(
+				(span) =>
+					isSqliteSpan(span) && span.parentSpanId === probe.spanId,
+			);
+			expect(owned.length).toBeGreaterThanOrEqual(2);
+			for (const span of owned) {
+				expect(span.traceId).toBe(probe.traceId);
+				expect(span.attributes["rivet.ray.id"]).toBe(
+					probe.attributes["rivet.ray.id"],
+				);
+			}
+		}
+
+		// The outbound call each probe makes while the other is mid-flight
+		// stays inside its own trace and carries its own ray.
+		for (const probe of probes) {
+			const callee = spans.find(
+				(span) =>
+					span.attributes["rivet.action.name"] === "getCount" &&
+					span.traceId === probe.traceId,
+			);
+			expect(callee).toBeDefined();
+			expect(callee?.parentSpanId).toBe(probe.spanId);
+			expect(callee?.attributes["rivet.ray.id"]).toBe(
+				probe.attributes["rivet.ray.id"],
+			);
+		}
+
+		const okLog = await waitForRuntimeLog(okToken, 10_000);
+		const failLog = await waitForRuntimeLog(failToken, 10_000);
+		const rayOf = (line: string) => / rayId=([0-9a-f-]{36})/.exec(line)?.[1];
+		expect(rayOf(okLog)).toBeDefined();
+		expect(rayOf(okLog)).not.toBe(rayOf(failLog));
+		expect(rays).toContain(rayOf(okLog));
+		expect(rays).toContain(rayOf(failLog));
+
+		await client.dispose();
+	}, 120_000);
+
+	test("keeps actor behavior intact when the trace exporter is unavailable", async () => {
+		// Nothing listens on this port, so every OTLP export attempt fails.
+		const unavailable = `http://127.0.0.1:${await getPort({ host: "127.0.0.1" })}/v1/traces`;
+		const { endpoint, poolName, child } =
+			await startTracedRuntime(unavailable);
+		runtime = child;
+
+		const client = createClient<any>({
+			endpoint,
+			token: TOKEN,
+			namespace: NAMESPACE,
+			poolName,
+			disableMetadataLookup: true,
+		}) as any;
+		const handle = await waitForActorReady(
+			() =>
+				client.integrationActor.create(
+					[`napi-telemetry-failure-${crypto.randomUUID()}`],
+					{ params: { userId: "integration-test" } },
+				),
+			30_000,
+		);
+
+		expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(
+			0,
+		);
+		expect(
+			await waitForActorReady(
+				() => handle.validatedAction({ amount: 4 }),
+				30_000,
+			),
+		).toBe(4);
+
+		await client.dispose();
+	}, 120_000);
+
+	test("keeps actor behavior intact when the trace exporter is slow", async () => {
+		// Stall exports long enough to saturate the small queue below.
+		collector = await startOtlpCollector(
+			await getPort({ host: "127.0.0.1" }),
+			{
+				responseDelayMs: 120_000,
+			},
+		);
+		const { endpoint, poolName, child } = await startTracedRuntime(
+			collector.endpoint,
+			{
+				OTEL_BSP_MAX_QUEUE_SIZE: "8",
+				OTEL_BSP_MAX_EXPORT_BATCH_SIZE: "4",
+			},
+		);
+		runtime = child;
+
+		const client = createClient<any>({
+			endpoint,
+			token: TOKEN,
+			namespace: NAMESPACE,
+			poolName,
+			disableMetadataLookup: true,
+		}) as any;
+		const handle = await waitForActorReady(
+			() =>
+				client.integrationActor.create(
+					[`napi-telemetry-slow-${crypto.randomUUID()}`],
+					{ params: { userId: "integration-test" } },
+				),
+			30_000,
+		);
+
+		const started = Date.now();
+		for (let index = 1; index <= 12; index += 1) {
+			expect(
+				await waitForActorReady(() => handle.increment(1), 30_000),
+			).toMatchObject({ count: index });
+		}
+		const elapsed = Date.now() - started;
+
+		// Actions must finish before the stalled collector responds.
+		expect(elapsed).toBeLessThan(60_000);
+
+		expect(await waitForActorReady(() => handle.getCount(), 30_000)).toBe(
+			12,
+		);
+
+		await client.dispose();
+	}, 180_000);
 });

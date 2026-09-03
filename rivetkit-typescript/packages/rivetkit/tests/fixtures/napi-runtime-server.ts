@@ -137,6 +137,28 @@ const integrationActor = actor({
 				kvCount: kvValue ? Number(kvValue) : null,
 			};
 		},
+		// Interleaves awaits, SQLite, a child actor call and a log so two
+		// overlapping invocations of this action have every chance to observe
+		// each other's telemetry context.
+		isolationProbe: async (c, token: string, fail: boolean) => {
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			await c.db.execute("SELECT ? AS probe", token);
+			c.log.warn({ correlation_token: token }, "isolation probe");
+			const client = c.client<any>();
+			await client.integrationActor
+				.getForId(c.actorId, {
+					params: { userId: "internal-integration-test" },
+				})
+				.getCount();
+			await new Promise((resolve) => setTimeout(resolve, 20));
+			await c.db.execute("SELECT ? AS probe2", token);
+			if (fail) {
+				throw new UserError("isolation probe failure", {
+					code: "isolation_probe_failed",
+				});
+			}
+			return token;
+		},
 		getCountViaClient: async (c) => {
 			const client = c.client<any>();
 			return await client.integrationActor
