@@ -1894,10 +1894,19 @@ impl ActorTask {
 		);
 		#[cfg(feature = "sqlite-local")]
 		ctx.shutdown_actor_runtime_socket().await;
-		ctx.sql()
+		if let Err(error) = ctx
+			.sql()
 			.cleanup_for_shutdown(reason == ShutdownKind::Sleep)
 			.await
-			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))?;
+			.with_context(|| format!("cleanup sqlite during {reason_label} shutdown"))
+		{
+			tracing::error!(
+				actor_id = %actor_id,
+				reason = reason_label,
+				%error,
+				"lost unflushed sqlite data during shutdown"
+			);
+		}
 		trim_native_allocator_after_shutdown(&actor_id, reason_label);
 		tracing::debug!(
 			actor_id = %actor_id,

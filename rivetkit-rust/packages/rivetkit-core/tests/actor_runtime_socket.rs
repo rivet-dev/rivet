@@ -266,6 +266,8 @@ fn query_connection(
 		rows,
 		changes,
 		last_insert_row_id: (changes > 0).then(|| connection.last_insert_rowid()),
+		readonly: None,
+		commit_seq: None,
 	})
 }
 
@@ -1167,7 +1169,15 @@ fn coordinator_errors_keep_endpoint_level_meaning() {
 		wire::ResponsePayload::QueueFull(_)
 	));
 	assert!(matches!(
-		map_error(TransactionCoordinatorClosedError.into()),
+		map_error(
+			TransactionClosedError {
+				coordinator: true,
+				key: None,
+				state: None,
+				message: "sqlite transaction coordinator is closed".to_string(),
+			}
+			.into()
+		),
 		wire::ResponsePayload::EndpointClosed
 	));
 	assert!(matches!(

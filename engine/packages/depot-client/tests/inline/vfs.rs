@@ -10,7 +10,7 @@ use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Barrier, mpsc};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
 use parking_lot::Mutex as SyncMutex;
@@ -59,6 +59,10 @@ fn vfs_config_wires_optimization_flags() {
 		vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES / 2,
 		vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS / 2,
 		pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
+		flush_retry_deadline_ms: 30_000,
+		flush_retry_backoff_min_ms: 50,
+		flush_retry_backoff_max_ms: 2_000,
+		max_unflushed_bytes: 64 * 1024 * 1024,
 	};
 
 	let config = VfsConfig::from_optimization_flags(flags);
@@ -144,6 +148,101 @@ impl SqliteTransport for RecordingInitialPagesTransport {
 		_request: protocol::SqliteCommitFinalizeRequest,
 	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
 		anyhow::bail!("the initial-pages recording transport does not implement staged commits")
+	}
+}
+
+struct PausableDirectTransport {
+	inner: DirectDepotTransport,
+	next_read: SyncMutex<Option<DirectReadGate>>,
+}
+
+impl PausableDirectTransport {
+	fn new(engine: Arc<DirectStorage>) -> Self {
+		Self {
+			inner: DirectDepotTransport::new(engine),
+			next_read: SyncMutex::new(None),
+		}
+	}
+
+	fn pause_next_read(&self) -> DirectReadPause {
+		let (reached_tx, reached_rx) = mpsc::channel();
+		let (resume_tx, resume_rx) = mpsc::channel();
+		*self.next_read.lock() = Some(DirectReadGate {
+			reached: reached_tx,
+			resume: resume_rx,
+		});
+		DirectReadPause {
+			reached: reached_rx,
+			resume: resume_tx,
+		}
+	}
+
+	fn direct_hooks(&self) -> Arc<vfs_support::DirectTransportHooks> {
+		self.inner.direct_hooks()
+	}
+}
+
+struct DirectReadGate {
+	reached: mpsc::Sender<()>,
+	resume: mpsc::Receiver<()>,
+}
+
+struct DirectReadPause {
+	reached: mpsc::Receiver<()>,
+	resume: mpsc::Sender<()>,
+}
+
+impl DirectReadPause {
+	fn wait_until_reached(&self) {
+		self.reached.recv().expect("read pause should be reached");
+	}
+
+	fn resume(self) {
+		self.resume.send(()).expect("read pause should resume");
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for PausableDirectTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		let response = self.inner.get_pages(request).await;
+		let gate = self.next_read.lock().take();
+		if let Some(gate) = gate {
+			let _ = gate.reached.send(());
+			let _ = gate.resume.recv();
+		}
+		response
+	}
+
+	async fn commit(
+		&self,
+		request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		self.inner.commit(request).await
+	}
+
+	async fn commit_stage_begin(
+		&self,
+		request: protocol::SqliteCommitStageBeginRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
+		self.inner.commit_stage_begin(request).await
+	}
+
+	async fn commit_stage_segment(
+		&self,
+		request: protocol::SqliteCommitStageSegmentRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageSegmentResponse> {
+		self.inner.commit_stage_segment(request).await
+	}
+
+	async fn commit_finalize(
+		&self,
+		request: protocol::SqliteCommitFinalizeRequest,
+	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
+		self.inner.commit_finalize(request).await
 	}
 }
 
@@ -591,19 +690,21 @@ impl DirectEngineHarness {
 		actor_id: &str,
 		config: VfsConfig,
 	) -> NativeDatabase {
-		let initial_main_page = runtime
-			.block_on(fetch_initial_main_page_for_registration(
+		let initial_pages = runtime
+			.block_on(fetch_initial_pages_for_registration(
 				transport.clone(),
 				actor_id,
+				0,
+				&config,
 			))
-			.expect("initial main page preload should succeed");
-		let vfs = SqliteVfs::register_with_transport_and_initial_page(
+			.expect("initial page preload should succeed");
+		let vfs = SqliteVfs::register_with_transport_and_initial_pages(
 			&next_test_name("sqlite-direct-vfs"),
 			transport,
 			actor_id.to_string(),
 			runtime.handle().clone(),
 			config,
-			initial_main_page,
+			initial_pages,
 			None,
 		)
 		.expect("v2 vfs should register");
@@ -659,6 +760,16 @@ fn open_worker_handle_with_vfs(
 	let engine = runtime.block_on(harness.open_engine());
 	let transport = Arc::new(DirectDepotTransport::new(engine));
 	let config = VfsConfig::default();
+	open_worker_handle_with_transport(runtime, harness, transport, config, metrics)
+}
+
+fn open_worker_handle_with_transport(
+	runtime: &tokio::runtime::Runtime,
+	harness: &DirectEngineHarness,
+	transport: SqliteTransportHandle,
+	config: VfsConfig,
+	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+) -> (Arc<SqliteVfs>, crate::database::NativeDatabaseHandle) {
 	let initial_pages = runtime
 		.block_on(fetch_initial_pages_for_registration(
 			transport.clone(),
@@ -1200,6 +1311,47 @@ fn sqlite_query_text(db: *mut sqlite3, sql: &str) -> std::result::Result<String,
 	}
 
 	result
+}
+
+fn sqlite_query_text_rows(db: *mut sqlite3, sql: &str) -> std::result::Result<Vec<String>, String> {
+	let c_sql = CString::new(sql).map_err(|err| err.to_string())?;
+	let mut stmt = ptr::null_mut();
+	let rc = unsafe { sqlite3_prepare_v2(db, c_sql.as_ptr(), -1, &mut stmt, ptr::null_mut()) };
+	if rc != SQLITE_OK {
+		return Err(format!(
+			"`{sql}` prepare failed with code {rc}: {}",
+			sqlite_error_message(db)
+		));
+	}
+	if stmt.is_null() {
+		return Err(format!("`{sql}` returned no statement"));
+	}
+
+	let mut rows = Vec::new();
+	loop {
+		match unsafe { sqlite3_step(stmt) } {
+			SQLITE_ROW => {
+				let text_ptr = unsafe { sqlite3_column_text(stmt, 0) };
+				rows.push(if text_ptr.is_null() {
+					String::new()
+				} else {
+					unsafe { CStr::from_ptr(text_ptr.cast()) }
+						.to_string_lossy()
+						.into_owned()
+				});
+			}
+			SQLITE_DONE => break,
+			step_rc => {
+				unsafe { sqlite3_finalize(stmt) };
+				return Err(format!(
+					"`{sql}` step failed with code {step_rc}: {}",
+					sqlite_error_message(db)
+				));
+			}
+		}
+	}
+	unsafe { sqlite3_finalize(stmt) };
+	Ok(rows)
 }
 
 fn sqlite_file_control(db: *mut sqlite3, op: c_int) -> std::result::Result<c_int, String> {
@@ -3819,7 +3971,7 @@ fn direct_engine_commits_trigger_workflow_compaction_wake() {
 		"CREATE TABLE items (id INTEGER PRIMARY KEY, value TEXT NOT NULL);",
 	)
 	.expect("create table should succeed");
-	for id in 1..=40 {
+	for id in 1..=depot::conveyer::quota::COMPACTION_DELTA_THRESHOLD {
 		sqlite_step_statement(
 			db.as_ptr(),
 			&format!("INSERT INTO items (id, value) VALUES ({id}, 'row-{id}');"),
@@ -3830,7 +3982,7 @@ fn direct_engine_commits_trigger_workflow_compaction_wake() {
 	assert_eq!(
 		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM items;")
 			.expect("final row count should succeed"),
-		40
+		depot::conveyer::quota::COMPACTION_DELTA_THRESHOLD as i64
 	);
 	let signals = engine.compaction_signals();
 	assert!(
@@ -3838,7 +3990,9 @@ fn direct_engine_commits_trigger_workflow_compaction_wake() {
 		"VFS commits should wake workflow compaction once hot lag is actionable",
 	);
 	assert!(
-		signals.iter().any(|signal| signal.observed_head_txid >= 32),
+		signals.iter().any(|signal| {
+			signal.observed_head_txid >= depot::conveyer::quota::COMPACTION_DELTA_THRESHOLD
+		}),
 		"workflow wake should observe the actionable hot-lag txid: {signals:?}",
 	);
 }
@@ -4516,6 +4670,7 @@ fn delayed_read_ahead_response_fails_head_fence_and_reopen_is_clean() {
 		.expect("training read page 3 should succeed");
 	ctx.resolve_pages(&[4], false)
 		.expect("training read page 4 should succeed");
+	ctx.state.read().evict_target_read_pages(&[5]);
 
 	delaying_transport.enable();
 	let vfs_a = db_a._vfs.clone();
@@ -6417,10 +6572,10 @@ fn commit_buffered_pages_uses_fast_path() {
 				actor_id: harness.actor_id.clone(),
 				new_db_size_pages: 1,
 				expected_head_txid: None,
-				dirty_pages: vec![protocol::SqliteDirtyPage {
+				dirty_pages: Arc::new(vec![protocol::SqliteDirtyPage {
 					pgno: 1,
 					bytes: empty_db_page(),
-				}],
+				}]),
 			},
 		))
 		.expect("fast-path commit should succeed");
@@ -6478,8 +6633,12 @@ fn partial_status_index_reduces_storage_and_cold_page_fetches() {
 	let relaxed = std::sync::atomic::Ordering::Relaxed;
 
 	let measure = |actor_id: &str, index_sql: &str| {
-		let db =
-			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+		let cold_config = VfsConfig {
+			startup_preload_first_pages: false,
+			preload_hints_on_open: false,
+			..VfsConfig::default()
+		};
+		let db = harness.open_db_on_engine(&runtime, engine.clone(), actor_id, cold_config.clone());
 		sqlite_exec(
 			db.as_ptr(),
 			"CREATE TABLE history (id INTEGER PRIMARY KEY, result INTEGER NOT NULL, payload BLOB NOT NULL);",
@@ -6495,8 +6654,7 @@ fn partial_status_index_reduces_storage_and_cold_page_fetches() {
 			sqlite_query_i64(db.as_ptr(), "PRAGMA page_count;").expect("read database page count");
 		drop(db);
 
-		let reopened =
-			harness.open_db_on_engine(&runtime, engine.clone(), actor_id, VfsConfig::default());
+		let reopened = harness.open_db_on_engine(&runtime, engine.clone(), actor_id, cold_config);
 		let ctx = direct_vfs_ctx(&reopened);
 		ctx.resolve_pages_fetches.store(0, relaxed);
 		ctx.pages_fetched_total.store(0, relaxed);
@@ -7396,5 +7554,2136 @@ fn direct_engine_persists_a_vacuum_shrink_across_reopen() {
 		sqlite_query_i64(reopened.as_ptr(), "SELECT COUNT(*) FROM blobs;")
 			.expect("count after reopen should succeed"),
 		0
+	);
+}
+
+fn deferred_test_config() -> VfsConfig {
+	VfsConfig {
+		commit_mode: CommitMode::Deferred,
+		deferred_commit: DeferredCommitConfig {
+			retry_deadline: Duration::from_millis(500),
+			retry_backoff_min: Duration::from_millis(5),
+			retry_backoff_max: Duration::from_millis(20),
+			max_unflushed_bytes: 1024 * 1024,
+		},
+		..VfsConfig::default()
+	}
+}
+
+fn wait_for_deferred_flush(runtime: &tokio::runtime::Runtime, db: &NativeDatabase) {
+	let seq = db.commit_seq();
+	runtime
+		.block_on(db._vfs.wait_for_flush(seq))
+		.expect("deferred commit should become durable");
+	assert_eq!(db._vfs.flushed_seq(), seq);
+}
+
+fn wait_for_deferred_flush_with_context(
+	runtime: &tokio::runtime::Runtime,
+	db: &NativeDatabase,
+	context: &str,
+) {
+	let seq = db.commit_seq();
+	runtime
+		.block_on(db._vfs.wait_for_flush(seq))
+		.unwrap_or_else(|error| panic!("{context}: deferred flush failed: {error}"));
+	assert_eq!(db._vfs.flushed_seq(), seq, "{context}");
+}
+
+fn close_deferred_database(runtime: &tokio::runtime::Runtime, db: NativeDatabase) {
+	db._vfs.begin_close();
+	runtime
+		.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(2)))
+		.expect("deferred flusher should drain");
+	drop(db);
+}
+
+fn close_deferred_database_with_context(
+	runtime: &tokio::runtime::Runtime,
+	db: NativeDatabase,
+	context: &str,
+) {
+	db._vfs.begin_close();
+	runtime
+		.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(2)))
+		.unwrap_or_else(|error| panic!("{context}: deferred close drain failed: {error}"));
+	drop(db);
+}
+
+fn assert_deferred_rows_durable<I, S>(
+	runtime: &tokio::runtime::Runtime,
+	harness: &DirectEngineHarness,
+	engine: Arc<DirectStorage>,
+	expected: I,
+) where
+	I: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
+	let mut config = VfsConfig::default();
+	config.assert_batch_atomic = false;
+	let reopened = harness.open_db_on_engine(runtime, engine, &harness.actor_id, config);
+	let expected = expected
+		.into_iter()
+		.map(|value| value.as_ref().to_owned())
+		.collect::<Vec<_>>();
+	assert_eq!(
+		sqlite_query_text_rows(
+			reopened.as_ptr(),
+			"SELECT value FROM deferred_items ORDER BY id;"
+		)
+		.expect("durability oracle query should succeed"),
+		expected,
+	);
+}
+
+fn assert_deferred_rows_durable_with_context<I, S>(
+	runtime: &tokio::runtime::Runtime,
+	harness: &DirectEngineHarness,
+	engine: Arc<DirectStorage>,
+	expected: I,
+	context: &str,
+) where
+	I: IntoIterator<Item = S>,
+	S: AsRef<str>,
+{
+	let mut config = VfsConfig::default();
+	config.assert_batch_atomic = false;
+	let reopened = harness.open_db_on_engine(runtime, engine, &harness.actor_id, config);
+	let expected = expected
+		.into_iter()
+		.map(|value| value.as_ref().to_owned())
+		.collect::<Vec<_>>();
+	let actual = sqlite_query_text_rows(
+		reopened.as_ptr(),
+		"SELECT value FROM deferred_items ORDER BY id;",
+	)
+	.unwrap_or_else(|error| panic!("{context}: durability oracle query failed: {error}"));
+	assert_eq!(actual, expected, "{context}");
+}
+
+fn assert_durable_table_exists(
+	runtime: &tokio::runtime::Runtime,
+	harness: &DirectEngineHarness,
+	engine: Arc<DirectStorage>,
+	table: &str,
+	exists: bool,
+) {
+	let mut config = VfsConfig::default();
+	config.assert_batch_atomic = false;
+	let reopened = harness.open_db_on_engine(runtime, engine, &harness.actor_id, config);
+	let query =
+		format!("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = '{table}';");
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), &query)
+			.expect("durability table oracle should succeed"),
+		i64::from(exists),
+	);
+}
+
+// Scripted-context tests below are unit-level VFS state-machine checks. Durable SQL state is
+// asserted separately by the DirectEngineHarness end-to-end tests.
+#[derive(Default)]
+struct ScriptedDeferredReadTransport {
+	requests: SyncMutex<Vec<protocol::SqliteGetPagesRequest>>,
+	head: SyncMutex<Option<u64>>,
+	extra_pages: SyncMutex<Vec<protocol::SqliteFetchedPage>>,
+}
+
+impl ScriptedDeferredReadTransport {
+	fn with_head(head: u64) -> Self {
+		Self {
+			head: SyncMutex::new(Some(head)),
+			..Self::default()
+		}
+	}
+}
+
+#[async_trait]
+impl SqliteTransport for ScriptedDeferredReadTransport {
+	async fn get_pages(
+		&self,
+		request: protocol::SqliteGetPagesRequest,
+	) -> anyhow::Result<protocol::SqliteGetPagesResponse> {
+		self.requests.lock().push(request.clone());
+		let mut pages = request
+			.pgnos
+			.iter()
+			.map(|pgno| protocol::SqliteFetchedPage {
+				pgno: *pgno,
+				bytes: Some(vec![*pgno as u8; DEFAULT_PAGE_SIZE]),
+			})
+			.collect::<Vec<_>>();
+		pages.extend(self.extra_pages.lock().clone());
+		Ok(protocol::SqliteGetPagesResponse::SqliteGetPagesOk(
+			protocol::SqliteGetPagesOk {
+				pages,
+				head_txid: *self.head.lock(),
+			},
+		))
+	}
+
+	async fn commit(
+		&self,
+		_request: protocol::SqliteCommitRequest,
+	) -> anyhow::Result<protocol::SqliteCommitResponse> {
+		anyhow::bail!("scripted deferred read transport does not commit")
+	}
+
+	async fn commit_stage_begin(
+		&self,
+		_request: protocol::SqliteCommitStageBeginRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageBeginResponse> {
+		anyhow::bail!("scripted deferred read transport does not stage commits")
+	}
+
+	async fn commit_stage_segment(
+		&self,
+		_request: protocol::SqliteCommitStageSegmentRequest,
+	) -> anyhow::Result<protocol::SqliteCommitStageSegmentResponse> {
+		anyhow::bail!("scripted deferred read transport does not stage commits")
+	}
+
+	async fn commit_finalize(
+		&self,
+		_request: protocol::SqliteCommitFinalizeRequest,
+	) -> anyhow::Result<protocol::SqliteCommitFinalizeResponse> {
+		anyhow::bail!("scripted deferred read transport does not stage commits")
+	}
+}
+
+fn deferred_context(
+	transport: SqliteTransportHandle,
+) -> (tokio::runtime::Runtime, Arc<VfsContext>) {
+	let runtime = direct_runtime();
+	let ctx = VfsContext::new(
+		next_test_name("sqlite-deferred-context"),
+		None,
+		runtime.handle().clone(),
+		transport,
+		VfsConfig {
+			page_cache_mode: SqliteVfsPageCacheMode::All,
+			..deferred_test_config()
+		},
+		unsafe { std::mem::zeroed() },
+		InitialPages {
+			pages: Vec::new(),
+			head_txid: Some(0),
+			requested_page_count: 1,
+		},
+		None,
+	)
+	.expect("deferred test context should build");
+	(runtime, Arc::new(ctx))
+}
+
+#[test]
+fn deferred_commit_returns_before_engine_ack() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let pause = hooks.pause_next_commit();
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('before-ack');",
+	)
+	.unwrap();
+	pause.wait_until_reached();
+	assert!(db.commit_seq() > db._vfs.flushed_seq());
+	pause.resume();
+	wait_for_deferred_flush(&runtime, &db);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["before-ack"]);
+}
+
+#[test]
+fn read_only_transaction_does_not_advance_commit_seq() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let db = harness.open_db_on_engine(
+		&runtime,
+		engine.clone(),
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let before = db.commit_seq();
+	sqlite_exec(
+		db.as_ptr(),
+		"BEGIN; SELECT COUNT(*) FROM deferred_items; COMMIT;",
+	)
+	.unwrap();
+	assert_eq!(db.commit_seq(), before);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, [] as [&str; 0]);
+}
+
+#[test]
+fn wait_for_flush_snapshot_ignores_later_commits() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+
+	let first_pause = hooks.pause_next_commit();
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('first');",
+	)
+	.unwrap();
+	first_pause.wait_until_reached();
+	let captured = db.commit_seq();
+
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('later');",
+	)
+	.unwrap();
+	assert!(db.commit_seq() > captured);
+	let later_pause = hooks.pause_next_commit();
+	first_pause.resume();
+	later_pause.wait_until_reached();
+	runtime
+		.block_on(db._vfs.wait_for_flush(captured))
+		.expect("captured sequence should flush before the later batch");
+	assert!(db._vfs.flushed_seq() < db.commit_seq());
+	later_pause.resume();
+	wait_for_deferred_flush(&runtime, &db);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["first", "later"]);
+}
+
+#[test]
+fn wait_for_flush_rejects_future_sequence() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db_on_engine(
+		&runtime,
+		runtime.block_on(harness.open_engine()),
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	let requested = db.commit_seq() + 1;
+	assert!(matches!(
+		runtime.block_on(db._vfs.wait_for_flush(requested)),
+		Err(FlushError::InvalidSequence { .. })
+	));
+	close_deferred_database(&runtime, db);
+}
+
+#[test]
+fn wait_for_flush_zero_is_immediate() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db_on_engine(
+		&runtime,
+		runtime.block_on(harness.open_engine()),
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	runtime
+		.block_on(db._vfs.wait_for_flush(0))
+		.expect("sequence zero should already be durable");
+	close_deferred_database(&runtime, db);
+}
+
+#[test]
+fn transient_errors_retry_then_succeed() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	hooks.fail_next_commits(2, "transient test failure");
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO deferred_items(value) VALUES ('retried');",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	assert!(hooks.commit_requests().len() >= 3);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["retried"]);
+}
+
+#[test]
+fn commit_ok_with_wrong_head_breaks_database() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	hooks.return_next_commit_head(Some(u64::MAX));
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	let error = runtime
+		.block_on(db._vfs.wait_for_flush(db.commit_seq()))
+		.expect_err("wrong acknowledgement head should break the database");
+	assert!(matches!(error, FlushError::HeadDiverged { .. }));
+	assert!(direct_vfs_ctx(&db).state.read().dead);
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, [] as [&str; 0]);
+}
+
+#[test]
+fn commit_ok_without_head_is_accepted() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	hooks.return_next_commit_head(None);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, [] as [&str; 0]);
+}
+
+#[test]
+fn flusher_panic_breaks_database() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db_on_engine(
+		&runtime,
+		runtime.block_on(harness.open_engine()),
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	direct_vfs_ctx(&db)
+		.flush
+		.panic_requested
+		.store(true, Ordering::Release);
+	direct_vfs_ctx(&db).flush.wake.notify_one();
+	let failure = runtime.block_on(db._vfs.wait_for_failure());
+	assert!(matches!(
+		failure,
+		DatabaseFailure::Flush(FlushError::Aborted(_))
+	));
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+}
+
+#[test]
+fn awaited_mode_advances_sequences_on_ack() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db(&runtime);
+	let before = db.commit_seq();
+	sqlite_exec(db.as_ptr(), "CREATE TABLE awaited_sequence (id INTEGER);").unwrap();
+	assert!(db.commit_seq() > before);
+	assert_eq!(db.commit_seq(), db._vfs.flushed_seq());
+}
+
+#[test]
+fn commit_seq_continues_across_reopen() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let mut config = deferred_test_config();
+	config.assert_batch_atomic = false;
+	let db = harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, config.clone());
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let seq = db.commit_seq();
+	close_deferred_database(&runtime, db);
+	config.initial_commit_seq = seq;
+	let reopened = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, config);
+	assert_eq!(reopened.commit_seq(), seq);
+	close_deferred_database(&runtime, reopened);
+}
+
+#[test]
+fn lost_ack_resend_hits_fence_and_breaks_database() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let flushed_before = db._vfs.flushed_seq();
+	hooks.fail_next_commit_after_apply("lost acknowledgement");
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('durable-but-indeterminate');",
+	)
+	.unwrap();
+	assert!(matches!(
+		runtime.block_on(db._vfs.wait_for_flush(db.commit_seq())),
+		Err(FlushError::HeadDiverged { .. })
+	));
+	assert!(
+		runtime
+			.block_on(db._vfs.wait_for_flush(flushed_before))
+			.is_err(),
+		"a terminal flush error wins even for an earlier durable sequence"
+	);
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["durable-but-indeterminate"]);
+}
+
+#[test]
+fn wait_for_flush_rejects_after_break_even_for_flushed_sequence() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let db = harness.open_db_on_engine(
+		&runtime,
+		runtime.block_on(harness.open_engine()),
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	let flushed = db._vfs.flushed_seq();
+	direct_vfs_ctx(&db).break_database(FlushError::Aborted("test break".to_owned()));
+	assert!(runtime.block_on(db._vfs.wait_for_flush(flushed)).is_err());
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+}
+
+#[test]
+fn retry_deadline_breaks_database_and_rejects_waiters() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let mut config = deferred_test_config();
+	config.deferred_commit.retry_deadline = Duration::from_millis(40);
+	let db = harness.open_db_with_transport(&runtime, transport, &harness.actor_id, config);
+	wait_for_deferred_flush(&runtime, &db);
+	hooks.fail_next_commits(100, "persistent transient failure");
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	assert!(matches!(
+		runtime.block_on(db._vfs.wait_for_flush(db.commit_seq())),
+		Err(FlushError::RetryDeadlineExceeded { .. })
+	));
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+	assert_durable_table_exists(&runtime, &harness, engine, "deferred_items", false);
+}
+
+#[test]
+fn hung_commit_is_bounded_by_deadline() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let mut config = deferred_test_config();
+	config.deferred_commit.retry_deadline = Duration::from_millis(40);
+	let db = harness.open_db_with_transport(&runtime, transport, &harness.actor_id, config);
+	wait_for_deferred_flush(&runtime, &db);
+	hooks.hang_next_commit();
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	let started = Instant::now();
+	assert!(matches!(
+		runtime.block_on(db._vfs.wait_for_flush(db.commit_seq())),
+		Err(FlushError::RetryDeadlineExceeded { .. })
+	));
+	assert!(
+		started.elapsed() < Duration::from_secs(1),
+		"hung commit must be bounded by the configured retry deadline"
+	);
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+	assert_durable_table_exists(&runtime, &harness, engine, "deferred_items", false);
+}
+
+#[test]
+fn awaited_mode_ignores_deferred_byte_limit_with_small_pages() {
+	let runtime = direct_runtime();
+	let mut config = VfsConfig::default();
+	config.commit_mode = CommitMode::Awaited;
+	config.deferred_commit.max_unflushed_bytes = usize::MAX;
+	let mut page = empty_db_page();
+	page.truncate(512);
+	page[16..18].copy_from_slice(&512_u16.to_be_bytes());
+	let result = VfsContext::new(
+		"awaited-small-page".to_owned(),
+		None,
+		runtime.handle().clone(),
+		Arc::new(RecordingInitialPagesTransport::default()),
+		config,
+		unsafe { std::mem::zeroed() },
+		InitialPages {
+			pages: vec![(1, page)],
+			head_txid: Some(0),
+			requested_page_count: 1,
+		},
+		None,
+	);
+	assert!(result.is_ok());
+}
+
+#[test]
+fn commits_during_in_flight_batch_coalesce_into_one_request() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let baseline = hooks.commit_requests().len();
+
+	let pause = hooks.pause_next_commit();
+	for value in ["first", "second", "third"] {
+		sqlite_step_statement(
+			db.as_ptr(),
+			&format!("INSERT INTO deferred_items(value) VALUES ('{value}');"),
+		)
+		.unwrap();
+		if value == "first" {
+			pause.wait_until_reached();
+		}
+	}
+	pause.resume();
+	wait_for_deferred_flush(&runtime, &db);
+	let requests = hooks.commit_requests();
+	assert_eq!(
+		requests.len() - baseline,
+		2,
+		"the two commits staged behind the in-flight request should share one batch",
+	);
+	assert_eq!(
+		requests[baseline + 1].expected_head_txid,
+		requests[baseline]
+			.expected_head_txid
+			.map(|head| head.saturating_add(1)),
+	);
+	drop(requests);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["first", "second", "third"]);
+}
+
+#[test]
+fn transient_error_resend_is_byte_identical_and_applies_once() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let (_, head_before) = runtime
+		.block_on(engine.read_branch_head(&harness.actor_id))
+		.expect("durability oracle should read the initial branch head");
+	let baseline = hooks.commit_requests().len();
+	hooks.fail_next_commit("retry this exact request");
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('retried');",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let requests = hooks.commit_requests();
+	let first = &requests[baseline];
+	let retry = &requests[baseline + 1];
+	assert_eq!(first.expected_head_txid, retry.expected_head_txid);
+	assert_eq!(first.db_size_pages, retry.db_size_pages);
+	assert_eq!(first.dirty_pages.len(), retry.dirty_pages.len());
+	for (first, retry) in first.dirty_pages.iter().zip(&retry.dirty_pages) {
+		assert_eq!(first.pgno, retry.pgno);
+		assert_eq!(first.bytes, retry.bytes);
+	}
+	drop(requests);
+	let (_, head_after) = runtime
+		.block_on(engine.read_branch_head(&harness.actor_id))
+		.expect("durability oracle should read the flushed branch head");
+	assert_eq!(head_after, head_before + 1);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["retried"]);
+}
+
+#[test]
+fn no_requests_after_close_returns() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let mut config = deferred_test_config();
+	config.deferred_commit.retry_deadline = Duration::from_secs(10);
+	let (vfs, db) = open_worker_handle_with_transport(&runtime, &harness, transport, config, None);
+	runtime
+		.block_on(db.execute(
+			"CREATE TABLE close_abort (id INTEGER PRIMARY KEY, value TEXT);".to_owned(),
+			None,
+		))
+		.unwrap();
+	runtime
+		.block_on(db.wait_for_flush(db.commit_seq()))
+		.unwrap();
+	let pause = hooks.pause_next_commit();
+	runtime
+		.block_on(db.execute(
+			"INSERT INTO close_abort(value) VALUES ('batch-a');".to_owned(),
+			None,
+		))
+		.unwrap();
+	pause.wait_until_reached();
+	runtime
+		.block_on(db.execute(
+			"INSERT INTO close_abort(value) VALUES ('batch-b');".to_owned(),
+			None,
+		))
+		.unwrap();
+	let error = runtime
+		.block_on(
+			db.close_with_timeouts_for_test(Duration::from_secs(1), Duration::from_millis(50)),
+		)
+		.expect_err("the close drain must hit its deadline while batch A is paused");
+	assert!(matches!(
+		error.downcast_ref::<FlushError>(),
+		Some(FlushError::Aborted(message)) if message == "close deadline"
+	));
+	let requests_after_close = hooks.commit_requests().len();
+	pause.resume();
+	assert_eq!(hooks.commit_requests().len(), requests_after_close);
+	assert!(matches!(
+		vfs.flush_error(),
+		Some(FlushError::Aborted(message)) if message == "close deadline"
+	));
+}
+
+#[test]
+fn worker_timeout_aborts_flusher_before_paused_io_resumes() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let setup = harness.open_db_on_engine(
+		&runtime,
+		engine.clone(),
+		&harness.actor_id,
+		VfsConfig::default(),
+	);
+	sqlite_exec(
+		setup.as_ptr(),
+		"CREATE TABLE worker_timeout (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO worker_timeout VALUES (1, 'durable');",
+	)
+	.unwrap();
+	drop(setup);
+
+	let transport = Arc::new(PausableDirectTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let (vfs, db) = open_worker_handle_with_transport(
+		&runtime,
+		&harness,
+		transport.clone(),
+		deferred_test_config(),
+		None,
+	);
+	vfs.ctx().state.write().invalidate_page_cache();
+	let pause = transport.pause_next_read();
+	let query = runtime.spawn({
+		let db = db.clone();
+		async move {
+			db.query(
+				"SELECT value FROM worker_timeout WHERE id = 1;".to_owned(),
+				None,
+			)
+			.await
+		}
+	});
+	pause.wait_until_reached();
+	let request_count = hooks.commit_requests().len();
+	let error = runtime
+		.block_on(
+			db.close_with_timeouts_for_test(Duration::from_millis(50), Duration::from_secs(1)),
+		)
+		.expect_err("a worker paused in VFS I/O must hit the worker close timeout");
+	assert!(
+		error
+			.downcast_ref::<crate::worker::SqliteWorkerCloseTimeoutError>()
+			.is_some()
+	);
+	assert!(matches!(
+		vfs.flush_error(),
+		Some(FlushError::Aborted(message)) if message == "worker close timeout"
+	));
+	pause.resume();
+	let _ = runtime.block_on(query);
+	assert_eq!(hooks.commit_requests().len(), request_count);
+}
+
+#[test]
+fn close_drains_pending_flushes() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	let pause = hooks.pause_next_commit();
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO deferred_items VALUES (1, 'close');",
+	)
+	.unwrap();
+	pause.wait_until_reached();
+	db._vfs.begin_close();
+	let drain = runtime.spawn({
+		let vfs = db._vfs.clone();
+		async move { vfs.drain_and_shutdown_flusher(Duration::from_secs(1)).await }
+	});
+	assert!(!drain.is_finished());
+	pause.resume();
+	runtime
+		.block_on(drain)
+		.expect("drain task should complete")
+		.expect("close should drain its pending batch");
+	drop(db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["close"]);
+}
+
+#[test]
+fn close_returns_flush_error_when_broken() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	hooks.return_next_commit_head(Some(u64::MAX));
+	sqlite_exec(db.as_ptr(), "CREATE TABLE close_broken (id INTEGER);").unwrap();
+	let expected = runtime
+		.block_on(db._vfs.wait_for_flush(db.commit_seq()))
+		.expect_err("wrong head should break the flusher");
+	db._vfs.begin_close();
+	let close_error = runtime
+		.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)))
+		.expect_err("close must preserve the terminal flush error");
+	assert_eq!(close_error.to_string(), expected.to_string());
+	drop(db);
+	assert_durable_table_exists(&runtime, &harness, engine, "close_broken", true);
+}
+
+#[test]
+fn drop_without_close_stages_only_and_is_short() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	wait_for_deferred_flush(&runtime, &db);
+	let pause = hooks.pause_next_commit();
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT); INSERT INTO deferred_items VALUES (1, 'drop');",
+	)
+	.unwrap();
+	pause.wait_until_reached();
+	let vfs = db._vfs.clone();
+	let started = Instant::now();
+	drop(db);
+	assert!(started.elapsed() < Duration::from_secs(1));
+	pause.resume();
+	runtime
+		.block_on(vfs.wait_for_flush(vfs.commit_seq()))
+		.expect("the already-staged batch should remain flushable after connection drop");
+	vfs.begin_close();
+	runtime
+		.block_on(vfs.drain_and_shutdown_flusher(Duration::from_secs(1)))
+		.unwrap();
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["drop"]);
+}
+
+#[test]
+fn awaited_mode_is_unchanged() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		VfsConfig::default(),
+	);
+	let baseline = hooks.commit_requests().len();
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	assert_eq!(db.commit_seq(), db._vfs.flushed_seq());
+	let after_create = hooks.commit_requests().len();
+	assert_eq!(after_create, baseline + 1);
+	sqlite_exec(
+		db.as_ptr(),
+		"INSERT INTO deferred_items VALUES (1, 'awaited');",
+	)
+	.unwrap();
+	assert_eq!(db.commit_seq(), db._vfs.flushed_seq());
+	assert_eq!(hooks.commit_requests().len(), after_create + 1);
+	drop(db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["awaited"]);
+}
+
+#[test]
+fn execute_result_reports_readonly_and_commit_seq() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let config = deferred_test_config();
+	let initial_pages = runtime
+		.block_on(fetch_initial_pages_for_registration(
+			transport.clone(),
+			&harness.actor_id,
+			0,
+			&config,
+		))
+		.unwrap();
+	let vfs = Arc::new(
+		SqliteVfs::register_with_transport_and_initial_pages(
+			&next_test_name("sqlite-deferred-worker-vfs"),
+			transport,
+			harness.actor_id.clone(),
+			runtime.handle().clone(),
+			config,
+			initial_pages,
+			None,
+		)
+		.unwrap(),
+	);
+	let db = crate::database::NativeDatabaseHandle::new(vfs, harness.actor_id.clone()).unwrap();
+	let ddl = runtime
+		.block_on(db.execute(
+			"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);".to_owned(),
+			None,
+		))
+		.unwrap();
+	assert_eq!(ddl.readonly, Some(false));
+	assert_eq!(ddl.commit_seq, Some(db.commit_seq()));
+	let read = runtime
+		.block_on(db.execute("SELECT * FROM deferred_items".to_owned(), None))
+		.unwrap();
+	assert_eq!(read.readonly, Some(true));
+	assert_eq!(read.commit_seq, None);
+	runtime.block_on(db.close()).unwrap();
+	assert_deferred_rows_durable(&runtime, &harness, engine, [] as [&str; 0]);
+}
+
+#[test]
+fn backpressure_blocks_commit_until_flush_progress() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let mut config = deferred_test_config();
+	config.deferred_commit.max_unflushed_bytes = 1;
+	let db = harness.open_db_with_transport(&runtime, transport, &harness.actor_id, config);
+	let pause = hooks.pause_next_commit();
+	let writer = thread::spawn(move || {
+		sqlite_exec(db.as_ptr(), "CREATE TABLE backpressure (id INTEGER);").unwrap();
+		db
+	});
+	pause.wait_until_reached();
+	assert!(
+		!writer.is_finished(),
+		"commit must wait while overlay exceeds its byte bound"
+	);
+	pause.resume();
+	let db = writer.join().unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	close_deferred_database(&runtime, db);
+}
+
+#[test]
+fn backpressure_returns_when_closing() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let mut config = deferred_test_config();
+	config.deferred_commit.max_unflushed_bytes = 1;
+	let db = harness.open_db_with_transport(&runtime, transport, &harness.actor_id, config);
+	let vfs = db._vfs.clone();
+	let pause = hooks.pause_next_commit();
+	let (writer_done_tx, writer_done_rx) = std::sync::mpsc::channel();
+	let writer = thread::spawn(move || {
+		sqlite_exec(
+			db.as_ptr(),
+			"CREATE TABLE closing_backpressure (id INTEGER);",
+		)
+		.unwrap();
+		writer_done_tx.send(()).unwrap();
+		db
+	});
+	pause.wait_until_reached();
+	assert!(!writer.is_finished());
+	vfs.begin_close();
+	writer_done_rx
+		.recv_timeout(Duration::from_secs(1))
+		.expect("closing must release the commit callback without waiting for the engine");
+	let db = writer.join().unwrap();
+	pause.resume();
+	runtime
+		.block_on(vfs.drain_and_shutdown_flusher(Duration::from_secs(1)))
+		.unwrap();
+	drop(db);
+}
+
+#[test]
+fn read_your_writes_while_batch_in_flight() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let pause = hooks.pause_next_commit();
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('local');",
+	)
+	.unwrap();
+	pause.wait_until_reached();
+	let (pgno, local_bytes) = {
+		let state = direct_vfs_ctx(&db).state.read();
+		let (pgno, page) = state
+			.overlay
+			.pages
+			.iter()
+			.next()
+			.expect("the in-flight write should remain pinned in the overlay");
+		(*pgno, page.bytes.clone())
+	};
+	direct_vfs_ctx(&db).state.write().invalidate_page_cache();
+	assert_eq!(
+		direct_vfs_ctx(&db).resolve_pages(&[pgno], false).unwrap()[&pgno],
+		Some(local_bytes),
+		"overlay bytes must win even after every evictable cache is invalidated",
+	);
+	assert_eq!(
+		sqlite_query_i64(db.as_ptr(), "SELECT COUNT(*) FROM deferred_items;").unwrap(),
+		1,
+	);
+	pause.resume();
+	wait_for_deferred_flush(&runtime, &db);
+	close_deferred_database(&runtime, db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["local"]);
+}
+
+#[test]
+fn overflow_expanded_read_does_not_overwrite_overlay() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	transport
+		.extra_pages
+		.lock()
+		.push(protocol::SqliteFetchedPage {
+			pgno: 2,
+			bytes: Some(vec![0xaa; DEFAULT_PAGE_SIZE]),
+		});
+	let (_runtime, ctx) = deferred_context(transport);
+	let local = vec![0xbb; DEFAULT_PAGE_SIZE];
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 3;
+		state.overlay.db_size_pages = 3;
+		state.overlay.commit_seq = 1;
+		state.overlay.bytes = local.len();
+		state.overlay.pages.insert(
+			2,
+			OverlayPage {
+				bytes: local.clone(),
+				seq: 1,
+			},
+		);
+	}
+	ctx.resolve_pages(&[3], false).unwrap();
+	assert_eq!(ctx.resolve_pages(&[2], false).unwrap()[&2], Some(local));
+	assert!(ctx.state.read().cached_page(&ctx.config, 2).is_none());
+}
+
+#[test]
+fn read_between_staging_and_in_flight_omits_head_fence() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport.clone());
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 3;
+		state.overlay.db_size_pages = 3;
+		state.overlay.commit_seq = 1;
+	}
+	ctx.resolve_pages(&[2], false).unwrap();
+	assert_eq!(transport.requests.lock()[0].expected_head_txid, None);
+	assert!(ctx.state.read().overlay.in_flight.is_none());
+}
+
+#[test]
+fn stale_unfenced_read_does_not_regress_durable_head() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(PausableDirectTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT); CREATE TABLE read_pad (payload BLOB); INSERT INTO read_pad VALUES (zeroblob(65536));",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let pause_commit = hooks.pause_next_commit();
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('first');",
+	)
+	.unwrap();
+	pause_commit.wait_until_reached();
+	let (read_pgno, first_seq) = {
+		let mut state = direct_vfs_ctx(&db).state.write();
+		let pgno = (1..=state.db_size_pages)
+			.find(|pgno| !state.overlay.pages.contains_key(pgno))
+			.expect("padding should leave a durable page outside the overlay");
+		state.invalidate_page_cache();
+		(pgno, state.overlay.commit_seq)
+	};
+	let pause_read = transport.pause_next_read();
+	let reader = thread::spawn({
+		let vfs = db._vfs.clone();
+		move || vfs.ctx().resolve_pages(&[read_pgno], false)
+	});
+	pause_read.wait_until_reached();
+	pause_commit.resume_and_wait_until_applied();
+	runtime
+		.block_on(db._vfs.wait_for_flush(first_seq))
+		.expect("the first commit acknowledgement should advance the durable head");
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items(value) VALUES ('second');",
+	)
+	.unwrap();
+	pause_read.resume();
+	reader.join().unwrap().unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let requests = hooks.commit_requests();
+	let second = requests.last().expect("second commit should be captured");
+	assert_eq!(
+		second.expected_head_txid,
+		requests[requests.len() - 2]
+			.expected_head_txid
+			.map(|head| head + 1),
+		"a stale read response must not regress the next commit's expected head",
+	);
+	drop(requests);
+	close_deferred_database(&runtime, db);
+}
+
+#[test]
+fn read_window_accepts_response_served_before_ack_processed_after() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(1));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 3;
+		state.overlay.db_size_pages = 3;
+		state.overlay.commit_seq = 1;
+		state.overlay.in_flight = Some(InFlightBatch {
+			seq: 1,
+			expected_head_txid: 0,
+			db_size_pages: 3,
+			pages: Arc::new(Vec::new()),
+			started_at: tokio::time::Instant::now(),
+			attempts: 1,
+		});
+	}
+	assert!(ctx.resolve_pages(&[2], false).is_ok());
+	assert!(!ctx.state.read().dead);
+}
+
+#[test]
+fn read_window_rejects_foreign_head() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(1));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 3;
+		state.overlay.db_size_pages = 3;
+		state.overlay.commit_seq = 1;
+	}
+	assert!(matches!(
+		ctx.resolve_pages(&[2], false),
+		Err(GetPagesError::FenceMismatch(_))
+	));
+	assert!(ctx.state.read().dead);
+	assert!(matches!(
+		ctx.flush_error(),
+		Some(FlushError::HeadDiverged {
+			expected: 0,
+			actual: Some(1),
+		})
+	));
+}
+
+#[test]
+fn prefetch_and_has_readable_page_skip_overlay_pages() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport.clone());
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 8;
+		state.overlay.db_size_pages = 8;
+		state.overlay.commit_seq = 1;
+		state.overlay.pages.insert(
+			5,
+			OverlayPage {
+				bytes: vec![5; DEFAULT_PAGE_SIZE],
+				seq: 1,
+			},
+		);
+		state.overlay.bytes = DEFAULT_PAGE_SIZE;
+		for pgno in [1, 2, 3] {
+			state.predictor.record(PageClass::Btree, pgno);
+		}
+		assert!(state.has_readable_page(&ctx.config, 5));
+	}
+	ctx.resolve_pages(&[4], true).unwrap();
+	let requests = transport.requests.lock();
+	let request = &requests[0];
+	assert!(
+		!request.pgnos.contains(&5),
+		"the predicted overlay page must not be fetched",
+	);
+	assert!(
+		request.pgnos.contains(&6),
+		"another stride-predicted page proves prefetch still ran",
+	);
+}
+
+#[test]
+fn empty_page_synthesis_disabled_after_local_commit() {
+	let (_runtime, ctx) = deferred_context(Arc::new(MissingDbTransport));
+	{
+		let mut state = ctx.state.write();
+		state.overlay.commit_seq = 1;
+		state.page_cache.invalidate(&1);
+		state.committed_page_cache.invalidate(&1);
+	}
+	assert!(ctx.resolve_pages(&[1], false).is_err());
+}
+
+#[test]
+fn oversized_transaction_is_rejected_before_merge() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	let page_limit = depot_client_types::MAX_COMMIT_DIRTY_PAGES;
+	{
+		let mut state = ctx.state.write();
+		for pgno in 1..=(page_limit as u32 + 1) {
+			state.write_buffer.dirty.insert(pgno, Vec::new());
+		}
+	}
+	assert!(ctx.stage_deferred_local_commit(false).is_err());
+	let state = ctx.state.read();
+	assert_eq!(state.overlay.commit_seq, 0);
+	assert!(state.overlay.pages.is_empty());
+	assert_eq!(state.write_buffer.dirty.len(), page_limit + 1);
+	drop(state);
+	ctx.state.write().write_buffer.dirty.clear();
+	ctx.state.write().write_buffer.dirty.insert(1, Vec::new());
+	assert!(ctx.stage_deferred_local_commit(false).is_ok());
+}
+
+#[test]
+fn closing_drains_page_cap_before_merging_another_commit() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		for pgno in 1..=depot_client_types::MAX_COMMIT_DIRTY_PAGES as u32 {
+			state.overlay.pages.insert(
+				pgno,
+				OverlayPage {
+					bytes: Vec::new(),
+					seq: 1,
+				},
+			);
+		}
+		state.overlay.commit_seq = 1;
+		state.write_buffer.dirty.insert(
+			depot_client_types::MAX_COMMIT_DIRTY_PAGES as u32 + 1,
+			Vec::new(),
+		);
+	}
+	ctx.begin_close();
+	let stager = thread::spawn({
+		let ctx = ctx.clone();
+		move || ctx.stage_deferred_local_commit(false)
+	});
+	assert!(
+		!stager.is_finished(),
+		"the hard page cap must drain even during close"
+	);
+	ctx.state.write().overlay.pages.remove(&1);
+	ctx.flush.progress_changed.send_modify(|_| {});
+	assert!(stager.join().unwrap().is_ok());
+	assert_eq!(
+		ctx.state.read().overlay.pages.len(),
+		depot_client_types::MAX_COMMIT_DIRTY_PAGES,
+	);
+}
+
+#[test]
+fn oversized_sql_transaction_rolls_back_and_connection_remains_usable() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let mut config = deferred_test_config();
+	config.max_commit_dirty_pages = 8;
+	let (vfs, db) = open_worker_handle_with_transport(&runtime, &harness, transport, config, None);
+	runtime
+		.block_on(db.exec(
+			"CREATE TABLE oversized_payload (id INTEGER PRIMARY KEY, payload BLOB);".to_owned(),
+		))
+		.expect("create table should succeed");
+	runtime
+		.block_on(db.wait_for_flush(db.commit_seq()))
+		.unwrap();
+	let ctx = vfs.ctx();
+	let atomic_before = ctx.commit_atomic_attempt_count.load(Ordering::Relaxed);
+	let rollback_before = ctx.rollback_atomic_count.load(Ordering::Relaxed);
+	let aux_write_before = ctx.aux_write_count.load(Ordering::Relaxed);
+	let sync_before = ctx.main_sync_count.load(Ordering::Relaxed);
+
+	let mut sql = String::from("BEGIN IMMEDIATE;");
+	for id in 1..=24 {
+		sql.push_str(&format!(
+			"INSERT INTO oversized_payload (id, payload) VALUES ({id}, randomblob(4096));",
+		));
+	}
+	sql.push_str("COMMIT;");
+	let error = runtime
+		.block_on(db.exec(sql))
+		.expect_err("the real batch-atomic commit must reject the configured page cap");
+	assert!(
+		error.to_string().contains("disk I/O error"),
+		"unexpected oversized commit error: {error:#}",
+	);
+	assert!(
+		ctx.commit_atomic_attempt_count.load(Ordering::Relaxed) > atomic_before,
+		"SQLite must reach COMMIT_ATOMIC_WRITE",
+	);
+	assert!(
+		ctx.rollback_atomic_count.load(Ordering::Relaxed) > rollback_before,
+		"SQLite must roll back the failed atomic write",
+	);
+	assert!(
+		ctx.aux_write_count.load(Ordering::Relaxed) > aux_write_before,
+		"SQLite must write its rollback journal",
+	);
+	assert!(
+		ctx.main_sync_count.load(Ordering::Relaxed) > sync_before,
+		"the deferred transient error must surface through the main-file xSync path",
+	);
+
+	runtime
+		.block_on(db.execute(
+			"INSERT INTO oversized_payload (id, payload) VALUES (100, zeroblob(32));".to_owned(),
+			None,
+		))
+		.expect("the connection must accept a later statement after rollback");
+	runtime
+		.block_on(db.wait_for_flush(db.commit_seq()))
+		.unwrap();
+	let rows = runtime
+		.block_on(db.query(
+			"SELECT id FROM oversized_payload ORDER BY id;".to_owned(),
+			None,
+		))
+		.expect("the recovery row should be readable");
+	assert_eq!(rows.rows, vec![vec![ColumnValue::Integer(100)]]);
+	runtime.block_on(db.close()).expect("database should close");
+	let mut reopen_config = VfsConfig::default();
+	reopen_config.assert_batch_atomic = false;
+	let reopened = harness.open_db_on_engine(&runtime, engine, &harness.actor_id, reopen_config);
+	assert_eq!(
+		sqlite_query_i64(reopened.as_ptr(), "SELECT id FROM oversized_payload;")
+			.expect("the recovery row should be durable"),
+		100,
+	);
+}
+
+#[test]
+fn native_close_waits_for_real_sql_drain_before_merge() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine));
+	let hooks = transport.direct_hooks();
+	let mut config = deferred_test_config();
+	config.max_commit_dirty_pages = 2;
+	let (vfs, db) = open_worker_handle_with_transport(&runtime, &harness, transport, config, None);
+	runtime
+		.block_on(
+			db.exec("CREATE TABLE close_page_cap (id INTEGER PRIMARY KEY, value TEXT);".to_owned()),
+		)
+		.expect("create table should succeed");
+	runtime
+		.block_on(db.wait_for_flush(db.commit_seq()))
+		.unwrap();
+	let baseline_seq = db.commit_seq();
+	let pause = hooks.pause_next_commit();
+	let execute = runtime.spawn({
+		let db = db.clone();
+		async move {
+			db.exec(
+				"BEGIN; INSERT INTO close_page_cap VALUES (1, 'first'); PRAGMA user_version = 1; COMMIT; \
+				 BEGIN; INSERT INTO close_page_cap VALUES (2, 'second'); PRAGMA user_version = 2; COMMIT;"
+					.to_owned(),
+			)
+			.await
+		}
+	});
+	pause.wait_until_reached();
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(1), async {
+				loop {
+					let blocked_in_second_commit = {
+						let state = vfs.ctx().state.read();
+						state.overlay.commit_seq == baseline_seq + 1
+							&& state.write_buffer.in_atomic_write
+							&& !state.write_buffer.dirty.is_empty()
+					};
+					if blocked_in_second_commit {
+						break;
+					}
+					tokio::task::yield_now().await;
+				}
+			})
+			.await
+		})
+		.expect("real multi-statement SQL should block in drain-before-merge");
+	assert!(!execute.is_finished());
+
+	let close = runtime.spawn({
+		let db = db.clone();
+		async move { db.close().await }
+	});
+	runtime.block_on(wait_worker_closing(&db));
+	assert!(
+		!close.is_finished(),
+		"close must wait for the active SQL callback blocked on the page cap",
+	);
+	pause.resume();
+	runtime
+		.block_on(execute)
+		.expect("multi-statement worker task should join")
+		.expect("multi-statement SQL should finish after flush progress");
+	runtime
+		.block_on(close)
+		.expect("close task should join")
+		.expect("close should drain the staged second commit");
+	assert_eq!(vfs.commit_seq(), vfs.flushed_seq());
+}
+
+#[test]
+fn foreign_writer_at_expected_plus_one_breaks_database() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let setup = harness.open_db_on_engine(
+		&runtime,
+		engine.clone(),
+		&harness.actor_id,
+		VfsConfig::default(),
+	);
+	sqlite_exec(
+		setup.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	drop(setup);
+	// Both handles must open at the same durable head. The normal open-time
+	// batch-atomic probe writes to the database, which would make the first
+	// handle stale before this test's deliberate foreign write.
+	let mut deferred_config = deferred_test_config();
+	deferred_config.assert_batch_atomic = false;
+	let deferred =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, deferred_config);
+	let mut foreign_config = VfsConfig::default();
+	foreign_config.assert_batch_atomic = false;
+	let foreign =
+		harness.open_db_on_engine(&runtime, engine.clone(), &harness.actor_id, foreign_config);
+	sqlite_step_statement(
+		foreign.as_ptr(),
+		"INSERT INTO deferred_items VALUES (1, 'foreign');",
+	)
+	.unwrap();
+	drop(foreign);
+	sqlite_step_statement(
+		deferred.as_ptr(),
+		"INSERT INTO deferred_items VALUES (2, 'local');",
+	)
+	.unwrap();
+	assert!(matches!(
+		runtime.block_on(deferred._vfs.wait_for_flush(deferred.commit_seq())),
+		Err(FlushError::HeadDiverged { .. })
+	));
+	deferred._vfs.begin_close();
+	let _ = runtime.block_on(
+		deferred
+			._vfs
+			.drain_and_shutdown_flusher(Duration::from_secs(1)),
+	);
+	drop(deferred);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["foreign"]);
+}
+
+#[test]
+fn late_ack_after_break_does_not_publish_progress() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let (_, durable_head_before) = runtime
+		.block_on(engine.read_branch_head(&harness.actor_id))
+		.unwrap();
+	let pause = hooks.pause_next_commit();
+	sqlite_step_statement(
+		db.as_ptr(),
+		"INSERT INTO deferred_items VALUES (1, 'late');",
+	)
+	.unwrap();
+	pause.wait_until_reached();
+	let flushed_before = db._vfs.flushed_seq();
+	let break_pause = direct_vfs_ctx(&db).pause_next_break_after_fatal_marker();
+	let breaker = thread::spawn({
+		let vfs = db._vfs.clone();
+		move || {
+			vfs.ctx()
+				.break_database(FlushError::Aborted("test break".to_owned()));
+		}
+	});
+	break_pause.wait_until_reached();
+	assert!(direct_vfs_ctx(&db).state.read().dead);
+	assert!(
+		db._vfs.flush_error().is_none(),
+		"the test must hold the break between the fatal marker and progress publication",
+	);
+	pause.resume_and_wait_until_applied();
+	runtime
+		.block_on(async {
+			tokio::time::timeout(Duration::from_secs(1), async {
+				loop {
+					if direct_vfs_ctx(&db)
+						.flush
+						.task
+						.lock()
+						.as_ref()
+						.is_some_and(|task| task.is_finished())
+					{
+						break;
+					}
+					tokio::task::yield_now().await;
+				}
+			})
+			.await
+		})
+		.expect("late acknowledgement should observe the fatal marker and stop");
+	assert_eq!(db._vfs.flushed_seq(), flushed_before);
+	assert!(
+		db._vfs.flush_error().is_none(),
+		"the acknowledgement must not synthesize a competing terminal error",
+	);
+	break_pause.resume();
+	breaker.join().expect("database break should finish");
+	let (_, durable_head_after) = runtime
+		.block_on(engine.read_branch_head(&harness.actor_id))
+		.unwrap();
+	assert!(durable_head_after > durable_head_before);
+	assert_eq!(db._vfs.flushed_seq(), flushed_before);
+	assert!(
+		runtime
+			.block_on(db._vfs.wait_for_flush(flushed_before))
+			.is_err()
+	);
+	db._vfs.begin_close();
+	let _ = runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+	drop(db);
+	assert_deferred_rows_durable(&runtime, &harness, engine, ["late"]);
+}
+
+#[test]
+fn truncate_with_dirty_pages_defers_staging_to_commit_boundary() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 4;
+		state.committed_db_size_pages = 4;
+		state.overlay.db_size_pages = 4;
+		state
+			.write_buffer
+			.dirty
+			.insert(1, vec![1; DEFAULT_PAGE_SIZE]);
+	}
+	assert!(!ctx.truncate_main_file((2 * DEFAULT_PAGE_SIZE) as i64));
+	assert_eq!(ctx.commit_seq(), 0);
+	ctx.stage_deferred_local_commit(false).unwrap();
+	let state = ctx.state.read();
+	assert_eq!(state.overlay.commit_seq, 1);
+	assert_eq!(state.overlay.db_size_pages, 2);
+	assert!(state.overlay.pages.contains_key(&1));
+	drop(state);
+}
+
+#[test]
+fn drop_with_open_transaction_stages_nothing() {
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let hooks = transport.direct_hooks();
+	let db = harness.open_db_with_transport(
+		&runtime,
+		transport,
+		&harness.actor_id,
+		deferred_test_config(),
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap();
+	wait_for_deferred_flush(&runtime, &db);
+	let baseline_seq = db.commit_seq();
+	let baseline_requests = hooks.commit_requests().len();
+	sqlite_exec(
+		db.as_ptr(),
+		"BEGIN; INSERT INTO deferred_items VALUES (1, 'rolled-back');",
+	)
+	.unwrap();
+	let vfs = db._vfs.clone();
+	drop(db);
+	assert_eq!(vfs.commit_seq(), baseline_seq);
+	assert_eq!(hooks.commit_requests().len(), baseline_requests);
+	vfs.begin_close();
+	runtime
+		.block_on(vfs.drain_and_shutdown_flusher(Duration::from_secs(1)))
+		.unwrap();
+	assert_deferred_rows_durable(&runtime, &harness, engine, [] as [&str; 0]);
+}
+
+#[test]
+fn size_only_truncate_is_a_local_commit() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 4;
+		state.committed_db_size_pages = 4;
+		state.overlay.db_size_pages = 4;
+	}
+	assert!(ctx.truncate_main_file((2 * DEFAULT_PAGE_SIZE) as i64));
+	ctx.flush_dirty_pages().unwrap();
+	let state = ctx.state.read();
+	assert_eq!(state.overlay.commit_seq, 1);
+	assert_eq!(state.overlay.db_size_pages, 2);
+	assert!(state.overlay.pages.is_empty());
+	drop(state);
+}
+
+#[test]
+fn shrink_evicts_overlay_pages_above_size() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 5;
+		state.committed_db_size_pages = 5;
+		state.overlay.db_size_pages = 5;
+		for pgno in [4, 5] {
+			state.overlay.pages.insert(
+				pgno,
+				OverlayPage {
+					bytes: vec![pgno as u8; DEFAULT_PAGE_SIZE],
+					seq: 1,
+				},
+			);
+		}
+		state.overlay.bytes = 2 * DEFAULT_PAGE_SIZE;
+		state.overlay.commit_seq = 1;
+	}
+	assert!(ctx.truncate_main_file((3 * DEFAULT_PAGE_SIZE) as i64));
+	ctx.stage_deferred_local_commit(false).unwrap();
+	let state = ctx.state.read();
+	assert!(state.overlay.pages.keys().all(|pgno| *pgno <= 3));
+	assert_eq!(state.overlay.bytes, 0);
+	drop(state);
+}
+
+#[test]
+fn shrink_while_expansion_in_flight() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 5;
+		state.committed_db_size_pages = 5;
+		state.overlay.db_size_pages = 5;
+		state.overlay.commit_seq = 1;
+		state.overlay.pages.insert(
+			5,
+			OverlayPage {
+				bytes: vec![5; DEFAULT_PAGE_SIZE],
+				seq: 1,
+			},
+		);
+		state.overlay.bytes = DEFAULT_PAGE_SIZE;
+		state.overlay.in_flight = Some(InFlightBatch {
+			seq: 1,
+			expected_head_txid: 0,
+			db_size_pages: 5,
+			pages: Arc::new(vec![protocol::SqliteDirtyPage {
+				pgno: 5,
+				bytes: vec![5; DEFAULT_PAGE_SIZE],
+			}]),
+			started_at: tokio::time::Instant::now(),
+			attempts: 1,
+		});
+	}
+	assert!(ctx.truncate_main_file((3 * DEFAULT_PAGE_SIZE) as i64));
+	ctx.stage_deferred_local_commit(false).unwrap();
+	let state = ctx.state.read();
+	assert_eq!(state.overlay.db_size_pages, 3);
+	assert!(!state.overlay.pages.contains_key(&5));
+	assert_eq!(state.overlay.in_flight.as_ref().unwrap().db_size_pages, 5);
+	drop(state);
+}
+
+#[test]
+fn xsync_during_atomic_write_does_not_stage() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	{
+		let mut state = ctx.state.write();
+		state.write_buffer.in_atomic_write = true;
+		state
+			.write_buffer
+			.dirty
+			.insert(1, vec![1; DEFAULT_PAGE_SIZE]);
+	}
+	ctx.flush_dirty_pages().unwrap();
+	let state = ctx.state.read();
+	assert_eq!(state.overlay.commit_seq, 0);
+	assert!(state.write_buffer.in_atomic_write);
+	assert!(state.write_buffer.dirty.contains_key(&1));
+	drop(state);
+}
+
+#[test]
+fn rollback_atomic_write_leaves_overlay() {
+	let transport = Arc::new(ScriptedDeferredReadTransport::with_head(0));
+	let (_runtime, ctx) = deferred_context(transport);
+	let committed = vec![1; DEFAULT_PAGE_SIZE];
+	{
+		let mut state = ctx.state.write();
+		state.db_size_pages = 2;
+		state.overlay.db_size_pages = 2;
+		state.overlay.commit_seq = 1;
+		state.overlay.pages.insert(
+			1,
+			OverlayPage {
+				bytes: committed.clone(),
+				seq: 1,
+			},
+		);
+		state.overlay.bytes = DEFAULT_PAGE_SIZE;
+		state.write_buffer.in_atomic_write = true;
+		state.write_buffer.saved_db_size = 2;
+		state
+			.write_buffer
+			.dirty
+			.insert(1, vec![2; DEFAULT_PAGE_SIZE]);
+	}
+	ctx.rollback_atomic_write();
+	let state = ctx.state.read();
+	assert_eq!(state.overlay.commit_seq, 1);
+	assert_eq!(state.overlay.pages[&1].bytes, committed);
+	assert_eq!(state.overlay.bytes, DEFAULT_PAGE_SIZE);
+	drop(state);
+}
+
+#[test]
+fn deferred_random() {
+	let seed = std::env::var("DEFERRED_RANDOM_SEED")
+		.ok()
+		.map(|value| {
+			value
+				.parse::<u64>()
+				.unwrap_or_else(|error| panic!("invalid DEFERRED_RANDOM_SEED `{value}`: {error}"))
+		})
+		.unwrap_or(0x5eed_c0de_u64);
+	let runtime = direct_runtime();
+	let harness = DirectEngineHarness::new();
+	let engine = runtime.block_on(harness.open_engine());
+	let mut transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+	let mut hooks = transport.direct_hooks();
+	let mut initial_config = deferred_test_config();
+	initial_config.assert_batch_atomic = false;
+	let mut db = harness.open_db_with_transport(
+		&runtime,
+		transport.clone(),
+		&harness.actor_id,
+		initial_config,
+	);
+	sqlite_exec(
+		db.as_ptr(),
+		"CREATE TABLE deferred_items (id INTEGER PRIMARY KEY, value TEXT);",
+	)
+	.unwrap_or_else(|error| panic!("seed {seed}: create table: {error}"));
+	struct Model {
+		local: Vec<String>,
+		acked_prefix: usize,
+	}
+	let mut model = Model {
+		local: Vec::new(),
+		acked_prefix: 0,
+	};
+	let mut state = seed;
+	let mut pause = None;
+	let mut next_value = 0_u64;
+	for iteration in 0..100 {
+		state ^= state << 13;
+		state ^= state >> 7;
+		state ^= state << 17;
+		let operation = (state % 11) as u8;
+		let context = || format!("seed {seed}, iteration {iteration}, operation {operation}");
+		match operation {
+			0 => {
+				let value = format!("value-{next_value}-{state}");
+				next_value += 1;
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!("INSERT INTO deferred_items(value) VALUES ('{value}');"),
+				)
+				.unwrap_or_else(|error| panic!("{}: {error}", context()));
+				model.local.push(value);
+			}
+			1 => assert_eq!(
+				sqlite_query_text_rows(
+					db.as_ptr(),
+					"SELECT value FROM deferred_items ORDER BY id;",
+				)
+				.unwrap_or_else(|error| panic!("{}: {error}", context())),
+				model.local,
+				"{}",
+				context(),
+			),
+			2 => {
+				if pause.is_some() {
+					continue;
+				}
+				wait_for_deferred_flush_with_context(&runtime, &db, &context());
+				model.acked_prefix = model.local.len();
+			}
+			3 => direct_vfs_ctx(&db).state.write().invalidate_page_cache(),
+			4 => {
+				// VACUUM exercises SQLite's size-only xTruncate boundary after the
+				// temporary payload is deleted.
+				sqlite_exec(
+					db.as_ptr(),
+					"CREATE TABLE IF NOT EXISTS random_pad (payload BLOB); INSERT INTO random_pad VALUES (zeroblob(32768)); DELETE FROM random_pad; VACUUM;",
+				)
+				.unwrap_or_else(|error| panic!("{}: {error}", context()));
+			}
+			5 => {
+				if pause.is_none() {
+					wait_for_deferred_flush_with_context(&runtime, &db, &context());
+					model.acked_prefix = model.local.len();
+					let held = hooks.pause_next_commit();
+					let value = format!("held-{next_value}-{state}");
+					next_value += 1;
+					sqlite_step_statement(
+						db.as_ptr(),
+						&format!("INSERT INTO deferred_items(value) VALUES ('{value}');"),
+					)
+					.unwrap_or_else(|error| panic!("{}: {error}", context()));
+					model.local.push(value);
+					held.wait_until_reached_with_context(&context());
+					pause = Some(held);
+				}
+			}
+			6 => {
+				if let Some(held) = pause.take() {
+					held.resume();
+					wait_for_deferred_flush_with_context(&runtime, &db, &context());
+					model.acked_prefix = model.local.len();
+				}
+			}
+			7 => {
+				if pause.is_none() {
+					hooks.fail_next_commit(format!("{} transient", context()));
+					let value = format!("retry-{next_value}-{state}");
+					next_value += 1;
+					sqlite_step_statement(
+						db.as_ptr(),
+						&format!("INSERT INTO deferred_items(value) VALUES ('{value}');"),
+					)
+					.unwrap_or_else(|error| panic!("{}: {error}", context()));
+					model.local.push(value);
+				}
+			}
+			8 | 9 => {
+				if pause.is_some() {
+					continue;
+				}
+				wait_for_deferred_flush_with_context(&runtime, &db, &context());
+				model.acked_prefix = model.local.len();
+				if operation == 8 {
+					hooks.fail_next_commit_after_apply(format!("{} lost ack", context()));
+				} else {
+					hooks.return_next_commit_head(Some(u64::MAX));
+				}
+				let value = format!("fault-{next_value}-{state}");
+				next_value += 1;
+				sqlite_step_statement(
+					db.as_ptr(),
+					&format!("INSERT INTO deferred_items(value) VALUES ('{value}');"),
+				)
+				.unwrap_or_else(|error| panic!("{}: {error}", context()));
+				model.local.push(value);
+				let initial_commit_seq = db.commit_seq();
+				runtime
+					.block_on(db._vfs.wait_for_flush(initial_commit_seq))
+					.expect_err(&context());
+				db._vfs.begin_close();
+				let _ =
+					runtime.block_on(db._vfs.drain_and_shutdown_flusher(Duration::from_secs(1)));
+				drop(db);
+				let expected_durable = model.local[..model.acked_prefix + 1].to_vec();
+				model.acked_prefix += 1;
+				assert_deferred_rows_durable_with_context(
+					&runtime,
+					&harness,
+					engine.clone(),
+					&expected_durable,
+					&context(),
+				);
+				transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+				hooks = transport.direct_hooks();
+				let mut config = deferred_test_config();
+				config.initial_commit_seq = initial_commit_seq;
+				config.assert_batch_atomic = false;
+				db = harness.open_db_with_transport(
+					&runtime,
+					transport.clone(),
+					&harness.actor_id,
+					config,
+				);
+			}
+			10 => {
+				if pause.is_some() {
+					continue;
+				}
+				wait_for_deferred_flush_with_context(&runtime, &db, &context());
+				model.acked_prefix = model.local.len();
+				let initial_commit_seq = db.commit_seq();
+				close_deferred_database_with_context(&runtime, db, &context());
+				assert_deferred_rows_durable_with_context(
+					&runtime,
+					&harness,
+					engine.clone(),
+					&model.local,
+					&context(),
+				);
+				transport = Arc::new(DirectDepotTransport::new(engine.clone()));
+				hooks = transport.direct_hooks();
+				let mut config = deferred_test_config();
+				config.initial_commit_seq = initial_commit_seq;
+				config.assert_batch_atomic = false;
+				db = harness.open_db_with_transport(
+					&runtime,
+					transport.clone(),
+					&harness.actor_id,
+					config,
+				);
+			}
+			_ => unreachable!(),
+		}
+	}
+	if let Some(held) = pause.take() {
+		held.resume();
+	}
+	wait_for_deferred_flush_with_context(&runtime, &db, &format!("seed {seed}: final flush"));
+	model.acked_prefix = model.local.len();
+	close_deferred_database_with_context(&runtime, db, &format!("seed {seed}: final close"));
+	assert_eq!(
+		model.acked_prefix,
+		model.local.len(),
+		"seed {seed}: acknowledged prefix"
+	);
+	assert_deferred_rows_durable_with_context(
+		&runtime,
+		&harness,
+		engine,
+		&model.local,
+		&format!("seed {seed}: final durability oracle"),
 	);
 }

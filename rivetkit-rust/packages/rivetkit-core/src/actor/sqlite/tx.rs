@@ -1,5 +1,5 @@
 use std::{
-	collections::{BTreeMap, VecDeque},
+	collections::{BTreeMap, BTreeSet, VecDeque},
 	error::Error,
 	fmt,
 	future::Future,
@@ -11,12 +11,13 @@ use std::{
 };
 
 use anyhow::{Context, Result};
+use parking_lot::Mutex as SyncMutex;
 use serde::Serialize;
 #[cfg(target_arch = "wasm32")]
 use tokio::sync::oneshot;
 use tokio::sync::{
-	Mutex as AsyncMutex, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, OwnedSemaphorePermit, RwLock,
-	Semaphore, TryAcquireError,
+	Mutex as AsyncMutex, Notify, OwnedRwLockReadGuard, OwnedRwLockWriteGuard, OwnedSemaphorePermit,
+	RwLock, Semaphore, TryAcquireError,
 };
 use tokio_util::sync::CancellationToken;
 
@@ -34,6 +35,18 @@ pub const TRANSACTION_COORDINATOR_QUEUE_CAPACITY: usize = 128;
 pub(super) const TRANSACTION_TERMINAL_CAPACITY: usize = 1024;
 #[cfg(feature = "sqlite-local")]
 static UNNAMED_TRANSACTION_WARNINGS: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CallMode {
+	Async,
+	SyncBlocking,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TransactionOrigin {
+	Bridge,
+	Internal,
+}
 
 #[derive(Clone)]
 pub struct SqliteTransaction {
@@ -60,12 +73,15 @@ impl SqliteTransaction {
 			.await
 	}
 
-	pub async fn commit(&self) -> Result<()> {
+	pub async fn commit(&self) -> Result<Option<u64>> {
 		self.db.finish_transaction(&self.key, true).await
 	}
 
 	pub async fn rollback(&self) -> Result<()> {
-		self.db.finish_transaction(&self.key, false).await
+		self.db
+			.finish_transaction(&self.key, false)
+			.await
+			.map(|_| ())
 	}
 
 	pub async fn expire(&self) -> Result<()> {
@@ -77,12 +93,29 @@ pub(super) struct TransactionCoordinator {
 	pub(super) gate: Arc<RwLock<()>>,
 	pub(super) admission: Arc<Semaphore>,
 	pub(super) state: AsyncMutex<TransactionCoordinatorState>,
+	bridge_pending: SyncMutex<BTreeSet<String>>,
+	bridge_pending_notify: Notify,
 	epoch: AtomicU64,
 	waiters: AtomicU64,
 }
 
+pub struct BridgeTransactionReservation {
+	coordinator: Arc<TransactionCoordinator>,
+	key: String,
+	armed: bool,
+}
+
+impl Drop for BridgeTransactionReservation {
+	fn drop(&mut self) {
+		if self.armed {
+			self.coordinator.bridge_pending.lock().remove(&self.key);
+		}
+	}
+}
+
 pub(super) struct TransactionCoordinatorState {
 	pub(super) active: Option<ActiveTransaction>,
+	pub(super) pending: BTreeMap<String, TransactionOrigin>,
 	pub(super) terminal: BTreeMap<String, TransactionTerminalState>,
 	pub(super) terminal_order: VecDeque<String>,
 	pub(super) poisoned: BTreeMap<String, Duration>,
@@ -92,6 +125,7 @@ pub(super) struct TransactionCoordinatorState {
 
 pub(super) struct ActiveTransaction {
 	key: String,
+	origin: TransactionOrigin,
 	timeout: Duration,
 	pub(super) expiring: bool,
 	connection_lost: bool,
@@ -164,12 +198,15 @@ impl Default for TransactionCoordinator {
 			admission: Arc::new(Semaphore::new(TRANSACTION_COORDINATOR_QUEUE_CAPACITY)),
 			state: AsyncMutex::new(TransactionCoordinatorState {
 				active: None,
+				pending: BTreeMap::new(),
 				terminal: BTreeMap::new(),
 				terminal_order: VecDeque::new(),
 				poisoned: BTreeMap::new(),
 				last_expired_timeout: None,
 				closed: false,
 			}),
+			bridge_pending: SyncMutex::new(BTreeSet::new()),
+			bridge_pending_notify: Notify::new(),
 			epoch: AtomicU64::new(0),
 			waiters: AtomicU64::new(0),
 		}
@@ -177,6 +214,159 @@ impl Default for TransactionCoordinator {
 }
 
 impl SqliteDb {
+	fn bridge_reserved(&self, exclude_key: Option<&str>) -> bool {
+		self.transaction_coordinator
+			.bridge_pending
+			.lock()
+			.iter()
+			.any(|key| Some(key.as_str()) != exclude_key)
+	}
+
+	async fn acquire_sync_regular_gate(&self) -> Result<OwnedRwLockReadGuard<()>> {
+		loop {
+			let notified = self
+				.transaction_coordinator
+				.bridge_pending_notify
+				.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+			{
+				let state = self.transaction_coordinator.state.lock().await;
+				let bridge_transaction = self.bridge_reserved(None)
+					|| state
+						.pending
+						.values()
+						.any(|origin| *origin == TransactionOrigin::Bridge)
+					|| state
+						.active
+						.as_ref()
+						.is_some_and(|active| active.origin == TransactionOrigin::Bridge);
+				if bridge_transaction {
+					return Err(crate::error::SqliteRuntimeError::TransactionActive.build());
+				}
+				if let Ok(gate) = Arc::clone(&self.transaction_coordinator.gate).try_read_owned() {
+					return Ok(gate);
+				}
+			}
+
+			tokio::select! {
+				_ = &mut notified => continue,
+				gate = Arc::clone(&self.transaction_coordinator.gate).read_owned() => {
+					let state = self.transaction_coordinator.state.lock().await;
+					let bridge_transaction = self.bridge_reserved(None)
+						|| state.pending.values().any(|origin| *origin == TransactionOrigin::Bridge)
+						|| state.active.as_ref().is_some_and(|active| active.origin == TransactionOrigin::Bridge);
+					if bridge_transaction {
+						return Err(crate::error::SqliteRuntimeError::TransactionActive.build());
+					}
+					return Ok(gate);
+				}
+			}
+		}
+	}
+
+	async fn acquire_sync_transaction_gate(&self, key: &str) -> Result<OwnedRwLockWriteGuard<()>> {
+		loop {
+			let notified = self
+				.transaction_coordinator
+				.bridge_pending_notify
+				.notified();
+			tokio::pin!(notified);
+			notified.as_mut().enable();
+			{
+				let state = self.transaction_coordinator.state.lock().await;
+				let bridge_transaction = self.bridge_reserved(Some(key))
+					|| state.pending.iter().any(|(pending_key, origin)| {
+						pending_key != key && *origin == TransactionOrigin::Bridge
+					}) || state
+					.active
+					.as_ref()
+					.is_some_and(|active| active.origin == TransactionOrigin::Bridge);
+				if bridge_transaction {
+					return Err(crate::error::SqliteRuntimeError::TransactionActive.build());
+				}
+				if let Ok(gate) = Arc::clone(&self.transaction_coordinator.gate).try_write_owned() {
+					return Ok(gate);
+				}
+			}
+
+			tokio::select! {
+				_ = &mut notified => continue,
+				gate = Arc::clone(&self.transaction_coordinator.gate).write_owned() => {
+					let state = self.transaction_coordinator.state.lock().await;
+					let bridge_transaction = self.bridge_reserved(Some(key))
+						|| state.pending.iter().any(|(pending_key, origin)| {
+							pending_key != key && *origin == TransactionOrigin::Bridge
+						})
+						|| state.active.as_ref().is_some_and(|active| active.origin == TransactionOrigin::Bridge);
+					if bridge_transaction {
+						return Err(crate::error::SqliteRuntimeError::TransactionActive.build());
+					}
+					return Ok(gate);
+				}
+			}
+		}
+	}
+
+	pub fn reserve_bridge_transaction(&self) -> BridgeTransactionReservation {
+		let key = uuid::Uuid::new_v4().to_string();
+		self.transaction_coordinator
+			.bridge_pending
+			.lock()
+			.insert(key.clone());
+		self.transaction_coordinator
+			.bridge_pending_notify
+			.notify_waiters();
+		BridgeTransactionReservation {
+			coordinator: Arc::clone(&self.transaction_coordinator),
+			key,
+			armed: true,
+		}
+	}
+
+	pub async fn begin_reserved_bridge_transaction(
+		&self,
+		reservation: BridgeTransactionReservation,
+		name: Option<String>,
+		timeout: Option<Duration>,
+	) -> Result<SqliteTransaction> {
+		if !Arc::ptr_eq(&reservation.coordinator, &self.transaction_coordinator) {
+			return Err(transaction_invalid_argument_error(
+				"bridge transaction reservation belongs to another database",
+			));
+		}
+		let key = reservation.key.clone();
+		self.validate_transaction_name(name.as_deref())?;
+		self.begin_transaction_with_key_and_name(
+			key,
+			name,
+			timeout,
+			TransactionOrigin::Bridge,
+			CallMode::Async,
+		)
+		.await
+	}
+
+	fn validate_transaction_name(&self, name: Option<&str>) -> Result<()> {
+		#[cfg(feature = "sqlite-local")]
+		let max_name_bytes = self.profiling.config.max_transaction_name_bytes;
+		#[cfg(not(feature = "sqlite-local"))]
+		let max_name_bytes = MAX_TRANSACTION_NAME_BYTES;
+		if let Some(name) = name {
+			if name.is_empty() {
+				return Err(transaction_invalid_argument_error(
+					"transaction name must not be empty",
+				));
+			}
+			if name.len() > max_name_bytes {
+				return Err(transaction_invalid_argument_error(
+					"transaction name exceeds the configured byte limit",
+				));
+			}
+		}
+		Ok(())
+	}
+
 	pub(super) fn try_transaction_admission(&self) -> Result<OwnedSemaphorePermit> {
 		match Arc::clone(&self.transaction_coordinator.admission).try_acquire_owned() {
 			Ok(permit) => Ok(permit),
@@ -185,13 +375,21 @@ impl SqliteDb {
 		}
 	}
 
-	pub(super) async fn begin_regular_operation(&self) -> Result<RegularOperationGuard> {
+	pub(super) async fn begin_regular_operation(
+		&self,
+		call_mode: CallMode,
+	) -> Result<RegularOperationGuard> {
 		let epoch = self.transaction_coordinator.epoch.load(Ordering::Acquire);
 		let permit = self.try_transaction_admission()?;
 		let wait = CoordinatorWaitGuard::new(self);
-		let gate = Arc::clone(&self.transaction_coordinator.gate)
-			.read_owned()
-			.await;
+		let gate = match call_mode {
+			CallMode::Async => {
+				Arc::clone(&self.transaction_coordinator.gate)
+					.read_owned()
+					.await
+			}
+			CallMode::SyncBlocking => self.acquire_sync_regular_gate().await?,
+		};
 		drop(wait);
 		let state = self.transaction_coordinator.state.lock().await;
 		if state.closed {
@@ -220,26 +418,29 @@ impl SqliteDb {
 		name: Option<&str>,
 		timeout: Option<Duration>,
 	) -> Result<SqliteTransaction> {
-		#[cfg(feature = "sqlite-local")]
-		let max_name_bytes = self.profiling.config.max_transaction_name_bytes;
-		#[cfg(not(feature = "sqlite-local"))]
-		let max_name_bytes = MAX_TRANSACTION_NAME_BYTES;
-		if let Some(name) = name {
-			if name.is_empty() {
-				return Err(transaction_invalid_argument_error(
-					"transaction name must not be empty",
-				));
-			}
-			if name.len() > max_name_bytes {
-				return Err(transaction_invalid_argument_error(
-					"transaction name exceeds the configured byte limit",
-				));
-			}
-		}
+		self.begin_named_transaction_with_mode(
+			name,
+			timeout,
+			TransactionOrigin::Internal,
+			CallMode::Async,
+		)
+		.await
+	}
+
+	pub async fn begin_named_transaction_with_mode(
+		&self,
+		name: Option<&str>,
+		timeout: Option<Duration>,
+		origin: TransactionOrigin,
+		call_mode: CallMode,
+	) -> Result<SqliteTransaction> {
+		self.validate_transaction_name(name)?;
 		self.begin_transaction_with_key_and_name(
 			uuid::Uuid::new_v4().to_string(),
 			name.map(ToOwned::to_owned),
 			timeout,
+			origin,
+			call_mode,
 		)
 		.await
 	}
@@ -249,8 +450,14 @@ impl SqliteDb {
 		key: impl Into<String>,
 		timeout: Option<Duration>,
 	) -> Result<SqliteTransaction> {
-		self.begin_transaction_with_key_and_name(key, None, timeout)
-			.await
+		self.begin_transaction_with_key_and_name(
+			key,
+			None,
+			timeout,
+			TransactionOrigin::Internal,
+			CallMode::Async,
+		)
+		.await
 	}
 
 	async fn begin_transaction_with_key_and_name(
@@ -258,6 +465,8 @@ impl SqliteDb {
 		key: impl Into<String>,
 		name: Option<String>,
 		timeout: Option<Duration>,
+		origin: TransactionOrigin,
+		call_mode: CallMode,
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
 		let started_at = (self.profiling.config.enabled
@@ -277,12 +486,26 @@ impl SqliteDb {
 		}
 
 		let db = self.clone();
+		{
+			let mut state = self.transaction_coordinator.state.lock().await;
+			if state.closed {
+				return Err(transaction_coordinator_closed_error());
+			}
+			state.pending.insert(key.clone(), origin);
+			if origin == TransactionOrigin::Bridge {
+				self.transaction_coordinator
+					.bridge_pending_notify
+					.notify_waiters();
+			}
+		}
 		run_detached_transaction_task(
 			async move {
 				db.begin_transaction_profiled_inner(
 					key,
 					timeout,
 					name,
+					origin,
+					call_mode,
 					#[cfg(feature = "sqlite-local")]
 					started_at,
 				)
@@ -303,6 +526,8 @@ impl SqliteDb {
 			key,
 			timeout,
 			None,
+			TransactionOrigin::Internal,
+			CallMode::Async,
 			#[cfg(feature = "sqlite-local")]
 			(self.profiling.config.enabled && self.backend() == super::SqliteBackend::LocalNative)
 				.then(crate::time::Instant::now),
@@ -315,25 +540,56 @@ impl SqliteDb {
 		key: String,
 		timeout: Duration,
 		_name: Option<String>,
+		origin: TransactionOrigin,
+		call_mode: CallMode,
 		#[cfg(feature = "sqlite-local")] started_at: Option<crate::time::Instant>,
 	) -> Result<SqliteTransaction> {
 		#[cfg(feature = "sqlite-local")]
 		let transaction_wait_started_at = started_at.map(|_| crate::time::Instant::now());
 		let epoch = self.transaction_coordinator.epoch.load(Ordering::Acquire);
-		let permit = self.try_transaction_admission()?;
+		let permit = match self.try_transaction_admission() {
+			Ok(permit) => permit,
+			Err(error) => {
+				self.transaction_coordinator
+					.state
+					.lock()
+					.await
+					.pending
+					.remove(&key);
+				return Err(error);
+			}
+		};
 		let wait = CoordinatorWaitGuard::new(self);
-		let gate_guard = Arc::clone(&self.transaction_coordinator.gate)
-			.write_owned()
-			.await;
+		let gate_guard = match call_mode {
+			CallMode::Async => {
+				Arc::clone(&self.transaction_coordinator.gate)
+					.write_owned()
+					.await
+			}
+			CallMode::SyncBlocking => match self.acquire_sync_transaction_gate(&key).await {
+				Ok(gate) => gate,
+				Err(error) => {
+					self.transaction_coordinator
+						.state
+						.lock()
+						.await
+						.pending
+						.remove(&key);
+					return Err(error);
+				}
+			},
+		};
 		drop(wait);
 		#[cfg(feature = "sqlite-local")]
 		let transaction_wait = transaction_wait_started_at.map(|started| started.elapsed());
 		{
-			let state = self.transaction_coordinator.state.lock().await;
+			let mut state = self.transaction_coordinator.state.lock().await;
 			if state.closed {
+				state.pending.remove(&key);
 				return Err(transaction_coordinator_closed_error());
 			}
 			if self.transaction_coordinator.epoch.load(Ordering::Acquire) != epoch {
+				state.pending.remove(&key);
 				return Err(transaction_expired_error(
 					state
 						.last_expired_timeout
@@ -341,6 +597,7 @@ impl SqliteDb {
 				));
 			}
 			if let Some(error) = transaction_known_state_error(&state, &key) {
+				state.pending.remove(&key);
 				return Err(error);
 			}
 		}
@@ -353,7 +610,9 @@ impl SqliteDb {
 				.execute_backend_profiled("BEGIN".to_owned(), None)
 				.await;
 			(
-				profiled.result.map(|result| (result, None)),
+				profiled
+					.result
+					.map(|result| (result, None, profiled.post_autocommit)),
 				profiled.profile,
 			)
 		} else {
@@ -369,7 +628,18 @@ impl SqliteDb {
 		let begin_result = self
 			.execute_backend_in_session("BEGIN".to_owned(), None, None)
 			.await;
-		let (_, remote_session) = begin_result.map_err(map_transaction_connection_error)?;
+		let (_, remote_session, _) = match begin_result {
+			Ok(result) => result,
+			Err(error) => {
+				self.transaction_coordinator
+					.state
+					.lock()
+					.await
+					.pending
+					.remove(&key);
+				return Err(map_transaction_connection_error(error));
+			}
+		};
 		// A successful BEGIN response and the coordinator state update are two
 		// separate async events. If the socket disconnected in that narrow gap,
 		// pegboard-envoy has already dropped the connection-owned database handle
@@ -378,11 +648,18 @@ impl SqliteDb {
 		if let Some(session) = remote_session
 			&& self.handle()?.connection_session() != Some(session)
 		{
+			self.transaction_coordinator
+				.state
+				.lock()
+				.await
+				.pending
+				.remove(&key);
 			return Err(transaction_connection_lost_error());
 		}
 		let operation = Arc::new(AsyncMutex::new(()));
 		{
 			let mut state = self.transaction_coordinator.state.lock().await;
+			state.pending.remove(&key);
 			if state.closed {
 				drop(state);
 				if let Err(error) = self
@@ -395,6 +672,7 @@ impl SqliteDb {
 			}
 			state.active = Some(ActiveTransaction {
 				key: key.clone(),
+				origin,
 				timeout,
 				expiring: false,
 				connection_lost: false,
@@ -513,28 +791,52 @@ impl SqliteDb {
 		let transaction_wait = started_at.map(|started| started.elapsed());
 		self.ensure_active_transaction(key).await?;
 		#[cfg(feature = "sqlite-local")]
-		if let Some(started_at) = started_at {
+		{
 			let sql_for_profile = sql.clone();
-			let profiled = self.exec_backend_profiled(sql).await;
-			let result = profiled.result;
-			let profile = profiled.profile;
-			if let Some(observation) = self.observe_statement_profile(
-				&sql_for_profile,
-				started_at,
-				transaction_wait.unwrap_or_default(),
-				profile,
-				if result.is_ok() { "success" } else { "error" },
-				"explicit",
-			) {
-				self.record_transaction_statement(key, &observation).await;
+			let (result, profile, post_autocommit) = match self.backend() {
+				super::SqliteBackend::LocalNative => {
+					let profiled = self.exec_backend_profiled(sql).await;
+					(profiled.result, profiled.profile, profiled.post_autocommit)
+				}
+				super::SqliteBackend::RemoteEnvoy => (
+					self.remote_exec_with_session(sql, remote_session)
+						.await
+						.map(|(result, _)| result),
+					None,
+					None,
+				),
+			};
+			if let Some(started_at) = started_at {
+				if let Some(observation) = self.observe_statement_profile(
+					&sql_for_profile,
+					started_at,
+					transaction_wait.unwrap_or_default(),
+					profile,
+					if result.is_ok() { "success" } else { "error" },
+					"explicit",
+				) {
+					self.record_transaction_statement(key, &observation).await;
+				}
 			}
-			return match result {
+			let output = match result {
 				Ok(result) => Ok(result),
 				Err(error) => Err(self.handle_transaction_backend_error(key, error).await),
 			};
+			if post_autocommit == Some(true) {
+				self.release_transaction(key, TransactionTerminalState::RolledBack, false)
+					.await;
+			}
+			return output;
 		}
+		#[cfg(not(feature = "sqlite-local"))]
 		match self.exec_backend_in_session(sql, remote_session).await {
-			Ok((result, _)) => Ok(result),
+			Ok((result, _, post_autocommit)) => {
+				if post_autocommit == Some(true) {
+					self.release_transaction(key, TransactionTerminalState::RolledBack, false)
+						.await;
+				}
+				Ok(result)
+			}
 			Err(error) => Err(self.handle_transaction_backend_error(key, error).await),
 		}
 	}
@@ -570,31 +872,55 @@ impl SqliteDb {
 		let transaction_wait = started_at.map(|started| started.elapsed());
 		self.ensure_active_transaction(key).await?;
 		#[cfg(feature = "sqlite-local")]
-		if let Some(started_at) = started_at {
+		{
 			let sql_for_profile = sql.clone();
-			let profiled = self.execute_backend_profiled(sql, params).await;
-			let result = profiled.result;
-			let profile = profiled.profile;
-			if let Some(observation) = self.observe_statement_profile(
-				&sql_for_profile,
-				started_at,
-				transaction_wait.unwrap_or_default(),
-				profile,
-				if result.is_ok() { "success" } else { "error" },
-				"explicit",
-			) {
-				self.record_transaction_statement(key, &observation).await;
+			let (result, profile, post_autocommit) = match self.backend() {
+				super::SqliteBackend::LocalNative => {
+					let profiled = self.execute_backend_profiled(sql, params).await;
+					(profiled.result, profiled.profile, profiled.post_autocommit)
+				}
+				super::SqliteBackend::RemoteEnvoy => (
+					self.remote_execute_with_session(sql, params, remote_session)
+						.await
+						.map(|(result, _)| result),
+					None,
+					None,
+				),
+			};
+			if let Some(started_at) = started_at {
+				if let Some(observation) = self.observe_statement_profile(
+					&sql_for_profile,
+					started_at,
+					transaction_wait.unwrap_or_default(),
+					profile,
+					if result.is_ok() { "success" } else { "error" },
+					"explicit",
+				) {
+					self.record_transaction_statement(key, &observation).await;
+				}
 			}
-			return match result {
+			let output = match result {
 				Ok(result) => Ok(result),
 				Err(error) => Err(self.handle_transaction_backend_error(key, error).await),
 			};
+			if post_autocommit == Some(true) {
+				self.release_transaction(key, TransactionTerminalState::RolledBack, false)
+					.await;
+			}
+			return output;
 		}
+		#[cfg(not(feature = "sqlite-local"))]
 		match self
 			.execute_backend_in_session(sql, params, remote_session)
 			.await
 		{
-			Ok((result, _)) => Ok(result),
+			Ok((result, _, post_autocommit)) => {
+				if post_autocommit == Some(true) {
+					self.release_transaction(key, TransactionTerminalState::RolledBack, false)
+						.await;
+				}
+				Ok(result)
+			}
 			Err(error) => Err(self.handle_transaction_backend_error(key, error).await),
 		}
 	}
@@ -613,7 +939,7 @@ impl SqliteDb {
 		}
 	}
 
-	async fn finish_transaction(&self, key: &str, commit: bool) -> Result<()> {
+	async fn finish_transaction(&self, key: &str, commit: bool) -> Result<Option<u64>> {
 		let db = self.clone();
 		let key = key.to_owned();
 		run_detached_transaction_task(
@@ -623,8 +949,19 @@ impl SqliteDb {
 		.await
 	}
 
-	async fn finish_transaction_inner(&self, key: &str, commit: bool) -> Result<()> {
-		let (operation, remote_session) = self.transaction_operation(key).await?;
+	async fn finish_transaction_inner(&self, key: &str, commit: bool) -> Result<Option<u64>> {
+		let (operation, remote_session) = match self.transaction_operation(key).await {
+			Ok(operation) => operation,
+			Err(error)
+				if !commit
+					&& error
+						.downcast_ref::<TransactionClosedError>()
+						.is_some_and(|terminal| terminal.state == Some("rolled back")) =>
+			{
+				return Ok(None);
+			}
+			Err(error) => return Err(error),
+		};
 		let _operation = operation.lock().await;
 		self.ensure_active_transaction(key).await?;
 
@@ -639,7 +976,9 @@ impl SqliteDb {
 				.execute_backend_profiled(statement.to_owned(), None)
 				.await;
 			(
-				profiled.result.map(|result| (result, None)),
+				profiled
+					.result
+					.map(|result| (result, None, profiled.post_autocommit)),
 				profiled.profile,
 			)
 		} else {
@@ -663,6 +1002,10 @@ impl SqliteDb {
 			)
 			.await;
 		}
+		let commit_seq = result
+			.as_ref()
+			.ok()
+			.and_then(|(result, _, _)| result.commit_seq);
 		if let Err(primary) = result {
 			if is_remote_connection_error(&primary) {
 				self.release_transaction(key, TransactionTerminalState::ConnectionLost, false)
@@ -692,7 +1035,7 @@ impl SqliteDb {
 			if is_no_active_transaction_error(&primary) {
 				self.release_transaction(key, TransactionTerminalState::RolledBack, false)
 					.await;
-				return Ok(());
+				return Ok(None);
 			}
 
 			self.release_transaction(key, TransactionTerminalState::RolledBack, true)
@@ -710,7 +1053,7 @@ impl SqliteDb {
 			false,
 		)
 		.await;
-		Ok(())
+		Ok(if commit { commit_seq } else { None })
 	}
 
 	#[cfg(feature = "sqlite-local")]
@@ -845,6 +1188,13 @@ impl SqliteDb {
 		key: &str,
 		error: anyhow::Error,
 	) -> anyhow::Error {
+		#[cfg(feature = "sqlite-local")]
+		if error
+			.downcast_ref::<depot_client::query::SqliteTransactionClosedError>()
+			.is_some()
+		{
+			return transaction_terminal_error(key, TransactionTerminalState::RolledBack);
+		}
 		if is_remote_connection_error(&error) {
 			self.release_transaction(key, TransactionTerminalState::ConnectionLost, false)
 				.await;
@@ -1029,20 +1379,21 @@ impl fmt::Display for TransactionQueueFullError {
 impl Error for TransactionQueueFullError {}
 
 #[derive(rivet_error::RivetError, Debug, Serialize)]
-#[error(
-	"sqlite",
-	"transaction_closed",
-	"SQLite transaction coordinator is closed."
-)]
-pub struct TransactionCoordinatorClosedError;
+#[error("sqlite", "transaction_closed", "SQLite transaction is closed.")]
+pub struct TransactionClosedError {
+	pub coordinator: bool,
+	pub key: Option<String>,
+	pub state: Option<&'static str>,
+	pub message: String,
+}
 
-impl fmt::Display for TransactionCoordinatorClosedError {
+impl fmt::Display for TransactionClosedError {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str("sqlite transaction coordinator is closed")
+		f.write_str(&self.message)
 	}
 }
 
-impl Error for TransactionCoordinatorClosedError {}
+impl Error for TransactionClosedError {}
 
 #[derive(rivet_error::RivetError, Debug, Serialize)]
 #[error(
@@ -1100,30 +1451,6 @@ impl fmt::Display for TransactionUnknownError {
 }
 
 impl Error for TransactionUnknownError {}
-
-#[derive(rivet_error::RivetError, Debug, Serialize)]
-#[error(
-	"sqlite",
-	"transaction_terminal",
-	"SQLite transaction handle is terminal.",
-	"SQLite transaction handle `{key}` is already {state}."
-)]
-pub struct TransactionTerminalError {
-	pub key: String,
-	pub state: &'static str,
-}
-
-impl fmt::Display for TransactionTerminalError {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(
-			f,
-			"sqlite transaction handle `{}` is already {}",
-			self.key, self.state
-		)
-	}
-}
-
-impl Error for TransactionTerminalError {}
 
 #[derive(rivet_error::RivetError, Debug, Serialize)]
 #[error(
@@ -1223,7 +1550,7 @@ fn spawn_transaction_timeout(
 				.await
 		};
 		if let Err(error) = result {
-			if error.downcast_ref::<TransactionTerminalError>().is_none() {
+			if error.downcast_ref::<TransactionClosedError>().is_none() {
 				tracing::error!(%error, "sqlite transaction terminal cleanup failed");
 			}
 		}
@@ -1320,9 +1647,20 @@ fn transaction_queue_full_error() -> anyhow::Error {
 }
 
 fn transaction_coordinator_closed_error() -> anyhow::Error {
-	TransactionCoordinatorClosedError
-		.build()
-		.context(TransactionCoordinatorClosedError)
+	let message = "sqlite transaction coordinator is closed".to_string();
+	TransactionClosedError {
+		coordinator: true,
+		key: None,
+		state: None,
+		message: message.clone(),
+	}
+	.build()
+	.context(TransactionClosedError {
+		coordinator: true,
+		key: None,
+		state: None,
+		message,
+	})
 }
 
 fn transaction_unknown_error(key: &str) -> anyhow::Error {
@@ -1390,13 +1728,18 @@ fn map_transaction_connection_error(error: anyhow::Error) -> anyhow::Error {
 }
 
 fn transaction_terminal_state_error(key: &str, state: &'static str) -> anyhow::Error {
-	TransactionTerminalError {
-		key: key.to_owned(),
-		state,
+	let message = format!("sqlite transaction handle `{key}` is already {state}");
+	TransactionClosedError {
+		coordinator: false,
+		key: Some(key.to_owned()),
+		state: Some(state),
+		message: message.clone(),
 	}
 	.build()
-	.context(TransactionTerminalError {
-		key: key.to_owned(),
-		state,
+	.context(TransactionClosedError {
+		coordinator: false,
+		key: Some(key.to_owned()),
+		state: Some(state),
+		message,
 	})
 }

@@ -39,9 +39,11 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 				this.executeSync(sql, params),
 			commit: async () => {
 				this.transactionEvents.push("COMMIT");
+				return 1;
 			},
 			commitSync: () => {
 				this.transactionEvents.push("COMMIT_SYNC");
+				return 1;
 			},
 			rollback: async () => {
 				this.transactionEvents.push("ROLLBACK");
@@ -56,6 +58,9 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 	closed = false;
 	executeCalls: { sql: string; params?: NativeParams; write: boolean }[] = [];
 	transactionEvents: string[] = [];
+	commitSequence = 0;
+	flushedSequence = 0;
+	waitedSequences: number[] = [];
 	#pending: ReturnType<typeof deferred<NativeExecuteResult>>[] = [];
 
 	async exec() {
@@ -92,6 +97,26 @@ class FakeNativeDatabase implements JsNativeDatabaseLike {
 
 	takeLastKvError() {
 		return null;
+	}
+
+	commitSeq() {
+		return this.commitSequence;
+	}
+
+	flushedSeq() {
+		return this.flushedSequence;
+	}
+
+	async waitForFlush(seq: number) {
+		this.waitedSequences.push(seq);
+	}
+
+	flushError() {
+		return null;
+	}
+
+	supportsSyncMetadata() {
+		return true;
 	}
 
 	async close() {
@@ -248,7 +273,20 @@ describe("wrapJsNativeDatabase", () => {
 		const fallback = db.execute("SELECT last_insert_rowid()");
 		await expect(fallback).resolves.toMatchObject({
 			rows: [[7]],
+			readonly: true,
 		});
+	});
+
+	test("delegates commit and flush sequences", async () => {
+		const native = new FakeNativeDatabase();
+		native.commitSequence = 5;
+		native.flushedSequence = 3;
+		const db = wrapJsNativeDatabase(native);
+
+		expect(db.commitSeq?.()).toBe(5);
+		expect(db.flushedSeq?.()).toBe(3);
+		await db.waitForFlush?.(5);
+		expect(native.waitedSequences).toEqual([5]);
 	});
 
 	test("close waits for admitted native calls and rejects new work", async () => {

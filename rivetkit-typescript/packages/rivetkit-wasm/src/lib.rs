@@ -202,6 +202,7 @@ pub struct WasmActorConfig {
 	pub icon: Option<String>,
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
+	pub sqlite_commit_mode: Option<WasmSqliteCommitMode>,
 	pub sqlite_profiling: Option<WasmSqliteProfilingConfig>,
 	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
@@ -231,6 +232,13 @@ pub struct WasmActorConfig {
 	pub actions: Option<Vec<WasmActionDefinition>>,
 }
 
+#[derive(Clone, Copy, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WasmSqliteCommitMode {
+	Awaited,
+	Deferred,
+}
+
 impl From<WasmActorConfig> for ActorConfigInput {
 	fn from(config: WasmActorConfig) -> Self {
 		Self {
@@ -238,6 +246,10 @@ impl From<WasmActorConfig> for ActorConfigInput {
 			icon: config.icon,
 			has_database: config.has_database,
 			remote_sqlite: config.remote_sqlite,
+			sqlite_commit_mode: config.sqlite_commit_mode.map(|mode| match mode {
+				WasmSqliteCommitMode::Awaited => rivetkit_core::SqliteCommitMode::Awaited,
+				WasmSqliteCommitMode::Deferred => rivetkit_core::SqliteCommitMode::Deferred,
+			}),
 			sqlite_profiling: config.sqlite_profiling.map(Into::into),
 			enable_actor_runtime_socket: config.enable_actor_runtime_socket,
 			has_state: config.has_state,

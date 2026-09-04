@@ -32,7 +32,9 @@ pub(crate) mod work_registry;
 pub use action::ActionDispatchError;
 #[cfg(feature = "sqlite-local")]
 pub use actor_runtime_socket::ActorRuntimeSocketEndpointInfo;
-pub use config::{ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket};
+pub use config::{
+	ActionDefinition, ActorConfig, ActorConfigOverrides, CanHibernateWebSocket, SqliteCommitMode,
+};
 pub use connection::ConnHandle;
 pub use context::{ActorContext, ActorWorkRegion, KeepAwakeRegion, WebSocketCallbackRegion};
 pub use factory::{ActorEntryFn, ActorFactory};

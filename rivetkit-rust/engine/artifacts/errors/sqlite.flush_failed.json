@@ -1,0 +1,5 @@
+{
+  "code": "flush_failed",
+  "group": "sqlite",
+  "message": "SQLite durability flush failed."
+}

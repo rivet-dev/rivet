@@ -111,7 +111,35 @@ const todoId = c.db.transactionSync((tx) => {
 });
 ```
 
-The callback must be synchronous and must use its `tx` value, which exposes only `executeSync(...)`. It must not return a promise. `{ name, timeout }` options are supported, matching `transaction(...)`. Synchronous operations are unavailable in WebAssembly runtimes.
+The callback must be synchronous and must use its `tx` value. The transaction client exposes `executeSync(...)` plus `commitSeq()`, `flushedSeq()`, `waitForFlush(...)`, and `flushError()`, delegating sequence and durability state to the base database. It must not return a promise. `{ name, timeout }` options are supported, matching `transaction(...)`. Synchronous operations are unavailable in WebAssembly runtimes.
+
+### Deferred commits
+
+Native SQLite normally waits for durable storage before a write returns. Integrations that need synchronous, turn-based storage can opt into deferred commits:
+
+```ts @nocheck
+db: db({
+  commitMode: "deferred",
+  onMigrate: async (db) => {
+    await db.execute("CREATE TABLE IF NOT EXISTS todos (id INTEGER PRIMARY KEY, title TEXT)");
+  },
+})
+```
+
+In deferred mode, a successful write is immediately visible to later queries in the same actor, but it may not be durable yet. Call `await c.db.waitForFlush()` before sending an output that depends on those writes. The call captures the current commit sequence synchronously, so writes started afterward are not part of that wait. You can also capture `c.db.commitSeq()` and pass it explicitly to `waitForFlush(sequence)`.
+
+`c.db.flushError()` returns the terminal durability error after the database has broken, or `null` while it is healthy. Transaction-scoped clients and synchronous transaction handles expose the same sequence, wait, and flush-error methods by delegating them to the base database. `execSync()` returns `{ readonly }`, matching the metadata available from `executeSyncRaw()`.
+
+`beginTransactionSync()` opens a synchronous handle that can stay open until a later event-loop turn. Run all synchronous SQL through the handle, then call `commitSync()` to receive its commit sequence, or `rollbackSync()` to discard it. Base-client synchronous calls throw while the handle is open; asynchronous calls queue behind it.
+
+```ts @nocheck
+const tx = c.db.beginTransactionSync({ name: "todo-turn" });
+tx.executeSync("INSERT INTO todos (title) VALUES (?)", title);
+const sequence = tx.commitSync();
+if (sequence !== null) await c.db.waitForFlush(sequence);
+```
+
+Deferred commits require local SQLite in the Node.js native runtime. Metadata-returning synchronous execution checks that capability before running SQL, so an unsupported remote statement is not executed and then rejected afterward. Actor shutdown drains staged commits. If durability becomes indeterminate, `waitForFlush()` rejects, `flushError()` reports the reason, and the actor generation stops rather than continuing with uncertain storage.
 
 ### Transactions
 

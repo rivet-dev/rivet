@@ -26,6 +26,7 @@ depot-client-types.workspace = true
 moka = { version = "0.12", default-features = false, features = ["sync"] }
 parking_lot.workspace = true
 scc.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 depot = { workspace = true, features = ["test-faults"] }

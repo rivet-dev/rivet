@@ -4,16 +4,20 @@ import type {
 	NativeDatabaseProvider,
 	RawAccess,
 	SqliteDatabase,
+	SqliteExecuteResult,
 	SqliteProfilingOptions,
+	SqliteCommitMode,
 	SqliteTransactionDatabase,
 	SqliteTransactionOptions,
 	SynchronousRawAccess,
+	SynchronousTransactionHandle,
 	SynchronousTransactionAccess,
 } from "./config";
 import {
 	isManualTransactionControl,
 	isSqliteBindingObject,
 	MIGRATION_TRANSACTION_TIMEOUT_MS,
+	normalizeSqliteBindings,
 	runSqliteTransactionSync,
 	toSqliteBindings,
 	validateTransactionName,
@@ -32,6 +36,8 @@ export interface DatabaseFactoryConfig {
 	 * subject to change without notice.
 	 */
 	profiling?: SqliteProfilingOptions;
+	/** Native SQLite commit durability mode. Defaults to `"awaited"`. */
+	commitMode?: SqliteCommitMode;
 }
 const nativeStateTransactionOpeners = new WeakMap<
 	NativeDatabaseProvider,
@@ -83,13 +89,25 @@ function hasMultipleStatements(query: string): boolean {
 	return trimmed.includes(";");
 }
 
+function isTerminalTransactionError(error: unknown): boolean {
+	if (typeof error !== "object" || error === null) return false;
+	const code = (error as { code?: unknown }).code;
+	return (
+		code === "transaction_closed" ||
+		code === "transaction_terminal" ||
+		code === "transaction_expired"
+	);
+}
+
 export function db({
 	onMigrate,
 	warnOnManualTransactions = true,
 	profiling,
+	commitMode = "awaited",
 }: DatabaseFactoryConfig = {}): DatabaseProvider<SynchronousRawAccess> {
 	const provider: DatabaseProvider<SynchronousRawAccess> = {
 		sqliteProfiling: profiling,
+		sqliteCommitMode: commitMode,
 		createClient: async (ctx) => {
 			const nativeDatabaseProvider = ctx.nativeDatabaseProvider;
 			if (!nativeDatabaseProvider) {
@@ -101,7 +119,8 @@ export function db({
 			const db = await nativeDatabaseProvider.open(ctx.actorId);
 			let closed = false;
 			let manualTransactionWarned = false;
-			let synchronousTransactionActive = false;
+			let synchronousTransactionKind: "callback" | "handle" | undefined;
+			let closeSynchronousHandle: (() => void) | undefined;
 			const ensureOpen = () => {
 				if (closed) {
 					throw new Error(
@@ -111,11 +130,34 @@ export function db({
 			};
 			const ensureSynchronousTransactionClient = (
 				transactionScoped: boolean,
+				asyncMember = false,
 			) => {
-				if (!transactionScoped && synchronousTransactionActive) {
+				if (
+					!transactionScoped &&
+					synchronousTransactionKind === "callback"
+				) {
 					throw new Error(
 						"Use the transaction callback's tx value for queries inside db.transactionSync().",
 					);
+				}
+				if (
+					!transactionScoped &&
+					!asyncMember &&
+					synchronousTransactionKind === "handle"
+				) {
+					throw new Error(
+						"Use the open synchronous transaction handle until it is committed or rolled back.",
+					);
+				}
+			};
+			const recoverSynchronousHandle = (error: unknown) => {
+				if (typeof error !== "object" || error === null) return;
+				const code = (error as { code?: unknown }).code;
+				if (
+					code === "transaction_active" ||
+					code === "transaction_closed"
+				) {
+					closeSynchronousHandle?.();
 				}
 			};
 
@@ -123,6 +165,7 @@ export function db({
 				target: SqliteDatabase | SqliteTransactionDatabase,
 				transactionScoped = false,
 				stateTransactionContext?: NativeStateTransactionContext,
+				sequencing: SqliteDatabase | SqliteTransactionDatabase = db,
 			): SynchronousRawAccess => {
 				const client: SynchronousRawAccess = {
 					execute: async <
@@ -135,7 +178,10 @@ export function db({
 						...args: unknown[]
 					): Promise<TRow[]> => {
 						ensureOpen();
-						ensureSynchronousTransactionClient(transactionScoped);
+						ensureSynchronousTransactionClient(
+							transactionScoped,
+							true,
+						);
 						if (
 							!transactionScoped &&
 							warnOnManualTransactions &&
@@ -263,6 +309,10 @@ export function db({
 							}
 
 							return execMultiStatementSync<TRow>(target, query);
+						} catch (error) {
+							if (!transactionScoped)
+								recoverSynchronousHandle(error);
+							throw error;
 						} finally {
 							const durationMs = performance.now() - start;
 							ctx.metrics?.trackSql(query, durationMs);
@@ -281,12 +331,51 @@ export function db({
 							}
 						}
 					},
+					executeSyncRaw: (
+						query: string,
+						...args: unknown[]
+					): SqliteExecuteResult & { readonly: boolean } => {
+						ensureOpen();
+						ensureSynchronousTransactionClient(transactionScoped);
+						if (!target.executeSync) {
+							throw new Error(
+								"Synchronous SQLite queries are only available in the Node.js native runtime.",
+							);
+						}
+						if (sequencing.supportsSyncMetadata?.() !== true) {
+							throw new Error(
+								"Synchronous SQLite metadata is only available for local native SQLite.",
+							);
+						}
+						let result: SqliteExecuteResult;
+						try {
+							result = target.executeSync(
+								query,
+								normalizeSqliteBindings(args),
+							);
+						} catch (error) {
+							if (!transactionScoped)
+								recoverSynchronousHandle(error);
+							throw error;
+						}
+						if (result.readonly === undefined) {
+							throw new Error(
+								"Synchronous SQLite metadata is only available in the Node.js native runtime.",
+							);
+						}
+						return result as SqliteExecuteResult & {
+							readonly: boolean;
+						};
+					},
 					transaction: async <T>(
 						callback: (tx: RawAccess) => Promise<T> | T,
 						options?: SqliteTransactionOptions,
 					): Promise<T> => {
 						ensureOpen();
-						ensureSynchronousTransactionClient(transactionScoped);
+						ensureSynchronousTransactionClient(
+							transactionScoped,
+							true,
+						);
 						validateTransactionTimeout(options?.timeout);
 						validateTransactionName(options?.name);
 						if (
@@ -325,7 +414,12 @@ export function db({
 										options?.timeout,
 										options?.name,
 									);
-							const tx = createClient(transaction, true);
+							const tx = createClient(
+								transaction,
+								true,
+								undefined,
+								sequencing,
+							);
 							try {
 								const result = await callback(tx);
 								await transaction.commit();
@@ -352,7 +446,7 @@ export function db({
 						>,
 					): T => {
 						ensureOpen();
-						if (transactionScoped || synchronousTransactionActive) {
+						if (transactionScoped || synchronousTransactionKind) {
 							throw new Error(
 								"Nested synchronous SQLite transactions are not supported.",
 							);
@@ -363,19 +457,145 @@ export function db({
 								const transactionClient = createClient(
 									transaction,
 									true,
+									undefined,
+									sequencing,
 								);
 								const tx: SynchronousTransactionAccess = {
 									executeSync: transactionClient.executeSync,
+									commitSeq: transactionClient.commitSeq,
+									flushedSeq: transactionClient.flushedSeq,
+									waitForFlush:
+										transactionClient.waitForFlush,
+									flushError: transactionClient.flushError,
 								};
-								synchronousTransactionActive = true;
+								synchronousTransactionKind = "callback";
 								try {
 									return callback(tx);
 								} finally {
-									synchronousTransactionActive = false;
+									synchronousTransactionKind = undefined;
 								}
 							},
 							options,
 						);
+					},
+					commitSeq: () => sequencing.commitSeq!(),
+					flushedSeq: () => sequencing.flushedSeq!(),
+					waitForFlush: async (seq?: number) => {
+						const targetSeq = seq ?? sequencing.commitSeq!();
+						if (!Number.isSafeInteger(targetSeq) || targetSeq < 0) {
+							throw new Error(
+								"flush sequence must be a non-negative safe integer",
+							);
+						}
+						await sequencing.waitForFlush!(targetSeq);
+					},
+					flushError: () => sequencing.flushError!(),
+					beginTransactionSync: (
+						options?: Omit<
+							SqliteTransactionOptions,
+							"experimental"
+						>,
+					): SynchronousTransactionHandle => {
+						ensureOpen();
+						if (transactionScoped || synchronousTransactionKind) {
+							throw new Error(
+								"Nested synchronous SQLite transactions are not supported.",
+							);
+						}
+						validateTransactionTimeout(options?.timeout);
+						validateTransactionName(options?.name);
+						if (!db.beginTransactionSync) {
+							throw new Error(
+								"Synchronous SQLite transactions are only available in the Node.js native runtime.",
+							);
+						}
+						const transaction = db.beginTransactionSync(
+							options?.timeout,
+							options?.name,
+						);
+						const transactionClient = createClient(
+							transaction,
+							true,
+							undefined,
+							sequencing,
+						);
+						let isOpen = true;
+						synchronousTransactionKind = "handle";
+						const finish = () => {
+							isOpen = false;
+							if (closeSynchronousHandle === finish) {
+								closeSynchronousHandle = undefined;
+								synchronousTransactionKind = undefined;
+							}
+						};
+						closeSynchronousHandle = finish;
+						const closeOnTerminal = (error: unknown) => {
+							if (isTerminalTransactionError(error)) {
+								finish();
+							}
+							throw error;
+						};
+						const requireOpen = () => {
+							if (!isOpen)
+								throw new Error(
+									"SQLite transaction handle is closed.",
+								);
+						};
+						return {
+							executeSync: (query, ...args) => {
+								requireOpen();
+								try {
+									return transactionClient.executeSync(
+										query,
+										...args,
+									);
+								} catch (error) {
+									return closeOnTerminal(error);
+								}
+							},
+							executeSyncRaw: (query, ...args) => {
+								requireOpen();
+								try {
+									return transactionClient.executeSyncRaw(
+										query,
+										...args,
+									);
+								} catch (error) {
+									return closeOnTerminal(error);
+								}
+							},
+							execSync: (sql, callback) => {
+								requireOpen();
+								try {
+									return transaction.execSync(sql, callback);
+								} catch (error) {
+									return closeOnTerminal(error);
+								}
+							},
+							commitSync: () => {
+								requireOpen();
+								try {
+									return transaction.commitSync();
+								} finally {
+									finish();
+								}
+							},
+							rollbackSync: () => {
+								requireOpen();
+								try {
+									transaction.rollbackSync();
+								} finally {
+									finish();
+								}
+							},
+							get isOpen() {
+								return isOpen;
+							},
+							commitSeq: transactionClient.commitSeq,
+							flushedSeq: transactionClient.flushedSeq,
+							waitForFlush: transactionClient.waitForFlush,
+							flushError: transactionClient.flushError,
+						};
 					},
 					close: async () => {
 						if (!closed) {
@@ -387,7 +607,7 @@ export function db({
 				};
 				if (!transactionScoped) {
 					nativeStateTransactionClientBinders.set(client, (context) =>
-						createClient(target, false, context),
+						createClient(target, false, context, sequencing),
 					);
 				}
 				return client;

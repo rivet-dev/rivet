@@ -28,7 +28,10 @@ use crate::actor::task_types::StateMutationReason;
 use crate::error::ActorRuntime;
 #[cfg(feature = "wasm-runtime")]
 use crate::runtime::RuntimeSpawner;
-use crate::sqlite::{BindParam, ExecuteResult, SqliteTransaction};
+use crate::sqlite::{
+	BindParam, BridgeTransactionReservation, CallMode, ExecuteResult, SqliteTransaction,
+	TransactionOrigin,
+};
 use crate::types::SaveStateOpts;
 
 #[cfg(test)]
@@ -304,6 +307,45 @@ impl ActorContext {
 		&self,
 		timeout: Option<Duration>,
 	) -> Result<ActorStateTransaction> {
+		self.begin_state_transaction_with_origin(timeout, TransactionOrigin::Internal)
+			.await
+	}
+
+	pub async fn begin_state_transaction_with_origin(
+		&self,
+		timeout: Option<Duration>,
+		origin: TransactionOrigin,
+	) -> Result<ActorStateTransaction> {
+		self.begin_state_transaction_with_reservation(timeout, origin, None)
+			.await
+	}
+
+	/// Reserves Bridge transaction admission synchronously, before a foreign
+	/// runtime creates or starts polling its asynchronous state-transaction
+	/// Promise.
+	pub fn reserve_bridge_state_transaction(&self) -> BridgeTransactionReservation {
+		self.sql().reserve_bridge_transaction()
+	}
+
+	pub async fn begin_reserved_bridge_state_transaction(
+		&self,
+		reservation: BridgeTransactionReservation,
+		timeout: Option<Duration>,
+	) -> Result<ActorStateTransaction> {
+		self.begin_state_transaction_with_reservation(
+			timeout,
+			TransactionOrigin::Bridge,
+			Some(reservation),
+		)
+		.await
+	}
+
+	async fn begin_state_transaction_with_reservation(
+		&self,
+		timeout: Option<Duration>,
+		origin: TransactionOrigin,
+		reservation: Option<BridgeTransactionReservation>,
+	) -> Result<ActorStateTransaction> {
 		self.clear_pending_save();
 		let save_guard = Arc::clone(&self.0.save_guard).lock_owned().await;
 		self.0
@@ -315,7 +357,19 @@ impl ActorContext {
 			.filter(|conn| conn.is_hibernatable())
 			.map(|conn| (conn.id().to_owned(), conn.state()))
 			.collect();
-		let transaction = match self.sql().begin_transaction(timeout).await {
+		let transaction_result = match reservation {
+			Some(reservation) => {
+				self.sql()
+					.begin_reserved_bridge_transaction(reservation, None, timeout)
+					.await
+			}
+			None => {
+				self.sql()
+					.begin_named_transaction_with_mode(None, timeout, origin, CallMode::Async)
+					.await
+			}
+		};
+		let transaction = match transaction_result {
 			Ok(transaction) => transaction,
 			Err(error) => {
 				self.0

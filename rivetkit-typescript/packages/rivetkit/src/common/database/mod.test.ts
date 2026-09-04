@@ -19,6 +19,9 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	stateTransactionTimeouts: Array<number | undefined> = [];
 	transactionTimeouts: Array<number | undefined> = [];
 	transactionNames: Array<string | undefined> = [];
+	commitSequence = 3;
+	flushedSequence = 2;
+	waitedSequences: number[] = [];
 
 	async exec(
 		sql: string,
@@ -30,9 +33,10 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	execSync(
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
-	): void {
+	): { readonly?: boolean } {
 		this.record(sql);
 		callback?.([1], ["value"]);
+		return { readonly: isReadonlySql(sql) };
 	}
 
 	async execute(
@@ -45,7 +49,7 @@ class FakeSqliteDatabase implements SqliteDatabase {
 
 	executeSync(sql: string, params?: SqliteBindings): SqliteExecuteResult {
 		this.record(sql, params);
-		return emptyResult();
+		return emptyResult(isReadonlySql(sql));
 	}
 
 	async beginTransaction(
@@ -64,17 +68,23 @@ class FakeSqliteDatabase implements SqliteDatabase {
 		this.record("BEGIN");
 		return {
 			exec: async () => {},
-			execSync: () => {},
+			execSync: (sql) => ({ readonly: isReadonlySql(sql) }),
 			execute: async (sql, params) => {
 				this.record(sql, params);
 				return emptyResult();
 			},
 			executeSync: (sql, params) => {
 				this.record(sql, params);
-				return emptyResult();
+				return emptyResult(isReadonlySql(sql));
 			},
-			commit: async () => this.record("COMMIT"),
-			commitSync: () => this.record("COMMIT"),
+			commit: async () => {
+				this.record("COMMIT");
+				return null;
+			},
+			commitSync: () => {
+				this.record("COMMIT");
+				return null;
+			},
 			rollback: async () => this.record("ROLLBACK"),
 			rollbackSync: () => this.record("ROLLBACK"),
 		};
@@ -86,16 +96,19 @@ class FakeSqliteDatabase implements SqliteDatabase {
 		this.record("BEGIN_STATE");
 		return {
 			exec: async () => {},
-			execSync: () => {},
+			execSync: (sql) => ({ readonly: isReadonlySql(sql) }),
 			execute: async (sql, params) => {
 				this.record(sql, params);
 				return emptyResult();
 			},
 			executeSync: (sql, params) => {
 				this.record(sql, params);
-				return emptyResult();
+				return emptyResult(isReadonlySql(sql));
 			},
-			commit: async () => this.record("COMMIT"),
+			commit: async () => {
+				this.record("COMMIT");
+				return null;
+			},
 			rollback: async () => this.record("ROLLBACK"),
 		};
 	}
@@ -121,6 +134,26 @@ class FakeSqliteDatabase implements SqliteDatabase {
 
 	async close(): Promise<void> {}
 
+	commitSeq(): number {
+		return this.commitSequence;
+	}
+
+	flushedSeq(): number {
+		return this.flushedSequence;
+	}
+
+	async waitForFlush(seq: number): Promise<void> {
+		this.waitedSequences.push(seq);
+	}
+
+	flushError(): string | null {
+		return null;
+	}
+
+	supportsSyncMetadata(): boolean {
+		return true;
+	}
+
 	private record(sql: string, params?: SqliteBindings): void {
 		this.executeCalls.push({ sql, params });
 		const error = this.failSql.get(sql);
@@ -128,12 +161,17 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	}
 }
 
-function emptyResult(): SqliteExecuteResult {
+function isReadonlySql(sql: string): boolean {
+	return /^\s*(?:SELECT|PRAGMA|WITH)\b/i.test(sql);
+}
+
+function emptyResult(readonly = false): SqliteExecuteResult {
 	return {
 		columns: [],
 		rows: [],
 		changes: 0,
 		lastInsertRowId: null,
+		readonly,
 	};
 }
 
@@ -167,6 +205,42 @@ describe("db", () => {
 				{ level: "warn", base: {}, timestamp: false },
 				{ write: (line: string) => logLines.push(line) },
 			),
+		);
+	});
+
+	test("plumbs deferred mode and exposes flush sequencing", async () => {
+		const nativeDb = new FakeSqliteDatabase();
+		const provider = db({ commitMode: "deferred" });
+		const client = await provider.createClient(
+			testProviderContext(nativeDb),
+		);
+
+		expect(provider.sqliteCommitMode).toBe("deferred");
+		expect(client.commitSeq()).toBe(3);
+		expect(client.flushedSeq()).toBe(2);
+		const waiting = client.waitForFlush();
+		nativeDb.commitSequence = 4;
+		await waiting;
+		expect(nativeDb.waitedSequences).toEqual([3]);
+		expect(
+			client.executeSyncRaw("INSERT INTO test VALUES (1)").readonly,
+		).toBe(false);
+	});
+
+	test("handle-form synchronous transactions guard the base sync client", async () => {
+		const nativeDb = new FakeSqliteDatabase();
+		const client = await db().createClient(testProviderContext(nativeDb));
+		const transaction = client.beginTransactionSync({ name: "turn" });
+
+		expect(transaction.isOpen).toBe(true);
+		expect(() => client.executeSync("SELECT 1")).toThrow(
+			"Use the open synchronous transaction handle",
+		);
+		expect(transaction.executeSyncRaw("SELECT 1").readonly).toBe(true);
+		expect(transaction.commitSync()).toBeNull();
+		expect(transaction.isOpen).toBe(false);
+		expect(() => transaction.executeSync("SELECT 1")).toThrow(
+			"transaction handle is closed",
 		);
 	});
 
@@ -299,7 +373,13 @@ describe("db", () => {
 		nativeDb.executeCalls = [];
 		let outerQuery: Promise<Record<string, unknown>[]> | undefined;
 		client.transactionSync((tx) => {
-			expect(Object.keys(tx)).toEqual(["executeSync"]);
+			expect(Object.keys(tx)).toEqual([
+				"executeSync",
+				"commitSeq",
+				"flushedSeq",
+				"waitForFlush",
+				"flushError",
+			]);
 			expect(() => client.executeSync("SELECT 1")).toThrow(
 				"transaction callback's tx value",
 			);

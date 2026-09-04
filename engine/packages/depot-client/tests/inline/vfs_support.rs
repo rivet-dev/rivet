@@ -18,6 +18,7 @@ use depot::{
 use parking_lot::Mutex;
 use rivet_envoy_protocol as protocol;
 use rivet_pools::{__rivet_util::Id, NodeId};
+use tokio::sync::oneshot;
 use universaldb::utils::IsolationLevel::Serializable;
 
 use super::super::SqliteTransport;
@@ -299,7 +300,8 @@ impl SqliteTransport for DirectDepotTransport {
 		&self,
 		request: protocol::SqliteCommitRequest,
 	) -> Result<protocol::SqliteCommitResponse> {
-		self.storage
+		let applied = self
+			.storage
 			.hooks
 			.apply_commit_hooks(request.clone())
 			.await?;
@@ -326,13 +328,19 @@ impl SqliteTransport for DirectDepotTransport {
 			.await
 		{
 			Ok(result) => {
+				if let Some(applied) = applied {
+					let _ = applied.send(());
+				}
 				if let Some(message) = self.storage.hooks.take_commit_after_apply_error() {
 					return Err(anyhow::anyhow!(message));
 				}
+				let head_txid = self
+					.storage
+					.hooks
+					.take_commit_response_head()
+					.unwrap_or(Some(result.head_txid));
 				Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-					protocol::SqliteCommitOk {
-						head_txid: Some(result.head_txid),
-					},
+					protocol::SqliteCommitOk { head_txid },
 				))
 			}
 			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
@@ -468,7 +476,8 @@ impl SqliteTransport for DirectMirrorTransport {
 		&self,
 		request: protocol::SqliteCommitRequest,
 	) -> Result<protocol::SqliteCommitResponse> {
-		self.storage
+		let applied = self
+			.storage
 			.hooks
 			.apply_commit_hooks(request.clone())
 			.await?;
@@ -484,9 +493,14 @@ impl SqliteTransport for DirectMirrorTransport {
 			.apply_commit(&actor_id, dirty_pages, request.db_size_pages)
 			.await
 		{
-			Ok(()) => Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
-				protocol::SqliteCommitOk { head_txid: None },
-			)),
+			Ok(()) => {
+				if let Some(applied) = applied {
+					let _ = applied.send(());
+				}
+				Ok(protocol::SqliteCommitResponse::SqliteCommitOk(
+					protocol::SqliteCommitOk { head_txid: None },
+				))
+			}
 			Err(err) => Ok(protocol::SqliteCommitResponse::SqliteErrorResponse(
 				sqlite_error_response(&err),
 			)),
@@ -534,22 +548,35 @@ struct DirectStorageCounters {
 
 #[derive(Default)]
 pub(crate) struct DirectTransportHooks {
-	fail_next_commit: Mutex<Option<String>>,
-	fail_next_commit_after_apply: Mutex<Option<String>>,
+	fail_next_commit: Mutex<Option<(usize, String)>>,
+	fail_next_commit_after_apply: Mutex<Option<(usize, String)>>,
 	fail_next_get_pages: Mutex<Option<String>>,
 	hang_next_commit: Mutex<bool>,
 	pause_next_commit: Mutex<Option<DirectCommitGate>>,
 	get_pages_requests: Mutex<Vec<protocol::SqliteGetPagesRequest>>,
 	commit_requests: Mutex<Vec<protocol::SqliteCommitRequest>>,
+	commit_response_head: Mutex<Option<Option<u64>>>,
 }
 
 impl DirectTransportHooks {
 	pub(crate) fn fail_next_commit(&self, message: impl Into<String>) {
-		*self.fail_next_commit.lock() = Some(message.into());
+		self.fail_next_commits(1, message);
+	}
+
+	pub(crate) fn fail_next_commits(&self, count: usize, message: impl Into<String>) {
+		*self.fail_next_commit.lock() = Some((count, message.into()));
 	}
 
 	pub(crate) fn fail_next_commit_after_apply(&self, message: impl Into<String>) {
-		*self.fail_next_commit_after_apply.lock() = Some(message.into());
+		self.fail_next_commits_after_apply(1, message);
+	}
+
+	pub(crate) fn fail_next_commits_after_apply(&self, count: usize, message: impl Into<String>) {
+		*self.fail_next_commit_after_apply.lock() = Some((count, message.into()));
+	}
+
+	pub(crate) fn return_next_commit_head(&self, head: Option<u64>) {
+		*self.commit_response_head.lock() = Some(head);
 	}
 
 	pub(crate) fn fail_next_get_pages(&self, message: impl Into<String>) {
@@ -582,23 +609,30 @@ impl DirectTransportHooks {
 
 	pub(crate) fn pause_next_commit(&self) -> DirectCommitPause {
 		let (reached_tx, reached_rx) = mpsc::channel();
-		let (resume_tx, resume_rx) = mpsc::channel();
+		let (resume_tx, resume_rx) = oneshot::channel();
+		let (applied_tx, applied_rx) = mpsc::channel();
 		*self.pause_next_commit.lock() = Some(DirectCommitGate {
 			reached: reached_tx,
 			resume: resume_rx,
+			applied: applied_tx,
 		});
 		DirectCommitPause {
 			reached: reached_rx,
 			resume: resume_tx,
+			applied: applied_rx,
 		}
 	}
 
 	pub(crate) fn take_commit_error(&self) -> Option<String> {
-		self.fail_next_commit.lock().take()
+		take_counted_error(&self.fail_next_commit)
 	}
 
 	pub(crate) fn take_commit_after_apply_error(&self) -> Option<String> {
-		self.fail_next_commit_after_apply.lock().take()
+		take_counted_error(&self.fail_next_commit_after_apply)
+	}
+
+	pub(crate) fn take_commit_response_head(&self) -> Option<Option<u64>> {
+		self.commit_response_head.lock().take()
 	}
 
 	pub(crate) fn take_get_pages_error(&self) -> Option<String> {
@@ -612,18 +646,19 @@ impl DirectTransportHooks {
 		should_hang
 	}
 
-	pub(crate) fn pause_commit_if_requested(&self) {
+	pub(crate) async fn pause_commit_if_requested(&self) -> Option<mpsc::Sender<()>> {
 		let Some(gate) = self.pause_next_commit.lock().take() else {
-			return;
+			return None;
 		};
 		let _ = gate.reached.send(());
-		let _ = gate.resume.recv();
+		let _ = gate.resume.await;
+		Some(gate.applied)
 	}
 
 	pub(crate) async fn apply_commit_hooks(
 		&self,
 		req: protocol::SqliteCommitRequest,
-	) -> Result<()> {
+	) -> Result<Option<mpsc::Sender<()>>> {
 		self.record_commit_request(req);
 		if self.take_commit_hang() {
 			std::future::pending().await
@@ -631,14 +666,25 @@ impl DirectTransportHooks {
 		if let Some(message) = self.take_commit_error() {
 			return Err(anyhow::anyhow!(message));
 		}
-		self.pause_commit_if_requested();
-		Ok(())
+		Ok(self.pause_commit_if_requested().await)
 	}
+}
+
+fn take_counted_error(slot: &Mutex<Option<(usize, String)>>) -> Option<String> {
+	let mut slot = slot.lock();
+	let (remaining, message) = slot.as_mut()?;
+	let output = message.clone();
+	*remaining = remaining.saturating_sub(1);
+	if *remaining == 0 {
+		*slot = None;
+	}
+	Some(output)
 }
 
 pub(crate) struct DirectCommitPause {
 	reached: mpsc::Receiver<()>,
-	resume: mpsc::Sender<()>,
+	resume: oneshot::Sender<()>,
+	applied: mpsc::Receiver<()>,
 }
 
 impl DirectCommitPause {
@@ -646,14 +692,28 @@ impl DirectCommitPause {
 		self.reached.recv().expect("commit pause should be reached");
 	}
 
+	pub(crate) fn wait_until_reached_with_context(&self, context: &str) {
+		self.reached
+			.recv()
+			.unwrap_or_else(|error| panic!("{context}: commit pause should be reached: {error}"));
+	}
+
 	pub(crate) fn resume(self) {
+		let _ = self.resume.send(());
+	}
+
+	pub(crate) fn resume_and_wait_until_applied(self) {
 		self.resume.send(()).expect("commit pause should resume");
+		self.applied
+			.recv()
+			.expect("resumed commit should be applied");
 	}
 }
 
 struct DirectCommitGate {
 	reached: mpsc::Sender<()>,
-	resume: mpsc::Receiver<()>,
+	resume: oneshot::Receiver<()>,
+	applied: mpsc::Sender<()>,
 }
 
 pub(crate) fn protocol_fetched_page(

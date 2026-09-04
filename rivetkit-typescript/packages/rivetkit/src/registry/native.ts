@@ -669,6 +669,11 @@ function getOrCreateNativeSqlDatabase(
 		query: (sql, params) => runtime.actorSqlQuery(ctx, sql, params),
 		run: (sql, params) => runtime.actorSqlRun(ctx, sql, params),
 		metrics: () => runtime.actorSqlMetrics(ctx),
+		commitSeq: () => runtime.actorSqlCommitSeq(ctx),
+		flushedSeq: () => runtime.actorSqlFlushedSeq(ctx),
+		waitForFlush: (seq) => runtime.actorSqlWaitForFlush(ctx, seq),
+		flushError: () => runtime.actorSqlFlushError(ctx),
+		supportsSyncMetadata: () => runtime.actorSqlSupportsSyncMetadata(ctx),
 		takeLastKvError: () => runtime.actorSqlTakeLastKvError(ctx),
 		close: () => runtime.actorSqlClose(ctx),
 	});
@@ -3838,12 +3843,16 @@ function buildActorConfig(
 	const sqliteProfiling = (
 		config.db as { sqliteProfiling?: SqliteProfilingOptions } | undefined
 	)?.sqliteProfiling;
+	const sqliteCommitMode = (
+		config.db as { sqliteCommitMode?: "awaited" | "deferred" } | undefined
+	)?.sqliteCommitMode;
 
 	return {
 		name: options.name as string | undefined,
 		icon: options.icon as string | undefined,
 		hasDatabase: true,
 		remoteSqlite: usesRemoteSqlite,
+		sqliteCommitMode,
 		sqliteProfiling,
 		enableActorRuntimeSocket: options.enableActorRuntimeSocket === true,
 		hasState:
@@ -4761,7 +4770,8 @@ export function buildNativeFactory(
 					}
 				} finally {
 					resolveNativeDestroy(runtime, ctx);
-					await actorCtx.closeDatabase();
+					// Core owns destroy-time database closure. Waiting for it here delays the
+					// callback that lets core unlink the Actor Runtime Socket for this generation.
 					clearNativeRuntimeState(runtime, ctx);
 					await actorCtx.dispose();
 				}

@@ -846,12 +846,14 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	async actorSqlTransactionCommit(
 		transaction: SqliteTransactionHandle,
-	): Promise<void> {
-		await asNativeSqlTransaction(transaction).commit();
+	): Promise<number | null> {
+		return await asNativeSqlTransaction(transaction).commit();
 	}
 
-	actorSqlTransactionCommitSync(transaction: SqliteTransactionHandle): void {
-		asNativeSqlTransaction(transaction).commitSync();
+	actorSqlTransactionCommitSync(
+		transaction: SqliteTransactionHandle,
+	): number | null {
+		return asNativeSqlTransaction(transaction).commitSync();
 	}
 
 	async actorSqlTransactionRollback(
@@ -934,6 +936,29 @@ export class NapiCoreRuntime implements CoreRuntime {
 
 	actorSqlMetrics(ctx: ActorContextHandle) {
 		return this.#actorSql(ctx).metrics?.() ?? null;
+	}
+
+	actorSqlCommitSeq(ctx: ActorContextHandle): number {
+		return this.#actorSql(ctx).commitSeq();
+	}
+
+	actorSqlFlushedSeq(ctx: ActorContextHandle): number {
+		return this.#actorSql(ctx).flushedSeq();
+	}
+
+	async actorSqlWaitForFlush(
+		ctx: ActorContextHandle,
+		seq: number,
+	): Promise<void> {
+		await this.#actorSql(ctx).waitForFlush(seq);
+	}
+
+	actorSqlFlushError(ctx: ActorContextHandle): string | null {
+		return this.#actorSql(ctx).flushError();
+	}
+
+	actorSqlSupportsSyncMetadata(ctx: ActorContextHandle): boolean {
+		return this.#actorSql(ctx).supportsSyncMetadata();
 	}
 
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null {

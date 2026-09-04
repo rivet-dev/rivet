@@ -1,4 +1,5 @@
 import type {
+	SqliteCommitMode,
 	SqliteNativeMetrics,
 	SqliteProfilingOptions,
 } from "@/common/database/config";
@@ -221,6 +222,7 @@ export interface RuntimeActorRuntimeSocketEndpointInfo {
 export interface RuntimeSqlQueryResult {
 	columns: string[];
 	rows: unknown[][];
+	readonly?: boolean;
 }
 
 export type RuntimeSqlExecResult = RuntimeSqlQueryResult;
@@ -228,6 +230,7 @@ export type RuntimeSqlExecResult = RuntimeSqlQueryResult;
 export interface RuntimeSqlExecuteResult extends RuntimeSqlQueryResult {
 	changes: number;
 	lastInsertRowId?: number | null;
+	commitSeq?: number;
 }
 
 export interface RuntimeSqlBatchStatement {
@@ -278,6 +281,9 @@ export interface RuntimeSqlDatabase {
 		timeoutMs?: number,
 		name?: string,
 	): RuntimeSqlTransactionDatabase;
+	commitSeq(): number;
+	flushedSeq(): number;
+	waitForFlush(seq: number): Promise<void>;
 	metrics?(): SqliteNativeMetrics | null;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
@@ -294,8 +300,8 @@ export interface RuntimeSqlTransactionDatabase {
 		sql: string,
 		params?: RuntimeSqlBindParams,
 	): RuntimeSqlExecuteResult;
-	commit(): Promise<void>;
-	commitSync(): void;
+	commit(): Promise<number | null>;
+	commitSync(): number | null;
 	rollback(): Promise<void>;
 	rollbackSync(): void;
 }
@@ -305,6 +311,7 @@ export interface RuntimeActorConfig {
 	icon?: string;
 	hasDatabase?: boolean;
 	remoteSqlite?: boolean;
+	sqliteCommitMode?: SqliteCommitMode;
 	sqliteProfiling?: SqliteProfilingOptions;
 	enableActorRuntimeSocket?: boolean;
 	hasState?: boolean;
@@ -679,8 +686,10 @@ export interface CoreRuntime {
 	): RuntimeSqlExecuteResult;
 	actorSqlTransactionCommit(
 		transaction: SqliteTransactionHandle,
-	): Promise<void>;
-	actorSqlTransactionCommitSync(transaction: SqliteTransactionHandle): void;
+	): Promise<number | null>;
+	actorSqlTransactionCommitSync(
+		transaction: SqliteTransactionHandle,
+	): number | null;
 	actorSqlTransactionRollback(
 		transaction: SqliteTransactionHandle,
 	): Promise<void>;
@@ -717,6 +726,11 @@ export interface CoreRuntime {
 		params?: RuntimeSqlBindParams,
 	): Promise<RuntimeSqlRunResult>;
 	actorSqlMetrics(ctx: ActorContextHandle): SqliteNativeMetrics | null;
+	actorSqlCommitSeq(ctx: ActorContextHandle): number;
+	actorSqlFlushedSeq(ctx: ActorContextHandle): number;
+	actorSqlWaitForFlush(ctx: ActorContextHandle, seq: number): Promise<void>;
+	actorSqlFlushError(ctx: ActorContextHandle): string | null;
+	actorSqlSupportsSyncMetadata(ctx: ActorContextHandle): boolean;
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null;
 	actorSqlClose(ctx: ActorContextHandle): Promise<void>;
 	actorRuntimeSocketProvision(

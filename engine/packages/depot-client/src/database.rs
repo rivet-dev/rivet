@@ -9,11 +9,14 @@ use tokio::runtime::Handle;
 use crate::{
 	query::{BindParam, ExecResult, ExecuteResult, QueryResult},
 	vfs::{
-		NativeVfsHandle, SqliteOpenPhase, SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics,
-		SqliteVfsMetricsSnapshot, VfsConfig, VfsPreloadHintSnapshot,
-		fetch_initial_pages_for_registration,
+		CommitMode, DatabaseFailure, FlushError, NativeVfsHandle, SqliteOpenPhase,
+		SqliteTransportHandle, SqliteVfs, SqliteVfsMetrics, SqliteVfsMetricsSnapshot, VfsConfig,
+		VfsPreloadHintSnapshot, fetch_initial_pages_for_registration,
 	},
-	worker::{SqliteWorkerFatalError, SqliteWorkerHandle, SqliteWorkerResult},
+	worker::{
+		SqliteWorkerCloseTimeoutError, SqliteWorkerFatalError, SqliteWorkerHandle,
+		SqliteWorkerResult,
+	},
 };
 
 #[derive(Clone)]
@@ -80,10 +83,14 @@ pub async fn open_database_from_transport(
 	generation: u64,
 	rt_handle: Handle,
 	metrics: Option<Arc<dyn SqliteVfsMetrics>>,
+	commit_mode: CommitMode,
+	initial_commit_seq: u64,
 ) -> Result<NativeDatabaseHandle> {
 	let open_timer = SqliteOpenTimer::new(&metrics);
 	let vfs_name = vfs_name_for_actor_database(&actor_id, generation);
-	let config = VfsConfig::default();
+	let mut config = VfsConfig::default();
+	config.commit_mode = commit_mode;
+	config.initial_commit_seq = initial_commit_seq;
 	let transport: SqliteTransportHandle = Arc::new(GenerationFencedTransport {
 		inner: transport,
 		generation,
@@ -253,6 +260,7 @@ impl NativeDatabaseHandle {
 		self.execute(sql, params).await.map(|result| QueryResult {
 			columns: result.columns,
 			rows: result.rows,
+			readonly: result.readonly,
 		})
 	}
 
@@ -281,14 +289,79 @@ impl NativeDatabaseHandle {
 	}
 
 	pub async fn close(&self) -> Result<()> {
-		match self.worker.close().await {
-			Ok(()) => Ok(()),
-			Err(error) => Err(self.fatal_error().unwrap_or(error)),
+		self.close_with_timeouts(None, self.vfs.close_flush_timeout())
+			.await
+	}
+
+	async fn close_with_timeouts(
+		&self,
+		worker_timeout: Option<std::time::Duration>,
+		flush_timeout: std::time::Duration,
+	) -> Result<()> {
+		self.vfs.begin_close();
+		#[cfg(test)]
+		let worker_result = match worker_timeout {
+			Some(timeout) => self.worker.close_with_timeout_for_test(timeout).await,
+			None => self.worker.close().await,
+		};
+		#[cfg(not(test))]
+		let worker_result = {
+			let _ = worker_timeout;
+			self.worker.close().await
+		};
+		if worker_result.as_ref().err().is_some_and(|error| {
+			error
+				.downcast_ref::<SqliteWorkerCloseTimeoutError>()
+				.is_some()
+		}) {
+			self.vfs.abort_flusher_for_worker_timeout().await;
+			return worker_result;
+		}
+		let flush_result = self.vfs.drain_and_shutdown_flusher(flush_timeout).await;
+		match (worker_result, flush_result) {
+			(Ok(()), Ok(())) => Ok(()),
+			(_, Err(error)) => Err(anyhow!(error)),
+			(Err(error), Ok(())) => Err(self.fatal_error().unwrap_or(error)),
 		}
 	}
 
-	pub async fn wait_for_worker_failure(&self) -> bool {
-		self.worker.wait_for_failure().await
+	#[cfg(test)]
+	pub(crate) async fn close_with_timeouts_for_test(
+		&self,
+		worker_timeout: std::time::Duration,
+		flush_timeout: std::time::Duration,
+	) -> Result<()> {
+		self.close_with_timeouts(Some(worker_timeout), flush_timeout)
+			.await
+	}
+
+	pub async fn wait_for_failure(&self) -> DatabaseFailure {
+		tokio::select! {
+			reason = self.vfs.wait_for_failure() => reason,
+			failed = self.worker.wait_for_failure() => {
+				if failed {
+					DatabaseFailure::WorkerStopped
+				} else {
+					DatabaseFailure::Closed
+				}
+			}
+		}
+	}
+
+	pub fn commit_seq(&self) -> u64 {
+		self.vfs.commit_seq()
+	}
+
+	pub fn flushed_seq(&self) -> u64 {
+		self.vfs.flushed_seq()
+	}
+
+	pub fn flush_error(&self) -> Option<FlushError> {
+		self.vfs.flush_error()
+	}
+
+	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		self.vfs.wait_for_flush(seq).await
 	}
 
 	pub fn take_last_kv_error(&self) -> Option<String> {

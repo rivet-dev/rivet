@@ -3,7 +3,7 @@ use std::env;
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use crate::time::{Instant, timeout};
@@ -169,6 +169,7 @@ pub(crate) struct RegistryDispatcher {
 	actor_instances: SccHashMap<String, ActorInstanceState>,
 	starting_instances: SccHashMap<String, Arc<Notify>>,
 	pending_stops: SccHashMap<String, PendingStop>,
+	sqlite_commit_sequences: SccHashMap<String, Arc<AtomicU64>>,
 	region: String,
 	handle_inspector_http_in_runtime: bool,
 }
@@ -704,6 +705,7 @@ impl RegistryDispatcher {
 			actor_instances: SccHashMap::new(),
 			starting_instances: SccHashMap::new(),
 			pending_stops: SccHashMap::new(),
+			sqlite_commit_sequences: SccHashMap::new(),
 			region: env::var("RIVET_REGION").unwrap_or_default(),
 			handle_inspector_http_in_runtime,
 		}
@@ -1038,6 +1040,12 @@ impl RegistryDispatcher {
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
+		if matches!(map_envoy_stop_reason(&reason), ShutdownKind::Destroy) {
+			let _ = self
+				.sqlite_commit_sequences
+				.remove_async(&actor_id.to_owned())
+				.await;
+		}
 		if self
 			.starting_instances
 			.get_async(&actor_id.to_owned())
@@ -1177,6 +1185,12 @@ impl RegistryDispatcher {
 		}
 
 		let final_result = shutdown_result.and(join_result);
+		if matches!(task_stop_reason, ShutdownKind::Destroy) {
+			let _ = self
+				.sqlite_commit_sequences
+				.remove_async(&actor_id.to_owned())
+				.await;
+		}
 		match &final_result {
 			Ok(_) => {
 				let _ = stop_handle.complete();
@@ -1221,6 +1235,23 @@ impl RegistryDispatcher {
 		factory: &ActorFactory,
 	) -> Result<ActorContext> {
 		let formatted_key = format_actor_key(&key);
+		let sqlite = SqliteDb::new_with_remote_sqlite(
+			handle.clone(),
+			actor_id.to_owned(),
+			Some(formatted_key),
+			Some(generation as u64),
+			factory.config().has_database,
+			factory.config().remote_sqlite,
+			factory.config().sqlite_commit_mode,
+		)?;
+		let commit_sequence = match self.sqlite_commit_sequences.entry_sync(actor_id.to_owned()) {
+			SccEntry::Occupied(entry) => Arc::clone(entry.get()),
+			SccEntry::Vacant(entry) => {
+				let state = Arc::new(AtomicU64::new(0));
+				entry.insert_entry(Arc::clone(&state));
+				state
+			}
+		};
 		let ctx = ActorContext::build(
 			actor_id.to_owned(),
 			actor_name.to_owned(),
@@ -1230,14 +1261,7 @@ impl RegistryDispatcher {
 			handle.get_envoy_key().to_owned(),
 			factory.config().clone(),
 			LegacyActorKv::new(handle.clone(), actor_id.to_owned()),
-			SqliteDb::new_with_remote_sqlite(
-				handle.clone(),
-				actor_id.to_owned(),
-				Some(formatted_key),
-				Some(generation as u64),
-				factory.config().has_database,
-				factory.config().remote_sqlite,
-			)?,
+			sqlite.with_commit_sequence_state(commit_sequence),
 		);
 		ctx.configure_envoy(handle, Some(generation));
 		Ok(ctx)

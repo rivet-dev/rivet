@@ -12,8 +12,8 @@ use libsqlite3_sys::{
 	sqlite3_bind_int64, sqlite3_bind_null, sqlite3_bind_text, sqlite3_changes, sqlite3_column_blob,
 	sqlite3_column_bytes, sqlite3_column_count, sqlite3_column_double, sqlite3_column_int64,
 	sqlite3_column_name, sqlite3_column_text, sqlite3_column_type, sqlite3_errmsg,
-	sqlite3_extended_errcode, sqlite3_finalize, sqlite3_last_insert_rowid, sqlite3_prepare_v2,
-	sqlite3_step,
+	sqlite3_extended_errcode, sqlite3_finalize, sqlite3_get_autocommit, sqlite3_last_insert_rowid,
+	sqlite3_prepare_v2, sqlite3_step, sqlite3_stmt_readonly,
 };
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -39,6 +39,17 @@ impl fmt::Display for SqliteStatementError {
 }
 
 impl Error for SqliteStatementError {}
+
+#[derive(Debug)]
+pub struct SqliteTransactionClosedError;
+
+impl fmt::Display for SqliteTransactionClosedError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str("sqlite transaction closed before the remaining exec statements")
+	}
+}
+
+impl Error for SqliteTransactionClosedError {}
 
 pub fn execute_statement(
 	db: *mut sqlite3,
@@ -97,8 +108,10 @@ pub fn query_statement(
 		return Ok(QueryResult {
 			columns: Vec::new(),
 			rows: Vec::new(),
+			readonly: Some(true),
 		});
 	}
+	let readonly = unsafe { sqlite3_stmt_readonly(stmt) != 0 };
 
 	let result = (|| {
 		if let Some(params) = params {
@@ -124,7 +137,11 @@ pub fn query_statement(
 			rows.push(row);
 		}
 
-		Ok(QueryResult { columns, rows })
+		Ok(QueryResult {
+			columns,
+			rows,
+			readonly: Some(readonly),
+		})
 	})();
 
 	unsafe {
@@ -150,7 +167,7 @@ pub fn execute_single_statement(
 			"failed to prepare sqlite execute statement",
 		));
 	}
-	if has_non_whitespace_tail(tail) {
+	if tail_has_statement(db, tail, 1)? {
 		if !stmt.is_null() {
 			unsafe {
 				sqlite3_finalize(stmt);
@@ -169,8 +186,11 @@ pub fn execute_single_statement(
 			rows: Vec::new(),
 			changes: 0,
 			last_insert_row_id: None,
+			readonly: Some(true),
+			commit_seq: None,
 		});
 	}
+	let readonly = unsafe { sqlite3_stmt_readonly(stmt) != 0 };
 
 	let result = (|| {
 		if let Some(params) = params {
@@ -205,6 +225,8 @@ pub fn execute_single_statement(
 			rows,
 			changes,
 			last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
+			readonly: Some(readonly),
+			commit_seq: None,
 		})
 	})();
 
@@ -231,7 +253,7 @@ pub fn execute_single_statement_profiled(
 			"failed to prepare sqlite execute statement",
 		));
 	}
-	if has_non_whitespace_tail(tail) {
+	if tail_has_statement(db, tail, 1)? {
 		if !stmt.is_null() {
 			unsafe {
 				sqlite3_finalize(stmt);
@@ -251,10 +273,13 @@ pub fn execute_single_statement_profiled(
 				rows: Vec::new(),
 				changes: 0,
 				last_insert_row_id: None,
+				readonly: Some(true),
+				commit_seq: None,
 			},
 			SqliteQueryProfile::default(),
 		));
 	}
+	let readonly = unsafe { sqlite3_stmt_readonly(stmt) != 0 };
 
 	let result = (|| {
 		let mut profile = SqliteQueryProfile::default();
@@ -293,6 +318,8 @@ pub fn execute_single_statement_profiled(
 				rows,
 				changes,
 				last_insert_row_id: (changes > 0).then(|| unsafe { sqlite3_last_insert_rowid(db) }),
+				readonly: Some(readonly),
+				commit_seq: None,
 			},
 			profile,
 		))
@@ -306,13 +333,27 @@ pub fn execute_single_statement_profiled(
 }
 
 pub fn exec_statements(db: *mut sqlite3, sql: &str) -> Result<QueryResult> {
+	exec_statements_inner(db, sql, false)
+}
+
+pub fn exec_statements_in_transaction(db: *mut sqlite3, sql: &str) -> Result<QueryResult> {
+	exec_statements_inner(db, sql, true)
+}
+
+fn exec_statements_inner(
+	db: *mut sqlite3,
+	sql: &str,
+	stop_when_autocommit_resumes: bool,
+) -> Result<QueryResult> {
 	let c_sql = CString::new(sql).map_err(|err| anyhow!(err.to_string()))?;
 	let mut remaining = c_sql.as_ptr();
 	let mut statement_index = 0_u32;
 	let mut final_result = QueryResult {
 		columns: Vec::new(),
 		rows: Vec::new(),
+		readonly: Some(true),
 	};
+	let mut all_readonly = true;
 
 	while unsafe { *remaining } != 0 {
 		let mut stmt = ptr::null_mut();
@@ -333,6 +374,7 @@ pub fn exec_statements(db: *mut sqlite3, sql: &str) -> Result<QueryResult> {
 			remaining = tail;
 			continue;
 		}
+		all_readonly &= unsafe { sqlite3_stmt_readonly(stmt) != 0 };
 
 		let result = (|| {
 			let columns = collect_columns(stmt);
@@ -366,7 +408,17 @@ pub fn exec_statements(db: *mut sqlite3, sql: &str) -> Result<QueryResult> {
 
 		let (columns, rows) = result?;
 		if !columns.is_empty() || !rows.is_empty() {
-			final_result = QueryResult { columns, rows };
+			final_result = QueryResult {
+				columns,
+				rows,
+				readonly: Some(all_readonly),
+			};
+		}
+		if stop_when_autocommit_resumes
+			&& unsafe { sqlite3_get_autocommit(db) } != 0
+			&& tail_has_statement(db, tail, statement_index.saturating_add(1))?
+		{
+			return Err(SqliteTransactionClosedError.into());
 		}
 
 		if tail == remaining {
@@ -376,6 +428,7 @@ pub fn exec_statements(db: *mut sqlite3, sql: &str) -> Result<QueryResult> {
 		statement_index = statement_index.saturating_add(1);
 	}
 
+	final_result.readonly = Some(all_readonly);
 	Ok(final_result)
 }
 
@@ -383,14 +436,31 @@ pub fn exec_statements_profiled(
 	db: *mut sqlite3,
 	sql: &str,
 ) -> Result<(QueryResult, SqliteQueryProfile)> {
+	exec_statements_profiled_inner(db, sql, false)
+}
+
+pub fn exec_statements_profiled_in_transaction(
+	db: *mut sqlite3,
+	sql: &str,
+) -> Result<(QueryResult, SqliteQueryProfile)> {
+	exec_statements_profiled_inner(db, sql, true)
+}
+
+fn exec_statements_profiled_inner(
+	db: *mut sqlite3,
+	sql: &str,
+	stop_when_autocommit_resumes: bool,
+) -> Result<(QueryResult, SqliteQueryProfile)> {
 	let c_sql = CString::new(sql).map_err(|err| anyhow!(err.to_string()))?;
 	let mut remaining = c_sql.as_ptr();
 	let mut statement_index = 0_u32;
 	let mut final_result = QueryResult {
 		columns: Vec::new(),
 		rows: Vec::new(),
+		readonly: Some(true),
 	};
 	let mut final_profile = SqliteQueryProfile::default();
+	let mut all_readonly = true;
 
 	while unsafe { *remaining } != 0 {
 		let mut stmt = ptr::null_mut();
@@ -411,6 +481,7 @@ pub fn exec_statements_profiled(
 			remaining = tail;
 			continue;
 		}
+		all_readonly &= unsafe { sqlite3_stmt_readonly(stmt) != 0 };
 
 		let result = (|| {
 			let columns = collect_columns(stmt);
@@ -449,8 +520,18 @@ pub fn exec_statements_profiled(
 
 		let (columns, rows, profile) = result?;
 		if !columns.is_empty() || !rows.is_empty() {
-			final_result = QueryResult { columns, rows };
+			final_result = QueryResult {
+				columns,
+				rows,
+				readonly: Some(all_readonly),
+			};
 			final_profile = profile;
+		}
+		if stop_when_autocommit_resumes
+			&& unsafe { sqlite3_get_autocommit(db) } != 0
+			&& tail_has_statement(db, tail, statement_index.saturating_add(1))?
+		{
+			return Err(SqliteTransactionClosedError.into());
 		}
 
 		if tail == remaining {
@@ -460,6 +541,7 @@ pub fn exec_statements_profiled(
 		statement_index = statement_index.saturating_add(1);
 	}
 
+	final_result.readonly = Some(all_readonly);
 	Ok((final_result, final_profile))
 }
 
@@ -631,13 +713,32 @@ fn logical_bind_bytes(param: &BindParam) -> u64 {
 	}
 }
 
-fn has_non_whitespace_tail(tail: *const c_char) -> bool {
-	if tail.is_null() {
-		return false;
+fn tail_has_statement(
+	db: *mut sqlite3,
+	mut remaining: *const c_char,
+	statement_index: u32,
+) -> Result<bool> {
+	while !remaining.is_null() && unsafe { *remaining } != 0 {
+		let mut stmt = ptr::null_mut();
+		let mut tail = ptr::null();
+		let rc = unsafe { sqlite3_prepare_v2(db, remaining, -1, &mut stmt, &mut tail) };
+		if rc != SQLITE_OK {
+			return Err(sqlite_error(
+				db,
+				statement_index,
+				"failed to prepare sqlite trailing statement",
+			));
+		}
+		if !stmt.is_null() {
+			unsafe { sqlite3_finalize(stmt) };
+			return Ok(true);
+		}
+		if tail == remaining {
+			break;
+		}
+		remaining = tail;
 	}
-
-	let bytes = unsafe { CStr::from_ptr(tail).to_bytes() };
-	bytes.iter().any(|byte| !byte.is_ascii_whitespace())
+	Ok(false)
 }
 
 fn sqlite_error(db: *mut sqlite3, statement_index: u32, context: &str) -> anyhow::Error {
@@ -740,6 +841,25 @@ mod tests {
 
 		assert_eq!(result.columns, vec!["count"]);
 		assert_eq!(result.rows, vec![vec![ColumnValue::Integer(2)]]);
+	}
+
+	#[test]
+	fn exec_keeps_only_the_last_compatible_result_set() {
+		let db = MemoryDb::open();
+		let result = exec_statements(db.as_ptr(), "SELECT 1 AS value; SELECT 2 AS value;")
+			.expect("both selects should execute");
+
+		assert_eq!(result.columns, vec!["value"]);
+		assert_eq!(result.rows, vec![vec![ColumnValue::Integer(2)]]);
+	}
+
+	#[test]
+	fn transaction_exec_allows_comments_after_commit() {
+		let db = MemoryDb::open();
+		exec_statements(db.as_ptr(), "BEGIN").unwrap();
+		let result = exec_statements_in_transaction(db.as_ptr(), "COMMIT; -- complete")
+			.expect("a trailing comment is not another transaction statement");
+		assert_eq!(result.readonly, Some(true));
 	}
 
 	#[test]

@@ -82,6 +82,7 @@ pub struct ExecResult {
 pub struct QueryResult {
 	pub columns: Vec<String>,
 	pub rows: Vec<Vec<ColumnValue>>,
+	pub readonly: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +91,8 @@ pub struct ExecuteResult {
 	pub rows: Vec<Vec<ColumnValue>>,
 	pub changes: i64,
 	pub last_insert_row_id: Option<i64>,
+	pub readonly: Option<bool>,
+	pub commit_seq: Option<u64>,
 }
 
 impl ExecuteResult {
@@ -97,6 +100,7 @@ impl ExecuteResult {
 		QueryResult {
 			columns: self.columns,
 			rows: self.rows,
+			readonly: self.readonly,
 		}
 	}
 
@@ -130,6 +134,8 @@ mod tests {
 			]],
 			changes: 3,
 			last_insert_row_id: Some(42),
+			readonly: Some(false),
+			commit_seq: Some(7),
 		};
 
 		assert_eq!(result.columns, vec!["id", "name"]);
@@ -151,6 +157,8 @@ mod tests {
 			rows: vec![vec![ColumnValue::Integer(9)]],
 			changes: 2,
 			last_insert_row_id: Some(10),
+			readonly: Some(false),
+			commit_seq: Some(8),
 		};
 
 		let query_result = result.clone().into_query_result();

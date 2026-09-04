@@ -24,6 +24,10 @@ pub const VFS_PAGE_CACHE_CAPACITY_PAGES_ENV: &str =
 pub const VFS_PROTECTED_CACHE_PAGES_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_PROTECTED_CACHE_PAGES";
 pub const VFS_STAGING_CACHE_TTL_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_VFS_STAGING_CACHE_TTL_MS";
 pub const PAGER_CACHE_SIZE_KIB_ENV: &str = "RIVETKIT_SQLITE_OPT_PAGER_CACHE_SIZE_KIB";
+pub const FLUSH_RETRY_DEADLINE_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_DEADLINE_MS";
+pub const FLUSH_RETRY_BACKOFF_MIN_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_BACKOFF_MIN_MS";
+pub const FLUSH_RETRY_BACKOFF_MAX_MS_ENV: &str = "RIVETKIT_SQLITE_OPT_FLUSH_RETRY_BACKOFF_MAX_MS";
+pub const MAX_UNFLUSHED_BYTES_ENV: &str = "RIVETKIT_SQLITE_OPT_MAX_UNFLUSHED_BYTES";
 
 pub const DEFAULT_STARTUP_PRELOAD_MAX_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_STARTUP_PRELOAD_MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -37,6 +41,10 @@ pub const DEFAULT_VFS_STAGING_CACHE_TTL_MS: u64 = 30_000;
 pub const MAX_VFS_STAGING_CACHE_TTL_MS: u64 = 300_000;
 pub const DEFAULT_PAGER_CACHE_SIZE_KIB: u64 = 8 * 1024;
 pub const MAX_PAGER_CACHE_SIZE_KIB: u64 = 256 * 1024;
+pub const DEFAULT_FLUSH_RETRY_DEADLINE_MS: u64 = 30_000;
+pub const DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS: u64 = 50;
+pub const DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS: u64 = 2_000;
+pub const DEFAULT_MAX_UNFLUSHED_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SqliteReadAheadMode {
@@ -110,6 +118,10 @@ pub struct SqliteOptimizationFlags {
 	pub vfs_protected_cache_pages: usize,
 	pub vfs_staging_cache_ttl_ms: u64,
 	pub pager_cache_size_kib: u64,
+	pub flush_retry_deadline_ms: u64,
+	pub flush_retry_backoff_min_ms: u64,
+	pub flush_retry_backoff_max_ms: u64,
+	pub max_unflushed_bytes: usize,
 }
 
 impl Default for SqliteOptimizationFlags {
@@ -138,6 +150,10 @@ impl Default for SqliteOptimizationFlags {
 			vfs_protected_cache_pages: DEFAULT_VFS_PROTECTED_CACHE_PAGES,
 			vfs_staging_cache_ttl_ms: DEFAULT_VFS_STAGING_CACHE_TTL_MS,
 			pager_cache_size_kib: DEFAULT_PAGER_CACHE_SIZE_KIB,
+			flush_retry_deadline_ms: DEFAULT_FLUSH_RETRY_DEADLINE_MS,
+			flush_retry_backoff_min_ms: DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS,
+			flush_retry_backoff_max_ms: DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS,
+			max_unflushed_bytes: DEFAULT_MAX_UNFLUSHED_BYTES,
 		}
 	}
 }
@@ -216,6 +232,22 @@ impl SqliteOptimizationFlags {
 				DEFAULT_PAGER_CACHE_SIZE_KIB,
 				MAX_PAGER_CACHE_SIZE_KIB,
 			),
+			flush_retry_deadline_ms: u64_by_default(
+				read_env(FLUSH_RETRY_DEADLINE_MS_ENV).as_deref(),
+				DEFAULT_FLUSH_RETRY_DEADLINE_MS,
+			),
+			flush_retry_backoff_min_ms: u64_by_default(
+				read_env(FLUSH_RETRY_BACKOFF_MIN_MS_ENV).as_deref(),
+				DEFAULT_FLUSH_RETRY_BACKOFF_MIN_MS,
+			),
+			flush_retry_backoff_max_ms: u64_by_default(
+				read_env(FLUSH_RETRY_BACKOFF_MAX_MS_ENV).as_deref(),
+				DEFAULT_FLUSH_RETRY_BACKOFF_MAX_MS,
+			),
+			max_unflushed_bytes: usize_by_default(
+				read_env(MAX_UNFLUSHED_BYTES_ENV).as_deref(),
+				DEFAULT_MAX_UNFLUSHED_BYTES,
+			),
 		}
 	}
 }
@@ -244,6 +276,18 @@ fn usize_bounded_by_default(value: Option<&str>, default: usize, max: usize) -> 
 		.and_then(|value| value.trim().parse::<usize>().ok())
 		.unwrap_or(default)
 		.min(max)
+}
+
+fn usize_by_default(value: Option<&str>, default: usize) -> usize {
+	value
+		.and_then(|value| value.trim().parse::<usize>().ok())
+		.unwrap_or(default)
+}
+
+fn u64_by_default(value: Option<&str>, default: u64) -> u64 {
+	value
+		.and_then(|value| value.trim().parse::<u64>().ok())
+		.unwrap_or(default)
 }
 
 fn u64_bounded_by_default(value: Option<&str>, default: u64, max: u64) -> u64 {

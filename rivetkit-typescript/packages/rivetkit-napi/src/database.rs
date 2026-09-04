@@ -1,13 +1,14 @@
 use std::{future::Future, time::Duration};
 
 use crate::actor_context::{StateDeltaPayload, state_deltas_from_payload};
-use napi::bindgen_prelude::Buffer;
+use napi::JsObject;
+use napi::bindgen_prelude::{Buffer, Env};
 use napi_derive::napi;
 use rivetkit_core::ActorStateTransaction as CoreActorStateTransaction;
 use rivetkit_core::sqlite::{
-	BindParam, ColumnValue, ExecuteResult as CoreExecuteResult, QueryResult as CoreQueryResult,
-	SqliteBatchStatement as CoreSqliteBatchStatement, SqliteDb as CoreSqliteDb,
-	SqliteTransaction as CoreSqliteTransaction,
+	BindParam, CallMode, ColumnValue, ExecuteResult as CoreExecuteResult,
+	QueryResult as CoreQueryResult, SqliteBatchStatement as CoreSqliteBatchStatement,
+	SqliteDb as CoreSqliteDb, SqliteTransaction as CoreSqliteTransaction, TransactionOrigin,
 };
 
 use crate::{NapiInvalidArgument, napi_anyhow_error};
@@ -74,6 +75,7 @@ pub struct ExecuteResult {
 pub struct QueryResult {
 	pub columns: Vec<String>,
 	pub rows: Vec<Vec<serde_json::Value>>,
+	pub readonly: Option<bool>,
 }
 
 #[napi(object)]
@@ -82,6 +84,8 @@ pub struct NativeExecuteResult {
 	pub rows: Vec<Vec<serde_json::Value>>,
 	pub changes: i64,
 	pub last_insert_row_id: Option<i64>,
+	pub readonly: Option<bool>,
+	pub commit_seq: Option<f64>,
 }
 
 #[napi(object)]
@@ -127,6 +131,43 @@ impl JsNativeDatabase {
 			write_buffer_dirty_pages: metrics.write_buffer_dirty_pages as f64,
 			db_size_pages: metrics.db_size_pages as f64,
 		})
+	}
+
+	#[napi]
+	pub fn commit_seq(&self) -> f64 {
+		self.db.commit_seq() as f64
+	}
+
+	#[napi]
+	pub fn flushed_seq(&self) -> f64 {
+		self.db.flushed_seq() as f64
+	}
+
+	#[napi]
+	pub fn flush_error(&self) -> Option<String> {
+		self.db.flush_error()
+	}
+
+	#[napi]
+	pub fn supports_sync_metadata(&self) -> bool {
+		self.db.backend() == rivetkit_core::sqlite::SqliteBackend::LocalNative
+	}
+
+	#[napi]
+	pub async fn wait_for_flush(&self, seq: f64) -> napi::Result<()> {
+		if !seq.is_finite() || seq < 0.0 || seq.fract() != 0.0 || seq > 9_007_199_254_740_991.0 {
+			return Err(napi_anyhow_error(
+				NapiInvalidArgument {
+					argument: "seq".to_owned(),
+					reason: "must be a non-negative safe integer".to_owned(),
+				}
+				.build(),
+			));
+		}
+		self.db
+			.wait_for_flush(seq as u64)
+			.await
+			.map_err(crate::napi_anyhow_error)
 	}
 
 	#[napi]
@@ -184,8 +225,11 @@ impl JsNativeDatabase {
 	) -> napi::Result<NativeExecuteResult> {
 		let params = params.map(js_bind_params_to_core).transpose()?;
 		let db = self.db.clone();
-		wait_for_runtime(async move { db.execute(sql, params).await })
-			.map(core_execute_result_to_js)
+		wait_for_runtime(async move {
+			db.execute_with_call_mode(sql, params, CallMode::SyncBlocking)
+				.await
+		})
+		.map(core_execute_result_to_js)
 	}
 
 	#[napi]
@@ -211,7 +255,8 @@ impl JsNativeDatabase {
 	#[napi]
 	pub fn exec_sync(&self, sql: String) -> napi::Result<QueryResult> {
 		let db = self.db.clone();
-		wait_for_runtime(async move { db.exec(sql).await }).map(core_query_result_to_js)
+		wait_for_runtime(async move { db.exec_with_call_mode(sql, CallMode::SyncBlocking).await })
+			.map(core_query_result_to_js)
 	}
 
 	#[napi]
@@ -219,19 +264,23 @@ impl JsNativeDatabase {
 		self.db.close().await.map_err(crate::napi_anyhow_error)
 	}
 
-	#[napi]
-	pub async fn begin_transaction(
+	#[napi(ts_return_type = "Promise<JsSqliteTransaction>")]
+	pub fn begin_transaction(
 		&self,
+		env: Env,
 		timeout_ms: Option<f64>,
 		name: Option<String>,
-	) -> napi::Result<JsSqliteTransaction> {
+	) -> napi::Result<JsObject> {
 		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
-		let transaction = self
-			.db
-			.begin_named_transaction(name.as_deref(), timeout)
-			.await
-			.map_err(crate::napi_anyhow_error)?;
-		Ok(JsSqliteTransaction { transaction })
+		let reservation = self.db.reserve_bridge_transaction();
+		let db = self.db.clone();
+		env.spawn_future(async move {
+			let transaction = db
+				.begin_reserved_bridge_transaction(reservation, name, timeout)
+				.await
+				.map_err(crate::napi_anyhow_error)?;
+			Ok(JsSqliteTransaction { transaction })
+		})
 	}
 
 	#[napi]
@@ -242,10 +291,15 @@ impl JsNativeDatabase {
 	) -> napi::Result<JsSqliteTransaction> {
 		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
 		let db = self.db.clone();
-		let transaction =
-			wait_for_runtime(
-				async move { db.begin_named_transaction(name.as_deref(), timeout).await },
-			)?;
+		let transaction = wait_for_runtime(async move {
+			db.begin_named_transaction_with_mode(
+				name.as_deref(),
+				timeout,
+				TransactionOrigin::Bridge,
+				CallMode::SyncBlocking,
+			)
+			.await
+		})?;
 		Ok(JsSqliteTransaction { transaction })
 	}
 }
@@ -294,17 +348,19 @@ impl JsSqliteTransaction {
 	}
 
 	#[napi]
-	pub async fn commit(&self) -> napi::Result<()> {
+	pub async fn commit(&self) -> napi::Result<Option<f64>> {
 		self.transaction
 			.commit()
 			.await
+			.map(|seq| seq.map(|seq| seq as f64))
 			.map_err(crate::napi_anyhow_error)
 	}
 
 	#[napi]
-	pub fn commit_sync(&self) -> napi::Result<()> {
+	pub fn commit_sync(&self) -> napi::Result<Option<f64>> {
 		let transaction = self.transaction.clone();
 		wait_for_runtime(async move { transaction.commit().await })
+			.map(|seq| seq.map(|seq| seq as f64))
 	}
 
 	#[napi]
@@ -453,6 +509,7 @@ fn core_query_result_to_js(result: CoreQueryResult) -> QueryResult {
 			.into_iter()
 			.map(|row| row.into_iter().map(column_value_to_json).collect())
 			.collect(),
+		readonly: result.readonly,
 	}
 }
 
@@ -466,6 +523,8 @@ fn core_execute_result_to_js(result: CoreExecuteResult) -> NativeExecuteResult {
 			.collect(),
 		changes: result.changes,
 		last_insert_row_id: result.last_insert_row_id,
+		readonly: result.readonly,
+		commit_seq: result.commit_seq.map(|seq| seq as f64),
 	}
 }
 

@@ -179,6 +179,7 @@ fn sqlite_ctx_with_harness_enabled(
 		Some(1),
 		enabled,
 		true,
+		crate::SqliteCommitMode::Awaited,
 	)
 	.expect("test remote sqlite should be configured");
 	let ctx = ActorContext::build(

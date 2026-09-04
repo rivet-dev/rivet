@@ -93,6 +93,7 @@ export interface JsActorConfig {
   icon?: string
   hasDatabase?: boolean
   remoteSqlite?: boolean
+  sqliteCommitMode?: string
   sqliteProfiling?: JsSqliteProfilingConfig
   enableActorRuntimeSocket?: boolean
   hasState?: boolean
@@ -135,12 +136,15 @@ export interface ExecuteResult {
 export interface QueryResult {
   columns: Array<string>
   rows: Array<Array<any>>
+  readonly?: boolean
 }
 export interface NativeExecuteResult {
   columns: Array<string>
   rows: Array<Array<any>>
   changes: number
   lastInsertRowId?: number
+  readonly?: boolean
+  commitSeq?: number
 }
 export interface JsSqliteBatchStatement {
   sql: string
@@ -376,6 +380,11 @@ export declare class ConnHandle {
 export declare class JsNativeDatabase {
   takeLastKvError(): string | null
   metrics(): JsSqliteVfsMetrics | null
+  commitSeq(): number
+  flushedSeq(): number
+  flushError(): string | null
+  supportsSyncMetadata(): boolean
+  waitForFlush(seq: number): Promise<void>
   run(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<ExecuteResult>
   query(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<QueryResult>
   execute(sql: string, params?: Array<JsBindParam> | undefined | null): Promise<NativeExecuteResult>
@@ -392,8 +401,8 @@ export declare class JsSqliteTransaction {
   executeSync(sql: string, params?: Array<JsBindParam> | undefined | null): NativeExecuteResult
   exec(sql: string): Promise<QueryResult>
   execSync(sql: string): QueryResult
-  commit(): Promise<void>
-  commitSync(): void
+  commit(): Promise<number | null>
+  commitSync(): number | null
   rollback(): Promise<void>
   rollbackSync(): void
 }

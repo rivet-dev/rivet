@@ -50,6 +50,7 @@ type NativeBindParam =
 interface NativeExecResult {
 	columns: string[];
 	rows: unknown[][];
+	readonly?: boolean;
 }
 
 interface NativeQueryResult {
@@ -66,6 +67,8 @@ interface NativeExecuteResult {
 	rows: unknown[][];
 	changes: number;
 	lastInsertRowId?: number | null;
+	readonly?: boolean;
+	commitSeq?: number;
 }
 
 interface NativeBatchStatement {
@@ -108,6 +111,11 @@ export interface JsNativeDatabaseLike {
 		params?: NativeBindParam[] | null,
 	): Promise<NativeRunResult>;
 	metrics?(): SqliteNativeMetrics | null;
+	commitSeq(): number;
+	flushedSeq(): number;
+	waitForFlush(seq: number): Promise<void>;
+	flushError(): string | null;
+	supportsSyncMetadata(): boolean;
 	takeLastKvError?(): string | null;
 	close(): Promise<void>;
 }
@@ -129,13 +137,13 @@ export interface JsNativeTransactionLike {
 		sql: string,
 		params?: NativeBindParam[] | null,
 	): NativeExecuteResult;
-	commit(): Promise<void>;
+	commit(): Promise<number | null | void>;
 	rollback(): Promise<void>;
 }
 
 export interface JsNativeSynchronousTransactionLike
 	extends JsNativeTransactionLike {
-	commitSync(): void;
+	commitSync(): number | null;
 	rollbackSync(): void;
 }
 
@@ -373,6 +381,7 @@ export function wrapJsNativeDatabase(
 				rows: [[lastInsertRowId ?? 0]],
 				changes: 0,
 				lastInsertRowId,
+				readonly: true,
 			};
 		}
 
@@ -401,6 +410,7 @@ export function wrapJsNativeDatabase(
 				rows: [[lastInsertRowId ?? 0]],
 				changes: 0,
 				lastInsertRowId,
+				readonly: true,
 			};
 		}
 
@@ -443,7 +453,7 @@ export function wrapJsNativeDatabase(
 		execSync(
 			sql: string,
 			callback?: (row: unknown[], columns: string[]) => void,
-		): void {
+		): { readonly?: boolean } {
 			const release = gate.enter();
 			let result: NativeExecResult;
 			try {
@@ -458,6 +468,7 @@ export function wrapJsNativeDatabase(
 					callback(row, result.columns);
 				}
 			}
+			return { readonly: result.readonly };
 		},
 		async execute(
 			sql: string,
@@ -585,6 +596,21 @@ export function wrapJsNativeDatabase(
 		nativeMetrics(): SqliteNativeMetrics | null {
 			return normalizeNativeMetrics(database.metrics?.());
 		},
+		commitSeq(): number {
+			return database.commitSeq();
+		},
+		flushedSeq(): number {
+			return database.flushedSeq();
+		},
+		async waitForFlush(seq: number): Promise<void> {
+			await database.waitForFlush(seq);
+		},
+		flushError(): string | null {
+			return database.flushError();
+		},
+		supportsSyncMetadata(): boolean {
+			return database.supportsSyncMetadata();
+		},
 		async close(): Promise<void> {
 			closePromise ??= gate.close(() => database.close());
 			await closePromise;
@@ -638,6 +664,7 @@ function wrapTransaction(
 			if (callback) {
 				for (const row of result.rows) callback(row, result.columns);
 			}
+			return { readonly: result.readonly };
 		},
 		async execute(sql, params) {
 			const release = gate.enter();
@@ -672,7 +699,7 @@ function wrapTransaction(
 		async commit() {
 			const release = gate.enter();
 			try {
-				await transaction.commit();
+				return (await transaction.commit()) ?? null;
 			} catch (error) {
 				enrichNativeDatabaseError(database, error);
 			} finally {
@@ -689,6 +716,11 @@ function wrapTransaction(
 				release();
 			}
 		},
+		commitSeq: () => database.commitSeq(),
+		flushedSeq: () => database.flushedSeq(),
+		waitForFlush: async (seq) => await database.waitForFlush(seq),
+		flushError: () => database.flushError(),
+		supportsSyncMetadata: () => database.supportsSyncMetadata(),
 	};
 
 	if (isSynchronousTransaction(transaction)) {
@@ -696,7 +728,7 @@ function wrapTransaction(
 			commitSync() {
 				const release = gate.enter();
 				try {
-					transaction.commitSync();
+					return transaction.commitSync() ?? null;
 				} catch (error) {
 					enrichNativeDatabaseError(database, error);
 				} finally {

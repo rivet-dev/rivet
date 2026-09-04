@@ -26,9 +26,8 @@ use vbare::OwnedVersionedData;
 
 use crate::actor::sqlite::{
 	BindParam, ColumnValue, ExecuteResult, SqliteBackend, SqliteDb, SqliteTransaction,
-	TRANSACTION_COORDINATOR_QUEUE_CAPACITY, TransactionCoordinatorClosedError,
-	TransactionExpiredError, TransactionInvalidArgumentError, TransactionQueueFullError,
-	TransactionTerminalError, TransactionUnknownError,
+	TRANSACTION_COORDINATOR_QUEUE_CAPACITY, TransactionClosedError, TransactionExpiredError,
+	TransactionInvalidArgumentError, TransactionQueueFullError, TransactionUnknownError,
 };
 
 const DEFAULT_MAX_FRAME_BYTES: u32 = 32 * 1024 * 1024;
@@ -113,7 +112,7 @@ impl EndpointTransaction for CoreEndpointTransaction {
 	}
 
 	async fn commit(&self) -> Result<()> {
-		self.0.commit().await
+		self.0.commit().await.map(|_| ())
 	}
 
 	async fn rollback(&self) -> Result<()> {
@@ -214,6 +213,13 @@ impl ActorRuntimeSocketEndpoint {
 		};
 		if let Some(mut serving) = serving {
 			serving.cancel.cancel();
+			// Unlink before waiting for the listener task so destroy cannot expose the
+			// previous generation's socket path while shutdown is still joining it.
+			if let Err(error) = std::fs::remove_file(&serving.info.path) {
+				if error.kind() != io::ErrorKind::NotFound {
+					tracing::warn!(path = %serving.info.path, %error, "failed to remove Actor Runtime Socket");
+				}
+			}
 			match tokio::time::timeout(LISTENER_SHUTDOWN_TIMEOUT, &mut serving.task).await {
 				Ok(Ok(())) => {}
 				Ok(Err(error)) => {
@@ -222,11 +228,6 @@ impl ActorRuntimeSocketEndpoint {
 				Err(_) => {
 					serving.task.abort();
 					let _ = serving.task.await;
-				}
-			}
-			if let Err(error) = std::fs::remove_file(&serving.info.path) {
-				if error.kind() != io::ErrorKind::NotFound {
-					tracing::warn!(path = %serving.info.path, %error, "failed to remove Actor Runtime Socket");
 				}
 			}
 		}
@@ -958,14 +959,12 @@ fn map_error(error: anyhow::Error) -> wire::ResponsePayload {
 	if let Some(error) = error.downcast_ref::<TransactionUnknownError>() {
 		return invalid_lease(&error.to_string());
 	}
-	if let Some(error) = error.downcast_ref::<TransactionTerminalError>() {
-		return invalid_lease(&error.to_string());
-	}
-	if error
-		.downcast_ref::<TransactionCoordinatorClosedError>()
-		.is_some()
-	{
-		return wire::ResponsePayload::EndpointClosed;
+	if let Some(error) = error.downcast_ref::<TransactionClosedError>() {
+		return if error.coordinator {
+			wire::ResponsePayload::EndpointClosed
+		} else {
+			invalid_lease(&error.to_string())
+		};
 	}
 	if error
 		.downcast_ref::<SqliteWorkerOverloadedError>()

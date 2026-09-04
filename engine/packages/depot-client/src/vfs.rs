@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::ptr;
 use std::slice;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
@@ -19,6 +19,8 @@ use parking_lot::{Mutex, RwLock};
 use rivet_envoy_protocol as protocol;
 use scc::HashMap as SccHashMap;
 use tokio::runtime::Handle;
+use tokio::sync::{Notify, watch};
+use tokio::task::JoinHandle;
 
 use crate::optimization_flags::{
 	SqliteOptimizationFlags, SqliteVfsPageCacheMode, sqlite_optimization_flags,
@@ -153,6 +155,58 @@ fn sqlite_now_ms() -> Result<i64> {
 		.try_into()?)
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CommitMode {
+	#[default]
+	Awaited,
+	Deferred,
+}
+
+#[derive(Clone, Debug, thiserror::Error)]
+pub enum FlushError {
+	#[error("sqlite flush retry deadline exceeded after {attempts} attempts: {last_error}")]
+	RetryDeadlineExceeded { attempts: u32, last_error: String },
+	#[error("sqlite durable head diverged: expected {expected}, engine has {actual:?}")]
+	HeadDiverged { expected: u64, actual: Option<u64> },
+	#[error("sqlite flusher aborted: {0}")]
+	Aborted(String),
+	#[error("sqlite flush sequence {requested} is ahead of commit sequence {current}")]
+	InvalidSequence { requested: u64, current: u64 },
+}
+
+#[derive(Clone, Debug)]
+pub enum DatabaseFailure {
+	Closed,
+	WorkerStopped,
+	Flush(FlushError),
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct FlushProgress {
+	pub flushed_seq: u64,
+	pub error: Option<FlushError>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DeferredCommitConfig {
+	pub retry_deadline: Duration,
+	pub retry_backoff_min: Duration,
+	pub retry_backoff_max: Duration,
+	pub max_unflushed_bytes: usize,
+}
+
+impl Default for DeferredCommitConfig {
+	fn default() -> Self {
+		let flags = sqlite_optimization_flags();
+		Self {
+			retry_deadline: Duration::from_millis(flags.flush_retry_deadline_ms),
+			retry_backoff_min: Duration::from_millis(flags.flush_retry_backoff_min_ms),
+			retry_backoff_max: Duration::from_millis(flags.flush_retry_backoff_max_ms),
+			max_unflushed_bytes: flags.max_unflushed_bytes,
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct VfsConfig {
 	pub cache_capacity_pages: u64,
@@ -175,6 +229,11 @@ pub struct VfsConfig {
 	pub recent_page_hints: bool,
 	pub adaptive_read_ahead: bool,
 	pub retain_read_cache: bool,
+	pub commit_mode: CommitMode,
+	pub deferred_commit: DeferredCommitConfig,
+	pub initial_commit_seq: u64,
+	#[cfg(test)]
+	pub max_commit_dirty_pages: usize,
 	#[cfg(test)]
 	pub assert_batch_atomic: bool,
 	#[cfg(test)]
@@ -231,6 +290,16 @@ impl VfsConfig {
 			recent_page_hints: flags.recent_page_hints,
 			adaptive_read_ahead: flags.adaptive_read_ahead,
 			retain_read_cache: flags.vfs_page_cache_mode.caches_any_pages(),
+			commit_mode: CommitMode::Awaited,
+			deferred_commit: DeferredCommitConfig {
+				retry_deadline: Duration::from_millis(flags.flush_retry_deadline_ms),
+				retry_backoff_min: Duration::from_millis(flags.flush_retry_backoff_min_ms),
+				retry_backoff_max: Duration::from_millis(flags.flush_retry_backoff_max_ms),
+				max_unflushed_bytes: flags.max_unflushed_bytes,
+			},
+			initial_commit_seq: 0,
+			#[cfg(test)]
+			max_commit_dirty_pages: depot_client_types::MAX_COMMIT_DIRTY_PAGES,
 			#[cfg(test)]
 			assert_batch_atomic: true,
 			#[cfg(test)]
@@ -282,7 +351,7 @@ pub enum CommitPath {
 pub struct BufferedCommitRequest {
 	pub actor_id: String,
 	pub new_db_size_pages: u32,
-	pub dirty_pages: Vec<protocol::SqliteDirtyPage>,
+	pub dirty_pages: Arc<Vec<protocol::SqliteDirtyPage>>,
 	pub expected_head_txid: Option<u64>,
 }
 
@@ -297,6 +366,22 @@ pub struct BufferedCommitOutcome {
 pub enum CommitBufferError {
 	FenceMismatch(String),
 	Other(String),
+	Response {
+		group: String,
+		code: String,
+		message: String,
+	},
+}
+
+impl CommitBufferError {
+	fn message(&self) -> &str {
+		match self {
+			CommitBufferError::FenceMismatch(message) | CommitBufferError::Other(message) => {
+				message
+			}
+			CommitBufferError::Response { message, .. } => message,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -549,6 +634,16 @@ pub trait SqliteVfsMetrics: Send + Sync {
 
 	fn record_commit(&self);
 
+	fn set_overlay_pages(&self, _pages: u64) {}
+
+	fn record_flush_batch(&self, _pages: u64, _bytes: u64) {}
+
+	fn observe_flush_latency(&self, _duration_ns: u64) {}
+
+	fn record_flush_retry(&self, _class: &'static str) {}
+
+	fn record_flush_broken(&self) {}
+
 	fn observe_commit_phases(
 		&self,
 		request_build_ns: u64,
@@ -611,11 +706,24 @@ pub struct VfsContext {
 	last_error: Mutex<Option<String>>,
 	transient_commit_error: Mutex<Option<String>>,
 	fatal_error: RwLock<Option<String>>,
+	flush: FlushController,
+	failure_tx: watch::Sender<Option<DatabaseFailure>>,
+	_failure_rx: watch::Receiver<Option<DatabaseFailure>>,
 	#[cfg(test)]
 	fail_next_aux_open: Mutex<Option<String>>,
 	#[cfg(test)]
 	fail_next_aux_delete: Mutex<Option<String>>,
+	#[cfg(test)]
+	break_after_fatal_marker: Mutex<Option<BreakPublicationGate>>,
 	commit_atomic_count: AtomicU64,
+	#[cfg(test)]
+	commit_atomic_attempt_count: AtomicU64,
+	#[cfg(test)]
+	rollback_atomic_count: AtomicU64,
+	#[cfg(test)]
+	aux_write_count: AtomicU64,
+	#[cfg(test)]
+	main_sync_count: AtomicU64,
 	io_methods: Box<sqlite3_io_methods>,
 	// Performance counters
 	pub resolve_pages_total: AtomicU64,
@@ -646,6 +754,7 @@ struct VfsState {
 	/// through `xTruncate` alone.
 	committed_db_size_pages: u32,
 	head_txid: Option<u64>,
+	durable_head_txid: u64,
 	page_size: usize,
 	page_cache: Cache<u32, Vec<u8>>,
 	committed_page_cache: Cache<u32, Vec<u8>>,
@@ -654,10 +763,107 @@ struct VfsState {
 	prefetched_pages: Arc<scc::HashSet<u32>>,
 	prefetch_unused_total: Arc<AtomicU64>,
 	write_buffer: WriteBuffer,
+	overlay: Overlay,
 	predictor: ClassifiedPredictor,
 	read_ahead: ClassifiedReadAhead,
 	recent_pages: RecentPageTracker,
 	dead: bool,
+}
+
+#[derive(Clone, Debug)]
+struct OverlayPage {
+	bytes: Vec<u8>,
+	seq: u64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct Overlay {
+	pages: BTreeMap<u32, OverlayPage>,
+	bytes: usize,
+	commit_seq: u64,
+	db_size_pages: u32,
+	in_flight: Option<InFlightBatch>,
+}
+
+#[derive(Clone, Debug)]
+struct InFlightBatch {
+	seq: u64,
+	expected_head_txid: u64,
+	db_size_pages: u32,
+	pages: Arc<Vec<protocol::SqliteDirtyPage>>,
+	started_at: tokio::time::Instant,
+	attempts: u32,
+}
+
+struct FlushController {
+	progress: Mutex<FlushProgress>,
+	progress_changed: watch::Sender<u64>,
+	_progress_rx: watch::Receiver<u64>,
+	wake: Arc<Notify>,
+	shutdown: AtomicBool,
+	closing: AtomicBool,
+	#[cfg(test)]
+	panic_requested: AtomicBool,
+	task: Mutex<Option<JoinHandle<()>>>,
+}
+
+#[cfg(test)]
+struct BreakPublicationGate {
+	reached: std::sync::mpsc::Sender<()>,
+	resume: std::sync::mpsc::Receiver<()>,
+}
+
+#[cfg(test)]
+struct BreakPublicationPause {
+	reached: std::sync::mpsc::Receiver<()>,
+	resume: std::sync::mpsc::Sender<()>,
+}
+
+#[cfg(test)]
+impl BreakPublicationPause {
+	fn wait_until_reached(&self) {
+		self.reached
+			.recv_timeout(Duration::from_secs(1))
+			.expect("database break should pause after marking the state dead");
+	}
+
+	fn resume(self) {
+		self.resume
+			.send(())
+			.expect("database break should resume terminal-error publication");
+	}
+}
+
+impl FlushController {
+	fn new(initial_seq: u64) -> Self {
+		let (progress_changed, progress_rx) = watch::channel(0);
+		Self {
+			progress: Mutex::new(FlushProgress {
+				flushed_seq: initial_seq,
+				error: None,
+			}),
+			progress_changed,
+			_progress_rx: progress_rx,
+			wake: Arc::new(Notify::new()),
+			shutdown: AtomicBool::new(false),
+			closing: AtomicBool::new(false),
+			#[cfg(test)]
+			panic_requested: AtomicBool::new(false),
+			task: Mutex::new(None),
+		}
+	}
+
+	fn publish_change(&self) {
+		let next = self.progress_changed.borrow().wrapping_add(1);
+		self.progress_changed.send_replace(next);
+	}
+}
+
+impl Drop for FlushController {
+	fn drop(&mut self) {
+		self.shutdown.store(true, Ordering::Release);
+		self.wake.notify_one();
+	}
 }
 
 #[derive(Debug, Clone, Default)]
@@ -813,7 +1019,7 @@ unsafe impl Sync for VfsContext {}
 pub struct SqliteVfs {
 	_registration: SqliteVfsRegistration,
 	_name: CString,
-	ctx: Box<VfsContext>,
+	ctx: Arc<VfsContext>,
 }
 
 unsafe impl Send for SqliteVfs {}
@@ -1166,6 +1372,7 @@ impl VfsState {
 			db_size_pages: 1,
 			committed_db_size_pages: 1,
 			head_txid: None,
+			durable_head_txid: 0,
 			page_size: DEFAULT_PAGE_SIZE,
 			page_cache,
 			committed_page_cache,
@@ -1174,6 +1381,10 @@ impl VfsState {
 			prefetched_pages: Arc::new(scc::HashSet::new()),
 			prefetch_unused_total: Arc::new(AtomicU64::new(0)),
 			write_buffer: WriteBuffer::default(),
+			overlay: Overlay {
+				commit_seq: config.initial_commit_seq,
+				..Overlay::default()
+			},
 			predictor: ClassifiedPredictor::default(),
 			read_ahead: ClassifiedReadAhead::default(),
 			recent_pages: RecentPageTracker::new(
@@ -1290,6 +1501,9 @@ impl VfsState {
 
 	fn has_readable_page(&self, config: &VfsConfig, pgno: u32) -> bool {
 		if self.write_buffer.dirty.contains_key(&pgno) {
+			return true;
+		}
+		if self.overlay.pages.contains_key(&pgno) {
 			return true;
 		}
 		if !can_read_cached_page(config, pgno) {
@@ -1413,6 +1627,104 @@ fn can_read_cached_page(config: &VfsConfig, pgno: u32) -> bool {
 }
 
 impl VfsContext {
+	fn stage_deferred_local_commit(
+		&self,
+		require_atomic: bool,
+	) -> std::result::Result<bool, CommitBufferError> {
+		let mut changed = self.flush.progress_changed.subscribe();
+		let seq = loop {
+			let mut state = self.state.write();
+			if state.dead {
+				return Err(CommitBufferError::Other(
+					"sqlite actor lost its fence".to_string(),
+				));
+			}
+			if require_atomic && !state.write_buffer.in_atomic_write {
+				return Ok(false);
+			}
+			if !require_atomic && state.write_buffer.in_atomic_write {
+				return Ok(false);
+			}
+			if state.write_buffer.dirty.is_empty()
+				&& state.db_size_pages == state.overlay.db_size_pages
+			{
+				if require_atomic {
+					state.write_buffer.in_atomic_write = false;
+				}
+				return Ok(false);
+			}
+
+			let dirty_len = state.write_buffer.dirty.len();
+			let page_limit = self.max_commit_dirty_pages();
+			if dirty_len > page_limit {
+				return Err(CommitBufferError::Other(format!(
+					"commit of {dirty_len} dirty pages exceeds the {} page maximum",
+					page_limit,
+				)));
+			}
+			if state.overlay.pages.len().saturating_add(dirty_len) > page_limit {
+				drop(state);
+				if let Some(error) = self.flush.progress.lock().error.clone() {
+					return Err(CommitBufferError::Other(error.to_string()));
+				}
+				self.runtime.block_on(changed.changed()).map_err(|_| {
+					CommitBufferError::Other("sqlite flush progress channel closed".to_string())
+				})?;
+				continue;
+			}
+
+			let seq = state.overlay.commit_seq.saturating_add(1);
+			let dirty = std::mem::take(&mut state.write_buffer.dirty);
+			for (pgno, bytes) in dirty {
+				if let Some(previous) = state.overlay.pages.insert(pgno, OverlayPage { bytes, seq })
+				{
+					state.overlay.bytes = state.overlay.bytes.saturating_sub(previous.bytes.len());
+				}
+				state.overlay.bytes = state
+					.overlay
+					.bytes
+					.saturating_add(state.overlay.pages[&pgno].bytes.len());
+			}
+			if state.db_size_pages < state.overlay.db_size_pages {
+				let first_removed = state.db_size_pages.saturating_add(1);
+				let removed = state.overlay.pages.split_off(&first_removed);
+				for page in removed.into_values() {
+					state.overlay.bytes = state.overlay.bytes.saturating_sub(page.bytes.len());
+				}
+			}
+			state.overlay.db_size_pages = state.db_size_pages;
+			state.overlay.commit_seq = seq;
+			state.committed_db_size_pages = state.db_size_pages;
+			state.write_buffer.in_atomic_write = false;
+			if let Some(metrics) = &self.metrics {
+				metrics.set_overlay_pages(state.overlay.pages.len() as u64);
+			}
+			break seq;
+		};
+
+		self.flush.wake.notify_one();
+		self.apply_deferred_backpressure()?;
+		Ok(seq > 0)
+	}
+
+	fn apply_deferred_backpressure(&self) -> std::result::Result<(), CommitBufferError> {
+		let mut changed = self.flush.progress_changed.subscribe();
+		loop {
+			if self.flush.closing.load(Ordering::Acquire) {
+				return Ok(());
+			}
+			let bytes = self.state.read().overlay.bytes;
+			if self.flush.progress.lock().error.is_some()
+				|| bytes <= self.config.deferred_commit.max_unflushed_bytes
+			{
+				return Ok(());
+			}
+			if self.runtime.block_on(changed.changed()).is_err() {
+				return Ok(());
+			}
+		}
+	}
+
 	fn new(
 		actor_id: String,
 		generation: Option<u64>,
@@ -1428,10 +1740,18 @@ impl VfsContext {
 			.is_some_and(|metrics| metrics.profiling_enabled());
 		let mut state = VfsState::new(&config, profiling_enabled);
 		let initial_pages = initial_pages.into();
+		if config.commit_mode == CommitMode::Deferred && initial_pages.head_txid.is_none() {
+			return Err(
+				"deferred sqlite commits require a durable head transaction id".to_string(),
+			);
+		}
 		state.head_txid = initial_pages.head_txid;
+		state.durable_head_txid = initial_pages.head_txid.unwrap_or_default();
 		for (pgno, page) in initial_pages.pages {
 			state.seed_page(&config, PageCacheInsertKind::Startup, pgno, page);
 		}
+		state.overlay.db_size_pages = state.db_size_pages;
+		let (failure_tx, failure_rx) = watch::channel(None);
 
 		Ok(Self {
 			actor_id,
@@ -1444,11 +1764,24 @@ impl VfsContext {
 			last_error: Mutex::new(None),
 			transient_commit_error: Mutex::new(None),
 			fatal_error: RwLock::new(None),
+			flush: FlushController::new(config.initial_commit_seq),
+			failure_tx,
+			_failure_rx: failure_rx,
 			#[cfg(test)]
 			fail_next_aux_open: Mutex::new(None),
 			#[cfg(test)]
 			fail_next_aux_delete: Mutex::new(None),
+			#[cfg(test)]
+			break_after_fatal_marker: Mutex::new(None),
 			commit_atomic_count: AtomicU64::new(0),
+			#[cfg(test)]
+			commit_atomic_attempt_count: AtomicU64::new(0),
+			#[cfg(test)]
+			rollback_atomic_count: AtomicU64::new(0),
+			#[cfg(test)]
+			aux_write_count: AtomicU64::new(0),
+			#[cfg(test)]
+			main_sync_count: AtomicU64::new(0),
 			io_methods: Box::new(io_methods),
 			resolve_pages_total: AtomicU64::new(0),
 			resolve_pages_cache_hits: AtomicU64::new(0),
@@ -1681,6 +2014,31 @@ impl VfsContext {
 		self.fail_next_aux_delete.lock().take()
 	}
 
+	#[cfg(test)]
+	fn pause_next_break_after_fatal_marker(&self) -> BreakPublicationPause {
+		let (reached_tx, reached_rx) = std::sync::mpsc::channel();
+		let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+		*self.break_after_fatal_marker.lock() = Some(BreakPublicationGate {
+			reached: reached_tx,
+			resume: resume_rx,
+		});
+		BreakPublicationPause {
+			reached: reached_rx,
+			resume: resume_tx,
+		}
+	}
+
+	fn max_commit_dirty_pages(&self) -> usize {
+		#[cfg(test)]
+		{
+			return self.config.max_commit_dirty_pages;
+		}
+		#[cfg(not(test))]
+		{
+			depot_client_types::MAX_COMMIT_DIRTY_PAGES
+		}
+	}
+
 	fn is_dead(&self) -> bool {
 		self.state.read().dead
 	}
@@ -1692,6 +2050,99 @@ impl VfsContext {
 		if fatal_error.is_none() {
 			*fatal_error = Some(message);
 		}
+	}
+
+	fn break_database(&self, error: FlushError) {
+		tracing::error!(
+			actor_id = %self.actor_id,
+			error = %error,
+			"sqlite database broken"
+		);
+		self.mark_fatal(error.to_string());
+		#[cfg(test)]
+		if let Some(gate) = self.break_after_fatal_marker.lock().take() {
+			let _ = gate.reached.send(());
+			let _ = gate.resume.recv();
+		}
+		let first = {
+			let mut progress = self.flush.progress.lock();
+			if progress.error.is_some() {
+				false
+			} else {
+				progress.error = Some(error.clone());
+				true
+			}
+		};
+		self.flush.publish_change();
+		if first {
+			if let Some(metrics) = &self.metrics {
+				metrics.record_flush_broken();
+			}
+			if !self.flush.closing.load(Ordering::Acquire) {
+				self.failure_tx
+					.send_replace(Some(DatabaseFailure::Flush(error)));
+			}
+		}
+	}
+
+	fn handle_read_fatal(&self, message: String) {
+		match self.config.commit_mode {
+			CommitMode::Awaited => self.mark_fatal(message),
+			CommitMode::Deferred => self.break_database(FlushError::Aborted(message)),
+		}
+	}
+
+	fn commit_seq(&self) -> u64 {
+		self.state.read().overlay.commit_seq
+	}
+
+	fn flushed_seq(&self) -> u64 {
+		self.flush.progress.lock().flushed_seq
+	}
+
+	fn flush_error(&self) -> Option<FlushError> {
+		self.flush.progress.lock().error.clone()
+	}
+
+	async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		let current = self.commit_seq();
+		if seq > current {
+			return Err(FlushError::InvalidSequence {
+				requested: seq,
+				current,
+			});
+		}
+		let mut changed = self.flush.progress_changed.subscribe();
+		loop {
+			let progress = self.flush.progress.lock().clone();
+			if let Some(error) = progress.error {
+				return Err(error);
+			}
+			if progress.flushed_seq >= seq {
+				return Ok(());
+			}
+			changed
+				.changed()
+				.await
+				.map_err(|_| FlushError::Aborted("flush progress channel closed".to_string()))?;
+		}
+	}
+
+	async fn wait_for_failure(&self) -> DatabaseFailure {
+		let mut failure = self.failure_tx.subscribe();
+		loop {
+			if let Some(reason) = failure.borrow().clone() {
+				return reason;
+			}
+			if failure.changed().await.is_err() {
+				return DatabaseFailure::WorkerStopped;
+			}
+		}
+	}
+
+	fn begin_close(&self) {
+		self.flush.closing.store(true, Ordering::Release);
+		self.flush.publish_change();
 	}
 
 	pub(crate) fn snapshot_preload_hints(&self) -> VfsPreloadHintSnapshot {
@@ -1753,6 +2204,10 @@ impl VfsContext {
 				}
 				if let Some(bytes) = state.write_buffer.dirty.get(&pgno) {
 					resolved.insert(pgno, Some(bytes.clone()));
+					continue;
+				}
+				if let Some(page) = state.overlay.pages.get(&pgno) {
+					resolved.insert(pgno, Some(page.bytes.clone()));
 					continue;
 				}
 				if let Some((bytes, was_prefetched)) = state.cached_page(&self.config, pgno) {
@@ -1823,6 +2278,8 @@ impl VfsContext {
 			skipped_cached_predicted_pages,
 			db_size_pages,
 			expected_head_txid,
+			durable_at_request,
+			deferred_read,
 		) = {
 			let mut state = self.state.write();
 			let ClassifiedReadAheadPlan {
@@ -1861,6 +2318,10 @@ impl VfsContext {
 					to_fetch.push(predicted);
 				}
 			}
+			let flushed_seq = self.flush.progress.lock().flushed_seq;
+			let deferred_read = self.config.commit_mode == CommitMode::Deferred
+				&& state.overlay.commit_seq > flushed_seq;
+			let expected_head_txid = if deferred_read { None } else { state.head_txid };
 			(
 				to_fetch,
 				state.page_size.max(1),
@@ -1872,7 +2333,9 @@ impl VfsContext {
 				predicted_pgnos,
 				skipped_cached_predicted_pages,
 				state.db_size_pages,
-				state.head_txid,
+				expected_head_txid,
+				state.durable_head_txid,
+				deferred_read,
 			)
 		};
 
@@ -1955,6 +2418,10 @@ impl VfsContext {
 				return Err(GetPagesError::Other(err.to_string()));
 			}
 		};
+		let synthesize_empty_page = match self.config.commit_mode {
+			CommitMode::Awaited => self.commit_total.load(Relaxed) == 0,
+			CommitMode::Deferred => self.commit_seq() == 0,
+		};
 
 		match response {
 			protocol::SqliteGetPagesResponse::SqliteGetPagesOk(ok) => {
@@ -2000,19 +2467,42 @@ impl VfsContext {
 					});
 				}
 				let response_head_txid = ok.head_txid;
-				if let Some(head_txid) = response_head_txid {
-					self.state.write().head_txid = Some(head_txid);
+				{
+					let mut state = self.state.write();
+					if self.config.commit_mode == CommitMode::Deferred {
+						if let Some(head) = response_head_txid {
+							let upper = state
+								.durable_head_txid
+								.saturating_add(u64::from(state.overlay.in_flight.is_some()));
+							let invalid = if deferred_read {
+								head < durable_at_request || head > upper
+							} else {
+								head != durable_at_request
+							};
+							if invalid {
+								let expected = if head < durable_at_request {
+									durable_at_request
+								} else {
+									upper
+								};
+								// Mark the database dead while the validation guard is still
+								// held, so a concurrent acknowledgement cannot advance durable
+								// state before `break_database` publishes the terminal error.
+								state.dead = true;
+								drop(state);
+								let error = FlushError::HeadDiverged {
+									expected,
+									actual: Some(head),
+								};
+								self.break_database(error.clone());
+								return Err(GetPagesError::FenceMismatch(error.to_string()));
+							}
+						}
+					} else if let Some(head_txid) = response_head_txid {
+						state.head_txid = Some(head_txid);
+					}
 				}
 				let missing_pages = missing.iter().copied().collect::<HashSet<_>>();
-				let (page_cache, protected_page_cache, prefetched_pages, prefetch_unused_total) = {
-					let state = self.state.read();
-					(
-						state.page_cache.clone(),
-						state.protected_page_cache.clone(),
-						state.prefetched_pages.clone(),
-						state.prefetch_unused_total.clone(),
-					)
-				};
 				#[cfg(debug_assertions)]
 				let mut returned_pgnos = HashSet::new();
 				#[cfg(debug_assertions)]
@@ -2031,11 +2521,13 @@ impl VfsContext {
 						}
 					}
 					let bytes = if fetched.bytes.is_none()
-						&& self.commit_total.load(Relaxed) == 0
+						&& synthesize_empty_page
 						&& missing_pages.contains(&fetched.pgno)
 						&& fetched.pgno == 1
 					{
-						self.state.write().head_txid = Some(0);
+						if self.config.commit_mode == CommitMode::Awaited {
+							self.state.write().head_txid = Some(0);
+						}
 						Some(empty_db_page())
 					} else {
 						fetched.bytes
@@ -2046,19 +2538,14 @@ impl VfsContext {
 						} else {
 							PageCacheInsertKind::Prefetch
 						};
-						cache_page(
-							&self.config,
-							&page_cache,
-							&protected_page_cache,
-							&prefetched_pages,
-							&prefetch_unused_total,
-							profile_active,
-							kind,
-							fetched.pgno,
-							bytes.clone(),
-						);
+						let mut state = self.state.write();
+						if !state.write_buffer.dirty.contains_key(&fetched.pgno)
+							&& !state.overlay.pages.contains_key(&fetched.pgno)
+						{
+							state.cache_page(&self.config, kind, fetched.pgno, bytes.clone());
+						}
 					}
-					resolved.insert(fetched.pgno, bytes);
+					resolved.entry(fetched.pgno).or_insert(bytes);
 				}
 				#[cfg(debug_assertions)]
 				{
@@ -2107,7 +2594,7 @@ impl VfsContext {
 						self.profile_request_limit(),
 					);
 				});
-				if self.commit_total.load(Relaxed) == 0
+				if synthesize_empty_page
 					&& missing.contains(&1)
 					&& is_initial_main_page_missing(&error.message)
 				{
@@ -2144,6 +2631,10 @@ impl VfsContext {
 		&self,
 		timeout: Option<Duration>,
 	) -> std::result::Result<CommitWait<Option<BufferedCommitOutcome>>, CommitBufferError> {
+		if self.config.commit_mode == CommitMode::Deferred {
+			self.stage_deferred_local_commit(false)?;
+			return Ok(CommitWait::Completed(None));
+		}
 		let total_start = Instant::now();
 		let request_build_start = Instant::now();
 		let request = {
@@ -2164,15 +2655,17 @@ impl VfsContext {
 				actor_id: self.actor_id.clone(),
 				new_db_size_pages: state.db_size_pages,
 				expected_head_txid: state.head_txid,
-				dirty_pages: state
-					.write_buffer
-					.dirty
-					.iter()
-					.map(|(pgno, bytes)| protocol::SqliteDirtyPage {
-						pgno: *pgno,
-						bytes: bytes.clone(),
-					})
-					.collect(),
+				dirty_pages: Arc::new(
+					state
+						.write_buffer
+						.dirty
+						.iter()
+						.map(|(pgno, bytes)| protocol::SqliteDirtyPage {
+							pgno: *pgno,
+							bytes: bytes.clone(),
+						})
+						.collect(),
+				),
 			}
 		};
 		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
@@ -2243,11 +2736,17 @@ impl VfsContext {
 		state.head_txid = outcome
 			.head_txid
 			.or_else(|| state.head_txid.map(|head_txid| head_txid.saturating_add(1)));
-		for dirty_page in &request.dirty_pages {
+		for dirty_page in request.dirty_pages.iter() {
 			state.cache_committed_page(&self.config, dirty_page.pgno, dirty_page.bytes.clone());
 		}
 		state.write_buffer.dirty.clear();
+		let seq = state.overlay.commit_seq.saturating_add(1);
+		state.overlay.commit_seq = seq;
+		state.overlay.db_size_pages = state.db_size_pages;
+		self.flush.progress.lock().flushed_seq = seq;
 		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+		drop(state);
+		self.flush.publish_change();
 		self.add_commit_phase_metrics(
 			request_build_ns,
 			transport_metrics,
@@ -2270,6 +2769,10 @@ impl VfsContext {
 		&self,
 		timeout: Option<Duration>,
 	) -> std::result::Result<CommitWait<()>, CommitBufferError> {
+		if self.config.commit_mode == CommitMode::Deferred {
+			self.stage_deferred_local_commit(true)?;
+			return Ok(CommitWait::Completed(()));
+		}
 		let total_start = Instant::now();
 		let request_build_start = Instant::now();
 		let request = {
@@ -2293,15 +2796,17 @@ impl VfsContext {
 				actor_id: self.actor_id.clone(),
 				new_db_size_pages: state.db_size_pages,
 				expected_head_txid: state.head_txid,
-				dirty_pages: state
-					.write_buffer
-					.dirty
-					.iter()
-					.map(|(pgno, bytes)| protocol::SqliteDirtyPage {
-						pgno: *pgno,
-						bytes: bytes.clone(),
-					})
-					.collect(),
+				dirty_pages: Arc::new(
+					state
+						.write_buffer
+						.dirty
+						.iter()
+						.map(|(pgno, bytes)| protocol::SqliteDirtyPage {
+							pgno: *pgno,
+							bytes: bytes.clone(),
+						})
+						.collect(),
+				),
 			}
 		};
 		let request_build_ns = request_build_start.elapsed().as_nanos() as u64;
@@ -2370,12 +2875,18 @@ impl VfsContext {
 		state.head_txid = outcome
 			.head_txid
 			.or_else(|| state.head_txid.map(|head_txid| head_txid.saturating_add(1)));
-		for dirty_page in &request.dirty_pages {
+		for dirty_page in request.dirty_pages.iter() {
 			state.cache_committed_page(&self.config, dirty_page.pgno, dirty_page.bytes.clone());
 		}
 		state.write_buffer.dirty.clear();
 		state.write_buffer.in_atomic_write = false;
+		let seq = state.overlay.commit_seq.saturating_add(1);
+		state.overlay.commit_seq = seq;
+		state.overlay.db_size_pages = state.db_size_pages;
+		self.flush.progress.lock().flushed_seq = seq;
 		let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+		drop(state);
+		self.flush.publish_change();
 		self.add_commit_phase_metrics(
 			request_build_ns,
 			transport_metrics,
@@ -2383,6 +2894,13 @@ impl VfsContext {
 			total_start.elapsed().as_nanos() as u64,
 		);
 		Ok(CommitWait::Completed(()))
+	}
+
+	fn rollback_atomic_write(&self) {
+		let mut state = self.state.write();
+		state.write_buffer.dirty.clear();
+		state.write_buffer.in_atomic_write = false;
+		state.db_size_pages = state.write_buffer.saved_db_size;
 	}
 
 	/// Returns true when the truncate left behind a size change that only a commit can carry to
@@ -2440,6 +2958,241 @@ impl Drop for VfsContext {
 	}
 }
 
+struct FlusherExitGuard {
+	ctx: Weak<VfsContext>,
+	armed: bool,
+}
+
+impl Drop for FlusherExitGuard {
+	fn drop(&mut self) {
+		if self.armed
+			&& let Some(ctx) = self.ctx.upgrade()
+		{
+			ctx.break_database(FlushError::Aborted(
+				"background flusher exited unexpectedly".to_string(),
+			));
+		}
+	}
+}
+
+async fn flusher_task(weak_ctx: Weak<VfsContext>) {
+	let mut guard = FlusherExitGuard {
+		ctx: weak_ctx.clone(),
+		armed: true,
+	};
+	loop {
+		let Some(ctx) = weak_ctx.upgrade() else {
+			guard.armed = false;
+			return;
+		};
+		#[cfg(test)]
+		if ctx.flush.panic_requested.swap(false, Ordering::AcqRel) {
+			panic!("test deferred sqlite flusher panic");
+		}
+		let wake = ctx.flush.wake.clone();
+		let batch = {
+			let flushed_seq = ctx.flush.progress.lock().flushed_seq;
+			let mut state = ctx.state.write();
+			if state.overlay.commit_seq == flushed_seq {
+				None
+			} else {
+				let pages = Arc::new(
+					state
+						.overlay
+						.pages
+						.iter()
+						.map(|(pgno, page)| protocol::SqliteDirtyPage {
+							pgno: *pgno,
+							bytes: page.bytes.clone(),
+						})
+						.collect::<Vec<_>>(),
+				);
+				let batch = InFlightBatch {
+					seq: state.overlay.commit_seq,
+					expected_head_txid: state.durable_head_txid,
+					db_size_pages: state.overlay.db_size_pages,
+					pages,
+					started_at: tokio::time::Instant::now(),
+					attempts: 0,
+				};
+				state.overlay.in_flight = Some(batch.clone());
+				Some(batch)
+			}
+		};
+
+		let Some(batch) = batch else {
+			if ctx.flush.shutdown.load(Ordering::Acquire) {
+				guard.armed = false;
+				return;
+			}
+			drop(ctx);
+			wake.notified().await;
+			continue;
+		};
+
+		match ship_deferred_batch(&ctx, batch.clone()).await {
+			Ok((head, transport_metrics)) => {
+				let state_update_start = Instant::now();
+				let mut state = ctx.state.write();
+				if state.dead {
+					guard.armed = false;
+					return;
+				}
+				// Durable state and progress are one publication. A fatal marker or
+				// terminal error that wins first prevents every acknowledgement-side
+				// mutation, including the `flushed_seq` advance.
+				let mut progress = ctx.flush.progress.lock();
+				if progress.error.is_some() {
+					guard.armed = false;
+					return;
+				}
+				state.durable_head_txid = head;
+				state.head_txid = Some(head);
+				for page in batch.pages.iter() {
+					let should_remove = state
+						.overlay
+						.pages
+						.get(&page.pgno)
+						.is_some_and(|overlay| overlay.seq <= batch.seq);
+					if should_remove && let Some(overlay) = state.overlay.pages.remove(&page.pgno) {
+						state.overlay.bytes =
+							state.overlay.bytes.saturating_sub(overlay.bytes.len());
+						state.page_cache.invalidate(&page.pgno);
+						state.protected_page_cache.remove_sync(&page.pgno);
+						if page.pgno <= state.db_size_pages {
+							state.cache_committed_page(&ctx.config, page.pgno, page.bytes.clone());
+						}
+					}
+				}
+				state.overlay.in_flight = None;
+				if let Some(metrics) = &ctx.metrics {
+					metrics.set_overlay_pages(state.overlay.pages.len() as u64);
+					metrics.record_flush_batch(
+						batch.pages.len() as u64,
+						batch.pages.iter().map(|page| page.bytes.len() as u64).sum(),
+					);
+					metrics.observe_flush_latency(batch.started_at.elapsed().as_nanos() as u64);
+					metrics.record_commit();
+				}
+				ctx.commit_total.fetch_add(1, Ordering::Relaxed);
+				let state_update_ns = state_update_start.elapsed().as_nanos() as u64;
+				progress.flushed_seq = batch.seq;
+				drop(progress);
+				drop(state);
+				ctx.add_commit_phase_metrics(
+					0,
+					transport_metrics,
+					state_update_ns,
+					batch.started_at.elapsed().as_nanos() as u64,
+				);
+				ctx.flush.publish_change();
+			}
+			Err(error) => {
+				ctx.break_database(error);
+				return;
+			}
+		}
+	}
+}
+
+async fn ship_deferred_batch(
+	ctx: &VfsContext,
+	mut batch: InFlightBatch,
+) -> std::result::Result<(u64, CommitTransportMetrics), FlushError> {
+	let deadline = batch.started_at + ctx.config.deferred_commit.retry_deadline;
+	let mut backoff = ctx.config.deferred_commit.retry_backoff_min;
+	let target_head = batch.expected_head_txid.saturating_add(1);
+	let mut last_error = "commit did not complete".to_string();
+	loop {
+		batch.attempts = batch.attempts.saturating_add(1);
+		let request = BufferedCommitRequest {
+			actor_id: ctx.actor_id.clone(),
+			new_db_size_pages: batch.db_size_pages,
+			dirty_pages: Arc::clone(&batch.pages),
+			expected_head_txid: Some(batch.expected_head_txid),
+		};
+		match tokio::time::timeout_at(deadline, commit_buffered_pages(&*ctx.transport, request))
+			.await
+		{
+			Ok(Ok((outcome, metrics))) => {
+				return match outcome.head_txid {
+					None => Ok((target_head, metrics)),
+					Some(head) if head == target_head => Ok((head, metrics)),
+					Some(head) => Err(FlushError::HeadDiverged {
+						expected: target_head,
+						actual: Some(head),
+					}),
+				};
+			}
+			Ok(Err(CommitBufferError::FenceMismatch(message))) => {
+				return Err(FlushError::HeadDiverged {
+					expected: target_head,
+					actual: parse_actual_head_txid(&message),
+				});
+			}
+			Ok(Err(error)) => {
+				last_error = error.message().to_string();
+				#[allow(unreachable_patterns)]
+				let retry_class = match &error {
+					CommitBufferError::Other(_) => "transport",
+					CommitBufferError::Response { .. } => "engine",
+					_ => "unknown",
+				};
+				if let Some(metrics) = &ctx.metrics {
+					metrics.record_flush_retry(retry_class);
+				}
+				tracing::warn!(
+					actor_id = %ctx.actor_id,
+					class = retry_class,
+					attempt = batch.attempts,
+					last_error = %last_error,
+					elapsed_ms = batch.started_at.elapsed().as_millis(),
+					"retrying deferred sqlite flush"
+				);
+			}
+			Err(_) => {
+				return Err(FlushError::RetryDeadlineExceeded {
+					attempts: batch.attempts,
+					last_error,
+				});
+			}
+		}
+
+		if tokio::time::Instant::now() >= deadline {
+			return Err(FlushError::RetryDeadlineExceeded {
+				attempts: batch.attempts,
+				last_error,
+			});
+		}
+		if tokio::time::timeout_at(deadline, tokio::time::sleep(backoff))
+			.await
+			.is_err()
+		{
+			return Err(FlushError::RetryDeadlineExceeded {
+				attempts: batch.attempts,
+				last_error,
+			});
+		}
+		backoff = backoff
+			.saturating_mul(2)
+			.min(ctx.config.deferred_commit.retry_backoff_max);
+	}
+}
+
+fn parse_actual_head_txid(message: &str) -> Option<u64> {
+	["current head txid ", "actual head txid ", "engine has "]
+		.into_iter()
+		.find_map(|prefix| {
+			let value = message.split(prefix).nth(1)?;
+			let digits = value
+				.trim_start()
+				.chars()
+				.take_while(char::is_ascii_digit)
+				.collect::<String>();
+			(!digits.is_empty()).then(|| digits.parse().ok()).flatten()
+		})
+}
+
 fn cleanup_batch_atomic_probe(db: *mut sqlite3) {
 	if let Err(err) = sqlite_exec(db, "DROP TABLE IF EXISTS __rivet_batch_probe;") {
 		tracing::warn!(%err, "failed to clean up sqlite batch atomic probe table");
@@ -2495,7 +3248,9 @@ fn assert_batch_atomic_probe(db: *mut sqlite3, vfs: &SqliteVfs) -> std::result::
 fn handle_non_finalize_commit_error(ctx: &VfsContext, err: &CommitBufferError) {
 	match err {
 		CommitBufferError::FenceMismatch(message) => ctx.mark_fatal(message.clone()),
-		CommitBufferError::Other(message) => ctx.set_last_error(message.clone()),
+		CommitBufferError::Other(message) | CommitBufferError::Response { message, .. } => {
+			ctx.set_last_error(message.clone())
+		}
 	}
 }
 
@@ -2652,7 +3407,7 @@ async fn commit_buffered_pages(
 	let serialize_start = Instant::now();
 	let commit_request = protocol::SqliteCommitRequest {
 		actor_id: request.actor_id.clone(),
-		dirty_pages: request.dirty_pages.clone(),
+		dirty_pages: request.dirty_pages.as_ref().clone(),
 		db_size_pages: request.new_db_size_pages,
 		now_ms: sqlite_now_ms().map_err(|err| CommitBufferError::Other(err.to_string()))?,
 		expected_generation: None,
@@ -2680,7 +3435,11 @@ async fn commit_buffered_pages(
 			if is_head_fence_mismatch_response(&error) {
 				Err(CommitBufferError::FenceMismatch(error.message))
 			} else {
-				Err(CommitBufferError::Other(error.message))
+				Err(CommitBufferError::Response {
+					group: error.group,
+					code: error.code,
+					message: error.message,
+				})
 			}
 		}
 	}
@@ -2709,7 +3468,8 @@ async fn commit_staged_pages(
 
 	let mut metrics = CommitTransportMetrics::default();
 	let serialize_start = Instant::now();
-	let mut dirty_pages = request.dirty_pages;
+	let mut dirty_pages =
+		Arc::try_unwrap(request.dirty_pages).unwrap_or_else(|pages| pages.as_ref().clone());
 	// Cutting segments needs ascending pages, and sorting once here keeps the per-segment work to a
 	// slice.
 	dirty_pages.sort_by_key(|page| page.pgno);
@@ -2788,7 +3548,11 @@ fn staged_commit_error(error: protocol::SqliteErrorResponse) -> CommitBufferErro
 	if is_head_fence_mismatch_response(&error) {
 		CommitBufferError::FenceMismatch(error.message)
 	} else {
-		CommitBufferError::Other(error.message)
+		CommitBufferError::Response {
+			group: error.group,
+			code: error.code,
+			message: error.message,
+		}
 	}
 }
 
@@ -3039,6 +3803,15 @@ unsafe extern "C" fn io_close(p_file: *mut sqlite3_file) -> c_int {
 				Ok(())
 			} else {
 				let ctx = &*file.ctx;
+				if ctx.config.commit_mode == CommitMode::Deferred {
+					let mut state = ctx.state.write();
+					state.write_buffer.dirty.clear();
+					state.write_buffer.in_atomic_write = false;
+					drop(state);
+					ctx.flush.wake.notify_one();
+					file.base.pMethods = ptr::null();
+					return SQLITE_OK;
+				}
 				let should_flush = {
 					let state = ctx.state.read();
 					state.write_buffer.in_atomic_write
@@ -3082,6 +3855,8 @@ unsafe extern "C" fn io_read(
 
 			let file = get_file(p_file);
 			if let Some(aux) = get_aux_state(file) {
+				#[cfg(test)]
+				(&*file.ctx).aux_write_count.fetch_add(1, Ordering::Relaxed);
 				if i_offset < 0 {
 					return SQLITE_IOERR_READ;
 				}
@@ -3133,7 +3908,7 @@ unsafe extern "C" fn io_read(
 						error = %message,
 						"sqlite xRead hit fatal sqlite error"
 					);
-					ctx.mark_fatal(message);
+					ctx.handle_read_fatal(message);
 					return SQLITE_IOERR_READ;
 				}
 				Err(GetPagesError::Other(message)) => {
@@ -3273,7 +4048,7 @@ unsafe extern "C" fn io_write(
 					match ctx.resolve_pages(&pages_to_resolve, false) {
 						Ok(pages) => pages,
 						Err(GetPagesError::FenceMismatch(message)) => {
-							ctx.mark_fatal(message);
+							ctx.handle_read_fatal(message);
 							return SQLITE_IOERR_WRITE;
 						}
 						Err(GetPagesError::Other(message)) => {
@@ -3399,6 +4174,8 @@ unsafe extern "C" fn io_sync(p_file: *mut sqlite3_file, _flags: c_int) -> c_int 
 				return SQLITE_OK;
 			}
 			let ctx = &*file.ctx;
+			#[cfg(test)]
+			ctx.main_sync_count.fetch_add(1, Ordering::Relaxed);
 			if let Some(message) = ctx.take_transient_commit_error() {
 				ctx.set_last_error(message);
 				return SQLITE_IOERR_FSYNC;
@@ -3483,30 +4260,36 @@ unsafe extern "C" fn io_file_control(
 					state.write_buffer.dirty.clear();
 					SQLITE_OK
 				}
-				SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => match ctx.commit_atomic_write() {
-					Ok(()) => {
-						ctx.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
-						SQLITE_OK
-					}
-					Err(err) => {
-						tracing::error!(
-							actor_id = %ctx.actor_id,
-							last_error = ?ctx.clone_last_error(),
-							?err,
-							"sqlite atomic write file control failed"
-						);
-						if let CommitBufferError::Other(message) = &err {
-							ctx.defer_transient_commit_error(message.clone());
+				SQLITE_FCNTL_COMMIT_ATOMIC_WRITE => {
+					#[cfg(test)]
+					ctx.commit_atomic_attempt_count
+						.fetch_add(1, Ordering::Relaxed);
+					match ctx.commit_atomic_write() {
+						Ok(()) => {
+							ctx.commit_atomic_count.fetch_add(1, Ordering::Relaxed);
+							SQLITE_OK
 						}
-						handle_finalize_fence_error(ctx, &err);
-						SQLITE_IOERR
+						Err(err) => {
+							tracing::error!(
+								actor_id = %ctx.actor_id,
+								last_error = ?ctx.clone_last_error(),
+								?err,
+								"sqlite atomic write file control failed"
+							);
+							if let CommitBufferError::Other(message)
+							| CommitBufferError::Response { message, .. } = &err
+							{
+								ctx.defer_transient_commit_error(message.clone());
+							}
+							handle_finalize_fence_error(ctx, &err);
+							SQLITE_IOERR
+						}
 					}
-				},
+				}
 				SQLITE_FCNTL_ROLLBACK_ATOMIC_WRITE => {
-					let mut state = ctx.state.write();
-					state.write_buffer.dirty.clear();
-					state.write_buffer.in_atomic_write = false;
-					state.db_size_pages = state.write_buffer.saved_db_size;
+					#[cfg(test)]
+					ctx.rollback_atomic_count.fetch_add(1, Ordering::Relaxed);
+					ctx.rollback_atomic_write();
 					SQLITE_OK
 				}
 				_ => SQLITE_NOTFOUND,
@@ -3753,6 +4536,119 @@ unsafe extern "C" fn vfs_get_last_error(
 }
 
 impl SqliteVfs {
+	pub fn commit_mode(&self) -> CommitMode {
+		self.ctx.config.commit_mode
+	}
+
+	pub fn commit_seq(&self) -> u64 {
+		self.ctx.commit_seq()
+	}
+
+	pub fn flushed_seq(&self) -> u64 {
+		self.ctx.flushed_seq()
+	}
+
+	pub fn flush_error(&self) -> Option<FlushError> {
+		self.ctx.flush_error()
+	}
+
+	pub async fn wait_for_flush(&self, seq: u64) -> std::result::Result<(), FlushError> {
+		self.ctx.wait_for_flush(seq).await
+	}
+
+	pub async fn wait_for_failure(&self) -> DatabaseFailure {
+		self.ctx.wait_for_failure().await
+	}
+
+	pub fn begin_close(&self) {
+		self.ctx.begin_close();
+	}
+
+	pub fn close_flush_timeout(&self) -> Duration {
+		self.ctx
+			.config
+			.deferred_commit
+			.retry_deadline
+			.saturating_add(self.ctx.config.deferred_commit.retry_backoff_max)
+	}
+
+	pub async fn drain_and_shutdown_flusher(
+		&self,
+		timeout: Duration,
+	) -> std::result::Result<(), FlushError> {
+		if self.commit_mode() == CommitMode::Awaited {
+			return match self.flush_error() {
+				Some(error) => Err(error),
+				None => Ok(()),
+			};
+		}
+
+		self.ctx.flush.shutdown.store(true, Ordering::Release);
+		self.ctx.flush.wake.notify_one();
+		let target = self.commit_seq();
+		let wait_result = tokio::time::timeout(timeout, self.wait_for_flush(target)).await;
+		let mut result = match wait_result {
+			Ok(result) => result,
+			Err(_) => {
+				let error = FlushError::Aborted("close deadline".to_string());
+				self.ctx.break_database(error.clone());
+				Err(error)
+			}
+		};
+
+		let task = self.ctx.flush.task.lock().take();
+		if let Some(mut task) = task {
+			if result.is_err() {
+				tracing::error!(
+					actor_id = %self.ctx.actor_id,
+					"aborting deferred sqlite flusher; the cut-off commit attempt is indeterminate"
+				);
+				task.abort();
+			}
+			match tokio::time::timeout(timeout, &mut task).await {
+				Ok(Ok(())) => {}
+				Ok(Err(join_error)) if join_error.is_cancelled() && result.is_err() => {}
+				Ok(Err(join_error)) => {
+					let error = self.flush_error().unwrap_or_else(|| {
+						FlushError::Aborted(format!("flusher task failed: {join_error}"))
+					});
+					result = Err(error);
+				}
+				Err(_) => {
+					tracing::error!(
+						actor_id = %self.ctx.actor_id,
+						"aborting hung deferred sqlite flusher; the cut-off commit attempt is indeterminate"
+					);
+					task.abort();
+					let _ = task.await;
+					let error = FlushError::Aborted("close deadline".to_string());
+					self.ctx.break_database(error.clone());
+					result = Err(error);
+				}
+			}
+		}
+		result
+	}
+
+	pub async fn abort_flusher_for_worker_timeout(&self) {
+		if self.commit_mode() != CommitMode::Deferred {
+			return;
+		}
+		self.ctx.flush.shutdown.store(true, Ordering::Release);
+		self.ctx.flush.wake.notify_one();
+		self.ctx
+			.break_database(FlushError::Aborted("worker close timeout".to_string()));
+		let task = self.ctx.flush.task.lock().take();
+		if let Some(task) = task {
+			tracing::error!(
+				actor_id = %self.ctx.actor_id,
+				"aborting deferred sqlite flusher after worker close timeout; the cut-off commit attempt is indeterminate"
+			);
+			task.abort();
+			let _ = task.await;
+		}
+	}
+
 	pub(crate) fn take_last_error(&self) -> Option<String> {
 		self.ctx.take_last_error()
 	}
@@ -3860,7 +4756,7 @@ impl SqliteVfs {
 		let generation = name
 			.rsplit_once("-g")
 			.and_then(|(_, generation)| generation.parse::<u64>().ok());
-		let mut ctx = Box::new(VfsContext::new(
+		let ctx = Arc::new(VfsContext::new(
 			actor_id,
 			generation,
 			runtime,
@@ -3870,7 +4766,7 @@ impl SqliteVfs {
 			initial_pages,
 			metrics,
 		)?);
-		let ctx_ptr = (&mut *ctx) as *mut VfsContext;
+		let ctx_ptr = Arc::as_ptr(&ctx) as *mut VfsContext;
 		let name_cstring = CString::new(name).map_err(|err| err.to_string())?;
 
 		let mut vfs: sqlite3_vfs = unsafe { std::mem::zeroed() };
@@ -3889,6 +4785,10 @@ impl SqliteVfs {
 		vfs.xGetLastError = Some(vfs_get_last_error);
 
 		let registration = SqliteVfsRegistration::register(vfs)?;
+		if ctx.config.commit_mode == CommitMode::Deferred {
+			let task = ctx.runtime.spawn(flusher_task(Arc::downgrade(&ctx)));
+			*ctx.flush.task.lock() = Some(task);
+		}
 
 		Ok(Self {
 			_registration: registration,
@@ -3956,6 +4856,10 @@ impl NativeDatabase {
 		self._vfs.ctx.round_trip_counts()
 	}
 
+	pub fn commit_seq(&self) -> u64 {
+		self._vfs.commit_seq()
+	}
+
 	pub(crate) fn begin_operation_profile(&self) -> SqliteOperationProfileGuard<'_> {
 		self._vfs.ctx.begin_operation_profile();
 		SqliteOperationProfileGuard {
@@ -3973,6 +4877,22 @@ impl Drop for NativeDatabase {
 	fn drop(&mut self) {
 		if !self.db.is_null() {
 			let ctx = self._vfs.ctx();
+			// Deferred commits are promoted into the overlay only at an SQLite commit
+			// boundary. In particular, do not stage dirty pages from an open
+			// transaction while closing: sqlite3_close_v2 rolls that transaction back
+			// and io_close discards the write buffer.
+			if ctx.config.commit_mode == CommitMode::Deferred {
+				let rc = unsafe { sqlite3_close_v2(self.db) };
+				if rc != SQLITE_OK {
+					tracing::warn!(
+						rc,
+						error = sqlite_error_message(self.db),
+						"failed to close deferred sqlite database"
+					);
+				}
+				self.db = ptr::null_mut();
+				return;
+			}
 			let should_flush = {
 				let state = ctx.state.read();
 				state.write_buffer.in_atomic_write

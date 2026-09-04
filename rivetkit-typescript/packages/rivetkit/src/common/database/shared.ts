@@ -137,6 +137,15 @@ export function toSqliteBindings(
 	throw new Error("unsupported sqlite binding collection");
 }
 
+export function normalizeSqliteBindings(
+	args: unknown[],
+): SqliteBindings | undefined {
+	if (args.length === 0) return undefined;
+	return args.length === 1 && isSqliteBindingObject(args[0])
+		? toSqliteBindings(args[0])
+		: toSqliteBindings(args);
+}
+
 /**
  * Serialize async operations on a shared non-reentrant resource.
  */

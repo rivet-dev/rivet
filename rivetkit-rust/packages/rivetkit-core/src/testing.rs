@@ -81,6 +81,7 @@ impl ActorContextHarness {
 			generation.map(u64::from),
 			false,
 			true,
+			crate::SqliteCommitMode::Awaited,
 		)
 		.expect("test remote sqlite should be configured");
 		let ctx = ActorContext::build(

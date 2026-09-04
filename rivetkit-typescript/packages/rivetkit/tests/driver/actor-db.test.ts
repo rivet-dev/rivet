@@ -731,7 +731,7 @@ describeDriverMatrix(
 							actor.synchronousQueries("sync"),
 						).resolves.toEqual({
 							value: "sync",
-							multiStatementValues: [1, 2],
+							multiStatementValues: [2],
 							transactionCount: 2,
 							rollbackCount: 0,
 						});
@@ -1178,7 +1178,7 @@ describeDriverMatrix(
 						]);
 						expect(
 							await actor.terminalTransactionDiagnostic(),
-						).toContain("already committed");
+						).toContain("SQLite transaction is closed.");
 					},
 					dbTestTimeout,
 				);

@@ -24,7 +24,7 @@ mod moved_tests {
 	use crate::actor::messages::StateDelta;
 	use crate::actor::task::LifecycleEvent;
 	use crate::kv::tests::new_in_memory;
-	use crate::sqlite::BindParam;
+	use crate::sqlite::{BindParam, CallMode};
 	use crate::{ActorContext, RequestSaveOpts};
 
 	use super::{
@@ -435,6 +435,52 @@ mod moved_tests {
 			"begin failure must reschedule the save cleared before acquiring exclusion",
 		);
 		assert_eq!(ctx.state_transaction_epoch(), epoch_before + 2);
+	}
+
+	#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+	async fn sqlite_sync_call_fails_during_reserved_bridge_state_transaction() {
+		let ctx = new_with_kv(
+			"actor-state-tx-bridge-reservation",
+			"state-tx-bridge-reservation",
+			Vec::new(),
+			"local",
+			new_in_memory(),
+		);
+		let save_guard = Arc::clone(&ctx.0.save_guard).lock_owned().await;
+		let reservation = ctx.reserve_bridge_state_transaction();
+		let begin = tokio::spawn({
+			let ctx = ctx.clone();
+			async move {
+				ctx.begin_reserved_bridge_state_transaction(reservation, None)
+					.await
+			}
+		});
+		tokio::task::yield_now().await;
+		assert!(
+			!begin.is_finished(),
+			"the state transaction should still be waiting for save exclusion",
+		);
+
+		let error = ctx
+			.sql()
+			.execute_with_call_mode("SELECT 1".to_owned(), None, CallMode::SyncBlocking)
+			.await
+			.expect_err("the synchronous reservation must be visible before the Promise runs");
+		assert_eq!(
+			rivet_error::RivetError::extract(&error).code(),
+			"transaction_active",
+		);
+
+		drop(save_guard);
+		let transaction = tokio::time::timeout(Duration::from_secs(1), begin)
+			.await
+			.expect("state transaction should acquire save exclusion")
+			.expect("state transaction task should join")
+			.expect("state transaction should begin");
+		transaction
+			.rollback()
+			.await
+			.expect("state transaction should roll back");
 	}
 
 	#[tokio::test]

@@ -144,8 +144,16 @@ fn build_ctx_with_remote_sqlite(
 		sql_handle.get_envoy_key().to_owned(),
 		config,
 		kv,
-		SqliteDb::new_with_remote_sqlite(sql_handle.clone(), actor_id, None, Some(1), false, true)
-			.expect("test remote sqlite should be configured"),
+		SqliteDb::new_with_remote_sqlite(
+			sql_handle.clone(),
+			actor_id,
+			None,
+			Some(1),
+			false,
+			true,
+			crate::SqliteCommitMode::Awaited,
+		)
+		.expect("test remote sqlite should be configured"),
 	);
 	ctx.configure_envoy(sql_handle, Some(1));
 	ctx
@@ -834,6 +842,7 @@ mod moved_tests {
 				Some(1),
 				false,
 				true,
+				crate::SqliteCommitMode::Awaited,
 			)
 			.expect("test remote sqlite should be configured"),
 		);

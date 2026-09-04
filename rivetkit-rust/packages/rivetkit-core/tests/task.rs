@@ -181,6 +181,7 @@ pub(crate) mod moved_tests {
 				Some(1),
 				false,
 				true,
+				crate::SqliteCommitMode::Awaited,
 			)
 			.expect("test remote sqlite should be configured"),
 		);

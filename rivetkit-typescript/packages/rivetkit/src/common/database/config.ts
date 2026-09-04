@@ -12,15 +12,18 @@ export type InferDatabaseClient<DBProvider extends AnyDatabaseProvider> =
 		: RawAccess;
 
 export type SqliteBindings = unknown[] | Record<string, unknown>;
+export type SqliteCommitMode = "awaited" | "deferred";
 
 export interface SqliteQueryResult {
 	columns: string[];
 	rows: unknown[][];
+	readonly?: boolean;
 }
 
 export interface SqliteExecuteResult extends SqliteQueryResult {
 	changes: number;
 	lastInsertRowId?: number | null;
+	commitSeq?: number;
 }
 
 export interface SqliteBatchStatement {
@@ -87,7 +90,7 @@ export interface SqliteDatabase {
 	execSync?(
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
-	): void;
+	): { readonly?: boolean };
 	execute(sql: string, params?: SqliteBindings): Promise<SqliteExecuteResult>;
 	executeSync?(sql: string, params?: SqliteBindings): SqliteExecuteResult;
 	executeBatch(
@@ -101,6 +104,11 @@ export interface SqliteDatabase {
 		timeoutMs?: number,
 		name?: string,
 	): SynchronousSqliteTransactionDatabase;
+	commitSeq?(): number;
+	flushedSeq?(): number;
+	waitForFlush?(seq: number): Promise<void>;
+	flushError?(): string | null;
+	supportsSyncMetadata?(): boolean;
 	run(sql: string, params?: SqliteBindings): Promise<void>;
 	query(sql: string, params?: SqliteBindings): Promise<SqliteQueryResult>;
 	nativeMetrics?():
@@ -118,20 +126,25 @@ export interface SqliteTransactionDatabase {
 	execSync?(
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
-	): void;
+	): { readonly?: boolean };
 	execute(sql: string, params?: SqliteBindings): Promise<SqliteExecuteResult>;
 	executeSync?(sql: string, params?: SqliteBindings): SqliteExecuteResult;
-	commit(): Promise<void>;
+	commit(): Promise<number | null>;
 	rollback(): Promise<void>;
+	commitSeq?(): number;
+	flushedSeq?(): number;
+	waitForFlush?(seq: number): Promise<void>;
+	flushError?(): string | null;
+	supportsSyncMetadata?(): boolean;
 }
 
 export type SynchronousSqliteTransactionDatabase = SqliteTransactionDatabase & {
 	execSync(
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
-	): void;
+	): { readonly?: boolean };
 	executeSync(sql: string, params?: SqliteBindings): SqliteExecuteResult;
-	commitSync(): void;
+	commitSync(): number | null;
 	rollbackSync(): void;
 };
 
@@ -192,6 +205,8 @@ export type DatabaseProvider<DB extends RawAccess> = {
 	 * subject to change without notice.
 	 */
 	sqliteProfiling?: SqliteProfilingOptions;
+	/** Durability behavior for native SQLite commits. Defaults to `"awaited"`. */
+	sqliteCommitMode?: SqliteCommitMode;
 	/**
 	 * Creates a new database client for the actor.
 	 * The result is passed to the actor context as `c.db`.
@@ -238,6 +253,10 @@ type ExecuteSyncFunction = <
 /** SQL operations available inside a synchronous transaction callback. */
 export type SynchronousTransactionAccess = {
 	executeSync: ExecuteSyncFunction;
+	commitSeq(): number;
+	flushedSeq(): number;
+	waitForFlush(seq?: number): Promise<void>;
+	flushError(): string | null;
 };
 
 export type RawAccess = {
@@ -250,6 +269,10 @@ export type RawAccess = {
 	 * This blocks the Node.js event loop. Prefer `execute` for normal use.
 	 */
 	executeSync?: ExecuteSyncFunction;
+	commitSeq?(): number;
+	flushedSeq?(): number;
+	waitForFlush?(seq?: number): Promise<void>;
+	flushError?(): string | null;
 	/** Runs a callback in an isolated SQLite transaction. */
 	transaction: <T>(
 		callback: (tx: RawAccess) => Promise<T> | T,
@@ -271,6 +294,17 @@ export type RawAccess = {
 /** Raw database access with synchronous operations provided by the Node.js runtime. */
 export type SynchronousRawAccess = RawAccess & {
 	executeSync: ExecuteSyncFunction;
+	executeSyncRaw(
+		query: string,
+		...args: unknown[]
+	): SqliteExecuteResult & { readonly: boolean };
+	commitSeq(): number;
+	flushedSeq(): number;
+	waitForFlush(seq?: number): Promise<void>;
+	flushError(): string | null;
+	beginTransactionSync(
+		options?: Omit<SqliteTransactionOptions, "experimental">,
+	): SynchronousTransactionHandle;
 	/**
 	 * Runs a synchronous callback in an isolated SQLite transaction.
 	 * The callback must not return a promise.
@@ -280,3 +314,25 @@ export type SynchronousRawAccess = RawAccess & {
 		options?: Omit<SqliteTransactionOptions, "experimental">,
 	) => T;
 };
+
+export interface SynchronousTransactionHandle {
+	executeSync<TRow extends Record<string, unknown> = Record<string, unknown>>(
+		query: string,
+		...args: unknown[]
+	): TRow[];
+	executeSyncRaw(
+		query: string,
+		...args: unknown[]
+	): SqliteExecuteResult & { readonly: boolean };
+	execSync(
+		sql: string,
+		callback?: (row: unknown[], columns: string[]) => void,
+	): { readonly?: boolean };
+	commitSeq(): number;
+	flushedSeq(): number;
+	waitForFlush(seq?: number): Promise<void>;
+	flushError(): string | null;
+	commitSync(): number | null;
+	rollbackSync(): void;
+	readonly isOpen: boolean;
+}

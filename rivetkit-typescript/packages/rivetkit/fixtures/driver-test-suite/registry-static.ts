@@ -24,6 +24,7 @@ import {
 	dbActorDrizzleMigration,
 	dbActorDrizzleMigrationRollback,
 } from "./actor-db-drizzle-transaction";
+import { dbActorDeferred, sleepDbActorDeferred } from "./actor-db-deferred";
 import {
 	actorRuntimeSocketWithoutDb,
 	dbActorManualWarningsDisabled,
@@ -353,6 +354,8 @@ export const registry = setup({
 		dbActorManualWarningsDisabled,
 		actorRuntimeSocketWithoutDb,
 		dbActorRaw,
+		dbActorDeferred,
+		sleepDbActorDeferred,
 		dbActorRuntimeSocketDisabled,
 		dbRemoteLifecycleProbe,
 		// From actor-db-drizzle-transaction.ts

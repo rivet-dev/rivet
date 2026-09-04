@@ -542,6 +542,9 @@ export function createActorProxy<AD extends AnyActorDefinition>(
 					if (typeof prop === "symbol")
 						return Reflect.get(target, prop);
 					if (prop === "then") return undefined;
+					if (prop === "bind") {
+						return Function.prototype.bind.bind(target);
+					}
 					return actionPath(`${name}.${prop}`);
 				},
 			},

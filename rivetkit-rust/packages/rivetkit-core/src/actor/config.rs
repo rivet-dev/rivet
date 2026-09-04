@@ -24,6 +24,13 @@ const DEFAULT_MAX_INCOMING_MESSAGE_SIZE: u32 = 65_536;
 const DEFAULT_MAX_OUTGOING_MESSAGE_SIZE: u32 = 1_048_576;
 pub(crate) const MAX_SQLITE_TRANSACTION_TRACE_STATEMENTS: usize = 32;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SqliteCommitMode {
+	#[default]
+	Awaited,
+	Deferred,
+}
+
 #[derive(Clone)]
 pub enum CanHibernateWebSocket {
 	Bool(bool),
@@ -151,6 +158,7 @@ pub struct ActorConfig {
 	/// on the TS side). Gates the inspector database tab.
 	pub has_database: bool,
 	pub remote_sqlite: bool,
+	pub sqlite_commit_mode: SqliteCommitMode,
 	pub sqlite_profiling: SqliteProfilingConfig,
 	/// Enables the experimental Actor Runtime Socket.
 	pub enable_actor_runtime_socket: bool,
@@ -190,6 +198,7 @@ pub struct ActorConfigInput {
 	pub icon: Option<String>,
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
+	pub sqlite_commit_mode: Option<SqliteCommitMode>,
 	pub sqlite_profiling: Option<SqliteProfilingConfigInput>,
 	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
@@ -222,6 +231,7 @@ impl ActorConfig {
 			icon: config.icon,
 			has_database: config.has_database.unwrap_or(false),
 			remote_sqlite: config.remote_sqlite.unwrap_or(false),
+			sqlite_commit_mode: config.sqlite_commit_mode.unwrap_or_default(),
 			sqlite_profiling: config
 				.sqlite_profiling
 				.map(SqliteProfilingConfig::from_input)
@@ -340,6 +350,7 @@ impl Default for ActorConfig {
 			icon: None,
 			has_database: false,
 			remote_sqlite: false,
+			sqlite_commit_mode: SqliteCommitMode::Awaited,
 			sqlite_profiling: SqliteProfilingConfig::default(),
 			enable_actor_runtime_socket: false,
 			has_state: false,

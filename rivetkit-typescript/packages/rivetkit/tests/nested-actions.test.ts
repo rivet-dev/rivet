@@ -108,6 +108,20 @@ describe("nested actions", () => {
 		expect(Object.getOwnPropertyDescriptor(handle, "then")).toBeUndefined();
 	});
 
+	test("supports binding action proxy functions", async () => {
+		const action = vi.fn().mockResolvedValue("pong");
+		const handle = createActorProxy({
+			action,
+		} as unknown as ActorHandleRaw) as any;
+		const bound = handle.ping.bind(handle);
+
+		await expect(bound("value")).resolves.toBe("pong");
+		expect(action).toHaveBeenCalledWith({
+			name: "ping",
+			args: ["value"],
+		});
+	});
+
 	test("preserves dotted namespace segments when matching nested schemas", () => {
 		const create = () => "created";
 		const schema = z.tuple([z.string()]);

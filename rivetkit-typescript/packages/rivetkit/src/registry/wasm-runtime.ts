@@ -865,14 +865,17 @@ export class WasmCoreRuntime implements CoreRuntime {
 
 	async actorSqlTransactionCommit(
 		transaction: SqliteTransactionHandle,
-	): Promise<void> {
+	): Promise<number | null> {
 		await callWasm(() =>
 			(transaction as unknown as { commit(): Promise<void> }).commit(),
 		);
+		return null;
 	}
 
-	actorSqlTransactionCommitSync(_transaction: SqliteTransactionHandle): void {
-		synchronousSqliteUnavailable();
+	actorSqlTransactionCommitSync(
+		_transaction: SqliteTransactionHandle,
+	): number | null {
+		return synchronousSqliteUnavailable();
 	}
 
 	async actorSqlTransactionRollback(
@@ -973,6 +976,27 @@ export class WasmCoreRuntime implements CoreRuntime {
 
 	actorSqlMetrics(ctx: ActorContextHandle) {
 		return this.#actorSql(ctx).metrics?.() ?? null;
+	}
+
+	actorSqlCommitSeq(_ctx: ActorContextHandle): number {
+		return 0;
+	}
+
+	actorSqlFlushedSeq(_ctx: ActorContextHandle): number {
+		return 0;
+	}
+
+	async actorSqlWaitForFlush(
+		_ctx: ActorContextHandle,
+		_seq: number,
+	): Promise<void> {}
+
+	actorSqlFlushError(_ctx: ActorContextHandle): string | null {
+		return null;
+	}
+
+	actorSqlSupportsSyncMetadata(_ctx: ActorContextHandle): boolean {
+		return false;
 	}
 
 	actorSqlTakeLastKvError(ctx: ActorContextHandle): string | null {

@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use depot::error::SqliteStorageError;
 use depot_client::{
 	database::{NativeDatabaseHandle, open_database_from_transport},
-	vfs::{SqliteTransport, SqliteVfsMetrics},
+	vfs::{CommitMode, SqliteTransport, SqliteVfsMetrics},
 };
 use rivet_envoy_protocol as protocol;
 use tokio::runtime::Handle;
@@ -39,6 +39,8 @@ pub async fn open_database_from_embedded_depot(
 		generation,
 		rt_handle,
 		metrics,
+		CommitMode::Awaited,
+		0,
 	)
 	.await
 }

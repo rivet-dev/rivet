@@ -15,6 +15,14 @@ Rules for the SQLite VFS implementation.
 - SQLite VFS v2 storage keys use literal ASCII path segments under the `0x02` subspace prefix with big-endian numeric suffixes so `scan_prefix` and `BTreeMap` ordering stay numerically correct.
 - SQLite v2 slow-path staging writes encoded LTX bytes directly under DELTA chunk keys. Do not expect `/STAGE` keys or a fixed one-chunk-per-page mapping in tests or recovery code.
 
+## Deferred commits
+
+- Deferred mode stages locally committed pages in the VFS overlay and exposes them to reads until the single background flusher receives a durable acknowledgement.
+- Every flush batch carries the durable head fence captured when the batch forms. Retries reuse the same bytes and fence. A lost acknowledgement or divergent head breaks the database because durability is indeterminate.
+- Flush waiters check the terminal error before sequence progress. Once broken, no sequence wait may report success and the core failure monitor stops the actor generation once.
+- Close first stops new work, rolls back an open lease, drains the overlay within the retry deadline, then shuts down the flusher before releasing the VFS.
+- Keep the named structures, algorithms, and invariants synchronized with the [deferred commits specification](sqlite/deferred-commits/SPEC.md).
+
 ## Read-mode/write-mode connection manager
 
 - The native connection manager is the SQLite read/write routing policy boundary. TypeScript and NAPI wrappers forward calls to native execution and must not decide routing from SQL text.

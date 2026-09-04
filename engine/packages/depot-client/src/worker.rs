@@ -17,7 +17,8 @@ use tokio::sync::{Notify, oneshot};
 
 use crate::{
 	query::{
-		BindParam, ExecuteResult, QueryResult, exec_statements, exec_statements_profiled,
+		BindParam, ExecuteResult, QueryResult, exec_statements, exec_statements_in_transaction,
+		exec_statements_profiled, exec_statements_profiled_in_transaction,
 		execute_single_statement, execute_single_statement_profiled,
 	},
 	vfs::{
@@ -78,10 +79,13 @@ enum SqliteCommand {
 }
 
 #[derive(Debug)]
-pub struct SqliteWorkerResult<T> {
+pub struct SqliteWorkerReply<T> {
 	pub result: Result<T>,
 	pub profile: SqliteOperationProfile,
+	pub post_autocommit: bool,
 }
+
+pub type SqliteWorkerResult<T> = SqliteWorkerReply<T>;
 
 struct CloseRequest;
 
@@ -241,6 +245,10 @@ impl SqliteWorkerHandle {
 	}
 
 	pub async fn close(&self) -> Result<()> {
+		self.close_with_timeout(SQLITE_WORKER_CLOSE_TIMEOUT).await
+	}
+
+	async fn close_with_timeout(&self, timeout: Duration) -> Result<()> {
 		let start = Instant::now();
 		if self.inner.mark_closing() {
 			// Close is a control path, not SQL work, so it must bypass the bounded
@@ -260,7 +268,7 @@ impl SqliteWorkerHandle {
 			}
 		};
 
-		match tokio::time::timeout(SQLITE_WORKER_CLOSE_TIMEOUT, wait_closed).await {
+		match tokio::time::timeout(timeout, wait_closed).await {
 			Ok(result) => result?,
 			Err(_) => {
 				if let Some(metrics) = &self.inner.metrics {
@@ -278,6 +286,11 @@ impl SqliteWorkerHandle {
 		}
 
 		self.join_worker().await
+	}
+
+	#[cfg(test)]
+	pub(crate) async fn close_with_timeout_for_test(&self, timeout: Duration) -> Result<()> {
+		self.close_with_timeout(timeout).await
 	}
 
 	pub async fn wait_for_failure(&self) -> bool {
@@ -527,12 +540,13 @@ fn run_command(
 				return;
 			}
 			begin_transaction_if_needed(db, transaction);
+			let commit_seq_before = db.commit_seq();
 			// Read the transaction state before running so the label reflects the
 			// transaction the statement executed against, not the state it leaves
 			// behind (a BEGIN flips autocommit off, a COMMIT flips it back on).
 			let in_tx = command_in_tx(db);
 			let stmt_kind = classify_statement(&sql);
-			let worker_result = if let Some(enqueued_at) = enqueued_at {
+			let mut worker_result = if let Some(enqueued_at) = enqueued_at {
 				let worker_wait_ns = enqueued_at.elapsed().as_nanos() as u64;
 				let operation_profile = db.begin_operation_profile();
 				let execution_start = Instant::now();
@@ -560,6 +574,7 @@ fn run_command(
 				SqliteWorkerResult {
 					result: result.map(|(value, _)| value),
 					profile,
+					post_autocommit: false,
 				}
 			} else {
 				let result = execute_single_statement(db.as_ptr(), &sql, params.as_deref());
@@ -574,8 +589,16 @@ fn run_command(
 				SqliteWorkerResult {
 					result,
 					profile: SqliteOperationProfile::default(),
+					post_autocommit: false,
 				}
 			};
+			let commit_seq_after = db.commit_seq();
+			if commit_seq_after > commit_seq_before
+				&& let Ok(result) = &mut worker_result.result
+			{
+				result.commit_seq = Some(commit_seq_after);
+			}
+			worker_result.post_autocommit = !command_in_tx(db);
 			finalize_transaction_if_complete(db, metrics, file_name, transaction);
 			let _ = reply.send(Ok(worker_result));
 		}
@@ -594,7 +617,11 @@ fn run_command(
 				let worker_wait_ns = enqueued_at.elapsed().as_nanos() as u64;
 				let operation_profile = db.begin_operation_profile();
 				let execution_start = Instant::now();
-				let result = exec_statements_profiled(db.as_ptr(), &sql);
+				let result = if in_tx {
+					exec_statements_profiled_in_transaction(db.as_ptr(), &sql)
+				} else {
+					exec_statements_profiled(db.as_ptr(), &sql)
+				};
 				let execution_ns = execution_start.elapsed().as_nanos() as u64;
 				let mut profile = operation_profile.finish();
 				profile.worker_wait_ns = worker_wait_ns;
@@ -610,13 +637,19 @@ fn run_command(
 				SqliteWorkerResult {
 					result: result.map(|(value, _)| value),
 					profile,
+					post_autocommit: !command_in_tx(db),
 				}
 			} else {
-				let result = exec_statements(db.as_ptr(), &sql);
+				let result = if in_tx {
+					exec_statements_in_transaction(db.as_ptr(), &sql)
+				} else {
+					exec_statements(db.as_ptr(), &sql)
+				};
 				record_command_metrics(metrics, "exec", in_tx, stmt_kind, &result, start.elapsed());
 				SqliteWorkerResult {
 					result,
 					profile: SqliteOperationProfile::default(),
+					post_autocommit: !command_in_tx(db),
 				}
 			};
 			finalize_transaction_if_complete(db, metrics, file_name, transaction);

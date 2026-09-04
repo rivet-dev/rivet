@@ -414,17 +414,22 @@ impl ActorContext {
 			.map_err(napi_anyhow_error)
 	}
 
-	#[napi]
-	pub async fn begin_state_transaction(
+	#[napi(ts_return_type = "Promise<JsActorStateTransaction>")]
+	pub fn begin_state_transaction(
 		&self,
+		env: Env,
 		timeout_ms: Option<f64>,
-	) -> napi::Result<JsActorStateTransaction> {
+	) -> napi::Result<JsObject> {
 		let timeout = timeout_ms.map(transaction_timeout).transpose()?;
-		self.inner
-			.begin_state_transaction(timeout)
-			.await
-			.map(JsActorStateTransaction::new)
-			.map_err(napi_anyhow_error)
+		let reservation = self.inner.reserve_bridge_state_transaction();
+		let inner = self.inner.clone();
+		env.spawn_future(async move {
+			inner
+				.begin_reserved_bridge_state_transaction(reservation, timeout)
+				.await
+				.map(JsActorStateTransaction::new)
+				.map_err(napi_anyhow_error)
+		})
 	}
 
 	#[napi]

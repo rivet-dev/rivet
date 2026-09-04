@@ -1,0 +1,5 @@
+{
+  "code": "deferred_commits_unsupported",
+  "group": "sqlite",
+  "message": "Deferred SQLite commits are unsupported."
+}

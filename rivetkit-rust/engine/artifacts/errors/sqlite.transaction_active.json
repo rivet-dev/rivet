@@ -1,0 +1,5 @@
+{
+  "code": "transaction_active",
+  "group": "sqlite",
+  "message": "A synchronous SQLite transaction is active."
+}

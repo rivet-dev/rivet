@@ -76,6 +76,27 @@ mod moved_tests {
 				),
 			)
 		}
+
+		async fn commit_stage_begin(
+			&self,
+			_request: rivet_envoy_client::protocol::SqliteCommitStageBeginRequest,
+		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitStageBeginResponse> {
+			anyhow::bail!("staged commits are not used by the metrics test transport")
+		}
+
+		async fn commit_stage_segment(
+			&self,
+			_request: rivet_envoy_client::protocol::SqliteCommitStageSegmentRequest,
+		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitStageSegmentResponse> {
+			anyhow::bail!("staged commits are not used by the metrics test transport")
+		}
+
+		async fn commit_finalize(
+			&self,
+			_request: rivet_envoy_client::protocol::SqliteCommitFinalizeRequest,
+		) -> anyhow::Result<rivet_envoy_client::protocol::SqliteCommitFinalizeResponse> {
+			anyhow::bail!("staged commits are not used by the metrics test transport")
+		}
 	}
 
 	#[test]
@@ -557,6 +578,8 @@ mod moved_tests {
 			1,
 			tokio::runtime::Handle::current(),
 			Some(metric_sink.clone()),
+			depot_client::vfs::CommitMode::Awaited,
+			0,
 		)
 		.await
 		.expect("native database should open");
@@ -632,6 +655,8 @@ mod moved_tests {
 			2,
 			tokio::runtime::Handle::current(),
 			Some(metric_sink.clone()),
+			depot_client::vfs::CommitMode::Awaited,
+			0,
 		)
 		.await
 		.expect("native database should reopen");

@@ -11,7 +11,7 @@ use rivet_error::{ActorSpecifier, RivetError, RivetErrorKind};
 use rivetkit_core::inspector::InspectorTabEntry;
 use rivetkit_core::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorContext as CoreActorContext,
-	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request,
+	ActorFactory as CoreActorFactory, ConnHandle as CoreConnHandle, Request, SqliteCommitMode,
 	SqliteProfilingConfigInput, WebSocket as CoreWebSocket,
 };
 
@@ -97,6 +97,7 @@ pub struct JsActorConfig {
 	pub icon: Option<String>,
 	pub has_database: Option<bool>,
 	pub remote_sqlite: Option<bool>,
+	pub sqlite_commit_mode: Option<String>,
 	pub sqlite_profiling: Option<JsSqliteProfilingConfig>,
 	pub enable_actor_runtime_socket: Option<bool>,
 	pub has_state: Option<bool>,
@@ -334,7 +335,9 @@ impl NapiActorFactory {
 		let adapter_config = Arc::new(AdapterConfig::from_js_config(&js_config));
 		let adapter_bindings = Arc::clone(&bindings);
 		let loop_config = Arc::clone(&adapter_config);
-		let actor_config = ActorConfig::from_input(ActorConfigInput::from(js_config));
+		let actor_config = ActorConfig::from_input(
+			ActorConfigInput::try_from(js_config).map_err(napi_anyhow_error)?,
+		);
 		// Reject malformed config (empty ids/labels, duplicate ids, custom
 		// tabs colliding with built-in ids, etc.) before the actor starts.
 		actor_config.validate().map_err(napi_anyhow_error)?;
@@ -988,13 +991,27 @@ pub(crate) fn callback_error(callback_name: &str, error: napi::Error) -> anyhow:
 	anyhow::anyhow!(reason)
 }
 
-impl From<JsActorConfig> for ActorConfigInput {
-	fn from(value: JsActorConfig) -> Self {
-		Self {
+impl TryFrom<JsActorConfig> for ActorConfigInput {
+	type Error = anyhow::Error;
+
+	fn try_from(value: JsActorConfig) -> Result<Self> {
+		let sqlite_commit_mode = match value.sqlite_commit_mode.as_deref() {
+			None | Some("awaited") => Some(SqliteCommitMode::Awaited),
+			Some("deferred") => Some(SqliteCommitMode::Deferred),
+			Some(other) => {
+				return Err(NapiInvalidArgument {
+					argument: "sqliteCommitMode".to_owned(),
+					reason: format!("must be `awaited` or `deferred`, received `{other}`"),
+				}
+				.build());
+			}
+		};
+		Ok(Self {
 			name: value.name,
 			icon: value.icon,
 			has_database: value.has_database,
 			remote_sqlite: value.remote_sqlite,
+			sqlite_commit_mode,
 			sqlite_profiling: value.sqlite_profiling.map(Into::into),
 			enable_actor_runtime_socket: value.enable_actor_runtime_socket,
 			has_state: value.has_state,
@@ -1056,7 +1073,7 @@ impl From<JsActorConfig> for ActorConfigInput {
 					})
 					.collect()
 			}),
-		}
+		})
 	}
 }
 

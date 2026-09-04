@@ -336,4 +336,32 @@ pub(crate) enum SqliteRuntimeError {
 		"Remote SQLite generation is stale: {reason}"
 	)]
 	RemoteFenceMismatch { reason: String },
+
+	#[error(
+		"flush_failed",
+		"SQLite durability flush failed.",
+		"SQLite durability flush failed: {message}"
+	)]
+	FlushFailed { message: String },
+
+	#[error(
+		"invalid_argument",
+		"Invalid SQLite argument.",
+		"Invalid SQLite argument: {message}"
+	)]
+	InvalidArgument { message: String },
+
+	#[error(
+		"deferred_commits_unsupported",
+		"Deferred SQLite commits are unsupported.",
+		"Deferred SQLite commits require the local native SQLite backend."
+	)]
+	DeferredCommitsUnsupported,
+
+	#[error(
+		"transaction_active",
+		"A synchronous SQLite transaction is active.",
+		"This synchronous SQLite operation would block on an active JavaScript transaction."
+	)]
+	TransactionActive,
 }

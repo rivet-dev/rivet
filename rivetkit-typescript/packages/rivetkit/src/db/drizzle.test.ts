@@ -25,9 +25,10 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	execSync(
 		sql: string,
 		callback?: (row: unknown[], columns: string[]) => void,
-	): void {
+	): { readonly?: boolean } {
 		this.executeCalls.push({ sql });
 		callback?.([1], ["value"]);
+		return { readonly: isReadonlySql(sql) };
 	}
 
 	async execute(
@@ -40,7 +41,7 @@ class FakeSqliteDatabase implements SqliteDatabase {
 
 	executeSync(sql: string, params?: SqliteBindings): SqliteExecuteResult {
 		this.executeCalls.push({ sql, params });
-		return emptyResult();
+		return emptyResult(isReadonlySql(sql));
 	}
 
 	async executeBatch(
@@ -78,20 +79,22 @@ class FakeSqliteDatabase implements SqliteDatabase {
 		this.executeCalls.push({ sql: "BEGIN" });
 		return {
 			exec: async () => {},
-			execSync: () => {},
+			execSync: (sql) => ({ readonly: isReadonlySql(sql) }),
 			execute: async (sql, params) => {
 				this.executeCalls.push({ sql, params });
 				return emptyResult();
 			},
 			executeSync: (sql, params) => {
 				this.executeCalls.push({ sql, params });
-				return emptyResult();
+				return emptyResult(isReadonlySql(sql));
 			},
 			commit: async () => {
 				this.executeCalls.push({ sql: "COMMIT" });
+				return null;
 			},
 			commitSync: () => {
 				this.executeCalls.push({ sql: "COMMIT" });
+				return null;
 			},
 			rollback: async () => {
 				this.executeCalls.push({ sql: "ROLLBACK" });
@@ -112,14 +115,37 @@ class FakeSqliteDatabase implements SqliteDatabase {
 	}
 
 	async close(): Promise<void> {}
+
+	commitSeq(): number {
+		return 0;
+	}
+
+	flushedSeq(): number {
+		return 0;
+	}
+
+	async waitForFlush(): Promise<void> {}
+
+	flushError(): string | null {
+		return null;
+	}
+
+	supportsSyncMetadata(): boolean {
+		return true;
+	}
 }
 
-function emptyResult(): SqliteExecuteResult {
+function isReadonlySql(sql: string): boolean {
+	return /^\s*(?:SELECT|PRAGMA|WITH)\b/i.test(sql);
+}
+
+function emptyResult(readonly = false): SqliteExecuteResult {
 	return {
 		columns: [],
 		rows: [],
 		changes: 0,
 		lastInsertRowId: null,
+		readonly,
 	};
 }
 
