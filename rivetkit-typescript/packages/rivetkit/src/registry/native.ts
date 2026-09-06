@@ -4034,6 +4034,10 @@ export function buildNativeFactory(
 					callNativeSync(() =>
 						runtime.actorInvocationTraceContext(ctx),
 					),
+				beginOutboundCall: (actorName, actionName) =>
+					callNativeSync(() =>
+						runtime.beginOutboundCall(ctx, actorName, actionName),
+					),
 			},
 		);
 	const run = getRunFunction(config.run);

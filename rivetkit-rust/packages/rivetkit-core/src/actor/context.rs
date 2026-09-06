@@ -281,6 +281,23 @@ impl ActorContext {
 		self.0.sql.clone().with_invocation_telemetry(self.1.clone())
 	}
 
+	/// Opens the span covering one call out to another actor, or nothing when
+	/// this handle serves no invocation or tracing is disabled.
+	///
+	/// `actor_name` and `action_name` name the callee. Both come from the
+	/// caller's own registry rather than from a remote peer, so neither is a
+	/// cardinality surface.
+	#[doc(hidden)]
+	pub fn begin_outbound_call(
+		&self,
+		actor_name: &str,
+		action_name: &str,
+	) -> Option<crate::OutboundCallInvocation> {
+		self.1
+			.as_ref()?
+			.start_outbound_call(actor_name, action_name)
+	}
+
 	/// Returns correlation for the invocation this handle serves, absent when
 	/// the handle is not bound to one or tracing is disabled.
 	pub fn invocation_trace_context(&self) -> Option<crate::ActorInvocationTraceContext> {

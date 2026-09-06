@@ -230,6 +230,19 @@ pub(crate) struct SqliteOperationSpan {
 	span: Option<tracing::Span>,
 }
 
+/// One call from this invocation out to another actor, held open across a
+/// foreign-runtime boundary.
+///
+/// The call is made by the host runtime's client, so it is opened and closed by
+/// two separate calls rather than by one Rust scope. Dropping this without
+/// finishing records the call as cancelled, matching how a dropped SQLite span
+/// is treated.
+#[doc(hidden)]
+pub struct OutboundCallInvocation {
+	span: Option<tracing::Span>,
+	context: Option<ActorInvocationSpanContext>,
+}
+
 impl ActorInvocation {
 	pub(crate) fn start_action(
 		ctx: &ActorContext,
@@ -516,11 +529,11 @@ impl ActorInvocationTelemetry {
 	#[doc(hidden)]
 	pub fn trace_context(&self) -> Option<ActorInvocationTraceContext> {
 		let active = self.active()?;
-		let span = active.span.lock().clone().and_then(|span| {
-			let context = span.context();
-			let context_span = context.span();
-			w3c_span_context(context_span.span_context())
-		});
+		let span = active
+			.span
+			.lock()
+			.clone()
+			.and_then(|span| span_context_of(&span));
 
 		Some(ActorInvocationTraceContext {
 			ray_id: active.ray_id.clone(),
@@ -547,6 +560,47 @@ impl ActorInvocationTelemetry {
 			traceparent,
 			tracestate,
 		}
+	}
+
+	/// Opens the span covering one call out to another actor.
+	///
+	/// The callee parents to this span rather than to the invocation making the
+	/// call, so the time spent reaching it, which includes routing and waking a
+	/// sleeping actor, is attributed to the call instead of falling in the gap
+	/// between the two invocations.
+	/// When this handle carries the application span active in the host
+	/// runtime, the call span parents there instead, which is what puts a
+	/// callee under the application span that issued the call rather than
+	/// beside it.
+	pub(crate) fn start_outbound_call(
+		&self,
+		actor_name: &str,
+		action_name: &str,
+	) -> Option<OutboundCallInvocation> {
+		let invocation_span = self.active()?.span.lock().clone()?;
+		let span = tracing::info_span!(
+			target: "rivetkit::telemetry",
+			parent: &invocation_span,
+			"rivet.actor.call",
+			otel.name = %format!("{actor_name}/{action_name}"),
+			otel.kind = "client",
+			// Omit rivet.invocation.type: this measures the caller waiting, not the callee running.
+			rivet.actor.name = %actor_name,
+			rivet.action.name = %action_name,
+			rivet.ray.id = self.0.ray_id.as_deref(),
+			otel.status_code = tracing::field::Empty,
+			error.type = tracing::field::Empty,
+		);
+		if let Some(application_span) = &self.1 {
+			span.set_parent(
+				opentelemetry::Context::new().with_remote_span_context(application_span.clone()),
+			);
+		}
+		let context = span_context_of(&span);
+		Some(OutboundCallInvocation {
+			span: Some(span),
+			context,
+		})
 	}
 
 	pub(crate) fn start_sqlite(&self, operation: SqliteOperation) -> Option<SqliteOperationSpan> {
@@ -624,6 +678,33 @@ impl Drop for InvocationWorkGuard {
 	}
 }
 
+impl OutboundCallInvocation {
+	/// W3C context of this call's span, to send to the callee so it parents
+	/// here. Absent when the call is not sampled.
+	pub fn span_context(&self) -> Option<ActorInvocationSpanContext> {
+		self.context.clone()
+	}
+
+	/// Records the call's outcome. `error` is the failure the callee returned,
+	/// and its group and code become the span's `error.type`.
+	pub fn finish(mut self, error: Option<&anyhow::Error>) {
+		let Some(span) = self.span.take() else {
+			return;
+		};
+		record_outcome(&span, error);
+	}
+}
+
+impl Drop for OutboundCallInvocation {
+	fn drop(&mut self) {
+		let Some(span) = self.span.take() else {
+			return;
+		};
+		span.record("otel.status_code", "ERROR");
+		span.record("error.type", OPERATION_ABANDONED_ERROR_TYPE);
+	}
+}
+
 impl SqliteOperationSpan {
 	pub(crate) fn span(&self) -> tracing::Span {
 		self.span.as_ref().expect("sqlite span is present").clone()
@@ -665,6 +746,14 @@ fn w3c_span_context(span_context: &SpanContext) -> Option<ActorInvocationSpanCon
 		),
 		tracestate: (!tracestate.is_empty()).then_some(tracestate),
 	})
+}
+
+/// Reads a span's W3C context, or nothing when it carries no valid context to
+/// propagate.
+fn span_context_of(span: &tracing::Span) -> Option<ActorInvocationSpanContext> {
+	let context = span.context();
+	let context_span = context.span();
+	w3c_span_context(context_span.span_context())
 }
 
 /// Opens the span covering the moment one queue message is handed to the

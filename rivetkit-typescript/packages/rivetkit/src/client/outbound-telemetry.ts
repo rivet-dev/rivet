@@ -4,7 +4,11 @@ import {
 	HEADER_TRACESTATE,
 } from "@/common/actor-router-consts";
 import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
-import { readActiveRayId, readActiveTraceHeaders } from "@/common/otel-context";
+import {
+	type ActiveTraceHeaders,
+	readActiveRayId,
+	readActiveTraceHeaders,
+} from "@/common/otel-context";
 
 /**
  * Headers that carry a caller's ray ID and trace context into an actor. One
@@ -13,18 +17,21 @@ import { readActiveRayId, readActiveTraceHeaders } from "@/common/otel-context";
  *
  * The ray ID is the calling invocation's when the caller is itself inside an
  * actor, else the one placed in OpenTelemetry baggage by the surrounding
- * request handler. The trace context is the application span active in this
- * JavaScript context, else the calling actor's own Core invocation span.
+ * request handler. The trace context is `callSpan` when the runtime opened a
+ * span for this call, else the application span active in this JavaScript
+ * context, else the calling actor's own Core invocation span.
  */
 export function outboundTelemetryHeaders(
 	invocation: ActorInvocationTraceContext | undefined,
+	callSpan?: ActiveTraceHeaders,
 ): Record<string, string> {
 	const headers: Record<string, string> = {};
 	const rayId = invocation?.rayId ?? readActiveRayId();
 	if (rayId) {
 		headers[HEADER_RIVET_RAY_ID] = rayId;
 	}
-	const traceHeaders = readActiveTraceHeaders() ?? invocation?.span;
+	const traceHeaders =
+		callSpan ?? readActiveTraceHeaders() ?? invocation?.span;
 	if (traceHeaders) {
 		headers[HEADER_TRACEPARENT] = traceHeaders.traceparent;
 		if (traceHeaders.tracestate) {

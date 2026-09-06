@@ -3,7 +3,10 @@ import type { ActorQuery } from "@/client/query";
 import type { Encoding } from "@/common/encoding";
 import type { EngineControlClient } from "@/engine-client/driver";
 import type { Registry } from "@/registry";
-import type { CurrentActorInvocation } from "@/registry/runtime";
+import type {
+	BeginOutboundCall,
+	CurrentActorInvocation,
+} from "@/registry/runtime";
 import type { ActorActionFunction, ActorGatewayOptions } from "./actor-common";
 import {
 	type ActorConn,
@@ -176,17 +179,14 @@ export interface Region {
 export const ACTOR_CONNS_SYMBOL = Symbol("actorConns");
 export const CREATE_ACTOR_CONN_PROXY = Symbol("createActorConnProxy");
 
-/**
- * Client for managing & connecting to actors.
- *
- * @template A The actors map type that defines the available actors.
- * @see {@link https://rivet.dev/docs/manage|Create & Manage Actors}
- */
+/** Options for constructing a raw actor client. */
 export interface ClientRawOptions {
 	encoding?: Encoding;
 	gateway?: ActorGatewayOptions;
 	/** Supplies the calling actor's invocation so actor-to-actor clients propagate its trace and ray ID. */
 	currentActorInvocation?: CurrentActorInvocation;
+	/** Opens and finishes the Core span covering an actor-to-actor call. */
+	beginOutboundCall?: BeginOutboundCall;
 }
 
 export class ClientRaw {
@@ -198,6 +198,7 @@ export class ClientRaw {
 	#encodingKind: Encoding;
 	#gatewayOptions: ActorGatewayOptions;
 	#currentActorInvocation?: CurrentActorInvocation;
+	#beginOutboundCall?: BeginOutboundCall;
 
 	/**
 	 * Creates an instance of Client.
@@ -211,6 +212,7 @@ export class ClientRaw {
 		this.#encodingKind = options.encoding ?? "bare";
 		this.#gatewayOptions = options.gateway ?? {};
 		this.#currentActorInvocation = options.currentActorInvocation;
+		this.#beginOutboundCall = options.beginOutboundCall;
 	}
 
 	/**
@@ -413,6 +415,7 @@ export class ClientRaw {
 			this.#gatewayOptions,
 			signal,
 			this.#currentActorInvocation,
+			this.#beginOutboundCall,
 		);
 	}
 

@@ -442,11 +442,15 @@ async function stopTestEngine(): Promise<void> {
 	}
 }
 
+/** OTLP `SpanKind.CLIENT`. */
+const OTLP_SPAN_KIND_CLIENT = 3;
+
 interface ExportedSpan {
 	name: string;
 	traceId: string;
 	spanId: string;
 	parentSpanId?: string;
+	kind?: number;
 	attributes: Record<string, string | undefined>;
 	links: Array<{ traceId: string; spanId: string }>;
 }
@@ -456,6 +460,7 @@ function exportedSpans(exports: Buffer[]): ExportedSpan[] {
 	type OtlpAttribute = { key: string; value: { stringValue?: string } };
 	type OtlpSpan = Omit<ExportedSpan, "attributes"> & {
 		attributes?: OtlpAttribute[];
+		kind?: number;
 		links?: Array<{ traceId: string; spanId: string }>;
 	};
 	type OtlpPayload = {
@@ -470,6 +475,7 @@ function exportedSpans(exports: Buffer[]): ExportedSpan[] {
 					traceId: span.traceId,
 					spanId: span.spanId,
 					parentSpanId: span.parentSpanId || undefined,
+					kind: span.kind,
 					attributes: Object.fromEntries(
 						(span.attributes ?? []).map((attribute) => [
 							attribute.key,
@@ -799,8 +805,21 @@ describe.sequential("native NAPI runtime integration", () => {
 		);
 		const caller = findInvocation(clientSpans, "getCountViaClient");
 		const callee = findInvocation(clientSpans, "getCount");
+		// The call out to the other actor is its own span sitting between the
+		// two invocations, so time spent reaching a cold or busy actor belongs
+		// to something instead of falling in the gap between them.
+		const hop = clientSpans.find(
+			(span) =>
+				span.kind === OTLP_SPAN_KIND_CLIENT &&
+				span.attributes["rivet.action.name"] === "getCount",
+		);
+		expect(hop?.parentSpanId).toBe(caller?.spanId);
+		expect(callee?.parentSpanId).toBe(hop?.spanId);
 		expect(callee?.traceId).toBe(caller?.traceId);
-		expect(callee?.parentSpanId).toBe(caller?.spanId);
+		expect(hop?.traceId).toBe(caller?.traceId);
+		expect(hop?.attributes["rivet.ray.id"]).toBe(
+			caller?.attributes["rivet.ray.id"],
+		);
 		expect(callee?.attributes["rivet.ray.id"]).toBe(
 			caller?.attributes["rivet.ray.id"],
 		);
@@ -945,28 +964,66 @@ describe.sequential("native NAPI runtime integration", () => {
 			}
 		}
 
-		// The outbound call each probe makes while the other is mid-flight
-		// stays inside its own trace and carries its own ray.
 		for (const probe of probes) {
+			const hop = spans.find(
+				(span) =>
+					span.kind === OTLP_SPAN_KIND_CLIENT &&
+					span.traceId === probe.traceId,
+			);
 			const callee = spans.find(
 				(span) =>
+					span.attributes["rivet.invocation.type"] !== undefined &&
 					span.attributes["rivet.action.name"] === "getCount" &&
 					span.traceId === probe.traceId,
 			);
+			expect(hop).toBeDefined();
 			expect(callee).toBeDefined();
-			expect(callee?.parentSpanId).toBe(probe.spanId);
-			expect(callee?.attributes["rivet.ray.id"]).toBe(
-				probe.attributes["rivet.ray.id"],
+			expect(hop?.attributes["rivet.actor.name"]).toBe(
+				"integrationActor",
 			);
+			expect(hop?.parentSpanId).toBe(probe.spanId);
+			expect(callee?.parentSpanId).toBe(hop?.spanId);
+			for (const span of [hop, callee]) {
+				expect(span?.attributes["rivet.ray.id"]).toBe(
+					probe.attributes["rivet.ray.id"],
+				);
+			}
 		}
 
 		const okLog = await waitForRuntimeLog(okToken, 10_000);
 		const failLog = await waitForRuntimeLog(failToken, 10_000);
-		const rayOf = (line: string) => / rayId=([0-9a-f-]{36})/.exec(line)?.[1];
+		const rayOf = (line: string) =>
+			/ rayId=([A-Za-z0-9_-]+)/.exec(line)?.[1];
 		expect(rayOf(okLog)).toBeDefined();
 		expect(rayOf(okLog)).not.toBe(rayOf(failLog));
 		expect(rays).toContain(rayOf(okLog));
 		expect(rays).toContain(rayOf(failLog));
+
+		// SQLite and actor calls inherit the active application span.
+		const underApp = await handle.getCountUnderApplicationSpan();
+		const appHop = await waitForSpans(
+			traceExports,
+			"the hop made under an application span",
+			(exported) =>
+				exported.some(
+					(span) =>
+						span.kind === OTLP_SPAN_KIND_CLIENT &&
+						span.parentSpanId === underApp.spanId,
+				),
+			10_000,
+		).then((exported) =>
+			exported.find(
+				(span) =>
+					span.kind === OTLP_SPAN_KIND_CLIENT &&
+					span.parentSpanId === underApp.spanId,
+			),
+		);
+		const appCallee = exportedSpans(traceExports).find(
+			(span) =>
+				span.attributes["rivet.invocation.type"] !== undefined &&
+				span.parentSpanId === appHop?.spanId,
+		);
+		expect(appCallee?.attributes["rivet.action.name"]).toBe("getCount");
 
 		await client.dispose();
 	}, 120_000);

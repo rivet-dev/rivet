@@ -257,6 +257,18 @@ export function encodeBridgeRivetError(error: RivetErrorLike): string {
 	})}`;
 }
 
+/**
+ * Encodes an error for the telemetry bridge. A structured error crosses with
+ * its group and code. Anything else crosses as text so Core classifies it,
+ * which is the same rule that keeps raw messages out of every span.
+ */
+export function encodeErrorForBridge(error: unknown): string {
+	if (error instanceof RivetError) {
+		return encodeBridgeRivetError(error);
+	}
+	return String(error);
+}
+
 export function decodeBridgeRivetErrorPayload(
 	value: string,
 ): BridgeRivetErrorPayload | undefined {

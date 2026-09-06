@@ -1,6 +1,8 @@
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { trace } from "@opentelemetry/api";
+import { NodeTracerProvider } from "@opentelemetry/sdk-trace-node";
 import { getEnginePath } from "@rivetkit/engine-cli";
 import { z } from "zod/v4";
 import { db } from "../../src/db/mod";
@@ -14,6 +16,10 @@ const repoEngineBinary = resolve(
 );
 
 const endpoint = process.env.RIVETKIT_TEST_ENDPOINT ?? "http://127.0.0.1:6642";
+
+// Register context propagation without exporting application spans; tests read their IDs.
+new NodeTracerProvider().register();
+const applicationTracer = trace.getTracer("napi-runtime-fixture");
 const connParamsSchema = z.object({
 	userId: z.string().min(1),
 });
@@ -158,6 +164,26 @@ const integrationActor = actor({
 				});
 			}
 			return token;
+		},
+		// Calls another actor while an application span is active, and returns
+		// that span's ID so a test can check the call parented to it.
+		getCountUnderApplicationSpan: async (c) => {
+			return await applicationTracer.startActiveSpan(
+				"agent.generate",
+				async (span) => {
+					try {
+						const client = c.client<any>();
+						const count = await client.integrationActor
+							.getForId(c.actorId, {
+								params: { userId: "internal-integration-test" },
+							})
+							.getCount();
+						return { count, spanId: span.spanContext().spanId };
+					} finally {
+						span.end();
+					}
+				},
+			);
 		},
 		getCountViaClient: async (c) => {
 			const client = c.client<any>();

@@ -24,6 +24,7 @@ import type {
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
 	RuntimeListenerConfig,
+	RuntimeOutboundCall,
 	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueInspectMessage,
 	RuntimeQueueMessage,
@@ -547,6 +548,16 @@ export class WasmCoreRuntime implements CoreRuntime {
 	actorInvocationTraceContext(
 		_ctx: ActorContextHandle,
 	): ActorInvocationTraceContext | undefined {
+		return undefined;
+	}
+
+	beginOutboundCall(
+		_ctx: ActorContextHandle,
+		_actorName: string,
+		_actionName: string,
+	): RuntimeOutboundCall | undefined {
+		// Wasm carries no invocation telemetry, so a call goes out untraced
+		// rather than failing.
 		return undefined;
 	}
 
