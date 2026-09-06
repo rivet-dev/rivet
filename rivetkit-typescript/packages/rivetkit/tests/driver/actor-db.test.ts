@@ -731,7 +731,9 @@ describeDriverMatrix(
 							actor.synchronousQueries("sync"),
 						).resolves.toEqual({
 							value: "sync",
-							multiStatementValues: [1, 2],
+							// exec() returns rows from the final statement, matching
+							// the existing native database contract.
+							multiStatementValues: [2],
 							transactionCount: 2,
 							rollbackCount: 0,
 						});
