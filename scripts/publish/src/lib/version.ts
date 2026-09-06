@@ -20,6 +20,7 @@ import { join, resolve as resolvePath } from "node:path";
 import { $ } from "execa";
 import { glob } from "glob";
 import * as semver from "semver";
+import { parse } from "yaml";
 import { scoped } from "./logger.js";
 import {
 	buildMetaPlatformMap,
@@ -54,6 +55,76 @@ const DEP_FIELDS = [
 	"peerDependencies",
 	"optionalDependencies",
 ] as const;
+
+export interface WorkspaceCatalogs {
+	default: ReadonlyMap<string, string>;
+	named: ReadonlyMap<string, ReadonlyMap<string, string>>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseCatalog(
+	value: unknown,
+	label: string,
+): ReadonlyMap<string, string> {
+	if (value === undefined) return new Map();
+	if (!isRecord(value)) {
+		throw new Error(`${label} must be a dependency-to-version mapping`);
+	}
+	const catalog = new Map<string, string>();
+	for (const [dependency, spec] of Object.entries(value)) {
+		if (typeof spec !== "string" || spec.length === 0) {
+			throw new Error(`${label}.${dependency} must be a non-empty string`);
+		}
+		catalog.set(dependency, spec);
+	}
+	return catalog;
+}
+
+export function parseWorkspaceCatalogs(source: string): WorkspaceCatalogs {
+	const parsed: unknown = parse(source);
+	if (!isRecord(parsed)) {
+		throw new Error("pnpm-workspace.yaml must contain a mapping");
+	}
+	const named = new Map<string, ReadonlyMap<string, string>>();
+	if (parsed.catalogs !== undefined) {
+		if (!isRecord(parsed.catalogs)) {
+			throw new Error("catalogs must be a named catalog mapping");
+		}
+		for (const [name, value] of Object.entries(parsed.catalogs)) {
+			named.set(name, parseCatalog(value, `catalogs.${name}`));
+		}
+	}
+	return {
+		default: parseCatalog(parsed.catalog, "catalog"),
+		named,
+	};
+}
+
+export function resolveCatalogDependency(
+	dependency: string,
+	spec: string,
+	catalogs: WorkspaceCatalogs,
+): string | undefined {
+	if (!spec.startsWith("catalog:")) return undefined;
+	const catalogName = spec.slice("catalog:".length);
+	const catalog =
+		catalogName.length === 0 ? catalogs.default : catalogs.named.get(catalogName);
+	if (catalog === undefined) {
+		throw new Error(
+			`dependency ${dependency} references missing pnpm catalog ${catalogName}`,
+		);
+	}
+	const resolved = catalog.get(dependency);
+	if (resolved === undefined) {
+		throw new Error(
+			`dependency ${dependency} is missing from pnpm catalog ${catalogName || "default"}`,
+		);
+	}
+	return resolved;
+}
 
 const PUBLISHED_RUST_WORKSPACE_DEPS = new Set([
 	"rivet-error-macros",
@@ -148,6 +219,11 @@ export async function bumpPackageJsons(
 	const packageNames = new Set(packages.map((p) => p.name));
 	const metaPlatformMap = buildMetaPlatformMap(packages);
 	const versionOnly = opts.versionOnly ?? false;
+	const catalogs = versionOnly
+		? undefined
+		: parseWorkspaceCatalogs(
+				await fs.readFile(join(repoRoot, "pnpm-workspace.yaml"), "utf8"),
+			);
 
 	// Cache `npm view <pkg> version` lookups for out-of-scope dependencies so a
 	// dep referenced by several packages is only resolved once.
@@ -195,6 +271,17 @@ export async function bumpPackageJsons(
 				const deps = pkgJson[field];
 				if (!deps) continue;
 				for (const [dep, spec] of Object.entries(deps)) {
+					const catalogVersion =
+						catalogs === undefined
+							? undefined
+							: resolveCatalogDependency(dep, spec, catalogs);
+					if (catalogVersion !== undefined) {
+						deps[dep] = catalogVersion;
+						log.info(
+							`resolving catalog dep ${pkg.name} -> ${dep}@${catalogVersion}`,
+						);
+						continue;
+					}
 					const isWorkspace =
 						typeof spec === "string" && spec.startsWith("workspace:");
 					if (!isWorkspace) continue;
