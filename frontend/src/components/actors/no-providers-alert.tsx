@@ -1,4 +1,4 @@
-import { faBook, faExclamationTriangle, faPlus, Icon } from "@rivet-gg/icons";
+import { faBook, faPlug, faPlus, Icon } from "@rivet-gg/icons";
 import { Link } from "@tanstack/react-router";
 import { ProviderDropdown } from "@/app/provider-dropdown";
 import { docsLinks } from "@/content/data";
@@ -16,14 +16,14 @@ export function NoProvidersAlert({
 			<div>
 				<H4>
 					<Icon
-						icon={faExclamationTriangle}
+						icon={faPlug}
 						className="mr-2 text-muted-foreground"
 					/>
-					No Providers Connected
+					No providers connected
 				</H4>
 				<p className="text-sm text-muted-foreground mt-1 mb-2 pl-7">
-					You can't run any Actors yet. Use provider of your choice to
-					connect and start deploying and running Rivet Actors.
+					Actors need somewhere to run. Add a provider to connect a
+					cloud of your choice and start running Rivet Actors.
 				</p>
 			</div>
 			<div className="flex flex-col items-center justify-center gap-2">
@@ -65,7 +65,7 @@ export function NoProvidersAlert({
 							size="sm"
 							className="w-full"
 						>
-							Connect Provider
+							Add Provider
 						</Button>
 					</ProviderDropdown>
 				)}

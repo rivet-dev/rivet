@@ -1,9 +1,16 @@
-import { faBook, Icon } from "@rivet-gg/icons";
+import { faBook, faMoon, faSun, Icon } from "@rivet-gg/icons";
 import { type ComponentPropsWithoutRef, forwardRef } from "react";
-import { Avatar, AvatarFallback, AvatarImage, Button } from "@/components";
+import {
+	Avatar,
+	AvatarFallback,
+	AvatarImage,
+	Button,
+	WithTooltip,
+} from "@/components";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 import { orgConicGradient, paletteForLetter } from "@/lib/org-palette";
+import { useTheme } from "@/lib/theme";
 import { FeedbackButton } from "./feedback-button";
 import { HelpButton } from "./help-button";
 import { UserDropdown } from "./user-dropdown";
@@ -23,8 +30,38 @@ export function TopBarActions() {
 						<UserAvatarTrigger />
 					</UserDropdown>
 				</>
-			) : null}
+			) : (
+				// Signed-in users switch themes from the account menu. Without
+				// auth (OSS / self-hosted) there is no menu, so expose the
+				// toggle directly.
+				<ThemeToggleButton />
+			)}
 		</div>
+	);
+}
+
+function ThemeToggleButton() {
+	const { theme, toggle } = useTheme();
+	const label =
+		theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+	return (
+		<WithTooltip
+			content={label}
+			trigger={
+				<Button
+					variant="ghost"
+					size="icon-sm"
+					aria-label={label}
+					className="text-muted-foreground hover:text-foreground"
+					onClick={toggle}
+				>
+					<Icon
+						icon={theme === "dark" ? faSun : faMoon}
+						className="size-4"
+					/>
+				</Button>
+			}
+		/>
 	);
 }
 

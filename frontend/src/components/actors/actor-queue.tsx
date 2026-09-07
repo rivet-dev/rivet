@@ -1,4 +1,4 @@
-import { faSpinnerThird, Icon } from "@rivet-gg/icons";
+import { faInbox, faSpinnerThird, Icon } from "@rivet-gg/icons";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { LiveBadge, ScrollArea } from "@/components";
@@ -53,8 +53,18 @@ export function ActorQueue({ actorId }: { actorId: ActorId }) {
 			</div>
 			<div className="p-3 space-y-2">
 				{status.messages.length === 0 ? (
-					<div className="text-sm text-muted-foreground">
-						Queue is empty.
+					<div className="flex flex-col items-center justify-center p-8 text-center">
+						<div className="mb-3 flex size-11 items-center justify-center rounded-full bg-muted">
+							<Icon
+								icon={faInbox}
+								className="text-muted-foreground"
+							/>
+						</div>
+						<h3 className="font-medium">Queue is empty</h3>
+						<p className="mt-1 max-w-sm text-sm text-muted-foreground">
+							Messages waiting to be processed by this actor will
+							appear here.
+						</p>
 					</div>
 				) : (
 					status.messages.map((message) => (
