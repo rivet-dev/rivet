@@ -14,17 +14,6 @@ export interface ActorInvocationSpanContext {
 	readonly spanId: string;
 	/** OpenTelemetry trace flags encoded as an integer. */
 	readonly traceFlags: number;
-	/** Serialized W3C Trace Context for the Core invocation. */
-	readonly traceparent: string;
 	/** Optional vendor trace state inherited by the Core invocation. */
 	readonly tracestate?: string;
-}
-
-/** Formats a W3C `traceparent` header from its span identifiers. */
-export function formatTraceparent(
-	traceId: string,
-	spanId: string,
-	traceFlags: number,
-): string {
-	return `00-${traceId}-${spanId}-${traceFlags.toString(16).padStart(2, "0")}`;
 }

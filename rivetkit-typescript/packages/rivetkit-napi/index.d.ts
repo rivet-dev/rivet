@@ -18,7 +18,6 @@ export interface JsActorInvocationSpanContext {
   traceId: string
   spanId: string
   traceFlags: number
-  traceparent: string
   tracestate?: string
 }
 export interface JsHttpRequest {

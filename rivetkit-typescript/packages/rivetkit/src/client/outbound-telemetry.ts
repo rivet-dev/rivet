@@ -3,9 +3,12 @@ import {
 	HEADER_TRACEPARENT,
 	HEADER_TRACESTATE,
 } from "@/common/actor-router-consts";
-import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
+import type {
+	ActorInvocationSpanContext,
+	ActorInvocationTraceContext,
+} from "@/common/actor-telemetry-context";
 import {
-	type ActiveTraceHeaders,
+	actorInvocationTraceHeaders,
 	readActiveRayId,
 	readActiveTraceHeaders,
 } from "@/common/otel-context";
@@ -23,7 +26,7 @@ import {
  */
 export function outboundTelemetryHeaders(
 	invocation: ActorInvocationTraceContext | undefined,
-	callSpan?: ActiveTraceHeaders,
+	callSpan?: ActorInvocationSpanContext,
 ): Record<string, string> {
 	const headers: Record<string, string> = {};
 	const rayId = invocation?.rayId ?? readActiveRayId();
@@ -31,7 +34,9 @@ export function outboundTelemetryHeaders(
 		headers[HEADER_RIVET_RAY_ID] = rayId;
 	}
 	const traceHeaders =
-		callSpan ?? readActiveTraceHeaders() ?? invocation?.span;
+		actorInvocationTraceHeaders(callSpan) ??
+		readActiveTraceHeaders() ??
+		actorInvocationTraceHeaders(invocation?.span);
 	if (traceHeaders) {
 		headers[HEADER_TRACEPARENT] = traceHeaders.traceparent;
 		if (traceHeaders.tracestate) {

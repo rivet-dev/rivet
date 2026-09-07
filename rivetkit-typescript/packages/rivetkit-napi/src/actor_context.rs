@@ -94,7 +94,6 @@ pub struct JsActorInvocationSpanContext {
 	pub trace_id: String,
 	pub span_id: String,
 	pub trace_flags: u8,
-	pub traceparent: String,
 	pub tracestate: Option<String>,
 }
 
@@ -113,7 +112,6 @@ impl From<ActorInvocationSpanContext> for JsActorInvocationSpanContext {
 			trace_id: value.trace_id,
 			span_id: value.span_id,
 			trace_flags: value.trace_flags,
-			traceparent: value.traceparent,
 			tracestate: value.tracestate,
 		}
 	}

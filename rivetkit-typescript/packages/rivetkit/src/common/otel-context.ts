@@ -1,15 +1,12 @@
 import {
-	type Context,
 	context,
 	createTraceState,
 	isSpanContextValid,
 	propagation,
+	type SpanContext,
 	trace,
 } from "@opentelemetry/api";
-import {
-	type ActorInvocationSpanContext,
-	formatTraceparent,
-} from "./actor-telemetry-context";
+import type { ActorInvocationSpanContext } from "./actor-telemetry-context";
 
 /** W3C headers derived from the active JavaScript OTel context. */
 export interface ActiveTraceHeaders {
@@ -21,18 +18,16 @@ export interface ActiveTraceHeaders {
 
 /** Returns the active W3C trace context, when an OTel provider has installed one. */
 export function readActiveTraceHeaders(): ActiveTraceHeaders | undefined {
-	const spanContext = trace.getSpanContext(context.active());
-	if (!spanContext || !isSpanContextValid(spanContext)) return undefined;
+	return traceHeaders(trace.getSpanContext(context.active()));
+}
 
-	const tracestate = spanContext.traceState?.serialize();
-	return {
-		traceparent: formatTraceparent(
-			spanContext.traceId,
-			spanContext.spanId,
-			spanContext.traceFlags,
-		),
-		...(tracestate ? { tracestate } : {}),
-	};
+/** Serializes the structured span context supplied by Core as W3C headers. */
+export function actorInvocationTraceHeaders(
+	invocation: ActorInvocationSpanContext | undefined,
+): ActiveTraceHeaders | undefined {
+	const spanContext = invocationSpanContext(invocation);
+	if (!spanContext) return undefined;
+	return traceHeaders(spanContext);
 }
 
 /** W3C Baggage key that carries a ray ID through application code. */
@@ -65,9 +60,19 @@ export function runWithActorInvocationSpan<T>(
 ): T {
 	if (!invocation) return run();
 
-	let parent: Context;
+	const spanContext = invocationSpanContext(invocation);
+	if (!spanContext) return run();
+	const parent = trace.setSpanContext(context.active(), spanContext);
+
+	return context.with(parent, run);
+}
+
+function invocationSpanContext(
+	invocation: ActorInvocationSpanContext | undefined,
+): SpanContext | undefined {
+	if (!invocation) return undefined;
 	try {
-		const spanContext = {
+		const spanContext: SpanContext = {
 			traceId: invocation.traceId,
 			spanId: invocation.spanId,
 			traceFlags: invocation.traceFlags,
@@ -76,12 +81,19 @@ export function runWithActorInvocationSpan<T>(
 				: undefined,
 			isRemote: false,
 		};
-		if (!isSpanContextValid(spanContext)) return run();
-		parent = trace.setSpanContext(context.active(), spanContext);
+		return isSpanContextValid(spanContext) ? spanContext : undefined;
 	} catch {
-		// Invalid telemetry must not prevent the action from running.
-		return run();
+		return undefined;
 	}
+}
 
-	return context.with(parent, run);
+function traceHeaders(
+	spanContext: SpanContext | undefined,
+): ActiveTraceHeaders | undefined {
+	if (!spanContext || !isSpanContextValid(spanContext)) return undefined;
+	const tracestate = spanContext.traceState?.serialize();
+	return {
+		traceparent: `00-${spanContext.traceId}-${spanContext.spanId}-${(spanContext.traceFlags & 1).toString(16).padStart(2, "0")}`,
+		...(tracestate ? { tracestate } : {}),
+	};
 }

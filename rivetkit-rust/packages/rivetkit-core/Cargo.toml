@@ -16,7 +16,6 @@ native-runtime = [
 	"dep:nix",
 	"dep:reqwest",
 	"dep:opentelemetry-otlp",
-	"dep:opentelemetry_sdk",
 	"dep:tracing-subscriber",
 	"dep:rivetkit-engine-process",
 	"dep:axum",
@@ -57,8 +56,9 @@ opentelemetry = { version = "0.28", default-features = false, features = [
 	# Lets the SDK report dropped spans and export failures through tracing.
 	"internal-logs",
 ] }
+opentelemetry-http.workspace = true
 opentelemetry-otlp = { version = "0.28", default-features = false, optional = true, features = ["trace", "http-json", "http-proto", "grpc-tonic", "reqwest-blocking-client"] }
-opentelemetry_sdk = { version = "0.28", default-features = false, optional = true, features = ["trace", "internal-logs"] }
+opentelemetry_sdk = { version = "0.28", default-features = false, features = ["trace", "internal-logs"] }
 rand.workspace = true
 reqwest = { workspace = true, optional = true }
 rusqlite = { workspace = true, optional = true }

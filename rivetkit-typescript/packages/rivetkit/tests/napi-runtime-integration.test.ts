@@ -475,6 +475,7 @@ interface ExportedSpan {
 	traceId: string;
 	spanId: string;
 	parentSpanId?: string;
+	traceState?: string;
 	kind?: number;
 	endTimeUnixNano: bigint;
 	attributes: Record<string, string | undefined>;
@@ -505,6 +506,7 @@ function exportedSpans(exports: Buffer[]): ExportedSpan[] {
 					traceId: span.traceId,
 					spanId: span.spanId,
 					parentSpanId: span.parentSpanId || undefined,
+					traceState: span.traceState,
 					kind: span.kind,
 					endTimeUnixNano: BigInt(span.endTimeUnixNano ?? 0),
 					attributes: Object.fromEntries(
@@ -832,6 +834,94 @@ describe.sequential("native NAPI runtime integration", () => {
 		await stopRuntime(runtime);
 		runtime = undefined;
 		await waitForProcessExit(processId, 5_000);
+	}, 120_000);
+
+	test("preserves vendor trace state across actor calls and ignores invalid trace versions", async () => {
+		collector = await startOtlpCollector(
+			await getPort({ host: "127.0.0.1" }),
+		);
+		const traceExports = collector.spans();
+		const { endpoint, poolName, child } = await startTracedRuntime(
+			collector.endpoint,
+		);
+		runtime = child;
+		const traceId = "1234567890abcdef1234567890abcdef";
+		const parentSpanId = "1234567890abcdef";
+		const traceState = "vendor=opaque-value";
+		const client = createIntegrationClient(endpoint, poolName);
+		const handle = await waitForActorReady(
+			() =>
+				client.integrationActor.create(
+					[`trace-context-${crypto.randomUUID()}`],
+					{ params: { userId: "integration-test" } },
+				),
+			30_000,
+		);
+		await waitForActorReady(() => handle.getCount(), 30_000);
+		const actorId = await handle.resolve();
+		const url = new URL(await handle.getGatewayUrl());
+		url.pathname = `${url.pathname.replace(/\/$/, "")}/action/getCountViaClient`;
+		// Every version calls the same actor, so each round takes the caller
+		// span that no earlier round has claimed.
+		const claimed = new Set<string>();
+		const callChain = (spans: ExportedSpan[]) => {
+			const caller = spans.find(
+				(span) =>
+					span.attributes["rivet.actor.id"] === actorId &&
+					span.attributes["rivet.action.name"] ===
+						"getCountViaClient" &&
+					!claimed.has(span.spanId),
+			);
+			const hop =
+				caller &&
+				spans.find(
+					(span) =>
+						span.kind === OTLP_SPAN_KIND_CLIENT &&
+						span.traceId === caller.traceId,
+				);
+			const callee =
+				hop && spans.find((span) => span.parentSpanId === hop.spanId);
+			return { caller, hop, callee };
+		};
+		for (const version of ["00", "zz", "0A"]) {
+			const response = await fetch(url, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"x-rivet-encoding": "json",
+					"x-rivet-token": TOKEN,
+					"x-rivet-conn-params": JSON.stringify({
+						userId: "integration-test",
+					}),
+					traceparent: `${version}-${traceId}-${parentSpanId}-01`,
+					tracestate: traceState,
+				},
+				body: JSON.stringify({ args: [] }),
+			});
+			expect(response.status).toBe(200);
+			await response.arrayBuffer();
+			const { caller, hop, callee } = callChain(
+				await waitForSpans(
+					traceExports,
+					"caller and callee trace contexts",
+					(spans) => callChain(spans).callee !== undefined,
+					10_000,
+				),
+			);
+			claimed.add(caller?.spanId ?? "");
+			if (version === "00") {
+				expect(caller?.traceId).toBe(traceId);
+				expect(caller?.parentSpanId).toBe(parentSpanId);
+				for (const span of [caller, hop, callee])
+					expect(span?.traceState).toBe(traceState);
+			} else {
+				expect(caller?.traceId).not.toBe(traceId);
+				expect(caller?.parentSpanId).toBeUndefined();
+				for (const span of [caller, hop, callee])
+					expect(span?.traceState || "").toBe("");
+			}
+		}
+		await client.dispose();
 	}, 120_000);
 
 	test("keeps overlapping invocations of one actor telemetrically isolated", async () => {

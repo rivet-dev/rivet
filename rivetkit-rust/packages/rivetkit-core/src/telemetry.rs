@@ -3,15 +3,16 @@
 #[cfg(feature = "native-runtime")]
 pub mod export;
 
-use std::str::FromStr as _;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-use opentelemetry::trace::{
-	SpanContext, SpanId, TraceContextExt as _, TraceFlags, TraceId, TraceState,
-};
+use opentelemetry::Context;
+use opentelemetry::propagation::{Extractor, TextMapPropagator as _};
+use opentelemetry::trace::{SpanContext, TraceContextExt as _};
+use opentelemetry_http::{HeaderExtractor, HeaderInjector};
+use opentelemetry_sdk::propagation::TraceContextPropagator;
 use parking_lot::Mutex;
-use rivetkit_client_protocol::telemetry_headers::format_traceparent;
+use rivetkit_client_protocol::ray_id::RayId;
 use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::ActorContext;
@@ -26,33 +27,24 @@ pub struct IncomingInvocationContext {
 	remote_parent: Option<SpanContext>,
 }
 
-pub(crate) use rivetkit_client_protocol::telemetry_headers::HEADER_RIVET_RAY_ID;
+pub(crate) use rivetkit_client_protocol::ray_id::HEADER_RIVET_RAY_ID;
+
+const HEADER_TRACEPARENT: &str = "traceparent";
+const HEADER_TRACESTATE: &str = "tracestate";
 
 impl IncomingInvocationContext {
-	pub(crate) fn from_headers(
-		ray_id: Option<String>,
-		traceparent: Option<&str>,
-		tracestate: Option<&str>,
-	) -> Self {
-		Self {
-			ray_id,
-			remote_parent: parse_remote_parent(traceparent, tracestate),
-		}
-	}
-
 	/// Reads the ray ID and W3C trace context an HTTP request carries. Every
 	/// HTTP entry point into an actor reads them through here, so they all
 	/// apply the same bounds.
 	pub(crate) fn from_http_headers(headers: &http::HeaderMap) -> Self {
-		Self::from_headers(
-			invocation_ray_id(headers),
-			headers
-				.get("traceparent")
-				.and_then(|value| value.to_str().ok()),
-			headers
-				.get("tracestate")
-				.and_then(|value| value.to_str().ok()),
-		)
+		Self {
+			ray_id: invocation_ray_id(headers),
+			remote_parent: if headers.contains_key(HEADER_TRACEPARENT) {
+				extract_remote_parent(&HeaderExtractor(headers))
+			} else {
+				None
+			},
+		}
 	}
 }
 
@@ -61,7 +53,7 @@ impl IncomingInvocationContext {
 /// absent.
 fn invocation_ray_id(headers: &http::HeaderMap) -> Option<String> {
 	let value = headers.get(HEADER_RIVET_RAY_ID)?.to_str().ok()?;
-	rivetkit_client_protocol::telemetry_headers::bounded_ray_id(value).map(str::to_owned)
+	RayId::parse(value.to_owned()).ok().map(RayId::into_string)
 }
 
 /// Name a request invocation is reported under, in place of an action name.
@@ -171,7 +163,6 @@ pub struct ActorInvocationSpanContext {
 	pub trace_id: String,
 	pub span_id: String,
 	pub trace_flags: u8,
-	pub traceparent: String,
 	pub tracestate: Option<String>,
 }
 
@@ -547,16 +538,21 @@ impl ActorInvocationTelemetry {
 	/// back to it then points at the code that caused it rather than at the
 	/// whole invocation around that code.
 	pub(crate) fn trace_origin(&self) -> TraceOrigin {
-		let Some(context) = self.trace_context() else {
+		let Some(active) = self.active() else {
 			return TraceOrigin::default();
 		};
-		let span = self.1.as_ref().and_then(w3c_span_context).or(context.span);
-		let (traceparent, tracestate) = match span {
-			Some(span) => (Some(span.traceparent), span.tracestate),
-			None => (None, None),
-		};
+		let span = self
+			.1
+			.clone()
+			.or_else(|| active.span.lock().as_ref().and_then(otel_span_context_of));
+		let (traceparent, tracestate) = span
+			.as_ref()
+			.and_then(propagation_headers)
+			.map_or((None, None), |(traceparent, tracestate)| {
+				(Some(traceparent), tracestate)
+			});
 		TraceOrigin {
-			ray_id: context.ray_id,
+			ray_id: active.ray_id.clone(),
 			traceparent,
 			tracestate,
 		}
@@ -680,7 +676,7 @@ impl Drop for InvocationWorkGuard {
 
 impl OutboundCallInvocation {
 	/// W3C context of this call's span, to send to the callee so it parents
-	/// here. Absent when the call is not sampled.
+	/// here. Absent when tracing is disabled.
 	pub fn span_context(&self) -> Option<ActorInvocationSpanContext> {
 		self.context.clone()
 	}
@@ -730,7 +726,7 @@ impl Drop for SqliteOperationSpan {
 
 /// W3C fields of a span context, or nothing when it is not valid and so
 /// carries nothing worth propagating.
-fn w3c_span_context(span_context: &SpanContext) -> Option<ActorInvocationSpanContext> {
+fn span_context_fields(span_context: &SpanContext) -> Option<ActorInvocationSpanContext> {
 	if !span_context.is_valid() {
 		return None;
 	}
@@ -739,11 +735,6 @@ fn w3c_span_context(span_context: &SpanContext) -> Option<ActorInvocationSpanCon
 		trace_id: span_context.trace_id().to_string(),
 		span_id: span_context.span_id().to_string(),
 		trace_flags: span_context.trace_flags().to_u8(),
-		traceparent: format_traceparent(
-			span_context.trace_id(),
-			span_context.span_id(),
-			span_context.trace_flags().to_u8(),
-		),
 		tracestate: (!tracestate.is_empty()).then_some(tracestate),
 	})
 }
@@ -751,9 +742,16 @@ fn w3c_span_context(span_context: &SpanContext) -> Option<ActorInvocationSpanCon
 /// Reads a span's W3C context, or nothing when it carries no valid context to
 /// propagate.
 fn span_context_of(span: &tracing::Span) -> Option<ActorInvocationSpanContext> {
+	otel_span_context_of(span)
+		.as_ref()
+		.and_then(span_context_fields)
+}
+
+fn otel_span_context_of(span: &tracing::Span) -> Option<SpanContext> {
 	let context = span.context();
 	let context_span = context.span();
-	w3c_span_context(context_span.span_context())
+	let span_context = context_span.span_context();
+	span_context.is_valid().then(|| span_context.clone())
 }
 
 /// Opens the span covering the moment one queue message is handed to the
@@ -826,31 +824,55 @@ fn record_outcome(span: &tracing::Span, error: Option<&anyhow::Error>) {
 }
 
 fn parse_remote_parent(traceparent: Option<&str>, tracestate: Option<&str>) -> Option<SpanContext> {
-	let mut fields = traceparent?.split('-');
-	let version = fields.next()?;
-	let trace_id = fields.next()?;
-	let span_id = fields.next()?;
-	let flags = fields.next()?;
-	if fields.next().is_some()
-		|| version.len() != 2
-		|| version.eq_ignore_ascii_case("ff")
-		|| trace_id.len() != 32
-		|| span_id.len() != 16
-		|| flags.len() != 2
-	{
-		return None;
+	traceparent?;
+	extract_remote_parent(&TraceHeaders {
+		traceparent,
+		tracestate,
+	})
+}
+
+fn extract_remote_parent(extractor: &dyn Extractor) -> Option<SpanContext> {
+	let context = TraceContextPropagator::new().extract_with_context(&Context::new(), extractor);
+	let span = context.span();
+	let span_context = span.span_context();
+	span_context.is_valid().then(|| span_context.clone())
+}
+
+fn propagation_headers(span_context: &SpanContext) -> Option<(String, Option<String>)> {
+	let context = Context::new().with_remote_span_context(span_context.clone());
+	let mut headers = http::HeaderMap::new();
+	TraceContextPropagator::new().inject_context(&context, &mut HeaderInjector(&mut headers));
+	let traceparent = headers.get(HEADER_TRACEPARENT)?.to_str().ok()?.to_owned();
+	let tracestate = headers
+		.get(HEADER_TRACESTATE)
+		.and_then(|value| value.to_str().ok())
+		.filter(|value| !value.is_empty())
+		.map(str::to_owned);
+	Some((traceparent, tracestate))
+}
+
+struct TraceHeaders<'a> {
+	traceparent: Option<&'a str>,
+	tracestate: Option<&'a str>,
+}
+
+impl Extractor for TraceHeaders<'_> {
+	fn get(&self, key: &str) -> Option<&str> {
+		match key {
+			key if key.eq_ignore_ascii_case(HEADER_TRACEPARENT) => self.traceparent,
+			key if key.eq_ignore_ascii_case(HEADER_TRACESTATE) => self.tracestate,
+			_ => None,
+		}
 	}
 
-	let trace_id = TraceId::from_hex(trace_id).ok()?;
-	let span_id = SpanId::from_hex(span_id).ok()?;
-	let flags = u8::from_str_radix(flags, 16).ok()?;
-	let trace_state = tracestate
-		.and_then(|value| TraceState::from_str(value).ok())
-		.unwrap_or_default();
-	let context = SpanContext::new(trace_id, span_id, TraceFlags::new(flags), true, trace_state);
-	if context.is_valid() {
-		Some(context)
-	} else {
-		None
+	fn keys(&self) -> Vec<&str> {
+		let mut keys = Vec::with_capacity(2);
+		if self.traceparent.is_some() {
+			keys.push(HEADER_TRACEPARENT);
+		}
+		if self.tracestate.is_some() {
+			keys.push(HEADER_TRACESTATE);
+		}
+		keys
 	}
 }

@@ -14,6 +14,8 @@ base64 = "0.22.1"
 bytes = { workspace = true }
 futures-util = "0.3.31"
 opentelemetry = { version = "0.28", default-features = false, features = ["trace"] }
+opentelemetry-http.workspace = true
+opentelemetry_sdk = { version = "0.28", default-features = false, features = ["trace"] }
 parking_lot.workspace = true
 reqwest = { version = "0.12.12", default-features = false, features = ["json", "charset", "http2", "macos-system-configuration", "rustls-tls-native-roots", "rustls-tls-webpki-roots"] }
 rivetkit-client-protocol.workspace = true
@@ -32,7 +34,6 @@ vbare = "0.0.4"
 
 [dev-dependencies]
 axum = { workspace = true, features = ["ws"] }
-opentelemetry_sdk = { version = "0.28", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "std", "registry"]}
 tempfile = "3.10.1"
 tokio-test = "0.4.3"

@@ -10,6 +10,7 @@ import type {
 } from "@rivetkit/rivetkit-napi";
 import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
 import {
+	actorInvocationTraceHeaders,
 	readActiveTraceHeaders,
 	runWithActorInvocationSpan,
 } from "@/common/otel-context";
@@ -267,7 +268,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 	#bindings: NativeBindings;
 	#sql = new WeakMap<NativeActorContext, NapiSqlDatabase>();
 	#invocationContext: AsyncLocalStorage<NativeActorContext>;
-	// `traceparent` of each invocation's own Core span, so an operation can
+	// W3C `traceparent` of each invocation's own Core span, so an operation can
 	// tell that span apart from an application span without a native call.
 	#invocationTraceparent = new WeakMap<NativeActorContext, string>();
 
@@ -609,8 +610,12 @@ export class NapiCoreRuntime implements CoreRuntime {
 	runWithActorInvocationContext<T>(ctx: ActorContextHandle, run: () => T): T {
 		const nativeCtx = asNativeActorContext(ctx);
 		const span = nativeCtx.invocationTraceContext()?.span;
-		if (span) {
-			this.#invocationTraceparent.set(nativeCtx, span.traceparent);
+		const traceHeaders = actorInvocationTraceHeaders(span);
+		if (traceHeaders) {
+			this.#invocationTraceparent.set(
+				nativeCtx,
+				traceHeaders.traceparent,
+			);
 		}
 		return this.#invocationContext.run(nativeCtx, () =>
 			runWithActorInvocationSpan(span, run),

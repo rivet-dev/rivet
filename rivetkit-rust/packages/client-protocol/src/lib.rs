@@ -1,5 +1,5 @@
 pub mod generated;
-pub mod telemetry_headers;
+pub mod ray_id;
 pub mod versioned;
 
 // Re-export latest.
