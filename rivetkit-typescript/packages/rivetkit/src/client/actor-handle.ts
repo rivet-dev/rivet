@@ -78,6 +78,7 @@ export class ActorHandleRaw {
 	#gatewayOptions: ActorGatewayOptions;
 	#params: unknown;
 	#getParams?: () => Promise<unknown>;
+	#signal?: AbortSignal;
 	#resolvedActorId?: string;
 	#resolvingActorId?: Promise<string>;
 	#queueSendMutex = new AsyncMutex();
@@ -97,6 +98,7 @@ export class ActorHandleRaw {
 		encoding: Encoding,
 		actorResolutionState: ActorResolutionState,
 		gatewayOptions: ActorGatewayOptions = {},
+		signal?: AbortSignal,
 	) {
 		this.#client = client;
 		this.#driver = driver;
@@ -105,6 +107,7 @@ export class ActorHandleRaw {
 		this.#gatewayOptions = gatewayOptions;
 		this.#params = params;
 		this.#getParams = getParams;
+		this.#signal = signal;
 	}
 
 	async #resolveConnectionParams(): Promise<unknown> {
@@ -268,12 +271,17 @@ export class ActorHandleRaw {
 				`Invalid action call: expected an options object { name, args }, got ${typeof opts}. Use handle.actionName(...args) for the shorthand API.`,
 			);
 		}
-		const run = async () => (await this.#sendActionNow(opts)) as Response;
+		// Fall back to the handle-level signal from `get`/`getOrCreate`/etc.
+		// when no per-call signal is provided.
+		const signal = opts.signal ?? this.#signal;
+		const optsWithSignal = { ...opts, signal };
+		const run = async () =>
+			(await this.#sendActionNow(optsWithSignal)) as Response;
 		if (opts.name === "destroy") {
 			return await run();
 		}
 
-		return await retryOnLifecycleBoundary(run, { signal: opts.signal });
+		return await retryOnLifecycleBoundary(run, { signal });
 	}
 
 	async #sendActionNow(
