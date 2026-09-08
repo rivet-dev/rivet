@@ -92,8 +92,9 @@ const TAB_META: Record<SettingsTab, { title: string; description?: string }> = {
 	},
 	settings: {
 		title: "Settings",
-		description:
-			"Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors.",
+		description: features.platform
+			? "Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors."
+			: "Connect providers and runners to this namespace. Use your cloud of choice to run Rivet Actors.",
 	},
 	compute: {
 		title: "Compute",

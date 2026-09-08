@@ -20,12 +20,14 @@ import {
 	Textarea,
 	WithTooltip,
 } from "@/components";
-import { ShimmerLine } from "../shimmer-line";
 import { formatValue } from "@/lib/format-value";
+import { ShimmerLine } from "../shimmer-line";
 import {
 	Select,
 	SelectContent,
+	SelectGroup,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
 } from "../ui/select";
@@ -105,18 +107,33 @@ export function ActorDatabase({ actorId }: ActorDatabaseProps) {
 	);
 }
 
+/**
+ * Tables created by Rivet itself (actor metadata, workflow KV, migration
+ * bookkeeping). They are still browsable but should not be the first thing a
+ * user sees when opening the Database tab.
+ */
+function isInternalTable(name: string) {
+	return name.startsWith("_rivet");
+}
+
+function defaultTableName(names: string[] | undefined) {
+	if (!names?.length) return undefined;
+	return names.find((name) => !isInternalTable(name)) ?? names[0];
+}
+
 function ActorDatabaseBrowser({ actorId }: ActorDatabaseProps) {
 	const actorInspector = useActorInspector();
 	const queryClient = useQueryClient();
 	const { data, refetch } = useQuery(
 		actorInspector.actorDatabaseQueryOptions(actorId),
 	);
-	const [table, setTable] = useState<string | undefined>(
-		() => data?.tables?.[0]?.table.name,
+	const [table, setTable] = useState<string | undefined>(() =>
+		defaultTableName(data?.tables?.map((t) => t.table.name)),
 	);
 	const [page, setPage] = useState(0);
 
-	const selectedTable = table || data?.tables?.[0]?.table.name;
+	const selectedTable =
+		table || defaultTableName(data?.tables?.map((t) => t.table.name));
 
 	const {
 		data: rows,
@@ -811,6 +828,10 @@ function TableSelect({
 	const { data: tables } = useQuery(
 		actorInspector.actorDatabaseTablesQueryOptions(actorId),
 	);
+	const userTables =
+		tables?.filter((table) => !isInternalTable(table.name)) ?? [];
+	const internalTables =
+		tables?.filter((table) => isInternalTable(table.name)) ?? [];
 
 	return (
 		<Select onValueChange={onSelect} value={value}>
@@ -826,7 +847,7 @@ function TableSelect({
 						</Flex>
 					</SelectItem>
 				) : null}
-				{tables?.map((table) => (
+				{userTables.map((table) => (
 					<SelectItem key={table.name} value={table.name}>
 						<div className="flex items-center gap-2">
 							<Icon icon={faTable} className="text-foreground" />
@@ -834,6 +855,24 @@ function TableSelect({
 						</div>
 					</SelectItem>
 				))}
+				{internalTables.length > 0 ? (
+					<SelectGroup>
+						<SelectLabel className="text-muted-foreground font-normal">
+							Internal
+						</SelectLabel>
+						{internalTables.map((table) => (
+							<SelectItem key={table.name} value={table.name}>
+								<div className="flex items-center gap-2">
+									<Icon
+										icon={faTable}
+										className="text-muted-foreground"
+									/>
+									{table.name}
+								</div>
+							</SelectItem>
+						))}
+					</SelectGroup>
+				) : null}
 			</SelectContent>
 		</Select>
 	);

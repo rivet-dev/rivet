@@ -22,6 +22,7 @@ import { useTimeout } from "../hooks/use-timeout";
 import { ActorDetailsLegacy } from "./actor-details-legacy";
 import {
 	CLOUD_TABS,
+	orderInspectorTabs,
 	SKELETON_INSPECTOR_TABS,
 	useHasManagedPool,
 	useShowTabLabels,
@@ -575,7 +576,7 @@ function ActorDetailsIframePath({
 				return;
 			}
 			if (msg.type === "tabs-available") {
-				setInspectorTabs(msg.tabs);
+				setInspectorTabs(orderInspectorTabs(msg.tabs));
 				return;
 			}
 			if (msg.type === "token-refresh-needed") {

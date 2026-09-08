@@ -44,7 +44,16 @@ const searchSchema = z
 export const Route = createFileRoute("/_context")({
 	component: RouteComponent,
 	validateSearch: (search) => {
-		const validated = searchSchema.parse(search);
+		// Hand-typed and shared links often carry `?n=counter` instead of the
+		// serialized array form. Accept both so a bare string never surfaces
+		// as a raw validation error page. Normalized before parsing because
+		// the schema is an intersection, and a per-field transform would
+		// conflict with the untouched value from the `z.record` half.
+		const normalized =
+			typeof search.n === "string"
+				? { ...search, n: [search.n] }
+				: search;
+		const validated = searchSchema.parse(normalized);
 		// `pool` is scoped to the pages that actually use it: the Logs route
 		// re-declares it in its own validateSearch, and the compute settings tab
 		// needs it while open. Drop it everywhere else so the selected pool does
