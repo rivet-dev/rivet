@@ -236,6 +236,7 @@ export class ClientRaw {
 			opts?.params,
 			opts?.getParams,
 			actorQuery,
+			opts?.signal,
 		);
 		return createActorProxy(handle) as ActorHandle<AD>;
 	}
@@ -275,6 +276,7 @@ export class ClientRaw {
 			opts?.params,
 			opts?.getParams,
 			actorQuery,
+			opts?.signal,
 		);
 		return createActorProxy(handle) as ActorHandle<AD>;
 	}
@@ -318,6 +320,7 @@ export class ClientRaw {
 			opts?.params,
 			opts?.getParams,
 			actorQuery,
+			opts?.signal,
 		);
 		return createActorProxy(handle) as ActorHandle<AD>;
 	}
@@ -377,6 +380,7 @@ export class ClientRaw {
 			opts?.params,
 			opts?.getParams,
 			getForIdQuery,
+			opts?.signal,
 		);
 
 		const proxy = createActorProxy(handle) as ActorHandle<AD>;
@@ -388,6 +392,7 @@ export class ClientRaw {
 		params: unknown,
 		getParams: (() => Promise<unknown>) | undefined,
 		actorQuery: ActorQuery,
+		signal?: AbortSignal,
 	): ActorHandleRaw {
 		return new ActorHandleRaw(
 			this,
@@ -397,6 +402,7 @@ export class ClientRaw {
 			this.#encodingKind,
 			actorQuery,
 			this.#gatewayOptions,
+			signal,
 		);
 	}
 
