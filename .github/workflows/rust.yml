@@ -17,30 +17,9 @@ env:
   RUSTFLAGS: "--cfg tokio_unstable"
   CARGO_TERM_COLOR: always
 jobs:
-  # Detect if rust code changed
-  changes:
-    runs-on: ubuntu-latest
-    outputs:
-      rust: ${{ steps.filter.outputs.rust }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v2
-        id: filter
-        with:
-          filters: |
-            rust:
-              - '**/*.rs'
-              - '**/*.bare'
-              - '**/Cargo.toml'
-              - '**/Cargo.lock'
-              - 'rivetkit-rust/packages/rivetkit-core/scripts/**/*.sh'
-              - '.github/workflows/rust.yml'
-
   fmt:
     name: Rustfmt
     runs-on: ubuntu-latest
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -53,8 +32,6 @@ jobs:
   # clippy:
   #   name: Clippy
   #   runs-on: depot-ubuntu-24.04-8
-  #   needs: changes
-  #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
   #
@@ -74,16 +51,12 @@ jobs:
   check:
     name: Check
     runs-on: depot-ubuntu-24.04-8
-    needs: changes
-    if: needs.changes.outputs.rust == 'true'
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: "rust-ci"
+          cache-shared-key: rust-ci
           cache-on-failure: true
 
       - name: Check event-driven drain invariants
@@ -107,8 +80,6 @@ jobs:
   # test:
   #   name: Test
   #   runs-on: depot-ubuntu-24.04-8
-  #   needs: changes
-  #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
   #
@@ -130,8 +101,6 @@ jobs:
   # deny:
   #   name: Deny
   #   runs-on: ubuntu-latest
-  #   needs: changes
-  #   if: needs.changes.outputs.rust == 'true'
   #   steps:
   #     - uses: actions/checkout@v4
   #     - name: cargo deny
@@ -143,19 +112,12 @@ jobs:
   status-check:
     name: Rust CI Status
     runs-on: ubuntu-latest
-    needs: [changes, fmt, check]
+    needs: [fmt, check]
     if: always()
     steps:
       - name: Check job status
         run: |
-          # If rust code didn't change, consider it a pass
-          if [ "${{ needs.changes.outputs.rust }}" != "true" ]; then
-            echo "No Rust changes detected, skipping checks"
-            exit 0
-          fi
-
-          # If rust code changed, verify all jobs passed
-          if [ "${{ needs.fmt.result }}" == "failure" ] || [ "${{ needs.check.result }}" == "failure" ]; then
+          if [ "${{ needs.fmt.result }}" != "success" ] || [ "${{ needs.check.result }}" != "success" ]; then
             echo "One or more required jobs failed"
             exit 1
           fi

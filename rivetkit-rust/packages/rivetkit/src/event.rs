@@ -19,8 +19,6 @@ use serde::{
 
 use crate::{action, actor::Actor, context::ConnCtx, persist};
 
-const EVENT_SET_TUPLE_ARITY_MAX: usize = 16;
-
 pub trait Event: Serialize + DeserializeOwned + Send + Sync + 'static {
 	const NAME: &'static str;
 }
@@ -1429,6 +1427,8 @@ mod tests {
 
 	use super::*;
 	use crate::{action, actor::Actor, start::wrap_start};
+
+	const EVENT_SET_TUPLE_ARITY_MAX: usize = 16;
 
 	struct EmptyActor;
 
