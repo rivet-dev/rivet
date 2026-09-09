@@ -6,12 +6,14 @@ use rivetkit_core::metrics_endpoint::{RenderedMetrics, render_prometheus_metrics
 use rivetkit_core::registry::CoreEnvoyHandle;
 use rivetkit_core::serverless::CoreServerlessRuntime;
 use rivetkit_core::{
-	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, ServeConfig,
+	ActorConfig, ActorFactory as CoreActorFactory, ActorStart, CoreRegistry, RuntimeMode,
+	ServeConfig,
 };
 use tokio_util::sync::CancellationToken;
 
 use crate::{
 	actor::Actor,
+	serverless_listener,
 	start::{Start, run_actor, wrap_start},
 };
 
@@ -130,7 +132,20 @@ impl Registry {
 	}
 
 	/// [`start`](Self::start) with an explicit [`ServeConfig`].
+	///
+	/// Selects the run mode from `RIVETKIT_RUNTIME_MODE` (see [`RuntimeMode`]),
+	/// mirroring the TypeScript `registry.start()`. `Envoy` (default) holds one
+	/// long-lived outbound envoy; `Serverless` runs an HTTP listener that lazily
+	/// starts and caches an envoy on the first request.
 	pub async fn start_with_config(self, config: ServeConfig) -> Result<()> {
+		match RuntimeMode::from_env() {
+			RuntimeMode::Envoy => self.start_envoy(config).await,
+			RuntimeMode::Serverless => self.start_serverless(config).await,
+		}
+	}
+
+	/// Persistent-envoy `start`: serves until SIGINT/SIGTERM, then drains.
+	async fn start_envoy(self, config: ServeConfig) -> Result<()> {
 		let shutdown = CancellationToken::new();
 		let mut serve = tokio::spawn({
 			let shutdown = shutdown.clone();
@@ -139,6 +154,26 @@ impl Registry {
 
 		tokio::select! {
 			// Surface an early serve failure instead of waiting for a signal.
+			result = &mut serve => return result?,
+			_ = shutdown_signal() => {}
+		}
+
+		shutdown.cancel();
+		serve.await?
+	}
+
+	/// Serverless `start`: runs the HTTP listener until SIGINT/SIGTERM, then
+	/// drains the cached envoy.
+	async fn start_serverless(self, config: ServeConfig) -> Result<()> {
+		let runtime = self.into_serverless_runtime(config).await?;
+		let shutdown = CancellationToken::new();
+		let mut serve = tokio::spawn({
+			let shutdown = shutdown.clone();
+			async move { serverless_listener::serve(runtime, shutdown).await }
+		});
+
+		tokio::select! {
+			// Surface an early listener failure instead of waiting for a signal.
 			result = &mut serve => return result?,
 			_ = shutdown_signal() => {}
 		}

@@ -241,6 +241,26 @@ impl EngineSpawnMode {
 	}
 }
 
+/// Selects how `Registry::start` runs, mirroring the TypeScript
+/// `RIVETKIT_RUNTIME_MODE` env var. `Envoy` holds one long-lived outbound
+/// envoy for the process lifetime; `Serverless` runs an HTTP listener that
+/// lazily starts and caches an envoy on the first request.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RuntimeMode {
+	#[default]
+	Envoy,
+	Serverless,
+}
+
+impl RuntimeMode {
+	pub fn from_env() -> Self {
+		match env::var("RIVETKIT_RUNTIME_MODE") {
+			Ok(value) if value.eq_ignore_ascii_case("serverless") => Self::Serverless,
+			_ => Self::Envoy,
+		}
+	}
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ServeConfig {
 	pub version: u32,

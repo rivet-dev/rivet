@@ -8,6 +8,7 @@ pub mod persist;
 pub mod prelude;
 pub mod queue;
 pub mod registry;
+mod serverless_listener;
 pub mod sqlite;
 pub mod start;
 pub mod test;
@@ -46,7 +47,8 @@ pub use rivetkit_core::{
 	CompletableQueueMessage, ConnHandle, ConnId, EngineSpawnMode, EnqueueAndWaitOpts,
 	HTTP_BODY_STREAM_CHANNEL_CAPACITY, KeepAwakeRegion, ListOpts, QueueMessage as CoreQueueMessage,
 	QueueNextBatchOpts, QueueNextOpts, QueueTryNextBatchOpts, QueueTryNextOpts, QueueWaitOpts,
-	Request, RequestSaveOpts, Response, ResponseChunk, SaveStateOpts, SerializeStateReason,
+	Request, RequestSaveOpts, Response, ResponseChunk, RuntimeMode, SaveStateOpts,
+	SerializeStateReason,
 	ServeConfig, SqliteBatchStatement, SqliteDb, SqliteTransaction, StateDelta, StreamingResponse,
 	WebSocket, WsMessage,
 	sqlite::{BindParam, ColumnValue, ExecResult, QueryResult},
