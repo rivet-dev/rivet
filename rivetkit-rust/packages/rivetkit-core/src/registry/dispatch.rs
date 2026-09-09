@@ -111,7 +111,14 @@ pub(super) fn workflow_dispatch_result(
 ) -> Result<(bool, Option<Vec<u8>>)> {
 	match result {
 		Ok(history) => Ok((true, history)),
-		Err(error) if is_dropped_reply_error(&error) => Ok((false, None)),
+		// A dropped reply or an actor that never configured workflows both mean
+		// "workflow unsupported". Report that as disabled instead of aborting the
+		// whole inspector init, which also carries tab config.
+		Err(error)
+			if is_dropped_reply_error(&error) || is_workflow_not_configured_error(&error) =>
+		{
+			Ok((false, None))
+		}
 		Err(error) => Err(error),
 	}
 }
@@ -119,6 +126,11 @@ pub(super) fn workflow_dispatch_result(
 pub(super) fn is_dropped_reply_error(error: &anyhow::Error) -> bool {
 	let error = RivetError::extract(error);
 	error.group() == "actor" && error.code() == "dropped_reply"
+}
+
+fn is_workflow_not_configured_error(error: &anyhow::Error) -> bool {
+	let error = RivetError::extract(error);
+	error.group() == "actor" && error.code() == "not_configured"
 }
 
 pub(super) async fn dispatch_subscribe_request(
