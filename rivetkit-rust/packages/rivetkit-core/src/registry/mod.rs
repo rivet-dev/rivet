@@ -160,8 +160,18 @@ impl ActorInstanceState {
 
 #[derive(Clone)]
 struct PendingStop {
+	generation: u32,
 	reason: protocol::StopActorReason,
 	stop_handle: ActorStopHandle,
+}
+
+enum TransitionResult {
+	/// The addressed generation was active and is now stopping.
+	Transitioned(ActiveActorInstance),
+	/// The stop addressed an older generation and must be dropped.
+	Stale,
+	/// No instance for the addressed generation exists yet; park the stop.
+	NoMatch,
 }
 
 pub(crate) struct RegistryDispatcher {
@@ -851,6 +861,26 @@ impl RegistryDispatcher {
 					.remove_async(&request.actor_id.clone())
 					.await
 					.map(|(_, pending_stop)| pending_stop);
+				// Drop a parked stop addressed to an older generation. A stop for a
+				// prior generation must never tear down a freshly started instance.
+				let pending_stop = match pending_stop {
+					Some(pending_stop) if pending_stop.generation < instance.generation => {
+						tracing::info!(
+							actor_id = %request.actor_id,
+							stop_generation = pending_stop.generation,
+							instance_generation = instance.generation,
+							"dropping stale pending stop for older generation during startup"
+						);
+						None
+					}
+					// A stop for a later generation cannot apply to this instance;
+					// re-park it so the matching generation consumes it.
+					Some(pending_stop) if pending_stop.generation > instance.generation => {
+						self.park_pending_stop(&request.actor_id, pending_stop).await;
+						None
+					}
+					other => other,
+				};
 				if let Some(pending_stop) = pending_stop {
 					let actor_id = request.actor_id.clone();
 					let stop_reason = map_envoy_stop_reason(&pending_stop.reason);
@@ -933,11 +963,23 @@ impl RegistryDispatcher {
 	async fn transition_actor_to_stopping(
 		&self,
 		actor_id: &str,
+		generation: u32,
 		reason: ShutdownKind,
-	) -> Option<ActiveActorInstance> {
+	) -> TransitionResult {
 		match self.actor_instances.entry_async(actor_id.to_owned()).await {
 			SccEntry::Occupied(mut entry) => {
 				let instance = entry.get().instance();
+				// Guard against cross-generation stops. A stop is only valid for the
+				// exact generation it addresses; any other generation must be left
+				// untouched so a stale stop can never kill a newer instance.
+				if generation != instance.generation {
+					drop(entry);
+					return if generation < instance.generation {
+						TransitionResult::Stale
+					} else {
+						TransitionResult::NoMatch
+					};
+				}
 				if matches!(entry.get(), ActorInstanceState::Active(_)) {
 					entry.insert(ActorInstanceState::Stopping {
 						instance: instance.clone(),
@@ -948,11 +990,26 @@ impl RegistryDispatcher {
 						.ctx
 						.warn_work_sent_to_stopping_instance("stop_actor");
 				}
-				Some(instance)
+				TransitionResult::Transitioned(instance)
 			}
 			SccEntry::Vacant(entry) => {
 				drop(entry);
-				None
+				TransitionResult::NoMatch
+			}
+		}
+	}
+
+	/// Park a stop for later delivery, keeping the highest generation so a stale
+	/// stop can never evict a stop addressed to a newer generation.
+	async fn park_pending_stop(&self, actor_id: &str, pending_stop: PendingStop) {
+		match self.pending_stops.entry_async(actor_id.to_owned()).await {
+			SccEntry::Occupied(mut entry) => {
+				if pending_stop.generation >= entry.get().generation {
+					entry.insert(pending_stop);
+				}
+			}
+			SccEntry::Vacant(entry) => {
+				entry.insert_entry(pending_stop);
 			}
 		}
 	}
@@ -1035,6 +1092,7 @@ impl RegistryDispatcher {
 	async fn stop_actor(
 		&self,
 		actor_id: &str,
+		generation: u32,
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
@@ -1044,36 +1102,46 @@ impl RegistryDispatcher {
 			.await
 			.is_some()
 		{
-			let _ = self
-				.pending_stops
-				.insert_async(
-					actor_id.to_owned(),
-					PendingStop {
-						reason,
-						stop_handle,
-					},
-				)
-				.await;
+			// An instance is starting. Park the stop so the startup-completion
+			// path can decide whether it addresses this generation.
+			self.park_pending_stop(
+				actor_id,
+				PendingStop {
+					generation,
+					reason,
+					stop_handle,
+				},
+			)
+			.await;
 			return Ok(());
 		}
 
 		let task_stop_reason = map_envoy_stop_reason(&reason);
 		let instance = match self
-			.transition_actor_to_stopping(actor_id, task_stop_reason)
+			.transition_actor_to_stopping(actor_id, generation, task_stop_reason)
 			.await
 		{
-			Some(instance) => instance,
-			None => {
-				let _ = self
-					.pending_stops
-					.insert_async(
-						actor_id.to_owned(),
-						PendingStop {
-							reason,
-							stop_handle,
-						},
-					)
-					.await;
+			TransitionResult::Transitioned(instance) => instance,
+			TransitionResult::Stale => {
+				tracing::warn!(
+					actor_id,
+					generation,
+					"dropping stale stop for older generation"
+				);
+				return Ok(());
+			}
+			TransitionResult::NoMatch => {
+				// The addressed generation is not running yet. Park the stop so a
+				// matching generation can consume it on startup.
+				self.park_pending_stop(
+					actor_id,
+					PendingStop {
+						generation,
+						reason,
+						stop_handle,
+					},
+				)
+				.await;
 				return Ok(());
 			}
 		};
