@@ -59,19 +59,16 @@ const integrationActor = actor({
 		jobs: queue({ message: jobSchema }),
 	},
 	onBeforeConnect: async () => {},
+	onRequest: async (c, request) => {
+		await c.db.execute("SELECT ? AS path", new URL(request.url).pathname);
+		return new Response("ok", { status: 200 });
+	},
 	actions: {
 		ping: async (c) => {
 			return c.conn.params.userId;
 		},
 		getCount: async (c) => {
 			return c.state.count;
-		},
-		logContext: async (c, correlationToken: string) => {
-			c.log.warn(
-				{ correlation_token: correlationToken },
-				"native actor log context",
-			);
-			return correlationToken;
 		},
 		validatedAction: async (_c, payload: { amount: number }) => {
 			return payload.amount;
@@ -143,20 +140,19 @@ const integrationActor = actor({
 				kvCount: kvValue ? Number(kvValue) : null,
 			};
 		},
-		// Interleaves awaits, SQLite, a child actor call and a log so two
-		// overlapping invocations of this action have every chance to observe
-		// each other's telemetry context.
+		// Both calls reach the queue before the test releases either one.
 		isolationProbe: async (c, token: string, fail: boolean) => {
-			await new Promise((resolve) => setTimeout(resolve, 20));
-			await c.db.execute("SELECT ? AS probe", token);
 			c.log.warn({ correlation_token: token }, "isolation probe");
+			if (!(await c.queue.next({ names: ["jobs"], timeout: 10_000 }))) {
+				throw new Error("isolation probe was not released");
+			}
+			await c.db.execute("SELECT ? AS probe", token);
 			const client = c.client<any>();
 			await client.integrationActor
 				.getForId(c.actorId, {
 					params: { userId: "internal-integration-test" },
 				})
 				.getCount();
-			await new Promise((resolve) => setTimeout(resolve, 20));
 			await c.db.execute("SELECT ? AS probe2", token);
 			if (fail) {
 				throw new UserError("isolation probe failure", {
@@ -165,13 +161,12 @@ const integrationActor = actor({
 			}
 			return token;
 		},
-		// Calls another actor while an application span is active, and returns
-		// that span's ID so a test can check the call parented to it.
 		getCountUnderApplicationSpan: async (c) => {
 			return await applicationTracer.startActiveSpan(
 				"agent.generate",
 				async (span) => {
 					try {
+						await c.db.execute("SELECT 1 AS under_span");
 						const client = c.client<any>();
 						const count = await client.integrationActor
 							.getForId(c.actorId, {
@@ -184,6 +179,26 @@ const integrationActor = actor({
 					}
 				},
 			);
+		},
+		// The queue gate releases the database work only after the reply.
+		insertAfterReply: (c, token: string) => {
+			c.waitUntil(
+				c.queue
+					.next({ names: ["jobs"], timeout: 10_000 })
+					.then((message) => {
+						if (!message)
+							throw new Error("deferred work was not released");
+						return c.db.execute("SELECT ? AS deferred", token);
+					}),
+			);
+			return "replied";
+		},
+		consumeJob: async (c) => {
+			const message = await c.queue.next({
+				names: ["jobs"],
+				timeout: 5_000,
+			});
+			return message?.body ?? null;
 		},
 		getCountViaClient: async (c) => {
 			const client = c.client<any>();
@@ -211,9 +226,25 @@ const integrationActor = actor({
 	},
 });
 
+const runConsumerActor = actor({
+	state: {},
+	queues: {
+		runJobs: queue({ message: jobSchema }),
+	},
+	run: async (c) => {
+		while (!c.aborted) {
+			await c.queue.waitForNames(["runJobs"], {
+				signal: c.abortSignal,
+			});
+		}
+	},
+	actions: {},
+});
+
 const registry = setup({
 	use: {
 		integrationActor,
+		runConsumerActor,
 	},
 	endpoint,
 	namespace: process.env.RIVET_NAMESPACE ?? "default",
