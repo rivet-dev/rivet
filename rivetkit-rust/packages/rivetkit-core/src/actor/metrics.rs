@@ -130,10 +130,12 @@ pub(crate) struct StartupTimer {
 	finished: bool,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum InvocationType {
 	Action,
 	Scheduled,
+	/// A raw HTTP request served by the actor's `onRequest` handler.
+	Request,
 }
 
 impl InvocationType {
@@ -141,14 +143,16 @@ impl InvocationType {
 		match self {
 			Self::Action => "action",
 			Self::Scheduled => "scheduled",
+			Self::Request => "request",
 		}
 	}
 
-	/// OpenTelemetry span kind for this invocation. An action is entered from
-	/// outside the actor, while a scheduled fire originates inside it.
+	/// OpenTelemetry span kind for this invocation. An action or a raw HTTP request
+	/// is entered from outside the actor, while a scheduled fire originates
+	/// inside it.
 	pub(crate) fn otel_kind(self) -> &'static str {
 		match self {
-			Self::Action => "server",
+			Self::Action | Self::Request => "server",
 			Self::Scheduled => "internal",
 		}
 	}
@@ -1973,18 +1977,20 @@ impl ActorMetrics {
 		}
 	}
 
+	/// `action_label` is already bounded: the caller folds action names
+	/// through `label_action_name`, and a request invocation uses a fixed
+	/// name, which the fold would otherwise turn into `_OTHER`.
 	pub(crate) fn record_invocation(
 		&self,
-		action_name: &str,
+		action_label: &str,
 		invocation_type: InvocationType,
 		result: InvocationStatus,
 		duration: Duration,
 	) {
 		let actor_labels = self.actor_labels();
-		let action_name = self.label_action_name(action_name);
 		let labels = [
 			actor_labels[0],
-			action_name,
+			action_label,
 			invocation_type.as_label(),
 			result.as_label(),
 		];

@@ -63,6 +63,19 @@ fn invocation_ray_id(headers: &http::HeaderMap) -> Option<String> {
 	rivetkit_client_protocol::telemetry_headers::bounded_ray_id(value).map(str::to_owned)
 }
 
+/// Name a request invocation is reported under, in place of an action name.
+/// It cannot collide with an action, because the metric and span carry the
+/// invocation type beside it.
+const REQUEST_INVOCATION_NAME: &str = "onRequest";
+
+/// What an invocation ran, which decides its name and the attributes that
+/// identify it on the span.
+#[derive(Clone, Copy, Debug)]
+enum InvocationSubject<'a> {
+	Action(&'a str),
+	Request { method: &'a str },
+}
+
 /// Owns the complete lifecycle of one actor invocation.
 #[derive(Debug)]
 pub(crate) struct ActorInvocation {
@@ -219,7 +232,7 @@ impl ActorInvocation {
 	) -> Self {
 		Self::start(
 			ctx,
-			action_name,
+			InvocationSubject::Action(action_name),
 			InvocationType::Action,
 			incoming.ray_id,
 			incoming.remote_parent,
@@ -236,7 +249,7 @@ impl ActorInvocation {
 			parse_remote_parent(origin.traceparent.as_deref(), origin.tracestate.as_deref());
 		Self::start(
 			ctx,
-			action_name,
+			InvocationSubject::Action(action_name),
 			InvocationType::Scheduled,
 			origin.ray_id,
 			None,
@@ -244,9 +257,29 @@ impl ActorInvocation {
 		)
 	}
 
+	/// Starts the invocation for one raw HTTP request served by `onRequest`.
+	/// The span is named after the handler rather than the path, because a
+	/// path is caller-supplied and would make the name a cardinality surface.
+	pub(crate) fn start_request(
+		ctx: &ActorContext,
+		request: &crate::actor::messages::Request,
+		incoming: IncomingInvocationContext,
+	) -> Self {
+		Self::start(
+			ctx,
+			InvocationSubject::Request {
+				method: request.method().as_str(),
+			},
+			InvocationType::Request,
+			incoming.ray_id,
+			incoming.remote_parent,
+			None,
+		)
+	}
+
 	fn start(
 		ctx: &ActorContext,
-		action_name: &str,
+		subject: InvocationSubject<'_>,
 		invocation_type: InvocationType,
 		ray_id: Option<String>,
 		parent: Option<SpanContext>,
@@ -254,7 +287,11 @@ impl ActorInvocation {
 	) -> Self {
 		let identity = ctx.telemetry_identity();
 		// Use bounded names for both spans and metrics.
-		let action_name = ctx.metrics().label_action_name(action_name).to_owned();
+		let (action_name, http_method) = match subject {
+			InvocationSubject::Action(name) => (ctx.metrics().label_action_name(name), None),
+			InvocationSubject::Request { method } => (REQUEST_INVOCATION_NAME, Some(method)),
+		};
+		let action_name = action_name.to_owned();
 		let span = if tracing::enabled!(target: "rivetkit::telemetry", tracing::Level::INFO) {
 				let span = tracing::info_span!(
 					target: "rivetkit::telemetry",
@@ -266,12 +303,18 @@ impl ActorInvocation {
 					rivet.actor.id = %identity.actor_id,
 					rivet.actor.name = %identity.actor_name,
 					rivet.actor.key = %identity.actor_key,
-					rivet.action.name = %action_name,
+					rivet.action.name = tracing::field::Empty,
 					rivet.ray.id = tracing::field::Empty,
+					http.request.method = tracing::field::Empty,
+					http.response.status_code = tracing::field::Empty,
 					otel.status_code = tracing::field::Empty,
 					error.type = tracing::field::Empty,
 				);
 				span.record("rivet.ray.id", ray_id.as_deref());
+				match http_method {
+					Some(method) => span.record("http.request.method", method),
+					None => span.record("rivet.action.name", &action_name),
+				};
 				if let Some(parent) = parent {
 					span.set_parent(opentelemetry::Context::new().with_remote_span_context(parent));
 				}
@@ -303,11 +346,41 @@ impl ActorInvocation {
 		);
 	}
 
+	/// Finishes a request invocation with the HTTP status the handler
+	/// answered, which is recorded on the span beside the outcome. A 5xx
+	/// answer counts as a failed invocation with the status as its error
+	/// identity, following the HTTP server span convention. An error means no
+	/// response was produced, so only the error identity is recorded.
+	pub(crate) fn finish_request(
+		mut self,
+		response: std::result::Result<&crate::actor::messages::ActorHttpResponse, &anyhow::Error>,
+	) {
+		match response {
+			Ok(response) => {
+				let status = response.status();
+				self.telemetry.record_http_status(status);
+				if status >= 500 {
+					self.finish_with_failure(InvocationFailure::HttpStatus(status));
+				} else {
+					self.finish_with_status(InvocationStatus::Ok, None);
+				}
+			}
+			Err(error) => self.finish(Some(error)),
+		}
+	}
+
 	fn finish_with_status(&mut self, status: InvocationStatus, error: Option<&anyhow::Error>) {
 		let Some(span) = self.telemetry.claim_terminal() else {
 			return;
 		};
-		self.record_finished(span, status, error);
+		self.record_finished(span, status, error.map(InvocationFailure::Error));
+	}
+
+	fn finish_with_failure(&mut self, failure: InvocationFailure<'_>) {
+		let Some(span) = self.telemetry.claim_terminal() else {
+			return;
+		};
+		self.record_finished(span, InvocationStatus::Error, Some(failure));
 	}
 
 	/// Records the terminal metric and span status of an invocation whose
@@ -318,7 +391,7 @@ impl ActorInvocation {
 		&self,
 		span: Option<tracing::Span>,
 		status: InvocationStatus,
-		error: Option<&anyhow::Error>,
+		failure: Option<InvocationFailure<'_>>,
 	) {
 		self.metrics.record_invocation(
 			&self.action_name,
@@ -327,11 +400,25 @@ impl ActorInvocation {
 			self.started_at.elapsed(),
 		);
 		if let Some(span) = span {
-			record_outcome(&span, error);
+			match failure {
+				Some(InvocationFailure::HttpStatus(status)) => {
+					span.record("otel.status_code", "ERROR");
+					span.record("error.type", status.to_string());
+				}
+				Some(InvocationFailure::Error(error)) => record_outcome(&span, Some(error)),
+				None => record_outcome(&span, None),
+			}
 			self.telemetry.mark_reply_sent(&span);
 		}
 		self.telemetry.release_span_if_settled();
 	}
+}
+
+/// Why an invocation is recorded as failed: an error crossing the runtime
+/// boundary, or a request the handler answered with a server error status.
+enum InvocationFailure<'a> {
+	Error(&'a anyhow::Error),
+	HttpStatus(u16),
 }
 
 impl Drop for ActorInvocation {
@@ -343,7 +430,11 @@ impl Drop for ActorInvocation {
 			return;
 		};
 		let error = crate::error::ActorLifecycle::DroppedReply.build();
-		self.record_finished(span, InvocationStatus::Dropped, Some(&error));
+		self.record_finished(
+			span,
+			InvocationStatus::Dropped,
+			Some(InvocationFailure::Error(&error)),
+		);
 	}
 }
 
@@ -373,10 +464,14 @@ impl ActorInvocationTelemetry {
 		traceparent: Option<&str>,
 		tracestate: Option<&str>,
 	) -> Self {
-		Self(
-			self.0.clone(),
-			parse_remote_parent(traceparent, tracestate),
-		)
+		Self(self.0.clone(), parse_remote_parent(traceparent, tracestate))
+	}
+
+	/// Records the status a request invocation answered with.
+	fn record_http_status(&self, status: u16) {
+		if let Some(span) = self.0.span.lock().as_ref() {
+			span.record("http.response.status_code", status);
+		}
 	}
 
 	/// Registers work that outlives the reply, so the invocation span stays
@@ -411,11 +506,7 @@ impl ActorInvocationTelemetry {
 		let Some(context) = self.trace_context() else {
 			return TraceOrigin::default();
 		};
-		let span = self
-			.1
-			.as_ref()
-			.and_then(w3c_span_context)
-			.or(context.span);
+		let span = self.1.as_ref().and_then(w3c_span_context).or(context.span);
 		let (traceparent, tracestate) = match span {
 			Some(span) => (Some(span.traceparent), span.tracestate),
 			None => (None, None),

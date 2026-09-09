@@ -17,6 +17,8 @@ use crate::actor::task_types::UserTaskKind;
 pub enum ActorWorkKind {
 	/// Dispatched action work awaiting its reply from the runtime adapter.
 	Action,
+	/// Non-action invocation work awaiting its reply from the runtime adapter.
+	DispatchReply,
 	/// User work that keeps the actor out of idle sleep while it runs.
 	KeepAwake,
 	/// Runtime-owned work that should behave like keep-awake without exposing a user API.
@@ -53,6 +55,12 @@ impl ActorWorkKind {
 				drains_shutdown_grace: true,
 				aborts_at_shutdown_deadline: true,
 				user_task_kind: Some(UserTaskKind::Action),
+			},
+			ActorWorkKind::DispatchReply => ActorWorkPolicy {
+				blocks_idle_sleep: true,
+				drains_shutdown_grace: true,
+				aborts_at_shutdown_deadline: true,
+				user_task_kind: None,
 			},
 			ActorWorkKind::KeepAwake => ActorWorkPolicy {
 				blocks_idle_sleep: true,
@@ -97,6 +105,7 @@ impl ActorWorkKind {
 	pub(crate) fn label(self) -> &'static str {
 		match self {
 			ActorWorkKind::Action => "action",
+			ActorWorkKind::DispatchReply => "dispatch_reply",
 			ActorWorkKind::KeepAwake => "keep_awake",
 			ActorWorkKind::InternalKeepAwake => "internal_keep_awake",
 			ActorWorkKind::WaitUntil => "wait_until",
