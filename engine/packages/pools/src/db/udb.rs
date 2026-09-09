@@ -43,6 +43,7 @@ pub async fn setup(config: &Config) -> Result<Option<UdbPool>> {
 					}
 				}),
 				nats,
+				pool_max_size: None,
 			};
 
 			Arc::new(

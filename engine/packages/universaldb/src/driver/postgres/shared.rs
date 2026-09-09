@@ -32,7 +32,11 @@ pub struct LeaseInfo {
 /// both a follower (it submits its own commits) and, in multi-node mode, a candidate leader.
 pub struct PostgresShared {
 	pub config: rivet_config::Config,
+	/// Serves follower transactions, dedup GC, and the lease cache refresh.
 	pub pool: Pool,
+	/// Reserved for the leader path (drain batches, lease acquire/renew/release, recovery floor) so
+	/// leadership survives a saturated follower pool. Followers never touch it.
+	pub leader_pool: Pool,
 	/// Unique per-process id. Names this node's commit subject and is the dedup `client_node_id`.
 	pub node_id: String,
 	/// How follower commits reach the leader (in-process channel or NATS).
@@ -59,6 +63,7 @@ impl PostgresShared {
 	pub fn new(
 		config: rivet_config::Config,
 		pool: Pool,
+		leader_pool: Pool,
 		node_id: String,
 		transport: Transport,
 	) -> Arc<Self> {
@@ -66,6 +71,7 @@ impl PostgresShared {
 		let shared = Arc::new(Self {
 			config,
 			pool,
+			leader_pool,
 			node_id,
 			transport,
 			durable_version: AtomicI64::new(0),

@@ -26,6 +26,28 @@ lazy_static::lazy_static! {
 		*REGISTRY
 	).unwrap();
 
+	/// Current size of a Postgres driver connection pool, labelled `follower` or `leader`.
+	pub static ref POSTGRES_POOL_SIZE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"udb_postgres_pool_size",
+		"Connections currently held by a UniversalDB Postgres connection pool.",
+		&["pool"],
+		*REGISTRY
+	).unwrap();
+	pub static ref POSTGRES_POOL_AVAILABLE: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"udb_postgres_pool_available",
+		"Idle connections available for checkout in a UniversalDB Postgres connection pool.",
+		&["pool"],
+		*REGISTRY
+	).unwrap();
+	/// Paired with `udb_postgres_pool_available`: available at 0 while waiting climbs is pool
+	/// starvation, where every slot is checked out and new transactions queue behind them.
+	pub static ref POSTGRES_POOL_WAITING: IntGaugeVec = register_int_gauge_vec_with_registry!(
+		"udb_postgres_pool_waiting",
+		"Callers queued waiting for a connection from a UniversalDB Postgres connection pool.",
+		&["pool"],
+		*REGISTRY
+	).unwrap();
+
 	pub static ref KEY_PACK_COUNT: IntCounterVec = register_int_counter_vec_with_registry!(
 		"udb_key_pack_count",
 		"How many times a key has been packed.",

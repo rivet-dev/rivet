@@ -19,6 +19,7 @@ use crate::{
 	RetryableTransaction, Transaction,
 	driver::{BoxFut, DatabaseDriver, Erased},
 	error::DatabaseError,
+	metrics,
 	transaction::TXN_TIMEOUT,
 	utils::{MaybeCommitted, calculate_tx_retry_backoff},
 };
@@ -32,6 +33,15 @@ use super::{
 };
 
 const GC_INTERVAL: Duration = Duration::from_secs(30);
+/// Default size of the follower connection pool, which serves ordinary transactions, dedup GC, and
+/// the lease cache refresh.
+const DEFAULT_POOL_MAX_SIZE: usize = 64;
+/// Size of the leader connection pool. The leader path only ever needs a connection for the drain
+/// batch and, concurrently, lease renewal, so two slots reserved away from follower traffic are
+/// enough to keep a leader alive under any amount of follower load.
+const LEADER_POOL_MAX_SIZE: usize = 2;
+/// How often pool occupancy is sampled into the pool gauges.
+const POOL_METRICS_INTERVAL: Duration = Duration::from_secs(1);
 /// Failover dedup rows older than this are garbage collected. Must be well beyond the longest a
 /// follower could spend resending a commit across a leader failover, so a dedup record is never
 /// deleted while a resend that needs it could still arrive.
@@ -44,6 +54,9 @@ pub struct PostgresConfig {
 	/// When set, UniversalDB runs in multi-node mode and uses NATS for follower-to-leader commit
 	/// transport. When `None`, it runs single-node with an in-process resolver.
 	pub nats: Option<NatsConfig>,
+	/// Size of the follower connection pool. Defaults to [`DEFAULT_POOL_MAX_SIZE`]. This is a test
+	/// seam for forcing pool exhaustion with a handful of transactions, not an operator knob.
+	pub pool_max_size: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -60,6 +73,7 @@ impl PostgresConfig {
 			connection_string,
 			ssl_config: None,
 			nats: None,
+			pool_max_size: None,
 		}
 	}
 }
@@ -73,6 +87,7 @@ pub struct PostgresDatabaseDriver {
 	max_retries: AtomicI32,
 	resolver_handle: JoinHandle<()>,
 	gc_handle: JoinHandle<()>,
+	pool_metrics_handle: JoinHandle<()>,
 }
 
 impl PostgresDatabaseDriver {
@@ -96,7 +111,14 @@ impl PostgresDatabaseDriver {
 			false
 		};
 
-		let pool = Self::build_pool(&config, ssl_disabled)?;
+		let pool = Self::build_pool(
+			&config,
+			ssl_disabled,
+			config.pool_max_size.unwrap_or(DEFAULT_POOL_MAX_SIZE),
+		)?;
+		// The leader path gets its own pool so a leader can always renew its lease and drain the
+		// commit queue no matter how saturated the follower pool is.
+		let leader_pool = Self::build_pool(&config, ssl_disabled, LEADER_POOL_MAX_SIZE)?;
 
 		// Initialize the schema (idempotent).
 		{
@@ -119,6 +141,7 @@ impl PostgresDatabaseDriver {
 				let shared = PostgresShared::new(
 					rivet_config.clone(),
 					pool,
+					leader_pool,
 					node_id,
 					Transport::SingleNode { commit_tx },
 				);
@@ -142,6 +165,7 @@ impl PostgresDatabaseDriver {
 				let shared = PostgresShared::new(
 					rivet_config.clone(),
 					pool,
+					leader_pool,
 					node_id,
 					Transport::MultiNode(NatsTransport { client, subjects }),
 				);
@@ -152,20 +176,22 @@ impl PostgresDatabaseDriver {
 
 		let resolver_handle = resolver::spawn(shared.clone(), resolver_input);
 		let gc_handle = Self::spawn_gc(shared.clone());
+		let pool_metrics_handle = Self::spawn_pool_metrics(shared.clone());
 
 		Ok(PostgresDatabaseDriver {
 			shared,
 			max_retries: AtomicI32::new(10),
 			resolver_handle,
 			gc_handle,
+			pool_metrics_handle,
 		})
 	}
 
-	fn build_pool(config: &PostgresConfig, ssl_disabled: bool) -> Result<Pool> {
+	fn build_pool(config: &PostgresConfig, ssl_disabled: bool, max_size: usize) -> Result<Pool> {
 		let mut pool_config = Config::new();
 		pool_config.url = Some(config.connection_string.clone());
 		pool_config.pool = Some(PoolConfig {
-			max_size: 64,
+			max_size,
 			..Default::default()
 		});
 		pool_config.manager = Some(ManagerConfig {
@@ -265,6 +291,32 @@ impl PostgresDatabaseDriver {
 			}
 		})
 	}
+
+	/// Sample both pools' occupancy into the pool gauges. `available == 0` with `waiting > 0` on the
+	/// follower pool is the signature of pool starvation.
+	fn spawn_pool_metrics(shared: Arc<PostgresShared>) -> JoinHandle<()> {
+		tokio::spawn(async move {
+			let mut interval = tokio::time::interval(POOL_METRICS_INTERVAL);
+			interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+			loop {
+				interval.tick().await;
+
+				for (label, pool) in [("follower", &shared.pool), ("leader", &shared.leader_pool)] {
+					let status = pool.status();
+					metrics::POSTGRES_POOL_SIZE
+						.with_label_values(&[label])
+						.set(status.size as i64);
+					metrics::POSTGRES_POOL_AVAILABLE
+						.with_label_values(&[label])
+						.set(status.available as i64);
+					metrics::POSTGRES_POOL_WAITING
+						.with_label_values(&[label])
+						.set(status.waiting as i64);
+				}
+			}
+		})
+	}
 }
 
 impl DatabaseDriver for PostgresDatabaseDriver {
@@ -352,6 +404,7 @@ impl DatabaseDriver for PostgresDatabaseDriver {
 			// Stop renewing the lease before releasing it so a racing renew cannot re-extend it.
 			self.resolver_handle.abort();
 			self.gc_handle.abort();
+			self.pool_metrics_handle.abort();
 
 			// Hand off leadership immediately if we hold it, instead of waiting out the lease TTL.
 			resolver::handoff(&self.shared).await;
@@ -365,5 +418,6 @@ impl Drop for PostgresDatabaseDriver {
 		// another node can take over. Without this a dropped leader would renew its lease forever.
 		self.resolver_handle.abort();
 		self.gc_handle.abort();
+		self.pool_metrics_handle.abort();
 	}
 }

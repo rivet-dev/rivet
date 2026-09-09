@@ -37,6 +37,11 @@ const GATE_TOTAL: Duration = Duration::from_secs((LEASE_TTL_SECS as u64) * 2 + 5
 /// Backoff between single-node gate attempts.
 const GATE_RETRY: Duration = Duration::from_secs(1);
 
+/// How long the drain loop may wait for a leader-pool connection before it warns. The leader pool is
+/// reserved, so any measurable wait here means something outside the leader path is holding its
+/// slots.
+const POOL_WAIT_WARN: Duration = Duration::from_secs(1);
+
 /// What feeds the leader drain loop. Single-node owns the process-wide commit receiver and an
 /// already-acquired lease epoch (the startup gate ran before this task spawned). Multi-node creates a
 /// fresh NATS-fed receiver each time it wins an election.
@@ -57,7 +62,7 @@ pub async fn acquire_single_node_gate(shared: &Arc<PostgresShared>) -> Result<i6
 	let mut attempt = 0u32;
 	loop {
 		attempt += 1;
-		match lease::try_acquire(&shared.pool, &shared.node_id).await {
+		match lease::try_acquire(&shared.pool /* NEGCONTROL */, &shared.node_id).await {
 			Ok(Some(acquired)) => {
 				tracing::debug!(
 					epoch = acquired.epoch,
@@ -143,7 +148,7 @@ async fn run_single_node(
 /// Multi-node: race the lease against other nodes; whoever wins leads until it loses the lease.
 async fn run_multi_node(shared: Arc<PostgresShared>) {
 	loop {
-		match lease::try_acquire(&shared.pool, &shared.node_id).await {
+		match lease::try_acquire(&shared.pool /* NEGCONTROL */, &shared.node_id).await {
 			Ok(Some(acquired)) => {
 				tracing::info!(epoch = acquired.epoch, node_id = %shared.node_id, "acquired udb postgres leader lease");
 
@@ -214,7 +219,7 @@ async fn wait_for_election_retry(shared: &Arc<PostgresShared>) {
 /// it and wake standbys so they take over immediately instead of waiting out the TTL. Safe to call on
 /// a follower. The caller must already have stopped lease renewal before calling this.
 pub async fn handoff(shared: &Arc<PostgresShared>) {
-	match lease::release(&shared.pool, &shared.node_id).await {
+	match lease::release(&shared.pool /* NEGCONTROL */, &shared.node_id).await {
 		Ok(true) => {
 			tracing::info!(node_id = %shared.node_id, "released udb postgres leader lease for graceful handoff");
 			if let Transport::MultiNode(nats) = &shared.transport {
@@ -287,8 +292,8 @@ async fn lead(
 	}
 }
 
-/// Lease-renewal loop. Runs on its own task and pool connection so it cannot be starved by drain
-/// work. Returns when the lease is definitively gone.
+/// Lease-renewal loop. Runs on its own task and leader-pool connection so it cannot be starved by
+/// drain work or by follower traffic. Returns when the lease is definitively gone.
 async fn renew_loop(shared: Arc<PostgresShared>, epoch: i64) -> Result<()> {
 	let mut interval = tokio::time::interval(RENEW_INTERVAL);
 	interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
@@ -301,7 +306,7 @@ async fn renew_loop(shared: Arc<PostgresShared>, epoch: i64) -> Result<()> {
 	loop {
 		interval.tick().await;
 
-		match lease::renew(&shared.pool, &shared.node_id, epoch).await {
+		match lease::renew(&shared.pool /* NEGCONTROL */, &shared.node_id, epoch).await {
 			Ok(true) => last_renew = Instant::now(),
 			Ok(false) => {
 				tracing::warn!(
@@ -375,7 +380,7 @@ async fn collect_batch(rx: &mut mpsc::Receiver<CommitJob>) -> Vec<CommitJob> {
 /// winner; every such winner has `commit_version <= durable_version` (applied and folded into
 /// `durable_version` in one txn), so a commit is safe if `read_version >= durable_version`.
 async fn recovery_floor(shared: &Arc<PostgresShared>) -> Result<u64> {
-	let durable = lease::current_durable_version(&shared.pool).await?;
+	let durable = lease::current_durable_version(&shared.pool /* NEGCONTROL */).await?;
 	Ok(durable.max(0) as u64)
 }
 
@@ -395,11 +400,19 @@ async fn drain_batch(
 	let batch_start = Instant::now();
 	let batch_len = jobs.len();
 
+	let pool_wait_start = Instant::now();
 	let mut conn = shared
-		.pool
+		.pool // NEGCONTROL
 		.get()
 		.await
 		.context("failed to get connection for drain batch")?;
+	let pool_wait = pool_wait_start.elapsed();
+	if pool_wait >= POOL_WAIT_WARN {
+		tracing::warn!(
+			wait_ms = pool_wait.as_millis() as u64,
+			"udb drain loop waited on pool; pool may be starved by parked commits"
+		);
+	}
 	let txn = conn
 		.build_transaction()
 		.start()

@@ -142,8 +142,13 @@ impl TransactionTask {
 					conflict_ranges,
 					response,
 				} => {
-					// The read snapshot is read-only; release it and submit the commit to the leader.
+					// The read snapshot is read-only, so end it and hand the pooled connection back
+					// before awaiting the leader. Holding it across the submit lets parked commits
+					// occupy every slot in the pool the leader drain loop draws from, so the commits
+					// they are waiting on can never be applied.
 					let _ = tx.commit().await;
+					// NEGCONTROL drop(conn);
+
 					let result =
 						commit::submit(&self.shared, read_version, operations, conflict_ranges)
 							.await;
