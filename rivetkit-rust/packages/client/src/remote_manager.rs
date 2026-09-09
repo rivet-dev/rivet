@@ -1,15 +1,22 @@
 use anyhow::{anyhow, Context, Result};
 use base64::{engine::general_purpose, engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use bytes::Bytes;
+use opentelemetry::baggage::BaggageExt as _;
+use opentelemetry::trace::TraceContextExt as _;
 use reqwest::{
 	header::{HeaderMap, HeaderName, HeaderValue, USER_AGENT},
 	Method,
+};
+use rivetkit_client_protocol::telemetry_headers::{
+	HEADER_RIVET_RAY_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE, RAY_BAGGAGE_KEY, bounded_ray_id,
+	format_traceparent,
 };
 use serde::{Deserialize, Serialize};
 use serde_cbor;
 use std::{collections::HashMap, str::FromStr, sync::Arc};
 use tokio::sync::OnceCell;
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tracing_opentelemetry::OpenTelemetrySpanExt as _;
 
 use crate::{
 	common::{
@@ -29,6 +36,7 @@ pub struct RemoteManager {
 	namespace: String,
 	pool_name: String,
 	headers: HashMap<String, String>,
+	ray_id: Option<String>,
 	max_input_size: usize,
 	disable_metadata_lookup: bool,
 	resolved_config: Arc<OnceCell<ResolvedClientConfig>>,
@@ -126,6 +134,7 @@ impl RemoteManager {
 			namespace: default_namespace(),
 			pool_name: default_pool_name(),
 			headers: HashMap::new(),
+			ray_id: None,
 			max_input_size: default_max_input_size(),
 			disable_metadata_lookup: false,
 			resolved_config: Arc::new(OnceCell::new()),
@@ -139,15 +148,27 @@ impl RemoteManager {
 		namespace: Option<String>,
 		pool_name: Option<String>,
 		headers: Option<HashMap<String, String>>,
+		ray_id: Option<String>,
 		max_input_size: Option<usize>,
 		disable_metadata_lookup: bool,
 	) -> Self {
+		let ray_id = ray_id.and_then(|ray_id| {
+			let bounded = bounded_ray_id(&ray_id).map(str::to_owned);
+			if bounded.is_none() {
+				tracing::warn!(
+					len = ray_id.len(),
+					"dropping configured ray id; it must be 1 to 128 characters of [A-Za-z0-9_-]"
+				);
+			}
+			bounded
+		});
 		Self {
 			endpoint,
 			token,
 			namespace: namespace.unwrap_or_else(default_namespace),
 			pool_name: pool_name.unwrap_or_else(default_pool_name),
 			headers: headers.unwrap_or_default(),
+			ray_id,
 			max_input_size: max_input_size.unwrap_or_else(default_max_input_size),
 			disable_metadata_lookup,
 			resolved_config: Arc::new(OnceCell::new()),
@@ -214,6 +235,11 @@ impl RemoteManager {
 		req = req.header(USER_AGENT, USER_AGENT_VALUE);
 
 		for (key, value) in &self.headers {
+			// Ray ID and trace context are per call, so a configured value cannot
+			// pin stale context on every request. Matches the TypeScript client.
+			if is_telemetry_header(key) {
+				continue;
+			}
 			let name = HeaderName::from_str(key)
 				.with_context(|| format!("invalid configured header name `{key}`"))?;
 			let value = HeaderValue::from_str(value)
@@ -493,6 +519,19 @@ impl RemoteManager {
 
 		let mut req = self.apply_common_headers_with(builder, &config)?;
 
+		// Per-call context wins over configured headers, and headers the
+		// caller passed for this request win over both, matching the
+		// TypeScript client.
+		let mut headers = headers;
+		let caller_set_trace_context =
+			headers.contains_key(HEADER_TRACEPARENT) || headers.contains_key(HEADER_TRACESTATE);
+		for (name, value) in self.telemetry_headers()? {
+			let is_trace_context = name == HEADER_TRACEPARENT || name == HEADER_TRACESTATE;
+			if is_trace_context && caller_set_trace_context {
+				continue;
+			}
+			headers.entry(name).or_insert(value);
+		}
 		req = req.headers(headers);
 
 		if let Some(body_data) = body {
@@ -501,6 +540,50 @@ impl RemoteManager {
 
 		let res = req.send().await?;
 		Ok(res)
+	}
+
+	/// Headers that carry the caller's trace context and ray ID into the actor,
+	/// read from the `tracing` span current at the call. Without a registered
+	/// OpenTelemetry layer the span carries no context and only a configured
+	/// ray ID is sent.
+	fn telemetry_headers(&self) -> Result<Vec<(HeaderName, HeaderValue)>> {
+		let mut headers = Vec::with_capacity(3);
+		let context = tracing::Span::current().context();
+		let span = context.span();
+		let span_context = span.span_context();
+		if span_context.is_valid() {
+			let traceparent = format_traceparent(
+				span_context.trace_id(),
+				span_context.span_id(),
+				span_context.trace_flags().to_u8(),
+			);
+			headers.push((
+				HeaderName::from_static(HEADER_TRACEPARENT),
+				HeaderValue::from_str(&traceparent).context("format traceparent header")?,
+			));
+			let tracestate = span_context.trace_state().header();
+			if !tracestate.is_empty() {
+				headers.push((
+					HeaderName::from_static(HEADER_TRACESTATE),
+					HeaderValue::from_str(&tracestate).context("format tracestate header")?,
+				));
+			}
+		}
+		let baggage_ray = context
+			.baggage()
+			.get(RAY_BAGGAGE_KEY)
+			.map(|value| value.as_str().into_owned());
+		let ray_id = baggage_ray
+			.as_deref()
+			.and_then(bounded_ray_id)
+			.or(self.ray_id.as_deref());
+		if let Some(ray_id) = ray_id {
+			headers.push((
+				HeaderName::from_static(HEADER_RIVET_RAY_ID),
+				HeaderValue::from_str(ray_id).context("format ray id header")?,
+			));
+		}
+		Ok(headers)
 	}
 
 	pub fn gateway_url(&self, query: &ActorQuery) -> Result<String> {
@@ -822,4 +905,10 @@ fn default_pool_name() -> String {
 
 fn default_max_input_size() -> usize {
 	4 * 1024
+}
+
+fn is_telemetry_header(name: &str) -> bool {
+	[HEADER_RIVET_RAY_ID, HEADER_TRACEPARENT, HEADER_TRACESTATE]
+		.iter()
+		.any(|header| header.eq_ignore_ascii_case(name))
 }
