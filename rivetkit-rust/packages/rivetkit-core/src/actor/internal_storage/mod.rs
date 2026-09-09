@@ -381,15 +381,18 @@ pub(crate) async fn load_queue_metadata(db: &SqliteDb) -> Result<QueueMetadata> 
 	})
 }
 
+/// Writes a queue message and, when the sender carried one, its encoded trace
+/// context, in one batch so a message never exists without its origin.
 pub(crate) async fn persist_queue_message(
 	db: &SqliteDb,
 	id: u64,
 	next_id: u64,
 	message: &PersistedQueueMessage,
+	trace_context: Option<Vec<u8>>,
 ) -> Result<()> {
 	let id = i64::try_from(id).context("queue message id exceeds sqlite integer range")?;
 	let next_id = i64::try_from(next_id).context("queue next id exceeds sqlite integer range")?;
-	db.execute_batch(vec![
+	let mut statements = vec![
 		SqliteBatchStatement {
 			sql: INSERT_QUEUE_MESSAGE_SQL.to_owned(),
 			params: Some(vec![
@@ -407,10 +410,24 @@ pub(crate) async fn persist_queue_message(
 				BindParam::Integer(next_id),
 			]),
 		},
-	])
-	.await
-	.context("persist internal queue message")?;
+	];
+	if let Some(trace_context) = trace_context {
+		statements.push(SqliteBatchStatement {
+			sql: UPSERT_QUEUE_TRACE_CONTEXT_SQL.to_owned(),
+			params: Some(vec![
+				BindParam::Text(queue_trace_context_key(id)),
+				BindParam::Blob(trace_context),
+			]),
+		});
+	}
+	db.execute_batch(statements)
+		.await
+		.context("persist internal queue message")?;
 	Ok(())
+}
+
+pub(crate) fn queue_trace_context_key(id: i64) -> String {
+	format!("queue_trace_context:{id}")
 }
 
 /// Persists imported queue rows without rewriting `queue_next_id` for every
@@ -646,6 +663,7 @@ fn decode_queue_message_rows(rows: &[Vec<ColumnValue>]) -> Result<Vec<QueueMessa
 					in_flight: None,
 					in_flight_at: None,
 				},
+				trace_context: read_optional_blob(row, 4, "queue message trace context")?,
 			})
 		})
 		.collect()
@@ -656,32 +674,49 @@ pub(crate) async fn delete_queue_messages(db: &SqliteDb, ids: &[u64]) -> Result<
 		return Ok(0);
 	}
 
-	let mut statements = Vec::with_capacity(ids.len());
+	// Each message row is followed by the delete of its trace context, so the
+	// two go in one batch and the row count below reads every other result.
+	let mut statements = Vec::with_capacity(ids.len() * 2);
 	for id in ids {
+		let id = i64::try_from(*id).context("queue message id exceeds sqlite integer range")?;
 		statements.push(SqliteBatchStatement {
 			sql: DELETE_QUEUE_MESSAGE_SQL.to_owned(),
-			params: Some(vec![BindParam::Integer(
-				i64::try_from(*id).context("queue message id exceeds sqlite integer range")?,
-			)]),
+			params: Some(vec![BindParam::Integer(id)]),
+		});
+		statements.push(SqliteBatchStatement {
+			sql: DELETE_QUEUE_TRACE_CONTEXT_SQL.to_owned(),
+			params: Some(vec![BindParam::Text(queue_trace_context_key(id))]),
 		});
 	}
 	let results = db
 		.execute_batch(statements)
 		.await
 		.context("delete internal queue messages")?;
-	results.into_iter().try_fold(0u32, |deleted, result| {
-		let changes = u32::try_from(result.changes)
-			.context("deleted queue message count is outside u32 range")?;
-		deleted
-			.checked_add(changes)
-			.context("deleted queue message count exceeds u32 range")
-	})
+	results
+		.into_iter()
+		.step_by(2)
+		.try_fold(0u32, |deleted, result| {
+			let changes = u32::try_from(result.changes)
+				.context("deleted queue message count is outside u32 range")?;
+			deleted
+				.checked_add(changes)
+				.context("deleted queue message count exceeds u32 range")
+		})
 }
 
 pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
-	db.execute(RESET_QUEUE_SQL, None)
-		.await
-		.context("reset internal queue")?;
+	db.execute_batch(vec![
+		SqliteBatchStatement {
+			sql: RESET_QUEUE_SQL.to_owned(),
+			params: None,
+		},
+		SqliteBatchStatement {
+			sql: RESET_QUEUE_TRACE_CONTEXTS_SQL.to_owned(),
+			params: None,
+		},
+	])
+	.await
+	.context("reset internal queue")?;
 	Ok(())
 }
 
@@ -689,6 +724,8 @@ pub(crate) async fn reset_queue(db: &SqliteDb) -> Result<()> {
 pub(crate) struct QueueMessageRow {
 	pub id: u64,
 	pub message: PersistedQueueMessage,
+	/// Encoded `QueueTraceContext`, when the sender carried one.
+	pub trace_context: Option<Vec<u8>>,
 }
 
 pub(crate) async fn user_kv_batch_get(
@@ -1170,6 +1207,9 @@ pub(crate) async fn clear_imported_storage(db: &SqliteDb, actor_id: &str) -> Res
 	db.execute(RESET_SCHEDULE_TRACE_CONTEXTS_SQL, None)
 		.await
 		.context("clear imported schedule trace contexts")?;
+	db.execute(RESET_QUEUE_TRACE_CONTEXTS_SQL, None)
+		.await
+		.context("clear imported queue trace contexts")?;
 	Ok(())
 }
 

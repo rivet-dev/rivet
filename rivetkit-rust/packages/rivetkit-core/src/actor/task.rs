@@ -209,6 +209,7 @@ pub enum DispatchCommand {
 	QueueSend {
 		name: String,
 		body: Vec<u8>,
+		incoming: crate::telemetry::IncomingInvocationContext,
 		conn: ConnHandle,
 		request: Request,
 		wait: bool,
@@ -974,30 +975,48 @@ impl ActorTask {
 			DispatchCommand::QueueSend {
 				name,
 				body,
+				incoming,
 				conn,
 				request,
 				wait,
 				timeout_ms,
 				reply,
-			} => match self.send_actor_event(
-				"dispatch_queue_send",
-				ActorEvent::QueueSend {
-					name,
-					body,
-					conn,
-					request,
-					wait,
-					timeout_ms,
-					reply: Reply::from(reply),
-				},
-			) {
-				Ok(()) => {
-					self.log_dispatch_command_handled(command_kind, "enqueued");
+			} => {
+				let invocation = ActorInvocation::start_queue_send(&self.ctx, &name, incoming);
+				let invocation_telemetry = invocation.telemetry();
+				let (tracked_reply_tx, tracked_reply_rx) = oneshot::channel();
+				match self.send_actor_event(
+					"dispatch_queue_send",
+					ActorEvent::QueueSend {
+						name,
+						body,
+						conn,
+						request,
+						wait,
+						timeout_ms,
+						invocation_telemetry: Some(invocation_telemetry),
+						reply: Reply::from(tracked_reply_tx),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
+						self.forward_tracked_reply(
+							ActorWorkKind::DispatchReply,
+							tracked_reply_rx,
+							reply,
+							move |result| {
+								invocation.finish(result.as_ref().err());
+								result
+							},
+						);
+					}
+					Err(error) => {
+						invocation.finish(Some(&error));
+						let _ = reply.send(Err(error));
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
+					}
 				}
-				Err(_error) => {
-					self.log_dispatch_command_handled(command_kind, "enqueue_failed");
-				}
-			},
+			}
 			DispatchCommand::Http { request, reply } => {
 				let incoming = IncomingInvocationContext::from_http_headers(request.headers());
 				let invocation = ActorInvocation::start_request(&self.ctx, &request, incoming);

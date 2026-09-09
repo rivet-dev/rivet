@@ -548,6 +548,56 @@ impl OwnedVersionedData for ScheduleTraceContext {
 	}
 }
 
+/// Trace origin of a queue message, stored beside its `_rivet_queue` row. It
+/// has its own versioned type so its persisted meaning cannot be conflated with
+/// `ScheduleTraceContext` even though both currently encode the same fields.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct QueueTraceContextData {
+	pub ray_id: Option<String>,
+	pub traceparent: Option<String>,
+	pub tracestate: Option<String>,
+}
+
+pub enum QueueTraceContext {
+	V1(QueueTraceContextData),
+}
+
+impl OwnedVersionedData for QueueTraceContext {
+	type Latest = QueueTraceContextData;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid queue trace context version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+		match (self, version) {
+			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
+			(_, version) => bail!("unexpected queue trace context version: {version}"),
+		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		Vec::<fn(Self) -> Result<Self>>::new()
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		Vec::<fn(Self) -> Result<Self>>::new()
+	}
+}
+
 impl OwnedVersionedData for RunWakeAt {
 	type Latest = Option<i64>;
 

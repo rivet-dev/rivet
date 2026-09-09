@@ -66,11 +66,10 @@ pub(crate) fn delete_schedule_trace_contexts_sql(event_count: usize) -> String {
 pub(crate) const LOAD_QUEUE_NEXT_ID_SQL: &str =
 	"SELECT queue_next_id FROM _rivet_runtime WHERE id = 1";
 pub(crate) const LOAD_QUEUE_STATS_SQL: &str = "SELECT COUNT(*), MAX(id) FROM _rivet_queue";
-pub(crate) const LOAD_QUEUE_MESSAGES_SQL: &str =
-	"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id";
-pub(crate) const LOAD_QUEUE_MESSAGES_LIMITED_SQL: &str =
-	"SELECT id, name, body, created_at FROM _rivet_queue ORDER BY id LIMIT ?";
-pub(crate) const LOAD_QUEUE_MESSAGES_FOR_NAME_SQL: &str = "SELECT id, name, body, created_at FROM _rivet_queue INDEXED BY _rivet_queue_name_id WHERE name = ? ORDER BY id LIMIT ?";
+// The trace-origin subquery uses a primary-key lookup per returned message.
+pub(crate) const LOAD_QUEUE_MESSAGES_SQL: &str = "SELECT id, name, body, created_at, (SELECT value FROM _rivet_meta WHERE key = 'queue_trace_context:' || id) FROM _rivet_queue ORDER BY id";
+pub(crate) const LOAD_QUEUE_MESSAGES_LIMITED_SQL: &str = "SELECT id, name, body, created_at, (SELECT value FROM _rivet_meta WHERE key = 'queue_trace_context:' || id) FROM _rivet_queue ORDER BY id LIMIT ?";
+pub(crate) const LOAD_QUEUE_MESSAGES_FOR_NAME_SQL: &str = "SELECT id, name, body, created_at, (SELECT value FROM _rivet_meta WHERE key = 'queue_trace_context:' || id) FROM _rivet_queue INDEXED BY _rivet_queue_name_id WHERE name = ? ORDER BY id LIMIT ?";
 pub(crate) const HAS_QUEUE_MESSAGES_SQL: &str = "SELECT 1 FROM _rivet_queue LIMIT 1";
 pub(crate) const HAS_QUEUE_MESSAGES_FOR_NAME_SQL: &str =
 	"SELECT 1 FROM _rivet_queue INDEXED BY _rivet_queue_name_id WHERE name = ? LIMIT 1";
@@ -82,13 +81,17 @@ pub(crate) fn load_queue_messages_by_ids_sql(id_count: usize) -> String {
 		.collect::<Vec<_>>()
 		.join(", ");
 	format!(
-		"SELECT id, name, body, created_at FROM _rivet_queue WHERE id IN ({placeholders}) ORDER BY id"
+		"SELECT id, name, body, created_at, (SELECT value FROM _rivet_meta WHERE key = 'queue_trace_context:' || id) FROM _rivet_queue WHERE id IN ({placeholders}) ORDER BY id"
 	)
 }
 pub(crate) const INSERT_QUEUE_MESSAGE_SQL: &str =
 	"INSERT OR REPLACE INTO _rivet_queue (id, name, body, created_at) VALUES (?, ?, ?, ?)";
 pub(crate) const DELETE_QUEUE_MESSAGE_SQL: &str = "DELETE FROM _rivet_queue WHERE id = ?";
 pub(crate) const RESET_QUEUE_SQL: &str = "DELETE FROM _rivet_queue";
+pub(crate) const UPSERT_QUEUE_TRACE_CONTEXT_SQL: &str = "INSERT INTO _rivet_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value";
+pub(crate) const DELETE_QUEUE_TRACE_CONTEXT_SQL: &str = "DELETE FROM _rivet_meta WHERE key = ?";
+pub(crate) const RESET_QUEUE_TRACE_CONTEXTS_SQL: &str =
+	"DELETE FROM _rivet_meta WHERE key >= 'queue_trace_context:' AND key < 'queue_trace_context;'";
 
 pub(crate) const DELETE_USER_KV_SQL: &str = "DELETE FROM _rivet_user_kv WHERE key = ?";
 pub(crate) const DELETE_USER_KV_RANGE_SQL: &str =

@@ -324,6 +324,7 @@ export interface RuntimeActorConfig {
 	preloadMaxWorkflowBytes?: number;
 	preloadMaxConnectionsBytes?: number;
 	actions?: Array<{ name: string }>;
+	queues?: Array<{ name: string }>;
 	inspectorTabs?: Array<RuntimeInspectorTabEntry>;
 }
 

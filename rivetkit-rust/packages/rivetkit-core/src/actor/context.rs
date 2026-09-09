@@ -263,7 +263,11 @@ impl ActorContext {
 	/// `traceparent` and `tracestate`. A handle that serves no invocation is
 	/// returned unchanged, because it opens no spans.
 	#[doc(hidden)]
-	pub fn with_application_span(&self, traceparent: Option<&str>, tracestate: Option<&str>) -> Self {
+	pub fn with_application_span(
+		&self,
+		traceparent: Option<&str>,
+		tracestate: Option<&str>,
+	) -> Self {
 		Self(
 			self.0.clone(),
 			self.1
@@ -340,6 +344,7 @@ impl ActorContext {
 		let metrics = ActorMetrics::new_for_actor(
 			name.clone(),
 			config.actions.iter().map(|action| action.name.clone()),
+			config.queues.iter().map(|queue| queue.name.clone()),
 			config.sqlite_profiling.clone(),
 		);
 		#[cfg(feature = "sqlite-local")]
@@ -780,7 +785,10 @@ impl ActorContext {
 	/// the request that started them.
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
-		let invocation = self.1.as_ref().map(crate::ActorInvocationTelemetry::hold_open);
+		let invocation = self
+			.1
+			.as_ref()
+			.map(crate::ActorInvocationTelemetry::hold_open);
 		self.spawn_work(ActorWorkKind::WaitUntil, async move {
 			future.await;
 			drop(invocation);
@@ -794,7 +802,10 @@ impl ActorContext {
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
-		let invocation = self.1.as_ref().map(crate::ActorInvocationTelemetry::hold_open);
+		let invocation = self
+			.1
+			.as_ref()
+			.map(crate::ActorInvocationTelemetry::hold_open);
 		self.spawn_work(ActorWorkKind::WaitUntil, async move {
 			future.await;
 			drop(invocation);

@@ -177,6 +177,12 @@ pub struct WasmActionDefinition {
 	pub name: String,
 }
 
+#[derive(Clone, Default, serde::Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct WasmQueueDefinition {
+	pub name: String,
+}
+
 /// Experimental SQLite profiling configuration. This entire configuration
 /// surface is subject to change without notice.
 #[derive(Clone, Default, serde::Deserialize)]
@@ -229,6 +235,7 @@ pub struct WasmActorConfig {
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
 	pub actions: Option<Vec<WasmActionDefinition>>,
+	pub queues: Option<Vec<WasmQueueDefinition>>,
 }
 
 impl From<WasmActorConfig> for ActorConfigInput {
@@ -263,6 +270,12 @@ impl From<WasmActorConfig> for ActorConfigInput {
 				actions
 					.into_iter()
 					.map(|action| rivetkit_core::ActionDefinition { name: action.name })
+					.collect()
+			}),
+			queues: config.queues.map(|queues| {
+				queues
+					.into_iter()
+					.map(|queue| rivetkit_core::QueueDefinition { name: queue.name })
 					.collect()
 			}),
 			// Custom inspector tabs serve assets from a filesystem `root`, which is a

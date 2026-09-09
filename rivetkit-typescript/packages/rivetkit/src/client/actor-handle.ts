@@ -171,6 +171,10 @@ export class ActorHandleRaw {
 					return await createQueueSender({
 						encoding: this.#encoding,
 						params: this.#params,
+						telemetryHeaders: () =>
+							outboundTelemetryHeaders(
+								this.#currentActorInvocation?.(),
+							),
 						customFetch: async (request: Request) => {
 							return await this.#driver.sendRequest(
 								target,

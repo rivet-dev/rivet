@@ -64,6 +64,9 @@ export interface JsQueueSendResult {
 export interface JsActionDefinition {
   name: string
 }
+export interface JsQueueDefinition {
+  name: string
+}
 /**
  * One entry in the actor's `inspector.tabs[]` declaration. Either a
  * custom-tab descriptor (id + label + source dir) or a built-in modifier
@@ -133,6 +136,7 @@ export interface JsActorConfig {
   maxIncomingMessageSize?: number
   maxOutgoingMessageSize?: number
   actions?: Array<JsActionDefinition>
+  queues?: Array<JsQueueDefinition>
   inspectorTabs?: Array<JsInspectorTabEntry>
 }
 export interface JsBindParam {

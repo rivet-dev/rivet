@@ -136,6 +136,8 @@ pub(crate) enum InvocationType {
 	Scheduled,
 	/// A raw HTTP request served by the actor's `onRequest` handler.
 	Request,
+	/// A message sent into one of the actor's queues from outside it.
+	QueueSend,
 }
 
 impl InvocationType {
@@ -144,16 +146,18 @@ impl InvocationType {
 			Self::Action => "action",
 			Self::Scheduled => "scheduled",
 			Self::Request => "request",
+			Self::QueueSend => "queue_send",
 		}
 	}
 
 	/// OpenTelemetry span kind for this invocation. An action or a raw HTTP request
-	/// is entered from outside the actor, while a scheduled fire originates
-	/// inside it.
+	/// is entered from outside the actor, a scheduled fire originates inside
+	/// it, and a queue send produces a message the actor consumes later.
 	pub(crate) fn otel_kind(self) -> &'static str {
 		match self {
 			Self::Action | Self::Request => "server",
 			Self::Scheduled => "internal",
+			Self::QueueSend => "producer",
 		}
 	}
 }
@@ -189,6 +193,7 @@ impl InvocationStatus {
 struct ActorMetricInner {
 	labels: ActorMetricLabels,
 	action_names: BTreeSet<String>,
+	queue_names: BTreeSet<String>,
 	#[cfg(feature = "sqlite-local")]
 	sqlite_profiling: crate::SqliteProfilingConfig,
 	#[cfg(feature = "sqlite-local")]
@@ -1672,6 +1677,7 @@ impl ActorMetrics {
 		Self::new_for_actor(
 			actor_name,
 			std::iter::empty(),
+			std::iter::empty(),
 			crate::SqliteProfilingConfig::default(),
 		)
 	}
@@ -1681,12 +1687,18 @@ impl ActorMetrics {
 		actor_name: impl Into<String>,
 		_sqlite_profiling: crate::SqliteProfilingConfig,
 	) -> Self {
-		Self::new_for_actor(actor_name, std::iter::empty(), _sqlite_profiling)
+		Self::new_for_actor(
+			actor_name,
+			std::iter::empty(),
+			std::iter::empty(),
+			_sqlite_profiling,
+		)
 	}
 
 	pub(crate) fn new_for_actor(
 		actor_name: impl Into<String>,
 		action_names: impl IntoIterator<Item = String>,
+		queue_names: impl IntoIterator<Item = String>,
 		_sqlite_profiling: crate::SqliteProfilingConfig,
 	) -> Self {
 		let labels = ActorMetricLabels {
@@ -1709,6 +1721,7 @@ impl ActorMetrics {
 			inner: Arc::new(ActorMetricInner {
 				labels,
 				action_names: action_names.into_iter().collect(),
+				queue_names: queue_names.into_iter().collect(),
 				#[cfg(feature = "sqlite-local")]
 				sqlite_profiling: _sqlite_profiling,
 				#[cfg(feature = "sqlite-local")]
@@ -1972,6 +1985,16 @@ impl ActorMetrics {
 	pub(crate) fn label_action_name<'a>(&'a self, action_name: &'a str) -> &'a str {
 		if self.inner.action_names.contains(action_name) {
 			action_name
+		} else {
+			"_OTHER"
+		}
+	}
+
+	/// Folds an undeclared queue name the same way `label_action_name` folds
+	/// an action name, for the same reason: it arrives from the caller.
+	pub(crate) fn label_queue_name<'a>(&'a self, queue_name: &'a str) -> &'a str {
+		if self.inner.queue_names.contains(queue_name) {
+			queue_name
 		} else {
 			"_OTHER"
 		}

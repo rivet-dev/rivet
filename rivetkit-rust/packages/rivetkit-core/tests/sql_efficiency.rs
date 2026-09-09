@@ -383,6 +383,24 @@ fn query_catalog() -> Vec<QueryCase> {
 			expectation: indexed(None, &["_rivet_queue"]),
 		},
 		QueryCase {
+			id: "queue.upsert_trace_context",
+			sql: internal_storage::UPSERT_QUEUE_TRACE_CONTEXT_SQL.into(),
+			params: vec![text("queue_trace_context:1"), Value::Blob(vec![1])],
+			expectation: indexed(None, &["_rivet_meta"]),
+		},
+		QueryCase {
+			id: "queue.delete_trace_context",
+			sql: internal_storage::DELETE_QUEUE_TRACE_CONTEXT_SQL.into(),
+			params: vec![text("queue_trace_context:1")],
+			expectation: indexed(None, &["_rivet_meta"]),
+		},
+		QueryCase {
+			id: "queue.reset_trace_contexts",
+			sql: internal_storage::RESET_QUEUE_TRACE_CONTEXTS_SQL.into(),
+			params: vec![],
+			expectation: indexed(None, &["_rivet_meta"]),
+		},
+		QueryCase {
 			id: "queue.reset",
 			sql: internal_storage::RESET_QUEUE_SQL.into(),
 			params: vec![],

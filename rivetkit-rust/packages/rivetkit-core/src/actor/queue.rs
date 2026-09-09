@@ -10,6 +10,7 @@ use crate::time::{Instant, SystemTime, UNIX_EPOCH, sleep};
 
 use anyhow::{Context, Result};
 use rivet_error::RivetError;
+use rivetkit_actor_persist::versioned::{QueueTraceContext, QueueTraceContextData};
 use rivetkit_actor_persist::{generated::v4 as persist_v4, versioned as persist_versioned};
 use serde::{Deserialize, Serialize};
 #[cfg(not(target_arch = "wasm32"))]
@@ -26,6 +27,9 @@ use crate::actor::persist::{
 use crate::actor::task_types::UserTaskKind;
 #[cfg(target_arch = "wasm32")]
 use crate::error::ActorRuntime;
+use crate::telemetry::{self, TraceOrigin};
+
+const QUEUE_TRACE_CONTEXT_VERSION: u16 = 1;
 
 #[derive(Clone, Debug, Default)]
 pub struct QueueNextOpts {
@@ -101,6 +105,10 @@ pub struct QueueMessage {
 	pub name: String,
 	pub body: Vec<u8>,
 	pub created_at: i64,
+	/// Ray ID and span of the invocation that sent the message, which the span
+	/// covering its receipt links back to. Empty when the sender carried no
+	/// trace context.
+	pub trace_origin: TraceOrigin,
 	completion: Option<CompletionHandle>,
 }
 
@@ -110,7 +118,28 @@ pub struct CompletableQueueMessage {
 	pub name: String,
 	pub body: Vec<u8>,
 	pub created_at: i64,
+	pub trace_origin: TraceOrigin,
 	completion: CompletionHandle,
+}
+
+impl From<QueueTraceContextData> for TraceOrigin {
+	fn from(context: QueueTraceContextData) -> Self {
+		Self {
+			ray_id: context.ray_id,
+			traceparent: context.traceparent,
+			tracestate: context.tracestate,
+		}
+	}
+}
+
+impl From<TraceOrigin> for QueueTraceContextData {
+	fn from(origin: TraceOrigin) -> Self {
+		Self {
+			ray_id: origin.ray_id,
+			traceparent: origin.traceparent,
+			tracestate: origin.tracestate,
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -281,6 +310,24 @@ impl ActorContext {
 			in_flight_at: None,
 		};
 		let encoded_message = encode_queue_message(&persisted).context("encode queue message")?;
+		// A send from inside an invocation records that invocation as the
+		// message's origin. A send from outside one has nothing to record.
+		let trace_origin = self
+			.invocation_telemetry()
+			.map(crate::ActorInvocationTelemetry::trace_origin)
+			.unwrap_or_default();
+		let encoded_trace_context = if trace_origin.is_empty() {
+			None
+		} else {
+			Some(
+				encode_latest_with_embedded_version::<QueueTraceContext>(
+					QueueTraceContextData::from(trace_origin.clone()),
+					QUEUE_TRACE_CONTEXT_VERSION,
+					"queue trace context",
+				)
+				.context("encode queue trace context")?,
+			)
+		};
 
 		let config = self.config();
 		if encoded_message.len() > config.max_queue_message_size as usize {
@@ -323,9 +370,14 @@ impl ActorContext {
 			false
 		};
 
-		let persist_result =
-			internal_storage::persist_queue_message(self.sql(), id, metadata.next_id, &persisted)
-				.await;
+		let persist_result = internal_storage::persist_queue_message(
+			self.sql(),
+			id,
+			metadata.next_id,
+			&persisted,
+			encoded_trace_context,
+		)
+		.await;
 
 		if let Err(error) = persist_result {
 			metadata.next_id = id;
@@ -350,6 +402,7 @@ impl ActorContext {
 			name: name.to_owned(),
 			body: body.to_vec(),
 			created_at,
+			trace_origin,
 			completion: None,
 		})
 	}
@@ -653,6 +706,12 @@ impl ActorContext {
 			return Ok(Vec::new());
 		}
 
+		// Keep receipt spans open until the batch is handed back.
+		let _receive_spans: Vec<tracing::Span> = selected
+			.iter()
+			.map(|message| telemetry::start_queue_receive(self, message))
+			.collect();
+
 		if completable {
 			let queue_size = self.0.queue_metadata.lock().await.size;
 			self.0
@@ -927,6 +986,7 @@ impl QueueMessage {
 			name: self.name,
 			body: self.body,
 			created_at: self.created_at,
+			trace_origin: self.trace_origin,
 			completion,
 		})
 	}
@@ -947,6 +1007,7 @@ impl CompletableQueueMessage {
 			name: self.name,
 			body: self.body,
 			created_at: self.created_at,
+			trace_origin: self.trace_origin,
 			completion: Some(self.completion),
 		}
 	}
@@ -1051,11 +1112,29 @@ fn normalize_names(names: Option<Vec<String>>) -> Option<BTreeSet<String>> {
 }
 
 fn queue_message_from_row(row: internal_storage::QueueMessageRow) -> QueueMessage {
+	// A malformed trace context is a telemetry defect, not a queue defect, so
+	// the message is still delivered and only its origin is lost.
+	let trace_origin = row
+		.trace_context
+		.as_deref()
+		.and_then(|payload| {
+			decode_latest_with_embedded_version::<QueueTraceContext>(payload, "queue trace context")
+				.inspect_err(|error| {
+					tracing::warn!(
+						message_id = row.id,
+						?error,
+						"ignoring undecodable queue trace context"
+					);
+				})
+				.ok()
+		})
+		.map_or_else(TraceOrigin::default, TraceOrigin::from);
 	QueueMessage {
 		id: row.id,
 		name: row.message.name,
 		body: row.message.body,
 		created_at: row.message.created_at,
+		trace_origin,
 		completion: None,
 	}
 }

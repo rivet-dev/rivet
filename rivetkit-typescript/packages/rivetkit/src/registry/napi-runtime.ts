@@ -71,6 +71,9 @@ type NapiSqlTransaction = Awaited<
 type NapiActorStateTransaction = Awaited<
 	ReturnType<NativeActorContext["beginStateTransaction"]>
 >;
+type NapiQueueMessage = Awaited<
+	ReturnType<ReturnType<NativeActorContext["queue"]>["send"]>
+>;
 
 function asNativeRegistry(handle: RegistryHandle): NativeCoreRegistry {
 	return handle as unknown as NativeCoreRegistry;
@@ -239,7 +242,7 @@ function toNapiKvEntry(entry: RuntimeKvEntry): {
 	};
 }
 
-function toNapiQueueMessage(message: RuntimeQueueMessage): RuntimeQueueMessage {
+function toNapiQueueMessage(message: NapiQueueMessage): RuntimeQueueMessage {
 	return {
 		id: () => message.id(),
 		name: () => message.name(),
@@ -948,7 +951,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		body: RuntimeBytes,
 	): Promise<RuntimeQueueMessage> {
 		return toNapiQueueMessage(
-			await asNativeActorContext(ctx)
+			await this.#actorContextForOperation(ctx)
 				.queue()
 				.send(name, toNapiBuffer(body)),
 		);
@@ -959,7 +962,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueNextBatchOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeQueueMessage[]> {
-		const messages = await asNativeActorContext(ctx)
+		const messages = await this.#actorContextForOperation(ctx)
 			.queue()
 			.nextBatch(
 				options,
@@ -975,7 +978,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeQueueMessage> {
 		return toNapiQueueMessage(
-			await asNativeActorContext(ctx)
+			await this.#actorContextForOperation(ctx)
 				.queue()
 				.waitForNames(
 					names,
@@ -1022,7 +1025,7 @@ export class NapiCoreRuntime implements CoreRuntime {
 		options?: RuntimeQueueEnqueueAndWaitOptions | undefined | null,
 		signal?: CancellationTokenHandle | undefined | null,
 	): Promise<RuntimeBytes | null> {
-		return await asNativeActorContext(ctx)
+		return await this.#actorContextForOperation(ctx)
 			.queue()
 			.enqueueAndWait(
 				name,
