@@ -100,3 +100,7 @@ tracing-subscriber.workspace = true
 [[test]]
 name = "integration"
 path = "tests/integration.rs"
+
+[[test]]
+name = "inspector_bundle"
+path = "tests/inspector_bundle.rs"
