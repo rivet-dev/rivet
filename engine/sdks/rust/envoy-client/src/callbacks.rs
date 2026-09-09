@@ -33,6 +33,13 @@ impl ActorStopHandle {
 		}
 	}
 
+	/// Test-only constructor that discards the completion signal. Not for production use.
+	#[doc(hidden)]
+	pub fn detached() -> Self {
+		let (tx, _rx) = oneshot::channel();
+		Self::new(tx)
+	}
+
 	pub fn complete(self) -> bool {
 		self.finish(Ok(()))
 	}

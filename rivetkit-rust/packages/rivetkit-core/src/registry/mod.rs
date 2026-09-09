@@ -160,8 +160,21 @@ impl ActorInstanceState {
 
 #[derive(Clone)]
 struct PendingStop {
+	generation: u32,
 	reason: protocol::StopActorReason,
 	stop_handle: ActorStopHandle,
+}
+
+/// Outcome of attempting to transition the actor instance under an id to stopping
+/// for a specific generation.
+enum TransitionResult {
+	/// The current instance matches the requested generation and was moved to stopping.
+	Transitioned(ActiveActorInstance),
+	/// An instance exists but for a different generation than the stop targets, so it
+	/// was left untouched. The stop must not be applied to it.
+	Stale,
+	/// No instance is registered for the actor id.
+	Vacant,
 }
 
 pub(crate) struct RegistryDispatcher {
@@ -773,6 +786,11 @@ impl RegistryDispatcher {
 			.starting_instances
 			.insert_async(request.actor_id.clone(), startup_notify.clone())
 			.await;
+		// Test-only seam: lets a test hold a generation in the "starting" window so it
+		// can deterministically deliver a stop for a previous generation that parks
+		// under the actor id and gets consumed by this startup.
+		#[cfg(test)]
+		test_hooks::wait_for_startup_gate(&request.actor_id).await;
 		let factory = self
 			.factories
 			.get(&request.actor_name)
@@ -851,6 +869,19 @@ impl RegistryDispatcher {
 					.remove_async(&request.actor_id.clone())
 					.await
 					.map(|(_, pending_stop)| pending_stop);
+				// Only apply a parked stop if it targets the generation we just started.
+				// A stop parked for a previous generation is stale: complete its handle
+				// so teardown finalizes, but leave the new generation running.
+				let pending_stop = match pending_stop {
+					Some(pending_stop) if pending_stop.generation == request.generation => {
+						Some(pending_stop)
+					}
+					Some(stale_stop) => {
+						let _ = stale_stop.stop_handle.complete();
+						None
+					}
+					None => None,
+				};
 				if let Some(pending_stop) = pending_stop {
 					let actor_id = request.actor_id.clone();
 					let stop_reason = map_envoy_stop_reason(&pending_stop.reason);
@@ -913,6 +944,16 @@ impl RegistryDispatcher {
 					.starting_instances
 					.remove_async(&request.actor_id.clone())
 					.await;
+				// A stop parked while this start was in flight would otherwise leak its
+				// ActorStopHandle in the map (the map holds the sender alive, hanging the
+				// caller). Drain and complete it since there is no instance to stop.
+				if let Some((_, pending_stop)) = self
+					.pending_stops
+					.remove_async(&request.actor_id.clone())
+					.await
+				{
+					let _ = pending_stop.stop_handle.complete();
+				}
 				startup_notify.notify_waiters();
 				Err(error)
 			}
@@ -933,11 +974,19 @@ impl RegistryDispatcher {
 	async fn transition_actor_to_stopping(
 		&self,
 		actor_id: &str,
+		generation: u32,
 		reason: ShutdownKind,
-	) -> Option<ActiveActorInstance> {
+	) -> TransitionResult {
 		match self.actor_instances.entry_async(actor_id.to_owned()).await {
 			SccEntry::Occupied(mut entry) => {
 				let instance = entry.get().instance();
+				// A stop is scoped to the generation it was issued for. If the currently
+				// registered instance is a different generation (e.g. a lost previous
+				// generation whose replacement is already running), the stop is stale and
+				// must not tear down the newer generation.
+				if instance.generation != generation {
+					return TransitionResult::Stale;
+				}
 				if matches!(entry.get(), ActorInstanceState::Active(_)) {
 					entry.insert(ActorInstanceState::Stopping {
 						instance: instance.clone(),
@@ -948,11 +997,11 @@ impl RegistryDispatcher {
 						.ctx
 						.warn_work_sent_to_stopping_instance("stop_actor");
 				}
-				Some(instance)
+				TransitionResult::Transitioned(instance)
 			}
 			SccEntry::Vacant(entry) => {
 				drop(entry);
-				None
+				TransitionResult::Vacant
 			}
 		}
 	}
@@ -1035,6 +1084,7 @@ impl RegistryDispatcher {
 	async fn stop_actor(
 		&self,
 		actor_id: &str,
+		generation: u32,
 		reason: protocol::StopActorReason,
 		stop_handle: ActorStopHandle,
 	) -> Result<()> {
@@ -1044,11 +1094,14 @@ impl RegistryDispatcher {
 			.await
 			.is_some()
 		{
+			// The target generation is still starting. Park the stop with its generation
+			// so startup can decide whether it belongs to the generation being started.
 			let _ = self
 				.pending_stops
 				.insert_async(
 					actor_id.to_owned(),
 					PendingStop {
+						generation,
 						reason,
 						stop_handle,
 					},
@@ -1058,31 +1111,40 @@ impl RegistryDispatcher {
 		}
 
 		let task_stop_reason = map_envoy_stop_reason(&reason);
-		let instance = match self
-			.transition_actor_to_stopping(actor_id, task_stop_reason)
+		match self
+			.transition_actor_to_stopping(actor_id, generation, task_stop_reason)
 			.await
 		{
-			Some(instance) => instance,
-			None => {
+			TransitionResult::Transitioned(instance) => {
+				let result = self
+					.shutdown_started_instance(actor_id, instance.clone(), reason, stop_handle)
+					.await;
+				self.remove_stopping_actor_instance(actor_id, &instance)
+					.await;
+				result
+			}
+			TransitionResult::Stale => {
+				// The running instance is a different generation; this stop targets a
+				// generation that is already gone. Complete the handle so envoy-client
+				// finalizes teardown cleanly instead of warning about a dropped handle.
+				let _ = stop_handle.complete();
+				Ok(())
+			}
+			TransitionResult::Vacant => {
 				let _ = self
 					.pending_stops
 					.insert_async(
 						actor_id.to_owned(),
 						PendingStop {
+							generation,
 							reason,
 							stop_handle,
 						},
 					)
 					.await;
-				return Ok(());
+				Ok(())
 			}
-		};
-		let result = self
-			.shutdown_started_instance(actor_id, instance.clone(), reason, stop_handle)
-			.await;
-		self.remove_stopping_actor_instance(actor_id, &instance)
-			.await;
-		result
+		}
 	}
 
 	async fn shutdown_started_instance(
@@ -1269,3 +1331,43 @@ fn map_envoy_stop_reason(reason: &protocol::StopActorReason) -> ShutdownKind {
 #[cfg(test)]
 #[path = "../../tests/registry.rs"]
 pub(crate) mod tests;
+
+// Test-only hooks used by the moved registry tests to deterministically drive the
+// generation-stop race. Gated behind `cfg(test)` so there is no production impact.
+#[cfg(test)]
+pub(crate) mod test_hooks {
+	use std::sync::{Arc, OnceLock};
+
+	use scc::HashMap as SccHashMap;
+	use tokio::sync::Semaphore;
+
+	static STARTUP_GATES: OnceLock<SccHashMap<String, Arc<Semaphore>>> = OnceLock::new();
+
+	fn gates() -> &'static SccHashMap<String, Arc<Semaphore>> {
+		STARTUP_GATES.get_or_init(SccHashMap::new)
+	}
+
+	/// Arms a gate so `start_actor` pauses for `actor_id` after registering as
+	/// starting, until `release_startup_gate` is called.
+	pub(crate) fn arm_startup_gate(actor_id: &str) {
+		let _ = gates().insert_sync(actor_id.to_owned(), Arc::new(Semaphore::new(0)));
+	}
+
+	/// Releases a previously armed gate, letting the paused `start_actor` continue.
+	pub(crate) fn release_startup_gate(actor_id: &str) {
+		if let Some(sem) = gates().read_sync(actor_id, |_, sem| sem.clone()) {
+			sem.add_permits(1);
+		}
+	}
+
+	/// Called from inside `start_actor`. Blocks only if a gate is armed for the
+	/// actor. Order-independent: a release before this runs still lets it through.
+	pub(crate) async fn wait_for_startup_gate(actor_id: &str) {
+		let sem = gates().read_sync(actor_id, |_, sem| sem.clone());
+		if let Some(sem) = sem {
+			let permit = sem.acquire().await.expect("startup gate semaphore closed");
+			permit.forget();
+			let _ = gates().remove_sync(actor_id);
+		}
+	}
+}
