@@ -1369,35 +1369,84 @@ export const createNamespaceContext = ({
 
 		return response.token;
 	};
-	return {
+	const engineContext = createEngineNamespaceContext({
 		...parent,
-		cloudNamespace: namespace,
-		...createEngineNamespaceContext({
-			...parent,
-			namespace: engineNamespaceName,
-			engineToken: token,
-			client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
-				token,
-			}),
-			namespacesQueryOptions() {
-				return parent.currentProjectNamespacesQueryOptions();
-			},
-			namespaceQueryOptions(
-				name: string | undefined,
-			): ReturnType<
+		namespace: engineNamespaceName,
+		engineToken: token,
+		client: createEngineClient(cloudEnv().VITE_APP_API_URL, {
+			token,
+		}),
+		namespacesQueryOptions() {
+			return parent.currentProjectNamespacesQueryOptions();
+		},
+		namespaceQueryOptions(
+			name: string | undefined,
+		): ReturnType<
+			ReturnType<
+				typeof createEngineNamespaceContext
+			>["namespaceQueryOptions"]
+		> {
+			return parent.currentProjectNamespaceQueryOptions({
+				namespace: name ?? namespace,
+			}) as ReturnType<
 				ReturnType<
 					typeof createEngineNamespaceContext
 				>["namespaceQueryOptions"]
-			> {
-				return parent.currentProjectNamespaceQueryOptions({
-					namespace: name ?? namespace,
-				}) as ReturnType<
-					ReturnType<
-						typeof createEngineNamespaceContext
-					>["namespaceQueryOptions"]
-				>;
-			},
-		}),
+			>;
+		},
+	});
+	return {
+		...parent,
+		cloudNamespace: namespace,
+		...engineContext,
+		// A Rivet Compute pool registers an engine runner config under the
+		// pool's name, so deleting only the config would strand the managed
+		// pool. Override the engine delete to also tear down the matching
+		// pool. Configs with no matching pool (external providers) are left
+		// untouched, so this is a no-op for them.
+		deleteRunnerConfigMutationOptions(
+			opts: { onSuccess?: (data: undefined) => void } = {},
+		) {
+			const base = engineContext.deleteRunnerConfigMutationOptions();
+			if (!base.mutationFn) {
+				throw new Error(
+					"engine runner config delete mutation is not configured",
+				);
+			}
+			const deleteRunnerConfig = base.mutationFn;
+			return mutationOptions({
+				...opts,
+				mutationKey: base.mutationKey,
+				mutationFn: async (name: string) => {
+					await deleteRunnerConfig(name);
+					const { managedPools } =
+						await parent.client.managedPools.list(
+							parent.project,
+							namespace,
+							{ org: parent.organization },
+						);
+					const pool = managedPools.find(
+						(candidate) =>
+							candidate.name === name &&
+							candidate.status !== "destroying",
+					);
+					if (pool) {
+						await parent.client.managedPools.delete(
+							parent.project,
+							namespace,
+							pool.name,
+							{ org: parent.organization },
+						);
+						await queryClient.invalidateQueries(
+							parent.currentProjectManagedPoolsQueryOptions({
+								namespace,
+							}),
+						);
+					}
+					return undefined;
+				},
+			});
+		},
 		currentNamespaceAccessTokenQueryOptions() {
 			return parent.accessTokenQueryOptions({ namespace });
 		},
