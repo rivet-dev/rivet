@@ -76,3 +76,52 @@ export function OnboardingSkeleton({ header }: { header?: ReactNode }) {
 		</div>
 	);
 }
+
+function PromptBannerSkeleton() {
+	return (
+		<div className="relative w-full flex flex-col items-stretch justify-between gap-4 rounded-lg border border-border px-4 py-4 sm:flex-row sm:items-center">
+			<Skeleton className="absolute -top-2.5 left-4 h-5 w-28 rounded-full" />
+			<div className="min-w-0 flex-1 space-y-2">
+				<Skeleton className="h-4 w-40" />
+				<Skeleton className="h-3 w-full" />
+				<Skeleton className="h-3 w-2/3" />
+			</div>
+			<Skeleton className="h-9 w-full shrink-0 sm:w-32" />
+		</div>
+	);
+}
+
+function DividerSkeleton() {
+	return (
+		<div className="flex items-center gap-3">
+			<div className="h-px flex-1 bg-border" />
+			<Skeleton className="h-3 w-24" />
+			<div className="h-px flex-1 bg-border" />
+		</div>
+	);
+}
+
+function ActionRowSkeleton() {
+	return (
+		<div className="w-full flex flex-col items-stretch justify-between gap-4 rounded-lg border border-border px-4 py-4 sm:flex-row sm:items-center">
+			<div className="min-w-0 flex-1 space-y-2">
+				<Skeleton className="h-4 w-48" />
+				<Skeleton className="h-3 w-3/4" />
+			</div>
+			<Skeleton className="h-9 w-full shrink-0 sm:w-36" />
+		</div>
+	);
+}
+
+// Mirrors the shape shared by the wizard's fetching steps: a recommended prompt
+// banner, an "or" divider, then a secondary action row. Keeping the borders and
+// divider real leaves only the text and buttons as skeletons.
+export function StepContentSkeleton() {
+	return (
+		<div className="flex flex-col gap-6">
+			<PromptBannerSkeleton />
+			<DividerSkeleton />
+			<ActionRowSkeleton />
+		</div>
+	);
+}

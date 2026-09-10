@@ -27,7 +27,6 @@ import {
 	CodeGroupSyncProvider,
 	CodePreview,
 	FormField,
-	Skeleton,
 } from "@/components";
 import {
 	useCloudNamespaceDataProvider,
@@ -67,6 +66,7 @@ import {
 	useStepperFormSubmit,
 } from "./forms/stepper-form";
 import { Content } from "./layout";
+import { StepContentSkeleton } from "./onboarding-skeleton";
 import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
 import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
 import {
@@ -364,16 +364,7 @@ export function GettingStarted({
 									),
 									deploy: () => (
 										<StepContent>
-											<Suspense
-												fallback={
-													<div className="space-y-6">
-														<Skeleton className="w-full h-[180px]" />
-														<Skeleton className="w-full h-[200px]" />
-													</div>
-												}
-											>
-												<DeployScreen />
-											</Suspense>
+											<DeployScreen />
 										</StepContent>
 									),
 								}}
@@ -441,7 +432,7 @@ export function GettingStarted({
 function StepContent({ children }: { children: ReactNode }) {
 	return (
 		<div className="w-full" data-component="step-content">
-			{children}
+			<Suspense fallback={<StepContentSkeleton />}>{children}</Suspense>
 		</div>
 	);
 }
