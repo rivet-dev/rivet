@@ -83,6 +83,55 @@ describe("onboarding product prompts", () => {
 		expect(prompt).not.toContain("Drive actors via the inspector HTTP API");
 	});
 
+	it("treats Durable Streams as a client-only service", () => {
+		const prompt = getAgentInstructionsPrompt({
+			...agentPromptOptions,
+			target: "durable-streams",
+		});
+
+		expect(prompt).toContain("# Durable Streams Setup");
+		expect(prompt).toContain("npx @rivet-dev/services dev");
+		expect(prompt).toContain("npm install @durable-streams/client");
+		expect(prompt).toContain(
+			"http://127.0.0.1:8642/durable-streams/v1/stream/demo",
+		);
+		expect(prompt).toContain(
+			"https://rivet.dev/actors/integrations/durable-streams",
+		);
+		expect(prompt).not.toContain("npm install rivetkit");
+		expect(prompt).not.toContain("registry.listen");
+		expect(prompt).not.toContain("RIVET_PUBLIC_ENDPOINT");
+	});
+
+	it("hands out the managed service URL for Durable Streams on Rivet Cloud", () => {
+		const prompt = getAgentInstructionsPrompt({
+			...agentPromptOptions,
+			target: "durable-streams",
+			durableStreamsServiceUrl:
+				"https://onboarding-test.staging.rivet.run/durable-streams/",
+		});
+
+		expect(prompt).toContain(
+			"https://onboarding-test.staging.rivet.run/durable-streams/v1/stream/<path>",
+		);
+		expect(prompt).toContain(
+			"managed service in the `onboarding-test` namespace",
+		);
+		expect(prompt).not.toContain("docker run");
+		expect(prompt).not.toContain("secret_test");
+	});
+
+	it("runs the Durable Streams worker against the control plane when self-hosting", () => {
+		const prompt = getAgentInstructionsPrompt({
+			...agentPromptOptions,
+			target: "durable-streams",
+		});
+
+		expect(prompt).toContain("rivetdev/services");
+		expect(prompt).toContain('RIVET_ENDPOINT="secret_test"');
+		expect(prompt).not.toContain("rivet.run/durable-streams/");
+	});
+
 	it("replaces Actor verification with an app URL for Dynamic Apps on Compute", () => {
 		const prompt = getComputeAddendum({
 			...computePromptOptions,

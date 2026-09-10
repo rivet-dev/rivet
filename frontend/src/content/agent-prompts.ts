@@ -2,7 +2,47 @@ export type OnboardingTarget =
 	| "actor"
 	| "agent-os"
 	| "workflows"
-	| "dynamic-apps";
+	| "dynamic-apps"
+	| "durable-streams";
+
+// Durable Streams is a managed service rather than user code, so the local
+// dev server and the client SDK are fixed and the prompts can name them.
+export const DURABLE_STREAMS_DOCS_URL =
+	"https://rivet.dev/actors/integrations/durable-streams";
+export const DURABLE_STREAMS_DEV_COMMAND = "npx @rivet-dev/services dev";
+export const DURABLE_STREAMS_LOCAL_URL =
+	"http://127.0.0.1:8642/durable-streams/";
+export const DURABLE_STREAMS_CLIENT_PACKAGE = "@durable-streams/client";
+
+// Path under a Rivet Run origin where the managed Durable Streams service is
+// served, e.g. `https://<ns>.rivet.run/durable-streams/`.
+export function getDurableStreamsServiceUrl(rivetRunUrl: string) {
+	return `${rivetRunUrl.replace(/\/?$/, "/")}durable-streams/`;
+}
+
+// The Durable Streams protocol mounts streams at `v1/stream/<path>` under the
+// service origin.
+export function getDurableStreamUrl(serviceUrl: string, streamPath: string) {
+	return `${serviceUrl.replace(/\/?$/, "/")}v1/stream/${streamPath}`;
+}
+
+export function getDurableStreamsClientSnippet(serviceUrl: string) {
+	return `import { DurableStream } from "${DURABLE_STREAMS_CLIENT_PACKAGE}";
+
+const stream = await DurableStream.create({
+	url: "${getDurableStreamUrl(serviceUrl, "demo")}",
+	contentType: "application/json",
+});
+
+await stream.append(JSON.stringify({ message: "hello" }));
+
+const res = await stream.stream<{ message: string }>();
+res.subscribeJson(async (batch) => {
+	for (const item of batch.items) {
+		console.log(item.message);
+	}
+});`;
+}
 
 const onboardingTargetCopy: Record<
 	OnboardingTarget,
@@ -34,6 +74,12 @@ const onboardingTargetCopy: Record<
 		quickstartDescription:
 			"Build a Dynamic Apps host and deploy a sample app by hand.",
 		quickstartUrl: "https://rivet.dev/dynamic-apps/docs/quickstart/",
+	},
+	"durable-streams": {
+		promptObject: "a Durable Streams client",
+		quickstartDescription:
+			"Run Durable Streams locally and connect a client by hand.",
+		quickstartUrl: DURABLE_STREAMS_DOCS_URL,
 	},
 };
 
@@ -170,6 +216,100 @@ ${mcpSection}## Step 4: Verify the workflow end-to-end
 4. If deployment or execution fails, run \`npx @rivetkit/cli logs --namespace ${namespace}\` and consult https://rivet.dev/workflows/docs/failure-and-recovery/ before retrying.
 
 Report the workflow host URL, command used, action or queue invoked, observed result, and any remaining setup the user must complete.`;
+}
+
+// Durable Streams ships as a service, so there is no user code to deploy. The
+// prompt walks the agent through the local dev server, the client SDK, and then
+// either the managed service URL (Rivet Cloud) or running the worker container
+// against the user's own control plane (self-hosted).
+function getDurableStreamsPrompt({
+	secretToken,
+	namespace,
+	durableStreamsServiceUrl,
+	mcpSection,
+}: {
+	secretToken: string;
+	namespace?: string;
+	durableStreamsServiceUrl?: string;
+	mcpSection: string;
+}) {
+	const localStreamUrl = getDurableStreamUrl(
+		DURABLE_STREAMS_LOCAL_URL,
+		"<path>",
+	);
+	const deploySteps = durableStreamsServiceUrl
+		? `Durable Streams runs as a managed service in the \`${namespace ?? "selected"}\` namespace on Rivet Cloud. There is nothing to build or deploy.
+
+1. Point the client at the managed service instead of the local server. Streams live at \`${getDurableStreamUrl(durableStreamsServiceUrl, "<path>")}\`.
+2. Read the service URL from an environment variable (for example \`DURABLE_STREAMS_URL\`) so local development keeps using \`${DURABLE_STREAMS_LOCAL_URL}\` and production uses \`${durableStreamsServiceUrl}\`.
+3. Verify against the managed service: append one record and read it back with \`curl '${getDurableStreamUrl(durableStreamsServiceUrl, "demo")}?offset=-1'\`.`
+		: `Durable Streams runs as a single worker container that connects to the user's Rivet control plane.
+
+1. Run the worker next to the application and point it at the control plane. \`RIVET_ENDPOINT\` contains a secret admin credential, so write it to the platform's secret store or a local \`.env\` that is listed in \`.gitignore\`. Never commit it and never expose it to browser code:
+   \`\`\`bash
+   docker run -p 8642:8642 \\
+     -e RIVET_ENDPOINT="${secretToken}" \\
+     -e HOST=0.0.0.0 \\
+     rivetdev/services
+   \`\`\`
+2. Point the client at the worker. Streams live at \`http://<host>:8642/durable-streams/v1/stream/<path>\`. Read the URL from an environment variable (for example \`DURABLE_STREAMS_URL\`) so local development keeps using \`${DURABLE_STREAMS_LOCAL_URL}\`.
+3. Verify against the deployed worker: append one record and read it back with \`curl 'http://<host>:8642/durable-streams/v1/stream/demo?offset=-1'\`.`;
+
+	return `# Durable Streams Setup
+
+Read the Durable Streams integration guide before changing the project: ${DURABLE_STREAMS_DOCS_URL}
+
+Durable Streams is an open standard for real-time streams with durable, replayable history. Rivet runs it as a service backed by Rivet Actors, so the project only needs a client. Do not scaffold Rivet Actors, a RivetKit registry, or a Dockerfile for this.
+
+## Step 1: Understand the project
+
+Determine whether the user wants a new project or wants to add Durable Streams to the existing application. Inspect the package manager, runtime, and any existing streaming or realtime code first. Good fits are agent session transcripts, CRDT sync, and change feeds that clients resume from an offset.
+
+## Step 2: Run Durable Streams locally
+
+Start the local Rivet control plane and the Durable Streams worker in a separate terminal:
+
+\`\`\`bash
+${DURABLE_STREAMS_DEV_COMMAND}
+\`\`\`
+
+Streams are then available at \`${localStreamUrl}\`. If the project already runs Rivet Actors with the RivetKit TypeScript SDK (2.3.12 or newer), Durable Streams is already served by that process at \`http://127.0.0.1:6420/durable-streams/v1/stream/<path>\` and this command is not needed.
+
+## Step 3: Connect a client
+
+- Install the official client with the project's package manager: \`npm install ${DURABLE_STREAMS_CLIENT_PACKAGE}\`.
+- Create a stream and append to it. Keep the base URL in one place so it can point at production later:
+
+\`\`\`ts
+${getDurableStreamsClientSnippet(DURABLE_STREAMS_LOCAL_URL)}
+\`\`\`
+
+- Readers can catch up from offset \`-1\` (the beginning), resume from a saved offset, or tail live. Persist the offset from the \`Stream-Next-Offset\` header when the application needs to resume.
+- For structured data, JSON mode, Yjs, TanStack AI, or the Vercel AI SDK, follow https://durablestreams.com instead of inventing a wire format.
+
+## Step 4: Verify locally
+
+Create a stream with one record, append a second, and read both back over HTTP, then run the application's own read path:
+
+\`\`\`bash
+curl -i -X PUT -H 'content-type: application/json' --data '[{"message":"hello"}]' ${getDurableStreamUrl(DURABLE_STREAMS_LOCAL_URL, "demo")}
+curl -i -X POST -H 'content-type: application/json' --data '{"message":"world"}' ${getDurableStreamUrl(DURABLE_STREAMS_LOCAL_URL, "demo")}
+curl '${getDurableStreamUrl(DURABLE_STREAMS_LOCAL_URL, "demo")}?offset=-1'
+\`\`\`
+
+Report the commands run and the observed result.
+
+## Step 5: Deploy
+
+${deploySteps}
+
+${mcpSection}## If you get stuck
+
+Check ${DURABLE_STREAMS_DOCS_URL} and https://durablestreams.com. If that doesn't help, point the user at:
+- Discord: https://rivet.dev/discord
+- GitHub issues: https://github.com/rivet-dev/rivet-durable-streams
+
+Include in the report: symptoms, what was tried, the client version, and the stream URL in use.`;
 }
 
 // The hosted connection authorizes against the user's Rivet account through a
@@ -390,6 +530,7 @@ export function getAgentInstructionsPrompt({
 	cliDeploy,
 	target = "actor",
 	mcp,
+	durableStreamsServiceUrl,
 }: {
 	providerStr: string;
 	publishableToken: string;
@@ -403,7 +544,19 @@ export function getAgentInstructionsPrompt({
 	cliDeploy?: boolean;
 	target?: OnboardingTarget;
 	mcp?: McpSetup;
+	// Managed Durable Streams service URL for this namespace on Rivet Cloud.
+	// Omitted when self-hosting, where the agent runs the worker itself.
+	durableStreamsServiceUrl?: string;
 }) {
+	if (target === "durable-streams") {
+		return getDurableStreamsPrompt({
+			secretToken,
+			namespace,
+			durableStreamsServiceUrl,
+			mcpSection: mcp ? getMcpSection(mcp) : "",
+		});
+	}
+
 	const poolLine =
 		runnerName !== "default" ? `\n  RIVET_POOL=${runnerName}` : "";
 	// Compute appends its own addendum with the same section; emitting it twice

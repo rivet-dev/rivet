@@ -1,3 +1,5 @@
+import { useNavigate } from "@tanstack/react-router";
+import { CONNECT_DURABLE_STREAMS_MODAL } from "@/app/dialogs/connect-provider-sheet";
 import { Frame } from "@/components";
 import {
 	getProductDocsUrl,
@@ -9,6 +11,7 @@ export default function AddComponentFrameContent({
 }: {
 	onClose?: () => void;
 }) {
+	const navigate = useNavigate();
 	return (
 		<>
 			<Frame.Header>
@@ -21,11 +24,24 @@ export default function AddComponentFrameContent({
 				<ProductPicker
 					ariaLabel="Add a component"
 					onSelect={(target) => {
-						window.open(
-							getProductDocsUrl(target),
-							"_blank",
-							"noopener,noreferrer",
-						);
+						// Products are added by writing code, so hand off to
+						// the docs. Services are connected in the dashboard,
+						// so open their setup sheet instead.
+						if (target === "durable-streams") {
+							void navigate({
+								to: ".",
+								search: (s) => ({
+									...(s as Record<string, unknown>),
+									modal: CONNECT_DURABLE_STREAMS_MODAL,
+								}),
+							});
+						} else {
+							window.open(
+								getProductDocsUrl(target),
+								"_blank",
+								"noopener,noreferrer",
+							);
+						}
 						onClose?.();
 					}}
 				/>

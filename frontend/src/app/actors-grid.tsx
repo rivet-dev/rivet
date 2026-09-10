@@ -206,7 +206,7 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 					<section>
 						<header className="flex items-center justify-between gap-4 mb-3">
 							<h2 className="text-base font-semibold text-foreground">
-								Actors
+								Components
 							</h2>
 						</header>
 
@@ -223,11 +223,11 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 							) : (
 								<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
 									<h3 className="text-base font-semibold text-foreground">
-										No actors yet
+										No components yet
 									</h3>
 									<SmallText className="text-muted-foreground max-w-md">
-										Deploy code that registers an actor to
-										see it here.
+										Deploy code that registers an actor or
+										add a service to see it here.
 									</SmallText>
 									<AddComponentButton />
 								</div>
