@@ -542,6 +542,24 @@
           "format": "uint64",
           "minimum": 0.0
         },
+        "admission_client_state_cache_capacity": {
+          "description": "Maximum number of IP-keyed admission state entries when an admission limit is enabled.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
+        "admission_client_state_cache_idle_timeout_ms": {
+          "description": "Idle timeout for IP-keyed admission state in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
         "enable_websocket_health_route": {
           "description": "Enables the internal websocket health route for debug and latency testing. This is intended for websocket ping/pong verification and should remain disabled in normal deployments.",
           "type": [
@@ -556,6 +574,15 @@
             "null"
           ],
           "format": "ip"
+        },
+        "http_client_pool_idle_timeout_ms": {
+          "description": "Idle timeout for pooled upstream HTTP connections in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
         },
         "http_max_request_body_size": {
           "description": "Max HTTP request body size in bytes (first line of defense).",
@@ -577,6 +604,15 @@
             }
           ]
         },
+        "max_in_flight": {
+          "description": "Maximum concurrent requests applied per client IP. Omit to disable the in-flight limit.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 1.0
+        },
         "port": {
           "description": "Port for HTTP traffic",
           "type": [
@@ -585,6 +621,35 @@
           ],
           "format": "uint16",
           "minimum": 0.0
+        },
+        "proxy_retry_initial_interval_ms": {
+          "description": "Initial exponential retry backoff in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
+        "proxy_retry_max_attempts": {
+          "description": "Maximum number of proxy attempts, including the initial attempt.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 1.0
+        },
+        "rate_limit": {
+          "description": "Fixed-window request limit applied per client IP. Omit to disable request rate limiting.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GuardRateLimit"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "route_api_public_timeout_ms": {
           "description": "Timeout for resolving api-public routes in milliseconds.",
@@ -699,6 +764,33 @@
             "null"
           ]
         },
+        "upstream_request_timeout_ms": {
+          "description": "Timeout for receiving upstream HTTP response headers in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
+        "websocket_connect_attempt_timeout_ms": {
+          "description": "Timeout for each upstream WebSocket connection attempt in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
+        "websocket_flush_timeout_ms": {
+          "description": "Timeout for flushing forwarded WebSocket messages in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
         "websocket_max_frame_size": {
           "description": "Max WebSocket frame size in bytes.",
           "type": [
@@ -716,6 +808,24 @@
           ],
           "format": "uint",
           "minimum": 0.0
+        },
+        "websocket_send_timeout_ms": {
+          "description": "Timeout for forwarding a WebSocket message in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
+        },
+        "websocket_setup_timeout_ms": {
+          "description": "Timeout for completing the client WebSocket upgrade in milliseconds.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 1.0
         }
       },
       "additionalProperties": false
@@ -748,6 +858,28 @@
         "opportunistic",
         "on"
       ]
+    },
+    "GuardRateLimit": {
+      "type": "object",
+      "required": [
+        "period_ms",
+        "requests"
+      ],
+      "properties": {
+        "period_ms": {
+          "description": "Fixed-window duration in milliseconds.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1.0
+        },
+        "requests": {
+          "description": "Number of requests allowed during each fixed window.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 1.0
+        }
+      },
+      "additionalProperties": false
     },
     "Https": {
       "type": "object",
