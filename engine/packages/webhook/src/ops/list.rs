@@ -16,8 +16,6 @@ pub struct Webhook {
 	pub config: WebhookConfig,
 }
 
-// Reads from the local UDB mirror written by `upsert`, not epoxy directly (see
-// `webhook_config_upsert` for why).
 #[operation]
 pub async fn webhook_config_list(ctx: &OperationCtx, input: &Input) -> Result<Vec<Webhook>> {
 	let webhooks = ctx

@@ -13,8 +13,6 @@ use crate::{
 	types::{DeliveryRecord, DeliveryStatus, WebhookConfig, WebhookEvent, WebhookEventType},
 };
 
-/// Topic used to correlate `webhook::ops::upsert` (which waits for the outcome) with the
-/// `UpsertComplete`/`Failed` messages this workflow sends.
 pub fn topic(namespace_id: Id, name: &str) -> (&'static str, String) {
 	("webhook", format!("{namespace_id}:{name}"))
 }
@@ -42,9 +40,6 @@ pub struct DeliverInput {
 	pub data: serde_json::Value,
 	pub event_type: WebhookEventType,
 	pub subject: Option<String>,
-	/// When the delivery was first triggered, in epoch milliseconds. Used for the CloudEvents
-	/// `time` attribute, which is the time of the occurrence and so must stay fixed across
-	/// retries of the same delivery.
 	pub created_at: i64,
 }
 
@@ -57,12 +52,9 @@ pub struct DeliverOutput {
 	pub retry_after_ms: Option<u64>,
 }
 
-// The maximum number of delivery attempts for a single triggered event before giving up.
+// The maximum number of delivery attempts for a single triggered event before giving up to DLQ.
 const MAX_DELIVERY_ATTEMPTS: u32 = 5;
 
-// Bounds on a destination-supplied `Retry-After`. The lower bound stops a `Retry-After: 0` from
-// turning the retry loop into a hot loop; the upper bound matches the backoff cap so a
-// misbehaving destination cannot park a delivery for an unbounded stretch.
 const MIN_RETRY_AFTER: Duration = Duration::from_secs(1);
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(300);
 
@@ -82,8 +74,7 @@ fn delivery_backoff(attempt: u32) -> Duration {
 }
 
 // How long to wait before the next attempt. A destination that told us how long to wait wins over
-// our own backoff, since receivers such as Discord and Slack rate limit on `Retry-After` and
-// ignoring it just earns more 429s.
+// our own backoff, using 429's
 fn next_delivery_delay(retry_after_ms: Option<u64>, attempt: u32) -> Duration {
 	match retry_after_ms {
 		Some(ms) => Duration::from_millis(ms).clamp(MIN_RETRY_AFTER, MAX_RETRY_AFTER),
@@ -123,7 +114,7 @@ pub async fn deliver(ctx: &ActivityCtx, input: &DeliverInput) -> Result<DeliverO
 
 	// The occurrence time, not the transmission time, so every attempt at one delivery carries
 	// the same value. Receivers dedupe on `id` plus `source` and would otherwise see the same
-	// event reported as having happened at several different times.
+	// event reported as having happened at several different times. Follows Cloudevents standards.
 	let occurred_at = chrono::DateTime::from_timestamp_millis(input.created_at)
 		.context("delivery created_at is not a valid timestamp")?
 		.to_rfc3339();
@@ -165,8 +156,6 @@ pub async fn deliver(ctx: &ActivityCtx, input: &DeliverInput) -> Result<DeliverO
 		Err(err) => {
 			let err = anyhow::Error::from(err);
 
-			// A hostname that only resolves to a disallowed address is rejected by the
-			// resolver at connect time, which the pre-flight check above cannot see.
 			if let Some(reason) = rivet_outbound_guard::block_reason(&err) {
 				return Ok(DeliverOutput {
 					error: Some(errors::Webhook::DestinationBlocked {
@@ -194,16 +183,6 @@ pub struct RecordDeliveryInput {
 	pub subject: Option<String>,
 }
 
-// Writes the current state of a delivery to the local UDB mirror so it can be looked up later by
-// `Retry` or listed for event history. Local only, not proposed through epoxy: a delivery only
-// ever matters to the datacenter that ran it (see `keys::DeliveryKey`).
-//
-// Preserves `created_at` from any existing record for this delivery id instead of taking it from
-// the caller, so a `Retry` (which re-enters this same activity) doesn't reset when the delivery
-// was first triggered. Stamps a fresh `created_at` only the first time a delivery id is recorded.
-//
-// Returns the `created_at` the record now carries, which the caller needs for the CloudEvents
-// `time` attribute.
 #[activity(RecordDelivery)]
 pub async fn record_delivery(ctx: &ActivityCtx, input: &RecordDeliveryInput) -> Result<i64> {
 	let namespace_id = input.namespace_id;
@@ -283,8 +262,6 @@ pub async fn get_delivery(
 		.await
 }
 
-// One workflow instance per (namespace_id, name, dc) - the dc is implicit since a workflow
-// always runs on the datacenter it was dispatched from (see webhook spec).
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Input {
 	pub namespace_id: Id,
@@ -314,8 +291,6 @@ pub async fn webhook(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 	let namespace_id = input.namespace_id;
 	let name = input.name.clone();
 
-	// Carries the current config as durable loop state so `Trigger` has something to deliver
-	// to; `Update` refreshes it only after `upsert` confirms the new config actually persisted.
 	ctx.loope(input.config.clone(), move |ctx, config| {
 		let name = name.clone();
 		async move {
@@ -326,9 +301,6 @@ pub async fn webhook(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
 					}
 				}
 				Main::Trigger(sig) => {
-					// The workflow owns the config, so it is the authority on what this webhook is
-					// subscribed to. Producers filter by subscription before signaling, but the
-					// config can change between that read and this signal arriving.
 					if !config.subscriptions.contains(&sig.event.event_type) {
 						tracing::debug!(
 							event_type = sig.event.event_type.as_str(),
@@ -498,7 +470,6 @@ async fn deliver_with_retries(
 		data,
 	} = event;
 
-	// Stored as JSON text, matching the `payload: str` field in the delivery schema.
 	let payload = serde_json::to_string(&data).context("event data is not serializable")?;
 	// Also yields the delivery's `created_at`, which the CloudEvents envelope needs. On a manual
 	// `Retry` this is the original trigger time, preserved by the activity.
@@ -554,9 +525,6 @@ async fn deliver_with_retries(
 			{
 				attempt += 1;
 
-				// Race the wait against `Destroy` so a delete mid-retry stops delivery
-				// immediately instead of waiting out the full retry sequence before the workflow
-				// notices.
 				let destroy_sig = ctx
 					.listen_with_timeout::<Destroy>(next_delivery_delay(
 						deliver_res.retry_after_ms,
@@ -617,9 +585,6 @@ pub async fn validate(
 		}
 	};
 
-	// Reject destinations the engine is not allowed to reach before the config is stored.
-	// Delivery re-checks this at request time, which also catches configs written before this
-	// gate existed and hosts whose DNS answer changes afterwards.
 	let policy = rivet_pools::reqwest::outbound_policy(ctx.config()).await?;
 	if let Err(reason) = policy.check_url(&parsed_url) {
 		return Ok(Err(errors::Webhook::Invalid {
@@ -627,8 +592,6 @@ pub async fn validate(
 		}));
 	}
 
-	// Enforce the webhook-safe event type allowlist. High-throughput types are still ingested for
-	// analytics; they just cannot be a webhook trigger (see the webhook spec).
 	for event_type in &input.config.subscriptions {
 		if !event_type.is_webhook_safe() {
 			return Ok(Err(errors::Webhook::EventTypeNotAllowed {
@@ -676,13 +639,6 @@ pub struct UpsertConfigInput {
 	pub config: WebhookConfig,
 }
 
-// Writes the webhook config to epoxy (the durable, replicated copy) and mirrors it into local
-// UDB (what `list` reads, since epoxy is slow and not meant for frequent/scan-style reads).
-//
-// `expect_one_of` is always `vec![None]` because epoxy v2 does not implement value-conditional
-// compare-and-swap; it accepts only that value. Concurrency is still detected, just at a
-// different granularity: consensus decides one value per round, and a proposal that loses the
-// round comes back as `ExpectedValueDoesNotMatch`, surfaced here as `Conflict`.
 #[activity(UpsertConfig)]
 pub async fn upsert_config(
 	ctx: &ActivityCtx,
@@ -732,9 +688,6 @@ pub async fn upsert_config(
 		},
 	}
 
-	// We still have to write locally for listing.
-	// TODO: non-transactional. Epoxy propose and the local UDB write can diverge if we crash or
-	// error between them.
 	let config = input.config.clone();
 	ctx.udb()?
 		.txn("webhook_upsert_config", |tx| {

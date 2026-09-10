@@ -23,8 +23,6 @@ fn deserialize_delivery(raw: &[u8]) -> Result<DeliveryRecord> {
 	Ok(rivet_data::versioned::WebhookDeliveryData::deserialize_with_embedded_version(raw)?.into())
 }
 
-// Durable, replicated copy proposed through epoxy. Slow to write and not meant to be read
-// frequently; the local `DataKey` below is what backs listing/reads within a datacenter.
 #[derive(Debug)]
 pub struct GlobalDataKey {
 	pub namespace_id: Id,
@@ -71,8 +69,6 @@ impl<'de> TupleUnpack<'de> for GlobalDataKey {
 	}
 }
 
-// Local-only mirror of `GlobalDataKey`, written directly to this datacenter's UDB after every
-// epoxy propose succeeds. Listing reads scan this instead of epoxy.
 #[derive(Debug)]
 pub struct DataKey {
 	pub namespace_id: Id,
@@ -123,7 +119,6 @@ impl<'de> TupleUnpack<'de> for DataKey {
 	}
 }
 
-// Subspace of all webhook `DataKey`s for a namespace, used to list webhook names.
 #[derive(Debug)]
 pub struct DataSubspaceKey {
 	pub namespace_id: Id,
@@ -146,10 +141,6 @@ impl TuplePack for DataSubspaceKey {
 	}
 }
 
-// Local-only record of a single delivery (one triggered event, identified by delivery id, and
-// every attempt made to deliver it), written by the webhook workflow. Not replicated through
-// epoxy: unlike config, a delivery only ever matters to the datacenter that ran it, since the
-// workflow that owns a delivery lives in exactly one datacenter.
 #[derive(Debug)]
 pub struct DeliveryKey {
 	pub namespace_id: Id,
@@ -216,7 +207,6 @@ impl<'de> TupleUnpack<'de> for DeliveryKey {
 	}
 }
 
-// Subspace of all `DeliveryKey`s for a single webhook, used to list its delivery history.
 #[derive(Debug)]
 pub struct DeliverySubspaceKey {
 	pub namespace_id: Id,

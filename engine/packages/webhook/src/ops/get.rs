@@ -9,9 +9,6 @@ pub struct Input {
 	pub name: String,
 }
 
-// Point read of a single webhook config from the local UDB mirror written by `upsert`, for
-// callers that only need to know whether one webhook exists. Use `list` when you need all of a
-// namespace's webhooks.
 #[operation]
 pub async fn webhook_config_get(
 	ctx: &OperationCtx,

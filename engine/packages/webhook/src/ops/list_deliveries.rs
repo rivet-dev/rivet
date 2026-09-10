@@ -17,11 +17,6 @@ pub struct Delivery {
 	pub record: DeliveryRecord,
 }
 
-// Reads every delivery recorded for one webhook from the local UDB mirror written by
-// `record_delivery` (see `workflows::webhook`). Unordered; callers sort by `created_at` for
-// chronological event history. A full scan of the webhook's delivery subspace, which is fine
-// given deliveries are meant to stay low-throughput (see the event-type allowlist in the webhook
-// spec) rather than a place to paginate over via range bounds.
 #[operation]
 pub async fn webhook_delivery_list(ctx: &OperationCtx, input: &Input) -> Result<Vec<Delivery>> {
 	let namespace_id = input.namespace_id;

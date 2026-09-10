@@ -38,6 +38,7 @@ frontend/build/
 *.swp
 *.swo
 .envrc
+flake-profile*
 
 # OS
 .DS_Store

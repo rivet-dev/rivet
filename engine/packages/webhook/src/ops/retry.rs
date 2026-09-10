@@ -10,9 +10,6 @@ pub struct Input {
 	pub delivery_id: String,
 }
 
-// Validates the delivery exists and is in a failed state, then signals the webhook workflow to
-// retry it. The workflow re-checks the same state on its side before actually redelivering, since
-// this read and the signal are not part of the same transaction.
 #[operation]
 pub async fn webhook_delivery_retry(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	let namespace_id = input.namespace_id;

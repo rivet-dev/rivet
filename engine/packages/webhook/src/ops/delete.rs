@@ -11,15 +11,6 @@ pub struct Input {
 	pub name: String,
 }
 
-// Proposes the epoxy clear (setting the value to `None` is how a key is deleted through epoxy),
-// clears the local UDB mirror, then signals the webhook workflow to exit. `graceful_not_found`
-// tolerates the workflow already being gone (e.g. a repeat delete), which also makes a repeat
-// delete a no-op rather than an error.
-//
-// `expect_one_of` is always `vec![None]` because epoxy v2 does not implement value-conditional
-// compare-and-swap; it accepts only that value. Concurrency is still detected, just at a
-// different granularity: consensus decides one value per round, and a proposal that loses the
-// round comes back as `ExpectedValueDoesNotMatch`, surfaced here as `Conflict`.
 #[operation]
 pub async fn webhook_config_delete(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	let namespace_id = input.namespace_id;

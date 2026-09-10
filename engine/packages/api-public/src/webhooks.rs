@@ -11,11 +11,11 @@ use rivet_api_types::pagination::Pagination;
 use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
+use namespace::errors::Namespace as NamespaceError;
+use namespace::ops::resolve_for_name_global::Input as ResolveNamespace;
+
 use crate::ctx::ApiCtx;
 
-// Config for a single webhook, keyed by an arbitrary name within a namespace. `subscriptions`
-// names the event types to deliver; only webhook-safe types are accepted (see
-// `webhook::types::WebhookEventType`).
 #[derive(Debug, Deserialize, Serialize, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct WebhookConfig {
@@ -26,8 +26,6 @@ pub struct WebhookConfig {
 	pub subscriptions: Vec<WebhookEventType>,
 }
 
-// Mirrors `webhook::types::WebhookEventType` for the public API. Only webhook-safe variants are
-// exposed; high-throughput event types are not subscribable and so have no API representation.
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, ToSchema)]
 pub enum WebhookEventType {
 	#[serde(rename = "runner_pool.error")]
@@ -48,8 +46,6 @@ impl From<WebhookEventType> for webhook::types::WebhookEventType {
 }
 
 impl WebhookEventType {
-	// `None` for event types that have no API representation because they cannot be subscribed
-	// to. Upsert validation rejects those, so a stored config should never contain one.
 	fn from_internal(value: webhook::types::WebhookEventType) -> Option<Self> {
 		match value {
 			webhook::types::WebhookEventType::RunnerPoolError => {
@@ -103,11 +99,11 @@ async fn list_inner(ctx: ApiCtx, query: ListQuery) -> Result<ListResponse> {
 	ctx.auth().await?;
 
 	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
+		.op(ResolveNamespace {
 			name: query.namespace.clone(),
 		})
 		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+		.ok_or_else(|| NamespaceError::NotFound.build())?;
 
 	let webhooks = ctx
 		.op(webhook::ops::list::Input {
@@ -199,15 +195,13 @@ async fn upsert_inner(
 ) -> Result<UpsertResponse> {
 	ctx.auth().await?;
 
-	// Resolve and validate namespace
 	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
+		.op(ResolveNamespace {
 			name: query.namespace.clone(),
 		})
 		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+		.ok_or_else(|| NamespaceError::NotFound.build())?;
 
-	// Upsert operation
 	ctx.op(webhook::ops::upsert::Input {
 		namespace_id: namespace.namespace_id,
 		name: path.webhook_name.clone(),
@@ -218,10 +212,6 @@ async fn upsert_inner(
 		},
 	})
 	.await?;
-
-	// The config is durable in epoxy and the webhook workflow is dispatched or signaled by
-	// the op above. Delivering triggered events over HTTP still needs to be built (see webhook
-	// spec).
 
 	Ok(UpsertResponse {})
 }
@@ -276,11 +266,11 @@ async fn delete_inner(ctx: ApiCtx, path: DeletePath, query: DeleteQuery) -> Resu
 	ctx.auth().await?;
 
 	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
+		.op(ResolveNamespace {
 			name: query.namespace.clone(),
 		})
 		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+		.ok_or_else(|| NamespaceError::NotFound.build())?;
 
 	ctx.op(webhook::ops::delete::Input {
 		namespace_id: namespace.namespace_id,
@@ -347,11 +337,11 @@ async fn retry_delivery_inner(
 	ctx.auth().await?;
 
 	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
+		.op(ResolveNamespace {
 			name: query.namespace.clone(),
 		})
 		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+		.ok_or_else(|| NamespaceError::NotFound.build())?;
 
 	ctx.op(webhook::ops::retry::Input {
 		namespace_id: namespace.namespace_id,
@@ -433,15 +423,12 @@ async fn events_inner(ctx: ApiCtx, path: EventsPath, query: EventsQuery) -> Resu
 	ctx.auth().await?;
 
 	let namespace = ctx
-		.op(namespace::ops::resolve_for_name_global::Input {
+		.op(ResolveNamespace {
 			name: query.namespace.clone(),
 		})
 		.await?
-		.ok_or_else(|| namespace::errors::Namespace::NotFound.build())?;
+		.ok_or_else(|| NamespaceError::NotFound.build())?;
 
-	// Distinguish "this webhook has no history" from "this webhook does not exist", which would
-	// otherwise both be an empty list. Note this means a deleted webhook's history is no longer
-	// readable, since delete clears the config.
 	if ctx
 		.op(webhook::ops::get::Input {
 			namespace_id: namespace.namespace_id,
@@ -460,8 +447,6 @@ async fn events_inner(ctx: ApiCtx, path: EventsPath, query: EventsQuery) -> Resu
 		})
 		.await?;
 
-	// Most recent first. `delivery_id` breaks ties deterministically since two deliveries can
-	// share a `created_at` millisecond.
 	deliveries.sort_by(|a, b| {
 		b.record
 			.created_at
@@ -469,8 +454,6 @@ async fn events_inner(ctx: ApiCtx, path: EventsPath, query: EventsQuery) -> Resu
 			.then_with(|| b.delivery_id.cmp(&a.delivery_id))
 	});
 
-	// The cursor is the `(created_at, delivery_id)` of the last item on the previous page;
-	// resume strictly after it in the same sorted order.
 	if let Some(cursor) = query.cursor {
 		let (created_at, delivery_id) = cursor
 			.split_once(':')

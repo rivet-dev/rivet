@@ -9,10 +9,6 @@ pub struct Input {
 	pub config: WebhookConfig,
 }
 
-// Signals the existing webhook workflow to update its config, or dispatches it for the first
-// time if it doesn't exist yet, then waits for the workflow to report success or failure. The
-// workflow itself does the validation and the epoxy/UDB write (see `workflows::webhook`),
-// mirroring `namespace.rs`'s dispatch-then-wait pattern.
 #[operation]
 pub async fn webhook_config_upsert(ctx: &OperationCtx, input: &Input) -> Result<()> {
 	let topic = workflows::webhook::topic(input.namespace_id, &input.name);
