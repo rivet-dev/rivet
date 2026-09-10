@@ -26,7 +26,11 @@ fn embedded_bundle_serves_index_when_required() {
 		!text.contains("ui_asset_not_found"),
 		"embedded inspector bundle is empty: GET /inspector/ui/ served ui_asset_not_found",
 	);
-	assert_eq!(resp.status, 200, "expected 200 for index.html, got {}", resp.status);
+	assert_eq!(
+		resp.status, 200,
+		"expected 200 for index.html, got {}",
+		resp.status
+	);
 
 	let lower = text.to_ascii_lowercase();
 	assert!(

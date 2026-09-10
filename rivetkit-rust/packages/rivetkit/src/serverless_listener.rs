@@ -11,16 +11,14 @@ use std::io;
 use std::net::{Ipv4Addr, SocketAddr};
 
 use anyhow::{Context, Result};
+use axum::Router;
 use axum::body::{Body, to_bytes};
 use axum::extract::{Request, State};
 use axum::response::Response;
-use axum::Router;
 use bytes::Bytes;
 use futures::StreamExt;
 use http::StatusCode;
-use rivetkit_core::serverless::{
-	CoreServerlessRuntime, ServerlessRequest, ServerlessResponse,
-};
+use rivetkit_core::serverless::{CoreServerlessRuntime, ServerlessRequest, ServerlessResponse};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use tokio_util::sync::CancellationToken;
 
@@ -125,7 +123,10 @@ fn into_response_with_guard(
 /// Builds an axum response that streams the runtime's response chunks. `guard`,
 /// when present, is held for the lifetime of the stream so dropping the body
 /// cancels the in-flight request.
-fn build_response(response: ServerlessResponse, guard: Option<tokio_util::sync::DropGuard>) -> Response {
+fn build_response(
+	response: ServerlessResponse,
+	guard: Option<tokio_util::sync::DropGuard>,
+) -> Response {
 	let ServerlessResponse {
 		status,
 		headers,
@@ -145,11 +146,13 @@ fn build_response(response: ServerlessResponse, guard: Option<tokio_util::sync::
 		builder = builder.header(name, value);
 	}
 
-	builder.body(Body::from_stream(stream)).unwrap_or_else(|error| {
-		tracing::error!(?error, "failed to build serverless response");
-		Response::builder()
-			.status(StatusCode::INTERNAL_SERVER_ERROR)
-			.body(Body::empty())
-			.expect("static error response is valid")
-	})
+	builder
+		.body(Body::from_stream(stream))
+		.unwrap_or_else(|error| {
+			tracing::error!(?error, "failed to build serverless response");
+			Response::builder()
+				.status(StatusCode::INTERNAL_SERVER_ERROR)
+				.body(Body::empty())
+				.expect("static error response is valid")
+		})
 }
