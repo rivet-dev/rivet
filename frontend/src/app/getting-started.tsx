@@ -958,7 +958,7 @@ function DurableStreamsClientSnippet({ serviceUrl }: { serviceUrl: string }) {
 // managed per namespace, so this hands out the service URL. Self-hosted
 // flavors run the worker container against their own control plane instead.
 // Also rendered by the "Add Durable Streams" sheet from namespace settings.
-export function DurableStreamsConnect() {
+function DurableStreamsConnect() {
 	const code = useAgentInstructionsCode({ target: "durable-streams" });
 	const serviceUrl = useDurableStreamsServiceUrl();
 	return (

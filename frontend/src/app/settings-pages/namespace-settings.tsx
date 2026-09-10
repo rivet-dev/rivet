@@ -25,7 +25,6 @@ import {
 	SecretToken,
 } from "@/routes/_context/orgs.$organization/projects.$project/ns.$namespace/tokens";
 import { McpConnection } from "./mcp-connection";
-import { Services } from "./namespace-services";
 import { SettingsCard } from "./settings-card";
 
 export function NamespaceSettingsContent() {
@@ -33,7 +32,6 @@ export function NamespaceSettingsContent() {
 		<div className="space-y-4">
 			<NoRunnersAlert />
 			<Providers />
-			<Services />
 			<Runners />
 		</div>
 	);
