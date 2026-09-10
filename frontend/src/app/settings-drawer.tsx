@@ -26,10 +26,6 @@ import {
 	useCloudProjectDataProvider,
 } from "@/components/actors/data-provider";
 import { features } from "@/lib/features";
-import {
-	BILLING_BANNER_HEIGHT,
-	useBillingLimitBanner,
-} from "./billing/billing-limit-alert";
 import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { PoolSwitcher, poolHeaderText, resolvePoolName } from "./pool-switcher";
 import { BillingPanel } from "./settings-pages/billing-panel";
@@ -123,11 +119,6 @@ interface SettingsDrawerProps {
 	open: boolean;
 	tab: SettingsTab;
 	onOpenChange: (open: boolean) => void;
-	/**
-	 * Extra space to leave above the drawer for chrome rendered between the top
-	 * bar and the content view, e.g. the billing limit banner. CSS length.
-	 */
-	topOffset?: string;
 }
 
 // TopBar is a flush `h-12` bar (48px, border included). Add the content view's
@@ -138,7 +129,6 @@ export function SettingsDrawer({
 	open,
 	tab,
 	onOpenChange,
-	topOffset = "0px",
 }: SettingsDrawerProps) {
 	const navigate = useNavigate();
 	const matchRoute = useMatchRoute();
@@ -195,16 +185,18 @@ export function SettingsDrawer({
 			<DialogPrimitive.Portal>
 				<DialogPrimitive.Content
 					className={cn(
-						"fixed left-2 right-2 z-50 flex flex-col overflow-hidden",
+						// `z-40` keeps the drawer under the billing banner (`z-[45]`)
+						// and under `z-50` popovers, dropdowns, and dialogs.
+						"fixed left-2 right-2 z-40 flex flex-col overflow-hidden",
 						"bg-card border border-border rounded-lg",
 						"focus:outline-none",
 						"data-[state=open]:animate-in data-[state=closed]:animate-out",
 						"data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-						// Track the billing banner's expand/collapse animation.
+						// Follow the banner's expand/collapse animation.
 						"transition-[top] duration-[250ms] ease-out",
 					)}
 					style={{
-						top: `calc(${TOP_BAR_OUTER_HEIGHT} + ${topOffset})`,
+						top: `calc(${TOP_BAR_OUTER_HEIGHT} + var(--billing-banner-height, 0px))`,
 						bottom: "8px",
 					}}
 					onInteractOutside={(e) => e.preventDefault()}
@@ -703,17 +695,10 @@ export function SettingsDrawerHost() {
 		typeof search.settings === "string" ? search.settings : undefined;
 	const tab = settingsParamToTab(param);
 
-	// The drawer is a fixed overlay under the top bar, so it must start below
-	// the billing limit banner when that is showing. Both derive the banner
-	// state from the same data rather than the banner publishing its height
-	// through a side channel.
-	const banner = useBillingLimitBanner();
-
 	return (
 		<SettingsDrawer
 			open={tab !== null}
 			tab={tab ?? "profile"}
-			topOffset={banner.visible ? BILLING_BANNER_HEIGHT : "0px"}
 			onOpenChange={(open) => {
 				if (!open) {
 					navigate({
