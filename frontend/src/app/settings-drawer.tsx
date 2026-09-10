@@ -5,6 +5,7 @@ import {
 	faClose,
 	faCreditCard,
 	faGear,
+	faPuzzlePiece,
 	faRivet,
 	faSliders,
 	faSparkles,
@@ -30,6 +31,7 @@ import { BillingUsageGauge } from "./billing/billing-usage-gauge";
 import { PoolSwitcher, poolHeaderText, resolvePoolName } from "./pool-switcher";
 import { BillingPanel } from "./settings-pages/billing-panel";
 import { NamespaceComputeContent } from "./settings-pages/namespace-compute";
+import { NamespaceServicesContent } from "./settings-pages/namespace-services";
 import {
 	NamespaceAdvancedContent,
 	NamespaceSettingsContent,
@@ -42,6 +44,7 @@ import { WhatsNewPanel } from "./settings-pages/whats-new-panel";
 export type SettingsTab =
 	| "profile"
 	| "settings"
+	| "services"
 	| "compute"
 	| "advanced"
 	| "billing"
@@ -64,6 +67,7 @@ const NAV_SECTIONS: Array<{
 		label: "Namespace",
 		items: [
 			{ key: "settings", label: "Settings", icon: faGear },
+			{ key: "services", label: "Services", icon: faPuzzlePiece },
 			{ key: "compute", label: "Compute", icon: faRivet },
 			{ key: "advanced", label: "Advanced", icon: faSliders },
 		],
@@ -95,6 +99,11 @@ const TAB_META: Record<SettingsTab, { title: string; description?: string }> = {
 		description: features.platform
 			? "Connect your RivetKit application to Rivet Cloud. Use your cloud of choice to run Rivet Actors."
 			: "Connect providers and runners to this namespace. Use your cloud of choice to run Rivet Actors.",
+	},
+	services: {
+		title: "Services",
+		description:
+			"Managed services you can connect to this namespace, such as Durable Streams.",
 	},
 	compute: {
 		title: "Compute",
@@ -366,6 +375,8 @@ function TabContent({ tab }: { tab: SettingsTab }) {
 			return <BillingPanel />;
 		case "settings":
 			return <SettingsTabBody />;
+		case "services":
+			return <ServicesTabBody />;
 		case "compute":
 			return <ComputeTabBody />;
 		case "advanced":
@@ -660,12 +671,50 @@ function CloudAdvancedTabBody() {
 	return <NamespaceAdvancedContent />;
 }
 
+function ServicesTabBody() {
+	if (!features.platform) {
+		return <EngineNamespaceServices />;
+	}
+	return <CloudServicesTabBody />;
+}
+
+function EngineNamespaceServices() {
+	return useEngineNamespaceReady() ? (
+		<NamespaceServicesContent />
+	) : (
+		<NamespaceSettingsSkeleton />
+	);
+}
+
+function CloudServicesTabBody() {
+	const namespaceMatch = useMatch({
+		from: "/_context/orgs/$organization/projects/$project/ns/$namespace",
+		shouldThrow: false,
+	});
+
+	if (!namespaceMatch) {
+		return (
+			<ResourcePicker
+				title="Pick a namespace"
+				description="Services are scoped to a namespace. Choose one to connect services like Durable Streams."
+				settings="services"
+				target="namespace"
+			/>
+		);
+	}
+	if (!namespaceMatch.loaderData) {
+		return <NamespaceSettingsSkeleton />;
+	}
+	return <NamespaceServicesContent />;
+}
+
 export function settingsParamToTab(
 	param: string | undefined,
 ): SettingsTab | null {
 	switch (param) {
 		case "profile":
 		case "settings":
+		case "services":
 		case "advanced":
 		case "billing":
 		case "organization":

@@ -16,6 +16,7 @@ import { type HostedTarget, hostedUrl } from "@/components/mcp/scope";
 import {
 	getAgentInstructionsPrompt,
 	getComputeAddendum,
+	getDurableStreamsServiceUrl,
 	type McpSetup,
 	type OnboardingTarget,
 } from "@/content/agent-prompts";
@@ -75,6 +76,7 @@ export function useAgentInstructionsCode({
 	const secretToken = useRivetDsn({ kind: "secret", endpoint });
 	const mcp = useMcpSetup();
 	const namespace = useEngineCompatDataProvider().engineNamespace;
+	const durableStreamsServiceUrl = useDurableStreamsServiceUrl();
 
 	return getAgentInstructionsPrompt({
 		providerStr,
@@ -89,7 +91,17 @@ export function useAgentInstructionsCode({
 		cliDeploy: provider === "rivet",
 		target,
 		mcp,
+		durableStreamsServiceUrl,
 	});
+}
+
+// Where the managed Durable Streams service for this namespace is served on
+// Rivet Cloud. Self-hosted flavors run the worker themselves, so there is no
+// fixed URL to hand out.
+export function useDurableStreamsServiceUrl(): string | undefined {
+	const namespace = useEngineCompatDataProvider().engineNamespace;
+	if (!features.compute) return undefined;
+	return getDurableStreamsServiceUrl(getRivetRunUrl(namespace));
 }
 
 // The MCP setup the copy-prompt should instruct the agent to perform. The hosted

@@ -26,6 +26,7 @@ import {
 	CodeGroup,
 	CodeGroupSyncProvider,
 	CodePreview,
+	DiscreteCopyButton,
 	FormField,
 	Skeleton,
 } from "@/components";
@@ -33,14 +34,27 @@ import {
 	useCloudNamespaceDataProvider,
 	useEngineCompatDataProvider,
 } from "@/components/actors";
+import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
+import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
+import {
+	DEFAULT_AGENT,
+	DEFAULT_PACKAGES,
+	DEFAULT_SANDBOX_PROVIDER,
+} from "@/components/onboarding/agent-os/catalog";
+import { ProductPicker } from "@/components/products/product-picker";
 import { defineStepper } from "@/components/ui/stepper";
 import {
+	DURABLE_STREAMS_CLIENT_PACKAGE,
+	DURABLE_STREAMS_DEV_COMMAND,
+	DURABLE_STREAMS_DOCS_URL,
+	DURABLE_STREAMS_LOCAL_URL,
+	getDurableStreamsClientSnippet,
+	getDurableStreamUrl,
 	getOnboardingTargetCopy,
 	type OnboardingTarget,
 } from "@/content/agent-prompts";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { engineEnv } from "@/lib/env";
-import { ProductPicker } from "@/components/products/product-picker";
 import { features } from "@/lib/features";
 import { queryClient } from "@/queries/global";
 import { cn } from "../components/lib/utils";
@@ -53,6 +67,14 @@ import {
 	DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
 import { TEST_IDS } from "../utils/test-ids";
+import {
+	AgentPromptBanner,
+	CommandBox,
+	defaultRuntimeModeForProvider,
+	useAgentInstructionsCode,
+	useComputeInstructionsCode,
+	useDurableStreamsServiceUrl,
+} from "./compute-deploy";
 import { DeploymentCheck } from "./deployment-check";
 import { useEndpoint } from "./dialogs/connect-manual-serverful-frame";
 import {
@@ -60,27 +82,13 @@ import {
 	Configuration,
 	ConfigurationAccordion,
 } from "./dialogs/connect-manual-serverless-frame";
-import { EnvVariables } from "./env-variables";
+import { EnvVariables, useRivetDsn } from "./env-variables";
 import {
 	StepperForm,
 	StepVisibilityContext,
 	useStepperFormSubmit,
 } from "./forms/stepper-form";
 import { Content } from "./layout";
-import { AgentSelectStep } from "@/components/onboarding/agent-os/agent-select-step";
-import { buildAgentOsSetup } from "@/components/onboarding/agent-os/build-agent-os-setup";
-import {
-	DEFAULT_AGENT,
-	DEFAULT_PACKAGES,
-	DEFAULT_SANDBOX_PROVIDER,
-} from "@/components/onboarding/agent-os/catalog";
-import {
-	AgentPromptBanner,
-	CommandBox,
-	defaultRuntimeModeForProvider,
-	useAgentInstructionsCode,
-	useComputeInstructionsCode,
-} from "./compute-deploy";
 
 function platformTitle(provider: unknown): string {
 	return (
@@ -100,7 +108,13 @@ const stepper = defineStepper(
 		// it must survive navigation past this step.
 		schema: z.object({
 			template: z
-				.enum(["actor", "agent-os", "workflows", "dynamic-apps"])
+				.enum([
+					"actor",
+					"agent-os",
+					"workflows",
+					"dynamic-apps",
+					"durable-streams",
+				])
 				.optional(),
 		}),
 		group: "local",
@@ -140,6 +154,18 @@ const stepper = defineStepper(
 		isVisible: (values: Record<string, unknown>) =>
 			values.template === "agent-os",
 	},
+	// Services are managed by Rivet, so there is no runner or image to deploy.
+	// Durable Streams gets this step in place of the platform deploy below.
+	{
+		id: "services",
+		title: "Connect to Durable Streams",
+		next: "Done",
+		previous: "Back",
+		schema: z.object({}),
+		group: "deploy",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template === "durable-streams",
+	},
 	{
 		id: "deploy",
 		title: "Deploy",
@@ -149,6 +175,8 @@ const stepper = defineStepper(
 		previous: "Back",
 		assist: true,
 		group: "deploy",
+		isVisible: (values: Record<string, unknown>) =>
+			values.template !== "durable-streams",
 		schema: (values: Record<string, unknown>) => {
 			const provider = (values.provider as string) || "rivet";
 			if (provider === "rivet") {
@@ -362,6 +390,11 @@ export function GettingStarted({
 											<AgentOsHandoff />
 										</StepContent>
 									),
+									services: () => (
+										<StepContent>
+											<DurableStreamsConnect />
+										</StepContent>
+									),
 									deploy: () => (
 										<StepContent>
 											<Suspense
@@ -391,7 +424,18 @@ export function GettingStarted({
 									>;
 									const provider = (accumulated.provider ??
 										live.provider) as string | undefined;
-									if (provider && provider !== "rivet") {
+									const template = (accumulated.template ??
+										live.template) as
+										| OnboardingTarget
+										| undefined;
+									// Services skip the platform deploy step, so
+									// the provider fields hold untouched defaults;
+									// writing them would register a bogus runner.
+									if (
+										provider &&
+										provider !== "rivet" &&
+										template !== "durable-streams"
+									) {
 										await saveProviderConfig({
 											...accumulated,
 											provider,
@@ -780,6 +824,9 @@ function SelectProductStep() {
 function RunLocallyStep() {
 	const target = useOnboardingTarget();
 	const copy = getOnboardingTargetCopy(target);
+	if (target === "durable-streams") {
+		return <DurableStreamsRunLocally />;
+	}
 	return (
 		<div className="flex flex-col gap-6">
 			{features.compute ? (
@@ -788,31 +835,241 @@ function RunLocallyStep() {
 				<RunLocallyGenericBanner target={target} />
 			)}
 			<OrDivider label="or do it yourself" />
-			<div className="w-full flex flex-col items-stretch justify-between gap-4 rounded-lg px-4 py-4 border border-border sm:flex-row sm:items-center">
-				<div className="min-w-0">
-					<p className="font-medium mb-1">
-						Follow the quickstart guide
-					</p>
-					<p className="text-sm text-muted-foreground">
-						{copy.quickstartDescription}
-					</p>
-				</div>
-				<Button
-					variant="outline"
-					asChild
-					className="w-full shrink-0 sm:w-auto"
-				>
-					<a
-						href={copy.quickstartUrl}
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						Quickstart guide
-						<Icon icon={faArrowRight} className="ms-2" />
-					</a>
-				</Button>
-			</div>
+			<QuickstartLink
+				description={copy.quickstartDescription}
+				url={copy.quickstartUrl}
+			/>
 		</div>
+	);
+}
+
+function QuickstartLink({
+	description,
+	url,
+	label = "Quickstart guide",
+}: {
+	description: string;
+	url: string;
+	label?: string;
+}) {
+	return (
+		<div className="w-full flex flex-col items-stretch justify-between gap-4 rounded-lg px-4 py-4 border border-border sm:flex-row sm:items-center">
+			<div className="min-w-0">
+				<p className="font-medium mb-1">Follow the quickstart guide</p>
+				<p className="text-sm text-muted-foreground">{description}</p>
+			</div>
+			<Button
+				variant="outline"
+				asChild
+				className="w-full shrink-0 sm:w-auto"
+			>
+				<a href={url} target="_blank" rel="noopener noreferrer">
+					{label}
+					<Icon icon={faArrowRight} className="ms-2" />
+				</a>
+			</Button>
+		</div>
+	);
+}
+
+// Durable Streams is a service, so "run locally" means starting the bundled dev
+// server and pointing the client SDK at it. There is no project to scaffold, so
+// the prompt is the generic one (no compute addendum) on every flavor.
+function DurableStreamsRunLocally() {
+	const code = useAgentInstructionsCode({ target: "durable-streams" });
+	const copy = getOnboardingTargetCopy("durable-streams");
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={code}
+				title="Use your coding agent"
+				description={`Copy a prompt that runs Durable Streams locally and wires up ${copy.promptObject} for you.${mcpSuffix}`}
+			/>
+			<OrDivider label="or do it yourself" />
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Start the dev server</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Runs a local Rivet control plane and the Durable Streams
+						worker. Streams are served at{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							{getDurableStreamUrl(
+								DURABLE_STREAMS_LOCAL_URL,
+								"<path>",
+							)}
+						</code>
+						.
+					</p>
+					<CommandBox command={DURABLE_STREAMS_DEV_COMMAND} />
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Connect a client</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Install the official client and append to your first
+						stream.
+					</p>
+					<div className="space-y-3">
+						<CommandBox
+							command={`npm install ${DURABLE_STREAMS_CLIENT_PACKAGE}`}
+						/>
+						<DurableStreamsClientSnippet
+							serviceUrl={DURABLE_STREAMS_LOCAL_URL}
+						/>
+					</div>
+				</div>
+			</div>
+			<QuickstartLink
+				description={copy.quickstartDescription}
+				url={copy.quickstartUrl}
+				label="Integration guide"
+			/>
+		</div>
+	);
+}
+
+function DurableStreamsClientSnippet({ serviceUrl }: { serviceUrl: string }) {
+	const code = getDurableStreamsClientSnippet(serviceUrl);
+	return (
+		<CodeGroup className="my-0">
+			{[
+				<CodeFrame
+					key="client"
+					language="typescript"
+					title="client.ts"
+					code={() => code}
+					className="m-0"
+				>
+					<CodePreview
+						language="typescript"
+						className="text-left"
+						code={code}
+					/>
+				</CodeFrame>,
+			]}
+		</CodeGroup>
+	);
+}
+
+// Final step on the Durable Streams path. On Rivet Cloud the service is
+// managed per namespace, so this hands out the service URL. Self-hosted
+// flavors run the worker container against their own control plane instead.
+// Also rendered by the "Add Durable Streams" sheet from namespace settings.
+function DurableStreamsConnect() {
+	const code = useAgentInstructionsCode({ target: "durable-streams" });
+	const serviceUrl = useDurableStreamsServiceUrl();
+	return (
+		<div className="flex flex-col gap-6">
+			<AgentPromptBanner
+				code={code}
+				containsSecret={!serviceUrl}
+				description={
+					serviceUrl
+						? `Have your coding agent point your client at the managed Durable Streams service.${mcpSuffix}`
+						: `Have your coding agent run the Durable Streams worker against this namespace.${mcpSuffix}`
+				}
+			/>
+			<OrDivider label="or set it up manually" />
+			{serviceUrl ? (
+				<DurableStreamsManagedService serviceUrl={serviceUrl} />
+			) : (
+				<DurableStreamsSelfHosted />
+			)}
+		</div>
+	);
+}
+
+function DurableStreamsManagedService({ serviceUrl }: { serviceUrl: string }) {
+	return (
+		<>
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Copy your service URL</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Durable Streams runs as a managed service in this
+						namespace. There is nothing to deploy.
+					</p>
+					<DiscreteCopyButton
+						value={serviceUrl}
+						className="font-mono text-xs text-muted-foreground"
+					>
+						{serviceUrl}
+					</DiscreteCopyButton>
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Point your client at it</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Swap the local URL for the service URL. Streams live
+						under{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							v1/stream/&lt;path&gt;
+						</code>
+						.
+					</p>
+					<DurableStreamsClientSnippet serviceUrl={serviceUrl} />
+				</div>
+			</div>
+		</>
+	);
+}
+
+function DurableStreamsSelfHosted() {
+	const endpoint = useRivetDsn({ kind: "secret" });
+	const command = `docker run -p 8642:8642 \\
+  -e RIVET_ENDPOINT="${endpoint}" \\
+  -e HOST=0.0.0.0 \\
+  rivetdev/services`;
+	return (
+		<>
+			<div className="flex gap-3">
+				<StepNumber n={1} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Run the worker</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						The worker runs your streams and connects to this
+						namespace.{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							RIVET_ENDPOINT
+						</code>{" "}
+						contains an admin credential, so keep it out of source
+						control and browser code.
+					</p>
+					<CommandBox command={command} />
+				</div>
+			</div>
+			<div className="flex gap-3">
+				<StepNumber n={2} />
+				<div className="flex-1 min-w-0">
+					<p className="font-medium mb-2">Point your client at it</p>
+					<p className="text-sm text-muted-foreground mb-3">
+						Streams are served at{" "}
+						<code className="font-mono text-xs bg-muted px-1 py-0.5 rounded">
+							http://&lt;host&gt;:8642/durable-streams/v1/stream/&lt;path&gt;
+						</code>
+						. See the{" "}
+						<a
+							href={DURABLE_STREAMS_DOCS_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-primary hover:underline"
+						>
+							integration guide
+						</a>{" "}
+						for the control plane flags Durable Streams needs.
+					</p>
+					<DurableStreamsClientSnippet
+						serviceUrl={"http://<host>:8642/durable-streams/"}
+					/>
+				</div>
+			</div>
+		</>
 	);
 }
 
