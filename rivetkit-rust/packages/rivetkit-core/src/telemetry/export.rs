@@ -6,7 +6,6 @@
 //! Core never installs a subscriber itself; which log layers surround the span
 //! layer is the host's decision.
 
-use std::sync::OnceLock;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
@@ -15,6 +14,7 @@ use opentelemetry::trace::TracerProvider as _;
 use opentelemetry_otlp::{Protocol, SpanExporter, WithExportConfig as _};
 use opentelemetry_sdk::Resource;
 use opentelemetry_sdk::trace::{SdkTracer, SdkTracerProvider};
+use parking_lot::Mutex;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::{EnvFilter, Layer};
 
@@ -23,7 +23,7 @@ use tracing_subscriber::{EnvFilter, Layer};
 /// process open.
 const FLUSH_TIMEOUT: Duration = Duration::from_secs(6);
 
-static PROVIDER: OnceLock<SdkTracerProvider> = OnceLock::new();
+static PROVIDER: Mutex<Option<SdkTracerProvider>> = Mutex::new(None);
 
 /// Builds the span layer when standard OTel environment variables opt in, or
 /// nothing when they do not. The layer only sees the runtime's own spans, so a
@@ -51,7 +51,8 @@ fn initialize_if_configured() -> Result<Option<SdkTracer>> {
 	if !export_is_configured() {
 		return Ok(None);
 	}
-	if let Some(provider) = PROVIDER.get() {
+	let mut stored_provider = PROVIDER.lock();
+	if let Some(provider) = stored_provider.as_ref() {
 		return Ok(Some(provider.tracer("rivetkit")));
 	}
 
@@ -75,10 +76,7 @@ fn initialize_if_configured() -> Result<Option<SdkTracer>> {
 		.with_batch_exporter(exporter)
 		.build();
 	let tracer = provider.tracer("rivetkit");
-	PROVIDER
-		.set(provider)
-		.ok()
-		.context("tracer provider already initialized")?;
+	*stored_provider = Some(provider);
 	Ok(Some(tracer))
 }
 
@@ -123,7 +121,8 @@ fn export_is_configured() -> bool {
 /// [`FLUSH_TIMEOUT`]. Export failures are logged and never returned, because a
 /// telemetry problem must not turn a clean shutdown into a failed one.
 pub async fn flush_best_effort() {
-	let Some(provider) = PROVIDER.get().cloned() else {
+	let provider = PROVIDER.lock().clone();
+	let Some(provider) = provider else {
 		return;
 	};
 	let flush = tokio::task::spawn_blocking(move || provider.force_flush());
