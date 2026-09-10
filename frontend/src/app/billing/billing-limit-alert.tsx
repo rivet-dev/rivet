@@ -1,68 +1,85 @@
 import { faExclamationTriangle, Icon } from "@rivet-gg/icons";
-import { useQuery } from "@tanstack/react-query";
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect } from "react";
 import { Button, cn } from "@/components";
-import { useCloudProjectDataProvider } from "@/components/actors";
 import { PLAN_LABELS } from "@/content/billing";
 import { features } from "@/lib/features";
-import { useHighestUsagePercent } from "./hooks";
 
-// Fixed banner height (Tailwind `h-9`). Published as a CSS variable so the
-// settings drawer, a fixed overlay anchored under the top bar, can start below
-// the banner instead of behind it.
-const BANNER_HEIGHT = "2.25rem";
+// Fixed banner height (Tailwind `h-9`). Exported so fixed overlays anchored
+// under the top bar (the settings drawer) can start below the banner instead
+// of behind it.
+export const BILLING_BANNER_HEIGHT = "2.25rem";
 
-export function BillingLimitAlert() {
-	if (!features.billing) return null;
-	return <BillingLimitAlertGuard />;
+export interface BillingLimitBannerState {
+	/** The banner is showing: free plan at or above 80% of its included usage. */
+	visible: boolean;
+	/** Usage has hit or passed 100% of the plan's included allotment. */
+	atLimit: boolean;
+	plan: string;
+	usagePercent: number;
 }
 
-// Billing is project-scoped, but this banner renders from the shared route
-// layout. `useMatch` with `shouldThrow: false` keeps it out of routes where
-// `useCloudProjectDataProvider` would throw, and waiting on `loaderData`
-// avoids reading the provider before the project loader resolves.
-function BillingLimitAlertGuard() {
+/**
+ * Resolves the free-plan usage banner state.
+ *
+ * Both the banner itself and anything that must lay out around it (the
+ * settings drawer offsets its top edge by the banner height) call this, so
+ * they derive the same answer from the same query data during render. A side
+ * channel such as a CSS variable set from an effect would let the two
+ * disagree, leaving the banner painted behind the drawer.
+ *
+ * Billing is project-scoped, but callers render from the shared route layout
+ * and the `_context` route, where `useCloudProjectDataProvider` would throw.
+ * The provider is read off the project match instead, and the queries are
+ * skipped until it resolves, so the hook is safe on every route and keeps a
+ * stable tree shape (no outer/inner split that would remount the caller when
+ * the project loader lands). Off a project route the banner is hidden.
+ */
+export function useBillingLimitBanner(): BillingLimitBannerState {
 	const projectMatch = useMatch({
 		from: "/_context/orgs/$organization/projects/$project",
 		shouldThrow: false,
 	});
+	const dataProvider = features.billing
+		? projectMatch?.loaderData?.dataProvider
+		: undefined;
 
-	if (!projectMatch?.loaderData) return null;
-
-	return <BillingLimitAlertInner />;
-}
-
-function BillingLimitAlertInner() {
-	const dataProvider = useCloudProjectDataProvider();
+	const detailsOptions =
+		dataProvider?.currentProjectBillingDetailsQueryOptions();
 	const { data: billingData } = useQuery({
-		...dataProvider.currentProjectBillingDetailsQueryOptions(),
+		queryKey: detailsOptions?.queryKey ?? ["billing-details", "no-project"],
+		queryFn: detailsOptions?.queryFn ?? skipToken,
 	});
 
-	const usagePercent = useHighestUsagePercent();
+	const usageOptions = dataProvider?.currentProjectBillingUsageQueryOptions();
+	const { data: usage } = useQuery({
+		queryKey: usageOptions?.queryKey ?? ["billing-usage", "no-project"],
+		queryFn: usageOptions?.queryFn ?? skipToken,
+	});
+
+	const usagePercent = usage?.highestPercent ?? 0;
 	const plan = billingData?.billing.activePlan || "free";
-	const hidden = plan !== "free" || usagePercent < 80;
 
-	useEffect(() => {
-		if (hidden) return;
-		const root = document.documentElement;
-		root.style.setProperty("--billing-banner-height", BANNER_HEIGHT);
-		return () => {
-			root.style.removeProperty("--billing-banner-height");
-		};
-	}, [hidden]);
+	return {
+		visible: !!dataProvider && plan === "free" && usagePercent >= 80,
+		atLimit: usagePercent >= 100,
+		plan,
+		usagePercent,
+	};
+}
 
-	const atLimit = usagePercent >= 100;
+export function BillingLimitAlert() {
+	const { visible, atLimit, plan, usagePercent } = useBillingLimitBanner();
 
 	// The usage figure comes from a slow backend scan, so the banner appears well
 	// after the page loads. Expanding it in keeps the content below from jumping.
 	return (
 		<AnimatePresence>
-			{!hidden ? (
+			{visible ? (
 				<motion.div
 					initial={{ height: 0, opacity: 0 }}
-					animate={{ height: BANNER_HEIGHT, opacity: 1 }}
+					animate={{ height: BILLING_BANNER_HEIGHT, opacity: 1 }}
 					exit={{ height: 0, opacity: 0 }}
 					transition={{ duration: 0.25, ease: "easeOut" }}
 					className={cn(
