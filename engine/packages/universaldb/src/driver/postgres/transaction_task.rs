@@ -147,7 +147,7 @@ impl TransactionTask {
 					// occupy every slot in the pool the leader drain loop draws from, so the commits
 					// they are waiting on can never be applied.
 					let _ = tx.commit().await;
-					// NEGCONTROL drop(conn);
+					drop(conn);
 
 					let result =
 						commit::submit(&self.shared, read_version, operations, conflict_ranges)

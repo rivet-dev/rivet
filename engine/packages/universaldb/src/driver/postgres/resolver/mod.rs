@@ -62,7 +62,7 @@ pub async fn acquire_single_node_gate(shared: &Arc<PostgresShared>) -> Result<i6
 	let mut attempt = 0u32;
 	loop {
 		attempt += 1;
-		match lease::try_acquire(&shared.pool /* NEGCONTROL */, &shared.node_id).await {
+		match lease::try_acquire(&shared.leader_pool, &shared.node_id).await {
 			Ok(Some(acquired)) => {
 				tracing::debug!(
 					epoch = acquired.epoch,
@@ -148,7 +148,7 @@ async fn run_single_node(
 /// Multi-node: race the lease against other nodes; whoever wins leads until it loses the lease.
 async fn run_multi_node(shared: Arc<PostgresShared>) {
 	loop {
-		match lease::try_acquire(&shared.pool /* NEGCONTROL */, &shared.node_id).await {
+		match lease::try_acquire(&shared.leader_pool, &shared.node_id).await {
 			Ok(Some(acquired)) => {
 				tracing::info!(epoch = acquired.epoch, node_id = %shared.node_id, "acquired udb postgres leader lease");
 
@@ -219,7 +219,7 @@ async fn wait_for_election_retry(shared: &Arc<PostgresShared>) {
 /// it and wake standbys so they take over immediately instead of waiting out the TTL. Safe to call on
 /// a follower. The caller must already have stopped lease renewal before calling this.
 pub async fn handoff(shared: &Arc<PostgresShared>) {
-	match lease::release(&shared.pool /* NEGCONTROL */, &shared.node_id).await {
+	match lease::release(&shared.leader_pool, &shared.node_id).await {
 		Ok(true) => {
 			tracing::info!(node_id = %shared.node_id, "released udb postgres leader lease for graceful handoff");
 			if let Transport::MultiNode(nats) = &shared.transport {
@@ -306,7 +306,7 @@ async fn renew_loop(shared: Arc<PostgresShared>, epoch: i64) -> Result<()> {
 	loop {
 		interval.tick().await;
 
-		match lease::renew(&shared.pool /* NEGCONTROL */, &shared.node_id, epoch).await {
+		match lease::renew(&shared.leader_pool, &shared.node_id, epoch).await {
 			Ok(true) => last_renew = Instant::now(),
 			Ok(false) => {
 				tracing::warn!(
@@ -380,7 +380,7 @@ async fn collect_batch(rx: &mut mpsc::Receiver<CommitJob>) -> Vec<CommitJob> {
 /// winner; every such winner has `commit_version <= durable_version` (applied and folded into
 /// `durable_version` in one txn), so a commit is safe if `read_version >= durable_version`.
 async fn recovery_floor(shared: &Arc<PostgresShared>) -> Result<u64> {
-	let durable = lease::current_durable_version(&shared.pool /* NEGCONTROL */).await?;
+	let durable = lease::current_durable_version(&shared.leader_pool).await?;
 	Ok(durable.max(0) as u64)
 }
 
@@ -402,7 +402,7 @@ async fn drain_batch(
 
 	let pool_wait_start = Instant::now();
 	let mut conn = shared
-		.pool // NEGCONTROL
+		.leader_pool
 		.get()
 		.await
 		.context("failed to get connection for drain batch")?;
