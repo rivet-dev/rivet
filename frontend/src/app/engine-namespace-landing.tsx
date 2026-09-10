@@ -5,8 +5,8 @@ import { Button, H1, ScrollArea, SmallText, WithTooltip } from "@/components";
 import { useEngineNamespaceDataProvider } from "@/components/actors";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { VisibilitySensor } from "@/components/visibility-sensor";
-import { AddComponentButton, AddComponentCard } from "./add-component-card";
 import { ActorBuildCard, ActorGridCardSkeleton } from "./actors-grid";
+import { AddComponentButton, AddComponentCard } from "./add-component-card";
 
 // Engine (OSS / enterprise) namespace landing shown when no Actor name is
 // selected. This is the engine counterpart to the cloud `ActorsGrid`; keep the
@@ -79,7 +79,7 @@ export function EngineNamespaceLanding() {
 					<section>
 						<header className="flex items-center justify-between gap-4 mb-3">
 							<h2 className="text-base font-semibold text-foreground">
-								Actors
+								Components
 							</h2>
 						</header>
 
@@ -96,11 +96,11 @@ export function EngineNamespaceLanding() {
 							) : (
 								<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
 									<h3 className="text-base font-semibold text-foreground">
-										No actors yet
+										No components yet
 									</h3>
 									<SmallText className="text-muted-foreground max-w-md">
-										Deploy code that registers an actor to
-										see it here.
+										Deploy code that registers an actor or
+										add a service to see it here.
 									</SmallText>
 									<AddComponentButton />
 								</div>

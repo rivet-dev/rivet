@@ -14,8 +14,8 @@ type FrameLoader = () => Promise<{
 	default: ComponentType<{ onClose?: () => void }>;
 }>;
 
-// Each "Add provider" modal maps to its connect frame, rendered inside the
-// right-side drawer instead of a centered dialog.
+// Each "Add provider" / "Add service" modal maps to its connect frame,
+// rendered inside the right-side drawer instead of a centered dialog.
 const PROVIDER_FRAMES: Record<string, FrameLoader> = {
 	"connect-rivet": () => import("@/app/dialogs/connect-rivet-frame"),
 	"connect-vercel": () => import("@/app/dialogs/connect-vercel-frame"),
@@ -28,7 +28,11 @@ const PROVIDER_FRAMES: Record<string, FrameLoader> = {
 	"connect-aws": () => import("@/app/dialogs/connect-aws-frame"),
 	"connect-gcp": () => import("@/app/dialogs/connect-gcp-frame"),
 	"connect-hetzner": () => import("@/app/dialogs/connect-hetzner-frame"),
+	"connect-durable-streams": () =>
+		import("@/app/dialogs/connect-durable-streams-frame"),
 };
+
+export const CONNECT_DURABLE_STREAMS_MODAL = "connect-durable-streams";
 
 export function isConnectProviderModal(modal: string | undefined): boolean {
 	return typeof modal === "string" && modal in PROVIDER_FRAMES;
