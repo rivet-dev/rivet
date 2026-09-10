@@ -3,6 +3,33 @@ use hyper::header::HeaderValue;
 use super::*;
 
 #[test]
+fn client_state_without_limits_admits_repeated_requests() {
+	let mut state = ClientState::new(None, None);
+
+	for _ in 0..10_001 {
+		assert_eq!(state.try_admit(), Ok(()));
+	}
+}
+
+#[test]
+fn client_state_reports_rate_limit_separately() {
+	let mut state = ClientState::new(Some((1, Duration::from_secs(60))), None);
+
+	assert_eq!(state.try_admit(), Ok(()));
+	assert_eq!(state.try_admit(), Err(AdmissionRejection::RateLimit));
+}
+
+#[test]
+fn client_state_reports_max_in_flight_separately() {
+	let mut state = ClientState::new(None, Some(1));
+
+	assert_eq!(state.try_admit(), Ok(()));
+	assert_eq!(state.try_admit(), Err(AdmissionRejection::MaxInFlight));
+	state.release_in_flight();
+	assert_eq!(state.try_admit(), Ok(()));
+}
+
+#[test]
 fn labels_rivet_errors_by_group_and_code() {
 	let err = crate::errors::UriParseError("http://actor-9f3b.example/path".to_owned()).build();
 

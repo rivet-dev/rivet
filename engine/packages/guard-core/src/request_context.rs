@@ -31,8 +31,6 @@ pub struct RequestContext {
 	pub(crate) request_body_is_end_stream: bool,
 	pub(crate) client_disconnect: CancellationToken,
 
-	pub(crate) rate_limit: RateLimitConfig,
-	pub(crate) max_in_flight: MaxInFlightConfig,
 	pub(crate) retry: RetryConfig,
 	pub(crate) timeout: TimeoutConfig,
 
@@ -55,6 +53,7 @@ impl RequestContext {
 		client_ip: IpAddr,
 		start_time: Instant,
 		client_disconnect: CancellationToken,
+		guard_config: &rivet_config::config::guard::Guard,
 	) -> Self {
 		let hostname = host.split(':').next().unwrap_or(&host).to_string();
 
@@ -74,19 +73,12 @@ impl RequestContext {
 			request_body_is_end_stream: true,
 			client_disconnect,
 
-			rate_limit: RateLimitConfig {
-				requests: 10000, // 10000 requests
-				period: 60,      // per 60 seconds
-			},
-			max_in_flight: MaxInFlightConfig {
-				amount: 2000, // 2000 concurrent requests
-			},
 			retry: RetryConfig {
-				max_attempts: 7,       // 7 retry attempts
-				initial_interval: 150, // 150ms initial interval
+				max_attempts: guard_config.proxy_retry_max_attempts(),
+				initial_interval: guard_config.proxy_retry_initial_interval_ms(),
 			},
 			timeout: TimeoutConfig {
-				request_timeout: 30, // 30 seconds for requests
+				request_timeout: guard_config.upstream_request_timeout(),
 			},
 
 			in_flight_permit: None,
@@ -164,17 +156,6 @@ impl RequestContext {
 }
 
 #[derive(Clone, Debug)]
-pub struct RateLimitConfig {
-	pub requests: u64,
-	pub period: u64, // in seconds
-}
-
-#[derive(Clone, Debug)]
-pub struct MaxInFlightConfig {
-	pub amount: usize,
-}
-
-#[derive(Clone, Debug)]
 pub struct RetryConfig {
 	pub max_attempts: u32,
 	pub initial_interval: u64, // in milliseconds
@@ -182,7 +163,7 @@ pub struct RetryConfig {
 
 #[derive(Clone, Debug)]
 pub struct TimeoutConfig {
-	pub request_timeout: u64, // in seconds
+	pub request_timeout: Duration,
 }
 
 #[derive(Clone, Debug)]

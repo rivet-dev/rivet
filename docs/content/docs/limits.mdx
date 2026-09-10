@@ -132,8 +132,8 @@ See [Actor Input](/actors/docs/input) for details.
 
 | Name | Soft Limit | Hard Limit | Description |
 |------|------------|------------|-------------|
-| Rate limit | — | 1200 requests/minute | Default rate limit per actor per IP address with a 1 minute time bucket. |
-| Max in-flight requests | — | 32 | Default maximum concurrent requests to an actor per IP address. |
+| Rate limit | — | — | Disabled by default. Configure `guard.rate_limit` to apply a fixed-window limit per source IP. |
+| Max in-flight requests | — | — | Disabled by default. Configure `guard.max_in_flight` to limit concurrent requests per source IP. |
 
 ### Timeouts
 

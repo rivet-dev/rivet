@@ -35,7 +35,7 @@ use crate::RouteTarget;
 use crate::request_context::RequestContext;
 use crate::response_body::ResponseBody;
 use crate::route::{CacheKeyFn, ResolveRouteOutput, RouteCache, RoutingFn, RoutingOutput};
-use crate::utils::{ClientState, InFlightPermit};
+use crate::utils::{AdmissionRejection, ClientState, InFlightPermit};
 use crate::{
 	WebSocketHandle, custom_serve::HibernationResult, errors, metrics, task_group::TaskGroup, utils,
 };
@@ -43,13 +43,6 @@ use crate::{
 pub const X_FORWARDED_FOR: HeaderName = HeaderName::from_static("x-forwarded-for");
 pub const X_RIVET_ERROR: HeaderName = HeaderName::from_static("x-rivet-error");
 
-/// How long a client's throttling state is kept after its last request.
-///
-/// This is an idle timeout rather than a live timeout so that a client which keeps sending traffic
-/// keeps its rate limit window and in-flight count. Expiring an active client would refill its rate
-/// limit window early, and would reset its in-flight count to zero while its existing requests are
-/// still running.
-const CLIENT_STATE_CACHE_IDLE_TIMEOUT: Duration = Duration::from_secs(60 * 60); // 1 hour
 const WEBSOCKET_CLOSE_LINGER: Duration = Duration::from_millis(5); // Keep TCP connection open briefly after WebSocket close
 
 fn websocket_config(guard_config: &rivet_config::config::guard::Guard) -> WebSocketConfig {
@@ -71,10 +64,9 @@ pub struct ProxyState {
 	>,
 	route_cache: RouteCache,
 	// We use moka::Cache instead of scc::HashMap because it automatically handles TTL and capacity
-	client_states: Cache<std::net::IpAddr, Arc<parking_lot::Mutex<ClientState>>>,
-	// Entries are owned by an InFlightPermit, so this is bounded by the per-client in-flight limits
-	// and does not need its own capacity or TTL eviction. Evicting a live entry here would let its
-	// request id be handed out to a second concurrent request.
+	client_states: Option<Cache<std::net::IpAddr, Arc<parking_lot::Mutex<ClientState>>>>,
+	// Entries are owned by an InFlightPermit for the lifetime of each active request, so live IDs
+	// cannot be evicted and handed out to a second concurrent request.
 	in_flight_requests: Arc<scc::HashSet<protocol::RequestId>>,
 
 	tasks: Arc<TaskGroup>,
@@ -86,6 +78,7 @@ impl ProxyState {
 		routing_fn: RoutingFn,
 		cache_key_fn: CacheKeyFn,
 	) -> Self {
+		let guard_config = config.guard();
 		let https_connector_builder =
 			match hyper_rustls::HttpsConnectorBuilder::new().with_native_roots() {
 				Ok(builder) => builder,
@@ -103,9 +96,22 @@ impl ProxyState {
 			.enable_http2()
 			.build();
 		let client = Client::builder(TokioExecutor::new())
-			.pool_idle_timeout(Duration::from_secs(30))
+			.pool_idle_timeout(guard_config.http_client_pool_idle_timeout())
 			.build(https_connector);
-		let route_cache_ttl = config.guard().route_cache_ttl();
+		let route_cache_ttl = guard_config.route_cache_ttl();
+		let client_states =
+			if guard_config.rate_limit().is_some() || guard_config.max_in_flight().is_some() {
+				Some(
+					Cache::builder()
+						.max_capacity(guard_config.admission_client_state_cache_capacity())
+						.time_to_idle(guard_config.admission_client_state_cache_idle_timeout())
+						.build(),
+				)
+			} else {
+				metrics::RATE_LIMITER_COUNT.set(0);
+				metrics::IN_FLIGHT_COUNTER_COUNT.set(0);
+				None
+			};
 
 		Self {
 			config,
@@ -113,10 +119,7 @@ impl ProxyState {
 			cache_key_fn,
 			client,
 			route_cache: RouteCache::new(route_cache_ttl),
-			client_states: Cache::builder()
-				.max_capacity(10_000)
-				.time_to_idle(CLIENT_STATE_CACHE_IDLE_TIMEOUT)
-				.build(),
+			client_states,
 			in_flight_requests: Arc::new(scc::HashSet::new()),
 			tasks: TaskGroup::new(),
 		}
@@ -224,40 +227,56 @@ impl ProxyState {
 
 	/// Get the throttling state for a client, creating it if it does not exist yet.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn client_state(&self, req_ctx: &RequestContext) -> Arc<parking_lot::Mutex<ClientState>> {
-		let entry = self
-			.client_states
+	async fn client_state(
+		&self,
+		req_ctx: &RequestContext,
+	) -> Option<Arc<parking_lot::Mutex<ClientState>>> {
+		let client_states = self.client_states.as_ref()?;
+		let guard_config = self.config.guard();
+		let entry = client_states
 			.entry(req_ctx.client_ip)
 			.or_insert_with(async {
 				Arc::new(parking_lot::Mutex::new(ClientState::new(
-					req_ctx.rate_limit.requests,
-					req_ctx.rate_limit.period,
-					req_ctx.max_in_flight.amount,
+					guard_config.rate_limit().map(|rate_limit| {
+						(
+							rate_limit.requests,
+							Duration::from_millis(rate_limit.period_ms),
+						)
+					}),
+					guard_config.max_in_flight(),
 				)))
 			})
 			.await;
 
 		if entry.is_fresh() {
-			// Each entry holds both a rate limiter and an in-flight counter
-			let count = self.client_states.entry_count() as i64;
-			metrics::RATE_LIMITER_COUNT.set(count);
-			metrics::IN_FLIGHT_COUNTER_COUNT.set(count);
+			let count = client_states.entry_count() as i64;
+			if guard_config.rate_limit().is_some() {
+				metrics::RATE_LIMITER_COUNT.set(count);
+			}
+			if guard_config.max_in_flight().is_some() {
+				metrics::IN_FLIGHT_COUNTER_COUNT.set(count);
+			}
 		}
 
-		entry.into_value()
+		Some(entry.into_value())
 	}
 
-	/// Admits a request under the client's rate limit and in-flight limit, assigning it a unique
-	/// request id. Returns false if either limit was hit.
+	/// Applies configured admission controls and assigns a unique protocol request ID. Request IDs
+	/// are allocated even when both admission controls are disabled.
 	///
 	/// On success the in-flight slot and the request id are owned by the permit stored on the
 	/// request context, and are released once every clone of that context is dropped.
 	#[tracing::instrument(level = "debug", skip_all)]
-	async fn try_admit_request(&self, req_ctx: &mut RequestContext) -> Result<bool> {
+	async fn admit_request(
+		&self,
+		req_ctx: &mut RequestContext,
+	) -> Result<Option<AdmissionRejection>> {
 		let client_state = self.client_state(req_ctx).await;
 
-		if !client_state.lock().try_admit() {
-			return Ok(false);
+		if let Some(client_state) = &client_state
+			&& let Err(rejection) = client_state.lock().try_admit()
+		{
+			return Ok(Some(rejection));
 		}
 
 		// The in-flight slot is held but not owned by anything yet. There are no await points before
@@ -266,7 +285,9 @@ impl ProxyState {
 		let request_id = match self.generate_unique_in_flight_request_id() {
 			Ok(request_id) => request_id,
 			Err(err) => {
-				client_state.lock().release_in_flight();
+				if let Some(client_state) = &client_state {
+					client_state.lock().release_in_flight();
+				}
 				return Err(err);
 			}
 		};
@@ -277,7 +298,7 @@ impl ProxyState {
 			request_id,
 		)));
 
-		Ok(true)
+		Ok(None)
 	}
 
 	/// Generate a request ID that is not currently in flight.
@@ -420,6 +441,7 @@ impl ProxyService {
 			client_ip,
 			start_time,
 			self.client_disconnect.clone(),
+			self.state.config.guard(),
 		);
 		req_ctx.set_request_body_metadata(request_body_exact_size, request_body_is_end_stream);
 
@@ -694,16 +716,41 @@ impl ProxyService {
 
 		let target = target_res?;
 
-		// Apply rate limiting and in-flight limits, and assign the protocol request ID. The permit
-		// lives on the request context and releases the in-flight slot and request ID when the
-		// context is dropped.
-		if !self.state.try_admit_request(req_ctx).await? {
-			return Err(errors::RateLimit {
-				method: req_ctx.method.to_string(),
-				path: req_ctx.path.clone(),
-				ip: req_ctx.client_ip.to_string(),
-			}
-			.build());
+		// Apply configured admission controls and assign the protocol request ID. The permit lives
+		// on the request context and releases any in-flight slot plus the request ID when the context
+		// is dropped.
+		if let Some(rejection) = self.state.admit_request(req_ctx).await? {
+			return match rejection {
+				AdmissionRejection::RateLimit => {
+					let rate_limit = self
+						.state
+						.config
+						.guard()
+						.rate_limit()
+						.context("rate limit rejected request without rate limit config")?;
+					Err(errors::RateLimit {
+						method: req_ctx.method.to_string(),
+						path: req_ctx.path.clone(),
+						ip: req_ctx.client_ip.to_string(),
+						requests: rate_limit.requests,
+						period_ms: rate_limit.period_ms,
+					}
+					.build())
+				}
+				AdmissionRejection::MaxInFlight => {
+					let max_in_flight =
+						self.state.config.guard().max_in_flight().context(
+							"in-flight limit rejected request without max-in-flight config",
+						)?;
+					Err(errors::MaxInFlight {
+						method: req_ctx.method.to_string(),
+						path: req_ctx.path.clone(),
+						ip: req_ctx.client_ip.to_string(),
+						max_in_flight,
+					}
+					.build())
+				}
+			};
 		}
 
 		// Increment metrics
@@ -739,7 +786,7 @@ impl ProxyService {
 		resolved_route: ResolveRouteOutput,
 	) -> Result<Response<ResponseBody>> {
 		// Set up retry with backoff
-		let timeout_duration = Duration::from_secs(req_ctx.timeout.request_timeout);
+		let timeout_duration = req_ctx.timeout.request_timeout;
 
 		match resolved_route {
 			ResolveRouteOutput::Target(mut target) => {
@@ -1075,8 +1122,7 @@ impl ProxyService {
 						let _active_guard = active_guard;
 						let req_ctx = &mut req_ctx;
 
-						// Set up a timeout for the entire operation
-						let timeout_duration = Duration::from_secs(30); // 30 seconds timeout
+						let timeout_duration = state.config.guard().websocket_setup_timeout();
 						tracing::debug!(
 							"WebSocket proxy task started with {}s timeout",
 							timeout_duration.as_secs()
@@ -1183,7 +1229,7 @@ impl ProxyService {
 							}
 
 							match tokio::time::timeout(
-								Duration::from_secs(5), // 5 second timeout per connection attempt
+								state.config.guard().websocket_connect_attempt_timeout(),
 								tokio_tungstenite::connect_async_with_config(
 									ws_request,
 									Some(websocket_config(state.config.guard())),
@@ -1227,8 +1273,13 @@ impl ProxyService {
 								Err(_) => {
 									last_error_code = Some("websocket_connect_timeout".to_owned());
 									tracing::debug!(
-										"WebSocket request attempt {} timed out after 5s",
-										attempts
+										attempts,
+										timeout_ms = state
+											.config
+											.guard()
+											.websocket_connect_attempt_timeout()
+											.as_millis() as u64,
+										"WebSocket request attempt timed out"
 									);
 								}
 							}
@@ -1415,7 +1466,7 @@ impl ProxyService {
 												// Send the message with a timeout
 												tracing::trace!("Sending message to upstream server");
 												let send_result = tokio::time::timeout(
-													Duration::from_secs(5),
+													state.config.guard().websocket_send_timeout(),
 													sink.send(upstream_msg)
 												).await;
 
@@ -1425,7 +1476,7 @@ impl ProxyService {
 														// Flush the sink with a timeout
 														tracing::trace!("Flushing upstream sink");
 														let flush_result = tokio::time::timeout(
-															Duration::from_secs(2),
+															state.config.guard().websocket_flush_timeout(),
 															sink.flush()
 														).await;
 
@@ -1447,10 +1498,10 @@ impl ProxyService {
 														break;
 													},
 													Err(_) => {
-														tracing::trace!("Timeout sending message to upstream after 5s");
+														tracing::trace!("Timeout sending message to upstream");
 														let _ = shutdown_tx.send(true);
 														break;
-													}
+													},
 												}
 											},
 											Some(Err(err)) => {
@@ -1566,7 +1617,7 @@ impl ProxyService {
 												// Send the message with a timeout
 												tracing::trace!("Sending message to client");
 												let send_result = tokio::time::timeout(
-													Duration::from_secs(5),
+													state.config.guard().websocket_send_timeout(),
 													sink.send(client_msg)
 												).await;
 
@@ -1576,7 +1627,7 @@ impl ProxyService {
 														// Flush the sink with a timeout
 														tracing::trace!("Flushing client sink");
 														let flush_result = tokio::time::timeout(
-															Duration::from_secs(2),
+															state.config.guard().websocket_flush_timeout(),
 															sink.flush()
 														).await;
 
@@ -1598,10 +1649,10 @@ impl ProxyService {
 														break;
 													},
 													Err(_) => {
-														tracing::trace!("Timeout sending message to client after 5s");
+														tracing::trace!("Timeout sending message to client");
 														let _ = shutdown_tx.send(true);
 														break;
-													}
+													},
 												}
 											},
 											Some(Err(err)) => {
@@ -1922,6 +1973,79 @@ impl ProxyServiceFactory {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn test_state(guard: rivet_config::config::guard::Guard) -> ProxyState {
+		let config = rivet_config::Config::from_root(rivet_config::config::Root {
+			guard: Some(guard),
+			..Default::default()
+		});
+		let routing_fn: RoutingFn =
+			Arc::new(|_| Box::pin(async { anyhow::bail!("routing is not used by this test") }));
+		let cache_key_fn: CacheKeyFn = Arc::new(|_| Ok(0));
+
+		ProxyState::new(config, routing_fn, cache_key_fn)
+	}
+
+	fn test_request_context(state: &ProxyState) -> RequestContext {
+		RequestContext::new(
+			"127.0.0.1:12345".parse().unwrap(),
+			Id::v1(uuid::Uuid::nil(), 0),
+			Id::v1(uuid::Uuid::nil(), 1),
+			"example.com".to_owned(),
+			"/actors".to_owned(),
+			hyper::Method::GET,
+			hyper::HeaderMap::new(),
+			false,
+			"127.0.0.1".parse().unwrap(),
+			Instant::now(),
+			CancellationToken::new(),
+			state.config.guard(),
+		)
+	}
+
+	#[tokio::test]
+	async fn default_admission_is_unlimited_and_still_allocates_request_ids() {
+		let state = test_state(Default::default());
+		assert!(state.client_states.is_none());
+
+		let mut contexts = Vec::with_capacity(10_001);
+		for _ in 0..10_001 {
+			let mut req_ctx = test_request_context(&state);
+			assert_eq!(state.admit_request(&mut req_ctx).await.unwrap(), None);
+			assert!(req_ctx.in_flight_request_id().is_ok());
+			contexts.push(req_ctx);
+		}
+	}
+
+	#[tokio::test]
+	async fn configured_admission_limits_are_enforced_independently() {
+		let state = test_state(rivet_config::config::guard::Guard {
+			rate_limit: Some(rivet_config::config::guard::GuardRateLimit {
+				requests: 1,
+				period_ms: 60_000,
+			}),
+			..Default::default()
+		});
+		let mut first = test_request_context(&state);
+		let mut second = test_request_context(&state);
+		assert_eq!(state.admit_request(&mut first).await.unwrap(), None);
+		assert_eq!(
+			state.admit_request(&mut second).await.unwrap(),
+			Some(AdmissionRejection::RateLimit)
+		);
+
+		let state = test_state(rivet_config::config::guard::Guard {
+			max_in_flight: Some(1),
+			..Default::default()
+		});
+		let mut first = test_request_context(&state);
+		let mut second = test_request_context(&state);
+		assert_eq!(state.admit_request(&mut first).await.unwrap(), None);
+		assert_eq!(
+			state.admit_request(&mut second).await.unwrap(),
+			Some(AdmissionRejection::MaxInFlight)
+		);
+	}
 
 	#[test]
 	fn websocket_config_uses_documented_limit() {
