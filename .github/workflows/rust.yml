@@ -59,6 +59,10 @@ jobs:
           cache-shared-key: rust-ci
           cache-on-failure: true
 
+      - name: Set up repository-specific Rust dependencies
+        if: ${{ hashFiles('scripts/ci/pre-rust-check.sh') != '' }}
+        run: scripts/ci/pre-rust-check.sh
+
       - name: Check event-driven drain invariants
         run: rivetkit-rust/packages/rivetkit-core/scripts/check-event-driven-drains.sh
 
