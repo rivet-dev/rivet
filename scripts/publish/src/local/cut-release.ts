@@ -167,11 +167,11 @@ async function main() {
 		await $({
 			stdio: "inherit",
 			cwd: repoRoot,
-		})`pnpm build -F @rivet-dev/workflow-world -F @rivet-dev/sandbox-adapter -F @rivet-dev/pi`;
+		})`pnpm build -F @rivet-dev/workflow-world -F @rivet-dev/sandbox-adapter -F @rivet-dev/pi -F @rivet-dev/opencode`;
 		await $({
 			stdio: "inherit",
 			cwd: repoRoot,
-		})`pnpm test -F @rivet-dev/sandbox-adapter -F @rivet-dev/pi`;
+		})`pnpm test -F @rivet-dev/sandbox-adapter -F @rivet-dev/pi -F @rivet-dev/opencode`;
 		await $({
 			stdio: "inherit",
 			cwd: repoRoot,
