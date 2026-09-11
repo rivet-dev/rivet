@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use hyper::{Method, header::HeaderMap};
 use rivet_runner_protocol as protocol;
 use rivet_util::Id;
+use rivet_api_builder::X_RIVET_RAY_ID;
+use std::collections::HashMap;
 use std::{
 	net::{IpAddr, SocketAddr},
 	sync::Arc,
@@ -88,6 +90,14 @@ impl RequestContext {
 
 	pub fn ray_id(&self) -> Id {
 		self.ray_id
+	}
+
+	/// Adds this request's ray ID to the headers forwarded to an actor when the
+	/// caller did not send one, so the actor and gateway use the same ray ID.
+	pub fn forward_ray(&self, headers: &mut HashMap<String, String>) {
+		headers
+			.entry(X_RIVET_RAY_ID.as_str().to_owned())
+			.or_insert_with(|| self.ray_id.to_string());
 	}
 
 	pub fn req_id(&self) -> Id {
