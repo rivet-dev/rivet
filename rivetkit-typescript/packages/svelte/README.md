@@ -708,5 +708,4 @@ The published artifact is self-contained: its internal framework bridge forwards
 
 ## License
 
-Apache-2.0. The published package includes the full license text, including the
-Rivet framework attribution retained by the package-local bridge.
+Apache-2.0. See the repository [LICENSE](../../../LICENSE).
