@@ -1,4 +1,5 @@
 import { decodeBridgeRivetError, RivetError } from "@/actor/errors";
+import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
 import type {
 	WasmRuntimeBindings,
 	WasmRuntimeConfig,
@@ -23,6 +24,7 @@ import type {
 	RuntimeKvEntry,
 	RuntimeKvListOptions,
 	RuntimeListenerConfig,
+	RuntimeOutboundCall,
 	RuntimeQueueEnqueueAndWaitOptions,
 	RuntimeQueueInspectMessage,
 	RuntimeQueueMessage,
@@ -533,6 +535,30 @@ export class WasmCoreRuntime implements CoreRuntime {
 
 	actorId(ctx: ActorContextHandle): string {
 		return callHandle(asWasmActorContext(ctx), "actorId");
+	}
+
+	runWithActorInvocationContext<T>(
+		_ctx: ActorContextHandle,
+		run: () => T,
+	): T {
+		// Wasm does not yet carry invocation telemetry across its runtime boundary.
+		return run();
+	}
+
+	actorInvocationTraceContext(
+		_ctx: ActorContextHandle,
+	): ActorInvocationTraceContext | undefined {
+		return undefined;
+	}
+
+	beginOutboundCall(
+		_ctx: ActorContextHandle,
+		_actorName: string,
+		_actionName: string,
+	): RuntimeOutboundCall | undefined {
+		// Wasm carries no invocation telemetry, so a call goes out untraced
+		// rather than failing.
+		return undefined;
 	}
 
 	actorName(ctx: ActorContextHandle): string {

@@ -8,6 +8,7 @@ import {
 	type ActorCron,
 	type ActorCronEveryOptions,
 	type ActorCronSetOptions,
+	type ActorLogger,
 	type ActorSchedule,
 	CONN_STATE_MANAGER_SYMBOL,
 	type CronFire,
@@ -46,6 +47,7 @@ import {
 } from "@/client/client";
 import { convertRegistryConfigToClientConfig } from "@/client/config";
 import { HEADER_CONN_PARAMS } from "@/common/actor-router-consts";
+import type { ActorInvocationTraceContext } from "@/common/actor-telemetry-context";
 import type {
 	AnyDatabaseProvider,
 	SqliteProfilingOptions,
@@ -2720,6 +2722,7 @@ export class ActorContextHandleAdapter {
 	#db?: unknown;
 	#dispatchCancelToken?: CancellationTokenHandle;
 	#kv?: NativeKvAdapter;
+	#log?: ActorLogger;
 	#queue?: NativeQueueAdapter;
 	#request?: Request;
 	#schedule?: NativeScheduleAdapter;
@@ -2956,8 +2959,30 @@ export class ActorContextHandleAdapter {
 		return this.#connMap;
 	}
 
+	#invocationTraceContext(): ActorInvocationTraceContext | undefined {
+		return callNativeSync(() =>
+			this.#runtime.actorInvocationTraceContext(this.#ctx),
+		);
+	}
+
 	get log() {
-		return logger();
+		if (!this.#log) {
+			// Actor fields follow the camelCase used by the rest of the
+			// TypeScript logs. trace_id and span_id stay snake_case because
+			// that is what OpenTelemetry log correlation tooling looks for.
+			const invocation = this.#invocationTraceContext();
+			this.#log = logger().child({
+				actorId: this.actorId,
+				actorName: this.name,
+				actorKey: this.key,
+				...(invocation?.rayId && { rayId: invocation.rayId }),
+				...(invocation?.span && {
+					trace_id: invocation.span.traceId,
+					span_id: invocation.span.spanId,
+				}),
+			});
+		}
+		return this.#log;
 	}
 
 	get abortSignal(): AbortSignal {
@@ -3881,6 +3906,9 @@ function buildActorConfig(
 		actions: Object.keys(flattenActionHandlers(config.actions))
 			.sort()
 			.map((name) => ({ name })),
+		queues: Object.keys(config.queues ?? {})
+			.sort()
+			.map((name) => ({ name })),
 		inspectorTabs: buildInspectorTabs(config.inspector, runtimeKind),
 	};
 }
@@ -3995,12 +4023,22 @@ export function buildNativeFactory(
 		events: config.events,
 		queues: config.queues,
 	};
-	const createClient = () =>
+	const createClient = (ctx: ActorContextHandle) =>
 		createClientWithDriver(
 			new RemoteEngineControlClient(
 				convertRegistryConfigToClientConfig(registryConfig),
 			),
-			{ encoding: "bare" },
+			{
+				encoding: "bare",
+				currentActorInvocation: () =>
+					callNativeSync(() =>
+						runtime.actorInvocationTraceContext(ctx),
+					),
+				beginOutboundCall: (actorName, actionName) =>
+					callNativeSync(() =>
+						runtime.beginOutboundCall(ctx, actorName, actionName),
+					),
+			},
 		);
 	const run = getRunFunction(config.run);
 	const runHandlerCoordinator =
@@ -4044,7 +4082,7 @@ export function buildNativeFactory(
 		new ActorContextHandleAdapter(
 			runtime,
 			ctx,
-			createClient,
+			() => createClient(ctx),
 			schemaConfig,
 			databaseProvider,
 			request,
@@ -4063,7 +4101,7 @@ export function buildNativeFactory(
 			runtime,
 			ctx,
 			conn,
-			createClient,
+			() => createClient(ctx),
 			schemaConfig,
 			databaseProvider,
 			request,
@@ -5041,129 +5079,147 @@ export function buildNativeFactory(
 				try {
 					const { ctx, request, cancelToken, responseBodyStream } =
 						unwrapTsfnPayload(error, payload);
-					const inspectorResponse =
-						await maybeHandleNativeInspectorRequest(ctx, request);
-					if (inspectorResponse) {
-						await cancelNativeHttpRequestBody(request.bodyStream);
-						return (
-							await convertNativeHttpResponse(
-								inspectorResponse,
-								responseBodyStream,
-							)
-						).response;
-					}
-
-					if (typeof config.onRequest !== "function") {
-						await cancelNativeHttpRequestBody(request.bodyStream);
-						return (
-							await convertNativeHttpResponse(
-								new Response(null, { status: 404 }),
-								responseBodyStream,
-							)
-						).response;
-					}
-
-					const requestAbortController = new AbortController();
-					const handlerRequest = buildNativeHttpRequest({
-						...request,
-						abortController: requestAbortController,
-					});
-					const rawConnParams =
-						handlerRequest.headers.get(HEADER_CONN_PARAMS);
-					let requestCtx:
-						| ReturnType<typeof withConnContext>
-						| undefined;
-					let conn: ConnHandle | undefined;
-					let removeRequestAbortListener: (() => void) | undefined;
-					let cleanupDeferredToBody = false;
-					let cleanedUp = false;
-					const cleanupRequest = async () => {
-						if (cleanedUp) return;
-						cleanedUp = true;
-						removeRequestAbortListener?.();
-						try {
-							await requestCtx?.dispose();
-						} finally {
-							if (conn) {
-								await runtime.connDisconnect(conn);
-							}
-						}
-					};
-					try {
-						const connParams = validateConnParams(
-							schemaConfig.connParamsSchema,
-							rawConnParams
-								? JSON.parse(rawConnParams)
-								: undefined,
-						);
-						conn = await callNative(() =>
-							runtime.actorConnectConn(
-								ctx,
-								encodeValue(connParams),
-								request,
-							),
-						);
-						requestCtx = makeConnCtx(
-							ctx,
-							conn,
-							handlerRequest,
-							cancelToken,
-						);
-						const ctxAbortSignal = requestCtx.abortSignal;
-						const abortRequest = () =>
-							requestAbortController.abort(ctxAbortSignal.reason);
-						if (ctxAbortSignal.aborted) {
-							abortRequest();
-						} else {
-							ctxAbortSignal.addEventListener(
-								"abort",
-								abortRequest,
-								{ once: true },
-							);
-							removeRequestAbortListener = () =>
-								ctxAbortSignal.removeEventListener(
-									"abort",
-									abortRequest,
+					return await runtime.runWithActorInvocationContext(
+						ctx,
+						async () => {
+							const inspectorResponse =
+								await maybeHandleNativeInspectorRequest(
+									ctx,
+									request,
 								);
-						}
-						const response = await config.onRequest(
-							requestCtx,
-							handlerRequest,
-						);
-						if (!isResponseLike(response)) {
-							throw new Error(
-								"onRequest handler must return a Response",
-							);
-						}
-						const conversion = await convertNativeHttpResponse(
-							response,
-							responseBodyStream,
-						);
-						if (conversion.bodyCompletion) {
-							cleanupDeferredToBody = true;
-							void conversion.bodyCompletion
-								.then(cleanupRequest)
-								.catch((cleanupError) => {
-									logger().error({
-										msg: "failed to clean up native streaming http request",
-										error: cleanupError,
-									});
-								});
-						}
-						return conversion.response;
-					} finally {
-						try {
-							// Handler completion ends upload ownership even when
-							// the Web Request body is locked or partly consumed.
-							await cancelNativeHttpRequestBody(
-								request.bodyStream,
-							);
-						} finally {
-							if (!cleanupDeferredToBody) {
-								await cleanupRequest();
+							if (inspectorResponse) {
+								await cancelNativeHttpRequestBody(
+									request.bodyStream,
+								);
+								return (
+									await convertNativeHttpResponse(
+										inspectorResponse,
+										responseBodyStream,
+									)
+								).response;
 							}
-						}
-					}
+
+							if (typeof config.onRequest !== "function") {
+								await cancelNativeHttpRequestBody(
+									request.bodyStream,
+								);
+								return (
+									await convertNativeHttpResponse(
+										new Response(null, { status: 404 }),
+										responseBodyStream,
+									)
+								).response;
+							}
+
+							const requestAbortController =
+								new AbortController();
+							const handlerRequest = buildNativeHttpRequest({
+								...request,
+								abortController: requestAbortController,
+							});
+							const rawConnParams =
+								handlerRequest.headers.get(HEADER_CONN_PARAMS);
+							let requestCtx:
+								| ReturnType<typeof withConnContext>
+								| undefined;
+							let conn: ConnHandle | undefined;
+							let removeRequestAbortListener:
+								| (() => void)
+								| undefined;
+							let cleanupDeferredToBody = false;
+							let cleanedUp = false;
+							const cleanupRequest = async () => {
+								if (cleanedUp) return;
+								cleanedUp = true;
+								removeRequestAbortListener?.();
+								try {
+									await requestCtx?.dispose();
+								} finally {
+									if (conn) {
+										await runtime.connDisconnect(conn);
+									}
+								}
+							};
+							try {
+								const connParams = validateConnParams(
+									schemaConfig.connParamsSchema,
+									rawConnParams
+										? JSON.parse(rawConnParams)
+										: undefined,
+								);
+								conn = await callNative(() =>
+									runtime.actorConnectConn(
+										ctx,
+										encodeValue(connParams),
+										request,
+									),
+								);
+								requestCtx = makeConnCtx(
+									ctx,
+									conn,
+									handlerRequest,
+									cancelToken,
+								);
+								const ctxAbortSignal = requestCtx.abortSignal;
+								const abortRequest = () =>
+									requestAbortController.abort(
+										ctxAbortSignal.reason,
+									);
+								if (ctxAbortSignal.aborted) {
+									abortRequest();
+								} else {
+									ctxAbortSignal.addEventListener(
+										"abort",
+										abortRequest,
+										{ once: true },
+									);
+									removeRequestAbortListener = () =>
+										ctxAbortSignal.removeEventListener(
+											"abort",
+											abortRequest,
+										);
+								}
+								const response = await config.onRequest(
+									requestCtx,
+									handlerRequest,
+								);
+								if (!isResponseLike(response)) {
+									throw new Error(
+										"onRequest handler must return a Response",
+									);
+								}
+								const conversion =
+									await convertNativeHttpResponse(
+										response,
+										responseBodyStream,
+									);
+								if (conversion.bodyCompletion) {
+									cleanupDeferredToBody = true;
+									void conversion.bodyCompletion
+										.then(cleanupRequest)
+										.catch((cleanupError) => {
+											logger().error({
+												msg: "failed to clean up native streaming http request",
+												error: cleanupError,
+											});
+										});
+								}
+								return conversion.response;
+							} finally {
+								try {
+									// Handler completion ends upload ownership even when
+									// the Web Request body is locked or partly consumed.
+									await cancelNativeHttpRequestBody(
+										request.bodyStream,
+									);
+								} finally {
+									if (!cleanupDeferredToBody) {
+										await cleanupRequest();
+									}
+								}
+							}
+						},
+					);
 				} catch (error) {
 					logger().error({
 						msg: "native onRequest failed",
@@ -5312,21 +5368,29 @@ export function buildNativeFactory(
 							conn != null
 								? makeConnCtx(ctx, conn, undefined, cancelToken)
 								: makeActorCtx(ctx, undefined, cancelToken);
-						try {
-							return encodeValue(
-								await handler(
-									actorCtx,
-									...validateActionArgs(
-										schemaConfig.actionInputSchemas,
-										name,
-										decodeArgs(args),
+						const runAction = async () => {
+							try {
+								return encodeValue(
+									await handler(
+										actorCtx,
+										...validateActionArgs(
+											schemaConfig.actionInputSchemas,
+											name,
+											decodeArgs(args),
+										),
+										...(scheduledFire
+											? [scheduledFire]
+											: []),
 									),
-									...(scheduledFire ? [scheduledFire] : []),
-								),
-							);
-						} finally {
-							await actorCtx.dispose();
-						}
+								);
+							} finally {
+								await actorCtx.dispose();
+							}
+						};
+						return await runtime.runWithActorInvocationContext(
+							ctx,
+							runAction,
+						);
 					},
 				),
 			]),
@@ -5365,7 +5429,7 @@ export function buildNativeFactory(
 					runtime,
 					ctx,
 					conn,
-					createClient,
+					() => createClient(ctx),
 					schemaConfig,
 					databaseProvider,
 					jsRequest,
@@ -5374,62 +5438,75 @@ export function buildNativeFactory(
 					cancelToken,
 					run !== undefined,
 				);
-				try {
-					if (
-						!schemaConfig.queues ||
-						!hasSchemaConfigKey(schemaConfig.queues, name)
-					) {
-						return { status: "completed" };
-					}
-
-					const canPublish = getQueueCanPublish(
-						schemaConfig.queues,
-						name,
-					);
-					if (canPublish && !(await canPublish(actorCtx))) {
-						throw forbiddenError();
-					}
-
-					const decodedBody = decodeValue(body);
-					if (wait) {
+				return await runtime.runWithActorInvocationContext(
+					ctx,
+					async () => {
 						try {
-							const response =
-								await actorCtx.queue.enqueueAndWait(
-									name,
-									decodedBody,
-									{
-										timeout:
-											timeoutMs === undefined ||
-											timeoutMs === null
-												? undefined
-												: Number(timeoutMs),
-									},
-								);
-							return {
-								status: "completed",
-								response:
-									response === undefined
-										? undefined
-										: encodeValue(response),
-							};
-						} catch (error) {
 							if (
-								(error as { group?: string; code?: string })
-									.group === "queue" &&
-								(error as { group?: string; code?: string })
-									.code === "timed_out"
+								!schemaConfig.queues ||
+								!hasSchemaConfigKey(schemaConfig.queues, name)
 							) {
-								return { status: "timedOut" };
+								return { status: "completed" };
 							}
-							throw error;
-						}
-					}
 
-					await actorCtx.queue.send(name, decodedBody);
-					return { status: "completed" };
-				} finally {
-					await actorCtx.dispose();
-				}
+							const canPublish = getQueueCanPublish(
+								schemaConfig.queues,
+								name,
+							);
+							if (canPublish && !(await canPublish(actorCtx))) {
+								throw forbiddenError();
+							}
+
+							const decodedBody = decodeValue(body);
+							if (wait) {
+								try {
+									const response =
+										await actorCtx.queue.enqueueAndWait(
+											name,
+											decodedBody,
+											{
+												timeout:
+													timeoutMs === undefined ||
+													timeoutMs === null
+														? undefined
+														: Number(timeoutMs),
+											},
+										);
+									return {
+										status: "completed",
+										response:
+											response === undefined
+												? undefined
+												: encodeValue(response),
+									};
+								} catch (error) {
+									if (
+										(
+											error as {
+												group?: string;
+												code?: string;
+											}
+										).group === "queue" &&
+										(
+											error as {
+												group?: string;
+												code?: string;
+											}
+										).code === "timed_out"
+									) {
+										return { status: "timedOut" };
+									}
+									throw error;
+								}
+							}
+
+							await actorCtx.queue.send(name, decodedBody);
+							return { status: "completed" };
+						} finally {
+							await actorCtx.dispose();
+						}
+					},
+				);
 			},
 		),
 		serializeState: wrapNativeCallback(

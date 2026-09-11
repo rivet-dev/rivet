@@ -55,6 +55,13 @@ pub struct ActionDefinition {
 	pub name: String,
 }
 
+/// A queue the actor declares. Names are bounded by this set wherever a queue
+/// name becomes a telemetry dimension.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct QueueDefinition {
+	pub name: String,
+}
+
 /// Experimental SQLite profiling configuration.
 ///
 /// This entire configuration surface, including every field, is subject to
@@ -178,6 +185,7 @@ pub struct ActorConfig {
 	pub max_outgoing_message_size: u32,
 	pub overrides: Option<ActorConfigOverrides>,
 	pub actions: Vec<ActionDefinition>,
+	pub queues: Vec<QueueDefinition>,
 	/// Author-declared inspector tab entries (custom tabs + built-in
 	/// hides). Validated upstream (Zod / builder).
 	pub inspector_tabs: Vec<InspectorTabEntry>,
@@ -212,6 +220,7 @@ pub struct ActorConfigInput {
 	pub max_incoming_message_size: Option<u32>,
 	pub max_outgoing_message_size: Option<u32>,
 	pub actions: Option<Vec<ActionDefinition>>,
+	pub queues: Option<Vec<QueueDefinition>>,
 	pub inspector_tabs: Option<Vec<InspectorTabEntry>>,
 }
 
@@ -289,6 +298,9 @@ impl ActorConfig {
 		if let Some(actions) = config.actions {
 			actor_config.actions = actions;
 		}
+		if let Some(queues) = config.queues {
+			actor_config.queues = queues;
+		}
 		if let Some(tabs) = config.inspector_tabs {
 			actor_config.inspector_tabs = tabs;
 		}
@@ -364,6 +376,7 @@ impl Default for ActorConfig {
 			max_outgoing_message_size: DEFAULT_MAX_OUTGOING_MESSAGE_SIZE,
 			overrides: None,
 			actions: Vec::new(),
+			queues: Vec::new(),
 			inspector_tabs: Vec::new(),
 		}
 	}

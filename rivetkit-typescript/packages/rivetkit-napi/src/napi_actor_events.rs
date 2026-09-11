@@ -396,6 +396,7 @@ pub(crate) async fn dispatch_event(
 			args,
 			conn,
 			scheduled_fire,
+			invocation_telemetry,
 			reply,
 		} => {
 			tracing::info!(
@@ -430,6 +431,7 @@ pub(crate) async fn dispatch_event(
 						call_action(
 							&callback,
 							&ctx,
+							invocation_telemetry,
 							conn,
 							name.clone(),
 							args.clone(),
@@ -460,7 +462,11 @@ pub(crate) async fn dispatch_event(
 				}
 			});
 		}
-		ActorEvent::HttpRequest { request, reply } => {
+		ActorEvent::HttpRequest {
+			request,
+			invocation_telemetry,
+			reply,
+		} => {
 			let Some(callback) = bindings.on_request.clone() else {
 				reply.send(Err(missing_callback("onRequest")));
 				return;
@@ -474,7 +480,7 @@ pub(crate) async fn dispatch_event(
 					"Action timed out",
 					None,
 					timeout,
-					call_http_request(&callback, &ctx, request),
+					call_http_request(&callback, &ctx, invocation_telemetry, request),
 				)
 				.await
 			});
@@ -486,6 +492,7 @@ pub(crate) async fn dispatch_event(
 			request,
 			wait,
 			timeout_ms,
+			invocation_telemetry,
 			reply,
 		} => {
 			let Some(callback) = bindings.on_queue_send.clone() else {
@@ -508,6 +515,7 @@ pub(crate) async fn dispatch_event(
 								&callback,
 								QueueSendPayload {
 									ctx: ctx.inner().clone(),
+									telemetry: invocation_telemetry,
 									conn,
 									request,
 									name,
@@ -1177,6 +1185,7 @@ async fn call_run(
 async fn call_action(
 	callback: &crate::actor_factory::CallbackTsfn<ActionPayload>,
 	ctx: &ActorContext,
+	telemetry: Option<rivetkit_core::ActorInvocationTelemetry>,
 	conn: Option<rivetkit_core::ConnHandle>,
 	name: String,
 	args: Vec<u8>,
@@ -1189,6 +1198,7 @@ async fn call_action(
 		callback,
 		ActionPayload {
 			ctx: ctx.inner().clone(),
+			telemetry,
 			conn,
 			name,
 			args,
@@ -1222,6 +1232,7 @@ async fn call_on_before_action_response(
 async fn call_http_request(
 	callback: &crate::actor_factory::CallbackTsfn<HttpRequestPayload>,
 	ctx: &ActorContext,
+	telemetry: Option<rivetkit_core::ActorInvocationTelemetry>,
 	request: rivetkit_core::Request,
 ) -> Result<rivetkit_core::ActorHttpResponse> {
 	let request_cancel_token = request.cancellation_token();
@@ -1230,6 +1241,7 @@ async fn call_http_request(
 		callback,
 		HttpRequestPayload {
 			ctx: ctx.inner().clone(),
+			telemetry,
 			request,
 			cancel_token: Some(request_cancel_token),
 			response_stream: None,

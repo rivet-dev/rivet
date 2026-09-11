@@ -62,7 +62,12 @@ use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 /// and on the returned runtime objects like `SqliteDb`, schedule APIs,
 /// queue APIs, `ConnHandle`, and `WebSocket`.
 #[derive(Clone)]
-pub struct ActorContext(pub(crate) Arc<ActorContextInner>);
+pub struct ActorContext(
+	pub(crate) Arc<ActorContextInner>,
+	// Telemetry of the invocation this handle serves. `None` on the actor-owned
+	// handle and on any handle created outside an invocation.
+	pub(crate) Option<crate::ActorInvocationTelemetry>,
+);
 
 #[derive(Clone)]
 pub struct ActorKv {
@@ -172,6 +177,7 @@ pub(crate) struct ActorContextInner {
 	hibernated_connection_liveness_override: RwLock<Option<BTreeSet<(Vec<u8>, Vec<u8>)>>>,
 	pub(super) metrics: ActorMetrics,
 	diagnostics: ActorDiagnostics,
+	telemetry_identity: Arc<crate::telemetry::ActorTelemetryIdentity>,
 	actor_id: String,
 	name: String,
 	key: ActorKey,
@@ -242,6 +248,72 @@ impl ActorKv {
 }
 
 impl ActorContext {
+	/// Returns a handle bound to `telemetry`, so schedules and SQLite work done
+	/// through it are attributed to that invocation.
+	pub fn with_invocation_telemetry(
+		mut self,
+		telemetry: Option<crate::ActorInvocationTelemetry>,
+	) -> Self {
+		self.1 = telemetry;
+		self
+	}
+
+	/// Returns a handle for the same invocation whose spans parent to the
+	/// application span the host runtime has active, given as W3C
+	/// `traceparent` and `tracestate`. A handle that serves no invocation is
+	/// returned unchanged, because it opens no spans.
+	#[doc(hidden)]
+	pub fn with_application_span(
+		&self,
+		traceparent: Option<&str>,
+		tracestate: Option<&str>,
+	) -> Self {
+		Self(
+			self.0.clone(),
+			self.1
+				.as_ref()
+				.map(|telemetry| telemetry.with_application_span(traceparent, tracestate)),
+		)
+	}
+
+	/// Returns the SQLite handle bound to this handle's invocation.
+	pub fn invocation_sql(&self) -> crate::actor::sqlite::SqliteDb {
+		self.0.sql.clone().with_invocation_telemetry(self.1.clone())
+	}
+
+	/// Opens the span covering one call out to another actor, or nothing when
+	/// this handle serves no invocation or tracing is disabled.
+	///
+	/// `actor_name` and `action_name` name the callee. Both come from the
+	/// caller's own registry rather than from a remote peer, so neither is a
+	/// cardinality surface.
+	#[doc(hidden)]
+	pub fn begin_outbound_call(
+		&self,
+		actor_name: &str,
+		action_name: &str,
+	) -> Option<crate::OutboundCallInvocation> {
+		self.1
+			.as_ref()?
+			.start_outbound_call(actor_name, action_name)
+	}
+
+	/// Returns correlation for the invocation this handle serves, absent when
+	/// the handle is not bound to one or tracing is disabled.
+	pub fn invocation_trace_context(&self) -> Option<crate::ActorInvocationTraceContext> {
+		self.1.as_ref()?.trace_context()
+	}
+
+	pub(crate) fn invocation_telemetry(&self) -> Option<&crate::ActorInvocationTelemetry> {
+		self.1.as_ref()
+	}
+
+	/// Returns whether two handles belong to the same running actor generation.
+	#[doc(hidden)]
+	pub fn is_same_instance(&self, other: &Self) -> bool {
+		Arc::ptr_eq(&self.0, &other.0)
+	}
+
 	#[cfg(test)]
 	pub(crate) fn new(
 		actor_id: impl Into<String>,
@@ -286,8 +358,12 @@ impl ActorContext {
 		let mut sql = sql;
 		#[cfg(feature = "sqlite-local")]
 		sql.set_profiling_config(config.sqlite_profiling.clone());
-		let metrics =
-			ActorMetrics::new_with_sqlite_profiling(name.clone(), config.sqlite_profiling.clone());
+		let metrics = ActorMetrics::new_for_actor(
+			name.clone(),
+			config.actions.iter().map(|action| action.name.clone()),
+			config.queues.iter().map(|queue| queue.name.clone()),
+			config.sqlite_profiling.clone(),
+		);
 		#[cfg(feature = "sqlite-local")]
 		sql.set_vfs_metrics(Arc::new(metrics.clone()));
 		let diagnostics = ActorDiagnostics::new(actor_id.clone());
@@ -300,7 +376,7 @@ impl ActorContext {
 		let shutdown_deadline = CancellationToken::new();
 		let sleep = SleepState::new(config.clone());
 		let user_kv = ActorKv { sql: sql.clone() };
-		let ctx = Self(Arc::new(ActorContextInner {
+		let inner = Arc::new(ActorContextInner {
 			legacy_kv,
 			user_kv,
 			sql,
@@ -387,11 +463,17 @@ impl ActorContext {
 			hibernated_connection_liveness_override: RwLock::new(None),
 			metrics,
 			diagnostics,
+			telemetry_identity: Arc::new(crate::telemetry::ActorTelemetryIdentity {
+				actor_id: actor_id.clone(),
+				actor_name: name.clone(),
+				actor_key: crate::types::format_actor_key(&key),
+			}),
 			actor_id,
 			name,
 			key,
 			region,
-		}));
+		});
+		let ctx = Self(inner, None);
 		ctx.configure_sleep_hooks();
 		ctx
 	}
@@ -714,9 +796,20 @@ impl ActorContext {
 		false
 	}
 
+	/// Runs `future` to completion after the current reply, without blocking
+	/// it. Work started from an invocation keeps that invocation's span open
+	/// until it settles, so its SQLite operations and logs stay attributed to
+	/// the request that started them.
 	#[cfg(not(feature = "wasm-runtime"))]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + Send + 'static) {
-		self.spawn_work(ActorWorkKind::WaitUntil, future);
+		let invocation = self
+			.1
+			.as_ref()
+			.map(crate::ActorInvocationTelemetry::hold_open);
+		self.spawn_work(ActorWorkKind::WaitUntil, async move {
+			future.await;
+			drop(invocation);
+		});
 	}
 
 	#[cfg(not(feature = "wasm-runtime"))]
@@ -726,7 +819,14 @@ impl ActorContext {
 
 	#[cfg(feature = "wasm-runtime")]
 	pub fn wait_until(&self, future: impl Future<Output = ()> + 'static) {
-		self.spawn_work(ActorWorkKind::WaitUntil, future);
+		let invocation = self
+			.1
+			.as_ref()
+			.map(crate::ActorInvocationTelemetry::hold_open);
+		self.spawn_work(ActorWorkKind::WaitUntil, async move {
+			future.await;
+			drop(invocation);
+		});
 	}
 
 	#[cfg(feature = "wasm-runtime")]
@@ -909,6 +1009,12 @@ impl ActorContext {
 
 	pub(crate) fn metrics(&self) -> &ActorMetrics {
 		&self.0.metrics
+	}
+
+	/// Identity fields shared by every invocation on this actor. Built once so a
+	/// span does not re-allocate them per action.
+	pub(crate) fn telemetry_identity(&self) -> Arc<crate::telemetry::ActorTelemetryIdentity> {
+		self.0.telemetry_identity.clone()
 	}
 
 	pub(crate) fn record_user_task_started(&self, kind: UserTaskKind) {
@@ -1337,7 +1443,7 @@ impl ActorContext {
 	}
 
 	pub(crate) fn from_weak(weak: &Weak<ActorContextInner>) -> Option<Self> {
-		weak.upgrade().map(Self)
+		weak.upgrade().map(|inner| Self(inner, None))
 	}
 
 	#[doc(hidden)]
@@ -1498,6 +1604,7 @@ impl ActorContext {
 		}
 		let region = match kind {
 			ActorWorkKind::Action => self.internal_keep_awake_region(),
+			ActorWorkKind::DispatchReply => self.internal_keep_awake_region(),
 			ActorWorkKind::KeepAwake => self.keep_awake_region_state(),
 			ActorWorkKind::InternalKeepAwake => self.internal_keep_awake_region(),
 			ActorWorkKind::WaitUntil => return None,
@@ -1748,8 +1855,14 @@ impl ActorContext {
 		self.track_shutdown_task(async move {
 			let _internal_keep_awake_region = internal_keep_awake_region;
 			ctx.record_user_task_started(UserTaskKind::ScheduledAction);
-			let started_at = Instant::now();
+			let user_task_started_at = Instant::now();
 			let action_name = action.clone();
+			let invocation = crate::telemetry::ActorInvocation::start_scheduled(
+				&ctx,
+				&action_name,
+				dispatch.origin,
+			);
+			let invocation_telemetry = invocation.telemetry();
 			let (reply_tx, reply_rx) = oneshot::channel();
 
 			let mut dispatch_error = None;
@@ -1759,6 +1872,7 @@ impl ActorContext {
 					args,
 					conn: None,
 					scheduled_fire: Some(scheduled_fire),
+					invocation_telemetry: Some(invocation_telemetry),
 					reply: Reply::from(reply_tx),
 				},
 				"scheduled_action",
@@ -1774,8 +1888,9 @@ impl ActorContext {
 							"scheduled event execution failed"
 						);
 					}
-					Err(error) => {
-						dispatch_error = Some(error.into());
+					Err(_) => {
+						// Use the same dropped-reply error for tracing, metrics, and schedule history.
+						dispatch_error = Some(ActorLifecycleError::DroppedReply.build());
 						tracing::error!(
 							error = ?dispatch_error.as_ref().expect("just assigned"),
 							event_id,
@@ -1794,6 +1909,7 @@ impl ActorContext {
 					);
 				}
 			}
+			invocation.finish(dispatch_error.as_ref());
 
 			ctx.finish_schedule_dispatch(&event_id, history_id, dispatch_error.as_ref())
 				.await;
@@ -1811,7 +1927,10 @@ impl ActorContext {
 				}
 			}
 
-			ctx.record_user_task_finished(UserTaskKind::ScheduledAction, started_at.elapsed());
+			ctx.record_user_task_finished(
+				UserTaskKind::ScheduledAction,
+				user_task_started_at.elapsed(),
+			);
 		});
 	}
 

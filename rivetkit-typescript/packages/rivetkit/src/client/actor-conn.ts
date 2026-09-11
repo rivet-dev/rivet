@@ -50,6 +50,7 @@ import { ACTOR_CONNS_SYMBOL, type ClientRaw } from "./client";
 import * as errors from "./errors";
 import { isRetryableLifecycleReconnectSignal } from "./lifecycle-errors";
 import { logger } from "./log";
+import { outboundTelemetryHeaders } from "./outbound-telemetry";
 import {
 	createQueueSender,
 	type QueueSendNoWaitOptions,
@@ -229,6 +230,7 @@ export class ActorConnRaw {
 		this.#queueSender = createQueueSender({
 			encoding: this.#encoding,
 			params: this.#params,
+			telemetryHeaders: () => outboundTelemetryHeaders(undefined),
 			customFetch: async (request: Request) => {
 				return await this.#driver.sendRequest(
 					getGatewayTarget(this.#actorResolutionState),

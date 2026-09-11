@@ -18,14 +18,16 @@ use napi_derive::napi;
 use parking_lot::Mutex;
 use rivetkit_core::types::ActorKeySegment;
 use rivetkit_core::{
-	ActorContext as CoreActorContext, ActorWorkKind, ConnHandle as CoreConnHandle, KeepAwakeRegion,
-	Request as CoreRequest, RequestSaveOpts, StateDelta, WebSocketCallbackRegion, WorkflowKvWrite,
+	ActorContext as CoreActorContext, ActorInvocationSpanContext, ActorInvocationTraceContext,
+	ActorWorkKind, ConnHandle as CoreConnHandle, KeepAwakeRegion,
+	OutboundCallInvocation as CoreOutboundCallInvocation, Request as CoreRequest, RequestSaveOpts,
+	StateDelta, WebSocketCallbackRegion, WorkflowKvWrite,
 };
 use scc::HashMap as SccHashMap;
 use tokio::sync::mpsc::UnboundedSender;
 use tokio_util::sync::CancellationToken as CoreCancellationToken;
 
-use crate::actor_factory::BridgeRivetErrorContext;
+use crate::actor_factory::{BridgeRivetErrorContext, anyhow_error_from_js_reason};
 use crate::connection::ConnHandle;
 use crate::database::{JsActorStateTransaction, JsNativeDatabase, transaction_timeout};
 use crate::kv::Kv;
@@ -77,6 +79,42 @@ pub struct JsActorKeySegment {
 	pub kind: String,
 	pub string_value: Option<String>,
 	pub number_value: Option<f64>,
+}
+
+/// Active actor invocation correlation exposed to the TypeScript runtime adapter.
+#[napi(object)]
+pub struct JsActorInvocationTraceContext {
+	pub ray_id: Option<String>,
+	pub span: Option<JsActorInvocationSpanContext>,
+}
+
+/// W3C span context of the current invocation span, present only when tracing is active.
+#[napi(object)]
+pub struct JsActorInvocationSpanContext {
+	pub trace_id: String,
+	pub span_id: String,
+	pub trace_flags: u8,
+	pub tracestate: Option<String>,
+}
+
+impl From<ActorInvocationTraceContext> for JsActorInvocationTraceContext {
+	fn from(value: ActorInvocationTraceContext) -> Self {
+		Self {
+			ray_id: value.ray_id,
+			span: value.span.map(JsActorInvocationSpanContext::from),
+		}
+	}
+}
+
+impl From<ActorInvocationSpanContext> for JsActorInvocationSpanContext {
+	fn from(value: ActorInvocationSpanContext) -> Self {
+		Self {
+			trace_id: value.trace_id,
+			span_id: value.span_id,
+			trace_flags: value.trace_flags,
+			tracestate: value.tracestate,
+		}
+	}
 }
 
 #[napi(object)]
@@ -273,9 +311,51 @@ impl ActorContext {
 	#[napi]
 	pub fn sql(&self) -> JsNativeDatabase {
 		JsNativeDatabase::new(
-			self.inner.sql().clone(),
+			self.inner.invocation_sql(),
 			Some(self.inner.actor_id().to_owned()),
 		)
+	}
+
+	#[napi]
+	pub fn same_actor_instance(&self, other: &ActorContext) -> bool {
+		self.inner.is_same_instance(&other.inner)
+	}
+
+	/// Returns a handle for the same invocation whose Core spans parent to the
+	/// application span active in JavaScript, given as W3C headers.
+	#[napi]
+	pub fn with_application_span(
+		&self,
+		traceparent: Option<String>,
+		tracestate: Option<String>,
+	) -> ActorContext {
+		ActorContext {
+			inner: self
+				.inner
+				.with_application_span(traceparent.as_deref(), tracestate.as_deref()),
+			shared: self.shared.clone(),
+		}
+	}
+
+	#[napi]
+	pub fn invocation_trace_context(&self) -> Option<JsActorInvocationTraceContext> {
+		self.inner.invocation_trace_context().map(Into::into)
+	}
+
+	/// Opens the span covering one call out to another actor. Returns nothing
+	/// when this handle serves no invocation or tracing is disabled, in which
+	/// case the caller sends its own context as before.
+	#[napi]
+	pub fn begin_outbound_call(
+		&self,
+		actor_name: String,
+		action_name: String,
+	) -> Option<OutboundCall> {
+		self.inner
+			.begin_outbound_call(&actor_name, &action_name)
+			.map(|invocation| OutboundCall {
+				invocation: Some(invocation),
+			})
 	}
 
 	#[napi]
@@ -1056,3 +1136,38 @@ fn js_http_request_to_core_request(request: JsHttpRequest) -> napi::Result<CoreR
 #[cfg(test)]
 #[path = "../tests/actor_context.rs"]
 mod tests;
+
+/// One open call out to another actor.
+///
+/// The call spans a request made by the host runtime, so it is opened and closed
+/// by two separate calls. Letting this be collected without finishing records
+/// the call as cancelled rather than silently losing it.
+#[napi]
+pub struct OutboundCall {
+	invocation: Option<CoreOutboundCallInvocation>,
+}
+
+#[napi]
+impl OutboundCall {
+	/// W3C context of this call's span, to send to the callee so it parents to
+	/// the call rather than to the invocation that made it.
+	#[napi]
+	pub fn span_context(&self) -> Option<JsActorInvocationSpanContext> {
+		self.invocation
+			.as_ref()
+			.and_then(CoreOutboundCallInvocation::span_context)
+			.map(Into::into)
+	}
+
+	/// Records the call's outcome. `error` is the failure as the bridge encodes
+	/// it, so a structured error keeps its group and code while anything else
+	/// stays unstructured for Core to classify.
+	#[napi]
+	pub fn finish(&mut self, error: Option<String>) {
+		let Some(invocation) = self.invocation.take() else {
+			return;
+		};
+		let error = error.map(anyhow_error_from_js_reason);
+		invocation.finish(error.as_ref());
+	}
+}

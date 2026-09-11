@@ -16,6 +16,13 @@ pub mod registry;
 pub mod runtime;
 pub(crate) mod serde_metrics;
 pub mod serverless;
+pub mod telemetry;
+// Internal bridge types consumed by the NAPI and Wasm runtime adapters.
+#[doc(hidden)]
+pub use telemetry::{
+	ActorInvocationSpanContext, ActorInvocationTelemetry, ActorInvocationTraceContext,
+	OutboundCallInvocation, TraceOrigin,
+};
 #[cfg(feature = "native-runtime")]
 pub mod serverless_http;
 #[cfg(feature = "native-runtime")]
@@ -124,7 +131,7 @@ pub use actor::{kv, sqlite};
 pub use actor::action::ActionDispatchError;
 pub use actor::config::{
 	ActionDefinition, ActorConfig, ActorConfigInput, ActorConfigOverrides, CanHibernateWebSocket,
-	SqliteProfilingConfig, SqliteProfilingConfigInput,
+	QueueDefinition, SqliteProfilingConfig, SqliteProfilingConfigInput,
 };
 pub use actor::connection::ConnHandle;
 pub use actor::context::{

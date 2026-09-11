@@ -46,6 +46,9 @@ pub struct ClientConfig {
 	pub encoding: EncodingKind,
 	pub transport: TransportKind,
 	pub headers: Option<HashMap<String, String>>,
+	/// Ray sent on every actor request made outside an active baggage
+	/// context, so work this client causes can be found by one string.
+	pub ray_id: Option<String>,
 	pub max_input_size: Option<usize>,
 	pub disable_metadata_lookup: bool,
 }
@@ -60,6 +63,7 @@ impl ClientConfig {
 			encoding: EncodingKind::Bare,
 			transport: TransportKind::WebSocket,
 			headers: None,
+			ray_id: None,
 			max_input_size: None,
 			disable_metadata_lookup: false,
 		}
@@ -104,6 +108,16 @@ impl ClientConfig {
 
 	pub fn headers(mut self, headers: HashMap<String, String>) -> Self {
 		self.headers = Some(headers);
+		self
+	}
+
+	/// Sets the ray sent on every actor request. It must be 1 to 128
+	/// characters of `[A-Za-z0-9_-]`, the same bound the runtime applies; a
+	/// value outside it is dropped with a warning when the client is built.
+	/// A ray carried in the active OpenTelemetry baggage under `rivet.ray.id`
+	/// takes precedence per call.
+	pub fn ray_id(mut self, ray_id: impl Into<String>) -> Self {
+		self.ray_id = Some(ray_id.into());
 		self
 	}
 
@@ -153,6 +167,7 @@ impl Client {
 			config.namespace,
 			config.pool_name,
 			config.headers,
+			config.ray_id,
 			config.max_input_size,
 			config.disable_metadata_lookup,
 		);

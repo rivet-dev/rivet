@@ -57,6 +57,7 @@ use crate::actor::task_types::ShutdownKind;
 use crate::actor::work_registry::ActorWorkKind;
 use crate::error::{ActorLifecycle as ActorLifecycleError, ActorRuntime};
 use crate::runtime::RuntimeSpawner;
+use crate::telemetry::{ActorInvocation, IncomingInvocationContext};
 #[cfg(test)]
 use crate::time::sleep;
 use crate::time::{Instant, sleep_until, timeout};
@@ -201,12 +202,14 @@ pub enum DispatchCommand {
 	Action {
 		name: String,
 		args: Vec<u8>,
+		incoming: crate::telemetry::IncomingInvocationContext,
 		conn: ConnHandle,
 		reply: oneshot::Sender<Result<Vec<u8>>>,
 	},
 	QueueSend {
 		name: String,
 		body: Vec<u8>,
+		incoming: crate::telemetry::IncomingInvocationContext,
 		conn: ConnHandle,
 		request: Request,
 		wait: bool,
@@ -902,9 +905,12 @@ impl ActorTask {
 			DispatchCommand::Action {
 				name,
 				args,
+				incoming,
 				conn,
 				reply,
 			} => {
+				let invocation = ActorInvocation::start_action(&self.ctx, &name, incoming);
+				let invocation_telemetry = invocation.telemetry();
 				tracing::info!(
 					actor_id = %self.ctx.actor_id(),
 					action_name = %name,
@@ -921,6 +927,7 @@ impl ActorTask {
 						args,
 						conn: Some(conn),
 						scheduled_fire: None,
+						invocation_telemetry: Some(invocation_telemetry),
 						reply: Reply::from(tracked_reply_tx),
 					},
 				) {
@@ -933,32 +940,23 @@ impl ActorTask {
 						self.log_dispatch_command_handled(command_kind, "enqueued");
 						let actor_id = self.ctx.actor_id().to_owned();
 						let ctx = self.ctx.clone();
-						self.ctx.spawn_work(ActorWorkKind::Action, async move {
-							match tracked_reply_rx.await {
-								Ok(result) => {
-									let result =
-										result.map_err(|error| ctx.attach_actor_to_error(error));
-									tracing::info!(
-										actor_id = %actor_id,
-										action_name = %action_name_for_log,
-										ok = result.is_ok(),
-										"actor task: tracked reply received, forwarding"
-									);
-									let _ = reply.send(result);
-								}
-								Err(_) => {
-									tracing::warn!(
-										actor_id = %actor_id,
-										action_name = %action_name_for_log,
-										"actor task: tracked reply dropped before completion"
-									);
-									let error = ctx.attach_actor_to_error(
-										ActorLifecycleError::DroppedReply.build(),
-									);
-									let _ = reply.send(Err(error));
-								}
-							}
-						});
+						self.forward_tracked_reply(
+							ActorWorkKind::Action,
+							tracked_reply_rx,
+							reply,
+							move |result| {
+								let result =
+									result.map_err(|error| ctx.attach_actor_to_error(error));
+								tracing::info!(
+									actor_id = %actor_id,
+									action_name = %action_name_for_log,
+									ok = result.is_ok(),
+									"actor task: tracked reply received, forwarding"
+								);
+								invocation.finish(result.as_ref().err());
+								result
+							},
+						);
 					}
 					Err(error) => {
 						tracing::warn!(
@@ -967,7 +965,9 @@ impl ActorTask {
 							?error,
 							"actor task: failed to enqueue ActorEvent::Action"
 						);
-						let _ = reply.send(Err(self.attach_actor_to_error(error)));
+						let error = self.attach_actor_to_error(error);
+						invocation.finish(Some(&error));
+						let _ = reply.send(Err(error));
 						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
@@ -975,42 +975,76 @@ impl ActorTask {
 			DispatchCommand::QueueSend {
 				name,
 				body,
+				incoming,
 				conn,
 				request,
 				wait,
 				timeout_ms,
 				reply,
-			} => match self.send_actor_event(
-				"dispatch_queue_send",
-				ActorEvent::QueueSend {
-					name,
-					body,
-					conn,
-					request,
-					wait,
-					timeout_ms,
-					reply: Reply::from(reply),
-				},
-			) {
-				Ok(()) => {
-					self.log_dispatch_command_handled(command_kind, "enqueued");
-				}
-				Err(_error) => {
-					self.log_dispatch_command_handled(command_kind, "enqueue_failed");
-				}
-			},
-			DispatchCommand::Http { request, reply } => {
+			} => {
+				let invocation = ActorInvocation::start_queue_send(&self.ctx, &name, incoming);
+				let invocation_telemetry = invocation.telemetry();
+				let (tracked_reply_tx, tracked_reply_rx) = oneshot::channel();
 				match self.send_actor_event(
-					"dispatch_http",
-					ActorEvent::HttpRequest {
+					"dispatch_queue_send",
+					ActorEvent::QueueSend {
+						name,
+						body,
+						conn,
 						request,
-						reply: Reply::from(reply),
+						wait,
+						timeout_ms,
+						invocation_telemetry: Some(invocation_telemetry),
+						reply: Reply::from(tracked_reply_tx),
 					},
 				) {
 					Ok(()) => {
 						self.log_dispatch_command_handled(command_kind, "enqueued");
+						self.forward_tracked_reply(
+							ActorWorkKind::DispatchReply,
+							tracked_reply_rx,
+							reply,
+							move |result| {
+								invocation.finish(result.as_ref().err());
+								result
+							},
+						);
 					}
-					Err(_error) => {
+					Err(error) => {
+						invocation.finish(Some(&error));
+						let _ = reply.send(Err(error));
+						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
+					}
+				}
+			}
+			DispatchCommand::Http { request, reply } => {
+				let incoming = IncomingInvocationContext::from_http_headers(request.headers());
+				let invocation = ActorInvocation::start_request(&self.ctx, &request, incoming);
+				let invocation_telemetry = invocation.telemetry();
+				let (tracked_reply_tx, tracked_reply_rx) = oneshot::channel();
+				match self.send_actor_event(
+					"dispatch_http",
+					ActorEvent::HttpRequest {
+						request,
+						invocation_telemetry: Some(invocation_telemetry),
+						reply: Reply::from(tracked_reply_tx),
+					},
+				) {
+					Ok(()) => {
+						self.log_dispatch_command_handled(command_kind, "enqueued");
+						self.forward_tracked_reply(
+							ActorWorkKind::DispatchReply,
+							tracked_reply_rx,
+							reply,
+							move |result| {
+								invocation.finish_request(result.as_ref());
+								result
+							},
+						);
+					}
+					Err(error) => {
+						invocation.finish(Some(&error));
+						let _ = reply.send(Err(error));
 						self.log_dispatch_command_handled(command_kind, "enqueue_failed");
 					}
 				}
@@ -1070,6 +1104,35 @@ impl ActorTask {
 				}
 			}
 		}
+	}
+
+	/// Waits for the runtime adapter's reply to one dispatched invocation and
+	/// forwards it to the caller. `on_reply` sees the reply first, finishes the
+	/// invocation, and returns what the caller gets. A reply channel closed
+	/// without an answer counts as a dropped reply, so every arm reports that
+	/// case the same way.
+	fn forward_tracked_reply<T: Send + 'static>(
+		&self,
+		kind: ActorWorkKind,
+		tracked_reply_rx: oneshot::Receiver<Result<T>>,
+		reply: oneshot::Sender<Result<T>>,
+		on_reply: impl FnOnce(Result<T>) -> Result<T> + Send + 'static,
+	) {
+		let actor_id = self.ctx.actor_id().to_owned();
+		self.ctx.spawn_work(kind, async move {
+			let result = match tracked_reply_rx.await {
+				Ok(result) => result,
+				Err(_) => {
+					tracing::warn!(
+						actor_id = %actor_id,
+						"actor task: tracked reply dropped before completion; the runtime adapter dropped its reply handle"
+					);
+					Err(ActorLifecycleError::DroppedReply.build())
+				}
+			};
+			let result = on_reply(result);
+			let _ = reply.send(result);
+		});
 	}
 
 	fn log_dispatch_command_handled(&self, command: &'static str, outcome: &'static str) {

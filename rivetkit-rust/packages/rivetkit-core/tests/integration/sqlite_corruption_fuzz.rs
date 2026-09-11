@@ -579,7 +579,11 @@ fn sqlite_fuzz_factory() -> ActorFactory {
 					ActorEvent::RunGracefulCleanup { reason: _, reply } => {
 						reply.send(Ok(()));
 					}
-					ActorEvent::HttpRequest { request: _, reply } => {
+					ActorEvent::HttpRequest {
+						request: _,
+						invocation_telemetry: _,
+						reply,
+					} => {
 						reply.send(Err(anyhow::anyhow!("http requests are not handled")));
 					}
 					ActorEvent::QueueSend {
@@ -589,6 +593,7 @@ fn sqlite_fuzz_factory() -> ActorFactory {
 						request: _,
 						wait: _,
 						timeout_ms: _,
+						invocation_telemetry: _,
 						reply,
 					} => {
 						reply.send(Err(anyhow::anyhow!("queue sends are not handled")));
