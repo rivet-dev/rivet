@@ -7,4 +7,4 @@
  * @module
  */
 
-export { effectRootScope, testWithEffect } from "./test-helpers.svelte.js";
+export { testWithEffect, effectRootScope } from "./test-helpers.svelte.js";

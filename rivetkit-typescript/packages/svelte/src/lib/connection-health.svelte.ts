@@ -43,10 +43,10 @@
  * the `"offline"` state). All other values are treated as unhealthy.
  */
 export interface ConnectionSource {
-	/** Current connection status string. */
-	readonly connStatus: string;
-	/** Current error, or `null`. */
-	readonly error: string | null;
+  /** Current connection status string. */
+  readonly connStatus: string;
+  /** Current error, or `null`. Accepts both `Error` objects and plain strings. */
+  readonly error: Error | string | null;
 }
 
 /** Aggregate health status across all monitored actors. */
@@ -54,26 +54,26 @@ export type HealthStatus = "connected" | "degraded" | "offline" | "connecting";
 
 /** Per-actor health snapshot. */
 export interface ActorHealth {
-	/** Whether this specific actor is connected. */
-	readonly connected: boolean;
-	/** The raw connection status string from the source. */
-	readonly status: string;
-	/** Current error message, or `null`. */
-	readonly error: string | null;
+  /** Whether this specific actor is connected. */
+  readonly connected: boolean;
+  /** The raw connection status string from the source. */
+  readonly status: string;
+  /** Current error message, or `null`. */
+  readonly error: Error | string | null;
 }
 
 /** The reactive health object returned by {@link createConnectionHealth}. */
 export interface ConnectionHealth<K extends string = string> {
-	/** Aggregate status: all connected, some, none, or still connecting. */
-	readonly status: HealthStatus;
-	/** Number of actors currently connected. */
-	readonly connected: number;
-	/** Total number of monitored actors. */
-	readonly total: number;
-	/** Per-actor health breakdown, keyed by the names you provided. */
-	readonly actors: Readonly<Record<K, ActorHealth>>;
-	/** Names of actors that are currently disconnected or errored. */
-	readonly unhealthy: readonly K[];
+  /** Aggregate status: all connected, some, none, or still connecting. */
+  readonly status: HealthStatus;
+  /** Number of actors currently connected. */
+  readonly connected: number;
+  /** Total number of monitored actors. */
+  readonly total: number;
+  /** Per-actor health breakdown, keyed by the names you provided. */
+  readonly actors: Readonly<Record<K, ActorHealth>>;
+  /** Names of actors that are currently disconnected or errored. */
+  readonly unhealthy: readonly K[];
 }
 
 // ---------------------------------------------------------------------------
@@ -110,77 +110,81 @@ export interface ConnectionHealth<K extends string = string> {
  * ```
  */
 export function createConnectionHealth<K extends string>(
-	getSources: () => Record<K, ConnectionSource>,
+  getSources: () => Record<K, ConnectionSource>,
 ): ConnectionHealth<K> {
-	// $derived.by() is required here because the computation is a multi-statement
-	// block (loop, conditionals). $derived only accepts a single expression.
-	// Svelte tracks all reactive reads inside the callback — connStatus and error
-	// on each source are read here, so any change re-runs this derivation.
-	const _health = $derived.by(() => {
-		const sources = getSources();
-		// Object.keys() returns string[] — the cast to K[] is safe as long as
-		// getSources() returns exactly the keys declared in K.
-		const keys = Object.keys(sources) as K[];
-		const total = keys.length;
+  // $derived.by() is required here because the computation is a multi-statement
+  // block (loop, conditionals). $derived only accepts a single expression.
+  // Svelte tracks all reactive reads inside the callback — connStatus and error
+  // on each source are read here, so any change re-runs this derivation.
+  const _health = $derived.by(() => {
+    const sources = getSources();
+    // Object.keys() returns string[] — the cast to K[] is safe as long as
+    // getSources() returns exactly the keys declared in K.
+    const keys = Object.keys(sources) as K[];
+    const total = keys.length;
 
-		const actors = {} as Record<K, ActorHealth>;
-		const unhealthy: K[] = [];
-		let connectedCount = 0;
-		let connectingCount = 0;
+    const actors = {} as Record<K, ActorHealth>;
+    const unhealthy: K[] = [];
+    let connectedCount = 0;
+    let connectingCount = 0;
 
-		for (const key of keys) {
-			const src = sources[key];
-			const isConnected = src.connStatus === "connected";
-			const isConnecting =
-				src.connStatus === "connecting" ||
-				src.connStatus === "reconnecting";
+    for (const key of keys) {
+      const src = sources[key];
+      // Snapshot each getter once so expensive ViewModel accessors are not
+      // repeated and every per-actor row represents one coherent read.
+      const sourceStatus = src.connStatus;
+      const sourceError = src.error;
+      const isConnected = sourceStatus === "connected";
+      const isConnecting =
+        sourceStatus === "connecting" || sourceStatus === "reconnecting";
 
-			actors[key] = {
-				connected: isConnected,
-				status: src.connStatus,
-				error: src.error,
-			};
+      actors[key] = {
+        connected: isConnected,
+        status: sourceStatus,
+        error: sourceError,
+      };
 
-			if (isConnected) {
-				connectedCount++;
-			} else {
-				unhealthy.push(key);
-				if (isConnecting) connectingCount++;
-			}
-		}
+      if (isConnected) {
+        connectedCount++;
+      } else {
+        unhealthy.push(key);
+        if (isConnecting) connectingCount++;
+      }
+    }
 
-		let status: HealthStatus;
-		if (connectedCount === total && total > 0) {
-			status = "connected";
-		} else if (connectedCount > 0) {
-			status = "degraded";
-		} else if (connectingCount > 0 || total === 0) {
-			// No actors connected yet but some are in-progress, or no sources
-			// registered at all (treat empty registry as "not ready yet").
-			status = "connecting";
-		} else {
-			status = "offline";
-		}
+    let status: HealthStatus;
+    if (connectedCount === total && total > 0) {
+      status = "connected";
+    } else if (connectedCount > 0) {
+      status = "degraded";
+    } else if (connectingCount > 0 || total === 0) {
+      // No actors connected yet but some are in-progress, or no sources
+      // registered at all (treat empty registry as "not ready yet").
+      status = "connecting";
+    } else {
+      status = "offline";
+    }
 
-		return { status, connected: connectedCount, total, actors, unhealthy };
-	});
+    return { status, connected: connectedCount, total, actors, unhealthy };
+  });
 
-	// Return an object with getters so destructuring preserves reactivity.
-	return {
-		get status() {
-			return _health.status;
-		},
-		get connected() {
-			return _health.connected;
-		},
-		get total() {
-			return _health.total;
-		},
-		get actors() {
-			return _health.actors;
-		},
-		get unhealthy() {
-			return _health.unhealthy;
-		},
-	};
+  // Return property getters so direct property reads stay reactive. As with
+  // other Svelte reactive objects, destructuring snapshots the current values.
+  return {
+    get status() {
+      return _health.status;
+    },
+    get connected() {
+      return _health.connected;
+    },
+    get total() {
+      return _health.total;
+    },
+    get actors() {
+      return _health.actors;
+    },
+    get unhealthy() {
+      return _health.unhealthy;
+    },
+  };
 }

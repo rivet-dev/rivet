@@ -1,195 +1,435 @@
 import "./runes-shim.js";
+import { describe, expect, test, vi, beforeEach } from "vitest";
 import type { ActorConnStatus } from "rivetkit/client";
-import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const frameworkMock = vi.hoisted(() => {
-	type Listener = (...args: unknown[]) => void;
-	type Subscriber = (value: { currentVal: MockActorState }) => void;
-	type MockConnection = {
-		id: string;
-		ping: () => string;
-		on: (eventName: string, handler: Listener) => () => void;
-		emit: (eventName: string, ...args: unknown[]) => void;
-	};
-	type MockActorState = {
-		connection: MockConnection;
-		handle: { id: string };
-		connStatus: ActorConnStatus;
-		error: Error | null;
-		hash: string;
-	};
+  type Listener = (...args: unknown[]) => void;
+  type Subscriber = (value: { currentVal: MockActorState }) => void;
+  type MockConnection = {
+    id: string;
+    ping: () => string;
+    admin: { ping: () => string };
+    on: (eventName: string, handler: Listener) => () => void;
+    emit: (eventName: string, ...args: unknown[]) => void;
+  };
+  type MockActorState = {
+    connection: MockConnection;
+    handle: { id: string };
+    connStatus: ActorConnStatus;
+    error: Error | null;
+    hash: string;
+  };
 
-	const subscribers = new Set<Subscriber>();
+  const subscribers = new Set<Subscriber>();
 
-	function createConnection(id: string): MockConnection {
-		const listeners = new Map<string, Set<Listener>>();
+  function createConnection(id: string): MockConnection {
+    const listeners = new Map<string, Set<Listener>>();
 
-		return {
-			id,
-			ping: () => `pong:${id}`,
-			on(eventName: string, handler: Listener) {
-				let eventListeners = listeners.get(eventName);
-				if (!eventListeners) {
-					eventListeners = new Set();
-					listeners.set(eventName, eventListeners);
-				}
+    return {
+      id,
+      ping: () => `pong:${id}`,
+      admin: { ping: () => `admin-pong:${id}` },
+      on(eventName: string, handler: Listener) {
+        let eventListeners = listeners.get(eventName);
+        if (!eventListeners) {
+          eventListeners = new Set();
+          listeners.set(eventName, eventListeners);
+        }
 
-				eventListeners.add(handler);
-				return () => eventListeners?.delete(handler);
-			},
-			emit(eventName: string, ...args: unknown[]) {
-				for (const listener of listeners.get(eventName) ?? []) {
-					listener(...args);
-				}
-			},
-		};
-	}
+        eventListeners.add(handler);
+        return () => eventListeners?.delete(handler);
+      },
+      emit(eventName: string, ...args: unknown[]) {
+        listeners.get(eventName)?.forEach((listener) => listener(...args));
+      },
+    };
+  }
 
-	let currentState: MockActorState;
+  let currentState: MockActorState;
+  let lastMount: ReturnType<typeof vi.fn> | null = null;
+  let lastUnmount: ReturnType<typeof vi.fn> | null = null;
 
-	const getOrCreateActor = vi.fn(() => ({
-		mount: vi.fn(() => vi.fn()),
-		state: {
-			get state() {
-				return currentState;
-			},
-			subscribe(callback: Subscriber) {
-				subscribers.add(callback);
-				return () => subscribers.delete(callback);
-			},
-		},
-	}));
+  const getOrCreateActor = vi.fn(() => {
+    lastUnmount = vi.fn();
+    lastMount = vi.fn(() => lastUnmount!);
+    return {
+      mount: lastMount,
+      state: {
+        get state() {
+          return currentState;
+        },
+        subscribe(callback: Subscriber) {
+          subscribers.add(callback);
+          return () => subscribers.delete(callback);
+        },
+      },
+    };
+  });
 
-	function push(next: Partial<MockActorState>) {
-		currentState = { ...currentState, ...next };
-		for (const subscriber of subscribers) {
-			subscriber({ currentVal: currentState });
-		}
-	}
+  function push(next: Partial<MockActorState>) {
+    currentState = { ...currentState, ...next };
+    subscribers.forEach((subscriber) =>
+      subscriber({ currentVal: currentState }),
+    );
+  }
 
-	function reset() {
-		subscribers.clear();
-		currentState = {
-			connection: createConnection("one"),
-			handle: { id: "handle-one" },
-			connStatus: "idle",
-			error: null,
-			hash: "hash-one",
-		};
-		getOrCreateActor.mockClear();
-	}
+  function reset() {
+    subscribers.clear();
+    currentState = {
+      connection: createConnection("one"),
+      handle: { id: "handle-one" },
+      connStatus: "idle",
+      error: null,
+      hash: "hash-one",
+    };
+    getOrCreateActor.mockClear();
+    lastMount = null;
+    lastUnmount = null;
+  }
 
-	reset();
+  reset();
 
-	return {
-		getOrCreateActor,
-		currentState: () => currentState,
-		push,
-		replaceConnection(id: string) {
-			const connection = createConnection(id);
-			push({
-				connection,
-				handle: { id: `handle-${id}` },
-				hash: `hash-${id}`,
-			});
-			return connection;
-		},
-		reset,
-	};
+  return {
+    getOrCreateActor,
+    currentState: () => currentState,
+    push,
+    replaceConnection(id: string) {
+      const connection = createConnection(id);
+      push({
+        connection,
+        handle: { id: `handle-${id}` },
+        hash: `hash-${id}`,
+      });
+      return connection;
+    },
+    lastMount: () => lastMount,
+    lastUnmount: () => lastUnmount,
+    reset,
+  };
 });
 
-vi.mock("@rivetkit/framework-base", () => ({
-	createRivetKit: vi.fn(() => ({
-		getOrCreateActor: frameworkMock.getOrCreateActor,
-	})),
+vi.mock("../internal/framework-base.js", () => ({
+  createRivetKit: vi.fn(() => ({
+    getOrCreateActor: frameworkMock.getOrCreateActor,
+  })),
+}));
+
+// preConnect() short-circuits to an inert handle under SSR (BROWSER=false).
+// Pin BROWSER=true so it actually mounts; createReactiveActor's own tests are
+// unaffected (they only branch on BROWSER for a dev-time SSR warning).
+vi.mock("esm-env", () => ({
+  BROWSER: true,
+  DEV: false,
 }));
 
 import { createRivetKitWithClient } from "../rivetkit.svelte.js";
 
 describe("createReactiveActor", () => {
-	beforeEach(() => {
-		frameworkMock.reset();
-	});
+  beforeEach(() => {
+    frameworkMock.reset();
+  });
 
-	test("caches proxied actor methods until the connection changes", () => {
-		const rivet = createRivetKitWithClient({} as never);
-		const actor = rivet.createReactiveActor({
-			name: "chat" as never,
-			key: ["room-1"],
-		});
+  test("defers framework subscription until mount", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
 
-		const firstPing = actor.ping;
-		const secondPing = actor.ping;
+    expect(frameworkMock.getOrCreateActor).not.toHaveBeenCalled();
 
-		expect(firstPing).toBe(secondPing);
-		expect(firstPing()).toBe("pong:one");
+    const unmount = actor.mount();
+    expect(frameworkMock.getOrCreateActor).toHaveBeenCalledTimes(1);
+    expect(frameworkMock.lastMount()).toHaveBeenCalledTimes(1);
 
-		frameworkMock.replaceConnection("two");
+    unmount();
+  });
 
-		const thirdPing = actor.ping;
-		expect(thirdPing).not.toBe(firstPing);
-		expect(thirdPing()).toBe("pong:two");
-	});
+  test("keeps proxied actor methods stable across connection changes", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
 
-	test("preserves lastError and tracks hasEverConnected", () => {
-		const rivet = createRivetKitWithClient({} as never);
-		const actor = rivet.createReactiveActor({
-			name: "chat" as never,
-			key: ["room-1"],
-		});
+    const firstPing = actor.ping;
+    const secondPing = actor.ping;
 
-		expect(actor.lastError).toBe(null);
-		expect(actor.hasEverConnected).toBe(false);
+    expect(firstPing).toBe(secondPing);
+    expect(firstPing()).toBe("pong:one");
 
-		frameworkMock.push({
-			connStatus: "disconnected",
-			error: new Error("boom"),
-		});
+    frameworkMock.replaceConnection("two");
 
-		expect(actor.error?.message).toBe("boom");
-		expect(actor.lastError?.message).toBe("boom");
-		expect(actor.hasEverConnected).toBe(false);
+    const thirdPing = actor.ping;
+    expect(thirdPing).toBe(firstPing);
+    expect(firstPing()).toBe("pong:two");
+    expect(thirdPing()).toBe("pong:two");
+  });
 
-		frameworkMock.push({
-			connStatus: "connected",
-			error: null,
-		});
+  test("supports handlers captured before mount and nested Rivet actions", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    const ping = actor.ping;
+    // This runtime-only test intentionally uses an erased registry. Describe
+    // the nested fake action locally now that the public factory no longer
+    // leaks `any` into consumers.
+    const adminPing = (actor as unknown as { admin: { ping: () => string } })
+      .admin.ping;
 
-		expect(actor.isConnected).toBe(true);
-		expect(actor.hasEverConnected).toBe(true);
-		expect(actor.lastError?.message).toBe("boom");
+    actor.mount();
 
-		frameworkMock.push({
-			connStatus: "disconnected",
-			error: null,
-		});
+    expect(ping()).toBe("pong:one");
+    expect(adminPing()).toBe("admin-pong:one");
 
-		expect(actor.error).toBe(null);
-		expect(actor.lastError?.message).toBe("boom");
-	});
+    frameworkMock.replaceConnection("two");
+    expect(adminPing()).toBe("admin-pong:two");
+  });
 
-	test("rebinds event listeners when the connection changes", () => {
-		const rivet = createRivetKitWithClient({} as never);
-		const actor = rivet.createReactiveActor({
-			name: "chat" as never,
-			key: ["room-1"],
-		});
+  test("is not Promise-like", async () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
 
-		const firstConnection = frameworkMock.currentState().connection;
-		const received: string[] = [];
+    await expect(Promise.resolve(actor)).resolves.toBe(actor);
+  });
 
-		actor.onEvent("message", (payload: unknown) => {
-			received.push(String(payload));
-		});
+  test("detaches captured handlers from the connection on dispose", async () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
+    const ping = actor.ping;
 
-		firstConnection.emit("message", "one");
-		expect(received).toEqual(["one"]);
+    actor.dispose();
 
-		const secondConnection = frameworkMock.replaceConnection("two");
+    expect(actor.connection).toBeNull();
+    expect(actor.connStatus).toBe("idle");
+    await expect(ping()).rejects.toMatchObject({
+      code: "ACTOR_NOT_YET_CONNECTED",
+      connStatus: "idle",
+    });
+  });
 
-		firstConnection.emit("message", "stale");
-		secondConnection.emit("message", "two");
+  test("preserves lastError and tracks hasEverConnected", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
 
-		expect(received).toEqual(["one", "two"]);
-	});
+    expect(actor.lastError).toBe(null);
+    expect(actor.hasEverConnected).toBe(false);
+
+    frameworkMock.push({
+      connStatus: "disconnected",
+      error: new Error("boom"),
+    });
+
+    expect(actor.error?.message).toBe("boom");
+    expect(actor.lastError?.message).toBe("boom");
+    expect(actor.hasEverConnected).toBe(false);
+
+    frameworkMock.push({
+      connStatus: "connected",
+      error: null,
+    });
+
+    expect(actor.isConnected).toBe(true);
+    expect(actor.hasEverConnected).toBe(true);
+    expect(actor.lastError?.message).toBe("boom");
+
+    frameworkMock.push({
+      connStatus: "disconnected",
+      error: null,
+    });
+
+    expect(actor.error).toBe(null);
+    expect(actor.lastError?.message).toBe("boom");
+  });
+
+  test("whenConnected resolves immediately when already connected", async () => {
+    frameworkMock.push({ connStatus: "connected" });
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
+
+    const result = await actor.whenConnected();
+    expect(result).toBe(true);
+  });
+
+  test("whenConnected resolves when connection is established", async () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
+
+    expect(actor.isConnected).toBe(false);
+
+    const promise = actor.whenConnected(5_000);
+
+    // Simulate connection after a tick
+    frameworkMock.push({ connStatus: "connected" });
+
+    const result = await promise;
+    expect(result).toBe(true);
+  });
+
+  test("whenConnected resolves false on timeout", async () => {
+    vi.useFakeTimers();
+
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
+
+    const promise = actor.whenConnected(100);
+
+    // Advance past timeout without connecting
+    vi.advanceTimersByTime(150);
+
+    const result = await promise;
+    expect(result).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  test("dispose cancels pending whenConnected with false", async () => {
+    vi.useFakeTimers();
+
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
+
+    const promise = actor.whenConnected(30_000);
+
+    // Dispose before connection is established
+    actor.dispose();
+
+    const result = await promise;
+    expect(result).toBe(false);
+
+    vi.useRealTimers();
+  });
+
+  test("rebinds event listeners when the connection changes", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    actor.mount();
+
+    const firstConnection = frameworkMock.currentState().connection;
+    const received: string[] = [];
+
+    actor.onEvent("message", (payload: unknown) => {
+      received.push(String(payload));
+    });
+
+    firstConnection.emit("message", "one");
+    expect(received).toEqual(["one"]);
+
+    const secondConnection = frameworkMock.replaceConnection("two");
+
+    firstConnection.emit("message", "stale");
+    secondConnection.emit("message", "two");
+
+    expect(received).toEqual(["one", "two"]);
+  });
+
+  test("dispose unmounts active framework refs", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+
+    actor.mount();
+    actor.dispose();
+
+    expect(frameworkMock.lastUnmount()).toHaveBeenCalledTimes(1);
+  });
+
+  test("binds event listeners registered before mount", () => {
+    const rivet = createRivetKitWithClient({} as never);
+    const actor = rivet.createReactiveActor({
+      name: "chat" as never,
+      key: ["room-1"],
+    });
+    const received: string[] = [];
+
+    actor.onEvent("message", (payload: unknown) => {
+      received.push(String(payload));
+    });
+
+    actor.mount();
+    frameworkMock.currentState().connection.emit("message", "mounted");
+
+    expect(received).toEqual(["mounted"]);
+  });
+});
+
+describe("preConnect", () => {
+  beforeEach(() => {
+    frameworkMock.reset();
+  });
+
+  test("opens a connection eagerly and disposes on demand", async () => {
+    const rivet = createRivetKitWithClient({} as never);
+
+    const handle = rivet.preConnect({ name: "chat" as never, key: ["room-1"] });
+
+    // Unlike createReactiveActor (which defers until mount), preConnect mounts
+    // immediately so the socket is live before any component takes over.
+    expect(frameworkMock.getOrCreateActor).toHaveBeenCalledTimes(1);
+    expect(frameworkMock.lastMount()).toHaveBeenCalledTimes(1);
+
+    await handle.dispose();
+    expect(frameworkMock.lastUnmount()).toHaveBeenCalledTimes(1);
+  });
+
+  test("dispose is idempotent", async () => {
+    const rivet = createRivetKitWithClient({} as never);
+
+    const handle = rivet.preConnect({ name: "chat" as never, key: ["room-1"] });
+    await handle.dispose();
+    await handle.dispose();
+
+    expect(frameworkMock.lastUnmount()).toHaveBeenCalledTimes(1);
+  });
+
+  test("forces enabled for an explicit eager connection", async () => {
+    const rivet = createRivetKitWithClient({} as never);
+
+    const handle = rivet.preConnect({
+      name: "chat" as never,
+      key: ["room-1"],
+      enabled: false,
+    });
+
+    expect(frameworkMock.getOrCreateActor).toHaveBeenCalledWith(
+      expect.objectContaining({ enabled: true }),
+    );
+    await handle.dispose();
+  });
 });

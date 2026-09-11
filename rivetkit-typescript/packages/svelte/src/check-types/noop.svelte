@@ -1,5 +1,5 @@
 <script lang="ts">
-const message = "noop";
+  const message = "noop";
 </script>
 
 <div>{message}</div>
