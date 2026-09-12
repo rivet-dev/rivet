@@ -12,12 +12,8 @@
 import type { MaybeGetter } from "./types.js";
 
 export function extract<T>(value: MaybeGetter<T>): T;
-export function extract<T>(
-	value: MaybeGetter<T | undefined>,
-	defaultValue: T,
-): T;
+export function extract<T>(value: MaybeGetter<T | undefined>, defaultValue: T): T;
 export function extract(value: unknown, defaultValue?: unknown): unknown {
-	const resolved =
-		typeof value === "function" ? (value as () => unknown)() : value;
+	const resolved = typeof value === "function" ? (value as () => unknown)() : value;
 	return resolved === undefined ? defaultValue : resolved;
 }

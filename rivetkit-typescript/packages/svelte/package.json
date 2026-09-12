@@ -19,28 +19,32 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "!dist/__tests__",
+    "!dist/__bench__"
   ],
   "scripts": {
     "build": "svelte-package -i src/lib",
     "check-types": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run --environment jsdom src/lib/__tests__/*.test.ts"
+    "test": "vitest run --environment jsdom src/lib/__tests__/*.test.ts",
+    "bench": "vitest bench --run --environment jsdom src/lib/__bench__/*.bench.ts"
   },
   "peerDependencies": {
-    "svelte": "^5.0.0"
+    "svelte": "^5.57.0"
   },
   "dependencies": {
-    "@rivetkit/framework-base": "2.1.10",
     "esm-env": "^1.2.2",
-    "rivetkit": "2.1.10"
+    "fast-deep-equal": "^3.1.3",
+    "rivetkit": "2.3.17"
   },
   "devDependencies": {
     "@sveltejs/package": "^2.5.7",
     "jsdom": "^28.0.0",
-    "svelte": "^5.0.0",
+    "svelte": "^5.57.0",
     "svelte-check": "^4.4.3",
     "typescript": "^5.5.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "@types/node": "^22.0.0"
   },
   "keywords": [
     "rivetkit",
@@ -50,5 +54,6 @@
     "actors",
     "realtime",
     "websocket"
-  ]
+  ],
+  "sideEffects": false
 }
