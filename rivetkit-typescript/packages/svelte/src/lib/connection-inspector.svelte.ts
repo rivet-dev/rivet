@@ -11,7 +11,7 @@
  * @module
  */
 
-import { untrack } from "svelte";
+import { createSubscriber } from "svelte/reactivity";
 import type { ActorConnStatus } from "rivetkit/client";
 
 /** Public snapshot fields. Anything else on a report is discarded. */
@@ -125,15 +125,26 @@ type HashBucket = {
 export function createConnectionInspector(): ConnectionInspector {
   const owners = new Map<string, OwnerRecord>();
   const byHash = new Map<string, HashBucket>();
-  let _revision = $state(0);
+  let _revision = 0;
   let nextSocketId = 0;
+  // Svelte's documented bridge for externally-mutated state:
+  // reading `revision` / `snapshot()` inside a `$derived` / `$effect`
+  // registers that effect, and `publish()` re-runs it. The registry is
+  // in-memory, so `start` only captures `update` for later publishes.
+  let publish: (() => void) | undefined;
+  const subscribe = createSubscriber((update) => {
+    publish = update;
+    return () => {
+      publish = undefined;
+    };
+  });
 
   function bump(): void {
     // Reports arrive from applyState, which can run inside a Svelte
-    // effect. untrack keeps the revision write from looping that effect.
-    untrack(() => {
-      _revision++;
-    });
+    // effect. The write below contains no reactive reads, so it cannot
+    // loop that effect; only effects reading revision/snapshot re-run.
+    _revision += 1;
+    publish?.();
   }
 
   function dropOwnerFromHash(hash: string, ownerId: string): void {
@@ -203,9 +214,11 @@ export function createConnectionInspector(): ConnectionInspector {
   return {
     enabled: true,
     get revision() {
+      subscribe();
       return _revision;
     },
     snapshot() {
+      subscribe();
       return [...byHash.values()].map((bucket) => copySample(bucket.sample));
     },
     connectedCount() {

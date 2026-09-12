@@ -1766,10 +1766,11 @@ export function createRivetKitWithClient<Registry extends AnyActorRegistry>(
       // ignores `enabled`, so both calls target the SAME actor entry.
       //
       // Ordering: framework-base defers each opts change with `queueMicrotask`,
-      // and @tanstack/store flushes `setState` SYNCHRONOUSLY — so by the time the
-      // re-enable microtask runs, the disable has fully propagated (connection
-      // disposed, status "idle"). queueMicrotask FIFO — not timer ordering — is
-      // what guarantees the re-enable observes "idle" and triggers create().
+      // and its `commitState` flushes state writes to the entry and its
+      // listeners SYNCHRONOUSLY, so by the time the re-enable microtask runs,
+      // the disable has fully propagated (connection disposed, status "idle").
+      // queueMicrotask FIFO, not timer ordering, is what guarantees the
+      // re-enable observes "idle" and triggers create().
       getOrCreateActor({ ...baseOpts, enabled: false });
       queueMicrotask(() => {
         // Skip if the handle was disposed while the disable was in flight.

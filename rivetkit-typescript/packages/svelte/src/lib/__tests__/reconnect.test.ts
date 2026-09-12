@@ -103,9 +103,9 @@ function makeZombieClient(): { client: unknown; conns: FakeConn[] } {
 }
 
 // Drain the microtask chain (framework-base queues opts-updates + create() on
-// queueMicrotask; @tanstack/store flushes setState synchronously). A handful of
-// macrotask boundaries deterministically drains it — no real timers/network are
-// involved, so this is not flaky.
+// queueMicrotask; commitState flushes entry state and listeners synchronously).
+// A handful of macrotask boundaries deterministically drains it, so this is
+// not flaky.
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 5; i++) {
     await new Promise<void>((r) => setTimeout(r, 0));

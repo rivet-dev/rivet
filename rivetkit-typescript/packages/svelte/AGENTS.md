@@ -2,6 +2,7 @@
 
 - Authentication and shared-client ownership belong to the consuming application; do not add application-specific session or authorization behavior.
 - Use a package-local framework bridge until the shared framework package forwards dynamic connection parameters; standalone installs must not require root patches.
+- The framework bridge's reactivity core is a minimal imperative observable (a `Map` of per-actor entries with per-entry listener sets). Do not reintroduce `@tanstack/store` or use Svelte's reactive collections (`SvelteMap`, `createSubscriber`) for the registry itself: their writes re-run the reading effect, but a framework push must reach `applyState` and the `$state` slots WITHOUT re-running the `useActor()` effect. Plain objects stay invisible to Svelte dependency tracking, which is the contract the adapter needs. `createSubscriber` is used only where a reactive read is genuinely wanted (inspector `revision`/`snapshot()`).
 - Construction is inert; only a mounted browser lifecycle may acquire a connection, and every mount reference must be released independently.
 - Preserve `preloadActor` as the deprecated alias of `warmUp`, and preserve reusable raw-connection disposal.
 - Inspector snapshots must use opaque IDs and must never expose raw framework hashes or connection parameters.

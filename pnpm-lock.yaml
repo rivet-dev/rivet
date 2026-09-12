@@ -4199,9 +4199,6 @@ importers:
 
   rivetkit-typescript/packages/svelte:
     dependencies:
-      '@tanstack/store':
-        specifier: ^0.7.1
-        version: 0.7.5
       esm-env:
         specifier: ^1.2.2
         version: 1.2.2
