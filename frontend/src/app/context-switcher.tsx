@@ -1214,12 +1214,8 @@ function ProjectList({
 										onHover?.(null);
 										onClose?.();
 										return navigate({
-											to: ".",
-											search: (old) => ({
-												...old,
-												modal: "create-project",
-												organization,
-											}),
+											to: "/orgs/$organization/new",
+											params: { organization },
 										});
 									}}
 								>
@@ -1287,12 +1283,8 @@ function ProjectList({
 								onHover?.(null);
 								onClose?.();
 								return navigate({
-									to: ".",
-									search: (old) => ({
-										...old,
-										modal: "create-project",
-										organization,
-									}),
+									to: "/orgs/$organization/new",
+									params: { organization },
 								});
 							}}
 						>

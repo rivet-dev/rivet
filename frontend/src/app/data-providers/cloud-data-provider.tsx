@@ -89,6 +89,103 @@ export const createGlobalContext = () => {
 				},
 			});
 		},
+		changeProjectBillingPlanMutationOptions({
+			organization,
+			project,
+		}: {
+			organization: string;
+			project: string;
+		}) {
+			return mutationOptions({
+				mutationKey: [{ organization, project }, "billing"],
+				mutationFn: async (data: { plan: Rivet.BillingPlan }) => {
+					const response = await client.billing.setPlan(project, {
+						plan: data.plan,
+						org: organization,
+					});
+					return response;
+				},
+			});
+		},
+		// Stripe customer portal for adding a payment method. Used when the
+		// org cannot change plans directly (no payment method on file yet).
+		// The subscription-update session is not usable here because it
+		// requires an existing subscription, which a fresh Free project does
+		// not have.
+		billingCustomerPortalSessionMutationOptions({
+			organization,
+		}: {
+			organization: string;
+		}) {
+			return mutationOptions({
+				mutationKey: [
+					{ organization },
+					"billing-customer-portal-session",
+				],
+				mutationFn: async (data: { returnUrl: string }) => {
+					const response =
+						await client.billing.createCustomerPortalSession({
+							org: organization,
+							returnUrl: data.returnUrl,
+						});
+					if (!response.url) {
+						throw new Error(
+							"no URL returned for customer portal session",
+						);
+					}
+					return response.url;
+				},
+			});
+		},
+		// BYOC cluster creation. Raw fetch because the pinned cloud SDK does
+		// not include the byoc group yet. Every new cluster gets a single
+		// region named "default".
+		createByocClusterMutationOptions() {
+			return mutationOptions({
+				mutationKey: ["byoc", "clusters", "create"],
+				mutationFn: async (data: {
+					organization: string;
+					cluster: string;
+				}) => {
+					const base = cloudEnv().VITE_APP_CLOUD_API_URL;
+					const post = async (path: string, body?: unknown) => {
+						const response = await fetch(
+							`${base}${path}?org=${encodeURIComponent(data.organization)}`,
+							{
+								method: "POST",
+								credentials: "include",
+								headers: body
+									? { "Content-Type": "application/json" }
+									: undefined,
+								body: body ? JSON.stringify(body) : undefined,
+							},
+						);
+						if (!response.ok) {
+							const text = await response.text();
+							throw new Error(
+								`byoc request failed (${response.status}): ${text}`,
+							);
+						}
+						return response.json();
+					};
+					const created = (await post(
+						`/byoc/v1/clusters/${encodeURIComponent(data.cluster)}`,
+					)) as {
+						cluster: { id: string; name: string };
+						token: {
+							token: string;
+							createdAt: string;
+							expiresAt?: string;
+						};
+					};
+					await post(
+						`/byoc/v1/clusters/${encodeURIComponent(data.cluster)}/regions`,
+						{ name: "default" },
+					);
+					return created;
+				},
+			});
+		},
 		// Fully-computed usage breakdown (plan, period, per-metric usage/included/
 		// overage, total). The backend does all the billing math so the dashboard
 		// only renders the result.

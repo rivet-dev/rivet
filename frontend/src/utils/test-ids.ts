@@ -5,6 +5,7 @@ export const TEST_IDS = {
 		PathSelectionManual: "onboarding-path-manual",
 
 		CreateProjectCard: "create-project-card",
+		SelectPlan: "onboarding-select-plan",
 
 		GettingStartedWizard: "onboarding-getting-started-wizard",
 		StepperSkipToDeploy: "onboarding-stepper-skip-to-deploy",

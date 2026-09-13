@@ -122,15 +122,8 @@ export function OrgLanding({ organization }: { organization: string }) {
 									startIcon={<Icon icon={faPlus} />}
 									onClick={() => {
 										navigate({
-											to: ".",
-											search: (old) => ({
-												...(old as Record<
-													string,
-													unknown
-												>),
-												modal: "create-project",
-												organization,
-											}),
+											to: "/orgs/$organization/new",
+											params: { organization },
 										});
 									}}
 								>
@@ -152,15 +145,8 @@ export function OrgLanding({ organization }: { organization: string }) {
 									startIcon={<Icon icon={faPlus} />}
 									onClick={() => {
 										navigate({
-											to: ".",
-											search: (old) => ({
-												...(old as Record<
-													string,
-													unknown
-												>),
-												modal: "create-project",
-												organization,
-											}),
+											to: "/orgs/$organization/new",
+											params: { organization },
 										});
 									}}
 								>

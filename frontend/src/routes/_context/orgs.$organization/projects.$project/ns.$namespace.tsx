@@ -1,4 +1,4 @@
-import type { Rivet } from "@rivet-gg/cloud";
+import { Rivet } from "@rivet-gg/cloud";
 import {
 	createFileRoute,
 	redirect,
@@ -27,6 +27,7 @@ import {
 	type RunnerConfigsInfiniteData,
 	type RunnerNamesInfiniteData,
 } from "@/lib/data";
+import { features } from "@/lib/features";
 import { posthog } from "@/lib/posthog";
 import {
 	RECENT_NAMESPACES_KEY,
@@ -77,6 +78,33 @@ export const Route = createFileRoute(
 				});
 			}
 			throw error;
+		}
+
+		// Returning from the Stripe payment page after project creation: the
+		// payment method now exists, so apply the plan picked before checkout.
+		// Best-effort: if checkout was cancelled the change is rejected and
+		// the project simply stays on Free.
+		if (features.billing && typeof search.applyPlan === "string") {
+			const plan = search.applyPlan;
+			if (
+				plan === Rivet.BillingPlan.Pro ||
+				plan === Rivet.BillingPlan.Team
+			) {
+				try {
+					await context.dataProvider
+						.changeCurrentProjectBillingPlanMutationOptions()
+						.mutationFn({ plan });
+					await context.queryClient.invalidateQueries(
+						context.dataProvider.currentProjectBillingDetailsQueryOptions(),
+					);
+				} catch (error) {
+					console.warn(
+						"failed to apply plan after checkout",
+						error,
+					);
+				}
+			}
+			throw redirect({ to: ".", search: {} });
 		}
 
 		if (search.skipOnboarding) {
