@@ -3,7 +3,14 @@ import { deployOptions, type Provider } from "@rivetkit/shared-data";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
 import { toast } from "sonner";
-import { Badge, Button, CodeFrame, CodePreview, getConfig } from "@/components";
+import {
+	Badge,
+	Button,
+	CodeFrame,
+	CodePreview,
+	cn,
+	getConfig,
+} from "@/components";
 import {
 	useCloudNamespaceDataProvider,
 	useEngineCompatDataProvider,
@@ -183,24 +190,35 @@ export function AgentPromptBanner({
 	containsSecret = false,
 	title = "Use your coding agent",
 	description = "Have your coding agent complete these steps to deploy to Rivet Compute.",
+	buttonLabel = "Copy prompt",
+	buttonClassName,
+	secretName = "deploy token",
+	disabled = false,
+	isLoading = false,
 }: {
 	code: string;
 	containsSecret?: boolean;
 	title?: string;
 	description?: string;
+	buttonLabel?: string;
+	buttonClassName?: string;
+	secretName?: string;
+	disabled?: boolean;
+	isLoading?: boolean;
 }) {
 	return (
 		<button
 			type="button"
+			disabled={disabled || isLoading}
 			onClick={() => {
 				navigator.clipboard.writeText(code);
 				toast.success(
 					containsSecret
-						? "Copied to clipboard — includes a secret deploy token, paste only into your agent"
+						? `Copied to clipboard — includes a secret ${secretName}, paste only into your agent`
 						: "Copied to clipboard",
 				);
 			}}
-			className="relative w-full flex flex-col items-stretch justify-between gap-4 rounded-lg px-4 py-4 border border-primary group cursor-pointer text-left sm:flex-row sm:items-center"
+			className="relative w-full flex flex-col items-stretch justify-between gap-4 rounded-lg px-4 py-4 border border-primary group cursor-pointer text-left sm:flex-row sm:items-center disabled:cursor-not-allowed disabled:opacity-50"
 		>
 			<Badge className="absolute -top-2.5 left-4 z-10 bg-background">
 				Recommended
@@ -210,7 +228,7 @@ export function AgentPromptBanner({
 				<p className="text-sm text-muted-foreground">{description}</p>
 				{containsSecret ? (
 					<p className="mt-1 text-xs text-muted-foreground">
-						Includes a secret deploy token. Paste only into your
+						Includes a secret {secretName}. Paste only into your
 						coding agent.
 					</p>
 				) : null}
@@ -218,11 +236,13 @@ export function AgentPromptBanner({
 			<Button
 				asChild
 				variant="outline"
-				className="w-full shrink-0 sm:w-auto"
+				className={cn("w-full shrink-0 sm:w-auto", buttonClassName)}
+				disabled={disabled || isLoading}
+				isLoading={isLoading}
 			>
 				<div>
 					<Icon icon={faCopy} className="me-2 text-primary" />
-					Copy prompt
+					{buttonLabel}
 				</div>
 			</Button>
 		</button>

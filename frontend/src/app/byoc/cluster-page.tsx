@@ -1,11 +1,18 @@
+import {
+	CLUSTER_CONFIG_FILENAME,
+	serializeClusterConfig,
+} from "./cluster-config";
+import { cloudEnv } from "@/lib/env";
 import type { Rivet } from "@rivet-gg/cloud";
 import {
 	faArrowUpRightFromSquare,
+	faArrowRight,
 	faCalendarDays,
 	faChevronDown,
 	faChevronRight,
-	faDownload,
+	faCopy,
 	faEnvelope,
+	faSlack,
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -15,6 +22,7 @@ import { useState } from "react";
 import {
 	Badge,
 	Button,
+	CopyTrigger,
 	cn,
 	H1,
 	MultiSelectFormField,
@@ -31,6 +39,9 @@ import {
 	BYOC_SUPPORT_EMAIL,
 } from "@/content/byoc";
 import { ByocContactTrigger } from "./byoc-contact-trigger";
+import { serializeAgentInstructions } from "./agent-instructions";
+import { AgentPromptBanner } from "@/app/compute-deploy";
+import { OrDivider } from "@/app/getting-started";
 
 type Command = Rivet.ByocListCommandsResponse.Commands.Item;
 type Region = Rivet.ByocListRegionsResponse.Regions.Item;
@@ -127,92 +138,130 @@ function SetupSection({
 	const { data, isLoading, isError } = useQuery(
 		dataProvider.currentOrgClusterOperatorTokenQueryOptions({ cluster }),
 	);
-
+	const config = serializeClusterConfig(
+		clusterId,
+		cloudEnv().VITE_APP_CLOUD_API_URL,
+	);
+	const agentInstructions = serializeAgentInstructions(
+		clusterId,
+		cloudEnv().VITE_APP_CLOUD_API_URL,
+		data?.token,
+	);
 	return (
 		<Section
 			title="Setup"
 			description="Run Rivet in your VPC, fully managed by Rivet."
 		>
-			<div className="flex flex-wrap gap-2">
-				<Button
-					asChild
-					variant="secondary"
-					startIcon={<Icon icon={faDownload} />}
-				>
-					<a href={BYOC_SETUP_KIT_URL} download>
-						Download setup kit
-					</a>
-				</Button>
-				<WithTooltip
-					disabled={isLoading || !!data}
-					content={
-						isError
-							? "Could not load setup credentials. Reload this page to retry, or contact Enterprise Support below."
-							: "No active operator token. Contact Enterprise Support below."
-					}
-					trigger={
-						<span
-							className="inline-flex"
-							tabIndex={!isLoading && !data ? 0 : undefined}
-						>
+			<div className="flex flex-col gap-6 pt-3">
+				<AgentPromptBanner
+					code={agentInstructions ?? ""}
+					containsSecret
+					secretName="operator token"
+					title="Use your coding agent"
+					description="Paste instructions into your coding agent"
+					buttonLabel="Copy agent instructions"
+					buttonClassName="sm:w-56"
+					disabled={!agentInstructions}
+					isLoading={isLoading}
+				/>
+				<OrDivider label="or do it yourself" />
+				<div className="w-full flex flex-col items-stretch justify-between gap-4 rounded-lg px-4 py-4 border border-border sm:flex-row sm:items-center">
+					<div className="min-w-0">
+						<p className="font-medium mb-1">
+							Follow the setup guide
+						</p>
+						<p className="text-sm text-muted-foreground">
+							Download the kit and cluster config to provision
+							Rivet in your cloud.
+						</p>
+						<div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-2">
 							<Button
-								variant="secondary"
-								startIcon={<Icon icon={faDownload} />}
-								isLoading={isLoading}
-								disabled={!clusterId || !data}
+								asChild
+								variant="ghost"
+								className="h-auto rounded-sm border-0 p-0 text-xs font-normal hover:bg-transparent hover:underline underline-offset-4"
+							>
+								<a href={BYOC_SETUP_KIT_URL} download>
+									Download kit
+								</a>
+							</Button>
+							<span
+								aria-hidden="true"
+								className="text-muted-foreground/40"
+							>
+								·
+							</span>
+							<Button
+								variant="ghost"
+								className="h-auto rounded-sm border-0 p-0 text-xs font-normal hover:bg-transparent hover:underline underline-offset-4"
+								disabled={!config}
 								onClick={() => {
-									if (!clusterId || !data) return;
-									saveAs(
-										new Blob(
-											[
-												setupCredentials({
-													clusterId,
-													token: data.token,
-												}),
-											],
-											{
+									if (config)
+										saveAs(
+											new Blob([config], {
 												type: "application/json;charset=utf-8",
-											},
-										),
-										"rivet-credentials.json",
-									);
+											}),
+											CLUSTER_CONFIG_FILENAME,
+										);
 								}}
 							>
-								Download setup credentials
+								Download config
 							</Button>
-						</span>
-					}
-				/>
-				<Button
-					asChild
-					variant="outline"
-					endIcon={<Icon icon={faArrowUpRightFromSquare} />}
-				>
-					<a
-						href={BYOC_QUICKSTART_DOCS_URL}
-						target="_blank"
-						rel="noreferrer"
+							<span
+								aria-hidden="true"
+								className="text-muted-foreground/40"
+							>
+								·
+							</span>
+							<WithTooltip
+								disabled={isLoading || !!data?.token}
+								content={
+									isError
+										? "Could not load the operator token. Reload to retry or contact Enterprise Support."
+										: "No active operator token. Contact Enterprise Support."
+								}
+								trigger={
+									<span
+										className="inline-flex"
+										tabIndex={
+											!isLoading && !data?.token
+												? 0
+												: undefined
+										}
+									>
+										<CopyTrigger value={data?.token ?? ""}>
+											<Button
+												variant="ghost"
+												className="h-auto rounded-sm border-0 p-0 text-xs font-normal hover:bg-transparent hover:underline underline-offset-4"
+												aria-label="Copy operator token"
+												isLoading={isLoading}
+												disabled={!data?.token}
+											>
+												Copy token
+											</Button>
+										</CopyTrigger>
+									</span>
+								}
+							/>
+						</div>
+					</div>
+					<Button
+						asChild
+						variant="outline"
+						className="w-full shrink-0 sm:w-56"
+						endIcon={<Icon icon={faArrowRight} />}
 					>
-						View setup guide
-					</a>
-				</Button>
+						<a
+							href={BYOC_QUICKSTART_DOCS_URL}
+							target="_blank"
+							rel="noreferrer"
+						>
+							View setup guide
+						</a>
+					</Button>
+				</div>
 			</div>
 		</Section>
 	);
-}
-
-function setupCredentials({
-	clusterId,
-	token,
-}: {
-	clusterId: string;
-	token: string;
-}) {
-	return `${JSON.stringify(
-		{ cloud_cluster_id: clusterId, operator_token: token },
-		null,
-		2,
-	)}\n`;
 }
 
 const REGION_COLUMNS = "grid-cols-[minmax(0,1fr)_9rem_9rem]";
@@ -650,6 +699,16 @@ function SupportSection() {
 							icon={faCalendarDays}
 							title="Book a call"
 							subtitle="Talk to the team about your cluster"
+							onClick={open}
+						/>
+					)}
+				</ByocContactTrigger>
+				<ByocContactTrigger>
+					{(open) => (
+						<SupportCard
+							icon={faSlack}
+							title="Slack Connect"
+							subtitle="Connect with the team on Slack"
 							onClick={open}
 						/>
 					)}
