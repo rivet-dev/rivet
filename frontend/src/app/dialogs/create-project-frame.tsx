@@ -195,6 +195,7 @@ export default function CreateProjectFrameContent({
 
 						try {
 							await setPlan({
+								organization: values.organization,
 								project: result.project.name,
 								plan: values.plan as Rivet.BillingPlan,
 							});

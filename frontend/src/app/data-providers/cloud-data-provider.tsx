@@ -677,11 +677,12 @@ export const createOrganizationContext = ({
 		mutationOptions({
 			mutationKey: ["billing", "set-plan"],
 			mutationFn: async (data: {
+				organization: string;
 				project: string;
 				plan: Rivet.BillingPlan;
 			}) => {
 				await client.billing.setPlan(data.project, {
-					org: organization,
+					org: data.organization,
 					plan: data.plan,
 				});
 			},
