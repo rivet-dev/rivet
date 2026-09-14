@@ -1,6 +1,7 @@
 import { faArrowRight, faLock, Icon } from "@rivet-gg/icons";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
+import { ByocContactTrigger } from "@/app/byoc/byoc-contact-trigger";
 import {
 	CloudOrganizationSelect,
 	cn,
@@ -14,7 +15,7 @@ import {
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
 import { PLANS } from "@/content/billing";
-import { BYOC_DOCS_URL, BYOC_SALES_URL } from "@/content/byoc";
+import { BYOC_DOCS_URL } from "@/content/byoc";
 import { features } from "@/lib/features";
 
 const SELECTABLE_PLANS = PLANS.filter((plan) => plan.id !== "enterprise");
@@ -216,15 +217,20 @@ const ByocPlanCard = ({
 			</span>
 			<span className="mt-3 rounded-md border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
 				<Icon icon={faLock} className="text-primary mr-1.5" />
-				<a
-					href={BYOC_SALES_URL}
-					target="_blank"
-					rel="noreferrer"
-					className="text-primary underline"
-					onClick={(event) => event.stopPropagation()}
-				>
-					Talk to an expert
-				</a>{" "}
+				<ByocContactTrigger>
+					{(open) => (
+						<button
+							type="button"
+							className="text-primary underline"
+							onClick={(event) => {
+								event.stopPropagation();
+								open();
+							}}
+						>
+							Contact us
+						</button>
+					)}
+				</ByocContactTrigger>{" "}
 				to add CMEK and other controls for your PCI/HIPAA needs.
 			</span>
 			<a

@@ -5,8 +5,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect } from "react";
 import { Button, cn } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { BYOC_SALES_URL, BYOC_TRIAL_DAYS } from "@/content/byoc";
+import { BYOC_TRIAL_DAYS } from "@/content/byoc";
 import { features } from "@/lib/features";
+import { ByocContactTrigger } from "./byoc-contact-trigger";
 
 const BANNER_HEIGHT = "2.25rem";
 
@@ -88,23 +89,21 @@ function ByocTrialAlertInner() {
 						</p>
 						<p className="text-muted-foreground min-w-0 truncate">
 							{ended
-								? "Contact support for uninterrupted access to this cluster."
+								? "Contact us for uninterrupted access to this cluster."
 								: `${daysLeft} ${daysLeft === 1 ? "day" : "days"} left in your free trial.`}
 						</p>
-						<Button
-							size="sm"
-							variant="ghost"
-							className="ml-auto h-6 shrink-0 text-xs"
-							asChild
-						>
-							<a
-								href={BYOC_SALES_URL}
-								target="_blank"
-								rel="noreferrer"
-							>
-								Contact support
-							</a>
-						</Button>
+						<ByocContactTrigger>
+							{(open) => (
+								<Button
+									size="sm"
+									variant="ghost"
+									className="ml-auto h-6 shrink-0 text-xs"
+									onClick={open}
+								>
+									Contact us
+								</Button>
+							)}
+						</ByocContactTrigger>
 					</div>
 				</motion.div>
 			) : null}

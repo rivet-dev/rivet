@@ -1,12 +1,11 @@
 import type { Rivet } from "@rivet-gg/cloud";
 import {
 	faArrowUpRightFromSquare,
-	faBook,
+	faCalendarDays,
 	faChevronDown,
 	faChevronRight,
 	faCopy,
 	faEnvelope,
-	faSlack,
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
@@ -27,12 +26,9 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import {
-	BYOC_DEPLOY_DOCS_URL,
-	BYOC_SALES_URL,
-	BYOC_SUPPORT_EMAIL,
-} from "@/content/byoc";
+import { BYOC_DEPLOY_DOCS_URL, BYOC_SUPPORT_EMAIL } from "@/content/byoc";
 import { cloudEnv } from "@/lib/env";
+import { ByocContactTrigger } from "./byoc-contact-trigger";
 
 type Command = Rivet.ByocListCommandsResponse.Commands.Item;
 type Region = Rivet.ByocListRegionsResponse.Regions.Item;
@@ -607,42 +603,75 @@ function Time({ value }: { value: string | number | undefined }) {
 	);
 }
 
+function SupportCard({
+	icon,
+	title,
+	subtitle,
+	onClick,
+	href,
+}: {
+	icon: typeof faEnvelope;
+	title: string;
+	subtitle: string;
+	onClick?: () => void;
+	href?: string;
+}) {
+	const body = (
+		<>
+			<Icon icon={icon} className="mt-0.5 shrink-0 text-foreground" />
+			<span className="min-w-0">
+				<span className="block font-semibold text-foreground">
+					{title}
+				</span>
+				<span className="block truncate text-muted-foreground">
+					{subtitle}
+				</span>
+			</span>
+		</>
+	);
+	const className = cn(
+		"flex flex-1 min-w-56 items-start gap-3 rounded-lg border border-foreground/10",
+		"bg-foreground/[0.02] px-4 py-3 text-left text-sm transition-colors hover:bg-foreground/[0.05]",
+	);
+
+	if (href) {
+		return (
+			<a href={href} className={className}>
+				{body}
+			</a>
+		);
+	}
+
+	return (
+		<button type="button" onClick={onClick} className={className}>
+			{body}
+		</button>
+	);
+}
+
 function SupportSection() {
 	return (
 		<Section
 			title="Enterprise Support"
-			description="Every BYOC cluster includes enterprise support over a shared Slack Connect channel."
+			description="Every BYOC cluster includes enterprise support."
 		>
 			<div className="flex flex-wrap gap-2">
-				<Button
-					asChild
-					variant="secondary"
-					startIcon={<Icon icon={faSlack} />}
-				>
-					<a href={BYOC_SALES_URL} target="_blank" rel="noreferrer">
-						Request Slack Connect
-					</a>
-				</Button>
-				<Button
-					asChild
-					variant="outline"
-					startIcon={<Icon icon={faEnvelope} />}
-				>
-					<a href={`mailto:${BYOC_SUPPORT_EMAIL}`}>Email support</a>
-				</Button>
-				<Button
-					asChild
-					variant="outline"
-					startIcon={<Icon icon={faBook} />}
-				>
-					<a
-						href={BYOC_DEPLOY_DOCS_URL}
-						target="_blank"
-						rel="noreferrer"
-					>
-						Documentation
-					</a>
-				</Button>
+				<ByocContactTrigger>
+					{(open) => (
+						<SupportCard
+							icon={faCalendarDays}
+							title="Book a call"
+							subtitle="Talk to the team about your cluster"
+							onClick={open}
+						/>
+					)}
+				</ByocContactTrigger>
+				<SupportCard
+					icon={faEnvelope}
+					title="Email support"
+					subtitle={BYOC_SUPPORT_EMAIL}
+					href={`mailto:${BYOC_SUPPORT_EMAIL}`}
+				/>
 			</div>
 		</Section>
 	);

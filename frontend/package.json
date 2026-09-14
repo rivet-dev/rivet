@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@better-auth/oauth-provider": "1.6.23",
+    "@calcom/embed-react": "^1.5.3",
     "@codemirror/autocomplete": "^6.18.7",
     "@codemirror/commands": "^6.8.1",
     "@codemirror/lang-javascript": "^6.2.4",
