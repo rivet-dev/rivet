@@ -4,18 +4,17 @@ import {
 	faCalendarDays,
 	faChevronDown,
 	faChevronRight,
-	faCopy,
+	faDownload,
 	faEnvelope,
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { saveAs } from "file-saver";
 import { useState } from "react";
 import {
 	Badge,
 	Button,
-	CopyArea,
-	CopyTrigger,
 	cn,
 	H1,
 	MultiSelectFormField,
@@ -26,8 +25,11 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { BYOC_DEPLOY_DOCS_URL, BYOC_SUPPORT_EMAIL } from "@/content/byoc";
-import { cloudEnv } from "@/lib/env";
+import {
+	BYOC_QUICKSTART_DOCS_URL,
+	BYOC_SETUP_KIT_URL,
+	BYOC_SUPPORT_EMAIL,
+} from "@/content/byoc";
 import { ByocContactTrigger } from "./byoc-contact-trigger";
 
 type Command = Rivet.ByocListCommandsResponse.Commands.Item;
@@ -122,109 +124,95 @@ function SetupSection({
 	clusterId: string | undefined;
 }) {
 	const dataProvider = useCloudDataProvider();
-	const { data, isLoading } = useQuery(
+	const { data, isLoading, isError } = useQuery(
 		dataProvider.currentOrgClusterOperatorTokenQueryOptions({ cluster }),
 	);
-
-	const operatorEndpoint = cloudEnv().VITE_APP_CLOUD_API_URL;
 
 	return (
 		<Section
 			title="Setup"
-			description="Provision the Rivet Operator within your cloud for a fully-managed Rivet cluster inside your own VPC."
+			description="Run Rivet in your VPC, fully managed by Rivet."
 		>
-			<div className="space-y-4">
-				<Field label="Operator Endpoint">
-					<CopyArea value={operatorEndpoint} />
-				</Field>
-				<Field label="Cluster ID">
-					{clusterId ? (
-						<CopyArea value={clusterId} />
-					) : (
-						<Skeleton className="h-9 w-full" />
-					)}
-				</Field>
-				<Field label="Operator Token">
-					{isLoading ? (
-						<Skeleton className="h-9 w-full" />
-					) : data ? (
-						<CopyArea value={data.token} isConfidential />
-					) : (
-						<SmallText className="text-muted-foreground">
-							No active operator token. Contact support to issue a
-							new one.
-						</SmallText>
-					)}
-				</Field>
-				<div className="flex flex-wrap gap-2">
-					{clusterId && data ? (
-						<CopyTrigger
-							value={() =>
-								operatorEnv({
-									endpoint: operatorEndpoint,
-									clusterId,
-									token: data.token,
-								})
-							}
+			<div className="flex flex-wrap gap-2">
+				<Button
+					asChild
+					variant="secondary"
+					startIcon={<Icon icon={faDownload} />}
+				>
+					<a href={BYOC_SETUP_KIT_URL} download>
+						Download setup kit
+					</a>
+				</Button>
+				<WithTooltip
+					disabled={isLoading || !!data}
+					content={
+						isError
+							? "Could not load setup credentials. Reload this page to retry, or contact Enterprise Support below."
+							: "No active operator token. Contact Enterprise Support below."
+					}
+					trigger={
+						<span
+							className="inline-flex"
+							tabIndex={!isLoading && !data ? 0 : undefined}
 						>
 							<Button
 								variant="secondary"
-								startIcon={<Icon icon={faCopy} />}
+								startIcon={<Icon icon={faDownload} />}
+								isLoading={isLoading}
+								disabled={!clusterId || !data}
+								onClick={() => {
+									if (!clusterId || !data) return;
+									saveAs(
+										new Blob(
+											[
+												setupCredentials({
+													clusterId,
+													token: data.token,
+												}),
+											],
+											{
+												type: "application/json;charset=utf-8",
+											},
+										),
+										"rivet-credentials.json",
+									);
+								}}
 							>
-								Copy Environment Variables
+								Download setup credentials
 							</Button>
-						</CopyTrigger>
-					) : null}
-					<Button
-						asChild
-						variant="outline"
-						endIcon={<Icon icon={faArrowUpRightFromSquare} />}
+						</span>
+					}
+				/>
+				<Button
+					asChild
+					variant="outline"
+					endIcon={<Icon icon={faArrowUpRightFromSquare} />}
+				>
+					<a
+						href={BYOC_QUICKSTART_DOCS_URL}
+						target="_blank"
+						rel="noreferrer"
 					>
-						<a
-							href={BYOC_DEPLOY_DOCS_URL}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Deploy Documentation
-						</a>
-					</Button>
-				</div>
+						View setup guide
+					</a>
+				</Button>
 			</div>
 		</Section>
 	);
 }
 
-function operatorEnv({
-	endpoint,
+function setupCredentials({
 	clusterId,
 	token,
 }: {
-	endpoint: string;
 	clusterId: string;
 	token: string;
 }) {
-	return [
-		`RIVET_CLOUD_API_URL=${endpoint}`,
-		`RIVET_CLUSTER_ID=${clusterId}`,
-		`RIVET_TOKEN=${token}`,
-	].join("\n");
-}
-
-function Field({
-	label,
-	children,
-}: {
-	label: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div>
-			<div className="text-xs font-medium text-muted-foreground mb-1.5">
-				{label}
-			</div>
-			{children}
-		</div>
-	);
+	return `${JSON.stringify(
+		{ cloud_cluster_id: clusterId, operator_token: token },
+		null,
+		2,
+	)}\n`;
 }
 
 const REGION_COLUMNS = "grid-cols-[minmax(0,1fr)_9rem_9rem]";
@@ -310,7 +298,7 @@ function RegionsSection({ cluster }: { cluster: string }) {
 				<>
 					Follow the{" "}
 					<a
-						href={BYOC_DEPLOY_DOCS_URL}
+						href={BYOC_QUICKSTART_DOCS_URL}
 						target="_blank"
 						rel="noreferrer"
 						className="underline"

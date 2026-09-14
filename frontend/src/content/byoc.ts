@@ -1,6 +1,8 @@
 export const BYOC_DOCS_URL = "https://www.rivet.dev/docs/cloud/byoc";
-export const BYOC_DEPLOY_DOCS_URL =
-	"https://www.rivet.dev/docs/cloud/byoc/deploy";
+export const BYOC_QUICKSTART_DOCS_URL =
+	"https://rivet.dev/cloud/byoc/quickstart/";
+export const BYOC_SETUP_KIT_URL =
+	"https://releases.rivet.dev/byoc/latest/setup-kit.tar.gz";
 export const BYOC_CAL_NAMESPACE = "byoc";
 export const BYOC_CAL_LINK = "team/rivet/byoc";
 export const BYOC_SUPPORT_EMAIL = "support@rivet.dev";
