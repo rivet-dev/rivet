@@ -70,6 +70,7 @@ export const stepper = defineStepper(
 		description:
 			"Add a payment method to activate the plan for this project.",
 		next: "Finish",
+		showPrevious: false,
 		isVisible: (values: Record<string, unknown>) =>
 			isPaidPlan(values.plan as PlanValue),
 		schema: z.object({}),
