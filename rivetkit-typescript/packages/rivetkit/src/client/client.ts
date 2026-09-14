@@ -3,7 +3,7 @@ import type { ActorQuery } from "@/client/query";
 import type { Encoding } from "@/common/encoding";
 import type { EngineControlClient } from "@/engine-client/driver";
 import type { Registry } from "@/registry";
-import type { CurrentActorInvocation } from "@/registry/runtime";
+import type { StartCallSpan, CurrentActorInvocation } from "@/registry/runtime";
 import type { ActorActionFunction, ActorGatewayOptions } from "./actor-common";
 import {
 	type ActorConn,
@@ -186,6 +186,8 @@ export interface ClientRawOptions {
 export interface ActorClientRuntimeOptions {
 	/** Supplies the calling actor's invocation so actor-to-actor clients propagate its trace and ray ID. */
 	currentActorInvocation?: CurrentActorInvocation;
+	/** Opens and finishes the Core span covering an actor-to-actor call. */
+	startCallSpan?: StartCallSpan;
 }
 
 /**
@@ -203,6 +205,7 @@ export class ClientRaw {
 	#encodingKind: Encoding;
 	#gatewayOptions: ActorGatewayOptions;
 	#currentActorInvocation?: CurrentActorInvocation;
+	#startCallSpan?: StartCallSpan;
 
 	/**
 	 * Creates an instance of Client.
@@ -216,6 +219,7 @@ export class ClientRaw {
 		this.#encodingKind = options.encoding ?? "bare";
 		this.#gatewayOptions = options.gateway ?? {};
 		this.#currentActorInvocation = options.currentActorInvocation;
+		this.#startCallSpan = options.startCallSpan;
 	}
 
 	/**
@@ -418,6 +422,7 @@ export class ClientRaw {
 			this.#gatewayOptions,
 			signal,
 			this.#currentActorInvocation,
+			this.#startCallSpan,
 		);
 	}
 

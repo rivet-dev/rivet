@@ -4028,6 +4028,10 @@ export function buildNativeFactory(
 					callNativeSync(() =>
 						runtime.actorInvocationTraceContext(ctx),
 					),
+				startCallSpan: (actorName, actionName) =>
+					callNativeSync(() =>
+						runtime.startCallSpan(ctx, actorName, actionName),
+					),
 			},
 		);
 	const run = getRunFunction(config.run);

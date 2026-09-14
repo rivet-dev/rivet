@@ -1,5 +1,6 @@
 import type { AnyActorDefinition } from "@/actor/definition";
-import type { ActorSpecifier } from "@/actor/errors";
+import { type ActorSpecifier, encodeErrorForBridge } from "@/actor/errors";
+import type { ActorInvocationSpanContext } from "@/common/actor-telemetry-context";
 import {
 	HEADER_CONN_PARAMS,
 	HEADER_ENCODING,
@@ -24,7 +25,7 @@ import { AsyncMutex } from "@/common/database/shared";
 import type { Encoding, JsonCompatValue } from "@/common/encoding";
 import { deconstructError } from "@/common/utils";
 import type { EngineControlClient } from "@/engine-client/driver";
-import type { CurrentActorInvocation } from "@/registry/runtime";
+import type { StartCallSpan, CurrentActorInvocation } from "@/registry/runtime";
 import {
 	decodeCborCompat,
 	deserializeWithEncoding,
@@ -85,6 +86,7 @@ export class ActorHandleRaw {
 	#resolvingActorId?: Promise<string>;
 	#queueSendMutex = new AsyncMutex();
 	#currentActorInvocation?: CurrentActorInvocation;
+	#startCallSpan?: StartCallSpan;
 
 	/**
 	 * Do not call this directly.
@@ -103,6 +105,7 @@ export class ActorHandleRaw {
 		gatewayOptions: ActorGatewayOptions = {},
 		signal?: AbortSignal,
 		currentActorInvocation?: CurrentActorInvocation,
+		startCallSpan?: StartCallSpan,
 	) {
 		this.#client = client;
 		this.#driver = driver;
@@ -113,6 +116,7 @@ export class ActorHandleRaw {
 		this.#getParams = getParams;
 		this.#signal = signal;
 		this.#currentActorInvocation = currentActorInvocation;
+		this.#startCallSpan = startCallSpan;
 	}
 
 	async #resolveConnectionParams(): Promise<unknown> {
@@ -284,20 +288,41 @@ export class ActorHandleRaw {
 		// when no per-call signal is provided.
 		const signal = opts.signal ?? this.#signal;
 		const optsWithSignal = { ...opts, signal };
+		// Open before retries so all attempts share one span and parent context.
+		const call = this.#startCallSpan?.(
+			getActorNameFromQuery(this.#actorResolutionState),
+			opts.name,
+		);
 		const run = async () =>
-			(await this.#sendActionNow(optsWithSignal)) as Response;
-		if (opts.name === "destroy") {
-			return await run();
+			(await this.#sendActionAttempts(
+				optsWithSignal,
+				call?.span,
+			)) as Response;
+		const send = async () => {
+			if (opts.name === "destroy") {
+				return await run();
+			}
+			return await retryOnLifecycleBoundary(run, { signal });
+		};
+		if (!call) {
+			return await send();
 		}
-
-		return await retryOnLifecycleBoundary(run, { signal });
+		try {
+			const output = await send();
+			call.finish();
+			return output;
+		} catch (error) {
+			call.finish(encodeErrorForBridge(error));
+			throw error;
+		}
 	}
 
-	async #sendActionNow(
+	async #sendActionAttempts(
 		opts: {
 			name: string;
 			args: unknown[];
 		} & ActorActionOptions,
+		callSpan?: ActorInvocationSpanContext,
 	): Promise<unknown> {
 		const maxAttempts = this.#getDynamicQueryMaxAttempts();
 		let useQueryTarget = isDynamicActorQuery(this.#actorResolutionState);
@@ -333,6 +358,7 @@ export class ActorHandleRaw {
 					[HEADER_ENCODING]: this.#encoding,
 					...outboundTelemetryHeaders(
 						this.#currentActorInvocation?.(),
+						callSpan,
 					),
 				};
 				if (this.#params !== undefined) {
