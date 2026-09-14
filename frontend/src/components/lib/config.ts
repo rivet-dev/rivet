@@ -32,6 +32,23 @@ export const getApiEndpoint = (apiEndpoint: string) => {
 	return apiEndpoint;
 };
 
+/**
+ * Returns the PostHog config only when it is actually usable. Unset Vite env
+ * vars survive index.html substitution as literal `%VITE_*%` placeholders, so a
+ * present `posthog` object is not on its own proof of configuration.
+ */
+export const getPosthogConfig = (config: Config) => {
+	const posthog = config.posthog;
+	if (
+		!posthog?.apiKey ||
+		!posthog.apiHost ||
+		posthog.apiKey.startsWith("%")
+	) {
+		return null;
+	}
+	return posthog;
+};
+
 export const getConfig = (): Config => {
 	const el = document.getElementById("RIVET_CONFIG");
 	if (!el) {

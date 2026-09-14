@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/react";
 import { lazy, type PropsWithChildren, Suspense } from "react";
-import { getConfig, useConfig } from "@/components";
+import { getConfig, getPosthogConfig, useConfig } from "@/components";
 import { commonEnv } from "@/lib/env";
 import { initPosthog } from "@/lib/posthog";
 
@@ -9,10 +9,11 @@ export async function initThirdPartyProviders(router: unknown, debug: boolean) {
 
 	let ph = null;
 
-	if (config.posthog) {
+	const posthogConfig = getPosthogConfig(config);
+	if (posthogConfig) {
 		ph = await initPosthog(
-			config.posthog.apiKey,
-			config.posthog.apiHost,
+			posthogConfig.apiKey,
+			posthogConfig.apiHost,
 			debug,
 		);
 	}
@@ -61,7 +62,7 @@ const LazyPostHogProvider = lazy(() =>
 export function ThirdPartyProviders({ children }: PropsWithChildren) {
 	const config = useConfig();
 
-	if (!config.posthog) {
+	if (!getPosthogConfig(config)) {
 		return children;
 	}
 
