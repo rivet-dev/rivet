@@ -26,7 +26,7 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { BYOC_DEPLOY_DOCS_URL, BYOC_SUPPORT_EMAIL } from "@/content/byoc";
+import { BYOC_QUICKSTART_DOCS_URL, BYOC_SUPPORT_EMAIL } from "@/content/byoc";
 import { cloudEnv } from "@/lib/env";
 import { ByocContactTrigger } from "./byoc-contact-trigger";
 
@@ -181,11 +181,11 @@ function SetupSection({
 						endIcon={<Icon icon={faArrowUpRightFromSquare} />}
 					>
 						<a
-							href={BYOC_DEPLOY_DOCS_URL}
+							href={BYOC_QUICKSTART_DOCS_URL}
 							target="_blank"
 							rel="noreferrer"
 						>
-							Deploy Documentation
+							Quick Start
 						</a>
 					</Button>
 				</div>
@@ -310,7 +310,7 @@ function RegionsSection({ cluster }: { cluster: string }) {
 				<>
 					Follow the{" "}
 					<a
-						href={BYOC_DEPLOY_DOCS_URL}
+						href={BYOC_QUICKSTART_DOCS_URL}
 						target="_blank"
 						rel="noreferrer"
 						className="underline"
