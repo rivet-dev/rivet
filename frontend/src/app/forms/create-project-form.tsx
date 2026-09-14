@@ -34,6 +34,17 @@ export const detailsSchema = z.object({
 	organization: z.string().nonempty("Organization is required"),
 });
 
+export const byocDetailsSchema = detailsSchema.extend({
+	name: z
+		.string()
+		.min(1)
+		.max(63)
+		.regex(
+			/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/,
+			"Must contain only lowercase alphanumeric characters and hyphens, and must not start or end with a hyphen",
+		),
+});
+
 export const formSchema = z.object({
 	...planSchema.shape,
 	...detailsSchema.shape,
@@ -63,7 +74,8 @@ export const stepper = defineStepper(
 		titleFor: (values: Record<string, unknown>) =>
 			values.plan === "byoc" ? "Create cluster" : "Create project",
 		next: "Continue",
-		schema: detailsSchema,
+		schema: (values: Record<string, unknown>) =>
+			values.plan === "byoc" ? byocDetailsSchema : detailsSchema,
 	},
 	{
 		id: "payment",
