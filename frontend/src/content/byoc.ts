@@ -1,4 +1,4 @@
-export const BYOC_DOCS_URL = "https://www.rivet.dev/docs/cloud/byoc";
+export const BYOC_DOCS_URL = "https://rivet.dev/cloud/byoc/";
 export const BYOC_QUICKSTART_DOCS_URL =
 	"https://rivet.dev/cloud/byoc/quickstart/";
 export const BYOC_SETUP_KIT_URL =
