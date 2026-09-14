@@ -1,3 +1,5 @@
+import { getPosthogEnabledFeatureFlags } from "@/lib/posthog";
+
 const envValue = import.meta.env.VITE_FEATURE_FLAGS as string | undefined;
 
 const raw = import.meta.env.DEV
@@ -15,8 +17,16 @@ const enabled =
 					.filter(Boolean),
 			);
 
+// Snapshotted before the app module graph loads (see src/main.tsx), empty when
+// PostHog is not configured.
+const remote = getPosthogEnabledFeatureFlags();
+
 function isEnabled(flag: string): boolean {
-	return enabled === null || enabled.has(flag);
+	if (enabled === null || enabled.has(flag)) {
+		return true;
+	}
+	// PostHog is purely additive: it may turn a flag on, never off.
+	return remote.has(flag);
 }
 
 const auth = isEnabled("auth");
