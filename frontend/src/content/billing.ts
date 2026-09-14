@@ -1,9 +1,12 @@
+import { faCheck, faPlus } from "@rivet-gg/icons";
+
 /** Human-readable plan names. `pro` is presented as "Hobby". */
 export const PLAN_LABELS: Record<string, string> = {
 	free: "Free",
 	pro: "Hobby",
 	team: "Team",
 	enterprise: "Enterprise",
+	byoc: "BYOC",
 };
 
 /**
@@ -41,3 +44,78 @@ export function computeCostPerSecond(vcpus: number, memoryMb: number): number {
 		(memoryMb / 1024) * COMPUTE.memoryPerGibSecond
 	);
 }
+
+export const PLANS = [
+	{
+		id: "free",
+		title: "Free",
+		price: "$0",
+		features: [
+			{ icon: faCheck, label: "1 vCPU Max" },
+			{ icon: faCheck, label: "$5 /mo Compute Limit" },
+			{ icon: faCheck, label: "5GiB Storage Limit" },
+			{ icon: faCheck, label: "Community Support" },
+			{ icon: faCheck, label: "5 Million Writes /mo Limit" },
+			{ icon: faCheck, label: "200 Million Reads /mo Limit" },
+			{ icon: faCheck, label: "100GiB Egress Limit" },
+			{ icon: faCheck, label: "100,000 Awake Actors Hours Limit" },
+		],
+	},
+	{
+		id: "pro",
+		title: "Hobby",
+		price: "$20",
+		usageBased: true,
+		features: [
+			{ icon: faPlus, label: "Up to 8 vCPU" },
+			{ icon: faPlus, label: "25 Billion Reads /mo included" },
+			{ icon: faPlus, label: "5GiB Storage included" },
+			{ icon: faCheck, label: "Email Support" },
+			{ icon: faPlus, label: "50 Million Writes /mo included" },
+			{ icon: faPlus, label: "1TiB Egress included" },
+			{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
+		],
+	},
+	{
+		id: "team",
+		title: "Team",
+		price: "$200",
+		usageBased: true,
+		features: [
+			{ icon: faPlus, label: "Up to 8 vCPU" },
+			{ icon: faPlus, label: "25 Billion Reads /mo included" },
+			{ icon: faPlus, label: "5GiB Storage included" },
+			{ icon: faCheck, label: "Slack Support" },
+			{ icon: faPlus, label: "50 Million Writes /mo included" },
+			{ icon: faPlus, label: "1TiB Egress included" },
+			{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
+			{ icon: faCheck, label: "MFA" },
+		],
+	},
+	{
+		id: "enterprise",
+		title: "Enterprise",
+		price: "Custom",
+		custom: true,
+		features: [
+			{ icon: faCheck, label: "Everything in Team" },
+			{ icon: faCheck, label: "Priority Support" },
+			{ icon: faCheck, label: "SLA" },
+			{ icon: faCheck, label: "OIDC SSO provider" },
+			{ icon: faCheck, label: "Audit logs" },
+			{ icon: faCheck, label: "Custom Roles" },
+			{ icon: faCheck, label: "Device Tracking" },
+			{ icon: faCheck, label: "Volume Pricing" },
+		],
+	},
+] as const;
+
+export type PlanId = (typeof PLANS)[number]["id"];
+
+export const getPlan = (id: PlanId) => {
+	const plan = PLANS.find((entry) => entry.id === id);
+	if (!plan) {
+		throw new Error(`unknown plan: ${id}`);
+	}
+	return plan;
+};

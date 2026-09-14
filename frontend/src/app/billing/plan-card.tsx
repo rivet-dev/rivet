@@ -1,6 +1,7 @@
-import { faCheck, faPlus, Icon, type IconProp } from "@rivet-gg/icons";
+import { Icon, type IconProp } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { Button, cn } from "@/components";
+import { getPlan, type PlanId } from "@/content/billing";
 
 type PlanCardProps = {
 	title: string;
@@ -71,92 +72,33 @@ function PlanCard({
 	);
 }
 
+const fromCatalog = (id: PlanId) => {
+	const plan = getPlan(id);
+	return {
+		title: plan.title,
+		price: plan.price,
+		usageBased: "usageBased" in plan ? plan.usageBased : undefined,
+		custom: "custom" in plan ? plan.custom : undefined,
+		features: [...plan.features],
+	};
+};
+
 export const CommunityPlan = (props: Partial<PlanCardProps>) => {
-	return (
-		<PlanCard
-			title="Free"
-			price="$0"
-			features={[
-				{ icon: faCheck, label: "1 vCPU Max" },
-				{ icon: faCheck, label: "$5 /mo Compute Limit" },
-				{ icon: faCheck, label: "5 Million Writes /mo Limit" },
-				{ icon: faCheck, label: "200 Million Reads /mo Limit" },
-				{ icon: faCheck, label: "5GiB Storage Limit" },
-				{ icon: faCheck, label: "100GiB Egress Limit" },
-				{ icon: faCheck, label: "100,000 Awake Actors Hours Limit" },
-				{ icon: faCheck, label: "Community Support" },
-			]}
-			{...props}
-		/>
-	);
+	return <PlanCard {...fromCatalog("free")} {...props} />;
 };
 
 export const ProPlan = (props: Partial<PlanCardProps>) => {
-	return (
-		<PlanCard
-			title="Hobby"
-			price="$20"
-			usageBased
-			features={[
-				{ icon: faPlus, label: "Up to 8 vCPU" },
-				{
-					icon: faPlus,
-					label: "25 Billion Read /mo included",
-				},
-				{
-					icon: faPlus,
-					label: "50 Million Writes /mo included",
-				},
-				{
-					icon: faPlus,
-					label: "5GiB Storage included",
-				},
-				{ icon: faPlus, label: "1TiB Egress included" },
-				{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
-				{ icon: faCheck, label: "Email Support" },
-			]}
-			{...props}
-		/>
-	);
+	return <PlanCard {...fromCatalog("pro")} {...props} />;
 };
 
 export const TeamPlan = (props: Partial<PlanCardProps>) => {
-	return (
-		<PlanCard
-			title="Team"
-			price="$200"
-			usageBased
-			features={[
-				{ icon: faPlus, label: "Up to 8 vCPU" },
-				{ icon: faPlus, label: "25 Billion Reads /mo included" },
-				{ icon: faPlus, label: "50 Million Writes /mo included" },
-				{ icon: faPlus, label: "5GiB Storage included" },
-				{ icon: faPlus, label: "1TiB Egress included" },
-				{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
-				{ icon: faCheck, label: "MFA" },
-				{ icon: faCheck, label: "Slack Support" },
-			]}
-			{...props}
-		/>
-	);
+	return <PlanCard {...fromCatalog("team")} {...props} />;
 };
 
 export const EnterprisePlan = (props: Partial<PlanCardProps>) => {
 	return (
 		<PlanCard
-			title="Enterprise"
-			price="Custom"
-			custom
-			features={[
-				{ icon: faCheck, label: "Everything in Team" },
-				{ icon: faCheck, label: "Priority Support" },
-				{ icon: faCheck, label: "SLA" },
-				{ icon: faCheck, label: "OIDC SSO provider" },
-				{ icon: faCheck, label: "Audit logs" },
-				{ icon: faCheck, label: "Custom Roles" },
-				{ icon: faCheck, label: "Device Tracking" },
-				{ icon: faCheck, label: "Volume Pricing" },
-			]}
+			{...fromCatalog("enterprise")}
 			{...props}
 			buttonProps={{
 				...props.buttonProps,

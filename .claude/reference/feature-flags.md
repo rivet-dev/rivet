@@ -33,6 +33,7 @@ if (features.platform) {
 | `branding` | Rivet branding chrome. |
 | `datacenter` | Datacenter-related UI. |
 | `danger-zone` | Destructive settings actions (`features.dangerZone`). |
+| `byoc` | Bring Your Own Cloud (`features.byoc`): the BYOC option in the create-project flow, BYOC clusters in the project lists, and the `/orgs/$org/clusters/$cluster` page. Requires `platform`. |
 
 Deployment flavors map to flag sets roughly as: **cloud** = all on; **OSS** = `auth`/`platform`/`acl` off; **enterprise** = `acl` on, `auth`/`platform` off (engine enforces auth without a login UI). Do not treat `platform`/`auth` as "engine requires credentials" — that is `acl`. **`compute` is opt-in even on cloud** — each Railway service adds it to `VITE_FEATURE_FLAGS` per-environment (e.g. staging on, prod off) rather than inheriting the cloud default-on set.
 
@@ -51,7 +52,7 @@ localStorage.setItem("FEATURE_FLAGS", ""); location.reload();
 // Full cloud: all flags on (see the commented canonical list in frontend/.env.local)
 localStorage.setItem(
   "FEATURE_FLAGS",
-  "compute,platform,acl,auth,captcha,branding,support,billing,datacenter,danger-zone,multitenancy",
+  "compute,platform,acl,auth,captcha,branding,support,billing,datacenter,danger-zone,multitenancy,byoc",
 );
 location.reload();
 

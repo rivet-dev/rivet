@@ -10,7 +10,8 @@ import { PLAN_LABELS } from "@/content/billing";
 
 const getPlanVariant = (
 	plan: string | undefined,
-): "secondary" | "premium" | "premium-blue" => {
+): "secondary" | "premium" | "premium-blue" | "premium-violet" => {
+	if (plan === "byoc") return "premium-violet";
 	if (plan === "team") return "premium-blue";
 	if (plan === "pro" || plan === "enterprise") return "premium";
 	return "secondary";
