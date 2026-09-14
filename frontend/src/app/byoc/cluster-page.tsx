@@ -31,7 +31,6 @@ import {
 	BYOC_DEPLOY_DOCS_URL,
 	BYOC_SALES_URL,
 	BYOC_SUPPORT_EMAIL,
-	BYOC_TRIAL_DAYS,
 } from "@/content/byoc";
 import { cloudEnv } from "@/lib/env";
 
@@ -58,18 +57,6 @@ export function ClusterPage({ cluster }: { cluster: string }) {
 								</H1>
 								<Badge variant="premium-violet">BYOC</Badge>
 							</div>
-							<SmallText className="text-muted-foreground mt-1">
-								Your first {BYOC_TRIAL_DAYS} days are free.{" "}
-								<a
-									href={BYOC_SALES_URL}
-									target="_blank"
-									rel="noreferrer"
-									className="underline"
-								>
-									Contact us
-								</a>{" "}
-								to keep the cluster running after that.
-							</SmallText>
 						</div>
 					</header>
 
