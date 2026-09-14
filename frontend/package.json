@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@better-auth/oauth-provider": "1.6.23",
+    "@calcom/embed-react": "^1.5.3",
     "@codemirror/autocomplete": "^6.18.7",
     "@codemirror/commands": "^6.8.1",
     "@codemirror/lang-javascript": "^6.2.4",
@@ -61,7 +62,7 @@
     "@radix-ui/react-toggle-group": "^1.1.11",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-visually-hidden": "^1.2.3",
-    "@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0",
+    "@rivet-gg/cloud": "https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@865",
     "@rivet-gg/icons": "workspace:*",
     "@rivetkit/engine-api-full": "workspace:*",
     "@rivetkit/shared-data": "workspace:*",

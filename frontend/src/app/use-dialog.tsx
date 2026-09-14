@@ -8,6 +8,9 @@ export const useDialog = {
 	CreateNamespace: createDialogHook(
 		() => import("@/app/dialogs/create-namespace-frame"),
 	),
+	ByocContact: createDialogHook(
+		() => import("@/app/dialogs/byoc-contact-frame"),
+	),
 	CreateProject: createDialogHook(
 		() => import("@/app/dialogs/create-project-frame"),
 	),
