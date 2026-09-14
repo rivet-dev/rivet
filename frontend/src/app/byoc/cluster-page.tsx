@@ -4,18 +4,17 @@ import {
 	faCalendarDays,
 	faChevronDown,
 	faChevronRight,
-	faCopy,
+	faDownload,
 	faEnvelope,
 	Icon,
 } from "@rivet-gg/icons";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
+import { saveAs } from "file-saver";
 import { useState } from "react";
 import {
 	Badge,
 	Button,
-	CopyArea,
-	CopyTrigger,
 	cn,
 	H1,
 	MultiSelectFormField,
@@ -26,7 +25,11 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { BYOC_QUICKSTART_DOCS_URL, BYOC_SUPPORT_EMAIL } from "@/content/byoc";
+import {
+	BYOC_QUICKSTART_DOCS_URL,
+	BYOC_SETUP_KIT_URL,
+	BYOC_SUPPORT_EMAIL,
+} from "@/content/byoc";
 import { cloudEnv } from "@/lib/env";
 import { ByocContactTrigger } from "./byoc-contact-trigger";
 
@@ -131,64 +134,55 @@ function SetupSection({
 	return (
 		<Section
 			title="Setup"
-			description="Provision the Rivet Operator within your cloud for a fully-managed Rivet cluster inside your own VPC."
+			description="Run Rivet in your VPC, fully managed by Rivet."
 		>
-			<div className="space-y-4">
-				<Field label="Operator Endpoint">
-					<CopyArea value={operatorEndpoint} />
-				</Field>
-				<Field label="Cluster ID">
-					{clusterId ? (
-						<CopyArea value={clusterId} />
-					) : (
-						<Skeleton className="h-9 w-full" />
-					)}
-				</Field>
-				<Field label="Operator Token">
-					{isLoading ? (
-						<Skeleton className="h-9 w-full" />
-					) : data ? (
-						<CopyArea value={data.token} isConfidential />
-					) : (
-						<SmallText className="text-muted-foreground">
-							No active operator token. Contact support to issue a
-							new one.
-						</SmallText>
-					)}
-				</Field>
-				<div className="flex flex-wrap gap-2">
-					{clusterId && data ? (
-						<CopyTrigger
-							value={() =>
-								operatorEnv({
-									endpoint: operatorEndpoint,
-									clusterId,
-									token: data.token,
-								})
-							}
-						>
-							<Button
-								variant="secondary"
-								startIcon={<Icon icon={faCopy} />}
-							>
-								Copy Environment Variables
-							</Button>
-						</CopyTrigger>
-					) : null}
-					<Button
-						asChild
-						variant="outline"
-						endIcon={<Icon icon={faArrowUpRightFromSquare} />}
+			<div className="flex flex-wrap gap-2">
+				<Button
+					asChild
+					variant="secondary"
+					startIcon={<Icon icon={faDownload} />}
+				>
+					<a href={BYOC_SETUP_KIT_URL} download>
+						Download setup kit
+					</a>
+				</Button>
+				<Button
+					variant="secondary"
+					startIcon={<Icon icon={faDownload} />}
+					isLoading={isLoading}
+					disabled={!clusterId || !data}
+					onClick={() => {
+						if (!clusterId || !data) return;
+						saveAs(
+							new Blob(
+								[
+									operatorEnv({
+										endpoint: operatorEndpoint,
+										clusterId,
+										token: data.token,
+									}),
+								],
+								{ type: "text/plain;charset=utf-8" },
+							),
+							"rivet-setup-credentials.env",
+						);
+					}}
+				>
+					Download setup credentials
+				</Button>
+				<Button
+					asChild
+					variant="outline"
+					endIcon={<Icon icon={faArrowUpRightFromSquare} />}
+				>
+					<a
+						href={BYOC_QUICKSTART_DOCS_URL}
+						target="_blank"
+						rel="noreferrer"
 					>
-						<a
-							href={BYOC_QUICKSTART_DOCS_URL}
-							target="_blank"
-							rel="noreferrer"
-						>
-							Quick Start
-						</a>
-					</Button>
-				</div>
+						View setup guide
+					</a>
+				</Button>
 			</div>
 		</Section>
 	);
@@ -208,23 +202,6 @@ function operatorEnv({
 		`RIVET_CLUSTER_ID=${clusterId}`,
 		`RIVET_TOKEN=${token}`,
 	].join("\n");
-}
-
-function Field({
-	label,
-	children,
-}: {
-	label: string;
-	children: React.ReactNode;
-}) {
-	return (
-		<div>
-			<div className="text-xs font-medium text-muted-foreground mb-1.5">
-				{label}
-			</div>
-			{children}
-		</div>
-	);
 }
 
 const REGION_COLUMNS = "grid-cols-[minmax(0,1fr)_9rem_9rem]";
