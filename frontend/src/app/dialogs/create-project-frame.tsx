@@ -187,6 +187,10 @@ export default function CreateProjectFrameContent({
 							return;
 						}
 
+						if (features.byoc && values.plan === "byoc") {
+							return;
+						}
+
 						const result = await ensureProject(values);
 
 						try {

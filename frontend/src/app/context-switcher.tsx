@@ -488,9 +488,10 @@ function ClusterListItems({
 	onHover?: (name: string | null) => void;
 }) {
 	const navigate = useNavigate();
-	const { data } = useInfiniteQuery(
-		useCloudDataProvider().currentOrgClustersQueryOptions(),
-	);
+	const { data, hasNextPage, isFetchingNextPage, fetchNextPage } =
+		useInfiniteQuery(
+			useCloudDataProvider().currentOrgClustersQueryOptions(),
+		);
 
 	return (
 		<>
@@ -524,6 +525,9 @@ function ClusterListItems({
 					<Badge variant="premium-violet">BYOC</Badge>
 				</CommandItem>
 			))}
+			{hasNextPage && !isFetchingNextPage ? (
+				<VisibilitySensor onChange={fetchNextPage} />
+			) : null}
 		</>
 	);
 }
