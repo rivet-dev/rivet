@@ -30,7 +30,6 @@ import {
 	BYOC_SETUP_KIT_URL,
 	BYOC_SUPPORT_EMAIL,
 } from "@/content/byoc";
-import { cloudEnv } from "@/lib/env";
 import { ByocContactTrigger } from "./byoc-contact-trigger";
 
 type Command = Rivet.ByocListCommandsResponse.Commands.Item;
@@ -125,11 +124,9 @@ function SetupSection({
 	clusterId: string | undefined;
 }) {
 	const dataProvider = useCloudDataProvider();
-	const { data, isLoading } = useQuery(
+	const { data, isLoading, isError } = useQuery(
 		dataProvider.currentOrgClusterOperatorTokenQueryOptions({ cluster }),
 	);
-
-	const operatorEndpoint = cloudEnv().VITE_APP_CLOUD_API_URL;
 
 	return (
 		<Section
@@ -146,30 +143,46 @@ function SetupSection({
 						Download setup kit
 					</a>
 				</Button>
-				<Button
-					variant="secondary"
-					startIcon={<Icon icon={faDownload} />}
-					isLoading={isLoading}
-					disabled={!clusterId || !data}
-					onClick={() => {
-						if (!clusterId || !data) return;
-						saveAs(
-							new Blob(
-								[
-									operatorEnv({
-										endpoint: operatorEndpoint,
-										clusterId,
-										token: data.token,
-									}),
-								],
-								{ type: "text/plain;charset=utf-8" },
-							),
-							"rivet-setup-credentials.env",
-						);
-					}}
-				>
-					Download setup credentials
-				</Button>
+				<WithTooltip
+					disabled={isLoading || !!data}
+					content={
+						isError
+							? "Could not load setup credentials. Reload this page to retry, or contact Enterprise Support below."
+							: "No active operator token. Contact Enterprise Support below."
+					}
+					trigger={
+						<span
+							className="inline-flex"
+							tabIndex={!isLoading && !data ? 0 : undefined}
+						>
+							<Button
+								variant="secondary"
+								startIcon={<Icon icon={faDownload} />}
+								isLoading={isLoading}
+								disabled={!clusterId || !data}
+								onClick={() => {
+									if (!clusterId || !data) return;
+									saveAs(
+										new Blob(
+											[
+												setupCredentials({
+													clusterId,
+													token: data.token,
+												}),
+											],
+											{
+												type: "application/json;charset=utf-8",
+											},
+										),
+										"rivet-credentials.json",
+									);
+								}}
+							>
+								Download setup credentials
+							</Button>
+						</span>
+					}
+				/>
 				<Button
 					asChild
 					variant="outline"
@@ -188,20 +201,18 @@ function SetupSection({
 	);
 }
 
-function operatorEnv({
-	endpoint,
+function setupCredentials({
 	clusterId,
 	token,
 }: {
-	endpoint: string;
 	clusterId: string;
 	token: string;
 }) {
-	return [
-		`RIVET_CLOUD_API_URL=${endpoint}`,
-		`RIVET_CLUSTER_ID=${clusterId}`,
-		`RIVET_TOKEN=${token}`,
-	].join("\n");
+	return `${JSON.stringify(
+		{ cloud_cluster_id: clusterId, operator_token: token },
+		null,
+		2,
+	)}\n`;
 }
 
 const REGION_COLUMNS = "grid-cols-[minmax(0,1fr)_9rem_9rem]";
