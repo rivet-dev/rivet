@@ -1,5 +1,5 @@
 import { faExternalLink, faPlus, Icon } from "@rivet-gg/icons";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQueries, useQuery } from "@tanstack/react-query";
 import {
 	Button,
 	cn,
@@ -26,7 +26,7 @@ import { SettingsCard } from "./settings-card";
 
 // Services are Rivet-run workers the user connects to a namespace rather than
 // code they deploy. Each one registers well-known actor names, so a namespace
-// "has" the service once any of those names shows up in its builds. Setup
+// "has" the service once an actor under any of those names exists. Setup
 // instructions live in the docs so they are not duplicated here.
 const SERVICES = [
 	{
@@ -114,9 +114,18 @@ function EnableServices() {
 
 function ServicesList() {
 	const dataProvider = useEngineCompatDataProvider();
-	const { data: builds = [] } = useInfiniteQuery(
-		dataProvider.buildsQueryOptions(),
-	);
+	// Probed per service rather than read off the namespace build list: that
+	// list is paginated, so a service registered past the first page would read
+	// as not connected.
+	const connections = useQueries({
+		queries: SERVICES.map((service) => ({
+			...dataProvider.actorsListPage1PollQueryOptions({
+				n: service.actorNames,
+				filters: { showDestroyed: { value: ["true"] } },
+			}),
+			select: (data: { actors: unknown[] }) => data.actors.length > 0,
+		})),
+	});
 
 	return (
 		<div className="space-y-4">
@@ -162,9 +171,7 @@ function ServicesList() {
 				}
 			>
 				{SERVICES.map((service, idx) => {
-					const connected = builds.some((build) =>
-						service.actorNames.includes(build.id),
-					);
+					const connected = connections[idx]?.data ?? false;
 					return (
 						<div
 							key={service.product.target}
