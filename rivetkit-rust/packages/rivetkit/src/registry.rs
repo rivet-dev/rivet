@@ -128,7 +128,7 @@ impl Registry {
 	/// control (tests, embedding), drive [`serve`](Self::serve) with your own
 	/// [`CancellationToken`] instead.
 	pub async fn start(self) -> Result<()> {
-		self.start_with_config(ServeConfig::from_env()).await
+		self.start_with_config(ServeConfig::from_env()?).await
 	}
 
 	/// [`start`](Self::start) with an explicit [`ServeConfig`].

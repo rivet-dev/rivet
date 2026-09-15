@@ -146,26 +146,56 @@ impl EnvoyCallbacks for RegistryCallbacks {
 }
 
 impl ServeSettings {
-	fn from_env() -> Self {
+	fn from_env() -> anyhow::Result<Self> {
 		let engine_host = env::var("RIVET_RUN_ENGINE_HOST").ok();
 		let engine_port = env::var("RIVET_RUN_ENGINE_PORT")
 			.ok()
 			.and_then(|value| value.parse().ok());
-		let endpoint = env::var("RIVET_ENDPOINT").unwrap_or_else(|_| {
-			default_engine_endpoint(
+		// Only a configured endpoint goes through auth parsing and URL
+		// validation, mirroring the TypeScript config transform. The built
+		// local default is used verbatim.
+		let parsed = env::var("RIVET_ENDPOINT")
+			.ok()
+			.map(extract_endpoint_auth)
+			.transpose()
+			.context("invalid RIVET_ENDPOINT")?;
+		let env_namespace = env::var("RIVET_NAMESPACE").ok();
+		let env_token = env::var("RIVET_TOKEN").ok();
+		let parsed = parsed.unwrap_or_else(|| ParsedEndpoint {
+			endpoint: default_engine_endpoint(
 				engine_host.as_deref().unwrap_or("127.0.0.1"),
 				engine_port.unwrap_or(6420),
-			)
+			),
+			namespace: None,
+			token: None,
 		});
+		if parsed.namespace.is_some() && env_namespace.is_some() {
+			anyhow::bail!(
+				"cannot specify namespace both in the RIVET_ENDPOINT URL and as RIVET_NAMESPACE"
+			);
+		}
+		if parsed.token.is_some() && env_token.is_some() {
+			anyhow::bail!(
+				"cannot specify token both in the RIVET_ENDPOINT URL and as RIVET_TOKEN"
+			);
+		}
 
-		Self {
+		Ok(Self {
 			version: env::var("RIVET_ENVOY_VERSION")
 				.ok()
 				.and_then(|value| value.parse().ok())
 				.unwrap_or(1),
-			endpoint,
-			token: Some(env::var("RIVET_TOKEN").unwrap_or_else(|_| "dev".to_owned())),
-			namespace: env::var("RIVET_NAMESPACE").unwrap_or_else(|_| "default".to_owned()),
+			endpoint: parsed.endpoint,
+			token: Some(
+				parsed
+					.token
+					.or(env_token)
+					.unwrap_or_else(|| "dev".to_owned()),
+			),
+			namespace: parsed
+				.namespace
+				.or(env_namespace)
+				.unwrap_or_else(|| "default".to_owned()),
 			pool_name: env::var("RIVET_POOL_NAME").unwrap_or_else(|_| "rivetkit-rust".to_owned()),
 			engine_binary_path: env::var_os("RIVET_ENGINE_BINARY_PATH").map(PathBuf::from),
 			start_services: matches!(env::var("RIVET_RUN_SERVICES").as_deref(), Ok("1")),
@@ -185,8 +215,66 @@ impl ServeSettings {
 			serverless_client_token: None,
 			serverless_validate_endpoint: true,
 			serverless_max_start_payload_bytes: 1_048_576,
+		})
+	}
+}
+
+/// An endpoint with URL auth credentials split out and stripped.
+#[derive(Debug)]
+struct ParsedEndpoint {
+	endpoint: String,
+	namespace: Option<String>,
+	token: Option<String>,
+}
+
+/// Parses an endpoint that may carry `https://namespace:token@host` URL auth,
+/// mirroring the TypeScript `tryParseEndpoint` helper. The returned endpoint
+/// is the URL-normalized string with any credentials stripped. Errors on
+/// invalid URLs, query strings, fragments, and a token without a namespace.
+fn extract_endpoint_auth(endpoint: String) -> anyhow::Result<ParsedEndpoint> {
+	let mut url = url::Url::parse(&endpoint)
+		.with_context(|| format!("invalid URL: {endpoint}"))?;
+	if url.query().is_some() {
+		anyhow::bail!("endpoint cannot contain a query string");
+	}
+	if url.fragment().is_some() {
+		anyhow::bail!("endpoint cannot contain a fragment");
+	}
+
+	let namespace = if url.username().is_empty() {
+		None
+	} else {
+		Some(decode_url_auth(url.username())?)
+	};
+	let token = match url.password() {
+		None | Some("") => None,
+		Some(password) => Some(decode_url_auth(password)?),
+	};
+	if token.is_some() && namespace.is_none() {
+		anyhow::bail!("endpoint cannot have a token without a namespace");
+	}
+
+	// Only strip credentials when some were parsed. URLs that carry auth
+	// always have an authority component, so clearing cannot fail there,
+	// while opaque-scheme URLs without auth would reject the setters.
+	if namespace.is_some() || token.is_some() {
+		if url.set_username("").is_err() || url.set_password(None).is_err() {
+			anyhow::bail!("endpoint URL does not support credentials");
 		}
 	}
+
+	Ok(ParsedEndpoint {
+		endpoint: url.to_string(),
+		namespace,
+		token,
+	})
+}
+
+// The raw value is intentionally left out of the error because it may be a
+// token.
+fn decode_url_auth(value: &str) -> anyhow::Result<String> {
+	super::http::percent_decode_path_segment(value)
+		.context("invalid percent-encoding in endpoint URL auth")
 }
 
 fn default_engine_endpoint(host: &str, port: u16) -> String {
@@ -199,9 +287,9 @@ fn default_engine_endpoint(host: &str, port: u16) -> String {
 }
 
 impl ServeConfig {
-	pub fn from_env() -> Self {
-		let settings = ServeSettings::from_env();
-		Self {
+	pub fn from_env() -> anyhow::Result<Self> {
+		let settings = ServeSettings::from_env()?;
+		Ok(Self {
 			version: settings.version,
 			endpoint: settings.endpoint,
 			token: settings.token,
@@ -224,7 +312,7 @@ impl ServeConfig {
 			serverless_max_start_payload_bytes: settings.serverless_max_start_payload_bytes,
 			serverless_cache_envoy: true,
 			..Default::default()
-		}
+		})
 	}
 }
 
@@ -280,3 +368,8 @@ fn deserialize_actor_key_from_protocol(key: &str) -> ActorKey {
 
 	parts.into_iter().map(ActorKeySegment::String).collect()
 }
+
+// Test shim keeps moved tests in crate-root tests/ with private-module access.
+#[cfg(test)]
+#[path = "../../tests/envoy_callbacks.rs"]
+mod tests;

@@ -599,7 +599,7 @@ impl CoreRegistry {
 	}
 
 	pub async fn serve(self, shutdown: CancellationToken) -> Result<()> {
-		self.serve_with_config(ServeConfig::from_env(), shutdown)
+		self.serve_with_config(ServeConfig::from_env()?, shutdown)
 			.await
 	}
 
