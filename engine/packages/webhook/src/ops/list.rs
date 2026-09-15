@@ -18,6 +18,7 @@ pub struct Webhook {
 
 #[operation]
 pub async fn webhook_config_list(ctx: &OperationCtx, input: &Input) -> Result<Vec<Webhook>> {
+	// Would be better to read from epoxy for consistency, find a way to list epoxy
 	let webhooks = ctx
 		.udb()?
 		.txn("webhook_config_list", |tx| async move {

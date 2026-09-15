@@ -1,6 +1,7 @@
 use epoxy::ops::propose::{
 	CheckAndSetCommand, Command, CommandKind, ConsensusFailedReason, Proposal, ProposalResult,
 };
+use epoxy_protocol::protocol::CachingBehavior;
 use gas::prelude::*;
 
 use crate::{errors, keys, workflows};
@@ -18,13 +19,24 @@ pub async fn webhook_config_delete(ctx: &OperationCtx, input: &Input) -> Result<
 
 	let global_key = keys::GlobalDataKey::new(namespace_id, name.clone());
 
+	let current = ctx
+		.op(epoxy::ops::kv::get_optimistic::Input {
+			replica_id: ctx.config().epoxy_replica_id(),
+			key: namespace::keys::subspace().pack(&global_key),
+			caching_behavior: CachingBehavior::Optimistic,
+			target_replicas: None,
+			save_empty: false,
+		})
+		.await?
+		.value;
+
 	let propose_res = ctx
 		.op(epoxy::ops::propose::Input {
 			proposal: Proposal {
 				commands: vec![Command {
 					kind: CommandKind::CheckAndSetCommand(CheckAndSetCommand {
 						key: namespace::keys::subspace().pack(&global_key),
-						expect_one_of: vec![None],
+						expect_one_of: vec![current], // TODO: verify CAS is implemented. Doesn't work with epoxyV2. Implement(?). Fails tests currently
 						new_value: None,
 					}),
 				}],
@@ -39,7 +51,6 @@ pub async fn webhook_config_delete(ctx: &OperationCtx, input: &Input) -> Result<
 		ProposalResult::Committed => {}
 		ProposalResult::ConsensusFailed { reason } => match reason {
 			ConsensusFailedReason::ExpectedValueDoesNotMatch { .. } => {
-				// Another proposer's value won this round, so the delete did not take effect.
 				return Err(errors::Webhook::Conflict.build());
 			}
 			ConsensusFailedReason::PreparePhaseConsensusFailed => {
@@ -53,17 +64,6 @@ pub async fn webhook_config_delete(ctx: &OperationCtx, input: &Input) -> Result<
 			}
 		},
 	}
-
-	ctx.udb()?
-		.txn("webhook_config_delete", |tx| {
-			let name = name.clone();
-			async move {
-				let tx = tx.with_subspace(namespace::keys::subspace());
-				tx.delete(&keys::DataKey::new(namespace_id, name));
-				Ok(())
-			}
-		})
-		.await?;
 
 	ctx.signal(workflows::webhook::Destroy {})
 		.to_workflow::<workflows::webhook::Workflow>()

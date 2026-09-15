@@ -1,5 +1,6 @@
+use epoxy_protocol::protocol::CachingBehavior;
 use gas::prelude::*;
-use universaldb::utils::IsolationLevel::*;
+use universaldb::prelude::FormalKey;
 
 use crate::{keys, types::WebhookConfig};
 
@@ -14,17 +15,19 @@ pub async fn webhook_config_get(
 	ctx: &OperationCtx,
 	input: &Input,
 ) -> Result<Option<WebhookConfig>> {
-	let namespace_id = input.namespace_id;
-	let name = input.name.clone();
+	let global_key = keys::GlobalDataKey::new(input.namespace_id, input.name.clone());
 
-	ctx.udb()?
-		.txn("webhook_config_get", move |tx| {
-			let name = name.clone();
-			async move {
-				let tx = tx.with_subspace(namespace::keys::subspace());
-				tx.read_opt(&keys::DataKey::new(namespace_id, name), Serializable)
-					.await
-			}
+	let res = ctx
+		.op(epoxy::ops::kv::get_optimistic::Input {
+			replica_id: ctx.config().epoxy_replica_id(),
+			key: namespace::keys::subspace().pack(&global_key),
+			caching_behavior: CachingBehavior::Optimistic,
+			target_replicas: None,
+			save_empty: false,
 		})
-		.await
+		.await?;
+
+	res.value
+		.map(|raw| global_key.deserialize(&raw))
+		.transpose()
 }

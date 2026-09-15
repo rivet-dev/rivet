@@ -9,6 +9,7 @@ edition.workspace = true
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
+epoxy-protocol.workspace = true
 epoxy.workspace = true
 futures-util.workspace = true
 gas.workspace = true
@@ -25,5 +26,5 @@ serde_json.workspace = true
 tracing.workspace = true
 universaldb.workspace = true
 url.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["v7"] }
 vbare.workspace = true

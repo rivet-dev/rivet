@@ -1,10 +1,8 @@
 use std::time::Duration;
 
-use epoxy::ops::propose::ProposalResult;
 use futures_util::FutureExt;
 use gas::prelude::*;
 use serde::{Deserialize, Serialize};
-use universaldb::prelude::FormalKey;
 use universaldb::utils::IsolationLevel::*;
 use uuid::Uuid;
 
@@ -13,43 +11,234 @@ use crate::{
 	types::{DeliveryRecord, DeliveryStatus, WebhookConfig, WebhookEvent, WebhookEventType},
 };
 
-pub fn topic(namespace_id: Id, name: &str) -> (&'static str, String) {
-	("webhook", format!("{namespace_id}:{name}"))
-}
-
-#[derive(Debug, Serialize)]
-struct CloudEvent<'a> {
-	id: String,
-	source: &'a str,
-	specversion: &'static str,
-	#[serde(rename = "type")]
-	kind: &'static str,
-	time: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	subject: Option<&'a str>,
-	datacontenttype: &'static str,
-	data: &'a serde_json::Value,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DeliverInput {
-	pub delivery_id: String,
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Input {
 	pub namespace_id: Id,
 	pub name: String,
 	pub config: WebhookConfig,
-	pub data: serde_json::Value,
-	pub event_type: WebhookEventType,
-	pub subject: Option<String>,
-	pub created_at: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct DeliverOutput {
-	/// `None` when the destination accepted the delivery.
-	pub error: Option<errors::Webhook>,
-	/// Delay the destination asked for via `Retry-After`, in milliseconds. Only ever set
-	/// alongside a retryable failure.
-	pub retry_after_ms: Option<u64>,
+#[workflow]
+pub async fn webhook(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
+	tracing::debug!(
+		namespace_id = %input.namespace_id,
+		name = %input.name,
+		"starting webhook workflow"
+	);
+
+	let namespace_id = input.namespace_id;
+	let name = input.name.clone();
+
+	ctx.loope(input.config.clone(), move |ctx, config| {
+		let name = name.clone();
+		async move {
+			match ctx.listen::<Main>().await? {
+				Main::Update(sig) => {
+					*config = sig.config;
+				}
+				Main::Trigger(sig) => {
+					if !config.subscriptions.contains(&sig.event.event_type) {
+						tracing::debug!(
+							event_type = sig.event.event_type.as_str(),
+							"dropping trigger for unsubscribed event type"
+						);
+						return Ok(Loop::Continue);
+					}
+
+					let delivery_id = ctx.activity(GenerateDeliveryIdInput {}).await?;
+
+					let outcome = deliver_with_retries(
+						ctx,
+						namespace_id,
+						name.clone(),
+						delivery_id,
+						config.clone(),
+						sig.event,
+					)
+					.await?;
+
+					if let DeliveryOutcome::Destroyed = outcome {
+						return Ok(Loop::Break(()));
+					}
+				}
+				Main::Retry(sig) => {
+					let record = ctx
+						.activity(GetDeliveryInput {
+							namespace_id,
+							name: name.clone(),
+							delivery_id: sig.delivery_id.clone(),
+						})
+						.await?;
+
+					let Some(record) = record else {
+						tracing::warn!(
+							delivery_id = %sig.delivery_id,
+							"retry requested for unknown delivery"
+						);
+						return Ok(Loop::Continue);
+					};
+
+					if !matches!(record.status, DeliveryStatus::Failed) {
+						tracing::warn!(
+							delivery_id = %sig.delivery_id,
+							status = ?record.status,
+							"retry requested for delivery not in a failed state"
+						);
+						return Ok(Loop::Continue);
+					}
+
+					let data = match serde_json::from_str(&record.payload) {
+						Ok(data) => data,
+						Err(err) => {
+							tracing::warn!(
+								delivery_id = %sig.delivery_id,
+								?err,
+								"stored delivery payload is not valid json"
+							);
+							return Ok(Loop::Continue);
+						}
+					};
+
+					let outcome = deliver_with_retries(
+						ctx,
+						namespace_id,
+						name.clone(),
+						sig.delivery_id,
+						config.clone(),
+						WebhookEvent {
+							event_type: record.event_type,
+							subject: record.subject,
+							data,
+						},
+					)
+					.await?;
+
+					if let DeliveryOutcome::Destroyed = outcome {
+						return Ok(Loop::Break(()));
+					}
+				}
+				Main::Destroy(_) => {
+					return Ok(Loop::Break(()));
+				}
+			}
+
+			Ok(Loop::<()>::Continue)
+		}
+		.boxed()
+	})
+	.await?;
+
+	Ok(())
+}
+
+enum DeliveryOutcome {
+	Done,
+	Destroyed,
+}
+
+// Runs (or re-runs, for a manual `Retry`) the full attempt loop for one delivery: records it as
+// `Pending`, attempts delivery with exponential backoff up to `MAX_DELIVERY_ATTEMPTS`, and records
+// the terminal `Succeeded`/`Failed` outcome. Shared by `Trigger` (a brand new delivery) and
+// `Retry` (re-attempting a stored, already-failed delivery), since both just need to run this
+// same loop against a `delivery_id` and `payload`.
+async fn deliver_with_retries(
+	ctx: &mut WorkflowCtx,
+	namespace_id: Id,
+	name: String,
+	delivery_id: String,
+	config: WebhookConfig,
+	event: WebhookEvent,
+) -> Result<DeliveryOutcome> {
+	let WebhookEvent {
+		event_type,
+		subject,
+		data,
+	} = event;
+
+	let payload = serde_json::to_string(&data).context("event data is not serializable")?;
+	// Also yields the delivery's `created_at`, which the CloudEvents envelope needs. On a manual
+	// `Retry` this is the original trigger time, preserved by the activity.
+	let created_at = ctx
+		.activity(RecordDeliveryInput {
+			namespace_id,
+			name: name.clone(),
+			delivery_id: delivery_id.clone(),
+			payload: payload.clone(),
+			status: DeliveryStatus::Pending,
+			attempt_count: 0,
+			last_error: None,
+			event_type,
+			subject: subject.clone(),
+		})
+		.await?;
+
+	let mut attempt = 0;
+
+	loop {
+		let deliver_res = ctx
+			.activity(DeliverInput {
+				delivery_id: delivery_id.clone(),
+				namespace_id,
+				name: name.clone(),
+				config: config.clone(),
+				data: data.clone(),
+				event_type,
+				subject: subject.clone(),
+				created_at,
+			})
+			.await?;
+
+		match deliver_res.error {
+			None => {
+				ctx.activity(RecordDeliveryInput {
+					namespace_id,
+					name: name.clone(),
+					delivery_id: delivery_id.clone(),
+					payload,
+					status: DeliveryStatus::Succeeded,
+					attempt_count: attempt + 1,
+					last_error: None,
+					event_type,
+					subject,
+				})
+				.await?;
+
+				return Ok(DeliveryOutcome::Done);
+			}
+			Some(error) if is_retryable(&error) && attempt + 1 < MAX_DELIVERY_ATTEMPTS => {
+				attempt += 1;
+
+				let destroy_sig = ctx
+					.listen_with_timeout::<Destroy>(next_delivery_delay(
+						deliver_res.retry_after_ms,
+						attempt,
+					))
+					.await?;
+
+				if destroy_sig.is_some() {
+					return Ok(DeliveryOutcome::Destroyed);
+				}
+			}
+			Some(error) => {
+				tracing::warn!(?error, attempt, "webhook delivery failed permanently");
+
+				ctx.activity(RecordDeliveryInput {
+					namespace_id,
+					name: name.clone(),
+					delivery_id: delivery_id.clone(),
+					payload,
+					status: DeliveryStatus::Failed,
+					attempt_count: attempt + 1,
+					last_error: Some(error.build().to_string()),
+					event_type,
+					subject,
+				})
+				.await?;
+
+				return Ok(DeliveryOutcome::Done);
+			}
+		}
+	}
 }
 
 // The maximum number of delivery attempts for a single triggered event before giving up to DLQ.
@@ -58,13 +247,17 @@ const MAX_DELIVERY_ATTEMPTS: u32 = 5;
 const MIN_RETRY_AFTER: Duration = Duration::from_secs(1);
 const MAX_RETRY_AFTER: Duration = Duration::from_secs(300);
 
-// Retries are for transient failures: 429 (rate limited) and 5xx (receiver-side error). Any
-// other 4xx means the request itself is wrong and retrying with the same payload won't help.
-fn is_retryable_status(status: u16) -> bool {
-	match status {
-		429 => true,
-		500..=599 => true,
-		_ => false,
+fn is_retryable(error: &errors::Webhook) -> bool {
+	match error {
+		errors::Webhook::RequestFailed { .. } => true,
+		errors::Webhook::DeliveryFailed { status } => matches!(status, 429 | 500..=599),
+		errors::Webhook::Invalid { .. }
+		| errors::Webhook::Conflict
+		| errors::Webhook::DestinationBlocked { .. }
+		| errors::Webhook::NotFound
+		| errors::Webhook::DeliveryNotFound
+		| errors::Webhook::DeliveryNotRetryable
+		| errors::Webhook::EventTypeNotAllowed { .. } => false,
 	}
 }
 
@@ -95,6 +288,49 @@ fn parse_retry_after(headers: &reqwest::header::HeaderMap) -> Option<u64> {
 	let delta = deadline.timestamp_millis() - chrono::Utc::now().timestamp_millis();
 
 	Some(delta.max(0) as u64)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GenerateDeliveryIdInput {}
+
+#[activity(GenerateDeliveryId)]
+pub async fn generate_delivery_id(
+	_ctx: &ActivityCtx,
+	_input: &GenerateDeliveryIdInput,
+) -> Result<String> {
+	Ok(Uuid::new_v4().to_string())
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DeliverInput {
+	pub delivery_id: String,
+	pub namespace_id: Id,
+	pub name: String,
+	pub config: WebhookConfig,
+	pub data: serde_json::Value,
+	pub event_type: WebhookEventType,
+	pub subject: Option<String>,
+	pub created_at: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DeliverOutput {
+	pub error: Option<errors::Webhook>,
+	pub retry_after_ms: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct CloudEvent<'a> {
+	id: String,
+	source: &'a str,
+	specversion: &'static str,
+	#[serde(rename = "type")]
+	kind: &'static str,
+	time: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	subject: Option<&'a str>,
+	datacontenttype: &'static str,
+	data: &'a serde_json::Value,
 }
 
 #[activity(Deliver)]
@@ -165,7 +401,12 @@ pub async fn deliver(ctx: &ActivityCtx, input: &DeliverInput) -> Result<DeliverO
 				});
 			}
 
-			bail!("webhook delivery request failed: {err}");
+			Ok(DeliverOutput {
+				error: Some(errors::Webhook::RequestFailed {
+					reason: format!("{err:#}"),
+				}),
+				retry_after_ms: None,
+			})
 		}
 	}
 }
@@ -262,448 +503,6 @@ pub async fn get_delivery(
 		.await
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Input {
-	pub namespace_id: Id,
-	pub name: String,
-	pub config: WebhookConfig,
-}
-
-#[workflow]
-pub async fn webhook(ctx: &mut WorkflowCtx, input: &Input) -> Result<()> {
-	tracing::debug!(
-		namespace_id = %input.namespace_id,
-		name = %input.name,
-		"starting webhook workflow"
-	);
-
-	if !upsert(
-		ctx,
-		input.namespace_id,
-		input.name.clone(),
-		input.config.clone(),
-	)
-	.await?
-	{
-		return Ok(());
-	}
-
-	let namespace_id = input.namespace_id;
-	let name = input.name.clone();
-
-	ctx.loope(input.config.clone(), move |ctx, config| {
-		let name = name.clone();
-		async move {
-			match ctx.listen::<Main>().await? {
-				Main::Update(sig) => {
-					if upsert(ctx, namespace_id, name.clone(), sig.config.clone()).await? {
-						*config = sig.config;
-					}
-				}
-				Main::Trigger(sig) => {
-					if !config.subscriptions.contains(&sig.event.event_type) {
-						tracing::debug!(
-							event_type = sig.event.event_type.as_str(),
-							"dropping trigger for unsubscribed event type"
-						);
-						return Ok(Loop::Continue);
-					}
-
-					let delivery_id = Uuid::new_v4().to_string();
-
-					let outcome = deliver_with_retries(
-						ctx,
-						namespace_id,
-						name.clone(),
-						delivery_id,
-						config.clone(),
-						sig.event,
-					)
-					.await?;
-
-					if let DeliveryOutcome::Destroyed = outcome {
-						return Ok(Loop::Break(()));
-					}
-				}
-				Main::Retry(sig) => {
-					let record = ctx
-						.activity(GetDeliveryInput {
-							namespace_id,
-							name: name.clone(),
-							delivery_id: sig.delivery_id.clone(),
-						})
-						.await?;
-
-					let Some(record) = record else {
-						tracing::warn!(
-							delivery_id = %sig.delivery_id,
-							"retry requested for unknown delivery"
-						);
-						return Ok(Loop::Continue);
-					};
-
-					if !matches!(record.status, DeliveryStatus::Failed) {
-						tracing::warn!(
-							delivery_id = %sig.delivery_id,
-							status = ?record.status,
-							"retry requested for delivery not in a failed state"
-						);
-						return Ok(Loop::Continue);
-					}
-
-					let data = match serde_json::from_str(&record.payload) {
-						Ok(data) => data,
-						Err(err) => {
-							tracing::warn!(
-								delivery_id = %sig.delivery_id,
-								?err,
-								"stored delivery payload is not valid json"
-							);
-							return Ok(Loop::Continue);
-						}
-					};
-
-					let outcome = deliver_with_retries(
-						ctx,
-						namespace_id,
-						name.clone(),
-						sig.delivery_id,
-						config.clone(),
-						WebhookEvent {
-							event_type: record.event_type,
-							subject: record.subject,
-							data,
-						},
-					)
-					.await?;
-
-					if let DeliveryOutcome::Destroyed = outcome {
-						return Ok(Loop::Break(()));
-					}
-				}
-				Main::Destroy(_) => {
-					return Ok(Loop::Break(()));
-				}
-			}
-
-			Ok(Loop::<()>::Continue)
-		}
-		.boxed()
-	})
-	.await?;
-
-	Ok(())
-}
-
-async fn upsert(
-	ctx: &mut WorkflowCtx,
-	namespace_id: Id,
-	name: String,
-	config: WebhookConfig,
-) -> Result<bool> {
-	let validate_res = ctx
-		.activity(ValidateInput {
-			config: config.clone(),
-		})
-		.await?;
-
-	if let Err(error) = validate_res {
-		ctx.msg(Failed { error })
-			.topic(topic(namespace_id, &name))
-			.send()
-			.await?;
-
-		// TODO(RVT-3928): return Ok(Err) (is what is written in the equiv namespace file)
-		return Ok(false);
-	}
-
-	let upsert_res = ctx
-		.activity(UpsertConfigInput {
-			namespace_id,
-			name: name.clone(),
-			config,
-		})
-		.await?;
-
-	if let Err(error) = upsert_res {
-		ctx.msg(Failed { error })
-			.topic(topic(namespace_id, &name))
-			.send()
-			.await?;
-
-		// TODO(RVT-3928): return Ok(Err) (is what is written in the equiv namespace file)
-		return Ok(false);
-	}
-
-	ctx.msg(UpsertComplete {})
-		.topic(topic(namespace_id, &name))
-		.send()
-		.await?;
-
-	Ok(true)
-}
-
-enum DeliveryOutcome {
-	// The delivery reached a terminal state, either delivered or permanently failed after
-	// exhausting retries. Either way there is nothing left to wait on.
-	Done,
-	// A `Destroy` signal interrupted an in-progress backoff wait.
-	Destroyed,
-}
-
-// Runs (or re-runs, for a manual `Retry`) the full attempt loop for one delivery: records it as
-// `Pending`, attempts delivery with exponential backoff up to `MAX_DELIVERY_ATTEMPTS`, and records
-// the terminal `Succeeded`/`Failed` outcome. Shared by `Trigger` (a brand new delivery) and
-// `Retry` (re-attempting a stored, already-failed delivery), since both just need to run this
-// same loop against a `delivery_id` and `payload`.
-async fn deliver_with_retries(
-	ctx: &mut WorkflowCtx,
-	namespace_id: Id,
-	name: String,
-	delivery_id: String,
-	config: WebhookConfig,
-	event: WebhookEvent,
-) -> Result<DeliveryOutcome> {
-	let WebhookEvent {
-		event_type,
-		subject,
-		data,
-	} = event;
-
-	let payload = serde_json::to_string(&data).context("event data is not serializable")?;
-	// Also yields the delivery's `created_at`, which the CloudEvents envelope needs. On a manual
-	// `Retry` this is the original trigger time, preserved by the activity.
-	let created_at = ctx
-		.activity(RecordDeliveryInput {
-			namespace_id,
-			name: name.clone(),
-			delivery_id: delivery_id.clone(),
-			payload: payload.clone(),
-			status: DeliveryStatus::Pending,
-			attempt_count: 0,
-			last_error: None,
-			event_type,
-			subject: subject.clone(),
-		})
-		.await?;
-
-	let mut attempt = 0;
-
-	loop {
-		let deliver_res = ctx
-			.activity(DeliverInput {
-				delivery_id: delivery_id.clone(),
-				namespace_id,
-				name: name.clone(),
-				config: config.clone(),
-				data: data.clone(),
-				event_type,
-				subject: subject.clone(),
-				created_at,
-			})
-			.await?;
-
-		match deliver_res.error {
-			None => {
-				ctx.activity(RecordDeliveryInput {
-					namespace_id,
-					name: name.clone(),
-					delivery_id: delivery_id.clone(),
-					payload,
-					status: DeliveryStatus::Succeeded,
-					attempt_count: attempt + 1,
-					last_error: None,
-					event_type,
-					subject,
-				})
-				.await?;
-
-				return Ok(DeliveryOutcome::Done);
-			}
-			Some(errors::Webhook::DeliveryFailed { status })
-				if is_retryable_status(status) && attempt + 1 < MAX_DELIVERY_ATTEMPTS =>
-			{
-				attempt += 1;
-
-				let destroy_sig = ctx
-					.listen_with_timeout::<Destroy>(next_delivery_delay(
-						deliver_res.retry_after_ms,
-						attempt,
-					))
-					.await?;
-
-				if destroy_sig.is_some() {
-					return Ok(DeliveryOutcome::Destroyed);
-				}
-			}
-			Some(error) => {
-				tracing::warn!(?error, attempt, "webhook delivery failed permanently");
-
-				ctx.activity(RecordDeliveryInput {
-					namespace_id,
-					name: name.clone(),
-					delivery_id: delivery_id.clone(),
-					payload,
-					status: DeliveryStatus::Failed,
-					attempt_count: attempt + 1,
-					last_error: Some(error.build().to_string()),
-					event_type,
-					subject,
-				})
-				.await?;
-
-				return Ok(DeliveryOutcome::Done);
-			}
-		}
-	}
-}
-
-#[message("webhook_upsert_complete")]
-pub struct UpsertComplete {}
-
-#[message("webhook_failed")]
-pub struct Failed {
-	pub error: errors::Webhook,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ValidateInput {
-	pub config: WebhookConfig,
-}
-
-#[activity(Validate)]
-pub async fn validate(
-	ctx: &ActivityCtx,
-	input: &ValidateInput,
-) -> Result<std::result::Result<(), errors::Webhook>> {
-	let parsed_url = match url::Url::parse(&input.config.url) {
-		Ok(parsed_url) => parsed_url,
-		Err(err) => {
-			return Ok(Err(errors::Webhook::Invalid {
-				reason: format!("invalid url: {err}"),
-			}));
-		}
-	};
-
-	let policy = rivet_pools::reqwest::outbound_policy(ctx.config()).await?;
-	if let Err(reason) = policy.check_url(&parsed_url) {
-		return Ok(Err(errors::Webhook::Invalid {
-			reason: format!("invalid url: {reason}"),
-		}));
-	}
-
-	for event_type in &input.config.subscriptions {
-		if !event_type.is_webhook_safe() {
-			return Ok(Err(errors::Webhook::EventTypeNotAllowed {
-				event_type: event_type.as_str().to_string(),
-			}));
-		}
-	}
-
-	if input.config.headers.len() > 16 {
-		return Ok(Err(errors::Webhook::Invalid {
-			reason: "too many headers (max 16)".to_string(),
-		}));
-	}
-
-	for (name, value) in &input.config.headers {
-		if name.len() > 128 {
-			return Ok(Err(errors::Webhook::Invalid {
-				reason: "invalid header name: too long (max 128)".to_string(),
-			}));
-		}
-		if let Err(err) = name.parse::<reqwest::header::HeaderName>() {
-			return Ok(Err(errors::Webhook::Invalid {
-				reason: format!("invalid header name: {err}"),
-			}));
-		}
-		if value.len() > 4096 {
-			return Ok(Err(errors::Webhook::Invalid {
-				reason: "invalid header value: too long (max 4096)".to_string(),
-			}));
-		}
-		if let Err(err) = value.parse::<reqwest::header::HeaderValue>() {
-			return Ok(Err(errors::Webhook::Invalid {
-				reason: format!("invalid header value: {err}"),
-			}));
-		}
-	}
-
-	Ok(Ok(()))
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpsertConfigInput {
-	pub namespace_id: Id,
-	pub name: String,
-	pub config: WebhookConfig,
-}
-
-#[activity(UpsertConfig)]
-pub async fn upsert_config(
-	ctx: &ActivityCtx,
-	input: &UpsertConfigInput,
-) -> Result<std::result::Result<(), errors::Webhook>> {
-	let namespace_id = input.namespace_id;
-	let name = input.name.clone();
-
-	let global_key = keys::GlobalDataKey::new(namespace_id, name.clone());
-
-	let propose_res = ctx
-		.op(epoxy::ops::propose::Input {
-			proposal: epoxy::ops::propose::Proposal {
-				commands: vec![epoxy::ops::propose::Command {
-					kind: epoxy::ops::propose::CommandKind::CheckAndSetCommand(
-						epoxy::ops::propose::CheckAndSetCommand {
-							key: namespace::keys::subspace().pack(&global_key),
-							expect_one_of: vec![None],
-							new_value: Some(global_key.serialize(input.config.clone())?),
-						},
-					),
-				}],
-			},
-			purge_cache: true,
-			mutable: true,
-			target_replicas: None,
-		})
-		.await?;
-
-	match propose_res {
-		ProposalResult::Committed => {}
-		ProposalResult::ConsensusFailed { reason } => match reason {
-			epoxy::ops::propose::ConsensusFailedReason::ExpectedValueDoesNotMatch { .. } => {
-				// Another proposer's value won this round, so this config was not the one
-				// committed. The caller should re-read and retry.
-				return Ok(Err(errors::Webhook::Conflict));
-			}
-			epoxy::ops::propose::ConsensusFailedReason::PreparePhaseConsensusFailed => {
-				bail!("epoxy propose failed: prepare phase consensus failed");
-			}
-			epoxy::ops::propose::ConsensusFailedReason::AcceptPhaseConsensusFailed => {
-				bail!("epoxy propose failed: accept phase consensus failed");
-			}
-			epoxy::ops::propose::ConsensusFailedReason::StaleBallot => {
-				bail!("epoxy propose failed: stale ballot");
-			}
-		},
-	}
-
-	let config = input.config.clone();
-	ctx.udb()?
-		.txn("webhook_upsert_config", |tx| {
-			let name = name.clone();
-			let config = config.clone();
-			async move {
-				let tx = tx.with_subspace(namespace::keys::subspace());
-				tx.write(&keys::DataKey::new(namespace_id, name), config)?;
-				Ok(())
-			}
-		})
-		.await?;
-
-	Ok(Ok(()))
-}
-
 #[signal("webhook_trigger")]
 pub struct Trigger {
 	pub event: WebhookEvent,
@@ -728,3 +527,7 @@ join_signal!(Main {
 	Destroy,
 	Retry,
 });
+
+#[cfg(test)]
+#[path = "../../tests/inline/workflows_webhook.rs"]
+mod tests;

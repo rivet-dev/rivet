@@ -473,3 +473,109 @@ pub async fn health_fanout(port: u16) -> Result<HealthFanoutResponse> {
 	let response = request.send().await?;
 	parse_response(response).await
 }
+
+// MARK: Webhooks
+
+pub async fn build_webhooks_upsert_request(
+	port: u16,
+	webhook_name: &str,
+	query: rivet_api_public::webhooks::UpsertQuery,
+	request: rivet_api_public::webhooks::UpsertRequest,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client
+		.put(format!(
+			"{}/webhooks/{}?{}",
+			get_endpoint(port),
+			webhook_name,
+			serde_html_form::to_string(&query)?,
+		))
+		.json(&request))
+}
+
+pub async fn webhooks_upsert(
+	port: u16,
+	webhook_name: &str,
+	query: rivet_api_public::webhooks::UpsertQuery,
+	request: rivet_api_public::webhooks::UpsertRequest,
+) -> Result<rivet_api_public::webhooks::UpsertResponse> {
+	let request = build_webhooks_upsert_request(port, webhook_name, query, request).await?;
+	let response = request.send().await?;
+	parse_response(response).await
+}
+
+pub async fn build_webhooks_delete_request(
+	port: u16,
+	webhook_name: &str,
+	query: rivet_api_public::webhooks::DeleteQuery,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client.delete(format!(
+		"{}/webhooks/{}?{}",
+		get_endpoint(port),
+		webhook_name,
+		serde_html_form::to_string(&query)?,
+	)))
+}
+
+pub async fn webhooks_delete(
+	port: u16,
+	webhook_name: &str,
+	query: rivet_api_public::webhooks::DeleteQuery,
+) -> Result<rivet_api_public::webhooks::DeleteResponse> {
+	let request = build_webhooks_delete_request(port, webhook_name, query).await?;
+	let response = request.send().await?;
+	parse_response(response).await
+}
+
+pub async fn build_webhooks_retry_delivery_request(
+	port: u16,
+	webhook_name: &str,
+	delivery_id: &str,
+	query: rivet_api_public::webhooks::RetryDeliveryQuery,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client.post(format!(
+		"{}/webhooks/{}/deliveries/{}/retry?{}",
+		get_endpoint(port),
+		webhook_name,
+		delivery_id,
+		serde_html_form::to_string(&query)?,
+	)))
+}
+
+pub async fn webhooks_retry_delivery(
+	port: u16,
+	webhook_name: &str,
+	delivery_id: &str,
+	query: rivet_api_public::webhooks::RetryDeliveryQuery,
+) -> Result<rivet_api_public::webhooks::RetryDeliveryResponse> {
+	let request =
+		build_webhooks_retry_delivery_request(port, webhook_name, delivery_id, query).await?;
+	let response = request.send().await?;
+	parse_response(response).await
+}
+
+pub async fn build_webhooks_events_request(
+	port: u16,
+	webhook_name: &str,
+	query: rivet_api_public::webhooks::EventsQuery,
+) -> Result<reqwest::RequestBuilder> {
+	let client = rivet_pools::reqwest::client().await?;
+	Ok(client.get(format!(
+		"{}/webhooks/{}/events?{}",
+		get_endpoint(port),
+		webhook_name,
+		serde_html_form::to_string(&query)?,
+	)))
+}
+
+pub async fn webhooks_events(
+	port: u16,
+	webhook_name: &str,
+	query: rivet_api_public::webhooks::EventsQuery,
+) -> Result<rivet_api_public::webhooks::EventsResponse> {
+	let request = build_webhooks_events_request(port, webhook_name, query).await?;
+	let response = request.send().await?;
+	parse_response(response).await
+}

@@ -5474,6 +5474,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "vbare",
+ "webhook",
 ]
 
 [[package]]
@@ -8751,6 +8752,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "epoxy",
+ "epoxy-protocol",
  "futures-util",
  "gasoline",
  "namespace",

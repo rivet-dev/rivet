@@ -94,3 +94,4 @@ tracing-subscriber.workspace = true
 urlencoding.workspace = true
 universalpubsub.workspace = true
 vbare.workspace = true
+webhook.workspace = true

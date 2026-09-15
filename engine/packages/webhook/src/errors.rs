@@ -23,6 +23,12 @@ pub enum Webhook {
 	)]
 	DeliveryFailed { status: u16 },
 	#[error(
+		"request_failed",
+		"Webhook delivery request failed.",
+		"Webhook delivery request failed: {reason}"
+	)]
+	RequestFailed { reason: String },
+	#[error(
 		"destination_blocked",
 		"Webhook destination is not allowed.",
 		"Webhook destination is not allowed: {reason}"
