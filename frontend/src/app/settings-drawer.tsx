@@ -103,7 +103,7 @@ const TAB_META: Record<SettingsTab, { title: string; description?: string }> = {
 	services: {
 		title: "Services",
 		description:
-			"Managed services you can connect to this namespace, such as Durable Streams.",
+			"Add Rivet-managed services to this namespace and point your app at them.",
 	},
 	compute: {
 		title: "Compute",
@@ -703,7 +703,7 @@ function CloudServicesTabBody() {
 		return (
 			<ResourcePicker
 				title="Pick a namespace"
-				description="Services are scoped to a namespace. Choose one to connect services like Durable Streams."
+				description="Services are scoped to a namespace. Choose one to manage its services."
 				settings="services"
 				target="namespace"
 			/>

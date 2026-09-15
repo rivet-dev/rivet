@@ -1,5 +1,5 @@
 import { faExternalLink, faPlus, Icon } from "@rivet-gg/icons";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
 	Button,
 	cn,
@@ -8,6 +8,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 	Ping,
+	Skeleton,
 } from "@/components";
 import { useEngineCompatDataProvider } from "@/components/actors";
 import {
@@ -15,6 +16,12 @@ import {
 	getProductDocsUrl,
 	ProductMark,
 } from "@/components/products/product-picker";
+import { features } from "@/lib/features";
+import {
+	MANAGED_SERVICES_POOL_CONFIG,
+	useEnableManagedServicesMutation,
+	useManagedServicesPoolQueryOptions,
+} from "../managed-services";
 import { SettingsCard } from "./settings-card";
 
 // Services are Rivet-run workers the user connects to a namespace rather than
@@ -33,6 +40,79 @@ function openDocs(target: (typeof SERVICES)[number]["product"]["target"]) {
 }
 
 export function NamespaceServicesContent() {
+	return features.compute ? <CloudServices /> : <ServicesList />;
+}
+
+// On Rivet Cloud every managed service runs in one dedicated compute pool, so
+// the namespace has to provision it before any service is reachable. Other
+// flavors run the service worker themselves and have nothing to enable.
+function CloudServices() {
+	const { data: pool, isLoading } = useQuery(
+		useManagedServicesPoolQueryOptions(),
+	);
+
+	if (isLoading) {
+		return <ServicesSkeleton />;
+	}
+	if (!pool) {
+		return <EnableServices />;
+	}
+	return <ServicesList />;
+}
+
+// Mirrors one row of ServicesList. The card chrome is static copy, so only the
+// per-service parts shimmer.
+function ServicesSkeleton() {
+	return (
+		<div className="space-y-4">
+			<SettingsCard
+				title="Services"
+				description="Managed services connected to this namespace."
+				divided
+				action={<Skeleton className="h-8 w-28" />}
+			>
+				<div className="flex items-center justify-between gap-4 px-5 py-3">
+					<div className="flex items-center gap-3 min-w-0">
+						<Skeleton className="size-8 rounded-xl" />
+						<div className="min-w-0 space-y-1.5">
+							<Skeleton className="h-4 w-32" />
+							<Skeleton className="h-3 w-56" />
+						</div>
+					</div>
+					<div className="flex items-center gap-3 shrink-0">
+						<Skeleton className="h-3 w-20" />
+						<Skeleton className="h-8 w-16" />
+					</div>
+				</div>
+			</SettingsCard>
+		</div>
+	);
+}
+
+function EnableServices() {
+	const { mutate, isPending } = useEnableManagedServicesMutation();
+
+	return (
+		<div className="flex flex-col items-center gap-3 rounded-md border border-dashed bg-card/50 px-6 py-10 text-center">
+			<div className="text-sm text-foreground">
+				Services are not enabled
+			</div>
+			<p className="text-xs text-muted-foreground max-w-md">
+				Enable services to provision the managed pool that runs them in
+				this namespace.
+			</p>
+			<Button
+				size="sm"
+				isLoading={isPending}
+				onClick={() => mutate(MANAGED_SERVICES_POOL_CONFIG)}
+			>
+				Enable services
+			</Button>
+		</div>
+	);
+}
+
+function ServicesList() {
 	const dataProvider = useEngineCompatDataProvider();
 	const { data: builds = [] } = useInfiniteQuery(
 		dataProvider.buildsQueryOptions(),

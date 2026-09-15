@@ -15,7 +15,6 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
 import { type ReactNode, Suspense, useContext, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match } from "ts-pattern";
@@ -53,6 +52,10 @@ import {
 	getOnboardingTargetCopy,
 	type OnboardingTarget,
 } from "@/content/agent-prompts";
+import {
+	MANAGED_SERVICES_POOL_CONFIG,
+	useEnableManagedServicesMutation,
+} from "@/app/managed-services";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { engineEnv } from "@/lib/env";
 import { features } from "@/lib/features";
@@ -807,40 +810,17 @@ function BuildTargetSelector({
 	);
 }
 
-// Rivet runs managed services out of one dedicated compute pool per namespace.
-// Picking a service provisions it up front so the pool is warming while the
-// user reads the connection steps.
-const MANAGED_SERVICES_POOL = "x-rivet-managed-services";
-
+// Picking a service provisions the managed services pool up front so it is
+// warming while the user reads the connection steps.
 function CloudBuildTargetSelector() {
-	const dataProvider = useCloudNamespaceDataProvider();
-	const { mutate } = useMutation({
-		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
-		onSuccess: async () => {
-			await queryClient.invalidateQueries(
-				dataProvider.currentNamespaceManagedPoolQueryOptions({
-					pool: MANAGED_SERVICES_POOL,
-				}),
-			);
-		},
-		onError: () => {
-			toast.error("Failed to provision managed services", {
-				description:
-					"Durable Streams may not be reachable yet. Retry from namespace settings.",
-			});
-		},
-	});
+	const { mutate } = useEnableManagedServicesMutation();
 	return (
 		<BuildTargetSelector
 			onSelectTarget={(target) => {
 				if (target !== "durable-streams") {
 					return;
 				}
-				mutate({
-					pool: MANAGED_SERVICES_POOL,
-					displayName: "Services",
-					image: { preset: { managedServices: {} } },
-				});
+				mutate(MANAGED_SERVICES_POOL_CONFIG);
 			}}
 		/>
 	);
