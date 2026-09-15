@@ -48,6 +48,10 @@ export const features = {
 	// `agentOs` gates the agentOS (coding-agent VM) onboarding template. Beta.
 	agentOs: isEnabled("agent-os"),
 	byoc: isEnabled("byoc") && platform,
+	// `services` gates managed services (Durable Streams): the Services
+	// section of the product picker, its onboarding path, and the Services
+	// namespace settings tab.
+	services: isEnabled("services"),
 	// `mcp` gates the MCP connection settings. The snippet differs per flavor:
 	// platform points at the hosted endpoint, OSS at the local stdio server.
 	mcp: isEnabled("mcp"),

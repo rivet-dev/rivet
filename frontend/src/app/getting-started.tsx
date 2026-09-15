@@ -164,7 +164,7 @@ const stepper = defineStepper(
 		schema: z.object({}),
 		group: "deploy",
 		isVisible: (values: Record<string, unknown>) =>
-			values.template === "durable-streams",
+			features.services && values.template === "durable-streams",
 	},
 	{
 		id: "deploy",

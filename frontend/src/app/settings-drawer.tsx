@@ -169,9 +169,16 @@ export function SettingsDrawer({
 
 	// Engine flavors only expose namespace-scoped settings (no account, billing,
 	// or organization), so the nav collapses to the Namespace section.
-	const navSections = features.platform
-		? NAV_SECTIONS
-		: NAV_SECTIONS.filter((section) => section.label === "Namespace");
+	const navSections = (
+		features.platform
+			? NAV_SECTIONS
+			: NAV_SECTIONS.filter((section) => section.label === "Namespace")
+	).map((section) => ({
+		...section,
+		items: section.items.filter(
+			(item) => item.key !== "services" || features.services,
+		),
+	}));
 
 	const meta = TAB_META[activeTab];
 	const titleNode: ReactNode =
@@ -714,7 +721,6 @@ export function settingsParamToTab(
 	switch (param) {
 		case "profile":
 		case "settings":
-		case "services":
 		case "advanced":
 		case "billing":
 		case "organization":
@@ -724,6 +730,8 @@ export function settingsParamToTab(
 		// the regular Settings tab on flavors without it.
 		case "compute":
 			return features.compute ? "compute" : "settings";
+		case "services":
+			return features.services ? "services" : "settings";
 		// Legacy: members lived in its own tab before being merged into
 		// Organization. Keep the deep link working.
 		case "members":

@@ -63,7 +63,7 @@ const PRODUCTS: Product[] = [
 		label: "Durable Streams",
 		description: "Real-time streams with durable, replayable history",
 		markFileName: "durable-streams-mark.svg",
-		isAvailable: () => true,
+		isAvailable: () => features.services,
 	},
 ];
 

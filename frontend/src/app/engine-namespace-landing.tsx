@@ -5,6 +5,7 @@ import { Button, H1, ScrollArea, SmallText, WithTooltip } from "@/components";
 import { useEngineNamespaceDataProvider } from "@/components/actors";
 import { NoProvidersAlert } from "@/components/actors/no-providers-alert";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { features } from "@/lib/features";
 import { ActorBuildCard, ActorGridCardSkeleton } from "./actors-grid";
 import { AddComponentButton, AddComponentCard } from "./add-component-card";
 
@@ -99,8 +100,9 @@ export function EngineNamespaceLanding() {
 										No components yet
 									</h3>
 									<SmallText className="text-muted-foreground max-w-md">
-										Deploy code that registers an actor or
-										add a service to see it here.
+										{features.services
+											? "Deploy code that registers an actor or add a service to see it here."
+											: "Deploy code that registers an actor to see it here."}
 									</SmallText>
 									<AddComponentButton />
 								</div>

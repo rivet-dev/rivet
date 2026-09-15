@@ -107,7 +107,7 @@ export function useAgentInstructionsCode({
 // fixed URL to hand out.
 export function useDurableStreamsServiceUrl(): string | undefined {
 	const namespace = useEngineCompatDataProvider().engineNamespace;
-	if (!features.compute) return undefined;
+	if (!features.compute || !features.services) return undefined;
 	return getDurableStreamsServiceUrl(getRivetRunUrl(namespace));
 }
 

@@ -226,8 +226,9 @@ export function ActorsGrid({ namespaceLabel }: { namespaceLabel?: string }) {
 										No components yet
 									</h3>
 									<SmallText className="text-muted-foreground max-w-md">
-										Deploy code that registers an actor or
-										add a service to see it here.
+										{features.services
+											? "Deploy code that registers an actor or add a service to see it here."
+											: "Deploy code that registers an actor to see it here."}
 									</SmallText>
 									<AddComponentButton />
 								</div>
