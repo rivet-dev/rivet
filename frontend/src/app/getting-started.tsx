@@ -988,7 +988,7 @@ function DurableStreamsManagedService({ serviceUrl }: { serviceUrl: string }) {
 						value={serviceUrl}
 						className="font-mono text-xs text-muted-foreground"
 					>
-						{serviceUrl}
+						<span className="truncate">{serviceUrl}</span>
 					</DiscreteCopyButton>
 				</div>
 			</div>
