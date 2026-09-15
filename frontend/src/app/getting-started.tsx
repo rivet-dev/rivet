@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { type ReactNode, Suspense, useContext, useMemo } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { match } from "ts-pattern";
@@ -778,7 +779,11 @@ function AgentOsKeyNotice() {
 // Product selector shown atop the first step. Selecting a product is the whole
 // step, so the choice advances the wizard instead of parking the user in front
 // of a Continue button.
-function BuildTargetSelector() {
+function BuildTargetSelector({
+	onSelectTarget,
+}: {
+	onSelectTarget?: (target: OnboardingTarget) => void;
+}) {
 	const { control, setValue } = useFormContext();
 	const submitForm = useStepperFormSubmit();
 	return (
@@ -788,6 +793,7 @@ function BuildTargetSelector() {
 			render={() => (
 				<ProductPicker
 					onSelect={(template) => {
+						onSelectTarget?.(template);
 						setValue("template", template, {
 							shouldDirty: true,
 							shouldTouch: true,
@@ -801,6 +807,45 @@ function BuildTargetSelector() {
 	);
 }
 
+// Rivet runs managed services out of one dedicated compute pool per namespace.
+// Picking a service provisions it up front so the pool is warming while the
+// user reads the connection steps.
+const MANAGED_SERVICES_POOL = "x-rivet-managed-services";
+
+function CloudBuildTargetSelector() {
+	const dataProvider = useCloudNamespaceDataProvider();
+	const { mutate } = useMutation({
+		...dataProvider.upsertCurrentNamespaceManagedPoolMutationOptions(),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries(
+				dataProvider.currentNamespaceManagedPoolQueryOptions({
+					pool: MANAGED_SERVICES_POOL,
+				}),
+			);
+		},
+		onError: () => {
+			toast.error("Failed to provision managed services", {
+				description:
+					"Durable Streams may not be reachable yet. Retry from namespace settings.",
+			});
+		},
+	});
+	return (
+		<BuildTargetSelector
+			onSelectTarget={(target) => {
+				if (target !== "durable-streams") {
+					return;
+				}
+				mutate({
+					pool: MANAGED_SERVICES_POOL,
+					displayName: "Services",
+					image: { preset: { managedServices: {} } },
+				});
+			}}
+		/>
+	);
+}
+
 function useOnboardingTarget(): OnboardingTarget {
 	return (
 		(useWatch({ name: "template" }) as OnboardingTarget | undefined) ??
@@ -809,7 +854,11 @@ function useOnboardingTarget(): OnboardingTarget {
 }
 
 function SelectProductStep() {
-	return <BuildTargetSelector />;
+	return features.compute ? (
+		<CloudBuildTargetSelector />
+	) : (
+		<BuildTargetSelector />
+	);
 }
 
 function RunLocallyStep() {
