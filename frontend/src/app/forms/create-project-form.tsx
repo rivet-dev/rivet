@@ -1,6 +1,8 @@
 import { faArrowRight, faLock, Icon } from "@rivet-gg/icons";
+import type { ReactNode } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
+import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { ByocContactTrigger } from "@/app/byoc/byoc-contact-trigger";
 import {
 	CloudOrganizationSelect,
@@ -151,43 +153,12 @@ export const Plan = () => {
 						<div className="space-y-3">
 							<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 								{SELECTABLE_PLANS.map((plan) => (
-									<button
+									<PlanOption
 										key={plan.id}
-										type="button"
-										aria-pressed={field.value === plan.id}
-										onClick={() => field.onChange(plan.id)}
-										className={cn(
-											"flex flex-col rounded-lg border p-4 text-left transition-colors",
-											"hover:bg-secondary/20",
-											field.value === plan.id
-												? "border-primary bg-secondary/20"
-												: "border-border",
-										)}
-									>
-										<span className="font-medium">
-											{plan.title}
-										</span>
-										<span className="mt-1">
-											<span className="text-2xl font-bold">
-												{plan.price}
-											</span>
-											<span className="text-muted-foreground text-sm ml-1">
-												/mo
-											</span>
-										</span>
-										<ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-											{plan.features
-												.slice(0, PLAN_FEATURE_COUNT)
-												.map((feature) => (
-													<li key={feature.label}>
-														<Icon
-															icon={feature.icon}
-														/>{" "}
-														{feature.label}
-													</li>
-												))}
-										</ul>
-									</button>
+										plan={plan}
+										isSelected={field.value === plan.id}
+										onSelect={() => field.onChange(plan.id)}
+									/>
 								))}
 							</div>
 							{features.byoc ? (
@@ -205,35 +176,92 @@ export const Plan = () => {
 	);
 };
 
+// Shared shell for the selectable plan cards. Selection is shown by the
+// primary border only; the badge already carries the plan color.
+const PlanOptionButton = ({
+	isSelected,
+	onSelect,
+	className,
+	children,
+}: {
+	isSelected: boolean;
+	onSelect: () => void;
+	className?: string;
+	children: ReactNode;
+}) => (
+	<button
+		type="button"
+		aria-pressed={isSelected}
+		onClick={onSelect}
+		className={cn(
+			"rounded-lg border p-4 text-left transition-colors hover:bg-secondary/40",
+			isSelected ? "border-primary bg-secondary/40" : "border-border",
+			className,
+		)}
+	>
+		{children}
+	</button>
+);
+
+const PlanOption = ({
+	plan,
+	isSelected,
+	onSelect,
+}: {
+	plan: (typeof SELECTABLE_PLANS)[number];
+	isSelected: boolean;
+	onSelect: () => void;
+}) => (
+	<PlanOptionButton
+		isSelected={isSelected}
+		onSelect={onSelect}
+		className="flex flex-col gap-3"
+	>
+		<span className="flex items-center justify-between gap-2">
+			<PlanBadge plan={plan.id} />
+			<span className="text-sm">
+				{"usageBased" in plan && plan.usageBased ? (
+					<span className="text-muted-foreground">From </span>
+				) : null}
+				<span className="font-medium">{plan.price}</span>
+				<span className="text-muted-foreground">/mo</span>
+			</span>
+		</span>
+		<ul className="space-y-1 text-xs text-muted-foreground">
+			{plan.features.slice(0, PLAN_FEATURE_COUNT).map((feature) => (
+				<li key={feature.label} className="flex gap-1.5">
+					<Icon icon={feature.icon} className="mt-0.5 shrink-0" />
+					<span>{feature.label}</span>
+				</li>
+			))}
+		</ul>
+	</PlanOptionButton>
+);
+
 const ByocPlanCard = ({
 	isSelected,
 	onSelect,
 }: {
 	isSelected: boolean;
 	onSelect: () => void;
-}) => {
-	return (
-		<button
-			type="button"
-			aria-pressed={isSelected}
-			onClick={onSelect}
-			className={cn(
-				"flex w-full flex-col rounded-lg border p-4 text-left transition-colors",
-				"hover:bg-secondary/20",
-				isSelected ? "border-primary bg-secondary/20" : "border-border",
-			)}
-		>
-			<span className="font-medium">BYOC</span>
-			<span className="mt-1 text-sm text-muted-foreground">
+}) => (
+	<PlanOptionButton
+		isSelected={isSelected}
+		onSelect={onSelect}
+		className="flex w-full items-start gap-3"
+	>
+		<PlanBadge plan="byoc" />
+		<span className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
+			<span className="text-sm text-foreground">
 				Run a fully-managed Rivet cluster inside your own cloud account.
 			</span>
-			<span className="mt-3 rounded-md border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-				<Icon icon={faLock} className="text-primary mr-1.5" />
+			<span className="text-muted-foreground">
+				<Icon icon={faLock} className="mr-1.5" />
 				<ByocContactTrigger>
 					{(open) => (
 						<button
 							type="button"
-							className="text-primary underline"
+							className="underline hover:text-foreground"
 							onClick={(event) => {
 								event.stopPropagation();
 								open();
@@ -245,18 +273,18 @@ const ByocPlanCard = ({
 				</ByocContactTrigger>{" "}
 				to add CMEK and other controls for your PCI/HIPAA needs.
 			</span>
-			<a
-				href={BYOC_DOCS_URL}
-				target="_blank"
-				rel="noreferrer"
-				className="mt-3 text-sm underline"
-				onClick={(event) => event.stopPropagation()}
-			>
-				Read docs <Icon icon={faArrowRight} />
-			</a>
-		</button>
-	);
-};
+		</span>
+		<a
+			href={BYOC_DOCS_URL}
+			target="_blank"
+			rel="noreferrer"
+			className="shrink-0 text-xs text-muted-foreground underline hover:text-foreground"
+			onClick={(event) => event.stopPropagation()}
+		>
+			Read docs <Icon icon={faArrowRight} />
+		</a>
+	</PlanOptionButton>
+);
 
 export const DefaultSubmit = () => {
 	return <Submit type="submit">Create Project</Submit>;
