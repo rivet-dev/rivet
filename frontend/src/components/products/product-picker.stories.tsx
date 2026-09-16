@@ -1,6 +1,6 @@
 import type { Story } from "@ladle/react";
 import "../../../.ladle/ladle.css";
-import { ProductPicker } from "./product-picker";
+import { PRODUCT_COMPOSABILITY_NOTE, ProductPicker } from "./product-picker";
 
 // The picker is rendered at two very different widths: full-bleed inside the
 // onboarding step, and constrained inside the "Add a component" dialog. The
@@ -8,7 +8,10 @@ import { ProductPicker } from "./product-picker";
 export const InOnboardingStep: Story = () => (
 	<div className="bg-background text-foreground min-h-screen p-8">
 		<div className="max-w-xl">
-			<h2 className="text-xl font-semibold mb-4">Select a product</h2>
+			<h2 className="text-xl font-semibold">Select a product</h2>
+			<p className="mt-1.5 mb-4 text-sm text-muted-foreground">
+				{PRODUCT_COMPOSABILITY_NOTE}
+			</p>
 			<ProductPicker onSelect={() => {}} />
 		</div>
 	</div>
