@@ -172,7 +172,8 @@ export function discoverPackages(
 			!p.name.startsWith("@rivetkit/") &&
 			p.name !== "rivetkit" &&
 			p.name !== "@rivet-dev/workflow-world" &&
-			p.name !== "@rivet-dev/pi"
+			p.name !== "@rivet-dev/pi" &&
+			p.name !== "@rivet-dev/opencode"
 		) continue;
 		add(p.path);
 	}

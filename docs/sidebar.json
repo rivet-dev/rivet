@@ -428,6 +428,10 @@
 					"href": "/actors/integrations/pi"
 				},
 				{
+					"title": "OpenCode v2 (Beta)",
+					"href": "/actors/integrations/opencode"
+				},
+				{
 					"title": "Flue",
 					"href": "/actors/integrations/flue"
 				},

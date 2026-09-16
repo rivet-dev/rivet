@@ -1,0 +1,43 @@
+{
+	"name": "@rivet-dev/opencode",
+	"version": "2.3.11",
+	"description": "Run OpenCode v2 directly as a Rivet Actor",
+	"license": "Apache-2.0",
+	"type": "module",
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"default": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "tsup",
+		"check-types": "tsc --noEmit",
+		"test": "pnpm build && vitest run"
+	},
+	"dependencies": {
+		"@opencode/client": "0.0.0-dev-19487",
+		"@opencode/core": "0.0.0-dev-19487",
+		"@opencode/plugin": "0.0.0-dev-19487",
+		"@opencode/sdk": "0.0.0-dev-19487",
+		"@opencode/util": "0.0.0-dev-19487",
+		"@rivet-dev/sandbox-adapter": "workspace:*",
+		"effect": "4.0.0-rc.112",
+		"rivetkit": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/node": "^22.19.15",
+		"tsup": "^8.5.0",
+		"typescript": "^5.9.2",
+		"vitest": "^4.0.15"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}

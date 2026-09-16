@@ -1,0 +1,115 @@
+---
+title: "OpenCode v2 (Beta)"
+description: "Run OpenCode v2 directly as a durable Rivet Actor."
+skill: false
+---
+
+<Info>
+This integration uses a pinned preview of OpenCode v2. APIs may change between releases. Requires Node.js 22.19 or newer.
+</Info>
+
+`@rivet-dev/opencode` embeds OpenCode in a Rivet Actor. It follows OpenCode's [Durable Objects integration](https://opencode.ai/v2/docs/build/sdk/cloudflare/): one embedded host per actor, SQLite-backed sessions and durable events, and recovery when the actor wakes. OpenCode runs in the actor process, not as a process inside a sandbox.
+
+## Quickstart
+
+```sh
+npm install @rivet-dev/opencode @rivet-dev/sandbox-adapter @rivet-dev/agentos rivetkit
+```
+
+Define a coding agent and a separate agentOS sandbox actor:
+
+```ts
+import { agentOS, setup } from "@rivet-dev/agentos";
+import { opencode } from "@rivet-dev/opencode";
+import { agentOSSandbox } from "@rivet-dev/sandbox-adapter";
+
+const mySandbox = agentOS();
+const myAgent = opencode({
+  sandbox: agentOSSandbox({ actor: "mySandbox" }),
+  opencode: {
+    config: { content: JSON.stringify({ default_agent: "build" }) },
+  },
+  actions: {
+    ping: () => "pong",
+  },
+});
+
+export const registry = setup({ use: { myAgent, mySandbox } });
+registry.start();
+```
+
+Configure model credentials on the actor host using OpenCode's provider environment variables, such as `ANTHROPIC_API_KEY`. See the [OpenCode SDK configuration](https://opencode.ai/v2/docs/build/sdk/). The `opencode` option accepts SDK configuration; the integration owns database configuration, event persistence, and resource cleanup.
+
+State, custom actions, events, queues, lifecycle hooks, and actor options work like a normal Rivet Actor definition. Built-in action names and the `event` event are reserved. Use `plugins` for trusted OpenCode plugins that customize agents, models, tools, and commands.
+
+## Prompting and events
+
+After connecting to `myAgent`, use its convenience actions:
+
+```ts
+agent.on("event", (event) => console.log(event));
+
+await agent.prompt("Inspect this project and summarize its structure.");
+await agent.waitForIdle();
+const session = await agent.getSession();
+const messages = await agent.getMessages();
+
+await agent.steer("Focus on the database code.");
+await agent.followUp("Then suggest tests.");
+// Interrupt current work:
+await agent.abort();
+```
+
+Unlike Pi, OpenCode's `prompt` returns when input is accepted, not when generation finishes. Use `waitForIdle` to wait for completion. The actor stays awake while generation is active. `steer` and `followUp` use OpenCode's native steering and queued-input delivery modes.
+
+These convenience methods use one lazily created default session per actor. Native OpenCode actions also support multiple sessions in the same actor:
+
+```ts
+const session = await agent.session.create({ title: "Review" });
+await agent.session.prompt({ sessionID: session.id, text: "Review the changes." });
+await agent.session.wait({ sessionID: session.id });
+```
+
+Native actions keep OpenCode's method names and input objects. They return ordinary promises; callers do not need Effect or an OpenCode HTTP server.
+
+| Area | Native actions |
+| --- | --- |
+| Sessions | `session.create`, `list`, `get`, `remove`, `import`, `export`, `fork`, `rename`, `move`, `stats`, `context` |
+| Generation | `session.prompt`, `command`, `skill`, `synthetic`, `shell`, `compact`, `generate`, `interrupt`, `wait`, `active` |
+| Queued input | `session.inbox.list`, `cancel`, `steer`, `queue` |
+| Models and agents | `model.list`, `model.default`, `provider.list`, `provider.get`, `agent.list`, `agent.get`, `session.switchModel`, `session.switchAgent` |
+| History and instructions | `message.list`, `session.revert.stage`, `clear`, `commit`, `session.instructions.entry.list`, `put`, `remove` |
+| Approvals | `permission.request.list`, `permission.reply`, saved permission management, `form.request.list`, `form.reply`, `form.cancel` |
+| Extensions | `plugin.list`, `awaitActivation`, `check`, `update`, `command.list`, `skill.list`, MCP connection and resource actions, `config.get` |
+
+Live events arrive through `event`; trusted server code can also use `onSessionEvent`. To recover missed durable events after reconnecting, call `readEvents({ sessionID, after, limit })`. `after` is the last event's sequence number; pages contain at most 1,000 events (100 by default). The live `session.log` stream is not exposed as an RPC return value.
+
+Raw RPC, host administration, and interactive terminal APIs are not exposed. Pi-specific controls such as thinking-level cycling and retry toggles are not emulated; use OpenCode's model variants, agent configuration, and plugins.
+
+## Persistence and sandbox lifecycle
+
+OpenCode writes its native session data and durable events directly to actor SQLite. It uses the same database for its upstream migrations; Rivet owns transactions and durability. The sandbox's opaque binding is persisted alongside these tables. There is no transcript file to synchronize.
+
+On wake, the actor reconnects its sandbox and reconstructs the embedded SDK. OpenCode's native recovery resumes suspended session work. On sleep, SDK resources are closed before the sandbox is suspended. Destroying the actor also asks the adapter to destroy its sandbox. Recovery does not depend on the sleep hook running successfully.
+
+Recovery is at least once: a crash can repeat an external tool's side effects. Make custom tools idempotent where repeating an operation would matter.
+
+## Sandbox behavior
+
+The same `@rivet-dev/sandbox-adapter` interface is shared with Pi. agentOS runs in a separate actor; E2B, Daytona, or another provider can implement that interface without changing this integration. OpenCode requires streaming `spawn`, output replay, stdin, process completion, and cancellation support.
+
+Sandbox coding tools use OpenCode's environment driver. The sandbox needs `/bin/sh` and GNU utilities, including `stat`, `find`, and `dd`. Configure command credentials in the sandbox provider. Ambient actor-host environment values are stripped before spawning sandbox commands; model credentials remain on the actor host.
+
+Project configuration discovery, host file browsing, filesystem snapshots, VCS metadata services, and interactive/persistent PTYs are disabled in sandbox mode. Git commands still work through the sandbox shell. Reverting conversation history does not restore sandbox files. Plugins are trusted application code and execute on the actor host; plugins that access files or start processes directly must explicitly use the sandbox.
+
+## Without a sandbox
+
+Omit `sandbox` to use the actor host's filesystem and processes:
+
+```ts
+const myAgent = opencode({ cwd: "/workspace" });
+```
+
+<Warning>
+Without a sandbox, OpenCode tools have the actor process's filesystem and operating-system permissions. OpenCode permissions are not an operating-system isolation boundary. Authenticate and authorize actor access using RivetKit's normal hooks before exposing coding actions to clients.
+</Warning>
