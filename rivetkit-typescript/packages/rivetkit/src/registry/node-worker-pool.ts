@@ -48,7 +48,7 @@ interface ManagedWorker {
 
 export interface NodeActorWorkerPool {
 	poolId: string;
-	close: () => Promise<void>;
+	close: (force?: boolean) => Promise<void>;
 }
 
 const WORKER_BOOTSTRAP_TIMEOUT_MS = 60_000;
@@ -182,6 +182,7 @@ export async function configureNodeActorWorkerPool(
 		);
 	}
 	const entrypoint = pathToFileURL(entrypointPath).href;
+	const argv = process.argv.slice(1);
 	const workers = new Map<number, ManagedWorker>();
 	const queuedWorkerIds = new Set<number>();
 	const spawnQueue: RuntimeWorkerSpawnRequest[] = [];
@@ -192,19 +193,26 @@ export async function configureNodeActorWorkerPool(
 	const reportSpawnFailure = (
 		managed: ManagedWorker,
 		reason: string,
-	): void => {
-		if (managed.registration || managed.spawnFailureReported) return;
+	): boolean => {
+		if (managed.registration || managed.spawnFailureReported) return false;
+		// Registration can precede its MessagePort acknowledgement. Core owns
+		// the atomic transition from pending to either registered or failed.
+		if (
+			!workerSpawnFailed(
+				registry,
+				managed.request.workerId,
+				managed.request.spawnToken,
+				reason,
+			)
+		) {
+			return false;
+		}
 		managed.spawnFailureReported = true;
 		logger().error(
 			{ workerId: managed.request.workerId, error: reason },
 			"actor worker thread failed to start",
 		);
-		workerSpawnFailed(
-			registry,
-			managed.request.workerId,
-			managed.request.spawnToken,
-			reason,
-		);
+		return true;
 	};
 
 	const spawnWorker = (request: RuntimeWorkerSpawnRequest): void => {
@@ -217,6 +225,7 @@ export async function configureNodeActorWorkerPool(
 				),
 				{
 					name: `rivetkit-actors-${request.workerId}`,
+					argv,
 					workerData: { ...request, poolId, entrypoint },
 				},
 			);
@@ -239,11 +248,14 @@ export async function configureNodeActorWorkerPool(
 			spawnFailureReported: false,
 			retirementRequested: false,
 			bootstrapTimeout: setTimeout(() => {
-				reportSpawnFailure(
-					managed,
-					`worker did not register within ${WORKER_BOOTSTRAP_TIMEOUT_MS}ms`,
-				);
-				void worker.terminate();
+				if (
+					reportSpawnFailure(
+						managed,
+						`worker did not register within ${WORKER_BOOTSTRAP_TIMEOUT_MS}ms`,
+					)
+				) {
+					void worker.terminate();
+				}
 			}, WORKER_BOOTSTRAP_TIMEOUT_MS),
 			exited,
 			resolveExited,
@@ -398,16 +410,26 @@ export async function configureNodeActorWorkerPool(
 	);
 	return {
 		poolId,
-		close: async () => {
-			if (closing) {
+		close: async (force = false) => {
+			const wasClosing = closing;
+			closing = true;
+			spawnQueue.length = 0;
+			queuedWorkerIds.clear();
+			// Grace expiry can interrupt an already-running graceful close.
+			if (force) {
+				await Promise.all(
+					[...workers.values()].map((managed) =>
+						managed.worker.terminate(),
+					),
+				);
+				return;
+			}
+			if (wasClosing) {
 				await Promise.all(
 					[...workers.values()].map((worker) => worker.exited),
 				);
 				return;
 			}
-			closing = true;
-			spawnQueue.length = 0;
-			queuedWorkerIds.clear();
 			for (const managed of workers.values()) {
 				if (!managed.registration) void managed.worker.terminate();
 			}

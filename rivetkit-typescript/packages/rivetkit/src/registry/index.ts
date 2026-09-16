@@ -19,6 +19,7 @@ import { attachActorWorkerRegistry, buildConfiguredRegistry } from "./native";
 import { convertNativeHttpResponse } from "./native-http";
 import {
 	claimActorWorkerBootstrap,
+	type NodeActorWorkerPool,
 	setActorWorkerAttachPromise,
 } from "./node-worker-pool";
 import type {
@@ -773,6 +774,12 @@ export class Registry<A extends RegistryActors> {
 		// Race the entire drain sequence (both modes + serve promise) against
 		// a single grace ceiling. By default, this uses the engine-provided
 		// actor stop threshold, matching Pegboard's hard cutoff for actors.
+		let graceTimeout: ReturnType<typeof setTimeout>;
+		const graceExpired = new Promise<void>((resolve) => {
+			graceTimeout = setTimeout(resolve, gracePeriodMs);
+			graceTimeout.unref?.();
+		});
+		const workerPools = new Set<NodeActorWorkerPool>();
 		const drain = async () => {
 			// Shut down every live `CoreRegistry` we know about. Mode A
 			// (`start()`) and Mode B (`handler()`) each build a separate
@@ -785,9 +792,16 @@ export class Registry<A extends RegistryActors> {
 						try {
 							const { runtime, registry, workerPool } =
 								await modeAPromise;
+							if (workerPool) workerPools.add(workerPool);
 							try {
 								await runtime.shutdownRegistry(registry);
 							} finally {
+								// Native shutdown only signals cancellation. Keep workers
+								// alive for actor cleanup until serve finishes or grace expires.
+								await Promise.race([
+									this.#runtimeServePromise,
+									graceExpired,
+								]);
 								await workerPool?.close();
 							}
 						} catch (err) {
@@ -805,6 +819,7 @@ export class Registry<A extends RegistryActors> {
 						try {
 							const { runtime, registry, workerPool } =
 								await modeBPromise;
+							if (workerPool) workerPools.add(workerPool);
 							try {
 								await runtime.shutdownRegistry(registry);
 							} finally {
@@ -832,12 +847,21 @@ export class Registry<A extends RegistryActors> {
 				await this.#applicationListenerPromise.catch(() => undefined);
 			}
 		};
-		await Promise.race([
-			drain(),
-			new Promise<void>((resolve) =>
-				setTimeout(resolve, gracePeriodMs).unref?.(),
-			),
-		]);
+		try {
+			const drained = await Promise.race([
+				drain().then(() => true),
+				graceExpired.then(() => false),
+			]);
+			if (!drained) {
+				// Deadline cleanup must not depend on a hung native shutdown or
+				// serve promise. Wait for worker exits before returning to the host.
+				await Promise.all(
+					[...workerPools].map((pool) => pool.close(true)),
+				);
+			}
+		} finally {
+			clearTimeout(graceTimeout!);
+		}
 	}
 
 	async #actorStopThresholdMs(

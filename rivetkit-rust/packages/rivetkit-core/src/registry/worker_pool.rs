@@ -604,7 +604,14 @@ impl ActorWorkerPool {
 		})
 	}
 
-	pub fn fail_worker_spawn(&self, worker_id: WorkerId, spawn_token: &str, reason: String) {
+	/// Atomically cancels a matching pending spawn. Only a successful cancellation
+	/// authorizes the host to terminate a worker whose readiness message is late.
+	pub fn fail_worker_spawn(
+		&self,
+		worker_id: WorkerId,
+		spawn_token: &str,
+		reason: String,
+	) -> bool {
 		let mut state = self.state.lock();
 		let class = state
 			.pending_spawns
@@ -612,7 +619,7 @@ impl ActorWorkerPool {
 			.filter(|pending| pending.request.spawn_token == spawn_token)
 			.map(|pending| pending.request.class);
 		let Some(class) = class else {
-			return;
+			return false;
 		};
 		Self::remove_pending_spawn(&mut state, worker_id);
 		METRICS
@@ -624,6 +631,7 @@ impl ActorWorkerPool {
 		}
 		drop(state);
 		self.changed.notify_waiters();
+		true
 	}
 
 	pub fn worker_lost(&self, worker_id: WorkerId, epoch: WorkerRegistrationEpoch) {

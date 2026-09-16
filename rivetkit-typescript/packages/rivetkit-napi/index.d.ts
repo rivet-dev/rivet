@@ -451,7 +451,7 @@ export declare class CoreRegistry {
   configureWorkerPool(actorsPerThread: number, baselineWorkerLimit: number, requestSpawns: (...args: any[]) => any, retireWorker: (...args: any[]) => any): string
   attachWorker(poolId: string, workerId: number, spawnToken: string, workerClass: string): JsWorkerRegistration
   detachWorker(): void
-  workerSpawnFailed(workerId: number, spawnToken: string, reason: string): void
+  workerSpawnFailed(workerId: number, spawnToken: string, reason: string): boolean
   workerExited(workerId: number, workerEpoch: number): void
   serve(config: JsServeConfig): Promise<void>
   /**

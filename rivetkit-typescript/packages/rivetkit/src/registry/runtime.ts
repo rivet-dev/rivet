@@ -482,12 +482,13 @@ export interface CoreRuntime {
 		workerClass: "baseline" | "overflow",
 	): RuntimeWorkerRegistration;
 	detachWorker?(registry: RegistryHandle): void;
+	/** Returns true only when core atomically cancels the matching pending spawn. */
 	workerSpawnFailed?(
 		registry: RegistryHandle,
 		workerId: number,
 		spawnToken: string,
 		reason: string,
-	): void;
+	): boolean;
 	workerExited?(
 		registry: RegistryHandle,
 		workerId: number,

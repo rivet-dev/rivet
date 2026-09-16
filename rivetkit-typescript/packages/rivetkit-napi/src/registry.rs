@@ -353,16 +353,16 @@ impl CoreRegistry {
 		worker_id: f64,
 		spawn_token: String,
 		reason: String,
-	) -> napi::Result<()> {
+	) -> napi::Result<bool> {
 		let worker_id = parse_worker_id(worker_id)?;
 		let Some(host) = self.worker_pool_host.lock().clone() else {
 			// A queued Worker constructor can fail after registry shutdown has
 			// already removed the pool host. Its pending reservation is gone.
-			return Ok(());
+			return Ok(false);
 		};
-		host.pool()
-			.fail_worker_spawn(worker_id, &spawn_token, reason);
-		Ok(())
+		Ok(host
+			.pool()
+			.fail_worker_spawn(worker_id, &spawn_token, reason))
 	}
 
 	#[napi(js_name = "workerExited")]

@@ -332,8 +332,8 @@ export class NapiCoreRuntime implements CoreRuntime {
 		workerId: number,
 		spawnToken: string,
 		reason: string,
-	): void {
-		asNativeRegistry(registry).workerSpawnFailed(
+	): boolean {
+		return asNativeRegistry(registry).workerSpawnFailed(
 			workerId,
 			spawnToken,
 			reason,

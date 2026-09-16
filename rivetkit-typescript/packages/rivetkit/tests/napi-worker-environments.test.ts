@@ -2,6 +2,24 @@ import { Worker } from "node:worker_threads";
 import { CoreRegistry } from "../../rivetkit-napi/index.js";
 import { expect, test } from "vitest";
 
+test("NAPI denies spawn cancellation for a missing reservation or closed pool", async () => {
+	const registry = new CoreRegistry();
+	registry.configureWorkerPool(
+		1,
+		1,
+		() => {},
+		() => {},
+	);
+	try {
+		expect(registry.workerSpawnFailed(1, "stale-token", "timeout")).toBe(
+			false,
+		);
+	} finally {
+		await registry.shutdown();
+	}
+	expect(registry.workerSpawnFailed(1, "stale-token", "timeout")).toBe(false);
+});
+
 test("NAPI worker environments resolve the main environment's pool", async () => {
 	const registry = new CoreRegistry();
 	const poolId = registry.configureWorkerPool(
