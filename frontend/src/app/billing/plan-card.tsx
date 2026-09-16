@@ -1,25 +1,117 @@
-import { Icon, type IconProp } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { Button, cn } from "@/components";
-import { getPlan, type PlanId } from "@/content/billing";
+import { getPlan, type PlanId, type PlanRow } from "@/content/billing";
+import { PlanBadge } from "./billing-plan-badge";
 
-type PlanCardProps = {
-	title: string;
+type PlanSummaryProps = {
+	plan: string;
 	price: string;
-	features: { icon: IconProp; label: ReactNode }[];
+	description?: string;
+	rows: readonly PlanRow[];
 	usageBased?: boolean;
 	custom?: boolean;
+	tag?: ReactNode;
+	className?: string;
+};
+
+export function PlanSummary({
+	plan,
+	price,
+	description,
+	rows,
+	usageBased,
+	custom,
+	tag,
+	className,
+}: PlanSummaryProps) {
+	return (
+		<div className={cn("flex flex-col", className)}>
+			<div className="mb-3 flex items-center justify-between gap-3">
+				<PlanBadge plan={plan} className="text-sm" />
+				{tag}
+			</div>
+			<div className="mb-4">
+				<span
+					className={cn(
+						"mb-1 block text-sm font-medium text-muted-foreground",
+						!usageBased && "invisible",
+					)}
+					aria-hidden={!usageBased}
+				>
+					From
+				</span>
+				<div className="flex items-baseline gap-1">
+					<span className="text-3xl font-medium tracking-[-0.015em]">
+						{price}
+					</span>
+					{custom ? null : (
+						<span className="ml-1 text-xs text-muted-foreground">
+							{usageBased ? "/mo + Usage" : "/mo"}
+						</span>
+					)}
+				</div>
+			</div>
+			{description ? (
+				<>
+					<div className="mb-4 h-px bg-border" />
+					<p className="mb-4 min-h-10 text-sm leading-5 text-muted-foreground">
+						{description}
+					</p>
+				</>
+			) : null}
+			<dl className="divide-y divide-border border-y text-xs">
+				{rows.map((row) => (
+					<div
+						key={row.label}
+						className="flex items-baseline justify-between gap-3 py-2"
+					>
+						<dt
+							className={
+								row.value
+									? "text-muted-foreground"
+									: "text-foreground"
+							}
+						>
+							{row.label}
+						</dt>
+						{row.value ? (
+							<dd className="whitespace-nowrap text-right font-medium text-foreground">
+								{row.value}
+							</dd>
+						) : null}
+					</div>
+				))}
+			</dl>
+		</div>
+	);
+}
+
+export const planSummaryProps = (id: PlanId) => {
+	const plan = getPlan(id);
+	return {
+		plan: id,
+		price: plan.price,
+		description: plan.description,
+		rows: plan.rows,
+		usageBased: "usageBased" in plan ? plan.usageBased : undefined,
+		custom: "custom" in plan ? plan.custom : undefined,
+	};
+};
+
+type PlanCardProps = PlanSummaryProps & {
 	current?: boolean;
 	buttonProps?: React.ComponentProps<typeof Button>;
-} & React.ComponentProps<"div">;
+} & Omit<React.ComponentProps<"div">, "className">;
 
 function PlanCard({
-	title,
+	plan,
 	price,
-	features,
+	description,
+	rows,
 	usageBased,
-	current,
 	custom,
+	tag,
+	current,
 	className,
 	buttonProps,
 	...props
@@ -33,72 +125,47 @@ function PlanCard({
 			)}
 			{...props}
 		>
-			<h3 className="text-lg font-medium mb-2">{title}</h3>
-			<div className="min-h-24">
-				{usageBased ? (
-					<p className="text-xs text-muted-foreground">From</p>
-				) : null}
-				<p className="">
-					<span className="text-4xl font-bold">{price}</span>
-					{custom ? null : (
-						<span className="text-muted-foreground ml-1">/mo</span>
-					)}
-				</p>
-				{usageBased ? (
-					<p className="text-sm text-muted-foreground">+ Usage</p>
-				) : null}
-			</div>
-			<div className="text-sm text-primary-foreground flex-1">
-				<ul className="text-muted-foreground mt-2 space-y-1">
-					{features?.map((feature, index) => (
-						<li key={`${feature.label}-${index}`}>
-							<Icon icon={feature.icon} /> {feature.label}
-						</li>
-					))}
-				</ul>
-			</div>
+			<PlanSummary
+				className="flex-1"
+				plan={plan}
+				price={price}
+				description={description}
+				rows={rows}
+				usageBased={usageBased}
+				custom={custom}
+				tag={tag}
+			/>
 			{!buttonProps?.hidden ? (
 				current ? (
 					<Button
 						variant="secondary"
-						className="w-full mt-4"
+						className="w-full mt-6"
 						{...buttonProps}
 					/>
 				) : (
-					<Button className="w-full mt-4" {...buttonProps} />
+					<Button className="w-full mt-6" {...buttonProps} />
 				)
 			) : null}
 		</div>
 	);
 }
 
-const fromCatalog = (id: PlanId) => {
-	const plan = getPlan(id);
-	return {
-		title: plan.title,
-		price: plan.price,
-		usageBased: "usageBased" in plan ? plan.usageBased : undefined,
-		custom: "custom" in plan ? plan.custom : undefined,
-		features: [...plan.features],
-	};
-};
-
 export const CommunityPlan = (props: Partial<PlanCardProps>) => {
-	return <PlanCard {...fromCatalog("free")} {...props} />;
+	return <PlanCard {...planSummaryProps("free")} {...props} />;
 };
 
 export const ProPlan = (props: Partial<PlanCardProps>) => {
-	return <PlanCard {...fromCatalog("pro")} {...props} />;
+	return <PlanCard {...planSummaryProps("pro")} {...props} />;
 };
 
 export const TeamPlan = (props: Partial<PlanCardProps>) => {
-	return <PlanCard {...fromCatalog("team")} {...props} />;
+	return <PlanCard {...planSummaryProps("team")} {...props} />;
 };
 
 export const EnterprisePlan = (props: Partial<PlanCardProps>) => {
 	return (
 		<PlanCard
-			{...fromCatalog("enterprise")}
+			{...planSummaryProps("enterprise")}
 			{...props}
 			buttonProps={{
 				...props.buttonProps,

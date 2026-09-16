@@ -19,6 +19,8 @@
 	--accent-foreground: 240 10% 4%;
 	--destructive: 0 84.2% 60.2%;
 	--destructive-foreground: 0 0% 100%;
+	/* Darker than the dark-mode yellow so the icon and border read on white. */
+	--warning: 45 93% 47%;
 	--border: 240 6% 90%;
 	--input: 240 6% 90%;
 	--ring: 18.5 100% 50%;

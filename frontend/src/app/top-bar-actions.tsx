@@ -1,4 +1,4 @@
-import { faBook, faMoon, faSun, Icon } from "@rivet-gg/icons";
+import { faMoon, faSun, Icon } from "@rivet-gg/icons";
 import { type ComponentPropsWithoutRef, forwardRef } from "react";
 import {
 	Avatar,
@@ -71,7 +71,6 @@ function DocsButton() {
 			variant="ghost"
 			size="sm"
 			className="text-muted-foreground hover:text-foreground"
-			startIcon={<Icon icon={faBook} className="size-4" />}
 			asChild
 		>
 			<a

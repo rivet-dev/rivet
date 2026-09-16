@@ -1,6 +1,8 @@
-import { faArrowRight, faLock, Icon } from "@rivet-gg/icons";
+import { faArrowUpRightFromSquare, Icon } from "@rivet-gg/icons";
+import type { ReactNode } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
+import { PlanSummary, planSummaryProps } from "@/app/billing/plan-card";
 import { ByocContactTrigger } from "@/app/byoc/byoc-contact-trigger";
 import {
 	CloudOrganizationSelect,
@@ -14,12 +16,11 @@ import {
 	Input,
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
-import { PLANS } from "@/content/billing";
-import { BYOC_DOCS_URL } from "@/content/byoc";
+import type { PlanId } from "@/content/billing";
+import { BYOC_DOCS_URL, BYOC_PLAN } from "@/content/byoc";
 import { features } from "@/lib/features";
 
-const SELECTABLE_PLANS = PLANS.filter((plan) => plan.id !== "enterprise");
-const PLAN_FEATURE_COUNT = 4;
+const SELECTABLE_PLANS = ["free", "pro", "team"] satisfies PlanId[];
 
 export const planSchema = z.object({
 	plan: z.enum(["free", "pro", "team", "byoc"]),
@@ -148,48 +149,22 @@ export const Plan = () => {
 			render={({ field }) => (
 				<FormItem>
 					<FormControl>
-						<div className="space-y-3">
-							<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-								{SELECTABLE_PLANS.map((plan) => (
-									<button
-										key={plan.id}
-										type="button"
-										aria-pressed={field.value === plan.id}
-										onClick={() => field.onChange(plan.id)}
-										className={cn(
-											"flex flex-col rounded-lg border p-4 text-left transition-colors",
-											"hover:bg-secondary/20",
-											field.value === plan.id
-												? "border-primary bg-secondary/20"
-												: "border-border",
-										)}
-									>
-										<span className="font-medium">
-											{plan.title}
-										</span>
-										<span className="mt-1">
-											<span className="text-2xl font-bold">
-												{plan.price}
-											</span>
-											<span className="text-muted-foreground text-sm ml-1">
-												/mo
-											</span>
-										</span>
-										<ul className="mt-3 space-y-1 text-xs text-muted-foreground">
-											{plan.features
-												.slice(0, PLAN_FEATURE_COUNT)
-												.map((feature) => (
-													<li key={feature.label}>
-														<Icon
-															icon={feature.icon}
-														/>{" "}
-														{feature.label}
-													</li>
-												))}
-										</ul>
-									</button>
-								))}
-							</div>
+						<div
+							className={cn(
+								"grid grid-cols-1 gap-3 sm:grid-cols-2",
+								features.byoc
+									? "lg:grid-cols-4"
+									: "lg:grid-cols-3",
+							)}
+						>
+							{SELECTABLE_PLANS.map((plan) => (
+								<PlanOption
+									key={plan}
+									plan={plan}
+									isSelected={field.value === plan}
+									onSelect={() => field.onChange(plan)}
+								/>
+							))}
 							{features.byoc ? (
 								<ByocPlanCard
 									isSelected={field.value === "byoc"}
@@ -205,58 +180,93 @@ export const Plan = () => {
 	);
 };
 
+const PlanOptionButton = ({
+	isSelected,
+	onSelect,
+	className,
+	children,
+}: {
+	isSelected: boolean;
+	onSelect: () => void;
+	className?: string;
+	children: ReactNode;
+}) => (
+	<button
+		type="button"
+		aria-pressed={isSelected}
+		onClick={onSelect}
+		className={cn(
+			"flex flex-col rounded-lg border p-4 text-left transition-colors hover:bg-secondary/40",
+			isSelected ? "border-primary bg-secondary/40" : "border-border",
+			className,
+		)}
+	>
+		{children}
+	</button>
+);
+
+const PlanOption = ({
+	plan,
+	isSelected,
+	onSelect,
+}: {
+	plan: PlanId;
+	isSelected: boolean;
+	onSelect: () => void;
+}) => (
+	<PlanOptionButton isSelected={isSelected} onSelect={onSelect}>
+		<PlanSummary {...planSummaryProps(plan)} description={undefined} />
+	</PlanOptionButton>
+);
+
 const ByocPlanCard = ({
 	isSelected,
 	onSelect,
 }: {
 	isSelected: boolean;
 	onSelect: () => void;
-}) => {
-	return (
-		<button
-			type="button"
-			aria-pressed={isSelected}
-			onClick={onSelect}
-			className={cn(
-				"flex w-full flex-col rounded-lg border p-4 text-left transition-colors",
-				"hover:bg-secondary/20",
-				isSelected ? "border-primary bg-secondary/20" : "border-border",
-			)}
-		>
-			<span className="font-medium">BYOC</span>
-			<span className="mt-1 text-sm text-muted-foreground">
-				Run a fully-managed Rivet cluster inside your own cloud account.
-			</span>
-			<span className="mt-3 rounded-md border bg-secondary/30 px-3 py-2 text-xs text-muted-foreground">
-				<Icon icon={faLock} className="text-primary mr-1.5" />
-				<ByocContactTrigger>
-					{(open) => (
-						<button
-							type="button"
-							className="text-primary underline"
-							onClick={(event) => {
-								event.stopPropagation();
-								open();
-							}}
-						>
-							Contact us
-						</button>
-					)}
-				</ByocContactTrigger>{" "}
-				to add CMEK and other controls for your PCI/HIPAA needs.
-			</span>
+}) => (
+	<PlanOptionButton isSelected={isSelected} onSelect={onSelect}>
+		<PlanSummary
+			className="flex-1"
+			plan="byoc"
+			custom
+			price={BYOC_PLAN.price}
+			rows={BYOC_PLAN.rows}
+			tag={
+				<span className="text-xs text-muted-foreground">
+					Your cloud
+				</span>
+			}
+		/>
+		<span className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
 			<a
 				href={BYOC_DOCS_URL}
 				target="_blank"
 				rel="noreferrer"
-				className="mt-3 text-sm underline"
+				className="hover:text-foreground"
 				onClick={(event) => event.stopPropagation()}
 			>
-				Read docs <Icon icon={faArrowRight} />
+				Read docs{" "}
+				<Icon icon={faArrowUpRightFromSquare} className="ml-0.5" />
 			</a>
-		</button>
-	);
-};
+			<ByocContactTrigger>
+				{(open) => (
+					<button
+						type="button"
+						className="hover:text-foreground"
+						onClick={(event) => {
+							event.stopPropagation();
+							open();
+						}}
+					>
+						Talk to us
+					</button>
+				)}
+			</ByocContactTrigger>
+		</span>
+	</PlanOptionButton>
+);
 
 export const DefaultSubmit = () => {
 	return <Submit type="submit">Create Project</Submit>;

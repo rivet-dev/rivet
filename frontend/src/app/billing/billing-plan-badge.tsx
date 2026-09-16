@@ -8,14 +8,37 @@ import {
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { PLAN_LABELS } from "@/content/billing";
 
-const getPlanVariant = (
-	plan: string | undefined,
-): "secondary" | "premium" | "premium-blue" | "premium-violet" => {
-	if (plan === "byoc") return "premium-violet";
-	if (plan === "team") return "premium-blue";
-	if (plan === "pro" || plan === "enterprise") return "premium";
-	return "secondary";
+// Tailwind's JIT needs full class strings, so each plan spells out its
+// light and dark variants.
+const PLAN_COLORS: Record<string, string> = {
+	free: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/15 dark:text-emerald-300",
+	pro: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:border-orange-500/50 dark:bg-orange-500/15 dark:text-orange-300",
+	team: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/15 dark:text-blue-300",
+	enterprise:
+		"border-purple-500/40 bg-purple-500/10 text-purple-700 dark:border-purple-500/50 dark:bg-purple-500/15 dark:text-purple-300",
+	byoc: "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300",
 };
+
+export function PlanBadge({
+	plan,
+	className,
+}: {
+	plan: string;
+	className?: string;
+}) {
+	return (
+		<Badge
+			variant="outline"
+			className={cn(
+				"shrink-0 justify-center rounded-md px-2 font-mono font-normal leading-4",
+				PLAN_COLORS[plan] ?? PLAN_COLORS.free,
+				className,
+			)}
+		>
+			{PLAN_LABELS[plan] ?? plan}
+		</Badge>
+	);
+}
 
 export function BillingPlanBadge() {
 	const dataProvider = useCloudProjectDataProvider();
@@ -27,16 +50,7 @@ export function BillingPlanBadge() {
 		return <SkeletonBadge />;
 	}
 
-	const plan = data?.billing.activePlan || "free";
-
-	return (
-		<Badge
-			variant={getPlanVariant(plan)}
-			className="min-w-12 justify-center my-px"
-		>
-			{PLAN_LABELS[plan]}
-		</Badge>
-	);
+	return <PlanBadge plan={data?.billing.activePlan || "free"} />;
 }
 
 export function LazyBillingPlanBadge({
@@ -55,23 +69,19 @@ export function LazyBillingPlanBadge({
 		...dataProvider.billingDetailsQueryOptions({ project, organization }),
 	});
 
-	const plan = data?.billing.activePlan || "free";
-
 	return (
 		<>
 			{isLoading || !isVisible ? (
 				<SkeletonBadge />
 			) : (
-				<Badge
-					variant={getPlanVariant(plan)}
-					className={cn("min-w-12 justify-center my-px", className)}
-				>
-					{PLAN_LABELS[plan]}
-				</Badge>
+				<PlanBadge
+					plan={data?.billing.activePlan || "free"}
+					className={className}
+				/>
 			)}
 			<VisibilitySensor onChange={() => setIsVisible(true)} />
 		</>
 	);
 }
 
-const SkeletonBadge = () => <Skeleton className="ml-2 h-6 w-12 rounded-full" />;
+const SkeletonBadge = () => <Skeleton className="h-[22px] w-12 rounded-md" />;
