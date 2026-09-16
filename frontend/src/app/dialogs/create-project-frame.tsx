@@ -5,7 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useContext, useRef } from "react";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { StepperForm } from "@/app/forms/stepper-form";
-import { Button, Flex, Frame, toast } from "@/components";
+import { Button, Frame, toast } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
 import { IsInModalContext } from "@/components/hooks/isomorphic-frame";
 import { authClient } from "@/lib/auth";
@@ -180,10 +180,10 @@ export default function CreateProjectFrameContent({
 					content={{
 						plan: () => <CreateProjectForm.Plan />,
 						details: () => (
-							<Flex gap="4" direction="col">
+							<CreateProjectForm.Details>
 								<CreateProjectForm.Organization />
 								<CreateProjectForm.Name />
-							</Flex>
+							</CreateProjectForm.Details>
 						),
 						payment: () => <PaymentStep />,
 					}}

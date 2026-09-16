@@ -1,6 +1,6 @@
 import { faArrowUpRightFromSquare, Icon } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
-import { type UseFormReturn, useFormContext } from "react-hook-form";
+import { type UseFormReturn, useFormContext, useWatch } from "react-hook-form";
 import z from "zod";
 import { PlanSummary, planSummaryProps } from "@/app/billing/plan-card";
 import { ByocContactTrigger } from "@/app/byoc/byoc-contact-trigger";
@@ -8,7 +8,9 @@ import {
 	CloudOrganizationSelect,
 	cn,
 	createSchemaForm,
+	Flex,
 	FormControl,
+	FormDescription,
 	FormField,
 	FormItem,
 	FormLabel,
@@ -17,7 +19,7 @@ import {
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
 import type { PlanId } from "@/content/billing";
-import { BYOC_DOCS_URL, BYOC_PLAN } from "@/content/byoc";
+import { BYOC_DOCS_URL, BYOC_PLAN, BYOC_TRIAL_DAYS } from "@/content/byoc";
 import { features } from "@/lib/features";
 
 const SELECTABLE_PLANS = ["free", "pro", "team"] satisfies PlanId[];
@@ -74,6 +76,9 @@ export const stepper = defineStepper(
 		title: "Create project",
 		titleFor: (values: Record<string, unknown>) =>
 			values.plan === "byoc" ? "Create cluster" : "Create project",
+		description: (values: Record<string, unknown>) =>
+			values.plan === "byoc" ? BYOC_PLAN.description : "",
+		previous: "Back",
 		next: "Continue",
 		schema: (values: Record<string, unknown>) =>
 			values.plan === "byoc" ? byocDetailsSchema : detailsSchema,
@@ -96,6 +101,7 @@ export { Form, Submit, SetValue };
 
 export const Name = ({ className }: { className?: string }) => {
 	const { control } = useFormContext<FormValues>();
+	const isByoc = useWatch({ control, name: "plan" }) === "byoc";
 	return (
 		<FormField
 			control={control}
@@ -105,18 +111,108 @@ export const Name = ({ className }: { className?: string }) => {
 					<FormLabel className="col-span-1">Name</FormLabel>
 					<FormControl className="row-start-2">
 						<Input
-							placeholder="Enter a project name..."
+							placeholder={
+								isByoc
+									? "Enter a cluster name..."
+									: "Enter a project name..."
+							}
 							autoFocus
 							autoComplete="off"
 							{...field}
 						/>
 					</FormControl>
+					{isByoc ? (
+						<FormDescription>
+							Lowercase letters, numbers, and hyphens.
+						</FormDescription>
+					) : null}
 					<FormMessage className="col-span-1" />
 				</FormItem>
 			)}
 		/>
 	);
 };
+
+/**
+ * Fields for the details step. For BYOC the wide modal would otherwise hold a
+ * single input, so the form shares the row with a short "what happens next"
+ * panel that sets expectations for the provisioning step that follows.
+ */
+export const Details = ({ children }: { children: ReactNode }) => {
+	const { control } = useFormContext<FormValues>();
+	const isByoc = useWatch({ control, name: "plan" }) === "byoc";
+
+	if (!isByoc) {
+		return (
+			<Flex gap="4" direction="col">
+				{children}
+			</Flex>
+		);
+	}
+
+	return (
+		<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+			<Flex gap="4" direction="col">
+				{children}
+			</Flex>
+			<ClusterNextSteps />
+		</div>
+	);
+};
+
+const CLUSTER_NEXT_STEPS = [
+	{
+		title: "Download setup kit and cluster config",
+		detail: "From your cluster page, or copy the instructions for your coding agent.",
+	},
+	{
+		title: "Provision your infrastructure",
+		detail: "Run Terraform in your AWS or Google Cloud account.",
+	},
+	{
+		title: "Request deployment",
+		detail: "Rivet deploys the control plane and notifies you.",
+	},
+] as const;
+
+const ClusterNextSteps = () => (
+	<aside className="rounded-lg border border-border bg-secondary/30 p-4 text-sm">
+		<p className="font-medium">Next steps</p>
+		<ol className="mt-3 space-y-3">
+			{CLUSTER_NEXT_STEPS.map((step, index) => (
+				<li
+					key={step.title}
+					className="grid grid-cols-[1.25rem_minmax(0,1fr)] gap-x-2"
+				>
+					<span className="font-mono-console text-xs leading-5 text-muted-foreground">
+						{index + 1}.
+					</span>
+					<span>
+						<span className="block leading-5">{step.title}</span>
+						<span className="block text-xs text-muted-foreground">
+							{step.detail}
+						</span>
+					</span>
+				</li>
+			))}
+		</ol>
+		<p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
+			{BYOC_TRIAL_DAYS}-day free trial. Every BYOC cluster includes
+			enterprise support.{" "}
+			<ByocContactTrigger>
+				{(open) => (
+					<button
+						type="button"
+						className="underline underline-offset-4 hover:text-foreground"
+						onClick={open}
+					>
+						Book a call
+					</button>
+				)}
+			</ByocContactTrigger>
+		</p>
+	</aside>
+);
 
 export const Organization = ({ className }: { className?: string }) => {
 	const { control } = useFormContext<FormValues>();
