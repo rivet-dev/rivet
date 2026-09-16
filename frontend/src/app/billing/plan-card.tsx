@@ -2,9 +2,11 @@ import { Icon, type IconProp } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { Button, cn } from "@/components";
 import { getPlan, type PlanId } from "@/content/billing";
+import { PlanBadge } from "./billing-plan-badge";
 
 type PlanCardProps = {
-	title: string;
+	/** Plan key as in `PLAN_LABELS`; renders as the card's colored badge. */
+	plan: string;
 	price: string;
 	features: { icon: IconProp; label: ReactNode }[];
 	usageBased?: boolean;
@@ -14,7 +16,7 @@ type PlanCardProps = {
 } & React.ComponentProps<"div">;
 
 function PlanCard({
-	title,
+	plan,
 	price,
 	features,
 	usageBased,
@@ -33,7 +35,9 @@ function PlanCard({
 			)}
 			{...props}
 		>
-			<h3 className="text-lg font-medium mb-2">{title}</h3>
+			<h3 className="mb-3">
+				<PlanBadge plan={plan} className="text-sm" />
+			</h3>
 			<div className="min-h-24">
 				{usageBased ? (
 					<p className="text-xs text-muted-foreground">From</p>
@@ -75,7 +79,7 @@ function PlanCard({
 const fromCatalog = (id: PlanId) => {
 	const plan = getPlan(id);
 	return {
-		title: plan.title,
+		plan: id,
 		price: plan.price,
 		usageBased: "usageBased" in plan ? plan.usageBased : undefined,
 		custom: "custom" in plan ? plan.custom : undefined,

@@ -438,13 +438,23 @@ function ActorDetailsIframePath({
 		return [...inspector, ...cloud];
 	}, [displayedInspectorTabs, visibleCloudTabs]);
 
+	// A dead actor never becomes reachable, so its inspector WS can't connect
+	// and the iframe would sit on "Connecting…" (or hit the 8s boot timeout)
+	// forever. Inspector tabs are disabled and the panel lands on the first
+	// dashboard-owned tab (Metadata), which carries the status, error and
+	// lifecycle actions for a terminal actor.
+	const isTerminal = isActorTerminal(status);
+
 	const activeTabSpec = useMemo(() => {
+		const selectable = isTerminal
+			? displayedTabs.filter((t) => t.kind === "cloud")
+			: displayedTabs;
 		if (tab) {
-			const match = displayedTabs.find((t) => t.id === tab);
+			const match = selectable.find((t) => t.id === tab);
 			if (match) return match;
 		}
-		return displayedTabs[0];
-	}, [tab, displayedTabs]);
+		return selectable[0] ?? displayedTabs[0];
+	}, [tab, displayedTabs, isTerminal]);
 
 	const activeInspectorTabId =
 		activeTabSpec?.kind === "inspector" ? activeTabSpec.id : undefined;
@@ -603,13 +613,6 @@ function ActorDetailsIframePath({
 			? CLOUD_TABS.find((t) => t.id === activeTabSpec.id)
 			: undefined;
 
-	// A dead actor never becomes reachable, so its inspector WS can't connect
-	// and the iframe would sit on "Connecting…" (or hit the 8s boot timeout)
-	// forever. Detect the terminal states from the engine status query and
-	// reuse the existing status/error UI instead of an indefinite spinner. The
-	// Metadata tab stays available with the full lifecycle and restart actions.
-	const isTerminal = isActorTerminal(status);
-
 	const { ref: tabListRef, showLabels } = useShowTabLabels();
 
 	return (
@@ -634,12 +637,14 @@ function ActorDetailsIframePath({
 										<TabsTrigger
 											value={t.id}
 											disabled={
-												inSkeletonMode &&
+												(inSkeletonMode ||
+													isTerminal) &&
 												t.kind === "inspector"
 											}
 											className={cn(
 												"text-xs px-2.5 py-1 pb-2 min-w-0 shrink gap-1 isolate before:absolute before:inset-x-0.5 before:top-1 before:bottom-2 before:-z-10 before:rounded-md before:transition-colors hover:before:bg-foreground/[0.06]",
-												inSkeletonMode &&
+												(inSkeletonMode ||
+													isTerminal) &&
 													t.kind === "inspector" &&
 													"opacity-60",
 											)}

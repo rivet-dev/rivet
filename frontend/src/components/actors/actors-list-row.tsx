@@ -25,7 +25,8 @@ export function actorsTableGridTemplate(
 	showIds: boolean,
 	showDatacenter: boolean,
 ) {
-	const parts: string[] = ["44px"];
+	// Status column only holds an 8px dot (or a small icon); no label.
+	const parts: string[] = ["16px"];
 	if (showIds) parts.push("96px");
 	if (showDatacenter) parts.push("64px");
 	parts.push("minmax(0,1fr)");
@@ -73,7 +74,7 @@ export const ActorsListRow = memo(
 					<WithTooltip
 						delayDuration={0}
 						trigger={
-							<div className="flex justify-start items-center">
+							<div className="flex justify-center items-center">
 								<QueriedActorStatusIndicator
 									actorId={actorId}
 								/>
@@ -204,7 +205,9 @@ export function ActorsListHeader() {
 				className="bg-foreground/[0.04] grid items-center gap-3 px-3 h-7 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
 				style={{ gridTemplateColumns: template }}
 			>
-				<div>Status</div>
+				<div>
+					<span className="sr-only">Status</span>
+				</div>
 				{showIds ? <div>ID</div> : null}
 				{showDatacenter ? <div>Region</div> : null}
 				<div>Key</div>

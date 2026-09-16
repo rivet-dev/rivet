@@ -1,7 +1,7 @@
 import {
 	faArrowUpRightFromSquare,
 	faBookOpen,
-	faMagnifyingGlass,
+	faFingerprint,
 	faQuestionSquare,
 	faSidebarFlip,
 	Icon,
@@ -173,7 +173,7 @@ function InstanceSearchTrigger() {
 			<CursorTooltipTrigger
 				content={
 					<>
-						Search
+						Open by ID
 						<CursorTooltipShortcut keys="K" />
 					</>
 				}
@@ -182,9 +182,9 @@ function InstanceSearchTrigger() {
 					variant="ghost"
 					size="icon-sm"
 					onClick={() => setOpen(true)}
-					aria-label="Search"
+					aria-label="Open by ID"
 				>
-					<Icon icon={faMagnifyingGlass} />
+					<Icon icon={faFingerprint} />
 				</Button>
 			</CursorTooltipTrigger>
 			<InstanceSearchDialog open={open} onOpenChange={setOpen} />
