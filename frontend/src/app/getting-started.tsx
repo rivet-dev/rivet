@@ -22,6 +22,10 @@ import z from "zod";
 import * as ConnectServerfulForm from "@/app/forms/connect-manual-serverful-form";
 import * as ConnectServerlessForm from "@/app/forms/connect-manual-serverless-form";
 import {
+	MANAGED_SERVICES_POOL_CONFIG,
+	useEnableManagedServicesMutation,
+} from "@/app/managed-services";
+import {
 	CodeFrame,
 	CodeGroup,
 	CodeGroupSyncProvider,
@@ -40,7 +44,10 @@ import {
 	DEFAULT_PACKAGES,
 	DEFAULT_SANDBOX_PROVIDER,
 } from "@/components/onboarding/agent-os/catalog";
-import { ProductPicker } from "@/components/products/product-picker";
+import {
+	PRODUCT_COMPOSABILITY_NOTE,
+	ProductPicker,
+} from "@/components/products/product-picker";
 import { defineStepper } from "@/components/ui/stepper";
 import {
 	DURABLE_STREAMS_CLIENT_PACKAGE,
@@ -52,10 +59,6 @@ import {
 	getOnboardingTargetCopy,
 	type OnboardingTarget,
 } from "@/content/agent-prompts";
-import {
-	MANAGED_SERVICES_POOL_CONFIG,
-	useEnableManagedServicesMutation,
-} from "@/app/managed-services";
 import { deriveProviderFromMetadata } from "@/lib/data";
 import { engineEnv } from "@/lib/env";
 import { features } from "@/lib/features";
@@ -105,6 +108,7 @@ const stepper = defineStepper(
 	{
 		id: "select",
 		title: "Select a product",
+		description: PRODUCT_COMPOSABILITY_NOTE,
 		// Selecting a card submits the step, so there is no Continue button.
 		showNext: false,
 		// `template` is carried in the step schema so the stepper accumulates it

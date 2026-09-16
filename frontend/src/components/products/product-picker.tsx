@@ -189,42 +189,34 @@ export function ProductPicker({
 	ariaLabel?: string;
 }) {
 	return (
-		<div>
-			<fieldset
-				aria-label={ariaLabel}
-				className="m-0 min-w-0 border-0 p-0 space-y-4"
-			>
-				{getProductSections().map((section) => (
-					<fieldset
-						key={section.id}
-						className="m-0 min-w-0 border-0 p-0"
-					>
-						<legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-							{section.label}
-						</legend>
-						<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-							{section.products.map((product) => (
-								<ProductCard
-									key={product.target}
-									icon={
-										<ProductMark
-											fileName={product.markFileName}
-											section={product.section}
-										/>
-									}
-									label={product.label}
-									description={product.description}
-									badge={product.badge}
-									onSelect={() => onSelect(product.target)}
-								/>
-							))}
-						</div>
-					</fieldset>
-				))}
-			</fieldset>
-			<p className="mt-2 text-xs text-muted-foreground">
-				{PRODUCT_COMPOSABILITY_NOTE}
-			</p>
-		</div>
+		<fieldset
+			aria-label={ariaLabel}
+			className="m-0 min-w-0 border-0 p-0 space-y-4"
+		>
+			{getProductSections().map((section) => (
+				<fieldset key={section.id} className="m-0 min-w-0 border-0 p-0">
+					<legend className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+						{section.label}
+					</legend>
+					<div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+						{section.products.map((product) => (
+							<ProductCard
+								key={product.target}
+								icon={
+									<ProductMark
+										fileName={product.markFileName}
+										section={product.section}
+									/>
+								}
+								label={product.label}
+								description={product.description}
+								badge={product.badge}
+								onSelect={() => onSelect(product.target)}
+							/>
+						))}
+					</div>
+				</fieldset>
+			))}
+		</fieldset>
 	);
 }
