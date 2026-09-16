@@ -14,8 +14,7 @@ export function ByocContactTrigger({
 			<Dialog
 				dialogProps={{ open: isOpen, onOpenChange: setOpen }}
 				dialogContentProps={{
-					className:
-						"w-[72rem] max-w-[calc(100vw-2rem)] gap-0 border-none bg-transparent p-0 shadow-none sm:rounded-none",
+					className: "w-[72rem] max-w-[calc(100vw-2rem)] gap-4",
 				}}
 			/>
 		</>
