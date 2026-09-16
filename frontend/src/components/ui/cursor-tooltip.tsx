@@ -199,16 +199,36 @@ export function CursorTooltipTrigger({
 		return { x: rect.right, y: rect.top + rect.height / 2 };
 	};
 
+	// React bubbles synthetic events through portals along the React tree, so
+	// a popover or dialog opened from the trigger would re-fire onFocus and
+	// onPointerEnter here when its content receives focus or the pointer.
+	// Only react to events whose DOM target is actually inside the wrapper.
+	const isOwn = (e: { currentTarget: HTMLElement; target: EventTarget }) =>
+		e.target instanceof Node && e.currentTarget.contains(e.target);
+
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: pointer handlers on a passive wrapper so disabled buttons still surface a tooltip
 		<span
 			className={cn("inline-flex", className)}
-			onPointerEnter={(e) => ctx.show(id, content, pointOf(e))}
-			onPointerMove={(e) => ctx.move(pointOf(e))}
+			onPointerEnter={(e) => {
+				if (isOwn(e)) ctx.show(id, content, pointOf(e));
+			}}
+			onPointerMove={(e) => {
+				if (isOwn(e)) ctx.move(pointOf(e));
+			}}
 			onPointerLeave={() => ctx.hide(id)}
 			onPointerDown={() => ctx.hide(id, { immediate: true })}
-			onFocus={(e) => ctx.show(id, content, anchorOf(e))}
+			onFocus={(e) => {
+				if (isOwn(e)) ctx.show(id, content, anchorOf(e));
+			}}
 			onBlur={() => ctx.hide(id, { immediate: true })}
+			// Keyboard activation mirrors pointerdown so the tooltip clears
+			// before whatever the trigger opens takes over.
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					ctx.hide(id, { immediate: true });
+				}
+			}}
 		>
 			{children}
 		</span>
