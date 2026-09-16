@@ -2,11 +2,12 @@ import type { Rivet } from "@rivet-gg/cloud";
 import { faArrowUpRightFromSquare, Icon } from "@rivet-gg/icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useRef } from "react";
+import { useContext, useRef } from "react";
 import * as CreateProjectForm from "@/app/forms/create-project-form";
 import { StepperForm } from "@/app/forms/stepper-form";
 import { Button, Flex, Frame, toast } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
+import { IsInModalContext } from "@/components/hooks/isomorphic-frame";
 import { authClient } from "@/lib/auth";
 import { features } from "@/lib/features";
 
@@ -45,6 +46,7 @@ export default function CreateProjectFrameContent({
 	const queryClient = useQueryClient();
 	const navigate = useNavigate();
 	const provider = useCloudDataProvider();
+	const isInModal = useContext(IsInModalContext);
 
 	const defaultOrg = useDefaultOrg();
 	const createdProject = useRef<{
@@ -163,7 +165,10 @@ export default function CreateProjectFrameContent({
 			<Frame.Header className="sr-only">
 				<Frame.Title>Create new project</Frame.Title>
 			</Frame.Header>
-			<Frame.Content>
+			{/* The visible title comes from the stepper. The sr-only header
+			    leaves no top padding in a card, and the dialog's own padding
+			    puts the title level with the close button. */}
+			<Frame.Content className={isInModal ? "pt-2" : "pt-6"}>
 				<StepperForm
 					{...CreateProjectForm.stepper}
 					singlePage

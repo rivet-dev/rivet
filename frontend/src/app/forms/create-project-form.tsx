@@ -1,8 +1,7 @@
-import { faArrowRight, faLock, Icon } from "@rivet-gg/icons";
+import { faArrowUpRightFromSquare, Icon } from "@rivet-gg/icons";
 import type { ReactNode } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
-import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { PlanSummary, planSummaryProps } from "@/app/billing/plan-card";
 import { ByocContactTrigger } from "@/app/byoc/byoc-contact-trigger";
 import {
@@ -18,7 +17,7 @@ import {
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
 import type { PlanId } from "@/content/billing";
-import { BYOC_DOCS_URL } from "@/content/byoc";
+import { BYOC_DOCS_URL, BYOC_PLAN } from "@/content/byoc";
 import { features } from "@/lib/features";
 
 const SELECTABLE_PLANS = ["free", "pro", "team"] satisfies PlanId[];
@@ -150,17 +149,22 @@ export const Plan = () => {
 			render={({ field }) => (
 				<FormItem>
 					<FormControl>
-						<div className="space-y-3">
-							<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-								{SELECTABLE_PLANS.map((plan) => (
-									<PlanOption
-										key={plan}
-										plan={plan}
-										isSelected={field.value === plan}
-										onSelect={() => field.onChange(plan)}
-									/>
-								))}
-							</div>
+						<div
+							className={cn(
+								"grid grid-cols-1 gap-3 sm:grid-cols-2",
+								features.byoc
+									? "lg:grid-cols-4"
+									: "lg:grid-cols-3",
+							)}
+						>
+							{SELECTABLE_PLANS.map((plan) => (
+								<PlanOption
+									key={plan}
+									plan={plan}
+									isSelected={field.value === plan}
+									onSelect={() => field.onChange(plan)}
+								/>
+							))}
 							{features.byoc ? (
 								<ByocPlanCard
 									isSelected={field.value === "byoc"}
@@ -226,44 +230,46 @@ const ByocPlanCard = ({
 	isSelected: boolean;
 	onSelect: () => void;
 }) => (
-	<PlanOptionButton
-		isSelected={isSelected}
-		onSelect={onSelect}
-		className="w-full flex-row items-start gap-3"
-	>
-		<PlanBadge plan="byoc" />
-		<span className="flex min-w-0 flex-1 flex-col gap-1 text-xs">
-			<span className="text-sm text-foreground">
-				Run a fully-managed Rivet cluster inside your own cloud account.
-			</span>
-			<span className="text-muted-foreground">
-				<Icon icon={faLock} className="mr-1.5" />
-				<ByocContactTrigger>
-					{(open) => (
-						<button
-							type="button"
-							className="underline hover:text-foreground"
-							onClick={(event) => {
-								event.stopPropagation();
-								open();
-							}}
-						>
-							Contact us
-						</button>
-					)}
-				</ByocContactTrigger>{" "}
-				to add CMEK and other controls for your PCI/HIPAA needs.
-			</span>
+	<PlanOptionButton isSelected={isSelected} onSelect={onSelect}>
+		<PlanSummary
+			className="flex-1"
+			plan="byoc"
+			custom
+			{...BYOC_PLAN}
+			tag={
+				<span className="text-xs text-muted-foreground">
+					Your cloud
+				</span>
+			}
+		/>
+		{/* Nested interactive elements stop propagation so they don't also
+		    select the card. */}
+		<span className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+			<a
+				href={BYOC_DOCS_URL}
+				target="_blank"
+				rel="noreferrer"
+				className="hover:text-foreground"
+				onClick={(event) => event.stopPropagation()}
+			>
+				Read docs{" "}
+				<Icon icon={faArrowUpRightFromSquare} className="ml-0.5" />
+			</a>
+			<ByocContactTrigger>
+				{(open) => (
+					<button
+						type="button"
+						className="hover:text-foreground"
+						onClick={(event) => {
+							event.stopPropagation();
+							open();
+						}}
+					>
+						Talk to us
+					</button>
+				)}
+			</ByocContactTrigger>
 		</span>
-		<a
-			href={BYOC_DOCS_URL}
-			target="_blank"
-			rel="noreferrer"
-			className="shrink-0 text-xs text-muted-foreground underline hover:text-foreground"
-			onClick={(event) => event.stopPropagation()}
-		>
-			Read docs <Icon icon={faArrowRight} />
-		</a>
 	</PlanOptionButton>
 );
 
