@@ -133,11 +133,6 @@ export const Name = ({ className }: { className?: string }) => {
 	);
 };
 
-/**
- * Fields for the details step. For BYOC the wide modal would otherwise hold a
- * single input, so the form shares the row with a short "what happens next"
- * panel that sets expectations for the provisioning step that follows.
- */
 export const Details = ({ children }: { children: ReactNode }) => {
 	const { control } = useFormContext<FormValues>();
 	const isByoc = useWatch({ control, name: "plan" }) === "byoc";

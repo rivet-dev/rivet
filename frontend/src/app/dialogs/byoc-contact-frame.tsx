@@ -16,8 +16,6 @@ export default function ByocContactFrameContent() {
 					light: { "cal-brand": "#000000" },
 					dark: { "cal-brand": "#fafafa" },
 				},
-				// The dialog card supplies the surface so the embed matches
-				// the dashboard instead of painting its own near-black box.
 				styles: { body: { background: "transparent" } },
 				hideEventTypeDetails: false,
 				layout: "month_view",
@@ -35,8 +33,7 @@ export default function ByocContactFrameContent() {
 			</Frame.Header>
 			<Frame.Content className="p-0">
 				<Cal
-					// The embed reads `config.theme` once at init, so remount
-					// when the dashboard theme flips while the dialog is open.
+					// Cal reads `config.theme` once at init; remount on theme change.
 					key={theme}
 					namespace={BYOC_CAL_NAMESPACE}
 					calLink={BYOC_CAL_LINK}
