@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { type UseFormReturn, useFormContext } from "react-hook-form";
 import z from "zod";
 import { PlanBadge } from "@/app/billing/billing-plan-badge";
+import { PlanSummary, planSummaryProps } from "@/app/billing/plan-card";
 import { ByocContactTrigger } from "@/app/byoc/byoc-contact-trigger";
 import {
 	CloudOrganizationSelect,
@@ -16,12 +17,11 @@ import {
 	Input,
 } from "@/components";
 import { defineStepper } from "@/components/ui/stepper";
-import { PLANS } from "@/content/billing";
+import type { PlanId } from "@/content/billing";
 import { BYOC_DOCS_URL } from "@/content/byoc";
 import { features } from "@/lib/features";
 
-const SELECTABLE_PLANS = PLANS.filter((plan) => plan.id !== "enterprise");
-const PLAN_FEATURE_COUNT = 4;
+const SELECTABLE_PLANS = ["free", "pro", "team"] satisfies PlanId[];
 
 export const planSchema = z.object({
 	plan: z.enum(["free", "pro", "team", "byoc"]),
@@ -154,10 +154,10 @@ export const Plan = () => {
 							<div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
 								{SELECTABLE_PLANS.map((plan) => (
 									<PlanOption
-										key={plan.id}
+										key={plan}
 										plan={plan}
-										isSelected={field.value === plan.id}
-										onSelect={() => field.onChange(plan.id)}
+										isSelected={field.value === plan}
+										onSelect={() => field.onChange(plan)}
 									/>
 								))}
 							</div>
@@ -194,7 +194,9 @@ const PlanOptionButton = ({
 		aria-pressed={isSelected}
 		onClick={onSelect}
 		className={cn(
-			"rounded-lg border p-4 text-left transition-colors hover:bg-secondary/40",
+			// Buttons center their content vertically; force top alignment so
+			// cards in one grid row line up regardless of height.
+			"flex flex-col rounded-lg border p-4 text-left transition-colors hover:bg-secondary/40",
 			isSelected ? "border-primary bg-secondary/40" : "border-border",
 			className,
 		)}
@@ -208,33 +210,12 @@ const PlanOption = ({
 	isSelected,
 	onSelect,
 }: {
-	plan: (typeof SELECTABLE_PLANS)[number];
+	plan: PlanId;
 	isSelected: boolean;
 	onSelect: () => void;
 }) => (
-	<PlanOptionButton
-		isSelected={isSelected}
-		onSelect={onSelect}
-		className="flex flex-col gap-3"
-	>
-		<span className="flex items-center justify-between gap-2">
-			<PlanBadge plan={plan.id} />
-			<span className="text-sm">
-				{"usageBased" in plan && plan.usageBased ? (
-					<span className="text-muted-foreground">From </span>
-				) : null}
-				<span className="font-medium">{plan.price}</span>
-				<span className="text-muted-foreground">/mo</span>
-			</span>
-		</span>
-		<ul className="space-y-1 text-xs text-muted-foreground">
-			{plan.features.slice(0, PLAN_FEATURE_COUNT).map((feature) => (
-				<li key={feature.label} className="flex gap-1.5">
-					<Icon icon={feature.icon} className="mt-0.5 shrink-0" />
-					<span>{feature.label}</span>
-				</li>
-			))}
-		</ul>
+	<PlanOptionButton isSelected={isSelected} onSelect={onSelect}>
+		<PlanSummary {...planSummaryProps(plan)} />
 	</PlanOptionButton>
 );
 
@@ -248,7 +229,7 @@ const ByocPlanCard = ({
 	<PlanOptionButton
 		isSelected={isSelected}
 		onSelect={onSelect}
-		className="flex w-full items-start gap-3"
+		className="w-full flex-row items-start gap-3"
 	>
 		<PlanBadge plan="byoc" />
 		<span className="flex min-w-0 flex-1 flex-col gap-1 text-xs">

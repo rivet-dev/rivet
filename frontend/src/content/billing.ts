@@ -1,5 +1,3 @@
-import { faCheck, faPlus } from "@rivet-gg/icons";
-
 /** Human-readable plan names. `pro` is presented as "Hobby". */
 export const PLAN_LABELS: Record<string, string> = {
 	free: "Free",
@@ -45,72 +43,91 @@ export function computeCostPerSecond(vcpus: number, memoryMb: number): number {
 	);
 }
 
+export type PlanRow = { label: string; value?: string };
+
+/**
+ * Plan catalog. `rows` mirror the pricing page on rivet.dev: label/value
+ * specs for cloud plans, label-only rows for Enterprise.
+ */
 export const PLANS = [
 	{
 		id: "free",
-		title: "Free",
 		price: "$0",
-		features: [
-			{ icon: faCheck, label: "1 vCPU Max" },
-			{ icon: faCheck, label: "$5 /mo Compute Limit" },
-			{ icon: faCheck, label: "5GiB Storage Limit" },
-			{ icon: faCheck, label: "Community Support" },
-			{ icon: faCheck, label: "5 Million Writes /mo Limit" },
-			{ icon: faCheck, label: "200 Million Reads /mo Limit" },
-			{ icon: faCheck, label: "100GiB Egress Limit" },
-			{ icon: faCheck, label: "100,000 Awake Actors Hours Limit" },
+		description: "For prototyping and small projects.",
+		rows: [
+			{ label: "Awake Actor Hours", value: "100,000 /mo max" },
+			{ label: "Compute", value: "$5 /mo max" },
+			{ label: "Max vCPU", value: "1" },
+			{ label: "Storage", value: "5GB max" },
+			{ label: "Reads", value: "200M /mo max" },
+			{ label: "Writes", value: "5M /mo max" },
+			{ label: "Egress", value: "100GB max" },
+			{ label: "Support", value: "Community" },
 		],
 	},
 	{
 		id: "pro",
-		title: "Hobby",
 		price: "$20",
 		usageBased: true,
-		features: [
-			{ icon: faPlus, label: "Up to 8 vCPU" },
-			{ icon: faPlus, label: "25 Billion Reads /mo included" },
-			{ icon: faPlus, label: "5GiB Storage included" },
-			{ icon: faCheck, label: "Email Support" },
-			{ icon: faPlus, label: "50 Million Writes /mo included" },
-			{ icon: faPlus, label: "1TiB Egress included" },
-			{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
+		description: "For scaling applications.",
+		rows: [
+			{ label: "Awake Actor Hours", value: "400,000 /mo" },
+			{ label: "Compute", value: "Usage-based" },
+			{ label: "Max vCPU", value: "8" },
+			{ label: "Storage", value: "5GB" },
+			{ label: "Reads", value: "25B /mo" },
+			{ label: "Writes", value: "50M /mo" },
+			{ label: "Egress", value: "1TB" },
+			{ label: "Support", value: "Email" },
 		],
 	},
 	{
 		id: "team",
-		title: "Team",
 		price: "$200",
 		usageBased: true,
-		features: [
-			{ icon: faPlus, label: "Up to 8 vCPU" },
-			{ icon: faPlus, label: "25 Billion Reads /mo included" },
-			{ icon: faPlus, label: "5GiB Storage included" },
-			{ icon: faCheck, label: "Slack Support" },
-			{ icon: faPlus, label: "50 Million Writes /mo included" },
-			{ icon: faPlus, label: "1TiB Egress included" },
-			{ icon: faPlus, label: "400,000 Awake Actors Hours included" },
-			{ icon: faCheck, label: "MFA" },
+		description: "For growing teams and businesses.",
+		rows: [
+			{ label: "Awake Actor Hours", value: "400,000 /mo" },
+			{ label: "Compute", value: "Usage-based" },
+			{ label: "Max vCPU", value: "8" },
+			{ label: "Storage", value: "5GB" },
+			{ label: "Reads", value: "25B /mo" },
+			{ label: "Writes", value: "50M /mo" },
+			{ label: "Egress", value: "1TB" },
+			{ label: "Support", value: "Slack & Email" },
 		],
 	},
 	{
 		id: "enterprise",
-		title: "Enterprise",
 		price: "Custom",
 		custom: true,
-		features: [
-			{ icon: faCheck, label: "Everything in Team" },
-			{ icon: faCheck, label: "Priority Support" },
-			{ icon: faCheck, label: "SLA" },
-			{ icon: faCheck, label: "OIDC SSO provider" },
-			{ icon: faCheck, label: "Audit logs" },
-			{ icon: faCheck, label: "Custom Roles" },
-			{ icon: faCheck, label: "Device Tracking" },
-			{ icon: faCheck, label: "Volume Pricing" },
+		description:
+			"For organizations with compliance and support requirements.",
+		rows: [
+			{ label: "Everything in Team" },
+			{ label: "Priority Support" },
+			{ label: "SLA" },
+			{ label: "OIDC SSO provider" },
+			{ label: "Audit logs" },
+			{ label: "Custom Roles" },
+			{ label: "Device Tracking" },
+			{ label: "Volume Pricing" },
 		],
 	},
-] as const;
+] as const satisfies readonly {
+	id: string;
+	price: string;
+	description: string;
+	rows: readonly PlanRow[];
+	usageBased?: boolean;
+	custom?: boolean;
+}[];
 
 export type PlanId = (typeof PLANS)[number]["id"];
+
+/** Catalog entry for an API plan id, falling back to Free for unknown ids. */
+export const findPlan = (id: string | undefined) =>
+	PLANS.find((entry) => entry.id === id) ?? getPlan("free");
 
 export const getPlan = (id: PlanId) => {
 	const plan = PLANS.find((entry) => entry.id === id);

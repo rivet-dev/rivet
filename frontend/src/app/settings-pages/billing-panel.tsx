@@ -14,6 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMatch } from "@tanstack/react-router";
 import { endOfMonth, startOfMonth } from "date-fns";
 import { Suspense, useState } from "react";
+import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { BillingPlans } from "@/app/billing/billing-plans";
 import { useBilledComputeCost } from "@/app/billing/hooks";
 import { ManageBillingButton } from "@/app/billing/manage-billing-button";
@@ -35,32 +36,11 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudProjectDataProvider } from "@/components/actors";
-import { features } from "@/lib/features";
 import { TwinklingSparkles } from "@/components/twinkling-sparkles";
-import { COMPUTE_MONTHLY_CAP_USD } from "@/content/billing";
+import { COMPUTE_MONTHLY_CAP_USD, findPlan } from "@/content/billing";
+import { features } from "@/lib/features";
 import { ResourcePicker } from "./resource-picker";
 import { SettingsCard } from "./settings-card";
-
-const PLAN_LABEL: Record<string, string> = {
-	free: "Free",
-	pro: "Hobby",
-	team: "Team",
-	enterprise: "Enterprise",
-};
-
-const PLAN_PRICE: Record<string, string> = {
-	free: "$0/mo",
-	pro: "$20/mo",
-	team: "$200/mo",
-	enterprise: "Custom",
-};
-
-const PLAN_BLURB: Record<string, string> = {
-	free: "Perfect for exploring Rivet. Upgrade anytime to unlock more capacity and support.",
-	pro: "For solo builders and hobby projects.",
-	team: "For teams shipping production workloads.",
-	enterprise: "Dedicated infrastructure and support.",
-};
 
 export function BillingPanel() {
 	// Use `useMatch` with `shouldThrow: false` instead of `useMatchRoute` so we
@@ -234,22 +214,24 @@ function CurrentPlanCard({
 	plan: string;
 	onUpgrade: () => void;
 }) {
-	const label = PLAN_LABEL[plan] ?? "Free";
-	const price = PLAN_PRICE[plan] ?? "$0/mo";
-	const blurb = PLAN_BLURB[plan] ?? PLAN_BLURB.free;
+	const catalog = findPlan(plan);
+	const usageBased = "usageBased" in catalog && catalog.usageBased;
+	const custom = "custom" in catalog && catalog.custom;
 	return (
 		<SettingsCard>
 			<div className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground mb-2">
 				Current plan
 			</div>
-			<div className="flex items-baseline gap-2 mb-2">
-				<span className="text-xl font-semibold text-foreground">
-					{label}
+			<div className="flex items-center gap-2 mb-2">
+				<PlanBadge plan={catalog.id} />
+				<span className="text-xs text-muted-foreground">
+					{usageBased ? "From " : null}
+					{catalog.price}
+					{custom ? null : usageBased ? "/mo + usage" : "/mo"}
 				</span>
-				<span className="text-xs text-muted-foreground">{price}</span>
 			</div>
 			<p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-				{blurb}
+				{catalog.description}
 			</p>
 			<div className="flex items-center gap-3">
 				<Button
@@ -433,11 +415,17 @@ function ComputeUsageRow({
 				</div>
 			</div>
 			<div className="text-sm tabular-nums text-foreground">
-				{loading ? <Skeleton className="h-4 w-12" /> : formatCurrency(cost)}
+				{loading ? (
+					<Skeleton className="h-4 w-12" />
+				) : (
+					formatCurrency(cost)
+				)}
 			</div>
 			<div className="min-w-0">
 				<div className="text-xs text-muted-foreground">
-					{capUsd != null ? `of ${formatCurrency(capUsd)}` : "No limit"}
+					{capUsd != null
+						? `of ${formatCurrency(capUsd)}`
+						: "No limit"}
 				</div>
 				{capUsd != null ? (
 					<div className="relative h-1 rounded-full bg-foreground/10 mt-1">

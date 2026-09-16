@@ -196,7 +196,7 @@ function CloudModals() {
 		<>
 			<CreateProjectDialog
 				organization={search?.organization}
-				dialogContentProps={{ className: "sm:max-w-2xl" }}
+				dialogContentProps={{ className: "sm:max-w-3xl" }}
 				dialogProps={{
 					open: search?.modal === "create-project",
 					onOpenChange: (value) => {
