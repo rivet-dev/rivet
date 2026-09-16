@@ -21,7 +21,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, OnceLock};
 use std::time::Duration;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use futures_util::future::join_all;
 use rivetkit::serverless_http::{self, ListenerConfig};
@@ -423,7 +423,7 @@ async fn async_main() -> Result<()> {
 		},
 	);
 
-	let mut config = ServeConfig::from_env();
+	let mut config = ServeConfig::from_env().context("parse serve config from environment")?;
 	config.version = args.runner_version;
 	config.serverless_base_path = Some(args.base_path.clone());
 	// The engine passes its endpoint per /start request in headers; never
