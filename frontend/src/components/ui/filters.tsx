@@ -45,6 +45,7 @@ import {
 import { Input } from "./input";
 import { Label } from "./label";
 import { Popover, PopoverContent, PopoverTrigger } from "./popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 import { Switch } from "./switch";
 
 interface AnimateChangeInHeightProps {
@@ -1401,15 +1402,20 @@ export function FiltersDisplay({
 
 	return (
 		<Popover>
-			<PopoverTrigger asChild>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					aria-label="Display options"
-				>
-					<Icon icon={faSliders} />
-				</Button>
-			</PopoverTrigger>
+			<Tooltip>
+				<TooltipTrigger asChild>
+					<PopoverTrigger asChild>
+						<Button
+							variant="ghost"
+							size="icon-sm"
+							aria-label="Display options"
+						>
+							<Icon icon={faSliders} />
+						</Button>
+					</PopoverTrigger>
+				</TooltipTrigger>
+				<TooltipContent>Display options</TooltipContent>
+			</Tooltip>
 			<PopoverContent className="w-60 p-2">
 				{(() => {
 					const entries = Object.entries(definitions);

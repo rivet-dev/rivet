@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { cn, Skeleton } from "@/components";
+import { Badge, cn, Skeleton } from "@/components";
 import {
 	useCloudDataProvider,
 	useCloudProjectDataProvider,
@@ -8,15 +8,14 @@ import {
 import { VisibilitySensor } from "@/components/visibility-sensor";
 import { PLAN_LABELS } from "@/content/billing";
 
-// One accent color per plan. Tailwind's JIT needs the full class strings to
-// exist literally, so each plan spells out its light and dark variants.
+// Tailwind's JIT needs full class strings, so each plan spells out its
+// light and dark variants.
 const PLAN_COLORS: Record<string, string> = {
 	free: "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-500/15 dark:text-emerald-300",
 	pro: "border-orange-500/40 bg-orange-500/10 text-orange-700 dark:border-orange-500/50 dark:bg-orange-500/15 dark:text-orange-300",
 	team: "border-blue-500/40 bg-blue-500/10 text-blue-700 dark:border-blue-500/50 dark:bg-blue-500/15 dark:text-blue-300",
 	enterprise:
 		"border-purple-500/40 bg-purple-500/10 text-purple-700 dark:border-purple-500/50 dark:bg-purple-500/15 dark:text-purple-300",
-	// Matches the `premium-violet` Badge used for BYOC elsewhere.
 	byoc: "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:border-violet-500/50 dark:bg-violet-500/15 dark:text-violet-300",
 };
 
@@ -28,15 +27,16 @@ export function PlanBadge({
 	className?: string;
 }) {
 	return (
-		<span
+		<Badge
+			variant="outline"
 			className={cn(
-				"inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-md border px-2 py-0.5 font-mono text-xs leading-4",
+				"shrink-0 justify-center rounded-md px-2 font-mono font-normal leading-4",
 				PLAN_COLORS[plan] ?? PLAN_COLORS.free,
 				className,
 			)}
 		>
 			{PLAN_LABELS[plan] ?? plan}
-		</span>
+		</Badge>
 	);
 }
 

@@ -4,23 +4,16 @@ import { getPlan, type PlanId, type PlanRow } from "@/content/billing";
 import { PlanBadge } from "./billing-plan-badge";
 
 type PlanSummaryProps = {
-	/** Plan key as in `PLAN_LABELS`; renders as the card's colored badge. */
 	plan: string;
 	price: string;
-	/** Omitted where the surrounding step already frames the choice. */
 	description?: string;
 	rows: readonly PlanRow[];
 	usageBased?: boolean;
 	custom?: boolean;
-	/** Rendered opposite the badge on the heading row. */
 	tag?: ReactNode;
 	className?: string;
 };
 
-/**
- * Plan header and spec table, matching the pricing page on rivet.dev. The
- * "From" line is always reserved so prices align across a row of cards.
- */
 export function PlanSummary({
 	plan,
 	price,
@@ -58,7 +51,6 @@ export function PlanSummary({
 					)}
 				</div>
 			</div>
-			{/* Without a description the table's top border is the divider. */}
 			{description ? (
 				<>
 					<div className="mb-4 h-px bg-border" />

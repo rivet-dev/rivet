@@ -28,9 +28,6 @@ import { useLocalStorage } from "usehooks-ts";
 import { RECORDS_PER_PAGE } from "@/app/data-providers/default-data-provider";
 import {
 	Button,
-	CursorTooltipGroup,
-	CursorTooltipShortcut,
-	CursorTooltipTrigger,
 	Dialog,
 	DialogContent,
 	DialogDescription,
@@ -41,9 +38,11 @@ import {
 	Input,
 	ls,
 	type OnFiltersChange,
+	Kbd,
 	ScrollArea,
 	ShimmerLine,
 	SmallText,
+	WithTooltip,
 } from "@/components";
 import { CodePreview } from "../code-preview/code-preview";
 import { VisibilitySensor } from "../visibility-sensor";
@@ -126,37 +125,33 @@ function TopBar() {
 		<div className="col-span-full border-b sticky top-0 bg-card z-[1]">
 			<div className="flex items-center px-3 gap-2 h-9">
 				<ActorNameLabel />
-				<CursorTooltipGroup className="ml-auto flex items-center gap-1 shrink-0">
+				<div className="ml-auto flex items-center gap-1 shrink-0">
 					{showInstanceTools ? (
 						<>
-							<CursorTooltipTrigger content="Display options">
-								<Display />
-							</CursorTooltipTrigger>
+							<Display />
 							<InstanceSearchTrigger />
 							<CreateActorButton
 								iconOnly
 								label="Create Instance"
-								renderTooltip={(trigger, content) => (
-									<CursorTooltipTrigger content={content}>
-										{trigger}
-									</CursorTooltipTrigger>
-								)}
 							/>
 						</>
 					) : null}
 					{isDetailsColCollapsed ? (
-						<CursorTooltipTrigger content="Expand details column">
-							<Button
-								onClick={() => detailsRef.current?.expand()}
-								variant="ghost"
-								size="icon-sm"
-								aria-label="Expand details column"
-							>
-								<Icon icon={faSidebarFlip} />
-							</Button>
-						</CursorTooltipTrigger>
+						<WithTooltip
+							trigger={
+								<Button
+									onClick={() => detailsRef.current?.expand()}
+									variant="ghost"
+									size="icon-sm"
+									aria-label="Expand details column"
+								>
+									<Icon icon={faSidebarFlip} />
+								</Button>
+							}
+							content="Expand details column"
+						/>
 					) : null}
-				</CursorTooltipGroup>
+				</div>
 			</div>
 			<LoadingIndicator />
 		</div>
@@ -166,27 +161,30 @@ function TopBar() {
 function InstanceSearchTrigger() {
 	const [open, setOpen] = useState(false);
 
-	useHotkey("Mod+K", () => setOpen(true));
+	useHotkey("Mod+F", () => setOpen(true), { ignoreInputs: true });
 
 	return (
 		<>
-			<CursorTooltipTrigger
-				content={
-					<>
-						Open by ID
-						<CursorTooltipShortcut keys="K" />
-					</>
+			<WithTooltip
+				trigger={
+					<Button
+						variant="ghost"
+						size="icon-sm"
+						onClick={() => setOpen(true)}
+						aria-label="Open by ID"
+					>
+						<Icon icon={faFingerprint} />
+					</Button>
 				}
-			>
-				<Button
-					variant="ghost"
-					size="icon-sm"
-					onClick={() => setOpen(true)}
-					aria-label="Open by ID"
-				>
-					<Icon icon={faFingerprint} />
-				</Button>
-			</CursorTooltipTrigger>
+				content={
+					<span className="flex items-center gap-2">
+						Open by ID
+						<Kbd className="border-0 bg-foreground/10 font-sans text-xs font-medium text-muted-foreground">
+							<Kbd.Key />F
+						</Kbd>
+					</span>
+				}
+			/>
 			<InstanceSearchDialog open={open} onOpenChange={setOpen} />
 		</>
 	);

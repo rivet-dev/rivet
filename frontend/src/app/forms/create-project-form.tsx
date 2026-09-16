@@ -180,8 +180,6 @@ export const Plan = () => {
 	);
 };
 
-// Shared shell for the selectable plan cards. Selection is shown by the
-// primary border only; the badge already carries the plan color.
 const PlanOptionButton = ({
 	isSelected,
 	onSelect,
@@ -198,8 +196,6 @@ const PlanOptionButton = ({
 		aria-pressed={isSelected}
 		onClick={onSelect}
 		className={cn(
-			// Buttons center their content vertically; force top alignment so
-			// cards in one grid row line up regardless of height.
 			"flex flex-col rounded-lg border p-4 text-left transition-colors hover:bg-secondary/40",
 			isSelected ? "border-primary bg-secondary/40" : "border-border",
 			className,
@@ -243,8 +239,6 @@ const ByocPlanCard = ({
 				</span>
 			}
 		/>
-		{/* Nested interactive elements stop propagation so they don't also
-		    select the card. */}
 		<span className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
 			<a
 				href={BYOC_DOCS_URL}
