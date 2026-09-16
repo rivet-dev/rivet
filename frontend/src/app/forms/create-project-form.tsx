@@ -219,7 +219,7 @@ const PlanOption = ({
 	onSelect: () => void;
 }) => (
 	<PlanOptionButton isSelected={isSelected} onSelect={onSelect}>
-		<PlanSummary {...planSummaryProps(plan)} />
+		<PlanSummary {...planSummaryProps(plan)} description={undefined} />
 	</PlanOptionButton>
 );
 
@@ -235,7 +235,8 @@ const ByocPlanCard = ({
 			className="flex-1"
 			plan="byoc"
 			custom
-			{...BYOC_PLAN}
+			price={BYOC_PLAN.price}
+			rows={BYOC_PLAN.rows}
 			tag={
 				<span className="text-xs text-muted-foreground">
 					Your cloud

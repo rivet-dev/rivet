@@ -7,7 +7,8 @@ type PlanSummaryProps = {
 	/** Plan key as in `PLAN_LABELS`; renders as the card's colored badge. */
 	plan: string;
 	price: string;
-	description: string;
+	/** Omitted where the surrounding step already frames the choice. */
+	description?: string;
 	rows: readonly PlanRow[];
 	usageBased?: boolean;
 	custom?: boolean;
@@ -57,10 +58,15 @@ export function PlanSummary({
 					)}
 				</div>
 			</div>
-			<div className="mb-4 h-px bg-border" />
-			<p className="mb-4 min-h-10 text-sm leading-5 text-muted-foreground">
-				{description}
-			</p>
+			{/* Without a description the table's top border is the divider. */}
+			{description ? (
+				<>
+					<div className="mb-4 h-px bg-border" />
+					<p className="mb-4 min-h-10 text-sm leading-5 text-muted-foreground">
+						{description}
+					</p>
+				</>
+			) : null}
 			<dl className="divide-y divide-border border-y text-xs">
 				{rows.map((row) => (
 					<div
