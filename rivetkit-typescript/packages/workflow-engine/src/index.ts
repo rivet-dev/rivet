@@ -12,7 +12,16 @@ export {
 	WorkflowContextImpl,
 } from "./context.js";
 // Driver
-export type { EngineDriver, KVEntry, KVWrite } from "./driver.js";
+export type {
+	EngineDriver,
+	KVEntry,
+	KVWrite,
+	WorkflowOutcome,
+	WorkflowSpan,
+	WorkflowStepOutcome,
+	WorkflowStepSpan,
+	WorkflowTelemetryDriver,
+} from "./driver.js";
 export { extractErrorInfo } from "./error-utils.js";
 // Errors
 export {
@@ -143,7 +152,7 @@ import {
 } from "../schemas/serde.js";
 import { type RollbackAction, WorkflowContextImpl } from "./context.js";
 // Main workflow runner
-import type { EngineDriver } from "./driver.js";
+import type { EngineDriver, WorkflowOutcome, WorkflowSpan } from "./driver.js";
 import {
 	extractErrorInfo,
 	getErrorEventTag,
@@ -288,6 +297,7 @@ async function executeRollback<TInput, TOutput>(
 	historyNotifier?: HistoryNotifier,
 	onError?: RunWorkflowOptions["onError"],
 	logger?: Logger,
+	runSpan?: WorkflowSpan,
 ): Promise<void> {
 	const rollbackActions: RollbackAction[] = [];
 	const ctx = new WorkflowContextImpl(
@@ -303,6 +313,8 @@ async function executeRollback<TInput, TOutput>(
 		historyNotifier,
 		onError,
 		logger,
+		undefined,
+		runSpan,
 	);
 
 	try {
@@ -511,16 +523,19 @@ async function executeLiveWorkflow<TInput, TOutput>(
 	let lastResult: WorkflowResult<TOutput> | undefined;
 
 	while (true) {
-		const result = await executeWorkflow(
-			workflowId,
-			workflowFn,
-			input,
-			driver,
-			messageDriver,
-			abortController,
-			onHistoryUpdated,
-			onError,
-			logger,
+		const result = await traceRun(driver, (runSpan) =>
+			executeWorkflow(
+				workflowId,
+				workflowFn,
+				input,
+				driver,
+				messageDriver,
+				abortController,
+				onHistoryUpdated,
+				onError,
+				logger,
+				runSpan,
+			),
 		);
 		lastResult = result;
 
@@ -642,16 +657,19 @@ export function runWorkflow<TInput, TOutput>(
 					options.onError,
 					logger,
 				)
-			: executeWorkflow(
-					workflowId,
-					workflowFn,
-					input,
-					driver,
-					messageDriver,
-					abortController,
-					options.onHistoryUpdated,
-					options.onError,
-					logger,
+			: traceRun(driver, (runSpan) =>
+					executeWorkflow(
+						workflowId,
+						workflowFn,
+						input,
+						driver,
+						messageDriver,
+						abortController,
+						options.onHistoryUpdated,
+						options.onError,
+						logger,
+						runSpan,
+					),
 				);
 
 	return {
@@ -886,6 +904,49 @@ function findReplayBoundaryEntry(
 	return boundary;
 }
 
+function runOutcomeFromState(state: WorkflowState): WorkflowOutcome {
+	switch (state) {
+		case "completed":
+			return "completed";
+		case "sleeping":
+			return "sleeping";
+		case "failed":
+			return "failed";
+		case "cancelled":
+			return "cancelled";
+		case "pending":
+		case "running":
+		case "rolling_back":
+			return "evicted";
+	}
+}
+
+/** Internal: Report one workflow run to the driver's telemetry, when it has any. */
+async function traceRun<TOutput>(
+	driver: EngineDriver,
+	run: (span?: WorkflowSpan) => Promise<WorkflowResult<TOutput>>,
+): Promise<WorkflowResult<TOutput>> {
+	if (!driver.telemetry) {
+		return await run();
+	}
+
+	const span = await driver.telemetry.startSpan();
+	let outcome: WorkflowOutcome = "failed";
+	try {
+		const result = await span.run(() => run(span));
+		outcome = runOutcomeFromState(result.state);
+		return result;
+	} catch (error) {
+		// A run throws EvictedError only when the workflow was already cancelled.
+		if (error instanceof EvictedError) {
+			outcome = "cancelled";
+		}
+		throw error;
+	} finally {
+		await span.finish(outcome);
+	}
+}
+
 /**
  * Internal: Execute the workflow and return the result.
  */
@@ -899,6 +960,7 @@ async function executeWorkflow<TInput, TOutput>(
 	onHistoryUpdated?: (history: WorkflowHistorySnapshot) => void,
 	onError?: RunWorkflowOptions["onError"],
 	logger?: Logger,
+	runSpan?: WorkflowSpan,
 ): Promise<WorkflowResult<TOutput>> {
 	const storage = await loadStorage(driver);
 	const historyNotifier: HistoryNotifier = onHistoryUpdated
@@ -953,6 +1015,7 @@ async function executeWorkflow<TInput, TOutput>(
 				historyNotifier,
 				onError,
 				logger,
+				runSpan,
 			);
 		} catch (error) {
 			if (error instanceof EvictedError) {
@@ -986,6 +1049,8 @@ async function executeWorkflow<TInput, TOutput>(
 		historyNotifier,
 		onError,
 		logger,
+		undefined,
+		runSpan,
 	);
 
 	storage.state = "running";
@@ -1064,6 +1129,7 @@ async function executeWorkflow<TInput, TOutput>(
 				historyNotifier,
 				onError,
 				logger,
+				runSpan,
 			);
 		} catch (rollbackError) {
 			if (rollbackError instanceof EvictedError) {

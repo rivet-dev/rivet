@@ -1,4 +1,5 @@
 use anyhow::{Result, bail};
+use serde::{Deserialize, Serialize};
 use vbare::OwnedVersionedData;
 
 use crate::generated::{v1, v2, v3, v4};
@@ -524,6 +525,53 @@ impl OwnedVersionedData for RunWakeAt {
 		match (self, version) {
 			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
 			(_, version) => bail!("unexpected run wake deadline version: {version}"),
+		}
+	}
+
+	fn deserialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		Vec::<fn(Self) -> Result<Self>>::new()
+	}
+
+	fn serialize_converters() -> Vec<impl Fn(Self) -> Result<Self>> {
+		Vec::<fn(Self) -> Result<Self>>::new()
+	}
+}
+
+/// The span of the last workflow run, which the next run links to.
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct WorkflowTraceContextV1 {
+	pub traceparent: Option<String>,
+	pub tracestate: Option<String>,
+}
+
+pub enum WorkflowTraceContext {
+	V1(WorkflowTraceContextV1),
+}
+
+impl OwnedVersionedData for WorkflowTraceContext {
+	type Latest = WorkflowTraceContextV1;
+
+	fn wrap_latest(latest: Self::Latest) -> Self {
+		Self::V1(latest)
+	}
+
+	fn unwrap_latest(self) -> Result<Self::Latest> {
+		match self {
+			Self::V1(data) => Ok(data),
+		}
+	}
+
+	fn deserialize_version(payload: &[u8], version: u16) -> Result<Self> {
+		match version {
+			1 => Ok(Self::V1(serde_bare::from_slice(payload)?)),
+			_ => bail!("invalid workflow trace context version: {version}"),
+		}
+	}
+
+	fn serialize_version(self, version: u16) -> Result<Vec<u8>> {
+		match (self, version) {
+			(Self::V1(data), 1) => serde_bare::to_vec(&data).map_err(Into::into),
+			(_, version) => bail!("unexpected workflow trace context version: {version}"),
 		}
 	}
 

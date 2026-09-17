@@ -54,7 +54,8 @@ use crate::inspector::{Inspector, InspectorSnapshot};
 use crate::sqlite::SqliteDb;
 use crate::telemetry::{
 	ActorInvocationTelemetry, ActorInvocationTraceContext, ActorTelemetryIdentity,
-	OutboundCallInvocation,
+	IncomingTraceContext, OutboundCallInvocation, WorkflowRunInvocation, WorkflowRunOutcome,
+	WorkflowStepSpan,
 };
 use crate::types::{ActorKey, ConnId, ListOpts, format_actor_key};
 
@@ -303,6 +304,59 @@ impl ActorContext {
 		self.1
 			.as_ref()?
 			.start_outbound_call(actor_name, action_name)
+	}
+
+	/// Opens one workflow run as its own invocation, linked to the span the
+	/// previous run persisted.
+	#[doc(hidden)]
+	pub async fn start_workflow_span(&self) -> WorkflowRunInvocation {
+		let previous = if tracing::enabled!(target: "rivetkit::telemetry", tracing::Level::INFO) {
+			internal_storage::load_workflow_trace(&self.0.sql)
+				.await
+				.unwrap_or_else(|error| {
+					tracing::warn!(
+						actor_id = %self.actor_id(),
+						?error,
+						"failed to load the previous workflow run span, so this run will not link to it"
+					);
+					IncomingTraceContext::default()
+				})
+		} else {
+			IncomingTraceContext::default()
+		};
+		WorkflowRunInvocation::start(self, previous)
+	}
+
+	/// Closes a workflow run and persists its span for the next run to link to.
+	#[doc(hidden)]
+	pub async fn finish_workflow_span(
+		&self,
+		run: WorkflowRunInvocation,
+		outcome: WorkflowRunOutcome,
+	) {
+		let Some(trace_context) = run.finish(outcome) else {
+			return;
+		};
+		if let Err(error) =
+			internal_storage::persist_workflow_trace(&self.0.sql, trace_context).await
+		{
+			tracing::warn!(
+				actor_id = %self.actor_id(),
+				?error,
+				"failed to persist the workflow run span, so the next run will not link to it"
+			);
+		}
+	}
+
+	/// Opens the span for one step attempt, or nothing when this handle serves
+	/// no invocation or tracing is off.
+	#[doc(hidden)]
+	pub fn start_workflow_step_span(
+		&self,
+		step_name: &str,
+		attempt: u32,
+	) -> Option<WorkflowStepSpan> {
+		WorkflowStepSpan::start(self, step_name, attempt)
 	}
 
 	/// Returns correlation for the invocation this handle serves, absent when

@@ -9,6 +9,7 @@ import {
 	type ActorCronEveryOptions,
 	type ActorCronSetOptions,
 	type ActorLogger,
+	type ActorRun,
 	type ActorSchedule,
 	CONN_STATE_MANAGER_SYMBOL,
 	type CronFire,
@@ -2726,7 +2727,7 @@ export class ActorContextHandleAdapter {
 	#queue?: NativeQueueAdapter;
 	#request?: Request;
 	#schedule?: NativeScheduleAdapter;
-	#run?: { setWakeAt(timestamp: number | null): Promise<void> };
+	#run?: ActorRun;
 	#runHandlerConfigured: boolean;
 	#onStateChange?: NativeOnStateChangeHandler;
 	#stateEnabled: boolean;
@@ -2907,6 +2908,12 @@ export class ActorContextHandleAdapter {
 						this.#runtime.actorSetRunWakeAt(this.#ctx, timestamp),
 					);
 				},
+				startWorkflowSpan: () =>
+					callNative(() =>
+						this.#runtime.startWorkflowSpan(this.#ctx),
+					),
+				runOutsideWorkflowSpan: (body) =>
+					this.#runtime.runOutsideActorInvocationContext(body),
 			};
 		}
 		return this.#run;

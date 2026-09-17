@@ -7,7 +7,7 @@ use rivetkit_actor_persist::versioned as persist_versioned;
 use crate::actor::connection::{
 	PersistedConnection, PersistedSubscription, encode_persisted_connection,
 };
-use crate::actor::keys::make_workflow_key;
+use crate::actor::keys::{WORKFLOW_TRACE_CONTEXT_KEY, make_workflow_key};
 use crate::actor::messages::WorkflowKvWrite;
 use crate::actor::persist::{
 	decode_latest_with_embedded_version, encode_latest_with_embedded_version,
@@ -35,6 +35,7 @@ const QUEUE_MESSAGE_IDS_PER_QUERY: usize = 128;
 const WORKFLOW_KV_VALUE_LIMIT: usize = 256 * 1024;
 pub(crate) const RUN_WAKE_AT_META_KEY: &str = "run_wake_at";
 const RUN_WAKE_AT_VERSION: u16 = 1;
+const WORKFLOW_TRACE_CONTEXT_VERSION: u16 = 1;
 
 /// Depot rejects SQLite commits that dirty more than `MAX_COMMIT_RAW_DIRTY_BYTES`
 /// (320 pages * 4 KiB = 1.3 MiB) in `engine/packages/depot/src/conveyer/constants.rs`.
@@ -1079,6 +1080,53 @@ pub(crate) async fn persist_run_wake_at(db: &SqliteDb, wake_at: Option<i64>) -> 
 	)
 	.await
 	.context("persist internal run wake deadline")?;
+	Ok(())
+}
+
+pub(crate) async fn load_workflow_trace(db: &SqliteDb) -> Result<IncomingTraceContext> {
+	let result = db
+		.query(
+			LOAD_WORKFLOW_KV_SQL,
+			Some(vec![BindParam::Blob(WORKFLOW_TRACE_CONTEXT_KEY.to_vec())]),
+		)
+		.await
+		.context("load workflow trace context")?;
+	let Some(row) = result.rows.first() else {
+		return Ok(IncomingTraceContext::default());
+	};
+	let payload = read_blob(row, 0, "workflow trace context")?;
+	let stored = decode_latest_with_embedded_version::<persist_versioned::WorkflowTraceContext>(
+		&payload,
+		"workflow trace context",
+	)?;
+	Ok(IncomingTraceContext {
+		traceparent: stored.traceparent,
+		tracestate: stored.tracestate,
+		..Default::default()
+	})
+}
+
+pub(crate) async fn persist_workflow_trace(
+	db: &SqliteDb,
+	trace_context: IncomingTraceContext,
+) -> Result<()> {
+	let payload = encode_latest_with_embedded_version::<persist_versioned::WorkflowTraceContext>(
+		persist_versioned::WorkflowTraceContextV1 {
+			traceparent: trace_context.traceparent,
+			tracestate: trace_context.tracestate,
+		},
+		WORKFLOW_TRACE_CONTEXT_VERSION,
+		"workflow trace context",
+	)?;
+	db.execute(
+		UPSERT_WORKFLOW_KV_SQL,
+		Some(vec![
+			BindParam::Blob(WORKFLOW_TRACE_CONTEXT_KEY.to_vec()),
+			BindParam::Blob(payload),
+		]),
+	)
+	.await
+	.context("persist workflow trace context")?;
 	Ok(())
 }
 

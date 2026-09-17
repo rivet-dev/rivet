@@ -338,6 +338,9 @@ export declare class ActorContext {
    * case the caller sends its own context as before.
    */
   startCallSpan(actorName: string, actionName: string): OutboundCall | null
+  startWorkflowSpan(): Promise<WorkflowSpan>
+  /** Returns nothing outside a workflow run or when tracing is off. */
+  startWorkflowStepSpan(stepName: string, attempt: number): WorkflowStepSpan | null
   provisionActorRuntimeSocket(): Promise<JsActorRuntimeSocketEndpointInfo>
   schedule(): Schedule
   queue(): Queue
@@ -406,6 +409,22 @@ export declare class OutboundCall {
    * stays unstructured for Core to classify.
    */
   finish(error?: string | undefined | null): void
+}
+/**
+ * One open workflow run. Collecting it without `finish` records the run as
+ * abandoned.
+ */
+export declare class WorkflowSpan {
+  /** The context workflow code runs under. */
+  ctx(): ActorContext
+  finish(outcome: string): Promise<void>
+}
+/** One open attempt at one workflow step. */
+export declare class WorkflowStepSpan {
+  /** The context the step's callback runs under. */
+  ctx(): ActorContext
+  /** `error` is what the step threw, as the bridge encodes it. */
+  finish(outcome: string, error?: string | undefined | null): void
 }
 export declare class NapiActorFactory {
   constructor(callbacks: object, config?: JsActorConfig | undefined | null)

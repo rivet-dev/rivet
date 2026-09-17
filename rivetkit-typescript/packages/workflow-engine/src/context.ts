@@ -1,5 +1,5 @@
 import type { Logger } from "pino";
-import type { EngineDriver } from "./driver.js";
+import type { EngineDriver, WorkflowSpan } from "./driver.js";
 import {
 	extractErrorInfo,
 	getErrorEventTag,
@@ -345,6 +345,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 	private abortController: AbortController;
 	private currentLocation: Location;
 	private visitedKeys: Set<string>;
+	private runSpan?: WorkflowSpan;
 	private mode: "forward" | "rollback";
 	private rollbackActions?: RollbackAction[];
 	private rollbackCheckpointSet: boolean;
@@ -369,6 +370,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		onError?: WorkflowErrorHandler,
 		logger?: Logger,
 		visitedKeys?: Set<string>,
+		runSpan?: WorkflowSpan,
 	) {
 		this.currentLocation = location;
 		this.abortController = abortController ?? new AbortController();
@@ -379,6 +381,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		this.onError = onError;
 		this.logger = logger;
 		this.visitedKeys = visitedKeys ?? new Set();
+		this.runSpan = runSpan;
 	}
 
 	get abortSignal(): AbortSignal {
@@ -435,6 +438,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			this.onError,
 			this.logger,
 			this.visitedKeys,
+			this.runSpan,
 		);
 	}
 
@@ -906,13 +910,19 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 		// Get timeout configuration
 		const timeout = config.timeout ?? DEFAULT_STEP_TIMEOUT;
 
+		const stepSpan = this.runSpan?.startStep(
+			config.name,
+			metadata.attempts,
+		);
+
 		try {
 			// Execute with timeout
 			const output = await this.executeWithTimeout(
-				config.run(),
+				stepSpan ? stepSpan.run(() => config.run()) : config.run(),
 				timeout,
 				config.name,
 			);
+			stepSpan?.finish("ok");
 
 			if (entry.kind.type === "step") {
 				entry.kind.data.output = output;
@@ -951,6 +961,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			// Timeout errors are treated as critical by default. Steps opt
 			// into retrying on timeout with retryOnTimeout: true.
 			if (error instanceof StepTimeoutError && !config.retryOnTimeout) {
+				stepSpan?.finish("failed", error);
 				metadata.status = "exhausted";
 				metadata.error = String(error);
 				await this.notifyStepError(config, metadata.attempts, error, {
@@ -970,6 +981,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 				error instanceof CriticalError ||
 				error instanceof RollbackError
 			) {
+				stepSpan?.finish("failed", error);
 				metadata.status = "exhausted";
 				metadata.error = String(error);
 				await this.notifyStepError(config, metadata.attempts, error, {
@@ -989,6 +1001,7 @@ export class WorkflowContextImpl implements WorkflowContextInterface {
 			}
 
 			const willRetry = metadata.attempts <= maxRetries;
+			stepSpan?.finish(willRetry ? "retry" : "failed", error);
 			metadata.status = willRetry ? "failed" : "exhausted";
 			metadata.error = String(error);
 
