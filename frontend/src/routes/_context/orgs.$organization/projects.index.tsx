@@ -1,8 +1,8 @@
 import { faChevronRight, faPlus, Icon } from "@rivet-gg/icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { PlanBadge } from "@/app/billing/billing-plan-badge";
 import { RouteError } from "@/app/route-error";
-import { features } from "@/lib/features";
 import { RouteLayout } from "@/app/route-layout";
 import {
 	Badge,
@@ -14,6 +14,7 @@ import {
 	Skeleton,
 } from "@/components";
 import { VisibilitySensor } from "@/components/visibility-sensor";
+import { features } from "@/lib/features";
 
 export const Route = createFileRoute("/_context/orgs/$organization/projects/")({
 	component: RouteComponent,
@@ -94,7 +95,7 @@ function ProjectList() {
 					params={{ cluster: cluster.name }}
 				>
 					<span className="flex-1 truncate">{cluster.name}</span>
-					<Badge variant="premium-violet">BYOC</Badge>
+					<PlanBadge plan="byoc" />
 					<Icon icon={faChevronRight} />
 				</Link>
 			))}

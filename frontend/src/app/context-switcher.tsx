@@ -15,7 +15,6 @@ import {
 } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
-	Badge,
 	Button,
 	Command,
 	CommandEmpty,
@@ -45,7 +44,7 @@ import {
 	RECENT_NAMESPACES_KEY,
 	RECENT_PROJECTS_KEY,
 } from "@/lib/recently-visited";
-import { LazyBillingPlanBadge } from "./billing/billing-plan-badge";
+import { LazyBillingPlanBadge, PlanBadge } from "./billing/billing-plan-badge";
 
 export function ContextSwitcher({ inline }: { inline?: boolean }) {
 	const match = useContextSwitcherMatch();
@@ -522,7 +521,7 @@ function ClusterListItems({
 						)}
 					/>
 					<span className="truncate flex-1">{cluster.name}</span>
-					<Badge variant="premium-violet">BYOC</Badge>
+					<PlanBadge plan="byoc" />
 				</CommandItem>
 			))}
 			{hasNextPage && !isFetchingNextPage ? (
