@@ -318,12 +318,20 @@ export interface RuntimeSqlTransactionDatabase {
 	rollback(): Promise<void>;
 }
 
+/** Sample rates for the traces an actor starts, in the shape core takes. */
+export interface RuntimeActorTracingConfig {
+	sampler?: number;
+	/** Keyed by flattened, dot-separated action name. */
+	actions?: Record<string, number>;
+}
+
 export interface RuntimeActorConfig {
 	name?: string;
 	icon?: string;
 	hasDatabase?: boolean;
 	remoteSqlite?: boolean;
 	sqliteProfiling?: SqliteProfilingOptions;
+	tracing?: RuntimeActorTracingConfig;
 	enableActorRuntimeSocket?: boolean;
 	hasState?: boolean;
 	canHibernateWebsocket?: boolean;

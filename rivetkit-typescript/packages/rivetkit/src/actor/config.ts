@@ -16,6 +16,7 @@ import type {
 	PrimitiveSchema,
 	QueueSchemaConfig,
 } from "./schema";
+import type { ActionSampleRates, ActorTracingOptions } from "./tracing";
 
 export const DEFAULT_SLEEP_GRACE_PERIOD = 15_000;
 
@@ -1342,6 +1343,12 @@ export const ActorOptionsSchema = GlobalActorOptionsBaseSchema.extend(
 export type ActorOptions = z.infer<typeof ActorOptionsSchema>;
 export type ActorOptionsInput = z.input<typeof ActorOptionsSchema>;
 
+const zSampleRate = z.number().min(0).max(1);
+
+const zActionSampleRates: z.ZodType<ActionSampleRates> = z.lazy(() =>
+	z.record(z.string(), z.union([zSampleRate, zActionSampleRates])),
+);
+
 export const ActorConfigSchema = z
 	.object({
 		onCreate: zFunction().optional(),
@@ -1359,6 +1366,13 @@ export const ActorConfigSchema = z
 		onWebSocket: zFunction().optional(),
 		actions: zActionTree.default(() => ({})),
 		actionInputSchemas: z.record(z.string(), z.any()).optional(),
+		tracing: z
+			.object({
+				sampler: zSampleRate.optional(),
+				actions: zActionSampleRates.optional(),
+			})
+			.strict()
+			.optional(),
 		connParamsSchema: z.any().optional(),
 		events: z.record(z.string(), z.any()).optional(),
 		queues: z.record(z.string(), z.any()).optional(),
@@ -1905,6 +1919,12 @@ interface BaseActorConfig<
 	actionInputSchemas?: ActionInputSchemas;
 
 	/**
+	 * How much of this actor's work is recorded in traces. Defaults to the
+	 * process sampler from `OTEL_TRACES_SAMPLER`.
+	 */
+	tracing?: ActorTracingOptions<TActions>;
+
+	/**
 	 * Optional schema for validating connection params in native runtimes.
 	 */
 	connParamsSchema?: PrimitiveSchema;
@@ -2061,6 +2081,7 @@ export type ActorConfigInput<
 } & Omit<
 	z.input<typeof ActorConfigSchema>,
 	| "actions"
+	| "tracing"
 	| "events"
 	| "queues"
 	| "onCreate"
@@ -2436,6 +2457,12 @@ export const DocActorConfigSchema = z
 			.optional()
 			.describe(
 				"Optional schemas for validating action argument tuples in native runtimes. May mirror nested action groups or use dot-separated low-level action names.",
+			),
+		tracing: z
+			.unknown()
+			.optional()
+			.describe(
+				"Trace sampling for this actor: `sampler` is the share of its invocations that are recorded, from 0 to 1, with optional per-action rates under `actions`. A rate lowers what is recorded and never raises it. Defaults to the process sampler from OTEL_TRACES_SAMPLER.",
 			),
 		connParamsSchema: z
 			.unknown()
