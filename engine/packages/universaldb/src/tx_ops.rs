@@ -390,36 +390,88 @@ impl TransactionOperations {
 		Ok(key)
 	}
 
-	pub async fn get_range<F, Fut>(
+	/// Reads one page of a range and merges this transaction's pending writes into it.
+	///
+	/// `get_from_db` reads one page of the range it is handed from the database. It runs again, on
+	/// the rest of the range, only when pending clears leave nothing of a page that is not the last
+	/// one: a page with no rows gives the caller no key to continue from, so it must not be returned
+	/// while the range has more rows.
+	pub async fn get_range<'a, F, Fut>(
 		&self,
-		opt: &RangeOption<'_>,
+		opt: &RangeOption<'a>,
 		isolation_level: IsolationLevel,
 		get_from_db: F,
 	) -> Result<Values>
 	where
-		F: FnOnce() -> Fut,
+		F: Fn(RangeOption<'a>) -> Fut,
 		Fut: std::future::Future<Output = Result<Values>>,
 	{
 		if let IsolationLevel::Serializable = isolation_level {
 			self.add_conflict_range(opt.begin.key(), opt.end.key(), ConflictRangeType::Read);
 		}
 
-		// Get database results
-		let db_values = get_from_db().await?;
+		let mut opt = opt.clone();
 
-		// If there are no local operations, just return the database results
-		if self.operations().is_empty() {
-			return Ok(db_values);
+		loop {
+			// Get database results
+			let db_values = get_from_db(opt.clone()).await?;
+
+			// If there are no local operations, just return the database results
+			if self.operations().is_empty() {
+				return Ok(db_values);
+			}
+
+			// A page that reports more rows stopped short of the end of the range, so the database
+			// has only been read up to the last key of the page.
+			let page_end = if db_values.more() {
+				db_values.iter().last().map(|kv| kv.key().to_vec())
+			} else {
+				None
+			};
+
+			let merged = self.merge_range_page(&opt, db_values, page_end.as_deref());
+
+			match page_end {
+				Some(page_end) if merged.is_empty() => match opt.next_range_after(&page_end, 0) {
+					Some(next) => opt = next,
+					None => return Ok(merged),
+				},
+				Some(_) | None => return Ok(merged),
+			}
 		}
+	}
 
-		let begin = opt.begin.key();
-		let end = opt.end.key();
+	/// Applies pending writes to one database page of a range read.
+	///
+	/// `page_end` is the last key of a database page that stopped short of the end of the range.
+	/// Pending writes past it belong to a later page. Merging them here would return them ahead of
+	/// database rows that sort before them, and the next page would continue after them and skip
+	/// those rows.
+	fn merge_range_page(
+		&self,
+		opt: &RangeOption<'_>,
+		db_values: Values,
+		page_end: Option<&[u8]>,
+	) -> Values {
+		let in_page = |key: &[u8]| {
+			let before_page_end = match page_end {
+				Some(page_end) => {
+					if opt.reverse {
+						key >= page_end
+					} else {
+						key <= page_end
+					}
+				}
+				None => true,
+			};
+
+			before_page_end && range_contains(opt, key)
+		};
 
 		// Start with database results in a map
 		let mut result_map = BTreeMap::new();
 		for kv in db_values.into_iter() {
-			let key = kv.key().to_vec();
-			let value = kv.value().to_vec();
+			let (key, value) = kv.into_parts();
 			result_map.insert(key, value);
 		}
 
@@ -427,7 +479,7 @@ impl TransactionOperations {
 		for op in &*self.operations() {
 			match op {
 				Operation::SetValue { key, value } => {
-					if key.as_slice() >= begin && key.as_slice() < end {
+					if in_page(key) {
 						result_map.insert(key.clone(), value.clone());
 					}
 				}
@@ -452,7 +504,7 @@ impl TransactionOperations {
 					param,
 					op_type,
 				} => {
-					if key.as_slice() >= begin && key.as_slice() < end {
+					if in_page(key) {
 						// Get current value for this key (from result_map or empty if not exists)
 						let current_value = result_map.get(key);
 						let current_slice = current_value.map(|v| &**v);
@@ -473,9 +525,11 @@ impl TransactionOperations {
 		// Build result respecting the scan direction and the limit. The merged map is ordered
 		// ascending, so a reverse scan has to drain it back to front: otherwise the merge silently
 		// flips a reverse scan to ascending, and a limit takes the lowest keys instead of the
-		// highest. Reads with no local operations return above and never reach this path, so the
-		// direction only ever went wrong once the transaction held a pending write.
+		// highest. Reads with no local operations never reach this path, so the direction only ever
+		// went wrong once the transaction held a pending write.
 		let limit = opt.limit.unwrap_or(usize::MAX);
+		// Rows are left unread either past the end of the database page or past the limit.
+		let more = page_end.is_some() || result_map.len() > limit;
 		let keyvalues = if opt.reverse {
 			result_map
 				.into_iter()
@@ -491,7 +545,7 @@ impl TransactionOperations {
 				.collect::<Vec<_>>()
 		};
 
-		Ok(Values::new(keyvalues))
+		Values::with_more(keyvalues, more)
 	}
 
 	pub fn clear_all(&self) {
@@ -505,4 +559,23 @@ impl TransactionOperations {
 			.unwrap()
 			.push((begin.to_vec(), end.to_vec(), conflict_type));
 	}
+}
+
+/// Whether `key` is inside the range `opt` selects, reading its key selectors the way the drivers
+/// do. `first_greater_than` excludes its key as a begin bound and includes it as an end bound, and
+/// every other selector is an inclusive begin and an exclusive end.
+///
+/// A paged read continues a forward scan from `first_greater_than(last_key)`, so a pending write to
+/// `last_key` has to be excluded here or it is returned once per page.
+fn range_contains(opt: &RangeOption<'_>, key: &[u8]) -> bool {
+	let after_begin = match (opt.begin.or_equal(), opt.begin.offset()) {
+		(true, 1) => key > opt.begin.key(),
+		_ => key >= opt.begin.key(),
+	};
+	let before_end = match (opt.end.or_equal(), opt.end.offset()) {
+		(true, 1) => key <= opt.end.key(),
+		_ => key < opt.end.key(),
+	};
+
+	after_begin && before_end
 }

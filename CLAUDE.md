@@ -261,8 +261,8 @@ When the user asks to track something in a note, store it in `~/.agents/notes/` 
 
 ## Performance
 
-- Bound UniversalDB ranges before materialization; a stream consumer's item limit does not constrain RocksDB's eager range allocation. See [dead-workflow backfill](docs-internal/engine/gasoline-dead-workflow-backfill.md).
-
+- UniversalDB drivers return range reads in byte bounded pages (`Values::more` plus `RangeOption::next_range`); a driver must never read a whole range for one `get_range` call. See [range paging](docs-internal/engine/universaldb/TRANSACTIONS.md#range-paging).
+- A paged range read still reads every value it passes; to skip large values interleaved in a range, seek past them with `get_key` instead of scanning. See [dead-workflow backfill](docs-internal/engine/gasoline-dead-workflow-backfill.md).
 - Use `rivet_perf::{perf_start, perf_finish}` for latency-sensitive async phases, shared I/O wrappers, and suspected backpressure points where slow-tail spans are useful.
 - Keep `perf_start!` labels bounded for metrics; put high-cardinality values such as IDs, request paths, and byte counts in span fields instead.
 - Every `PerfMeasure` must end with `perf_finish!` or `perf_abandon!` before leaving scope.

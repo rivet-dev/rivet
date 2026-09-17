@@ -425,17 +425,22 @@ impl SubCommand {
 							let new_subspace =
 								universaldb::tuple::Subspace::all().subspace(&new_tuple);
 
-							// Get all key-value pairs from the old subspace
-							let mut stream = tx.get_ranges_keyvalues(
-								universaldb::RangeOption {
-									mode: StreamingMode::WantAll,
-									..(&old_subspace).into()
-								},
-								Serializable,
-							);
+							// Read the whole old subspace before writing. The new subspace can be nested
+							// inside the old one, and a range read that is still streaming returns keys
+							// this transaction writes ahead of it, so the moved keys would be moved again.
+							let entries = tx
+								.get_ranges_keyvalues(
+									universaldb::RangeOption {
+										mode: StreamingMode::WantAll,
+										..(&old_subspace).into()
+									},
+									Serializable,
+								)
+								.try_collect::<Vec<_>>()
+								.await?;
 
 							let mut keys_moved = 0;
-							while let Some(entry) = stream.try_next().await? {
+							for entry in entries {
 								// Unpack key from old subspace
 								if let Ok(relative_tuple) =
 									old_subspace.unpack::<SimpleTuple>(entry.key())

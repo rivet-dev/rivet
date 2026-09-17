@@ -57,6 +57,8 @@ pub enum TransactionCommand {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		/// Soft cap on the key plus value bytes of the page. See `RangeOption::page_target_bytes`.
+		target_bytes: Option<usize>,
 		reverse: bool,
 		response: oneshot::Sender<Result<Values>>,
 	},
@@ -126,6 +128,7 @@ impl TransactionTask {
 					end_or_equal,
 					end_offset,
 					limit,
+					target_bytes,
 					reverse,
 					response,
 				} => {
@@ -139,6 +142,7 @@ impl TransactionTask {
 						end_or_equal,
 						end_offset,
 						limit,
+						target_bytes,
 						reverse,
 					);
 					let _ = response.send(result);
@@ -393,6 +397,12 @@ impl TransactionTask {
 		}
 	}
 
+	/// Reads one page of a range.
+	///
+	/// The page ends at the row limit, or after the row that brings it to `target_bytes`, whichever
+	/// comes first. It always holds at least one row when the range has any, so a row larger than the
+	/// byte budget still makes progress. The returned `Values` reports `more` only when the scan
+	/// stopped on a row that is still inside the range.
 	fn handle_get_range(
 		snapshot: &Snapshot<'_>,
 		begin: Vec<u8>,
@@ -402,6 +412,7 @@ impl TransactionTask {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		target_bytes: Option<usize>,
 		reverse: bool,
 	) -> Result<Values> {
 		// Resolve the begin selector
@@ -413,7 +424,10 @@ impl TransactionTask {
 			Self::resolve_key_selector_for_range(snapshot, &end, end_or_equal, end_offset)?;
 
 		let mut results = Vec::new();
+		let mut results_bytes = 0usize;
+		let mut more = false;
 		let limit = limit.unwrap_or(usize::MAX);
+		let target_bytes = target_bytes.unwrap_or(usize::MAX);
 
 		// When reversing, iterate descending from the end so that `limit` selects
 		// the highest keys in range (matching FDB semantics). Applying `limit`
@@ -435,13 +449,18 @@ impl TransactionTask {
 					break;
 				}
 
-				let key = iter_bytes_to_vec(k);
-				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
-				results.push(KeyValue::new(key, value));
-
-				if results.len() >= limit {
+				// The page is full and this row is still in range, so it is left for the next page.
+				if !results.is_empty() && (results.len() >= limit || results_bytes >= target_bytes)
+				{
+					more = true;
 					break;
 				}
+
+				let key = iter_bytes_to_vec(k);
+				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
+				results_bytes = results_bytes.saturating_add(key.len() + value.len());
+				results.push(KeyValue::new(key, value));
+
 				iter.prev();
 			}
 			iter.status()
@@ -457,20 +476,25 @@ impl TransactionTask {
 					break;
 				}
 
-				let key = iter_bytes_to_vec(k);
-				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
-				results.push(KeyValue::new(key, value));
-
-				if results.len() >= limit {
+				// The page is full and this row is still in range, so it is left for the next page.
+				if !results.is_empty() && (results.len() >= limit || results_bytes >= target_bytes)
+				{
+					more = true;
 					break;
 				}
+
+				let key = iter_bytes_to_vec(k);
+				let value = iter.value().map(iter_bytes_to_vec).unwrap_or_default();
+				results_bytes = results_bytes.saturating_add(key.len() + value.len());
+				results.push(KeyValue::new(key, value));
+
 				iter.next();
 			}
 			iter.status()
 				.context("failed to iterate rocksdb for get range")?;
 		}
 
-		Ok(Values::new(results))
+		Ok(Values::with_more(results, more))
 	}
 
 	fn resolve_key_selector_for_range(
