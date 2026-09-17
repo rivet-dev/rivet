@@ -100,12 +100,19 @@ export interface JsSqliteProfilingConfig {
   maxDiagnosticEventsPerMinute?: number
   diagnosticEventQueueCapacity?: number
 }
+/** Per-actor trace sample rates, from 0 to 1. */
+export interface JsActorTracingConfig {
+  sampler?: number
+  /** Keyed by flattened, dot-separated action name. */
+  actions?: Record<string, number>
+}
 export interface JsActorConfig {
   name?: string
   icon?: string
   hasDatabase?: boolean
   remoteSqlite?: boolean
   sqliteProfiling?: JsSqliteProfilingConfig
+  tracing?: JsActorTracingConfig
   enableActorRuntimeSocket?: boolean
   hasState?: boolean
   canHibernateWebsocket?: boolean
