@@ -12,10 +12,13 @@ import {
 	faChevronRight,
 	faCopy,
 	faEnvelope,
+	faPlus,
 	faSlack,
+	faTrash,
+	faTriangleExclamation,
 	Icon,
 } from "@rivet-gg/icons";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { saveAs } from "file-saver";
 import { useState } from "react";
@@ -30,9 +33,11 @@ import {
 	ScrollArea,
 	Skeleton,
 	SmallText,
+	toast,
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
+import { queryClient } from "@/queries/global";
 import {
 	BYOC_QUICKSTART_DOCS_URL,
 	BYOC_SETUP_KIT_URL,
@@ -72,6 +77,7 @@ export function ClusterPage({ cluster }: { cluster: string }) {
 					<SetupSection cluster={cluster} clusterId={data?.id} />
 					<RegionsSection cluster={cluster} />
 					<CommandsSection cluster={cluster} />
+					<OtelTokenSection key={cluster} cluster={cluster} />
 					<SupportSection />
 				</div>
 			</ScrollArea>
@@ -690,6 +696,172 @@ function SupportCard({
 		<button type="button" onClick={onClick} className={className}>
 			{body}
 		</button>
+	);
+}
+
+function OtelTokenSection({ cluster }: { cluster: string }) {
+	const dataProvider = useCloudDataProvider();
+	const organization = dataProvider.organization;
+	const { data, isLoading, isError } = useQuery(
+		dataProvider.currentOrgClusterOtelTokenQueryOptions({ cluster }),
+	);
+
+	const [confirmingRevoke, setConfirmingRevoke] = useState(false);
+
+	const invalidateToken = () =>
+		queryClient.invalidateQueries({
+			queryKey: [{ organization, cluster }, "byoc-otel-token"],
+		});
+
+	const createMutation = useMutation({
+		...dataProvider.createOtelTokenMutationOptions(),
+		onSuccess: () => {
+			setConfirmingRevoke(false);
+			void invalidateToken();
+		},
+		onError: () => {
+			toast.error("Could not create the metrics token. Please try again.");
+		},
+	});
+
+	const revokeMutation = useMutation({
+		...dataProvider.revokeOtelTokenMutationOptions(),
+		onSuccess: () => {
+			setConfirmingRevoke(false);
+			toast.success("Metrics ingest token revoked.");
+			void invalidateToken();
+		},
+		onError: () => {
+			toast.error("Could not revoke the metrics token. Please try again.");
+		},
+	});
+
+	// The plaintext token is returned only once, at creation. Show it until the
+	// user dismisses it, then fall back to the redacted view. This (and the
+	// revoke-confirm state) is per-cluster; the parent remounts this component
+	// via key={cluster} so navigating to another cluster cannot surface a
+	// previous cluster's token or a stale revoke confirmation.
+	const freshToken = createMutation.data?.token;
+
+	// Shared so the token block is the same full-width box in every state and
+	// does not resize when switching between the plaintext and redacted views.
+	const tokenBoxClassName =
+		"w-full overflow-x-auto rounded-md border border-foreground/10 bg-background p-2.5 font-mono-console text-sm";
+
+	return (
+		<Section
+			title="Metrics ingest token"
+			description="Authorizes sending OpenTelemetry metrics from this cluster to Rivet. Keep it secret."
+		>
+			{freshToken ? (
+				<div className="flex flex-col gap-3">
+					<div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/[0.06] px-3 py-2 text-sm text-amber-600 dark:text-amber-400">
+						<Icon
+							icon={faTriangleExclamation}
+							className="mt-0.5 shrink-0"
+						/>
+						<span>
+							Copy this token now. For security it is only shown
+							once and cannot be retrieved later.
+						</span>
+					</div>
+					<pre className={tokenBoxClassName}>{freshToken}</pre>
+					<div className="flex items-center justify-end gap-2">
+						<Button
+							variant="ghost"
+							onClick={() => createMutation.reset()}
+						>
+							Done
+						</Button>
+						<CopyTrigger value={freshToken}>
+							<Button
+								variant="outline"
+								startIcon={<Icon icon={faCopy} />}
+							>
+								Copy token
+							</Button>
+						</CopyTrigger>
+					</div>
+				</div>
+			) : isLoading ? (
+				<Skeleton className="h-24 w-full rounded-md" />
+			) : isError ? (
+				<SmallText className="text-muted-foreground">
+					Could not load the metrics token. Reload to retry.
+				</SmallText>
+			) : data ? (
+				<div className="flex flex-col gap-3">
+					<pre className={tokenBoxClassName}>
+						{`cloud_byocotel_${"•".repeat(16)}${data.tokenLastFour}`}
+					</pre>
+					<div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
+						<SmallText className="text-muted-foreground">
+							Created <Time value={data.createdAt} />
+							{data.lastUsedAt ? (
+								<>
+									{" · last used "}
+									<Time value={data.lastUsedAt} />
+								</>
+							) : (
+								" · never used"
+							)}
+						</SmallText>
+						<div className="flex shrink-0 items-center gap-2">
+							{confirmingRevoke ? (
+								<>
+									<Button
+										key="cancel"
+										variant="ghost"
+										disabled={revokeMutation.isPending}
+										onClick={() =>
+											setConfirmingRevoke(false)
+										}
+									>
+										Cancel
+									</Button>
+									<Button
+										key="confirm"
+										variant="destructive"
+										startIcon={<Icon icon={faTrash} />}
+										isLoading={revokeMutation.isPending}
+										onClick={() =>
+											revokeMutation.mutate({
+												organization,
+												cluster,
+											})
+										}
+									>
+										Confirm revoke
+									</Button>
+								</>
+							) : (
+								<Button
+									key="revoke"
+									variant="destructive-outline"
+									startIcon={<Icon icon={faTrash} />}
+									onClick={() => setConfirmingRevoke(true)}
+								>
+									Revoke
+								</Button>
+							)}
+						</div>
+					</div>
+				</div>
+			) : (
+				<div className="flex justify-center">
+					<Button
+						variant="outline"
+						startIcon={<Icon icon={faPlus} />}
+						isLoading={createMutation.isPending}
+						onClick={() =>
+							createMutation.mutate({ organization, cluster })
+						}
+					>
+						Create token
+					</Button>
+				</div>
+			)}
+		</Section>
 	);
 }
 
