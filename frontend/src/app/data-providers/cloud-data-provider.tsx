@@ -620,6 +620,62 @@ export const createOrganizationContext = ({
 			...no404Retry(),
 		});
 
+	// The OTLP ingest token is a per-cluster singleton. A 404 means no active
+	// token exists yet, which is a normal empty state (not an error), so it maps
+	// to null and the UI offers to create one.
+	const clusterOtelTokenQueryOptions = (opts: {
+		organization: string;
+		cluster: string;
+	}) =>
+		queryOptions({
+			queryKey: [opts, "byoc-otel-token"],
+			queryFn:
+				async (): Promise<Rivet.ByocGetOtelTokenResponse | null> => {
+					try {
+						return await client.byoc.getOtelToken(opts.cluster, {
+							org: opts.organization,
+						});
+					} catch (error) {
+						if (
+							error &&
+							typeof error === "object" &&
+							"statusCode" in error &&
+							error.statusCode === 404
+						) {
+							return null;
+						}
+						throw error;
+					}
+				},
+			...no404Retry(),
+		});
+
+	const createOtelTokenMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["byoc-otel-token", "create"],
+			mutationFn: async (data: {
+				organization: string;
+				cluster: string;
+			}) => {
+				return await client.byoc.createOtelToken(data.cluster, {
+					org: data.organization,
+				});
+			},
+		});
+
+	const revokeOtelTokenMutationOptions = () =>
+		mutationOptions({
+			mutationKey: ["byoc-otel-token", "revoke"],
+			mutationFn: async (data: {
+				organization: string;
+				cluster: string;
+			}) => {
+				return await client.byoc.revokeOtelToken(data.cluster, {
+					org: data.organization,
+				});
+			},
+		});
+
 	const clusterRegionsQueryOptions = (opts: {
 		organization: string;
 		cluster: string;
@@ -636,8 +692,6 @@ export const createOrganizationContext = ({
 			},
 			getNextPageParam: (lastPage) => lastPage.pagination.cursor,
 			select: (data) => data.pages.flatMap((page) => page.regions),
-			// Operators report heartbeats every 5s, so keep region rows live.
-			refetchInterval: 5_000,
 		});
 
 	const clusterCommandsQueryOptions = (opts: {
@@ -710,6 +764,12 @@ export const createOrganizationContext = ({
 				cluster: opts.cluster,
 			});
 		},
+		currentOrgClusterOtelTokenQueryOptions: (opts: { cluster: string }) => {
+			return clusterOtelTokenQueryOptions({
+				organization,
+				cluster: opts.cluster,
+			});
+		},
 		currentOrgClusterRegionsQueryOptions: (opts: { cluster: string }) => {
 			return clusterRegionsQueryOptions({
 				organization,
@@ -727,6 +787,8 @@ export const createOrganizationContext = ({
 			});
 		},
 		createClusterMutationOptions,
+		createOtelTokenMutationOptions,
+		revokeOtelTokenMutationOptions,
 		setProjectBillingPlanMutationOptions,
 		orgProjectNamespacesQueryOptions,
 		namespaceAccessTokenQueryOptions,
