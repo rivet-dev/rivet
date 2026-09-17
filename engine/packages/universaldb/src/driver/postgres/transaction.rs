@@ -11,7 +11,7 @@ use anyhow::{Context, Result};
 use tokio::sync::{OnceCell, mpsc, oneshot};
 
 use crate::{
-	driver::TransactionDriver,
+	driver::{TransactionDriver, paged_range_stream},
 	key_selector::KeySelector,
 	options::{ConflictRangeType, MutationType},
 	range_option::RangeOption,
@@ -151,37 +151,31 @@ impl TransactionDriver for PostgresTransactionDriver {
 	fn get_range<'a>(
 		&'a self,
 		opt: &RangeOption<'a>,
-		_iteration: usize,
+		iteration: usize,
 		isolation_level: IsolationLevel,
 	) -> Pin<Box<dyn Future<Output = Result<Values>> + Send + 'a>> {
 		let opt = opt.clone();
 
 		Box::pin(async move {
-			let begin = opt.begin.key().to_vec();
-			let begin_or_equal = opt.begin.or_equal();
-			let begin_offset = opt.begin.offset();
-			let end = opt.end.key().to_vec();
-			let end_or_equal = opt.end.or_equal();
-			let end_offset = opt.end.offset();
-			let limit = opt.limit;
-			let reverse = opt.reverse;
+			let target_bytes = opt.page_target_bytes(iteration);
 
 			self.operations
-				.get_range(&opt, isolation_level, || async {
+				.get_range(&opt, isolation_level, move |page_opt| async move {
 					let tx_sender = self.ensure_transaction().await?;
 
 					// Send query command
 					let (response_tx, response_rx) = oneshot::channel();
 					tx_sender
 						.send(TransactionCommand::GetRange {
-							begin: begin.clone(),
-							begin_or_equal,
-							begin_offset,
-							end: end.clone(),
-							end_or_equal,
-							end_offset,
-							limit,
-							reverse,
+							begin: page_opt.begin.key().to_vec(),
+							begin_or_equal: page_opt.begin.or_equal(),
+							begin_offset: page_opt.begin.offset(),
+							end: page_opt.end.key().to_vec(),
+							end_or_equal: page_opt.end.or_equal(),
+							end_offset: page_opt.end.offset(),
+							limit: page_opt.limit,
+							target_bytes,
+							reverse: page_opt.reverse,
 							response: response_tx,
 						})
 						.context("failed to send postgres transaction command")?;
@@ -200,20 +194,7 @@ impl TransactionDriver for PostgresTransactionDriver {
 		opt: RangeOption<'a>,
 		isolation_level: IsolationLevel,
 	) -> crate::value::Stream<'a, Value> {
-		use futures_util::{StreamExt, stream};
-
-		// Convert the range result into a stream
-		let fut = async move {
-			match self.get_range(&opt, 1, isolation_level).await {
-				Ok(values) => values
-					.into_iter()
-					.map(|kv| Ok(Value::from_keyvalue(kv)))
-					.collect::<Vec<_>>(),
-				Err(e) => vec![Err(e)],
-			}
-		};
-
-		Box::pin(stream::once(fut).flat_map(stream::iter))
+		paged_range_stream(self, opt, isolation_level)
 	}
 
 	fn set(&self, key: &[u8], value: &[u8]) {

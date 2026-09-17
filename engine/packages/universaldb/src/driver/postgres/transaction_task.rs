@@ -13,6 +13,18 @@ use crate::{
 
 use super::{commit, shared::PostgresShared};
 
+/// Narrowest row a byte bounded page is sized for. Such a page asks Postgres for at most its byte
+/// budget divided by this many rows, which bounds the rows read past the budget and then left out.
+const PAGE_MIN_ROW_BYTES: usize = 64;
+
+/// Fewest rows a byte bounded page asks Postgres for.
+const PAGE_MIN_ROWS: usize = 16;
+
+/// Once a page has shown how large the rows are, the next page asks Postgres for this many times the
+/// rows that would fill its byte budget at that size. The slack lets a run of smaller rows still
+/// fill most of the budget.
+const PAGE_ROW_SLACK: usize = 2;
+
 pub enum TransactionCommand {
 	// Read operations
 	Get {
@@ -33,6 +45,8 @@ pub enum TransactionCommand {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		/// Soft cap on the key plus value bytes of the page. See `RangeOption::page_target_bytes`.
+		target_bytes: Option<usize>,
 		reverse: bool,
 		response: oneshot::Sender<Result<Values>>,
 	},
@@ -59,6 +73,10 @@ pub enum TransactionCommand {
 pub struct TransactionTask {
 	shared: Arc<PostgresShared>,
 	receiver: mpsc::UnboundedReceiver<TransactionCommand>,
+	/// Mean key plus value bytes of the rows in the last byte bounded page this transaction read.
+	/// It sizes the row limit of the next page. A wrong guess only makes that page shorter or makes
+	/// Postgres read more rows past the budget, and the page after it corrects the guess.
+	page_row_bytes: Option<usize>,
 }
 
 impl TransactionTask {
@@ -66,7 +84,11 @@ impl TransactionTask {
 		shared: Arc<PostgresShared>,
 		receiver: mpsc::UnboundedReceiver<TransactionCommand>,
 	) -> Self {
-		Self { shared, receiver }
+		Self {
+			shared,
+			receiver,
+			page_row_bytes: None,
+		}
 	}
 
 	pub async fn run(mut self) {
@@ -119,6 +141,7 @@ impl TransactionTask {
 					end_or_equal,
 					end_offset,
 					limit,
+					target_bytes,
 					reverse,
 					response,
 				} => {
@@ -132,6 +155,7 @@ impl TransactionTask {
 							end_or_equal,
 							end_offset,
 							limit,
+							target_bytes,
 							reverse,
 						)
 						.await;
@@ -209,6 +233,11 @@ impl TransactionTask {
 			.map_err(map_postgres_error)
 	}
 
+	/// Reads one page of a range.
+	///
+	/// The page ends at the row limit, or after the row that brings it to `target_bytes`, whichever
+	/// comes first. It always holds at least one row when the range has any, so a row larger than the
+	/// byte budget still makes progress.
 	async fn handle_get_range(
 		&mut self,
 		tx: &Transaction<'_>,
@@ -219,6 +248,7 @@ impl TransactionTask {
 		end_or_equal: bool,
 		end_offset: i32,
 		limit: Option<usize>,
+		target_bytes: Option<usize>,
 		reverse: bool,
 	) -> Result<Values> {
 		// Determine SQL operators based on key selector types
@@ -234,44 +264,101 @@ impl TransactionTask {
 			"<"
 		};
 
-		let query = if reverse {
-			if let Some(limit) = limit {
-				format!(
-					"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC LIMIT {limit}"
-				)
-			} else {
-				format!(
-					"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key DESC"
-				)
+		let order = if reverse { "DESC" } else { "ASC" };
+
+		// The limit and the byte budget are bound as parameters rather than written into the SQL so
+		// the statement cache holds one entry per query shape instead of one per value.
+		let (rows, row_cap) = if let Some(target_bytes) = target_bytes {
+			// SQL has no byte limit, so the page is cut with a running total. `bytes_before` is the
+			// size of every row ahead of a row, which keeps the first row and the row that reaches the
+			// budget. The inner row limit bounds how many rows past the budget are read only to be
+			// left out.
+			let widest_byte_rows = target_bytes / PAGE_MIN_ROW_BYTES;
+			let byte_rows = match self.page_row_bytes {
+				Some(row_bytes) => (target_bytes / row_bytes.max(PAGE_MIN_ROW_BYTES))
+					.saturating_mul(PAGE_ROW_SLACK)
+					.min(widest_byte_rows),
+				None => widest_byte_rows,
 			}
-		} else if let Some(limit) = limit {
-			format!(
-				"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key LIMIT {limit}"
-			)
+			.max(PAGE_MIN_ROWS);
+			let row_cap = limit.map_or(byte_rows, |limit| limit.min(byte_rows));
+
+			let query = format!(
+				"SELECT key, value FROM (
+					SELECT key, value, SUM(octet_length(key) + octet_length(value)) OVER (
+						ORDER BY key {order} ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
+					) AS bytes_before
+					FROM (
+						SELECT key, value FROM kv
+						WHERE key {begin_op} $1 AND key {end_op} $2
+						ORDER BY key {order}
+						LIMIT $3::bigint
+					) AS candidates
+				) AS page
+				WHERE bytes_before IS NULL OR bytes_before < $4::bigint
+				ORDER BY key {order}"
+			);
+			let stmt = tx
+				.prepare_cached(&query)
+				.await
+				.map_err(map_postgres_error)?;
+
+			let rows = tx
+				.query(
+					&stmt,
+					&[
+						&begin_key,
+						&end_key,
+						&sql_bigint(row_cap),
+						&sql_bigint(target_bytes),
+					],
+				)
+				.await
+				.map_err(map_postgres_error)?;
+
+			(rows, row_cap)
 		} else {
-			format!(
-				"SELECT key, value FROM kv WHERE key {begin_op} $1 AND key {end_op} $2 ORDER BY key"
-			)
+			let row_cap = limit.unwrap_or(usize::MAX);
+
+			let query = format!(
+				"SELECT key, value FROM kv
+				WHERE key {begin_op} $1 AND key {end_op} $2
+				ORDER BY key {order}
+				LIMIT $3::bigint"
+			);
+			let stmt = tx
+				.prepare_cached(&query)
+				.await
+				.map_err(map_postgres_error)?;
+
+			let rows = tx
+				.query(&stmt, &[&begin_key, &end_key, &sql_bigint(row_cap)])
+				.await
+				.map_err(map_postgres_error)?;
+
+			(rows, row_cap)
 		};
 
-		let stmt = tx
-			.prepare_cached(&query)
-			.await
-			.map_err(map_postgres_error)?;
+		let mut results = Vec::with_capacity(rows.len());
+		let mut results_bytes = 0usize;
+		for row in rows {
+			let key: Vec<u8> = row.get(0);
+			let value: Vec<u8> = row.get(1);
+			results_bytes = results_bytes.saturating_add(key.len() + value.len());
+			results.push(KeyValue::new(key, value));
+		}
 
-		tx.query(&stmt, &[&begin_key, &end_key])
-			.await
-			.map(|rows| {
-				rows.into_iter()
-					.map(|row| {
-						let key: Vec<u8> = row.get(0);
-						let value: Vec<u8> = row.get(1);
-						KeyValue::new(key, value)
-					})
-					.collect()
-			})
-			.map(Values::new)
-			.map_err(map_postgres_error)
+		if target_bytes.is_some() && !results.is_empty() {
+			self.page_row_bytes = Some(results_bytes / results.len());
+		}
+
+		// A page that filled its row limit or its byte budget may have stopped short of the end of
+		// the range. Reporting more rows than there are only costs the caller one empty page.
+		let more = !results.is_empty()
+			&& (results.len() >= row_cap
+				|| target_bytes.is_some_and(|target_bytes| results_bytes >= target_bytes));
+
+		Ok(Values::with_more(results, more))
 	}
 
 	async fn handle_get_estimated_range_size(
@@ -329,6 +416,11 @@ impl TransactionTask {
 			}
 		}
 	}
+}
+
+/// Converts a row or byte count to a SQL `bigint` parameter, saturating rather than wrapping.
+fn sql_bigint(value: usize) -> i64 {
+	i64::try_from(value).unwrap_or(i64::MAX)
 }
 
 /// Maps a PostgreSQL error from the read path to a `DatabaseError` where appropriate.

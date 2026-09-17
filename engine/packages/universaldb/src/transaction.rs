@@ -472,6 +472,9 @@ impl Transaction {
 		}
 	}
 
+	/// Reads one page of a range, as FoundationDB's `get_range` does. It does not return the whole
+	/// range: check `Values::more` and continue with `RangeOption::next_range` and the next
+	/// `iteration`, or use [`Transaction::get_ranges_keyvalues`] to stream every row.
 	pub fn get_range<'a, 'k>(
 		&'a self,
 		opt: &'k RangeOption<'k>,
@@ -648,6 +651,7 @@ impl<'t> InformalTransaction<'t> {
 		self.inner.get_key(selector, isolation_level)
 	}
 
+	/// Reads one page of a range, not the whole range. See [`Transaction::get_range`].
 	pub fn get_range<'a, 'k>(
 		&'a self,
 		opt: &'k RangeOption<'k>,

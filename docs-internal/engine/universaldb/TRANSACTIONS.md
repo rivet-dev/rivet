@@ -110,8 +110,33 @@ while let Some(entry) = stream.try_next().await? {
 
 - `begin` / `end`: Key selectors defining the range
 - `limit`: Maximum number of results
-- `mode`: `StreamingMode::Iterator` (streaming) or `StreamingMode::WantAll` (batch)
+- `mode`: How large each page of the read is. See [Range Paging](#range-paging)
+- `target_bytes`: Lowers the page size a mode implies. `0` keeps the mode's own size
 - `reverse`: Iterate in reverse lexicographical order
+
+### Range Paging
+
+A range read never loads the whole range. Drivers return it one page at a time, and `get_ranges_keyvalues()` fetches the next page only when the consumer has drained the current one. A stream that is dropped early leaves the rest of the range unread, and a read holds at most one page in memory however large the range is.
+
+A page ends at `limit` rows or after the row that brings it to the mode's byte budget, whichever comes first. It always holds at least one row. The budgets are the ones FoundationDB's client uses per batch:
+
+| Mode | Page budget |
+|------|-------------|
+| `Iterator` (default) | 4 KB for the first page, growing 1.5x per page up to 120 KB |
+| `WantAll`, `Serial` | 120 KB |
+| `Large` | 4 KB |
+| `Medium` | 1 KB |
+| `Small` | 256 B |
+| `Exact` | `limit` rows in one page, with no byte budget |
+
+- Use `Iterator` when the consumer may stop early and `WantAll` when it reads the whole range.
+- Put a known row cap in `RangeOption.limit` instead of only breaking out of the consumer loop. The last page then stops at the cap rather than filling its byte budget.
+- A `Serializable` read adds one read conflict range for the whole range, not one per page.
+- Pending writes of the transaction are merged into the page that covers their key, so a paged read returns the same rows in the same order as an unpaged one.
+- As in FoundationDB, a range stream that is still being consumed returns keys the transaction writes ahead of it. Collect the range before writing when the writes can land in the part of the range that is not read yet.
+- Paging bounds memory, not work. A range read still returns every value it passes. When small keys are interleaved with large values the caller does not need, seek past them with `get_key` instead of scanning.
+
+Each page is one `TransactionDriver::get_range` call. It returns `Values`, whose `more()` says whether the range has rows past the page, and `RangeOption::next_range(&page)` yields the range left to read.
 
 ### Building Range Bounds
 

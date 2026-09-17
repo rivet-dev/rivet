@@ -1,6 +1,7 @@
 use std::{any::Any, future::Future, path::Path, pin::Pin, sync::Arc};
 
 use anyhow::{Result, bail};
+use futures_util::{TryStreamExt, stream};
 
 use crate::{
 	key_selector::KeySelector,
@@ -43,6 +44,46 @@ pub trait DatabaseDriver: Send + Sync {
 	}
 }
 
+/// Streams a range by reading it one page at a time.
+///
+/// Each page is one [`TransactionDriver::get_range`] call bounded by
+/// [`RangeOption::page_target_bytes`], so the stream never holds more than one page of the range in
+/// memory, and a consumer that stops early leaves the rest of the range unread.
+pub(crate) fn paged_range_stream<'a, D>(
+	driver: &'a D,
+	opt: RangeOption<'a>,
+	isolation_level: IsolationLevel,
+) -> crate::value::Stream<'a, Value>
+where
+	D: TransactionDriver + ?Sized,
+{
+	Box::pin(
+		stream::try_unfold(
+			(Some(opt), 1usize, isolation_level),
+			move |(opt, iteration, isolation_level)| async move {
+				let Some(opt) = opt else {
+					return anyhow::Ok(None);
+				};
+
+				let page = driver.get_range(&opt, iteration, isolation_level).await?;
+				let next_opt = opt.next_range(&page);
+				let rows = stream::iter(
+					page.into_iter()
+						.map(|kv| anyhow::Ok(Value::from_keyvalue(kv))),
+				);
+
+				// The first page registers the read conflict range for the whole range, and every
+				// later page reads a part of it, so later pages add no conflict range of their own.
+				Ok(Some((
+					rows,
+					(next_opt, iteration + 1, IsolationLevel::Snapshot),
+				)))
+			},
+		)
+		.try_flatten(),
+	)
+}
+
 pub trait TransactionDriver: Send + Sync {
 	fn atomic_op(&self, key: &[u8], param: &[u8], op_type: MutationType);
 
@@ -57,12 +98,18 @@ pub trait TransactionDriver: Send + Sync {
 		selector: &KeySelector<'a>,
 		isolation_level: IsolationLevel,
 	) -> Pin<Box<dyn Future<Output = Result<Slice>> + Send + 'a>>;
+	/// Reads one page of a range, never the whole range.
+	///
+	/// The page is bounded by `opt.limit` and by `opt.page_target_bytes(iteration)`, where
+	/// `iteration` is the 1-based number of the page. `Values::more` reports whether rows are left
+	/// and `RangeOption::next_range` gives the range to pass to the next call.
 	fn get_range<'a>(
 		&'a self,
 		opt: &RangeOption<'a>,
 		iteration: usize,
 		isolation_level: IsolationLevel,
 	) -> Pin<Box<dyn Future<Output = Result<Values>> + Send + 'a>>;
+	/// Streams a whole range by reading it one page at a time. See [`paged_range_stream`].
 	fn get_ranges_keyvalues<'a>(
 		&'a self,
 		opt: RangeOption<'a>,
