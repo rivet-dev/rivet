@@ -155,6 +155,8 @@ import { statelessActor } from "./stateless";
 import {
 	telemetryActor,
 	telemetryRunConsumerActor,
+	telemetrySampledActor,
+	telemetrySelfSampledActor,
 	workflowTracedActor,
 } from "./telemetry";
 import {
@@ -206,6 +208,8 @@ export const registry = setup({
 		telemetryActor,
 		telemetryRunConsumerActor,
 		workflowTracedActor,
+		telemetrySampledActor,
+		telemetrySelfSampledActor,
 		// From counter.ts
 		counter,
 		// From counter-conn.ts

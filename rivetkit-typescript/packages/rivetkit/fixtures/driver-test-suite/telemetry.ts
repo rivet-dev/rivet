@@ -173,3 +173,56 @@ export const workflowTracedActor = actor({
 		sleepTimeout: 50,
 	},
 });
+
+/** Records nothing except `recorded`. */
+export const telemetrySampledActor = actor({
+	db: db(),
+	tracing: {
+		sampler: 0,
+		actions: {
+			recorded: 1,
+		},
+	},
+	actions: {
+		unrecorded: async (c, marker: string) => {
+			await c.db.execute("SELECT ? AS marker", marker);
+			return trace.getActiveSpan()?.spanContext().traceFlags;
+		},
+		recorded: async (c, marker: string) => {
+			await c.db.execute("SELECT ? AS marker", marker);
+			return trace.getActiveSpan()?.spanContext().traceFlags;
+		},
+	},
+});
+
+/** Records everything except `unrecorded`. */
+export const telemetrySelfSampledActor = actor({
+	state: {},
+	db: db(),
+	queues: {
+		jobs: jobSchema,
+		runJobs: jobSchema,
+	},
+	tracing: {
+		sampler: 1,
+		actions: {
+			unrecorded: 0,
+		},
+	},
+	onRequest: () => new Response("ok", { status: 200 }),
+	run: async (c) => {
+		while (!c.aborted) {
+			await c.queue.waitForNames(["runJobs"], {
+				signal: c.abortSignal,
+			});
+		}
+	},
+	actions: {
+		recorded: (_c, marker: string) => marker,
+		unrecorded: (_c, marker: string) => marker,
+		scheduleBoth: async (c, marker: string) => {
+			await c.schedule.after(20, "unrecorded", marker);
+			await c.schedule.after(200, "recorded", marker);
+		},
+	},
+});
