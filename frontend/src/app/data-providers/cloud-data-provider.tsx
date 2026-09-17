@@ -629,30 +629,34 @@ export const createOrganizationContext = ({
 	}) =>
 		queryOptions({
 			queryKey: [opts, "byoc-otel-token"],
-			queryFn: async (): Promise<Rivet.ByocGetOtelTokenResponse | null> => {
-				try {
-					return await client.byoc.getOtelToken(opts.cluster, {
-						org: opts.organization,
-					});
-				} catch (error) {
-					if (
-						error &&
-						typeof error === "object" &&
-						"statusCode" in error &&
-						error.statusCode === 404
-					) {
-						return null;
+			queryFn:
+				async (): Promise<Rivet.ByocGetOtelTokenResponse | null> => {
+					try {
+						return await client.byoc.getOtelToken(opts.cluster, {
+							org: opts.organization,
+						});
+					} catch (error) {
+						if (
+							error &&
+							typeof error === "object" &&
+							"statusCode" in error &&
+							error.statusCode === 404
+						) {
+							return null;
+						}
+						throw error;
 					}
-					throw error;
-				}
-			},
+				},
 			...no404Retry(),
 		});
 
 	const createOtelTokenMutationOptions = () =>
 		mutationOptions({
 			mutationKey: ["byoc-otel-token", "create"],
-			mutationFn: async (data: { organization: string; cluster: string }) => {
+			mutationFn: async (data: {
+				organization: string;
+				cluster: string;
+			}) => {
 				return await client.byoc.createOtelToken(data.cluster, {
 					org: data.organization,
 				});
@@ -662,7 +666,10 @@ export const createOrganizationContext = ({
 	const revokeOtelTokenMutationOptions = () =>
 		mutationOptions({
 			mutationKey: ["byoc-otel-token", "revoke"],
-			mutationFn: async (data: { organization: string; cluster: string }) => {
+			mutationFn: async (data: {
+				organization: string;
+				cluster: string;
+			}) => {
 				return await client.byoc.revokeOtelToken(data.cluster, {
 					org: data.organization,
 				});
@@ -685,8 +692,6 @@ export const createOrganizationContext = ({
 			},
 			getNextPageParam: (lastPage) => lastPage.pagination.cursor,
 			select: (data) => data.pages.flatMap((page) => page.regions),
-			// Operators report heartbeats every 5s, so keep region rows live.
-			refetchInterval: 5_000,
 		});
 
 	const clusterCommandsQueryOptions = (opts: {

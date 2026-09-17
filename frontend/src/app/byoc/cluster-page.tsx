@@ -1,12 +1,7 @@
-import {
-	CLUSTER_CONFIG_FILENAME,
-	serializeClusterConfig,
-} from "./cluster-config";
-import { cloudEnv } from "@/lib/env";
 import type { Rivet } from "@rivet-gg/cloud";
 import {
-	faArrowUpRightFromSquare,
 	faArrowRight,
+	faArrowUpRightFromSquare,
 	faCalendarDays,
 	faChevronDown,
 	faChevronRight,
@@ -22,6 +17,8 @@ import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { saveAs } from "file-saver";
 import { useState } from "react";
+import { AgentPromptBanner } from "@/app/compute-deploy";
+import { OrDivider } from "@/app/getting-started";
 import {
 	Badge,
 	Button,
@@ -37,16 +34,19 @@ import {
 	WithTooltip,
 } from "@/components";
 import { useCloudDataProvider } from "@/components/actors";
-import { queryClient } from "@/queries/global";
 import {
 	BYOC_QUICKSTART_DOCS_URL,
 	BYOC_SETUP_KIT_URL,
 	BYOC_SUPPORT_EMAIL,
 } from "@/content/byoc";
-import { ByocContactTrigger } from "./byoc-contact-trigger";
+import { cloudEnv } from "@/lib/env";
+import { queryClient } from "@/queries/global";
 import { serializeAgentInstructions } from "./agent-instructions";
-import { AgentPromptBanner } from "@/app/compute-deploy";
-import { OrDivider } from "@/app/getting-started";
+import { ByocContactTrigger } from "./byoc-contact-trigger";
+import {
+	CLUSTER_CONFIG_FILENAME,
+	serializeClusterConfig,
+} from "./cluster-config";
 
 type Command = Rivet.ByocListCommandsResponse.Commands.Item;
 type Region = Rivet.ByocListRegionsResponse.Regions.Item;
@@ -399,13 +399,6 @@ function RegionsSection({ cluster }: { cluster: string }) {
 	);
 }
 
-// Operator boot ids encode the boot timestamp as ms * 1024 plus a random component.
-function bootIdToTimestamp(
-	bootId: number | null | undefined,
-): number | undefined {
-	return bootId == null ? undefined : Math.floor(bootId / 1024);
-}
-
 function RegionRow({ region }: { region: Region }) {
 	return (
 		<div
@@ -418,7 +411,7 @@ function RegionRow({ region }: { region: Region }) {
 				{region.name}
 			</div>
 			<div className="text-muted-foreground">
-				<Time value={bootIdToTimestamp(region.operatorBootId)} />
+				<Time value={region.operatorBootId ?? undefined} />
 			</div>
 			<div className="text-muted-foreground">
 				<Time value={region.lastSeenAt} />
@@ -720,7 +713,9 @@ function OtelTokenSection({ cluster }: { cluster: string }) {
 			void invalidateToken();
 		},
 		onError: () => {
-			toast.error("Could not create the metrics token. Please try again.");
+			toast.error(
+				"Could not create the metrics token. Please try again.",
+			);
 		},
 	});
 
@@ -732,7 +727,9 @@ function OtelTokenSection({ cluster }: { cluster: string }) {
 			void invalidateToken();
 		},
 		onError: () => {
-			toast.error("Could not revoke the metrics token. Please try again.");
+			toast.error(
+				"Could not revoke the metrics token. Please try again.",
+			);
 		},
 	});
 
@@ -792,7 +789,7 @@ function OtelTokenSection({ cluster }: { cluster: string }) {
 			) : data ? (
 				<div className="flex flex-col gap-3">
 					<pre className={tokenBoxClassName}>
-						{`cloud_byocotel_${"•".repeat(16)}${data.tokenLastFour}`}
+						{`byoc_otel_${"•".repeat(16)}${data.tokenLastFour}`}
 					</pre>
 					<div className="flex flex-col items-start justify-between gap-2 sm:flex-row sm:items-center">
 						<SmallText className="text-muted-foreground">
