@@ -379,8 +379,8 @@ export const RegistryConfigSchema = z
 		// Namespace priority: parsed from endpoint URL > config value (includes env var) > "default"
 		const namespace =
 			parsedEndpoint?.namespace ?? config.namespace ?? "default";
-		// Token priority: parsed from endpoint URL > config value (includes env var)
-		const token = parsedEndpoint?.token ?? config.token;
+		// Token priority: parsed from endpoint URL > config value (includes env var) > "dev"
+		const token = parsedEndpoint?.token ?? config.token ?? "dev";
 
 		// Parse publicEndpoint string (env var fallback is applied via transform in serverless schema)
 		const parsedPublicEndpoint = config.serverless.publicEndpoint

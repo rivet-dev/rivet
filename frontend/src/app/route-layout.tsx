@@ -4,6 +4,7 @@ import type { ImperativePanelHandle } from "react-resizable-panels";
 import { H2, Skeleton } from "@/components";
 import { RootLayoutContextProvider } from "@/components/actors/root-layout-context";
 import { BillingLimitAlert } from "./billing/billing-limit-alert";
+import { ByocTrialAlert } from "./byoc/byoc-trial-alert";
 import { TopBar } from "./top-bar";
 
 export function RouteLayout({
@@ -17,6 +18,7 @@ export function RouteLayout({
 		<div className="flex h-screen flex-col bg-background">
 			<TopBar />
 			<BillingLimitAlert />
+			<ByocTrialAlert />
 			<main className="flex flex-1 min-h-0 flex-col bg-background min-w-0 pl-2">
 				{/*
 				 * `isSidebarCollapsed: false` so the inner Content / ActorsListPreview

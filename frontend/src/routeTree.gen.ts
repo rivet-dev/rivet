@@ -28,6 +28,7 @@ import { Route as ContextNsNamespaceIndexRouteImport } from './routes/_context/n
 import { Route as ContextOrgsOrganizationProjectsIndexRouteImport } from './routes/_context/orgs.$organization/projects.index'
 import { Route as ContextOrgsOrganizationNewIndexRouteImport } from './routes/_context/orgs.$organization/new/index'
 import { Route as ContextOrgsOrganizationProjectsProjectRouteImport } from './routes/_context/orgs.$organization/projects.$project'
+import { Route as ContextOrgsOrganizationClustersClusterRouteImport } from './routes/_context/orgs.$organization/clusters.$cluster'
 import { Route as ContextOrgsOrganizationProjectsProjectIndexRouteImport } from './routes/_context/orgs.$organization/projects.$project/index'
 import { Route as ContextOrgsOrganizationProjectsProjectSettingsRouteImport } from './routes/_context/orgs.$organization/projects.$project/settings'
 import { Route as ContextOrgsOrganizationProjectsProjectMetricsRouteImport } from './routes/_context/orgs.$organization/projects.$project/metrics'
@@ -139,6 +140,12 @@ const ContextOrgsOrganizationProjectsProjectRoute =
     path: '/projects/$project',
     getParentRoute: () => ContextOrgsOrganizationRoute,
   } as any)
+const ContextOrgsOrganizationClustersClusterRoute =
+  ContextOrgsOrganizationClustersClusterRouteImport.update({
+    id: '/clusters/$cluster',
+    path: '/clusters/$cluster',
+    getParentRoute: () => ContextOrgsOrganizationRoute,
+  } as any)
 const ContextOrgsOrganizationProjectsProjectIndexRoute =
   ContextOrgsOrganizationProjectsProjectIndexRouteImport.update({
     id: '/',
@@ -237,6 +244,7 @@ export interface FileRoutesByFullPath {
   '/new/': typeof ContextNewIndexRoute
   '/ns/$namespace/': typeof ContextNsNamespaceIndexRoute
   '/orgs/$organization/': typeof ContextOrgsOrganizationIndexRoute
+  '/orgs/$organization/clusters/$cluster': typeof ContextOrgsOrganizationClustersClusterRoute
   '/orgs/$organization/projects/$project': typeof ContextOrgsOrganizationProjectsProjectRouteWithChildren
   '/orgs/$organization/new/': typeof ContextOrgsOrganizationNewIndexRoute
   '/orgs/$organization/projects/': typeof ContextOrgsOrganizationProjectsIndexRoute
@@ -267,6 +275,7 @@ export interface FileRoutesByTo {
   '/new': typeof ContextNewIndexRoute
   '/ns/$namespace': typeof ContextNsNamespaceIndexRoute
   '/orgs/$organization': typeof ContextOrgsOrganizationIndexRoute
+  '/orgs/$organization/clusters/$cluster': typeof ContextOrgsOrganizationClustersClusterRoute
   '/orgs/$organization/new': typeof ContextOrgsOrganizationNewIndexRoute
   '/orgs/$organization/projects': typeof ContextOrgsOrganizationProjectsIndexRoute
   '/orgs/$organization/projects/$project/billing': typeof ContextOrgsOrganizationProjectsProjectBillingRoute
@@ -299,6 +308,7 @@ export interface FileRoutesById {
   '/_context/new/': typeof ContextNewIndexRoute
   '/_context/ns/$namespace/': typeof ContextNsNamespaceIndexRoute
   '/_context/orgs/$organization/': typeof ContextOrgsOrganizationIndexRoute
+  '/_context/orgs/$organization/clusters/$cluster': typeof ContextOrgsOrganizationClustersClusterRoute
   '/_context/orgs/$organization/projects/$project': typeof ContextOrgsOrganizationProjectsProjectRouteWithChildren
   '/_context/orgs/$organization/new/': typeof ContextOrgsOrganizationNewIndexRoute
   '/_context/orgs/$organization/projects/': typeof ContextOrgsOrganizationProjectsIndexRoute
@@ -333,6 +343,7 @@ export interface FileRouteTypes {
     | '/new/'
     | '/ns/$namespace/'
     | '/orgs/$organization/'
+    | '/orgs/$organization/clusters/$cluster'
     | '/orgs/$organization/projects/$project'
     | '/orgs/$organization/new/'
     | '/orgs/$organization/projects/'
@@ -363,6 +374,7 @@ export interface FileRouteTypes {
     | '/new'
     | '/ns/$namespace'
     | '/orgs/$organization'
+    | '/orgs/$organization/clusters/$cluster'
     | '/orgs/$organization/new'
     | '/orgs/$organization/projects'
     | '/orgs/$organization/projects/$project/billing'
@@ -394,6 +406,7 @@ export interface FileRouteTypes {
     | '/_context/new/'
     | '/_context/ns/$namespace/'
     | '/_context/orgs/$organization/'
+    | '/_context/orgs/$organization/clusters/$cluster'
     | '/_context/orgs/$organization/projects/$project'
     | '/_context/orgs/$organization/new/'
     | '/_context/orgs/$organization/projects/'
@@ -558,6 +571,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ContextOrgsOrganizationProjectsProjectRouteImport
       parentRoute: typeof ContextOrgsOrganizationRoute
     }
+    '/_context/orgs/$organization/clusters/$cluster': {
+      id: '/_context/orgs/$organization/clusters/$cluster'
+      path: '/clusters/$cluster'
+      fullPath: '/orgs/$organization/clusters/$cluster'
+      preLoaderRoute: typeof ContextOrgsOrganizationClustersClusterRouteImport
+      parentRoute: typeof ContextOrgsOrganizationRoute
+    }
     '/_context/orgs/$organization/projects/$project/': {
       id: '/_context/orgs/$organization/projects/$project/'
       path: '/'
@@ -718,6 +738,7 @@ const ContextOrgsOrganizationProjectsProjectRouteWithChildren =
 
 interface ContextOrgsOrganizationRouteChildren {
   ContextOrgsOrganizationIndexRoute: typeof ContextOrgsOrganizationIndexRoute
+  ContextOrgsOrganizationClustersClusterRoute: typeof ContextOrgsOrganizationClustersClusterRoute
   ContextOrgsOrganizationProjectsProjectRoute: typeof ContextOrgsOrganizationProjectsProjectRouteWithChildren
   ContextOrgsOrganizationNewIndexRoute: typeof ContextOrgsOrganizationNewIndexRoute
   ContextOrgsOrganizationProjectsIndexRoute: typeof ContextOrgsOrganizationProjectsIndexRoute
@@ -726,6 +747,8 @@ interface ContextOrgsOrganizationRouteChildren {
 const ContextOrgsOrganizationRouteChildren: ContextOrgsOrganizationRouteChildren =
   {
     ContextOrgsOrganizationIndexRoute: ContextOrgsOrganizationIndexRoute,
+    ContextOrgsOrganizationClustersClusterRoute:
+      ContextOrgsOrganizationClustersClusterRoute,
     ContextOrgsOrganizationProjectsProjectRoute:
       ContextOrgsOrganizationProjectsProjectRouteWithChildren,
     ContextOrgsOrganizationNewIndexRoute: ContextOrgsOrganizationNewIndexRoute,

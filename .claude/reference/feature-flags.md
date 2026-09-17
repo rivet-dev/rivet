@@ -15,6 +15,7 @@ if (features.platform) {
 ```
 
 - Source of truth at runtime is the `VITE_FEATURE_FLAGS` env var: a comma-separated list of enabled flag names.
+- On cloud, PostHog feature flags are merged in additively on top of that. See [PostHog flags](#posthog-flags-cloud-only).
 - In dev (`import.meta.env.DEV`), a `localStorage` key `FEATURE_FLAGS` overrides the env var so a flavor can be simulated locally.
 - **Unset (`undefined`) means every flag is on** — that is the full cloud build. An empty/explicit list opts in only to the named flags.
 - Some flags imply others (e.g. `platform` requires `auth`; `acl` is implied by `platform`). Encode those dependencies in `features.ts`, not at each call site.
@@ -33,8 +34,26 @@ if (features.platform) {
 | `branding` | Rivet branding chrome. |
 | `datacenter` | Datacenter-related UI. |
 | `danger-zone` | Destructive settings actions (`features.dangerZone`). |
+| `byoc` | Bring Your Own Cloud (`features.byoc`): the BYOC option in the create-project flow, BYOC clusters in the project lists, and the `/orgs/$org/clusters/$cluster` page. Requires `platform`. |
+| `services` | Managed services (`features.services`): the Services section of the onboarding product picker, the Durable Streams onboarding path, and the Services tab on the namespace settings drawer. Independent of `platform` (cloud hands out a managed service URL, self-host runs the worker container). |
 
 Deployment flavors map to flag sets roughly as: **cloud** = all on; **OSS** = `auth`/`platform`/`acl` off; **enterprise** = `acl` on, `auth`/`platform` off (engine enforces auth without a login UI). Do not treat `platform`/`auth` as "engine requires credentials" — that is `acl`. **`compute` is opt-in even on cloud** — each Railway service adds it to `VITE_FEATURE_FLAGS` per-environment (e.g. staging on, prod off) rather than inheriting the cloud default-on set.
+
+## PostHog flags (cloud only)
+
+On deployments where PostHog is configured, PostHog feature flags are merged into `features` **additively**: a PostHog flag whose key matches a flag name (`byoc`, `agent-os`, `danger-zone`, ...) can turn that flag **on**, and can never turn off a flag that `VITE_FEATURE_FLAGS` or the dev `localStorage` override already enabled. Env and localStorage always win.
+
+The merge is gated on PostHog actually being configured (`getPosthogConfig` in [frontend/src/components/lib/config.ts](../../frontend/src/components/lib/config.ts)), not on a flavor check, so OSS self-host and enterprise builds never load `posthog-js` and never wait on it.
+
+The flag set is snapshotted **once**, in [frontend/src/main.tsx](../../frontend/src/main.tsx), before the app module graph is imported. Several modules read `features` at import time and others use `features.platform` to guard conditional hook calls, so the flag set must be constant for the lifetime of the app. Later `onFeatureFlags` emissions are ignored, and the snapshot is capped by a short timeout so a slow or blocked PostHog cannot delay first paint. PostHog persists flags in `localStorage`, so a flag flipped in the PostHog UI applies from the next page load.
+
+To test, set the flag on your own PostHog person and reload, or simulate it locally before the app boots:
+
+```js
+// In DevTools, on a cloud-flavored dashboard
+localStorage.setItem("FEATURE_FLAGS", ""); // env baseline: everything off
+// then enable e.g. `byoc` for your user in PostHog and reload
+```
 
 ## Testing across flavors (required for frontend changes)
 
@@ -51,7 +70,7 @@ localStorage.setItem("FEATURE_FLAGS", ""); location.reload();
 // Full cloud: all flags on (see the commented canonical list in frontend/.env.local)
 localStorage.setItem(
   "FEATURE_FLAGS",
-  "compute,platform,acl,auth,captcha,branding,support,billing,datacenter,danger-zone,multitenancy",
+  "compute,platform,acl,auth,captcha,branding,support,billing,datacenter,danger-zone,multitenancy,byoc,services",
 );
 location.reload();
 

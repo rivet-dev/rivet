@@ -28,7 +28,7 @@ overrides:
   react-dom: 19.1.0
   '@rivet-gg/components': workspace:*
   '@rivet-gg/icons': workspace:*
-  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0
+  '@rivet-gg/cloud': https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979
   '@flue/sdk': 1.0.0-beta.9
   '@codemirror/state': 6.5.2
   '@codemirror/view': 6.38.2
@@ -374,8 +374,8 @@ importers:
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979
       '@rivetkit/engine-api-full':
         specifier: workspace:*
         version: link:../../engine/sdks/typescript/api-full
@@ -2438,6 +2438,9 @@ importers:
       '@better-auth/oauth-provider':
         specifier: 1.6.23
         version: 1.6.23(7bea9415bd556bb40c4cef5522677eff)
+      '@calcom/embed-react':
+        specifier: ^1.5.3
+        version: 1.5.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@codemirror/autocomplete':
         specifier: 6.18.7
         version: 6.18.7
@@ -2562,8 +2565,8 @@ importers:
         specifier: ^1.2.3
         version: 1.2.3(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)
       '@rivet-gg/cloud':
-        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0
-        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0
+        specifier: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979
+        version: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979
       '@rivet-gg/icons':
         specifier: workspace:*
         version: link:packages/icons
@@ -4902,6 +4905,18 @@ packages:
 
   '@braintree/sanitize-url@7.1.1':
     resolution: {integrity: sha512-i1L7noDNxtFyL5DmZafWy1wRVhGehQmzZaz1HiN5e7iylJMSZR7ekOV7NsIqa5qBldlLrsKv4HbgFUVlQrz8Mw==}
+
+  '@calcom/embed-core@1.5.3':
+    resolution: {integrity: sha512-GeId9gaByJ5EWiPmuvelZOvFWPOTWkcWZr5vGTCbIUTX125oE5yn0n8lDF1MJk5Xj1WO+/dk9jKIE08Ad9ytiQ==}
+
+  '@calcom/embed-react@1.5.3':
+    resolution: {integrity: sha512-JCgge04pc8fhdvUmPNVLhW8/lCWK+AAziKecKWWPfv1nn2s+qKP2BwsEAnxhxK9yPOBgE1EIEgmYkrrNB1iajA==}
+    peerDependencies:
+      react: 19.1.0
+      react-dom: 19.1.0
+
+  '@calcom/embed-snippet@1.3.3':
+    resolution: {integrity: sha512-pqqKaeLB8R6BvyegcpI9gAyY6Xyx1bKYfWvIGOvIbTpguWyM1BBBVcT9DCeGe8Zw7Ujp5K56ci7isRUrT2Uadg==}
 
   '@cbor-extract/cbor-extract-darwin-arm64@2.2.0':
     resolution: {integrity: sha512-P7swiOAdF7aSi0H+tHtHtr6zrpF3aAq/W9FXx5HektRvLTM2O89xCyXF3pk7pLc7QpaY7AoaE8UowVf9QBdh3w==}
@@ -8567,8 +8582,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0':
-    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0}
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979':
+    resolution: {tarball: https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979}
     version: 0.0.0
 
   '@rivetkit/bare-ts@0.6.2':
@@ -20793,6 +20808,19 @@ snapshots:
 
   '@braintree/sanitize-url@7.1.1': {}
 
+  '@calcom/embed-core@1.5.3': {}
+
+  '@calcom/embed-react@1.5.3(react-dom@19.1.0(react@19.1.0))(react@19.1.0)':
+    dependencies:
+      '@calcom/embed-core': 1.5.3
+      '@calcom/embed-snippet': 1.3.3
+      react: 19.1.0
+      react-dom: 19.1.0(react@19.1.0)
+
+  '@calcom/embed-snippet@1.3.3':
+    dependencies:
+      '@calcom/embed-core': 1.5.3
+
   '@cbor-extract/cbor-extract-darwin-arm64@2.2.0':
     optional: true
 
@@ -24904,7 +24932,7 @@ snapshots:
       '@rivet-dev/services-linux-x64-musl': 0.1.6
       '@rivet-dev/services-win32-x64': 0.1.6
 
-  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@87a84c0':
+  '@rivet-gg/cloud@https://pkg.pr.new/rivet-dev/engine-ee/@rivet-gg/cloud@979':
     dependencies:
       cross-fetch: 4.1.0
       form-data: 4.0.5

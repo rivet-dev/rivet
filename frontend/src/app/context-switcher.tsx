@@ -15,6 +15,7 @@ import {
 } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import {
+	Badge,
 	Button,
 	Command,
 	CommandEmpty,
@@ -146,6 +147,20 @@ function ContextSwitcherInner({
 				<ProjectSegmentPopover
 					organization={match.organization}
 					currentProject={match.project}
+				/>
+			</div>
+		);
+	}
+
+	if (inline && match && "organization" in match && "cluster" in match) {
+		return (
+			<div className="flex items-center min-w-0">
+				<BreadcrumbSlash />
+				<OrgSegmentPopover organization={match.organization} />
+				<BreadcrumbSlash />
+				<ClusterSegmentPopover
+					organization={match.organization}
+					currentCluster={match.cluster}
 				/>
 			</div>
 		);
@@ -411,6 +426,109 @@ function OrgList({
 				</CommandList>
 			</Command>
 		</div>
+	);
+}
+
+function ClusterSegmentPopover({
+	organization,
+	currentCluster,
+}: {
+	organization: string;
+	currentCluster: string;
+}) {
+	const [open, setOpen] = useState(false);
+	const { data } = useQuery(
+		useCloudDataProvider().currentOrgClusterQueryOptions({
+			cluster: currentCluster,
+		}),
+	);
+
+	return (
+		<Popover open={open} onOpenChange={setOpen}>
+			<div className="flex items-center">
+				<span className="flex h-auto items-center px-2 py-1 text-sm font-medium text-foreground">
+					<span className="truncate">
+						{data?.name ?? currentCluster}
+					</span>
+				</span>
+				<PopoverTrigger asChild>
+					<Button
+						variant="ghost"
+						aria-label="Open project switcher"
+						className="flex h-auto items-center self-stretch px-1.5 py-1 text-foreground rounded-lg hover:bg-foreground/[0.06] data-[state=open]:bg-foreground/[0.06]"
+					>
+						<UnfoldIcon />
+					</Button>
+				</PopoverTrigger>
+			</div>
+			<PopoverContent
+				className="p-0 w-56"
+				align="start"
+				closeAnimation={false}
+			>
+				<ProjectList
+					organization={organization}
+					currentProject={currentCluster}
+					onClose={() => setOpen(false)}
+				/>
+			</PopoverContent>
+		</Popover>
+	);
+}
+
+function ClusterListItems({
+	organization,
+	currentCluster,
+	onClose,
+	onHover,
+}: {
+	organization: string;
+	currentCluster?: string;
+	onClose?: () => void;
+	onHover?: (name: string | null) => void;
+}) {
+	const navigate = useNavigate();
+	const { data, hasNextPage, isFetchingNextPage, fetchNextPage } =
+		useInfiniteQuery(
+			useCloudDataProvider().currentOrgClustersQueryOptions(),
+		);
+
+	return (
+		<>
+			{data?.map((cluster) => (
+				<CommandItem
+					key={cluster.id}
+					value={cluster.name}
+					className="static w-full"
+					onMouseEnter={() => onHover?.(null)}
+					onSelect={() => {
+						onClose?.();
+						authClient.organization.setActive({
+							organizationSlug: organization,
+						});
+						void navigate({
+							to: "/orgs/$organization/clusters/$cluster",
+							params: { organization, cluster: cluster.name },
+						});
+					}}
+				>
+					<Icon
+						icon={faCheck}
+						className={cn(
+							"mr-2 size-3 shrink-0 text-primary",
+							cluster.name === currentCluster
+								? "opacity-100"
+								: "opacity-0",
+						)}
+					/>
+					<span className="truncate flex-1">{cluster.name}</span>
+					<Badge variant="premium-violet">BYOC</Badge>
+				</CommandItem>
+			))}
+			{hasNextPage && !isFetchingNextPage ? (
+				<VisibilitySensor onChange={fetchNextPage} />
+			) : null}
+		</>
 	);
 }
 
@@ -802,6 +920,7 @@ const useContextSwitcherMatch = ():
 			organization: string;
 	  }
 	| { organization: string; project: string }
+	| { organization: string; cluster: string }
 	| { organization: string }
 	| { namespace: string }
 	| false => {
@@ -832,6 +951,15 @@ const useContextSwitcherMatch = ():
 
 	if (matchEngineNamespace) {
 		return matchEngineNamespace;
+	}
+
+	const matchCluster = match({
+		to: "/orgs/$organization/clusters/$cluster",
+		fuzzy: true,
+	});
+
+	if (matchCluster) {
+		return matchCluster;
 	}
 
 	const matchOrganization = match({
@@ -899,6 +1027,10 @@ function Breadcrumbs({ inline }: { inline?: boolean }) {
 
 	if (match && "project" in match) {
 		return <ProjectBreadcrumb project={match.project} />;
+	}
+
+	if (match && "cluster" in match) {
+		return <span className="truncate">{match.cluster}</span>;
 	}
 
 	if (match && "namespace" in match) {
@@ -1188,7 +1320,7 @@ function ProjectList({
 	const paramsProject = useParams({
 		strict: false,
 		select(params) {
-			return params.project;
+			return params.project ?? params.cluster;
 		},
 	});
 	const project = currentProject ?? paramsProject;
@@ -1270,6 +1402,14 @@ function ProjectList({
 									/>
 								);
 							})}
+						{features.byoc ? (
+							<ClusterListItems
+								organization={organization}
+								currentCluster={project}
+								onClose={onClose}
+								onHover={onHover}
+							/>
+						) : null}
 						{isLoading || isFetchingNextPage ? (
 							<>
 								<ListItemSkeleton />

@@ -12,7 +12,7 @@ export function AssetImage(
 		<img
 			{...props}
 			alt={props.alt ?? "Asset image"}
-			src={`${props.src?.includes("http") ? "" : assetsUrl}${props.src}`}
+			src={`${typeof props.src === "string" && props.src.includes("http") ? "" : assetsUrl}${props.src}`}
 		/>
 	);
 }

@@ -1,6 +1,6 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useCloudProjectDataProvider } from "@/components/actors";
-import { CurrentPlan } from "./billing-plans";
+import { PlanBadge } from "./billing-plan-badge";
 
 export function BillingStatus() {
 	const dataProvider = useCloudProjectDataProvider();
@@ -13,19 +13,13 @@ export function BillingStatus() {
 	return (
 		<p>
 			You are currently on the{" "}
-			<span className="font-semibold">
-				<CurrentPlan plan={billing?.activePlan} />
-			</span>{" "}
-			plan.{" "}
+			<PlanBadge plan={billing?.activePlan ?? "free"} /> plan.{" "}
 			{billing?.futurePlan &&
 			billing.activePlan !== billing?.futurePlan &&
 			billing.currentPeriodEnd ? (
 				<>
 					Your plan will change to{" "}
-					<span className="font-semibold">
-						<CurrentPlan plan={billing.futurePlan} />
-					</span>{" "}
-					on{" "}
+					<PlanBadge plan={billing.futurePlan} /> on{" "}
 					{new Date(billing.currentPeriodEnd).toLocaleDateString(
 						undefined,
 						{
