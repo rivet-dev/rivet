@@ -46,8 +46,8 @@ use crate::conveyer::{
 	ltx::{DecodedLtx, LtxHeader, decode_ltx_v3, encode_ltx_v3},
 	shard_blob,
 	types::{
-		BranchState, BucketBranchId, CommitRow, DBHead, DbHistoryPin, DbHistoryPinKind, DirtyPage,
-		FoldIndexEntry, PitrIntervalCoverage, PitrPolicy, encode_commit_row,
+		BranchState, BucketBranchId, BucketId, CommitRow, DBHead, DbHistoryPin, DbHistoryPinKind,
+		DirtyPage, FoldIndexEntry, PitrIntervalCoverage, PitrPolicy, encode_commit_row,
 		encode_compaction_root, encode_database_branch_record, encode_db_head,
 		encode_fold_index_entry, encode_pitr_interval_coverage,
 	},
